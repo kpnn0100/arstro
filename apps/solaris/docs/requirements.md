@@ -6,15 +6,16 @@ entry with a dead anchor is a defect, and a behaviour with no entry does not shi
 
 ## Conformance
 
-Rung **0** of `arstro.rule` §5 — specified, no code yet. The ladder and where each rung lands:
+Rung **4** of `arstro.rule` §5 — the generated API document is committed and drift-tested
+(DR-API-1). The ladder:
 
 | rung | means | lands with |
 |---|---|---|
-| 0 | spec only | ← **here** (S0) |
-| 1 | core split out; `Command`/`Event`/model with one text codec | V1 |
-| 2 | registered with the root `ctest`; L2 headless service tests | V1 |
-| 3 | a real CLI that is the whole app without a window | V2 |
-| 4 | generated API document, committed, drift-tested | V3 |
+| 0 | spec only | done (S0) |
+| 1 | core split out; `Command`/`Event`/model with one text codec | done — DR-SVC-1 |
+| 2 | registered with the root `ctest`; L2 headless service tests | done — `solaris_service` |
+| 3 | a real CLI that is the whole app without a window | done — `solaris-cc`, DR-SVC-3 |
+| 4 | generated API document, committed, drift-tested | ← **here** — DR-API-1 |
 | 5 | control socket + the GUI/headless equivalence test | X4 |
 
 ## Entries
@@ -124,3 +125,79 @@ compressor, reverb and EQ — which is how DSP `a16e972` (the synth's shared noi
 panned away from falls on a quarter cosine; `fadeGain` (`:32`) — linear in amplitude — the same
 formulas as `apps/interstellar/render/AudioMix.cpp`. Guarded by `test_pan_and_fades_follow…`, which
 checks a 0.5 region at pan +0.5, −6 dB to 1e-7 against the closed forms.
+
+### DR-SVC-1 One way in, one way out (R-SVC-1, R-SVC-2, R-G-4)
+`SolarisService` (`core/service/SolarisService.h`) is the application: `dispatchText(line)` parses
+with the grammar TABLE (`commandSpecs`, `core/service/Command.cpp:26`; `parseCommand`, `:199` —
+longest verb match, flags checked against the row) and `dispatch` (`core/service/SolarisService.cpp:76`)
+runs it; out come the `AppModel` (`core/service/AppModel.h`, refreshed after every command) and
+`Event`s whose `formatEvent` text is the log line. **Every edit is all-or-nothing**: the project is
+copied first, the command runs, `validateProject` runs, and any failure restores the copy
+(`:173`) and refuses with the validator's sentence — a refused command changes nothing, and a
+`set` line's `params.changed` events are emitted only once the whole line has landed. The core
+holds no codec and no device API: decoding and WAV writing are `Host` functions (R-SVC-4).
+
+### DR-SVC-2 Unknown input is refused, naming it (R-SVC-3)
+An unknown verb or flag fails in `parseCommand` with the nearest candidates (`strp add` →
+`did you mean: strip add?`). An address goes through `setAddress` (`core/service/SolarisService.cpp:353`):
+an unknown node, field or DEVICE PARAMETER is refused with the nearest name (`set
+dv_1.filter.cutof=1` → `did you mean: filter.cutoff?`); a value out of range is refused with the
+range; a device parameter's value is read against the DSP registry — a choice by name (listing the
+choices on a miss), a number clamped to the spec — and stored as its canonical text. `get`
+(`:495`) reads every field `set` writes plus derived ones (`<clip>.length` resolved, `<strip>.out`,
+a device parameter not stored = the registry default). A refusal is a `command.rejected` event and
+`lastError`.
+
+### DR-SVC-3 solaris-cc is the whole app without a window (R-SVC-1)
+`cli/main.cpp` holds no behaviour: argv, stdout, the host's file functions; ` : ` chains lines,
+`--script` reads them, `--watch` streams events, a refusal exits 3. End to end (2026-10-08): a
+drum pattern + a synth bass + a 44.1 kHz sample + a reverb bus built entirely by command, saved,
+audited, rendered with stems; measured — a drum hit on every beat with silence before it, the 4-beat
+pattern looping across an 8-beat clip, the bass C2 at 65.4 Hz, the sample resampled to 48 kHz and
+stored relative to the song's folder.
+
+### DR-MIX-2 Every sample file gets its own strip (R-MIX-2, R-MIX-3)
+`clip add --src` (`core/service/ServiceEdit.cpp:360`): a file no clip uses yet gets a new audio strip
+named after it on the first mixer, routed by `defaultOutFor` (`:70`) to the first bus on a later
+mixer ("Main"), and a new lane; a file already used reuses its strip; `--strip` overrides. The file
+is decoded through the host to learn its length (refused if it cannot be read), and stored relative
+to the song's folder when inside it (`relativePath`, `core/service/SolarisService.cpp:193`).
+
+### DR-MIX-7 Solo keeps the soloed path alive (R-MIX-7)
+`silentStrips` (`core/Compile.cpp:47`): with any strip soloed, a strip is audible only if it is
+soloed, reachable downstream of one (its buses, its sends' returns) or upstream of one (what feeds
+it); muted strips are silent regardless. The model shows it as `strips[].audible`; the engine gets
+it as `silent`.
+
+### DR-MIX-8/9/10 Fed by, the matrix, the audit (R-MIX-8, R-MIX-9, R-MIX-10)
+`refreshModel` (`core/service/ServiceModel.cpp:70`) computes each strip's `clipCount`, `fromLanes`
+and `fromStrips`. `matrix print [--json]` (`matrixText`, `:260`): rows = strips in processing order,
+columns = the buses, master and output ports; `●` = the main output, `-6.0pre` = a send's dB and tap.
+`audit` (`:193`): unused strips, strips that reach no output port, single-input and empty buses,
+clips on silent strips, offline files, unknown device types and parameters, and any strip or the
+master that went over 0 dBFS in the last render.
+
+### DR-CLIP-2/3 Patterns and linked clips (R-CLIP-2, R-CLIP-3)
+`compile` (`core/Compile.cpp:131`) expands a note clip: a clip longer than its pattern loops it, a
+note is cut at the clip's end (`(C1)`, `:216`); events sort by time with note-offs before note-ons at
+one sample (`(C2)`, `:230`). `clip duplicate` makes a second clip of the SAME pattern (`linked` = 2 in
+the model); `clip unique` copies the pattern. `note add` replaces a note at the same pitch and tick.
+
+### DR-RENDER-1 Offline render (R-RENDER-1, R-RENDER-2, R-RENDER-3)
+`render` (`core/service/ServiceRender.cpp:31`): compile → build the engine → one pass capturing the
+master bus (the mixdown, `--out`), any `--stems` (strips' post-fader outputs, `<out>.<ch>.wav`) and
+with `--ports` every output port (`<out>.<port>.wav`); 24-bit PCM or `--bits 32f`; `--from`/`--to`
+in beats (an explicit `--to` is exact). With no `--to` the tail runs past the song's end until the
+first block the master spends below −90 dBFS, capped at 10 s (`:98`). The host writes the files
+(`writeWav`, `host/AudioFiles.cpp:116`) and decodes sources through FFmpeg, resampled to the project
+rate, mono at unity in both channels (`decodeAudio`, `:24`). Two renders of one song are
+byte-identical (`test_render_writes_the_mix_deterministically`).
+
+### DR-API-1 The API document is generated, committed and drift-tested (R-API-1)
+`apiJson` / `apiMarkdown` (`core/service/ApiDoc.cpp:43`, `:80`) print, from the tables the code
+runs on, every command (usage, summary, the R- tag that asked for it), every event with its fields,
+every `AppModel` field (with `stable`), and **every DSP registry device with every parameter's unit,
+range, default and choices**. `docs/api.json` and `docs/API.md` are that output, committed;
+`solaris_api_current` (`tests/api_current.cmake`) regenerates and compares, failing with the command
+that fixes it (checked: an edited summary turns it red). `test_the_dump_and_the_document` fails if
+the codec writes a key the field table does not list.

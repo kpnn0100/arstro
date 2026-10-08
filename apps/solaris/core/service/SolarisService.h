@@ -1,0 +1,93 @@
+/*
+ *  solaris_core — SolarisService: THE application (R-SVC-1, arstro.rule §1).
+ *
+ *  One way in: a text line in the grammar (`dispatchText`), parsed by the table in Command.cpp.
+ *  One way out: the `AppModel` (plain data, refreshed after every change) and the `Event` stream
+ *  (every line also the log). `output()` is what the last command printed — `get`, `audit`,
+ *  `matrix print`, `state print`, `api`.
+ *
+ *  The service carries no codec, no device API and no OS path (R-SVC-4): decoding a file, writing
+ *  a WAV, listing a folder and the settings/recents files are the host's, injected as `Host`. A
+ *  host that leaves one out gets a refusal naming it, never a silent no-op.
+ *
+ *  Every edit is all-or-nothing: the project is copied before a mutating command, the command
+ *  runs, the result is validated (R-FMT-4, R-MIX-4), and a failure restores the copy and refuses
+ *  with the validation's sentence — a refused command changes nothing.
+ */
+#pragma once
+#include "AppModel.h"
+#include "Command.h"
+#include "Event.h"
+#include "MixGraph.h"
+#include "Project.h"
+#include <functional>
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
+#include <vector>
+
+namespace arstro
+{
+namespace solaris
+{
+    class SolarisService
+    {
+    public:
+        struct Host
+        {
+            /** Decode `path` to PCM at `rate` (1 or 2 channels). False + `err` if it cannot. */
+            std::function<bool(const std::string &path, int rate, engine::Pcm &out, std::string &err)> decodeAudio;
+            /** Write `channels` (equal lengths) as a WAV at `rate`; bits 24 = PCM, 32 = float. */
+            std::function<bool(const std::string &path, const std::vector<std::vector<float>> &channels, int rate,
+                               int bits, std::string &err)> writeWav;
+        };
+
+        explicit SolarisService(Host host = Host());
+
+        bool dispatchText(const std::string &line, std::string &err);
+        bool dispatch(const Command &c, std::string &err);
+
+        const AppModel &model() const { return mModel; }
+        const std::string &output() const { return mOutput; }
+        void subscribe(std::function<void(const Event &)> sink) { mSinks.push_back(std::move(sink)); }
+        /** The open document (null on Home) — for tests and the host's title bar. */
+        const Project *project() const { return mOpen ? &mProject : nullptr; }
+
+    private:
+        // dispatch groups (ServiceEdit.cpp, ServiceModel.cpp, ServiceRender.cpp)
+        bool projectCommand(const Command &c, std::string &err);
+        bool setAddress(const std::string &address, const std::string &value, std::string &stored, std::string &err);
+        bool getAddress(const std::string &address, std::string &value, std::string &err) const;
+        bool mixCommand(const Command &c, std::string &err);
+        bool clipCommand(const Command &c, std::string &err);
+        bool render(const Command &c, std::string &err);
+        void refreshModel();
+        std::vector<std::string> audit() const;
+        std::string matrixText(bool json) const;
+
+        // helpers
+        std::string resolvePath(const std::string &src) const;      // a clip's src → a path the host opens
+        std::string relativePath(const std::string &file) const;    // a file → what a clip stores
+        std::shared_ptr<const engine::Pcm> pcmFor(const std::string &src);
+        std::string defaultOutFor(const std::string &mixerId) const; // the first bus on a later mixer
+        std::string firstMixer() const;
+        std::string secondMixer() const;
+        void emit(const Event &e);
+        void changed(const std::string &what, const std::string &node);
+        bool requireOpen(std::string &err) const;
+
+        Host mHost;
+        Project mProject;
+        bool mOpen = false;
+        std::string mPath;
+        AppModel mModel;
+        std::string mOutput;
+        std::vector<std::function<void(const Event &)>> mSinks;
+        std::map<std::string, std::shared_ptr<const engine::Pcm>> mPcm; // by resolved path, at mPcmRate
+        std::set<std::string> mOffline;                                 // resolved paths that would not decode
+        int mPcmRate = 0;
+        std::vector<std::string> mAudit, mLastRenderPeaks;
+    };
+}
+}

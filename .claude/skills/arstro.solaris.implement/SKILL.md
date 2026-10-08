@@ -46,8 +46,9 @@ Studio's.
 | `apps/solaris/cli/` | `solaris-cc` | host | argv/stdout only |
 | `apps/solaris/app/` | `solaris_app` | Artboard, cosmo widgets | the UI over `AppHooks` |
 
-Rows land phase by phase; `PROGRESS.md` says which exist. **Do not run a command this file names
-for a directory that does not exist yet** — build it (it is probably NEXT), or say it is missing.
+Rows land phase by phase; `PROGRESS.md` says which exist (as of V3: model, engine, core, host's
+file I/O, cli — not yet devices, settings, the UI). **Do not run a command this file names for a
+directory that does not exist yet** — build it (it is probably NEXT), or say it is missing.
 
 ---
 
@@ -132,25 +133,38 @@ codec, document it in `appModelFields()`, regenerate API.
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
-ctest --test-dir build -R 'solaris|unit|integration'           # solaris + the DSP library's suites
+ctest --test-dir build -R 'solaris|^unit$|^integration$'   # Solaris + the DSP library's suites
+# the committed API document — regenerate after ANY command, event, model field or DSP registry change:
+build/apps/solaris/cli/solaris-cc api --json > apps/solaris/docs/api.json
+build/apps/solaris/cli/solaris-cc api --md   > apps/solaris/docs/API.md
 # the DSP library alone (its own scripts):
 bash core/DigitalSignalProcessing/unittest/buildSynthTests.sh  # must say 0 failed
 python3 core/DigitalSignalProcessing/tests/run_integration.py
 ```
 
-From V1 on, end to end from a shell (do this for any change a user would hear):
-```bash
-CC=build/apps/solaris/cli/solaris-cc
-$CC --watch project new $SCRATCH/song.slp --bpm 128 \
-  : strip add --kind instrument --instrument drums --name Drums \
-  : pattern new --name beat --length 4 : note add pt_1 --pitch 36 --at 0 : note add pt_1 --pitch 36 --at 1 \
-  : clip add --strip ch_2 --pattern pt_1 --at 0 --length 16 \
-  : render --out $SCRATCH/mix.wav : project save
-```
-Then **measure the file** (peak, RMS, onsets where the notes are) — a render that "succeeded" with
-silence is a bug. `state print --json --stable` is the diffable state; `audit` the mix report.
+Suites: `solaris_model` (the .slp: fixed point, refusals, repairs) · `solaris_engine` (the mix on
+rendered samples: laws to 1e-7, notes on their sample, byte-identical across chunk sizes) ·
+`solaris_service` (L1 tables + L2: the real service through `dispatchText` with a fake decoder and
+WAV writer) · `solaris_api_current` (the committed document = what the code prints). Set
+`SOLARIS_TEST_DIR` to keep the service suite's songs out of /tmp.
 
----
+### End to end from a shell (do this for any change a user would hear)
+```bash
+cd $SCRATCH && ffmpeg -loglevel error -f lavfi -i "sine=frequency=330:duration=1" -ac 1 tone.wav
+CC=$REPO/build/apps/solaris/cli/solaris-cc
+$CC --watch project new song.slp --bpm 120 \
+  : strip add --kind instrument --instrument drums --name Drums \
+  : clip add --strip ch_2 --at 0 --length 8 \
+  : note add pt_1 --pitch 36 --at 0 : note add pt_1 --pitch 38 --at 1 : note add pt_1 --pitch 42 --at 0.5 \
+  : strip add --kind instrument --instrument synth --name Bass : clip add --strip ch_3 --length 8 \
+  : note add pt_2 --pitch 36 --at 0 --length 1.5 : set dv_2.filter.cutoff=600 \
+  : clip add --src tone.wav --at 4 : strip add --kind bus --name Verb : device add ch_5 --type reverb \
+  : send add ch_3 --to ch_5 --gain -10 : project save : audit : matrix print \
+  : render --out mix.wav --stems ch_2,ch_3
+```
+Then **measure the files** (python `wave`: RMS just after each beat vs just before, the pitch by zero
+crossings, the tail) — a render that "succeeded" with silence is a bug. `state print --json --stable`
+is the diffable state; `audit` the mix report; `matrix print` every route.
 
 ## 5. Gotchas (keep this list growing)
 
@@ -167,6 +181,17 @@ silence is a bug. `state print --json --stable` is the diffable state; `audit` t
   every assertion (cosmo D-43).
 - **`core/DigitalSignalProcessing` is a submodule on `feature/1.0.0`.** Commit, pull, test and push
   it BEFORE the umbrella records its pointer.
+- **A DSP object shared by the channels of a block depends on the block size.** Each block renders
+  channel 0 and then channel 1; a generator shared by both hands each whichever stretch of its
+  sequence the block leaves it. The engine's chunking test (128 vs 77) caught exactly this in the
+  synth's noise (DSP `a16e972`) — keep per-channel state per channel, and keep that test.
+- **Devices ramp their parameters over a block** after every write (`SignalProcessor` smoothing).
+  The engine warms each device with a block of silence at build; a test that writes a parameter and
+  reads the very next samples sees the ramp.
+- **In a test that renders in blocks, an event is only seen at a block boundary** — schedule test
+  notes at multiples of the block (a closed hat at 4800 in 128-blocks never fired; 4864 does).
+- **Every edit is all-or-nothing** (`dispatch` copies the project and validates after). A new command
+  needs no rollback code of its own — but it must not emit events before it has succeeded.
 
 ---
 

@@ -314,13 +314,15 @@ static void test_meters_seek_capture_and_live_params()
     Engine e;
     std::string err;
     assert(e.build(g, err));
-    e.captureStrip(0);
+    e.captureStrips({0, 1});
+    e.captureMaster(true);
     PortBuffers out;
     e.render(1000, out);
     const Meter &m = e.stripMeters()[0];
     assert(std::fabs(m.peak[0] - 0.5f) < 1e-6 && std::fabs(m.rms[1] - 0.5f) < 1e-5 && m.maxPeak[0] >= m.peak[0]);
     assert(std::fabs(e.masterMeter().peak[0] - 0.5f) < 1e-6);
-    assert(e.captured().size() == 2 && e.captured()[0][500] == out.ports[0][0][500]);
+    assert(e.captured(0).size() == 2 && e.captured(0)[0][500] == out.ports[0][0][500]);
+    assert(e.captured(1)[1][500] == out.ports[0][1][500] && e.capturedMaster()[0][500] == out.ports[0][0][500]);
     e.clearPeaks();
     assert(e.stripMeters()[0].maxPeak[0] == 0.0f);
     assert(e.setDeviceParam(0, 0, "peak2.gain", 6.0));

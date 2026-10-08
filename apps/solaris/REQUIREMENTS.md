@@ -42,7 +42,7 @@ the section heading. Read before any code; conflict-check before accepting a new
 
 ---
 
-## R-DSP — the sound is the DSP library's — 🚧 IN PROGRESS (the library side is built — DR-DSP-1; Solaris hosts it from E1)
+## R-DSP — the sound is the DSP library's — ✅ IMPLEMENTED (DR-DSP-1, DR-ENG-1: Solaris hosts the registry's devices and implements none)
 
 The user's rule (2026-10-08): *"make sure all the core of those instruments and basic filters is in
 dsp."*
@@ -66,7 +66,7 @@ dsp."*
 - **R-DSP-5 Splitting at note events is the host's job.** A device renders whole blocks; the engine
   splits a block at every note event so a note starts on its exact sample (was SR-TIME-3).
 
-## R-INST — instruments — ✅ IMPLEMENTED in the DSP library (DR-INST-1, DR-INST-2); played by Solaris from E1
+## R-INST — instruments — ✅ IMPLEMENTED (DR-INST-1, DR-INST-2; played through Solaris's engine, DR-ENG-1)
 
 The user's request (2026-10-08): *"make me some basic instruments: Drum Machine, Basic Synth with 2
 OSC."*
@@ -87,7 +87,7 @@ OSC."*
 - **R-INST-4 Reserved:** a sampler (play a sample chromatically) (was SR-INST-2), VST3 hosting (was
   SR-RACK-3).
 
-## R-FX — effects — 🚧 IN PROGRESS (1–4 ✅ in the DSP library, DR-FX-1; 5, the strip's rack, from E1)
+## R-FX — effects — ✅ IMPLEMENTED (1–4 DR-FX-1; 5 the rack: `device add/remove/move`, DR-SVC-1)
 
 The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Reverb, …"*
 
@@ -106,7 +106,7 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
 
 ---
 
-## R-MIX — the mixer: every source has its own strip — 🚧 IN PROGRESS (4 ✅ DR-MIX-4; 11 ✅ DR-MIX-11; 1/5/6 rendered by the engine, DR-ENG-1; 3's defaults in the model)
+## R-MIX — the mixer: every source has its own strip — 🚧 IN PROGRESS (1–11 ✅ headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; 12, folding in the mixer VIEW, lands with the UI)
 
 The user's model (2026-10-08): *"sample got its own line by default; we can add multiple mixers as
 the user wants their workspace organised; the 1st mixer stores the samples, the 2nd receives from
@@ -150,7 +150,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 - **R-MIX-12 Strips feeding a bus fold under it** in the mixer view (expand to see them), so thirty
   one-shots are not thirty visible strips.
 
-## R-LANE — the timeline: lanes hold time — 📋 SPECIFIED
+## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅ headless: DR-CLIP-2/3; R-LANE-2's view lands with the UI)
 
 - **R-LANE-1 A lane is a timeline row for organisation only** (FL Studio's playlist): it holds any
   clips, from any strips. Lanes are added, named, coloured, reordered and deleted (deleting a lane
@@ -249,7 +249,7 @@ R-VER, applied to an arrangement:
 - **R-VER-5 Reserved:** import another song (concatenate or overlay), embed a song in a song or in
   Interstellar (was SR-MERGE-2, SR-EMBED-1..4).
 
-## R-RENDER — offline render — 📋 SPECIFIED
+## R-RENDER — offline render — ✅ IMPLEMENTED (DR-RENDER-1)
 
 - **R-RENDER-1 Render is offline and deterministic:** the same project, version and range give the
   same bytes (was SR-NFR-1, SR-RENDER-1).
@@ -276,7 +276,7 @@ R-VER, applied to an arrangement:
 
 ---
 
-## R-FMT — the `.slp` project — 🚧 IN PROGRESS (1, 2, 4 ✅ DR-FMT-1; 3's offline flag lands with V2)
+## R-FMT — the `.slp` project — ✅ IMPLEMENTED (DR-FMT-1; R-FMT-3's offline flag: `clips[].offline` and `audit`, DR-MIX-8/9/10)
 
 - **R-FMT-1 A `.slp` is a text document in the suite grammar** (`arstro-project = 1`, `app = solaris`,
   `#type id=… key=value`), normative in [`docs/project-format.md`](docs/project-format.md), and its
@@ -288,7 +288,7 @@ R-VER, applied to an arrangement:
   if missing (was SR-FMT-3; its content hash is deferred to R-VER-5, where merging needs it).
 - **R-FMT-4 A structural error refuses, a numeric corruption repairs** (Interstellar's rule).
 
-## R-SVC / R-API — the service and its document — 📋 SPECIFIED
+## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1…3, DR-API-1) — rung 4
 
 - **R-SVC-1** `SolarisService`: `dispatch(Command)` / `pump` / `model()` / an `Event` sink. The GUI,
   `solaris-cc`, a script and an agent send the same text lines (was SR-CLI-1).

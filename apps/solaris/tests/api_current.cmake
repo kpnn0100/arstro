@@ -1,0 +1,18 @@
+# R-API-1: the committed API document is what the code generates TODAY. Regenerate and compare;
+# a difference fails with the command that fixes it.
+foreach(kind json md)
+  if(kind STREQUAL "json")
+    set(file "${DOCS}/api.json")
+  else()
+    set(file "${DOCS}/API.md")
+  endif()
+  execute_process(COMMAND "${CC}" api --${kind} OUTPUT_VARIABLE now RESULT_VARIABLE rc)
+  if(NOT rc EQUAL 0)
+    message(FATAL_ERROR "solaris-cc api --${kind} failed (${rc})")
+  endif()
+  file(READ "${file}" committed)
+  if(NOT now STREQUAL committed)
+    message(FATAL_ERROR "${file} is stale — regenerate it:\n  solaris-cc api --${kind} > ${file}")
+  endif()
+endforeach()
+message(STATUS "docs/api.json and docs/API.md match the code")

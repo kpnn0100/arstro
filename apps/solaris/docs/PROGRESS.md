@@ -11,15 +11,15 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-08 — E1: the engine (sample-accurate, deterministic, Interstellar's laws).*
+*Last updated: 2026-10-08 — V1–V3: the service, solaris-cc, offline render, the API document (rung 4).*
 
 ---
 
 ## NEXT
 
-**► V1 — the service**: `SolarisService` (grammar table, events, `AppModel` + codec, compile
-`.slp` → `MixGraph` with solo resolution and pattern expansion, device params checked against the
-registry), `solaris-cc`, L2 tests through `dispatchText`.
+**► H1/P1 — live sound**: the host's settings and recents files, folder listing, PulseAudio device
+enumeration; then real-time playback on the clock device (transport commands, meters in the
+model, parameter edits through lock-free queues, structural edits by graph swap).
 
 ---
 
@@ -57,14 +57,18 @@ umbrella's pointer — `arstro.rule` §7).
       synth's shared noise), fixed in DSP `a16e972`.
 
 ### V — the service (rung 1 → 4)
-- [ ] **V1** `SolarisService` + grammar table + events + `AppModel` + codec; `solaris-cc`; L2 tests.
-- [ ] **V2** `render` to WAV (master, stems, per port) through the host's writer; audio clips decoded
+- [x] **V1** `SolarisService` + grammar table + events + `AppModel` + codec; `solaris-cc`; L2 tests.
+- [x] **V2** `render` to WAV (master, stems, per port) through the host's writer; audio clips decoded
       through the host's decoder.
-- [ ] **V3** `api --json|--md` generated, `docs/api.json` + `docs/API.md` committed, drift test.
+- [x] **V3** `api --json|--md` generated, `docs/api.json` + `docs/API.md` committed, drift test.
+      — V1–V3 landed as one commit (render needs the host's codecs, the document needs the
+      registry and the grammar): DR-SVC-1…3, DR-MIX-2/7/8/9/10, DR-CLIP-2/3, DR-RENDER-1, DR-API-1;
+      `solaris_service` 11 L2 tests, `solaris_api_current`; rung 4. End to end with the real CLI:
+      drums + synth bass + a sample + a reverb bus, rendered and measured.
 
 ### H/P — host and live sound
-- [ ] **H1** Host: FFmpeg decode, WAV writer, settings + recents files, folder listing, device
-      enumeration (PulseAudio).
+- [~] **H1** Host: FFmpeg decode, WAV writer ✅ (`host/AudioFiles.cpp`); settings + recents files,
+      folder listing, device enumeration (PulseAudio) — not yet.
 - [ ] **P1** Real-time playback on one device (the clock): transport, meters, param edits through
       lock-free queues, structural edits by graph swap.
 - [ ] **P2** Several devices: followers through an adaptive resampler (a DSP module), latency
@@ -86,6 +90,17 @@ umbrella's pointer — `arstro.rule` §7).
 ---
 
 ## Decisions log (newest first)
+
+- **2026-10-08 — `render --out` is the MASTER BUS** (after its rack and gain), not "whatever reaches
+  the Main port": a strip routed straight to a port (a headphone cue) is not part of the mixdown.
+  `--ports` writes what each port receives.
+- **2026-10-08 — a new clip with no `--lane` gets a new lane** (audio and notes alike), the CLI form
+  of "dropped into empty space" (R-BROWSE-3). `--lane` puts it on an existing one.
+- **2026-10-08 — a new source strip feeds the first bus on a LATER mixer** (that is "Main" in a new
+  song); with none, the master. No header field names the default — renaming Main keeps it working.
+- **2026-10-08 — Solaris has its own small `Json`**, the same shape as Interstellar's: that one lives
+  in `interstellar_core`, which hosts all of Cosmo; a shared utility library is an Interstellar
+  refactor, out of a Solaris task's scope.
 
 - **2026-10-08 — the engine warms every device with a block of silence.** The DSP library smooths
   each parameter write over a block (`SignalProcessor`), so a freshly built device ramps from its

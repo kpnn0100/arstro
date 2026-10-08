@@ -297,8 +297,9 @@ namespace engine
             meter(mStripMeters[si], st.outL.data(), st.outR.data(), n);
             for (int i = 0; i < n; ++i) { st.sumSq[0] += st.outL[i] * st.outL[i]; st.sumSq[1] += st.outR[i] * st.outR[i]; }
             st.counted += n;
-            if ((int)si == mCapture)
-                for (int i = 0; i < n; ++i) { mCaptured[0][off + i] = (float)st.outL[i]; mCaptured[1][off + i] = (float)st.outR[i]; }
+            for (size_t k = 0; k < mCapture.size(); ++k)
+                if (mCapture[k] == (int)si)
+                    for (int i = 0; i < n; ++i) { mCaptured[k][0][off + i] = (float)st.outL[i]; mCaptured[k][1][off + i] = (float)st.outR[i]; }
         }
 
         for (size_t k = 0; k < mMasterRack.size(); ++k)
@@ -309,6 +310,8 @@ namespace engine
         }
         for (int i = 0; i < n; ++i) { mMasterL[i] *= mGraph.masterGain; mMasterR[i] *= mGraph.masterGain; }
         meter(mMasterMeter, mMasterL.data(), mMasterR.data(), n);
+        if (mCaptureMaster)
+            for (int i = 0; i < n; ++i) { mCapturedMaster[0][off + i] = (float)mMasterL[i]; mCapturedMaster[1][off + i] = (float)mMasterR[i]; }
         for (int p : mGraph.masterPorts) route(Target{Target::Port, p}, mMasterL.data(), mMasterR.data(), n, 1.0, out, off);
     }
 
@@ -320,7 +323,8 @@ namespace engine
             out.ports[p].resize(std::max(1, mGraph.ports[p].channels));
             for (auto &ch : out.ports[p]) ch.assign(std::max(0, frames), 0.0f);
         }
-        if (mCapture >= 0) mCaptured.assign(2, std::vector<float>(std::max(0, frames), 0.0f));
+        mCaptured.assign(mCapture.size(), std::vector<std::vector<float>>(2, std::vector<float>(std::max(0, frames), 0.0f)));
+        if (mCaptureMaster) mCapturedMaster.assign(2, std::vector<float>(std::max(0, frames), 0.0f));
         for (auto &m : mStripMeters) m = Meter{{0, 0}, {0, 0}, {m.maxPeak[0], m.maxPeak[1]}};
         mMasterMeter = Meter{{0, 0}, {0, 0}, {mMasterMeter.maxPeak[0], mMasterMeter.maxPeak[1]}};
         for (auto &st : mStrips) { st->sumSq[0] = st->sumSq[1] = 0; st->counted = 0; }

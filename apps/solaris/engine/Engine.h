@@ -58,9 +58,13 @@ namespace engine
         /** Render `frames` from the current position into `out` and advance. */
         void render(int frames, PortBuffers &out);
 
-        /** Capture a strip's post-fader output into `stem` on every render (−1 = none) — stems. */
-        void captureStrip(int strip) { mCapture = strip; }
-        const std::vector<std::vector<float>> &captured() const { return mCaptured; }
+        /** Capture these strips' post-fader outputs on every render (stems); [] = none. */
+        void captureStrips(const std::vector<int> &strips) { mCapture = strips; }
+        /** The k-th captured strip's last render: [2][frames]. */
+        const std::vector<std::vector<float>> &captured(size_t k) const { return mCaptured[k]; }
+        /** Capture the master bus (after its rack and gain) on every render — the mixdown. */
+        void captureMaster(bool on) { mCaptureMaster = on; }
+        const std::vector<std::vector<float>> &capturedMaster() const { return mCapturedMaster; }
 
         const std::vector<Meter> &stripMeters() const { return mStripMeters; }
         const Meter &masterMeter() const { return mMasterMeter; }
@@ -85,8 +89,10 @@ namespace engine
         std::vector<double> mMasterL, mMasterR;
         std::vector<Meter> mStripMeters;
         Meter mMasterMeter;
-        int mCapture = -1;
-        std::vector<std::vector<float>> mCaptured;
+        std::vector<int> mCapture;
+        std::vector<std::vector<std::vector<float>>> mCaptured;
+        bool mCaptureMaster = false;
+        std::vector<std::vector<float>> mCapturedMaster;
         long long mPos = 0;
     };
 }

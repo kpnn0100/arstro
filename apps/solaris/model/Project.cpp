@@ -61,6 +61,13 @@ namespace solaris
         return nullptr;
     }
 
+    const Rack *Project::rack(const std::string &track) const
+    {
+        for (const auto &r : racks)
+            if (r.track == track) return &r;
+        return nullptr;
+    }
+
     DeviceNode *Project::device(const std::string &id, Rack **owner)
     {
         for (auto &r : racks)

@@ -175,6 +175,7 @@ namespace solaris
         const Lane *lane(const std::string &id) const;
         const Pattern *pattern(const std::string &id) const;
         const Clip *clip(const std::string &id) const;
+        const Rack *rack(const std::string &track) const;
 
         /** The mixer a strip lives on, resolved (absent = the first by order). */
         const Mixer *mixerOf(const Strip &s) const;

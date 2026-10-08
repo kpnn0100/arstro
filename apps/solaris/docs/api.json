@@ -1,0 +1,2327 @@
+{
+  "app": "solaris",
+  "generatedBy": "solaris-cc api --json",
+  "commands": [
+    {
+      "verb": "project new",
+      "usage": "project new <path.slp> [--bpm <n>] [--sig <n/d>] [--rate <hz>] [--name <text>]",
+      "args": "<path.slp>",
+      "flags": [
+        "bpm=<n>",
+        "sig=<n/d>",
+        "rate=<hz>",
+        "name=<text>"
+      ],
+      "summary": "Create a song and open it: Mixer 1 \"Sources\", Mixer 2 \"Buses\" with the bus \"Main\" → master, and the output port \"Main\" (R-MIX-3).",
+      "requirement": "R-HOME-1"
+    },
+    {
+      "verb": "project open",
+      "usage": "project open <path.slp>",
+      "args": "<path.slp>",
+      "flags": [],
+      "summary": "Open a song.",
+      "requirement": "R-HOME-1"
+    },
+    {
+      "verb": "project save",
+      "usage": "project save [path.slp]",
+      "args": "[path.slp]",
+      "flags": [],
+      "summary": "Write the .slp (a path saves it there).",
+      "requirement": "R-FMT-2"
+    },
+    {
+      "verb": "project close",
+      "usage": "project close",
+      "args": "",
+      "flags": [],
+      "summary": "Close the song and return Home.",
+      "requirement": "R-UI-1"
+    },
+    {
+      "verb": "set",
+      "usage": "set <address>=<value> …",
+      "args": "<address>=<value> …",
+      "flags": [],
+      "summary": "Write addresses: project.bpm, <strip>.gain, <clip>.at, <device>.<param> (any DSP registry parameter, in its unit), … — `api` lists every one. An unknown address or parameter is refused.",
+      "requirement": "R-SVC-3"
+    },
+    {
+      "verb": "get",
+      "usage": "get <address>",
+      "args": "<address>",
+      "flags": [],
+      "summary": "Print an address's stored value.",
+      "requirement": "R-SVC-1"
+    },
+    {
+      "verb": "mixer add",
+      "usage": "mixer add [name]",
+      "args": "[name]",
+      "flags": [],
+      "summary": "Add a mixer page after the last one.",
+      "requirement": "R-MIX-3"
+    },
+    {
+      "verb": "mixer delete",
+      "usage": "mixer delete <mx>",
+      "args": "<mx>",
+      "flags": [],
+      "summary": "Delete an empty mixer. Refused while strips live on it.",
+      "requirement": "R-MIX-3"
+    },
+    {
+      "verb": "mixer move",
+      "usage": "mixer move <mx> [--to <index>]",
+      "args": "<mx>",
+      "flags": [
+        "to=<index>"
+      ],
+      "summary": "Move a mixer to position <index> (0 = first). Refused if it would make any route point backward.",
+      "requirement": "R-MIX-4"
+    },
+    {
+      "verb": "strip add",
+      "usage": "strip add [--kind <audio|instrument|bus>] [--name <text>] [--mixer <mx>] [--instrument <synth|drums>] [--out <target>]",
+      "args": "",
+      "flags": [
+        "kind=<audio|instrument|bus>",
+        "name=<text>",
+        "mixer=<mx>",
+        "instrument=<synth|drums>",
+        "out=<target>"
+      ],
+      "summary": "Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: the first bus on a later mixer (\"Main\"), else master. An instrument strip gets its instrument (default synth) as its first device.",
+      "requirement": "R-MIX-1"
+    },
+    {
+      "verb": "strip delete",
+      "usage": "strip delete <ch> [--with-clips]",
+      "args": "<ch>",
+      "flags": [
+        "with-clips"
+      ],
+      "summary": "Delete a strip and its rack. Refused while clips play through it or strips route to it, unless --with-clips (its clips go too).",
+      "requirement": "R-MIX-1"
+    },
+    {
+      "verb": "strip move",
+      "usage": "strip move <ch> [--mixer <mx>] [--order <n>]",
+      "args": "<ch>",
+      "flags": [
+        "mixer=<mx>",
+        "order=<n>"
+      ],
+      "summary": "Move a strip to another mixer and/or position. Refused if a route would point backward.",
+      "requirement": "R-MIX-3"
+    },
+    {
+      "verb": "route",
+      "usage": "route <ch> [--to <ch|master|port>]",
+      "args": "<ch>",
+      "flags": [
+        "to=<ch|master|port>"
+      ],
+      "summary": "Set a strip's main output: a strip on a LATER mixer, master, or an output port.",
+      "requirement": "R-MIX-4"
+    },
+    {
+      "verb": "send add",
+      "usage": "send add <ch> [--to <ch|master|port>] [--gain <dB>] [--pre]",
+      "args": "<ch>",
+      "flags": [
+        "to=<ch|master|port>",
+        "gain=<dB>",
+        "pre"
+      ],
+      "summary": "Add a send (post-fader unless --pre). Same forward-only rule as `route`.",
+      "requirement": "R-MIX-5"
+    },
+    {
+      "verb": "send delete",
+      "usage": "send delete <sd>",
+      "args": "<sd>",
+      "flags": [],
+      "summary": "Remove a send.",
+      "requirement": "R-MIX-5"
+    },
+    {
+      "verb": "device add",
+      "usage": "device add <ch|master> [--type <registry type>] [--at <index>]",
+      "args": "<ch|master>",
+      "flags": [
+        "type=<registry type>",
+        "at=<index>"
+      ],
+      "summary": "Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an instrument strip.",
+      "requirement": "R-FX-5"
+    },
+    {
+      "verb": "device remove",
+      "usage": "device remove <dv>",
+      "args": "<dv>",
+      "flags": [],
+      "summary": "Remove a device from its rack. An instrument strip keeps its instrument.",
+      "requirement": "R-FX-5"
+    },
+    {
+      "verb": "device move",
+      "usage": "device move <dv> [--to <index>]",
+      "args": "<dv>",
+      "flags": [
+        "to=<index>"
+      ],
+      "summary": "Move a device within its rack.",
+      "requirement": "R-FX-5"
+    },
+    {
+      "verb": "lane add",
+      "usage": "lane add [name]",
+      "args": "[name]",
+      "flags": [],
+      "summary": "Add a timeline lane at the bottom.",
+      "requirement": "R-LANE-1"
+    },
+    {
+      "verb": "lane delete",
+      "usage": "lane delete <ln> [--with-clips]",
+      "args": "<ln>",
+      "flags": [
+        "with-clips"
+      ],
+      "summary": "Delete a lane. Refused while clips are drawn on it, unless --with-clips.",
+      "requirement": "R-LANE-1"
+    },
+    {
+      "verb": "clip add",
+      "usage": "clip add [--src <file>] [--strip <ch>] [--pattern <pt>] [--lane <ln>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]",
+      "args": "",
+      "flags": [
+        "src=<file>",
+        "strip=<ch>",
+        "pattern=<pt>",
+        "lane=<ln>",
+        "at=<beats>",
+        "length=<beats>",
+        "in=<s>",
+        "out=<s>"
+      ],
+      "summary": "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip, and with no --lane it gets a new lane. With --strip <instrument>: a note clip of --pattern (a new empty pattern if none).",
+      "requirement": "R-MIX-2"
+    },
+    {
+      "verb": "clip move",
+      "usage": "clip move <ac> [--at <beats>] [--lane <ln>] [--strip <ch>]",
+      "args": "<ac>",
+      "flags": [
+        "at=<beats>",
+        "lane=<ln>",
+        "strip=<ch>"
+      ],
+      "summary": "Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through).",
+      "requirement": "R-LANE-2"
+    },
+    {
+      "verb": "clip duplicate",
+      "usage": "clip duplicate <ac> [--at <beats>]",
+      "args": "<ac>",
+      "flags": [
+        "at=<beats>"
+      ],
+      "summary": "A copy right after it (or at --at). A note clip's copy plays the SAME pattern — linked.",
+      "requirement": "R-CLIP-3"
+    },
+    {
+      "verb": "clip unique",
+      "usage": "clip unique <ac>",
+      "args": "<ac>",
+      "flags": [],
+      "summary": "Give a note clip its own copy of its pattern.",
+      "requirement": "R-CLIP-3"
+    },
+    {
+      "verb": "clip delete",
+      "usage": "clip delete <ac>",
+      "args": "<ac>",
+      "flags": [],
+      "summary": "Remove a clip.",
+      "requirement": "R-LANE-1"
+    },
+    {
+      "verb": "pattern new",
+      "usage": "pattern new [--name <text>] [--length <beats>]",
+      "args": "",
+      "flags": [
+        "name=<text>",
+        "length=<beats>"
+      ],
+      "summary": "Create an empty pattern.",
+      "requirement": "R-CLIP-2"
+    },
+    {
+      "verb": "note add",
+      "usage": "note add <pt> [--pitch <0-127>] [--at <beats>] [--length <beats>] [--vel <1-127>]",
+      "args": "<pt>",
+      "flags": [
+        "pitch=<0-127>",
+        "at=<beats>",
+        "length=<beats>",
+        "vel=<1-127>"
+      ],
+      "summary": "Add a note to a pattern — every clip of it changes.",
+      "requirement": "R-CLIP-2"
+    },
+    {
+      "verb": "note delete",
+      "usage": "note delete <pt> [--pitch <0-127>] [--at <beats>]",
+      "args": "<pt>",
+      "flags": [
+        "pitch=<0-127>",
+        "at=<beats>"
+      ],
+      "summary": "Remove the note at that pitch and time.",
+      "requirement": "R-CLIP-2"
+    },
+    {
+      "verb": "render",
+      "usage": "render [--out <file.wav>] [--from <beats>] [--to <beats>] [--stems <ch,…>] [--ports] [--bits <24|32f>]",
+      "args": "",
+      "flags": [
+        "out=<file.wav>",
+        "from=<beats>",
+        "to=<beats>",
+        "stems=<ch,…>",
+        "ports",
+        "bits=<24|32f>"
+      ],
+      "summary": "Render offline: the master to --out; with --stems, each named strip's post-fader output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS or 10 s.",
+      "requirement": "R-RENDER-2"
+    },
+    {
+      "verb": "matrix print",
+      "usage": "matrix print [--json]",
+      "args": "",
+      "flags": [
+        "json"
+      ],
+      "summary": "Every route and send at once: rows = strips, columns = destinations.",
+      "requirement": "R-MIX-9"
+    },
+    {
+      "verb": "audit",
+      "usage": "audit",
+      "args": "",
+      "flags": [],
+      "summary": "The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping.",
+      "requirement": "R-MIX-10"
+    },
+    {
+      "verb": "state print",
+      "usage": "state print [--json] [--stable]",
+      "args": "",
+      "flags": [
+        "json",
+        "stable"
+      ],
+      "summary": "The whole AppModel; --stable omits what changes with time.",
+      "requirement": "R-SVC-2"
+    },
+    {
+      "verb": "api",
+      "usage": "api [--json] [--md]",
+      "args": "",
+      "flags": [
+        "json",
+        "md"
+      ],
+      "summary": "This document: every command, event, model field and device parameter.",
+      "requirement": "R-API-1"
+    }
+  ],
+  "events": [
+    {
+      "name": "info",
+      "fields": [
+        "text"
+      ],
+      "summary": "A note worth logging; carries no state."
+    },
+    {
+      "name": "error",
+      "fields": [
+        "why"
+      ],
+      "summary": "Something failed. Also set as AppModel.lastError."
+    },
+    {
+      "name": "command.rejected",
+      "fields": [
+        "line",
+        "why"
+      ],
+      "summary": "A line was refused (R-SVC-3): unknown verb, flag, address or parameter; a refused edit."
+    },
+    {
+      "name": "screen.changed",
+      "fields": [
+        "screen"
+      ],
+      "summary": "home | project."
+    },
+    {
+      "name": "project.opened",
+      "fields": [
+        "path",
+        "strips",
+        "clips"
+      ],
+      "summary": "A song is open."
+    },
+    {
+      "name": "project.saved",
+      "fields": [
+        "path"
+      ],
+      "summary": "The .slp was written."
+    },
+    {
+      "name": "project.closed",
+      "fields": [],
+      "summary": "Back to Home."
+    },
+    {
+      "name": "project.changed",
+      "fields": [
+        "what",
+        "node"
+      ],
+      "summary": "A node was added, removed, moved or re-routed. what = e.g. strip.added, clip.moved, route.set."
+    },
+    {
+      "name": "params.changed",
+      "fields": [
+        "address",
+        "value"
+      ],
+      "summary": "An address was written; value is what was STORED (clamped)."
+    },
+    {
+      "name": "render.finished",
+      "fields": [
+        "out",
+        "frames",
+        "peak"
+      ],
+      "summary": "A render was written; peak is the master's, dBFS."
+    },
+    {
+      "name": "render.failed",
+      "fields": [
+        "why"
+      ],
+      "summary": "A render stopped with an error."
+    },
+    {
+      "name": "audit.report",
+      "fields": [
+        "findings"
+      ],
+      "summary": "How many findings `audit` printed."
+    }
+  ],
+  "model": [
+    {
+      "path": "screen",
+      "type": "string",
+      "summary": "home | project",
+      "stable": true
+    },
+    {
+      "path": "projectPath",
+      "type": "string",
+      "summary": "the open .slp",
+      "stable": true
+    },
+    {
+      "path": "projectName",
+      "type": "string",
+      "summary": "the song's name",
+      "stable": true
+    },
+    {
+      "path": "dirty",
+      "type": "bool",
+      "summary": "unsaved changes",
+      "stable": true
+    },
+    {
+      "path": "bpm",
+      "type": "number",
+      "summary": "tempo",
+      "stable": true
+    },
+    {
+      "path": "sig",
+      "type": "string",
+      "summary": "meter, n/d",
+      "stable": true
+    },
+    {
+      "path": "sampleRate",
+      "type": "int",
+      "summary": "the project's rate",
+      "stable": true
+    },
+    {
+      "path": "masterGain",
+      "type": "number",
+      "summary": "dB",
+      "stable": true
+    },
+    {
+      "path": "masterOut",
+      "type": "string[]",
+      "summary": "the port ids the master feeds",
+      "stable": true
+    },
+    {
+      "path": "mixers",
+      "type": "object[]",
+      "summary": "mixer pages in order",
+      "stable": true
+    },
+    {
+      "path": "mixers[].id",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "mixers[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "mixers[].order",
+      "type": "int",
+      "summary": "processing and tab order",
+      "stable": true
+    },
+    {
+      "path": "mixers[].strips",
+      "type": "string[]",
+      "summary": "its strips in processing order",
+      "stable": true
+    },
+    {
+      "path": "strips",
+      "type": "object[]",
+      "summary": "every strip, in processing order",
+      "stable": true
+    },
+    {
+      "path": "strips[].id",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].kind",
+      "type": "string",
+      "summary": "audio | instrument | bus",
+      "stable": true
+    },
+    {
+      "path": "strips[].mixer",
+      "type": "string",
+      "summary": "the mixer it lives on (resolved)",
+      "stable": true
+    },
+    {
+      "path": "strips[].order",
+      "type": "int",
+      "summary": "position on its mixer",
+      "stable": true
+    },
+    {
+      "path": "strips[].out",
+      "type": "string",
+      "summary": "master, a strip id, or a port id (resolved)",
+      "stable": true
+    },
+    {
+      "path": "strips[].gain",
+      "type": "number",
+      "summary": "dB",
+      "stable": true
+    },
+    {
+      "path": "strips[].pan",
+      "type": "number",
+      "summary": "−1 … +1",
+      "stable": true
+    },
+    {
+      "path": "strips[].mute",
+      "type": "bool",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].solo",
+      "type": "bool",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].audible",
+      "type": "bool",
+      "summary": "false when muted or silenced by another strip's solo (R-MIX-7)",
+      "stable": true
+    },
+    {
+      "path": "strips[].colour",
+      "type": "int",
+      "summary": "−1 = none",
+      "stable": true
+    },
+    {
+      "path": "strips[].sends",
+      "type": "object[]",
+      "summary": "its sends",
+      "stable": true
+    },
+    {
+      "path": "strips[].sends[].id",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].sends[].to",
+      "type": "string",
+      "summary": "a strip on a later mixer, master, or a port",
+      "stable": true
+    },
+    {
+      "path": "strips[].sends[].gain",
+      "type": "number",
+      "summary": "dB",
+      "stable": true
+    },
+    {
+      "path": "strips[].sends[].pre",
+      "type": "bool",
+      "summary": "pre-fader",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices",
+      "type": "object[]",
+      "summary": "the rack, in order (an instrument strip's first is its instrument)",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].id",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].type",
+      "type": "string",
+      "summary": "the DSP registry type",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].label",
+      "type": "string",
+      "summary": "the registry's label",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].instrument",
+      "type": "bool",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].bypass",
+      "type": "bool",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].known",
+      "type": "bool",
+      "summary": "false when this build's registry lacks the type (kept, not played)",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].params",
+      "type": "object[]",
+      "summary": "every registry parameter, stored or default (R-UI-5)",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].params[].name",
+      "type": "string",
+      "summary": "the registry name, e.g. filter.cutoff",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].params[].label",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].params[].unit",
+      "type": "string",
+      "summary": "Hz, dB, ms, st, ct, oct, or empty",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].params[].text",
+      "type": "string",
+      "summary": "as stored: a number, or a choice's name",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].params[].value",
+      "type": "number",
+      "summary": "engineering units; a choice = its index",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].params[].min",
+      "type": "number",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].params[].max",
+      "type": "number",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].params[].def",
+      "type": "number",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].params[].choices",
+      "type": "string[]",
+      "summary": "empty unless a choice",
+      "stable": true
+    },
+    {
+      "path": "strips[].clipCount",
+      "type": "int",
+      "summary": "fed by: clips playing through it (R-MIX-8)",
+      "stable": true
+    },
+    {
+      "path": "strips[].fromLanes",
+      "type": "string[]",
+      "summary": "fed by: the lanes those clips are drawn on",
+      "stable": true
+    },
+    {
+      "path": "strips[].fromStrips",
+      "type": "string[]",
+      "summary": "fed by: strips whose output or a send lands here",
+      "stable": true
+    },
+    {
+      "path": "masterDevices",
+      "type": "object[]",
+      "summary": "the master's rack, shaped like strips[].devices",
+      "stable": true
+    },
+    {
+      "path": "lanes",
+      "type": "object[]",
+      "summary": "timeline rows, in order",
+      "stable": true
+    },
+    {
+      "path": "lanes[].id",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "lanes[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "lanes[].order",
+      "type": "int",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "lanes[].colour",
+      "type": "int",
+      "summary": "−1 = none",
+      "stable": true
+    },
+    {
+      "path": "clips",
+      "type": "object[]",
+      "summary": "every clip",
+      "stable": true
+    },
+    {
+      "path": "clips[].id",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "clips[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "clips[].track",
+      "type": "string",
+      "summary": "the strip it sounds through",
+      "stable": true
+    },
+    {
+      "path": "clips[].lane",
+      "type": "string",
+      "summary": "the lane it is drawn on (\"\" = its strip's own row)",
+      "stable": true
+    },
+    {
+      "path": "clips[].kind",
+      "type": "string",
+      "summary": "audio | note",
+      "stable": true
+    },
+    {
+      "path": "clips[].src",
+      "type": "string",
+      "summary": "audio: the file",
+      "stable": true
+    },
+    {
+      "path": "clips[].pattern",
+      "type": "string",
+      "summary": "note: the pattern it plays",
+      "stable": true
+    },
+    {
+      "path": "clips[].at",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "clips[].length",
+      "type": "number",
+      "summary": "beats, resolved",
+      "stable": true
+    },
+    {
+      "path": "clips[].in",
+      "type": "number",
+      "summary": "seconds into the file",
+      "stable": true
+    },
+    {
+      "path": "clips[].out",
+      "type": "number",
+      "summary": "seconds into the file",
+      "stable": true
+    },
+    {
+      "path": "clips[].gain",
+      "type": "number",
+      "summary": "dB",
+      "stable": true
+    },
+    {
+      "path": "clips[].fadeIn",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "clips[].fadeOut",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "clips[].loop",
+      "type": "bool",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "clips[].offline",
+      "type": "bool",
+      "summary": "the file could not be read",
+      "stable": true
+    },
+    {
+      "path": "clips[].linked",
+      "type": "int",
+      "summary": "clips playing the same pattern, this one included (R-CLIP-3)",
+      "stable": true
+    },
+    {
+      "path": "patterns",
+      "type": "object[]",
+      "summary": "every pattern",
+      "stable": true
+    },
+    {
+      "path": "patterns[].id",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "patterns[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "patterns[].length",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "patterns[].clips",
+      "type": "int",
+      "summary": "clips playing it",
+      "stable": true
+    },
+    {
+      "path": "patterns[].notes",
+      "type": "object[]",
+      "summary": "sorted by (at, pitch)",
+      "stable": true
+    },
+    {
+      "path": "patterns[].notes[].pitch",
+      "type": "int",
+      "summary": "0…127",
+      "stable": true
+    },
+    {
+      "path": "patterns[].notes[].at",
+      "type": "number",
+      "summary": "beats from the pattern's start",
+      "stable": true
+    },
+    {
+      "path": "patterns[].notes[].length",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "patterns[].notes[].vel",
+      "type": "int",
+      "summary": "1…127",
+      "stable": true
+    },
+    {
+      "path": "ports",
+      "type": "object[]",
+      "summary": "logical ports (R-DEV-3)",
+      "stable": true
+    },
+    {
+      "path": "ports[].id",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "ports[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "ports[].dir",
+      "type": "string",
+      "summary": "in | out",
+      "stable": true
+    },
+    {
+      "path": "ports[].channels",
+      "type": "int",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "lengthBeats",
+      "type": "number",
+      "summary": "where the last clip ends",
+      "stable": true
+    },
+    {
+      "path": "audit",
+      "type": "string[]",
+      "summary": "the last `audit`'s findings",
+      "stable": true
+    },
+    {
+      "path": "lastError",
+      "type": "string",
+      "summary": "the last refusal or failure",
+      "stable": true
+    },
+    {
+      "path": "revision",
+      "type": "int",
+      "summary": "bumps on every change",
+      "stable": false
+    }
+  ],
+  "devices": [
+    {
+      "type": "synth",
+      "label": "Basic Synth",
+      "kind": "instrument",
+      "summary": "Two oscillators and noise through a resonant filter and an amplitude envelope; 16 voices.",
+      "params": [
+        {
+          "name": "osc1.wave",
+          "label": "Wave",
+          "unit": "",
+          "choices": [
+            "sine",
+            "saw",
+            "square",
+            "triangle"
+          ],
+          "default": "saw"
+        },
+        {
+          "name": "osc1.octave",
+          "label": "Octave",
+          "unit": "oct",
+          "min": -3.0,
+          "max": 3.0,
+          "default": 0.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc1.semi",
+          "label": "Semi",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc1.fine",
+          "label": "Fine",
+          "unit": "ct",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc1.level",
+          "label": "Level",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.8,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc1.voices",
+          "label": "Unison",
+          "unit": "",
+          "min": 1.0,
+          "max": 5.0,
+          "default": 1.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc1.detune",
+          "label": "Detune",
+          "unit": "ct",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 15.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.wave",
+          "label": "Wave",
+          "unit": "",
+          "choices": [
+            "sine",
+            "saw",
+            "square",
+            "triangle"
+          ],
+          "default": "square"
+        },
+        {
+          "name": "osc2.octave",
+          "label": "Octave",
+          "unit": "oct",
+          "min": -3.0,
+          "max": 3.0,
+          "default": -1.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc2.semi",
+          "label": "Semi",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc2.fine",
+          "label": "Fine",
+          "unit": "ct",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 7.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.level",
+          "label": "Level",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.voices",
+          "label": "Unison",
+          "unit": "",
+          "min": 1.0,
+          "max": 5.0,
+          "default": 1.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc2.detune",
+          "label": "Detune",
+          "unit": "ct",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 15.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "noise",
+          "label": "Noise",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "filter.mode",
+          "label": "Mode",
+          "unit": "",
+          "choices": [
+            "lowpass",
+            "bandpass",
+            "highpass",
+            "notch"
+          ],
+          "default": "lowpass"
+        },
+        {
+          "name": "filter.cutoff",
+          "label": "Cutoff",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 20000.0,
+          "default": 2400.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "filter.res",
+          "label": "Resonance",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.25,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "filter.env",
+          "label": "Env Amount",
+          "unit": "oct",
+          "min": -8.0,
+          "max": 8.0,
+          "default": 2.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "filter.keytrack",
+          "label": "Key Track",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "fenv.attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 3.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "fenv.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 350.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "fenv.sustain",
+          "label": "Sustain",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.25,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "fenv.release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 300.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "amp.attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 3.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "amp.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 120.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "amp.sustain",
+          "label": "Sustain",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.8,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "amp.release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 250.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "volume",
+          "label": "Volume",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": -12.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "velocity",
+          "label": "Velocity",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.8,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
+      "type": "drums",
+      "label": "Drum Machine",
+      "kind": "instrument",
+      "summary": "Ten synthesized pads on the GM drum notes (36 kick … 56 cowbell); the closed hat chokes the open hat.",
+      "params": [
+        {
+          "name": "kick.tune",
+          "label": "Tune",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "kick.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 4000.0,
+          "default": 450.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "kick.tone",
+          "label": "Tone",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "kick.level",
+          "label": "Level",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "kick.pan",
+          "label": "Pan",
+          "unit": "",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "rim.tune",
+          "label": "Tune",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "rim.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 4000.0,
+          "default": 45.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "rim.tone",
+          "label": "Tone",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "rim.level",
+          "label": "Level",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "rim.pan",
+          "label": "Pan",
+          "unit": "",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "snare.tune",
+          "label": "Tune",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "snare.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 4000.0,
+          "default": 220.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "snare.tone",
+          "label": "Tone",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "snare.level",
+          "label": "Level",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "snare.pan",
+          "label": "Pan",
+          "unit": "",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "clap.tune",
+          "label": "Tune",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "clap.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 4000.0,
+          "default": 300.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "clap.tone",
+          "label": "Tone",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "clap.level",
+          "label": "Level",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "clap.pan",
+          "label": "Pan",
+          "unit": "",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "ltom.tune",
+          "label": "Tune",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "ltom.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 4000.0,
+          "default": 500.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "ltom.tone",
+          "label": "Tone",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "ltom.level",
+          "label": "Level",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "ltom.pan",
+          "label": "Pan",
+          "unit": "",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "chat.tune",
+          "label": "Tune",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "chat.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 4000.0,
+          "default": 60.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "chat.tone",
+          "label": "Tone",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "chat.level",
+          "label": "Level",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "chat.pan",
+          "label": "Pan",
+          "unit": "",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mtom.tune",
+          "label": "Tune",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mtom.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 4000.0,
+          "default": 420.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "mtom.tone",
+          "label": "Tone",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mtom.level",
+          "label": "Level",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mtom.pan",
+          "label": "Pan",
+          "unit": "",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "ohat.tune",
+          "label": "Tune",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "ohat.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 4000.0,
+          "default": 450.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "ohat.tone",
+          "label": "Tone",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "ohat.level",
+          "label": "Level",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "ohat.pan",
+          "label": "Pan",
+          "unit": "",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "htom.tune",
+          "label": "Tune",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "htom.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 4000.0,
+          "default": 360.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "htom.tone",
+          "label": "Tone",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "htom.level",
+          "label": "Level",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "htom.pan",
+          "label": "Pan",
+          "unit": "",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "cowbell.tune",
+          "label": "Tune",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "cowbell.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 4000.0,
+          "default": 350.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "cowbell.tone",
+          "label": "Tone",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "cowbell.level",
+          "label": "Level",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "cowbell.pan",
+          "label": "Pan",
+          "unit": "",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "volume",
+          "label": "Volume",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": -6.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
+      "type": "compressor",
+      "label": "Compressor",
+      "kind": "effect",
+      "summary": "Feed-forward peak compressor.",
+      "params": [
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 0.0,
+          "default": -18.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "ratio",
+          "label": "Ratio",
+          "unit": ":1",
+          "min": 1.0,
+          "max": 20.0,
+          "default": 4.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.1,
+          "max": 200.0,
+          "default": 5.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 5.0,
+          "max": 2000.0,
+          "default": 100.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "makeup",
+          "label": "Makeup",
+          "unit": "dB",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
+      "type": "eq",
+      "label": "EQ",
+      "kind": "effect",
+      "summary": "Low cut, low shelf, three peaks, high shelf, high cut.",
+      "params": [
+        {
+          "name": "lowcut.on",
+          "label": "Low Cut",
+          "unit": "",
+          "choices": [
+            "off",
+            "on"
+          ],
+          "default": "off"
+        },
+        {
+          "name": "lowcut.freq",
+          "label": "Low Cut",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 1000.0,
+          "default": 30.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "lowshelf.freq",
+          "label": "Low Shelf",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 1000.0,
+          "default": 100.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "lowshelf.gain",
+          "label": "Low Shelf",
+          "unit": "dB",
+          "min": -18.0,
+          "max": 18.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "peak1.freq",
+          "label": "Peak 1",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 20000.0,
+          "default": 250.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "peak1.gain",
+          "label": "Gain",
+          "unit": "dB",
+          "min": -18.0,
+          "max": 18.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "peak1.q",
+          "label": "Q",
+          "unit": "",
+          "min": 0.1,
+          "max": 10.0,
+          "default": 1.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "peak2.freq",
+          "label": "Peak 2",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 20000.0,
+          "default": 1000.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "peak2.gain",
+          "label": "Gain",
+          "unit": "dB",
+          "min": -18.0,
+          "max": 18.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "peak2.q",
+          "label": "Q",
+          "unit": "",
+          "min": 0.1,
+          "max": 10.0,
+          "default": 1.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "peak3.freq",
+          "label": "Peak 3",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 20000.0,
+          "default": 4000.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "peak3.gain",
+          "label": "Gain",
+          "unit": "dB",
+          "min": -18.0,
+          "max": 18.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "peak3.q",
+          "label": "Q",
+          "unit": "",
+          "min": 0.1,
+          "max": 10.0,
+          "default": 1.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "highshelf.freq",
+          "label": "High Shelf",
+          "unit": "Hz",
+          "min": 1000.0,
+          "max": 20000.0,
+          "default": 8000.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "highshelf.gain",
+          "label": "High Shelf",
+          "unit": "dB",
+          "min": -18.0,
+          "max": 18.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "highcut.on",
+          "label": "High Cut",
+          "unit": "",
+          "choices": [
+            "off",
+            "on"
+          ],
+          "default": "off"
+        },
+        {
+          "name": "highcut.freq",
+          "label": "High Cut",
+          "unit": "Hz",
+          "min": 1000.0,
+          "max": 20000.0,
+          "default": 18000.0,
+          "integer": false,
+          "log": true
+        }
+      ]
+    },
+    {
+      "type": "reverb",
+      "label": "Reverb",
+      "kind": "effect",
+      "summary": "Feedback-delay-network reverb, decorrelated stereo.",
+      "params": [
+        {
+          "name": "size",
+          "label": "Size",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 300.0,
+          "default": 100.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 100.0,
+          "max": 10000.0,
+          "default": 1500.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "lowcut",
+          "label": "Low Cut",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 2000.0,
+          "default": 100.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "highcut",
+          "label": "High Cut",
+          "unit": "Hz",
+          "min": 1000.0,
+          "max": 20000.0,
+          "default": 8000.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "width",
+          "label": "Width",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.6,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mix",
+          "label": "Mix",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.25,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
+      "type": "delay",
+      "label": "Delay",
+      "kind": "effect",
+      "summary": "Feedback echo, each repeat darker.",
+      "params": [
+        {
+          "name": "time",
+          "label": "Time",
+          "unit": "ms",
+          "min": 1.0,
+          "max": 2000.0,
+          "default": 375.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "feedback",
+          "label": "Feedback",
+          "unit": "",
+          "min": 0.0,
+          "max": 0.95,
+          "default": 0.4,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "tone",
+          "label": "Tone",
+          "unit": "Hz",
+          "min": 200.0,
+          "max": 20000.0,
+          "default": 4000.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "mix",
+          "label": "Mix",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.3,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
+      "type": "chorus",
+      "label": "Chorus",
+      "kind": "effect",
+      "summary": "LFO-modulated short delay.",
+      "params": [
+        {
+          "name": "rate",
+          "label": "Rate",
+          "unit": "Hz",
+          "min": 0.05,
+          "max": 10.0,
+          "default": 1.5,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "depth",
+          "label": "Depth",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10.0,
+          "default": 3.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "delay",
+          "label": "Delay",
+          "unit": "ms",
+          "min": 1.0,
+          "max": 40.0,
+          "default": 12.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mix",
+          "label": "Mix",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
+      "type": "drive",
+      "label": "Drive",
+      "kind": "effect",
+      "summary": "tanh waveshaper with a tone low-pass.",
+      "params": [
+        {
+          "name": "drive",
+          "label": "Drive",
+          "unit": "x",
+          "min": 1.0,
+          "max": 50.0,
+          "default": 2.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "tone",
+          "label": "Tone",
+          "unit": "Hz",
+          "min": 500.0,
+          "max": 20000.0,
+          "default": 5000.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "level",
+          "label": "Level",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
+      "type": "filter",
+      "label": "Filter",
+      "kind": "effect",
+      "summary": "The synth's resonant state-variable filter, with a dry/wet mix.",
+      "params": [
+        {
+          "name": "mode",
+          "label": "Mode",
+          "unit": "",
+          "choices": [
+            "lowpass",
+            "bandpass",
+            "highpass",
+            "notch"
+          ],
+          "default": "lowpass"
+        },
+        {
+          "name": "cutoff",
+          "label": "Cutoff",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 20000.0,
+          "default": 1000.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "res",
+          "label": "Resonance",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.3,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mix",
+          "label": "Mix",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    }
+  ]
+}
