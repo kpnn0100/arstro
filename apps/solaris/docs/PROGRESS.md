@@ -11,15 +11,15 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-08 — D1: the DSP primitives (EQ, SVF, noise, decay envelope).*
+*Last updated: 2026-10-08 — D2: the Basic Synth and the Drum Machine, in the DSP library.*
 
 ---
 
 ## NEXT
 
-**► D2 — the instruments**, in `core/DigitalSignalProcessing` under `arstro.dsp.implement`:
-`BasicSynth` (2 OSC → SVF → amp ADSR) and `DrumMachine` (synthesized GM pads, hat choke), built
-from D1's primitives and the existing `Oscillator`/`ADSREnvelope`.
+**► D3 — the `Device` interface and the `DeviceRegistry`**, in `core/DigitalSignalProcessing`:
+one uniform device over every instrument and effect (synth, drums, compressor, eq, reverb, delay,
+chorus, drive, filter), each parameter described once — name, unit, range, default, choices.
 
 ---
 
@@ -37,8 +37,10 @@ umbrella's pointer — `arstro.rule` §7).
       (seeded); `DecayEnvelope` (exponential). `## Math` in each README; unit + integration tests.
       — DSP `1256c64` (REQ-eq-1/2, REQ-svf-1/2, REQ-noise-1, REQ-decay-1); measured against
       formulas recomputed in Python: EQ 0.000 dB, SVF 0.042 dB, decay −298.5 dB/s vs −300.
-- [ ] **D2** Instruments: `BasicSynth` (2 OSC → SVF → amp ADSR, filter ADSR, unison, noise);
-      `DrumMachine` (10 synthesized pads on GM notes, hat choke).
+- [x] **D2** Instruments: `BasicSynth` (2 OSC → SVF → amp ADSR, filter ADSR, unison, noise);
+      `DrumMachine` (10 synthesized pads on GM notes, hat choke). — DSP `1fd677f` (REQ-inst-1,
+      REQ-synth2-1…5, REQ-drum-1…5); equal temperament to 0.026 cents, kick settles on
+      48·2^(tune/12) Hz, choke > 60 dB, every pad sounds and stops, renders byte-identical.
 - [ ] **D3** `Device` interface + `DeviceRegistry`: synth, drums, compressor, eq, reverb, delay,
       chorus, drive, filter — names, units, ranges, defaults, choices; one factory.
 
