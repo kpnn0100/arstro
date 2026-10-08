@@ -195,11 +195,12 @@
     },
     {
       "verb": "clip add",
-      "usage": "clip add [--src <file>] [--strip <ch>] [--pattern <pt>] [--lane <ln>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]",
+      "usage": "clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--pattern <pt>] [--lane <ln>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]",
       "args": "",
       "flags": [
         "src=<file>",
         "strip=<ch>",
+        "instrument=<type>",
         "pattern=<pt>",
         "lane=<ln>",
         "at=<beats>",
@@ -207,7 +208,7 @@
         "in=<s>",
         "out=<s>"
       ],
-      "summary": "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip, and with no --lane it gets a new lane. With --strip <instrument>: a note clip of --pattern (a new empty pattern if none).",
+      "summary": "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip, and with no --lane it gets a new lane. With --strip <instrument>: a note clip of --pattern (a new empty pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3).",
       "requirement": "R-MIX-2"
     },
     {
@@ -738,7 +739,7 @@
     {
       "path": "strips[].colour",
       "type": "int",
-      "summary": "−1 = none",
+      "summary": "an index into the track colours: its own, else from its id — never −1",
       "stable": true
     },
     {
@@ -1322,6 +1323,30 @@
       "type": "number[]",
       "summary": "L/R peaks of the last played block",
       "stable": false
+    },
+    {
+      "path": "deviceTypes",
+      "type": "object[]",
+      "summary": "the DSP registry: every instrument and effect a strip can host (R-BROWSE-1)",
+      "stable": true
+    },
+    {
+      "path": "deviceTypes[].name",
+      "type": "string",
+      "summary": "the registry type, what `device add --type` and `--instrument` take",
+      "stable": true
+    },
+    {
+      "path": "deviceTypes[].label",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "deviceTypes[].kind",
+      "type": "string",
+      "summary": "instrument | effect",
+      "stable": true
     },
     {
       "path": "browser",

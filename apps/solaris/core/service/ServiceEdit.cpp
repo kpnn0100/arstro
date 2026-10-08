@@ -355,10 +355,24 @@ namespace solaris
             Clip cl;
             if (!beatsFlag(c, "at", 0.0, cl.at, err)) return false;
             if (c.has("lane") && !p.lane(c.flag("lane"))) { err = "no lane `" + c.flag("lane") + "`"; return false; }
+            std::string made; // --instrument: a new instrument strip, made by `strip add`'s own rules (R-BROWSE-3: one drop, one command)
+            if (c.has("instrument"))
+            {
+                if (c.has("src") || c.has("strip")) { err = "--instrument makes its own strip — give it without --src or --strip"; return false; }
+                Command sc;
+                sc.kind = K::StripAdd;
+                sc.flags = {{"kind", "instrument"}, {"instrument", c.flag("instrument")}};
+                if (!mixCommand(sc, err)) return false;
+                made = p.strips.back().id;
+            }
             if (c.has("src"))
             {
                 // R-MIX-2: a file the song has not used gets its own strip; a used one reuses it.
-                cl.src = relativePath(c.flag("src"));
+                // A relative path names a file in the SONG's folder when one is there (what the model stores, and
+                // what the browser's "Song" list hands back); otherwise the caller's working directory.
+                std::string given = c.flag("src");
+                if (!fs::path(given).is_absolute() && !mPath.empty() && fs::exists(resolvePath(given))) given = resolvePath(given);
+                cl.src = relativePath(given);
                 auto pcm = pcmFor(cl.src);
                 if (!pcm)
                 {
@@ -403,10 +417,11 @@ namespace solaris
                 cl.name = stem;
                 cl.lane = c.has("lane") ? c.flag("lane") : newLane(stem);
             }
-            else if (c.has("strip"))
+            else if (c.has("strip") || !made.empty())
             {
-                const Strip *s = p.strip(c.flag("strip"));
-                if (!s) { err = "no strip `" + c.flag("strip") + "`"; return false; }
+                const std::string sid = made.empty() ? c.flag("strip") : made;
+                const Strip *s = p.strip(sid);
+                if (!s) { err = "no strip `" + sid + "`"; return false; }
                 if (s->kind != "instrument") { err = s->id + " is a " + s->kind + " strip — notes need an instrument strip (or give --src for audio)"; return false; }
                 cl.track = s->id;
                 if (c.has("pattern"))
@@ -429,7 +444,7 @@ namespace solaris
             }
             else
             {
-                err = "clip add needs --src <file> (audio) or --strip <instrument strip> (notes)";
+                err = "clip add needs --src <file> (audio), --strip <instrument strip> or --instrument <type> (notes)";
                 return false;
             }
             cl.id = p.nextId("ac");

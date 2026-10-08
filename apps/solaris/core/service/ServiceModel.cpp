@@ -8,6 +8,7 @@
 #include "SolarisService.h"
 #include "device/Device.h"
 #include <algorithm>
+#include <cstdlib>
 #include <cmath>
 #include <fstream>
 #include <functional>
@@ -93,6 +94,8 @@ namespace solaris
         for (const auto &p : mSettings.ports) mModel.settings.ports.push_back(p.first + "=" + p.second);
         mModel.devices = mDevices;
         mModel.browser = mBrowser;
+        for (const auto &t : DeviceRegistry::types())
+            mModel.deviceTypes.push_back(DeviceTypeModel{t.name, t.label, t.kind == DeviceKind::Instrument ? "instrument" : "effect"});
         if (mRecentsStale)
         {
             // Home's cards read each song's header: done when the list or a song changes, not per command
@@ -156,7 +159,9 @@ namespace solaris
             sm.mixer = p.mixerOf(*s) ? p.mixerOf(*s)->id : std::string();
             sm.out = s->out.empty() ? "master" : s->out;
             sm.order = s->order;
-            sm.colour = s->colour;
+            // its own, else one from its id's number: a default that never changes when other strips come and go
+            // (one by position would recolour every later strip's clips the moment one is deleted)
+            sm.colour = s->colour >= 0 ? s->colour : std::max(0, std::atoi(s->id.c_str() + std::min(s->id.size(), s->id.find('_') + 1)) - 1);
             sm.gain = s->gain;
             sm.pan = s->pan;
             sm.mute = s->mute;

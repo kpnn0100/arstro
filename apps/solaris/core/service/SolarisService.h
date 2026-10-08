@@ -108,6 +108,7 @@ namespace solaris
         AppModel mModel;
         std::string mOutput;
         std::vector<std::function<void(const Event &)>> mSinks;
+        std::vector<Event> mPending; // an edit's events, emitted only once the whole command has landed
         std::map<std::string, std::shared_ptr<const engine::Pcm>> mPcm; // by resolved path, at mPcmRate
         std::set<std::string> mOffline;                                 // resolved paths that would not decode
         int mPcmRate = 0;

@@ -5,7 +5,9 @@
 #undef NDEBUG
 #endif
 #include "../Rig.h"
+using arstro::solaris_ui::Timeline;
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <string>
 
@@ -151,6 +153,172 @@ static void test_home_unsaved_confirm_and_recents()
     pass("Home: unsaved changes ask first (Discard closes); a card opens its song, right-click forgets it");
 }
 
+namespace
+{
+    // a widget-local rect → window coordinates (the App draws its tree at the identity transform)
+    artboard::Rect world(const artboard::Segment &s, const artboard::Rect &r)
+    {
+        const artboard::Point o = s.worldTransform().apply(artboard::Point{0, 0});
+        return artboard::Rect{r.x + o.x, r.y + o.y, r.w, r.h};
+    }
+    double cx(const artboard::Rect &r) { return r.x + r.w * 0.5; }
+    double cy(const artboard::Rect &r) { return r.y + r.h * 0.5; }
+}
+
+static void test_browser_tabs_and_sample_drag()
+{
+    sltest::Rig r("ui-browse", 1280, 800);
+    r.cmd("folder add /music/Samples");
+    r.cmd("project new " + r.song("Browse") + ".slp --bpm 120");
+    r.settle();
+    auto &b = r.app->project().browser();
+    auto &tl = r.app->project().timeline();
+    // the tab highlight SLIDES
+    const double x0 = b.tabHighlightX();
+    r.click(world(b, b.tabRect(1)));
+    r.frame();
+    r.frame();
+    const double mid = b.tabHighlightX();
+    assert(mid > x0 && mid < b.tabRect(1).x);
+    r.settle();
+    assert(b.tab() == 1 && b.row(1).value == "synth" && b.row(1).label == "Basic Synth");
+    // back to Samples: the folder from Settings, browsed by a click
+    r.click(world(b, b.tabRect(0)));
+    r.settle();
+    assert(b.rowCount() == 1 && b.row(0).kind == "folder");
+    r.click(world(b, b.rowRect(0)));
+    r.settle();
+    assert(sentLine(r, "browse /music/Samples"));
+    int kick = -1;
+    for (int i = 0; i < b.rowCount(); ++i)
+        if (b.row(i).label == "808 kick.wav") kick = i;
+    assert(kick > 0);
+    // drag it onto the lanes, at beat 4 (no lanes yet: below the last = a new one)
+    const artboard::Rect from = world(b, b.rowRect(kick));
+    const double toX = world(tl, artboard::Rect{tl.beatToX(4.0), 0, 0, 0}).x + 2.0;
+    const double toY = world(tl, artboard::Rect{0, Timeline::kRulerH + 20.0, 0, 0}).y;
+    r.drag(cx(from), cy(from), toX, toY, 8, false);
+    assert(r.app->project().ghostAmount() > 0.0);                          // the ghost follows the pointer
+    r.app->pointer(2, toX, toY, 0, r.now);
+    r.settle();
+    assert(sentLine(r, "clip add --src \"/music/Samples/808 kick.wav\" --at 4"));
+    const auto &m = r.svc->model();
+    assert(m.clips.size() == 1 && m.clips[0].at == 4.0 && m.strips.size() == 2 && m.lanes.size() == 1); // its own strip, a new lane
+    assert(r.app->project().ghostAmount() == 0.0);
+    pass("Browser: the tab highlight slides; a sample folder is browsed; a sample dragged to the lanes is `clip add` at the drop beat");
+}
+
+static void test_instrument_drop_and_clip_drag()
+{
+    sltest::Rig r("ui-drop", 1280, 800);
+    r.cmd("project new " + r.song("Drop") + ".slp --bpm 120");
+    r.cmd("lane add Beats");
+    r.cmd("lane add Bass");
+    r.settle();
+    auto &b = r.app->project().browser();
+    auto &tl = r.app->project().timeline();
+    r.click(world(b, b.tabRect(1)));
+    r.settle();
+    int drums = -1;
+    for (int i = 0; i < b.rowCount(); ++i)
+        if (b.row(i).value == "drums") drums = i;
+    const artboard::Rect from = world(b, b.rowRect(drums));
+    const artboard::Rect lane0 = world(tl, tl.rowRect(0));
+    r.drag(cx(from), cy(from), world(tl, artboard::Rect{tl.beatToX(2.0), 0, 0, 0}).x + 2.0, cy(lane0));
+    r.settle();
+    assert(sentLine(r, "clip add --instrument drums --at 2 --length 4 --lane ln_1"));   // one drop, one line (R-BROWSE-3)
+    assert(!sentLine(r, "strip add --kind instrument --instrument drums"));
+    bool made = false;
+    for (const auto &st : r.svc->model().strips) made |= st.id == r.svc->model().clips[0].track && st.kind == "instrument";
+    assert(made);
+    // drag that clip: +2 beats, down a lane — it follows the pointer exactly, then `clip move`
+    const artboard::Rect c0 = world(tl, tl.clipRect("ac_1"));
+    const artboard::Rect lane1 = world(tl, tl.rowRect(1));
+    const double dx = 2.0 * tl.pxPerBeat();
+    r.drag(c0.x + 10.0, cy(c0), c0.x + 10.0 + dx, cy(lane1), 8, false);
+    const artboard::Rect mid = world(tl, tl.clipRect("ac_1"));
+    assert(std::fabs(mid.x - (c0.x + dx)) < 1.0 && std::fabs(cy(mid) - cy(lane1)) < 1.0);
+    r.app->pointer(2, c0.x + 10.0 + dx, cy(lane1), 0, r.now);
+    r.settle();
+    assert(sentLine(r, "clip move ac_1 --at 4 --lane ln_2"));
+    assert(r.svc->model().clips[0].at == 4.0 && r.svc->model().clips[0].lane == "ln_2");
+    const artboard::Rect after = world(tl, tl.clipRect("ac_1"));
+    assert(std::fabs(after.x - mid.x) < 1.0);                           // where it was dropped: nothing jumps
+    pass("An instrument dropped on a lane is ONE `clip add --instrument` — a strip and its clip; a clip dragged follows the pointer and lands as `clip move`");
+}
+
+static void test_lists_travel_when_the_song_changes_shape()
+{
+    sltest::Rig r("ui-travel", 1280, 800);
+    r.cmd("project new " + r.song("Travel") + ".slp --bpm 120");
+    r.cmd("clip add --instrument drums --at 0 --length 4");
+    r.settle();
+    auto &b = r.app->project().browser();
+    auto &tl = r.app->project().timeline();
+    assert(tl.clipAlpha("ac_1") == 1.0);                 // there when the song opened: placed, not faded in
+    // a clip arriving from a shell fades in: the first frame it shows, it is not yet whole
+    r.cmd("clip add --instrument synth --at 4 --length 4");
+    double first = 0;
+    for (int k = 0; k < 20 && first == 0; ++k) { r.frame(); first = tl.clipAlpha("ac_2"); }
+    assert(first > 0.0 && first < 1.0);
+    r.settle();
+    assert(tl.clipAlpha("ac_2") == 1.0);
+    // a clip moved from a shell EASES there
+    const double x0 = tl.clipRect("ac_1").x;
+    r.cmd("clip move ac_1 --at 8");
+    r.frame();
+    r.frame();
+    const double xm = tl.clipRect("ac_1").x;
+    r.settle();
+    const double x1 = tl.clipRect("ac_1").x;
+    assert(x1 > x0 && xm > x0 && xm < x1);
+    // a lane removed above: the one below SLIDES up; the removed clip fades where it was and takes no input
+    const double y0 = tl.rowRect(1).y;
+    r.cmd("lane delete ln_1 --with-clips");
+    r.frame();
+    r.frame();
+    const double ym = tl.rowRect(0).y, ghost = tl.clipAlpha("ac_1");
+    assert(tl.clipRect("ac_1").w == 0.0 && ghost > 0.0 && ghost < 1.0);
+    r.settle();
+    const double y1 = tl.rowRect(0).y;
+    assert(ym < y0 && ym > y1 && tl.clipAlpha("ac_1") == 0.0);
+    // the browser: a tab switched CROSS-FADES its list
+    r.click(world(b, b.tabRect(1)));
+    double fa = 0;
+    for (int k = 0; k < 20 && fa == 0; ++k) { r.frame(); fa = b.rowAlpha(1); }
+    assert(fa > 0.0 && fa < 1.0);
+    r.settle();
+    assert(b.rowAlpha(1) == 1.0);
+    pass("Lists travel (§1): a clip from a shell fades in, a `clip move` eases, a lane removed slides the next up, a tab cross-fades");
+}
+
+static void test_ruler_seek_keys_and_selection()
+{
+    sltest::Rig r("ui-ruler", 1280, 800);
+    r.cmd("project new " + r.song("Ruler") + ".slp --bpm 120");
+    r.cmd("strip add --kind instrument --instrument synth");
+    r.cmd("clip add --strip ch_2 --length 4");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    r.click(world(tl, artboard::Rect{tl.beatToX(8.0), 4.0, 1.0, 10.0}));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "transport seek 8"));
+    assert(tl.playheadBeat() > 0.0 && tl.playheadBeat() < 8.0);        // a seek EASES the playhead
+    r.settle();
+    assert(tl.playheadBeat() == 8.0);
+    r.click(world(tl, tl.clipRect("ac_1")));
+    r.frame();
+    assert(tl.selectedClip() == "ac_1");
+    r.key('D', true);                                                   // Ctrl+D: a linked copy after it
+    assert(sentLine(r, "clip duplicate ac_1") && r.svc->model().clips.size() == 2 && r.svc->model().clips[1].linked == 2);
+    r.key(46);                                                          // Delete
+    assert(sentLine(r, "clip delete ac_1") && r.svc->model().clips.size() == 1);
+    r.settle();
+    assert(tl.selectedClip().empty());                                  // the selection went with the clip
+    pass("Ruler click seeks (the playhead eases); a clip selects; Ctrl+D duplicates linked, Delete removes it");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -160,6 +328,10 @@ int main()
     test_settings_folders();
     test_song_bar_and_keys();
     test_home_unsaved_confirm_and_recents();
+    test_browser_tabs_and_sample_drag();
+    test_instrument_drop_and_clip_drag();
+    test_ruler_seek_keys_and_selection();
+    test_lists_travel_when_the_song_changes_shape();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

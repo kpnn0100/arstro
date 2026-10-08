@@ -28,7 +28,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `device move <dv> [--to <index>]` | Move a device within its rack. | R-FX-5 |
 | `lane add [name]` | Add a timeline lane at the bottom. | R-LANE-1 |
 | `lane delete <ln> [--with-clips]` | Delete a lane. Refused while clips are drawn on it, unless --with-clips. | R-LANE-1 |
-| `clip add [--src <file>] [--strip <ch>] [--pattern <pt>] [--lane <ln>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]` | Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip, and with no --lane it gets a new lane. With --strip <instrument>: a note clip of --pattern (a new empty pattern if none). | R-MIX-2 |
+| `clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--pattern <pt>] [--lane <ln>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]` | Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip, and with no --lane it gets a new lane. With --strip <instrument>: a note clip of --pattern (a new empty pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). | R-MIX-2 |
 | `clip move <ac> [--at <beats>] [--lane <ln>] [--strip <ch>]` | Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). | R-LANE-2 |
 | `clip duplicate <ac> [--at <beats>]` | A copy right after it (or at --at). A note clip's copy plays the SAME pattern — linked. | R-CLIP-3 |
 | `clip unique <ac>` | Give a note clip its own copy of its pattern. | R-CLIP-3 |
@@ -119,7 +119,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].mute` | bool |  |
 | `strips[].solo` | bool |  |
 | `strips[].audible` | bool | false when muted or silenced by another strip's solo (R-MIX-7) |
-| `strips[].colour` | int | −1 = none |
+| `strips[].colour` | int | an index into the track colours: its own, else from its id — never −1 |
 | `strips[].sends` | object[] | its sends |
 | `strips[].sends[].id` | string |  |
 | `strips[].sends[].to` | string | a strip on a later mixer, master, or a port |
@@ -217,6 +217,10 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.latencyMs` | number | the clock device's *(not in `--stable`)* |
 | `transport.device` | string | the clock device ('' = the system default) |
 | `transport.masterPeak` | number[] | L/R peaks of the last played block *(not in `--stable`)* |
+| `deviceTypes` | object[] | the DSP registry: every instrument and effect a strip can host (R-BROWSE-1) |
+| `deviceTypes[].name` | string | the registry type, what `device add --type` and `--instrument` take |
+| `deviceTypes[].label` | string |  |
+| `deviceTypes[].kind` | string | instrument \| effect |
 | `browser` | object | the folder last browsed |
 | `browser.path` | string |  |
 | `browser.entries` | object[] | folders first, then by name |

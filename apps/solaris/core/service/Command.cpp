@@ -73,10 +73,11 @@ namespace solaris
              "Delete a lane. Refused while clips are drawn on it, unless --with-clips.", "R-LANE-1"},
 
             {K::ClipAdd, "clip add", "", 0, 0,
-             {"src=<file>", "strip=<ch>", "pattern=<pt>", "lane=<ln>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>"},
+             {"src=<file>", "strip=<ch>", "instrument=<type>", "pattern=<pt>", "lane=<ln>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>"},
              "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the "
              "first mixer (R-MIX-2), a used one reuses its strip, and with no --lane it gets a new lane. With "
-             "--strip <instrument>: a note clip of --pattern (a new empty pattern if none).", "R-MIX-2"},
+             "--strip <instrument>: a note clip of --pattern (a new empty pattern if none). With --instrument "
+             "<type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3).", "R-MIX-2"},
             {K::ClipMove, "clip move", "<ac>", 1, 1, {"at=<beats>", "lane=<ln>", "strip=<ch>"},
              "Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through).", "R-LANE-2"},
             {K::ClipDuplicate, "clip duplicate", "<ac>", 1, 1, {"at=<beats>"},

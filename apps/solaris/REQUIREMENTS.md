@@ -150,7 +150,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 - **R-MIX-12 Strips feeding a bus fold under it** in the mixer view (expand to see them), so thirty
   one-shots are not thirty visible strips.
 
-## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅ headless: DR-CLIP-2/3; R-LANE-2's view lands with the UI)
+## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅: DR-CLIP-2/3 headless, DR-UI-3 drawn and dragged; R-LANE-2's view with U4)
 
 - **R-LANE-1 A lane is a timeline row for organisation only** (FL Studio's playlist): it holds any
   clips, from any strips. Lanes are added, named, coloured, reordered and deleted (deleting a lane
@@ -223,16 +223,23 @@ audio devices so the user can take advantage of their devices."*
   `bpm · length`, version count. New (name, tempo, meter, sample rate defaulting from Settings),
   Open, Settings.
 
-## R-BROWSE — the left panel: samples and presets — 🚧 IN PROGRESS (listing ✅ DR-BROWSE-1; the panel and drag and drop land with U2/U4)
+## R-BROWSE — the left panel: samples and presets — 🚧 IN PROGRESS (1 ✅ DR-BROWSE-1/2, presets wait for a preset store; 3 ✅ onto the lanes, DR-BROWSE-2 — onto a strip or a rack with U3/U4; 2 audition with P2)
 
 - **R-BROWSE-1 Three sections:** Folders (the sample folders from Settings), Presets (every
   instrument and effect in the registry with its factory and user presets), Project (the sounds the
-  project already uses).
+  project already uses). (**AMENDED (U2, 2026-10-08):** the tabs read **Samples · Instruments ·
+  Song** — a tab is named for what is in it: "Folders" named the mechanism; "Presets" promised a
+  preset store that does not exist yet, so the tab lists the registry's instruments and effects and
+  a type's factory and user presets will join it under its row; "Project" is "the song" everywhere
+  else in this app.)
 - **R-BROWSE-2 Click auditions** a sample through the master's port without touching the project.
 - **R-BROWSE-3 Drag and drop.** A sample onto a lane → a clip at the drop point on a new or reused
   strip (R-MIX-2); into empty space → a new lane too; onto a strip → load it there. An instrument
   preset into empty space → a new instrument strip + lane + an empty clip; onto a strip's rack → an
-  effect inserted at that slot. **Every drop is one command** (R-G-4).
+  effect inserted at that slot. **Every drop is one command** (R-G-4). (**Added 2026-10-08,
+  building U2:** an instrument dropped is `clip add --instrument <type>` — the new strip and its
+  empty clip in one command, so a refusal of either leaves nothing half made; and a refused command
+  emits no `project.changed` for the work it undid.)
 
 ---
 
@@ -307,7 +314,7 @@ R-VER, applied to an arrangement:
 - **R-API-1 The API document is generated, committed and drift-tested** — rung 4 — and includes the
   device registry (every instrument and effect parameter with unit and range).
 
-## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 6 ✅ DR-UI-1, DR-UI-6; 3 the song bar only — the browser, lanes and mixer dock with U2/U3; 4 partly; 5 with U3)
+## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 6, 7 ✅ DR-UI-1, DR-UI-6, DR-UI-7; 3 the song bar, browser and lanes ✅ DR-UI-3 — the mixer dock with U3; 4 partly; 5 with U3)
 
 - **R-UI-1 Two screens, as Interstellar:** Home (R-HOME) and the Project view.
 - **R-UI-2 The accent is teal, `#159387`, the only forked token** — teal because orange, the
@@ -327,13 +334,19 @@ R-VER, applied to an arrangement:
   followed, and its header-only helpers (`TextFit`, `EasedScroll`, `Glyphs`) are INCLUDED from
   `apps/interstellar/app/widgets/`, not copied. A copied widget is a divergence with a delay fuse.
   (**Amended 2026-10-08:** `SettingsDialog` left the list — R-SET-1; the Interstellar helpers joined
-  it — their home should be Artboard, a task filed in `docs/PROGRESS.md`.)
+  it — their home should be Artboard, a task filed in `docs/PROGRESS.md`. **U2:** `AnimatedRows`
+  joined them — the browser's list and the lanes travel through it.)
 - **R-UI-5 Device panels are generated from the registry** (R-DSP-2): a knob or slider per
   parameter, grouped by its name's prefix (`osc1.*`, `filter.*`). A new DSP parameter appears in
   the UI with no UI code.
 - **R-UI-6 Every state is drawn and shot,** empty and loading included, at two window sizes,
   mid-transition as well as at rest. The shots drive the REAL service through the same hooks the
   window uses (no fake): the service is headless and cheap, so the shot is also an integration test.
+- **R-UI-7 A strip has one colour everywhere** — its own, else one derived from its id, so it never
+  changes when other strips come and go; a clip wears its strip's colour on whatever lane it sits
+  (the timeline, and the mixer with U3). The service resolves it (R-G-3: a second front end must
+  not re-derive it). (**Added 2026-10-08, building U2:** the lanes first took a strip's place in
+  processing order, and deleting one strip recoloured every later strip's clips in one frame.)
 
 ## R-NFR — non-functional — 📋 SPECIFIED
 

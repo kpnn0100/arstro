@@ -49,6 +49,9 @@ namespace solaris_ui
         };
         bar.onSave = [this] { dispatch("project save"); };
         bar.onSettings = [this] { openSettings(); };
+        mProject->onCommand = [this](const std::string &line) { return dispatch(line); };
+        mProject->onNotice = [this](const std::string &s) { showToast(s); };
+        mProject->browser().onOpenSettings = [this] { openSettings(); };
 
         mSettings->onCommand = [this](const std::string &line) { dispatch(line); };
         mSettings->onAddFolder = [this] {
@@ -193,6 +196,9 @@ namespace solaris_ui
                 return dispatch(m.transport.playing ? "transport stop" : "transport play");
             }
             if (e.ctrl && e.keyCode == 'S') return dispatch("project save");
+            const std::string sel = mProject->timeline().selectedClip();
+            if (!sel.empty() && (e.keyCode == 46 || e.keyCode == 8)) return dispatch("clip delete " + sel); // Delete / Backspace
+            if (!sel.empty() && e.ctrl && e.keyCode == 'D') return dispatch("clip duplicate " + sel);     // a linked copy after it
             if (e.keyCode == 13 && !e.ctrl) return dispatch("transport seek 0");
         }
         if (e.ctrl && e.keyCode == ',') { openSettings(); return true; }

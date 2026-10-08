@@ -129,12 +129,14 @@ checks a 0.5 region at pan +0.5, −6 dB to 1e-7 against the closed forms.
 ### DR-SVC-1 One way in, one way out (R-SVC-1, R-SVC-2, R-G-4)
 `SolarisService` (`core/service/SolarisService.h`) is the application: `dispatchText(line)` parses
 with the grammar TABLE (`commandSpecs`, `core/service/Command.cpp:26`; `parseCommand`, `:199` —
-longest verb match, flags checked against the row) and `dispatch` (`core/service/SolarisService.cpp:76`)
+longest verb match, flags checked against the row) and `dispatch` (`core/service/SolarisService.cpp:84`)
 runs it; out come the `AppModel` (`core/service/AppModel.h`, refreshed after every command) and
 `Event`s whose `formatEvent` text is the log line. **Every edit is all-or-nothing**: the project is
 copied first, the command runs, `validateProject` runs, and any failure restores the copy
-(`:173`) and refuses with the validator's sentence — a refused command changes nothing, and a
-`set` line's `params.changed` events are emitted only once the whole line has landed. The core
+(`:188`) and refuses with the validator's sentence — a refused command changes nothing. An edit's
+events (`project.changed` from `changed`, `:34`; a `set` line's `params.changed`) are HELD in
+`mPending` and emitted only once the whole command has landed (`:197`), so a refused command
+announces nothing either (D-1). The core
 holds no codec and no device API: decoding and WAV writing are `Host` functions (R-SVC-4).
 
 ### DR-SVC-2 Unknown input is refused, naming it (R-SVC-3)
@@ -157,11 +159,13 @@ pattern looping across an 8-beat clip, the bass C2 at 65.4 Hz, the sample resamp
 stored relative to the song's folder.
 
 ### DR-MIX-2 Every sample file gets its own strip (R-MIX-2, R-MIX-3)
-`clip add --src` (`core/service/ServiceEdit.cpp:360`): a file no clip uses yet gets a new audio strip
+`clip add --src` (`core/service/ServiceEdit.cpp:353`): a file no clip uses yet gets a new audio strip
 named after it on the first mixer, routed by `defaultOutFor` (`:70`) to the first bus on a later
 mixer ("Main"), and a new lane; a file already used reuses its strip; `--strip` overrides. The file
 is decoded through the host to learn its length (refused if it cannot be read), and stored relative
-to the song's folder when inside it (`relativePath`, `core/service/SolarisService.cpp:193`).
+to the song's folder when inside it (`relativePath`). A relative `--src` names a file in the SONG's
+folder first when one is there (`:374`) — what the model stores and the browser's Song tab hands
+back — else the caller's working directory.
 
 ### DR-MIX-7 Solo keeps the soloed path alive (R-MIX-7)
 `silentStrips` (`core/Compile.cpp:47`): with any strip soloed, a strip is audible only if it is
@@ -226,7 +230,7 @@ song is a card marked `missing`. `recents remove` takes one off the list and lea
 ### DR-BROWSE-1 The browser lists a folder (R-BROWSE-1, headless half)
 `browse <folder>` asks the host (`listDir`, `host/Machine.cpp`): sub-folders, audio files (by
 extension), songs (`.slp`), hidden entries left out; folders first, then by name; the model's
-`browser` holds the listing. Drag and drop is the UI's (R-BROWSE-3), over `clip add`.
+`browser` holds the listing. The panel and its drag and drop are DR-BROWSE-2.
 
 ### DR-PLAY-1 Live playback is the offline render, and edits are heard (R-PLAY-1, R-TIME-4)
 `transport play [--from]` (`transportCommand`, `core/service/ServiceTransport.cpp`) compiles the song,
@@ -291,10 +295,53 @@ first (`App::openSettings`, `app/App.cpp:118`). Every chip is `settings set …`
 shell shows at once.
 
 ### DR-UI-6 Shots and UI tests over the real service (R-UI-6)
-`solaris_app_shots` renders nine named states — Home empty and with cards, Settings at rest,
-mid-fade and mid-chip-ease, the song, Home→song mid-cross-fade, a refusal toast, the unsaved
-confirm — at 1440×900 and 1024×640, over the REAL `SolarisService` (`app/tests/Rig.h`: fake devices,
-folders and decoder; a fixed 16 ms clock); `--check` fails a blank frame. `solaris_app_ui` (5
-tests) clicks the geometry the widgets publish and asserts the lines sent, the model that came back,
+`solaris_app_shots` renders fourteen named states — Home empty and with cards, Settings at rest,
+mid-fade and mid-chip-ease, the song, Home→song mid-cross-fade, a refusal toast, the browser's
+instruments and a browsed folder, a sample dragged mid-way, a clip mid-drag, a clip selected while
+zoomed, the unsaved confirm — at 1440×900 and 1024×640, over the REAL `SolarisService` (`app/tests/Rig.h`: fake devices,
+folders and decoder; a fixed 16 ms clock); `--check` fails a blank frame. `solaris_app_ui` (9
+tests) clicks and drags the geometry the widgets publish and asserts the lines sent, the model that came back,
 and a LIVE value caught mid-tween for every transition (the cross-fade, the sheet's fade, a chip's
 fill, the close). The window ran on this machine's display (`solaris song.slp`, 4 s, no crash).
+
+### DR-UI-3 The lanes (R-UI-3, R-LANE-1, R-CLIP-1…4, R-TIME-4, R-UI-7)
+`ProjectScreen` (`app/widgets/ProjectScreen.cpp`): the song bar on top, the browser on the left
+(234 px), `Timeline` (`app/widgets/Timeline.cpp`) filling the rest. A row per lane in lane order,
+then a row per strip whose clips have no lane ("its strip's row"); a lane with no colour wears its
+first clip's. A clip is drawn on its row, coloured by its STRIP (`surface::track`), its name pinned
+to the visible edge when it begins off-screen (`paintClip`, `:355`); a note clip draws its
+pattern's notes repeated where it loops, the seams marked, and "linked ×N" when it shares its
+pattern. Ruler: bars from 1, labels thinned as it zooms out. The playhead is `destructive`; it
+follows the transport while playing and eases 140 ms on a seek. Ctrl+wheel zooms 4–320 px/beat,
+eased 220 ms and anchored at the pointer (`:331`); the wheel scrolls, Shift+wheel sideways. A clip
+dragged follows the pointer exactly, snapped to 1/4 beat, between LANES only, and lands as `clip
+move <ac> --at <b> [--lane <ln>]` (`:303`) where it was let go. A click selects (the teal ring
+cross-fades 200 ms between clips); Delete/Backspace → `clip delete`, Ctrl+D → `clip duplicate`
+(`app/App.cpp:200`); a ruler click → `transport seek <b>`, snapped (`Timeline.cpp:323`). **The picture travels
+(§1):** the rows are Interstellar's `AnimatedRows` keyed by lane; each clip keeps an eased beat, row
+and opacity keyed by its id (`Timeline::advance`, `Timeline.cpp:197`) — it fades in when it arrives, fades out where it
+was when it goes (taking no input), eases 200 ms with its row when moved from a shell; the zebra
+follows the LIVE slot, a stripe's colour cross-fades, the empty-state words fade. Another song
+places everything where it is. Empty, it says what to do in words.
+
+### DR-BROWSE-2 The browser and drag and drop (R-BROWSE-1 amended, R-BROWSE-3)
+`Browser` (`app/widgets/Browser.cpp`): tabs **Samples · Instruments · Song** under a highlight that
+slides 220 ms. Samples lists the folders from Settings; a folder clicked is `browse "<path>"`
+(`:216`) and shows its sub-folders and audio files (mono, the filename rule) under a row back up;
+with no folders it says so and a click opens Settings. Instruments lists `AppModel::deviceTypes`
+(the DSP registry, `core/service/ServiceModel.cpp:97`) — instruments, then effects. Song lists the
+files the song plays. The list is `AnimatedRows` keyed by generation and content (`rebuild`, `:54`):
+a tab or folder changed starts a new generation, so the old list fades where it was scrolled while
+the new one fades in (`navigate`, `:96`); an inserted row fades in, a removed one out. A row is
+dragged out: the browser reports the pointer and the drop; `ProjectScreen` draws the ghost (the
+overlay pass) and the timeline's teal drop hint at the snapped beat, and on release sends ONE line
+(`place`, `app/widgets/ProjectScreen.cpp:66`): a sample → `clip add --src "<file>" --at <b> [--lane
+<ln>]`; an instrument → `clip add --instrument <type> --at <b> --length 4 [--lane <ln>]` (the new
+strip and its empty note clip in one command, `core/service/ServiceEdit.cpp:359`); below the last
+lane, no `--lane` — a new lane; an effect → a notice that it goes on a strip (U3). A double-click
+places at the playhead.
+
+### DR-UI-7 A strip's colour (R-UI-7)
+The model's `strips[].colour` is resolved by the service (`core/service/ServiceModel.cpp:164`): the
+strip's own, else its id's number − 1 — never −1, and unchanged when other strips are added or
+deleted. Every front end draws it as is.

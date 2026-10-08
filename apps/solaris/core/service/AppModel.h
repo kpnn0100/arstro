@@ -136,6 +136,12 @@ namespace solaris
         std::vector<std::string> ports;          // "<name>=<device>:<channel>"
     };
 
+    /** One entry of the DSP library's device registry — what the browser lists (R-BROWSE-1). */
+    struct DeviceTypeModel
+    {
+        std::string name, label, kind;           // kind = instrument | effect
+    };
+
     struct TransportModel
     {
         bool playing = false;
@@ -170,6 +176,7 @@ namespace solaris
         std::vector<DeviceInfo> devices;         // from the last `devices list`
         BrowserModel browser;
         TransportModel transport;
+        std::vector<DeviceTypeModel> deviceTypes; // the registry, instruments first (R-DSP-2)
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };
 }

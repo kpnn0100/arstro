@@ -10,6 +10,7 @@
  *  --check fails if any shot is a single colour (a blank frame is the cheapest broken state to miss).
  */
 #include "../Rig.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <functional>
@@ -93,6 +94,58 @@ namespace
                  r.settle();
                  r.click(r.app->project().bar().hitRect(1)); // Play — this rig has no output device
                  r.pump(300.0);
+             }},
+            {"browser-instruments",
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 r.app->project().browser().setTab(1);
+                 r.settle();
+             }},
+            {"browser-folder",
+             [](sltest::Rig &r) {
+                 r.cmd("folder add /music/Samples");
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 auto &b = r.app->project().browser();
+                 const artboard::Rect row = b.rowRect(0);
+                 r.click(row.x + 20.0 + b.x.value(), row.y + row.h * 0.5 + b.y.value());
+                 r.settle();
+             }},
+            {"drag-sample-mid",
+             [](sltest::Rig &r) {
+                 r.cmd("folder add /music/Samples");
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 auto &b = r.app->project().browser();
+                 r.click(b.rowRect(0).x + 20.0 + b.x.value(), b.rowRect(0).y + 10.0 + b.y.value());
+                 r.settle();
+                 const artboard::Rect row = b.rowRect(2);
+                 auto &tl = r.app->project().timeline();
+                 r.drag(row.x + 40.0 + b.x.value(), row.y + 10.0 + b.y.value(), tl.x.value() + tl.beatToX(6.0) + 3.0,
+                        tl.y.value() + tl.rowRect(1).y + 20.0, 8, false); // held over the Bass lane at beat 6
+                 r.pump(200.0);
+             }},
+            {"clip-dragging",
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect c = tl.clipRect("ac_3");
+                 const double ox = tl.x.value(), oy = tl.y.value();
+                 r.drag(ox + c.x + 8.0, oy + c.y + 10.0, ox + c.x + 8.0 + 4 * tl.pxPerBeat(), oy + tl.rowRect(0).y + 20.0, 8, false);
+             }},
+            {"clip-selected-zoomed",
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const double ox = tl.x.value(), oy = tl.y.value();
+                 for (int i = 0; i < 3; ++i) r.app->wheel(ox + tl.beatToX(2.0), oy + 60.0, 1.0, true); // Ctrl+wheel: zoom in about beat 2
+                 r.settle();
+                 const artboard::Rect c = tl.clipRect("ac_1");                   // begins off-screen once zoomed:
+                 r.click(ox + std::max(c.x, arstro::solaris_ui::Timeline::kHeaderW) + 30.0, oy + c.y + 20.0); // click its visible part
+                 r.settle();
              }},
             {"confirm-unsaved",
              [](sltest::Rig &r) {

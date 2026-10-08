@@ -33,7 +33,8 @@ namespace solaris
 
     void SolarisService::changed(const std::string &what, const std::string &node)
     {
-        emit(Event(Event::Kind::ProjectChanged).with("what", what).with("node", node));
+        // held until the command lands: a refused command restores the project, so it must not have said it changed
+        mPending.push_back(Event(Event::Kind::ProjectChanged).with("what", what).with("node", node));
     }
 
     bool SolarisService::requireOpen(std::string &err) const
@@ -87,7 +88,7 @@ namespace solaris
         const bool editing = mutates(c.kind);
         if (editing && !requireOpen(err)) return false;
         const Project before = editing ? mProject : Project();
-        std::vector<Event> pending; // a `set`'s events, emitted only once the whole line has landed
+        mPending.clear();
 
         bool ok = false;
         switch (c.kind)
@@ -102,7 +103,7 @@ namespace solaris
             {
                 std::string stored;
                 if (!setAddress(f.first, f.second, stored, err)) { ok = false; break; }
-                pending.push_back(Event(Event::Kind::ParamsChanged).with("address", f.first).with("value", stored));
+                mPending.push_back(Event(Event::Kind::ParamsChanged).with("address", f.first).with("value", stored));
             }
             break;
         }
@@ -186,12 +187,15 @@ namespace solaris
         {
             if (editing) mProject = before; // a refused command changes nothing
             mOutput.clear();
+            mPending.clear();
             refreshModel();
             return false;
         }
         if (editing) mModel.dirty = true;
         refreshModel();
-        for (const auto &e : pending) emit(e);
+        std::vector<Event> landed;
+        landed.swap(mPending);
+        for (const auto &e : landed) emit(e);
         if (editing) liveUpdate(c); // heard while playing (DR-PLAY-1)
         pump();
         return true;

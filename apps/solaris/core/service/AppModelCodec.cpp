@@ -33,7 +33,7 @@ namespace solaris
             {"strips[].mute", "bool", ""},
             {"strips[].solo", "bool", ""},
             {"strips[].audible", "bool", "false when muted or silenced by another strip's solo (R-MIX-7)"},
-            {"strips[].colour", "int", "−1 = none"},
+            {"strips[].colour", "int", "an index into the track colours: its own, else from its id — never −1"},
             {"strips[].sends", "object[]", "its sends"},
             {"strips[].sends[].id", "string", ""},
             {"strips[].sends[].to", "string", "a strip on a later mixer, master, or a port"},
@@ -131,6 +131,10 @@ namespace solaris
             {"transport.latencyMs", "number", "the clock device's", false},
             {"transport.device", "string", "the clock device ('' = the system default)"},
             {"transport.masterPeak", "number[]", "L/R peaks of the last played block", false},
+            {"deviceTypes", "object[]", "the DSP registry: every instrument and effect a strip can host (R-BROWSE-1)"},
+            {"deviceTypes[].name", "string", "the registry type, what `device add --type` and `--instrument` take"},
+            {"deviceTypes[].label", "string", ""},
+            {"deviceTypes[].kind", "string", "instrument | effect"},
             {"browser", "object", "the folder last browsed"},
             {"browser.path", "string", ""},
             {"browser.entries", "object[]", "folders first, then by name"},
@@ -237,6 +241,9 @@ namespace solaris
         tr.set("device", m.transport.device);
         if (!stable) tr.set("masterPeak", Json::array().push(Json::number(m.transport.masterPeak[0])).push(Json::number(m.transport.masterPeak[1])));
         j.set("transport", tr);
+        Json types = Json::array();
+        for (const auto &d : m.deviceTypes) types.push(Json::object().set("name", d.name).set("label", d.label).set("kind", d.kind));
+        j.set("deviceTypes", types);
         Json entries = Json::array();
         for (const auto &e : m.browser.entries) entries.push(Json::object().set("name", e.name).set("path", e.path).set("kind", e.kind));
         j.set("browser", Json::object().set("path", m.browser.path).set("entries", entries));

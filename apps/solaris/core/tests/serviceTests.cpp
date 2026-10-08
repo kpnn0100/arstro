@@ -248,8 +248,56 @@ static void test_every_sample_file_gets_its_own_strip()
     assert(std::fabs(r.clip("ac_1")->length - 0.5 * 120 / 60) < 1e-9);                       // half a second at 120 bpm = 1 beat
     assert(contains(r.no("clip add --src missing.wav"), "cannot read missing.wav"));
     assert(contains(r.no("clip add --strip ch_2"), "notes need an instrument strip"));
-    assert(r.no("clip add --at 3") == "clip add needs --src <file> (audio) or --strip <instrument strip> (notes)");
+    assert(r.no("clip add --at 3") == "clip add needs --src <file> (audio), --strip <instrument strip> or --instrument <type> (notes)");
     pass("every sample file gets its own strip on Sources → Main; the same file reuses it; fed-by is computed (R-MIX-2/3/8)");
+}
+
+static void test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_changed()
+{
+    Run r;
+    r.ok("project new " + freshSong("instdrop"));
+    r.events.clear();
+    assert(r.ok("clip add --instrument drums --at 2 --length 4") == "ac_1\n"); // what dropping "Drum Machine" sends
+    const StripModel *d = r.strip("ch_2");
+    assert(d && d->kind == "instrument" && d->name == "Drum Machine" && d->mixer == "mx_1" && d->out == "ch_1");
+    assert(d->devices.size() == 1 && d->devices[0].type == "drums");
+    const ClipModel *c = r.clip("ac_1");
+    assert(c && c->track == "ch_2" && c->kind == "note" && c->at == 2.0 && c->length == 4.0 && c->lane == "ln_1");
+    assert(r.events.size() == 2 && contains(r.events[0], "what=strip.added node=ch_2") && contains(r.events[1], "what=clip.added node=ac_1"));
+
+    const std::string before = r.text();
+    r.events.clear();
+    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth drums)"));
+    assert(contains(r.no("clip add --instrument synth --strip ch_2"), "without --src or --strip"));
+    assert(contains(r.no("clip add --instrument synth --length -1"), "--length"));   // the strip was made, then the clip refused
+    assert(r.text() == before && r.events.size() == 3);                                // three rejections, no change
+    r.ok("clip add --src kick.wav");
+    r.events.clear();
+    assert(contains(r.no("clip add --src snare.wav --in -1"), "--in"));              // likewise: a new strip, then a refusal
+    for (const auto &e : r.events) assert(!contains(e, "project.changed"));            // nothing said it changed…
+    assert(r.svc.model().strips.size() == 3);                                           // …and nothing did
+    // a strip's colour is its own or comes from its id, so one deleted recolours nobody else
+    const int kick = r.strip("ch_3")->colour;
+    assert(kick >= 0 && r.strip("ch_2")->colour != kick);
+    r.ok("strip delete ch_2 --with-clips");
+    assert(r.strip("ch_3")->colour == kick);
+    pass("clip add --instrument: a new instrument strip and an empty note clip in ONE command; a refused edit emits no change (R-BROWSE-3)");
+}
+
+static void test_a_relative_src_is_found_in_the_songs_folder()
+{
+    Run r;
+    const std::string dir = scratch() + "/relsong";
+    fs::remove_all(dir);
+    fs::create_directories(dir + "/samples");
+    std::ofstream(dir + "/samples/snare.wav") << "x";                   // the fake decoder reads any path that exists or not
+    r.ok("project new " + dir + "/song.slp");
+    r.ok("clip add --src " + dir + "/samples/snare.wav");
+    assert(r.clip("ac_1")->src == "samples/snare.wav");                 // stored relative to the song
+    r.ok("clip add --src samples/snare.wav --at 4");                    // what the browser's Song tab hands back
+    assert(r.clip("ac_2")->track == r.clip("ac_1")->track);            // the SAME file: the same strip
+    assert(r.svc.model().strips.size() == 2 && r.svc.model().deviceTypes.size() == 9 && r.svc.model().deviceTypes[0].kind == "instrument");
+    pass("a relative src names a file in the song's folder first — the Song tab re-places a sound with one `clip add`");
 }
 
 static void test_routing_only_goes_forward_and_refusals_change_nothing()
@@ -628,6 +676,8 @@ int main()
     test_event_and_model_tables();
     test_a_new_song_has_its_mixers_and_round_trips();
     test_every_sample_file_gets_its_own_strip();
+    test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_changed();
+    test_a_relative_src_is_found_in_the_songs_folder();
     test_routing_only_goes_forward_and_refusals_change_nothing();
     test_set_and_get_through_the_registry();
     test_patterns_are_shared_by_their_clips();
