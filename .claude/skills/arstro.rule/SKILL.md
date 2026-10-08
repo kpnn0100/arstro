@@ -18,8 +18,7 @@ argument for its own §8: a rule worth repeating is a rule worth hoisting.**
 ## Scope
 
 Everything under `/home/namdln/1.workspace/m.yspace/arstro` — the apps (`cosmo`, `genesis`,
-`arstrobench`, `pulsar`, `launcher`, and the two specified-but-unbuilt ones, `interstellar` and
-`solaris`) and the libraries (`core/Artboard`, `core/ImageProcessing`,
+`arstrobench`, `pulsar`, `launcher`, `interstellar`, and `solaris`, specified and being built) and the libraries (`core/Artboard`, `core/ImageProcessing`,
 `core/DigitalSignalProcessing`).
 
 **This file is not a substitute for the skill you came for.** Follow both; where they overlap, the
@@ -34,7 +33,7 @@ the copy of record is `.claude/skills/arstro.rule/SKILL.md` in the umbrella.
 
 ## 0. Orient — before the first edit, every invocation
 
-1. **The unit's ledger**, if it has one (`docs/PROGRESS.md` for cosmo, `docs/plan.md` for solaris,
+1. **The unit's ledger**, if it has one (`docs/PROGRESS.md` for cosmo, interstellar and solaris,
    `docs/piano-physics-progress.md` for the piano). **NEXT** says what to do.
 2. **The unit's defect list**, if it has one (`docs/DEFECTS.md`). Your task may already be filed,
    diagnosed, and have a recommended fix waiting.
@@ -150,7 +149,7 @@ stops describing the code. **Cosmo is the reference** (`apps/cosmo/REQUIREMENTS.
 - **A withdrawn id is retired, not recycled** — including any wire-format value it owned. See the
   `R-AISEG` withdrawal: type value `4` is retired forever, because re-pointing it at a live type
   would turn a mask that does nothing into a mask that does something *wrong*.
-- **The prefix may be the app's** (`R-`/`DR-` in cosmo, `SR-` in solaris, `FR-`/`NFR-` in Artboard,
+- **The prefix may be the app's** (`R-`/`DR-` in cosmo, interstellar and solaris, `FR-`/`NFR-` in Artboard,
   `G-`/`NG-` in genesis). The prefix is not the rule; **two tiers and stable ids are the rule.**
 
 ### The markers, with their real shapes
@@ -344,11 +343,11 @@ do not pretend the whole ladder is a prerequisite for any work at all.
 
 | rung | what it means | who has it |
 |---|---|---|
-| 0 | spec only | interstellar, pulsar |
-| 1 | core split out; `Command`/`Event`/model with one text codec | solaris (specified) |
+| 0 | spec only | pulsar, solaris (second specification, 2026-10-08) |
+| 1 | core split out; `Command`/`Event`/model with one text codec | — |
 | 2 | registered with the root `ctest`; L2 headless service tests | genesis, arstrobench |
 | 3 | a real CLI front end that is the whole app without a window | genesis (partial), cosmo |
-| 4 | generated API document, committed, drift-tested | **nobody yet** |
+| 4 | generated API document, committed, drift-tested | interstellar |
 | 5 | control socket + the equivalence test (§1) | cosmo |
 
 ---
@@ -524,9 +523,11 @@ Every Arstro skill invokes `arstro.rule` first, then applies its own:
 | `arstro.dsp.implement` (+ `.experimental`) | compose-don't-duplicate, derive the math, document every equation |
 | `arstro.piano.implement` | which milestone is next, and how to measure it |
 | `android.theme.implement` | the shell milestones and its own ledger |
+| `arstro.interstellar.implement` · `.debug` | Interstellar's map, laws and recipes |
+| `arstro.solaris.implement` | Solaris's map and laws — above all, that its sound is built in the DSP library |
 
 **Known gaps this file does not paper over.** `core/ImageProcessing` has no requirements document
 at all while its `design.md` claims V-model discipline — its requirements live in cosmo's files
-today. Genesis has one requirement tier where it needs two. Solaris has a third id convention
-(`SR-` + phase tags) and no as-built tier. Nobody is on rung 4. Each is a real task, not a
-formatting complaint.
+today. Genesis has one requirement tier where it needs two. Each is a real task, not a formatting
+complaint. (Solaris's third id convention — `SR-` + phase tags, no as-built tier — was retired
+with its first specification on 2026-10-08.)

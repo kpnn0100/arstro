@@ -1,0 +1,55 @@
+# Solaris — architecture
+
+The layers of `arstro.rule` §1, applied to a DAW. **The sound is the DSP library's** (R-DSP-1):
+Solaris hosts devices and routes their output; it implements no DSP.
+
+```
+   host          GTK window · FFmpeg decode · WAV writer · PulseAudio devices · settings/recents files
+   ───────────────────────────────────── seam: SolarisService::Host ──────────────────────────────
+   front ends    GUI (app/, over AppHooks) · solaris-cc · tests          (peers — all send TEXT)
+   ───────────────────────────────────── seam: dispatch(text) / model() / events ─────────────────
+   service       core/   SolarisService: grammar table, events, AppModel, compile(project → graph)
+   model         model/  the .slp document: parse, serialize, validate — no sound, no I/O
+   engine        engine/ MixGraph → strips, racks, sends, ports, meters — knows no project, no file
+   DSP           core/DigitalSignalProcessing: every instrument, every effect, Device + registry
+```
+
+## Module map
+
+| directory | target | depends on | holds | requirement |
+|---|---|---|---|---|
+| `core/DigitalSignalProcessing/src/` | `arstro_dsp` | — | `Biquad`, `ParametricEQ`, `StateVariableFilter`, `Noise`, `DecayEnvelope`, `BasicSynth`, `DrumMachine`, `Device` + `DeviceRegistry`, the existing `Compressor`/`Reverb`/`Repeater`/`Chorus`/`Overdrive` | R-DSP, R-INST, R-FX |
+| `apps/solaris/model/` | `solaris_model` | — | `Project` (.slp), `Format` (canonical numbers/times/quoting) | R-FMT, R-MIX-4 (validation) |
+| `apps/solaris/engine/` | `solaris_engine` | `arstro_dsp` | `MixGraph` (plain data), `Engine` (render a block), mix laws, meters | R-MIX, R-PLAY, R-RENDER-1 |
+| `apps/solaris/core/` | `solaris_core` | model, engine | `SolarisService`, `Command` table, `Event`, `AppModel` + codec, `ApiDoc`, `Compile` | R-SVC, R-API |
+| `apps/solaris/host/` | `solaris_host` | core, FFmpeg, libpulse | decoder, WAV writer, devices, settings + recents | R-SVC-4, R-DEV, R-SET |
+| `apps/solaris/cli/` | `solaris-cc` | host | argv/stdout only — every verb is the grammar | R-SVC-1 |
+| `apps/solaris/app/` | `solaris_app` | Artboard, cosmo widgets | the UI over `AppHooks` | R-UI |
+
+*(Rows land with the code; a row whose directory does not exist yet is the plan, and says so in
+`PROGRESS.md`.)*
+
+## Data flow
+
+1. A text line arrives (GUI, CLI, script) → `parseCommand` against the table → `dispatch`.
+2. The service edits the `Project` (model), re-validates, and **compiles** it into a `MixGraph`:
+   strips in processing order (mixer order, then strip order — forward-only routing makes this a
+   topological order for free), each strip's devices (registry type + parameter values), its
+   audio regions (decoded PCM from the host, at the project rate), its note events in samples, its
+   output and sends as indices.
+3. The engine renders blocks of the graph: per strip, sum its inputs, add its clips or play its
+   instrument (split at note events), run its rack, tap pre-fader sends, apply fader and pan, tap
+   post-fader sends, add into its output. Master → rack → gain → ports.
+4. Offline render writes ports/stems through the host's writer. Live playback runs the same render
+   on the clock device's callback (P1).
+
+## Threading (live, from P1)
+
+The service owns the project and compiles graphs on its thread. Devices are constructed there too.
+A **parameter** edit reaches the audio thread as a message on a lock-free queue; a **structural**
+edit hands over a whole new engine state the same way, and the old one is destroyed back on the
+service thread. The audio thread never allocates, locks or does I/O (R-PLAY-2).
+
+## Known limits
+
+- `arstro::AudioConfig` is a process singleton (R-NFR-7): one sample rate per process.

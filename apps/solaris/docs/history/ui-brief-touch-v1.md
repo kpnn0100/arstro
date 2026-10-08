@@ -1,3 +1,7 @@
+> **❌ WITHDRAWN 2026-10-08 — the first Solaris specification, archived whole.** Superseded by
+> [`../../REQUIREMENTS.md`](../../REQUIREMENTS.md) (the second specification), which says why and maps
+> every `SR-` id it carries forward. Nothing in this file is in force; its ids are retired, never reused.
+
 # Solaris — UI Design Brief (for a Figma AI)
 
 Paste this into a Figma AI / generative design tool. It describes the UI for **Solaris**, a

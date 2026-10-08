@@ -65,7 +65,15 @@ render nobody can reproduce.
 | `gain` | dB | −∞…+12; `0.0` is unity. **dB, not a linear factor** — a fader is logarithmic and storing the linear value makes every file unreadable by a person |
 | `pan` | −1…+1 | −1 hard left |
 | `order` | int | lane order, and the bus sum order |
-| `out` | id | the track or bus this feeds; absent = master |
+| `out` | id | the track or bus this feeds; absent = master. Solaris also accepts `master` and a `#aport` id |
+| `mixer` | id | Solaris: the `#amixer` page this strip lives on; absent = the first (§2.9) |
+
+> **AMENDED (Solaris, 2026-10-08):** an `#atrack` **is a mixer strip** — it always carried gain, pan,
+> mute, solo and `out`, which is what a strip is. Solaris separates the strip from the timeline row
+> it used to also be: rows are `#alane` (§2.7) and a clip names both (`track=` what it sounds
+> through, `lane=` where it is drawn). A clip with no `lane` is drawn on its track's own row — which
+> is exactly what every existing `.isp` means, so nothing an Interstellar file says changes. Solaris
+> also requires a route to go forward: to a strip on a later `#amixer`, `master`, or a port.
 
 **Interstellar implements `kind=audio` only** and refuses to *render* an `instrument` track rather
 than silently dropping it — a silent track is indistinguishable from a bug.
@@ -94,9 +102,19 @@ Two forms, told apart by whether `src` is present.
 | `length` | the clip's extent (note clips) |
 | `gain`, `fadeIn`, `fadeOut` | clip-level staging, in dB and timebase units |
 | `loop` | repeat the source range to fill `length` |
+| `lane` | Solaris: the `#alane` it is drawn on; absent = its track's own row |
+| `pattern` | Solaris: a note clip plays this `#apattern` (§2.8) instead of inline notes |
 
-Fades are **linear in dB over the stated duration**, because an equal-power crossfade is the
-default a listener expects and a linear-amplitude fade audibly dips in the middle.
+**`in`/`out` are seconds into the source in every timebase** — a file has no tempo, and a source
+range measured in beats would play a different part of the sample after a tempo change.
+
+Fades are **linear in amplitude** over the stated duration, and pan is a **balance with unity at
+centre** (the side panned away from falls on a quarter cosine).
+**AMENDED (Solaris, 2026-10-08):** this paragraph said fades were *linear in dB*. Interstellar's
+`AudioMix` (`apps/interstellar/render/AudioMix.cpp`) has always faded linearly in amplitude, and it
+is the shipped implementation of this contract; a document that disagrees with the only code that
+implements it is the document's defect. Solaris matches the code (Solaris R-MIX-11), so a project
+sounds the same in both apps.
 
 ### 2.3 `#note` — MIDI as plain text
 
@@ -138,6 +156,38 @@ automation, deliberately: one breakpoint syntax in the suite.
 ```
 
 `pre` selects pre- or post-fader. Absent sends mean a track goes to `out` (or master) only.
+In Solaris `to` may also be `master` or a `#aport` id (a headphone cue straight to a port).
+
+### 2.7 `#alane` — a timeline row (Solaris)
+
+```
+#alane id=ln_1 name=Drums order=0 colour=3
+```
+
+Organisation only: it holds any clips, from any strips. Where a clip is drawn, never what it sounds
+through.
+
+### 2.8 `#apattern` — notes shared by clips (Solaris)
+
+```
+#apattern id=pt_1 name="Beat A" length=4.0
+  #note pitch=36 at=0.0 length=0.25 vel=110
+#aclip id=ac_2 track=atr_2 lane=ln_2 pattern=pt_1 at=0.0 length=16.0
+```
+
+Clips naming one pattern are linked: edit the notes once, every copy changes. A clip longer than
+its pattern loops it. A note clip with inline `#note` children (§2.2) is still valid.
+
+### 2.9 `#amixer` and `#aport` (Solaris)
+
+```
+#amixer id=mx_1 name=Sources order=0
+#aport  id=prt_1 name=Main dir=out channels=2 order=0
+```
+
+A mixer is a page of strips; its `order` is the processing order. A port is a **logical** output or
+input — the project never names a device; the machine's settings map a port to a device's
+channels. The header's `masterOut` names the port(s) the master feeds.
 
 ---
 
@@ -159,6 +209,7 @@ deleted, which is a node that should not exist.
 | `#atrack kind=instrument \| bus`, `#asend` | parsed, preserved, **refused at render** | yes |
 | `#aclip` note form, `#note` | parsed, preserved, not rendered | yes |
 | `#arack`, `#aeffect`, `#aauto` | parsed, preserved, not rendered | yes |
+| `#alane`, `#apattern`, `#amixer`, `#aport`; `lane=`/`pattern=`/`mixer=` keys | parsed, preserved (unknown to it) | yes |
 
 **"Parsed, preserved, refused" is the contract**, and the three words are different: a node
 Interstellar does not understand still round-trips byte-identically (so a Solaris project is not

@@ -1,3 +1,7 @@
+> **❌ WITHDRAWN 2026-10-08 — the first Solaris specification, archived whole.** Superseded by
+> [`../../REQUIREMENTS.md`](../../REQUIREMENTS.md) (the second specification), which says why and maps
+> every `SR-` id it carries forward. Nothing in this file is in force; its ids are retired, never reused.
+
 # Solaris — Implementation & Test Plan
 
 Phased build plan for the [requirements](requirements.md). Each phase is a **shippable, verifiable
