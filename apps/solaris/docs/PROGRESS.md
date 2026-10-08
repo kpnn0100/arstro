@@ -11,15 +11,15 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-08 — the second specification, the skill, and the build order.*
+*Last updated: 2026-10-08 — D1: the DSP primitives (EQ, SVF, noise, decay envelope).*
 
 ---
 
 ## NEXT
 
-**► D1 — the DSP primitives** the instruments and the EQ are built from (biquad + parametric EQ,
-state-variable filter, seeded noise, exponential decay), in `core/DigitalSignalProcessing` under
-`arstro.dsp.implement`.
+**► D2 — the instruments**, in `core/DigitalSignalProcessing` under `arstro.dsp.implement`:
+`BasicSynth` (2 OSC → SVF → amp ADSR) and `DrumMachine` (synthesized GM pads, hat choke), built
+from D1's primitives and the existing `Oscillator`/`ADSREnvelope`.
 
 ---
 
@@ -33,8 +33,10 @@ umbrella's pointer — `arstro.rule` §7).
       `arstro.solaris.implement` skill; the first specification archived in `docs/history/`.
 
 ### D — the sound, in the DSP library (R-DSP, R-INST, R-FX)
-- [ ] **D1** Primitives: `Biquad` (RBJ) + `ParametricEQ`; `StateVariableFilter` (TPT); `Noise`
+- [x] **D1** Primitives: `Biquad` (RBJ) + `ParametricEQ`; `StateVariableFilter` (TPT); `Noise`
       (seeded); `DecayEnvelope` (exponential). `## Math` in each README; unit + integration tests.
+      — DSP `1256c64` (REQ-eq-1/2, REQ-svf-1/2, REQ-noise-1, REQ-decay-1); measured against
+      formulas recomputed in Python: EQ 0.000 dB, SVF 0.042 dB, decay −298.5 dB/s vs −300.
 - [ ] **D2** Instruments: `BasicSynth` (2 OSC → SVF → amp ADSR, filter ADSR, unison, noise);
       `DrumMachine` (10 synthesized pads on GM notes, hat choke).
 - [ ] **D3** `Device` interface + `DeviceRegistry`: synth, drums, compressor, eq, reverb, delay,
