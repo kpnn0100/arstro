@@ -106,7 +106,7 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
 
 ---
 
-## R-MIX — the mixer: every source has its own strip — 📋 SPECIFIED
+## R-MIX — the mixer: every source has its own strip — 🚧 IN PROGRESS (4 ✅ DR-MIX-4; 3's defaults in the model)
 
 The user's model (2026-10-08): *"sample got its own line by default; we can add multiple mixers as
 the user wants their workspace organised; the 1st mixer stores the samples, the 2nd receives from
@@ -276,7 +276,7 @@ R-VER, applied to an arrangement:
 
 ---
 
-## R-FMT — the `.slp` project — 📋 SPECIFIED
+## R-FMT — the `.slp` project — 🚧 IN PROGRESS (1, 2, 4 ✅ DR-FMT-1; 3's offline flag lands with V2)
 
 - **R-FMT-1 A `.slp` is a text document in the suite grammar** (`arstro-project = 1`, `app = solaris`,
   `#type id=… key=value`), normative in [`docs/project-format.md`](docs/project-format.md), and its

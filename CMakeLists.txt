@@ -23,6 +23,7 @@ endif()
 
 option(ARSTRO_BUILD_COSMO "Build the cosmo photo editor GUI" ON)
 option(ARSTRO_BUILD_INTERSTELLAR "Build Interstellar (interstellar_core, interstellar-cc, GUI)" ON)
+option(ARSTRO_BUILD_SOLARIS "Build Solaris (the DAW: solaris_model, engine, core, solaris-cc, GUI)" ON)
 option(ARSTRO_BUILD_GENESIS "Build Genesis (animation designer: genesis_core, genesis-cc, GUI)" ON)
 option(ARSTRO_BUILD_ANDROID_SHELL "Build the Android-theme touch shell (apps/launcher/android-shell)" ON)
 option(ARSTRO_BUILD_DSP "Build the Arstro DSP library + synth/kitchen-sink/piano-demo apps" ON)
@@ -84,6 +85,13 @@ endif()
 # hosts a real CosmoService and `if(TARGET cosmo_core)` can only see a target already defined.
 if(ARSTRO_BUILD_INTERSTELLAR)
   add_subdirectory(apps/interstellar)
+endif()
+
+# solaris: the DAW. AFTER the DSP library — its engine hosts arstro_dsp's devices, and every
+# instrument and effect it plays is that library's (apps/solaris R-DSP-1) — and after cosmo, whose
+# widgets its UI reuses.
+if(ARSTRO_BUILD_SOLARIS)
+  add_subdirectory(apps/solaris)
 endif()
 
 if(ARSTRO_BUILD_ARSTROBENCH)

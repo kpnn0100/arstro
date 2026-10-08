@@ -11,15 +11,15 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-08 — D3: the device registry; the DSP half of the request is complete.*
+*Last updated: 2026-10-08 — M1: the `.slp` model (fixed point, forward-only routing).*
 
 ---
 
 ## NEXT
 
-**► M1 — `solaris_model`**: the `.slp` document (`docs/project-format.md`) — parse, serialize as a
-byte-exact fixed point, validate (forward-only routing, references, kinds), repair non-finite
-numbers; device parameters validated against the DSP registry.
+**► E1 — `solaris_engine`**: a `MixGraph` (plain data: strips in processing order with their
+devices, regions, note events, outputs and sends) → rendered blocks through the DSP registry's
+devices; sample-accurate note splitting; Interstellar's pan and fade laws; meters; deterministic.
 
 ---
 
@@ -47,7 +47,10 @@ umbrella's pointer — `arstro.rule` §7).
       parameter matches the RBJ formula to 0.000 dB. DR-DSP-1, DR-INST-1/2, DR-FX-1 written.
 
 ### M/E — model and engine
-- [ ] **M1** `solaris_model`: the `.slp` (parse, serialize fixed point, validate, repair).
+- [x] **M1** `solaris_model`: the `.slp` (parse, serialize fixed point, validate, repair). — DR-FMT-1,
+      DR-MIX-4; `solaris_model` 8 tests (fixed point over every node type + unknowns + comments;
+      forward-only routing refused naming both ends; 24 structural refusals; 4 repairs counted).
+      Device parameters are checked against the registry by the core (V1), not the model.
 - [ ] **E1** `solaris_engine`: `MixGraph` → devices, strips in mixer order, sends, ports, master;
       sample-accurate notes; pan/fade laws equal to Interstellar's; meters; deterministic.
 

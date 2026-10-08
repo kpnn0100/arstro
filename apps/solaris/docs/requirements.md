@@ -19,7 +19,7 @@ Rung **0** of `arstro.rule` §5 — specified, no code yet. The ladder and where
 
 ## Entries
 
-Anchors into the DSP library are relative to `core/DigitalSignalProcessing/` — that is where
+Anchors without a path prefix are under `apps/solaris/`. Anchors into the DSP library are relative to `core/DigitalSignalProcessing/` — that is where
 Solaris's sound lives (R-DSP-1).
 
 ### DR-DSP-1 Every instrument and effect is a registry entry in the DSP library (R-DSP-1, R-DSP-2, R-DSP-3)
@@ -61,3 +61,36 @@ when fresh. `filter` is the synth's SVF with a mix (`src/device/DeviceRegistry.c
 wrap `Compressor`, `Reverb`, `Repeater`, `Chorus` and `Overdrive` unchanged
 (`EffectDevice`, `src/device/DeviceRegistry.cpp:221`). R-FX-5 (a strip's rack) is Solaris's and is
 not built yet.
+
+### DR-FMT-1 The `.slp` document (R-FMT-1, R-FMT-2, R-FMT-4)
+`solaris_model` (`model/Project.h`) holds the document as typed data — header, `#aport`,
+`#amixer`, `#atrack` (strip), `#asend`, `#arack`/`#aeffect`, `#alane`, `#apattern`/`#note`,
+`#aclip` — and links nothing but the standard library: a device is its registry `type` plus its
+parameters as text, which the core checks against the DSP registry. `parseProject`
+(`model/Project.cpp:292`) reads the suite grammar: header `key = value`, node lines, indented
+continuation lines, whole-line and inline `;` comments (kept with the node they follow), unknown
+keys (kept in order) and unknown nodes (kept verbatim with their indented lines). The suite's
+inline `#note`s under an `#aclip` become a pattern of their own — the one normalisation, reported.
+`serializeProject` (`model/Project.cpp:516`) writes §10's canonical form: `canonicalNumber`
+(`model/Format.cpp:33`, shortest round-trip, always a point), `canonicalBeats` (`:52`, rounded to
+1/960 beat, fewest decimals that read back to the tick), seconds to the microsecond; defaults of
+optional fields are omitted. **Parse → serialize is a byte-exact fixed point** for canonical text.
+Refused, each naming what and where (`validateProject`, `model/Project.cpp:623`): duplicate ids,
+`master` as an id, unknown strip kinds, dangling references, an audio clip on a non-audio strip, a
+note clip on a non-instrument strip, `in ≥ out`, a clip before the song, two racks for one strip,
+an input port as a destination, a header that is not `app = solaris` / `timebase = beats` /
+`ppq = 960`. Repaired and counted (`Reader::num`, `:165`): a non-finite or unreadable number → the
+field's default; out-of-range pan, pitch and velocity clamp. Guarded by `solaris_model` (8 tests;
+mutants checked: dropping unknown keys on write breaks the fixed point).
+
+### DR-MIX-4 Routing only goes forward (R-MIX-4)
+`validateProject`'s `checkTarget` (`model/Project.cpp:640`) accepts an `out` or a send target only
+when it is `master`, an output port, or a strip whose mixer's `order` is GREATER than the source
+strip's; anything else is refused as `ch_1 (Main, on Buses) output → ch_2 (kick, on Sources): a
+strip can only feed a strip on a LATER mixer, the master or a port (R-MIX-4)`. A file that routes
+backward does not load. Because of this, `Project::stripsInOrder` (`model/Project.cpp:97`) —
+mixer order, then strip order — is a topological order of the routing graph with no cycle check
+at all. A new project is `newProject` (`model/Project.cpp:134`): Sources (`mx_1`), Buses (`mx_2`)
+holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the master (R-MIX-3).
+Guarded by `test_routing_only_goes_forward` (mutant checked: `<=` → `<` lets a same-mixer route
+through and the test fails).
