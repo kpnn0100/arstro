@@ -38,7 +38,8 @@ namespace solaris
             ClipAdd, ClipMove, ClipDuplicate, ClipUnique, ClipDelete,
             PatternNew, NoteAdd, NoteDelete,
             Render,
-            MatrixPrint, Audit, StatePrint, Api
+            MatrixPrint, Audit, StatePrint, Api,
+            SettingsSet, SettingsPrint, FolderAdd, FolderRemove, FolderMove, DevicesList, Browse, RecentsRemove
         };
         Kind kind = Kind::None;
         std::vector<std::string> args;                           // positionals after the verb

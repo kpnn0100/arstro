@@ -177,7 +177,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 
 ---
 
-## R-DEV — audio devices: use every device you have — 📋 SPECIFIED
+## R-DEV — audio devices: use every device you have — 🚧 IN PROGRESS (listing and the port map ✅ DR-SET-1; streams with P1/P2)
 
 The user (2026-10-08): *"we can send to multiple output devices; I want solaris to handle multiple
 audio devices so the user can take advantage of their devices."*
@@ -202,7 +202,7 @@ audio devices so the user can take advantage of their devices."*
   the driver resamples and the transport says so.
 - **R-DEV-8 Linux first**, over the PulseAudio API (which PipeWire also serves); Windows later.
 
-## R-SET — settings — 📋 SPECIFIED
+## R-SET — settings — 🚧 IN PROGRESS (headless ✅ DR-SET-1; the dialog lands with U1)
 
 - **R-SET-1 Cosmo's Settings dialog, reused,** as Interstellar R-SET-1, plus Solaris's rows: output
   and input devices (enable, clock), sample rate (the default for new projects and the preferred
@@ -211,13 +211,13 @@ audio devices so the user can take advantage of their devices."*
 - **R-SET-2 Settings are the machine's**, persisted beside the app's other settings, never in a
   project. Each change is a `settings set` line the service validates, applies and persists.
 
-## R-HOME — Home — 📋 SPECIFIED
+## R-HOME — Home — 🚧 IN PROGRESS (recents ✅ DR-HOME-1; the screen lands with U1)
 
 - **R-HOME-1 Like Interstellar's and Cosmo's.** Recent projects as cards, newest first: name,
   `bpm · length`, version count. New (name, tempo, meter, sample rate defaulting from Settings),
   Open, Settings.
 
-## R-BROWSE — the left panel: samples and presets — 📋 SPECIFIED
+## R-BROWSE — the left panel: samples and presets — 🚧 IN PROGRESS (listing ✅ DR-BROWSE-1; the panel and drag and drop land with U2/U4)
 
 - **R-BROWSE-1 Three sections:** Folders (the sample folders from Settings), Presets (every
   instrument and effect in the registry with its factory and user presets), Project (the sounds the

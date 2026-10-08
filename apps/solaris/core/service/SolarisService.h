@@ -20,6 +20,7 @@
 #include "Event.h"
 #include "MixGraph.h"
 #include "Project.h"
+#include "Settings.h"
 #include <functional>
 #include <map>
 #include <memory>
@@ -41,6 +42,12 @@ namespace solaris
             /** Write `channels` (equal lengths) as a WAV at `rate`; bits 24 = PCM, 32 = float. */
             std::function<bool(const std::string &path, const std::vector<std::vector<float>> &channels, int rate,
                                int bits, std::string &err)> writeWav;
+            /** The entries of a folder (no "." / ".."). False + `err` if it cannot be listed. */
+            std::function<bool(const std::string &path, std::vector<BrowserEntry> &out, std::string &err)> listDir;
+            /** The machine's audio devices, inputs and outputs. */
+            std::function<bool(std::vector<DeviceInfo> &out, std::string &err)> listDevices;
+            std::string settingsPath; // the machine's settings file ("" = not persisted)
+            std::string recentsPath;  // the recent songs, one path per line ("" = not persisted)
         };
 
         explicit SolarisService(Host host = Host());
@@ -62,6 +69,10 @@ namespace solaris
         bool mixCommand(const Command &c, std::string &err);
         bool clipCommand(const Command &c, std::string &err);
         bool render(const Command &c, std::string &err);
+        bool machineCommand(const Command &c, std::string &err);
+        void loadMachine();
+        bool saveSettings(std::string &err);
+        void touchRecent(const std::string &path);
         void refreshModel();
         std::vector<std::string> audit() const;
         std::string matrixText(bool json) const;
@@ -88,6 +99,12 @@ namespace solaris
         std::set<std::string> mOffline;                                 // resolved paths that would not decode
         int mPcmRate = 0;
         std::vector<std::string> mAudit, mLastRenderPeaks;
+        Settings mSettings;
+        std::vector<std::string> mRecents;
+        std::vector<RecentModel> mRecentCards; // parsed from the files: rebuilt only when stale
+        bool mRecentsStale = true;
+        std::vector<DeviceInfo> mDevices;
+        BrowserModel mBrowser;
     };
 }
 }

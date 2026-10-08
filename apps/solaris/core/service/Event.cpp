@@ -40,6 +40,10 @@ namespace solaris
             {EK::RenderFinished, "render.finished", {"out", "frames", "peak"}, "A render was written; peak is the master's, dBFS."},
             {EK::RenderFailed, "render.failed", {"why"}, "A render stopped with an error."},
             {EK::AuditReport, "audit.report", {"findings"}, "How many findings `audit` printed."},
+            {EK::SettingsChanged, "settings.changed", {"what"}, "A machine setting changed and was saved: sampleRate, bufferSize, output, input, port.<name>, folders."},
+            {EK::DevicesChanged, "devices.changed", {"count"}, "`devices list` found this many devices."},
+            {EK::BrowseChanged, "browse.changed", {"path", "entries"}, "The browser now lists this folder."},
+            {EK::RecentsChanged, "recents.changed", {"count"}, "Home's recent songs changed."},
         };
         return specs;
     }

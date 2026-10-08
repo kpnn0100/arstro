@@ -35,7 +35,11 @@ namespace solaris
             ParamsChanged,    // address, value
             RenderFinished,   // out, frames, peak
             RenderFailed,     // why
-            AuditReport       // findings
+            AuditReport,      // findings
+            SettingsChanged,  // what
+            DevicesChanged,   // count
+            BrowseChanged,    // path, entries
+            RecentsChanged    // count
         };
 
         Kind kind = Kind::Info;

@@ -10,8 +10,10 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <set>
+#include <sstream>
 
 namespace arstro
 {
@@ -76,6 +78,42 @@ namespace solaris
         mModel.revision = rev + 1;
         mModel.lastError = lastError;
         mModel.audit = mAudit;
+        // the machine's side: there with or without a song
+        mModel.settings.sampleRate = mSettings.sampleRate;
+        mModel.settings.bufferSize = mSettings.bufferSize;
+        mModel.settings.latencyMs = std::round(1000.0 * mSettings.bufferSize / mSettings.sampleRate * 10.0) / 10.0;
+        mModel.settings.output = mSettings.output;
+        mModel.settings.input = mSettings.input;
+        mModel.settings.folders = mSettings.folders;
+        for (const auto &p : mSettings.ports) mModel.settings.ports.push_back(p.first + "=" + p.second);
+        mModel.devices = mDevices;
+        mModel.browser = mBrowser;
+        if (mRecentsStale)
+        {
+            // Home's cards read each song's header: done when the list or a song changes, not per command
+            mRecentCards.clear();
+            for (const auto &path : mRecents)
+            {
+                RecentModel r;
+                r.path = path;
+                std::ifstream f(path, std::ios::binary);
+                std::stringstream ss;
+                Project song;
+                std::string why;
+                if (f) ss << f.rdbuf();
+                if (!f || !parseProject(ss.str(), song, why)) r.missing = true;
+                else
+                {
+                    r.name = song.header.name;
+                    r.bpm = song.header.bpm;
+                    r.strips = (int)song.strips.size();
+                    for (const auto &c : song.clips) r.lengthBeats = std::max(r.lengthBeats, c.at + clipLengthBeats(song, c));
+                }
+                mRecentCards.push_back(r);
+            }
+            mRecentsStale = false;
+        }
+        mModel.recents = mRecentCards;
         if (!mOpen)
         {
             mModel.screen = "home";

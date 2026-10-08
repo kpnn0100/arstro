@@ -337,6 +337,74 @@
       ],
       "summary": "This document: every command, event, model field and device parameter.",
       "requirement": "R-API-1"
+    },
+    {
+      "verb": "settings set",
+      "usage": "settings set <key>=<value> …",
+      "args": "<key>=<value> …",
+      "flags": [],
+      "summary": "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine). Saved at once.",
+      "requirement": "R-SET-1"
+    },
+    {
+      "verb": "settings print",
+      "usage": "settings print [--json]",
+      "args": "",
+      "flags": [
+        "json"
+      ],
+      "summary": "The machine's settings.",
+      "requirement": "R-SET-1"
+    },
+    {
+      "verb": "folder add",
+      "usage": "folder add <path>",
+      "args": "<path>",
+      "flags": [],
+      "summary": "Add a sample folder to the browser's quick-access list.",
+      "requirement": "R-SET-1"
+    },
+    {
+      "verb": "folder remove",
+      "usage": "folder remove <path>",
+      "args": "<path>",
+      "flags": [],
+      "summary": "Remove a sample folder from the list (the folder itself is untouched).",
+      "requirement": "R-SET-1"
+    },
+    {
+      "verb": "folder move",
+      "usage": "folder move <path> [--to <index>]",
+      "args": "<path>",
+      "flags": [
+        "to=<index>"
+      ],
+      "summary": "Reorder the sample folders.",
+      "requirement": "R-SET-1"
+    },
+    {
+      "verb": "devices list",
+      "usage": "devices list",
+      "args": "",
+      "flags": [],
+      "summary": "List this machine's audio devices (ids for `settings set output=…`).",
+      "requirement": "R-DEV-1"
+    },
+    {
+      "verb": "browse",
+      "usage": "browse <folder>",
+      "args": "<folder>",
+      "flags": [],
+      "summary": "List a folder for the browser: sub-folders, audio files, songs.",
+      "requirement": "R-BROWSE-1"
+    },
+    {
+      "verb": "recents remove",
+      "usage": "recents remove <path>",
+      "args": "<path>",
+      "flags": [],
+      "summary": "Take a song off Home's recent list (the file is untouched).",
+      "requirement": "R-HOME-1"
     }
   ],
   "events": [
@@ -428,6 +496,35 @@
         "findings"
       ],
       "summary": "How many findings `audit` printed."
+    },
+    {
+      "name": "settings.changed",
+      "fields": [
+        "what"
+      ],
+      "summary": "A machine setting changed and was saved: sampleRate, bufferSize, output, input, port.<name>, folders."
+    },
+    {
+      "name": "devices.changed",
+      "fields": [
+        "count"
+      ],
+      "summary": "`devices list` found this many devices."
+    },
+    {
+      "name": "browse.changed",
+      "fields": [
+        "path",
+        "entries"
+      ],
+      "summary": "The browser now lists this folder."
+    },
+    {
+      "name": "recents.changed",
+      "fields": [
+        "count"
+      ],
+      "summary": "Home's recent songs changed."
     }
   ],
   "model": [
@@ -993,6 +1090,168 @@
       "path": "lastError",
       "type": "string",
       "summary": "the last refusal or failure",
+      "stable": true
+    },
+    {
+      "path": "recents",
+      "type": "object[]",
+      "summary": "Home's cards, newest first (R-HOME-1)",
+      "stable": true
+    },
+    {
+      "path": "recents[].path",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "recents[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "recents[].bpm",
+      "type": "number",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "recents[].lengthBeats",
+      "type": "number",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "recents[].strips",
+      "type": "int",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "recents[].missing",
+      "type": "bool",
+      "summary": "the file is gone or no longer a song",
+      "stable": true
+    },
+    {
+      "path": "settings",
+      "type": "object",
+      "summary": "the MACHINE's settings (R-SET-2)",
+      "stable": true
+    },
+    {
+      "path": "settings.sampleRate",
+      "type": "int",
+      "summary": "new songs, and the clock device's rate",
+      "stable": true
+    },
+    {
+      "path": "settings.bufferSize",
+      "type": "int",
+      "summary": "frames per device write",
+      "stable": true
+    },
+    {
+      "path": "settings.latencyMs",
+      "type": "number",
+      "summary": "what that buffer costs at that rate",
+      "stable": true
+    },
+    {
+      "path": "settings.output",
+      "type": "string",
+      "summary": "the clock device ('' = the system default)",
+      "stable": true
+    },
+    {
+      "path": "settings.input",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "settings.folders",
+      "type": "string[]",
+      "summary": "the browser's quick-access folders, in order",
+      "stable": true
+    },
+    {
+      "path": "settings.ports",
+      "type": "string[]",
+      "summary": "<port>=<device>:<channel> on this machine",
+      "stable": true
+    },
+    {
+      "path": "devices",
+      "type": "object[]",
+      "summary": "from the last `devices list`",
+      "stable": true
+    },
+    {
+      "path": "devices[].id",
+      "type": "string",
+      "summary": "what `settings set output=` takes",
+      "stable": true
+    },
+    {
+      "path": "devices[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "devices[].dir",
+      "type": "string",
+      "summary": "out | in",
+      "stable": true
+    },
+    {
+      "path": "devices[].channels",
+      "type": "int",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "devices[].rate",
+      "type": "int",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "browser",
+      "type": "object",
+      "summary": "the folder last browsed",
+      "stable": true
+    },
+    {
+      "path": "browser.path",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "browser.entries",
+      "type": "object[]",
+      "summary": "folders first, then by name",
+      "stable": true
+    },
+    {
+      "path": "browser.entries[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "browser.entries[].path",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "browser.entries[].kind",
+      "type": "string",
+      "summary": "dir | audio | song | other",
       "stable": true
     },
     {

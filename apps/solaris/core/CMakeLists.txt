@@ -2,6 +2,7 @@
 # the model and the engine. No codec, no device API, no OS path (R-SVC-4).
 add_library(solaris_core STATIC
   Compile.cpp
+  Settings.cpp
   service/Json.cpp
   service/Command.cpp
   service/Event.cpp
@@ -10,7 +11,8 @@ add_library(solaris_core STATIC
   service/SolarisService.cpp
   service/ServiceEdit.cpp
   service/ServiceModel.cpp
-  service/ServiceRender.cpp)
+  service/ServiceRender.cpp
+  service/ServiceMachine.cpp)
 target_include_directories(solaris_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/service)
 target_link_libraries(solaris_core PUBLIC solaris_model solaris_engine)
 

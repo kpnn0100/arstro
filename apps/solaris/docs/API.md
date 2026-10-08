@@ -41,6 +41,14 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `audit` | The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping. | R-MIX-10 |
 | `state print [--json] [--stable]` | The whole AppModel; --stable omits what changes with time. | R-SVC-2 |
 | `api [--json] [--md]` | This document: every command, event, model field and device parameter. | R-API-1 |
+| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine). Saved at once. | R-SET-1 |
+| `settings print [--json]` | The machine's settings. | R-SET-1 |
+| `folder add <path>` | Add a sample folder to the browser's quick-access list. | R-SET-1 |
+| `folder remove <path>` | Remove a sample folder from the list (the folder itself is untouched). | R-SET-1 |
+| `folder move <path> [--to <index>]` | Reorder the sample folders. | R-SET-1 |
+| `devices list` | List this machine's audio devices (ids for `settings set output=…`). | R-DEV-1 |
+| `browse <folder>` | List a folder for the browser: sub-folders, audio files, songs. | R-BROWSE-1 |
+| `recents remove <path>` | Take a song off Home's recent list (the file is untouched). | R-HOME-1 |
 
 ## Addresses (`set` / `get`)
 
@@ -70,6 +78,10 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `render.finished` | out, frames, peak | A render was written; peak is the master's, dBFS. |
 | `render.failed` | why | A render stopped with an error. |
 | `audit.report` | findings | How many findings `audit` printed. |
+| `settings.changed` | what | A machine setting changed and was saved: sampleRate, bufferSize, output, input, port.<name>, folders. |
+| `devices.changed` | count | `devices list` found this many devices. |
+| `browse.changed` | path, entries | The browser now lists this folder. |
+| `recents.changed` | count | Home's recent songs changed. |
 
 ## Model (`state print --json`)
 
@@ -169,6 +181,33 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `lengthBeats` | number | where the last clip ends |
 | `audit` | string[] | the last `audit`'s findings |
 | `lastError` | string | the last refusal or failure |
+| `recents` | object[] | Home's cards, newest first (R-HOME-1) |
+| `recents[].path` | string |  |
+| `recents[].name` | string |  |
+| `recents[].bpm` | number |  |
+| `recents[].lengthBeats` | number |  |
+| `recents[].strips` | int |  |
+| `recents[].missing` | bool | the file is gone or no longer a song |
+| `settings` | object | the MACHINE's settings (R-SET-2) |
+| `settings.sampleRate` | int | new songs, and the clock device's rate |
+| `settings.bufferSize` | int | frames per device write |
+| `settings.latencyMs` | number | what that buffer costs at that rate |
+| `settings.output` | string | the clock device ('' = the system default) |
+| `settings.input` | string |  |
+| `settings.folders` | string[] | the browser's quick-access folders, in order |
+| `settings.ports` | string[] | <port>=<device>:<channel> on this machine |
+| `devices` | object[] | from the last `devices list` |
+| `devices[].id` | string | what `settings set output=` takes |
+| `devices[].name` | string |  |
+| `devices[].dir` | string | out \| in |
+| `devices[].channels` | int |  |
+| `devices[].rate` | int |  |
+| `browser` | object | the folder last browsed |
+| `browser.path` | string |  |
+| `browser.entries` | object[] | folders first, then by name |
+| `browser.entries[].name` | string |  |
+| `browser.entries[].path` | string |  |
+| `browser.entries[].kind` | string | dir \| audio \| song \| other |
 | `revision` | int | bumps on every change *(not in `--stable`)* |
 
 ## Devices — the DSP library's registry

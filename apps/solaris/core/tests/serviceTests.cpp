@@ -45,6 +45,7 @@ namespace
     // says "missing"; written WAVs are kept in memory.
     struct Fake
     {
+        std::string settings, recents; // "" = not persisted
         std::map<std::string, std::vector<std::vector<float>>> written;
         std::map<std::string, int> bits;
         SolarisService::Host host()
@@ -64,6 +65,19 @@ namespace
                 bits[path] = b;
                 return true;
             };
+            h.listDir = [](const std::string &path, std::vector<BrowserEntry> &out, std::string &err) {
+                if (contains(path, "nowhere")) { err = "no such folder"; return false; }
+                out = {BrowserEntry{"kick.wav", path + "/kick.wav", "audio"}, BrowserEntry{"Loops", path + "/Loops", "dir"},
+                       BrowserEntry{"notes.txt", path + "/notes.txt", "other"}, BrowserEntry{"a.slp", path + "/a.slp", "song"}};
+                return true;
+            };
+            h.listDevices = [](std::vector<DeviceInfo> &out, std::string &) {
+                out = {DeviceInfo{"card_a", "Speakers", "out", 2, 48000}, DeviceInfo{"card_b", "Headphones", "out", 2, 44100},
+                       DeviceInfo{"mic", "Mic", "in", 1, 48000}};
+                return true;
+            };
+            h.settingsPath = settings;
+            h.recentsPath = recents;
             return h;
         }
     };
@@ -73,7 +87,8 @@ namespace
         Fake fake;
         SolarisService svc;
         std::vector<std::string> events;
-        Run() : svc(fake.host())
+        Run() : Run(std::string(), std::string()) {}
+        Run(const std::string &settings, const std::string &recents) : fake{settings, recents}, svc(fake.host())
         {
             svc.subscribe([this](const Event &e) { events.push_back(formatEvent(e)); });
         }
@@ -400,9 +415,12 @@ static void test_the_dump_and_the_document()
     r2.ok("send add ch_2 --to prt_1");
     r2.ok("device add master --type eq");
     std::string s2 = r2.ok("state print --json --stable");
-    const auto strip = [](std::string s) { // the paths differ by name; nothing else may
-        const auto a = s.find("\"projectPath\""), b = s.find('\n', a);
-        return s.erase(a, b - a);
+    const auto strip = [](const std::string &s) { // the two songs' FILE PATHS differ (and so their recents); nothing else may
+        std::istringstream in(s);
+        std::string line, out;
+        while (std::getline(in, line))
+            if (!contains(line, "\"projectPath\"") && !contains(line, "\"path\"")) out += line + "\n";
+        return out;
     };
     assert(strip(stable) == strip(s2));
     const std::string json = r.ok("api --json"), md = r.ok("api --md");
@@ -412,6 +430,51 @@ static void test_the_dump_and_the_document()
     assert(contains(md, "| `filter.cutoff` | 20.0 … 20000.0 Hz | 2400.0 Hz |"));
     assert(r.ok("state print") == "screen project · Song · 120.0 bpm · 2 mixers · 3 strips · 2 lanes · 2 clips · unsaved\n");
     pass("state print --stable is deterministic and every key is documented; api lists every verb and every DSP parameter (R-API-1)");
+}
+
+static void test_the_machine_settings_folders_devices_and_recents()
+{
+    const std::string settings = scratch() + "/settings.txt", recents = scratch() + "/recents";
+    fs::remove(settings);
+    fs::remove(recents);
+    {
+        Run r(settings, recents);
+        r.ok("settings set sampleRate=44100 bufferSize=512 output=card_a port.Phones=card_b:0");
+        assert(r.svc.model().settings.sampleRate == 44100 && r.svc.model().settings.latencyMs == 11.6);
+        assert(r.svc.model().settings.ports == std::vector<std::string>{"Phones=card_b:0"});
+        assert(contains(r.no("settings set sampleRat=1"), "did you mean: sampleRate?"));
+        assert(contains(r.no("settings set bufferSize=7"), "32 … 8192"));
+        assert(contains(r.no("settings set port.Main=card_a"), "<device>:<first channel>"));
+        r.ok("folder add /music/Samples");
+        r.ok("folder add /music/Loops");
+        r.ok("folder move /music/Loops --to 0");
+        assert((r.svc.model().settings.folders == std::vector<std::string>{"/music/Loops", "/music/Samples"}));
+        assert(contains(r.no("folder add /nowhere"), "cannot list /nowhere"));
+        assert(contains(r.no("folder add /music/Loops"), "already a sample folder"));
+        r.ok("folder remove /music/Loops");
+        assert(r.ok("browse /music/Samples") == "dir\tLoops\nsong\ta.slp\naudio\tkick.wav\nother\tnotes.txt\n");
+        assert(r.svc.model().browser.entries[0].kind == "dir");          // folders first
+        assert(contains(r.ok("devices list"), "out\tcard_b\t2 ch · 44100 Hz\tHeadphones"));
+        assert(r.svc.model().devices.size() == 3);
+        // a new song starts at the machine's rate; it lands on Home's recent list
+        const std::string a = freshSong("recent_a"), b = freshSong("recent_b");
+        r.ok("project new " + a + " --name First");
+        assert(r.svc.model().sampleRate == 44100);
+        r.ok("project new " + b + " --name Second");
+        r.ok("project close");
+        const auto &cards = r.svc.model().recents;
+        assert(cards.size() == 2 && cards[0].name == "Second" && cards[1].name == "First" && cards[0].strips == 1);
+    }
+    // the machine's side survives the process: a second service reads the same files
+    Run again(settings, recents);
+    assert(again.svc.model().settings.output == "card_a" && again.svc.model().settings.folders == std::vector<std::string>{"/music/Samples"});
+    assert(again.svc.model().recents.size() == 2);
+    again.ok("recents remove " + again.svc.model().recents[0].path);
+    assert(again.svc.model().recents.size() == 1 && again.svc.model().recents[0].name == "First");
+    fs::remove(again.svc.model().recents[0].path);
+    Run third(settings, recents);
+    assert(third.svc.model().recents[0].missing);                         // a deleted song is shown as missing
+    pass("the machine: settings, sample folders, browse, devices, recents — saved, and read back by a second process (R-SET, R-HOME-1, R-BROWSE-1)");
 }
 
 static void test_a_refusal_is_an_event_and_lands_in_lastError()
@@ -439,6 +502,7 @@ int main()
     test_solo_mute_matrix_and_audit();
     test_render_writes_the_mix_deterministically();
     test_the_dump_and_the_document();
+    test_the_machine_settings_folders_devices_and_recents();
     test_a_refusal_is_an_event_and_lands_in_lastError();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;

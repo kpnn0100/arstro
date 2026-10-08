@@ -100,6 +100,41 @@ namespace solaris
         int channels = 2;
     };
 
+    struct BrowserEntry
+    {
+        std::string name, path;
+        std::string kind;                        // dir | audio | song | other
+    };
+
+    struct BrowserModel
+    {
+        std::string path;                        // the folder last browsed ("" = none)
+        std::vector<BrowserEntry> entries;       // folders first, then by name
+    };
+
+    struct DeviceInfo
+    {
+        std::string id, name, dir;               // dir = out | in
+        int channels = 2, rate = 48000;
+    };
+
+    struct RecentModel
+    {
+        std::string path, name;
+        double bpm = 0, lengthBeats = 0;
+        int strips = 0;
+        bool missing = false;                    // the file is gone or no longer a song
+    };
+
+    struct SettingsModel
+    {
+        int sampleRate = 48000, bufferSize = 256;
+        double latencyMs = 0;                    // what the buffer costs at the rate
+        std::string output, input;
+        std::vector<std::string> folders;
+        std::vector<std::string> ports;          // "<name>=<device>:<channel>"
+    };
+
     struct AppModel
     {
         std::string screen = "home";             // home | project
@@ -119,6 +154,10 @@ namespace solaris
         double lengthBeats = 0;                  // the song's end (the last clip's)
         std::vector<std::string> audit;          // the last `audit`'s findings
         std::string lastError;
+        std::vector<RecentModel> recents;        // Home's cards, newest first
+        SettingsModel settings;
+        std::vector<DeviceInfo> devices;         // from the last `devices list`
+        BrowserModel browser;
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };
 }

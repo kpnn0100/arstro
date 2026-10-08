@@ -101,6 +101,33 @@ namespace solaris
             {"lengthBeats", "number", "where the last clip ends"},
             {"audit", "string[]", "the last `audit`'s findings"},
             {"lastError", "string", "the last refusal or failure"},
+            {"recents", "object[]", "Home's cards, newest first (R-HOME-1)"},
+            {"recents[].path", "string", ""},
+            {"recents[].name", "string", ""},
+            {"recents[].bpm", "number", ""},
+            {"recents[].lengthBeats", "number", ""},
+            {"recents[].strips", "int", ""},
+            {"recents[].missing", "bool", "the file is gone or no longer a song"},
+            {"settings", "object", "the MACHINE's settings (R-SET-2)"},
+            {"settings.sampleRate", "int", "new songs, and the clock device's rate"},
+            {"settings.bufferSize", "int", "frames per device write"},
+            {"settings.latencyMs", "number", "what that buffer costs at that rate"},
+            {"settings.output", "string", "the clock device ('' = the system default)"},
+            {"settings.input", "string", ""},
+            {"settings.folders", "string[]", "the browser's quick-access folders, in order"},
+            {"settings.ports", "string[]", "<port>=<device>:<channel> on this machine"},
+            {"devices", "object[]", "from the last `devices list`"},
+            {"devices[].id", "string", "what `settings set output=` takes"},
+            {"devices[].name", "string", ""},
+            {"devices[].dir", "string", "out | in"},
+            {"devices[].channels", "int", ""},
+            {"devices[].rate", "int", ""},
+            {"browser", "object", "the folder last browsed"},
+            {"browser.path", "string", ""},
+            {"browser.entries", "object[]", "folders first, then by name"},
+            {"browser.entries[].name", "string", ""},
+            {"browser.entries[].path", "string", ""},
+            {"browser.entries[].kind", "string", "dir | audio | song | other"},
             {"revision", "int", "bumps on every change", false},
         };
         return f;
@@ -179,6 +206,21 @@ namespace solaris
         for (const auto &p : m.ports) ports.push(Json::object().set("id", p.id).set("name", p.name).set("dir", p.dir).set("channels", p.channels));
         j.set("ports", ports);
         j.set("lengthBeats", m.lengthBeats).set("audit", strings(m.audit)).set("lastError", m.lastError);
+        Json recents = Json::array();
+        for (const auto &r : m.recents)
+            recents.push(Json::object().set("path", r.path).set("name", r.name).set("bpm", r.bpm).set("lengthBeats", r.lengthBeats)
+                             .set("strips", r.strips).set("missing", r.missing));
+        j.set("recents", recents);
+        j.set("settings", Json::object().set("sampleRate", m.settings.sampleRate).set("bufferSize", m.settings.bufferSize)
+                              .set("latencyMs", m.settings.latencyMs).set("output", m.settings.output).set("input", m.settings.input)
+                              .set("folders", strings(m.settings.folders)).set("ports", strings(m.settings.ports)));
+        Json devs = Json::array();
+        for (const auto &d : m.devices)
+            devs.push(Json::object().set("id", d.id).set("name", d.name).set("dir", d.dir).set("channels", d.channels).set("rate", d.rate));
+        j.set("devices", devs);
+        Json entries = Json::array();
+        for (const auto &e : m.browser.entries) entries.push(Json::object().set("name", e.name).set("path", e.path).set("kind", e.kind));
+        j.set("browser", Json::object().set("path", m.browser.path).set("entries", entries));
         if (!stable) j.set("revision", m.revision);
         return j;
     }

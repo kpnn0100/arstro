@@ -14,6 +14,7 @@
  *  `--watch` streams every event to stderr.
  */
 #include "AudioFiles.h"
+#include "Machine.h"
 #include "SolarisService.h"
 #include <cstdio>
 #include <fstream>
@@ -71,6 +72,11 @@ int main(int argc, char **argv)
     SolarisService::Host host;
     host.decodeAudio = solaris_host::decodeAudio;
     host.writeWav = solaris_host::writeWav;
+    host.listDir = solaris_host::listDir;
+    host.listDevices = solaris_host::listDevices;
+    // The same settings and recents files the window uses: `settings set` here and the Settings
+    // dialog are one setting.
+    solaris_host::machinePaths(host.settingsPath, host.recentsPath);
     SolarisService svc(host);
     // The event stream IS the log: a shell run with --watch shows exactly what a window would.
     svc.subscribe([watch](const Event &e) {

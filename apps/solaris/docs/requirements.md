@@ -201,3 +201,29 @@ range, default and choices**. `docs/api.json` and `docs/API.md` are that output,
 `solaris_api_current` (`tests/api_current.cmake`) regenerates and compares, failing with the command
 that fixes it (checked: an edited summary turns it red). `test_the_dump_and_the_document` fails if
 the codec writes a key the field table does not list.
+
+### DR-SET-1 The machine's settings (R-SET-1, R-SET-2, R-DEV-1, R-DEV-3)
+`Settings` (`core/Settings.h`) is the MACHINE's, never a song's: `sampleRate` (a new song's default
+— `project new` without `--rate` takes it), `bufferSize` (and the model's `settings.latencyMs`),
+`output`/`input` device ids, `folder` lines, `port.<name> = <device>:<channel>` (where a song's
+logical port plays on this machine). `settings set` (`machineCommand`,
+`core/service/ServiceMachine.cpp`) validates every key — an unknown key is refused with the nearest
+— and writes the host-given file at once; a second process reads the same file
+(`test_the_machine_settings_folders_devices_and_recents`). `folder add/remove/move` keeps the
+browser's quick-access list in order; `folder add` refuses a folder the host cannot list.
+`devices list` asks the host, which asks the sound server through the PulseAudio API
+(`listDevices`, `host/Machine.cpp`) — outputs and inputs, monitors of outputs left out. The CLI and
+the window share the files (`machinePaths`: XDG, overridable by `SOLARIS_SETTINGS` /
+`SOLARIS_RECENTS`).
+
+### DR-HOME-1 The recent songs (R-HOME-1)
+Opening, creating or saving a song under a new path puts it first on the recent list
+(`touchRecent`, `core/service/ServiceMachine.cpp`), at most 20, persisted in the host's recents file.
+The model's `recents[]` cards carry each song's name, bpm, length and strip count, read from the
+files when the list or a song changes (not on every command); a file that is gone or no longer a
+song is a card marked `missing`. `recents remove` takes one off the list and leaves the file.
+
+### DR-BROWSE-1 The browser lists a folder (R-BROWSE-1, headless half)
+`browse <folder>` asks the host (`listDir`, `host/Machine.cpp`): sub-folders, audio files (by
+extension), songs (`.slp`), hidden entries left out; folders first, then by name; the model's
+`browser` holds the listing. Drag and drop is the UI's (R-BROWSE-3), over `clip add`.

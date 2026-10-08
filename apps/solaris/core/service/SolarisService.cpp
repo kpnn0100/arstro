@@ -18,7 +18,11 @@ namespace solaris
 {
     using K = Command::Kind;
 
-    SolarisService::SolarisService(Host host) : mHost(std::move(host)) { refreshModel(); }
+    SolarisService::SolarisService(Host host) : mHost(std::move(host))
+    {
+        loadMachine();
+        refreshModel();
+    }
 
     void SolarisService::emit(const Event &e)
     {
@@ -65,6 +69,8 @@ namespace solaris
             {
             case K::ProjectNew: case K::ProjectOpen: case K::ProjectSave: case K::ProjectClose:
             case K::Get: case K::Render: case K::MatrixPrint: case K::Audit: case K::StatePrint: case K::Api:
+            case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
+            case K::DevicesList: case K::Browse: case K::RecentsRemove:
             case K::None:
                 return false;
             default:
@@ -154,6 +160,10 @@ namespace solaris
             ok = true;
             mOutput = c.has("md") ? apiMarkdown() : apiJson();
             break;
+        case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
+        case K::DevicesList: case K::Browse: case K::RecentsRemove:
+            ok = machineCommand(c, err);
+            break;
         case K::None:
             ok = true;
             break;
@@ -236,6 +246,7 @@ namespace solaris
             mLastRenderPeaks.clear();
             refreshModel();
             mModel.dirty = false;
+            touchRecent(path);
             emit(Event(Event::Kind::ScreenChanged).with("screen", "project"));
             emit(Event(Event::Kind::ProjectOpened).with("path", path)
                      .with("strips", (long long)mProject.strips.size()).with("clips", (long long)mProject.clips.size()));
@@ -260,7 +271,7 @@ namespace solaris
             int num = 0, den = 0;
             if (std::sscanf(sig.c_str(), "%d/%d", &num, &den) != 2 || num < 1 || num > 32 || (den != 2 && den != 4 && den != 8 && den != 16))
             { err = "--sig must be a meter like 4/4, 3/4 or 7/8"; return false; }
-            double rate = 48000;
+            double rate = mSettings.sampleRate; // R-SET-1: the machine's rate is a new song's default
             if (c.has("rate") && (!parseNumber(c.flag("rate"), rate) || !(rate >= 8000 && rate <= 192000)))
             { err = "--rate must be a sample rate between 8000 and 192000"; return false; }
             const std::string stem = fs::path(path).stem().string();
@@ -293,7 +304,8 @@ namespace solaris
             if (!requireOpen(err)) return false;
             const std::string path = c.arg(0, mPath);
             if (!write(path)) return false;
-            if (path != mPath) { mPath = path; mPcm.clear(); mOffline.clear(); } // relative media now resolve from here
+            mRecentsStale = true; // its card shows the saved name and length
+            if (path != mPath) { mPath = path; mPcm.clear(); mOffline.clear(); touchRecent(path); } // relative media now resolve from here
             mModel.dirty = false;
             emit(Event(Event::Kind::ProjectSaved).with("path", path));
             return true;
