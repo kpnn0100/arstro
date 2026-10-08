@@ -10,7 +10,10 @@
 #include "Event.h"
 #include "Format.h"
 #include "SolarisService.h"
+#include <atomic>
 #include <cassert>
+#include <chrono>
+#include <thread>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -43,9 +46,32 @@ namespace
 
     // The fake host: any path decodes to half a second of a 1 kHz sine at 0.5, except one that
     // says "missing"; written WAVs are kept in memory.
+    // A clock device that keeps what it is given: frames land in `sink`, counted in `frames`
+    // (read the sink only after `transport stop` has joined the player).
+    struct Capture
+    {
+        std::vector<float> sink;
+        std::atomic<long long> frames{0};
+    };
+    struct FakeOut : IAudioOut
+    {
+        std::shared_ptr<Capture> cap;
+        bool open(const std::string &, int, int, int, std::string &) override { return true; }
+        bool write(const float *x, int n) override
+        {
+            cap->sink.insert(cap->sink.end(), x, x + 2 * n);
+            cap->frames.fetch_add(n);
+            std::this_thread::sleep_for(std::chrono::microseconds(300)); // a fast, but not runaway, device
+            return true;
+        }
+        double latency() override { return 0.0; }
+    };
+
     struct Fake
     {
         std::string settings, recents; // "" = not persisted
+        std::shared_ptr<Capture> capture = std::make_shared<Capture>();
+        bool canPlay = true;
         std::map<std::string, std::vector<std::vector<float>>> written;
         std::map<std::string, int> bits;
         SolarisService::Host host()
@@ -78,6 +104,12 @@ namespace
             };
             h.settingsPath = settings;
             h.recentsPath = recents;
+            if (canPlay)
+                h.audioOut = [this] {
+                    auto o = std::make_unique<FakeOut>();
+                    o->cap = capture;
+                    return std::unique_ptr<IAudioOut>(std::move(o));
+                };
             return h;
         }
     };
@@ -477,6 +509,106 @@ static void test_the_machine_settings_folders_devices_and_recents()
     pass("the machine: settings, sample folders, browse, devices, recents — saved, and read back by a second process (R-SET, R-HOME-1, R-BROWSE-1)");
 }
 
+namespace
+{
+    void waitFrames(Run &r, long long n)
+    {
+        for (int i = 0; i < 2000 && r.fake.capture->frames.load() < n; ++i) r.ok("wait 0.005");
+        assert(r.fake.capture->frames.load() >= n);
+    }
+    float peakOf(const std::vector<float> &v, size_t from, size_t to)
+    {
+        float p = 0;
+        for (size_t i = from; i < to && i < v.size(); ++i) p = std::max(p, std::fabs(v[i]));
+        return p;
+    }
+}
+
+static void test_live_playback_is_the_offline_render()
+{
+    Run r;
+    r.ok("project new " + freshSong("live") + " --bpm 120");
+    r.ok("strip add --kind instrument --instrument drums");
+    r.ok("clip add --strip ch_2 --length 8");
+    r.ok("note add pt_1 --pitch 36 --at 0");
+    r.ok("note add pt_1 --pitch 42 --at 0.5");
+    r.ok("note add pt_1 --pitch 38 --at 1");
+    r.ok("strip add --kind instrument --instrument synth");
+    r.ok("clip add --strip ch_3 --length 8");
+    r.ok("note add pt_2 --pitch 48 --at 0 --length 2");
+    r.ok("strip add --kind bus --name Verb");
+    r.ok("device add ch_4 --type reverb");
+    r.ok("send add ch_3 --to ch_4 --gain -6");
+    r.events.clear();
+    r.ok("transport play");
+    assert(r.svc.model().transport.playing && contains(r.events.back(), "[evt] transport.changed playing=1 position=0.0 loop=off"));
+    waitFrames(r, 96000);
+    r.ok("transport stop");
+    assert(!r.svc.model().transport.playing && r.svc.model().transport.position >= 4.0); // 96000 frames = 4 beats heard
+    r.ok("render --out " + scratch() + "/live.wav --ports --to 4");
+    const auto &port = r.fake.written[scratch() + "/live.Main.wav"];
+    const auto &live = r.fake.capture->sink;
+    for (size_t i = 0; i < 96000; ++i)
+    {
+        if (live[2 * i] != port[0][i] || live[2 * i + 1] != port[1][i]) std::printf("    frame %zu: live %g offline %g\n", i, live[2 * i], port[0][i]);
+        assert(live[2 * i] == port[0][i] && live[2 * i + 1] == port[1][i]);
+    }
+    assert(peakOf(live, 0, 2 * 96000) > 0.05f);
+    pass("live playback on the clock device is the offline render, sample for sample, over 4 beats (R-PLAY-1)");
+}
+
+static void test_edits_while_playing_are_heard()
+{
+    Run r;
+    r.ok("project new " + freshSong("liveedit") + " --bpm 120");
+    r.ok("transport play");                                     // an empty song: silence…
+    waitFrames(r, 12000);
+    r.ok("clip add --src tone.wav --length 64");                // …a STRUCTURAL edit: a new engine swapped in
+    const long long added = r.fake.capture->frames.load();
+    waitFrames(r, added + 24000);
+    r.ok("set ch_2.gain=-120");                                 // a LIVE edit: a message, the next block
+    const long long muted = r.fake.capture->frames.load();
+    waitFrames(r, muted + 24000);
+    r.ok("transport stop");
+    const auto &v = r.fake.capture->sink;
+    assert(peakOf(v, 0, 2 * 11000) == 0.0f);                    // before the clip existed
+    assert(peakOf(v, 2 * (added + 4096), 2 * (added + 12000)) > 0.3f);  // the tone, after the swap
+    assert(peakOf(v, 2 * (muted + 4096), 2 * (muted + 24000)) < 1e-5f); // gone after −120 dB
+    assert(contains(r.no("transport play --from -1"), "--from"));
+    Run cannot;
+    cannot.fake.canPlay = false;
+    SolarisService mute(cannot.fake.host());
+    std::string err;
+    mute.dispatchText("project new " + freshSong("noout"), err);
+    assert(!mute.dispatchText("transport play", err) && err == "this build cannot play audio (no output stream)");
+    pass("while playing: a clip added is heard (an engine swap); a gain change is heard at the next block (R-PLAY-1)");
+}
+
+static void test_loop_and_seek()
+{
+    Run r;
+    r.ok("project new " + freshSong("loop") + " --bpm 120");
+    r.ok("strip add --kind instrument --instrument drums");
+    r.ok("clip add --strip ch_2 --length 8");
+    r.ok("note add pt_1 --pitch 36 --at 0");                    // one kick at beat 0 of a 4-beat pattern
+    r.ok("transport loop 0 1");                                 // loop the first beat: a kick every beat
+    r.ok("transport play");
+    waitFrames(r, 4 * 24000 + 1000);
+    r.ok("transport stop");
+    const auto &v = r.fake.capture->sink;
+    for (int k = 1; k <= 3; ++k)
+    {
+        const size_t at = (size_t)k * 24000;
+        assert(peakOf(v, 2 * at, 2 * (at + 480)) > 10.0f * peakOf(v, 2 * (at - 2400), 2 * at)); // the kick again, each beat
+    }
+    r.ok("transport loop off");
+    assert(r.svc.model().transport.loopTo == 0.0);
+    r.ok("transport seek 6");
+    assert(r.svc.model().transport.position == 6.0);
+    assert(contains(r.no("transport loop 3 2"), "to > from"));
+    pass("loop repeats its span while playing; seek moves the transport (R-TIME-4)");
+}
+
 static void test_a_refusal_is_an_event_and_lands_in_lastError()
 {
     Run r;
@@ -503,6 +635,9 @@ int main()
     test_render_writes_the_mix_deterministically();
     test_the_dump_and_the_document();
     test_the_machine_settings_folders_devices_and_recents();
+    test_live_playback_is_the_offline_render();
+    test_edits_while_playing_are_heard();
+    test_loop_and_seek();
     test_a_refusal_is_an_event_and_lands_in_lastError();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;

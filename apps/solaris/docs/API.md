@@ -49,6 +49,11 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `devices list` | List this machine's audio devices (ids for `settings set output=…`). | R-DEV-1 |
 | `browse <folder>` | List a folder for the browser: sub-folders, audio files, songs. | R-BROWSE-1 |
 | `recents remove <path>` | Take a song off Home's recent list (the file is untouched). | R-HOME-1 |
+| `transport play [--from <beats>]` | Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position. | R-PLAY-1 |
+| `transport stop` | Stop; the transport stays where it was heard. | R-TIME-4 |
+| `transport seek <beats>` | Move the transport (playing or not). | R-TIME-4 |
+| `transport loop <from\|off> [to]` | Loop between two beats while playing; `off` ends it. | R-TIME-4 |
+| `wait <seconds>` | Let time pass (playback goes on, the model's transport and meters update) — for scripts that listen. | R-PLAY-3 |
 
 ## Addresses (`set` / `get`)
 
@@ -82,6 +87,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `devices.changed` | count | `devices list` found this many devices. |
 | `browse.changed` | path, entries | The browser now lists this folder. |
 | `recents.changed` | count | Home's recent songs changed. |
+| `transport.changed` | playing, position, loop | Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`. |
 
 ## Model (`state print --json`)
 
@@ -136,6 +142,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].devices[].params[].max` | number |  |
 | `strips[].devices[].params[].def` | number |  |
 | `strips[].devices[].params[].choices` | string[] | empty unless a choice |
+| `strips[].peak` | number[] | the last played block's peaks, L/R (R-PLAY-3) *(not in `--stable`)* |
 | `strips[].clipCount` | int | fed by: clips playing through it (R-MIX-8) |
 | `strips[].fromLanes` | string[] | fed by: the lanes those clips are drawn on |
 | `strips[].fromStrips` | string[] | fed by: strips whose output or a send lands here |
@@ -202,6 +209,14 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `devices[].dir` | string | out \| in |
 | `devices[].channels` | int |  |
 | `devices[].rate` | int |  |
+| `transport` | object | play, position, loop (R-TIME-4) |
+| `transport.playing` | bool |  |
+| `transport.position` | number | beats — what is heard *(not in `--stable`)* |
+| `transport.loopFrom` | number | beats |
+| `transport.loopTo` | number | beats; equal to loopFrom = no loop |
+| `transport.latencyMs` | number | the clock device's *(not in `--stable`)* |
+| `transport.device` | string | the clock device ('' = the system default) |
+| `transport.masterPeak` | number[] | L/R peaks of the last played block *(not in `--stable`)* |
 | `browser` | object | the folder last browsed |
 | `browser.path` | string |  |
 | `browser.entries` | object[] | folders first, then by name |

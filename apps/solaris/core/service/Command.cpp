@@ -111,6 +111,16 @@ namespace solaris
             {K::DevicesList, "devices list", "", 0, 0, {}, "List this machine's audio devices (ids for `settings set output=…`).", "R-DEV-1"},
             {K::Browse, "browse", "<folder>", 1, 1, {}, "List a folder for the browser: sub-folders, audio files, songs.", "R-BROWSE-1"},
             {K::RecentsRemove, "recents remove", "<path>", 1, 1, {}, "Take a song off Home's recent list (the file is untouched).", "R-HOME-1"},
+
+            {K::TransportPlay, "transport play", "", 0, 0, {"from=<beats>"},
+             "Play on the clock device (settings output), from --from or where the transport stands. Edits while "
+             "playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a "
+             "new engine swapped in at the same position.", "R-PLAY-1"},
+            {K::TransportStop, "transport stop", "", 0, 0, {}, "Stop; the transport stays where it was heard.", "R-TIME-4"},
+            {K::TransportSeek, "transport seek", "<beats>", 1, 1, {}, "Move the transport (playing or not).", "R-TIME-4"},
+            {K::TransportLoop, "transport loop", "<from|off> [to]", 1, 2, {}, "Loop between two beats while playing; `off` ends it.", "R-TIME-4"},
+            {K::Wait, "wait", "<seconds>", 1, 1, {}, "Let time pass (playback goes on, the model's transport and meters update) — "
+             "for scripts that listen.", "R-PLAY-3"},
         };
         return specs;
     }

@@ -173,7 +173,11 @@ namespace solaris
                 {
                     bool ok = true;
                     auto dd = deviceDesc(rk->devices[k], r.warnings, ok);
-                    if (ok) es.rack.push_back(dd);
+                    if (ok)
+                    {
+                        r.devices[dd.id] = {(int)g.strips.size(), (int)es.rack.size()};
+                        es.rack.push_back(dd);
+                    }
                     else if (k == 0 && es.kind == engine::Strip::Instrument) instrumentOk = false;
                 }
             if (es.kind == engine::Strip::Instrument)
@@ -238,7 +242,11 @@ namespace solaris
             {
                 bool ok = true;
                 auto dd = deviceDesc(d, r.warnings, ok);
-                if (ok) g.masterRack.push_back(dd);
+                if (ok)
+                {
+                    r.devices[dd.id] = {-1, (int)g.masterRack.size()};
+                    g.masterRack.push_back(dd);
+                }
             }
         return r;
     }

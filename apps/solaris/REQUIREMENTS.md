@@ -168,7 +168,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 - **R-CLIP-4 Clips may overlap** on a lane; overlapping audio sums (was SR-CLIP-4).
 - **R-CLIP-5 Reserved:** time-stretch and pitch-shift (was SR-CLIP-3).
 
-## R-TIME — transport and time — 📋 SPECIFIED
+## R-TIME — transport and time — 🚧 IN PROGRESS (1–4 ✅ but the metronome: DR-PLAY-1)
 
 - **R-TIME-1 Beats are authoritative**, 960 PPQ; seconds are derived from the tempo (was SR-TIME-1).
 - **R-TIME-2 One tempo and one meter** per project; a tempo/meter map is reserved (was SR-TIME-2/5).
@@ -258,7 +258,7 @@ R-VER, applied to an arrangement:
 - **R-RENDER-3 A range or the whole song**, with the tail rendered until the output falls below
   −90 dBFS or a 10 s cap (was SR-RENDER-3/4).
 
-## R-PLAY — real-time playback — 📋 SPECIFIED
+## R-PLAY — real-time playback — ✅ IMPLEMENTED on one device (DR-PLAY-1/2/3; several devices: P2, R-DEV-2/4)
 
 - **R-PLAY-1 Playback runs the same graph the render runs** on the clock device's callback;
   offline and live produce the same samples (was SR-RT-1..3, SR-SCOPE-2).

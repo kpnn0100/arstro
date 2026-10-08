@@ -44,6 +44,8 @@ namespace solaris
             {EK::DevicesChanged, "devices.changed", {"count"}, "`devices list` found this many devices."},
             {EK::BrowseChanged, "browse.changed", {"path", "entries"}, "The browser now lists this folder."},
             {EK::RecentsChanged, "recents.changed", {"count"}, "Home's recent songs changed."},
+            {EK::TransportChanged, "transport.changed", {"playing", "position", "loop"},
+             "Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`."},
         };
         return specs;
     }

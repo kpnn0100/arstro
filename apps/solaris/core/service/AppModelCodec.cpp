@@ -56,6 +56,7 @@ namespace solaris
             {"strips[].devices[].params[].max", "number", ""},
             {"strips[].devices[].params[].def", "number", ""},
             {"strips[].devices[].params[].choices", "string[]", "empty unless a choice"},
+            {"strips[].peak", "number[]", "the last played block's peaks, L/R (R-PLAY-3)", false},
             {"strips[].clipCount", "int", "fed by: clips playing through it (R-MIX-8)"},
             {"strips[].fromLanes", "string[]", "fed by: the lanes those clips are drawn on"},
             {"strips[].fromStrips", "string[]", "fed by: strips whose output or a send lands here"},
@@ -122,6 +123,14 @@ namespace solaris
             {"devices[].dir", "string", "out | in"},
             {"devices[].channels", "int", ""},
             {"devices[].rate", "int", ""},
+            {"transport", "object", "play, position, loop (R-TIME-4)"},
+            {"transport.playing", "bool", ""},
+            {"transport.position", "number", "beats — what is heard", false},
+            {"transport.loopFrom", "number", "beats"},
+            {"transport.loopTo", "number", "beats; equal to loopFrom = no loop"},
+            {"transport.latencyMs", "number", "the clock device's", false},
+            {"transport.device", "string", "the clock device ('' = the system default)"},
+            {"transport.masterPeak", "number[]", "L/R peaks of the last played block", false},
             {"browser", "object", "the folder last browsed"},
             {"browser.path", "string", ""},
             {"browser.entries", "object[]", "folders first, then by name"},
@@ -174,11 +183,13 @@ namespace solaris
         {
             Json sends = Json::array();
             for (const auto &sd : s.sends) sends.push(Json::object().set("id", sd.id).set("to", sd.to).set("gain", sd.gain).set("pre", sd.pre));
-            strips.push(Json::object()
-                            .set("id", s.id).set("name", s.name).set("kind", s.kind).set("mixer", s.mixer).set("order", s.order)
+            Json st = Json::object();
+            st.set("id", s.id).set("name", s.name).set("kind", s.kind).set("mixer", s.mixer).set("order", s.order)
                             .set("out", s.out).set("gain", s.gain).set("pan", s.pan).set("mute", s.mute).set("solo", s.solo)
-                            .set("audible", s.audible).set("colour", s.colour).set("sends", sends).set("devices", devices(s.devices))
-                            .set("clipCount", s.clipCount).set("fromLanes", strings(s.fromLanes)).set("fromStrips", strings(s.fromStrips)));
+                            .set("audible", s.audible).set("colour", s.colour).set("sends", sends).set("devices", devices(s.devices));
+            if (!stable) st.set("peak", Json::array().push(Json::number(s.peak[0])).push(Json::number(s.peak[1])));
+            st.set("clipCount", s.clipCount).set("fromLanes", strings(s.fromLanes)).set("fromStrips", strings(s.fromStrips));
+            strips.push(st);
         }
         j.set("strips", strips);
         j.set("masterDevices", devices(m.masterDevices));
@@ -218,6 +229,14 @@ namespace solaris
         for (const auto &d : m.devices)
             devs.push(Json::object().set("id", d.id).set("name", d.name).set("dir", d.dir).set("channels", d.channels).set("rate", d.rate));
         j.set("devices", devs);
+        Json tr = Json::object();
+        tr.set("playing", m.transport.playing);
+        if (!stable) tr.set("position", m.transport.position);
+        tr.set("loopFrom", m.transport.loopFrom).set("loopTo", m.transport.loopTo);
+        if (!stable) tr.set("latencyMs", m.transport.latencyMs);
+        tr.set("device", m.transport.device);
+        if (!stable) tr.set("masterPeak", Json::array().push(Json::number(m.transport.masterPeak[0])).push(Json::number(m.transport.masterPeak[1])));
+        j.set("transport", tr);
         Json entries = Json::array();
         for (const auto &e : m.browser.entries) entries.push(Json::object().set("name", e.name).set("path", e.path).set("kind", e.kind));
         j.set("browser", Json::object().set("path", m.browser.path).set("entries", entries));

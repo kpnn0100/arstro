@@ -39,7 +39,8 @@ namespace solaris
             PatternNew, NoteAdd, NoteDelete,
             Render,
             MatrixPrint, Audit, StatePrint, Api,
-            SettingsSet, SettingsPrint, FolderAdd, FolderRemove, FolderMove, DevicesList, Browse, RecentsRemove
+            SettingsSet, SettingsPrint, FolderAdd, FolderRemove, FolderMove, DevicesList, Browse, RecentsRemove,
+            TransportPlay, TransportStop, TransportSeek, TransportLoop, Wait
         };
         Kind kind = Kind::None;
         std::vector<std::string> args;                           // positionals after the verb

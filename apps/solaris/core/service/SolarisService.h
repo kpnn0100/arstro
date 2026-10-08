@@ -16,9 +16,11 @@
  */
 #pragma once
 #include "AppModel.h"
+#include "AudioOut.h"
 #include "Command.h"
 #include "Event.h"
 #include "MixGraph.h"
+#include "Player.h"
 #include "Project.h"
 #include "Settings.h"
 #include <functional>
@@ -46,16 +48,23 @@ namespace solaris
             std::function<bool(const std::string &path, std::vector<BrowserEntry> &out, std::string &err)> listDir;
             /** The machine's audio devices, inputs and outputs. */
             std::function<bool(std::vector<DeviceInfo> &out, std::string &err)> listDevices;
+            /** A stream to the clock device (R-PLAY-1). Empty = this build cannot play. */
+            std::function<std::unique_ptr<IAudioOut>()> audioOut;
             std::string settingsPath; // the machine's settings file ("" = not persisted)
             std::string recentsPath;  // the recent songs, one path per line ("" = not persisted)
         };
 
         explicit SolarisService(Host host = Host());
+        ~SolarisService();
+        SolarisService(const SolarisService &other);   // a copy never plays (getAddress probes on one)
 
         bool dispatchText(const std::string &line, std::string &err);
         bool dispatch(const Command &c, std::string &err);
 
         const AppModel &model() const { return mModel; }
+        /** Bring the transport and meters into the model, free engines the player handed back. A
+         *  host calls it on a timer while playing; `wait` calls it; it emits nothing. */
+        void pump();
         const std::string &output() const { return mOutput; }
         void subscribe(std::function<void(const Event &)> sink) { mSinks.push_back(std::move(sink)); }
         /** The open document (null on Home) — for tests and the host's title bar. */
@@ -70,6 +79,10 @@ namespace solaris
         bool clipCommand(const Command &c, std::string &err);
         bool render(const Command &c, std::string &err);
         bool machineCommand(const Command &c, std::string &err);
+        bool transportCommand(const Command &c, std::string &err);
+        void liveUpdate(const Command &c);            // after an edit while playing: live messages or an engine swap
+        bool buildLive(std::unique_ptr<engine::Engine> &out, std::string &err);
+        void stopPlayer();
         void loadMachine();
         bool saveSettings(std::string &err);
         void touchRecent(const std::string &path);
@@ -105,6 +118,10 @@ namespace solaris
         bool mRecentsStale = true;
         std::vector<DeviceInfo> mDevices;
         BrowserModel mBrowser;
+        std::unique_ptr<Player> mPlayer;
+        std::vector<std::string> mLiveStrips;                         // engine strip index → strip id
+        std::map<std::string, std::pair<int, int>> mLiveDevices;      // device id → (strip index, rack index)
+        double mPosition = 0, mLoopFrom = 0, mLoopTo = 0;             // beats
     };
 }
 }

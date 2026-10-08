@@ -39,7 +39,8 @@ namespace solaris
             SettingsChanged,  // what
             DevicesChanged,   // count
             BrowseChanged,    // path, entries
-            RecentsChanged    // count
+            RecentsChanged,   // count
+            TransportChanged  // playing, position, loop
         };
 
         Kind kind = Kind::Info;

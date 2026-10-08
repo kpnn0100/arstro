@@ -12,9 +12,10 @@ else()
   message(STATUS "solaris_host: no FFmpeg — audio files cannot be decoded (rendering still works)")
 endif()
 
-# R-DEV-8: the PulseAudio API (PipeWire serves it too) — device lists now, streams with P1
-pkg_check_modules(SOLARIS_PULSE IMPORTED_TARGET libpulse)
+# R-DEV-8: the PulseAudio API (PipeWire serves it too) — the device list and the clock device's stream
+pkg_check_modules(SOLARIS_PULSE IMPORTED_TARGET libpulse libpulse-simple)
 if(SOLARIS_PULSE_FOUND)
+  target_sources(solaris_host PRIVATE AudioOutPulse.cpp)
   target_link_libraries(solaris_host PRIVATE PkgConfig::SOLARIS_PULSE)
-  target_compile_definitions(solaris_host PRIVATE SOLARIS_HAVE_PULSE=1)
+  target_compile_definitions(solaris_host PUBLIC SOLARIS_HAVE_PULSE=1)
 endif()

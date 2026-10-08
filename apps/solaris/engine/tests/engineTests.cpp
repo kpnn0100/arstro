@@ -8,13 +8,28 @@
 #endif
 #include "../Engine.h"
 #include "../MixLaws.h"
+#include <atomic>
 #include <cassert>
+#include <cstdlib>
+#include <new>
 #include <cmath>
 #include <cstdio>
 #include <memory>
 #include <string>
 
 using namespace arstro::solaris::engine;
+
+// A counting allocator for this binary: off except inside the window a test opens.
+static std::atomic<long> gAllocs{0};
+static std::atomic<bool> gCounting{false};
+void *operator new(size_t n)
+{
+    if (gCounting.load(std::memory_order_relaxed)) gAllocs.fetch_add(1, std::memory_order_relaxed);
+    if (void *p = std::malloc(n ? n : 1)) return p;
+    throw std::bad_alloc();
+}
+void operator delete(void *p) noexcept { std::free(p); }
+void operator delete(void *p, size_t) noexcept { std::free(p); }
 
 namespace
 {
@@ -336,6 +351,54 @@ static void test_meters_seek_capture_and_live_params()
     pass("meters report peak and RMS; seek moves; a strip can be captured as a stem; params change live");
 }
 
+static void test_live_render_allocates_nothing_and_takes_live_edits()
+{
+    MixGraph g = basic();
+    Strip drums;
+    drums.id = "ch_3";
+    drums.kind = Strip::Instrument;
+    drums.rack = {DeviceDesc{"dv_1", "drums", {}, false}, DeviceDesc{"dv_2", "reverb", {}, false}};
+    for (int k = 0; k < 16; ++k) drums.notes.push_back(NoteEvent{k * 3000LL, 36 + (k % 3) * 2, 110, true});
+    drums.out = Target{Target::Strip, 2};
+    Strip synth;
+    synth.id = "ch_4";
+    synth.kind = Strip::Instrument;
+    synth.rack = {DeviceDesc{"dv_3", "synth", {{"noise", 0.3}}, false}};
+    synth.notes = {NoteEvent{100, 60, 100, true}, NoteEvent{20000, 60, 0, false}};
+    synth.out = Target{Target::Strip, 2};
+    g.strips = {g.strips[0], drums, synth, g.strips[1]};
+    g.strips[0].out = Target{Target::Strip, 3};
+    g.strips[1].out = Target{Target::Strip, 3};
+    g.strips[2].out = Target{Target::Strip, 3};
+    Engine e;
+    std::string err;
+    assert(e.build(g, err));
+    PortBuffers out;
+    e.prepare(out, 256);
+    gAllocs = 0;
+    gCounting = true;
+    for (int k = 0; k < 200; ++k) e.render(256, out);  // a second of playback in device-sized blocks
+    e.setStripGain(1, 0.5);
+    e.setStripPan(2, -0.5);
+    e.setStripSilent(0, true);
+    e.setDeviceBypass(1, 1, true);
+    e.setMasterGain(0.8);
+    e.setDeviceParam(2, 0, "filter.cutoff", 900.0);
+    for (int k = 0; k < 20; ++k) e.render(256, out);
+    gCounting = false;
+    if (gAllocs.load()) std::printf("    %ld allocations on the live path\n", gAllocs.load());
+    assert(gAllocs.load() == 0);
+    // the edits took: silence the drums and the synth, and the port goes quiet
+    e.setStripSilent(1, true);
+    e.setStripSilent(2, true);
+    e.render(256, out);
+    e.render(256, out);
+    float peak = 0;
+    for (float v : out.ports[0][0]) peak = std::max(peak, std::fabs(v));
+    assert(peak < 1e-3f);                                   // only the reverb bypassed… and the strips silenced
+    pass("live: after prepare, rendering and every live edit allocate nothing (R-PLAY-2)");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -347,6 +410,7 @@ int main()
     test_notes_start_on_their_exact_sample();
     test_render_is_deterministic_however_it_is_chopped();
     test_meters_seek_capture_and_live_params();
+    test_live_render_allocates_nothing_and_takes_live_edits();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

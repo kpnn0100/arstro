@@ -71,6 +71,7 @@ namespace solaris
             case K::Get: case K::Render: case K::MatrixPrint: case K::Audit: case K::StatePrint: case K::Api:
             case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
             case K::DevicesList: case K::Browse: case K::RecentsRemove:
+            case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait:
             case K::None:
                 return false;
             default:
@@ -164,6 +165,9 @@ namespace solaris
         case K::DevicesList: case K::Browse: case K::RecentsRemove:
             ok = machineCommand(c, err);
             break;
+        case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait:
+            ok = transportCommand(c, err);
+            break;
         case K::None:
             ok = true;
             break;
@@ -188,6 +192,8 @@ namespace solaris
         if (editing) mModel.dirty = true;
         refreshModel();
         for (const auto &e : pending) emit(e);
+        if (editing) liveUpdate(c); // heard while playing (DR-PLAY-1)
+        pump();
         return true;
     }
 
@@ -237,6 +243,9 @@ namespace solaris
     bool SolarisService::projectCommand(const Command &c, std::string &err)
     {
         auto open = [&](Project p, const std::string &path) {
+            stopPlayer();
+            mPosition = mLoopFrom = mLoopTo = 0;
+            mModel.transport = TransportModel();
             mProject = std::move(p);
             mPath = path;
             mOpen = true;
@@ -311,6 +320,9 @@ namespace solaris
             return true;
         }
         case K::ProjectClose:
+            stopPlayer();
+            mPosition = mLoopFrom = mLoopTo = 0;
+            mModel.transport = TransportModel();
             mOpen = false;
             mProject = Project();
             mPath.clear();

@@ -70,6 +70,16 @@ namespace engine
         const Meter &masterMeter() const { return mMasterMeter; }
         void clearPeaks();
 
+        /** Size `out` for blocks up to `maxFrames`, so `render` never allocates (R-PLAY-2). */
+        void prepare(PortBuffers &out, int maxFrames) const;
+
+        // ── live edits, from the thread that renders (the player drains them between blocks) ──
+        void setStripGain(int strip, double linear);
+        void setStripPan(int strip, double pan);
+        void setStripSilent(int strip, bool silent);
+        void setMasterGain(double linear) { mGraph.masterGain = linear; }
+        void setDeviceBypass(int strip, int device, bool bypass);  // strip −1 = the master's rack
+
         /** A device parameter, live (registry name). False when there is no such strip/device/name. */
         bool setDeviceParam(int strip, int device, const std::string &name, double value);
         bool setMasterDeviceParam(int device, const std::string &name, double value);

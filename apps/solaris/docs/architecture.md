@@ -21,8 +21,8 @@ Solaris hosts devices and routes their output; it implements no DSP.
 | `core/DigitalSignalProcessing/src/` | `arstro_dsp` | — | `Biquad`, `ParametricEQ`, `StateVariableFilter`, `Noise`, `DecayEnvelope`, `BasicSynth`, `DrumMachine`, `Device` + `DeviceRegistry`, the existing `Compressor`/`Reverb`/`Repeater`/`Chorus`/`Overdrive` | R-DSP, R-INST, R-FX |
 | `apps/solaris/model/` | `solaris_model` | — | `Project` (.slp: parse, serialize, validate, `newProject`), `Format` (canonical numbers/beats/seconds, quoting, line tokens) | R-FMT, R-MIX-3/4 |
 | `apps/solaris/engine/` | `solaris_engine` | `arstro_dsp` | `MixGraph` (plain data), `Engine` (build → warm → render pieces split at note events; meters, stems, live params, seek), `MixLaws` (Interstellar's pan/fade) | R-MIX, R-DSP-5, R-PLAY, R-RENDER-1 |
-| `apps/solaris/core/` | `solaris_core` | model, engine | `Settings` (the machine's, R-SET-2); `Compile` (.slp → MixGraph: solo, patterns, registry-checked params); `service/`: `SolarisService` (+ `ServiceEdit`, `ServiceModel`, `ServiceRender`, `ServiceMachine`), `Command` (the grammar table), `Event`, `AppModel` + `AppModelCodec`, `ApiDoc`, `Json` | R-SVC, R-API, R-MIX, R-CLIP, R-RENDER |
-| `apps/solaris/host/` | `solaris_host` | core, FFmpeg + libpulse (optional) | `AudioFiles` (FFmpeg decode → stereo float at the project rate; WAV 24/32f), `Machine` (folder listing, PulseAudio device list, XDG paths) — streams land with P1 | R-SVC-4, R-DEV, R-SET, R-BROWSE-1 |
+| `apps/solaris/core/` | `solaris_core` | model, engine | `Settings` (the machine's, R-SET-2); `AudioOut` (the output seam); `Player` (the engine on a thread: Live messages, engine swaps, atomics); `Compile` (.slp → MixGraph: solo, patterns, registry-checked params); `service/`: `SolarisService` (+ `ServiceEdit`, `ServiceModel`, `ServiceRender`, `ServiceMachine`, `ServiceTransport`), `Command` (the grammar table), `Event`, `AppModel` + `AppModelCodec`, `ApiDoc`, `Json` | R-SVC, R-API, R-MIX, R-CLIP, R-RENDER |
+| `apps/solaris/host/` | `solaris_host` | core, FFmpeg + libpulse (optional) | `AudioFiles` (FFmpeg decode → stereo float at the project rate; WAV 24/32f), `Machine` (folder listing, PulseAudio device list, XDG paths), `AudioOutPulse` (the clock device's stream) | R-SVC-4, R-DEV, R-SET, R-BROWSE-1 |
 | `apps/solaris/cli/` | `solaris-cc` | host | argv/stdout only — every verb is the grammar; `solaris_api_current` drift test | R-SVC-1, R-API-1 |
 | `apps/solaris/app/` | `solaris_app` | Artboard, cosmo widgets | the UI over `AppHooks` | R-UI |
 
@@ -43,7 +43,7 @@ Solaris hosts devices and routes their output; it implements no DSP.
 4. Offline render writes ports/stems through the host's writer. Live playback runs the same render
    on the clock device's callback (P1).
 
-## Threading (live, from P1)
+## Threading (live — DR-PLAY-1/2)
 
 The service owns the project and compiles graphs on its thread. Devices are constructed there too.
 A **parameter** edit reaches the audio thread as a message on a lock-free queue; a **structural**

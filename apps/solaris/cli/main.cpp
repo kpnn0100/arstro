@@ -15,6 +15,9 @@
  */
 #include "AudioFiles.h"
 #include "Machine.h"
+#ifdef SOLARIS_HAVE_PULSE
+#include "AudioOutPulse.h"
+#endif
 #include "SolarisService.h"
 #include <cstdio>
 #include <fstream>
@@ -42,7 +45,8 @@ namespace
             "  clip add --strip ch_2 --pattern pt_1 --at 0 --length 16\n"
             "  clip add --src samples/hat.wav --at 0\n"
             "  set dv_1.kick.tune=-2 ch_2.gain=-3\n"
-            "  render --out mix.wav --stems ch_2\n");
+            "  render --out mix.wav --stems ch_2\n"
+            "  transport play : wait 8 : transport stop     # hear it on the clock device\n");
     }
 
     std::string quote(const std::string &s)
@@ -74,6 +78,9 @@ int main(int argc, char **argv)
     host.writeWav = solaris_host::writeWav;
     host.listDir = solaris_host::listDir;
     host.listDevices = solaris_host::listDevices;
+#ifdef SOLARIS_HAVE_PULSE
+    host.audioOut = [] { return std::unique_ptr<IAudioOut>(new solaris_host::AudioOutPulse()); };
+#endif
     // The same settings and recents files the window uses: `settings set` here and the Settings
     // dialog are one setting.
     solaris_host::machinePaths(host.settingsPath, host.recentsPath);

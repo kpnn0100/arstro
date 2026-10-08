@@ -11,16 +11,16 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-08 — H1: the machine's settings, sample folders, devices, recents.*
+*Last updated: 2026-10-08 — P1: live playback on the clock device; edits heard while playing.*
 
 ---
 
 ## NEXT
 
-**► P1 — live sound on the clock device**: `transport play|stop|seek|loop`, a player thread that
-runs the engine and writes to the host's output stream (PulseAudio), position and meters in the
-model, parameter edits through a lock-free queue, structural edits by an engine swap; a fake
-stream proves live = offline (R-PLAY-1).
+**► U1 — the UI begins: Home + Settings.** `apps/solaris/app/` in the cosmo/interstellar family
+(teal accent): Home's recent-song cards, New/Open, and the Settings dialog (devices, rate,
+buffer, folders, port map) — every control a command line through `AppHooks::dispatch`; shots at
+two sizes, looked at. Read `arstro.design.rule` and Interstellar's `app/` first.
 
 ---
 
@@ -72,8 +72,10 @@ umbrella's pointer — `arstro.rule` §7).
       folder listing, device enumeration through PulseAudio (`host/Machine.cpp`). — DR-SET-1,
       DR-HOME-1, DR-BROWSE-1; `solaris_service` 12 tests; on this machine `devices list` finds 2
       outputs (analog, HDMI) and 2 inputs (Brio mic, analog).
-- [ ] **P1** Real-time playback on one device (the clock): transport, meters, param edits through
-      lock-free queues, structural edits by graph swap.
+- [x] **P1** Real-time playback on one device (the clock): transport, meters, param edits through
+      lock-free queues, structural edits by graph swap. — DR-PLAY-1/2/3; live = offline sample for
+      sample; edits heard; the audio path allocates nothing (counted); DSP `317bed2`. Plays on this
+      machine through PulseAudio.
 - [ ] **P2** Several devices: followers through an adaptive resampler (a DSP module), latency
       compensation, per-device drift/xrun/latency in the model.
 

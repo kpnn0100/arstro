@@ -74,7 +74,12 @@ namespace solaris
         const bool dirty = mModel.dirty;
         const long long rev = mModel.revision;
         const std::string lastError = mModel.lastError;
+        const TransportModel transport = mModel.transport;
         mModel = AppModel();
+        mModel.transport = transport;
+        mModel.transport.loopFrom = mLoopFrom;
+        mModel.transport.loopTo = mLoopTo;
+        if (!mModel.transport.playing) mModel.transport.position = mPosition;
         mModel.revision = rev + 1;
         mModel.lastError = lastError;
         mModel.audit = mAudit;

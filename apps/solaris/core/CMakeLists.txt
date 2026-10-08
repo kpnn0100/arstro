@@ -3,6 +3,7 @@
 add_library(solaris_core STATIC
   Compile.cpp
   Settings.cpp
+  Player.cpp
   service/Json.cpp
   service/Command.cpp
   service/Event.cpp
@@ -12,9 +13,11 @@ add_library(solaris_core STATIC
   service/ServiceEdit.cpp
   service/ServiceModel.cpp
   service/ServiceRender.cpp
-  service/ServiceMachine.cpp)
+  service/ServiceMachine.cpp
+  service/ServiceTransport.cpp)
 target_include_directories(solaris_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/service)
-target_link_libraries(solaris_core PUBLIC solaris_model solaris_engine)
+find_package(Threads REQUIRED)
+target_link_libraries(solaris_core PUBLIC solaris_model solaris_engine Threads::Threads)
 
 add_executable(solaris_service_tests tests/serviceTests.cpp)
 target_link_libraries(solaris_service_tests PRIVATE solaris_core)

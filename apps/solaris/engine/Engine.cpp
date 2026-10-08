@@ -315,15 +315,46 @@ namespace engine
         for (int p : mGraph.masterPorts) route(Target{Target::Port, p}, mMasterL.data(), mMasterR.data(), n, 1.0, out, off);
     }
 
+    void Engine::prepare(PortBuffers &out, int maxFrames) const
+    {
+        out.ports.resize(mGraph.ports.size());
+        for (size_t p = 0; p < mGraph.ports.size(); ++p)
+        {
+            out.ports[p].resize(std::max(1, mGraph.ports[p].channels));
+            for (auto &ch : out.ports[p]) ch.reserve((size_t)std::max(0, maxFrames));
+        }
+    }
+
+    void Engine::setStripGain(int strip, double linear)
+    {
+        if (strip >= 0 && strip < (int)mGraph.strips.size()) mGraph.strips[strip].gain = linear;
+    }
+    void Engine::setStripPan(int strip, double pan)
+    {
+        if (strip >= 0 && strip < (int)mGraph.strips.size()) mGraph.strips[strip].pan = pan;
+    }
+    void Engine::setStripSilent(int strip, bool silent)
+    {
+        if (strip >= 0 && strip < (int)mGraph.strips.size()) mGraph.strips[strip].silent = silent;
+    }
+    void Engine::setDeviceBypass(int strip, int device, bool bypass)
+    {
+        auto &rack = strip < 0 ? mGraph.masterRack : (strip < (int)mGraph.strips.size() ? mGraph.strips[strip].rack : mGraph.masterRack);
+        if (strip >= (int)mGraph.strips.size()) return;
+        if (device >= 0 && device < (int)rack.size()) rack[device].bypass = bypass;
+    }
+
     void Engine::render(int frames, PortBuffers &out)
     {
+        // No allocation once `prepare` sized the buffers (R-PLAY-2): resize/assign within capacity.
         out.ports.resize(mGraph.ports.size());
         for (size_t p = 0; p < mGraph.ports.size(); ++p)
         {
             out.ports[p].resize(std::max(1, mGraph.ports[p].channels));
             for (auto &ch : out.ports[p]) ch.assign(std::max(0, frames), 0.0f);
         }
-        mCaptured.assign(mCapture.size(), std::vector<std::vector<float>>(2, std::vector<float>(std::max(0, frames), 0.0f)));
+        if (!mCapture.empty())
+            mCaptured.assign(mCapture.size(), std::vector<std::vector<float>>(2, std::vector<float>(std::max(0, frames), 0.0f)));
         if (mCaptureMaster) mCapturedMaster.assign(2, std::vector<float>(std::max(0, frames), 0.0f));
         for (auto &m : mStripMeters) m = Meter{{0, 0}, {0, 0}, {m.maxPeak[0], m.maxPeak[1]}};
         mMasterMeter = Meter{{0, 0}, {0, 0}, {mMasterMeter.maxPeak[0], mMasterMeter.maxPeak[1]}};

@@ -50,6 +50,7 @@ namespace solaris
         std::vector<SendModel> sends;
         std::vector<DeviceModel> devices;
         // "fed by" (R-MIX-8)
+        float peak[2] = {0, 0};                 // the last played block's peaks, L/R (0 when stopped)
         int clipCount = 0;
         std::vector<std::string> fromLanes;     // lanes its clips are drawn on
         std::vector<std::string> fromStrips;    // strips whose output or a send lands here
@@ -135,6 +136,16 @@ namespace solaris
         std::vector<std::string> ports;          // "<name>=<device>:<channel>"
     };
 
+    struct TransportModel
+    {
+        bool playing = false;
+        double position = 0;                     // beats — what is HEARD (rendered minus the device's latency)
+        double loopFrom = 0, loopTo = 0;         // beats; equal = no loop
+        double latencyMs = 0;                    // the clock device's, while playing
+        std::string device;                      // the clock device ("" = the system default)
+        float masterPeak[2] = {0, 0};
+    };
+
     struct AppModel
     {
         std::string screen = "home";             // home | project
@@ -158,6 +169,7 @@ namespace solaris
         SettingsModel settings;
         std::vector<DeviceInfo> devices;         // from the last `devices list`
         BrowserModel browser;
+        TransportModel transport;
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };
 }

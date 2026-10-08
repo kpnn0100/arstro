@@ -227,3 +227,38 @@ song is a card marked `missing`. `recents remove` takes one off the list and lea
 `browse <folder>` asks the host (`listDir`, `host/Machine.cpp`): sub-folders, audio files (by
 extension), songs (`.slp`), hidden entries left out; folders first, then by name; the model's
 `browser` holds the listing. Drag and drop is the UI's (R-BROWSE-3), over `clip add`.
+
+### DR-PLAY-1 Live playback is the offline render, and edits are heard (R-PLAY-1, R-TIME-4)
+`transport play [--from]` (`transportCommand`, `core/service/ServiceTransport.cpp`) compiles the song,
+builds an engine exactly as `render` does, opens the host's stream to the clock device (`settings
+output`, the song's rate, the machine's buffer) and starts a `Player` (`core/Player.h`) — a thread
+that renders blocks and WRITES them to the stream, whose blocking back-pressure is the clock.
+Ports reach the clock device by the machine's port map (R-DEV-3): an unmapped port, or one mapped
+to the clock device, lands at its channel; a port on another device waits for P2. Edits while
+playing (`liveUpdate`): a strip's gain or pan, a mute or solo (every strip's silence recomputed),
+a device parameter or bypass, the master gain go as lock-free `Live` messages applied at the next
+block; anything else (a clip, a route, a device added) compiles a NEW engine on the service's thread
+and sends it as a `Swap` — the player continues it from the same position and hands the old one
+back to be freed on the service's thread (`collect`). `transport stop` leaves the transport where
+it was heard; `transport seek` and `transport loop <from> <to>|off` work playing or stopped — the
+player stops exactly at the loop's end and seeks back. `wait <seconds>` lets time pass for scripts.
+`pump()` brings the heard position (rendered minus the device's latency), the latency and the peaks
+into the model. Guarded by `test_live_playback_is_the_offline_render` (a fake clock device: 4 beats
+of drums + synth + a reverb send, **sample for sample equal to `render --ports`**),
+`test_edits_while_playing_are_heard` (a clip added mid-play is heard after the swap; `gain=-120`
+silences at the next block — mutant: dropping `liveUpdate` fails it), `test_loop_and_seek`. On this
+machine: `transport play : wait 1.5` reads 3.0 beats at 120 bpm through PulseAudio, latency 39 ms.
+
+### DR-PLAY-2 The audio thread never allocates, locks or touches a file (R-PLAY-2)
+Everything the player touches is sized in `Player::start`: `Engine::prepare` reserves every port
+buffer for the block, the interleaved buffer is allocated, the meters are a fixed array of atomics.
+Messages and engine hand-backs go through the DSP library's SPSC `LockFreeQueue`. `Engine::render`
+allocates nothing within prepared capacity (a capture buffer only when stems are asked for —
+`test_live_render_allocates_nothing_and_takes_live_edits` counts allocations with a replaced
+`operator new`: 0 over 220 blocks and every live setter; mutant: an unconditional capture buffer
+→ 880). Every DSP registry device allocates nothing once warm (DSP REQ-device-5, `317bed2`).
+
+### DR-PLAY-3 Meters in the model (R-PLAY-3, partly)
+While playing, `pump()` copies the last block's peaks into `strips[].peak` and
+`transport.masterPeak` (L/R, linear) — excluded from the stable dump. RMS, peak hold and the clip
+latch are the UI's to draw from these numbers (U3).

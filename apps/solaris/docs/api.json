@@ -405,6 +405,48 @@
       "flags": [],
       "summary": "Take a song off Home's recent list (the file is untouched).",
       "requirement": "R-HOME-1"
+    },
+    {
+      "verb": "transport play",
+      "usage": "transport play [--from <beats>]",
+      "args": "",
+      "flags": [
+        "from=<beats>"
+      ],
+      "summary": "Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position.",
+      "requirement": "R-PLAY-1"
+    },
+    {
+      "verb": "transport stop",
+      "usage": "transport stop",
+      "args": "",
+      "flags": [],
+      "summary": "Stop; the transport stays where it was heard.",
+      "requirement": "R-TIME-4"
+    },
+    {
+      "verb": "transport seek",
+      "usage": "transport seek <beats>",
+      "args": "<beats>",
+      "flags": [],
+      "summary": "Move the transport (playing or not).",
+      "requirement": "R-TIME-4"
+    },
+    {
+      "verb": "transport loop",
+      "usage": "transport loop <from|off> [to]",
+      "args": "<from|off> [to]",
+      "flags": [],
+      "summary": "Loop between two beats while playing; `off` ends it.",
+      "requirement": "R-TIME-4"
+    },
+    {
+      "verb": "wait",
+      "usage": "wait <seconds>",
+      "args": "<seconds>",
+      "flags": [],
+      "summary": "Let time pass (playback goes on, the model's transport and meters update) — for scripts that listen.",
+      "requirement": "R-PLAY-3"
     }
   ],
   "events": [
@@ -525,6 +567,15 @@
         "count"
       ],
       "summary": "Home's recent songs changed."
+    },
+    {
+      "name": "transport.changed",
+      "fields": [
+        "playing",
+        "position",
+        "loop"
+      ],
+      "summary": "Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`."
     }
   ],
   "model": [
@@ -821,6 +872,12 @@
       "type": "string[]",
       "summary": "empty unless a choice",
       "stable": true
+    },
+    {
+      "path": "strips[].peak",
+      "type": "number[]",
+      "summary": "the last played block's peaks, L/R (R-PLAY-3)",
+      "stable": false
     },
     {
       "path": "strips[].clipCount",
@@ -1217,6 +1274,54 @@
       "type": "int",
       "summary": "",
       "stable": true
+    },
+    {
+      "path": "transport",
+      "type": "object",
+      "summary": "play, position, loop (R-TIME-4)",
+      "stable": true
+    },
+    {
+      "path": "transport.playing",
+      "type": "bool",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "transport.position",
+      "type": "number",
+      "summary": "beats — what is heard",
+      "stable": false
+    },
+    {
+      "path": "transport.loopFrom",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "transport.loopTo",
+      "type": "number",
+      "summary": "beats; equal to loopFrom = no loop",
+      "stable": true
+    },
+    {
+      "path": "transport.latencyMs",
+      "type": "number",
+      "summary": "the clock device's",
+      "stable": false
+    },
+    {
+      "path": "transport.device",
+      "type": "string",
+      "summary": "the clock device ('' = the system default)",
+      "stable": true
+    },
+    {
+      "path": "transport.masterPeak",
+      "type": "number[]",
+      "summary": "L/R peaks of the last played block",
+      "stable": false
     },
     {
       "path": "browser",

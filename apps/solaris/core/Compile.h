@@ -18,6 +18,7 @@
 #include "MixGraph.h"
 #include "Project.h"
 #include <functional>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -35,6 +36,7 @@ namespace solaris
     {
         engine::MixGraph graph;
         std::vector<std::string> stripIds;   // graph strip index → strip id
+        std::map<std::string, std::pair<int, int>> devices; // device id → (graph strip index or −1 = master, index in its compiled rack)
         std::vector<std::string> warnings;   // devices or parameters left out, offline media
     };
 
