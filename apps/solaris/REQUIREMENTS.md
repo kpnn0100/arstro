@@ -107,7 +107,7 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
 
 ---
 
-## R-MIX — the mixer: every source has its own strip — ✅ IMPLEMENTED (1–11 headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; drawn and played with: DR-UI-8; 12 the fold: DR-UI-8; 13/14 the line added, sources relinked: DR-MIX-13; 15 the sidechain: DR-MIX-15; 8's linked selection with U4) — 🚧 16 (the mixer's numbers bound) with C3
+## R-MIX — the mixer: every source has its own strip — ✅ IMPLEMENTED (1–11 headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; drawn and played with: DR-UI-8; 12 the fold: DR-UI-8; 13/14 the line added, sources relinked: DR-MIX-13; 15 the sidechain: DR-MIX-15; 8's linked selection with U4) — 16 ✅ (the mixer's numbers bound, DR-MIX-16)
 
 The user's model (2026-10-08): *"sample got its own line by default; we can add multiple mixers as
 the user wants their workspace organised; the 1st mixer stores the samples, the 2nd receives from
@@ -544,7 +544,7 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   silent, under 0 dBFS, the kick on the beats, the tempo right). The tune is public domain, so the
   result can be shared.
 
-## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 (ids) with C3
+## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11)
 
 - **R-UI-1 Two screens, as Interstellar:** Home (R-HOME) and the Project view.
 - **R-UI-2 The accent is teal, `#159387`, the only forked token** — teal because orange, the

@@ -175,7 +175,11 @@ umbrella's pointer — `arstro.rule` §7).
       the deepest unsnapped; `solaris_app_ui` 22 (3 mutants caught); the lines' strength raised at
       merge so the divisions read.
 - [ ] **C2** Bezier automation; the automation's window (R-AUTO-10/11).
-- [ ] **C3** The mixer's numbers bound from the dock; IDs shown and copied (R-MIX-16, R-UI-11).
+- [x] **C3** The mixer's numbers bound from the dock; IDs shown and copied (R-MIX-16, R-UI-11). — DR-MIX-16,
+      DR-UI-11 (`76fb935`, a sub-agent): one `ParamMenu` for device rows and the dock's fader/pan/send/master;
+      `bindings[].live` from the audio thread through pre-sized atomics (no allocation, counted); a
+      `showIds` setting, ids eased in everywhere; Copy Address/Value/as Formula through the host's
+      clipboard; 5 mutants caught; merged over C1 with its anchors followed by source text.
 - [ ] **C4a** Agent-sized composition: shell, scripts, ids, bulk notes, arrangement, readback, honest values (R-SVC-8).
 - [ ] **C4b** The faces: control channel + attach, equivalence test, web (NTWB) (R-SVC-5…7).
 - [ ] **C5** A whole song made by an agent with `solaris-cc`, measured (R-SVC-9).
