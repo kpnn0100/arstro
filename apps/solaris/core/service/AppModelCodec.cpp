@@ -148,6 +148,11 @@ namespace solaris
             {"settings.input", "string", ""},
             {"settings.folders", "string[]", "the browser's quick-access folders, in order"},
             {"settings.ports", "string[]", "<port>=<device>:<channel> on this machine"},
+            {"settings.metronome", "bool", "clicks while playing (R-TIME-4), never in a render"},
+            {"settings.metronomeLevel", "number", "dB"},
+            {"settings.newBpm", "number", "a new song's tempo without --bpm"},
+            {"settings.newSig", "string", "a new song's meter without --sig"},
+            {"settings.reducedMotion", "bool", "the UI's tweens collapse (with the OS's own setting)"},
             {"devices", "object[]", "from the last `devices list`"},
             {"devices[].id", "string", "what `settings set output=` takes"},
             {"devices[].name", "string", ""},
@@ -279,7 +284,9 @@ namespace solaris
         j.set("recents", recents);
         j.set("settings", Json::object().set("sampleRate", m.settings.sampleRate).set("bufferSize", m.settings.bufferSize)
                               .set("latencyMs", m.settings.latencyMs).set("output", m.settings.output).set("input", m.settings.input)
-                              .set("folders", strings(m.settings.folders)).set("ports", strings(m.settings.ports)));
+                              .set("folders", strings(m.settings.folders)).set("ports", strings(m.settings.ports))
+                              .set("metronome", m.settings.metronome).set("metronomeLevel", m.settings.metronomeLevel)
+                              .set("newBpm", m.settings.newBpm).set("newSig", m.settings.newSig).set("reducedMotion", m.settings.reducedMotion));
         Json devs = Json::array();
         for (const auto &d : m.devices)
             devs.push(Json::object().set("id", d.id).set("name", d.name).set("dir", d.dir).set("channels", d.channels).set("rate", d.rate));

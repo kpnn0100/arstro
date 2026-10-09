@@ -21,7 +21,28 @@ namespace solaris_ui
         double dbOf(float lin) { return lin > 0 ? 20.0 * std::log10(lin) : -90.0; }
     }
 
-    SongBar::SongBar() { height.set(kHeight); }
+    SongBar::SongBar()
+    {
+        height.set(kHeight);
+        mMenus = std::make_shared<cosmo_v2::MenuStrip>();
+        addChild(mMenus);
+    }
+
+    void SongBar::layout()
+    {
+        const Rect s = hitRect(kSettings);
+        mMenus->x.set(s.right() + 6.0);
+        mMenus->y.set(0.0);
+        mMenus->width.set(mMenus->contentWidth());
+        mMenus->height.set(kHeight);
+    }
+
+    double SongBar::transportX() const
+    {
+        // centred when there is room; otherwise right of the menus and a readable name (R4: measured, not fixed)
+        const double after = mMenus->x.value() + mMenus->contentWidth() + 14.0 + kNameMin + 24.0;
+        return std::max(width.value() * 0.5 - 110.0, after);
+    }
 
     void SongBar::bind(const solaris::AppModel &m)
     {
@@ -41,9 +62,9 @@ namespace solaris_ui
         switch (which)
         {
         case kHome: return Rect{78.0, cy - kBtnH * 0.5, 52.0, kBtnH};
-        case kPlay: return Rect{W * 0.5 - 110.0, cy - kBtnH * 0.5, kPlayW, kBtnH};
-        case kSave: return Rect{W - 12.0 - 26.0 - 8.0 - 48.0, cy - kBtnH * 0.5, 48.0, kBtnH};
-        case kSettings: return Rect{W - 12.0 - 26.0, cy - kBtnH * 0.5, 26.0, kBtnH};
+        case kSettings: return Rect{78.0 + 52.0 + 2.0, cy - kBtnH * 0.5, 66.0, kBtnH};
+        case kPlay: return Rect{transportX(), cy - kBtnH * 0.5, kPlayW, kBtnH};
+        case kSave: return Rect{W - 12.0 - 48.0, cy - kBtnH * 0.5, 48.0, kBtnH};
         default: return Rect{};
         }
     }
@@ -136,9 +157,10 @@ namespace solaris_ui
             return r;
         };
         button(kHome, "Home", false);
+        button(kSettings, "Settings", false);
 
         // the song's name, ellipsized against the space left before the transport; the unsaved dot after it
-        const double nameX = hitRect(kHome).right() + 14.0, nameMax = std::max(0.0, hitRect(kPlay).x - 40.0 - nameX);
+        const double nameX = mMenus->x.value() + mMenus->contentWidth() + 14.0, nameMax = std::max(0.0, hitRect(kPlay).x - 24.0 - nameX);
         const std::string nm = textfit::ellipsize(t, mName, nameMax, 12.0, font::sansMedium());
         t.setFill(palette::foreground());
         t.drawText(nm, nameX, textfit::baseline(cy, 12.0), 12.0, font::sansMedium());
@@ -184,12 +206,6 @@ namespace solaris_ui
             }
         }
         button(kSave, "Save", false);
-        {
-            const Rect r = button(kSettings, "", false);
-            const Color lc = lerpColor(palette::mutedForeground(), palette::foreground(), 0.6 * mHover.amount(kSettings));
-            drawCircle(t, r.x + r.w * 0.5, r.y + r.h * 0.5, 2.4, Paint::stroked(lc, 1.1));
-            drawCircle(t, r.x + r.w * 0.5, r.y + r.h * 0.5, 4.8, Paint::stroked(lc, 1.1));
-        }
     }
 }
 }

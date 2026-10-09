@@ -84,6 +84,28 @@ namespace solaris
                 }
                 else if (k == "output") next.output = v;
                 else if (k == "input") next.input = v;
+                else if (k == "metronome" || k == "reducedMotion")
+                {
+                    if (v != "on" && v != "off") { err = k + " is on or off"; return false; }
+                    (k == "metronome" ? next.metronome : next.reducedMotion) = v == "on";
+                }
+                else if (k == "metronomeLevel")
+                {
+                    if (!parseNumber(v, x) || x < -40 || x > 6) { err = "metronomeLevel must be dB from -40 to 6"; return false; }
+                    next.metronomeLevel = x;
+                }
+                else if (k == "newBpm")
+                {
+                    if (!parseNumber(v, x) || x < 20 || x > 999) { err = "newBpm must be a tempo from 20 to 999"; return false; }
+                    next.newBpm = x;
+                }
+                else if (k == "newSig")
+                {
+                    int n = 0, d = 0;
+                    if (std::sscanf(v.c_str(), "%d/%d", &n, &d) != 2 || n < 1 || n > 32 || (d != 2 && d != 4 && d != 8 && d != 16))
+                    { err = "newSig must be a meter like 4/4, 3/4 or 7/8"; return false; }
+                    next.newSig = v;
+                }
                 else if (k.rfind("port.", 0) == 0 && k.size() > 5)
                 {
                     const auto colon = v.rfind(':');
@@ -96,8 +118,10 @@ namespace solaris
                 else
                 {
                     err = "no setting `" + k + "`";
-                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input"});
-                    err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>)") : " (did you mean: " + near[0] + "?)";
+                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "newBpm", "newSig", "reducedMotion"});
+                    err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>, metronome, "
+                                                      "metronomeLevel, newBpm, newSig, reducedMotion)")
+                                        : " (did you mean: " + near[0] + "?)";
                     return false;
                 }
                 what.push_back(k);
@@ -116,7 +140,9 @@ namespace solaris
                 for (const auto &p : mSettings.ports) ports.push(Json::string(p.first + "=" + p.second));
                 mOutput = Json::object().set("sampleRate", mSettings.sampleRate).set("bufferSize", mSettings.bufferSize)
                               .set("output", mSettings.output).set("input", mSettings.input)
-                              .set("folders", folders).set("ports", ports).dump();
+                              .set("folders", folders).set("ports", ports).set("metronome", mSettings.metronome)
+                              .set("metronomeLevel", mSettings.metronomeLevel).set("newBpm", mSettings.newBpm)
+                              .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion).dump();
             }
             return true;
         case K::FolderAdd:

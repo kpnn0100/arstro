@@ -22,7 +22,26 @@ namespace solaris_ui
         constexpr int kDoneId = 900, kAddId = 901, kRemoveBase = 1000;
         Color fade(Color c, double a) { c.a *= a; return c; }
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
-        const char *kLabels[SettingsSheet::kRows] = {"OUTPUT", "INPUT", "SAMPLE RATE", "BUFFER"};
+        const char *kLabels[SettingsSheet::kRows] = {"OUTPUT", "INPUT", "SAMPLE RATE", "BUFFER", "METRONOME", "CLICK LEVEL",
+                                                     "TEMPO", "METER", "REDUCED MOTION"};
+        const char *kKeys[SettingsSheet::kRows] = {"output", "input", "sampleRate", "bufferSize", "metronome", "metronomeLevel",
+                                                   "newBpm", "newSig", "reducedMotion"};
+        // the sheet's sections (R-SET-3), in order; the sample folders sit before Interface
+        struct Section { const char *title; std::vector<int> rows; bool folders; };
+        const Section kSections[] = {
+            {"Audio", {SettingsSheet::kOutput, SettingsSheet::kInput, SettingsSheet::kRate, SettingsSheet::kBuffer}, false},
+            {"Playback", {SettingsSheet::kMetronome, SettingsSheet::kClickLevel}, false},
+            {"New songs", {SettingsSheet::kNewBpm, SettingsSheet::kNewSig}, false},
+            {"Sample folders", {}, true},
+            {"Interface", {SettingsSheet::kMotion}, false},
+        };
+        constexpr double kSectionGap = 30.0; // a section title sits this far below the last chips above it
+        std::string num(double v)
+        {
+            char b[32];
+            std::snprintf(b, sizeof b, "%g", v);
+            return b;
+        }
         const int kRates[] = {44100, 48000, 88200, 96000};
         const int kBuffers[] = {64, 128, 256, 512, 1024, 2048};
         // a path too wide for its row keeps its END — the folder's own name is the part that identifies it
@@ -49,6 +68,11 @@ namespace solaris_ui
             mChips[kRate].push_back(Chip{b, std::to_string(r)});
         }
         for (int b : kBuffers) mChips[kBuffer].push_back(Chip{std::to_string(b), std::to_string(b)});
+        mChips[kMetronome] = {Chip{"Off", "off"}, Chip{"On", "on"}};
+        for (int d : {-18, -12, -6, 0}) mChips[kClickLevel].push_back(Chip{std::to_string(d) + " dB", std::to_string(d)});
+        for (int b : {100, 120, 124, 126, 128, 140, 150, 174}) mChips[kNewBpm].push_back(Chip{std::to_string(b), std::to_string(b)});
+        for (const char *m : {"4/4", "3/4", "6/8", "7/8"}) mChips[kNewSig].push_back(Chip{m, m});
+        mChips[kMotion] = {Chip{"Off", "off"}, Chip{"On", "on"}};
         for (int r = 0; r < kRows; ++r) mChosen[r].assign(mChips[r].size(), AnimatedProperty{0.0});
     }
 
@@ -61,6 +85,7 @@ namespace solaris_ui
         mBuffer = s.bufferSize;
         mLatencyMs = s.latencyMs;
         mFolders = s.folders;
+        mSettings = s;
         for (int r : {kOutput, kInput})
         {
             std::vector<Chip> chips = {Chip{"System default", ""}};
@@ -77,9 +102,26 @@ namespace solaris_ui
         }
     }
 
+    std::string SettingsSheet::current(int row) const
+    {
+        switch (row)
+        {
+        case kOutput: return mOutput;
+        case kInput: return mInput;
+        case kRate: return std::to_string(mRate);
+        case kBuffer: return std::to_string(mBuffer);
+        case kMetronome: return mSettings.metronome ? "on" : "off";
+        case kClickLevel: return num(mSettings.metronomeLevel);
+        case kNewBpm: return num(mSettings.newBpm);
+        case kNewSig: return mSettings.newSig;
+        case kMotion: return mSettings.reducedMotion ? "on" : "off";
+        default: return std::string();
+        }
+    }
+
     int SettingsSheet::chosen(int row) const
     {
-        const std::string v = row == kOutput ? mOutput : row == kInput ? mInput : row == kRate ? std::to_string(mRate) : std::to_string(mBuffer);
+        const std::string v = current(row);
         for (size_t i = 0; i < mChips[row].size(); ++i)
             if (mChips[row][i].value == v) return (int)i;
         return -1;
@@ -93,6 +135,12 @@ namespace solaris_ui
     Rect SettingsSheet::chipRect(int row, int chip) const
     {
         return row >= 0 && row < kRows && chip >= 0 && chip < (int)mChipRects[row].size() ? mChipRects[row][(size_t)chip] : Rect{};
+    }
+
+    void SettingsSheet::revealRect(const Rect &r)
+    {
+        const Rect c = cardRect();
+        mScroll.reveal(r.y - (c.y - mScroll.value()), r.h + kPad);
     }
 
     void SettingsSheet::show() { mShowWanted = true; mCloseWanted = false; }
@@ -177,8 +225,7 @@ namespace solaris_ui
                 for (size_t i = 0; i < mChipRects[r].size() && i < mChips[r].size(); ++i)
                     if (mChipRects[r][i].contains(local))
                     {
-                        static const char *keys[kRows] = {"output", "input", "sampleRate", "bufferSize"};
-                        if (onCommand) onCommand(std::string("settings set ") + q(std::string(keys[r]) + "=" + mChips[r][i].value));
+                        if (onCommand) onCommand(std::string("settings set ") + q(std::string(kKeys[r]) + "=" + mChips[r][i].value));
                         return true;
                     }
             return true;
@@ -202,28 +249,40 @@ namespace solaris_ui
         const double W = width.value(), H = height.value();
         drawRoundedRect(t, Rect{0, 0, W, H}, 0.0, Paint::filled(surface::scrim(a)));
 
-        // ── the content, measured: chip rows wrap at the card's inner width ──
+        // ── the content, measured: sections, each a title then its rows; chip rows wrap at the inner width ──
         const double cw = std::min(kCardW, W - 32.0), inner = cw - 2 * kPad;
-        double y = kPad + 16.0 + 26.0;                       // title baseline + gap
+        double y = kPad + 16.0 + 22.0;                       // title baseline + gap
         std::vector<Rect> rowRects[kRows];
         double labelY[kRows];
-        for (int r = 0; r < kRows; ++r)
+        std::vector<double> sectionY;
+        double foldersY = 0;
+        for (const auto &sec : kSections)
         {
-            labelY[r] = y;
-            y += kRowLabelGap;
-            double x = 0;
-            for (const auto &c : mChips[r])
+            sectionY.push_back(y);
+            y += 22.0;                                       // the section title, then its first label
+            if (sec.folders)
             {
-                const std::string lbl = textfit::ellipsize(t, c.label, inner, kFontPx, font::sans());
-                const double w = std::min(inner, t.measureText(lbl, kFontPx, font::sans()) + 22.0);
-                if (x > 0 && x + w > inner) { x = 0; y += kChipH + 6.0; }
-                rowRects[r].push_back(Rect{x, y, w, kChipH});
-                x += w + 6.0;
+                foldersY = y - 8.0;                          // the list reads from just under the title (its note sits beside it)
+                y += std::max<size_t>(1, mFolders.size()) * kFolderRowH + 8.0 + kChipH + kSectionGap - 8.0;
+                continue;
             }
-            y += kChipH + kRowGap;
+            for (int r : sec.rows)
+            {
+                labelY[r] = y;
+                y += kRowLabelGap;
+                double x = 0;
+                for (const auto &c : mChips[r])
+                {
+                    const std::string lbl = textfit::ellipsize(t, c.label, inner, kFontPx, font::sans());
+                    const double w = std::min(inner, t.measureText(lbl, kFontPx, font::sans()) + 22.0);
+                    if (x > 0 && x + w > inner) { x = 0; y += kChipH + 6.0; }
+                    rowRects[r].push_back(Rect{x, y, w, kChipH});
+                    x += w + 6.0;
+                }
+                y += kChipH + kRowGap;
+            }
+            y += kSectionGap - kRowGap;
         }
-        const double foldersY = y;
-        y += kRowLabelGap + std::max<size_t>(1, mFolders.size()) * kFolderRowH + 8.0 + kChipH + kRowGap;
         const double doneY = y;
         mContentH = y + kChipH + kPad;
 
@@ -249,12 +308,32 @@ namespace solaris_ui
             t.setFill(fade(palette::mutedForeground(), 0.8 * a));
             t.drawText(textfit::ellipsize(t, note, std::max(0.0, c.x + kPad + inner - nx), 10.0, font::sans()), nx, baseY, 10.0, font::sans());
         };
+        // a section title: 12 px SemiBold, a hairline above all but the first
+        for (size_t k = 0; k < sectionY.size(); ++k)
+        {
+            if (k > 0)
+            {
+                t.setStroke(fade(palette::border(), a), 1.0);
+                t.beginPath(); t.moveTo(c.x + kPad, oy + sectionY[k] - 14.0); t.lineTo(c.x + kPad + inner, oy + sectionY[k] - 14.0); t.strokePath();
+            }
+            t.setFill(fade(palette::foreground(), a));
+            t.drawText(kSections[k].title, c.x + kPad, oy + sectionY[k] + 4.0, 12.0, font::sansSemiBold());
+            if (kSections[k].folders)
+            {
+                t.setFill(fade(palette::mutedForeground(), 0.8 * a));
+                t.drawText("the browser lists these first", c.x + kPad + t.measureText(kSections[k].title, 12.0, font::sansSemiBold()) + 10.0,
+                           oy + sectionY[k] + 4.0, 10.0, font::sans());
+            }
+        }
         int hid = 0;
         for (int r = 0; r < kRows; ++r)
         {
             std::string note;
             if (r == kOutput) note = "the clock \xE2\x80\x94 every other device follows it";
             if (r == kRate) note = "new songs start here";
+            if (r == kMetronome) note = "clicks while playing \xE2\x80\x94 never in a render";
+            if (r == kNewBpm) note = "a new song starts at this tempo";
+            if (r == kMotion) note = "every tween collapses \xE2\x80\x94 the system's own setting counts too";
             if (r == kBuffer)
             {
                 char b[64];
@@ -280,9 +359,8 @@ namespace solaris_ui
         }
 
         // ── sample folders ──
-        label("SAMPLE FOLDERS", "the browser lists these first", oy + foldersY);
         mRemove.clear();
-        double fy = oy + foldersY + kRowLabelGap - 4.0;
+        double fy = oy + foldersY;
         if (mFolders.empty())
         {
             t.setFill(fade(palette::mutedForeground(), 0.8 * a));

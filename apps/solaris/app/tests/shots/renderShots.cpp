@@ -209,6 +209,15 @@ namespace
                  r.click(world(d, d.toggleRect()));
                  r.settle();
              }},
+            {"menu-file-open",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("set ch_2.gain=-3");
+                 r.settle();
+                 auto &ms = r.app->project().bar().menus();
+                 r.click(world(ms, ms.titleRect(1))); // Edit: it names what undo would take back
+                 r.settle();
+             }},
             {"confirm-unsaved",
              [](sltest::Rig &r) {
                  songWithStrips(r, "Night Drive");

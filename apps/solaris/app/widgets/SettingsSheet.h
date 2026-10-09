@@ -3,9 +3,11 @@
  *
  *  Cosmo's SettingsDialog's LOOK — the scrim, the popover card, the row labels tracked +0.06, the
  *  chips (filled accent when chosen, secondary + border otherwise), the eased hover wash, the Done
- *  button, the 150/120 ms fade — with Solaris's rows: Output (the clock device), Input, Sample rate,
- *  Buffer (the latency it costs, said beside it), and the Sample folders as a list with a remove
- *  button per folder and "Add folder…". Not cosmo's class: its rows are an image engine's.
+ *  button, the 150/120 ms fade — in SECTIONS as cosmo's and Interstellar's Engine Settings are
+ *  (R-SET-3): **Audio** — Output (the clock device), Input, Sample rate, Buffer (the latency it
+ *  costs, said beside it); **Playback** — Metronome, Click level; **New songs** — Tempo, Meter;
+ *  **Sample folders** — a list with a remove button per folder and "Add folder…"; **Interface** —
+ *  Reduced motion. Not cosmo's class: its rows are an image engine's.
  *
  *  Every control is a command line (`onCommand`): `settings set output=<id>`, `folder add <path>`,
  *  `folder remove <path>` — the sheet holds no setting of its own; it draws `AppModel::settings` and
@@ -31,7 +33,7 @@ namespace solaris_ui
     class SettingsSheet : public artboard::Segment
     {
     public:
-        enum Row { kOutput = 0, kInput, kRate, kBuffer, kRows };
+        enum Row { kOutput = 0, kInput, kRate, kBuffer, kMetronome, kClickLevel, kNewBpm, kNewSig, kMotion, kRows };
         static constexpr double kCardW = 520.0;
         static constexpr double kPad = 24.0;
         static constexpr double kChipH = 26.0;
@@ -54,6 +56,8 @@ namespace solaris_ui
         artboard::Rect folderRemoveRect(int i) const { return i >= 0 && i < (int)mRemove.size() ? mRemove[(size_t)i] : artboard::Rect{}; }
         int chipCount(int row) const { return row >= 0 && row < kRows ? (int)mChips[(size_t)row].size() : 0; }
         double chosenAmount(int row, int chip) const;
+        /** Scroll (eased) so a rect from the last paint is inside the card. */
+        void revealRect(const artboard::Rect &r);
 
         void advance(double nowMs) override;
         void onOverlay(artboard::IRenderTarget &t) const override;
@@ -69,6 +73,7 @@ namespace solaris_ui
             std::string label, value;
         };
         int chosen(int row) const;
+        std::string current(int row) const; // the row's setting, as its chips' values spell it
         int hoverId(const artboard::Point &p) const;
         artboard::Rect cardRect() const;
 
@@ -77,6 +82,7 @@ namespace solaris_ui
         std::string mOutput, mInput;
         int mRate = 48000, mBuffer = 256;
         double mLatencyMs = 0;
+        solaris::SettingsModel mSettings;
 
         bool mOpen = false, mClosing = false, mShowWanted = false, mCloseWanted = false;
         double mNowMs = 0.0;

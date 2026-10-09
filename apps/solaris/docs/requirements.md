@@ -454,3 +454,26 @@ while playing, swap in a new engine; any new edit clears redo. Not edits: machin
 transport, a save, `get`/`eval`/`audit`. `project new|open|close` start a new history. The model names
 both (`undoLabel`, `redoLabel`, `undoDepth`, `redoDepth`); the window's Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y
 send `undo` / `redo` (`app/App.cpp`).
+
+### DR-UI-9 The song bar's menus and Settings beside Home (R-UI-3 amended)
+`SongBar` (`app/widgets/SongBar.cpp`): wordmark · Home · Settings · cosmo's `MenuStrip` (laid out by
+`SongBar::layout`, `:31`) · the song's name; the transport is centred when there is room and otherwise
+starts right of the menus and `kNameMin` (120 px) of name (`transportX`, `:40`), so the bar fits at
+1024; the master meter and Save on the right. `App::buildMenus` (`app/App.cpp:83`): **File** — New
+Song…, Open…, Save, Save As…, Render…, Render Stems… (the host's save picker, `onPickSave`, then
+`project save "<path>"`, `render --out "<path>" [--stems <every strip>]`), Home; **Edit** — Undo / Redo
+naming what they would take back (from `undoLabel`/`redoLabel`), Duplicate / Delete the selected clip;
+**Song** — Add Mixer, Add Bus, Add Audio Line, Add Lane; **View** — Hide/Show Mixer (the dock eases
+to its tab bar), Hide/Show Browser (its width eases to 0, everything right of it follows the live
+width), Metronome On/Off (`settings set metronome=…`), Settings…. Labels follow the state
+(`refreshMenus`, `:119`). A press outside an open menu closes it first (`:248`), as cosmo's does.
+
+### DR-SET-3 The settings sheet in sections (R-SET-3)
+`SettingsSheet` (`app/widgets/SettingsSheet.cpp:29`): **Audio** (Output, Input, Sample rate, Buffer),
+**Playback** (Metronome Off/On, Click level −18/−12/−6/0 dB), **New songs** (Tempo 100…174, Meter
+4/4 3/4 6/8 7/8), **Sample folders**, **Interface** (Reduced motion) — a 12 px title per section, a
+hairline between; every chip `settings set <key>=…`. The service keeps the new keys in the machine's
+file (`metronome`, `metronomeLevel`, `newBpm`, `newSig`, `reducedMotion` — `core/Settings.cpp`),
+`project new` starts at `newBpm`/`newSig` when no flag says otherwise, and the App ORs `reducedMotion`
+with the OS's own setting into `artboard::setReducedMotion` (design rule §2.6). The sheet scrolls when
+it is taller than the window (R6); `revealRect` brings a control in.

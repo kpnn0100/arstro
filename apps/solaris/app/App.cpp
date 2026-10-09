@@ -65,6 +65,7 @@ namespace solaris_ui
             if (onPickFolder) onPickFolder([this](const std::string &path) { dispatch("folder add " + quote(path)); });
         };
 
+        buildMenus();
         mRecognizer.setSink([this](const Gesture &g) {
             if (mMenu->isOpen()) { mMenu->onGesture(g); return; }       // a modal owns input
             if (mConfirm->isOpen()) { mConfirm->onGesture(g); return; }
@@ -73,6 +74,71 @@ namespace solaris_ui
             else mProject->onGesture(g);
         });
         layoutAll();
+    }
+
+    // ── the song bar's menus (R-UI-3 amended): every item a command line or a host picker ────────
+
+    std::string App::selectedClip() const { return mProject->timeline().selectedClip(); }
+
+    void App::buildMenus()
+    {
+        auto &ms = mProject->bar().menus();
+        ms.addMenu({"File", {
+            {"New Song\xE2\x80\xA6", [this] { if (onPickSongToCreate) onPickSongToCreate(); }},
+            {"Open\xE2\x80\xA6", [this] { if (onPickSongToOpen) onPickSongToOpen(); }},
+            {"Save            (Ctrl+S)", [this] { dispatch("project save"); }},
+            {"Save As\xE2\x80\xA6", [this] {
+                 const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+                 if (onPickSave) onPickSave("Save the song as", m.projectName + ".slp", [this](const std::string &p) { dispatch("project save " + quote(p)); });
+             }},
+            {"Render\xE2\x80\xA6", [this] {
+                 const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+                 if (onPickSave) onPickSave("Render the mix", m.projectName + ".wav", [this](const std::string &p) { dispatch("render --out " + quote(p)); });
+             }},
+            {"Render Stems\xE2\x80\xA6", [this] {
+                 const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+                 std::string ids;
+                 for (const auto &s : m.strips) ids += (ids.empty() ? "" : ",") + s.id;
+                 if (onPickSave && !ids.empty())
+                     onPickSave("Render the mix and a stem per strip", m.projectName + ".wav",
+                                [this, ids](const std::string &p) { dispatch("render --out " + quote(p) + " --stems " + ids); });
+             }},
+            {"Home", [this] { requestHome(); }},
+        }});
+        ms.addMenu({"Edit", {}});   // filled by refreshMenus: its labels name what undo would take back
+        ms.addMenu({"Song", {
+            {"Add Mixer", [this] { dispatch("mixer add"); }},
+            {"Add Bus", [this] { dispatch("strip add --kind bus"); }},
+            {"Add Audio Line", [this] { dispatch("strip add --kind audio"); }},
+            {"Add Lane", [this] { dispatch("lane add"); }},
+        }});
+        ms.addMenu({"View", {}});   // filled by refreshMenus: Show / Hide follows the state
+        refreshMenus(mHooks.model ? mHooks.model() : emptyModel());
+    }
+
+    void App::refreshMenus(const solaris::AppModel &m)
+    {
+        const std::string key = m.undoLabel + "|" + m.redoLabel + "|" + (mProject->dockOpen() ? "1" : "0") + (mProject->browserOpen() ? "1" : "0") +
+                                (m.settings.metronome ? "1" : "0");
+        if (key == mMenuKey) return; // labels change only when what they name does
+        mMenuKey = key;
+        auto &ms = mProject->bar().menus();
+        const std::string undo = m.undoLabel.empty() ? "Undo" : "Undo " + m.undoLabel, redo = m.redoLabel.empty() ? "Redo" : "Redo " + m.redoLabel;
+        ms.setItems(1, {
+            {undo + "   (Ctrl+Z)", [this] { dispatch("undo"); }},
+            {redo + "   (Ctrl+Y)", [this] { dispatch("redo"); }},
+            {"Duplicate Clip   (Ctrl+D)", [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip duplicate " + c); }},
+            {"Delete Clip   (Del)", [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip delete " + c); }},
+        });
+        ms.setItems(3, {
+            {mProject->dockOpen() ? "Hide Mixer" : "Show Mixer", [this] { mProject->setDockOpen(!mProject->dockOpen()); mMenuKey.clear(); refreshMenus(mHooks.model ? mHooks.model() : emptyModel()); }},
+            {mProject->browserOpen() ? "Hide Browser" : "Show Browser", [this] { mProject->setBrowserOpen(!mProject->browserOpen()); mMenuKey.clear(); refreshMenus(mHooks.model ? mHooks.model() : emptyModel()); }},
+            {m.settings.metronome ? "Metronome: On" : "Metronome: Off", [this] {
+                 const auto &mm = mHooks.model ? mHooks.model() : emptyModel();
+                 dispatch(std::string("settings set metronome=") + (mm.settings.metronome ? "off" : "on"));
+             }},
+            {"Settings\xE2\x80\xA6   (Ctrl+,)", [this] { openSettings(); }},
+        });
     }
 
     void App::layoutAll()
@@ -156,6 +222,12 @@ namespace solaris_ui
         mHome->bind(m);
         mProject->bind(m);
         mSettings->bind(m);
+        refreshMenus(m);
+        if (m.settings.reducedMotion != mAppReducedMotion)
+        {
+            mAppReducedMotion = m.settings.reducedMotion;
+            artboard::setReducedMotion(mOsReducedMotion || mAppReducedMotion); // the setting, or the OS's (design rule §2.6)
+        }
     }
 
     bool App::needsRedraw(double nowMs) const
@@ -170,7 +242,13 @@ namespace solaris_ui
     void App::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)
     {
         mLastActivityMs = mNowMs;
-        if (kind == 0) mProject->setInteracting(true);
+        if (kind == 0)
+        {
+            mProject->setInteracting(true);
+            // a press outside the open menu closes it first, as cosmo's does; the press then does its own thing
+            auto &ms = mProject->bar().menus();
+            if (ms.openIndex() >= 0 && !ms.pointInActiveArea(ms.toLocal(Point{x, y}))) ms.close();
+        }
         if (kind == 2) mProject->setInteracting(false);
         RawPointer rp{};
         rp.kind = kind == 0 ? RawPointer::Kind::Down : (kind == 2 ? RawPointer::Kind::Up : RawPointer::Kind::Move);

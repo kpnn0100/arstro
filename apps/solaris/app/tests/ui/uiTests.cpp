@@ -100,10 +100,14 @@ static void test_settings_folders()
     assert(sentLine(r, "folder remove /music/Samples") && r.svc->model().settings.folders == std::vector<std::string>{"/music/Loops"});
     r.app->onPickFolder = [](std::function<void(const std::string &)> done) { done("/music/One Shots"); };
     r.settle();
+    r.app->settings().revealRect(r.app->settings().addFolderRect()); // the sheet scrolls (R6): bring the button in first
+    r.settle();
     r.click(r.app->settings().addFolderRect());
     assert(sentLine(r, "folder add \"/music/One Shots\"") && r.svc->model().settings.folders.size() == 2);
     r.app->onPickFolder = [](std::function<void(const std::string &)> done) { done("/nowhere"); };
     r.settle(); // the list grew: the button moved down a row — aim at where it is NOW
+    r.app->settings().revealRect(r.app->settings().addFolderRect());
+    r.settle();
     r.click(r.app->settings().addFolderRect());
     r.frame();
     assert(contains(r.app->toastText(), "cannot list /nowhere"));          // a refusal is SAID
@@ -447,6 +451,97 @@ static void test_mixer_matrix_effects_and_device_panel()
     pass("Mixer: + Effect is the registry; a chip opens a generated panel (fade), a slider is `set` in its unit, bypass, pages cross-fade; the matrix adds a send");
 }
 
+static void test_song_bar_menus_and_settings_sections()
+{
+    sltest::Rig r("ui-menus", 1024, 640);
+    r.cmd("project new " + r.song("Menus") + ".slp --bpm 120");
+    r.cmd("clip add --instrument drums --at 0 --length 4");
+    r.settle();
+    auto &bar = r.app->project().bar();
+    auto &ms = bar.menus();
+    using arstro::solaris_ui::SongBar;
+    // Settings sits beside Home; the transport keeps clear of the menus and a readable name, even at 1024
+    assert(bar.hitRect(SongBar::kSettings).x > bar.hitRect(SongBar::kHome).right());
+    assert(bar.hitRect(SongBar::kPlay).x >= ms.x.value() + ms.contentWidth() + SongBar::kNameMin);
+    r.click(world(bar, bar.hitRect(SongBar::kSettings)));
+    r.settle();
+    assert(r.app->settings().isOpen());
+    r.key(27);
+    r.settle();
+    // File › Save is `project save`
+    assert(ms.menuCount() == 4 && ms.menu(0).title == "File" && ms.menu(3).title == "View");
+    r.click(world(ms, ms.titleRect(0)));
+    r.settle();
+    assert(ms.openIndex() == 0);
+    r.click(world(ms, ms.itemRect(0, 2)));
+    r.settle();
+    assert(sentLine(r, "project save") && ms.openIndex() == -1);
+    // Edit names what undo would take back, and is the `undo` line
+    r.cmd("set ch_2.gain=-3");
+    r.settle();
+    assert(contains(ms.menu(1).items[0].label, "Undo set ch_2.gain"));
+    r.click(world(ms, ms.titleRect(1)));
+    r.settle();
+    r.click(world(ms, ms.itemRect(1, 0)));
+    r.settle();
+    assert(sentLine(r, "undo") && r.svc->model().strips[0].gain == 0.0);
+    // Song › Add Bus
+    r.click(world(ms, ms.titleRect(2)));
+    r.settle();
+    r.click(world(ms, ms.itemRect(2, 1)));
+    r.settle();
+    assert(sentLine(r, "strip add --kind bus"));
+    // a press outside an open menu closes it
+    r.click(world(ms, ms.titleRect(0)));
+    r.settle();
+    r.click(400.0, 400.0);
+    r.settle();
+    assert(ms.openIndex() == -1);
+    // View › Hide Mixer folds the dock, eased; Hide Browser folds the browser, eased; Metronome is a setting
+    auto &ps = r.app->project();
+    const double dock0 = ps.dockHeight();
+    r.click(world(ms, ms.titleRect(3)));
+    r.settle();
+    assert(ms.menu(3).items[0].label == "Hide Mixer");
+    r.click(world(ms, ms.itemRect(3, 0)));
+    r.frame();
+    r.frame();
+    assert(ps.dockHeight() < dock0 && ps.dockHeight() > arstro::solaris_ui::MixerDock::kTabsH);
+    r.settle();
+    assert(ps.dockHeight() == arstro::solaris_ui::MixerDock::kTabsH && ms.menu(3).items[0].label == "Show Mixer");
+    r.click(world(ms, ms.titleRect(3)));
+    r.settle();
+    r.click(world(ms, ms.itemRect(3, 1)));
+    r.frame();
+    r.frame();
+    assert(ps.browserWidth() > 0.0 && ps.browserWidth() < arstro::solaris_ui::Browser::kWidth);
+    r.settle();
+    assert(ps.browserWidth() == 0.0);
+    r.click(world(ms, ms.titleRect(3)));
+    r.settle();
+    r.click(world(ms, ms.itemRect(3, 2)));
+    r.settle();
+    assert(sentLine(r, "settings set metronome=on") && r.svc->model().settings.metronome);
+    // the settings sheet's new sections: a chip is a `settings set` line
+    r.app->openSettings();
+    r.settle();
+    using arstro::solaris_ui::SettingsSheet;
+    r.app->settings().revealRect(r.app->settings().chipRect(SettingsSheet::kNewBpm, 4));
+    r.settle();
+    r.click(r.app->settings().chipRect(SettingsSheet::kNewBpm, 4)); // 128
+    r.settle();
+    assert(sentLine(r, "settings set newBpm=128") && r.svc->model().settings.newBpm == 128.0);
+    r.app->settings().revealRect(r.app->settings().chipRect(SettingsSheet::kMotion, 1));
+    r.settle();
+    r.click(r.app->settings().chipRect(SettingsSheet::kMotion, 1));
+    r.settle();
+    assert(sentLine(r, "settings set reducedMotion=on") && artboard::reducedMotion()); // the setting reaches every primitive
+    r.cmd("settings set reducedMotion=off");
+    r.settle();
+    assert(!artboard::reducedMotion());
+    pass("Song bar: Settings beside Home; File/Edit/Song/View are command lines (Edit names its undo); outside press closes; View folds the dock and browser, eased; new settings rows are lines");
+}
+
 static void test_ruler_seek_keys_and_selection()
 {
     sltest::Rig r("ui-ruler", 1280, 800);
@@ -489,6 +584,7 @@ int main()
     test_lists_travel_when_the_song_changes_shape();
     test_mixer_dock_strips();
     test_mixer_matrix_effects_and_device_panel();
+    test_song_bar_menus_and_settings_sections();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

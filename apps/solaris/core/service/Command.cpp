@@ -128,7 +128,7 @@ namespace solaris
             {K::SettingsSet, "settings set", "<key>=<value> …", 1, -1, {},
              "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), "
              "bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), "
-             "port.<name>=<device>:<channel> (where a song's port plays on this machine). Saved at once.",
+             "port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), newBpm / newSig (what a new song starts at), reducedMotion (on|off). Saved at once.",
              "R-SET-1", true},
             {K::SettingsPrint, "settings print", "", 0, 0, {"json"}, "The machine's settings.", "R-SET-1"},
             {K::FolderAdd, "folder add", "<path>", 1, 1, {}, "Add a sample folder to the browser's quick-access list.", "R-SET-1"},

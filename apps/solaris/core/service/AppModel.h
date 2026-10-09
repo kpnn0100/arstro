@@ -163,6 +163,9 @@ namespace solaris
         std::string output, input;
         std::vector<std::string> folders;
         std::vector<std::string> ports;          // "<name>=<device>:<channel>"
+        bool metronome = false, reducedMotion = false; // R-SET-3
+        double metronomeLevel = -6, newBpm = 120;
+        std::string newSig = "4/4";
     };
 
     /** One entry of the DSP library's device registry — what the browser lists (R-BROWSE-1). */

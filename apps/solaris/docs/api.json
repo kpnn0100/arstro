@@ -455,7 +455,7 @@
       "usage": "settings set <key>=<value> …",
       "args": "<key>=<value> …",
       "flags": [],
-      "summary": "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine). Saved at once.",
+      "summary": "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), newBpm / newSig (what a new song starts at), reducedMotion (on|off). Saved at once.",
       "requirement": "R-SET-1"
     },
     {
@@ -1535,6 +1535,36 @@
       "path": "settings.ports",
       "type": "string[]",
       "summary": "<port>=<device>:<channel> on this machine",
+      "stable": true
+    },
+    {
+      "path": "settings.metronome",
+      "type": "bool",
+      "summary": "clicks while playing (R-TIME-4), never in a render",
+      "stable": true
+    },
+    {
+      "path": "settings.metronomeLevel",
+      "type": "number",
+      "summary": "dB",
+      "stable": true
+    },
+    {
+      "path": "settings.newBpm",
+      "type": "number",
+      "summary": "a new song's tempo without --bpm",
+      "stable": true
+    },
+    {
+      "path": "settings.newSig",
+      "type": "string",
+      "summary": "a new song's meter without --sig",
+      "stable": true
+    },
+    {
+      "path": "settings.reducedMotion",
+      "type": "bool",
+      "summary": "the UI's tweens collapse (with the OS's own setting)",
       "stable": true
     },
     {

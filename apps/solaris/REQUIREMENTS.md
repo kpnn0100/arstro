@@ -227,7 +227,7 @@ audio devices so the user can take advantage of their devices."*
   the driver resamples and the transport says so.
 - **R-DEV-8 Linux first**, over the PulseAudio API (which PipeWire also serves); Windows later.
 
-## R-SET — settings — ✅ IMPLEMENTED (DR-SET-1, DR-SET-2)
+## R-SET — settings — ✅ IMPLEMENTED (DR-SET-1, DR-SET-2, DR-SET-3)
 
 - **R-SET-1 A settings sheet in Cosmo's modal style** — the same scrim, card, chips, fade and Done
   button — with Solaris's rows: output and input devices (the clock is the output), sample rate
@@ -467,7 +467,7 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 - **R-API-1 The API document is generated, committed and drift-tested** — rung 4 — and includes the
   device registry (every instrument and effect parameter with unit and range).
 
-## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8 — 3 without the version chip, X1; 4 partly: the Artboard move is T1)
+## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1)
 
 - **R-UI-1 Two screens, as Interstellar:** Home (R-HOME) and the Project view.
 - **R-UI-2 The accent is teal, `#159387`, the only forked token** — teal because orange, the

@@ -46,6 +46,10 @@ namespace solaris_ui
         double dockHeight() const { return mDockH.value(); } // LIVE
         void setDockOpen(bool open) { mDockOpen = open; }
         bool dockOpen() const { return mDockOpen; }
+        /** View › Browser: the left panel folds away (its width eased) and comes back. */
+        void setBrowserOpen(bool open) { mBrowserOpen = open; }
+        bool browserOpen() const { return mBrowserOpen; }
+        double browserWidth() const { return mBrowserW.value(); } // LIVE
         /** The pointer is down somewhere: a gesture in flight outranks the model (the device panel). */
         void setInteracting(bool on) { mInteracting = on; }
 
@@ -78,6 +82,8 @@ namespace solaris_ui
         bool mDockOpen = true, mDockInit = false, mInteracting = false;
         double mDockLast = 0.0;
         artboard::AnimatedProperty mDockH{0.0};
+        bool mBrowserOpen = true, mBrowserInit = false, mBrowserLast = true;
+        artboard::AnimatedProperty mBrowserW{0.0};
         double mNowMs = 0.0, mPosition = 0.0;
         artboard::AnimatedProperty mGhost{0.0};
         bool mGhostWanted = false;

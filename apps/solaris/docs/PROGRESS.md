@@ -11,18 +11,18 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-09 — B2: undo and redo.*
+*Last updated: 2026-10-09 — B3: the song bar menus and the settings sections.*
 
 ---
 
 ## NEXT
 
-**► B3 — the song bar** (R-UI-3 amended, R-SET-3): Settings moves beside Home; cosmo's `MenuStrip`
-with File (New, Open, Save, Save As, Render, Render Stems, Home), Edit (Undo, Redo, Duplicate, Delete),
-Song (Add Mixer, Add Line, Add Lane, Quantize…), View (mixer dock, browser, metronome); every item a
-command line or a host picker. The settings sheet in sections — Audio, Playback, New songs, Sample
-folders, Interface — each option a `settings set` line (new keys: metronome, metronomeLevel, newBpm,
-newSig, reducedMotion).
+**► B4 — windows** (R-WIN-1…4): a floating window frame inside the song view (title bar dragged,
+×, eased open/close, stacked, one per device); the device window = the generated controls + the
+parameter LIST (label, value in its unit, number/link/formula/automation, the last changed lit — from
+`devices[].lastChanged`); a parameter's menu: Create Automation (`auto create`), Formula… (cosmo's
+rename field → `set <addr>="=…"`), Clear Binding (`bind clear`), Reset to Default (`set <addr>=<def>`).
+A rack chip or an instrument strip's name (double-click) opens it; the dock's popover panel goes.
 
 ---
 
@@ -116,8 +116,10 @@ umbrella's pointer — `arstro.rule` §7).
       red. A silent refusal is now impossible (`dispatch` names it).
 - [x] **B2** Undo / redo (R-EDM-1). — DR-EDM-1; byte-exact both ways; a dragged fader is one step
       (mutant: no merging → the depth assertion fails); Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y.
-- [ ] **B3** The song bar: Settings beside Home, cosmo's menu strip (File / Edit / Song / View), the
-      settings sheet's full sections (R-UI-3, R-SET-3).
+- [x] **B3** The song bar: Settings beside Home, cosmo's menu strip (File / Edit / Song / View), the
+      settings sheet's full sections (R-UI-3, R-SET-3). — DR-UI-9, DR-SET-3; new machine keys
+      metronome, metronomeLevel, newBpm, newSig, reducedMotion; View folds the dock and the browser,
+      eased; `solaris_app_ui` 12; shot menu-file-open, looked at.
 - [ ] **B4** Windows: the device window, its parameter list with the last change lit, the parameter
       menu — automation, formula, clear, reset (R-WIN-1…4).
 - [ ] **B5** Automation on the timeline (R-AUTO-6).

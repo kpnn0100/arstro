@@ -111,12 +111,16 @@ namespace solaris_ui
     {
         const double W = width.value(), H = height.value(), top = SongBar::kHeight;
         mBar->x.set(0); mBar->y.set(0); mBar->width.set(W);
-        mBrowser->x.set(0); mBrowser->y.set(top); mBrowser->width.set(Browser::kWidth); mBrowser->height.set(std::max(0.0, H - top));
-        const double rw = std::max(0.0, W - Browser::kWidth), dockH = std::min(mDockH.value(), std::max(0.0, H - top));
-        mTimeline->x.set(Browser::kWidth); mTimeline->y.set(top);
+        mBar->layout();
+        // the browser folds by its WIDTH (View › Browser): everything right of it reads the live width
+        const double bw = mBrowserW.value();
+        mBrowser->x.set(bw - Browser::kWidth); mBrowser->y.set(top); mBrowser->width.set(Browser::kWidth); mBrowser->height.set(std::max(0.0, H - top));
+        mBrowser->opacity.set(std::clamp(bw / Browser::kWidth, 0.0, 1.0));
+        const double rw = std::max(0.0, W - bw), dockH = std::min(mDockH.value(), std::max(0.0, H - top));
+        mTimeline->x.set(bw); mTimeline->y.set(top);
         mTimeline->width.set(rw);                                    // the flexible column last (§4)
         mTimeline->height.set(std::max(0.0, H - top - dockH));       // from the LIVE dock height: the seam never tears
-        mDock->x.set(Browser::kWidth); mDock->y.set(top + std::max(0.0, H - top - dockH));
+        mDock->x.set(bw); mDock->y.set(top + std::max(0.0, H - top - dockH));
         mDock->width.set(rw);
         mDock->height.set(dockH);
         mBrowser->layout();
@@ -135,6 +139,10 @@ namespace solaris_ui
         if (!mDockInit) { mDockH.set(dt); mDockLast = dt; mDockInit = true; }
         else if (dt != mDockLast) { mDockH.animateTo(dt, motion::kSlideMs, Easing::EaseOutCubic, nowMs); mDockLast = dt; }
         mDockH.update(nowMs);
+        const double bwWant = mBrowserOpen ? Browser::kWidth : 0.0;
+        if (!mBrowserInit) { mBrowserW.set(bwWant); mBrowserLast = mBrowserOpen; mBrowserInit = true; }
+        else if (mBrowserOpen != mBrowserLast) { mBrowserW.animateTo(bwWant, motion::kSlideMs, Easing::EaseOutCubic, nowMs); mBrowserLast = mBrowserOpen; }
+        mBrowserW.update(nowMs);
         Segment::advance(nowMs);
     }
 

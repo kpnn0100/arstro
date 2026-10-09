@@ -354,10 +354,10 @@ namespace solaris
         {
             const std::string path = c.arg(0);
             if (fs::exists(path)) { err = path + " already exists — open it, or choose another name"; return false; }
-            double bpm = 120.0;
+            double bpm = mSettings.newBpm; // R-SET-3: the machine's choice for a new song
             if (c.has("bpm") && (!parseNumber(c.flag("bpm"), bpm) || !(bpm >= 20 && bpm <= 999)))
             { err = "--bpm must be a tempo between 20 and 999"; return false; }
-            const std::string sig = c.flag("sig", "4/4");
+            const std::string sig = c.flag("sig", mSettings.newSig);
             int num = 0, den = 0;
             if (std::sscanf(sig.c_str(), "%d/%d", &num, &den) != 2 || num < 1 || num > 32 || (den != 2 && den != 4 && den != 8 && den != 16))
             { err = "--sig must be a meter like 4/4, 3/4 or 7/8"; return false; }

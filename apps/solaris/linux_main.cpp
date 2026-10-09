@@ -186,6 +186,12 @@ int main(int argc, char **argv)
         const std::string p = pick(a, GTK_FILE_CHOOSER_ACTION_SAVE, "New song", "_Create", true, "Untitled.slp");
         if (!p.empty()) a->app->newSongPicked(p);
     };
+    a->app->onPickSave = [a](const std::string &title, const std::string &suggested, std::function<void(const std::string &)> done) {
+        const bool song = suggested.size() > 4 && suggested.compare(suggested.size() - 4, 4, ".slp") == 0;
+        const std::string p = pick(a, GTK_FILE_CHOOSER_ACTION_SAVE, title.c_str(), "_Save", song, suggested);
+        if (!p.empty()) done(p);
+    };
+    a->app->setOsReducedMotion(!animations); // the OS's "reduce motion" (design rule §2.6); the app's own setting ORs in
     a->app->onPickFolder = [a](std::function<void(const std::string &)> done) {
         const std::string p = pick(a, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER, "Add a sample folder", "_Add", false, std::string());
         if (!p.empty()) done(p);

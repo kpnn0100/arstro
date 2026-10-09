@@ -23,6 +23,12 @@ namespace solaris
         std::string input;
         std::vector<std::string> folders;       // R-SET-1: the browser's quick-access list, in order
         std::vector<std::pair<std::string, std::string>> ports; // port name → "<device id>:<first channel>"
+        // R-SET-3: the rest of the sheet
+        bool metronome = false;                 // clicks while playing (R-TIME-4), never in a render
+        double metronomeLevel = -6.0;           // dB, −40 … 6
+        double newBpm = 120.0;                  // what `project new` starts at without --bpm
+        std::string newSig = "4/4";             // … and without --sig
+        bool reducedMotion = false;             // the UI's tweens collapse (design rule §2.6), with the OS's
 
         std::string text() const;
         static Settings parse(const std::string &text);

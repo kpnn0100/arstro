@@ -52,6 +52,10 @@ namespace solaris_ui
 
         std::function<void()> onPickSongToOpen, onPickSongToCreate;
         std::function<void(std::function<void(const std::string &)> done)> onPickFolder;
+        /** A file to write: Save As, Render, Render Stems (the host's save dialog; `suggested` names it). */
+        std::function<void(const std::string &title, const std::string &suggested, std::function<void(const std::string &)> done)> onPickSave;
+        /** The OS's own "reduce motion" (the host reads it once); the app ORs it with its setting (R-SET-3). */
+        void setOsReducedMotion(bool on) { mOsReducedMotion = on; artboard::setReducedMotion(on || mAppReducedMotion); }
         void openSongPicked(const std::string &path);
         void newSongPicked(const std::string &path);
         void openSettings();
@@ -75,6 +79,9 @@ namespace solaris_ui
 
     private:
         void bindIfStale();
+        void buildMenus();
+        void refreshMenus(const solaris::AppModel &m);
+        std::string selectedClip() const;
         void layoutAll();
         void showToast(const std::string &text);
         static std::string quote(const std::string &s);
@@ -96,6 +103,8 @@ namespace solaris_ui
         artboard::AnimatedProperty mToast{0.0};
         bool mToastWanted = false;
         double mToastShownAt = -1e9;
+        bool mOsReducedMotion = false, mAppReducedMotion = false;
+        std::string mMenuKey;                // what the dynamic menu labels were built from
     };
 }
 }

@@ -52,7 +52,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `audit` | The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping. | R-MIX-10 |
 | `state print [--json] [--stable]` | The whole AppModel; --stable omits what changes with time. | R-SVC-2 |
 | `api [--json] [--md]` | This document: every command, event, model field and device parameter. | R-API-1 |
-| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine). Saved at once. | R-SET-1 |
+| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on\|off), metronomeLevel (dB), newBpm / newSig (what a new song starts at), reducedMotion (on\|off). Saved at once. | R-SET-1 |
 | `settings print [--json]` | The machine's settings. | R-SET-1 |
 | `folder add <path>` | Add a sample folder to the browser's quick-access list. | R-SET-1 |
 | `folder remove <path>` | Remove a sample folder from the list (the folder itself is untouched). | R-SET-1 |
@@ -247,6 +247,11 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.input` | string |  |
 | `settings.folders` | string[] | the browser's quick-access folders, in order |
 | `settings.ports` | string[] | <port>=<device>:<channel> on this machine |
+| `settings.metronome` | bool | clicks while playing (R-TIME-4), never in a render |
+| `settings.metronomeLevel` | number | dB |
+| `settings.newBpm` | number | a new song's tempo without --bpm |
+| `settings.newSig` | string | a new song's meter without --sig |
+| `settings.reducedMotion` | bool | the UI's tweens collapse (with the OS's own setting) |
 | `devices` | object[] | from the last `devices list` |
 | `devices[].id` | string | what `settings set output=` takes |
 | `devices[].name` | string |  |

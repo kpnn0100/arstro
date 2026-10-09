@@ -95,6 +95,11 @@ namespace solaris
         mModel.settings.input = mSettings.input;
         mModel.settings.folders = mSettings.folders;
         for (const auto &p : mSettings.ports) mModel.settings.ports.push_back(p.first + "=" + p.second);
+        mModel.settings.metronome = mSettings.metronome;
+        mModel.settings.metronomeLevel = mSettings.metronomeLevel;
+        mModel.settings.newBpm = mSettings.newBpm;
+        mModel.settings.newSig = mSettings.newSig;
+        mModel.settings.reducedMotion = mSettings.reducedMotion;
         mModel.devices = mDevices;
         mModel.browser = mBrowser;
         for (const auto &t : DeviceRegistry::types())

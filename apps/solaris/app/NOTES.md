@@ -12,8 +12,12 @@ helpers it borrows.
 | Home › Open song… | the host's open picker → `project open "<path>"` |
 | Home › a card | `project open "<path>"` |
 | Home › a card, right-click | `recents remove "<path>"` |
-| Home / song bar › Settings, Ctrl+, | `devices list`, then the sheet opens |
-| Settings › a chip | `settings set output=<id>` · `input=<id>` · `sampleRate=<hz>` · `bufferSize=<frames>` |
+| Home / song bar › Settings (beside Home), Ctrl+, | `devices list`, then the sheet opens |
+| Song bar › File › New Song… · Open… · Save · Save As… · Render… · Render Stems… · Home | picker → `project new` · picker → `project open` · `project save` · picker → `project save "<path>"` · picker → `render --out "<path>"` · picker → `render --out "<path>" --stems <every strip>` · `project close` |
+| Song bar › Edit › Undo · Redo · Duplicate Clip · Delete Clip | `undo` · `redo` · `clip duplicate <ac>` · `clip delete <ac>` |
+| Song bar › Song › Add Mixer · Add Bus · Add Audio Line · Add Lane | `mixer add` · `strip add --kind bus` · `strip add --kind audio` · `lane add` |
+| Song bar › View › Hide/Show Mixer · Hide/Show Browser · Metronome · Settings… | the view's · the view's · `settings set metronome=on\|off` · the sheet |
+| Settings › a chip | `settings set output=<id>` · `input=<id>` · `sampleRate=<hz>` · `bufferSize=<frames>` · `metronome=on\|off` · `metronomeLevel=<dB>` · `newBpm=<bpm>` · `newSig=<n/d>` · `reducedMotion=on\|off` |
 | Settings › × on a folder | `folder remove "<path>"` |
 | Settings › Add folder… | the host's folder picker → `folder add "<path>"` |
 | Song bar › Home | `project close` — behind cosmo's ConfirmDialog when unsaved (Save → `project save` then close) |
@@ -57,7 +61,7 @@ The REAL App over the REAL service (`tests/Rig.h`): home-empty · home-cards (a 
 song) · settings-open · settings-mid-open (mid-fade) · settings-chip-changing (a chip's fill
 mid-ease) · project-open · home-to-project-mid (mid cross-fade) · toast-refusal ·
 browser-instruments · browser-folder · drag-sample-mid (the ghost and the drop hint) ·
-clip-dragging · clip-selected-zoomed · mixer-sources · mixer-buses · mixer-tab-mid (pages mid
+clip-dragging · clip-selected-zoomed · menu-file-open (Edit open, naming its undo) · mixer-sources · mixer-buses · mixer-tab-mid (pages mid
 cross-fade) · mixer-matrix · mixer-folded · device-panel · dock-folded · confirm-unsaved.
 Each at 1440×900 and 1024×640. **Look at them** after a change.
 
