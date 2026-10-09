@@ -174,7 +174,12 @@ umbrella's pointer — `arstro.rule` §7).
       `snap()` for ruler, clip drag, loop, automation points and browser drops; zoom 4.7–637 px/beat,
       the deepest unsnapped; `solaris_app_ui` 22 (3 mutants caught); the lines' strength raised at
       merge so the divisions read.
-- [ ] **C2** Bezier automation; the automation's window (R-AUTO-10/11).
+- [x] **C2** Bezier automation; the automation's window (R-AUTO-10/11). — DR-AUTO-6/7 (`b5a102a`, a sub-agent):
+      `#point shape=bezier speedIn inflIn speedOut inflOut` — Interstellar's keyframes, its `Anim.h` included
+      in the engine (allocation-free); smooth = AE's ease, equal to the old smoothstep to 1e-9; a bezier
+      gain renders within 0.019 dB of the formula; cosmo's handles (Alt-pull, mirror, Alt-break); the
+      `auto:<au>` window with the value at the playhead (`automations[].now`); 4 mutants caught.
+      Merged over C1/C3: docs merged section by section, anchors followed by source text.
 - [x] **C3** The mixer's numbers bound from the dock; IDs shown and copied (R-MIX-16, R-UI-11). — DR-MIX-16,
       DR-UI-11 (`76fb935`, a sub-agent): one `ParamMenu` for device rows and the dock's fader/pan/send/master;
       `bindings[].live` from the audio thread through pre-sized atomics (no allocation, counted); a

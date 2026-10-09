@@ -332,7 +332,7 @@ R-VER, applied to an arrangement:
 - **R-PLAY-3 Meters** on every strip and the master: peak and RMS per channel, a held peak, a clip
   latch — the numbers in the model, not only drawn.
 
-## R-AUTO — automation and parameter formulas — ✅ IMPLEMENTED (user request, 2026-10-09; DR-AUTO-1…5, made from a window: DR-UI-5) — 🚧 10 (bezier), 11 (its window) with C2
+## R-AUTO — automation and parameter formulas — ✅ IMPLEMENTED (user request, 2026-10-09; DR-AUTO-1…5, made from a window: DR-UI-5) — 10 ✅ (bezier, DR-AUTO-6), 11 ✅ (its window, DR-AUTO-7)
 
 The user: *"all number param can be link, apply formula, create automation, apply formula with
 automation like FL Studio. Automation is created separately, make the formula core of the binding.
