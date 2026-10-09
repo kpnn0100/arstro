@@ -147,3 +147,20 @@ for b in range(1, 32):                                                   # the k
 
 Check, at least: not silent (RMS above about −40 dBFS), peak under 0 dBFS (`audit` also names a strip
 that clipped), the hits on their beats, and a pitch or two (an FFT peak of a stem) where the tune says.
+
+A whole song made this way, rendered and measured, is [`demo/canon/`](../demo/canon/README.md) —
+Pachelbel's Canon as 128 bpm EDM in 86 commands (R-SVC-9); `ctest -R solaris_demo_canon` re-makes it.
+
+## 8. Drive the window the user is looking at
+
+The same lines reach a running window. Start it with a control socket, then attach:
+
+| how | use it for |
+|---|---|
+| `solaris --control /tmp/sol.sock [song.slp]` | the user's window, drivable |
+| `solaris-cc attach /tmp/sol.sock --script song.txt` | a script into that window — it prints exactly what `solaris-cc` prints, refusals and exit codes included |
+| `solaris-cc attach /tmp/sol.sock clip add --instrument drums --at 0 --length 8 : audit` | a quick line or two; `--follow` keeps printing events after the last line |
+| `solaris-cc ntwb install` | the web face for Arstro Remote (the same grammar from a browser; R-SVC-7) |
+
+One script through `solaris-cc` and through a live window gives the same events, output, state, `.slp`
+and render — `tests/acceptance/run.sh` proves it (R-SVC-6, DR-SVC-5).

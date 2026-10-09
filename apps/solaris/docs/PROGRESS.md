@@ -191,7 +191,15 @@ umbrella's pointer — `arstro.rule` §7).
       `pattern steps|duplicate|clear|delete|transpose`, `clip duplicate --count`, lane reuse; `ls`, `show`,
       `pattern print`, compact JSON; out-of-range values refused; `docs/AGENTS.md`. An 8-bar song: 32
       commands (the audit's 16 bars took 110). 7 mutants caught.
-- [ ] **C4b** The faces: control channel + attach, equivalence test, web (NTWB) (R-SVC-5…7).
+- [x] **C4b** The faces: control channel + attach, equivalence test, web (NTWB) (R-SVC-5…7).
+      — DR-SVC-5/7 (`596c04a`, a sub-agent): `solaris --control <socket>` over cosmo's `ControlChannel`
+      compiled in place (`[out]`/`[ok]`/`[refused]` per line, `wait` holds the queue, never the GTK
+      thread); `solaris-cc attach` prints what `solaris-cc` prints; `solaris_equivalence` runs one
+      script headless and through a live window — same events, output, dump, `.slp`, WAV (skipped
+      without a display); `solaris-cc ntwb serve|install|uninstall|api` and `apps/solaris/web/` (song bar,
+      Home, lanes, mixer, console; tokens generated from Theme.h). Rung 5. 3 mutants caught. Open: the web
+      re-derives the fader/meter maths (`MixerDock.cpp:89-90`) — the service should publish it; the web
+      not yet run inside a real Arstro Remote.
 - [x] **C5** A whole song made by an agent with `solaris-cc`, measured (R-SVC-9).
       — DR-SVC-9: `demo/canon/` — Pachelbel's Canon as 128 bpm EDM, 86 commands, 7 instruments, 2 buses,
       formula delay, kick-keyed sidechains, bezier filter automation, limiter; `solaris_demo_canon`
@@ -203,6 +211,10 @@ umbrella's pointer — `arstro.rule` §7).
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
       `implement_artboard`); both apps include them from there.
+- [ ] **T2** The service publishes a fader's position law and a meter's scale in `AppModel`, so the web
+      face stops re-deriving `MixerDock.cpp:89-90` (law 13; found merging C4b).
+- [ ] **T3** D-2 (a renamed strip's lane and pattern keep the old name) and D-3 (a kit's pad names are
+      not its parameter names) — found making the canon (C5).
 
 ### X — later (specified, not scheduled)
 - [ ] **X1** Versions (R-VER) · [ ] **X2** Recording (R-REC) · [ ] **X3** Automation (R-AUTO)

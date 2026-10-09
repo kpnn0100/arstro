@@ -497,7 +497,7 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   if missing (was SR-FMT-3; its content hash is deferred to R-VER-5, where merging needs it).
 - **R-FMT-4 A structural error refuses, a numeric corruption repairs** (Interstellar's rule).
 
-## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1…3, DR-API-1) — rung 4 — 8, 9 ✅ (composition, the song: DR-SVC-8/9) — 🚧 5–7 (control channel, equivalence, web) with C4b
+## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1…3, DR-API-1) — rung 5 — 5–9 ✅ (control channel + attach, equivalence, web, composition, the song: DR-SVC-5/7/8/9)
 
 - **R-SVC-1** `SolarisService`: `dispatch(Command)` / `pump` / `model()` / an `Event` sink. The GUI,
   `solaris-cc`, a script and an agent send the same text lines (was SR-CLI-1).
