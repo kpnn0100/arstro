@@ -216,7 +216,10 @@ umbrella's pointer — `arstro.rule` §7).
       amended rules (a new bus feeds Main; recents name their own folder). The canon re-rendered: the
       mix was 96 samples behind its kick stem, now 0.
 - [x] **E1** The third brief's requirements (R-TIME-6, R-LANE-3, R-CLIP-6…8, R-BROWSE-4, R-VST-7/8; discussion Round 5).
-- [ ] **E2** The ruler dragged (R-TIME-6).
+- [x] **E2** The ruler dragged (R-TIME-6).
+      — DR-TIME-6: a press waits for click-or-drag; a drag scrubs (the playhead the pointer's, a seek at each
+      grid line, playing or not) or, from the brace's lower half, moves or resizes the loop with one
+      `transport loop` on release. 3 mutants caught; shots `ruler-scrubbing`, `loop-brace-moving`.
 - [ ] **E3** Instrument tracks (R-LANE-3; R-LANE-1 amended).
 - [ ] **E4** MIDI clips made, looped and moved on the lanes; the song's MIDI list (R-CLIP-6…8, R-BROWSE-4).
 - [ ] **E5** The plugin editor in the Arstro look; Basic Synth's (R-VST-7/8).

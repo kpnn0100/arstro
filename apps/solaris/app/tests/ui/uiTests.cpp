@@ -1190,6 +1190,85 @@ static void test_the_loop_region_on_the_ruler()
     pass("Loop region: a shell's loop fades in and moves eased; Shift-drag on the ruler is the pointer's, one `transport loop` on release, staying; a click inside clears it, fading; a plain click seeks (R-EDM-7)");
 }
 
+static void test_the_ruler_is_dragged()
+{
+    // R-TIME-6: a drag on the ruler — the playhead is the pointer's, a seek at each grid line; the loop's
+    // brace moved by its body and resized by an end, ONE `transport loop` on release
+    sltest::Rig r("ui-ruler-drag", 1280, 800);
+    r.cmd("project new " + r.song("Scrub") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 16");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    const artboard::Rect ruler = world(tl, tl.rulerRect());
+    const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
+    const double top = ruler.y + Timeline::kRulerH * 0.25, low = ruler.y + Timeline::kRulerH * 0.75;
+    auto seeks = [&] {
+        std::vector<std::string> out;
+        for (const auto &l : r.sent)
+            if (l.rfind("transport seek ", 0) == 0) out.push_back(l);
+        return out;
+    };
+    const double step = tl.snapStep();
+    assert(step > 0.0);
+    // held: the playhead is EXACTLY the pointer's on the grid (not eased toward it), and the song was told
+    // at every line it crossed — not once at the end
+    r.drag(tw.x + tl.beatToX(1.1), top, tw.x + tl.beatToX(6.9), top, 6, false);
+    assert(tl.scrubbing());
+    const double want = std::round(6.9 / step) * step;
+    assert(tl.playheadBeat() == want);
+    const auto held = seeks();
+    assert(held.size() >= 4 && held.back() == "transport seek " + Timeline::beatText(want));
+    r.app->pointer(2, tw.x + tl.beatToX(6.9), top, 0, r.now);
+    r.frame();
+    assert(!tl.scrubbing() && seeks().size() == held.size());    // let go on the line it was on: nothing more to say
+    r.frame();
+    assert(tl.playheadBeat() == want && r.svc->model().transport.position == want); // nothing eases back
+    // while PLAYING the playhead is still the pointer's, not the audio's
+    r.cmd("transport play");
+    r.pump(100.0);
+    r.drag(tw.x + tl.beatToX(2.0), top, tw.x + tl.beatToX(10.2), top, 4, false);
+    const double held2 = std::round(10.2 / step) * step;
+    for (int k = 0; k < 6; ++k)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        r.frame();
+        assert(tl.playheadBeat() == held2);
+    }
+    r.app->pointer(2, tw.x + tl.beatToX(10.2), top, 0, r.now);
+    r.frame();
+    r.cmd("transport stop");
+    r.settle();
+    assert(r.svc->model().transport.position >= held2);            // it played on from where it was let go
+    // the loop's brace: its body moves it, its length kept — the pointer's while held, one line on release
+    r.cmd("transport loop 4 8");
+    r.settle();
+    const size_t before = r.sent.size();
+    r.drag(tw.x + tl.beatToX(5.0), low, tw.x + tl.beatToX(7.0), low, 6, false);
+    assert(tl.braceDragging() && !tl.scrubbing());
+    assert(std::fabs(tl.loopRect().x - tl.beatToX(6.0)) < 0.5 && std::fabs(tl.loopRect().right() - tl.beatToX(10.0)) < 0.5);
+    assert(r.sent.size() == before);                                // nothing said while held
+    r.app->pointer(2, tw.x + tl.beatToX(7.0), low, 0, r.now);
+    r.frame();
+    assert(r.sent.size() == before + 1 && r.sent.back() == "transport loop 6 10");
+    assert(std::fabs(tl.loopRect().x - tl.beatToX(6.0)) < 0.5);     // where it was let go
+    r.settle();
+    assert(r.svc->model().transport.loopFrom == 6.0 && r.svc->model().transport.loopTo == 10.0);
+    // an end resizes it; it never crosses the other end
+    r.drag(tw.x + tl.beatToX(10.0), low, tw.x + tl.beatToX(12.0), low, 6);
+    assert(r.sent.back() == "transport loop 6 12");
+    r.settle();
+    r.drag(tw.x + tl.beatToX(6.0), low, tw.x + tl.beatToX(20.0), low, 6);
+    assert(r.sent.back() == "transport loop " + Timeline::beatText(12.0 - step) + " 12");
+    r.settle();
+    // a click is still a seek (R-TIME-5), and the playhead eases there
+    r.click(tw.x + tl.beatToX(3.0), top);
+    r.frame();
+    assert(r.sent.back() == "transport seek 3");
+    r.settle();
+    assert(tl.playheadBeat() == 3.0);
+    pass("The ruler dragged: the playhead is the pointer's on the grid, a seek at each line, playing or not, staying where let go; the loop's brace moved by its body and resized by an end, one `transport loop` on release; a click still seeks (R-TIME-6)");
+}
+
 static void test_a_sample_dropped_on_a_sampler_loads_it()
 {
     sltest::Rig r("ui-sampler", 1280, 800);
@@ -1617,6 +1696,7 @@ int main()
     test_a_line_added_and_sources_relinked();
     test_a_strip_keys_a_later_compressor();
     test_the_loop_region_on_the_ruler();
+    test_the_ruler_is_dragged();
     test_a_sample_dropped_on_a_sampler_loads_it();
     test_a_sample_is_heard_from_the_browser();
     test_the_grid_follows_the_zoom();

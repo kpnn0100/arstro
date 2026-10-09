@@ -426,6 +426,25 @@ namespace
                  const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
                  r.drag(tw.x + tl.beatToX(2.0), ruler.y + ruler.h * 0.5, tw.x + tl.beatToX(6.6), ruler.y + ruler.h * 0.5, 6, false, true);
              }},
+            {"ruler-scrubbing", // R-TIME-6: the playhead held by the pointer on the ruler
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect ruler = world(tl, tl.rulerRect());
+                 const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
+                 r.drag(tw.x + tl.beatToX(1.0), ruler.y + ruler.h * 0.25, tw.x + tl.beatToX(5.3), ruler.y + ruler.h * 0.25, 6, false);
+             }},
+            {"loop-brace-moving", // R-TIME-6: the loop's brace taken by its body, mid-drag
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("transport loop 4 8");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect ruler = world(tl, tl.rulerRect());
+                 const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
+                 r.drag(tw.x + tl.beatToX(5.0), ruler.y + ruler.h * 0.75, tw.x + tl.beatToX(8.0), ruler.y + ruler.h * 0.75, 6, false);
+             }},
             {"mixer-sidechain",   // the kick keys the bass's compressor; a limiter on the master (R-MIX-15, R-EDM-4)
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

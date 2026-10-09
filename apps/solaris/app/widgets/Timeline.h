@@ -81,6 +81,7 @@ namespace solaris_ui
         static constexpr double kGridHidePx = 6.0;  // a level's lines closer than this: not drawn
         static constexpr double kGridFullPx = 16.0; // … this far apart or more: fully drawn (smoothstep between)
         static constexpr double kSnapPx = 11.0;     // the snap step: the finest level at least this far apart (half drawn)
+        static constexpr double kBraceGrip = 6.5;   // space::u(2): the loop brace's end is taken within this (R-TIME-6)
         static constexpr double kZoomPpb = 28.0;    // the zoom a song opens at, px a beat
         static constexpr int kZoomOutSteps = 8, kZoomInSteps = 14; // Ctrl+wheel: ×1.25 a step — 4.7 … 637 px a beat
 
@@ -132,6 +133,10 @@ namespace solaris_ui
         artboard::Rect loopRect() const;                       // the brace on the ruler; empty when there is none
         double loopAmount() const { return mLoopAmt.value(); } // LIVE presence, 0 … 1
         double loopFromLive() const { return mLoopA.value(); } // LIVE, beats
+        double loopToLive() const { return mLoopB.value(); }   // LIVE, beats
+        // the ruler dragged (R-TIME-6): the playhead is the pointer's while held
+        bool scrubbing() const { return mRuler == RulerDrag::Scrub; }
+        bool braceDragging() const { return mRuler == RulerDrag::LoopBody || mRuler == RulerDrag::LoopFrom || mRuler == RulerDrag::LoopTo; }
 
         // automation rows (R-AUTO-6), local geometry as DRAWN
         int autoCount() const { return (int)mAutoIds.size(); }
@@ -281,6 +286,15 @@ namespace solaris_ui
         artboard::AnimatedProperty mLoopA{0.0}, mLoopB{0.0}, mLoopAmt{0.0};
         bool mLoopInit = false, mLoopOnLast = false, mLoopDragging = false;
         double mLoopGrab = 0, mLoopLive = 0;
+        // the ruler dragged (R-TIME-6): a press waits to see whether it is a click (a seek — R-TIME-5 — or
+        // clearing the loop) or a drag, and a drag decides once, by where it began, what it moves
+        enum class RulerDrag { None, Pending, Scrub, LoopBody, LoopFrom, LoopTo };
+        RulerDrag mRuler = RulerDrag::None, mRulerZone = RulerDrag::None;
+        double mRulerDownBeat = 0.0;
+        double mScrubBeat = 0.0, mScrubSent = -1.0;   // the pointer's beat on the grid; the last one sent
+        double mBraceA0 = 0.0, mBraceB0 = 0.0;        // the brace's span when it was taken
+        double mBraceA = 0.0, mBraceB = 0.0;          // … and where the pointer has it
+        bool rulerGesture(const artboard::Gesture &g, const artboard::Point &local);
     };
 }
 }

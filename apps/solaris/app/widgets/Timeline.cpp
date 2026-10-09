@@ -305,7 +305,8 @@ namespace solaris_ui
     {
         mNowMs = nowMs;
         if (!mInit) { mPlayhead.set(mPosition); mInit = true; }
-        if (mPlaying) mPlayhead.set(mPosition); // continuous: it follows the audio, not a tween
+        if (mRuler == RulerDrag::Scrub) mPlayhead.set(mScrubBeat); // the pointer is the animation (R-TIME-6)
+        else if (mPlaying) mPlayhead.set(mPosition); // continuous: it follows the audio, not a tween
         else if (std::fabs(mPlayhead.value() - mPosition) > 1e-6 && !mPlayhead.isAnimating())
             mPlayhead.animateTo(mPosition, 140.0, Easing::EaseOutCubic, nowMs); // a seek eases
         mPlayhead.update(nowMs);
@@ -449,13 +450,14 @@ namespace solaris_ui
     void Timeline::loopSpan(double &a, double &b) const
     {
         if (mLoopDragging) { a = std::min(mLoopGrab, mLoopLive); b = std::max(mLoopGrab, mLoopLive); return; }
+        if (braceDragging()) { a = mBraceA; b = mBraceB; return; } // the pointer's (R-TIME-6)
         a = mLoopA.value();
         b = mLoopB.value();
     }
 
     Rect Timeline::loopRect() const
     {
-        if (!mLoopDragging && mLoopAmt.value() <= 0.001) return Rect{};
+        if (!mLoopDragging && !braceDragging() && mLoopAmt.value() <= 0.001) return Rect{};
         double a, b;
         loopSpan(a, b);
         return Rect{beatToX(a), kRulerH - 7.0, std::max(0.0, beatToX(b) - beatToX(a)), 5.0};
@@ -510,9 +512,102 @@ namespace solaris_ui
         }
     }
 
+    bool Timeline::rulerGesture(const Gesture &g, const Point &local)
+    {
+        // R-TIME-6: a drag on the ruler. A press waits — a click is still the seek (R-TIME-5) or clears the
+        // loop (R-EDM-7) — and the drag decides once, by where it began: on the brace's end or body (its
+        // lower half) it moves the loop, ONE `transport loop` on release; anywhere else the playhead is the
+        // pointer's, on the grid you see, with a seek at each new line (as a fader sends each step) so a
+        // playing song is heard from there. A Shift-drag is the loop's own (loopGesture).
+        switch (g.type)
+        {
+        case Gesture::Type::Down:
+        {
+            mRuler = RulerDrag::None;
+            if (!rulerRect().contains(local) || g.shift) return false;
+            mRuler = RulerDrag::Pending;
+            mRulerDownBeat = xToBeat(local.x);
+            mPressClip.clear();
+            mRulerZone = RulerDrag::Scrub;
+            const Rect br = loopRect();
+            if (br.w > 0 && mLoopTo > mLoopFrom && local.y >= kRulerH * 0.5)
+            {
+                if (std::fabs(local.x - br.x) <= kBraceGrip) mRulerZone = RulerDrag::LoopFrom;
+                else if (std::fabs(local.x - br.right()) <= kBraceGrip) mRulerZone = RulerDrag::LoopTo;
+                else if (local.x > br.x && local.x < br.right()) mRulerZone = RulerDrag::LoopBody;
+            }
+            return true;
+        }
+        case Gesture::Type::DragStart:
+            if (mRuler != RulerDrag::Pending) return mRuler != RulerDrag::None;
+            mRuler = mRulerZone;
+            if (mRuler == RulerDrag::Scrub) mScrubSent = -1.0;
+            else
+            {
+                mBraceA0 = mBraceA = mLoopFrom;
+                mBraceB0 = mBraceB = mLoopTo;
+            }
+            [[fallthrough]];
+        case Gesture::Type::Drag:
+        {
+            if (mRuler == RulerDrag::None || mRuler == RulerDrag::Pending) return false;
+            const double beat = xToBeat(local.x);
+            if (mRuler == RulerDrag::Scrub)
+            {
+                mScrubBeat = snap(beat);
+                if (mScrubBeat != mScrubSent && onCommand)
+                {
+                    mScrubSent = mScrubBeat;
+                    onCommand("transport seek " + beats(mScrubBeat));
+                }
+                return true;
+            }
+            // the brace: moved by its body (its length kept), resized by an end — never shorter than a step
+            const double d = beat - mRulerDownBeat, minLen = std::max(snapStep(), 1.0 / kPpq);
+            if (mRuler == RulerDrag::LoopBody)
+            {
+                mBraceA = snap(mBraceA0 + d);
+                mBraceB = mBraceA + (mBraceB0 - mBraceA0);
+            }
+            else if (mRuler == RulerDrag::LoopFrom) mBraceA = std::min(snap(mBraceA0 + d), mBraceB0 - minLen);
+            else mBraceB = std::max(snap(mBraceB0 + d), mBraceA0 + minLen);
+            return true;
+        }
+        case Gesture::Type::Up:
+        case Gesture::Type::Drop:
+        {
+            const RulerDrag was = mRuler;
+            mRuler = RulerDrag::None;
+            if (was == RulerDrag::None || was == RulerDrag::Pending) return false; // a click: the seek, or clearing the loop
+            if (was == RulerDrag::Scrub)
+            {
+                mPlayhead.set(mScrubBeat); // where it was let go — the pointer was the animation
+                if (mScrubBeat != mScrubSent && onCommand) onCommand("transport seek " + beats(mScrubBeat));
+                return true;
+            }
+            // the brace stays where it was let go, then the one line; a refusal eases it home
+            mLoopA.set(mBraceA);
+            mLoopB.set(mBraceB);
+            mLoopAmt.set(1.0);
+            mLoopALast = mBraceA;
+            mLoopBLast = mBraceB;
+            mLoopOnLast = true;
+            if ((mBraceA != mBraceA0 || mBraceB != mBraceB0) && onCommand)
+                onCommand("transport loop " + beats(mBraceA) + " " + beats(mBraceB));
+            return true;
+        }
+        case Gesture::Type::Click:
+            mRuler = RulerDrag::None;
+            return false;
+        default:
+            return false;
+        }
+    }
+
     bool Timeline::handleGesture(const Gesture &g, const Point &local)
     {
         if (autoGesture(g, local)) return true; // an automation row's curve and points (R-AUTO-6)
+        if (rulerGesture(g, local)) return true; // the ruler dragged: the playhead, the loop's brace (R-TIME-6)
         if (loopGesture(g, local)) return true; // the loop region on the ruler (R-EDM-7)
         switch (g.type)
         {

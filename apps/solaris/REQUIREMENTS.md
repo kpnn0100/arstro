@@ -241,7 +241,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   `clip move <ac> --lane <ln> [--at <b>]`; an audio clip dragged onto an instrument's track is refused
   (it eases home), a note clip onto a plain lane keeps its instrument (organisation, R-LANE-1).
 
-## R-TIME — transport and time — ✅ BUILT (1–4: DR-PLAY-1, the metronome DR-EDM-2, the loop region on the ruler DR-EDM-7) — 5 ✅ (the ruler on the grid, DR-UI-10) — 🚧 6 (the ruler dragged, E2)
+## R-TIME — transport and time — ✅ BUILT (1–4: DR-PLAY-1, the metronome DR-EDM-2, the loop region on the ruler DR-EDM-7) — 5 ✅ (the ruler on the grid, DR-UI-10) — 6 ✅ (the ruler dragged, DR-TIME-6)
 
 - **R-TIME-1 Beats are authoritative**, 960 PPQ; seconds are derived from the tempo (was SR-TIME-1).
 - **R-TIME-2 One tempo and one meter** per project; a tempo/meter map is reserved (was SR-TIME-2/5).

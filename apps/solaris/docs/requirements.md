@@ -1155,3 +1155,24 @@ refused. The lanes draw it through Interstellar's `AnimatedRows`, keyed by lane,
 (DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:1710`: to the top and back,
 renumbered, refused out of range, undone) and, drawn, by `test_instrument_drop_and_clip_drag`
 (`app/tests/ui/uiTests.cpp:220`: a lane moved from a shell slides to the top with its clip, caught mid-tween).
+
+### DR-TIME-6 The ruler dragged (R-TIME-6)
+`Timeline::rulerGesture` (`app/widgets/Timeline.cpp:515`, called first in `handleGesture`, `:610`) takes a
+press on the ruler without Shift and waits: a click is still the seek (R-TIME-5) or clears the loop
+(R-EDM-7). A drag decides ONCE, by where it began: within `kBraceGrip` (6.5 px) of an end of the loop's
+brace, or on its body, in the ruler's lower half (`:535`), it moves the loop; anywhere else it scrubs.
+Scrubbing, the playhead is the pointer's on the snap step (`advance`, `:308`, overrides both the eased
+seek and following the audio while it is held) and a `transport seek` goes at each new line — a fader
+sends each step the same way; a seek is transport, not an edit, so no undo step and the song stays
+saved — and once more on release if the last line was not sent; the playhead is `set` there, so
+nothing eases back. The brace is the pointer's while held (`loopSpan`, `loopRect`), moved with its length
+kept or resized never shorter than one step, and ONE `transport loop <a> <b>` goes on release (`:596`),
+the brace placed where it was let go so the model's echo moves nothing.
+
+Guarded by `test_the_ruler_is_dragged` (`app/tests/ui/uiTests.cpp:1193`): held, the playhead equals the
+snapped pointer beat exactly and four or more seeks were sent; let go, it stays; PLAYING, it stays the
+pointer's frame after frame and the song plays on from there; the brace moved 4–8 → 6–10, nothing sent
+until release, then one line; resized by its right end, clamped at its left; a click still seeks. Mutants
+seen red, then restored: the playhead following the audio while scrubbing, a seek only on release, a body
+drag keeping the brace's end. Shots `ruler-scrubbing` and `loop-brace-moving`
+(`app/tests/shots/renderShots.cpp:429`, `:438`), both sizes, looked at.
