@@ -197,7 +197,7 @@ card — placed from the LIVE card widths, so it slides as cards grow in and shr
 and every instrument of the registry, each ONE `strip add --kind … [--instrument <type>] --mixer
 <mx>` (`MixerDock::openAddLine`, `MixerDock.cpp:709`); the new card grows in. A strip's menu offers
 "Move its clips to ▸" when it has clips and another strip of its kind exists — a second menu of those
-strips → `strip relink` (`MixerDock.cpp:961`). On the lanes a clip's menu (`Timeline.cpp:392`) offers
+strips → `strip relink` (`MixerDock.cpp:961`). On the lanes a clip's menu (`Timeline.cpp:497`) offers
 "Play through ▸" — the strips of its kind, the current one marked "now" → `clip move <ac> --strip
 <ch>` — then Piano Roll (a note clip), Duplicate, Delete.
 
@@ -330,17 +330,17 @@ fill, the close). The window ran on this machine's display (`solaris song.slp`, 
 (234 px), `Timeline` (`app/widgets/Timeline.cpp`) filling the rest. A row per lane in lane order,
 then a row per strip whose clips have no lane ("its strip's row"); a lane with no colour wears its
 first clip's. A clip is drawn on its row, coloured by its STRIP (`surface::track`), its name pinned
-to the visible edge when it begins off-screen (`paintClip`, `:443`); a note clip draws its
+to the visible edge when it begins off-screen (`paintClip`, `:548`); a note clip draws its
 pattern's notes repeated where it loops, the seams marked, and "linked ×N" when it shares its
 pattern. Ruler: bars from 1, labels thinned as it zooms out. The playhead is `destructive`; it
 follows the transport while playing and eases 140 ms on a seek. Ctrl+wheel zooms 4–320 px/beat,
-eased 220 ms and anchored at the pointer (`:426`); the wheel scrolls, Shift+wheel sideways. A clip
+eased 220 ms and anchored at the pointer (`:531`); the wheel scrolls, Shift+wheel sideways. A clip
 dragged follows the pointer exactly, snapped to 1/4 beat, between LANES only, and lands as `clip
-move <ac> --at <b> [--lane <ln>]` (`:363`) where it was let go. A click selects (the teal ring
+move <ac> --at <b> [--lane <ln>]` (`:468`) where it was let go. A click selects (the teal ring
 cross-fades 200 ms between clips); Delete/Backspace → `clip delete`, Ctrl+D → `clip duplicate`
-(`app/App.cpp:295`); a ruler click → `transport seek <b>`, snapped (`Timeline.cpp:383`). **The picture travels
+(`app/App.cpp:295`); a ruler click → `transport seek <b>`, snapped (`Timeline.cpp:488`). **The picture travels
 (§1):** the rows are Interstellar's `AnimatedRows` keyed by lane; each clip keeps an eased beat, row
-and opacity keyed by its id (`Timeline::advance`, `Timeline.cpp:229`) — it fades in when it arrives, fades out where it
+and opacity keyed by its id (`Timeline::advance`, `Timeline.cpp:231`) — it fades in when it arrives, fades out where it
 was when it goes (taking no input), eases 200 ms with its row when moved from a shell; the zebra
 follows the LIVE slot, a stripe's colour cross-fades, the empty-state words fade. Another song
 places everything where it is. Empty, it says what to do in words.
@@ -507,7 +507,7 @@ strip's name (double-click) in the dock open them; a chip is outlined while its 
 Placement and stacking are the view's. The dock's floating panel is gone (R-UI-5 amended).
 
 ### DR-AUTO-5 Automation on the timeline (R-AUTO-6)
-`Timeline` (`app/widgets/Timeline.cpp:89`) appends a row per automation after the lanes, keyed
+`Timeline` (`app/widgets/Timeline.cpp:91`) appends a row per automation after the lanes, keyed
 `auto:<au>` in the same `AnimatedRows` (a lane added slides them down; a new one grows in), its header
 the accent stripe, its name and the address that reads it. `TimelineAuto.cpp` draws the curve over the
 beat grid — holding the first value before the first point and the last after, linear / hold / smooth
@@ -531,7 +531,7 @@ device type its named keys (`deviceTypes[].noteNames`, `core/service/ServiceMode
 registry's (REQ-device-6: the Drum Machine's ten pads, Kick = 36 …).
 **The window.** `PianoRoll` (`app/widgets/PianoRoll.cpp`) is the content of a `roll:<pt>` window
 (`WindowLayer::openRoll`, `app/widgets/FloatWindow.cpp:147`), opened by double-clicking a note clip
-(`Timeline.cpp:388`) or by an instrument window's "Piano Roll" (`DevicePanel.cpp:443` — the strip's
+(`Timeline.cpp:493`) or by an instrument window's "Piano Roll" (`DevicePanel.cpp:443` — the strip's
 pattern; a menu when it plays several; `clip add --strip` and then its roll when it has none). Titled
 "Piano Roll — <pattern> · <strip>"; a pattern gone closes it. A toolbar: snap 1/4 · 1/8 · 1/16
 (default) · 1/32 · Off, Notes | Steps, Quantize… (a menu of three lines: straight, swing 25 %, 50 %, at
@@ -605,4 +605,14 @@ beats, and a render with it on equals one with it off byte for byte.
 The DSP library's `limiter` (REQ-fx-limiter-1: gain, ceiling, release, lookahead — its latency) is a
 registry effect, so it is in "+ Effect", on the master or a strip, with no Solaris code; the output
 never exceeds its ceiling by construction (measured in the DSP suites).
+
+### DR-EDM-7 The loop region on the ruler (R-EDM-7, R-TIME-4)
+`Timeline` draws the model's `transport.loopFrom … loopTo` as a brace on the ruler, its ends marked, in
+the accent, and tints the region on the lanes under the clips (`app/widgets/Timeline.cpp:638`, `:744`;
+`loopRect`, `:365`). It is eased (`:243`): it fades in where it is when a loop appears, fades out when
+it goes, and a loop changed by anyone moves there over 220 ms. `loopGesture` (`:373`): Shift-drag on the
+ruler draws the brace under the pointer (both ends snapped to the quarter-beat, like a seek) and sends
+ONE `transport loop <from> <to>` on release, the brace staying where it was let go; a click inside the
+brace sends `transport loop off`; a plain click elsewhere on the ruler still seeks. The engine already
+loops (DR-PLAY-1), so the playhead wraps at the brace's end while playing.
 

@@ -939,6 +939,54 @@ static void test_a_strip_keys_a_later_compressor()
     pass("Sidechain: a strip's menu keys a later strip in one `send add --sidechain`, offering exactly the service's keyTargets (R-MIX-15)");
 }
 
+static void test_the_loop_region_on_the_ruler()
+{
+    sltest::Rig r("ui-loop", 1280, 800);
+    r.cmd("project new " + r.song("Loop") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 16");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    assert(tl.loopRect().w == 0.0);
+    // a shell's loop: the brace fades in where it is, then MOVES eased when changed
+    r.cmd("transport loop 4 8");
+    r.frame();
+    r.frame();
+    assert(tl.loopAmount() > 0.0 && tl.loopAmount() < 1.0);
+    r.settle();
+    assert(tl.loopAmount() == 1.0 && std::fabs(tl.loopRect().x - tl.beatToX(4.0)) < 0.5 && std::fabs(tl.loopRect().right() - tl.beatToX(8.0)) < 0.5);
+    r.cmd("transport loop 2 6");
+    r.frame();
+    r.frame();
+    assert(tl.loopFromLive() < 4.0 && tl.loopFromLive() > 2.0);
+    r.settle();
+    assert(std::fabs(tl.loopFromLive() - 2.0) < 1e-9);
+    // Shift-drag on the ruler: the brace is the pointer's while held; ONE line on release; it stays
+    const artboard::Rect ruler = world(tl, tl.rulerRect());
+    const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
+    const double y = cy(ruler);
+    r.drag(tw.x + tl.beatToX(9.1), y, tw.x + tl.beatToX(12.9), y, 6, false, true);
+    assert(std::fabs(tl.loopRect().x - tl.beatToX(9.0)) < 0.5 && std::fabs(tl.loopRect().right() - tl.beatToX(13.0)) < 0.5);
+    r.app->pointer(2, tw.x + tl.beatToX(12.9), y, 0, r.now, false, true);
+    r.frame();
+    assert(sentLine(r, "transport loop 9 13"));
+    assert(std::fabs(tl.loopRect().x - tl.beatToX(9.0)) < 0.5); // where it was let go: nothing jumps
+    r.settle();
+    assert(r.svc->model().transport.loopFrom == 9.0 && r.svc->model().transport.loopTo == 13.0);
+    // a click inside the brace clears it — and it fades out
+    const artboard::Rect br = world(tl, tl.loopRect());
+    r.click(cx(br), cy(br));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "transport loop off") && tl.loopAmount() > 0.0 && tl.loopAmount() < 1.0);
+    r.settle();
+    assert(tl.loopAmount() == 0.0 && r.svc->model().transport.loopTo <= r.svc->model().transport.loopFrom);
+    // a plain click on the ruler still seeks
+    r.click(tw.x + tl.beatToX(3.0), y);
+    r.settle();
+    assert(sentLine(r, "transport seek 3"));
+    pass("Loop region: a shell's loop fades in and moves eased; Shift-drag on the ruler is the pointer's, one `transport loop` on release, staying; a click inside clears it, fading; a plain click seeks (R-EDM-7)");
+}
+
 static void test_ruler_seek_keys_and_selection()
 {
     sltest::Rig r("ui-ruler", 1280, 800);
@@ -988,6 +1036,7 @@ int main()
     test_a_kits_roll_names_its_pads();
     test_a_line_added_and_sources_relinked();
     test_a_strip_keys_a_later_compressor();
+    test_the_loop_region_on_the_ruler();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

@@ -35,6 +35,8 @@ namespace solaris_ui
         mLength = m.lengthBeats;
         mPosition = m.transport.position;
         mPlaying = m.transport.playing;
+        mLoopFrom = m.transport.loopFrom;
+        mLoopTo = m.transport.loopTo;
         if (m.projectPath != mSong)
         {
             // another song: nothing of the last one may travel into it
@@ -42,7 +44,7 @@ namespace solaris_ui
             mRowMotion = interstellar_v1::AnimatedRows<Row>();
             mLive.clear();
             mStripes.clear();
-            mEver = mBound = mEmptyInit = false;
+            mEver = mBound = mEmptyInit = mLoopInit = false;
         }
         std::map<std::string, int> colourOf; // the service resolves a strip's colour (stable by id)
         for (const auto &st : m.strips) colourOf[st.id] = st.colour;
@@ -238,6 +240,44 @@ namespace solaris_ui
         mSelIn.update(nowMs);
         mSelOut.update(nowMs);
         mDropAmt.update(nowMs);
+        // the loop region: appears and goes with a fade; moved by anyone it eases there (§1)
+        {
+            const bool on = mLoopTo > mLoopFrom;
+            if (!mLoopInit)
+            {
+                mLoopA.set(mLoopFrom);
+                mLoopB.set(mLoopTo);
+                mLoopAmt.set(on ? 1.0 : 0.0);
+                mLoopALast = mLoopFrom;
+                mLoopBLast = mLoopTo;
+                mLoopOnLast = on;
+                mLoopInit = true;
+            }
+            if (on != mLoopOnLast)
+            {
+                mLoopAmt.animateTo(on ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+                mLoopOnLast = on;
+            }
+            if (on && (mLoopFrom != mLoopALast || mLoopTo != mLoopBLast))
+            {
+                if (mLoopAmt.value() <= 0.001)
+                {
+                    // from nothing: it fades in where it is — there is nowhere to travel from
+                    mLoopA.set(mLoopFrom);
+                    mLoopB.set(mLoopTo);
+                }
+                else
+                {
+                    mLoopA.animateTo(mLoopFrom, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs);
+                    mLoopB.animateTo(mLoopTo, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs);
+                }
+                mLoopALast = mLoopFrom;
+                mLoopBLast = mLoopTo;
+            }
+            mLoopA.update(nowMs);
+            mLoopB.update(nowMs);
+            mLoopAmt.update(nowMs);
+        }
         for (auto &kv : mAutos)
         {
             AutoLive &l = kv.second;
@@ -315,9 +355,74 @@ namespace solaris_ui
         Segment::advance(nowMs);
     }
 
+    void Timeline::loopSpan(double &a, double &b) const
+    {
+        if (mLoopDragging) { a = std::min(mLoopGrab, mLoopLive); b = std::max(mLoopGrab, mLoopLive); return; }
+        a = mLoopA.value();
+        b = mLoopB.value();
+    }
+
+    Rect Timeline::loopRect() const
+    {
+        if (!mLoopDragging && mLoopAmt.value() <= 0.001) return Rect{};
+        double a, b;
+        loopSpan(a, b);
+        return Rect{beatToX(a), kRulerH - 7.0, std::max(0.0, beatToX(b) - beatToX(a)), 5.0};
+    }
+
+    bool Timeline::loopGesture(const Gesture &g, const Point &local)
+    {
+        // R-EDM-7: Shift-drag on the ruler sets the loop — the brace is the pointer's while held, ONE
+        // `transport loop` on release, where it was let go; a click inside the brace clears it
+        switch (g.type)
+        {
+        case Gesture::Type::Down:
+            if (!rulerRect().contains(local) || !g.shift) return false;
+            mLoopDragging = true;
+            mLoopGrab = mLoopLive = snap(xToBeat(local.x));
+            return true;
+        case Gesture::Type::DragStart:
+        case Gesture::Type::Drag:
+            if (!mLoopDragging) return false;
+            mLoopLive = snap(xToBeat(local.x));
+            return true;
+        case Gesture::Type::Up:
+        case Gesture::Type::Drop:
+        {
+            if (!mLoopDragging) return false;
+            double a, b;
+            loopSpan(a, b);
+            mLoopDragging = false;
+            if (b - a < 0.25) return true; // a Shift-click: no region
+            mLoopA.set(a);
+            mLoopB.set(b);
+            mLoopAmt.set(1.0);
+            mLoopALast = a;
+            mLoopBLast = b;
+            mLoopOnLast = true;
+            if (onCommand) onCommand("transport loop " + beats(a) + " " + beats(b));
+            return true;
+        }
+        case Gesture::Type::Click:
+        {
+            if (!rulerRect().contains(local) || g.shift) return g.shift && rulerRect().contains(local);
+            const Rect br = loopRect();
+            if (br.w > 0 && local.x >= br.x && local.x <= br.right() && mLoopTo > mLoopFrom)
+            {
+                if (onCommand) onCommand("transport loop off");
+                return true;
+            }
+            return false; // outside the brace: the ruler's own click (a seek)
+        }
+        default:
+            return false;
+        }
+    }
+
     bool Timeline::handleGesture(const Gesture &g, const Point &local)
     {
         if (autoGesture(g, local)) return true; // an automation row's curve and points (R-AUTO-6)
+        if (loopGesture(g, local)) return true; // the loop region on the ruler (R-EDM-7)
         switch (g.type)
         {
         case Gesture::Type::Move:
@@ -530,6 +635,16 @@ namespace solaris_ui
         }
         t.restore();
 
+        // the loop region, tinted under the clips (R-EDM-7)
+        if (const Rect br = loopRect(); br.w > 0)
+        {
+            const double la = mLoopDragging ? 1.0 : mLoopAmt.value();
+            t.save();
+            t.clipRect(kHeaderW, kRulerH, W - kHeaderW, H - kRulerH);
+            drawRoundedRect(t, Rect{br.x, kRulerH, br.w, H - kRulerH}, 0.0, Paint::filled(palette::primaryAlpha(0.07 * la)));
+            t.restore();
+        }
+
         // clips
         t.save();
         t.clipRect(kHeaderW, kRulerH, W - kHeaderW, H - kRulerH);
@@ -624,6 +739,17 @@ namespace solaris_ui
             {
                 t.setFill(palette::mutedForeground());
                 t.drawText(std::to_string(bar), x + 4.0, 13.0, 9.0, font::mono());
+            }
+        }
+        // the loop's brace on the ruler, with its ends
+        if (const Rect br = loopRect(); br.w > 0)
+        {
+            const double la = mLoopDragging ? 1.0 : mLoopAmt.value();
+            drawRoundedRect(t, br, radius::control(), Paint::filled(palette::primaryAlpha(0.85 * la)));
+            t.setStroke(palette::primaryAlpha(la), 1.5);
+            for (double x : {br.x, br.right()})
+            {
+                t.beginPath(); t.moveTo(std::round(x) + 0.5, 3.0); t.lineTo(std::round(x) + 0.5, kRulerH); t.strokePath();
             }
         }
         t.restore();

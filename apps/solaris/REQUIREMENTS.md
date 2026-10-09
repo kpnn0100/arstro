@@ -190,7 +190,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 - **R-CLIP-4 Clips may overlap** on a lane; overlapping audio sums (was SR-CLIP-4).
 - **R-CLIP-5 Reserved:** time-stretch and pitch-shift (was SR-CLIP-3).
 
-## R-TIME — transport and time — 🚧 IN PROGRESS (1–4 ✅: DR-PLAY-1, the metronome DR-EDM-2; 4's loop region on the ruler with B10)
+## R-TIME — transport and time — ✅ BUILT (1–4: DR-PLAY-1, the metronome DR-EDM-2, the loop region on the ruler DR-EDM-7)
 
 - **R-TIME-1 Beats are authoritative**, 960 PPQ; seconds are derived from the tempo (was SR-TIME-1).
 - **R-TIME-2 One tempo and one meter** per project; a tempo/meter map is reserved (was SR-TIME-2/5).
@@ -409,7 +409,7 @@ controller, normalised parameters and saved state.
 - **R-VST-6 Reserved:** hosting other makers' VST3 in Solaris (scan `~/.vst3`, load, process, their
   editor window) — host work (R-SVC-4).
 
-## R-EDM — what a professional EDM DAW needs (user request, 2026-10-09: *"suggest all necessary features"*) — 🚧 IN PROGRESS (1 ✅ DR-EDM-1; 2 ✅ DR-EDM-2; 3 ✅ with R-MIX-15, DR-MIX-15; 4 ✅ DR-EDM-4; 5 ✅ with R-AUTO, DR-AUTO-2; 6 ✅ with R-ROLL, DR-ROLL-1)
+## R-EDM — what a professional EDM DAW needs (user request, 2026-10-09: *"suggest all necessary features"*) — 🚧 IN PROGRESS (1 ✅ DR-EDM-1; 2 ✅ DR-EDM-2; 3 ✅ with R-MIX-15, DR-MIX-15; 4 ✅ DR-EDM-4; 5 ✅ with R-AUTO, DR-AUTO-2; 6 ✅ with R-ROLL, DR-ROLL-1; 7 ✅ DR-EDM-7)
 
 **Built with this brief:**
 - **R-EDM-1 Undo and redo** of every edit — `undo`, `redo`; Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y; the model

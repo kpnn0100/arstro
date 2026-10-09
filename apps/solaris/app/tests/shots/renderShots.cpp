@@ -270,6 +270,21 @@ namespace
                  wl.roll("pt_1")->setMode(arstro::solaris_ui::PianoRoll::Steps);
                  r.settle();
              }},
+            {"loop-region",   // R-EDM-7: the brace on the ruler, the region tinted on the lanes
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("transport loop 4 12");
+                 r.settle();
+             }},
+            {"loop-dragging", // mid Shift-drag: the brace is the pointer's
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect ruler = world(tl, tl.rulerRect());
+                 const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
+                 r.drag(tw.x + tl.beatToX(2.0), ruler.y + ruler.h * 0.5, tw.x + tl.beatToX(6.6), ruler.y + ruler.h * 0.5, 6, false, true);
+             }},
             {"mixer-sidechain",   // the kick keys the bass's compressor; a limiter on the master (R-MIX-15, R-EDM-4)
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

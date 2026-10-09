@@ -34,6 +34,7 @@ helpers it borrows.
 | Browser › an effect dragged onto the lanes | nothing; a notice (effects go on a strip — U3) |
 | Lanes › a clip dragged | `clip move <ac> [--at <beat>] [--lane <ln>]` on release (snapped to 1/4 beat; between lanes only) |
 | Lanes › a ruler click | `transport seek <beat>` (snapped to 1/4 beat) |
+| Lanes › Shift-drag on the ruler · a click inside the loop's brace | `transport loop <from> <to>` on release (both snapped) · `transport loop off` |
 | Lanes › a click on a clip | nothing — selection is the view's (U4 links it to the strip) |
 | Lanes › Delete / Backspace with a clip selected | `clip delete <ac>` |
 | Lanes › Ctrl+D with a clip selected | `clip duplicate <ac>` (a note clip's copy is linked) |
@@ -77,7 +78,7 @@ song) · settings-open · settings-mid-open (mid-fade) · settings-chip-changing
 mid-ease) · project-open · home-to-project-mid (mid cross-fade) · toast-refusal ·
 browser-instruments · browser-folder · drag-sample-mid (the ghost and the drop hint) ·
 clip-dragging · clip-selected-zoomed · menu-file-open (Edit open, naming its undo) · mixer-sources · mixer-buses · mixer-tab-mid (pages mid
-cross-fade) · mixer-matrix · mixer-folded · device-panel (its window) · device-window-bound (two windows, a bound row, the last change lit) · automation-rows (two curves: smooth, hold, log Hz) · piano-roll (a bassline, velocities) · piano-roll-note-in (a note mid-fade) · step-mode (a kit's pads, a beat) · mixer-sidechain (a key in amber, a limiter on the master) · mixer-add-line (the "+ Line" menu) · clip-play-through (a clip's "Play through ▸") · dock-folded · confirm-unsaved.
+cross-fade) · mixer-matrix · mixer-folded · device-panel (its window) · device-window-bound (two windows, a bound row, the last change lit) · automation-rows (two curves: smooth, hold, log Hz) · piano-roll (a bassline, velocities) · piano-roll-note-in (a note mid-fade) · step-mode (a kit's pads, a beat) · loop-region (the brace and the tint) · loop-dragging (mid Shift-drag) · mixer-sidechain (a key in amber, a limiter on the master) · mixer-add-line (the "+ Line" menu) · clip-play-through (a clip's "Play through ▸") · dock-folded · confirm-unsaved.
 Each at 1440×900 and 1024×640. **Look at them** after a change.
 
 ## Borrowed, not copied

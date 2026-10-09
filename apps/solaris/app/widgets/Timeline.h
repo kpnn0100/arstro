@@ -85,6 +85,11 @@ namespace solaris_ui
         std::function<void(const std::string &patternId)> onOpenPattern; // a note clip double-clicked: its piano roll (R-ROLL-1)
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
 
+        // the loop region (R-EDM-7), as DRAWN
+        artboard::Rect loopRect() const;                       // the brace on the ruler; empty when there is none
+        double loopAmount() const { return mLoopAmt.value(); } // LIVE presence, 0 … 1
+        double loopFromLive() const { return mLoopA.value(); } // LIVE, beats
+
         // automation rows (R-AUTO-6), local geometry as DRAWN
         int autoCount() const { return (int)mAutoIds.size(); }
         artboard::Rect autoRowRect(const std::string &au) const;
@@ -150,6 +155,8 @@ namespace solaris_ui
         void paintCurve(artboard::IRenderTarget &t, const AutoLive &l, const std::vector<solaris::AutoPointModel> &pts, const artboard::Rect &row,
                         double alpha, bool handles) const;
         bool autoGesture(const artboard::Gesture &g, const artboard::Point &local);
+        bool loopGesture(const artboard::Gesture &g, const artboard::Point &local);
+        void loopSpan(double &a, double &b) const; // the brace's beats as drawn (the pointer's while dragged)
         std::string autoAt(double y) const;
         int pointNear(const std::string &au, const artboard::Point &local) const;
         const ClipLive *live(const std::string &id) const;
@@ -199,6 +206,11 @@ namespace solaris_ui
         int mDropRow = -1;
         std::string mDropLabel;
         artboard::AnimatedProperty mDropAmt{0.0};
+        // the loop: the model's, eased; a Shift-drag on the ruler is the pointer's
+        double mLoopFrom = 0, mLoopTo = 0, mLoopALast = 0, mLoopBLast = 0;
+        artboard::AnimatedProperty mLoopA{0.0}, mLoopB{0.0}, mLoopAmt{0.0};
+        bool mLoopInit = false, mLoopOnLast = false, mLoopDragging = false;
+        double mLoopGrab = 0, mLoopLive = 0;
     };
 }
 }

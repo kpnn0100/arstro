@@ -147,17 +147,17 @@ namespace sltest
         }
         void click(const artboard::Rect &r, int button = 0) { click(r.x + r.w * 0.5, r.y + r.h * 0.5, button); }
         /** press → several moves → release, a frame between each, as a hand would. */
-        void drag(double x0, double y0, double x1, double y1, int steps = 8, bool releaseIt = true)
+        void drag(double x0, double y0, double x1, double y1, int steps = 8, bool releaseIt = true, bool shift = false)
         {
-            app->pointer(1, x0, y0, 0, now);
-            app->pointer(0, x0, y0, 0, now);
+            app->pointer(1, x0, y0, 0, now, false, shift);
+            app->pointer(0, x0, y0, 0, now, false, shift);
             frame();
             for (int k = 1; k <= steps; ++k)
             {
-                app->pointer(1, x0 + (x1 - x0) * k / steps, y0 + (y1 - y0) * k / steps, 0, now);
+                app->pointer(1, x0 + (x1 - x0) * k / steps, y0 + (y1 - y0) * k / steps, 0, now, false, shift);
                 frame();
             }
-            if (releaseIt) { app->pointer(2, x1, y1, 0, now); frame(); }
+            if (releaseIt) { app->pointer(2, x1, y1, 0, now, false, shift); frame(); }
         }
         void key(int code, bool ctrl = false)
         {
