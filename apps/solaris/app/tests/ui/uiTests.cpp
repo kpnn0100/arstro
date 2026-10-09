@@ -987,6 +987,42 @@ static void test_the_loop_region_on_the_ruler()
     pass("Loop region: a shell's loop fades in and moves eased; Shift-drag on the ruler is the pointer's, one `transport loop` on release, staying; a click inside clears it, fading; a plain click seeks (R-EDM-7)");
 }
 
+static void test_a_sample_dropped_on_a_sampler_loads_it()
+{
+    sltest::Rig r("ui-sampler", 1280, 800);
+    r.cmd("folder add /music/Samples");
+    r.cmd("project new " + r.song("Sampler") + ".slp --bpm 120");
+    r.cmd("strip add --kind instrument --instrument sampler");     // ch_2, dv_1 — no sound yet
+    r.settle();
+    auto &wl = r.app->project().windows();
+    wl.openDevice("dv_1");
+    r.settle();
+    auto &panel = *wl.devicePanel("dv_1");
+    assert(panel.takesSample() && panel.sampleText() == "no sample \xE2\x80\x94 drop one here");
+    // a sample from the browser, dragged onto the sampler's window: it lights (eased), and the drop is ONE line
+    auto &b = r.app->project().browser();
+    r.click(world(b, b.rowRect(0)));
+    r.settle();
+    int kick = -1;
+    for (int i = 0; i < b.rowCount(); ++i)
+        if (b.row(i).label == "808 kick.wav") kick = i;
+    assert(kick > 0);
+    const artboard::Rect from = world(b, b.rowRect(kick));
+    const artboard::Rect win = world(*wl.window("dev:dv_1"), artboard::Rect{0, 0, wl.window("dev:dv_1")->width.value(), wl.window("dev:dv_1")->height.value()});
+    r.drag(cx(from), cy(from), cx(win), cy(win), 4, false);
+    assert(wl.samplerAt(artboard::Point{cx(win), cy(win)}) == "dv_1");
+    r.frame();                                                       // the tween began on the last move's frame
+    assert(panel.dropAmount() > 0.0 && panel.dropAmount() < 1.0);
+    r.settle();
+    assert(panel.dropAmount() == 1.0);
+    r.app->pointer(2, cx(win), cy(win), 0, r.now);
+    r.settle();
+    assert(sentLine(r, "set dv_1.sample=\"/music/Samples/808 kick.wav\""));
+    assert(panel.sampleText() == "sample 808 kick.wav" && panel.dropAmount() == 0.0);
+    assert(r.svc->model().clips.empty()); // it loaded the sampler; it did not place a clip
+    pass("Sampler: its window says it has no sound; a sample dragged onto it lights it (eased) and is ONE `set <dv>.sample=`; then it names the sound (R-EDM-8)");
+}
+
 static void test_ruler_seek_keys_and_selection()
 {
     sltest::Rig r("ui-ruler", 1280, 800);
@@ -1037,6 +1073,7 @@ int main()
     test_a_line_added_and_sources_relinked();
     test_a_strip_keys_a_later_compressor();
     test_the_loop_region_on_the_ruler();
+    test_a_sample_dropped_on_a_sampler_loads_it();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

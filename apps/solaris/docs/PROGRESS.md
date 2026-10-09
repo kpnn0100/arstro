@@ -11,22 +11,18 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-09 — B10: the loop region.*
+*Last updated: 2026-10-09 — B11: the sampler.*
 
 ---
 
 ## NEXT
 
-**► B11 — a sampler** (R-EDM-8), DSP first: a `Sampler` instrument in the library — one-shot and
-chromatic (root key, the pitch ratio 2^((note − root)/12) by linear-interpolated playback), an ADSR,
-start / end, reverse, velocity → level — fed its sound through a NEW device input: `DeviceType::takesSample`
-+ `Device::setSample(pcm, frames, channels, rate)` (the host decodes; the library never opens a file),
-its `## Math`, REQ-, unit + integration tests (a note an octave up plays at twice the rate, measured by
-its spectral peak). Then Solaris: a device node's `src=` (a sample path, relative to the song, as a clip's)
-in the `.slp`; `device add <ch> --type sampler --src <file>` and `set <dv>.src=`; the engine hands the
-decoded PCM in at build; the browser drops a sample onto an instrument line's rack as a sampler; the
-device window shows its sample's name. L2: a rendered note at the root equals the file, an octave up
-measures twice the frequency.
+**► B12 — audition in the browser** (R-EDM-9, R-BROWSE-2): a sample row in the browser plays when
+clicked (or on hover with Shift held) through the clock device, outside the song — `audition <file>` /
+`audition stop` in the grammar (a machine command, not an edit: no undo, no unsaved mark), the Player
+mixing the decoded file after the engine like the metronome, never in a render; the row shows it playing
+(an eased progress fill keyed by the file) and a second click stops it. L2: the live stream carries the
+file's samples at the audition level; a render does not. UI test (the fill caught mid-ease) and a shot.
 ---
 
 ## The build, in order
@@ -156,7 +152,12 @@ umbrella's pointer — `arstro.rule` §7).
 - [x] **B10** The loop region on the ruler (R-EDM-7). — DR-EDM-7; `solaris_app_ui` 19 (the brace fades in
       and moves eased after a shell's loop — a mutant that snaps it fails; Shift-drag is the pointer's
       and one line; a click inside clears it, fading); shots loop-region, loop-dragging.
-- [ ] **B11+** R-EDM-8…20, one task each, in that order unless the user reorders.
+- [x] **B11** A sampler (R-EDM-8). — DR-EDM-8; DSP REQ-inst-sampler-1 (`1d944b6`: at the root the recording
+      itself; an octave up 880 Hz in half the time; a fifth down within 2e-3 — a nearest-frame mutant
+      fails it; the 220 Hz recording at ±semitones, measured); `solaris_service` 25 (the file through the
+      whole chain, sample for sample — a mutant skipping `setSample` fails it); `solaris_app_ui` 20 (a
+      sample dropped on the sampler's window: lit, eased, one line); shot sampler-window.
+- [ ] **B12+** R-EDM-9…20, one task each, in that order unless the user reorders.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

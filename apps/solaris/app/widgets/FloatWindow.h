@@ -87,6 +87,10 @@ namespace solaris_ui
 
         void bind(const solaris::AppModel &m, bool interacting);
         void layout();
+        /** The sampler whose window is topmost at a world point ("" = none): where a dragged sample lands (R-EDM-8). */
+        std::string samplerAt(artboard::Point world) const;
+        /** While a sample is dragged: light the sampler window under it ("" = none), eased. */
+        void setSampleHint(const std::string &dv);
         /** A right-click at a window point, offered first: true when a window's content took it. */
         bool contextClick(artboard::Point world);
 

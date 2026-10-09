@@ -236,6 +236,31 @@ namespace solaris_ui
         }
     }
 
+    std::string WindowLayer::samplerAt(Point world) const
+    {
+        // the topmost open window under the point decides
+        const auto &kids = children();
+        for (auto it = kids.rbegin(); it != kids.rend(); ++it)
+        {
+            auto *w = static_cast<FloatWindow *>(it->get());
+            if (!w->isOpen() || !w->localBounds().contains(w->toLocal(world))) continue;
+            if (w->key().rfind("dev:", 0) != 0) return std::string();
+            const auto &panel = static_cast<const DevicePanel &>(w->content());
+            return panel.takesSample() ? panel.device() : std::string();
+        }
+        return std::string();
+    }
+
+    void WindowLayer::setSampleHint(const std::string &dv)
+    {
+        for (auto &kv : mWindows)
+            if (kv.first.rfind("dev:", 0) == 0)
+            {
+                auto &panel = static_cast<DevicePanel &>(kv.second->content());
+                panel.setDropHint(!dv.empty() && panel.device() == dv);
+            }
+    }
+
     bool WindowLayer::contextClick(Point world)
     {
         // the topmost open window under the point decides

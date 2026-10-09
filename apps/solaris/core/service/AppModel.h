@@ -35,6 +35,8 @@ namespace solaris
         bool instrument = false, bypass = false, known = true; // known = this build's registry has the type
         std::vector<ParamModel> params;
         std::string lastChanged;                // the parameter last written, by anyone (R-WIN-2)
+        bool takesSample = false;               // R-EDM-8: it plays a recorded sound (a sampler)
+        std::string sample;                     // that sound, as stored (relative to the song); "" = none
     };
 
     struct AutoPointModel
@@ -183,6 +185,7 @@ namespace solaris
     {
         std::string name, label, kind;           // kind = instrument | effect
         std::vector<NoteNameModel> noteNames;    // a kit's keys; empty for a melodic instrument
+        bool takesSample = false;                // R-EDM-8: it plays a recorded sound — give it one (`--sample`, `<dv>.sample`)
     };
 
     struct TransportModel

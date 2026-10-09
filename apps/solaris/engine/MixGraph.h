@@ -47,6 +47,7 @@ namespace engine
         std::string id, type;                               // a DSP registry type
         std::vector<std::pair<std::string, double>> params; // registry names, engineering units
         bool bypass = false;
+        std::shared_ptr<const Pcm> sample;                  // R-EDM-8: a sampler's sound, decoded at the song's rate
     };
 
     /** An audio clip, in samples. */

@@ -62,6 +62,10 @@ namespace solaris_ui
         artboard::Rect bypassRect() const;
         artboard::Rect removeRect() const;
         artboard::Rect rollRect() const;                       // an instrument's "Piano Roll" (R-ROLL-1)
+        bool takesSample() const;                              // a sampler: it plays a recorded sound (R-EDM-8)
+        std::string sampleText() const;                        // what its header says of that sound
+        void setDropHint(bool on) { mDropWant = on; }          // a sample hovering over it: outlined, eased
+        double dropAmount() const { return mDrop.value(); }    // LIVE
         void reveal(const std::string &param);
         /** A right-click at a window point: true when it lands on a parameter row (its menu opened).
          *  The App offers right-clicks here first — a row's slider would otherwise swallow it. */
@@ -92,6 +96,8 @@ namespace solaris_ui
         bool mBypassInit = false, mBypassLast = false;
         interstellar_v1::EasedScroll mScroll;
         cosmo_v2::HoverFade mHover;
+        artboard::AnimatedProperty mDrop{0.0};
+        bool mDropWant = false, mDropLast = false;
     };
 }
 }

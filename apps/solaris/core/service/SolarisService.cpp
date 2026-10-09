@@ -602,10 +602,20 @@ namespace solaris
             if (f == "bypass") { if (!boolean(value, b, err)) return false; d->bypass = b; stored = boolText(b); return true; }
             const DeviceType *t = DeviceRegistry::find(d->type);
             if (!t) { err = "this build has no `" + d->type + "` device, so " + id + "'s parameters cannot be checked"; return false; }
+            if (f == "sample" && t->takesSample)
+            {
+                // R-EDM-8: the sound it plays — "" takes it away
+                if (value.empty()) { d->sample.clear(); stored.clear(); return true; }
+                if (!resolveSample(value, d->sample, err)) return false;
+                stored = d->sample;
+                return true;
+            }
+            if (f == "sample") { err = id + " is a " + t->label + ", which plays no sample (a sampler does)"; return false; }
             const int i = t->paramIndex(f);
             if (i < 0)
             {
                 std::vector<std::string> names = {"bypass"};
+                if (t->takesSample) names.push_back("sample");
                 for (const auto &ps : t->params) names.push_back(ps.name);
                 err = unknownField(id, "a " + t->label, f, names);
                 return false;
@@ -694,6 +704,7 @@ namespace solaris
                     {
                         put("bypass", boolText(d.bypass));
                         put("type", d.type);
+                        put("sample", d.sample);
                         for (const auto &kv : d.params) put(kv.first.c_str(), kv.second);
                         if (!have)
                             if (const DeviceType *t = DeviceRegistry::find(d.type))

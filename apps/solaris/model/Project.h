@@ -92,6 +92,7 @@ namespace solaris
         bool bypass = false;
         Fields params;
         Remarks remarks;
+        std::string sample;   // R-EDM-8: a sampler's sound — a path, stored as a clip's src is (relative to the song)
     };
 
     struct Rack

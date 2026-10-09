@@ -95,6 +95,9 @@ to any STRIP later in processing order, its own mixer included — never to the 
 Order is file order (the one place in the schema where it is, because a chain is a sequence).
 `type` and every parameter key are **the DSP registry's** (R-DSP-2); values are in the registry's
 units (R-DSP-3); a choice is written by name. An instrument strip's first device is its instrument.
+A device whose type plays a recording (the `sampler`, R-EDM-8) names it with `sample=` — a path stored
+as a clip's `src` is (relative to the song when inside its folder), written right after `type`:
+`#aeffect id=dv_4 type=sampler sample="samples/vox chop.wav" mode=one-shot`.
 `track=master` is the master's rack. A key the registry does not know is kept and reported by
 `audit`; a value outside its range is clamped and counted.
 

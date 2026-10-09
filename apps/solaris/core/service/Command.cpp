@@ -52,10 +52,10 @@ namespace solaris
              "Move a mixer to position <index> (0 = first). Refused if it would make any route point backward.", "R-MIX-4"},
 
             {K::StripAdd, "strip add", "", 0, 0,
-             {"kind=<audio|instrument|bus>", "name=<text>", "mixer=<mx>", "instrument=<synth|drums>", "out=<target>"},
+             {"kind=<audio|instrument|bus>", "name=<text>", "mixer=<mx>", "instrument=<type>", "sample=<file>", "out=<target>"},
              "Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: "
              "the first bus on a later mixer (\"Main\"), else master. An instrument strip gets its instrument "
-             "(default synth) as its first device.", "R-MIX-1"},
+             "(default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8).", "R-MIX-1"},
             {K::StripDelete, "strip delete", "<ch>", 1, 1, {"with-clips"},
              "Delete a strip and its rack. Refused while clips play through it or strips route to it, unless "
              "--with-clips (its clips go too).", "R-MIX-1"},
@@ -84,7 +84,7 @@ namespace solaris
              "Delete a lane. Refused while clips are drawn on it, unless --with-clips.", "R-LANE-1"},
 
             {K::ClipAdd, "clip add", "", 0, 0,
-             {"src=<file>", "strip=<ch>", "instrument=<type>", "pattern=<pt>", "lane=<ln>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>"},
+             {"src=<file>", "strip=<ch>", "instrument=<type>", "sample=<file>", "pattern=<pt>", "lane=<ln>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>"},
              "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the "
              "first mixer (R-MIX-2), a used one reuses its strip, and with no --lane it gets a new lane. With "
              "--strip <instrument>: a note clip of --pattern (a new empty pattern if none). With --instrument "

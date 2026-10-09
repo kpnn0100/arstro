@@ -64,7 +64,10 @@ namespace solaris_ui
         mBrowser->onDragMove = [this](const Browser::Item &it, Point world) {
             double beat = 0;
             int row = -1;
-            const bool over = overLanes(world, beat, row);
+            // over a sampler's window, a sample loads into it (R-EDM-8): the window lights, the lanes do not
+            const std::string sampler = it.kind == "audio" ? mWindows->samplerAt(world) : std::string();
+            mWindows->setSampleHint(sampler);
+            const bool over = sampler.empty() && overLanes(world, beat, row);
             const bool newLane = row >= mTimeline->rowCount();
             mTimeline->setDropHint(over && it.kind != "effect", beat, row, it.label + (newLane ? "  \xC2\xB7  new lane" : ""));
             mGhostWanted = true;
@@ -73,10 +76,13 @@ namespace solaris_ui
         };
         mBrowser->onDrop = [this](const Browser::Item &it, Point world) {
             mTimeline->setDropHint(false);
+            mWindows->setSampleHint(std::string());
             mGhostWanted = false;
             double beat = 0;
             int row = -1;
-            if (overLanes(world, beat, row)) place(it, beat, row);
+            const std::string sampler = it.kind == "audio" ? mWindows->samplerAt(world) : std::string();
+            if (!sampler.empty()) { if (onCommand) onCommand("set " + sampler + ".sample=" + q(it.value)); } // ONE line
+            else if (overLanes(world, beat, row)) place(it, beat, row);
         };
         mBrowser->onActivate = [this](const Browser::Item &it) { place(it, std::floor(mPosition * 4.0) / 4.0, mTimeline->rowCount()); };
     }

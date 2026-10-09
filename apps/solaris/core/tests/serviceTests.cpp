@@ -267,7 +267,7 @@ static void test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_ch
 
     const std::string before = r.text();
     r.events.clear();
-    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth drums)"));
+    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth drums sampler)"));
     assert(contains(r.no("clip add --instrument synth --strip ch_2"), "without --src or --strip"));
     assert(contains(r.no("clip add --instrument synth --length -1"), "--length"));   // the strip was made, then the clip refused
     assert(r.text() == before && r.events.size() == 3);                                // three rejections, no change
@@ -296,7 +296,7 @@ static void test_a_relative_src_is_found_in_the_songs_folder()
     assert(r.clip("ac_1")->src == "samples/snare.wav");                 // stored relative to the song
     r.ok("clip add --src samples/snare.wav --at 4");                    // what the browser's Song tab hands back
     assert(r.clip("ac_2")->track == r.clip("ac_1")->track);            // the SAME file: the same strip
-    assert(r.svc.model().strips.size() == 2 && r.svc.model().deviceTypes.size() == 10 && r.svc.model().deviceTypes[0].kind == "instrument");
+    assert(r.svc.model().strips.size() == 2 && r.svc.model().deviceTypes.size() == 11 && r.svc.model().deviceTypes[0].kind == "instrument");
     pass("a relative src names a file in the song's folder first — the Song tab re-places a sound with one `clip add`");
 }
 
@@ -430,6 +430,67 @@ static void test_a_sidechain_key_ducks_the_bass()
     assert(contains(r.no("set sd_1.sidechain=false"), "a strip can only feed a strip on a LATER mixer"));
     assert(r.ok("get sd_1.sidechain") == "true\n");
     pass("sidechain: a key goes forward to a strip's compressor; the bass dips 6–22.5 dB after each kick and is back before the next; soloed it still pumps; the kick muted, nothing; Sidechain off, it compresses on its input; audited, saved (R-MIX-15)");
+}
+
+static void test_a_sampler_plays_its_sound_by_the_key()
+{
+    Run r;
+    const std::string dir = scratch();
+    const std::string song = freshSong("sampler");
+    r.ok("project new " + song + " --bpm 120");
+    std::ofstream(dir + "/kick.wav") << "x";                          // in the song's folder: stored relative
+    // a sampler line with its sound, in one command (R-EDM-8) — the fake decoder: a 1 kHz tone at 0.5, half a second
+    r.ok("clip add --instrument sampler --sample kick.wav --at 0 --length 8");
+    r.ok("set dv_1.velocity=0");                                      // every note full: the file's own level
+    r.ok("note add pt_1 --pitch 60 --at 0 --length 1");                // the root: the file itself
+    r.ok("note add pt_1 --pitch 72 --at 2 --length 1");                // an octave up
+    const auto &m = r.svc.model();
+    const auto *dm = &m.strips[0].devices[0];
+    for (const auto &st : m.strips)
+        if (!st.devices.empty() && st.devices[0].id == "dv_1") dm = &st.devices[0];
+    assert(dm->takesSample && dm->sample == "kick.wav");
+    assert(r.ok("get dv_1.sample") == "kick.wav\n");
+    const std::string out = dir + "/sampler.wav";
+    r.ok("render --out " + out + " --to 4");
+    const auto &L = r.fake.written[out][0];
+    // at the root it IS the file, sample for sample (unity pan law at centre, 0 dB fader and master)
+    bool exact = true;
+    for (int i = 0; i < 20000; ++i) exact &= L[(size_t)i] == (float)(0.5 * std::sin(2 * M_PI * 1000.0 * i / 48000));
+    assert(exact);
+    // an octave up: 2 kHz, and over in half the time
+    auto hz = [&](size_t a, size_t b) {
+        int n = 0;
+        for (size_t i = a + 1; i < b; ++i) n += (L[i - 1] < 0.0f) != (L[i] < 0.0f);
+        return n / 2.0 / ((double)(b - a) / 48000.0);
+    };
+    assert(std::fabs(hz(0, 20000) - 1000.0) < 5.0);
+    assert(std::fabs(hz(48000, 48000 + 11000) - 2000.0) < 10.0);
+    float after = 0;
+    for (size_t i = 48000 + 12100; i < 72000; ++i) after = std::max(after, std::fabs(L[i]));
+    assert(after == 0.0f);
+    // the file keeps it, relative to the song
+    r.ok("project save");
+    std::ifstream in(song);
+    std::stringstream ss;
+    ss << in.rdbuf();
+    assert(contains(ss.str(), "type=sampler sample=kick.wav"));
+    // refusals, each naming why; nothing changes
+    assert(contains(r.no("set dv_1.sample=missing.wav"), "cannot read missing.wav"));
+    assert(r.ok("get dv_1.sample") == "kick.wav\n");
+    assert(contains(r.no("strip add --kind instrument --instrument synth --sample kick.wav"), "--sample is for an instrument that plays one"));
+    r.ok("strip add --kind instrument --instrument synth");
+    std::string synthDv;
+    for (const auto &st : r.svc.model().strips)
+        for (const auto &d : st.devices)
+            if (d.type == "synth") synthDv = d.id;
+    assert(contains(r.no("set " + synthDv + ".sample=kick.wav"), "plays no sample"));
+    // a sampler with no sound is audited
+    r.ok("strip add --kind instrument --instrument sampler");
+    assert(contains(r.ok("audit"), "has no sample — give it one"));
+    bool typed = false;
+    for (const auto &t : r.svc.model().deviceTypes) typed |= t.name == "sampler" && t.takesSample && t.kind == "instrument";
+    assert(typed);
+    pass("sampler: made with its sound in one command; at the root it IS the file, an octave up 2 kHz and half as long; saved relative; refusals named; audited when silent (R-EDM-8)");
 }
 
 static void test_undo_and_redo_every_edit()
@@ -1010,6 +1071,7 @@ int main()
     test_formulas_bind_numbers_and_refuse_what_cannot_be_read();
     test_an_automated_gain_renders_its_curve();
     test_a_sidechain_key_ducks_the_bass();
+    test_a_sampler_plays_its_sound_by_the_key();
     test_routing_only_goes_forward_and_refusals_change_nothing();
     test_set_and_get_through_the_registry();
     test_patterns_are_shared_by_their_clips();

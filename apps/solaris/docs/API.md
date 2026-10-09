@@ -19,7 +19,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `mixer add [name]` | Add a mixer page after the last one. | R-MIX-3 |
 | `mixer delete <mx>` | Delete an empty mixer. Refused while strips live on it. | R-MIX-3 |
 | `mixer move <mx> [--to <index>]` | Move a mixer to position <index> (0 = first). Refused if it would make any route point backward. | R-MIX-4 |
-| `strip add [--kind <audio\|instrument\|bus>] [--name <text>] [--mixer <mx>] [--instrument <synth\|drums>] [--out <target>]` | Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: the first bus on a later mixer ("Main"), else master. An instrument strip gets its instrument (default synth) as its first device. | R-MIX-1 |
+| `strip add [--kind <audio\|instrument\|bus>] [--name <text>] [--mixer <mx>] [--instrument <type>] [--sample <file>] [--out <target>]` | Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: the first bus on a later mixer ("Main"), else master. An instrument strip gets its instrument (default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8). | R-MIX-1 |
 | `strip delete <ch> [--with-clips]` | Delete a strip and its rack. Refused while clips play through it or strips route to it, unless --with-clips (its clips go too). | R-MIX-1 |
 | `strip move <ch> [--mixer <mx>] [--order <n>]` | Move a strip to another mixer and/or position. Refused if a route would point backward. | R-MIX-3 |
 | `strip relink <ch> [--to <ch>]` | Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips need an audio strip, note clips an instrument strip; a bus plays no clips. | R-MIX-14 |
@@ -31,7 +31,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `device move <dv> [--to <index>]` | Move a device within its rack. | R-FX-5 |
 | `lane add [name]` | Add a timeline lane at the bottom. | R-LANE-1 |
 | `lane delete <ln> [--with-clips]` | Delete a lane. Refused while clips are drawn on it, unless --with-clips. | R-LANE-1 |
-| `clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--pattern <pt>] [--lane <ln>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]` | Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip, and with no --lane it gets a new lane. With --strip <instrument>: a note clip of --pattern (a new empty pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). | R-MIX-2 |
+| `clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--sample <file>] [--pattern <pt>] [--lane <ln>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]` | Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip, and with no --lane it gets a new lane. With --strip <instrument>: a note clip of --pattern (a new empty pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). | R-MIX-2 |
 | `clip move <ac> [--at <beats>] [--lane <ln>] [--strip <ch>]` | Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). | R-LANE-2 |
 | `clip duplicate <ac> [--at <beats>]` | A copy right after it (or at --at). A note clip's copy plays the SAME pattern — linked. | R-CLIP-3 |
 | `clip unique <ac>` | Give a note clip its own copy of its pattern. | R-CLIP-3 |
@@ -76,7 +76,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `project.name` · `project.bpm` · `project.sig` · `project.masterGain` · `project.sampleRate` | text · 20…999 · n/d · dB · Hz |
 | `<strip>.name` · `.gain` · `.pan` · `.mute` · `.solo` · `.colour` | text · dB (−120…12) · −1…1 · bool · bool · −1…15 |
 | `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` | text · beats · beats · beats · beats · dB · bool · s · s |
-| `<lane>.name` · `.colour` · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
+| `<lane>.name` · `.colour` · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
 | `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |
 | `<automation>.name` · `.unit` · `.min` · `.max` (read: also `.from` · `.points`) | text · text · number · number |
 | any NUMBER above (a strip's gain/pan, a send's gain, `project.masterGain`, a numeric device parameter) `=<formula>` | binds it (R-AUTO-1): numbers, `+ - * / ^ ( )`, `sin cos tan abs sign min max clamp lerp pow exp log sqrt floor ceil round frac`, `pi`, `beat bar bpm t`, an automation id (`au_1`), another numeric address (a link). `get` prints the formula; a plain number clears it |
@@ -156,6 +156,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].devices[].label` | string | the registry's label |
 | `strips[].devices[].instrument` | bool |  |
 | `strips[].devices[].bypass` | bool |  |
+| `strips[].devices[].takesSample` | bool | it plays a recorded sound (a sampler, R-EDM-8) |
+| `strips[].devices[].sample` | string | that sound, as stored (relative to the song); "" = none |
 | `strips[].devices[].known` | bool | false when this build's registry lacks the type (kept, not played) |
 | `strips[].devices[].lastChanged` | string | the parameter last written, by anyone (R-WIN-2) |
 | `strips[].devices[].params` | object[] | every registry parameter, stored or default (R-UI-5) |
@@ -278,6 +280,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `deviceTypes[].label` | string |  |
 | `deviceTypes[].kind` | string | instrument \| effect |
 | `deviceTypes[].noteNames` | object[] | a kit's keys, named (REQ-device-6) |
+| `deviceTypes[].takesSample` | bool | it plays a recorded sound: give it one with --sample / <dv>.sample (R-EDM-8) |
 | `deviceTypes[].noteNames[].note` | int |  |
 | `deviceTypes[].noteNames[].name` | string |  |
 | `browser` | object | the folder last browsed |
@@ -386,6 +389,24 @@ Ten synthesized pads on the GM drum notes (36 kick … 56 cowbell); the closed h
 | `cowbell.level` | -60.0 … 6.0 dB | 0.0 dB |
 | `cowbell.pan` | -1.0 … 1.0 | 0.0 |
 | `volume` | -60.0 … 6.0 dB | -6.0 dB |
+
+### `sampler` — Sampler (instrument)
+
+Plays a recorded sound: pitched by the note (chromatic) or as recorded (one-shot); a span, reverse, an ADSR.
+
+| parameter | range | default |
+|---|---|---|
+| `mode` | chromatic · one-shot | chromatic |
+| `root` | 0.0 … 127.0 | 60.0 |
+| `start` | 0.0 … 1.0 | 0.0 |
+| `end` | 0.0 … 1.0 | 1.0 |
+| `reverse` | off · on | off |
+| `attack` | 0.0 … 2000.0 ms | 0.0 ms |
+| `decay` | 0.0 … 2000.0 ms | 0.0 ms |
+| `sustain` | 0.0 … 1.0 | 1.0 |
+| `release` | 1.0 … 5000.0 ms | 30.0 ms |
+| `level` | -40.0 … 12.0 dB | 0.0 dB |
+| `velocity` | 0.0 … 1.0 | 1.0 |
 
 ### `compressor` — Compressor (effect)
 

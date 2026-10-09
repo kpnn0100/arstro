@@ -255,6 +255,7 @@ namespace solaris
             if (k == "id") n.id = v;
             else if (k == "type") n.type = v;
             else if (k == "bypass") n.bypass = r.boolean(k, v, false);
+            else if (k == "sample") n.sample = v;
             else n.params.emplace_back(k, v); // the registry's, checked by the core
         }
         void apply(Reader &r, Lane &n, const std::string &k, const std::string &v)
@@ -672,6 +673,7 @@ namespace solaris
                 Line l("aeffect");
                 l.kv("id", d.id).kv("type", d.type);
                 if (d.bypass) l.kv("bypass", "true");
+                l.strIf("sample", d.sample);
                 for (const auto &kv : d.params) l.str(kv.first, kv.second);
                 emit(out, "  ", l, d.remarks);
             }

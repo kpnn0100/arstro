@@ -54,6 +54,8 @@ namespace solaris
             {"strips[].devices[].label", "string", "the registry's label"},
             {"strips[].devices[].instrument", "bool", ""},
             {"strips[].devices[].bypass", "bool", ""},
+            {"strips[].devices[].takesSample", "bool", "it plays a recorded sound (a sampler, R-EDM-8)"},
+            {"strips[].devices[].sample", "string", "that sound, as stored (relative to the song); \"\" = none"},
             {"strips[].devices[].known", "bool", "false when this build's registry lacks the type (kept, not played)"},
             {"strips[].devices[].lastChanged", "string", "the parameter last written, by anyone (R-WIN-2)"},
             {"strips[].devices[].params", "object[]", "every registry parameter, stored or default (R-UI-5)"},
@@ -176,6 +178,7 @@ namespace solaris
             {"deviceTypes[].label", "string", ""},
             {"deviceTypes[].kind", "string", "instrument | effect"},
             {"deviceTypes[].noteNames", "object[]", "a kit's keys, named (REQ-device-6)"},
+            {"deviceTypes[].takesSample", "bool", "it plays a recorded sound: give it one with --sample / <dv>.sample (R-EDM-8)"},
             {"deviceTypes[].noteNames[].note", "int", ""},
             {"deviceTypes[].noteNames[].name", "string", ""},
             {"browser", "object", "the folder last browsed"},
@@ -211,6 +214,7 @@ namespace solaris
                                     .set("formula", p.formula));
                 a.push(Json::object().set("id", d.id).set("type", d.type).set("label", d.label)
                            .set("instrument", d.instrument).set("bypass", d.bypass).set("known", d.known).set("lastChanged", d.lastChanged)
+                           .set("takesSample", d.takesSample).set("sample", d.sample)
                            .set("params", params));
             }
             return a;
@@ -312,7 +316,7 @@ namespace solaris
         {
             Json names = Json::array();
             for (const auto &n : d.noteNames) names.push(Json::object().set("note", n.note).set("name", n.name));
-            types.push(Json::object().set("name", d.name).set("label", d.label).set("kind", d.kind).set("noteNames", names));
+            types.push(Json::object().set("name", d.name).set("label", d.label).set("kind", d.kind).set("noteNames", names).set("takesSample", d.takesSample));
         }
         j.set("deviceTypes", types);
         Json entries = Json::array();

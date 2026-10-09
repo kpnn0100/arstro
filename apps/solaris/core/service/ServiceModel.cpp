@@ -29,8 +29,10 @@ namespace solaris
             m.id = d.id;
             m.type = d.type;
             m.bypass = d.bypass;
+            m.sample = d.sample;
             const DeviceType *t = DeviceRegistry::find(d.type);
             m.known = t != nullptr;
+            m.takesSample = t && t->takesSample;
             if (!t)
             {
                 m.label = d.type;
@@ -106,6 +108,7 @@ namespace solaris
         {
             DeviceTypeModel tm{t.name, t.label, t.kind == DeviceKind::Instrument ? "instrument" : "effect", {}};
             for (const auto &nn : t.noteNames) tm.noteNames.push_back(NoteNameModel{nn.first, nn.second});
+            tm.takesSample = t.takesSample;
             mModel.deviceTypes.push_back(tm);
         }
         if (mRecentsStale)
@@ -388,6 +391,14 @@ namespace solaris
             }
         if (p.header.masterOut.empty()) out.push_back("unreachable: the master feeds no port");
         for (const auto &pk : mLastRenderPeaks) out.push_back(pk);
+        // R-EDM-8: a sampler with no sound, or one it cannot read, plays nothing
+        for (const auto &rk : p.racks)
+            for (const auto &d : rk.devices)
+                if (const DeviceType *t = DeviceRegistry::find(d.type); t && t->takesSample)
+                {
+                    if (d.sample.empty()) out.push_back("silent: " + d.id + " (" + t->label + ") has no sample — give it one (set " + d.id + ".sample=<file>)");
+                    else if (mOffline.count(resolvePath(d.sample))) out.push_back("offline: " + d.id + "'s sample " + d.sample + " cannot be read");
+                }
         // R-MIX-15: a key nothing listens to — no compressor on that strip with Sidechain on
         for (const auto &sd : p.sends)
         {

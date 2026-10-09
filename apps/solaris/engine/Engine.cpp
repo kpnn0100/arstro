@@ -46,6 +46,9 @@ namespace engine
                     err = "device " + d.id + " (" + d.type + ") has no parameter `" + p.first + "`";
                     return nullptr;
                 }
+            // R-EDM-8: a sampler's sound, handed in here — at build, never on the audio thread (it copies)
+            if (d.sample && dev->type().takesSample)
+                dev->setSample(d.sample->samples.data(), d.sample->frames, d.sample->channels, AudioConfig::instance().sampleRate());
             return dev;
         }
 

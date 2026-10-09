@@ -101,6 +101,8 @@ namespace solaris
         std::string resolvePath(const std::string &src) const;      // a clip's src → a path the host opens
         std::string relativePath(const std::string &file) const;    // a file → what a clip stores
         std::shared_ptr<const engine::Pcm> pcmFor(const std::string &src);
+        /** R-EDM-8: a sampler's sound — resolved as a clip's src is, and refused if it cannot be read. */
+        bool resolveSample(const std::string &given, std::string &stored, std::string &err);
         std::string defaultOutFor(const std::string &mixerId) const; // the first bus on a later mixer
         std::string firstMixer() const;
         std::string secondMixer() const;

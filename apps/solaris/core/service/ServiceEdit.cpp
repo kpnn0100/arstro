@@ -80,6 +80,17 @@ namespace solaris
         return std::string();
     }
 
+    bool SolarisService::resolveSample(const std::string &given, std::string &stored, std::string &err)
+    {
+        // as a clip's src: a relative name is the song folder's file when there is one, else the caller's
+        std::string g = given;
+        if (!fs::path(g).is_absolute() && !mPath.empty() && fs::exists(resolvePath(g))) g = resolvePath(g);
+        stored = relativePath(g);
+        if (pcmFor(stored)) return true;
+        err = mHost.decodeAudio ? "cannot read " + given + " as audio" : "this build has no audio decoder";
+        return false;
+    }
+
     bool SolarisService::mixCommand(const Command &c, std::string &err)
     {
         Project &p = mProject;
@@ -167,9 +178,19 @@ namespace solaris
             {
                 Rack r;
                 r.track = s.id;
-                r.devices.push_back(DeviceNode{p.nextId("dv"), instrument, false, {}, {}});
+                DeviceNode dn;
+                dn.id = p.nextId("dv");
+                dn.type = instrument;
+                if (c.has("sample"))
+                {
+                    // R-EDM-8: a sampler made with its sound
+                    if (!DeviceRegistry::find(instrument)->takesSample) { err = "--sample is for an instrument that plays one (sampler), not " + instrument; return false; }
+                    if (!resolveSample(c.flag("sample"), dn.sample, err)) return false;
+                }
+                r.devices.push_back(dn);
                 p.racks.push_back(r);
             }
+            else if (c.has("sample")) { err = "--sample is for --kind instrument --instrument sampler"; return false; }
             changed("strip.added", s.id);
             mOutput = s.id + "\n";
             return true;
@@ -290,7 +311,13 @@ namespace solaris
                 for (const auto &x : DeviceRegistry::types()) names.push_back(x.name);
                 err = "no device type `" + type + "`";
                 const auto near = nearest(type, names);
-                err += near.empty() ? std::string(" (types: synth, drums, compressor, eq, reverb, delay, chorus, drive, filter)") : " (did you mean: " + near[0] + "?)";
+                if (near.empty())
+                {
+                    err += " (types:";
+                    for (const auto &n : names) err += " " + n;
+                    err += ")";
+                }
+                else err += " (did you mean: " + near[0] + "?)";
                 return false;
             }
             const bool instrumentStrip = s && s->kind == "instrument";
@@ -397,6 +424,7 @@ namespace solaris
                 Command sc;
                 sc.kind = K::StripAdd;
                 sc.flags = {{"kind", "instrument"}, {"instrument", c.flag("instrument")}};
+                if (c.has("sample")) sc.flags.emplace_back("sample", c.flag("sample")); // a sampler and its sound, one drop
                 if (!mixCommand(sc, err)) return false;
                 made = p.strips.back().id;
             }

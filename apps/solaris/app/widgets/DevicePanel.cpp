@@ -323,6 +323,12 @@ namespace solaris_ui
         if (!mBypassInit) { mBypass.set(by ? 1.0 : 0.0); mBypassLast = by; mBypassInit = true; }
         else if (by != mBypassLast) { mBypass.animateTo(by ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); mBypassLast = by; }
         mBypass.update(nowMs);
+        if (mDropWant != mDropLast)
+        {
+            mDrop.animateTo(mDropWant ? 1.0 : 0.0, motion::kHoverMs, Easing::EaseOutCubic, nowMs);
+            mDropLast = mDropWant;
+        }
+        mDrop.update(nowMs);
         mScroll.advance(nowMs);
         if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
@@ -376,6 +382,21 @@ namespace solaris_ui
     }
 
     Rect DevicePanel::removeRect() const { return Rect{width.value() - space::padX() - 55.25, 8.125, 55.25, 19.5}; }
+    bool DevicePanel::takesSample() const
+    {
+        const solaris::DeviceModel *d = model();
+        return d && d->takesSample;
+    }
+
+    std::string DevicePanel::sampleText() const
+    {
+        const solaris::DeviceModel *d = model();
+        if (!d || !d->takesSample) return std::string();
+        if (d->sample.empty()) return "no sample \xE2\x80\x94 drop one here";
+        const auto slash = d->sample.find_last_of('/');
+        return "sample " + (slash == std::string::npos ? d->sample : d->sample.substr(slash + 1));
+    }
+
     Rect DevicePanel::rollRect() const { return Rect{width.value() - space::padX() - 71.5, 8.125, 71.5, 19.5}; } // u(22): "Piano Roll" fits
     Rect DevicePanel::bypassRect() const
     {
@@ -476,7 +497,9 @@ namespace solaris_ui
         if (!d) return;
         const Rect by = bypassRect();
         t.setFill(palette::mutedForeground());
-        t.drawText(textfit::ellipsize(t, mOwner + " \xC2\xB7 " + d->id + " \xC2\xB7 " + d->type, std::max(0.0, by.x - 2.0 * space::padX()), 10.0, font::mono()),
+        // a sampler names its sound where the others name their type (R-EDM-8)
+        const std::string what = d->takesSample ? sampleText() : d->id + " \xC2\xB7 " + d->type;
+        t.drawText(textfit::ellipsize(t, mOwner + " \xC2\xB7 " + what, std::max(0.0, by.x - 2.0 * space::padX()), 10.0, font::mono()),
                    space::padX(), textfit::baseline(by.y + by.h * 0.5, 10.0), 10.0, font::mono());
         // On / Bypassed: the fill eases whoever changed it
         const double b = mBypass.value();
@@ -501,6 +524,10 @@ namespace solaris_ui
         }
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, kHeaderH - 0.5); t.lineTo(W, kHeaderH - 0.5); t.strokePath();
+        // a sample hovering over a sampler: the window outlined in the accent, eased (R-EDM-8)
+        if (mDrop.value() > 0.001)
+            drawRoundedRect(t, Rect{1.0, 1.0, W - 2.0, height.value() - 2.0}, radius::control(),
+                            Paint::stroked(palette::primaryAlpha(mDrop.value()), 2.0));
     }
 }
 }

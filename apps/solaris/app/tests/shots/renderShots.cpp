@@ -270,6 +270,19 @@ namespace
                  wl.roll("pt_1")->setMode(arstro::solaris_ui::PianoRoll::Steps);
                  r.settle();
              }},
+            {"sampler-window",   // R-EDM-8: a sampler names its sound; its parameters from the registry
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("strip add --kind instrument --instrument sampler --name \"Vox Chop\" --sample \"" + r.dir + "/vocal take 3.wav\"");
+                 std::string dv;
+                 for (const auto &st : r.svc->model().strips)
+                     for (const auto &d : st.devices)
+                         if (d.type == "sampler") dv = d.id;
+                 r.cmd("set " + dv + ".mode=one-shot " + dv + ".start=0.25 " + dv + ".reverse=on");
+                 r.settle();
+                 r.app->project().windows().openDevice(dv);
+                 r.settle();
+             }},
             {"loop-region",   // R-EDM-7: the brace on the ruler, the region tinted on the lanes
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

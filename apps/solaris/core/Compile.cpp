@@ -74,7 +74,7 @@ namespace solaris
 
     namespace
     {
-        engine::DeviceDesc deviceDesc(const DeviceNode &d, std::vector<std::string> &warnings, bool &ok)
+        engine::DeviceDesc deviceDesc(const DeviceNode &d, const PcmProvider &pcm, std::vector<std::string> &warnings, bool &ok)
         {
             engine::DeviceDesc out;
             out.id = d.id;
@@ -98,6 +98,12 @@ namespace solaris
                     continue;
                 }
                 out.params.emplace_back(kv.first, v);
+            }
+            // R-EDM-8: a sampler's sound, decoded by the host; one that cannot be read plays nothing, said
+            if (!d.sample.empty())
+            {
+                if (!t->takesSample) warnings.push_back("device " + d.id + " (" + d.type + ") plays no sample — `sample=` ignored");
+                else if (!(out.sample = pcm ? pcm(d.sample) : nullptr)) warnings.push_back("device " + d.id + ": cannot read its sample " + d.sample + " — it plays nothing");
             }
             return out;
         }
@@ -165,7 +171,7 @@ namespace solaris
                 for (size_t k = 0; k < rk->devices.size(); ++k)
                 {
                     bool ok = true;
-                    auto dd = deviceDesc(rk->devices[k], r.warnings, ok);
+                    auto dd = deviceDesc(rk->devices[k], pcm, r.warnings, ok);
                     if (ok)
                     {
                         r.devices[dd.id] = {(int)g.strips.size(), (int)es.rack.size()};
@@ -234,7 +240,7 @@ namespace solaris
             for (const auto &d : mr->devices)
             {
                 bool ok = true;
-                auto dd = deviceDesc(d, r.warnings, ok);
+                auto dd = deviceDesc(d, pcm, r.warnings, ok);
                 if (ok)
                 {
                     r.devices[dd.id] = {-1, (int)g.masterRack.size()};
