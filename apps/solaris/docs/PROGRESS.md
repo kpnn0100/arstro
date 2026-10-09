@@ -17,14 +17,17 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► B13 — a MIDI keyboard** (R-EDM-10): the host reads MIDI input (ALSA sequencer, behind the
-`SolarisService::Host` seam — the core sees note events, never a MIDI API) and the service routes notes
-to the ARMED instrument strip (`set <ch>.arm=true`, one strip at a time): heard at once through the
-Player whether the transport plays or not (a live-note message, no engine swap), and — while playing
-with record on (`transport record on|off`) — written into the pattern under the playhead as ONE edit per
-take (an undo removes the take), quantised to the snap if the setting asks. `note on <ch> --pitch --vel`
-/ `note off` in the grammar so a script (and the tests) can play it. L2: a played note sounds on its
-sample in the live stream; a recorded take lands in the pattern at the beats it was played.
+**► C — the 2026-10-09 second brief** (user request; run as up to four sub-agents in worktrees, merged
+here one task per commit):
+- **C1** the grid follows the zoom; the ruler seeks on it, unsnapped at the deepest zoom (R-UI-10, R-TIME-5).
+- **C2** bezier automation (Interstellar's model, cosmo's handles) and the automation's window on a
+  double-click (R-AUTO-10, R-AUTO-11).
+- **C3** the mixer's numbers bound from the dock, live values published; IDs shown and copied
+  (R-MIX-16, R-UI-11).
+- **C4** agent-friendly faces: the control channel + `attach`, the equivalence test, the NTWB web face,
+  agent-sized composition (R-SVC-5…8).
+- **C5** the goal: a whole song made with `solaris-cc` alone, rendered and measured (R-SVC-9).
+Then B13 (the MIDI keyboard) as before.
 ---
 
 ## The build, in order
@@ -163,6 +166,11 @@ umbrella's pointer — `arstro.rule` §7).
       the audition level, sample for sample; it ends itself, said); `solaris_app_ui` 21 (the row's fill
       eases in and out — a mutant that snaps it fails); shot browser-audition; the UI rig now has a
       silent output device that keeps time, and pumps the service every frame as the window does.
+- [ ] **C1** The grid follows the zoom; the ruler seeks on it (R-UI-10, R-TIME-5).
+- [ ] **C2** Bezier automation; the automation's window (R-AUTO-10/11).
+- [ ] **C3** The mixer's numbers bound from the dock; IDs shown and copied (R-MIX-16, R-UI-11).
+- [ ] **C4** Agent-friendly faces: control channel, equivalence test, web (NTWB), composition (R-SVC-5…8).
+- [ ] **C5** A whole song made by an agent with `solaris-cc`, measured (R-SVC-9).
 - [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.
 
 ### T — tasks found on the way
@@ -176,6 +184,16 @@ umbrella's pointer — `arstro.rule` §7).
 ---
 
 ## Decisions log (newest first)
+
+- **2026-10-09 — the second brief, decided without a round (the user asked to build):**
+  - bezier automation stores Interstellar's keyframe model (speed + influence per side) — one curve
+    model in the suite — and is EDITED with cosmo's handles (Alt-drag pulls them, Alt breaks symmetry);
+  - a double-click on a point still deletes it (R-AUTO-6); on the row's header or empty curve it opens
+    the automation's window;
+  - the zoom's grid IS the snap step on the lanes, and the deepest zoom does not snap;
+  - "copy" goes through a host clipboard hook — the core has no clipboard;
+  - "web" is NTWB through Arstro Remote, as cosmo's, not a web server of Solaris's own;
+  - the song an agent makes is a public-domain tune, so it can be shared.
 
 - **2026-10-09 — a solo-silenced strip still keys; a muted one does not; a key brings nothing into a
   solo.** A soloed bass must keep its pump (the EDM reason to sidechain at all) without the kick

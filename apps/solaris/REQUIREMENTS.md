@@ -107,7 +107,7 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
 
 ---
 
-## R-MIX — the mixer: every source has its own strip — ✅ IMPLEMENTED (1–11 headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; drawn and played with: DR-UI-8; 12 the fold: DR-UI-8; 13/14 the line added, sources relinked: DR-MIX-13; 15 the sidechain: DR-MIX-15; 8's linked selection with U4)
+## R-MIX — the mixer: every source has its own strip — ✅ IMPLEMENTED (1–11 headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; drawn and played with: DR-UI-8; 12 the fold: DR-UI-8; 13/14 the line added, sources relinked: DR-MIX-13; 15 the sidechain: DR-MIX-15; 8's linked selection with U4) — 🚧 16 (the mixer's numbers bound) with C3
 
 The user's model (2026-10-08): *"sample got its own line by default; we can add multiple mixers as
 the user wants their workspace organised; the 1st mixer stores the samples, the 2nd receives from
@@ -160,6 +160,13 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   through any strip of its kind — its menu on the lanes offers "Play through ▸" (`clip move --strip`);
   a strip's menu offers "Move its clips to ▸", which moves EVERY clip of it in one command
   (`strip relink <from> --to <to>`, refused across kinds).
+- **R-MIX-16 The mixer's numbers take formulas and automation too** (user request, 2026-10-09: *"even
+  mixer can have formula and automation"*): a right-click on a fader, a pan, a send's level or the
+  master fader offers the device parameter's menu (R-WIN-3) — Create Automation, Formula…, Clear
+  Binding, Reset, and Copy Address / Value / as Formula (R-UI-11) — each one command over the
+  addresses that already bind (`<ch>.gain`, `.pan`, `<sd>.gain`, `project.masterGain`, R-AUTO-1). A
+  bound control says what drives it, and while the song plays it MOVES with the value the engine
+  evaluates — a value the model publishes (`bindings[].live`), never one the widget re-derives.
 - **R-MIX-15 Sidechain** (R-EDM-3): a send may feed a strip's SIDECHAIN input instead of its audio
   (`send add <ch> --to <ch> --sidechain`); the strip's compressor detects on it (its `sidechain`
   switch); the key strip must come earlier in processing order (R-MIX-4, amended). The classic
@@ -190,11 +197,15 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 - **R-CLIP-4 Clips may overlap** on a lane; overlapping audio sums (was SR-CLIP-4).
 - **R-CLIP-5 Reserved:** time-stretch and pitch-shift (was SR-CLIP-3).
 
-## R-TIME — transport and time — ✅ BUILT (1–4: DR-PLAY-1, the metronome DR-EDM-2, the loop region on the ruler DR-EDM-7)
+## R-TIME — transport and time — ✅ BUILT (1–4: DR-PLAY-1, the metronome DR-EDM-2, the loop region on the ruler DR-EDM-7) — 🚧 5 (the ruler on the grid) with C1
 
 - **R-TIME-1 Beats are authoritative**, 960 PPQ; seconds are derived from the tempo (was SR-TIME-1).
 - **R-TIME-2 One tempo and one meter** per project; a tempo/meter map is reserved (was SR-TIME-2/5).
 - **R-TIME-3 Sample-accurate:** notes start on their exact sample (R-DSP-5) (was SR-TIME-3).
+- **R-TIME-5 A click on the ruler goes there, on the grid you see** (user request, 2026-10-09: *"when click
+  on beat indicator on timeline, move to that position with snap to beat at that zoom, if zoom max, no
+  snap"*): the seek lands on the nearest line of the zoom's grid (R-UI-10); at the deepest zoom it does
+  not snap at all — the exact tick under the pointer.
 - **R-TIME-4 Transport:** play, stop, seek, loop region, metronome (was SR-TIME-4). (**Detailed
   2026-10-09, R-EDM-2/7:** the metronome is the machine's setting (`settings set metronome=on`), clicks
   on every beat while playing with the bar's first accented, its sound a pad of the DSP library's
@@ -310,7 +321,7 @@ R-VER, applied to an arrangement:
 - **R-PLAY-3 Meters** on every strip and the master: peak and RMS per channel, a held peak, a clip
   latch — the numbers in the model, not only drawn.
 
-## R-AUTO — automation and parameter formulas — ✅ IMPLEMENTED (user request, 2026-10-09; DR-AUTO-1…5, made from a window: DR-UI-5)
+## R-AUTO — automation and parameter formulas — ✅ IMPLEMENTED (user request, 2026-10-09; DR-AUTO-1…5, made from a window: DR-UI-5) — 🚧 10 (bezier), 11 (its window) with C2
 
 The user: *"all number param can be link, apply formula, create automation, apply formula with
 automation like FL Studio. Automation is created separately, make the formula core of the binding.
@@ -332,7 +343,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
   or through links, is refused naming the loop.
 - **R-AUTO-4 An automation is its own object** (FL Studio's automation clip): an id (`au_n`), a name, a
   unit and range, and points — beat, value, shape `linear | hold | smooth`. It moves nothing until a
-  formula reads it. Stored as `#aauto` with `#point` children (amends the suite schema's sketch,
+  formula reads it. (**AMENDED (R-AUTO-10, 2026-10-09):** and `bezier`, shaped by handles.) Stored as `#aauto` with `#point` children (amends the suite schema's sketch,
   `docs/audio-format.md` §2.5, which nothing wrote yet).
 - **R-AUTO-5 Automation is created from a property in ONE command** (`auto create <address>`): a new
   `au_n` named *"<owner> · <parameter label>"* (*"Bass · Cutoff"*), ranged as the property, with points
@@ -342,7 +353,10 @@ the object it belongs to, shows it on the timeline, and that property will use a
 - **R-AUTO-6 Automations are drawn on the timeline** — an AUTOMATION section under the lanes, a row per
   automation showing its name and curve. A click adds a point, a drag moves it (time snapped to a
   sixteenth), a double-click removes it, a right-click sets its shape or deletes the automation; each
-  gesture is one command (`auto point add|move|delete|shape`, `auto delete`).
+  gesture is one command (`auto point add|move|delete|shape`, `auto delete`). (**AMENDED (R-UI-10,
+  R-AUTO-11, 2026-10-09):** a point's time snaps to the zoom's grid, not a fixed sixteenth; a double-click
+  ON A POINT still removes it, a double-click on the row's header or on the curve away from a point
+  opens the automation's window.)
 - **R-AUTO-7 Evaluated by the engine, at control rate.** The service compiles the bindings and the
   curves into the graph; the engine evaluates every binding every 64 samples at ABSOLUTE positions,
   so playback and render agree whatever the chunking (R-RENDER-1); gain and pan ramp across each
@@ -352,6 +366,20 @@ the object it belongs to, shows it on the timeline, and that property will use a
   `--explain`, the formula and every name it reads with its value.
 - **R-AUTO-9 Observable:** the model publishes `bindings[]` (address, formula, what it reads) and
   `automations[]` (id, name, unit and range, points, which addresses use it).
+
+- **R-AUTO-10 Bezier automation, like cosmo's curve** (user request, 2026-10-09: *"automation need bezier
+  curve like cosmo curve"*): a point's sides may be bezier. The MODEL is Interstellar's (R-ANIM-2,
+  `apps/interstellar/model/Anim.h` — After Effects' keyframe: each side linear | bezier | hold with a
+  speed, in the automation's unit per beat, and an influence, % of the neighbouring segment) so the
+  suite has ONE curve model (law 16); the GESTURE is cosmo's (`CurvePanel`): Alt-drag a point pulls
+  out symmetric handles, a handle drags (the opposite one mirrors), Alt breaks the symmetry. One command
+  per gesture (`auto point shape <au> --at <b> --shape bezier [--speed-in --influence-in --speed-out
+  --influence-out]`); stored on `#point`; evaluated by the engine at control rate from compiled data;
+  `eval` agrees with what renders, measured.
+- **R-AUTO-11 Double-click an automation to see it** (user request, 2026-10-09: *"double click to see
+  information of automation"*): its window (R-WIN) shows its name (renamable), id, unit and range,
+  the address it was made from, its points (beat, value, shape), every formula that reads it (address
+  and formula), and its value at the playhead — all from the model, nothing re-derived.
 
 ## R-WIN — windows inside the song view — ✅ IMPLEMENTED (user request, 2026-10-09; DR-WIN-1, DR-UI-5)
 
@@ -455,7 +483,7 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   if missing (was SR-FMT-3; its content hash is deferred to R-VER-5, where merging needs it).
 - **R-FMT-4 A structural error refuses, a numeric corruption repairs** (Interstellar's rule).
 
-## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1…3, DR-API-1) — rung 4
+## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1…3, DR-API-1) — rung 4 — 🚧 5–9 (agent-friendly: control channel, equivalence, web, composition, the song) with C4/C5
 
 - **R-SVC-1** `SolarisService`: `dispatch(Command)` / `pump` / `model()` / an `Event` sink. The GUI,
   `solaris-cc`, a script and an agent send the same text lines (was SR-CLI-1).
@@ -468,7 +496,28 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 - **R-API-1 The API document is generated, committed and drift-tested** — rung 4 — and includes the
   device registry (every instrument and effect parameter with unit and range).
 
-## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1)
+- **R-SVC-5 An agent can drive the running window** (user request, 2026-10-09: *"Agent friendly, make it
+  like cosmo, core backend and front end can be cli (for Agent), GUI for user and web"*): `solaris
+  --control <socket>` opens a line channel on the live window (cosmo's `ControlChannel`: it moves lines,
+  never parses them); `solaris-cc attach <socket> [--script f]` sends command lines and prints the
+  event lines — the user watches the song being made.
+- **R-SVC-6 One script, two faces, one answer** (arstro.rule §1's equivalence test): a committed script
+  run headless (`solaris-cc --script`) and through a live window (`attach`) ends in the same `state
+  print --json --stable` and the same event stream.
+- **R-SVC-7 A web face**: Solaris is an Arstro Remote app over NTWB (`solaris-cc ntwb serve | install |
+  uninstall | api`, the `core/Ntwb` library, cosmo's worked example, `arstro.ntwb.implement`); its web UI
+  (`apps/solaris/web`) shows the song — transport, lanes and clips, strips and their levels — and sends
+  the same command lines. The service is the model; the web draws it.
+- **R-SVC-8 Composition is agent-sized**: whatever an agent needs to write a whole song in few,
+  readable lines — bulk note entry with note names, the ids a command made printed back, a song
+  overview — specified from an audit of an agent composing with the CLI (2026-10-09), with a guide,
+  `docs/AGENTS.md`, that ends in a worked song.
+- **R-SVC-9 The goal, measured** (user request: *"the goal is you can make me a song that you know"*): an
+  agent makes a whole song with `solaris-cc` alone; the script is committed, the render measured (not
+  silent, under 0 dBFS, the kick on the beats, the tempo right). The tune is public domain, so the
+  result can be shared.
+
+## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 (grid) with C1, 11 (ids) with C3
 
 - **R-UI-1 Two screens, as Interstellar:** Home (R-HOME) and the Project view.
 - **R-UI-2 The accent is teal, `#159387`, the only forked token** — teal because orange, the
@@ -512,6 +561,21 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   (the timeline, and the mixer with U3). The service resolves it (R-G-3: a second front end must
   not re-derive it). (**Added 2026-10-08, building U2:** the lanes first took a strip's place in
   processing order, and deleting one strip recoloured every later strip's clips in one frame.)
+
+- **R-UI-10 The grid follows the zoom** (user request, 2026-10-09: *"when zoom, divide into smaller note"*):
+  zoomed out the lanes show bars; zooming in, beats appear, then halves, quarters and on to the
+  thirty-second of a beat — each level fading in as it gets room (eased: nothing snaps, §1). The finest
+  level that has room is THE snap step everywhere on the lanes — a ruler click (R-TIME-5), a clip drag,
+  a loop drag (R-EDM-7), an automation point (R-AUTO-6), a browser drop; at the deepest zoom nothing
+  snaps. The step is the view's, published for tests and drawn on the ruler.
+- **R-UI-11 IDs you can see and copy** (user request, 2026-10-09: *"highlight id, right click to an object
+  property to copy it property, for 3rd vst3, right click on item in parameter list to do it"*): View ›
+  Show IDs draws every object's id beside its name — strips, lanes, clips, patterns, devices, sends,
+  automations — and every parameter row's full address. A right-click on any property (a device
+  parameter row, a fader, a pan, a send, an automation, a clip) offers Copy Address
+  (`dv_1.filter.cutoff`), Copy Value (`1200 Hz`) and Copy as Formula (`=dv_1.filter.cutoff`), through
+  the host's clipboard (the core has none, R-SVC-4). A third-party VST3's parameter list (R-VST-6) gets
+  the same menu when hosting lands.
 
 ## R-NFR — non-functional — 📋 SPECIFIED
 
