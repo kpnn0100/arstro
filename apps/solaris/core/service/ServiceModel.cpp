@@ -6,6 +6,7 @@
 #include "Compile.h"
 #include "Format.h"
 #include "Json.h"
+#include "RegistryModel.h"
 #include "SolarisService.h"
 #include "device/Device.h"
 #include <algorithm>
@@ -45,28 +46,21 @@ namespace solaris
                 }
                 return m;
             }
-            m.label = t->label;
-            m.instrument = t->kind == DeviceKind::Instrument;
-            // Every registry parameter, stored or not: the UI draws a knob per parameter (R-UI-5).
+            // the registry's description, at the values the song stores (RegistryModel: the ONE mapping, R-VST-7)
+            std::vector<double> values;
             for (const auto &spec : t->params)
             {
-                ParamModel pm;
-                pm.name = spec.name;
-                pm.label = spec.label;
-                pm.unit = spec.unit;
-                pm.min = spec.min;
-                pm.max = spec.max;
-                pm.def = spec.def;
-                pm.choices = spec.choices;
-                pm.logScale = spec.logScale;
-                pm.integer = spec.integer;
-                pm.value = spec.def;
+                double v = spec.def;
                 for (const auto &kv : d.params)
-                    if (kv.first == spec.name) parseParam(spec, kv.second, pm.value);
-                pm.text = paramText(spec, pm.value);
-                m.params.push_back(pm);
+                    if (kv.first == spec.name) parseParam(spec, kv.second, v);
+                values.push_back(v);
             }
-            return m;
+            DeviceModel full = deviceModelOf(*t, values);
+            full.id = m.id;
+            full.bypass = m.bypass;
+            full.sample = m.sample;
+            full.known = true;
+            return full;
         }
 
         std::string dbText(float lin)

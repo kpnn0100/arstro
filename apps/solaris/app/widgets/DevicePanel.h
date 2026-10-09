@@ -74,6 +74,10 @@ namespace solaris_ui
          *  The App offers right-clicks here first — a row's slider would otherwise swallow it. */
         bool contextClick(artboard::Point world);
 
+        /** The song's controls in the header — On/Bypassed, Remove, Piano Roll. Off in a plugin's own editor
+         *  (R-VST-7), where the panel is the whole instrument: its header names it instead. Opt-in, default on. */
+        bool songControls = true;
+
         std::function<bool(const std::string &line)> onCommand;
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
         std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onRename;

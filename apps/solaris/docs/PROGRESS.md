@@ -233,7 +233,13 @@ umbrella's pointer — `arstro.rule` §7).
       the MIDI first — New MIDI, each pattern's length, notes and players — double-click → its roll, a menu,
       dragged onto a track / a plain lane / below. Model: `patterns[].strips`, `.lastStrip`. 3 mutants caught;
       shots `midi-list`, `clip-end-dragging`.
-- [ ] **E5** The plugin editor in the Arstro look; Basic Synth's (R-VST-7/8).
+- [x] **E5** The plugin editor in the Arstro look; Basic Synth's (R-VST-7/8).
+      — DR-VST-7 (DSP `e53edb6` REQ-vst-6, the seam): the plugins' editor is Solaris's DevicePanel over a
+      one-device model built by the shared `deviceModelOf` (the service uses it too), song controls off,
+      the instrument titled with the arstro mark; its lines → beginEdit once / performEdit per step (the
+      shared mapping) / endEdit at release; a host change springs in and is lit; an XEmbed X11 view on the
+      host's run loop, resizable. Validator passes; L5 in the SDK's editor host (a drag moved Kick Decay
+      450 → 29.9 ms). 4 mutants caught.
 - [ ] **E6** Drum Machine's editor with its pads (R-VST-7/8).
 - [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.
 

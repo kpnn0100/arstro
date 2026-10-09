@@ -480,7 +480,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
   every note start onto the grid, delaying every second grid step by the swing.
 - **R-ROLL-5 The pattern's length** is set from the roll (`set <pt>.length=`), its end dragged.
 
-## R-VST — VST3 — ✅ BUILT 1–5 (user request, 2026-10-09; replaces R-INST-4's VST3 half; DR-VST-1; 6 reserved) — 🚧 7, 8 (the Arstro editor, E5/E6)
+## R-VST — VST3 — ✅ BUILT 1–5 (user request, 2026-10-09; replaces R-INST-4's VST3 half; DR-VST-1; 6 reserved) — 7 ✅ Basic Synth's editor and the shared panel (DR-VST-7), 🚧 Drum Machine's pads (E6) — 8 ✅ (DR-VST-7)
 
 The user: *"need to sync with current workflow of other apps that use VST3 (because this will use
 VST3 later) — install the VST3 SDK and adapt Basic Synth and Drum Machine to VST3."* No app in the

@@ -47,7 +47,8 @@ anything — the reproduction and the guarding test are already written there.
 | directory | library | depends on | what lives there |
 |---|---|---|---|
 | `core/DigitalSignalProcessing/src/` | `arstro_dsp` (submodule, `feature/1.0.0`) | — | **all sound**: `Oscillator`, `Biquad`/`ParametricEQ`, `StateVariableFilter`, `Noise`, `DecayEnvelope`, `ADSREnvelope`, `BasicSynth`, `DrumMachine`, the effects, `Device` + `DeviceRegistry` (one description per parameter) |
-| `core/DigitalSignalProcessing/apps/` | demos, plugins | `arstro_dsp` (+ the VST3 SDK for `vst3`) | `kitchen_sink`, `piano_demo`, `wav_demo`; `vst3` — Basic Synth and Drum Machine as VST3 plugins (B8, its README) |
+| `core/DigitalSignalProcessing/apps/` | demos, plugins | `arstro_dsp` (+ the VST3 SDK for `vst3`) | `kitchen_sink`, `piano_demo`, `wav_demo`; `vst3` — Basic Synth and Drum Machine as VST3 plugins (B8, its README), the editor seam `Editor.h` (REQ-vst-6), `vst3_editorhost` |
+| `apps/solaris/plugins/` | `solaris_instrument_editor` + `X11View.cpp` linked INTO the plugin modules | `solaris_app`, the SDK, X11 | the plugins' own editor (R-VST-7): Solaris's DevicePanel over a one-device model (`deviceModelOf`), the host's edits through `ParamAccess`; `solaris_plugin_editor` |
 | `apps/solaris/model/` | `solaris_model` | — | `Project` (.slp parse / serialize fixed point / validate / repair / `newProject`), `feedsForward` + `targetsOf` (the forward-only rule, ONCE), `Format` |
 | `apps/solaris/engine/` | `solaris_engine` | `arstro_dsp` | `MixGraph` (plain data), `Engine` (build → warm → render pieces split at note events; meters, stems, live setters), `MixLaws` — **knows no project and no file** |
 | `apps/solaris/core/` | `solaris_core` | model, engine | `Compile` (.slp → MixGraph: solo, patterns, registry-checked params), `Settings`, `AudioOut` (the output seam), `Player` (the engine on a thread, lock-free messages, engine swaps) |

@@ -189,3 +189,21 @@ its opt-in `formatValue`), `Icons`, `Theme`, `EmbeddedFonts` are compiled from `
 - **At 1024×640 the automation rows sit under the dock**: a shot or a test wheels the lanes
   (`App::wheel`, negative notches = down) before aiming at them.
 
+## The plugins' own editor (R-VST-7, `apps/solaris/plugins`)
+
+The same DevicePanel, inside a VST3 host: `InstrumentEditor` builds a model of one device from the host's
+values and turns the panel's lines into the host's edits. Its controls, each the host's edit (the plugin
+normalises by the shared mapping):
+
+| gesture | what the host is told |
+|---|---|
+| a slider dragged | `beginEdit(id)` on the first step, `performEdit(id, normalizedFromValue(value))` per step that moved, `endEdit(id)` at release |
+| a choice clicked (left / right half) | begin, perform (the previous / next name), end — at once |
+| a slider double-clicked | begin, perform (the registry's default), end |
+| the host moves a value (automation, a preset) | nothing back; the thumb springs there and the row is lit |
+
+Shots: `solaris_plugin_editor` writes `plugin-editor-synth.png`, `plugin-editor-synth-small.png` (360×320),
+`plugin-editor-drums.png` into its working directory. Live: `vst3_editorhost build/vst3/ArstroBasicSynth.vst3`.
+Gotcha: the SDK's editor host reads `_XEMBED_INFO` from the plugin's window on its CreateNotify — set it
+before mapping, in the same batch as the window's creation, or the host exits ("XGetWindowProperty for
+_XEMBED_INFO failed").

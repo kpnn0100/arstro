@@ -1258,3 +1258,43 @@ Guarded by the same test: MIDI listed first with "1 bar" and "Bass"; New MIDI �
 mid-grow, "unplayed"; dropped on the Bass track, below the last lane, and (unplayed) off a track → the
 notice and nothing sent; a double-click → `roll:pt_1` open; the menu's five items, Delete → `pattern
 delete`. Mutant seen red: a drop on a track ignoring the track. Shot `midi-list` (`:448`), looked at.
+
+### DR-VST-7 The plugins' own editor, in the Arstro look (R-VST-7, R-VST-8)
+**The seam** is the DSP repo's (REQ-vst-6, DSP `e53edb6`): `Controller::createView("editor")` returns
+`createEditor(*this)` when the build defines `ARSTRO_VST3_EDITOR`, nothing otherwise. The umbrella
+compiles its editor into both plugin modules and defines it (`plugins/CMakeLists.txt:29`) — built from
+the DSP repo alone the plugins offer none and a host draws its generic view.
+
+**The content is Solaris's DevicePanel**, generated from the registry (law 2): `InstrumentEditor`
+(`plugins/InstrumentEditor.cpp`) builds a model of ONE device each frame the host's values moved
+(`refresh`, `:34`) with `deviceModelOf` (`core/service/RegistryModel.cpp:7` — the ONE registry→model
+mapping, which the service now uses too, `core/service/ServiceModel.cpp:58`), the panel's song controls
+off (`DevicePanel::songControls`, `app/widgets/DevicePanel.h:79`: the header names the instrument with the
+suite's mark and teal dot instead, `app/widgets/DevicePanel.cpp:529`). Solaris's accent and embedded fonts
+are installed before a widget is built. The panel speaks text as in Solaris; `command` (`:57`) turns
+`set dv_1.<name>=<value>` into the host's edit through `ParamAccess` — begun ONCE per parameter per
+press, performed per step (a step that moved nothing says nothing, `:73`), ended when the pointer lets
+go (`pointer`, `:92`), a click or a double-click's reset all three at once. `ControllerAccess`
+(`plugins/PluginAccess.h:15`) is the plugin's side: the controller's `editPerform` normalises by
+`normalizedFromValue`. A value the HOST changes is a new revision: the slider's thumb springs there
+(Artboard's Slider eases a programmatic value) and the row it changed is lit (`:41`) — and nothing is
+echoed back as an edit.
+
+**The view** (`plugins/X11View.cpp`): an X11 child of the host's window on a connection of its own
+(`attached`, `:72`), with the XEmbed info hosts read on creation (`:82`); the host's `IRunLoop` — queried
+from the plug frame — drives it: our connection's descriptor for input, a 16 ms timer for frames (`:99`).
+Each frame is drawn into a back buffer and copied to the window (`frame`, `:171`). Resizable: the host's
+size is the editor's, never below 360×320 (`checkSizeConstraint`, `:128`); it opens at 520×600.
+`createEditor` (`:243`). Everything linked into the module is position-independent (`solaris_app`,
+`artboard_core`, `solaris_instrument_editor`).
+
+Guarded by `solaris_plugin_editor` (`plugins/tests/editorTests.cpp`, the editor over the REAL plugin
+controller with a fake host's component handler, headless): a row per registry parameter at both sizes
+(`:142`); a drag → beginEdit once, performEdit per step equal to `normalizedFromValue` of the value the
+editor chose, strictly rising, endEdit on release; a choice clicked → the next name, begun/performed/
+ended (`:159`); a host change caught between, then lit, nothing echoed (`:212`); the drum machine's
+editor builds (`:235`). The validator passes both plugins with the editor linked in. Mutants seen red,
+then restored: no beginEdit, an end per step, a host change never reaching the panel, a linear mapping in
+the plugin. **Live (L5, 2026-10-09):** `vst3_editorhost` (the SDK's X11 host) opened Drum Machine's editor
+in a real host window, 520×600, drawn as above; a drag sent to its window moved Kick Decay 450 ms →
+29.9 ms with its row lit.

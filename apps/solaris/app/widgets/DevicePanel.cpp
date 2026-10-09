@@ -477,6 +477,7 @@ namespace solaris_ui
         case Gesture::Type::Move:
         {
             int h = -1;
+            if (!songControls) { mHover.setHovered(-1); return true; }
             if (removeRect().contains(local)) h = 1;
             else if (bypassRect().contains(local)) h = 2;
             if (rollRect().contains(local)) h = 3;
@@ -486,7 +487,7 @@ namespace solaris_ui
         case Gesture::Type::Click:
         {
             const solaris::DeviceModel *d = model();
-            if (!d) return true;
+            if (!d || !songControls) return true;
             if (!d->instrument && removeRect().contains(local)) { if (onCommand) onCommand("device remove " + d->id); return true; }
             if (bypassRect().contains(local)) { if (onCommand) onCommand("set " + d->id + ".bypass=" + (d->bypass ? "false" : "true")); return true; }
             if (d->instrument && rollRect().contains(local) && !mStrip.empty())
@@ -523,6 +524,21 @@ namespace solaris_ui
         const double W = width.value();
         const solaris::DeviceModel *d = model();
         if (!d) return;
+        if (!songControls)
+        {
+            // a plugin's own editor (R-VST-7): the instrument named as a window title, the suite's mark at the right
+            const double cy = kHeaderH * 0.5;
+            t.setFill(palette::foreground());
+            const double mark = t.measureText("arstro", 10.0, font::mono());
+            t.drawText(textfit::ellipsize(t, d->label, std::max(0.0, W - mark - 4.0 * space::padX()), 13.0, font::sansSemiBold()),
+                       space::padX(), textfit::baseline(cy, 13.0), 13.0, font::sansSemiBold());
+            t.setFill(palette::mutedForeground());
+            t.drawText("arstro", W - space::padX() - mark - 7.0, textfit::baseline(cy, 10.0), 10.0, font::mono());
+            drawCircle(t, W - space::padX() - 2.5, textfit::baseline(cy, 10.0) - 2.0, 2.0, Paint::filled(palette::primary())); // the accent dot
+            t.setStroke(palette::border(), 1.0);
+            t.beginPath(); t.moveTo(0, kHeaderH - 0.5); t.lineTo(W, kHeaderH - 0.5); t.strokePath();
+            return;
+        }
         const Rect by = bypassRect();
         t.setFill(palette::mutedForeground());
         // a sampler names its sound where the others name their type (R-EDM-8)

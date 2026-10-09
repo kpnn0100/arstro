@@ -28,6 +28,9 @@ namespace cosmo_v2
 
         void setValue(double v);  // programmatic -- does not fire onChange
         double value() const;
+        /** The thumb as DRAWN — the slider's spring-smoothed display value, easing toward value() after a
+         *  programmatic change. Read-only, for a test that must tell an eased change from a snap. */
+        double displayValue() const;
         /** Green "stacked reach": the amount ancestor groups add on top of this value
          *  (in the slider's value units). Draws a reach from the thumb to value+offset
          *  so the effective total is visible; 0 hides it (DR-EDIT-4 / group stacking). */

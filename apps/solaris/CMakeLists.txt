@@ -28,6 +28,11 @@ if(TARGET solaris_app AND TARGET solaris_host)
   endif()
 endif()
 
+# Basic Synth and Drum Machine as VST3 plugins: their own editor, in the Arstro look (R-VST-7)
+if(TARGET solaris_app)
+  add_subdirectory(plugins)
+endif()
+
 # the faces proved equal (R-SVC-5…7): the control channel and attach, the web adapter, and the
 # equivalence test — one script through solaris-cc and through a live window (tests/acceptance)
 if(TARGET solaris-cc)
