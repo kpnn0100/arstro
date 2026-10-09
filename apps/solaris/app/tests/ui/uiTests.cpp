@@ -631,6 +631,77 @@ static void test_device_window_lists_parameters_and_binds_them()
     pass("Device window: an instrument's name opens it; dragged by its title exactly; the last change lit and moving (eased); Create Automation / Formula / Clear Binding are lines and the row says what decides it; × fades it out");
 }
 
+static void test_automation_rows_draw_and_edit_curves()
+{
+    sltest::Rig r("ui-auto", 1280, 800);
+    r.cmd("project new " + r.song("Auto") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 8");   // ch_2, dv_1
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    // an automation made from a shell appears as a row under the lanes, growing in
+    r.cmd("auto create ch_2.gain");
+    r.frame();
+    r.frame();
+    assert(tl.autoCount() == 1 && tl.autoRowRect("au_1").h > 0.0);
+    r.settle();
+    const artboard::Rect row = world(tl, tl.autoRowRect("au_1"));
+    assert(row.y > world(tl, tl.rowRect(0)).bottom() - 1.0);          // after the lanes
+    // a click in its row adds a point at the snapped beat and the value under the pointer
+    const double x2 = world(tl, artboard::Rect{tl.beatToX(2.0), 0, 0, 0}).x;
+    const double yq = row.y + row.h * 0.25;
+    r.click(x2 + 1.0, yq);
+    r.settle();
+    bool added = false;
+    for (const auto &l : r.sent) added |= l.rfind("auto point add au_1 --at 2 --value ", 0) == 0;
+    assert(added && r.svc->model().automations[0].points.size() == 3);
+    // a point dragged follows the pointer EXACTLY; let go it is ONE `auto point move`, and stays
+    const artboard::Point p1 = tl.autoPointAt("au_1", 1);
+    const double x3 = tl.beatToX(3.0);
+    const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
+    r.drag(tw.x + p1.x, tw.y + p1.y, tw.x + x3, tw.y + p1.y - 6.0, 6, false);
+    // while held the handle is drawn under the pointer (its beat snapped to a sixteenth), not easing after it
+    const artboard::Point held = tl.autoDragPoint();
+    assert(std::fabs(held.x - x3) < 0.5 && std::fabs(held.y - (p1.y - 6.0)) < 0.5);
+    r.app->pointer(2, tw.x + x3, tw.y + p1.y - 6.0, 0, r.now);
+    r.settle();
+    bool moved = false;
+    for (const auto &l : r.sent) moved |= l.rfind("auto point move au_1 --at 2 --to 3 --value ", 0) == 0;
+    assert(moved && r.svc->model().automations[0].points[1].at == 3.0);
+    assert(std::fabs(tl.autoPointAt("au_1", 1).x - x3) < 0.5);       // where it was let go: nothing jumps
+    // a curve changed from a shell EASES there
+    r.cmd("auto point move au_1 --at 3 --value -40");
+    r.frame();
+    r.frame();
+    assert(tl.autoEase("au_1") > 0.0 && tl.autoEase("au_1") < 1.0);
+    r.settle();
+    assert(tl.autoEase("au_1") == 1.0);
+    // right-click a point: its shapes; Hold is one line
+    const artboard::Point p0 = tl.autoPointAt("au_1", 0);
+    r.click(tw.x + p0.x, tw.y + p0.y, 2);
+    r.settle();
+    auto &menu = r.app->menu();
+    int hold = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label.rfind("Hold", 0) == 0) hold = i;
+    assert(menu.isOpen() && hold >= 0);
+    r.click(menu.itemRect(hold));
+    r.settle();
+    assert(sentLine(r, "auto point shape au_1 --at 0 --shape hold") && r.svc->model().automations[0].points[0].shape == "hold");
+    // a double-click on a point deletes it
+    const artboard::Point pm = tl.autoPointAt("au_1", 1);
+    r.click(tw.x + pm.x, tw.y + pm.y);
+    r.click(tw.x + pm.x, tw.y + pm.y);
+    r.settle();
+    assert(sentLine(r, "auto point delete au_1 --at 3") && r.svc->model().automations[0].points.size() == 2);
+    // right-click the row: Delete Automation (and the formulas that read it)
+    r.click(tw.x + tl.beatToX(6.0), cy(world(tl, tl.autoRowRect("au_1"))) + 18.0, 2);
+    r.settle();
+    r.click(menu.itemRect(menu.itemCount() - 1));
+    r.settle();
+    assert(sentLine(r, "auto delete au_1 --unbind") && r.svc->model().automations.empty() && r.svc->model().bindings.empty());
+    pass("Automation rows: a row per automation under the lanes; click adds, a drag follows exactly and is one move, a shell's edit eases, shapes and deletes from the menu (R-AUTO-6)");
+}
+
 static void test_ruler_seek_keys_and_selection()
 {
     sltest::Rig r("ui-ruler", 1280, 800);
@@ -675,6 +746,7 @@ int main()
     test_mixer_matrix_effects_and_device_panel();
     test_song_bar_menus_and_settings_sections();
     test_device_window_lists_parameters_and_binds_them();
+    test_automation_rows_draw_and_edit_curves();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

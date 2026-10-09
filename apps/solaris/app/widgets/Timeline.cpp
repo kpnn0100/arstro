@@ -84,6 +84,30 @@ namespace solaris_ui
             keyed.emplace_back(r.key, r);
             mStripes[r.key].want = r.colour;
         }
+        // the automation rows, after the lanes, in the same eased list (a lane added slides them down)
+        mAutoIds.clear();
+        for (const auto &a : m.automations)
+        {
+            Row ar;
+            ar.key = "auto:" + a.id;
+            ar.label = a.name;
+            ar.automation = a.id;
+            keyed.emplace_back(ar.key, ar);
+            mAutoIds.push_back(a.id);
+            AutoLive &l = mAutos[a.id];
+            l.model = a;
+            bool same = l.to.size() == a.points.size();
+            for (size_t i = 0; same && i < a.points.size(); ++i)
+                same = l.to[i].at == a.points[i].at && l.to[i].value == a.points[i].value && l.to[i].shape == a.points[i].shape;
+            if (!same)
+            {
+                l.shownBefore = shownPoints(l); // what is drawn NOW: the next tween starts there
+                l.to = a.points;
+                l.changed = true;
+            }
+        }
+        for (auto it = mAutos.begin(); it != mAutos.end();)
+            it = std::find(mAutoIds.begin(), mAutoIds.end(), it->first) == mAutoIds.end() ? mAutos.erase(it) : std::next(it);
         mRowMotion.sync(keyed, kRowH);
         for (auto &l : mLive) l.gone = true;
         for (const auto &v : mClips)
@@ -197,7 +221,7 @@ namespace solaris_ui
     {
         const double viewW = std::max(0.0, width.value() - kHeaderW);
         mScrollX.setExtent(kHeaderW, viewW, std::max(viewW, (mLength + 4.0 * mBeatsPerBar) * mPpbTarget));
-        mScrollY.setExtent(kRulerH, std::max(0.0, height.value() - kRulerH), (mRows.size() + 1) * kRowH);
+        mScrollY.setExtent(kRulerH, std::max(0.0, height.value() - kRulerH), (mRows.size() + mAutoIds.size() + 1) * kRowH);
     }
 
     void Timeline::advance(double nowMs)
@@ -212,6 +236,20 @@ namespace solaris_ui
         mSelIn.update(nowMs);
         mSelOut.update(nowMs);
         mDropAmt.update(nowMs);
+        for (auto &kv : mAutos)
+        {
+            AutoLive &l = kv.second;
+            if (!l.placed || !mEver) { l.from = l.to; l.t.set(1.0); l.placed = true; l.changed = false; }
+            else if (l.changed)
+            {
+                // a curve the model changed eases there: point by point, or (a point more or fewer) cross-faded
+                l.from = l.shownBefore;
+                l.t.set(0.0);
+                l.t.animateTo(1.0, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs);
+                l.changed = false;
+            }
+            l.t.update(nowMs);
+        }
         const bool fadeIn = mEver && !reducedMotion();
         mRowMotion.advance(nowMs);
         for (auto &l : mLive)
@@ -277,6 +315,7 @@ namespace solaris_ui
 
     bool Timeline::handleGesture(const Gesture &g, const Point &local)
     {
+        if (autoGesture(g, local)) return true; // an automation row's curve and points (R-AUTO-6)
         switch (g.type)
         {
         case Gesture::Type::Move:
@@ -475,6 +514,7 @@ namespace solaris_ui
         }
         if (mDragging)
             if (const ClipLive *l = live(mPressClip)) paintClip(t, l->v, clipBox(l->v, mDragBeat, rowY(mDragRow)), 1.0, 1.0, lerpColor(l->hueFrom, l->hueTo, l->hueT.value()));
+        paintAutomation(t); // the curves, in the clips' clip
         // the browser's drop hint: where it would land
         if (mDropAmt.value() > 0.001 && mDropRow >= 0)
         {
@@ -503,6 +543,20 @@ namespace solaris_ui
             const auto st = mStripes.find(row.key);
             if (st != mStripes.end() && st->second.placed) stripe = lerpColor(st->second.from, st->second.to, st->second.t.value());
             drawRoundedRect(t, Rect{0, r.y + 6.0, 3.0, r.h - 12.0}, radius::control(), Paint::filled(fade(stripe, a)));
+            if (!d.automation.empty())
+            {
+                // an automation row: the accent stripe, its name, what reads it
+                drawRoundedRect(t, Rect{0, r.y + 6.0, 3.0, r.h - 12.0}, radius::control(), Paint::filled(fade(palette::primary(), a)));
+                t.setFill(fade(palette::foreground(), a));
+                t.drawText(textfit::ellipsize(t, d.label, kHeaderW - 20.0, 11.0, font::sans()), 12.0, textfit::baseline(r.y + 16.0, 11.0), 11.0, font::sans());
+                const auto al = mAutos.find(d.automation);
+                const std::string sub = al != mAutos.end() && !al->second.model.usedBy.empty() ? al->second.model.usedBy[0] : "moves nothing yet";
+                t.setFill(fade(palette::mutedForeground(), a));
+                t.drawText(textfit::ellipsize(t, sub, kHeaderW - 20.0, 9.0, font::mono()), 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::mono());
+                t.setStroke(fade(palette::border(), a), 1.0);
+                t.beginPath(); t.moveTo(0, r.bottom() - 0.5); t.lineTo(W, r.bottom() - 0.5); t.strokePath();
+                continue;
+            }
             const bool own = d.lane.empty();
             t.setFill(fade(own ? palette::mutedForeground() : palette::foreground(), a));
             t.drawText(textfit::ellipsize(t, d.label, kHeaderW - 20.0, 11.0, font::sans()), 12.0, textfit::baseline(r.y + 16.0, 11.0), 11.0, font::sans());

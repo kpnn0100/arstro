@@ -11,18 +11,19 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-09 — B4: device windows and the parameter list.*
+*Last updated: 2026-10-09 — B5: automation on the timeline.*
 
 ---
 
 ## NEXT
 
-**► B5 — automation on the timeline** (R-AUTO-6): an AUTOMATION section under the lanes — a row per
-automation, its name in the header, its curve drawn in its strip's colour over the beat grid with
-the points as handles; a click adds a point (`auto point add`), a drag moves one (on release:
-`auto point move --at <b> --to <b2> --value <v>`, following the pointer exactly while held), a
-double-click deletes, a right-click offers the shapes and Delete Automation; rows keyed so a new
-automation grows in. The model already has everything (`automations[]`).
+**► B6 — the piano roll** (R-ROLL-1…5, R-EDM-6): `note move <pt> --pitch --at [--to-pitch] [--to-at]
+[--length] [--vel]` and `pattern quantize <pt> --grid --swing` in the service; the registry's note
+names for the drum machine (DSP: `DeviceType::noteNames`); a piano-roll WINDOW (`roll:<pt>`) — keys
+(C named, a drum's pads by name), the beat grid, notes in the strip's colour, the velocity lane, the
+pattern's end; click adds (last length), drag moves / right edge resizes (one `note move` on release),
+double-click deletes, velocity drag; snap 1/4…1/32 or off; Step mode (16 steps a bar, a row per pad);
+opened by double-clicking a note clip and from an instrument's window. Every note eased (keyed).
 
 ---
 
@@ -124,7 +125,9 @@ umbrella's pointer — `arstro.rule` §7).
       menu — automation, formula, clear, reset (R-WIN-1…4). — DR-WIN-1, DR-UI-5 rewritten; the dock's
       popover panel replaced; `solaris_app_ui` 13 (the light caught mid-ease — a mutant that snaps
       fails it; a typed formula through cosmo's field); shot device-window-bound, looked at.
-- [ ] **B5** Automation on the timeline (R-AUTO-6).
+- [x] **B5** Automation on the timeline (R-AUTO-6). — DR-AUTO-5; `solaris_app_ui` 14 (a dragged
+      point drawn under the pointer, one move on release, nothing jumps; a shell's edit eases — a
+      mutant that snaps fails it); shot automation-rows, looked at.
 - [ ] **B6** The piano roll window: `note move`, velocity, snap, step mode, quantize + swing
       (R-ROLL-1…5, R-EDM-6).
 - [ ] **B7** The mixer: "+ Line", relink — `strip relink`, "Play through" (R-MIX-13/14).

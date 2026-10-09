@@ -489,3 +489,17 @@ the top right) — reopening a closed one where it was; titles follow the model 
 and a window whose device is removed by anyone closes (`bind`, `:168`). Rack chips and an instrument
 strip's name (double-click) in the dock open them; a chip is outlined while its window is open.
 Placement and stacking are the view's. The dock's floating panel is gone (R-UI-5 amended).
+
+### DR-AUTO-5 Automation on the timeline (R-AUTO-6)
+`Timeline` (`app/widgets/Timeline.cpp:87`) appends a row per automation after the lanes, keyed
+`auto:<au>` in the same `AnimatedRows` (a lane added slides them down; a new one grows in), its header
+the accent stripe, its name and the address that reads it. `TimelineAuto.cpp` draws the curve over the
+beat grid — holding the first value before the first point and the last after, linear / hold / smooth
+(smoothstep) per segment, on a log scale for Hz and ms (`valueToY`, `:48`) — with the points as
+handles (`paintAutomation`, `:166`). `autoGesture` (`:201`): a click on the row adds a point at the
+sixteenth under the pointer with the value under it (`auto point add`); a point dragged is drawn under
+the pointer while held (its beat snapped) and sends ONE `auto point move <au> --at <from> --to <to>
+--value <v>` on release, staying where it was let go; a double-click deletes it; a right-click offers
+Linear / Hold / Smooth, Delete Point and Delete Automation (`auto delete --unbind`). A curve the model
+changes eases there point by point over 220 ms; a point added or removed cross-fades the two curves
+(`shownPoints`, `:35`).

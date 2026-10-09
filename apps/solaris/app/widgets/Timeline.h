@@ -18,6 +18,13 @@
  *  id — it fades in when it arrives, fades out when it goes, and a `clip move` from a shell eases
  *  it there. A song opened places everything where it is: there is nowhere to travel from.
  *
+ *  AUTOMATION (R-AUTO-6): under the lanes, a row per automation — its name, its curve over the beat
+ *  grid with the points as handles (a log scale for Hz and ms). A click adds a point, a drag moves one
+ *  (following the pointer exactly; one `auto point move` on release), a double-click deletes it, a
+ *  right-click offers the shapes or deleting the automation. The rows are keyed in the same eased
+ *  list as the lanes; a curve the model changes eases point by point (a point added or removed
+ *  cross-fades the two curves).
+ *
  *  Editing is command lines (`onCommand`): a click on the ruler → `transport seek <beat>` (snapped to a sixteenth, as clips are); a clip
  *  dragged → `clip move <id> --at <beat> [--lane <ln>]` on release, snapped to a sixteenth. While
  *  dragging the clip follows the pointer exactly — direct manipulation, the one exemption — and the
@@ -28,6 +35,7 @@
 #include "AppModel.h"
 #include "../../../interstellar/app/widgets/AnimatedRows.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
+#include "../../../cosmo/widgets/ContextMenu.h"
 #include "../../../cosmo/widgets/HoverFade.h"
 #include <algorithm>
 #include <cmath>
@@ -74,6 +82,16 @@ namespace solaris_ui
 
         std::function<void(const std::string &line)> onCommand;
         std::function<void(const std::string &clipId)> onSelect;
+        std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
+
+        // automation rows (R-AUTO-6), local geometry as DRAWN
+        int autoCount() const { return (int)mAutoIds.size(); }
+        artboard::Rect autoRowRect(const std::string &au) const;
+        artboard::Point autoPointAt(const std::string &au, int i) const;
+        double autoValueAt(const std::string &au, double y) const;  // the value a y in its row means
+        double autoEase(const std::string &au) const;               // 1 = its curve at rest (LIVE)
+        /** The point being dragged, as DRAWN (local); (−1, −1) when none. */
+        artboard::Point autoDragPoint() const;
 
         void advance(double nowMs) override;
 
@@ -85,8 +103,17 @@ namespace solaris_ui
     private:
         struct Row
         {
-            std::string key, lane, label; // key: the lane's id, or "strip:<id>" for a strip's own row
+            std::string key, lane, label; // key: the lane's id, "strip:<id>" for a strip's own row, "auto:<au>"
             int colour = -1;
+            std::string automation;       // an automation row: its id
+        };
+        /** An automation's curve as drawn: eased from what was shown to what the model says. */
+        struct AutoLive
+        {
+            solaris::AutomationModel model;
+            std::vector<solaris::AutoPointModel> from, to, shownBefore;
+            artboard::AnimatedProperty t{1.0};
+            bool placed = false, changed = false;
         };
         struct ClipView
         {
@@ -115,13 +142,28 @@ namespace solaris_ui
             bool placed = false;
         };
         std::string clipAt(const artboard::Point &p) const;
+        std::vector<solaris::AutoPointModel> shownPoints(const AutoLive &l) const;
+        double valueToY(const AutoLive &l, double v, const artboard::Rect &row) const;
+        double yToValue(const AutoLive &l, double y, const artboard::Rect &row) const;
+        void paintAutomation(artboard::IRenderTarget &t) const;
+        void paintCurve(artboard::IRenderTarget &t, const AutoLive &l, const std::vector<solaris::AutoPointModel> &pts, const artboard::Rect &row,
+                        double alpha, bool handles) const;
+        bool autoGesture(const artboard::Gesture &g, const artboard::Point &local);
+        std::string autoAt(double y) const;
+        int pointNear(const std::string &au, const artboard::Point &local) const;
         const ClipLive *live(const std::string &id) const;
         double rowY(int i) const; // row i's LIVE top, before scrolling
         artboard::Rect clipBox(const ClipView &v, double at, double rowY) const;
         void paintClip(artboard::IRenderTarget &t, const ClipView &v, const artboard::Rect &r, double alpha, double ring, const artboard::Color &hue) const;
         double snap(double beat) const { return std::max(0.0, std::round(beat * 4.0) / 4.0); }
 
-        std::vector<Row> mRows;                       // the model's, in order: hit-testing
+        std::vector<Row> mRows;                       // the model's LANES, in order: hit-testing
+        std::vector<std::string> mAutoIds;            // automation rows, after the lanes
+        std::map<std::string, AutoLive> mAutos;
+        std::string mAutoPress;                       // a point pressed / dragged
+        int mAutoPoint = -1;
+        bool mAutoDragging = false;
+        double mAutoAt = 0, mAutoValue = 0;
         interstellar_v1::AnimatedRows<Row> mRowMotion; // what is drawn: eased, ghosts fading
         std::vector<ClipView> mClips;
         std::vector<ClipLive> mLive;                  // by clip id, ghosts included

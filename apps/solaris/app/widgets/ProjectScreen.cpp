@@ -45,6 +45,7 @@ namespace solaris_ui
 
         mBrowser->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
         mTimeline->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
+        mTimeline->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
         mDock->onCommand = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
         mDock->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
         mDock->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {

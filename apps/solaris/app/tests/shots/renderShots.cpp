@@ -215,6 +215,19 @@ namespace
                  r.app->project().windows().window("dev:dv_2")->open(); // back to the front
                  r.settle();
              }},
+            {"automation-rows",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("auto create dv_2.filter.cutoff");
+                 r.cmd("auto point move au_1 --at 0 --value 300");
+                 r.cmd("auto point add au_1 --at 4 --value 4000 --shape smooth");
+                 r.cmd("auto point add au_1 --at 8 --value 900 --shape hold");
+                 r.cmd("auto point add au_1 --at 12 --value 600");
+                 r.cmd("auto create ch_4.gain");
+                 r.cmd("auto point move au_2 --at 0 --value -24");
+                 r.cmd("auto point add au_2 --at 6 --value 0");
+                 r.settle();
+             }},
             {"dock-folded",
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");
