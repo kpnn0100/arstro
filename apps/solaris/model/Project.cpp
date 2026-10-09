@@ -315,6 +315,10 @@ namespace solaris
             if (k == "at") n.at = toTick(r.num(k, v, 0.0));
             else if (k == "value") n.value = r.num(k, v, 0.0);
             else if (k == "shape") n.shape = v;
+            else if (k == "speedIn") n.speedIn = r.num(k, v, 0.0);       // R-AUTO-10: Interstellar's spelling
+            else if (k == "inflIn") n.inflIn = r.num(k, v, 33.333);
+            else if (k == "speedOut") n.speedOut = r.num(k, v, 0.0);
+            else if (k == "inflOut") n.inflOut = r.num(k, v, 33.333);
             else n.unknown.emplace_back(k, v);
         }
         void apply(Reader &, Binding &n, const std::string &k, const std::string &v)
@@ -728,6 +732,9 @@ namespace solaris
                 Line pl("point");
                 pl.kv("at", canonicalBeats(x.at)).kv("value", canonicalNumber(x.value));
                 if (x.shape != "linear") pl.kv("shape", x.shape);
+                if (x.shape == "bezier")
+                    pl.kv("speedIn", canonicalNumber(x.speedIn)).kv("inflIn", canonicalNumber(x.inflIn))
+                        .kv("speedOut", canonicalNumber(x.speedOut)).kv("inflOut", canonicalNumber(x.inflOut));
                 out += "  " + pl.unknown(x.unknown).s + "\n";
             }
         }
@@ -896,8 +903,14 @@ namespace solaris
             {
                 if (!(a.min < a.max)) e.push_back(a.id + "'s range " + canonicalNumber(a.min) + "…" + canonicalNumber(a.max) + " is empty");
                 for (const auto &pt : a.points)
-                    if (pt.shape != "linear" && pt.shape != "hold" && pt.shape != "smooth")
-                        e.push_back(a.id + " has a point of shape `" + pt.shape + "` (linear | hold | smooth)");
+                {
+                    if (pt.shape != "linear" && pt.shape != "hold" && pt.shape != "smooth" && pt.shape != "bezier")
+                        e.push_back(a.id + " has a point of shape `" + pt.shape + "` (linear | hold | smooth | bezier)");
+                    if (pt.shape == "bezier" && !(pt.inflIn > 0 && pt.inflIn <= 100 && pt.inflOut > 0 && pt.inflOut <= 100))
+                        e.push_back(a.id + "'s bezier point at beat " + canonicalBeats(pt.at) + " has an influence outside 0 < x ≤ 100 %");
+                    if (pt.shape == "bezier" && !(std::isfinite(pt.speedIn) && std::isfinite(pt.speedOut)))
+                        e.push_back(a.id + "'s bezier point at beat " + canonicalBeats(pt.at) + " has a speed that is not a number");
+                }
             }
         }
         return e;

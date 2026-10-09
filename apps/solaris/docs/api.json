@@ -372,14 +372,14 @@
     },
     {
       "verb": "auto point add",
-      "usage": "auto point add <au> [--at <beats>] [--value <v>] [--shape <linear|hold|smooth>]",
+      "usage": "auto point add <au> [--at <beats>] [--value <v>] [--shape <linear|hold|smooth|bezier>]",
       "args": "<au>",
       "flags": [
         "at=<beats>",
         "value=<v>",
-        "shape=<linear|hold|smooth>"
+        "shape=<linear|hold|smooth|bezier>"
       ],
-      "summary": "Add a point (one at the same beat is replaced). Its shape governs the segment after it.",
+      "summary": "Add a point (one at the same beat is replaced). Its shape governs the segment after it (a bezier point's handles start flat: speed 0, influence 33.333 %).",
       "requirement": "R-AUTO-6"
     },
     {
@@ -406,14 +406,18 @@
     },
     {
       "verb": "auto point shape",
-      "usage": "auto point shape <au> [--at <beats>] [--shape <linear|hold|smooth>]",
+      "usage": "auto point shape <au> [--at <beats>] [--shape <linear|hold|smooth|bezier>] [--speed-in <v/beat>] [--influence-in <%>] [--speed-out <v/beat>] [--influence-out <%>]",
       "args": "<au>",
       "flags": [
         "at=<beats>",
-        "shape=<linear|hold|smooth>"
+        "shape=<linear|hold|smooth|bezier>",
+        "speed-in=<v/beat>",
+        "influence-in=<%>",
+        "speed-out=<v/beat>",
+        "influence-out=<%>"
       ],
-      "summary": "Set how the curve leaves the point at --at.",
-      "requirement": "R-AUTO-6"
+      "summary": "Set how the curve leaves the point at --at. A BEZIER point is Interstellar's key (R-ANIM-2): on each side a speed — the slope there, in the automation's unit per beat — and an influence, how far into the neighbouring segment it pulls (0 < x ≤ 100 %); flags not given are kept. One line per handle gesture.",
+      "requirement": "R-AUTO-10"
     },
     {
       "verb": "bind clear",
@@ -1445,7 +1449,31 @@
     {
       "path": "automations[].points[].shape",
       "type": "string",
-      "summary": "linear | hold | smooth — the segment after it",
+      "summary": "linear | hold | smooth | bezier — the segment after it (bezier: both its sides)",
+      "stable": true
+    },
+    {
+      "path": "automations[].points[].speedIn",
+      "type": "number",
+      "summary": "bezier (R-AUTO-10): the slope arriving, in the automation's unit per beat",
+      "stable": true
+    },
+    {
+      "path": "automations[].points[].inflIn",
+      "type": "number",
+      "summary": "bezier: how far into the segment before it that slope pulls, % (0 < x ≤ 100)",
+      "stable": true
+    },
+    {
+      "path": "automations[].points[].speedOut",
+      "type": "number",
+      "summary": "bezier: the slope leaving, unit per beat",
+      "stable": true
+    },
+    {
+      "path": "automations[].points[].inflOut",
+      "type": "number",
+      "summary": "bezier: how far into the segment after it, %",
       "stable": true
     },
     {
@@ -1453,6 +1481,12 @@
       "type": "string[]",
       "summary": "addresses whose formula reads it",
       "stable": true
+    },
+    {
+      "path": "automations[].now",
+      "type": "number",
+      "summary": "its value at the playhead (`transport.position`) by the engine's own evaluator; follows the transport while playing (R-AUTO-11)",
+      "stable": false
     },
     {
       "path": "bindings",

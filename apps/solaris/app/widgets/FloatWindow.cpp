@@ -1,6 +1,7 @@
 #include "FloatWindow.h"
 #include "DevicePanel.h"
 #include "PianoRoll.h"
+#include "AutomationPanel.h"
 #include "../../../interstellar/app/widgets/Glyphs.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
 #include <algorithm>
@@ -163,6 +164,31 @@ namespace solaris_ui
         return *w;
     }
 
+    FloatWindow &WindowLayer::openAutomation(const std::string &au)
+    {
+        const std::string key = "auto:" + au;
+        FloatWindow *w = window(key);
+        if (!w)
+        {
+            auto panel = std::make_shared<AutomationPanel>(au);
+            panel->onCommand = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
+            panel->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
+                if (onRename) onRename(cur, world, std::move(done));
+            };
+            panel->bind(mModel);
+            w = &place(std::make_shared<FloatWindow>(key, panel), 422.5, 390.0);
+        }
+        w->open();
+        bind(mModel, mInteracting);
+        return *w;
+    }
+
+    AutomationPanel *WindowLayer::automationPanel(const std::string &au) const
+    {
+        FloatWindow *w = window("auto:" + au);
+        return w ? static_cast<AutomationPanel *>(&w->content()) : nullptr;
+    }
+
     PianoRoll *WindowLayer::roll(const std::string &pt) const
     {
         FloatWindow *w = window("roll:" + pt);
@@ -220,6 +246,13 @@ namespace solaris_ui
                 w.setTitle(roll.title());
                 if (!roll.present() && w.isOpen()) w.close(); // a pattern deleted by anyone takes its roll with it
             }
+            else if (kv.first.rfind("auto:", 0) == 0)
+            {
+                auto &panel = static_cast<AutomationPanel &>(w.content());
+                panel.bind(m);
+                w.setTitle(panel.title());                    // a rename from anywhere retitles it
+                if (!panel.present() && w.isOpen()) w.close(); // an automation deleted by anyone takes its window with it
+            }
         }
     }
 
@@ -235,6 +268,7 @@ namespace solaris_ui
             w.layout();
             if (kv.first.rfind("dev:", 0) == 0) static_cast<DevicePanel &>(w.content()).layout();
             else if (kv.first.rfind("roll:", 0) == 0) static_cast<PianoRoll &>(w.content()).layout();
+            else if (kv.first.rfind("auto:", 0) == 0) static_cast<AutomationPanel &>(w.content()).layout();
         }
     }
 

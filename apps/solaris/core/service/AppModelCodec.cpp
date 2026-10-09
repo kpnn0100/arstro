@@ -123,8 +123,14 @@ namespace solaris
             {"automations[].points", "object[]", "sorted by at"},
             {"automations[].points[].at", "number", "beats"},
             {"automations[].points[].value", "number", "in the automation's unit"},
-            {"automations[].points[].shape", "string", "linear | hold | smooth — the segment after it"},
+            {"automations[].points[].shape", "string", "linear | hold | smooth | bezier — the segment after it (bezier: both its sides)"},
+            {"automations[].points[].speedIn", "number", "bezier (R-AUTO-10): the slope arriving, in the automation's unit per beat"},
+            {"automations[].points[].inflIn", "number", "bezier: how far into the segment before it that slope pulls, % (0 < x ≤ 100)"},
+            {"automations[].points[].speedOut", "number", "bezier: the slope leaving, unit per beat"},
+            {"automations[].points[].inflOut", "number", "bezier: how far into the segment after it, %"},
             {"automations[].usedBy", "string[]", "addresses whose formula reads it"},
+            {"automations[].now", "number", "its value at the playhead (`transport.position`) by the engine's own evaluator; follows the "
+                                            "transport while playing (R-AUTO-11)", false},
             {"bindings", "object[]", "every formula (R-AUTO-1/9)"},
             {"bindings[].address", "string", "what it drives"},
             {"bindings[].formula", "string", "as typed, with its leading ="},
@@ -282,9 +288,13 @@ namespace solaris
         for (const auto &a : m.automations)
         {
             Json pts = Json::array();
-            for (const auto &pt : a.points) pts.push(Json::object().set("at", pt.at).set("value", pt.value).set("shape", pt.shape));
-            autos.push(Json::object().set("id", a.id).set("name", a.name).set("unit", a.unit).set("from", a.from).set("min", a.min)
-                           .set("max", a.max).set("points", pts).set("usedBy", strings(a.usedBy)));
+            for (const auto &pt : a.points)
+                pts.push(Json::object().set("at", pt.at).set("value", pt.value).set("shape", pt.shape).set("speedIn", pt.speedIn)
+                             .set("inflIn", pt.inflIn).set("speedOut", pt.speedOut).set("inflOut", pt.inflOut));
+            Json ao = Json::object().set("id", a.id).set("name", a.name).set("unit", a.unit).set("from", a.from).set("min", a.min)
+                          .set("max", a.max).set("points", pts).set("usedBy", strings(a.usedBy));
+            if (!stable) ao.set("now", a.now);
+            autos.push(ao);
         }
         j.set("automations", autos);
         Json binds = Json::array();

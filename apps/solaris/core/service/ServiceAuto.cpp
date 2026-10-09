@@ -25,9 +25,37 @@ namespace solaris
         }
         bool shapeOk(const std::string &s, std::string &err)
         {
-            if (s == "linear" || s == "hold" || s == "smooth") return true;
-            err = "a point's shape is linear, hold or smooth — not `" + s + "`";
+            if (s == "linear" || s == "hold" || s == "smooth" || s == "bezier") return true;
+            err = "a point's shape is linear, hold, smooth or bezier — not `" + s + "`";
             return false;
+        }
+        /** R-AUTO-10: a bezier point's handles from the flags given; the others kept. */
+        bool handleFlags(const Command &c, AutoPoint &pt, bool &any, std::string &err)
+        {
+            static const char *speeds[] = {"speed-in", "speed-out"}, *infls[] = {"influence-in", "influence-out"};
+            double *speed[] = {&pt.speedIn, &pt.speedOut}, *infl[] = {&pt.inflIn, &pt.inflOut};
+            any = false;
+            for (int k = 0; k < 2; ++k)
+            {
+                if (c.has(speeds[k]))
+                {
+                    if (!numberFlag(c, speeds[k], *speed[k], err)) return false;
+                    any = true;
+                }
+                if (c.has(infls[k]))
+                {
+                    double v = 0;
+                    if (!numberFlag(c, infls[k], v, err)) return false;
+                    if (!(v > 0 && v <= 100))
+                    {
+                        err = std::string("--") + infls[k] + " is how far the handle reaches into the segment, 0 < x ≤ 100 %, not `" + c.flag(infls[k]) + "`";
+                        return false;
+                    }
+                    *infl[k] = v;
+                    any = true;
+                }
+            }
+            return true;
         }
         AutoPoint *pointAt(Automation &a, double at)
         {
@@ -171,9 +199,29 @@ namespace solaris
                     a->points.erase(a->points.begin() + (pt - a->points.data()));
                 else if (c.kind == K::AutoPointShape)
                 {
-                    const std::string s = c.flag("shape");
+                    // one line per gesture: the shape and, for a bezier point, its handles (R-AUTO-10)
+                    const std::string s = c.flag("shape", pt->shape);
                     if (!shapeOk(s, err)) return false;
-                    pt->shape = s;
+                    AutoPoint next = *pt;
+                    bool handles = false;
+                    if (!handleFlags(c, next, handles, err)) return false;
+                    if (handles && s != "bezier")
+                    {
+                        err = "--speed-*/--influence-* shape a BEZIER point's handles; the point at beat " + canonicalBeats(pt->at) + " is " + s +
+                              " — add --shape bezier";
+                        return false;
+                    }
+                    if (!c.has("shape") && !handles) { err = "auto point shape needs --shape (or a bezier point's --speed-*/--influence-*)"; return false; }
+                    next.shape = s;
+                    if (s != "bezier") // the file keeps handles only on a bezier point: so does the song
+                    {
+                        const AutoPoint flat;
+                        next.speedIn = flat.speedIn;
+                        next.inflIn = flat.inflIn;
+                        next.speedOut = flat.speedOut;
+                        next.inflOut = flat.inflOut;
+                    }
+                    *pt = next;
                 }
                 else
                 {

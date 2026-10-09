@@ -91,6 +91,7 @@ namespace solaris
             for (auto &bm : mModel.bindings)
                 for (size_t i = 0; i < mLiveBinds.size() && i < mLiveValues.size(); ++i)
                     if (mLiveBinds[i] == bm.address) { bm.live = mLiveValues[i]; break; }
+        refreshNow(); // the automations' values follow what is heard (R-AUTO-11)
     }
 
     bool SolarisService::auditionCommand(const Command &c, std::string &err)

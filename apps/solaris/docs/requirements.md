@@ -68,15 +68,15 @@ not built yet.
 `#amixer`, `#atrack` (strip), `#asend`, `#arack`/`#aeffect`, `#alane`, `#apattern`/`#note`,
 `#aclip` — and links nothing but the standard library: a device is its registry `type` plus its
 parameters as text, which the core checks against the DSP registry. `parseProject`
-(`model/Project.cpp:335`) reads the suite grammar: header `key = value`, node lines, indented
+(`model/Project.cpp:339`) reads the suite grammar: header `key = value`, node lines, indented
 continuation lines, whole-line and inline `;` comments (kept with the node they follow), unknown
 keys (kept in order) and unknown nodes (kept verbatim with their indented lines). The suite's
 inline `#note`s under an `#aclip` become a pattern of their own — the one normalisation, reported.
-`serializeProject` (`model/Project.cpp:619`) writes §10's canonical form: `canonicalNumber`
+`serializeProject` (`model/Project.cpp:623`) writes §10's canonical form: `canonicalNumber`
 (`model/Format.cpp:33`, shortest round-trip, always a point), `canonicalBeats` (`:52`, rounded to
 1/960 beat, fewest decimals that read back to the tick), seconds to the microsecond; defaults of
 optional fields are omitted. **Parse → serialize is a byte-exact fixed point** for canonical text.
-Refused, each naming what and where (`validateProject`, `model/Project.cpp:781`): duplicate ids,
+Refused, each naming what and where (`validateProject`, `model/Project.cpp:788`): duplicate ids,
 `master` as an id, unknown strip kinds, dangling references, an audio clip on a non-audio strip, a
 note clip on a non-instrument strip, `in ≥ out`, a clip before the song, two racks for one strip,
 an input port as a destination, a header that is not `app = solaris` / `timebase = beats` /
@@ -86,7 +86,7 @@ mutants checked: dropping unknown keys on write breaks the fixed point).
 
 ### DR-MIX-4 Routing only goes forward (R-MIX-4)
 `validateProject`'s `checkTarget` accepts an `out` or a send target only when it is `master`, an
-output port, or a strip `feedsForward` (`model/Project.cpp:745`) allows — one whose mixer's `order`
+output port, or a strip `feedsForward` (`model/Project.cpp:752`) allows — one whose mixer's `order`
 is GREATER than the source strip's — the ONE copy of the rule; anything else is refused as `ch_1 (Main, on Buses) output → ch_2 (kick, on Sources): a
 strip can only feed a strip on a LATER mixer, the master or a port (R-MIX-4)`. A file that routes
 backward does not load. Because of this, `Project::stripsInOrder` (`model/Project.cpp:113`) —
@@ -180,7 +180,7 @@ it as `silent`.
 
 ### DR-MIX-8/9/10 Fed by, the matrix, the audit (R-MIX-8, R-MIX-9, R-MIX-10)
 `refreshModel` (`core/service/ServiceModel.cpp:78`) computes each strip's `clipCount`, `fromLanes`
-and `fromStrips`. `matrix print [--json]` (`matrixText`, `:464`): rows = strips in processing order,
+and `fromStrips`. `matrix print [--json]` (`matrixText`, `:476`): rows = strips in processing order,
 columns = the buses, master and output ports; `●` = the main output, `-6.0pre` = a send's dB and tap.
 `audit` (`:366`): unused strips, strips that reach no output port, single-input and empty buses,
 clips on silent strips, offline files, unknown device types and parameters, and any strip or the
@@ -197,7 +197,7 @@ card — placed from the LIVE card widths, so it slides as cards grow in and shr
 and every instrument of the registry, each ONE `strip add --kind … [--instrument <type>] --mixer
 <mx>` (`MixerDock::openAddLine`, `MixerDock.cpp:810`); the new card grows in. A strip's menu offers
 "Move its clips to ▸" when it has clips and another strip of its kind exists — a second menu of those
-strips → `strip relink` (`MixerDock.cpp:1097`). On the lanes a clip's menu (`Timeline.cpp:585`) offers
+strips → `strip relink` (`MixerDock.cpp:1097`). On the lanes a clip's menu (`Timeline.cpp:588`) offers
 "Play through ▸" — the strips of its kind, the current one marked "now" → `clip move <ac> --strip
 <ch>` — then Piano Roll (a note clip), Duplicate, Delete.
 
@@ -334,7 +334,7 @@ fill, the close). The window ran on this machine's display (`solaris song.slp`, 
 (234 px), `Timeline` (`app/widgets/Timeline.cpp`) filling the rest. A row per lane in lane order,
 then a row per strip whose clips have no lane ("its strip's row"); a lane with no colour wears its
 first clip's. A clip is drawn on its row, coloured by its STRIP (`surface::track`), its name pinned
-to the visible edge when it begins off-screen (`paintClip`, `:639`); a note clip draws its
+to the visible edge when it begins off-screen (`paintClip`, `:642`); a note clip draws its
 pattern's notes repeated where it loops, the seams marked, and "linked ×N" when it shares its
 pattern. Ruler: bars from 1, the grid's ticks, every label faded in by its room (DR-UI-10). The
 playhead is `destructive`; it follows the transport while playing and eases 140 ms on a seek.
@@ -344,9 +344,9 @@ zoom and its finest level with room is THE snap step on the lanes (DR-UI-10). A 
 the pointer exactly, on that step, between LANES only, and lands as `clip move <ac> --at <b> [--lane
 <ln>]` (`:555`) where it was let go. A click selects (the teal ring cross-fades 200 ms between
 clips); Delete/Backspace → `clip delete`, Ctrl+D → `clip duplicate` (`app/App.cpp:312`); a ruler
-click → `transport seek <b>` on the grid you see (`Timeline.cpp:576`). **The picture travels
+click → `transport seek <b>` on the grid you see (`Timeline.cpp:579`). **The picture travels
 (§1):** the rows are Interstellar's `AnimatedRows` keyed by lane; each clip keeps an eased beat, row
-and opacity keyed by its id (`Timeline::advance`, `Timeline.cpp:302`) — it fades in when it arrives, fades out where it
+and opacity keyed by its id (`Timeline::advance`, `Timeline.cpp:304`) — it fades in when it arrives, fades out where it
 was when it goes (taking no input), eases 200 ms with its row when moved from a shell; the zebra
 follows the LIVE slot, a stripe's colour cross-fades, the empty-state words fade. Another song
 places everything where it is. Empty, it says what to do in words.
@@ -362,7 +362,7 @@ a tab or folder changed starts a new generation, so the old list fades where it 
 the new one fades in (`navigate`, `:96`); an inserted row fades in, a removed one out. A row is
 dragged out: the browser reports the pointer and the drop; `ProjectScreen` draws the ghost (the
 overlay pass) and the timeline's teal drop hint at the beat on the lanes' step (DR-UI-10; `overLanes`,
-`app/widgets/ProjectScreen.cpp:94`), and on release sends ONE line (`place`, `:103`): a sample → `clip add --src "<file>" --at <b> [--lane
+`app/widgets/ProjectScreen.cpp:95`), and on release sends ONE line (`place`, `:104`): a sample → `clip add --src "<file>" --at <b> [--lane
 <ln>]`; an instrument → `clip add --instrument <type> --at <b> --length 4 [--lane <ln>]` (the new
 strip and its empty note clip in one command, `core/service/ServiceEdit.cpp:421`); below the last
 lane, no `--lane` — a new lane; an effect → a notice that it goes on a strip (U3). A double-click
@@ -375,7 +375,7 @@ deleted. Every front end draws it as is.
 
 ### DR-UI-8 The mixer dock (R-UI-3, R-MIX-1/5/6/7/9/12, R-MIX-12 amended)
 `MixerDock` (`app/widgets/MixerDock.cpp`) sits under the lanes (`ProjectScreen::dockTarget`,
-`app/widgets/ProjectScreen.cpp:125`: 429 px wanted; its top edge dragged follows the pointer; the
+`app/widgets/ProjectScreen.cpp:126`: 429 px wanted; its top edge dragged follows the pointer; the
 chevron folds it to its tab bar, eased 220 ms; it gives way before the lanes, which keep 130 px).
 Tabs: a mixer page each, "+" (`mixer add`), Matrix; keyed (`syncTabs`) so a tab added slides the
 others along, measured in one weight so choosing a tab moves nothing; the highlight slides, the
@@ -427,12 +427,13 @@ down `bind` re-seeds nothing (`:277`); the body scrolls with its own bar (`revea
 
 ### DR-AUTO-1 Automations and bindings in the `.slp` (R-AUTO-1, R-AUTO-4)
 `Automation` (`model/Project.h`): id `au_n`, name, unit, min/max, `from`, points (beat, value, shape
-`linear|hold|smooth`, sorted). `Binding`: address + formula (with its `=`), one per address. Written
-after the clips as `#aauto` with `#point` children and `#abind` nodes (`serializeProject`); read by
-`parseProject` (`model/Project.cpp:425`), which also reads the suite schema's earlier sketch —
-indented `<beats> = <value>` lines and `node=/param=/interp=` — and normalises it once (`:480`).
-`validateProject` (`:847`) refuses two bindings on one address, a formula without `=`, a binding on
-something that does not exist, an empty range and an unknown shape.
+`linear|hold|smooth|bezier`, sorted; a bezier point's handles — DR-AUTO-6). `Binding`: address +
+formula (with its `=`), one per address. Written after the clips as `#aauto` with `#point` children
+and `#abind` nodes (`serializeProject`); read by `parseProject` (`model/Project.cpp:429`), which also
+reads the suite schema's earlier sketch — indented `<beats> = <value>` lines and
+`node=/param=/interp=` — and normalises it once (`:484`). `validateProject` (`:884`) refuses two
+bindings on one address, a formula without `=`, a binding on something that does not exist, an empty
+range, an unknown shape and a bezier influence outside 0 < x ≤ 100 % (`:910`).
 
 ### DR-AUTO-2 Formulas: parsed, resolved, ordered (R-AUTO-2, R-AUTO-3)
 `parseFormula` (`core/Formula.cpp:205`): recursive descent straight to the engine's postfix
@@ -448,12 +449,14 @@ its members; an unreadable binding is left out — INERT, its own value plays. `
 answers for one candidate beside the rest; `set` refuses on its answer.
 
 ### DR-AUTO-3 The engine evaluates them every 64 samples (R-AUTO-7)
-`compile` (`core/Compile.cpp:251`) turns automations into `engine::Curve`s (points in samples) and
+`compile` (`core/Compile.cpp:251`) turns automations into `engine::Curve`s (`compileCurve`, `:330`:
+Interstellar's keyframes in samples, speeds per sample, ranged as the automation — DR-AUTO-6) and
 bindings into `engine::Bind`s — target (strip gain/pan, send gain, master gain, a device parameter by
 registry index), clamp, integer, own value — with each symbol remapped: an automation → its curve's
 slot, a bound address → its binding's slot, an unbound address → its own value as a constant.
-`evaluateBinds` (`engine/Expr.h:156`) fills the clock, the curves (`Curve::valueAt`, `:109`) and each
-binding in order (`Expr::eval`, `:51`, a fixed stack, no allocation; a non-finite result keeps the last
+`evaluateBinds` (`engine/Expr.h:217`) fills the clock, the curves (`Curve::valueAt`, `:181`, Interstellar's
+`anim::eval`, clamped to the automation's range) and each
+binding in order (`Expr::eval`, `:59`, a fixed stack, no allocation; a non-finite result keeps the last
 good value). `Engine::render` (`engine/Engine.cpp:531`) cuts pieces at every multiple of `kControl` = 64
 samples and evaluates there (`evalBinds`, `:190`), so the result is the same however time is chopped;
 bound gains, pans and sends ramp linearly across the period, unbound strips render exactly as before.
@@ -464,18 +467,19 @@ Values at time zero are applied before the devices' warm-up (`:180`); a seek eva
 ### DR-AUTO-4 The service: commands, `set`, `eval`, the model (R-AUTO-1…5, 8, 9)
 `set <address>="=<formula>"` binds (`core/service/SolarisService.cpp:473`); a plain number clears the
 binding and sets the value; `get` prints the formula; an unquoted formula with spaces is refused with
-the quoting shown. `auto create <address>` (`core/service/ServiceAuto.cpp:83`) makes `au_n` named
+the quoting shown. `auto create <address>` (`core/service/ServiceAuto.cpp:111`) makes `au_n` named
 "<owner> · <label>", ranged as the address, holding its value from beat 0 to the song's end (at least
 four bars), and binds the address to `=au_n`; `auto add|delete` (refused while read, `--unbind`),
-`auto point add|move|delete|shape` (values clamped to the range), `bind clear`; deleting a strip, a
+`auto point add|move|delete|shape` (values clamped to the range; `shape` takes a bezier point's handles,
+DR-AUTO-6), `bind clear`; deleting a strip, a
 send or a device drops the bindings that drive them. `eval <address> [--at] [--explain]`
-(`:213`) compiles and evaluates with the engine's own function and prints each name it reads.
+(`:261`) compiles and evaluates with the engine's own function and prints each name it reads.
 `refreshModel` (`core/service/ServiceModel.cpp:276`) publishes `bindings[]` (reads, ok, problem),
-`automations[]` (points, usedBy), `params[].formula`, `strips[].gainFormula/panFormula`,
-`sends[].gainFormula`, `masterGainFormula`, `devices[].lastChanged` and — **AMENDED (R-MIX-16, 2026-10-09)** —
-`bindings[].live`, each binding's value at the heard position (`evaluateLive`, `:347`; DR-MIX-16); `audit` (`:366`) names inert
+`automations[]` (points with their handles, usedBy, `now` — DR-AUTO-7), `params[].formula`,
+`strips[].gainFormula/panFormula`, `sends[].gainFormula`, `masterGainFormula`, `devices[].lastChanged` and — **AMENDED (R-MIX-16, 2026-10-09)** —
+`bindings[].live`, each binding's value at the heard position (`evaluateLive`, `:352`; DR-MIX-16); `audit` (`:345`) names inert
 bindings and automations no formula reads. While playing, a binding or curve edit — or a `set` on an
-address a formula reads — swaps in a new engine (`core/service/ServiceTransport.cpp:247`).
+address a formula reads — swaps in a new engine (`core/service/ServiceTransport.cpp:248`).
 
 ### DR-EDM-1 Undo and redo (R-EDM-1)
 After every edit that LANDED, `dispatch` keeps the song as it was before it (`core/service/SolarisService.cpp:216`),
@@ -517,10 +521,10 @@ it is taller than the window (R6); `revealRect` brings a control in.
 `FloatWindow` (`app/widgets/FloatWindow.cpp`): a frame — a 26 px title bar (title, ×) over its content.
 Dragged by the title it follows the pointer exactly, kept inside the layer; touched anywhere it is
 raised; `open`/`close` record intent and `advance` fades it (150 / 120 ms); while closing it takes no
-input (`handleGesture`, `:54`). `WindowLayer` covers the song view under the song bar (over the lanes,
-dock and browser) and keeps windows keyed — `dev:<dv>` (`openDevice`, `:126`: a new one cascades from
-the top right) and `roll:<pt>` (`openRoll`, `:149`, DR-ROLL-1) — reopening a closed one where it was; titles follow the model ("Basic Synth — Bass")
-and a window whose device is removed by anyone closes (`bind`, `:195`). Rack chips and an instrument
+input (`handleGesture`, `:55`). `WindowLayer` covers the song view under the song bar (over the lanes,
+dock and browser) and keeps windows keyed — `dev:<dv>` (`openDevice`, `:127`: a new one cascades from
+the top right), `roll:<pt>` (`openRoll`, `:150`, DR-ROLL-1) and `auto:<au>` (`openAutomation`, `:167`, DR-AUTO-7) — reopening a closed one where it was; titles follow the model ("Basic Synth — Bass")
+and a window whose device is removed by anyone closes (`bind`, `:221`). Rack chips and an instrument
 strip's name (double-click) in the dock open them; a chip is outlined while its window is open.
 Placement and stacking are the view's. The dock's floating panel is gone (R-UI-5 amended).
 
@@ -528,15 +532,19 @@ Placement and stacking are the view's. The dock's floating panel is gone (R-UI-5
 `Timeline` (`app/widgets/Timeline.cpp:162`) appends a row per automation after the lanes, keyed
 `auto:<au>` in the same `AnimatedRows` (a lane added slides them down; a new one grows in), its header
 the accent stripe, its name and the address that reads it. `TimelineAuto.cpp` draws the curve over the
-beat grid — holding the first value before the first point and the last after, linear / hold / smooth
-(smoothstep) per segment, on a log scale for Hz and ms (`valueToY`, `:43`) — with the points as
-handles (`paintAutomation`, `:161`). `autoGesture` (`:196`): a click on the row adds a point at the
-lanes' snap step under the pointer (DR-UI-10; `:263`) with the value under it (`auto point add`); a
-point dragged is drawn under the pointer while held (its beat on the same step, `:222`) and sends ONE `auto point move <au> --at <from> --to <to>
---value <v>` on release, staying where it was let go; a double-click deletes it; a right-click offers
-Linear / Hold / Smooth, Delete Point and Delete Automation (`auto delete --unbind`). A curve the model
-changes eases there point by point over 220 ms; a point added or removed cross-fades the two curves
-(`shownPoints`, `:30`).
+beat grid by the ENGINE's keys (`keysOf`, `:44` → `engine::curveKeys`; `paintCurve`, `:296`, samples
+each non-linear segment with `anim::segment`) — holding the first value before the first point and the
+last after, linear / hold / smooth / bezier per segment, on a log scale for Hz and ms (`valueToY`,
+`:107`) — with the points as handles and a bezier point's two handle stems (`paintAutomation`, `:347`).
+`autoGesture` (`:389`): a click on the row adds a point at the
+lanes' snap step under the pointer (DR-UI-10; `:496`) with the value under it (`auto point add`) once the double-click has had its chance — 350 ms, a ghost point
+drawn at once and fading in meanwhile (`:503`, sent by `advanceAuto`, `:268`; **AMENDED (R-AUTO-11)**:
+a double-click there opens the window instead); a point dragged is drawn under the pointer while held
+(its beat on the same step, `:424`) and sends ONE `auto point move <au> --at <from> --to <to> --value <v>` on release,
+staying where it was let go; a double-click ON a point deletes it; a right-click offers Linear / Hold /
+Smooth / Bezier, Delete Point and Delete Automation (`auto delete --unbind`). A curve the model changes
+eases there point by point over 220 ms — handles too; a point added or removed, or a shape changed,
+cross-fades the two curves (`shownPoints`, `:84`).
 
 ### DR-ROLL-1 The piano roll (R-ROLL-1…5, R-EDM-6)
 **Grammar.** `note move <pt> --pitch <p> --at <b> [--to-pitch <p>] [--to-at <b>] [--length <b>] [--vel
@@ -548,8 +556,8 @@ its first clip plays through and that strip's instrument (`patterns[].strip`, `.
 device type its named keys (`deviceTypes[].noteNames`, `core/service/ServiceModel.cpp:117`) — the DSP
 registry's (REQ-device-6: the Drum Machine's ten pads, Kick = 36 …).
 **The window.** `PianoRoll` (`app/widgets/PianoRoll.cpp`) is the content of a `roll:<pt>` window
-(`WindowLayer::openRoll`, `app/widgets/FloatWindow.cpp:149`), opened by double-clicking a note clip
-(`Timeline.cpp:581`) or by an instrument window's "Piano Roll" (`DevicePanel.cpp:492` — the strip's
+(`WindowLayer::openRoll`, `app/widgets/FloatWindow.cpp:150`), opened by double-clicking a note clip
+(`Timeline.cpp:584`) or by an instrument window's "Piano Roll" (`DevicePanel.cpp:492` — the strip's
 pattern; a menu when it plays several; `clip add --strip` and then its roll when it has none). Titled
 "Piano Roll — <pattern> · <strip>"; a pattern gone closes it. A toolbar: snap 1/4 · 1/8 · 1/16
 (default) · 1/32 · Off, Notes | Steps, Quantize… (a menu of three lines: straight, swing 25 %, 50 %, at
@@ -593,17 +601,17 @@ Solaris's way, 0 of 96 000 samples differing, not silence, its state read back a
 
 ### DR-MIX-15 The sidechain: a key into a later strip's compressor (R-MIX-15, R-EDM-3)
 `send add <ch> --to <ch2> --sidechain [--pre] [--gain]` makes a KEY (`#asend … sidechain=true`,
-`<send>.sidechain` settable): `keysForward` (`model/Project.cpp:751`) allows any strip later in processing
+`<send>.sidechain` settable): `keysForward` (`model/Project.cpp:758`) allows any strip later in processing
 order, its own mixer included — the validator holds a key to it and refuses the master or a port
-(`:822`), an audible send stays `feedsForward`; `strips[].keyTargets` (`keyTargetsOf`, `:759`) is what a
+(`:822`), an audible send stays `feedsForward`; `strips[].keyTargets` (`keyTargetsOf`, `:766`) is what a
 picker offers. The engine sums a key into the target's KEY buffers instead of its input (`routeKey`,
 `engine/Engine.cpp:296`) and hands them to every device whose type `takesKey` before it runs (`:396`) —
 the DSP Compressor with Sidechain on detects on it (DSP REQ-fx-sidechain-1); silence when nothing keys
 it. A strip silenced by another's SOLO still keys (`keyLive`, `core/Compile.cpp:161`; `Engine.cpp:410`) and
 a key does not pull its source into a solo (`Compile.cpp:52`), so a soloed bass keeps its pump while the
 kick stays silent; a MUTED strip keys nothing (live, a mute in a song with keys swaps the engine,
-`core/service/ServiceTransport.cpp:277`). The audit names a key that no compressor with Sidechain on
-hears (`core/service/ServiceModel.cpp:451`). In the dock a key reads "key <target>" in the solo amber,
+`core/service/ServiceTransport.cpp:278`). The audit names a key that no compressor with Sidechain on
+hears (`core/service/ServiceModel.cpp:463`). In the dock a key reads "key <target>" in the solo amber,
 and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:1104`).
 Measured (L2): a ghost kick (−120 dB fader, pre-fader key) through −30 dB at 4:1 dips a −6 dBFS bass
 6–22.5 dB 15–35 ms after each kick, back within 1 dB before the next; identical with the bass soloed;
@@ -626,7 +634,7 @@ never exceeds its ceiling by construction (measured in the DSP suites).
 
 ### DR-EDM-7 The loop region on the ruler (R-EDM-7, R-TIME-4)
 `Timeline` draws the model's `transport.loopFrom … loopTo` as a brace on the ruler, its ends marked, in
-the accent, and tints the region on the lanes under the clips (`app/widgets/Timeline.cpp:801`, `:892`;
+the accent, and tints the region on the lanes under the clips (`app/widgets/Timeline.cpp:804`, `:892`;
 `loopRect`, `:452`). It is eased (`:330`): it fades in where it is when a loop appears, fades out when
 it goes, and a loop changed by anyone moves there over 220 ms. `loopGesture` (`:460`): Shift-drag on the
 ruler draws the brace under the pointer (both ends on the lanes' snap step, like a seek — DR-UI-10,
@@ -646,10 +654,10 @@ refused on a type that plays none. Compile decodes it through the same cache as 
 device's description (`core/Compile.cpp:102`); the engine hands it in at build, never on the audio thread
 (`engine/Engine.cpp:49`); a change of sound is a structural live update (an engine swap). The model
 gives `devices[].takesSample`, `.sample` and `deviceTypes[].takesSample`; the audit names a sampler with
-no sound or an unreadable one (`core/service/ServiceModel.cpp:430`). In the UI a sampler's window names
+no sound or an unreadable one (`core/service/ServiceModel.cpp:442`). In the UI a sampler's window names
 its sound where others name their type (`DevicePanel::sampleText`, `app/widgets/DevicePanel.cpp:417`),
 and a browser sample dragged over it lights the window (eased) and drops as ONE `set <dv>.sample=`
-(`WindowLayer::samplerAt`, `app/widgets/FloatWindow.cpp:241`; `app/widgets/ProjectScreen.cpp:88`).
+(`WindowLayer::samplerAt`, `app/widgets/FloatWindow.cpp:275`; `app/widgets/ProjectScreen.cpp:89`).
 Measured (L2): at the root the render IS the decoded file sample for sample (a mutant whose engine skips
 `setSample` fails it), an octave up is 2 kHz and over in half the time.
 
@@ -659,7 +667,7 @@ with or without a song open. The file is decoded through the clips' cache and pl
 `Auditioner` (`core/Auditioner.cpp:40`) — its OWN output stream and thread, so a preview is heard
 whether the song plays or not, at the `auditionLevel` setting (dB, default −6), to its end, then it
 stops itself; it never allocates on its thread and is never in a render (a render does not know it).
-`auditionCommand` (`core/service/ServiceTransport.cpp:96`) refuses a file it cannot read naming it; the
+`auditionCommand` (`core/service/ServiceTransport.cpp:97`) refuses a file it cannot read naming it; the
 service's `pump` (`:65`) carries its progress into `audition.{file, playing, progress}` and announces its
 end (`audition.changed … playing=0`); the model keeps it across refreshes, and the App re-binds while it
 plays and once when it ends (`app/App.cpp:238`). In the browser a click on a sample hears it, a click on
@@ -673,26 +681,26 @@ the audition level, sample for sample; it ends itself, said.
 **The levels.** The lanes' grid has seven: a bar (the song's meter), a beat, and 1/2, 1/4, 1/8, 1/16
 and 1/32 of a beat (`Timeline::gridSpan`, `app/widgets/Timeline.cpp:59`). How much of a level is drawn
 is a smoothstep of its line spacing at the EASED zoom — nothing closer than 6 px, all of it from 16 px
-apart (`kGridHidePx`, `kGridFullPx`, `app/widgets/Timeline.h:73`; `room`, `Timeline.cpp:30`;
+apart (`kGridHidePx`, `kGridFullPx`, `app/widgets/Timeline.h:81`; `room`, `Timeline.cpp:30`;
 `gridAlpha`, `:64`) — recomputed every frame, so a Ctrl+wheel zoom (eased 220 ms) fades a level in or
 out with it and never pops one. A line is drawn once, by the coarsest level it belongs to: bars
 strongest (white 7 %), beats next (4 %), the divisions faintest (2.2 %); every fourth bar is always
-drawn, so a far-out song keeps its phrases (`paintGrid`, `:699`). The ruler repeats the levels as ticks
+drawn, so a far-out song keeps its phrases (`paintGrid`, `:702`). The ruler repeats the levels as ticks
 — long for a bar, shorter as they get finer — and its labels are MEASURED against their room: a bar's
 number fades in as its every-1/2/4/… bars get room for the widest number in view, and zoomed in the
-beats are named `bar.beat` (`2.3`), fading in as a beat gets room for one (`paintRuler`, `:721`; the
+beats are named `bar.beat` (`2.3`), fading in as a beat gets room for one (`paintRuler`, `:724`; the
 labels `:751`). The old fixed thresholds, which swapped the labels in one frame mid-zoom, are gone.
 
 **The step.** THE snap step is the finest level whose lines are at least 11 px apart (`kSnapPx` — past
 half drawn: you snap to lines you can see), never coarser than a bar; at the deepest zoom it is 0 and
 nothing snaps (`snapStep`, `:73`; `atDeepestZoom`, `:70`). `snap()` (`:80`) is the ONE rounding of
 every gesture on the lanes: a ruler click → `transport seek` (`:575`), a clip drag (`:538`), the loop's
-Shift-drag (`:469`), an automation point added or dragged (`app/widgets/TimelineAuto.cpp:263`, `:222`),
-the browser's drop and its hint (`app/widgets/ProjectScreen.cpp:98`) — at the deepest zoom the tick
+Shift-drag (`:469`), an automation point added or dragged (`app/widgets/TimelineAuto.cpp:496`, `:222`),
+the browser's drop and its hint (`app/widgets/ProjectScreen.cpp:99`) — at the deepest zoom the tick
 under the pointer. Every gesture is still ONE command, its beats printed to the tick: rounded to 1/960
 and spelled with the fewest decimals that keep it (`Timeline::beatText`, `Timeline.cpp:44` — the `%g`
 it replaces kept six significant digits, so past beat 1000 a line lost ticks). The step is published
-LIVE for tests (`snapStep`, `snapLabel`, `gridAlpha`, `snapLabelAmount`, `Timeline.h:102`) and named in
+LIVE for tests (`snapStep`, `snapLabel`, `gridAlpha`, `snapLabelAmount`, `Timeline.h:110`) and named in
 the ruler's corner over the lane headers — `Snap Bar`, `1/4` … `1/128`, `Off`, in the piano roll's note
 values (a beat = 1/4) — cross-faded 200 ms when it changes, older names fading out from where they are
 however fast the wheel turns (`stepName`, `Timeline.cpp:88`; `advance`, `:310`; `paintRuler`, `:723`).
@@ -704,7 +712,7 @@ place (`:620`). **Decision:** the deepest zoom rose from 320 px/beat so that 1/3
 a bar below 11.5 px/beat, a beat from 11.5, 1/2 from 22.4 (a song opens at 28: bars, beats and halves
 drawn, the step 1/2), 1/4 from 55, 1/8 from 107, 1/16 from 209, 1/32 from 408, nothing at 637.
 
-**Proof.** `test_the_grid_follows_the_zoom` (`app/tests/ui/uiTests.cpp:1309`) drives the real service:
+**Proof.** `test_the_grid_follows_the_zoom` (`app/tests/ui/uiTests.cpp:1472`) drives the real service:
 at the default zoom a ruler click at beat 3.3 seeks 3.5 (a fixed quarter says 3.25); a level's alpha
 is caught mid-fade during an eased two-notch zoom, between its two ends; at 1/8 a seek, a clip drag
 (on the step while held, then `clip move ac_1 --at 3.125`) and an instrument dropped from the browser
@@ -727,7 +735,7 @@ in the matrix → `<sd>.gain`, the master fader → `project.masterGain` (the ad
 R-AUTO-1); Reset is 0 (unity, the centre); any other right-click on a card is still the strip's menu.
 
 **The value at the heard position, published.** `bindings[].live` (`AppModel.h`). Stopped: `evaluateLive`
-(`core/service/ServiceModel.cpp:347`) compiles the song as `eval` does and evaluates every binding with the
+(`core/service/ServiceModel.cpp:352`) compiles the song as `eval` does and evaluates every binding with the
 engine's own `evaluateBinds` at the transport's position (an inert binding: its own value) — so it equals
 `eval <address> --at <position>`. Playing: after every block the `Player` copies `Engine::bindValues()` into a
 ring of 64 slots of pre-sized atomics (`keepLive`, `core/Player.cpp:103` — stores only; a sequence number
@@ -748,13 +756,13 @@ level. What drives each: a tag over the fader — `auto au_1`, `= ch_3.gain`, `=
 `:1121`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
 in and out (200 ms) and its text cross-fades when the formula changes (`:603`).
 
-Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1110`): stopped, `live` is
+Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1201`): stopped, `live` is
 `eval`'s number at the position; playing (a fake clock device), a −2 dB-a-beat ramp is within 0.1 dB of the
 curve at the heard position at beats 2…12 and falling, a link (`=ch_2.gain / 2`) exactly half of it, a device
 formula `1000 + 500 * sin(beat)` within 25 Hz; after a structural edit while playing the new engine's order is
 read; 0 allocations on the audio thread. Mutants: `pump` ignoring the player → stuck at 0 dB at beat 2;
 `bindValues()` copied on the audio thread → 1019 allocations. UI `test_the_mixers_numbers_bind_from_the_dock`
-(`app/tests/ui/uiTests.cpp:1092`): a fader's right-click is the parameter menu, Create Automation is `auto create
+(`app/tests/ui/uiTests.cpp:1255`): a fader's right-click is the parameter menu, Create Automation is `auto create
 ch_2.gain` and the tag fades in (caught mid-tween); Formula… on a pan sends `set ch_3.pan="=0.25 - 0.75"` and
 the knob EASES onto −0.5; a send copies `-8.0 dB` and `=sd_1.gain`; the master copies `project.masterGain`;
 Clear Binding fades the tag out; playing, the fader equals `faderPos(live)` every frame and moves. Mutants:
@@ -767,11 +775,11 @@ a send and the master on formulas) and `copied-toast`.
 (`core/service/ServiceMachine.cpp:89`), published as `settings.showIds` — so an agent turns the ids on as the
 View menu does (View › Show IDs / Hide IDs, `app/App.cpp:144`).
 
-**Drawn, faded.** `ProjectScreen` eases ONE amount from the model's setting (`app/widgets/ProjectScreen.cpp:174`,
+**Drawn, faded.** `ProjectScreen` eases ONE amount from the model's setting (`app/widgets/ProjectScreen.cpp:175`,
 200 ms; `idsAmount()` is the live value) and hands it to every widget that draws ids; `drawNameWithId`
 (`app/widgets/ParamMenu.cpp:84`) draws a name with its id right-aligned in the accent's mono, the name giving
 way by the EASED amount. Where: lane headers (the lane's id; a strip's own row, the strip's) and automation
-rows (`au_n`) (`app/widgets/Timeline.cpp:865`, `:715`); clips (`ac_n`, and a note clip's pattern `pt_n`;
+rows (`au_n`) (`app/widgets/Timeline.cpp:868`, `:715`); clips (`ac_n`, and a note clip's pattern `pt_n`;
 `:558` — "linked ×N" fades out for them); in the dock each strip card (`ch_n`), the master (`master`), each
 rack chip (`dv_n`) and each send (`sd_n`, cross-fading with "→ name") (`paintCard`,
 `app/widgets/MixerDock.cpp:1176`); a device window's rows show their FULL address (`dv_1.filter.cutoff`) in a
@@ -779,8 +787,8 @@ pill over the label (`ParamIds`, `app/widgets/DevicePanel.cpp:179`); its header 
 
 **Copied, by the host.** Copy Address / Copy Value / Copy as Formula on a device parameter row and on the
 dock's faders, pans, sends and master (DR-MIX-16; a choice row has no "as Formula" — no formula reads a
-choice); Copy ID on a clip (`app/widgets/Timeline.cpp:612`), a strip's and a mixer tab's menu in the dock; Copy ID
-and Copy as Formula (`=au_1`) on an automation row (`app/widgets/TimelineAuto.cpp:299`). The clipboard is the
+choice); Copy ID on a clip (`app/widgets/Timeline.cpp:615`), a strip's and a mixer tab's menu in the dock; Copy ID
+and Copy as Formula (`=au_1`) on an automation row (`app/widgets/TimelineAuto.cpp:560`). The clipboard is the
 HOST's (the core has none, R-SVC-4): `App::onCopy`, which `linux_main.cpp:194` gives GTK's CLIPBOARD and
 PRIMARY selections and the test rig records (`Rig::copied`). A copy says so: `App::copy` (`app/App.cpp:186`)
 toasts "Copied dv_1.filter.cutoff", outlined in the accent (a refusal's toast stays red). When hosting lands,
@@ -788,10 +796,67 @@ a third-party VST3's parameter list (R-VST-6) builds a `ParamTarget` per row and
 
 Measured. L2 (`test_the_machine_settings_folders_devices_and_recents`): `settings set showIds=on` reaches the
 model and the file and a second process reads it; `showIds=yes` is refused. UI `test_ids_shown_and_copied`
-(`app/tests/ui/uiTests.cpp:1190`): View › Show IDs sends `settings set showIds=on`, the ids' amount caught between 0
+(`app/tests/ui/uiTests.cpp:1353`): View › Show IDs sends `settings set showIds=on`, the ids' amount caught between 0
 and 1, then 1, the item reads Hide IDs; a shell's `showIds=off` fades them out the same way; a parameter row
 copies `dv_1.filter.cutoff`, `900 Hz`, `=dv_1.filter.cutoff` (toasted); a choice row offers no "as Formula";
 a clip copies `ac_1`, an automation `=au_1` and `au_1`. Mutant: the ids SET instead of eased → the mid-tween
 assertion fails. Shots `show-ids` (lanes, clips, an automation, the dock and a device window's rows) and
 `show-ids-mid` (mid-fade).
 
+### DR-AUTO-6 Bezier automation (R-AUTO-10)
+ONE curve model in the suite (law 16): a curve IS Interstellar's keyframe list, and Interstellar's
+header-only evaluator (`apps/interstellar/model/Anim.h` — After Effects' key, each side linear | bezier |
+hold with a speed and an influence) is INCLUDED in place by the engine (`engine/Expr.h:22`), not ported:
+it allocates nothing (a fixed 48-step bisection on the Bézier's time component, doubles only), so the
+audio thread runs it every 64 samples as it runs the formulas. A `#point` (`AutoPoint`,
+`model/Project.h:149`) keeps `shape=` and gains Interstellar's spelling for a bezier point's handles —
+`speedIn inflIn speedOut inflOut`, speeds in the automation's unit PER BEAT (the `.slp`'s timebase),
+influences in % (0 < x ≤ 100), read always (`model/Project.cpp:318`), written only for a bezier point
+(`:735`), so a file of linear / hold / smooth points reads and writes byte for byte as before.
+`engine::curveKeys` (`engine/Expr.h:139`) is the ONE mapping of a point onto a key's two sides, used by
+the compiler and the timeline's drawing alike: linear → both sides linear; hold → its out side holds;
+smooth → After Effects' Ease on the segment after it (speed 0, influence ⅓ on both ends — a Bézier
+whose time is exactly linear, so its value is exactly R-AUTO-4's smoothstep, to 1e-9 measured) unless
+the next point is bezier, whose own handle wins on its side; bezier → both sides bezier with its
+handles. `compileCurve` (`core/Compile.cpp:330`) converts beats to samples (speeds ÷ samples per beat)
+and ranges the curve: `Curve::valueAt` (`engine/Expr.h:181`) clamps to the automation's min/max, so a
+handle's overshoot stops where the drawing (which clamps to the row) stops. Grammar: `auto point shape
+<au> --at <b> [--shape bezier] [--speed-in <v>] [--influence-in <%>] [--speed-out <v>] [--influence-out
+<%>]` — flags not given are kept, so a bezier point takes one handle's numbers alone; refused, naming
+it, are a handle flag on a point that is not (or is not becoming) bezier, an influence outside
+0 < x ≤ 100 %, a speed that is not a number, no flag at all (`handleFlags`,
+`core/service/ServiceAuto.cpp:33`; `:200`). `auto point add --shape bezier` starts flat (speed 0,
+influence 33.333 %, Interstellar's default key). In the timeline (`app/widgets/TimelineAuto.cpp`) —
+cosmo's `CurvePanel` gesture over Interstellar's numbers: a handle's end is its influence of the
+segment on its side along its speed (`handleEnd`, `:63`); Alt-drag a point pulls out symmetric handles
+(both sides the pointer's slope, both reaching the pointer's distance in beats), a handle dragged moves
+its own side and MIRRORS the opposite, Alt-drag a handle moves only its own (`dragHandle`, `:214`); a
+handle is clamped between its point and the neighbour. While held it is drawn under the pointer
+exactly (`drawnPoints`, `:166`; `autoHandleAt`, `:192`); the release sends ONE `auto point shape …
+--shape bezier --speed-in … --influence-in … --speed-out … --influence-out …` with the numbers it
+draws parsed back from that text, so the model returns exactly what is drawn and nothing eases after
+(`:437`). Measured (L2, `solaris_service`): a bezier gain −24 → 0 dB over 8 beats with 80 % / 70 %
+influences renders, at beats 1…7, the level `eval` prints (= the cubic solved independently by Newton,
+to 1e-6 dB) within 0.05 dB (worst 0.019 dB); the engine test checks linear and hold bit for bit, smooth
+against smoothstep, bezier against the cubic to 1e-9 and no allocation.
+
+### DR-AUTO-7 The automation's window (R-AUTO-11)
+A double-click on an automation row's HEADER (`app/widgets/TimelineAuto.cpp:511`), or on its curve away
+from a point (`:536` — the first click's pending point is dropped, so the gesture adds nothing),
+calls `onOpenAutomation` (`app/widgets/ProjectScreen.cpp:54`) → `WindowLayer::openAutomation`
+(`app/widgets/FloatWindow.cpp:167`): an `auto:<au>` FloatWindow (fading in and out as every window does)
+around an `AutomationPanel`, titled "Automation — <name>" and closed when anyone deletes the automation
+(`WindowLayer::bind`, `app/widgets/FloatWindow.cpp:249`). Every line is the model's (`AutomationPanel::bind`,
+`app/widgets/AutomationPanel.cpp:56`): name, id, range in its unit, the address it was made from, its
+points (beat, value, shape — a bezier point's speeds and influences), every formula that reads it
+(`usedBy`, each with its binding's formula from `bindings[]`), and its value at the playhead —
+`automations[].now`, which the service computes with the engine's own compiled curve
+(`compileCurve`) at `transport.position` in `refreshModel` (`core/service/ServiceModel.cpp:321`,
+`refreshNow`, `:338`) and again in `pump` while playing (`core/service/ServiceTransport.cpp:94`); it is
+left out of `state print --stable`, as the position is. The rows are an `AnimatedRows` keyed by what
+they say — a point added slides the rows below and fades in, an edit or a rename cross-fades its row;
+the value at the playhead follows the transport continuously while playing and eases to a seek or an
+edit (`app/widgets/AutomationPanel.cpp:105`). Rename is cosmo's field over the header's button and ONE
+`set <au>.name=…` (an address that already existed, R-AUTO-4; `app/widgets/AutomationPanel.cpp:185`). A double-click ON a point still deletes it
+(R-AUTO-6). Measured (L2): `now` equals `eval` at the sought beat and the cubic while playing; (UI) the
+window caught mid-fade, the facts present, `now` and a new row caught mid-tween, the rename one line.

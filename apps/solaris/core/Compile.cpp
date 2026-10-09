@@ -256,16 +256,9 @@ namespace solaris
         std::map<std::string, int> curveOf;
         for (const auto &a : p.automations)
         {
-            engine::Curve c;
-            for (const auto &pt : a.points)
-            {
-                c.at.push_back(std::llround(pt.at * spb));
-                c.value.push_back(pt.value);
-                c.shape.push_back(pt.shape == "hold" ? engine::Curve::Hold : pt.shape == "smooth" ? engine::Curve::Smooth : engine::Curve::Linear);
-            }
             curveOf[a.id] = (int)g.curves.size();
             r.curveIds.push_back(a.id);
-            g.curves.push_back(std::move(c));
+            g.curves.push_back(compileCurve(a, spb));
         }
         std::vector<std::string> problems;
         const auto ordered = orderBindings(p, problems);
@@ -332,6 +325,29 @@ namespace solaris
             g.binds.push_back(std::move(b));
         }
         return r;
+    }
+
+    engine::Curve compileCurve(const Automation &a, double spb)
+    {
+        std::vector<engine::CurvePoint> pts;
+        pts.reserve(a.points.size());
+        for (const auto &pt : a.points)
+        {
+            engine::CurvePoint c;
+            c.t = (double)std::llround(pt.at * spb);
+            c.v = pt.value;
+            if (!engine::shapeNamed(pt.shape, c.shape)) c.shape = engine::CurvePoint::Linear; // validate refuses it first
+            c.speedIn = pt.speedIn / spb; // the .slp's are per BEAT
+            c.inflIn = pt.inflIn;
+            c.speedOut = pt.speedOut / spb;
+            c.inflOut = pt.inflOut;
+            pts.push_back(c);
+        }
+        engine::Curve curve;
+        curve.keys = engine::curveKeys(pts);
+        curve.lo = a.min;
+        curve.hi = a.max;
+        return curve;
     }
 }
 }

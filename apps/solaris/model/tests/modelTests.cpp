@@ -180,6 +180,58 @@ static void test_automation_sketch_and_binding_refusals()
     pass("#aauto + #point and #abind: the schema sketch normalises once; one binding per address, on something real (R-AUTO-1/4)");
 }
 
+static void test_bezier_points_round_trip_and_old_shapes_stay_byte_identical()
+{
+    // R-AUTO-10: a bezier point carries Interstellar's handles (speed per beat, influence %), written
+    // only for a bezier point — so a file of linear / hold / smooth points reads and writes exactly
+    // as it did before bezier existed.
+    const std::string head =
+        "arstro-project = 1\napp        = solaris\nid         = prj_9\ntimebase   = beats\nbpm        = 120.0\nsig        = 4/4\n"
+        "ppq        = 960\nsampleRate = 48000\nmasterGain = 0.0\n\n"
+        "#amixer id=mx_1 name=Sources order=0\n\n"
+        "#atrack id=ch_1 name=Main kind=bus mixer=mx_1 order=0 gain=0.0 pan=0.0\n\n";
+    const std::string old = head +
+        "#aauto id=au_1 name=Sweep unit=dB min=-60.0 max=6.0 from=ch_1.gain\n"
+        "  #point at=0.0 value=-60.0\n"
+        "  #point at=2.0 value=-12.0 shape=hold\n"
+        "  #point at=4.0 value=0.0 shape=smooth\n"
+        "  #point at=8.0 value=-6.0\n";
+    Project p;
+    std::string err;
+    ParseReport rep;
+    assert(parseProject(old, p, err, &rep) && rep.repaired == 0);
+    if (serializeProject(p) != old) std::printf("--- got:\n%s\n--- want:\n%s\n", serializeProject(p).c_str(), old.c_str());
+    assert(serializeProject(p) == old);                                    // the old shapes: byte for byte
+    const std::string bez = head +
+        "#aauto id=au_1 name=Sweep unit=dB min=-60.0 max=6.0 from=ch_1.gain\n"
+        "  #point at=0.0 value=-60.0\n"
+        "  #point at=2.0 value=-12.0 shape=bezier speedIn=-4.5 inflIn=62.5 speedOut=12.0 inflOut=20.0\n"
+        "  #point at=4.0 value=0.0 shape=bezier speedIn=0.0 inflIn=33.333 speedOut=0.0 inflOut=33.333 future=kept\n"
+        "  #point at=8.0 value=-6.0 shape=smooth\n";
+    Project q;
+    assert(parseProject(bez, q, err, &rep) && rep.repaired == 0 && validateProject(q).empty());
+    if (serializeProject(q) != bez) std::printf("--- got:\n%s\n--- want:\n%s\n", serializeProject(q).c_str(), bez.c_str());
+    assert(serializeProject(q) == bez);                                    // a fixed point, unknown keys kept
+    const AutoPoint &b = q.automation("au_1")->points[1];
+    assert(b.shape == "bezier" && b.speedIn == -4.5 && b.inflIn == 62.5 && b.speedOut == 12.0 && b.inflOut == 20.0);
+    assert(q.automation("au_1")->points[2].unknown.size() == 1);
+    // a point turned linear again drops its handles from the file
+    q.automations[0].points[1].shape = "linear";
+    assert(!contains(serializeProject(q), "speedIn=-4.5"));
+    // an influence outside 0 < x ≤ 100 %, a bad shape: refused, named
+    q.automations[0].points[1].shape = "bezier";
+    q.automations[0].points[1].inflOut = 140.0;
+    q.automations[0].points[2].shape = "bounce";
+    bool infl = false, shape = false;
+    for (const auto &x : validateProject(q))
+    {
+        infl |= contains(x, "au_1's bezier point at beat 2.0 has an influence outside 0 < x");
+        shape |= contains(x, "shape `bounce` (linear | hold | smooth | bezier)");
+    }
+    assert(infl && shape);
+    pass("#point: a bezier point's handles (speedIn/inflIn/speedOut/inflOut, Interstellar's spelling) round-trip byte-exact; linear/hold/smooth files unchanged; bad influence refused (R-AUTO-10)");
+}
+
 static void test_a_new_project_has_the_default_mixers()
 {
     const Project p = newProject("prj_9", "Song", 124.0, "4/4", 48000);
@@ -362,6 +414,7 @@ int main()
     test_canonical_numbers_times_and_strings();
     test_canonical_text_is_a_fixed_point();
     test_automation_sketch_and_binding_refusals();
+    test_bezier_points_round_trip_and_old_shapes_stay_byte_identical();
     test_a_new_project_has_the_default_mixers();
     test_hand_written_text_normalises_once();
     test_routing_only_goes_forward();

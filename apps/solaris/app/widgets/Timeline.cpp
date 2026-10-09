@@ -173,7 +173,9 @@ namespace solaris_ui
             l.model = a;
             bool same = l.to.size() == a.points.size();
             for (size_t i = 0; same && i < a.points.size(); ++i)
-                same = l.to[i].at == a.points[i].at && l.to[i].value == a.points[i].value && l.to[i].shape == a.points[i].shape;
+                same = l.to[i].at == a.points[i].at && l.to[i].value == a.points[i].value && l.to[i].shape == a.points[i].shape &&
+                       l.to[i].speedIn == a.points[i].speedIn && l.to[i].inflIn == a.points[i].inflIn && l.to[i].speedOut == a.points[i].speedOut &&
+                       l.to[i].inflOut == a.points[i].inflOut;
             if (!same)
             {
                 l.shownBefore = shownPoints(l); // what is drawn NOW: the next tween starts there
@@ -380,6 +382,7 @@ namespace solaris_ui
             }
             l.t.update(nowMs);
         }
+        advanceAuto(nowMs); // a click's point waiting out the double-click (R-AUTO-11)
         const bool fadeIn = mEver && !reducedMotion();
         mRowMotion.advance(nowMs);
         for (auto &l : mLive)

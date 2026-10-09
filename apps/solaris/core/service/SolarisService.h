@@ -97,6 +97,7 @@ namespace solaris
         void touchRecent(const std::string &path);
         void refreshModel();
         void evaluateLive(double beat);               // bindings[].live at `beat`, by the engine's evaluator (R-MIX-16)
+        void refreshNow(); // automations[].now at the playhead (R-AUTO-11)
         std::vector<std::string> audit() const;
         std::string matrixText(bool json) const;
 
@@ -127,6 +128,8 @@ namespace solaris
         std::string mCoalesce;           // the newest step's merge key: `set` of the same addresses
         static constexpr size_t kHistory = 200;
         std::map<std::string, std::string> mLastChanged; // device id → the parameter last written (R-WIN-2)
+        std::vector<engine::Curve> mNowCurves;           // model.automations[i] compiled: its `now` at the playhead (R-AUTO-11)
+        double mNowSpb = 1.0;                            // … at this many samples per beat
         std::map<std::string, std::shared_ptr<const engine::Pcm>> mPcm; // by resolved path, at mPcmRate
         std::set<std::string> mOffline;                                 // resolved paths that would not decode
         int mPcmRate = 0;

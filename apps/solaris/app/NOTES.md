@@ -70,8 +70,11 @@ helpers it borrows.
 | Piano roll › Quantize… | `pattern quantize <pt> --grid <snap> [--swing 0.25\|0.5]` |
 | Piano roll › Steps › a cell | `note add <pt> --pitch <p> --at <b> --length 0.25` · `note delete …` when one is there |
 | A window › its title dragged · × · a click on it | the view's: moved exactly, closed (eased), raised |
-| Automation row › a click · a point dragged (on release) · a point double-clicked | `auto point add <au> --at <b> --value <v>` · `auto point move <au> --at <b> --to <b2> --value <v>` · `auto point delete <au> --at <b>` — `<b>`/`<b2>` on the lanes' snap step |
-| Automation row › right-click a point · the row | Linear/Hold/Smooth → `auto point shape <au> --at <b> --shape …`, Delete Point · Copy ID (`au_1`) · Copy as Formula (`=au_1`) → the host's clipboard · Delete Automation → `auto delete <au> --unbind` |
+| Automation row › a click · a point dragged (on release) · a point double-clicked | `auto point add <au> --at <b> --value <v>` (sent once the double-click has had its chance, ~350 ms; a ghost point at once) · `auto point move <au> --at <b> --to <b2> --value <v>` · `auto point delete <au> --at <b>` — `<b>`/`<b2>` on the lanes' snap step |
+| Automation row › right-click a point · the row | Linear/Hold/Smooth/Bezier → `auto point shape <au> --at <b> --shape …`, Delete Point · Copy ID (`au_1`) · Copy as Formula (`=au_1`) → the host's clipboard · Delete Automation → `auto delete <au> --unbind` |
+| Automation row › Alt-drag a point · drag a handle · Alt-drag a handle (on release) | ONE `auto point shape <au> --at <b> --shape bezier --speed-in <v> --influence-in <%> --speed-out <v> --influence-out <%>` — symmetric handles · the opposite mirrored · that side alone |
+| Automation row › double-click its header · its curve away from a point | its `auto:<au>` WINDOW (the view's); the click's pending point is dropped |
+| Automation window › Rename | cosmo's field → `set <au>.name="<typed>"` |
 
 A refusal is the toast, with the service's own sentence (`App::dispatch`). A copy is the toast too — "Copied
 <text>", outlined in the accent, not the destructive red (`App::copy`); the text went to the HOST's clipboard
@@ -84,7 +87,7 @@ song) · settings-open · settings-mid-open (mid-fade) · settings-chip-changing
 mid-ease) · project-open · home-to-project-mid (mid cross-fade) · toast-refusal ·
 browser-instruments · browser-folder · drag-sample-mid (the ghost and the drop hint) ·
 clip-dragging · clip-selected-zoomed · lanes-zoomed-in (bars to thirty-seconds, the beats named, Snap 1/128) · lanes-zoomed-out (bars only, Snap Bar) · lanes-zoom-mid (mid Ctrl+wheel: a level mid-fade, the step's names cross-fading) · menu-file-open (Edit open, naming its undo) · mixer-sources · mixer-buses · mixer-tab-mid (pages mid
-cross-fade) · mixer-matrix · mixer-folded · device-panel (its window) · device-window-bound (two windows, a bound row, the last change lit) · automation-rows (two curves: smooth, hold, log Hz) · piano-roll (a bassline, velocities) · piano-roll-note-in (a note mid-fade) · step-mode (a kit's pads, a beat) · browser-audition (a sample being heard, its row filling) · sampler-window (a sampler naming its sound) · loop-region (the brace and the tint) · loop-dragging (mid Shift-drag) · mixer-sidechain (a key in amber, a limiter on the master) · mixer-add-line (the "+ Line" menu) · clip-play-through (a clip's "Play through ▸") · mixer-bound (faders, a pan, a send and the master driven by formulas: their tags, readouts in the accent, values where the transport is) · show-ids (every id: lanes, clips, an automation, the dock, a device window's addresses) · show-ids-mid (the ids mid-fade) · copied-toast (a copy said, in the accent) · dock-folded · confirm-unsaved.
+cross-fade) · mixer-matrix · mixer-folded · device-panel (its window) · device-window-bound (two windows, a bound row, the last change lit) · automation-rows (two curves: smooth, hold, log Hz) · automation-bezier (bezier points with their handle stems, a log-Hz row and a pan row) · automation-window (an automation's window: its facts, a bezier point, two formulas reading it, its value at the playhead) · piano-roll (a bassline, velocities) · piano-roll-note-in (a note mid-fade) · step-mode (a kit's pads, a beat) · browser-audition (a sample being heard, its row filling) · sampler-window (a sampler naming its sound) · loop-region (the brace and the tint) · loop-dragging (mid Shift-drag) · mixer-sidechain (a key in amber, a limiter on the master) · mixer-add-line (the "+ Line" menu) · clip-play-through (a clip's "Play through ▸") · mixer-bound (faders, a pan, a send and the master driven by formulas: their tags, readouts in the accent, values where the transport is) · show-ids (every id: lanes, clips, an automation, the dock, a device window's addresses) · show-ids-mid (the ids mid-fade) · copied-toast (a copy said, in the accent) · dock-folded · confirm-unsaved.
 Each at 1440×900 and 1024×640. **Look at them** after a change.
 
 ## Borrowed, not copied
@@ -163,3 +166,18 @@ its opt-in `formatValue`), `Icons`, `Theme`, `EmbeddedFonts` are compiled from `
   unclipped and over the whole tree, so a lower window's ids would show through a higher one.
 - **The UI rig's output plays at quarter speed** (`Rig.h`'s `SilentOut`): a test of something that moves
   while playing must let REAL time pass between frames (`sleep_for`), the rig's clock is fake.
+
+## Gotchas found building C2 (bezier automation, its window)
+
+- **A click that a double-click must be able to cancel waits.** Artboard's recognizer emits `Click` on
+  the first release and `DoubleClick` on the second (no `Click`), so a click that adds a point would
+  land before the double-click that should open the window. The row's click waits out the
+  double-click (`Timeline::advanceAuto`) and draws a ghost point at once (R2: a response this frame).
+  A test that clicks an automation row then asserts the `auto point add` must pump ~350 ms first.
+- **A handle's release sends the numbers it DRAWS**: format them, parse them back, put THOSE in the
+  live state — the model returns exactly the text, so nothing eases after the release.
+- **A pan's row is ~36 px of range**: a test's handle drag must stay inside the row, or the drawn end
+  clamps at the edge and is no longer under the pointer.
+- **At 1024×640 the automation rows sit under the dock**: a shot or a test wheels the lanes
+  (`App::wheel`, negative notches = down) before aiming at them.
+

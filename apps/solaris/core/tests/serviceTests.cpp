@@ -10,6 +10,7 @@
 #include "Event.h"
 #include "Format.h"
 #include "SolarisService.h"
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <chrono>
@@ -600,7 +601,7 @@ static void test_formulas_bind_numbers_and_refuse_what_cannot_be_read()
     assert(contains(r.no("auto point move au_1 --at 3 --value 1"), "no point at beat 3.0"));
     r.ok("auto point move au_1 --at 4 --to 2 --value 400");
     r.ok("auto point shape au_1 --at 2 --shape hold");
-    assert(contains(r.no("auto point shape au_1 --at 2 --shape bounce"), "linear, hold or smooth"));
+    assert(contains(r.no("auto point shape au_1 --at 2 --shape bounce"), "linear, hold, smooth or bezier"));
     const auto &pts = r.svc.model().automations[0].points;
     assert(pts[1].at == 2.0 && pts[1].value == 400.0 && pts[1].shape == "hold");
     // eval: the value at a beat, and why
@@ -656,6 +657,96 @@ static void test_an_automated_gain_renders_its_curve()
     r.ok("auto add --name Spare");
     assert(contains(r.ok("audit"), "automation au_2 (Spare) moves nothing — no formula reads it"));
     pass("an automated gain renders its curve: −5 dB at beat 2, −15 dB at beat 6 of a 0 → −20 dB ramp, within 0.1 dB; saved as #aauto/#abind; an unreadable formula is inert and audited");
+}
+
+static void test_a_bezier_gain_renders_what_eval_says_and_the_formula_says()
+{
+    // R-AUTO-10: a bezier automation, shaped by one line per handle gesture, MEASURED: the rendered
+    // level at several beats, `eval` there, and After Effects' cubic solved independently agree.
+    Run r;
+    const std::string dir = scratch();
+    r.ok("project new " + freshSong("bezier") + " --bpm 120");
+    r.ok("clip add --src tone.wav --at 0 --length 8");                  // a 1 kHz sine at 0.5, looped
+    r.ok("auto create ch_2.gain");                                     // au_1: 0 dB at 0 and at the song's end (16)
+    r.ok("auto point move au_1 --at 0 --value -24");
+    r.ok("auto point shape au_1 --at 0 --shape bezier --speed-out 0 --influence-out 80");
+    r.ok("auto point add au_1 --at 8 --value 0 --shape bezier");      // flat handles: speed 0, influence 33.333
+    r.ok("auto point shape au_1 --at 8 --speed-in 1.5 --influence-in 70"); // a bezier point keeps the flags not given
+    {
+        const auto &pts = r.svc.model().automations[0].points;
+        assert(pts.size() == 3 && pts[0].shape == "bezier" && pts[0].speedOut == 0.0 && pts[0].inflOut == 80.0 && pts[0].inflIn == 33.333);
+        assert(pts[1].shape == "bezier" && pts[1].speedIn == 1.5 && pts[1].inflIn == 70.0 && pts[1].speedOut == 0.0 && pts[1].inflOut == 33.333);
+    }
+    // the formula: P0 (0, −24), P1 (0.8·8, −24), P2 (8 − 0.7·8, 0 − 1.5·0.7·8), P3 (8, 0); time solved by Newton
+    auto formula = [](double beat) {
+        const double x0 = 0, x1 = 6.4, x2 = 8 - 5.6, x3 = 8, y0 = -24, y1 = -24, y2 = 0 - 1.5 * 5.6, y3 = 0;
+        auto bez = [](double a, double b, double c, double d, double u) {
+            const double m = 1 - u;
+            return m * m * m * a + 3 * m * m * u * b + 3 * m * u * u * c + u * u * u * d;
+        };
+        double u = beat / 8.0;
+        for (int i = 0; i < 80; ++i)
+        {
+            const double m = 1 - u, dx = 3 * m * m * (x1 - x0) + 6 * m * u * (x2 - x1) + 3 * u * u * (x3 - x2);
+            u = std::clamp(u - (bez(x0, x1, x2, x3, u) - beat) / std::max(dx, 1e-6), 0.0, 1.0);
+        }
+        return bez(y0, y1, y2, y3, u);
+    };
+    const std::string out = dir + "/bezier.wav";
+    r.ok("render --out " + out + " --to 8");
+    const auto &L = r.fake.written[out][0];
+    auto dbAround = [&](long long s) {
+        double sum = 0;
+        for (long long i = s - 240; i < s + 240; ++i) sum += (double)L[(size_t)i] * L[(size_t)i]; // ten periods of 1 kHz
+        return 20.0 * std::log10(std::sqrt(sum / 480.0) / (0.5 / std::sqrt(2.0)));
+    };
+    double worst = 0;
+    bool bends = false;
+    for (double beat : {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0})
+    {
+        const std::string e = r.ok("eval ch_2.gain --at " + canonicalNumber(beat));
+        const double said = std::atof(e.substr(e.find(" = ") + 3).c_str());
+        const double heard = dbAround(std::llround(beat * 24000)), want = formula(beat);
+        if (std::fabs(said - want) > 1e-6 || std::fabs(heard - want) > 0.05)
+            std::printf("    beat %.0f: eval %.6f dB, rendered %.4f dB, the formula %.6f dB\n", beat, said, heard, want);
+        assert(std::fabs(said - want) < 1e-6);                         // eval IS the formula
+        assert(std::fabs(heard - want) < 0.05);                        // and what renders
+        worst = std::max(worst, std::fabs(heard - want));
+        bends |= std::fabs(want - (-24.0 + 3.0 * beat)) > 1.0;         // not the straight line
+    }
+    assert(bends);
+    // the model's value at the playhead is the same evaluator's, there
+    r.ok("transport seek 2");
+    const std::string e2 = r.ok("eval ch_2.gain --at 2");
+    assert(std::fabs(r.svc.model().automations[0].now - std::atof(e2.substr(e2.find(" = ") + 3).c_str())) < 1e-9); // eval's, printed
+    assert(std::fabs(r.svc.model().automations[0].now - formula(2.0)) < 1e-9);
+    assert(contains(r.ok("state print --json"), "\"now\":") && !contains(r.ok("state print --json --stable"), "\"now\":"));
+    // … and follows the transport while playing
+    r.ok("transport play --from 1");
+    r.ok("wait 0.3");
+    const double pos = r.svc.model().transport.position, now = r.svc.model().automations[0].now;
+    assert(pos > 1.0 && std::fabs(now - formula(pos)) < 1e-3);
+    r.ok("transport stop");
+    // refusals name what is wrong — and change nothing
+    const std::string before = r.text();
+    assert(contains(r.no("auto point shape au_1 --at 16 --speed-in 2"), "shape a BEZIER point's handles; the point at beat 16.0 is linear"));
+    assert(contains(r.no("auto point shape au_1 --at 0 --shape hold --speed-out 1"), "is hold"));
+    assert(contains(r.no("auto point shape au_1 --at 0 --influence-out 0"), "0 < x ≤ 100 %, not `0`"));
+    assert(contains(r.no("auto point shape au_1 --at 0 --influence-in 150"), "--influence-in is how far"));
+    assert(contains(r.no("auto point shape au_1 --at 0 --speed-out fast"), "--speed-out must be a number"));
+    assert(contains(r.no("auto point shape au_1 --at 0"), "needs --shape"));
+    assert(contains(r.no("auto point shape au_1 --at 3 --shape bezier"), "no point at beat 3.0"));
+    assert(contains(r.no("auto point shape au_1 --at 0 --speed 2"), "speed-in"));  // an unknown flag names the nearest
+    assert(r.text() == before);
+    // the file keeps it, Interstellar's spelling, and reads back the same curve
+    assert(contains(r.text(), "#point at=0.0 value=-24.0 shape=bezier speedIn=0.0 inflIn=33.333 speedOut=0.0 inflOut=80.0"));
+    // a point made linear again drops its handles — in the song as in the file
+    r.ok("auto point shape au_1 --at 8 --shape linear");
+    assert(r.svc.model().automations[0].points[1].speedIn == 0.0 && r.svc.model().automations[0].points[1].inflIn == 33.333);
+    assert(!contains(r.text(), "speedIn=1.5"));
+    pass("a bezier gain: rendered level, eval and After Effects' cubic agree at beats 1…7 (eval to 1e-6 dB, the render within 0.05 dB); "
+         "now follows the playhead; handle refusals named (R-AUTO-10, R-AUTO-11)");
+    std::printf("    worst rendered error %.4f dB\n", worst);
 }
 
 static void test_routing_only_goes_forward_and_refusals_change_nothing()
@@ -1195,6 +1286,7 @@ int main()
     test_undo_and_redo_every_edit();
     test_formulas_bind_numbers_and_refuse_what_cannot_be_read();
     test_an_automated_gain_renders_its_curve();
+    test_a_bezier_gain_renders_what_eval_says_and_the_formula_says();
     test_a_sidechain_key_ducks_the_bass();
     test_a_sampler_plays_its_sound_by_the_key();
     test_routing_only_goes_forward_and_refusals_change_nothing();

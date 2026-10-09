@@ -114,13 +114,17 @@ namespace solaris
              "An automation from nothing (default range 0…1). It moves nothing until a formula reads it. Prints the id.", "R-AUTO-4"},
             {K::AutoDelete, "auto delete", "<au>", 1, 1, {"unbind"},
              "Delete an automation. Refused while a formula reads it, unless --unbind (those bindings are cleared).", "R-AUTO-4"},
-            {K::AutoPointAdd, "auto point add", "<au>", 1, 1, {"at=<beats>", "value=<v>", "shape=<linear|hold|smooth>"},
-             "Add a point (one at the same beat is replaced). Its shape governs the segment after it.", "R-AUTO-6"},
+            {K::AutoPointAdd, "auto point add", "<au>", 1, 1, {"at=<beats>", "value=<v>", "shape=<linear|hold|smooth|bezier>"},
+             "Add a point (one at the same beat is replaced). Its shape governs the segment after it (a bezier point's "
+             "handles start flat: speed 0, influence 33.333 %).", "R-AUTO-6"},
             {K::AutoPointMove, "auto point move", "<au>", 1, 1, {"at=<beats>", "to=<beats>", "value=<v>"},
              "Move the point at --at to another beat and/or value.", "R-AUTO-6"},
             {K::AutoPointDelete, "auto point delete", "<au>", 1, 1, {"at=<beats>"}, "Remove the point at --at.", "R-AUTO-6"},
-            {K::AutoPointShape, "auto point shape", "<au>", 1, 1, {"at=<beats>", "shape=<linear|hold|smooth>"},
-             "Set how the curve leaves the point at --at.", "R-AUTO-6"},
+            {K::AutoPointShape, "auto point shape", "<au>", 1, 1,
+             {"at=<beats>", "shape=<linear|hold|smooth|bezier>", "speed-in=<v/beat>", "influence-in=<%>", "speed-out=<v/beat>", "influence-out=<%>"},
+             "Set how the curve leaves the point at --at. A BEZIER point is Interstellar's key (R-ANIM-2): on each side a "
+             "speed — the slope there, in the automation's unit per beat — and an influence, how far into the "
+             "neighbouring segment it pulls (0 < x ≤ 100 %); flags not given are kept. One line per handle gesture.", "R-AUTO-10"},
             {K::BindClear, "bind clear", "<address>", 1, 1, {},
              "Clear an address's formula: it plays its own stored value again. (`set <address>=<number>` clears and sets.)", "R-AUTO-1"},
             {K::Eval, "eval", "<address>", 1, 1, {"at=<beats>", "explain"},

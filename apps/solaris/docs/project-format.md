@@ -130,13 +130,23 @@ pattern named after the clip, and written back as one — the only normalisation
 #aauto id=au_1 name="Bass · Cutoff" unit=Hz min=20.0 max=20000.0 from=dv_2.filter.cutoff
   #point at=0.0 value=600.0
   #point at=8.0 value=2400.0 shape=smooth
+  #point at=12.0 value=900.0 shape=bezier speedIn=-150.0 inflIn=40.0 speedOut=0.0 inflOut=33.333
+  #point at=16.0 value=600.0
 
 #abind address=dv_2.filter.cutoff formula="=au_1"
 #abind address=ch_3.pan formula="=0.25 * sin(beat * pi)"
 ```
 
 An automation is a curve that moves nothing until a formula reads it (R-AUTO-4): `at` in beats, `value`
-in its unit, `shape` (`linear` when absent | `hold` | `smooth`) governs the segment AFTER the point.
+in its unit, `shape` (`linear` when absent | `hold` | `smooth` | `bezier`) governs the segment AFTER the
+point. A `bezier` point (R-AUTO-10) is Interstellar's keyframe (its R-ANIM-2, spelled as its `#key`
+spells it) with both sides bezier: `speedIn` / `speedOut` are the curve's slope arriving and leaving, in
+the automation's unit PER BEAT, and `inflIn` / `inflOut` how far into the segment before / after the
+handle reaches, in % (0 < x ≤ 100). The four are written only for a bezier point (always all four), so a
+file of linear / hold / smooth points is byte-identical to one written before bezier existed; on another
+shape they are ignored. `smooth` is After Effects' Ease on the segment after the point (speed 0,
+influence ⅓ at both ends — the smoothstep it always was); a bezier next point's own handle wins on its
+side. The curve never leaves `min … max` (a handle's overshoot stops there).
 `from` is the address it was made from — a hint, never a link. A binding (R-AUTO-1) decides one
 address's value: `formula` as typed, with its `=`. One per address; the stored value under it (the
 strip's `gain=`, the device's parameter) stays, and plays again when the binding is cleared. An

@@ -42,7 +42,8 @@ namespace solaris
     struct AutoPointModel
     {
         double at = 0, value = 0;               // beats; the automation's unit
-        std::string shape = "linear";           // linear | hold | smooth
+        std::string shape = "linear";           // linear | hold | smooth | bezier
+        double speedIn = 0, inflIn = 33.333, speedOut = 0, inflOut = 33.333; // bezier (R-AUTO-10): unit per beat; %
     };
 
     struct AutomationModel
@@ -51,6 +52,7 @@ namespace solaris
         double min = 0, max = 1;
         std::vector<AutoPointModel> points;
         std::vector<std::string> usedBy;        // addresses whose formula reads it
+        double now = 0;                         // its value at the playhead, by the engine's evaluator (R-AUTO-11)
     };
 
     struct BindingModel

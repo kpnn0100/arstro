@@ -303,6 +303,46 @@ namespace
                      if (menu.item(i).label == "Copy Address") { r.click(menu.itemRect(i)); break; }
                  r.pump(300.0);
              }},
+            {"automation-bezier",   // R-AUTO-10: bezier points with their handles, Interstellar's model drawn by the engine's keys
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("auto create dv_2.filter.cutoff");
+                 r.cmd("auto point move au_1 --at 0 --value 80");
+                 r.cmd("auto point add au_1 --at 6 --value 6000 --shape bezier");
+                 r.cmd("auto point shape au_1 --at 6 --speed-in 2500 --influence-in 55 --speed-out -900 --influence-out 40");
+                 r.cmd("auto point add au_1 --at 14 --value 300");
+                 r.cmd("auto create ch_3.pan");
+                 r.cmd("auto point move au_2 --at 0 --value -0.8");
+                 r.cmd("auto point shape au_2 --at 0 --shape bezier --speed-out 0 --influence-out 80");
+                 r.cmd("auto point add au_2 --at 8 --value 0.7 --shape bezier");
+                 r.cmd("auto point shape au_2 --at 8 --speed-in 0.35 --influence-in 45 --speed-out -0.1 --influence-out 60");
+                 r.cmd("auto point add au_2 --at 13 --value -0.4 --shape smooth");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect lanes = world(tl, tl.rowRect(0));
+                 r.app->wheel(lanes.x + 400.0, lanes.y + 10.0, -4.0); // the small window: the rows are under the dock until scrolled to
+                 r.settle();
+             }},
+            {"automation-window",   // R-AUTO-11: a double-click on the row's header — its facts, all the model's
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("auto create dv_2.filter.cutoff");
+                 r.cmd("auto point move au_1 --at 0 --value 300");
+                 r.cmd("auto point add au_1 --at 6 --value 3000 --shape bezier");
+                 r.cmd("auto point shape au_1 --at 6 --speed-in 700 --influence-in 55 --speed-out -250 --influence-out 40");
+                 r.cmd("auto point add au_1 --at 14 --value 500 --shape hold");
+                 r.cmd("set dv_2.osc2.level=\"=0.4 + 0.0001 * au_1\"");
+                 r.cmd("transport seek 5");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect lanes = world(tl, tl.rowRect(0));
+                 r.app->wheel(lanes.x + 400.0, lanes.y + 10.0, -4.0); // the small window: its row is under the dock until scrolled to
+                 r.settle();
+                 const artboard::Rect row = world(tl, tl.autoRowRect("au_1"));
+                 r.click(row.x + 30.0, row.y + row.h * 0.5);
+                 r.click(row.x + 30.0, row.y + row.h * 0.5);
+                 r.settle();
+             }},
             {"piano-roll",
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

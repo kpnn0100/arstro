@@ -11,12 +11,14 @@
 #include "device/Device.h"
 #include <atomic>
 #include <cassert>
+#include <algorithm>
 #include <cstdlib>
 #include <new>
 #include <cmath>
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <vector>
 
 using namespace arstro::solaris::engine;
 
@@ -422,9 +424,10 @@ static void test_bindings_drive_gain_and_parameters_at_control_rate()
         g.strips[1].rack = {DeviceDesc{"dv_1", "compressor", {}, false}};
         g.clock = Clock{24000, 4, 120, 48000};
         Curve c;
-        c.at = {0, 96000};
-        c.value = {0.0, -20.0};
-        c.shape = {Curve::Linear, Curve::Linear};
+        CurvePoint a0, a1;
+        a1.t = 96000;
+        a1.v = -20.0;
+        c.keys = curveKeys({a0, a1});
         g.curves = {c};
         Bind gain;
         gain.kind = Bind::StripGain;
@@ -473,6 +476,84 @@ static void test_bindings_drive_gain_and_parameters_at_control_rate()
     pass("bindings: a curve drives a gain and a formula a device parameter, every 64 samples, ramped, byte-identical however chopped (R-AUTO-7)");
 }
 
+static void test_curves_are_interstellars_keyframes()
+{
+    // R-AUTO-10 (law 16): a curve IS Interstellar's keyframe model, evaluated by its Anim.h. Linear and
+    // hold are exactly what they were; smooth is Ease, whose Bézier is exactly the smoothstep R-AUTO-4
+    // drew; a bezier segment is the cubic of After Effects' handles — checked here against the formula
+    // solved independently (Newton on the time component), not against Anim.h itself.
+    auto curve = [](std::vector<CurvePoint> pts, double lo = -HUGE_VAL, double hi = HUGE_VAL) {
+        Curve c;
+        c.keys = curveKeys(pts);
+        c.lo = lo;
+        c.hi = hi;
+        return c;
+    };
+    auto pt = [](double t, double v, CurvePoint::Shape s) {
+        CurvePoint p;
+        p.t = t;
+        p.v = v;
+        p.shape = s;
+        return p;
+    };
+    const Curve lin = curve({pt(0, 0, CurvePoint::Linear), pt(1000, 10, CurvePoint::Linear)});
+    const Curve hold = curve({pt(0, 3, CurvePoint::Hold), pt(1000, 10, CurvePoint::Linear)});
+    const Curve smooth = curve({pt(0, 0, CurvePoint::Smooth), pt(1000, 10, CurvePoint::Linear)});
+    for (long long s : {-5LL, 0LL, 1LL, 250LL, 333LL, 500LL, 999LL, 1000LL, 4000LL})
+    {
+        const double f = std::clamp((double)s / 1000.0, 0.0, 1.0);
+        assert(lin.valueAt(s) == 0.0 + (10.0 - 0.0) * f);            // bit for bit the old lerp
+        assert(hold.valueAt(s) == (s >= 1000 ? 10.0 : 3.0));
+        assert(std::fabs(smooth.valueAt(s) - 10.0 * f * f * (3.0 - 2.0 * f)) < 1e-9);
+    }
+    // a bezier point between two linear ones: (0, 0) → (1000, 10, out 0.03/sample at 60 %) → (3000, 0)
+    CurvePoint b = pt(1000, 10, CurvePoint::Bezier);
+    b.speedIn = 0.02;
+    b.inflIn = 50.0;
+    b.speedOut = 0.03;
+    b.inflOut = 60.0;
+    const Curve bz = curve({pt(0, 0, CurvePoint::Linear), b, pt(3000, 0, CurvePoint::Linear)});
+    auto cubic = [](double tA, double vA, double soA, double ioA, double tB, double vB, double siB, double iiB, double t) {
+        // P0…P3 of the segment, After Effects' handles (a linear side: the segment's slope at ⅓)
+        const double dt = tB - tA;
+        const double x1 = tA + ioA * dt, y1 = vA + soA * ioA * dt, x2 = tB - iiB * dt, y2 = vB - siB * iiB * dt;
+        auto bez = [](double p0, double p1, double p2, double p3, double u) {
+            const double m = 1 - u;
+            return m * m * m * p0 + 3 * m * m * u * p1 + 3 * m * u * u * p2 + u * u * u * p3;
+        };
+        double u = (t - tA) / dt;
+        for (int i = 0; i < 60; ++i)
+        {
+            const double m = 1 - u, x = bez(tA, x1, x2, tB, u);
+            const double dx = 3 * m * m * (x1 - tA) + 6 * m * u * (x2 - x1) + 3 * u * u * (tB - x2);
+            u = std::clamp(u - (x - t) / dx, 0.0, 1.0);
+        }
+        return bez(vA, y1, y2, vB, u);
+    };
+    bool bends = false;
+    for (long long s : {100LL, 400LL, 700LL, 950LL, 1050LL, 1500LL, 2200LL, 2900LL})
+    {
+        const double want = s < 1000 ? cubic(0, 0, 10.0 / 1000.0, 1.0 / 3.0, 1000, 10, 0.02, 0.5, (double)s)
+                                     : cubic(1000, 10, 0.03, 0.6, 3000, 0, -10.0 / 2000.0, 1.0 / 3.0, (double)s);
+        if (std::fabs(bz.valueAt(s) - want) > 1e-9) std::printf("    sample %lld: %.12f, the formula %.12f\n", s, bz.valueAt(s), want);
+        assert(std::fabs(bz.valueAt(s) - want) < 1e-9);
+        const double straight = s < 1000 ? 10.0 * s / 1000.0 : 10.0 - 10.0 * (s - 1000) / 2000.0;
+        bends |= std::fabs(want - straight) > 0.5;                       // a curve, not the line
+    }
+    assert(bends);
+    // a handle's overshoot stops at the automation's range
+    const Curve capped = curve({pt(0, 0, CurvePoint::Linear), b, pt(3000, 0, CurvePoint::Linear)}, 0.0, 10.0);
+    assert(bz.valueAt(1100) > 10.0 && capped.valueAt(1100) == 10.0);
+    // evaluating allocates nothing (the audio thread calls it every 64 samples)
+    gAllocs = 0;
+    gCounting = true;
+    double sink = 0;
+    for (long long s = 0; s < 3000; s += 64) sink += bz.valueAt(s) + smooth.valueAt(s);
+    gCounting = false;
+    assert(gAllocs.load() == 0 && std::isfinite(sink));
+    pass("curves are Interstellar's keyframes: linear and hold exact, smooth = Ease = smoothstep, bezier = the handles' cubic to 1e-9, clamped to the range, no allocation (R-AUTO-10)");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -486,6 +567,7 @@ int main()
     test_meters_seek_capture_and_live_params();
     test_live_render_allocates_nothing_and_takes_live_edits();
     test_bindings_drive_gain_and_parameters_at_control_rate();
+    test_curves_are_interstellars_keyframes();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

@@ -5,6 +5,7 @@
 #undef NDEBUG
 #endif
 #include "../Rig.h"
+#include "../../widgets/AutomationPanel.h"
 #include "../../widgets/DevicePanel.h"
 #include "../../widgets/ParamMenu.h"
 #include "../../widgets/PianoRoll.h"
@@ -706,6 +707,168 @@ static void test_automation_rows_draw_and_edit_curves()
     r.settle();
     assert(sentLine(r, "auto delete au_1 --unbind") && r.svc->model().automations.empty() && r.svc->model().bindings.empty());
     pass("Automation rows: a row per automation under the lanes; click adds, a drag follows exactly and is one move, a shell's edit eases, shapes and deletes from the menu (R-AUTO-6)");
+}
+
+static void test_bezier_handles_and_the_automation_window()
+{
+    sltest::Rig r("ui-bezier", 1280, 800);
+    r.cmd("project new " + r.song("Bezier") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 8");    // ch_2
+    r.cmd("auto create ch_2.pan");                             // au_1: −1 … 1, flat at 0 from beat 0 to 16
+    r.cmd("auto point add au_1 --at 4 --value 0.5");
+    r.cmd("auto point add au_1 --at 8 --value -0.5");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
+    auto lines = [&](const std::string &prefix) {
+        int n = 0;
+        for (const auto &l : r.sent) n += l.rfind(prefix, 0) == 0;
+        return n;
+    };
+    auto near = [](artboard::Point a, double x, double y) { return std::fabs(a.x - x) < 0.5 && std::fabs(a.y - y) < 0.5; };
+    // ── Alt-drag a point pulls out SYMMETRIC handles; the one under the pointer follows it exactly ──
+    const artboard::Point p1 = tl.autoPointAt("au_1", 1);
+    const double hx = p1.x + 40.0, hy = p1.y - 5.0; // inside the row's range (a pan's −1 … 1 spans ~36 px)
+    const size_t before = r.sent.size();
+    r.app->pointer(1, tw.x + p1.x, tw.y + p1.y, 0, r.now, true);
+    r.app->pointer(0, tw.x + p1.x, tw.y + p1.y, 0, r.now, true);
+    r.frame();
+    for (int k = 1; k <= 6; ++k)
+    {
+        r.app->pointer(1, tw.x + p1.x + (hx - p1.x) * k / 6.0, tw.y + p1.y + (hy - p1.y) * k / 6.0, 0, r.now, true);
+        r.frame();
+    }
+    assert(near(tl.autoHandleAt("au_1", 1, 2), hx, hy));                 // under the pointer, not easing after it
+    assert(near(tl.autoHandleAt("au_1", 1, 1), 2.0 * p1.x - hx, 2.0 * p1.y - hy)); // the in-handle its mirror
+    assert(near(tl.autoPointAt("au_1", 1), p1.x, p1.y));                 // the point itself stays
+    assert(r.sent.size() == before);                                      // nothing sent while held
+    r.app->pointer(2, tw.x + hx, tw.y + hy, 0, r.now, true);
+    r.frame();
+    assert(r.sent.size() == before + 1 && lines("auto point shape au_1 --at 4 --shape bezier --speed-in ") == 1); // ONE line
+    assert(near(tl.autoHandleAt("au_1", 1, 2), hx, hy) && tl.autoEase("au_1") == 1.0); // where it was let go: nothing jumps
+    r.settle();
+    assert(near(tl.autoHandleAt("au_1", 1, 2), hx, hy) && tl.autoEase("au_1") == 1.0);
+    {
+        const auto &pt = r.svc->model().automations[0].points[1];
+        assert(pt.shape == "bezier" && pt.speedIn == pt.speedOut && pt.speedOut > 0.0); // pulled up and right: rising through the point
+    }
+    // ── a handle dragged: the opposite one MIRRORS ──
+    const double h2x = hx + 14.0, h2y = hy + 10.0;
+    r.drag(tw.x + hx, tw.y + hy, tw.x + h2x, tw.y + h2y, 6, false);
+    assert(near(tl.autoHandleAt("au_1", 1, 2), h2x, h2y) && near(tl.autoHandleAt("au_1", 1, 1), 2.0 * p1.x - h2x, 2.0 * p1.y - h2y));
+    r.app->pointer(2, tw.x + h2x, tw.y + h2y, 0, r.now);
+    r.settle();
+    assert(lines("auto point shape au_1 --at 4 --shape bezier") == 2 && near(tl.autoHandleAt("au_1", 1, 2), h2x, h2y));
+    // ── Alt on a handle BREAKS the symmetry: only the in-handle moves ──
+    const artboard::Point in0 = tl.autoHandleAt("au_1", 1, 1);
+    const double i2x = in0.x - 10.0, i2y = in0.y + 12.0;
+    r.app->pointer(1, tw.x + in0.x, tw.y + in0.y, 0, r.now, true);
+    r.app->pointer(0, tw.x + in0.x, tw.y + in0.y, 0, r.now, true);
+    r.frame();
+    for (int k = 1; k <= 6; ++k)
+    {
+        r.app->pointer(1, tw.x + in0.x + (i2x - in0.x) * k / 6.0, tw.y + in0.y + (i2y - in0.y) * k / 6.0, 0, r.now, true);
+        r.frame();
+    }
+    assert(near(tl.autoHandleAt("au_1", 1, 1), i2x, i2y) && near(tl.autoHandleAt("au_1", 1, 2), h2x, h2y));
+    r.app->pointer(2, tw.x + i2x, tw.y + i2y, 0, r.now, true);
+    r.settle();
+    {
+        const auto &pt = r.svc->model().automations[0].points[1];
+        assert(lines("auto point shape au_1 --at 4 --shape bezier") == 3 && pt.speedIn != pt.speedOut); // a cusp
+    }
+    assert(near(tl.autoHandleAt("au_1", 1, 1), i2x, i2y));
+    // ── a handle a shell moves EASES there ──
+    const artboard::Point o0 = tl.autoHandleAt("au_1", 1, 2);
+    r.cmd("auto point shape au_1 --at 4 --speed-out 0 --influence-out 80");
+    r.frame();
+    r.frame();
+    const artboard::Point oMid = tl.autoHandleAt("au_1", 1, 2);
+    assert(tl.autoEase("au_1") > 0.0 && tl.autoEase("au_1") < 1.0 && std::fabs(oMid.x - o0.x) > 0.5);
+    r.settle();
+    const artboard::Point o1 = tl.autoHandleAt("au_1", 1, 2);
+    assert(std::fabs(o1.y - p1.y) < 0.5 && std::fabs(o1.x - (p1.x + 0.8 * 4.0 * tl.pxPerBeat())) < 0.5 && std::fabs(oMid.x - o1.x) > 0.5);
+
+    // ── double-click the row's HEADER: the automation's window, fading in ──
+    auto &wl = r.app->project().windows();
+    const artboard::Rect row = world(tl, tl.autoRowRect("au_1"));
+    r.click(row.x + 30.0, cy(row));
+    r.click(row.x + 30.0, cy(row));
+    r.frame();
+    r.frame();
+    assert(wl.isOpen("auto:au_1") && wl.window("auto:au_1")->appearAmount() > 0.0 && wl.window("auto:au_1")->appearAmount() < 1.0);
+    r.settle();
+    auto &w = *wl.window("auto:au_1");
+    auto &panel = *wl.automationPanel("au_1");
+    const auto &am = r.svc->model().automations[0];
+    // the facts, all the model's: name, id, range, made from, its points, what reads it (with the formula), now
+    const std::string facts = panel.text();
+    assert(contains(facts, am.name) && contains(facts, "au_1") && contains(facts, "Made from  ch_2.pan") && contains(facts, "POINTS \xC2\xB7 4"));
+    assert(contains(facts, "beat 4  0.50  bezier") && contains(facts, "beat 8  -0.50  linear") && contains(facts, "ch_2.pan  =au_1"));
+    assert(w.title() == "Automation \xE2\x80\x94 " + am.name && panel.nowTarget() == am.now);
+    // the value at the playhead is the model's, and EASES to a seek
+    r.cmd("transport seek 6");
+    r.frame();
+    r.frame();
+    const double nowWant = r.svc->model().automations[0].now;
+    assert(panel.nowTarget() == nowWant && std::fabs(panel.nowLive() - nowWant) > 1e-6);
+    r.settle();
+    assert(panel.nowLive() == nowWant && nowWant != 0.0);
+    // its rows update eased: a point added from a shell fades its row in
+    r.cmd("auto point add au_1 --at 12 --value 0.25");
+    r.frame();
+    r.frame();
+    std::string key;
+    for (const auto &k : panel.rowKeys())
+        if (k.rfind("pt:12|", 0) == 0) key = k;
+    assert(!key.empty() && panel.rowAlpha(key) > 0.0 && panel.rowAlpha(key) < 1.0);
+    r.settle();
+    assert(panel.rowAlpha(key) == 1.0);
+    // Rename: cosmo's field; what is typed is ONE line, and the window and the row follow
+    r.click(world(panel, panel.renameRect()));
+    r.settle();
+    auto &menu = r.app->menu();
+    assert(menu.isRenaming());
+    artboard::KeyEvent typed;
+    typed.type = artboard::KeyEvent::Type::Text;
+    typed.text = "Wobble";
+    r.app->key(typed);
+    r.key(13);
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "set au_1.name=Wobble") && r.svc->model().automations[0].name == "Wobble");
+    assert(w.title() == "Automation \xE2\x80\x94 Wobble" && panel.rowAlpha("name:Wobble") > 0.0 && panel.rowAlpha("name:Wobble") < 1.0);
+    r.settle();
+    // × closes it; a double-click on the CURVE away from a point opens it again — and adds no point
+    r.click(world(w, w.closeRect()));
+    r.settle();
+    assert(!wl.isOpen("auto:au_1"));
+    const int adds = lines("auto point add");
+    const double bx = tw.x + tl.beatToX(10.0), by = tw.y + tl.autoRowRect("au_1").y + 8.0;
+    r.click(bx, by);
+    r.frame();
+    assert(tl.autoPendingAmount() > 0.0 && lines("auto point add") == adds);   // a ghost at once; the line waits
+    r.click(bx, by);
+    r.settle();
+    assert(wl.isOpen("auto:au_1") && lines("auto point add") == adds && r.svc->model().automations[0].points.size() == 5);
+    assert(tl.autoPendingAmount() == 0.0);
+    // a single click still adds — once the double-click has had its chance
+    r.click(world(w, w.closeRect()));
+    r.settle();
+    r.click(bx, by);
+    r.pump(160.0);
+    assert(lines("auto point add") == adds);
+    r.settle();
+    assert(lines("auto point add au_1 --at 10 --value ") == 1 && r.svc->model().automations[0].points.size() == 6);
+    // a double-click ON a point still deletes it
+    const artboard::Point p3 = tl.autoPointAt("au_1", 3);
+    r.click(tw.x + p3.x, tw.y + p3.y);
+    r.click(tw.x + p3.x, tw.y + p3.y);
+    r.settle();
+    assert(sentLine(r, "auto point delete au_1 --at 10") && r.svc->model().automations[0].points.size() == 5 && !wl.isOpen("auto:au_1"));
+    pass("Bezier and the automation's window: Alt-drag pulls symmetric handles, a handle mirrors, Alt breaks it — under the pointer while held, ONE line, "
+         "nothing jumps; a shell's handle eases; header double-click opens the window (fading) with the model's facts, now eased, rows eased, Rename one line; "
+         "a curve double-click opens it and adds nothing; a point double-click still deletes (R-AUTO-10, R-AUTO-11)");
 }
 
 static void test_piano_roll_edits_the_pattern()
@@ -1412,6 +1575,7 @@ int main()
     test_song_bar_menus_and_settings_sections();
     test_device_window_lists_parameters_and_binds_them();
     test_automation_rows_draw_and_edit_curves();
+    test_bezier_handles_and_the_automation_window();
     test_piano_roll_edits_the_pattern();
     test_a_kits_roll_names_its_pads();
     test_a_line_added_and_sources_relinked();

@@ -142,12 +142,16 @@ namespace solaris
         bool isAudio() const { return !src.empty(); }
     };
 
-    /** A point of an automation (R-AUTO-4): the shape governs the segment AFTER it. */
+    /** A point of an automation (R-AUTO-4): the shape governs the segment AFTER it — a bezier point
+     *  both its sides (R-AUTO-10), each shaped by Interstellar's handle (R-ANIM-2): a SPEED, the
+     *  curve's slope there in the automation's unit per beat, and an INFLUENCE, how far into the
+     *  neighbouring segment that slope pulls, 0.1 … 100 %. Written only for a bezier point. */
     struct AutoPoint
     {
         double at = 0.0, value = 0.0;   // beats; the automation's unit
-        std::string shape = "linear";   // linear | hold | smooth
+        std::string shape = "linear";   // linear | hold | smooth | bezier
         Fields unknown;
+        double speedIn = 0.0, inflIn = 33.333, speedOut = 0.0, inflOut = 33.333; // bezier: per beat; %
     };
 
     /** An automation — FL Studio's automation clip (R-AUTO-4). It moves nothing until a formula reads it. */

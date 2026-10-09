@@ -35,8 +35,16 @@
  *  grid with the points as handles (a log scale for Hz and ms). A click adds a point, a drag moves one
  *  (following the pointer exactly; one `auto point move` on release), a double-click deletes it, a
  *  right-click offers the shapes or deleting the automation. The rows are keyed in the same eased
- *  list as the lanes; a curve the model changes eases point by point (a point added or removed
- *  cross-fades the two curves).
+ *  list as the lanes; a curve the model changes eases point by point (a point added or removed, or a
+ *  shape changed, cross-fades the two curves). The curve is drawn by the ENGINE's mapping onto
+ *  Interstellar's keyframes (`engine::curveKeys`, `anim::segment`), so what is drawn is what plays.
+ *  BEZIER (R-AUTO-10, cosmo's CurvePanel gesture): Alt-drag a point pulls out symmetric handles; a
+ *  handle dragged moves the opposite one as its mirror; Alt-drag a handle breaks the symmetry. The
+ *  handle follows the pointer exactly while held; the release is ONE `auto point shape … --shape
+ *  bezier --speed-in … --influence-in … --speed-out … --influence-out …`, and stays where it was let go.
+ *  A double-click on the row's header or on its curve away from a point opens the automation's
+ *  window (R-AUTO-11) — so a click on the curve waits out the double-click before it adds a point,
+ *  drawn at once as a ghost that fades in.
  *
  *  Editing is command lines (`onCommand`): a click on the ruler → `transport seek <beat>` (on the grid
  *  you see); a clip dragged → `clip move <id> --at <beat> [--lane <ln>]` on release, on the same grid.
@@ -115,6 +123,7 @@ namespace solaris_ui
         std::function<void(const std::string &line)> onCommand;
         std::function<void(const std::string &clipId)> onSelect;
         std::function<void(const std::string &patternId)> onOpenPattern; // a note clip double-clicked: its piano roll (R-ROLL-1)
+        std::function<void(const std::string &au)> onOpenAutomation;     // an automation row double-clicked: its window (R-AUTO-11)
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
         std::function<void(const std::string &text)> onCopy;      // the host's clipboard: Copy ID (R-UI-11)
         std::function<double()> idsAmount;                        // View › Show IDs, eased by the screen (R-UI-11)
@@ -132,6 +141,10 @@ namespace solaris_ui
         double autoEase(const std::string &au) const;               // 1 = its curve at rest (LIVE)
         /** The point being dragged, as DRAWN (local); (−1, −1) when none. */
         artboard::Point autoDragPoint() const;
+        /** A bezier point's handle end as DRAWN (local; side 1 = in, 2 = out) — the pointer's while held; (−1, −1) when none. */
+        artboard::Point autoHandleAt(const std::string &au, int i, int side) const;
+        /** A click's point waiting out the double-click: its ghost's LIVE opacity (0 = none). */
+        double autoPendingAmount() const { return mPendAmt.value(); }
 
         void advance(double nowMs) override;
 
@@ -189,6 +202,10 @@ namespace solaris_ui
         void paintCurve(artboard::IRenderTarget &t, const AutoLive &l, const std::vector<solaris::AutoPointModel> &pts, const artboard::Rect &row,
                         double alpha, bool handles) const;
         bool autoGesture(const artboard::Gesture &g, const artboard::Point &local);
+        void advanceAuto(double nowMs);
+        std::vector<solaris::AutoPointModel> drawnPoints(const AutoLive &l) const; // shown, with a held point or handle the pointer's
+        int handleNear(const std::string &au, const artboard::Point &local, int &side) const;
+        void dragHandle(const artboard::Point &local, bool alt);
         bool loopGesture(const artboard::Gesture &g, const artboard::Point &local);
         void loopSpan(double &a, double &b) const; // the brace's beats as drawn (the pointer's while dragged)
         std::string autoAt(double y) const;
@@ -208,6 +225,13 @@ namespace solaris_ui
         int mAutoPoint = -1;
         bool mAutoDragging = false;
         double mAutoAt = 0, mAutoValue = 0;
+        int mAutoHandle = 0;                          // 0 the point; 1 its in-handle, 2 its out-handle; 3 an Alt-pull (R-AUTO-10)
+        solaris::AutoPointModel mAutoHeld;            // the pressed point's handles while one is held
+        // a click on a row's curve waits out the double-click (which opens the window) before adding
+        std::string mPendAu;
+        double mPendAt = 0, mPendValue = 0, mPendMs = 0;
+        bool mPendWaiting = false;
+        artboard::AnimatedProperty mPendAmt{0.0};
         interstellar_v1::AnimatedRows<Row> mRowMotion; // what is drawn: eased, ghosts fading
         std::vector<ClipView> mClips;
         struct StripRef { std::string id, name, kind; };

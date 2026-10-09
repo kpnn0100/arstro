@@ -318,6 +318,8 @@ namespace solaris
             for (auto &d : sm.devices) fillDevice(d);
         }
         for (auto &d : mModel.masterDevices) fillDevice(d);
+        mNowCurves.clear();
+        mNowSpb = 60.0 / p.header.bpm * p.header.sampleRate;
         for (const auto &a : p.automations)
         {
             AutomationModel am;
@@ -327,9 +329,11 @@ namespace solaris
             am.from = a.from;
             am.min = a.min;
             am.max = a.max;
-            for (const auto &pt : a.points) am.points.push_back(AutoPointModel{pt.at, pt.value, pt.shape});
+            for (const auto &pt : a.points)
+                am.points.push_back(AutoPointModel{pt.at, pt.value, pt.shape, pt.speedIn, pt.inflIn, pt.speedOut, pt.inflOut});
             for (const auto &bm : mModel.bindings)
                 if (std::find(bm.reads.begin(), bm.reads.end(), a.id) != bm.reads.end()) am.usedBy.push_back(bm.address);
+            mNowCurves.push_back(compileCurve(a, mNowSpb)); // the engine's curve: `now` is what the audio plays there
             mModel.automations.push_back(am);
         }
         // R-MIX-16: what each formula evaluates to where the transport is. While playing, the values the
@@ -342,6 +346,7 @@ namespace solaris
             const auto it = wasLive.find(bm.address);
             if (it != wasLive.end()) bm.live = it->second;
         }
+        refreshNow();
     }
 
     void SolarisService::evaluateLive(double beat)
@@ -361,6 +366,13 @@ namespace solaris
             std::string why;
             bm.live = describeAddress(mProject, bm.address, own, why) ? own.value : 0.0;
         }
+    }
+
+    void SolarisService::refreshNow()
+    {
+        // R-AUTO-11: each automation's value at the playhead — the heard position while playing
+        const long long s = std::llround(mModel.transport.position * mNowSpb);
+        for (size_t i = 0; i < mModel.automations.size() && i < mNowCurves.size(); ++i) mModel.automations[i].now = mNowCurves[i].valueAt(s);
     }
 
     std::vector<std::string> SolarisService::audit() const

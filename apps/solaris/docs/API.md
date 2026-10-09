@@ -44,10 +44,10 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `auto create <address>` | Automate a number: a new automation named "<owner> · <parameter>", ranged as it, holding its value from beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id. | R-AUTO-5 |
 | `auto add [--name <text>] [--min <v>] [--max <v>] [--unit <text>]` | An automation from nothing (default range 0…1). It moves nothing until a formula reads it. Prints the id. | R-AUTO-4 |
 | `auto delete <au> [--unbind]` | Delete an automation. Refused while a formula reads it, unless --unbind (those bindings are cleared). | R-AUTO-4 |
-| `auto point add <au> [--at <beats>] [--value <v>] [--shape <linear\|hold\|smooth>]` | Add a point (one at the same beat is replaced). Its shape governs the segment after it. | R-AUTO-6 |
+| `auto point add <au> [--at <beats>] [--value <v>] [--shape <linear\|hold\|smooth\|bezier>]` | Add a point (one at the same beat is replaced). Its shape governs the segment after it (a bezier point's handles start flat: speed 0, influence 33.333 %). | R-AUTO-6 |
 | `auto point move <au> [--at <beats>] [--to <beats>] [--value <v>]` | Move the point at --at to another beat and/or value. | R-AUTO-6 |
 | `auto point delete <au> [--at <beats>]` | Remove the point at --at. | R-AUTO-6 |
-| `auto point shape <au> [--at <beats>] [--shape <linear\|hold\|smooth>]` | Set how the curve leaves the point at --at. | R-AUTO-6 |
+| `auto point shape <au> [--at <beats>] [--shape <linear\|hold\|smooth\|bezier>] [--speed-in <v/beat>] [--influence-in <%>] [--speed-out <v/beat>] [--influence-out <%>]` | Set how the curve leaves the point at --at. A BEZIER point is Interstellar's key (R-ANIM-2): on each side a speed — the slope there, in the automation's unit per beat — and an influence, how far into the neighbouring segment it pulls (0 < x ≤ 100 %); flags not given are kept. One line per handle gesture. | R-AUTO-10 |
 | `bind clear <address>` | Clear an address's formula: it plays its own stored value again. (`set <address>=<number>` clears and sets.) | R-AUTO-1 |
 | `eval <address> [--at <beats>] [--explain]` | The value an address plays at a beat (default 0); --explain shows its formula and every name it reads. | R-AUTO-8 |
 | `render [--out <file.wav>] [--from <beats>] [--to <beats>] [--stems <ch,…>] [--ports] [--bits <24\|32f>]` | Render offline: the master to --out; with --stems, each named strip's post-fader output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS or 10 s. | R-RENDER-2 |
@@ -227,8 +227,13 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `automations[].points` | object[] | sorted by at |
 | `automations[].points[].at` | number | beats |
 | `automations[].points[].value` | number | in the automation's unit |
-| `automations[].points[].shape` | string | linear \| hold \| smooth — the segment after it |
+| `automations[].points[].shape` | string | linear \| hold \| smooth \| bezier — the segment after it (bezier: both its sides) |
+| `automations[].points[].speedIn` | number | bezier (R-AUTO-10): the slope arriving, in the automation's unit per beat |
+| `automations[].points[].inflIn` | number | bezier: how far into the segment before it that slope pulls, % (0 < x ≤ 100) |
+| `automations[].points[].speedOut` | number | bezier: the slope leaving, unit per beat |
+| `automations[].points[].inflOut` | number | bezier: how far into the segment after it, % |
 | `automations[].usedBy` | string[] | addresses whose formula reads it |
+| `automations[].now` | number | its value at the playhead (`transport.position`) by the engine's own evaluator; follows the transport while playing (R-AUTO-11) *(not in `--stable`)* |
 | `bindings` | object[] | every formula (R-AUTO-1/9) |
 | `bindings[].address` | string | what it drives |
 | `bindings[].formula` | string | as typed, with its leading = |

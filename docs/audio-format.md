@@ -150,8 +150,9 @@ Breakpoints are `<time> = <value>` in the project's timebase. The same shape as 
 automation, deliberately: one breakpoint syntax in the suite.
 
 (**AMENDED (Solaris R-AUTO, 2026-10-09):** nothing wrote the sketch above. Solaris writes an automation
-as `#aauto id=au_1 name=… unit=… min=… max=… from=<address>` with `#point at=… value=… [shape=hold|smooth]`
-children — the same child-node form as `#note` — and a separate `#abind address=… formula="=au_1"`
+as `#aauto id=au_1 name=… unit=… min=… max=… from=<address>` with `#point at=… value=… [shape=hold|smooth|bezier]`
+children (a bezier point carries Interstellar's handle fields, `speedIn= inflIn= speedOut= inflOut=`, per
+beat and in % — R-AUTO-10, Solaris `docs/project-format.md` §8a) — the same child-node form as `#note` — and a separate `#abind address=… formula="=au_1"`
 decides what it drives (an automation alone moves nothing). Solaris still READS the sketch and writes it
 back in the new form; Interstellar keeps its own `#anim`/`#key` (its R-ANIM).)
 
