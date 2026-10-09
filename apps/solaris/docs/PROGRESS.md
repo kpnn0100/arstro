@@ -24,9 +24,12 @@ here one task per commit):
   double-click (R-AUTO-10, R-AUTO-11).
 - **C3** the mixer's numbers bound from the dock, live values published; IDs shown and copied
   (R-MIX-16, R-UI-11).
-- **C4** agent-friendly faces: the control channel + `attach`, the equivalence test, the NTWB web face,
-  agent-sized composition (R-SVC-5…8).
+- **C4a** agent-sized composition in the CLI and service (R-SVC-8 as detailed by the audit).
+- **C4b** the faces: the control channel + `attach`, the equivalence test, the NTWB web face (R-SVC-5…7).
 - **C5** the goal: a whole song made with `solaris-cc` alone, rendered and measured (R-SVC-9).
+- **C6** the audit's fixes: latency compensation (R-MIX-17), forward = later in processing order
+  (R-MIX-4 amended), `strip move --order` renumbers, `matrix print` shows every target, recents
+  absolute, `lane move`, the docs that disagree with the code (audit 2026-10-09).
 Then B13 (the MIDI keyboard) as before.
 ---
 
@@ -169,8 +172,10 @@ umbrella's pointer — `arstro.rule` §7).
 - [ ] **C1** The grid follows the zoom; the ruler seeks on it (R-UI-10, R-TIME-5).
 - [ ] **C2** Bezier automation; the automation's window (R-AUTO-10/11).
 - [ ] **C3** The mixer's numbers bound from the dock; IDs shown and copied (R-MIX-16, R-UI-11).
-- [ ] **C4** Agent-friendly faces: control channel, equivalence test, web (NTWB), composition (R-SVC-5…8).
+- [ ] **C4a** Agent-sized composition: shell, scripts, ids, bulk notes, arrangement, readback, honest values (R-SVC-8).
+- [ ] **C4b** The faces: control channel + attach, equivalence test, web (NTWB) (R-SVC-5…7).
 - [ ] **C5** A whole song made by an agent with `solaris-cc`, measured (R-SVC-9).
+- [ ] **C6** The audit's fixes (R-MIX-17 latency, R-MIX-4 amended, strip order, matrix, recents, lanes, docs).
 - [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.
 
 ### T — tasks found on the way

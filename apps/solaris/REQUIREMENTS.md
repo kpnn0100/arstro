@@ -132,7 +132,12 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   which allowed any acyclic graph). (**AMENDED (R-MIX-15, sidechain, 2026-10-09):** a SIDECHAIN
   key — a signal a strip's detector listens to, not something it plays — may come from any strip
   EARLIER in processing order, the same mixer included: the key is computed before the strip that
-  reads it, so no loop can form. Main outputs and audible sends stay forward-only.)
+  reads it, so no loop can form. Main outputs and audible sends stay forward-only.) (**AMENDED (audit,
+  2026-10-09):** "forward" is LATER IN PROCESSING ORDER — mixer order, then strip order within a mixer
+  — for outputs and sends too, as it already was for keys. Found: a bus made by `strip add --kind bus`
+  (and the GUI's Add Bus) lands on Buses with Main and could not feed Main, so every reverb return or
+  group skipped Main. The order is still total, so no loop can form; `feedsForward` stays the ONE copy
+  of the rule; a reorder (`strip move`, `mixer move`) that would point any route backward is refused.)
 - **R-MIX-5 A send** has its own level and is pre- or post-fader (was SR-MIX-3). The main output is
   where the fader goes; a send is an extra copy.
 - **R-MIX-6 The master** sums every strip routed to it, has a gain and a rack, and feeds one or
@@ -167,6 +172,12 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   addresses that already bind (`<ch>.gain`, `.pan`, `<sd>.gain`, `project.masterGain`, R-AUTO-1). A
   bound control says what drives it, and while the song plays it MOVES with the value the engine
   evaluates — a value the model publishes (`bindings[].live`), never one the widget re-derives.
+- **R-MIX-17 Latency is compensated** (audit, 2026-10-09: the master limiter's lookahead put the whole
+  render 96 samples late, and on a strip it would put that strip out of time with the rest): a device
+  reports its latency (DSP `Device::latency()`); the engine delays every other path so all signals meet
+  in time at each strip, bus and the master; the offline render starts at beat 0 exactly (the master's
+  latency trimmed) and live playback reports the heard position minus it. Measured: a limiter on one
+  strip keeps that strip sample-aligned with an unprocessed twin.
 - **R-MIX-15 Sidechain** (R-EDM-3): a send may feed a strip's SIDECHAIN input instead of its audio
   (`send add <ch> --to <ch> --sidechain`); the strip's compressor detects on it (its `sidechain`
   switch); the key strip must come earlier in processing order (R-MIX-4, amended). The classic
@@ -511,7 +522,23 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 - **R-SVC-8 Composition is agent-sized**: whatever an agent needs to write a whole song in few,
   readable lines — bulk note entry with note names, the ids a command made printed back, a song
   overview — specified from an audit of an agent composing with the CLI (2026-10-09), with a guide,
-  `docs/AGENTS.md`, that ends in a worked song.
+  `docs/AGENTS.md`, that ends in a worked song. (**Detailed from the audit, 2026-10-09** — an agent's
+  16-bar song took 110 commands, 64 of them single notes, every id guessed:)
+  - **a session that lasts**: `solaris-cc shell [--song <f>]` reads lines from stdin into ONE service
+    (undo kept); a one-shot call that would drop unsaved edits says so and exits 4 unless `--discard`;
+  - **scripts that say where**: a refusal names its `line N`; `#` comments may end a line; a comment or
+    blank line prints nothing (it reprinted the last output — ids came out twice); `--keep-going`;
+  - **everything made is said**: a creating command prints its id first, then `made: strip=… device=…
+    pattern=… lane=…` for whatever else it made, and each made node is announced (`project.changed`);
+  - **notes in bulk, by name**: `notes add <pt> "<pitch>@<beat>[:<length>[:<vel>]] …"`; a pitch anywhere is
+    a number, a name (`C4`, `F#3`, `Bb2`; C4 = 60) or a kit's pad (`kick`); `note add --chord <Cm7>`;
+    `pattern steps <pt> --pitch <p> "x...x...x...x..."`; `pattern duplicate | clear | delete | transpose`;
+  - **arrangement**: `clip duplicate <ac> --count N`; a `clip add` with no `--lane` goes on the lane its
+    strip's clips are already on (a new lane only for a strip with none) — AMENDS ClipAdd's "a new lane";
+  - **reading back**: `ls` (a tree of ids and names), `show <id>` (a node's non-default fields),
+    `pattern print <pt>`, `state print --json --compact` (no registry, no defaults);
+  - **honest values**: a device parameter out of its range is REFUSED as a strip's gain is (R-DSP-3), not
+    clamped in silence; the audit names notes past their pattern's end, empty and unused patterns.
 - **R-SVC-9 The goal, measured** (user request: *"the goal is you can make me a song that you know"*): an
   agent makes a whole song with `solaris-cc` alone; the script is committed, the render measured (not
   silent, under 0 dBFS, the kick on the beats, the tempo right). The tune is public domain, so the
