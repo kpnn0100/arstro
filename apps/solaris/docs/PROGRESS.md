@@ -185,7 +185,12 @@ umbrella's pointer — `arstro.rule` §7).
       `bindings[].live` from the audio thread through pre-sized atomics (no allocation, counted); a
       `showIds` setting, ids eased in everywhere; Copy Address/Value/as Formula through the host's
       clipboard; 5 mutants caught; merged over C1 with its anchors followed by source text.
-- [ ] **C4a** Agent-sized composition: shell, scripts, ids, bulk notes, arrangement, readback, honest values (R-SVC-8).
+- [x] **C4a** Agent-sized composition: shell, scripts, ids, bulk notes, arrangement, readback, honest values (R-SVC-8).
+      — DR-SVC-8 (`3055cea`, a sub-agent): `solaris-cc shell`, `line N:`, exit 4 on dropped edits;
+      `made:` lines + announced nodes; `notes add` notation, pitch names and kit pads, `--chord`,
+      `pattern steps|duplicate|clear|delete|transpose`, `clip duplicate --count`, lane reuse; `ls`, `show`,
+      `pattern print`, compact JSON; out-of-range values refused; `docs/AGENTS.md`. An 8-bar song: 32
+      commands (the audit's 16 bars took 110). 7 mutants caught.
 - [ ] **C4b** The faces: control channel + attach, equivalence test, web (NTWB) (R-SVC-5…7).
 - [ ] **C5** A whole song made by an agent with `solaris-cc`, measured (R-SVC-9).
 - [ ] **C6** The audit's fixes (R-MIX-17 latency, R-MIX-4 amended, strip order, matrix, recents, lanes, docs).
