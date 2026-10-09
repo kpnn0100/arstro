@@ -35,7 +35,7 @@ namespace solaris_ui
             return level >= 2 && n % 2 == 0;
         }
         // the lanes' lines: bars strongest, beats next, the divisions faintest (R-UI-10)
-        constexpr double kLineA[3] = {0.07, 0.04, 0.022};
+        constexpr double kLineA[3] = {0.11, 0.065, 0.04}; // bars · beats · divisions: the subdivisions must READ (R-UI-10: "divide into smaller note")
         // the ruler's ticks: long and bright for a bar, shorter and fainter as the level gets finer
         constexpr double kTickA[3] = {0.15, 0.12, 0.09}, kTickH[3] = {7.0, 4.5, 2.5};
     }

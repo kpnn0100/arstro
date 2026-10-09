@@ -169,7 +169,11 @@ umbrella's pointer — `arstro.rule` §7).
       the audition level, sample for sample; it ends itself, said); `solaris_app_ui` 21 (the row's fill
       eases in and out — a mutant that snaps it fails); shot browser-audition; the UI rig now has a
       silent output device that keeps time, and pumps the service every frame as the window does.
-- [ ] **C1** The grid follows the zoom; the ruler seeks on it (R-UI-10, R-TIME-5).
+- [x] **C1** The grid follows the zoom; the ruler seeks on it (R-UI-10, R-TIME-5). — DR-UI-10 (`780bde9`, a
+      sub-agent): seven levels, bar → 1/32 beat, each fading in with its room from the EASED zoom; one
+      `snap()` for ruler, clip drag, loop, automation points and browser drops; zoom 4.7–637 px/beat,
+      the deepest unsnapped; `solaris_app_ui` 22 (3 mutants caught); the lines' strength raised at
+      merge so the divisions read.
 - [ ] **C2** Bezier automation; the automation's window (R-AUTO-10/11).
 - [ ] **C3** The mixer's numbers bound from the dock; IDs shown and copied (R-MIX-16, R-UI-11).
 - [ ] **C4a** Agent-sized composition: shell, scripts, ids, bulk notes, arrangement, readback, honest values (R-SVC-8).

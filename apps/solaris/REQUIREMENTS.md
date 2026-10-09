@@ -208,7 +208,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 - **R-CLIP-4 Clips may overlap** on a lane; overlapping audio sums (was SR-CLIP-4).
 - **R-CLIP-5 Reserved:** time-stretch and pitch-shift (was SR-CLIP-3).
 
-## R-TIME — transport and time — ✅ BUILT (1–4: DR-PLAY-1, the metronome DR-EDM-2, the loop region on the ruler DR-EDM-7) — 🚧 5 (the ruler on the grid) with C1
+## R-TIME — transport and time — ✅ BUILT (1–4: DR-PLAY-1, the metronome DR-EDM-2, the loop region on the ruler DR-EDM-7) — 5 ✅ (the ruler on the grid, DR-UI-10)
 
 - **R-TIME-1 Beats are authoritative**, 960 PPQ; seconds are derived from the tempo (was SR-TIME-1).
 - **R-TIME-2 One tempo and one meter** per project; a tempo/meter map is reserved (was SR-TIME-2/5).
@@ -416,7 +416,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
 - **R-ROLL-2 Editing, one command per gesture:** a click on empty grid adds a note of the last-used
   length at the snapped beat (`note add`); a drag moves a note in time and pitch, a drag on its right
   edge resizes it (`note move`); a double-click or right-click deletes it; a drag in the velocity lane
-  sets its velocity. Snap 1/4, 1/8, 1/16 (default), 1/32 beat or off; Ctrl+wheel zooms, the wheel
+  sets its velocity. Snap 1/4, 1/8, 1/16 (default), 1/32 — NOTE values, a beat being 1/4 — or off; Ctrl+wheel zooms, the wheel
   scrolls, eased.
 - **R-ROLL-3 Step mode** — the step sequencer, a VIEW of the same pattern (R-INST-3): a row per pad
   (or per key), sixteen steps a bar; a click toggles a note there. (Detailed while building it, B6: for
@@ -544,7 +544,7 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   silent, under 0 dBFS, the kick on the beats, the tempo right). The tune is public domain, so the
   result can be shared.
 
-## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 (grid) with C1, 11 (ids) with C3
+## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 (ids) with C3
 
 - **R-UI-1 Two screens, as Interstellar:** Home (R-HOME) and the Project view.
 - **R-UI-2 The accent is teal, `#159387`, the only forked token** — teal because orange, the
