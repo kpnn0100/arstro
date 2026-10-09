@@ -140,6 +140,32 @@ namespace solaris
         bool isAudio() const { return !src.empty(); }
     };
 
+    /** A point of an automation (R-AUTO-4): the shape governs the segment AFTER it. */
+    struct AutoPoint
+    {
+        double at = 0.0, value = 0.0;   // beats; the automation's unit
+        std::string shape = "linear";   // linear | hold | smooth
+        Fields unknown;
+    };
+
+    /** An automation — FL Studio's automation clip (R-AUTO-4). It moves nothing until a formula reads it. */
+    struct Automation
+    {
+        std::string id, name, unit, from; // `from`: the address it was made from (a hint, never a link)
+        double min = 0.0, max = 1.0;
+        std::vector<AutoPoint> points;    // sorted by `at`
+        Fields unknown;
+        Remarks remarks;
+    };
+
+    /** A binding (R-AUTO-1): the formula that decides an address's value. One per address. */
+    struct Binding
+    {
+        std::string address, formula;   // formula as typed, with its leading `=`
+        Fields unknown;
+        Remarks remarks;
+    };
+
     /** A node this build does not know: kept verbatim, written back where it was read. */
     struct RawNode
     {
@@ -157,6 +183,8 @@ namespace solaris
         std::vector<Lane> lanes;
         std::vector<Pattern> patterns;
         std::vector<Clip> clips;
+        std::vector<Automation> automations;
+        std::vector<Binding> bindings;
         std::vector<RawNode> raw;
 
         // ── lookups (nullptr = none) ──
@@ -168,6 +196,10 @@ namespace solaris
         Lane *lane(const std::string &id);
         Pattern *pattern(const std::string &id);
         Clip *clip(const std::string &id);
+        Automation *automation(const std::string &id);
+        Binding *binding(const std::string &address);
+        const Automation *automation(const std::string &id) const;
+        const Binding *binding(const std::string &address) const;
         DeviceNode *device(const std::string &id, Rack **owner = nullptr);
         const Strip *strip(const std::string &id) const;
         const Mixer *mixer(const std::string &id) const;

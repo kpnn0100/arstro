@@ -15,6 +15,7 @@ namespace solaris
             {"sig", "string", "meter, n/d"},
             {"sampleRate", "int", "the project's rate"},
             {"masterGain", "number", "dB"},
+            {"masterGainFormula", "string", "the formula driving it, \"\" = none (R-AUTO-1)"},
             {"masterOut", "string[]", "the port ids the master feeds"},
             {"mixers", "object[]", "mixer pages in order"},
             {"mixers[].id", "string", ""},
@@ -30,6 +31,8 @@ namespace solaris
             {"strips[].out", "string", "master, a strip id, or a port id (resolved)"},
             {"strips[].gain", "number", "dB"},
             {"strips[].pan", "number", "−1 … +1"},
+            {"strips[].gainFormula", "string", "the formula driving the gain, \"\" = none (R-AUTO-1)"},
+            {"strips[].panFormula", "string", "the formula driving the pan, \"\" = none"},
             {"strips[].mute", "bool", ""},
             {"strips[].solo", "bool", ""},
             {"strips[].audible", "bool", "false when muted or silenced by another strip's solo (R-MIX-7)"},
@@ -39,6 +42,7 @@ namespace solaris
             {"strips[].sends[].to", "string", "a strip on a later mixer, master, or a port"},
             {"strips[].sends[].gain", "number", "dB"},
             {"strips[].sends[].pre", "bool", "pre-fader"},
+            {"strips[].sends[].gainFormula", "string", "the formula driving the send's gain, \"\" = none"},
             {"strips[].devices", "object[]", "the rack, in order (an instrument strip's first is its instrument)"},
             {"strips[].devices[].id", "string", ""},
             {"strips[].devices[].type", "string", "the DSP registry type"},
@@ -46,6 +50,7 @@ namespace solaris
             {"strips[].devices[].instrument", "bool", ""},
             {"strips[].devices[].bypass", "bool", ""},
             {"strips[].devices[].known", "bool", "false when this build's registry lacks the type (kept, not played)"},
+            {"strips[].devices[].lastChanged", "string", "the parameter last written, by anyone (R-WIN-2)"},
             {"strips[].devices[].params", "object[]", "every registry parameter, stored or default (R-UI-5)"},
             {"strips[].devices[].params[].name", "string", "the registry name, e.g. filter.cutoff"},
             {"strips[].devices[].params[].label", "string", ""},
@@ -58,6 +63,7 @@ namespace solaris
             {"strips[].devices[].params[].choices", "string[]", "empty unless a choice"},
             {"strips[].devices[].params[].logScale", "bool", "a control's taper: moves in ratios (frequencies, times)"},
             {"strips[].devices[].params[].integer", "bool", "whole steps only"},
+            {"strips[].devices[].params[].formula", "string", "the formula driving it, \"\" = its own value plays (R-AUTO-1)"},
             {"strips[].peak", "number[]", "the last played block's peaks, L/R (R-PLAY-3)", false},
             {"strips[].clipCount", "int", "fed by: clips playing through it (R-MIX-8)"},
             {"strips[].fromLanes", "string[]", "fed by: the lanes those clips are drawn on"},
@@ -97,6 +103,24 @@ namespace solaris
             {"patterns[].notes[].at", "number", "beats from the pattern's start"},
             {"patterns[].notes[].length", "number", "beats"},
             {"patterns[].notes[].vel", "int", "1…127"},
+            {"automations", "object[]", "every automation (R-AUTO-4)"},
+            {"automations[].id", "string", "au_n — what a formula names"},
+            {"automations[].name", "string", "\"<owner> · <parameter>\" when made from one"},
+            {"automations[].unit", "string", ""},
+            {"automations[].from", "string", "the address it was made from (a hint, not a link)"},
+            {"automations[].min", "number", ""},
+            {"automations[].max", "number", ""},
+            {"automations[].points", "object[]", "sorted by at"},
+            {"automations[].points[].at", "number", "beats"},
+            {"automations[].points[].value", "number", "in the automation's unit"},
+            {"automations[].points[].shape", "string", "linear | hold | smooth — the segment after it"},
+            {"automations[].usedBy", "string[]", "addresses whose formula reads it"},
+            {"bindings", "object[]", "every formula (R-AUTO-1/9)"},
+            {"bindings[].address", "string", "what it drives"},
+            {"bindings[].formula", "string", "as typed, with its leading ="},
+            {"bindings[].reads", "string[]", "the automations and addresses it reads"},
+            {"bindings[].ok", "bool", "false = INERT: the address's own value plays"},
+            {"bindings[].problem", "string", "why it is inert"},
             {"ports", "object[]", "logical ports (R-DEV-3)"},
             {"ports[].id", "string", ""},
             {"ports[].name", "string", ""},
@@ -167,9 +191,11 @@ namespace solaris
                     params.push(Json::object()
                                     .set("name", p.name).set("label", p.label).set("unit", p.unit).set("text", p.text)
                                     .set("value", p.value).set("min", p.min).set("max", p.max).set("def", p.def)
-                                    .set("choices", strings(p.choices)).set("logScale", p.logScale).set("integer", p.integer));
+                                    .set("choices", strings(p.choices)).set("logScale", p.logScale).set("integer", p.integer)
+                                    .set("formula", p.formula));
                 a.push(Json::object().set("id", d.id).set("type", d.type).set("label", d.label)
-                           .set("instrument", d.instrument).set("bypass", d.bypass).set("known", d.known).set("params", params));
+                           .set("instrument", d.instrument).set("bypass", d.bypass).set("known", d.known).set("lastChanged", d.lastChanged)
+                           .set("params", params));
             }
             return a;
         }
@@ -180,7 +206,7 @@ namespace solaris
         Json j = Json::object();
         j.set("screen", m.screen).set("projectPath", m.projectPath).set("projectName", m.projectName).set("dirty", m.dirty)
             .set("bpm", m.bpm).set("sig", m.sig).set("sampleRate", m.sampleRate).set("masterGain", m.masterGain)
-            .set("masterOut", strings(m.masterOut));
+            .set("masterGainFormula", m.masterGainFormula).set("masterOut", strings(m.masterOut));
         Json mixers = Json::array();
         for (const auto &x : m.mixers)
             mixers.push(Json::object().set("id", x.id).set("name", x.name).set("order", x.order).set("strips", strings(x.strips)));
@@ -189,10 +215,12 @@ namespace solaris
         for (const auto &s : m.strips)
         {
             Json sends = Json::array();
-            for (const auto &sd : s.sends) sends.push(Json::object().set("id", sd.id).set("to", sd.to).set("gain", sd.gain).set("pre", sd.pre));
+            for (const auto &sd : s.sends)
+                sends.push(Json::object().set("id", sd.id).set("to", sd.to).set("gain", sd.gain).set("pre", sd.pre).set("gainFormula", sd.gainFormula));
             Json st = Json::object();
             st.set("id", s.id).set("name", s.name).set("kind", s.kind).set("mixer", s.mixer).set("order", s.order)
-                            .set("out", s.out).set("gain", s.gain).set("pan", s.pan).set("mute", s.mute).set("solo", s.solo)
+                            .set("out", s.out).set("gain", s.gain).set("pan", s.pan).set("gainFormula", s.gainFormula)
+                            .set("panFormula", s.panFormula).set("mute", s.mute).set("solo", s.solo)
                             .set("audible", s.audible).set("colour", s.colour).set("sends", sends).set("devices", devices(s.devices));
             if (!stable) st.set("peak", Json::array().push(Json::number(s.peak[0])).push(Json::number(s.peak[1])));
             st.set("clipCount", s.clipCount).set("fromLanes", strings(s.fromLanes)).set("fromStrips", strings(s.fromStrips))
@@ -221,6 +249,20 @@ namespace solaris
             patterns.push(Json::object().set("id", p.id).set("name", p.name).set("length", p.length).set("clips", p.clips).set("notes", notes));
         }
         j.set("patterns", patterns);
+        Json autos = Json::array();
+        for (const auto &a : m.automations)
+        {
+            Json pts = Json::array();
+            for (const auto &pt : a.points) pts.push(Json::object().set("at", pt.at).set("value", pt.value).set("shape", pt.shape));
+            autos.push(Json::object().set("id", a.id).set("name", a.name).set("unit", a.unit).set("from", a.from).set("min", a.min)
+                           .set("max", a.max).set("points", pts).set("usedBy", strings(a.usedBy)));
+        }
+        j.set("automations", autos);
+        Json binds = Json::array();
+        for (const auto &b : m.bindings)
+            binds.push(Json::object().set("address", b.address).set("formula", b.formula).set("reads", strings(b.reads)).set("ok", b.ok)
+                           .set("problem", b.problem));
+        j.set("bindings", binds);
         Json ports = Json::array();
         for (const auto &p : m.ports) ports.push(Json::object().set("id", p.id).set("name", p.name).set("dir", p.dir).set("channels", p.channels));
         j.set("ports", ports);

@@ -37,7 +37,9 @@ namespace solaris
         engine::MixGraph graph;
         std::vector<std::string> stripIds;   // graph strip index → strip id
         std::map<std::string, std::pair<int, int>> devices; // device id → (graph strip index or −1 = master, index in its compiled rack)
-        std::vector<std::string> warnings;   // devices or parameters left out, offline media
+        std::vector<std::string> warnings;   // devices or parameters left out, offline media, inert bindings
+        std::vector<std::string> curveIds;   // graph curve index → automation id
+        std::vector<std::string> bindAddresses; // graph bind index → the address it drives
     };
 
     CompileResult compile(const Project &p, const PcmProvider &pcm);

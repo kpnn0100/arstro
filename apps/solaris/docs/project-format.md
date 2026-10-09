@@ -118,6 +118,26 @@ A pattern is the notes a note clip plays (R-CLIP-2); clips that share a pattern 
 A suite file whose note clip carries inline `#note` children (audio-format §2.2) is read as a
 pattern named after the clip, and written back as one — the only normalisation the parser makes.
 
+## 8a. Automation — `#aauto` / `#point`, and formulas — `#abind` (R-AUTO)
+
+```
+#aauto id=au_1 name="Bass · Cutoff" unit=Hz min=20.0 max=20000.0 from=dv_2.filter.cutoff
+  #point at=0.0 value=600.0
+  #point at=8.0 value=2400.0 shape=smooth
+
+#abind address=dv_2.filter.cutoff formula="=au_1"
+#abind address=ch_3.pan formula="=0.25 * sin(beat * pi)"
+```
+
+An automation is a curve that moves nothing until a formula reads it (R-AUTO-4): `at` in beats, `value`
+in its unit, `shape` (`linear` when absent | `hold` | `smooth`) governs the segment AFTER the point.
+`from` is the address it was made from — a hint, never a link. A binding (R-AUTO-1) decides one
+address's value: `formula` as typed, with its `=`. One per address; the stored value under it (the
+strip's `gain=`, the device's parameter) stays, and plays again when the binding is cleared. An
+`#aauto` written in the suite schema's earlier sketch (indented `<beats> = <value>` lines, `node=`,
+`param=`, `interp=`) is read and written back in this form — the second normalisation the parser
+makes.
+
 ## 9. Clips — `#aclip`
 
 ```
@@ -141,7 +161,7 @@ pattern named after the clip, and written back as one — the only normalisation
 
 Header keys in §1's order, then unknown header keys in read order. Nodes grouped by type in this
 document's order (`#aport`, `#amixer`, `#atrack`, `#asend`, `#arack`, `#alane`, `#apattern`,
-`#aclip`, then unknown nodes in read order), each type in creation order; children indented two
+`#aclip`, `#aauto`, `#abind`, then unknown nodes in read order), each type in creation order; children indented two
 spaces. Fields in the order the tables give, then unknown keys in read order. Booleans
 `true`/`false`. Numbers: always a decimal point (`0.0`); **times are rounded to the tick (1/960
 beat) and printed with the fewest decimals that read back to the same tick**; seconds to the

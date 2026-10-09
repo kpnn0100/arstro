@@ -187,6 +187,15 @@ namespace solaris
             for (const auto &cl : p.clips) clips += cl.track == id ? 1 : 0;
             if (clips && !withClips) { err = std::to_string(clips) + " clip(s) play through " + id + " — move them, or add --with-clips"; return false; }
             p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [&](const Clip &x) { return x.track == id; }), p.clips.end());
+            {
+                // its formulas go with it: the strip's, its sends', its devices' (R-AUTO-1)
+                std::set<std::string> nodes = {id};
+                for (const auto &x : p.sends)
+                    if (x.from == id) nodes.insert(x.id);
+                if (const Rack *rk = p.rack(id))
+                    for (const auto &d : rk->devices) nodes.insert(d.id);
+                dropBindingsOf(nodes);
+            }
             p.sends.erase(std::remove_if(p.sends.begin(), p.sends.end(), [&](const Send &x) { return x.from == id; }), p.sends.end());
             p.racks.erase(std::remove_if(p.racks.begin(), p.racks.end(), [&](const Rack &x) { return x.track == id; }), p.racks.end());
             p.strips.erase(std::remove_if(p.strips.begin(), p.strips.end(), [&](const Strip &x) { return x.id == id; }), p.strips.end());
@@ -240,6 +249,7 @@ namespace solaris
             const std::string id = c.arg(0);
             if (!p.send(id)) { err = "no send `" + id + "`"; return false; }
             p.sends.erase(std::remove_if(p.sends.begin(), p.sends.end(), [&](const Send &x) { return x.id == id; }), p.sends.end());
+            dropBindingsOf({id});
             changed("send.deleted", id);
             return true;
         }
@@ -292,6 +302,7 @@ namespace solaris
                     const std::string track = r->track;
                     p.racks.erase(std::remove_if(p.racks.begin(), p.racks.end(), [&](const Rack &x) { return x.track == track; }), p.racks.end());
                 }
+                dropBindingsOf({id});
                 changed("device.removed", id);
                 return true;
             }

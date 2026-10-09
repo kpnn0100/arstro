@@ -300,6 +300,113 @@ static void test_a_relative_src_is_found_in_the_songs_folder()
     pass("a relative src names a file in the song's folder first — the Song tab re-places a sound with one `clip add`");
 }
 
+static void test_formulas_bind_numbers_and_refuse_what_cannot_be_read()
+{
+    Run r;
+    r.ok("project new " + freshSong("formulas"));
+    r.ok("clip add --instrument synth --at 0 --length 8");             // ch_2, its synth dv_1, pt_1
+    // automation FROM a property: one command, named after its owner and parameter, ranged as it, bound to it
+    assert(r.ok("auto create dv_1.filter.cutoff") == "au_1\n");
+    {
+        const auto &m = r.svc.model();
+        assert(m.automations.size() == 1);
+        const auto &a = m.automations[0];
+        assert(a.name == "Basic Synth \xC2\xB7 Cutoff" && a.unit == "Hz" && a.min == 20.0 && a.max == 20000.0 && a.from == "dv_1.filter.cutoff");
+        assert(a.points.size() == 2 && a.points[0].at == 0.0 && a.points[1].at >= 8.0 && a.points[0].value == a.points[1].value);
+        assert(a.usedBy == std::vector<std::string>{"dv_1.filter.cutoff"});
+        assert(m.bindings.size() == 1 && m.bindings[0].formula == "=au_1" && m.bindings[0].ok);
+        const auto &dv = r.strip("ch_2")->devices[0];
+        bool bound = false;
+        for (const auto &pm : dv.params) bound |= pm.name == "filter.cutoff" && pm.formula == "=au_1";
+        assert(bound && dv.lastChanged == "filter.cutoff");
+    }
+    assert(r.ok("get dv_1.filter.cutoff") == "=au_1\n");                   // `get` prints what decides it
+    // a formula with spaces, the clock, a link
+    r.ok("set ch_2.pan=\"=0.25 * sin(beat * pi)\"");
+    assert(r.ok("get ch_2.pan") == "=0.25 * sin(beat * pi)\n" && r.strip("ch_2")->panFormula == "=0.25 * sin(beat * pi)");
+    assert(contains(r.no("set project.masterGain==ch_2.gain - 3"), "a formula with spaces is quoted"));
+    r.ok("set project.masterGain=\"=ch_2.gain - 3\"");
+    // what cannot be read is refused, naming it — and a refused line changes nothing and says nothing
+    const std::string before = r.text();
+    r.events.clear();
+    assert(contains(r.no("set ch_2.gain==au_9"), "reads `au_9`, which is no automation"));
+    assert(contains(r.no("set ch_2.gain==1+"), "the formula ends"));
+    assert(contains(r.no("set ch_2.gain==foo(1)"), "unknown function `foo`"));
+    assert(contains(r.no("set ch_2.gain==min(1)"), "`min` takes 2 values"));
+    assert(contains(r.no("set dv_1.osc1.wave==1"), "is a choice"));
+    assert(contains(r.no("set ch_2.mute==1"), "not a number a formula can drive"));
+    assert(contains(r.no("set ch_2.gain==project.masterGain"), "a loop of links (")); // masterGain already reads ch_2.gain
+    assert(r.text() == before);
+    for (const auto &e : r.events) assert(!contains(e, "params.changed") && !contains(e, "project.changed"));
+    // a plain number clears the formula and sets the value; `bind clear` keeps the value
+    r.ok("set ch_2.pan=0.3");
+    assert(r.strip("ch_2")->panFormula.empty() && r.strip("ch_2")->pan == 0.3 && r.ok("get ch_2.pan") == "0.3\n");
+    r.ok("bind clear project.masterGain");
+    assert(r.svc.model().masterGainFormula.empty() && contains(r.no("bind clear project.masterGain"), "has no formula"));
+    // points: added sorted and clamped to the range, moved, shaped; refusals name the beat
+    r.ok("auto point add au_1 --at 4 --value 99999 --shape smooth");
+    assert(r.svc.model().automations[0].points.size() == 3 && r.svc.model().automations[0].points[1].value == 20000.0);
+    assert(contains(r.no("auto point move au_1 --at 3 --value 1"), "no point at beat 3.0"));
+    r.ok("auto point move au_1 --at 4 --to 2 --value 400");
+    r.ok("auto point shape au_1 --at 2 --shape hold");
+    assert(contains(r.no("auto point shape au_1 --at 2 --shape bounce"), "linear, hold or smooth"));
+    const auto &pts = r.svc.model().automations[0].points;
+    assert(pts[1].at == 2.0 && pts[1].value == 400.0 && pts[1].shape == "hold");
+    // eval: the value at a beat, and why
+    const std::string ex = r.ok("eval dv_1.filter.cutoff --at 3 --explain");
+    assert(contains(ex, "dv_1.filter.cutoff = 400.0 Hz at beat 3.0") && contains(ex, "au_1 = 400.0") && contains(ex, "automation \""));
+    // an automation read by a formula is not deleted out from under it
+    assert(contains(r.no("auto delete au_1"), "read by dv_1.filter.cutoff"));
+    // deleting what a formula drives takes the formula with it
+    r.ok("strip delete ch_2 --with-clips");
+    assert(r.svc.model().bindings.empty() && r.svc.model().automations[0].usedBy.empty());
+    r.ok("auto delete au_1");
+    assert(r.svc.model().automations.empty());
+    pass("formulas: auto create names, ranges and binds; links, the clock, quoting; unreadable formulas and loops refused; numbers clear; eval explains (R-AUTO-1…5, 8)");
+}
+
+static void test_an_automated_gain_renders_its_curve()
+{
+    Run r;
+    const std::string dir = scratch();
+    const std::string song = freshSong("autorender");
+    r.ok("project new " + song + " --bpm 120");
+    r.ok("clip add --src tone.wav --at 0 --length 8");                 // a 1 kHz sine at 0.5, looped for 8 beats
+    r.ok("auto create ch_2.gain");
+    r.ok("auto point move au_1 --at 0 --value 0");
+    r.ok("auto point add au_1 --at 8 --value -20");
+    const std::string out = dir + "/auto.wav";
+    r.ok("render --out " + out);
+    const auto &L = r.fake.written[out][0];
+    auto dbAround = [&](long long s) {
+        double sum = 0;
+        for (long long i = s - 1200; i < s + 1200; ++i) sum += (double)L[(size_t)i] * L[(size_t)i];
+        return 20.0 * std::log10(std::sqrt(sum / 2400.0) / (0.5 / std::sqrt(2.0)));
+    };
+    const double b2 = dbAround(48000), b6 = dbAround(144000);
+    if (std::fabs(b2 + 5.0) > 0.1 || std::fabs(b6 + 15.0) > 0.1) std::printf("    beat 2: %.3f dB, beat 6: %.3f dB\n", b2, b6);
+    assert(std::fabs(b2 + 5.0) < 0.1 && std::fabs(b6 + 15.0) < 0.1);   // the curve, measured (R-AUTO-7)
+    // the file keeps it, and a hand-edited formula that cannot be read is INERT, said in the model and the audit
+    r.ok("project save");
+    std::ifstream in(song);
+    std::stringstream ss;
+    ss << in.rdbuf();
+    assert(contains(ss.str(), "#aauto id=au_1") && contains(ss.str(), "#point at=8.0 value=-20.0") && contains(ss.str(), "#abind address=ch_2.gain formula=\"=au_1\""));
+    // a hand-edited formula that cannot be read opens, plays its own value, and says why — in the model and the audit
+    std::string text = ss.str();
+    text.replace(text.find("formula=\"=au_1\""), std::string("formula=\"=au_1\"").size(), "formula=\"=au_1 * nope\"");
+    { std::ofstream(song) << text; }
+    r.ok("project open " + song);
+    const auto &bm = r.svc.model().bindings;
+    assert(bm.size() == 1 && !bm[0].ok && contains(bm[0].problem, "reads `nope`"));
+    const std::string audit = r.ok("audit");
+    assert(contains(audit, "binding ch_2.gain: formula") && contains(audit, "inert: its own value plays"));
+    assert(!contains(audit, "automation au_1"));                       // a formula names it, even an inert one
+    r.ok("auto add --name Spare");
+    assert(contains(r.ok("audit"), "automation au_2 (Spare) moves nothing — no formula reads it"));
+    pass("an automated gain renders its curve: −5 dB at beat 2, −15 dB at beat 6 of a 0 → −20 dB ramp, within 0.1 dB; saved as #aauto/#abind; an unreadable formula is inert and audited");
+}
+
 static void test_routing_only_goes_forward_and_refusals_change_nothing()
 {
     Run r;
@@ -684,6 +791,8 @@ int main()
     test_every_sample_file_gets_its_own_strip();
     test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_changed();
     test_a_relative_src_is_found_in_the_songs_folder();
+    test_formulas_bind_numbers_and_refuse_what_cannot_be_read();
+    test_an_automated_gain_renders_its_curve();
     test_routing_only_goes_forward_and_refusals_change_nothing();
     test_set_and_get_through_the_registry();
     test_patterns_are_shared_by_their_clips();

@@ -36,7 +36,8 @@ namespace solaris
 
             {K::Set, "set", "<address>=<value> …", 1, -1, {},
              "Write addresses: project.bpm, <strip>.gain, <clip>.at, <device>.<param> (any DSP registry "
-             "parameter, in its unit), … — `api` lists every one. An unknown address or parameter is refused.",
+             "parameter, in its unit), … — `api` lists every one. An unknown address or parameter is refused. "
+             "A value starting with `=` is a FORMULA that drives a number (R-AUTO); a plain number clears it.",
              "R-SVC-3", true},
             {K::Get, "get", "<address>", 1, 1, {}, "Print an address's stored value.", "R-SVC-1"},
 
@@ -89,6 +90,25 @@ namespace solaris
             {K::NoteAdd, "note add", "<pt>", 1, 1, {"pitch=<0-127>", "at=<beats>", "length=<beats>", "vel=<1-127>"},
              "Add a note to a pattern — every clip of it changes.", "R-CLIP-2"},
             {K::NoteDelete, "note delete", "<pt>", 1, 1, {"pitch=<0-127>", "at=<beats>"}, "Remove the note at that pitch and time.", "R-CLIP-2"},
+
+            {K::AutoCreate, "auto create", "<address>", 1, 1, {},
+             "Automate a number: a new automation named \"<owner> · <parameter>\", ranged as it, holding its value from "
+             "beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id.", "R-AUTO-5"},
+            {K::AutoAdd, "auto add", "", 0, 0, {"name=<text>", "min=<v>", "max=<v>", "unit=<text>"},
+             "An automation from nothing (default range 0…1). It moves nothing until a formula reads it. Prints the id.", "R-AUTO-4"},
+            {K::AutoDelete, "auto delete", "<au>", 1, 1, {"unbind"},
+             "Delete an automation. Refused while a formula reads it, unless --unbind (those bindings are cleared).", "R-AUTO-4"},
+            {K::AutoPointAdd, "auto point add", "<au>", 1, 1, {"at=<beats>", "value=<v>", "shape=<linear|hold|smooth>"},
+             "Add a point (one at the same beat is replaced). Its shape governs the segment after it.", "R-AUTO-6"},
+            {K::AutoPointMove, "auto point move", "<au>", 1, 1, {"at=<beats>", "to=<beats>", "value=<v>"},
+             "Move the point at --at to another beat and/or value.", "R-AUTO-6"},
+            {K::AutoPointDelete, "auto point delete", "<au>", 1, 1, {"at=<beats>"}, "Remove the point at --at.", "R-AUTO-6"},
+            {K::AutoPointShape, "auto point shape", "<au>", 1, 1, {"at=<beats>", "shape=<linear|hold|smooth>"},
+             "Set how the curve leaves the point at --at.", "R-AUTO-6"},
+            {K::BindClear, "bind clear", "<address>", 1, 1, {},
+             "Clear an address's formula: it plays its own stored value again. (`set <address>=<number>` clears and sets.)", "R-AUTO-1"},
+            {K::Eval, "eval", "<address>", 1, 1, {"at=<beats>", "explain"},
+             "The value an address plays at a beat (default 0); --explain shows its formula and every name it reads.", "R-AUTO-8"},
 
             {K::Render, "render", "", 0, 0, {"out=<file.wav>", "from=<beats>", "to=<beats>", "stems=<ch,…>", "ports", "bits=<24|32f>"},
              "Render offline: the master to --out; with --stems, each named strip's post-fader output to "
@@ -293,7 +313,13 @@ namespace solaris
             if (spec->fieldArgs)
             {
                 const auto eq = tok.find('=');
-                if (eq == std::string::npos || eq == 0) { err = "expected <address>=<value>, got `" + tok + "`"; return c; }
+                if (eq == std::string::npos || eq == 0)
+                {
+                    err = "expected <address>=<value>, got `" + tok + "`";
+                    if (!out.fields.empty() && !out.fields.back().second.empty() && out.fields.back().second[0] == '=')
+                        err += " — a formula with spaces is quoted: " + out.fields.back().first + "=\"" + out.fields.back().second + " …\"";
+                    return c;
+                }
                 out.fields.emplace_back(tok.substr(0, eq), tok.substr(eq + 1));
                 out.args.push_back(tok);
                 continue;

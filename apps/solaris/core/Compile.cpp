@@ -1,4 +1,5 @@
 #include "Compile.h"
+#include "Bindings.h"
 #include "Format.h"
 #include "MixLaws.h"
 #include "device/Device.h"
@@ -153,6 +154,7 @@ namespace solaris
             r.stripIds.push_back(s->id);
         }
         const auto silent = silentStrips(p);
+        std::map<std::string, std::pair<int, int>> sendAt; // send id → (graph strip, its index in that strip's sends)
         const double spb = 60.0 / p.header.bpm * p.header.sampleRate; // samples per beat
 
         for (const Strip *s : order)
@@ -166,7 +168,10 @@ namespace solaris
             es.out = target(s->out, stripIndex, portIndex);
             for (const auto &sd : p.sends)
                 if (sd.from == s->id)
+                {
+                    sendAt[sd.id] = {(int)g.strips.size(), (int)es.sends.size()};
                     es.sends.push_back(engine::Send{target(sd.to, stripIndex, portIndex), engine::dbToLinear(sd.gain), sd.pre});
+                }
             bool instrumentOk = true;
             if (const Rack *rk = p.rack(s->id))
                 for (size_t k = 0; k < rk->devices.size(); ++k)
@@ -248,6 +253,90 @@ namespace solaris
                     g.masterRack.push_back(dd);
                 }
             }
+
+        // automation and formulas (R-AUTO-7): curves in samples, bindings ordered so a link reads an earlier one
+        g.clock.samplesPerBeat = spb;
+        g.clock.beatsPerBar = std::max(1, std::atoi(p.header.sig.c_str()));
+        g.clock.bpm = p.header.bpm;
+        g.clock.rate = p.header.sampleRate;
+        std::map<std::string, int> curveOf;
+        for (const auto &a : p.automations)
+        {
+            engine::Curve c;
+            for (const auto &pt : a.points)
+            {
+                c.at.push_back(std::llround(pt.at * spb));
+                c.value.push_back(pt.value);
+                c.shape.push_back(pt.shape == "hold" ? engine::Curve::Hold : pt.shape == "smooth" ? engine::Curve::Smooth : engine::Curve::Linear);
+            }
+            curveOf[a.id] = (int)g.curves.size();
+            r.curveIds.push_back(a.id);
+            g.curves.push_back(std::move(c));
+        }
+        std::vector<std::string> problems;
+        const auto ordered = orderBindings(p, problems);
+        for (const auto &x : problems) r.warnings.push_back("binding " + x + " — inert, its own value plays");
+        std::map<std::string, int> bindOf;
+        for (const auto &ob : ordered)
+        {
+            engine::Bind b;
+            const AddressSpec &sp = ob.spec;
+            switch (sp.kind)
+            {
+            case AddressSpec::StripGain:
+            case AddressSpec::StripPan:
+                b.kind = sp.kind == AddressSpec::StripGain ? engine::Bind::StripGain : engine::Bind::StripPan;
+                b.strip = stripIndex.at(sp.node);
+                break;
+            case AddressSpec::SendGain:
+            {
+                const auto it = sendAt.find(sp.node);
+                if (it == sendAt.end()) { r.warnings.push_back("binding " + ob.binding->address + ": its send is not in the graph — inert"); continue; }
+                b.kind = engine::Bind::SendGain;
+                b.strip = it->second.first;
+                b.index = it->second.second;
+                break;
+            }
+            case AddressSpec::MasterGain:
+                b.kind = engine::Bind::MasterGain;
+                break;
+            case AddressSpec::DeviceParam:
+            {
+                const auto it = r.devices.find(sp.node);
+                if (it == r.devices.end()) { r.warnings.push_back("binding " + ob.binding->address + ": its device is left out — inert"); continue; }
+                b.kind = it->second.first < 0 ? engine::Bind::MasterDeviceParam : engine::Bind::DeviceParam;
+                b.strip = it->second.first;
+                b.index = it->second.second;
+                b.param = sp.paramIndex;
+                break;
+            }
+            }
+            b.lo = sp.lo;
+            b.hi = sp.hi;
+            b.integer = sp.integer;
+            b.own = sp.value;
+            b.expr = ob.formula.expr;
+            const int bindBase = engine::kClockSlots + (int)g.curves.size();
+            for (auto &o : b.expr.ops)
+            {
+                if (o.kind != engine::ExprOp::Var || o.index >= 0) continue;
+                const std::string &name = ob.formula.names[(size_t)(-o.index - 1)];
+                if (curveOf.count(name)) o.index = engine::kClockSlots + curveOf[name];
+                else if (bindOf.count(name)) o.index = bindBase + bindOf[name];
+                else
+                {
+                    // a link to an address nothing drives: its own value, a constant
+                    AddressSpec other;
+                    std::string why;
+                    describeAddress(p, name, other, why);
+                    o.kind = engine::ExprOp::Num;
+                    o.num = other.value;
+                }
+            }
+            bindOf[ob.binding->address] = (int)g.binds.size();
+            r.bindAddresses.push_back(ob.binding->address);
+            g.binds.push_back(std::move(b));
+        }
         return r;
     }
 }

@@ -12,7 +12,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `project open <path.slp>` | Open a song. | R-HOME-1 |
 | `project save [path.slp]` | Write the .slp (a path saves it there). | R-FMT-2 |
 | `project close` | Close the song and return Home. | R-UI-1 |
-| `set <address>=<value> …` | Write addresses: project.bpm, <strip>.gain, <clip>.at, <device>.<param> (any DSP registry parameter, in its unit), … — `api` lists every one. An unknown address or parameter is refused. | R-SVC-3 |
+| `set <address>=<value> …` | Write addresses: project.bpm, <strip>.gain, <clip>.at, <device>.<param> (any DSP registry parameter, in its unit), … — `api` lists every one. An unknown address or parameter is refused. A value starting with `=` is a FORMULA that drives a number (R-AUTO); a plain number clears it. | R-SVC-3 |
 | `get <address>` | Print an address's stored value. | R-SVC-1 |
 | `mixer add [name]` | Add a mixer page after the last one. | R-MIX-3 |
 | `mixer delete <mx>` | Delete an empty mixer. Refused while strips live on it. | R-MIX-3 |
@@ -36,6 +36,15 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `pattern new [--name <text>] [--length <beats>]` | Create an empty pattern. | R-CLIP-2 |
 | `note add <pt> [--pitch <0-127>] [--at <beats>] [--length <beats>] [--vel <1-127>]` | Add a note to a pattern — every clip of it changes. | R-CLIP-2 |
 | `note delete <pt> [--pitch <0-127>] [--at <beats>]` | Remove the note at that pitch and time. | R-CLIP-2 |
+| `auto create <address>` | Automate a number: a new automation named "<owner> · <parameter>", ranged as it, holding its value from beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id. | R-AUTO-5 |
+| `auto add [--name <text>] [--min <v>] [--max <v>] [--unit <text>]` | An automation from nothing (default range 0…1). It moves nothing until a formula reads it. Prints the id. | R-AUTO-4 |
+| `auto delete <au> [--unbind]` | Delete an automation. Refused while a formula reads it, unless --unbind (those bindings are cleared). | R-AUTO-4 |
+| `auto point add <au> [--at <beats>] [--value <v>] [--shape <linear\|hold\|smooth>]` | Add a point (one at the same beat is replaced). Its shape governs the segment after it. | R-AUTO-6 |
+| `auto point move <au> [--at <beats>] [--to <beats>] [--value <v>]` | Move the point at --at to another beat and/or value. | R-AUTO-6 |
+| `auto point delete <au> [--at <beats>]` | Remove the point at --at. | R-AUTO-6 |
+| `auto point shape <au> [--at <beats>] [--shape <linear\|hold\|smooth>]` | Set how the curve leaves the point at --at. | R-AUTO-6 |
+| `bind clear <address>` | Clear an address's formula: it plays its own stored value again. (`set <address>=<number>` clears and sets.) | R-AUTO-1 |
+| `eval <address> [--at <beats>] [--explain]` | The value an address plays at a beat (default 0); --explain shows its formula and every name it reads. | R-AUTO-8 |
 | `render [--out <file.wav>] [--from <beats>] [--to <beats>] [--stems <ch,…>] [--ports] [--bits <24\|32f>]` | Render offline: the master to --out; with --stems, each named strip's post-fader output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS or 10 s. | R-RENDER-2 |
 | `matrix print [--json]` | Every route and send at once: rows = strips, columns = destinations. | R-MIX-9 |
 | `audit` | The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping. | R-MIX-10 |
@@ -64,6 +73,8 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` | text · beats · beats · beats · beats · dB · bool · s · s |
 | `<lane>.name` · `.colour` · `<mixer>.name` · `<send>.gain` · `.pre` · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
 | `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |
+| `<automation>.name` · `.unit` · `.min` · `.max` (read: also `.from` · `.points`) | text · text · number · number |
+| any NUMBER above (a strip's gain/pan, a send's gain, `project.masterGain`, a numeric device parameter) `=<formula>` | binds it (R-AUTO-1): numbers, `+ - * / ^ ( )`, `sin cos tan abs sign min max clamp lerp pow exp log sqrt floor ceil round frac`, `pi`, `beat bar bpm t`, an automation id (`au_1`), another numeric address (a link). `get` prints the formula; a plain number clears it |
 
 ## Events
 
@@ -101,6 +112,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `sig` | string | meter, n/d |
 | `sampleRate` | int | the project's rate |
 | `masterGain` | number | dB |
+| `masterGainFormula` | string | the formula driving it, "" = none (R-AUTO-1) |
 | `masterOut` | string[] | the port ids the master feeds |
 | `mixers` | object[] | mixer pages in order |
 | `mixers[].id` | string |  |
@@ -116,6 +128,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].out` | string | master, a strip id, or a port id (resolved) |
 | `strips[].gain` | number | dB |
 | `strips[].pan` | number | −1 … +1 |
+| `strips[].gainFormula` | string | the formula driving the gain, "" = none (R-AUTO-1) |
+| `strips[].panFormula` | string | the formula driving the pan, "" = none |
 | `strips[].mute` | bool |  |
 | `strips[].solo` | bool |  |
 | `strips[].audible` | bool | false when muted or silenced by another strip's solo (R-MIX-7) |
@@ -125,6 +139,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].sends[].to` | string | a strip on a later mixer, master, or a port |
 | `strips[].sends[].gain` | number | dB |
 | `strips[].sends[].pre` | bool | pre-fader |
+| `strips[].sends[].gainFormula` | string | the formula driving the send's gain, "" = none |
 | `strips[].devices` | object[] | the rack, in order (an instrument strip's first is its instrument) |
 | `strips[].devices[].id` | string |  |
 | `strips[].devices[].type` | string | the DSP registry type |
@@ -132,6 +147,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].devices[].instrument` | bool |  |
 | `strips[].devices[].bypass` | bool |  |
 | `strips[].devices[].known` | bool | false when this build's registry lacks the type (kept, not played) |
+| `strips[].devices[].lastChanged` | string | the parameter last written, by anyone (R-WIN-2) |
 | `strips[].devices[].params` | object[] | every registry parameter, stored or default (R-UI-5) |
 | `strips[].devices[].params[].name` | string | the registry name, e.g. filter.cutoff |
 | `strips[].devices[].params[].label` | string |  |
@@ -144,6 +160,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].devices[].params[].choices` | string[] | empty unless a choice |
 | `strips[].devices[].params[].logScale` | bool | a control's taper: moves in ratios (frequencies, times) |
 | `strips[].devices[].params[].integer` | bool | whole steps only |
+| `strips[].devices[].params[].formula` | string | the formula driving it, "" = its own value plays (R-AUTO-1) |
 | `strips[].peak` | number[] | the last played block's peaks, L/R (R-PLAY-3) *(not in `--stable`)* |
 | `strips[].clipCount` | int | fed by: clips playing through it (R-MIX-8) |
 | `strips[].fromLanes` | string[] | fed by: the lanes those clips are drawn on |
@@ -183,6 +200,24 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `patterns[].notes[].at` | number | beats from the pattern's start |
 | `patterns[].notes[].length` | number | beats |
 | `patterns[].notes[].vel` | int | 1…127 |
+| `automations` | object[] | every automation (R-AUTO-4) |
+| `automations[].id` | string | au_n — what a formula names |
+| `automations[].name` | string | "<owner> · <parameter>" when made from one |
+| `automations[].unit` | string |  |
+| `automations[].from` | string | the address it was made from (a hint, not a link) |
+| `automations[].min` | number |  |
+| `automations[].max` | number |  |
+| `automations[].points` | object[] | sorted by at |
+| `automations[].points[].at` | number | beats |
+| `automations[].points[].value` | number | in the automation's unit |
+| `automations[].points[].shape` | string | linear \| hold \| smooth — the segment after it |
+| `automations[].usedBy` | string[] | addresses whose formula reads it |
+| `bindings` | object[] | every formula (R-AUTO-1/9) |
+| `bindings[].address` | string | what it drives |
+| `bindings[].formula` | string | as typed, with its leading = |
+| `bindings[].reads` | string[] | the automations and addresses it reads |
+| `bindings[].ok` | bool | false = INERT: the address's own value plays |
+| `bindings[].problem` | string | why it is inert |
 | `ports` | object[] | logical ports (R-DEV-3) |
 | `ports[].id` | string |  |
 | `ports[].name` | string |  |

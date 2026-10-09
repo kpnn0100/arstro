@@ -97,6 +97,11 @@ namespace solaris
         o += "| `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` | text · beats · beats · beats · beats · dB · bool · s · s |\n";
         o += "| `<lane>.name` · `.colour` · `<mixer>.name` · `<send>.gain` · `.pre` · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |\n";
         o += "| `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |\n";
+        o += "| `<automation>.name` · `.unit` · `.min` · `.max` (read: also `.from` · `.points`) | text · text · number · number |\n";
+        o += "| any NUMBER above (a strip's gain/pan, a send's gain, `project.masterGain`, a numeric device parameter) `=<formula>` | "
+             "binds it (R-AUTO-1): numbers, `+ - * / ^ ( )`, `sin cos tan abs sign min max clamp lerp pow exp log sqrt floor ceil "
+             "round frac`, `pi`, `beat bar bpm t`, an automation id (`au_1`), another numeric address (a link). `get` prints "
+             "the formula; a plain number clears it |\n";
         o += "\n## Events\n\nEach is one line: `[evt] <name> key=value …` — the log line, the `--watch` stream.\n\n";
         o += "| event | fields | when |\n|---|---|---|\n";
         for (const auto &e : eventSpecs())

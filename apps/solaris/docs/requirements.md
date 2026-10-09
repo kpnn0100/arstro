@@ -132,14 +132,16 @@ checks a 0.5 region at pan +0.5, −6 dB to 1e-7 against the closed forms.
 ### DR-SVC-1 One way in, one way out (R-SVC-1, R-SVC-2, R-G-4)
 `SolarisService` (`core/service/SolarisService.h`) is the application: `dispatchText(line)` parses
 with the grammar TABLE (`commandSpecs`, `core/service/Command.cpp:26`; `parseCommand`, `:199` —
-longest verb match, flags checked against the row) and `dispatch` (`core/service/SolarisService.cpp:84`)
+longest verb match, flags checked against the row) and `dispatch` (`core/service/SolarisService.cpp:85`)
 runs it; out come the `AppModel` (`core/service/AppModel.h`, refreshed after every command) and
 `Event`s whose `formatEvent` text is the log line. **Every edit is all-or-nothing**: the project is
 copied first, the command runs, `validateProject` runs, and any failure restores the copy
-(`:188`) and refuses with the validator's sentence — a refused command changes nothing. An edit's
-events (`project.changed` from `changed`, `:34`; a `set` line's `params.changed`) are HELD in
-`mPending` and emitted only once the whole command has landed (`:197`), so a refused command
-announces nothing either (D-1). The core
+(`:204`) and refuses with the validator's sentence — a refused command changes nothing. An edit's
+events (`project.changed` from `changed`, `:35`; a `set` line's `params.changed`) are HELD in
+`mPending` and emitted only once the whole command has landed (`:213`), so a refused command
+announces nothing either (D-1). And a refusal always says WHY: a path that returns false without a
+reason is caught in `dispatch` (`:189`) and named (`` `clip add` was refused without a reason``),
+never silent (R-SVC-3) — B1's own wiring mistake showed the hole. The core
 holds no codec and no device API: decoding and WAV writing are `Host` functions (R-SVC-4).
 
 ### DR-SVC-2 Unknown input is refused, naming it (R-SVC-3)
@@ -162,12 +164,12 @@ pattern looping across an 8-beat clip, the bass C2 at 65.4 Hz, the sample resamp
 stored relative to the song's folder.
 
 ### DR-MIX-2 Every sample file gets its own strip (R-MIX-2, R-MIX-3)
-`clip add --src` (`core/service/ServiceEdit.cpp:353`): a file no clip uses yet gets a new audio strip
+`clip add --src` (`core/service/ServiceEdit.cpp:364`): a file no clip uses yet gets a new audio strip
 named after it on the first mixer, routed by `defaultOutFor` (`:70`) to the first bus on a later
 mixer ("Main"), and a new lane; a file already used reuses its strip; `--strip` overrides. The file
 is decoded through the host to learn its length (refused if it cannot be read), and stored relative
 to the song's folder when inside it (`relativePath`). A relative `--src` names a file in the SONG's
-folder first when one is there (`:374`) — what the model stores and the browser's Song tab hands
+folder first when one is there (`:385`) — what the model stores and the browser's Song tab hands
 back — else the caller's working directory.
 
 ### DR-MIX-7 Solo keeps the soloed path alive (R-MIX-7)
@@ -341,7 +343,7 @@ dragged out: the browser reports the pointer and the drop; `ProjectScreen` draws
 overlay pass) and the timeline's teal drop hint at the snapped beat, and on release sends ONE line
 (`place`, `app/widgets/ProjectScreen.cpp:66`): a sample → `clip add --src "<file>" --at <b> [--lane
 <ln>]`; an instrument → `clip add --instrument <type> --at <b> --length 4 [--lane <ln>]` (the new
-strip and its empty note clip in one command, `core/service/ServiceEdit.cpp:359`); below the last
+strip and its empty note clip in one command, `core/service/ServiceEdit.cpp:370`); below the last
 lane, no `--lane` — a new lane; an effect → a notice that it goes on a strip (U3). A double-click
 places at the playhead.
 
@@ -390,3 +392,54 @@ Remove `device remove` (none for an instrument). Another device cross-fades the 
 while the pointer is down `bind` re-seeds nothing; the body scrolls (`reveal` eases to a row). A
 device removed by anyone closes the panel. The model publishes `params[].logScale` and `.integer`
 for it.
+
+### DR-AUTO-1 Automations and bindings in the `.slp` (R-AUTO-1, R-AUTO-4)
+`Automation` (`model/Project.h`): id `au_n`, name, unit, min/max, `from`, points (beat, value, shape
+`linear|hold|smooth`, sorted). `Binding`: address + formula (with its `=`), one per address. Written
+after the clips as `#aauto` with `#point` children and `#abind` nodes (`serializeProject`); read by
+`parseProject` (`model/Project.cpp:423`), which also reads the suite schema's earlier sketch —
+indented `<beats> = <value>` lines and `node=/param=/interp=` — and normalises it once (`:480`).
+`validateProject` (`:847`) refuses two bindings on one address, a formula without `=`, a binding on
+something that does not exist, an empty range and an unknown shape.
+
+### DR-AUTO-2 Formulas: parsed, resolved, ordered (R-AUTO-2, R-AUTO-3)
+`parseFormula` (`core/Formula.cpp:205`): recursive descent straight to the engine's postfix
+`Expr`; numbers, `+ − * / ^` (right-assoc.), unary minus, parentheses, 17 functions with their
+arities checked, `pi`, the clock words `beat bar bpm t`; every other name is a symbol, listed in first
+use; errors name the text and its column; deeper than the evaluator's stack is refused.
+`describeAddress` (`core/Bindings.cpp:11`) is the one answer to "is this a number a formula can
+drive, and what are its range, unit, label and owner": a strip's gain (dB, −120…12) and pan, a send's
+gain, `project.masterGain`, every numeric registry parameter (a choice or a switch is refused, saying
+so). `orderBindings` (`:91`) resolves each symbol to an automation or a numeric address and orders the
+bindings (Kahn, file order on ties) so a link reads one evaluated before it; a loop is reported naming
+its members; an unreadable binding is left out — INERT, its own value plays. `checkBinding` (`:149`)
+answers for one candidate beside the rest; `set` refuses on its answer.
+
+### DR-AUTO-3 The engine evaluates them every 64 samples (R-AUTO-7)
+`compile` (`core/Compile.cpp:257`) turns automations into `engine::Curve`s (points in samples) and
+bindings into `engine::Bind`s — target (strip gain/pan, send gain, master gain, a device parameter by
+registry index), clamp, integer, own value — with each symbol remapped: an automation → its curve's
+slot, a bound address → its binding's slot, an unbound address → its own value as a constant.
+`evaluateBinds` (`engine/Expr.h:156`) fills the clock, the curves (`Curve::valueAt`, `:109`) and each
+binding in order (`Expr::eval`, `:51`, a fixed stack, no allocation; a non-finite result keeps the last
+good value). `Engine::render` (`engine/Engine.cpp:507`) cuts pieces at every multiple of `kControl` = 64
+samples and evaluates there (`evalBinds`, `:178`), so the result is the same however time is chopped;
+bound gains, pans and sends ramp linearly across the period, unbound strips render exactly as before.
+Values at time zero are applied before the devices' warm-up (`:171`); a seek evaluates at once
+(`:250`). Measured: a 0 → −20 dB curve renders −5.00 dB at beat 1 and a formula-stepped compressor makeup
++12 dB from beat 2, byte-identical at chunks of 77, 128 and 1000, no zipper, no allocation.
+
+### DR-AUTO-4 The service: commands, `set`, `eval`, the model (R-AUTO-1…5, 8, 9)
+`set <address>="=<formula>"` binds (`core/service/SolarisService.cpp:411`); a plain number clears the
+binding and sets the value; `get` prints the formula; an unquoted formula with spaces is refused with
+the quoting shown. `auto create <address>` (`core/service/ServiceAuto.cpp:83`) makes `au_n` named
+"<owner> · <label>", ranged as the address, holding its value from beat 0 to the song's end (at least
+four bars), and binds the address to `=au_n`; `auto add|delete` (refused while read, `--unbind`),
+`auto point add|move|delete|shape` (values clamped to the range), `bind clear`; deleting a strip, a
+send or a device drops the bindings that drive them. `eval <address> [--at] [--explain]`
+(`:213`) compiles and evaluates with the engine's own function and prints each name it reads.
+`refreshModel` (`core/service/ServiceModel.cpp:244`) publishes `bindings[]` (reads, ok, problem),
+`automations[]` (points, usedBy), `params[].formula`, `strips[].gainFormula/panFormula`,
+`sends[].gainFormula`, `masterGainFormula` and `devices[].lastChanged`; `audit` (`:365`) names inert
+bindings and automations no formula reads. While playing, a binding or curve edit — or a `set` on an
+address a formula reads — swaps in a new engine (`core/service/ServiceTransport.cpp:191`).

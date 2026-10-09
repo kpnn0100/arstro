@@ -12,6 +12,7 @@
  *  and refuses a graph that breaks it, because processing in index order is only correct then.
  */
 #pragma once
+#include "Expr.h"
 #include <memory>
 #include <string>
 #include <utility>
@@ -105,6 +106,10 @@ namespace engine
         std::vector<int> masterPorts;     // port indices the master feeds
         std::vector<Port> ports;
         long long end = 0;                // the last sample anything is scheduled at (the song's length)
+        // automation and formulas (R-AUTO-7): evaluated every Engine::kControl samples at absolute positions
+        Clock clock;
+        std::vector<Curve> curves;        // automation curves, slot kClockSlots + i
+        std::vector<Bind> binds;          // in evaluation order: a link reads only an earlier one
     };
 }
 }

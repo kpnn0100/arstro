@@ -18,6 +18,12 @@ namespace engine
         size_t nextEvent = 0;                     // the first note event at or after the position
         double sumSq[2] = {0, 0};
         long long counted = 0;
+        // bound gain / pan / sends ramp from A to B across one control period starting at `ramp`
+        bool gainBound = false, panBound = false;
+        double gainA = 1, gainB = 1, panA = 0, panB = 0;
+        long long ramp = 0;
+        std::vector<char> sendBound;
+        std::vector<double> sendA, sendB, tmpL, tmpR;
     };
 
     Engine::Engine() = default;
@@ -99,8 +105,7 @@ namespace engine
             {
                 auto dev = makeDevice(d, err);
                 if (!dev) return false;
-                warm(*dev);
-                st->rack.push_back(std::move(dev));
+                st->rack.push_back(std::move(dev));   // warmed below, once its bindings are applied
             }
             if (s.kind == Strip::Instrument && (st->rack.empty() || !st->rack[0]->isInstrument()))
             {
@@ -109,6 +114,13 @@ namespace engine
             }
             st->inL.assign(kBlock, 0.0); st->inR.assign(kBlock, 0.0);
             st->outL.assign(kBlock, 0.0); st->outR.assign(kBlock, 0.0);
+            st->tmpL.assign(kBlock, 0.0); st->tmpR.assign(kBlock, 0.0);
+            st->gainA = st->gainB = s.gain;
+            st->panA = st->panB = s.pan;
+            st->sendBound.assign(s.sends.size(), 0);
+            st->sendA.assign(s.sends.size(), 1.0);
+            st->sendB.assign(s.sends.size(), 1.0);
+            for (size_t k = 0; k < s.sends.size(); ++k) st->sendA[k] = st->sendB[k] = s.sends[k].gain;
             strips.push_back(std::move(st));
         }
         std::vector<std::unique_ptr<Device>> master;
@@ -116,8 +128,20 @@ namespace engine
         {
             auto dev = makeDevice(d, err);
             if (!dev) return false;
-            warm(*dev);
             master.push_back(std::move(dev));
+        }
+        for (const auto &b : graph.binds)
+        {
+            const bool bad = (b.kind == Bind::StripGain || b.kind == Bind::StripPan || b.kind == Bind::SendGain || b.kind == Bind::DeviceParam)
+                                 ? (b.strip < 0 || b.strip >= (int)graph.strips.size())
+                                 : false;
+            if (bad || (b.kind == Bind::SendGain && (b.index < 0 || b.index >= (int)graph.strips[b.strip].sends.size())) ||
+                (b.kind == Bind::DeviceParam && (b.index < 0 || b.index >= (int)strips[b.strip]->rack.size())) ||
+                (b.kind == Bind::MasterDeviceParam && (b.index < 0 || b.index >= (int)master.size())))
+            {
+                err = "a binding points at a strip, send or device the graph does not have";
+                return false;
+            }
         }
 
         mGraph = graph;
@@ -129,7 +153,87 @@ namespace engine
         mMasterMeter = Meter{};
         mCaptured.clear();
         mPos = 0;
+        mVars.assign(kClockSlots + mGraph.curves.size() + mGraph.binds.size(), 0.0);
+        mBindValues.assign(mGraph.binds.size(), 0.0);
+        mApplied.assign(mGraph.binds.size(), std::nan(""));
+        mMasterBound = false;
+        mMasterA = mMasterB = mGraph.masterGain;
+        for (size_t b = 0; b < mGraph.binds.size(); ++b)
+        {
+            const Bind &bd = mGraph.binds[b];
+            mBindValues[b] = bd.own;
+            if (bd.kind == Bind::StripGain) mStrips[bd.strip]->gainBound = true;
+            if (bd.kind == Bind::StripPan) mStrips[bd.strip]->panBound = true;
+            if (bd.kind == Bind::SendGain) mStrips[bd.strip]->sendBound[bd.index] = 1;
+            if (bd.kind == Bind::MasterGain) mMasterBound = true;
+        }
+        // the values at time zero go in BEFORE the warm-up, so its block of silence finishes their ramps too
+        evalBinds(0, true);
+        for (auto &st : mStrips)
+            for (auto &dev : st->rack) warm(*dev);
+        for (auto &dev : mMasterRack) warm(*dev);
         return true;
+    }
+
+    void Engine::evalBinds(long long sample, bool immediate)
+    {
+        if (mGraph.binds.empty()) return;
+        evaluateBinds(mGraph.clock, mGraph.curves, mGraph.binds, sample, mVars.data(), mBindValues.data());
+        for (size_t b = 0; b < mGraph.binds.size(); ++b)
+        {
+            const Bind &bd = mGraph.binds[b];
+            const double v = mBindValues[b];
+            switch (bd.kind)
+            {
+            case Bind::StripGain:
+            {
+                StripState &st = *mStrips[bd.strip];
+                const double lin = v <= -119.95 ? 0.0 : dbToLinear(v);
+                st.gainA = immediate ? lin : st.gainB;
+                st.gainB = lin;
+                st.ramp = sample;
+                mGraph.strips[bd.strip].gain = lin;
+                break;
+            }
+            case Bind::StripPan:
+            {
+                StripState &st = *mStrips[bd.strip];
+                st.panA = immediate ? v : st.panB;
+                st.panB = v;
+                st.ramp = sample;
+                mGraph.strips[bd.strip].pan = v;
+                break;
+            }
+            case Bind::SendGain:
+            {
+                StripState &st = *mStrips[bd.strip];
+                const double lin = v <= -119.95 ? 0.0 : dbToLinear(v);
+                st.sendA[bd.index] = immediate ? lin : st.sendB[bd.index];
+                st.sendB[bd.index] = lin;
+                st.ramp = sample;
+                mGraph.strips[bd.strip].sends[bd.index].gain = lin;
+                break;
+            }
+            case Bind::MasterGain:
+            {
+                const double lin = v <= -119.95 ? 0.0 : dbToLinear(v);
+                mMasterA = immediate ? lin : mMasterB;
+                mMasterB = lin;
+                mMasterRamp = sample;
+                mGraph.masterGain = lin;
+                break;
+            }
+            case Bind::DeviceParam:
+            case Bind::MasterDeviceParam:
+                if (v != mApplied[b]) // a device smooths its own writes; only a change is written
+                {
+                    Device &dev = bd.kind == Bind::DeviceParam ? *mStrips[bd.strip]->rack[bd.index] : *mMasterRack[bd.index];
+                    dev.setParam(bd.param, v);
+                    mApplied[b] = v;
+                }
+                break;
+            }
+        }
     }
 
     void Engine::seek(long long sample)
@@ -143,6 +247,7 @@ namespace engine
                                                      [](const NoteEvent &e, long long p) { return e.at < p; }) - notes.begin());
             if (mGraph.strips[i].kind == Strip::Instrument && !st.rack.empty()) st.rack[0]->reset();
         }
+        evalBinds(mPos, true); // a jump has no value to ramp from
     }
 
     void Engine::clearPeaks()
@@ -281,17 +386,46 @@ namespace engine
             }
             else
             {
-                for (const Send &s : d.sends)
-                    if (s.pre) route(s.to, L, R, n, s.gain, out, off);
-                double gl = 1, gr = 1;
-                balancePan(d.pan, gl, gr);
-                for (int i = 0; i < n; ++i)
+                // a bound value ramps from A to B across the control period that began at `ramp` (R-AUTO-7)
+                auto rampAt = [&](int i) { return std::min(1.0, std::max(0.0, (double)(p0 + i - st.ramp) / kControl)); };
+                auto sendTo = [&](size_t k, const double *sL, const double *sR) {
+                    const Send &s = d.sends[k];
+                    if (!st.sendBound[k]) { route(s.to, sL, sR, n, s.gain, out, off); return; }
+                    for (int i = 0; i < n; ++i)
+                    {
+                        const double g = st.sendA[k] + (st.sendB[k] - st.sendA[k]) * rampAt(i);
+                        st.tmpL[i] = sL[i] * g;
+                        st.tmpR[i] = sR[i] * g;
+                    }
+                    route(s.to, st.tmpL.data(), st.tmpR.data(), n, 1.0, out, off);
+                };
+                for (size_t k = 0; k < d.sends.size(); ++k)
+                    if (d.sends[k].pre) sendTo(k, L, R);
+                if (st.gainBound || st.panBound)
                 {
-                    st.outL[i] = L[i] * d.gain * gl;
-                    st.outR[i] = R[i] * d.gain * gr;
+                    for (int i = 0; i < n; ++i)
+                    {
+                        const double f = rampAt(i);
+                        const double g = st.gainBound ? st.gainA + (st.gainB - st.gainA) * f : d.gain;
+                        const double pan = st.panBound ? st.panA + (st.panB - st.panA) * f : d.pan;
+                        double gl = 1, gr = 1;
+                        balancePan(pan, gl, gr);
+                        st.outL[i] = L[i] * g * gl;
+                        st.outR[i] = R[i] * g * gr;
+                    }
                 }
-                for (const Send &s : d.sends)
-                    if (!s.pre) route(s.to, st.outL.data(), st.outR.data(), n, s.gain, out, off);
+                else
+                {
+                    double gl = 1, gr = 1;
+                    balancePan(d.pan, gl, gr);
+                    for (int i = 0; i < n; ++i)
+                    {
+                        st.outL[i] = L[i] * d.gain * gl;
+                        st.outR[i] = R[i] * d.gain * gr;
+                    }
+                }
+                for (size_t k = 0; k < d.sends.size(); ++k)
+                    if (!d.sends[k].pre) sendTo(k, st.outL.data(), st.outR.data());
                 route(d.out, st.outL.data(), st.outR.data(), n, 1.0, out, off);
             }
             meter(mStripMeters[si], st.outL.data(), st.outR.data(), n);
@@ -308,7 +442,16 @@ namespace engine
             Sample *io[2] = {mMasterL.data(), mMasterR.data()};
             mMasterRack[k]->process(io, 2, n);
         }
-        for (int i = 0; i < n; ++i) { mMasterL[i] *= mGraph.masterGain; mMasterR[i] *= mGraph.masterGain; }
+        if (mMasterBound)
+            for (int i = 0; i < n; ++i)
+            {
+                const double f = std::min(1.0, std::max(0.0, (double)(p0 + i - mMasterRamp) / kControl));
+                const double g = mMasterA + (mMasterB - mMasterA) * f;
+                mMasterL[i] *= g;
+                mMasterR[i] *= g;
+            }
+        else
+            for (int i = 0; i < n; ++i) { mMasterL[i] *= mGraph.masterGain; mMasterR[i] *= mGraph.masterGain; }
         meter(mMasterMeter, mMasterL.data(), mMasterR.data(), n);
         if (mCaptureMaster)
             for (int i = 0; i < n; ++i) { mCapturedMaster[0][off + i] = (float)mMasterL[i]; mCapturedMaster[1][off + i] = (float)mMasterR[i]; }
@@ -361,9 +504,17 @@ namespace engine
         for (auto &st : mStrips) { st->sumSq[0] = st->sumSq[1] = 0; st->counted = 0; }
 
         int done = 0;
+        const bool bound = !mGraph.binds.empty();
         while (done < frames)
         {
-            const int n = std::min(kBlock, frames - done);
+            int n = std::min(kBlock, frames - done);
+            if (bound)
+            {
+                // pieces end on control boundaries, so every boundary is evaluated once, however time is chopped
+                const int into = (int)(mPos % kControl);
+                if (into == 0) evalBinds(mPos, false);
+                n = std::min(n, kControl - into);
+            }
             renderPiece(mPos, n, out, done);
             mPos += n;
             done += n;

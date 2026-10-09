@@ -2,6 +2,7 @@
 // matrix (R-MIX-9). Everything here is COMPUTED from the project, never stored in it: "fed by",
 // audibility under solos, resolved clip lengths, linked counts — a second front end reading the
 // model gets the same answers without re-deriving them (arstro.rule §1).
+#include "Bindings.h"
 #include "Compile.h"
 #include "Format.h"
 #include "Json.h"
@@ -239,6 +240,62 @@ namespace solaris
             mModel.patterns.push_back(pm);
         }
         for (const auto &po : p.ports) mModel.ports.push_back(PortModel{po.id, po.name, po.dir, po.channels});
+
+        // formulas and automation (R-AUTO-9), every one checked, the inert ones saying why
+        std::vector<std::string> problems;
+        const auto ordered = orderBindings(p, problems);
+        std::map<std::string, const OrderedBinding *> okAt;
+        for (const auto &ob : ordered) okAt[ob.binding->address] = &ob;
+        for (const auto &b : p.bindings)
+        {
+            BindingModel bm;
+            bm.address = b.address;
+            bm.formula = b.formula;
+            const auto it = okAt.find(b.address);
+            if (it != okAt.end()) bm.reads = it->second->reads;
+            else
+            {
+                bm.ok = false;
+                for (const auto &x : problems)
+                    if (x.compare(0, b.address.size() + 1, b.address + ":") == 0) { bm.problem = x.substr(b.address.size() + 2); break; }
+                ParsedFormula f;
+                std::string why;
+                if (parseFormula(b.formula, f, why)) bm.reads = f.names;
+            }
+            mModel.bindings.push_back(bm);
+        }
+        auto formulaOf = [&](const std::string &address) {
+            const Binding *b = p.binding(address);
+            return b ? b->formula : std::string();
+        };
+        mModel.masterGainFormula = formulaOf("project.masterGain");
+        auto fillDevice = [&](DeviceModel &d) {
+            for (auto &pm : d.params) pm.formula = formulaOf(d.id + "." + pm.name);
+            const auto lc = mLastChanged.find(d.id);
+            if (lc != mLastChanged.end()) d.lastChanged = lc->second;
+        };
+        for (auto &sm : mModel.strips)
+        {
+            sm.gainFormula = formulaOf(sm.id + ".gain");
+            sm.panFormula = formulaOf(sm.id + ".pan");
+            for (auto &sd : sm.sends) sd.gainFormula = formulaOf(sd.id + ".gain");
+            for (auto &d : sm.devices) fillDevice(d);
+        }
+        for (auto &d : mModel.masterDevices) fillDevice(d);
+        for (const auto &a : p.automations)
+        {
+            AutomationModel am;
+            am.id = a.id;
+            am.name = a.name;
+            am.unit = a.unit;
+            am.from = a.from;
+            am.min = a.min;
+            am.max = a.max;
+            for (const auto &pt : a.points) am.points.push_back(AutoPointModel{pt.at, pt.value, pt.shape});
+            for (const auto &bm : mModel.bindings)
+                if (std::find(bm.reads.begin(), bm.reads.end(), a.id) != bm.reads.end()) am.usedBy.push_back(bm.address);
+            mModel.automations.push_back(am);
+        }
     }
 
     std::vector<std::string> SolarisService::audit() const
@@ -305,6 +362,14 @@ namespace solaris
             }
         if (p.header.masterOut.empty()) out.push_back("unreachable: the master feeds no port");
         for (const auto &pk : mLastRenderPeaks) out.push_back(pk);
+        // R-AUTO: a formula nobody can read plays nothing; an automation nobody reads moves nothing
+        {
+            std::vector<std::string> problems;
+            orderBindings(p, problems);
+            for (const auto &x : problems) out.push_back("binding " + x + " — inert: its own value plays");
+            for (const auto &a : p.automations)
+                if (readersOf(a.id).empty()) out.push_back("automation " + a.id + " (" + a.name + ") moves nothing — no formula reads it");
+        }
         return out;
     }
 

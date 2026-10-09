@@ -26,6 +26,7 @@ namespace solaris
         std::vector<std::string> choices;
         bool logScale = false;  // a control's taper: frequencies and times move in ratios
         bool integer = false;   // whole steps only (octave, voices)
+        std::string formula;    // the formula driving it ("" = its own value plays) — R-AUTO-1
     };
 
     struct DeviceModel
@@ -33,6 +34,29 @@ namespace solaris
         std::string id, type, label;
         bool instrument = false, bypass = false, known = true; // known = this build's registry has the type
         std::vector<ParamModel> params;
+        std::string lastChanged;                // the parameter last written, by anyone (R-WIN-2)
+    };
+
+    struct AutoPointModel
+    {
+        double at = 0, value = 0;               // beats; the automation's unit
+        std::string shape = "linear";           // linear | hold | smooth
+    };
+
+    struct AutomationModel
+    {
+        std::string id, name, unit, from;
+        double min = 0, max = 1;
+        std::vector<AutoPointModel> points;
+        std::vector<std::string> usedBy;        // addresses whose formula reads it
+    };
+
+    struct BindingModel
+    {
+        std::string address, formula;
+        std::vector<std::string> reads;         // automation ids and addresses it reads
+        bool ok = true;                         // false = INERT (its own value plays); `problem` says why
+        std::string problem;
     };
 
     struct SendModel
@@ -40,6 +64,7 @@ namespace solaris
         std::string id, to;
         double gain = 0;   // dB
         bool pre = false;
+        std::string gainFormula; // R-AUTO-1
     };
 
     struct StripModel
@@ -47,6 +72,7 @@ namespace solaris
         std::string id, name, kind, mixer, out; // out resolved: "master", a strip id or a port id
         int order = 0, colour = -1;
         double gain = 0, pan = 0;               // dB, −1…+1
+        std::string gainFormula, panFormula;    // R-AUTO-1: "" = the stored value plays
         bool mute = false, solo = false;
         bool audible = true;                    // false when muted or silenced by another strip's solo
         std::vector<SendModel> sends;
@@ -161,6 +187,7 @@ namespace solaris
         std::string projectPath, projectName;
         bool dirty = false;
         double bpm = 120, masterGain = 0;
+        std::string masterGainFormula;           // R-AUTO-1
         std::string sig = "4/4";
         int sampleRate = 48000;
         std::vector<std::string> masterOut;
@@ -169,6 +196,8 @@ namespace solaris
         std::vector<DeviceModel> masterDevices;  // the master's rack
         std::vector<LaneModel> lanes;
         std::vector<ClipModel> clips;
+        std::vector<AutomationModel> automations; // R-AUTO-4/9
+        std::vector<BindingModel> bindings;       // R-AUTO-1/9, every formula, inert ones flagged
         std::vector<PatternModel> patterns;
         std::vector<PortModel> ports;
         double lengthBeats = 0;                  // the song's end (the last clip's)

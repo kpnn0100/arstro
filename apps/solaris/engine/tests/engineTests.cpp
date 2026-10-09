@@ -8,6 +8,7 @@
 #endif
 #include "../Engine.h"
 #include "../MixLaws.h"
+#include "device/Device.h"
 #include <atomic>
 #include <cassert>
 #include <cstdlib>
@@ -399,6 +400,79 @@ static void test_live_render_allocates_nothing_and_takes_live_edits()
     pass("live: after prepare, rendering and every live edit allocate nothing (R-PLAY-2)");
 }
 
+static void test_bindings_drive_gain_and_parameters_at_control_rate()
+{
+    // a quiet constant (below the compressor's threshold, so it only applies its makeup) through a
+    // strip whose gain follows a curve 0 → −20 dB over 4 beats, into Main whose compressor's makeup
+    // a formula steps to +12 dB from beat 2: =12 * clamp(floor(beat / 2), 0, 1)
+    auto op = [](ExprOp::Kind k, double num = 0, int index = 0, ExprOp::Func fn = ExprOp::Sin) {
+        ExprOp o;
+        o.kind = k;
+        o.num = num;
+        o.index = index;
+        o.fn = fn;
+        return o;
+    };
+    auto graph = [&]() {
+        MixGraph g = basic();
+        Region r;
+        r.pcm = constant(0.05f, 96000);
+        r.frames = r.srcFrames = 96000;
+        g.strips[0].regions = {r};
+        g.strips[1].rack = {DeviceDesc{"dv_1", "compressor", {}, false}};
+        g.clock = Clock{24000, 4, 120, 48000};
+        Curve c;
+        c.at = {0, 96000};
+        c.value = {0.0, -20.0};
+        c.shape = {Curve::Linear, Curve::Linear};
+        g.curves = {c};
+        Bind gain;
+        gain.kind = Bind::StripGain;
+        gain.strip = 0;
+        gain.lo = -120;
+        gain.hi = 12;
+        gain.expr.ops = {op(ExprOp::Var, 0, kClockSlots)};
+        Bind mk;
+        mk.kind = Bind::DeviceParam;
+        mk.strip = 1;
+        mk.index = 0;
+        mk.param = arstro::DeviceRegistry::find("compressor")->paramIndex("makeup");
+        mk.lo = 0;
+        mk.hi = 24;
+        mk.expr.ops = {op(ExprOp::Num, 12), op(ExprOp::Var, 0, 0), op(ExprOp::Num, 2), op(ExprOp::Div), op(ExprOp::Fn, 0, 0, ExprOp::Floor),
+                       op(ExprOp::Num, 0), op(ExprOp::Num, 1), op(ExprOp::Fn, 0, 0, ExprOp::Clamp), op(ExprOp::Mul)};
+        g.binds = {gain, mk};
+        return g;
+    };
+    Engine a, b, c;
+    std::string err;
+    assert(a.build(graph(), err) && b.build(graph(), err) && c.build(graph(), err));
+    const PortBuffers ra = renderAll(a, 96000, 77), rb = renderAll(b, 96000, 128), rc = renderAll(c, 96000, 1000);
+    assert(ra.ports[0][0] == rb.ports[0][0] && rb.ports[0][0] == rc.ports[0][0]); // however time is chopped (R-AUTO-7)
+    auto dbAt = [&](long long s) { return 20.0 * std::log10(ra.ports[0][0][(size_t)s] / 0.05); };
+    if (std::fabs(dbAt(24000) + 5.0) > 0.1 || std::fabs(dbAt(72000) + 3.0) > 0.2)
+        std::printf("    beat 1: %.3f dB (want −5), beat 3: %.3f dB (want −15 + 12)\n", dbAt(24000), dbAt(72000));
+    assert(std::fabs(dbAt(0)) < 0.1);
+    assert(std::fabs(dbAt(24000) + 5.0) < 0.1);           // a quarter of the way down the curve
+    assert(std::fabs(dbAt(72000) + 3.0) < 0.2);           // three quarters, plus the makeup the formula stepped in
+    assert(a.bindValues().size() == 2 && a.bindValues()[1] == 12.0);
+    // no zipper: the gain moves by at most one control period's share of the curve per sample
+    double worst = 0;
+    for (size_t i = 1; i < 40000; ++i) worst = std::max(worst, std::fabs((double)ra.ports[0][0][i] - ra.ports[0][0][i - 1]));
+    assert(worst < 1e-5);
+    // and evaluating allocates nothing once prepared (R-PLAY-2)
+    Engine d;
+    assert(d.build(graph(), err));
+    PortBuffers out;
+    d.prepare(out, 256);
+    gAllocs = 0;
+    gCounting = true;
+    for (int k = 0; k < 100; ++k) d.render(256, out);
+    gCounting = false;
+    assert(gAllocs.load() == 0);
+    pass("bindings: a curve drives a gain and a formula a device parameter, every 64 samples, ramped, byte-identical however chopped (R-AUTO-7)");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -411,6 +485,7 @@ int main()
     test_render_is_deterministic_however_it_is_chopped();
     test_meters_seek_capture_and_live_params();
     test_live_render_allocates_nothing_and_takes_live_edits();
+    test_bindings_drive_gain_and_parameters_at_control_rate();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

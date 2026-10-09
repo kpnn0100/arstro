@@ -53,6 +53,15 @@ namespace solaris
     const Lane *Project::lane(const std::string &id) const { return findId(lanes, id); }
     const Pattern *Project::pattern(const std::string &id) const { return findId(patterns, id); }
     const Clip *Project::clip(const std::string &id) const { return findId(clips, id); }
+    Automation *Project::automation(const std::string &id) { return findId(automations, id); }
+    const Automation *Project::automation(const std::string &id) const { return findId(automations, id); }
+    Binding *Project::binding(const std::string &address)
+    {
+        for (auto &x : bindings)
+            if (x.address == address) return &x;
+        return nullptr;
+    }
+    const Binding *Project::binding(const std::string &address) const { return const_cast<Project *>(this)->binding(address); }
 
     Rack *Project::rack(const std::string &track)
     {
@@ -121,6 +130,7 @@ namespace solaris
         for (const auto &x : lanes) ids.push_back(x.id);
         for (const auto &x : patterns) ids.push_back(x.id);
         for (const auto &x : clips) ids.push_back(x.id);
+        for (const auto &x : automations) ids.push_back(x.id);
         return ids;
     }
 
@@ -288,6 +298,30 @@ namespace solaris
             else n.unknown.emplace_back(k, v);
         }
 
+        void apply(Reader &r, Automation &n, const std::string &k, const std::string &v)
+        {
+            if (k == "id") n.id = v;
+            else if (k == "name") n.name = v;
+            else if (k == "unit") n.unit = v;
+            else if (k == "from") n.from = v;
+            else if (k == "min") n.min = r.num(k, v, 0.0);
+            else if (k == "max") n.max = r.num(k, v, 1.0);
+            else n.unknown.emplace_back(k, v);
+        }
+        void apply(Reader &r, AutoPoint &n, const std::string &k, const std::string &v)
+        {
+            if (k == "at") n.at = toTick(r.num(k, v, 0.0));
+            else if (k == "value") n.value = r.num(k, v, 0.0);
+            else if (k == "shape") n.shape = v;
+            else n.unknown.emplace_back(k, v);
+        }
+        void apply(Reader &, Binding &n, const std::string &k, const std::string &v)
+        {
+            if (k == "address") n.address = v;
+            else if (k == "formula") n.formula = v;
+            else n.unknown.emplace_back(k, v);
+        }
+
         void sortNotes(Pattern &p)
         {
             std::stable_sort(p.notes.begin(), p.notes.end(), [](const Note &a, const Note &b) {
@@ -304,7 +338,7 @@ namespace solaris
         Reader r{report ? report : &localReport, {}};
 
         // What a continuation line or a comment attaches to.
-        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Pattern, Note, Clip, Raw };
+        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Pattern, Note, Clip, Auto, Point, Bind, Raw };
         Cur cur = Cur::None;
         bool seenNode = false, sawMagic = false;
         std::map<std::string, std::vector<Note>> inlineNotes; // note clips written the suite's inline way
@@ -322,6 +356,9 @@ namespace solaris
             case Cur::Pattern:
             case Cur::Note: return &p.patterns.back().remarks;
             case Cur::Clip: return &p.clips.back().remarks;
+            case Cur::Auto:
+            case Cur::Point: return &p.automations.back().remarks;
+            case Cur::Bind: return &p.bindings.back().remarks;
             default: return nullptr;
             }
         };
@@ -383,6 +420,20 @@ namespace solaris
                     }
                 }
                 else if (tok.type == "aclip") { p.clips.emplace_back(); fill(p.clips.back()); cur = Cur::Clip; }
+                else if (tok.type == "aauto") { p.automations.emplace_back(); fill(p.automations.back()); cur = Cur::Auto; }
+                else if (tok.type == "point")
+                {
+                    if (!(cur == Cur::Auto || cur == Cur::Point))
+                    {
+                        err = "line " + std::to_string(lineNo) + ": #point outside an #aauto";
+                        return false;
+                    }
+                    AutoPoint pt;
+                    for (const auto &f : tok.fields) apply(r, pt, f.first, f.second);
+                    p.automations.back().points.push_back(pt);
+                    cur = Cur::Point;
+                }
+                else if (tok.type == "abind") { p.bindings.emplace_back(); fill(p.bindings.back()); cur = Cur::Bind; }
                 else { p.raw.push_back(RawNode{{line}}); cur = Cur::Raw; }
                 continue;
             }
@@ -424,6 +475,22 @@ namespace solaris
                 else p.header.unknown.emplace_back(key, value);
                 continue;
             }
+            if (indented && (cur == Cur::Auto || cur == Cur::Point))
+            {
+                // the suite schema's breakpoint sketch, `<beats> = <value>` (audio-format §2.5 before
+                // R-AUTO): read as a linear #point, written back as one
+                const auto eq = t.find('=');
+                double at = 0, v = 0;
+                if (eq != std::string::npos && parseNumber(trim(t.substr(0, eq)), at) && parseNumber(trim(t.substr(eq + 1)), v))
+                {
+                    AutoPoint pt;
+                    pt.at = toTick(at);
+                    pt.value = v;
+                    p.automations.back().points.push_back(pt);
+                    cur = Cur::Point;
+                    continue;
+                }
+            }
             if (indented && cur != Cur::None && cur != Cur::Raw)
             {
                 // a continuation of the node above: more key=value fields
@@ -442,6 +509,9 @@ namespace solaris
                     case Cur::Pattern: apply(r, p.patterns.back(), f.first, f.second); break;
                     case Cur::Note: apply(r, p.patterns.back().notes.back(), f.first, f.second); break;
                     case Cur::Clip: apply(r, p.clips.back(), f.first, f.second); break;
+                    case Cur::Auto: apply(r, p.automations.back(), f.first, f.second); break;
+                    case Cur::Point: apply(r, p.automations.back().points.back(), f.first, f.second); break;
+                    case Cur::Bind: apply(r, p.bindings.back(), f.first, f.second); break;
                     default: break;
                     }
                 }
@@ -473,6 +543,29 @@ namespace solaris
             p.patterns.push_back(pt);
         }
         for (auto &pt : p.patterns) sortNotes(pt);
+        for (auto &a : p.automations)
+        {
+            // the sketch's `node=… param=… interp=…` become `from` and the points' shape
+            std::string node, param, interp;
+            Fields keep;
+            for (const auto &f : a.unknown)
+            {
+                if (f.first == "node") node = f.second;
+                else if (f.first == "param") param = f.second;
+                else if (f.first == "interp") interp = f.second;
+                else keep.push_back(f);
+            }
+            if (!node.empty() || !param.empty() || !interp.empty())
+            {
+                a.unknown = keep;
+                if (a.from.empty() && !node.empty()) a.from = node + (param.empty() ? "" : "." + param);
+                if (a.name.empty()) a.name = a.from.empty() ? a.id : a.from;
+                if (interp == "hold" || interp == "smooth")
+                    for (auto &pt : a.points) pt.shape = interp;
+                r.report->notes.push_back(a.id + ": the schema sketch's node/param/interp became from=" + a.from);
+            }
+            std::stable_sort(a.points.begin(), a.points.end(), [](const AutoPoint &x, const AutoPoint &y) { return x.at < y.at; });
+        }
 
         const auto errors = validateProject(p);
         if (!errors.empty())
@@ -619,6 +712,24 @@ namespace solaris
             }
             emit(out, "", l.unknown(n.unknown), n.remarks);
         }
+        group(!p.automations.empty());
+        for (const auto &n : p.automations)
+        {
+            Line l("aauto");
+            l.kv("id", n.id).str("name", n.name).strIf("unit", n.unit).kv("min", canonicalNumber(n.min)).kv("max", canonicalNumber(n.max))
+                .strIf("from", n.from);
+            emit(out, "", l.unknown(n.unknown), n.remarks);
+            for (const auto &x : n.points)
+            {
+                Line pl("point");
+                pl.kv("at", canonicalBeats(x.at)).kv("value", canonicalNumber(x.value));
+                if (x.shape != "linear") pl.kv("shape", x.shape);
+                out += "  " + pl.unknown(x.unknown).s + "\n";
+            }
+        }
+        group(!p.bindings.empty());
+        for (const auto &n : p.bindings)
+            emit(out, "", Line("abind").kv("address", n.address).str("formula", n.formula).unknown(n.unknown), n.remarks);
         group(!p.raw.empty());
         for (const auto &r : p.raw)
             for (const auto &l : r.lines) out += l + "\n";
@@ -732,6 +843,32 @@ namespace solaris
             const Port *po = p.port(o);
             if (!po) e.push_back("the master feeds `" + o + "`, which is no port");
             else if (po->dir != "out") e.push_back("the master feeds " + o + ", an INPUT port");
+        }
+        // R-AUTO: one binding per address, on something that exists; automations well formed
+        {
+            std::set<std::string> bound;
+            for (const auto &b : p.bindings)
+            {
+                if (b.address.empty()) { e.push_back("an #abind has no address"); continue; }
+                if (!bound.insert(b.address).second) e.push_back("two bindings drive " + b.address + " (one per address, R-AUTO-1)");
+                if (b.formula.empty() || b.formula[0] != '=')
+                    e.push_back(b.address + "'s binding `" + b.formula + "` is not a formula — a formula starts with `=`");
+                const auto dot = b.address.find('.');
+                const std::string node = b.address.substr(0, dot);
+                bool exists = node == "project" || p.strip(node) != nullptr;
+                for (const auto &sd : p.sends) exists |= sd.id == node;
+                for (const auto &r : p.racks)
+                    for (const auto &d : r.devices) exists |= d.id == node;
+                if (dot == std::string::npos || dot + 1 >= b.address.size() || !exists)
+                    e.push_back("a binding drives `" + b.address + "`, which is no strip, send, device or project field");
+            }
+            for (const auto &a : p.automations)
+            {
+                if (!(a.min < a.max)) e.push_back(a.id + "'s range " + canonicalNumber(a.min) + "…" + canonicalNumber(a.max) + " is empty");
+                for (const auto &pt : a.points)
+                    if (pt.shape != "linear" && pt.shape != "hold" && pt.shape != "smooth")
+                        e.push_back(a.id + " has a point of shape `" + pt.shape + "` (linear | hold | smooth)");
+            }
         }
         return e;
     }

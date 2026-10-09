@@ -73,9 +73,14 @@ namespace
         "#aclip id=ac_2 name=hook track=ch_3 lane=ln_2 pattern=pt_1 at=4.0 length=16.0\n"
         "#aclip id=ac_3 track=ch_3 pattern=pt_1 at=20.0\n"
         "\n"
-        "#aauto id=au_1 node=dv_1 param=filter.cutoff interp=linear\n"
-        "  0.000 = 400\n"
-        "  4.000 = 1600\n";
+        "#aauto id=au_1 name=\"Lead · Cutoff\" unit=Hz min=20.0 max=20000.0 from=dv_1.filter.cutoff\n"
+        "  #point at=0.0 value=400.0\n"
+        "  #point at=4.0 value=1600.0 shape=smooth\n"
+        "\n"
+        "#abind address=dv_1.filter.cutoff formula=\"=au_1 * 2\"\n"
+        "\n"
+        "#xfuture id=xf_1 colour=7\n"
+        "  detail=\"kept as written\"\n";
 }
 
 static void test_canonical_numbers_times_and_strings()
@@ -130,8 +135,49 @@ static void test_canonical_text_is_a_fixed_point()
     assert(p.pattern("pt_1")->notes.size() == 3);
     assert(p.clip("ac_1")->src == "samples/kick 01.wav" && p.clip("ac_1")->out == 0.512);
     assert(p.clip("ac_1")->fadeOut == 0.125 && p.clip("ac_1")->isAudio() && !p.clip("ac_2")->isAudio());
-    assert(p.raw.size() == 1 && p.raw[0].lines.size() == 3); // the unknown #aauto, kept verbatim
+    assert(p.raw.size() == 1 && p.raw[0].lines.size() == 2); // an unknown node, kept verbatim
+    assert(p.automations.size() == 1 && p.automation("au_1")->points.size() == 2 && p.automation("au_1")->points[1].shape == "smooth");
+    assert(p.automation("au_1")->max == 20000.0 && p.binding("dv_1.filter.cutoff")->formula == "=au_1 * 2");
     pass("canonical text: parse -> serialize is a byte-exact fixed point (every node, unknowns, comments)");
+}
+
+static void test_automation_sketch_and_binding_refusals()
+{
+    // the suite schema's sketch — indented `<beats> = <value>` lines — reads as points, once
+    const char *sketch =
+        "arstro-project = 1\napp = solaris\nid = prj_3\n"
+        "#amixer id=mx_1 name=Sources order=0\n"
+        "#atrack id=ch_1 name=Lead kind=instrument mixer=mx_1\n"
+        "#arack track=ch_1\n"
+        "  #aeffect id=dv_1 type=synth\n"
+        "#aauto id=au_1 node=dv_1 param=filter.cutoff interp=hold\n"
+        "  0.000 = 400\n"
+        "  4.000 = 1600\n";
+    Project p;
+    std::string err;
+    ParseReport rep;
+    assert(parseProject(sketch, p, err, &rep));
+    const Automation *a = p.automation("au_1");
+    assert(a && a->from == "dv_1.filter.cutoff" && a->points.size() == 2 && a->points[1].value == 1600.0 && a->points[0].shape == "hold");
+    assert(a->unknown.empty() && rep.notes.size() == 1);
+    Project q;
+    assert(parseProject(serializeProject(p), q, err) && serializeProject(q) == serializeProject(p)); // normalised once
+    // one binding per address, a formula starts with `=`, and it drives something that exists
+    p.bindings.push_back(Binding{"dv_1.filter.cutoff", "=au_1", {}, {}});
+    assert(validateProject(p).empty());
+    p.bindings.push_back(Binding{"dv_1.filter.cutoff", "=500", {}, {}});
+    p.bindings.push_back(Binding{"ch_9.gain", "=0", {}, {}});
+    p.bindings.push_back(Binding{"ch_1.pan", "0.5", {}, {}});
+    const auto e = validateProject(p);
+    bool two = false, nowhere = false, notFormula = false;
+    for (const auto &x : e)
+    {
+        two |= contains(x, "two bindings drive dv_1.filter.cutoff");
+        nowhere |= contains(x, "`ch_9.gain`, which is no strip");
+        notFormula |= contains(x, "ch_1.pan's binding `0.5` is not a formula");
+    }
+    assert(two && nowhere && notFormula);
+    pass("#aauto + #point and #abind: the schema sketch normalises once; one binding per address, on something real (R-AUTO-1/4)");
 }
 
 static void test_a_new_project_has_the_default_mixers()
@@ -315,6 +361,7 @@ int main()
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     test_canonical_numbers_times_and_strings();
     test_canonical_text_is_a_fixed_point();
+    test_automation_sketch_and_binding_refusals();
     test_a_new_project_has_the_default_mixers();
     test_hand_written_text_normalises_once();
     test_routing_only_goes_forward();

@@ -45,6 +45,7 @@ namespace engine
     {
     public:
         static constexpr int kBlock = 128;
+        static constexpr int kControl = 64; // bindings are evaluated at every multiple of this sample
 
         /** Build every device. False + `err` on a graph that routes backward or names an unknown
          *  device type (a registry type missing from this build would be a silent part). */
@@ -83,6 +84,8 @@ namespace engine
         /** A device parameter, live (registry name). False when there is no such strip/device/name. */
         bool setDeviceParam(int strip, int device, const std::string &name, double value);
         bool setMasterDeviceParam(int device, const std::string &name, double value);
+        /** Every binding's value as last evaluated (R-AUTO-7), in the graph's bind order. */
+        const std::vector<double> &bindValues() const { return mBindValues; }
 
         Engine();
         ~Engine();
@@ -92,6 +95,7 @@ namespace engine
         void renderPiece(long long p0, int n, PortBuffers &out, int outOffset);
         void route(const Target &t, const double *L, const double *R, int n, double gain, PortBuffers &out, int outOffset);
         void meter(Meter &m, const double *L, const double *R, int n);
+        void evalBinds(long long sample, bool immediate); // `immediate`: no ramp (build, seek)
 
         MixGraph mGraph;
         std::vector<std::unique_ptr<StripState>> mStrips;
@@ -104,6 +108,10 @@ namespace engine
         bool mCaptureMaster = false;
         std::vector<std::vector<float>> mCapturedMaster;
         long long mPos = 0;
+        std::vector<double> mVars, mBindValues, mApplied;   // sized at build: evaluation never allocates
+        bool mMasterBound = false;
+        double mMasterA = 1, mMasterB = 1;
+        long long mMasterRamp = 0;
     };
 }
 }

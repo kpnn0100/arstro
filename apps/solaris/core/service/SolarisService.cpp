@@ -1,4 +1,5 @@
 #include "SolarisService.h"
+#include "Bindings.h"
 #include "ApiDoc.h"
 #include "AppModelCodec.h"
 #include "Compile.h"
@@ -69,7 +70,7 @@ namespace solaris
             switch (k)
             {
             case K::ProjectNew: case K::ProjectOpen: case K::ProjectSave: case K::ProjectClose:
-            case K::Get: case K::Render: case K::MatrixPrint: case K::Audit: case K::StatePrint: case K::Api:
+            case K::Get: case K::Eval: case K::Render: case K::MatrixPrint: case K::Audit: case K::StatePrint: case K::Api:
             case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
             case K::DevicesList: case K::Browse: case K::RecentsRemove:
             case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait:
@@ -104,6 +105,8 @@ namespace solaris
                 std::string stored;
                 if (!setAddress(f.first, f.second, stored, err)) { ok = false; break; }
                 mPending.push_back(Event(Event::Kind::ParamsChanged).with("address", f.first).with("value", stored));
+                const auto dot = f.first.find('.');
+                if (mProject.device(f.first.substr(0, dot))) mLastChanged[f.first.substr(0, dot)] = f.first.substr(dot + 1);
             }
             break;
         }
@@ -118,6 +121,13 @@ namespace solaris
         case K::StripMove: case K::Route: case K::SendAdd: case K::SendDelete: case K::DeviceAdd:
         case K::DeviceRemove: case K::DeviceMove: case K::LaneAdd: case K::LaneDelete:
             ok = mixCommand(c, err);
+            break;
+        case K::AutoAdd: case K::AutoCreate: case K::AutoDelete: case K::AutoPointAdd: case K::AutoPointMove:
+        case K::AutoPointDelete: case K::AutoPointShape: case K::BindClear:
+            ok = autoCommand(c, err);
+            break;
+        case K::Eval:
+            ok = evalCommand(c, err);
             break;
         case K::ClipAdd: case K::ClipMove: case K::ClipDuplicate: case K::ClipUnique: case K::ClipDelete:
         case K::PatternNew: case K::NoteAdd: case K::NoteDelete:
@@ -174,6 +184,12 @@ namespace solaris
             break;
         }
 
+        if (!ok && err.empty())
+        {
+            // R-SVC-3: a refusal always says why — a path that forgot to is named, never silent
+            const CommandSpec *sp = specFor(c.kind);
+            err = "`" + std::string(sp ? sp->verb : "command") + "` was refused without a reason";
+        }
         if (ok && editing)
         {
             const auto errors = validateProject(mProject);
@@ -392,6 +408,43 @@ namespace solaris
         bool b = false;
         Project &p = mProject;
 
+        // a FORMULA drives the number (R-AUTO-1); a plain number clears it and sets the value
+        if (!value.empty() && value[0] == '=')
+        {
+            AddressSpec spec;
+            if (!describeAddress(p, address, spec, err)) return false;
+            if (!checkBinding(p, address, value, err)) { err = address + ": " + err; return false; }
+            if (Binding *bd = p.binding(address)) bd->formula = value;
+            else p.bindings.push_back(Binding{address, value, {}, {}});
+            mBindingsTouched = true;
+            stored = value;
+            return true;
+        }
+        if (p.binding(address))
+        {
+            p.bindings.erase(std::remove_if(p.bindings.begin(), p.bindings.end(), [&](const Binding &bd) { return bd.address == address; }),
+                             p.bindings.end());
+            mBindingsTouched = true;
+        }
+        if (Automation *a = p.automation(id))
+        {
+            if (f == "name") { a->name = value; stored = value; mBindingsTouched = true; return true; }
+            if (f == "unit") { a->unit = value; stored = value; return true; }
+            if (f == "min" || f == "max")
+            {
+                if (!number(value, x, err)) return false;
+                const double lo = f == "min" ? x : a->min, hi = f == "max" ? x : a->max;
+                if (!(lo < hi)) { err = a->id + "'s range would be empty (" + canonicalNumber(lo) + "…" + canonicalNumber(hi) + ")"; return false; }
+                (f == "min" ? a->min : a->max) = x;
+                for (auto &pt : a->points) pt.value = std::min(std::max(pt.value, a->min), a->max);
+                stored = canonicalNumber(x);
+                mBindingsTouched = true;
+                return true;
+            }
+            err = unknownField(id, "an automation", f, {"name", "unit", "min", "max"}) + " — points are `auto point …`";
+            return false;
+        }
+
         if (id == "project")
         {
             static const std::vector<std::string> fields = {"name", "bpm", "sig", "masterGain", "sampleRate"};
@@ -535,7 +588,17 @@ namespace solaris
         auto put = [&](const char *field, const std::string &v) {
             if (f == field) { value = v; have = true; }
         };
-        if (id == "project")
+        if (const Binding *bd = p.binding(address))
+        {
+            value = bd->formula; // what decides it
+            return true;
+        }
+        if (const Automation *a = p.automation(id))
+        {
+            put("name", a->name); put("unit", a->unit); put("min", canonicalNumber(a->min)); put("max", canonicalNumber(a->max));
+            put("from", a->from); put("points", std::to_string(a->points.size()));
+        }
+        else if (id == "project")
         {
             put("name", p.header.name); put("bpm", canonicalNumber(p.header.bpm)); put("sig", p.header.sig);
             put("masterGain", canonicalNumber(p.header.masterGain)); put("sampleRate", std::to_string(p.header.sampleRate));

@@ -80,6 +80,11 @@ namespace solaris
         bool render(const Command &c, std::string &err);
         bool machineCommand(const Command &c, std::string &err);
         bool transportCommand(const Command &c, std::string &err);
+        bool autoCommand(const Command &c, std::string &err);   // ServiceAuto.cpp
+        bool evalCommand(const Command &c, std::string &err);
+        double songEndBeats() const;
+        std::vector<std::string> readersOf(const std::string &name) const; // addresses whose formula reads `name`
+        void dropBindingsOf(const std::set<std::string> &nodes);         // the formulas driving these nodes go
         void liveUpdate(const Command &c);            // after an edit while playing: live messages or an engine swap
         bool buildLive(std::unique_ptr<engine::Engine> &out, std::string &err);
         void stopPlayer();
@@ -109,6 +114,8 @@ namespace solaris
         std::string mOutput;
         std::vector<std::function<void(const Event &)>> mSinks;
         std::vector<Event> mPending; // an edit's events, emitted only once the whole command has landed
+        bool mBindingsTouched = false; // a formula or an automation changed: playback needs a new engine
+        std::map<std::string, std::string> mLastChanged; // device id → the parameter last written (R-WIN-2)
         std::map<std::string, std::shared_ptr<const engine::Pcm>> mPcm; // by resolved path, at mPcmRate
         std::set<std::string> mOffline;                                 // resolved paths that would not decode
         int mPcmRate = 0;

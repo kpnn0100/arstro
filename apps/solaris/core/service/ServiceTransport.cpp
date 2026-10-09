@@ -184,9 +184,13 @@ namespace solaris
 
     void SolarisService::liveUpdate(const Command &c)
     {
+        const bool bindingsTouched = mBindingsTouched;
+        mBindingsTouched = false;
         if (!mPlayer || !mPlayer->running()) return;
         std::vector<Player::Live> msgs;
-        bool structural = c.kind != K::Set;
+        bool structural = c.kind != K::Set || bindingsTouched; // a formula or a curve changed: compile it
+        for (const auto &f : c.fields)
+            if (!structural && !readersOf(f.first).empty()) structural = true; // a formula reads it: its readers move too
         bool silences = false;
         for (const auto &f : c.fields)
         {

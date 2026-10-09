@@ -44,7 +44,7 @@
       "usage": "set <address>=<value> …",
       "args": "<address>=<value> …",
       "flags": [],
-      "summary": "Write addresses: project.bpm, <strip>.gain, <clip>.at, <device>.<param> (any DSP registry parameter, in its unit), … — `api` lists every one. An unknown address or parameter is refused.",
+      "summary": "Write addresses: project.bpm, <strip>.gain, <clip>.at, <device>.<param> (any DSP registry parameter, in its unit), … — `api` lists every one. An unknown address or parameter is refused. A value starting with `=` is a FORMULA that drives a number (R-AUTO); a plain number clears it.",
       "requirement": "R-SVC-3"
     },
     {
@@ -283,6 +283,101 @@
       ],
       "summary": "Remove the note at that pitch and time.",
       "requirement": "R-CLIP-2"
+    },
+    {
+      "verb": "auto create",
+      "usage": "auto create <address>",
+      "args": "<address>",
+      "flags": [],
+      "summary": "Automate a number: a new automation named \"<owner> · <parameter>\", ranged as it, holding its value from beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id.",
+      "requirement": "R-AUTO-5"
+    },
+    {
+      "verb": "auto add",
+      "usage": "auto add [--name <text>] [--min <v>] [--max <v>] [--unit <text>]",
+      "args": "",
+      "flags": [
+        "name=<text>",
+        "min=<v>",
+        "max=<v>",
+        "unit=<text>"
+      ],
+      "summary": "An automation from nothing (default range 0…1). It moves nothing until a formula reads it. Prints the id.",
+      "requirement": "R-AUTO-4"
+    },
+    {
+      "verb": "auto delete",
+      "usage": "auto delete <au> [--unbind]",
+      "args": "<au>",
+      "flags": [
+        "unbind"
+      ],
+      "summary": "Delete an automation. Refused while a formula reads it, unless --unbind (those bindings are cleared).",
+      "requirement": "R-AUTO-4"
+    },
+    {
+      "verb": "auto point add",
+      "usage": "auto point add <au> [--at <beats>] [--value <v>] [--shape <linear|hold|smooth>]",
+      "args": "<au>",
+      "flags": [
+        "at=<beats>",
+        "value=<v>",
+        "shape=<linear|hold|smooth>"
+      ],
+      "summary": "Add a point (one at the same beat is replaced). Its shape governs the segment after it.",
+      "requirement": "R-AUTO-6"
+    },
+    {
+      "verb": "auto point move",
+      "usage": "auto point move <au> [--at <beats>] [--to <beats>] [--value <v>]",
+      "args": "<au>",
+      "flags": [
+        "at=<beats>",
+        "to=<beats>",
+        "value=<v>"
+      ],
+      "summary": "Move the point at --at to another beat and/or value.",
+      "requirement": "R-AUTO-6"
+    },
+    {
+      "verb": "auto point delete",
+      "usage": "auto point delete <au> [--at <beats>]",
+      "args": "<au>",
+      "flags": [
+        "at=<beats>"
+      ],
+      "summary": "Remove the point at --at.",
+      "requirement": "R-AUTO-6"
+    },
+    {
+      "verb": "auto point shape",
+      "usage": "auto point shape <au> [--at <beats>] [--shape <linear|hold|smooth>]",
+      "args": "<au>",
+      "flags": [
+        "at=<beats>",
+        "shape=<linear|hold|smooth>"
+      ],
+      "summary": "Set how the curve leaves the point at --at.",
+      "requirement": "R-AUTO-6"
+    },
+    {
+      "verb": "bind clear",
+      "usage": "bind clear <address>",
+      "args": "<address>",
+      "flags": [],
+      "summary": "Clear an address's formula: it plays its own stored value again. (`set <address>=<number>` clears and sets.)",
+      "requirement": "R-AUTO-1"
+    },
+    {
+      "verb": "eval",
+      "usage": "eval <address> [--at <beats>] [--explain]",
+      "args": "<address>",
+      "flags": [
+        "at=<beats>",
+        "explain"
+      ],
+      "summary": "The value an address plays at a beat (default 0); --explain shows its formula and every name it reads.",
+      "requirement": "R-AUTO-8"
     },
     {
       "verb": "render",
@@ -629,6 +724,12 @@
       "stable": true
     },
     {
+      "path": "masterGainFormula",
+      "type": "string",
+      "summary": "the formula driving it, \"\" = none (R-AUTO-1)",
+      "stable": true
+    },
+    {
       "path": "masterOut",
       "type": "string[]",
       "summary": "the port ids the master feeds",
@@ -719,6 +820,18 @@
       "stable": true
     },
     {
+      "path": "strips[].gainFormula",
+      "type": "string",
+      "summary": "the formula driving the gain, \"\" = none (R-AUTO-1)",
+      "stable": true
+    },
+    {
+      "path": "strips[].panFormula",
+      "type": "string",
+      "summary": "the formula driving the pan, \"\" = none",
+      "stable": true
+    },
+    {
       "path": "strips[].mute",
       "type": "bool",
       "summary": "",
@@ -773,6 +886,12 @@
       "stable": true
     },
     {
+      "path": "strips[].sends[].gainFormula",
+      "type": "string",
+      "summary": "the formula driving the send's gain, \"\" = none",
+      "stable": true
+    },
+    {
       "path": "strips[].devices",
       "type": "object[]",
       "summary": "the rack, in order (an instrument strip's first is its instrument)",
@@ -812,6 +931,12 @@
       "path": "strips[].devices[].known",
       "type": "bool",
       "summary": "false when this build's registry lacks the type (kept, not played)",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].lastChanged",
+      "type": "string",
+      "summary": "the parameter last written, by anyone (R-WIN-2)",
       "stable": true
     },
     {
@@ -884,6 +1009,12 @@
       "path": "strips[].devices[].params[].integer",
       "type": "bool",
       "summary": "whole steps only",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].params[].formula",
+      "type": "string",
+      "summary": "the formula driving it, \"\" = its own value plays (R-AUTO-1)",
       "stable": true
     },
     {
@@ -1118,6 +1249,114 @@
       "path": "patterns[].notes[].vel",
       "type": "int",
       "summary": "1…127",
+      "stable": true
+    },
+    {
+      "path": "automations",
+      "type": "object[]",
+      "summary": "every automation (R-AUTO-4)",
+      "stable": true
+    },
+    {
+      "path": "automations[].id",
+      "type": "string",
+      "summary": "au_n — what a formula names",
+      "stable": true
+    },
+    {
+      "path": "automations[].name",
+      "type": "string",
+      "summary": "\"<owner> · <parameter>\" when made from one",
+      "stable": true
+    },
+    {
+      "path": "automations[].unit",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "automations[].from",
+      "type": "string",
+      "summary": "the address it was made from (a hint, not a link)",
+      "stable": true
+    },
+    {
+      "path": "automations[].min",
+      "type": "number",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "automations[].max",
+      "type": "number",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "automations[].points",
+      "type": "object[]",
+      "summary": "sorted by at",
+      "stable": true
+    },
+    {
+      "path": "automations[].points[].at",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "automations[].points[].value",
+      "type": "number",
+      "summary": "in the automation's unit",
+      "stable": true
+    },
+    {
+      "path": "automations[].points[].shape",
+      "type": "string",
+      "summary": "linear | hold | smooth — the segment after it",
+      "stable": true
+    },
+    {
+      "path": "automations[].usedBy",
+      "type": "string[]",
+      "summary": "addresses whose formula reads it",
+      "stable": true
+    },
+    {
+      "path": "bindings",
+      "type": "object[]",
+      "summary": "every formula (R-AUTO-1/9)",
+      "stable": true
+    },
+    {
+      "path": "bindings[].address",
+      "type": "string",
+      "summary": "what it drives",
+      "stable": true
+    },
+    {
+      "path": "bindings[].formula",
+      "type": "string",
+      "summary": "as typed, with its leading =",
+      "stable": true
+    },
+    {
+      "path": "bindings[].reads",
+      "type": "string[]",
+      "summary": "the automations and addresses it reads",
+      "stable": true
+    },
+    {
+      "path": "bindings[].ok",
+      "type": "bool",
+      "summary": "false = INERT: the address's own value plays",
+      "stable": true
+    },
+    {
+      "path": "bindings[].problem",
+      "type": "string",
+      "summary": "why it is inert",
       "stable": true
     },
     {
