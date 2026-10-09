@@ -85,7 +85,8 @@ OSC."*
 - **R-INST-3 An instrument is played by note clips** (R-CLIP-2). A drum pattern is a note clip
   whose notes are pads; a step sequencer is a *view* of that clip (R-UI), not a second data model.
 - **R-INST-4 Reserved:** a sampler (play a sample chromatically) (was SR-INST-2), VST3 hosting (was
-  SR-RACK-3).
+  SR-RACK-3). (**AMENDED (user request, 2026-10-09):** VST3 is now R-VST — our instruments ship as
+  plugins first, hosting follows; the sampler is R-EDM-8.)
 
 ## R-FX — effects — ✅ IMPLEMENTED (1–4 DR-FX-1; 5 the rack: `device add/remove/move`, DR-SVC-1)
 
@@ -128,7 +129,10 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   LATER mixer, the master, or an output port — never a strip on its own or an earlier mixer. A
   feedback loop therefore cannot be built at all, the processing order is the mixer order, and the
   flow always reads left to right. A backward route is refused naming both ends (was SR-ROUTE-5,
-  which allowed any acyclic graph).
+  which allowed any acyclic graph). (**AMENDED (R-MIX-15, sidechain, 2026-10-09):** a SIDECHAIN
+  key — a signal a strip's detector listens to, not something it plays — may come from any strip
+  EARLIER in processing order, the same mixer included: the key is computed before the strip that
+  reads it, so no loop can form. Main outputs and audible sends stay forward-only.)
 - **R-MIX-5 A send** has its own level and is pre- or post-fader (was SR-MIX-3). The main output is
   where the fader goes; a send is an extra copy.
 - **R-MIX-6 The master** sums every strip routed to it, has a gain and a rack, and feeds one or
@@ -149,6 +153,18 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   playback. Assertable from the CLI like Interstellar's `lint`.
 - **R-MIX-11 Mix laws are the suite's**: constant-power balance pan with unity at centre and
   linear-amplitude fades — Interstellar's `AudioMix` — so one project sounds the same in both apps.
+- **R-MIX-13 A line is added from the mixer** (user request, 2026-10-09): every mixer page ends with
+  "+ Line" — an audio line, a bus, or any instrument of the registry — one command,
+  `strip add --kind … --mixer <mx>`; the new card grows in.
+- **R-MIX-14 A source can be relinked to another line** (user request, 2026-10-09): a clip plays
+  through any strip of its kind — its menu on the lanes offers "Play through ▸" (`clip move --strip`);
+  a strip's menu offers "Move its clips to ▸", which moves EVERY clip of it in one command
+  (`strip relink <from> --to <to>`, refused across kinds).
+- **R-MIX-15 Sidechain** (R-EDM-3): a send may feed a strip's SIDECHAIN input instead of its audio
+  (`send add <ch> --to <ch> --sidechain`); the strip's compressor detects on it (its `sidechain`
+  switch); the key strip must come earlier in processing order (R-MIX-4, amended). The classic
+  pump — the kick ducking the bass — is measured: the bass dips by the compressor's gain reduction
+  within its attack after each kick, and not without the send.
 - **R-MIX-12 Strips feeding a bus fold under it** in the mixer view (expand to see them), so thirty
   one-shots are not thirty visible strips. (**AMENDED (U3, 2026-10-08):** the strips on a page that
   feed the same bus (two or more) stand together under a header naming it, and a click FOLDS them
@@ -179,7 +195,10 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 - **R-TIME-1 Beats are authoritative**, 960 PPQ; seconds are derived from the tempo (was SR-TIME-1).
 - **R-TIME-2 One tempo and one meter** per project; a tempo/meter map is reserved (was SR-TIME-2/5).
 - **R-TIME-3 Sample-accurate:** notes start on their exact sample (R-DSP-5) (was SR-TIME-3).
-- **R-TIME-4 Transport:** play, stop, seek, loop region, metronome (was SR-TIME-4).
+- **R-TIME-4 Transport:** play, stop, seek, loop region, metronome (was SR-TIME-4). (**Detailed
+  2026-10-09, R-EDM-2/7:** the metronome is the machine's setting (`settings set metronome=on`), clicks
+  on every beat while playing with the bar's first accented, its sound a pad of the DSP library's
+  Drum Machine, and is NEVER in a render; the loop region is drawn on the ruler and dragged there.)
 
 ---
 
@@ -220,6 +239,11 @@ audio devices so the user can take advantage of their devices."*
   which Solaris has, and its extension point is rows of chips, which cannot hold a folder list with
   add and remove. Showing a DAW's user five rows about a photo engine is worse than a second dialog
   that looks the same; so the reuse is the look, not the class. A test tone waits for P2.)
+- **R-SET-3 The full option set** (user request, 2026-10-09: *"full option like cosmo and
+  interstellar"*): the sheet is in sections as their Engine Settings are — **Audio** (output, input,
+  sample rate, buffer), **Playback** (metronome on/off and level), **New songs** (tempo and time
+  signature a new song starts with), **Sample folders**, **Interface** (reduced motion) — every
+  option a `settings set <key>=…` line.
 - **R-SET-2 Settings are the machine's**, persisted beside the app's other settings, never in a
   project. Each change is a `settings set` line the service validates, applies and persists.
 
@@ -286,11 +310,133 @@ R-VER, applied to an arrangement:
 - **R-PLAY-3 Meters** on every strip and the master: peak and RMS per channel, a held peak, a clip
   latch — the numbers in the model, not only drawn.
 
+## R-AUTO — automation and parameter formulas — 📋 SPECIFIED (user request, 2026-10-09; replaces the reserved line)
+
+The user: *"all number param can be link, apply formula, create automation, apply formula with
+automation like FL Studio. Automation is created separately, make the formula core of the binding.
+When creating automation from a property, solaris creates the automation named with the property and
+the object it belongs to, shows it on the timeline, and that property will use a formula like
+=automation1."*
+
+- **R-AUTO-1 Every numeric address can be BOUND** — a strip's gain and pan, the master gain, a send's
+  gain, every numeric parameter of every device. A binding is a formula: `set <address>="=<expr>"`;
+  `set <address>=<number>` clears it. One binding per address (R-G-3); a choice or a switch is not
+  bindable.
+- **R-AUTO-2 The formula language:** numbers; `+ − * / ^`, parentheses, unary minus; `sin cos tan abs
+  sign min max clamp lerp pow exp log sqrt floor ceil round frac`; `pi`; the song's `beat`, `bar`,
+  `bpm` and `t` (seconds); an automation's id (`au_1` — its curve's value at the position); and any
+  numeric address — a LINK (`ch_2.gain`, `dv_1.filter.cutoff`) reading that address's EVALUATED value.
+  The result is clamped to the target's range (rounded when it is an integer). A syntax error or an
+  unknown name is refused, naming it (R-SVC-3).
+- **R-AUTO-3 Bindings are acyclic.** A binding that would make an address depend on itself, directly
+  or through links, is refused naming the loop.
+- **R-AUTO-4 An automation is its own object** (FL Studio's automation clip): an id (`au_n`), a name, a
+  unit and range, and points — beat, value, shape `linear | hold | smooth`. It moves nothing until a
+  formula reads it. Stored as `#aauto` with `#point` children (amends the suite schema's sketch,
+  `docs/audio-format.md` §2.5, which nothing wrote yet).
+- **R-AUTO-5 Automation is created from a property in ONE command** (`auto create <address>`): a new
+  `au_n` named *"<owner> · <parameter label>"* (*"Bass · Cutoff"*), ranged as the property, with points
+  at beat 0 and at the song's end holding the property's current value; it shows on the timeline; and
+  the property is bound to `=au_n`. (The user wrote `=automation1`; ids follow the suite's scheme.)
+  `auto add --name … [--min --max --unit]` makes one from nothing.
+- **R-AUTO-6 Automations are drawn on the timeline** — an AUTOMATION section under the lanes, a row per
+  automation showing its name and curve. A click adds a point, a drag moves it (time snapped to a
+  sixteenth), a double-click removes it, a right-click sets its shape or deletes the automation; each
+  gesture is one command (`auto point add|move|delete|shape`, `auto delete`).
+- **R-AUTO-7 Evaluated by the engine, at control rate.** The service compiles the bindings and the
+  curves into the graph; the engine evaluates every binding every 64 samples at ABSOLUTE positions,
+  so playback and render agree whatever the chunking (R-RENDER-1); gain and pan ramp across each
+  control period so nothing zippers. Measured: an automated gain renders the curve's level at known
+  beats within 0.1 dB.
+- **R-AUTO-8 Explainable:** `eval <address> [--at <beat>] [--explain]` prints the value there and, with
+  `--explain`, the formula and every name it reads with its value.
+- **R-AUTO-9 Observable:** the model publishes `bindings[]` (address, formula, what it reads) and
+  `automations[]` (id, name, unit and range, points, which addresses use it).
+
+## R-WIN — windows inside the song view — 📋 SPECIFIED (user request, 2026-10-09)
+
+- **R-WIN-1 A device opens in a WINDOW** (FL Studio's channel window), *"when open a synth setting,
+  need to show a window of that synth"*: a rack chip clicked, or an instrument strip's name
+  double-clicked, opens a floating window over the song view — titled by the device and its strip,
+  closed by ×, dragged by its title bar, several open at once, the last touched on top, at most one
+  per device. Opening and closing ease.
+- **R-WIN-2 The window lists every parameter the device supports** — label, value in its unit, and
+  whether it is a number, a link, a formula or an automation — and **HIGHLIGHTS THE LAST CHANGED**
+  (eased). Which parameter changed last is the model's (`devices[].lastChanged`), written by any `set`
+  from anywhere — a shell's edit lights it too.
+- **R-WIN-3 A parameter's menu** (right-click): Create Automation (R-AUTO-5), Formula… (type one — a
+  link is a formula naming an address), Clear Binding, Reset to Default — each one command.
+- **R-WIN-4 Window placement and stacking are the view's** — not saved, not commands, like zoom.
+
+## R-ROLL — the piano roll — 📋 SPECIFIED (user request, 2026-10-09)
+
+- **R-ROLL-1 A piano-roll WINDOW per pattern** (R-WIN's frame), opened by double-clicking a note clip
+  or from its instrument's window: keys on the left (C named with its octave; a drum machine's keys
+  named by its pads — the registry's note names), a beat grid with bars, the pattern's notes in the
+  strip's colour, a velocity lane below, the pattern's end marked.
+- **R-ROLL-2 Editing, one command per gesture:** a click on empty grid adds a note of the last-used
+  length at the snapped beat (`note add`); a drag moves a note in time and pitch, a drag on its right
+  edge resizes it (`note move`); a double-click or right-click deletes it; a drag in the velocity lane
+  sets its velocity. Snap 1/4, 1/8, 1/16 (default), 1/32 beat or off; Ctrl+wheel zooms, the wheel
+  scrolls, eased.
+- **R-ROLL-3 Step mode** — the step sequencer, a VIEW of the same pattern (R-INST-3): a row per pad
+  (or per key), sixteen steps a bar; a click toggles a note there.
+- **R-ROLL-4 Quantize and swing:** `pattern quantize <pt> [--grid <beats>] [--swing <0…0.75>]` moves
+  every note start onto the grid, delaying every second grid step by the swing.
+- **R-ROLL-5 The pattern's length** is set from the roll (`set <pt>.length=`), its end dragged.
+
+## R-VST — VST3 — 📋 SPECIFIED (user request, 2026-10-09; replaces R-INST-4's VST3 half)
+
+The user: *"need to sync with current workflow of other apps that use VST3 (because this will use
+VST3 later) — install the VST3 SDK and adapt Basic Synth and Drum Machine to VST3."* No app in the
+workspace hosts VST3; the workflow is the industry's: an instrument is a plugin with a processor, a
+controller, normalised parameters and saved state.
+
+- **R-VST-1 The SDK is installed once per machine** (`~/sdk/vst3sdk`, Steinberg's `vst3sdk`, its
+  version and licence recorded in DR-VST-1) and found through `VST3_SDK_ROOT`; with no SDK the build
+  skips the plugins and says so.
+- **R-VST-2 Basic Synth and Drum Machine build as VST3 instruments FROM THE DSP LIBRARY'S OWN
+  CLASSES** (`core/DigitalSignalProcessing/apps/vst3`) — no copy of their sound (R-DSP-1).
+- **R-VST-3 Their parameters ARE the registry's:** one VST parameter per registry parameter, its id
+  the parameter's index in its type (frozen — a shipped id never moves), title, unit, default and step
+  count from the spec; the normalised 0…1 is ONE shared mapping in the DSP library
+  (`normalizedFromValue` / `valueFromNormalized`, honouring `logScale`, `integer`, choices).
+- **R-VST-4 State** saves and restores every parameter as the registry's text — the values a `.slp`
+  stores.
+- **R-VST-5 Verified:** the SDK's validator passes both plugins; an offline host renders each and
+  equals the DSP device's own render sample for sample at the same parameters, notes and block size.
+- **R-VST-6 Reserved:** hosting other makers' VST3 in Solaris (scan `~/.vst3`, load, process, their
+  editor window) — host work (R-SVC-4).
+
+## R-EDM — what a professional EDM DAW needs (user request, 2026-10-09: *"suggest all necessary features"*)
+
+**Built with this brief:**
+- **R-EDM-1 Undo and redo** of every edit — `undo`, `redo`; Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y; the model
+  names what each would undo. A machine setting or the transport is not an edit.
+- **R-EDM-2 Metronome** (R-TIME-4, detailed).
+- **R-EDM-3 Sidechain compression** (R-MIX-15): the DSP Compressor gains a sidechain detector input.
+- **R-EDM-4 A limiter** — a DSP brickwall limiter (lookahead, ceiling, release) for the master: the
+  output never exceeds its ceiling, measured.
+- **R-EDM-5 Tempo-synced values** by formula: `bpm` in a formula (R-AUTO-2) makes a delay time or an
+  LFO rate follow the song (`=60000/bpm*0.75` is a dotted eighth).
+- **R-EDM-6 Step sequencer, quantize, swing** (R-ROLL-3/4).
+- **R-EDM-7 The loop region on the ruler** (R-TIME-4, detailed): Shift-drag on the ruler sets it
+  (`transport loop`), its brace drawn there; a click inside it clears it.
+
+**Specified, scheduled after** (each its own ledger task): R-EDM-8 a sampler (one-shots, chromatic) ·
+R-EDM-9 audition in the browser (R-BROWSE-2) · R-EDM-10 a MIDI keyboard (play, record into a pattern)
+· R-EDM-11 audio recording (R-REC) · R-EDM-12 clip fades and gain on the lanes, slice, reverse ·
+R-EDM-13 warp / time-stretch (R-CLIP-5) · R-EDM-14 a tempo map and tempo automation · R-EDM-15 a
+spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC beside WAV · R-EDM-17
+hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
+audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
+
 ## Reserved areas — 📋 SPECIFIED, not scheduled
 
 - **R-REC** recording from input ports into the armed strip, sample-aligned (was SR-REC-1..3,
   SR-ROUTE-4).
-- **R-AUTO** automation curves on any registry parameter and strip gain/pan (was SR-AUTO-1..3).
+- ~~**R-AUTO** automation curves on any registry parameter and strip gain/pan (was SR-AUTO-1..3).~~
+  Specified 2026-10-09 — see R-AUTO above.
 - **R-MIDI** CC lanes, per-note expression, SMF import/export (was SR-MIDI-1..3).
 
 ---
@@ -335,6 +481,12 @@ R-VER, applied to an arrangement:
   the left (R-BROWSE); lanes in the centre (R-LANE); **the mixer docked under the timeline** with a
   tab per mixer and a Matrix tab (R-MIX); the transport (R-TIME-4) with the master meter and device
   status. Docked, not a separate screen, because linked selection (R-MIX-8) needs both in view.
+  (**AMENDED (user request, 2026-10-09):** *"open setting need to be at top left next to home and have
+  full option like cosmo and interstellar"* — the song bar's left reads: wordmark · Home · Settings ·
+  cosmo's `MenuStrip` with **File** (New, Open, Save, Save As, Render, Render Stems, Home), **Edit**
+  (Undo, Redo, Duplicate, Delete), **Song** (Add Mixer, Add Line, Add Lane, Quantize), **View** (the
+  mixer dock, the browser, the metronome). Settings is no longer at the right. Every item is a command
+  line or a host picker.)
 - **R-UI-4 Cosmo's widgets are reused as libraries** (`SliderRow`, `SegmentedControl`, `PillButton`,
   `IconButton`, `ConfirmDialog`, `MenuStrip`, `HoverFade`); Interstellar's timeline idioms are
   followed, and its header-only helpers (`TextFit`, `EasedScroll`, `Glyphs`) are INCLUDED from
@@ -348,6 +500,8 @@ R-VER, applied to an arrangement:
 - **R-UI-5 Device panels are generated from the registry** (R-DSP-2): a knob or slider per
   parameter, grouped by its name's prefix (`osc1.*`, `filter.*`). A new DSP parameter appears in
   the UI with no UI code.
+  (**AMENDED (R-WIN-1, 2026-10-09):** the generated controls now open in a device WINDOW — the rule is
+  unchanged, the frame moved.)
 - **R-UI-6 Every state is drawn and shot,** empty and loading included, at two window sizes,
   mid-transition as well as at rest. The shots drive the REAL service through the same hooks the
   window uses (no fake): the service is headless and cheap, so the shot is also an integration test.

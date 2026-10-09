@@ -11,19 +11,18 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-08 — U3: the mixer dock — pages, the master, the matrix, device panels.*
+*Last updated: 2026-10-09 — B0: the brief written as requirements; phase B planned.*
 
 ---
 
 ## NEXT
 
-**► U4 — the two halves talk**: linked selection (R-MIX-8) — a clip selected lights its strip in
-the dock and scrolls it into view; a strip selected lights its clips on the lanes. Arrange by Lane
-| Channel (R-LANE-2): one toggle regroups the same clips into a row per strip, and a clip dragged to
-another row there is `clip move --strip`. Drag and drop onto the dock: an effect from the browser
-onto a strip's rack → `device add <ch> --type <t> --at <slot>`; a sample onto a strip → a clip on
-that strip. The audit panel (R-MIX-10): `audit` as a list in the dock, each finding naming what to
-click. Read `app/NOTES.md` first.
+**► B1 — formulas and automation, the core** (R-AUTO-1…5, 7…9): `#aauto` + `#point` and `#abind` in the
+`.slp`; the formula language parsed in the core, compiled into the graph, evaluated by the engine every
+64 samples at absolute positions (gain/pan ramped); links acyclic; `auto create|add|delete`,
+`auto point add|move|delete|shape`, `eval --explain`; `bindings[]`, `automations[]`,
+`devices[].lastChanged` in the model. Measured: an automated gain and an automated cutoff render the
+curve. The UI for it is B4/B5.
 
 ---
 
@@ -106,6 +105,26 @@ umbrella's pointer — `arstro.rule` §7).
 - [ ] **U5** Note editing: piano roll for the synth, step grid for the drum machine (views of a
       pattern).
 
+### B — the 2026-10-09 brief (user: *"no need discussion, implement all needed features"*)
+- [x] **B0** Requirements: R-AUTO, R-WIN, R-ROLL, R-VST, R-EDM written; R-INST-4, R-MIX-4 (sidechain),
+      R-TIME-4, R-UI-3, R-UI-5, R-SET-3 amended; this phase.
+- [ ] **B1** Formulas + automation core (model, compile, engine, service, `eval`).
+- [ ] **B2** Undo / redo (R-EDM-1).
+- [ ] **B3** The song bar: Settings beside Home, cosmo's menu strip (File / Edit / Song / View), the
+      settings sheet's full sections (R-UI-3, R-SET-3).
+- [ ] **B4** Windows: the device window, its parameter list with the last change lit, the parameter
+      menu — automation, formula, clear, reset (R-WIN-1…4).
+- [ ] **B5** Automation on the timeline (R-AUTO-6).
+- [ ] **B6** The piano roll window: `note move`, velocity, snap, step mode, quantize + swing
+      (R-ROLL-1…5, R-EDM-6).
+- [ ] **B7** The mixer: "+ Line", relink — `strip relink`, "Play through" (R-MIX-13/14).
+- [ ] **B8** VST3: the SDK, Basic Synth + Drum Machine as plugins, the shared normalisation, validator,
+      plugin = device sample for sample (R-VST-1…5).
+- [ ] **B9** EDM sound: sidechain (DSP compressor + `send add --sidechain`), the limiter, the
+      metronome (R-MIX-15, R-EDM-2/3/4).
+- [ ] **B10** The loop region on the ruler (R-EDM-7).
+- [ ] **B11+** R-EDM-8…20, one task each, in that order unless the user reorders.
+
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
       `implement_artboard`); both apps include them from there.
@@ -117,6 +136,12 @@ umbrella's pointer — `arstro.rule` §7).
 ---
 
 ## Decisions log (newest first)
+
+- **2026-10-09 — the brief is built without a discussion round**, on the user's word. Its open
+  choices were taken as written in R-AUTO/R-WIN/R-ROLL/R-VST/R-EDM: a binding is a formula (a link is a
+  formula naming an address); automations are ids `au_n` (the user's `=automation1` is `=au_1`); windows
+  float INSIDE the song view as FL Studio's do; our plugins come before hosting; a sidechain key may
+  come from an earlier strip on the same mixer.
 
 - **2026-10-08 — the fader law is gain ∝ position², +6 dB at the top** (0 dB at 70 %, −24 dB at
   a quarter): the usual console taper, so the useful range takes most of the travel. A value set
