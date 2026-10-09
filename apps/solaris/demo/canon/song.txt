@@ -1,0 +1,110 @@
+# Canon in D (Johann Pachelbel, c. 1680 — public domain), arranged as EDM for Solaris by an agent
+project new canon.slp --bpm 128 --name "Canon in D"
+
+# — the kick: its own strip, so it can key the sidechains (ch_2, dv_1, pt_1, ln_1)
+clip add --instrument drums --at 32 --length 32
+set ch_2.name=Kick dv_1.kick.tune=-2 dv_1.kick.decay=380 dv_1.kick.tone=0.35
+pattern steps pt_1 --pitch kick "x...x...x...x..."
+clip add --strip ch_2 --pattern pt_1 --at 80 --length 32
+
+# — the rest of the kit (ch_3, dv_2): hats in the intro, the groove, a clap roll in the build
+clip add --instrument drums --at 16 --length 16
+set ch_3.name=Drums dv_2.clap.level=-2 dv_2.chat.level=-3 dv_2.ohat.level=-7 dv_2.chat.pan=0.3 dv_2.ohat.pan=-0.3 dv_2.chat.tone=0.75
+pattern steps pt_2 --pitch closed-hat "..x...x...x...x." --vel 80
+pattern duplicate pt_2 --name Groove
+pattern steps pt_3 --pitch clap "....x.......x..."
+pattern steps pt_3 --pitch closed-hat "x.x.x.x.x.x.x.x." --vel 70
+pattern steps pt_3 --pitch open-hat "..x...x...x...x." --vel 60
+clip add --strip ch_3 --pattern pt_3 --at 32 --length 32
+clip add --strip ch_3 --pattern pt_3 --at 80 --length 32
+pattern new --name Roll --length 16
+pattern steps pt_4 --pitch clap "x...x...x...x...x...x...x...x...x.x.x.x.x.x.x.x.xxxxxxxxxxxxxxxx" --vel 90
+clip add --strip ch_3 --pattern pt_4 --at 64 --length 16
+
+# — the bass (ch_4, dv_3): the ground on the off-beats
+clip add --instrument synth --at 32 --length 32
+set ch_4.name=Bass pt_5.length=16
+set dv_3.osc1.wave=saw dv_3.osc2.wave=sine dv_3.osc2.octave=-1 dv_3.osc2.level=0.7 dv_3.filter.cutoff=650 dv_3.filter.res=0.2 dv_3.filter.env=1.5 dv_3.amp.decay=160 dv_3.amp.sustain=0.6 dv_3.amp.release=90 dv_3.volume=-8
+notes add pt_5 "D2@0.5:0.42 D2@1.5:0.42 A1@2.5:0.42 A1@3.5:0.42 B1@4.5:0.42 B1@5.5:0.42 F#1@6.5:0.42 F#1@7.5:0.42 G1@8.5:0.42 G1@9.5:0.42 D2@10.5:0.42 D2@11.5:0.42 G1@12.5:0.42 G1@13.5:0.42 A1@14.5:0.42 A1@15.5:0.42" --vel 112
+clip add --strip ch_4 --pattern pt_5 --at 80 --length 32
+
+# — the pad (ch_5, dv_4): the chords all the way, a wide supersaw
+clip add --instrument synth --at 0 --length 128
+set ch_5.name=Pad pt_6.length=16
+set dv_4.osc1.voices=5 dv_4.osc1.detune=32 dv_4.osc1.level=0.6 dv_4.osc2.wave=saw dv_4.osc2.octave=0 dv_4.osc2.voices=5 dv_4.osc2.detune=22 dv_4.osc2.level=0.5 dv_4.filter.res=0.15 dv_4.filter.env=0.5 dv_4.amp.attack=220 dv_4.amp.decay=600 dv_4.amp.sustain=0.85 dv_4.amp.release=700 dv_4.volume=-16
+note add pt_6 --chord D --at 0 --length 2 --vel 80 --octave 4 --inversion 0
+note add pt_6 --chord A --at 2 --length 2 --vel 80 --octave 3 --inversion 1
+note add pt_6 --chord Bm --at 4 --length 2 --vel 80 --octave 4 --inversion 0
+note add pt_6 --chord F#m --at 6 --length 2 --vel 80 --octave 3 --inversion 1
+note add pt_6 --chord G --at 8 --length 2 --vel 80 --octave 3 --inversion 1
+note add pt_6 --chord D --at 10 --length 2 --vel 80 --octave 4 --inversion 0
+note add pt_6 --chord G --at 12 --length 2 --vel 80 --octave 3 --inversion 1
+note add pt_6 --chord A --at 14 --length 2 --vel 80 --octave 3 --inversion 1
+
+# — the canon itself (ch_6, dv_5): a pluck — line A, line B, then the eighth-note variation
+clip add --instrument synth --at 16 --length 16
+set ch_6.name=Canon pt_7.length=16
+set dv_5.osc1.voices=3 dv_5.osc1.detune=16 dv_5.osc2.wave=square dv_5.osc2.octave=0 dv_5.osc2.level=0.35 dv_5.filter.cutoff=900 dv_5.filter.res=0.3 dv_5.filter.env=3.5 dv_5.fenv.attack=1 dv_5.fenv.decay=240 dv_5.fenv.sustain=0.15 dv_5.amp.decay=450 dv_5.amp.sustain=0.45 dv_5.amp.release=260 dv_5.volume=-10
+notes add pt_7 "F#5@0:1.9 E5@2:1.9 D5@4:1.9 C#5@6:1.9 B4@8:1.9 A4@10:1.9 B4@12:1.9 C#5@14:1.9" --vel 96
+pattern new --name "Canon B" --length 16
+notes add pt_8 "D5@0:1.9 C#5@2:1.9 B4@4:1.9 A4@6:1.9 G4@8:1.9 F#4@10:1.9 G4@12:1.9 E4@14:1.9" --vel 96
+pattern new --name "Canon C" --length 16
+notes add pt_9 "D5@0:0.9 F#5@1:0.9 A5@2:0.9 G5@3:0.9 F#5@4:0.9 D5@5:0.9 F#5@6:0.9 E5@7:0.9 D5@8:0.9 B4@9:0.9 D5@10:0.9 A4@11:0.9 G4@12:0.9 B4@13:0.9 A4@14:0.9 G4@15:0.9" --vel 104
+clip add --strip ch_6 --pattern pt_7 --at 32 --length 16
+clip add --strip ch_6 --pattern pt_8 --at 48 --length 16
+clip add --strip ch_6 --pattern pt_9 --at 64 --length 16
+clip add --strip ch_6 --pattern pt_9 --at 80 --length 32
+clip add --strip ch_6 --pattern pt_7 --at 112 --length 16
+
+# — an arpeggio for the drop (ch_7, dv_6): each chord's tones in sixteenths
+clip add --instrument synth --at 80 --length 32
+set ch_7.name=Arp pt_10.length=16
+set dv_6.osc1.wave=square dv_6.osc1.level=0.7 dv_6.osc2.level=0 dv_6.filter.cutoff=1400 dv_6.filter.env=3 dv_6.fenv.decay=110 dv_6.fenv.sustain=0 dv_6.amp.decay=150 dv_6.amp.sustain=0 dv_6.amp.release=90 dv_6.volume=-14
+notes add pt_10 "D4@0.0:0.2 F#4@0.25:0.2 A4@0.5:0.2 D5@0.75:0.2 A4@1.0:0.2 F#4@1.25:0.2 A4@1.5:0.2 D5@1.75:0.2 A3@2.0:0.2 C#4@2.25:0.2 E4@2.5:0.2 A4@2.75:0.2 E4@3.0:0.2 C#4@3.25:0.2 E4@3.5:0.2 A4@3.75:0.2 B3@4.0:0.2 D4@4.25:0.2 F#4@4.5:0.2 B4@4.75:0.2 F#4@5.0:0.2 D4@5.25:0.2 F#4@5.5:0.2 B4@5.75:0.2 F#3@6.0:0.2 A3@6.25:0.2 C#4@6.5:0.2 F#4@6.75:0.2 C#4@7.0:0.2 A3@7.25:0.2 C#4@7.5:0.2 F#4@7.75:0.2 G3@8.0:0.2 B3@8.25:0.2 D4@8.5:0.2 G4@8.75:0.2 D4@9.0:0.2 B3@9.25:0.2 D4@9.5:0.2 G4@9.75:0.2 D4@10.0:0.2 F#4@10.25:0.2 A4@10.5:0.2 D5@10.75:0.2 A4@11.0:0.2 F#4@11.25:0.2 A4@11.5:0.2 D5@11.75:0.2 G3@12.0:0.2 B3@12.25:0.2 D4@12.5:0.2 G4@12.75:0.2 D4@13.0:0.2 B3@13.25:0.2 D4@13.5:0.2 G4@13.75:0.2 A3@14.0:0.2 C#4@14.25:0.2 E4@14.5:0.2 A4@14.75:0.2 E4@15.0:0.2 C#4@15.25:0.2 E4@15.5:0.2 A4@15.75:0.2" --vel 90
+
+# — space: a reverb and a tempo-synced delay (a dotted eighth, by formula)
+strip add --kind bus --name Reverb
+device add ch_8 --type reverb
+set dv_7.decay=2600 dv_7.mix=1 dv_7.lowcut=250
+strip add --kind bus --name Delay
+device add ch_9 --type delay
+set dv_8.time="=60000/bpm*0.75" dv_8.feedback=0.35 dv_8.mix=1 dv_8.tone=3500
+send add ch_6 --to ch_8 --gain -8
+send add ch_6 --to ch_9 --gain -14
+send add ch_5 --to ch_8 --gain -12
+send add ch_7 --to ch_9 --gain -16
+send add ch_3 --to ch_8 --gain -20
+
+# — the pump: the kick keys a compressor on the bass and on the pad
+device add ch_4 --type compressor
+set dv_9.sidechain=on dv_9.threshold=-30 dv_9.ratio=6 dv_9.attack=1 dv_9.release=140
+device add ch_5 --type compressor
+set dv_10.sidechain=on dv_10.threshold=-30 dv_10.ratio=4 dv_10.attack=2 dv_10.release=180
+send add ch_2 --to ch_4 --sidechain
+send add ch_2 --to ch_5 --sidechain
+
+# — the pad's filter opens through the intro, closes, rises through the build (bezier), opens on the drop
+auto create dv_4.filter.cutoff
+auto point move au_1 --at 0 --value 300
+auto point add au_1 --at 31 --value 4200 --shape bezier
+auto point shape au_1 --at 31 --speed-in 220 --influence-in 60 --speed-out 0 --influence-out 33
+auto point add au_1 --at 64 --value 900
+auto point add au_1 --at 79.5 --value 9000 --shape bezier
+auto point shape au_1 --at 79.5 --speed-in 1600 --influence-in 75 --speed-out 0 --influence-out 33
+auto point add au_1 --at 80 --value 5200 --shape hold
+auto point add au_1 --at 112 --value 5200
+auto point add au_1 --at 128 --value 350
+
+# — width: a chorus on the pad, the arp a little to the right
+device add ch_5 --type chorus
+set dv_11.rate=0.4 dv_11.depth=5 dv_11.delay=14 dv_11.mix=0.45 ch_7.pan=0.3
+
+# — the mix, and the master
+set ch_2.gain=-3 ch_3.gain=-6 ch_4.gain=-5 ch_5.gain=-6 ch_6.gain=-4 ch_7.gain=-8 ch_8.gain=-6 ch_9.gain=-9
+device add master --type limiter
+set dv_12.gain=5 dv_12.ceiling=-0.8
+
+ls
+audit
+project save
+render --out canon.wav --stems ch_2,ch_4,ch_5,ch_6

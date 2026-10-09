@@ -929,3 +929,22 @@ end (2026-10-09): an 8-bar "Ode to Joy" (drums by steps, bass by `notes add`, ch
 a reverb bus) in 32 commands where the audit's 16 bars took 110; rendered and measured — RMS −21.8 dBFS,
 peak −6.5 dBFS, the kick 18.6 dB or more above the level just before every one of the beats, onsets
 500.0 ms apart (120.00 bpm), the lead at E4 329.6, G4 391.8, C4 261.5, D4 293.7 Hz.
+
+### DR-SVC-9 The goal, measured (R-SVC-9)
+A whole song made with `solaris-cc` alone: `demo/canon/` — Pachelbel's Canon in D (public domain) as a
+128 bpm EDM track, 128 beats. `make_script.py` spells the notes once and writes `song.txt`, the committed
+script: 86 commands (`project new`, seven instrument strips by `clip add --instrument`, `pattern steps`,
+`notes add`, `note add --chord`, `pattern duplicate`, two buses and their sends, a delay time as a formula
+`=60000/bpm*0.75`, two compressors keyed from the kick, a chorus, the pad's cutoff automated on bezier
+points, a master limiter), ending in `ls`, `audit`, `project save` and `render --stems`. `measure.py`
+measures the render.
+
+Guarded by `solaris_demo_canon` (`tests/demo_canon.cmake`, registered in `cli/CMakeLists.txt:15`): the
+committed script must equal what `make_script.py` writes, the run must exit 0 and write the song, its mix
+and four stems, and `measure.py` must pass — skipped, and said, where there is no python3 with numpy.
+Mutants seen red, then restored: a stray line in `song.txt` (stale), the kick a sixteenth late (200
+samples off). Measured (2026-10-09): 62.30 s, peak −0.80 dBFS, RMS −16.8 dBFS; intro −28.2, verse −15.4,
+build −17.6, drop −14.4 dBFS; the kick on all 64 beats within 1 sample; the bass 29.5 dB down just after
+each kick; line A at 743 662 586 552 495 442 493 557 Hz (worst 8.4 cents); the pad's centroid 1157 →
+2300 Hz across the intro. Found on the way: D-2 (a renamed strip's lane keeps the old name) and D-3 (a
+kit's pad and parameter names differ).

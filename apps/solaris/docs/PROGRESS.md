@@ -192,7 +192,11 @@ umbrella's pointer — `arstro.rule` §7).
       `pattern print`, compact JSON; out-of-range values refused; `docs/AGENTS.md`. An 8-bar song: 32
       commands (the audit's 16 bars took 110). 7 mutants caught.
 - [ ] **C4b** The faces: control channel + attach, equivalence test, web (NTWB) (R-SVC-5…7).
-- [ ] **C5** A whole song made by an agent with `solaris-cc`, measured (R-SVC-9).
+- [x] **C5** A whole song made by an agent with `solaris-cc`, measured (R-SVC-9).
+      — DR-SVC-9: `demo/canon/` — Pachelbel's Canon as 128 bpm EDM, 86 commands, 7 instruments, 2 buses,
+      formula delay, kick-keyed sidechains, bezier filter automation, limiter; `solaris_demo_canon`
+      regenerates the script, runs it and measures the render (kick within 1 sample on 64 beats, line A
+      within 8.4 cents, peak −0.80 dBFS). 2 mutants caught. Found D-2, D-3.
 - [ ] **C6** The audit's fixes (R-MIX-17 latency, R-MIX-4 amended, strip order, matrix, recents, lanes, docs).
 - [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.
 
