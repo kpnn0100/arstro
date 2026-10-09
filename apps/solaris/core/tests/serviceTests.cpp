@@ -300,6 +300,47 @@ static void test_a_relative_src_is_found_in_the_songs_folder()
     pass("a relative src names a file in the song's folder first — the Song tab re-places a sound with one `clip add`");
 }
 
+static void test_undo_and_redo_every_edit()
+{
+    Run r;
+    const std::string song = freshSong("undo");
+    r.ok("project new " + song);
+    const std::string empty = r.text();
+    r.ok("clip add --instrument drums --at 0 --length 4");                        // step 1
+    const std::string withDrums = r.text();
+    for (const char *g : {"-1", "-2", "-3"}) r.ok(std::string("set ch_2.gain=") + g); // a fader dragged: ONE step
+    const std::string dragged = r.text();
+    r.ok("set ch_2.pan=0.5");                                                       // step 3
+    const auto &m = r.svc.model();
+    assert(m.undoDepth == 3 && m.undoLabel == "set ch_2.pan" && m.redoDepth == 0);
+    r.events.clear();
+    assert(r.ok("undo") == "set ch_2.pan\n" && r.text() == dragged);
+    assert(r.events.size() == 1 && contains(r.events[0], "what=undo node=\"set ch_2.pan\""));
+    assert(r.ok("undo") == "set ch_2.gain\n" && r.text() == withDrums);           // the whole drag, in one
+    assert(r.ok("redo") == "set ch_2.gain\n" && r.text() == dragged);
+    r.ok("undo");
+    assert(r.ok("undo") == "clip add\n" && r.text() == empty);
+    assert(contains(r.no("undo"), "nothing to undo"));
+    assert(r.ok("redo") == "clip add\n" && r.text() == withDrums && r.svc.model().redoDepth == 2);
+    // a new edit clears what redo could put back
+    r.ok("lane add Extra");
+    assert(r.svc.model().redoDepth == 0 && contains(r.no("redo"), "nothing to redo"));
+    // not edits: a machine setting, the transport, a save
+    const int depth = r.svc.model().undoDepth;
+    r.ok("settings set bufferSize=256");
+    r.ok("transport seek 4");
+    r.ok("project save");
+    assert(r.svc.model().undoDepth == depth);
+    // automation is undone like anything else
+    r.ok("auto create ch_2.gain");
+    r.ok("undo");
+    assert(r.svc.model().automations.empty() && r.svc.model().bindings.empty());
+    // another song: its own history
+    r.ok("project open " + song);
+    assert(r.svc.model().undoDepth == 0 && contains(r.no("undo"), "nothing to undo"));
+    pass("undo / redo: every edit, byte-exact; a dragged fader is one step; a new edit clears redo; settings, transport and save are not edits (R-EDM-1)");
+}
+
 static void test_formulas_bind_numbers_and_refuse_what_cannot_be_read()
 {
     Run r;
@@ -791,6 +832,7 @@ int main()
     test_every_sample_file_gets_its_own_strip();
     test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_changed();
     test_a_relative_src_is_found_in_the_songs_folder();
+    test_undo_and_redo_every_edit();
     test_formulas_bind_numbers_and_refuse_what_cannot_be_read();
     test_an_automated_gain_renders_its_curve();
     test_routing_only_goes_forward_and_refusals_change_nothing();

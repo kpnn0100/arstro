@@ -11,16 +11,18 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-09 — B1: formulas and automation, the core.*
+*Last updated: 2026-10-09 — B2: undo and redo.*
 
 ---
 
 ## NEXT
 
-**► B2 — undo and redo** (R-EDM-1): every edit undoable — the service keeps the project before each
-edit that landed (bounded), `undo` / `redo` restore it, the model names what each would undo
-(`history.undo`, `.redo`, the labels); Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y in the window. A machine setting,
-the transport, a save are not edits. While playing, an undo swaps in a new engine.
+**► B3 — the song bar** (R-UI-3 amended, R-SET-3): Settings moves beside Home; cosmo's `MenuStrip`
+with File (New, Open, Save, Save As, Render, Render Stems, Home), Edit (Undo, Redo, Duplicate, Delete),
+Song (Add Mixer, Add Line, Add Lane, Quantize…), View (mixer dock, browser, metronome); every item a
+command line or a host picker. The settings sheet in sections — Audio, Playback, New songs, Sample
+folders, Interface — each option a `settings set` line (new keys: metronome, metronomeLevel, newBpm,
+newSig, reducedMotion).
 
 ---
 
@@ -112,7 +114,8 @@ umbrella's pointer — `arstro.rule` §7).
       a curve renders −5 / −15 dB at beats 2 / 6 within 0.1 dB; byte-identical at chunks 77/128/1000;
       no allocation. Mutants: no control split → chunking test red; no `checkBinding` → refusal test
       red. A silent refusal is now impossible (`dispatch` names it).
-- [ ] **B2** Undo / redo (R-EDM-1).
+- [x] **B2** Undo / redo (R-EDM-1). — DR-EDM-1; byte-exact both ways; a dragged fader is one step
+      (mutant: no merging → the depth assertion fails); Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y.
 - [ ] **B3** The song bar: Settings beside Home, cosmo's menu strip (File / Edit / Song / View), the
       settings sheet's full sections (R-UI-3, R-SET-3).
 - [ ] **B4** Windows: the device window, its parameter list with the last change lit, the parameter

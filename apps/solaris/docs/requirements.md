@@ -443,3 +443,14 @@ send or a device drops the bindings that drive them. `eval <address> [--at] [--e
 `sends[].gainFormula`, `masterGainFormula` and `devices[].lastChanged`; `audit` (`:365`) names inert
 bindings and automations no formula reads. While playing, a binding or curve edit — or a `set` on an
 address a formula reads — swaps in a new engine (`core/service/ServiceTransport.cpp:191`).
+
+### DR-EDM-1 Undo and redo (R-EDM-1)
+After every edit that LANDED, `dispatch` keeps the song as it was before it (`core/service/SolarisService.cpp:216`),
+at most 200 steps; consecutive `set`s of exactly the same addresses extend the newest step instead of
+adding one, so a dragged fader is one step (a rule a script sees the same way). `undo` / `redo`
+(`historyCommand`, `:263`) swap the song with the step, print its label (`set ch_2.gain`, `clip add`,
+`strip delete ch_3`), emit `project.changed what=undo|redo node=<label>`, mark the song unsaved and,
+while playing, swap in a new engine; any new edit clears redo. Not edits: machine settings, the
+transport, a save, `get`/`eval`/`audit`. `project new|open|close` start a new history. The model names
+both (`undoLabel`, `redoLabel`, `undoDepth`, `redoDepth`); the window's Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y
+send `undo` / `redo` (`app/App.cpp`).

@@ -269,6 +269,10 @@ namespace solaris
             return b ? b->formula : std::string();
         };
         mModel.masterGainFormula = formulaOf("project.masterGain");
+        mModel.undoDepth = (int)mUndo.size();
+        mModel.redoDepth = (int)mRedo.size();
+        mModel.undoLabel = mUndo.empty() ? std::string() : mUndo.back().label;
+        mModel.redoLabel = mRedo.empty() ? std::string() : mRedo.back().label;
         auto fillDevice = [&](DeviceModel &d) {
             for (auto &pm : d.params) pm.formula = formulaOf(d.id + "." + pm.name);
             const auto lc = mLastChanged.find(d.id);

@@ -408,11 +408,12 @@ controller, normalised parameters and saved state.
 - **R-VST-6 Reserved:** hosting other makers' VST3 in Solaris (scan `~/.vst3`, load, process, their
   editor window) — host work (R-SVC-4).
 
-## R-EDM — what a professional EDM DAW needs (user request, 2026-10-09: *"suggest all necessary features"*)
+## R-EDM — what a professional EDM DAW needs (user request, 2026-10-09: *"suggest all necessary features"*) — 🚧 IN PROGRESS (1 ✅ DR-EDM-1; 5 ✅ with R-AUTO, DR-AUTO-2)
 
 **Built with this brief:**
 - **R-EDM-1 Undo and redo** of every edit — `undo`, `redo`; Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y; the model
-  names what each would undo. A machine setting or the transport is not an edit.
+  names what each would undo. A machine setting or the transport is not an edit. Consecutive `set`s of
+  the same addresses — a dragged fader — are ONE step (added while building it, B2).
 - **R-EDM-2 Metronome** (R-TIME-4, detailed).
 - **R-EDM-3 Sidechain compression** (R-MIX-15): the DSP Compressor gains a sidechain detector input.
 - **R-EDM-4 A limiter** — a DSP brickwall limiter (lookahead, ceiling, release) for the master: the

@@ -70,7 +70,7 @@ namespace solaris
             switch (k)
             {
             case K::ProjectNew: case K::ProjectOpen: case K::ProjectSave: case K::ProjectClose:
-            case K::Get: case K::Eval: case K::Render: case K::MatrixPrint: case K::Audit: case K::StatePrint: case K::Api:
+            case K::Get: case K::Eval: case K::Undo: case K::Redo: case K::Render: case K::MatrixPrint: case K::Audit: case K::StatePrint: case K::Api:
             case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
             case K::DevicesList: case K::Browse: case K::RecentsRemove:
             case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait:
@@ -110,6 +110,9 @@ namespace solaris
             }
             break;
         }
+        case K::Undo: case K::Redo:
+            ok = historyCommand(c, err);
+            break;
         case K::Get:
         {
             std::string v;
@@ -207,13 +210,71 @@ namespace solaris
             refreshModel();
             return false;
         }
-        if (editing) mModel.dirty = true;
+        const bool history = c.kind == K::Undo || c.kind == K::Redo;
+        if (editing)
+        {
+            // R-EDM-1: the song before this edit, unless it continues the last one (a fader dragged)
+            std::string key;
+            if (c.kind == K::Set)
+            {
+                std::vector<std::string> addresses;
+                for (const auto &f : c.fields) addresses.push_back(f.first);
+                std::sort(addresses.begin(), addresses.end());
+                key = "set";
+                for (const auto &a : addresses) key += " " + a;
+            }
+            if (key.empty() || key != mCoalesce || mUndo.empty())
+            {
+                mUndo.push_back(Step{before, labelOf(c)});
+                if (mUndo.size() > kHistory) mUndo.erase(mUndo.begin());
+            }
+            mCoalesce = key;
+            mRedo.clear();
+        }
+        if (c.kind == K::ProjectNew || c.kind == K::ProjectOpen || c.kind == K::ProjectClose)
+        {
+            mUndo.clear();   // another song: its own history
+            mRedo.clear();
+            mCoalesce.clear();
+        }
+        if (editing || history) mModel.dirty = true;
         refreshModel();
         std::vector<Event> landed;
         landed.swap(mPending);
         for (const auto &e : landed) emit(e);
-        if (editing) liveUpdate(c); // heard while playing (DR-PLAY-1)
+        if (editing || history) liveUpdate(c); // heard while playing (DR-PLAY-1)
         pump();
+        return true;
+    }
+
+    // ── history (R-EDM-1) ────────────────────────────────────────────────────────────────────
+
+    std::string SolarisService::labelOf(const Command &c) const
+    {
+        const CommandSpec *sp = specFor(c.kind);
+        std::string l = sp ? sp->verb : "edit";
+        if (c.kind == K::Set)
+            for (const auto &f : c.fields) l += " " + f.first;
+        else
+            for (const auto &a : c.args) l += " " + a;
+        return l;
+    }
+
+    bool SolarisService::historyCommand(const Command &c, std::string &err)
+    {
+        if (!requireOpen(err)) return false;
+        const bool undo = c.kind == K::Undo;
+        auto &from = undo ? mUndo : mRedo;
+        auto &to = undo ? mRedo : mUndo;
+        if (from.empty()) { err = undo ? "nothing to undo" : "nothing to redo"; return false; }
+        Step s = std::move(from.back());
+        from.pop_back();
+        to.push_back(Step{mProject, s.label});
+        mProject = std::move(s.project);
+        mCoalesce.clear();       // the next edit starts a step of its own
+        mBindingsTouched = true; // the song changed shape under the player
+        changed(undo ? "undo" : "redo", s.label);
+        mOutput = s.label + "\n";
         return true;
     }
 

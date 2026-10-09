@@ -40,6 +40,11 @@ namespace solaris
              "A value starting with `=` is a FORMULA that drives a number (R-AUTO); a plain number clears it.",
              "R-SVC-3", true},
             {K::Get, "get", "<address>", 1, 1, {}, "Print an address's stored value.", "R-SVC-1"},
+            {K::Undo, "undo", "", 0, 0, {},
+             "Undo the last edit (prints what). Consecutive `set`s of the same addresses — a fader dragged — are ONE "
+             "step. A machine setting, the transport and a save are not edits; a new or opened song starts a new history.",
+             "R-EDM-1"},
+            {K::Redo, "redo", "", 0, 0, {}, "Redo what `undo` took back; a new edit clears it.", "R-EDM-1"},
 
             {K::MixerAdd, "mixer add", "[name]", 0, 1, {}, "Add a mixer page after the last one.", "R-MIX-3"},
             {K::MixerDelete, "mixer delete", "<mx>", 1, 1, {}, "Delete an empty mixer. Refused while strips live on it.", "R-MIX-3"},

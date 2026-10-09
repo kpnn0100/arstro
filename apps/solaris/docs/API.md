@@ -14,6 +14,8 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `project close` | Close the song and return Home. | R-UI-1 |
 | `set <address>=<value> …` | Write addresses: project.bpm, <strip>.gain, <clip>.at, <device>.<param> (any DSP registry parameter, in its unit), … — `api` lists every one. An unknown address or parameter is refused. A value starting with `=` is a FORMULA that drives a number (R-AUTO); a plain number clears it. | R-SVC-3 |
 | `get <address>` | Print an address's stored value. | R-SVC-1 |
+| `undo` | Undo the last edit (prints what). Consecutive `set`s of the same addresses — a fader dragged — are ONE step. A machine setting, the transport and a save are not edits; a new or opened song starts a new history. | R-EDM-1 |
+| `redo` | Redo what `undo` took back; a new edit clears it. | R-EDM-1 |
 | `mixer add [name]` | Add a mixer page after the last one. | R-MIX-3 |
 | `mixer delete <mx>` | Delete an empty mixer. Refused while strips live on it. | R-MIX-3 |
 | `mixer move <mx> [--to <index>]` | Move a mixer to position <index> (0 = first). Refused if it would make any route point backward. | R-MIX-4 |
@@ -113,6 +115,10 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `sampleRate` | int | the project's rate |
 | `masterGain` | number | dB |
 | `masterGainFormula` | string | the formula driving it, "" = none (R-AUTO-1) |
+| `undoLabel` | string | what `undo` would take back, "" = nothing (R-EDM-1) |
+| `redoLabel` | string | what `redo` would put back |
+| `undoDepth` | int | edits `undo` can take back |
+| `redoDepth` | int | steps `redo` can put back |
 | `masterOut` | string[] | the port ids the master feeds |
 | `mixers` | object[] | mixer pages in order |
 | `mixers[].id` | string |  |

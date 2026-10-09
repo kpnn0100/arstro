@@ -37,6 +37,7 @@ namespace solaris
             LaneAdd, LaneDelete,
             ClipAdd, ClipMove, ClipDuplicate, ClipUnique, ClipDelete,
             PatternNew, NoteAdd, NoteDelete,
+            Undo, Redo,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,
             Render,
             MatrixPrint, Audit, StatePrint, Api,

@@ -208,6 +208,8 @@ namespace solaris_ui
                 return dispatch(m.transport.playing ? "transport stop" : "transport play");
             }
             if (e.ctrl && e.keyCode == 'S') return dispatch("project save");
+            if (e.ctrl && ((e.keyCode == 'Z' && e.shift) || e.keyCode == 'Y')) return dispatch("redo"); // R-EDM-1
+            if (e.ctrl && e.keyCode == 'Z') return dispatch("undo");
             const std::string sel = mProject->timeline().selectedClip();
             if (!sel.empty() && (e.keyCode == 46 || e.keyCode == 8)) return dispatch("clip delete " + sel); // Delete / Backspace
             if (!sel.empty() && e.ctrl && e.keyCode == 'D') return dispatch("clip duplicate " + sel);     // a linked copy after it

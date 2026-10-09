@@ -127,6 +127,10 @@ static void test_song_bar_and_keys()
     assert(r.sent.back() == "transport play");
     r.key('S', true);                                                     // Ctrl+S
     assert(r.sent.back() == "project save");
+    // undo / redo from the keyboard are the service's lines (R-EDM-1)
+    r.key('Z', true);
+    r.key('Y', true);
+    assert(sentLine(r, "undo") && sentLine(r, "redo"));
     pass("Song bar: Play, Save, Space and Ctrl+S are command lines; a refused play is a toast with the service's reason");
 }
 

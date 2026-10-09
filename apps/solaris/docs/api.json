@@ -56,6 +56,22 @@
       "requirement": "R-SVC-1"
     },
     {
+      "verb": "undo",
+      "usage": "undo",
+      "args": "",
+      "flags": [],
+      "summary": "Undo the last edit (prints what). Consecutive `set`s of the same addresses — a fader dragged — are ONE step. A machine setting, the transport and a save are not edits; a new or opened song starts a new history.",
+      "requirement": "R-EDM-1"
+    },
+    {
+      "verb": "redo",
+      "usage": "redo",
+      "args": "",
+      "flags": [],
+      "summary": "Redo what `undo` took back; a new edit clears it.",
+      "requirement": "R-EDM-1"
+    },
+    {
       "verb": "mixer add",
       "usage": "mixer add [name]",
       "args": "[name]",
@@ -727,6 +743,30 @@
       "path": "masterGainFormula",
       "type": "string",
       "summary": "the formula driving it, \"\" = none (R-AUTO-1)",
+      "stable": true
+    },
+    {
+      "path": "undoLabel",
+      "type": "string",
+      "summary": "what `undo` would take back, \"\" = nothing (R-EDM-1)",
+      "stable": true
+    },
+    {
+      "path": "redoLabel",
+      "type": "string",
+      "summary": "what `redo` would put back",
+      "stable": true
+    },
+    {
+      "path": "undoDepth",
+      "type": "int",
+      "summary": "edits `undo` can take back",
+      "stable": true
+    },
+    {
+      "path": "redoDepth",
+      "type": "int",
+      "summary": "steps `redo` can put back",
       "stable": true
     },
     {

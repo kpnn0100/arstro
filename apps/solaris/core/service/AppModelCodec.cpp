@@ -16,6 +16,10 @@ namespace solaris
             {"sampleRate", "int", "the project's rate"},
             {"masterGain", "number", "dB"},
             {"masterGainFormula", "string", "the formula driving it, \"\" = none (R-AUTO-1)"},
+            {"undoLabel", "string", "what `undo` would take back, \"\" = nothing (R-EDM-1)"},
+            {"redoLabel", "string", "what `redo` would put back"},
+            {"undoDepth", "int", "edits `undo` can take back"},
+            {"redoDepth", "int", "steps `redo` can put back"},
             {"masterOut", "string[]", "the port ids the master feeds"},
             {"mixers", "object[]", "mixer pages in order"},
             {"mixers[].id", "string", ""},
@@ -206,7 +210,8 @@ namespace solaris
         Json j = Json::object();
         j.set("screen", m.screen).set("projectPath", m.projectPath).set("projectName", m.projectName).set("dirty", m.dirty)
             .set("bpm", m.bpm).set("sig", m.sig).set("sampleRate", m.sampleRate).set("masterGain", m.masterGain)
-            .set("masterGainFormula", m.masterGainFormula).set("masterOut", strings(m.masterOut));
+            .set("masterGainFormula", m.masterGainFormula).set("undoLabel", m.undoLabel).set("redoLabel", m.redoLabel)
+            .set("undoDepth", m.undoDepth).set("redoDepth", m.redoDepth).set("masterOut", strings(m.masterOut));
         Json mixers = Json::array();
         for (const auto &x : m.mixers)
             mixers.push(Json::object().set("id", x.id).set("name", x.name).set("order", x.order).set("strips", strings(x.strips)));

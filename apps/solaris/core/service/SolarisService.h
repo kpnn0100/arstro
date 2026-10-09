@@ -81,6 +81,8 @@ namespace solaris
         bool machineCommand(const Command &c, std::string &err);
         bool transportCommand(const Command &c, std::string &err);
         bool autoCommand(const Command &c, std::string &err);   // ServiceAuto.cpp
+        bool historyCommand(const Command &c, std::string &err); // undo / redo
+        std::string labelOf(const Command &c) const;
         bool evalCommand(const Command &c, std::string &err);
         double songEndBeats() const;
         std::vector<std::string> readersOf(const std::string &name) const; // addresses whose formula reads `name`
@@ -115,6 +117,10 @@ namespace solaris
         std::vector<std::function<void(const Event &)>> mSinks;
         std::vector<Event> mPending; // an edit's events, emitted only once the whole command has landed
         bool mBindingsTouched = false; // a formula or an automation changed: playback needs a new engine
+        struct Step { Project project; std::string label; };
+        std::vector<Step> mUndo, mRedo;  // the song before each edit that landed (R-EDM-1)
+        std::string mCoalesce;           // the newest step's merge key: `set` of the same addresses
+        static constexpr size_t kHistory = 200;
         std::map<std::string, std::string> mLastChanged; // device id → the parameter last written (R-WIN-2)
         std::map<std::string, std::shared_ptr<const engine::Pcm>> mPcm; // by resolved path, at mPcmRate
         std::set<std::string> mOffline;                                 // resolved paths that would not decode

@@ -20,6 +20,7 @@ helpers it borrows.
 | Song bar › Play/Stop, Space | `transport play` / `transport stop` |
 | Song bar › Save, Ctrl+S | `project save` |
 | Enter | `transport seek 0` |
+| Ctrl+Z · Ctrl+Shift+Z / Ctrl+Y | `undo` · `redo` |
 | Browser › a tab | nothing — the list is the model's (`settings.folders`, `deviceTypes`, the song's clips) |
 | Browser › a sample folder, a sub-folder, the row back up | `browse "<path>"` |
 | Browser › Samples with no folders, a click | `devices list`, then the settings sheet |

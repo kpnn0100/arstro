@@ -188,6 +188,8 @@ namespace solaris
         bool dirty = false;
         double bpm = 120, masterGain = 0;
         std::string masterGainFormula;           // R-AUTO-1
+        std::string undoLabel, redoLabel;        // what `undo` / `redo` would take back ("" = nothing) — R-EDM-1
+        int undoDepth = 0, redoDepth = 0;
         std::string sig = "4/4";
         int sampleRate = 48000;
         std::vector<std::string> masterOut;
