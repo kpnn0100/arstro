@@ -6,8 +6,8 @@ entry with a dead anchor is a defect, and a behaviour with no entry does not shi
 
 ## Conformance
 
-Rung **4** of `arstro.rule` §5 — the generated API document is committed and drift-tested
-(DR-API-1). The ladder:
+Rung **5** of `arstro.rule` §5 — the generated API document is committed and drift-tested
+(DR-API-1), and one script through the CLI and a live window gives one answer (DR-SVC-5). The ladder:
 
 | rung | means | lands with |
 |---|---|---|
@@ -15,8 +15,8 @@ Rung **4** of `arstro.rule` §5 — the generated API document is committed and 
 | 1 | core split out; `Command`/`Event`/model with one text codec | done — DR-SVC-1 |
 | 2 | registered with the root `ctest`; L2 headless service tests | done — `solaris_service` |
 | 3 | a real CLI that is the whole app without a window | done — `solaris-cc`, DR-SVC-3 |
-| 4 | generated API document, committed, drift-tested | ← **here** — DR-API-1 |
-| 5 | control socket + the GUI/headless equivalence test | X4 |
+| 4 | generated API document, committed, drift-tested | done — DR-API-1 |
+| 5 | control socket + the GUI/headless equivalence test | ← **here** — DR-SVC-5 (C4b) |
 
 ## Entries
 
@@ -799,7 +799,7 @@ pill over the label (`ParamIds`, `app/widgets/DevicePanel.cpp:179`); its header 
 dock's faders, pans, sends and master (DR-MIX-16; a choice row has no "as Formula" — no formula reads a
 choice); Copy ID on a clip (`app/widgets/Timeline.cpp:615`), a strip's and a mixer tab's menu in the dock; Copy ID
 and Copy as Formula (`=au_1`) on an automation row (`app/widgets/TimelineAuto.cpp:560`). The clipboard is the
-HOST's (the core has none, R-SVC-4): `App::onCopy`, which `linux_main.cpp:194` gives GTK's CLIPBOARD and
+HOST's (the core has none, R-SVC-4): `App::onCopy`, which `linux_main.cpp:211` gives GTK's CLIPBOARD and
 PRIMARY selections and the test rig records (`Rig::copied`). A copy says so: `App::copy` (`app/App.cpp:186`)
 toasts "Copied dv_1.filter.cutoff", outlined in the accent (a refusal's toast stays red). When hosting lands,
 a third-party VST3's parameter list (R-VST-6) builds a `ParamTarget` per row and offers this same menu.
@@ -874,13 +874,13 @@ window caught mid-fade, the facts present, `now` and a new row caught mid-tween,
 ### DR-SVC-8 Composition is agent-sized (R-SVC-8)
 Built from the audit of an agent's 16-bar song (110 commands, 64 single `note add`s, every id guessed,
 edits lost between calls, comment lines reprinting ids). The guide is `docs/AGENTS.md`.
-- **A session that lasts.** `solaris-cc shell [--song <f>]` (`cli/main.cpp:146`) reads stdin lines into
+- **A session that lasts.** `solaris-cc shell [--song <f>]` (`cli/main.cpp:151`) reads stdin lines into
   ONE service — the open song, its ids and its undo history last the session; `--song` opens the file
   or makes it when it is not there; a refusal is reported and the session goes on (exit 3 at the end).
-  Every run ends in `finish` (`:136`): a song left with unsaved edits is named on stderr and the run
+  Every run ends in `finish` (`:141`): a song left with unsaved edits is named on stderr and the run
   exits **4**, unless `--discard`.
 - **Scripts that say where.** A refusal prints `refused: line N: …` — the script's own line number, or
-  the chained command's (`run`, `:124`); `--keep-going` runs past refusals and still exits 3 (`:193`).
+  the chained command's (`run`, `:129`); `--keep-going` runs past refusals and still exits 3 (`:198`).
   `parseCommand` drops a `#` that starts a word outside quotes (`withoutComment`,
   `core/service/Command.cpp:301`) — `F#3` stays a pitch; a comment or blank line clears the output
   (`core/service/SolarisService.cpp:59`), so nothing is printed twice.
@@ -939,7 +939,7 @@ script: 86 commands (`project new`, seven instrument strips by `clip add --instr
 points, a master limiter), ending in `ls`, `audit`, `project save` and `render --stems`. `measure.py`
 measures the render.
 
-Guarded by `solaris_demo_canon` (`tests/demo_canon.cmake`, registered in `cli/CMakeLists.txt:15`): the
+Guarded by `solaris_demo_canon` (`tests/demo_canon.cmake`, registered in `cli/CMakeLists.txt:22`): the
 committed script must equal what `make_script.py` writes, the run must exit 0 and write the song, its mix
 and four stems, and `measure.py` must pass — skipped, and said, where there is no python3 with numpy.
 Mutants seen red, then restored: a stray line in `song.txt` (stale), the kick a sixteenth late (200
@@ -948,3 +948,97 @@ build −17.6, drop −14.4 dBFS; the kick on all 64 beats within 1 sample; the 
 each kick; line A at 743 662 586 552 495 442 493 557 Hz (worst 8.4 cents); the pad's centroid 1157 →
 2300 Hz across the intro. Found on the way: D-2 (a renamed strip's lane keeps the old name) and D-3 (a
 kit's pad and parameter names differ).
+
+### DR-SVC-5 The control channel and attach (R-SVC-5, R-SVC-6)
+**The window.** `solaris --control <socket> [song.slp]` (`linux_main.cpp:240`) builds a `ControlServer`
+on the window's own service after any song opened and polls it from its own 16 ms GLib timeout
+(`onControl`, `:143`; `:254`) — not the frame clock, so a minimised window is still drivable. The
+wire is cosmo's `ControlChannel` **compiled in place** (`apps/cosmo/ControlChannel.cpp:382` `poll`,
+`:402` `broadcast`; target `solaris_control`, `host/CMakeLists.txt:29`): a non-blocking Unix line
+socket that moves lines and never parses them, replaces a stale socket node, refuses any other file
+at the path and removes its node on close. Its only need from cosmo's host, the LOGI/LOGW macros, is
+met by `cosmo_v2::log::writef` to stderr (`host/ControlLog.cpp:20`) — linking cosmo's Log.cpp would
+bring its ProjectStore and GLib.
+
+**The answer to a line** (`ControlServer::poll`, `host/ControlServer.cpp:51`; the prefixes,
+`host/ControlServer.h:77`): every service event goes out as the `formatEvent` line `--watch` prints,
+to every client, as it is emitted (the sink, `:33`); each line runs through THE door,
+`dispatchText` (`:85`), and is answered after its events — its output one `[out] <text>` per line
+(`:96`), then `[ok] <line>` (`:99`); a refusal is `[refused] <why>` (`:87`) right after its
+`[evt] command.rejected`. A blank or comment line is `[ok]` and runs nothing (`:71`). Lines are run in
+order, one write may carry many. **`wait` is the loop's** (`:77`): a valid `wait <s>` holds the queue
+— later lines wait their turn while the window keeps ticking, `[ok] wait …` comes when the time is
+up — instead of sleeping the GTK thread as the service's own `wait` would (`core/service/
+ServiceTransport.cpp:131`); one the service would refuse is handed to it and refused at once.
+
+**attach** (`cli/Attach.cpp:55`, hooked at `cli/main.cpp:85` before any service is built — it builds
+none): lines from `--script`, chained ` : ` args, or stdin; sends ONE line, waits for its `[ok]`
+(matched by echo) or `[refused]`, then the next (`:141`–`:175`), so a script ends when its last answer
+arrives, never on a quiet-period guess. It prints what solaris-cc prints where solaris-cc prints it:
+output on stdout, event lines on stderr (always — watching is the point), `refused: <why>` and exit 3
+on a refusal (`:206`); `--follow` keeps printing events; `--timeout` (300 s). Empty lines are not sent:
+the channel delivers none, so none would be answered (`:170`).
+
+**Proof.** `solaris_control` (`tests/faces/controlTests.cpp`, no display needed): the wire for eight
+lines — events, outputs, refusals, a comment, the stable dump — equals what a second service given
+the same lines directly produces (`:148`); `wait 0.5` returns from `poll` at once, holds the next
+line until the clock passes it, and `wait 99999` is the service's refusal, never held (`:192`);
+`solaris-cc attach` against the in-process server prints byte for byte what `solaris-cc --watch
+--script` prints for a 17-line song — stdout, the event stream, and the saved `.slp` (`:243`).
+**The equivalence test (R-SVC-6)** `solaris_equivalence` = `tests/acceptance/run.sh` over the committed
+`tests/acceptance/a-song-made-twice.txt` (drums + synth with their notes, a reverb bus and a send,
+levels, a formula via `auto create`, undo/redo, `get`, `audit`, `matrix print`, `project save`,
+`render`, `state print --json --stable`): run headless, then through a LIVE `solaris --control` window
+with `attach`, in the same scratch directory with scratch `SOLARIS_SETTINGS`/`SOLARIS_RECENTS` and no
+`transport play`; it asserts the window's event stream and requires the two runs' events, outputs,
+stable state, saved song and rendered mix to be identical (`run.sh:114`–`:121`). With no display it
+exits 77 and ctest reports it **Skipped** (`tests/CMakeLists.txt:29`), never passed. Ran live on
+DISPLAY=:1 (2026-10-09): 28 lines, 31 events, all five artifacts identical, 18 of 18 runs. Mutants: a
+channel that drops the event lines fails `solaris_control` (`:175`) and the equivalence test; an
+attach that prints no output fails both (`:301`; "no state dump came back from the window").
+
+### DR-SVC-7 The web face (R-SVC-7)
+**The adapter** (`cli/NtwbAdapter.cpp`, cosmo's pattern, `arstro.ntwb.implement`) holds no behaviour:
+the NTWB call `command {line}` is `dispatchText` and answers `{output, revision}` or fails with the
+service's sentence; `wait` is refused — it would sleep the loop and its pings (`:111`); a `notify`
+(a fader in flight) is the same call with no reply (`:78`). Every event is relayed under its own
+`eventName` as `{line: formatEvent(e), fields}` (`:73`). The state `model` is `modelToJson(m, false)`
+— exactly what `state print --json` prints (`:43`) — pushed when the revision moves (≤ 25/s), and the
+state `transport` (playing, position, loop, latency, the master's and every strip's peaks, the
+audition) when it changed (≤ 20/s), because `pump()` moves those with no revision (`:83`–`:102`).
+`model` and `commands` (the grammar table: name, usage, summary) are the other calls (`:127`).
+`apiDescription()` (`:152`) is generated from the event table and committed as
+`docs/ntwb-api.json` (ctest `solaris_ntwb_api_current`, `cli/CMakeLists.txt:20`); it points to
+`docs/API.md` for the grammar instead of copying it.
+
+**`solaris-cc ntwb`** (`cli/NtwbMain.cpp:178`): `api`; `install [--data-dir D] [--web-dir W]` (`:77`)
+writes `D/solaris/{ntwb.json, api.json, web/}` (D defaults to `$XDG_DATA_HOME/ntwb/apps`) — the web
+UI plus what it borrows, copied not forked: cosmo's `js/core/signal.js` + `dom.js` (`:93`) and cosmo's
+typeface (`:99`); the manifest is `single: true` (`:130`) — one engine on the clock device, its pages
+sharing the song; `uninstall [--data-dir D]`; `serve` (`:142`) — the service with the window's host
+(files, devices, the clock device, the machine's settings and recents), the adapter, and the loop that
+owns the clock: `client.poll(8)`, `pump()`, `tick()` (`:166`).
+
+**The page** (`web/`, no build step, MVVM): `js/model/session.js` (NTWB → signals; intents → lines),
+`js/vm/song.js` (the shared shapes — the lanes' rows by Timeline's rule (`:53`), clips with their
+pattern's notes, mixers with their strips in order, the transport — `view.*` the page's own; every
+intent ONE command line, the window's own: `set <ch>.mute=true|false` (`:150`), `transport seek <beat>`
+on Timeline's snap step (`js/views/lanes.js:36`), a fader's `set <ch>.gain=<dB, 1 dp>` by
+MixerDock's law (`js/views/util.js:19`)), and the views: the song bar (transport, position, bpm,
+undo/redo/save/close, the session), Home (recents, new/open by a path on the machine), the lanes
+(ruler, rows, clips, playhead — every model value through an eased copy, `Tween`, `lanes.js:19`), the
+mixer (pages, strips with meter, fader, gain, pan, mute, solo; the master) and a console (the line in,
+its output, refusals and the event stream, the verb's usage from `commands`). The tokens are generated
+from Theme.h with the teal installed (`cli/webTokens.cpp:41`, `web/css/tokens.css`, ctest
+`solaris_web_tokens_current`, `cli/CMakeLists.txt:31`).
+
+**Proof.** `solaris_ntwb` (`tests/faces/ntwbAdapterTests.cpp`): the real service, adapter and
+`ntwb::Client` over `ntwb::MemoryTransport` with a fake host — calls become commands, a refusal is a
+failed result with the service's words and one `command.rejected` event, `wait` and an unknown method
+are refused, a notify lands, `model` and the pushed state equal `state print --json` but for the
+revision, `commands` lists the whole table, the transport has its key, every frame validates
+(`:124`); `ntwb install` into a scratch data dir writes the manifest, the API, the page, cosmo's two
+files unchanged and the fonts, and `uninstall` removes them (`:207`). Mutant: an adapter that relays
+no events fails it. The page was looked at in headless Chrome over a fake bridge fed a real `state
+print --json` (desktop, Home, the console mid cross-fade) and its intents checked to send the window's
+lines; it has NOT yet been run through a real Arstro Remote.

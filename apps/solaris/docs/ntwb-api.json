@@ -1,0 +1,112 @@
+{
+  "ntwb": "1.1.0",
+  "app": "solaris",
+  "methods": {
+    "command": {
+      "doc": "dispatch one command line to the service, as the window and solaris-cc do; `wait` is refused (watch the events instead)",
+      "params": {
+        "line": {
+          "type": "str",
+          "required": true,
+          "doc": "one line of the Solaris command grammar (R-SVC-1) - every command is in apps/solaris/docs/API.md, and the `commands` method lists them"
+        }
+      },
+      "result": "{output, revision} - output is what the command printed; a refusal fails with its reason"
+    },
+    "model": {
+      "doc": "the whole AppModel as JSON (what `state print --json` prints)",
+      "params": {},
+      "result": "the model"
+    },
+    "commands": {
+      "doc": "the command grammar: every command with its usage and summary",
+      "params": {},
+      "result": "[{name, usage, summary}]"
+    }
+  },
+  "events": {
+    "info": {
+      "doc": "A note worth logging; carries no state.",
+      "data": "{line, fields: {text}}"
+    },
+    "error": {
+      "doc": "Something failed. Also set as AppModel.lastError.",
+      "data": "{line, fields: {why}}"
+    },
+    "command.rejected": {
+      "doc": "A line was refused (R-SVC-3): unknown verb, flag, address or parameter; a refused edit.",
+      "data": "{line, fields: {line, why}}"
+    },
+    "screen.changed": {
+      "doc": "home | project.",
+      "data": "{line, fields: {screen}}"
+    },
+    "project.opened": {
+      "doc": "A song is open.",
+      "data": "{line, fields: {path, strips, clips}}"
+    },
+    "project.saved": {
+      "doc": "The .slp was written.",
+      "data": "{line, fields: {path}}"
+    },
+    "project.closed": {
+      "doc": "Back to Home.",
+      "data": "{line, fields: {}}"
+    },
+    "project.changed": {
+      "doc": "A node was added, removed, moved or re-routed. what = e.g. strip.added, clip.moved, route.set. Every node a command makes is announced, one event each (R-SVC-8).",
+      "data": "{line, fields: {what, node}}"
+    },
+    "params.changed": {
+      "doc": "An address was written; value is what was STORED, canonical (a value out of range is refused, never clamped — R-SVC-8).",
+      "data": "{line, fields: {address, value}}"
+    },
+    "render.finished": {
+      "doc": "A render was written; peak is the master's, dBFS.",
+      "data": "{line, fields: {out, frames, peak}}"
+    },
+    "render.failed": {
+      "doc": "A render stopped with an error.",
+      "data": "{line, fields: {why}}"
+    },
+    "audit.report": {
+      "doc": "How many findings `audit` printed.",
+      "data": "{line, fields: {findings}}"
+    },
+    "settings.changed": {
+      "doc": "A machine setting changed and was saved: sampleRate, bufferSize, output, input, port.<name>, folders.",
+      "data": "{line, fields: {what}}"
+    },
+    "devices.changed": {
+      "doc": "`devices list` found this many devices.",
+      "data": "{line, fields: {count}}"
+    },
+    "browse.changed": {
+      "doc": "The browser now lists this folder.",
+      "data": "{line, fields: {path, entries}}"
+    },
+    "recents.changed": {
+      "doc": "Home's recent songs changed.",
+      "data": "{line, fields: {count}}"
+    },
+    "transport.changed": {
+      "doc": "Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`.",
+      "data": "{line, fields: {playing, position, loop}}"
+    },
+    "audition.changed": {
+      "doc": "A sample previewed from the browser started (playing 1) or ended — stopped, or to its end (playing 0).",
+      "data": "{line, fields: {file, playing}}"
+    }
+  },
+  "state": {
+    "model": {
+      "doc": "the AppModel (state print --json), pushed on every revision (at most 25/s)",
+      "data": "object"
+    },
+    "transport": {
+      "doc": "what moves without an edit, pushed when it changed (at most 20/s)",
+      "data": "{playing, position, loopFrom, loopTo, latencyMs, masterPeak, peaks: {<strip>: [l, r]}, audition, auditionPlaying, auditionProgress}"
+    }
+  },
+  "streams": {}
+}

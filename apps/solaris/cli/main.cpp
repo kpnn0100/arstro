@@ -17,6 +17,7 @@
  *  agent's work is never dropped in silence (R-SVC-8). `--watch` streams every event to stderr.
  */
 #include "AudioFiles.h"
+#include "Faces.h"
 #include "Machine.h"
 #ifdef SOLARIS_HAVE_PULSE
 #include "AudioOutPulse.h"
@@ -62,6 +63,7 @@ namespace
             "  project save : render --out mix.wav --stems ch_2\n"
             "  transport play : wait 8 : transport stop     # hear it on the clock device\n"
             "Read docs/AGENTS.md for a whole song.\n");
+        std::fputs(solaris_cli::facesUsage(), stdout); // attach, ntwb (Faces.h)
     }
 
     std::string quote(const std::string &s)
@@ -79,6 +81,9 @@ int main(int argc, char **argv)
         usage();
         return args.empty() ? kUsage : kOk;
     }
+    // the faces that are not this loop (Faces.h): attach builds NO service, ntwb serves one to a browser
+    if (args[0] == "attach") return solaris_cli::attachMain(std::vector<std::string>(args.begin() + 1, args.end()));
+    if (args[0] == "ntwb") return solaris_cli::ntwbMain(std::vector<std::string>(args.begin() + 1, args.end()));
     bool watch = false, keepGoing = false, discard = false, shell = false;
     std::string script, song;
     auto option = [&](std::vector<std::string> &a) {

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Solaris</title>
+<link rel="icon" href="icon.svg">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+</head>
+<body>
+<!--
+  Solaris — the web face (R-SVC-7). MVVM: the model is `solaris-cc ntwb serve` on the machine (THE
+  SolarisService of this Arstro Remote session, shared by every page of it); this page is ONE view of
+  it with its own view-model (js/vm/song.js). It sends command lines - the same text the window's
+  gestures and solaris-cc send - and draws the model and the events the service publishes. Nothing
+  else. js/core/ (signal.js, dom.js) and fonts/ are cosmo's, copied here by `solaris-cc ntwb install`.
+-->
+<div id="app"></div>
+<script src="/ntwb/ntwb.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

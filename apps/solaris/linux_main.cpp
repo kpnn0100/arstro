@@ -9,9 +9,15 @@
  *
  *  The service is pumped on every frame tick (the transport and the meters come back from the
  *  player through it); the window repaints only while the app says something is moving.
+ *
+ *      solaris [--control <socket>] [song.slp]
+ *
+ *  `--control` opens the window to an agent (R-SVC-5): `solaris-cc attach <socket>` sends it command
+ *  lines and reads its events (host/ControlServer.h) — the user watches the song being made.
  */
 #include "App.h"
 #include "AudioFiles.h"
+#include "ControlServer.h"
 #include "EmbeddedFonts.h"
 #include "Machine.h"
 #include "SolarisService.h"
@@ -54,6 +60,7 @@ namespace
         artboard::CairoTarget target;
         GtkWidget *window = nullptr, *area = nullptr;
         gint64 startUs = 0;
+        std::unique_ptr<solaris_host::ControlServer> control; // R-SVC-5: only with --control; last, so it goes first
     };
 
     double nowMs(const Host &a) { return a.startUs == 0 ? 0.0 : (g_get_monotonic_time() - a.startUs) / 1000.0; }
@@ -128,6 +135,16 @@ namespace
         a->app->wheel(e->x, e->y, dy, (e->state & GDK_CONTROL_MASK) != 0);
         gtk_widget_queue_draw(a->area);
         return TRUE;
+    }
+
+    // R-SVC-5: a line off the control socket lands in the SAME dispatchText a click uses, on the UI
+    // thread between frames. Its own GLib timeout, not the frame clock, so an agent still drives a
+    // window that is minimised or covered; ControlServer never blocks (a `wait` holds its queue).
+    gboolean onControl(gpointer user)
+    {
+        auto *a = static_cast<Host *>(user);
+        if (a->control->poll(g_get_monotonic_time() / 1e6) > 0) gtk_widget_queue_draw(a->area);
+        return G_SOURCE_CONTINUE;
     }
 
     void onSizeAllocate(GtkWidget *, GtkAllocation *alloc, gpointer user) { static_cast<Host *>(user)->app->setSize(alloc->width, alloc->height); }
@@ -220,10 +237,26 @@ int main(int argc, char **argv)
     g_signal_connect(a->area, "key-press-event", G_CALLBACK(onKey), a);
     gtk_container_add(GTK_CONTAINER(a->window), a->area);
 
-    if (argc > 1)
+    std::string song, controlPath; // solaris [--control <socket>] [song.slp]
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::string arg = argv[i];
+        if (arg == "--control" && i + 1 < argc) controlPath = argv[++i];
+        else if (arg.rfind("--control=", 0) == 0) controlPath = arg.substr(10);
+        else if (song.empty()) song = arg;
+    }
+    if (!song.empty())
     {
         std::string err;
-        if (!a->svc.dispatchText("project open \"" + std::string(argv[1]) + "\"", err)) g_printerr("solaris: %s\n", err.c_str());
+        if (!a->svc.dispatchText("project open \"" + song + "\"", err)) g_printerr("solaris: %s\n", err.c_str());
+    }
+    if (!controlPath.empty())
+    {
+        // after the song opened, so a client that attaches at once sees every later event
+        a->control = std::make_unique<solaris_host::ControlServer>(a->svc);
+        std::string err;
+        if (!a->control->open(controlPath, err)) g_printerr("solaris: %s\n", err.c_str()); // the window still runs
+        else g_timeout_add(16, onControl, a);
     }
     a->startUs = g_get_monotonic_time();
     gtk_widget_add_tick_callback(a->area, onTick, a, nullptr);

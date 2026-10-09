@@ -1,0 +1,53 @@
+# R-SVC-6 — one script, two faces, one answer.
+#
+#   apps/solaris/tests/acceptance/run.sh <solaris> <solaris-cc>      (ctest: solaris_equivalence)
+#
+# run.sh plays this file twice: headless through `solaris-cc --watch --script`, and through a LIVE
+# window (`solaris --control`) with `solaris-cc attach`. Both must print the same outputs, the same
+# events, the same `state print --json --stable`, and write the same song and the same mix. Every
+# line is the grammar of docs/API.md — the same text the window's own clicks send — so this file is
+# at once the test, the documentation and a reproduction recipe.
+#
+# It never plays: `transport play` would sound on the machine's clock device, and the comparison is
+# about the song, not the speakers. Comment and blank lines are dropped by run.sh before either
+# face sees the script (both faces answer them with nothing; the CLI's old reprint is C4a's).
+
+# ── the song ──
+project new song.slp --bpm 124 --name Twice
+
+# a drum kit and a synth, each its own strip with its pattern (R-BROWSE-3: one gesture, one line)
+clip add --instrument drums --at 0 --length 8
+note add pt_1 --pitch 36 --at 0
+note add pt_1 --pitch 38 --at 1
+note add pt_1 --pitch 36 --at 2
+note add pt_1 --pitch 38 --at 3
+note add pt_1 --pitch 42 --at 0.5
+note add pt_1 --pitch 42 --at 1.5
+clip add --instrument synth --at 0 --length 8
+note add pt_2 --pitch 45 --at 0 --length 1.5
+note add pt_2 --pitch 48 --at 2 --length 1
+note add pt_2 --pitch 52 --at 3 --length 0.5 --vel 96
+clip duplicate ac_1
+
+# ── the mix: a bus with a reverb, a send, levels, a parameter, a formula ──
+strip add --kind bus --name Verb
+device add ch_4 --type reverb
+send add ch_3 --to ch_4 --gain -10
+set ch_2.gain=-4.5 ch_3.pan=-0.3 dv_2.filter.cutoff=900
+set ch_3.name=Lead
+auto create ch_4.gain
+undo
+redo
+
+# ── reading back: what an agent would ask ──
+get ch_2.gain
+get dv_2.filter.cutoff
+audit
+matrix print
+
+# ── the files: the same song and the same mix from either face (render is pure, R-RENDER-1) ──
+project save
+render --out mix.wav
+
+# the comparison artifact: --stable leaves out what changes with time (revision, position, peaks)
+state print --json --stable

@@ -1,0 +1,243 @@
+/*
+ * Solaris — base.css: the web face's layout and controls (R-SVC-7).
+ *
+ * Every colour, radius, family and duration comes from tokens.css, GENERATED from Theme.h with
+ * Solaris's teal installed (solaris_web_tokens) - never a hex here. The faces are the window's
+ * own (cosmo's Roboto and JetBrains Mono, copied beside the page by `ntwb install`), registered
+ * under the SAME family names the C++ draws with, as cosmo's base.css does.
+ */
+@font-face { font-family: "Roboto"; src: url("../fonts/Roboto-Regular.ttf") format("truetype"); font-display: block; }
+@font-face { font-family: "Roboto Medium"; src: url("../fonts/Roboto-Medium.ttf") format("truetype"); font-display: block; }
+@font-face { font-family: "Roboto SemiBold"; src: url("../fonts/Roboto-SemiBold.ttf") format("truetype"); font-display: block; }
+@font-face { font-family: "JetBrains Mono"; src: url("../fonts/JetBrainsMono-Regular.ttf") format("truetype"); font-display: block; }
+@font-face { font-family: "JetBrains Mono Medium"; src: url("../fonts/JetBrainsMono-Medium.ttf") format("truetype"); font-display: block; }
+
+:root {
+  --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);      /* EaseOutCubic */
+  --ease-in-out: cubic-bezier(0.645, 0.045, 0.355, 1);  /* EaseInOutCubic */
+  --row-h: 44px;
+  --ruler-h: 24px;
+  --head-w: 168px;
+  color-scheme: dark;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion-hover: 0ms; --motion-cross-fade: 0ms; --motion-select: 0ms; --motion-slide: 0ms; --motion-catch-up: 0ms;
+          --motion-reflow: 0ms; --motion-toast-in: 0ms; --motion-toast-out: 0ms; }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--background); color: var(--foreground);
+             font-family: var(--font-sans), system-ui, sans-serif; font-size: 12px; line-height: 1.25;
+             -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; }
+button:disabled { cursor: default; opacity: 0.35; }
+input { font: inherit; color: inherit; }
+.mono { font-family: var(--font-mono), ui-monospace, monospace; }
+svg.icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+.scroll { overflow: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--white-rgb), 0.14) transparent; }
+.enter { opacity: 0; }
+.leave { opacity: 0 !important; pointer-events: none; }
+
+#app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+
+/* ── the song bar ─────────────────────────────────────────────────────────────────────── */
+.topbar { flex: none; height: 40px; display: flex; align-items: center; gap: 16px; padding: 0 12px;
+          background: var(--header-bg); border-bottom: 1px solid var(--border); }
+.brand { display: flex; align-items: center; gap: 8px; }
+.brand img { width: 20px; height: 20px; }
+.wordmark { font-family: var(--font-sans-semibold); font-size: 14px; letter-spacing: 0.2px; }
+.song-controls { flex: 1; display: flex; align-items: center; gap: 18px; min-width: 0;
+                 opacity: 0; pointer-events: none; transition: opacity var(--motion-cross-fade) var(--ease-out); }
+.song-controls.on { opacity: 1; pointer-events: auto; }
+.song-title { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--secondary-foreground); }
+.song-name { font-family: var(--font-sans-medium); color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dirty { width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--primary);
+         opacity: 0; transform: scale(0.4); transition: opacity var(--motion-hover) var(--ease-out), transform var(--motion-hover) var(--ease-out); }
+.dirty.on { opacity: 1; transform: none; }
+.transport { display: flex; align-items: center; gap: 6px; margin: 0 auto; }
+.actions { display: flex; align-items: center; gap: 2px; }
+.tbtn { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--radius-control);
+        color: var(--secondary-foreground); transition: background-color var(--motion-hover) var(--ease-out), color var(--motion-hover) var(--ease-out); }
+.tbtn:hover:not(:disabled) { background: var(--hover-wash); color: var(--foreground); }
+.play-btn { position: relative; background: var(--secondary); color: var(--foreground); }
+.play-btn svg { position: absolute; transition: opacity var(--motion-select) var(--ease-out), transform var(--motion-select) var(--ease-out); }
+.play-btn .play { fill: currentColor; stroke: none; }
+.play-btn .stop { fill: currentColor; stroke: none; opacity: 0; transform: scale(0.6); }
+.play-btn.playing { background: var(--primary); color: var(--primary-foreground); }
+.play-btn.playing .play { opacity: 0; transform: scale(0.6); }
+.play-btn.playing .stop { opacity: 1; transform: none; }
+.position { min-width: 74px; padding: 5px 8px; border-radius: var(--radius-control); background: var(--muted); text-align: center;
+            color: var(--foreground); font-size: 12px; }
+.bpm-wrap { display: flex; align-items: center; gap: 4px; padding: 0 8px 0 4px; height: 26px; border-radius: var(--radius-control);
+            background: var(--muted); color: var(--muted-foreground); }
+.bpm { width: 56px; background: transparent; border: 0; outline: none; text-align: right; color: var(--foreground); font-size: 12px; }
+.bpm::-webkit-inner-spin-button { display: none; }
+.presence { display: inline-flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 11px; white-space: nowrap; margin-left: auto; }
+.presence i { width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--muted-foreground);
+              transition: background-color var(--motion-hover) var(--ease-out); }
+.presence.live i { background: var(--success); }
+
+/* ── pages: Home and the song cross-fade ─────────────────────────────────────────────── */
+.pages { position: relative; flex: 1; min-height: 0; }
+.page { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity var(--motion-reflow) var(--ease-out); }
+.page.on { opacity: 1; pointer-events: auto; }
+.waiting { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px;
+           color: var(--muted-foreground); opacity: 0; pointer-events: none; transition: opacity var(--motion-reflow) var(--ease-out); }
+.waiting.on { opacity: 1; }
+.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(var(--white-rgb), 0.12); border-top-color: var(--primary);
+           animation: spin 900ms linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Home ─────────────────────────────────────────────────────────────────────────────── */
+.home-inner { max-width: 880px; margin: 0 auto; padding: 48px 32px; }
+.wordmark-big { font-family: var(--font-sans-semibold); font-size: 32px; margin: 0 0 8px; letter-spacing: 0.3px; }
+.home-sub { margin: 0 0 24px; color: var(--secondary-foreground); max-width: 560px; line-height: 1.5; }
+.home-actions { display: flex; gap: 8px; margin-bottom: 32px; }
+.path { flex: 1; height: 32px; padding: 0 10px; background: var(--input); border: 1px solid var(--border); border-radius: var(--radius-control);
+        outline: none; font-size: 12px; transition: border-color var(--motion-hover) var(--ease-out); }
+.path:focus { border-color: var(--ring); }
+.pill { height: 32px; padding: 0 16px; border-radius: var(--radius-pill); background: var(--secondary); font-family: var(--font-sans-medium);
+        transition: background-color var(--motion-hover) var(--ease-out); }
+.pill:hover { background: color-mix(in srgb, var(--secondary) 80%, white); }
+.pill.primary { background: var(--primary); color: var(--primary-foreground); }
+.pill.primary:hover { background: color-mix(in srgb, var(--primary) 88%, white); }
+.home-inner h2 { font-family: var(--font-sans-medium); font-size: 12px; color: var(--muted-foreground); text-transform: uppercase;
+                 letter-spacing: 0.6px; margin: 0 0 12px; }
+.recents { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.recent { text-align: left; padding: 14px; border-radius: var(--radius-control); background: var(--card); border: 1px solid var(--border);
+          transition: background-color var(--motion-hover) var(--ease-out), border-color var(--motion-hover) var(--ease-out), opacity var(--motion-reflow) var(--ease-out); }
+.recent:hover:not(:disabled) { border-color: var(--ring); }
+.recent.missing { opacity: 0.45; }
+.recent-name { font-family: var(--font-sans-medium); font-size: 13px; margin-bottom: 6px; }
+.recent-meta { color: var(--secondary-foreground); font-size: 11px; margin-bottom: 4px; }
+.recent-path { color: var(--muted-foreground); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recents-empty { color: var(--muted-foreground); }
+
+/* ── the song: lanes over the deck ────────────────────────────────────────────────────── */
+.song-page { display: flex; flex-direction: column; }
+.lanes { flex: 1; min-height: 120px; display: grid; grid-template-columns: var(--head-w) 1fr; grid-template-rows: var(--ruler-h) 1fr;
+         background: var(--stage-bg); }
+.lanes-corner { background: var(--ruler-bg); border-bottom: 1px solid var(--border); border-right: 1px solid var(--border);
+                display: flex; align-items: center; padding: 0 10px; color: var(--muted-foreground); font-size: 10px;
+                text-transform: uppercase; letter-spacing: 0.6px; }
+.ruler { position: relative; overflow: hidden; background: var(--ruler-bg); border-bottom: 1px solid var(--border); cursor: pointer; }
+.ruler-inner { position: relative; height: 100%; }
+.bar-label { position: absolute; left: 0; top: 0; height: 100%; padding: 6px 0 0 4px; font-size: 10px; color: var(--muted-foreground);
+             border-left: 1px solid rgba(var(--white-rgb), 0.12); transition: opacity var(--motion-cross-fade) var(--ease-out); }
+.ruler-playhead { position: absolute; left: -5px; bottom: 0; width: 0; height: 0; border: 5px solid transparent;
+                  border-bottom: 6px solid var(--playhead); z-index: 2; }
+.lane-heads { position: relative; overflow: hidden; background: var(--header-bg); border-right: 1px solid var(--border); }
+.lane-heads-inner { position: relative; }
+.lane-head { position: absolute; left: 0; right: 0; top: 0; height: var(--row-h); display: flex; align-items: center; gap: 8px;
+             padding: 0 10px; border-bottom: 1px solid var(--border); transition: opacity var(--motion-select) var(--ease-out); }
+.lane-colour { width: 3px; height: 22px; border-radius: var(--radius-pill); flex: none; }
+.lane-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stage-wrap { position: relative; min-width: 0; min-height: 0; }
+.lane-stage { position: absolute; inset: 0; }
+.stage-content { position: relative;
+                 background-image:
+                   repeating-linear-gradient(to right, rgba(var(--white-rgb), 0.07) 0 1px, transparent 1px var(--bar)),
+                   repeating-linear-gradient(to right, rgba(var(--white-rgb), 0.035) 0 1px, transparent 1px var(--ppb)); }
+.rows-layer, .clips-layer { position: absolute; inset: 0; }
+.lane-row { position: absolute; left: 0; right: 0; top: 0; height: var(--row-h); background: var(--lane-bg); border-bottom: 1px solid var(--border);
+            opacity: 0.6; transition: opacity var(--motion-select) var(--ease-out); }
+.lane-row.alt { background: var(--lane-alt-bg); }
+.clip { position: absolute; left: 0; top: 0; height: calc(var(--row-h) - 6px); border-radius: var(--radius-control); overflow: hidden;
+        background: color-mix(in srgb, var(--clip) 34%, var(--card)); border: 1px solid color-mix(in srgb, var(--clip) 70%, transparent);
+        transition: opacity var(--motion-select) var(--ease-out); }
+.clip-name { position: absolute; left: 6px; top: 3px; right: 4px; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+             color: var(--foreground); }
+.clip-notes { position: absolute; left: 0; right: 0; top: 17px; bottom: 3px; width: 100%; height: calc(100% - 20px); }
+.clip-notes rect { fill: color-mix(in srgb, var(--clip) 55%, white); }
+.clip.linked { border-style: dashed; }
+.clip.offline { border-color: var(--destructive); background: color-mix(in srgb, var(--destructive) 14%, var(--card)); }
+.playhead { position: absolute; top: 0; bottom: 0; left: 0; width: 1px; background: var(--playhead); z-index: 3; pointer-events: none; }
+.lanes-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted-foreground);
+               pointer-events: none; opacity: 0; transition: opacity var(--motion-cross-fade) var(--ease-out); }
+.lanes-empty.on { opacity: 1; }
+
+/* ── the deck: Mixer | Console ────────────────────────────────────────────────────────── */
+.deck { flex: none; height: 292px; display: flex; flex-direction: column; background: var(--deck-bg); border-top: 1px solid var(--border); }
+.tabs { position: relative; flex: none; display: grid; grid-template-columns: repeat(2, 96px); height: 30px; padding: 0 4px; }
+.tab { position: relative; z-index: 1; color: var(--muted-foreground); font-family: var(--font-sans-medium);
+       transition: color var(--motion-slide) var(--ease-out); }
+.tab.on { color: var(--foreground); }
+.tab-highlight { position: absolute; left: 4px; bottom: 0; width: 96px; height: 2px; background: var(--primary);
+                 transition: transform var(--motion-slide) var(--ease-out); }
+.deck-pages { position: relative; flex: 1; min-height: 0; border-top: 1px solid var(--border); }
+.deck-page { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity var(--motion-cross-fade) var(--ease-out); }
+.deck-page.on { opacity: 1; pointer-events: auto; }
+
+.mixer { position: absolute; inset: 0; display: flex; }
+.mixer-pages { flex: 1; display: flex; gap: 1px; min-width: 0; }
+.mixer-page { flex: none; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); transition: opacity var(--motion-reflow) var(--ease-out); }
+.mixer-name { height: 22px; padding: 4px 10px; color: var(--muted-foreground); font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; }
+.mixer-strips { flex: 1; min-height: 0; display: flex; gap: 4px; padding: 0 6px 6px; }
+.master-wrap { flex: none; display: flex; padding: 22px 8px 6px; border-left: 1px solid var(--border); }
+.strip { position: relative; width: 84px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px 6px;
+         background: var(--strip-bg); border-radius: var(--radius-control); border: 1px solid var(--border);
+         transition: opacity var(--motion-select) var(--ease-out); }
+.strip.inaudible { opacity: 0.55; }
+.strip-colour { position: absolute; left: 6px; right: 6px; top: 0; height: 2px; border-radius: 0 0 2px 2px; }
+.strip-name { width: 100%; text-align: center; font-family: var(--font-sans-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip-kind { max-width: 100%; color: var(--muted-foreground); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fader-row { flex: 1 1 0; min-height: 0; display: flex; gap: 8px; align-items: stretch; padding: 4px 0; }
+.meter { display: flex; gap: 2px; width: 9px; }
+.meter span { position: relative; flex: 1; background: rgba(var(--white-rgb), 0.05); border-radius: 1px; overflow: hidden; }
+/* the gradient stays the full height and the level REVEALS it (MixerDock: green, amber near 0 dB, red over) */
+.meter i { position: absolute; inset: 0; clip-path: inset(100% 0 0 0);
+           background: linear-gradient(to top, var(--meter-low) 0 76%, var(--meter-mid) 76% 91%, var(--meter-high) 91%); }
+.fader-wrap { display: flex; justify-content: center; width: 24px; min-height: 0; }
+/* a fader cap on a thin rail, as the window draws it; vertical by writing-mode, the top = +6 dB */
+.fader { writing-mode: vertical-lr; direction: rtl; -webkit-appearance: none; appearance: none; background: transparent;
+         width: 24px; height: auto; min-height: 0; align-self: stretch; margin: 0; cursor: ns-resize; }
+.fader::-webkit-slider-runnable-track { width: 4px; height: 100%; margin: 0 auto; border-radius: 2px; background: rgba(var(--white-rgb), 0.09); }
+.fader::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 11px; margin-left: -9px; border-radius: 3px;
+                               background: var(--foreground); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+                               transition: background-color var(--motion-hover) var(--ease-out); }
+.fader:hover::-webkit-slider-thumb { background: var(--white); }
+.fader::-moz-range-track { width: 4px; border-radius: 2px; background: rgba(var(--white-rgb), 0.09); }
+.fader::-moz-range-thumb { width: 22px; height: 11px; border: 0; border-radius: 3px; background: var(--foreground); }
+.fader:disabled { opacity: 0.5; cursor: default; }
+.db { font-size: 10px; color: var(--secondary-foreground); }
+.pan { -webkit-appearance: none; appearance: none; background: transparent; width: 64px; height: 14px; margin: 0; cursor: ew-resize; }
+.pan::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: rgba(var(--white-rgb), 0.09); }
+.pan::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 10px; height: 10px; margin-top: -3.5px; border-radius: 50%;
+                             background: var(--primary); }
+.pan::-moz-range-track { height: 3px; border-radius: 2px; background: rgba(var(--white-rgb), 0.09); }
+.pan::-moz-range-thumb { width: 10px; height: 10px; border: 0; border-radius: 50%; background: var(--primary); }
+.pan-space { height: 16px; }
+.ms-row { display: flex; gap: 4px; height: 20px; }
+.ms { width: 24px; height: 20px; border-radius: var(--radius-hairline); background: var(--secondary); color: var(--muted-foreground);
+      font-family: var(--font-sans-semibold); font-size: 10px;
+      transition: background-color var(--motion-hover) var(--ease-out), color var(--motion-hover) var(--ease-out); }
+.ms.mute.on { background: var(--primary); color: var(--primary-foreground); }
+.ms.solo.on { background: var(--solo); color: #141414; }
+
+.console { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.console-log { flex: 1; min-height: 0; padding: 8px 12px; font-size: 11px; line-height: 1.5; user-select: text; }
+.console-log .row { white-space: pre-wrap; word-break: break-word; }
+.console-log .in { color: var(--foreground); }
+.console-log .out { color: var(--secondary-foreground); }
+.console-log .evt { color: var(--muted-foreground); }
+.console-log .bad { color: var(--destructive); }
+.console-bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 34px; border-top: 1px solid var(--border); background: var(--muted); }
+.prompt { color: var(--primary); }
+.console-input { flex: 1; height: 100%; background: transparent; border: 0; outline: none; font-size: 12px; }
+.console-hint { flex: none; height: 20px; padding: 2px 12px 0 30px; color: var(--muted-foreground); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── toasts: a refusal says why, in the service's words ───────────────────────────────── */
+.toasts { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center;
+          gap: 6px; z-index: 100; pointer-events: none; }
+.toast { background: var(--popover); border: 1px solid var(--border); border-radius: var(--radius-control); padding: 8px 12px; font-size: 12px;
+         max-width: min(90vw, 560px); opacity: 0; transform: translateY(6px);
+         transition: opacity var(--motion-toast-in) var(--ease-out), transform var(--motion-toast-in) var(--ease-out); }
+.toast.on { opacity: 1; transform: none; }
+.toast.err { border-color: color-mix(in srgb, var(--destructive) 50%, transparent); }
+
+@media (max-width: 720px) {
+  :root { --head-w: 104px; }
+  .bpm-wrap, .actions { display: none; }
+  .deck { height: 240px; }
+}

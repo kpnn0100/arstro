@@ -19,3 +19,17 @@ if(SOLARIS_PULSE_FOUND)
   target_link_libraries(solaris_host PRIVATE PkgConfig::SOLARIS_PULSE)
   target_compile_definitions(solaris_host PUBLIC SOLARIS_HAVE_PULSE=1)
 endif()
+
+# R-SVC-5: the window's control channel. cosmo's ControlChannel is COMPILED IN PLACE (a non-blocking
+# Unix line socket that moves lines and never parses them — linked, not copied, as R-UI-4 reuses
+# cosmo's widgets); ControlLog.cpp gives it the one log symbol it needs from cosmo's host, and
+# ControlServer is the Solaris half: each line to dispatchText, each answer framed. GTK-free, so the
+# tests drive it with no window (tests/faces).
+if(UNIX)
+  add_library(solaris_control STATIC
+    ControlServer.cpp
+    ControlLog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo/ControlChannel.cpp)
+  target_include_directories(solaris_control PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(solaris_control PUBLIC solaris_core)
+endif()
