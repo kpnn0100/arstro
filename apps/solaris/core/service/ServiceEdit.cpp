@@ -556,6 +556,62 @@ namespace solaris
             changed("note.added", pt->id);
             return true;
         }
+        case K::NoteMove:
+        {
+            Pattern *pt = p.pattern(c.arg(0));
+            if (!pt) { err = "no pattern `" + c.arg(0) + "`"; return false; }
+            if (!c.has("pitch") || !c.has("at")) { err = "a note is named by --pitch and --at"; return false; }
+            if (!c.has("to-pitch") && !c.has("to-at") && !c.has("length") && !c.has("vel"))
+            { err = "note move needs --to-pitch, --to-at, --length and/or --vel"; return false; }
+            int pitch = 0;
+            double at = 0;
+            if (!intFlag(c, "pitch", 0, 127, 60, pitch, err) || !beatsFlag(c, "at", 0, at, err)) return false;
+            auto at_ = [&](int pi, double a) {
+                for (auto &n : pt->notes)
+                    if (n.pitch == pi && std::fabs(n.at - a) < 0.5 / kPpq) return &n;
+                return (Note *)nullptr;
+            };
+            Note *n = at_(pitch, at);
+            if (!n) { err = "no note " + std::to_string(pitch) + " at beat " + canonicalBeats(at) + " in " + pt->id; return false; }
+            Note next = *n;
+            if (!intFlag(c, "to-pitch", 0, 127, n->pitch, next.pitch, err) || !beatsFlag(c, "to-at", n->at, next.at, err)) return false;
+            if (!beatsFlag(c, "length", n->length, next.length, err)) return false;
+            if (!(next.length > 0)) { err = "--length must be more than 0 beats"; return false; }
+            if (!intFlag(c, "vel", 1, 127, n->vel, next.vel, err)) return false;
+            const Note *there = at_(next.pitch, next.at);
+            if (there && there != n) { err = "a note is already at " + std::to_string(next.pitch) + ", beat " + canonicalBeats(next.at); return false; }
+            *n = next;
+            std::stable_sort(pt->notes.begin(), pt->notes.end(), [](const Note &a, const Note &b) {
+                return a.at != b.at ? a.at < b.at : a.pitch < b.pitch;
+            });
+            changed("note.moved", pt->id);
+            return true;
+        }
+        case K::PatternQuantize:
+        {
+            Pattern *pt = p.pattern(c.arg(0));
+            if (!pt) { err = "no pattern `" + c.arg(0) + "`"; return false; }
+            double grid = 0.25, swing = 0;
+            if (c.has("grid") && (!parseNumber(c.flag("grid"), grid) || !(grid >= 1.0 / 32 && grid <= 4)))
+            { err = "--grid must be a step from 1/32 to 4 beats"; return false; }
+            if (c.has("swing") && (!parseNumber(c.flag("swing"), swing) || !(swing >= 0 && swing <= 0.75)))
+            { err = "--swing must be 0 to 0.75 of a step"; return false; }
+            for (auto &n : pt->notes)
+            {
+                const long long k = std::llround(n.at / grid);
+                n.at = toTick(k * grid + ((k % 2) ? swing * grid : 0.0)); // every second step pushed late
+            }
+            // notes that landed on one another merge: the louder stays
+            std::stable_sort(pt->notes.begin(), pt->notes.end(), [](const Note &a, const Note &b) {
+                return a.at != b.at ? a.at < b.at : (a.pitch != b.pitch ? a.pitch < b.pitch : a.vel > b.vel);
+            });
+            pt->notes.erase(std::unique(pt->notes.begin(), pt->notes.end(), [](const Note &a, const Note &b) {
+                                return a.pitch == b.pitch && std::fabs(a.at - b.at) < 0.5 / kPpq;
+                            }),
+                            pt->notes.end());
+            changed("pattern.quantized", pt->id);
+            return true;
+        }
         default:
             return false;
         }

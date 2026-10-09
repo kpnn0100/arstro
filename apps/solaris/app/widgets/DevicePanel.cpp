@@ -263,10 +263,19 @@ namespace solaris_ui
         mPresent = d != nullptr;
         if (!d || !mBuilt) return;               // built in `advance`, once the model has it
         mOwner.clear();
+        mStrip.clear();
         for (const auto &s : m.strips)
             for (const auto &x : s.devices)
-                if (x.id == mDevice) mOwner = s.name;
+                if (x.id == mDevice) { mOwner = s.name; mStrip = s.id; }
         if (mOwner.empty()) mOwner = "Master";
+        if (mRollPending)
+            for (const auto &p : m.patterns)
+                if (p.strip == mStrip && !mStrip.empty())
+                {
+                    mRollPending = false;
+                    if (onOpenPattern) onOpenPattern(p.id);
+                    break;
+                }
         mBody->lastChanged = d->lastChanged;
         for (auto &r : mBody->rows)
             for (const auto &p : d->params)
@@ -367,10 +376,11 @@ namespace solaris_ui
     }
 
     Rect DevicePanel::removeRect() const { return Rect{width.value() - space::padX() - 55.25, 8.125, 55.25, 19.5}; }
+    Rect DevicePanel::rollRect() const { return Rect{width.value() - space::padX() - 71.5, 8.125, 71.5, 19.5}; } // u(22): "Piano Roll" fits
     Rect DevicePanel::bypassRect() const
     {
         const solaris::DeviceModel *d = model();
-        const Rect r = d && d->instrument ? Rect{width.value() - space::padX() + 6.5, 8.125, 0, 19.5} : removeRect(); // no Remove for an instrument
+        const Rect r = d && d->instrument ? rollRect() : removeRect(); // an instrument has no Remove; it has its notes
         return Rect{r.x - 6.5 - 55.25, r.y, 55.25, 19.5};
     }
 
@@ -420,6 +430,7 @@ namespace solaris_ui
             int h = -1;
             if (removeRect().contains(local)) h = 1;
             else if (bypassRect().contains(local)) h = 2;
+            if (rollRect().contains(local)) h = 3;
             mHover.setHovered(h);
             return true;
         }
@@ -429,6 +440,21 @@ namespace solaris_ui
             if (!d) return true;
             if (!d->instrument && removeRect().contains(local)) { if (onCommand) onCommand("device remove " + d->id); return true; }
             if (bypassRect().contains(local)) { if (onCommand) onCommand("set " + d->id + ".bypass=" + (d->bypass ? "false" : "true")); return true; }
+            if (d->instrument && rollRect().contains(local) && !mStrip.empty())
+            {
+                // the strip's pattern; a menu when it plays several; a new clip (and pattern) when it has none
+                std::vector<cosmo_v2::ContextMenu::Item> items;
+                for (const auto &p : mModel.patterns)
+                    if (p.strip == mStrip)
+                    {
+                        const std::string id = p.id;
+                        items.push_back({p.name.empty() ? id : p.name, [this, id] { if (onOpenPattern) onOpenPattern(id); }});
+                    }
+                if (items.size() == 1) items[0].action();
+                else if (items.size() > 1 && onMenu) onMenu(std::move(items), g.pos);
+                else if (items.empty() && onCommand && onCommand("clip add --strip " + mStrip)) mRollPending = true;
+                return true;
+            }
             return true;
         }
         case Gesture::Type::RightClick:
@@ -458,7 +484,15 @@ namespace solaris_ui
         const std::string bl = b > 0.5 ? "Bypassed" : "On";
         t.setFill(lerpColor(palette::primaryForeground(), palette::secondaryForeground(), b));
         t.drawText(bl, by.x + (by.w - t.measureText(bl, 10.0, font::sans())) * 0.5, textfit::baseline(by.y + by.h * 0.5, 10.0), 10.0, font::sans());
-        if (!d->instrument)
+        if (d->instrument)
+        {
+            const Rect rr = rollRect();
+            drawRoundedRect(t, rr, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), mHover.amount(3))));
+            t.setFill(palette::secondaryForeground());
+            t.drawText("Piano Roll", rr.x + (rr.w - t.measureText("Piano Roll", 10.0, font::sans())) * 0.5, textfit::baseline(rr.y + rr.h * 0.5, 10.0), 10.0,
+                       font::sans());
+        }
+        else
         {
             const Rect rm = removeRect();
             drawRoundedRect(t, rm, radius::control(), Paint::filled(palette::hoverWash(0.6 + mHover.amount(1))));

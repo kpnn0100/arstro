@@ -61,6 +61,7 @@ namespace solaris_ui
         double litAmount(const std::string &param) const;      // the last-change light, LIVE
         artboard::Rect bypassRect() const;
         artboard::Rect removeRect() const;
+        artboard::Rect rollRect() const;                       // an instrument's "Piano Roll" (R-ROLL-1)
         void reveal(const std::string &param);
         /** A right-click at a window point: true when it lands on a parameter row (its menu opened).
          *  The App offers right-clicks here first — a row's slider would otherwise swallow it. */
@@ -69,6 +70,7 @@ namespace solaris_ui
         std::function<bool(const std::string &line)> onCommand;
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
         std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onRename;
+        std::function<void(const std::string &patternId)> onOpenPattern;
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -81,7 +83,8 @@ namespace solaris_ui
         void build(const solaris::DeviceModel &d);
         void openParamMenu(int row, artboard::Point world);
 
-        std::string mDevice, mOwner;
+        std::string mDevice, mOwner, mStrip;
+        bool mRollPending = false; // "Piano Roll" on a strip with no pattern: open the one `clip add` makes
         solaris::AppModel mModel;
         bool mPresent = false, mBuilt = false, mInteracting = false;
         std::shared_ptr<ParamBody> mBody;

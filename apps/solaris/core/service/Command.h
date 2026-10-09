@@ -36,7 +36,7 @@ namespace solaris
             DeviceAdd, DeviceRemove, DeviceMove,
             LaneAdd, LaneDelete,
             ClipAdd, ClipMove, ClipDuplicate, ClipUnique, ClipDelete,
-            PatternNew, NoteAdd, NoteDelete,
+            PatternNew, NoteAdd, NoteDelete, NoteMove, PatternQuantize,
             Undo, Redo,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,
             Render,

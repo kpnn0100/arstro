@@ -368,7 +368,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
   link is a formula naming an address), Clear Binding, Reset to Default — each one command.
 - **R-WIN-4 Window placement and stacking are the view's** — not saved, not commands, like zoom.
 
-## R-ROLL — the piano roll — 📋 SPECIFIED (user request, 2026-10-09)
+## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1)
 
 - **R-ROLL-1 A piano-roll WINDOW per pattern** (R-WIN's frame), opened by double-clicking a note clip
   or from its instrument's window: keys on the left (C named with its octave; a drum machine's keys
@@ -380,7 +380,8 @@ the object it belongs to, shows it on the timeline, and that property will use a
   sets its velocity. Snap 1/4, 1/8, 1/16 (default), 1/32 beat or off; Ctrl+wheel zooms, the wheel
   scrolls, eased.
 - **R-ROLL-3 Step mode** — the step sequencer, a VIEW of the same pattern (R-INST-3): a row per pad
-  (or per key), sixteen steps a bar; a click toggles a note there.
+  (or per key), sixteen steps a bar; a click toggles a note there. (Detailed while building it, B6: for
+  a melodic instrument a row per pitch the pattern uses, and middle C; Steps zooms to fit the pattern.)
 - **R-ROLL-4 Quantize and swing:** `pattern quantize <pt> [--grid <beats>] [--swing <0…0.75>]` moves
   every note start onto the grid, delaying every second grid step by the swing.
 - **R-ROLL-5 The pattern's length** is set from the roll (`set <pt>.length=`), its end dragged.
@@ -408,7 +409,7 @@ controller, normalised parameters and saved state.
 - **R-VST-6 Reserved:** hosting other makers' VST3 in Solaris (scan `~/.vst3`, load, process, their
   editor window) — host work (R-SVC-4).
 
-## R-EDM — what a professional EDM DAW needs (user request, 2026-10-09: *"suggest all necessary features"*) — 🚧 IN PROGRESS (1 ✅ DR-EDM-1; 5 ✅ with R-AUTO, DR-AUTO-2)
+## R-EDM — what a professional EDM DAW needs (user request, 2026-10-09: *"suggest all necessary features"*) — 🚧 IN PROGRESS (1 ✅ DR-EDM-1; 5 ✅ with R-AUTO, DR-AUTO-2; 6 ✅ with R-ROLL, DR-ROLL-1)
 
 **Built with this brief:**
 - **R-EDM-1 Undo and redo** of every edit — `undo`, `redo`; Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y; the model

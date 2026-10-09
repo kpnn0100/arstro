@@ -10,6 +10,7 @@
  *  --check fails if any shot is a single colour (a blank frame is the cheapest broken state to miss).
  */
 #include "../Rig.h"
+#include "../../widgets/PianoRoll.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -226,6 +227,47 @@ namespace
                  r.cmd("auto create ch_4.gain");
                  r.cmd("auto point move au_2 --at 0 --value -24");
                  r.cmd("auto point add au_2 --at 6 --value 0");
+                 r.settle();
+             }},
+            {"piano-roll",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 // a bassline: roots and fifths, the offbeats softer
+                 const int line[8][2] = {{45, 110}, {45, 70}, {52, 100}, {45, 72}, {48, 112}, {48, 68}, {55, 96}, {50, 80}};
+                 for (int i = 0; i < 8; ++i)
+                     r.cmd("note add pt_2 --pitch " + std::to_string(line[i][0]) + " --at " + std::to_string(i * 0.5) + " --length " +
+                           (i % 2 ? "0.25" : "0.5") + " --vel " + std::to_string(line[i][1]));
+                 r.settle();
+                 r.app->project().windows().openRoll("pt_2");
+                 r.settle();
+             }},
+            {"piano-roll-note-in",   // mid-transition: a note fading in where it was clicked
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("note add pt_2 --pitch 45 --at 0 --length 1");
+                 r.settle();
+                 r.app->project().windows().openRoll("pt_2");
+                 r.settle();
+                 r.cmd("note add pt_2 --pitch 52 --at 1 --length 1");
+                 r.frame();
+                 r.frame();
+                 r.frame();
+             }},
+            {"step-mode",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 for (int s = 0; s < 16; ++s)
+                 {
+                     const std::string at = std::to_string(s * 0.25);
+                     if (s % 4 == 0 && s) r.cmd("note add pt_1 --pitch 36 --at " + at + " --length 0.25");
+                     if (s % 8 == 4) r.cmd("note add pt_1 --pitch 39 --at " + at + " --length 0.25");
+                     if (s % 2 == 0) r.cmd("note add pt_1 --pitch 42 --at " + at + " --length 0.25 --vel " + (s % 4 ? "70" : "100"));
+                     if (s % 4 == 2) r.cmd("note add pt_1 --pitch 46 --at " + at + " --length 0.25 --vel 90");
+                 }
+                 r.settle();
+                 auto &wl = r.app->project().windows();
+                 wl.openRoll("pt_1");
+                 wl.roll("pt_1")->setMode(arstro::solaris_ui::PianoRoll::Steps);
                  r.settle();
              }},
             {"dock-folded",

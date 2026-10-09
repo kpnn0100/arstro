@@ -122,6 +122,8 @@ namespace solaris
         double length = 4;
         int clips = 0;
         std::vector<NoteModel> notes;
+        std::string strip;                       // the strip its first clip plays through ("" = none yet)
+        std::string instrument;                  // that strip's instrument type ("synth", "drums")
     };
 
     struct PortModel
@@ -169,9 +171,16 @@ namespace solaris
     };
 
     /** One entry of the DSP library's device registry — what the browser lists (R-BROWSE-1). */
+    struct NoteNameModel
+    {
+        int note = 0;
+        std::string name;                        // "Kick" — a kit's key, from the registry (REQ-device-6)
+    };
+
     struct DeviceTypeModel
     {
         std::string name, label, kind;           // kind = instrument | effect
+        std::vector<NoteNameModel> noteNames;    // a kit's keys; empty for a melodic instrument
     };
 
     struct TransportModel

@@ -6,6 +6,7 @@
 #endif
 #include "../Rig.h"
 #include "../../widgets/DevicePanel.h"
+#include "../../widgets/PianoRoll.h"
 #include "../../../../cosmo/widgets/SliderRow.h"
 using arstro::solaris_ui::Timeline;
 #include <cassert>
@@ -702,6 +703,133 @@ static void test_automation_rows_draw_and_edit_curves()
     pass("Automation rows: a row per automation under the lanes; click adds, a drag follows exactly and is one move, a shell's edit eases, shapes and deletes from the menu (R-AUTO-6)");
 }
 
+static void test_piano_roll_edits_the_pattern()
+{
+    sltest::Rig r("ui-roll", 1280, 800);
+    r.cmd("project new " + r.song("Roll") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    const std::string ac = r.svc->model().clips[0].id, pt = r.svc->model().clips[0].pattern;
+    r.cmd("note add " + pt + " --pitch 60 --at 0 --length 1");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &wl = r.app->project().windows();
+    // a note clip double-clicked opens its pattern's roll, fading in
+    const artboard::Rect clip = world(tl, tl.clipRect(ac));
+    r.click(clip.x + 12.0, cy(clip));
+    r.click(clip.x + 12.0, cy(clip));
+    r.frame();
+    r.frame();
+    assert(wl.isOpen("roll:" + pt) && wl.window("roll:" + pt)->appearAmount() < 1.0);
+    r.settle();
+    auto &roll = *wl.roll(pt);
+    assert(roll.keyLabel(60) == "C4" && roll.keyLabel(61).empty());
+    const artboard::Rect rw = world(roll, artboard::Rect{0, 0, 0, 0});
+    auto at = [&](double beat, int pitch) { return artboard::Point{rw.x + roll.beatToX(beat), rw.y + roll.pitchToY(pitch) + roll.kNoteH * 0.5}; };
+    // a click on the grid adds a note of the last length in the cell under the pointer; it fades in
+    artboard::Point c = at(1.1, 64);
+    r.click(c.x, c.y);
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "note add " + pt + " --pitch 64 --at 1 --length 0.25"));
+    const double fadeIn = roll.noteAlpha(64, 1.0);
+    assert(fadeIn > 0.0 && fadeIn < 1.0);
+    r.settle();
+    assert(roll.noteAlpha(64, 1.0) == 1.0);
+    // a note dragged follows the pointer (its beat snapped); let go it is ONE `note move`, where it was let go
+    c = at(0.2, 60);
+    const artboard::Point to = at(2.2, 62);
+    r.drag(c.x, c.y, to.x, to.y, 6, false);
+    const artboard::Rect held = roll.heldRect();
+    assert(std::fabs(held.x - roll.beatToX(2.0)) < 0.5 && std::fabs(held.y - (roll.pitchToY(62) + 1.0)) < 0.5);
+    r.app->pointer(2, to.x, to.y, 0, r.now);
+    r.frame();
+    assert(sentLine(r, "note move " + pt + " --pitch 60 --at 0 --to-pitch 62 --to-at 2"));
+    assert(roll.noteAlpha(62, 2.0) == 1.0 && roll.noteAlpha(60, 0.0) == 0.0); // nothing re-fades, nothing jumps back
+    r.settle();
+    // its right edge resizes it — and the next note added takes that length
+    const artboard::Rect n64 = world(roll, roll.noteRect(64, 1.0));
+    r.drag(n64.right() - 2.0, cy(n64), rw.x + roll.beatToX(2.0) + 1.0, cy(n64), 6);
+    r.settle();
+    assert(sentLine(r, "note move " + pt + " --pitch 64 --at 1 --length 1"));
+    // a velocity stem dragged to the top: one line, 127
+    const artboard::Rect vel = world(roll, roll.velRect());
+    r.drag(rw.x + roll.beatToX(2.0) + 1.5, vel.bottom() - 10.0, rw.x + roll.beatToX(2.0) + 1.5, vel.y + 2.0, 6);
+    r.settle();
+    assert(sentLine(r, "note move " + pt + " --pitch 62 --at 2 --vel 127"));
+    // a double-click deletes; the note fades out where it was
+    c = at(1.5, 64);
+    r.click(c.x, c.y);
+    r.click(c.x, c.y);
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "note delete " + pt + " --pitch 64 --at 1"));
+    const double fadeOut = roll.noteAlpha(64, 1.0);
+    assert(fadeOut > 0.0 && fadeOut < 1.0);
+    r.settle();
+    // snap 1/8, then Quantize… is a menu of lines
+    r.click(world(roll, roll.snapRect(1)));
+    assert(roll.snap() == 0.5);
+    r.click(world(roll, roll.quantizeRect()));
+    r.settle();
+    auto &menu = r.app->menu();
+    assert(menu.isOpen() && menu.itemCount() == 3);
+    r.click(menu.itemRect(1));
+    r.settle();
+    assert(sentLine(r, "pattern quantize " + pt + " --grid 0.5 --swing 0.25"));
+    // the pattern's end dragged: `set <pt>.length=`; the handle stays where it was let go
+    const artboard::Rect end = world(roll, roll.endRect());
+    r.drag(cx(end), cy(end), rw.x + roll.beatToX(8.0), cy(end), 6);
+    r.settle();
+    assert(sentLine(r, "set " + pt + ".length=8") && std::fabs(roll.endRect().x + 4.875 - roll.beatToX(8.0)) < 0.5);
+    assert(r.svc->model().patterns[0].length == 8.0);
+    // Steps: the mode cross-fades; a cell toggles a note
+    r.click(world(roll, roll.modeRect(1)));
+    r.frame();
+    r.frame();
+    assert(roll.mode() == arstro::solaris_ui::PianoRoll::Steps && roll.modeAmount() > 0.0 && roll.modeAmount() < 1.0);
+    r.settle();
+    int row60 = -1;
+    for (int i = 0; i < roll.stepRows(); ++i)
+        if (roll.stepRowPitch(i) == 60) row60 = i;
+    assert(row60 >= 0);
+    r.click(world(roll, roll.stepCell(row60, 4)));
+    r.settle();
+    assert(sentLine(r, "note add " + pt + " --pitch 60 --at 1 --length 0.25"));
+    r.click(world(roll, roll.stepCell(row60, 4)));
+    r.settle();
+    assert(sentLine(r, "note delete " + pt + " --pitch 60 --at 1"));
+    pass("Piano roll: a note clip opens it; click adds (last length), drag follows the pointer and is one move, the edge resizes, velocity drags, double-click deletes — each note fading; snap, quantize, the end; Steps cross-fades and toggles (R-ROLL-1…5)");
+}
+
+static void test_a_kits_roll_names_its_pads()
+{
+    sltest::Rig r("ui-roll-kit", 1280, 800);
+    r.cmd("project new " + r.song("Kit") + ".slp --bpm 120");
+    r.cmd("clip add --instrument drums --at 0 --length 4");
+    r.settle();
+    const std::string strip = r.svc->model().clips[0].track, pt = r.svc->model().clips[0].pattern;
+    std::string dv;
+    for (const auto &s : r.svc->model().strips)
+        if (s.id == strip) dv = s.devices[0].id;
+    auto &wl = r.app->project().windows();
+    // the instrument's window has "Piano Roll": its strip's pattern
+    wl.openDevice(dv);
+    r.settle();
+    r.click(world(*wl.devicePanel(dv), wl.devicePanel(dv)->rollRect()));
+    r.settle();
+    assert(wl.isOpen("roll:" + pt));
+    auto &roll = *wl.roll(pt);
+    // the keys are the kit's pads, from the registry; Steps has a row per pad
+    assert(roll.keyLabel(36) == "Kick" && roll.keyLabel(60).empty());
+    assert(roll.stepRows() == 10 && roll.stepRowPitch(0) == 36);
+    roll.setMode(arstro::solaris_ui::PianoRoll::Steps);
+    r.settle();
+    r.click(world(roll, roll.stepCell(0, 0)));
+    r.settle();
+    assert(sentLine(r, "note add " + pt + " --pitch 36 --at 0 --length 0.25"));
+    pass("A kit's roll: opened from its window's Piano Roll; keys named by its pads (registry note names); Steps a row per pad");
+}
+
 static void test_ruler_seek_keys_and_selection()
 {
     sltest::Rig r("ui-ruler", 1280, 800);
@@ -747,6 +875,8 @@ int main()
     test_song_bar_menus_and_settings_sections();
     test_device_window_lists_parameters_and_binds_them();
     test_automation_rows_draw_and_edit_curves();
+    test_piano_roll_edits_the_pattern();
+    test_a_kits_roll_names_its_pads();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

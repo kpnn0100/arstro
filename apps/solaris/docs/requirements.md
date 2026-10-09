@@ -275,9 +275,9 @@ latch are the UI's to draw from these numbers (U3).
 ### DR-UI-1 The window, Home and the song bar (R-UI-1, R-UI-2, R-UI-3, R-HOME-1, R-G-4)
 `solaris_app` (`app/`) is a platform-free Artboard tree that links no service: `App` (`app/App.h`)
 draws from `AppHooks::model()` and sends text lines through `AppHooks::dispatch` (`App::dispatch`,
-`app/App.cpp:99` — a refusal becomes a toast with the service's sentence). `linux_main.cpp` is the
+`app/App.cpp:180` — a refusal becomes a toast with the service's sentence). `linux_main.cpp` is the
 only OS code: GTK3, the frame clock, the pickers, the host functions, the service pumped every tick.
-The screen follows `AppModel::screen` and CROSS-FADES (260 ms, `App::render`, `app/App.cpp:202`).
+The screen follows `AppModel::screen` and CROSS-FADES (260 ms, `App::render`, `app/App.cpp:303`).
 `installSolarisAccent()` moves cosmo's accent slot to teal `#159387` before any widget exists
 (`app/Theme.h`); every neutral, radius, font and spacing token is cosmo's, aliased. `HomeScreen`
 (`app/widgets/HomeScreen.cpp`): the `solaris.` wordmark sized to fit, New/Open, Settings, recent-song
@@ -295,7 +295,7 @@ card, uppercase labels tracked +0.13 with a plain note, chips that size to their
 wrap, a filled accent when chosen — the fill EASES over 200 ms whoever chose it (`advance`, `:101`) —
 the folder list with × per folder and "Add folder…", Done; 150 ms open / 120 ms close; Escape, Enter,
 Done and the scrim close it; the card scrolls when the window is short. Opening sends `devices list`
-first (`App::openSettings`, `app/App.cpp:118`). Every chip is `settings set …`, every folder control
+first (`App::openSettings`, `app/App.cpp:199`). Every chip is `settings set …`, every folder control
 `folder add|remove` (`handleGesture`, `:158`); the sheet draws the model, so a setting changed from a
 shell shows at once.
 
@@ -315,17 +315,17 @@ fill, the close). The window ran on this machine's display (`solaris song.slp`, 
 (234 px), `Timeline` (`app/widgets/Timeline.cpp`) filling the rest. A row per lane in lane order,
 then a row per strip whose clips have no lane ("its strip's row"); a lane with no colour wears its
 first clip's. A clip is drawn on its row, coloured by its STRIP (`surface::track`), its name pinned
-to the visible edge when it begins off-screen (`paintClip`, `:355`); a note clip draws its
+to the visible edge when it begins off-screen (`paintClip`, `:410`); a note clip draws its
 pattern's notes repeated where it loops, the seams marked, and "linked ×N" when it shares its
 pattern. Ruler: bars from 1, labels thinned as it zooms out. The playhead is `destructive`; it
 follows the transport while playing and eases 140 ms on a seek. Ctrl+wheel zooms 4–320 px/beat,
-eased 220 ms and anchored at the pointer (`:331`); the wheel scrolls, Shift+wheel sideways. A clip
+eased 220 ms and anchored at the pointer (`:393`); the wheel scrolls, Shift+wheel sideways. A clip
 dragged follows the pointer exactly, snapped to 1/4 beat, between LANES only, and lands as `clip
-move <ac> --at <b> [--lane <ln>]` (`:303`) where it was let go. A click selects (the teal ring
+move <ac> --at <b> [--lane <ln>]` (`:361`) where it was let go. A click selects (the teal ring
 cross-fades 200 ms between clips); Delete/Backspace → `clip delete`, Ctrl+D → `clip duplicate`
-(`app/App.cpp:200`); a ruler click → `transport seek <b>`, snapped (`Timeline.cpp:323`). **The picture travels
+(`app/App.cpp:295`); a ruler click → `transport seek <b>`, snapped (`Timeline.cpp:381`). **The picture travels
 (§1):** the rows are Interstellar's `AnimatedRows` keyed by lane; each clip keeps an eased beat, row
-and opacity keyed by its id (`Timeline::advance`, `Timeline.cpp:197`) — it fades in when it arrives, fades out where it
+and opacity keyed by its id (`Timeline::advance`, `Timeline.cpp:227`) — it fades in when it arrives, fades out where it
 was when it goes (taking no input), eases 200 ms with its row when moved from a shell; the zebra
 follows the LIVE slot, a stripe's colour cross-fades, the empty-state words fade. Another song
 places everything where it is. Empty, it says what to do in words.
@@ -341,7 +341,7 @@ a tab or folder changed starts a new generation, so the old list fades where it 
 the new one fades in (`navigate`, `:96`); an inserted row fades in, a removed one out. A row is
 dragged out: the browser reports the pointer and the drop; `ProjectScreen` draws the ghost (the
 overlay pass) and the timeline's teal drop hint at the snapped beat, and on release sends ONE line
-(`place`, `app/widgets/ProjectScreen.cpp:66`): a sample → `clip add --src "<file>" --at <b> [--lane
+(`place`, `app/widgets/ProjectScreen.cpp:93`): a sample → `clip add --src "<file>" --at <b> [--lane
 <ln>]`; an instrument → `clip add --instrument <type> --at <b> --length 4 [--lane <ln>]` (the new
 strip and its empty note clip in one command, `core/service/ServiceEdit.cpp:370`); below the last
 lane, no `--lane` — a new lane; an effect → a notice that it goes on a strip (U3). A double-click
@@ -354,7 +354,7 @@ deleted. Every front end draws it as is.
 
 ### DR-UI-8 The mixer dock (R-UI-3, R-MIX-1/5/6/7/9/12, R-MIX-12 amended)
 `MixerDock` (`app/widgets/MixerDock.cpp`) sits under the lanes (`ProjectScreen::dockTarget`,
-`app/widgets/ProjectScreen.cpp:102`: 429 px wanted; its top edge dragged follows the pointer; the
+`app/widgets/ProjectScreen.cpp:114`: 429 px wanted; its top edge dragged follows the pointer; the
 chevron folds it to its tab bar, eased 220 ms; it gives way before the lanes, which keep 130 px).
 Tabs: a mixer page each, "+" (`mixer add`), Matrix; keyed (`syncTabs`) so a tab added slides the
 others along, measured in one weight so choosing a tab moves nothing; the highlight slides, the
@@ -389,9 +389,10 @@ its names. It is the parameter LIST: the value column says what decides each row
 `:45`) — its number, `auto au_1`, `= ch_2.gain`, `= <formula>` cut to the column — and the row
 `DeviceModel::lastChanged` names is lit, the light easing from row to row (`ParamBody`, `:90`). A
 right-click offers Create Automation, Formula… (cosmo's rename field), Clear Binding, Reset to Default
-(`openParamMenu`, `:386`); the App offers right-clicks to the windows first because a row's slider would
-swallow them (`app/App.cpp:73`). Every change is one line: `set <dv>.<param>=…`, `auto create`,
-`bind clear`, `set <dv>.bypass=…`, `device remove <dv>` (none for an instrument). While the pointer is
+(`openParamMenu`, `:396`); the App offers right-clicks to the windows first because a row's slider would
+swallow them (`app/App.cpp:72`). Every change is one line: `set <dv>.<param>=…`, `auto create`,
+`bind clear`, `set <dv>.bypass=…`, `device remove <dv>` (none for an instrument — it has "Piano Roll"
+instead, DR-ROLL-1). While the pointer is
 down `bind` re-seeds nothing (`:258`); the body scrolls with its own bar (`reveal` eases to a row).
 
 ### DR-AUTO-1 Automations and bindings in the `.slp` (R-AUTO-1, R-AUTO-4)
@@ -460,7 +461,7 @@ send `undo` / `redo` (`app/App.cpp`).
 `SongBar` (`app/widgets/SongBar.cpp`): wordmark · Home · Settings · cosmo's `MenuStrip` (laid out by
 `SongBar::layout`, `:31`) · the song's name; the transport is centred when there is room and otherwise
 starts right of the menus and `kNameMin` (120 px) of name (`transportX`, `:40`), so the bar fits at
-1024; the master meter and Save on the right. `App::buildMenus` (`app/App.cpp:83`): **File** — New
+1024; the master meter and Save on the right. `App::buildMenus` (`app/App.cpp:86`): **File** — New
 Song…, Open…, Save, Save As…, Render…, Render Stems… (the host's save picker, `onPickSave`, then
 `project save "<path>"`, `render --out "<path>" [--stems <every strip>]`), Home; **Edit** — Undo / Redo
 naming what they would take back (from `undoLabel`/`redoLabel`), Duplicate / Delete the selected clip;
@@ -483,10 +484,10 @@ it is taller than the window (R6); `revealRect` brings a control in.
 `FloatWindow` (`app/widgets/FloatWindow.cpp`): a frame — a 26 px title bar (title, ×) over its content.
 Dragged by the title it follows the pointer exactly, kept inside the layer; touched anywhere it is
 raised; `open`/`close` record intent and `advance` fades it (150 / 120 ms); while closing it takes no
-input (`handleGesture`, `:53`). `WindowLayer` covers the song view under the song bar (over the lanes,
-dock and browser) and keeps windows keyed — `dev:<dv>` (`openDevice`, `:125`: a new one cascades from
-the top right) — reopening a closed one where it was; titles follow the model ("Basic Synth — Bass")
-and a window whose device is removed by anyone closes (`bind`, `:168`). Rack chips and an instrument
+input (`handleGesture`, `:54`). `WindowLayer` covers the song view under the song bar (over the lanes,
+dock and browser) and keeps windows keyed — `dev:<dv>` (`openDevice`, `:126`: a new one cascades from
+the top right) and `roll:<pt>` (`openRoll`, `:147`, DR-ROLL-1) — reopening a closed one where it was; titles follow the model ("Basic Synth — Bass")
+and a window whose device is removed by anyone closes (`bind`, `:193`). Rack chips and an instrument
 strip's name (double-click) in the dock open them; a chip is outlined while its window is open.
 Placement and stacking are the view's. The dock's floating panel is gone (R-UI-5 amended).
 
@@ -503,3 +504,33 @@ the pointer while held (its beat snapped) and sends ONE `auto point move <au> --
 Linear / Hold / Smooth, Delete Point and Delete Automation (`auto delete --unbind`). A curve the model
 changes eases there point by point over 220 ms; a point added or removed cross-fades the two curves
 (`shownPoints`, `:35`).
+
+### DR-ROLL-1 The piano roll (R-ROLL-1…5, R-EDM-6)
+**Grammar.** `note move <pt> --pitch <p> --at <b> [--to-pitch <p>] [--to-at <b>] [--length <b>] [--vel
+<1…127>]` (`core/service/ServiceEdit.cpp:559`) edits the one note at that pitch and beat — a moved note
+landing on another's place replaces it; `pattern quantize <pt> [--grid <b>] [--swing <0…0.75>]`
+(`:590`) moves every start to `k·grid`, odd `k` delayed by `swing·grid`, two notes landing together
+merging into the louder. Both are edits (undoable, all-or-nothing). The model gives a pattern the strip
+its first clip plays through and that strip's instrument (`patterns[].strip`, `.instrument`), and a
+device type its named keys (`deviceTypes[].noteNames`, `core/service/ServiceModel.cpp:108`) — the DSP
+registry's (REQ-device-6: the Drum Machine's ten pads, Kick = 36 …).
+**The window.** `PianoRoll` (`app/widgets/PianoRoll.cpp`) is the content of a `roll:<pt>` window
+(`WindowLayer::openRoll`, `app/widgets/FloatWindow.cpp:147`), opened by double-clicking a note clip
+(`Timeline.cpp:386`) or by an instrument window's "Piano Roll" (`DevicePanel.cpp:443` — the strip's
+pattern; a menu when it plays several; `clip add --strip` and then its roll when it has none). Titled
+"Piano Roll — <pattern> · <strip>"; a pattern gone closes it. A toolbar: snap 1/4 · 1/8 · 1/16
+(default) · 1/32 · Off, Notes | Steps, Quantize… (a menu of three lines: straight, swing 25 %, 50 %, at
+the snap). **Notes:** keys on the left (C named with its octave, C4 = 60; a kit's keys by its pads,
+nothing else named), black-key rows shaded, bars stronger; notes in the strip's colour, brighter the
+louder; the velocity lane below; past the pattern's end dimmed, the end a handle (`onPaint`, `:512`).
+A click on empty grid → `note add <pt> --pitch --at <the snapped cell> --length <the last length>`; a
+note dragged is drawn where the POINTER has it (beat snapped) and lands as ONE `note move … --to-pitch
+--to-at`; its right 5 px resize it (`note move … --length`, which becomes the last length); a
+velocity stem dragged → `note move … --vel`; a double-click or right-click → `note delete`; the end
+dragged → `set <pt>.length=` (`handleGesture`, `:258`). **Steps:** a row per pad (a kit) or per pitch in
+use and middle C, a cell per sixteenth, a click toggling a note there (`note add … --length 0.25` /
+`note delete`) (`paintSteps`, `:482`). **Nothing snaps:** notes are keyed by (pitch, beat) — a new one
+fades in, a deleted one fades out where it was, a dragged one is the pointer's and lands without
+re-fading (`bind`, `:68`; `advance`, `:173`); the two modes cross-fade; Steps zooms to fit the pattern
+(64–160 px a beat) and Notes gets its own zoom back, eased; Ctrl+wheel zooms about the pointer, the
+wheel scrolls, eased; a length changed from a shell moves the end, eased.

@@ -54,6 +54,13 @@ helpers it borrows.
 | Device window › a slider · a choice (left/right half) · double-click a slider | `set <dv>.<param>=<value in its unit>` · `set <dv>.<param>=<name>` · the registry default |
 | Device window › a row, right-click › Create Automation · Formula… · Clear Binding · Reset to Default | `auto create <dv>.<param>` · cosmo's field → `set <dv>.<param>="=<typed>"` · `bind clear <dv>.<param>` · `set <dv>.<param>=<default>` |
 | Device window › On/Bypassed · Remove | `set <dv>.bypass=…` · `device remove <dv>` |
+| Device window (an instrument) › Piano Roll | its strip's pattern's roll (a menu when several); none yet → `clip add --strip <ch>`, then its roll |
+| Lanes › a note clip double-clicked | its pattern's piano-roll WINDOW (the view's) |
+| Piano roll › a click on empty grid · a note dragged (on release) · its right edge dragged | `note add <pt> --pitch <p> --at <cell> --length <last>` · `note move <pt> --pitch <p> --at <b> --to-pitch <p2> --to-at <b2>` · `note move … --length <b>` |
+| Piano roll › a velocity stem dragged · a note double-/right-clicked · the end dragged | `note move … --vel <v>` · `note delete <pt> --pitch <p> --at <b>` · `set <pt>.length=<b>` |
+| Piano roll › Snap · Notes/Steps · Ctrl+wheel · wheel | nothing — the view's (Steps zooms to fit) |
+| Piano roll › Quantize… | `pattern quantize <pt> --grid <snap> [--swing 0.25\|0.5]` |
+| Piano roll › Steps › a cell | `note add <pt> --pitch <p> --at <b> --length 0.25` · `note delete …` when one is there |
 | A window › its title dragged · × · a click on it | the view's: moved exactly, closed (eased), raised |
 | Automation row › a click · a point dragged (on release) · a point double-clicked | `auto point add <au> --at <b> --value <v>` · `auto point move <au> --at <b> --to <b2> --value <v>` · `auto point delete <au> --at <b>` |
 | Automation row › right-click a point · the row | Linear/Hold/Smooth → `auto point shape <au> --at <b> --shape …`, Delete Point · Delete Automation → `auto delete <au> --unbind` |
@@ -67,7 +74,7 @@ song) · settings-open · settings-mid-open (mid-fade) · settings-chip-changing
 mid-ease) · project-open · home-to-project-mid (mid cross-fade) · toast-refusal ·
 browser-instruments · browser-folder · drag-sample-mid (the ghost and the drop hint) ·
 clip-dragging · clip-selected-zoomed · menu-file-open (Edit open, naming its undo) · mixer-sources · mixer-buses · mixer-tab-mid (pages mid
-cross-fade) · mixer-matrix · mixer-folded · device-panel (its window) · device-window-bound (two windows, a bound row, the last change lit) · automation-rows (two curves: smooth, hold, log Hz) · dock-folded · confirm-unsaved.
+cross-fade) · mixer-matrix · mixer-folded · device-panel (its window) · device-window-bound (two windows, a bound row, the last change lit) · automation-rows (two curves: smooth, hold, log Hz) · piano-roll (a bassline, velocities) · piano-roll-note-in (a note mid-fade) · step-mode (a kit's pads, a beat) · dock-folded · confirm-unsaved.
 Each at 1440×900 and 1024×640. **Look at them** after a change.
 
 ## Borrowed, not copied

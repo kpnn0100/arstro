@@ -133,7 +133,7 @@ namespace solaris
             ok = evalCommand(c, err);
             break;
         case K::ClipAdd: case K::ClipMove: case K::ClipDuplicate: case K::ClipUnique: case K::ClipDelete:
-        case K::PatternNew: case K::NoteAdd: case K::NoteDelete:
+        case K::PatternNew: case K::NoteAdd: case K::NoteDelete: case K::NoteMove: case K::PatternQuantize:
             ok = clipCommand(c, err);
             break;
         case K::Render:

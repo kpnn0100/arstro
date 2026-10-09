@@ -38,6 +38,8 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `pattern new [--name <text>] [--length <beats>]` | Create an empty pattern. | R-CLIP-2 |
 | `note add <pt> [--pitch <0-127>] [--at <beats>] [--length <beats>] [--vel <1-127>]` | Add a note to a pattern — every clip of it changes. | R-CLIP-2 |
 | `note delete <pt> [--pitch <0-127>] [--at <beats>]` | Remove the note at that pitch and time. | R-CLIP-2 |
+| `note move <pt> [--pitch <0-127>] [--at <beats>] [--to-pitch <0-127>] [--to-at <beats>] [--length <beats>] [--vel <1-127>]` | Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) — one gesture, one line. Refused onto another note. | R-ROLL-2 |
+| `pattern quantize <pt> [--grid <beats>] [--swing <0-0.75>]` | Move every note's start onto the grid (default a sixteenth, 0.25), delaying every second grid step by --swing of a step. Notes that land on one another merge (the louder stays). | R-ROLL-4 |
 | `auto create <address>` | Automate a number: a new automation named "<owner> · <parameter>", ranged as it, holding its value from beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id. | R-AUTO-5 |
 | `auto add [--name <text>] [--min <v>] [--max <v>] [--unit <text>]` | An automation from nothing (default range 0…1). It moves nothing until a formula reads it. Prints the id. | R-AUTO-4 |
 | `auto delete <au> [--unbind]` | Delete an automation. Refused while a formula reads it, unless --unbind (those bindings are cleared). | R-AUTO-4 |
@@ -201,6 +203,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `patterns[].name` | string |  |
 | `patterns[].length` | number | beats |
 | `patterns[].clips` | int | clips playing it |
+| `patterns[].strip` | string | the strip its first clip plays through |
+| `patterns[].instrument` | string | that strip's instrument type (what names its keys) |
 | `patterns[].notes` | object[] | sorted by (at, pitch) |
 | `patterns[].notes[].pitch` | int | 0…127 |
 | `patterns[].notes[].at` | number | beats from the pattern's start |
@@ -270,6 +274,9 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `deviceTypes[].name` | string | the registry type, what `device add --type` and `--instrument` take |
 | `deviceTypes[].label` | string |  |
 | `deviceTypes[].kind` | string | instrument \| effect |
+| `deviceTypes[].noteNames` | object[] | a kit's keys, named (REQ-device-6) |
+| `deviceTypes[].noteNames[].note` | int |  |
+| `deviceTypes[].noteNames[].name` | string |  |
 | `browser` | object | the folder last browsed |
 | `browser.path` | string |  |
 | `browser.entries` | object[] | folders first, then by name |

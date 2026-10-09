@@ -102,6 +102,8 @@ namespace solaris
             {"patterns[].name", "string", ""},
             {"patterns[].length", "number", "beats"},
             {"patterns[].clips", "int", "clips playing it"},
+            {"patterns[].strip", "string", "the strip its first clip plays through"},
+            {"patterns[].instrument", "string", "that strip's instrument type (what names its keys)"},
             {"patterns[].notes", "object[]", "sorted by (at, pitch)"},
             {"patterns[].notes[].pitch", "int", "0…127"},
             {"patterns[].notes[].at", "number", "beats from the pattern's start"},
@@ -171,6 +173,9 @@ namespace solaris
             {"deviceTypes[].name", "string", "the registry type, what `device add --type` and `--instrument` take"},
             {"deviceTypes[].label", "string", ""},
             {"deviceTypes[].kind", "string", "instrument | effect"},
+            {"deviceTypes[].noteNames", "object[]", "a kit's keys, named (REQ-device-6)"},
+            {"deviceTypes[].noteNames[].note", "int", ""},
+            {"deviceTypes[].noteNames[].name", "string", ""},
             {"browser", "object", "the folder last browsed"},
             {"browser.path", "string", ""},
             {"browser.entries", "object[]", "folders first, then by name"},
@@ -256,7 +261,8 @@ namespace solaris
             Json notes = Json::array();
             for (const auto &n : p.notes)
                 notes.push(Json::object().set("pitch", n.pitch).set("at", n.at).set("length", n.length).set("vel", n.vel));
-            patterns.push(Json::object().set("id", p.id).set("name", p.name).set("length", p.length).set("clips", p.clips).set("notes", notes));
+            patterns.push(Json::object().set("id", p.id).set("name", p.name).set("length", p.length).set("clips", p.clips).set("notes", notes)
+                              .set("strip", p.strip).set("instrument", p.instrument));
         }
         j.set("patterns", patterns);
         Json autos = Json::array();
@@ -300,7 +306,12 @@ namespace solaris
         if (!stable) tr.set("masterPeak", Json::array().push(Json::number(m.transport.masterPeak[0])).push(Json::number(m.transport.masterPeak[1])));
         j.set("transport", tr);
         Json types = Json::array();
-        for (const auto &d : m.deviceTypes) types.push(Json::object().set("name", d.name).set("label", d.label).set("kind", d.kind));
+        for (const auto &d : m.deviceTypes)
+        {
+            Json names = Json::array();
+            for (const auto &n : d.noteNames) names.push(Json::object().set("note", n.note).set("name", n.name));
+            types.push(Json::object().set("name", d.name).set("label", d.label).set("kind", d.kind).set("noteNames", names));
+        }
         j.set("deviceTypes", types);
         Json entries = Json::array();
         for (const auto &e : m.browser.entries) entries.push(Json::object().set("name", e.name).set("path", e.path).set("kind", e.kind));

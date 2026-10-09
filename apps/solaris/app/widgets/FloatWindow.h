@@ -32,6 +32,7 @@ namespace arstro
 namespace solaris_ui
 {
     class DevicePanel;
+    class PianoRoll;
 
     class FloatWindow : public artboard::Segment
     {
@@ -78,6 +79,9 @@ namespace solaris_ui
         FloatWindow &openDevice(const std::string &dv);
         FloatWindow *window(const std::string &key) const;
         DevicePanel *devicePanel(const std::string &dv) const;
+        /** Open (or bring forward) the piano roll of pattern `pt` (R-ROLL-1). */
+        FloatWindow &openRoll(const std::string &pt);
+        PianoRoll *roll(const std::string &pt) const;
         bool isOpen(const std::string &key) const;
         void close(const std::string &key);
 

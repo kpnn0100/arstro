@@ -11,20 +11,18 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-09 — B5: automation on the timeline.*
+*Last updated: 2026-10-09 — B6: the piano roll.*
 
 ---
 
 ## NEXT
 
-**► B6 — the piano roll** (R-ROLL-1…5, R-EDM-6): `note move <pt> --pitch --at [--to-pitch] [--to-at]
-[--length] [--vel]` and `pattern quantize <pt> --grid --swing` in the service; the registry's note
-names for the drum machine (DSP: `DeviceType::noteNames`); a piano-roll WINDOW (`roll:<pt>`) — keys
-(C named, a drum's pads by name), the beat grid, notes in the strip's colour, the velocity lane, the
-pattern's end; click adds (last length), drag moves / right edge resizes (one `note move` on release),
-double-click deletes, velocity drag; snap 1/4…1/32 or off; Step mode (16 steps a bar, a row per pad);
-opened by double-clicking a note clip and from an instrument's window. Every note eased (keyed).
-
+**► B7 — the mixer's lines** (R-MIX-13/14): "+ Line" at the end of every mixer page — a menu of an
+audio line, a bus, and every instrument of the registry → ONE `strip add --kind … [--instrument <type>]
+--mixer <mx>`, the new card growing in; `strip relink <from> --to <to>` in the service (every clip of
+`<from>` to `<to>`, one edit, refused across kinds and naming why); a clip's menu on the lanes "Play
+through ▸" (`clip move <ac> --strip <ch>`, the strips of its kind); a strip card's menu "Move its clips
+to ▸" (`strip relink`). L2 test of `strip relink` and its refusals; UI tests of both menus; shot.
 ---
 
 ## The build, in order
@@ -128,8 +126,12 @@ umbrella's pointer — `arstro.rule` §7).
 - [x] **B5** Automation on the timeline (R-AUTO-6). — DR-AUTO-5; `solaris_app_ui` 14 (a dragged
       point drawn under the pointer, one move on release, nothing jumps; a shell's edit eases — a
       mutant that snaps fails it); shot automation-rows, looked at.
-- [ ] **B6** The piano roll window: `note move`, velocity, snap, step mode, quantize + swing
-      (R-ROLL-1…5, R-EDM-6).
+- [x] **B6** The piano roll window: `note move`, velocity, snap, step mode, quantize + swing
+      (R-ROLL-1…5, R-EDM-6). — DR-ROLL-1; DSP REQ-device-6 (the registry names a kit's keys);
+      `solaris_service` 21 (move, resize, re-velocity, replace on landing, quantize + swing, refusals);
+      `solaris_app_ui` 16 (a note fading in and out, a drag drawn under the pointer and one move, the
+      modes cross-fading — mutants that snap the fade or the mode fail them); shots piano-roll,
+      piano-roll-note-in, step-mode, looked at.
 - [ ] **B7** The mixer: "+ Line", relink — `strip relink`, "Play through" (R-MIX-13/14).
 - [ ] **B8** VST3: the SDK, Basic Synth + Drum Machine as plugins, the shared normalisation, validator,
       plugin = device sample for sample (R-VST-1…5).
@@ -149,6 +151,11 @@ umbrella's pointer — `arstro.rule` §7).
 ---
 
 ## Decisions log (newest first)
+
+- **2026-10-09 — the piano roll's Steps mode zooms to fit.** A sixteenth at the Notes zoom is 12 px —
+  a cell nobody hits. Steps fits the pattern to the window (64–160 px a beat), eased, and Notes keeps
+  its own zoom; Ctrl+wheel does nothing in Steps. A melodic pattern's Steps rows are the pitches it
+  uses plus middle C (a kit's are its pads).
 
 - **2026-10-09 — the brief is built without a discussion round**, on the user's word. Its open
   choices were taken as written in R-AUTO/R-WIN/R-ROLL/R-VST/R-EDM: a binding is a formula (a link is a

@@ -95,6 +95,12 @@ namespace solaris
             {K::NoteAdd, "note add", "<pt>", 1, 1, {"pitch=<0-127>", "at=<beats>", "length=<beats>", "vel=<1-127>"},
              "Add a note to a pattern — every clip of it changes.", "R-CLIP-2"},
             {K::NoteDelete, "note delete", "<pt>", 1, 1, {"pitch=<0-127>", "at=<beats>"}, "Remove the note at that pitch and time.", "R-CLIP-2"},
+            {K::NoteMove, "note move", "<pt>", 1, 1, {"pitch=<0-127>", "at=<beats>", "to-pitch=<0-127>", "to-at=<beats>", "length=<beats>", "vel=<1-127>"},
+             "Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) — "
+             "one gesture, one line. Refused onto another note.", "R-ROLL-2"},
+            {K::PatternQuantize, "pattern quantize", "<pt>", 1, 1, {"grid=<beats>", "swing=<0-0.75>"},
+             "Move every note's start onto the grid (default a sixteenth, 0.25), delaying every second grid step by "
+             "--swing of a step. Notes that land on one another merge (the louder stays).", "R-ROLL-4"},
 
             {K::AutoCreate, "auto create", "<address>", 1, 1, {},
              "Automate a number: a new automation named \"<owner> · <parameter>\", ranged as it, holding its value from "

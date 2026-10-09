@@ -82,6 +82,7 @@ namespace solaris_ui
 
         std::function<void(const std::string &line)> onCommand;
         std::function<void(const std::string &clipId)> onSelect;
+        std::function<void(const std::string &patternId)> onOpenPattern; // a note clip double-clicked: its piano roll (R-ROLL-1)
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
 
         // automation rows (R-AUTO-6), local geometry as DRAWN

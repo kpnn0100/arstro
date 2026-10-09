@@ -1,5 +1,6 @@
 #include "FloatWindow.h"
 #include "DevicePanel.h"
+#include "PianoRoll.h"
 #include "../../../interstellar/app/widgets/Glyphs.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
 #include <algorithm>
@@ -134,12 +135,36 @@ namespace solaris_ui
             panel->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
                 if (onRename) onRename(cur, world, std::move(done));
             };
+            panel->onOpenPattern = [this](const std::string &pt) { openRoll(pt); };
             panel->bind(mModel, mInteracting);
             w = &place(std::make_shared<FloatWindow>(key, panel), 390.0, 520.0);
         }
         w->open();
         bind(mModel, mInteracting); // its title, now
         return *w;
+    }
+
+    FloatWindow &WindowLayer::openRoll(const std::string &pt)
+    {
+        const std::string key = "roll:" + pt;
+        FloatWindow *w = window(key);
+        if (!w)
+        {
+            auto roll = std::make_shared<PianoRoll>(pt);
+            roll->onCommand = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
+            roll->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
+            roll->bind(mModel);
+            w = &place(std::make_shared<FloatWindow>(key, roll), 720.0, 460.0);
+        }
+        w->open();
+        bind(mModel, mInteracting);
+        return *w;
+    }
+
+    PianoRoll *WindowLayer::roll(const std::string &pt) const
+    {
+        FloatWindow *w = window("roll:" + pt);
+        return w ? static_cast<PianoRoll *>(&w->content()) : nullptr;
     }
 
     FloatWindow *WindowLayer::window(const std::string &key) const
@@ -186,6 +211,13 @@ namespace solaris_ui
                 w.setTitle(title);
                 if (!panel.present() && w.isOpen()) w.close();
             }
+            else if (kv.first.rfind("roll:", 0) == 0)
+            {
+                auto &roll = static_cast<PianoRoll &>(w.content());
+                roll.bind(m);
+                w.setTitle(roll.title());
+                if (!roll.present() && w.isOpen()) w.close(); // a pattern deleted by anyone takes its roll with it
+            }
         }
     }
 
@@ -200,6 +232,7 @@ namespace solaris_ui
             w.y.set(std::clamp(w.y.value(), 0.0, std::max(0.0, H - FloatWindow::kTitleH)));
             w.layout();
             if (kv.first.rfind("dev:", 0) == 0) static_cast<DevicePanel &>(w.content()).layout();
+            else if (kv.first.rfind("roll:", 0) == 0) static_cast<PianoRoll &>(w.content()).layout();
         }
     }
 
@@ -212,6 +245,7 @@ namespace solaris_ui
             auto *w = static_cast<FloatWindow *>(it->get());
             if (!w->isOpen() || !w->localBounds().contains(w->toLocal(world))) continue;
             if (w->key().rfind("dev:", 0) == 0) return static_cast<DevicePanel &>(w->content()).contextClick(world);
+            if (w->key().rfind("roll:", 0) == 0) return static_cast<PianoRoll &>(w->content()).contextClick(world);
             return false;
         }
         return false;

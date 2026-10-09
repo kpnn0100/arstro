@@ -103,7 +103,11 @@ namespace solaris
         mModel.devices = mDevices;
         mModel.browser = mBrowser;
         for (const auto &t : DeviceRegistry::types())
-            mModel.deviceTypes.push_back(DeviceTypeModel{t.name, t.label, t.kind == DeviceKind::Instrument ? "instrument" : "effect"});
+        {
+            DeviceTypeModel tm{t.name, t.label, t.kind == DeviceKind::Instrument ? "instrument" : "effect", {}};
+            for (const auto &nn : t.noteNames) tm.noteNames.push_back(NoteNameModel{nn.first, nn.second});
+            mModel.deviceTypes.push_back(tm);
+        }
         if (mRecentsStale)
         {
             // Home's cards read each song's header: done when the list or a song changes, not per command
@@ -241,6 +245,14 @@ namespace solaris
             pm.name = pt.name;
             pm.length = pt.length;
             pm.clips = uses[pt.id];
+            for (const auto &c : p.clips)
+                if (c.pattern == pt.id)
+                {
+                    pm.strip = c.track;
+                    if (const Rack *rk = p.rack(c.track))
+                        if (!rk->devices.empty()) pm.instrument = rk->devices.front().type;
+                    break;
+                }
             for (const auto &n : pt.notes) pm.notes.push_back(NoteModel{n.pitch, n.vel, n.at, n.length});
             mModel.patterns.push_back(pm);
         }

@@ -383,6 +383,10 @@ namespace solaris_ui
             }
             selectClip(clipAt(local));
             return true;
+        case Gesture::Type::DoubleClick:
+            for (const auto &v : mClips)
+                if (v.c.id == clipAt(local) && v.c.kind == "note" && onOpenPattern) onOpenPattern(v.c.pattern);
+            return true;
         case Gesture::Type::Scroll:
             if (g.ctrl)
             {

@@ -300,6 +300,44 @@ static void test_a_relative_src_is_found_in_the_songs_folder()
     pass("a relative src names a file in the song's folder first — the Song tab re-places a sound with one `clip add`");
 }
 
+static void test_note_move_and_quantize_edit_the_pattern()
+{
+    Run r;
+    r.ok("project new " + freshSong("roll"));
+    r.ok("clip add --instrument drums --at 0 --length 4");                     // ch_2, pt_1
+    r.ok("note add pt_1 --pitch 36 --at 0");
+    r.ok("note add pt_1 --pitch 38 --at 1 --length 0.5 --vel 90");
+    // one gesture, one line: move in time and pitch, resize, re-velocity
+    r.ok("note move pt_1 --pitch 38 --at 1 --to-pitch 40 --to-at 1.5");
+    r.ok("note move pt_1 --pitch 40 --at 1.5 --length 1 --vel 120");
+    const auto &n = r.svc.model().patterns[0].notes;
+    assert(n.size() == 2 && n[1].pitch == 40 && n[1].at == 1.5 && n[1].length == 1.0 && n[1].vel == 120);
+    assert(contains(r.no("note move pt_1 --pitch 40 --at 1.5 --to-pitch 36 --to-at 0"), "a note is already at 36"));
+    assert(contains(r.no("note move pt_1 --pitch 41 --at 1.5 --length 2"), "no note 41"));
+    assert(contains(r.no("note move pt_1 --pitch 40 --at 1.5"), "needs --to-pitch, --to-at, --length and/or --vel"));
+    // quantize: onto the grid; swing pushes every second step late; notes landing together merge
+    r.ok("note add pt_1 --pitch 42 --at 0.27");
+    r.ok("note add pt_1 --pitch 42 --at 0.49");
+    r.ok("note add pt_1 --pitch 42 --at 0.51 --vel 127");
+    r.ok("pattern quantize pt_1 --grid 0.25 --swing 0.5");
+    std::vector<double> hats;
+    int loud = 0;
+    for (const auto &x : r.svc.model().patterns[0].notes)
+        if (x.pitch == 42) { hats.push_back(x.at); loud = std::max(loud, x.vel); }
+    // 0.27 → step 1 (odd, +0.125) = 0.375; 0.49 and 0.51 → step 2 (even) = 0.5, merged, the louder kept
+    assert(hats == std::vector<double>({0.375, 0.5}) && loud == 127);
+    assert(contains(r.no("pattern quantize pt_1 --swing 0.9"), "--swing must be 0 to 0.75"));
+    // what a piano roll needs: the kit's key names, the pattern's strip and instrument
+    const auto &m = r.svc.model();
+    const auto &pm = m.patterns[0];
+    assert(pm.strip == "ch_2" && pm.instrument == "drums");
+    bool kick = false;
+    for (const auto &t : m.deviceTypes)
+        for (const auto &nn : t.noteNames) kick |= t.name == "drums" && nn.note == 36 && nn.name == "Kick";
+    assert(kick);
+    pass("note move: one line moves, resizes, re-velocities, refused onto a note; pattern quantize with swing merges collisions; the kit's keys are named (R-ROLL-2/4)");
+}
+
 static void test_undo_and_redo_every_edit()
 {
     Run r;
@@ -832,6 +870,7 @@ int main()
     test_every_sample_file_gets_its_own_strip();
     test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_changed();
     test_a_relative_src_is_found_in_the_songs_folder();
+    test_note_move_and_quantize_edit_the_pattern();
     test_undo_and_redo_every_edit();
     test_formulas_bind_numbers_and_refuse_what_cannot_be_read();
     test_an_automated_gain_renders_its_curve();
