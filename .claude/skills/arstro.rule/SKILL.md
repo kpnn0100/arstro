@@ -343,11 +343,11 @@ do not pretend the whole ladder is a prerequisite for any work at all.
 
 | rung | what it means | who has it |
 |---|---|---|
-| 0 | spec only | pulsar, solaris (second specification, 2026-10-08) |
+| 0 | spec only | pulsar |
 | 1 | core split out; `Command`/`Event`/model with one text codec | — |
 | 2 | registered with the root `ctest`; L2 headless service tests | genesis, arstrobench |
 | 3 | a real CLI front end that is the whole app without a window | genesis (partial), cosmo |
-| 4 | generated API document, committed, drift-tested | interstellar |
+| 4 | generated API document, committed, drift-tested | interstellar, solaris |
 | 5 | control socket + the equivalence test (§1) | cosmo |
 
 ---
@@ -524,7 +524,7 @@ Every Arstro skill invokes `arstro.rule` first, then applies its own:
 | `arstro.piano.implement` | which milestone is next, and how to measure it |
 | `android.theme.implement` | the shell milestones and its own ledger |
 | `arstro.interstellar.implement` · `.debug` | Interstellar's map, laws and recipes |
-| `arstro.solaris.implement` | Solaris's map and laws — above all, that its sound is built in the DSP library |
+| `arstro.solaris.implement` · `.debug` | Solaris's map, laws and recipes — above all, that its sound is built in the DSP library — and its reproduce/measure/file loop |
 
 **Known gaps this file does not paper over.** `core/ImageProcessing` has no requirements document
 at all while its `design.md` claims V-model discipline — its requirements live in cosmo's files

@@ -1,7 +1,8 @@
 # Solaris — Defects
 
 `D-<n>`, sequential, never reused, never deleted; a resolved entry moves whole to **Closed** with its
-commit hash and the test that now guards it. Entry format: `arstro.cosmo.core.debug` §4.
+commit hash and the test that now guards it. Entry format: `arstro.solaris.debug` §4 (filed by that
+skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions live in `tests/repro/`.
 
 ## Open
 
