@@ -101,7 +101,9 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
 - **R-FX-4** Compressor (threshold, ratio, attack, release, makeup), Reverb (pre-delay, decay, low
   cut, high cut, width, mix), Delay (time, feedback, tone, mix), Chorus (rate, depth, delay, mix) and
   Drive (drive, tone, level) wrap the DSP library's existing `Compressor`, `Reverb`, `Repeater`,
-  `Chorus` and `Overdrive` — reused, not rewritten.
+  `Chorus` and `Overdrive` — reused, not rewritten. (**Honest status (audit, 2026-10-09):** the Reverb
+  is built with `size` (the network's delay spread), decay, low cut, high cut, width and mix — its
+  PRE-DELAY is not built; it stays wanted, a DSP-library task first (R-DSP-1).)
 - **R-FX-5 A strip hosts an ordered rack** of devices: add, remove, reorder, bypass per device
   (was SR-RACK-1). An instrument strip's first device is its instrument.
 
@@ -275,7 +277,7 @@ audio devices so the user can take advantage of their devices."*
   `bpm · length`, version count. New (name, tempo, meter, sample rate defaulting from Settings),
   Open, Settings.
 
-## R-BROWSE — the left panel: samples and presets — 🚧 IN PROGRESS (1 ✅ DR-BROWSE-1/2, presets wait for a preset store; 3 ✅ onto the lanes, DR-BROWSE-2 — onto a strip or a rack with U3/U4; 2 audition with P2)
+## R-BROWSE — the left panel: samples and presets — 🚧 IN PROGRESS (1 ✅ DR-BROWSE-1/2, presets wait for a preset store; 2 ✅ audition, DR-EDM-9 (R-EDM-9); 3 ✅ onto the lanes, DR-BROWSE-2 — onto a strip or a rack with U3/U4)
 
 - **R-BROWSE-1 Three sections:** Folders (the sample folders from Settings), Presets (every
   instrument and effect in the registry with its factory and user presets), Project (the sounds the
@@ -326,7 +328,7 @@ R-VER, applied to an arrangement:
 - **R-RENDER-3 A range or the whole song**, with the tail rendered until the output falls below
   −90 dBFS or a 10 s cap (was SR-RENDER-3/4).
 
-## R-PLAY — real-time playback — ✅ IMPLEMENTED on one device (DR-PLAY-1/2/3; several devices: P2, R-DEV-2/4)
+## R-PLAY — real-time playback — ✅ IMPLEMENTED on one device (1–2: DR-PLAY-1/2) — 🚧 3 partly (per-block peaks in the model, DR-PLAY-3; RMS, a held peak and a clip latch are not in the model yet) — several devices: P2, R-DEV-2/4
 
 - **R-PLAY-1 Playback runs the same graph the render runs** on the clock device's callback;
   offline and live produce the same samples (was SR-RT-1..3, SR-SCOPE-2).
@@ -467,8 +469,10 @@ controller, normalised parameters and saved state.
 - **R-EDM-7 The loop region on the ruler** (R-TIME-4, detailed): Shift-drag on the ruler sets it
   (`transport loop`), its brace drawn there; a click inside it clears it.
 
-**Specified, scheduled after** (each its own ledger task): R-EDM-8 a sampler (one-shots, chromatic) ·
-R-EDM-9 audition in the browser (R-BROWSE-2) · R-EDM-10 a MIDI keyboard (play, record into a pattern)
+**Built after** (each its own ledger task): R-EDM-8 a sampler (one-shots, chromatic) — DR-EDM-8 ·
+R-EDM-9 audition in the browser (R-BROWSE-2) — DR-EDM-9.
+
+**Specified, scheduled after** (each its own ledger task): R-EDM-10 a MIDI keyboard (play, record into a pattern)
 · R-EDM-11 audio recording (R-REC) · R-EDM-12 clip fades and gain on the lanes, slice, reverse ·
 R-EDM-13 warp / time-stretch (R-CLIP-5) · R-EDM-14 a tempo map and tempo automation · R-EDM-15 a
 spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC beside WAV · R-EDM-17
@@ -567,7 +571,9 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   cosmo's `MenuStrip` with **File** (New, Open, Save, Save As, Render, Render Stems, Home), **Edit**
   (Undo, Redo, Duplicate, Delete), **Song** (Add Mixer, Add Line, Add Lane, Quantize), **View** (the
   mixer dock, the browser, the metronome). Settings is no longer at the right. Every item is a command
-  line or a host picker.)
+  line or a host picker.) (**As built (audit, 2026-10-09):** Song reads Add Mixer, Add Bus, Add Audio
+  Line, Add Lane, Quantize Clip — the selected note clip's pattern at the lanes' snap step, one
+  `pattern quantize <pt> --grid <step>` line, DR-UI-9.)
 - **R-UI-4 Cosmo's widgets are reused as libraries** (`SliderRow`, `SegmentedControl`, `PillButton`,
   `IconButton`, `ConfirmDialog`, `MenuStrip`, `HoverFade`); Interstellar's timeline idioms are
   followed, and its header-only helpers (`TextFit`, `EasedScroll`, `Glyphs`) are INCLUDED from

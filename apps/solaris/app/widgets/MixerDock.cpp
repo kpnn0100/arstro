@@ -476,14 +476,10 @@ namespace solaris_ui
                 ++row;
             }
         }
-        int col = 0, colOf = -1;
-        for (const auto &s : mModel.strips)
-            if (!mMixers.empty() && s.mixer != mMixers.front().id) { if (s.id == to) colOf = col; ++col; }
-        if (to == "master") colOf = col;
-        ++col;
-        for (const auto &p : mModel.ports)
-            if (p.dir == "out") { if (p.id == to) colOf = col; ++col; }
-        if (rowOf < 0 || colOf < 0) return Rect{};
+        // the columns are the service's (R-MIX-9): the same `matrix print` prints
+        const auto &cols = mModel.matrix.columns;
+        const int colOf = (int)(std::find(cols.begin(), cols.end(), to) - cols.begin());
+        if (rowOf < 0 || colOf >= (int)cols.size()) return Rect{};
         return Rect{kRowHeadW + colOf * kCellW - mMxX.value(), kTabsH + kColHeadH + rowOf * kCellH - mMxY.value(), kCellW, kCellH};
     }
 
@@ -508,11 +504,9 @@ namespace solaris_ui
         mScrollX.setExtent(0.0, stripsRight(), content);
         mScrollY.setExtent(kTabsH, std::max(0.0, H - kTabsH), bodyH());
         // the matrix's extents
-        int rows = 0, cols = 1;
+        int rows = 0;
+        const int cols = (int)mModel.matrix.columns.size();
         for (const auto &mx : mMixers) rows += 1 + (int)mx.strips.size();
-        for (const auto &s : mModel.strips)
-            if (!mMixers.empty() && s.mixer != mMixers.front().id) ++cols;
-        for (const auto &p : mModel.ports) cols += p.dir == "out" ? 1 : 0;
         mMxX.setExtent(kRowHeadW, std::max(0.0, W - kRowHeadW), cols * kCellW);
         mMxY.setExtent(kTabsH + kColHeadH, std::max(0.0, H - kTabsH - kColHeadH), rows * kCellH);
     }
@@ -744,16 +738,8 @@ namespace solaris_ui
         {
             if (p.x < kRowHeadW || p.y < kTabsH + kColHeadH) return h;
             for (const auto &s : mModel.strips)
-            {
-                std::vector<std::string> cols;
-                for (const auto &o : mModel.strips)
-                    if (!mMixers.empty() && o.mixer != mMixers.front().id) cols.push_back(o.id);
-                cols.push_back("master");
-                for (const auto &pt : mModel.ports)
-                    if (pt.dir == "out") cols.push_back(pt.id);
-                for (const auto &c : cols)
+                for (const auto &c : mModel.matrix.columns)
                     if (cellRect(s.id, c).contains(p)) { h.part = Part::Cell; h.id = s.id; h.to = c; return h; }
-            }
             return h;
         }
         // the master
@@ -1417,12 +1403,7 @@ namespace solaris_ui
     {
         if (a <= 0.001) return;
         const double W = width.value(), H = height.value();
-        std::vector<std::string> cols;
-        for (const auto &s : mModel.strips)
-            if (!mMixers.empty() && s.mixer != mMixers.front().id) cols.push_back(s.id);
-        cols.push_back("master");
-        for (const auto &p : mModel.ports)
-            if (p.dir == "out") cols.push_back(p.id);
+        const auto &cols = mModel.matrix.columns; // the service's (R-MIX-9): every route has a cell
         const double x0 = kRowHeadW - mMxX.value(), y0 = kTabsH + kColHeadH - mMxY.value();
         // the cells
         t.save();
@@ -1466,7 +1447,8 @@ namespace solaris_ui
                         for (const auto &sd : s->sends)
                             if (sd.to == to)
                             {
-                                const std::string txt = num(sd.gain, 1) + (sd.pre ? " P" : "");
+                                // P pre-fader; K a sidechain key (R-MIX-15) — `matrix print`'s "pre" / "key"
+                                const std::string txt = num(sd.gain, 1) + (sd.pre ? " P" : "") + (sd.sidechain ? " K" : "");
                                 t.setFill(fade(palette::foreground(), a * snd));
                                 t.drawText(txt, r.x + (r.w - t.measureText(txt, 10.0, font::mono())) * 0.5, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::mono());
                             }

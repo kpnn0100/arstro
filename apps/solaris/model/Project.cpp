@@ -751,24 +751,33 @@ namespace solaris
 
     bool feedsForward(const Project &p, const Strip &from, const Strip &to)
     {
-        const Mixer *a = p.mixerOf(from), *b = p.mixerOf(to);
-        return &from != &to && (b ? b->order : 0) > (a ? a->order : 0);
-    }
-
-    bool keysForward(const Project &p, const Strip &from, const Strip &to)
-    {
+        // later in processing order = later in stripsInOrder(): (mixer order, strip order), a tie kept in
+        // the file's order by its stable sort
         if (&from == &to) return false;
-        const auto order = p.stripsInOrder();
-        const auto a = std::find(order.begin(), order.end(), &from), b = std::find(order.begin(), order.end(), &to);
-        return a != order.end() && b != order.end() && b > a;
+        const auto a = p.rankOf(from), b = p.rankOf(to);
+        if (a != b) return a < b;
+        const Strip *first = p.strips.data(), *last = first + p.strips.size();
+        return &from >= first && &from < last && &to >= first && &to < last && &from < &to;
     }
 
     std::vector<std::string> keyTargetsOf(const Project &p, const Strip &s)
     {
         std::vector<std::string> out;
-        for (const Strip *t : p.stripsInOrder())
-            if (keysForward(p, s, *t)) out.push_back(t->id);
+        for (const auto &id : targetsOf(p, s))
+            if (p.strip(id)) out.push_back(id);
         return out;
+    }
+
+    namespace
+    {
+        std::vector<const Port *> outPortsInOrder(const Project &p)
+        {
+            std::vector<const Port *> ports;
+            for (const auto &pt : p.ports)
+                if (pt.dir == "out") ports.push_back(&pt);
+            std::stable_sort(ports.begin(), ports.end(), [](const Port *x, const Port *y) { return x->order < y->order; });
+            return ports;
+        }
     }
 
     std::vector<std::string> targetsOf(const Project &p, const Strip &s)
@@ -777,12 +786,25 @@ namespace solaris
         for (const Strip *t : p.stripsInOrder())
             if (feedsForward(p, s, *t)) out.push_back(t->id);
         out.push_back("master");
-        std::vector<const Port *> ports;
-        for (const auto &pt : p.ports)
-            if (pt.dir == "out") ports.push_back(&pt);
-        std::stable_sort(ports.begin(), ports.end(), [](const Port *x, const Port *y) { return x->order < y->order; });
-        for (const Port *pt : ports) out.push_back(pt->id);
+        for (const Port *pt : outPortsInOrder(p)) out.push_back(pt->id);
         return out;
+    }
+
+    std::vector<std::string> matrixColumnsOf(const Project &p)
+    {
+        std::set<std::string> reached;
+        for (const auto &s : p.strips)
+        {
+            for (const auto &t : targetsOf(p, s)) reached.insert(t);
+            reached.insert(s.out); // a route the rule refuses still shows (a file edited by hand)
+        }
+        for (const auto &sd : p.sends) reached.insert(sd.to);
+        std::vector<std::string> cols;
+        for (const Strip *s : p.stripsInOrder())
+            if (reached.count(s->id)) cols.push_back(s->id);
+        cols.push_back("master");
+        for (const Port *pt : outPortsInOrder(p)) cols.push_back(pt->id);
+        return cols;
     }
 
     std::vector<std::string> validateProject(const Project &p)
@@ -801,7 +823,7 @@ namespace solaris
             const Mixer *m = p.mixerOf(s);
             return s.id + " (" + s.name + ", on " + (m ? m->name : std::string("no mixer")) + ")";
         };
-        // R-MIX-4: a target is "master", an output port, or a strip on a LATER mixer.
+        // R-MIX-4: a target is "master", an output port, or a strip LATER in processing order.
         auto checkTarget = [&](const Strip &from, const std::string &to, const std::string &what) {
             if (to.empty() || to == "master") return;
             if (const Port *pt = p.port(to))
@@ -814,7 +836,7 @@ namespace solaris
             if (t == &from) { e.push_back(from.id + "'s " + what + " goes to itself"); return; }
             if (!feedsForward(p, from, *t))
                 e.push_back(describe(from) + " " + what + " → " + describe(*t) +
-                            ": a strip can only feed a strip on a LATER mixer, the master or a port (R-MIX-4)");
+                            ": a strip can only feed a strip LATER in processing order (a later mixer, or after it on its own), the master or a port (R-MIX-4)");
         };
         for (const auto &s : p.strips)
         {
@@ -833,7 +855,7 @@ namespace solaris
                 // a key goes to a strip's detector: a strip later in processing order, any mixer (R-MIX-15)
                 const Strip *t = p.strip(sd.to);
                 if (!t) e.push_back(sd.id + " is a sidechain key, so it must go to a strip — `" + sd.to + "` is not one");
-                else if (!keysForward(p, *from, *t))
+                else if (!feedsForward(p, *from, *t))
                     e.push_back(describe(*from) + " key " + sd.id + " → " + describe(*t) +
                                 ": a sidechain key can only go to a strip LATER in processing order (R-MIX-15)");
             }

@@ -70,7 +70,8 @@ namespace solaris
         void setTempo(double samplesPerBeat, int beatsPerBar) { mSpb.store(samplesPerBeat); mBpb.store(beatsPerBar < 1 ? 1 : beatsPerBar); }
         static constexpr int kClickBeat = 37, kClickBar = 56; // the Drum Machine's rim and cowbell
         void setLoop(long long from, long long to) { mLoopA.store(from); mLoopB.store(to); }
-        /** The sample the listener hears now: rendered minus the device's latency. */
+        /** The sample the listener hears now: rendered minus the device's latency and the engine's
+         *  (R-MIX-17: what comes out of the engine is `outputLatency()` behind its position). */
         long long heard() const;
         long long rendered() const { return mRendered.load(); }
         double latency() const { return mLatency.load(); }
@@ -109,6 +110,7 @@ namespace solaris
         LockFreeQueue<engine::Engine *> mRetired{64};
         std::atomic<long long> mRendered{0}, mLoopA{0}, mLoopB{0};
         std::atomic<double> mLatency{0};
+        std::atomic<long long> mGraphLatency{0}; // the playing engine's outputLatency (R-MIX-17)
         std::unique_ptr<std::atomic<float>[]> mPeaks{new std::atomic<float>[2 * kMaxStrips + 2]};
         std::unique_ptr<Device> mClick;
         std::vector<Sample> mClickL, mClickR;

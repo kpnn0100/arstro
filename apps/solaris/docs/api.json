@@ -109,7 +109,7 @@
         "sample=<file>",
         "out=<target>"
       ],
-      "summary": "Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: the first bus on a later mixer (\"Main\"), else master. An instrument strip gets its instrument (default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8).",
+      "summary": "Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: \"Main\" — the bus that leaves the nearest later mixer with buses, else the one leaving its own mixer (the new strip is then placed BEFORE it, so the route goes forward), else master. An instrument strip gets its instrument (default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8).",
       "requirement": "R-MIX-1"
     },
     {
@@ -130,7 +130,7 @@
         "mixer=<mx>",
         "order=<n>"
       ],
-      "summary": "Move a strip to another mixer and/or position. Refused if a route would point backward.",
+      "summary": "Move a strip to another mixer (at its end) and/or to position --order <n> on it (0 = first); its mixer's strips renumber in their new order, as `mixer move` renumbers mixers. Refused if a route would point backward.",
       "requirement": "R-MIX-3"
     },
     {
@@ -150,7 +150,7 @@
       "flags": [
         "to=<ch|master|port>"
       ],
-      "summary": "Set a strip's main output: a strip on a LATER mixer, master, or an output port.",
+      "summary": "Set a strip's main output: a strip LATER in processing order (a later mixer, or after it on its own), master, or an output port.",
       "requirement": "R-MIX-4"
     },
     {
@@ -163,7 +163,7 @@
         "pre",
         "sidechain"
       ],
-      "summary": "Add a send (post-fader unless --pre). Same forward-only rule as `route`. With --sidechain it is a KEY: it feeds the target's compressors' detectors (their Sidechain switch), not its input, and may go to any strip later in processing order, its own mixer included (R-MIX-15).",
+      "summary": "Add a send (post-fader unless --pre). Same forward-only rule as `route`. With --sidechain it is a KEY: it feeds the target's compressors' detectors (their Sidechain switch), not its input, and goes to a strip (R-MIX-15).",
       "requirement": "R-MIX-5"
     },
     {
@@ -219,6 +219,16 @@
         "with-clips"
       ],
       "summary": "Delete a lane. Refused while clips are drawn on it, unless --with-clips.",
+      "requirement": "R-LANE-1"
+    },
+    {
+      "verb": "lane move",
+      "usage": "lane move <ln> [--to <index>]",
+      "args": "<ln>",
+      "flags": [
+        "to=<index>"
+      ],
+      "summary": "Move a lane to row <index> (0 = the top); the lanes renumber in their new order.",
       "requirement": "R-LANE-1"
     },
     {
@@ -515,17 +525,17 @@
     },
     {
       "verb": "render",
-      "usage": "render [--out <file.wav>] [--from <beats>] [--to <beats>] [--stems <ch,…>] [--ports] [--bits <24|32f>]",
+      "usage": "render --out <file.wav> [--from <beats>] [--to <beats>] [--stems <ch,…|all>] [--ports] [--bits <24|32f>]",
       "args": "",
       "flags": [
         "out=<file.wav>",
         "from=<beats>",
         "to=<beats>",
-        "stems=<ch,…>",
+        "stems=<ch,…|all>",
         "ports",
         "bits=<24|32f>"
       ],
-      "summary": "Render offline: the master to --out; with --stems, each named strip's post-fader output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS or 10 s.",
+      "summary": "Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) is compensated and trimmed (R-MIX-17).",
       "requirement": "R-RENDER-2"
     },
     {
@@ -1253,13 +1263,13 @@
     {
       "path": "strips[].targets",
       "type": "string[]",
-      "summary": "where its output or a send may go (R-MIX-4): strips on later mixers, master, output ports",
+      "summary": "where its output or a send may go (R-MIX-4): strips LATER in processing order (a later mixer, or after it on its own), master, output ports",
       "stable": true
     },
     {
       "path": "strips[].keyTargets",
       "type": "string[]",
-      "summary": "where a sidechain key may go (R-MIX-15): any strip later in processing order, its own mixer included",
+      "summary": "where a sidechain key may go (R-MIX-15): the strips of targets",
       "stable": true
     },
     {
@@ -1650,6 +1660,18 @@
       "path": "ports[].channels",
       "type": "int",
       "summary": "",
+      "stable": true
+    },
+    {
+      "path": "matrix",
+      "type": "object",
+      "summary": "the routing matrix (R-MIX-9), computed once for every face",
+      "stable": true
+    },
+    {
+      "path": "matrix.columns",
+      "type": "string[]",
+      "summary": "its columns: every strip some strip may or does reach (processing order), \"master\", the output ports — every route and key has a cell",
       "stable": true
     },
     {

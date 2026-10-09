@@ -15,7 +15,7 @@ helpers it borrows.
 | Home / song bar › Settings (beside Home), Ctrl+, | `devices list`, then the sheet opens |
 | Song bar › File › New Song… · Open… · Save · Save As… · Render… · Render Stems… · Home | picker → `project new` · picker → `project open` · `project save` · picker → `project save "<path>"` · picker → `render --out "<path>"` · picker → `render --out "<path>" --stems <every strip>` · `project close` |
 | Song bar › Edit › Undo · Redo · Duplicate Clip · Delete Clip | `undo` · `redo` · `clip duplicate <ac>` · `clip delete <ac>` |
-| Song bar › Song › Add Mixer · Add Bus · Add Audio Line · Add Lane | `mixer add` · `strip add --kind bus` · `strip add --kind audio` · `lane add` |
+| Song bar › Song › Add Mixer · Add Bus · Add Audio Line · Add Lane · Quantize Clip | `mixer add` · `strip add --kind bus` (placed before Main, feeding it) · `strip add --kind audio` · `lane add` · `pattern quantize <pt> --grid <the lanes' snap step, 1/32 when none>` (the selected note clip's pattern) |
 | Song bar › View › Hide/Show Mixer · Hide/Show Browser · Metronome · Show/Hide IDs · Settings… | the view's · the view's · `settings set metronome=on\|off` · `settings set showIds=on\|off` (R-UI-11) · the sheet |
 | Settings › a chip | `settings set output=<id>` · `input=<id>` · `sampleRate=<hz>` · `bufferSize=<frames>` · `metronome=on\|off` · `metronomeLevel=<dB>` · `newBpm=<bpm>` · `newSig=<n/d>` · `reducedMotion=on\|off` |
 | Settings › × on a folder | `folder remove "<path>"` |
@@ -52,7 +52,7 @@ helpers it borrows.
 | Dock › a strip, right-click (not on a number) | Rename… → `set <ch>.name="…"` · Copy ID · Move its clips to ▸ (the strips of its kind) → `strip relink <ch> --to <ch2>` · Delete strip → `strip delete <ch>` |
 | Dock › a strip, right-click › Sidechain to ▸ (its `keyTargets`) | `send add <ch> --to <ch2> --sidechain` — shown "key <target>" in amber |
 | Dock › "+ Line" (after a page's last card) | Audio line · Bus · each instrument → `strip add --kind audio\|bus\|instrument [--instrument <type>] --mixer <mx>` |
-| Matrix › an open cell · double-click · a send cell · dragged up/down | `send add <ch> --to <col>` · `route <ch> --to <col>` · its menu (as a send) · `set <sd>.gain=<dB>` |
+| Matrix › an open cell · double-click · a send cell · dragged up/down | `send add <ch> --to <col>` · `route <ch> --to <col>` · its menu (as a send) · `set <sd>.gain=<dB>` — the columns are the model's `matrix.columns` (every strip a route may reach, master, out ports — the same `matrix print` prints); a send cell reads its dB, `P` pre-fader, `K` a sidechain key |
 | Dock › a fader · a pan · a send's level (card or matrix cell) · the master fader, right-click | the PARAMETER menu (`ParamMenu`, R-MIX-16) on `<ch>.gain` · `<ch>.pan` · `<sd>.gain` · `project.masterGain`: Create Automation → `auto create <address>` · Formula… → cosmo's field → `set <address>="=<typed>"` · Clear Binding → `bind clear <address>` · Reset to Default → `set <address>=0` · Copy Address · Copy Value · Copy as Formula → the host's clipboard |
 | Dock › a device chip · an instrument strip's name, double-click | its WINDOW opens or comes forward (the view's) |
 | Device window › a slider · a choice (left/right half) · double-click a slider | `set <dv>.<param>=<value in its unit>` · `set <dv>.<param>=<name>` · the registry default |

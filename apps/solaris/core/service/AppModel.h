@@ -90,7 +90,13 @@ namespace solaris
         std::vector<std::string> fromLanes;     // lanes its clips are drawn on
         std::vector<std::string> fromStrips;    // strips whose output or a send lands here
         std::vector<std::string> targets;       // where its output or a send MAY go (R-MIX-4): later strips, master, out ports
-        std::vector<std::string> keyTargets;    // where a sidechain KEY may go (R-MIX-15): any strip later in processing order
+        std::vector<std::string> keyTargets;    // where a sidechain KEY may go (R-MIX-15): the strips of `targets`
+    };
+
+    /** R-MIX-9: the matrix both faces draw — computed once, by the service. */
+    struct MatrixModel
+    {
+        std::vector<std::string> columns;       // every strip some strip may or does reach (processing order), "master", out ports
     };
 
     struct MixerModel
@@ -233,6 +239,7 @@ namespace solaris
         std::vector<BindingModel> bindings;       // R-AUTO-1/9, every formula, inert ones flagged
         std::vector<PatternModel> patterns;
         std::vector<PortModel> ports;
+        MatrixModel matrix;                      // R-MIX-9: its columns, so `matrix print` and the GUI show every route alike
         double lengthBeats = 0;                  // the song's end (the last clip's)
         std::vector<std::string> audit;          // the last `audit`'s findings
         std::string lastError;

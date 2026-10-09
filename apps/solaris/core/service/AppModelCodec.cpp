@@ -77,8 +77,8 @@ namespace solaris
             {"strips[].clipCount", "int", "fed by: clips playing through it (R-MIX-8)"},
             {"strips[].fromLanes", "string[]", "fed by: the lanes those clips are drawn on"},
             {"strips[].fromStrips", "string[]", "fed by: strips whose output or a send lands here"},
-            {"strips[].targets", "string[]", "where its output or a send may go (R-MIX-4): strips on later mixers, master, output ports"},
-            {"strips[].keyTargets", "string[]", "where a sidechain key may go (R-MIX-15): any strip later in processing order, its own mixer included"},
+            {"strips[].targets", "string[]", "where its output or a send may go (R-MIX-4): strips LATER in processing order (a later mixer, or after it on its own), master, output ports"},
+            {"strips[].keyTargets", "string[]", "where a sidechain key may go (R-MIX-15): the strips of targets"},
             {"masterDevices", "object[]", "the master's rack, shaped like strips[].devices"},
             {"lanes", "object[]", "timeline rows, in order"},
             {"lanes[].id", "string", ""},
@@ -145,6 +145,8 @@ namespace solaris
             {"ports[].name", "string", ""},
             {"ports[].dir", "string", "in | out"},
             {"ports[].channels", "int", ""},
+            {"matrix", "object", "the routing matrix (R-MIX-9), computed once for every face"},
+            {"matrix.columns", "string[]", "its columns: every strip some strip may or does reach (processing order), \"master\", the output ports — every route and key has a cell"},
             {"lengthBeats", "number", "where the last clip ends"},
             {"audit", "string[]", "the last `audit`'s findings"},
             {"lastError", "string", "the last refusal or failure"},
@@ -436,6 +438,7 @@ namespace solaris
         Json ports = Json::array();
         for (const auto &p : m.ports) ports.push(Json::object().set("id", p.id).set("name", p.name).set("dir", p.dir).set("channels", p.channels));
         j.set("ports", ports);
+        j.set("matrix", Json::object().set("columns", strings(m.matrix.columns)));
         j.set("lengthBeats", m.lengthBeats).set("audit", strings(m.audit)).set("lastError", m.lastError);
         Json recents = Json::array();
         for (const auto &r : m.recents)

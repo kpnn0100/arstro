@@ -272,6 +272,7 @@ namespace solaris
             mModel.patterns.push_back(pm);
         }
         for (const auto &po : p.ports) mModel.ports.push_back(PortModel{po.id, po.name, po.dir, po.channels});
+        mModel.matrix.columns = matrixColumnsOf(p); // R-MIX-9: the same columns `matrix print` prints
 
         // formulas and automation (R-AUTO-9), every one checked, the inert ones saying why
         std::vector<std::string> problems;
@@ -489,15 +490,11 @@ namespace solaris
 
     std::string SolarisService::matrixText(bool json) const
     {
-        // R-MIX-9: rows = strips in processing order; columns = later strips, master, output ports.
+        // R-MIX-9: rows = strips in processing order; columns = the model's `matrix.columns` — every strip some
+        // strip may or does reach, master, output ports — so a route to an instrument or a same-mixer strip shows
         const Project &p = mProject;
         const auto order = p.stripsInOrder();
-        std::vector<std::string> cols;
-        for (const Strip *s : order)
-            if (s->kind == "bus") cols.push_back(s->id);
-        cols.push_back("master");
-        for (const auto &po : p.ports)
-            if (po.dir == "out") cols.push_back(po.id);
+        const std::vector<std::string> cols = matrixColumnsOf(p);
 
         auto cell = [&](const Strip &s, const std::string &col) {
             std::string v;

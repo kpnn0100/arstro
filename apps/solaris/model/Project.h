@@ -242,15 +242,19 @@ namespace solaris
     std::string serializeProject(const Project &p);
     /** Every structural error (§11), each one sentence naming what and where. Empty = valid. */
     std::vector<std::string> validateProject(const Project &p);
-    /** R-MIX-4, the one rule: may strip `from` feed strip `to`? Only a strip on a LATER mixer. */
+    /** R-MIX-4, the one rule: may strip `from` feed strip `to` — by its output, a send or a sidechain
+     *  key? Only a strip LATER IN PROCESSING ORDER: a later mixer, or later on its own (strip order,
+     *  then the file's order on a tie). A total order, so no loop can form (amended, audit 2026-10-09:
+     *  it was "a later mixer" for outputs and sends, which kept a bus made on Buses from feeding Main). */
     bool feedsForward(const Project &p, const Strip &from, const Strip &to);
-    /** Everything `s` may route or send to: strips on later mixers (processing order), then
+    /** Everything `s` may route or send to: the strips after it in processing order, then
      *  "master", then the output ports — what a matrix column or a route picker offers. */
     std::vector<std::string> targetsOf(const Project &p, const Strip &s);
-    /** R-MIX-4 amended (R-MIX-15): a sidechain KEY may go to any strip LATER in processing order, the
-     *  same mixer included — it is heard by a detector, never played, so no loop can form. */
-    bool keysForward(const Project &p, const Strip &from, const Strip &to);
+    /** Where a sidechain KEY may go (R-MIX-15): the strips of `targetsOf` — a key goes to a strip. */
     std::vector<std::string> keyTargetsOf(const Project &p, const Strip &s);
+    /** R-MIX-9: the matrix's columns, ONCE for every face — every strip some strip may reach or does
+     *  reach (processing order), then "master", then the output ports: every route has a cell. */
+    std::vector<std::string> matrixColumnsOf(const Project &p);
 
     /** A fresh project: R-MIX-3's defaults — Mixer 1 "Sources", Mixer 2 "Buses" with bus "Main",
      *  output port "Main" fed by the master. */

@@ -253,7 +253,17 @@ static void test_instrument_drop_and_clip_drag()
     assert(r.svc->model().clips[0].at == 4.0 && r.svc->model().clips[0].lane == "ln_2");
     const artboard::Rect after = world(tl, tl.clipRect("ac_1"));
     assert(std::fabs(after.x - mid.x) < 1.0);                           // where it was dropped: nothing jumps
-    pass("An instrument dropped on a lane is ONE `clip add --instrument` — a strip and its clip; a clip dragged follows the pointer and lands as `clip move`");
+    // R-LANE-1: a lane moved from a shell (`lane move`) slides to its row with its clips — caught mid-tween
+    const double row1 = cy(world(tl, tl.clipRect("ac_1")));
+    r.cmd("lane move ln_2 --to 0");
+    r.frame();
+    r.frame();
+    const double moving = cy(world(tl, tl.clipRect("ac_1")));
+    r.settle();
+    const double row0 = cy(world(tl, tl.clipRect("ac_1")));
+    assert(row0 < row1 - 1.0 && moving < row1 - 0.01 && moving > row0 + 0.01);
+    assert(r.svc->model().lanes[0].id == "ln_2" && r.svc->model().lanes[0].order == 0);
+    pass("An instrument dropped on a lane is ONE `clip add --instrument` — a strip and its clip; a clip dragged follows the pointer and lands as `clip move`; a lane moved slides with its clips");
 }
 
 static void test_lists_travel_when_the_song_changes_shape()
@@ -460,7 +470,20 @@ static void test_mixer_matrix_effects_and_device_panel()
     r.click(world(d, d.cellRect("ch_1", "ch_1")));                       // Main → itself: hatched
     r.settle();
     assert(r.sent.size() == before);
-    pass("Mixer: + Effect is the registry; a chip opens the device's generated window (fade), a slider is `set` in its unit, bypass, a second window on top; the matrix adds a send");
+    // every route has a cell (R-MIX-9): the columns are the service's `matrix.columns` — an instrument LATER on
+    // Sources is one (forward = processing order, R-MIX-4 amended), where "strips off the first mixer" had none
+    r.cmd("clip add --instrument drums --at 0 --length 4");              // ch_3, after ch_2 on Sources
+    r.settle();
+    const auto &cols = r.svc->model().matrix.columns;
+    assert(std::find(cols.begin(), cols.end(), "ch_3") != cols.end() && d.cellRect("ch_2", "ch_3").w > 0.0);
+    r.click(world(d, d.cellRect("ch_2", "ch_3")));
+    r.settle();
+    assert(sentLine(r, "send add ch_2 --to ch_3"));
+    const size_t back = r.sent.size();
+    r.click(world(d, d.cellRect("ch_3", "ch_3")));                       // itself: hatched, takes nothing
+    r.settle();
+    assert(r.sent.size() == back);
+    pass("Mixer: + Effect is the registry; a chip opens the device's generated window (fade), a slider is `set` in its unit, bypass, a second window on top; the matrix adds a send, and has a column for every strip a route may reach");
 }
 
 static void test_song_bar_menus_and_settings_sections()
@@ -503,6 +526,19 @@ static void test_song_bar_menus_and_settings_sections()
     r.click(world(ms, ms.itemRect(2, 1)));
     r.settle();
     assert(sentLine(r, "strip add --kind bus"));
+    // Song › Quantize Clip: the selected note clip's pattern, at the lanes' snap step — one line (R-UI-3)
+    r.app->project().timeline().selectClip("ac_1");
+    r.settle();
+    r.click(world(ms, ms.titleRect(2)));
+    r.settle();
+    assert(ms.menu(2).items[4].label == "Quantize Clip");
+    r.click(world(ms, ms.itemRect(2, 4)));
+    r.settle();
+    {
+        char grid[32];
+        std::snprintf(grid, sizeof grid, "%.10g", std::min(4.0, std::max(1.0 / 32.0, r.app->project().timeline().snapStep())));
+        assert(sentLine(r, std::string("pattern quantize pt_1 --grid ") + grid) && r.svc->model().lastError.empty());
+    }
     // a press outside an open menu closes it
     r.click(world(ms, ms.titleRect(0)));
     r.settle();

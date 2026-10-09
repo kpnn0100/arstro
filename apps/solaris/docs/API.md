@@ -19,18 +19,19 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `mixer add [name]` | Add a mixer page after the last one. | R-MIX-3 |
 | `mixer delete <mx>` | Delete an empty mixer. Refused while strips live on it. | R-MIX-3 |
 | `mixer move <mx> [--to <index>]` | Move a mixer to position <index> (0 = first). Refused if it would make any route point backward. | R-MIX-4 |
-| `strip add [--kind <audio\|instrument\|bus>] [--name <text>] [--mixer <mx>] [--instrument <type>] [--sample <file>] [--out <target>]` | Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: the first bus on a later mixer ("Main"), else master. An instrument strip gets its instrument (default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8). | R-MIX-1 |
+| `strip add [--kind <audio\|instrument\|bus>] [--name <text>] [--mixer <mx>] [--instrument <type>] [--sample <file>] [--out <target>]` | Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: "Main" — the bus that leaves the nearest later mixer with buses, else the one leaving its own mixer (the new strip is then placed BEFORE it, so the route goes forward), else master. An instrument strip gets its instrument (default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8). | R-MIX-1 |
 | `strip delete <ch> [--with-clips]` | Delete a strip and its rack. Refused while clips play through it or strips route to it, unless --with-clips (its clips go too). | R-MIX-1 |
-| `strip move <ch> [--mixer <mx>] [--order <n>]` | Move a strip to another mixer and/or position. Refused if a route would point backward. | R-MIX-3 |
+| `strip move <ch> [--mixer <mx>] [--order <n>]` | Move a strip to another mixer (at its end) and/or to position --order <n> on it (0 = first); its mixer's strips renumber in their new order, as `mixer move` renumbers mixers. Refused if a route would point backward. | R-MIX-3 |
 | `strip relink <ch> [--to <ch>]` | Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips need an audio strip, note clips an instrument strip; a bus plays no clips. | R-MIX-14 |
-| `route <ch> [--to <ch\|master\|port>]` | Set a strip's main output: a strip on a LATER mixer, master, or an output port. | R-MIX-4 |
-| `send add <ch> [--to <ch\|master\|port>] [--gain <dB>] [--pre] [--sidechain]` | Add a send (post-fader unless --pre). Same forward-only rule as `route`. With --sidechain it is a KEY: it feeds the target's compressors' detectors (their Sidechain switch), not its input, and may go to any strip later in processing order, its own mixer included (R-MIX-15). | R-MIX-5 |
+| `route <ch> [--to <ch\|master\|port>]` | Set a strip's main output: a strip LATER in processing order (a later mixer, or after it on its own), master, or an output port. | R-MIX-4 |
+| `send add <ch> [--to <ch\|master\|port>] [--gain <dB>] [--pre] [--sidechain]` | Add a send (post-fader unless --pre). Same forward-only rule as `route`. With --sidechain it is a KEY: it feeds the target's compressors' detectors (their Sidechain switch), not its input, and goes to a strip (R-MIX-15). | R-MIX-5 |
 | `send delete <sd>` | Remove a send. | R-MIX-5 |
 | `device add <ch\|master> [--type <registry type>] [--at <index>]` | Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an instrument strip. | R-FX-5 |
 | `device remove <dv>` | Remove a device from its rack. An instrument strip keeps its instrument. | R-FX-5 |
 | `device move <dv> [--to <index>]` | Move a device within its rack. | R-FX-5 |
 | `lane add [name]` | Add a timeline lane at the bottom. | R-LANE-1 |
 | `lane delete <ln> [--with-clips]` | Delete a lane. Refused while clips are drawn on it, unless --with-clips. | R-LANE-1 |
+| `lane move <ln> [--to <index>]` | Move a lane to row <index> (0 = the top); the lanes renumber in their new order. | R-LANE-1 |
 | `clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--sample <file>] [--pattern <pt>] [--lane <ln\|new>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]` | Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of --pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). With no --lane it goes on the lane its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for a new one (R-SVC-8). Prints the clip, then `made:` and whatever else it made. | R-MIX-2 |
 | `clip move <ac> [--at <beats>] [--lane <ln>] [--strip <ch>]` | Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). | R-LANE-2 |
 | `clip duplicate <ac> [--at <beats>] [--count <n>]` | A copy right after it (or at --at); --count N makes N copies end to end. A note clip's copy plays the SAME pattern — linked. Prints the first copy, then `made:` the rest. | R-CLIP-3 |
@@ -57,7 +58,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `auto point shape <au> [--at <beats>] [--shape <linear\|hold\|smooth\|bezier>] [--speed-in <v/beat>] [--influence-in <%>] [--speed-out <v/beat>] [--influence-out <%>]` | Set how the curve leaves the point at --at. A BEZIER point is Interstellar's key (R-ANIM-2): on each side a speed — the slope there, in the automation's unit per beat — and an influence, how far into the neighbouring segment it pulls (0 < x ≤ 100 %); flags not given are kept. One line per handle gesture. | R-AUTO-10 |
 | `bind clear <address>` | Clear an address's formula: it plays its own stored value again. (`set <address>=<number>` clears and sets.) | R-AUTO-1 |
 | `eval <address> [--at <beats>] [--explain]` | The value an address plays at a beat (default 0); --explain shows its formula and every name it reads. | R-AUTO-8 |
-| `render [--out <file.wav>] [--from <beats>] [--to <beats>] [--stems <ch,…>] [--ports] [--bits <24\|32f>]` | Render offline: the master to --out; with --stems, each named strip's post-fader output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS or 10 s. | R-RENDER-2 |
+| `render --out <file.wav> [--from <beats>] [--to <beats>] [--stems <ch,…\|all>] [--ports] [--bits <24\|32f>]` | Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) is compensated and trimmed (R-MIX-17). | R-RENDER-2 |
 | `matrix print [--json]` | Every route and send at once: rows = strips, columns = destinations. | R-MIX-9 |
 | `audit` | The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping. | R-MIX-10 |
 | `state print [--json] [--stable] [--compact]` | The whole AppModel; --stable omits what changes with time. --json --compact: the SONG only (no registry, machine, recents or browser), on one line; a device lists only its non-default parameters as `name=value`, a pattern its notes in the `notes add` notation. | R-SVC-2 |
@@ -221,8 +222,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].clipCount` | int | fed by: clips playing through it (R-MIX-8) |
 | `strips[].fromLanes` | string[] | fed by: the lanes those clips are drawn on |
 | `strips[].fromStrips` | string[] | fed by: strips whose output or a send lands here |
-| `strips[].targets` | string[] | where its output or a send may go (R-MIX-4): strips on later mixers, master, output ports |
-| `strips[].keyTargets` | string[] | where a sidechain key may go (R-MIX-15): any strip later in processing order, its own mixer included |
+| `strips[].targets` | string[] | where its output or a send may go (R-MIX-4): strips LATER in processing order (a later mixer, or after it on its own), master, output ports |
+| `strips[].keyTargets` | string[] | where a sidechain key may go (R-MIX-15): the strips of targets |
 | `masterDevices` | object[] | the master's rack, shaped like strips[].devices |
 | `lanes` | object[] | timeline rows, in order |
 | `lanes[].id` | string |  |
@@ -288,6 +289,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `ports[].name` | string |  |
 | `ports[].dir` | string | in \| out |
 | `ports[].channels` | int |  |
+| `matrix` | object | the routing matrix (R-MIX-9), computed once for every face |
+| `matrix.columns` | string[] | its columns: every strip some strip may or does reach (processing order), "master", the output ports — every route and key has a cell |
 | `lengthBeats` | number | where the last clip ends |
 | `audit` | string[] | the last `audit`'s findings |
 | `lastError` | string | the last refusal or failure |

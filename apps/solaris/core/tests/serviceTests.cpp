@@ -26,6 +26,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <tuple>
 
 using namespace arstro::solaris;
 namespace fs = std::filesystem;
@@ -451,8 +452,11 @@ static void test_a_sidechain_key_ducks_the_bass()
     ss << in.rdbuf();
     assert(contains(ss.str(), "#asend id=sd_1 from=ch_2 to=ch_3 gain=0.0 pre=true sidechain=true"));
     assert(r.ok("get sd_1.sidechain") == "true\n");
-    // turned into an audible send it must obey the audible rule — ch_3 is on the same mixer: refused, nothing changed
-    assert(contains(r.no("set sd_1.sidechain=false"), "a strip can only feed a strip on a LATER mixer"));
+    // an audible send obeys the same rule (R-MIX-4 amended: forward = later in processing order): ch_3 comes after
+    // ch_2 on Sources, so the key turned audible is taken; back, ch_3 → ch_2, it is refused naming both ends
+    r.ok("set sd_1.sidechain=false");
+    r.ok("set sd_1.sidechain=true");
+    assert(contains(r.no("send add ch_3 --to ch_2"), "ch_3 (tone, on Sources) send sd_2 → ch_2 (Drum Machine, on Sources): a strip can only feed a strip LATER in processing order"));
     assert(r.ok("get sd_1.sidechain") == "true\n");
     pass("sidechain: a key goes forward to a strip's compressor; the bass dips 6–22.5 dB after each kick and is back before the next; soloed it still pumps; the kick muted, nothing; Sidechain off, it compresses on its input; audited, saved (R-MIX-15)");
 }
@@ -864,7 +868,7 @@ static void test_solo_mute_matrix_and_audit()
     r.ok("project new " + freshSong("mix"));
     r.ok("clip add --src kick.wav");                                   // ch_2 → Main
     r.ok("clip add --src hat.wav");                                    // ch_3 → Main
-    r.ok("strip add --kind bus --name Verb");                          // ch_4 on Buses → master
+    r.ok("strip add --kind bus --name Verb");                          // ch_4 on Buses, placed BEFORE Main → Main
     r.ok("send add ch_3 --to ch_4 --gain -6 --pre");
     r.ok("set ch_2.solo=true");
     const AppModel &m = r.svc.model();
@@ -874,10 +878,17 @@ static void test_solo_mute_matrix_and_audit()
     assert(audible("ch_3") && audible("ch_1") && audible("ch_4") && !audible("ch_2"));   // its send's return too
     r.ok("set ch_3.solo=false ch_2.mute=true");
     assert(!audible("ch_2") && audible("ch_3"));
+    // R-MIX-9: every route has a cell — a key to a strip on its own mixer too; the columns are published once
+    r.ok("send add ch_2 --to ch_3 --sidechain --gain -3");
+    const std::vector<std::string> cols = {"ch_3", "ch_4", "ch_1", "master", "prt_1"};
+    assert(m.matrix.columns == cols);
     const std::string mx = r.ok("matrix print");
-    assert(contains(mx, "strip\tch_1\tch_4\tmaster\tprt_1"));
-    assert(contains(mx, "ch_3\t●\t-6.0pre\t\t"));
-    assert(contains(r.ok("matrix print --json"), "\"ch_4\": \"-6.0pre\""));
+    assert(contains(mx, "strip\tch_3\tch_4\tch_1\tmaster\tprt_1\n"));
+    assert(contains(mx, "ch_2\t-3.0key\t\t●\t\t\n"));                 // its key to ch_3, on Sources like it
+    assert(contains(mx, "ch_3\t\t-6.0pre\t●\t\t\n"));
+    assert(contains(mx, "ch_4\t\t\t●\t\t\n"));                       // the new bus feeds Main
+    const std::string js = r.ok("matrix print --json");
+    assert(contains(js, "\"ch_4\": \"-6.0pre\"") && contains(js, "\"ch_3\": \"-3.0key\""));
     const std::string a = r.ok("audit");
     assert(contains(a, "silent: clip ac_1 plays through ch_2 (kick), which is muted"));
     assert(contains(a, "single input: bus ch_4 (Verb) is fed by one strip only"));
@@ -1026,7 +1037,19 @@ static void test_the_machine_settings_folders_devices_and_recents()
     fs::remove(again.svc.model().recents[0].path);
     Run third(settings, recents);
     assert(third.svc.model().recents[0].missing);                         // a deleted song is shown as missing
-    pass("the machine: settings, sample folders, browse, devices, recents — saved, and read back by a second process (R-SET, R-HOME-1, R-BROWSE-1)");
+    {
+        // a song opened by a RELATIVE path is remembered by its absolute one: a window started elsewhere finds it
+        const fs::path was = fs::current_path();
+        fs::current_path(scratch());
+        fs::remove("relative_song.slp");
+        third.ok("project new relative_song.slp --name Rel");
+        third.ok("project close");
+        fs::current_path(was);
+        const std::string abs = (fs::path(scratch()) / "relative_song.slp").lexically_normal().string();
+        assert(third.svc.model().recents[0].path == abs && !third.svc.model().recents[0].missing);
+        third.ok("recents remove " + abs);
+    }
+    pass("the machine: settings, sample folders, browse, devices, recents (by absolute path) — saved, and read back by a second process (R-SET, R-HOME-1, R-BROWSE-1)");
 }
 
 namespace
@@ -1544,7 +1567,8 @@ static void test_reading_a_song_back()
     const std::string ls = r.ok("ls");
     assert(contains(ls, "song \"Read Back\" · 100.0 bpm · 4/4 · 8 beats\n"));
     assert(contains(ls, "mixer mx_1 \"Sources\"\n  ch_2 \"Basic Synth\" instrument [synth dv_1] → ch_1 · gain -6.0 · sd_1 → ch_3 -12.0 dB\n"));
-    assert(contains(ls, "  ch_3 \"Verb\" bus [reverb dv_2] → master\n"));
+    // R-MIX-4 amended (C6): a bus made on Buses is placed before Main and feeds it
+    assert(contains(ls, "mixer mx_2 \"Buses\"\n  ch_3 \"Verb\" bus [reverb dv_2] → ch_1\n  ch_1 \"Main\" bus → master\n"));
     assert(contains(ls, "lane ln_1 \"Basic Synth\"\n  ac_1 @0 len 8 pt_1 via ch_2\n"));
     assert(contains(ls, "pattern pt_1 \"Basic Synth\" 4 beats · 2 notes · 1 clip\n"));
     const std::string dv = r.ok("show dv_1");
@@ -1570,6 +1594,141 @@ static void test_reading_a_song_back()
     Run home;
     assert(contains(home.no("ls"), "no song is open"));
     pass("ls / show / pattern print / state print --json --compact read a song back (ids, names, non-default values with units) without editing it; out-of-range values refused (R-SVC-8)");
+}
+
+static void test_latency_is_compensated_and_a_render_starts_on_the_beat()
+{
+    // R-MIX-17. Two sources of the same tone (two files, two strips — R-MIX-2), a limiter on ONE: the other is
+    // delayed to meet it, so the mix is their sum to the bit; and a limiter on the master: the render still
+    // starts on beat 0 — the same bytes as with no limiter (under its ceiling a limiter is exactly its delay).
+    Run r;
+    const std::string dir = scratch();
+    r.ok("project new " + freshSong("latency") + " --bpm 120");
+    r.ok("clip add --src a.wav --at 0");                               // ch_2 → Main
+    r.ok("clip add --src b.wav --at 0");                               // ch_3 → Main, the same samples
+    r.ok("set ch_2.gain=-12 ch_3.gain=-12");                           // under every ceiling: no gain is reduced
+    auto render = [&](const std::string &name, const std::string &more = std::string()) {
+        const std::string out = dir + "/" + name + ".wav";
+        r.ok("render --out " + out + " --stems ch_2,ch_3 --ports" + more);
+        return std::make_tuple(r.fake.written[out], r.fake.written[dir + "/" + name + ".ch_2.wav"],
+                               r.fake.written[dir + "/" + name + ".ch_3.wav"], r.fake.written[dir + "/" + name + ".Main.wav"]);
+    };
+    auto onset = [](const std::vector<float> &x) {
+        for (size_t i = 0; i < x.size(); ++i)
+            if (std::fabs(x[i]) > 1e-4f) return (long long)i;
+        return -1LL;
+    };
+    const auto plain = render("plain");
+    r.ok("device add ch_2 --type limiter");                            // 96 samples of lookahead on ONE twin
+    const auto one = render("one");
+    const auto &mix = std::get<0>(one)[0], &a = std::get<1>(one)[0], &b = std::get<2>(one)[0];
+    assert(a == b && a == std::get<1>(plain)[0]);                       // each stem from beat 0, sample for sample
+    bool summed = mix.size() == a.size();
+    for (size_t i = 0; summed && i < mix.size(); ++i) summed = mix[i] == a[i] + b[i];
+    assert(summed && std::get<0>(one) == std::get<0>(plain));           // they meet at Main: the mix is their sum
+    r.ok("device remove dv_1");
+    r.ok("device add master --type limiter");                          // the master's lookahead: 96 samples
+    const auto master = render("master");
+    assert(onset(std::get<0>(master)[0]) == onset(std::get<0>(plain)[0]) && onset(std::get<0>(plain)[0]) < 48);
+    assert(std::get<0>(master) == std::get<0>(plain) && std::get<3>(master) == std::get<3>(plain)); // mix and port: the same bytes
+    assert(std::get<1>(master) == std::get<1>(plain));
+    r.ok("render --out " + dir + "/exact.wav --from 1 --to 3");        // --to is exact, latency or not
+    assert(r.fake.written[dir + "/exact.wav"][0].size() == 48000);
+    r.ok("render --out " + dir + "/all.wav --stems all");               // every strip a stem
+    assert(r.fake.written.count(dir + "/all.ch_1.wav") && r.fake.written.count(dir + "/all.ch_2.wav") && r.fake.written.count(dir + "/all.ch_3.wav"));
+    // live: what the device hears is the render, `outputLatency` later — the first 96 frames are the lookahead's
+    r.ok("transport play");
+    waitFrames(r, 48000);
+    r.ok("transport stop");
+    const auto &live = r.fake.capture->sink;
+    const auto &port = std::get<3>(master);
+    bool late = true;
+    for (size_t i = 0; i < 96; ++i) late &= live[2 * i] == 0.0f;
+    assert(port[0].size() == 28096);                                    // the tone's 24000 frames, a tail block
+    for (size_t i = 0; i < port[0].size(); ++i)
+    {
+        const bool same = live[2 * (i + 96)] == port[0][i] && live[2 * (i + 96) + 1] == port[1][i];
+        if (!same && late) std::printf("    frame %zu: live %g offline %g\n", i, live[2 * (i + 96)], port[0][i]);
+        late &= same;
+    }
+    assert(late);
+    // a lookahead moved WHILE playing re-plans the compensation (a new engine), never left stale: back on one
+    // twin, set to 5 ms (240 samples) as it plays, the twins still meet — what is heard is the 5 ms render, 240 late
+    r.ok("device remove dv_1");
+    r.ok("device add ch_2 --type limiter");                            // dv_1 again: ids are the document's
+    r.fake.capture->sink.clear();
+    r.fake.capture->frames = 0;
+    r.ok("transport play --from 0");
+    r.ok("set dv_1.lookahead=5");
+    waitFrames(r, 30000);
+    r.ok("transport stop");
+    r.ok("render --out " + dir + "/five.wav --ports");
+    const auto &five = r.fake.written[dir + "/five.Main.wav"];
+    bool met = true;
+    // (the tone is periodic in 48 samples, so its END tells the twins apart: un-re-planned, one would stop 144 early)
+    for (size_t f = 20000; f < 24400; ++f) met &= live[2 * f] == five[0][f - 240] && live[2 * f + 1] == five[1][f - 240];
+    assert(met);
+    pass("latency compensated (R-MIX-17): a limiter's twin meets it at Main (the mix is their sum to the bit); a master limiter's render starts on beat 0, byte-identical to none; stems each from beat 0; live is the render, 96 frames later");
+}
+
+static void test_forward_is_processing_order_and_moves_renumber()
+{
+    // R-MIX-4 amended: forward = LATER IN PROCESSING ORDER (mixer order, then strip order) for routes and sends
+    Run r;
+    r.ok("project new " + freshSong("forward"));
+    auto onBuses = [&] { return r.svc.model().mixers[1].strips; };
+    r.ok("strip add --kind bus --name Verb");                           // ch_2, made on Buses, beside Main
+    assert(r.strip("ch_2")->out == "ch_1");                             // its default output is Main…
+    assert(onBuses() == std::vector<std::string>({"ch_2", "ch_1"}));    // …so it is placed BEFORE Main
+    r.ok("strip add --kind bus --name Delay");
+    assert(r.strip("ch_3")->out == "ch_1" && onBuses() == std::vector<std::string>({"ch_2", "ch_3", "ch_1"}));
+    assert(r.strip("ch_2")->targets == std::vector<std::string>({"ch_3", "ch_1", "master", "prt_1"})); // later on its own mixer
+    r.ok("route ch_2 --to ch_3");                                       // same mixer, later: forward
+    r.ok("send add ch_2 --to ch_1 --gain -6");
+    const std::string before = r.text();
+    assert(contains(r.no("route ch_3 --to ch_2"), "ch_3 (Delay, on Buses) output → ch_2 (Verb, on Buses): a strip can only feed a strip LATER in processing order"));
+    assert(contains(r.no("strip move ch_1 --order 0"), "R-MIX-4"));    // Main first would turn both routes back
+    assert(contains(r.no("strip move ch_3 --order 0"), "R-MIX-4"));    // ch_2 → ch_3 would point back
+    assert(r.text() == before);
+    // a new source still feeds Main, the bus LEAVING Buses — not the first one on it
+    r.ok("clip add --src kick.wav");                                    // ch_4 on Sources
+    assert(r.strip("ch_4")->out == "ch_1");
+    // strip move renumbers, as mixer move does: --order 0 is first, never a tie
+    r.ok("clip add --src hat.wav");                                     // ch_5
+    r.ok("clip add --src snare.wav");                                   // ch_6
+    r.ok("strip move ch_6 --order 0");
+    assert(r.svc.model().mixers[0].strips == std::vector<std::string>({"ch_6", "ch_4", "ch_5"}));
+    assert(r.strip("ch_6")->order == 0 && r.strip("ch_4")->order == 1 && r.strip("ch_5")->order == 2);
+    assert(contains(r.no("strip move ch_6 --order 3"), "from 0 to 2"));
+    r.ok("strip move ch_4 --mixer mx_2 --order 0");                     // onto Buses, first: its route to Main stays forward
+    assert(onBuses() == std::vector<std::string>({"ch_4", "ch_2", "ch_3", "ch_1"}));
+    assert(r.svc.model().mixers[0].strips == std::vector<std::string>({"ch_6", "ch_5"}) && r.strip("ch_5")->order == 1);
+    assert(contains(r.no("strip move ch_5 --mixer mx_2"), "R-MIX-4")); // at the END of Buses it would feed Main backward
+    pass("forward is processing order (R-MIX-4 amended): a bus made on Buses goes before Main and feeds it; same-mixer routes forward, backward ones refused naming both ends; a reorder that would point one back is refused; strip move renumbers");
+}
+
+static void test_lanes_are_reordered()
+{
+    Run r;
+    r.ok("project new " + freshSong("lanes"));
+    r.ok("lane add A");
+    r.ok("lane add B");
+    r.ok("lane add C");                                                 // ln_1 … ln_3
+    r.ok("lane move ln_3 --to 0");
+    auto ids = [&] {
+        std::vector<std::string> v;
+        for (const auto &l : r.svc.model().lanes) v.push_back(l.id + ":" + std::to_string(l.order));
+        return v;
+    };
+    assert(ids() == std::vector<std::string>({"ln_3:0", "ln_1:1", "ln_2:2"}));
+    r.ok("lane move ln_3 --to 2");
+    assert(ids() == std::vector<std::string>({"ln_1:0", "ln_2:1", "ln_3:2"}));
+    assert(contains(r.no("lane move ln_1 --to 3"), "from 0 to 2"));
+    assert(contains(r.no("lane move ln_9 --to 0"), "no lane"));
+    assert(contains(r.no("lane move ln_1"), "--to"));
+    r.ok("undo");
+    assert(ids() == std::vector<std::string>({"ln_3:0", "ln_1:1", "ln_2:2"}));
+    pass("lane move reorders the lanes — renumbered, refused out of range, undone (R-LANE-1)");
 }
 
 int main()
@@ -1611,6 +1770,9 @@ int main()
     test_steps_and_pattern_edits();
     test_a_clip_joins_its_strips_lane();
     test_reading_a_song_back();
+    test_latency_is_compensated_and_a_render_starts_on_the_beat();
+    test_forward_is_processing_order_and_moves_renumber();
+    test_lanes_are_reordered();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

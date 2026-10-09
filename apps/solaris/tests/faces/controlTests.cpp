@@ -154,7 +154,11 @@ namespace
         const fs::path dir = scratch("order");
         fs::create_directories(dir / "ref");
         fs::current_path(dir / "ref");
-        const std::vector<std::string> want = expectedWire(lines);
+        std::vector<std::string> want = expectedWire(lines);
+        // recents are absolute (R-HOME, C6): the reference ran in ref/, the channel runs in dir — same song
+        const std::string refDir = (dir / "ref").string(), liveDir = dir.string();
+        for (auto &w : want)
+            for (size_t at; (at = w.find(refDir)) != std::string::npos;) w.replace(at, refDir.size(), liveDir);
 
         fs::current_path(dir);
         solaris::SolarisService svc;
@@ -292,7 +296,11 @@ namespace
         }
         assert(done && WIFEXITED(status) && WEXITSTATUS(status) == 0);
 
-        const std::string cliOut = slurp(dir / "cli" / "out.txt"), liveOut = slurp(dir / "live" / "out.txt");
+        std::string cliOut = slurp(dir / "cli" / "out.txt");
+        const std::string liveOut = slurp(dir / "live" / "out.txt");
+        // recents are absolute (R-HOME, C6): the dump's recents name each run's own folder — same song
+        const std::string cliDir = (dir / "cli").string(), liveDir = (dir / "live").string();
+        for (size_t at; (at = cliOut.find(cliDir)) != std::string::npos;) cliOut.replace(at, cliDir.size(), liveDir);
         const std::string cliErr = slurp(dir / "cli" / "err.txt"), liveErr = slurp(dir / "live" / "err.txt");
         if (cliOut != liveOut || cliErr != liveErr)
             std::fprintf(stderr, "diff -u %s/{cli,live}/out.txt ; diff -u %s/{cli,live}/err.txt\n", dir.c_str(), dir.c_str());

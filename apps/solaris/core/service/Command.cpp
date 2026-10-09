@@ -54,23 +54,26 @@ namespace solaris
             {K::StripAdd, "strip add", "", 0, 0,
              {"kind=<audio|instrument|bus>", "name=<text>", "mixer=<mx>", "instrument=<type>", "sample=<file>", "out=<target>"},
              "Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: "
-             "the first bus on a later mixer (\"Main\"), else master. An instrument strip gets its instrument "
-             "(default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8).", "R-MIX-1"},
+             "\"Main\" — the bus that leaves the nearest later mixer with buses, else the one leaving its own mixer "
+             "(the new strip is then placed BEFORE it, so the route goes forward), else master. An instrument strip "
+             "gets its instrument (default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8).", "R-MIX-1"},
             {K::StripDelete, "strip delete", "<ch>", 1, 1, {"with-clips"},
              "Delete a strip and its rack. Refused while clips play through it or strips route to it, unless "
              "--with-clips (its clips go too).", "R-MIX-1"},
             {K::StripMove, "strip move", "<ch>", 1, 1, {"mixer=<mx>", "order=<n>"},
-             "Move a strip to another mixer and/or position. Refused if a route would point backward.", "R-MIX-3"},
+             "Move a strip to another mixer (at its end) and/or to position --order <n> on it (0 = first); its mixer's "
+             "strips renumber in their new order, as `mixer move` renumbers mixers. Refused if a route would point backward.", "R-MIX-3"},
             {K::StripRelink, "strip relink", "<ch>", 1, 1, {"to=<ch>"},
              "Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips "
              "need an audio strip, note clips an instrument strip; a bus plays no clips.", "R-MIX-14"},
             {K::Route, "route", "<ch>", 1, 1, {"to=<ch|master|port>"},
-             "Set a strip's main output: a strip on a LATER mixer, master, or an output port.", "R-MIX-4"},
+             "Set a strip's main output: a strip LATER in processing order (a later mixer, or after it on its own), "
+             "master, or an output port.", "R-MIX-4"},
 
             {K::SendAdd, "send add", "<ch>", 1, 1, {"to=<ch|master|port>", "gain=<dB>", "pre", "sidechain"},
              "Add a send (post-fader unless --pre). Same forward-only rule as `route`. With --sidechain it is a "
-             "KEY: it feeds the target's compressors' detectors (their Sidechain switch), not its input, and may go "
-             "to any strip later in processing order, its own mixer included (R-MIX-15).", "R-MIX-5"},
+             "KEY: it feeds the target's compressors' detectors (their Sidechain switch), not its input, and goes "
+             "to a strip (R-MIX-15).", "R-MIX-5"},
             {K::SendDelete, "send delete", "<sd>", 1, 1, {}, "Remove a send.", "R-MIX-5"},
 
             {K::DeviceAdd, "device add", "<ch|master>", 1, 1, {"type=<registry type>", "at=<index>"},
@@ -82,6 +85,8 @@ namespace solaris
             {K::LaneAdd, "lane add", "[name]", 0, 1, {}, "Add a timeline lane at the bottom.", "R-LANE-1"},
             {K::LaneDelete, "lane delete", "<ln>", 1, 1, {"with-clips"},
              "Delete a lane. Refused while clips are drawn on it, unless --with-clips.", "R-LANE-1"},
+            {K::LaneMove, "lane move", "<ln>", 1, 1, {"to=<index>"},
+             "Move a lane to row <index> (0 = the top); the lanes renumber in their new order.", "R-LANE-1"},
 
             {K::ClipAdd, "clip add", "", 0, 0,
              {"src=<file>", "strip=<ch>", "instrument=<type>", "sample=<file>", "pattern=<pt>", "lane=<ln|new>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>"},
@@ -153,10 +158,11 @@ namespace solaris
             {K::Eval, "eval", "<address>", 1, 1, {"at=<beats>", "explain"},
              "The value an address plays at a beat (default 0); --explain shows its formula and every name it reads.", "R-AUTO-8"},
 
-            {K::Render, "render", "", 0, 0, {"out=<file.wav>", "from=<beats>", "to=<beats>", "stems=<ch,…>", "ports", "bits=<24|32f>"},
-             "Render offline: the master to --out; with --stems, each named strip's post-fader output to "
-             "<out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS "
-             "or 10 s.", "R-RENDER-2"},
+            {K::Render, "render", "", 0, 0, {"out=<file.wav>", "from=<beats>", "to=<beats>", "stems=<ch,…|all>", "ports", "bits=<24|32f>"},
+             "Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader "
+             "output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until "
+             "−90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) "
+             "is compensated and trimmed (R-MIX-17).", "R-RENDER-2", false, {"out"}},
 
             {K::MatrixPrint, "matrix print", "", 0, 0, {"json"}, "Every route and send at once: rows = strips, columns = destinations.", "R-MIX-9"},
             {K::Audit, "audit", "", 0, 0, {}, "The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping.", "R-MIX-10"},
@@ -290,7 +296,9 @@ namespace solaris
         for (const auto &f : s.flags)
         {
             const auto eq = f.find('=');
-            u += eq == std::string::npos ? " [--" + f + "]" : " [--" + f.substr(0, eq) + " " + f.substr(eq + 1) + "]";
+            const std::string flag = eq == std::string::npos ? "--" + f : "--" + f.substr(0, eq) + " " + f.substr(eq + 1);
+            const bool must = std::find(s.required.begin(), s.required.end(), flagName(f)) != s.required.end();
+            u += must ? " " + flag : " [" + flag + "]";
         }
         return u;
     }
@@ -397,6 +405,13 @@ namespace solaris
             }
             out.args.push_back(tok);
         }
+        for (const auto &f : spec->flags)
+            if (std::find(spec->required.begin(), spec->required.end(), flagName(f)) != spec->required.end() && !out.has(flagName(f)))
+            {
+                const auto eq = f.find('=');
+                err = spec->verb + " needs --" + flagName(f) + (eq == std::string::npos ? std::string() : " " + f.substr(eq + 1));
+                return c;
+            }
         const int n = (int)out.args.size();
         if (n < spec->minArgs || (spec->maxArgs >= 0 && n > spec->maxArgs))
         {

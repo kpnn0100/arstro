@@ -1,6 +1,7 @@
 #include "App.h"
 #include "../../interstellar/app/widgets/TextFit.h"
 #include <algorithm>
+#include <cstdio>
 
 namespace arstro
 {
@@ -115,6 +116,19 @@ namespace solaris_ui
             {"Add Bus", [this] { dispatch("strip add --kind bus"); }},
             {"Add Audio Line", [this] { dispatch("strip add --kind audio"); }},
             {"Add Lane", [this] { dispatch("lane add"); }},
+            {"Quantize Clip", [this] {
+                 // the selected note clip's pattern at the lanes' snap step (R-UI-3) — 1/32 of a beat when nothing snaps
+                 const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+                 const std::string sel = selectedClip();
+                 for (const auto &c : m.clips)
+                     if (c.id == sel && !c.pattern.empty())
+                     {
+                         const double step = std::min(4.0, std::max(1.0 / 32.0, mProject->timeline().snapStep()));
+                         char grid[32];
+                         std::snprintf(grid, sizeof grid, "%.10g", step); // a power-of-two step prints exactly
+                         dispatch("pattern quantize " + c.pattern + " --grid " + grid);
+                     }
+             }},
         }});
         ms.addMenu({"View", {}});   // filled by refreshMenus: Show / Hide follows the state
         refreshMenus(mHooks.model ? mHooks.model() : emptyModel());

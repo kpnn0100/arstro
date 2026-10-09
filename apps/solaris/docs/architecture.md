@@ -21,8 +21,8 @@ Solaris hosts devices and routes their output; it implements no DSP.
 | directory | target | depends on | holds | requirement |
 |---|---|---|---|---|
 | `core/DigitalSignalProcessing/src/` | `arstro_dsp` | — | `Biquad`, `ParametricEQ`, `StateVariableFilter`, `Noise`, `DecayEnvelope`, `BasicSynth`, `DrumMachine`, `Device` + `DeviceRegistry`, the existing `Compressor`/`Reverb`/`Repeater`/`Chorus`/`Overdrive` | R-DSP, R-INST, R-FX |
-| `apps/solaris/model/` | `solaris_model` | — | `Project` (.slp: parse, serialize, validate, `newProject`; `feedsForward` + `targetsOf`, the forward-only rule once; `Automation` + `Binding`, R-AUTO), `Format` (canonical numbers/beats/seconds, quoting, line tokens) | R-FMT, R-MIX-3/4 |
-| `apps/solaris/engine/` | `solaris_engine` | `arstro_dsp` | `MixGraph` (plain data), `Engine` (build → warm → render pieces split at note events; meters, stems, live params, seek), `MixLaws` (Interstellar's pan/fade), `Expr` (a formula's postfix program, `Curve` — Interstellar's keyframes, its `model/Anim.h` included in place, `curveKeys` the one mapping of a point's shape onto them — `Bind`, `evaluateBinds` — evaluated every 64 samples) | R-MIX, R-DSP-5, R-PLAY, R-RENDER-1, R-AUTO-10 |
+| `apps/solaris/model/` | `solaris_model` | — | `Project` (.slp: parse, serialize, validate, `newProject`; `feedsForward` + `targetsOf` + `matrixColumnsOf`, the forward-only rule once — later in processing order; `Automation` + `Binding`, R-AUTO), `Format` (canonical numbers/beats/seconds, quoting, line tokens) | R-FMT, R-MIX-3/4 |
+| `apps/solaris/engine/` | `solaris_engine` | `arstro_dsp` | `MixGraph` (plain data), `Engine` (build → compensate latency → warm → render pieces split at note events; meters, stems, live params, seek), `MixLaws` (Interstellar's pan/fade), `Expr` (a formula's postfix program, `Curve` — Interstellar's keyframes, its `model/Anim.h` included in place, `curveKeys` the one mapping of a point's shape onto them — `Bind`, `evaluateBinds` — evaluated every 64 samples) | R-MIX, R-DSP-5, R-PLAY, R-RENDER-1, R-AUTO-10 |
 | `apps/solaris/core/` | `solaris_core` | model, engine | `Settings` (the machine's, R-SET-2); `AudioOut` (the output seam); `Player` (the engine on a thread: Live messages, engine swaps, atomics; the metronome, after the engine — heard, never rendered; the bindings' evaluated values, block by block, in a seqlocked ring of atomics read for the HEARD position, R-MIX-16); `Auditioner` (the browser's preview: its own stream and thread, R-EDM-9); `Compile` (.slp → MixGraph: solo, patterns, registry-checked params, curves (`compileCurve`, also the model's `automations[].now`) and bindings); `Formula` (a formula's text → `Expr`); `Bindings` (`describeAddress`, `orderBindings`, `checkBinding`); `service/`: `SolarisService` (+ `ServiceEdit`, `ServiceModel`, `ServiceRender`, `ServiceMachine`, `ServiceTransport`, `ServiceAuto` — automation, formulas, `eval`; `ServiceCompose` — notes in bulk and by name, step rows, pattern edits, `ls`/`show`/`pattern print`, R-SVC-8), `Command` (the grammar table), `Notation` (pitch names, chords, the note token, step rows — pure, R-SVC-8), `Event`, `AppModel` + `AppModelCodec`, `ApiDoc`, `Json` | R-SVC, R-API, R-MIX, R-CLIP, R-RENDER |
 | `apps/solaris/host/` | `solaris_host` | core, FFmpeg + libpulse (optional) | `AudioFiles` (FFmpeg decode → stereo float at the project rate; WAV 24/32f), `Machine` (folder listing, PulseAudio device list, XDG paths), `AudioOutPulse` (the clock device's stream) | R-SVC-4, R-DEV, R-SET, R-BROWSE-1 |
 | `apps/solaris/host/` | `solaris_control` (POSIX) | core; cosmo's `ControlChannel.cpp` compiled in place | `ControlServer` (the window's control channel: each line to `dispatchText`, answered `[out]`/`[ok]`/`[refused]` after its `[evt]` lines; `wait` holds the queue, never the thread), `ControlLog` (the one log symbol cosmo's channel needs) — GTK-free, so it is tested with no window | R-SVC-5 |
@@ -60,9 +60,14 @@ window and requires the same events, outputs, stable state, song and mix (DR-SVC
    output and sends as indices.
 3. The engine renders blocks of the graph: per strip, sum its inputs, add its clips or play its
    instrument (split at note events), run its rack, tap pre-fader sends, apply fader and pan, tap
-   post-fader sends, add into its output. Master → rack → gain → ports.
-4. Offline render writes ports/stems through the host's writer. Live playback runs the same render
-   on the clock device's callback (P1).
+   post-fader sends, add into its output. Master → rack → gain → ports. **Latency is compensated**
+   (R-MIX-17, DR-MIX-17): at build the engine reads every device's `latency()` (the DSP library's —
+   a limiter's lookahead) and sizes a delay per connection so every signal meets in time at each
+   strip, bus, the master and the ports; what comes out is `outputLatency()` behind the song.
+4. Offline render writes ports/stems through the host's writer, trimming `outputLatency()` (a stem
+   its strip's own) so every file starts at its first beat exactly. Live playback runs the same
+   render on the clock device's callback (P1); the heard position subtracts the device's latency
+   and the engine's.
 
 ## Threading (live — DR-PLAY-1/2)
 
@@ -74,3 +79,6 @@ service thread. The audio thread never allocates, locks or does I/O (R-PLAY-2).
 ## Known limits
 
 - `arstro::AudioConfig` is a process singleton (R-NFR-7): one sample rate per process.
+- Bound values (automation, formulas) are evaluated at the engine's position, so one applied after a
+  latent device lands up to that path's latency early (≤ 10 ms); a latency an automation moves is
+  compensated at its starting value (DR-MIX-17).

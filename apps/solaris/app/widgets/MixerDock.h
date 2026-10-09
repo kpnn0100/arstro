@@ -10,10 +10,11 @@
  *  solo silences dims. Strips feeding the same bus are grouped under a header naming it, and a
  *  click FOLDS the group into that header (R-MIX-12) — thirty one-shots become one column.
  *
- *  The Matrix (R-MIX-9): a row per strip, grouped by mixer; a column per strip that can receive
- *  (any strip not on the first mixer), the master and every output port. A cell shows the main
- *  output (●) or a send's level (and P when pre-fader); a cell routing could not take (backward,
- *  R-MIX-4) is hatched. A click on an open cell adds a send, on a send offers pre/post, main
+ *  The Matrix (R-MIX-9): a row per strip, grouped by mixer; the columns are the service's
+ *  (`matrix.columns`, the same `matrix print` prints): every strip some strip may or does reach, the
+ *  master and every output port — so a route or a key to an instrument or a same-mixer strip has its
+ *  cell. A cell shows the main output (●) or a send's level (P when pre-fader, K when a sidechain
+ *  key); a cell routing could not take (backward, R-MIX-4) is hatched. A click on an open cell adds a send, on a send offers pre/post, main
  *  output and remove; a vertical drag on a send sets its level.
  *
  *  The mixer's numbers bind (R-MIX-16): a right-click on a fader, a pan, a send's level (on a card or in

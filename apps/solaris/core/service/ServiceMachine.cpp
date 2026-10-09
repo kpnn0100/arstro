@@ -9,6 +9,7 @@
 #include "Player.h"
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 
@@ -48,8 +49,24 @@ namespace solaris
         return (bool)f;
     }
 
-    void SolarisService::touchRecent(const std::string &path)
+    namespace fs = std::filesystem;
+
+    namespace
     {
+        // R-HOME-1: a recent song is named by its ABSOLUTE path — `project open song.slp` from one folder must
+        // still be found by a window started in another
+        std::string absolutePath(const std::string &p)
+        {
+            if (p.empty()) return p;
+            std::error_code ec;
+            const fs::path a = fs::absolute(fs::path(p), ec);
+            return ec ? p : a.lexically_normal().string();
+        }
+    }
+
+    void SolarisService::touchRecent(const std::string &given)
+    {
+        const std::string path = absolutePath(given);
         mRecentsStale = true;
         mRecents.erase(std::remove(mRecents.begin(), mRecents.end(), path), mRecents.end());
         mRecents.insert(mRecents.begin(), path);
@@ -213,7 +230,8 @@ namespace solaris
         }
         case K::RecentsRemove:
         {
-            const auto it = std::find(mRecents.begin(), mRecents.end(), c.arg(0));
+            auto it = std::find(mRecents.begin(), mRecents.end(), c.arg(0));
+            if (it == mRecents.end()) it = std::find(mRecents.begin(), mRecents.end(), absolutePath(c.arg(0)));
             if (it == mRecents.end()) { err = c.arg(0) + " is not on the recent list"; return false; }
             mRecents.erase(it);
             mRecentsStale = true;

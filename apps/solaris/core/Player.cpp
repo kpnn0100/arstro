@@ -36,6 +36,7 @@ namespace solaris
         mClickWas = false;
         for (int i = 0; i < 2 * kMaxStrips + 2; ++i) mPeaks[(size_t)i].store(0.0f);
         mEng->seek(from);
+        mGraphLatency.store(mEng->outputLatency());
         mRendered.store(from);
         mLatency.store(mOut->latency());
         mRun.store(true);
@@ -62,7 +63,7 @@ namespace solaris
 
     long long Player::heard() const
     {
-        const long long r = mRendered.load() - (long long)std::llround(mLatency.load() * mRate);
+        const long long r = mRendered.load() - (long long)std::llround(mLatency.load() * mRate) - mGraphLatency.load();
         return std::max(0LL, r);
     }
 
@@ -93,6 +94,7 @@ namespace solaris
             engine::Engine *old = mEng;
             mEng = m.engine;
             mGeneration = m.generation;
+            mGraphLatency.store(mEng->outputLatency(), std::memory_order_relaxed);
             mEng->prepare(mPb, mBlock); // the port count may have changed: within capacity it does not allocate
             if (!mRetired.push(old)) delete old; // the service is not collecting: better a free here than a leak
             break;
@@ -122,7 +124,8 @@ namespace solaris
     {
         const long long n = mSlotsWritten.load(std::memory_order_acquire);
         if (n <= 0) return false;
-        const long long lag = (long long)std::llround(mLatency.load(std::memory_order_relaxed) * mRate);
+        const long long lag = (long long)std::llround(mLatency.load(std::memory_order_relaxed) * mRate) +
+                              mGraphLatency.load(std::memory_order_relaxed); // R-MIX-17: the engine's own lag too
         // newest first: the first slot of this engine at or before what is heard; else the oldest kept of it.
         // The slot the thread may be rewriting next is never read.
         long long target = 0, pick = -1;
@@ -217,7 +220,7 @@ namespace solaris
             mPeaks[2 * kMaxStrips].store(mEng->masterMeter().peak[0], std::memory_order_relaxed);
             mPeaks[2 * kMaxStrips + 1].store(mEng->masterMeter().peak[1], std::memory_order_relaxed);
             const bool clickOn = mClickOn.load(std::memory_order_relaxed);
-            if (clickOn) click(pos, n);
+            if (clickOn) click(pos - mGraphLatency.load(std::memory_order_relaxed), n); // on the beat the music is on (R-MIX-17)
             else if (mClickWas && mClick) mClick->reset(); // off: no tail waits to resume
             mClickWas = clickOn;
             mOut->write(mInterleaved.data(), n); // blocks: the device is the clock

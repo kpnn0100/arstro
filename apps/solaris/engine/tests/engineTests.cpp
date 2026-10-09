@@ -366,10 +366,11 @@ static void test_live_render_allocates_nothing_and_takes_live_edits()
     Strip synth;
     synth.id = "ch_4";
     synth.kind = Strip::Instrument;
-    synth.rack = {DeviceDesc{"dv_3", "synth", {{"noise", 0.3}}, false}};
+    synth.rack = {DeviceDesc{"dv_3", "synth", {{"noise", 0.3}}, false}, DeviceDesc{"dv_9", "limiter", {}, false}};
     synth.notes = {NoteEvent{100, 60, 100, true}, NoteEvent{20000, 60, 0, false}};
     synth.out = Target{Target::Strip, 2};
     g.strips = {g.strips[0], drums, synth, g.strips[1]};
+    g.masterRack = {DeviceDesc{"dv_10", "limiter", {}, false}}; // R-MIX-17: delay lines on the live path too
     g.strips[0].out = Target{Target::Strip, 3};
     g.strips[1].out = Target{Target::Strip, 3};
     g.strips[2].out = Target{Target::Strip, 3};
@@ -385,6 +386,7 @@ static void test_live_render_allocates_nothing_and_takes_live_edits()
     e.setStripPan(2, -0.5);
     e.setStripSilent(0, true);
     e.setDeviceBypass(1, 1, true);
+    e.setDeviceBypass(2, 1, true);                          // a bypassed limiter runs its delay instead
     e.setMasterGain(0.8);
     e.setDeviceParam(2, 0, "filter.cutoff", 900.0);
     for (int k = 0; k < 20; ++k) e.render(256, out);
@@ -554,6 +556,156 @@ static void test_curves_are_interstellars_keyframes()
     pass("curves are Interstellar's keyframes: linear and hold exact, smooth = Ease = smoothstep, bezier = the handles' cubic to 1e-9, clamped to the range, no allocation (R-AUTO-10)");
 }
 
+// R-MIX-17: a click and a quiet tone (under every limiter's ceiling, so a limiter is EXACTLY its delay),
+// on the left only or the right only — two strips summed into one bus stay told apart, bit for bit.
+static std::shared_ptr<const Pcm> clickTone(bool left, bool right, long long frames = 6000)
+{
+    auto p = std::make_shared<Pcm>();
+    p->channels = 2;
+    p->frames = frames;
+    for (long long n = 0; n < frames; ++n)
+    {
+        const float v = n == 0 ? 0.5f : (float)(0.25 * std::sin(0.03 * (double)n));
+        p->samples.push_back(left ? v : 0.0f);
+        p->samples.push_back(right ? v : 0.0f);
+    }
+    return p;
+}
+
+static Region regionOf(std::shared_ptr<const Pcm> pcm, long long start)
+{
+    Region r;
+    r.pcm = pcm;
+    r.start = start;
+    r.frames = pcm->frames;
+    r.srcFrames = pcm->frames;
+    return r;
+}
+
+static void test_latency_is_compensated_everywhere_signals_meet()
+{
+    // Twins: ch_a plays the sound on the LEFT through a limiter (96 samples of lookahead at 48 kHz),
+    // ch_b the same sound on the RIGHT with nothing; both into the bus Main → master → port. With the
+    // twin delayed to match, Main's left and right are the same samples — the click at 1000 + 96.
+    auto twins = [](bool viaSends) {
+        MixGraph g;
+        g.sampleRate = 48000;
+        g.ports = {Port{"prt_1", "Main", 2}, Port{"prt_2", "Phones", 2}};
+        g.masterPorts = {0};
+        Strip a, b, main;
+        a.id = "ch_a";
+        a.regions = {regionOf(clickTone(true, false), 1000)};
+        a.rack = {DeviceDesc{"dv_1", "limiter", {}, false}};
+        b.id = "ch_b";
+        b.regions = {regionOf(clickTone(false, true), 1000)};
+        main.id = "ch_main";
+        main.kind = Strip::Bus;
+        main.out = Target{Target::Master, -1};
+        if (viaSends)
+        {
+            a.out = b.out = Target{Target::None, -1};
+            a.sends = b.sends = {Send{Target{Target::Strip, 2}, 1.0, false}};
+        }
+        else a.out = b.out = Target{Target::Strip, 2};
+        g.strips = {a, b, main};
+        return g;
+    };
+    auto aligned = [](const PortBuffers &o, long long at) {
+        const auto &L = o.ports[0][0], &R = o.ports[0][1];
+        bool same = L == R, before = true;
+        for (long long i = 0; i < at; ++i) before &= L[(size_t)i] == 0.0f;
+        return same && before && L[(size_t)at] == 0.5f;
+    };
+    std::string err;
+    for (bool viaSends : {false, true})
+    {
+        Engine e;
+        assert(e.build(twins(viaSends), err));
+        assert(e.outputLatency() == 96 && e.stripLatency(0) == 96 && e.stripLatency(1) == 0 && e.stripLatency(2) == 96);
+        const auto o = renderAll(e, 6000, 128);
+        assert(aligned(o, 1000 + 96));
+    }
+    // the same however time is chopped
+    {
+        Engine x, y;
+        assert(x.build(twins(false), err) && y.build(twins(false), err));
+        const auto ox = renderAll(x, 6000, 128), oy = renderAll(y, 6000, 77);
+        assert(ox.ports[0][0] == oy.ports[0][0] && ox.ports[0][1] == oy.ports[0][1]);
+    }
+    // bypassed, the limiter still takes its 96 samples: the timing never jumps with a bypass
+    {
+        MixGraph g = twins(false);
+        g.strips[0].rack[0].bypass = true;
+        Engine e;
+        assert(e.build(g, err) && e.outputLatency() == 96);
+        assert(aligned(renderAll(e, 6000, 128), 1000 + 96));
+    }
+    // a master limiter: everything out is 96 late — a strip sent straight to a port (a cue) too, so the
+    // ports meet; the render trims outputLatency() and a beat-0 hit lands on sample 0 (serviceTests)
+    {
+        MixGraph g = basic();
+        g.strips[0].regions = {regionOf(clickTone(true, true), 0)};
+        g.strips[0].sends = {Send{Target{Target::Port, 1}, 1.0, false}};
+        g.masterRack = {DeviceDesc{"dv_m", "limiter", {}, false}};
+        Engine e;
+        assert(e.build(g, err) && e.outputLatency() == 96 && e.stripLatency(0) == 0);
+        e.captureMaster(true);
+        PortBuffers o;
+        e.render(1000, o);
+        assert(o.ports[0][0][95] == 0.0f && o.ports[0][0][96] == 0.5f);         // Main, through the master
+        assert(o.ports[1][0][95] == 0.0f && o.ports[1][0][96] == 0.5f);         // Phones, straight from the strip
+        assert(e.capturedMaster()[0][96] == 0.5f && o.ports[0][0] == o.ports[1][0]);
+    }
+    // a key: K keys S's compressor. A limiter on K delays S's audio to meet its key (S's output exactly
+    // 96 later than with none); a limiter in S's own rack BEFORE the compressor delays the key to meet
+    // the audio there (the same 96)
+    {
+        auto keyed = [](bool limitKey, bool limitBefore) {
+            MixGraph g = basic();
+            auto burst = std::make_shared<Pcm>();
+            burst->channels = 1;
+            burst->frames = 2000;
+            for (long long n = 0; n < 2000; ++n) burst->samples.push_back(n % 500 < 60 ? 0.8f : 0.0f);
+            Strip k, s;
+            k.id = "ch_k";
+            k.regions = {regionOf(burst, 2000)};
+            k.out = Target{Target::None, -1};
+            if (limitKey) k.rack = {DeviceDesc{"dv_l", "limiter", {{"ceiling", 0.0}}, false}};
+            k.sends = {Send{Target{Target::Strip, 1}, 1.0, false, true}};
+            s.id = "ch_s";
+            s.regions = {regionOf(clickTone(true, true, 8000), 0)};
+            s.rack = {DeviceDesc{"dv_c", "compressor", {{"sidechain", 1.0}, {"threshold", -30.0}, {"ratio", 8.0}, {"attack", 0.5}}, false}};
+            if (limitBefore) s.rack.insert(s.rack.begin(), DeviceDesc{"dv_p", "limiter", {}, false});
+            s.out = Target{Target::Strip, 2};
+            g.strips = {k, s, g.strips[1]};
+            return g;
+        };
+        auto strip = [&](const MixGraph &g) {
+            Engine e;
+            assert(e.build(g, err));
+            e.captureStrips({1});
+            std::vector<float> out;
+            PortBuffers o;
+            for (int done = 0; done < 8000; done += 128)
+            {
+                e.render(128, o);
+                out.insert(out.end(), e.captured(0)[0].begin(), e.captured(0)[0].end());
+            }
+            return std::make_pair(out, e.stripLatency(1));
+        };
+        const auto plain = strip(keyed(false, false)), late = strip(keyed(true, false)), behind = strip(keyed(false, true));
+        assert(plain.second == 0 && late.second == 96 && behind.second == 96);
+        bool ducks = false, shifted = true;
+        for (size_t i = 0; i + 96 < plain.first.size(); ++i)
+        {
+            shifted &= late.first[i + 96] == plain.first[i] && behind.first[i + 96] == plain.first[i];
+            if (i > 2100 && i < 2400) ducks |= std::fabs(plain.first[i]) < 0.5 * 0.25 && std::fabs(plain.first[i]) > 0.0;
+        }
+        assert(shifted && ducks); // and the key does duck: the test is not one of two silences
+    }
+    pass("latency compensated (R-MIX-17): a limiter's twin is delayed to meet it at a bus, by output or by send, bypassed or not, chunked any way; the ports meet; keys meet the audio");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -568,6 +720,7 @@ int main()
     test_live_render_allocates_nothing_and_takes_live_edits();
     test_bindings_drive_gain_and_parameters_at_control_rate();
     test_curves_are_interstellars_keyframes();
+    test_latency_is_compensated_everywhere_signals_meet();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

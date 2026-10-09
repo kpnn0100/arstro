@@ -54,6 +54,35 @@ namespace solaris
             return m + 1;
         }
         std::string stemOf(const std::string &file) { return fs::path(file).stem().string(); }
+
+        /** The strips on `mixerId` in processing order, `id` put at `at` (clamped), renumbered 0…n−1 —
+         *  as `mixer move` renumbers mixers, so an order never ties (R-MIX-3/4). */
+        void placeStrip(Project &p, const std::string &mixerId, const std::string &id, int at)
+        {
+            std::vector<std::string> ids;
+            for (const Strip *s : p.stripsInOrder())
+                if (s->id != id && p.mixerOf(*s) && p.mixerOf(*s)->id == mixerId) ids.push_back(s->id);
+            at = std::max(0, std::min(at, (int)ids.size()));
+            if (p.strip(id)) ids.insert(ids.begin() + at, id);
+            for (size_t i = 0; i < ids.size(); ++i) p.strip(ids[i])->order = (int)i;
+        }
+
+        /** R-MIX-4 (amended): a new strip whose output is a strip on its OWN mixer goes just before it, so the
+         *  route it was made with points forward (a bus made on Buses, feeding Main). */
+        void placeBeforeItsTarget(Project &p, const std::string &id)
+        {
+            const Strip *s = p.strip(id);
+            const Strip *t = s ? p.strip(s->out) : nullptr;
+            if (!t || p.mixerOf(*t) != p.mixerOf(*s) || feedsForward(p, *s, *t)) return;
+            const std::string mixerId = p.mixerOf(*s) ? p.mixerOf(*s)->id : std::string();
+            int at = 0;
+            for (const Strip *o : p.stripsInOrder())
+            {
+                if (o == t) break;
+                if (o != s && p.mixerOf(*o) == p.mixerOf(*s)) ++at;
+            }
+            placeStrip(p, mixerId, id, at);
+        }
     }
 
     std::string SolarisService::firstMixer() const
@@ -70,15 +99,25 @@ namespace solaris
 
     std::string SolarisService::defaultOutFor(const std::string &mixerId) const
     {
-        // R-MIX-3: a new source strip feeds "Main" — the first bus on a later mixer; else master.
+        // R-MIX-3: a new strip feeds "Main" — the bus that LEAVES the nearest later mixer that has buses (a bus
+        // feeding another on its own page is a return, not the way out); with none later, the one leaving its own
+        // mixer (the new strip is placed before it, R-MIX-4 amended); else master.
         const Mixer *m = mProject.mixer(mixerId);
         const int order = m ? m->order : 0;
-        for (const Strip *s : mProject.stripsInOrder())
-        {
-            const Mixer *sm = mProject.mixerOf(*s);
-            if (s->kind == "bus" && sm && sm->order > order) return s->id;
-        }
-        return std::string();
+        auto exitOf = [this](const Mixer *mx) {
+            for (const Strip *s : mProject.stripsInOrder())
+            {
+                if (s->kind != "bus" || mProject.mixerOf(*s) != mx) continue;
+                const Strip *t = mProject.strip(s->out);
+                if (t && mProject.mixerOf(*t) == mx) continue;
+                return s->id;
+            }
+            return std::string();
+        };
+        for (const Mixer *mx : mProject.mixersInOrder())
+            if (mx->order > order)
+                if (const std::string id = exitOf(mx); !id.empty()) return id;
+        return m ? exitOf(m) : std::string();
     }
 
     bool SolarisService::resolveSample(const std::string &given, std::string &stored, std::string &err)
@@ -175,6 +214,7 @@ namespace solaris
                 s.name = c.flag("name", kind == "bus" ? "Bus" : "Audio");
             }
             p.strips.push_back(s);
+            placeBeforeItsTarget(p, s.id);
             if (!instrument.empty())
             {
                 Rack r;
@@ -230,15 +270,28 @@ namespace solaris
             Strip *s = p.strip(c.arg(0));
             if (!s) { err = "no strip `" + c.arg(0) + "`"; return false; }
             if (!c.has("mixer") && !c.has("order")) { err = "strip move needs --mixer and/or --order"; return false; }
+            const std::string id = s->id, from = p.mixerOf(*s) ? p.mixerOf(*s)->id : std::string();
             if (c.has("mixer"))
             {
                 if (!p.mixer(c.flag("mixer"))) { err = "no mixer `" + c.flag("mixer") + "`"; return false; }
                 s->mixer = c.flag("mixer");
             }
-            int order = s->order;
-            if (!intFlag(c, "order", -1000000, 1000000, order, order, err)) return false;
-            s->order = order;
-            changed("strip.moved", s->id);
+            const std::string to = p.mixerOf(*s) ? p.mixerOf(*s)->id : std::string();
+            // its position among the OTHER strips of the mixer it ends on: kept on its own mixer, the end of a new one
+            int others = 0, at = 0;
+            bool passed = false;
+            for (const Strip *o : p.stripsInOrder())
+            {
+                if (o->id == id) { passed = true; continue; }
+                if (!p.mixerOf(*o) || p.mixerOf(*o)->id != to) continue;
+                if (to == from && !passed) ++at;
+                ++others;
+            }
+            if (to != from) at = others;
+            if (!intFlag(c, "order", 0, others, at, at, err)) return false;
+            placeStrip(p, to, id, at);                      // renumbered, so `--order 0` is first — never a tie
+            if (from != to) placeStrip(p, from, std::string(), 0);
+            changed("strip.moved", id);
             return true;
         }
         case K::StripRelink:
@@ -283,7 +336,7 @@ namespace solaris
             sd.from = c.arg(0);
             sd.to = c.flag("to");
             sd.pre = c.has("pre");
-            sd.sidechain = c.has("sidechain"); // R-MIX-15: a key; the validator holds it to keysForward
+            sd.sidechain = c.has("sidechain"); // R-MIX-15: a key; the validator holds it to feedsForward, as any send
             if (c.has("gain") && (!parseNumber(c.flag("gain"), sd.gain) || !(sd.gain >= -120 && sd.gain <= 12)))
             { err = "--gain must be dB between -120 and 12"; return false; }
             p.sends.push_back(sd);
@@ -394,6 +447,25 @@ namespace solaris
             changed("lane.deleted", id);
             return true;
         }
+        case K::LaneMove:
+        {
+            // R-LANE-1: lanes are reordered — renumbered in their new order, as `mixer move` does
+            const std::string id = c.arg(0);
+            if (!p.lane(id)) { err = "no lane `" + id + "`"; return false; }
+            if (!c.has("to")) { err = "lane move needs --to <index>"; return false; }
+            int to = 0;
+            if (!intFlag(c, "to", 0, (int)p.lanes.size() - 1, 0, to, err)) return false;
+            std::vector<const Lane *> order;
+            for (const auto &l : p.lanes) order.push_back(&l);
+            std::stable_sort(order.begin(), order.end(), [](const Lane *a, const Lane *b) { return a->order < b->order; });
+            std::vector<std::string> ids;
+            for (const Lane *l : order)
+                if (l->id != id) ids.push_back(l->id);
+            ids.insert(ids.begin() + to, id);
+            for (size_t i = 0; i < ids.size(); ++i) p.lane(ids[i])->order = (int)i;
+            changed("lane.moved", id);
+            return true;
+        }
         default:
             return false;
         }
@@ -478,6 +550,7 @@ namespace solaris
                         s.order = nextOrder(orders);
                         s.out = defaultOutFor(s.mixer);
                         p.strips.push_back(s);
+                        placeBeforeItsTarget(p, s.id);
                         cl.track = s.id;
                         changed("strip.added", s.id);
                     }

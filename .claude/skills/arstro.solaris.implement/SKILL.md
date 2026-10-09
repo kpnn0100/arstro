@@ -76,10 +76,15 @@ the ledger; build it (it is probably NEXT) or say it is missing.
    by one shared function, so the plugin, the service and the panel agree to the last digit.
 3. **A channel IS a strip** (R-MIX-1); **every sample file gets its own strip** (R-MIX-2) and the same
    file again reuses it. No insert number between a sound and its strip.
-4. **Routing only goes forward** (R-MIX-4) — to a strip on a LATER mixer, the master, or a port.
-   `feedsForward` is the one copy of the rule; `targetsOf` publishes it as `strips[].targets`, and
-   every picker or matrix offers exactly that list. Never add a cycle check; never allow a same-mixer
-   route "just this once" — processing order is mixer order then strip order because of this.
+4. **Routing only goes forward** (R-MIX-4, amended by the audit of 2026-10-09) — to a strip LATER IN
+   PROCESSING ORDER (a later mixer, or after it on its own: mixer order, then strip order), the master,
+   or a port; outputs, sends and keys alike. `feedsForward` is the one copy of the rule; `targetsOf`
+   publishes it as `strips[].targets`, `matrixColumnsOf` as `matrix.columns`, and every picker or
+   matrix offers exactly that. Never add a cycle check — the order is total, so no loop can form; a
+   reorder that would point a route back is refused by the validator after the command.
+   **Latency is compensated** (R-MIX-17): a device's `latency()` is the DSP library's; the engine
+   delays every other path at build and the render trims `outputLatency()` — never add a delay of
+   your own for a latent device.
 5. **Lanes are organisation only** (R-LANE-1): a clip's `lane` decides where it is drawn, its `track`
    what it sounds through. Never derive one from the other.
 6. **Patterns are shared** (R-CLIP-3): a duplicate is a second clip of the same pattern; notes are

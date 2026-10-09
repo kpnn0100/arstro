@@ -116,7 +116,7 @@ namespace solaris
         std::shared_ptr<const engine::Pcm> pcmFor(const std::string &src);
         /** R-EDM-8: a sampler's sound — resolved as a clip's src is, and refused if it cannot be read. */
         bool resolveSample(const std::string &given, std::string &stored, std::string &err);
-        std::string defaultOutFor(const std::string &mixerId) const; // the first bus on a later mixer
+        std::string defaultOutFor(const std::string &mixerId) const; // "Main": the bus leaving the nearest later mixer, else its own
         std::string firstMixer() const;
         std::string secondMixer() const;
         void emit(const Event &e);
@@ -156,6 +156,9 @@ namespace solaris
         std::vector<std::string> mLiveBinds;                          // engine bind index → the address it drives
         int mLiveGen = 0;                                             // bumps with every engine built to play
         std::vector<double> mLiveValues;                              // the player's, read in `pump`
+        std::map<std::string, int> mLiveLatency;                      // device id → its latency in the playing engine (R-MIX-17)
+        std::map<std::string, std::shared_ptr<Device>> mLatencyProbes; // per type: what its stored values make its latency
+        int latencyOf(const DeviceNode &d);
         double mPosition = 0, mLoopFrom = 0, mLoopTo = 0;             // beats
     };
 }

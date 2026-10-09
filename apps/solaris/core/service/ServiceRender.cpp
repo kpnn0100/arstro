@@ -2,7 +2,9 @@
 // in one pass, capturing the master bus (the mixdown), any stems (strips' post-fader outputs) and,
 // with --ports, every output port; then hand each buffer to the host's WAV writer (the core holds
 // no codec, R-SVC-4). The tail runs past the song's end until the master falls below −90 dBFS
-// for a whole block, or 10 s.
+// for a whole block, or 10 s. The render starts at its first beat EXACTLY (R-MIX-17): the engine's
+// output lags the song by its latency (a master limiter's lookahead), so that many samples more are
+// rendered at the end and dropped at the start — a stem by its own strip's latency.
 #include "Compile.h"
 #include "Engine.h"
 #include "Format.h"
@@ -45,7 +47,12 @@ namespace solaris
         if (c.has("stems"))
         {
             std::string cur;
-            const std::string list = c.flag("stems") + ",";
+            std::string list = c.flag("stems") + ",";
+            if (c.flag("stems") == "all") // every strip, in processing order
+            {
+                list.clear();
+                for (const auto &id : cr.stripIds) list += id + ",";
+            }
             for (char ch : list)
             {
                 if (ch != ',') { cur += ch; continue; }
@@ -70,6 +77,8 @@ namespace solaris
         const float floor = (float)std::pow(10.0, -90.0 / 20.0);
 
         eng.seek(start);
+        const long long lag = eng.outputLatency(); // R-MIX-17: rendered past the end, trimmed from the start
+        const long long endLate = end + lag;
         eng.captureMaster(true);
         eng.captureStrips(stems);
         std::vector<std::vector<float>> master(2);
@@ -82,9 +91,9 @@ namespace solaris
         long long pos = start;
         while (true)
         {
-            const bool inSong = pos < end;
-            const int n = inSong ? (int)std::min<long long>(chunk, end - pos) : chunk;
-            if (!inSong && pos - end >= tailCap) break;
+            const bool inSong = pos < endLate;
+            const int n = inSong ? (int)std::min<long long>(chunk, endLate - pos) : chunk;
+            if (!inSong && pos - endLate >= tailCap) break;
             eng.render(n, pb);
             const auto &m = eng.capturedMaster();
             for (int ch = 0; ch < 2; ++ch) master[ch].insert(master[ch].end(), m[ch].begin(), m[ch].end());
@@ -98,6 +107,19 @@ namespace solaris
             // (R-RENDER-3) past the end: stop at the first block the master spends below −90 dBFS
             if (!inSong && eng.masterMeter().peak[0] < floor && eng.masterMeter().peak[1] < floor) break;
         }
+        // R-MIX-17: each file from the song's `start` — the master and the ports `lag` late, a stem its strip's
+        const size_t len = master[0].size() - (size_t)lag;
+        auto trim = [len](std::vector<float> &ch, long long late) {
+            std::vector<float> t(len, 0.0f);
+            for (size_t i = 0; i < len && (size_t)late + i < ch.size(); ++i) t[i] = ch[(size_t)late + i];
+            ch.swap(t);
+        };
+        for (auto &ch : master) trim(ch, lag);
+        for (size_t k = 0; k < stems.size(); ++k)
+            for (auto &ch : stemData[k]) trim(ch, eng.stripLatency(stems[k]));
+        if (c.has("ports"))
+            for (auto &port : portData)
+                for (auto &ch : port) trim(ch, lag);
 
         const int bits = bitsText == "24" ? 24 : 32;
         if (!mHost.writeWav(out, master, rate, bits, err)) return false;

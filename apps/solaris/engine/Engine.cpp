@@ -25,6 +25,13 @@ namespace engine
         long long ramp = 0;
         std::vector<char> sendBound;
         std::vector<double> sendA, sendB, tmpL, tmpR;
+        // R-MIX-17: latency compensation — every delay sized at build (`compensate`)
+        DelayLine srcDelay;                       // its own clips or notes, up to the latest arrival at its input
+        DelayLine outDelay;                       // its main output, up to what else reaches that target
+        std::vector<DelayLine> sendDelay;         // each send's and key's, the same way
+        std::vector<DelayLine> bypassDelay;       // per device: its latency, run in its place while it is bypassed
+        std::vector<DelayLine> keyDelay;          // per keyed device: the latency of the devices before it
+        std::vector<double> srcL, srcR, kdL, kdR; // its own sound before its delay; a delayed key
     };
 
     Engine::Engine() = default;
@@ -181,9 +188,98 @@ namespace engine
         }
         // the values at time zero go in BEFORE the warm-up, so its block of silence finishes their ramps too
         evalBinds(0, true);
+        compensate(); // with those values: a bound lookahead is read at its starting value
         for (auto &st : mStrips)
             for (auto &dev : st->rack) warm(*dev);
         for (auto &dev : mMasterRack) warm(*dev);
+        return true;
+    }
+
+    void Engine::compensate()
+    {
+        // R-MIX-17. In processing order (every target is later): a strip's input is aligned to the
+        // latest arrival — its own sound (an instrument's latency), earlier strips' outputs, sends and
+        // keys; its output is that plus its effects'. Then each connection is delayed by what its
+        // target's alignment exceeds it by; the master and every port meet at the latest of all.
+        const int ns = (int)mStrips.size();
+        std::vector<int> in((size_t)ns, 0), out((size_t)ns, 0), src((size_t)ns, 0);
+        int inMaster = 0, atPorts = 0;
+        for (int i = 0; i < ns; ++i)
+        {
+            const Strip &d = mGraph.strips[(size_t)i];
+            StripState &st = *mStrips[(size_t)i];
+            const size_t firstFx = d.kind == Strip::Instrument && !st.rack.empty() ? 1 : 0;
+            src[(size_t)i] = firstFx ? std::max(0, st.rack[0]->latency()) : 0;
+            in[(size_t)i] = std::max(in[(size_t)i], src[(size_t)i]);
+            int fx = 0;
+            st.bypassDelay.assign(st.rack.size(), DelayLine{});
+            st.keyDelay.assign(st.rack.size(), DelayLine{});
+            for (size_t k = firstFx; k < st.rack.size(); ++k)
+            {
+                const int lat = std::max(0, st.rack[k]->latency());
+                if (st.rack[k]->type().takesKey) st.keyDelay[k].size(fx); // the audio reached it `fx` later than the input
+                st.bypassDelay[k].size(lat);
+                fx += lat;
+            }
+            out[(size_t)i] = in[(size_t)i] + fx;
+            auto arrive = [&](const Target &t) {
+                if (t.kind == Target::Strip) in[(size_t)t.index] = std::max(in[(size_t)t.index], out[(size_t)i]);
+                else if (t.kind == Target::Master) inMaster = std::max(inMaster, out[(size_t)i]);
+                else if (t.kind == Target::Port) atPorts = std::max(atPorts, out[(size_t)i]);
+            };
+            arrive(d.out);
+            for (const auto &s : d.sends) arrive(s.to);
+        }
+        int masterFx = 0;
+        mMasterBypass.assign(mMasterRack.size(), DelayLine{});
+        for (size_t k = 0; k < mMasterRack.size(); ++k)
+        {
+            const int lat = std::max(0, mMasterRack[k]->latency());
+            mMasterBypass[k].size(lat);
+            masterFx += lat;
+        }
+        const int outMaster = inMaster + masterFx;
+        mOutLatency = std::max(outMaster, atPorts);
+        mMasterDelay.size(mOutLatency - outMaster);
+        for (int i = 0; i < ns; ++i)
+        {
+            const Strip &d = mGraph.strips[(size_t)i];
+            StripState &st = *mStrips[(size_t)i];
+            auto need = [&](const Target &t) {
+                switch (t.kind)
+                {
+                case Target::Strip: return in[(size_t)t.index] - out[(size_t)i];
+                case Target::Master: return inMaster - out[(size_t)i];
+                case Target::Port: return mOutLatency - out[(size_t)i];
+                default: return 0;
+                }
+            };
+            st.srcDelay.size(in[(size_t)i] - src[(size_t)i]);
+            st.outDelay.size(need(d.out));
+            st.sendDelay.assign(d.sends.size(), DelayLine{});
+            for (size_t k = 0; k < d.sends.size(); ++k) st.sendDelay[k].size(need(d.sends[k].to));
+            st.srcL.assign(kBlock, 0.0); st.srcR.assign(kBlock, 0.0);
+            st.kdL.assign(kBlock, 0.0); st.kdR.assign(kBlock, 0.0);
+        }
+        mStripLatency = out;
+        mDlyL.assign(kBlock, 0.0);
+        mDlyR.assign(kBlock, 0.0);
+        mZero.assign(kBlock, 0.0);
+    }
+
+    bool Engine::delayed(const double *&L, const double *&R, int n, double &gain, DelayLine *dl)
+    {
+        if (!dl || dl->length() == 0) return false;
+        for (int i = 0; i < n; ++i)
+        {
+            double a = L[i] * gain, b = R[i] * gain;
+            dl->step(a, b);
+            mDlyL[(size_t)i] = a;
+            mDlyR[(size_t)i] = b;
+        }
+        L = mDlyL.data();
+        R = mDlyR.data();
+        gain = 1.0;
         return true;
     }
 
@@ -276,6 +372,13 @@ namespace engine
         return rack[device]->setParam(name, value);
     }
 
+    int Engine::deviceLatency(int strip, int device) const
+    {
+        const auto &rack = strip < 0 ? mMasterRack : (strip < (int)mStrips.size() ? mStrips[(size_t)strip]->rack : mMasterRack);
+        if (strip >= (int)mStrips.size() || device < 0 || device >= (int)rack.size()) return 0;
+        return rack[(size_t)device]->latency();
+    }
+
     bool Engine::setMasterDeviceParam(int device, const std::string &name, double value)
     {
         if (device < 0 || device >= (int)mMasterRack.size()) return false;
@@ -293,15 +396,18 @@ namespace engine
         m.maxPeak[1] = std::max(m.maxPeak[1], m.peak[1]);
     }
 
-    void Engine::routeKey(const Target &t, const double *L, const double *R, int n, double gain)
+    void Engine::routeKey(const Target &t, const double *L, const double *R, int n, double gain, DelayLine *delay)
     {
         if (t.kind != Target::Strip) return; // refused at build; a key goes to a strip
+        delayed(L, R, n, gain, delay);
         auto &st = *mStrips[t.index];
         for (int i = 0; i < n; ++i) { st.keyL[i] += L[i] * gain; st.keyR[i] += R[i] * gain; }
     }
 
-    void Engine::route(const Target &t, const double *L, const double *R, int n, double gain, PortBuffers &out, int off)
+    void Engine::route(const Target &t, const double *L, const double *R, int n, double gain, PortBuffers &out, int off, DelayLine *delay)
     {
+        if (t.kind == Target::None) return;
+        delayed(L, R, n, gain, delay); // R-MIX-17: it waits for what else reaches the target
         switch (t.kind)
         {
         case Target::Master:
@@ -344,6 +450,16 @@ namespace engine
             const Strip &d = mGraph.strips[si];
             StripState &st = *mStrips[si];
             double *L = st.inL.data(), *R = st.inR.data();
+            // R-MIX-17: its own sound waits, in its own delay, for the latest arrival at its input
+            const bool srcLate = st.srcDelay.length() > 0;
+            double *SL = L, *SR = R;
+            if (srcLate)
+            {
+                SL = st.srcL.data();
+                SR = st.srcR.data();
+                std::fill(SL, SL + n, 0.0);
+                std::fill(SR, SR + n, 0.0);
+            }
 
             if (d.kind == Strip::Audio)
             {
@@ -360,8 +476,8 @@ namespace engine
                         src += rg.srcOffset;
                         if (src < 0 || src >= rg.pcm->frames) continue; // outside the file is silence
                         const double g = rg.gain * fadeGain(local, rg.frames, rg.fadeIn, rg.fadeOut);
-                        L[t - p0] += g * rg.pcm->at(src, 0);
-                        R[t - p0] += g * rg.pcm->at(src, 1);
+                        SL[t - p0] += g * rg.pcm->at(src, 0);
+                        SR[t - p0] += g * rg.pcm->at(src, 1);
                     }
                 }
             }
@@ -378,7 +494,7 @@ namespace engine
                     const NoteEvent &e = d.notes[st.nextEvent];
                     if (e.at > cur && playing)
                     {
-                        Sample *io[2] = {L + (cur - p0), R + (cur - p0)};
+                        Sample *io[2] = {SL + (cur - p0), SR + (cur - p0)};
                         inst.process(io, 2, (int)(e.at - cur));
                     }
                     cur = std::max(cur, e.at);
@@ -388,18 +504,39 @@ namespace engine
                 }
                 if (cur < p0 + n && playing)
                 {
-                    Sample *io[2] = {L + (cur - p0), R + (cur - p0)};
+                    Sample *io[2] = {SL + (cur - p0), SR + (cur - p0)};
                     inst.process(io, 2, (int)(p0 + n - cur));
                 }
             }
+            if (srcLate)
+                for (int i = 0; i < n; ++i)
+                {
+                    double a = SL[i], b = SR[i];
+                    st.srcDelay.step(a, b);
+                    L[i] += a;
+                    R[i] += b;
+                }
             for (size_t k = firstFx; k < st.rack.size(); ++k)
             {
-                if (d.rack[k].bypass) continue;
+                if (d.rack[k].bypass)
+                {
+                    st.bypassDelay[k].run(L, R, n); // R-MIX-17: bypassed, it still takes its time
+                    continue;
+                }
                 Sample *io[2] = {L, R};
                 if (st.rack[k]->type().takesKey)
                 {
                     // R-MIX-15: a compressor's detector hears the strip's key (silence when nothing keys it)
                     const Sample *key[2] = {st.keyL.data(), st.keyR.data()};
+                    if (st.keyDelay[k].length() > 0)
+                    {
+                        // R-MIX-17: the audio reaches it late by the devices before it; so does its key
+                        std::copy(st.keyL.begin(), st.keyL.begin() + n, st.kdL.begin());
+                        std::copy(st.keyR.begin(), st.keyR.begin() + n, st.kdR.begin());
+                        st.keyDelay[k].run(st.kdL.data(), st.kdR.data(), n);
+                        key[0] = st.kdL.data();
+                        key[1] = st.kdR.data();
+                    }
                     st.rack[k]->setKey(key, 2);
                 }
                 st.rack[k]->process(io, 2, n);
@@ -407,11 +544,20 @@ namespace engine
 
             bool keys = false;
             for (const auto &s : d.sends) keys |= s.key;
+            // R-MIX-17: a delayed connection drains what it holds while nothing more goes in — what was
+            // sent before a mute still arrives, in time
+            auto drain = [&](const Target &to, bool key, DelayLine &dl) {
+                if (dl.length() == 0) return;
+                if (key) routeKey(to, mZero.data(), mZero.data(), n, 1.0, &dl);
+                else route(to, mZero.data(), mZero.data(), n, 1.0, out, off, &dl);
+            };
             if (d.silent && !(keys && d.keyLive))
             {
                 // A muted or solo-silenced strip sends nothing anywhere.
                 std::fill(st.outL.begin(), st.outL.begin() + n, 0.0);
                 std::fill(st.outR.begin(), st.outR.begin() + n, 0.0);
+                drain(d.out, false, st.outDelay);
+                for (size_t k = 0; k < d.sends.size(); ++k) drain(d.sends[k].to, d.sends[k].key, st.sendDelay[k]);
             }
             else
             {
@@ -421,9 +567,10 @@ namespace engine
                 auto rampAt = [&](int i) { return std::min(1.0, std::max(0.0, (double)(p0 + i - st.ramp) / kControl)); };
                 auto sendTo = [&](size_t k, const double *sL, const double *sR) {
                     const Send &s = d.sends[k];
+                    DelayLine *dl = &st.sendDelay[k];
                     auto deliver = [&](const double *a, const double *b, double g) {
-                        if (s.key) routeKey(s.to, a, b, n, g);
-                        else route(s.to, a, b, n, g, out, off);
+                        if (s.key) routeKey(s.to, a, b, n, g, dl);
+                        else route(s.to, a, b, n, g, out, off, dl);
                     };
                     if (!st.sendBound[k]) { deliver(sL, sR, s.gain); return; }
                     for (int i = 0; i < n; ++i)
@@ -435,7 +582,11 @@ namespace engine
                     deliver(st.tmpL.data(), st.tmpR.data(), 1.0);
                 };
                 for (size_t k = 0; k < d.sends.size(); ++k)
-                    if (d.sends[k].pre && runs(k)) sendTo(k, L, R);
+                    if (d.sends[k].pre)
+                    {
+                        if (runs(k)) sendTo(k, L, R);
+                        else drain(d.sends[k].to, d.sends[k].key, st.sendDelay[k]);
+                    }
                 if (st.gainBound || st.panBound)
                 {
                     for (int i = 0; i < n; ++i)
@@ -460,14 +611,19 @@ namespace engine
                     }
                 }
                 for (size_t k = 0; k < d.sends.size(); ++k)
-                    if (!d.sends[k].pre && runs(k)) sendTo(k, st.outL.data(), st.outR.data());
+                    if (!d.sends[k].pre)
+                    {
+                        if (runs(k)) sendTo(k, st.outL.data(), st.outR.data());
+                        else drain(d.sends[k].to, d.sends[k].key, st.sendDelay[k]);
+                    }
                 if (d.silent)
                 {
                     std::fill(st.outL.begin(), st.outL.begin() + n, 0.0);
                     std::fill(st.outR.begin(), st.outR.begin() + n, 0.0);
+                    drain(d.out, false, st.outDelay);
                 }
                 else
-                    route(d.out, st.outL.data(), st.outR.data(), n, 1.0, out, off);
+                    route(d.out, st.outL.data(), st.outR.data(), n, 1.0, out, off, &st.outDelay);
             }
             meter(mStripMeters[si], st.outL.data(), st.outR.data(), n);
             for (int i = 0; i < n; ++i) { st.sumSq[0] += st.outL[i] * st.outL[i]; st.sumSq[1] += st.outR[i] * st.outR[i]; }
@@ -479,7 +635,11 @@ namespace engine
 
         for (size_t k = 0; k < mMasterRack.size(); ++k)
         {
-            if (mGraph.masterRack[k].bypass) continue;
+            if (mGraph.masterRack[k].bypass)
+            {
+                mMasterBypass[k].run(mMasterL.data(), mMasterR.data(), n);
+                continue;
+            }
             Sample *io[2] = {mMasterL.data(), mMasterR.data()};
             mMasterRack[k]->process(io, 2, n);
         }
@@ -493,6 +653,7 @@ namespace engine
             }
         else
             for (int i = 0; i < n; ++i) { mMasterL[i] *= mGraph.masterGain; mMasterR[i] *= mGraph.masterGain; }
+        mMasterDelay.run(mMasterL.data(), mMasterR.data(), n); // R-MIX-17: up to what reaches a port the latest
         meter(mMasterMeter, mMasterL.data(), mMasterR.data(), n);
         if (mCaptureMaster)
             for (int i = 0; i < n; ++i) { mCapturedMaster[0][off + i] = (float)mMasterL[i]; mCapturedMaster[1][off + i] = (float)mMasterR[i]; }

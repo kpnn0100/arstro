@@ -14,6 +14,19 @@
  *  silence when the engine is built, because the DSP library smooths every parameter write over a
  *  block: without the warm-up, the first block of every render would carry a ramp from each
  *  device's default to the project's value.
+ *
+ *  **Latency compensated** (R-MIX-17, plugin delay compensation). A device reports how late its
+ *  output is (`Device::latency()` — the limiter's lookahead); a strip's rack adds its devices'. At
+ *  build the engine walks the graph in processing order: every signal arriving at a strip's input
+ *  (its own clips or notes, earlier strips' outputs, sends and keys), at the master and at the ports
+ *  is DELAYED to the latest of them, so they all meet in time — a delay line per connection, sized
+ *  at build, so rendering never allocates. A bypassed device still delays by its latency (the
+ *  timing never jumps with a bypass); a key reaching a compressor behind a latent device in its own
+ *  rack is delayed by that device too. What comes out — every port and the captured master — is
+ *  `outputLatency()` samples behind the song: an offline render trims it, live playback subtracts it
+ *  from the heard position. A strip's meters and stem are `stripLatency(i)` behind. The latencies are
+ *  read once, at build, with the bindings at time zero applied: a latency an automation moves while
+ *  the song plays is compensated at its starting value (a live `set` of it builds a new engine).
  */
 #pragma once
 #include "MixGraph.h"
@@ -39,6 +52,35 @@ namespace engine
     struct PortBuffers
     {
         std::vector<std::vector<std::vector<float>>> ports; // [port][channel][frame]
+    };
+
+    /** A fixed stereo delay, sized when the engine is built (R-MIX-17) — rendering never allocates. */
+    struct DelayLine
+    {
+        std::vector<double> l, r;
+        int w = 0;
+        int length() const { return (int)l.size(); }
+        void size(int n)
+        {
+            l.assign((size_t)(n > 0 ? n : 0), 0.0);
+            r.assign((size_t)(n > 0 ? n : 0), 0.0);
+            w = 0;
+        }
+        /** In place: each sample out is the one that went in `length()` samples ago. */
+        void step(double &a, double &b)
+        {
+            const double ya = l[(size_t)w], yb = r[(size_t)w];
+            l[(size_t)w] = a;
+            r[(size_t)w] = b;
+            a = ya;
+            b = yb;
+            if (++w == (int)l.size()) w = 0;
+        }
+        void run(double *a, double *b, int n)
+        {
+            if (l.empty()) return;
+            for (int i = 0; i < n; ++i) step(a[i], b[i]);
+        }
     };
 
     class Engine
@@ -67,6 +109,17 @@ namespace engine
         void captureMaster(bool on) { mCaptureMaster = on; }
         const std::vector<std::vector<float>> &capturedMaster() const { return mCapturedMaster; }
 
+        /** R-MIX-17: samples every port and the captured master lag the song — the most any path
+         *  to an output carries; an offline render trims it, live playback subtracts it. */
+        int outputLatency() const { return mOutLatency; }
+        /** Samples strip `i`'s output (its meters, its stem) lags the song. */
+        int stripLatency(int strip) const
+        {
+            return strip >= 0 && strip < (int)mStripLatency.size() ? mStripLatency[(size_t)strip] : 0;
+        }
+        /** A device's latency now (strip −1 = the master's rack); 0 when there is no such device. */
+        int deviceLatency(int strip, int device) const;
+
         const std::vector<Meter> &stripMeters() const { return mStripMeters; }
         const Meter &masterMeter() const { return mMasterMeter; }
         void clearPeaks();
@@ -93,8 +146,12 @@ namespace engine
     private:
         struct StripState;
         void renderPiece(long long p0, int n, PortBuffers &out, int outOffset);
-        void route(const Target &t, const double *L, const double *R, int n, double gain, PortBuffers &out, int outOffset);
-        void routeKey(const Target &t, const double *L, const double *R, int n, double gain);
+        void route(const Target &t, const double *L, const double *R, int n, double gain, PortBuffers &out, int outOffset,
+                   DelayLine *delay = nullptr);
+        void routeKey(const Target &t, const double *L, const double *R, int n, double gain, DelayLine *delay = nullptr);
+        /** `L·gain` through `delay` into the scratch pair; returns false (nothing done) for no delay. */
+        bool delayed(const double *&L, const double *&R, int n, double &gain, DelayLine *delay);
+        void compensate(); // R-MIX-17: size every delay line from the devices' latencies (build)
         void meter(Meter &m, const double *L, const double *R, int n);
         void evalBinds(long long sample, bool immediate); // `immediate`: no ramp (build, seek)
 
@@ -113,6 +170,12 @@ namespace engine
         bool mMasterBound = false;
         double mMasterA = 1, mMasterB = 1;
         long long mMasterRamp = 0;
+        // R-MIX-17: latency compensation, sized at build
+        int mOutLatency = 0;
+        std::vector<int> mStripLatency;
+        std::vector<DelayLine> mMasterBypass;   // per master device: its latency, run while it is bypassed
+        DelayLine mMasterDelay;                 // the master up to outputLatency (a strip straight to a port came later)
+        std::vector<double> mDlyL, mDlyR, mZero; // scratch for a delayed connection; silence to drain one
     };
 }
 }

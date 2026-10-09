@@ -11,6 +11,7 @@
 #include <cassert>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 using namespace arstro::solaris;
 
@@ -289,13 +290,27 @@ static void test_routing_only_goes_forward()
     p.strip("ch_1")->out = "ch_2";
     auto e = validateProject(p);
     assert(e.size() == 1 && contains(e[0], "ch_1 (Main, on Buses) output → ch_2 (kick, on Sources)") && contains(e[0], "R-MIX-4"));
-    // the same mixer is not forward either
+    // R-MIX-4 amended (audit, 2026-10-09): forward is LATER IN PROCESSING ORDER — on its own mixer too, by
+    // strip order (a tie by the file's order) — so a strip may feed one after it on Sources, never one before
     p.strip("ch_1")->out.clear();
     Strip b = a;
-    b.id = "ch_3"; b.name = "snare"; b.out = "ch_2";
+    b.id = "ch_3"; b.name = "snare"; b.order = 1; b.out = "ch_2";
     p.strips.push_back(b);
     e = validateProject(p);
-    assert(e.size() == 1 && contains(e[0], "ch_3 (snare, on Sources) output → ch_2 (kick, on Sources)"));
+    assert(e.size() == 1 && contains(e[0], "ch_3 (snare, on Sources) output → ch_2 (kick, on Sources)") &&
+           contains(e[0], "LATER in processing order"));
+    p.strip("ch_3")->out = "ch_1";
+    p.strip("ch_2")->out = "ch_3";                               // kick → snare: after it on Sources
+    assert(validateProject(p).empty() && feedsForward(p, *p.strip("ch_2"), *p.strip("ch_3")));
+    assert(!feedsForward(p, *p.strip("ch_3"), *p.strip("ch_2")) && !feedsForward(p, *p.strip("ch_2"), *p.strip("ch_2")));
+    p.strip("ch_3")->order = 0;                                  // a tie: the file's order decides
+    assert(feedsForward(p, *p.strip("ch_2"), *p.strip("ch_3")) && !feedsForward(p, *p.strip("ch_3"), *p.strip("ch_2")));
+    p.strip("ch_3")->order = 1;
+    assert(targetsOf(p, *p.strip("ch_2")) == std::vector<std::string>({"ch_3", "ch_1", "master", "prt_1"}));
+    assert(keyTargetsOf(p, *p.strip("ch_2")) == std::vector<std::string>({"ch_3", "ch_1"}));
+    // R-MIX-9: the matrix's columns — every strip a route may or does reach, master, the out ports
+    assert(matrixColumnsOf(p) == std::vector<std::string>({"ch_3", "ch_1", "master", "prt_1"}));
+    p.strip("ch_2")->out = "ch_1";
     p.strip("ch_3")->out = "ch_3";
     assert(contains(validateProject(p)[0], "goes to itself"));
     p.strip("ch_3")->out = "master";
@@ -312,7 +327,7 @@ static void test_routing_only_goes_forward()
     std::string err;
     assert(!parseProject(serializeProject(p), q, err));
     assert(contains(err, "ch_1 (Main, on Buses)") && contains(err, "R-MIX-4"));
-    pass("routing only goes forward: same or earlier mixer refused, naming both ends (R-MIX-4)");
+    pass("routing only goes forward — later in processing order, its own mixer included; back refused naming both ends; targets, key targets and the matrix's columns published (R-MIX-4 amended, R-MIX-9)");
 }
 
 static void test_structural_errors_are_refused_with_names()

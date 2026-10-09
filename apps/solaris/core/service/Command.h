@@ -34,7 +34,7 @@ namespace solaris
             StripAdd, StripDelete, StripMove, StripRelink, Route,
             SendAdd, SendDelete,
             DeviceAdd, DeviceRemove, DeviceMove,
-            LaneAdd, LaneDelete,
+            LaneAdd, LaneDelete, LaneMove,
             ClipAdd, ClipMove, ClipDuplicate, ClipUnique, ClipDelete,
             PatternNew, NoteAdd, NoteDelete, NoteMove, PatternQuantize,
             NotesAdd, PatternSteps, PatternDuplicate, PatternClear, PatternDelete, PatternTranspose, // R-SVC-8
@@ -66,6 +66,7 @@ namespace solaris
         std::string summary;
         std::string requirement;        // the R- id that asked for it
         bool fieldArgs = false;         // `set`: positionals are address=value
+        std::vector<std::string> required; // flags it cannot run without: the usage shows them unbracketed, a line without one is refused
     };
 
     const std::vector<CommandSpec> &commandSpecs();

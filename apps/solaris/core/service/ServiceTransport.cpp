@@ -53,9 +53,28 @@ namespace solaris
         mLiveStrips = cr.stripIds;
         mLiveDevices = cr.devices;
         mLiveBinds = cr.bindAddresses;
+        mLiveLatency.clear();
+        for (const auto &d : cr.devices) mLiveLatency[d.first] = eng->deviceLatency(d.second.first, d.second.second);
         ++mLiveGen; // its live values are told apart from the engine it replaces
         out = std::move(eng);
         return true;
+    }
+
+    int SolarisService::latencyOf(const DeviceNode &d)
+    {
+        // R-MIX-17: a probe of the type (made once, on this thread) set to the node's stored values
+        const DeviceType *t = DeviceRegistry::find(d.type);
+        if (!t) return 0;
+        auto &probe = mLatencyProbes[d.type];
+        if (!probe) probe = DeviceRegistry::create(d.type);
+        for (size_t i = 0; i < t->params.size(); ++i)
+        {
+            double v = t->params[i].def;
+            for (const auto &kv : d.params)
+                if (kv.first == t->params[i].name) parseParam(t->params[i], kv.second, v);
+            probe->setParam((int)i, v);
+        }
+        return probe->latency();
     }
 
     void SolarisService::pump()
@@ -289,6 +308,9 @@ namespace solaris
                     const DeviceType *t = DeviceRegistry::find(d->type);
                     const int pi = t ? t->paramIndex(field) : -1;
                     if (pi < 0 || field.size() >= sizeof m.name) { structural = true; break; }
+                    // R-MIX-17: a value that moves the device's latency (a limiter's lookahead) re-plans the compensation
+                    const auto was = mLiveLatency.find(id);
+                    if (was != mLiveLatency.end() && latencyOf(*d) != was->second) { structural = true; break; }
                     double v = t->params[pi].def;
                     for (const auto &kv : d->params)
                         if (kv.first == field) parseParam(t->params[pi], kv.second, v);
