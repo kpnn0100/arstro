@@ -26,24 +26,10 @@ namespace solaris
         return pt ? pt->length : 0.0;
     }
 
-    bool parseParam(const ParamSpec &spec, const std::string &text, double &value)
-    {
-        if (spec.isChoice())
-            for (size_t i = 0; i < spec.choices.size(); ++i)
-                if (spec.choices[i] == text) { value = (double)i; return true; }
-        double v = 0;
-        if (!parseNumber(text, v)) return false;
-        value = spec.clamp(v);
-        return true;
-    }
+    // a parameter's text is the DSP library's (REQ-device-7) — the same text a VST3 plugin's state stores
+    bool parseParam(const ParamSpec &spec, const std::string &text, double &value) { return paramFromText(spec, text, value); }
 
-    std::string paramText(const ParamSpec &spec, double value)
-    {
-        const double v = spec.clamp(value);
-        if (spec.isChoice()) return spec.choices[(size_t)v];
-        if (spec.integer) return canonicalNumber(std::round(v));
-        return canonicalNumber(v);
-    }
+    std::string paramText(const ParamSpec &spec, double value) { return paramToText(spec, value); }
 
     std::set<std::string> silentStrips(const Project &p)
     {

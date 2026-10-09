@@ -549,3 +549,27 @@ fades in, a deleted one fades out where it was, a dragged one is the pointer's a
 re-fading (`PianoRoll::bind`, `PianoRoll.cpp:68`; `PianoRoll::advance`, `PianoRoll.cpp:173`); the two modes cross-fade; Steps zooms to fit the pattern
 (64–160 px a beat) and Notes gets its own zoom back, eased; Ctrl+wheel zooms about the pointer, the
 wheel scrolls, eased; a length changed from a shell moves the end, eased.
+
+### DR-VST-1 Our instruments as VST3 plugins (R-VST-1…5)
+**The SDK:** Steinberg's `vst3sdk` **v3.8.1_build_84**, cloned recursively to `~/sdk/vst3sdk`; its
+`LICENSE.txt` (and `base`, `pluginterfaces`, `public.sdk`'s) is the **MIT licence** (Steinberg relicensed
+the SDK from 3.8; VSTGUI, which the plugins do not use, keeps its own). Found through `VST3_SDK_ROOT`
+(a CMake variable or the environment); with none, `core/DigitalSignalProcessing/apps/vst3` prints
+`arstro VST3: no SDK at …` and builds nothing (verified by configuring against a missing path). The
+SDK's CMake wants 3.25 and this machine has 3.22, so the DSP library compiles the SDK's sources itself
+from the SDK's own source lists, as PIC static libraries scoped to that directory.
+**The plugins** (DSP REQ-vst-1…5, `core/DigitalSignalProcessing/apps/vst3/README.md`):
+`ArstroBasicSynth.vst3` and `ArstroDrumMachine.vst3` — a generic processor and controller around
+`DeviceRegistry::create("synth" | "drums")`, the object Solaris renders; a parameter per registry
+parameter, id = its index; normalised by the DSP library's `normalizedFromValue` / `valueFromNormalized`
+(REQ-device-7); a block split at every note and parameter point; state as the registry's text.
+`cmake --build build --target vst3_install` copies both to `~/.vst3` (done on this machine).
+**One text:** Solaris's `parseParam` / `paramText` (`core/Compile.cpp:30`, `:32`) ARE the DSP library's
+`paramFromText` / `paramToText`, so a `.slp`'s device values and a plugin's state are the same text by
+construction (the model and service suites, unchanged, still pass on it). The device panel's log taper
+is the same formula as `normalizedFromValue`'s (N2) but its own copy: the front end does not link the
+DSP library (law 13), and every value it sends is parsed by the service.
+**Verified** (root `ctest`): `vst3_validate_synth`, `vst3_validate_drums` — the SDK's validator, 47
+tests, 0 failed, each; `vst3_equivalence` — each bundle hosted offline equals the device rendered
+Solaris's way, 0 of 96 000 samples differing, not silence, its state read back as text.
+

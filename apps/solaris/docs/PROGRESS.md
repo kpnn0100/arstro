@@ -11,21 +11,21 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-09 — B7: the mixer's lines.*
+*Last updated: 2026-10-09 — B8: VST3.*
 
 ---
 
 ## NEXT
 
-**► B8 — VST3, our instruments as plugins** (R-VST-1…5): the SDK cloned (`--recursive`) to a fixed place
-outside the repo, found through a CMake variable, its licence read and its version recorded in R-VST;
-a thin VST3 processor + controller per instrument (Basic Synth, Drum Machine) in
-`core/DigitalSignalProcessing/apps/vst3/` behind a CMake option, so `arstro_dsp` stays dependency-free;
-ONE shared normalisation (registry range + taper ↔ 0…1) in the DSP library used by the plugin, with its
-own unit test (round trip to the last digit, log taper, integer, choice); parameter ids frozen from the
-registry; the SDK's `validator` run on both; the plugin's audio equals the device's render sample for
-sample at the same parameters and notes; installed to `~/.vst3/`. DSP commit + push first, then the
-umbrella pointer.
+**► B9 — EDM sound** (R-MIX-15, R-EDM-2/3/4), DSP first: the `Compressor` gains a sidechain detector
+input (its `sidechain` switch in the registry; `## Math` for the keyed detector) and a brickwall
+`Limiter` (lookahead, ceiling, release — the output never above the ceiling, measured), each with its
+REQ-, unit and integration tests, pushed; then in Solaris `send add <ch> --to <ch> --sidechain` (a send
+into a strip's key input; the key strip earlier in processing order, R-MIX-4 amended), the engine
+routing it to the compressor's detector, the pump measured (the bass dips by the gain reduction after
+each kick, and not without the send); the metronome — `settings set metronome=on`, a Drum Machine pad
+on every beat while PLAYING (the bar's first accented), at `metronomeLevel`, never in a render
+(measured: a render with it on equals one with it off).
 ---
 
 ## The build, in order
@@ -141,8 +141,11 @@ umbrella's pointer — `arstro.rule` §7).
       sliding — a mutant placing it from target widths fails it); shots mixer-add-line,
       clip-play-through, looked at. Every DR anchor re-checked with a script; 40-odd that had drifted
       since U1 re-pointed.
-- [ ] **B8** VST3: the SDK, Basic Synth + Drum Machine as plugins, the shared normalisation, validator,
-      plugin = device sample for sample (R-VST-1…5).
+- [x] **B8** VST3: the SDK, Basic Synth + Drum Machine as plugins, the shared normalisation, validator,
+      plugin = device sample for sample (R-VST-1…5). — DR-VST-1; DSP REQ-device-7, REQ-vst-1…5
+      (`4ab11ad`); SDK v3.8.1 (MIT) at ~/sdk/vst3sdk, built with our CMake; validator 47/47 on both;
+      `vst3_equivalence` 0 of 96 000 differ (a wrapper ignoring note offsets fails it); installed to
+      ~/.vst3. Solaris's parameter text is now the DSP library's.
 - [ ] **B9** EDM sound: sidechain (DSP compressor + `send add --sidechain`), the limiter, the
       metronome (R-MIX-15, R-EDM-2/3/4).
 - [ ] **B10** The loop region on the ruler (R-EDM-7).
@@ -159,6 +162,12 @@ umbrella's pointer — `arstro.rule` §7).
 ---
 
 ## Decisions log (newest first)
+
+- **2026-10-09 — the VST3 SDK is built from its sources by our CMake**, not through its own: v3.8.1 (the
+  first MIT release) needs CMake 3.25 and this machine has 3.22; an older SDK would build but is not MIT.
+  The source lists are the SDK's own, so an SDK update is a list check, not a rewrite. No warm-up block
+  in the plugin: a mutant without it still matched, because the instruments have no parameter ramp —
+  so it was dead code claiming a job; the reference keeps Solaris's warm-up and would catch a ramp.
 
 - **2026-10-09 — the piano roll's Steps mode zooms to fit.** A sixteenth at the Notes zoom is 12 px —
   a cell nobody hits. Steps fits the pattern to the window (64–160 px a beat), eased, and Notes keeps
