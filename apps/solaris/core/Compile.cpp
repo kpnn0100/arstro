@@ -48,7 +48,8 @@ namespace solaris
             up[b].push_back(a);
         };
         for (const auto &s : p.strips) edge(s.id, s.out);
-        for (const auto &sd : p.sends) edge(sd.from, sd.to);
+        for (const auto &sd : p.sends)
+            if (!sd.sidechain) edge(sd.from, sd.to); // a key is heard by a detector, not by you: it brings nothing into a solo (R-MIX-15)
         std::set<std::string> audible;
         auto walk = [&](const std::string &from, std::map<std::string, std::vector<std::string>> &g) {
             std::vector<std::string> stack = {from};
@@ -151,12 +152,13 @@ namespace solaris
             es.gain = engine::dbToLinear(s->gain);
             es.pan = s->pan;
             es.silent = silent.count(s->id) > 0;
+            es.keyLive = !s->mute; // solo-silenced, it still keys (a soloed bass keeps its pump)
             es.out = target(s->out, stripIndex, portIndex);
             for (const auto &sd : p.sends)
                 if (sd.from == s->id)
                 {
                     sendAt[sd.id] = {(int)g.strips.size(), (int)es.sends.size()};
-                    es.sends.push_back(engine::Send{target(sd.to, stripIndex, portIndex), engine::dbToLinear(sd.gain), sd.pre});
+                    es.sends.push_back(engine::Send{target(sd.to, stripIndex, portIndex), engine::dbToLinear(sd.gain), sd.pre, sd.sidechain});
                 }
             bool instrumentOk = true;
             if (const Rack *rk = p.rack(s->id))

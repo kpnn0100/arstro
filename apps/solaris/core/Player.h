@@ -7,11 +7,17 @@
  *  handing the old one back through a second queue to be destroyed on the service's thread
  *  (`collect`). Position and meters come back through atomics. So the audio thread never takes a
  *  lock, never allocates (everything is sized before `start`), never touches a file.
+ *
+ *  The metronome (R-TIME-4, R-EDM-2) is HERE, after the engine, so it is in what you hear and never in
+ *  a render: a Drum Machine of its own clicks every beat — the bar's first on the cowbell, the rest on
+ *  the rim — into the device's first two channels, at the setting's level. On/off, level and tempo are
+ *  atomics the service sets; the click device is made in `start`.
  */
 #pragma once
 #include "AudioOut.h"
 #include "Engine.h"
 #include "base/LockFreeQueue.h"
+#include "device/Device.h"
 #include <atomic>
 #include <memory>
 #include <thread>
@@ -49,6 +55,10 @@ namespace solaris
         bool running() const { return mRun.load(); }
 
         bool send(const Live &m) { return mIn.push(m); }
+        /** The metronome: on or off, its gain (linear); and where the beats are (samples a beat, beats a bar). */
+        void setClick(bool on, double gain) { mClickOn.store(on); mClickGain.store(gain); }
+        void setTempo(double samplesPerBeat, int beatsPerBar) { mSpb.store(samplesPerBeat); mBpb.store(beatsPerBar < 1 ? 1 : beatsPerBar); }
+        static constexpr int kClickBeat = 37, kClickBar = 56; // the Drum Machine's rim and cowbell
         void setLoop(long long from, long long to) { mLoopA.store(from); mLoopB.store(to); }
         /** The sample the listener hears now: rendered minus the device's latency. */
         long long heard() const;
@@ -62,6 +72,7 @@ namespace solaris
     private:
         void run();
         void apply(const Live &m);
+        void click(long long pos, int n);
 
         std::thread mThread;
         std::atomic<bool> mRun{false};
@@ -76,6 +87,12 @@ namespace solaris
         std::atomic<long long> mRendered{0}, mLoopA{0}, mLoopB{0};
         std::atomic<double> mLatency{0};
         std::unique_ptr<std::atomic<float>[]> mPeaks{new std::atomic<float>[2 * kMaxStrips + 2]};
+        std::unique_ptr<Device> mClick;
+        std::vector<Sample> mClickL, mClickR;
+        std::atomic<bool> mClickOn{false};
+        std::atomic<double> mClickGain{0.5}, mSpb{24000.0};
+        std::atomic<int> mBpb{4};
+        bool mClickWas = false;
     };
 }
 }

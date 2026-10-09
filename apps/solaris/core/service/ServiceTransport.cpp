@@ -132,6 +132,8 @@ namespace solaris
             mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(mLoopFrom * spb) : 0,
                              mLoopTo > mLoopFrom ? (long long)std::llround(mLoopTo * spb) : 0);
             mModel.transport.device = mSettings.output;
+            mPlayer->setTempo(spb, std::max(1, std::atoi(mProject.header.sig.c_str())));
+            mPlayer->setClick(mSettings.metronome, engine::dbToLinear(mSettings.metronomeLevel));
             mPlayer->start(std::move(out), std::move(eng), routes, 2, mSettings.bufferSize, (long long)std::llround(mPosition * spb));
             announce();
             return true;
@@ -187,6 +189,10 @@ namespace solaris
         const bool bindingsTouched = mBindingsTouched;
         mBindingsTouched = false;
         if (!mPlayer || !mPlayer->running()) return;
+        // the metronome follows the tempo and the bar (atomics: cheap, whatever the edit was)
+        mPlayer->setTempo(60.0 / mProject.header.bpm * mProject.header.sampleRate, std::max(1, std::atoi(mProject.header.sig.c_str())));
+        bool keys = false;
+        for (const auto &sd : mProject.sends) keys |= sd.sidechain;
         std::vector<Player::Live> msgs;
         bool structural = c.kind != K::Set || bindingsTouched; // a formula or a curve changed: compile it
         for (const auto &f : c.fields)
@@ -218,6 +224,7 @@ namespace solaris
                 m.strip = strip;
                 m.value = mProject.strip(id)->pan;
             }
+            else if (strip >= 0 && field == "mute" && keys) { structural = true; break; } // a muted strip stops keying: compile it (R-MIX-15)
             else if (strip >= 0 && (field == "mute" || field == "solo")) { silences = true; continue; }
             else if (mLiveDevices.count(id))
             {

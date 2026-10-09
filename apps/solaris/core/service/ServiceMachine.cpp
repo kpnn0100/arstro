@@ -5,6 +5,8 @@
 #include "Format.h"
 #include "Json.h"
 #include "SolarisService.h"
+#include "MixLaws.h"
+#include "Player.h"
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -129,6 +131,7 @@ namespace solaris
             const Settings keep = mSettings;
             mSettings = next;
             if (!saveSettings(err)) { mSettings = keep; return false; }
+            if (mPlayer) mPlayer->setClick(mSettings.metronome, engine::dbToLinear(mSettings.metronomeLevel)); // heard at once
             for (const auto &w : what) emit(Event(Event::Kind::SettingsChanged).with("what", w));
             return true;
         }

@@ -80,6 +80,7 @@ namespace solaris
         std::string id, from, to;
         double gain = 0.0;
         bool pre = false;
+        bool sidechain = false; // R-MIX-15: into the target's KEY (its compressors' detectors), not its input
         Fields unknown;
         Remarks remarks;
     };
@@ -241,6 +242,10 @@ namespace solaris
     /** Everything `s` may route or send to: strips on later mixers (processing order), then
      *  "master", then the output ports — what a matrix column or a route picker offers. */
     std::vector<std::string> targetsOf(const Project &p, const Strip &s);
+    /** R-MIX-4 amended (R-MIX-15): a sidechain KEY may go to any strip LATER in processing order, the
+     *  same mixer included — it is heard by a detector, never played, so no loop can form. */
+    bool keysForward(const Project &p, const Strip &from, const Strip &to);
+    std::vector<std::string> keyTargetsOf(const Project &p, const Strip &s);
 
     /** A fresh project: R-MIX-3's defaults — Mixer 1 "Sources", Mixer 2 "Buses" with bus "Main",
      *  output port "Main" fed by the master. */

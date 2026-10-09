@@ -9,6 +9,7 @@
 #include "../../widgets/PianoRoll.h"
 #include "../../../../cosmo/widgets/SliderRow.h"
 using arstro::solaris_ui::Timeline;
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -894,6 +895,50 @@ static void test_a_line_added_and_sources_relinked()
     pass("Lines: \"+ Line\" adds an audio line, a bus or any instrument to the page in one line, the card growing in and \"+ Line\" sliding along (eased); a strip's clips move to another line in one `strip relink`; a clip plays through another strip from its menu (R-MIX-13/14)");
 }
 
+static void test_a_strip_keys_a_later_compressor()
+{
+    sltest::Rig r("ui-key", 1280, 800);
+    r.cmd("project new " + r.song("Key") + ".slp --bpm 120");
+    r.cmd("clip add --instrument drums --at 0 --length 4");       // ch_2, the kick
+    r.cmd("clip add --instrument synth --at 0 --length 4");       // ch_3, the bass — later in order
+    r.cmd("device add ch_3 --type compressor");
+    r.settle();
+    auto &d = r.app->project().dock();
+    auto &menu = r.app->menu();
+    // the kick's menu: "Sidechain to ▸" offers exactly the service's keyTargets; one is ONE line
+    const artboard::Rect card = world(d, d.cardRect("ch_2"));
+    r.click(card.x + 20.0, card.y + 16.0, 2);
+    r.settle();
+    int key = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label.rfind("Sidechain to", 0) == 0) key = i;
+    assert(menu.isOpen() && key >= 0);
+    r.click(menu.itemRect(key));
+    r.settle();
+    auto keyTargetsOf = [&](const std::string &id) {
+        for (const auto &st : r.svc->model().strips)
+            if (st.id == id) return st.keyTargets;
+        return std::vector<std::string>{};
+    };
+    const auto targets = keyTargetsOf("ch_2");
+    assert(menu.isOpen() && menu.itemCount() == (int)targets.size());
+    int bassItem = -1;
+    for (size_t i = 0; i < targets.size(); ++i)
+        if (targets[i] == "ch_3") bassItem = (int)i;
+    assert(bassItem >= 0);
+    r.click(menu.itemRect(bassItem));
+    r.settle();
+    assert(sentLine(r, "send add ch_2 --to ch_3 --sidechain"));
+    bool keyed = false;
+    for (const auto &st : r.svc->model().strips)
+        for (const auto &sd : st.sends) keyed |= st.id == "ch_2" && sd.sidechain;
+    assert(keyed);
+    // and no key back from the bass to the kick: keys only go forward in processing order
+    const auto back = keyTargetsOf("ch_3");
+    assert(std::find(back.begin(), back.end(), "ch_2") == back.end());
+    pass("Sidechain: a strip's menu keys a later strip in one `send add --sidechain`, offering exactly the service's keyTargets (R-MIX-15)");
+}
+
 static void test_ruler_seek_keys_and_selection()
 {
     sltest::Rig r("ui-ruler", 1280, 800);
@@ -942,6 +987,7 @@ int main()
     test_piano_roll_edits_the_pattern();
     test_a_kits_roll_names_its_pads();
     test_a_line_added_and_sources_relinked();
+    test_a_strip_keys_a_later_compressor();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

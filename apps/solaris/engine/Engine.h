@@ -94,6 +94,7 @@ namespace engine
         struct StripState;
         void renderPiece(long long p0, int n, PortBuffers &out, int outOffset);
         void route(const Target &t, const double *L, const double *R, int n, double gain, PortBuffers &out, int outOffset);
+        void routeKey(const Target &t, const double *L, const double *R, int n, double gain);
         void meter(Meter &m, const double *L, const double *R, int n);
         void evalBinds(long long sample, bool immediate); // `immediate`: no ramp (build, seek)
 

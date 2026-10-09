@@ -25,6 +25,10 @@ namespace solaris
         // Everything the thread will touch is sized HERE (R-PLAY-2).
         mEng->prepare(mPb, mBlock);
         mInterleaved.assign((size_t)mBlock * (size_t)mChannels, 0.0f);
+        mClick = DeviceRegistry::create("drums"); // the metronome's own kit, made here, not on the audio thread
+        mClickL.assign((size_t)mBlock, 0.0);
+        mClickR.assign((size_t)mBlock, 0.0);
+        mClickWas = false;
         for (int i = 0; i < 2 * kMaxStrips + 2; ++i) mPeaks[(size_t)i].store(0.0f);
         mEng->seek(from);
         mRendered.store(from);
@@ -90,6 +94,39 @@ namespace solaris
         }
     }
 
+    void Player::click(long long pos, int n)
+    {
+        // every beat in [pos, pos + n) on its exact sample — the bar's first accented (R-TIME-4)
+        const double spb = mSpb.load(std::memory_order_relaxed);
+        const int bpb = mBpb.load(std::memory_order_relaxed);
+        if (!mClick || spb <= 0.0) return;
+        std::fill(mClickL.begin(), mClickL.begin() + n, 0.0);
+        std::fill(mClickR.begin(), mClickR.begin() + n, 0.0);
+        int cur = 0;
+        auto run = [&](int to) {
+            if (to <= cur) return;
+            Sample *io[2] = {mClickL.data() + cur, mClickR.data() + cur};
+            mClick->process(io, 2, to - cur);
+            cur = to;
+        };
+        for (long long k = (long long)std::ceil((double)pos / spb - 1e-9);; ++k)
+        {
+            const long long at = std::llround((double)k * spb);
+            if (at >= pos + n) break;
+            if (at < pos) continue;
+            run((int)(at - pos));
+            const bool bar = k % bpb == 0;
+            mClick->noteOn(bar ? kClickBar : kClickBeat, bar ? 127 : 96);
+        }
+        run(n);
+        const double g = mClickGain.load(std::memory_order_relaxed);
+        for (int i = 0; i < n; ++i)
+        {
+            mInterleaved[(size_t)i * mChannels] += (float)(g * mClickL[(size_t)i]);
+            if (mChannels > 1) mInterleaved[(size_t)i * mChannels + 1] += (float)(g * mClickR[(size_t)i]);
+        }
+    }
+
     void Player::run()
     {
         while (mRun.load())
@@ -120,6 +157,10 @@ namespace solaris
             }
             mPeaks[2 * kMaxStrips].store(mEng->masterMeter().peak[0], std::memory_order_relaxed);
             mPeaks[2 * kMaxStrips + 1].store(mEng->masterMeter().peak[1], std::memory_order_relaxed);
+            const bool clickOn = mClickOn.load(std::memory_order_relaxed);
+            if (clickOn) click(pos, n);
+            else if (mClickWas && mClick) mClick->reset(); // off: no tail waits to resume
+            mClickWas = clickOn;
             mOut->write(mInterleaved.data(), n); // blocks: the device is the clock
             mLatency.store(mOut->latency(), std::memory_order_relaxed);
             if (b > a && mEng->position() >= b) mEng->seek(a);

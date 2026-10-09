@@ -47,6 +47,7 @@ namespace solaris
             {"strips[].sends[].gain", "number", "dB"},
             {"strips[].sends[].pre", "bool", "pre-fader"},
             {"strips[].sends[].gainFormula", "string", "the formula driving the send's gain, \"\" = none"},
+            {"strips[].sends[].sidechain", "bool", "a sidechain key: into the target's compressors' detectors, not its input (R-MIX-15)"},
             {"strips[].devices", "object[]", "the rack, in order (an instrument strip's first is its instrument)"},
             {"strips[].devices[].id", "string", ""},
             {"strips[].devices[].type", "string", "the DSP registry type"},
@@ -73,6 +74,7 @@ namespace solaris
             {"strips[].fromLanes", "string[]", "fed by: the lanes those clips are drawn on"},
             {"strips[].fromStrips", "string[]", "fed by: strips whose output or a send lands here"},
             {"strips[].targets", "string[]", "where its output or a send may go (R-MIX-4): strips on later mixers, master, output ports"},
+            {"strips[].keyTargets", "string[]", "where a sidechain key may go (R-MIX-15): any strip later in processing order, its own mixer included"},
             {"masterDevices", "object[]", "the master's rack, shaped like strips[].devices"},
             {"lanes", "object[]", "timeline rows, in order"},
             {"lanes[].id", "string", ""},
@@ -231,7 +233,7 @@ namespace solaris
         {
             Json sends = Json::array();
             for (const auto &sd : s.sends)
-                sends.push(Json::object().set("id", sd.id).set("to", sd.to).set("gain", sd.gain).set("pre", sd.pre).set("gainFormula", sd.gainFormula));
+                sends.push(Json::object().set("id", sd.id).set("to", sd.to).set("gain", sd.gain).set("pre", sd.pre).set("gainFormula", sd.gainFormula).set("sidechain", sd.sidechain));
             Json st = Json::object();
             st.set("id", s.id).set("name", s.name).set("kind", s.kind).set("mixer", s.mixer).set("order", s.order)
                             .set("out", s.out).set("gain", s.gain).set("pan", s.pan).set("gainFormula", s.gainFormula)
@@ -239,7 +241,7 @@ namespace solaris
                             .set("audible", s.audible).set("colour", s.colour).set("sends", sends).set("devices", devices(s.devices));
             if (!stable) st.set("peak", Json::array().push(Json::number(s.peak[0])).push(Json::number(s.peak[1])));
             st.set("clipCount", s.clipCount).set("fromLanes", strings(s.fromLanes)).set("fromStrips", strings(s.fromStrips))
-                .set("targets", strings(s.targets));
+                .set("targets", strings(s.targets)).set("keyTargets", strings(s.keyTargets));
             strips.push(st);
         }
         j.set("strips", strips);

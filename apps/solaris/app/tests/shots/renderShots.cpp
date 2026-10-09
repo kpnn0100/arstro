@@ -270,6 +270,15 @@ namespace
                  wl.roll("pt_1")->setMode(arstro::solaris_ui::PianoRoll::Steps);
                  r.settle();
              }},
+            {"mixer-sidechain",   // the kick keys the bass's compressor; a limiter on the master (R-MIX-15, R-EDM-4)
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("device add ch_3 --type compressor");
+                 r.cmd("set dv_4.sidechain=on dv_4.threshold=-30");
+                 r.cmd("send add ch_2 --to ch_3 --sidechain --pre");
+                 r.cmd("device add master --type limiter");
+                 r.settle();
+             }},
             {"mixer-add-line",
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

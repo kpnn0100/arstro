@@ -107,7 +107,7 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
 
 ---
 
-## R-MIX — the mixer: every source has its own strip — ✅ IMPLEMENTED (1–11 headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; drawn and played with: DR-UI-8; 12 the fold: DR-UI-8; 13/14 the line added, sources relinked: DR-MIX-13; 15 with B9; 8's linked selection with U4)
+## R-MIX — the mixer: every source has its own strip — ✅ IMPLEMENTED (1–11 headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; drawn and played with: DR-UI-8; 12 the fold: DR-UI-8; 13/14 the line added, sources relinked: DR-MIX-13; 15 the sidechain: DR-MIX-15; 8's linked selection with U4)
 
 The user's model (2026-10-08): *"sample got its own line by default; we can add multiple mixers as
 the user wants their workspace organised; the 1st mixer stores the samples, the 2nd receives from
@@ -190,7 +190,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 - **R-CLIP-4 Clips may overlap** on a lane; overlapping audio sums (was SR-CLIP-4).
 - **R-CLIP-5 Reserved:** time-stretch and pitch-shift (was SR-CLIP-3).
 
-## R-TIME — transport and time — 🚧 IN PROGRESS (1–4 ✅ but the metronome: DR-PLAY-1)
+## R-TIME — transport and time — 🚧 IN PROGRESS (1–4 ✅: DR-PLAY-1, the metronome DR-EDM-2; 4's loop region on the ruler with B10)
 
 - **R-TIME-1 Beats are authoritative**, 960 PPQ; seconds are derived from the tempo (was SR-TIME-1).
 - **R-TIME-2 One tempo and one meter** per project; a tempo/meter map is reserved (was SR-TIME-2/5).
@@ -409,7 +409,7 @@ controller, normalised parameters and saved state.
 - **R-VST-6 Reserved:** hosting other makers' VST3 in Solaris (scan `~/.vst3`, load, process, their
   editor window) — host work (R-SVC-4).
 
-## R-EDM — what a professional EDM DAW needs (user request, 2026-10-09: *"suggest all necessary features"*) — 🚧 IN PROGRESS (1 ✅ DR-EDM-1; 5 ✅ with R-AUTO, DR-AUTO-2; 6 ✅ with R-ROLL, DR-ROLL-1)
+## R-EDM — what a professional EDM DAW needs (user request, 2026-10-09: *"suggest all necessary features"*) — 🚧 IN PROGRESS (1 ✅ DR-EDM-1; 2 ✅ DR-EDM-2; 3 ✅ with R-MIX-15, DR-MIX-15; 4 ✅ DR-EDM-4; 5 ✅ with R-AUTO, DR-AUTO-2; 6 ✅ with R-ROLL, DR-ROLL-1)
 
 **Built with this brief:**
 - **R-EDM-1 Undo and redo** of every edit — `undo`, `redo`; Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y; the model

@@ -15,6 +15,7 @@ namespace engine
     {
         std::vector<std::unique_ptr<Device>> rack; // aligned with the graph's rack
         std::vector<double> inL, inR, outL, outR;
+        std::vector<double> keyL, keyR;           // R-MIX-15: what earlier strips keyed it with, this piece
         size_t nextEvent = 0;                     // the first note event at or after the position
         double sumSq[2] = {0, 0};
         long long counted = 0;
@@ -82,7 +83,14 @@ namespace engine
         {
             if (!checkTarget(graph.strips[i].out, i, graph, err, "output")) return false;
             for (const auto &s : graph.strips[i].sends)
-                if (!checkTarget(s.to, i, graph, err, "send")) return false;
+            {
+                if (!checkTarget(s.to, i, graph, err, s.key ? "sidechain key" : "send")) return false;
+                if (s.key && s.to.kind != Target::Strip)
+                {
+                    err = graph.strips[i].id + "'s sidechain key goes to the master or a port — a key goes to a strip";
+                    return false;
+                }
+            }
         }
         for (int p : graph.masterPorts)
             if (p < 0 || p >= (int)graph.ports.size())
@@ -115,6 +123,7 @@ namespace engine
             st->inL.assign(kBlock, 0.0); st->inR.assign(kBlock, 0.0);
             st->outL.assign(kBlock, 0.0); st->outR.assign(kBlock, 0.0);
             st->tmpL.assign(kBlock, 0.0); st->tmpR.assign(kBlock, 0.0);
+            st->keyL.assign(kBlock, 0.0); st->keyR.assign(kBlock, 0.0);
             st->gainA = st->gainB = s.gain;
             st->panA = st->panB = s.pan;
             st->sendBound.assign(s.sends.size(), 0);
@@ -281,6 +290,13 @@ namespace engine
         m.maxPeak[1] = std::max(m.maxPeak[1], m.peak[1]);
     }
 
+    void Engine::routeKey(const Target &t, const double *L, const double *R, int n, double gain)
+    {
+        if (t.kind != Target::Strip) return; // refused at build; a key goes to a strip
+        auto &st = *mStrips[t.index];
+        for (int i = 0; i < n; ++i) { st.keyL[i] += L[i] * gain; st.keyR[i] += R[i] * gain; }
+    }
+
     void Engine::route(const Target &t, const double *L, const double *R, int n, double gain, PortBuffers &out, int off)
     {
         switch (t.kind)
@@ -314,6 +330,8 @@ namespace engine
         {
             std::fill(st->inL.begin(), st->inL.begin() + n, 0.0);
             std::fill(st->inR.begin(), st->inR.begin() + n, 0.0);
+            std::fill(st->keyL.begin(), st->keyL.begin() + n, 0.0);
+            std::fill(st->keyR.begin(), st->keyR.begin() + n, 0.0);
         }
         std::fill(mMasterL.begin(), mMasterL.begin() + n, 0.0);
         std::fill(mMasterR.begin(), mMasterR.begin() + n, 0.0);
@@ -375,10 +393,18 @@ namespace engine
             {
                 if (d.rack[k].bypass) continue;
                 Sample *io[2] = {L, R};
+                if (st.rack[k]->type().takesKey)
+                {
+                    // R-MIX-15: a compressor's detector hears the strip's key (silence when nothing keys it)
+                    const Sample *key[2] = {st.keyL.data(), st.keyR.data()};
+                    st.rack[k]->setKey(key, 2);
+                }
                 st.rack[k]->process(io, 2, n);
             }
 
-            if (d.silent)
+            bool keys = false;
+            for (const auto &s : d.sends) keys |= s.key;
+            if (d.silent && !(keys && d.keyLive))
             {
                 // A muted or solo-silenced strip sends nothing anywhere.
                 std::fill(st.outL.begin(), st.outL.begin() + n, 0.0);
@@ -386,21 +412,27 @@ namespace engine
             }
             else
             {
+                // silenced by another's solo, a strip still keys: only its key sends run (R-MIX-15)
+                auto runs = [&](size_t k) { return !d.silent || d.sends[k].key; };
                 // a bound value ramps from A to B across the control period that began at `ramp` (R-AUTO-7)
                 auto rampAt = [&](int i) { return std::min(1.0, std::max(0.0, (double)(p0 + i - st.ramp) / kControl)); };
                 auto sendTo = [&](size_t k, const double *sL, const double *sR) {
                     const Send &s = d.sends[k];
-                    if (!st.sendBound[k]) { route(s.to, sL, sR, n, s.gain, out, off); return; }
+                    auto deliver = [&](const double *a, const double *b, double g) {
+                        if (s.key) routeKey(s.to, a, b, n, g);
+                        else route(s.to, a, b, n, g, out, off);
+                    };
+                    if (!st.sendBound[k]) { deliver(sL, sR, s.gain); return; }
                     for (int i = 0; i < n; ++i)
                     {
                         const double g = st.sendA[k] + (st.sendB[k] - st.sendA[k]) * rampAt(i);
                         st.tmpL[i] = sL[i] * g;
                         st.tmpR[i] = sR[i] * g;
                     }
-                    route(s.to, st.tmpL.data(), st.tmpR.data(), n, 1.0, out, off);
+                    deliver(st.tmpL.data(), st.tmpR.data(), 1.0);
                 };
                 for (size_t k = 0; k < d.sends.size(); ++k)
-                    if (d.sends[k].pre) sendTo(k, L, R);
+                    if (d.sends[k].pre && runs(k)) sendTo(k, L, R);
                 if (st.gainBound || st.panBound)
                 {
                     for (int i = 0; i < n; ++i)
@@ -425,8 +457,14 @@ namespace engine
                     }
                 }
                 for (size_t k = 0; k < d.sends.size(); ++k)
-                    if (!d.sends[k].pre) sendTo(k, st.outL.data(), st.outR.data());
-                route(d.out, st.outL.data(), st.outR.data(), n, 1.0, out, off);
+                    if (!d.sends[k].pre && runs(k)) sendTo(k, st.outL.data(), st.outR.data());
+                if (d.silent)
+                {
+                    std::fill(st.outL.begin(), st.outL.begin() + n, 0.0);
+                    std::fill(st.outR.begin(), st.outR.begin() + n, 0.0);
+                }
+                else
+                    route(d.out, st.outL.data(), st.outR.data(), n, 1.0, out, off);
             }
             meter(mStripMeters[si], st.outL.data(), st.outR.data(), n);
             for (int i = 0; i < n; ++i) { st.sumSq[0] += st.outL[i] * st.outL[i]; st.sumSq[1] += st.outR[i] * st.outR[i]; }

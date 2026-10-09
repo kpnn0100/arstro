@@ -242,6 +242,7 @@ namespace solaris
             else if (k == "to") n.to = v;
             else if (k == "gain") n.gain = r.num(k, v, 0.0);
             else if (k == "pre") n.pre = r.boolean(k, v, false);
+            else if (k == "sidechain") n.sidechain = r.boolean(k, v, false);
             else n.unknown.emplace_back(k, v);
         }
         void apply(Reader &, Rack &n, const std::string &k, const std::string &v)
@@ -589,6 +590,7 @@ namespace solaris
             Line &kv(const std::string &k, const std::string &v) { s += " " + k + "=" + v; return *this; }
             Line &str(const std::string &k, const std::string &v) { return kv(k, quoteIfNeeded(v)); }
             Line &strIf(const std::string &k, const std::string &v) { return v.empty() ? *this : str(k, v); }
+            Line &kvIf(bool when, const std::string &k, const std::string &v) { return when ? kv(k, v) : *this; }
             Line &unknown(const Fields &f)
             {
                 for (const auto &x : f) str(x.first, x.second);
@@ -660,7 +662,7 @@ namespace solaris
         group(!p.sends.empty());
         for (const auto &n : p.sends)
             emit(out, "", Line("asend").kv("id", n.id).kv("from", n.from).kv("to", n.to).kv("gain", canonicalNumber(n.gain))
-                              .kv("pre", boolText(n.pre)).unknown(n.unknown), n.remarks);
+                              .kv("pre", boolText(n.pre)).kvIf(n.sidechain, "sidechain", "true").unknown(n.unknown), n.remarks);
         group(!p.racks.empty());
         for (const auto &r : p.racks)
         {
@@ -744,6 +746,22 @@ namespace solaris
         return &from != &to && (b ? b->order : 0) > (a ? a->order : 0);
     }
 
+    bool keysForward(const Project &p, const Strip &from, const Strip &to)
+    {
+        if (&from == &to) return false;
+        const auto order = p.stripsInOrder();
+        const auto a = std::find(order.begin(), order.end(), &from), b = std::find(order.begin(), order.end(), &to);
+        return a != order.end() && b != order.end() && b > a;
+    }
+
+    std::vector<std::string> keyTargetsOf(const Project &p, const Strip &s)
+    {
+        std::vector<std::string> out;
+        for (const Strip *t : p.stripsInOrder())
+            if (keysForward(p, s, *t)) out.push_back(t->id);
+        return out;
+    }
+
     std::vector<std::string> targetsOf(const Project &p, const Strip &s)
     {
         std::vector<std::string> out;
@@ -801,7 +819,17 @@ namespace solaris
             const Strip *from = p.strip(sd.from);
             if (!from) { e.push_back(sd.id + " sends from `" + sd.from + "`, which is no strip"); continue; }
             if (sd.to.empty()) e.push_back(sd.id + " has no target");
-            checkTarget(*from, sd.to, "send " + sd.id);
+            if (sd.sidechain)
+            {
+                // a key goes to a strip's detector: a strip later in processing order, any mixer (R-MIX-15)
+                const Strip *t = p.strip(sd.to);
+                if (!t) e.push_back(sd.id + " is a sidechain key, so it must go to a strip — `" + sd.to + "` is not one");
+                else if (!keysForward(p, *from, *t))
+                    e.push_back(describe(*from) + " key " + sd.id + " → " + describe(*t) +
+                                ": a sidechain key can only go to a strip LATER in processing order (R-MIX-15)");
+            }
+            else
+                checkTarget(*from, sd.to, "send " + sd.id);
         }
         {
             std::set<std::string> tracks;

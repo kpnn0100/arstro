@@ -75,9 +75,12 @@ A route to a strip on the same or an earlier mixer is **refused**, naming both e
 ```
 #asend id=sd_1 from=ch_2 to=ch_4  gain=-12.0 pre=false
 #asend id=sd_2 from=ch_2 to=prt_2 gain=0.0   pre=true     ; a headphone cue straight to a port
+#asend id=sd_3 from=ch_2 to=ch_3  gain=0.0   pre=true sidechain=true ; the kick keys the bass's compressor
 ```
 
-Same forward-only rule as `out`.
+Same forward-only rule as `out`. `sidechain=true` (written only when true; absent = false) makes the
+send a KEY (R-MIX-15): it feeds the target strip's compressors' detectors, not its input, and may go
+to any STRIP later in processing order, its own mixer included — never to the master or a port.
 
 ## 6. Racks — `#arack` / `#aeffect`
 

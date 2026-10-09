@@ -154,14 +154,15 @@
     },
     {
       "verb": "send add",
-      "usage": "send add <ch> [--to <ch|master|port>] [--gain <dB>] [--pre]",
+      "usage": "send add <ch> [--to <ch|master|port>] [--gain <dB>] [--pre] [--sidechain]",
       "args": "<ch>",
       "flags": [
         "to=<ch|master|port>",
         "gain=<dB>",
-        "pre"
+        "pre",
+        "sidechain"
       ],
-      "summary": "Add a send (post-fader unless --pre). Same forward-only rule as `route`.",
+      "summary": "Add a send (post-fader unless --pre). Same forward-only rule as `route`. With --sidechain it is a KEY: it feeds the target's compressors' detectors (their Sidechain switch), not its input, and may go to any strip later in processing order, its own mixer included (R-MIX-15).",
       "requirement": "R-MIX-5"
     },
     {
@@ -968,6 +969,12 @@
       "stable": true
     },
     {
+      "path": "strips[].sends[].sidechain",
+      "type": "bool",
+      "summary": "a sidechain key: into the target's compressors' detectors, not its input (R-MIX-15)",
+      "stable": true
+    },
+    {
       "path": "strips[].devices",
       "type": "object[]",
       "summary": "the rack, in order (an instrument strip's first is its instrument)",
@@ -1121,6 +1128,12 @@
       "path": "strips[].targets",
       "type": "string[]",
       "summary": "where its output or a send may go (R-MIX-4): strips on later mixers, master, output ports",
+      "stable": true
+    },
+    {
+      "path": "strips[].keyTargets",
+      "type": "string[]",
+      "summary": "where a sidechain key may go (R-MIX-15): any strip later in processing order, its own mixer included",
       "stable": true
     },
     {
@@ -2621,7 +2634,7 @@
       "type": "compressor",
       "label": "Compressor",
       "kind": "effect",
-      "summary": "Feed-forward peak compressor.",
+      "summary": "Feed-forward peak compressor; with Sidechain on it listens to another track (its key).",
       "params": [
         {
           "name": "threshold",
@@ -2672,6 +2685,16 @@
           "default": 0.0,
           "integer": false,
           "log": false
+        },
+        {
+          "name": "sidechain",
+          "label": "Sidechain",
+          "unit": "",
+          "choices": [
+            "off",
+            "on"
+          ],
+          "default": "off"
         }
       ]
     },
@@ -3100,6 +3123,54 @@
           "min": 0.0,
           "max": 1.0,
           "default": 1.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
+      "type": "limiter",
+      "label": "Limiter",
+      "kind": "effect",
+      "summary": "Brickwall lookahead limiter: the output never exceeds the ceiling.",
+      "params": [
+        {
+          "name": "gain",
+          "label": "Gain",
+          "unit": "dB",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "ceiling",
+          "label": "Ceiling",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 0.0,
+          "default": -0.3,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 1.0,
+          "max": 1000.0,
+          "default": 60.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "lookahead",
+          "label": "Lookahead",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10.0,
+          "default": 2.0,
           "integer": false,
           "log": false
         }

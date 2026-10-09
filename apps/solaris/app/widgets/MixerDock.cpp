@@ -959,6 +959,13 @@ namespace solaris_ui
                         }
                 if (!to.empty())
                     items.push_back({"Move its clips to \xE2\x96\xB8", [this, to, world] { if (onMenu) onMenu(to, world); }});
+                // a key for a later strip's compressor — exactly the service's keyTargets (R-MIX-15)
+                std::vector<cosmo_v2::ContextMenu::Item> keys;
+                for (const auto &k : s.keyTargets)
+                    if (const auto *ks = strip(k))
+                        keys.push_back({ks->name, [this, id, k] { send("send add " + id + " --to " + k + " --sidechain"); }});
+                if (!keys.empty())
+                    items.push_back({"Sidechain to \xE2\x96\xB8", [this, keys, world] { if (onMenu) onMenu(keys, world); }});
                 items.push_back({"Delete strip", [this, id] { send("strip delete " + id); }});
                 onMenu(std::move(items), world);
             }
@@ -1075,7 +1082,9 @@ namespace solaris_ui
             const auto &sd = s->sends[(size_t)k];
             const std::string gain = num(sd.gain, 1) + (sd.pre ? " P" : "");
             const double gw = t.measureText(gain, 9.0, font::mono());
-            arrowText(t, labelOf(sd.to), r.x + 3.0, r.y + r.h * 0.5, r.w - gw - 10.0, 9.0, font::sans(), fade(palette::secondaryForeground(), ca));
+            // a sidechain key says so, in the solo amber: it is heard by a detector, not in the mix (R-MIX-15)
+            arrowText(t, (sd.sidechain ? "key " : "") + labelOf(sd.to), r.x + 3.0, r.y + r.h * 0.5, r.w - gw - 10.0, 9.0, font::sans(),
+                      fade(sd.sidechain ? surface::solo() : palette::secondaryForeground(), ca));
             t.setFill(fade(palette::mutedForeground(), ca));
             t.drawText(gain, r.right() - 3.0 - gw, textfit::baseline(r.y + r.h * 0.5, 9.0), 9.0, font::mono());
         }

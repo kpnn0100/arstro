@@ -11,21 +11,17 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-09 — B8: VST3.*
+*Last updated: 2026-10-09 — B9: EDM sound.*
 
 ---
 
 ## NEXT
 
-**► B9 — EDM sound** (R-MIX-15, R-EDM-2/3/4), DSP first: the `Compressor` gains a sidechain detector
-input (its `sidechain` switch in the registry; `## Math` for the keyed detector) and a brickwall
-`Limiter` (lookahead, ceiling, release — the output never above the ceiling, measured), each with its
-REQ-, unit and integration tests, pushed; then in Solaris `send add <ch> --to <ch> --sidechain` (a send
-into a strip's key input; the key strip earlier in processing order, R-MIX-4 amended), the engine
-routing it to the compressor's detector, the pump measured (the bass dips by the gain reduction after
-each kick, and not without the send); the metronome — `settings set metronome=on`, a Drum Machine pad
-on every beat while PLAYING (the bar's first accented), at `metronomeLevel`, never in a render
-(measured: a render with it on equals one with it off).
+**► B10 — the loop region on the ruler** (R-EDM-7, R-TIME-4): Shift-drag on the ruler sets the loop
+(ONE `transport loop --from <b> --to <b>` on release, both ends snapped like a seek; the brace follows the
+pointer while dragged), the brace drawn on the ruler in the accent with the region tinted on the lanes,
+eased when a shell sets or clears it; a click inside the brace clears it (`transport loop --off`); the
+playhead wraps visibly. UI test (the brace caught mid-ease after a shell's `transport loop`), shot.
 ---
 
 ## The build, in order
@@ -146,8 +142,12 @@ umbrella's pointer — `arstro.rule` §7).
       (`4ab11ad`); SDK v3.8.1 (MIT) at ~/sdk/vst3sdk, built with our CMake; validator 47/47 on both;
       `vst3_equivalence` 0 of 96 000 differ (a wrapper ignoring note offsets fails it); installed to
       ~/.vst3. Solaris's parameter text is now the DSP library's.
-- [ ] **B9** EDM sound: sidechain (DSP compressor + `send add --sidechain`), the limiter, the
-      metronome (R-MIX-15, R-EDM-2/3/4).
+- [x] **B9** EDM sound: sidechain (DSP compressor + `send add --sidechain`), the limiter, the
+      metronome (R-MIX-15, R-EDM-2/3/4). — DR-MIX-15, DR-EDM-2, DR-EDM-4; DSP REQ-fx-sidechain-1,
+      REQ-fx-limiter-1 (`c31bc9f`: never above the ceiling BY CONSTRUCTION, the clamp idle — 3 mutants
+      caught); `solaris_service` 24 (the pump measured 6–22.5 dB and back; soloed still pumps — a mutant
+      found that a key dragged its source INTO a solo, fixed; the metronome on each beat's sample, never
+      in a render); `solaris_app_ui` 18; shot mixer-sidechain.
 - [ ] **B10** The loop region on the ruler (R-EDM-7).
 - [ ] **B11+** R-EDM-8…20, one task each, in that order unless the user reorders.
 
@@ -162,6 +162,11 @@ umbrella's pointer — `arstro.rule` §7).
 ---
 
 ## Decisions log (newest first)
+
+- **2026-10-09 — a solo-silenced strip still keys; a muted one does not; a key brings nothing into a
+  solo.** A soloed bass must keep its pump (the EDM reason to sidechain at all) without the kick
+  becoming audible; a mute is the user saying "this is off". The metronome lives in the Player, after
+  the engine — the one place that is heard and never rendered.
 
 - **2026-10-09 — the VST3 SDK is built from its sources by our CMake**, not through its own: v3.8.1 (the
   first MIT release) needs CMake 3.25 and this machine has 3.22; an older SDK would build but is not MIT.

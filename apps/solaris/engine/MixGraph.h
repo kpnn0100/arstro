@@ -75,6 +75,7 @@ namespace engine
         Target to;
         double gain = 1.0; // linear
         bool pre = false;
+        bool key = false;  // R-MIX-15: into the target strip's KEY — what its compressors detect on — not its input
     };
 
     struct Strip
@@ -84,6 +85,7 @@ namespace engine
         double gain = 1.0;                // linear
         double pan = 0.0;                 // −1 … +1, balance law
         bool silent = false;              // muted, or silenced by another strip's solo (the core decides)
+        bool keyLive = true;              // its sidechain keys still run while silent — false only when muted
         std::vector<DeviceDesc> rack;     // an instrument strip's rack[0] is its instrument
         std::vector<Region> regions;      // audio strips
         std::vector<NoteEvent> notes;     // instrument strips; sorted by `at`, offs before ons

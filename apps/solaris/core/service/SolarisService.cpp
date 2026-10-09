@@ -579,7 +579,8 @@ namespace solaris
         {
             if (f == "gain") { if (!number(value, x, err) || !inRange(x, -120, 12, "gain (dB)", err)) return false; sd->gain = x; stored = canonicalNumber(x); return true; }
             if (f == "pre") { if (!boolean(value, b, err)) return false; sd->pre = b; stored = boolText(b); return true; }
-            err = unknownField(id, "a send", f, {"gain", "pre"});
+            if (f == "sidechain") { if (!boolean(value, b, err)) return false; sd->sidechain = b; stored = boolText(b); return true; } // R-MIX-15
+            err = unknownField(id, "a send", f, {"gain", "pre", "sidechain"});
             return false;
         }
         if (Pattern *pt = p.pattern(id))
@@ -686,7 +687,7 @@ namespace solaris
         else
         {
             for (const auto &sd : p.sends)
-                if (sd.id == id) { put("to", sd.to); put("gain", canonicalNumber(sd.gain)); put("pre", boolText(sd.pre)); }
+                if (sd.id == id) { put("to", sd.to); put("gain", canonicalNumber(sd.gain)); put("pre", boolText(sd.pre)); put("sidechain", boolText(sd.sidechain)); }
             for (const auto &r : p.racks)
                 for (const auto &d : r.devices)
                     if (d.id == id)

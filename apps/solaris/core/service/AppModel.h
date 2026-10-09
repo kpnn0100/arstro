@@ -65,6 +65,7 @@ namespace solaris
         double gain = 0;   // dB
         bool pre = false;
         std::string gainFormula; // R-AUTO-1
+        bool sidechain = false;  // R-MIX-15: into `to`'s KEY (its compressors' detectors), not its input
     };
 
     struct StripModel
@@ -83,6 +84,7 @@ namespace solaris
         std::vector<std::string> fromLanes;     // lanes its clips are drawn on
         std::vector<std::string> fromStrips;    // strips whose output or a send lands here
         std::vector<std::string> targets;       // where its output or a send MAY go (R-MIX-4): later strips, master, out ports
+        std::vector<std::string> keyTargets;    // where a sidechain KEY may go (R-MIX-15): any strip later in processing order
     };
 
     struct MixerModel

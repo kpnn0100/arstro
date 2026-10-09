@@ -67,8 +67,10 @@ namespace solaris
             {K::Route, "route", "<ch>", 1, 1, {"to=<ch|master|port>"},
              "Set a strip's main output: a strip on a LATER mixer, master, or an output port.", "R-MIX-4"},
 
-            {K::SendAdd, "send add", "<ch>", 1, 1, {"to=<ch|master|port>", "gain=<dB>", "pre"},
-             "Add a send (post-fader unless --pre). Same forward-only rule as `route`.", "R-MIX-5"},
+            {K::SendAdd, "send add", "<ch>", 1, 1, {"to=<ch|master|port>", "gain=<dB>", "pre", "sidechain"},
+             "Add a send (post-fader unless --pre). Same forward-only rule as `route`. With --sidechain it is a "
+             "KEY: it feeds the target's compressors' detectors (their Sidechain switch), not its input, and may go "
+             "to any strip later in processing order, its own mixer included (R-MIX-15).", "R-MIX-5"},
             {K::SendDelete, "send delete", "<sd>", 1, 1, {}, "Remove a send.", "R-MIX-5"},
 
             {K::DeviceAdd, "device add", "<ch|master>", 1, 1, {"type=<registry type>", "at=<index>"},

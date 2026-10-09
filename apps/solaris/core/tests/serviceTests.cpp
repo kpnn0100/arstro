@@ -296,7 +296,7 @@ static void test_a_relative_src_is_found_in_the_songs_folder()
     assert(r.clip("ac_1")->src == "samples/snare.wav");                 // stored relative to the song
     r.ok("clip add --src samples/snare.wav --at 4");                    // what the browser's Song tab hands back
     assert(r.clip("ac_2")->track == r.clip("ac_1")->track);            // the SAME file: the same strip
-    assert(r.svc.model().strips.size() == 2 && r.svc.model().deviceTypes.size() == 9 && r.svc.model().deviceTypes[0].kind == "instrument");
+    assert(r.svc.model().strips.size() == 2 && r.svc.model().deviceTypes.size() == 10 && r.svc.model().deviceTypes[0].kind == "instrument");
     pass("a relative src names a file in the song's folder first — the Song tab re-places a sound with one `clip add`");
 }
 
@@ -360,6 +360,76 @@ static void test_strip_relink_moves_every_clip_in_one_edit()
     assert(r.ok("undo") == "strip relink ch_2\n");
     for (const auto &c : r.svc.model().clips) assert(c.track == "ch_2");
     pass("strip relink: every clip of a strip to another line in one edit (one undo); refused onto a bus, across kinds, onto itself, with nothing to move (R-MIX-14)");
+}
+
+static void test_a_sidechain_key_ducks_the_bass()
+{
+    Run r;
+    const std::string dir = scratch();
+    const std::string song = freshSong("sidechain");
+    r.ok("project new " + song + " --bpm 120");
+    r.ok("clip add --instrument drums --at 0 --length 8");                       // ch_2: the kick, first in order
+    for (int b = 0; b < 8; ++b) r.ok("note add pt_1 --pitch 36 --at " + std::to_string(b));
+    r.ok("clip add --src tone.wav --at 0 --length 8");                           // ch_3: the "bass" (a 1 kHz tone at 0.5)
+    r.ok("set ch_2.gain=-120");                                                  // a ghost kick: heard by the key only
+    r.ok("device add ch_3 --type compressor");
+    r.ok("set dv_2.threshold=-30 dv_2.ratio=4 dv_2.attack=1 dv_2.release=80");
+    // a key goes forward in processing order, to a strip — never back, never to the master (R-MIX-15)
+    assert(contains(r.no("send add ch_3 --to ch_2 --sidechain"), "a sidechain key can only go to a strip LATER in processing order"));
+    assert(contains(r.no("send add ch_2 --to master --sidechain"), "must go to a strip"));
+    const std::string sd = r.ok("send add ch_2 --to ch_3 --sidechain --pre");
+    assert(sd == "sd_1\n");
+    // a key nothing hears is said so; Sidechain on, it is heard
+    assert(contains(r.ok("audit"), "sidechain sd_1 keys ch_3, where no compressor has Sidechain on"));
+    r.ok("set dv_2.sidechain=on");
+    assert(!contains(r.ok("audit"), "sidechain sd_1"));
+    const auto &m = r.svc.model();
+    assert(m.strips[1].sends.size() == 1 || m.strips[0].sends.size() == 1);
+    for (const auto &st : m.strips)
+        if (st.id == "ch_2") assert(st.sends[0].sidechain && std::find(st.keyTargets.begin(), st.keyTargets.end(), "ch_3") != st.keyTargets.end());
+    auto renderDb = [&](const std::string &name) {
+        const std::string out = dir + "/" + name + ".wav";
+        r.ok("render --out " + out);
+        const auto &L = r.fake.written[out][0];
+        // the bass 15–35 ms after the kick on beat 2, and 25–45 ms before the one on beat 3
+        auto db = [&](long long a, long long b) {
+            double sum = 0;
+            for (long long i = a; i < b; ++i) sum += (double)L[(size_t)i] * L[(size_t)i];
+            return 10.0 * std::log10(sum / (double)(b - a) + 1e-30);
+        };
+        return std::make_pair(db(48000 + 720, 48000 + 1680), db(72000 - 2160, 72000 - 1200));
+    };
+    const auto keyed = renderDb("keyed");
+    // the baseline: the kick muted — a muted strip sends no key, so Sidechain on hears silence and cuts nothing
+    // (Sidechain OFF is no baseline: the compressor would hear the −6 dBFS bass itself and cut it 18 dB)
+    r.ok("set ch_2.mute=true");
+    const auto plain = renderDb("plain");
+    r.ok("set ch_2.mute=false");
+    const double dip = plain.first - keyed.first, back = plain.second - keyed.second;
+    if (dip < 6.0 || dip > 22.5 || std::fabs(back) > 1.0) std::printf("    dip %.2f dB, before the next kick %.2f dB\n", dip, back);
+    assert(dip >= 6.0 && dip <= 22.5);                // ducked by the kick: at most (0 − (−30))·¾
+    assert(std::fabs(back) < 1.0);                    // and back before the next one
+    // the bass soloed keeps its pump — the kick, silenced by the solo, still keys; muted, it does not
+    r.ok("set ch_3.solo=true");
+    for (const auto &st : r.svc.model().strips)
+        if (st.id == "ch_2") assert(!st.audible);       // the key brings the kick into the solo? no — it is silenced
+    const auto soloed = renderDb("soloed");
+    assert(std::fabs(soloed.first - keyed.first) < 1e-6); // and still keys
+    r.ok("set ch_3.solo=false dv_2.sidechain=off");
+    const auto self = renderDb("self");
+    assert(self.second < plain.second - 10.0);        // un-keyed, it compresses on the bass itself, all the time
+    r.ok("set dv_2.sidechain=on");
+    // the file keeps it
+    r.ok("project save");
+    std::ifstream in(song);
+    std::stringstream ss;
+    ss << in.rdbuf();
+    assert(contains(ss.str(), "#asend id=sd_1 from=ch_2 to=ch_3 gain=0.0 pre=true sidechain=true"));
+    assert(r.ok("get sd_1.sidechain") == "true\n");
+    // turned into an audible send it must obey the audible rule — ch_3 is on the same mixer: refused, nothing changed
+    assert(contains(r.no("set sd_1.sidechain=false"), "a strip can only feed a strip on a LATER mixer"));
+    assert(r.ok("get sd_1.sidechain") == "true\n");
+    pass("sidechain: a key goes forward to a strip's compressor; the bass dips 6–22.5 dB after each kick and is back before the next; soloed it still pumps; the kick muted, nothing; Sidechain off, it compresses on its input; audited, saved (R-MIX-15)");
 }
 
 static void test_undo_and_redo_every_edit()
@@ -821,6 +891,46 @@ static void test_live_playback_is_the_offline_render()
     pass("live playback on the clock device is the offline render, sample for sample, over 4 beats (R-PLAY-1)");
 }
 
+static void test_the_metronome_clicks_live_and_never_in_a_render()
+{
+    Run r;
+    const std::string dir = scratch();
+    r.ok("project new " + freshSong("click") + " --bpm 120");       // an empty song: every sound is the click
+    r.ok("settings set metronome=on metronomeLevel=0");
+    r.ok("transport play");
+    waitFrames(r, 4 * 24000 + 4800);
+    r.ok("transport stop");
+    const auto &live = r.fake.capture->sink;
+    // a click on every beat (24 000 frames at 120 bpm), starting on its exact sample
+    for (int k = 0; k <= 4; ++k)
+    {
+        const size_t at = (size_t)k * 24000;
+        const float on = peakOf(live, 2 * at, 2 * (at + 2400));
+        const float before = k == 0 ? 0.0f : peakOf(live, 2 * (at - 48), 2 * at);
+        if (!(on > 0.05f && before < 0.1f * on)) std::printf("    beat %d: click %.4f, just before %.4f\n", k, on, before);
+        assert(on > 0.05f && before < 0.1f * on);
+    }
+    // the bar's first is another pad: beat 0 (cowbell) is not beat 1 (rim)
+    float diff = 0;
+    for (size_t i = 0; i < 2400; ++i) diff = std::max(diff, std::fabs(live[2 * i] - live[2 * (24000 + i)]));
+    assert(diff > 0.05f);
+    // off while playing: heard at once — the next beats are silent
+    const size_t mark = live.size() / 2;
+    r.ok("transport play");
+    r.ok("settings set metronome=off");
+    waitFrames(r, (long long)mark + 3 * 24000);
+    r.ok("transport stop");
+    assert(peakOf(r.fake.capture->sink, 2 * (mark + 24000), 2 * (mark + 3 * 24000)) == 0.0f);
+    // never in a render: on or off, the same bytes (here: silence)
+    r.ok("settings set metronome=on");
+    r.ok("render --out " + dir + "/on.wav --to 4");
+    r.ok("settings set metronome=off");
+    r.ok("render --out " + dir + "/off.wav --to 4");
+    assert(r.fake.written[dir + "/on.wav"] == r.fake.written[dir + "/off.wav"]);
+    assert(peakOf(r.fake.written[dir + "/on.wav"][0], 0, 96000) == 0.0f);
+    pass("metronome: a click on every beat's exact sample while playing, the bar's first another pad, off at once; never in a render (R-TIME-4, R-EDM-2)");
+}
+
 static void test_edits_while_playing_are_heard()
 {
     Run r;
@@ -899,6 +1009,7 @@ int main()
     test_undo_and_redo_every_edit();
     test_formulas_bind_numbers_and_refuse_what_cannot_be_read();
     test_an_automated_gain_renders_its_curve();
+    test_a_sidechain_key_ducks_the_bass();
     test_routing_only_goes_forward_and_refusals_change_nothing();
     test_set_and_get_through_the_registry();
     test_patterns_are_shared_by_their_clips();
@@ -907,6 +1018,7 @@ int main()
     test_the_dump_and_the_document();
     test_the_machine_settings_folders_devices_and_recents();
     test_live_playback_is_the_offline_render();
+    test_the_metronome_clicks_live_and_never_in_a_render();
     test_edits_while_playing_are_heard();
     test_loop_and_seek();
     test_a_refusal_is_an_event_and_lands_in_lastError();

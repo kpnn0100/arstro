@@ -260,6 +260,7 @@ namespace solaris
             sd.from = c.arg(0);
             sd.to = c.flag("to");
             sd.pre = c.has("pre");
+            sd.sidechain = c.has("sidechain"); // R-MIX-15: a key; the validator holds it to keysForward
             if (c.has("gain") && (!parseNumber(c.flag("gain"), sd.gain) || !(sd.gain >= -120 && sd.gain <= 12)))
             { err = "--gain must be dB between -120 and 12"; return false; }
             p.sends.push_back(sd);

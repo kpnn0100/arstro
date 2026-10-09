@@ -180,7 +180,11 @@ namespace solaris
             sm.solo = s->solo;
             sm.audible = !silent.count(s->id);
             for (const auto &sd : p.sends)
-                if (sd.from == s->id) sm.sends.push_back(SendModel{sd.id, sd.to, sd.gain, sd.pre});
+                if (sd.from == s->id)
+                {
+                    sm.sends.push_back(SendModel{sd.id, sd.to, sd.gain, sd.pre});
+                    sm.sends.back().sidechain = sd.sidechain;
+                }
             if (const Rack *r = p.rack(s->id))
                 for (const auto &d : r->devices) sm.devices.push_back(deviceModel(d));
             // fed by (R-MIX-8)
@@ -198,6 +202,7 @@ namespace solaris
             sm.fromLanes.assign(lanes.begin(), lanes.end());
             sm.fromStrips.assign(from.begin(), from.end());
             sm.targets = targetsOf(p, *s);
+            sm.keyTargets = keyTargetsOf(p, *s);
             mModel.strips.push_back(sm);
         }
         if (const Rack *r = p.rack("master"))
@@ -383,6 +388,21 @@ namespace solaris
             }
         if (p.header.masterOut.empty()) out.push_back("unreachable: the master feeds no port");
         for (const auto &pk : mLastRenderPeaks) out.push_back(pk);
+        // R-MIX-15: a key nothing listens to — no compressor on that strip with Sidechain on
+        for (const auto &sd : p.sends)
+        {
+            if (!sd.sidechain) continue;
+            bool heard = false;
+            if (const Rack *rk = p.rack(sd.to))
+                for (const auto &d : rk->devices)
+                {
+                    const DeviceType *t = DeviceRegistry::find(d.type);
+                    if (!t || !t->takesKey || d.bypass) continue;
+                    for (const auto &kv : d.params)
+                        if (kv.first == "sidechain" && kv.second == "on") heard = true;
+                }
+            if (!heard) out.push_back("sidechain " + sd.id + " keys " + sd.to + ", where no compressor has Sidechain on — it ducks nothing");
+        }
         // R-AUTO: a formula nobody can read plays nothing; an automation nobody reads moves nothing
         {
             std::vector<std::string> problems;
@@ -412,7 +432,7 @@ namespace solaris
             if (out == col) v = "●";
             for (const auto &sd : p.sends)
                 if (sd.from == s.id && sd.to == col)
-                    v += (v.empty() ? "" : "+") + canonicalNumber(sd.gain) + (sd.pre ? "pre" : "");
+                    v += (v.empty() ? "" : "+") + canonicalNumber(sd.gain) + (sd.pre ? "pre" : "") + (sd.sidechain ? "key" : "");
             return v;
         };
         if (json)

@@ -24,7 +24,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `strip move <ch> [--mixer <mx>] [--order <n>]` | Move a strip to another mixer and/or position. Refused if a route would point backward. | R-MIX-3 |
 | `strip relink <ch> [--to <ch>]` | Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips need an audio strip, note clips an instrument strip; a bus plays no clips. | R-MIX-14 |
 | `route <ch> [--to <ch\|master\|port>]` | Set a strip's main output: a strip on a LATER mixer, master, or an output port. | R-MIX-4 |
-| `send add <ch> [--to <ch\|master\|port>] [--gain <dB>] [--pre]` | Add a send (post-fader unless --pre). Same forward-only rule as `route`. | R-MIX-5 |
+| `send add <ch> [--to <ch\|master\|port>] [--gain <dB>] [--pre] [--sidechain]` | Add a send (post-fader unless --pre). Same forward-only rule as `route`. With --sidechain it is a KEY: it feeds the target's compressors' detectors (their Sidechain switch), not its input, and may go to any strip later in processing order, its own mixer included (R-MIX-15). | R-MIX-5 |
 | `send delete <sd>` | Remove a send. | R-MIX-5 |
 | `device add <ch\|master> [--type <registry type>] [--at <index>]` | Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an instrument strip. | R-FX-5 |
 | `device remove <dv>` | Remove a device from its rack. An instrument strip keeps its instrument. | R-FX-5 |
@@ -76,7 +76,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `project.name` · `project.bpm` · `project.sig` · `project.masterGain` · `project.sampleRate` | text · 20…999 · n/d · dB · Hz |
 | `<strip>.name` · `.gain` · `.pan` · `.mute` · `.solo` · `.colour` | text · dB (−120…12) · −1…1 · bool · bool · −1…15 |
 | `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` | text · beats · beats · beats · beats · dB · bool · s · s |
-| `<lane>.name` · `.colour` · `<mixer>.name` · `<send>.gain` · `.pre` · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
+| `<lane>.name` · `.colour` · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
 | `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |
 | `<automation>.name` · `.unit` · `.min` · `.max` (read: also `.from` · `.points`) | text · text · number · number |
 | any NUMBER above (a strip's gain/pan, a send's gain, `project.masterGain`, a numeric device parameter) `=<formula>` | binds it (R-AUTO-1): numbers, `+ - * / ^ ( )`, `sin cos tan abs sign min max clamp lerp pow exp log sqrt floor ceil round frac`, `pi`, `beat bar bpm t`, an automation id (`au_1`), another numeric address (a link). `get` prints the formula; a plain number clears it |
@@ -149,6 +149,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].sends[].gain` | number | dB |
 | `strips[].sends[].pre` | bool | pre-fader |
 | `strips[].sends[].gainFormula` | string | the formula driving the send's gain, "" = none |
+| `strips[].sends[].sidechain` | bool | a sidechain key: into the target's compressors' detectors, not its input (R-MIX-15) |
 | `strips[].devices` | object[] | the rack, in order (an instrument strip's first is its instrument) |
 | `strips[].devices[].id` | string |  |
 | `strips[].devices[].type` | string | the DSP registry type |
@@ -175,6 +176,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].fromLanes` | string[] | fed by: the lanes those clips are drawn on |
 | `strips[].fromStrips` | string[] | fed by: strips whose output or a send lands here |
 | `strips[].targets` | string[] | where its output or a send may go (R-MIX-4): strips on later mixers, master, output ports |
+| `strips[].keyTargets` | string[] | where a sidechain key may go (R-MIX-15): any strip later in processing order, its own mixer included |
 | `masterDevices` | object[] | the master's rack, shaped like strips[].devices |
 | `lanes` | object[] | timeline rows, in order |
 | `lanes[].id` | string |  |
@@ -387,7 +389,7 @@ Ten synthesized pads on the GM drum notes (36 kick … 56 cowbell); the closed h
 
 ### `compressor` — Compressor (effect)
 
-Feed-forward peak compressor.
+Feed-forward peak compressor; with Sidechain on it listens to another track (its key).
 
 | parameter | range | default |
 |---|---|---|
@@ -396,6 +398,7 @@ Feed-forward peak compressor.
 | `attack` | 0.1 … 200.0 ms | 5.0 ms |
 | `release` | 5.0 … 2000.0 ms | 100.0 ms |
 | `makeup` | 0.0 … 24.0 dB | 0.0 dB |
+| `sidechain` | off · on | off |
 
 ### `eq` — EQ (effect)
 
@@ -476,3 +479,14 @@ The synth's resonant state-variable filter, with a dry/wet mix.
 | `cutoff` | 20.0 … 20000.0 Hz | 1000.0 Hz |
 | `res` | 0.0 … 1.0 | 0.3 |
 | `mix` | 0.0 … 1.0 | 1.0 |
+
+### `limiter` — Limiter (effect)
+
+Brickwall lookahead limiter: the output never exceeds the ceiling.
+
+| parameter | range | default |
+|---|---|---|
+| `gain` | 0.0 … 24.0 dB | 0.0 dB |
+| `ceiling` | -24.0 … 0.0 dB | -0.3 dB |
+| `release` | 1.0 … 1000.0 ms | 60.0 ms |
+| `lookahead` | 0.0 … 10.0 ms | 2.0 ms |
