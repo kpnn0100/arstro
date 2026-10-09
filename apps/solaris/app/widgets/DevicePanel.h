@@ -12,9 +12,11 @@
  *  It is the parameter LIST the brief asks for (R-WIN-2): each row's value column says what decides
  *  it — its number, or `auto au_1` (an automation), `= ch_2.gain` (a link), `= <formula>` — and the
  *  row the model says changed LAST (`DeviceModel::lastChanged`, written by any `set`, from anywhere)
- *  is lit, the light easing from row to row. A right-click offers Create Automation, Formula…, Clear
- *  Binding and Reset to Default (R-WIN-3). Every change is ONE command line: `set <dv>.<param>=…`,
- *  `auto create`, `bind clear`, `set <dv>.bypass=…`, `device remove <dv>`.
+ *  is lit, the light easing from row to row. A right-click offers the shared parameter menu
+ *  (`ParamMenu`, R-WIN-3, R-UI-11): Create Automation, Formula…, Clear Binding, Reset to Default, Copy
+ *  Address / Value / as Formula — the same menu the dock's faders, pans and sends offer. With View ›
+ *  Show IDs every row's full address (`dv_1.filter.cutoff`) fades in over its label. Every change is ONE
+ *  command line: `set <dv>.<param>=…`, `auto create`, `bind clear`, `set <dv>.bypass=…`, `device remove <dv>`.
  *
  *  The rows are built once, the first time the model has the device, and kept (a Segment never
  *  drops a child). While the pointer is down `bind` does not re-seed the sliders: a gesture in
@@ -37,6 +39,7 @@ namespace cosmo_v2 { class SliderRow; }
 namespace solaris_ui
 {
     class ParamBody;
+    class ParamIds;
 
     class DevicePanel : public artboard::Segment
     {
@@ -75,6 +78,9 @@ namespace solaris_ui
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
         std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onRename;
         std::function<void(const std::string &patternId)> onOpenPattern;
+        std::function<void(const std::string &text)> onCopy;    // the host's clipboard (R-UI-11)
+        std::function<double()> idsAmount;                      // View › Show IDs, eased by the screen (R-UI-11)
+        double idsShown() const { return idsAmount ? idsAmount() : 0.0; }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -92,6 +98,7 @@ namespace solaris_ui
         solaris::AppModel mModel;
         bool mPresent = false, mBuilt = false, mInteracting = false;
         std::shared_ptr<ParamBody> mBody;
+        std::shared_ptr<ParamIds> mIds;     // over the rows: each row's address, faded in by Show IDs
         artboard::AnimatedProperty mBypass{0.0};
         bool mBypassInit = false, mBypassLast = false;
         interstellar_v1::EasedScroll mScroll;

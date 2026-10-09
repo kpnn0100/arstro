@@ -494,7 +494,7 @@
       "usage": "settings set <key>=<value> …",
       "args": "<key>=<value> …",
       "flags": [],
-      "summary": "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on|off). Saved at once.",
+      "summary": "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on|off), showIds (on|off: every object's id beside its name, R-UI-11). Saved at once.",
       "requirement": "R-SET-1"
     },
     {
@@ -1491,6 +1491,12 @@
       "stable": true
     },
     {
+      "path": "bindings[].live",
+      "type": "number",
+      "summary": "its value at the HEARD position (R-MIX-16): the engine's while playing, eval's at the transport when stopped",
+      "stable": false
+    },
+    {
       "path": "ports",
       "type": "object[]",
       "summary": "logical ports (R-DEV-3)",
@@ -1662,6 +1668,12 @@
       "path": "settings.reducedMotion",
       "type": "bool",
       "summary": "the UI's tweens collapse (with the OS's own setting)",
+      "stable": true
+    },
+    {
+      "path": "settings.showIds",
+      "type": "bool",
+      "summary": "every object's id drawn beside its name (R-UI-11)",
       "stable": true
     },
     {

@@ -1,4 +1,5 @@
 #include "Timeline.h"
+#include "ParamMenu.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
 #include <algorithm>
 #include <cmath>
@@ -608,6 +609,7 @@ namespace solaris_ui
                 items.push_back({"Piano Roll", [this, pt] { if (onOpenPattern) onOpenPattern(pt); }});
             }
             items.push_back({"Duplicate", [this, id] { if (onCommand) onCommand("clip duplicate " + id); }});
+            items.push_back({"Copy ID", [this, id] { if (onCopy) onCopy(id); }}); // R-UI-11
             items.push_back({"Delete", [this, id] { if (onCommand) onCommand("clip delete " + id); }});
             onMenu(std::move(items), world);
             return true;
@@ -641,9 +643,9 @@ namespace solaris_ui
         t.clipRect(r.x, r.y, r.w, r.h);
         const double px = 10.0;
         const double lx = std::max(r.x, kHeaderW) + 5.0; // a clip begun off-screen keeps its name at the visible edge
-        t.setFill(fade(palette::foreground(), a));
-        t.drawText(textfit::ellipsize(t, v.c.name.empty() ? v.c.id : v.c.name, std::max(0.0, r.right() - lx - 5.0), px, font::sansMedium()), lx,
-                   r.y + 12.0, px, font::sansMedium());
+        const double ids = idsAmount ? idsAmount() : 0.0; // R-UI-11: its id (and its pattern's) beside its name
+        drawNameWithId(t, v.c.name.empty() ? v.c.id : v.c.name, v.c.kind == "note" ? v.c.id + " " + v.c.pattern : v.c.id, lx, r.y + 12.0,
+                       std::max(0.0, r.right() - lx - 5.0), px, font::sansMedium(), palette::foreground(), ids, a);
         if (v.c.kind == "note" && v.patternLength > 0)
         {
             // the pattern's notes, repeated where the clip loops it; its seams marked
@@ -673,7 +675,7 @@ namespace solaris_ui
                 const double sw = t.measureText(s, 9.0, font::sans());
                 if (r.w > sw + 60.0)
                 {
-                    t.setFill(fade(palette::mutedForeground(), a));
+                    t.setFill(fade(palette::mutedForeground(), a * (1.0 - ids))); // the ids take its place
                     t.drawText(s, r.right() - sw - 6.0, r.y + 12.0, 9.0, font::sans());
                 }
             }
@@ -860,8 +862,8 @@ namespace solaris_ui
             {
                 // an automation row: the accent stripe, its name, what reads it
                 drawRoundedRect(t, Rect{0, r.y + 6.0, 3.0, r.h - 12.0}, radius::control(), Paint::filled(fade(palette::primary(), a)));
-                t.setFill(fade(palette::foreground(), a));
-                t.drawText(textfit::ellipsize(t, d.label, kHeaderW - 20.0, 11.0, font::sans()), 12.0, textfit::baseline(r.y + 16.0, 11.0), 11.0, font::sans());
+                drawNameWithId(t, d.label, d.automation, 12.0, textfit::baseline(r.y + 16.0, 11.0), kHeaderW - 20.0, 11.0, font::sans(), palette::foreground(),
+                               idsAmount ? idsAmount() : 0.0, a);
                 const auto al = mAutos.find(d.automation);
                 const std::string sub = al != mAutos.end() && !al->second.model.usedBy.empty() ? al->second.model.usedBy[0] : "moves nothing yet";
                 t.setFill(fade(palette::mutedForeground(), a));
@@ -871,8 +873,8 @@ namespace solaris_ui
                 continue;
             }
             const bool own = d.lane.empty();
-            t.setFill(fade(own ? palette::mutedForeground() : palette::foreground(), a));
-            t.drawText(textfit::ellipsize(t, d.label, kHeaderW - 20.0, 11.0, font::sans()), 12.0, textfit::baseline(r.y + 16.0, 11.0), 11.0, font::sans());
+            drawNameWithId(t, d.label, own ? row.key.substr(row.key.find(':') + 1) : d.lane, 12.0, textfit::baseline(r.y + 16.0, 11.0), kHeaderW - 20.0, 11.0,
+                           font::sans(), own ? palette::mutedForeground() : palette::foreground(), idsAmount ? idsAmount() : 0.0, a);
             if (own)
             {
                 t.setFill(fade(palette::mutedForeground(), a));

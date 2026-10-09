@@ -35,6 +35,15 @@ namespace solaris_ui
         mWindows->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
             if (onRename) onRename(cur, world, std::move(done));
         };
+        // R-UI-11: one clipboard (the host's) and one eased Show IDs for every widget
+        auto copy = [this](const std::string &text) { if (onCopy) onCopy(text); };
+        auto ids = [this] { return mIds.value(); };
+        mWindows->onCopy = copy;
+        mWindows->idsAmount = ids;
+        mDock->onCopy = copy;
+        mDock->idsAmount = ids;
+        mTimeline->onCopy = copy;
+        mTimeline->idsAmount = ids;
         mDock->onOpenDevice = [this](const std::string &dv) { mWindows->openDevice(dv); };
         mDock->isDeviceOpen = [this](const std::string &dv) { return mWindows->isOpen("dev:" + dv); };
 
@@ -105,6 +114,7 @@ namespace solaris_ui
     void ProjectScreen::bind(const solaris::AppModel &m)
     {
         mPosition = m.transport.position;
+        mIdsWant = m.settings.showIds;
         mBar->bind(m);
         mBrowser->bind(m);
         mTimeline->bind(m);
@@ -159,6 +169,10 @@ namespace solaris_ui
         if (!mBrowserInit) { mBrowserW.set(bwWant); mBrowserLast = mBrowserOpen; mBrowserInit = true; }
         else if (mBrowserOpen != mBrowserLast) { mBrowserW.animateTo(bwWant, motion::kSlideMs, Easing::EaseOutCubic, nowMs); mBrowserLast = mBrowserOpen; }
         mBrowserW.update(nowMs);
+        // Show IDs: the ids fade in and out together, wherever they are drawn (§1: a setting is not exempt)
+        if (!mIdsInit) { mIds.set(mIdsWant ? 1.0 : 0.0); mIdsLast = mIdsWant; mIdsInit = true; }
+        else if (mIdsWant != mIdsLast) { mIds.animateTo(mIdsWant ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); mIdsLast = mIdsWant; }
+        mIds.update(nowMs);
         Segment::advance(nowMs);
     }
 

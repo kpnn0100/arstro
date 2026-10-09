@@ -131,6 +131,7 @@ namespace solaris
             {"bindings[].reads", "string[]", "the automations and addresses it reads"},
             {"bindings[].ok", "bool", "false = INERT: the address's own value plays"},
             {"bindings[].problem", "string", "why it is inert"},
+            {"bindings[].live", "number", "its value at the HEARD position (R-MIX-16): the engine's while playing, eval's at the transport when stopped", false},
             {"ports", "object[]", "logical ports (R-DEV-3)"},
             {"ports[].id", "string", ""},
             {"ports[].name", "string", ""},
@@ -160,6 +161,7 @@ namespace solaris
             {"settings.newBpm", "number", "a new song's tempo without --bpm"},
             {"settings.newSig", "string", "a new song's meter without --sig"},
             {"settings.reducedMotion", "bool", "the UI's tweens collapse (with the OS's own setting)"},
+            {"settings.showIds", "bool", "every object's id drawn beside its name (R-UI-11)"},
             {"devices", "object[]", "from the last `devices list`"},
             {"devices[].id", "string", "what `settings set output=` takes"},
             {"devices[].name", "string", ""},
@@ -287,8 +289,12 @@ namespace solaris
         j.set("automations", autos);
         Json binds = Json::array();
         for (const auto &b : m.bindings)
-            binds.push(Json::object().set("address", b.address).set("formula", b.formula).set("reads", strings(b.reads)).set("ok", b.ok)
-                           .set("problem", b.problem));
+        {
+            Json bj = Json::object();
+            bj.set("address", b.address).set("formula", b.formula).set("reads", strings(b.reads)).set("ok", b.ok).set("problem", b.problem);
+            if (!stable) bj.set("live", b.live); // it moves with the transport
+            binds.push(bj);
+        }
         j.set("bindings", binds);
         Json ports = Json::array();
         for (const auto &p : m.ports) ports.push(Json::object().set("id", p.id).set("name", p.name).set("dir", p.dir).set("channels", p.channels));
@@ -303,7 +309,8 @@ namespace solaris
                               .set("latencyMs", m.settings.latencyMs).set("output", m.settings.output).set("input", m.settings.input)
                               .set("folders", strings(m.settings.folders)).set("ports", strings(m.settings.ports))
                               .set("metronome", m.settings.metronome).set("metronomeLevel", m.settings.metronomeLevel).set("auditionLevel", m.settings.auditionLevel)
-                              .set("newBpm", m.settings.newBpm).set("newSig", m.settings.newSig).set("reducedMotion", m.settings.reducedMotion));
+                              .set("newBpm", m.settings.newBpm).set("newSig", m.settings.newSig).set("reducedMotion", m.settings.reducedMotion)
+                              .set("showIds", m.settings.showIds));
         Json devs = Json::array();
         for (const auto &d : m.devices)
             devs.push(Json::object().set("id", d.id).set("name", d.name).set("dir", d.dir).set("channels", d.channels).set("rate", d.rate));

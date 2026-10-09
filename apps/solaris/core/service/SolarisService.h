@@ -96,6 +96,7 @@ namespace solaris
         bool saveSettings(std::string &err);
         void touchRecent(const std::string &path);
         void refreshModel();
+        void evaluateLive(double beat);               // bindings[].live at `beat`, by the engine's evaluator (R-MIX-16)
         std::vector<std::string> audit() const;
         std::string matrixText(bool json) const;
 
@@ -140,6 +141,9 @@ namespace solaris
         std::unique_ptr<Auditioner> mAudition;   // R-EDM-9: the browser's preview, its own stream
         std::vector<std::string> mLiveStrips;                         // engine strip index → strip id
         std::map<std::string, std::pair<int, int>> mLiveDevices;      // device id → (strip index, rack index)
+        std::vector<std::string> mLiveBinds;                          // engine bind index → the address it drives
+        int mLiveGen = 0;                                             // bumps with every engine built to play
+        std::vector<double> mLiveValues;                              // the player's, read in `pump`
         double mPosition = 0, mLoopFrom = 0, mLoopTo = 0;             // beats
     };
 }

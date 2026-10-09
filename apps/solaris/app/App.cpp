@@ -53,6 +53,7 @@ namespace solaris_ui
         bar.onSettings = [this] { openSettings(); };
         mProject->onCommand = [this](const std::string &line) { return dispatch(line); };
         mProject->onNotice = [this](const std::string &s) { showToast(s); };
+        mProject->onCopy = [this](const std::string &text) { copy(text); };
         mProject->browser().onOpenSettings = [this] { openSettings(); };
         mProject->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { mMenu->open(std::move(items), world.x, world.y); };
         mProject->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
@@ -122,7 +123,7 @@ namespace solaris_ui
     void App::refreshMenus(const solaris::AppModel &m)
     {
         const std::string key = m.undoLabel + "|" + m.redoLabel + "|" + (mProject->dockOpen() ? "1" : "0") + (mProject->browserOpen() ? "1" : "0") +
-                                (m.settings.metronome ? "1" : "0");
+                                (m.settings.metronome ? "1" : "0") + (m.settings.showIds ? "1" : "0");
         if (key == mMenuKey) return; // labels change only when what they name does
         mMenuKey = key;
         auto &ms = mProject->bar().menus();
@@ -139,6 +140,10 @@ namespace solaris_ui
             {m.settings.metronome ? "Metronome: On" : "Metronome: Off", [this] {
                  const auto &mm = mHooks.model ? mHooks.model() : emptyModel();
                  dispatch(std::string("settings set metronome=") + (mm.settings.metronome ? "off" : "on"));
+             }},
+            {m.settings.showIds ? "Hide IDs" : "Show IDs", [this] { // R-UI-11: a machine setting, so a script can turn it on too
+                 const auto &mm = mHooks.model ? mHooks.model() : emptyModel();
+                 dispatch(std::string("settings set showIds=") + (mm.settings.showIds ? "off" : "on"));
              }},
             {"Settings\xE2\x80\xA6   (Ctrl+,)", [this] { openSettings(); }},
         });
@@ -171,10 +176,20 @@ namespace solaris_ui
         return screen == "home" ? mHome->opacity.value() : mProject->opacity.value();
     }
 
-    void App::showToast(const std::string &text)
+    void App::showToast(const std::string &text, bool refusal)
     {
         mToastText = text;
+        mToastRefusal = refusal;
         mToastWanted = true;
+    }
+
+    void App::copy(const std::string &text)
+    {
+        // R-UI-11: the host's clipboard; a copy says so
+        mLastActivityMs = mNowMs;
+        if (!onCopy) { showToast("This window has no clipboard"); return; }
+        onCopy(text);
+        showToast("Copied " + text, false);
     }
 
     bool App::dispatch(const std::string &line)
@@ -362,7 +377,7 @@ namespace solaris_ui
             const std::string s = textfit::ellipsize(target, mToastText, std::min(640.0, mW - 64.0), px, font::sans());
             const double w = target.measureText(s, px, font::sans()) + 32.0, h = 34.0;
             const Rect r{(mW - w) * 0.5, mH - 24.0 - h + (1.0 - ta) * 12.0, w, h};
-            Color bg = palette::popover(), bd = palette::destructive(), fg = palette::foreground();
+            Color bg = palette::popover(), bd = mToastRefusal ? palette::destructive() : palette::primary(), fg = palette::foreground();
             bg.a *= ta; bd.a *= 0.6 * ta; fg.a *= ta;
             drawRoundedRect(target, r, radius::control(), Paint::filledStroked(bg, bd, 1.0));
             target.setFill(fg);

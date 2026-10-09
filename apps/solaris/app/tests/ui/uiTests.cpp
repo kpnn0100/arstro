@@ -6,6 +6,7 @@
 #endif
 #include "../Rig.h"
 #include "../../widgets/DevicePanel.h"
+#include "../../widgets/ParamMenu.h"
 #include "../../widgets/PianoRoll.h"
 #include "../../../../cosmo/widgets/SliderRow.h"
 using arstro::solaris_ui::Timeline;
@@ -14,6 +15,7 @@ using arstro::solaris_ui::Timeline;
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <thread>
 
 namespace
 {
@@ -1059,6 +1061,224 @@ static void test_a_sample_is_heard_from_the_browser()
     pass("Audition: a click on a sample hears it now (one line, not an edit), its row filling as it plays, eased in; a second click stops it, eased out (R-EDM-9)");
 }
 
+namespace
+{
+    int menuItem(sltest::Rig &r, const std::string &label)
+    {
+        auto &menu = r.app->menu();
+        for (int i = 0; i < menu.itemCount(); ++i)
+            if (menu.item(i).label == label) return i;
+        return -1;
+    }
+    /** Open the right-click menu at `at` and click `label` in it. */
+    void menuPick(sltest::Rig &r, const artboard::Rect &at, const std::string &label)
+    {
+        r.click(at, 2);
+        r.settle();
+        const int i = menuItem(r, label);
+        if (i < 0) std::printf("    no `%s` in the menu\n", label.c_str());
+        assert(r.app->menu().isOpen() && i >= 0);
+        r.click(r.app->menu().itemRect(i));
+    }
+    double liveOf(const sltest::Rig &r, const std::string &address)
+    {
+        for (const auto &b : r.svc->model().bindings)
+            if (b.address == address) return b.live;
+        assert(false);
+        return 0.0;
+    }
+}
+
+static void test_the_mixers_numbers_bind_from_the_dock()
+{
+    // R-MIX-16: a fader, a pan, a send's level, the master — the device parameter's menu; a bound control says
+    // what drives it and is DRAWN at the model's live value: eased onto a new driver, following the engine while playing
+    sltest::Rig r("ui-mixbind", 1280, 800);
+    r.cmd("project new " + r.song("Bind") + ".slp --bpm 120");
+    r.cmd("clip add --instrument drums --at 0 --length 16");     // ch_2
+    r.cmd("clip add --instrument synth --at 0 --length 16");     // ch_3
+    r.cmd("strip add --kind bus --name Verb");                   // ch_4
+    r.cmd("send add ch_3 --to ch_4 --gain -8");                  // sd_1
+    r.settle();
+    using arstro::solaris_ui::MixerDock;
+    auto &d = r.app->project().dock();
+    auto &menu = r.app->menu();
+    // a fader's menu is the parameter menu: Create Automation is ONE line, and the fader then says what drives it
+    r.click(world(d, d.faderRect("ch_2")), 2);
+    r.settle();
+    assert(menu.isOpen() && menu.item(0).label == "Create Automation");
+    for (const char *l : {"Formula\xE2\x80\xA6", "Reset to Default", "Copy Address", "Copy Value", "Copy as Formula"}) assert(menuItem(r, l) >= 0);
+    assert(menuItem(r, "Clear Binding") < 0 && menuItem(r, "Rename\xE2\x80\xA6") < 0);    // not the strip's menu
+    r.click(menu.itemRect(0));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "auto create ch_2.gain"));
+    const double tagMid = d.tagAmount("ch_2.gain");
+    assert(tagMid > 0.0 && tagMid < 1.0);                                                  // the tag fades in
+    r.settle();
+    assert(d.tagText("ch_2.gain") == "auto au_1" && d.tagAmount("ch_2.gain") == 1.0);
+    // Copy Address: the host's clipboard, and the app says so
+    menuPick(r, world(d, d.faderRect("ch_2")), "Copy Address");
+    r.settle();
+    assert(!r.copied.empty() && r.copied.back() == "ch_2.gain");
+    assert(r.app->toastText() == "Copied ch_2.gain" && !r.app->toastIsRefusal() && r.app->toastAmount() > 0.0);
+    // Formula… on a pan: cosmo's field; what is typed is one quoted `set`, and the knob EASES to what it evaluates to
+    menuPick(r, world(d, d.panRect("ch_3")), "Formula\xE2\x80\xA6");
+    r.settle();
+    assert(menu.isRenaming());
+    artboard::KeyEvent typed;
+    typed.type = artboard::KeyEvent::Type::Text;
+    typed.text = "=0.25 - 0.75";
+    r.app->key(typed);
+    r.key(13);
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "set ch_3.pan=\"=0.25 - 0.75\"") && liveOf(r, "ch_3.pan") == -0.5);
+    const double panMid = d.panLive("ch_3");
+    assert(panMid < -0.01 && panMid > -0.49);                                              // a new driver: eased onto
+    r.settle();
+    assert(std::fabs(d.panLive("ch_3") + 0.5) < 1e-9 && d.tagAmount("ch_3.pan") == 1.0 && r.svc->model().strips.size() > 0);
+    // a send's level: its menu too — Copy Value is what it shows, Copy as Formula what a formula reads it by
+    menuPick(r, world(d, d.sendRect("ch_3", 0)), "Copy Value");
+    r.settle();
+    assert(r.copied.back() == "-8.0 dB");
+    menuPick(r, world(d, d.sendRect("ch_3", 0)), "Copy as Formula");
+    r.settle();
+    assert(r.copied.back() == "=sd_1.gain");
+    menuPick(r, world(d, d.sendRect("ch_3", 0)), "Formula\xE2\x80\xA6");
+    r.settle();
+    typed.text = "=au_1-4";
+    r.app->key(typed);
+    r.key(13);
+    r.settle();
+    assert(sentLine(r, "set sd_1.gain==au_1-4") && d.tagAmount("sd_1.gain") == 1.0 && d.shownValue("sd_1.gain") == -4.0);
+    // the master fader
+    menuPick(r, world(d, d.faderRect("master")), "Copy Address");
+    r.settle();
+    assert(r.copied.back() == "project.masterGain");
+    // Clear Binding: its own value again, the tag fading out
+    menuPick(r, world(d, d.panRect("ch_3")), "Clear Binding");
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "bind clear ch_3.pan") && d.tagAmount("ch_3.pan") > 0.0 && d.tagAmount("ch_3.pan") < 1.0);
+    r.settle();
+    assert(d.tagAmount("ch_3.pan") == 0.0 && d.tagText("ch_3.pan").empty());
+    // playing: the bound fader FOLLOWS the engine's value, continuously (the playhead's idiom), and moves with it
+    r.cmd("auto point move au_1 --at 16 --value -32");                                      // ch_2.gain ramps −2 dB a beat
+    r.settle();
+    assert(std::fabs(d.faderLive("ch_2") - MixerDock::faderPos(0.0)) < 1e-9);
+    r.cmd("transport play");
+    r.pump(300.0);                                                                           // past the catch-up
+    const double before = d.faderLive("ch_2");
+    int followed = 0;
+    for (int k = 0; k < 12; ++k)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(60));
+        r.frame();
+        const double want = MixerDock::faderPos(liveOf(r, "ch_2.gain"));
+        if (std::fabs(d.faderLive("ch_2") - want) > 1e-9) std::printf("    frame %d: fader %.6f, live %.6f\n", k, d.faderLive("ch_2"), want);
+        assert(std::fabs(d.faderLive("ch_2") - want) < 1e-9);
+        ++followed;
+    }
+    assert(followed == 12 && liveOf(r, "ch_2.gain") < -0.1 && d.faderLive("ch_2") < before);
+    r.cmd("transport stop");
+    r.settle();
+    assert(std::fabs(d.faderLive("ch_2") - MixerDock::faderPos(liveOf(r, "ch_2.gain"))) < 1e-9);
+    pass("Mixer numbers bind (R-MIX-16): a fader/pan/send/master right-click is the parameter menu — Create Automation, Formula… (one quoted line), Clear Binding, Copy Address/Value/as Formula to the host's clipboard (toasted); the tag fades in and out; a new driver eases; playing, the fader follows the engine's live value");
+}
+
+static void test_ids_shown_and_copied()
+{
+    // R-UI-11: View › Show IDs is a machine setting the ids FADE in by; Copy items on parameter rows, clips, automations
+    sltest::Rig r("ui-ids", 1280, 800);
+    r.cmd("project new " + r.song("Ids") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 8");      // ch_2, dv_1, ac_1, pt_1
+    r.cmd("set dv_1.filter.cutoff=900");
+    r.settle();
+    auto &ps = r.app->project();
+    auto &ms = ps.bar().menus();
+    // View › Show IDs → `settings set showIds=on`; every id fades in together, eased (caught mid-tween)
+    assert(ps.idsAmount() == 0.0);
+    r.click(world(ms, ms.titleRect(3)));
+    r.settle();
+    int show = -1;
+    for (int i = 0; i < (int)ms.menu(3).items.size(); ++i)
+        if (ms.menu(3).items[(size_t)i].label == "Show IDs") show = i;
+    assert(show >= 0);
+    r.click(world(ms, ms.itemRect(3, show)));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "settings set showIds=on") && r.svc->model().settings.showIds);
+    const double mid = ps.idsAmount();
+    assert(mid > 0.0 && mid < 1.0);
+    r.settle();
+    assert(ps.idsAmount() == 1.0 && ms.menu(3).items[(size_t)show].label == "Hide IDs");
+    // an agent turns it off: they fade out the same way
+    r.cmd("settings set showIds=off");
+    r.frame();
+    r.frame();
+    assert(ps.idsAmount() > 0.0 && ps.idsAmount() < 1.0);
+    r.settle();
+    assert(ps.idsAmount() == 0.0);
+    // a device parameter row: Copy Address / Value / as Formula
+    auto &wl = ps.windows();
+    wl.openDevice("dv_1");
+    r.settle();
+    auto &p = *wl.devicePanel("dv_1");
+    int cut = -1;
+    for (int i = 0; i < p.rowCount(); ++i)
+        if (p.rowParam(i) == "filter.cutoff") cut = i;
+    p.reveal("filter.cutoff");
+    r.settle();
+    const artboard::Rect row = world(p, p.rowRect(cut));
+    menuPick(r, artboard::Rect{row.x + 10.0, row.y, 20.0, row.h}, "Copy Address");
+    r.settle();
+    assert(r.copied.back() == "dv_1.filter.cutoff" && r.app->toastText() == "Copied dv_1.filter.cutoff");
+    menuPick(r, artboard::Rect{row.x + 10.0, row.y, 20.0, row.h}, "Copy Value");
+    r.settle();
+    assert(r.copied.back() == "900 Hz");
+    menuPick(r, artboard::Rect{row.x + 10.0, row.y, 20.0, row.h}, "Copy as Formula");
+    r.settle();
+    assert(r.copied.back() == "=dv_1.filter.cutoff");
+    // a choice row: no formula reads it, so no Copy as Formula; its value is its name
+    int wave = -1;
+    for (int i = 0; i < p.rowCount(); ++i)
+        if (p.rowParam(i) == "osc1.wave") wave = i;
+    p.reveal("osc1.wave");
+    r.settle();
+    const artboard::Rect wr = world(p, p.rowRect(wave));
+    r.click(artboard::Rect{wr.x + 10.0, wr.y, 20.0, wr.h}, 2);
+    r.settle();
+    assert(menuItem(r, "Copy Value") >= 0 && menuItem(r, "Copy as Formula") < 0 && menuItem(r, "Create Automation") < 0);
+    r.click(r.app->menu().itemRect(menuItem(r, "Copy Value")));
+    r.settle();
+    std::string waveText;
+    for (const auto &st : r.svc->model().strips)
+        for (const auto &dv : st.devices)
+            for (const auto &pm : dv.params)
+                if (dv.id == "dv_1" && pm.name == "osc1.wave") waveText = pm.text;
+    assert(!waveText.empty() && r.copied.back() == waveText);
+    wl.close("dev:dv_1");
+    r.settle();
+    // a clip: Copy ID
+    auto &tl = ps.timeline();
+    menuPick(r, world(tl, tl.clipRect("ac_1")), "Copy ID");
+    r.settle();
+    assert(r.copied.back() == "ac_1");
+    // an automation's row: Copy ID, Copy as Formula
+    r.cmd("auto create dv_1.filter.cutoff");
+    r.settle();
+    const artboard::Rect ar = world(tl, tl.autoRowRect("au_1"));
+    const double ax = world(tl, artboard::Rect{tl.beatToX(3.0), 0, 0, 0}).x;
+    menuPick(r, artboard::Rect{ax, ar.y + ar.h * 0.5 - 2.0, 4.0, 4.0}, "Copy as Formula");
+    r.settle();
+    assert(r.copied.back() == "=au_1");
+    menuPick(r, artboard::Rect{ax, ar.y + ar.h * 0.5 - 2.0, 4.0, 4.0}, "Copy ID");
+    r.settle();
+    assert(r.copied.back() == "au_1");
+    pass("IDs (R-UI-11): View › Show IDs is `settings set showIds=…` and the ids fade in and out together (caught mid-tween); a parameter row copies its address, value and formula; a choice no formula; a clip and an automation their ids — to the host's clipboard");
+}
+
 static void test_ruler_seek_keys_and_selection()
 {
     sltest::Rig r("ui-ruler", 1280, 800);
@@ -1184,6 +1404,8 @@ int main()
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();
     test_ruler_seek_keys_and_selection();
+    test_the_mixers_numbers_bind_from_the_dock();
+    test_ids_shown_and_copied();
     test_lists_travel_when_the_song_changes_shape();
     test_mixer_dock_strips();
     test_mixer_matrix_effects_and_device_panel();

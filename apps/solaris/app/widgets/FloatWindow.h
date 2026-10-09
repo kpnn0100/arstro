@@ -97,6 +97,8 @@ namespace solaris_ui
         std::function<bool(const std::string &line)> onCommand;
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
         std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onRename;
+        std::function<void(const std::string &text)> onCopy;    // the host's clipboard (R-UI-11)
+        std::function<double()> idsAmount;                      // View › Show IDs, eased by the screen
 
     protected:
         bool hitTestSelf(const artboard::Point &) const override { return false; } // only the windows take input

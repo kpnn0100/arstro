@@ -1,4 +1,5 @@
 #include "DevicePanel.h"
+#include "ParamMenu.h"
 #include "../../../interstellar/app/widgets/Glyphs.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
 #include "../../../cosmo/widgets/SliderRow.h"
@@ -40,22 +41,6 @@ namespace solaris_ui
                 return (v > 0 ? "+" : "") + number(v, p.integer ? 0 : 1) + " " + p.unit;
             if (p.unit.empty() && !p.integer && p.min >= 0.0 && p.max <= 1.0) return number(v * 100.0, 0) + " %";
             return number(v, p.integer ? 0 : 2) + (p.unit.empty() ? "" : " " + p.unit);
-        }
-        /** What decides a bound parameter, said in the value column (R-WIN-2). */
-        std::string bindingText(const std::string &formula)
-        {
-            std::string body = formula.size() > 1 ? formula.substr(1) : std::string();
-            const auto a = body.find_first_not_of(' '), b = body.find_last_not_of(' ');
-            body = a == std::string::npos ? std::string() : body.substr(a, b - a + 1);
-            bool name = !body.empty();
-            for (char c : body) name = name && (std::isalnum((unsigned char)c) || c == '_' || c == '.');
-            if (name && body.rfind("au_", 0) == 0 && body.find('.') == std::string::npos) return "auto " + body; // an automation
-            // a link, or a formula — cut to the value column (SliderRow right-aligns at ~6 px a character):
-            // the whole formula is one `get` away, and its own menu shows it
-            std::string out = "= " + body;
-            constexpr size_t kChars = 14;
-            if (out.size() > kChars) out = out.substr(0, kChars - 1) + "\xE2\x80\xA6";
-            return out;
         }
         /** The text a `set` stores: enough digits that a drag lands where it was let go. */
         std::string storeText(double v, bool integer)
@@ -189,6 +174,36 @@ namespace solaris_ui
         DevicePanel *owner = nullptr;
     };
 
+    /** R-UI-11: over the rows, each row's full address in the label column, faded in by Show IDs (eased). A
+     *  child after the sliders, so it covers their labels; it takes no input. */
+    class ParamIds : public Segment
+    {
+    public:
+        DevicePanel *owner = nullptr;
+        ParamBody *body = nullptr;
+
+    protected:
+        bool hitTestSelf(const Point &) const override { return false; }
+        void onPaint(IRenderTarget &t) const override
+        {
+            const double a = owner ? owner->idsShown() : 0.0;
+            if (a <= 0.001 || !body) return;
+            const double H = height.value(), px = 8.5;
+            for (const auto &r : body->rows)
+            {
+                const double y = r.top - body->scroll;
+                if (y + kRowStep < 0.0 || y > H) continue;
+                const std::string address = owner->device() + "." + r.spec.name;
+                const double w = std::min(std::max(cosmo_v2::SliderRow::kLabelWidth, t.measureText(address, px, font::mono()) + 8.0),
+                                          std::max(0.0, width.value() - 2.0 * space::padX() - DevicePanel::kValueW));
+                const Rect b{space::padX() - 3.0, y + 2.0, w, cosmo_v2::SliderRow::kRowHeight - 4.0};
+                drawRoundedRect(t, b, radius::control(), Paint::filledStroked(fade(palette::popover(), 0.97 * a), palette::primaryAlpha(0.45 * a), 1.0));
+                t.setFill(fade(palette::primary(), a));
+                t.drawText(textfit::ellipsize(t, address, b.w - 8.0, px, font::mono()), b.x + 4.0, textfit::baseline(b.y + b.h * 0.5, px), px, font::mono());
+            }
+        }
+    };
+
     DevicePanel::DevicePanel(std::string deviceId) : mDevice(std::move(deviceId))
     {
         clipToBounds = true;
@@ -252,6 +267,10 @@ namespace solaris_ui
             y += kRowStep;
         }
         b.contentH = y + 6.5;
+        mIds = std::make_shared<ParamIds>(); // after the sliders: it draws over their labels
+        mIds->owner = this;
+        mIds->body = mBody.get();
+        b.addChild(mIds);
         mBuilt = true;
     }
 
@@ -298,6 +317,13 @@ namespace solaris_ui
         mBody->width.set(W);
         mBody->height.set(bodyH);
         mBody->scroll = mScroll.value();
+        if (mIds)
+        {
+            mIds->x.set(0.0);
+            mIds->y.set(0.0);
+            mIds->width.set(W);
+            mIds->height.set(bodyH);
+        }
         for (auto &r : mBody->rows)
         {
             if (!r.slider) continue;
@@ -418,28 +444,30 @@ namespace solaris_ui
     {
         if (!onMenu || i < 0 || i >= rowCount()) return;
         const ParamBody::Row &r = mBody->rows[(size_t)i];
-        const std::string address = mDevice + "." + r.spec.name;
-        std::vector<cosmo_v2::ContextMenu::Item> items;
-        if (r.spec.choices.empty())
+        // the shared menu (R-WIN-3, R-UI-11): this row says what it is, ParamMenu says what can be done
+        ParamTarget p;
+        p.address = mDevice + "." + r.spec.name;
+        p.formula = r.spec.formula;
+        p.bindable = r.spec.choices.empty();
+        if (p.bindable)
         {
-            if (r.spec.formula.empty() || bindingText(r.spec.formula).rfind("auto ", 0) != 0)
-                items.push_back({"Create Automation", [this, address] { if (onCommand) onCommand("auto create " + address); }});
-            const std::string current = r.spec.formula.empty() ? std::string("=") : r.spec.formula;
-            items.push_back({"Formula\xE2\x80\xA6", [this, address, current, world] {
-                                 if (!onRename) return;
-                                 onRename(current, world, [this, address](const std::string &typed) {
-                                     std::string f = typed;
-                                     if (f.empty()) return;
-                                     if (f[0] != '=') f = "=" + f;
-                                     if (onCommand) onCommand("set " + address + "=" + q(f));
-                                 });
-                             }});
-            if (!r.spec.formula.empty()) items.push_back({"Clear Binding", [this, address] { if (onCommand) onCommand("bind clear " + address); }});
+            double v = r.spec.value;
+            for (const auto &b : mModel.bindings) // a bound value: what it evaluates to now (R-MIX-16)
+                if (b.address == p.address) v = b.live;
+            p.value = formatValue(r.spec, v);
+            p.reset = storeText(r.spec.def, r.spec.integer);
         }
-        const std::string def = r.spec.choices.empty() ? storeText(r.spec.def, r.spec.integer)
-                                                        : r.spec.choices[(size_t)std::clamp((int)std::lround(r.spec.def), 0, (int)r.spec.choices.size() - 1)];
-        items.push_back({"Reset to Default", [this, address, def] { if (onCommand) onCommand("set " + address + "=" + def); }});
-        onMenu(items, world);
+        else
+        {
+            const int n = (int)r.spec.choices.size();
+            p.value = r.choice >= 0 && r.choice < n ? r.spec.choices[(size_t)r.choice] : std::string();
+            p.reset = r.spec.choices[(size_t)std::clamp((int)std::lround(r.spec.def), 0, n - 1)];
+        }
+        PropertyHooks h;
+        h.command = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
+        h.rename = [this](const std::string &cur, Point at, std::function<void(const std::string &)> done) { if (onRename) onRename(cur, at, std::move(done)); };
+        h.copy = [this](const std::string &text) { if (onCopy) onCopy(text); };
+        onMenu(paramMenuItems(p, h, world), world);
     }
 
     bool DevicePanel::handleGesture(const Gesture &g, const Point &local)

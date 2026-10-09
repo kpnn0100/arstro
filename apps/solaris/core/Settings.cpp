@@ -21,6 +21,7 @@ namespace solaris
         o << "newBpm = " << newBpm << "\n";
         o << "newSig = " << newSig << "\n";
         o << "reducedMotion = " << (reducedMotion ? "on" : "off") << "\n";
+        o << "showIds = " << (showIds ? "on" : "off") << "\n";
         return o.str();
     }
 
@@ -51,6 +52,7 @@ namespace solaris
             else if (k == "newBpm") { const double b = std::atof(v.c_str()); if (b >= 20 && b <= 999) s.newBpm = b; }
             else if (k == "newSig" && !v.empty()) s.newSig = v;
             else if (k == "reducedMotion") s.reducedMotion = v == "on";
+            else if (k == "showIds") s.showIds = v == "on";
         }
         return s;
     }

@@ -16,7 +16,7 @@ helpers it borrows.
 | Song bar › File › New Song… · Open… · Save · Save As… · Render… · Render Stems… · Home | picker → `project new` · picker → `project open` · `project save` · picker → `project save "<path>"` · picker → `render --out "<path>"` · picker → `render --out "<path>" --stems <every strip>` · `project close` |
 | Song bar › Edit › Undo · Redo · Duplicate Clip · Delete Clip | `undo` · `redo` · `clip duplicate <ac>` · `clip delete <ac>` |
 | Song bar › Song › Add Mixer · Add Bus · Add Audio Line · Add Lane | `mixer add` · `strip add --kind bus` · `strip add --kind audio` · `lane add` |
-| Song bar › View › Hide/Show Mixer · Hide/Show Browser · Metronome · Settings… | the view's · the view's · `settings set metronome=on\|off` · the sheet |
+| Song bar › View › Hide/Show Mixer · Hide/Show Browser · Metronome · Show/Hide IDs · Settings… | the view's · the view's · `settings set metronome=on\|off` · `settings set showIds=on\|off` (R-UI-11) · the sheet |
 | Settings › a chip | `settings set output=<id>` · `input=<id>` · `sampleRate=<hz>` · `bufferSize=<frames>` · `metronome=on\|off` · `metronomeLevel=<dB>` · `newBpm=<bpm>` · `newSig=<n/d>` · `reducedMotion=on\|off` |
 | Settings › × on a folder | `folder remove "<path>"` |
 | Settings › Add folder… | the host's folder picker → `folder add "<path>"` |
@@ -41,7 +41,7 @@ helpers it borrows.
 | Lanes › Ctrl+wheel · wheel · Shift+wheel | nothing — zoom about the pointer (×1.25 a notch, 4.7–637 px a beat; the grid's levels fade with it and the snap step follows), scroll, scroll sideways (the view's) |
 | Dock › a mixer tab · the chevron · its top edge dragged · a fold header | nothing — the page shown, the dock folded or sized, a group folded (the view's) |
 | Dock › "+" in the tabs | `mixer add` |
-| Dock › a mixer tab, right-click | Rename… → `set <mx>.name="…"` · Delete mixer → `mixer delete <mx>` |
+| Dock › a mixer tab, right-click | Rename… → `set <mx>.name="…"` · Copy ID → the host's clipboard · Delete mixer → `mixer delete <mx>` |
 | Dock › a fader dragged (each step) · double-click | `set <ch>.gain=<dB>` (master: `set project.masterGain=<dB>`) · `…=0` |
 | Dock › pan dragged · double-click | `set <ch>.pan=<−1…1>` · `…=0` |
 | Dock › M · S | `set <ch>.mute=true\|false` · `set <ch>.solo=true\|false` |
@@ -49,20 +49,21 @@ helpers it borrows.
 | Dock › "+ Effect" | a menu of the registry's effects → `device add <ch\|master> --type <t>` |
 | Dock › "+N more" chip | a menu of the rest of the rack, each opening its window |
 | Dock › a send · dragged sideways | Pre/Post-fader → `set <sd>.pre=…` · Make it the main output → `route` then `send delete` · Remove → `send delete <sd>` · `set <sd>.gain=<dB>` |
-| Dock › a strip, right-click | Rename… → `set <ch>.name="…"` · Move its clips to ▸ (the strips of its kind) → `strip relink <ch> --to <ch2>` · Delete strip → `strip delete <ch>` |
+| Dock › a strip, right-click (not on a number) | Rename… → `set <ch>.name="…"` · Copy ID · Move its clips to ▸ (the strips of its kind) → `strip relink <ch> --to <ch2>` · Delete strip → `strip delete <ch>` |
 | Dock › a strip, right-click › Sidechain to ▸ (its `keyTargets`) | `send add <ch> --to <ch2> --sidechain` — shown "key <target>" in amber |
 | Dock › "+ Line" (after a page's last card) | Audio line · Bus · each instrument → `strip add --kind audio\|bus\|instrument [--instrument <type>] --mixer <mx>` |
 | Matrix › an open cell · double-click · a send cell · dragged up/down | `send add <ch> --to <col>` · `route <ch> --to <col>` · its menu (as a send) · `set <sd>.gain=<dB>` |
+| Dock › a fader · a pan · a send's level (card or matrix cell) · the master fader, right-click | the PARAMETER menu (`ParamMenu`, R-MIX-16) on `<ch>.gain` · `<ch>.pan` · `<sd>.gain` · `project.masterGain`: Create Automation → `auto create <address>` · Formula… → cosmo's field → `set <address>="=<typed>"` · Clear Binding → `bind clear <address>` · Reset to Default → `set <address>=0` · Copy Address · Copy Value · Copy as Formula → the host's clipboard |
 | Dock › a device chip · an instrument strip's name, double-click | its WINDOW opens or comes forward (the view's) |
 | Device window › a slider · a choice (left/right half) · double-click a slider | `set <dv>.<param>=<value in its unit>` · `set <dv>.<param>=<name>` · the registry default |
-| Device window › a row, right-click › Create Automation · Formula… · Clear Binding · Reset to Default | `auto create <dv>.<param>` · cosmo's field → `set <dv>.<param>="=<typed>"` · `bind clear <dv>.<param>` · `set <dv>.<param>=<default>` |
+| Device window › a row, right-click › Create Automation · Formula… · Clear Binding · Reset to Default · Copy Address · Copy Value · Copy as Formula | `auto create <dv>.<param>` · cosmo's field → `set <dv>.<param>="=<typed>"` · `bind clear <dv>.<param>` · `set <dv>.<param>=<default>` · the host's clipboard (`dv_1.filter.cutoff` · `900 Hz` · `=dv_1.filter.cutoff`; a choice: no binding items, no "as Formula") — the SAME menu as the dock's numbers (`ParamMenu`) |
 | Device window › On/Bypassed · Remove | `set <dv>.bypass=…` · `device remove <dv>` |
 | Device window (a sampler) › a browser sample dropped on it | `set <dv>.sample="<file>"` — ONE line; the window lights while it hovers |
 | Device window (an instrument) › Piano Roll | its strip's pattern's roll (a menu when several); none yet → `clip add --strip <ch>`, then its roll |
 | Browser › a click on a sample · on the one being heard | `audition "<file>"` · `audition stop` (a double-click still places it) |
 | Settings › Playback › PREVIEW LEVEL | `settings set auditionLevel=<dB>` |
 | Lanes › a note clip double-clicked | its pattern's piano-roll WINDOW (the view's) |
-| Lanes › a clip, right-click | Play through ▸ (the strips of its kind) → `clip move <ac> --strip <ch>` · Piano Roll (a note clip) · Duplicate → `clip duplicate <ac>` · Delete → `clip delete <ac>` |
+| Lanes › a clip, right-click | Play through ▸ (the strips of its kind) → `clip move <ac> --strip <ch>` · Piano Roll (a note clip) · Duplicate → `clip duplicate <ac>` · Copy ID → the host's clipboard · Delete → `clip delete <ac>` |
 | Piano roll › a click on empty grid · a note dragged (on release) · its right edge dragged | `note add <pt> --pitch <p> --at <cell> --length <last>` · `note move <pt> --pitch <p> --at <b> --to-pitch <p2> --to-at <b2>` · `note move … --length <b>` |
 | Piano roll › a velocity stem dragged · a note double-/right-clicked · the end dragged | `note move … --vel <v>` · `note delete <pt> --pitch <p> --at <b>` · `set <pt>.length=<b>` |
 | Piano roll › Snap · Notes/Steps · Ctrl+wheel · wheel | nothing — the view's (Steps zooms to fit) |
@@ -70,9 +71,11 @@ helpers it borrows.
 | Piano roll › Steps › a cell | `note add <pt> --pitch <p> --at <b> --length 0.25` · `note delete …` when one is there |
 | A window › its title dragged · × · a click on it | the view's: moved exactly, closed (eased), raised |
 | Automation row › a click · a point dragged (on release) · a point double-clicked | `auto point add <au> --at <b> --value <v>` · `auto point move <au> --at <b> --to <b2> --value <v>` · `auto point delete <au> --at <b>` — `<b>`/`<b2>` on the lanes' snap step |
-| Automation row › right-click a point · the row | Linear/Hold/Smooth → `auto point shape <au> --at <b> --shape …`, Delete Point · Delete Automation → `auto delete <au> --unbind` |
+| Automation row › right-click a point · the row | Linear/Hold/Smooth → `auto point shape <au> --at <b> --shape …`, Delete Point · Copy ID (`au_1`) · Copy as Formula (`=au_1`) → the host's clipboard · Delete Automation → `auto delete <au> --unbind` |
 
-A refusal is the toast, with the service's own sentence (`App::dispatch`).
+A refusal is the toast, with the service's own sentence (`App::dispatch`). A copy is the toast too — "Copied
+<text>", outlined in the accent, not the destructive red (`App::copy`); the text went to the HOST's clipboard
+(`App::onCopy`: GTK's CLIPBOARD and PRIMARY in `linux_main.cpp`; `Rig::copied` in the tests).
 
 ## Shots — `solaris_app_shots [--outdir D] [--only S] [--size WxH] [--check]`
 
@@ -81,7 +84,7 @@ song) · settings-open · settings-mid-open (mid-fade) · settings-chip-changing
 mid-ease) · project-open · home-to-project-mid (mid cross-fade) · toast-refusal ·
 browser-instruments · browser-folder · drag-sample-mid (the ghost and the drop hint) ·
 clip-dragging · clip-selected-zoomed · lanes-zoomed-in (bars to thirty-seconds, the beats named, Snap 1/128) · lanes-zoomed-out (bars only, Snap Bar) · lanes-zoom-mid (mid Ctrl+wheel: a level mid-fade, the step's names cross-fading) · menu-file-open (Edit open, naming its undo) · mixer-sources · mixer-buses · mixer-tab-mid (pages mid
-cross-fade) · mixer-matrix · mixer-folded · device-panel (its window) · device-window-bound (two windows, a bound row, the last change lit) · automation-rows (two curves: smooth, hold, log Hz) · piano-roll (a bassline, velocities) · piano-roll-note-in (a note mid-fade) · step-mode (a kit's pads, a beat) · browser-audition (a sample being heard, its row filling) · sampler-window (a sampler naming its sound) · loop-region (the brace and the tint) · loop-dragging (mid Shift-drag) · mixer-sidechain (a key in amber, a limiter on the master) · mixer-add-line (the "+ Line" menu) · clip-play-through (a clip's "Play through ▸") · dock-folded · confirm-unsaved.
+cross-fade) · mixer-matrix · mixer-folded · device-panel (its window) · device-window-bound (two windows, a bound row, the last change lit) · automation-rows (two curves: smooth, hold, log Hz) · piano-roll (a bassline, velocities) · piano-roll-note-in (a note mid-fade) · step-mode (a kit's pads, a beat) · browser-audition (a sample being heard, its row filling) · sampler-window (a sampler naming its sound) · loop-region (the brace and the tint) · loop-dragging (mid Shift-drag) · mixer-sidechain (a key in amber, a limiter on the master) · mixer-add-line (the "+ Line" menu) · clip-play-through (a clip's "Play through ▸") · mixer-bound (faders, a pan, a send and the master driven by formulas: their tags, readouts in the accent, values where the transport is) · show-ids (every id: lanes, clips, an automation, the dock, a device window's addresses) · show-ids-mid (the ids mid-fade) · copied-toast (a copy said, in the accent) · dock-folded · confirm-unsaved.
 Each at 1440×900 and 1024×640. **Look at them** after a change.
 
 ## Borrowed, not copied
@@ -143,3 +146,20 @@ its opt-in `formatValue`), `Icons`, `Theme`, `EmbeddedFonts` are compiled from `
   `Timeline::beatText` (to the tick, the fewest decimals).
 - **One snap for every gesture on the lanes** — `Timeline::snap`. A widget beside the lanes (the
   browser's drop) asks the timeline; it never rounds a beat itself.
+
+## Gotchas found building C3 (R-MIX-16, R-UI-11)
+
+- **A value that follows the engine is SET while playing, but a new driver is EASED onto first** — a
+  formula typed while playing jumps the evaluated value; `MixerDock`'s `follow` eases until the catch-up
+  ends (retargeting with the time LEFT, so it lands exactly then) and only then sets each frame. Play
+  pressed mid-ease starts a catch-up too. Restarting a 220 ms ease every frame on a moving target never
+  ends — it chases forever.
+- **`bindings[].live` moves without a revision** — the App binds every frame while playing, so the dock
+  sees it; stopped, it only moves with a command (a seek, an edit), which bumps the revision.
+- **Draw ids from ONE eased amount** (`ProjectScreen::idsAmount`), passed to every widget as a hook — a
+  per-widget copy would let the lanes and the dock fade out of step.
+- **A label a child draws cannot be faded by its parent**: the device window's addresses are a child
+  added AFTER the sliders (`ParamIds`), painting a pill over their labels; Artboard's overlay pass is
+  unclipped and over the whole tree, so a lower window's ids would show through a higher one.
+- **The UI rig's output plays at quarter speed** (`Rig.h`'s `SilentOut`): a test of something that moves
+  while playing must let REAL time pass between frames (`sleep_for`), the rig's clock is fake.

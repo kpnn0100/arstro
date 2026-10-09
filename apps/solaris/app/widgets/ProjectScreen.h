@@ -62,6 +62,10 @@ namespace solaris_ui
         std::function<void(const std::string &)> onNotice;
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
         std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onRename;
+        /** A text for the host's clipboard (R-UI-11): an address, a value, an id — the App hands it to the host. */
+        std::function<void(const std::string &text)> onCopy;
+        /** View › Show IDs (R-UI-11): the model's `settings.showIds`, EASED here once for every widget that draws ids. */
+        double idsAmount() const { return mIds.value(); }
 
         /** The ghost's live opacity (a test tells a fade from a cut). */
         double ghostAmount() const { return mGhost.value(); }
@@ -90,6 +94,8 @@ namespace solaris_ui
         bool mBrowserOpen = true, mBrowserInit = false, mBrowserLast = true;
         artboard::AnimatedProperty mBrowserW{0.0};
         double mNowMs = 0.0, mPosition = 0.0;
+        artboard::AnimatedProperty mIds{0.0};
+        bool mIdsWant = false, mIdsLast = false, mIdsInit = false;
         artboard::AnimatedProperty mGhost{0.0};
         bool mGhostWanted = false;
         artboard::Point mGhostAt{0, 0};

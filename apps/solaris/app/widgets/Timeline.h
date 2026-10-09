@@ -116,6 +116,8 @@ namespace solaris_ui
         std::function<void(const std::string &clipId)> onSelect;
         std::function<void(const std::string &patternId)> onOpenPattern; // a note clip double-clicked: its piano roll (R-ROLL-1)
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
+        std::function<void(const std::string &text)> onCopy;      // the host's clipboard: Copy ID (R-UI-11)
+        std::function<double()> idsAmount;                        // View › Show IDs, eased by the screen (R-UI-11)
 
         // the loop region (R-EDM-7), as DRAWN
         artboard::Rect loopRect() const;                       // the brace on the ruler; empty when there is none

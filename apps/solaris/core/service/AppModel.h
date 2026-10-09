@@ -59,6 +59,8 @@ namespace solaris
         std::vector<std::string> reads;         // automation ids and addresses it reads
         bool ok = true;                         // false = INERT (its own value plays); `problem` says why
         std::string problem;
+        double live = 0;                        // R-MIX-16: its value at the HEARD position — the engine's, block by
+                                                // block, while playing; `eval`'s at the transport when stopped
     };
 
     struct SendModel
@@ -173,6 +175,7 @@ namespace solaris
         double metronomeLevel = -6, newBpm = 120;
         double auditionLevel = -6;              // dB: a sample previewed from the browser (R-EDM-9)
         std::string newSig = "4/4";
+        bool showIds = false;                    // R-UI-11: every object's id beside its name
     };
 
     /** One entry of the DSP library's device registry — what the browser lists (R-BROWSE-1). */

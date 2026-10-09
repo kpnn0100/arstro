@@ -54,6 +54,9 @@ namespace solaris_ui
         std::function<void(std::function<void(const std::string &)> done)> onPickFolder;
         /** A file to write: Save As, Render, Render Stems (the host's save dialog; `suggested` names it). */
         std::function<void(const std::string &title, const std::string &suggested, std::function<void(const std::string &)> done)> onPickSave;
+        /** The HOST's clipboard (R-UI-11; the core has none, R-SVC-4): Copy Address / Value / as Formula / ID put
+         *  their text here, and the app says so ("Copied dv_1.filter.cutoff"). */
+        std::function<void(const std::string &text)> onCopy;
         /** The OS's own "reduce motion" (the host reads it once); the app ORs it with its setting (R-SET-3). */
         void setOsReducedMotion(bool on) { mOsReducedMotion = on; artboard::setReducedMotion(on || mAppReducedMotion); }
         void openSongPicked(const std::string &path);
@@ -66,6 +69,7 @@ namespace solaris_ui
         const std::string &screen() const { return mScreen; }
         double screenOpacity(const std::string &screen) const;
         const std::string &toastText() const { return mToastText; }
+        bool toastIsRefusal() const { return mToastRefusal; }
         double toastAmount() const { return mToast.value(); }
         static double minWidth() { return 960.0; }
         static double minHeight() { return 600.0; }
@@ -83,7 +87,8 @@ namespace solaris_ui
         void refreshMenus(const solaris::AppModel &m);
         std::string selectedClip() const;
         void layoutAll();
-        void showToast(const std::string &text);
+        void showToast(const std::string &text, bool refusal = true);
+        void copy(const std::string &text);
         static std::string quote(const std::string &s);
         static const solaris::AppModel &emptyModel();
 
@@ -101,6 +106,7 @@ namespace solaris_ui
         long long mBoundRevision = -1;
         bool mBoundAudition = false;
         std::string mToastText;
+        bool mToastRefusal = true;           // a refusal is outlined in the destructive red; a notice in the accent
         artboard::AnimatedProperty mToast{0.0};
         bool mToastWanted = false;
         double mToastShownAt = -1e9;

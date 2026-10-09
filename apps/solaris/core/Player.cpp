@@ -6,6 +6,8 @@ namespace arstro
 {
 namespace solaris
 {
+    Player::Player() : mSlots(new LiveSlot[kLiveSlots]) {}
+
     Player::~Player()
     {
         stop();
@@ -13,9 +15,12 @@ namespace solaris
     }
 
     bool Player::start(std::unique_ptr<IAudioOut> out, std::unique_ptr<engine::Engine> eng, std::vector<Route> routes,
-                       int channels, int block, long long from)
+                       int channels, int block, long long from, int generation)
     {
         stop();
+        mGeneration = generation;
+        mOutFrames = 0;
+        mSlotsWritten.store(0);
         mOut = std::move(out);
         mEng = eng.release();
         mRoutes = std::move(routes);
@@ -87,11 +92,65 @@ namespace solaris
             m.engine->seek(mEng->position());
             engine::Engine *old = mEng;
             mEng = m.engine;
+            mGeneration = m.generation;
             mEng->prepare(mPb, mBlock); // the port count may have changed: within capacity it does not allocate
             if (!mRetired.push(old)) delete old; // the service is not collecting: better a free here than a leak
             break;
         }
         }
+    }
+
+    void Player::keepLive(long long out)
+    {
+        // R-MIX-16: stores only — no allocation, no lock (R-PLAY-2)
+        const auto &v = mEng->bindValues();
+        const int n = (int)std::min(v.size(), (size_t)kMaxBinds);
+        const long long k = mSlotsWritten.load(std::memory_order_relaxed);
+        LiveSlot &s = mSlots[(size_t)(k % kLiveSlots)];
+        const unsigned q = s.seq.load(std::memory_order_relaxed);
+        s.seq.store(q + 1, std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_release);
+        for (int i = 0; i < n; ++i) s.value[i].store(v[(size_t)i], std::memory_order_relaxed);
+        s.count.store(n, std::memory_order_relaxed);
+        s.generation.store(mGeneration, std::memory_order_relaxed);
+        s.out.store(out, std::memory_order_relaxed);
+        s.seq.store(q + 2, std::memory_order_release);
+        mSlotsWritten.store(k + 1, std::memory_order_release);
+    }
+
+    bool Player::liveValues(int generation, std::vector<double> &out) const
+    {
+        const long long n = mSlotsWritten.load(std::memory_order_acquire);
+        if (n <= 0) return false;
+        const long long lag = (long long)std::llround(mLatency.load(std::memory_order_relaxed) * mRate);
+        // newest first: the first slot of this engine at or before what is heard; else the oldest kept of it.
+        // The slot the thread may be rewriting next is never read.
+        long long target = 0, pick = -1;
+        bool first = true;
+        for (long long k = n - 1; k >= 0 && k > n - kLiveSlots; --k)
+        {
+            const LiveSlot &s = mSlots[(size_t)(k % kLiveSlots)];
+            const unsigned q = s.seq.load(std::memory_order_acquire);
+            const long long at = s.out.load(std::memory_order_relaxed);
+            const int gen = s.generation.load(std::memory_order_relaxed);
+            std::atomic_thread_fence(std::memory_order_acquire);
+            if ((q & 1u) || s.seq.load(std::memory_order_relaxed) != q) continue;
+            if (first) { target = at - lag; first = false; }
+            if (gen != generation) continue; // an engine the service has since replaced
+            pick = k;
+            if (at <= target) break;
+        }
+        if (pick < 0) return false;
+        const LiveSlot &s = mSlots[(size_t)(pick % kLiveSlots)];
+        const unsigned q = s.seq.load(std::memory_order_acquire);
+        const int count = s.count.load(std::memory_order_relaxed), gen = s.generation.load(std::memory_order_relaxed);
+        if (gen != generation) return false;
+        std::vector<double> v((size_t)std::max(0, count));
+        for (int i = 0; i < count; ++i) v[(size_t)i] = s.value[i].load(std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_acquire);
+        if ((q & 1u) || s.seq.load(std::memory_order_relaxed) != q) return false; // overwritten while read: keep the last
+        out.swap(v);
+        return true;
     }
 
     void Player::click(long long pos, int n)
@@ -163,6 +222,8 @@ namespace solaris
             mClickWas = clickOn;
             mOut->write(mInterleaved.data(), n); // blocks: the device is the clock
             mLatency.store(mOut->latency(), std::memory_order_relaxed);
+            mOutFrames += n;
+            keepLive(mOutFrames);
             if (b > a && mEng->position() >= b) mEng->seek(a);
             mRendered.store(mEng->position());
         }

@@ -42,6 +42,7 @@ namespace solaris
         mPlayer.reset();
         mLiveStrips.clear();
         mLiveDevices.clear();
+        mLiveBinds.clear();
     }
 
     bool SolarisService::buildLive(std::unique_ptr<engine::Engine> &out, std::string &err)
@@ -51,6 +52,8 @@ namespace solaris
         if (!eng->build(cr.graph, err)) return false;
         mLiveStrips = cr.stripIds;
         mLiveDevices = cr.devices;
+        mLiveBinds = cr.bindAddresses;
+        ++mLiveGen; // its live values are told apart from the engine it replaces
         out = std::move(eng);
         return true;
     }
@@ -83,6 +86,11 @@ namespace solaris
                     s.peak[0] = mPlayer->peak((int)(2 * i));
                     s.peak[1] = mPlayer->peak((int)(2 * i + 1));
                 }
+        // R-MIX-16: what each formula evaluated to for the block heard now, by the engine that played it
+        if (!mLiveBinds.empty() && mPlayer->liveValues(mLiveGen, mLiveValues))
+            for (auto &bm : mModel.bindings)
+                for (size_t i = 0; i < mLiveBinds.size() && i < mLiveValues.size(); ++i)
+                    if (mLiveBinds[i] == bm.address) { bm.live = mLiveValues[i]; break; }
     }
 
     bool SolarisService::auditionCommand(const Command &c, std::string &err)
@@ -176,7 +184,7 @@ namespace solaris
             mModel.transport.device = mSettings.output;
             mPlayer->setTempo(spb, std::max(1, std::atoi(mProject.header.sig.c_str())));
             mPlayer->setClick(mSettings.metronome, engine::dbToLinear(mSettings.metronomeLevel));
-            mPlayer->start(std::move(out), std::move(eng), routes, 2, mSettings.bufferSize, (long long)std::llround(mPosition * spb));
+            mPlayer->start(std::move(out), std::move(eng), routes, 2, mSettings.bufferSize, (long long)std::llround(mPosition * spb), mLiveGen);
             announce();
             return true;
         }
@@ -319,6 +327,7 @@ namespace solaris
         Player::Live m;
         m.kind = Player::Live::Swap;
         m.engine = eng.release();
+        m.generation = mLiveGen;
         if (!mPlayer->send(m)) delete m.engine;
     }
 }

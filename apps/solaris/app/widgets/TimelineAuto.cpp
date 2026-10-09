@@ -296,6 +296,8 @@ namespace solaris_ui
                 }
                 items.push_back({"Delete Point", [this, au, at] { if (onCommand) onCommand("auto point delete " + au + " --at " + at); }});
             }
+            items.push_back({"Copy ID", [this, au] { if (onCopy) onCopy(au); }});                 // R-UI-11
+            items.push_back({"Copy as Formula", [this, au] { if (onCopy) onCopy("=" + au); }});   // what a formula reads it by
             items.push_back({"Delete Automation", [this, au] { if (onCommand) onCommand("auto delete " + au + " --unbind"); }});
             onMenu(items, g.pos);
             return true;

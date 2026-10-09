@@ -18,13 +18,30 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <cstdlib>
 #include <map>
+#include <new>
 #include <set>
 #include <sstream>
 #include <string>
 
 using namespace arstro::solaris;
 namespace fs = std::filesystem;
+
+// A counting allocator: off except inside the window a test opens, and counting only threads other than
+// the test's own — the player's audio thread (R-PLAY-2: it never allocates).
+static std::atomic<long> gThreadAllocs{0};
+static std::atomic<bool> gCountThreads{false};
+static std::thread::id gMainThread;
+void *operator new(size_t n)
+{
+    if (gCountThreads.load(std::memory_order_relaxed) && std::this_thread::get_id() != gMainThread)
+        gThreadAllocs.fetch_add(1, std::memory_order_relaxed);
+    if (void *p = std::malloc(n ? n : 1)) return p;
+    throw std::bad_alloc();
+}
+void operator delete(void *p) noexcept { std::free(p); }
+void operator delete(void *p, size_t) noexcept { std::free(p); }
 
 namespace
 {
@@ -872,6 +889,9 @@ static void test_the_machine_settings_folders_devices_and_recents()
         assert(contains(r.no("settings set sampleRat=1"), "did you mean: sampleRate?"));
         assert(contains(r.no("settings set bufferSize=7"), "32 … 8192"));
         assert(contains(r.no("settings set port.Main=card_a"), "<device>:<first channel>"));
+        r.ok("settings set showIds=on");                                  // R-UI-11: an agent can turn the ids on too
+        assert(r.svc.model().settings.showIds && contains(r.ok("settings print"), "showIds = on"));
+        assert(contains(r.no("settings set showIds=yes"), "showIds is on or off"));
         r.ok("folder add /music/Samples");
         r.ok("folder add /music/Loops");
         r.ok("folder move /music/Loops --to 0");
@@ -895,6 +915,7 @@ static void test_the_machine_settings_folders_devices_and_recents()
     // the machine's side survives the process: a second service reads the same files
     Run again(settings, recents);
     assert(again.svc.model().settings.output == "card_a" && again.svc.model().settings.folders == std::vector<std::string>{"/music/Samples"});
+    assert(again.svc.model().settings.showIds);
     assert(again.svc.model().recents.size() == 2);
     again.ok("recents remove " + again.svc.model().recents[0].path);
     assert(again.svc.model().recents.size() == 1 && again.svc.model().recents[0].name == "First");
@@ -1076,6 +1097,77 @@ static void test_loop_and_seek()
     pass("loop repeats its span while playing; seek moves the transport (R-TIME-4)");
 }
 
+namespace
+{
+    const BindingModel *binding(const Run &r, const std::string &address)
+    {
+        for (const auto &b : r.svc.model().bindings)
+            if (b.address == address) return &b;
+        return nullptr;
+    }
+}
+
+static void test_a_bound_value_is_published_live()
+{
+    // R-MIX-16: bindings[].live is the value at the HEARD position — the engine's own while playing,
+    // `eval`'s at the transport when stopped — and the audio thread copies it without allocating
+    Run r;
+    r.ok("project new " + freshSong("livebind") + " --bpm 120");
+    r.ok("clip add --src tone.wav --at 0 --length 16");                // ch_2
+    r.ok("auto create ch_2.gain");                                     // au_1: 0 dB at beats 0 and 16
+    r.ok("auto point move au_1 --at 16 --value -32");                  // a ramp: −2 dB a beat
+    r.ok("set project.masterGain=\"=ch_2.gain / 2\"");                 // a link reads the evaluated value: −1 dB a beat
+    r.ok("strip add --kind instrument --instrument synth");            // ch_3, dv_1: a device parameter formula too
+    r.ok("clip add --strip ch_3 --length 16");
+    r.ok("note add pt_1 --pitch 48 --at 0 --length 16");
+    r.ok("set dv_1.filter.cutoff=\"=1000 + 500 * sin(beat)\"");
+    // stopped: eval's answer at the transport
+    r.ok("transport seek 6");
+    assert(binding(r, "ch_2.gain")->live == -12.0 && binding(r, "project.masterGain")->live == -6.0);
+    assert(contains(r.ok("eval ch_2.gain --at 6"), "ch_2.gain = " + canonicalNumber(binding(r, "ch_2.gain")->live) + " dB"));
+    r.ok("transport seek 0");
+    assert(binding(r, "ch_2.gain")->live == 0.0);
+    // playing: it follows the curve the engine evaluates, block by block (the fake device has no latency)
+    r.fake.capture->sink.reserve(2 * 2000000); // the fake device keeps what it is given: within capacity it allocates nothing
+    r.ok("transport play");
+    waitFrames(r, 24000);
+    gThreadAllocs = 0;
+    gCountThreads = true;                                              // from here the audio thread must not allocate
+    double last = 1.0;
+    int seen = 0;
+    for (long long beat = 2; beat <= 12; beat += 2)
+    {
+        waitFrames(r, beat * 24000);
+        const double pos = r.svc.model().transport.position, g = binding(r, "ch_2.gain")->live, m = binding(r, "project.masterGain")->live;
+        const double cut = binding(r, "dv_1.filter.cutoff")->live;
+        if (std::fabs(g + 2.0 * pos) > 0.1 || std::fabs(m - g / 2.0) > 1e-9)
+            std::printf("    beat %.4f: gain live %.4f (curve %.4f), master %.4f\n", pos, g, -2.0 * pos, m);
+        assert(std::fabs(g + 2.0 * pos) < 0.1 && std::fabs(m - g / 2.0) < 1e-9);    // within a block of the curve; the link follows it
+        assert(std::fabs(cut - (1000.0 + 500.0 * std::sin(pos))) < 25.0);
+        assert(g < last);                                                          // it MOVES
+        last = g;
+        ++seen;
+    }
+    gCountThreads = false;
+    const long allocs = gThreadAllocs.load();
+    r.ok("transport stop");
+    if (allocs) std::printf("    %ld allocations on the audio thread\n", allocs);
+    assert(seen == 6 && allocs == 0);
+    // stopped again: eval's answer where it stopped
+    const double pos = r.svc.model().transport.position;
+    if (!(pos >= 11.9 && std::fabs(binding(r, "ch_2.gain")->live + 2.0 * pos) < 1e-3)) std::printf("    stopped at %.6f: live %.6f\n", pos, binding(r, "ch_2.gain")->live);
+    assert(pos >= 11.9 && std::fabs(binding(r, "ch_2.gain")->live + 2.0 * pos) < 1e-3);
+    // a structural edit while playing swaps the engine: the values come from the new one, never the old one's order
+    r.ok("transport play --from 4");
+    r.ok("set ch_3.pan=\"=-0.5\"");                                       // a new binding: a new engine, a new bind order
+    waitFrames(r, r.fake.capture->frames.load() + 24000);
+    assert(binding(r, "ch_3.pan")->live == -0.5 && std::fabs(binding(r, "ch_2.gain")->live + 2.0 * r.svc.model().transport.position) < 0.1);
+    r.ok("transport stop");
+    // not in the stable dump: it moves with the transport
+    assert(!contains(r.ok("state print --json --stable"), "\"live\"") && contains(r.ok("state print --json"), "\"live\""));
+    pass("bindings[].live: eval's value at the transport when stopped; while playing the engine's, block by block, following a ramp, a link and a device formula; copied without allocating on the audio thread (R-MIX-16, R-PLAY-2)");
+}
+
 static void test_a_refusal_is_an_event_and_lands_in_lastError()
 {
     Run r;
@@ -1090,6 +1182,7 @@ static void test_a_refusal_is_an_event_and_lands_in_lastError()
 
 int main()
 {
+    gMainThread = std::this_thread::get_id();
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     test_grammar_table_parses_and_rejects();
     test_event_and_model_tables();
@@ -1116,6 +1209,7 @@ int main()
     test_audition_plays_a_sample_outside_the_song();
     test_edits_while_playing_are_heard();
     test_loop_and_seek();
+    test_a_bound_value_is_published_live();
     test_a_refusal_is_an_event_and_lands_in_lastError();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;

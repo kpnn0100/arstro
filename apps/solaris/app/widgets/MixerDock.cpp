@@ -1,4 +1,5 @@
 #include "MixerDock.h"
+#include "ParamMenu.h"
 #include "../../../interstellar/app/widgets/Glyphs.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
 #include <algorithm>
@@ -22,6 +23,7 @@ namespace solaris_ui
         constexpr double kSendH = 16.25;       // space::u(5)
         constexpr double kResizeH = 4.875;     // space::u(1.5): the dock's top edge, a grip
         constexpr double kMeterAttackMs = 40.0;
+        constexpr double kFrameMs = 16.0;      // the shortest catch-up: one frame
 
         Color fade(Color c, double a) { c.a *= a; return c; }
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
@@ -109,6 +111,41 @@ namespace solaris_ui
         return it == mLive.end() ? nullptr : &it->second;
     }
 
+    std::string MixerDock::formulaOf(const std::string &address) const
+    {
+        for (const auto &b : mModel.bindings)
+            if (b.address == address) return b.formula;
+        return std::string();
+    }
+
+    double MixerDock::shownValue(const std::string &address) const
+    {
+        const auto it = mLiveOf.find(address);
+        if (it != mLiveOf.end()) return it->second;
+        if (address == "project.masterGain") return mModel.masterGain;
+        const auto dot = address.find('.');
+        const std::string id = address.substr(0, dot), field = dot == std::string::npos ? std::string() : address.substr(dot + 1);
+        for (const auto &s : mModel.strips)
+        {
+            if (s.id == id) return field == "pan" ? s.pan : s.gain;
+            for (const auto &sd : s.sends)
+                if (sd.id == id) return sd.gain;
+        }
+        return 0.0;
+    }
+
+    std::string MixerDock::tagText(const std::string &address) const
+    {
+        const auto it = mTags.find(address);
+        return it != mTags.end() && it->second.on ? it->second.to : std::string();
+    }
+
+    double MixerDock::tagAmount(const std::string &address) const
+    {
+        const auto it = mTags.find(address);
+        return it == mTags.end() ? 0.0 : it->second.a.value();
+    }
+
     std::string MixerDock::labelOf(const std::string &target) const
     {
         if (target == "master" || target.empty()) return "Master";
@@ -130,6 +167,7 @@ namespace solaris_ui
             mTabs.clear();
             mFold.clear();
             mCells.clear();
+            mTags.clear();
             mTab = 0;
             mHiInit = false;
             mEver = mBound = false;
@@ -140,6 +178,8 @@ namespace solaris_ui
         mModel = m;
         mMixers = m.mixers;
         mInteracting = interacting;
+        mLiveOf.clear();
+        for (const auto &b : m.bindings) mLiveOf[b.address] = b.live; // R-MIX-16: the value a bound control is drawn at
         mTab = std::clamp(mTab, 0, (int)mMixers.size());
         syncCards();
         syncTabs();
@@ -484,10 +524,21 @@ namespace solaris_ui
         mNowMs = nowMs;
         const bool fadeIn = mEver && !reducedMotion();
         // every strip's eased picture, and the master's
+        const bool playing = mModel.transport.playing, started = playing && !mWasPlaying;
+        mWasPlaying = playing;
         auto drive = [&](const std::string &id, double gain, double pan, bool mute, bool solo, bool audible, const float *peak, int colour) {
             Live &l = live(id);
             const bool draggingFader = mDragging && mPress.part == Part::Fader && mPress.id == id;
             const bool draggingPan = mDragging && mPress.part == Part::Pan && mPress.id == id;
+            // R-MIX-16: a bound control is drawn at the value the model publishes — the engine's, while playing
+            const std::string ga = id == "master" ? std::string("project.masterGain") : id + ".gain", pa = id + ".pan";
+            const auto gl = mLiveOf.find(ga), pl = mLiveOf.find(pa);
+            const bool gBound = gl != mLiveOf.end(), pBound = id != "master" && pl != mLiveOf.end();
+            if (gBound) gain = gl->second;
+            if (pBound) pan = pl->second;
+            const std::string gBy = gBound ? formulaOf(ga) : std::string(), pBy = pBound ? formulaOf(pa) : std::string();
+            if (gBy != l.gainBy) { l.gainBy = gBy; l.gainCatchUntil = nowMs + motion::kCatchUpMs; } // a new driver: ease to it first
+            if (pBy != l.panBy) { l.panBy = pBy; l.panCatchUntil = nowMs + motion::kCatchUpMs; }
             const double f = faderPos(gain);
             const Color col = colour >= 0 ? surface::track(colour) : palette::secondaryForeground();
             if (!l.placed)
@@ -500,8 +551,24 @@ namespace solaris_ui
                 l.colFrom = l.colTo = col; l.colT.set(1.0); l.colLast = colour;
                 l.placed = true;
             }
-            if (!draggingFader && f != l.faderLast) { l.fader.animateTo(f, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); l.faderLast = f; }
-            if (!draggingPan && pan != l.panLast) { l.pan.animateTo(pan, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); l.panLast = pan; }
+            if (started) l.gainCatchUntil = l.panCatchUntil = nowMs + motion::kCatchUpMs; // play pressed mid-ease: finish it first
+            // playing and bound, it follows the audio continuously (the playhead's idiom) — after easing onto a new
+            // driver, landing exactly when the catch-up ends; stopped, a change eases
+            auto follow = [&](AnimatedProperty &p, double target, bool bound, double until) {
+                if (bound && playing && nowMs >= until) p.set(target);
+                else if (bound && playing) p.animateTo(target, std::max(kFrameMs, until - nowMs), Easing::EaseOutCubic, nowMs);
+                else p.animateTo(target, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs);
+            };
+            if (!draggingFader && (f != l.faderLast || (gBound && playing && l.fader.isAnimating())))
+            {
+                follow(l.fader, f, gBound, l.gainCatchUntil);
+                l.faderLast = f;
+            }
+            if (!draggingPan && (pan != l.panLast || (pBound && playing && l.pan.isAnimating())))
+            {
+                follow(l.pan, pan, pBound, l.panCatchUntil);
+                l.panLast = pan;
+            }
             if (mute != l.muteLast) { l.mute.animateTo(mute ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.muteLast = mute; }
             if (solo != l.soloLast) { l.solo.animateTo(solo ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.soloLast = solo; }
             if (audible == l.dimLast) { l.dim.animateTo(audible ? 0.0 : 1.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.dimLast = !audible; }
@@ -532,6 +599,40 @@ namespace solaris_ui
         };
         for (const auto &s : mModel.strips) drive(s.id, s.gain, s.pan, s.mute, s.solo, s.audible, s.peak, s.colour);
         drive("master", mModel.masterGain, 0.0, false, false, true, mModel.transport.masterPeak, -1);
+        // what drives each bound control: a tag that fades in and out, its text cross-fading when it changes
+        std::set<std::string> boundNow;
+        for (const auto &s : mModel.strips)
+        {
+            if (!s.gainFormula.empty()) boundNow.insert(s.id + ".gain");
+            if (!s.panFormula.empty()) boundNow.insert(s.id + ".pan");
+            for (const auto &sd : s.sends)
+                if (!sd.gainFormula.empty()) boundNow.insert(sd.id + ".gain");
+        }
+        if (!mModel.masterGainFormula.empty()) boundNow.insert("project.masterGain");
+        for (const auto &a : boundNow) mTags[a];
+        for (auto &kv : mTags)
+        {
+            Tag &tg = kv.second;
+            const bool on = boundNow.count(kv.first) > 0;
+            const std::string text = on ? bindingText(formulaOf(kv.first), 13) : tg.to;
+            if (!tg.placed)
+            {
+                tg.from = tg.to = text;
+                tg.a.set(on && !fadeIn ? 1.0 : 0.0);
+                tg.on = on && !fadeIn;
+                tg.placed = true;
+            }
+            if (on != tg.on) { tg.a.animateTo(on ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); tg.on = on; }
+            if (on && text != tg.to)
+            {
+                tg.from = tg.to;
+                tg.to = text;
+                tg.t.set(0.0);
+                tg.t.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            }
+            tg.a.update(nowMs);
+            tg.t.update(nowMs);
+        }
 
         // cards: grow in, shrink out
         for (auto &kv : mPages)
@@ -747,6 +848,38 @@ namespace solaris_ui
         onMenu(items, world);
     }
 
+    bool MixerDock::openParam(const Hit &h, Point world)
+    {
+        // R-MIX-16: a fader, a pan, a send's level, the master fader — the device parameter's menu, shared
+        if (!onMenu) return false;
+        ParamTarget p;
+        if (h.part == Part::Fader && h.id == "master") p.address = "project.masterGain";
+        else if (h.part == Part::Fader && strip(h.id)) p.address = h.id + ".gain";
+        else if (h.part == Part::Pan && strip(h.id)) p.address = h.id + ".pan";
+        else if (h.part == Part::Send || h.part == Part::Cell)
+        {
+            const auto *s = strip(h.id);
+            if (!s) return false;
+            const int n = (int)s->sends.size();
+            for (int k = 0; k < n; ++k)
+            {
+                const auto &sd = s->sends[(size_t)k];
+                if ((h.part == Part::Send && k == h.index && !(h.index == 1 && n > 2)) || (h.part == Part::Cell && sd.to == h.to)) p.address = sd.id + ".gain";
+            }
+        }
+        if (p.address.empty()) return false;
+        p.formula = formulaOf(p.address);
+        const double v = shownValue(p.address);
+        p.value = h.part == Part::Pan ? num(v, 2) : dbText(v) + " dB";
+        p.reset = "0"; // unity gain, the centre
+        PropertyHooks hk;
+        hk.command = [this](const std::string &l) { return send(l); };
+        hk.rename = [this](const std::string &cur, Point at, std::function<void(const std::string &)> done) { if (onRename) onRename(cur, at, std::move(done)); };
+        hk.copy = [this](const std::string &text) { if (onCopy) onCopy(text); };
+        onMenu(paramMenuItems(p, hk, world), world);
+        return true;
+    }
+
     bool MixerDock::handleGesture(const Gesture &g, const Point &local)
     {
         switch (g.type)
@@ -929,6 +1062,7 @@ namespace solaris_ui
         case Gesture::Type::RightClick:
         {
             const Hit h = hitAt(local);
+            if (openParam(h, g.pos)) return true; // a number: its own menu (R-MIX-16)
             if (h.part == Part::Tab && h.index < (int)mMixers.size() && onMenu)
             {
                 const std::string id = mMixers[(size_t)h.index].id, name = mMixers[(size_t)h.index].name;
@@ -936,6 +1070,7 @@ namespace solaris_ui
                 onMenu({{"Rename\xE2\x80\xA6", [this, id, name, world] {
                              if (onRename) onRename(name, world, [this, id](const std::string &n) { send("set " + id + ".name=" + q(n)); });
                          }},
+                        {"Copy ID", [this, id] { if (onCopy) onCopy(id); }},
                         {"Delete mixer", [this, id] { send("mixer delete " + id); }}},
                        world);
             }
@@ -947,7 +1082,8 @@ namespace solaris_ui
                 std::vector<cosmo_v2::ContextMenu::Item> items = {
                     {"Rename\xE2\x80\xA6", [this, id, name, world] {
                          if (onRename) onRename(name, world, [this, id](const std::string &n) { send("set " + id + ".name=" + q(n)); });
-                     }}};
+                     }},
+                    {"Copy ID", [this, id] { if (onCopy) onCopy(id); }}}; // R-UI-11
                 // its clips re-linked to another line of its kind, all in one (R-MIX-14)
                 std::vector<cosmo_v2::ContextMenu::Item> to;
                 if (s.clipCount > 0)
@@ -981,6 +1117,26 @@ namespace solaris_ui
     }
 
     // ── paint ────────────────────────────────────────────────────────────────────────────────
+
+    void MixerDock::paintTag(IRenderTarget &t, const std::string &address, const Rect &r, double alpha) const
+    {
+        // what drives a bound fader (R-MIX-16): "auto au_1", "= ch_3.gain" — faded in and out, its text cross-faded
+        const auto it = mTags.find(address);
+        if (it == mTags.end()) return;
+        const Tag &tg = it->second;
+        const double a = tg.a.value() * alpha;
+        if (a <= 0.001) return;
+        drawRoundedRect(t, r, radius::pill(), Paint::filled(palette::primaryAlpha(0.16 * a)));
+        const double px = 8.5, k = tg.t.value();
+        auto text = [&](const std::string &s, double amount) {
+            if (amount <= 0.001 || s.empty()) return;
+            const std::string e = textfit::ellipsize(t, s, r.w - 6.0, px, font::mono());
+            t.setFill(fade(lerpColor(palette::primary(), palette::foreground(), 0.35), a * amount));
+            t.drawText(e, r.x + (r.w - t.measureText(e, px, font::mono())) * 0.5, textfit::baseline(r.y + r.h * 0.5, px), px, font::mono());
+        };
+        text(tg.from, 1.0 - k);
+        text(tg.to, k);
+    }
 
     void MixerDock::paintFader(IRenderTarget &t, const Rect &z, const Live &l, double a) const
     {
@@ -1033,8 +1189,8 @@ namespace solaris_ui
         const double ca = a * (1.0 - 0.55 * l->dim.value()); // silenced by a solo, or muted: it recedes
         const Color col = lerpColor(l->colFrom, l->colTo, l->colT.value());
         drawRoundedRect(t, Rect{x + 6.5, by + 5.0, w - 13.0, 3.0}, radius::pill(), Paint::filled(fade(col, ca)));
-        t.setFill(fade(palette::foreground(), ca));
-        t.drawText(textfit::ellipsize(t, s->name, w - 13.0, 11.0, font::sansMedium()), x + 6.5, by + 21.0, 11.0, font::sansMedium());
+        const double ids = idsShown(); // R-UI-11: View › Show IDs, eased
+        drawNameWithId(t, s->name, id, x + 6.5, by + 21.0, w - 13.0, 11.0, font::sansMedium(), palette::foreground(), ids, ca);
         std::string sub = s->kind;
         if (s->kind == "audio" || s->kind == "instrument") sub += " \xC2\xB7 " + std::to_string(s->clipCount) + (s->clipCount == 1 ? " clip" : " clips");
         else sub += " \xC2\xB7 fed by " + std::to_string(s->fromStrips.size());
@@ -1047,7 +1203,7 @@ namespace solaris_ui
         {
             const Rect r = g.chips[k];
             const double hv = mHover.amount(hoverId((int)Part::Chip, id + ">", k));
-            std::string label;
+            std::string label, dv;
             bool add = k == slots - 1, more = n + 1 > kSlots && k == slots - 2, bypass = false, open = false;
             if (add) label = "+ Effect";
             else if (more) label = "+" + std::to_string(n - (kSlots - 2)) + " more";
@@ -1055,6 +1211,7 @@ namespace solaris_ui
             {
                 const auto &d = s->devices[(size_t)k];
                 label = d.label;
+                dv = d.id;
                 bypass = d.bypass;
                 open = isDeviceOpen && isDeviceOpen(d.id);
             }
@@ -1063,8 +1220,8 @@ namespace solaris_ui
             else
                 drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(lerpColor(palette::secondary(), palette::popover(), hv), ca),
                                                                                fade(open ? palette::primary() : palette::whiteAlpha(0.0), ca), 1.0));
-            t.setFill(fade(add || more || bypass ? palette::mutedForeground() : palette::foreground(), ca));
-            t.drawText(textfit::ellipsize(t, label, r.w - 10.0, 10.0, font::sans()), r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
+            drawNameWithId(t, label, dv, r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), r.w - 10.0, 10.0, font::sans(),
+                           add || more || bypass ? palette::mutedForeground() : palette::foreground(), ids, ca);
         }
         // sends
         const int ns = (int)s->sends.size();
@@ -1080,13 +1237,27 @@ namespace solaris_ui
                 continue;
             }
             const auto &sd = s->sends[(size_t)k];
-            const std::string gain = num(sd.gain, 1) + (sd.pre ? " P" : "");
-            const double gw = t.measureText(gain, 9.0, font::mono());
-            // a sidechain key says so, in the solo amber: it is heard by a detector, not in the mix (R-MIX-15)
-            arrowText(t, (sd.sidechain ? "key " : "") + labelOf(sd.to), r.x + 3.0, r.y + r.h * 0.5, r.w - gw - 10.0, 9.0, font::sans(),
-                      fade(sd.sidechain ? surface::solo() : palette::secondaryForeground(), ca));
-            t.setFill(fade(palette::mutedForeground(), ca));
-            t.drawText(gain, r.right() - 3.0 - gw, textfit::baseline(r.y + r.h * 0.5, 9.0), 9.0, font::mono());
+            // its level as the model publishes it — the evaluated value when a formula drives it (R-MIX-16)
+            const std::string gain = num(shownValue(sd.id + ".gain"), 1) + (sd.pre ? " P" : "");
+            const double ta = tagAmount(sd.id + ".gain"), fw = t.measureText("\xC6\x92", 9.0, font::mono()) + 2.0;
+            const double gw = t.measureText(gain, 9.0, font::mono()) + fw * ta, cyS = r.y + r.h * 0.5;
+            // a sidechain key says so, in the solo amber: it is heard by a detector, not in the mix (R-MIX-15);
+            // with Show IDs the send's own id takes the label's place (cross-faded)
+            arrowText(t, (sd.sidechain ? "key " : "") + labelOf(sd.to), r.x + 3.0, cyS, r.w - gw - 10.0, 9.0, font::sans(),
+                      fade(sd.sidechain ? surface::solo() : palette::secondaryForeground(), ca * (1.0 - ids)));
+            if (ids > 0.001)
+            {
+                t.setFill(fade(palette::primary(), ca * ids));
+                t.drawText(textfit::ellipsize(t, sd.id, std::max(0.0, r.w - gw - 10.0), idPx(9.0), font::mono()), r.x + 3.0, textfit::baseline(cyS, idPx(9.0)),
+                           idPx(9.0), font::mono());
+            }
+            t.setFill(fade(lerpColor(palette::mutedForeground(), palette::primary(), ta), ca));
+            t.drawText(gain, r.right() - 3.0 - (gw - fw * ta), textfit::baseline(cyS, 9.0), 9.0, font::mono());
+            if (ta > 0.001) // bound: "ƒ" before its level
+            {
+                t.setFill(fade(palette::primary(), ca * ta));
+                t.drawText("\xC6\x92", r.right() - 3.0 - gw, textfit::baseline(cyS, 9.0), 9.0, font::mono());
+            }
         }
         // pan: from the centre
         {
@@ -1097,10 +1268,17 @@ namespace solaris_ui
             t.setStroke(fade(palette::whiteAlpha(0.3), ca), 1.0);
             t.beginPath(); t.moveTo(std::round(cx) + 0.5, cy - 4.0); t.lineTo(std::round(cx) + 0.5, cy + 4.0); t.strokePath();
             drawCircle(t, px, cy, 4.0, Paint::filled(fade(palette::foreground(), ca)));
+            const double pt = tagAmount(id + ".pan"); // bound: "ƒ" in the margin after it (R-MIX-16)
+            if (pt > 0.001)
+            {
+                t.setFill(fade(palette::primary(), ca * pt));
+                t.drawText("\xC6\x92", r.right() + 2.0, textfit::baseline(cy, 9.0), 9.0, font::mono());
+            }
         }
         paintFader(t, g.zone, *l, ca);
+        paintTag(t, id + ".gain", Rect{x + 6.5, g.pan.bottom() + 2.0, w - 13.0, 12.0}, ca);
         const std::string rd = dbText(faderDb(l->fader.value()));
-        t.setFill(fade(palette::secondaryForeground(), ca));
+        t.setFill(fade(lerpColor(palette::secondaryForeground(), palette::primary(), tagAmount(id + ".gain")), ca));
         t.drawText(rd, x + (w - t.measureText(rd, 10.0, font::mono())) * 0.5, g.readoutY, 10.0, font::mono());
         // mute and solo: the fill eases whoever changed them; solo is amber, never the accent
         auto toggle = [&](const Rect &r, const char *label, double on, const Color &onCol, int part) {
@@ -1164,8 +1342,8 @@ namespace solaris_ui
         drawRoundedRect(t, Rect{x, by, w, bh}, 0.0, Paint::filled(fade(palette::popover(), a)));
         t.setStroke(fade(palette::border(), a), 1.0);
         t.beginPath(); t.moveTo(x + 0.5, by); t.lineTo(x + 0.5, by + bh); t.strokePath();
-        t.setFill(fade(palette::foreground(), a));
-        t.drawText("Master", x + 6.5, by + 21.0, 11.0, font::sansMedium());
+        const double ids = idsShown();
+        drawNameWithId(t, "Master", "master", x + 6.5, by + 21.0, w - 13.0, 11.0, font::sansMedium(), palette::foreground(), ids, a);
         t.setFill(fade(palette::mutedForeground(), a));
         const size_t nd = mModel.masterDevices.size();
         t.drawText(nd ? std::to_string(nd) + (nd == 1 ? " device" : " devices") : std::string("the mix"), x + 6.5, by + 33.0, 9.0, font::sans());
@@ -1176,14 +1354,16 @@ namespace solaris_ui
             const double hv = mHover.amount(hoverId((int)Part::Chip, "master>", k));
             const bool add = k == slots - 1, more = n + 1 > kSlots && k == slots - 2;
             const std::string label = add ? "+ Effect" : more ? "+" + std::to_string(n - (kSlots - 2)) + " more" : mModel.masterDevices[(size_t)k].label;
+            const std::string dv = add || more ? std::string() : mModel.masterDevices[(size_t)k].id;
             if (add) drawRoundedRect(t, r, radius::control(), Paint::stroked(fade(palette::whiteAlpha(0.14 + 0.2 * hv), a), 1.0));
             else drawRoundedRect(t, r, radius::control(), Paint::filled(fade(lerpColor(palette::secondary(), palette::card(), hv), a)));
-            t.setFill(fade(add || more ? palette::mutedForeground() : palette::foreground(), a));
-            t.drawText(textfit::ellipsize(t, label, r.w - 10.0, 10.0, font::sans()), r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
+            drawNameWithId(t, label, dv, r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), r.w - 10.0, 10.0, font::sans(),
+                           add || more ? palette::mutedForeground() : palette::foreground(), ids, a);
         }
         paintFader(t, g.zone, *l, a);
+        paintTag(t, "project.masterGain", Rect{x + 6.5, g.pan.bottom() + 2.0, w - 13.0, 12.0}, a);
         const std::string rd = dbText(faderDb(l->fader.value()));
-        t.setFill(fade(palette::secondaryForeground(), a));
+        t.setFill(fade(lerpColor(palette::secondaryForeground(), palette::primary(), tagAmount("project.masterGain")), a));
         t.drawText(rd, x + (w - t.measureText(rd, 10.0, font::mono())) * 0.5, g.readoutY, 10.0, font::mono());
         std::string outs;
         for (const auto &o : mModel.masterOut) outs += (outs.empty() ? "" : ", ") + labelOf(o);

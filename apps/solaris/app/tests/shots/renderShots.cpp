@@ -258,6 +258,51 @@ namespace
                  r.cmd("auto point add au_2 --at 6 --value 0");
                  r.settle();
              }},
+            {"mixer-bound",   // R-MIX-16: faders, a pan, a send and the master driven by formulas, each saying what drives it
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("auto create ch_3.gain");                                  // Bass's fader rides an automation
+                 r.cmd("auto point move au_1 --at 0 --value -18");
+                 r.cmd("auto point add au_1 --at 8 --value 0 --shape smooth");
+                 r.cmd("set ch_2.gain=\"=ch_3.gain - 2\"");                        // the drums follow it: a link
+                 r.cmd("set ch_2.pan=\"=0.6 * sin(beat * pi / 4)\"");              // an auto-pan
+                 r.cmd("set sd_1.gain=\"=au_1 - 6\"");                             // the send rides it too
+                 r.cmd("set project.masterGain=\"=-2 + 2 * sin(beat * pi / 8)\"");
+                 r.cmd("transport seek 3");                                        // the values where the transport is
+                 r.settle();
+             }},
+            {"show-ids",      // R-UI-11: every id beside its name — lanes, clips, automations, the dock, a device's rows
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("auto create dv_2.filter.cutoff");
+                 r.cmd("settings set showIds=on");
+                 r.settle();
+                 auto &d = r.app->project().dock();
+                 r.click(world(d, d.chipRect("ch_3", 0)));                        // Bass's Basic Synth: its rows' addresses
+                 r.settle();
+             }},
+            {"show-ids-mid",  // mid-transition: the ids fading in (View › Show IDs), the names giving way
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 r.cmd("settings set showIds=on");
+                 r.frame();
+                 r.frame();
+                 r.frame();
+                 r.frame();
+             }},
+            {"copied-toast",  // a copy says so, in the accent (a refusal's toast is red)
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 auto &d = r.app->project().dock();
+                 r.click(world(d, d.faderRect("ch_3")), 2);
+                 r.settle();
+                 auto &menu = r.app->menu();
+                 for (int i = 0; i < menu.itemCount(); ++i)
+                     if (menu.item(i).label == "Copy Address") { r.click(menu.itemRect(i)); break; }
+                 r.pump(300.0);
+             }},
             {"piano-roll",
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

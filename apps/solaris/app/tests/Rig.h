@@ -103,6 +103,7 @@ namespace sltest
         int w, h;
         double now = 1000.0;
         std::vector<std::string> sent;   // every line the app dispatched, in order
+        std::vector<std::string> copied; // the host's clipboard: every text the app copied (R-UI-11)
 
         /** `name` picks a scratch folder, emptied: no songs, settings or recents from a previous run. */
         /** `audio` = false: a machine with no output device (a refusal to test). */
@@ -118,6 +119,7 @@ namespace sltest
                 return svc->dispatchText(line, err);
             };
             app = std::make_unique<arstro::solaris_ui::App>(hooks, w, h);
+            app->onCopy = [this](const std::string &text) { copied.push_back(text); };
             alloc();
         }
         ~Rig() { release(); }

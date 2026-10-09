@@ -136,6 +136,8 @@ namespace solaris_ui
                 if (onRename) onRename(cur, world, std::move(done));
             };
             panel->onOpenPattern = [this](const std::string &pt) { openRoll(pt); };
+            panel->onCopy = [this](const std::string &text) { if (onCopy) onCopy(text); };
+            panel->idsAmount = [this] { return idsAmount ? idsAmount() : 0.0; };
             panel->bind(mModel, mInteracting);
             w = &place(std::make_shared<FloatWindow>(key, panel), 390.0, 520.0);
         }

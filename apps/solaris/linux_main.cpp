@@ -191,6 +191,11 @@ int main(int argc, char **argv)
         const std::string p = pick(a, GTK_FILE_CHOOSER_ACTION_SAVE, title.c_str(), "_Save", song, suggested);
         if (!p.empty()) done(p);
     };
+    a->app->onCopy = [](const std::string &text) {
+        // R-UI-11: the clipboard is the host's (the core has none, R-SVC-4) — both selections, so a middle click pastes it too
+        gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD), text.c_str(), (gint)text.size());
+        gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), text.c_str(), (gint)text.size());
+    };
     a->app->setOsReducedMotion(!animations); // the OS's "reduce motion" (design rule §2.6); the app's own setting ORs in
     a->app->onPickFolder = [a](std::function<void(const std::string &)> done) {
         const std::string p = pick(a, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER, "Add a sample folder", "_Add", false, std::string());

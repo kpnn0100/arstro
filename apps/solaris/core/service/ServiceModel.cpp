@@ -82,6 +82,9 @@ namespace solaris
         const std::string lastError = mModel.lastError;
         const TransportModel transport = mModel.transport;
         const AuditionModel audition = mModel.audition; // the machine's preview: no song decides it
+        std::map<std::string, double> wasLive;          // while playing, `pump` owns bindings[].live: kept
+        if (mPlayer && mPlayer->running())
+            for (const auto &b : mModel.bindings) wasLive[b.address] = b.live;
         mModel = AppModel();
         mModel.transport = transport;
         mModel.audition = audition;
@@ -105,6 +108,7 @@ namespace solaris
         mModel.settings.newBpm = mSettings.newBpm;
         mModel.settings.newSig = mSettings.newSig;
         mModel.settings.reducedMotion = mSettings.reducedMotion;
+        mModel.settings.showIds = mSettings.showIds;
         mModel.devices = mDevices;
         mModel.browser = mBrowser;
         for (const auto &t : DeviceRegistry::types())
@@ -327,6 +331,35 @@ namespace solaris
             for (const auto &bm : mModel.bindings)
                 if (std::find(bm.reads.begin(), bm.reads.end(), a.id) != bm.reads.end()) am.usedBy.push_back(bm.address);
             mModel.automations.push_back(am);
+        }
+        // R-MIX-16: what each formula evaluates to where the transport is. While playing, the values the
+        // engine evaluated for what is heard (`pump`) are kept; a binding new since is evaluated here first.
+        bool fresh = false;
+        for (const auto &bm : mModel.bindings) fresh |= !wasLive.count(bm.address);
+        if (fresh) evaluateLive(mModel.transport.position);
+        for (auto &bm : mModel.bindings)
+        {
+            const auto it = wasLive.find(bm.address);
+            if (it != wasLive.end()) bm.live = it->second;
+        }
+    }
+
+    void SolarisService::evaluateLive(double beat)
+    {
+        if (!mOpen || mModel.bindings.empty()) return;
+        // the engine's evaluator over the engine's compiled data, as `eval` does: a script and the screen agree
+        const CompileResult cr = compile(mProject, [](const std::string &) { return std::shared_ptr<const engine::Pcm>(); });
+        const engine::MixGraph &g = cr.graph;
+        std::vector<double> vars(engine::kClockSlots + g.curves.size() + g.binds.size(), 0.0), values(g.binds.size(), 0.0);
+        for (size_t b = 0; b < g.binds.size(); ++b) values[b] = g.binds[b].own;
+        engine::evaluateBinds(g.clock, g.curves, g.binds, std::llround(beat * g.clock.samplesPerBeat), vars.data(), values.data());
+        for (auto &bm : mModel.bindings)
+        {
+            const auto it = std::find(cr.bindAddresses.begin(), cr.bindAddresses.end(), bm.address);
+            if (it != cr.bindAddresses.end()) { bm.live = values[(size_t)(it - cr.bindAddresses.begin())]; continue; }
+            AddressSpec own; // inert: its own value plays
+            std::string why;
+            bm.live = describeAddress(mProject, bm.address, own, why) ? own.value : 0.0;
         }
     }
 

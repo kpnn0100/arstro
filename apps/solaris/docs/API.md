@@ -55,7 +55,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `audit` | The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping. | R-MIX-10 |
 | `state print [--json] [--stable]` | The whole AppModel; --stable omits what changes with time. | R-SVC-2 |
 | `api [--json] [--md]` | This document: every command, event, model field and device parameter. | R-API-1 |
-| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on\|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on\|off). Saved at once. | R-SET-1 |
+| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on\|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on\|off), showIds (on\|off: every object's id beside its name, R-UI-11). Saved at once. | R-SET-1 |
 | `settings print [--json]` | The machine's settings. | R-SET-1 |
 | `folder add <path>` | Add a sample folder to the browser's quick-access list. | R-SET-1 |
 | `folder remove <path>` | Remove a sample folder from the list (the folder itself is untouched). | R-SET-1 |
@@ -235,6 +235,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `bindings[].reads` | string[] | the automations and addresses it reads |
 | `bindings[].ok` | bool | false = INERT: the address's own value plays |
 | `bindings[].problem` | string | why it is inert |
+| `bindings[].live` | number | its value at the HEARD position (R-MIX-16): the engine's while playing, eval's at the transport when stopped *(not in `--stable`)* |
 | `ports` | object[] | logical ports (R-DEV-3) |
 | `ports[].id` | string |  |
 | `ports[].name` | string |  |
@@ -264,6 +265,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.newBpm` | number | a new song's tempo without --bpm |
 | `settings.newSig` | string | a new song's meter without --sig |
 | `settings.reducedMotion` | bool | the UI's tweens collapse (with the OS's own setting) |
+| `settings.showIds` | bool | every object's id drawn beside its name (R-UI-11) |
 | `devices` | object[] | from the last `devices list` |
 | `devices[].id` | string | what `settings set output=` takes |
 | `devices[].name` | string |  |

@@ -16,6 +16,14 @@
  *  R-MIX-4) is hatched. A click on an open cell adds a send, on a send offers pre/post, main
  *  output and remove; a vertical drag on a send sets its level.
  *
+ *  The mixer's numbers bind (R-MIX-16): a right-click on a fader, a pan, a send's level (on a card or in
+ *  the matrix) or the master fader offers the device parameter's menu (`ParamMenu`: Create Automation,
+ *  Formula…, Clear Binding, Reset, Copy Address / Value / as Formula). A bound control says what drives
+ *  it — a tag over the fader ("auto au_1", "= ch_3.gain"), "ƒ" by a pan or a send's level, the readout
+ *  in the accent — and is drawn at the value the model publishes (`bindings[].live`): while playing it
+ *  follows the engine continuously, like the playhead; stopped, a change of binding or position eases.
+ *  With View › Show IDs each card, chip and send shows its id (eased).
+ *
  *  Everything is a command line (`onCommand`): `set <ch>.gain|pan|mute|solo=…`,
  *  `set project.masterGain=…`, `route`, `send add|delete`, `set <sd>.gain|pre=…`, `device add`,
  *  `mixer add|delete`, `set <mx|ch>.name=…`. Folding, the shown tab, scroll and the dock's height
@@ -93,6 +101,11 @@ namespace solaris_ui
         artboard::Rect cellRect(const std::string &from, const std::string &to) const; // the matrix
         artboard::Rect addLineRect() const;          // the shown page's "+ Line" (R-MIX-13), where it is DRAWN
         double meterLive(const std::string &id, int channel) const;
+        /** R-MIX-16: what a bound control's tag says ("" when the address is not bound), and its LIVE presence. */
+        std::string tagText(const std::string &address) const;
+        double tagAmount(const std::string &address) const;
+        /** The value a control is DRAWN at: the model's live value when bound, its own otherwise. */
+        double shownValue(const std::string &address) const;
 
 
         /** The fader law: 0 dB at 0.708, +6 at the top, −∞ at the bottom (gain ∝ position², +6 dB headroom). */
@@ -106,6 +119,8 @@ namespace solaris_ui
         std::function<void(const std::string &dv)> onOpenDevice;      // a chip: the device's window (R-WIN-1)
         std::function<bool(const std::string &dv)> isDeviceOpen;      // its chip is outlined while it is
         std::function<void(double worldY)> onResize; // the top edge dragged (direct manipulation)
+        std::function<void(const std::string &text)> onCopy;          // the host's clipboard (R-UI-11)
+        std::function<double()> idsAmount;                            // View › Show IDs, eased by the screen
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -122,6 +137,9 @@ namespace solaris_ui
             bool muteLast = false, soloLast = false, dimLast = false, placed = false;
             artboard::Color colFrom, colTo;
             int colLast = -1;
+            // R-MIX-16: what drives the fader / pan; a change of it eases (catches up) before following the engine
+            std::string gainBy, panBy;
+            double gainCatchUntil = -1e9, panCatchUntil = -1e9;
         };
         /** A column on a page: a strip, or the header of the strips feeding one bus. Keyed. */
         struct Card
@@ -149,6 +167,13 @@ namespace solaris_ui
             bool placed = false, gone = false;
         };
         struct Toggle { artboard::AnimatedProperty a{0.0}; bool last = false, placed = false; };
+        /** A bound control's tag (R-MIX-16), keyed by address: its presence and its text, cross-faded. */
+        struct Tag
+        {
+            std::string from, to;
+            artboard::AnimatedProperty a{0.0}, t{1.0};
+            bool on = false, placed = false;
+        };
         enum class Part { None, Tab, AddMixer, ToggleDock, Resize, Header, Chip, Send, Pan, Fader, Mute, Solo, Out, Fold, Cell, AddLine };
         struct Hit
         {
@@ -176,6 +201,10 @@ namespace solaris_ui
         void openAddLine(artboard::Point world);
         static artboard::Rect addLineAt(double x, double top) { return artboard::Rect{x + 6.5, top + 6.5, kAddLineW - 13.0, 26.0}; }
         void openSend(const solaris::SendModel &sd, const std::string &from, artboard::Point world);
+        bool openParam(const Hit &h, artboard::Point world); // a number's menu (R-MIX-16); false when it is not one
+        std::string formulaOf(const std::string &address) const;
+        double idsShown() const { return idsAmount ? idsAmount() : 0.0; }
+        void paintTag(artboard::IRenderTarget &t, const std::string &address, const artboard::Rect &r, double alpha) const;
         bool send(const std::string &line) { return onCommand ? onCommand(line) : false; }
         Live &live(const std::string &id) { return mLive[id]; }
         const Live *liveOf(const std::string &id) const;
@@ -194,9 +223,11 @@ namespace solaris_ui
         std::vector<Tab> mTabs;
         std::map<std::string, Toggle> mFold;     // by bus id: true = folded (the view's)
         std::map<std::string, Toggle> mCells;    // the matrix: "from>to" — a main output's dot, a send's presence
+        std::map<std::string, Tag> mTags;        // bound controls, by address
+        std::map<std::string, double> mLiveOf;   // address → bindings[].live
         mutable std::map<std::string, double> mTabTextW; // measured in the paint, read by the next layout
         int mTab = 0;
-        bool mInteracting = false, mBound = false, mEver = false;
+        bool mInteracting = false, mBound = false, mEver = false, mWasPlaying = false;
         double mNowMs = 0.0;
         artboard::AnimatedProperty mHiX{0.0}, mHiW{0.0};
         bool mHiInit = false;

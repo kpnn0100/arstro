@@ -86,10 +86,10 @@ namespace solaris
                 }
                 else if (k == "output") next.output = v;
                 else if (k == "input") next.input = v;
-                else if (k == "metronome" || k == "reducedMotion")
+                else if (k == "metronome" || k == "reducedMotion" || k == "showIds")
                 {
                     if (v != "on" && v != "off") { err = k + " is on or off"; return false; }
-                    (k == "metronome" ? next.metronome : next.reducedMotion) = v == "on";
+                    (k == "metronome" ? next.metronome : k == "reducedMotion" ? next.reducedMotion : next.showIds) = v == "on";
                 }
                 else if (k == "metronomeLevel" || k == "auditionLevel")
                 {
@@ -120,9 +120,9 @@ namespace solaris
                 else
                 {
                     err = "no setting `" + k + "`";
-                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion"});
+                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds"});
                     err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>, metronome, "
-                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion)")
+                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds)")
                                         : " (did you mean: " + near[0] + "?)";
                     return false;
                 }
@@ -145,7 +145,8 @@ namespace solaris
                               .set("output", mSettings.output).set("input", mSettings.input)
                               .set("folders", folders).set("ports", ports).set("metronome", mSettings.metronome)
                               .set("metronomeLevel", mSettings.metronomeLevel).set("auditionLevel", mSettings.auditionLevel).set("newBpm", mSettings.newBpm)
-                              .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion).dump();
+                              .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion)
+                              .set("showIds", mSettings.showIds).dump();
             }
             return true;
         case K::FolderAdd:
