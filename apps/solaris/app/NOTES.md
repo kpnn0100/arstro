@@ -28,8 +28,8 @@ helpers it borrows.
 | Browser › a tab | nothing — the list is the model's (`settings.folders`, `deviceTypes`, the song's clips) |
 | Browser › a sample folder, a sub-folder, the row back up | `browse "<path>"` |
 | Browser › Samples with no folders, a click | `devices list`, then the settings sheet |
-| Browser › a sample dragged onto the lanes | `clip add --src "<file>" --at <beat> [--lane <ln>]` — `<beat>` on the lanes' snap step; below the last lane: no `--lane`, a new one |
-| Browser › an instrument dragged onto the lanes | `clip add --instrument <type> --at <beat> --length 4 [--lane <ln>]` — ONE line (R-BROWSE-3) |
+| Browser › a sample dragged onto the lanes | `clip add --src "<file>" --at <beat> --lane <ln\|new>` — `<beat>` on the lanes' snap step; below the last lane: `--lane new`, a new one (said explicitly since R-SVC-8: with no `--lane` a clip joins its strip's lane — a used sample would have landed on its old row) |
+| Browser › an instrument dragged onto the lanes | `clip add --instrument <type> --at <beat> --length 4 --lane <ln\|new>` — ONE line (R-BROWSE-3) |
 | Browser › a double-click | the same, at the playhead |
 | Browser › an effect dragged onto the lanes | nothing; a notice (effects go on a strip — U3) |
 | Lanes › a clip dragged | `clip move <ac> [--at <beat>] [--lane <ln>]` on release (on the snap step; between lanes only) |

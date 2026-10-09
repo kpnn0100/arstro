@@ -1,4 +1,6 @@
 #include "AppModelCodec.h"
+#include "Format.h"
+#include "Notation.h"
 
 namespace arstro
 {
@@ -234,8 +236,133 @@ namespace solaris
         }
     }
 
-    Json modelToJson(const AppModel &m, bool stable)
+    namespace
     {
+        // R-SVC-8: `state print --json --compact` — the SONG for an agent's context: no registry, no machine, no
+        // recents or browser; a device's non-default parameters as pasteable `name=value`; notes in the notation
+        Json compactDevices(const std::vector<DeviceModel> &ds)
+        {
+            Json a = Json::array();
+            for (const auto &d : ds)
+            {
+                Json params = Json::array();
+                for (const auto &p : d.params)
+                    if (!p.formula.empty()) params.push(Json::string(p.name + "=" + p.formula));
+                    else if (!d.known || p.value != p.def) params.push(Json::string(p.name + "=" + p.text));
+                Json j = Json::object();
+                j.set("id", d.id).set("type", d.type);
+                if (d.bypass) j.set("bypass", true);
+                if (!d.sample.empty()) j.set("sample", d.sample);
+                a.push(j.set("params", params));
+            }
+            return a;
+        }
+        std::string beatText(double b)
+        {
+            std::string s = canonicalBeats(b);
+            if (s.size() > 2 && s.compare(s.size() - 2, 2, ".0") == 0) s.resize(s.size() - 2);
+            return s;
+        }
+        Json compactJson(const AppModel &m)
+        {
+            Json j = Json::object();
+            j.set("projectPath", m.projectPath).set("projectName", m.projectName).set("dirty", m.dirty).set("bpm", m.bpm)
+                .set("sig", m.sig).set("sampleRate", m.sampleRate).set("lengthBeats", m.lengthBeats);
+            if (m.masterGain != 0) j.set("masterGain", m.masterGain);
+            if (!m.masterGainFormula.empty()) j.set("masterGainFormula", m.masterGainFormula);
+            j.set("masterOut", strings(m.masterOut));
+            Json mixers = Json::array();
+            for (const auto &x : m.mixers) mixers.push(Json::object().set("id", x.id).set("name", x.name).set("strips", strings(x.strips)));
+            j.set("mixers", mixers);
+            Json strips = Json::array();
+            for (const auto &s : m.strips)
+            {
+                Json st = Json::object();
+                st.set("id", s.id).set("name", s.name).set("kind", s.kind).set("out", s.out);
+                if (s.gain != 0) st.set("gain", s.gain);
+                if (s.pan != 0) st.set("pan", s.pan);
+                if (!s.gainFormula.empty()) st.set("gainFormula", s.gainFormula);
+                if (!s.panFormula.empty()) st.set("panFormula", s.panFormula);
+                if (s.mute) st.set("mute", true);
+                if (s.solo) st.set("solo", true);
+                if (!s.sends.empty())
+                {
+                    Json sends = Json::array();
+                    for (const auto &sd : s.sends)
+                    {
+                        Json x = Json::object();
+                        x.set("id", sd.id).set("to", sd.to).set("gain", sd.gain);
+                        if (sd.pre) x.set("pre", true);
+                        if (sd.sidechain) x.set("sidechain", true);
+                        if (!sd.gainFormula.empty()) x.set("gainFormula", sd.gainFormula);
+                        sends.push(x);
+                    }
+                    st.set("sends", sends);
+                }
+                if (!s.devices.empty()) st.set("devices", compactDevices(s.devices));
+                strips.push(st);
+            }
+            j.set("strips", strips);
+            if (!m.masterDevices.empty()) j.set("masterDevices", compactDevices(m.masterDevices));
+            Json lanes = Json::array();
+            for (const auto &l : m.lanes) lanes.push(Json::object().set("id", l.id).set("name", l.name));
+            j.set("lanes", lanes);
+            Json clips = Json::array();
+            for (const auto &c : m.clips)
+            {
+                Json x = Json::object();
+                x.set("id", c.id).set("track", c.track).set("lane", c.lane).set("at", c.at).set("length", c.length);
+                if (c.kind == "audio") x.set("src", c.src);
+                else x.set("pattern", c.pattern);
+                if (c.gain != 0) x.set("gain", c.gain);
+                if (c.fadeIn != 0) x.set("fadeIn", c.fadeIn);
+                if (c.fadeOut != 0) x.set("fadeOut", c.fadeOut);
+                if (c.offline) x.set("offline", true);
+                clips.push(x);
+            }
+            j.set("clips", clips);
+            Json patterns = Json::array();
+            for (const auto &p : m.patterns)
+            {
+                Json notes = Json::array();
+                for (const auto &n : p.notes)
+                    notes.push(Json::string(pitchName(n.pitch) + "@" + beatText(n.at) + ":" + beatText(n.length) + ":" + std::to_string(n.vel)));
+                patterns.push(Json::object().set("id", p.id).set("name", p.name).set("length", p.length).set("clips", p.clips).set("notes", notes));
+            }
+            j.set("patterns", patterns);
+            if (!m.automations.empty())
+            {
+                Json autos = Json::array();
+                for (const auto &a : m.automations)
+                {
+                    Json pts = Json::array();
+                    for (const auto &pt : a.points) pts.push(Json::string(beatText(pt.at) + "=" + canonicalNumber(pt.value) + (pt.shape == "linear" ? "" : " " + pt.shape)));
+                    autos.push(Json::object().set("id", a.id).set("name", a.name).set("min", a.min).set("max", a.max).set("points", pts)
+                                   .set("usedBy", strings(a.usedBy)));
+                }
+                j.set("automations", autos);
+            }
+            if (!m.bindings.empty())
+            {
+                Json binds = Json::array();
+                for (const auto &b : m.bindings)
+                {
+                    Json x = Json::object();
+                    x.set("address", b.address).set("formula", b.formula);
+                    if (!b.ok) x.set("problem", b.problem);
+                    binds.push(x);
+                }
+                j.set("bindings", binds);
+            }
+            if (!m.audit.empty()) j.set("audit", strings(m.audit));
+            if (!m.lastError.empty()) j.set("lastError", m.lastError);
+            return j;
+        }
+    }
+
+    Json modelToJson(const AppModel &m, bool stable, bool compact)
+    {
+        if (compact) return compactJson(m);
         Json j = Json::object();
         j.set("screen", m.screen).set("projectPath", m.projectPath).set("projectName", m.projectName).set("dirty", m.dirty)
             .set("bpm", m.bpm).set("sig", m.sig).set("sampleRate", m.sampleRate).set("masterGain", m.masterGain)

@@ -4,6 +4,7 @@
 #include "Event.h"
 #include "Format.h"
 #include "Json.h"
+#include "Notation.h"
 #include "device/Device.h"
 
 namespace arstro
@@ -69,11 +70,30 @@ namespace solaris
                 else j.set("min", p.min).set("max", p.max).set("default", p.def).set("integer", p.integer).set("log", p.logScale);
                 params.push(j);
             }
-            devs.push(Json::object().set("type", t.name).set("label", t.label)
-                          .set("kind", t.kind == DeviceKind::Instrument ? "instrument" : "effect")
-                          .set("summary", t.summary).set("params", params));
+            Json dev = Json::object();
+            dev.set("type", t.name).set("label", t.label).set("kind", t.kind == DeviceKind::Instrument ? "instrument" : "effect")
+                .set("summary", t.summary).set("params", params);
+            if (!t.noteNames.empty())
+            {
+                Json pads = Json::array(); // a pitch can be written by these names (R-SVC-8)
+                for (const auto &nn : t.noteNames) pads.push(Json::object().set("name", padText(nn.second)).set("note", nn.first));
+                dev.set("pads", pads);
+            }
+            devs.push(dev);
         }
         doc.set("devices", devs);
+        Json chords = Json::array();
+        for (const auto &q : chordQualities())
+        {
+            Json iv = Json::array();
+            for (int k : q.intervals) iv.push(Json::integer(k));
+            chords.push(Json::object().set("names", strings(q.names)).set("intervals", iv).set("label", q.label));
+        }
+        doc.set("notation", Json::object()
+                                .set("pitch", "a number 0-127, a name (C4 = 60, F#3, Bb2, c-1 = 0) or a kit's pad (kick)")
+                                .set("note", "<pitch>@<beat>[:<length>[:<vel>]]")
+                                .set("steps", "x = a note, X = an accent (127), . or - = a rest; spaces and | ignored")
+                                .set("chords", chords));
         return doc.dump();
     }
 
@@ -84,9 +104,11 @@ namespace solaris
         o += "> **Generated** by `solaris-cc api --md` from the tables the code runs on — the grammar table, the "
              "event table, the model's field table and the DSP library's device registry. Do not edit: a test "
              "regenerates this file and fails on any difference (R-API-1).\n\n";
-        o += "A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` on the command line, or "
-             "one per line with `--script`. An unknown verb, flag, address or parameter is refused, naming the "
-             "nearest candidates.\n\n";
+        o += "A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` on the command line, "
+             "one per line with `--script`, or a session on stdin with `shell` (one song, undo kept). `#` starts a "
+             "comment, also at the end of a line. An unknown verb, flag, address or parameter is refused, naming the "
+             "nearest candidates. A command that makes nodes prints the id it made first, then `made: kind=id …` for "
+             "anything else it made. How an agent writes a song: `docs/AGENTS.md`.\n\n";
         o += "## Commands\n\n| usage | what | asked by |\n|---|---|---|\n";
         for (const auto &s : commandSpecs())
             o += "| `" + md(usageOf(s)) + "` | " + md(s.summary) + " | " + s.requirement + " |\n";
@@ -102,6 +124,21 @@ namespace solaris
              "binds it (R-AUTO-1): numbers, `+ - * / ^ ( )`, `sin cos tan abs sign min max clamp lerp pow exp log sqrt floor ceil "
              "round frac`, `pi`, `beat bar bpm t`, an automation id (`au_1`), another numeric address (a link). `get` prints "
              "the formula; a plain number clears it |\n";
+        o += "\n## Notation (R-SVC-8)\n\n";
+        o += "| what | written | e.g. |\n|---|---|---|\n";
+        o += "| a pitch (`--pitch`, `--to-pitch`, a note) | a number 0–127, a name — a letter, `#`/`b`, an octave; C4 = 60, c-1 = 0 — or a "
+             "kit's pad (below, case and `-` ignored) | `60` · `C4` · `F#3` · `Bb2` · `kick` · `closed-hat` |\n";
+        o += "| a note (`notes add`) | `<pitch>@<beat>[:<length>[:<vel>]]`; an empty field keeps the default | `C4@0:0.5:90` · `kick@1` · `E4@2::70` |\n";
+        o += "| a step row (`pattern steps`) | `x` a note, `X` an accent (127), `.` or `-` a rest; spaces and `\\|` ignored | `x...x...x...X...` |\n";
+        o += "| a chord (`note add --chord`) | a root (`C`, `F#`, `Bb`) then a quality below; the root sits in `--octave` (4) | `Cm7` · `F#dim` · `Bbmaj7` |\n";
+        o += "\n| chord quality | semitones | |\n|---|---|---|\n";
+        for (const auto &q : chordQualities())
+        {
+            std::string names, iv;
+            for (const auto &n : q.names) names += (names.empty() ? "" : " · ") + std::string("`") + (n.empty() ? "C" : "C" + n) + "`";
+            for (int k : q.intervals) iv += (iv.empty() ? "" : " ") + std::to_string(k);
+            o += "| " + md(names) + " | " + iv + " | " + q.label + " |\n";
+        }
         o += "\n## Events\n\nEach is one line: `[evt] <name> key=value …` — the log line, the `--watch` stream.\n\n";
         o += "| event | fields | when |\n|---|---|---|\n";
         for (const auto &e : eventSpecs())
@@ -119,7 +156,14 @@ namespace solaris
         for (const auto &t : DeviceRegistry::types())
         {
             o += "\n### `" + t.name + "` — " + t.label + " (" + (t.kind == DeviceKind::Instrument ? "instrument" : "effect") + ")\n\n";
-            o += md(t.summary) + "\n\n| parameter | range | default |\n|---|---|---|\n";
+            o += md(t.summary) + "\n\n";
+            if (!t.noteNames.empty())
+            {
+                o += "Pads — a pitch by name:";
+                for (const auto &nn : t.noteNames) o += " `" + padText(nn.second) + "` " + std::to_string(nn.first) + (nn.first == t.noteNames.back().first ? "" : " ·");
+                o += "\n\n";
+            }
+            o += "| parameter | range | default |\n|---|---|---|\n";
             for (const auto &p : t.params)
                 o += "| `" + p.name + "` | " + md(range(p)) + " | " + defText(p) + (p.unit.empty() || p.isChoice() ? "" : " " + p.unit) + " |\n";
         }

@@ -25,6 +25,7 @@ namespace solaris
     };
 
     const std::vector<ModelField> &appModelFields();
-    Json modelToJson(const AppModel &m, bool stable);
+    /** `compact` (R-SVC-8): the song only, non-default values, notes in the notation — `state print --json --compact`. */
+    Json modelToJson(const AppModel &m, bool stable, bool compact = false);
 }
 }

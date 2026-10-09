@@ -54,7 +54,11 @@ namespace solaris
             emit(Event(Event::Kind::CommandRejected).with("line", line).with("why", err));
             return false;
         }
-        if (c.kind == K::None) return true;
+        if (c.kind == K::None)
+        {
+            mOutput.clear(); // a comment or a blank line prints nothing — not the line before it again (R-SVC-8)
+            return true;
+        }
         if (!dispatch(c, err))
         {
             emit(Event(Event::Kind::CommandRejected).with("line", line).with("why", err));
@@ -75,6 +79,7 @@ namespace solaris
             case K::DevicesList: case K::Browse: case K::RecentsRemove:
             case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait:
             case K::Audition: case K::None:
+            case K::Ls: case K::Show: case K::PatternPrint: // R-SVC-8: reading back
                 return false;
             default:
                 return true;
@@ -90,6 +95,9 @@ namespace solaris
         if (editing && !requireOpen(err)) return false;
         const Project before = editing ? mProject : Project();
         mPending.clear();
+        std::set<std::string> idsBefore; // R-SVC-8: what an edit made is said, by the ids it added
+        if (editing)
+            for (const auto &id : mProject.allIds()) idsBefore.insert(id);
 
         bool ok = false;
         switch (c.kind)
@@ -136,6 +144,13 @@ namespace solaris
         case K::PatternNew: case K::NoteAdd: case K::NoteDelete: case K::NoteMove: case K::PatternQuantize:
             ok = clipCommand(c, err);
             break;
+        case K::NotesAdd: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
+        case K::PatternTranspose:
+            ok = composeCommand(c, err);
+            break;
+        case K::Ls: case K::Show: case K::PatternPrint:
+            ok = readCommand(c, err);
+            break;
         case K::Render:
             ok = render(c, err);
             break;
@@ -158,7 +173,8 @@ namespace solaris
         {
             ok = true;
             refreshModel();
-            if (c.has("json")) mOutput = modelToJson(mModel, c.has("stable")).dump();
+            if (c.has("compact")) mOutput = modelToJson(mModel, true, true).dumpCompact(); // R-SVC-8: the song, for an agent
+            else if (c.has("json")) mOutput = modelToJson(mModel, c.has("stable")).dump();
             else
             {
                 std::ostringstream o;
@@ -213,6 +229,25 @@ namespace solaris
         const bool history = c.kind == K::Undo || c.kind == K::Redo;
         if (editing)
         {
+            // R-SVC-8: everything made is said — the first line stays the command's own id (scripts read
+            // it); `made:` names the rest by kind, so an agent never has to predict an id
+            static const std::vector<std::pair<std::string, std::string>> kinds = {
+                {"ch_", "strip"}, {"dv_", "device"}, {"pt_", "pattern"}, {"ln_", "lane"}, {"ac_", "clip"},
+                {"au_", "automation"}, {"sd_", "send"}, {"mx_", "mixer"}, {"prt_", "port"}};
+            const std::string primary = mOutput.substr(0, mOutput.find('\n'));
+            std::vector<std::string> fresh;
+            for (const auto &id : mProject.allIds())
+                if (!idsBefore.count(id) && id != primary) fresh.push_back(id);
+            std::string made;
+            for (const auto &k : kinds)
+            {
+                std::string list;
+                for (const auto &id : fresh)
+                    if (id.compare(0, k.first.size(), k.first) == 0) list += (list.empty() ? "" : ",") + id;
+                if (!list.empty()) made += " " + k.second + "=" + list;
+            }
+            if (!made.empty()) mOutput += "made:" + made + "\n";
+
             // R-EDM-1: the song before this edit, unless it continues the last one (a fader dragged)
             std::string key;
             if (c.kind == K::Set)
@@ -621,7 +656,21 @@ namespace solaris
                 return false;
             }
             const ParamSpec &spec = t->params[i];
-            if (!parseParam(spec, value, x))
+            // R-SVC-8 / R-DSP-3: a value outside the registry's range is REFUSED naming the range, as a strip's
+            // gain is — never clamped in silence; a choice is one of its names (or its index)
+            bool valid = parseParam(spec, value, x);
+            double typed = 0;
+            const bool numeric = parseNumber(value, typed) && std::isfinite(typed);
+            if (valid && spec.isChoice() && std::find(spec.choices.begin(), spec.choices.end(), value) == spec.choices.end())
+                valid = numeric && typed == std::floor(typed) && typed >= 0 && typed < (double)spec.choices.size();
+            if (valid && !spec.isChoice() && (typed < spec.min || typed > spec.max))
+            {
+                err = id + "." + f + " must be between " + canonicalNumber(spec.min) + " and " + canonicalNumber(spec.max) +
+                      (spec.unit.empty() ? std::string() : " " + spec.unit) + ", got " + value;
+                return false;
+            }
+            if (valid && spec.integer && typed != std::floor(typed)) { err = id + "." + f + " takes whole numbers, got " + value; return false; }
+            if (!valid)
             {
                 err = "`" + value + "` is not a value of " + id + "." + f;
                 if (spec.isChoice())

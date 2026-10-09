@@ -84,28 +84,51 @@ namespace solaris
              "Delete a lane. Refused while clips are drawn on it, unless --with-clips.", "R-LANE-1"},
 
             {K::ClipAdd, "clip add", "", 0, 0,
-             {"src=<file>", "strip=<ch>", "instrument=<type>", "sample=<file>", "pattern=<pt>", "lane=<ln>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>"},
+             {"src=<file>", "strip=<ch>", "instrument=<type>", "sample=<file>", "pattern=<pt>", "lane=<ln|new>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>"},
              "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the "
-             "first mixer (R-MIX-2), a used one reuses its strip, and with no --lane it gets a new lane. With "
-             "--strip <instrument>: a note clip of --pattern (a new empty pattern if none). With --instrument "
-             "<type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3).", "R-MIX-2"},
+             "first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of "
+             "--pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument "
+             "strip of that type — what dropping an instrument does (R-BROWSE-3). With no --lane it goes on the lane "
+             "its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for "
+             "a new one (R-SVC-8). Prints the clip, then `made:` and whatever else it made.", "R-MIX-2"},
             {K::ClipMove, "clip move", "<ac>", 1, 1, {"at=<beats>", "lane=<ln>", "strip=<ch>"},
              "Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through).", "R-LANE-2"},
-            {K::ClipDuplicate, "clip duplicate", "<ac>", 1, 1, {"at=<beats>"},
-             "A copy right after it (or at --at). A note clip's copy plays the SAME pattern — linked.", "R-CLIP-3"},
+            {K::ClipDuplicate, "clip duplicate", "<ac>", 1, 1, {"at=<beats>", "count=<n>"},
+             "A copy right after it (or at --at); --count N makes N copies end to end. A note clip's copy plays the "
+             "SAME pattern — linked. Prints the first copy, then `made:` the rest.", "R-CLIP-3"},
             {K::ClipUnique, "clip unique", "<ac>", 1, 1, {}, "Give a note clip its own copy of its pattern.", "R-CLIP-3"},
             {K::ClipDelete, "clip delete", "<ac>", 1, 1, {}, "Remove a clip.", "R-LANE-1"},
 
             {K::PatternNew, "pattern new", "", 0, 0, {"name=<text>", "length=<beats>"}, "Create an empty pattern.", "R-CLIP-2"},
-            {K::NoteAdd, "note add", "<pt>", 1, 1, {"pitch=<0-127>", "at=<beats>", "length=<beats>", "vel=<1-127>"},
-             "Add a note to a pattern — every clip of it changes.", "R-CLIP-2"},
-            {K::NoteDelete, "note delete", "<pt>", 1, 1, {"pitch=<0-127>", "at=<beats>"}, "Remove the note at that pitch and time.", "R-CLIP-2"},
-            {K::NoteMove, "note move", "<pt>", 1, 1, {"pitch=<0-127>", "at=<beats>", "to-pitch=<0-127>", "to-at=<beats>", "length=<beats>", "vel=<1-127>"},
+            {K::NoteAdd, "note add", "<pt>", 1, 1,
+             {"pitch=<pitch>", "at=<beats>", "length=<beats>", "vel=<1-127>", "chord=<name>", "inversion=<n>", "octave=<n>"},
+             "Add a note to a pattern — every clip of it changes. A pitch is a number, a name (C4 = 60, F#3, Bb2) or a "
+             "kit's pad (kick). --chord <Cm7> adds a chord instead (its root in --octave, default 4; --inversion n "
+             "raises its n lowest notes an octave) as ONE edit — the qualities are under Notation.", "R-CLIP-2"},
+            {K::NoteDelete, "note delete", "<pt>", 1, 1, {"pitch=<pitch>", "at=<beats>"}, "Remove the note at that pitch and time.", "R-CLIP-2"},
+            {K::NoteMove, "note move", "<pt>", 1, 1, {"pitch=<pitch>", "at=<beats>", "to-pitch=<pitch>", "to-at=<beats>", "length=<beats>", "vel=<1-127>"},
              "Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) — "
              "one gesture, one line. Refused onto another note.", "R-ROLL-2"},
             {K::PatternQuantize, "pattern quantize", "<pt>", 1, 1, {"grid=<beats>", "swing=<0-0.75>"},
              "Move every note's start onto the grid (default a sixteenth, 0.25), delaying every second grid step by "
              "--swing of a step. Notes that land on one another merge (the louder stays).", "R-ROLL-4"},
+            {K::NotesAdd, "notes add", "<pt> \"<note> …\"", 2, -1, {"length=<beats>", "vel=<1-127>"},
+             "Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>]] — C4@0:0.5:90, "
+             "kick@1, E4@2::70. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing "
+             "lands. Prints how many; warns of notes past the pattern's end.", "R-SVC-8"},
+            {K::PatternSteps, "pattern steps", "<pt> \"<steps>\"", 2, -1, {"pitch=<pitch>", "step=<beats>", "vel=<1-127>", "at=<beats>", "length=<beats>"},
+             "A step row: x = a note, X = an accent (velocity 127), . or - = a rest, one per --step (default 0.25) from "
+             "--at (default 0); spaces and | are ignored. REPLACES that pitch's notes in the span; --length defaults to "
+             "a step. One edit.", "R-SVC-8"},
+            {K::PatternDuplicate, "pattern duplicate", "<pt>", 1, 1, {"name=<text>"},
+             "A new pattern with the same notes and length (named \"<name> copy\"). Prints its id.", "R-SVC-8"},
+            {K::PatternClear, "pattern clear", "<pt>", 1, 1, {"pitch=<pitch>"}, "Remove every note (or only --pitch's).", "R-SVC-8"},
+            {K::PatternDelete, "pattern delete", "<pt>", 1, 1, {},
+             "Delete a pattern. Refused while a clip plays it (naming the clips).", "R-SVC-8"},
+            {K::PatternTranspose, "pattern transpose", "<pt>", 1, 1, {"semi=<n>"},
+             "Move every note by --semi semitones (negative = down). Refused if a note would leave 0–127.", "R-SVC-8"},
+            {K::PatternPrint, "pattern print", "<pt>", 1, 1, {},
+             "Its notes, one per line in the `notes add` notation (pitch as a name or pad), the number after `#`.", "R-SVC-8"},
 
             {K::AutoCreate, "auto create", "<address>", 1, 1, {},
              "Automate a number: a new automation named \"<owner> · <parameter>\", ranged as it, holding its value from "
@@ -137,7 +160,16 @@ namespace solaris
 
             {K::MatrixPrint, "matrix print", "", 0, 0, {"json"}, "Every route and send at once: rows = strips, columns = destinations.", "R-MIX-9"},
             {K::Audit, "audit", "", 0, 0, {}, "The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping.", "R-MIX-10"},
-            {K::StatePrint, "state print", "", 0, 0, {"json", "stable"}, "The whole AppModel; --stable omits what changes with time.", "R-SVC-2"},
+            {K::StatePrint, "state print", "", 0, 0, {"json", "stable", "compact"},
+             "The whole AppModel; --stable omits what changes with time. --json --compact: the SONG only (no registry, "
+             "machine, recents or browser), on one line; a device lists only its non-default parameters as "
+             "`name=value`, a pattern its notes in the `notes add` notation.", "R-SVC-2"},
+            {K::Ls, "ls", "", 0, 0, {},
+             "The song as a tree of ids and names: mixers → strips (kind, devices, output, sends), the master, lanes → "
+             "clips (at, length, pattern or file), patterns (length, notes, clips), automations.", "R-SVC-8"},
+            {K::Show, "show", "<id>", 1, 1, {},
+             "One node's fields that differ from their defaults; a device's non-default parameters with their units "
+             "(and the default); `show project` for the song.", "R-SVC-8"},
             {K::Api, "api", "", 0, 0, {"json", "md"}, "This document: every command, event, model field and device parameter.", "R-API-1"},
 
             {K::SettingsSet, "settings set", "<key>=<value> …", 1, -1, {},
@@ -263,10 +295,26 @@ namespace solaris
         return u;
     }
 
-    Command parseCommand(const std::string &line, std::string &err)
+    namespace
+    {
+        // R-SVC-8: `# …` may end a line — a `#` that starts a word, outside quotes (`F#3` is a pitch)
+        std::string withoutComment(const std::string &line)
+        {
+            bool inQuote = false;
+            for (size_t i = 0; i < line.size(); ++i)
+            {
+                if (line[i] == '"') inQuote = !inQuote;
+                else if (line[i] == '#' && !inQuote && (i == 0 || line[i - 1] == ' ' || line[i - 1] == '\t')) return line.substr(0, i);
+            }
+            return line;
+        }
+    }
+
+    Command parseCommand(const std::string &text, std::string &err)
     {
         err.clear();
         Command c;
+        const std::string line = withoutComment(text);
         const auto first = line.find_first_not_of(" \t\r\n");
         if (first == std::string::npos || line[first] == '#' || line[first] == ';') return c;
         const std::vector<std::string> t = tokenize(line);

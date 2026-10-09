@@ -5,6 +5,7 @@
 // changes nothing.
 #include "Compile.h"
 #include "Format.h"
+#include "Notation.h"
 #include "SolarisService.h"
 #include "device/Device.h"
 #include <algorithm>
@@ -192,6 +193,7 @@ namespace solaris
             }
             else if (c.has("sample")) { err = "--sample is for --kind instrument --instrument sampler"; return false; }
             changed("strip.added", s.id);
+            if (!instrument.empty()) changed("device.added", p.rack(s.id)->devices.front().id); // R-SVC-8: every made node is said
             mOutput = s.id + "\n";
             return true;
         }
@@ -408,7 +410,17 @@ namespace solaris
             l.name = name;
             l.order = nextOrder(orders);
             p.lanes.push_back(l);
+            changed("lane.added", l.id);
             return l.id;
+        };
+        // R-SVC-8 (AMENDS "a new lane"): with no --lane a clip goes where its strip's clips already are — the
+        // newest one's lane — and a new lane only for a strip with none; `--lane new` asks for one
+        auto laneFor = [&](const std::string &track, const std::string &name) {
+            if (c.flag("lane") == "new") return newLane(name);
+            if (c.has("lane")) return c.flag("lane");
+            for (auto it = p.clips.rbegin(); it != p.clips.rend(); ++it)
+                if (it->track == track && !it->lane.empty() && p.lane(it->lane)) return it->lane;
+            return newLane(name);
         };
         switch (c.kind)
         {
@@ -416,7 +428,7 @@ namespace solaris
         {
             Clip cl;
             if (!beatsFlag(c, "at", 0.0, cl.at, err)) return false;
-            if (c.has("lane") && !p.lane(c.flag("lane"))) { err = "no lane `" + c.flag("lane") + "`"; return false; }
+            if (c.has("lane") && c.flag("lane") != "new" && !p.lane(c.flag("lane"))) { err = "no lane `" + c.flag("lane") + "` (or `new`)"; return false; }
             std::string made; // --instrument: a new instrument strip, made by `strip add`'s own rules (R-BROWSE-3: one drop, one command)
             if (c.has("instrument"))
             {
@@ -478,7 +490,7 @@ namespace solaris
                 if (c.has("out")) { if (!parseNumber(c.flag("out"), v) || v < 0) { err = "--out must be seconds ≥ 0"; return false; } cl.out = v; }
                 if (c.has("length")) { if (!beatsFlag(c, "length", 0, cl.length, err)) return false; cl.loop = true; }
                 cl.name = stem;
-                cl.lane = c.has("lane") ? c.flag("lane") : newLane(stem);
+                cl.lane = laneFor(cl.track, stem);
             }
             else if (c.has("strip") || !made.empty())
             {
@@ -500,10 +512,11 @@ namespace solaris
                     pt.length = 4.0;
                     p.patterns.push_back(pt);
                     cl.pattern = pt.id;
+                    changed("pattern.added", pt.id); // R-SVC-8: every made node is said
                 }
                 if (!beatsFlag(c, "length", 0, cl.length, err)) return false;
                 cl.name = p.pattern(cl.pattern)->name;
-                cl.lane = c.has("lane") ? c.flag("lane") : newLane(s->name);
+                cl.lane = laneFor(s->id, s->name);
             }
             else
             {
@@ -531,13 +544,21 @@ namespace solaris
         {
             const Clip *src = p.clip(c.arg(0));
             if (!src) { err = "no clip `" + c.arg(0) + "`"; return false; }
+            int count = 1;
+            if (!intFlag(c, "count", 1, 256, 1, count, err)) return false; // R-SVC-8: N copies end to end
             Clip copy = *src;
-            copy.id = p.nextId("ac");
             copy.remarks = Remarks();
-            if (!beatsFlag(c, "at", toTick(src->at + clipLengthBeats(p, *src)), copy.at, err)) return false;
-            p.clips.push_back(copy); // a note clip's copy plays the SAME pattern: linked (R-CLIP-3)
-            changed("clip.added", copy.id);
-            mOutput = copy.id + "\n";
+            const double len = clipLengthBeats(p, *src);
+            double first = 0;
+            if (!beatsFlag(c, "at", toTick(src->at + len), first, err)) return false;
+            for (int k = 0; k < count; ++k)
+            {
+                copy.id = p.nextId("ac");
+                copy.at = toTick(first + k * len);
+                p.clips.push_back(copy); // a note clip's copy plays the SAME pattern: linked (R-CLIP-3)
+                changed("clip.added", copy.id);
+                if (k == 0) mOutput = copy.id + "\n";
+            }
             return true;
         }
         case K::ClipUnique:
@@ -580,9 +601,23 @@ namespace solaris
         {
             Pattern *pt = p.pattern(c.arg(0));
             if (!pt) { err = "no pattern `" + c.arg(0) + "`"; return false; }
-            if (!c.has("pitch") || !c.has("at")) { err = "a note needs --pitch and --at"; return false; }
+            const bool chord = c.kind == K::NoteAdd && c.has("chord");
+            if (chord && c.has("pitch")) { err = "--chord names its own notes — give it without --pitch"; return false; }
+            if (!chord && (c.has("inversion") || c.has("octave"))) { err = "--inversion and --octave shape a --chord"; return false; }
+            if ((!chord && !c.has("pitch")) || !c.has("at")) { err = c.kind == K::NoteAdd ? "a note needs --pitch (or --chord) and --at" : "a note needs --pitch and --at"; return false; }
             int pitch = 0;
-            if (!intFlag(c, "pitch", 0, 127, 60, pitch, err)) return false;
+            std::vector<int> pitches; // R-SVC-8: a chord is many notes, ONE edit
+            if (chord)
+            {
+                int octave = 4, inversion = 0;
+                if (!intFlag(c, "octave", -1, 9, 4, octave, err) || !intFlag(c, "inversion", 0, 8, 0, inversion, err)) return false;
+                if (!chordPitches(c.flag("chord"), octave, inversion, pitches, err)) return false;
+            }
+            else
+            {
+                if (!pitchOf(c.flag("pitch"), pt->id, pitch, err)) return false;
+                pitches = {pitch};
+            }
             double at = 0;
             if (!beatsFlag(c, "at", 0, at, err)) return false;
             auto same = [&](const Note &n) { return n.pitch == pitch && std::fabs(n.at - at) < 0.5 / kPpq; };
@@ -595,16 +630,24 @@ namespace solaris
                 return true;
             }
             Note n;
-            n.pitch = pitch;
             n.at = at;
             if (!beatsFlag(c, "length", 0.25, n.length, err)) return false;
             if (!(n.length > 0)) { err = "--length must be more than 0 beats"; return false; }
             if (!intFlag(c, "vel", 1, 127, 100, n.vel, err)) return false;
-            pt->notes.erase(std::remove_if(pt->notes.begin(), pt->notes.end(), same), pt->notes.end()); // replace, not stack
-            pt->notes.push_back(n);
+            std::string names;
+            for (int k : pitches)
+            {
+                pitch = k;
+                n.pitch = k;
+                pt->notes.erase(std::remove_if(pt->notes.begin(), pt->notes.end(), same), pt->notes.end()); // replace, not stack
+                pt->notes.push_back(n);
+                names += (names.empty() ? "" : " ") + pitchName(k);
+            }
             std::stable_sort(pt->notes.begin(), pt->notes.end(), [](const Note &a, const Note &b) {
                 return a.at != b.at ? a.at < b.at : a.pitch < b.pitch;
             });
+            if (chord) mOutput = c.flag("chord") + ": " + names + "\n";
+            mOutput += pastEndWarning(*pt);
             changed("note.added", pt->id);
             return true;
         }
@@ -617,7 +660,7 @@ namespace solaris
             { err = "note move needs --to-pitch, --to-at, --length and/or --vel"; return false; }
             int pitch = 0;
             double at = 0;
-            if (!intFlag(c, "pitch", 0, 127, 60, pitch, err) || !beatsFlag(c, "at", 0, at, err)) return false;
+            if (!pitchOf(c.flag("pitch"), pt->id, pitch, err) || !beatsFlag(c, "at", 0, at, err)) return false;
             auto at_ = [&](int pi, double a) {
                 for (auto &n : pt->notes)
                     if (n.pitch == pi && std::fabs(n.at - a) < 0.5 / kPpq) return &n;
@@ -626,7 +669,8 @@ namespace solaris
             Note *n = at_(pitch, at);
             if (!n) { err = "no note " + std::to_string(pitch) + " at beat " + canonicalBeats(at) + " in " + pt->id; return false; }
             Note next = *n;
-            if (!intFlag(c, "to-pitch", 0, 127, n->pitch, next.pitch, err) || !beatsFlag(c, "to-at", n->at, next.at, err)) return false;
+            if (c.has("to-pitch") && !pitchOf(c.flag("to-pitch"), pt->id, next.pitch, err)) return false;
+            if (!beatsFlag(c, "to-at", n->at, next.at, err)) return false;
             if (!beatsFlag(c, "length", n->length, next.length, err)) return false;
             if (!(next.length > 0)) { err = "--length must be more than 0 beats"; return false; }
             if (!intFlag(c, "vel", 1, 127, n->vel, next.vel, err)) return false;
@@ -636,6 +680,7 @@ namespace solaris
             std::stable_sort(pt->notes.begin(), pt->notes.end(), [](const Note &a, const Note &b) {
                 return a.at != b.at ? a.at < b.at : a.pitch < b.pitch;
             });
+            mOutput = pastEndWarning(*pt);
             changed("note.moved", pt->id);
             return true;
         }

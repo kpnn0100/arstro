@@ -37,6 +37,8 @@ namespace solaris
             LaneAdd, LaneDelete,
             ClipAdd, ClipMove, ClipDuplicate, ClipUnique, ClipDelete,
             PatternNew, NoteAdd, NoteDelete, NoteMove, PatternQuantize,
+            NotesAdd, PatternSteps, PatternDuplicate, PatternClear, PatternDelete, PatternTranspose, // R-SVC-8
+            Ls, Show, PatternPrint,                                                                   // R-SVC-8: read back
             Undo, Redo,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,
             Render,
@@ -69,7 +71,8 @@ namespace solaris
     const std::vector<CommandSpec> &commandSpecs();
     const CommandSpec *specFor(Command::Kind k);
     std::string usageOf(const CommandSpec &s);
-    /** Parse one line. A blank line or a whole-line `#`/`;` comment is Kind::None with no error. */
+    /** Parse one line. A blank line or a whole-line `#`/`;` comment is Kind::None with no error; a `#`
+     *  that starts a word outside quotes ends the line (a trailing comment, R-SVC-8) — `F#3` is a pitch. */
     Command parseCommand(const std::string &line, std::string &err);
     std::string formatCommand(const Command &c);
     /** Up to three candidates from `pool` near `word` (prefix or small edit distance). */

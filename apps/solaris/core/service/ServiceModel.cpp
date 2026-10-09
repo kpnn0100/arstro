@@ -462,6 +462,20 @@ namespace solaris
                 }
             if (!heard) out.push_back("sidechain " + sd.id + " keys " + sd.to + ", where no compressor has Sidechain on — it ducks nothing");
         }
+        // R-SVC-8: notes past a pattern's end play over its next repeat; an empty pattern plays nothing; a pattern no
+        // clip plays is never heard
+        for (const auto &pt : p.patterns)
+        {
+            size_t past = 0, clips = 0;
+            for (const auto &n : pt.notes) past += n.at >= pt.length - 0.5 / kPpq ? 1 : 0;
+            for (const auto &c : p.clips) clips += c.pattern == pt.id ? 1 : 0;
+            const std::string label = pt.id + " (" + pt.name + ")";
+            if (past)
+                out.push_back("past its end: " + label + " has " + std::to_string(past) + " note(s) starting at or after beat " +
+                              canonicalBeats(pt.length) + " — they play over its next repeat (set " + pt.id + ".length)");
+            if (pt.notes.empty()) out.push_back("empty pattern: " + label + " has no notes" + (clips ? " — its clips play nothing" : ""));
+            if (!clips) out.push_back("unused pattern: " + label + " — no clip plays it");
+        }
         // R-AUTO: a formula nobody can read plays nothing; an automation nobody reads moves nothing
         {
             std::vector<std::string> problems;

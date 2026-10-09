@@ -64,6 +64,20 @@ namespace solaris
                 if (std::fabs(pt.at - t) < 1e-9) return &pt;
             return nullptr;
         }
+        // R-SVC-8: a point outside the automation's range is refused naming the range, never clamped in silence —
+        // only a value within printing's rounding of a bound (a dragged point's "%.6g") is that bound
+        bool inAutoRange(const Automation &a, double &v, std::string &err)
+        {
+            const double slack = 1e-6 * std::max(std::fabs(a.max - a.min), std::max(std::fabs(a.min), std::fabs(a.max)));
+            if (v >= a.min - slack && v <= a.max + slack)
+            {
+                v = std::min(std::max(v, a.min), a.max);
+                return true;
+            }
+            err = "--value for " + a.id + " must be between " + canonicalNumber(a.min) + " and " + canonicalNumber(a.max) +
+                  (a.unit.empty() ? std::string() : " " + a.unit) + ", got " + canonicalNumber(v);
+            return false;
+        }
         void sortPoints(Automation &a)
         {
             std::stable_sort(a.points.begin(), a.points.end(), [](const AutoPoint &x, const AutoPoint &y) { return x.at < y.at; });
@@ -184,8 +198,7 @@ namespace solaris
                 if (!c.has("value")) { err = "auto point add needs --value"; return false; }
                 AutoPoint pt;
                 pt.at = toTick(at);
-                if (!numberFlag(c, "value", pt.value, err)) return false;
-                pt.value = std::min(std::max(pt.value, a->min), a->max);
+                if (!numberFlag(c, "value", pt.value, err) || !inAutoRange(*a, pt.value, err)) return false;
                 pt.shape = c.flag("shape", "linear");
                 if (!shapeOk(pt.shape, err)) return false;
                 if (AutoPoint *same = pointAt(*a, at)) *same = pt;
@@ -228,7 +241,7 @@ namespace solaris
                     if (!c.has("to") && !c.has("value")) { err = "auto point move needs --to and/or --value"; return false; }
                     double to = at, v = pt->value;
                     if (c.has("to") && !numberFlag(c, "to", to, err)) return false;
-                    if (c.has("value") && !numberFlag(c, "value", v, err)) return false;
+                    if (c.has("value") && (!numberFlag(c, "value", v, err) || !inAutoRange(*a, v, err))) return false;
                     if (to < 0) { err = "--to cannot be negative"; return false; }
                     const AutoPoint *other = pointAt(*a, to);
                     if (other && other != pt) { err = a->id + " already has a point at beat " + canonicalBeats(toTick(to)); return false; }

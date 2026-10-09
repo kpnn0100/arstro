@@ -43,9 +43,11 @@ namespace solaris
         Type type() const { return mType; }
         /** Pretty-printed, two-space indent, a trailing newline. */
         std::string dump() const;
+        /** One line, no spaces, a trailing newline — for an agent's context (R-SVC-8). */
+        std::string dumpCompact() const;
 
     private:
-        void write(std::string &out, int indent) const;
+        void write(std::string &out, int indent) const; // indent < 0 = compact
         Type mType = Type::Null;
         bool mBool = false;
         std::string mText;

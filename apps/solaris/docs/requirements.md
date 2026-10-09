@@ -131,45 +131,51 @@ checks a 0.5 region at pan +0.5, −6 dB to 1e-7 against the closed forms.
 
 ### DR-SVC-1 One way in, one way out (R-SVC-1, R-SVC-2, R-G-4)
 `SolarisService` (`core/service/SolarisService.h`) is the application: `dispatchText(line)` parses
-with the grammar TABLE (`commandSpecs`, `core/service/Command.cpp:26`; `parseCommand`, `:199` —
-longest verb match, flags checked against the row) and `dispatch` (`core/service/SolarisService.cpp:85`)
+with the grammar TABLE (`commandSpecs`, `core/service/Command.cpp:26`; `parseCommand`, `:309` —
+longest verb match, flags checked against the row) and `dispatch` (`core/service/SolarisService.cpp:90`)
 runs it; out come the `AppModel` (`core/service/AppModel.h`, refreshed after every command) and
 `Event`s whose `formatEvent` text is the log line. **Every edit is all-or-nothing**: the project is
 copied first, the command runs, `validateProject` runs, and any failure restores the copy
-(`:207`) and refuses with the validator's sentence — a refused command changes nothing. An edit's
+(`:223`) and refuses with the validator's sentence — a refused command changes nothing. An edit's
 events (`project.changed` from `changed`, `:35`; a `set` line's `params.changed`) are HELD in
-`mPending` and emitted only once the whole command has landed (`:243`), so a refused command
-announces nothing either (D-1). And a refusal always says WHY: a path that returns false without a
-reason is caught in `dispatch` (`:189`) and named (`` `clip add` was refused without a reason``),
+`mPending` and emitted only once the whole command has landed (`:278`), so a refused command
+announces nothing either (D-1). An edit that made nodes prints the id it made first and `made:` with
+the rest (DR-SVC-8). And a refusal always says WHY: a path that returns false without a
+reason is caught in `dispatch` (`:206`) and named (`` `clip add` was refused without a reason``),
 never silent (R-SVC-3) — B1's own wiring mistake showed the hole. The core
 holds no codec and no device API: decoding and WAV writing are `Host` functions (R-SVC-4).
 
 ### DR-SVC-2 Unknown input is refused, naming it (R-SVC-3)
 An unknown verb or flag fails in `parseCommand` with the nearest candidates (`strp add` →
-`did you mean: strip add?`). An address goes through `setAddress` (`core/service/SolarisService.cpp:459`):
+`did you mean: strip add?`). An address goes through `setAddress` (`core/service/SolarisService.cpp:494`):
 an unknown node, field or DEVICE PARAMETER is refused with the nearest name (`set
 dv_1.filter.cutof=1` → `did you mean: filter.cutoff?`); a value out of range is refused with the
-range; a device parameter's value is read against the DSP registry — a choice by name (listing the
-choices on a miss), a number clamped to the spec — and stored as its canonical text. `get`
-(`:495`) reads every field `set` writes plus derived ones (`<clip>.length` resolved, `<strip>.out`,
+range; a device parameter's value is read against the DSP registry — a choice by name or index (listing
+the choices on a miss), a number inside the spec's range (`:659`; **amended, R-SVC-8, 2026-10-09**: it was
+clamped in silence, now a value outside is REFUSED naming the range with its unit, and a non-whole value
+of an integer parameter is refused) — and stored as its canonical text. `get` (`getAddress`, `:698`) reads every field `set` writes plus derived ones (`<clip>.length` resolved, `<strip>.out`,
 a device parameter not stored = the registry default). A refusal is a `command.rejected` event and
 `lastError`.
 
 ### DR-SVC-3 solaris-cc is the whole app without a window (R-SVC-1)
-`cli/main.cpp` holds no behaviour: argv, stdout, the host's file functions; ` : ` chains lines,
-`--script` reads them, `--watch` streams events, a refusal exits 3. End to end (2026-10-08): a
+`cli/main.cpp` holds no behaviour: argv, stdin, stdout, the host's file functions; ` : ` chains lines,
+`--script` reads them, `shell` reads stdin into one service, `--watch` streams events, a refusal is
+`refused: line N: …` and exits 3, unsaved edits at the end exit 4 (**amended, R-SVC-8, 2026-10-09** —
+DR-SVC-8 has the session, `--keep-going` and `--discard`). End to end (2026-10-08): a
 drum pattern + a synth bass + a 44.1 kHz sample + a reverb bus built entirely by command, saved,
 audited, rendered with stems; measured — a drum hit on every beat with silence before it, the 4-beat
 pattern looping across an 8-beat clip, the bass C2 at 65.4 Hz, the sample resampled to 48 kHz and
 stored relative to the song's folder.
 
 ### DR-MIX-2 Every sample file gets its own strip (R-MIX-2, R-MIX-3)
-`clip add --src` (`core/service/ServiceEdit.cpp:415`): a file no clip uses yet gets a new audio strip
-named after it on the first mixer, routed by `defaultOutFor` (`:70`) to the first bus on a later
-mixer ("Main"), and a new lane; a file already used reuses its strip; `--strip` overrides. The file
+`clip add --src` (`core/service/ServiceEdit.cpp:427`): a file no clip uses yet gets a new audio strip
+named after it on the first mixer, routed by `defaultOutFor` (`:71`) to the first bus on a later
+mixer ("Main"), and — having no clips — a new lane; a file already used reuses its strip and, with no
+`--lane`, its lane (`laneFor`, `:418`; **amended, R-SVC-8, 2026-10-09**: every clip got a new lane);
+`--strip` overrides. The file
 is decoded through the host to learn its length (refused if it cannot be read), and stored relative
 to the song's folder when inside it (`relativePath`). A relative `--src` names a file in the SONG's
-folder first when one is there (`:385`) — what the model stores and the browser's Song tab hands
+folder first when one is there (`:446`) — what the model stores and the browser's Song tab hands
 back — else the caller's working directory.
 
 ### DR-MIX-7 Solo keeps the soloed path alive (R-MIX-7)
@@ -180,14 +186,15 @@ it as `silent`.
 
 ### DR-MIX-8/9/10 Fed by, the matrix, the audit (R-MIX-8, R-MIX-9, R-MIX-10)
 `refreshModel` (`core/service/ServiceModel.cpp:78`) computes each strip's `clipCount`, `fromLanes`
-and `fromStrips`. `matrix print [--json]` (`matrixText`, `:476`): rows = strips in processing order,
+and `fromStrips`. `matrix print [--json]` (`matrixText`, `:490`): rows = strips in processing order,
 columns = the buses, master and output ports; `●` = the main output, `-6.0pre` = a send's dB and tap.
-`audit` (`:366`): unused strips, strips that reach no output port, single-input and empty buses,
-clips on silent strips, offline files, unknown device types and parameters, and any strip or the
-master that went over 0 dBFS in the last render.
+`audit` (`:333`): unused strips, strips that reach no output port, single-input and empty buses,
+clips on silent strips, offline files, unknown device types and parameters, any strip or the
+master that went over 0 dBFS in the last render, and (R-SVC-8, `:420`) notes past their pattern's end,
+empty patterns and patterns no clip plays.
 
 ### DR-MIX-13 A line added from the mixer; sources relinked (R-MIX-13, R-MIX-14)
-`strip relink <ch> --to <ch2>` (`core/service/ServiceEdit.cpp:242`) moves EVERY clip playing through
+`strip relink <ch> --to <ch2>` (`core/service/ServiceEdit.cpp:244`) moves EVERY clip playing through
 `<ch>` to `<ch2>` in one edit (one undo step, "strip relink <ch>"), printing how many moved; refused
 onto a bus ("a bus plays no clips"), across kinds (audio clips need an audio strip, note clips an
 instrument strip), onto itself, and when `<ch>` has no clips. A pattern's `strip` follows its first
@@ -205,7 +212,8 @@ strips → `strip relink` (`MixerDock.cpp:1097`). On the lanes a clip's menu (`T
 `compile` (`core/Compile.cpp:125`) expands a note clip: a clip longer than its pattern loops it, a
 note is cut at the clip's end (`(C1)`, `:216`); events sort by time with note-offs before note-ons at
 one sample (`(C2)`, `:230`). `clip duplicate` makes a second clip of the SAME pattern (`linked` = 2 in
-the model); `clip unique` copies the pattern. `note add` replaces a note at the same pitch and tick.
+the model) — `--count N` makes N, end to end, one edit (DR-SVC-8); `clip unique` copies the pattern.
+`note add` replaces a note at the same pitch and tick; so does each note of `notes add`.
 
 ### DR-RENDER-1 Offline render (R-RENDER-1, R-RENDER-2, R-RENDER-3)
 `render` (`core/service/ServiceRender.cpp:31`): compile → build the engine → one pass capturing the
@@ -218,10 +226,11 @@ rate, mono at unity in both channels (`decodeAudio`, `:24`). Two renders of one 
 byte-identical (`test_render_writes_the_mix_deterministically`).
 
 ### DR-API-1 The API document is generated, committed and drift-tested (R-API-1)
-`apiJson` / `apiMarkdown` (`core/service/ApiDoc.cpp:43`, `:80`) print, from the tables the code
+`apiJson` / `apiMarkdown` (`core/service/ApiDoc.cpp:44`, `:100`) print, from the tables the code
 runs on, every command (usage, summary, the R- tag that asked for it), every event with its fields,
-every `AppModel` field (with `stable`), and **every DSP registry device with every parameter's unit,
-range, default and choices**. `docs/api.json` and `docs/API.md` are that output, committed;
+every `AppModel` field (with `stable`), **every DSP registry device with every parameter's unit,
+range, default and choices**, a kit's pads by name (`:80`), and the Notation — pitches, the note token,
+step rows, every chord quality (`:127`, from `chordQualities()`, R-SVC-8). `docs/api.json` and `docs/API.md` are that output, committed;
 `solaris_api_current` (`tests/api_current.cmake`) regenerates and compares, failing with the command
 that fixes it (checked: an edited summary turns it red). `test_the_dump_and_the_document` fails if
 the codec writes a key the field table does not list.
@@ -364,8 +373,9 @@ dragged out: the browser reports the pointer and the drop; `ProjectScreen` draws
 overlay pass) and the timeline's teal drop hint at the beat on the lanes' step (DR-UI-10; `overLanes`,
 `app/widgets/ProjectScreen.cpp:95`), and on release sends ONE line (`place`, `:104`): a sample → `clip add --src "<file>" --at <b> [--lane
 <ln>]`; an instrument → `clip add --instrument <type> --at <b> --length 4 [--lane <ln>]` (the new
-strip and its empty note clip in one command, `core/service/ServiceEdit.cpp:421`); below the last
-lane, no `--lane` — a new lane; an effect → a notice that it goes on a strip (U3). A double-click
+strip and its empty note clip in one command, `core/service/ServiceEdit.cpp:433`); below the last
+lane, `--lane new` — a new lane (`app/widgets/ProjectScreen.cpp:109`; **amended, R-SVC-8, 2026-10-09**: it sent no `--lane`, which
+now means "its strip's lane", so the drop says what it wants); an effect → a notice that it goes on a strip (U3). A double-click
 places at the playhead.
 
 ### DR-UI-7 A strip's colour (R-UI-7)
@@ -375,7 +385,7 @@ deleted. Every front end draws it as is.
 
 ### DR-UI-8 The mixer dock (R-UI-3, R-MIX-1/5/6/7/9/12, R-MIX-12 amended)
 `MixerDock` (`app/widgets/MixerDock.cpp`) sits under the lanes (`ProjectScreen::dockTarget`,
-`app/widgets/ProjectScreen.cpp:126`: 429 px wanted; its top edge dragged follows the pointer; the
+`app/widgets/ProjectScreen.cpp:127`: 429 px wanted; its top edge dragged follows the pointer; the
 chevron folds it to its tab bar, eased 220 ms; it gives way before the lanes, which keep 130 px).
 Tabs: a mixer page each, "+" (`mixer add`), Matrix; keyed (`syncTabs`) so a tab added slides the
 others along, measured in one weight so choosing a tab moves nothing; the highlight slides, the
@@ -465,13 +475,13 @@ Values at time zero are applied before the devices' warm-up (`:180`); a seek eva
 +12 dB from beat 2, byte-identical at chunks of 77, 128 and 1000, no zipper, no allocation.
 
 ### DR-AUTO-4 The service: commands, `set`, `eval`, the model (R-AUTO-1…5, 8, 9)
-`set <address>="=<formula>"` binds (`core/service/SolarisService.cpp:473`); a plain number clears the
+`set <address>="=<formula>"` binds (`core/service/SolarisService.cpp:508`); a plain number clears the
 binding and sets the value; `get` prints the formula; an unquoted formula with spaces is refused with
-the quoting shown. `auto create <address>` (`core/service/ServiceAuto.cpp:111`) makes `au_n` named
+the quoting shown. `auto create <address>` (`core/service/ServiceAuto.cpp:125`) makes `au_n` named
 "<owner> · <label>", ranged as the address, holding its value from beat 0 to the song's end (at least
 four bars), and binds the address to `=au_n`; `auto add|delete` (refused while read, `--unbind`),
-`auto point add|move|delete|shape` (values clamped to the range; `shape` takes a bezier point's handles,
-DR-AUTO-6), `bind clear`; deleting a strip, a
+`auto point add|move|delete|shape` (a value outside the range is refused naming it, `inAutoRange`, `core/service/ServiceAuto.cpp:69` —
+**amended, R-SVC-8, 2026-10-09**: it was clamped; `shape` takes a bezier point's handles, DR-AUTO-6), `bind clear`; deleting a strip, a
 send or a device drops the bindings that drive them. `eval <address> [--at] [--explain]`
 (`:261`) compiles and evaluates with the engine's own function and prints each name it reads.
 `refreshModel` (`core/service/ServiceModel.cpp:276`) publishes `bindings[]` (reads, ok, problem),
@@ -482,10 +492,10 @@ bindings and automations no formula reads. While playing, a binding or curve edi
 address a formula reads — swaps in a new engine (`core/service/ServiceTransport.cpp:248`).
 
 ### DR-EDM-1 Undo and redo (R-EDM-1)
-After every edit that LANDED, `dispatch` keeps the song as it was before it (`core/service/SolarisService.cpp:216`),
+After every edit that LANDED, `dispatch` keeps the song as it was before it (`core/service/SolarisService.cpp:251`),
 at most 200 steps; consecutive `set`s of exactly the same addresses extend the newest step instead of
 adding one, so a dragged fader is one step (a rule a script sees the same way). `undo` / `redo`
-(`historyCommand`, `:263`) swap the song with the step, print its label (`set ch_2.gain`, `clip add`,
+(`historyCommand`, `:298`) swap the song with the step, print its label (`set ch_2.gain`, `clip add`,
 `strip delete ch_3`), emit `project.changed what=undo|redo node=<label>`, mark the song unsaved and,
 while playing, swap in a new engine; any new edit clears redo. Not edits: machine settings, the
 transport, a save, `get`/`eval`/`audit`. `project new|open|close` start a new history. The model names
@@ -548,9 +558,9 @@ cross-fades the two curves (`shownPoints`, `:84`).
 
 ### DR-ROLL-1 The piano roll (R-ROLL-1…5, R-EDM-6)
 **Grammar.** `note move <pt> --pitch <p> --at <b> [--to-pitch <p>] [--to-at <b>] [--length <b>] [--vel
-<1…127>]` (`core/service/ServiceEdit.cpp:611`) edits the one note at that pitch and beat — a moved note
+<1…127>]` (`core/service/ServiceEdit.cpp:654`; a pitch by number, name or pad, DR-SVC-8) edits the one note at that pitch and beat — a moved note
 landing on another's place replaces it; `pattern quantize <pt> [--grid <b>] [--swing <0…0.75>]`
-(`:614`) moves every start to `k·grid`, odd `k` delayed by `swing·grid`, two notes landing together
+(`:687`) moves every start to `k·grid`, odd `k` delayed by `swing·grid`, two notes landing together
 merging into the louder. Both are edits (undoable, all-or-nothing). The model gives a pattern the strip
 its first clip plays through and that strip's instrument (`patterns[].strip`, `.instrument`), and a
 device type its named keys (`deviceTypes[].noteNames`, `core/service/ServiceModel.cpp:117`) — the DSP
@@ -649,7 +659,7 @@ registry instrument that `takesSample`: the host decodes, the device copies. Sol
 on the device node (`#aeffect … sample=<path>`, relative to the song as a clip's `src`), sets it with
 `strip add --kind instrument --instrument sampler --sample <file>`, `clip add --instrument sampler
 --sample <file>` (one drop, one command) or `set <dv>.sample=<file>` (`""` takes it away) — resolved and
-refused unread by `resolveSample` (`core/service/ServiceEdit.cpp:83`; `:186`; `SolarisService.cpp:605`),
+refused unread by `resolveSample` (`core/service/ServiceEdit.cpp:84`; `:186`; `SolarisService.cpp:640`),
 refused on a type that plays none. Compile decodes it through the same cache as clips and puts it on the
 device's description (`core/Compile.cpp:102`); the engine hands it in at build, never on the audio thread
 (`engine/Engine.cpp:49`); a change of sound is a structural live update (an engine swap). The model
@@ -756,7 +766,7 @@ level. What drives each: a tag over the fader — `auto au_1`, `= ch_3.gain`, `=
 `:1121`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
 in and out (200 ms) and its text cross-fades when the formula changes (`:603`).
 
-Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1201`): stopped, `live` is
+Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1214`): stopped, `live` is
 `eval`'s number at the position; playing (a fake clock device), a −2 dB-a-beat ramp is within 0.1 dB of the
 curve at the heard position at beats 2…12 and falling, a link (`=ch_2.gain / 2`) exactly half of it, a device
 formula `1000 + 500 * sin(beat)` within 25 Hz; after a structural edit while playing the new engine's order is
@@ -775,7 +785,7 @@ a send and the master on formulas) and `copied-toast`.
 (`core/service/ServiceMachine.cpp:89`), published as `settings.showIds` — so an agent turns the ids on as the
 View menu does (View › Show IDs / Hide IDs, `app/App.cpp:144`).
 
-**Drawn, faded.** `ProjectScreen` eases ONE amount from the model's setting (`app/widgets/ProjectScreen.cpp:175`,
+**Drawn, faded.** `ProjectScreen` eases ONE amount from the model's setting (`app/widgets/ProjectScreen.cpp:176`,
 200 ms; `idsAmount()` is the live value) and hands it to every widget that draws ids; `drawNameWithId`
 (`app/widgets/ParamMenu.cpp:84`) draws a name with its id right-aligned in the accent's mono, the name giving
 way by the EASED amount. Where: lane headers (the lane's id; a strip's own row, the strip's) and automation
@@ -860,3 +870,62 @@ edit (`app/widgets/AutomationPanel.cpp:105`). Rename is cosmo's field over the h
 `set <au>.name=…` (an address that already existed, R-AUTO-4; `app/widgets/AutomationPanel.cpp:185`). A double-click ON a point still deletes it
 (R-AUTO-6). Measured (L2): `now` equals `eval` at the sought beat and the cubic while playing; (UI) the
 window caught mid-fade, the facts present, `now` and a new row caught mid-tween, the rename one line.
+
+### DR-SVC-8 Composition is agent-sized (R-SVC-8)
+Built from the audit of an agent's 16-bar song (110 commands, 64 single `note add`s, every id guessed,
+edits lost between calls, comment lines reprinting ids). The guide is `docs/AGENTS.md`.
+- **A session that lasts.** `solaris-cc shell [--song <f>]` (`cli/main.cpp:146`) reads stdin lines into
+  ONE service — the open song, its ids and its undo history last the session; `--song` opens the file
+  or makes it when it is not there; a refusal is reported and the session goes on (exit 3 at the end).
+  Every run ends in `finish` (`:136`): a song left with unsaved edits is named on stderr and the run
+  exits **4**, unless `--discard`.
+- **Scripts that say where.** A refusal prints `refused: line N: …` — the script's own line number, or
+  the chained command's (`run`, `:124`); `--keep-going` runs past refusals and still exits 3 (`:193`).
+  `parseCommand` drops a `#` that starts a word outside quotes (`withoutComment`,
+  `core/service/Command.cpp:301`) — `F#3` stays a pitch; a comment or blank line clears the output
+  (`core/service/SolarisService.cpp:59`), so nothing is printed twice.
+- **Everything made is said.** `dispatch` diffs the song's ids around an edit (`:232`): the first line
+  stays the command's own id, then `made: strip=… device=… pattern=… lane=… clip=…` lists the rest by
+  kind. Each made node is announced by its own `project.changed` — the instrument of a new instrument
+  strip (`core/service/ServiceEdit.cpp:196`), an auto pattern (`:515`), every new lane (`:381`).
+- **Notes in bulk, by name.** `core/service/Notation.cpp` is the notation, pure: `parsePitchName`
+  (`:40`, C4 = 60, `#`/`b`, c-1 = 0), `chordQualities` (`:79`, 21 qualities — maj, m, 5, dim, aug,
+  sus2, sus4, 6, m6, 7, maj7, m7, mmaj7, dim7, m7b5, 7sus4, add9, madd9, 9, maj9, m9), `chordPitches`
+  (`:107`, `--octave`, `--inversion` raising the lowest notes), `parseNoteToken` (`:135`,
+  `<pitch>@<beat>[:<length>[:<vel>]]`), `parseSteps` (`:167`). `SolarisService::pitchOf`
+  (`core/service/ServiceCompose.cpp:80`) resolves a pitch anywhere — `--pitch`, `--to-pitch`, a note
+  token, a step row — as a number, a name, or a pad of the kit that plays the pattern (the registry's
+  note names, case/space/hyphen-blind; every kit's when no clip plays it yet), refusing an unknown one
+  with the pads listed. `notes add` (`:153`) parses every token before touching the pattern and refuses
+  the first bad one by number and text — ONE edit, ONE undo step. `note add --chord` (`ServiceEdit.cpp:609`)
+  adds a chord as one edit and prints its notes. `pattern steps` (`ServiceCompose.cpp:190`): x / X (127) /
+  `.` per `--step` from `--at`, replacing that pitch in the span. `pattern duplicate | clear [--pitch] |
+  delete` (refused while a clip plays it, naming the clips, `:248`) `| transpose --semi` (refused whole if a
+  note would leave 0–127, `:259`). A note starting at or past its pattern's end is warned at once
+  (`pastEndWarning`, `:122`) and audited (`core/service/ServiceModel.cpp:465`, with empty and unused patterns).
+- **Arrangement.** `clip duplicate --count N` makes N copies end to end in one edit
+  (`ServiceEdit.cpp:543`). A `clip add` with no `--lane` goes on the lane of its strip's newest clip; a new
+  lane only for a strip with none; `--lane new` asks for one (`laneFor`, `:418`) — the GUI's drop below the
+  last lane says `--lane new` (`app/widgets/ProjectScreen.cpp:109`), so R-BROWSE-3 holds.
+- **Reading back** (read-only: in `mutates()`, `SolarisService.cpp:82` — no undo step, still saved):
+  `ls` (`lsText`, `ServiceCompose.cpp:329`), `show <id>` (`showText`, `:404` — a device's non-default
+  parameters with unit and default, a formula where one drives it), `pattern print` (`:294`, the notation
+  with the pitch's number and name after `#`, a kit's pads by name), `state print --json --compact`
+  (`compactJson`, `core/service/AppModelCodec.cpp:266`; `Json::dumpCompact`, `core/service/Json.cpp:118`):
+  the song only, one line, a device's non-default parameters as `name=value`, notes in the notation.
+- **Honest values.** A device parameter outside its registry range is refused naming the range and unit
+  (`SolarisService.cpp:659`), as is an automation point (`inAutoRange`, `core/service/ServiceAuto.cpp:69` — a value within printing's
+  rounding of a bound is that bound, so a dragged point at the top edge still lands).
+- The API document gains the Notation section and each kit's pads (`core/service/ApiDoc.cpp:127`, `:80`).
+
+Guarded by `solaris_service` (`core/tests/serviceTests.cpp:1290` … `:1349`: the notation tables; comment
+lines print nothing; every made id printed and announced; notes add by name, a bad token, an unknown pad,
+chords, one undo step; steps and pattern edits; the lane rule and `--count`; reading back, out-of-range
+refusals) and `solaris_cli_session` (`tests/cli_session.cmake`: line numbers, `--keep-going`, exit 4,
+`--discard`, the shell keeping undo). Mutants seen red, then restored: a comment line keeping the last
+output (both suites), a `notes add` pushing a step per note, a device value clamped again, an auto pattern
+not announced, every clip on a new lane, unsaved edits exiting 0, `pattern delete` while played. End to
+end (2026-10-09): an 8-bar "Ode to Joy" (drums by steps, bass by `notes add`, chords by `--chord`, the tune,
+a reverb bus) in 32 commands where the audit's 16 bars took 110; rendered and measured — RMS −21.8 dBFS,
+peak −6.5 dBFS, the kick 18.6 dB or more above the level just before every one of the beats, onsets
+500.0 ms apart (120.00 bpm), the lead at E4 329.6, G4 391.8, C4 261.5, D4 293.7 Hz.

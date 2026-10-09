@@ -105,7 +105,8 @@ namespace solaris_ui
     {
         if (!onCommand) return false;
         const std::string lane = row < mTimeline->rowCount() ? mTimeline->rowLane(row) : std::string();
-        const std::string onLane = lane.empty() ? std::string() : " --lane " + q(lane);
+        // below the last lane: a NEW lane, said explicitly — with no --lane a clip joins its strip's lane (R-SVC-8)
+        const std::string onLane = lane.empty() ? std::string(" --lane new") : " --lane " + q(lane);
         if (it.kind == "audio") return onCommand("clip add --src " + q(it.value) + " --at " + beats(beat) + onLane);
         if (it.kind == "instrument") return onCommand("clip add --instrument " + it.value + " --at " + beats(beat) + " --length 4" + onLane);
         if (it.kind == "effect" && onNotice) onNotice("An effect goes on a mixer strip \xE2\x80\x94 drop it in the mixer.");

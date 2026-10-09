@@ -291,7 +291,10 @@ audio devices so the user can take advantage of their devices."*
   effect inserted at that slot. **Every drop is one command** (R-G-4). (**Added 2026-10-08,
   building U2:** an instrument dropped is `clip add --instrument <type>` — the new strip and its
   empty clip in one command, so a refusal of either leaves nothing half made; and a refused command
-  emits no `project.changed` for the work it undid.)
+  emits no `project.changed` for the work it undid.) (**AMENDED (R-SVC-8, 2026-10-09):** a `clip
+  add` with no `--lane` now goes on the lane its strip's clips are on — a new lane only for a strip
+  with none — so the drop into empty space asks for its new lane with `--lane new`; the gesture and
+  what it makes are unchanged.)
 
 ---
 

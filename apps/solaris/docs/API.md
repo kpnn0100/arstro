@@ -2,7 +2,7 @@
 
 > **Generated** by `solaris-cc api --md` from the tables the code runs on — the grammar table, the event table, the model's field table and the DSP library's device registry. Do not edit: a test regenerates this file and fails on any difference (R-API-1).
 
-A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` on the command line, or one per line with `--script`. An unknown verb, flag, address or parameter is refused, naming the nearest candidates.
+A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` on the command line, one per line with `--script`, or a session on stdin with `shell` (one song, undo kept). `#` starts a comment, also at the end of a line. An unknown verb, flag, address or parameter is refused, naming the nearest candidates. A command that makes nodes prints the id it made first, then `made: kind=id …` for anything else it made. How an agent writes a song: `docs/AGENTS.md`.
 
 ## Commands
 
@@ -31,16 +31,23 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `device move <dv> [--to <index>]` | Move a device within its rack. | R-FX-5 |
 | `lane add [name]` | Add a timeline lane at the bottom. | R-LANE-1 |
 | `lane delete <ln> [--with-clips]` | Delete a lane. Refused while clips are drawn on it, unless --with-clips. | R-LANE-1 |
-| `clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--sample <file>] [--pattern <pt>] [--lane <ln>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]` | Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip, and with no --lane it gets a new lane. With --strip <instrument>: a note clip of --pattern (a new empty pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). | R-MIX-2 |
+| `clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--sample <file>] [--pattern <pt>] [--lane <ln\|new>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]` | Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of --pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). With no --lane it goes on the lane its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for a new one (R-SVC-8). Prints the clip, then `made:` and whatever else it made. | R-MIX-2 |
 | `clip move <ac> [--at <beats>] [--lane <ln>] [--strip <ch>]` | Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). | R-LANE-2 |
-| `clip duplicate <ac> [--at <beats>]` | A copy right after it (or at --at). A note clip's copy plays the SAME pattern — linked. | R-CLIP-3 |
+| `clip duplicate <ac> [--at <beats>] [--count <n>]` | A copy right after it (or at --at); --count N makes N copies end to end. A note clip's copy plays the SAME pattern — linked. Prints the first copy, then `made:` the rest. | R-CLIP-3 |
 | `clip unique <ac>` | Give a note clip its own copy of its pattern. | R-CLIP-3 |
 | `clip delete <ac>` | Remove a clip. | R-LANE-1 |
 | `pattern new [--name <text>] [--length <beats>]` | Create an empty pattern. | R-CLIP-2 |
-| `note add <pt> [--pitch <0-127>] [--at <beats>] [--length <beats>] [--vel <1-127>]` | Add a note to a pattern — every clip of it changes. | R-CLIP-2 |
-| `note delete <pt> [--pitch <0-127>] [--at <beats>]` | Remove the note at that pitch and time. | R-CLIP-2 |
-| `note move <pt> [--pitch <0-127>] [--at <beats>] [--to-pitch <0-127>] [--to-at <beats>] [--length <beats>] [--vel <1-127>]` | Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) — one gesture, one line. Refused onto another note. | R-ROLL-2 |
+| `note add <pt> [--pitch <pitch>] [--at <beats>] [--length <beats>] [--vel <1-127>] [--chord <name>] [--inversion <n>] [--octave <n>]` | Add a note to a pattern — every clip of it changes. A pitch is a number, a name (C4 = 60, F#3, Bb2) or a kit's pad (kick). --chord <Cm7> adds a chord instead (its root in --octave, default 4; --inversion n raises its n lowest notes an octave) as ONE edit — the qualities are under Notation. | R-CLIP-2 |
+| `note delete <pt> [--pitch <pitch>] [--at <beats>]` | Remove the note at that pitch and time. | R-CLIP-2 |
+| `note move <pt> [--pitch <pitch>] [--at <beats>] [--to-pitch <pitch>] [--to-at <beats>] [--length <beats>] [--vel <1-127>]` | Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) — one gesture, one line. Refused onto another note. | R-ROLL-2 |
 | `pattern quantize <pt> [--grid <beats>] [--swing <0-0.75>]` | Move every note's start onto the grid (default a sixteenth, 0.25), delaying every second grid step by --swing of a step. Notes that land on one another merge (the louder stays). | R-ROLL-4 |
+| `notes add <pt> "<note> …" [--length <beats>] [--vel <1-127>]` | Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>]] — C4@0:0.5:90, kick@1, E4@2::70. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing lands. Prints how many; warns of notes past the pattern's end. | R-SVC-8 |
+| `pattern steps <pt> "<steps>" [--pitch <pitch>] [--step <beats>] [--vel <1-127>] [--at <beats>] [--length <beats>]` | A step row: x = a note, X = an accent (velocity 127), . or - = a rest, one per --step (default 0.25) from --at (default 0); spaces and \| are ignored. REPLACES that pitch's notes in the span; --length defaults to a step. One edit. | R-SVC-8 |
+| `pattern duplicate <pt> [--name <text>]` | A new pattern with the same notes and length (named "<name> copy"). Prints its id. | R-SVC-8 |
+| `pattern clear <pt> [--pitch <pitch>]` | Remove every note (or only --pitch's). | R-SVC-8 |
+| `pattern delete <pt>` | Delete a pattern. Refused while a clip plays it (naming the clips). | R-SVC-8 |
+| `pattern transpose <pt> [--semi <n>]` | Move every note by --semi semitones (negative = down). Refused if a note would leave 0–127. | R-SVC-8 |
+| `pattern print <pt>` | Its notes, one per line in the `notes add` notation (pitch as a name or pad), the number after `#`. | R-SVC-8 |
 | `auto create <address>` | Automate a number: a new automation named "<owner> · <parameter>", ranged as it, holding its value from beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id. | R-AUTO-5 |
 | `auto add [--name <text>] [--min <v>] [--max <v>] [--unit <text>]` | An automation from nothing (default range 0…1). It moves nothing until a formula reads it. Prints the id. | R-AUTO-4 |
 | `auto delete <au> [--unbind]` | Delete an automation. Refused while a formula reads it, unless --unbind (those bindings are cleared). | R-AUTO-4 |
@@ -53,7 +60,9 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `render [--out <file.wav>] [--from <beats>] [--to <beats>] [--stems <ch,…>] [--ports] [--bits <24\|32f>]` | Render offline: the master to --out; with --stems, each named strip's post-fader output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS or 10 s. | R-RENDER-2 |
 | `matrix print [--json]` | Every route and send at once: rows = strips, columns = destinations. | R-MIX-9 |
 | `audit` | The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping. | R-MIX-10 |
-| `state print [--json] [--stable]` | The whole AppModel; --stable omits what changes with time. | R-SVC-2 |
+| `state print [--json] [--stable] [--compact]` | The whole AppModel; --stable omits what changes with time. --json --compact: the SONG only (no registry, machine, recents or browser), on one line; a device lists only its non-default parameters as `name=value`, a pattern its notes in the `notes add` notation. | R-SVC-2 |
+| `ls` | The song as a tree of ids and names: mixers → strips (kind, devices, output, sends), the master, lanes → clips (at, length, pattern or file), patterns (length, notes, clips), automations. | R-SVC-8 |
+| `show <id>` | One node's fields that differ from their defaults; a device's non-default parameters with their units (and the default); `show project` for the song. | R-SVC-8 |
 | `api [--json] [--md]` | This document: every command, event, model field and device parameter. | R-API-1 |
 | `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on\|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on\|off), showIds (on\|off: every object's id beside its name, R-UI-11). Saved at once. | R-SET-1 |
 | `settings print [--json]` | The machine's settings. | R-SET-1 |
@@ -82,6 +91,39 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `<automation>.name` · `.unit` · `.min` · `.max` (read: also `.from` · `.points`) | text · text · number · number |
 | any NUMBER above (a strip's gain/pan, a send's gain, `project.masterGain`, a numeric device parameter) `=<formula>` | binds it (R-AUTO-1): numbers, `+ - * / ^ ( )`, `sin cos tan abs sign min max clamp lerp pow exp log sqrt floor ceil round frac`, `pi`, `beat bar bpm t`, an automation id (`au_1`), another numeric address (a link). `get` prints the formula; a plain number clears it |
 
+## Notation (R-SVC-8)
+
+| what | written | e.g. |
+|---|---|---|
+| a pitch (`--pitch`, `--to-pitch`, a note) | a number 0–127, a name — a letter, `#`/`b`, an octave; C4 = 60, c-1 = 0 — or a kit's pad (below, case and `-` ignored) | `60` · `C4` · `F#3` · `Bb2` · `kick` · `closed-hat` |
+| a note (`notes add`) | `<pitch>@<beat>[:<length>[:<vel>]]`; an empty field keeps the default | `C4@0:0.5:90` · `kick@1` · `E4@2::70` |
+| a step row (`pattern steps`) | `x` a note, `X` an accent (127), `.` or `-` a rest; spaces and `\|` ignored | `x...x...x...X...` |
+| a chord (`note add --chord`) | a root (`C`, `F#`, `Bb`) then a quality below; the root sits in `--octave` (4) | `Cm7` · `F#dim` · `Bbmaj7` |
+
+| chord quality | semitones | |
+|---|---|---|
+| `C` · `Cmaj` · `CM` | 0 4 7 | major |
+| `Cm` · `Cmin` · `C-` | 0 3 7 | minor |
+| `C5` | 0 7 | power (root and fifth) |
+| `Cdim` | 0 3 6 | diminished |
+| `Caug` · `C+` | 0 4 8 | augmented |
+| `Csus2` | 0 2 7 | suspended second |
+| `Csus4` · `Csus` | 0 5 7 | suspended fourth |
+| `C6` | 0 4 7 9 | major sixth |
+| `Cm6` | 0 3 7 9 | minor sixth |
+| `C7` | 0 4 7 10 | dominant seventh |
+| `Cmaj7` · `CM7` | 0 4 7 11 | major seventh |
+| `Cm7` · `Cmin7` · `C-7` | 0 3 7 10 | minor seventh |
+| `Cmmaj7` | 0 3 7 11 | minor-major seventh |
+| `Cdim7` | 0 3 6 9 | diminished seventh |
+| `Cm7b5` | 0 3 6 10 | half-diminished |
+| `C7sus4` | 0 5 7 10 | dominant seventh, suspended fourth |
+| `Cadd9` | 0 4 7 14 | major, added ninth |
+| `Cmadd9` | 0 3 7 14 | minor, added ninth |
+| `C9` | 0 4 7 10 14 | dominant ninth |
+| `Cmaj9` | 0 4 7 11 14 | major ninth |
+| `Cm9` | 0 3 7 10 14 | minor ninth |
+
 ## Events
 
 Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` stream.
@@ -95,8 +137,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `project.opened` | path, strips, clips | A song is open. |
 | `project.saved` | path | The .slp was written. |
 | `project.closed` |  | Back to Home. |
-| `project.changed` | what, node | A node was added, removed, moved or re-routed. what = e.g. strip.added, clip.moved, route.set. |
-| `params.changed` | address, value | An address was written; value is what was STORED (clamped). |
+| `project.changed` | what, node | A node was added, removed, moved or re-routed. what = e.g. strip.added, clip.moved, route.set. Every node a command makes is announced, one event each (R-SVC-8). |
+| `params.changed` | address, value | An address was written; value is what was STORED, canonical (a value out of range is refused, never clamped — R-SVC-8). |
 | `render.finished` | out, frames, peak | A render was written; peak is the master's, dBFS. |
 | `render.failed` | why | A render stopped with an error. |
 | `audit.report` | findings | How many findings `audit` printed. |
@@ -349,6 +391,8 @@ Two oscillators and noise through a resonant filter and an amplitude envelope; 1
 ### `drums` — Drum Machine (instrument)
 
 Ten synthesized pads on the GM drum notes (36 kick … 56 cowbell); the closed hat chokes the open hat.
+
+Pads — a pitch by name: `kick` 36 · `rim` 37 · `snare` 38 · `clap` 39 · `low-tom` 41 · `closed-hat` 42 · `mid-tom` 45 · `open-hat` 46 · `high-tom` 48 · `cowbell` 56
 
 | parameter | range | default |
 |---|---|---|

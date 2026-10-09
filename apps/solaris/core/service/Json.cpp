@@ -55,7 +55,7 @@ namespace solaris
 
     void Json::write(std::string &out, int indent) const
     {
-        const std::string pad(size_t(indent) * 2, ' '), padIn(size_t(indent + 1) * 2, ' ');
+        const std::string pad(indent < 0 ? 0 : size_t(indent) * 2, ' '), padIn(indent < 0 ? 0 : size_t(indent + 1) * 2, ' ');
         switch (mType)
         {
         case Type::Null: out += "null"; break;
@@ -67,6 +67,13 @@ namespace solaris
         case Type::String: out += "\"" + jsonEscape(mText) + "\""; break;
         case Type::Array:
             if (mItems.empty()) { out += "[]"; break; }
+            if (indent < 0)
+            {
+                out += "[";
+                for (size_t i = 0; i < mItems.size(); ++i) { if (i) out += ","; mItems[i].write(out, -1); }
+                out += "]";
+                break;
+            }
             out += "[\n";
             for (size_t i = 0; i < mItems.size(); ++i)
             {
@@ -78,6 +85,17 @@ namespace solaris
             break;
         case Type::Object:
             if (mMembers.empty()) { out += "{}"; break; }
+            if (indent < 0)
+            {
+                out += "{";
+                for (size_t i = 0; i < mMembers.size(); ++i)
+                {
+                    out += (i ? ",\"" : "\"") + jsonEscape(mMembers[i].first) + "\":";
+                    mMembers[i].second.write(out, -1);
+                }
+                out += "}";
+                break;
+            }
             out += "{\n";
             for (size_t i = 0; i < mMembers.size(); ++i)
             {
@@ -94,6 +112,13 @@ namespace solaris
     {
         std::string out;
         write(out, 0);
+        return out + "\n";
+    }
+
+    std::string Json::dumpCompact() const
+    {
+        std::string out;
+        write(out, -1);
         return out + "\n";
     }
 }

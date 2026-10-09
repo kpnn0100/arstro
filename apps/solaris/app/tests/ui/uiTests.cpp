@@ -210,7 +210,7 @@ static void test_browser_tabs_and_sample_drag()
     assert(r.app->project().ghostAmount() > 0.0);                          // the ghost follows the pointer
     r.app->pointer(2, toX, toY, 0, r.now);
     r.settle();
-    assert(sentLine(r, "clip add --src \"/music/Samples/808 kick.wav\" --at 4"));
+    assert(sentLine(r, "clip add --src \"/music/Samples/808 kick.wav\" --at 4 --lane new"));   // below the last lane (R-BROWSE-3)
     const auto &m = r.svc->model();
     assert(m.clips.size() == 1 && m.clips[0].at == 4.0 && m.strips.size() == 2 && m.lanes.size() == 1); // its own strip, a new lane
     assert(r.app->project().ghostAmount() == 0.0);

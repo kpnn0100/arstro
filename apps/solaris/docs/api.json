@@ -223,7 +223,7 @@
     },
     {
       "verb": "clip add",
-      "usage": "clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--sample <file>] [--pattern <pt>] [--lane <ln>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]",
+      "usage": "clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--sample <file>] [--pattern <pt>] [--lane <ln|new>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]",
       "args": "",
       "flags": [
         "src=<file>",
@@ -231,13 +231,13 @@
         "instrument=<type>",
         "sample=<file>",
         "pattern=<pt>",
-        "lane=<ln>",
+        "lane=<ln|new>",
         "at=<beats>",
         "length=<beats>",
         "in=<s>",
         "out=<s>"
       ],
-      "summary": "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip, and with no --lane it gets a new lane. With --strip <instrument>: a note clip of --pattern (a new empty pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3).",
+      "summary": "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of --pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). With no --lane it goes on the lane its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for a new one (R-SVC-8). Prints the clip, then `made:` and whatever else it made.",
       "requirement": "R-MIX-2"
     },
     {
@@ -254,12 +254,13 @@
     },
     {
       "verb": "clip duplicate",
-      "usage": "clip duplicate <ac> [--at <beats>]",
+      "usage": "clip duplicate <ac> [--at <beats>] [--count <n>]",
       "args": "<ac>",
       "flags": [
-        "at=<beats>"
+        "at=<beats>",
+        "count=<n>"
       ],
-      "summary": "A copy right after it (or at --at). A note clip's copy plays the SAME pattern — linked.",
+      "summary": "A copy right after it (or at --at); --count N makes N copies end to end. A note clip's copy plays the SAME pattern — linked. Prints the first copy, then `made:` the rest.",
       "requirement": "R-CLIP-3"
     },
     {
@@ -291,23 +292,26 @@
     },
     {
       "verb": "note add",
-      "usage": "note add <pt> [--pitch <0-127>] [--at <beats>] [--length <beats>] [--vel <1-127>]",
+      "usage": "note add <pt> [--pitch <pitch>] [--at <beats>] [--length <beats>] [--vel <1-127>] [--chord <name>] [--inversion <n>] [--octave <n>]",
       "args": "<pt>",
       "flags": [
-        "pitch=<0-127>",
+        "pitch=<pitch>",
         "at=<beats>",
         "length=<beats>",
-        "vel=<1-127>"
+        "vel=<1-127>",
+        "chord=<name>",
+        "inversion=<n>",
+        "octave=<n>"
       ],
-      "summary": "Add a note to a pattern — every clip of it changes.",
+      "summary": "Add a note to a pattern — every clip of it changes. A pitch is a number, a name (C4 = 60, F#3, Bb2) or a kit's pad (kick). --chord <Cm7> adds a chord instead (its root in --octave, default 4; --inversion n raises its n lowest notes an octave) as ONE edit — the qualities are under Notation.",
       "requirement": "R-CLIP-2"
     },
     {
       "verb": "note delete",
-      "usage": "note delete <pt> [--pitch <0-127>] [--at <beats>]",
+      "usage": "note delete <pt> [--pitch <pitch>] [--at <beats>]",
       "args": "<pt>",
       "flags": [
-        "pitch=<0-127>",
+        "pitch=<pitch>",
         "at=<beats>"
       ],
       "summary": "Remove the note at that pitch and time.",
@@ -315,12 +319,12 @@
     },
     {
       "verb": "note move",
-      "usage": "note move <pt> [--pitch <0-127>] [--at <beats>] [--to-pitch <0-127>] [--to-at <beats>] [--length <beats>] [--vel <1-127>]",
+      "usage": "note move <pt> [--pitch <pitch>] [--at <beats>] [--to-pitch <pitch>] [--to-at <beats>] [--length <beats>] [--vel <1-127>]",
       "args": "<pt>",
       "flags": [
-        "pitch=<0-127>",
+        "pitch=<pitch>",
         "at=<beats>",
-        "to-pitch=<0-127>",
+        "to-pitch=<pitch>",
         "to-at=<beats>",
         "length=<beats>",
         "vel=<1-127>"
@@ -338,6 +342,77 @@
       ],
       "summary": "Move every note's start onto the grid (default a sixteenth, 0.25), delaying every second grid step by --swing of a step. Notes that land on one another merge (the louder stays).",
       "requirement": "R-ROLL-4"
+    },
+    {
+      "verb": "notes add",
+      "usage": "notes add <pt> \"<note> …\" [--length <beats>] [--vel <1-127>]",
+      "args": "<pt> \"<note> …\"",
+      "flags": [
+        "length=<beats>",
+        "vel=<1-127>"
+      ],
+      "summary": "Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>]] — C4@0:0.5:90, kick@1, E4@2::70. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing lands. Prints how many; warns of notes past the pattern's end.",
+      "requirement": "R-SVC-8"
+    },
+    {
+      "verb": "pattern steps",
+      "usage": "pattern steps <pt> \"<steps>\" [--pitch <pitch>] [--step <beats>] [--vel <1-127>] [--at <beats>] [--length <beats>]",
+      "args": "<pt> \"<steps>\"",
+      "flags": [
+        "pitch=<pitch>",
+        "step=<beats>",
+        "vel=<1-127>",
+        "at=<beats>",
+        "length=<beats>"
+      ],
+      "summary": "A step row: x = a note, X = an accent (velocity 127), . or - = a rest, one per --step (default 0.25) from --at (default 0); spaces and | are ignored. REPLACES that pitch's notes in the span; --length defaults to a step. One edit.",
+      "requirement": "R-SVC-8"
+    },
+    {
+      "verb": "pattern duplicate",
+      "usage": "pattern duplicate <pt> [--name <text>]",
+      "args": "<pt>",
+      "flags": [
+        "name=<text>"
+      ],
+      "summary": "A new pattern with the same notes and length (named \"<name> copy\"). Prints its id.",
+      "requirement": "R-SVC-8"
+    },
+    {
+      "verb": "pattern clear",
+      "usage": "pattern clear <pt> [--pitch <pitch>]",
+      "args": "<pt>",
+      "flags": [
+        "pitch=<pitch>"
+      ],
+      "summary": "Remove every note (or only --pitch's).",
+      "requirement": "R-SVC-8"
+    },
+    {
+      "verb": "pattern delete",
+      "usage": "pattern delete <pt>",
+      "args": "<pt>",
+      "flags": [],
+      "summary": "Delete a pattern. Refused while a clip plays it (naming the clips).",
+      "requirement": "R-SVC-8"
+    },
+    {
+      "verb": "pattern transpose",
+      "usage": "pattern transpose <pt> [--semi <n>]",
+      "args": "<pt>",
+      "flags": [
+        "semi=<n>"
+      ],
+      "summary": "Move every note by --semi semitones (negative = down). Refused if a note would leave 0–127.",
+      "requirement": "R-SVC-8"
+    },
+    {
+      "verb": "pattern print",
+      "usage": "pattern print <pt>",
+      "args": "<pt>",
+      "flags": [],
+      "summary": "Its notes, one per line in the `notes add` notation (pitch as a name or pad), the number after `#`.",
+      "requirement": "R-SVC-8"
     },
     {
       "verb": "auto create",
@@ -473,14 +548,31 @@
     },
     {
       "verb": "state print",
-      "usage": "state print [--json] [--stable]",
+      "usage": "state print [--json] [--stable] [--compact]",
       "args": "",
       "flags": [
         "json",
-        "stable"
+        "stable",
+        "compact"
       ],
-      "summary": "The whole AppModel; --stable omits what changes with time.",
+      "summary": "The whole AppModel; --stable omits what changes with time. --json --compact: the SONG only (no registry, machine, recents or browser), on one line; a device lists only its non-default parameters as `name=value`, a pattern its notes in the `notes add` notation.",
       "requirement": "R-SVC-2"
+    },
+    {
+      "verb": "ls",
+      "usage": "ls",
+      "args": "",
+      "flags": [],
+      "summary": "The song as a tree of ids and names: mixers → strips (kind, devices, output, sends), the master, lanes → clips (at, length, pattern or file), patterns (length, notes, clips), automations.",
+      "requirement": "R-SVC-8"
+    },
+    {
+      "verb": "show",
+      "usage": "show <id>",
+      "args": "<id>",
+      "flags": [],
+      "summary": "One node's fields that differ from their defaults; a device's non-default parameters with their units (and the default); `show project` for the song.",
+      "requirement": "R-SVC-8"
     },
     {
       "verb": "api",
@@ -669,7 +761,7 @@
         "what",
         "node"
       ],
-      "summary": "A node was added, removed, moved or re-routed. what = e.g. strip.added, clip.moved, route.set."
+      "summary": "A node was added, removed, moved or re-routed. what = e.g. strip.added, clip.moved, route.set. Every node a command makes is announced, one event each (R-SVC-8)."
     },
     {
       "name": "params.changed",
@@ -677,7 +769,7 @@
         "address",
         "value"
       ],
-      "summary": "An address was written; value is what was STORED (clamped)."
+      "summary": "An address was written; value is what was STORED, canonical (a value out of range is refused, never clamped — R-SVC-8)."
     },
     {
       "name": "render.finished",
@@ -2740,6 +2832,48 @@
           "integer": false,
           "log": false
         }
+      ],
+      "pads": [
+        {
+          "name": "kick",
+          "note": 36
+        },
+        {
+          "name": "rim",
+          "note": 37
+        },
+        {
+          "name": "snare",
+          "note": 38
+        },
+        {
+          "name": "clap",
+          "note": 39
+        },
+        {
+          "name": "low-tom",
+          "note": 41
+        },
+        {
+          "name": "closed-hat",
+          "note": 42
+        },
+        {
+          "name": "mid-tom",
+          "note": 45
+        },
+        {
+          "name": "open-hat",
+          "note": 46
+        },
+        {
+          "name": "high-tom",
+          "note": 48
+        },
+        {
+          "name": "cowbell",
+          "note": 56
+        }
       ]
     },
     {
@@ -3406,5 +3540,268 @@
         }
       ]
     }
-  ]
+  ],
+  "notation": {
+    "pitch": "a number 0-127, a name (C4 = 60, F#3, Bb2, c-1 = 0) or a kit's pad (kick)",
+    "note": "<pitch>@<beat>[:<length>[:<vel>]]",
+    "steps": "x = a note, X = an accent (127), . or - = a rest; spaces and | ignored",
+    "chords": [
+      {
+        "names": [
+          "",
+          "maj",
+          "M"
+        ],
+        "intervals": [
+          0,
+          4,
+          7
+        ],
+        "label": "major"
+      },
+      {
+        "names": [
+          "m",
+          "min",
+          "-"
+        ],
+        "intervals": [
+          0,
+          3,
+          7
+        ],
+        "label": "minor"
+      },
+      {
+        "names": [
+          "5"
+        ],
+        "intervals": [
+          0,
+          7
+        ],
+        "label": "power (root and fifth)"
+      },
+      {
+        "names": [
+          "dim"
+        ],
+        "intervals": [
+          0,
+          3,
+          6
+        ],
+        "label": "diminished"
+      },
+      {
+        "names": [
+          "aug",
+          "+"
+        ],
+        "intervals": [
+          0,
+          4,
+          8
+        ],
+        "label": "augmented"
+      },
+      {
+        "names": [
+          "sus2"
+        ],
+        "intervals": [
+          0,
+          2,
+          7
+        ],
+        "label": "suspended second"
+      },
+      {
+        "names": [
+          "sus4",
+          "sus"
+        ],
+        "intervals": [
+          0,
+          5,
+          7
+        ],
+        "label": "suspended fourth"
+      },
+      {
+        "names": [
+          "6"
+        ],
+        "intervals": [
+          0,
+          4,
+          7,
+          9
+        ],
+        "label": "major sixth"
+      },
+      {
+        "names": [
+          "m6"
+        ],
+        "intervals": [
+          0,
+          3,
+          7,
+          9
+        ],
+        "label": "minor sixth"
+      },
+      {
+        "names": [
+          "7"
+        ],
+        "intervals": [
+          0,
+          4,
+          7,
+          10
+        ],
+        "label": "dominant seventh"
+      },
+      {
+        "names": [
+          "maj7",
+          "M7"
+        ],
+        "intervals": [
+          0,
+          4,
+          7,
+          11
+        ],
+        "label": "major seventh"
+      },
+      {
+        "names": [
+          "m7",
+          "min7",
+          "-7"
+        ],
+        "intervals": [
+          0,
+          3,
+          7,
+          10
+        ],
+        "label": "minor seventh"
+      },
+      {
+        "names": [
+          "mmaj7"
+        ],
+        "intervals": [
+          0,
+          3,
+          7,
+          11
+        ],
+        "label": "minor-major seventh"
+      },
+      {
+        "names": [
+          "dim7"
+        ],
+        "intervals": [
+          0,
+          3,
+          6,
+          9
+        ],
+        "label": "diminished seventh"
+      },
+      {
+        "names": [
+          "m7b5"
+        ],
+        "intervals": [
+          0,
+          3,
+          6,
+          10
+        ],
+        "label": "half-diminished"
+      },
+      {
+        "names": [
+          "7sus4"
+        ],
+        "intervals": [
+          0,
+          5,
+          7,
+          10
+        ],
+        "label": "dominant seventh, suspended fourth"
+      },
+      {
+        "names": [
+          "add9"
+        ],
+        "intervals": [
+          0,
+          4,
+          7,
+          14
+        ],
+        "label": "major, added ninth"
+      },
+      {
+        "names": [
+          "madd9"
+        ],
+        "intervals": [
+          0,
+          3,
+          7,
+          14
+        ],
+        "label": "minor, added ninth"
+      },
+      {
+        "names": [
+          "9"
+        ],
+        "intervals": [
+          0,
+          4,
+          7,
+          10,
+          14
+        ],
+        "label": "dominant ninth"
+      },
+      {
+        "names": [
+          "maj9"
+        ],
+        "intervals": [
+          0,
+          4,
+          7,
+          11,
+          14
+        ],
+        "label": "major ninth"
+      },
+      {
+        "names": [
+          "m9"
+        ],
+        "intervals": [
+          0,
+          3,
+          7,
+          10,
+          14
+        ],
+        "label": "minor ninth"
+      }
+    ]
+  }
 }

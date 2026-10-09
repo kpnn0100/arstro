@@ -83,6 +83,15 @@ namespace solaris
         bool machineCommand(const Command &c, std::string &err);
         bool transportCommand(const Command &c, std::string &err);
         bool autoCommand(const Command &c, std::string &err);   // ServiceAuto.cpp
+        // R-SVC-8 (ServiceCompose.cpp): notes in bulk and by name, steps, pattern edits; the read-back views
+        bool composeCommand(const Command &c, std::string &err);
+        bool readCommand(const Command &c, std::string &err);
+        /** A pitch as written — a number, a name (C4 = 60) or a pad of the kit that plays `pattern`. */
+        bool pitchOf(const std::string &text, const std::string &pattern, int &midi, std::string &err) const;
+        /** "warning: …" naming notes that start at or after the pattern's end ("" = none). */
+        std::string pastEndWarning(const Pattern &pt) const;
+        std::string lsText() const;
+        bool showText(const std::string &id, std::string &out, std::string &err) const;
         bool historyCommand(const Command &c, std::string &err); // undo / redo
         std::string labelOf(const Command &c) const;
         bool evalCommand(const Command &c, std::string &err);

@@ -9,6 +9,7 @@
 #include "Command.h"
 #include "Event.h"
 #include "Format.h"
+#include "Notation.h"
 #include "SolarisService.h"
 #include <algorithm>
 #include <atomic>
@@ -53,6 +54,8 @@ namespace
         ++passed;
     }
     bool contains(const std::string &s, const std::string &part) { return s.find(part) != std::string::npos; }
+    // a creating command's FIRST line is its id (R-SVC-8: `made:` follows with whatever else it made)
+    std::string firstLine(const std::string &s) { return s.substr(0, s.find('\n')); }
 
     std::string scratch()
     {
@@ -253,7 +256,7 @@ static void test_every_sample_file_gets_its_own_strip()
 {
     Run r;
     r.ok("project new " + freshSong("samples"));
-    assert(r.ok("clip add --src kick.wav --at 0") == "ac_1\n");
+    assert(r.ok("clip add --src kick.wav --at 0") == "ac_1\nmade: strip=ch_2 lane=ln_1\n");
     const StripModel *kick = r.strip("ch_2");
     assert(kick && kick->name == "kick" && kick->kind == "audio" && kick->mixer == "mx_1" && kick->out == "ch_1"); // Sources → Main
     assert(r.clip("ac_1")->lane == "ln_1" && r.svc.model().lanes[0].name == "kick");
@@ -275,13 +278,17 @@ static void test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_ch
     Run r;
     r.ok("project new " + freshSong("instdrop"));
     r.events.clear();
-    assert(r.ok("clip add --instrument drums --at 2 --length 4") == "ac_1\n"); // what dropping "Drum Machine" sends
+    assert(r.ok("clip add --instrument drums --at 2 --length 4") ==                  // what dropping "Drum Machine" sends
+           "ac_1\nmade: strip=ch_2 device=dv_1 pattern=pt_1 lane=ln_1\n");          // R-SVC-8: everything made is said
     const StripModel *d = r.strip("ch_2");
     assert(d && d->kind == "instrument" && d->name == "Drum Machine" && d->mixer == "mx_1" && d->out == "ch_1");
     assert(d->devices.size() == 1 && d->devices[0].type == "drums");
     const ClipModel *c = r.clip("ac_1");
     assert(c && c->track == "ch_2" && c->kind == "note" && c->at == 2.0 && c->length == 4.0 && c->lane == "ln_1");
-    assert(r.events.size() == 2 && contains(r.events[0], "what=strip.added node=ch_2") && contains(r.events[1], "what=clip.added node=ac_1"));
+    // …and each made node is announced (R-SVC-8)
+    assert(r.events.size() == 5 && contains(r.events[0], "what=strip.added node=ch_2") && contains(r.events[1], "what=device.added node=dv_1") &&
+           contains(r.events[2], "what=pattern.added node=pt_1") && contains(r.events[3], "what=lane.added node=ln_1") &&
+           contains(r.events[4], "what=clip.added node=ac_1"));
 
     const std::string before = r.text();
     r.events.clear();
@@ -558,7 +565,7 @@ static void test_formulas_bind_numbers_and_refuse_what_cannot_be_read()
     r.ok("project new " + freshSong("formulas"));
     r.ok("clip add --instrument synth --at 0 --length 8");             // ch_2, its synth dv_1, pt_1
     // automation FROM a property: one command, named after its owner and parameter, ranged as it, bound to it
-    assert(r.ok("auto create dv_1.filter.cutoff") == "au_1\n");
+    assert(firstLine(r.ok("auto create dv_1.filter.cutoff")) == "au_1");
     {
         const auto &m = r.svc.model();
         assert(m.automations.size() == 1);
@@ -595,9 +602,13 @@ static void test_formulas_bind_numbers_and_refuse_what_cannot_be_read()
     assert(r.strip("ch_2")->panFormula.empty() && r.strip("ch_2")->pan == 0.3 && r.ok("get ch_2.pan") == "0.3\n");
     r.ok("bind clear project.masterGain");
     assert(r.svc.model().masterGainFormula.empty() && contains(r.no("bind clear project.masterGain"), "has no formula"));
-    // points: added sorted and clamped to the range, moved, shaped; refusals name the beat
-    r.ok("auto point add au_1 --at 4 --value 99999 --shape smooth");
+    // points: added sorted, moved, shaped; a value outside the range is REFUSED naming it (R-SVC-8: never clamped
+    // in silence); refusals name the beat
+    assert(contains(r.no("auto point add au_1 --at 4 --value 99999 --shape smooth"), "--value for au_1 must be between 20.0 and 20000.0 Hz, got 99999.0"));
+    assert(r.svc.model().automations[0].points.size() == 2);
+    r.ok("auto point add au_1 --at 4 --value 20000 --shape smooth");
     assert(r.svc.model().automations[0].points.size() == 3 && r.svc.model().automations[0].points[1].value == 20000.0);
+    assert(contains(r.no("auto point move au_1 --at 4 --value 5"), "must be between 20.0 and 20000.0 Hz"));
     assert(contains(r.no("auto point move au_1 --at 3 --value 1"), "no point at beat 3.0"));
     r.ok("auto point move au_1 --at 4 --to 2 --value 400");
     r.ok("auto point shape au_1 --at 2 --shape hold");
@@ -785,7 +796,7 @@ static void test_set_and_get_through_the_registry()
 {
     Run r;
     r.ok("project new " + freshSong("params"));
-    assert(r.ok("strip add --kind instrument --instrument synth --name Lead") == "ch_2\n");
+    assert(r.ok("strip add --kind instrument --instrument synth --name Lead") == "ch_2\nmade: device=dv_1\n");
     const StripModel *lead = r.strip("ch_2");
     assert(lead->devices.size() == 1 && lead->devices[0].type == "synth" && lead->devices[0].instrument);
     r.events.clear();
@@ -794,7 +805,9 @@ static void test_set_and_get_through_the_registry()
     assert(r.events[1] == "[evt] params.changed address=dv_1.osc1.wave value=sine");
     assert(r.ok("get dv_1.filter.cutoff") == "800.0\n" && r.ok("get dv_1.osc1.wave") == "sine\n");
     assert(r.ok("get dv_1.filter.res") == "0.25\n");                   // not stored = the registry default
-    assert(r.ok("set dv_1.filter.cutoff=99999").empty() && r.ok("get dv_1.filter.cutoff") == "20000.0\n"); // clamped by the spec
+    // R-SVC-8: out of the registry's range is REFUSED naming the range — as a strip's gain is — and nothing changes
+    assert(r.no("set dv_1.filter.cutoff=99999") == "dv_1.filter.cutoff must be between 20.0 and 20000.0 Hz, got 99999");
+    assert(r.ok("get dv_1.filter.cutoff") == "800.0\n");
     assert(contains(r.no("set dv_1.filter.cutof=1"), "no field `filter.cutof` (did you mean: filter.cutoff?)"));
     assert(contains(r.no("set dv_1.osc1.wave=saww"), "one of: sine, saw, square, triangle"));
     assert(contains(r.no("set ch_2.gian=1"), "did you mean: gain?"));
@@ -820,7 +833,7 @@ static void test_set_and_get_through_the_registry()
     assert(contains(r.no("device add ch_2 --type flanger"), "no device type `flanger`"));
     r.ok("device add master --type compressor");
     assert(r.svc.model().masterDevices.size() == 1);
-    pass("set/get read every device parameter from the DSP registry: clamped, choices by name, typos refused, lines atomic (R-DSP-2/3, R-SVC-3)");
+    pass("set/get read every device parameter from the DSP registry: out of range refused, choices by name, typos refused, lines atomic (R-DSP-2/3, R-SVC-3)");
 }
 
 static void test_patterns_are_shared_by_their_clips()
@@ -828,7 +841,7 @@ static void test_patterns_are_shared_by_their_clips()
     Run r;
     r.ok("project new " + freshSong("patterns"));
     r.ok("strip add --kind instrument --instrument drums --name Drums");
-    assert(r.ok("clip add --strip ch_2 --at 0 --length 16") == "ac_1\n");
+    assert(r.ok("clip add --strip ch_2 --at 0 --length 16") == "ac_1\nmade: pattern=pt_1 lane=ln_1\n");
     assert(r.clip("ac_1")->pattern == "pt_1" && r.clip("ac_1")->length == 16.0);
     r.ok("clip duplicate ac_1");
     assert(r.clip("ac_2")->at == 16.0 && r.clip("ac_2")->pattern == "pt_1" && r.clip("ac_2")->linked == 2);
@@ -1271,6 +1284,294 @@ static void test_a_refusal_is_an_event_and_lands_in_lastError()
     pass("a refusal is a command.rejected event AND lastError — inspectable by a front end that was not listening");
 }
 
+
+// ── R-SVC-8: composition at an agent's size ─────────────────────────────────────────────────
+
+static void test_the_notation_tables()
+{
+    int m = -1;
+    std::string err;
+    assert(parsePitchName("C4", m, err) && m == 60);
+    assert(parsePitchName("F#3", m, err) && m == 54);
+    assert(parsePitchName("Bb2", m, err) && m == 46);
+    assert(parsePitchName("c-1", m, err) && m == 0);
+    assert(parsePitchName("G9", m, err) && m == 127);
+    assert(parsePitchName("eb4", m, err) && m == 63);
+    assert(!parsePitchName("G#9", m, err) && contains(err, "128, outside MIDI's 0–127"));
+    assert(!parsePitchName("H4", m, err) && !parsePitchName("C", m, err) && !parsePitchName("kick", m, err));
+    assert(pitchName(61) == "C#4" && pitchName(0) == "C-1" && pitchName(127) == "G9");
+    std::vector<int> ch;
+    assert(chordPitches("Cm7", 4, 0, ch, err) && ch == std::vector<int>({60, 63, 67, 70}));
+    assert(chordPitches("Cm7", 4, 1, ch, err) && ch == std::vector<int>({63, 67, 70, 72}));     // first inversion
+    assert(chordPitches("F#", 3, 0, ch, err) && ch == std::vector<int>({54, 58, 61}));
+    assert(chordPitches("Bbmaj7", 3, 0, ch, err) && ch == std::vector<int>({58, 62, 65, 69}));
+    assert(chordPitches("Gsus4", 4, 0, ch, err) && ch == std::vector<int>({67, 72, 74}));
+    assert(!chordPitches("Cxyz", 4, 0, ch, err) && contains(err, "unknown chord `Cxyz`") && contains(err, "m7") && contains(err, "sus4"));
+    assert(!chordPitches("C", 4, 3, ch, err) && contains(err, "--inversion for C is 0 to 2"));
+    assert(!chordPitches("C9", 9, 0, ch, err) && contains(err, "outside 0–127"));
+    NoteToken t;
+    assert(parseNoteToken("C4@0:0.5:90", t, err) && t.pitch == "C4" && t.at == 0 && t.length == 0.5 && t.vel == 90 && t.hasLength && t.hasVel);
+    assert(parseNoteToken("E4@2::70", t, err) && t.at == 2 && !t.hasLength && t.vel == 70);
+    assert(parseNoteToken("kick@1.5", t, err) && t.pitch == "kick" && !t.hasLength && !t.hasVel);
+    assert(!parseNoteToken("C4", t, err) && contains(err, "<pitch>@<beat>"));
+    assert(!parseNoteToken("C4@x", t, err) && contains(err, "the beat `x`"));
+    assert(!parseNoteToken("C4@0:0:90", t, err) && contains(err, "the length `0`"));
+    assert(!parseNoteToken("C4@0:1:128", t, err) && contains(err, "the velocity `128`"));
+    std::vector<int> st;
+    assert(parseSteps("x...X..-| x", st, err) && st == std::vector<int>({1, 0, 0, 0, 2, 0, 0, 0, 1}));
+    assert(!parseSteps("x..o", st, err) && contains(err, "`o`"));
+    // a `#` that starts a word ends the line; one inside a word is a sharp
+    Command c = parseCommand("note add pt_1 --pitch F#3 --at 0   # the root", err);
+    assert(err.empty() && c.flag("pitch") == "F#3" && c.args.size() == 1);
+    c = parseCommand("strip add --kind bus --name \"Bus #1\" # a bus", err);
+    assert(err.empty() && c.flag("name") == "Bus #1");
+    pass("the notation: C4 = 60, F#3, Bb2, c-1; chords with inversions; <pitch>@<beat>:<len>:<vel>; step rows; a trailing # comment (R-SVC-8)");
+}
+
+static void test_comment_lines_print_nothing()
+{
+    Run r;
+    r.ok("project new " + freshSong("comments"));
+    assert(r.ok("strip add --kind bus --name Verb   # a return") == "ch_2\n");
+    // the audit's bug: a comment line kept the LAST output, and the CLI printed the id again
+    assert(r.ok("# a comment").empty());
+    assert(r.ok("").empty());
+    assert(r.ok("   ").empty());
+    r.ok("set ch_2.gain=-3 # quieter");
+    assert(r.ok("get ch_2.gain") == "-3.0\n");
+    pass("a comment or a blank line prints nothing (it reprinted the line before it); `#` may end a line (R-SVC-8)");
+}
+
+static void test_everything_made_is_said()
+{
+    Run r;
+    r.ok("project new " + freshSong("made"));
+    // every node a command made is in its output AND announced by its own event
+    auto check = [&](const std::string &line, const std::string &expected) {
+        r.events.clear();
+        const std::string out = r.ok(line);
+        if (out != expected) std::printf("    `%s` printed `%s`\n", line.c_str(), out.c_str());
+        assert(out == expected);
+        std::vector<std::string> ids = {firstLine(out)};
+        const auto made = out.find("made:");
+        if (made != std::string::npos)
+        {
+            std::istringstream in(out.substr(made + 5));
+            std::string kv;
+            while (in >> kv)
+            {
+                std::string list = kv.substr(kv.find('=') + 1), id;
+                std::istringstream items(list);
+                while (std::getline(items, id, ',')) ids.push_back(id);
+            }
+        }
+        for (const auto &id : ids)
+        {
+            bool said = false;
+            for (const auto &e : r.events) said |= contains(e, "project.changed") && contains(e, ".added node=" + id);
+            if (!said) std::printf("    %s was made by `%s` but not announced\n", id.c_str(), line.c_str());
+            assert(said);
+        }
+    };
+    check("strip add --kind instrument --instrument synth --name Bass", "ch_2\nmade: device=dv_1\n");
+    check("clip add --strip ch_2 --at 0 --length 8", "ac_1\nmade: pattern=pt_1 lane=ln_1\n");
+    check("clip add --instrument drums --at 0", "ac_2\nmade: strip=ch_3 device=dv_2 pattern=pt_2 lane=ln_2\n");
+    check("clip add --src kick.wav --at 0", "ac_3\nmade: strip=ch_4 lane=ln_3\n");
+    check("clip add --src kick.wav --at 4", "ac_4\n");                       // the same file: its strip, its lane — nothing else made
+    check("clip add --strip ch_2 --pattern pt_1 --at 8", "ac_5\n");
+    check("clip duplicate ac_5 --count 3", "ac_6\nmade: clip=ac_7,ac_8\n");
+    check("pattern duplicate pt_1", "pt_3\n");
+    check("lane add Spare", "ln_4\n");
+    check("auto create dv_1.filter.cutoff", "au_1\n");
+    check("send add ch_2 --to ch_1", "sd_1\n");
+    check("device add ch_2 --type reverb", "dv_3\n");
+    pass("everything made is said: the id first (as before), then `made: strip=… device=… pattern=… lane=…`; each one announced by its own event (R-SVC-8)");
+}
+
+static void test_notes_in_bulk_and_by_name()
+{
+    Run r;
+    r.ok("project new " + freshSong("bulk"));
+    r.ok("clip add --instrument synth --at 0 --length 8");                     // ch_2, pt_1
+    r.ok("clip add --instrument drums --at 0 --length 8");                     // ch_3, pt_2
+    const std::string before = r.text();
+    const int depth = r.svc.model().undoDepth;
+    // ONE line, one edit: names, numbers, defaults, per-note length and velocity
+    assert(r.ok("notes add pt_1 \"C2@0:0.5 Eb2@1:0.5:90 48@2 G2@3::70\" Bb1@3.5 --length 0.25 --vel 110") == "5 notes\n");
+    {
+        const auto &n = r.svc.model().patterns[0].notes;
+        assert(n.size() == 5);
+        assert(n[0].pitch == 36 && n[0].at == 0 && n[0].length == 0.5 && n[0].vel == 110);
+        assert(n[1].pitch == 39 && n[1].vel == 90);
+        assert(n[2].pitch == 48 && n[2].length == 0.25 && n[2].vel == 110);
+        assert(n[3].pitch == 43 && n[3].length == 0.25 && n[3].vel == 70);
+        assert(n[4].pitch == 34 && n[4].at == 3.5);
+    }
+    assert(r.svc.model().undoDepth == depth + 1);                               // ONE undo step…
+    assert(r.ok("undo") == "notes add pt_1 C2@0:0.5 Eb2@1:0.5:90 48@2 G2@3::70 Bb1@3.5\n");   // …that takes the whole line back
+    assert(r.text() == before);
+    r.ok("redo");
+    // a kit's pads by name — case, spaces and hyphens ignored
+    assert(r.ok("notes add pt_2 \"Kick@0 snare@1 closed-hat@0.5 OPENHAT@1.5 low_tom@3\"") == "5 notes\n");
+    std::set<int> pads;
+    for (const auto &x : r.svc.model().patterns[1].notes) pads.insert(x.pitch);
+    assert(pads == std::set<int>({36, 38, 42, 46, 41}));
+    // a bad token is refused BY NAME, and nothing of the line lands (no event either)
+    const std::string mid = r.text();
+    r.events.clear();
+    assert(r.no("notes add pt_1 \"C4@0 D4@1 X9@2\"") ==
+           "note 3 `X9@2`: `X9` is not a pitch (a number 0–127, or a name: C4 = 60, F#3, Bb2); pt_1 plays through no kit, so a pad name does not apply — nothing was added");
+    assert(contains(r.no("notes add pt_1 C4@0 D4@x"), "note 2 `D4@x`: `D4@x`: the beat `x` is not a number"));
+    assert(contains(r.no("notes add pt_2 \"kick@0 kik@1\""), "note 2 `kik@1`: `kik` is not a pitch (60, C4, F#3) nor a pad of drums (pads: kick rim snare clap low-tom closed-hat mid-tom open-hat high-tom cowbell)"));
+    assert(contains(r.no("notes add pt_1 kick@0"), "`kick` is not a pitch"));     // a synth has no pads
+    assert(contains(r.no("notes add pt_9 C4@0"), "no pattern `pt_9`"));
+    assert(r.text() == mid);
+    for (const auto &e : r.events) assert(!contains(e, "project.changed"));
+    // a pitch by name everywhere: note add / delete / move
+    r.ok("note add pt_1 --pitch F#4 --at 2 --length 1");
+    r.ok("note move pt_1 --pitch F#4 --at 2 --to-pitch G4");
+    assert(contains(r.no("note delete pt_1 --pitch F#4 --at 2"), "no note 66"));
+    r.ok("note delete pt_1 --pitch G4 --at 2");
+    r.ok("note add pt_2 --pitch cowbell --at 2");
+    assert(contains(r.no("note add pt_2 --pitch bell --at 2"), "pads: kick"));
+    assert(contains(r.no("note add pt_1 --pitch 128 --at 0"), "0–127"));
+    // chords: one line, one edit
+    const size_t had = r.svc.model().patterns[0].notes.size();
+    assert(r.ok("note add pt_1 --chord Cm7 --at 4 --length 4 --octave 3 --vel 80") == "Cm7: C3 D#3 G3 A#3\nwarning: 4 notes of pt_1 start at or after its end (beat 4) — they play over its next repeat; set pt_1.length=8\n");
+    assert(r.svc.model().patterns[0].notes.size() == had + 4);
+    assert(r.ok("undo") == "note add pt_1\n" && r.svc.model().patterns[0].notes.size() == had);
+    r.ok("note add pt_1 --chord F --at 0 --length 4 --inversion 2");            // F4 A4 C5, its two lowest raised: C5 F5 A5
+    std::set<int> f;
+    for (const auto &x : r.svc.model().patterns[0].notes)
+        if (x.length == 4.0) f.insert(x.pitch);
+    assert(f == std::set<int>({72, 77, 81}));
+    assert(contains(r.no("note add pt_1 --chord Cm13 --at 0"), "unknown chord `Cm13`: after the root comes one of (major), m, 5, dim, aug"));
+    assert(contains(r.no("note add pt_1 --chord C --pitch 60 --at 0"), "without --pitch"));
+    assert(contains(r.no("note add pt_1 --pitch 60 --at 0 --inversion 1"), "shape a --chord"));
+    pass("notes add: many notes by name in ONE edit (one undo), a bad token refused by name with nothing landed; pads by name; pitch names in note add/delete/move; chords with --octave/--inversion (R-SVC-8)");
+}
+
+static void test_steps_and_pattern_edits()
+{
+    Run r;
+    r.ok("project new " + freshSong("steps"));
+    r.ok("clip add --instrument drums --at 0 --length 16");                     // ch_2, pt_1
+    assert(r.ok("pattern steps pt_1 --pitch kick \"x...x...x...x...\"") == "4 notes\n");
+    assert(r.ok("pattern steps pt_1 --pitch closed-hat \"..x. ..x. ..x. ..X.\" --vel 70") == "4 notes\n");
+    auto at = [&](int pitch) {
+        std::vector<std::pair<double, int>> v;
+        for (const auto &n : r.svc.model().patterns[0].notes)
+            if (n.pitch == pitch) v.emplace_back(n.at, n.vel);
+        return v;
+    };
+    assert(at(36) == (std::vector<std::pair<double, int>>{{0, 100}, {1, 100}, {2, 100}, {3, 100}}));
+    assert(at(42) == (std::vector<std::pair<double, int>>{{0.5, 70}, {1.5, 70}, {2.5, 70}, {3.5, 127}})); // X = an accent
+    // the row REPLACES that pitch in its span — and only that pitch, only that span
+    r.ok("pattern steps pt_1 --pitch kick \"x.x.\" --step 0.5");                 // beats 0 … 2
+    assert(at(36) == (std::vector<std::pair<double, int>>{{0, 100}, {1, 100}, {2, 100}, {3, 100}}));
+    r.ok("pattern steps pt_1 --pitch 36 \"X..x\" --step 0.5 --at 2");            // beats 2 … 4
+    assert(at(36) == (std::vector<std::pair<double, int>>{{0, 100}, {1, 100}, {2, 127}, {3.5, 100}}) && at(42).size() == 4);
+    for (const auto &n : r.svc.model().patterns[0].notes)
+        if (n.pitch == 36 && n.at == 3.5) assert(n.length == 0.5);               // a note lasts a step
+    assert(contains(r.no("pattern steps pt_1 --pitch kick \"x..y\""), "`y`"));
+    assert(contains(r.no("pattern steps pt_1 \"x...\""), "needs --pitch"));
+    assert(contains(r.no("pattern steps pt_1 --pitch kick \"x...\" --step 0"), "--step must be more than 0"));
+    // duplicate: a NEW pattern, the same notes
+    assert(r.ok("pattern duplicate pt_1") == "pt_2\n");
+    assert(r.svc.model().patterns[1].name == "Drum Machine copy" && r.svc.model().patterns[1].notes.size() == r.svc.model().patterns[0].notes.size());
+    // transpose, refused whole when a note would leave 0–127
+    r.ok("pattern transpose pt_2 --semi 12");
+    assert(r.svc.model().patterns[1].notes[0].pitch == 48);
+    r.ok("note add pt_2 --pitch G9 --at 1");
+    const std::string before = r.text();
+    assert(contains(r.no("pattern transpose pt_2 --semi 1"), "G9 (127) at beat 1 would be 128, outside 0–127 — nothing moved"));
+    assert(r.text() == before);
+    // clear one pitch, then all
+    assert(r.ok("pattern clear pt_2 --pitch G9") == "1 note removed\n");
+    assert(r.ok("pattern clear pt_2") == "8 notes removed\n" && r.svc.model().patterns[1].notes.empty());
+    // the audit: an empty pattern, an unused one, notes past the end
+    r.ok("note add pt_1 --pitch kick --at 6");
+    const std::string a = r.ok("audit");
+    assert(contains(a, "empty pattern: pt_2 (Drum Machine copy) has no notes"));
+    assert(contains(a, "unused pattern: pt_2 (Drum Machine copy) — no clip plays it"));
+    assert(contains(a, "past its end: pt_1 (Drum Machine) has 1 note(s) starting at or after beat 4.0"));
+    // delete: refused while a clip plays it, naming the clips
+    r.ok("clip duplicate ac_1");
+    assert(r.no("pattern delete pt_1") == "pt_1 is played by ac_1, ac_2 — delete those clips (or `clip unique` them) first");
+    r.ok("pattern delete pt_2");
+    assert(r.svc.model().patterns.size() == 1);
+    assert(contains(r.no("pattern delete pt_2"), "no pattern `pt_2`"));
+    pass("pattern steps: x/X/. rows that replace their pitch's span; pattern duplicate/transpose/clear/delete (refused while played); the audit names empty, unused and past-the-end patterns (R-SVC-8)");
+}
+
+static void test_a_clip_joins_its_strips_lane()
+{
+    Run r;
+    r.ok("project new " + freshSong("lanes"));
+    r.ok("clip add --instrument synth --at 0 --length 4");                    // ch_2 on a new lane ln_1
+    r.ok("clip add --strip ch_2 --at 4 --length 4");                          // no --lane: ch_2's lane, not a new one
+    r.ok("clip add --src kick.wav --at 0");                                   // a new strip: a new lane ln_2
+    r.ok("clip add --src kick.wav --at 2");                                   // its strip has clips: ln_2
+    assert(r.clip("ac_2")->lane == "ln_1" && r.clip("ac_3")->lane == "ln_2" && r.clip("ac_4")->lane == "ln_2");
+    assert(r.svc.model().lanes.size() == 2);
+    assert(r.ok("clip add --strip ch_2 --at 8 --lane new") == "ac_5\nmade: pattern=pt_3 lane=ln_3\n");   // asked for
+    r.ok("clip add --strip ch_2 --at 12");                                    // the newest clip's lane now
+    assert(r.clip("ac_6")->lane == "ln_3");
+    assert(contains(r.no("clip add --strip ch_2 --lane ln_9"), "no lane `ln_9` (or `new`)"));
+    // N copies, end to end
+    assert(firstLine(r.ok("clip duplicate ac_1 --count 3")) == "ac_7");
+    assert(r.clip("ac_7")->at == 4.0 && r.clip("ac_8")->at == 8.0 && r.clip("ac_9")->at == 12.0 && r.clip("ac_9")->pattern == "pt_1");
+    r.ok("clip duplicate ac_1 --count 2 --at 32");
+    assert(r.clip("ac_10")->at == 32.0 && r.clip("ac_11")->at == 36.0);
+    assert(r.ok("undo") == "clip duplicate ac_1\n" && !r.clip("ac_10") && !r.clip("ac_11"));                 // one edit
+    assert(contains(r.no("clip duplicate ac_1 --count 0"), "--count must be a whole number from 1 to 256"));
+    pass("a clip with no --lane joins its strip's lane (a new lane only for a strip with none; --lane new asks); clip duplicate --count N, end to end, one edit (R-SVC-8)");
+}
+
+static void test_reading_a_song_back()
+{
+    Run r;
+    const std::string song = freshSong("readback");
+    r.ok("project new " + song + " --name \"Read Back\" --bpm 100");
+    r.ok("clip add --instrument synth --at 0 --length 8");                    // ch_2, dv_1, pt_1, ln_1
+    r.ok("notes add pt_1 \"C4@0:1 E4@1\"");
+    r.ok("set dv_1.filter.cutoff=800 dv_1.osc1.wave=sine ch_2.gain=-6");
+    r.ok("strip add --kind bus --name Verb");                                 // ch_3
+    r.ok("device add ch_3 --type reverb");                                    // dv_2
+    r.ok("send add ch_2 --to ch_3 --gain -12");
+    r.ok("project save");
+    const int undo = r.svc.model().undoDepth;
+    const std::string ls = r.ok("ls");
+    assert(contains(ls, "song \"Read Back\" · 100.0 bpm · 4/4 · 8 beats\n"));
+    assert(contains(ls, "mixer mx_1 \"Sources\"\n  ch_2 \"Basic Synth\" instrument [synth dv_1] → ch_1 · gain -6.0 · sd_1 → ch_3 -12.0 dB\n"));
+    assert(contains(ls, "  ch_3 \"Verb\" bus [reverb dv_2] → master\n"));
+    assert(contains(ls, "lane ln_1 \"Basic Synth\"\n  ac_1 @0 len 8 pt_1 via ch_2\n"));
+    assert(contains(ls, "pattern pt_1 \"Basic Synth\" 4 beats · 2 notes · 1 clip\n"));
+    const std::string dv = r.ok("show dv_1");
+    assert(contains(dv, "dv_1 synth (Basic Synth) on ch_2\n"));
+    assert(contains(dv, "  filter.cutoff 800.0 Hz  (default 2400.0)\n") && contains(dv, "  osc1.wave sine  (default saw)\n"));
+    assert(!contains(dv, "filter.res"));                                      // a default is not shown
+    assert(contains(r.ok("show ch_2"), "  gain -6.0 dB\n") && contains(r.ok("show ac_1"), "  pattern pt_1\n"));
+    assert(contains(r.ok("show project"), "  bpm 100.0\n"));
+    assert(r.no("show dv_9") == "no node `dv_9` (did you mean: dv_1?)");
+    assert(r.ok("pattern print pt_1") == "# pt_1 \"Basic Synth\" · 4 beats · 2 notes · played by ac_1\nC4@0:1:100  # 60\nE4@1:0.25:100  # 64\n");
+    const std::string compact = r.ok("state print --json --compact");
+    assert(std::count(compact.begin(), compact.end(), '\n') == 1);            // one line
+    assert(!contains(compact, "deviceTypes") && !contains(compact, "\"label\"") && !contains(compact, "\"min\"") && !contains(compact, "recents"));
+    assert(contains(compact, "\"params\":[\"osc1.wave=sine\",\"filter.cutoff=800.0\"]") && contains(compact, "\"notes\":[\"C4@0:1:100\",\"E4@1:0.25:100\"]"));
+    assert(compact.size() * 4 < r.ok("state print --json").size());            // a quarter of the full dump, or less
+    // reading is not editing: still saved, no undo step
+    assert(!r.svc.model().dirty && r.svc.model().undoDepth == undo);
+    assert(r.no("set dv_1.filter.cutoff=10") == "dv_1.filter.cutoff must be between 20.0 and 20000.0 Hz, got 10");
+    assert(r.no("set dv_1.osc1.octave=1.5") == "dv_1.osc1.octave takes whole numbers, got 1.5");
+    assert(contains(r.no("set dv_1.osc1.wave=7"), "one of: sine, saw, square, triangle"));
+    r.ok("set dv_1.osc1.wave=2");                                             // a choice by its index still reads
+    assert(r.ok("get dv_1.osc1.wave") == "square\n");
+    Run home;
+    assert(contains(home.no("ls"), "no song is open"));
+    pass("ls / show / pattern print / state print --json --compact read a song back (ids, names, non-default values with units) without editing it; out-of-range values refused (R-SVC-8)");
+}
+
 int main()
 {
     gMainThread = std::this_thread::get_id();
@@ -1303,6 +1604,13 @@ int main()
     test_loop_and_seek();
     test_a_bound_value_is_published_live();
     test_a_refusal_is_an_event_and_lands_in_lastError();
+    test_the_notation_tables();
+    test_comment_lines_print_nothing();
+    test_everything_made_is_said();
+    test_notes_in_bulk_and_by_name();
+    test_steps_and_pattern_edits();
+    test_a_clip_joins_its_strips_lane();
+    test_reading_a_song_back();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }
