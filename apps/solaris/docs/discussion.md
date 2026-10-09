@@ -288,3 +288,26 @@ User's direction (verbatim, condensed):
   [`../REQUIREMENTS.md`](../REQUIREMENTS.md); law 1 of the `arstro.solaris.implement` skill.
 - Open questions closed with the recommended defaults — listed in [`PROGRESS.md`](PROGRESS.md)'s
   decisions log, each one line to change.
+
+### Round 5 — 2026-10-09 — the third brief
+
+- User: *"1. make the Basic Synth a vst3 app and make the UI follow Arstro theme like Cosmo/Interstellar
+  and Solaris, drum machine also. 2. Remove piano roll user can create midi track and put in an
+  instrument track, so they can loop that midi in the track or move to another, there should be a midi
+  list of project to drag and drop into project. 3. time bar interact with drag and drop too, not just
+  click."*
+- Asked, because each changes the app's shape, and answered (each the recommended reading):
+  - **"Remove piano roll"** → *keep it as the editor*: MIDI clips become things made, looped and moved on
+    the lanes and listed in the browser; the piano roll stays, as the editor a MIDI clip opens.
+  - **A MIDI clip dragged to another track** → *a track owns its instrument*: it plays through that
+    track's instrument. This amends R-LANE-1 (lanes were organisation only); a lane naming no
+    instrument keeps the old meaning, and R-LANE-2's channel view stays reserved and compatible.
+  - **"A vst3 app"** → *plugins with an Arstro editor*, not standalone apps.
+- Decided without asking (one line each to change): the editor uses Solaris's teal (they are Solaris's
+  instruments); the editor lives in the umbrella, because it needs Artboard and cosmo, while the DSP
+  repo keeps the processor and controller and builds them alone with the host's generic view; the UI
+  says "MIDI" for the grammar's note clips and patterns; dragging on the ruler seeks at every grid line
+  (as a fader sends each step), and the loop brace is moved and resized by dragging; a song saved
+  before tracks existed has its one-instrument lanes made tracks on opening.
+- Became: R-TIME-6, R-LANE-3 (R-LANE-1 amended), R-CLIP-6…8, R-BROWSE-4, R-VST-7/8 in
+  [`../REQUIREMENTS.md`](../REQUIREMENTS.md); ledger tasks E1–E6 in [`PROGRESS.md`](PROGRESS.md).

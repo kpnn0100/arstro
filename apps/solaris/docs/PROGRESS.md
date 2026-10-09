@@ -17,9 +17,19 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► B13 — the MIDI keyboard** (R-EDM-10), then R-EDM-11…20 one task each (B13+ below). B13+ are
-Claude's own EDM suggestions from the first brief — check the user still wants them before a long run.
-The second brief (C1–C6, 2026-10-09) is built; T2 and T3 are small and may go first.
+**► E — the 2026-10-09 third brief** (user request; discussion Round 5; one task per commit):
+- **E1** the requirements: R-TIME-6, R-LANE-3 (R-LANE-1 amended), R-CLIP-6…8, R-BROWSE-4, R-VST-7/8.
+- **E2** the ruler dragged: the playhead follows, seeking at each grid line; the loop brace moved and
+  resized (R-TIME-6).
+- **E3** instrument tracks: `<lane>.strip`, clips re-routed by the track they are put on, audio refused
+  there, headers name the instrument, older songs' one-instrument lanes adopted (R-LANE-3, D-2's lane half).
+- **E4** MIDI clips on the lanes and the song's MIDI list: made by a double-click on a track, looped by
+  dragging the end, moved between tracks; the Song tab's MIDI rows dragged in (R-CLIP-6…8, R-BROWSE-4).
+- **E5** the plugin editor: an Artboard view embedded in the host's X11 window, generated from the
+  registry; Basic Synth's (R-VST-7/8).
+- **E6** Drum Machine's editor: its pads, played from the editor through the processor (R-VST-7/8).
+Then B13 (the MIDI keyboard, R-EDM-10) — B13+ are Claude's own suggestions; ask before a long run.
+T2 and T3 are small and may go first.
 
 ---
 
@@ -205,6 +215,12 @@ umbrella's pointer — `arstro.rule` §7).
       `--stems all`; docs made honest. 8 mutants caught. Merged over C2–C5: two tests updated to the
       amended rules (a new bus feeds Main; recents name their own folder). The canon re-rendered: the
       mix was 96 samples behind its kick stem, now 0.
+- [x] **E1** The third brief's requirements (R-TIME-6, R-LANE-3, R-CLIP-6…8, R-BROWSE-4, R-VST-7/8; discussion Round 5).
+- [ ] **E2** The ruler dragged (R-TIME-6).
+- [ ] **E3** Instrument tracks (R-LANE-3; R-LANE-1 amended).
+- [ ] **E4** MIDI clips made, looped and moved on the lanes; the song's MIDI list (R-CLIP-6…8, R-BROWSE-4).
+- [ ] **E5** The plugin editor in the Arstro look; Basic Synth's (R-VST-7/8).
+- [ ] **E6** Drum Machine's editor with its pads (R-VST-7/8).
 - [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.
 
 ### T — tasks found on the way

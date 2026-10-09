@@ -192,14 +192,32 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   only faders a new song has would hide behind a click. The fold is the view's, not the song's: a
   fold is not saved and no command sets it, like zoom.)
 
-## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅: DR-CLIP-2/3 headless, DR-UI-3 drawn and dragged, DR-LANE-1 `lane move`; R-LANE-2's view with U4)
+## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅: DR-CLIP-2/3 headless, DR-UI-3 drawn and dragged, DR-LANE-1 `lane move`; R-LANE-2's view with U4) — 🚧 R-LANE-3, R-CLIP-6…8 (instrument tracks, MIDI clips made, looped and moved: E3, E4)
 
 - **R-LANE-1 A lane is a timeline row for organisation only** (FL Studio's playlist): it holds any
   clips, from any strips. Lanes are added, named, coloured, reordered and deleted (deleting a lane
-  with clips is refused unless asked to take them with it).
+  with clips is refused unless asked to take them with it). (**AMENDED (user request, 2026-10-09,
+  third brief):** a lane may instead be an instrument's TRACK (R-LANE-3) — then what it holds plays
+  through that instrument. A lane that names no instrument is organisation only, exactly as written.)
 - **R-LANE-2 Arrange by Lane | Channel.** One toggle regroups the same clips as one row per strip —
   each row is exactly what one strip plays. In that view, dragging a clip to another row moves it to
   that strip (re-routes it).
+- **R-LANE-3 An instrument track** (user request, 2026-10-09, third brief: *"user can create midi track
+  and put in an instrument track, so they can loop that midi in the track or move to another"*; the user
+  chose "a track owns its instrument"): a lane may name ONE instrument strip as its own
+  (`<lane>.strip`); it is then that instrument's track and a note clip on it plays through it. Placed
+  there, a clip plays through it; moved there (`clip move --lane`), it is re-routed in the same command,
+  and the output says so; told to play through another instrument (`clip move --strip`), it moves to
+  that instrument's track (its newest, else a new one) in the same command. An audio clip is refused
+  on an instrument's track, naming it — a track is exactly what its instrument plays. A lane made for
+  an instrument (`clip add --instrument`, an instrument's first clip, `lane add --strip <ch>`) is its
+  track; one instrument may have several. A track's header names its instrument and, while the lane
+  has no name of its own, shows the strip's name — renaming the instrument renames it (D-2's lane
+  half). `set <ln>.strip=<ch>` makes a lane a track (refused while it holds a clip of another strip,
+  naming it); `set <ln>.strip=none` makes it plain. Deleting the instrument leaves its tracks plain
+  lanes. A song saved before tracks existed (no `tracks` line in its header) opens with every lane
+  whose clips all play through one instrument strip made that strip's track — the lanes R-SVC-8's lane
+  reuse built — and is saved with the line from then on.
 - **R-CLIP-1 An audio clip** plays a span of a file: `at` (beats), source `in`/`out` (seconds — a
   file has no tempo), gain, fade in/out, loop to fill a length (was SR-CLIP-1/2).
 - **R-CLIP-2 A note clip** plays a **pattern** — a named list of notes (pitch, start, length,
@@ -209,8 +227,21 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   pattern: editing the notes edits every copy. "Make unique" gives a clip its own copy.
 - **R-CLIP-4 Clips may overlap** on a lane; overlapping audio sums (was SR-CLIP-4).
 - **R-CLIP-5 Reserved:** time-stretch and pitch-shift (was SR-CLIP-3).
+- **R-CLIP-6 A MIDI clip is made on its track** (user request, 2026-10-09, third brief; the user chose to
+  keep the piano roll as the clip's editor): a double-click on an instrument track's empty space makes a
+  one-bar note clip there on the snap step — a new empty pattern, one command (`clip add --lane <ln> --at
+  <b> --length 4`, the track's instrument implied); a right-click there offers New MIDI Clip. The UI
+  says **MIDI** for what the grammar calls a note clip and a pattern (the user's word); the grammar keeps
+  its names. Double-clicking the clip opens its piano roll, as before (R-ROLL-1).
+- **R-CLIP-7 A clip's end is dragged** (*"so they can loop that midi in the track"*): its right edge sets
+  its length on the snap step — one `set <ac>.length=<beats>` on release, the edge the pointer's while
+  held. A note clip longer than its pattern repeats it (R-CLIP-2), and every repeat's start is marked on
+  the clip so the loop can be seen.
+- **R-CLIP-8 A clip dragged onto another track plays through that track's instrument** (R-LANE-3): one
+  `clip move <ac> --lane <ln> [--at <b>]`; an audio clip dragged onto an instrument's track is refused
+  (it eases home), a note clip onto a plain lane keeps its instrument (organisation, R-LANE-1).
 
-## R-TIME — transport and time — ✅ BUILT (1–4: DR-PLAY-1, the metronome DR-EDM-2, the loop region on the ruler DR-EDM-7) — 5 ✅ (the ruler on the grid, DR-UI-10)
+## R-TIME — transport and time — ✅ BUILT (1–4: DR-PLAY-1, the metronome DR-EDM-2, the loop region on the ruler DR-EDM-7) — 5 ✅ (the ruler on the grid, DR-UI-10) — 🚧 6 (the ruler dragged, E2)
 
 - **R-TIME-1 Beats are authoritative**, 960 PPQ; seconds are derived from the tempo (was SR-TIME-1).
 - **R-TIME-2 One tempo and one meter** per project; a tempo/meter map is reserved (was SR-TIME-2/5).
@@ -219,6 +250,14 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   on beat indicator on timeline, move to that position with snap to beat at that zoom, if zoom max, no
   snap"*): the seek lands on the nearest line of the zoom's grid (R-UI-10); at the deepest zoom it does
   not snap at all — the exact tick under the pointer.
+- **R-TIME-6 The ruler takes drags** (user request, 2026-10-09, third brief: *"time bar interact with drag
+  and drop too, not just click"*): pressed and dragged, the playhead follows the pointer on the grid you
+  see (unsnapped at the deepest zoom, R-TIME-5) — a `transport seek` each time it reaches a new grid
+  line, as a fader sends each step, so a playing song is heard from there, and once more where it is
+  let go. The loop region's brace is dragged by its body (it moves, its length kept) or by an end (it
+  resizes): one `transport loop` on release. Shift-drag still draws a new loop (R-EDM-7); a click still
+  seeks (R-TIME-5); a click inside the brace still clears it. A seek is not an edit: no undo step, the
+  song stays saved.
 - **R-TIME-4 Transport:** play, stop, seek, loop region, metronome (was SR-TIME-4). (**Detailed
   2026-10-09, R-EDM-2/7:** the metronome is the machine's setting (`settings set metronome=on`), clicks
   on every beat while playing with the bar's first accented, its sound a pad of the DSP library's
@@ -277,7 +316,7 @@ audio devices so the user can take advantage of their devices."*
   `bpm · length`, version count. New (name, tempo, meter, sample rate defaulting from Settings),
   Open, Settings.
 
-## R-BROWSE — the left panel: samples and presets — 🚧 IN PROGRESS (1 ✅ DR-BROWSE-1/2, presets wait for a preset store; 2 ✅ audition, DR-EDM-9 (R-EDM-9); 3 ✅ onto the lanes, DR-BROWSE-2 — onto a strip or a rack with U3/U4)
+## R-BROWSE — the left panel: samples and presets — 🚧 IN PROGRESS (1 ✅ DR-BROWSE-1/2, presets wait for a preset store; 2 ✅ audition, DR-EDM-9 (R-EDM-9); 3 ✅ onto the lanes, DR-BROWSE-2 — onto a strip or a rack with U3/U4) — 🚧 4 (the song's MIDI list, E4)
 
 - **R-BROWSE-1 Three sections:** Folders (the sample folders from Settings), Presets (every
   instrument and effect in the registry with its factory and user presets), Project (the sounds the
@@ -286,6 +325,16 @@ audio devices so the user can take advantage of their devices."*
   preset store that does not exist yet, so the tab lists the registry's instruments and effects and
   a type's factory and user presets will join it under its row; "Project" is "the song" everywhere
   else in this app.)
+- **R-BROWSE-4 The song's MIDI list** (user request, 2026-10-09, third brief: *"there should be a midi
+  list of project to drag and drop into project"*): the Song tab lists the song's MIDI (its patterns)
+  above its samples — each with its name, length, note count and the instruments that play it; keyed
+  rows that grow in and shrink out. Dragged onto an instrument's track → a clip of it there, on the snap
+  step (`clip add --pattern <pt> --lane <ln> --at <b>`, the track's instrument implied); onto a plain
+  lane or below the last → it plays through the instrument its newest clip plays through (on that
+  lane, or a new track for it); a pattern no clip plays, dropped off a track → a notice naming what to
+  do, nothing sent. **New MIDI** → `pattern new`; a double-click → its piano roll; its menu: Rename,
+  Duplicate (`pattern duplicate`), Delete (refused while a clip plays it, naming them), Copy ID. Every
+  drop is one command (R-BROWSE-3).
 - **R-BROWSE-2 Click auditions** a sample through the master's port without touching the project.
 - **R-BROWSE-3 Drag and drop.** A sample onto a lane → a clip at the drop point on a new or reused
   strip (R-MIX-2); into empty space → a new lane too; onto a strip → load it there. An instrument
@@ -430,7 +479,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
   every note start onto the grid, delaying every second grid step by the swing.
 - **R-ROLL-5 The pattern's length** is set from the roll (`set <pt>.length=`), its end dragged.
 
-## R-VST — VST3 — ✅ BUILT 1–5 (user request, 2026-10-09; replaces R-INST-4's VST3 half; DR-VST-1; 6 reserved)
+## R-VST — VST3 — ✅ BUILT 1–5 (user request, 2026-10-09; replaces R-INST-4's VST3 half; DR-VST-1; 6 reserved) — 🚧 7, 8 (the Arstro editor, E5/E6)
 
 The user: *"need to sync with current workflow of other apps that use VST3 (because this will use
 VST3 later) — install the VST3 SDK and adapt Basic Synth and Drum Machine to VST3."* No app in the
@@ -452,6 +501,24 @@ controller, normalised parameters and saved state.
   equals the DSP device's own render sample for sample at the same parameters, notes and block size.
 - **R-VST-6 Reserved:** hosting other makers' VST3 in Solaris (scan `~/.vst3`, load, process, their
   editor window) — host work (R-SVC-4).
+- **R-VST-7 Their own editor, in the Arstro look** (user request, 2026-10-09, third brief: *"make the
+  Basic Synth a vst3 app and make the UI follow Arstro theme like Cosmo/Interstellar and Solaris, drum
+  machine also"*; the user chose "plugins with an Arstro editor", not standalone apps): each plugin opens
+  its own editor (`IPlugView` — on Linux an X11 window embedded in the host's, driven by the host's
+  `IRunLoop`) instead of the host's generic sliders. It is drawn by Artboard with cosmo's tokens and
+  embedded fonts and Solaris's teal (they are Solaris's instruments) and obeys `arstro.design.rule` like
+  any Arstro window — nothing snaps; a value the HOST changes (automation, a preset, undo) eases in.
+  Its controls are GENERATED from the registry (law 2): a section per parameter group, a slider per
+  number with its unit and taper, a segmented choice per choice, double-click → the default; every
+  gesture is a host-automatable edit (`beginEdit` / `performEdit` / `endEdit`) through the ONE shared
+  normalisation (R-VST-3). Drum Machine's editor adds its pads: a grid named by the registry's note
+  names, a click plays the pad through the plugin's own processor, the pad picked shows its controls.
+  The editor is the umbrella's (it needs Artboard and cosmo, which the DSP repo does not carry): the DSP
+  repo alone still builds both plugins with the host's generic view, through one seam.
+- **R-VST-8 Verified:** the validator still passes both plugins with their editors; each editor is
+  rendered headless at its size and looked at; a slider dragged makes `performEdit` with the shared
+  mapping's value; a host change is caught mid-tween; a pad click reaches the processor as a note; and
+  the editor runs embedded in a real VST3 host window on X11 (the SDK's editor host, L5).
 
 ## R-EDM — what a professional EDM DAW needs (user request, 2026-10-09: *"suggest all necessary features"*) — 🚧 IN PROGRESS (1 ✅ DR-EDM-1; 2 ✅ DR-EDM-2; 3 ✅ with R-MIX-15, DR-MIX-15; 4 ✅ DR-EDM-4; 5 ✅ with R-AUTO, DR-AUTO-2; 6 ✅ with R-ROLL, DR-ROLL-1; 7 ✅ DR-EDM-7; 8 ✅ DR-EDM-8; 9 ✅ DR-EDM-9)
 
