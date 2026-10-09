@@ -1,6 +1,7 @@
 #include "InstrumentEditor.h"
 #include "EmbeddedFonts.h"
 #include "RegistryModel.h"
+#include "../../interstellar/app/widgets/TextFit.h"
 #include <algorithm>
 #include <cmath>
 #include <mutex>
@@ -10,6 +11,7 @@ namespace arstro
 namespace solaris_ui
 {
     using namespace artboard;
+    namespace textfit = interstellar_v1::textfit;
 
     InstrumentEditor::InstrumentEditor(const DeviceType &type, ParamAccess &access) : mType(type), mAccess(access)
     {
@@ -18,10 +20,19 @@ namespace solaris_ui
         static std::once_flag fonts;
         std::call_once(fonts, [] { cosmo_v2::registerEmbeddedFonts(); });
         installSolarisAccent();
+        mRoot = std::make_shared<Segment>();
         mPanel = std::make_shared<DevicePanel>(kDevice);
         mPanel->songControls = false;
         mPanel->onCommand = [this](const std::string &line) { return command(line); };
-        mRecognizer.setSink([this](const Gesture &g) { mPanel->onGesture(g); });
+        mRoot->addChild(mPanel);
+        if (!type.noteNames.empty())
+        {
+            // a kit: its pads over the panel; a pad picked shows the parameters that shape it
+            mPads = std::make_shared<PadGrid>(type, access);
+            mPads->onPick = [this](const std::string &prefix) { mPanel->revealGroup(prefix); };
+            mRoot->addChild(mPads);
+        }
+        mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
         refresh();
     }
 
@@ -110,6 +121,113 @@ namespace solaris_ui
         }
     }
 
+    // ── a kit's pads ────────────────────────────────────────────────────────────────────────
+
+    PadGrid::PadGrid(const DeviceType &type, ParamAccess &access) : mAccess(access)
+    {
+        clipToBounds = true;
+        for (size_t i = 0; i < type.noteNames.size(); ++i)
+        {
+            Pad p;
+            p.note = type.noteNames[i].first;
+            p.name = type.noteNames[i].second;
+            for (const auto &np : type.notePrefixes)
+                if (np.first == p.note) p.prefix = np.second; // the registry joins a key to its parameters (REQ-device-9)
+            mPads.push_back(std::move(p));
+        }
+    }
+
+    double PadGrid::contentHeight() const
+    {
+        const int rows = ((int)mPads.size() + kColumns - 1) / kColumns;
+        return rows <= 0 ? 0.0 : 2.0 * kPad + rows * kPadH + (rows - 1) * kGap;
+    }
+
+    Rect PadGrid::padRect(int i) const
+    {
+        const double w = (width.value() - 2.0 * kPad - (kColumns - 1) * kGap) / kColumns;
+        const int r = i / kColumns, c = i % kColumns;
+        return Rect{kPad + c * (w + kGap), kPad + r * (kPadH + kGap), std::max(0.0, w), kPadH};
+    }
+
+    int PadGrid::padAt(const Point &p) const
+    {
+        for (int i = 0; i < padCount(); ++i)
+            if (padRect(i).contains(p)) return i;
+        return -1;
+    }
+
+    void PadGrid::advance(double nowMs)
+    {
+        mNowMs = nowMs;
+        for (int i = 0; i < padCount(); ++i)
+        {
+            Pad &p = mPads[(size_t)i];
+            const bool want = i == mPicked;
+            if (want != p.pickLast)
+            {
+                p.pick.animateTo(want ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs);
+                p.pickLast = want;
+            }
+            if (p.hit)
+            {
+                // a hit: lit at once (R2, a response this frame), then dying away like the sound
+                p.flash.set(1.0);
+                p.flash.animateTo(0.0, 320.0, Easing::EaseOutCubic, nowMs);
+                p.hit = false;
+            }
+            p.pick.update(nowMs);
+            p.flash.update(nowMs);
+        }
+        Segment::advance(nowMs);
+    }
+
+    bool PadGrid::handleGesture(const Gesture &g, const Point &local)
+    {
+        switch (g.type)
+        {
+        case Gesture::Type::Down:
+        {
+            const int i = padAt(local);
+            if (i < 0) return true;
+            mHeld = i;
+            mPads[(size_t)i].hit = true;
+            mAccess.play(mPads[(size_t)i].note, 100);
+            if (mPicked != i)
+            {
+                mPicked = i;
+                if (onPick && !mPads[(size_t)i].prefix.empty()) onPick(mPads[(size_t)i].prefix);
+            }
+            return true;
+        }
+        case Gesture::Type::Up:
+        case Gesture::Type::Drop:
+            if (mHeld >= 0) mAccess.play(mPads[(size_t)mHeld].note, 0);
+            mHeld = -1;
+            return true;
+        default:
+            return true; // the grid is a surface
+        }
+    }
+
+    void PadGrid::onPaint(IRenderTarget &t) const
+    {
+        t.setStroke(palette::border(), 1.0);
+        t.beginPath(); t.moveTo(0, height.value() - 0.5); t.lineTo(width.value(), height.value() - 0.5); t.strokePath();
+        for (int i = 0; i < padCount(); ++i)
+        {
+            const Pad &p = mPads[(size_t)i];
+            const Rect r = padRect(i);
+            drawRoundedRect(t, r, radius::control(), Paint::filled(palette::secondary()));
+            if (p.flash.value() > 0.001) drawRoundedRect(t, r, radius::control(), Paint::filled(palette::primaryAlpha(0.45 * p.flash.value())));
+            if (p.pick.value() > 0.001) drawRoundedRect(t, r, radius::control(), Paint::stroked(palette::primaryAlpha(p.pick.value()), 1.5));
+            t.setFill(palette::foreground());
+            t.drawText(textfit::ellipsize(t, p.name, r.w - 12.0, 11.0, font::sansMedium()), r.x + 6.0, r.y + 16.0, 11.0, font::sansMedium());
+            t.setFill(palette::mutedForeground());
+            t.drawText(std::to_string(p.note), r.x + 6.0, r.bottom() - 7.0, 9.0, font::mono());
+        }
+    }
+
     void InstrumentEditor::wheel(double x, double y, double notches, double timeMs)
     {
         RawPointer rp{};
@@ -125,15 +243,26 @@ namespace solaris_ui
         refresh();
         mRecognizer.advance(nowMs);
         drawRoundedRect(t, Rect{0, 0, mW, mH}, 0.0, Paint::filled(palette::background()));
+        mRoot->width.set(mW);
+        mRoot->height.set(mH);
+        if (mPads)
+        {
+            // the pads in the panel's band: under its title, over its rows
+            mPads->x.set(0.0);
+            mPads->y.set(DevicePanel::kHeaderH);
+            mPads->width.set(mW);
+            mPads->height.set(mPads->contentHeight());
+            mPanel->band = mPads->contentHeight();
+        }
         mPanel->x.set(0.0);
         mPanel->y.set(0.0);
         mPanel->width.set(mW);
         mPanel->height.set(mH);
         mPanel->layout();
-        mPanel->advance(nowMs);
+        mRoot->advance(nowMs);
         mPanel->layout(); // rows built this frame are placed this frame
-        mPanel->render(t);
-        mPanel->renderOverlay(t);
+        mRoot->render(t);
+        mRoot->renderOverlay(t);
     }
 }
 }

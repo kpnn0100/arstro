@@ -201,9 +201,10 @@ normalises by the shared mapping):
 | a choice clicked (left / right half) | begin, perform (the previous / next name), end — at once |
 | a slider double-clicked | begin, perform (the registry's default), end |
 | the host moves a value (automation, a preset) | nothing back; the thumb springs there and the row is lit |
+| a pad pressed · released (Drum Machine) | no edit: the pad heard through the processor (`playNote` → `arstro.note`), the pad picked (its ring eases in, its hit flashes and dies away), the panel scrolled so that pad's group begins at the top · its note-off |
 
 Shots: `solaris_plugin_editor` writes `plugin-editor-synth.png`, `plugin-editor-synth-small.png` (360×320),
-`plugin-editor-drums.png` into its working directory. Live: `vst3_editorhost build/vst3/ArstroBasicSynth.vst3`.
+`plugin-editor-drums.png`, `plugin-editor-drums-pads.png` (Closed Hat picked, CHAT at the top) into its working directory. Live: `vst3_editorhost build/vst3/ArstroBasicSynth.vst3`.
 Gotcha: the SDK's editor host reads `_XEMBED_INFO` from the plugin's window on its CreateNotify — set it
 before mapping, in the same batch as the window's creation, or the host exits ("XGetWindowProperty for
 _XEMBED_INFO failed").

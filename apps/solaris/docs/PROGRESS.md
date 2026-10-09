@@ -17,19 +17,10 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► E — the 2026-10-09 third brief** (user request; discussion Round 5; one task per commit):
-- **E1** the requirements: R-TIME-6, R-LANE-3 (R-LANE-1 amended), R-CLIP-6…8, R-BROWSE-4, R-VST-7/8.
-- **E2** the ruler dragged: the playhead follows, seeking at each grid line; the loop brace moved and
-  resized (R-TIME-6).
-- **E3** instrument tracks: `<lane>.strip`, clips re-routed by the track they are put on, audio refused
-  there, headers name the instrument, older songs' one-instrument lanes adopted (R-LANE-3, D-2's lane half).
-- **E4** MIDI clips on the lanes and the song's MIDI list: made by a double-click on a track, looped by
-  dragging the end, moved between tracks; the Song tab's MIDI rows dragged in (R-CLIP-6…8, R-BROWSE-4).
-- **E5** the plugin editor: an Artboard view embedded in the host's X11 window, generated from the
-  registry; Basic Synth's (R-VST-7/8).
-- **E6** Drum Machine's editor: its pads, played from the editor through the processor (R-VST-7/8).
-Then B13 (the MIDI keyboard, R-EDM-10) — B13+ are Claude's own suggestions; ask before a long run.
-T2 and T3 are small and may go first.
+**► B13 — the MIDI keyboard** (R-EDM-10), then R-EDM-11…20 one task each (B13+ below). B13+ are
+Claude's own EDM suggestions from the first brief — check the user still wants them before a long run.
+The second (C1–C6) and third (E1–E6) briefs of 2026-10-09 are built; T2 and T3 (D-2's pattern half, D-3 —
+now a lookup through `notePrefixes`) are small and may go first.
 
 ---
 
@@ -240,7 +231,11 @@ umbrella's pointer — `arstro.rule` §7).
       shared mapping) / endEdit at release; a host change springs in and is lit; an XEmbed X11 view on the
       host's run loop, resizable. Validator passes; L5 in the SDK's editor host (a drag moved Kick Decay
       450 → 29.9 ms). 4 mutants caught.
-- [ ] **E6** Drum Machine's editor with its pads (R-VST-7/8).
+- [x] **E6** Drum Machine's editor with its pads (R-VST-7/8).
+      — DR-VST-7 (DSP `9634166`: REQ-device-9 `notePrefixes`, REQ-vst-7 `playNote` → `arstro.note` → a lock-free
+      queue in the processor): ten pads named by the registry in the panel's band; a press plays the pad
+      through the processor (heard end to end in process: peak 0.358) and picks it, the panel scrolling its
+      group to the top; pick and flash ease. 5 mutants caught (4 umbrella, 1 DSP). L5 in the editor host.
 - [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.
 
 ### T — tasks found on the way

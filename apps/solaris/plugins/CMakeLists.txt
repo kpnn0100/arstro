@@ -37,5 +37,5 @@ endforeach()
 # mapping's value; a host change eases in; the frames written for a look
 add_executable(solaris_plugin_editor_tests tests/editorTests.cpp ${SL_VST3_DIR}/RegistryPlugin.cpp)
 target_include_directories(solaris_plugin_editor_tests PRIVATE ${SL_VST3_DIR})
-target_link_libraries(solaris_plugin_editor_tests PRIVATE solaris_instrument_editor vst3_sdk)
+target_link_libraries(solaris_plugin_editor_tests PRIVATE solaris_instrument_editor vst3_sdk vst3_hosting)
 add_test(NAME solaris_plugin_editor COMMAND solaris_plugin_editor_tests)

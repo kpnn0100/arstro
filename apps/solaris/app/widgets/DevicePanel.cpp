@@ -310,10 +310,10 @@ namespace solaris_ui
     void DevicePanel::layout()
     {
         const double W = width.value(), H = height.value();
-        const double bodyH = std::max(0.0, H - kHeaderH);
-        mScroll.setExtent(kHeaderH, bodyH, mBody->contentH);
+        const double bodyH = std::max(0.0, H - bodyTop());
+        mScroll.setExtent(bodyTop(), bodyH, mBody->contentH);
         mBody->x.set(0.0);
-        mBody->y.set(kHeaderH);
+        mBody->y.set(bodyTop());
         mBody->width.set(W);
         mBody->height.set(bodyH);
         mBody->scroll = mScroll.value();
@@ -371,7 +371,7 @@ namespace solaris_ui
     Rect DevicePanel::rowRect(int i) const
     {
         if (i < 0 || i >= rowCount()) return Rect{};
-        return Rect{space::padX(), kHeaderH + mBody->rows[(size_t)i].top - mScroll.value(), width.value() - 2.0 * space::padX(),
+        return Rect{space::padX(), bodyTop() + mBody->rows[(size_t)i].top - mScroll.value(), width.value() - 2.0 * space::padX(),
                     cosmo_v2::SliderRow::kRowHeight};
     }
 
@@ -405,6 +405,20 @@ namespace solaris_ui
     {
         for (const auto &r : mBody->rows)
             if (r.spec.name == param) mScroll.reveal(r.top, cosmo_v2::SliderRow::kRowHeight);
+    }
+
+    void DevicePanel::revealGroup(const std::string &prefix)
+    {
+        // the group's section header, at the top: the group's first row, and the header just above it
+        for (const auto &r : mBody->rows)
+            if (r.spec.name.rfind(prefix + ".", 0) == 0)
+            {
+                double top = r.top;
+                for (const auto &s : mBody->sections)
+                    if (s.second <= r.top) top = s.second;
+                mScroll.reveal(top, std::max(0.0, height.value() - bodyTop()));
+                return;
+            }
     }
 
     Rect DevicePanel::removeRect() const { return Rect{width.value() - space::padX() - 55.25, 8.125, 55.25, 19.5}; }

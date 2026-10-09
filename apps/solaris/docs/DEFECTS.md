@@ -32,6 +32,8 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
   `DeviceRegistry` entry in the DSP library) were named apart.
 - **Recommended fix:** resolve a pad's note name as an alias of its parameter prefix in `setAddress` /
   `getAddress` (or rename one side in the registry, which would change saved `.slp` keys — not that).
+  (**2026-10-09, E6:** the registry now publishes the join — `DeviceType::notePrefixes`, DSP REQ-device-9:
+  42 "Closed Hat" ↔ `chat` — and the plugins' editor uses it for its pads. The fix above is now a lookup.)
 
 ## Closed
 

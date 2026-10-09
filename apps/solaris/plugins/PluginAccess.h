@@ -20,6 +20,7 @@ namespace solaris_ui
         void begin(int i) override { mC.editBegin(i); }
         void perform(int i, double v) override { mC.editPerform(i, v); }
         void end(int i) override { mC.editEnd(i); }
+        void play(int pitch, int velocity) override { mC.playNote(pitch, velocity); } // a pad: through the processor (REQ-vst-7)
 
     private:
         vst3::Controller &mC;

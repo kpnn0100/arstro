@@ -38,6 +38,51 @@ namespace solaris_ui
         virtual void begin(int index) = 0;
         virtual void perform(int index, double value) = 0;
         virtual void end(int index) = 0;
+        /** A key heard through the plugin (a pad clicked) — velocity 0 is its note-off. */
+        virtual void play(int pitch, int velocity) { (void)pitch; (void)velocity; }
+    };
+
+    /** A kit's pads (R-VST-7, Drum Machine): one per key the registry names, in its order. A press plays the
+     *  pad through the plugin and picks it — the panel scrolls to the parameters that shape it (the registry's
+     *  `notePrefixes`); the release is its note-off. The pick and the hit's flash ease (design rule §1). */
+    class PadGrid : public artboard::Segment
+    {
+    public:
+        static constexpr int kColumns = 5;
+        static constexpr double kPadH = 39.0;   // space::u(12)
+        static constexpr double kGap = 6.5;     // space::u(2)
+        static constexpr double kPad = 9.75;    // space::u(3): the panel's padding
+        PadGrid(const DeviceType &type, ParamAccess &access);
+        double contentHeight() const;           // what the grid needs at its width
+        int padCount() const { return (int)mPads.size(); }
+        artboard::Rect padRect(int i) const;    // local
+        const std::string &padName(int i) const { return mPads[(size_t)i].name; }
+        int padNote(int i) const { return mPads[(size_t)i].note; }
+        const std::string &padPrefix(int i) const { return mPads[(size_t)i].prefix; }
+        int picked() const { return mPicked; }
+        double pickAmount(int i) const { return mPads[(size_t)i].pick.value(); }   // LIVE
+        double flashAmount(int i) const { return mPads[(size_t)i].flash.value(); } // LIVE
+        std::function<void(const std::string &prefix)> onPick;
+        void advance(double nowMs) override;
+
+    protected:
+        void onPaint(artboard::IRenderTarget &t) const override;
+        bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
+        bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
+
+    private:
+        struct Pad
+        {
+            int note = 0;
+            std::string name, prefix;
+            artboard::AnimatedProperty pick{0.0}, flash{0.0};
+            bool pickLast = false, hit = false;
+        };
+        int padAt(const artboard::Point &p) const;
+        ParamAccess &mAccess;
+        std::vector<Pad> mPads;
+        int mPicked = -1, mHeld = -1;
+        double mNowMs = 0.0;
     };
 
     class InstrumentEditor
@@ -59,6 +104,8 @@ namespace solaris_ui
         void render(artboard::IRenderTarget &t, double nowMs);
 
         DevicePanel &panel() { return *mPanel; }
+        /** A kit's pads, over the panel (nullptr for a melodic instrument). */
+        PadGrid *pads() { return mPads.get(); }
         const solaris::AppModel &model() const { return mModel; }
         const DeviceType &type() const { return mType; }
 
@@ -68,7 +115,9 @@ namespace solaris_ui
 
         const DeviceType &mType;
         ParamAccess &mAccess;
+        std::shared_ptr<artboard::Segment> mRoot;
         std::shared_ptr<DevicePanel> mPanel;
+        std::shared_ptr<PadGrid> mPads;
         artboard::GestureRecognizer mRecognizer;
         solaris::AppModel mModel;
         std::vector<double> mShown;     // the values the model was built from

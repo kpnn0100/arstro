@@ -77,6 +77,12 @@ namespace solaris_ui
         /** The song's controls in the header — On/Bypassed, Remove, Piano Roll. Off in a plugin's own editor
          *  (R-VST-7), where the panel is the whole instrument: its header names it instead. Opt-in, default on. */
         bool songControls = true;
+        /** Room under the header an embedder fills (a kit's pads in a plugin's editor, R-VST-7); the rows begin
+         *  below it. Opt-in, default 0: Solaris's windows lay out exactly as before. */
+        double band = 0.0;
+        double bodyTop() const { return kHeaderH + band; }
+        /** Scroll, eased, so the group whose parameters are `<prefix>.*` begins at the top (a pad picked). */
+        void revealGroup(const std::string &prefix);
 
         std::function<bool(const std::string &line)> onCommand;
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;

@@ -5,6 +5,8 @@
 #endif
 #include <cassert>
 #include "PluginAccess.h"
+#include "public.sdk/source/vst/hosting/hostclasses.h"
+#include "public.sdk/source/vst/hosting/processdata.h"
 #include "adapter/native/CairoTarget.h"
 #include "widgets/DevicePanel.h"
 #include "../../../cosmo/widgets/SliderRow.h"
@@ -51,8 +53,10 @@ namespace
         void begin(int i) override { inner.begin(i); }
         void perform(int i, double v) override { performed.emplace_back(i, v); inner.perform(i, v); }
         void end(int i) override { inner.end(i); }
+        void play(int pitch, int velocity) override { played.emplace_back(pitch, velocity); inner.play(pitch, velocity); }
         arstro::solaris_ui::ParamAccess &inner;
         std::vector<std::pair<int, double>> performed;
+        std::vector<std::pair<int, int>> played;
     };
 
     /** A plugin, its controller wired to the fake host, its editor drawn into an image — no window. */
@@ -238,7 +242,113 @@ namespace
         r.settle();
         assert(r.editor.panel().rowCount() == (int)r.controller.type().params.size() && r.editor.model().strips[0].devices[0].label == "Drum Machine");
         r.write("plugin-editor-drums");
-        pass("the drum machine's editor: its registry's rows, titled Drum Machine");
+        Rig s("synth");
+        assert(s.editor.pads() == nullptr); // a melodic instrument has no pads
+        pass("the drum machine's editor: its registry's rows, titled Drum Machine; a synth's has no pads");
+    }
+
+    void test_a_pad_plays_and_shows_its_parameters()
+    {
+        // R-VST-7: the kit's pads — named by the registry, in its order; a press plays the pad through the
+        // plugin and picks it (the panel scrolls to what shapes it); the release is its note-off
+        Rig r("drums");
+        r.settle();
+        auto *pads = r.editor.pads();
+        const auto &t = r.controller.type();
+        assert(pads && pads->padCount() == (int)t.noteNames.size());
+        int hat = -1;
+        for (int i = 0; i < pads->padCount(); ++i)
+        {
+            assert(pads->padName(i) == t.noteNames[(size_t)i].second && pads->padNote(i) == t.noteNames[(size_t)i].first);
+            if (pads->padName(i) == "Closed Hat") hat = i;
+        }
+        assert(hat >= 0 && pads->padPrefix(hat) == "chat"); // the registry joins the key to its parameters
+        auto &p = r.editor.panel();
+        auto rowOf = [&](const std::string &n) { return p.rowRect(r.row(n)); };
+        assert(rowOf("chat.tune").y > p.height.value());    // below the fold at first
+        artboard::Rect pr = pads->padRect(hat);
+        pr.y += pads->y.value();                             // the grid sits in the panel's band, under its title
+        pr.x += pads->x.value();
+        r.editor.pointer(1, pr.x + pr.w * 0.5, pr.y + pr.h * 0.5, 0, r.now);
+        r.editor.pointer(0, pr.x + pr.w * 0.5, pr.y + pr.h * 0.5, 0, r.now);
+        assert(r.rec.played.size() == 1 && r.rec.played[0] == std::make_pair(42, 100)); // heard on the press
+        r.frame();
+        r.frame();
+        assert(pads->flashAmount(hat) > 0.0 && pads->flashAmount(hat) < 1.0);   // the hit, dying away
+        assert(pads->pickAmount(hat) > 0.0 && pads->pickAmount(hat) < 1.0);     // the pick, easing in
+        assert(pads->picked() == hat);
+        r.editor.pointer(2, pr.x + pr.w * 0.5, pr.y + pr.h * 0.5, 0, r.now + 60.0);
+        r.frame();
+        assert(r.rec.played.size() == 2 && r.rec.played[1] == std::make_pair(42, 0)); // its note-off on release
+        r.settle();
+        assert(pads->pickAmount(hat) == 1.0 && pads->flashAmount(hat) == 0.0);
+        const artboard::Rect row = rowOf("chat.tune");
+        // scrolled so the hat's group begins at the top of the rows (its header, then `chat.tune`)
+        assert(row.y >= p.bodyTop() - 1.0 && row.y < p.bodyTop() + 3.0 * arstro::cosmo_v2::SliderRow::kRowHeight);
+        assert(pads->y.value() == arstro::solaris_ui::DevicePanel::kHeaderH && p.band == pads->contentHeight());
+        assert(r.host.edits.empty()); // playing a pad edits nothing
+        r.write("plugin-editor-drums-pads");
+        pass("a pad: named by the registry, heard through the plugin on the press (42 at 100) and released (42 at 0), its flash and its pick caught easing, the panel scrolled to `chat.*`; no edit (R-VST-7)");
+    }
+
+    void test_a_pad_is_heard_through_the_processor()
+    {
+        // R-VST-7 end to end, in process: the editor's pad → the controller's message → the host's connection →
+        // the processor's queue → a note at the next block. The SDK's own host classes carry the message.
+        IPtr<Vst::HostApplication> app = owned(new Vst::HostApplication());
+        const arstro::vst3::PluginId id{"drums", FUID(), FUID()};
+        IPtr<arstro::vst3::Processor> proc = owned(new arstro::vst3::Processor(id));
+        IPtr<arstro::vst3::Controller> ctl = owned(new arstro::vst3::Controller(id));
+        assert(proc->initialize(app) == kResultOk && ctl->initialize(app) == kResultOk);
+        assert(proc->connect(ctl) == kResultOk && ctl->connect(proc) == kResultOk); // what a host does for the two halves
+        Vst::SpeakerArrangement out = Vst::SpeakerArr::kStereo;
+        Vst::ProcessSetup setup{Vst::kRealtime, Vst::kSample32, 256, 48000.0};
+        assert(proc->setBusArrangements(nullptr, 0, &out, 1) == kResultOk && proc->setupProcessing(setup) == kResultOk);
+        proc->activateBus(Vst::kAudio, Vst::kOutput, 0, true);
+        proc->activateBus(Vst::kEvent, Vst::kInput, 0, true);
+        assert(proc->setActive(true) == kResultOk);
+        proc->setProcessing(true);
+        Vst::HostProcessData data;
+        data.prepare(*proc, 256, Vst::kSample32);
+        auto blocks = [&](int n) {
+            double peak = 0.0;
+            for (int b = 0; b < n; ++b)
+            {
+                data.numSamples = 256;
+                data.inputEvents = nullptr;
+                data.inputParameterChanges = nullptr;
+                proc->process(data);
+                for (int i = 0; i < 256; ++i) peak = std::max(peak, (double)std::fabs(data.outputs[0].channelBuffers32[0][i]));
+            }
+            return peak;
+        };
+        arstro::solaris_ui::ControllerAccess access(*ctl);
+        InstrumentEditor editor(ctl->type(), access);
+        cairo_surface_t *surf = cairo_image_surface_create(CAIRO_FORMAT_RGB24, (int)editor.width(), (int)editor.height());
+        cairo_t *cr = cairo_create(surf);
+        artboard::CairoTarget target(cr);
+        double now = 0.0;
+        for (int i = 0; i < 30; ++i) { editor.render(target, now); now += 16.0; }
+        assert(blocks(4) == 0.0); // silence until a pad is played
+        auto *pads = editor.pads();
+        artboard::Rect kick = pads->padRect(0);
+        kick.x += pads->x.value();
+        kick.y += pads->y.value();
+        editor.pointer(1, kick.x + 10.0, kick.y + 10.0, 0, now);
+        editor.pointer(0, kick.x + 10.0, kick.y + 10.0, 0, now);
+        const double heard = blocks(8);
+        editor.pointer(2, kick.x + 10.0, kick.y + 10.0, 0, now + 50.0);
+        std::printf("    the kick pad, through the processor: peak %.3f\n", heard);
+        assert(heard > 0.05);
+        cairo_destroy(cr);
+        cairo_surface_destroy(surf);
+        proc->setProcessing(false);
+        proc->setActive(false);
+        ctl->disconnect(proc);
+        proc->disconnect(ctl);
+        ctl->terminate();
+        proc->terminate();
+        pass("a pad is heard: editor → controller → host message → processor → the kick at the next block, where there was silence (R-VST-7, REQ-vst-7)");
     }
 }
 
@@ -248,6 +358,8 @@ int main()
     test_a_drag_is_the_hosts_edit_with_the_shared_mapping();
     test_a_host_change_eases_in_and_is_lit();
     test_the_drum_machine_editor_builds();
+    test_a_pad_plays_and_shows_its_parameters();
+    test_a_pad_is_heard_through_the_processor();
     std::printf("\n%d passed, 0 failed\n", gPassed);
     return 0;
 }
