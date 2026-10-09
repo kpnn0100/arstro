@@ -310,7 +310,7 @@ R-VER, applied to an arrangement:
 - **R-PLAY-3 Meters** on every strip and the master: peak and RMS per channel, a held peak, a clip
   latch — the numbers in the model, not only drawn.
 
-## R-AUTO — automation and parameter formulas — 🚧 IN PROGRESS (user request, 2026-10-09; 1–5, 7–9 ✅ DR-AUTO-1…4; 6 the timeline view: B5)
+## R-AUTO — automation and parameter formulas — 🚧 IN PROGRESS (user request, 2026-10-09; 1–5, 7–9 ✅ DR-AUTO-1…4, made from a window: DR-UI-5; 6 the timeline view: B5)
 
 The user: *"all number param can be link, apply formula, create automation, apply formula with
 automation like FL Studio. Automation is created separately, make the formula core of the binding.
@@ -353,7 +353,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
 - **R-AUTO-9 Observable:** the model publishes `bindings[]` (address, formula, what it reads) and
   `automations[]` (id, name, unit and range, points, which addresses use it).
 
-## R-WIN — windows inside the song view — 📋 SPECIFIED (user request, 2026-10-09)
+## R-WIN — windows inside the song view — ✅ IMPLEMENTED (user request, 2026-10-09; DR-WIN-1, DR-UI-5)
 
 - **R-WIN-1 A device opens in a WINDOW** (FL Studio's channel window), *"when open a synth setting,
   need to show a window of that synth"*: a rack chip clicked, or an instrument strip's name

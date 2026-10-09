@@ -5,6 +5,7 @@
 #undef NDEBUG
 #endif
 #include "../Rig.h"
+#include "../../widgets/DevicePanel.h"
 #include "../../../../cosmo/widgets/SliderRow.h"
 using arstro::solaris_ui::Timeline;
 #include <cassert>
@@ -404,21 +405,24 @@ static void test_mixer_matrix_effects_and_device_panel()
     r.click(menu.itemRect(reverb));
     r.settle();
     assert(sentLine(r, "device add ch_2 --type reverb") && r.svc->model().strips[0].devices.size() == 2);
-    // a chip opens its device's panel, fading in; its rows are the registry's parameters
+    // a chip opens its device's WINDOW, fading in (R-WIN-1); its rows are the registry's parameters
     r.click(world(d, d.chipRect("ch_2", 0)));
     r.frame();
     r.frame();
-    auto &p = d.panel();
-    assert(p.shown() && p.appearAmount() > 0.0 && p.appearAmount() < 1.0);
-    r.settle();
     const std::string dv = r.svc->model().strips[0].devices[0].id;
+    auto &wl = r.app->project().windows();
+    auto *w = wl.window("dev:" + dv);
+    assert(w && w->isOpen() && w->appearAmount() > 0.0 && w->appearAmount() < 1.0);
+    r.settle();
+    auto &p = *wl.devicePanel(dv);
     assert(p.device() == dv && p.rowCount() == (int)r.svc->model().strips[0].devices[0].params.size());
     assert(p.slider("filter.cutoff") != nullptr && p.slider("osc1.wave") == nullptr); // a choice is not a slider
+    assert(contains(w->title(), "Basic Synth"));
     // a slider dragged is `set <dv>.<param>=…` in its unit (a log taper: cutoff moves in ratios)
     int cut = -1;
     for (int i = 0; i < p.rowCount(); ++i)
         if (p.rowParam(i) == "filter.cutoff") cut = i;
-    p.reveal("filter.cutoff");                                           // below the fold of the panel: scroll to it
+    p.reveal("filter.cutoff");                                           // below the fold of the window: scroll to it
     r.settle();
     const artboard::Rect row = world(p, p.rowRect(cut));
     const double sx = row.x + arstro::cosmo_v2::SliderRow::kLabelWidth + 20.0;
@@ -427,15 +431,16 @@ static void test_mixer_matrix_effects_and_device_panel()
     bool cutoff = false;
     for (const auto &l : r.sent) cutoff |= l.rfind("set " + dv + ".filter.cutoff=", 0) == 0;
     assert(cutoff);
-    // bypass, eased chip; another device cross-fades the pages
+    // bypass, eased chip; another device opens a second window, on top
     r.click(world(p, p.bypassRect()));
     r.settle();
     assert(sentLine(r, "set " + dv + ".bypass=true") && r.svc->model().strips[0].devices[0].bypass);
     const std::string fx = r.svc->model().strips[0].devices[1].id;
     r.click(world(d, d.chipRect("ch_2", 1)));
-    r.frame();
-    r.frame();
-    assert(p.device() == fx && p.pageAmount(fx) > 0.0 && p.pageAmount(fx) < 1.0 && p.pageAmount(dv) > 0.0);
+    r.settle();
+    assert(wl.isOpen("dev:" + fx) && wl.isOpen("dev:" + dv) && wl.children().back().get() == wl.window("dev:" + fx));
+    wl.close("dev:" + fx);
+    wl.close("dev:" + dv);
     r.settle();
     // the matrix: an open cell adds a send; a backward one takes nothing
     r.click(world(d, d.tabRect(d.tabCount() - 1)));
@@ -448,7 +453,7 @@ static void test_mixer_matrix_effects_and_device_panel()
     r.click(world(d, d.cellRect("ch_1", "ch_1")));                       // Main → itself: hatched
     r.settle();
     assert(r.sent.size() == before);
-    pass("Mixer: + Effect is the registry; a chip opens a generated panel (fade), a slider is `set` in its unit, bypass, pages cross-fade; the matrix adds a send");
+    pass("Mixer: + Effect is the registry; a chip opens the device's generated window (fade), a slider is `set` in its unit, bypass, a second window on top; the matrix adds a send");
 }
 
 static void test_song_bar_menus_and_settings_sections()
@@ -542,6 +547,90 @@ static void test_song_bar_menus_and_settings_sections()
     pass("Song bar: Settings beside Home; File/Edit/Song/View are command lines (Edit names its undo); outside press closes; View folds the dock and browser, eased; new settings rows are lines");
 }
 
+static void test_device_window_lists_parameters_and_binds_them()
+{
+    sltest::Rig r("ui-window", 1280, 800);
+    r.cmd("project new " + r.song("Window") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");        // ch_2, dv_1
+    r.settle();
+    auto &d = r.app->project().dock();
+    auto &wl = r.app->project().windows();
+    // double-clicking an instrument strip's name opens its synth's window
+    const artboard::Rect card = world(d, d.cardRect("ch_2"));
+    r.click(card.x + 20.0, card.y + 16.0);
+    r.click(card.x + 20.0, card.y + 16.0);
+    r.settle();
+    assert(wl.isOpen("dev:dv_1"));
+    auto &w = *wl.window("dev:dv_1");
+    auto &p = *wl.devicePanel("dv_1");
+    // dragged by its title, it follows the pointer exactly
+    const artboard::Rect t0 = world(w, w.titleRect());
+    const double x0 = w.x.value(), y0 = w.y.value();
+    r.drag(t0.x + 40.0, cy(t0), t0.x - 60.0, cy(t0) + 30.0, 6);
+    assert(std::fabs(w.x.value() - (x0 - 100.0)) < 0.5 && std::fabs(w.y.value() - (y0 + 30.0)) < 0.5);
+    // the parameter changed last is lit — whoever changed it — and the light moves, eased
+    r.cmd("set dv_1.filter.cutoff=900");
+    r.frame();
+    r.frame();
+    const double mid = p.litAmount("filter.cutoff");
+    assert(mid > 0.0 && mid < 1.0);
+    r.settle();
+    assert(p.litAmount("filter.cutoff") == 1.0 && r.svc->model().strips[0].devices[0].lastChanged == "filter.cutoff");
+    r.cmd("set dv_1.filter.res=0.5");
+    r.settle();
+    assert(p.litAmount("filter.res") == 1.0 && p.litAmount("filter.cutoff") == 0.0);
+    // a parameter's menu: Create Automation is ONE line, and the row then says what decides it
+    int cut = -1;
+    for (int i = 0; i < p.rowCount(); ++i)
+        if (p.rowParam(i) == "filter.cutoff") cut = i;
+    p.reveal("filter.cutoff");
+    r.settle();
+    const artboard::Rect row = world(p, p.rowRect(cut));
+    auto &menu = r.app->menu();
+    r.click(row.x + 20.0, cy(row), 2);
+    r.settle();
+    assert(menu.isOpen() && menu.item(0).label == "Create Automation");
+    r.click(menu.itemRect(0));
+    r.settle();
+    assert(sentLine(r, "auto create dv_1.filter.cutoff") && p.readout("filter.cutoff") == "auto au_1");
+    // Formula… is cosmo's field: what is typed becomes `set <address>=<formula>`
+    r.click(row.x + 20.0, cy(row), 2);
+    r.settle();
+    int formula = -1, clear = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+    {
+        if (menu.item(i).label == "Formula\xE2\x80\xA6") formula = i;
+        if (menu.item(i).label == "Clear Binding") clear = i;
+    }
+    assert(formula >= 0 && clear >= 0);
+    r.click(menu.itemRect(formula));
+    r.settle();
+    assert(menu.isRenaming());
+    artboard::KeyEvent typed;
+    typed.type = artboard::KeyEvent::Type::Text;
+    typed.text = "=au_1*2";
+    r.app->key(typed);
+    r.key(13);
+    r.settle();
+    assert(sentLine(r, "set dv_1.filter.cutoff==au_1*2") && p.readout("filter.cutoff") == "= au_1*2");
+    // Clear Binding: its own number again
+    r.click(row.x + 20.0, cy(row), 2);
+    r.settle();
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label == "Clear Binding") clear = i;
+    r.click(menu.itemRect(clear));
+    r.settle();
+    assert(sentLine(r, "bind clear dv_1.filter.cutoff") && p.readout("filter.cutoff") == "900 Hz");
+    // × closes it, fading; while closing it takes no input
+    r.click(world(w, w.closeRect()));
+    r.frame();
+    r.frame();
+    assert(!w.isOpen() && w.appearAmount() > 0.0 && w.appearAmount() < 1.0);
+    r.settle();
+    assert(w.appearAmount() == 0.0);
+    pass("Device window: an instrument's name opens it; dragged by its title exactly; the last change lit and moving (eased); Create Automation / Formula / Clear Binding are lines and the row says what decides it; × fades it out");
+}
+
 static void test_ruler_seek_keys_and_selection()
 {
     sltest::Rig r("ui-ruler", 1280, 800);
@@ -585,6 +674,7 @@ int main()
     test_mixer_dock_strips();
     test_mixer_matrix_effects_and_device_panel();
     test_song_bar_menus_and_settings_sections();
+    test_device_window_lists_parameters_and_binds_them();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

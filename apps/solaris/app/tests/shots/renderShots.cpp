@@ -201,6 +201,20 @@ namespace
                  r.click(world(d, d.chipRect("ch_3", 0))); // Bass's Basic Synth
                  r.settle();
              }},
+            {"device-window-bound",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("auto create dv_2.filter.cutoff");
+                 r.cmd("set dv_2.filter.res=0.62");          // the last change: lit
+                 r.cmd("set dv_2.osc2.level=\"=0.5 + 0.25 * sin(beat * pi)\"");
+                 r.settle();
+                 auto &d = r.app->project().dock();
+                 r.click(world(d, d.chipRect("ch_3", 0)));    // Bass's Basic Synth
+                 r.click(world(d, d.chipRect("ch_3", 1)));    // and its EQ, on top
+                 r.settle();
+                 r.app->project().windows().window("dev:dv_2")->open(); // back to the front
+                 r.settle();
+             }},
             {"dock-folded",
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

@@ -4,7 +4,7 @@
  *  A tab per mixer page (the song's order) and a **Matrix** tab; "+" adds a mixer. A page is a row
  *  of strip cards in processing order, the **master** pinned at the right. A card, top to bottom:
  *  its colour and name ("audio · 3 clips", "bus · fed by 4"); its rack as chips (a chip opens the
- *  device's panel, "+ Effect" offers the registry's effects); its sends; pan; the fader (dB, a
+ *  device's WINDOW — R-WIN-1 — "+ Effect" offers the registry's effects); its sends; pan; the fader (dB, a
  *  fader law that puts 0 dB at 70 %) beside an L/R meter; mute and solo; and where it goes ("→
  *  Main" — a click offers exactly `strips[].targets`, the service's forward-only list). A strip a
  *  solo silences dims. Strips feeding the same bus are grouped under a header naming it, and a
@@ -32,7 +32,6 @@
 #pragma once
 #include "../Theme.h"
 #include "AppModel.h"
-#include "DevicePanel.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/ContextMenu.h"
 #include "../../../cosmo/widgets/HoverFade.h"
@@ -92,7 +91,7 @@ namespace solaris_ui
         double foldAmount(const std::string &bus) const;
         artboard::Rect cellRect(const std::string &from, const std::string &to) const; // the matrix
         double meterLive(const std::string &id, int channel) const;
-        DevicePanel &panel() { return *mPanel; }
+
 
         /** The fader law: 0 dB at 0.708, +6 at the top, −∞ at the bottom (gain ∝ position², +6 dB headroom). */
         static double faderPos(double dB);
@@ -102,6 +101,8 @@ namespace solaris_ui
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
         std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onRename;
         std::function<void()> onToggle;              // the chevron: fold the dock away or bring it back
+        std::function<void(const std::string &dv)> onOpenDevice;      // a chip: the device's window (R-WIN-1)
+        std::function<bool(const std::string &dv)> isDeviceOpen;      // its chip is outlined while it is
         std::function<void(double worldY)> onResize; // the top edge dragged (direct manipulation)
 
     protected:
@@ -198,7 +199,7 @@ namespace solaris_ui
         double mHiXLast = 0, mHiWLast = 0;
         interstellar_v1::EasedScroll mScrollX, mScrollY, mMxX, mMxY;
         cosmo_v2::HoverFade mHover;
-        std::shared_ptr<DevicePanel> mPanel;
+
         // a drag in flight
         Hit mPress;
         bool mDragging = false;

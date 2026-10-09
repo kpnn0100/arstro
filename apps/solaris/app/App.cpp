@@ -68,6 +68,9 @@ namespace solaris_ui
         buildMenus();
         mRecognizer.setSink([this](const Gesture &g) {
             if (mMenu->isOpen()) { mMenu->onGesture(g); return; }       // a modal owns input
+            if (g.type == Gesture::Type::RightClick && mScreen == "project" && !mConfirm->isOpen() && !mSettings->isOpen() &&
+                mProject->contextClick(g.pos))
+                return; // a window's parameter row: its menu (a slider would swallow the click)
             if (mConfirm->isOpen()) { mConfirm->onGesture(g); return; }
             if (mSettings->isOpen()) { mSettings->onGesture(g); return; }
             if (mScreen == "home") mHome->onGesture(g);

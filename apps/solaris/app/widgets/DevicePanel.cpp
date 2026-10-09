@@ -1,5 +1,4 @@
 #include "DevicePanel.h"
-#include "../../../interstellar/app/widgets/FadePage.h"
 #include "../../../interstellar/app/widgets/Glyphs.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
 #include "../../../cosmo/widgets/SliderRow.h"
@@ -19,7 +18,8 @@ namespace solaris_ui
     {
         constexpr double kRowStep = 22.75;     // space::u(7): a parameter row
         constexpr double kSectionH = 26.0;     // space::u(8): a section's header
-        constexpr double kValueW = 52.0;       // space::u(16): "12.5 kHz" in mono 10
+        Color fade(Color c, double a) { c.a *= a; return c; }
+        std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
 
         std::string number(double v, int decimals)
         {
@@ -41,6 +41,22 @@ namespace solaris_ui
             if (p.unit.empty() && !p.integer && p.min >= 0.0 && p.max <= 1.0) return number(v * 100.0, 0) + " %";
             return number(v, p.integer ? 0 : 2) + (p.unit.empty() ? "" : " " + p.unit);
         }
+        /** What decides a bound parameter, said in the value column (R-WIN-2). */
+        std::string bindingText(const std::string &formula)
+        {
+            std::string body = formula.size() > 1 ? formula.substr(1) : std::string();
+            const auto a = body.find_first_not_of(' '), b = body.find_last_not_of(' ');
+            body = a == std::string::npos ? std::string() : body.substr(a, b - a + 1);
+            bool name = !body.empty();
+            for (char c : body) name = name && (std::isalnum((unsigned char)c) || c == '_' || c == '.');
+            if (name && body.rfind("au_", 0) == 0 && body.find('.') == std::string::npos) return "auto " + body; // an automation
+            // a link, or a formula — cut to the value column (SliderRow right-aligns at ~6 px a character):
+            // the whole formula is one `get` away, and its own menu shows it
+            std::string out = "= " + body;
+            constexpr size_t kChars = 14;
+            if (out.size() > kChars) out = out.substr(0, kChars - 1) + "\xE2\x80\xA6";
+            return out;
+        }
         /** The text a `set` stores: enough digits that a drag lands where it was let go. */
         std::string storeText(double v, bool integer)
         {
@@ -56,57 +72,82 @@ namespace solaris_ui
             for (auto &c : s) c = (char)std::toupper((unsigned char)c);
             return s;
         }
-    }
-
-    /** One device's rows: SliderRows as children, section headers and choice rows drawn here. */
-    class ParamPage : public interstellar_v1::FadePage
-    {
-    public:
-        struct Row
-        {
-            solaris::ParamModel spec;
-            std::shared_ptr<cosmo_v2::SliderRow> slider; // null for a choice
-            int choice = 0;
-            double top = 0.0;
-        };
-        std::vector<Row> rows;
-        std::vector<std::pair<std::string, double>> sections; // header, top
-        double contentH = 0.0, scroll = 0.0;
-
-        bool logTaper(const solaris::ParamModel &p) const { return p.logScale && p.min > 0.0 && p.max > p.min; }
-        double toPos(const solaris::ParamModel &p, double v) const
+        bool logTaper(const solaris::ParamModel &p) { return p.logScale && p.min > 0.0 && p.max > p.min; }
+        double toPos(const solaris::ParamModel &p, double v)
         {
             if (!logTaper(p)) return v;
             return std::log(std::max(v, p.min) / p.min) / std::log(p.max / p.min);
         }
-        double fromPos(const solaris::ParamModel &p, double s) const
+        double fromPos(const solaris::ParamModel &p, double s)
         {
             double v = logTaper(p) ? p.min * std::pow(p.max / p.min, std::clamp(s, 0.0, 1.0)) : s;
             if (p.integer) v = std::round(v);
             return std::clamp(v, p.min, p.max);
         }
-        Rect choiceBox(const Row &r, double w) const
+    }
+
+    /** The scrolled body: the rows (SliderRows as children), section headers, choice rows and the light. */
+    class ParamBody : public Segment
+    {
+    public:
+        struct Row
+        {
+            solaris::ParamModel spec;                    // spec.formula: what decides it ("" = its number)
+            std::shared_ptr<cosmo_v2::SliderRow> slider; // null for a choice
+            int choice = 0;
+            double top = 0.0;
+            AnimatedProperty lit{0.0};
+            bool litLast = false, litPlaced = false;
+        };
+        std::vector<Row> rows;
+        std::vector<std::pair<std::string, double>> sections;
+        double contentH = 0.0, scroll = 0.0;
+        std::string lastChanged;
+
+        ParamBody() { clipToBounds = true; }
+        Rect rowBox(const Row &r) const { return Rect{0.0, r.top - scroll - 1.0, width.value(), kRowStep}; }
+        Rect choiceBox(const Row &r) const
         {
             const double x = space::padX() + cosmo_v2::SliderRow::kLabelWidth + 8.125;
-            return Rect{x, r.top - scroll, std::max(0.0, w - x - space::padX()), cosmo_v2::SliderRow::kRowHeight};
+            return Rect{x, r.top - scroll, std::max(0.0, width.value() - x - space::padX()), cosmo_v2::SliderRow::kRowHeight};
+        }
+        void advance(double nowMs) override
+        {
+            for (auto &r : rows)
+            {
+                const bool on = r.spec.name == lastChanged;
+                if (!r.litPlaced) { r.lit.set(on ? 1.0 : 0.0); r.litLast = on; r.litPlaced = true; }
+                if (on != r.litLast) { r.lit.animateTo(on ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); r.litLast = on; }
+                r.lit.update(nowMs);
+            }
+            Segment::advance(nowMs);
         }
 
     protected:
         void onPaint(IRenderTarget &t) const override
         {
-            const double W = width.value();
+            const double W = width.value(), H = height.value();
+            // the last change, lit — drawn first, so the row's controls sit on it
+            for (const auto &r : rows)
+            {
+                const double l = r.lit.value();
+                if (l <= 0.001) continue;
+                const Rect b = rowBox(r);
+                drawRoundedRect(t, b, 0.0, Paint::filled(palette::primaryAlpha(0.12 * l)));
+                drawRoundedRect(t, Rect{0.0, b.y + 3.0, 2.0, b.h - 6.0}, radius::pill(), Paint::filled(palette::primaryAlpha(l)));
+            }
             for (const auto &s : sections)
             {
                 const double y = s.second - scroll;
-                if (y + kSectionH < 0 || y > height.value()) continue;
+                if (y + kSectionH < 0 || y > H) continue;
                 t.setFill(palette::mutedForeground());
                 t.drawText(s.first, space::padX(), textfit::baseline(y + kSectionH * 0.6, 9.0), 9.0, font::sansSemiBold(), 0.13 * 9.0);
             }
             for (const auto &r : rows)
             {
                 if (r.slider) continue;
-                const Rect b = choiceBox(r, W);
-                if (b.bottom() < 0 || b.y > height.value()) continue;
+                const Rect b = choiceBox(r);
+                if (b.bottom() < 0 || b.y > H) continue;
                 const double cy = b.y + b.h * 0.5;
                 t.setFill(palette::mutedForeground());
                 t.drawText(textfit::ellipsize(t, r.spec.label, cosmo_v2::SliderRow::kLabelWidth - 4.0, 10.0, font::sans()), space::padX(),
@@ -120,42 +161,55 @@ namespace solaris_ui
                 glyph::line(t, b.x + 10.0, cy - 3.5, b.x + 6.5, cy, ic, 1.2), glyph::line(t, b.x + 6.5, cy, b.x + 10.0, cy + 3.5, ic, 1.2);
                 glyph::line(t, b.right() - 10.0, cy - 3.5, b.right() - 6.5, cy, ic, 1.2), glyph::line(t, b.right() - 6.5, cy, b.right() - 10.0, cy + 3.5, ic, 1.2);
             }
+            // the body's own scroll bar, only when there is somewhere to scroll (R6)
+            if (contentH > H + 0.5)
+            {
+                const double th = std::max(18.0, H * H / contentH), ty = (H - th) * (scroll / (contentH - H));
+                drawRoundedRect(t, Rect{W - 5.0, ty, 3.0, th}, radius::pill(), Paint::filled(palette::whiteAlpha(0.18)));
+            }
         }
+        bool handleGesture(const Gesture &g, const Point &local) override
+        {
+            if (g.type != Gesture::Type::Click) return g.type == Gesture::Type::Down || g.type == Gesture::Type::Move;
+            // a choice row: the left half steps back, the right half forward
+            for (auto &r : rows)
+            {
+                if (r.slider || r.spec.choices.empty()) continue;
+                const Rect b = choiceBox(r);
+                if (!b.contains(local)) continue;
+                const int n = (int)r.spec.choices.size();
+                const int next = ((r.choice + (local.x < b.x + b.w * 0.5 ? -1 : 1)) % n + n) % n;
+                if (owner && owner->onCommand) owner->onCommand("set " + owner->device() + "." + r.spec.name + "=" + r.spec.choices[(size_t)next]);
+                return true;
+            }
+            return true;
+        }
+
+    public:
+        DevicePanel *owner = nullptr;
     };
 
-    DevicePanel::DevicePanel()
+    DevicePanel::DevicePanel(std::string deviceId) : mDevice(std::move(deviceId))
     {
         clipToBounds = true;
-        opacity.set(0.0);
+        mBody = std::make_shared<ParamBody>();
+        mBody->owner = this;
+        addChild(mBody);
     }
 
-    const solaris::DeviceModel *DevicePanel::find(const std::string &id) const
+    const solaris::DeviceModel *DevicePanel::model() const
     {
         for (const auto &s : mModel.strips)
             for (const auto &d : s.devices)
-                if (d.id == id) return &d;
+                if (d.id == mDevice) return &d;
         for (const auto &d : mModel.masterDevices)
-            if (d.id == id) return &d;
+            if (d.id == mDevice) return &d;
         return nullptr;
     }
 
-    std::string DevicePanel::ownerOf(const std::string &id) const
+    void DevicePanel::build(const solaris::DeviceModel &d)
     {
-        for (const auto &s : mModel.strips)
-            for (const auto &d : s.devices)
-                if (d.id == id) return s.name;
-        return "Master";
-    }
-
-    ParamPage *DevicePanel::page(const std::string &id) const
-    {
-        const auto it = mPages.find(id);
-        return it == mPages.end() ? nullptr : it->second.get();
-    }
-
-    ParamPage &DevicePanel::build(const solaris::DeviceModel &d)
-    {
-        auto pg = std::make_shared<ParamPage>();
+        ParamBody &b = *mBody;
         double y = 6.5;
         std::string section = "\x01";
         for (const auto &p : d.params)
@@ -166,64 +220,62 @@ namespace solaris_ui
                 section = s;
                 if (!s.empty())
                 {
-                    pg->sections.emplace_back(s, y);
+                    b.sections.emplace_back(s, y);
                     y += kSectionH;
                 }
             }
-            ParamPage::Row r;
+            ParamBody::Row r;
             r.spec = p;
             r.top = y;
             if (p.choices.empty())
             {
-                const bool log = pg->logTaper(p);
-                const double lo = log ? 0.0 : p.min, hi = log ? 1.0 : p.max;
-                r.slider = std::make_shared<cosmo_v2::SliderRow>(p.label, lo, hi, pg->toPos(p, p.def)); // double-click: the registry's default
+                const bool log = logTaper(p);
+                r.slider = std::make_shared<cosmo_v2::SliderRow>(p.label, log ? 0.0 : p.min, log ? 1.0 : p.max, toPos(p, p.def)); // double-click: the default
                 r.slider->setValueWidth(kValueW);
-                ParamPage *raw = pg.get();
-                const std::string dev = d.id;
-                const solaris::ParamModel spec = p;
-                r.slider->formatValue = [raw, spec](double s) { return formatValue(spec, raw->fromPos(spec, s)); };
-                r.slider->onChange = [this, raw, spec, dev](double s) {
-                    if (onCommand) onCommand("set " + dev + "." + spec.name + "=" + storeText(raw->fromPos(spec, s), spec.integer));
+                const std::string dev = d.id, name = p.name;
+                ParamBody *body = mBody.get();
+                r.slider->formatValue = [body, name](double s) {
+                    for (const auto &row : body->rows)
+                        if (row.spec.name == name)
+                            return row.spec.formula.empty() ? formatValue(row.spec, fromPos(row.spec, s)) : bindingText(row.spec.formula);
+                    return std::string();
                 };
-                r.slider->setValue(pg->toPos(p, p.value));
-                pg->addChild(r.slider);
+                const solaris::ParamModel spec = p;
+                r.slider->onChange = [this, spec, dev](double s) {
+                    if (onCommand) onCommand("set " + dev + "." + spec.name + "=" + storeText(fromPos(spec, s), spec.integer));
+                };
+                r.slider->setValue(toPos(p, p.value));
+                b.addChild(r.slider);
             }
             r.choice = (int)std::lround(p.value);
-            pg->rows.push_back(r);
+            b.rows.push_back(std::move(r));
             y += kRowStep;
         }
-        pg->contentH = y + 6.5;
-        pg->setShownImmediate(false);
-        addChild(pg);
-        mPages[d.id] = pg;
-        return *pg;
+        b.contentH = y + 6.5;
+        mBuilt = true;
     }
-
-    void DevicePanel::show(const std::string &id)
-    {
-        if (id == mDevice && mWanted) return;
-        mDevice = id;
-        mWanted = true;
-    }
-
-    void DevicePanel::hide() { mWanted = false; }
 
     void DevicePanel::bind(const solaris::AppModel &m, bool interacting)
     {
         mModel = m;
         mInteracting = interacting;
-        const solaris::DeviceModel *d = find(mDevice);
-        if (!d) { mWanted = false; return; } // removed while open (by anyone): the panel goes with it
-        ParamPage *pg = page(mDevice);
-        if (!pg || interacting) return;      // not built yet (the next advance builds it from this model); a drag outranks the model
-        for (auto &r : pg->rows)
+        const solaris::DeviceModel *d = model();
+        mPresent = d != nullptr;
+        if (!d || !mBuilt) return;               // built in `advance`, once the model has it
+        mOwner.clear();
+        for (const auto &s : m.strips)
+            for (const auto &x : s.devices)
+                if (x.id == mDevice) mOwner = s.name;
+        if (mOwner.empty()) mOwner = "Master";
+        mBody->lastChanged = d->lastChanged;
+        for (auto &r : mBody->rows)
             for (const auto &p : d->params)
                 if (p.name == r.spec.name)
                 {
+                    r.spec.formula = p.formula;
                     r.spec.value = p.value;
                     r.choice = (int)std::lround(p.value);
-                    if (r.slider) r.slider->setValue(pg->toPos(p, p.value));
+                    if (r.slider && !interacting) r.slider->setValue(toPos(p, p.value)); // a drag in flight outranks the model
                 }
     }
 
@@ -231,48 +283,33 @@ namespace solaris_ui
     {
         const double W = width.value(), H = height.value();
         const double bodyH = std::max(0.0, H - kHeaderH);
-        const ParamPage *cur = page(mDevice);
-        mScroll.setExtent(kHeaderH, bodyH, cur ? cur->contentH : 0.0);
-        for (auto &kv : mPages)
+        mScroll.setExtent(kHeaderH, bodyH, mBody->contentH);
+        mBody->x.set(0.0);
+        mBody->y.set(kHeaderH);
+        mBody->width.set(W);
+        mBody->height.set(bodyH);
+        mBody->scroll = mScroll.value();
+        for (auto &r : mBody->rows)
         {
-            ParamPage &pg = *kv.second;
-            pg.x.set(0.0);
-            pg.y.set(kHeaderH);
-            pg.width.set(W);
-            pg.height.set(bodyH);
-            pg.scroll = kv.first == mDevice ? mScroll.value() : pg.scroll; // a page fading out stays where it was
-            for (auto &r : pg.rows)
-            {
-                if (!r.slider) continue;
-                const double y = r.top - pg.scroll;
-                r.slider->visible = y + cosmo_v2::SliderRow::kRowHeight > 0.0 && y < bodyH; // cull what is scrolled out
-                r.slider->x.set(space::padX());
-                r.slider->y.set(y);
-                r.slider->width.set(std::max(0.0, W - 2.0 * space::padX()));
-                r.slider->layout();
-            }
+            if (!r.slider) continue;
+            const double y = r.top - mBody->scroll;
+            r.slider->visible = y + cosmo_v2::SliderRow::kRowHeight > 0.0 && y < bodyH; // cull what is scrolled out
+            r.slider->x.set(space::padX());
+            r.slider->y.set(y);
+            r.slider->width.set(std::max(0.0, W - 2.0 * space::padX()));
+            r.slider->layout();
         }
     }
 
     void DevicePanel::advance(double nowMs)
     {
-        mNowMs = nowMs;
-        // a device shown for the first time: its rows, built once from the model as it is now, then kept
-        if (mWanted && !page(mDevice))
-            if (const solaris::DeviceModel *d = find(mDevice)) build(*d);
-        if (mWanted != mApplied)
-        {
-            mAppear.animateTo(mWanted ? 1.0 : 0.0, mWanted ? motion::kModalOpenMs : motion::kModalCloseMs, Easing::EaseOutCubic, nowMs);
-            if (mWanted && mAppear.value() <= 0.001)
-                for (auto &kv : mPages) kv.second->setShownImmediate(kv.first == mDevice); // from closed: the panel's fade carries it
-            mApplied = mWanted;
-        }
-        if (mWanted)
-            for (auto &kv : mPages) kv.second->setShown(kv.first == mDevice); // another device: the pages cross-fade
-        mAppear.update(nowMs);
-        opacity.set(mAppear.value());
-
-        const solaris::DeviceModel *d = find(mDevice);
+        if (!mBuilt)
+            if (const solaris::DeviceModel *d = model())
+            {
+                build(*d);
+                bind(mModel, mInteracting);
+            }
+        const solaris::DeviceModel *d = model();
         const bool by = d && d->bypass;
         if (!mBypassInit) { mBypass.set(by ? 1.0 : 0.0); mBypassLast = by; mBypassInit = true; }
         else if (by != mBypassLast) { mBypass.animateTo(by ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); mBypassLast = by; }
@@ -283,60 +320,95 @@ namespace solaris_ui
         Segment::advance(nowMs);
     }
 
-    int DevicePanel::rowCount() const
-    {
-        const ParamPage *pg = page(mDevice);
-        return pg ? (int)pg->rows.size() : 0;
-    }
+    int DevicePanel::rowCount() const { return (int)mBody->rows.size(); }
 
     std::string DevicePanel::rowParam(int i) const
     {
-        const ParamPage *pg = page(mDevice);
-        return pg && i >= 0 && i < (int)pg->rows.size() ? pg->rows[(size_t)i].spec.name : std::string();
+        return i >= 0 && i < rowCount() ? mBody->rows[(size_t)i].spec.name : std::string();
     }
 
     Rect DevicePanel::rowRect(int i) const
     {
-        const ParamPage *pg = page(mDevice);
-        if (!pg || i < 0 || i >= (int)pg->rows.size()) return Rect{};
-        return Rect{space::padX(), kHeaderH + pg->rows[(size_t)i].top - mScroll.value(), width.value() - 2.0 * space::padX(),
+        if (i < 0 || i >= rowCount()) return Rect{};
+        return Rect{space::padX(), kHeaderH + mBody->rows[(size_t)i].top - mScroll.value(), width.value() - 2.0 * space::padX(),
                     cosmo_v2::SliderRow::kRowHeight};
     }
 
     cosmo_v2::SliderRow *DevicePanel::slider(const std::string &param) const
     {
-        const ParamPage *pg = page(mDevice);
-        if (!pg) return nullptr;
-        for (const auto &r : pg->rows)
+        for (const auto &r : mBody->rows)
             if (r.spec.name == param) return r.slider.get();
         return nullptr;
     }
 
+    std::string DevicePanel::readout(const std::string &param) const
+    {
+        for (const auto &r : mBody->rows)
+            if (r.spec.name == param)
+            {
+                if (!r.spec.formula.empty()) return bindingText(r.spec.formula);
+                if (!r.spec.choices.empty()) return r.choice >= 0 && r.choice < (int)r.spec.choices.size() ? r.spec.choices[(size_t)r.choice] : "";
+                return formatValue(r.spec, r.spec.value);
+            }
+        return std::string();
+    }
+
+    double DevicePanel::litAmount(const std::string &param) const
+    {
+        for (const auto &r : mBody->rows)
+            if (r.spec.name == param) return r.lit.value();
+        return 0.0;
+    }
+
     void DevicePanel::reveal(const std::string &param)
     {
-        const ParamPage *pg = page(mDevice);
-        if (!pg) return;
-        for (const auto &r : pg->rows)
+        for (const auto &r : mBody->rows)
             if (r.spec.name == param) mScroll.reveal(r.top, cosmo_v2::SliderRow::kRowHeight);
     }
 
-    double DevicePanel::pageAmount(const std::string &id) const
-    {
-        const ParamPage *pg = page(id);
-        return pg ? pg->fadeValue() : 0.0;
-    }
-
-    Rect DevicePanel::closeRect() const { return Rect{width.value() - space::padX() - 19.5, 14.625, 19.5, 19.5}; }
-    Rect DevicePanel::removeRect() const
-    {
-        const Rect c = closeRect();
-        return Rect{c.x - 6.5 - 55.25, c.y, 55.25, 19.5}; // space::u(17)
-    }
+    Rect DevicePanel::removeRect() const { return Rect{width.value() - space::padX() - 55.25, 8.125, 55.25, 19.5}; }
     Rect DevicePanel::bypassRect() const
     {
-        const solaris::DeviceModel *d = find(mDevice);
-        const Rect r = d && d->instrument ? closeRect() : removeRect(); // an instrument cannot be removed: no button
+        const solaris::DeviceModel *d = model();
+        const Rect r = d && d->instrument ? Rect{width.value() - space::padX() + 6.5, 8.125, 0, 19.5} : removeRect(); // no Remove for an instrument
         return Rect{r.x - 6.5 - 55.25, r.y, 55.25, 19.5};
+    }
+
+    bool DevicePanel::contextClick(Point world)
+    {
+        const Point local = toLocal(world);
+        if (!localBounds().contains(local)) return false;
+        for (int i = 0; i < rowCount(); ++i)
+            if (rowRect(i).contains(local)) { openParamMenu(i, world); return true; }
+        return false;
+    }
+
+    void DevicePanel::openParamMenu(int i, Point world)
+    {
+        if (!onMenu || i < 0 || i >= rowCount()) return;
+        const ParamBody::Row &r = mBody->rows[(size_t)i];
+        const std::string address = mDevice + "." + r.spec.name;
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        if (r.spec.choices.empty())
+        {
+            if (r.spec.formula.empty() || bindingText(r.spec.formula).rfind("auto ", 0) != 0)
+                items.push_back({"Create Automation", [this, address] { if (onCommand) onCommand("auto create " + address); }});
+            const std::string current = r.spec.formula.empty() ? std::string("=") : r.spec.formula;
+            items.push_back({"Formula\xE2\x80\xA6", [this, address, current, world] {
+                                 if (!onRename) return;
+                                 onRename(current, world, [this, address](const std::string &typed) {
+                                     std::string f = typed;
+                                     if (f.empty()) return;
+                                     if (f[0] != '=') f = "=" + f;
+                                     if (onCommand) onCommand("set " + address + "=" + q(f));
+                                 });
+                             }});
+            if (!r.spec.formula.empty()) items.push_back({"Clear Binding", [this, address] { if (onCommand) onCommand("bind clear " + address); }});
+        }
+        const std::string def = r.spec.choices.empty() ? storeText(r.spec.def, r.spec.integer)
+                                                        : r.spec.choices[(size_t)std::clamp((int)std::lround(r.spec.def), 0, (int)r.spec.choices.size() - 1)];
+        items.push_back({"Reset to Default", [this, address, def] { if (onCommand) onCommand("set " + address + "=" + def); }});
+        onMenu(items, world);
     }
 
     bool DevicePanel::handleGesture(const Gesture &g, const Point &local)
@@ -346,60 +418,43 @@ namespace solaris_ui
         case Gesture::Type::Move:
         {
             int h = -1;
-            if (closeRect().contains(local)) h = 0;
-            else if (removeRect().contains(local)) h = 1;
+            if (removeRect().contains(local)) h = 1;
             else if (bypassRect().contains(local)) h = 2;
             mHover.setHovered(h);
             return true;
         }
         case Gesture::Type::Click:
         {
-            const solaris::DeviceModel *d = find(mDevice);
+            const solaris::DeviceModel *d = model();
             if (!d) return true;
-            if (closeRect().contains(local)) { hide(); return true; }
             if (!d->instrument && removeRect().contains(local)) { if (onCommand) onCommand("device remove " + d->id); return true; }
             if (bypassRect().contains(local)) { if (onCommand) onCommand("set " + d->id + ".bypass=" + (d->bypass ? "false" : "true")); return true; }
-            // a choice row: the left half steps back, the right half forward
-            ParamPage *pg = page(mDevice);
-            if (!pg || local.y < kHeaderH) return true;
-            const Point pl{local.x, local.y - kHeaderH};
-            for (auto &r : pg->rows)
-            {
-                if (r.slider || r.spec.choices.empty()) continue;
-                const Rect b = pg->choiceBox(r, width.value());
-                if (!b.contains(pl)) continue;
-                const int n = (int)r.spec.choices.size();
-                const int next = ((r.choice + (pl.x < b.x + b.w * 0.5 ? -1 : 1)) % n + n) % n;
-                if (onCommand) onCommand("set " + d->id + "." + r.spec.name + "=" + r.spec.choices[(size_t)next]);
-                return true;
-            }
             return true;
         }
+        case Gesture::Type::RightClick:
+            for (int i = 0; i < rowCount(); ++i)
+                if (rowRect(i).contains(local)) { openParamMenu(i, g.pos); return true; }
+            return true;
         case Gesture::Type::Scroll:
             mScroll.scrollBy(g.delta.y);
             return true;
         default:
-            return true; // the panel is a surface: nothing falls through it to the strips below
+            return true; // the panel is a surface: nothing falls through it
         }
     }
 
     void DevicePanel::onPaint(IRenderTarget &t) const
     {
-        const double W = width.value(), H = height.value();
-        drawRoundedRect(t, Rect{0.5, 0.5, W - 1.0, H - 1.0}, radius::control(), Paint::filledStroked(palette::popover(), palette::border(), 1.0));
-        const solaris::DeviceModel *d = find(mDevice);
+        const double W = width.value();
+        const solaris::DeviceModel *d = model();
         if (!d) return;
         const Rect by = bypassRect();
-        const double titleW = std::max(0.0, by.x - 2.0 * space::padX());
-        t.setFill(palette::foreground());
-        t.drawText(textfit::ellipsize(t, d->label, titleW, 12.0, font::sansMedium()), space::padX(), 21.0, 12.0, font::sansMedium());
         t.setFill(palette::mutedForeground());
-        t.drawText(textfit::ellipsize(t, ownerOf(d->id) + " \xC2\xB7 " + d->id, titleW, 10.0, font::mono()), space::padX(), 36.0, 10.0, font::mono());
-
+        t.drawText(textfit::ellipsize(t, mOwner + " \xC2\xB7 " + d->id + " \xC2\xB7 " + d->type, std::max(0.0, by.x - 2.0 * space::padX()), 10.0, font::mono()),
+                   space::padX(), textfit::baseline(by.y + by.h * 0.5, 10.0), 10.0, font::mono());
         // On / Bypassed: the fill eases whoever changed it
         const double b = mBypass.value();
-        const Color chip = lerpColor(palette::primary(), palette::secondary(), b);
-        drawRoundedRect(t, by, radius::control(), Paint::filled(chip));
+        drawRoundedRect(t, by, radius::control(), Paint::filled(lerpColor(palette::primary(), palette::secondary(), b)));
         const std::string bl = b > 0.5 ? "Bypassed" : "On";
         t.setFill(lerpColor(palette::primaryForeground(), palette::secondaryForeground(), b));
         t.drawText(bl, by.x + (by.w - t.measureText(bl, 10.0, font::sans())) * 0.5, textfit::baseline(by.y + by.h * 0.5, 10.0), 10.0, font::sans());
@@ -410,14 +465,8 @@ namespace solaris_ui
             t.setFill(lerpColor(palette::secondaryForeground(), palette::destructive(), mHover.amount(1)));
             t.drawText("Remove", rm.x + (rm.w - t.measureText("Remove", 10.0, font::sans())) * 0.5, textfit::baseline(rm.y + rm.h * 0.5, 10.0), 10.0, font::sans());
         }
-        const Rect c = closeRect();
-        if (mHover.amount(0) > 0.001) drawRoundedRect(t, c, radius::control(), Paint::filled(palette::hoverWash(mHover.amount(0))));
-        const Color xc = lerpColor(palette::mutedForeground(), palette::foreground(), mHover.amount(0));
-        glyph::line(t, c.x + 6.0, c.y + 6.0, c.right() - 6.0, c.bottom() - 6.0, xc, 1.3);
-        glyph::line(t, c.right() - 6.0, c.y + 6.0, c.x + 6.0, c.bottom() - 6.0, xc, 1.3);
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, kHeaderH - 0.5); t.lineTo(W, kHeaderH - 0.5); t.strokePath();
-        mScroll.drawBar(t, W - 5.0);
     }
 }
 }

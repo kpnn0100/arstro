@@ -379,19 +379,20 @@ drawn through an eased copy keyed by strip (fader and pan 220 ms, M/S/dim 200, c
 cards and tabs are keyed — arriving grows, leaving shrinks, a moved card shrinks where it was and
 grows where it is. A strip a solo silences dims.
 
-### DR-UI-5 Device panels, generated (R-UI-5)
-`DevicePanel` (`app/widgets/DevicePanel.cpp`) opens from a rack chip, over the strips, fading and
-sliding (150 / 120 ms). It knows no device: per `DeviceModel::params` it builds — once per device,
-the first time it is shown (`advance`, `:257`; `build`, `:156`), kept — a page of rows grouped by the
-name's prefix (`osc1.*` → OSC1): a number is cosmo's `SliderRow` with the opt-in `formatValue`
-(Hz/kHz, ms, dB, st/ct/oct signed, a 0…1 amount in %), a `logScale` parameter mapped through a log
-taper (`logTaper`, `:76`), an `integer` one rounded; a choice is a row stepping its names (left half
-back, right half forward). A row's double-click restores the registry's default. Every change is
-`set <dv>.<param>=…` (a choice by name), the header's chip `set <dv>.bypass=…` (its fill eased),
-Remove `device remove` (none for an instrument). Another device cross-fades the pages (`FadePage`);
-while the pointer is down `bind` re-seeds nothing; the body scrolls (`reveal` eases to a row). A
-device removed by anyone closes the panel. The model publishes `params[].logScale` and `.integer`
-for it.
+### DR-UI-5 Device panels, generated (R-UI-5, R-WIN-2/3)
+`DevicePanel` (`app/widgets/DevicePanel.cpp`) is the content of a device's WINDOW (DR-WIN-1). It knows no
+device: per `DeviceModel::params` it builds — once, the first time the model has the device
+(`build`, `:210`), kept — a row per parameter grouped by the name's prefix (`osc1.*` → OSC1): a number
+is cosmo's `SliderRow` with the opt-in `formatValue` (Hz/kHz, ms, dB, st/ct/oct signed, a 0…1 amount in
+%), a `logScale` parameter through a log taper, an `integer` one rounded; a choice is a row stepping
+its names. It is the parameter LIST: the value column says what decides each row (`bindingText`,
+`:45`) — its number, `auto au_1`, `= ch_2.gain`, `= <formula>` cut to the column — and the row
+`DeviceModel::lastChanged` names is lit, the light easing from row to row (`ParamBody`, `:90`). A
+right-click offers Create Automation, Formula… (cosmo's rename field), Clear Binding, Reset to Default
+(`openParamMenu`, `:386`); the App offers right-clicks to the windows first because a row's slider would
+swallow them (`app/App.cpp:73`). Every change is one line: `set <dv>.<param>=…`, `auto create`,
+`bind clear`, `set <dv>.bypass=…`, `device remove <dv>` (none for an instrument). While the pointer is
+down `bind` re-seeds nothing (`:258`); the body scrolls with its own bar (`reveal` eases to a row).
 
 ### DR-AUTO-1 Automations and bindings in the `.slp` (R-AUTO-1, R-AUTO-4)
 `Automation` (`model/Project.h`): id `au_n`, name, unit, min/max, `from`, points (beat, value, shape
@@ -477,3 +478,14 @@ file (`metronome`, `metronomeLevel`, `newBpm`, `newSig`, `reducedMotion` — `co
 `project new` starts at `newBpm`/`newSig` when no flag says otherwise, and the App ORs `reducedMotion`
 with the OS's own setting into `artboard::setReducedMotion` (design rule §2.6). The sheet scrolls when
 it is taller than the window (R6); `revealRect` brings a control in.
+
+### DR-WIN-1 Windows inside the song view (R-WIN-1, R-WIN-4)
+`FloatWindow` (`app/widgets/FloatWindow.cpp`): a frame — a 26 px title bar (title, ×) over its content.
+Dragged by the title it follows the pointer exactly, kept inside the layer; touched anywhere it is
+raised; `open`/`close` record intent and `advance` fades it (150 / 120 ms); while closing it takes no
+input (`handleGesture`, `:53`). `WindowLayer` covers the song view under the song bar (over the lanes,
+dock and browser) and keeps windows keyed — `dev:<dv>` (`openDevice`, `:125`: a new one cascades from
+the top right) — reopening a closed one where it was; titles follow the model ("Basic Synth — Bass")
+and a window whose device is removed by anyone closes (`bind`, `:168`). Rack chips and an instrument
+strip's name (double-click) in the dock open them; a chip is outlined while its window is open.
+Placement and stacking are the view's. The dock's floating panel is gone (R-UI-5 amended).

@@ -11,18 +11,18 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-09 — B3: the song bar menus and the settings sections.*
+*Last updated: 2026-10-09 — B4: device windows and the parameter list.*
 
 ---
 
 ## NEXT
 
-**► B4 — windows** (R-WIN-1…4): a floating window frame inside the song view (title bar dragged,
-×, eased open/close, stacked, one per device); the device window = the generated controls + the
-parameter LIST (label, value in its unit, number/link/formula/automation, the last changed lit — from
-`devices[].lastChanged`); a parameter's menu: Create Automation (`auto create`), Formula… (cosmo's
-rename field → `set <addr>="=…"`), Clear Binding (`bind clear`), Reset to Default (`set <addr>=<def>`).
-A rack chip or an instrument strip's name (double-click) opens it; the dock's popover panel goes.
+**► B5 — automation on the timeline** (R-AUTO-6): an AUTOMATION section under the lanes — a row per
+automation, its name in the header, its curve drawn in its strip's colour over the beat grid with
+the points as handles; a click adds a point (`auto point add`), a drag moves one (on release:
+`auto point move --at <b> --to <b2> --value <v>`, following the pointer exactly while held), a
+double-click deletes, a right-click offers the shapes and Delete Automation; rows keyed so a new
+automation grows in. The model already has everything (`automations[]`).
 
 ---
 
@@ -120,8 +120,10 @@ umbrella's pointer — `arstro.rule` §7).
       settings sheet's full sections (R-UI-3, R-SET-3). — DR-UI-9, DR-SET-3; new machine keys
       metronome, metronomeLevel, newBpm, newSig, reducedMotion; View folds the dock and the browser,
       eased; `solaris_app_ui` 12; shot menu-file-open, looked at.
-- [ ] **B4** Windows: the device window, its parameter list with the last change lit, the parameter
-      menu — automation, formula, clear, reset (R-WIN-1…4).
+- [x] **B4** Windows: the device window, its parameter list with the last change lit, the parameter
+      menu — automation, formula, clear, reset (R-WIN-1…4). — DR-WIN-1, DR-UI-5 rewritten; the dock's
+      popover panel replaced; `solaris_app_ui` 13 (the light caught mid-ease — a mutant that snaps
+      fails it; a typed formula through cosmo's field); shot device-window-bound, looked at.
 - [ ] **B5** Automation on the timeline (R-AUTO-6).
 - [ ] **B6** The piano roll window: `note move`, velocity, snap, step mode, quantize + swing
       (R-ROLL-1…5, R-EDM-6).

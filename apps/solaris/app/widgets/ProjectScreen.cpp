@@ -32,7 +32,16 @@ namespace solaris_ui
         addChild(mTimeline);
         addChild(mDock);
         addChild(mBrowser);
+        mWindows = std::make_shared<WindowLayer>();
+        addChild(mWindows); // over the lanes, the dock and the browser; under the song bar and its menus
         addChild(mBar);
+        mWindows->onCommand = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
+        mWindows->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
+        mWindows->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
+            if (onRename) onRename(cur, world, std::move(done));
+        };
+        mDock->onOpenDevice = [this](const std::string &dv) { mWindows->openDevice(dv); };
+        mDock->isDeviceOpen = [this](const std::string &dv) { return mWindows->isOpen("dev:" + dv); };
 
         mBrowser->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
         mTimeline->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
@@ -97,6 +106,7 @@ namespace solaris_ui
         mBrowser->bind(m);
         mTimeline->bind(m);
         mDock->bind(m, mInteracting);
+        mWindows->bind(m, mInteracting);
     }
 
     double ProjectScreen::dockTarget() const
@@ -123,9 +133,12 @@ namespace solaris_ui
         mDock->x.set(bw); mDock->y.set(top + std::max(0.0, H - top - dockH));
         mDock->width.set(rw);
         mDock->height.set(dockH);
+        mWindows->x.set(0.0); mWindows->y.set(top);
+        mWindows->width.set(W); mWindows->height.set(std::max(0.0, H - top));
         mBrowser->layout();
         mTimeline->layout();
         mDock->layout();
+        mWindows->layout();
     }
 
     void ProjectScreen::advance(double nowMs)

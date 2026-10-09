@@ -92,9 +92,6 @@ namespace solaris_ui
     MixerDock::MixerDock()
     {
         clipToBounds = true;
-        mPanel = std::make_shared<DevicePanel>();
-        mPanel->onCommand = [this](const std::string &line) { return send(line); };
-        addChild(mPanel);
     }
 
     // ── the model ────────────────────────────────────────────────────────────────────────────
@@ -146,7 +143,6 @@ namespace solaris_ui
         mTab = std::clamp(mTab, 0, (int)mMixers.size());
         syncCards();
         syncTabs();
-        mPanel->bind(m, interacting);
         mBound = true;
     }
 
@@ -469,13 +465,6 @@ namespace solaris_ui
         for (const auto &p : mModel.ports) cols += p.dir == "out" ? 1 : 0;
         mMxX.setExtent(kRowHeadW, std::max(0.0, W - kRowHeadW), cols * kCellW);
         mMxY.setExtent(kTabsH + kColHeadH, std::max(0.0, H - kTabsH - kColHeadH), rows * kCellH);
-        // the device panel floats over the strips, left of the master; it slides in as it fades
-        const double a = mPanel->appearAmount();
-        mPanel->x.set(std::max(0.0, stripsRight() - DevicePanel::kWidth - 6.5) + (1.0 - a) * 13.0);
-        mPanel->y.set(kTabsH + 6.5);
-        mPanel->width.set(std::min(DevicePanel::kWidth, std::max(0.0, stripsRight() - 13.0)));
-        mPanel->height.set(std::max(0.0, H - kTabsH - 13.0));
-        mPanel->layout();
     }
 
     // ── time ─────────────────────────────────────────────────────────────────────────────────
@@ -861,14 +850,13 @@ namespace solaris_ui
                     for (const auto &d : *devs)
                     {
                         const std::string id = d.id;
-                        items.push_back({d.label, [this, id] { mPanel->show(id); }});
+                        items.push_back({d.label, [this, id] { if (onOpenDevice) onOpenDevice(id); }});
                     }
                     onMenu(items, world);
                     break;
                 }
                 const std::string dv = (*devs)[(size_t)h.index].id;
-                if (mPanel->shown() && mPanel->device() == dv) mPanel->hide();
-                else mPanel->show(dv);
+                if (onOpenDevice) onOpenDevice(dv); // its window (R-WIN-1): opened, or brought forward
                 break;
             }
             case Part::Send:
@@ -900,6 +888,9 @@ namespace solaris_ui
         {
             const Hit h = hitAt(local);
             if (h.part == Part::Fader) send(h.id == "master" ? "set project.masterGain=0" : "set " + h.id + ".gain=0");
+            if (h.part == Part::Header) // an instrument strip's name: its instrument's window ("a window of that synth")
+                if (const auto *s = strip(h.id))
+                    if (s->kind == "instrument" && !s->devices.empty() && onOpenDevice) onOpenDevice(s->devices[0].id);
             if (h.part == Part::Pan) send("set " + h.id + ".pan=0");
             if (h.part == Part::Cell)
                 if (const auto *s = strip(h.id))
@@ -1016,7 +1007,7 @@ namespace solaris_ui
                 const auto &d = s->devices[(size_t)k];
                 label = d.label;
                 bypass = d.bypass;
-                open = mPanel->shown() && mPanel->device() == d.id;
+                open = isDeviceOpen && isDeviceOpen(d.id);
             }
             if (add)
                 drawRoundedRect(t, r, radius::control(), Paint::stroked(fade(palette::whiteAlpha(0.14 + 0.2 * hv), ca), 1.0));

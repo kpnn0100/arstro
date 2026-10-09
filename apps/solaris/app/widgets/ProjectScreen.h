@@ -22,6 +22,7 @@
 #include "../Theme.h"
 #include "AppModel.h"
 #include "Browser.h"
+#include "FloatWindow.h"
 #include "MixerDock.h"
 #include "SongBar.h"
 #include "Timeline.h"
@@ -42,6 +43,9 @@ namespace solaris_ui
         Browser &browser() { return *mBrowser; }
         Timeline &timeline() { return *mTimeline; }
         MixerDock &dock() { return *mDock; }
+        WindowLayer &windows() { return *mWindows; }
+        /** A right-click, offered before anyone else: a window's parameter row takes it (R-WIN-3). */
+        bool contextClick(artboard::Point world) { return mWindows->contextClick(world); }
         static constexpr double kLanesFloor = 130.0;  // space::u(40): the lanes never shrink below this
         double dockHeight() const { return mDockH.value(); } // LIVE
         void setDockOpen(bool open) { mDockOpen = open; }
@@ -78,6 +82,7 @@ namespace solaris_ui
         std::shared_ptr<Browser> mBrowser;
         std::shared_ptr<Timeline> mTimeline;
         std::shared_ptr<MixerDock> mDock;
+        std::shared_ptr<WindowLayer> mWindows;
         double mDockWant = 429.0;          // space::u(132): what the user last dragged it to
         bool mDockOpen = true, mDockInit = false, mInteracting = false;
         double mDockLast = 0.0;

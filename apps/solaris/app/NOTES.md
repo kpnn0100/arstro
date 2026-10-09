@@ -46,12 +46,15 @@ helpers it borrows.
 | Dock › M · S | `set <ch>.mute=true\|false` · `set <ch>.solo=true\|false` |
 | Dock › "→ out" | a menu of `strips[].targets` → `route <ch> --to <target>` |
 | Dock › "+ Effect" | a menu of the registry's effects → `device add <ch\|master> --type <t>` |
-| Dock › a device chip | opens its panel (the view's); "+N more" lists the rest |
+| Dock › "+N more" chip | a menu of the rest of the rack, each opening its window |
 | Dock › a send · dragged sideways | Pre/Post-fader → `set <sd>.pre=…` · Make it the main output → `route` then `send delete` · Remove → `send delete <sd>` · `set <sd>.gain=<dB>` |
 | Dock › a strip, right-click | Rename… → `set <ch>.name="…"` · Delete strip → `strip delete <ch>` |
 | Matrix › an open cell · double-click · a send cell · dragged up/down | `send add <ch> --to <col>` · `route <ch> --to <col>` · its menu (as a send) · `set <sd>.gain=<dB>` |
-| Device panel › a slider · a choice (left/right half) · double-click a slider | `set <dv>.<param>=<value in its unit>` · `set <dv>.<param>=<name>` · the registry default |
-| Device panel › On/Bypassed · Remove · × | `set <dv>.bypass=…` · `device remove <dv>` · closes (the view's) |
+| Dock › a device chip · an instrument strip's name, double-click | its WINDOW opens or comes forward (the view's) |
+| Device window › a slider · a choice (left/right half) · double-click a slider | `set <dv>.<param>=<value in its unit>` · `set <dv>.<param>=<name>` · the registry default |
+| Device window › a row, right-click › Create Automation · Formula… · Clear Binding · Reset to Default | `auto create <dv>.<param>` · cosmo's field → `set <dv>.<param>="=<typed>"` · `bind clear <dv>.<param>` · `set <dv>.<param>=<default>` |
+| Device window › On/Bypassed · Remove | `set <dv>.bypass=…` · `device remove <dv>` |
+| A window › its title dragged · × · a click on it | the view's: moved exactly, closed (eased), raised |
 
 A refusal is the toast, with the service's own sentence (`App::dispatch`).
 
@@ -62,7 +65,7 @@ song) · settings-open · settings-mid-open (mid-fade) · settings-chip-changing
 mid-ease) · project-open · home-to-project-mid (mid cross-fade) · toast-refusal ·
 browser-instruments · browser-folder · drag-sample-mid (the ghost and the drop hint) ·
 clip-dragging · clip-selected-zoomed · menu-file-open (Edit open, naming its undo) · mixer-sources · mixer-buses · mixer-tab-mid (pages mid
-cross-fade) · mixer-matrix · mixer-folded · device-panel · dock-folded · confirm-unsaved.
+cross-fade) · mixer-matrix · mixer-folded · device-panel (its window) · device-window-bound (two windows, a bound row, the last change lit) · dock-folded · confirm-unsaved.
 Each at 1440×900 and 1024×640. **Look at them** after a change.
 
 ## Borrowed, not copied
@@ -104,3 +107,13 @@ its opt-in `formatValue`), `Icons`, `Theme`, `EmbeddedFonts` are compiled from `
 - A culled row takes no input: aim a test at a row only after `reveal` has scrolled it in.
 - The arrow "→" is drawn (`arrowText`): the embedded Roboto has no U+2192; "●" is not there either.
 - `Rig` publishes `world()`, `cx()`, `cy()` for the shots and the UI tests alike.
+
+## Gotchas found building B3/B4
+
+- **Right-clicks and clicks do not bubble** in Artboard (`dispatchGesture`): the topmost child takes
+  them whether it handles them or not. A row's slider swallows a right-click meant for the row — the
+  App offers right-clicks to the window layer FIRST (`ProjectScreen::contextClick`).
+- **A long readout in a SliderRow runs left over its track** (it right-aligns by estimate): cut it to
+  the value column before handing it over.
+- **A settings sheet taller than the window scrolls** — a test aims at a control only after
+  `revealRect` has brought it in.
