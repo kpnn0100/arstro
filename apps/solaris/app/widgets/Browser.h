@@ -26,6 +26,7 @@
 #include "../../../interstellar/app/widgets/AnimatedRows.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/HoverFade.h"
+#include "../../../cosmo/widgets/ContextMenu.h"
 #include <functional>
 #include <map>
 #include <string>
@@ -44,8 +45,9 @@ namespace solaris_ui
 
         struct Item
         {
-            std::string kind;   // folder | dir | up | audio | instrument | effect | header | empty (label + note: the words)
+            std::string kind;   // folder | dir | up | audio | instrument | effect | pattern | newmidi | header | empty (label + note: the words)
             std::string label, value, note;
+            std::string strip;  // a pattern: the strip its newest clip plays through ("" = none) — where a drop off a track goes (R-BROWSE-4)
         };
 
         Browser();
@@ -70,6 +72,11 @@ namespace solaris_ui
         std::function<void(const Item &, artboard::Point world)> onDragMove, onDrop;
         std::function<void()> onDragCancel;
         std::function<void(const Item &)> onActivate;
+        // R-BROWSE-4: the song's MIDI — its piano roll, its menu, renamed in place, an id copied
+        std::function<void(const std::string &patternId)> onOpenPattern;
+        std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
+        std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onRename;
+        std::function<void(const std::string &text)> onCopy;
 
         void advance(double nowMs) override;
 
@@ -84,7 +91,7 @@ namespace solaris_ui
         double rowY(int i) const; // row i's LIVE top in the list, before scrolling
         int rowAt(const artboard::Point &p) const;
         double listTop() const { return kTabsH + 1.0; }
-        static bool draggable(const Item &i) { return i.kind == "audio" || i.kind == "instrument" || i.kind == "effect"; }
+        static bool draggable(const Item &i) { return i.kind == "audio" || i.kind == "instrument" || i.kind == "effect" || i.kind == "pattern"; }
 
         int mTab = kSamples;
         std::string mPath;                        // the folder being browsed ("" = the folder list)
@@ -92,6 +99,7 @@ namespace solaris_ui
         std::vector<solaris::BrowserEntry> mEntries;
         std::vector<solaris::DeviceTypeModel> mTypes;
         std::vector<std::pair<std::string, std::string>> mSongSounds; // label, src
+        std::vector<Item> mSongMidi;                  // R-BROWSE-4: the song's patterns, as rows
         std::vector<Item> mRows;                      // the list as it is: hit-testing, row()
         // R-EDM-9: the preview, keyed by file — its fill fades in on the row heard, out on the one left
         struct Aud { artboard::AnimatedProperty amt{0.0}; bool want = false, last = false, placed = false; double progress = 0; };

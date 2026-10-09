@@ -227,7 +227,12 @@ umbrella's pointer — `arstro.rule` §7).
       and delete carry tracks; older songs adopted on opening. The view: stripe in the strip's colour, the
       instrument named under it (fading), the lane header's Track of ▸ / Plain Lane / Copy ID; a browser drop
       onto a track → `--lane new`. 5 mutants caught (3 service, 2 UI).
-- [ ] **E4** MIDI clips made, looped and moved on the lanes; the song's MIDI list (R-CLIP-6…8, R-BROWSE-4).
+- [x] **E4** MIDI clips made, looped and moved on the lanes; the song's MIDI list (R-CLIP-6…8, R-BROWSE-4).
+      — DR-CLIP-6, DR-BROWSE-4: a double-click (or New MIDI Clip) on a track makes a one-bar clip there; a
+      clip's right edge sets its length (one `set .length` on release; lengths now ease); the Song tab lists
+      the MIDI first — New MIDI, each pattern's length, notes and players — double-click → its roll, a menu,
+      dragged onto a track / a plain lane / below. Model: `patterns[].strips`, `.lastStrip`. 3 mutants caught;
+      shots `midi-list`, `clip-end-dragging`.
 - [ ] **E5** The plugin editor in the Arstro look; Basic Synth's (R-VST-7/8).
 - [ ] **E6** Drum Machine's editor with its pads (R-VST-7/8).
 - [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.

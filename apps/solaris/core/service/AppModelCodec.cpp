@@ -112,6 +112,8 @@ namespace solaris
             {"patterns[].clips", "int", "clips playing it"},
             {"patterns[].strip", "string", "the strip its first clip plays through"},
             {"patterns[].instrument", "string", "that strip's instrument type (what names its keys)"},
+            {"patterns[].strips", "string[]", "R-BROWSE-4: every strip a clip of it plays through, in clip order"},
+            {"patterns[].lastStrip", "string", "the strip its newest clip plays through — where the MIDI list drops it off a track"},
             {"patterns[].notes", "object[]", "sorted by (at, pitch)"},
             {"patterns[].notes[].pitch", "int", "0…127"},
             {"patterns[].notes[].at", "number", "beats from the pattern's start"},
@@ -418,7 +420,7 @@ namespace solaris
             for (const auto &n : p.notes)
                 notes.push(Json::object().set("pitch", n.pitch).set("at", n.at).set("length", n.length).set("vel", n.vel));
             patterns.push(Json::object().set("id", p.id).set("name", p.name).set("length", p.length).set("clips", p.clips).set("notes", notes)
-                              .set("strip", p.strip).set("instrument", p.instrument));
+                              .set("strip", p.strip).set("instrument", p.instrument).set("strips", strings(p.strips)).set("lastStrip", p.lastStrip));
         }
         j.set("patterns", patterns);
         Json autos = Json::array();

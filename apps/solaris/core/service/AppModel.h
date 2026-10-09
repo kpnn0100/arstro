@@ -140,6 +140,8 @@ namespace solaris
         std::vector<NoteModel> notes;
         std::string strip;                       // the strip its first clip plays through ("" = none yet)
         std::string instrument;                  // that strip's instrument type ("synth", "drums")
+        std::vector<std::string> strips;         // R-BROWSE-4: every strip a clip of it plays through, in clip order
+        std::string lastStrip;                   // … the one its newest clip plays through — where a drop off a track goes
     };
 
     struct PortModel

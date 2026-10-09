@@ -82,6 +82,7 @@ namespace solaris_ui
         static constexpr double kGridFullPx = 16.0; // … this far apart or more: fully drawn (smoothstep between)
         static constexpr double kSnapPx = 11.0;     // the snap step: the finest level at least this far apart (half drawn)
         static constexpr double kBraceGrip = 6.5;   // space::u(2): the loop brace's end is taken within this (R-TIME-6)
+        static constexpr double kEdgeGrip = 6.5;    // space::u(2): a clip's right edge is taken within this (R-CLIP-7)
         static constexpr double kZoomPpb = 28.0;    // the zoom a song opens at, px a beat
         static constexpr int kZoomOutSteps = 8, kZoomInSteps = 14; // Ctrl+wheel: ×1.25 a step — 4.7 … 637 px a beat
 
@@ -108,6 +109,9 @@ namespace solaris_ui
         double clipAlpha(const std::string &id) const;
         /** How far a clip's colour has come since its strip's last changed (1 = there). */
         double clipHueAmount(const std::string &id) const;
+        /** A clip's LIVE drawn length, beats (eased; the pointer's while its end is dragged — R-CLIP-7). */
+        double clipLengthLive(const std::string &id) const;
+        bool resizing() const { return mResizing; }
         double playheadBeat() const { return mPlayhead.value(); }  // LIVE (eased on a seek)
 
         // the grid follows the zoom (R-UI-10, R-TIME-5) — every value LIVE, from the EASED zoom
@@ -198,8 +202,8 @@ namespace solaris_ui
         struct ClipLive
         {
             ClipView v;
-            double atTarget = 0, rowTarget = 0, atLast = 0, rowLast = 0, aLast = 0;
-            artboard::AnimatedProperty at{0.0}, row{0.0}, alpha{0.0}, hueT{1.0};
+            double atTarget = 0, rowTarget = 0, atLast = 0, rowLast = 0, aLast = 0, lenTarget = 0, lenLast = 0;
+            artboard::AnimatedProperty at{0.0}, row{0.0}, alpha{0.0}, hueT{1.0}, len{0.0}; // len: beats, eased (R-CLIP-7)
             artboard::Color hueFrom, hueTo; // its strip's colour, cross-faded when the strip's changes
             int hueLast = 0;
             bool placed = false, gone = false;
@@ -230,8 +234,10 @@ namespace solaris_ui
         int pointNear(const std::string &au, const artboard::Point &local) const;
         const ClipLive *live(const std::string &id) const;
         double rowY(int i) const; // row i's LIVE top, before scrolling
-        artboard::Rect clipBox(const ClipView &v, double at, double rowY) const;
-        void paintClip(artboard::IRenderTarget &t, const ClipView &v, const artboard::Rect &r, double alpha, double ring, const artboard::Color &hue) const;
+        artboard::Rect clipBox(const ClipView &v, double at, double y, double len) const;
+        void paintClip(artboard::IRenderTarget &t, const ClipView &v, const artboard::Rect &r, double alpha, double ring, const artboard::Color &hue, double len) const;
+        double liveLength(const ClipLive &l) const;   // what is drawn: the pointer's while its end is held, else eased
+        bool newClipOn(const artboard::Point &local);   // R-CLIP-6: a MIDI clip on the track under the pointer
         void paintGrid(artboard::IRenderTarget &t, double b0, double b1) const; // the lanes' lines, every level faded by its room
         void paintRuler(artboard::IRenderTarget &t, double b0, double b1) const; // ticks, bar and beat labels, the step's name
         static std::string stepName(double step, int beatsPerBar);
@@ -283,6 +289,10 @@ namespace solaris_ui
         // selection ring: fades out from the old clip while it fades in on the new one
         std::string mSelected, mPrevSelected;
         artboard::AnimatedProperty mSelIn{0.0}, mSelOut{0.0};
+        // a clip's right edge held (R-CLIP-7): its length is the pointer's, one `set <ac>.length` on release
+        std::string mEdgeClip;
+        bool mResizing = false;
+        double mResizeLen = 0.0;
         // a clip drag in flight
         std::string mPressClip;
         double mGrab = 0.0;

@@ -445,6 +445,29 @@ namespace
                  const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
                  r.drag(tw.x + tl.beatToX(5.0), ruler.y + ruler.h * 0.75, tw.x + tl.beatToX(8.0), ruler.y + ruler.h * 0.75, 6, false);
              }},
+            {"midi-list", // R-BROWSE-4: the Song tab — New MIDI, the patterns with length, notes and who plays them, then the samples
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("note add pt_1 --pitch 38 --at 1");
+                 r.cmd("notes add pt_2 \"E2@0:2 G2@2:1 A2@3\"");
+                 r.cmd("pattern new --name \"Fill (4 bars, with a long name)\" --length 16");
+                 r.cmd("clip add --pattern pt_2 --lane ln_2 --at 8");
+                 r.settle();
+                 auto &b = r.app->project().browser();
+                 r.click(world(b, b.tabRect(2)));
+                 r.settle();
+             }},
+            {"clip-end-dragging", // R-CLIP-7: a MIDI clip's end held — the pattern repeating in it, its seams marked
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("notes add pt_2 \"E2@0:1 G2@2 A2@3:0.5\"");
+                 r.cmd("set pt_2.length=4");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect c = world(tl, tl.clipRect("ac_2"));
+                 const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
+                 r.drag(c.right() - 2.0, c.y + c.h * 0.5, tw.x + tl.beatToX(22.6), c.y + c.h * 0.5, 6, false);
+             }},
             {"mixer-sidechain",   // the kick keys the bass's compressor; a limiter on the master (R-MIX-15, R-EDM-4)
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

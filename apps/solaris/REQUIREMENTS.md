@@ -192,7 +192,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   only faders a new song has would hide behind a click. The fold is the view's, not the song's: a
   fold is not saved and no command sets it, like zoom.)
 
-## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅: DR-CLIP-2/3 headless, DR-UI-3 drawn and dragged, DR-LANE-1 `lane move`; R-LANE-2's view with U4) — R-LANE-3 ✅ (instrument tracks, DR-LANE-3) — 🚧 R-CLIP-6…8 (MIDI clips made, looped and moved: E4)
+## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅: DR-CLIP-2/3 headless, DR-UI-3 drawn and dragged, DR-LANE-1 `lane move`; R-LANE-2's view with U4) — R-LANE-3 ✅ (instrument tracks, DR-LANE-3) — R-CLIP-6…8 ✅ (MIDI clips made, looped and moved, DR-CLIP-6)
 
 - **R-LANE-1 A lane is a timeline row for organisation only** (FL Studio's playlist): it holds any
   clips, from any strips. Lanes are added, named, coloured, reordered and deleted (deleting a lane
@@ -317,7 +317,7 @@ audio devices so the user can take advantage of their devices."*
   `bpm · length`, version count. New (name, tempo, meter, sample rate defaulting from Settings),
   Open, Settings.
 
-## R-BROWSE — the left panel: samples and presets — 🚧 IN PROGRESS (1 ✅ DR-BROWSE-1/2, presets wait for a preset store; 2 ✅ audition, DR-EDM-9 (R-EDM-9); 3 ✅ onto the lanes, DR-BROWSE-2 — onto a strip or a rack with U3/U4) — 🚧 4 (the song's MIDI list, E4)
+## R-BROWSE — the left panel: samples and presets — 🚧 IN PROGRESS (1 ✅ DR-BROWSE-1/2, presets wait for a preset store; 2 ✅ audition, DR-EDM-9 (R-EDM-9); 3 ✅ onto the lanes, DR-BROWSE-2 — onto a strip or a rack with U3/U4) — 4 ✅ (the song's MIDI list, DR-BROWSE-4)
 
 - **R-BROWSE-1 Three sections:** Folders (the sample folders from Settings), Presets (every
   instrument and effect in the registry with its factory and user presets), Project (the sounds the

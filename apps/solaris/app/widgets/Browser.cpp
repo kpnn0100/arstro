@@ -4,6 +4,7 @@
 #include "../../../cosmo/widgets/Icons.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <set>
 
@@ -25,6 +26,24 @@ namespace solaris_ui
             return s == std::string::npos ? p : p.substr(s + 1);
         }
         Color fade(Color c, double a) { c.a *= a; return c; }
+        // R-BROWSE-4: a pattern's glyph — a tiny piano roll, three notes at three pitches
+        void notesGlyph(IRenderTarget &t, const Rect &b, const Color &c)
+        {
+            const double y[3] = {0.7, 0.25, 0.5}, x[3] = {0.0, 0.3, 0.62}, w[3] = {0.4, 0.4, 0.38};
+            for (int i = 0; i < 3; ++i)
+                drawRoundedRect(t, Rect{b.x + x[i] * b.w, b.y + y[i] * b.h - 1.0, w[i] * b.w, 2.2}, radius::control(), Paint::filled(c));
+        }
+        std::string lengthText(double beats, int perBar)
+        {
+            // a pattern's length as a musician says it: bars when it is whole bars, else beats
+            char buf[32];
+            const double bars = beats / std::max(1, perBar);
+            if (std::fabs(bars - std::round(bars)) < 1e-9 && bars >= 1)
+                std::snprintf(buf, sizeof buf, "%d bar%s", (int)std::round(bars), std::round(bars) == 1 ? "" : "s");
+            else
+                std::snprintf(buf, sizeof buf, "%g beat%s", beats, beats == 1 ? "" : "s");
+            return buf;
+        }
         void waveGlyph(IRenderTarget &t, const Rect &b, const Color &c)
         {
             const double h[5] = {0.35, 0.8, 1.0, 0.6, 0.3};
@@ -47,6 +66,21 @@ namespace solaris_ui
         mAudProgress = m.audition.progress;
         // the folder browsed last is what the Samples tab shows, once the user went into one
         if (!mPath.empty() && m.browser.path == mPath) mEntries = m.browser.entries;
+        // R-BROWSE-4: the song's MIDI — each pattern with its length, its notes and who plays it
+        mSongMidi.clear();
+        std::map<std::string, std::string> stripName;
+        for (const auto &s : m.strips) stripName[s.id] = s.name;
+        const int perBar = std::max(1, std::atoi(m.sig.c_str()));
+        for (const auto &pt : m.patterns)
+        {
+            std::string who;
+            for (const auto &s : pt.strips) who += (who.empty() ? "" : ", ") + (stripName.count(s) ? stripName[s] : s);
+            Item it{"pattern", pt.name, pt.id, ""};
+            it.note = lengthText(pt.length, perBar) + " \xC2\xB7 " + std::to_string(pt.notes.size()) + (pt.notes.size() == 1 ? " note" : " notes") +
+                      " \xC2\xB7 " + (who.empty() ? std::string("unplayed") : who);
+            it.strip = pt.lastStrip;
+            mSongMidi.push_back(it);
+        }
         mSongSounds.clear();
         std::set<std::string> seen;
         for (const auto &c : m.clips)
@@ -79,7 +113,14 @@ namespace solaris_ui
             }
         }
         else
+        {
+            // R-BROWSE-4: the song's MIDI first (a new one always to hand), then its samples
+            mRows.push_back(Item{"header", "MIDI", "", ""});
+            mRows.push_back(Item{"newmidi", "New MIDI", "", ""});
+            for (const auto &it : mSongMidi) mRows.push_back(it);
+            if (!mSongSounds.empty()) mRows.push_back(Item{"header", "SAMPLES", "", ""});
             for (const auto &s : mSongSounds) mRows.push_back(Item{"audio", s.first, s.second, ""});
+        }
 
         // what is drawn: keyed by generation and content; an empty list says so in words, as a row
         const std::string gen = std::to_string(mGen) + "|";
@@ -245,12 +286,33 @@ namespace solaris_ui
             else if (it.kind == "audio" && onCommand)
                 // R-EDM-9: a click hears it now; a click on the one being heard stops it
                 onCommand(mAudPlaying && mAudFile == it.value ? std::string("audition stop") : "audition " + q(it.value));
+            else if (it.kind == "newmidi" && onCommand)
+                onCommand("pattern new --name " + q("MIDI " + std::to_string(mSongMidi.size() + 1))); // R-BROWSE-4
             return true;
         }
         case Gesture::Type::DoubleClick:
         {
             const int r = rowAt(local);
-            if (r >= 0 && draggable(mRows[(size_t)r]) && onActivate) onActivate(mRows[(size_t)r]);
+            if (r < 0) return true;
+            if (mRows[(size_t)r].kind == "pattern") { if (onOpenPattern) onOpenPattern(mRows[(size_t)r].value); return true; } // its piano roll
+            if (draggable(mRows[(size_t)r]) && onActivate) onActivate(mRows[(size_t)r]);
+            return true;
+        }
+        case Gesture::Type::RightClick:
+        {
+            // a pattern's menu (R-BROWSE-4): each one line
+            const int r = rowAt(local);
+            if (r < 0 || mRows[(size_t)r].kind != "pattern" || !onMenu) return true;
+            const std::string id = mRows[(size_t)r].value, name = mRows[(size_t)r].label;
+            const Point world = g.pos;
+            onMenu({{"Rename\xE2\x80\xA6", [this, id, name, world] {
+                         if (onRename) onRename(name, world, [this, id](const std::string &n) { if (onCommand) onCommand("set " + id + ".name=" + q(n)); });
+                     }},
+                    {"Piano Roll", [this, id] { if (onOpenPattern) onOpenPattern(id); }},
+                    {"Duplicate", [this, id] { if (onCommand) onCommand("pattern duplicate " + id); }},
+                    {"Copy ID", [this, id] { if (onCopy) onCopy(id); }},
+                    {"Delete", [this, id] { if (onCommand) onCommand("pattern delete " + id); }}},
+                   world);
             return true;
         }
         default:
@@ -322,12 +384,29 @@ namespace solaris_ui
             else if (it.kind == "up") glyph::line(t, ib.x + 8.0, ib.y + 2.0, ib.x + 3.0, ib.y + 6.0, ic, 1.3), glyph::line(t, ib.x + 3.0, ib.y + 6.0, ib.x + 8.0, ib.y + 10.0, ic, 1.3);
             else if (it.kind == "audio") waveGlyph(t, ib, ic);
             else if (it.kind == "instrument") glyph::speaker(t, ib, ic, 1.1);
+            else if (it.kind == "pattern") notesGlyph(t, ib, ic);
+            else if (it.kind == "newmidi")
+            {
+                glyph::line(t, ib.x + 6.0, ib.y + 2.0, ib.x + 6.0, ib.y + 10.0, ic, 1.3);
+                glyph::line(t, ib.x + 2.0, ib.y + 6.0, ib.x + 10.0, ib.y + 6.0, ic, 1.3);
+            }
             else drawCircle(t, ib.x + 6.0, ib.y + 6.0, 4.0, Paint::stroked(ic, 1.1));
             const bool mono = it.kind == "audio";   // a filename is mono (the type ramp's rule)
             const double px = mono ? 10.0 : 11.0;
             const char *fam = mono ? font::mono() : font::sans();
-            t.setFill(fade(it.kind == "up" ? palette::mutedForeground() : palette::foreground(), a));
-            t.drawText(textfit::ellipsize(t, it.label, W - ib.right() - 2 * space::padX(), px, fam), ib.right() + 8.0, textfit::baseline(cy, px), px, fam);
+            double labelW = W - ib.right() - 2 * space::padX();
+            if (it.kind == "pattern" && !it.note.empty())
+            {
+                // its length, notes and who plays it, at the right — mono (numbers), muted; the name gets the rest
+                const std::string meta = textfit::ellipsize(t, it.note, W * 0.62, 9.0, font::mono());
+                const double mw = t.measureText(meta, 9.0, font::mono());
+                t.setFill(fade(palette::mutedForeground(), a));
+                t.drawText(meta, W - space::padX() - mw, textfit::baseline(cy, 9.0), 9.0, font::mono());
+                labelW = std::max(0.0, labelW - mw - 8.0);
+            }
+            t.setFill(fade(it.kind == "up" || it.kind == "newmidi" ? lerpColor(palette::mutedForeground(), palette::foreground(), it.kind == "newmidi" ? hv : 0.0)
+                                                                   : palette::foreground(), a));
+            t.drawText(textfit::ellipsize(t, it.label, labelW, px, fam), ib.right() + 8.0, textfit::baseline(cy, px), px, fam);
         }
         t.restore();
         mScroll.drawBar(t, W - 5.0);

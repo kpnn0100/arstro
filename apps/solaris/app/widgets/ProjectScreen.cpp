@@ -48,6 +48,13 @@ namespace solaris_ui
         mDock->isDeviceOpen = [this](const std::string &dv) { return mWindows->isOpen("dev:" + dv); };
 
         mBrowser->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
+        // R-BROWSE-4: the song's MIDI list — its piano roll, its menu, a rename in place, an id copied
+        mBrowser->onOpenPattern = [this](const std::string &pt) { mWindows->openRoll(pt); };
+        mBrowser->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
+        mBrowser->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
+            if (onRename) onRename(cur, world, std::move(done));
+        };
+        mBrowser->onCopy = copy;
         mTimeline->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
         mTimeline->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
         mTimeline->onOpenPattern = [this](const std::string &pt) { mWindows->openRoll(pt); };
@@ -111,6 +118,18 @@ namespace solaris_ui
         const std::string onLane = lane.empty() || track ? std::string(" --lane new") : " --lane " + q(lane);
         if (it.kind == "audio") return onCommand("clip add --src " + q(it.value) + " --at " + beats(beat) + onLane);
         if (it.kind == "instrument") return onCommand("clip add --instrument " + it.value + " --at " + beats(beat) + " --length 4" + onLane);
+        if (it.kind == "pattern")
+        {
+            // R-BROWSE-4: onto an instrument's track it plays through that instrument; anywhere else through the one
+            // its newest clip plays through (that lane, or a new track for it); played by nothing, off a track: say so
+            if (track) return onCommand("clip add --pattern " + it.value + " --lane " + q(lane) + " --at " + beats(beat));
+            if (it.strip.empty())
+            {
+                if (onNotice) onNotice("Drop " + it.label + " on an instrument's track \xE2\x80\x94 nothing plays it yet.");
+                return false;
+            }
+            return onCommand("clip add --pattern " + it.value + " --strip " + it.strip + " --at " + beats(beat) + (lane.empty() ? std::string(" --lane new") : " --lane " + q(lane)));
+        }
         if (it.kind == "effect" && onNotice) onNotice("An effect goes on a mixer strip \xE2\x80\x94 drop it in the mixer.");
         return false;
     }

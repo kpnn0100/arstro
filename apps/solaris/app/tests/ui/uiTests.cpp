@@ -286,6 +286,122 @@ static void test_a_lane_is_an_instruments_track()
     pass("Tracks: an instrument's lane is named by it and names its instrument; a clip dragged onto another track plays through it (its colour easing); Track of ▸ / Plain Lane fade the line in and out; a browser drop onto a track gets its own lane (R-LANE-3)");
 }
 
+static void test_midi_clips_are_made_looped_moved_and_listed()
+{
+    // R-CLIP-6…8, R-BROWSE-4: a MIDI clip made on its track, looped by its end, moved between tracks; the song's
+    // MIDI list dragged in
+    sltest::Rig r("ui-midi", 1280, 800);
+    r.cmd("project new " + r.song("Midi") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");                 // ch_2, ln_1, pt_1, ac_1
+    r.cmd("clip add --instrument drums --at 0 --length 4");                 // ch_3, ln_2, pt_2, ac_2
+    r.cmd("set ch_2.name=Bass");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &menu = r.app->menu();
+    auto &wl = r.app->project().windows();
+    const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
+    auto clipOf = [&](const std::string &id) {
+        const auto &cs = r.svc->model().clips;
+        for (size_t i = 0; i < cs.size(); ++i)
+            if (cs[i].id == id) return &cs[i];
+        return static_cast<decltype(&cs[0])>(nullptr);
+    };
+    const double step = tl.snapStep();
+    // a double-click on the Bass track's empty space: a one-bar MIDI clip there, on the snap step — one line
+    const double rowY = cy(world(tl, tl.rowRect(0)));
+    r.click(tw.x + tl.beatToX(8.1), rowY);
+    r.click(tw.x + tl.beatToX(8.1), rowY);
+    r.settle();
+    assert(sentLine(r, "clip add --lane ln_1 --at " + Timeline::beatText(std::round(8.1 / step) * step) + " --length 4"));
+    assert(clipOf("ac_3") && clipOf("ac_3")->track == "ch_2" && clipOf("ac_3")->lane == "ln_1" && clipOf("ac_3")->pattern == "pt_3");
+    // …and its menu offers the same
+    r.click(tw.x + tl.beatToX(14.1), rowY, 2);
+    r.settle();
+    assert(menu.isOpen() && menu.itemCount() == 1 && menu.item(0).label == "New MIDI Clip");
+    r.click(tw.x + tl.beatToX(30.0), cy(world(tl, tl.rowRect(1))) + 4.0 * Timeline::kRowH); // a press outside closes it
+    r.settle();
+    assert(!menu.isOpen());
+    // ac_1's right edge dragged: its length is the pointer's while held (nothing said), ONE line on release, staying
+    const artboard::Rect c1 = world(tl, tl.clipRect("ac_1"));
+    const size_t before = r.sent.size();
+    r.drag(c1.right() - 2.0, cy(c1), tw.x + tl.beatToX(9.9), cy(c1), 6, false);
+    const double want = std::round(9.9 / step) * step;
+    assert(tl.resizing() && tl.clipLengthLive("ac_1") == want && r.sent.size() == before);
+    r.app->pointer(2, tw.x + tl.beatToX(9.9), cy(c1), 0, r.now);
+    r.frame();
+    assert(r.sent.size() == before + 1 && r.sent.back() == "set ac_1.length=" + Timeline::beatText(want));
+    assert(tl.clipLengthLive("ac_1") == want);                              // where it was let go
+    r.settle();
+    assert(clipOf("ac_1")->length == want);                                 // the pattern (4 beats) repeats in it
+    // a shell's length EASES (nothing snaps)
+    r.cmd("set ac_1.length=6");
+    r.frame();
+    r.frame();
+    assert(tl.clipLengthLive("ac_1") < want && tl.clipLengthLive("ac_1") > 6.0);
+    r.settle();
+    assert(tl.clipLengthLive("ac_1") == 6.0);
+    // ac_3 dragged onto the drums' track: it plays through the drums
+    const artboard::Rect c3 = world(tl, tl.clipRect("ac_3"));
+    r.drag(c3.x + 10.0, cy(c3), c3.x + 10.0, cy(world(tl, tl.rowRect(1))), 6);
+    r.settle();
+    assert(sentLine(r, "clip move ac_3 --lane ln_2") && clipOf("ac_3")->track == "ch_3");
+    // the Song tab: MIDI first — New MIDI, then each pattern with its length, notes and who plays it
+    auto &b = r.app->project().browser();
+    r.click(world(b, b.tabRect(2)));
+    r.settle();
+    assert(b.row(0).kind == "header" && b.row(0).label == "MIDI" && b.row(1).kind == "newmidi");
+    int p1 = -1;
+    for (int i = 0; i < b.rowCount(); ++i)
+        if (b.row(i).value == "pt_1") p1 = i;
+    assert(p1 > 1 && b.row(p1).kind == "pattern" && contains(b.row(p1).note, "1 bar") && contains(b.row(p1).note, "Bass"));
+    // New MIDI: one `pattern new`, its row growing in
+    r.click(world(b, b.rowRect(1)));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "pattern new --name \"MIDI 4\""));
+    int p4 = -1;
+    for (int i = 0; i < b.rowCount(); ++i)
+        if (b.row(i).value == "pt_4") p4 = i;
+    assert(p4 > 0 && b.rowAlpha(p4) > 0.0 && b.rowAlpha(p4) < 1.0 && contains(b.row(p4).note, "unplayed"));
+    r.settle();
+    // dragged onto the Bass track: a clip of it there, playing through the bass
+    const artboard::Rect from = world(b, b.rowRect(p4));
+    r.drag(cx(from), cy(from), tw.x + tl.beatToX(12.0) + 2.0, rowY, 8);
+    r.settle();
+    assert(sentLine(r, "clip add --pattern pt_4 --lane ln_1 --at 12"));
+    // pt_1 dropped below the last lane: through the instrument its newest clip plays through, on a new track for it
+    for (int i = 0; i < b.rowCount(); ++i)
+        if (b.row(i).value == "pt_1") p1 = i;
+    const artboard::Rect f1 = world(b, b.rowRect(p1));
+    const double below = cy(world(tl, tl.rowRect(1))) + 2.0 * Timeline::kRowH;
+    r.drag(cx(f1), cy(f1), tw.x + tl.beatToX(16.0) + 2.0, below, 8);
+    r.settle();
+    assert(sentLine(r, "clip add --pattern pt_1 --strip ch_2 --at 16 --lane new"));
+    // a pattern nothing plays, dropped off a track: a notice, nothing sent
+    r.cmd("pattern new --name Loose");                                      // pt_5
+    r.settle();
+    int p5 = -1;
+    for (int i = 0; i < b.rowCount(); ++i)
+        if (b.row(i).value == "pt_5") p5 = i;
+    const size_t n5 = r.sent.size();
+    const artboard::Rect f5 = world(b, b.rowRect(p5));
+    r.drag(cx(f5), cy(f5), tw.x + tl.beatToX(20.0) + 2.0, below + 2.0 * Timeline::kRowH, 8);
+    r.settle();
+    assert(r.sent.size() == n5 && contains(r.app->toastText(), "nothing plays it yet"));
+    // a double-click: its piano roll; a right-click: its menu
+    r.click(world(b, b.rowRect(p1)));
+    r.click(world(b, b.rowRect(p1)));
+    r.settle();
+    assert(wl.isOpen("roll:pt_1"));
+    r.click(cx(world(b, b.rowRect(p5))), cy(world(b, b.rowRect(p5))), 2);
+    r.settle();
+    assert(menu.isOpen() && menu.itemCount() == 5 && menu.item(0).label.rfind("Rename", 0) == 0 && menu.item(4).label == "Delete");
+    r.click(menu.itemRect(4));
+    r.settle();
+    assert(sentLine(r, "pattern delete pt_5"));
+    pass("MIDI clips: a double-click on a track makes one there (its menu too); an end dragged is the pointer's, one `set .length` on release, a shell's eases; moved onto another track it plays through it; the Song tab lists the MIDI, New MIDI grows in, a pattern dropped on a track or below plays through the right instrument, unplayed off a track says so, a double-click opens its roll (R-CLIP-6…8, R-BROWSE-4)");
+}
+
 static void test_instrument_drop_and_clip_drag()
 {
     sltest::Rig r("ui-drop", 1280, 800);
@@ -1751,6 +1867,7 @@ int main()
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();
     test_a_lane_is_an_instruments_track();
+    test_midi_clips_are_made_looped_moved_and_listed();
     test_ruler_seek_keys_and_selection();
     test_the_mixers_numbers_bind_from_the_dock();
     test_ids_shown_and_copied();

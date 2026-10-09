@@ -1473,6 +1473,18 @@
       "stable": true
     },
     {
+      "path": "patterns[].strips",
+      "type": "string[]",
+      "summary": "R-BROWSE-4: every strip a clip of it plays through, in clip order",
+      "stable": true
+    },
+    {
+      "path": "patterns[].lastStrip",
+      "type": "string",
+      "summary": "the strip its newest clip plays through — where the MIDI list drops it off a track",
+      "stable": true
+    },
+    {
       "path": "patterns[].notes",
       "type": "object[]",
       "summary": "sorted by (at, pitch)",

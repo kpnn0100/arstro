@@ -209,6 +209,7 @@ namespace solaris_ui
             l->v = v;
             l->atTarget = v.c.at;
             l->rowTarget = v.row;
+            l->lenTarget = v.c.length;
             l->gone = false;
         }
         mBound = true;
@@ -272,10 +273,22 @@ namespace solaris_ui
     Rect Timeline::rowRect(int i) const { return Rect{0.0, kRulerH + rowY(i) - mScrollY.value(), width.value(), kRowH}; }
     Rect Timeline::rulerRect() const { return Rect{kHeaderW, 0.0, std::max(0.0, width.value() - kHeaderW), kRulerH}; }
 
-    Rect Timeline::clipBox(const ClipView &v, double at, double y) const
+    double Timeline::liveLength(const ClipLive &l) const
+    {
+        if (mResizing && l.v.c.id == mEdgeClip) return mResizeLen;
+        return l.placed ? l.len.value() : l.lenTarget;
+    }
+
+    double Timeline::clipLengthLive(const std::string &id) const
+    {
+        const ClipLive *l = live(id);
+        return l ? liveLength(*l) : 0.0;
+    }
+
+    Rect Timeline::clipBox(const ClipView &, double at, double y, double len) const
     {
         const double top = kRulerH + y - mScrollY.value();
-        const double x0 = beatToX(at), x1 = beatToX(at + std::max(0.25, v.c.length));
+        const double x0 = beatToX(at), x1 = beatToX(at + std::max(0.25, len));
         return Rect{x0, top + 3.0, std::max(3.0, x1 - x0 - 1.0), kRowH - 6.0};
     }
 
@@ -283,8 +296,8 @@ namespace solaris_ui
     {
         const ClipLive *l = live(id);
         if (!l) return Rect{};
-        if (mDragging && id == mPressClip) return clipBox(l->v, mDragBeat, rowY(mDragRow));
-        return l->placed ? clipBox(l->v, l->at.value(), l->row.value() * kRowH) : clipBox(l->v, l->atTarget, l->rowTarget * kRowH);
+        if (mDragging && id == mPressClip) return clipBox(l->v, mDragBeat, rowY(mDragRow), liveLength(*l));
+        return l->placed ? clipBox(l->v, l->at.value(), l->row.value() * kRowH, liveLength(*l)) : clipBox(l->v, l->atTarget, l->rowTarget * kRowH, liveLength(*l));
     }
 
     std::string Timeline::clipAt(const Point &p) const
@@ -437,6 +450,8 @@ namespace solaris_ui
             {
                 l.at.set(l.atTarget);
                 l.row.set(l.rowTarget);
+                l.len.set(l.lenTarget);
+                l.lenLast = l.lenTarget;
                 l.atLast = l.atTarget;
                 l.rowLast = l.rowTarget;
                 l.alpha.set(fadeIn ? 0.0 : 1.0);
@@ -457,6 +472,8 @@ namespace solaris_ui
             // the same 200 ms ease as the rows, so a clip and its lane travel together
             if (l.atTarget != l.atLast) { l.at.animateTo(l.atTarget, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.atLast = l.atTarget; }
             if (l.rowTarget != l.rowLast) { l.row.animateTo(l.rowTarget, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.rowLast = l.rowTarget; }
+            if (l.lenTarget != l.lenLast) { l.len.animateTo(l.lenTarget, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.lenLast = l.lenTarget; }
+            l.len.update(nowMs);
             if (aWant != l.aLast) { l.alpha.animateTo(aWant, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); l.aLast = aWant; }
             l.at.update(nowMs);
             l.row.update(nowMs);
@@ -554,6 +571,17 @@ namespace solaris_ui
         default:
             return false;
         }
+    }
+
+    bool Timeline::newClipOn(const Point &local)
+    {
+        // R-CLIP-6: a one-bar MIDI clip on the instrument's track under the pointer, on the snap step — ONE
+        // `clip add`, the track's instrument implied, a new empty pattern for it
+        if (local.x < kHeaderW || local.y < kRulerH || !onCommand) return false;
+        const int ri = rowAt(local.y);
+        if (ri < 0 || ri >= (int)mRows.size() || mRows[(size_t)ri].strip.empty()) return false;
+        onCommand("clip add --lane " + q(mRows[(size_t)ri].lane) + " --at " + beats(snap(xToBeat(local.x))) + " --length " + beats((double)mBeatsPerBar));
+        return true;
     }
 
     bool Timeline::rulerGesture(const Gesture &g, const Point &local)
@@ -666,9 +694,22 @@ namespace solaris_ui
         }
         case Gesture::Type::Down:
             mPressClip = clipAt(local);
+            mEdgeClip.clear();
+            if (!mPressClip.empty())
+            {
+                // R-CLIP-7: on its right edge the press takes the clip's END, not the clip
+                const Rect r = clipRect(mPressClip);
+                if (local.x >= r.right() - kEdgeGrip && r.w > 3.0 * kEdgeGrip) { mEdgeClip = mPressClip; mPressClip.clear(); }
+            }
             if (const ClipLive *l = live(mPressClip)) mGrab = xToBeat(local.x) - l->at.value(); // where it is DRAWN: a drag never teleports
             return true;
         case Gesture::Type::DragStart:
+            if (!mEdgeClip.empty())
+            {
+                mResizing = true;
+                if (const ClipLive *l = live(mEdgeClip)) mResizeLen = liveLength(*l);
+                selectClip(mEdgeClip);
+            }
             if (!mPressClip.empty())
             {
                 mDragging = true;
@@ -676,6 +717,13 @@ namespace solaris_ui
             }
             [[fallthrough]];
         case Gesture::Type::Drag:
+            if (mResizing)
+            {
+                // the end on the grid you see, never shorter than one step of it
+                if (const ClipLive *l = live(mEdgeClip))
+                    mResizeLen = std::max(std::max(snapStep(), 1.0 / kPpq), snap(xToBeat(local.x)) - l->atTarget);
+                return true;
+            }
             if (mDragging)
             {
                 mDragBeat = snap(xToBeat(local.x) - mGrab);
@@ -687,6 +735,24 @@ namespace solaris_ui
             return true;
         case Gesture::Type::Drop:
         case Gesture::Type::Up:
+            if (mResizing)
+            {
+                // where it was let go — the pointer was the animation — then ONE line; a refusal eases it back
+                mResizing = false;
+                std::string send;
+                for (auto &l : mLive)
+                    if (!l.gone && l.v.c.id == mEdgeClip)
+                    {
+                        l.len.set(mResizeLen);
+                        l.lenTarget = l.lenLast = mResizeLen;
+                        if (std::fabs(mResizeLen - l.v.c.length) > 1e-9) send = "set " + l.v.c.id + ".length=" + beats(mResizeLen);
+                        break;
+                    }
+                mEdgeClip.clear();
+                if (!send.empty() && onCommand) onCommand(send); // after the loop: the model it brings back re-keys mLive
+                return true;
+            }
+            mEdgeClip.clear();
             if (mDragging)
             {
                 mDragging = false;
@@ -721,6 +787,7 @@ namespace solaris_ui
             selectClip(clipAt(local));
             return true;
         case Gesture::Type::DoubleClick:
+            if (clipAt(local).empty() && newClipOn(local)) return true; // R-CLIP-6: on an instrument's track, a MIDI clip there
             for (const auto &v : mClips)
                 if (v.c.id == clipAt(local) && v.c.kind == "note" && onOpenPattern) onOpenPattern(v.c.pattern);
             return true;
@@ -749,6 +816,17 @@ namespace solaris_ui
             }
             // a clip's menu: what it plays through (R-MIX-14), its notes, a copy, gone — each one line
             const std::string id = clipAt(local);
+            if (id.empty() && onMenu && local.x >= kHeaderW)
+            {
+                // an instrument's track, where no clip is: New MIDI Clip there (R-CLIP-6)
+                const int ri = rowAt(local.y);
+                if (ri >= 0 && ri < (int)mRows.size() && !mRows[(size_t)ri].strip.empty())
+                {
+                    const Point here = local, world = g.pos;
+                    onMenu({{"New MIDI Clip", [this, here] { newClipOn(here); }}}, world);
+                }
+                return true;
+            }
             const ClipView *v = nullptr;
             for (const auto &x : mClips)
                 if (x.c.id == id) v = &x;
@@ -799,7 +877,7 @@ namespace solaris_ui
         }
     }
 
-    void Timeline::paintClip(IRenderTarget &t, const ClipView &v, const Rect &r, double a, double ring, const Color &hue) const
+    void Timeline::paintClip(IRenderTarget &t, const ClipView &v, const Rect &r, double a, double ring, const Color &hue, double len) const
     {
         drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(hue, 0.32 * a), fade(hue, 0.85 * a), 1.0));
         t.save();
@@ -816,7 +894,7 @@ namespace solaris_ui
             for (const auto &n : v.notes) { lo = std::min(lo, n.pitch); hi = std::max(hi, n.pitch); }
             const double top = r.y + 17.0, h = std::max(4.0, r.bottom() - 3.0 - top);
             const double ppb = mPpb.value();
-            for (double k = 0; k < v.c.length - 1e-9; k += v.patternLength)
+            for (double k = 0; k < len - 1e-9; k += v.patternLength)
             {
                 if (k > 0)
                 {
@@ -825,9 +903,9 @@ namespace solaris_ui
                 }
                 for (const auto &n : v.notes)
                 {
-                    if (k + n.at >= v.c.length) continue;
+                    if (k + n.at >= len) continue;
                     const double y = hi == lo ? top + h * 0.5 : top + h * (1.0 - (double)(n.pitch - lo) / (hi - lo)) - 1.5;
-                    const double w = std::max(2.0, std::min(n.length, v.c.length - k - n.at) * ppb - 1.0);
+                    const double w = std::max(2.0, std::min(n.length, len - k - n.at) * ppb - 1.0);
                     drawRoundedRect(t, Rect{r.x + (k + n.at) * ppb, std::clamp(y, top, top + h - 3.0), w, 3.0}, radius::control(),
                                     Paint::filled(fade(palette::foreground(), 0.75 * a)));
                 }
@@ -980,10 +1058,10 @@ namespace solaris_ui
             const double a = l.placed ? l.alpha.value() : 0.0;
             if (a <= 0.001) continue;
             const bool dragged = !l.gone && mDragging && v.c.id == mPressClip;
-            const Rect r = clipBox(v, l.at.value(), l.row.value() * kRowH);
+            const Rect r = clipBox(v, l.at.value(), l.row.value() * kRowH, liveLength(l));
             if (r.right() < kHeaderW || r.x > W || r.bottom() < kRulerH || r.y > H) continue;
             const double ring = l.gone ? 0.0 : (v.c.id == mSelected ? mSelIn.value() : (v.c.id == mPrevSelected ? mSelOut.value() : 0.0));
-            paintClip(t, v, r, (dragged ? 0.35 : 1.0) * a, dragged ? 0.0 : ring, lerpColor(l.hueFrom, l.hueTo, l.hueT.value()));
+            paintClip(t, v, r, (dragged ? 0.35 : 1.0) * a, dragged ? 0.0 : ring, lerpColor(l.hueFrom, l.hueTo, l.hueT.value()), liveLength(l));
             int hi = -1;
             for (size_t i = 0; i < mClips.size() && !l.gone; ++i)
                 if (mClips[i].c.id == v.c.id) hi = (int)i;
@@ -991,7 +1069,8 @@ namespace solaris_ui
             if (hv > 0.001 && !dragged) drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv * a)));
         }
         if (mDragging)
-            if (const ClipLive *l = live(mPressClip)) paintClip(t, l->v, clipBox(l->v, mDragBeat, rowY(mDragRow)), 1.0, 1.0, lerpColor(l->hueFrom, l->hueTo, l->hueT.value()));
+            if (const ClipLive *l = live(mPressClip))
+                paintClip(t, l->v, clipBox(l->v, mDragBeat, rowY(mDragRow), liveLength(*l)), 1.0, 1.0, lerpColor(l->hueFrom, l->hueTo, l->hueT.value()), liveLength(*l));
         paintAutomation(t); // the curves, in the clips' clip
         // the browser's drop hint: where it would land
         if (mDropAmt.value() > 0.001 && mDropRow >= 0)

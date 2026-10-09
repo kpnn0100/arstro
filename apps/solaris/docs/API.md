@@ -257,6 +257,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `patterns[].clips` | int | clips playing it |
 | `patterns[].strip` | string | the strip its first clip plays through |
 | `patterns[].instrument` | string | that strip's instrument type (what names its keys) |
+| `patterns[].strips` | string[] | R-BROWSE-4: every strip a clip of it plays through, in clip order |
+| `patterns[].lastStrip` | string | the strip its newest clip plays through — where the MIDI list drops it off a track |
 | `patterns[].notes` | object[] | sorted by (at, pitch) |
 | `patterns[].notes[].pitch` | int | 0…127 |
 | `patterns[].notes[].at` | number | beats from the pattern's start |

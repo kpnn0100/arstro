@@ -268,6 +268,12 @@ namespace solaris
                         if (!rk->devices.empty()) pm.instrument = rk->devices.front().type;
                     break;
                 }
+            for (const auto &c : p.clips)
+                if (c.pattern == pt.id)
+                {
+                    if (std::find(pm.strips.begin(), pm.strips.end(), c.track) == pm.strips.end()) pm.strips.push_back(c.track);
+                    pm.lastStrip = c.track; // the clips are in the order they were made: the last is the newest
+                }
             for (const auto &n : pt.notes) pm.notes.push_back(NoteModel{n.pitch, n.vel, n.at, n.length});
             mModel.patterns.push_back(pm);
         }
