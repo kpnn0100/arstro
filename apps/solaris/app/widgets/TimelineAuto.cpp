@@ -23,12 +23,7 @@ namespace solaris_ui
             std::snprintf(b, sizeof b, "%.6g", v);
             return b;
         }
-        std::string beats(double b)
-        {
-            char buf[32];
-            std::snprintf(buf, sizeof buf, "%g", std::round(b * 960.0) / 960.0);
-            return buf;
-        }
+        std::string beats(double b) { return Timeline::beatText(b); } // to the tick
         bool logShown(const solaris::AutomationModel &m) { return (m.unit == "Hz" || m.unit == "ms") && m.min > 0 && m.max > m.min; }
     }
 
@@ -224,7 +219,7 @@ namespace solaris_ui
             if (!mAutoDragging) return !mAutoPress.empty();
             const auto it = mAutos.find(mAutoPress);
             if (it == mAutos.end()) return true;
-            mAutoAt = std::max(0.0, std::round(xToBeat(local.x) * 4.0) / 4.0); // a sixteenth
+            mAutoAt = snap(xToBeat(local.x)); // the grid you see (R-UI-10)
             mAutoValue = yToValue(it->second, local.y, autoRowRect(mAutoPress));
             return true;
         }
@@ -265,7 +260,7 @@ namespace solaris_ui
             if (au.empty()) return false;
             if (pointNear(au, local) >= 0) return true; // a click on a point selects nothing, adds nothing
             const auto it = mAutos.find(au);
-            const double at = std::max(0.0, std::round(xToBeat(local.x) * 4.0) / 4.0);
+            const double at = snap(xToBeat(local.x)); // the grid you see (R-UI-10)
             const double v = yToValue(it->second, local.y, autoRowRect(au));
             if (onCommand) onCommand("auto point add " + au + " --at " + beats(at) + " --value " + num(v));
             return true;

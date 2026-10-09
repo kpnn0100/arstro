@@ -28,17 +28,17 @@ helpers it borrows.
 | Browser › a tab | nothing — the list is the model's (`settings.folders`, `deviceTypes`, the song's clips) |
 | Browser › a sample folder, a sub-folder, the row back up | `browse "<path>"` |
 | Browser › Samples with no folders, a click | `devices list`, then the settings sheet |
-| Browser › a sample dragged onto the lanes | `clip add --src "<file>" --at <beat> [--lane <ln>]` — below the last lane: no `--lane`, a new one |
+| Browser › a sample dragged onto the lanes | `clip add --src "<file>" --at <beat> [--lane <ln>]` — `<beat>` on the lanes' snap step; below the last lane: no `--lane`, a new one |
 | Browser › an instrument dragged onto the lanes | `clip add --instrument <type> --at <beat> --length 4 [--lane <ln>]` — ONE line (R-BROWSE-3) |
 | Browser › a double-click | the same, at the playhead |
 | Browser › an effect dragged onto the lanes | nothing; a notice (effects go on a strip — U3) |
-| Lanes › a clip dragged | `clip move <ac> [--at <beat>] [--lane <ln>]` on release (snapped to 1/4 beat; between lanes only) |
-| Lanes › a ruler click | `transport seek <beat>` (snapped to 1/4 beat) |
-| Lanes › Shift-drag on the ruler · a click inside the loop's brace | `transport loop <from> <to>` on release (both snapped) · `transport loop off` |
+| Lanes › a clip dragged | `clip move <ac> [--at <beat>] [--lane <ln>]` on release (on the snap step; between lanes only) |
+| Lanes › a ruler click | `transport seek <beat>` — on the grid you see: the finest level with room, named in the ruler's corner ("Snap 1/8"); at the deepest zoom ("Off") the exact tick (R-TIME-5, R-UI-10) |
+| Lanes › Shift-drag on the ruler · a click inside the loop's brace | `transport loop <from> <to>` on release (both on the snap step) · `transport loop off` |
 | Lanes › a click on a clip | nothing — selection is the view's (U4 links it to the strip) |
 | Lanes › Delete / Backspace with a clip selected | `clip delete <ac>` |
 | Lanes › Ctrl+D with a clip selected | `clip duplicate <ac>` (a note clip's copy is linked) |
-| Lanes › Ctrl+wheel · wheel · Shift+wheel | nothing — zoom about the pointer, scroll, scroll sideways (the view's) |
+| Lanes › Ctrl+wheel · wheel · Shift+wheel | nothing — zoom about the pointer (×1.25 a notch, 4.7–637 px a beat; the grid's levels fade with it and the snap step follows), scroll, scroll sideways (the view's) |
 | Dock › a mixer tab · the chevron · its top edge dragged · a fold header | nothing — the page shown, the dock folded or sized, a group folded (the view's) |
 | Dock › "+" in the tabs | `mixer add` |
 | Dock › a mixer tab, right-click | Rename… → `set <mx>.name="…"` · Delete mixer → `mixer delete <mx>` |
@@ -69,7 +69,7 @@ helpers it borrows.
 | Piano roll › Quantize… | `pattern quantize <pt> --grid <snap> [--swing 0.25\|0.5]` |
 | Piano roll › Steps › a cell | `note add <pt> --pitch <p> --at <b> --length 0.25` · `note delete …` when one is there |
 | A window › its title dragged · × · a click on it | the view's: moved exactly, closed (eased), raised |
-| Automation row › a click · a point dragged (on release) · a point double-clicked | `auto point add <au> --at <b> --value <v>` · `auto point move <au> --at <b> --to <b2> --value <v>` · `auto point delete <au> --at <b>` |
+| Automation row › a click · a point dragged (on release) · a point double-clicked | `auto point add <au> --at <b> --value <v>` · `auto point move <au> --at <b> --to <b2> --value <v>` · `auto point delete <au> --at <b>` — `<b>`/`<b2>` on the lanes' snap step |
 | Automation row › right-click a point · the row | Linear/Hold/Smooth → `auto point shape <au> --at <b> --shape …`, Delete Point · Delete Automation → `auto delete <au> --unbind` |
 
 A refusal is the toast, with the service's own sentence (`App::dispatch`).
@@ -80,7 +80,7 @@ The REAL App over the REAL service (`tests/Rig.h`): home-empty · home-cards (a 
 song) · settings-open · settings-mid-open (mid-fade) · settings-chip-changing (a chip's fill
 mid-ease) · project-open · home-to-project-mid (mid cross-fade) · toast-refusal ·
 browser-instruments · browser-folder · drag-sample-mid (the ghost and the drop hint) ·
-clip-dragging · clip-selected-zoomed · menu-file-open (Edit open, naming its undo) · mixer-sources · mixer-buses · mixer-tab-mid (pages mid
+clip-dragging · clip-selected-zoomed · lanes-zoomed-in (bars to thirty-seconds, the beats named, Snap 1/128) · lanes-zoomed-out (bars only, Snap Bar) · lanes-zoom-mid (mid Ctrl+wheel: a level mid-fade, the step's names cross-fading) · menu-file-open (Edit open, naming its undo) · mixer-sources · mixer-buses · mixer-tab-mid (pages mid
 cross-fade) · mixer-matrix · mixer-folded · device-panel (its window) · device-window-bound (two windows, a bound row, the last change lit) · automation-rows (two curves: smooth, hold, log Hz) · piano-roll (a bassline, velocities) · piano-roll-note-in (a note mid-fade) · step-mode (a kit's pads, a beat) · browser-audition (a sample being heard, its row filling) · sampler-window (a sampler naming its sound) · loop-region (the brace and the tint) · loop-dragging (mid Shift-drag) · mixer-sidechain (a key in amber, a limiter on the master) · mixer-add-line (the "+ Line" menu) · clip-play-through (a clip's "Play through ▸") · dock-folded · confirm-unsaved.
 Each at 1440×900 and 1024×640. **Look at them** after a change.
 
@@ -133,3 +133,13 @@ its opt-in `formatValue`), `Icons`, `Theme`, `EmbeddedFonts` are compiled from `
   the value column before handing it over.
 - **A settings sheet taller than the window scrolls** — a test aims at a control only after
   `revealRect` has brought it in.
+
+## Gotchas found building C1 (the grid follows the zoom)
+
+- **A threshold on the zoom is a pop**: "label every 2nd bar below 56 px" swapped labels in one frame
+  while the zoom eased past it. Derive an ALPHA from the eased value (`gridAlpha`, the labels' room)
+  instead of a switch on it.
+- **`%g` keeps six significant digits**: past beat 1000 a printed beat lost ticks. Print beats with
+  `Timeline::beatText` (to the tick, the fewest decimals).
+- **One snap for every gesture on the lanes** — `Timeline::snap`. A widget beside the lanes (the
+  browser's drop) asks the timeline; it never rounds a beat itself.

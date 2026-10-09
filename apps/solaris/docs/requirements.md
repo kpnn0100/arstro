@@ -197,7 +197,7 @@ card — placed from the LIVE card widths, so it slides as cards grow in and shr
 and every instrument of the registry, each ONE `strip add --kind … [--instrument <type>] --mixer
 <mx>` (`MixerDock::openAddLine`, `MixerDock.cpp:709`); the new card grows in. A strip's menu offers
 "Move its clips to ▸" when it has clips and another strip of its kind exists — a second menu of those
-strips → `strip relink` (`MixerDock.cpp:961`). On the lanes a clip's menu (`Timeline.cpp:497`) offers
+strips → `strip relink` (`MixerDock.cpp:961`). On the lanes a clip's menu (`Timeline.cpp:584`) offers
 "Play through ▸" — the strips of its kind, the current one marked "now" → `clip move <ac> --strip
 <ch>` — then Piano Roll (a note clip), Duplicate, Delete.
 
@@ -330,17 +330,19 @@ fill, the close). The window ran on this machine's display (`solaris song.slp`, 
 (234 px), `Timeline` (`app/widgets/Timeline.cpp`) filling the rest. A row per lane in lane order,
 then a row per strip whose clips have no lane ("its strip's row"); a lane with no colour wears its
 first clip's. A clip is drawn on its row, coloured by its STRIP (`surface::track`), its name pinned
-to the visible edge when it begins off-screen (`paintClip`, `:548`); a note clip draws its
+to the visible edge when it begins off-screen (`paintClip`, `:637`); a note clip draws its
 pattern's notes repeated where it loops, the seams marked, and "linked ×N" when it shares its
-pattern. Ruler: bars from 1, labels thinned as it zooms out. The playhead is `destructive`; it
-follows the transport while playing and eases 140 ms on a seek. Ctrl+wheel zooms 4–320 px/beat,
-eased 220 ms and anchored at the pointer (`:531`); the wheel scrolls, Shift+wheel sideways. A clip
-dragged follows the pointer exactly, snapped to 1/4 beat, between LANES only, and lands as `clip
-move <ac> --at <b> [--lane <ln>]` (`:468`) where it was let go. A click selects (the teal ring
-cross-fades 200 ms between clips); Delete/Backspace → `clip delete`, Ctrl+D → `clip duplicate`
-(`app/App.cpp:297`); a ruler click → `transport seek <b>`, snapped (`Timeline.cpp:488`). **The picture travels
+pattern. Ruler: bars from 1, the grid's ticks, every label faded in by its room (DR-UI-10). The
+playhead is `destructive`; it follows the transport while playing and eases 140 ms on a seek.
+Ctrl+wheel zooms ×1.25 a notch on a lattice about 28 px/beat — 4.7 to 637 px/beat — eased 220 ms
+and anchored at the pointer (`:618`); the wheel scrolls, Shift+wheel sideways. The grid follows the
+zoom and its finest level with room is THE snap step on the lanes (DR-UI-10). A clip dragged follows
+the pointer exactly, on that step, between LANES only, and lands as `clip move <ac> --at <b> [--lane
+<ln>]` (`:555`) where it was let go. A click selects (the teal ring cross-fades 200 ms between
+clips); Delete/Backspace → `clip delete`, Ctrl+D → `clip duplicate` (`app/App.cpp:297`); a ruler
+click → `transport seek <b>` on the grid you see (`Timeline.cpp:575`). **The picture travels
 (§1):** the rows are Interstellar's `AnimatedRows` keyed by lane; each clip keeps an eased beat, row
-and opacity keyed by its id (`Timeline::advance`, `Timeline.cpp:231`) — it fades in when it arrives, fades out where it
+and opacity keyed by its id (`Timeline::advance`, `Timeline.cpp:301`) — it fades in when it arrives, fades out where it
 was when it goes (taking no input), eases 200 ms with its row when moved from a shell; the zebra
 follows the LIVE slot, a stripe's colour cross-fades, the empty-state words fade. Another song
 places everything where it is. Empty, it says what to do in words.
@@ -355,8 +357,8 @@ files the song plays. The list is `AnimatedRows` keyed by generation and content
 a tab or folder changed starts a new generation, so the old list fades where it was scrolled while
 the new one fades in (`navigate`, `:96`); an inserted row fades in, a removed one out. A row is
 dragged out: the browser reports the pointer and the drop; `ProjectScreen` draws the ghost (the
-overlay pass) and the timeline's teal drop hint at the snapped beat, and on release sends ONE line
-(`place`, `app/widgets/ProjectScreen.cpp:99`): a sample → `clip add --src "<file>" --at <b> [--lane
+overlay pass) and the timeline's teal drop hint at the beat on the lanes' step (DR-UI-10; `overLanes`,
+`app/widgets/ProjectScreen.cpp:85`), and on release sends ONE line (`place`, `:94`): a sample → `clip add --src "<file>" --at <b> [--lane
 <ln>]`; an instrument → `clip add --instrument <type> --at <b> --length 4 [--lane <ln>]` (the new
 strip and its empty note clip in one command, `core/service/ServiceEdit.cpp:421`); below the last
 lane, no `--lane` — a new lane; an effect → a notice that it goes on a strip (U3). A double-click
@@ -369,7 +371,7 @@ deleted. Every front end draws it as is.
 
 ### DR-UI-8 The mixer dock (R-UI-3, R-MIX-1/5/6/7/9/12, R-MIX-12 amended)
 `MixerDock` (`app/widgets/MixerDock.cpp`) sits under the lanes (`ProjectScreen::dockTarget`,
-`app/widgets/ProjectScreen.cpp:120`: 429 px wanted; its top edge dragged follows the pointer; the
+`app/widgets/ProjectScreen.cpp:115`: 429 px wanted; its top edge dragged follows the pointer; the
 chevron folds it to its tab bar, eased 220 ms; it gives way before the lanes, which keep 130 px).
 Tabs: a mixer page each, "+" (`mixer add`), Matrix; keyed (`syncTabs`) so a tab added slides the
 others along, measured in one weight so choosing a tab moves nothing; the highlight slides, the
@@ -507,18 +509,18 @@ strip's name (double-click) in the dock open them; a chip is outlined while its 
 Placement and stacking are the view's. The dock's floating panel is gone (R-UI-5 amended).
 
 ### DR-AUTO-5 Automation on the timeline (R-AUTO-6)
-`Timeline` (`app/widgets/Timeline.cpp:91`) appends a row per automation after the lanes, keyed
+`Timeline` (`app/widgets/Timeline.cpp:161`) appends a row per automation after the lanes, keyed
 `auto:<au>` in the same `AnimatedRows` (a lane added slides them down; a new one grows in), its header
 the accent stripe, its name and the address that reads it. `TimelineAuto.cpp` draws the curve over the
 beat grid — holding the first value before the first point and the last after, linear / hold / smooth
-(smoothstep) per segment, on a log scale for Hz and ms (`valueToY`, `:48`) — with the points as
-handles (`paintAutomation`, `:166`). `autoGesture` (`:201`): a click on the row adds a point at the
-sixteenth under the pointer with the value under it (`auto point add`); a point dragged is drawn under
-the pointer while held (its beat snapped) and sends ONE `auto point move <au> --at <from> --to <to>
+(smoothstep) per segment, on a log scale for Hz and ms (`valueToY`, `:43`) — with the points as
+handles (`paintAutomation`, `:161`). `autoGesture` (`:196`): a click on the row adds a point at the
+lanes' snap step under the pointer (DR-UI-10; `:263`) with the value under it (`auto point add`); a
+point dragged is drawn under the pointer while held (its beat on the same step, `:222`) and sends ONE `auto point move <au> --at <from> --to <to>
 --value <v>` on release, staying where it was let go; a double-click deletes it; a right-click offers
 Linear / Hold / Smooth, Delete Point and Delete Automation (`auto delete --unbind`). A curve the model
 changes eases there point by point over 220 ms; a point added or removed cross-fades the two curves
-(`shownPoints`, `:35`).
+(`shownPoints`, `:30`).
 
 ### DR-ROLL-1 The piano roll (R-ROLL-1…5, R-EDM-6)
 **Grammar.** `note move <pt> --pitch <p> --at <b> [--to-pitch <p>] [--to-at <b>] [--length <b>] [--vel
@@ -531,7 +533,7 @@ device type its named keys (`deviceTypes[].noteNames`, `core/service/ServiceMode
 registry's (REQ-device-6: the Drum Machine's ten pads, Kick = 36 …).
 **The window.** `PianoRoll` (`app/widgets/PianoRoll.cpp`) is the content of a `roll:<pt>` window
 (`WindowLayer::openRoll`, `app/widgets/FloatWindow.cpp:147`), opened by double-clicking a note clip
-(`Timeline.cpp:493`) or by an instrument window's "Piano Roll" (`DevicePanel.cpp:464` — the strip's
+(`Timeline.cpp:580`) or by an instrument window's "Piano Roll" (`DevicePanel.cpp:464` — the strip's
 pattern; a menu when it plays several; `clip add --strip` and then its roll when it has none). Titled
 "Piano Roll — <pattern> · <strip>"; a pattern gone closes it. A toolbar: snap 1/4 · 1/8 · 1/16
 (default) · 1/32 · Off, Notes | Steps, Quantize… (a menu of three lines: straight, swing 25 %, 50 %, at
@@ -608,13 +610,14 @@ never exceeds its ceiling by construction (measured in the DSP suites).
 
 ### DR-EDM-7 The loop region on the ruler (R-EDM-7, R-TIME-4)
 `Timeline` draws the model's `transport.loopFrom … loopTo` as a brace on the ruler, its ends marked, in
-the accent, and tints the region on the lanes under the clips (`app/widgets/Timeline.cpp:638`, `:744`;
-`loopRect`, `:365`). It is eased (`:243`): it fades in where it is when a loop appears, fades out when
-it goes, and a loop changed by anyone moves there over 220 ms. `loopGesture` (`:373`): Shift-drag on the
-ruler draws the brace under the pointer (both ends snapped to the quarter-beat, like a seek) and sends
-ONE `transport loop <from> <to>` on release, the brace staying where it was let go; a click inside the
-brace sends `transport loop off`; a plain click elsewhere on the ruler still seeks. The engine already
-loops (DR-PLAY-1), so the playhead wraps at the brace's end while playing.
+the accent, and tints the region on the lanes under the clips (`app/widgets/Timeline.cpp:799`, `:892`;
+`loopRect`, `:452`). It is eased (`:330`): it fades in where it is when a loop appears, fades out when
+it goes, and a loop changed by anyone moves there over 220 ms. `loopGesture` (`:460`): Shift-drag on the
+ruler draws the brace under the pointer (both ends on the lanes' snap step, like a seek — DR-UI-10,
+`:469`) and sends ONE `transport loop <from> <to>` on release, the brace staying where it was let go
+(both ends on one line is a Shift-click: no region, `:483`); a click inside the brace sends `transport
+loop off`; a plain click elsewhere on the ruler still seeks. The engine already loops (DR-PLAY-1), so
+the playhead wraps at the brace's end while playing.
 
 ### DR-EDM-8 A sampler (R-EDM-8)
 The DSP library's `sampler` (REQ-inst-sampler-1: chromatic or one-shot, a span, reverse, an ADSR) is a
@@ -630,7 +633,7 @@ gives `devices[].takesSample`, `.sample` and `deviceTypes[].takesSample`; the au
 no sound or an unreadable one (`core/service/ServiceModel.cpp:397`). In the UI a sampler's window names
 its sound where others name their type (`DevicePanel::sampleText`, `app/widgets/DevicePanel.cpp:391`),
 and a browser sample dragged over it lights the window (eased) and drops as ONE `set <dv>.sample=`
-(`WindowLayer::samplerAt`, `app/widgets/FloatWindow.cpp:239`; `app/widgets/ProjectScreen.cpp:84`).
+(`WindowLayer::samplerAt`, `app/widgets/FloatWindow.cpp:239`; `app/widgets/ProjectScreen.cpp:79`).
 Measured (L2): at the root the render IS the decoded file sample for sample (a mutant whose engine skips
 `setSample` fails it), an octave up is 2 kHz and over in half the time.
 
@@ -649,3 +652,48 @@ bar along its foot, keyed by the file and eased in and out (`:165`, `:312`) — 
 it. Settings › Playback has PREVIEW LEVEL. Measured (L2): the live stream carries the decoded file at
 the audition level, sample for sample; it ends itself, said.
 
+
+### DR-UI-10 The grid follows the zoom (R-UI-10, R-TIME-5)
+**The levels.** The lanes' grid has seven: a bar (the song's meter), a beat, and 1/2, 1/4, 1/8, 1/16
+and 1/32 of a beat (`Timeline::gridSpan`, `app/widgets/Timeline.cpp:58`). How much of a level is drawn
+is a smoothstep of its line spacing at the EASED zoom — nothing closer than 6 px, all of it from 16 px
+apart (`kGridHidePx`, `kGridFullPx`, `app/widgets/Timeline.h:73`; `room`, `Timeline.cpp:29`;
+`gridAlpha`, `:64`) — recomputed every frame, so a Ctrl+wheel zoom (eased 220 ms) fades a level in or
+out with it and never pops one. A line is drawn once, by the coarsest level it belongs to: bars
+strongest (white 7 %), beats next (4 %), the divisions faintest (2.2 %); every fourth bar is always
+drawn, so a far-out song keeps its phrases (`paintGrid`, `:697`). The ruler repeats the levels as ticks
+— long for a bar, shorter as they get finer — and its labels are MEASURED against their room: a bar's
+number fades in as its every-1/2/4/… bars get room for the widest number in view, and zoomed in the
+beats are named `bar.beat` (`2.3`), fading in as a beat gets room for one (`paintRuler`, `:719`; the
+labels `:751`). The old fixed thresholds, which swapped the labels in one frame mid-zoom, are gone.
+
+**The step.** THE snap step is the finest level whose lines are at least 11 px apart (`kSnapPx` — past
+half drawn: you snap to lines you can see), never coarser than a bar; at the deepest zoom it is 0 and
+nothing snaps (`snapStep`, `:72`; `atDeepestZoom`, `:70`). `snap()` (`:80`) is the ONE rounding of
+every gesture on the lanes: a ruler click → `transport seek` (`:575`), a clip drag (`:538`), the loop's
+Shift-drag (`:469`), an automation point added or dragged (`app/widgets/TimelineAuto.cpp:263`, `:222`),
+the browser's drop and its hint (`app/widgets/ProjectScreen.cpp:89`) — at the deepest zoom the tick
+under the pointer. Every gesture is still ONE command, its beats printed to the tick: rounded to 1/960
+and spelled with the fewest decimals that keep it (`Timeline::beatText`, `Timeline.cpp:43` — the `%g`
+it replaces kept six significant digits, so past beat 1000 a line lost ticks). The step is published
+LIVE for tests (`snapStep`, `snapLabel`, `gridAlpha`, `snapLabelAmount`, `Timeline.h:102`) and named in
+the ruler's corner over the lane headers — `Snap Bar`, `1/4` … `1/128`, `Off`, in the piano roll's note
+values (a beat = 1/4) — cross-faded 200 ms when it changes, older names fading out from where they are
+however fast the wheel turns (`stepName`, `Timeline.cpp:87`; `advance`, `:310`; `paintRuler`, `:723`).
+
+**The zoom.** A lattice of ×1.25 notches about 28 px/beat, 8 out (4.7 px/beat: a 4/4 bar is 18.8 px)
+and 14 in (637 px/beat), so a notch in and a notch out are exact inverses and the deepest zoom is one
+place (`:620`). **Decision:** the deepest zoom rose from 320 px/beat so that 1/32 of a beat gets room —
+20 px apart at 637, fully drawn, and THE step one notch before snapping turns off. The step by zoom:
+a bar below 11.5 px/beat, a beat from 11.5, 1/2 from 22.4 (a song opens at 28: bars, beats and halves
+drawn, the step 1/2), 1/4 from 55, 1/8 from 107, 1/16 from 209, 1/32 from 408, nothing at 637.
+
+**Proof.** `test_the_grid_follows_the_zoom` (`app/tests/ui/uiTests.cpp:1089`) drives the real service:
+at the default zoom a ruler click at beat 3.3 seeks 3.5 (a fixed quarter says 3.25); a level's alpha
+is caught mid-fade during an eased two-notch zoom, between its two ends; at 1/8 a seek, a clip drag
+(on the step while held, then `clip move ac_1 --at 3.125`) and an instrument dropped from the browser
+land on the same step, the step's name caught mid cross-fade; at the deepest zoom a click seven ticks
+past beat 2 is exactly `transport seek 2.007`; all the way out a click at 9.9 is `transport seek 8`.
+Mutants — a fixed 1/4 snap, a level's alpha taken from the TARGET zoom (it pops), a deepest zoom that
+snaps — each fail it. Shots `lanes-zoomed-in`, `lanes-zoomed-out`, `lanes-zoom-mid` (mid Ctrl+wheel)
+(`app/tests/shots/renderShots.cpp:165`).

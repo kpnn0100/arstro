@@ -13,6 +13,19 @@
  *  and scroll EASE; while playing the playhead follows the transport continuously, and a seek eases
  *  it (§1).
  *
+ *  THE GRID FOLLOWS THE ZOOM (R-UI-10, R-TIME-5). Its levels are a bar, a beat, then 1/2, 1/4, 1/8,
+ *  1/16 and 1/32 of a beat. How much of a level is drawn is a smooth function of its line spacing at
+ *  the EASED zoom, recomputed every frame — none below kGridHidePx, all of it from kGridFullPx — so a
+ *  Ctrl+wheel zoom fades levels in and out and never pops one. Bars are drawn strongest, beats next,
+ *  the divisions faintest; every fourth bar is always drawn, so a far-out song keeps its phrases.
+ *  THE SNAP STEP is the finest level whose lines are at least kSnapPx apart (half drawn: you snap to
+ *  lines you can see), never coarser than a bar; at the deepest zoom nothing snaps — the exact tick.
+ *  `snap()` is the ONE rounding every gesture on the lanes uses: a ruler click, a clip drag, a loop
+ *  Shift-drag, an automation point, the browser's drop (`ProjectScreen::overLanes`). The ruler names
+ *  the step in its corner, in the piano roll's note values (a beat = 1/4), cross-faded as it changes.
+ *  The zoom steps ×1.25 on a lattice about 28 px a beat — 8 steps out (4.7) and 14 in (637, where
+ *  1/32 of a beat is 20 px apart: fully drawn and THE step one notch before the deepest zoom).
+ *
  *  The picture TRAVELS when the song changes shape (§1, "list insert/remove"): lanes are Interstellar's
  *  `AnimatedRows` keyed by lane id; a clip keeps its own eased beat, row and opacity keyed by clip
  *  id — it fades in when it arrives, fades out when it goes, and a `clip move` from a shell eases
@@ -25,10 +38,11 @@
  *  list as the lanes; a curve the model changes eases point by point (a point added or removed
  *  cross-fades the two curves).
  *
- *  Editing is command lines (`onCommand`): a click on the ruler → `transport seek <beat>` (snapped to a sixteenth, as clips are); a clip
- *  dragged → `clip move <id> --at <beat> [--lane <ln>]` on release, snapped to a sixteenth. While
- *  dragging the clip follows the pointer exactly — direct manipulation, the one exemption — and the
- *  model the command returns puts it exactly there, so nothing jumps.
+ *  Editing is command lines (`onCommand`): a click on the ruler → `transport seek <beat>` (on the grid
+ *  you see); a clip dragged → `clip move <id> --at <beat> [--lane <ln>]` on release, on the same grid.
+ *  Beats are printed to the tick (`beatText`). While dragging the clip follows the pointer exactly —
+ *  direct manipulation, the one exemption — and the model the command returns puts it exactly there,
+ *  so nothing jumps.
  */
 #pragma once
 #include "../Theme.h"
@@ -54,6 +68,13 @@ namespace solaris_ui
         static constexpr double kHeaderW = 117.0;   // space::u(36): Interstellar's time origin
         static constexpr double kRulerH = 22.75;    // space::u(7)
         static constexpr double kRowH = 48.75;      // space::u(15)
+        // the grid (R-UI-10): level 0 a bar, 1 a beat, 2…6 a half … a thirty-second of a beat
+        static constexpr int kGridLevels = 7;
+        static constexpr double kGridHidePx = 6.0;  // a level's lines closer than this: not drawn
+        static constexpr double kGridFullPx = 16.0; // … this far apart or more: fully drawn (smoothstep between)
+        static constexpr double kSnapPx = 11.0;     // the snap step: the finest level at least this far apart (half drawn)
+        static constexpr double kZoomPpb = 28.0;    // the zoom a song opens at, px a beat
+        static constexpr int kZoomOutSteps = 8, kZoomInSteps = 14; // Ctrl+wheel: ×1.25 a step — 4.7 … 637 px a beat
 
         Timeline();
         void bind(const solaris::AppModel &m);
@@ -74,6 +95,17 @@ namespace solaris_ui
         /** How far a clip's colour has come since its strip's last changed (1 = there). */
         double clipHueAmount(const std::string &id) const;
         double playheadBeat() const { return mPlayhead.value(); }  // LIVE (eased on a seek)
+
+        // the grid follows the zoom (R-UI-10, R-TIME-5) — every value LIVE, from the EASED zoom
+        double gridSpan(int level) const;    // beats between a level's lines (a bar is the song's meter)
+        double gridAlpha(int level) const;   // how much of a level is drawn, 0 … 1
+        double snapStep() const;             // THE step on the lanes, beats; 0 at the deepest zoom: nothing snaps
+        double snap(double beat) const;      // the nearest line of it (≥ 0) — at the deepest zoom the exact tick
+        bool atDeepestZoom() const;
+        std::string snapLabel() const;       // the step as the ruler's corner names it ("1/8", "Bar", "Off")
+        double snapLabelAmount() const { return mStepNames.empty() ? 0.0 : mStepNames.back().a.value(); } // LIVE: 1 = its name fully drawn
+        /** A beat as a command spells it: rounded to the tick (960 PPQ), the fewest decimals that keep it. */
+        static std::string beatText(double beat);
 
         /** The browser's drag: where it would land (a row; beat), and what it is. */
         void setDropHint(bool on, double beat = 0.0, int row = -1, const std::string &label = std::string());
@@ -163,7 +195,9 @@ namespace solaris_ui
         double rowY(int i) const; // row i's LIVE top, before scrolling
         artboard::Rect clipBox(const ClipView &v, double at, double rowY) const;
         void paintClip(artboard::IRenderTarget &t, const ClipView &v, const artboard::Rect &r, double alpha, double ring, const artboard::Color &hue) const;
-        double snap(double beat) const { return std::max(0.0, std::round(beat * 4.0) / 4.0); }
+        void paintGrid(artboard::IRenderTarget &t, double b0, double b1) const; // the lanes' lines, every level faded by its room
+        void paintRuler(artboard::IRenderTarget &t, double b0, double b1) const; // ticks, bar and beat labels, the step's name
+        static std::string stepName(double step, int beatsPerBar);
 
         std::vector<Row> mRows;                       // the model's LANES, in order: hit-testing
         std::vector<std::string> mAutoIds;            // automation rows, after the lanes
@@ -187,8 +221,18 @@ namespace solaris_ui
         double mPosition = 0;
         bool mPlaying = false, mInit = false;
         double mNowMs = 0.0;
-        artboard::AnimatedProperty mPpb{28.0}, mPlayhead{0.0};
-        double mPpbTarget = 28.0;
+        artboard::AnimatedProperty mPpb{kZoomPpb}, mPlayhead{0.0};
+        double mPpbTarget = kZoomPpb;
+        int mZoomStep = 0;                  // the lattice: mPpbTarget = kZoomPpb · 1.25^step
+        // the step's name on the ruler: when the step changes (the zoom eased past a level) the new name
+        // fades in and the ones before fade out from where they are — however fast the wheel turns
+        struct StepName
+        {
+            std::string text;
+            artboard::AnimatedProperty a{0.0};
+            bool out = false;
+        };
+        std::vector<StepName> mStepNames;
         interstellar_v1::EasedScroll mScrollX, mScrollY;
         cosmo_v2::HoverFade mHover;
         // selection ring: fades out from the old clip while it fades in on the new one

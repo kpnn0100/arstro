@@ -663,7 +663,7 @@ static void test_automation_rows_draw_and_edit_curves()
     const double x3 = tl.beatToX(3.0);
     const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
     r.drag(tw.x + p1.x, tw.y + p1.y, tw.x + x3, tw.y + p1.y - 6.0, 6, false);
-    // while held the handle is drawn under the pointer (its beat snapped to a sixteenth), not easing after it
+    // while held the handle is drawn under the pointer (its beat on the grid's step, R-UI-10), not easing after it
     const artboard::Point held = tl.autoDragPoint();
     assert(std::fabs(held.x - x3) < 0.5 && std::fabs(held.y - (p1.y - 6.0)) < 0.5);
     r.app->pointer(2, tw.x + x3, tw.y + p1.y - 6.0, 0, r.now);
@@ -1086,6 +1086,92 @@ static void test_ruler_seek_keys_and_selection()
     pass("Ruler click seeks (the playhead eases); a clip selects; Ctrl+D duplicates linked, Delete removes it");
 }
 
+static void test_the_grid_follows_the_zoom()
+{
+    sltest::Rig r("ui-grid", 1280, 800);
+    r.cmd("project new " + r.song("Grid") + ".slp --bpm 120");
+    r.cmd("lane add Beats");
+    r.cmd("clip add --instrument synth --at 2 --length 4 --lane ln_1");   // ac_1
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
+    const double ry = cy(world(tl, tl.rulerRect()));
+    auto rulerClick = [&](double beat) {
+        r.click(tw.x + tl.beatToX(beat), ry);
+        r.settle();
+    };
+    auto zoom = [&](int notches) { // Ctrl+wheel about beat 2 — the clip's start stays where it is
+        for (int i = 0; i < std::abs(notches); ++i) r.app->wheel(tw.x + tl.beatToX(2.0), ry + 60.0, notches > 0 ? 1.0 : -1.0, true);
+    };
+    // the default zoom (28 px a beat): bars, beats and halves drawn, quarters barely; the step is the half you see
+    assert(tl.pxPerBeat() == Timeline::kZoomPpb);
+    assert(tl.gridAlpha(0) == 1.0 && tl.gridAlpha(1) == 1.0 && tl.gridAlpha(2) > 0.5 && tl.gridAlpha(3) < 0.1 && tl.gridAlpha(4) == 0.0);
+    assert(tl.snapStep() == 0.5 && tl.snapLabel() == "1/8");
+    rulerClick(3.3);
+    assert(sentLine(r, "transport seek 3.5") && r.svc->model().transport.position == 3.5); // not 3.25: a quarter you cannot see
+
+    // Ctrl+wheel EASES the zoom, and a level FADES with it — caught mid-fade, between its two ends (§1)
+    const double q0 = tl.gridAlpha(3);
+    zoom(2);                                                            // 43.75 px a beat, eased
+    r.frame();
+    r.frame();
+    r.frame();
+    const double qMid = tl.gridAlpha(3), ppbMid = tl.pxPerBeat();
+    r.settle();
+    const double q1 = tl.gridAlpha(3);
+    assert(ppbMid > Timeline::kZoomPpb && ppbMid < tl.pxPerBeat());
+    assert(q0 < qMid - 0.02 && qMid < q1 - 0.05);                      // neither popped at the end nor stuck at the start
+
+    // four notches more (107 px a beat): the step is 1/8 of a beat, its name cross-fading on the ruler as it changes
+    zoom(4);
+    bool nameMid = false;
+    for (int i = 0; i < 40; ++i)
+    {
+        r.frame();
+        nameMid |= tl.snapLabelAmount() > 0.0 && tl.snapLabelAmount() < 1.0;
+    }
+    assert(nameMid && tl.snapLabelAmount() == 1.0);
+    assert(tl.snapStep() == 0.125 && tl.snapLabel() == "1/32" && tl.gridAlpha(4) > 0.5 && tl.gridAlpha(5) < 0.5); // the step: drawn more than half
+    rulerClick(5.17);
+    assert(sentLine(r, "transport seek 5.125"));                      // a fixed quarter would say 5.25
+    // a clip dragged lands on the same step, following the pointer exactly (on the grid) while held
+    const artboard::Rect c0 = world(tl, tl.clipRect("ac_1"));
+    const double dx = 1.1 * tl.pxPerBeat();
+    r.drag(c0.x + 10.0, cy(c0), c0.x + 10.0 + dx, cy(c0), 8, false);
+    assert(std::fabs(world(tl, tl.clipRect("ac_1")).x - (tw.x + tl.beatToX(3.125))) < 0.5);
+    r.app->pointer(2, c0.x + 10.0 + dx, cy(c0), 0, r.now);
+    r.settle();
+    assert(sentLine(r, "clip move ac_1 --at 3.125") && r.svc->model().clips[0].at == 3.125);
+    // the browser's drop too: the hint and the line on the same step
+    auto &b = r.app->project().browser();
+    r.click(world(b, b.tabRect(1)));
+    r.settle();
+    int drums = -1;
+    for (int i = 0; i < b.rowCount(); ++i)
+        if (b.row(i).value == "drums") drums = i;
+    const artboard::Rect from = world(b, b.rowRect(drums));
+    r.drag(cx(from), cy(from), tw.x + tl.beatToX(4.1), cy(world(tl, tl.rowRect(0))));
+    r.settle();
+    assert(sentLine(r, "clip add --instrument drums --at 4.125 --length 4 --lane ln_1"));
+
+    // the deepest zoom (14 notches; one more changes nothing): NOTHING snaps — the exact tick under the pointer
+    zoom(9);
+    r.settle();
+    assert(tl.atDeepestZoom() && tl.snapStep() == 0.0 && tl.snapLabel() == "Off" && tl.gridAlpha(6) == 1.0);
+    rulerClick(2.0 + 7.0 / 960.0);                                     // seven ticks past beat 2: on no grid line
+    assert(sentLine(r, "transport seek 2.007") && r.svc->model().transport.position == 1927.0 / 960.0);
+
+    // all the way out (8 notches past the default): bars only, and a click goes to the nearest bar
+    zoom(-30);
+    r.settle();
+    assert(std::fabs(tl.pxPerBeat() - Timeline::kZoomPpb * std::pow(1.25, -Timeline::kZoomOutSteps)) < 1e-9);
+    assert(tl.gridAlpha(0) == 1.0 && tl.gridAlpha(1) == 0.0 && tl.snapStep() == 4.0 && tl.snapLabel() == "Bar");
+    rulerClick(9.9);
+    assert(sentLine(r, "transport seek 8") && r.svc->model().transport.position == 8.0);
+    pass("The grid follows the zoom: levels fade in as they get room (caught mid-fade in an eased zoom); a ruler click, a clip drag and a drop "
+         "land on the finest level you see — a bar far out, the tick at the deepest zoom (R-UI-10, R-TIME-5)");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -1111,6 +1197,7 @@ int main()
     test_the_loop_region_on_the_ruler();
     test_a_sample_dropped_on_a_sampler_loads_it();
     test_a_sample_is_heard_from_the_browser();
+    test_the_grid_follows_the_zoom();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

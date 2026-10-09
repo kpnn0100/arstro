@@ -162,6 +162,33 @@ namespace
                  r.click(ox + std::max(c.x, arstro::solaris_ui::Timeline::kHeaderW) + 30.0, oy + c.y + 20.0); // click its visible part
                  r.settle();
              }},
+            {"lanes-zoomed-in",   // R-UI-10: twelve notches in — bars, beats, halves … thirty-seconds; the beats named; Snap 1/128
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const double ox = tl.x.value(), oy = tl.y.value();
+                 for (int i = 0; i < 12; ++i) r.app->wheel(ox + tl.beatToX(8.0), oy + 60.0, 1.0, true); // about the vocal's start
+                 r.settle();
+             }},
+            {"lanes-zoomed-out",  // R-UI-10: all the way out — bars only, every other bar named; Snap Bar
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const double ox = tl.x.value(), oy = tl.y.value();
+                 for (int i = 0; i < 8; ++i) r.app->wheel(ox + tl.beatToX(0.0) + 1.0, oy + 60.0, -1.0, true);
+                 r.settle();
+             }},
+            {"lanes-zoom-mid",    // mid Ctrl+wheel: a level caught mid-fade, the step's two names cross-fading
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const double ox = tl.x.value(), oy = tl.y.value();
+                 for (int i = 0; i < 3; ++i) r.app->wheel(ox + tl.beatToX(8.0), oy + 60.0, 1.0, true);
+                 r.pump(5 * sltest::Rig::kFrameMs);
+             }},
             {"mixer-sources",
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

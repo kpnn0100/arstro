@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <map>
 
 namespace arstro
@@ -14,16 +15,85 @@ namespace solaris_ui
 
     namespace
     {
-        constexpr double kMinPpb = 4.0, kMaxPpb = 320.0;
+        constexpr double kZoomRatio = 1.25;   // one Ctrl+wheel notch
+        constexpr double kPpq = 960.0;        // a tick (R-TIME-1): what a beat is rounded to
         Color fade(Color c, double a) { c.a *= a; return c; }
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
-        std::string beats(double b)
+        std::string beats(double b) { return Timeline::beatText(b); }
+        double smooth01(double u)
         {
-            char buf[32];
-            std::snprintf(buf, sizeof buf, "%g", std::round(b * 960.0) / 960.0);
-            return buf;
+            u = std::clamp(u, 0.0, 1.0);
+            return u * u * (3.0 - 2.0 * u);
         }
+        /** How much of a grid level is drawn when its lines are `px` apart (R-UI-10). */
+        double room(double px) { return smooth01((px - Timeline::kGridHidePx) / (Timeline::kGridFullPx - Timeline::kGridHidePx)); }
+        double deepestPpb() { return Timeline::kZoomPpb * std::pow(kZoomRatio, Timeline::kZoomInSteps); }
+        /** Line n of a level is drawn by a COARSER level (a beat on a bar, a half on a beat …). */
+        bool coarser(int level, long long n, int beatsPerBar)
+        {
+            if (level == 1) return n % beatsPerBar == 0;
+            return level >= 2 && n % 2 == 0;
+        }
+        // the lanes' lines: bars strongest, beats next, the divisions faintest (R-UI-10)
+        constexpr double kLineA[3] = {0.07, 0.04, 0.022};
+        // the ruler's ticks: long and bright for a bar, shorter and fainter as the level gets finer
+        constexpr double kTickA[3] = {0.15, 0.12, 0.09}, kTickH[3] = {7.0, 4.5, 2.5};
     }
+
+    std::string Timeline::beatText(double beat)
+    {
+        const double tick = std::round(beat * kPpq);
+        if (tick == 0.0) return "0";
+        char buf[48];
+        for (int d = 0; d <= 6; ++d) // six decimals always suffice: 1e-6 · 960 < ½
+        {
+            std::snprintf(buf, sizeof buf, "%.*f", d, tick / kPpq);
+            if (std::round(std::strtod(buf, nullptr) * kPpq) == tick) break;
+        }
+        return buf;
+    }
+
+    // ---- the grid follows the zoom (R-UI-10, R-TIME-5) --------------------------------------------
+
+    double Timeline::gridSpan(int level) const
+    {
+        if (level <= 0) return (double)mBeatsPerBar;
+        return 1.0 / (double)(1 << std::min(level - 1, kGridLevels - 2)); // 1, 1/2, 1/4 … 1/32
+    }
+
+    double Timeline::gridAlpha(int level) const
+    {
+        if (level < 0 || level >= kGridLevels) return 0.0;
+        return room(gridSpan(level) * mPpb.value()); // the EASED zoom: a level fades as the zoom eases
+    }
+
+    bool Timeline::atDeepestZoom() const { return mPpb.value() >= deepestPpb() * (1.0 - 1e-9); }
+
+    double Timeline::snapStep() const
+    {
+        if (atDeepestZoom()) return 0.0; // R-TIME-5: zoomed all the way in, nothing snaps
+        for (int l = kGridLevels - 1; l > 0; --l)
+            if (gridSpan(l) * mPpb.value() >= kSnapPx) return gridSpan(l);
+        return gridSpan(0); // never coarser than a bar
+    }
+
+    double Timeline::snap(double beat) const
+    {
+        const double step = snapStep();
+        const double b = step > 0.0 ? std::round(beat / step) * step : beat;
+        return std::max(0.0, std::round(b * kPpq) / kPpq);
+    }
+
+    std::string Timeline::stepName(double step, int beatsPerBar)
+    {
+        if (step <= 0.0) return "Off";
+        if (beatsPerBar > 1 && step >= beatsPerBar - 1e-9) return "Bar";
+        char buf[16];
+        std::snprintf(buf, sizeof buf, "1/%lld", (long long)std::llround(4.0 / step)); // the piano roll's note values: a beat = 1/4
+        return buf;
+    }
+
+    std::string Timeline::snapLabel() const { return stepName(snapStep(), mBeatsPerBar); }
 
     Timeline::Timeline() { clipToBounds = true; }
 
@@ -237,6 +307,23 @@ namespace solaris_ui
             mPlayhead.animateTo(mPosition, 140.0, Easing::EaseOutCubic, nowMs); // a seek eases
         mPlayhead.update(nowMs);
         mPpb.update(nowMs);
+        // the snap step follows the EASED zoom; its name on the ruler cross-fades when it changes (§1)
+        if (const std::string name = snapLabel(); mStepNames.empty() || mStepNames.back().text != name)
+        {
+            const bool first = mStepNames.empty(); // nowhere to travel from: placed
+            for (auto &n : mStepNames)
+                if (!n.out)
+                {
+                    n.out = true;
+                    n.a.animateTo(0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+                }
+            mStepNames.push_back(StepName{name});
+            if (first) mStepNames.back().a.set(1.0);
+            else mStepNames.back().a.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+        }
+        for (auto &n : mStepNames) n.a.update(nowMs);
+        mStepNames.erase(std::remove_if(mStepNames.begin(), mStepNames.end(), [](const StepName &n) { return n.out && !n.a.isAnimating() && n.a.value() <= 0.001; }),
+                         mStepNames.end());
         mSelIn.update(nowMs);
         mSelOut.update(nowMs);
         mDropAmt.update(nowMs);
@@ -393,7 +480,7 @@ namespace solaris_ui
             double a, b;
             loopSpan(a, b);
             mLoopDragging = false;
-            if (b - a < 0.25) return true; // a Shift-click: no region
+            if (b - a < 0.5 / kPpq) return true; // a Shift-click (both ends on one line): no region
             mLoopA.set(a);
             mLoopB.set(b);
             mLoopAmt.set(1.0);
@@ -485,7 +572,7 @@ namespace solaris_ui
         case Gesture::Type::Click:
             if (rulerRect().contains(local))
             {
-                if (onCommand) onCommand("transport seek " + beats(snap(xToBeat(local.x)))); // the grid clips snap to
+                if (onCommand) onCommand("transport seek " + beats(snap(xToBeat(local.x)))); // on the grid you see (R-TIME-5)
                 return true;
             }
             selectClip(clipAt(local));
@@ -530,8 +617,10 @@ namespace solaris_ui
             {
                 // zoom about the pointer: the beat under it stays under it
                 const double anchor = xToBeat(local.x);
-                const double next = std::clamp(mPpbTarget * (g.delta.y < 0 ? 1.25 : 0.8), kMinPpb, kMaxPpb);
-                if (next == mPpbTarget) return true;
+                const int step = std::clamp(mZoomStep + (g.delta.y < 0 ? 1 : -1), -kZoomOutSteps, kZoomInSteps);
+                if (step == mZoomStep) return true;
+                mZoomStep = step; // a lattice: in and out are exact inverses, and the deepest zoom is one place
+                const double next = kZoomPpb * std::pow(kZoomRatio, step);
                 mPpbTarget = next;
                 mPpb.animateTo(next, motion::kCatchUpMs, Easing::EaseOutCubic, mNowMs);
                 layout();
@@ -605,6 +694,87 @@ namespace solaris_ui
         if (ring > 0.001) drawRoundedRect(t, r, radius::control(), Paint::stroked(fade(palette::primary(), ring * a), 1.5));
     }
 
+    void Timeline::paintGrid(IRenderTarget &t, double b0, double b1) const
+    {
+        // R-UI-10: every level's lines, faded by their room at the EASED zoom; a line is drawn once, by the
+        // coarsest level it belongs to; every fourth bar is always drawn (a far-out song keeps its phrases)
+        const double H = height.value();
+        for (int l = 0; l < kGridLevels; ++l)
+        {
+            const double a = gridAlpha(l), span = gridSpan(l);
+            if (l > 0 && a <= 0.001) continue;
+            const double strength = kLineA[std::min(l, 2)];
+            for (long long n = (long long)std::ceil(b0 / span - 1e-9); n * span <= b1; ++n)
+            {
+                if (coarser(l, n, mBeatsPerBar)) continue;
+                const double la = l == 0 && n % 4 == 0 ? 1.0 : a;
+                if (la <= 0.001) continue;
+                const double x = std::round(beatToX(n * span)) + 0.5;
+                t.setStroke(palette::whiteAlpha(strength * la), 1.0);
+                t.beginPath(); t.moveTo(x, kRulerH); t.lineTo(x, H); t.strokePath();
+            }
+        }
+    }
+
+    void Timeline::paintRuler(IRenderTarget &t, double b0, double b1) const
+    {
+        const double W = width.value(), ppb = mPpb.value(), barPx = ppb * mBeatsPerBar;
+        drawRoundedRect(t, Rect{0, 0, W, kRulerH}, 0.0, Paint::filled(surface::rulerBg()));
+        // the corner over the lane headers names the snap step (R-UI-10), cross-faded as it changes
+        const double nameX = 12.0 + t.measureText("Snap", 9.0, font::sans()) + 6.0;
+        t.setFill(palette::mutedForeground());
+        t.drawText("Snap", 12.0, 13.0, 9.0, font::sans());
+        for (const auto &n : mStepNames)
+            if (n.a.value() > 0.001)
+            {
+                t.setFill(fade(palette::foreground(), 0.8 * n.a.value()));
+                t.drawText(textfit::ellipsize(t, n.text, kHeaderW - 8.0 - nameX, 9.0, font::mono()), nameX, 13.0, 9.0, font::mono());
+            }
+        t.save();
+        t.clipRect(kHeaderW, 0, W - kHeaderW, kRulerH);
+        // ticks: the lanes' levels, the same fades — long and bright for a bar, shorter as they get finer
+        for (int l = 0; l < kGridLevels; ++l)
+        {
+            const double a = gridAlpha(l), span = gridSpan(l);
+            if (l > 0 && a <= 0.001) continue;
+            const int k = std::min(l, 2);
+            for (long long n = (long long)std::ceil(b0 / span - 1e-9); n * span <= b1; ++n)
+            {
+                if (coarser(l, n, mBeatsPerBar)) continue;
+                const double la = l == 0 && n % 4 == 0 ? 1.0 : a;
+                if (la <= 0.001) continue;
+                const double x = std::round(beatToX(n * span)) + 0.5;
+                t.setStroke(palette::whiteAlpha(kTickA[k] * la), 1.0);
+                t.beginPath(); t.moveTo(x, kRulerH - kTickH[k]); t.lineTo(x, kRulerH); t.strokePath();
+            }
+        }
+        // labels, MEASURED (R5): a bar's number fades in as its every-1/2/4/8… bars get room for the widest;
+        // zoomed in, the beats are named too ("2.3": bar 2, beat 3), fading in as a beat gets room for one
+        const long long lastBar = (long long)std::floor(b1 / mBeatsPerBar) + 1;
+        const double barNeed = t.measureText(std::to_string(lastBar), 9.0, font::mono()) + 8.0;
+        const double beatNeed = t.measureText(std::to_string(lastBar) + ".8", 9.0, font::mono()) + 8.0;
+        const double beatA = mBeatsPerBar > 1 ? smooth01((ppb - beatNeed) / 10.0) : 0.0;
+        for (long long n = std::max(0LL, (long long)std::floor(b0)); n <= (long long)b1; ++n)
+        {
+            const long long bar = n / mBeatsPerBar;
+            const int beat = (int)(n % mBeatsPerBar);
+            double a = beatA;
+            std::string s = std::to_string(bar + 1);
+            if (beat == 0)
+            {
+                long long every = 64; // the coarsest of 1, 2, 4 … 64 bars this one starts
+                while (every > 1 && bar % every != 0) every /= 2;
+                a = smooth01((every * barPx - barNeed) / 10.0);
+            }
+            else s += "." + std::to_string(beat + 1);
+            if (a <= 0.001) continue;
+            const double x = std::round(beatToX((double)n)) + 0.5;
+            t.setFill(fade(palette::mutedForeground(), (beat == 0 ? 1.0 : 0.7) * a));
+            t.drawText(s, x + 4.0, 13.0, 9.0, font::mono());
+        }
+        t.restore();
+    }
+
     void Timeline::onPaint(IRenderTarget &t) const
     {
         const double W = width.value(), H = height.value(), ppb = mPpb.value();
@@ -623,16 +793,7 @@ namespace solaris_ui
             drawRoundedRect(t, Rect{kHeaderW, y, W - kHeaderW, kRowH}, 0.0, Paint::filled(fade(surface::laneBg(), (1.0 - odd) * a)));
             drawRoundedRect(t, Rect{kHeaderW, y, W - kHeaderW, kRowH}, 0.0, Paint::filled(fade(surface::laneAltBg(), odd * a)));
         }
-        const int stride = ppb * mBeatsPerBar < 24.0 ? 4 : 1; // zoomed far out: every 4th bar's line only
-        for (double b = b0; b <= b1; b += 1.0)
-        {
-            const bool bar = std::fmod(b, mBeatsPerBar) == 0.0;
-            if (!bar && ppb < 10.0) continue;
-            if (bar && std::fmod(b / mBeatsPerBar, stride) != 0.0) continue;
-            const double x = std::round(beatToX(b)) + 0.5;
-            t.setStroke(palette::whiteAlpha(bar ? 0.06 : 0.025), 1.0);
-            t.beginPath(); t.moveTo(x, kRulerH); t.lineTo(x, H); t.strokePath();
-        }
+        paintGrid(t, b0, b1);
         t.restore();
 
         // the loop region, tinted under the clips (R-EDM-7)
@@ -724,23 +885,10 @@ namespace solaris_ui
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(kHeaderW - 0.5, 0); t.lineTo(kHeaderW - 0.5, H); t.strokePath();
 
-        // ruler: bars from 1
-        drawRoundedRect(t, Rect{0, 0, W, kRulerH}, 0.0, Paint::filled(surface::rulerBg()));
+        // ruler: bars from 1, the grid's ticks, the step named in its corner
+        paintRuler(t, b0, b1);
         t.save();
         t.clipRect(kHeaderW, 0, W - kHeaderW, kRulerH);
-        const int labelEvery = ppb * mBeatsPerBar < 28.0 ? 8 : (ppb * mBeatsPerBar < 56.0 ? 2 : 1);
-        for (double b = std::floor(b0 / mBeatsPerBar) * mBeatsPerBar; b <= b1; b += mBeatsPerBar)
-        {
-            const int bar = (int)(b / mBeatsPerBar) + 1;
-            const double x = std::round(beatToX(b)) + 0.5;
-            t.setStroke(palette::whiteAlpha(0.15), 1.0);
-            t.beginPath(); t.moveTo(x, kRulerH - 7.0); t.lineTo(x, kRulerH); t.strokePath();
-            if ((bar - 1) % labelEvery == 0)
-            {
-                t.setFill(palette::mutedForeground());
-                t.drawText(std::to_string(bar), x + 4.0, 13.0, 9.0, font::mono());
-            }
-        }
         // the loop's brace on the ruler, with its ends
         if (const Rect br = loopRect(); br.w > 0)
         {

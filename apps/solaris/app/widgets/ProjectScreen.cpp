@@ -14,12 +14,7 @@ namespace solaris_ui
     namespace
     {
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
-        std::string beats(double b)
-        {
-            char buf[32];
-            std::snprintf(buf, sizeof buf, "%g", std::round(b * 960.0) / 960.0);
-            return buf;
-        }
+        std::string beats(double b) { return Timeline::beatText(b); } // to the tick
     }
 
     ProjectScreen::ProjectScreen()
@@ -91,7 +86,7 @@ namespace solaris_ui
     {
         const Point p = mTimeline->toLocal(world);
         if (p.x < Timeline::kHeaderW || p.y < Timeline::kRulerH || p.x > mTimeline->width.value() || p.y > mTimeline->height.value()) return false;
-        beat = std::max(0.0, std::round(mTimeline->xToBeat(p.x) * 4.0) / 4.0);
+        beat = mTimeline->snap(mTimeline->xToBeat(p.x)); // the lanes' one grid (R-UI-10): the hint and the drop agree
         row = mTimeline->rowAt(p.y);
         return row >= 0;
     }
