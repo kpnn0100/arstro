@@ -85,6 +85,8 @@ namespace solaris
             {"lanes[].name", "string", ""},
             {"lanes[].order", "int", ""},
             {"lanes[].colour", "int", "−1 = none"},
+            {"lanes[].strip", "string", "R-LANE-3: the instrument strip it is the track of — what is on it plays through it; empty = a plain lane"},
+            {"lanes[].ownName", "bool", "false: a track showing its instrument strip's name (renaming the strip renames it)"},
             {"clips", "object[]", "every clip"},
             {"clips[].id", "string", ""},
             {"clips[].name", "string", ""},
@@ -307,7 +309,12 @@ namespace solaris
             j.set("strips", strips);
             if (!m.masterDevices.empty()) j.set("masterDevices", compactDevices(m.masterDevices));
             Json lanes = Json::array();
-            for (const auto &l : m.lanes) lanes.push(Json::object().set("id", l.id).set("name", l.name));
+            for (const auto &l : m.lanes)
+            {
+                Json x = Json::object().set("id", l.id).set("name", l.name);
+                if (!l.strip.empty()) x.set("track", l.strip);
+                lanes.push(x);
+            }
             j.set("lanes", lanes);
             Json clips = Json::array();
             for (const auto &c : m.clips)
@@ -393,7 +400,8 @@ namespace solaris
         j.set("strips", strips);
         j.set("masterDevices", devices(m.masterDevices));
         Json lanes = Json::array();
-        for (const auto &l : m.lanes) lanes.push(Json::object().set("id", l.id).set("name", l.name).set("order", l.order).set("colour", l.colour));
+        for (const auto &l : m.lanes)
+            lanes.push(Json::object().set("id", l.id).set("name", l.name).set("order", l.order).set("colour", l.colour).set("strip", l.strip).set("ownName", l.ownName));
         j.set("lanes", lanes);
         Json clips = Json::array();
         for (const auto &c : m.clips)

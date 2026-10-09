@@ -192,7 +192,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   only faders a new song has would hide behind a click. The fold is the view's, not the song's: a
   fold is not saved and no command sets it, like zoom.)
 
-## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅: DR-CLIP-2/3 headless, DR-UI-3 drawn and dragged, DR-LANE-1 `lane move`; R-LANE-2's view with U4) — 🚧 R-LANE-3, R-CLIP-6…8 (instrument tracks, MIDI clips made, looped and moved: E3, E4)
+## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅: DR-CLIP-2/3 headless, DR-UI-3 drawn and dragged, DR-LANE-1 `lane move`; R-LANE-2's view with U4) — R-LANE-3 ✅ (instrument tracks, DR-LANE-3) — 🚧 R-CLIP-6…8 (MIDI clips made, looped and moved: E4)
 
 - **R-LANE-1 A lane is a timeline row for organisation only** (FL Studio's playlist): it holds any
   clips, from any strips. Lanes are added, named, coloured, reordered and deleted (deleting a lane
@@ -217,7 +217,8 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   naming it); `set <ln>.strip=none` makes it plain. Deleting the instrument leaves its tracks plain
   lanes. A song saved before tracks existed (no `tracks` line in its header) opens with every lane
   whose clips all play through one instrument strip made that strip's track — the lanes R-SVC-8's lane
-  reuse built — and is saved with the line from then on.
+  reuse built; one still carrying the name it was made with (its strip's, or its instrument's) shows the
+  strip's name — and is saved with the line from then on (detailed building E3).
 - **R-CLIP-1 An audio clip** plays a span of a file: `at` (beats), source `in`/`out` (seconds — a
   file has no tempo), gain, fade in/out, loop to fill a length (was SR-CLIP-1/2).
 - **R-CLIP-2 A note clip** plays a **pattern** — a named list of notes (pitch, start, length,

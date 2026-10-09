@@ -205,10 +205,12 @@
     },
     {
       "verb": "lane add",
-      "usage": "lane add [name]",
+      "usage": "lane add [name] [--strip <ch>]",
       "args": "[name]",
-      "flags": [],
-      "summary": "Add a timeline lane at the bottom.",
+      "flags": [
+        "strip=<ch>"
+      ],
+      "summary": "Add a timeline lane at the bottom. With --strip <instrument>: that instrument's TRACK — what is put on it plays through it, and it shows the strip's name until given its own (R-LANE-3).",
       "requirement": "R-LANE-1"
     },
     {
@@ -247,7 +249,7 @@
         "in=<s>",
         "out=<s>"
       ],
-      "summary": "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of --pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). With no --lane it goes on the lane its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for a new one (R-SVC-8). Prints the clip, then `made:` and whatever else it made.",
+      "summary": "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of --pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). With no --lane it goes on the lane its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for a new one (R-SVC-8). On an instrument's TRACK (--lane <ln>) a note clip plays through that instrument — --strip may be left out, --pattern places that pattern; audio and --instrument are refused there (R-LANE-3). Prints the clip, then `made:` and whatever else it made.",
       "requirement": "R-MIX-2"
     },
     {
@@ -259,7 +261,7 @@
         "lane=<ln>",
         "strip=<ch>"
       ],
-      "summary": "Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through).",
+      "summary": "Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). Onto an instrument's TRACK a note clip is re-routed to that instrument (and says so); a clip on a track told --strip <another> goes to that one's track; audio is refused on a track (R-LANE-3).",
       "requirement": "R-LANE-2"
     },
     {
@@ -1306,6 +1308,18 @@
       "path": "lanes[].colour",
       "type": "int",
       "summary": "−1 = none",
+      "stable": true
+    },
+    {
+      "path": "lanes[].strip",
+      "type": "string",
+      "summary": "R-LANE-3: the instrument strip it is the track of — what is on it plays through it; empty = a plain lane",
+      "stable": true
+    },
+    {
+      "path": "lanes[].ownName",
+      "type": "bool",
+      "summary": "false: a track showing its instrument strip's name (renaming the strip renames it)",
       "stable": true
     },
     {

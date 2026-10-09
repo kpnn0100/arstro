@@ -29,11 +29,11 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `device add <ch\|master> [--type <registry type>] [--at <index>]` | Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an instrument strip. | R-FX-5 |
 | `device remove <dv>` | Remove a device from its rack. An instrument strip keeps its instrument. | R-FX-5 |
 | `device move <dv> [--to <index>]` | Move a device within its rack. | R-FX-5 |
-| `lane add [name]` | Add a timeline lane at the bottom. | R-LANE-1 |
+| `lane add [name] [--strip <ch>]` | Add a timeline lane at the bottom. With --strip <instrument>: that instrument's TRACK — what is put on it plays through it, and it shows the strip's name until given its own (R-LANE-3). | R-LANE-1 |
 | `lane delete <ln> [--with-clips]` | Delete a lane. Refused while clips are drawn on it, unless --with-clips. | R-LANE-1 |
 | `lane move <ln> [--to <index>]` | Move a lane to row <index> (0 = the top); the lanes renumber in their new order. | R-LANE-1 |
-| `clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--sample <file>] [--pattern <pt>] [--lane <ln\|new>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]` | Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of --pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). With no --lane it goes on the lane its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for a new one (R-SVC-8). Prints the clip, then `made:` and whatever else it made. | R-MIX-2 |
-| `clip move <ac> [--at <beats>] [--lane <ln>] [--strip <ch>]` | Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). | R-LANE-2 |
+| `clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--sample <file>] [--pattern <pt>] [--lane <ln\|new>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]` | Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of --pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). With no --lane it goes on the lane its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for a new one (R-SVC-8). On an instrument's TRACK (--lane <ln>) a note clip plays through that instrument — --strip may be left out, --pattern places that pattern; audio and --instrument are refused there (R-LANE-3). Prints the clip, then `made:` and whatever else it made. | R-MIX-2 |
+| `clip move <ac> [--at <beats>] [--lane <ln>] [--strip <ch>]` | Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). Onto an instrument's TRACK a note clip is re-routed to that instrument (and says so); a clip on a track told --strip <another> goes to that one's track; audio is refused on a track (R-LANE-3). | R-LANE-2 |
 | `clip duplicate <ac> [--at <beats>] [--count <n>]` | A copy right after it (or at --at); --count N makes N copies end to end. A note clip's copy plays the SAME pattern — linked. Prints the first copy, then `made:` the rest. | R-CLIP-3 |
 | `clip unique <ac>` | Give a note clip its own copy of its pattern. | R-CLIP-3 |
 | `clip delete <ac>` | Remove a clip. | R-LANE-1 |
@@ -87,7 +87,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `project.name` · `project.bpm` · `project.sig` · `project.masterGain` · `project.sampleRate` | text · 20…999 · n/d · dB · Hz |
 | `<strip>.name` · `.gain` · `.pan` · `.mute` · `.solo` · `.colour` | text · dB (−120…12) · −1…1 · bool · bool · −1…15 |
 | `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` | text · beats · beats · beats · beats · dB · bool · s · s |
-| `<lane>.name` · `.colour` · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
+| `<lane>.name` · `.colour` · `.strip` (`<ch>` an instrument: the lane is its track; `none`: plain — R-LANE-3) · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
 | `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |
 | `<automation>.name` · `.unit` · `.min` · `.max` (read: also `.from` · `.points`) | text · text · number · number |
 | any NUMBER above (a strip's gain/pan, a send's gain, `project.masterGain`, a numeric device parameter) `=<formula>` | binds it (R-AUTO-1): numbers, `+ - * / ^ ( )`, `sin cos tan abs sign min max clamp lerp pow exp log sqrt floor ceil round frac`, `pi`, `beat bar bpm t`, an automation id (`au_1`), another numeric address (a link). `get` prints the formula; a plain number clears it |
@@ -230,6 +230,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `lanes[].name` | string |  |
 | `lanes[].order` | int |  |
 | `lanes[].colour` | int | −1 = none |
+| `lanes[].strip` | string | R-LANE-3: the instrument strip it is the track of — what is on it plays through it; empty = a plain lane |
+| `lanes[].ownName` | bool | false: a track showing its instrument strip's name (renaming the strip renames it) |
 | `clips` | object[] | every clip |
 | `clips[].id` | string |  |
 | `clips[].name` | string |  |

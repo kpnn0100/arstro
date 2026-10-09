@@ -261,6 +261,14 @@ namespace solaris
             }
             p.sends.erase(std::remove_if(p.sends.begin(), p.sends.end(), [&](const Send &x) { return x.from == id; }), p.sends.end());
             p.racks.erase(std::remove_if(p.racks.begin(), p.racks.end(), [&](const Rack &x) { return x.track == id; }), p.racks.end());
+            for (auto &l : p.lanes)
+                if (l.track == id)
+                {
+                    // R-LANE-3: its tracks become plain lanes, keeping the name they showed
+                    l.name = laneTitle(p, l);
+                    l.track.clear();
+                    changed("lane.changed", l.id);
+                }
             p.strips.erase(std::remove_if(p.strips.begin(), p.strips.end(), [&](const Strip &x) { return x.id == id; }), p.strips.end());
             changed("strip.deleted", id);
             return true;
@@ -313,6 +321,15 @@ namespace solaris
             for (auto &cl : p.clips)
                 if (cl.track == from->id) { cl.track = to->id; ++moved; }
             if (!moved) { err = from->id + " (" + from->name + ") has no clips to move"; return false; }
+            // R-LANE-3: its tracks go with its clips — drawn where they were, now the other line's tracks,
+            // keeping the name they showed
+            for (auto &l : p.lanes)
+                if (l.track == from->id)
+                {
+                    l.name = laneTitle(p, l);
+                    l.track = to->id;
+                    changed("lane.changed", l.id);
+                }
             changed("strip.relinked", from->id);
             mOutput = std::to_string(moved) + "\n";
             return true;
@@ -428,7 +445,16 @@ namespace solaris
             for (const auto &l : p.lanes) orders.push_back(l.order);
             Lane l;
             l.id = p.nextId("ln");
-            l.name = c.arg(0, "Lane " + std::to_string(p.lanes.size() + 1));
+            if (c.has("strip"))
+            {
+                // R-LANE-3: an instrument's track — it shows the strip's name until it is given its own
+                const Strip *s = p.strip(c.flag("strip"));
+                if (!s) { err = "no strip `" + c.flag("strip") + "`"; return false; }
+                if (s->kind != "instrument") { err = s->id + " is a " + s->kind + " strip — a track belongs to an instrument (R-LANE-3)"; return false; }
+                l.track = s->id;
+                l.name = c.arg(0, "");
+            }
+            else l.name = c.arg(0, "Lane " + std::to_string(p.lanes.size() + 1));
             l.order = nextOrder(orders);
             p.lanes.push_back(l);
             changed("lane.added", l.id);
@@ -474,25 +500,48 @@ namespace solaris
     bool SolarisService::clipCommand(const Command &c, std::string &err)
     {
         Project &p = mProject;
-        auto newLane = [&](const std::string &name) {
+        // R-LANE-3: a lane made for an instrument is its TRACK, showing the strip's name; any other is named
+        auto newLane = [&](const std::string &name, const std::string &owner) {
             std::vector<int> orders;
             for (const auto &l : p.lanes) orders.push_back(l.order);
             Lane l;
             l.id = p.nextId("ln");
-            l.name = name;
+            const Strip *s = owner.empty() ? nullptr : p.strip(owner);
+            if (s && s->kind == "instrument") l.track = owner;
+            else l.name = name;
             l.order = nextOrder(orders);
             p.lanes.push_back(l);
             changed("lane.added", l.id);
             return l.id;
         };
+        // an instrument's track: the one its newest clip is on, else its newest, else a new one
+        auto trackOf = [&](const std::string &strip) {
+            for (auto it = p.clips.rbegin(); it != p.clips.rend(); ++it)
+                if (it->track == strip && !it->lane.empty())
+                    if (const Lane *l = p.lane(it->lane); l && l->track == strip) return it->lane;
+            for (auto it = p.lanes.rbegin(); it != p.lanes.rend(); ++it)
+                if (it->track == strip) return it->id;
+            return newLane(std::string(), strip);
+        };
         // R-SVC-8 (AMENDS "a new lane"): with no --lane a clip goes where its strip's clips already are — the
-        // newest one's lane — and a new lane only for a strip with none; `--lane new` asks for one
+        // newest one's lane — and a new lane only for a strip with none; `--lane new` asks for one. R-LANE-3:
+        // an instrument's clip goes on its track, or (an older arrangement with none) the plain lane its clips are on
         auto laneFor = [&](const std::string &track, const std::string &name) {
-            if (c.flag("lane") == "new") return newLane(name);
+            if (c.flag("lane") == "new") return newLane(name, track);
             if (c.has("lane")) return c.flag("lane");
+            const Strip *s = p.strip(track);
+            if (s && s->kind == "instrument")
+            {
+                for (const auto &l : p.lanes)
+                    if (l.track == track) return trackOf(track);
+                for (auto it = p.clips.rbegin(); it != p.clips.rend(); ++it)
+                    if (it->track == track && !it->lane.empty())
+                        if (const Lane *l = p.lane(it->lane); l && l->track.empty()) return it->lane;
+                return newLane(name, track);
+            }
             for (auto it = p.clips.rbegin(); it != p.clips.rend(); ++it)
                 if (it->track == track && !it->lane.empty() && p.lane(it->lane)) return it->lane;
-            return newLane(name);
+            return newLane(name, track);
         };
         switch (c.kind)
         {
@@ -501,6 +550,23 @@ namespace solaris
             Clip cl;
             if (!beatsFlag(c, "at", 0.0, cl.at, err)) return false;
             if (c.has("lane") && c.flag("lane") != "new" && !p.lane(c.flag("lane"))) { err = "no lane `" + c.flag("lane") + "` (or `new`)"; return false; }
+            // R-LANE-3: a clip put on an instrument's track plays through it
+            std::string owner;
+            if (c.has("lane") && c.flag("lane") != "new") owner = p.lane(c.flag("lane"))->track;
+            auto trackName = [&](const std::string &ln, const std::string &ch) {
+                const Strip *s = p.strip(ch);
+                return ln + " is the track of " + ch + (s ? " (" + s->name + ")" : std::string());
+            };
+            if (!owner.empty())
+            {
+                if (c.has("src")) { err = trackName(c.flag("lane"), owner) + ", an instrument — an audio clip needs a lane of its own (R-LANE-3)"; return false; }
+                if (c.has("instrument")) { err = trackName(c.flag("lane"), owner) + " — a new instrument gets its own track: give --lane new (R-LANE-3)"; return false; }
+                if (c.has("strip") && c.flag("strip") != owner)
+                {
+                    err = trackName(c.flag("lane"), owner) + " — a clip on it plays through " + owner + "; leave out --strip, or put it on " + c.flag("strip") + "'s track (R-LANE-3)";
+                    return false;
+                }
+            }
             std::string made; // --instrument: a new instrument strip, made by `strip add`'s own rules (R-BROWSE-3: one drop, one command)
             if (c.has("instrument"))
             {
@@ -565,9 +631,9 @@ namespace solaris
                 cl.name = stem;
                 cl.lane = laneFor(cl.track, stem);
             }
-            else if (c.has("strip") || !made.empty())
+            else if (c.has("strip") || !made.empty() || !owner.empty())
             {
-                const std::string sid = made.empty() ? c.flag("strip") : made;
+                const std::string sid = !made.empty() ? made : c.has("strip") ? c.flag("strip") : owner;
                 const Strip *s = p.strip(sid);
                 if (!s) { err = "no strip `" + sid + "`"; return false; }
                 if (s->kind != "instrument") { err = s->id + " is a " + s->kind + " strip — notes need an instrument strip (or give --src for audio)"; return false; }
@@ -593,7 +659,7 @@ namespace solaris
             }
             else
             {
-                err = "clip add needs --src <file> (audio), --strip <instrument strip> or --instrument <type> (notes)";
+                err = "clip add needs --src <file> (audio), --strip <instrument strip>, --lane <an instrument's track> or --instrument <type> (notes)";
                 return false;
             }
             cl.id = p.nextId("ac");
@@ -608,9 +674,31 @@ namespace solaris
             if (!cl) { err = "no clip `" + c.arg(0) + "`"; return false; }
             if (!c.has("at") && !c.has("lane") && !c.has("strip")) { err = "clip move needs --at, --lane and/or --strip"; return false; }
             if (!beatsFlag(c, "at", cl->at, cl->at, err)) return false;
-            if (c.has("lane")) cl->lane = c.flag("lane") == "none" ? std::string() : c.flag("lane");
-            if (c.has("strip")) cl->track = c.flag("strip");
+            std::string lane = !c.has("lane") ? cl->lane : c.flag("lane") == "none" ? std::string() : c.flag("lane");
+            std::string strip = c.has("strip") ? c.flag("strip") : cl->track;
+            if (c.has("strip") && !p.strip(strip)) { err = "no strip `" + strip + "`"; return false; }
+            const std::string owner = lane.empty() || !p.lane(lane) ? std::string() : p.lane(lane)->track;
+            if (!owner.empty())
+            {
+                // R-LANE-3: on an instrument's track a clip plays through that instrument
+                const Strip *o = p.strip(owner);
+                const std::string what = lane + " is the track of " + owner + (o ? " (" + o->name + ")" : std::string());
+                if (cl->isAudio()) { err = cl->id + " is audio — " + what + ", an instrument; audio needs a lane of its own (R-LANE-3)"; return false; }
+                if (c.has("lane") && c.has("strip") && strip != owner)
+                {
+                    err = what + " — a clip on it plays through " + owner + "; give --lane or --strip, not both (R-LANE-3)";
+                    return false;
+                }
+                if (c.has("lane")) strip = owner;                 // moved onto a track: re-routed with it
+                else if (strip != owner) lane = trackOf(strip);   // told to play through another: to that one's track
+            }
+            const bool rerouted = strip != cl->track;
+            cl = p.clip(c.arg(0));                                // (a new track may have been made)
+            cl->lane = lane;
+            cl->track = strip;
             changed("clip.moved", cl->id);
+            if (rerouted)
+                if (const Strip *s = p.strip(strip)) mOutput = cl->id + " plays through " + s->id + " (" + s->name + ")\n";
             return true;
         }
         case K::ClipDuplicate:

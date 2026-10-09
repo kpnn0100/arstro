@@ -217,6 +217,75 @@ static void test_browser_tabs_and_sample_drag()
     pass("Browser: the tab highlight slides; a sample folder is browsed; a sample dragged to the lanes is `clip add` at the drop beat");
 }
 
+static void test_a_lane_is_an_instruments_track()
+{
+    // R-LANE-3: an instrument's lane is its TRACK — named by it, its instrument under its name; a clip dragged
+    // onto another track plays through that one; the lane's menu makes a track (fading in), a plain lane, or copies its id
+    sltest::Rig r("ui-tracks", 1280, 800);
+    r.cmd("project new " + r.song("Tracks") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");                 // ch_2, ln_1, ac_1
+    r.cmd("clip add --instrument drums --at 0 --length 4");                 // ch_3, ln_2, ac_2
+    r.cmd("lane add Ideas");                                                // ln_3, plain
+    r.cmd("set ch_2.name=Bass");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &menu = r.app->menu();
+    assert(tl.rowLabel(0) == "Bass" && tl.trackLabel("ln_1") == "Basic Synth" && tl.trackAmount("ln_1") == 1.0); // renamed with its strip (D-2)
+    assert(tl.trackLabel("ln_2") == "Drum Machine" && tl.trackAmount("ln_3") == 0.0);
+    // the bass's clip dragged onto the drums' track: ONE `clip move`, and it plays through the drums now
+    const artboard::Rect clip = world(tl, tl.clipRect("ac_1"));
+    const artboard::Rect row1 = world(tl, tl.rowRect(1));
+    r.drag(clip.x + 12.0, cy(clip), clip.x + 12.0, cy(row1), 6);
+    assert(sentLine(r, "clip move ac_1 --lane ln_2"));
+    r.frame();
+    assert(tl.clipHueAmount("ac_1") < 1.0);                                // its colour eases to the drums' — caught mid-ease
+    r.settle();
+    const auto *ac1 = &r.svc->model().clips[0];
+    for (const auto &c : r.svc->model().clips)
+        if (c.id == "ac_1") ac1 = &c;
+    assert(ac1->track == "ch_3" && ac1->lane == "ln_2" && tl.clipHueAmount("ac_1") == 1.0);
+    // the plain lane's menu: Track of ▸ Bass — and its instrument's line fades in
+    const artboard::Rect head = world(tl, artboard::Rect{0, tl.rowRect(2).y, Timeline::kHeaderW, tl.rowRect(2).h});
+    r.click(cx(head), cy(head), 2);
+    r.settle();
+    assert(menu.isOpen() && menu.item(0).label.rfind("Track of", 0) == 0 && menu.item(menu.itemCount() - 1).label == "Copy ID");
+    r.click(menu.itemRect(0));
+    r.settle();
+    int bass = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label == "Bass") bass = i;
+    assert(bass >= 0);
+    r.click(menu.itemRect(bass));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "set ln_3.strip=ch_2") && tl.trackAmount("ln_3") > 0.0 && tl.trackAmount("ln_3") < 1.0);
+    r.settle();
+    assert(tl.trackAmount("ln_3") == 1.0 && tl.trackLabel("ln_3") == "Basic Synth" && tl.rowLabel(2) == "Ideas");
+    // …and Plain Lane again: it fades out
+    r.click(cx(head), cy(head), 2);
+    r.settle();
+    int plain = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label == "Plain Lane") plain = i;
+    assert(plain >= 0);
+    r.click(menu.itemRect(plain));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "set ln_3.strip=none") && tl.trackAmount("ln_3") > 0.0 && tl.trackAmount("ln_3") < 1.0);
+    r.settle();
+    assert(tl.trackAmount("ln_3") == 0.0);
+    // an instrument dragged from the browser onto a track gets a lane of its own (it cannot play through another's)
+    auto &b = r.app->project().browser();
+    r.click(world(b, b.tabRect(1)));
+    r.settle();
+    const artboard::Rect from = world(b, b.rowRect(1));                     // Basic Synth
+    const double toX = world(tl, artboard::Rect{tl.beatToX(8.0), 0, 0, 0}).x + 2.0;
+    r.drag(cx(from), cy(from), toX, cy(world(tl, tl.rowRect(0))), 8);
+    r.settle();
+    assert(sentLine(r, "clip add --instrument synth --at 8 --length 4 --lane new"));
+    pass("Tracks: an instrument's lane is named by it and names its instrument; a clip dragged onto another track plays through it (its colour easing); Track of ▸ / Plain Lane fade the line in and out; a browser drop onto a track gets its own lane (R-LANE-3)");
+}
+
 static void test_instrument_drop_and_clip_drag()
 {
     sltest::Rig r("ui-drop", 1280, 800);
@@ -1681,6 +1750,7 @@ int main()
     test_home_unsaved_confirm_and_recents();
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();
+    test_a_lane_is_an_instruments_track();
     test_ruler_seek_keys_and_selection();
     test_the_mixers_numbers_bind_from_the_dock();
     test_ids_shown_and_copied();

@@ -372,7 +372,7 @@ namespace solaris
         };
         for (const Lane *l : lanes)
         {
-            o << "lane " << l->id << " " << q(l->name) << "\n";
+            o << "lane " << l->id << " " << q(laneTitle(p, *l)) << (l->track.empty() ? std::string() : " · track of " + l->track) << "\n";
             for (const auto &c : p.clips)
                 if (c.lane == l->id) clipLine(c);
         }
@@ -468,7 +468,8 @@ namespace solaris
         }
         else if (const Lane *l = p.lane(id))
         {
-            o << l->id << " lane " << q(l->name) << "\n";
+            o << l->id << " lane " << q(laneTitle(p, *l)) << "\n";
+            if (!l->track.empty()) field("track of", l->track + (l->name.empty() ? " (its name shown)" : std::string()));
             if (l->colour >= 0) field("colour", std::to_string(l->colour));
             std::string clips;
             for (const auto &c : p.clips)

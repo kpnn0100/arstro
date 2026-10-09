@@ -69,6 +69,36 @@ namespace solaris
 
     namespace
     {
+        // R-LANE-3: a song saved before lanes could be tracks. The lanes whose clips all play through one
+        // instrument — what R-SVC-8's lane reuse built — become its tracks; one still carrying the name it was
+        // made with (its strip's, or its instrument's label) shows the strip's name from now on (D-2's lane half)
+        void adoptTracks(Project &p, std::vector<std::string> &notes)
+        {
+            if (p.header.tracks) return;
+            p.header.tracks = true;
+            for (auto &l : p.lanes)
+            {
+                if (!l.track.empty()) continue;
+                std::string owner;
+                bool one = true, any = false;
+                for (const auto &c : p.clips)
+                    if (c.lane == l.id)
+                    {
+                        if (c.isAudio() || (any && c.track != owner)) one = false;
+                        owner = c.track;
+                        any = true;
+                    }
+                const Strip *s = any && one ? p.strip(owner) : nullptr;
+                if (!s || s->kind != "instrument") continue;
+                l.track = owner;
+                std::string label;
+                if (const Rack *rk = p.rack(owner); rk && !rk->devices.empty())
+                    if (const DeviceType *t = DeviceRegistry::find(rk->devices.front().type)) label = t->label;
+                if (l.name == s->name || (!label.empty() && l.name == label)) l.name.clear();
+                notes.push_back("lane " + l.id + " became the track of " + owner + " (" + s->name + ") — a song from before tracks (R-LANE-3)");
+            }
+        }
+
         bool mutates(K k)
         {
             switch (k)
@@ -420,6 +450,7 @@ namespace solaris
             Project p;
             ParseReport rep;
             if (!parseProject(ss.str(), p, err, &rep)) { err = path + ": " + err; return false; }
+            adoptTracks(p, rep.notes);
             open(std::move(p), path);
             for (const auto &n : rep.notes) emit(Event(Event::Kind::Info).with("text", n));
             return true;
@@ -601,7 +632,30 @@ namespace solaris
         {
             if (f == "name") { l->name = value; stored = value; return true; }
             if (f == "colour") { if (!number(value, x, err) || !inRange(x, -1, 15, "colour", err)) return false; l->colour = (int)x; stored = std::to_string((int)x); return true; }
-            err = unknownField(id, "a lane", f, {"name", "colour"});
+            if (f == "strip")
+            {
+                // R-LANE-3: a lane becomes an instrument's track — or plain again, keeping the name it showed
+                if (value == "none")
+                {
+                    l->name = laneTitle(p, *l);
+                    l->track.clear();
+                    stored = "none";
+                    return true;
+                }
+                const Strip *s = p.strip(value);
+                if (!s) { err = "no strip `" + value + "` (or `none`)"; return false; }
+                if (s->kind != "instrument") { err = value + " is a " + s->kind + " strip — a track belongs to an instrument (R-LANE-3)"; return false; }
+                for (const auto &cl : p.clips)
+                    if (cl.lane == l->id && cl.track != value)
+                    {
+                        err = id + " holds " + cl.id + ", which " + (cl.isAudio() ? "is audio" : "plays through " + cl.track) + " — move it first (R-LANE-3)";
+                        return false;
+                    }
+                l->track = value;
+                stored = value;
+                return true;
+            }
+            err = unknownField(id, "a lane", f, {"name", "colour", "strip"});
             return false;
         }
         if (Mixer *m = p.mixer(id))
@@ -739,7 +793,7 @@ namespace solaris
             if (c->isAudio()) { put("in", canonicalSeconds(c->in)); put("out", canonicalSeconds(c->out)); put("src", c->src); }
             else put("pattern", c->pattern);
         }
-        else if (const Lane *l = p.lane(id)) { put("name", l->name); put("colour", std::to_string(l->colour)); }
+        else if (const Lane *l = p.lane(id)) { put("name", l->name); put("colour", std::to_string(l->colour)); put("strip", l->track.empty() ? "none" : l->track); }
         else if (const Mixer *m = p.mixer(id)) { put("name", m->name); put("order", std::to_string(m->order)); }
         else if (const Pattern *pt = p.pattern(id)) { put("name", pt->name); put("length", canonicalBeats(pt->length)); }
         else if (const Port *po = p.port(id)) { put("name", po->name); put("channels", std::to_string(po->channels)); }

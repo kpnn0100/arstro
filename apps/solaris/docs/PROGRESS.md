@@ -220,7 +220,13 @@ umbrella's pointer — `arstro.rule` §7).
       — DR-TIME-6: a press waits for click-or-drag; a drag scrubs (the playhead the pointer's, a seek at each
       grid line, playing or not) or, from the brace's lower half, moves or resizes the loop with one
       `transport loop` on release. 3 mutants caught; shots `ruler-scrubbing`, `loop-brace-moving`.
-- [ ] **E3** Instrument tracks (R-LANE-3; R-LANE-1 amended).
+- [x] **E3** Instrument tracks (R-LANE-3; R-LANE-1 amended).
+      — DR-LANE-3: `#alane … track=<ch>` + header `tracks = on`; validated; a lane made for an instrument is its
+      track, showing its name (D-2's lane half); `clip add --lane <track>` implies the strip; `clip move` onto a
+      track re-routes in one edit and says so; audio refused there; `lane add --strip`, `<lane>.strip`; relink
+      and delete carry tracks; older songs adopted on opening. The view: stripe in the strip's colour, the
+      instrument named under it (fading), the lane header's Track of ▸ / Plain Lane / Copy ID; a browser drop
+      onto a track → `--lane new`. 5 mutants caught (3 service, 2 UI).
 - [ ] **E4** MIDI clips made, looped and moved on the lanes; the song's MIDI list (R-CLIP-6…8, R-BROWSE-4).
 - [ ] **E5** The plugin editor in the Arstro look; Basic Synth's (R-VST-7/8).
 - [ ] **E6** Drum Machine's editor with its pads (R-VST-7/8).

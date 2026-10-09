@@ -82,7 +82,9 @@ namespace solaris
             {K::DeviceRemove, "device remove", "<dv>", 1, 1, {}, "Remove a device from its rack. An instrument strip keeps its instrument.", "R-FX-5"},
             {K::DeviceMove, "device move", "<dv>", 1, 1, {"to=<index>"}, "Move a device within its rack.", "R-FX-5"},
 
-            {K::LaneAdd, "lane add", "[name]", 0, 1, {}, "Add a timeline lane at the bottom.", "R-LANE-1"},
+            {K::LaneAdd, "lane add", "[name]", 0, 1, {"strip=<ch>"},
+             "Add a timeline lane at the bottom. With --strip <instrument>: that instrument's TRACK — what is put on it plays "
+             "through it, and it shows the strip's name until given its own (R-LANE-3).", "R-LANE-1"},
             {K::LaneDelete, "lane delete", "<ln>", 1, 1, {"with-clips"},
              "Delete a lane. Refused while clips are drawn on it, unless --with-clips.", "R-LANE-1"},
             {K::LaneMove, "lane move", "<ln>", 1, 1, {"to=<index>"},
@@ -95,9 +97,13 @@ namespace solaris
              "--pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument "
              "strip of that type — what dropping an instrument does (R-BROWSE-3). With no --lane it goes on the lane "
              "its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for "
-             "a new one (R-SVC-8). Prints the clip, then `made:` and whatever else it made.", "R-MIX-2"},
+             "a new one (R-SVC-8). On an instrument's TRACK (--lane <ln>) a note clip plays through that instrument — "
+             "--strip may be left out, --pattern places that pattern; audio and --instrument are refused there (R-LANE-3). "
+             "Prints the clip, then `made:` and whatever else it made.", "R-MIX-2"},
             {K::ClipMove, "clip move", "<ac>", 1, 1, {"at=<beats>", "lane=<ln>", "strip=<ch>"},
-             "Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through).", "R-LANE-2"},
+             "Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). "
+             "Onto an instrument's TRACK a note clip is re-routed to that instrument (and says so); a clip on a track "
+             "told --strip <another> goes to that one's track; audio is refused on a track (R-LANE-3).", "R-LANE-2"},
             {K::ClipDuplicate, "clip duplicate", "<ac>", 1, 1, {"at=<beats>", "count=<n>"},
              "A copy right after it (or at --at); --count N makes N copies end to end. A note clip's copy plays the "
              "SAME pattern — linked. Prints the first copy, then `made:` the rest.", "R-CLIP-3"},

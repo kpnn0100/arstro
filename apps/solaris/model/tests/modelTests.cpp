@@ -38,6 +38,7 @@ namespace
         "sampleRate = 48000\n"
         "masterGain = -1.5\n"
         "masterOut  = prt_1,prt_2\n"
+        "tracks     = on\n"
         "futureKey  = kept\n"
         "; a note to myself\n"
         "\n"
@@ -63,7 +64,7 @@ namespace
         "  #aeffect id=dv_3 type=compressor threshold=-12.0\n"
         "\n"
         "#alane id=ln_1 name=Drums order=0 colour=3\n"
-        "#alane id=ln_2 name=\"Lead line\" order=1\n"
+        "#alane id=ln_2 name=\"Lead line\" track=ch_3 order=1\n"
         "\n"
         "#apattern id=pt_1 name=hook length=4.0\n"
         "  #note pitch=60 at=0.0 length=0.5 vel=100\n"
@@ -188,7 +189,7 @@ static void test_bezier_points_round_trip_and_old_shapes_stay_byte_identical()
     // as it did before bezier existed.
     const std::string head =
         "arstro-project = 1\napp        = solaris\nid         = prj_9\ntimebase   = beats\nbpm        = 120.0\nsig        = 4/4\n"
-        "ppq        = 960\nsampleRate = 48000\nmasterGain = 0.0\n\n"
+        "ppq        = 960\nsampleRate = 48000\nmasterGain = 0.0\ntracks     = on\n\n"
         "#amixer id=mx_1 name=Sources order=0\n\n"
         "#atrack id=ch_1 name=Main kind=bus mixer=mx_1 order=0 gain=0.0 pan=0.0\n\n";
     const std::string old = head +
@@ -365,6 +366,15 @@ static void test_structural_errors_are_refused_with_names()
     refuse("#asend id=sd_1 from=ch_8 to=master\n", "sends from `ch_8`");
     refuse("#apattern id=pt_1 length=0\n", "pattern pt_1 has no length");
     refuse("this is not a line\n", "cannot read");
+    // R-LANE-3: a track belongs to an instrument, and what is on it plays through it
+    refuse("#alane id=ln_1 name=a track=ch_9 order=0\n", "lane ln_1 is the track of `ch_9`, which is no strip");
+    refuse("#atrack id=ch_1 name=a kind=bus\n#alane id=ln_1 name=a track=ch_1 order=0\n", "a bus strip — a track belongs to an instrument");
+    refuse("#atrack id=ch_1 name=a kind=instrument\n#atrack id=ch_2 name=b kind=instrument\n#apattern id=pt_1 length=4\n"
+           "#alane id=ln_1 name=a track=ch_1 order=0\n#aclip id=ac_1 track=ch_2 lane=ln_1 pattern=pt_1\n",
+           "note clip ac_1 is on ln_1, the track of ch_1 — but plays through ch_2");
+    refuse("#atrack id=ch_1 name=a kind=instrument\n#atrack id=ch_2 name=b kind=audio\n"
+           "#alane id=ln_1 name=a track=ch_1 order=0\n#aclip id=ac_1 track=ch_2 lane=ln_1 src=a.wav in=0 out=1\n",
+           "audio clip ac_1 is on ln_1, the track of ch_1 — audio cannot play through an instrument");
 
     Project p;
     std::string err;
@@ -375,7 +385,12 @@ static void test_structural_errors_are_refused_with_names()
     assert(!parseProject("app = solaris\n", p, err) && contains(err, "not an arstro project"));
     assert(!parseProject("arstro-project = 1\nbogus header\n", p, err) && contains(err, "key = value"));
     assert(!parseProject("arstro-project = 1\nmasterOut = prt_9\n", p, err) && contains(err, "`prt_9`, which is no port"));
-    pass("structural errors are refused, each naming what and where (R-FMT-4)");
+    assert(!parseProject("arstro-project = 1\napp = solaris\ntracks = maybe\n", p, err) && contains(err, "tracks `maybe`"));
+    // a song from before tracks says so (the service adopts its lanes); one with the line, or new, does not
+    assert(parseProject("arstro-project = 1\napp = solaris\nid = prj\n", p, err) && !p.header.tracks);
+    assert(parseProject("arstro-project = 1\napp = solaris\nid = prj\ntracks = on\n", p, err) && p.header.tracks);
+    assert(newProject("prj", "n", 120, "4/4", 48000).header.tracks);
+    pass("structural errors are refused, each naming what and where (R-FMT-4); a track's owner and what is on it checked (R-LANE-3)");
 }
 
 static void test_numeric_corruption_is_repaired_and_counted()

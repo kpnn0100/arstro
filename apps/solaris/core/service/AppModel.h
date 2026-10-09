@@ -108,8 +108,10 @@ namespace solaris
 
     struct LaneModel
     {
-        std::string id, name;
+        std::string id, name;                    // name: what it SHOWS — its own, else its instrument's (R-LANE-3)
         int order = 0, colour = -1;
+        std::string strip;                       // R-LANE-3: the instrument strip it is the track of; empty = plain
+        bool ownName = true;                     // false: a track showing its strip's name
     };
 
     struct ClipModel

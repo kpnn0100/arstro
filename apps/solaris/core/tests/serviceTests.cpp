@@ -270,7 +270,7 @@ static void test_every_sample_file_gets_its_own_strip()
     assert(std::fabs(r.clip("ac_1")->length - 0.5 * 120 / 60) < 1e-9);                       // half a second at 120 bpm = 1 beat
     assert(contains(r.no("clip add --src missing.wav"), "cannot read missing.wav"));
     assert(contains(r.no("clip add --strip ch_2"), "notes need an instrument strip"));
-    assert(r.no("clip add --at 3") == "clip add needs --src <file> (audio), --strip <instrument strip> or --instrument <type> (notes)");
+    assert(r.no("clip add --at 3") == "clip add needs --src <file> (audio), --strip <instrument strip>, --lane <an instrument's track> or --instrument <type> (notes)");
     pass("every sample file gets its own strip on Sources → Main; the same file reuses it; fed-by is computed (R-MIX-2/3/8)");
 }
 
@@ -1551,6 +1551,118 @@ static void test_a_clip_joins_its_strips_lane()
     pass("a clip with no --lane joins its strip's lane (a new lane only for a strip with none; --lane new asks); clip duplicate --count N, end to end, one edit (R-SVC-8)");
 }
 
+static void test_instrument_tracks()
+{
+    // R-LANE-3: a lane may be an instrument's TRACK — what is put on it plays through it
+    Run r;
+    r.ok("project new " + freshSong("tracks"));
+    auto lane = [&](const std::string &id) -> const LaneModel * {
+        for (const auto &l : r.svc.model().lanes)
+            if (l.id == id) return &l;
+        return nullptr;
+    };
+    // an instrument's first clip makes its track, which shows the strip's name — and follows a rename (D-2)
+    assert(r.ok("clip add --instrument synth --at 0 --length 4") == "ac_1\nmade: strip=ch_2 device=dv_1 pattern=pt_1 lane=ln_1\n");
+    assert(lane("ln_1")->strip == "ch_2" && !lane("ln_1")->ownName && lane("ln_1")->name == "Basic Synth");
+    r.ok("set ch_2.name=Bass");
+    assert(lane("ln_1")->name == "Bass");
+    r.ok("clip add --instrument synth --at 0 --length 4");                 // ch_3, ln_2
+    r.ok("set ch_3.name=Pad");
+    assert(lane("ln_2")->strip == "ch_3");
+    // put on a track: --strip implied; a pattern placed there plays through it
+    assert(r.ok("clip add --lane ln_2 --at 8") == "ac_3\nmade: pattern=pt_3\n");
+    assert(r.clip("ac_3")->track == "ch_3" && r.clip("ac_3")->lane == "ln_2");
+    r.ok("clip add --pattern pt_1 --lane ln_2 --at 12");
+    assert(r.clip("ac_4")->track == "ch_3" && r.clip("ac_4")->pattern == "pt_1");
+    // moved onto another track: re-routed in the same command, and said; ONE undo takes both back
+    const int depth = r.svc.model().undoDepth;
+    assert(r.ok("clip move ac_1 --lane ln_2 --at 4") == "ac_1 plays through ch_3 (Pad)\n");
+    assert(r.clip("ac_1")->track == "ch_3" && r.clip("ac_1")->lane == "ln_2" && r.clip("ac_1")->at == 4.0);
+    assert(r.svc.model().undoDepth == depth + 1);
+    r.ok("undo");
+    assert(r.clip("ac_1")->track == "ch_2" && r.clip("ac_1")->lane == "ln_1" && r.clip("ac_1")->at == 0.0);
+    r.ok("redo");
+    // told to play through another instrument, it goes to that one's track
+    assert(r.ok("clip move ac_1 --strip ch_2") == "ac_1 plays through ch_2 (Bass)\n");
+    assert(r.clip("ac_1")->lane == "ln_1");
+    // audio is refused on a track; a new instrument asks for its own
+    assert(contains(r.no("clip add --src kick.wav --lane ln_1"), "ln_1 is the track of ch_2 (Bass), an instrument — an audio clip needs a lane of its own"));
+    r.ok("clip add --src kick.wav --at 0");                                 // ch_4, its own plain lane ln_3
+    assert(lane("ln_3")->strip.empty() && lane("ln_3")->name == "kick");
+    assert(contains(r.no("clip move ac_5 --lane ln_1"), "ac_5 is audio — ln_1 is the track of ch_2 (Bass), an instrument"));
+    assert(contains(r.no("clip add --instrument drums --lane ln_1"), "a new instrument gets its own track: give --lane new"));
+    assert(contains(r.no("clip add --strip ch_2 --lane ln_2"), "a clip on it plays through ch_3; leave out --strip"));
+    assert(contains(r.no("clip move ac_1 --lane ln_2 --strip ch_2"), "give --lane or --strip, not both"));
+    // a plain lane is organisation only, as before
+    r.ok("lane add Ideas");                                                 // ln_4
+    assert(r.ok("clip move ac_1 --lane ln_4").empty() && r.clip("ac_1")->track == "ch_2");
+    // a lane made a track, and plain again (keeping the name it showed)
+    assert(r.ok("lane add --strip ch_2") == "ln_5\n" && lane("ln_5")->name == "Bass" && lane("ln_5")->strip == "ch_2");
+    assert(contains(r.no("set ln_3.strip=ch_2"), "ln_3 holds ac_5, which is audio"));
+    assert(contains(r.no("set ln_4.strip=ch_4"), "a track belongs to an instrument"));
+    assert(contains(r.no("set ln_4.strip=ch_9"), "no strip `ch_9`"));
+    r.ok("set ln_4.strip=ch_2");
+    assert(lane("ln_4")->strip == "ch_2" && lane("ln_4")->name == "Ideas" && lane("ln_4")->ownName);
+    r.ok("set ln_5.strip=none");
+    assert(lane("ln_5")->strip.empty() && lane("ln_5")->name == "Bass" && r.ok("get ln_5.strip") == "none\n");
+    // relinked, its tracks go with its clips; deleted, its tracks become plain lanes
+    r.ok("clip add --instrument synth --at 0");                              // ch_5, ln_6
+    r.ok("strip relink ch_3 --to ch_5");
+    assert(lane("ln_2")->strip == "ch_5" && lane("ln_2")->name == "Pad");
+    r.ok("strip delete ch_5 --with-clips");
+    assert(lane("ln_2")->strip.empty() && lane("ln_2")->name == "Pad" && lane("ln_6")->strip.empty());
+    // ls says which lanes are tracks; the file keeps them
+    assert(contains(r.ok("ls"), "lane ln_1 \"Bass\" · track of ch_2\n"));
+    r.ok("project save");
+    {
+        std::ifstream f(scratch() + "/tracks.slp");
+        std::stringstream ss;
+        ss << f.rdbuf();
+        assert(contains(ss.str(), "tracks     = on\n") && contains(ss.str(), "#alane id=ln_1 name=\"\" track=ch_2 order=0"));
+    }
+    pass("instrument tracks: an instrument's lane is its track, named by it; a clip put or moved there plays through it, in one edit and said; audio refused there; lane add --strip, <lane>.strip; relink and delete carry them (R-LANE-3)");
+}
+
+static void test_a_song_from_before_tracks_adopts_them()
+{
+    // R-LANE-3: no `tracks` line — a lane whose clips all play through one instrument becomes its track; one
+    // still carrying the name it was made with shows its strip's name; a lane of audio or of two instruments stays plain
+    const std::string path = freshSong("before-tracks");
+    {
+        std::ofstream f(path);
+        f << "arstro-project = 1\napp = solaris\nid = prj_old\nname = Old\nbpm = 120.0\n"
+             "#amixer id=mx_1 name=Sources order=0\n#amixer id=mx_2 name=Buses order=1\n"
+             "#atrack id=ch_1 name=Main kind=bus mixer=mx_2 order=0 gain=0.0 pan=0.0\n"
+             "#atrack id=ch_2 name=Bass kind=instrument mixer=mx_1 order=0 gain=0.0 pan=0.0 out=ch_1\n"
+             "#atrack id=ch_3 name=Lead kind=instrument mixer=mx_1 order=1 gain=0.0 pan=0.0 out=ch_1\n"
+             "#atrack id=ch_4 name=kick kind=audio mixer=mx_1 order=2 gain=0.0 pan=0.0 out=ch_1\n"
+             "#arack track=ch_2\n  #aeffect id=dv_1 type=synth\n#arack track=ch_3\n  #aeffect id=dv_2 type=synth\n"
+             "#alane id=ln_1 name=\"Basic Synth\" order=0\n#alane id=ln_2 name=Hooks order=1\n#alane id=ln_3 name=Mixed order=2\n"
+             "#alane id=ln_4 name=Drums order=3\n#alane id=ln_5 name=Empty order=4\n"
+             "#apattern id=pt_1 name=A length=4.0\n"
+             "#aclip id=ac_1 track=ch_2 lane=ln_1 pattern=pt_1 at=0.0\n#aclip id=ac_2 track=ch_2 lane=ln_1 pattern=pt_1 at=4.0\n"
+             "#aclip id=ac_3 track=ch_3 lane=ln_2 pattern=pt_1 at=0.0\n"
+             "#aclip id=ac_4 track=ch_2 lane=ln_3 pattern=pt_1 at=0.0\n#aclip id=ac_5 track=ch_3 lane=ln_3 pattern=pt_1 at=4.0\n"
+             "#aclip id=ac_6 track=ch_4 lane=ln_4 src=kick.wav in=0.0 out=0.5 at=0.0\n";
+    }
+    Run r;
+    r.events.clear();
+    r.ok("project open " + path);
+    auto lane = [&](const std::string &id) -> const LaneModel * {
+        for (const auto &l : r.svc.model().lanes)
+            if (l.id == id) return &l;
+        return nullptr;
+    };
+    assert(lane("ln_1")->strip == "ch_2" && lane("ln_1")->name == "Bass" && !lane("ln_1")->ownName); // made as "Basic Synth": now its strip's
+    assert(lane("ln_2")->strip == "ch_3" && lane("ln_2")->name == "Hooks" && lane("ln_2")->ownName); // a name of its own: kept
+    assert(lane("ln_3")->strip.empty() && lane("ln_4")->strip.empty() && lane("ln_5")->strip.empty());
+    int said = 0;
+    for (const auto &e : r.events) said += contains(e, "became the track of") ? 1 : 0;
+    assert(said == 2);
+    assert(!r.svc.model().dirty);                                            // opening is not an edit
+    pass("a song from before tracks: its one-instrument lanes become tracks on opening, said; a lane still named as it was made shows its strip's name; audio, mixed and empty lanes stay plain (R-LANE-3)");
+}
+
 static void test_reading_a_song_back()
 {
     Run r;
@@ -1569,7 +1681,7 @@ static void test_reading_a_song_back()
     assert(contains(ls, "mixer mx_1 \"Sources\"\n  ch_2 \"Basic Synth\" instrument [synth dv_1] → ch_1 · gain -6.0 · sd_1 → ch_3 -12.0 dB\n"));
     // R-MIX-4 amended (C6): a bus made on Buses is placed before Main and feeds it
     assert(contains(ls, "mixer mx_2 \"Buses\"\n  ch_3 \"Verb\" bus [reverb dv_2] → ch_1\n  ch_1 \"Main\" bus → master\n"));
-    assert(contains(ls, "lane ln_1 \"Basic Synth\"\n  ac_1 @0 len 8 pt_1 via ch_2\n"));
+    assert(contains(ls, "lane ln_1 \"Basic Synth\" · track of ch_2\n  ac_1 @0 len 8 pt_1 via ch_2\n")); // R-LANE-3
     assert(contains(ls, "pattern pt_1 \"Basic Synth\" 4 beats · 2 notes · 1 clip\n"));
     const std::string dv = r.ok("show dv_1");
     assert(contains(dv, "dv_1 synth (Basic Synth) on ch_2\n"));
@@ -1770,6 +1882,8 @@ int main()
     test_steps_and_pattern_edits();
     test_a_clip_joins_its_strips_lane();
     test_reading_a_song_back();
+    test_instrument_tracks();
+    test_a_song_from_before_tracks_adopts_them();
     test_latency_is_compensated_and_a_render_starts_on_the_beat();
     test_forward_is_processing_order_and_moves_renumber();
     test_lanes_are_reordered();

@@ -6,7 +6,7 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Open
 
-### D-2 A strip's new name does not reach its lane or its pattern
+### D-2 A strip's new name does not reach its lane or its pattern — lane half FIXED in E3 (DR-LANE-3), pattern half open
 - **Found:** 2026-10-09, making the canon (C5) with `solaris-cc` alone.
 - **Symptom:** after the reproduction below, `ls` shows `ch_2 "Bass"` but still
   `lane ln_1 "Basic Synth"` and `pattern pt_1 "Basic Synth"`. A song of four synths shows four lanes
@@ -18,6 +18,10 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 - **Recommended fix:** a lane or pattern made for a strip keeps that strip's name while it was never
   renamed itself — renaming the strip renames the ones still carrying its old name, in the same edit.
   Needs an R-LANE line first (lanes are organisation only, R-LANE-1, so the rule is about names alone).
+- **Lane half fixed (E3, 2026-10-09):** a lane made for an instrument is its TRACK (R-LANE-3) with no name
+  of its own and shows the strip's (`laneTitle`); older songs' lanes are adopted, a name they were made
+  with cleared. Guard: `test_instrument_tracks`, `test_a_lane_is_an_instruments_track`. The pattern half
+  remains: a pattern made by `clip add` is still named after its strip as it was then.
 
 ### D-3 A kit's parameter names are not its pad names
 - **Found:** 2026-10-09, making the canon (C5).

@@ -94,6 +94,11 @@ namespace solaris_ui
         /** The row under `y` (local); −1 above the rows; rowCount() below the last. */
         int rowAt(double y) const;
         int rowCount() const { return (int)mRows.size(); }
+        std::string rowTrack(int i) const { return i >= 0 && i < (int)mRows.size() ? mRows[(size_t)i].strip : std::string(); } // whose track (R-LANE-3)
+        std::string rowLabel(int i) const { return i >= 0 && i < (int)mRows.size() ? mRows[(size_t)i].label : std::string(); }
+        /** R-LANE-3: how much of a lane's "instrument track" line is drawn (LIVE, 0 … 1), and what it says. */
+        double trackAmount(const std::string &lane) const;
+        std::string trackLabel(const std::string &lane) const;
         std::string rowLane(int i) const { return i >= 0 && i < (int)mRows.size() ? mRows[(size_t)i].lane : std::string(); }
         artboard::Rect rowRect(int i) const;
         artboard::Rect clipRect(const std::string &id) const;
@@ -164,6 +169,14 @@ namespace solaris_ui
             std::string key, lane, label; // key: the lane's id, "strip:<id>" for a strip's own row, "auto:<au>"
             int colour = -1;
             std::string automation;       // an automation row: its id
+            std::string strip, sub;       // R-LANE-3: an instrument's track — whose, and the instrument named under it
+        };
+        /** A track's instrument line, fading in and out as the lane becomes a track and stops being one. */
+        struct TrackLive
+        {
+            artboard::AnimatedProperty amt{0.0};
+            bool want = false, placed = false;
+            std::string sub;              // the last shown, so it fades out as it was
         };
         /** An automation's curve as drawn: eased from what was shown to what the model says. */
         struct AutoLive
@@ -243,6 +256,7 @@ namespace solaris_ui
         std::vector<StripRef> mStrips;                // what a clip may play through (its menu, R-MIX-14)
         std::vector<ClipLive> mLive;                  // by clip id, ghosts included
         std::map<std::string, Stripe> mStripes;       // by row key
+        std::map<std::string, TrackLive> mTracks;     // by lane id (R-LANE-3)
         std::string mSong;                            // another song: everything placed afresh
         bool mBound = false, mEver = false, mEmptyInit = false;
         artboard::AnimatedProperty mEmptyAmt{0.0};

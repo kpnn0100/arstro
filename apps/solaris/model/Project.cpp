@@ -45,6 +45,12 @@ namespace solaris
     Strip *Project::strip(const std::string &id) { return findId(strips, id); }
     Send *Project::send(const std::string &id) { return findId(sends, id); }
     Lane *Project::lane(const std::string &id) { return findId(lanes, id); }
+    std::string laneTitle(const Project &p, const Lane &l)
+    {
+        if (!l.name.empty() || l.track.empty()) return l.name;
+        const Strip *s = p.strip(l.track);
+        return s ? s->name : l.name;
+    }
     Pattern *Project::pattern(const std::string &id) { return findId(patterns, id); }
     Clip *Project::clip(const std::string &id) { return findId(clips, id); }
     const Strip *Project::strip(const std::string &id) const { return findId(strips, id); }
@@ -262,6 +268,7 @@ namespace solaris
         {
             if (k == "id") n.id = v;
             else if (k == "name") n.name = v;
+            else if (k == "track") n.track = v;
             else if (k == "order") n.order = r.integer(k, v, 0);
             else if (k == "colour") n.colour = r.integer(k, v, -1);
             else n.unknown.emplace_back(k, v);
@@ -346,7 +353,7 @@ namespace solaris
         // What a continuation line or a comment attaches to.
         enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Pattern, Note, Clip, Auto, Point, Bind, Raw };
         Cur cur = Cur::None;
-        bool seenNode = false, sawMagic = false;
+        bool seenNode = false, sawMagic = false, sawTracks = false;
         std::map<std::string, std::vector<Note>> inlineNotes; // note clips written the suite's inline way
 
         auto remarksOfCurrent = [&]() -> Remarks * {
@@ -478,6 +485,11 @@ namespace solaris
                 else if (key == "sampleRate") p.header.sampleRate = r.integer(key, value, 48000);
                 else if (key == "masterGain") p.header.masterGain = r.num(key, value, 0.0);
                 else if (key == "masterOut") p.header.masterOut = splitComma(value);
+                else if (key == "tracks")
+                {
+                    if (value != "on") { err = "tracks `" + value + "`: the only value is `on` (R-LANE-3)"; return false; }
+                    sawTracks = true;
+                }
                 else p.header.unknown.emplace_back(key, value);
                 continue;
             }
@@ -549,6 +561,7 @@ namespace solaris
             p.patterns.push_back(pt);
         }
         for (auto &pt : p.patterns) sortNotes(pt);
+        p.header.tracks = sawTracks; // R-LANE-3: without the line the service adopts the lanes that are tracks in all but name
         for (auto &a : p.automations)
         {
             // the sketch's `node=… param=… interp=…` become `from` and the points' shape
@@ -640,6 +653,7 @@ namespace solaris
             for (size_t i = 0; i < h.masterOut.size(); ++i) v += (i ? "," : "") + h.masterOut[i];
             out += headerLine("masterOut", v);
         }
+        out += headerLine("tracks", "on"); // R-LANE-3: lanes may be tracks — a file without the line predates them
         for (const auto &u : h.unknown) out += headerLine(u.first, quoteIfNeeded(u.second));
         for (const auto &c : h.comments) out += c + "\n";
 
@@ -686,7 +700,7 @@ namespace solaris
         for (const auto &n : p.lanes)
         {
             Line l("alane");
-            l.kv("id", n.id).str("name", n.name).kv("order", std::to_string(n.order));
+            l.kv("id", n.id).str("name", n.name).kvIf(!n.track.empty(), "track", n.track).kv("order", std::to_string(n.order));
             if (n.colour >= 0) l.kv("colour", std::to_string(n.colour));
             emit(out, "", l.unknown(n.unknown), n.remarks);
         }
@@ -874,11 +888,22 @@ namespace solaris
         }
         for (const auto &pt : p.patterns)
             if (!(pt.length > 0)) e.push_back("pattern " + pt.id + " has no length");
+        for (const auto &l : p.lanes)
+        {
+            // R-LANE-3: a track belongs to an instrument
+            if (l.track.empty()) continue;
+            const Strip *s = p.strip(l.track);
+            if (!s) e.push_back("lane " + l.id + " is the track of `" + l.track + "`, which is no strip");
+            else if (s->kind != "instrument") e.push_back("lane " + l.id + " is the track of " + s->id + ", a " + s->kind + " strip — a track belongs to an instrument");
+        }
         for (const auto &c : p.clips)
         {
             const Strip *s = p.strip(c.track);
             if (!s) { e.push_back("clip " + c.id + " plays through `" + c.track + "`, which is no strip"); continue; }
             if (!c.lane.empty() && !p.lane(c.lane)) e.push_back("clip " + c.id + " is on lane `" + c.lane + "`, which does not exist");
+            if (const Lane *l = c.lane.empty() ? nullptr : p.lane(c.lane); l && !l->track.empty() && l->track != c.track)
+                e.push_back((c.isAudio() ? "audio clip " : "note clip ") + c.id + " is on " + l->id + ", the track of " + l->track +
+                            " — " + (c.isAudio() ? "audio cannot play through an instrument; put it on a lane of its own" : "but plays through " + c.track) + " (R-LANE-3)");
             if (c.at < 0) e.push_back("clip " + c.id + " starts before the song (at " + canonicalBeats(c.at) + ")");
             if (c.isAudio())
             {

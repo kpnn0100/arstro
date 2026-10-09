@@ -221,7 +221,7 @@ namespace solaris
         std::vector<const Lane *> lanes;
         for (const auto &l : p.lanes) lanes.push_back(&l);
         std::stable_sort(lanes.begin(), lanes.end(), [](const Lane *a, const Lane *b) { return a->order < b->order; });
-        for (const Lane *l : lanes) mModel.lanes.push_back(LaneModel{l->id, l->name, l->order, l->colour});
+        for (const Lane *l : lanes) mModel.lanes.push_back(LaneModel{l->id, laneTitle(p, *l), l->order, l->colour, l->track, !l->name.empty() || l->track.empty()});
 
         std::map<std::string, int> uses;
         for (const auto &c : p.clips)

@@ -115,6 +115,7 @@ namespace solaris_ui
             mRowMotion = interstellar_v1::AnimatedRows<Row>();
             mLive.clear();
             mStripes.clear();
+            mTracks.clear();
             mEver = mBound = mEmptyInit = mLoopInit = false;
         }
         std::map<std::string, int> colourOf; // the service resolves a strip's colour (stable by id)
@@ -124,7 +125,19 @@ namespace solaris_ui
         for (const auto &l : m.lanes)
         {
             rowOfLane[l.id] = (int)mRows.size();
-            mRows.push_back(Row{l.id, l.id, l.name, l.colour});
+            Row r{l.id, l.id, l.name, l.colour};
+            if (!l.strip.empty())
+            {
+                // R-LANE-3: an instrument's track — its stripe the strip's colour (unless it has its own), its
+                // instrument named under its name
+                r.strip = l.strip;
+                if (r.colour < 0) r.colour = colourOf[l.strip];
+                for (const auto &st : m.strips)
+                    if (st.id == l.strip)
+                        for (const auto &d : st.devices)
+                            if (d.instrument && r.sub.empty()) r.sub = d.label;
+            }
+            mRows.push_back(r);
         }
         for (const auto &c : m.clips)
             if (c.lane.empty() && !rowOfStrip.count(c.track))
@@ -214,6 +227,18 @@ namespace solaris_ui
         for (const auto &l : mLive)
             if (l.v.c.id == id) return l.placed ? l.alpha.value() : 0.0;
         return 0.0;
+    }
+
+    double Timeline::trackAmount(const std::string &lane) const
+    {
+        const auto it = mTracks.find(lane);
+        return it == mTracks.end() ? 0.0 : it->second.amt.value();
+    }
+
+    std::string Timeline::trackLabel(const std::string &lane) const
+    {
+        const auto it = mTracks.find(lane);
+        return it == mTracks.end() ? std::string() : it->second.sub;
     }
 
     double Timeline::clipHueAmount(const std::string &id) const
@@ -328,6 +353,25 @@ namespace solaris_ui
         for (auto &n : mStepNames) n.a.update(nowMs);
         mStepNames.erase(std::remove_if(mStepNames.begin(), mStepNames.end(), [](const StepName &n) { return n.out && !n.a.isAnimating() && n.a.value() <= 0.001; }),
                          mStepNames.end());
+        for (const auto &row : mRows)
+        {
+            if (row.lane.empty()) continue;
+            TrackLive &tk = mTracks[row.lane];
+            const bool want = !row.strip.empty();
+            if (!row.sub.empty()) tk.sub = row.sub;
+            if (!tk.placed)
+            {
+                tk.amt.set(want ? 1.0 : 0.0); // nowhere to travel from: placed
+                tk.want = want;
+                tk.placed = true;
+            }
+            else if (want != tk.want)
+            {
+                tk.want = want;
+                tk.amt.animateTo(want ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            }
+            tk.amt.update(nowMs);
+        }
         mSelIn.update(nowMs);
         mSelOut.update(nowMs);
         mDropAmt.update(nowMs);
@@ -682,6 +726,27 @@ namespace solaris_ui
             return true;
         case Gesture::Type::RightClick:
         {
+            if (local.x < kHeaderW && local.y >= kRulerH)
+            {
+                // a lane's menu (R-LANE-3): whose track it is — or a plain lane — each one line
+                const int ri = rowAt(local.y);
+                if (ri < 0 || ri >= (int)mRows.size() || mRows[(size_t)ri].lane.empty() || !onMenu) return true;
+                const std::string ln = mRows[(size_t)ri].lane, owner = mRows[(size_t)ri].strip;
+                std::vector<cosmo_v2::ContextMenu::Item> owners, items;
+                for (const auto &s : mStrips)
+                    if (s.kind == "instrument")
+                    {
+                        const std::string sid = s.id;
+                        owners.push_back({s.name + (sid == owner ? "  \xC2\xB7 now" : ""),
+                                          [this, ln, sid] { if (onCommand) onCommand("set " + ln + ".strip=" + sid); }});
+                    }
+                const Point world = g.pos;
+                if (!owners.empty()) items.push_back({"Track of \xE2\x96\xB8", [this, owners, world] { if (onMenu) onMenu(owners, world); }});
+                if (!owner.empty()) items.push_back({"Plain Lane", [this, ln] { if (onCommand) onCommand("set " + ln + ".strip=none"); }});
+                items.push_back({"Copy ID", [this, ln] { if (onCopy) onCopy(ln); }}); // R-UI-11
+                onMenu(std::move(items), world);
+                return true;
+            }
             // a clip's menu: what it plays through (R-MIX-14), its notes, a copy, gone — each one line
             const std::string id = clipAt(local);
             const ClipView *v = nullptr;
@@ -977,6 +1042,12 @@ namespace solaris_ui
             {
                 t.setFill(fade(palette::mutedForeground(), a));
                 t.drawText("its strip's row", 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::sans());
+            }
+            else if (const auto tk = mTracks.find(d.lane); tk != mTracks.end() && tk->second.amt.value() > 0.001 && !tk->second.sub.empty())
+            {
+                // R-LANE-3: an instrument's track names its instrument
+                t.setFill(fade(palette::mutedForeground(), a * tk->second.amt.value()));
+                t.drawText(textfit::ellipsize(t, tk->second.sub, kHeaderW - 20.0, 9.0, font::sans()), 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::sans());
             }
             t.setStroke(fade(palette::border(), a), 1.0);
             t.beginPath(); t.moveTo(0, r.bottom() - 0.5); t.lineTo(W, r.bottom() - 0.5); t.strokePath();

@@ -23,6 +23,7 @@ ppq        = 960
 sampleRate = 48000
 masterGain = 0.0            ; dB
 masterOut  = prt_1          ; the output port(s) the master feeds, comma-separated
+tracks     = on             ; R-LANE-3: lanes may be instruments' tracks (absent = a song from before them)
 ```
 
 `timebase` is always `beats` in a Solaris project (audio-format §1). Every time field below is in
@@ -107,7 +108,15 @@ as a clip's `src` is (relative to the song when inside its folder), written righ
 #alane id=ln_1 name=Drums order=0 colour=3
 ```
 
-Organisation only (R-LANE-1). A clip's lane decides where it is DRAWN, never what it sounds through.
+Organisation only (R-LANE-1) — unless it names an instrument strip, `track=ch_2`: then it is that
+instrument's TRACK (R-LANE-3) and every clip on it plays through it (a note clip of another strip or an
+audio clip there is refused). A track with no `name` shows its strip's. A file with no `tracks = on`
+header line predates tracks: Solaris makes each lane whose clips all play through one instrument that
+instrument's track on opening, and writes the line when it saves.
+
+```
+#alane id=ln_2 name="" track=ch_4 order=1
+```
 
 ## 8. Patterns — `#apattern` / `#note`
 
@@ -190,7 +199,8 @@ canonical text.
 | refused | why |
 |---|---|
 | two nodes with one id | references would be ambiguous |
-| a route or send to a strip on the same or an earlier mixer | R-MIX-4 — and it names both ends |
+| a route, send or key to a strip that is not LATER in processing order | R-MIX-4 (amended 2026-10-09) — and it names both ends |
+| a lane that is the track of no strip or of a non-instrument; a clip on a track that does not play through it | R-LANE-3 — named |
 | `out`/`to`/`track`/`mixer`/`lane`/`pattern` naming nothing | named, with the candidates |
 | an audio clip on a non-audio strip, a note clip on a non-instrument strip | the clip could not sound |
 | an audio clip with `in >= out` | a clip with no samples is not a clip |

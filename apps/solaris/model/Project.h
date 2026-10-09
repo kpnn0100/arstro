@@ -44,6 +44,7 @@ namespace solaris
         int sampleRate = 48000;
         double masterGain = 0.0;        // dB
         std::vector<std::string> masterOut; // port ids
+        bool tracks = true;             // R-LANE-3: false = a song saved before lanes could be tracks (no `tracks` line)
         Fields unknown;
         std::vector<std::string> comments; // whole comment lines before the first node
     };
@@ -106,6 +107,7 @@ namespace solaris
     struct Lane
     {
         std::string id, name;
+        std::string track;              // R-LANE-3: the instrument strip this lane is the TRACK of; empty = organisation only
         int order = 0, colour = -1;
         Fields unknown;
         Remarks remarks;
@@ -255,6 +257,10 @@ namespace solaris
     /** R-MIX-9: the matrix's columns, ONCE for every face — every strip some strip may reach or does
      *  reach (processing order), then "master", then the output ports: every route has a cell. */
     std::vector<std::string> matrixColumnsOf(const Project &p);
+
+    /** R-LANE-3: the name a lane shows — its own, else (a track with none) its instrument strip's, so a renamed
+     *  instrument renames its tracks. */
+    std::string laneTitle(const Project &p, const Lane &l);
 
     /** A fresh project: R-MIX-3's defaults — Mixer 1 "Sources", Mixer 2 "Buses" with bus "Main",
      *  output port "Main" fed by the master. */

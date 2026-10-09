@@ -29,11 +29,13 @@ helpers it borrows.
 | Browser › a sample folder, a sub-folder, the row back up | `browse "<path>"` |
 | Browser › Samples with no folders, a click | `devices list`, then the settings sheet |
 | Browser › a sample dragged onto the lanes | `clip add --src "<file>" --at <beat> --lane <ln\|new>` — `<beat>` on the lanes' snap step; below the last lane: `--lane new`, a new one (said explicitly since R-SVC-8: with no `--lane` a clip joins its strip's lane — a used sample would have landed on its old row) |
-| Browser › an instrument dragged onto the lanes | `clip add --instrument <type> --at <beat> --length 4 --lane <ln\|new>` — ONE line (R-BROWSE-3) |
+| Browser › an instrument dragged onto the lanes | `clip add --instrument <type> --at <beat> --length 4 --lane <ln\|new>` — ONE line (R-BROWSE-3); onto another instrument's track: `--lane new` (R-LANE-3), as for a sample |
 | Browser › a double-click | the same, at the playhead |
 | Browser › an effect dragged onto the lanes | nothing; a notice (effects go on a strip — U3) |
 | Lanes › a clip dragged | `clip move <ac> [--at <beat>] [--lane <ln>]` on release (on the snap step; between lanes only) |
 | Lanes › a ruler click | `transport seek <beat>` — on the grid you see: the finest level with room, named in the ruler's corner ("Snap 1/8"); at the deepest zoom ("Off") the exact tick (R-TIME-5, R-UI-10) |
+| Lanes › a lane header, right-click | Track of ▸ (the instrument strips) → `set <ln>.strip=<ch>` · Plain Lane → `set <ln>.strip=none` · Copy ID — a track names its instrument under its name, the line fading in and out (R-LANE-3) |
+| Lanes › a clip dragged onto an instrument's track | `clip move <ac> --lane <ln>` — the service re-routes a note clip to that instrument (its colour eases); audio is refused there and eases home (R-LANE-3) |
 | Lanes › Shift-drag on the ruler · a click inside the loop's brace | `transport loop <from> <to>` on release (both on the snap step) · `transport loop off` |
 | Lanes › the ruler dragged (anywhere but the brace) | `transport seek <beat>` at each new line of the snap step while held — the playhead is the pointer's — and once more where let go if it moved on (R-TIME-6) |
 | Lanes › the loop's brace dragged by its body · by an end (the ruler's lower half) | `transport loop <from> <to>` ONCE on release: moved with its length kept · resized, never past the other end (R-TIME-6) |
