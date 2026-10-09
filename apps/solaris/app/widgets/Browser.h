@@ -27,6 +27,7 @@
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/HoverFade.h"
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -59,6 +60,8 @@ namespace solaris_ui
         int rowCount() const { return (int)mRows.size(); }
         const Item &row(int i) const { return mRows[(size_t)i]; }
         double tabHighlightX() const { return mTabX.value(); } // LIVE, for the slide test
+        /** R-EDM-9: how much a file's audition fill shows (LIVE, eased) — 0 when it is not being heard. */
+        double auditionAmount(const std::string &file) const;
         /** Row i's LIVE opacity — a test tells a cross-fade from a cut. */
         double rowAlpha(int i) const;
 
@@ -90,6 +93,12 @@ namespace solaris_ui
         std::vector<solaris::DeviceTypeModel> mTypes;
         std::vector<std::pair<std::string, std::string>> mSongSounds; // label, src
         std::vector<Item> mRows;                      // the list as it is: hit-testing, row()
+        // R-EDM-9: the preview, keyed by file — its fill fades in on the row heard, out on the one left
+        struct Aud { artboard::AnimatedProperty amt{0.0}; bool want = false, last = false, placed = false; double progress = 0; };
+        std::map<std::string, Aud> mAud;
+        std::string mAudFile;
+        bool mAudPlaying = false;
+        double mAudProgress = 0;
         interstellar_v1::AnimatedRows<Item> mMotion;  // the list as drawn: eased, ghosts fading
         int mGen = 0;                                 // bumped by navigate()
         double mGhostScroll = 0.0;                    // where the list a navigation left was scrolled to

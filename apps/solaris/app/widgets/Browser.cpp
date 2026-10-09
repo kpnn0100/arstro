@@ -42,6 +42,9 @@ namespace solaris_ui
     {
         mFolders = m.settings.folders;
         mTypes = m.deviceTypes;
+        mAudFile = m.audition.file;
+        mAudPlaying = m.audition.playing;
+        mAudProgress = m.audition.progress;
         // the folder browsed last is what the Samples tab shows, once the user went into one
         if (!mPath.empty() && m.browser.path == mPath) mEntries = m.browser.entries;
         mSongSounds.clear();
@@ -127,6 +130,12 @@ namespace solaris_ui
         return Rect{space::padX() + t * w, 4.0, w, kTabsH - 8.0};
     }
 
+    double Browser::auditionAmount(const std::string &file) const
+    {
+        const auto it = mAud.find(file);
+        return it == mAud.end() ? 0.0 : it->second.amt.value();
+    }
+
     Rect Browser::rowRect(int i) const
     {
         return Rect{0.0, listTop() + rowY(i) - mScroll.value(), width.value(), space::rowH()};
@@ -153,6 +162,23 @@ namespace solaris_ui
         else if (std::fabs(mTabX.value() - want) > 0.01 && !mTabX.isAnimating()) mTabX.animateTo(want, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
         mTabX.update(nowMs);
         mMotion.advance(nowMs);
+        // the preview's fill: on the row heard, its progress following the audio; eased in and out
+        if (mAudPlaying && !mAudFile.empty()) mAud[mAudFile];
+        for (auto it = mAud.begin(); it != mAud.end();)
+        {
+            Aud &a = it->second;
+            a.want = mAudPlaying && it->first == mAudFile;
+            if (a.want) a.progress = mAudProgress;
+            if (!a.placed) { a.amt.set(0.0); a.placed = true; }
+            if (a.want != a.last)
+            {
+                a.amt.animateTo(a.want ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+                a.last = a.want;
+            }
+            a.amt.update(nowMs);
+            if (!a.want && !a.amt.isAnimating() && a.amt.value() <= 0.001) it = mAud.erase(it);
+            else ++it;
+        }
         mScroll.advance(nowMs);
         if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
@@ -216,6 +242,9 @@ namespace solaris_ui
                 if (!mPath.empty() && onCommand) onCommand("browse " + q(mPath));
                 rebuild();
             }
+            else if (it.kind == "audio" && onCommand)
+                // R-EDM-9: a click hears it now; a click on the one being heard stops it
+                onCommand(mAudPlaying && mAudFile == it.value ? std::string("audition stop") : "audition " + q(it.value));
             return true;
         }
         case Gesture::Type::DoubleClick:
@@ -277,6 +306,14 @@ namespace solaris_ui
                 t.drawText(it.label, space::padX(), textfit::baseline(cy + 3.0, 9.0), 9.0, font::sansSemiBold(), 0.13 * 9.0);
                 continue;
             }
+            if (it.kind == "audio")
+                if (const auto au = mAud.find(it.value); au != mAud.end() && au->second.amt.value() > 0.001)
+                {
+                    // R-EDM-9: being heard — a fill across the row as far as the preview has played
+                    const double fa = au->second.amt.value() * a, done = std::clamp(au->second.progress, 0.0, 1.0);
+                    drawRoundedRect(t, Rect{4.0, r.y + 1.0, (W - 8.0) * done, r.h - 2.0}, radius::control(), Paint::filled(palette::primaryAlpha(0.3 * fa)));
+                    drawRoundedRect(t, Rect{4.0, r.bottom() - 3.0, (W - 8.0) * done, 2.0}, radius::pill(), Paint::filled(palette::primaryAlpha(fa)));
+                }
             const double hv = row.gone || row.index < 0 ? 0.0 : mHover.amount(row.index);
             if (hv > 0.001) drawRoundedRect(t, Rect{4.0, r.y + 1.0, W - 8.0, r.h - 2.0}, radius::control(), Paint::filled(palette::hoverWash(hv * a)));
             const Rect ib{space::padX(), cy - 6.0, 12.0, 12.0};

@@ -46,6 +46,8 @@ namespace solaris
             {EK::RecentsChanged, "recents.changed", {"count"}, "Home's recent songs changed."},
             {EK::TransportChanged, "transport.changed", {"playing", "position", "loop"},
              "Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`."},
+            {EK::AuditionChanged, "audition.changed", {"file", "playing"},
+             "A sample previewed from the browser started (playing 1) or ended — stopped, or to its end (playing 0)."},
         };
         return specs;
     }

@@ -99,6 +99,7 @@ namespace solaris_ui
         std::string mScreen = "home";
         bool mScreenInit = false;
         long long mBoundRevision = -1;
+        bool mBoundAudition = false;
         std::string mToastText;
         artboard::AnimatedProperty mToast{0.0};
         bool mToastWanted = false;

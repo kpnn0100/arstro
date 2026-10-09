@@ -220,8 +220,10 @@ namespace solaris_ui
     void App::bindIfStale()
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
-        if (m.revision == mBoundRevision && !m.transport.playing) return;
+        // live state moves without a revision: the playing transport, a preview being heard (and its end)
+        if (m.revision == mBoundRevision && !m.transport.playing && !m.audition.playing && m.audition.playing == mBoundAudition) return;
         mBoundRevision = m.revision;
+        mBoundAudition = m.audition.playing;
         mHome->bind(m);
         mProject->bind(m);
         mSettings->bind(m);
@@ -236,7 +238,7 @@ namespace solaris_ui
     bool App::needsRedraw(double nowMs) const
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
-        if (m.revision != mBoundRevision || m.transport.playing) return true;
+        if (m.revision != mBoundRevision || m.transport.playing || m.audition.playing || m.audition.playing != mBoundAudition) return true;
         if (mHome->opacity.isAnimating() || mProject->opacity.isAnimating() || mToast.isAnimating() || mToast.value() > 0.0) return true;
         if (mSettings->appearAmount() > 0.0 || mMenu->isOpen()) return true;
         return nowMs - mLastActivityMs < kActiveWindowMs;

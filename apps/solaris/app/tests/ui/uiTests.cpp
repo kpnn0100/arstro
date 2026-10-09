@@ -99,6 +99,8 @@ static void test_settings_folders()
     r.settle();
     r.app->openSettings();
     r.settle();
+    r.app->settings().revealRect(r.app->settings().folderRemoveRect(0)); // the sheet scrolls (R6): bring it in first
+    r.settle();
     r.click(r.app->settings().folderRemoveRect(0));
     assert(sentLine(r, "folder remove /music/Samples") && r.svc->model().settings.folders == std::vector<std::string>{"/music/Loops"});
     r.app->onPickFolder = [](std::function<void(const std::string &)> done) { done("/music/One Shots"); };
@@ -119,7 +121,7 @@ static void test_settings_folders()
 
 static void test_song_bar_and_keys()
 {
-    sltest::Rig r("ui-bar", 1280, 800);
+    sltest::Rig r("ui-bar", 1280, 800, false);                             // no output device: Play is refused
     r.cmd("project new " + r.song("Bar") + ".slp --name Bar");
     r.cmd("strip add --kind instrument --instrument drums");
     r.settle();
@@ -1023,6 +1025,40 @@ static void test_a_sample_dropped_on_a_sampler_loads_it()
     pass("Sampler: its window says it has no sound; a sample dragged onto it lights it (eased) and is ONE `set <dv>.sample=`; then it names the sound (R-EDM-8)");
 }
 
+static void test_a_sample_is_heard_from_the_browser()
+{
+    sltest::Rig r("ui-audition", 1280, 800);
+    r.cmd("folder add /music/Samples");
+    r.cmd("project new " + r.song("Audition") + ".slp --bpm 120");
+    r.settle();
+    auto &b = r.app->project().browser();
+    r.click(world(b, b.rowRect(0)));
+    r.settle();
+    int kick = -1;
+    for (int i = 0; i < b.rowCount(); ++i)
+        if (b.row(i).label == "808 kick.wav") kick = i;
+    assert(kick > 0);
+    const std::string file = "/music/Samples/808 kick.wav";
+    // a click: heard now (ONE line, not an edit); the row's fill eases in
+    r.click(world(b, b.rowRect(kick)));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "audition \"" + file + "\"") && r.svc->model().audition.playing);
+    assert(b.auditionAmount(file) > 0.0 && b.auditionAmount(file) < 1.0);
+    assert(!r.svc->model().dirty);
+    r.pump(600.0);                                                    // past the double-click time: a double-click PLACES it
+    assert(b.auditionAmount(file) == 1.0);
+    // a click on the one being heard stops it; the fill fades out
+    r.click(world(b, b.rowRect(kick)));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "audition stop") && !r.svc->model().audition.playing);
+    assert(b.auditionAmount(file) > 0.0 && b.auditionAmount(file) < 1.0);
+    r.settle();
+    assert(b.auditionAmount(file) == 0.0);
+    pass("Audition: a click on a sample hears it now (one line, not an edit), its row filling as it plays, eased in; a second click stops it, eased out (R-EDM-9)");
+}
+
 static void test_ruler_seek_keys_and_selection()
 {
     sltest::Rig r("ui-ruler", 1280, 800);
@@ -1074,6 +1110,7 @@ int main()
     test_a_strip_keys_a_later_compressor();
     test_the_loop_region_on_the_ruler();
     test_a_sample_dropped_on_a_sampler_loads_it();
+    test_a_sample_is_heard_from_the_browser();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

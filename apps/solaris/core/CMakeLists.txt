@@ -6,6 +6,7 @@ add_library(solaris_core STATIC
   Bindings.cpp
   Settings.cpp
   Player.cpp
+  Auditioner.cpp
   service/Json.cpp
   service/Command.cpp
   service/Event.cpp

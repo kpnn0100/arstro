@@ -40,7 +40,8 @@ namespace solaris
             DevicesChanged,   // count
             BrowseChanged,    // path, entries
             RecentsChanged,   // count
-            TransportChanged  // playing, position, loop
+            TransportChanged, // playing, position, loop
+            AuditionChanged   // file, playing
         };
 
         Kind kind = Kind::Info;

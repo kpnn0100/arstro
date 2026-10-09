@@ -156,6 +156,7 @@ namespace solaris
             {"settings.ports", "string[]", "<port>=<device>:<channel> on this machine"},
             {"settings.metronome", "bool", "clicks while playing (R-TIME-4), never in a render"},
             {"settings.metronomeLevel", "number", "dB"},
+            {"settings.auditionLevel", "number", "dB: a sample previewed from the browser (R-EDM-9)"},
             {"settings.newBpm", "number", "a new song's tempo without --bpm"},
             {"settings.newSig", "string", "a new song's meter without --sig"},
             {"settings.reducedMotion", "bool", "the UI's tweens collapse (with the OS's own setting)"},
@@ -173,6 +174,10 @@ namespace solaris
             {"transport.latencyMs", "number", "the clock device's", false},
             {"transport.device", "string", "the clock device ('' = the system default)"},
             {"transport.masterPeak", "number[]", "L/R peaks of the last played block", false},
+            {"audition", "object", "a sample heard from the browser, outside the song (R-EDM-9)"},
+            {"audition.file", "string", "the file previewed ('' = none)"},
+            {"audition.playing", "bool", ""},
+            {"audition.progress", "number", "0 … 1 of the file handed to the device", false},
             {"deviceTypes", "object[]", "the DSP registry: every instrument and effect a strip can host (R-BROWSE-1)"},
             {"deviceTypes[].name", "string", "the registry type, what `device add --type` and `--instrument` take"},
             {"deviceTypes[].label", "string", ""},
@@ -297,7 +302,7 @@ namespace solaris
         j.set("settings", Json::object().set("sampleRate", m.settings.sampleRate).set("bufferSize", m.settings.bufferSize)
                               .set("latencyMs", m.settings.latencyMs).set("output", m.settings.output).set("input", m.settings.input)
                               .set("folders", strings(m.settings.folders)).set("ports", strings(m.settings.ports))
-                              .set("metronome", m.settings.metronome).set("metronomeLevel", m.settings.metronomeLevel)
+                              .set("metronome", m.settings.metronome).set("metronomeLevel", m.settings.metronomeLevel).set("auditionLevel", m.settings.auditionLevel)
                               .set("newBpm", m.settings.newBpm).set("newSig", m.settings.newSig).set("reducedMotion", m.settings.reducedMotion));
         Json devs = Json::array();
         for (const auto &d : m.devices)
@@ -311,6 +316,10 @@ namespace solaris
         tr.set("device", m.transport.device);
         if (!stable) tr.set("masterPeak", Json::array().push(Json::number(m.transport.masterPeak[0])).push(Json::number(m.transport.masterPeak[1])));
         j.set("transport", tr);
+        Json au = Json::object();
+        au.set("file", m.audition.file).set("playing", m.audition.playing);
+        if (!stable) au.set("progress", m.audition.progress);
+        j.set("audition", au);
         Json types = Json::array();
         for (const auto &d : m.deviceTypes)
         {

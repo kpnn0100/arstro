@@ -11,18 +11,20 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-09 — B11: the sampler.*
+*Last updated: 2026-10-09 — B12: audition.*
 
 ---
 
 ## NEXT
 
-**► B12 — audition in the browser** (R-EDM-9, R-BROWSE-2): a sample row in the browser plays when
-clicked (or on hover with Shift held) through the clock device, outside the song — `audition <file>` /
-`audition stop` in the grammar (a machine command, not an edit: no undo, no unsaved mark), the Player
-mixing the decoded file after the engine like the metronome, never in a render; the row shows it playing
-(an eased progress fill keyed by the file) and a second click stops it. L2: the live stream carries the
-file's samples at the audition level; a render does not. UI test (the fill caught mid-ease) and a shot.
+**► B13 — a MIDI keyboard** (R-EDM-10): the host reads MIDI input (ALSA sequencer, behind the
+`SolarisService::Host` seam — the core sees note events, never a MIDI API) and the service routes notes
+to the ARMED instrument strip (`set <ch>.arm=true`, one strip at a time): heard at once through the
+Player whether the transport plays or not (a live-note message, no engine swap), and — while playing
+with record on (`transport record on|off`) — written into the pattern under the playhead as ONE edit per
+take (an undo removes the take), quantised to the snap if the setting asks. `note on <ch> --pitch --vel`
+/ `note off` in the grammar so a script (and the tests) can play it. L2: a played note sounds on its
+sample in the live stream; a recorded take lands in the pattern at the beats it was played.
 ---
 
 ## The build, in order
@@ -157,7 +159,11 @@ umbrella's pointer — `arstro.rule` §7).
       fails it; the 220 Hz recording at ±semitones, measured); `solaris_service` 25 (the file through the
       whole chain, sample for sample — a mutant skipping `setSample` fails it); `solaris_app_ui` 20 (a
       sample dropped on the sampler's window: lit, eased, one line); shot sampler-window.
-- [ ] **B12+** R-EDM-9…20, one task each, in that order unless the user reorders.
+- [x] **B12** Audition in the browser (R-EDM-9). — DR-EDM-9; `solaris_service` 26 (the live stream IS the file at
+      the audition level, sample for sample; it ends itself, said); `solaris_app_ui` 21 (the row's fill
+      eases in and out — a mutant that snaps it fails); shot browser-audition; the UI rig now has a
+      silent output device that keeps time, and pumps the service every frame as the window does.
+- [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

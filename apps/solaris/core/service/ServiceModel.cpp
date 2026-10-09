@@ -81,8 +81,10 @@ namespace solaris
         const long long rev = mModel.revision;
         const std::string lastError = mModel.lastError;
         const TransportModel transport = mModel.transport;
+        const AuditionModel audition = mModel.audition; // the machine's preview: no song decides it
         mModel = AppModel();
         mModel.transport = transport;
+        mModel.audition = audition;
         mModel.transport.loopFrom = mLoopFrom;
         mModel.transport.loopTo = mLoopTo;
         if (!mModel.transport.playing) mModel.transport.position = mPosition;
@@ -99,6 +101,7 @@ namespace solaris
         for (const auto &p : mSettings.ports) mModel.settings.ports.push_back(p.first + "=" + p.second);
         mModel.settings.metronome = mSettings.metronome;
         mModel.settings.metronomeLevel = mSettings.metronomeLevel;
+        mModel.settings.auditionLevel = mSettings.auditionLevel;
         mModel.settings.newBpm = mSettings.newBpm;
         mModel.settings.newSig = mSettings.newSig;
         mModel.settings.reducedMotion = mSettings.reducedMotion;

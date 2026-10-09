@@ -494,7 +494,7 @@
       "usage": "settings set <key>=<value> …",
       "args": "<key>=<value> …",
       "flags": [],
-      "summary": "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), newBpm / newSig (what a new song starts at), reducedMotion (on|off). Saved at once.",
+      "summary": "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on|off). Saved at once.",
       "requirement": "R-SET-1"
     },
     {
@@ -590,6 +590,14 @@
       "flags": [],
       "summary": "Loop between two beats while playing; `off` ends it.",
       "requirement": "R-TIME-4"
+    },
+    {
+      "verb": "audition",
+      "usage": "audition <file|stop>",
+      "args": "<file|stop>",
+      "flags": [],
+      "summary": "Hear a sample now, outside the song (the browser's preview): through the output device at the audition level, to its end; `stop` ends it. Not an edit, never in a render.",
+      "requirement": "R-EDM-9"
     },
     {
       "verb": "wait",
@@ -727,6 +735,14 @@
         "loop"
       ],
       "summary": "Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`."
+    },
+    {
+      "name": "audition.changed",
+      "fields": [
+        "file",
+        "playing"
+      ],
+      "summary": "A sample previewed from the browser started (playing 1) or ended — stopped, or to its end (playing 0)."
     }
   ],
   "model": [
@@ -1625,6 +1641,12 @@
       "stable": true
     },
     {
+      "path": "settings.auditionLevel",
+      "type": "number",
+      "summary": "dB: a sample previewed from the browser (R-EDM-9)",
+      "stable": true
+    },
+    {
       "path": "settings.newBpm",
       "type": "number",
       "summary": "a new song's tempo without --bpm",
@@ -1724,6 +1746,30 @@
       "path": "transport.masterPeak",
       "type": "number[]",
       "summary": "L/R peaks of the last played block",
+      "stable": false
+    },
+    {
+      "path": "audition",
+      "type": "object",
+      "summary": "a sample heard from the browser, outside the song (R-EDM-9)",
+      "stable": true
+    },
+    {
+      "path": "audition.file",
+      "type": "string",
+      "summary": "the file previewed ('' = none)",
+      "stable": true
+    },
+    {
+      "path": "audition.playing",
+      "type": "bool",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "audition.progress",
+      "type": "number",
+      "summary": "0 … 1 of the file handed to the device",
       "stable": false
     },
     {

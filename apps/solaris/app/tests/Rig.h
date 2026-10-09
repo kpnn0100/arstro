@@ -11,6 +11,8 @@
  *  when the frame INDEX decides where it is. One CairoTarget per rig, re-bound each frame.
  */
 #pragma once
+#include <chrono>
+#include <thread>
 #include "App.h"
 #include "EmbeddedFonts.h"
 #include "SolarisService.h"
@@ -46,7 +48,7 @@ namespace sltest
         return d.string();
     }
 
-    inline SolarisService::Host fakeHost(const std::string &dir)
+    inline SolarisService::Host fakeHost(const std::string &dir, bool audio = true)
     {
         SolarisService::Host h;
         h.decodeAudio = [](const std::string &, int rate, arstro::solaris::engine::Pcm &out, std::string &) {
@@ -72,6 +74,19 @@ namespace sltest
                    {"usb_mic", "Brio 100 Mono", "in", 1, 48000}};
             return true;
         };
+        // an output device that keeps time and plays nowhere (the browser's audition, R-EDM-9)
+        struct SilentOut : arstro::solaris::IAudioOut
+        {
+            bool open(const std::string &, int, int, int, std::string &) override { return true; }
+            bool write(const float *, int n) override
+            {
+                // a quarter speed: a half-second sample previews for two real seconds, so a test sees it playing
+                std::this_thread::sleep_for(std::chrono::microseconds((long long)n * 4000000 / 48000));
+                return true;
+            }
+            double latency() override { return 0.0; }
+        };
+        if (audio) h.audioOut = [] { return std::unique_ptr<arstro::solaris::IAudioOut>(new SilentOut()); };
         h.settingsPath = dir + "/settings.txt";
         h.recentsPath = dir + "/recents";
         return h;
@@ -90,11 +105,12 @@ namespace sltest
         std::vector<std::string> sent;   // every line the app dispatched, in order
 
         /** `name` picks a scratch folder, emptied: no songs, settings or recents from a previous run. */
-        Rig(const std::string &name, int w_, int h_) : dir(scratch(name)), w(w_), h(h_)
+        /** `audio` = false: a machine with no output device (a refusal to test). */
+        Rig(const std::string &name, int w_, int h_, bool audio = true) : dir(scratch(name)), w(w_), h(h_)
         {
             // a fresh folder every run: songs, settings and recents from the last run would change the story
             for (const auto &e : fs::directory_iterator(dir)) fs::remove_all(e.path());
-            svc = std::make_unique<SolarisService>(fakeHost(dir));
+            svc = std::make_unique<SolarisService>(fakeHost(dir, audio));
             arstro::solaris_ui::AppHooks hooks;
             hooks.model = [this]() -> const arstro::solaris::AppModel & { return svc->model(); };
             hooks.dispatch = [this](const std::string &line, std::string &err) {
@@ -126,6 +142,7 @@ namespace sltest
         }
         void frame()
         {
+            svc->pump(); // as the window's tick does: live state (the transport, a preview) reaches the model
             cairo_save(mCr);
             cairo_set_operator(mCr, CAIRO_OPERATOR_SOURCE);
             cairo_set_source_rgb(mCr, 0, 0, 0);

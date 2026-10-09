@@ -171,6 +171,7 @@ namespace solaris
         std::vector<std::string> ports;          // "<name>=<device>:<channel>"
         bool metronome = false, reducedMotion = false; // R-SET-3
         double metronomeLevel = -6, newBpm = 120;
+        double auditionLevel = -6;              // dB: a sample previewed from the browser (R-EDM-9)
         std::string newSig = "4/4";
     };
 
@@ -186,6 +187,14 @@ namespace solaris
         std::string name, label, kind;           // kind = instrument | effect
         std::vector<NoteNameModel> noteNames;    // a kit's keys; empty for a melodic instrument
         bool takesSample = false;                // R-EDM-8: it plays a recorded sound — give it one (`--sample`, `<dv>.sample`)
+    };
+
+    /** R-EDM-9: a sample heard from the browser, outside the song. */
+    struct AuditionModel
+    {
+        std::string file;                        // as given (a path the host opens); "" = none
+        bool playing = false;
+        double progress = 0;                     // 0 … 1 of the file handed to the device
     };
 
     struct TransportModel
@@ -227,6 +236,7 @@ namespace solaris
         std::vector<DeviceInfo> devices;         // from the last `devices list`
         BrowserModel browser;
         TransportModel transport;
+        AuditionModel audition;
         std::vector<DeviceTypeModel> deviceTypes; // the registry, instruments first (R-DSP-2)
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };

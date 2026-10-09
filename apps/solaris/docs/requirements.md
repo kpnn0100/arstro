@@ -96,7 +96,7 @@ holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the mas
 Guarded by `test_routing_only_goes_forward` (mutant checked: `<=` → `<` lets a same-mixer route
 through and the test fails). The same rule is PUBLISHED: `targetsOf` (`:636`) lists what a strip
 may feed — later strips in processing order, `master`, the output ports — as `strips[].targets`
-(`core/service/ServiceModel.cpp:207`); a front end offers exactly that list, and the test routes
+(`core/service/ServiceModel.cpp:210`); a front end offers exactly that list, and the test routes
 to every entry offered.
 
 ### DR-ENG-1 The engine renders a MixGraph through the DSP library's devices (R-MIX-1/5/6, R-DSP-1/5, R-RENDER-1)
@@ -180,7 +180,7 @@ it as `silent`.
 
 ### DR-MIX-8/9/10 Fed by, the matrix, the audit (R-MIX-8, R-MIX-9, R-MIX-10)
 `refreshModel` (`core/service/ServiceModel.cpp:78`) computes each strip's `clipCount`, `fromLanes`
-and `fromStrips`. `matrix print [--json]` (`matrixText`, `:428`): rows = strips in processing order,
+and `fromStrips`. `matrix print [--json]` (`matrixText`, `:431`): rows = strips in processing order,
 columns = the buses, master and output ports; `●` = the main output, `-6.0pre` = a send's dB and tap.
 `audit` (`:193`): unused strips, strips that reach no output port, single-input and empty buses,
 clips on silent strips, offline files, unknown device types and parameters, and any strip or the
@@ -292,7 +292,7 @@ latch are the UI's to draw from these numbers (U3).
 draws from `AppHooks::model()` and sends text lines through `AppHooks::dispatch` (`App::dispatch`,
 `app/App.cpp:180` — a refusal becomes a toast with the service's sentence). `linux_main.cpp` is the
 only OS code: GTK3, the frame clock, the pickers, the host functions, the service pumped every tick.
-The screen follows `AppModel::screen` and CROSS-FADES (260 ms, `App::render`, `app/App.cpp:303`).
+The screen follows `AppModel::screen` and CROSS-FADES (260 ms, `App::render`, `app/App.cpp:305`).
 `installSolarisAccent()` moves cosmo's accent slot to teal `#159387` before any widget exists
 (`app/Theme.h`); every neutral, radius, font and spacing token is cosmo's, aliased. `HomeScreen`
 (`app/widgets/HomeScreen.cpp`): the `solaris.` wordmark sized to fit, New/Open, Settings, recent-song
@@ -307,7 +307,7 @@ Ctrl+S save, Enter to the start, Ctrl+, settings. Every control's command line i
 ### DR-SET-2 The settings sheet (R-SET-1, amended)
 `SettingsSheet` (`app/widgets/SettingsSheet.cpp`) in cosmo's modal style: the scrim, the popover
 card, uppercase labels tracked +0.13 with a plain note, chips that size to their MEASURED text and
-wrap, a filled accent when chosen — the fill EASES over 200 ms whoever chose it (`advance`, `:149`) —
+wrap, a filled accent when chosen — the fill EASES over 200 ms whoever chose it (`advance`, `:151`) —
 the folder list with × per folder and "Add folder…", Done; 150 ms open / 120 ms close; Escape, Enter,
 Done and the scrim close it; the card scrolls when the window is short. Opening sends `devices list`
 first (`App::openSettings`, `app/App.cpp:199`). Every chip is `settings set …`, every folder control
@@ -338,7 +338,7 @@ eased 220 ms and anchored at the pointer (`:531`); the wheel scrolls, Shift+whee
 dragged follows the pointer exactly, snapped to 1/4 beat, between LANES only, and lands as `clip
 move <ac> --at <b> [--lane <ln>]` (`:468`) where it was let go. A click selects (the teal ring
 cross-fades 200 ms between clips); Delete/Backspace → `clip delete`, Ctrl+D → `clip duplicate`
-(`app/App.cpp:295`); a ruler click → `transport seek <b>`, snapped (`Timeline.cpp:488`). **The picture travels
+(`app/App.cpp:297`); a ruler click → `transport seek <b>`, snapped (`Timeline.cpp:488`). **The picture travels
 (§1):** the rows are Interstellar's `AnimatedRows` keyed by lane; each clip keeps an eased beat, row
 and opacity keyed by its id (`Timeline::advance`, `Timeline.cpp:231`) — it fades in when it arrives, fades out where it
 was when it goes (taking no input), eases 200 ms with its row when moved from a shell; the zebra
@@ -350,7 +350,7 @@ places everything where it is. Empty, it says what to do in words.
 slides 220 ms. Samples lists the folders from Settings; a folder clicked is `browse "<path>"`
 (`:216`) and shows its sub-folders and audio files (mono, the filename rule) under a row back up;
 with no folders it says so and a click opens Settings. Instruments lists `AppModel::deviceTypes`
-(the DSP registry, `core/service/ServiceModel.cpp:107`) — instruments, then effects. Song lists the
+(the DSP registry, `core/service/ServiceModel.cpp:110`) — instruments, then effects. Song lists the
 files the song plays. The list is `AnimatedRows` keyed by generation and content (`rebuild`, `:54`):
 a tab or folder changed starts a new generation, so the old list fades where it was scrolled while
 the new one fades in (`navigate`, `:96`); an inserted row fades in, a removed one out. A row is
@@ -363,7 +363,7 @@ lane, no `--lane` — a new lane; an effect → a notice that it goes on a strip
 places at the playhead.
 
 ### DR-UI-7 A strip's colour (R-UI-7)
-The model's `strips[].colour` is resolved by the service (`core/service/ServiceModel.cpp:179`): the
+The model's `strips[].colour` is resolved by the service (`core/service/ServiceModel.cpp:182`): the
 strip's own, else its id's number − 1 — never −1, and unchanged when other strips are added or
 deleted. Every front end draws it as is.
 
@@ -455,11 +455,11 @@ four bars), and binds the address to `=au_n`; `auto add|delete` (refused while r
 `auto point add|move|delete|shape` (values clamped to the range), `bind clear`; deleting a strip, a
 send or a device drops the bindings that drive them. `eval <address> [--at] [--explain]`
 (`:213`) compiles and evaluates with the engine's own function and prints each name it reads.
-`refreshModel` (`core/service/ServiceModel.cpp:269`) publishes `bindings[]` (reads, ok, problem),
+`refreshModel` (`core/service/ServiceModel.cpp:272`) publishes `bindings[]` (reads, ok, problem),
 `automations[]` (points, usedBy), `params[].formula`, `strips[].gainFormula/panFormula`,
 `sends[].gainFormula`, `masterGainFormula` and `devices[].lastChanged`; `audit` (`:365`) names inert
 bindings and automations no formula reads. While playing, a binding or curve edit — or a `set` on an
-address a formula reads — swaps in a new engine (`core/service/ServiceTransport.cpp:197`).
+address a formula reads — swaps in a new engine (`core/service/ServiceTransport.cpp:239`).
 
 ### DR-EDM-1 Undo and redo (R-EDM-1)
 After every edit that LANDED, `dispatch` keeps the song as it was before it (`core/service/SolarisService.cpp:216`),
@@ -527,7 +527,7 @@ landing on another's place replaces it; `pattern quantize <pt> [--grid <b>] [--s
 (`:614`) moves every start to `k·grid`, odd `k` delayed by `swing·grid`, two notes landing together
 merging into the louder. Both are edits (undoable, all-or-nothing). The model gives a pattern the strip
 its first clip plays through and that strip's instrument (`patterns[].strip`, `.instrument`), and a
-device type its named keys (`deviceTypes[].noteNames`, `core/service/ServiceModel.cpp:110`) — the DSP
+device type its named keys (`deviceTypes[].noteNames`, `core/service/ServiceModel.cpp:113`) — the DSP
 registry's (REQ-device-6: the Drum Machine's ten pads, Kick = 36 …).
 **The window.** `PianoRoll` (`app/widgets/PianoRoll.cpp`) is the content of a `roll:<pt>` window
 (`WindowLayer::openRoll`, `app/widgets/FloatWindow.cpp:147`), opened by double-clicking a note clip
@@ -584,8 +584,8 @@ the DSP Compressor with Sidechain on detects on it (DSP REQ-fx-sidechain-1); sil
 it. A strip silenced by another's SOLO still keys (`keyLive`, `core/Compile.cpp:161`; `Engine.cpp:410`) and
 a key does not pull its source into a solo (`Compile.cpp:52`), so a soloed bass keeps its pump while the
 kick stays silent; a MUTED strip keys nothing (live, a mute in a song with keys swaps the engine,
-`core/service/ServiceTransport.cpp:227`). The audit names a key that no compressor with Sidechain on
-hears (`core/service/ServiceModel.cpp:415`). In the dock a key reads "key <target>" in the solo amber,
+`core/service/ServiceTransport.cpp:269`). The audit names a key that no compressor with Sidechain on
+hears (`core/service/ServiceModel.cpp:418`). In the dock a key reads "key <target>" in the solo amber,
 and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:968`).
 Measured (L2): a ghost kick (−120 dB fader, pre-fader key) through −30 dB at 4:1 dips a −6 dBFS bass
 6–22.5 dB 15–35 ms after each kick, back within 1 dB before the next; identical with the bass soloed;
@@ -627,10 +627,25 @@ refused on a type that plays none. Compile decodes it through the same cache as 
 device's description (`core/Compile.cpp:102`); the engine hands it in at build, never on the audio thread
 (`engine/Engine.cpp:49`); a change of sound is a structural live update (an engine swap). The model
 gives `devices[].takesSample`, `.sample` and `deviceTypes[].takesSample`; the audit names a sampler with
-no sound or an unreadable one (`core/service/ServiceModel.cpp:394`). In the UI a sampler's window names
+no sound or an unreadable one (`core/service/ServiceModel.cpp:397`). In the UI a sampler's window names
 its sound where others name their type (`DevicePanel::sampleText`, `app/widgets/DevicePanel.cpp:391`),
 and a browser sample dragged over it lights the window (eased) and drops as ONE `set <dv>.sample=`
 (`WindowLayer::samplerAt`, `app/widgets/FloatWindow.cpp:239`; `app/widgets/ProjectScreen.cpp:84`).
 Measured (L2): at the root the render IS the decoded file sample for sample (a mutant whose engine skips
 `setSample` fails it), an octave up is 2 kHz and over in half the time.
+
+### DR-EDM-9 Audition in the browser (R-EDM-9, R-BROWSE-2)
+`audition <file>` / `audition stop` — a machine command (not an edit: no undo, the song stays saved),
+with or without a song open. The file is decoded through the clips' cache and played by an
+`Auditioner` (`core/Auditioner.cpp:40`) — its OWN output stream and thread, so a preview is heard
+whether the song plays or not, at the `auditionLevel` setting (dB, default −6), to its end, then it
+stops itself; it never allocates on its thread and is never in a render (a render does not know it).
+`auditionCommand` (`core/service/ServiceTransport.cpp:88`) refuses a file it cannot read naming it; the
+service's `pump` (`:62`) carries its progress into `audition.{file, playing, progress}` and announces its
+end (`audition.changed … playing=0`); the model keeps it across refreshes, and the App re-binds while it
+plays and once when it ends (`app/App.cpp:223`). In the browser a click on a sample hears it, a click on
+the one being heard stops it (`app/widgets/Browser.cpp:246`); its row fills as it plays with an accent
+bar along its foot, keyed by the file and eased in and out (`:165`, `:312`) — a double-click still places
+it. Settings › Playback has PREVIEW LEVEL. Measured (L2): the live stream carries the decoded file at
+the audition level, sample for sample; it ends itself, said.
 

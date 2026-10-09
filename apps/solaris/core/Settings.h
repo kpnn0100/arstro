@@ -26,6 +26,7 @@ namespace solaris
         // R-SET-3: the rest of the sheet
         bool metronome = false;                 // clicks while playing (R-TIME-4), never in a render
         double metronomeLevel = -6.0;           // dB, −40 … 6
+        double auditionLevel = -6.0;            // dB, −40 … 6: a sample previewed from the browser (R-EDM-9)
         double newBpm = 120.0;                  // what `project new` starts at without --bpm
         std::string newSig = "4/4";             // … and without --sig
         bool reducedMotion = false;             // the UI's tweens collapse (design rule §2.6), with the OS's

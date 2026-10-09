@@ -74,7 +74,7 @@ namespace solaris
             case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
             case K::DevicesList: case K::Browse: case K::RecentsRemove:
             case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait:
-            case K::None:
+            case K::Audition: case K::None:
                 return false;
             default:
                 return true;
@@ -179,7 +179,7 @@ namespace solaris
         case K::DevicesList: case K::Browse: case K::RecentsRemove:
             ok = machineCommand(c, err);
             break;
-        case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait:
+        case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait: case K::Audition:
             ok = transportCommand(c, err);
             break;
         case K::None:

@@ -992,6 +992,38 @@ static void test_the_metronome_clicks_live_and_never_in_a_render()
     pass("metronome: a click on every beat's exact sample while playing, the bar's first another pad, off at once; never in a render (R-TIME-4, R-EDM-2)");
 }
 
+static void test_audition_plays_a_sample_outside_the_song()
+{
+    Run r;
+    r.ok("project new " + freshSong("audition") + " --bpm 120");
+    r.ok("settings set auditionLevel=-6");
+    r.events.clear();
+    // the browser's preview: heard now, outside the song (R-EDM-9) — not an edit
+    r.ok("audition kick.wav");
+    assert(r.svc.model().audition.playing && contains(r.events.back(), "[evt] audition.changed") && contains(r.events.back(), "playing=1"));
+    assert(!r.svc.model().dirty);                                    // not an edit: the song stays saved
+    waitFrames(r, 24000);                                             // the fake decoder: half a second at 48 kHz
+    const auto &live = r.fake.capture->sink;
+    const double g = std::pow(10.0, -6.0 / 20.0);
+    bool exact = true;
+    for (int i = 0; i < 24000; ++i)
+    {
+        const float x = (float)(0.5 * std::sin(2 * M_PI * 1000.0 * i / 48000));
+        exact &= live[(size_t)(2 * i)] == (float)(g * x) && live[(size_t)(2 * i + 1)] == (float)(g * x);
+    }
+    assert(exact);
+    // to its end it stops itself: said in the model and the stream
+    r.ok("wait 0.05");
+    assert(!r.svc.model().audition.playing && r.svc.model().audition.progress == 1.0);
+    bool ended = false;
+    for (const auto &e : r.events) ended |= contains(e, "[evt] audition.changed") && contains(e, "playing=0");
+    assert(ended);
+    // refusals name why; stop with nothing playing is fine
+    assert(contains(r.no("audition missing.wav"), "cannot read missing.wav"));
+    r.ok("audition stop");
+    pass("audition: a sample heard now through the device at the audition level, sample for sample, outside the song (not an edit); it stops itself at its end, said (R-EDM-9)");
+}
+
 static void test_edits_while_playing_are_heard()
 {
     Run r;
@@ -1081,6 +1113,7 @@ int main()
     test_the_machine_settings_folders_devices_and_recents();
     test_live_playback_is_the_offline_render();
     test_the_metronome_clicks_live_and_never_in_a_render();
+    test_audition_plays_a_sample_outside_the_song();
     test_edits_while_playing_are_heard();
     test_loop_and_seek();
     test_a_refusal_is_an_event_and_lands_in_lastError();

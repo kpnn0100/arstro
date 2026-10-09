@@ -21,6 +21,7 @@
 #include "Event.h"
 #include "MixGraph.h"
 #include "Player.h"
+#include "Auditioner.h"
 #include "Project.h"
 #include "Settings.h"
 #include <functional>
@@ -65,6 +66,7 @@ namespace solaris
         /** Bring the transport and meters into the model, free engines the player handed back. A
          *  host calls it on a timer while playing; `wait` calls it; it emits nothing. */
         void pump();
+        bool auditionCommand(const Command &c, std::string &err);
         const std::string &output() const { return mOutput; }
         void subscribe(std::function<void(const Event &)> sink) { mSinks.push_back(std::move(sink)); }
         /** The open document (null on Home) — for tests and the host's title bar. */
@@ -135,6 +137,7 @@ namespace solaris
         std::vector<DeviceInfo> mDevices;
         BrowserModel mBrowser;
         std::unique_ptr<Player> mPlayer;
+        std::unique_ptr<Auditioner> mAudition;   // R-EDM-9: the browser's preview, its own stream
         std::vector<std::string> mLiveStrips;                         // engine strip index → strip id
         std::map<std::string, std::pair<int, int>> mLiveDevices;      // device id → (strip index, rack index)
         double mPosition = 0, mLoopFrom = 0, mLoopTo = 0;             // beats

@@ -33,7 +33,7 @@ namespace solaris_ui
     class SettingsSheet : public artboard::Segment
     {
     public:
-        enum Row { kOutput = 0, kInput, kRate, kBuffer, kMetronome, kClickLevel, kNewBpm, kNewSig, kMotion, kRows };
+        enum Row { kOutput = 0, kInput, kRate, kBuffer, kMetronome, kClickLevel, kPreviewLevel, kNewBpm, kNewSig, kMotion, kRows };
         static constexpr double kCardW = 520.0;
         static constexpr double kPad = 24.0;
         static constexpr double kChipH = 26.0;

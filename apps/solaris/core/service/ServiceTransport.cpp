@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <thread>
 
 namespace arstro
@@ -20,6 +21,7 @@ namespace arstro
 namespace solaris
 {
     using K = Command::Kind;
+    namespace fs = std::filesystem;
 
     SolarisService::~SolarisService() { stopPlayer(); }
 
@@ -55,6 +57,16 @@ namespace solaris
 
     void SolarisService::pump()
     {
+        if (mAudition)
+        {
+            // the preview runs on its own: its progress, and its end when it reaches it
+            mModel.audition.progress = mAudition->progress();
+            if (mModel.audition.playing && !mAudition->playing())
+            {
+                mModel.audition.playing = false;
+                emit(Event(Event::Kind::AuditionChanged).with("file", mModel.audition.file).with("playing", "0"));
+            }
+        }
         if (!mPlayer) return;
         mPlayer->collect();
         TransportModel &t = mModel.transport;
@@ -73,8 +85,38 @@ namespace solaris
                 }
     }
 
+    bool SolarisService::auditionCommand(const Command &c, std::string &err)
+    {
+        // R-EDM-9: a sample heard now, outside the song — not an edit, never in a render
+        const std::string a = c.arg(0);
+        if (a == "stop")
+        {
+            if (mAudition) mAudition->stop();
+            const bool was = mModel.audition.playing;
+            mModel.audition.playing = false;
+            if (was) emit(Event(Event::Kind::AuditionChanged).with("file", mModel.audition.file).with("playing", "0"));
+            return true;
+        }
+        std::string path = a;
+        if (!fs::path(path).is_absolute() && !mPath.empty() && fs::exists(resolvePath(path))) path = resolvePath(path);
+        auto pcm = pcmFor(path);
+        if (!pcm) { err = mHost.decodeAudio ? "cannot read " + a + " as audio" : "this build has no audio decoder"; return false; }
+        auto out = mHost.audioOut ? mHost.audioOut() : nullptr;
+        if (!out || !out->open(mSettings.output, mPcmRate, 2, mSettings.bufferSize, err))
+        {
+            if (err.empty()) err = "cannot open the output device";
+            return false;
+        }
+        if (!mAudition) mAudition = std::make_unique<Auditioner>();
+        mAudition->start(std::move(out), pcm, path, engine::dbToLinear(mSettings.auditionLevel), mSettings.bufferSize);
+        mModel.audition = AuditionModel{path, true, 0.0};
+        emit(Event(Event::Kind::AuditionChanged).with("file", path).with("playing", "1"));
+        return true;
+    }
+
     bool SolarisService::transportCommand(const Command &c, std::string &err)
     {
+        if (c.kind == K::Audition) return auditionCommand(c, err);
         auto announce = [this]() {
             pump();
             const bool playing = mPlayer && mPlayer->running();

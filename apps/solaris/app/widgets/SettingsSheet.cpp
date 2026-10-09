@@ -23,14 +23,14 @@ namespace solaris_ui
         Color fade(Color c, double a) { c.a *= a; return c; }
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
         const char *kLabels[SettingsSheet::kRows] = {"OUTPUT", "INPUT", "SAMPLE RATE", "BUFFER", "METRONOME", "CLICK LEVEL",
-                                                     "TEMPO", "METER", "REDUCED MOTION"};
+                                                     "PREVIEW LEVEL", "TEMPO", "METER", "REDUCED MOTION"};
         const char *kKeys[SettingsSheet::kRows] = {"output", "input", "sampleRate", "bufferSize", "metronome", "metronomeLevel",
-                                                   "newBpm", "newSig", "reducedMotion"};
+                                                   "auditionLevel", "newBpm", "newSig", "reducedMotion"};
         // the sheet's sections (R-SET-3), in order; the sample folders sit before Interface
         struct Section { const char *title; std::vector<int> rows; bool folders; };
         const Section kSections[] = {
             {"Audio", {SettingsSheet::kOutput, SettingsSheet::kInput, SettingsSheet::kRate, SettingsSheet::kBuffer}, false},
-            {"Playback", {SettingsSheet::kMetronome, SettingsSheet::kClickLevel}, false},
+            {"Playback", {SettingsSheet::kMetronome, SettingsSheet::kClickLevel, SettingsSheet::kPreviewLevel}, false},
             {"New songs", {SettingsSheet::kNewBpm, SettingsSheet::kNewSig}, false},
             {"Sample folders", {}, true},
             {"Interface", {SettingsSheet::kMotion}, false},
@@ -70,6 +70,7 @@ namespace solaris_ui
         for (int b : kBuffers) mChips[kBuffer].push_back(Chip{std::to_string(b), std::to_string(b)});
         mChips[kMetronome] = {Chip{"Off", "off"}, Chip{"On", "on"}};
         for (int d : {-18, -12, -6, 0}) mChips[kClickLevel].push_back(Chip{std::to_string(d) + " dB", std::to_string(d)});
+        for (int d : {-18, -12, -6, 0}) mChips[kPreviewLevel].push_back(Chip{std::to_string(d) + " dB", std::to_string(d)});
         for (int b : {100, 120, 124, 126, 128, 140, 150, 174}) mChips[kNewBpm].push_back(Chip{std::to_string(b), std::to_string(b)});
         for (const char *m : {"4/4", "3/4", "6/8", "7/8"}) mChips[kNewSig].push_back(Chip{m, m});
         mChips[kMotion] = {Chip{"Off", "off"}, Chip{"On", "on"}};
@@ -112,6 +113,7 @@ namespace solaris_ui
         case kBuffer: return std::to_string(mBuffer);
         case kMetronome: return mSettings.metronome ? "on" : "off";
         case kClickLevel: return num(mSettings.metronomeLevel);
+        case kPreviewLevel: return num(mSettings.auditionLevel);
         case kNewBpm: return num(mSettings.newBpm);
         case kNewSig: return mSettings.newSig;
         case kMotion: return mSettings.reducedMotion ? "on" : "off";

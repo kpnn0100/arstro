@@ -17,6 +17,7 @@ namespace solaris
         for (const auto &p : ports) o << "port." << p.first << " = " << p.second << "\n";
         o << "metronome = " << (metronome ? "on" : "off") << "\n";
         o << "metronomeLevel = " << metronomeLevel << "\n";
+        o << "auditionLevel = " << auditionLevel << "\n";
         o << "newBpm = " << newBpm << "\n";
         o << "newSig = " << newSig << "\n";
         o << "reducedMotion = " << (reducedMotion ? "on" : "off") << "\n";
@@ -46,6 +47,7 @@ namespace solaris
             else if (k.rfind("port.", 0) == 0 && k.size() > 5) s.ports.emplace_back(k.substr(5), v);
             else if (k == "metronome") s.metronome = v == "on";
             else if (k == "metronomeLevel") { const double d = std::atof(v.c_str()); if (d >= -40 && d <= 6) s.metronomeLevel = d; }
+            else if (k == "auditionLevel") { const double d = std::atof(v.c_str()); if (d >= -40 && d <= 6) s.auditionLevel = d; }
             else if (k == "newBpm") { const double b = std::atof(v.c_str()); if (b >= 20 && b <= 999) s.newBpm = b; }
             else if (k == "newSig" && !v.empty()) s.newSig = v;
             else if (k == "reducedMotion") s.reducedMotion = v == "on";

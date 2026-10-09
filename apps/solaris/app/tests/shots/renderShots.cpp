@@ -11,6 +11,8 @@
  */
 #include "../Rig.h"
 #include "../../widgets/PianoRoll.h"
+#include <thread>
+#include <chrono>
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -269,6 +271,20 @@ namespace
                  wl.openRoll("pt_1");
                  wl.roll("pt_1")->setMode(arstro::solaris_ui::PianoRoll::Steps);
                  r.settle();
+             }},
+            {"browser-audition",   // R-EDM-9: a sample being heard, its row filling as it plays
+             [](sltest::Rig &r) {
+                 r.cmd("folder add /music/Samples");
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 auto &b = r.app->project().browser();
+                 r.click(world(b, b.rowRect(0)));
+                 r.settle();
+                 for (int i = 0; i < b.rowCount(); ++i)
+                     if (b.row(i).label == "808 kick.wav") { r.click(world(b, b.rowRect(i))); break; }
+                 std::this_thread::sleep_for(std::chrono::milliseconds(900)); // the preview runs on the clock: let it get going
+                 r.move(10.0, 600.0);                                          // the pointer away: the fill, not the hover
+                 r.pump(400.0);
              }},
             {"sampler-window",   // R-EDM-8: a sampler names its sound; its parameters from the registry
              [](sltest::Rig &r) {

@@ -55,7 +55,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `audit` | The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping. | R-MIX-10 |
 | `state print [--json] [--stable]` | The whole AppModel; --stable omits what changes with time. | R-SVC-2 |
 | `api [--json] [--md]` | This document: every command, event, model field and device parameter. | R-API-1 |
-| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on\|off), metronomeLevel (dB), newBpm / newSig (what a new song starts at), reducedMotion (on\|off). Saved at once. | R-SET-1 |
+| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on\|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on\|off). Saved at once. | R-SET-1 |
 | `settings print [--json]` | The machine's settings. | R-SET-1 |
 | `folder add <path>` | Add a sample folder to the browser's quick-access list. | R-SET-1 |
 | `folder remove <path>` | Remove a sample folder from the list (the folder itself is untouched). | R-SET-1 |
@@ -67,6 +67,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `transport stop` | Stop; the transport stays where it was heard. | R-TIME-4 |
 | `transport seek <beats>` | Move the transport (playing or not). | R-TIME-4 |
 | `transport loop <from\|off> [to]` | Loop between two beats while playing; `off` ends it. | R-TIME-4 |
+| `audition <file\|stop>` | Hear a sample now, outside the song (the browser's preview): through the output device at the audition level, to its end; `stop` ends it. Not an edit, never in a render. | R-EDM-9 |
 | `wait <seconds>` | Let time pass (playback goes on, the model's transport and meters update) — for scripts that listen. | R-PLAY-3 |
 
 ## Addresses (`set` / `get`)
@@ -104,6 +105,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `browse.changed` | path, entries | The browser now lists this folder. |
 | `recents.changed` | count | Home's recent songs changed. |
 | `transport.changed` | playing, position, loop | Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`. |
+| `audition.changed` | file, playing | A sample previewed from the browser started (playing 1) or ended — stopped, or to its end (playing 0). |
 
 ## Model (`state print --json`)
 
@@ -258,6 +260,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.ports` | string[] | <port>=<device>:<channel> on this machine |
 | `settings.metronome` | bool | clicks while playing (R-TIME-4), never in a render |
 | `settings.metronomeLevel` | number | dB |
+| `settings.auditionLevel` | number | dB: a sample previewed from the browser (R-EDM-9) |
 | `settings.newBpm` | number | a new song's tempo without --bpm |
 | `settings.newSig` | string | a new song's meter without --sig |
 | `settings.reducedMotion` | bool | the UI's tweens collapse (with the OS's own setting) |
@@ -275,6 +278,10 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.latencyMs` | number | the clock device's *(not in `--stable`)* |
 | `transport.device` | string | the clock device ('' = the system default) |
 | `transport.masterPeak` | number[] | L/R peaks of the last played block *(not in `--stable`)* |
+| `audition` | object | a sample heard from the browser, outside the song (R-EDM-9) |
+| `audition.file` | string | the file previewed ('' = none) |
+| `audition.playing` | bool |  |
+| `audition.progress` | number | 0 … 1 of the file handed to the device *(not in `--stable`)* |
 | `deviceTypes` | object[] | the DSP registry: every instrument and effect a strip can host (R-BROWSE-1) |
 | `deviceTypes[].name` | string | the registry type, what `device add --type` and `--instrument` take |
 | `deviceTypes[].label` | string |  |

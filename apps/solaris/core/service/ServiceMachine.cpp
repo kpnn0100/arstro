@@ -91,10 +91,10 @@ namespace solaris
                     if (v != "on" && v != "off") { err = k + " is on or off"; return false; }
                     (k == "metronome" ? next.metronome : next.reducedMotion) = v == "on";
                 }
-                else if (k == "metronomeLevel")
+                else if (k == "metronomeLevel" || k == "auditionLevel")
                 {
-                    if (!parseNumber(v, x) || x < -40 || x > 6) { err = "metronomeLevel must be dB from -40 to 6"; return false; }
-                    next.metronomeLevel = x;
+                    if (!parseNumber(v, x) || x < -40 || x > 6) { err = k + " must be dB from -40 to 6"; return false; }
+                    (k == "metronomeLevel" ? next.metronomeLevel : next.auditionLevel) = x;
                 }
                 else if (k == "newBpm")
                 {
@@ -120,9 +120,9 @@ namespace solaris
                 else
                 {
                     err = "no setting `" + k + "`";
-                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "newBpm", "newSig", "reducedMotion"});
+                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion"});
                     err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>, metronome, "
-                                                      "metronomeLevel, newBpm, newSig, reducedMotion)")
+                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion)")
                                         : " (did you mean: " + near[0] + "?)";
                     return false;
                 }
@@ -144,7 +144,7 @@ namespace solaris
                 mOutput = Json::object().set("sampleRate", mSettings.sampleRate).set("bufferSize", mSettings.bufferSize)
                               .set("output", mSettings.output).set("input", mSettings.input)
                               .set("folders", folders).set("ports", ports).set("metronome", mSettings.metronome)
-                              .set("metronomeLevel", mSettings.metronomeLevel).set("newBpm", mSettings.newBpm)
+                              .set("metronomeLevel", mSettings.metronomeLevel).set("auditionLevel", mSettings.auditionLevel).set("newBpm", mSettings.newBpm)
                               .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion).dump();
             }
             return true;
