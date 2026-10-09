@@ -17,20 +17,10 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► C — the 2026-10-09 second brief** (user request; run as up to four sub-agents in worktrees, merged
-here one task per commit):
-- **C1** the grid follows the zoom; the ruler seeks on it, unsnapped at the deepest zoom (R-UI-10, R-TIME-5).
-- **C2** bezier automation (Interstellar's model, cosmo's handles) and the automation's window on a
-  double-click (R-AUTO-10, R-AUTO-11).
-- **C3** the mixer's numbers bound from the dock, live values published; IDs shown and copied
-  (R-MIX-16, R-UI-11).
-- **C4a** agent-sized composition in the CLI and service (R-SVC-8 as detailed by the audit).
-- **C4b** the faces: the control channel + `attach`, the equivalence test, the NTWB web face (R-SVC-5…7).
-- **C5** the goal: a whole song made with `solaris-cc` alone, rendered and measured (R-SVC-9).
-- **C6** the audit's fixes: latency compensation (R-MIX-17), forward = later in processing order
-  (R-MIX-4 amended), `strip move --order` renumbers, `matrix print` shows every target, recents
-  absolute, `lane move`, the docs that disagree with the code (audit 2026-10-09).
-Then B13 (the MIDI keyboard) as before.
+**► B13 — the MIDI keyboard** (R-EDM-10), then R-EDM-11…20 one task each (B13+ below). B13+ are
+Claude's own EDM suggestions from the first brief — check the user still wants them before a long run.
+The second brief (C1–C6, 2026-10-09) is built; T2 and T3 are small and may go first.
+
 ---
 
 ## The build, in order
@@ -205,7 +195,16 @@ umbrella's pointer — `arstro.rule` §7).
       formula delay, kick-keyed sidechains, bezier filter automation, limiter; `solaris_demo_canon`
       regenerates the script, runs it and measures the render (kick within 1 sample on 64 beats, line A
       within 8.4 cents, peak −0.80 dBFS). 2 mutants caught. Found D-2, D-3.
-- [ ] **C6** The audit's fixes (R-MIX-17 latency, R-MIX-4 amended, strip order, matrix, recents, lanes, docs).
+- [x] **C6** The audit's fixes (R-MIX-17 latency, R-MIX-4 amended, strip order, matrix, recents, lanes, docs).
+      — DR-MIX-17, DR-MIX-4, DR-LANE-1 (`ee7eb4c`, a sub-agent; DSP `b611e4a` REQ-device-8
+      `Device::latency()`): the engine delays every path to meet the latest at each strip, bus, key and
+      port, sized at build; the render trims `outputLatency()`; the player's position subtracts it.
+      `feedsForward` = later in processing order for outputs, sends and keys (a new bus on Buses goes
+      before Main and feeds it); `strip move --order` renumbers; `matrix.columns` published and drawn;
+      recents absolute; `lane move`; Song › Quantize Clip; `render --out` required in the grammar;
+      `--stems all`; docs made honest. 8 mutants caught. Merged over C2–C5: two tests updated to the
+      amended rules (a new bus feeds Main; recents name their own folder). The canon re-rendered: the
+      mix was 96 samples behind its kick stem, now 0.
 - [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.
 
 ### T — tasks found on the way

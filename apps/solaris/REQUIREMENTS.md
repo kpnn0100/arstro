@@ -109,7 +109,7 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
 
 ---
 
-## R-MIX — the mixer: every source has its own strip — ✅ IMPLEMENTED (1–11 headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; drawn and played with: DR-UI-8; 12 the fold: DR-UI-8; 13/14 the line added, sources relinked: DR-MIX-13; 15 the sidechain: DR-MIX-15; 8's linked selection with U4) — 16 ✅ (the mixer's numbers bound, DR-MIX-16)
+## R-MIX — the mixer: every source has its own strip — ✅ IMPLEMENTED (1–11 headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; drawn and played with: DR-UI-8; 12 the fold: DR-UI-8; 13/14 the line added, sources relinked: DR-MIX-13; 15 the sidechain: DR-MIX-15; 8's linked selection with U4) — 16 ✅ (the mixer's numbers bound, DR-MIX-16) — 17 ✅ (latency compensated, DR-MIX-17); 4 amended ✅ (forward = later in processing order, DR-MIX-4)
 
 The user's model (2026-10-08): *"sample got its own line by default; we can add multiple mixers as
 the user wants their workspace organised; the 1st mixer stores the samples, the 2nd receives from
@@ -192,7 +192,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   only faders a new song has would hide behind a click. The fold is the view's, not the song's: a
   fold is not saved and no command sets it, like zoom.)
 
-## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅: DR-CLIP-2/3 headless, DR-UI-3 drawn and dragged; R-LANE-2's view with U4)
+## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅: DR-CLIP-2/3 headless, DR-UI-3 drawn and dragged, DR-LANE-1 `lane move`; R-LANE-2's view with U4)
 
 - **R-LANE-1 A lane is a timeline row for organisation only** (FL Studio's playlist): it holds any
   clips, from any strips. Lanes are added, named, coloured, reordered and deleted (deleting a lane
