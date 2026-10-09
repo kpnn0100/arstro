@@ -218,6 +218,29 @@ namespace solaris
             changed("strip.moved", s->id);
             return true;
         }
+        case K::StripRelink:
+        {
+            // a source re-linked to another line: every clip of it, in one edit (R-MIX-14)
+            const Strip *from = p.strip(c.arg(0));
+            if (!from) { err = "no strip `" + c.arg(0) + "`"; return false; }
+            if (!c.has("to")) { err = "strip relink needs --to <strip>"; return false; }
+            const Strip *to = p.strip(c.flag("to"));
+            if (!to) { err = "no strip `" + c.flag("to") + "`"; return false; }
+            if (to->id == from->id) { err = "its clips already play through " + to->id; return false; }
+            if (to->kind != from->kind)
+            {
+                err = to->id + " (" + to->name + ") is " + (to->kind == "bus" ? "a bus — a bus plays no clips" : "an " + to->kind + " strip") +
+                      "; " + from->id + "'s clips need " + (from->kind == "audio" ? "an audio" : "an instrument") + " strip";
+                return false;
+            }
+            int moved = 0;
+            for (auto &cl : p.clips)
+                if (cl.track == from->id) { cl.track = to->id; ++moved; }
+            if (!moved) { err = from->id + " (" + from->name + ") has no clips to move"; return false; }
+            changed("strip.relinked", from->id);
+            mOutput = std::to_string(moved) + "\n";
+            return true;
+        }
         case K::Route:
         {
             Strip *s = p.strip(c.arg(0));

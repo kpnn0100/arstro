@@ -314,6 +314,15 @@ namespace solaris_ui
         return cardX("strip:" + id, x, w) ? Rect{x, bodyTop(), w, bodyH()} : Rect{};
     }
 
+    Rect MixerDock::addLineRect() const
+    {
+        const Page *pg = shownPage();
+        if (!pg || onMatrix() || mTab >= (int)mMixers.size()) return Rect{};
+        double x = -mScrollX.value();
+        for (const auto &c : pg->cards) x += cardWidth(c); // after the LIVE cards: it slides as they grow and shrink
+        return addLineAt(x, bodyTop());
+    }
+
     Rect MixerDock::faderRect(const std::string &id) const
     {
         const Rect c = cardRect(id);
@@ -455,6 +464,7 @@ namespace solaris_ui
         double content = 0.0;
         if (const Page *pg = shownPage())
             for (const auto &c : pg->cards) content += cardWidth(c);
+        if (!onMatrix()) content += kAddLineW;
         mScrollX.setExtent(0.0, stripsRight(), content);
         mScrollY.setExtent(kTabsH, std::max(0.0, H - kTabsH), bodyH());
         // the matrix's extents
@@ -681,6 +691,7 @@ namespace solaris_ui
             }
             cx += cw;
         }
+        if (addLineRect().contains(p)) h.part = Part::AddLine;
         return h;
     }
 
@@ -693,6 +704,23 @@ namespace solaris_ui
         for (const auto &t : s->targets) // exactly what the service says it may feed (R-MIX-4)
             items.push_back({labelOf(t) + (t == cur ? "  \xC2\xB7 now" : ""), [this, id, t] { send("route " + id + " --to " + t); }});
         onMenu(items, world);
+    }
+
+    void MixerDock::openAddLine(Point world)
+    {
+        // a line on THIS mixer: an audio line, a bus, or any instrument the registry has — one `strip add` each
+        if (!onMenu || mTab >= (int)mMixers.size()) return;
+        const std::string mx = mMixers[(size_t)mTab].id;
+        std::vector<cosmo_v2::ContextMenu::Item> items = {
+            {"Audio line", [this, mx] { send("strip add --kind audio --mixer " + mx); }},
+            {"Bus", [this, mx] { send("strip add --kind bus --mixer " + mx); }}};
+        for (const auto &t : mModel.deviceTypes)
+            if (t.kind == "instrument")
+            {
+                const std::string type = t.name;
+                items.push_back({t.label, [this, mx, type] { send("strip add --kind instrument --instrument " + type + " --mixer " + mx); }});
+            }
+        onMenu(std::move(items), world);
     }
 
     void MixerDock::openAddEffect(const std::string &id, Point world)
@@ -821,6 +849,7 @@ namespace solaris_ui
             {
             case Part::Tab: setTab(h.index); break;
             case Part::AddMixer: send("mixer add"); break;
+            case Part::AddLine: openAddLine(world); break;
             case Part::ToggleDock: if (onToggle) onToggle(); break;
             case Part::Mute:
                 if (const auto *s = strip(h.id)) send("set " + h.id + ".mute=" + (s->mute ? "false" : "true"));
@@ -912,13 +941,26 @@ namespace solaris_ui
             }
             else if (h.part != Part::None && h.part != Part::Fold && h.id != "master" && strip(h.id) && onMenu)
             {
-                const std::string id = h.id, name = strip(h.id)->name;
+                const solaris::StripModel &s = *strip(h.id);
+                const std::string id = s.id, name = s.name;
                 const Point world = g.pos;
-                onMenu({{"Rename\xE2\x80\xA6", [this, id, name, world] {
-                             if (onRename) onRename(name, world, [this, id](const std::string &n) { send("set " + id + ".name=" + q(n)); });
-                         }},
-                        {"Delete strip", [this, id] { send("strip delete " + id); }}},
-                       world);
+                std::vector<cosmo_v2::ContextMenu::Item> items = {
+                    {"Rename\xE2\x80\xA6", [this, id, name, world] {
+                         if (onRename) onRename(name, world, [this, id](const std::string &n) { send("set " + id + ".name=" + q(n)); });
+                     }}};
+                // its clips re-linked to another line of its kind, all in one (R-MIX-14)
+                std::vector<cosmo_v2::ContextMenu::Item> to;
+                if (s.clipCount > 0)
+                    for (const auto &o : mModel.strips)
+                        if (o.id != id && o.kind == s.kind)
+                        {
+                            const std::string oid = o.id;
+                            to.push_back({o.name, [this, id, oid] { send("strip relink " + id + " --to " + oid); }});
+                        }
+                if (!to.empty())
+                    items.push_back({"Move its clips to \xE2\x96\xB8", [this, to, world] { if (onMenu) onMenu(to, world); }});
+                items.push_back({"Delete strip", [this, id] { send("strip delete " + id); }});
+                onMenu(std::move(items), world);
             }
             return true;
         }
@@ -1159,13 +1201,25 @@ namespace solaris_ui
             }
             cx += cw;
         }
+        // "+ Line": after the last card, sliding with the cards as they grow and shrink (R-MIX-13)
+        const Rect add = addLineAt(cx, bodyTop());
+        if (add.x < stripsRight() && alpha > 0.001)
+        {
+            const double hv = shown ? mHover.amount(hoverId((int)Part::AddLine, ">", -1)) : 0.0;
+            drawRoundedRect(t, add, radius::control(), Paint::stroked(fade(palette::whiteAlpha(0.14 + 0.2 * hv), alpha), 1.0));
+            t.setFill(fade(lerpColor(palette::secondaryForeground(), palette::foreground(), hv), alpha));
+            t.drawText("+ Line", add.x + (add.w - t.measureText("+ Line", 10.0, font::sans())) * 0.5, textfit::baseline(add.y + add.h * 0.5, 10.0), 10.0,
+                       font::sans());
+        }
         if (pg.cards.empty() && alpha > 0.001)
         {
+            const double tx = add.right() + space::padX() * 2.0;
             t.setFill(fade(palette::mutedForeground(), alpha));
-            t.drawText("No strips on this mixer.", space::padX() * 2.0, kTabsH + 34.0, 11.0, font::sans());
+            t.drawText("No strips on this mixer.", tx, kTabsH + 34.0, 11.0, font::sans());
             t.setFill(fade(palette::mutedForeground(), 0.75 * alpha));
-            t.drawText(textfit::ellipsize(t, "A strip moved to this mixer, or a bus added to it, shows up here.", stripsRight() - 40.0, 10.0, font::sans()),
-                       space::padX() * 2.0, kTabsH + 52.0, 10.0, font::sans());
+            t.drawText(textfit::ellipsize(t, "\"+ Line\" adds one here; a strip moved to this mixer shows up too.", std::max(0.0, stripsRight() - tx - 13.0), 10.0,
+                                          font::sans()),
+                       tx, kTabsH + 52.0, 10.0, font::sans());
         }
         t.restore();
     }

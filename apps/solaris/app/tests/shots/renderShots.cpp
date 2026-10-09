@@ -270,6 +270,26 @@ namespace
                  wl.roll("pt_1")->setMode(arstro::solaris_ui::PianoRoll::Steps);
                  r.settle();
              }},
+            {"mixer-add-line",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 auto &d = r.app->project().dock();
+                 r.click(world(d, d.addLineRect()));
+                 r.settle();
+             }},
+            {"clip-play-through",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("strip add --kind instrument --instrument synth --name Lead");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect c = world(tl, tl.clipRect(r.svc->model().clips[1].id)); // Bass's clip
+                 r.click(c.x + 30.0, c.y + c.h * 0.5, 2);
+                 r.settle();
+                 r.click(r.app->menu().itemRect(0)); // Play through ▸
+                 r.settle();
+             }},
             {"dock-folded",
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

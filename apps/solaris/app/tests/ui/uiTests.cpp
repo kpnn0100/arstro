@@ -830,6 +830,70 @@ static void test_a_kits_roll_names_its_pads()
     pass("A kit's roll: opened from its window's Piano Roll; keys named by its pads (registry note names); Steps a row per pad");
 }
 
+static void test_a_line_added_and_sources_relinked()
+{
+    sltest::Rig r("ui-lines", 1280, 800);
+    r.cmd("project new " + r.song("Lines") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");        // ch_2
+    r.settle();
+    auto &d = r.app->project().dock();
+    auto &menu = r.app->menu();
+    const std::string mx = r.svc->model().mixers[0].id, ac = r.svc->model().clips[0].id;
+    // "+ Line" after the page's last card: a menu of an audio line, a bus and every instrument — one line each
+    const artboard::Rect add0 = world(d, d.addLineRect());
+    assert(add0.w > 0.0);
+    r.click(add0);
+    r.settle();
+    assert(menu.isOpen() && menu.item(0).label == "Audio line" && menu.item(1).label == "Bus");
+    int synth = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label == "Basic Synth") synth = i;
+    assert(synth >= 2);
+    r.click(menu.itemRect(synth));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "strip add --kind instrument --instrument synth --mixer " + mx));
+    std::string added;
+    for (const auto &st : r.svc->model().strips)
+        if (st.kind == "instrument" && st.id != "ch_2") added = st.id;
+    // the new card grows in, and "+ Line" slides along with it — caught between
+    const double w = d.cardRect(added).w, ax = world(d, d.addLineRect()).x;
+    assert(w > 0.0 && w < arstro::solaris_ui::MixerDock::kStripW - 0.5);
+    assert(ax > add0.x + 0.5 && ax < add0.x + arstro::solaris_ui::MixerDock::kStripW - 0.5);
+    r.settle();
+    assert(std::fabs(d.addLineRect().x - 6.5 - d.cardRect(added).right()) < 0.5); // right after the last card (two now feed Main: a group)
+    // a strip's menu: "Move its clips to ▸" — the lines of its kind — is ONE `strip relink`
+    const artboard::Rect card = world(d, d.cardRect("ch_2"));
+    r.click(card.x + 20.0, card.y + 16.0, 2);
+    r.settle();
+    int move = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label.rfind("Move its clips to", 0) == 0) move = i;
+    assert(menu.isOpen() && move >= 0);
+    r.click(menu.itemRect(move));
+    r.settle();
+    assert(menu.isOpen() && menu.itemCount() == 1);              // only the other instrument line
+    r.click(menu.itemRect(0));
+    r.settle();
+    assert(sentLine(r, "strip relink ch_2 --to " + added) && r.svc->model().clips[0].track == added);
+    // a clip's menu on the lanes: "Play through ▸" — the strips of its kind — is ONE `clip move --strip`
+    auto &tl = r.app->project().timeline();
+    const artboard::Rect clip = world(tl, tl.clipRect(ac));
+    r.click(clip.x + 12.0, cy(clip), 2);
+    r.settle();
+    assert(menu.isOpen() && menu.item(0).label.rfind("Play through", 0) == 0);
+    r.click(menu.itemRect(0));
+    r.settle();
+    int back = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label.rfind(r.svc->model().strips[1].name, 0) == 0 && menu.item(i).label.find("now") == std::string::npos) back = i;
+    assert(menu.itemCount() == 2 && back >= 0);
+    r.click(menu.itemRect(back));
+    r.settle();
+    assert(sentLine(r, "clip move " + ac + " --strip ch_2") && r.svc->model().clips[0].track == "ch_2");
+    pass("Lines: \"+ Line\" adds an audio line, a bus or any instrument to the page in one line, the card growing in and \"+ Line\" sliding along (eased); a strip's clips move to another line in one `strip relink`; a clip plays through another strip from its menu (R-MIX-13/14)");
+}
+
 static void test_ruler_seek_keys_and_selection()
 {
     sltest::Rig r("ui-ruler", 1280, 800);
@@ -877,6 +941,7 @@ int main()
     test_automation_rows_draw_and_edit_curves();
     test_piano_roll_edits_the_pattern();
     test_a_kits_roll_names_its_pads();
+    test_a_line_added_and_sources_relinked();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

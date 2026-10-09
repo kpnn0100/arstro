@@ -167,6 +167,8 @@ namespace solaris_ui
         double mAutoAt = 0, mAutoValue = 0;
         interstellar_v1::AnimatedRows<Row> mRowMotion; // what is drawn: eased, ghosts fading
         std::vector<ClipView> mClips;
+        struct StripRef { std::string id, name, kind; };
+        std::vector<StripRef> mStrips;                // what a clip may play through (its menu, R-MIX-14)
         std::vector<ClipLive> mLive;                  // by clip id, ghosts included
         std::map<std::string, Stripe> mStripes;       // by row key
         std::string mSong;                            // another song: everything placed afresh

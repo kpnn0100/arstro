@@ -338,6 +338,30 @@ static void test_note_move_and_quantize_edit_the_pattern()
     pass("note move: one line moves, resizes, re-velocities, refused onto a note; pattern quantize with swing merges collisions; the kit's keys are named (R-ROLL-2/4)");
 }
 
+static void test_strip_relink_moves_every_clip_in_one_edit()
+{
+    Run r;
+    r.ok("project new " + freshSong("relink"));
+    r.ok("clip add --instrument synth --at 0 --length 4");                 // ch_2
+    r.ok("clip duplicate " + r.svc.model().clips[0].id);                    // a second clip, linked
+    r.ok("strip add --kind instrument --instrument synth --name Lead");     // ch_3: the new line
+    r.ok("strip add --kind bus --name Verb");                               // ch_4
+    r.ok("strip add --kind audio --name Vox");                              // ch_5
+    assert(r.ok("strip relink ch_2 --to ch_3") == "2\n");
+    for (const auto &c : r.svc.model().clips) assert(c.track == "ch_3");
+    assert(r.svc.model().patterns[0].strip == "ch_3");
+    assert(contains(r.no("strip relink ch_3 --to ch_4"), "a bus plays no clips"));
+    assert(contains(r.no("strip relink ch_3 --to ch_5"), "need an instrument strip"));
+    assert(contains(r.no("strip relink ch_2 --to ch_3"), "has no clips to move"));
+    assert(contains(r.no("strip relink ch_3 --to ch_3"), "already play through"));
+    assert(contains(r.no("strip relink ch_3 --to ch_9"), "no strip `ch_9`"));
+    assert(contains(r.no("strip relink ch_3"), "needs --to"));
+    // ONE edit: one undo puts every clip back
+    assert(r.ok("undo") == "strip relink ch_2\n");
+    for (const auto &c : r.svc.model().clips) assert(c.track == "ch_2");
+    pass("strip relink: every clip of a strip to another line in one edit (one undo); refused onto a bus, across kinds, onto itself, with nothing to move (R-MIX-14)");
+}
+
 static void test_undo_and_redo_every_edit()
 {
     Run r;
@@ -871,6 +895,7 @@ int main()
     test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_changed();
     test_a_relative_src_is_found_in_the_songs_folder();
     test_note_move_and_quantize_edit_the_pattern();
+    test_strip_relink_moves_every_clip_in_one_edit();
     test_undo_and_redo_every_edit();
     test_formulas_bind_numbers_and_refuse_what_cannot_be_read();
     test_an_automated_gain_renders_its_curve();

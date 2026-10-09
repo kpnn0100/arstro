@@ -57,6 +57,7 @@ namespace solaris_ui
         static constexpr double kColHeadH = 39.0;    // space::u(12)
         static constexpr double kCellW = 61.75;      // space::u(19)
         static constexpr double kCellH = 26.0;       // space::u(8)
+        static constexpr double kAddLineW = 78.0;    // space::u(24): the "+ Line" slot after a page's last card
 
         MixerDock();
         void bind(const solaris::AppModel &m, bool interacting);
@@ -90,6 +91,7 @@ namespace solaris_ui
         artboard::Rect foldRect(const std::string &bus) const;
         double foldAmount(const std::string &bus) const;
         artboard::Rect cellRect(const std::string &from, const std::string &to) const; // the matrix
+        artboard::Rect addLineRect() const;          // the shown page's "+ Line" (R-MIX-13), where it is DRAWN
         double meterLive(const std::string &id, int channel) const;
 
 
@@ -147,7 +149,7 @@ namespace solaris_ui
             bool placed = false, gone = false;
         };
         struct Toggle { artboard::AnimatedProperty a{0.0}; bool last = false, placed = false; };
-        enum class Part { None, Tab, AddMixer, ToggleDock, Resize, Header, Chip, Send, Pan, Fader, Mute, Solo, Out, Fold, Cell };
+        enum class Part { None, Tab, AddMixer, ToggleDock, Resize, Header, Chip, Send, Pan, Fader, Mute, Solo, Out, Fold, Cell, AddLine };
         struct Hit
         {
             Part part = Part::None;
@@ -171,6 +173,8 @@ namespace solaris_ui
         Hit hitAt(const artboard::Point &p) const;
         void openOut(const std::string &id, artboard::Point world);
         void openAddEffect(const std::string &id, artboard::Point world);
+        void openAddLine(artboard::Point world);
+        static artboard::Rect addLineAt(double x, double top) { return artboard::Rect{x + 6.5, top + 6.5, kAddLineW - 13.0, 26.0}; }
         void openSend(const solaris::SendModel &sd, const std::string &from, artboard::Point world);
         bool send(const std::string &line) { return onCommand ? onCommand(line) : false; }
         Live &live(const std::string &id) { return mLive[id]; }

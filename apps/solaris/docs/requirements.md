@@ -38,10 +38,10 @@ renders finite) and `registry_eq_by_name` (a parameter written by name matches t
 0.000 dB).
 
 ### DR-INST-1 The Basic Synth (R-INST-1)
-`BasicSynth` (`src/instrument/BasicSynth.cpp:171` renders): per voice two `Oscillator`s (waveform,
+`BasicSynth` (`src/instrument/BasicSynth.cpp:177` renders): per voice two `Oscillator`s (waveform,
 octave, semitone, cents, level, unison + detune) and `Noise` → a `StateVariableFilter` swept per
-sample by its own ADSR and key tracking in octaves (`cutoffFor`, `:92`) → an amplitude ADSR. 16
-voices; the same note retriggers, else an idle voice, else the oldest is stolen (`noteOn`, `:99`).
+sample by its own ADSR and key tracking in octaves (`cutoffFor`, `:98`) → an amplitude ADSR. 16
+voices; the same note retriggers, else an idle voice, else the oldest is stolen (`noteOn`, `:105`).
 The oscillators' own ADSRs are gates, so the release tail is never cut. Registry type `synth`,
 parameters `osc1.*`, `osc2.*`, `noise`, `filter.*`, `fenv.*`, `amp.*`, `volume`, `velocity`.
 Guarded by the DSP repo's `instrumentTests.cpp` and `synth2_equal_temperament` (0.026 cents).
@@ -68,53 +68,53 @@ not built yet.
 `#amixer`, `#atrack` (strip), `#asend`, `#arack`/`#aeffect`, `#alane`, `#apattern`/`#note`,
 `#aclip` — and links nothing but the standard library: a device is its registry `type` plus its
 parameters as text, which the core checks against the DSP registry. `parseProject`
-(`model/Project.cpp:299`) reads the suite grammar: header `key = value`, node lines, indented
+(`model/Project.cpp:333`) reads the suite grammar: header `key = value`, node lines, indented
 continuation lines, whole-line and inline `;` comments (kept with the node they follow), unknown
 keys (kept in order) and unknown nodes (kept verbatim with their indented lines). The suite's
 inline `#note`s under an `#aclip` become a pattern of their own — the one normalisation, reported.
-`serializeProject` (`model/Project.cpp:523`) writes §10's canonical form: `canonicalNumber`
+`serializeProject` (`model/Project.cpp:616`) writes §10's canonical form: `canonicalNumber`
 (`model/Format.cpp:33`, shortest round-trip, always a point), `canonicalBeats` (`:52`, rounded to
 1/960 beat, fewest decimals that read back to the tick), seconds to the microsecond; defaults of
 optional fields are omitted. **Parse → serialize is a byte-exact fixed point** for canonical text.
-Refused, each naming what and where (`validateProject`, `model/Project.cpp:650`): duplicate ids,
+Refused, each naming what and where (`validateProject`, `model/Project.cpp:761`): duplicate ids,
 `master` as an id, unknown strip kinds, dangling references, an audio clip on a non-audio strip, a
 note clip on a non-instrument strip, `in ≥ out`, a clip before the song, two racks for one strip,
 an input port as a destination, a header that is not `app = solaris` / `timebase = beats` /
-`ppq = 960`. Repaired and counted (`Reader::num`, `:165`): a non-finite or unreadable number → the
+`ppq = 960`. Repaired and counted (`Reader::num`, `:182`): a non-finite or unreadable number → the
 field's default; out-of-range pan, pitch and velocity clamp. Guarded by `solaris_model` (8 tests;
 mutants checked: dropping unknown keys on write breaks the fixed point).
 
 ### DR-MIX-4 Routing only goes forward (R-MIX-4)
 `validateProject`'s `checkTarget` accepts an `out` or a send target only when it is `master`, an
-output port, or a strip `feedsForward` (`model/Project.cpp:630`) allows — one whose mixer's `order`
+output port, or a strip `feedsForward` (`model/Project.cpp:741`) allows — one whose mixer's `order`
 is GREATER than the source strip's — the ONE copy of the rule; anything else is refused as `ch_1 (Main, on Buses) output → ch_2 (kick, on Sources): a
 strip can only feed a strip on a LATER mixer, the master or a port (R-MIX-4)`. A file that routes
-backward does not load. Because of this, `Project::stripsInOrder` (`model/Project.cpp:104`) —
+backward does not load. Because of this, `Project::stripsInOrder` (`model/Project.cpp:113`) —
 mixer order, then strip order — is a topological order of the routing graph with no cycle check
-at all. A new project is `newProject` (`model/Project.cpp:141`): Sources (`mx_1`), Buses (`mx_2`)
+at all. A new project is `newProject` (`model/Project.cpp:151`): Sources (`mx_1`), Buses (`mx_2`)
 holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the master (R-MIX-3).
 Guarded by `test_routing_only_goes_forward` (mutant checked: `<=` → `<` lets a same-mixer route
 through and the test fails). The same rule is PUBLISHED: `targetsOf` (`:636`) lists what a strip
 may feed — later strips in processing order, `master`, the output ports — as `strips[].targets`
-(`core/service/ServiceModel.cpp:190`); a front end offers exactly that list, and the test routes
+(`core/service/ServiceModel.cpp:200`); a front end offers exactly that list, and the test routes
 to every entry offered.
 
 ### DR-ENG-1 The engine renders a MixGraph through the DSP library's devices (R-MIX-1/5/6, R-DSP-1/5, R-RENDER-1)
 `solaris_engine` knows no project and no file: it renders a `MixGraph` (`engine/MixGraph.h`) —
 strips in processing order with their devices (registry types + values), audio regions in samples
 over decoded PCM, note events in samples, an output and sends as forward indices, the master's rack
-and gain, the ports. `Engine::build` (`engine/Engine.cpp:72`) refuses a target that is not LATER
+and gain, the ports. `Engine::build` (`engine/Engine.cpp:78`) refuses a target that is not LATER
 (R-MIX-4, a second time — the graph might not come from the model), a missing port, an unknown
 device type or parameter, an instrument strip whose rack does not start with an instrument; sets
 the DSP library's process-wide sample rate (R-NFR-7); builds every device with
-`DeviceRegistry::create`; and **warms** each with one block of silence (`warm`, `:47`), because the
+`DeviceRegistry::create`; and **warms** each with one block of silence (`warm`, `:53`), because the
 library smooths every parameter write over a block and the first block of every render would
-otherwise carry a ramp from the device's default. `renderPiece` (`:206`) per strip in order: sum
+otherwise carry a ramp from the device's default. `renderPiece` (`:311`) per strip in order: sum
 what earlier strips routed/sent to it; add its regions (looped, offset, offline = silent) or play
-its instrument with the block **split at every note event** (`:249`, R-DSP-5); run the rest of its
+its instrument with the block **split at every note event** (`:355`, R-DSP-5); run the rest of its
 rack (bypass skips); tap pre-fader sends; fader + balance pan; post-fader sends; add into its
-output (`route`, `:179` — master, a later strip, or a port; a mono port gets the average of L and
-R). A silent strip (muted or solo-silenced, decided by the core) sends nothing anywhere (`:276`).
+output (`route`, `:284` — master, a later strip, or a port; a mono port gets the average of L and
+R). A silent strip (muted or solo-silenced, decided by the core) sends nothing anywhere (`:381`).
 Then the master rack, master gain, its ports. Meters (peak, RMS per render call, max peak since
 `clearPeaks`), a captured strip for stems, live parameter writes, `seek` (instruments reset, effect
 tails ring on). Guarded by `solaris_engine` (8 tests): a region sounds from its first sample to its
@@ -136,9 +136,9 @@ longest verb match, flags checked against the row) and `dispatch` (`core/service
 runs it; out come the `AppModel` (`core/service/AppModel.h`, refreshed after every command) and
 `Event`s whose `formatEvent` text is the log line. **Every edit is all-or-nothing**: the project is
 copied first, the command runs, `validateProject` runs, and any failure restores the copy
-(`:204`) and refuses with the validator's sentence — a refused command changes nothing. An edit's
+(`:207`) and refuses with the validator's sentence — a refused command changes nothing. An edit's
 events (`project.changed` from `changed`, `:35`; a `set` line's `params.changed`) are HELD in
-`mPending` and emitted only once the whole command has landed (`:213`), so a refused command
+`mPending` and emitted only once the whole command has landed (`:243`), so a refused command
 announces nothing either (D-1). And a refusal always says WHY: a path that returns false without a
 reason is caught in `dispatch` (`:189`) and named (`` `clip add` was refused without a reason``),
 never silent (R-SVC-3) — B1's own wiring mistake showed the hole. The core
@@ -146,7 +146,7 @@ holds no codec and no device API: decoding and WAV writing are `Host` functions 
 
 ### DR-SVC-2 Unknown input is refused, naming it (R-SVC-3)
 An unknown verb or flag fails in `parseCommand` with the nearest candidates (`strp add` →
-`did you mean: strip add?`). An address goes through `setAddress` (`core/service/SolarisService.cpp:353`):
+`did you mean: strip add?`). An address goes through `setAddress` (`core/service/SolarisService.cpp:459`):
 an unknown node, field or DEVICE PARAMETER is refused with the nearest name (`set
 dv_1.filter.cutof=1` → `did you mean: filter.cutoff?`); a value out of range is refused with the
 range; a device parameter's value is read against the DSP registry — a choice by name (listing the
@@ -164,7 +164,7 @@ pattern looping across an 8-beat clip, the bass C2 at 65.4 Hz, the sample resamp
 stored relative to the song's folder.
 
 ### DR-MIX-2 Every sample file gets its own strip (R-MIX-2, R-MIX-3)
-`clip add --src` (`core/service/ServiceEdit.cpp:364`): a file no clip uses yet gets a new audio strip
+`clip add --src` (`core/service/ServiceEdit.cpp:387`): a file no clip uses yet gets a new audio strip
 named after it on the first mixer, routed by `defaultOutFor` (`:70`) to the first bus on a later
 mixer ("Main"), and a new lane; a file already used reuses its strip; `--strip` overrides. The file
 is decoded through the host to learn its length (refused if it cannot be read), and stored relative
@@ -173,21 +173,36 @@ folder first when one is there (`:385`) — what the model stores and the browse
 back — else the caller's working directory.
 
 ### DR-MIX-7 Solo keeps the soloed path alive (R-MIX-7)
-`silentStrips` (`core/Compile.cpp:47`): with any strip soloed, a strip is audible only if it is
+`silentStrips` (`core/Compile.cpp:48`): with any strip soloed, a strip is audible only if it is
 soloed, reachable downstream of one (its buses, its sends' returns) or upstream of one (what feeds
 it); muted strips are silent regardless. The model shows it as `strips[].audible`; the engine gets
 it as `silent`.
 
 ### DR-MIX-8/9/10 Fed by, the matrix, the audit (R-MIX-8, R-MIX-9, R-MIX-10)
-`refreshModel` (`core/service/ServiceModel.cpp:75`) computes each strip's `clipCount`, `fromLanes`
-and `fromStrips`. `matrix print [--json]` (`matrixText`, `:260`): rows = strips in processing order,
+`refreshModel` (`core/service/ServiceModel.cpp:76`) computes each strip's `clipCount`, `fromLanes`
+and `fromStrips`. `matrix print [--json]` (`matrixText`, `:397`): rows = strips in processing order,
 columns = the buses, master and output ports; `●` = the main output, `-6.0pre` = a send's dB and tap.
 `audit` (`:193`): unused strips, strips that reach no output port, single-input and empty buses,
 clips on silent strips, offline files, unknown device types and parameters, and any strip or the
 master that went over 0 dBFS in the last render.
 
+### DR-MIX-13 A line added from the mixer; sources relinked (R-MIX-13, R-MIX-14)
+`strip relink <ch> --to <ch2>` (`core/service/ServiceEdit.cpp:221`) moves EVERY clip playing through
+`<ch>` to `<ch2>` in one edit (one undo step, "strip relink <ch>"), printing how many moved; refused
+onto a bus ("a bus plays no clips"), across kinds (audio clips need an audio strip, note clips an
+instrument strip), onto itself, and when `<ch>` has no clips. A pattern's `strip` follows its first
+clip. In the dock (`app/widgets/MixerDock.cpp`) every mixer page ends with "+ Line" after its last
+card — placed from the LIVE card widths, so it slides as cards grow in and shrink out
+(`MixerDock::addLineRect`, `MixerDock.cpp:317`; drawn at `:1204`) — whose menu is an audio line, a bus
+and every instrument of the registry, each ONE `strip add --kind … [--instrument <type>] --mixer
+<mx>` (`MixerDock::openAddLine`, `MixerDock.cpp:709`); the new card grows in. A strip's menu offers
+"Move its clips to ▸" when it has clips and another strip of its kind exists — a second menu of those
+strips → `strip relink` (`MixerDock.cpp:961`). On the lanes a clip's menu (`Timeline.cpp:392`) offers
+"Play through ▸" — the strips of its kind, the current one marked "now" → `clip move <ac> --strip
+<ch>` — then Piano Roll (a note clip), Duplicate, Delete.
+
 ### DR-CLIP-2/3 Patterns and linked clips (R-CLIP-2, R-CLIP-3)
-`compile` (`core/Compile.cpp:131`) expands a note clip: a clip longer than its pattern loops it, a
+`compile` (`core/Compile.cpp:132`) expands a note clip: a clip longer than its pattern loops it, a
 note is cut at the clip's end (`(C1)`, `:216`); events sort by time with note-offs before note-ons at
 one sample (`(C2)`, `:230`). `clip duplicate` makes a second clip of the SAME pattern (`linked` = 2 in
 the model); `clip unique` copies the pattern. `note add` replaces a note at the same pitch and tick.
@@ -292,11 +307,11 @@ Ctrl+S save, Enter to the start, Ctrl+, settings. Every control's command line i
 ### DR-SET-2 The settings sheet (R-SET-1, amended)
 `SettingsSheet` (`app/widgets/SettingsSheet.cpp`) in cosmo's modal style: the scrim, the popover
 card, uppercase labels tracked +0.13 with a plain note, chips that size to their MEASURED text and
-wrap, a filled accent when chosen — the fill EASES over 200 ms whoever chose it (`advance`, `:101`) —
+wrap, a filled accent when chosen — the fill EASES over 200 ms whoever chose it (`advance`, `:149`) —
 the folder list with × per folder and "Add folder…", Done; 150 ms open / 120 ms close; Escape, Enter,
 Done and the scrim close it; the card scrolls when the window is short. Opening sends `devices list`
 first (`App::openSettings`, `app/App.cpp:199`). Every chip is `settings set …`, every folder control
-`folder add|remove` (`handleGesture`, `:158`); the sheet draws the model, so a setting changed from a
+`folder add|remove` (`handleGesture`, `:206`); the sheet draws the model, so a setting changed from a
 shell shows at once.
 
 ### DR-UI-6 Shots and UI tests over the real service (R-UI-6)
@@ -315,17 +330,17 @@ fill, the close). The window ran on this machine's display (`solaris song.slp`, 
 (234 px), `Timeline` (`app/widgets/Timeline.cpp`) filling the rest. A row per lane in lane order,
 then a row per strip whose clips have no lane ("its strip's row"); a lane with no colour wears its
 first clip's. A clip is drawn on its row, coloured by its STRIP (`surface::track`), its name pinned
-to the visible edge when it begins off-screen (`paintClip`, `:410`); a note clip draws its
+to the visible edge when it begins off-screen (`paintClip`, `:443`); a note clip draws its
 pattern's notes repeated where it loops, the seams marked, and "linked ×N" when it shares its
 pattern. Ruler: bars from 1, labels thinned as it zooms out. The playhead is `destructive`; it
 follows the transport while playing and eases 140 ms on a seek. Ctrl+wheel zooms 4–320 px/beat,
-eased 220 ms and anchored at the pointer (`:393`); the wheel scrolls, Shift+wheel sideways. A clip
+eased 220 ms and anchored at the pointer (`:426`); the wheel scrolls, Shift+wheel sideways. A clip
 dragged follows the pointer exactly, snapped to 1/4 beat, between LANES only, and lands as `clip
-move <ac> --at <b> [--lane <ln>]` (`:361`) where it was let go. A click selects (the teal ring
+move <ac> --at <b> [--lane <ln>]` (`:363`) where it was let go. A click selects (the teal ring
 cross-fades 200 ms between clips); Delete/Backspace → `clip delete`, Ctrl+D → `clip duplicate`
-(`app/App.cpp:295`); a ruler click → `transport seek <b>`, snapped (`Timeline.cpp:381`). **The picture travels
+(`app/App.cpp:295`); a ruler click → `transport seek <b>`, snapped (`Timeline.cpp:383`). **The picture travels
 (§1):** the rows are Interstellar's `AnimatedRows` keyed by lane; each clip keeps an eased beat, row
-and opacity keyed by its id (`Timeline::advance`, `Timeline.cpp:227`) — it fades in when it arrives, fades out where it
+and opacity keyed by its id (`Timeline::advance`, `Timeline.cpp:229`) — it fades in when it arrives, fades out where it
 was when it goes (taking no input), eases 200 ms with its row when moved from a shell; the zebra
 follows the LIVE slot, a stripe's colour cross-fades, the empty-state words fade. Another song
 places everything where it is. Empty, it says what to do in words.
@@ -335,7 +350,7 @@ places everything where it is. Empty, it says what to do in words.
 slides 220 ms. Samples lists the folders from Settings; a folder clicked is `browse "<path>"`
 (`:216`) and shows its sub-folders and audio files (mono, the filename rule) under a row back up;
 with no folders it says so and a click opens Settings. Instruments lists `AppModel::deviceTypes`
-(the DSP registry, `core/service/ServiceModel.cpp:100`) — instruments, then effects. Song lists the
+(the DSP registry, `core/service/ServiceModel.cpp:105`) — instruments, then effects. Song lists the
 files the song plays. The list is `AnimatedRows` keyed by generation and content (`rebuild`, `:54`):
 a tab or folder changed starts a new generation, so the old list fades where it was scrolled while
 the new one fades in (`navigate`, `:96`); an inserted row fades in, a removed one out. A row is
@@ -343,12 +358,12 @@ dragged out: the browser reports the pointer and the drop; `ProjectScreen` draws
 overlay pass) and the timeline's teal drop hint at the snapped beat, and on release sends ONE line
 (`place`, `app/widgets/ProjectScreen.cpp:93`): a sample → `clip add --src "<file>" --at <b> [--lane
 <ln>]`; an instrument → `clip add --instrument <type> --at <b> --length 4 [--lane <ln>]` (the new
-strip and its empty note clip in one command, `core/service/ServiceEdit.cpp:370`); below the last
+strip and its empty note clip in one command, `core/service/ServiceEdit.cpp:393`); below the last
 lane, no `--lane` — a new lane; an effect → a notice that it goes on a strip (U3). A double-click
 places at the playhead.
 
 ### DR-UI-7 A strip's colour (R-UI-7)
-The model's `strips[].colour` is resolved by the service (`core/service/ServiceModel.cpp:166`): the
+The model's `strips[].colour` is resolved by the service (`core/service/ServiceModel.cpp:176`): the
 strip's own, else its id's number − 1 — never −1, and unchanged when other strips are added or
 deleted. Every front end draws it as is.
 
@@ -358,22 +373,22 @@ deleted. Every front end draws it as is.
 chevron folds it to its tab bar, eased 220 ms; it gives way before the lanes, which keep 130 px).
 Tabs: a mixer page each, "+" (`mixer add`), Matrix; keyed (`syncTabs`) so a tab added slides the
 others along, measured in one weight so choosing a tab moves nothing; the highlight slides, the
-pages cross-fade as layers. A page (`syncCards`, `:153`) is a card per strip in processing order,
+pages cross-fade as layers. A page (`syncCards`, `:149`) is a card per strip in processing order,
 the strips feeding one bus (two or more) gathered under its header; the master pinned right. A card:
 colour, name, "audio · N clips" / "bus · fed by N"; rack chips (four slots: the devices and "+
 Effect", or two, "+N more", "+ Effect"); two sends (→ name, dB, P = pre; a third says "in the
 matrix"); pan; the fader (`faderPos`, `:89`: gain ∝ position², 0 dB at 0.708, +6 at the top) beside
 L/R meters (−60…+6 dBFS, green → amber at −12 → red at −3); M and S (solo amber); "→ <out>".
-Commands (`handleGesture`, `:733`): a fader or pan dragged — `set <ch>.gain|pan=…` (master:
+Commands (`handleGesture`, `:750`): a fader or pan dragged — `set <ch>.gain|pan=…` (master:
 `set project.masterGain=…`) at each step, double-click → 0; M/S → `set <ch>.mute|solo=…`; "→ out"
 → cosmo's `ContextMenu` of `strips[].targets` → `route`; "+ Effect" → the registry's effects →
-`device add` (`openAddEffect`, `:709`); a send → pre/post, make it the main output, remove; a send
+`device add` (`openAddEffect`, `:726`); a send → pre/post, make it the main output, remove; a send
 dragged sideways → `set <sd>.gain=…`; right-click → rename (`set <ch|mx>.name=…`) or delete. A
-fold header click folds its group (`:843`, the view's, eased 260 ms: members narrow to nothing, the
-header widens to "→ Main · N strips"). The Matrix (`paintMatrix`, `:1182`): rows by mixer, columns
+fold header click folds its group (`:861`, the view's, eased 260 ms: members narrow to nothing, the
+header widens to "→ Main · N strips"). The Matrix (`paintMatrix`, `:1227`): rows by mixer, columns
 = strips off the first mixer, master, out ports; ● the main output, a send's dB; a cell routing
 refuses is hatched; a click on an open cell → `send add`, on a send → its menu, a double-click →
-`route`, a vertical drag → its level. **Nothing snaps** (`advance`, `:483`): every model value is
+`route`, a vertical drag → its level. **Nothing snaps** (`advance`, `:482`): every model value is
 drawn through an eased copy keyed by strip (fader and pan 220 ms, M/S/dim 200, colour cross-fade
 200 from what is shown, meters 40 up / 300 down); a dragged control follows the pointer exactly;
 cards and tabs are keyed — arriving grows, leaving shrinks, a moved card shrinks where it was and
@@ -424,7 +439,7 @@ registry index), clamp, integer, own value — with each symbol remapped: an aut
 slot, a bound address → its binding's slot, an unbound address → its own value as a constant.
 `evaluateBinds` (`engine/Expr.h:156`) fills the clock, the curves (`Curve::valueAt`, `:109`) and each
 binding in order (`Expr::eval`, `:51`, a fixed stack, no allocation; a non-finite result keeps the last
-good value). `Engine::render` (`engine/Engine.cpp:507`) cuts pieces at every multiple of `kControl` = 64
+good value). `Engine::render` (`engine/Engine.cpp:490`) cuts pieces at every multiple of `kControl` = 64
 samples and evaluates there (`evalBinds`, `:178`), so the result is the same however time is chopped;
 bound gains, pans and sends ramp linearly across the period, unbound strips render exactly as before.
 Values at time zero are applied before the devices' warm-up (`:171`); a seek evaluates at once
@@ -432,7 +447,7 @@ Values at time zero are applied before the devices' warm-up (`:171`); a seek eva
 +12 dB from beat 2, byte-identical at chunks of 77, 128 and 1000, no zipper, no allocation.
 
 ### DR-AUTO-4 The service: commands, `set`, `eval`, the model (R-AUTO-1…5, 8, 9)
-`set <address>="=<formula>"` binds (`core/service/SolarisService.cpp:411`); a plain number clears the
+`set <address>="=<formula>"` binds (`core/service/SolarisService.cpp:473`); a plain number clears the
 binding and sets the value; `get` prints the formula; an unquoted formula with spaces is refused with
 the quoting shown. `auto create <address>` (`core/service/ServiceAuto.cpp:83`) makes `au_n` named
 "<owner> · <label>", ranged as the address, holding its value from beat 0 to the song's end (at least
@@ -440,7 +455,7 @@ four bars), and binds the address to `=au_n`; `auto add|delete` (refused while r
 `auto point add|move|delete|shape` (values clamped to the range), `bind clear`; deleting a strip, a
 send or a device drops the bindings that drive them. `eval <address> [--at] [--explain]`
 (`:213`) compiles and evaluates with the engine's own function and prints each name it reads.
-`refreshModel` (`core/service/ServiceModel.cpp:244`) publishes `bindings[]` (reads, ok, problem),
+`refreshModel` (`core/service/ServiceModel.cpp:261`) publishes `bindings[]` (reads, ok, problem),
 `automations[]` (points, usedBy), `params[].formula`, `strips[].gainFormula/panFormula`,
 `sends[].gainFormula`, `masterGainFormula` and `devices[].lastChanged`; `audit` (`:365`) names inert
 bindings and automations no formula reads. While playing, a binding or curve edit — or a `set` on an
@@ -468,7 +483,7 @@ naming what they would take back (from `undoLabel`/`redoLabel`), Duplicate / Del
 **Song** — Add Mixer, Add Bus, Add Audio Line, Add Lane; **View** — Hide/Show Mixer (the dock eases
 to its tab bar), Hide/Show Browser (its width eases to 0, everything right of it follows the live
 width), Metronome On/Off (`settings set metronome=…`), Settings…. Labels follow the state
-(`refreshMenus`, `:119`). A press outside an open menu closes it first (`:248`), as cosmo's does.
+(`refreshMenus`, `:122`). A press outside an open menu closes it first (`:251`), as cosmo's does.
 
 ### DR-SET-3 The settings sheet in sections (R-SET-3)
 `SettingsSheet` (`app/widgets/SettingsSheet.cpp:29`): **Audio** (Output, Input, Sample rate, Buffer),
@@ -492,7 +507,7 @@ strip's name (double-click) in the dock open them; a chip is outlined while its 
 Placement and stacking are the view's. The dock's floating panel is gone (R-UI-5 amended).
 
 ### DR-AUTO-5 Automation on the timeline (R-AUTO-6)
-`Timeline` (`app/widgets/Timeline.cpp:87`) appends a row per automation after the lanes, keyed
+`Timeline` (`app/widgets/Timeline.cpp:89`) appends a row per automation after the lanes, keyed
 `auto:<au>` in the same `AnimatedRows` (a lane added slides them down; a new one grows in), its header
 the accent stripe, its name and the address that reads it. `TimelineAuto.cpp` draws the curve over the
 beat grid — holding the first value before the first point and the last after, linear / hold / smooth
@@ -507,30 +522,30 @@ changes eases there point by point over 220 ms; a point added or removed cross-f
 
 ### DR-ROLL-1 The piano roll (R-ROLL-1…5, R-EDM-6)
 **Grammar.** `note move <pt> --pitch <p> --at <b> [--to-pitch <p>] [--to-at <b>] [--length <b>] [--vel
-<1…127>]` (`core/service/ServiceEdit.cpp:559`) edits the one note at that pitch and beat — a moved note
+<1…127>]` (`core/service/ServiceEdit.cpp:582`) edits the one note at that pitch and beat — a moved note
 landing on another's place replaces it; `pattern quantize <pt> [--grid <b>] [--swing <0…0.75>]`
-(`:590`) moves every start to `k·grid`, odd `k` delayed by `swing·grid`, two notes landing together
+(`:613`) moves every start to `k·grid`, odd `k` delayed by `swing·grid`, two notes landing together
 merging into the louder. Both are edits (undoable, all-or-nothing). The model gives a pattern the strip
 its first clip plays through and that strip's instrument (`patterns[].strip`, `.instrument`), and a
 device type its named keys (`deviceTypes[].noteNames`, `core/service/ServiceModel.cpp:108`) — the DSP
 registry's (REQ-device-6: the Drum Machine's ten pads, Kick = 36 …).
 **The window.** `PianoRoll` (`app/widgets/PianoRoll.cpp`) is the content of a `roll:<pt>` window
 (`WindowLayer::openRoll`, `app/widgets/FloatWindow.cpp:147`), opened by double-clicking a note clip
-(`Timeline.cpp:386`) or by an instrument window's "Piano Roll" (`DevicePanel.cpp:443` — the strip's
+(`Timeline.cpp:388`) or by an instrument window's "Piano Roll" (`DevicePanel.cpp:443` — the strip's
 pattern; a menu when it plays several; `clip add --strip` and then its roll when it has none). Titled
 "Piano Roll — <pattern> · <strip>"; a pattern gone closes it. A toolbar: snap 1/4 · 1/8 · 1/16
 (default) · 1/32 · Off, Notes | Steps, Quantize… (a menu of three lines: straight, swing 25 %, 50 %, at
 the snap). **Notes:** keys on the left (C named with its octave, C4 = 60; a kit's keys by its pads,
 nothing else named), black-key rows shaded, bars stronger; notes in the strip's colour, brighter the
-louder; the velocity lane below; past the pattern's end dimmed, the end a handle (`onPaint`, `:512`).
+louder; the velocity lane below; past the pattern's end dimmed, the end a handle (`PianoRoll::onPaint`, `PianoRoll.cpp:512`).
 A click on empty grid → `note add <pt> --pitch --at <the snapped cell> --length <the last length>`; a
 note dragged is drawn where the POINTER has it (beat snapped) and lands as ONE `note move … --to-pitch
 --to-at`; its right 5 px resize it (`note move … --length`, which becomes the last length); a
 velocity stem dragged → `note move … --vel`; a double-click or right-click → `note delete`; the end
-dragged → `set <pt>.length=` (`handleGesture`, `:258`). **Steps:** a row per pad (a kit) or per pitch in
+dragged → `set <pt>.length=` (`PianoRoll::handleGesture`, `PianoRoll.cpp:258`). **Steps:** a row per pad (a kit) or per pitch in
 use and middle C, a cell per sixteenth, a click toggling a note there (`note add … --length 0.25` /
-`note delete`) (`paintSteps`, `:482`). **Nothing snaps:** notes are keyed by (pitch, beat) — a new one
+`note delete`) (`PianoRoll::paintSteps`, `PianoRoll.cpp:482`). **Nothing snaps:** notes are keyed by (pitch, beat) — a new one
 fades in, a deleted one fades out where it was, a dragged one is the pointer's and lands without
-re-fading (`bind`, `:68`; `advance`, `:173`); the two modes cross-fade; Steps zooms to fit the pattern
+re-fading (`PianoRoll::bind`, `PianoRoll.cpp:68`; `PianoRoll::advance`, `PianoRoll.cpp:173`); the two modes cross-fade; Steps zooms to fit the pattern
 (64–160 px a beat) and Notes gets its own zoom back, eased; Ctrl+wheel zooms about the pointer, the
 wheel scrolls, eased; a length changed from a shell moves the end, eased.

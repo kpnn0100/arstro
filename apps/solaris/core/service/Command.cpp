@@ -61,6 +61,9 @@ namespace solaris
              "--with-clips (its clips go too).", "R-MIX-1"},
             {K::StripMove, "strip move", "<ch>", 1, 1, {"mixer=<mx>", "order=<n>"},
              "Move a strip to another mixer and/or position. Refused if a route would point backward.", "R-MIX-3"},
+            {K::StripRelink, "strip relink", "<ch>", 1, 1, {"to=<ch>"},
+             "Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips "
+             "need an audio strip, note clips an instrument strip; a bus plays no clips.", "R-MIX-14"},
             {K::Route, "route", "<ch>", 1, 1, {"to=<ch|master|port>"},
              "Set a strip's main output: a strip on a LATER mixer, master, or an output port.", "R-MIX-4"},
 

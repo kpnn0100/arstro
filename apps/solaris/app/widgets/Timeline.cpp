@@ -30,6 +30,8 @@ namespace solaris_ui
     void Timeline::bind(const solaris::AppModel &m)
     {
         mBeatsPerBar = std::max(1, std::atoi(m.sig.c_str()));
+        mStrips.clear();
+        for (const auto &s : m.strips) mStrips.push_back(StripRef{s.id, s.name, s.kind});
         mLength = m.lengthBeats;
         mPosition = m.transport.position;
         mPlaying = m.transport.playing;
@@ -387,6 +389,37 @@ namespace solaris_ui
             for (const auto &v : mClips)
                 if (v.c.id == clipAt(local) && v.c.kind == "note" && onOpenPattern) onOpenPattern(v.c.pattern);
             return true;
+        case Gesture::Type::RightClick:
+        {
+            // a clip's menu: what it plays through (R-MIX-14), its notes, a copy, gone — each one line
+            const std::string id = clipAt(local);
+            const ClipView *v = nullptr;
+            for (const auto &x : mClips)
+                if (x.c.id == id) v = &x;
+            if (!v || !onMenu) return true;
+            selectClip(id);
+            const solaris::ClipModel c = v->c;
+            const std::string want = c.kind == "note" ? "instrument" : "audio";
+            std::vector<cosmo_v2::ContextMenu::Item> through, items;
+            for (const auto &s : mStrips)
+                if (s.kind == want)
+                {
+                    const std::string sid = s.id;
+                    through.push_back({s.name + (sid == c.track ? "  \xC2\xB7 now" : ""),
+                                       [this, id, sid] { if (onCommand) onCommand("clip move " + id + " --strip " + sid); }});
+                }
+            const Point world = g.pos;
+            items.push_back({"Play through \xE2\x96\xB8", [this, through, world] { if (onMenu) onMenu(through, world); }});
+            if (c.kind == "note")
+            {
+                const std::string pt = c.pattern;
+                items.push_back({"Piano Roll", [this, pt] { if (onOpenPattern) onOpenPattern(pt); }});
+            }
+            items.push_back({"Duplicate", [this, id] { if (onCommand) onCommand("clip duplicate " + id); }});
+            items.push_back({"Delete", [this, id] { if (onCommand) onCommand("clip delete " + id); }});
+            onMenu(std::move(items), world);
+            return true;
+        }
         case Gesture::Type::Scroll:
             if (g.ctrl)
             {

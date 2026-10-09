@@ -107,7 +107,7 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
 
 ---
 
-## R-MIX — the mixer: every source has its own strip — ✅ IMPLEMENTED (1–11 headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; drawn and played with: DR-UI-8; 12 the fold: DR-UI-8; 8's linked selection with U4)
+## R-MIX — the mixer: every source has its own strip — ✅ IMPLEMENTED (1–11 headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; drawn and played with: DR-UI-8; 12 the fold: DR-UI-8; 13/14 the line added, sources relinked: DR-MIX-13; 15 with B9; 8's linked selection with U4)
 
 The user's model (2026-10-08): *"sample got its own line by default; we can add multiple mixers as
 the user wants their workspace organised; the 1st mixer stores the samples, the 2nd receives from

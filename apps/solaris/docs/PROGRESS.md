@@ -11,18 +11,21 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-09 — B6: the piano roll.*
+*Last updated: 2026-10-09 — B7: the mixer's lines.*
 
 ---
 
 ## NEXT
 
-**► B7 — the mixer's lines** (R-MIX-13/14): "+ Line" at the end of every mixer page — a menu of an
-audio line, a bus, and every instrument of the registry → ONE `strip add --kind … [--instrument <type>]
---mixer <mx>`, the new card growing in; `strip relink <from> --to <to>` in the service (every clip of
-`<from>` to `<to>`, one edit, refused across kinds and naming why); a clip's menu on the lanes "Play
-through ▸" (`clip move <ac> --strip <ch>`, the strips of its kind); a strip card's menu "Move its clips
-to ▸" (`strip relink`). L2 test of `strip relink` and its refusals; UI tests of both menus; shot.
+**► B8 — VST3, our instruments as plugins** (R-VST-1…5): the SDK cloned (`--recursive`) to a fixed place
+outside the repo, found through a CMake variable, its licence read and its version recorded in R-VST;
+a thin VST3 processor + controller per instrument (Basic Synth, Drum Machine) in
+`core/DigitalSignalProcessing/apps/vst3/` behind a CMake option, so `arstro_dsp` stays dependency-free;
+ONE shared normalisation (registry range + taper ↔ 0…1) in the DSP library used by the plugin, with its
+own unit test (round trip to the last digit, log taper, integer, choice); parameter ids frozen from the
+registry; the SDK's `validator` run on both; the plugin's audio equals the device's render sample for
+sample at the same parameters and notes; installed to `~/.vst3/`. DSP commit + push first, then the
+umbrella pointer.
 ---
 
 ## The build, in order
@@ -132,7 +135,12 @@ umbrella's pointer — `arstro.rule` §7).
       `solaris_app_ui` 16 (a note fading in and out, a drag drawn under the pointer and one move, the
       modes cross-fading — mutants that snap the fade or the mode fail them); shots piano-roll,
       piano-roll-note-in, step-mode, looked at.
-- [ ] **B7** The mixer: "+ Line", relink — `strip relink`, "Play through" (R-MIX-13/14).
+- [x] **B7** The mixer: "+ Line", relink — `strip relink`, "Play through" (R-MIX-13/14). — DR-MIX-13;
+      `solaris_service` 22 (relink moves every clip, one undo; refused onto a bus, across kinds, onto
+      itself, with nothing to move); `solaris_app_ui` 17 (the new card growing in and "+ Line" caught
+      sliding — a mutant placing it from target widths fails it); shots mixer-add-line,
+      clip-play-through, looked at. Every DR anchor re-checked with a script; 40-odd that had drifted
+      since U1 re-pointed.
 - [ ] **B8** VST3: the SDK, Basic Synth + Drum Machine as plugins, the shared normalisation, validator,
       plugin = device sample for sample (R-VST-1…5).
 - [ ] **B9** EDM sound: sidechain (DSP compressor + `send add --sidechain`), the limiter, the

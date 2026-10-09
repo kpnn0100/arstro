@@ -22,6 +22,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `strip add [--kind <audio\|instrument\|bus>] [--name <text>] [--mixer <mx>] [--instrument <synth\|drums>] [--out <target>]` | Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: the first bus on a later mixer ("Main"), else master. An instrument strip gets its instrument (default synth) as its first device. | R-MIX-1 |
 | `strip delete <ch> [--with-clips]` | Delete a strip and its rack. Refused while clips play through it or strips route to it, unless --with-clips (its clips go too). | R-MIX-1 |
 | `strip move <ch> [--mixer <mx>] [--order <n>]` | Move a strip to another mixer and/or position. Refused if a route would point backward. | R-MIX-3 |
+| `strip relink <ch> [--to <ch>]` | Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips need an audio strip, note clips an instrument strip; a bus plays no clips. | R-MIX-14 |
 | `route <ch> [--to <ch\|master\|port>]` | Set a strip's main output: a strip on a LATER mixer, master, or an output port. | R-MIX-4 |
 | `send add <ch> [--to <ch\|master\|port>] [--gain <dB>] [--pre]` | Add a send (post-fader unless --pre). Same forward-only rule as `route`. | R-MIX-5 |
 | `send delete <sd>` | Remove a send. | R-MIX-5 |

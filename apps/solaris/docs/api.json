@@ -133,6 +133,16 @@
       "requirement": "R-MIX-3"
     },
     {
+      "verb": "strip relink",
+      "usage": "strip relink <ch> [--to <ch>]",
+      "args": "<ch>",
+      "flags": [
+        "to=<ch>"
+      ],
+      "summary": "Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips need an audio strip, note clips an instrument strip; a bus plays no clips.",
+      "requirement": "R-MIX-14"
+    },
+    {
       "verb": "route",
       "usage": "route <ch> [--to <ch|master|port>]",
       "args": "<ch>",

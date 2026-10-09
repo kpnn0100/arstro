@@ -121,7 +121,7 @@ namespace solaris
             break;
         }
         case K::MixerAdd: case K::MixerDelete: case K::MixerMove: case K::StripAdd: case K::StripDelete:
-        case K::StripMove: case K::Route: case K::SendAdd: case K::SendDelete: case K::DeviceAdd:
+        case K::StripMove: case K::StripRelink: case K::Route: case K::SendAdd: case K::SendDelete: case K::DeviceAdd:
         case K::DeviceRemove: case K::DeviceMove: case K::LaneAdd: case K::LaneDelete:
             ok = mixCommand(c, err);
             break;
