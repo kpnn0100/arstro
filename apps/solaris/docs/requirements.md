@@ -631,6 +631,27 @@ re-fading (`PianoRoll::bind`, `PianoRoll.cpp:68`; `PianoRoll::advance`, `PianoRo
 (64–160 px a beat) and Notes gets its own zoom back, eased; Ctrl+wheel zooms about the pointer, the
 wheel scrolls, eased; a length changed from a shell moves the end, eased.
 
+### DR-ROLL-6 Play from the roll (R-ROLL-6)
+**Grammar.** `transport play --clip <ac>` (`core/service/ServiceTransport.cpp:180`) plays the clip's span —
+`at` … `at + clipLengthBeats` — LOOPED, the whole song sounding there, from its start (or from `--from` when
+that lies inside it); a clip unknown or of no length is refused naming it. The song's loop is kept aside and
+given back by `transport stop`, by a plain `transport play` (the song's) and when the clip is deleted
+(`endClipLoop`, `:281`); a `transport loop` set meanwhile is the song's and stays. After every edit the
+loop follows the clip — moved, resized, a looped clip lengthened (`followClipLoop`, `:295`, called from
+`dispatch`, `core/service/SolarisService.cpp:306`) — sent to the Player at once. The model publishes it:
+`transport.loopClip` (`core/service/AppModel.h:227`), with `loopFrom`/`loopTo` the clip's span while it
+loops. L2: `test_a_clip_plays_looped_and_gives_the_songs_loop_back` hears the clip's kick at the top of
+each of three loops and checks every way back to the song's loop.
+**The window.** A roll knows its clip: the one it was opened from (a double-click or the clip's "Piano
+Roll", `WindowLayer::openRoll(pt, ac)`, `app/widgets/FloatWindow.cpp:167`) while that clip lasts, else the
+pattern's first in time; none when the pattern is on no track (`PianoRoll::bind`, `PianoRoll.cpp:83`). Its
+toolbar starts with ▶ (`PianoRoll::togglePlay`, `:159`): `transport play --clip <ac>`, or `transport stop` as
+■ while its clip loops — lit in the accent then, its glyph dimmed with no clip and the click saying nothing.
+Space stops whatever plays; stopped, with a roll the front window (`WindowLayer::frontRoll`,
+`FloatWindow.cpp:198` — the last open window in the stacking order), it is that roll's ▶, else the song's
+play (`App::key`, `app/App.cpp:323`). The playhead is drawn where the clip is heard — the transport's beat
+less the clip's start, modulo the pattern's length for a looped clip — fading in and out with the play
+(`:616`), and the grid follows it a page at a time, eased, when it leaves the view (`:257`).
 ### DR-VST-1 Our instruments as VST3 plugins (R-VST-1…5)
 **The SDK:** Steinberg's `vst3sdk` **v3.8.1_build_84**, cloned recursively to `~/sdk/vst3sdk`; its
 `LICENSE.txt` (and `base`, `pluginterfaces`, `public.sdk`'s) is the **MIT licence** (Steinberg relicensed

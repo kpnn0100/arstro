@@ -789,7 +789,7 @@ namespace solaris_ui
         case Gesture::Type::DoubleClick:
             if (clipAt(local).empty() && newClipOn(local)) return true; // R-CLIP-6: on an instrument's track, a MIDI clip there
             for (const auto &v : mClips)
-                if (v.c.id == clipAt(local) && v.c.kind == "note" && onOpenPattern) onOpenPattern(v.c.pattern);
+                if (v.c.id == clipAt(local) && v.c.kind == "note" && onOpenPattern) onOpenPattern(v.c.pattern, v.c.id);
             return true;
         case Gesture::Type::RightClick:
         {
@@ -847,7 +847,7 @@ namespace solaris_ui
             if (c.kind == "note")
             {
                 const std::string pt = c.pattern;
-                items.push_back({"Piano Roll", [this, pt] { if (onOpenPattern) onOpenPattern(pt); }});
+                items.push_back({"Piano Roll", [this, pt, id] { if (onOpenPattern) onOpenPattern(pt, id); }});
             }
             items.push_back({"Duplicate", [this, id] { if (onCommand) onCommand("clip duplicate " + id); }});
             items.push_back({"Copy ID", [this, id] { if (onCopy) onCopy(id); }}); // R-UI-11

@@ -472,7 +472,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
   link is a formula naming an address), Clear Binding, Reset to Default — each one command.
 - **R-WIN-4 Window placement and stacking are the view's** — not saved, not commands, like zoom.
 
-## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6, 7 📋 (play from the roll, a note heard when made: user request 2026-10-15)
+## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6 ✅ (play from the roll, DR-ROLL-6) — 7 📋 (a note heard when made: user request 2026-10-15)
 
 - **R-ROLL-1 A piano-roll WINDOW per pattern** (R-WIN's frame), opened by double-clicking a note clip
   or from its instrument's window: keys on the left (C named with its octave; a drum machine's keys
@@ -494,7 +494,8 @@ the object it belongs to, shows it on the timeline, and that property will use a
   was opened from, else the pattern's first clip in time — from its start, LOOPING its span, the whole song
   sounding there, until stopped (■, the same button); the song's own loop region comes back when it stops.
   One command, `transport play --clip <ac>`; the transport publishes which clip it loops so every front end
-  can show it. Space with a roll window in front is that ▶; elsewhere Space stays the song's play/stop. The
+  can show it. Space stops whatever plays; stopped, with a roll window in front, it is that ▶ (else the
+  song's play). The
   roll draws the playhead where its clip is heard and keeps it in view while playing, eased. A pattern on no
   track has nothing to sound through: its ▶ is dimmed and says so.
 - **R-ROLL-7 A note is heard when it is made** (user request, 2026-10-15: *"when create a note, play

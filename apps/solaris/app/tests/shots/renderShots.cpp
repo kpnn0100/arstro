@@ -373,6 +373,22 @@ namespace
                  r.app->project().windows().openRoll("pt_2");
                  r.settle();
              }},
+            {"piano-roll-playing",   // R-ROLL-6: its ▶ lit, the clip looping, the playhead where it is heard
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 const int line[8][2] = {{45, 110}, {45, 70}, {52, 100}, {45, 72}, {48, 112}, {48, 68}, {55, 96}, {50, 80}};
+                 for (int i = 0; i < 8; ++i)
+                     r.cmd("note add pt_2 --pitch " + std::to_string(line[i][0]) + " --at " + std::to_string(i * 0.5) + " --length " +
+                           (i % 2 ? "0.25" : "0.5") + " --vel " + std::to_string(line[i][1]));
+                 r.settle();
+                 r.app->project().windows().openRoll("pt_2");
+                 r.settle();
+                 std::string ac;
+                 for (const auto &c : r.svc->model().clips)
+                     if (c.pattern == "pt_2" && ac.empty()) ac = c.id;
+                 r.cmd("transport play --clip " + ac);
+                 for (int k = 0; k < 50; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+             }},
             {"piano-roll-note-in",   // mid-transition: a note fading in where it was clicked
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

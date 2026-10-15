@@ -1224,6 +1224,44 @@ static void test_loop_and_seek()
     pass("loop repeats its span while playing; seek moves the transport (R-TIME-4)");
 }
 
+static void test_a_clip_plays_looped_and_gives_the_songs_loop_back()
+{
+    Run r;
+    r.ok("project new " + freshSong("cliploop") + " --bpm 120");
+    r.ok("strip add --kind instrument --instrument drums");
+    r.ok("clip add --strip ch_2 --at 8 --length 2");             // ac_1: beats 8 … 10
+    r.ok("note add pt_1 --pitch 36 --at 0");                    // a kick on the clip's first beat
+    r.ok("transport loop 0 4");                                 // the song's own loop
+    r.ok("transport play --clip ac_1");
+    const auto &t = r.svc.model().transport;
+    assert(t.loopClip == "ac_1" && t.loopFrom == 8.0 && t.loopTo == 10.0);
+    waitFrames(r, 3 * 48000 + 1000);                            // three loops of one second
+    const auto &v = r.fake.capture->sink;
+    for (int k = 0; k < 3; ++k)
+    {
+        const size_t at = (size_t)k * 48000;
+        assert(peakOf(v, 2 * at, 2 * (at + 480)) > 10.0f * peakOf(v, 2 * (at + 12000), 2 * (at + 24000))); // the kick, each loop
+    }
+    r.ok("clip move ac_1 --at 12");                             // edited while it loops: the loop follows
+    assert(r.svc.model().transport.loopFrom == 12.0 && r.svc.model().transport.loopTo == 14.0);
+    r.ok("transport stop");
+    assert(r.svc.model().transport.loopClip.empty());
+    assert(r.svc.model().transport.loopFrom == 0.0 && r.svc.model().transport.loopTo == 4.0); // the song's, back
+    r.ok("transport play --clip ac_1");
+    r.ok("transport play");                                     // the song's play: the song's loop
+    assert(r.svc.model().transport.loopClip.empty() && r.svc.model().transport.loopTo == 4.0);
+    r.ok("transport play --clip ac_1");
+    r.ok("transport loop 2 3");                                 // a loop set by hand wins, and stays
+    r.ok("transport stop");
+    assert(r.svc.model().transport.loopFrom == 2.0 && r.svc.model().transport.loopTo == 3.0);
+    r.ok("transport play --clip ac_1");
+    r.ok("clip delete ac_1");                                   // gone: the song's loop again
+    assert(r.svc.model().transport.loopClip.empty() && r.svc.model().transport.loopTo == 3.0);
+    r.ok("transport stop");
+    assert(contains(r.no("transport play --clip ac_9"), "no clip 'ac_9'"));
+    pass("`transport play --clip` loops the clip's span, follows its edits, and gives the song's loop back (R-ROLL-6)");
+}
+
 namespace
 {
     const BindingModel *binding(const Run &r, const std::string &address)
@@ -1892,6 +1930,7 @@ int main()
     test_audition_plays_a_sample_outside_the_song();
     test_edits_while_playing_are_heard();
     test_loop_and_seek();
+    test_a_clip_plays_looped_and_gives_the_songs_loop_back();
     test_a_bound_value_is_published_live();
     test_a_refusal_is_an_event_and_lands_in_lastError();
     test_the_notation_tables();

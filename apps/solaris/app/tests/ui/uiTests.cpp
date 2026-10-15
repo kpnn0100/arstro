@@ -1259,6 +1259,68 @@ static void test_piano_roll_edits_the_pattern()
     pass("Piano roll: a note clip opens it; click adds (last length), drag follows the pointer and is one move, the edge resizes, velocity drags, double-click deletes — each note fading; snap, quantize, the end; Steps cross-fades and toggles (R-ROLL-1…5)");
 }
 
+static void test_the_roll_plays_its_clip()
+{
+    sltest::Rig r("ui-rollplay", 1280, 800);
+    r.cmd("project new " + r.song("RollPlay") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    const std::string ac1 = r.svc->model().clips[0].id, pt = r.svc->model().clips[0].pattern;
+    r.cmd("note add " + pt + " --pitch 60 --at 0 --length 1");
+    r.cmd("clip duplicate " + ac1);                                   // a linked copy at beat 4
+    const std::string ac2 = r.svc->model().clips[1].id;
+    r.cmd("transport loop 0 2");                                      // the song's own loop
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &wl = r.app->project().windows();
+    // opened from the second clip: that clip is the roll's
+    const artboard::Rect c2 = world(tl, tl.clipRect(ac2));
+    r.click(c2.x + 12.0, cy(c2));
+    r.click(c2.x + 12.0, cy(c2));
+    r.settle();
+    auto &roll = *wl.roll(pt);
+    assert(roll.clip() == ac2 && roll.playheadAlpha() == 0.0);
+    // its ▶: ONE line, the clip looped in the song
+    r.click(world(roll, roll.playRect()));
+    assert(r.sent.back() == "transport play --clip " + ac2);
+    const auto &t = r.svc->model().transport;
+    assert(t.playing && t.loopClip == ac2 && t.loopFrom == 4.0 && t.loopTo == 8.0);
+    // the playhead fades in where the clip is heard — caught mid-fade, never a snap
+    double first = 0.0;
+    for (int k = 0; k < 40 && first == 0.0; ++k)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        r.frame();
+        first = roll.playheadAlpha();
+    }
+    assert(first > 0.0 && first < 1.0 && roll.playheadBeat() >= 0.0 && roll.playheadBeat() < 4.0);
+    assert(roll.looping());
+    // Space stops whatever plays; the song's loop comes back
+    r.key(32);
+    assert(r.sent.back() == "transport stop" && t.loopClip.empty() && t.loopFrom == 0.0 && t.loopTo == 2.0);
+    r.settle();
+    assert(roll.playheadAlpha() == 0.0 && !roll.looping());
+    // stopped, with the roll in front, Space is the roll's ▶
+    r.key(32);
+    assert(r.sent.back() == "transport play --clip " + ac2);
+    r.key(32);
+    assert(r.sent.back() == "transport stop");
+    // a pattern on no track: nothing to sound through — its ▶ says nothing; Space plays the song
+    r.cmd("pattern new --name Loose");
+    const std::string pt2 = r.svc->model().patterns.back().id;
+    r.frame();                                                        // the app has it, as the MIDI list would
+    wl.openRoll(pt2);
+    r.settle();
+    auto &loose = *wl.roll(pt2);
+    assert(loose.clip().empty() && wl.frontRoll() == &loose);
+    const size_t before = r.sent.size();
+    r.click(world(loose, loose.playRect()));
+    assert(r.sent.size() == before);
+    r.key(32);
+    assert(r.sent.back() == "transport play");
+    r.key(32);
+    pass("The roll plays its clip (R-ROLL-6): ▶ is ONE `transport play --clip` for the clip it was opened from, looped in the song; the playhead fades in where it is heard; Space stops whatever plays and, stopped, is the front roll's ▶; the song's loop comes back; a pattern on no track has nothing to play");
+}
+
 static void test_a_kits_roll_names_its_pads()
 {
     sltest::Rig r("ui-roll-kit", 1280, 800);
@@ -1949,6 +2011,7 @@ int main()
     test_automation_rows_draw_and_edit_curves();
     test_bezier_handles_and_the_automation_window();
     test_piano_roll_edits_the_pattern();
+    test_the_roll_plays_its_clip();
     test_a_kits_roll_names_its_pads();
     test_a_line_added_and_sources_relinked();
     test_a_strip_keys_a_later_compressor();

@@ -81,8 +81,11 @@ namespace solaris_ui
         FloatWindow &openDevice(const std::string &dv);
         FloatWindow *window(const std::string &key) const;
         DevicePanel *devicePanel(const std::string &dv) const;
-        /** Open (or bring forward) the piano roll of pattern `pt` (R-ROLL-1). */
-        FloatWindow &openRoll(const std::string &pt);
+        /** Open (or bring forward) the piano roll of pattern `pt` (R-ROLL-1), for clip `ac` when it was
+         *  opened from one — its ▶ loops that clip (R-ROLL-6; '' = the pattern's first in time). */
+        FloatWindow &openRoll(const std::string &pt, const std::string &ac = std::string());
+        /** The piano roll in front of every other window, or null (Space plays it, R-ROLL-6). */
+        PianoRoll *frontRoll() const;
         PianoRoll *roll(const std::string &pt) const;
         /** Open (or bring forward) the window of automation `au` (R-AUTO-11). */
         FloatWindow &openAutomation(const std::string &au);

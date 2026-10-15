@@ -303,6 +303,7 @@ namespace solaris
             mCoalesce.clear();
         }
         if (editing || history) mModel.dirty = true;
+        if (editing || history) followClipLoop(); // R-ROLL-6: the looped clip, as edited
         refreshModel();
         std::vector<Event> landed;
         landed.swap(mPending);
@@ -391,6 +392,7 @@ namespace solaris
         auto open = [&](Project p, const std::string &path) {
             stopPlayer();
             mPosition = mLoopFrom = mLoopTo = 0;
+            mClipLoop.clear();
             mModel.transport = TransportModel();
             mProject = std::move(p);
             mPath = path;
@@ -470,6 +472,7 @@ namespace solaris
             mRecentsStale = true; // Home is where the cards matter: re-read them (a song may have moved meanwhile)
             stopPlayer();
             mPosition = mLoopFrom = mLoopTo = 0;
+            mClipLoop.clear();
             mModel.transport = TransportModel();
             mOpen = false;
             mProject = Project();

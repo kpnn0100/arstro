@@ -1,5 +1,7 @@
 #include "App.h"
 #include "../../interstellar/app/widgets/TextFit.h"
+#include "widgets/FloatWindow.h"
+#include "widgets/PianoRoll.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -317,7 +319,10 @@ namespace solaris_ui
             if (e.keyCode == 32) // Space: play / stop, as every DAW
             {
                 const auto &m = mHooks.model ? mHooks.model() : emptyModel();
-                return dispatch(m.transport.playing ? "transport stop" : "transport play");
+                if (m.transport.playing) return dispatch("transport stop");
+                if (PianoRoll *r = mProject->windows().frontRoll()) // a roll in front: its ▶ (R-ROLL-6)
+                    if (r->togglePlay()) return true;
+                return dispatch("transport play");
             }
             if (e.ctrl && e.keyCode == 'S') return dispatch("project save");
             if (e.ctrl && ((e.keyCode == 'Z' && e.shift) || e.keyCode == 'Y')) return dispatch("redo"); // R-EDM-1

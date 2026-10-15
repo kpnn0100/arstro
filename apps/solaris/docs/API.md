@@ -73,7 +73,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `devices list` | List this machine's audio devices (ids for `settings set output=…`). | R-DEV-1 |
 | `browse <folder>` | List a folder for the browser: sub-folders, audio files, songs. | R-BROWSE-1 |
 | `recents remove <path>` | Take a song off Home's recent list (the file is untouched). | R-HOME-1 |
-| `transport play [--from <beats>]` | Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position. | R-PLAY-1 |
+| `transport play [--from <beats>] [--clip <ac>]` | Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position. --clip plays that clip's span looped, the whole song sounding there (the piano roll's play, R-ROLL-6): it follows the clip as it is edited, and the song's own loop comes back at `transport stop`, a plain `transport play` or a `transport loop`. | R-PLAY-1 |
 | `transport stop` | Stop; the transport stays where it was heard. | R-TIME-4 |
 | `transport seek <beats>` | Move the transport (playing or not). | R-TIME-4 |
 | `transport loop <from\|off> [to]` | Loop between two beats while playing; `off` ends it. | R-TIME-4 |
@@ -334,6 +334,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.position` | number | beats — what is heard *(not in `--stable`)* |
 | `transport.loopFrom` | number | beats |
 | `transport.loopTo` | number | beats; equal to loopFrom = no loop |
+| `transport.loopClip` | string | the clip the loop follows (`transport play --clip`, the piano roll's play); '' = the song's own loop |
 | `transport.latencyMs` | number | the clock device's *(not in `--stable`)* |
 | `transport.device` | string | the clock device ('' = the system default) |
 | `transport.masterPeak` | number[] | L/R peaks of the last played block *(not in `--stable`)* |

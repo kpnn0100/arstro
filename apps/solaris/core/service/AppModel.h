@@ -224,6 +224,7 @@ namespace solaris
         bool playing = false;
         double position = 0;                     // beats — what is HEARD (rendered minus the device's latency)
         double loopFrom = 0, loopTo = 0;         // beats; equal = no loop
+        std::string loopClip;                    // the clip `transport play --clip` loops ('' = the song's loop) — R-ROLL-6
         double latencyMs = 0;                    // the clock device's, while playing
         std::string device;                      // the clock device ("" = the system default)
         float masterPeak[2] = {0, 0};

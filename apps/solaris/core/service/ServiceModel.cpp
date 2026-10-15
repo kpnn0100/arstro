@@ -84,6 +84,7 @@ namespace solaris
         mModel.audition = audition;
         mModel.transport.loopFrom = mLoopFrom;
         mModel.transport.loopTo = mLoopTo;
+        mModel.transport.loopClip = mClipLoop;
         if (!mModel.transport.playing) mModel.transport.position = mPosition;
         mModel.revision = rev + 1;
         mModel.lastError = lastError;

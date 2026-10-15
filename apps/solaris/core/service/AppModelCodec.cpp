@@ -190,6 +190,7 @@ namespace solaris
             {"transport.position", "number", "beats — what is heard", false},
             {"transport.loopFrom", "number", "beats"},
             {"transport.loopTo", "number", "beats; equal to loopFrom = no loop"},
+            {"transport.loopClip", "string", "the clip the loop follows (`transport play --clip`, the piano roll's play); '' = the song's own loop"},
             {"transport.latencyMs", "number", "the clock device's", false},
             {"transport.device", "string", "the clock device ('' = the system default)"},
             {"transport.masterPeak", "number[]", "L/R peaks of the last played block", false},
@@ -478,7 +479,7 @@ namespace solaris
         Json tr = Json::object();
         tr.set("playing", m.transport.playing);
         if (!stable) tr.set("position", m.transport.position);
-        tr.set("loopFrom", m.transport.loopFrom).set("loopTo", m.transport.loopTo);
+        tr.set("loopFrom", m.transport.loopFrom).set("loopTo", m.transport.loopTo).set("loopClip", m.transport.loopClip);
         if (!stable) tr.set("latencyMs", m.transport.latencyMs);
         tr.set("device", m.transport.device);
         if (!stable) tr.set("masterPeak", Json::array().push(Json::number(m.transport.masterPeak[0])).push(Json::number(m.transport.masterPeak[1])));

@@ -101,6 +101,8 @@ namespace solaris
         void liveUpdate(const Command &c);            // after an edit while playing: live messages or an engine swap
         bool buildLive(std::unique_ptr<engine::Engine> &out, std::string &err);
         void stopPlayer();
+        void endClipLoop();                           // R-ROLL-6: the song's loop back
+        void followClipLoop();                        // … the looped clip moved, resized or gone
         void loadMachine();
         bool saveSettings(std::string &err);
         void touchRecent(const std::string &path);
@@ -160,6 +162,8 @@ namespace solaris
         std::map<std::string, std::shared_ptr<Device>> mLatencyProbes; // per type: what its stored values make its latency
         int latencyOf(const DeviceNode &d);
         double mPosition = 0, mLoopFrom = 0, mLoopTo = 0;             // beats
+        std::string mClipLoop;                                        // R-ROLL-6: the clip `transport play --clip` loops ('' = the song's loop)
+        double mSongLoopFrom = 0, mSongLoopTo = 0;                    // … and the song's loop, given back when it ends
     };
 }
 }

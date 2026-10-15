@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — H1: the fourth brief's requirements.*
+*Last updated: 2026-10-15 — H2: play from the roll.*
 
 ---
 
 ## NEXT
 
-**► H2 — play from the roll** (R-ROLL-6), then H3…H6 in order: the 2026-10-15 brief (a song made in the
+**► H3 — a note heard when it is made** (R-ROLL-7), then H4…H6 in order: the 2026-10-15 brief (a song made in the
 window, Bach's Prelude in C, with the UX it finds fixed). B13+ wait; T2 and T3 may go between.
 
 ---
@@ -249,8 +249,14 @@ umbrella's pointer — `arstro.rule` §7).
 
 ### H — a song made in the window (user request, 2026-10-15; discussion round 6)
 - [x] **H1** The brief's requirements: R-ROLL-6/7, R-INST-5, R-SVC-10/11; discussion round 6; this section.
-- [ ] **H2** Play from the roll: its ▶, `transport play --clip`, the clip's loop published, Space with a roll
+- [x] **H2** Play from the roll: its ▶, `transport play --clip`, the clip's loop published, Space with a roll
       in front, the playhead in the roll (R-ROLL-6).
+      — DR-ROLL-6: `transport play --clip <ac>` loops the clip's span in the song, follows its edits, gives the
+      song's loop back (stop, a plain play, the clip deleted; a hand-set loop stays); `transport.loopClip`. The
+      roll knows the clip it was opened from (else the pattern's first); ▶/■ in its toolbar, dimmed on no track;
+      Space stops whatever plays and, stopped, is the front roll's ▶; the playhead fades in where the clip is
+      heard and the grid pages after it. L2 hears the kick each loop; UI test; shot `piano-roll-playing`. 3
+      mutants caught (a snapping playhead, stop keeping the clip's loop, a loop not following its clip).
 - [ ] **H3** A note heard when it is made: `note preview`, a preview stream through the track's chain; the
       roll sounds an added note, a pitch a drag enters, a pressed key (R-ROLL-7).
 - [ ] **H4** The piano: the DSP library's physical piano as a library instrument and a registry entry

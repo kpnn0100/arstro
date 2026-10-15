@@ -19,6 +19,7 @@ namespace solaris_ui
         constexpr double kChipW = 35.75;  // space::u(11)
         constexpr double kModeW = 52.0;   // space::u(16)
         constexpr double kQuantW = 71.5;  // space::u(22)
+        constexpr double kPlayW = 29.25;  // space::u(9): the roll's ▶
         constexpr double kEdge = 5.0;     // a note's right edge, grabbed to resize
         constexpr double kTol = 0.5 / 960.0;
         Color fade(Color c, double a) { c.a *= a; return c; }
@@ -79,6 +80,25 @@ namespace solaris_ui
         mNames.clear();
         for (const auto &t : m.deviceTypes)
             if (t.name == pt->instrument) mNames = t.noteNames;
+        // the roll's clip (R-ROLL-6): the one it was opened from while it lasts, else the first in time
+        const solaris::ClipModel *cl = nullptr;
+        for (const auto &c : m.clips)
+            if (c.pattern == mPattern && c.id == mClipWanted) cl = &c;
+        if (!cl)
+            for (const auto &c : m.clips)
+                if (c.pattern == mPattern && (!cl || c.at < cl->at)) cl = &c;
+        mClip = cl ? cl->id : std::string();
+        mClipAt = cl ? cl->at : 0.0;
+        mClipLen = cl ? cl->length : 0.0;
+        mPlaying = m.transport.playing;
+        mLooping = !mClip.empty() && m.transport.loopClip == mClip;
+        // where the clip is heard, in the pattern (a clip longer than its pattern loops it)
+        mHeadBeat = -1;
+        if (mPlaying && cl && m.transport.position >= mClipAt && m.transport.position < mClipAt + mClipLen)
+        {
+            const double in = m.transport.position - mClipAt;
+            mHeadBeat = pt->length > 0 ? std::fmod(in, pt->length) : in;
+        }
         // keyed: a note the model still has stays; a new one fades in; a gone one fades out where it was
         for (auto &l : mNotes) l.gone = true;
         for (const auto &n : pt->notes)
@@ -133,7 +153,15 @@ namespace solaris_ui
         return Rect{beatToX(mLive.at), pitchToY(mLive.pitch) + 1.0, std::max(3.0, mLive.length * mPpb.value() - 1.0), kNoteH - 2.0};
     }
 
-    Rect PianoRoll::snapRect(int i) const { return Rect{space::padX() + 34.0 + i * (kChipW + 3.25), 4.875, kChipW, kToolH - 9.75}; }
+    Rect PianoRoll::playRect() const { return Rect{space::padX(), 4.875, kPlayW, kToolH - 9.75}; }
+    Rect PianoRoll::snapRect(int i) const { return Rect{playRect().right() + 13.0 + 34.0 + i * (kChipW + 3.25), 4.875, kChipW, kToolH - 9.75}; }
+
+    bool PianoRoll::togglePlay()
+    {
+        if (mClip.empty()) return false; // on no track: nothing to sound through
+        send(mLooping && mPlaying ? std::string("transport stop") : "transport play --clip " + mClip);
+        return true;
+    }
     Rect PianoRoll::modeRect(int m) const
     {
         const Rect last = snapRect(4);
@@ -217,6 +245,20 @@ namespace solaris_ui
         if (mEndLast < 0) { mEnd.set(mModel.length); mEndLast = mModel.length; }
         else if (mModel.length != mEndLast) { mEnd.animateTo(mModel.length, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); mEndLast = mModel.length; }
         mEnd.update(nowMs);
+        const bool head = mHeadBeat >= 0.0;
+        if (head != mHeadLast)
+        {
+            mHeadAlpha.animateTo(head ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mHeadLast = head;
+        }
+        mHeadAlpha.update(nowMs);
+        if (head && mDrag == Drag::None)
+        {
+            // keep it in view: past the grid's right edge (or wrapped back before its left), a page on
+            const Rect g = gridRect();
+            const double x = kKeysW + mHeadBeat * mPpbTarget - mScrollX.target();
+            if (g.w > 40.0 && (x > g.right() - 13.0 || x < g.x)) mScrollX.scrollBy(x - (g.x + 13.0));
+        }
         mPpb.update(nowMs);
         mScrollX.advance(nowMs);
         mScrollY.advance(nowMs);
@@ -268,6 +310,7 @@ namespace solaris_ui
             for (int m = 0; m < 2; ++m)
                 if (modeRect(m).contains(local)) h = 10 + m;
             if (quantizeRect().contains(local)) h = 20;
+            if (playRect().contains(local) && !mClip.empty()) h = 30;
             mHover.setHovered(h);
             return true;
         }
@@ -365,6 +408,7 @@ namespace solaris_ui
         }
         case Gesture::Type::Click:
         {
+            if (playRect().contains(local)) { togglePlay(); return true; }
             for (int i = 0; i < 5; ++i)
                 if (snapRect(i).contains(local)) { mSnap = kSnaps[i]; return true; }
             for (int m = 0; m < 2; ++m)
@@ -569,12 +613,38 @@ namespace solaris_ui
         }
         t.restore();
 
+        // the playhead (R-ROLL-6): where the clip is heard
+        if (mHeadAlpha.value() > 0.001 && mHeadBeat >= 0.0)
+        {
+            const double x = std::round(beatToX(mHeadBeat)) + 0.5;
+            if (x >= grid.x && x <= W)
+            {
+                t.setStroke(fade(surface::playhead(), mHeadAlpha.value()), 1.0);
+                t.beginPath(); t.moveTo(x, grid.y); t.lineTo(x, H); t.strokePath();
+            }
+        }
+
         // the toolbar
         drawRoundedRect(t, Rect{0, 0, W, kToolH}, 0.0, Paint::filled(surface::headerBg()));
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, kToolH - 0.5); t.lineTo(W, kToolH - 0.5); t.strokePath();
         t.setFill(palette::mutedForeground());
-        t.drawText("SNAP", space::padX(), textfit::baseline(kToolH * 0.5, 8.0), 8.0, font::sansSemiBold(), 0.13 * 8.0);
+        {
+            // ▶ / ■: the roll's play — lit while its clip loops; dimmed with nothing to sound through
+            const Rect r = playRect();
+            const bool on = mLooping && mPlaying, can = !mClip.empty();
+            const double hv = mHover.amount(30);
+            drawRoundedRect(t, r, radius::control(), Paint::filled(on ? palette::primary() : lerpColor(palette::secondary(), palette::popover(), hv)));
+            const Color ink = fade(on ? palette::primaryForeground() : palette::foreground(), can ? 1.0 : 0.35);
+            const double cx = r.x + r.w * 0.5, cy = r.y + r.h * 0.5;
+            t.setFill(ink);
+            t.beginPath();
+            if (on) { t.moveTo(cx - 4.0, cy - 4.0); t.lineTo(cx + 4.0, cy - 4.0); t.lineTo(cx + 4.0, cy + 4.0); t.lineTo(cx - 4.0, cy + 4.0); }
+            else { t.moveTo(cx - 3.5, cy - 5.0); t.lineTo(cx + 5.0, cy); t.lineTo(cx - 3.5, cy + 5.0); }
+            t.closePath();
+            t.fillPath();
+        }
+        t.drawText("SNAP", playRect().right() + 13.0, textfit::baseline(kToolH * 0.5, 8.0), 8.0, font::sansSemiBold(), 0.13 * 8.0);
         auto chip = [&](const Rect &r, const char *label, bool on, int hoverId) {
             const double hv = mHover.amount(hoverId);
             drawRoundedRect(t, r, radius::control(), Paint::filled(on ? palette::primary() : lerpColor(palette::secondary(), palette::popover(), hv)));

@@ -15,8 +15,15 @@
  *  deletes it; a velocity stem dragged sets it. Steps mode: a row per pad (or per pitch in use),
  *  sixteen steps a bar; a click toggles a note. Snap 1/4, 1/8, 1/16 (default), 1/32 or off.
  *
+ *  Its play (R-ROLL-6): the ▶ at the toolbar's start loops the roll's clip — the one it was opened from,
+ *  else the pattern's first in time — with the song sounding there (`transport play --clip`, ONE line);
+ *  ■ (the same button, while that clip loops) stops it. The playhead is drawn where the clip is heard
+ *  and kept in view, the grid following it a page at a time, eased. A pattern on no track has nothing to
+ *  sound through: the ▶ is dimmed.
+ *
  *  Nothing snaps on screen (§1): notes are keyed by (pitch, beat) and fade in and out; zoom and
- *  scroll ease; the mode switch cross-fades; the dragged note is the pointer's.
+ *  scroll ease; the mode switch cross-fades; the dragged note is the pointer's; the playhead fades in
+ *  and out with the play.
  */
 #pragma once
 #include "../Theme.h"
@@ -45,6 +52,15 @@ namespace solaris_ui
 
         explicit PianoRoll(std::string patternId);
         const std::string &pattern() const { return mPattern; }
+        /** The clip the roll was opened from (R-ROLL-6) — its ▶ loops it; '' = the pattern's first in time. */
+        void setClip(const std::string &ac) { mClipWanted = ac; }
+        const std::string &clip() const { return mClip; }  // as resolved ('' = the pattern is on no track)
+        /** ▶ / ■ — the roll's play (also Space with the roll in front). False: nothing to play. */
+        bool togglePlay();
+        bool looping() const { return mLooping; }           // its clip is the one the transport loops
+        artboard::Rect playRect() const;
+        double playheadBeat() const { return mHeadBeat; }   // in the pattern (−1: not heard here)
+        double playheadAlpha() const { return mHeadAlpha.value(); } // LIVE
         bool present() const { return mPresent; }
         std::string title() const;
 
@@ -104,6 +120,11 @@ namespace solaris_ui
         void paintSteps(artboard::IRenderTarget &t, double a) const;
 
         std::string mPattern;
+        std::string mClipWanted, mClip;             // R-ROLL-6
+        double mClipAt = 0, mClipLen = 0;
+        bool mPlaying = false, mLooping = false, mHeadLast = false;
+        double mHeadBeat = -1;
+        artboard::AnimatedProperty mHeadAlpha{0.0};
         bool mPresent = false;
         solaris::PatternModel mModel;
         std::vector<solaris::NoteNameModel> mNames; // the instrument's named keys

@@ -57,7 +57,7 @@ namespace solaris_ui
         mBrowser->onCopy = copy;
         mTimeline->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
         mTimeline->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
-        mTimeline->onOpenPattern = [this](const std::string &pt) { mWindows->openRoll(pt); };
+        mTimeline->onOpenPattern = [this](const std::string &pt, const std::string &ac) { mWindows->openRoll(pt, ac); };
         mTimeline->onOpenAutomation = [this](const std::string &au) { mWindows->openAutomation(au); }; // R-AUTO-11
         mDock->onCommand = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
         mDock->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };

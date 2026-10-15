@@ -197,10 +197,12 @@ namespace solaris
             {K::Browse, "browse", "<folder>", 1, 1, {}, "List a folder for the browser: sub-folders, audio files, songs.", "R-BROWSE-1"},
             {K::RecentsRemove, "recents remove", "<path>", 1, 1, {}, "Take a song off Home's recent list (the file is untouched).", "R-HOME-1"},
 
-            {K::TransportPlay, "transport play", "", 0, 0, {"from=<beats>"},
+            {K::TransportPlay, "transport play", "", 0, 0, {"from=<beats>", "clip=<ac>"},
              "Play on the clock device (settings output), from --from or where the transport stands. Edits while "
              "playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a "
-             "new engine swapped in at the same position.", "R-PLAY-1"},
+             "new engine swapped in at the same position. --clip plays that clip's span looped, the whole song "
+             "sounding there (the piano roll's play, R-ROLL-6): it follows the clip as it is edited, and the song's "
+             "own loop comes back at `transport stop`, a plain `transport play` or a `transport loop`.", "R-PLAY-1"},
             {K::TransportStop, "transport stop", "", 0, 0, {}, "Stop; the transport stays where it was heard.", "R-TIME-4"},
             {K::TransportSeek, "transport seek", "<beats>", 1, 1, {}, "Move the transport (playing or not).", "R-TIME-4"},
             {K::TransportLoop, "transport loop", "<from|off> [to]", 1, 2, {}, "Loop between two beats while playing; `off` ends it.", "R-TIME-4"},

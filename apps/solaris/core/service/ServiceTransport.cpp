@@ -177,6 +177,25 @@ namespace solaris
                 if (!parseNumber(c.flag("from"), x) || x < 0) { err = "--from must be beats ≥ 0"; return false; }
                 mPosition = toTick(x);
             }
+            if (c.has("clip"))
+            {
+                // R-ROLL-6: the roll's play — the clip's span, looped, the song sounding there
+                const Clip *cl = nullptr;
+                for (const auto &k : mProject.clips)
+                    if (k.id == c.flag("clip")) cl = &k;
+                if (!cl) { err = "no clip '" + c.flag("clip") + "'"; return false; }
+                const double len = clipLengthBeats(mProject, *cl);
+                if (len <= 0) { err = "clip '" + cl->id + "' has no length to loop"; return false; }
+                if (mClipLoop.empty()) { mSongLoopFrom = mLoopFrom; mSongLoopTo = mLoopTo; }
+                mClipLoop = cl->id;
+                mLoopFrom = cl->at;
+                mLoopTo = cl->at + len;
+                if (!c.has("from") || mPosition < mLoopFrom || mPosition >= mLoopTo) mPosition = mLoopFrom;
+            }
+            else endClipLoop(); // the song's play: the song's loop
+            mModel.transport.loopFrom = mLoopFrom;
+            mModel.transport.loopTo = mLoopTo;
+            mModel.transport.loopClip = mClipLoop;
             stopPlayer();
             std::unique_ptr<engine::Engine> eng;
             if (!buildLive(eng, err)) return false;
@@ -210,8 +229,11 @@ namespace solaris
         }
         case K::TransportStop:
             stopPlayer();
+            endClipLoop();
             mModel.transport = TransportModel();
             mModel.transport.position = mPosition;
+            mModel.transport.loopFrom = mLoopFrom;
+            mModel.transport.loopTo = mLoopTo;
             announce();
             return true;
         case K::TransportSeek:
@@ -232,6 +254,7 @@ namespace solaris
         case K::TransportLoop:
         {
             if (!requireOpen(err)) return false;
+            mClipLoop.clear(); // a loop set by hand is the song's: the roll's play gives way to it
             if (c.arg(0) == "off") { mLoopFrom = mLoopTo = 0; }
             else
             {
@@ -246,11 +269,44 @@ namespace solaris
                                  mLoopTo > mLoopFrom ? (long long)std::llround(mLoopTo * spb) : 0);
             mModel.transport.loopFrom = mLoopFrom;
             mModel.transport.loopTo = mLoopTo;
+            mModel.transport.loopClip.clear();
             announce();
             return true;
         }
         default:
             return false;
+        }
+    }
+
+    void SolarisService::endClipLoop()
+    {
+        if (mClipLoop.empty()) return;
+        mClipLoop.clear();
+        mLoopFrom = mSongLoopFrom;
+        mLoopTo = mSongLoopTo;
+        if (mPlayer)
+        {
+            const double spb = 60.0 / std::max(1.0, mProject.header.bpm) * mProject.header.sampleRate;
+            mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(mLoopFrom * spb) : 0,
+                             mLoopTo > mLoopFrom ? (long long)std::llround(mLoopTo * spb) : 0);
+        }
+    }
+
+    void SolarisService::followClipLoop()
+    {
+        if (mClipLoop.empty()) return;
+        const Clip *cl = nullptr;
+        for (const auto &k : mProject.clips)
+            if (k.id == mClipLoop) cl = &k;
+        const double len = cl ? clipLengthBeats(mProject, *cl) : 0.0;
+        if (!cl || len <= 0) { endClipLoop(); return; } // the clip is gone: the song's loop again
+        if (cl->at == mLoopFrom && cl->at + len == mLoopTo) return;
+        mLoopFrom = cl->at;
+        mLoopTo = cl->at + len;
+        if (mPlayer)
+        {
+            const double spb = 60.0 / std::max(1.0, mProject.header.bpm) * mProject.header.sampleRate;
+            mPlayer->setLoop((long long)std::llround(mLoopFrom * spb), (long long)std::llround(mLoopTo * spb));
         }
     }
 

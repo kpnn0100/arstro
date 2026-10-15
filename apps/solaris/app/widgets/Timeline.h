@@ -132,7 +132,7 @@ namespace solaris_ui
 
         std::function<void(const std::string &line)> onCommand;
         std::function<void(const std::string &clipId)> onSelect;
-        std::function<void(const std::string &patternId)> onOpenPattern; // a note clip double-clicked: its piano roll (R-ROLL-1)
+        std::function<void(const std::string &patternId, const std::string &clipId)> onOpenPattern; // a note clip double-clicked: its piano roll, for that clip (R-ROLL-1, R-ROLL-6)
         std::function<void(const std::string &au)> onOpenAutomation;     // an automation row double-clicked: its window (R-AUTO-11)
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
         std::function<void(const std::string &text)> onCopy;      // the host's clipboard: Copy ID (R-UI-11)

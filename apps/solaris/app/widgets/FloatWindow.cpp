@@ -152,7 +152,7 @@ namespace solaris_ui
         return *w;
     }
 
-    FloatWindow &WindowLayer::openRoll(const std::string &pt)
+    FloatWindow &WindowLayer::openRoll(const std::string &pt, const std::string &ac)
     {
         const std::string key = "roll:" + pt;
         FloatWindow *w = window(key);
@@ -164,6 +164,7 @@ namespace solaris_ui
             roll->bind(mModel);
             w = &place(std::make_shared<FloatWindow>(key, roll), 720.0, 460.0);
         }
+        if (!ac.empty()) static_cast<PianoRoll &>(w->content()).setClip(ac); // opened from a clip: that clip's roll
         w->open();
         bind(mModel, mInteracting);
         return *w;
@@ -192,6 +193,18 @@ namespace solaris_ui
     {
         FloatWindow *w = window("auto:" + au);
         return w ? static_cast<AutomationPanel *>(&w->content()) : nullptr;
+    }
+
+    PianoRoll *WindowLayer::frontRoll() const
+    {
+        // the stacking order is the child order: the last open window is in front
+        for (auto it = children().rbegin(); it != children().rend(); ++it)
+        {
+            auto *w = dynamic_cast<FloatWindow *>(it->get());
+            if (!w || !w->isOpen()) continue;
+            return w->key().rfind("roll:", 0) == 0 ? static_cast<PianoRoll *>(&w->content()) : nullptr;
+        }
+        return nullptr;
     }
 
     PianoRoll *WindowLayer::roll(const std::string &pt) const

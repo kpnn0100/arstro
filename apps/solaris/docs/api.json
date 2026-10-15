@@ -667,12 +667,13 @@
     },
     {
       "verb": "transport play",
-      "usage": "transport play [--from <beats>]",
+      "usage": "transport play [--from <beats>] [--clip <ac>]",
       "args": "",
       "flags": [
-        "from=<beats>"
+        "from=<beats>",
+        "clip=<ac>"
       ],
-      "summary": "Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position.",
+      "summary": "Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position. --clip plays that clip's span looped, the whole song sounding there (the piano roll's play, R-ROLL-6): it follows the clip as it is edited, and the song's own loop comes back at `transport stop`, a plain `transport play` or a `transport loop`.",
       "requirement": "R-PLAY-1"
     },
     {
@@ -1932,6 +1933,12 @@
       "path": "transport.loopTo",
       "type": "number",
       "summary": "beats; equal to loopFrom = no loop",
+      "stable": true
+    },
+    {
+      "path": "transport.loopClip",
+      "type": "string",
+      "summary": "the clip the loop follows (`transport play --clip`, the piano roll's play); '' = the song's own loop",
       "stable": true
     },
     {
