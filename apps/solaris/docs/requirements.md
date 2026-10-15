@@ -689,6 +689,27 @@ allocates, frees or locks.
 row a dragged note enters (`:382`), a Steps cell turned on, and a key pressed or swept (`:358` — the key lit while
 held, eased in and out); lengths 1/8 to 1 beat. A pattern on no track is made, not heard.
 
+### DR-ROLL-8 A selection in the roll, and what is done to it (R-ROLL-8)
+**Grammar.** `notes move <pt> "<pitch@beat> …" [--by <beats>] [--semi <n>]` and `notes delete <pt> "<pitch@beat>
+…"` (`core/service/ServiceCompose.cpp:190`) act on several notes as ONE edit (one undo step); `--by` may be
+negative. Refused whole, naming the first: a name that matches no note, a note that would land on one not moved
+(a chord moved together may pass over its own places), a pitch outside 0–127, a start before beat 0. A copy is
+`notes add` with full tokens (`pitch@beat:length:vel`), which already replaces a note it lands on.
+**The roll** (`app/widgets/PianoRoll.cpp`). The selection is the view's: a set of note keys, emptied of any note
+the model no longer has. A click on a note selects it, Shift+click adds or removes it (`:654`); a click on empty
+grid adds a note (R-ROLL-2) and lets go of the selection; Ctrl on the empty grid draws a box that selects every
+note it touches (Shift keeps what was selected) (`:572`). Selected notes are lit — brighter, outlined in the
+accent — eased in and out (120 ms). A selected note dragged (with others selected) carries the whole selection
+with the pointer, kept at or after beat 0 and inside 0–127, heard at each row the pressed note enters (R-ROLL-7),
+and lands as ONE `notes move` (`:565`, `moveSelection` `:214` — the moved notes appear where they were let go
+at once, still selected). Keys (`PianoRoll::key`, `:246`): ↑/↓ a semitone (Shift: an octave), ←/→ a snap step
+(a sixteenth when Off) — `notes move`; Delete/Backspace — `notes delete`; Ctrl+D — the selection again right
+after itself, by its span (earliest start to latest end, up to the snap), `notes add`, the copy selected
+(`addSelected`, `:238`); Ctrl+C — to the clipboard every roll shares (the window layer's); Ctrl+V — pasted into
+the roll at the same beats, selected; Ctrl+A — every note; Escape — none. The keys reach the roll the pointer
+last pressed in: `App` notes on every press whether it fell in the front roll (`app/App.cpp:89`) and offers the
+key to that roll first (`:338`) — a press on the lanes gives the keys back to them.
+
 ### DR-VST-1 Our instruments as VST3 plugins (R-VST-1…5)
 **The SDK:** Steinberg's `vst3sdk` **v3.8.1_build_84**, cloned recursively to `~/sdk/vst3sdk`; its
 `LICENSE.txt` (and `base`, `pluginterfaces`, `public.sdk`'s) is the **MIT licence** (Steinberg relicensed

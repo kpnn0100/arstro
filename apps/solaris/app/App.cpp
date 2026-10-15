@@ -82,6 +82,12 @@ namespace solaris_ui
                 return; // a window's parameter row: its menu (a slider would swallow the click)
             if (mConfirm->isOpen()) { mConfirm->onGesture(g); return; }
             if (mSettings->isOpen()) { mSettings->onGesture(g); return; }
+            if (g.type == Gesture::Type::Down && mScreen == "project")
+            {
+                // R-ROLL-8: the keyboard follows the pointer — a press in the front roll gives it the keys
+                PianoRoll *r = mProject->windows().frontRoll();
+                mRollKeys = r && r->localBounds().contains(r->toLocal(g.pos));
+            }
             if (mScreen == "home") mHome->onGesture(g);
             else mProject->onGesture(g);
         });
@@ -329,6 +335,9 @@ namespace solaris_ui
                     if (r->togglePlay()) return true;
                 return dispatch("transport play");
             }
+            if (mRollKeys) // R-ROLL-8: the roll the pointer last pressed in takes its keys (a selection's)
+                if (PianoRoll *r = mProject->windows().frontRoll())
+                    if (r->key(e)) return true;
             if (e.ctrl && e.keyCode == 'S') return dispatch("project save");
             if (e.ctrl && ((e.keyCode == 'Z' && e.shift) || e.keyCode == 'Y')) return dispatch("redo"); // R-EDM-1
             if (e.ctrl && e.keyCode == 'Z') return dispatch("undo");

@@ -1236,6 +1236,42 @@ static void test_a_note_preview_is_the_strip_heard_outside_the_song()
     pass("`note preview`: a note through the strip's chain — its instrument, fader and pan — is the strip's sound in the song sample for sample, outside it (not an edit); it ends after its tail; a second takes over with a fade, no jump (R-ROLL-7)");
 }
 
+static void test_notes_move_and_delete_a_selection_as_one_edit()
+{
+    Run r;
+    r.ok("project new " + freshSong("selection") + " --bpm 120");
+    r.ok("pattern new --name Fig --length 4");
+    r.ok("notes add pt_1 \"C4@0:2 E4@0.25:1.75 G4@0.5 C5@0.75 E5@1\"");
+    const int depth = r.svc.model().undoDepth;
+    // the upper three moved a beat later and up a fifth: ONE edit, the rest untouched
+    r.ok("notes move pt_1 \"G4@0.5 C5@0.75 E5@1\" --by 1 --semi 7");
+    const auto &n = r.svc.model().patterns[0].notes;
+    auto has = [&](int pitch, double at) {
+        for (const auto &x : n)
+            if (x.pitch == pitch && std::fabs(x.at - at) < 1e-9) return true;
+        return false;
+    };
+    assert(n.size() == 5 && has(60, 0) && has(64, 0.25) && has(74, 1.5) && has(79, 1.75) && has(83, 2.0) && !has(67, 0.5));
+    assert(r.svc.model().undoDepth == depth + 1);
+    r.ok("undo");
+    assert(has(67, 0.5) && has(72, 0.75) && has(76, 1.0));
+    // refused whole, naming the first: no such note; onto a note not moved; out of range; before beat 0
+    assert(contains(r.no("notes move pt_1 \"G4@0.5 A4@3\" --by 1"), "`A4@3`: pt_1 has no note there"));
+    assert(contains(r.no("notes move pt_1 \"G4@0.5\" --by -0.5 --semi -7"), "would land on 60@0, which is not moved"));
+    assert(contains(r.no("notes move pt_1 \"E5@1\" --semi 60"), "outside 0–127"));
+    assert(contains(r.no("notes move pt_1 \"C4@0\" --by -1"), "before beat 0"));
+    assert(has(67, 0.5) && n.size() == 5);                             // nothing moved
+    // a selection moved onto its own old places is fine (a chord moved up together)
+    r.ok("notes move pt_1 \"C4@0 E4@0.25\" --semi 4");
+    assert(has(64, 0) && has(68, 0.25));
+    // deleted as one edit
+    const int d2 = r.svc.model().undoDepth;
+    r.ok("notes delete pt_1 \"G4@0.5 C5@0.75\"");
+    assert(n.size() == 3 && !has(67, 0.5) && !has(72, 0.75) && r.svc.model().undoDepth == d2 + 1);
+    assert(contains(r.no("notes delete pt_1 \"G4@0.5\""), "has no note there"));
+    pass("`notes move` / `notes delete`: a selection moved (beats and semitones) or removed as ONE edit; refused whole naming the first — no note, onto a note not moved, out of range, before 0 (R-ROLL-8)");
+}
+
 static void test_edits_while_playing_are_heard()
 {
     Run r;
@@ -1993,6 +2029,7 @@ int main()
     test_the_metronome_clicks_live_and_never_in_a_render();
     test_audition_plays_a_sample_outside_the_song();
     test_a_note_preview_is_the_strip_heard_outside_the_song();
+    test_notes_move_and_delete_a_selection_as_one_edit();
     test_edits_while_playing_are_heard();
     test_loop_and_seek();
     test_a_clip_plays_looped_and_gives_the_songs_loop_back();

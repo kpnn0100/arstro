@@ -103,6 +103,7 @@ namespace solaris_ui
         artboard::GestureRecognizer mRecognizer;
         std::string mScreen = "home";
         bool mScreenInit = false;
+        bool mRollKeys = false; // R-ROLL-8: the pointer last pressed in the front piano roll — the keys go to it
         long long mBoundRevision = -1;
         bool mBoundAudition = false;
         std::string mToastText;

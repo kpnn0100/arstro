@@ -161,6 +161,7 @@ namespace solaris_ui
             auto roll = std::make_shared<PianoRoll>(pt);
             roll->onCommand = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
             roll->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
+            roll->setClipboard(mNoteClipboard); // copy in one roll, paste in any
             roll->bind(mModel);
             w = &place(std::make_shared<FloatWindow>(key, roll), 720.0, 460.0);
         }

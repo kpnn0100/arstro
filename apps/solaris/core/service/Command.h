@@ -37,7 +37,7 @@ namespace solaris
             LaneAdd, LaneDelete, LaneMove,
             ClipAdd, ClipMove, ClipDuplicate, ClipUnique, ClipDelete,
             PatternNew, NoteAdd, NoteDelete, NoteMove, PatternQuantize,
-            NotesAdd, PatternSteps, PatternDuplicate, PatternClear, PatternDelete, PatternTranspose, // R-SVC-8
+            NotesAdd, NotesMove, NotesDelete, PatternSteps, PatternDuplicate, PatternClear, PatternDelete, PatternTranspose, // R-SVC-8
             Ls, Show, PatternPrint,                                                                   // R-SVC-8: read back
             Undo, Redo,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,

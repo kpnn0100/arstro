@@ -174,7 +174,7 @@ namespace solaris
         case K::PatternNew: case K::NoteAdd: case K::NoteDelete: case K::NoteMove: case K::PatternQuantize:
             ok = clipCommand(c, err);
             break;
-        case K::NotesAdd: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
+        case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose:
             ok = composeCommand(c, err);
             break;

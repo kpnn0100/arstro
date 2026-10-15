@@ -187,6 +187,70 @@ namespace solaris
             mOutput = countOf(add.size(), "note", "notes") + "\n" + pastEndWarning(*pt);
             return true;
         }
+        case K::NotesMove:
+        case K::NotesDelete:
+        {
+            // R-ROLL-8: a selection, as ONE edit — each note named by pitch@beat; refused whole, naming the first
+            const bool move = c.kind == K::NotesMove;
+            double by = 0;
+            int semi = 0;
+            if (move)
+            {
+                // --by may be negative: a selection moves left as well as right
+                if (c.has("by") && (!parseNumber(c.flag("by"), by) || !std::isfinite(by) || std::fabs(by) > 1e6))
+                { err = "--by is a number of beats (negative moves earlier), got `" + c.flag("by") + "`"; return false; }
+                double s = 0;
+                if (c.has("semi") && (!parseNumber(c.flag("semi"), s) || s != std::floor(s) || std::fabs(s) > 127))
+                { err = "--semi is a whole number of semitones"; return false; }
+                semi = (int)s;
+            }
+            const auto words = wordsAfterFirst(c);
+            if (words.empty()) { err = std::string("notes ") + (move ? "move" : "delete") + " needs notes: <pitch>@<beat> …"; return false; }
+            std::vector<size_t> which; // indexes into pt->notes
+            for (size_t i = 0; i < words.size(); ++i)
+            {
+                NoteToken t;
+                int pitch = 0;
+                std::string why;
+                if (!parseNoteToken(words[i], t, why) || !pitchOf(t.pitch, pt->id, pitch, why))
+                { err = "note " + std::to_string(i + 1) + " `" + words[i] + "`: " + why + " — nothing changed"; return false; }
+                size_t k = pt->notes.size();
+                for (size_t j = 0; j < pt->notes.size(); ++j)
+                    if (pt->notes[j].pitch == pitch && sameTick(pt->notes[j].at, toTick(t.at))) k = j;
+                if (k == pt->notes.size()) { err = "note " + std::to_string(i + 1) + " `" + words[i] + "`: " + pt->id + " has no note there — nothing changed"; return false; }
+                if (std::find(which.begin(), which.end(), k) == which.end()) which.push_back(k);
+            }
+            if (!move)
+            {
+                std::sort(which.rbegin(), which.rend());
+                for (size_t k : which) pt->notes.erase(pt->notes.begin() + (long)k);
+                changed("notes.deleted", pt->id);
+                mOutput = countOf(which.size(), "note", "notes") + " deleted\n";
+                return true;
+            }
+            const double shift = toTick(by);
+            for (size_t k : which)
+            {
+                const Note &n = pt->notes[k];
+                const int to = n.pitch + semi;
+                const double at = n.at + shift;
+                const std::string name = std::to_string(n.pitch) + "@" + beatText(n.at);
+                if (to < 0 || to > 127) { err = "note " + name + " would go to pitch " + std::to_string(to) + ", outside 0–127 — nothing moved"; return false; }
+                if (at < -0.5 / kPpq) { err = "note " + name + " would start before beat 0 — nothing moved"; return false; }
+                for (size_t j = 0; j < pt->notes.size(); ++j)
+                    if (std::find(which.begin(), which.end(), j) == which.end() && pt->notes[j].pitch == to && sameTick(pt->notes[j].at, at))
+                    { err = "note " + name + " would land on " + std::to_string(to) + "@" + beatText(at) + ", which is not moved — nothing moved"; return false; }
+            }
+            for (size_t k : which)
+            {
+                pt->notes[k].pitch += semi;
+                pt->notes[k].at = std::max(0.0, pt->notes[k].at + shift);
+            }
+            sortNotes(*pt);
+            changed("notes.moved", pt->id);
+            mOutput = countOf(which.size(), "note", "notes") + " moved\n";
+            return true;
+        }
         case K::PatternSteps:
         {
             if (!c.has("pitch")) { err = "pattern steps needs --pitch (a number, a name or a pad: kick)"; return false; }

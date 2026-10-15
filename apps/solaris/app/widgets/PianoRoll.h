@@ -25,6 +25,14 @@
  *  turned on and a key pressed (or swept) are heard through the clip's track — `note preview <ch> <pitch>`,
  *  a line beside the edit's own, never in undo. The pressed key is lit while held.
  *
+ *  A selection (R-ROLL-8, the view's): a click on a note selects it (Shift+click adds or removes it),
+ *  Ctrl+drag on the grid draws a box, Ctrl+A takes every note, Escape lets go; the selection is lit. Done
+ *  to it, each ONE line: dragged, the whole selection moves with the pointer and lands as `notes move`;
+ *  ↑/↓ transpose it (Shift: an octave), ←/→ move it a snap step; Delete removes it (`notes delete`);
+ *  Ctrl+D lays a copy right after it (its span, rounded up to the snap) and Ctrl+C / Ctrl+V copy it and
+ *  paste it, here or in another roll, at the same beats (`notes add`) — the copy becomes the selection.
+ *  The keys reach the roll the pointer last pressed in (`App`).
+ *
  *  Nothing snaps on screen (§1): notes are keyed by (pitch, beat) and fade in and out; zoom and
  *  scroll ease; the mode switch cross-fades; the dragged note is the pointer's; the playhead fades in
  *  and out with the play.
@@ -37,6 +45,8 @@
 #include "../../../cosmo/widgets/HoverFade.h"
 #include <functional>
 #include <map>
+#include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -66,6 +76,15 @@ namespace solaris_ui
         double playheadBeat() const { return mHeadBeat; }   // in the pattern (−1: not heard here)
         double playheadAlpha() const { return mHeadAlpha.value(); } // LIVE
         artboard::Rect keyRect(int pitch) const;            // a key on the left (R-ROLL-7: pressed, it sounds)
+        // R-ROLL-8: the selection (the view's) and what is done to it
+        bool selected(int pitch, double at) const;
+        int selectionCount() const { return (int)mSel.size(); }
+        double selectAmount(int pitch, double at) const;   // a note's selection light, LIVE
+        artboard::Rect boxRect() const;                     // the box being drawn (empty when none)
+        /** A key while this roll has the keyboard: true when it took it. */
+        bool key(const artboard::KeyEvent &e);
+        /** The note clipboard every roll shares (Ctrl+C in one, Ctrl+V in any). */
+        void setClipboard(std::shared_ptr<std::vector<solaris::NoteModel>> c) { mClipboard = std::move(c); }
         double keyLit(int pitch) const;                     // a pressed key's light, LIVE
         bool present() const { return mPresent; }
         std::string title() const;
@@ -114,21 +133,34 @@ namespace solaris_ui
             solaris::NoteModel n;
             artboard::AnimatedProperty alpha{0.0};
             double aLast = 0;
+            artboard::AnimatedProperty sel{0.0};    // R-ROLL-8: its selection light
+            bool selLast = false;
             bool placed = false, gone = false, instant = false;
         };
-        enum class Drag { None, Move, Resize, Velocity, End, Keys };
+        enum class Drag { None, Move, Resize, Velocity, End, Keys, MoveSel, Box };
         static std::string key(int pitch, double at);
         const NoteLive *noteAt(const artboard::Point &p, bool &edge) const;
         std::string noteName(int pitch) const;
         double snapped(double beat) const;
         void send(const std::string &line) { if (onCommand) onCommand(line); }
         void preview(int pitch, int vel, double length);    // R-ROLL-7: heard through the clip's track
+        bool sendOk(const std::string &line) { return onCommand ? onCommand(line) : false; }
+        std::string tokens(const std::vector<solaris::NoteModel> &ns, double by = 0.0, int semi = 0, bool full = false) const;
+        std::vector<solaris::NoteModel> selectedNotes() const;
+        void moveSelection(double by, int semi);             // ONE `notes move`; the selection follows on success
+        void addSelected(const std::vector<solaris::NoteModel> &ns); // ONE `notes add`; what landed is the selection
         void paintNotes(artboard::IRenderTarget &t, double a) const;
         void paintSteps(artboard::IRenderTarget &t, double a) const;
 
         std::string mPattern;
         std::string mClipWanted, mClip;             // R-ROLL-6
         std::string mClipTrack;                     // R-ROLL-7: the strip it sounds through ('' = none)
+        std::set<std::string> mSel;                 // R-ROLL-8: selected notes, by key
+        std::shared_ptr<std::vector<solaris::NoteModel>> mClipboard;
+        artboard::Point mBoxA{0, 0}, mBoxB{0, 0};
+        bool mBoxAdd = false;
+        double mSelDBeat = 0;                       // a selection dragged: where the pointer has it
+        int mSelDSemi = 0;
         int mHeardPitch = -1, mKeyPitch = -1;       // the last pitch a drag sounded; the key held
         artboard::AnimatedProperty mKeyLight{0.0};
         int mKeyLitPitch = -1;

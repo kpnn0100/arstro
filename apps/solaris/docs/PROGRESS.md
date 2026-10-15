@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — H6: the tempo in the song bar.*
+*Last updated: 2026-10-15 — H7: a selection in the roll.*
 
 ---
 
 ## NEXT
 
-**► H7 — a selection in the roll** (R-ROLL-8), then H8…H10 in order: the 2026-10-15 brief (a song made in the
+**► H8 — the pattern grows to hold its notes** (R-ROLL-9), then H9…H10 in order: the 2026-10-15 brief (a song made in the
 window, Bach's Prelude in C, with the UX it finds fixed). B13+ wait; T2 and T3 may go between.
 
 ---
@@ -278,8 +278,11 @@ umbrella's pointer — `arstro.rule` §7).
 - [x] **H6** The song's tempo set in the song bar (U-1; R-UI-13).
       — DR-UI-13: the bpm readout is a control — dragged, the pointer's, one `set project.bpm` per step (Shift: a
       tenth); double-clicked, typed; set elsewhere, eased. UI test; a snapping tempo seen red.
-- [ ] **H7** A selection in the roll and what is done to it: `notes move`, `notes delete`, duplicate, copy and paste
+- [x] **H7** A selection in the roll and what is done to it: `notes move`, `notes delete`, duplicate, copy and paste
       (U-2; R-ROLL-8).
+      — DR-ROLL-8: `notes move` / `notes delete` (one edit, refused whole); the roll selects by click, Shift+click,
+      a Ctrl box, Ctrl+A; the selection dragged, the arrows, Delete, Ctrl+D, Ctrl+C/V (a shared clipboard) — each
+      one line; lit, eased; the keys go to the roll last pressed. L2 + UI tests; 2 mutants caught.
 - [ ] **H8** The pattern grows to hold its notes; a whole-pattern clip grows with it (U-3; R-ROLL-9).
 - [ ] **H9** The length a click makes, shown and chosen; a window resized by its corner (U-4, U-5; R-ROLL-10,
       R-WIN-5).

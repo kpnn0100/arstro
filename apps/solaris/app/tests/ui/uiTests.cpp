@@ -1439,6 +1439,131 @@ static void test_the_roll_sounds_what_is_made()
     pass("The roll sounds what is made (R-ROLL-7): a note added, a note pressed, each row a drag enters and each key pressed or swept is a `note preview` through the clip's track, never in undo; the key is lit while held, eased; a pattern on no track is made, not heard");
 }
 
+static void test_the_rolls_selection_and_what_is_done_to_it()
+{
+    sltest::Rig r("ui-rollsel", 1280, 800);
+    r.cmd("project new " + r.song("Sel") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 8");
+    const std::string ac = r.svc->model().clips[0].id, pt = r.svc->model().clips[0].pattern;
+    r.cmd("set " + pt + ".length=8");
+    r.cmd("notes add " + pt + " \"C4@0:2 E4@0.25:1.75 G4@0.5 C5@0.75 E5@1\"");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &wl = r.app->project().windows();
+    const artboard::Rect clip = world(tl, tl.clipRect(ac));
+    r.click(clip.x + 12.0, cy(clip));
+    r.click(clip.x + 12.0, cy(clip));
+    r.settle();
+    auto &roll = *wl.roll(pt);
+    const artboard::Rect rw = world(roll, artboard::Rect{0, 0, 0, 0});
+    auto noteAt = [&](int pitch, double at) { return world(roll, roll.noteRect(pitch, at)); };
+    auto press = [&](double x, double y, bool shift, bool ctrl) {
+        r.app->pointer(0, x, y, 0, r.now, false, shift, ctrl);
+        r.app->pointer(2, x, y, 0, r.now, false, shift, ctrl);
+        r.frame();
+    };
+    auto keyMod = [&](int code, bool shift, bool ctrl) {
+        artboard::KeyEvent e;
+        e.type = artboard::KeyEvent::Type::Down;
+        e.keyCode = code;
+        e.shift = shift;
+        e.ctrl = ctrl;
+        r.app->key(e);
+        r.frame();
+    };
+    auto lastEdit = [&]() {
+        for (auto it = r.sent.rbegin(); it != r.sent.rend(); ++it)
+            if (it->rfind("note preview ", 0) != 0) return *it;
+        return std::string();
+    };
+    auto has = [&](const std::string &p, int pitch, double at) {
+        for (const auto &x : r.svc->model().patterns)
+            if (x.id == p)
+                for (const auto &n : x.notes)
+                    if (n.pitch == pitch && std::fabs(n.at - at) < 1e-9) return true;
+        return false;
+    };
+    // a click selects — lit, eased in; Shift+click adds
+    artboard::Rect g4 = noteAt(67, 0.5);
+    press(cx(g4), cy(g4), false, false);
+    r.frame();
+    assert(roll.selectionCount() == 1 && roll.selected(67, 0.5));
+    const double lit = roll.selectAmount(67, 0.5);
+    assert(lit > 0.0 && lit < 1.0);
+    press(cx(noteAt(72, 0.75)), cy(noteAt(72, 0.75)), true, false);
+    press(cx(noteAt(76, 1.0)), cy(noteAt(76, 1.0)), true, false);
+    r.settle();
+    assert(roll.selectionCount() == 3 && roll.selectAmount(67, 0.5) == 1.0);
+    // a selected note dragged carries the selection with the pointer: ONE `notes move` when let go
+    const size_t mark = r.sent.size();
+    g4 = noteAt(67, 0.5);
+    const double dx = roll.beatToX(1.5) - roll.beatToX(0.5), dy = roll.pitchToY(69) - roll.pitchToY(67);
+    r.drag(cx(g4), cy(g4), cx(g4) + dx, cy(g4) + dy, 8, false);
+    for (size_t i = mark; i < r.sent.size(); ++i) assert(r.sent[i].rfind("note preview ", 0) == 0); // heard (R-ROLL-7), no edit until it lands
+    r.app->pointer(2, cx(g4) + dx, cy(g4) + dy, 0, r.now);
+    r.frame();
+    assert(lastEdit() == "notes move " + pt + " \"67@0.5 72@0.75 76@1\" --by 1 --semi 2");
+    assert(has(pt, 69, 1.5) && has(pt, 74, 1.75) && has(pt, 78, 2) && roll.selected(69, 1.5) && roll.selectionCount() == 3);
+    r.settle();
+    // the arrows: ↑ a semitone, Shift+↓ an octave, ← a snap step — each ONE line
+    keyMod(38, false, false);
+    assert(lastEdit() == "notes move " + pt + " \"69@1.5 74@1.75 78@2\" --by 0 --semi 1");
+    keyMod(40, true, false);
+    assert(lastEdit() == "notes move " + pt + " \"70@1.5 75@1.75 79@2\" --by 0 --semi -12");
+    keyMod(37, false, false);
+    assert(lastEdit() == "notes move " + pt + " \"58@1.5 63@1.75 67@2\" --by -0.25 --semi 0");
+    assert(has(pt, 58, 1.25) && has(pt, 63, 1.5) && has(pt, 55, 1.75) == false && has(pt, 67, 1.75));
+    // Ctrl+D: a copy right after it — its span, 1.25 to 2.0, is 0.75 (a whole number of sixteenths) — the copy selected
+    keyMod('D', false, true);
+    assert(lastEdit() == "notes add " + pt + " \"58@2:0.25:100 63@2.25:0.25:100 67@2.5:0.25:100\"");
+    assert(has(pt, 58, 2) && roll.selected(67, 2.5) && !roll.selected(67, 1.75) && roll.selectionCount() == 3);
+    // Ctrl+C here, Ctrl+V in another roll: at the same beats, selected there
+    keyMod('C', false, true);
+    r.cmd("pattern new --name Other --length 4");
+    const std::string pt2 = r.svc->model().patterns.back().id;
+    r.frame();
+    wl.openRoll(pt2);
+    r.settle();
+    auto &other = *wl.roll(pt2);
+    const artboard::Rect ow = world(other, other.gridRect());
+    press(ow.x + 30.0, ow.y + 30.0, false, true);                     // a Ctrl-press on its empty grid: the keys are its
+    keyMod('V', false, true);
+    assert(lastEdit() == "notes add " + pt2 + " \"58@2:0.25:100 63@2.25:0.25:100 67@2.5:0.25:100\"");
+    assert(has(pt2, 63, 2.25) && other.selectionCount() == 3);
+    wl.close("roll:" + pt2);
+    r.settle();
+    // back in the first: Ctrl+A, then Delete — ONE `notes delete`
+    const artboard::Rect rg = world(roll, roll.gridRect());
+    press(rg.right() - 20.0, rg.bottom() - 10.0, false, true);        // a Ctrl-press on its empty grid: the keys are its again
+    keyMod('A', false, true);
+    const int all = roll.selectionCount();
+    assert(all == 8);
+    keyMod(46, false, false);
+    assert(lastEdit().rfind("notes delete " + pt + " \"", 0) == 0 && roll.selectionCount() == 0);
+    for (const auto &x : r.svc->model().patterns)
+        if (x.id == pt) assert(x.notes.empty());
+    // a Ctrl+drag draws a box selecting what it touches; Escape lets go
+    r.cmd("notes add " + pt + " \"C4@0 D4@0.5 E4@1 F4@3\"");
+    r.settle();
+    const artboard::Rect a0 = noteAt(60, 0), a1 = noteAt(64, 1.0);
+    // from just inside the grid, a row above E4 (empty there), to below C4 past E4's end
+    const double bx0 = a0.x + 2.0, by0 = a1.y - 4.0, bx1 = a1.right() + 4.0, by1 = a0.bottom() + 4.0;
+    r.app->pointer(0, bx0, by0, 0, r.now, false, false, true);
+    for (int k = 1; k <= 6; ++k) { r.app->pointer(1, bx0 + k * (bx1 - bx0) / 6.0, by0 + k * (by1 - by0) / 6.0, 0, r.now, false, false, true); r.frame(); }
+    assert(roll.boxRect().w > 0.0);
+    r.app->pointer(2, a1.right() + 4.0, a0.bottom() + 4.0, 0, r.now, false, false, true);
+    r.frame();
+    assert(roll.selectionCount() == 3 && roll.selected(62, 0.5) && !roll.selected(65, 3));
+    keyMod(27, false, false);
+    assert(roll.selectionCount() == 0);
+    // the keys follow the pointer: a press on the lanes, and Delete is not the roll's
+    const artboard::Rect ruler = world(tl, tl.rulerRect());
+    press(ruler.x + 40.0, ruler.bottom() + 200.0, false, false);     // the lanes, left of the roll's window
+    keyMod('A', false, true);
+    assert(roll.selectionCount() == 0);
+    pass("The roll's selection (R-ROLL-8): click and Shift+click select (lit, eased); a selected note drags the selection as ONE `notes move`; ↑ ↓ (Shift: octave) ← → move it; Ctrl+D lays a copy after it; Ctrl+C / Ctrl+V paste into another roll; Ctrl+A and Delete; a Ctrl box; Escape; the keys go to the roll last pressed");
+}
+
 static void test_a_kits_roll_names_its_pads()
 {
     sltest::Rig r("ui-roll-kit", 1280, 800);
@@ -2132,6 +2257,7 @@ int main()
     test_piano_roll_edits_the_pattern();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
+    test_the_rolls_selection_and_what_is_done_to_it();
     test_a_kits_roll_names_its_pads();
     test_a_line_added_and_sources_relinked();
     test_a_strip_keys_a_later_compressor();

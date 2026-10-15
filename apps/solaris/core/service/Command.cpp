@@ -133,6 +133,14 @@ namespace solaris
              "Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>]] — C4@0:0.5:90, "
              "kick@1, E4@2::70. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing "
              "lands. Prints how many; warns of notes past the pattern's end.", "R-SVC-8"},
+            {K::NotesMove, "notes move", "<pt> \"<pitch@beat> …\"", 2, -1, {"by=<beats>", "semi=<n>"},
+             "Move several notes as ONE edit (one undo step) — the piano roll's selection dragged, or moved by the arrow "
+             "keys: each named by <pitch>@<beat>, all moved --by beats (default 0) and --semi semitones (default 0). "
+             "Refused whole, naming the first, when a name matches no note, or a note would land on one not moved, "
+             "below beat 0 or outside 0–127.", "R-ROLL-8"},
+            {K::NotesDelete, "notes delete", "<pt> \"<pitch@beat> …\"", 2, -1, {},
+             "Remove several notes as ONE edit — the piano roll's selection deleted. Refused whole, naming the first, "
+             "when a name matches no note.", "R-ROLL-8"},
             {K::PatternSteps, "pattern steps", "<pt> \"<steps>\"", 2, -1, {"pitch=<pitch>", "step=<beats>", "vel=<1-127>", "at=<beats>", "length=<beats>"},
              "A step row: x = a note, X = an accent (velocity 127), . or - = a rest, one per --step (default 0.25) from "
              "--at (default 0); spaces and | are ignored. REPLACES that pitch's notes in the span; --length defaults to "

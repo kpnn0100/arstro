@@ -112,6 +112,12 @@ namespace solaris_ui
             l->n = n;
             l->gone = false;
         }
+        // a selected note gone (deleted, undone, moved by a shell) is no longer selected
+        {
+            std::set<std::string> present;
+            for (const auto &n : pt->notes) present.insert(key(n.pitch, n.at));
+            for (auto it = mSel.begin(); it != mSel.end();) it = present.count(*it) ? std::next(it) : mSel.erase(it);
+        }
         // the step rows: a kit's pads, else the pitches in use (and middle C)
         mStepPitches.clear();
         if (!mNames.empty())
@@ -165,6 +171,120 @@ namespace solaris_ui
         if (mClipTrack.empty() || pitch < 0 || pitch > 127) return; // on no track: nothing to sound through
         send("note preview " + mClipTrack + " " + std::to_string(pitch) + " --vel " + std::to_string(std::clamp(vel, 1, 127)) + " --length " +
              beats(std::clamp(length, 0.125, 1.0)));
+    }
+
+    // ── the selection (R-ROLL-8) ──────────────────────────────────────────────────────────────────
+
+    bool PianoRoll::selected(int pitch, double at) const { return mSel.count(key(pitch, at)) > 0; }
+
+    double PianoRoll::selectAmount(int pitch, double at) const
+    {
+        const std::string k = key(pitch, at);
+        for (const auto &l : mNotes)
+            if (!l.gone && key(l.n.pitch, l.n.at) == k) return l.sel.value();
+        return 0.0;
+    }
+
+    Rect PianoRoll::boxRect() const
+    {
+        if (mDrag != Drag::Box) return Rect{};
+        return Rect{std::min(mBoxA.x, mBoxB.x), std::min(mBoxA.y, mBoxB.y), std::fabs(mBoxB.x - mBoxA.x), std::fabs(mBoxB.y - mBoxA.y)};
+    }
+
+    std::string PianoRoll::tokens(const std::vector<solaris::NoteModel> &ns, double by, int semi, bool full) const
+    {
+        std::string s;
+        for (const auto &n : ns)
+        {
+            if (!s.empty()) s += " ";
+            s += std::to_string(n.pitch + semi) + "@" + beats(n.at + by);
+            if (full) s += ":" + beats(n.length) + ":" + std::to_string(n.vel);
+        }
+        return "\"" + s + "\"";
+    }
+
+    std::vector<solaris::NoteModel> PianoRoll::selectedNotes() const
+    {
+        std::vector<solaris::NoteModel> v;
+        for (const auto &n : mModel.notes)
+            if (mSel.count(key(n.pitch, n.at))) v.push_back(n);
+        return v;
+    }
+
+    void PianoRoll::moveSelection(double by, int semi)
+    {
+        const auto ns = selectedNotes();
+        if (ns.empty() || (std::fabs(by) < kTol && semi == 0)) return;
+        if (!sendOk("notes move " + mPattern + " " + tokens(ns) + " --by " + beats(by) + " --semi " + std::to_string(semi))) return;
+        // where they went: there at once (the pointer or the key showed it), the old places gone at once
+        std::set<std::string> next;
+        for (const auto &n : ns)
+        {
+            for (auto &l : mNotes)
+                if (key(l.n.pitch, l.n.at) == key(n.pitch, n.at)) l.instant = true;
+            NoteLive nl;
+            nl.n = n;
+            nl.n.at = std::max(0.0, n.at + by);
+            nl.n.pitch = n.pitch + semi;
+            nl.instant = true;
+            nl.sel.set(1.0);
+            nl.selLast = true;
+            mNotes.push_back(nl);
+            next.insert(key(nl.n.pitch, nl.n.at));
+        }
+        mSel = next;
+    }
+
+    void PianoRoll::addSelected(const std::vector<solaris::NoteModel> &ns)
+    {
+        if (ns.empty()) return;
+        if (!sendOk("notes add " + mPattern + " " + tokens(ns, 0.0, 0, true))) return;
+        mSel.clear();
+        for (const auto &n : ns) mSel.insert(key(n.pitch, n.at));
+    }
+
+    bool PianoRoll::key(const KeyEvent &e)
+    {
+        if (e.type != KeyEvent::Type::Down || mMode != Notes) return false;
+        if (e.ctrl && e.keyCode == 'A')
+        {
+            mSel.clear();
+            for (const auto &n : mModel.notes) mSel.insert(key(n.pitch, n.at));
+            return true;
+        }
+        if (e.ctrl && e.keyCode == 'V')
+        {
+            if (!mClipboard || mClipboard->empty()) return false;
+            addSelected(*mClipboard); // at the same beats, selected: ready to be dragged where it goes
+            return true;
+        }
+        if (mSel.empty()) return false;
+        if (e.keyCode == 27) { mSel.clear(); return true; }  // Escape lets go
+        if (e.keyCode == 46 || e.keyCode == 8)               // Delete / Backspace
+        {
+            if (sendOk("notes delete " + mPattern + " " + tokens(selectedNotes()))) mSel.clear();
+            return true;
+        }
+        if (e.keyCode == 38 || e.keyCode == 40) { moveSelection(0.0, (e.keyCode == 38 ? 1 : -1) * (e.shift ? 12 : 1)); return true; }
+        if (e.keyCode == 37 || e.keyCode == 39) { moveSelection((e.keyCode == 39 ? 1.0 : -1.0) * (mSnap > 0 ? mSnap : 0.25), 0); return true; }
+        if (e.ctrl && e.keyCode == 'C')
+        {
+            if (mClipboard) *mClipboard = selectedNotes();
+            return true;
+        }
+        if (e.ctrl && e.keyCode == 'D')
+        {
+            // a copy right after the selection: its span — the earliest start to the latest end — up to the snap
+            auto ns = selectedNotes();
+            double lo = 1e18, hi = 0.0;
+            for (const auto &n : ns) { lo = std::min(lo, n.at); hi = std::max(hi, n.at + n.length); }
+            double span = hi - lo;
+            if (mSnap > 0) span = std::ceil(span / mSnap - 1e-9) * mSnap;
+            for (auto &n : ns) n.at += span;
+            addSelected(ns);
+            return true;
+        }
+        return false;
     }
 
     bool PianoRoll::togglePlay()
@@ -224,6 +344,13 @@ namespace solaris_ui
                 l.aLast = want;
             }
             l.alpha.update(nowMs);
+            const bool sel = !l.gone && mSel.count(key(l.n.pitch, l.n.at)) > 0; // R-ROLL-8: lit, eased
+            if (sel != l.selLast)
+            {
+                l.sel.animateTo(sel ? 1.0 : 0.0, motion::kHoverMs, Easing::EaseOutCubic, nowMs);
+                l.selLast = sel;
+            }
+            l.sel.update(nowMs);
         }
         mNotes.erase(std::remove_if(mNotes.begin(), mNotes.end(), [](const NoteLive &l) { return l.gone && !l.alpha.isAnimating() && l.alpha.value() <= 0.001; }),
                      mNotes.end());
@@ -342,7 +469,10 @@ namespace solaris_ui
                 bool edge = false;
                 if (const NoteLive *n = noteAt(local, edge))
                 {
-                    mDrag = edge ? Drag::Resize : Drag::Move;
+                    const bool inSel = !edge && mSel.size() > 1 && mSel.count(key(n->n.pitch, n->n.at)) > 0;
+                    mDrag = inSel ? Drag::MoveSel : edge ? Drag::Resize : Drag::Move;
+                    mSelDBeat = 0.0;
+                    mSelDSemi = 0;
                     mPressNote = n->n;
                     mLive = n->n;
                     mPressKey = key(n->n.pitch, n->n.at);
@@ -350,6 +480,12 @@ namespace solaris_ui
                     mGrabPitch = yToPitch(local.y) - n->n.pitch;
                     mHeardPitch = n->n.pitch;
                     preview(n->n.pitch, n->n.vel, n->n.length); // a note pressed is heard, as in every roll
+                }
+                else if (g.ctrl)
+                {
+                    mDrag = Drag::Box; // R-ROLL-8: a box selects what it touches
+                    mBoxA = mBoxB = local;
+                    mBoxAdd = g.shift;
                 }
                 return true;
             }
@@ -381,6 +517,23 @@ namespace solaris_ui
                 mLive.pitch = std::clamp(yToPitch(local.y) - (int)mGrabPitch, 0, 127);
                 if (mLive.pitch != mHeardPitch) { mHeardPitch = mLive.pitch; preview(mLive.pitch, mLive.vel, mLive.length); } // each row it enters
                 break;
+            case Drag::MoveSel:
+            {
+                // the whole selection is the pointer's: kept at or after beat 0 and inside 0–127
+                double lo = 1e18;
+                int pmin = 127, pmax = 0;
+                for (const auto &n : selectedNotes()) { lo = std::min(lo, n.at); pmin = std::min(pmin, n.pitch); pmax = std::max(pmax, n.pitch); }
+                const double at = snapped(xToBeat(local.x) - mGrabBeat);
+                const int pitch = yToPitch(local.y) - (int)mGrabPitch;
+                mSelDBeat = std::max(at - mPressNote.at, -lo);
+                mSelDSemi = std::clamp(pitch - mPressNote.pitch, -pmin, 127 - pmax);
+                const int heard = mPressNote.pitch + mSelDSemi;
+                if (heard != mHeardPitch) { mHeardPitch = heard; preview(heard, mPressNote.vel, mPressNote.length); }
+                break;
+            }
+            case Drag::Box:
+                mBoxB = local;
+                break;
             case Drag::Keys:
             {
                 const int p = std::clamp(yToPitch(std::clamp(local.y, grid.y, grid.bottom() - 1.0)), 0, 127);
@@ -409,6 +562,24 @@ namespace solaris_ui
             const Drag d = mDrag;
             mDrag = Drag::None;
             const std::string id = mPattern, from = " --pitch " + std::to_string(mPressNote.pitch) + " --at " + beats(mPressNote.at);
+            if (d == Drag::MoveSel)
+            {
+                moveSelection(mSelDBeat, mSelDSemi);
+                mSelDBeat = 0.0;
+                mSelDSemi = 0;
+                return true;
+            }
+            if (d == Drag::Box)
+            {
+                const Rect b{std::min(mBoxA.x, mBoxB.x), std::min(mBoxA.y, mBoxB.y), std::fabs(mBoxB.x - mBoxA.x), std::fabs(mBoxB.y - mBoxA.y)};
+                if (!mBoxAdd) mSel.clear();
+                for (const auto &n : mModel.notes)
+                {
+                    const Rect r = noteRect(n.pitch, n.at);
+                    if (r.x < b.right() && r.right() > b.x && r.y < b.bottom() && r.bottom() > b.y) mSel.insert(key(n.pitch, n.at));
+                }
+                return true;
+            }
             if (d == Drag::Move && (mLive.at != mPressNote.at || mLive.pitch != mPressNote.pitch))
             {
                 // where the pointer let go: the new note appears there at once, the old one goes at once
@@ -418,7 +589,8 @@ namespace solaris_ui
                 nl.n = mLive;
                 nl.instant = true;
                 mNotes.push_back(nl);
-                send("note move " + id + from + " --to-pitch " + std::to_string(mLive.pitch) + " --to-at " + beats(mLive.at));
+                if (sendOk("note move " + id + from + " --to-pitch " + std::to_string(mLive.pitch) + " --to-at " + beats(mLive.at)))
+                    mSel = {key(mLive.pitch, mLive.at)}; // the note moved is what is selected
             }
             else if (d == Drag::Resize && mLive.length != mPressNote.length)
             {
@@ -477,7 +649,16 @@ namespace solaris_ui
             if (grid.contains(local))
             {
                 bool edge = false;
-                if (noteAt(local, edge)) return true; // a click on a note adds nothing
+                if (const NoteLive *n = noteAt(local, edge))
+                {
+                    // R-ROLL-8: a click selects the note; Shift adds or removes it
+                    const std::string k = key(n->n.pitch, n->n.at);
+                    if (g.shift) { if (!mSel.erase(k)) mSel.insert(k); }
+                    else mSel = {k};
+                    return true;
+                }
+                if (g.ctrl) { mSel.clear(); return true; } // an empty box
+                mSel.clear();
                 const double at = mSnap > 0 ? std::max(0.0, std::floor(xToBeat(local.x) / mSnap) * mSnap) : snapped(xToBeat(local.x));
                 const int pitch = yToPitch(local.y);
                 send("note add " + mPattern + " --pitch " + std::to_string(pitch) + " --at " + beats(at) + " --length " + beats(mLastLength));
@@ -554,11 +735,20 @@ namespace solaris_ui
             const double na = (l.placed ? l.alpha.value() : 0.0) * a;
             if (na <= 0.001) continue;
             const bool dragged = (mDrag == Drag::Move || mDrag == Drag::Resize || mDrag == Drag::Velocity) && !l.gone && key(l.n.pitch, l.n.at) == mPressKey;
-            const solaris::NoteModel n = dragged ? mLive : l.n;
+            const bool carried = mDrag == Drag::MoveSel && !l.gone && mSel.count(key(l.n.pitch, l.n.at)) > 0;
+            solaris::NoteModel n = dragged ? mLive : l.n;
+            if (carried) { n.at += mSelDBeat; n.pitch += mSelDSemi; } // the selection is the pointer's
             const Rect r{beatToX(n.at), pitchToY(n.pitch) + 1.0, std::max(3.0, n.length * mPpb.value() - 1.0), kNoteH - 2.0};
             if (r.right() < grid.x || r.x > grid.right() || r.bottom() < grid.y || r.y > grid.bottom()) continue;
-            const Color c = lerpColor(base, palette::white(), 0.12 + 0.28 * (n.vel / 127.0));
-            drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(c, na * (dragged ? 1.0 : 0.9)), fade(palette::whiteAlpha(0.35), na), 1.0));
+            const double sel = l.sel.value();
+            const Color c = lerpColor(base, palette::white(), 0.12 + 0.28 * (n.vel / 127.0) + 0.25 * sel);
+            drawRoundedRect(t, r, radius::control(),
+                            Paint::filledStroked(fade(c, na * (dragged || carried ? 1.0 : 0.9)), fade(lerpColor(palette::whiteAlpha(0.35), palette::primary(), sel), na), 1.0 + 0.5 * sel));
+        }
+        if (mDrag == Drag::Box)
+        {
+            const Rect b = boxRect();
+            drawRoundedRect(t, b, radius::control(), Paint::filledStroked(palette::primaryAlpha(0.12), palette::primaryAlpha(0.7), 1.0));
         }
         t.restore();
     }

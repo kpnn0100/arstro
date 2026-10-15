@@ -114,6 +114,7 @@ namespace solaris_ui
     private:
         FloatWindow &place(std::shared_ptr<FloatWindow> w, double width, double height);
         std::map<std::string, std::shared_ptr<FloatWindow>> mWindows;
+        std::shared_ptr<std::vector<solaris::NoteModel>> mNoteClipboard = std::make_shared<std::vector<solaris::NoteModel>>(); // R-ROLL-8: every roll's
         solaris::AppModel mModel;
         bool mInteracting = false;
         int mCascade = 0;
