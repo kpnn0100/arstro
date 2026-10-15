@@ -128,11 +128,20 @@ namespace
     gboolean onScroll(GtkWidget *, GdkEventScroll *e, gpointer user)
     {
         auto *a = static_cast<Host *>(user);
+        // D-5: Shift goes with the wheel (sideways in the roll and on the lanes), and a sideways scroll — a tilted
+        // wheel, a touchpad's horizontal swipe — IS Shift+wheel: left = toward the start, as wheel-up is
         double dy = 0.0;
+        bool sideways = (e->state & GDK_SHIFT_MASK) != 0;
         if (e->direction == GDK_SCROLL_UP) dy = 1.0;
         else if (e->direction == GDK_SCROLL_DOWN) dy = -1.0;
-        else if (e->direction == GDK_SCROLL_SMOOTH) dy = -e->delta_y;
-        a->app->wheel(e->x, e->y, dy, (e->state & GDK_CONTROL_MASK) != 0);
+        else if (e->direction == GDK_SCROLL_LEFT) { dy = 1.0; sideways = true; }
+        else if (e->direction == GDK_SCROLL_RIGHT) { dy = -1.0; sideways = true; }
+        else if (e->direction == GDK_SCROLL_SMOOTH)
+        {
+            if (std::fabs(e->delta_x) > std::fabs(e->delta_y)) { dy = -e->delta_x; sideways = true; }
+            else dy = -e->delta_y;
+        }
+        a->app->wheel(e->x, e->y, dy, (e->state & GDK_CONTROL_MASK) != 0, sideways);
         gtk_widget_queue_draw(a->area);
         return TRUE;
     }

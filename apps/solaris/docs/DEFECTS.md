@@ -37,6 +37,21 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-5 Shift+wheel and sideways scrolling never reached the app from the window — closed in H10a
+- **Found:** 2026-10-15, making the Prelude (R-SVC-11): bar 35 had to be brought into the roll's view, and the
+  roll scrolls sideways on Shift+wheel (as the lanes do, NOTES "Lanes › Shift+wheel") — which no person could do.
+- **Symptom:** in the real window, Shift+wheel over the roll or the lanes scrolled UP AND DOWN; a tilted wheel's
+  or a touchpad's sideways scroll did nothing at all.
+- **Cause:** the GTK host (`linux_main.cpp`, `onScroll`) passed only Ctrl to `App::wheel`, which took no Shift,
+  and dropped `GDK_SCROLL_LEFT/RIGHT` and a smooth scroll's `delta_x`. The widgets were right; the seam lost it.
+- **Fix:** `App::wheel(…, ctrl, shift)` carries Shift into the gesture; the host passes it, and turns a sideways
+  scroll into Shift+wheel (left toward the start).
+- **Guard:** `test_the_wheel_scrolls_sideways_with_shift` (the roll and the lanes, through `App::wheel` — mutant: Shift
+  dropped in `App::wheel`, seen red). The host's half (`onScroll`) is compiled and read, NOT driven live: this GTK
+  build ignores synthetic (XSendEvent) pointer events even with `GDK_CORE_DEVICE_EVENTS=1` — a synthetic click on
+  a tab did nothing either — XTest would move the user's own pointer on their display, and no virtual X server is
+  installed here. Live check owed: Shift+wheel and a touchpad swipe over the lanes and the roll.
+
 ### D-4 The Basic Synth's Resonance did nothing — closed in G3, DSP `66b5ecb`
 - **Found:** 2026-10-15, building the analog face's filter screen (R-UI-12): its test measures the real filter
   against the documented prototype, and every resonance peaked at −3.01 dB (Q 0.707).

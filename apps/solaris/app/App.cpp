@@ -306,7 +306,7 @@ namespace solaris_ui
         mRecognizer.feed(rp);
     }
 
-    void App::wheel(double x, double y, double notches, bool ctrl)
+    void App::wheel(double x, double y, double notches, bool ctrl, bool shift)
     {
         mLastActivityMs = mNowMs;
         RawPointer rp{};
@@ -314,6 +314,7 @@ namespace solaris_ui
         rp.pos = Point{x, y};
         rp.timeMs = mNowMs;
         rp.ctrl = ctrl;
+        rp.shift = shift; // D-5: the roll's and the lanes' sideways scroll
         rp.scroll = Point{0.0, -notches * 40.0}; // + notches = wheel up = toward the start (Interstellar's notch)
         mRecognizer.feed(rp);
     }

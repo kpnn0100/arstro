@@ -1629,6 +1629,39 @@ static void test_the_length_a_click_makes_and_a_window_resized()
     pass("The length a click makes is named and chosen (R-ROLL-10): the chip's menu, 'Last used' following a resize; a window resized by its corner (R-WIN-5): the pointer's, its content laid out anew, never below the floor nor out of the layer");
 }
 
+static void test_the_wheel_scrolls_sideways_with_shift()
+{
+    // D-5: Shift goes with the wheel through App::wheel (the window passes it, and a sideways swipe arrives as it)
+    sltest::Rig r("ui-sideways", 1280, 800);
+    r.cmd("project new " + r.song("Side") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 64");
+    const std::string ac = r.svc->model().clips[0].id, pt = r.svc->model().clips[0].pattern;
+    r.cmd("set " + pt + ".length=64");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &wl = r.app->project().windows();
+    // the lanes: Shift+wheel moves time, not the rows
+    const artboard::Rect ruler = world(tl, tl.rulerRect());
+    const double t0 = tl.beatToX(0.0), row0 = tl.rowRect(0).y;
+    r.app->wheel(ruler.x + 200.0, ruler.bottom() + 30.0, -3.0, false, true);
+    r.settle();
+    assert(tl.beatToX(0.0) < t0 - 1.0 && tl.rowRect(0).y == row0);
+    // the roll: the same
+    wl.openRoll(pt, ac);
+    r.settle();
+    auto &roll = *wl.roll(pt);
+    const artboard::Rect g = world(roll, roll.gridRect());
+    const double x0 = roll.beatToX(0.0), y60 = roll.pitchToY(60);
+    r.app->wheel(cx(g), cy(g), -3.0, false, true);
+    r.settle();
+    assert(roll.beatToX(0.0) < x0 - 1.0 && roll.pitchToY(60) == y60);
+    // and without Shift the wheel still scrolls the rows
+    r.app->wheel(cx(g), cy(g), -2.0);
+    r.settle();
+    assert(roll.pitchToY(60) != y60);
+    pass("D-5: Shift+wheel scrolls sideways — the lanes and the roll move time, not rows; the plain wheel still scrolls rows");
+}
+
 static void test_a_kits_roll_names_its_pads()
 {
     sltest::Rig r("ui-roll-kit", 1280, 800);
@@ -2324,6 +2357,7 @@ int main()
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();
     test_the_length_a_click_makes_and_a_window_resized();
+    test_the_wheel_scrolls_sideways_with_shift();
     test_a_kits_roll_names_its_pads();
     test_a_line_added_and_sources_relinked();
     test_a_strip_keys_a_later_compressor();

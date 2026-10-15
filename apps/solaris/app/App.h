@@ -44,7 +44,9 @@ namespace solaris_ui
         bool needsRedraw(double nowMs) const;
 
         void pointer(int kind, double x, double y, int button, double timeMs, bool alt = false, bool shift = false, bool ctrl = false);
-        void wheel(double x, double y, double notches, bool ctrl = false);
+        /** The wheel: `notches` up (+) or down (−); Shift scrolls sideways — and a sideways scroll (a tilted wheel,
+         *  a touchpad) arrives as Shift (D-5). */
+        void wheel(double x, double y, double notches, bool ctrl = false, bool shift = false);
         bool key(const artboard::KeyEvent &e);
 
         /** Send one command line. A refusal becomes the toast, with the service's sentence. */
