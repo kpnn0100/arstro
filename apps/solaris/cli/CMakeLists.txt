@@ -19,6 +19,13 @@ add_test(NAME solaris_cli_session
           -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/cli_session.cmake)
 # R-SVC-9: the goal, measured — a whole song made with solaris-cc alone, rendered and measured.
 find_program(SOLARIS_PYTHON3 python3)
+# R-SVC-12: the EDM track, measured as a master — named outside `-R solaris` (a minute's render of a 2:17 song in a
+# Debug build): `ctest -L long`
+add_test(NAME edm_track_measured
+  COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/edm
+          -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_edm -DPY=${SOLARIS_PYTHON3} -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/demo_edm.cmake)
+set_tests_properties(edm_track_measured PROPERTIES TIMEOUT 1200 LABELS "long")
+
 add_test(NAME solaris_demo_canon
   COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/canon
           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_canon -DPY=${SOLARIS_PYTHON3}

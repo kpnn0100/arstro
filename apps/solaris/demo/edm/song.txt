@@ -1,0 +1,215 @@
+# Perihelion — an original EDM track, written by make_script.py (R-SVC-12). 126 bpm, A minor, 72 bars.
+project new perihelion.slp --bpm 126 --name "Perihelion"
+
+# the kick — tuned near the key's root (48 Hz · 2^(2/12) = 54 Hz), every beat; out for the builds' last bars
+clip add --instrument drums --at 0 --length 32
+set ch_2.name="Kick" pt_1.name="Kick"
+set dv_1.kick.tune=2 dv_1.kick.decay=420 dv_1.kick.tone=0.45 dv_1.volume=0
+pattern steps pt_1 --pitch kick "x...x...x...x..." --vel 120
+set pt_1.length=4
+clip add --strip ch_2 --pattern pt_1 --at 64 --length 64
+clip add --strip ch_2 --pattern pt_1 --at 192 --length 64
+clip add --strip ch_2 --pattern pt_1 --at 256 --length 32
+pattern new --name "Kick, a bar" --length 4
+pattern steps pt_2 --pitch kick "x..............." --vel 116
+clip add --strip ch_2 --pattern pt_2 --at 32 --length 16
+clip add --strip ch_2 --pattern pt_1 --at 48 --length 8
+clip add --strip ch_2 --pattern pt_2 --at 160 --length 16
+clip add --strip ch_2 --pattern pt_1 --at 176 --length 8
+
+# the groove: clap on 2 and 4, open hats on the off-beats choked by the closed sixteenths around them
+clip add --instrument drums --at 16 --length 16
+set ch_3.name="Groove" pt_3.name="Groove"
+set dv_2.clap.level=-3 dv_2.clap.decay=260 dv_2.chat.level=-5 dv_2.chat.tone=0.8 dv_2.chat.pan=0.25 dv_2.ohat.level=-6 dv_2.ohat.decay=300 dv_2.ohat.pan=-0.2 dv_2.volume=-2
+set pt_3.length=4
+pattern steps pt_3 --pitch clap "....x.......x..." --vel 115
+pattern steps pt_3 --pitch closed-hat "xx.xxx.xxx.xxx.x" --vel 52
+pattern steps pt_3 --pitch open-hat "..x...x...x...x." --vel 80
+pattern new --name "Intro hats" --length 4
+pattern steps pt_4 --pitch closed-hat "..x...x...x...x." --vel 64
+clip add --strip ch_3 --pattern pt_4 --at 0 --length 16
+clip add --strip ch_3 --pattern pt_3 --at 64 --length 64
+clip add --strip ch_3 --pattern pt_3 --at 192 --length 64
+clip add --strip ch_3 --pattern pt_3 --at 256 --length 24
+clip add --strip ch_3 --pattern pt_4 --at 32 --length 24
+clip add --strip ch_3 --pattern pt_4 --at 160 --length 24
+
+# cymbals (REQ-drum-6): a crash on each drop's phrases and into the breakdown; a ride through the second drop
+clip add --instrument drums --at 64 --length 4
+set ch_4.name="Cymbals" pt_5.name="Cymbals"
+set dv_3.crash.level=-2 dv_3.crash.decay=2200 dv_3.ride.level=-9 dv_3.ride.pan=0.3 dv_3.volume=-3
+set pt_5.length=4
+pattern steps pt_5 --pitch crash "x..............." --vel 118
+clip add --strip ch_4 --pattern pt_5 --at 96 --length 4
+clip add --strip ch_4 --pattern pt_5 --at 128 --length 4
+clip add --strip ch_4 --pattern pt_5 --at 192 --length 4
+clip add --strip ch_4 --pattern pt_5 --at 224 --length 4
+clip add --strip ch_4 --pattern pt_5 --at 256 --length 4
+pattern new --name "Ride" --length 4
+pattern steps pt_6 --pitch ride "x...x...x...x..." --vel 70
+pattern steps pt_6 --pitch ride "..x...x...x...x." --vel 50 --at 0
+clip add --strip ch_4 --pattern pt_6 --at 196 --length 60
+
+# the build's snare roll: quarters, eighths, sixteenths, thirty-seconds — then a beat of silence before the drop
+clip add --instrument drums --at 32 --length 32
+set ch_5.name="Roll" pt_7.name="Roll"
+set dv_4.snare.tune=3 dv_4.snare.decay=180 dv_4.snare.tone=0.6 dv_4.volume=-6
+set pt_7.length=32
+pattern steps pt_7 --pitch snare "x...x...x...x...x...x...x...x..." --vel 58 --at 0
+pattern steps pt_7 --pitch snare "x.x.x.x.x.x.x.x.x.x.x.x.x.x.x.x." --vel 72 --at 8
+pattern steps pt_7 --pitch snare "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" --vel 86 --at 16
+pattern steps pt_7 --pitch snare "xxxxxxxxxxxxxxxx" --vel 100 --at 24
+pattern steps pt_7 --pitch snare "xxxxxxxxxxxxxxxxxxxxxxxx" --step 0.125 --vel 112 --at 28
+clip add --strip ch_5 --pattern pt_7 --at 160 --length 32
+
+# the sub: a sine on each bar's root (A1 F1 C2 G1), mono, ducked by the kick
+clip add --instrument synth --at 64 --length 64
+set ch_6.name="Sub" pt_8.name="Sub"
+set dv_5.osc1.wave=sine dv_5.osc1.octave=0 dv_5.osc2.level=0 dv_5.filter.cutoff=280 dv_5.filter.res=0 dv_5.filter.env=0 dv_5.filter.keytrack=0 dv_5.amp.attack=4 dv_5.amp.decay=60 dv_5.amp.sustain=1 dv_5.amp.release=90 dv_5.volume=-5
+set pt_8.length=16
+notes add pt_8 "33@0:4:110 29@4:4:110 36@8:4:110 31@12:4:110"
+clip add --strip ch_6 --pattern pt_8 --at 192 --length 64
+
+# the mid bass: off-beat eighths on the roots an octave up, a pickup into each bar
+clip add --instrument synth --at 64 --length 64
+set ch_7.name="Mid Bass" pt_9.name="Mid Bass"
+set dv_6.osc1.wave=saw dv_6.osc2.wave=square dv_6.osc2.octave=-1 dv_6.osc2.level=0.35 dv_6.filter.cutoff=650 dv_6.filter.res=0.28 dv_6.filter.env=2.2 dv_6.fenv.decay=150 dv_6.fenv.sustain=0.1 dv_6.amp.attack=1 dv_6.amp.decay=170 dv_6.amp.sustain=0.35 dv_6.amp.release=60 dv_6.volume=-9
+set pt_9.length=16
+notes add pt_9 "45@0.5:0.375:100 45@1.5:0.375:92 45@2.5:0.375:100 45@3.5:0.375:92 57@3.75:0.25:84 41@4.5:0.375:100 41@5.5:0.375:92 41@6.5:0.375:100 41@7.5:0.375:92 53@7.75:0.25:84 36@8.5:0.375:100 36@9.5:0.375:92 36@10.5:0.375:100 36@11.5:0.375:92 48@11.75:0.25:84 43@12.5:0.375:100 43@13.5:0.375:92 43@14.5:0.375:100 43@15.5:0.375:92 55@15.75:0.25:84"
+clip add --strip ch_7 --pattern pt_9 --at 192 --length 64
+
+# the chords: two five-voice saws, detuned and WIDE (REQ-synth2-6), held a bar each, pumping on the kick
+clip add --instrument synth --at 64 --length 64
+set ch_8.name="Supersaw" pt_10.name="Supersaw"
+set dv_7.osc1.wave=saw dv_7.osc1.voices=5 dv_7.osc1.detune=38 dv_7.osc1.width=24 dv_7.osc1.level=0.7 dv_7.osc2.wave=saw dv_7.osc2.octave=0 dv_7.osc2.voices=5 dv_7.osc2.detune=22 dv_7.osc2.width=16 dv_7.osc2.fine=6 dv_7.osc2.level=0.55 dv_7.filter.cutoff=5200 dv_7.filter.res=0.12 dv_7.filter.env=0.8 dv_7.fenv.decay=700 dv_7.fenv.sustain=0.55 dv_7.amp.attack=6 dv_7.amp.decay=400 dv_7.amp.sustain=0.9 dv_7.amp.release=320 dv_7.volume=-16
+set pt_10.length=16
+notes add pt_10 "57@0:4:96 60@0:4:96 64@0:4:96 69@0:4:96 57@4:4:96 60@4:4:96 65@4:4:96 69@4:4:96 55@8:4:96 60@8:4:96 64@8:4:96 67@8:4:96 55@12:4:96 59@12:4:96 62@12:4:96 67@12:4:96"
+clip add --strip ch_8 --pattern pt_10 --at 192 --length 64
+
+# the lead: the hook — a bright three-voice saw with an octave square, a dotted-eighth delay
+clip add --instrument synth --at 64 --length 64
+set ch_9.name="Lead" pt_11.name="Lead"
+set dv_8.osc1.wave=saw dv_8.osc1.voices=3 dv_8.osc1.detune=14 dv_8.osc1.width=12 dv_8.osc1.level=0.75 dv_8.osc2.wave=square dv_8.osc2.octave=1 dv_8.osc2.level=0.18 dv_8.filter.cutoff=2400 dv_8.filter.res=0.22 dv_8.filter.env=2.4 dv_8.fenv.decay=260 dv_8.fenv.sustain=0.35 dv_8.amp.attack=2 dv_8.amp.decay=320 dv_8.amp.sustain=0.6 dv_8.amp.release=200 dv_8.volume=-14
+set pt_11.length=16
+notes add pt_11 "69@0:0.5:104 72@0.75:0.25:92 76@1:0.5:104 74@1.5:0.5:92 72@2:0.75:104 69@3:0.5:104 67@3.5:0.5:92 69@4:0.5:104 72@4.75:0.25:92 77@5:0.75:104 76@6:0.5:104 72@6.5:0.5:92 69@7:1:104 67@8:0.5:104 72@8.5:0.5:92 76@9:0.75:104 79@10:0.5:104 76@10.5:0.5:92 74@11:0.75:104 74@12:0.5:104 71@12.5:0.5:92 67@13:0.5:104 74@13.75:0.25:92 76@14:1:104 74@15:0.5:104 71@15.5:0.5:92"
+clip add --strip ch_9 --pattern pt_11 --at 192 --length 64
+
+# the pad: slow, wide, low-passed — its filter opening through the intro and the builds
+clip add --instrument synth --at 0 --length 64
+set ch_10.name="Pad" pt_12.name="Pad"
+set dv_9.osc1.wave=saw dv_9.osc1.voices=5 dv_9.osc1.detune=26 dv_9.osc1.width=30 dv_9.osc1.level=0.6 dv_9.osc2.wave=triangle dv_9.osc2.octave=1 dv_9.osc2.level=0.25 dv_9.filter.res=0.2 dv_9.filter.env=0.3 dv_9.filter.keytrack=0.3 dv_9.amp.attack=650 dv_9.amp.decay=900 dv_9.amp.sustain=0.85 dv_9.amp.release=1400 dv_9.volume=-15
+set pt_12.length=16
+notes add pt_12 "45@0:4:90 52@0:4:90 60@0:4:90 41@4:4:90 48@4:4:90 57@4:4:90 48@8:4:90 55@8:4:90 64@8:4:90 43@12:4:90 50@12:4:90 59@12:4:90"
+clip add --strip ch_10 --pattern pt_12 --at 128 --length 64
+clip add --strip ch_10 --pattern pt_12 --at 256 --length 32
+auto create dv_9.filter.cutoff
+auto point move au_1 --at 0 --value 260
+auto point add au_1 --at 31.5 --value 1400 --shape smooth
+auto point add au_1 --at 32 --value 1400
+auto point add au_1 --at 63.5 --value 7000 --shape smooth
+auto point add au_1 --at 64 --value 900 --shape hold
+auto point add au_1 --at 128 --value 2200
+auto point add au_1 --at 160 --value 2200
+auto point add au_1 --at 191.5 --value 8000 --shape smooth
+auto point add au_1 --at 192 --value 900 --shape hold
+auto point add au_1 --at 256 --value 3000
+auto point add au_1 --at 288 --value 240 --shape smooth
+
+# the piano (R-INST-5) in the breakdown: broken chords in eighths, the hook joining an octave up
+clip add --instrument piano --at 128 --length 16
+set ch_11.name="Piano" pt_13.name="Piano"
+set dv_10.volume=-4 dv_10.strings.decay=1.2 dv_10.hammer.hardness=0.9
+set pt_13.length=16
+notes add pt_13 "45@0:0.5:92 64@0.5:0.5:78 72@1:0.5:78 76@1.5:0.5:78 72@2:0.5:78 64@2.5:0.5:78 60@3:0.5:78 64@3.5:0.5:78 41@4:0.5:92 60@4.5:0.5:78 69@5:0.5:78 72@5.5:0.5:78 69@6:0.5:78 60@6.5:0.5:78 57@7:0.5:78 60@7.5:0.5:78 48@8:0.5:92 67@8.5:0.5:78 76@9:0.5:78 79@9.5:0.5:78 76@10:0.5:78 67@10.5:0.5:78 64@11:0.5:78 67@11.5:0.5:78 43@12:0.5:92 62@12.5:0.5:78 71@13:0.5:78 74@13.5:0.5:78 71@14:0.5:78 62@14.5:0.5:78 59@15:0.5:78 62@15.5:0.5:78"
+pattern new --name "Piano + hook" --length 16
+notes add pt_14 "45@0:0.5:92 64@0.5:0.5:78 72@1:0.5:78 76@1.5:0.5:78 72@2:0.5:78 64@2.5:0.5:78 60@3:0.5:78 64@3.5:0.5:78 41@4:0.5:92 60@4.5:0.5:78 69@5:0.5:78 72@5.5:0.5:78 69@6:0.5:78 60@6.5:0.5:78 57@7:0.5:78 60@7.5:0.5:78 48@8:0.5:92 67@8.5:0.5:78 76@9:0.5:78 79@9.5:0.5:78 76@10:0.5:78 67@10.5:0.5:78 64@11:0.5:78 67@11.5:0.5:78 43@12:0.5:92 62@12.5:0.5:78 71@13:0.5:78 74@13.5:0.5:78 71@14:0.5:78 62@14.5:0.5:78 59@15:0.5:78 62@15.5:0.5:78 81@0:0.5:88 84@0.75:0.25:88 88@1:0.5:88 86@1.5:0.5:88 84@2:0.75:88 81@3:0.5:88 79@3.5:0.5:88 81@4:0.5:88 84@4.75:0.25:88 89@5:0.75:88 88@6:0.5:88 84@6.5:0.5:88 81@7:1:88 79@8:0.5:88 84@8.5:0.5:88 88@9:0.75:88"
+notes add pt_14 "91@10:0.5:88 88@10.5:0.5:88 86@11:0.75:88 86@12:0.5:88 83@12.5:0.5:88 79@13:0.5:88 86@13.75:0.25:88 88@14:1:88 86@15:0.5:88 83@15.5:0.5:88"
+clip add --strip ch_11 --pattern pt_14 --at 144 --length 16
+
+# the riser: a noise-and-saw sweep, its filter opening and its pitch climbing an octave through each build
+clip add --instrument synth --at 32 --length 32
+set ch_12.name="Riser" pt_15.name="Riser"
+set dv_11.osc1.wave=saw dv_11.osc1.voices=3 dv_11.osc1.detune=40 dv_11.osc1.width=30 dv_11.osc1.level=0.3 dv_11.osc2.level=0 dv_11.noise=0.8 dv_11.filter.res=0.35 dv_11.filter.env=0 dv_11.filter.keytrack=0 dv_11.amp.attack=1500 dv_11.amp.sustain=1 dv_11.amp.release=300 dv_11.volume=-15
+set pt_15.length=32
+notes add pt_15 "57@0:31.5:100"
+clip add --strip ch_12 --pattern pt_15 --at 160 --length 32
+auto create dv_11.filter.cutoff
+auto point move au_2 --at 0 --to 32 --value 200
+auto point add au_2 --at 63.5 --value 8500 --shape smooth
+auto point add au_2 --at 64 --value 200 --shape hold
+auto point add au_2 --at 160 --value 200
+auto point add au_2 --at 191.5 --value 8500 --shape smooth
+auto point add au_2 --at 192 --value 200 --shape hold
+auto create dv_11.osc1.semi
+auto point move au_3 --at 0 --to 32 --value -12
+auto point add au_3 --at 63.5 --value 12
+auto point add au_3 --at 64 --value -12 --shape hold
+auto point add au_3 --at 160 --value -12
+auto point add au_3 --at 191.5 --value 12
+auto point add au_3 --at 192 --value -12 --shape hold
+auto create dv_11.volume
+auto point move au_4 --at 0 --to 32 --value -40
+auto point add au_4 --at 63.5 --value -13 --shape smooth
+auto point add au_4 --at 64 --value -40 --shape hold
+auto point add au_4 --at 160 --value -40
+auto point add au_4 --at 191.5 --value -13 --shape smooth
+auto point add au_4 --at 192 --value -40 --shape hold
+
+# the pump: the kick keys a compressor on the sub, the mid bass, the chords, the lead and the pad
+device add ch_6 --type compressor
+set dv_12.sidechain=on dv_12.threshold=-28 dv_12.ratio=8 dv_12.attack=1 dv_12.release=120
+send add ch_2 --to ch_6 --sidechain
+device add ch_7 --type compressor
+set dv_13.sidechain=on dv_13.threshold=-26 dv_13.ratio=5 dv_13.attack=1 dv_13.release=120
+send add ch_2 --to ch_7 --sidechain
+device add ch_8 --type compressor
+set dv_14.sidechain=on dv_14.threshold=-22 dv_14.ratio=4 dv_14.attack=1 dv_14.release=130
+send add ch_2 --to ch_8 --sidechain
+device add ch_9 --type compressor
+set dv_15.sidechain=on dv_15.threshold=-20 dv_15.ratio=2 dv_15.attack=1 dv_15.release=120
+send add ch_2 --to ch_9 --sidechain
+device add ch_10 --type compressor
+set dv_16.sidechain=on dv_16.threshold=-24 dv_16.ratio=3 dv_16.attack=1 dv_16.release=160
+send add ch_2 --to ch_10 --sidechain
+
+# tone: the chords, the lead, the pad and the piano give the low end to the kick and the sub
+device add ch_8 --type eq
+set dv_17.lowcut.on=on dv_17.lowcut.freq=160
+device add ch_9 --type eq
+set dv_18.lowcut.on=on dv_18.lowcut.freq=220
+device add ch_10 --type eq
+set dv_19.lowcut.on=on dv_19.lowcut.freq=140
+device add ch_11 --type eq
+set dv_20.lowcut.on=on dv_20.lowcut.freq=70
+device add ch_12 --type eq
+set dv_21.lowcut.on=on dv_21.lowcut.freq=180
+device add ch_3 --type eq
+set dv_22.lowcut.on=on dv_22.lowcut.freq=300
+device add ch_4 --type eq
+set dv_23.lowcut.on=on dv_23.lowcut.freq=400
+
+# space: a long, wide reverb and a dotted-eighth delay, each on a bus
+strip add --kind bus --name Reverb
+device add ch_13 --type reverb
+set dv_24.decay=3200 dv_24.size=160 dv_24.mix=1 dv_24.lowcut=300 dv_24.highcut=12000 dv_24.width=1
+strip add --kind bus --name Delay
+device add ch_14 --type delay
+set dv_25.time="=60000/bpm*0.75" dv_25.feedback=0.38 dv_25.tone=4500 dv_25.mix=1
+send add ch_8 --to ch_13 --gain -11
+send add ch_9 --to ch_13 --gain -8
+send add ch_9 --to ch_14 --gain -11
+send add ch_10 --to ch_13 --gain -6
+send add ch_11 --to ch_13 --gain -7
+send add ch_12 --to ch_13 --gain -5
+send add ch_3 --to ch_13 --gain -16
+send add ch_4 --to ch_13 --gain -14
+
+# the mix: faders; the master: a limiter, its ceiling under −1 dBTP
+set ch_2.gain=-2 ch_3.gain=-6 ch_4.gain=-9 ch_5.gain=-1 ch_6.gain=-7 ch_7.gain=-6 ch_8.gain=-3 ch_9.gain=-4 ch_10.gain=-7 ch_11.gain=-4 ch_12.gain=-6 ch_13.gain=-7 ch_14.gain=-11
+device add master --type limiter
+set dv_26.gain=12 dv_26.ceiling=-2.0 dv_26.release=80
+
+ls
+audit
+project save
+render --out perihelion.wav --stems ch_2,ch_8,ch_6,ch_9

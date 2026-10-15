@@ -1142,6 +1142,17 @@ U-8 the short drag (D-6), U-9 a short note's body (D-7), U-10 Ctrl selecting (R-
 the reason: U-6 (a unit the registry does not give) and what a person would still want (a chord stamp or an
 arpeggiator, velocity by hand, a keyboard — B13).
 
+### DR-SVC-12 An EDM track, original, measured as a master (R-SVC-12)
+`demo/edm` (its README): *Perihelion*, written for this repo — i–VI–III–VII in A minor, its own hook, bass lines,
+drums and form — 126 bpm, 72 bars, made with `solaris-cc` alone from `make_script.py`'s `song.txt` (~215 lines).
+Its sounds are the library's, three of them gained for it: stereo unison (REQ-synth2-6), crash and ride
+(REQ-drum-6), and a volume that moves a sounding note (D-8) so the riser swells. `measure.py` judges the master:
+BS.1770-4 loudness (K-weighted, gated) −10.3 LUFS integrated; true peak −1.03 dBTP (4× oversampled); the drops
+(−8.8 LUFS short-term) over the breakdown (−13.6); each build +3.1 LU and +15 dB brighter at 5–14 kHz, landing
+under its drop; the low end mono (correlation 1.000 under 120 Hz) and the highs wide (side/mid −1.7 dB over 1 kHz);
+the chords pumping 10.3 dB on the kick; the kick on all 128 drop beats within 0.19 ms; 98 % of the pitched peaks in
+A minor; the sub to the air. ctest `edm_track_measured` (label `long`, ~1 min).
+
 ### DR-SVC-5 The control channel and attach (R-SVC-5, R-SVC-6)
 **The window.** `solaris --control <socket> [song.slp]` (`linux_main.cpp:240`) builds a `ControlServer`
 on the window's own service after any song opened and polls it from its own 16 ms GLib timeout

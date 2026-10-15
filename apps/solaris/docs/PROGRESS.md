@@ -11,13 +11,15 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — I4a: D-8, a live volume.*
+*Last updated: 2026-10-15 — I4: Perihelion, measured as a master.*
 
 ---
 
 ## NEXT
 
-**► I4 — the EDM track** (R-SVC-12): written, rendered, measured as a production: the 2026-10-15 EDM brief. B13+ wait.
+**► B13 — the MIDI keyboard** (R-EDM-10) — Claude's own suggestion: ask before a long run. The 2026-10-15 EDM brief
+is built (I1–I4, I4a). Open: D-5's live check; the audit's wants (a chord stamp or arpeggiator, velocity by hand);
+the library has no true-peak limiter (the track's −1 dBTP was met by headroom, the limiter at −2 dBFS). T2, T3.
 
 ---
 
@@ -317,8 +319,12 @@ umbrella's pointer — `arstro.rule` §7).
 - [x] **I4a** D-8 (found making the track): a synth's volume / a sampler's level, automated or set while a note
       sounded, moved nothing until the next note — the riser could not swell. DSP `0707803`: applied per block,
       ramped. Guard `Volume_and_level_move_a_sounding_note` (a stepped volume seen red).
-- [ ] **I4** The track: `demo/edm` — its script written by a generator, rendered, measured as a production
+- [x] **I4** The track: `demo/edm` — its script written by a generator, rendered, measured as a production
       (`measure.py`), a ctest; anything it finds missing becomes I5…; delivered (R-SVC-12).
+      — DR-SVC-12: *Perihelion*, 126 bpm, A minor, 2:17. −10.3 LUFS, −1.03 dBTP, drops 4.8 LU over the breakdown,
+      builds +3.1 LU landing under their drops, mono lows / wide highs, a 10 dB pump, the kick within 0.19 ms, 98 % in
+      key. Seven mixes to get there (the measure's first key test was fooled by drum noise — rewritten to peaks).
+      ctest `edm_track_measured` (label `long`). Delivered to ~/Music/Solaris/perihelion.*.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
