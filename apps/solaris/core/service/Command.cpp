@@ -132,7 +132,8 @@ namespace solaris
             {K::NotesAdd, "notes add", "<pt> \"<note> …\"", 2, -1, {"length=<beats>", "vel=<1-127>"},
              "Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>]] — C4@0:0.5:90, "
              "kick@1, E4@2::70. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing "
-             "lands. Prints how many; warns of notes past the pattern's end.", "R-SVC-8"},
+             "lands. Prints how many. A note past the pattern's end grows the pattern to the end of that bar, and a clip "
+             "that played it whole with it (R-ROLL-9).", "R-SVC-8"},
             {K::NotesMove, "notes move", "<pt> \"<pitch@beat> …\"", 2, -1, {"by=<beats>", "semi=<n>"},
              "Move several notes as ONE edit (one undo step) — the piano roll's selection dragged, or moved by the arrow "
              "keys: each named by <pitch>@<beat>, all moved --by beats (default 0) and --semi semitones (default 0). "

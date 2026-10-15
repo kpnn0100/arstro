@@ -1272,6 +1272,41 @@ static void test_notes_move_and_delete_a_selection_as_one_edit()
     pass("`notes move` / `notes delete`: a selection moved (beats and semitones) or removed as ONE edit; refused whole naming the first — no note, onto a note not moved, out of range, before 0 (R-ROLL-8)");
 }
 
+static void test_a_pattern_grows_to_hold_its_notes()
+{
+    Run r;
+    r.ok("project new " + freshSong("grow") + " --bpm 120");
+    r.ok("strip add --kind instrument --instrument synth");
+    r.ok("clip add --strip ch_2 --length 4");                       // ac_1 plays pt_1 whole (4 beats)
+    r.ok("clip add --strip ch_2 --pattern pt_1 --at 8 --length 2");  // ac_2: cut shorter
+    r.ok("clip add --strip ch_2 --pattern pt_1 --at 16 --length 12"); // ac_3: looping on past it
+    auto pt = [&]() { return r.svc.model().patterns[0]; };
+    auto clipLen = [&](const std::string &id) {
+        for (const auto &c : r.svc.model().clips)
+            if (c.id == id) return c.length;
+        return -1.0;
+    };
+    const int depth = r.svc.model().undoDepth;
+    // a note written past the end: the pattern grows to the end of the bar that holds it, in the same edit
+    assert(contains(r.ok("note add pt_1 --pitch 60 --at 5 --length 0.5"), "pt_1 grew to 8 beats to hold its notes; ac_1 with it"));
+    assert(pt().length == 8.0 && clipLen("ac_1") == 8.0 && clipLen("ac_2") == 2.0 && clipLen("ac_3") == 12.0);
+    assert(r.svc.model().undoDepth == depth + 1);
+    r.ok("undo");                                                       // one step back takes both
+    assert(pt().length == 4.0 && clipLen("ac_1") == 4.0 && pt().notes.empty());
+    // a note within the end changes nothing; one resized past it grows it; one moved past it, and a selection
+    r.ok("note add pt_1 --pitch 60 --at 3");
+    assert(pt().length == 4.0);
+    assert(contains(r.ok("note move pt_1 --pitch 60 --at 3 --length 2"), "grew to 8 beats"));
+    assert(pt().length == 8.0 && clipLen("ac_1") == 8.0);
+    r.ok("notes add pt_1 \"E4@0 G4@1\"");
+    assert(contains(r.ok("notes move pt_1 \"E4@0 G4@1\" --by 9"), "grew to 12 beats"));
+    assert(pt().length == 12.0 && clipLen("ac_1") == 12.0);
+    // the end set back by hand stays (R-ROLL-5); the audit names what it leaves outside
+    r.ok("set pt_1.length=4");
+    assert(pt().length == 4.0 && contains(r.ok("audit"), "past its end: pt_1"));
+    pass("A pattern grows to hold its notes (R-ROLL-9): added, resized or moved past the end, it reaches the end of that bar in the same edit (one undo); a clip that played it whole grows with it, one cut shorter or looping on stays; set back by hand it stays, and the audit names what is outside");
+}
+
 static void test_edits_while_playing_are_heard()
 {
     Run r;
@@ -1598,9 +1633,13 @@ static void test_notes_in_bulk_and_by_name()
     assert(contains(r.no("note add pt_1 --pitch 128 --at 0"), "0–127"));
     // chords: one line, one edit
     const size_t had = r.svc.model().patterns[0].notes.size();
-    assert(r.ok("note add pt_1 --chord Cm7 --at 4 --length 4 --octave 3 --vel 80") == "Cm7: C3 D#3 G3 A#3\nwarning: 4 notes of pt_1 start at or after its end (beat 4) — they play over its next repeat; set pt_1.length=8\n");
-    assert(r.svc.model().patterns[0].notes.size() == had + 4);
-    assert(r.ok("undo") == "note add pt_1\n" && r.svc.model().patterns[0].notes.size() == had);
+    // written past the 4-beat end: the pattern grows to the bar that holds it, in the same edit (R-ROLL-9 — this
+    // used to be a warning, R-SVC-8 amended)
+    const double was = r.svc.model().patterns[0].length;
+    assert(was == 4.0);
+    assert(r.ok("note add pt_1 --chord Cm7 --at 4 --length 4 --octave 3 --vel 80").rfind("Cm7: C3 D#3 G3 A#3\npt_1 grew to 8 beats to hold its notes", 0) == 0);
+    assert(r.svc.model().patterns[0].notes.size() == had + 4 && r.svc.model().patterns[0].length == 8.0);
+    assert(r.ok("undo") == "note add pt_1\n" && r.svc.model().patterns[0].notes.size() == had && r.svc.model().patterns[0].length == 4.0);
     r.ok("note add pt_1 --chord F --at 0 --length 4 --inversion 2");            // F4 A4 C5, its two lowest raised: C5 F5 A5
     std::set<int> f;
     for (const auto &x : r.svc.model().patterns[0].notes)
@@ -1650,8 +1689,10 @@ static void test_steps_and_pattern_edits()
     // clear one pitch, then all
     assert(r.ok("pattern clear pt_2 --pitch G9") == "1 note removed\n");
     assert(r.ok("pattern clear pt_2") == "8 notes removed\n" && r.svc.model().patterns[1].notes.empty());
-    // the audit: an empty pattern, an unused one, notes past the end
-    r.ok("note add pt_1 --pitch kick --at 6");
+    // the audit: an empty pattern, an unused one, notes past the end — a note written past the end grows the
+    // pattern (R-ROLL-9), so the end is set back over it by hand, as a song saved before could have it
+    assert(contains(r.ok("note add pt_1 --pitch kick --at 6"), "pt_1 grew to 8 beats"));
+    r.ok("set pt_1.length=4");
     const std::string a = r.ok("audit");
     assert(contains(a, "empty pattern: pt_2 (Drum Machine copy) has no notes"));
     assert(contains(a, "unused pattern: pt_2 (Drum Machine copy) — no clip plays it"));
@@ -2030,6 +2071,7 @@ int main()
     test_audition_plays_a_sample_outside_the_song();
     test_a_note_preview_is_the_strip_heard_outside_the_song();
     test_notes_move_and_delete_a_selection_as_one_edit();
+    test_a_pattern_grows_to_hold_its_notes();
     test_edits_while_playing_are_heard();
     test_loop_and_seek();
     test_a_clip_plays_looped_and_gives_the_songs_loop_back();

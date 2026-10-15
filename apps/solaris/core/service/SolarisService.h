@@ -92,6 +92,7 @@ namespace solaris
         bool pitchOf(const std::string &text, const std::string &pattern, int &midi, std::string &err) const;
         /** "warning: …" naming notes that start at or after the pattern's end ("" = none). */
         std::string pastEndWarning(const Pattern &pt) const;
+        std::string growToHold(Pattern &pt);          // R-ROLL-9: the pattern grows to the bar holding its last note's end; returns what it said
         std::string lsText() const;
         bool showText(const std::string &id, std::string &out, std::string &err) const;
         bool historyCommand(const Command &c, std::string &err); // undo / redo

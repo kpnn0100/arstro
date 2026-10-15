@@ -133,6 +133,27 @@ namespace solaris
                ") — they play over its next repeat; set " + pt.id + ".length=" + beatText(std::ceil(last / bar - 1e-9) * bar) + "\n";
     }
 
+    std::string SolarisService::growToHold(Pattern &pt)
+    {
+        // R-ROLL-9: a pattern holds what is written in it — grown to the end of the bar that holds its last note's
+        // end, in the same edit; a clip that played it whole (its length the pattern's) grows with it; a clip cut
+        // shorter, or looping on past it, stays as it is
+        double end = 0;
+        for (const auto &n : pt.notes) end = std::max(end, n.at + n.length);
+        if (end <= pt.length + 0.5 / kPpq) return std::string();
+        const double bar = barBeats(mProject), old = pt.length, grown = std::ceil(end / bar - 1e-9) * bar;
+        pt.length = toTick(grown);
+        std::string clips;
+        for (auto &c : mProject.clips)
+            if (c.pattern == pt.id && std::fabs(c.length - old) < 0.5 / kPpq)
+            {
+                c.length = pt.length;
+                clips += (clips.empty() ? "; " : ", ") + c.id;
+            }
+        changed("pattern.length", pt.id);
+        return pt.id + " grew to " + beatText(pt.length) + " beats to hold its notes" + (clips.empty() ? "" : clips + " with it") + "\n";
+    }
+
     // ── the edits ───────────────────────────────────────────────────────────────────────────────
 
     bool SolarisService::composeCommand(const Command &c, std::string &err)
@@ -184,7 +205,7 @@ namespace solaris
             }
             sortNotes(*pt);
             changed("notes.added", pt->id);
-            mOutput = countOf(add.size(), "note", "notes") + "\n" + pastEndWarning(*pt);
+            mOutput = countOf(add.size(), "note", "notes") + "\n" + growToHold(*pt); // R-ROLL-9 (amends R-SVC-8's warning)
             return true;
         }
         case K::NotesMove:
@@ -248,7 +269,7 @@ namespace solaris
             }
             sortNotes(*pt);
             changed("notes.moved", pt->id);
-            mOutput = countOf(which.size(), "note", "notes") + " moved\n";
+            mOutput = countOf(which.size(), "note", "notes") + " moved\n" + growToHold(*pt);
             return true;
         }
         case K::PatternSteps:
@@ -284,7 +305,7 @@ namespace solaris
             }
             sortNotes(*pt);
             changed("pattern.steps", pt->id);
-            mOutput = countOf(hits, "note", "notes") + "\n" + pastEndWarning(*pt);
+            mOutput = countOf(hits, "note", "notes") + "\n" + growToHold(*pt); // R-ROLL-9
             return true;
         }
         case K::PatternDuplicate:

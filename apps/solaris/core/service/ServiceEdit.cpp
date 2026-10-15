@@ -808,7 +808,7 @@ namespace solaris
                 return a.at != b.at ? a.at < b.at : a.pitch < b.pitch;
             });
             if (chord) mOutput = c.flag("chord") + ": " + names + "\n";
-            mOutput += pastEndWarning(*pt);
+            mOutput += growToHold(*pt); // R-ROLL-9 (it used to warn)
             changed("note.added", pt->id);
             return true;
         }
@@ -841,7 +841,7 @@ namespace solaris
             std::stable_sort(pt->notes.begin(), pt->notes.end(), [](const Note &a, const Note &b) {
                 return a.at != b.at ? a.at < b.at : a.pitch < b.pitch;
             });
-            mOutput = pastEndWarning(*pt);
+            mOutput = growToHold(*pt); // R-ROLL-9: moved or resized past the end, the pattern holds it
             changed("note.moved", pt->id);
             return true;
         }

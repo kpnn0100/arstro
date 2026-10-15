@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — H7: a selection in the roll.*
+*Last updated: 2026-10-15 — H8: the pattern grows to hold its notes.*
 
 ---
 
 ## NEXT
 
-**► H8 — the pattern grows to hold its notes** (R-ROLL-9), then H9…H10 in order: the 2026-10-15 brief (a song made in the
+**► H9 — the length a click makes; a window resized by its corner** (R-ROLL-10, R-WIN-5), then H10: the 2026-10-15 brief (a song made in the
 window, Bach's Prelude in C, with the UX it finds fixed). B13+ wait; T2 and T3 may go between.
 
 ---
@@ -283,7 +283,9 @@ umbrella's pointer — `arstro.rule` §7).
       — DR-ROLL-8: `notes move` / `notes delete` (one edit, refused whole); the roll selects by click, Shift+click,
       a Ctrl box, Ctrl+A; the selection dragged, the arrows, Delete, Ctrl+D, Ctrl+C/V (a shared clipboard) — each
       one line; lit, eased; the keys go to the roll last pressed. L2 + UI tests; 2 mutants caught.
-- [ ] **H8** The pattern grows to hold its notes; a whole-pattern clip grows with it (U-3; R-ROLL-9).
+- [x] **H8** The pattern grows to hold its notes; a whole-pattern clip grows with it (U-3; R-ROLL-9).
+      — DR-ROLL-9: every note-writing edit grows the pattern to the bar holding its last note's end, a clip that
+      played it whole with it, in the same edit; said in the output; R-SVC-8's warning amended. L2; mutant caught.
 - [ ] **H9** The length a click makes, shown and chosen; a window resized by its corner (U-4, U-5; R-ROLL-10,
       R-WIN-5).
 - [ ] **H10** The Prelude, made in the window with the fixes: every note, the tempo, measured against the score

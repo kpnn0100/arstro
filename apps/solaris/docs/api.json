@@ -374,7 +374,7 @@
         "length=<beats>",
         "vel=<1-127>"
       ],
-      "summary": "Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>]] — C4@0:0.5:90, kick@1, E4@2::70. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing lands. Prints how many; warns of notes past the pattern's end.",
+      "summary": "Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>]] — C4@0:0.5:90, kick@1, E4@2::70. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing lands. Prints how many. A note past the pattern's end grows the pattern to the end of that bar, and a clip that played it whole with it (R-ROLL-9).",
       "requirement": "R-SVC-8"
     },
     {

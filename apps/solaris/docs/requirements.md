@@ -710,6 +710,18 @@ the roll at the same beats, selected; Ctrl+A — every note; Escape — none. Th
 last pressed in: `App` notes on every press whether it fell in the front roll (`app/App.cpp:89`) and offers the
 key to that roll first (`:338`) — a press on the lanes gives the keys back to them.
 
+### DR-ROLL-9 The pattern grows to hold what is written in it (R-ROLL-9)
+`growToHold` (`core/service/ServiceCompose.cpp:136`) runs inside every edit that writes notes — `note add` (a chord
+too), `note move` (moved or resized), `notes add` (a paste, a duplicate), `notes move`, `pattern steps`: when a
+note's end passes the pattern's, the pattern's length becomes the end of the bar that holds it (`barBeats`, the
+song's signature), and every clip whose length WAS the pattern's — it played it whole — takes the new length; a
+clip cut shorter, or longer and looping on, keeps its own. Part of the same edit (one undo step takes both); the
+command's output says it ("pt_1 grew to 8 beats to hold its notes; ac_1 with it"), so a script reads it; event
+`project.changed what=pattern.length`. An end set back by hand (`set <pt>.length=`, R-ROLL-5) is obeyed, and the
+audit names the notes it leaves outside. In the roll the end handle eases to the new end (DR-ROLL-1). Closes the
+UX audit's U-3 (a note past the end was dimmed and never heard). L2 `test_a_pattern_grows_to_hold_its_notes`
+(mutant: a whole-pattern clip that does not follow, seen red).
+
 ### DR-VST-1 Our instruments as VST3 plugins (R-VST-1…5)
 **The SDK:** Steinberg's `vst3sdk` **v3.8.1_build_84**, cloned recursively to `~/sdk/vst3sdk`; its
 `LICENSE.txt` (and `base`, `pluginterfaces`, `public.sdk`'s) is the **MIT licence** (Steinberg relicensed
@@ -1028,8 +1040,9 @@ edits lost between calls, comment lines reprinting ids). The guide is `docs/AGEN
   adds a chord as one edit and prints its notes. `pattern steps` (`ServiceCompose.cpp:190`): x / X (127) /
   `.` per `--step` from `--at`, replacing that pitch in the span. `pattern duplicate | clear [--pitch] |
   delete` (refused while a clip plays it, naming the clips, `:248`) `| transpose --semi` (refused whole if a
-  note would leave 0–127, `:259`). A note starting at or past its pattern's end is warned at once
-  (`pastEndWarning`, `:122`) and audited (`core/service/ServiceModel.cpp:466`, with empty and unused patterns).
+  note would leave 0–127, `:259`). A note written past its pattern's end grows the pattern (DR-ROLL-9 — it used
+  to be warned, `pastEndWarning`, `:122`, which the audit still uses); one left outside by an end set back by hand
+  is audited (`core/service/ServiceModel.cpp:466`, with empty and unused patterns).
 - **Arrangement.** `clip duplicate --count N` makes N copies end to end in one edit
   (`ServiceEdit.cpp:704`). A `clip add` with no `--lane` goes on the lane of its strip's newest clip; a new
   lane only for a strip with none; `--lane new` asks for one (`laneFor`, `:529`) — the GUI's drop below the
