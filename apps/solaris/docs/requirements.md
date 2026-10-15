@@ -58,6 +58,20 @@ Per pad `tune`, `decay`, `tone`, `level`, `pan` (registry `kick.tune` … `cowbe
 `volume`); the closed hat chokes the open hat (`:185`); `reset()` reseeds, so a pattern replays
 byte-identically. Guarded by `instrumentTests.cpp` and `kick_settles_on_its_tuned_fundamental`.
 
+### DR-INST-5 The piano (R-INST-5)
+Registry type `piano` (DSP `9d6ef27`, REQ-inst-piano-1): the library's physical piano — `PianoEngine`
+(`src/physical`, moved there from the DSP's demo app) as the `Piano` instrument (`src/instrument/Piano.cpp`):
+16 voices of felt hammer, stiff inharmonic unison strings and a shared bridge and soundboard; velocity
+`v/127`; a volume after its soft limiter; a stop lets the keys go (the pedals keep what they hold), a seek is
+silence. Its parameters are the engine's voicing bank, titled Hammer (hardness, felt curve, hysteresis, felt
+relax), Strings (sustain, brightness, stretch, unison detune, bass growl, attack glide, treble shimmer,
+aftersound), Body (soundboard, resonance), Pedals (sustain, soft) and Output (drive, volume). A voice is
+stolen longest-released first, so a held bass under an arpeggio keeps sounding; the same notes after a
+seek are the same samples as from the start. Solaris has it with no Solaris code (R-DSP-2): `strip add
+--instrument piano`, its addresses, the API document, its analog face (shot `piano-window`) and the MIDI
+roll all come from the registry; a song's refusal of an unknown instrument now lists `synth piano drums
+sampler`.
+
 ### DR-FX-1 The basic effects (R-FX-1…4)
 Registry types `compressor`, `eq`, `reverb`, `delay`, `chorus`, `drive`, `filter`. `eq` is
 `ParametricEQ` (`src/equalizer/ParametricEQ.cpp:5`): seven `Biquad` bands built by the RBJ cookbook

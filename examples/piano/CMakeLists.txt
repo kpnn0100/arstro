@@ -17,7 +17,6 @@ if(PIANO_GTK3_FOUND AND PIANO_ALSA_FOUND AND PIANO_X11_FOUND AND Threads_FOUND)
     linux_main.cpp
     PianoApp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src/adapter/native/CairoTarget.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/DigitalSignalProcessing/apps/piano_demo/PianoEngine.cpp
   )
   target_include_directories(arstro_piano_ui PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src

@@ -24,7 +24,7 @@
  */
 #pragma once
 #include "../../core/Artboard/include/artboard/artboard.h"
-#include "../../core/DigitalSignalProcessing/apps/piano_demo/PianoEngine.h"
+#include "../../core/DigitalSignalProcessing/src/physical/PianoEngine.h"
 #include "../../core/DigitalSignalProcessing/src/base/LockFreeQueue.h"
 #include <array>
 #include <atomic>

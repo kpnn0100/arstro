@@ -242,6 +242,18 @@ namespace
                  r.frame();
                  r.frame();
              }},
+            {"piano-window", // R-INST-5: the piano's face — Hammer, Strings, Body, Pedals, Output, from the registry
+             [](sltest::Rig &r) {
+                 r.cmd("project new " + r.song("Prelude") + ".slp --bpm 66");
+                 r.cmd("strip add --kind instrument --instrument piano --name Piano");
+                 r.settle();
+                 std::string dv;
+                 for (const auto &st : r.svc->model().strips)
+                     for (const auto &d : st.devices)
+                         if (d.type == "piano" && dv.empty()) dv = d.id;
+                 r.app->project().windows().openDevice(dv);
+                 r.settle();
+             }},
             {"effect-window", // R-UI-12: an effect keeps its parameter list
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

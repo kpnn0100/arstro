@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — H3: a note heard when it is made.*
+*Last updated: 2026-10-15 — H4: the piano.*
 
 ---
 
 ## NEXT
 
-**► H4 — the piano** (R-INST-5, DSP first), then H5…H6 in order: the 2026-10-15 brief (a song made in the
+**► H5 — the Prelude, made in the window** (R-SVC-10/11), its UX findings as H6… tasks: the 2026-10-15 brief (a song made in the
 window, Bach's Prelude in C, with the UX it finds fixed). B13+ wait; T2 and T3 may go between.
 
 ---
@@ -264,8 +264,14 @@ umbrella's pointer — `arstro.rule` §7).
       open across a run of previews, the old voice faded under the new, voices handed over and back through
       atomics. The roll sounds a note added, pressed, dragged into a row, a key pressed or swept (lit), a Steps
       cell; never in undo. 3 mutants caught (a cut instead of a fade, the fader left out, a snapping key light).
-- [ ] **H4** The piano: the DSP library's physical piano as a library instrument and a registry entry
+- [x] **H4** The piano: the DSP library's physical piano as a library instrument and a registry entry
       (DSP first; R-INST-5).
+      — DR-INST-5 (DSP `9d6ef27`, REQ-inst-piano-1): `PianoEngine` into `src/physical`, `Piano` and registry
+      `piano` (voicing bank, pedals, drive, volume; titled groups), 16 voices stolen longest-released first,
+      `silence()` making a seek's replay bit-identical — which found two engine defects: never-struck voices
+      were undamped phantom strings ringing through the bridge (now seated: one voice 4× cheaper), and a stale
+      `displacementAtStrike` met every stolen voice's strike. Bench 10.7× RT (Release), budget met. The
+      umbrella's examples/piano plays the library's engine. Shot `piano-window`. Stealing mutant seen red.
 - [ ] **H5** The Prelude, made in the window: its score table, the gestures that make it, the UX audit as it
       goes (`docs/ux-audit.md`), the measurement (R-SVC-10/11). Each finding becomes an H6… task here,
       fixed before the song is finished.

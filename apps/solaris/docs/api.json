@@ -2409,6 +2409,194 @@
       ]
     },
     {
+      "type": "piano",
+      "label": "Piano",
+      "kind": "instrument",
+      "summary": "A physical piano: felt hammers on stiff, inharmonic strings through a shared bridge and soundboard; sustain and soft pedals; 16 voices, a held key never stolen while a released one rings.",
+      "params": [
+        {
+          "name": "hammer.hardness",
+          "label": "Hardness",
+          "unit": "x",
+          "min": 0.5,
+          "max": 1.6,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "hammer.curve",
+          "label": "Felt Curve",
+          "unit": "",
+          "min": 1.5,
+          "max": 3.5,
+          "default": 2.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "hammer.hysteresis",
+          "label": "Hysteresis",
+          "unit": "",
+          "min": 0.0,
+          "max": 0.6,
+          "default": 0.2,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "hammer.relax",
+          "label": "Felt Relax",
+          "unit": "x",
+          "min": 0.0,
+          "max": 2.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "strings.decay",
+          "label": "Sustain",
+          "unit": "x",
+          "min": 0.3,
+          "max": 2.5,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "strings.brightness",
+          "label": "Brightness",
+          "unit": "x",
+          "min": 0.25,
+          "max": 4.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "strings.inharmonicity",
+          "label": "Stretch",
+          "unit": "x",
+          "min": 0.0,
+          "max": 3.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "strings.detune",
+          "label": "Unison Detune",
+          "unit": "cents",
+          "min": 0.0,
+          "max": 3.0,
+          "default": 0.6,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "strings.growl",
+          "label": "Bass Growl",
+          "unit": "",
+          "min": 0.0,
+          "max": 0.03,
+          "default": 0.008,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "strings.glide",
+          "label": "Attack Glide",
+          "unit": "x",
+          "min": 0.0,
+          "max": 4.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "strings.shimmer",
+          "label": "Treble Shimmer",
+          "unit": "",
+          "min": 0.0,
+          "max": 300.0,
+          "default": 90.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "strings.sing",
+          "label": "Aftersound",
+          "unit": "x",
+          "min": 0.0,
+          "max": 2.5,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "body.mix",
+          "label": "Soundboard",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "body.resonance",
+          "label": "Resonance",
+          "unit": "",
+          "min": 0.0,
+          "max": 2.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "pedal.sustain",
+          "label": "Sustain Pedal",
+          "unit": "",
+          "choices": [
+            "off",
+            "on"
+          ],
+          "default": "off"
+        },
+        {
+          "name": "pedal.soft",
+          "label": "Soft Pedal",
+          "unit": "",
+          "choices": [
+            "off",
+            "on"
+          ],
+          "default": "off"
+        },
+        {
+          "name": "drive",
+          "label": "Drive",
+          "unit": "",
+          "min": 0.05,
+          "max": 0.5,
+          "default": 0.22,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "volume",
+          "label": "Volume",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "drums",
       "label": "Drum Machine",
       "kind": "instrument",

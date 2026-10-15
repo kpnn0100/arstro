@@ -293,7 +293,7 @@ static void test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_ch
 
     const std::string before = r.text();
     r.events.clear();
-    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth drums sampler)"));
+    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth piano drums sampler)"));
     assert(contains(r.no("clip add --instrument synth --strip ch_2"), "without --src or --strip"));
     assert(contains(r.no("clip add --instrument synth --length -1"), "--length"));   // the strip was made, then the clip refused
     assert(r.text() == before && r.events.size() == 3);                                // three rejections, no change
@@ -322,7 +322,7 @@ static void test_a_relative_src_is_found_in_the_songs_folder()
     assert(r.clip("ac_1")->src == "samples/snare.wav");                 // stored relative to the song
     r.ok("clip add --src samples/snare.wav --at 4");                    // what the browser's Song tab hands back
     assert(r.clip("ac_2")->track == r.clip("ac_1")->track);            // the SAME file: the same strip
-    assert(r.svc.model().strips.size() == 2 && r.svc.model().deviceTypes.size() == 11 && r.svc.model().deviceTypes[0].kind == "instrument");
+    assert(r.svc.model().strips.size() == 2 && r.svc.model().deviceTypes.size() == 12 && r.svc.model().deviceTypes[0].kind == "instrument");
     pass("a relative src names a file in the song's folder first — the Song tab re-places a sound with one `clip add`");
 }
 

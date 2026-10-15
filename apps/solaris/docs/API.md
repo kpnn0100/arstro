@@ -401,6 +401,31 @@ Two oscillators and noise through a resonant filter and an amplitude envelope; 1
 | `volume` | -60.0 … 6.0 dB | -12.0 dB |
 | `velocity` | 0.0 … 1.0 | 0.8 |
 
+### `piano` — Piano (instrument)
+
+A physical piano: felt hammers on stiff, inharmonic strings through a shared bridge and soundboard; sustain and soft pedals; 16 voices, a held key never stolen while a released one rings.
+
+| parameter | range | default |
+|---|---|---|
+| `hammer.hardness` | 0.5 … 1.6 x | 1.0 x |
+| `hammer.curve` | 1.5 … 3.5 | 2.5 |
+| `hammer.hysteresis` | 0.0 … 0.6 | 0.2 |
+| `hammer.relax` | 0.0 … 2.0 x | 1.0 x |
+| `strings.decay` | 0.3 … 2.5 x | 1.0 x |
+| `strings.brightness` | 0.25 … 4.0 x | 1.0 x |
+| `strings.inharmonicity` | 0.0 … 3.0 x | 1.0 x |
+| `strings.detune` | 0.0 … 3.0 cents | 0.6 cents |
+| `strings.growl` | 0.0 … 0.03 | 0.008 |
+| `strings.glide` | 0.0 … 4.0 x | 1.0 x |
+| `strings.shimmer` | 0.0 … 300.0 | 90.0 |
+| `strings.sing` | 0.0 … 2.5 x | 1.0 x |
+| `body.mix` | 0.0 … 1.0 | 0.5 |
+| `body.resonance` | 0.0 … 2.0 | 0.5 |
+| `pedal.sustain` | off · on | off |
+| `pedal.soft` | off · on | off |
+| `drive` | 0.05 … 0.5 | 0.22 |
+| `volume` | -60.0 … 6.0 dB | 0.0 dB |
+
 ### `drums` — Drum Machine (instrument)
 
 Ten synthesized pads on the GM drum notes (36 kick … 56 cowbell); the closed hat chokes the open hat.
