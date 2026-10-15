@@ -1618,7 +1618,7 @@ static void test_notes_in_bulk_and_by_name()
     assert(r.no("notes add pt_1 \"C4@0 D4@1 X9@2\"") ==
            "note 3 `X9@2`: `X9` is not a pitch (a number 0–127, or a name: C4 = 60, F#3, Bb2); pt_1 plays through no kit, so a pad name does not apply — nothing was added");
     assert(contains(r.no("notes add pt_1 C4@0 D4@x"), "note 2 `D4@x`: `D4@x`: the beat `x` is not a number"));
-    assert(contains(r.no("notes add pt_2 \"kick@0 kik@1\""), "note 2 `kik@1`: `kik` is not a pitch (60, C4, F#3) nor a pad of drums (pads: kick rim snare clap low-tom closed-hat mid-tom open-hat high-tom cowbell)"));
+    assert(contains(r.no("notes add pt_2 \"kick@0 kik@1\""), "note 2 `kik@1`: `kik` is not a pitch (60, C4, F#3) nor a pad of drums (pads: kick rim snare clap low-tom closed-hat mid-tom open-hat high-tom crash ride cowbell)"));
     assert(contains(r.no("notes add pt_1 kick@0"), "`kick` is not a pitch"));     // a synth has no pads
     assert(contains(r.no("notes add pt_9 C4@0"), "no pattern `pt_9`"));
     assert(r.text() == mid);

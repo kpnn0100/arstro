@@ -63,6 +63,12 @@ Per pad `tune`, `decay`, `tone`, `level`, `pan` (registry `kick.tune` … `cowbe
 `volume`); the closed hat chokes the open hat (`:185`); `reset()` reseeds, so a pattern replays
 byte-identically. Guarded by `instrumentTests.cpp` and `kick_settles_on_its_tuned_fundamental`.
 
+**Crash and ride** (R-INST-2 amended; DSP `79648e7`, REQ-drum-6): crash 49 (K12, 1800 ms: the hats' squares and more
+noise, a 3.5 kHz band and a 5 kHz sheen, a burst over a wash) and ride 51 (K13, 1200 ms: a two-square bell in a
+3 kHz band over a wash above 8 kHz), last in the pad order so older pads keep their indices; both 0.55 peaks.
+Solaris has them with no code: `crash` and `ride` pad names, `crash.*` / `ride.*` addresses, two more step rows in
+a kit's roll, two more pads in the plugin's editor.
+
 ### DR-INST-5 The piano (R-INST-5)
 Registry type `piano` (DSP `9d6ef27`, REQ-inst-piano-1): the library's physical piano — `PianoEngine`
 (`src/physical`, moved there from the DSP's demo app) as the `Piano` instrument (`src/instrument/Piano.cpp`):

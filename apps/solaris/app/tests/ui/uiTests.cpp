@@ -1746,7 +1746,7 @@ static void test_a_kits_roll_names_its_pads()
     auto &roll = *wl.roll(pt);
     // the keys are the kit's pads, from the registry; Steps has a row per pad
     assert(roll.keyLabel(36) == "Kick" && roll.keyLabel(60).empty());
-    assert(roll.stepRows() == 10 && roll.stepRowPitch(0) == 36);
+    assert(roll.stepRows() == 12 && roll.stepRowPitch(0) == 36); // twelve pads: the crash and ride too (REQ-drum-6)
     roll.setMode(arstro::solaris_ui::PianoRoll::Steps);
     r.settle();
     r.click(world(roll, roll.stepCell(0, 0)));

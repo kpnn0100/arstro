@@ -432,9 +432,9 @@ A physical piano: felt hammers on stiff, inharmonic strings through a shared bri
 
 ### `drums` — Drum Machine (instrument)
 
-Ten synthesized pads on the GM drum notes (36 kick … 56 cowbell); the closed hat chokes the open hat.
+Twelve synthesized pads on the GM drum notes (36 kick … 56 cowbell, a crash 49 and a ride 51); the closed hat chokes the open hat.
 
-Pads — a pitch by name: `kick` 36 · `rim` 37 · `snare` 38 · `clap` 39 · `low-tom` 41 · `closed-hat` 42 · `mid-tom` 45 · `open-hat` 46 · `high-tom` 48 · `cowbell` 56
+Pads — a pitch by name: `kick` 36 · `rim` 37 · `snare` 38 · `clap` 39 · `low-tom` 41 · `closed-hat` 42 · `mid-tom` 45 · `open-hat` 46 · `high-tom` 48 · `crash` 49 · `ride` 51 · `cowbell` 56
 
 | parameter | range | default |
 |---|---|---|
@@ -488,6 +488,16 @@ Pads — a pitch by name: `kick` 36 · `rim` 37 · `snare` 38 · `clap` 39 · `l
 | `cowbell.tone` | 0.0 … 1.0 | 0.5 |
 | `cowbell.level` | -60.0 … 6.0 dB | 0.0 dB |
 | `cowbell.pan` | -1.0 … 1.0 | 0.0 |
+| `crash.tune` | -12.0 … 12.0 st | 0.0 st |
+| `crash.decay` | 10.0 … 4000.0 ms | 1800.0 ms |
+| `crash.tone` | 0.0 … 1.0 | 0.5 |
+| `crash.level` | -60.0 … 6.0 dB | 0.0 dB |
+| `crash.pan` | -1.0 … 1.0 | 0.0 |
+| `ride.tune` | -12.0 … 12.0 st | 0.0 st |
+| `ride.decay` | 10.0 … 4000.0 ms | 1200.0 ms |
+| `ride.tone` | 0.0 … 1.0 | 0.5 |
+| `ride.level` | -60.0 … 6.0 dB | 0.0 dB |
+| `ride.pan` | -1.0 … 1.0 | 0.0 |
 | `volume` | -60.0 … 6.0 dB | -6.0 dB |
 
 ### `sampler` — Sampler (instrument)
