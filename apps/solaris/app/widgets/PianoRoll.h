@@ -21,6 +21,10 @@
  *  and kept in view, the grid following it a page at a time, eased. A pattern on no track has nothing to
  *  sound through: the ▶ is dimmed.
  *
+ *  It sounds (R-ROLL-7): a note added, a note pressed, each pitch row a dragged note enters, a Steps cell
+ *  turned on and a key pressed (or swept) are heard through the clip's track — `note preview <ch> <pitch>`,
+ *  a line beside the edit's own, never in undo. The pressed key is lit while held.
+ *
  *  Nothing snaps on screen (§1): notes are keyed by (pitch, beat) and fade in and out; zoom and
  *  scroll ease; the mode switch cross-fades; the dragged note is the pointer's; the playhead fades in
  *  and out with the play.
@@ -61,6 +65,8 @@ namespace solaris_ui
         artboard::Rect playRect() const;
         double playheadBeat() const { return mHeadBeat; }   // in the pattern (−1: not heard here)
         double playheadAlpha() const { return mHeadAlpha.value(); } // LIVE
+        artboard::Rect keyRect(int pitch) const;            // a key on the left (R-ROLL-7: pressed, it sounds)
+        double keyLit(int pitch) const;                     // a pressed key's light, LIVE
         bool present() const { return mPresent; }
         std::string title() const;
 
@@ -110,17 +116,23 @@ namespace solaris_ui
             double aLast = 0;
             bool placed = false, gone = false, instant = false;
         };
-        enum class Drag { None, Move, Resize, Velocity, End };
+        enum class Drag { None, Move, Resize, Velocity, End, Keys };
         static std::string key(int pitch, double at);
         const NoteLive *noteAt(const artboard::Point &p, bool &edge) const;
         std::string noteName(int pitch) const;
         double snapped(double beat) const;
         void send(const std::string &line) { if (onCommand) onCommand(line); }
+        void preview(int pitch, int vel, double length);    // R-ROLL-7: heard through the clip's track
         void paintNotes(artboard::IRenderTarget &t, double a) const;
         void paintSteps(artboard::IRenderTarget &t, double a) const;
 
         std::string mPattern;
         std::string mClipWanted, mClip;             // R-ROLL-6
+        std::string mClipTrack;                     // R-ROLL-7: the strip it sounds through ('' = none)
+        int mHeardPitch = -1, mKeyPitch = -1;       // the last pitch a drag sounded; the key held
+        artboard::AnimatedProperty mKeyLight{0.0};
+        int mKeyLitPitch = -1;
+        bool mKeyLastHeld = false;
         double mClipAt = 0, mClipLen = 0;
         bool mPlaying = false, mLooping = false, mHeadLast = false;
         double mHeadBeat = -1;

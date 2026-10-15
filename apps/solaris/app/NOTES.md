@@ -76,6 +76,7 @@ helpers it borrows.
 | Lanes › a clip, right-click | Play through ▸ (the strips of its kind) → `clip move <ac> --strip <ch>` · Piano Roll (a note clip) · Duplicate → `clip duplicate <ac>` · Copy ID → the host's clipboard · Delete → `clip delete <ac>` |
 | Piano roll › a click on empty grid · a note dragged (on release) · its right edge dragged | `note add <pt> --pitch <p> --at <cell> --length <last>` · `note move <pt> --pitch <p> --at <b> --to-pitch <p2> --to-at <b2>` · `note move … --length <b>` |
 | Piano roll › a velocity stem dragged · a note double-/right-clicked · the end dragged | `note move … --vel <v>` · `note delete <pt> --pitch <p> --at <b>` · `set <pt>.length=<b>` |
+| Piano roll › a note added · pressed · dragged into a new row · a key pressed or swept · a Steps cell on | beside the edit's own line: `note preview <ch> <pitch> --vel <v> --length <b>` through the clip's track — never in undo (R-ROLL-7) |
 | Piano roll › ▶ (■ while its clip loops) · Space with a roll in front, stopped | `transport play --clip <ac>` (the clip it was opened from, else the pattern's first) · `transport stop`; Space stops whatever plays (R-ROLL-6) |
 | Piano roll › Snap · Notes/Steps · Ctrl+wheel · wheel | nothing — the view's (Steps zooms to fit) |
 | Piano roll › Quantize… | `pattern quantize <pt> --grid <snap> [--swing 0.25\|0.5]` |

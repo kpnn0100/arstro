@@ -96,6 +96,10 @@
     "audition.changed": {
       "doc": "A sample previewed from the browser started (playing 1) or ended — stopped, or to its end (playing 0).",
       "data": "{line, fields: {file, playing}}"
+    },
+    "note.previewed": {
+      "doc": "A note was heard through a strip, outside the song (`note preview`, the piano roll's sound — R-ROLL-7).",
+      "data": "{line, fields: {strip, pitch}}"
     }
   },
   "state": {

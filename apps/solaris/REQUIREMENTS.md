@@ -472,7 +472,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
   link is a formula naming an address), Clear Binding, Reset to Default — each one command.
 - **R-WIN-4 Window placement and stacking are the view's** — not saved, not commands, like zoom.
 
-## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6 ✅ (play from the roll, DR-ROLL-6) — 7 📋 (a note heard when made: user request 2026-10-15)
+## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6 ✅ (play from the roll, DR-ROLL-6) — 7 ✅ (a note heard when made, DR-ROLL-7)
 
 - **R-ROLL-1 A piano-roll WINDOW per pattern** (R-WIN's frame), opened by double-clicking a note clip
   or from its instrument's window: keys on the left (C named with its octave; a drum machine's keys

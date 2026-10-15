@@ -1172,6 +1172,70 @@ static void test_audition_plays_a_sample_outside_the_song()
     pass("audition: a sample heard now through the device at the audition level, sample for sample, outside the song (not an edit); it stops itself at its end, said (R-EDM-9)");
 }
 
+namespace
+{
+    // the preview's thread writes until a second of quiet, then closes: wait until the sink stops growing
+    void waitQuiet(Run &r)
+    {
+        long long last = -1;
+        for (int stable = 0, k = 0; stable < 4 && k < 400; ++k)
+        {
+            r.ok("wait 0.02");
+            const long long now = r.fake.capture->frames.load();
+            stable = now == last ? stable + 1 : 0;
+            last = now;
+        }
+    }
+}
+
+static void test_a_note_preview_is_the_strip_heard_outside_the_song()
+{
+    Run r;
+    r.ok("project new " + freshSong("preview") + " --bpm 120");
+    r.ok("strip add --kind instrument --instrument synth");          // ch_2, its Basic Synth dv_1
+    r.ok("set dv_1.osc1.wave=sine dv_1.osc2.level=0 dv_1.filter.cutoff=20000 dv_1.amp.attack=0 dv_1.amp.release=20");
+    r.ok("set ch_2.gain=-3 ch_2.pan=0.25");                          // its fader and pan are part of its sound
+    const int depth = r.svc.model().undoDepth;
+    r.events.clear();
+    r.ok("note preview ch_2 A4 --length 0.5 --vel 90");
+    assert(contains(r.events.back(), "[evt] note.previewed strip=ch_2 pitch=69"));
+    waitQuiet(r);
+    assert(r.svc.model().undoDepth == depth);                          // not an edit
+    std::vector<float> heard = r.fake.capture->sink;
+    // the strip in the song, rendered: the same note on the same strip — the preview IS that sound
+    r.ok("clip add --strip ch_2 --length 1");
+    r.ok("note add pt_1 --pitch 69 --at 0 --length 0.5 --vel 90");
+    r.ok("render --out " + scratch() + "/preview.wav --ports --to 1");
+    const auto &port = r.fake.written[scratch() + "/preview.Main.wav"];
+    float worst = 0.0f;
+    for (size_t i = 0; i < 24000; ++i)
+        worst = std::max({worst, std::fabs(heard[2 * i] - port[0][i]), std::fabs(heard[2 * i + 1] - port[1][i])});
+    assert(worst < 1e-6f && peakOf(heard, 0, 2 * 12000) > 0.05f);
+    // it ends: silence after its note and its release, then the stream closes
+    assert(peakOf(heard, 2 * 14400, heard.size()) < 1e-4f);
+    // a preview started while one rings takes over with a fade — never a jump the sine itself cannot make
+    r.fake.capture->sink.clear();
+    r.ok("set dv_1.amp.release=2000");                                // the first note would ring on
+    r.ok("note preview ch_2 60 --length 2");
+    r.ok("wait 0.01");
+    r.ok("note preview ch_2 67 --length 0.25");
+    waitQuiet(r);
+    const auto &both = r.fake.capture->sink;
+    float step = 0.0f, peak = 0.0f;
+    for (size_t i = 2; i + 1 < both.size(); i += 2)
+    {
+        step = std::max(step, std::fabs(both[i] - both[i - 2]));
+        peak = std::max(peak, std::fabs(both[i]));
+    }
+    assert(peak > 0.05f && step < 0.08f * peak);                       // a sine at 392 Hz moves ≤ 0.051·peak a sample
+    // refusals name why; none is an edit
+    assert(contains(r.no("note preview ch_1 60"), "plays no notes"));
+    assert(contains(r.no("note preview ch_9 60"), "no strip 'ch_9'"));
+    assert(contains(r.no("note preview ch_2 128"), "0–127"));
+    assert(contains(r.no("note preview ch_2 60 --vel 0"), "--vel"));
+    pass("`note preview`: a note through the strip's chain — its instrument, fader and pan — is the strip's sound in the song sample for sample, outside it (not an edit); it ends after its tail; a second takes over with a fade, no jump (R-ROLL-7)");
+}
+
 static void test_edits_while_playing_are_heard()
 {
     Run r;
@@ -1928,6 +1992,7 @@ int main()
     test_live_playback_is_the_offline_render();
     test_the_metronome_clicks_live_and_never_in_a_render();
     test_audition_plays_a_sample_outside_the_song();
+    test_a_note_preview_is_the_strip_heard_outside_the_song();
     test_edits_while_playing_are_heard();
     test_loop_and_seek();
     test_a_clip_plays_looped_and_gives_the_songs_loop_back();

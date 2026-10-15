@@ -7,6 +7,7 @@
 #include "Engine.h"
 #include "Format.h"
 #include "MixLaws.h"
+#include "Notation.h"
 #include "Player.h"
 #include "SolarisService.h"
 #include "device/Device.h"
@@ -79,6 +80,7 @@ namespace solaris
 
     void SolarisService::pump()
     {
+        if (mPreview) mPreview->collect(); // R-ROLL-7: what its thread is done with, freed here
         if (mAudition)
         {
             // the preview runs on its own: its progress, and its end when it reaches it
@@ -142,9 +144,101 @@ namespace solaris
         return true;
     }
 
+    bool SolarisService::previewCommand(const Command &c, std::string &err)
+    {
+        // R-ROLL-7: one note through one strip's chain, outside the song — not an edit, never in a render.
+        // The strip, its rack and a one-note pattern compiled into a graph of their own: the preview IS the
+        // strip's sound, by the same compiler and engine as the song's, and the song's engine never knows.
+        if (!requireOpen(err)) return false;
+        const Strip *s = nullptr;
+        for (const auto &x : mProject.strips)
+            if (x.id == c.arg(0)) s = &x;
+        if (!s) { err = "no strip '" + c.arg(0) + "'"; return false; }
+        if (s->kind != "instrument") { err = "strip " + s->id + " (" + s->name + ") plays no notes — an instrument strip does"; return false; }
+        const Rack *rk = mProject.rack(s->id);
+        int pitch = 60;
+        double v = 0;
+        std::string nameErr;
+        if (parseNumber(c.arg(1), v) && std::isfinite(v))
+        {
+            if (v != std::floor(v) || v < 0 || v > 127) { err = "a pitch number is a whole number 0–127, got " + c.arg(1); return false; }
+            pitch = (int)v;
+        }
+        else if (!parsePitchName(c.arg(1), pitch, nameErr))
+        {
+            // the strip's kit's pad, by name
+            const DeviceType *t = rk && !rk->devices.empty() ? DeviceRegistry::find(rk->devices.front().type) : nullptr;
+            bool found = false;
+            if (t)
+                for (const auto &nn : t->noteNames)
+                    if (padKey(nn.second) == padKey(c.arg(1))) { pitch = nn.first; found = true; }
+            if (!found) { err = nameErr; return false; }
+        }
+        int vel = 100;
+        if (c.has("vel"))
+        {
+            if (!parseNumber(c.flag("vel"), v) || v != std::floor(v) || v < 1 || v > 127) { err = "--vel is a whole number 1–127"; return false; }
+            vel = (int)v;
+        }
+        double length = 0.5;
+        if (c.has("length") && (!parseNumber(c.flag("length"), length) || !(length > 0) || length > 64)) { err = "--length is beats, > 0 and ≤ 64"; return false; }
+        if (!mHost.audioOut) { err = "this build cannot play audio (no output stream)"; return false; }
+
+        Project p;
+        p.header = mProject.header;
+        p.header.masterGain = 0.0;               // the strip as it reaches the master, not the master's level
+        p.ports = mProject.ports;
+        p.mixers = mProject.mixers;
+        Strip st = *s;
+        st.out.clear();                          // straight to the master: no bus, no send, no key
+        st.mute = st.solo = false;
+        p.strips.push_back(st);
+        if (rk) p.racks.push_back(*rk);          // its instrument and its rack — the master's rack is the song's
+        Pattern pt;
+        pt.id = "pt_preview";
+        pt.length = length;
+        Note n;
+        n.pitch = pitch;
+        n.vel = vel;
+        n.length = length;
+        pt.notes.push_back(n);
+        p.patterns.push_back(pt);
+        Clip cl;
+        cl.id = "ac_preview";
+        cl.track = st.id;
+        cl.pattern = pt.id;
+        p.clips.push_back(cl);
+        // bindings are left out: a formula may read the song's other addresses — the preview is the strip's
+        // values as they stand
+        CompileResult cr = compile(p, [this](const std::string &src) { return pcmFor(src); });
+        auto voice = std::make_unique<NotePreview::Voice>();
+        voice->engine = std::make_unique<engine::Engine>();
+        if (!voice->engine->build(cr.graph, err)) return false;
+        if (!mPreview) mPreview = std::make_unique<NotePreview>();
+        const int block = mPreview->running() ? mPreview->block() : std::max(32, mSettings.bufferSize);
+        voice->engine->prepare(voice->out, block);
+        const double spb = 60.0 / mProject.header.bpm * mProject.header.sampleRate;
+        voice->noteFrames = (long long)std::llround(length * spb) + voice->engine->outputLatency();
+        voice->maxFrames = voice->noteFrames + 4LL * mProject.header.sampleRate; // a tail of four seconds at most
+        mPreview->hear(std::move(voice));
+        if (!mPreview->running())
+        {
+            auto out = mHost.audioOut();
+            if (!out || !out->open(mSettings.output, mProject.header.sampleRate, 2, block, err))
+            {
+                if (err.empty()) err = "cannot open the output device";
+                return false;
+            }
+            mPreview->start(std::move(out), block);
+        }
+        emit(Event(Event::Kind::NotePreviewed).with("strip", s->id).with("pitch", std::to_string(pitch)));
+        return true;
+    }
+
     bool SolarisService::transportCommand(const Command &c, std::string &err)
     {
         if (c.kind == K::Audition) return auditionCommand(c, err);
+        if (c.kind == K::NotePreview) return previewCommand(c, err);
         auto announce = [this]() {
             pump();
             const bool playing = mPlayer && mPlayer->running();

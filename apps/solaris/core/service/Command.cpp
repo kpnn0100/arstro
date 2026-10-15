@@ -117,6 +117,12 @@ namespace solaris
              "kit's pad (kick). --chord <Cm7> adds a chord instead (its root in --octave, default 4; --inversion n "
              "raises its n lowest notes an octave) as ONE edit — the qualities are under Notation.", "R-CLIP-2"},
             {K::NoteDelete, "note delete", "<pt>", 1, 1, {"pitch=<pitch>", "at=<beats>"}, "Remove the note at that pitch and time.", "R-CLIP-2"},
+            {K::NotePreview, "note preview", "<ch> <pitch>", 2, 2, {"vel=<1-127>", "length=<beats>"},
+             "Hear one note through instrument strip <ch> — its instrument and its rack, at its fader and pan, as it "
+             "sounds in the song — on a stream of its own, whether the song plays or not (the piano roll's sound "
+             "when a note is made, a key pressed). A pitch is a number, a name or the strip's kit's pad; --length "
+             "beats (default 0.5), --vel (default 100). A preview started while one rings takes over with a short "
+             "fade. Not an edit, never in a render.", "R-ROLL-7"},
             {K::NoteMove, "note move", "<pt>", 1, 1, {"pitch=<pitch>", "at=<beats>", "to-pitch=<pitch>", "to-at=<beats>", "length=<beats>", "vel=<1-127>"},
              "Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) — "
              "one gesture, one line. Refused onto another note.", "R-ROLL-2"},

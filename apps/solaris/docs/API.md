@@ -40,6 +40,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `pattern new [--name <text>] [--length <beats>]` | Create an empty pattern. | R-CLIP-2 |
 | `note add <pt> [--pitch <pitch>] [--at <beats>] [--length <beats>] [--vel <1-127>] [--chord <name>] [--inversion <n>] [--octave <n>]` | Add a note to a pattern — every clip of it changes. A pitch is a number, a name (C4 = 60, F#3, Bb2) or a kit's pad (kick). --chord <Cm7> adds a chord instead (its root in --octave, default 4; --inversion n raises its n lowest notes an octave) as ONE edit — the qualities are under Notation. | R-CLIP-2 |
 | `note delete <pt> [--pitch <pitch>] [--at <beats>]` | Remove the note at that pitch and time. | R-CLIP-2 |
+| `note preview <ch> <pitch> [--vel <1-127>] [--length <beats>]` | Hear one note through instrument strip <ch> — its instrument and its rack, at its fader and pan, as it sounds in the song — on a stream of its own, whether the song plays or not (the piano roll's sound when a note is made, a key pressed). A pitch is a number, a name or the strip's kit's pad; --length beats (default 0.5), --vel (default 100). A preview started while one rings takes over with a short fade. Not an edit, never in a render. | R-ROLL-7 |
 | `note move <pt> [--pitch <pitch>] [--at <beats>] [--to-pitch <pitch>] [--to-at <beats>] [--length <beats>] [--vel <1-127>]` | Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) — one gesture, one line. Refused onto another note. | R-ROLL-2 |
 | `pattern quantize <pt> [--grid <beats>] [--swing <0-0.75>]` | Move every note's start onto the grid (default a sixteenth, 0.25), delaying every second grid step by --swing of a step. Notes that land on one another merge (the louder stays). | R-ROLL-4 |
 | `notes add <pt> "<note> …" [--length <beats>] [--vel <1-127>]` | Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>]] — C4@0:0.5:90, kick@1, E4@2::70. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing lands. Prints how many; warns of notes past the pattern's end. | R-SVC-8 |
@@ -149,6 +150,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `recents.changed` | count | Home's recent songs changed. |
 | `transport.changed` | playing, position, loop | Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`. |
 | `audition.changed` | file, playing | A sample previewed from the browser started (playing 1) or ended — stopped, or to its end (playing 0). |
+| `note.previewed` | strip, pitch | A note was heard through a strip, outside the song (`note preview`, the piano roll's sound — R-ROLL-7). |
 
 ## Model (`state print --json`)
 

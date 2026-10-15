@@ -41,7 +41,8 @@ namespace solaris
             BrowseChanged,    // path, entries
             RecentsChanged,   // count
             TransportChanged, // playing, position, loop
-            AuditionChanged   // file, playing
+            AuditionChanged,  // file, playing
+            NotePreviewed     // strip, pitch
         };
 
         Kind kind = Kind::Info;

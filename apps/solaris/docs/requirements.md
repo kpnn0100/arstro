@@ -652,6 +652,29 @@ Space stops whatever plays; stopped, with a roll the front window (`WindowLayer:
 play (`App::key`, `app/App.cpp:323`). The playhead is drawn where the clip is heard — the transport's beat
 less the clip's start, modulo the pattern's length for a looped clip — fading in and out with the play
 (`:616`), and the grid follows it a page at a time, eased, when it leaves the view (`:257`).
+### DR-ROLL-7 A note is heard when it is made (R-ROLL-7)
+**Grammar.** `note preview <ch> <pitch> [--vel <1…127>] [--length <beats>]` (`core/service/ServiceTransport.cpp:147`)
+— not an edit (no undo step, the song stays saved), never in a render; refused naming why for a strip that is not
+an instrument's, an unknown strip, a pitch out of 0–127 and a velocity out of range. A pitch is a number, a name
+(A4) or the strip's kit's pad. It compiles a song of its own (`:187`): the song's header, ports and mixers, the strip
+— routed straight to the master, unmuted, unsoloed, its fader and pan kept — its rack, and a one-note pattern on a
+clip at beat 0; master gain 0 dB, no master rack, no bindings (a formula may read the song's other addresses: the
+preview is the strip's values as they stand). The SAME `compile` and `Engine` as the song, so the preview is the
+strip's sound — the L2 test hears it equal, to 1e-6, to the render of that note on that strip in the song. Event
+`note.previewed strip= pitch=`.
+**The stream.** `NotePreview` (`core/NotePreview.cpp`) is the Auditioner's pattern for an engine: its own output
+stream and thread, opened by a preview and closed after a second of quiet (`:111`; the service hands a voice
+over THEN starts a thread when none runs, and the thread looks for one before it closes, so neither misses the
+other). A voice — engine and port buffers, sized on the service's thread — arrives through an atomic slot (`:223`
+in the service); the one ringing fades out under it over 480 samples (10 ms), never a click; a voice ends when it
+has stayed under −80 dB for 0.1 s after its note, or four seconds past it; a finished voice goes back through a
+ring of atomic slots and is freed by the service's `pump` (`ServiceTransport.cpp:83`) — the thread never
+allocates, frees or locks.
+**The roll** (`PianoRoll::preview`, `app/widgets/PianoRoll.cpp:163`) sounds through the track of its clip
+(DR-ROLL-6), as a line beside the edit's own: a note added (`:484`, at the last length), a note pressed, each pitch
+row a dragged note enters (`:382`), a Steps cell turned on, and a key pressed or swept (`:358` — the key lit while
+held, eased in and out); lengths 1/8 to 1 beat. A pattern on no track is made, not heard.
+
 ### DR-VST-1 Our instruments as VST3 plugins (R-VST-1…5)
 **The SDK:** Steinberg's `vst3sdk` **v3.8.1_build_84**, cloned recursively to `~/sdk/vst3sdk`; its
 `LICENSE.txt` (and `base`, `pluginterfaces`, `public.sdk`'s) is the **MIT licence** (Steinberg relicensed

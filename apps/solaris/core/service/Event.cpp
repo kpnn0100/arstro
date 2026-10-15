@@ -48,6 +48,8 @@ namespace solaris
              "Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`."},
             {EK::AuditionChanged, "audition.changed", {"file", "playing"},
              "A sample previewed from the browser started (playing 1) or ended — stopped, or to its end (playing 0)."},
+            {EK::NotePreviewed, "note.previewed", {"strip", "pitch"},
+             "A note was heard through a strip, outside the song (`note preview`, the piano roll's sound — R-ROLL-7)."},
         };
         return specs;
     }

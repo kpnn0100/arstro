@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — H2: play from the roll.*
+*Last updated: 2026-10-15 — H3: a note heard when it is made.*
 
 ---
 
 ## NEXT
 
-**► H3 — a note heard when it is made** (R-ROLL-7), then H4…H6 in order: the 2026-10-15 brief (a song made in the
+**► H4 — the piano** (R-INST-5, DSP first), then H5…H6 in order: the 2026-10-15 brief (a song made in the
 window, Bach's Prelude in C, with the UX it finds fixed). B13+ wait; T2 and T3 may go between.
 
 ---
@@ -257,8 +257,13 @@ umbrella's pointer — `arstro.rule` §7).
       Space stops whatever plays and, stopped, is the front roll's ▶; the playhead fades in where the clip is
       heard and the grid pages after it. L2 hears the kick each loop; UI test; shot `piano-roll-playing`. 3
       mutants caught (a snapping playhead, stop keeping the clip's loop, a loop not following its clip).
-- [ ] **H3** A note heard when it is made: `note preview`, a preview stream through the track's chain; the
+- [x] **H3** A note heard when it is made: `note preview`, a preview stream through the track's chain; the
       roll sounds an added note, a pitch a drag enters, a pressed key (R-ROLL-7).
+      — DR-ROLL-7: `note preview <ch> <pitch>` compiles the strip, its rack and one note into an engine of their own
+      (the same compiler) — heard equal to the strip's render in the song to 1e-6; `NotePreview`, a stream kept
+      open across a run of previews, the old voice faded under the new, voices handed over and back through
+      atomics. The roll sounds a note added, pressed, dragged into a row, a key pressed or swept (lit), a Steps
+      cell; never in undo. 3 mutants caught (a cut instead of a fade, the fader left out, a snapping key light).
 - [ ] **H4** The piano: the DSP library's physical piano as a library instrument and a registry entry
       (DSP first; R-INST-5).
 - [ ] **H5** The Prelude, made in the window: its score table, the gestures that make it, the UX audit as it

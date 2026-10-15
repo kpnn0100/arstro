@@ -88,6 +88,7 @@ namespace solaris_ui
             for (const auto &c : m.clips)
                 if (c.pattern == mPattern && (!cl || c.at < cl->at)) cl = &c;
         mClip = cl ? cl->id : std::string();
+        mClipTrack = cl ? cl->track : std::string();
         mClipAt = cl ? cl->at : 0.0;
         mClipLen = cl ? cl->length : 0.0;
         mPlaying = m.transport.playing;
@@ -155,6 +156,16 @@ namespace solaris_ui
 
     Rect PianoRoll::playRect() const { return Rect{space::padX(), 4.875, kPlayW, kToolH - 9.75}; }
     Rect PianoRoll::snapRect(int i) const { return Rect{playRect().right() + 13.0 + 34.0 + i * (kChipW + 3.25), 4.875, kChipW, kToolH - 9.75}; }
+
+    Rect PianoRoll::keyRect(int pitch) const { return Rect{0, pitchToY(pitch), kKeysW - 1.0, kNoteH}; }
+    double PianoRoll::keyLit(int pitch) const { return pitch == mKeyLitPitch ? mKeyLight.value() : 0.0; }
+
+    void PianoRoll::preview(int pitch, int vel, double length)
+    {
+        if (mClipTrack.empty() || pitch < 0 || pitch > 127) return; // on no track: nothing to sound through
+        send("note preview " + mClipTrack + " " + std::to_string(pitch) + " --vel " + std::to_string(std::clamp(vel, 1, 127)) + " --length " +
+             beats(std::clamp(length, 0.125, 1.0)));
+    }
 
     bool PianoRoll::togglePlay()
     {
@@ -245,6 +256,14 @@ namespace solaris_ui
         if (mEndLast < 0) { mEnd.set(mModel.length); mEndLast = mModel.length; }
         else if (mModel.length != mEndLast) { mEnd.animateTo(mModel.length, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); mEndLast = mModel.length; }
         mEnd.update(nowMs);
+        const bool held = mDrag == Drag::Keys && mKeyPitch >= 0;
+        if (held && mKeyPitch != mKeyLitPitch) { mKeyLitPitch = mKeyPitch; mKeyLight.set(0.0); mKeyLastHeld = false; } // another key: its own light
+        if (held != mKeyLastHeld)
+        {
+            mKeyLight.animateTo(held ? 1.0 : 0.0, held ? motion::kHoverMs : motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mKeyLastHeld = held;
+        }
+        mKeyLight.update(nowMs);
         const bool head = mHeadBeat >= 0.0;
         if (head != mHeadLast)
         {
@@ -329,7 +348,16 @@ namespace solaris_ui
                     mPressKey = key(n->n.pitch, n->n.at);
                     mGrabBeat = xToBeat(local.x) - n->n.at;
                     mGrabPitch = yToPitch(local.y) - n->n.pitch;
+                    mHeardPitch = n->n.pitch;
+                    preview(n->n.pitch, n->n.vel, n->n.length); // a note pressed is heard, as in every roll
                 }
+                return true;
+            }
+            if (mMode == Notes && local.x < kKeysW && local.y >= grid.y && local.y < grid.bottom())
+            {
+                mDrag = Drag::Keys; // a key pressed sounds; swept, each key it enters
+                mKeyPitch = yToPitch(local.y);
+                preview(mKeyPitch, 100, 0.5);
                 return true;
             }
             if (vel.contains(local))
@@ -351,7 +379,14 @@ namespace solaris_ui
             case Drag::Move:
                 mLive.at = snapped(xToBeat(local.x) - mGrabBeat);
                 mLive.pitch = std::clamp(yToPitch(local.y) - (int)mGrabPitch, 0, 127);
+                if (mLive.pitch != mHeardPitch) { mHeardPitch = mLive.pitch; preview(mLive.pitch, mLive.vel, mLive.length); } // each row it enters
                 break;
+            case Drag::Keys:
+            {
+                const int p = std::clamp(yToPitch(std::clamp(local.y, grid.y, grid.bottom() - 1.0)), 0, 127);
+                if (p != mKeyPitch) { mKeyPitch = p; preview(p, 100, 0.5); }
+                break;
+            }
             case Drag::Resize:
             {
                 const double step = mSnap > 0 ? mSnap : 1.0 / 16.0;
@@ -434,6 +469,7 @@ namespace solaris_ui
                             for (const auto &n : mModel.notes) on |= n.pitch == pitch && std::fabs(n.at - s * 0.25) < kTol;
                             send(std::string(on ? "note delete " : "note add ") + mPattern + " --pitch " + std::to_string(pitch) + " --at " + beats(s * 0.25) +
                                  (on ? "" : " --length 0.25"));
+                            if (!on) preview(pitch, 100, 0.25);
                             return true;
                         }
                 return true;
@@ -443,7 +479,9 @@ namespace solaris_ui
                 bool edge = false;
                 if (noteAt(local, edge)) return true; // a click on a note adds nothing
                 const double at = mSnap > 0 ? std::max(0.0, std::floor(xToBeat(local.x) / mSnap) * mSnap) : snapped(xToBeat(local.x));
-                send("note add " + mPattern + " --pitch " + std::to_string(yToPitch(local.y)) + " --at " + beats(at) + " --length " + beats(mLastLength));
+                const int pitch = yToPitch(local.y);
+                send("note add " + mPattern + " --pitch " + std::to_string(pitch) + " --at " + beats(at) + " --length " + beats(mLastLength));
+                preview(pitch, 100, mLastLength); // R-ROLL-7: the note made is heard
             }
             return true;
         }
@@ -499,6 +537,8 @@ namespace solaris_ui
             const Rect k{0, y, kKeysW - 1.0, kNoteH};
             drawRoundedRect(t, Rect{0, y + 0.5, kKeysW - 1.0, kNoteH - 1.0}, 0.0,
                             Paint::filled(fade(black(p) ? palette::canvasBg() : palette::secondary(), a)));
+            if (const double lit = keyLit(p); lit > 0.001) // a key pressed: it sounds, lit while held
+                drawRoundedRect(t, Rect{0, y + 0.5, kKeysW - 1.0, kNoteH - 1.0}, 0.0, Paint::filled(fade(palette::primaryAlpha(0.55), a * lit)));
             const std::string nm = noteName(p);
             if (!nm.empty())
             {

@@ -1321,6 +1321,77 @@ static void test_the_roll_plays_its_clip()
     pass("The roll plays its clip (R-ROLL-6): ▶ is ONE `transport play --clip` for the clip it was opened from, looped in the song; the playhead fades in where it is heard; Space stops whatever plays and, stopped, is the front roll's ▶; the song's loop comes back; a pattern on no track has nothing to play");
 }
 
+static void test_the_roll_sounds_what_is_made()
+{
+    sltest::Rig r("ui-rollsound", 1280, 800);
+    r.cmd("project new " + r.song("RollSound") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    const std::string ac = r.svc->model().clips[0].id, pt = r.svc->model().clips[0].pattern, ch = r.svc->model().clips[0].track;
+    r.cmd("note add " + pt + " --pitch 60 --at 0 --length 1 --vel 80");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &wl = r.app->project().windows();
+    const artboard::Rect clip = world(tl, tl.clipRect(ac));
+    r.click(clip.x + 12.0, cy(clip));
+    r.click(clip.x + 12.0, cy(clip));
+    r.settle();
+    auto &roll = *wl.roll(pt);
+    const artboard::Rect rw = world(roll, artboard::Rect{0, 0, 0, 0});
+    auto at = [&](double beat, int pitch) { return artboard::Point{rw.x + roll.beatToX(beat), rw.y + roll.pitchToY(pitch) + roll.kNoteH * 0.5}; };
+    auto previews = [&](size_t from) {
+        std::vector<std::string> v;
+        for (size_t i = from; i < r.sent.size(); ++i)
+            if (r.sent[i].rfind("note preview ", 0) == 0) v.push_back(r.sent[i]);
+        return v;
+    };
+    const int depth = r.svc->model().undoDepth;
+    // a note made is heard through the clip's track: the edit's line, then the hearing's
+    size_t mark = r.sent.size();
+    const artboard::Point c = at(2.1, 64);
+    r.click(c.x, c.y);
+    r.settle();
+    assert(r.sent[mark] == "note add " + pt + " --pitch 64 --at 2 --length 0.25");
+    assert(previews(mark) == std::vector<std::string>{"note preview " + ch + " 64 --vel 100 --length 0.25"});
+    assert(r.svc->model().undoDepth == depth + 1);                    // the hearing is not in undo
+    // a note pressed is heard; dragged up two rows, each row it enters
+    mark = r.sent.size();
+    const artboard::Point n60 = at(0.3, 60), n62 = at(0.3, 62);
+    r.drag(n60.x, n60.y, n62.x, n62.y, 8);
+    r.settle();
+    assert((previews(mark) == std::vector<std::string>{"note preview " + ch + " 60 --vel 80 --length 1", "note preview " + ch + " 61 --vel 80 --length 1",
+                                                        "note preview " + ch + " 62 --vel 80 --length 1"}));
+    // a key pressed sounds and is lit while held — eased in, eased out; swept, each key it enters
+    mark = r.sent.size();
+    const artboard::Rect k72 = world(roll, roll.keyRect(72)), k74 = world(roll, roll.keyRect(74));
+    r.drag(cx(k72), cy(k72), cx(k74), cy(k74), 4, false);
+    r.frame();
+    const double lit = roll.keyLit(74);
+    assert(lit > 0.0 && lit < 1.0);
+    assert((previews(mark) == std::vector<std::string>{"note preview " + ch + " 72 --vel 100 --length 0.5", "note preview " + ch + " 73 --vel 100 --length 0.5",
+                                                        "note preview " + ch + " 74 --vel 100 --length 0.5"}));
+    r.settle();
+    assert(roll.keyLit(74) == 1.0);
+    r.app->pointer(2, cx(k74), cy(k74), 0, r.now);
+    r.frame();
+    r.frame();
+    assert(roll.keyLit(74) > 0.0 && roll.keyLit(74) < 1.0);
+    r.settle();
+    assert(roll.keyLit(74) == 0.0 && r.svc->model().undoDepth == depth + 2); // keys edit nothing
+    // a pattern on no track has nothing to sound through: its note is made, not heard
+    r.cmd("pattern new --name Loose");
+    const std::string pt2 = r.svc->model().patterns.back().id;
+    r.frame();
+    wl.openRoll(pt2);
+    r.settle();
+    auto &loose = *wl.roll(pt2);
+    const artboard::Rect lw = world(loose, artboard::Rect{0, 0, 0, 0});
+    mark = r.sent.size();
+    r.click(lw.x + loose.beatToX(1.1), lw.y + loose.pitchToY(60) + loose.kNoteH * 0.5);
+    r.settle();
+    assert(r.sent.size() == mark + 1 && r.sent[mark].rfind("note add " + pt2, 0) == 0);
+    pass("The roll sounds what is made (R-ROLL-7): a note added, a note pressed, each row a drag enters and each key pressed or swept is a `note preview` through the clip's track, never in undo; the key is lit while held, eased; a pattern on no track is made, not heard");
+}
+
 static void test_a_kits_roll_names_its_pads()
 {
     sltest::Rig r("ui-roll-kit", 1280, 800);
@@ -2012,6 +2083,7 @@ int main()
     test_bezier_handles_and_the_automation_window();
     test_piano_roll_edits_the_pattern();
     test_the_roll_plays_its_clip();
+    test_the_roll_sounds_what_is_made();
     test_a_kits_roll_names_its_pads();
     test_a_line_added_and_sources_relinked();
     test_a_strip_keys_a_later_compressor();
