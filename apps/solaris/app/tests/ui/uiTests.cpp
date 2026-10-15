@@ -1556,6 +1556,17 @@ static void test_the_rolls_selection_and_what_is_done_to_it()
     assert(roll.selectionCount() == 3 && roll.selected(62, 0.5) && !roll.selected(65, 3));
     keyMod(27, false, false);
     assert(roll.selectionCount() == 0);
+    // U-10: a Ctrl+drag that starts ON a selected note is still a box — Ctrl never moves a note
+    keyMod('A', false, true);
+    const size_t m2 = r.sent.size();
+    const artboard::Rect c4 = noteAt(60, 0);
+    r.app->pointer(0, c4.x + 3.0, cy(c4), 0, r.now, false, false, true);
+    for (int k = 1; k <= 6; ++k) { r.app->pointer(1, c4.x + 3.0 + k * 10.0, cy(c4) - k * 2.0, 0, r.now, false, false, true); r.frame(); }
+    r.app->pointer(2, c4.x + 63.0, cy(c4) - 12.0, 0, r.now, false, false, true);
+    r.settle();
+    for (size_t i = m2; i < r.sent.size(); ++i) assert(r.sent[i].rfind("notes move", 0) != 0 && r.sent[i].rfind("note move", 0) != 0);
+    assert(has(pt, 60, 0) && roll.selected(60, 0) && roll.selectionCount() < 4);
+    keyMod(27, false, false);
     // the keys follow the pointer: a press on the lanes, and Delete is not the roll's
     const artboard::Rect ruler = world(tl, tl.rulerRect());
     press(ruler.x + 40.0, ruler.bottom() + 200.0, false, false);     // the lanes, left of the roll's window

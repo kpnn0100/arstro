@@ -707,8 +707,9 @@ negative. Refused whole, naming the first: a name that matches no note, a note t
 `notes add` with full tokens (`pitch@beat:length:vel`), which already replaces a note it lands on.
 **The roll** (`app/widgets/PianoRoll.cpp`). The selection is the view's: a set of note keys, emptied of any note
 the model no longer has. A click on a note selects it, Shift+click adds or removes it (`:654`); a click on empty
-grid adds a note (R-ROLL-2) and lets go of the selection; Ctrl on the empty grid draws a box that selects every
-note it touches (Shift keeps what was selected) (`:572`). Selected notes are lit — brighter, outlined in the
+grid adds a note (R-ROLL-2) and lets go of the selection; Ctrl draws a box that selects every note it touches
+(Shift keeps what was selected) — wherever the press is, even on a note: Ctrl is selecting and never moves a
+note, and a Ctrl+click on a note selects it (the box of no size touches it) (U-10, R-ROLL-8 amended). Selected notes are lit — brighter, outlined in the
 accent — eased in and out (120 ms). A selected note dragged (with others selected) carries the whole selection
 with the pointer, kept at or after beat 0 and inside 0–127, heard at each row the pressed note enters (R-ROLL-7),
 and lands as ONE `notes move` (`:565`, `moveSelection` `:214` — the moved notes appear where they were let go

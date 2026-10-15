@@ -78,7 +78,7 @@ helpers it borrows.
 | Piano roll › a click on empty grid · a note dragged (on release) · its right edge dragged | `note add <pt> --pitch <p> --at <cell> --length <last>` · `note move <pt> --pitch <p> --at <b> --to-pitch <p2> --to-at <b2>` · `note move … --length <b>` |
 | Piano roll › a velocity stem dragged · a note double-/right-clicked · the end dragged | `note move … --vel <v>` · `note delete <pt> --pitch <p> --at <b>` · `set <pt>.length=<b>` |
 | Piano roll › a note added · pressed · dragged into a new row · a key pressed or swept · a Steps cell on | beside the edit's own line: `note preview <ch> <pitch> --vel <v> --length <b>` through the clip's track — never in undo (R-ROLL-7) |
-| Piano roll › a click on a note · Shift+click · Ctrl+drag on the grid · Ctrl+A · Escape | the selection — the view's (R-ROLL-8) |
+| Piano roll › a click on a note · Shift+click · Ctrl+drag anywhere on the grid (even from a note) · Ctrl+A · Escape | the selection — the view's (R-ROLL-8) |
 | Piano roll › the selection dragged · ↑/↓ (Shift: octave) · ←/→ | `notes move <pt> "<pitch@beat> …" --by <beats> --semi <n>` — ONE line |
 | Piano roll › Delete/Backspace · Ctrl+D · Ctrl+C then Ctrl+V (any roll) | `notes delete <pt> "…"` · `notes add <pt> "<pitch@beat:len:vel> …"` (a copy after the selection) · the shared clipboard, then `notes add` at the same beats |
 | Piano roll › ▶ (■ while its clip loops) · Space with a roll in front, stopped | `transport play --clip <ac>` (the clip it was opened from, else the pattern's first) · `transport stop`; Space stops whatever plays (R-ROLL-6) |

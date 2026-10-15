@@ -533,6 +533,15 @@ namespace solaris_ui
             mPressPt = local;
             mSwallowClick = false;
             if (endRect().contains(local)) { mDrag = Drag::End; mLiveEnd = mEnd.value(); return true; }
+            if (mMode == Notes && grid.contains(local) && g.ctrl)
+            {
+                // R-ROLL-8 (amended, U-10): Ctrl is selecting — a box, wherever it starts, even on a note; Ctrl never
+                // moves a note (a Ctrl+click on one selects it: the box of no size touches it)
+                mDrag = Drag::Box;
+                mBoxA = mBoxB = local;
+                mBoxAdd = g.shift;
+                return true;
+            }
             if (mMode == Notes && grid.contains(local))
             {
                 bool edge = false;
@@ -549,12 +558,6 @@ namespace solaris_ui
                     mGrabPitch = yToPitch(local.y) - n->n.pitch;
                     mHeardPitch = n->n.pitch;
                     preview(n->n.pitch, n->n.vel, n->n.length); // a note pressed is heard, as in every roll
-                }
-                else if (g.ctrl)
-                {
-                    mDrag = Drag::Box; // R-ROLL-8: a box selects what it touches
-                    mBoxA = mBoxB = local;
-                    mBoxAdd = g.shift;
                 }
                 return true;
             }
@@ -693,6 +696,7 @@ namespace solaris_ui
             if (grid.contains(local))
             {
                 bool edge = false;
+                if (g.ctrl) return true; // a Ctrl+click: its box (of no size) already selected what it touched
                 if (const NoteLive *n = noteAt(local, edge))
                 {
                     // R-ROLL-8: a click selects the note; Shift adds or removes it
@@ -701,7 +705,6 @@ namespace solaris_ui
                     else mSel = {k};
                     return true;
                 }
-                if (g.ctrl) { mSel.clear(); return true; } // an empty box
                 mSel.clear();
                 const double at = mSnap > 0 ? std::max(0.0, std::floor(xToBeat(local.x) / mSnap) * mSnap) : snapped(xToBeat(local.x));
                 const int pitch = yToPitch(local.y);

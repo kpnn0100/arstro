@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — H10c: D-7, a short note's body.*
+*Last updated: 2026-10-15 — H10d: Ctrl is selecting.*
 
 ---
 
@@ -298,6 +298,9 @@ umbrella's pointer — `arstro.rule` §7).
       swallowed; a click still moves nothing. Guard `test_a_short_drag_lands_where_it_was_let_go` (mutant seen red).
 - [x] **H10c** D-7 (found in H10, U-9): a note under 5 px wide was all resize edge — it could not be moved. The edge
       is the right 5 px or the right third of the note. Guard in `test_a_short_drag_lands_where_it_was_let_go`.
+- [x] **H10d** U-10 (found in H10): a Ctrl+drag starting on a note grabbed the note (and the selection with it). Ctrl
+      is selecting: a box wherever it starts, never a move (R-ROLL-8 amended). Guard in the selection test (mutant
+      seen red).
 - [ ] **H10** The Prelude, made in the window with the fixes: every note, the tempo, measured against the score
       (R-SVC-10), rendered and delivered; the audit's attempt 2 — what the fixes saved.
 

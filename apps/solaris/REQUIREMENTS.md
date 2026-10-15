@@ -511,7 +511,9 @@ the object it belongs to, shows it on the timeline, and that property will use a
 
 - **R-ROLL-8 A selection, and what is done to it** (U-2, R-SVC-11): a click on a note selects it (Shift+click
   adds or removes one; a click on empty grid still adds a note and clears the selection); Ctrl+drag on the
-  grid draws a box selecting every note it touches; Ctrl+A selects all. The selection is lit. Done to it, each
+  grid draws a box selecting every note it touches — wherever it starts, even on a note: Ctrl is selecting and
+  never moves a note (**AMENDED (the UX audit's U-10, 2026-10-15):** a box started on a note used to grab the
+  note — and, the note being selected, carried the whole selection away); Ctrl+A selects all. The selection is lit. Done to it, each
   ONE edit: a selected note dragged moves the whole selection (`notes move <pt> "<pitch@beat> …" --by <beats>
   --semi <n>`); ↑/↓ transpose it a semitone (Shift: an octave), ←/→ move it a snap step; Delete removes it
   (`notes delete <pt> "<pitch@beat> …"`); Ctrl+D duplicates it right after itself — by its span, the earliest
