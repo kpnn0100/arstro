@@ -8,6 +8,7 @@ pitches. Bars 33–34 break the figure over the tonic pedal; bar 35 is the final
 Bach's autograph (no Schwencke bar). Pitches are MIDI numbers, C4 = 60; a beat is a quarter note.
 
     python3 score.py            # writes score.txt: one note a line, `pitch at length`
+    python3 score.py --reference ref.txt   # a solaris-cc script: the score as a song, for measure.py
 """
 import os
 
@@ -88,8 +89,27 @@ def notes():
     return sorted(out, key=lambda n: (n[1], n[0]))
 
 
+def reference_script(out):
+    """The score as a song, straight from the table (no window): the same piano, reverb and tempo the window's
+    song has — so where the notes are the same, the two renders are the same samples (render is pure)."""
+    lines = ["project new reference.slp --bpm 66",
+             "clip add --instrument piano --at 0 --length 140",
+             "set pt_1.length=140"]
+    ns = notes()
+    for i in range(0, len(ns), 64):
+        toks = " ".join(f"{q}@{t:g}:{l:g}" for q, t, l in ns[i:i + 64])
+        lines.append(f'notes add pt_1 "{toks}"')
+    lines += ["device add ch_2 --type reverb", "project save", "render --out reference.wav"]
+    with open(out, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+
 if __name__ == '__main__':
+    import sys
     here = os.path.dirname(os.path.abspath(__file__))
+    if len(sys.argv) > 2 and sys.argv[1] == "--reference":
+        reference_script(sys.argv[2])
+        sys.exit(0)
     ns = notes()
     with open(os.path.join(here, 'score.txt'), 'w') as f:
         f.write("# J. S. Bach, Prelude in C major BWV 846 — pitch at length (beats), written by score.py\n")

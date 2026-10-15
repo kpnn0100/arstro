@@ -1107,6 +1107,28 @@ each kick; line A at 743 662 586 552 495 442 493 557 Hz (worst 8.4 cents); the p
 2300 Hz across the intro. Found on the way: D-2 (a renamed strip's lane keeps the old name) and D-3 (a
 kit's pad and parameter names differ).
 
+### DR-SVC-10 The second song, made in the window, measured against its score (R-SVC-10)
+`demo/prelude` (its README): J. S. Bach's Prelude in C, BWV 846 (public domain), on the piano (DR-INST-5). The
+score is a table (`score.py` → `score.txt`, 549 notes, 140 beats); the song is made by `makePrelude.cpp`
+(`solaris_demo_prelude`) through the real `App` and service by gestures alone — clicks, drags, keys and the
+wheel at the geometry the app draws (the test rig, minus GTK), each counted — with the bars it builds checked
+against the score as it goes. `measure.py` diffs the song's notes (`pattern print`) against the score and its
+render against the score's own song (`score.py --reference`, made straight from the table with `solaris-cc`:
+the same piano, reverb and tempo — render being pure, a bar with the score's notes is the same samples).
+Measured: 549 of 549 notes at pitch, start and length, nothing extra; 35 of 35 bars ≤ −60 dB from the score's
+render; 128.2 s; peak −2.8 dBFS; the pulse a sixteenth at 66 bpm. The rig's WAV writer writes nothing, so the
+window's Render… is dispatched and the file is rendered from the saved song by `solaris-cc`. ctest
+`prelude_made_in_the_window` (label `long`, ~7 min in a Debug build; outside the everyday `-R solaris`).
+
+### DR-SVC-11 The UX found by making it (R-SVC-11)
+`docs/ux-audit.md`: attempt 1 (the app as it was) — two bars cost 50 gestures, six findings (U-1…U-6); attempt 2
+(with the fixes) — the whole song in 376 gestures, 0.68 a note against 1.6, and four more found and fixed on the
+way (U-7…U-10). Closed: U-1 the tempo (DR-UI-13), U-2 the selection (DR-ROLL-8), U-3 the pattern growing
+(DR-ROLL-9), U-4 the length chip (DR-ROLL-10), U-5 windows resized (DR-WIN-5), U-7 the sideways wheel (D-5),
+U-8 the short drag (D-6), U-9 a short note's body (D-7), U-10 Ctrl selecting (R-ROLL-8 amended). Deferred with
+the reason: U-6 (a unit the registry does not give) and what a person would still want (a chord stamp or an
+arpeggiator, velocity by hand, a keyboard — B13).
+
 ### DR-SVC-5 The control channel and attach (R-SVC-5, R-SVC-6)
 **The window.** `solaris --control <socket> [song.slp]` (`linux_main.cpp:240`) builds a `ControlServer`
 on the window's own service after any song opened and polls it from its own 16 ms GLib timeout

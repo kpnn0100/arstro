@@ -11,13 +11,15 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — H10d: Ctrl is selecting.*
+*Last updated: 2026-10-15 — H10: the Prelude made in the window.*
 
 ---
 
 ## NEXT
 
-**► H10 — the Prelude, made in the window with the fixes** (R-SVC-10/11): the 2026-10-15 brief (a song made in the
+**► B13 — the MIDI keyboard** (R-EDM-10) — Claude's own suggestion: ask before a long run. The 2026-10-15 brief
+(a song made in the window) is built: H1–H10. Owed: D-5's live check (DEFECTS); the audit's deferred wants (a
+chord stamp or arpeggiator, velocity by hand) are a requirement round each. T2, T3 may go first.: the 2026-10-15 brief (a song made in the
 window, Bach's Prelude in C, with the UX it finds fixed). B13+ wait; T2 and T3 may go between.
 
 ---
@@ -301,8 +303,11 @@ umbrella's pointer — `arstro.rule` §7).
 - [x] **H10d** U-10 (found in H10): a Ctrl+drag starting on a note grabbed the note (and the selection with it). Ctrl
       is selecting: a box wherever it starts, never a move (R-ROLL-8 amended). Guard in the selection test (mutant
       seen red).
-- [ ] **H10** The Prelude, made in the window with the fixes: every note, the tempo, measured against the score
+- [x] **H10** The Prelude, made in the window with the fixes: every note, the tempo, measured against the score
       (R-SVC-10), rendered and delivered; the audit's attempt 2 — what the fixes saved.
+      — DR-SVC-10/11: 549 of 549 notes, 35 of 35 bars the same samples as the score's own render, 376 gestures
+      (0.68 a note, from 1.6); four more findings fixed on the way (H10a–d). ctest `prelude_made_in_the_window`
+      (label `long`). Delivered to ~/Music/Solaris/ (prelude-in-c.slp/.wav/.mp3).
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

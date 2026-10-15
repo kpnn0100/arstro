@@ -28,3 +28,31 @@ a double-click. At that rate the 549 notes of the Prelude cost about 860.
 | U-9 | moving a voice up two semitones, zoomed out | a sixteenth (~5 px) was all resize edge: a vertical drag resized nothing and moved nothing (D-7) | a short note is grabbed by its body | high (cannot edit at that zoom) | **closed** — H10c, D-7 |
 | U-10 | boxing one voice's row in a bar, the box starting at the bar's first beat — on the bass note itself | a Ctrl+press on a note grabbed the note, and with the whole bar selected it carried the bar 3¾ beats away | Ctrl is selecting: a box wherever it starts, never a move | high (an edit no one asked for) | **closed** — H10d, R-ROLL-8 amended |
 | U-6 | reading the piano's knobs | unitless physics constants read as percentages ("Bass Growl 1 %", "Drive 22 %"), and "Treble Shimm…" is cut | a number as its range reads (0.008, 0.22); a label that fits | low | deferred: the registry gives no unit for these — R-DSP-2's description should say "a coefficient" (a DSP-side unit, not a Solaris guess); recorded for the next registry round |
+
+## Attempt 2 — the app with the fixes (2026-10-15, after H6–H10d)
+
+The whole Prelude, made by the same hand (`demo/prelude/makePrelude.cpp`) the way the fixed roll invites:
+the tempo dragged to 66 in the song bar; the Piano dragged onto the lanes; its roll opened, moved, resized by
+its corner to show all 46 rows and zoomed out to ten bars; the first half bar with the length chip; Ctrl+A,
+Ctrl+D; then each bar — a box over the bar before, Ctrl+D, and only the voices that change boxed and moved
+(↑/↓ for a semitone, a drag for more); the runs and the last chord clicked in; a reverb; Ctrl+S; Render….
+
+**549 notes cost 376 gestures** — 67 clicks, 197 drags, 71 keys, 40 wheel flicks, a double-click — against
+about 860 with the app as it was: **0.68 a note, from 1.6.** Measured against the score: 549 of 549 notes at
+their pitch, start and length, nothing extra; all 35 bars the same samples as the score's own render.
+
+Making it found four more, each fixed before the song was finished:
+
+| id | doing | in the way | how bad | became |
+|---|---|---|---|---|
+| U-7 | bringing bar 35 into the roll's view | the window never passed Shift or a sideways scroll to the app: Shift+wheel scrolled rows | high | closed — H10a, D-5 |
+| U-8 | pulling an end back a sixteenth, zoomed out (~6 px) | under the 5 px drag threshold: nothing moved, and the click that came instead added a note | high | closed — H10b, D-6 |
+| U-9 | moving a voice up two semitones, zoomed out | a ~5 px note was all resize edge: it could not be moved | high | closed — H10c, D-7 |
+| U-10 | boxing a voice's row from the bar's first beat | a Ctrl+press on a note grabbed it — and, the bar selected, carried the bar away | high | closed — H10d, R-ROLL-8 amended |
+
+What a person would still want, not fixed here (each a requirement round of its own): **a chord or an
+arpeggio entered at once** (32 of the 35 bars are one chord played in one figure — a "chord stamp" or an
+arpeggiator in the roll would make each bar one gesture); **velocity by hand** (every note is 100 — the
+score has no dynamics, a performance would); **a keyboard to play it in** (B13, R-EDM-10); **the window's
+own sideways scroll checked live** (D-5's host half, owed in DEFECTS).
+

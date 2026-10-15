@@ -69,6 +69,14 @@ add_test(NAME solaris_app_shots COMMAND solaris_app_shots --outdir ${CMAKE_CURRE
 # the Prelude, made through the window's gestures (R-SVC-10/11): the app driven as a hand drives it
 add_executable(solaris_demo_prelude ../demo/prelude/makePrelude.cpp)
 target_link_libraries(solaris_demo_prelude PRIVATE solaris_app solaris_core)
+find_program(SOLARIS_PRELUDE_PY python3)
+# named outside `-R solaris` (the everyday run): the whole song by hand and two renders of a 2-minute physical
+# piano take ~7 minutes in a Debug build — run it with `ctest -L long` or `-R prelude`
+add_test(NAME prelude_made_in_the_window
+  COMMAND ${CMAKE_COMMAND} -DDRIVER=$<TARGET_FILE:solaris_demo_prelude> -DCC=$<TARGET_FILE:solaris-cc>
+          -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/prelude -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_prelude
+          -DPY=${SOLARIS_PRELUDE_PY} -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/demo_prelude.cmake)
+set_tests_properties(prelude_made_in_the_window PROPERTIES TIMEOUT 1800 LABELS "long")
 
 add_executable(solaris_app_ui_tests tests/ui/uiTests.cpp)
 target_link_libraries(solaris_app_ui_tests PRIVATE solaris_app solaris_core)
