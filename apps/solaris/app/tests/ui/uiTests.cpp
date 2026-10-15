@@ -435,10 +435,12 @@ static void test_an_instruments_face_is_an_analog_panel()
     assert(sentLine(r, "set dv_1.osc1.wave=triangle") && f->lightLive("osc1.wave") > 1.0 && f->lightLive("osc1.wave") < 3.0);
     r.settle();
     assert(f->lightLive("osc1.wave") == 3.0 && f->valueText("osc1.wave") == "triangle");
-    // a knob double-clicked: its default
-    const artboard::Rect vol = world(*f, f->dialRect(f->controlIndex("volume")));
+    // a knob double-clicked: its default — scrolled into view first, as a hand would (the face is taller than
+    // the window since the oscillators gained a Width, REQ-synth2-6)
     r.cmd("set dv_1.volume=-3");
+    wl.devicePanel("dv_1")->reveal("volume");
     r.settle();
+    const artboard::Rect vol = world(*f, f->dialRect(f->controlIndex("volume")));
     r.click(cx(vol), cy(vol));
     r.click(cx(vol), cy(vol));
     r.settle();

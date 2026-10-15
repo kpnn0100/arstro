@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — I1: the EDM brief's requirements.*
+*Last updated: 2026-10-15 — I2: stereo unison.*
 
 ---
 
 ## NEXT
 
-**► I2 — stereo unison in the Basic Synth** (R-INST-1, DSP first), then I3, I4: the 2026-10-15 EDM brief. B13+ wait.
+**► I3 — crash and ride in the Drum Machine** (R-INST-2, DSP first), then I4: the 2026-10-15 EDM brief. B13+ wait.
 
 ---
 
@@ -308,7 +308,9 @@ umbrella's pointer — `arstro.rule` §7).
 
 ### I — an EDM track, as a test (user request, 2026-10-15; discussion round 7)
 - [x] **I1** The brief's requirements: R-INST-1/2 amended (stereo unison; crash and ride), R-SVC-12; round 7.
-- [ ] **I2** Stereo unison in the Basic Synth: a width per oscillator, spread starting phases (DSP first; R-INST-1).
+- [x] **I2** Stereo unison in the Basic Synth: a width per oscillator, spread starting phases (DSP first; R-INST-1).
+      — DSP `94d259f` (REQ-synth2-6): width 20 → L/R correlation 0.44; attack 0.9× sustained (aligned: 7.8×, seen red).
+      Solaris: pointer, API regenerated, the face's test scrolls its Volume knob into view (the face grew).
 - [ ] **I3** Crash and ride in the Drum Machine (DSP first; R-INST-2).
 - [ ] **I4** The track: `demo/edm` — its script written by a generator, rendered, measured as a production
       (`measure.py`), a ctest; anything it finds missing becomes I5…; delivered (R-SVC-12).

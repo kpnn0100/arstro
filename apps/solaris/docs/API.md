@@ -379,6 +379,7 @@ Two oscillators and noise through a resonant filter and an amplitude envelope; 1
 | `osc1.level` | 0.0 … 1.0 | 0.8 |
 | `osc1.voices` | 1.0 … 5.0 | 1.0 |
 | `osc1.detune` | 0.0 … 100.0 ct | 15.0 ct |
+| `osc1.width` | 0.0 … 50.0 ct | 0.0 ct |
 | `osc2.wave` | sine · saw · square · triangle | square |
 | `osc2.octave` | -3.0 … 3.0 oct | -1.0 oct |
 | `osc2.semi` | -12.0 … 12.0 st | 0.0 st |
@@ -386,6 +387,7 @@ Two oscillators and noise through a resonant filter and an amplitude envelope; 1
 | `osc2.level` | 0.0 … 1.0 | 0.5 |
 | `osc2.voices` | 1.0 … 5.0 | 1.0 |
 | `osc2.detune` | 0.0 … 100.0 ct | 15.0 ct |
+| `osc2.width` | 0.0 … 50.0 ct | 0.0 ct |
 | `noise` | 0.0 … 1.0 | 0.0 |
 | `filter.mode` | lowpass · bandpass · highpass · notch | lowpass |
 | `filter.cutoff` | 20.0 … 20000.0 Hz | 2400.0 Hz |

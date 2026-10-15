@@ -66,7 +66,7 @@ dsp."*
 - **R-DSP-5 Splitting at note events is the host's job.** A device renders whole blocks; the engine
   splits a block at every note event so a note starts on its exact sample (was SR-TIME-3).
 
-## R-INST — instruments — ✅ IMPLEMENTED (DR-INST-1, DR-INST-2; played through Solaris's engine, DR-ENG-1) — 5 ✅ (the piano, DR-INST-5) — 1, 2 amended 📋 (stereo unison; crash and ride: user request 2026-10-15)
+## R-INST — instruments — ✅ IMPLEMENTED (DR-INST-1, DR-INST-2; played through Solaris's engine, DR-ENG-1) — 5 ✅ (the piano, DR-INST-5) — 1 amended ✅ (stereo unison, DR-INST-1) — 2 amended 📋 (crash and ride: user request 2026-10-15)
 
 The user's request (2026-10-08): *"make me some basic instruments: Drum Machine, Basic Synth with 2
 OSC."*

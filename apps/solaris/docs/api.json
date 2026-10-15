@@ -2192,6 +2192,16 @@
           "log": false
         },
         {
+          "name": "osc1.width",
+          "label": "Width",
+          "unit": "ct",
+          "min": 0.0,
+          "max": 50.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
           "name": "osc2.wave",
           "label": "Wave",
           "unit": "",
@@ -2260,6 +2270,16 @@
           "min": 0.0,
           "max": 100.0,
           "default": 15.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.width",
+          "label": "Width",
+          "unit": "ct",
+          "min": 0.0,
+          "max": 50.0,
+          "default": 0.0,
           "integer": false,
           "log": false
         },
