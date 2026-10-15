@@ -111,6 +111,10 @@ namespace solaris_ui
         artboard::Rect snapRect(int i) const;            // 0 1/4 · 1 1/8 · 2 1/16 · 3 1/32 · 4 Off
         artboard::Rect modeRect(int m) const;
         artboard::Rect quantizeRect() const;
+        artboard::Rect lengthRect() const;               // R-ROLL-10: the length a click makes, and its menu
+        double clickLength() const { return mLengthChoice > 0 ? mLengthChoice : mLastLength; }
+        void setLengthChoice(double beats) { mLengthChoice = beats; } // 0 = the last length (the default)
+        static std::string lengthName(double beats);     // 1/16, 1/4, 1/1 … or "1.75 beats"
         artboard::Rect endRect() const;                  // the pattern's end handle
         int stepRows() const { return (int)mStepPitches.size(); }
         int stepRowPitch(int r) const { return r >= 0 && r < stepRows() ? mStepPitches[(size_t)r] : -1; }
@@ -178,6 +182,7 @@ namespace solaris_ui
         std::vector<int> mStepPitches;
         Mode mMode = Notes;
         double mSnap = 0.25, mLastLength = 0.25;
+        double mLengthChoice = 0.0;                 // R-ROLL-10: 0 = the last length; else this, in beats
         artboard::AnimatedProperty mModeAmt{0.0}, mPpb{48.0}, mEnd{4.0};
         double mPpbTarget = 48.0, mNotesPpb = 48.0, mEndLast = -1, mNowMs = 0;
         bool mModeInit = false, mModeLast = false, mScrolledIn = false, mEver = false;

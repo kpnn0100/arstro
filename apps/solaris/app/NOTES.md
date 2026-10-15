@@ -83,6 +83,8 @@ helpers it borrows.
 | Piano roll › Delete/Backspace · Ctrl+D · Ctrl+C then Ctrl+V (any roll) | `notes delete <pt> "…"` · `notes add <pt> "<pitch@beat:len:vel> …"` (a copy after the selection) · the shared clipboard, then `notes add` at the same beats |
 | Piano roll › ▶ (■ while its clip loops) · Space with a roll in front, stopped | `transport play --clip <ac>` (the clip it was opened from, else the pattern's first) · `transport stop`; Space stops whatever plays (R-ROLL-6) |
 | Piano roll › Snap · Notes/Steps · Ctrl+wheel · wheel | nothing — the view's (Steps zooms to fit) |
+| Piano roll › Length ▾ (its menu) | nothing — the length a click makes (the view's; R-ROLL-10) |
+| A window's bottom-right corner dragged | nothing — its size (the view's; R-WIN-5) |
 | Piano roll › Quantize… | `pattern quantize <pt> --grid <snap> [--swing 0.25\|0.5]` |
 | Piano roll › Steps › a cell | `note add <pt> --pitch <p> --at <b> --length 0.25` · `note delete …` when one is there |
 | A window › its title dragged · × · a click on it | the view's: moved exactly, closed (eased), raised |

@@ -20,6 +20,7 @@ namespace solaris_ui
         constexpr double kModeW = 52.0;   // space::u(16)
         constexpr double kQuantW = 71.5;  // space::u(22)
         constexpr double kPlayW = 29.25;  // space::u(9): the roll's ▶
+        constexpr double kLenW = 91.0;    // space::u(28): "Length 1/16 ▾"
         constexpr double kEdge = 5.0;     // a note's right edge, grabbed to resize
         constexpr double kTol = 0.5 / 960.0;
         Color fade(Color c, double a) { c.a *= a; return c; }
@@ -299,6 +300,16 @@ namespace solaris_ui
         return Rect{last.right() + 19.5 + m * kModeW, 4.875, kModeW, kToolH - 9.75};
     }
     Rect PianoRoll::quantizeRect() const { return Rect{modeRect(1).right() + 13.0, 4.875, kQuantW, kToolH - 9.75}; }
+    Rect PianoRoll::lengthRect() const { return Rect{quantizeRect().right() + 6.5, 4.875, kLenW, kToolH - 9.75}; }
+
+    std::string PianoRoll::lengthName(double b)
+    {
+        // note values, a beat being a quarter (as the snap chips name them)
+        const struct { double beats; const char *name; } kNames[] = {{0.125, "1/32"}, {0.25, "1/16"}, {0.5, "1/8"}, {1.0, "1/4"}, {2.0, "1/2"}, {4.0, "1/1"}};
+        for (const auto &n : kNames)
+            if (std::fabs(b - n.beats) < kTol) return n.name;
+        return beats(b) + " beats";
+    }
     Rect PianoRoll::endRect() const
     {
         const double x = beatToX(mDrag == Drag::End ? mLiveEnd : mEnd.value());
@@ -456,6 +467,7 @@ namespace solaris_ui
             for (int m = 0; m < 2; ++m)
                 if (modeRect(m).contains(local)) h = 10 + m;
             if (quantizeRect().contains(local)) h = 20;
+            if (lengthRect().contains(local)) h = 21;
             if (playRect().contains(local) && !mClip.empty()) h = 30;
             mHover.setHovered(h);
             return true;
@@ -620,6 +632,17 @@ namespace solaris_ui
                 if (snapRect(i).contains(local)) { mSnap = kSnaps[i]; return true; }
             for (int m = 0; m < 2; ++m)
                 if (modeRect(m).contains(local)) { mMode = (Mode)m; return true; }
+            if (lengthRect().contains(local))
+            {
+                // R-ROLL-10: the length a click makes — the last one (the default), or a note value
+                if (!onMenu) return true;
+                std::vector<cosmo_v2::ContextMenu::Item> items;
+                items.push_back({"Last used (" + lengthName(mLastLength) + ")", [this] { mLengthChoice = 0.0; }});
+                for (double b : {0.125, 0.25, 0.5, 1.0, 2.0, 4.0})
+                    items.push_back({lengthName(b), [this, b] { mLengthChoice = b; }});
+                onMenu(std::move(items), g.pos);
+                return true;
+            }
             if (quantizeRect().contains(local))
             {
                 if (!onMenu) return true;
@@ -661,8 +684,8 @@ namespace solaris_ui
                 mSel.clear();
                 const double at = mSnap > 0 ? std::max(0.0, std::floor(xToBeat(local.x) / mSnap) * mSnap) : snapped(xToBeat(local.x));
                 const int pitch = yToPitch(local.y);
-                send("note add " + mPattern + " --pitch " + std::to_string(pitch) + " --at " + beats(at) + " --length " + beats(mLastLength));
-                preview(pitch, 100, mLastLength); // R-ROLL-7: the note made is heard
+                send("note add " + mPattern + " --pitch " + std::to_string(pitch) + " --at " + beats(at) + " --length " + beats(clickLength()));
+                preview(pitch, 100, clickLength()); // R-ROLL-7: the note made is heard
             }
             return true;
         }
@@ -885,9 +908,18 @@ namespace solaris_ui
         chip(modeRect(0), "Notes", mMode == Notes, 10);
         chip(modeRect(1), "Steps", mMode == Steps, 11);
         chip(quantizeRect(), "Quantize\xE2\x80\xA6", false, 20);
+        {
+            // R-ROLL-10: the length a click makes, named; "▾" says it is a menu
+            const std::string lbl = "Length " + lengthName(clickLength()) + (mLengthChoice > 0 ? "" : "*") + " \xE2\x96\xBE";
+            const Rect lr = lengthRect();
+            const double hv = mHover.amount(21);
+            drawRoundedRect(t, lr, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), hv)));
+            t.setFill(palette::secondaryForeground());
+            t.drawText(textfit::ellipsize(t, lbl, lr.w - 8.0, 10.0, font::sans()), lr.x + 6.0, textfit::baseline(lr.y + lr.h * 0.5, 10.0), 10.0, font::sans());
+        }
         const std::string len = beats(mModel.length) + " beats";
         t.setFill(palette::mutedForeground());
-        const double lx = std::max(quantizeRect().right() + 13.0, W - space::padX() - t.measureText(len, 10.0, font::mono()));
+        const double lx = std::max(lengthRect().right() + 13.0, W - space::padX() - t.measureText(len, 10.0, font::mono()));
         t.drawText(len, lx, textfit::baseline(kToolH * 0.5, 10.0), 10.0, font::mono());
         if (m < 0.999) mScrollY.drawBar(t, W - 5.0, 1.0 - m);
     }

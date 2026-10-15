@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — H8: the pattern grows to hold its notes.*
+*Last updated: 2026-10-15 — H9: the length a click makes; windows resized.*
 
 ---
 
 ## NEXT
 
-**► H9 — the length a click makes; a window resized by its corner** (R-ROLL-10, R-WIN-5), then H10: the 2026-10-15 brief (a song made in the
+**► H10 — the Prelude, made in the window with the fixes** (R-SVC-10/11): the 2026-10-15 brief (a song made in the
 window, Bach's Prelude in C, with the UX it finds fixed). B13+ wait; T2 and T3 may go between.
 
 ---
@@ -286,8 +286,10 @@ umbrella's pointer — `arstro.rule` §7).
 - [x] **H8** The pattern grows to hold its notes; a whole-pattern clip grows with it (U-3; R-ROLL-9).
       — DR-ROLL-9: every note-writing edit grows the pattern to the bar holding its last note's end, a clip that
       played it whole with it, in the same edit; said in the output; R-SVC-8's warning amended. L2; mutant caught.
-- [ ] **H9** The length a click makes, shown and chosen; a window resized by its corner (U-4, U-5; R-ROLL-10,
+- [x] **H9** The length a click makes, shown and chosen; a window resized by its corner (U-4, U-5; R-ROLL-10,
       R-WIN-5).
+      — DR-ROLL-10: "Length 1/16* ▾" and its menu (the last length, or a note value). DR-WIN-5: a corner grip on
+      every window, the pointer's, floored and kept in the layer, the content laid out anew. UI test; 2 mutants.
 - [ ] **H10** The Prelude, made in the window with the fixes: every note, the tempo, measured against the score
       (R-SVC-10), rendered and delivered; the audit's attempt 2 — what the fixes saved.
 

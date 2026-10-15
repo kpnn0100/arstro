@@ -1564,6 +1564,71 @@ static void test_the_rolls_selection_and_what_is_done_to_it()
     pass("The roll's selection (R-ROLL-8): click and Shift+click select (lit, eased); a selected note drags the selection as ONE `notes move`; ↑ ↓ (Shift: octave) ← → move it; Ctrl+D lays a copy after it; Ctrl+C / Ctrl+V paste into another roll; Ctrl+A and Delete; a Ctrl box; Escape; the keys go to the roll last pressed");
 }
 
+static void test_the_length_a_click_makes_and_a_window_resized()
+{
+    sltest::Rig r("ui-rolllen", 1280, 800);
+    r.cmd("project new " + r.song("Len") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 8");
+    const std::string ac = r.svc->model().clips[0].id, pt = r.svc->model().clips[0].pattern;
+    r.cmd("note add " + pt + " --pitch 60 --at 0 --length 0.25");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &wl = r.app->project().windows();
+    const artboard::Rect clip = world(tl, tl.clipRect(ac));
+    r.click(clip.x + 12.0, cy(clip));
+    r.click(clip.x + 12.0, cy(clip));
+    r.settle();
+    auto &roll = *wl.roll(pt);
+    auto lastEdit = [&]() {
+        for (auto it = r.sent.rbegin(); it != r.sent.rend(); ++it)
+            if (it->rfind("note preview ", 0) != 0) return *it;
+        return std::string();
+    };
+    // R-ROLL-10: the chip names the length a click makes; its menu chooses one — the view's, no line
+    assert(roll.clickLength() == 0.25);
+    const size_t mark = r.sent.size();
+    r.click(world(roll, roll.lengthRect()));
+    r.settle();
+    auto &menu = r.app->menu();
+    assert(menu.isOpen() && menu.itemCount() == 7 && r.sent.size() == mark);
+    r.click(menu.itemRect(4));                                           // 1/4
+    r.settle();
+    assert(roll.clickLength() == 1.0);
+    const artboard::Rect rw = world(roll, artboard::Rect{0, 0, 0, 0});
+    r.click(rw.x + roll.beatToX(2.1), rw.y + roll.pitchToY(64) + roll.kNoteH * 0.5);
+    r.settle();
+    assert(lastEdit() == "note add " + pt + " --pitch 64 --at 2 --length 1");
+    // "Last used": the length of the note last made or resized
+    r.click(world(roll, roll.lengthRect()));
+    r.settle();
+    r.click(menu.itemRect(0));
+    r.settle();
+    assert(roll.clickLength() == 0.25);
+    const artboard::Rect n60 = world(roll, roll.noteRect(60, 0.0));
+    r.drag(n60.right() - 2.0, cy(n60), rw.x + roll.beatToX(2.0) + 1.0, cy(n60), 6);
+    r.settle();
+    assert(roll.clickLength() == 2.0);
+    // R-WIN-5: the corner resizes the window — the pointer's, the roll laid out at the new size
+    auto &w = *wl.window("roll:" + pt);
+    const double w0 = w.width.value(), h0 = w.height.value(), grid0 = roll.gridRect().h;
+    const artboard::Rect g = world(w, w.gripRect());
+    r.drag(cx(g), cy(g), cx(g) - 150.0, cy(g) + 120.0, 6, false);
+    assert(std::fabs(w.width.value() - (w0 - 150.0)) < 0.5 && std::fabs(w.height.value() - (h0 + 120.0)) < 0.5);
+    r.app->pointer(2, cx(g) - 150.0, cy(g) + 120.0, 0, r.now);
+    r.settle();
+    assert(std::fabs(roll.gridRect().h - (grid0 + 120.0)) < 0.5);           // more rows to see
+    // never smaller than the floor, never out of the layer
+    const artboard::Rect g2 = world(w, w.gripRect());
+    r.drag(cx(g2), cy(g2), cx(g2) - 2000.0, cy(g2) - 2000.0, 6);
+    r.settle();
+    assert(w.width.value() == arstro::solaris_ui::FloatWindow::kMinW && w.height.value() == arstro::solaris_ui::FloatWindow::kMinH);
+    const artboard::Rect g3 = world(w, w.gripRect());
+    r.drag(cx(g3), cy(g3), cx(g3) + 4000.0, cy(g3) + 4000.0, 6);
+    r.settle();
+    assert(w.x.value() + w.width.value() <= wl.width.value() + 0.5 && w.y.value() + w.height.value() <= wl.height.value() + 0.5);
+    pass("The length a click makes is named and chosen (R-ROLL-10): the chip's menu, 'Last used' following a resize; a window resized by its corner (R-WIN-5): the pointer's, its content laid out anew, never below the floor nor out of the layer");
+}
+
 static void test_a_kits_roll_names_its_pads()
 {
     sltest::Rig r("ui-roll-kit", 1280, 800);
@@ -2258,6 +2323,7 @@ int main()
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();
+    test_the_length_a_click_makes_and_a_window_resized();
     test_a_kits_roll_names_its_pads();
     test_a_line_added_and_sources_relinked();
     test_a_strip_keys_a_later_compressor();

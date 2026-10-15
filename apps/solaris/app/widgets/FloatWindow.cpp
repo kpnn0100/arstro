@@ -15,11 +15,85 @@ namespace solaris_ui
     namespace textfit = interstellar_v1::textfit;
     namespace glyph = interstellar_v1::glyph;
 
+    // R-WIN-5: the corner a window is resized by — a child of its own, on top of the content (added after it),
+    // so a press there is the window's and not the roll's or the panel's beneath
+    class ResizeGrip : public Segment
+    {
+    public:
+        explicit ResizeGrip(FloatWindow &w) : mWin(w) {}
+        void advance(double nowMs) override
+        {
+            if (!isHovered() && !mHeld) mHover.clear();
+            mHover.advance(nowMs);
+            Segment::advance(nowMs);
+        }
+
+    protected:
+        bool hitTestSelf(const Point &p) const override { return localBounds().contains(p); }
+        bool handleGesture(const Gesture &g, const Point &) override
+        {
+            Segment *layer = mWin.parent();
+            switch (g.type)
+            {
+            case Gesture::Type::Move:
+                mHover.setHovered(0);
+                return true;
+            case Gesture::Type::Down:
+                mWin.raise();
+                mHeld = true;
+                mHover.setHovered(0);
+                mGrab = layer ? layer->toLocal(g.pos) : g.pos;
+                mW0 = mWin.width.value();
+                mH0 = mWin.height.value();
+                return true;
+            case Gesture::Type::DragStart:
+            case Gesture::Type::Drag:
+                if (mHeld && layer)
+                {
+                    // the pointer is the animation: the size is where it has the corner, never below the floor
+                    // nor past the layer's edge
+                    const Point p = layer->toLocal(g.pos);
+                    const double maxW = std::max(FloatWindow::kMinW, layer->width.value() - mWin.x.value());
+                    const double maxH = std::max(FloatWindow::kMinH, layer->height.value() - mWin.y.value());
+                    mWin.width.set(std::clamp(mW0 + p.x - mGrab.x, FloatWindow::kMinW, maxW));
+                    mWin.height.set(std::clamp(mH0 + p.y - mGrab.y, FloatWindow::kMinH, maxH));
+                }
+                return true;
+            case Gesture::Type::Up:
+            case Gesture::Type::Drop:
+                mHeld = false;
+                return true;
+            default:
+                return true;
+            }
+        }
+        void onPaint(IRenderTarget &t) const override
+        {
+            // three short strokes across the corner, brighter under the pointer
+            const double W = width.value(), H = height.value(), hv = mHover.amount(0);
+            const Color c = lerpColor(palette::mutedForeground(), palette::foreground(), hv);
+            for (int k = 1; k <= 3; ++k)
+            {
+                const double d = 3.25 * k;
+                glyph::line(t, W - d, H - 1.0, W - 1.0, H - d, c, 1.0);
+            }
+        }
+
+    private:
+        FloatWindow &mWin;
+        Point mGrab{0, 0};
+        double mW0 = 0, mH0 = 0;
+        bool mHeld = false;
+        cosmo_v2::HoverFade mHover;
+    };
+
     FloatWindow::FloatWindow(std::string key, std::shared_ptr<Segment> content) : mKey(std::move(key)), mContent(std::move(content))
     {
         clipToBounds = true;
         opacity.set(0.0);
         addChild(mContent);
+        mGrip = std::make_shared<ResizeGrip>(*this);
+        addChild(mGrip); // after the content: on top of it
     }
 
     void FloatWindow::open()
@@ -36,6 +110,11 @@ namespace solaris_ui
         mContent->y.set(kTitleH);
         mContent->width.set(std::max(0.0, width.value() - 2.0));
         mContent->height.set(std::max(0.0, height.value() - kTitleH - 1.0));
+        const Rect g = gripRect();
+        mGrip->x.set(g.x);
+        mGrip->y.set(g.y);
+        mGrip->width.set(g.w);
+        mGrip->height.set(g.h);
     }
 
     void FloatWindow::advance(double nowMs)

@@ -455,7 +455,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
   the address it was made from, its points (beat, value, shape), every formula that reads it (address
   and formula), and its value at the playhead — all from the model, nothing re-derived.
 
-## R-WIN — windows inside the song view — ✅ IMPLEMENTED (user request, 2026-10-09; DR-WIN-1, DR-UI-5) — 5 📋 (resized by the corner: the UX audit, 2026-10-15)
+## R-WIN — windows inside the song view — ✅ IMPLEMENTED (user request, 2026-10-09; DR-WIN-1, DR-UI-5) — 5 ✅ (resized by the corner, DR-WIN-5)
 
 - **R-WIN-1 A device opens in a WINDOW** (FL Studio's channel window), *"when open a synth setting,
   need to show a window of that synth"*: a rack chip clicked, or an instrument strip's name
@@ -476,7 +476,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
   out of the layer — and its content lays itself out at the new size (a roll shows more rows, a face
   reflows its modules). The view's, like its place (R-WIN-4): not saved, not a command.
 
-## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6 ✅ (play from the roll, DR-ROLL-6) — 7 ✅ (a note heard when made, DR-ROLL-7) — 8 ✅ (the selection, DR-ROLL-8) — 9 ✅ (the pattern grows, DR-ROLL-9) — 10 📋 (the length chosen: the UX audit, 2026-10-15)
+## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6 ✅ (play from the roll, DR-ROLL-6) — 7 ✅ (a note heard when made, DR-ROLL-7) — 8 ✅ (the selection, DR-ROLL-8) — 9 ✅ (the pattern grows, DR-ROLL-9) — 10 ✅ (the length chosen, DR-ROLL-10)
 
 - **R-ROLL-1 A piano-roll WINDOW per pattern** (R-WIN's frame), opened by double-clicking a note clip
   or from its instrument's window: keys on the left (C named with its octave; a drum machine's keys

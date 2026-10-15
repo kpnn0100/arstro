@@ -36,6 +36,8 @@ namespace solaris_ui
     class PianoRoll;
     class AutomationPanel;
 
+    class ResizeGrip;
+
     class FloatWindow : public artboard::Segment
     {
     public:
@@ -53,6 +55,11 @@ namespace solaris_ui
         double appearAmount() const { return mAppear.value(); } // LIVE
         artboard::Rect titleRect() const { return artboard::Rect{0, 0, width.value(), kTitleH}; }
         artboard::Rect closeRect() const { return artboard::Rect{width.value() - 6.5 - 19.5, 3.25, 19.5, 19.5}; }
+        /** R-WIN-5: the corner a window is resized by (local). */
+        artboard::Rect gripRect() const { return artboard::Rect{width.value() - kGrip - 1.0, height.value() - kGrip - 1.0, kGrip, kGrip}; }
+        static constexpr double kGrip = 13.0;    // space::u(4)
+        static constexpr double kMinW = 260.0;   // space::u(80): a window is never resized smaller …
+        static constexpr double kMinH = 156.0;   // space::u(48): … than its title, a toolbar and a few rows
         void layout();
         void advance(double nowMs) override;
         bool hitTest(const artboard::Point &p) const override { return mWanted && Segment::hitTest(p); }
@@ -67,6 +74,7 @@ namespace solaris_ui
     private:
         std::string mKey, mTitle;
         std::shared_ptr<artboard::Segment> mContent;
+        std::shared_ptr<ResizeGrip> mGrip;
         bool mWanted = false, mApplied = false, mDragging = false;
         artboard::Point mGrab{0, 0};
         artboard::AnimatedProperty mAppear{0.0};

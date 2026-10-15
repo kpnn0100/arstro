@@ -597,6 +597,15 @@ and a window whose device is removed by anyone closes (`bind`, `:226`). Rack chi
 strip's name (double-click) in the dock open them; a chip is outlined while its window is open.
 Placement and stacking are the view's. The dock's floating panel is gone (R-UI-5 amended).
 
+### DR-WIN-5 A window is resized by its corner (R-WIN-5)
+Every float window carries a `ResizeGrip` (`app/widgets/FloatWindow.cpp:20`) — a child of its own added after the
+content, so it is drawn and hit on top of it — at its bottom-right corner (`gripRect`, 13 px; placed by
+`FloatWindow::layout`, `:113`). A press raises the window; dragged, the size is where the pointer has the corner —
+direct manipulation, no easing — never below `kMinW` × `kMinH` (260 × 156) nor past the layer's edge. The content
+is laid out at the new size each frame: a roll shows more rows (its grid grows by exactly the height added), an
+instrument's face reflows its modules. Three strokes mark the corner, brighter under the pointer. The view's: not
+saved, not a command (R-WIN-4). Closes the UX audit's U-5.
+
 ### DR-AUTO-5 Automation on the timeline (R-AUTO-6)
 `Timeline` (`app/widgets/Timeline.cpp:175`) appends a row per automation after the lanes, keyed
 `auto:<au>` in the same `AnimatedRows` (a lane added slides them down; a new one grows in), its header
@@ -721,6 +730,13 @@ command's output says it ("pt_1 grew to 8 beats to hold its notes; ac_1 with it"
 audit names the notes it leaves outside. In the roll the end handle eases to the new end (DR-ROLL-1). Closes the
 UX audit's U-3 (a note past the end was dimmed and never heard). L2 `test_a_pattern_grows_to_hold_its_notes`
 (mutant: a whole-pattern clip that does not follow, seen red).
+
+### DR-ROLL-10 The length a click makes is shown and chosen (R-ROLL-10)
+The roll's toolbar names it after Quantize… (`PianoRoll::lengthRect`, `app/widgets/PianoRoll.cpp:303`; drawn at
+`:912`): "Length 1/16* ▾" — a note value (`lengthName`, `:305`: 1/32 … 1/1, a beat being a quarter, else
+"<n> beats"), starred while it is the LAST length (the note last made or resized, the default). Its menu (`:635`)
+offers "Last used (…)" and 1/32, 1/16, 1/8, 1/4, 1/2, 1/1; the choice is the view's — no line — and a click on the
+grid makes a note of `clickLength()`, the choice or the last length. Closes the UX audit's U-4.
 
 ### DR-VST-1 Our instruments as VST3 plugins (R-VST-1…5)
 **The SDK:** Steinberg's `vst3sdk` **v3.8.1_build_84**, cloned recursively to `~/sdk/vst3sdk`; its
