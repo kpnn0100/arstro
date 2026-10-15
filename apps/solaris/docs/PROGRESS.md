@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — I3: crash and ride.*
+*Last updated: 2026-10-15 — I4a: D-8, a live volume.*
 
 ---
 
@@ -314,6 +314,9 @@ umbrella's pointer — `arstro.rule` §7).
 - [x] **I3** Crash and ride in the Drum Machine (DSP first; R-INST-2).
       — DSP `79648e7` (REQ-drum-6): crash 49 (1750 ms, 71 % above 3 kHz), ride 51 (1200 ms, a bell over its wash; the
       first bell missed its band — retuned). Solaris: pointer, API, two tests that pinned ten pads.
+- [x] **I4a** D-8 (found making the track): a synth's volume / a sampler's level, automated or set while a note
+      sounded, moved nothing until the next note — the riser could not swell. DSP `0707803`: applied per block,
+      ramped. Guard `Volume_and_level_move_a_sounding_note` (a stepped volume seen red).
 - [ ] **I4** The track: `demo/edm` — its script written by a generator, rendered, measured as a production
       (`measure.py`), a ctest; anything it finds missing becomes I5…; delivered (R-SVC-12).
 

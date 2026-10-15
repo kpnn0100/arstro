@@ -49,6 +49,8 @@ voices; the same note retriggers, else an idle voice, else the oldest is stolen 
 The oscillators' own ADSRs are gates, so the release tail is never cut. Registry type `synth`,
 parameters `osc1.*`, `osc2.*`, `noise`, `filter.*`, `fenv.*`, `amp.*`, `volume`, `velocity`.
 Guarded by the DSP repo's `instrumentTests.cpp` and `synth2_equal_temperament` (0.026 cents).
+**A live volume** (D-8; DSP `0707803`, REQ-synth2-4 amended): the velocity is the note's; the volume is applied per
+block, ramped — set or automated while a note sounds, it moves it (a riser can swell). The Sampler's level likewise.
 **Stereo unison** (R-INST-1 amended; DSP `94d259f`, REQ-synth2-6): `osc1/2.width` (0…50 ct, default 0) detunes the
 channels apart by the Oscillator's per-channel offset, and unison voices start at spread phases (frac(v/φ), the
 same on every channel) — a supersaw is wide (width 20: L/R correlation 0.44) and its attack no longer spikes

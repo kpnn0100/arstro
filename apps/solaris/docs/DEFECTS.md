@@ -37,6 +37,18 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-8 A synth's volume, automated or set while a note sounded, did nothing to that note — closed in I4a, DSP `0707803`
+- **Found:** 2026-10-15, making the EDM track (R-SVC-12): the riser — one long note — was automated to swell from
+  −40 dB to −4 dB through each build; measured, each build's last bars were no louder than its first.
+- **Reproduction:** a synth note held 2 s; `set dv_1.volume=-20` (or an automation on it) after 1 s → the note's
+  level unchanged until the next note-on.
+- **Cause:** `BasicSynth::noteOn` multiplied the volume into the voice's gain; the Sampler did the same with its
+  level. (The Drum Machine and the Piano already applied theirs per block.)
+- **Fix (DSP, REQ-synth2-4 amended):** the velocity stays the note's; the volume / level is applied per block,
+  ramped linearly from where the last block ended — no step.
+- **Guard:** DSP `Volume_and_level_move_a_sounding_note` (exactly −20 dB on the held note, no step; a stepped volume
+  seen red); the EDM track's measured builds (`demo/edm/measure.py`).
+
 ### D-7 A note narrower than 5 px could not be moved — every press grabbed its resize edge — closed in H10c
 - **Found:** 2026-10-15, making the Prelude zoomed out (R-SVC-11): a sixteenth is ~5 px wide there, and dragging a
   selected voice up two semitones sent nothing — the press was "on the edge", a resize, which only reads x.
