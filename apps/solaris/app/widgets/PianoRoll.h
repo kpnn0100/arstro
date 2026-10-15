@@ -148,6 +148,7 @@ namespace solaris_ui
         double snapped(double beat) const;
         void send(const std::string &line) { if (onCommand) onCommand(line); }
         void preview(int pitch, int vel, double length);    // R-ROLL-7: heard through the clip's track
+        void track(const artboard::Point &local);           // a gesture in flight, where the pointer has it (D-6: also at release)
         bool sendOk(const std::string &line) { return onCommand ? onCommand(line) : false; }
         std::string tokens(const std::vector<solaris::NoteModel> &ns, double by = 0.0, int semi = 0, bool full = false) const;
         std::vector<solaris::NoteModel> selectedNotes() const;
@@ -164,6 +165,8 @@ namespace solaris_ui
         artboard::Point mBoxA{0, 0}, mBoxB{0, 0};
         bool mBoxAdd = false;
         double mSelDBeat = 0;                       // a selection dragged: where the pointer has it
+        artboard::Point mPressPt{0, 0};             // where the press was (D-6: a release elsewhere is a drag, however short)
+        bool mSwallowClick = false;                 // … and the Click the recognizer still sends after it is not a click
         int mSelDSemi = 0;
         int mHeardPitch = -1, mKeyPitch = -1;       // the last pitch a drag sounded; the key held
         artboard::AnimatedProperty mKeyLight{0.0};

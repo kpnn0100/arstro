@@ -646,7 +646,8 @@ A click on empty grid → `note add <pt> --pitch --at <the snapped cell> --lengt
 note dragged is drawn where the POINTER has it (beat snapped) and lands as ONE `note move … --to-pitch
 --to-at`; its right 5 px resize it (`note move … --length`, which becomes the last length); a
 velocity stem dragged → `note move … --vel`; a double-click or right-click → `note delete`; the end
-dragged → `set <pt>.length=` (`PianoRoll::handleGesture`, `PianoRoll.cpp:258`). **Steps:** a row per pad (a kit) or per pitch in
+dragged → `set <pt>.length=` — a drag lands where it is let go however short (under the recognizer's 5 px
+threshold too, `PianoRoll::track` at the release, the Click after it swallowed; D-6) (`PianoRoll::handleGesture`, `PianoRoll.cpp:258`). **Steps:** a row per pad (a kit) or per pitch in
 use and middle C, a cell per sixteenth, a click toggling a note there (`note add … --length 0.25` /
 `note delete`) (`PianoRoll::paintSteps`, `PianoRoll.cpp:482`). **Nothing snaps:** notes are keyed by (pitch, beat) — a new one
 fades in, a deleted one fades out where it was, a dragged one is the pointer's and lands without

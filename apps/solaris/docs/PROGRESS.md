@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — H10a: D-5, the sideways wheel.*
+*Last updated: 2026-10-15 — H10b: D-6, the short drag.*
 
 ---
 
@@ -293,6 +293,9 @@ umbrella's pointer — `arstro.rule` §7).
 - [x] **H10a** D-5 (found starting H10, the UX audit's U-7): Shift+wheel and a sideways swipe never reached the app
       from the window — `App::wheel` carries Shift, the GTK host passes it and turns a sideways scroll into it. Guard
       `test_the_wheel_scrolls_sideways_with_shift` (mutant seen red); the host's half owed a live check (DEFECTS).
+- [x] **H10b** D-6 (found in H10, the UX audit's U-8): a note dragged under the 5 px threshold was a click — the
+      resize lost, a note added instead. `PianoRoll::track` runs at the release too; the Click after it is
+      swallowed; a click still moves nothing. Guard `test_a_short_drag_lands_where_it_was_let_go` (mutant seen red).
 - [ ] **H10** The Prelude, made in the window with the fixes: every note, the tempo, measured against the score
       (R-SVC-10), rendered and delivered; the audit's attempt 2 — what the fixes saved.
 

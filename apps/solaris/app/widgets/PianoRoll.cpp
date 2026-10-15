@@ -454,6 +454,59 @@ namespace solaris_ui
         return true;
     }
 
+    void PianoRoll::track(const Point &local)
+    {
+        // where the pointer has a gesture in flight — every Drag, and once more at release, so a drag shorter
+        // than the recognizer's threshold (a sixteenth zoomed out is 6 px) still lands where it was let go (D-6)
+        const Rect vel = velRect(), grid = gridRect();
+        (void)grid;
+        switch (mDrag)
+        {
+            case Drag::Move:
+                mLive.at = snapped(xToBeat(local.x) - mGrabBeat);
+                mLive.pitch = std::clamp(yToPitch(local.y) - (int)mGrabPitch, 0, 127);
+                if (mLive.pitch != mHeardPitch) { mHeardPitch = mLive.pitch; preview(mLive.pitch, mLive.vel, mLive.length); } // each row it enters
+                break;
+            case Drag::MoveSel:
+            {
+                // the whole selection is the pointer's: kept at or after beat 0 and inside 0–127
+                double lo = 1e18;
+                int pmin = 127, pmax = 0;
+                for (const auto &n : selectedNotes()) { lo = std::min(lo, n.at); pmin = std::min(pmin, n.pitch); pmax = std::max(pmax, n.pitch); }
+                const double at = snapped(xToBeat(local.x) - mGrabBeat);
+                const int pitch = yToPitch(local.y) - (int)mGrabPitch;
+                mSelDBeat = std::max(at - mPressNote.at, -lo);
+                mSelDSemi = std::clamp(pitch - mPressNote.pitch, -pmin, 127 - pmax);
+                const int heard = mPressNote.pitch + mSelDSemi;
+                if (heard != mHeardPitch) { mHeardPitch = heard; preview(heard, mPressNote.vel, mPressNote.length); }
+                break;
+            }
+            case Drag::Box:
+                mBoxB = local;
+                break;
+            case Drag::Keys:
+            {
+                const int p = std::clamp(yToPitch(std::clamp(local.y, grid.y, grid.bottom() - 1.0)), 0, 127);
+                if (p != mKeyPitch) { mKeyPitch = p; preview(p, 100, 0.5); }
+                break;
+            }
+            case Drag::Resize:
+            {
+                const double step = mSnap > 0 ? mSnap : 1.0 / 16.0;
+                mLive.length = std::max(step, snapped(xToBeat(local.x)) - mLive.at);
+                break;
+            }
+            case Drag::Velocity:
+                mLive.vel = std::clamp((int)std::lround((vel.bottom() - 6.0 - local.y) / std::max(1.0, kVelH - 12.0) * 127.0), 1, 127);
+                break;
+            case Drag::End:
+                mLiveEnd = std::max(0.25, snapped(xToBeat(local.x)));
+                break;
+            default:
+                break;
+        }
+    }
+
     bool PianoRoll::handleGesture(const Gesture &g, const Point &local)
     {
         const Rect grid = gridRect(), vel = velRect();
@@ -475,6 +528,8 @@ namespace solaris_ui
         case Gesture::Type::Down:
         {
             mDrag = Drag::None;
+            mPressPt = local;
+            mSwallowClick = false;
             if (endRect().contains(local)) { mDrag = Drag::End; mLiveEnd = mEnd.value(); return true; }
             if (mMode == Notes && grid.contains(local))
             {
@@ -522,55 +577,18 @@ namespace solaris_ui
         }
         case Gesture::Type::DragStart:
         case Gesture::Type::Drag:
-            switch (mDrag)
-            {
-            case Drag::Move:
-                mLive.at = snapped(xToBeat(local.x) - mGrabBeat);
-                mLive.pitch = std::clamp(yToPitch(local.y) - (int)mGrabPitch, 0, 127);
-                if (mLive.pitch != mHeardPitch) { mHeardPitch = mLive.pitch; preview(mLive.pitch, mLive.vel, mLive.length); } // each row it enters
-                break;
-            case Drag::MoveSel:
-            {
-                // the whole selection is the pointer's: kept at or after beat 0 and inside 0–127
-                double lo = 1e18;
-                int pmin = 127, pmax = 0;
-                for (const auto &n : selectedNotes()) { lo = std::min(lo, n.at); pmin = std::min(pmin, n.pitch); pmax = std::max(pmax, n.pitch); }
-                const double at = snapped(xToBeat(local.x) - mGrabBeat);
-                const int pitch = yToPitch(local.y) - (int)mGrabPitch;
-                mSelDBeat = std::max(at - mPressNote.at, -lo);
-                mSelDSemi = std::clamp(pitch - mPressNote.pitch, -pmin, 127 - pmax);
-                const int heard = mPressNote.pitch + mSelDSemi;
-                if (heard != mHeardPitch) { mHeardPitch = heard; preview(heard, mPressNote.vel, mPressNote.length); }
-                break;
-            }
-            case Drag::Box:
-                mBoxB = local;
-                break;
-            case Drag::Keys:
-            {
-                const int p = std::clamp(yToPitch(std::clamp(local.y, grid.y, grid.bottom() - 1.0)), 0, 127);
-                if (p != mKeyPitch) { mKeyPitch = p; preview(p, 100, 0.5); }
-                break;
-            }
-            case Drag::Resize:
-            {
-                const double step = mSnap > 0 ? mSnap : 1.0 / 16.0;
-                mLive.length = std::max(step, snapped(xToBeat(local.x)) - mLive.at);
-                break;
-            }
-            case Drag::Velocity:
-                mLive.vel = std::clamp((int)std::lround((vel.bottom() - 6.0 - local.y) / std::max(1.0, kVelH - 12.0) * 127.0), 1, 127);
-                break;
-            case Drag::End:
-                mLiveEnd = std::max(0.25, snapped(xToBeat(local.x)));
-                break;
-            default:
-                break;
-            }
+            track(local);
             return true;
         case Gesture::Type::Up:
         case Gesture::Type::Drop:
         {
+            // D-6: a drag shorter than the recognizer's threshold still lands where it was let go — but a click (no
+            // movement at all) moves nothing, so an off-grid note is not re-snapped by being clicked
+            if (mDrag != Drag::None && mDrag != Drag::Box && std::hypot(local.x - mPressPt.x, local.y - mPressPt.y) > 0.5)
+            {
+                track(local);
+                mSwallowClick = true; // under the threshold the recognizer calls it a Click too — it was a drag
+            }
             const Drag d = mDrag;
             mDrag = Drag::None;
             const std::string id = mPattern, from = " --pitch " + std::to_string(mPressNote.pitch) + " --at " + beats(mPressNote.at);
@@ -627,6 +645,7 @@ namespace solaris_ui
         }
         case Gesture::Type::Click:
         {
+            if (mSwallowClick) { mSwallowClick = false; return true; } // D-6: the short drag just landed
             if (playRect().contains(local)) { togglePlay(); return true; }
             for (int i = 0; i < 5; ++i)
                 if (snapRect(i).contains(local)) { mSnap = kSnaps[i]; return true; }

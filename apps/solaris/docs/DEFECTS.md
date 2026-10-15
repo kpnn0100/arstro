@@ -37,6 +37,19 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-6 A note dragged less than 5 px was a click: the resize or the move was lost — closed in H10b
+- **Found:** 2026-10-15, making the Prelude zoomed out (R-SVC-11): a sixteenth is ~6 px there, and pulling the
+  tenor's end back one sixteenth did nothing — and every bar after was built on the wrong length.
+- **Symptom:** a note's edge or body dragged by under 5 px (the gesture recognizer's drag threshold) sent nothing;
+  the release arrived as a Click, which on empty grid ADDED a note.
+- **Cause:** the roll took the pointer's position only from Drag gestures, which start past the threshold; the
+  Up was ignored for position, and the recognizer's Click after it was handled as a click.
+- **Fix:** the drag's tracking (`PianoRoll::track`) runs at every Drag and once more at the release when the
+  pointer moved at all; the Click the recognizer still sends after such a release is swallowed. A release where
+  the press was (no movement) is a click and moves nothing — an off-grid note is not re-snapped by a click.
+- **Guard:** `test_a_short_drag_lands_where_it_was_let_go` (a 4 px pull lands as `note move … --length 1.75` and
+  adds nothing; a click on an off-grid note moves nothing) — mutant (no tracking at release) seen red.
+
 ### D-5 Shift+wheel and sideways scrolling never reached the app from the window — closed in H10a
 - **Found:** 2026-10-15, making the Prelude (R-SVC-11): bar 35 had to be brought into the roll's view, and the
   roll scrolls sideways on Shift+wheel (as the lanes do, NOTES "Lanes › Shift+wheel") — which no person could do.

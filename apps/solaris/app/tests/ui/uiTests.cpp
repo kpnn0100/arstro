@@ -1662,6 +1662,47 @@ static void test_the_wheel_scrolls_sideways_with_shift()
     pass("D-5: Shift+wheel scrolls sideways — the lanes and the roll move time, not rows; the plain wheel still scrolls rows");
 }
 
+static void test_a_short_drag_lands_where_it_was_let_go()
+{
+    // D-6: zoomed out, a sixteenth is ~6 px — a pull shorter than the recognizer's 5 px threshold was a click
+    sltest::Rig r("ui-shortdrag", 1280, 800);
+    r.cmd("project new " + r.song("Short") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 8");
+    const std::string ac = r.svc->model().clips[0].id, pt = r.svc->model().clips[0].pattern;
+    r.cmd("notes add " + pt + " \"E4@0.25:2 G4@1.1:0.25\"");             // G4 off the grid
+    r.settle();
+    auto &wl = r.app->project().windows();
+    wl.openRoll(pt, ac);
+    r.settle();
+    auto &roll = *wl.roll(pt);
+    const artboard::Rect g = world(roll, roll.gridRect());
+    for (int k = 0; k < 3; ++k) r.app->wheel(cx(g), cy(g), -1.0, true); // zoomed out: 48 → ~25 px a beat
+    r.settle();
+    const artboard::Rect rw = world(roll, artboard::Rect{0, 0, 0, 0});
+    auto lastEdit = [&]() {
+        for (auto it = r.sent.rbegin(); it != r.sent.rend(); ++it)
+            if (it->rfind("note preview ", 0) != 0) return *it;
+        return std::string();
+    };
+    // E4's end pulled back one sixteenth: 4 px, under the threshold — it lands
+    const artboard::Rect e4 = world(roll, roll.noteRect(64, 0.25));
+    const double to = rw.x + roll.beatToX(2.0) - 1.0;
+    assert(e4.right() - 2.0 - to < 5.0);
+    const size_t m0 = r.sent.size();
+    r.drag(e4.right() - 2.0, cy(e4), to, cy(e4), 4);
+    r.settle();
+    assert(lastEdit() == "note move " + pt + " --pitch 64 --at 0.25 --length 1.75");
+    for (size_t i = m0; i < r.sent.size(); ++i) assert(r.sent[i].rfind("note add", 0) != 0); // and nothing else: not a click too
+    // a click on the off-grid G4 moves nothing (a release where it was pressed is a click)
+    const size_t mark = r.sent.size();
+    const artboard::Rect g4 = world(roll, roll.noteRect(67, 1.1));
+    r.click(g4.x + 2.0, cy(g4));
+    r.settle();
+    for (size_t i = mark; i < r.sent.size(); ++i) assert(r.sent[i].rfind("note move", 0) != 0);
+    assert(roll.selected(67, 1.1));
+    pass("D-6: a drag shorter than the recognizer's threshold lands where it was let go (a sixteenth pulled at ~6 px); a click moves nothing");
+}
+
 static void test_a_kits_roll_names_its_pads()
 {
     sltest::Rig r("ui-roll-kit", 1280, 800);
@@ -2358,6 +2399,7 @@ int main()
     test_the_rolls_selection_and_what_is_done_to_it();
     test_the_length_a_click_makes_and_a_window_resized();
     test_the_wheel_scrolls_sideways_with_shift();
+    test_a_short_drag_lands_where_it_was_let_go();
     test_a_kits_roll_names_its_pads();
     test_a_line_added_and_sources_relinked();
     test_a_strip_keys_a_later_compressor();
