@@ -17,10 +17,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► B13 — the MIDI keyboard** (R-EDM-10), then R-EDM-11…20 one task each (B13+ below). B13+ are
-Claude's own EDM suggestions from the first brief — check the user still wants them before a long run.
-The second (C1–C6) and third (E1–E6) briefs of 2026-10-09 are built; T2 and T3 (D-2's pattern half, D-3 —
-now a lookup through `notePrefixes`) are small and may go first.
+**► G — the 2026-10-15 brief: an analog face for the instruments** (user request; R-UI-12):
+- **G1** the requirement (R-UI-12; R-WIN-2 and R-VST-7 amended).
+- **G2** the registry's group labels (DSP REQ-device-10) published in the model (`devices[].groups`).
+- **G3** the analog face — sections, knobs, switches, displays — in Solaris's instrument windows and the
+  plugins' editors (R-UI-12).
+Then B13 (the MIDI keyboard, R-EDM-10) — B13+ are Claude's own suggestions; ask before a long run. T2, T3
+are small and may go first.
 
 ---
 
@@ -236,6 +239,9 @@ umbrella's pointer — `arstro.rule` §7).
       queue in the processor): ten pads named by the registry in the panel's band; a press plays the pad
       through the processor (heard end to end in process: peak 0.358) and picks it, the panel scrolling its
       group to the top; pick and flash ease. 5 mutants caught (4 umbrella, 1 DSP). L5 in the editor host.
+- [x] **G1** The analog face's requirement (R-UI-12; R-WIN-2, R-VST-7 amended).
+- [ ] **G2** The registry's group labels in the model (DSP REQ-device-10).
+- [ ] **G3** The analog face in Solaris's instrument windows and the plugins' editors (R-UI-12).
 - [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.
 
 ### T — tasks found on the way

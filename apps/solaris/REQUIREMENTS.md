@@ -457,7 +457,9 @@ the object it belongs to, shows it on the timeline, and that property will use a
 - **R-WIN-2 The window lists every parameter the device supports** — label, value in its unit, and
   whether it is a number, a link, a formula or an automation — and **HIGHLIGHTS THE LAST CHANGED**
   (eased). Which parameter changed last is the model's (`devices[].lastChanged`), written by any `set`
-  from anywhere — a shell's edit lights it too.
+  from anywhere — a shell's edit lights it too. (**AMENDED (R-UI-12, user request 2026-10-15):** an
+  instrument's window shows its analog face instead of the list; every knob and switch carries the same
+  facts — its value in its unit or its binding, the light of the last change, its menu.)
 - **R-WIN-3 A parameter's menu** (right-click): Create Automation (R-AUTO-5), Formula… (type one — a
   link is a formula naming an address), Clear Binding, Reset to Default — each one command.
 - **R-WIN-4 Window placement and stacking are the view's** — not saved, not commands, like zoom.
@@ -515,7 +517,9 @@ controller, normalised parameters and saved state.
   normalisation (R-VST-3). Drum Machine's editor adds its pads: a grid named by the registry's note
   names, a click plays the pad through the plugin's own processor, the pad picked shows its controls.
   The editor is the umbrella's (it needs Artboard and cosmo, which the DSP repo does not carry): the DSP
-  repo alone still builds both plugins with the host's generic view, through one seam.
+  repo alone still builds both plugins with the host's generic view, through one seam. (**AMENDED (R-UI-12,
+  user request 2026-10-15):** the editor's content is the instrument's analog face — sections, knobs,
+  switches, displays — not the parameter list, and it opens at the face's own size.)
 - **R-VST-8 Verified:** the validator still passes both plugins with their editors; each editor is
   rendered headless at its size and looked at; a slider dragged makes `performEdit` with the shared
   mapping's value; a host change is caught mid-tween; a pad click reaches the processor as a note; and
@@ -619,7 +623,7 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   silent, under 0 dBFS, the kick on the beats, the tempo right). The tune is public domain, so the
   result can be shared.
 
-## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11)
+## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 🚧 12 (the analog face, G2/G3)
 
 - **R-UI-1 Two screens, as Interstellar:** Home (R-HOME) and the Project view.
 - **R-UI-2 The accent is teal, `#159387`, the only forked token** — teal because orange, the
@@ -680,6 +684,28 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   (`dv_1.filter.cutoff`), Copy Value (`1200 Hz`) and Copy as Formula (`=dv_1.filter.cutoff`), through
   the host's clipboard (the core has none, R-SVC-4). A third-party VST3's parameter list (R-VST-6) gets
   the same menu when hosting lands.
+- **R-UI-12 An instrument's face is an analog synth panel** (user request, 2026-10-15: *"make a full GUI
+  following analog synth design, with arstro theme that mean the basic synth should have section, knob,
+  good design following an analog synth"*). An instrument's window (R-WIN-1) and its plugin's editor
+  (R-VST-7) show its parameters as a hardware panel in the Arstro look — still GENERATED from the registry
+  (R-UI-5, law 2: a parameter the DSP library adds tomorrow appears as a knob with no UI code):
+  - **sections** — a module per parameter group, titled by the registry's group label (DSP REQ-device-10),
+    in the registry's order with the ungrouped last; the modules flow left to right and wrap with the
+    width (design rule R4), a row's modules sharing its height and its spare width;
+  - **knobs** for numbers — a 270° dial whose arc, in the accent, grows from the minimum, or from zero for a
+    range that spans it; detents for a whole-number range of a few steps; its label under it and its value,
+    in its unit, under that;
+  - **switches** for choices — a row of keys, each drawn as the choice's shape (a wave, a filter) or named,
+    the chosen one lit, the light sliding to a new choice;
+  - **displays** drawn from the live values — an oscillator's wave (its unison voices spread by the detune),
+    a filter's response (the DSP library's own documented prototype, measured to agree with the filter),
+    an envelope's shape (linear stages, as the library's ADSR);
+  - **gestures** — drag up or down (Shift: fine), double-click → the default, right-click → the parameter's
+    menu (R-WIN-3, in Solaris); each step of a drag one `set`, as a slider's was;
+  - **nothing snaps** — a value changed anywhere turns its knob there and redraws its display through it;
+    the last change is lit (R-WIN-2); a bound parameter names its binding under the knob and follows its
+    live value (R-MIX-16); Show IDs puts each address over its label (R-UI-11).
+  An effect's window keeps the parameter list.
 
 ## R-NFR — non-functional — 📋 SPECIFIED
 
