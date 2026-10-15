@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — H4: the piano.*
+*Last updated: 2026-10-15 — H5: the Prelude, attempt 1, and the UX audit.*
 
 ---
 
 ## NEXT
 
-**► H5 — the Prelude, made in the window** (R-SVC-10/11), its UX findings as H6… tasks: the 2026-10-15 brief (a song made in the
+**► H6 — the tempo in the song bar** (R-UI-13), then H7…H10 in order: the 2026-10-15 brief (a song made in the
 window, Bach's Prelude in C, with the UX it finds fixed). B13+ wait; T2 and T3 may go between.
 
 ---
@@ -272,9 +272,17 @@ umbrella's pointer — `arstro.rule` §7).
       were undamped phantom strings ringing through the bridge (now seated: one voice 4× cheaper), and a stale
       `displacementAtStrike` met every stolen voice's strike. Bench 10.7× RT (Release), budget met. The
       umbrella's examples/piano plays the library's engine. Shot `piano-window`. Stealing mutant seen red.
-- [ ] **H5** The Prelude, made in the window: its score table, the gestures that make it, the UX audit as it
-      goes (`docs/ux-audit.md`), the measurement (R-SVC-10/11). Each finding becomes an H6… task here,
-      fixed before the song is finished.
+- [x] **H5** The Prelude, attempt 1: its score table (`demo/prelude/score.py`, 549 notes, 140 beats), the driver
+      that makes it through the window's gestures (`makePrelude.cpp`, `solaris_demo_prelude`), the UX audit
+      (`docs/ux-audit.md`): two bars cost 50 gestures; U-1…U-6 found — five became the tasks below.
+- [ ] **H6** The song's tempo set in the song bar (U-1; R-UI-13).
+- [ ] **H7** A selection in the roll and what is done to it: `notes move`, `notes delete`, duplicate, copy and paste
+      (U-2; R-ROLL-8).
+- [ ] **H8** The pattern grows to hold its notes; a whole-pattern clip grows with it (U-3; R-ROLL-9).
+- [ ] **H9** The length a click makes, shown and chosen; a window resized by its corner (U-4, U-5; R-ROLL-10,
+      R-WIN-5).
+- [ ] **H10** The Prelude, made in the window with the fixes: every note, the tempo, measured against the score
+      (R-SVC-10), rendered and delivered; the audit's attempt 2 — what the fixes saved.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

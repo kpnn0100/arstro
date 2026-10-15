@@ -66,6 +66,10 @@ add_executable(solaris_app_shots tests/shots/renderShots.cpp)
 target_link_libraries(solaris_app_shots PRIVATE solaris_app solaris_core)
 add_test(NAME solaris_app_shots COMMAND solaris_app_shots --outdir ${CMAKE_CURRENT_BINARY_DIR}/shots-ctest --check)
 
+# the Prelude, made through the window's gestures (R-SVC-10/11): the app driven as a hand drives it
+add_executable(solaris_demo_prelude ../demo/prelude/makePrelude.cpp)
+target_link_libraries(solaris_demo_prelude PRIVATE solaris_app solaris_core)
+
 add_executable(solaris_app_ui_tests tests/ui/uiTests.cpp)
 target_link_libraries(solaris_app_ui_tests PRIVATE solaris_app solaris_core)
 add_test(NAME solaris_app_ui COMMAND solaris_app_ui_tests)

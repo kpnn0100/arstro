@@ -455,7 +455,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
   the address it was made from, its points (beat, value, shape), every formula that reads it (address
   and formula), and its value at the playhead — all from the model, nothing re-derived.
 
-## R-WIN — windows inside the song view — ✅ IMPLEMENTED (user request, 2026-10-09; DR-WIN-1, DR-UI-5)
+## R-WIN — windows inside the song view — ✅ IMPLEMENTED (user request, 2026-10-09; DR-WIN-1, DR-UI-5) — 5 📋 (resized by the corner: the UX audit, 2026-10-15)
 
 - **R-WIN-1 A device opens in a WINDOW** (FL Studio's channel window), *"when open a synth setting,
   need to show a window of that synth"*: a rack chip clicked, or an instrument strip's name
@@ -471,8 +471,12 @@ the object it belongs to, shows it on the timeline, and that property will use a
 - **R-WIN-3 A parameter's menu** (right-click): Create Automation (R-AUTO-5), Formula… (type one — a
   link is a formula naming an address), Clear Binding, Reset to Default — each one command.
 - **R-WIN-4 Window placement and stacking are the view's** — not saved, not commands, like zoom.
+- **R-WIN-5 A window is resized by its corner** (the UX audit's U-5, R-SVC-11): dragging a window's
+  bottom-right corner sizes it — the pointer's while held, never smaller than its content's floor nor
+  out of the layer — and its content lays itself out at the new size (a roll shows more rows, a face
+  reflows its modules). The view's, like its place (R-WIN-4): not saved, not a command.
 
-## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6 ✅ (play from the roll, DR-ROLL-6) — 7 ✅ (a note heard when made, DR-ROLL-7)
+## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6 ✅ (play from the roll, DR-ROLL-6) — 7 ✅ (a note heard when made, DR-ROLL-7) — 8–10 📋 (selection, the pattern growing, the length chosen: the UX audit, 2026-10-15)
 
 - **R-ROLL-1 A piano-roll WINDOW per pattern** (R-WIN's frame), opened by double-clicking a note clip
   or from its instrument's window: keys on the left (C named with its octave; a drum machine's keys
@@ -504,6 +508,26 @@ the object it belongs to, shows it on the timeline, and that property will use a
   fader and pan, as it will sound in the song — on a stream of its own, so it is heard whether the song plays
   or not. Never in a render, never an edit, never in undo. One command, `note preview <ch> <pitch> [--vel]
   [--length]`. A preview started while another rings takes over with a short fade, never a click.
+
+- **R-ROLL-8 A selection, and what is done to it** (U-2, R-SVC-11): a click on a note selects it (Shift+click
+  adds or removes one; a click on empty grid still adds a note and clears the selection); Ctrl+drag on the
+  grid draws a box selecting every note it touches; Ctrl+A selects all. The selection is lit. Done to it, each
+  ONE edit: a selected note dragged moves the whole selection (`notes move <pt> "<pitch@beat> …" --by <beats>
+  --semi <n>`); ↑/↓ transpose it a semitone (Shift: an octave), ←/→ move it a snap step; Delete removes it
+  (`notes delete <pt> "<pitch@beat> …"`); Ctrl+D duplicates it right after itself — by its span, the earliest
+  start to the latest end, rounded up to the snap — and the copy becomes the selection (`notes add`, the copy's
+  tokens); Ctrl+C copies it to the app's clipboard and Ctrl+V pastes it into this roll or another at the same
+  beats, selected, ready to be dragged. A bulk edit that would land a note on an unselected one, below beat 0 or
+  outside 0–127 is refused whole, naming the first.
+- **R-ROLL-9 The pattern grows to hold what is written in it** (U-3, R-SVC-11): a note added, moved, resized or
+  pasted past the pattern's end lengthens the pattern to the end of the bar that holds the note's end — one
+  edit with the note's — and a clip that played its pattern whole (its length the pattern's) grows with it; a
+  clip cut shorter or looping on stays as it is. (**AMENDS R-SVC-8's "warns of notes past the pattern's end":**
+  `notes add` grows the pattern instead of warning — a note no one hears is never what was asked for; the
+  audit's warning stays for a song saved before.)
+- **R-ROLL-10 The length a click makes is shown and chosen** (U-4, R-SVC-11): the toolbar names it ("Length ¼"
+  — the last length, as now), and its menu sets it — the snap values, ½, 1, 2 and 4 beats, or "Last" (the
+  length of the note last made or resized, the default). The view's, not a command.
 
 ## R-VST — VST3 — ✅ BUILT 1–5 (user request, 2026-10-09; replaces R-INST-4's VST3 half; DR-VST-1; 6 reserved) — 7, 8 ✅ (the plugins' own editor — the shared panel, Drum Machine's pads — DR-VST-7)
 
@@ -658,7 +682,7 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   happens in `docs/ux-audit.md` (U-n: what was being done, what got in the way, what a user expects, how
   bad) and fixed in its own task with its own requirement, or deferred with the reason.
 
-## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12)
+## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12) — 13 📋 (the tempo set in the song bar: the UX audit, 2026-10-15)
 
 - **R-UI-1 Two screens, as Interstellar:** Home (R-HOME) and the Project view.
 - **R-UI-2 The accent is teal, `#159387`, the only forked token** — teal because orange, the
@@ -741,6 +765,10 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
     the last change is lit (R-WIN-2); a bound parameter names its binding under the knob and follows its
     live value (R-MIX-16); Show IDs puts each address over its label (R-UI-11).
   An effect's window keeps the parameter list.
+
+- **R-UI-13 The song's tempo is set where it is shown** (U-1, R-SVC-11): the song bar's "<bpm> bpm" is a control
+  — dragged up or down, a bpm a step (Shift: a tenth), one `set project.bpm=<n>` per step that moved it (as a
+  fader sends each step); a double-click types one in. Drawn eased when it changes from elsewhere (§1).
 
 ## R-NFR — non-functional — 📋 SPECIFIED
 
