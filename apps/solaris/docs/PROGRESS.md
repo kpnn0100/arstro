@@ -11,16 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — H10: the Prelude made in the window.*
+*Last updated: 2026-10-15 — I1: the EDM brief's requirements.*
 
 ---
 
 ## NEXT
 
-**► B13 — the MIDI keyboard** (R-EDM-10) — Claude's own suggestion: ask before a long run. The 2026-10-15 brief
-(a song made in the window) is built: H1–H10. Owed: D-5's live check (DEFECTS); the audit's deferred wants (a
-chord stamp or arpeggiator, velocity by hand) are a requirement round each. T2, T3 may go first.: the 2026-10-15 brief (a song made in the
-window, Bach's Prelude in C, with the UX it finds fixed). B13+ wait; T2 and T3 may go between.
+**► I2 — stereo unison in the Basic Synth** (R-INST-1, DSP first), then I3, I4: the 2026-10-15 EDM brief. B13+ wait.
 
 ---
 
@@ -308,6 +305,13 @@ umbrella's pointer — `arstro.rule` §7).
       — DR-SVC-10/11: 549 of 549 notes, 35 of 35 bars the same samples as the score's own render, 376 gestures
       (0.68 a note, from 1.6); four more findings fixed on the way (H10a–d). ctest `prelude_made_in_the_window`
       (label `long`). Delivered to ~/Music/Solaris/ (prelude-in-c.slp/.wav/.mp3).
+
+### I — an EDM track, as a test (user request, 2026-10-15; discussion round 7)
+- [x] **I1** The brief's requirements: R-INST-1/2 amended (stereo unison; crash and ride), R-SVC-12; round 7.
+- [ ] **I2** Stereo unison in the Basic Synth: a width per oscillator, spread starting phases (DSP first; R-INST-1).
+- [ ] **I3** Crash and ride in the Drum Machine (DSP first; R-INST-2).
+- [ ] **I4** The track: `demo/edm` — its script written by a generator, rendered, measured as a production
+      (`measure.py`), a ctest; anything it finds missing becomes I5…; delivered (R-SVC-12).
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

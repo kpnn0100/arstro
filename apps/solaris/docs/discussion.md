@@ -340,3 +340,20 @@ User's direction (verbatim, condensed):
     roll's keys and a note dragged to a new pitch sound too, as in every piano roll.
 - Became: R-ROLL-6/7, R-INST-5, R-SVC-10, R-UX in [`../REQUIREMENTS.md`](../REQUIREMENTS.md); ledger tasks
   H1… in [`PROGRESS.md`](PROGRESS.md).
+
+### Round 7 — 2026-10-15 — the fifth brief: an EDM track, as a test
+
+- User: *"please make an edm song, edm require more advance sound, so it can be a test for you."*
+- Decided without asking (each one line to change):
+  - **Original, not a cover.** The progression, melody and arrangement are written for this track; nothing is
+    taken from anyone's song. Made with `solaris-cc` alone, as the canon was — the window's test was the
+    Prelude's; this one is the SOUND's.
+  - **"More advanced sound" is measured, not claimed.** What a mastering engineer checks: integrated and
+    short-term loudness, true peak, section contrast, low end mono and highs wide, the sidechain's pump depth,
+    the grid, the key — numbers in `measure.py`, as the canon's and the Prelude's are.
+  - **The gaps it shows are filled in the DSP library first** (the user's rule from round 6, "if the instrument
+    is not enough, make that instrument"): the Basic Synth's unison was mono — every supersaw centred, its
+    voices starting in phase — and the kit had no cymbal for a drop. Both are amendments of R-INST-1/2.
+- Became: R-INST-1/2 amended, R-SVC-12 in [`../REQUIREMENTS.md`](../REQUIREMENTS.md); ledger tasks I1… in
+  [`PROGRESS.md`](PROGRESS.md).
+

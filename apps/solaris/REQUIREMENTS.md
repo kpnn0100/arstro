@@ -66,7 +66,7 @@ dsp."*
 - **R-DSP-5 Splitting at note events is the host's job.** A device renders whole blocks; the engine
   splits a block at every note event so a note starts on its exact sample (was SR-TIME-3).
 
-## R-INST — instruments — ✅ IMPLEMENTED (DR-INST-1, DR-INST-2; played through Solaris's engine, DR-ENG-1) — 5 ✅ (the piano, DR-INST-5)
+## R-INST — instruments — ✅ IMPLEMENTED (DR-INST-1, DR-INST-2; played through Solaris's engine, DR-ENG-1) — 5 ✅ (the piano, DR-INST-5) — 1, 2 amended 📋 (stereo unison; crash and ride: user request 2026-10-15)
 
 The user's request (2026-10-08): *"make me some basic instruments: Drum Machine, Basic Synth with 2
 OSC."*
@@ -77,11 +77,18 @@ OSC."*
   resonance, envelope amount, key tracking — with its own ADSR. An amplitude ADSR after the filter
   (oscillators → filter → amplifier: the classic order). Velocity scales level. Built on the DSP
   library's `Oscillator`, `ADSREnvelope` and a state-variable filter (was SR-INST-1).
+  (**AMENDED (user request, 2026-10-15: *"make an edm song, edm require more advance sound"*):** unison is
+  STEREO — per oscillator a width (the library oscillator's per-channel detune spread, in cents), and unison
+  voices start at spread phases (deterministic, per voice and channel) instead of all at zero, so a supersaw is
+  wide and its attack does not flam; one voice stays mono-identical, as before.)
 - **R-INST-2 Drum Machine — synthesized kit, played by notes.** Pads on the General MIDI drum
   notes: kick 36, rim 37, snare 38, clap 39, low tom 41, closed hat 42, mid tom 45, open hat 46,
   high tom 48, cowbell 56. Each pad has tune, decay, tone, level and pan. **The closed hat chokes the
   open hat.** Every pad is synthesized from DSP primitives (oscillators, seeded noise, filters,
   exponential decays) with its model written in its README — no sample files.
+  (**AMENDED (user request, 2026-10-15, the EDM song):** two cymbals on their GM notes — **crash 49**, a long
+  bright wash for the downbeat of a drop, and **ride 51**, a shorter pinging bell with a wash — each with tune,
+  decay, tone, level and pan like every pad, synthesized as the hats are, with their models in the README.)
 - **R-INST-3 An instrument is played by note clips** (R-CLIP-2). A drum pattern is a note clip
   whose notes are pads; a step sequencer is a *view* of that clip (R-UI), not a second data model.
 - **R-INST-4 Reserved:** a sampler (play a sample chromatically) (was SR-INST-2), VST3 hosting (was
@@ -622,7 +629,7 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   if missing (was SR-FMT-3; its content hash is deferred to R-VER-5, where merging needs it).
 - **R-FMT-4 A structural error refuses, a numeric corruption repairs** (Interstellar's rule).
 
-## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1…3, DR-API-1) — rung 5 — 5–9 ✅ (control channel + attach, equivalence, web, composition, the song: DR-SVC-5/7/8/9) — 10, 11 ✅ (the Prelude made in the window, 549 of 549 notes; its UX audit, U-1…U-10: DR-SVC-10/11)
+## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1…3, DR-API-1) — rung 5 — 5–9 ✅ (control channel + attach, equivalence, web, composition, the song: DR-SVC-5/7/8/9) — 10, 11 ✅ (the Prelude made in the window, 549 of 549 notes; its UX audit, U-1…U-10: DR-SVC-10/11) — 12 📋 (an original EDM track measured as a production: user request 2026-10-15)
 
 - **R-SVC-1** `SolarisService`: `dispatch(Command)` / `pump` / `model()` / an `Event` sink. The GUI,
   `solaris-cc`, a script and an agent send the same text lines (was SR-CLI-1).
@@ -683,6 +690,15 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   a result a user would not expect, a step that takes ten when it should take one — is written down as it
   happens in `docs/ux-audit.md` (U-n: what was being done, what got in the way, what a user expects, how
   bad) and fixed in its own task with its own requirement, or deferred with the reason.
+- **R-SVC-12 An EDM track, original, measured as a production** (user request, 2026-10-15: *"please make an edm
+  song, edm require more advance sound, so it can be a test for you"*). An original track — its progression,
+  melody and arrangement written for it, no one else's song — made with `solaris-cc` alone (as R-SVC-9), its
+  script committed, its sounds the DSP library's: an intro, a build with a riser and a snare roll, a drop with a
+  wide supersaw, a sub and a sidechained mid bass under a four-on-the-floor kick and a crash, a breakdown, a
+  second build and drop, an outro. Measured as a master is judged, not only "not silent": integrated loudness
+  and the drops' short-term loudness, true peak under −1 dBTP, the drops louder than the breakdown, the low end
+  near-mono and the highs wide, the sidechain's pump in dB, the kick on every beat of the drops, the notes in
+  the key, every section's energy where the form puts it. A sound the library lacks for it is made there first.
 
 ## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12) — 13 ✅ (the tempo set in the song bar, DR-UI-13)
 
