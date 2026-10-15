@@ -1700,7 +1700,17 @@ static void test_a_short_drag_lands_where_it_was_let_go()
     r.settle();
     for (size_t i = mark; i < r.sent.size(); ++i) assert(r.sent[i].rfind("note move", 0) != 0);
     assert(roll.selected(67, 1.1));
-    pass("D-6: a drag shorter than the recognizer's threshold lands where it was let go (a sixteenth pulled at ~6 px); a click moves nothing");
+    // D-7: a sixteenth zoomed out (~5 px) is grabbed by its body and moved, not resized: its right third is the edge
+    r.cmd("note add " + pt + " --pitch 72 --at 3 --length 0.25");
+    r.settle();
+    const artboard::Rect c5 = world(roll, roll.noteRect(72, 3.0));
+    assert(c5.w < 8.0);
+    const size_t m1 = r.sent.size();
+    r.drag(c5.x + 1.5, cy(c5), c5.x + 1.5, cy(c5) - 2.0 * roll.kNoteH, 6);
+    r.settle();
+    assert(lastEdit() == "note move " + pt + " --pitch 72 --at 3 --to-pitch 74 --to-at 3");
+    for (size_t i = m1; i < r.sent.size(); ++i) assert(r.sent[i].find("--length") == std::string::npos || r.sent[i].rfind("note preview", 0) == 0);
+    pass("D-6: a drag shorter than the recognizer's threshold lands where it was let go (a sixteenth pulled at ~6 px); a click moves nothing. D-7: a ~5 px note is grabbed by its body and moved");
 }
 
 static void test_a_kits_roll_names_its_pads()

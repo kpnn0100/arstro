@@ -37,6 +37,15 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-7 A note narrower than 5 px could not be moved — every press grabbed its resize edge — closed in H10c
+- **Found:** 2026-10-15, making the Prelude zoomed out (R-SVC-11): a sixteenth is ~5 px wide there, and dragging a
+  selected voice up two semitones sent nothing — the press was "on the edge", a resize, which only reads x.
+- **Cause:** the resize zone was a note's right 5 px (`kEdge`), the whole of a note that narrow.
+- **Fix:** the zone is the right 5 px or the right third of the note, whichever is smaller (`noteAt`), so a short
+  note keeps a body to grab; a wide note's edge is as before.
+- **Guard:** `test_a_short_drag_lands_where_it_was_let_go` — a ~5 px note grabbed at its body moves up two rows as
+  ONE `note move`, no resize; mutant (the old 5 px zone) seen red.
+
 ### D-6 A note dragged less than 5 px was a click: the resize or the move was lost — closed in H10b
 - **Found:** 2026-10-15, making the Prelude zoomed out (R-SVC-11): a sixteenth is ~6 px there, and pulling the
   tenor's end back one sixteenth did nothing — and every bar after was built on the wrong length.

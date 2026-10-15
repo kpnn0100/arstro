@@ -435,7 +435,9 @@ namespace solaris_ui
             const Rect r = noteRect(it->n.pitch, it->n.at);
             if (r.contains(p))
             {
-                edge = p.x >= r.right() - kEdge;
+                // the resize zone is the right 5 px — or the right third of a short note, so a sixteenth zoomed out
+                // (5 px wide) keeps a body to grab and move (D-7)
+                edge = p.x >= r.right() - std::min(kEdge, r.w / 3.0);
                 return &*it;
             }
         }

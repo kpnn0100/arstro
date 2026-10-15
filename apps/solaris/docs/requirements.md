@@ -644,7 +644,7 @@ nothing else named), black-key rows shaded, bars stronger; notes in the strip's 
 louder; the velocity lane below; past the pattern's end dimmed, the end a handle (`PianoRoll::onPaint`, `PianoRoll.cpp:512`).
 A click on empty grid → `note add <pt> --pitch --at <the snapped cell> --length <the last length>`; a
 note dragged is drawn where the POINTER has it (beat snapped) and lands as ONE `note move … --to-pitch
---to-at`; its right 5 px resize it (`note move … --length`, which becomes the last length); a
+--to-at`; its right 5 px — or its right third when it is narrower than 15 px, so a short note keeps a body to grab (D-7) — resize it (`note move … --length`, which becomes the last length); a
 velocity stem dragged → `note move … --vel`; a double-click or right-click → `note delete`; the end
 dragged → `set <pt>.length=` — a drag lands where it is let go however short (under the recognizer's 5 px
 threshold too, `PianoRoll::track` at the release, the Click after it swallowed; D-6) (`PianoRoll::handleGesture`, `PianoRoll.cpp:258`). **Steps:** a row per pad (a kit) or per pitch in
