@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — H5: the Prelude, attempt 1, and the UX audit.*
+*Last updated: 2026-10-15 — H6: the tempo in the song bar.*
 
 ---
 
 ## NEXT
 
-**► H6 — the tempo in the song bar** (R-UI-13), then H7…H10 in order: the 2026-10-15 brief (a song made in the
+**► H7 — a selection in the roll** (R-ROLL-8), then H8…H10 in order: the 2026-10-15 brief (a song made in the
 window, Bach's Prelude in C, with the UX it finds fixed). B13+ wait; T2 and T3 may go between.
 
 ---
@@ -275,7 +275,9 @@ umbrella's pointer — `arstro.rule` §7).
 - [x] **H5** The Prelude, attempt 1: its score table (`demo/prelude/score.py`, 549 notes, 140 beats), the driver
       that makes it through the window's gestures (`makePrelude.cpp`, `solaris_demo_prelude`), the UX audit
       (`docs/ux-audit.md`): two bars cost 50 gestures; U-1…U-6 found — five became the tasks below.
-- [ ] **H6** The song's tempo set in the song bar (U-1; R-UI-13).
+- [x] **H6** The song's tempo set in the song bar (U-1; R-UI-13).
+      — DR-UI-13: the bpm readout is a control — dragged, the pointer's, one `set project.bpm` per step (Shift: a
+      tenth); double-clicked, typed; set elsewhere, eased. UI test; a snapping tempo seen red.
 - [ ] **H7** A selection in the roll and what is done to it: `notes move`, `notes delete`, duplicate, copy and paste
       (U-2; R-ROLL-8).
 - [ ] **H8** The pattern grows to hold its notes; a whole-pattern clip grows with it (U-3; R-ROLL-9).

@@ -1424,3 +1424,15 @@ change caught mid-turn and a choice's light mid-slide; `:279` the filter screen 
 red, then restored: a knob that snaps, a light that snaps, a bound knob that drags, the screen's Q drifting.
 Shots `device-panel` (the face), `device-face-turning` (mid-turn and mid-morph), `effect-window`
 (`app/tests/shots/renderShots.cpp:234`, `:245`), and the plugin's `plugin-editor-synth.png` — looked at.
+
+### DR-UI-13 The song's tempo is set in the song bar (R-UI-13)
+The song bar's "<bpm> bpm" is a control (`SongBar`, `app/widgets/SongBar.cpp`; its hit rect `kBpm`, `:68`, placed
+after the position by JetBrains Mono's fixed 0.6 em advance, so it needs no render target). A press takes it;
+dragged up or down it is the POINTER's — a bpm per `kBpmStepPx` (3.25 px) of vertical travel, a tenth with
+Shift, 20…999 — and every step that moved it sends ONE `set project.bpm=<n>` (`SongBar::handleGesture`, `:126`;
+the recognizer reports a drag past its slop, so the first line may cover two steps). A double-click opens the
+App's text field with the tempo, and what is typed is one `set project.bpm=` — the service refuses what is not a
+tempo, said in its toast (`:164`). It is lit while held, washed on hover, and a tempo set from elsewhere is
+drawn easing there over 220 ms (`kCatchUpMs`) — `bpmShown()` is the LIVE value (`:243`). Closes the UX audit's
+U-1. UI test `test_the_tempo_is_set_in_the_song_bar` (mutant: a tempo that snaps, seen red).
+

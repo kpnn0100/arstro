@@ -22,6 +22,7 @@ helpers it borrows.
 | Settings › Add folder… | the host's folder picker → `folder add "<path>"` |
 | Song bar › Home | `project close` — behind cosmo's ConfirmDialog when unsaved (Save → `project save` then close) |
 | Song bar › Play/Stop, Space | `transport play` / `transport stop` |
+| Song bar › the tempo dragged up/down (Shift: fine) · double-clicked | `set project.bpm=<n>` per step that moved it · the App's field → one `set project.bpm=<typed>` (R-UI-13) |
 | Song bar › Save, Ctrl+S | `project save` |
 | Enter | `transport seek 0` |
 | Ctrl+Z · Ctrl+Shift+Z / Ctrl+Y | `undo` · `redo` |

@@ -9,6 +9,10 @@
  *  the master meter and Save. Cosmo's TopBar height (29.25 = 9 units). The menus' items are the
  *  App's (every one a command line or a host picker); this bar only places the strip.
  *
+ *  The tempo is a control (R-UI-13): dragged up or down it is the pointer's, a bpm a step (Shift: a tenth),
+ *  one `set project.bpm=<n>` per step that moved it; a double-click types one in (the App's field). A
+ *  tempo changed from elsewhere is drawn easing to its new value.
+ *
  *  The play glyph and the stop glyph CROSS-FADE (200 ms) when the transport changes, whoever
  *  changed it; the unsaved dot fades in and out; the meter rises fast and falls slowly (a meter's
  *  ballistics, eased per frame from the model's peaks — §1 holds: nothing jumps a frame).
@@ -30,7 +34,8 @@ namespace solaris_ui
     {
     public:
         static constexpr double kHeight = 29.25;
-        enum Hit { kNone = -1, kHome = 0, kPlay, kSave, kSettings };
+        enum Hit { kNone = -1, kHome = 0, kPlay, kSave, kSettings, kBpm };
+        static constexpr double kBpmStepPx = 3.25; // space::u(1) of vertical drag: one step
         static constexpr double kNameMin = 120.0; // the song's name keeps this much before the transport moves right
 
         SongBar();
@@ -40,8 +45,12 @@ namespace solaris_ui
         artboard::Rect hitRect(int which) const;
         double playAmount() const { return mPlaying.value(); }   // 0 = the play glyph, 1 = the stop glyph (LIVE)
         double meterLevel(int ch) const { return mMeter[ch].value(); }
+        double bpmShown() const { return mBpmDrag ? mBpmLive : mBpmShown.value(); } // the tempo as DRAWN (LIVE)
 
         std::function<void()> onHome, onPlayToggle, onSave, onSettings;
+        std::function<bool(const std::string &line)> onCommand;
+        /** A value typed in place (the App's field): the current text, where, and what to do with the result. */
+        std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onEditText;
 
         void advance(double nowMs) override;
 
@@ -55,6 +64,10 @@ namespace solaris_ui
         std::string mName;
         bool mDirty = false, mPlayingWanted = false;
         double mPosition = 0, mBpm = 120;
+        artboard::AnimatedProperty mBpmShown{120.0};
+        double mBpmLast = -1, mBpmPress = 0, mBpmPressY = 0, mBpmLive = 0, mNowMs = 0;
+        bool mBpmDrag = false;
+        std::string mBpmSent;
         int mBeatsPerBar = 4;
         float mPeak[2] = {0, 0};
         artboard::AnimatedProperty mPlaying{0.0}, mDirtyDot{0.0}, mMeter[2]{artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};

@@ -18,7 +18,7 @@ a double-click. At that rate the 549 notes of the Prelude cost about 860.
 
 | id | doing | in the way | expected | how bad | became |
 |---|---|---|---|---|---|
-| U-1 | starting the song at its tempo (66) | the song bar shows "120 bpm" and nothing changes it; only Settings › New-song tempo, for the NEXT song | the tempo is a control where it is shown — dragged, or typed | high | H6 — R-UI-13 |
+| U-1 | starting the song at its tempo (66) | the song bar shows "120 bpm" and nothing changes it; only Settings › New-song tempo, for the NEXT song | the tempo is a control where it is shown — dragged, or typed | high | **closed** — H6, R-UI-13 (DR-UI-13) |
 | U-2 | entering a figure that repeats 70 times | the roll has no selection: no copy, no duplicate, no moving or transposing several notes — every note of every bar is a click | select (click, Shift+click, a box), duplicate after itself, copy and paste, move and transpose the selection, delete it — one edit each | high | H7 — R-ROLL-8 |
 | U-3 | the second bar | a note past the pattern's end (4 beats) is drawn dimmed and NEVER PLAYS; nothing says so; the clip on the lanes stays 4 beats | the pattern grows to hold what is written in it, and a clip that plays the whole pattern grows with it | high (silent loss) | H8 — R-ROLL-9 |
 | U-4 | the bass (2 beats), the tenor (1¾), the figure (¼) | a click makes a note of the LAST length, shown nowhere; changing it is dragging some note's edge — 13 of the 50 gestures | the length a click makes is shown, and chosen in one gesture | medium | H9 — R-ROLL-10 |

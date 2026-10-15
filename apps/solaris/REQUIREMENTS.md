@@ -682,7 +682,7 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   happens in `docs/ux-audit.md` (U-n: what was being done, what got in the way, what a user expects, how
   bad) and fixed in its own task with its own requirement, or deferred with the reason.
 
-## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12) — 13 📋 (the tempo set in the song bar: the UX audit, 2026-10-15)
+## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12) — 13 ✅ (the tempo set in the song bar, DR-UI-13)
 
 - **R-UI-1 Two screens, as Interstellar:** Home (R-HOME) and the Project view.
 - **R-UI-2 The accent is teal, `#159387`, the only forked token** — teal because orange, the

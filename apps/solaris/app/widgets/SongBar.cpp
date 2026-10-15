@@ -65,13 +65,20 @@ namespace solaris_ui
         case kSettings: return Rect{78.0 + 52.0 + 2.0, cy - kBtnH * 0.5, 66.0, kBtnH};
         case kPlay: return Rect{transportX(), cy - kBtnH * 0.5, kPlayW, kBtnH};
         case kSave: return Rect{W - 12.0 - 48.0, cy - kBtnH * 0.5, 48.0, kBtnH};
+        case kBpm:
+        {
+            // after the position: JetBrains Mono's advance is 0.6 em, so "000.0.000" at 11 px is 59.4 px wide —
+            // a fixed width, so the hit rect needs no render target; "999.9 bpm" fits in u(21)
+            const Rect p = hitRect(kPlay);
+            return Rect{p.right() + 12.0 + 9 * 0.6 * 11.0 + 12.0, cy - kBtnH * 0.5, 68.25, kBtnH};
+        }
         default: return Rect{};
         }
     }
 
     int SongBar::hitAt(const Point &p) const
     {
-        for (int i = kHome; i <= kSettings; ++i)
+        for (int i = kHome; i <= kBpm; ++i)
             if (hitRect(i).contains(p)) return i;
         return kNone;
     }
@@ -88,6 +95,15 @@ namespace solaris_ui
             if (std::fabs(p.value() - want) > 1e-4 && (!p.isAnimating())) p.animateTo(want, ms, Easing::EaseOutCubic, nowMs);
             p.update(nowMs);
         };
+        mNowMs = nowMs;
+        if (mBpmLast < 0) { mBpmShown.set(mBpm); mBpmLast = mBpm; } // first placement: nowhere to travel from
+        else if (mBpm != mBpmLast)
+        {
+            if (mBpmDrag) mBpmShown.set(mBpm); // the pointer's own steps: already where it is drawn
+            else mBpmShown.animateTo(mBpm, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs);
+            mBpmLast = mBpm;
+        }
+        mBpmShown.update(nowMs);
         toward(mPlaying, mPlayingWanted ? 1.0 : 0.0, motion::kCrossFadeMs);
         toward(mDirtyDot, mDirty ? 1.0 : 0.0, motion::kCrossFadeMs);
         for (int c = 0; c < 2; ++c)
@@ -115,7 +131,47 @@ namespace solaris_ui
             mHover.setHovered(hitAt(local));
             return true;
         case Gesture::Type::Down:
+            if (hitAt(local) == kBpm)
+            {
+                mBpmDrag = true; // the tempo, taken: the pointer's until let go
+                mBpmPress = mBpmLive = mBpm;
+                mBpmPressY = local.y;
+                mBpmSent.clear();
+            }
             return true;
+        case Gesture::Type::DragStart:
+        case Gesture::Type::Drag:
+            if (mBpmDrag)
+            {
+                const double step = g.shift ? 0.1 : 1.0;
+                const double raw = mBpmPress + (mBpmPressY - local.y) / kBpmStepPx * step;
+                const double v = std::clamp(std::round(raw / step) * step, 20.0, 999.0);
+                char buf[32];
+                std::snprintf(buf, sizeof buf, "%g", std::round(v * 10.0) / 10.0);
+                mBpmLive = std::round(v * 10.0) / 10.0;
+                if (buf != mBpmSent && mBpmLive != mBpm)
+                {
+                    mBpmSent = buf;
+                    if (onCommand) onCommand(std::string("set project.bpm=") + buf); // one line per step that moved it
+                }
+                return true;
+            }
+            return Segment::handleGesture(g, local);
+        case Gesture::Type::Up:
+        case Gesture::Type::Drop:
+            if (mBpmDrag) { mBpmDrag = false; return true; }
+            return Segment::handleGesture(g, local);
+        case Gesture::Type::DoubleClick:
+            if (hitAt(local) == kBpm && onEditText)
+            {
+                char buf[32];
+                std::snprintf(buf, sizeof buf, "%g", mBpm);
+                onEditText(buf, g.pos, [this](const std::string &text) {
+                    if (onCommand && !text.empty()) onCommand("set project.bpm=" + text); // the service refuses what is not a tempo
+                });
+                return true;
+            }
+            return Segment::handleGesture(g, local);
         case Gesture::Type::Click:
             switch (hitAt(local))
             {
@@ -184,9 +240,13 @@ namespace solaris_ui
             std::snprintf(buf, sizeof buf, "%3d.%d.%03d", bar, beat, tick);
             t.setFill(palette::foreground());
             t.drawText(buf, r.right() + 12.0, textfit::baseline(cy, 11.0), 11.0, font::mono());
-            std::snprintf(buf, sizeof buf, "%g bpm", mBpm);
-            t.setFill(palette::mutedForeground());
-            t.drawText(buf, r.right() + 12.0 + t.measureText("000.0.000", 11.0, font::mono()) + 16.0, textfit::baseline(cy, 11.0), 11.0, font::mono());
+            // the tempo: a control (R-UI-13) — a wash on hover, the accent while held, eased from elsewhere
+            const Rect br = hitRect(kBpm);
+            const double bh = std::max(mHover.amount(kBpm), mBpmDrag ? 1.0 : 0.0);
+            if (bh > 0.001) drawRoundedRect(t, br, radius::control(), Paint::filled(palette::hoverWash(bh)));
+            std::snprintf(buf, sizeof buf, "%g bpm", std::round(bpmShown() * 10.0) / 10.0);
+            t.setFill(mBpmDrag ? palette::primary() : lerpColor(palette::mutedForeground(), palette::foreground(), bh));
+            t.drawText(buf, br.x + 4.0, textfit::baseline(cy, 11.0), 11.0, font::mono());
         }
 
         // master meter, L over R

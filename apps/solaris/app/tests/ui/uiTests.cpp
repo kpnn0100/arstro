@@ -740,6 +740,53 @@ static void test_mixer_matrix_effects_and_device_panel()
     pass("Mixer: + Effect is the registry; a chip opens the device's generated window (fade), a slider is `set` in its unit, bypass, a second window on top; the matrix adds a send, and has a column for every strip a route may reach");
 }
 
+static void test_the_tempo_is_set_in_the_song_bar()
+{
+    sltest::Rig r("ui-tempo", 1280, 800);
+    r.cmd("project new " + r.song("Tempo") + ".slp --bpm 120");
+    r.settle();
+    auto &bar = r.app->project().bar();
+    const artboard::Rect br = world(bar, bar.hitRect(arstro::solaris_ui::SongBar::kBpm));
+    // dragged up ten steps: it is the pointer's, one line per step that moved it
+    const size_t mark = r.sent.size();
+    r.drag(cx(br), cy(br), cx(br), cy(br) - 10.0 * arstro::solaris_ui::SongBar::kBpmStepPx, 10, false);
+    assert(bar.bpmShown() == 130.0);
+    std::vector<std::string> lines(r.sent.begin() + (long)mark, r.sent.end());
+    // the recognizer reports a drag past its slop, so the first line may cover two steps; after it, each step its own
+    assert(lines.size() >= 9 && lines.back() == "set project.bpm=130");
+    for (size_t i = 1; i < lines.size(); ++i)
+        assert(lines[i] == "set project.bpm=" + std::to_string(130 - (int)(lines.size() - 1 - i)));
+    r.app->pointer(2, cx(br), cy(br) - 10.0 * arstro::solaris_ui::SongBar::kBpmStepPx, 0, r.now);
+    r.settle();
+    assert(r.svc->model().bpm == 130.0 && bar.bpmShown() == 130.0);
+    // Shift: a tenth a step
+    r.drag(cx(br), cy(br), cx(br), cy(br) + 4.0 * arstro::solaris_ui::SongBar::kBpmStepPx, 4, true, true);
+    r.settle();
+    assert(r.svc->model().bpm == 129.6 && r.sent.back() == "set project.bpm=129.6");
+    // changed from elsewhere: drawn easing there, caught mid-way, never a jump
+    r.cmd("set project.bpm=66");
+    r.frame();
+    r.frame();
+    const double mid = bar.bpmShown();
+    assert(mid < 129.6 && mid > 66.0);
+    r.settle();
+    assert(bar.bpmShown() == 66.0);
+    // a double-click types one in: ONE line
+    r.click(cx(br), cy(br));
+    r.click(cx(br), cy(br));
+    r.settle();
+    auto &menu = r.app->menu();
+    assert(menu.isRenaming());
+    artboard::KeyEvent typed;
+    typed.type = artboard::KeyEvent::Type::Text;
+    typed.text = "72";
+    r.app->key(typed);
+    r.key(13);
+    r.settle();
+    assert(r.svc->model().bpm == 72.0);
+    pass("The tempo is set in the song bar (R-UI-13): dragged, a bpm a step and one `set project.bpm` per step (Shift: a tenth); changed elsewhere it eases there; a double-click types one in");
+}
+
 static void test_song_bar_menus_and_settings_sections()
 {
     sltest::Rig r("ui-menus", 1024, 640);
@@ -2065,6 +2112,7 @@ int main()
     test_settings_chips_send_lines_and_ease();
     test_settings_folders();
     test_song_bar_and_keys();
+    test_the_tempo_is_set_in_the_song_bar();
     test_home_unsaved_confirm_and_recents();
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();
