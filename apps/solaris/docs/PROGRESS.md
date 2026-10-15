@@ -240,7 +240,10 @@ umbrella's pointer — `arstro.rule` §7).
       through the processor (heard end to end in process: peak 0.358) and picks it, the panel scrolling its
       group to the top; pick and flash ease. 5 mutants caught (4 umbrella, 1 DSP). L5 in the editor host.
 - [x] **G1** The analog face's requirement (R-UI-12; R-WIN-2, R-VST-7 amended).
-- [ ] **G2** The registry's group labels in the model (DSP REQ-device-10).
+- [x] **G2** The registry's group labels in the model (DSP REQ-device-10).
+      — DSP `c8a15eb` `DeviceType::groupLabels` (every instrument group titled); `devices[].groups` (`prefix`,
+      `label`) filled by the shared `deviceModelOf`, documented, API regenerated; L2 test (mutant: an untitled
+      group, red in the DSP unit test). The DR text lands with the face (DR-UI-12, G3).
 - [ ] **G3** The analog face in Solaris's instrument windows and the plugins' editors (R-UI-12).
 - [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.
 

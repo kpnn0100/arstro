@@ -29,6 +29,12 @@ namespace solaris
         std::string formula;    // the formula driving it ("" = its own value plays) — R-AUTO-1
     };
 
+    /** R-UI-12: a parameter group — the prefix before a parameter's dot ("" for none) — and its title. */
+    struct ParamGroupModel
+    {
+        std::string prefix, label;
+    };
+
     struct DeviceModel
     {
         std::string id, type, label;
@@ -37,6 +43,7 @@ namespace solaris
         std::string lastChanged;                // the parameter last written, by anyone (R-WIN-2)
         bool takesSample = false;               // R-EDM-8: it plays a recorded sound (a sampler)
         std::string sample;                     // that sound, as stored (relative to the song); "" = none
+        std::vector<ParamGroupModel> groups;    // R-UI-12: its parameter groups' titles, the registry's (REQ-device-10)
     };
 
     struct AutoPointModel

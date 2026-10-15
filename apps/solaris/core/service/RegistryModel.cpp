@@ -11,6 +11,7 @@ namespace solaris
         m.label = t.label;
         m.instrument = t.kind == DeviceKind::Instrument;
         m.takesSample = t.takesSample;
+        for (const auto &g : t.groupLabels) m.groups.push_back(ParamGroupModel{g.first, g.second}); // R-UI-12: a section's title
         // Every registry parameter, stored or not: the UI draws a control per parameter (R-UI-5).
         for (size_t i = 0; i < t.params.size(); ++i)
         {

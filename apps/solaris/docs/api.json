@@ -1161,6 +1161,24 @@
       "stable": true
     },
     {
+      "path": "strips[].devices[].groups",
+      "type": "object[]",
+      "summary": "R-UI-12: its parameter groups' titles, the registry's — `prefix` (before a parameter's dot, \"\" for none) and `label`",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].groups[].prefix",
+      "type": "string",
+      "summary": "the prefix before a parameter's dot; \"\" = the parameters with none",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].groups[].label",
+      "type": "string",
+      "summary": "its title, for a person",
+      "stable": true
+    },
+    {
       "path": "strips[].devices[].params",
       "type": "object[]",
       "summary": "every registry parameter, stored or default (R-UI-5)",

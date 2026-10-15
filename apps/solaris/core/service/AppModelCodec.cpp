@@ -60,6 +60,9 @@ namespace solaris
             {"strips[].devices[].sample", "string", "that sound, as stored (relative to the song); \"\" = none"},
             {"strips[].devices[].known", "bool", "false when this build's registry lacks the type (kept, not played)"},
             {"strips[].devices[].lastChanged", "string", "the parameter last written, by anyone (R-WIN-2)"},
+            {"strips[].devices[].groups", "object[]", "R-UI-12: its parameter groups' titles, the registry's — `prefix` (before a parameter's dot, \"\" for none) and `label`"},
+            {"strips[].devices[].groups[].prefix", "string", "the prefix before a parameter's dot; \"\" = the parameters with none"},
+            {"strips[].devices[].groups[].label", "string", "its title, for a person"},
             {"strips[].devices[].params", "object[]", "every registry parameter, stored or default (R-UI-5)"},
             {"strips[].devices[].params[].name", "string", "the registry name, e.g. filter.cutoff"},
             {"strips[].devices[].params[].label", "string", ""},
@@ -221,6 +224,12 @@ namespace solaris
             for (const auto &s : v) a.push(Json::string(s));
             return a;
         }
+        Json groupsOf(const std::vector<ParamGroupModel> &gs)
+        {
+            Json a = Json::array();
+            for (const auto &g : gs) a.push(Json::object().set("prefix", g.prefix).set("label", g.label));
+            return a;
+        }
         Json devices(const std::vector<DeviceModel> &ds)
         {
             Json a = Json::array();
@@ -236,6 +245,7 @@ namespace solaris
                 a.push(Json::object().set("id", d.id).set("type", d.type).set("label", d.label)
                            .set("instrument", d.instrument).set("bypass", d.bypass).set("known", d.known).set("lastChanged", d.lastChanged)
                            .set("takesSample", d.takesSample).set("sample", d.sample)
+                           .set("groups", groupsOf(d.groups))
                            .set("params", params));
             }
             return a;

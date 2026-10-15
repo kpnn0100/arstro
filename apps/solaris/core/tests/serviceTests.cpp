@@ -1551,6 +1551,25 @@ static void test_a_clip_joins_its_strips_lane()
     pass("a clip with no --lane joins its strip's lane (a new lane only for a strip with none; --lane new asks); clip duplicate --count N, end to end, one edit (R-SVC-8)");
 }
 
+static void test_an_instruments_groups_are_titled()
+{
+    // R-UI-12: the model carries the registry's group titles (REQ-device-10), so a face can draw sections
+    Run r;
+    r.ok("project new " + freshSong("groups"));
+    r.ok("clip add --instrument synth --at 0");                              // dv_1
+    r.ok("device add ch_2 --type reverb");                                   // dv_2, an effect
+    const auto &d = r.svc.model().strips[0].devices;
+    auto title = [&](const DeviceModel &dm, const std::string &prefix) {
+        for (const auto &g : dm.groups)
+            if (g.prefix == prefix) return g.label;
+        return std::string("-");
+    };
+    assert(d[0].type == "synth" && title(d[0], "osc1") == "Oscillator 1" && title(d[0], "fenv") == "Filter Envelope" && title(d[0], "") == "Mix & Output");
+    assert(d[1].type == "reverb" && d[1].groups.empty());
+    assert(contains(r.ok("state print --json"), "\"label\": \"Filter Envelope\""));
+    pass("an instrument's parameter groups arrive titled by the registry (Oscillator 1 … Mix & Output); an effect's have none (R-UI-12)");
+}
+
 static void test_instrument_tracks()
 {
     // R-LANE-3: a lane may be an instrument's TRACK — what is put on it plays through it
@@ -1882,6 +1901,7 @@ int main()
     test_steps_and_pattern_edits();
     test_a_clip_joins_its_strips_lane();
     test_reading_a_song_back();
+    test_an_instruments_groups_are_titled();
     test_instrument_tracks();
     test_a_song_from_before_tracks_adopts_them();
     test_latency_is_compensated_and_a_render_starts_on_the_beat();
