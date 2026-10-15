@@ -311,3 +311,32 @@ User's direction (verbatim, condensed):
   before tracks existed has its one-instrument lanes made tracks on opening.
 - Became: R-TIME-6, R-LANE-3 (R-LANE-1 amended), R-CLIP-6…8, R-BROWSE-4, R-VST-7/8 in
   [`../REQUIREMENTS.md`](../REQUIREMENTS.md); ledger tasks E1–E6 in [`PROGRESS.md`](PROGRESS.md).
+
+### Round 6 — 2026-10-15 — the fourth brief: a song made in the window
+
+- User: *"fix following — when open a midi roll, user can press play directly in that — when create a note,
+  play sound. Here come a hard part: you have to make a song yourself, try find a song that you understand
+  deeply, that you can replicate that song 99%. During making that song, if the instrument is not enough,
+  make that instrument; during making that song, analyze the UX, if any point that don't make sense to user
+  fix it. The goal is a production ready solaris app."*
+- Decided without asking (each one line to change):
+  - **The song is J. S. Bach's Prelude in C major, BWV 846** (The Well-Tempered Clavier I, 1722). Public
+    domain, as R-SVC-9 requires, so the result can be shared — a copyrighted song is not an option at any
+    percentage. Chosen because it can honestly be replicated to the note: every bar is one five-note chord
+    played in one fixed figure, so the score is a table of 35 chords and the replica can be diffed against
+    it note by note — "99 %" becomes a number, not a feeling.
+  - **It needs a piano, which Solaris does not have** — the DSP library has a physical piano voice
+    (`src/physical`, REQ-piano-*) but only its demo app plays it. The piano becomes a library instrument
+    with a registry entry (R-INST-5), so Solaris, the plugins and the CLI all get it with no Solaris code.
+  - **It is made through the window, not the CLI** (the canon was the CLI's proof, R-SVC-9): every note
+    entered by the roll's gestures, driven headlessly through the app's own gesture path (the test rig)
+    and checked live in the real window. Every place a user would stumble is written down as it happens
+    (`docs/ux-audit.md`), fixed in its own task, and the song is finished with the fixes.
+  - **The roll's ▶ loops the roll's clip, with the song sounding around it** — what you hear while editing a
+    pattern is that pattern in place, again and again; the song's own loop comes back when it stops. Space
+    with a roll in front is the roll's ▶; elsewhere it stays the song's play/stop.
+  - **A new note sounds through its track** — the instrument and the track's rack at the track's fader, as it
+    will sound in the song — on its own stream, so it is heard whether or not the song plays; a click on the
+    roll's keys and a note dragged to a new pitch sound too, as in every piano roll.
+- Became: R-ROLL-6/7, R-INST-5, R-SVC-10, R-UX in [`../REQUIREMENTS.md`](../REQUIREMENTS.md); ledger tasks
+  H1… in [`PROGRESS.md`](PROGRESS.md).

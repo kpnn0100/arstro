@@ -11,15 +11,14 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-09 — B12: audition.*
+*Last updated: 2026-10-15 — H1: the fourth brief's requirements.*
 
 ---
 
 ## NEXT
 
-**► B13 — the MIDI keyboard** (R-EDM-10), then R-EDM-11…20 one task each (B13+ below). B13+ are Claude's own
-EDM suggestions — ask before a long run. The 2026-10-15 brief (G1–G3, the analog face) is built; T2 and T3
-are small and may go first.
+**► H2 — play from the roll** (R-ROLL-6), then H3…H6 in order: the 2026-10-15 brief (a song made in the
+window, Bach's Prelude in C, with the UX it finds fixed). B13+ wait; T2 and T3 may go between.
 
 ---
 
@@ -247,6 +246,18 @@ umbrella's pointer — `arstro.rule` §7).
       default, the parameter menu, bound knobs inert; windows 820 wide, the plugin editor at its own size (980).
       Found and fixed D-4 (the synth's Resonance did nothing; DSP `66b5ecb`). 4 mutants caught.
 - [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.
+
+### H — a song made in the window (user request, 2026-10-15; discussion round 6)
+- [x] **H1** The brief's requirements: R-ROLL-6/7, R-INST-5, R-SVC-10/11; discussion round 6; this section.
+- [ ] **H2** Play from the roll: its ▶, `transport play --clip`, the clip's loop published, Space with a roll
+      in front, the playhead in the roll (R-ROLL-6).
+- [ ] **H3** A note heard when it is made: `note preview`, a preview stream through the track's chain; the
+      roll sounds an added note, a pitch a drag enters, a pressed key (R-ROLL-7).
+- [ ] **H4** The piano: the DSP library's physical piano as a library instrument and a registry entry
+      (DSP first; R-INST-5).
+- [ ] **H5** The Prelude, made in the window: its score table, the gestures that make it, the UX audit as it
+      goes (`docs/ux-audit.md`), the measurement (R-SVC-10/11). Each finding becomes an H6… task here,
+      fixed before the song is finished.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

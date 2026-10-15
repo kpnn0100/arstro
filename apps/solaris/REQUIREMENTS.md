@@ -66,7 +66,7 @@ dsp."*
 - **R-DSP-5 Splitting at note events is the host's job.** A device renders whole blocks; the engine
   splits a block at every note event so a note starts on its exact sample (was SR-TIME-3).
 
-## R-INST — instruments — ✅ IMPLEMENTED (DR-INST-1, DR-INST-2; played through Solaris's engine, DR-ENG-1)
+## R-INST — instruments — ✅ IMPLEMENTED (DR-INST-1, DR-INST-2; played through Solaris's engine, DR-ENG-1) — 5 📋 (the piano, user request 2026-10-15)
 
 The user's request (2026-10-08): *"make me some basic instruments: Drum Machine, Basic Synth with 2
 OSC."*
@@ -87,6 +87,14 @@ OSC."*
 - **R-INST-4 Reserved:** a sampler (play a sample chromatically) (was SR-INST-2), VST3 hosting (was
   SR-RACK-3). (**AMENDED (user request, 2026-10-09):** VST3 is now R-VST — our instruments ship as
   plugins first, hosting follows; the sampler is R-EDM-8.)
+- **R-INST-5 Piano — the DSP library's physical piano, played by notes** (user request, 2026-10-15: *"if
+  the instrument is not enough, make that instrument"* — the song of R-SVC-10 is for the piano). The
+  library's physical model (`PianoVoice`: felt hammer, stiff strings, bridge, soundboard — REQ-piano-*)
+  becomes a library instrument with a registry entry, so Solaris, its plugins and the CLI have it with no
+  Solaris code (R-DSP-2). Its voicing controls (hammer, strings, body, output) and the sustain pedal are
+  registry parameters. A held note is never stolen while a released one is still ringing: a figure over a
+  held bass (an Alberti bass, an arpeggio) keeps its bass. Fast enough for one track with headroom: the
+  registry's real-time budget holds for a piano chord.
 
 ## R-FX — effects — ✅ IMPLEMENTED (1–4 DR-FX-1; 5 the rack: `device add/remove/move`, DR-SVC-1)
 
@@ -464,7 +472,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
   link is a formula naming an address), Clear Binding, Reset to Default — each one command.
 - **R-WIN-4 Window placement and stacking are the view's** — not saved, not commands, like zoom.
 
-## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1)
+## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6, 7 📋 (play from the roll, a note heard when made: user request 2026-10-15)
 
 - **R-ROLL-1 A piano-roll WINDOW per pattern** (R-WIN's frame), opened by double-clicking a note clip
   or from its instrument's window: keys on the left (C named with its octave; a drum machine's keys
@@ -481,6 +489,20 @@ the object it belongs to, shows it on the timeline, and that property will use a
 - **R-ROLL-4 Quantize and swing:** `pattern quantize <pt> [--grid <beats>] [--swing <0…0.75>]` moves
   every note start onto the grid, delaying every second grid step by the swing.
 - **R-ROLL-5 The pattern's length** is set from the roll (`set <pt>.length=`), its end dragged.
+- **R-ROLL-6 Play from the roll** (user request, 2026-10-15: *"when open a midi roll, user can press play
+  directly in that"*). A ▶ at the start of the roll's toolbar plays the clip the roll belongs to — the one it
+  was opened from, else the pattern's first clip in time — from its start, LOOPING its span, the whole song
+  sounding there, until stopped (■, the same button); the song's own loop region comes back when it stops.
+  One command, `transport play --clip <ac>`; the transport publishes which clip it loops so every front end
+  can show it. Space with a roll window in front is that ▶; elsewhere Space stays the song's play/stop. The
+  roll draws the playhead where its clip is heard and keeps it in view while playing, eased. A pattern on no
+  track has nothing to sound through: its ▶ is dimmed and says so.
+- **R-ROLL-7 A note is heard when it is made** (user request, 2026-10-15: *"when create a note, play
+  sound"*). A click that adds a note, a drag that takes a note into a new pitch row (each row it enters) and
+  a press on the roll's keys play that pitch through the clip's track — its instrument and its rack, at its
+  fader and pan, as it will sound in the song — on a stream of its own, so it is heard whether the song plays
+  or not. Never in a render, never an edit, never in undo. One command, `note preview <ch> <pitch> [--vel]
+  [--length]`. A preview started while another rings takes over with a short fade, never a click.
 
 ## R-VST — VST3 — ✅ BUILT 1–5 (user request, 2026-10-09; replaces R-INST-4's VST3 half; DR-VST-1; 6 reserved) — 7, 8 ✅ (the plugins' own editor — the shared panel, Drum Machine's pads — DR-VST-7)
 
@@ -573,7 +595,7 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   if missing (was SR-FMT-3; its content hash is deferred to R-VER-5, where merging needs it).
 - **R-FMT-4 A structural error refuses, a numeric corruption repairs** (Interstellar's rule).
 
-## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1…3, DR-API-1) — rung 5 — 5–9 ✅ (control channel + attach, equivalence, web, composition, the song: DR-SVC-5/7/8/9)
+## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1…3, DR-API-1) — rung 5 — 5–9 ✅ (control channel + attach, equivalence, web, composition, the song: DR-SVC-5/7/8/9) — 10, 11 📋 (the second song made in the window, its UX audit: user request 2026-10-15)
 
 - **R-SVC-1** `SolarisService`: `dispatch(Command)` / `pump` / `model()` / an `Event` sink. The GUI,
   `solaris-cc`, a script and an agent send the same text lines (was SR-CLI-1).
@@ -622,6 +644,18 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   agent makes a whole song with `solaris-cc` alone; the script is committed, the render measured (not
   silent, under 0 dBFS, the kick on the beats, the tempo right). The tune is public domain, so the
   result can be shared.
+- **R-SVC-10 The second song, made in the window, measured against its score** (user request, 2026-10-15:
+  *"make a song yourself … that you can replicate 99% … the goal is a production ready solaris app"*):
+  J. S. Bach's Prelude in C major, BWV 846 (1722, public domain), on the piano (R-INST-5), made through the
+  window's gestures — the roll, the mixer, the transport — not the CLI. Measured: the pattern diffed against
+  the score note by note (pitch, start, length) — 99 % or better, the goal every note; the render: each
+  bar's pitch classes match that bar's chord, not silent, under 0 dBFS, the tempo right. Committed with
+  its score table and its measurement, as the canon is.
+- **R-SVC-11 The UX found by making it** (same request: *"during making that song, analyze the UX, if any
+  point that don't make sense to user fix it"*): every place the song's making stumbles — a gesture missing,
+  a result a user would not expect, a step that takes ten when it should take one — is written down as it
+  happens in `docs/ux-audit.md` (U-n: what was being done, what got in the way, what a user expects, how
+  bad) and fixed in its own task with its own requirement, or deferred with the reason.
 
 ## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12)
 
