@@ -110,7 +110,7 @@ mixer and renumbers the mixer 0…n−1 (`placeStrip`, `:60`; `case K::StripMove
 renumbers mixers — an order never ties. A new project is `newProject` (`model/Project.cpp:157`): Sources (`mx_1`), Buses (`mx_2`)
 holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the master (R-MIX-3).
 Guarded by `test_routing_only_goes_forward` and `test_forward_is_processing_order_and_moves_renumber`
-(`core/tests/serviceTests.cpp:1786`: a bus made on Buses goes before Main and feeds it; a same-mixer route
+(`core/tests/serviceTests.cpp:1805`: a bus made on Buses goes before Main and feeds it; a same-mixer route
 forward is taken, backward refused naming both ends; `strip move` that would point one back refused;
 `--order 0` first and renumbered; mutant checked: the old later-mixer rule refuses the new bus's
 default route). The same rule is PUBLISHED: `targetsOf` (`model/Project.cpp:797`) lists what a strip
@@ -461,7 +461,7 @@ it (`paintTag`, `:1121`); with View › Show IDs each card, chip and send shows 
 ### DR-UI-5 Device panels, generated (R-UI-5, R-WIN-2/3)
 `DevicePanel` (`app/widgets/DevicePanel.cpp`) is the content of a device's WINDOW (DR-WIN-1). It knows no
 device: per `DeviceModel::params` it builds — once, the first time the model has the device
-(`build`, `:225`), kept — a row per parameter grouped by the name's prefix (`osc1.*` → OSC1): a number
+(`build`, `:192`), kept — a row per parameter grouped by the name's prefix (`osc1.*` → OSC1): a number
 is cosmo's `SliderRow` with the opt-in `formatValue` (Hz/kHz, ms, dB, st/ct/oct signed, a 0…1 amount in
 %), a `logScale` parameter through a log taper, an `integer` one rounded; a choice is a row stepping
 its names. It is the parameter LIST: the value column says what decides each row (`bindingText`,
@@ -578,8 +578,8 @@ Dragged by the title it follows the pointer exactly, kept inside the layer; touc
 raised; `open`/`close` record intent and `advance` fades it (150 / 120 ms); while closing it takes no
 input (`handleGesture`, `:55`). `WindowLayer` covers the song view under the song bar (over the lanes,
 dock and browser) and keeps windows keyed — `dev:<dv>` (`openDevice`, `:127`: a new one cascades from
-the top right), `roll:<pt>` (`openRoll`, `:150`, DR-ROLL-1) and `auto:<au>` (`openAutomation`, `:167`, DR-AUTO-7) — reopening a closed one where it was; titles follow the model ("Basic Synth — Bass")
-and a window whose device is removed by anyone closes (`bind`, `:221`). Rack chips and an instrument
+the top right), `roll:<pt>` (`openRoll`, `:155`, DR-ROLL-1) and `auto:<au>` (`openAutomation`, `:172`, DR-AUTO-7) — reopening a closed one where it was; titles follow the model ("Basic Synth — Bass")
+and a window whose device is removed by anyone closes (`bind`, `:226`). Rack chips and an instrument
 strip's name (double-click) in the dock open them; a chip is outlined while its window is open.
 Placement and stacking are the view's. The dock's floating panel is gone (R-UI-5 amended).
 
@@ -611,8 +611,8 @@ its first clip plays through and that strip's instrument (`patterns[].strip`, `.
 device type its named keys (`deviceTypes[].noteNames`, `core/service/ServiceModel.cpp:111`) — the DSP
 registry's (REQ-device-6: the Drum Machine's ten pads, Kick = 36 …).
 **The window.** `PianoRoll` (`app/widgets/PianoRoll.cpp`) is the content of a `roll:<pt>` window
-(`WindowLayer::openRoll`, `app/widgets/FloatWindow.cpp:150`), opened by double-clicking a note clip
-(`Timeline.cpp:789`) or by an instrument window's "Piano Roll" (`DevicePanel.cpp:507` — the strip's
+(`WindowLayer::openRoll`, `app/widgets/FloatWindow.cpp:155`), opened by double-clicking a note clip
+(`Timeline.cpp:789`) or by an instrument window's "Piano Roll" (`DevicePanel.cpp:533` — the strip's
 pattern; a menu when it plays several; `clip add --strip` and then its roll when it has none). Titled
 "Piano Roll — <pattern> · <strip>"; a pattern gone closes it. A toolbar: snap 1/4 · 1/8 · 1/16
 (default) · 1/32 · Off, Notes | Steps, Quantize… (a menu of three lines: straight, swing 25 %, 50 %, at
@@ -713,9 +713,9 @@ device's description (`core/Compile.cpp:102`); the engine hands it in at build, 
 (`engine/Engine.cpp:56`); a change of sound is a structural live update (an engine swap). The model
 gives `devices[].takesSample`, `.sample` and `deviceTypes[].takesSample`; the audit names a sampler with
 no sound or an unreadable one (`core/service/ServiceModel.cpp:443`). In the UI a sampler's window names
-its sound where others name their type (`DevicePanel::sampleText`, `app/widgets/DevicePanel.cpp:431`),
+its sound where others name their type (`DevicePanel::sampleText`, `app/widgets/DevicePanel.cpp:442`),
 and a browser sample dragged over it lights the window (eased) and drops as ONE `set <dv>.sample=`
-(`WindowLayer::samplerAt`, `app/widgets/FloatWindow.cpp:275`; `app/widgets/ProjectScreen.cpp:96`).
+(`WindowLayer::samplerAt`, `app/widgets/FloatWindow.cpp:280`; `app/widgets/ProjectScreen.cpp:96`).
 Measured (L2): at the root the render IS the decoded file sample for sample (a mutant whose engine skips
 `setSample` fails it), an octave up is 2 kHz and over in half the time.
 
@@ -770,7 +770,7 @@ place (`:620`). **Decision:** the deepest zoom rose from 320 px/beat so that 1/3
 a bar below 11.5 px/beat, a beat from 11.5, 1/2 from 22.4 (a song opens at 28: bars, beats and halves
 drawn, the step 1/2), 1/4 from 55, 1/8 from 107, 1/16 from 209, 1/32 from 408, nothing at 637.
 
-**Proof.** `test_the_grid_follows_the_zoom` (`app/tests/ui/uiTests.cpp:1772`) drives the real service:
+**Proof.** `test_the_grid_follows_the_zoom` (`app/tests/ui/uiTests.cpp:1841`) drives the real service:
 at the default zoom a ruler click at beat 3.3 seeks 3.5 (a fixed quarter says 3.25); a level's alpha
 is caught mid-fade during an eased two-notch zoom, between its two ends; at 1/8 a seek, a clip drag
 (on the step while held, then `clip move ac_1 --at 3.125`) and an instrument dropped from the browser
@@ -785,7 +785,7 @@ formula can drive from a `ParamTarget` (address, formula, value as shown, reset,
 unless it already IS one (`auto create <address>`), Formula… (cosmo's rename field seeded with the formula or
 "=", → `set <address>="=<typed>"`, quoted when it has a space), Clear Binding when bound (`bind clear
 <address>`), Reset to Default (`set <address>=<default>`), and Copy Address / Copy Value / Copy as Formula
-(DR-UI-11). The device window (`DevicePanel::openParamMenu`, `app/widgets/DevicePanel.cpp:457`) and the dock
+(DR-UI-11). The device window (`DevicePanel::openParamMenu`, `app/widgets/DevicePanel.cpp:468`) and the dock
 (`MixerDock::openParam`, `app/widgets/MixerDock.cpp:837`, offered first on a right-click, `:1051`) both call
 it, so the menus cannot drift; a hosted third-party VST3's parameter list (R-VST-6, not built yet) will call
 it the same way. In the dock: a fader → `<ch>.gain`, a pan → `<ch>.pan`, a send's row on a card or its cell
@@ -820,7 +820,7 @@ curve at the heard position at beats 2…12 and falling, a link (`=ch_2.gain / 2
 formula `1000 + 500 * sin(beat)` within 25 Hz; after a structural edit while playing the new engine's order is
 read; 0 allocations on the audio thread. Mutants: `pump` ignoring the player → stuck at 0 dB at beat 2;
 `bindValues()` copied on the audio thread → 1019 allocations. UI `test_the_mixers_numbers_bind_from_the_dock`
-(`app/tests/ui/uiTests.cpp:1555`): a fader's right-click is the parameter menu, Create Automation is `auto create
+(`app/tests/ui/uiTests.cpp:1624`): a fader's right-click is the parameter menu, Create Automation is `auto create
 ch_2.gain` and the tag fades in (caught mid-tween); Formula… on a pan sends `set ch_3.pan="=0.25 - 0.75"` and
 the knob EASES onto −0.5; a send copies `-8.0 dB` and `=sd_1.gain`; the master copies `project.masterGain`;
 Clear Binding fades the tag out; playing, the fader equals `faderPos(live)` every frame and moves. Mutants:
@@ -841,7 +841,7 @@ rows (`au_n`) (`app/widgets/Timeline.cpp:1107`, `:715`); clips (`ac_n`, and a no
 `:558` — "linked ×N" fades out for them); in the dock each strip card (`ch_n`), the master (`master`), each
 rack chip (`dv_n`) and each send (`sd_n`, cross-fading with "→ name") (`paintCard`,
 `app/widgets/MixerDock.cpp:1162`); a device window's rows show their FULL address (`dv_1.filter.cutoff`) in a
-pill over the label (`ParamIds`, `app/widgets/DevicePanel.cpp:179`); its header already names its id.
+pill over the label (`ParamIds`, `app/widgets/DevicePanel.cpp:146`); its header already names its id.
 
 **Copied, by the host.** Copy Address / Copy Value / Copy as Formula on a device parameter row and on the
 dock's faders, pans, sends and master (DR-MIX-16; a choice row has no "as Formula" — no formula reads a
@@ -854,7 +854,7 @@ a third-party VST3's parameter list (R-VST-6) builds a `ParamTarget` per row and
 
 Measured. L2 (`test_the_machine_settings_folders_devices_and_recents`): `settings set showIds=on` reaches the
 model and the file and a second process reads it; `showIds=yes` is refused. UI `test_ids_shown_and_copied`
-(`app/tests/ui/uiTests.cpp:1653`): View › Show IDs sends `settings set showIds=on`, the ids' amount caught between 0
+(`app/tests/ui/uiTests.cpp:1722`): View › Show IDs sends `settings set showIds=on`, the ids' amount caught between 0
 and 1, then 1, the item reads Hide IDs; a shell's `showIds=off` fades them out the same way; a parameter row
 copies `dv_1.filter.cutoff`, `900 Hz`, `=dv_1.filter.cutoff` (toasted); a choice row offers no "as Formula";
 a clip copies `ac_1`, an automation `=au_1` and `au_1`. Mutant: the ids SET instead of eased → the mid-tween
@@ -902,9 +902,9 @@ against smoothstep, bezier against the cubic to 1e-9 and no allocation.
 A double-click on an automation row's HEADER (`app/widgets/TimelineAuto.cpp:511`), or on its curve away
 from a point (`:536` — the first click's pending point is dropped, so the gesture adds nothing),
 calls `onOpenAutomation` (`app/widgets/ProjectScreen.cpp:61`) → `WindowLayer::openAutomation`
-(`app/widgets/FloatWindow.cpp:167`): an `auto:<au>` FloatWindow (fading in and out as every window does)
+(`app/widgets/FloatWindow.cpp:172`): an `auto:<au>` FloatWindow (fading in and out as every window does)
 around an `AutomationPanel`, titled "Automation — <name>" and closed when anyone deletes the automation
-(`WindowLayer::bind`, `app/widgets/FloatWindow.cpp:249`). Every line is the model's (`AutomationPanel::bind`,
+(`WindowLayer::bind`, `app/widgets/FloatWindow.cpp:254`). Every line is the model's (`AutomationPanel::bind`,
 `app/widgets/AutomationPanel.cpp:56`): name, id, range in its unit, the address it was made from, its
 points (beat, value, shape — a bezier point's speeds and influences), every formula that reads it
 (`usedBy`, each with its binding's formula from `bindings[]`), and its value at the playhead —
@@ -959,7 +959,7 @@ edits lost between calls, comment lines reprinting ids). The guide is `docs/AGEN
   `ls` (`lsText`, `ServiceCompose.cpp:329`), `show <id>` (`showText`, `:404` — a device's non-default
   parameters with unit and default, a formula where one drives it), `pattern print` (`:294`, the notation
   with the pitch's number and name after `#`, a kit's pads by name), `state print --json --compact`
-  (`compactJson`, `core/service/AppModelCodec.cpp:272`; `Json::dumpCompact`, `core/service/Json.cpp:118`):
+  (`compactJson`, `core/service/AppModelCodec.cpp:282`; `Json::dumpCompact`, `core/service/Json.cpp:118`):
   the song only, one line, a device's non-default parameters as `name=value`, notes in the notation.
 - **Honest values.** A device parameter outside its registry range is refused naming the range and unit
   (`SolarisService.cpp:713`), as is an automation point (`inAutoRange`, `core/service/ServiceAuto.cpp:69` — a value within printing's
@@ -1136,7 +1136,7 @@ puts Main and a cue sent straight to Phones at 96 together; a key from a limited
 audio 96 to meet it, and a limiter before the keyed compressor delays the key 96 — the keyed strip's output
 exactly the unlimited one 96 later (and it does duck). Mutants: every delay sized 0 → the twins fail;
 no key delay in the rack → the key check fails. Service (`test_latency_is_compensated_and_a_render_starts_on_the_beat`,
-`core/tests/serviceTests.cpp:1711`): two strips of one tone, a limiter on one — each stem from beat 0 and
+`core/tests/serviceTests.cpp:1730`): two strips of one tone, a limiter on one — each stem from beat 0 and
 equal, the mix exactly their sum and equal to the render with no limiter; a master limiter's render, port
 and stems byte-identical to none (under its ceiling it is exactly its delay); `--to` exact; live, the
 device's frames are the render 96 later; a lookahead set to 5 ms WHILE playing keeps the twins met — the
@@ -1152,9 +1152,9 @@ mix is at lag 0.
 `core/service/ServiceEdit.cpp:476`) puts the lane at row `index` (0 = the top) and renumbers every lane
 0…n−1 in the new order — one edit, one undo step; an index past the last row or an unknown lane is
 refused. The lanes draw it through Interstellar's `AnimatedRows`, keyed by lane, so the rows slide
-(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:1822`: to the top and back,
+(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:1841`: to the top and back,
 renumbered, refused out of range, undone) and, drawn, by `test_instrument_drop_and_clip_drag`
-(`app/tests/ui/uiTests.cpp:405`: a lane moved from a shell slides to the top with its clip, caught mid-tween).
+(`app/tests/ui/uiTests.cpp:477`: a lane moved from a shell slides to the top with its clip, caught mid-tween).
 
 ### DR-TIME-6 The ruler dragged (R-TIME-6)
 `Timeline::rulerGesture` (`app/widgets/Timeline.cpp:587`, called first in `handleGesture`, `:682`) takes a
@@ -1169,13 +1169,13 @@ nothing eases back. The brace is the pointer's while held (`loopSpan`, `loopRect
 kept or resized never shorter than one step, and ONE `transport loop <a> <b>` goes on release (`:668`),
 the brace placed where it was let go so the model's echo moves nothing.
 
-Guarded by `test_the_ruler_is_dragged` (`app/tests/ui/uiTests.cpp:1378`): held, the playhead equals the
+Guarded by `test_the_ruler_is_dragged` (`app/tests/ui/uiTests.cpp:1447`): held, the playhead equals the
 snapped pointer beat exactly and four or more seeks were sent; let go, it stays; PLAYING, it stays the
 pointer's frame after frame and the song plays on from there; the brace moved 4–8 → 6–10, nothing sent
 until release, then one line; resized by its right end, clamped at its left; a click still seeks. Mutants
 seen red, then restored: the playhead following the audio while scrubbing, a seek only on release, a body
 drag keeping the brace's end. Shots `ruler-scrubbing` and `loop-brace-moving`
-(`app/tests/shots/renderShots.cpp:429`, `:438`), both sizes, looked at.
+(`app/tests/shots/renderShots.cpp:447`, `:438`), both sizes, looked at.
 
 ### DR-LANE-3 Instrument tracks (R-LANE-3; R-LANE-1 amended)
 **The model.** `Lane::track` (`model/Project.h`) names the instrument strip a lane is the TRACK of; the
@@ -1213,8 +1213,8 @@ instrument dropped from the browser onto a track asks for a lane of its own (`--
 
 Guarded by `solaris_model` (`model/tests/modelTests.cpp:369`: the four refusals; `tracks` read, refused
 other than `on`, written in the canonical text), `solaris_service` (`test_instrument_tracks`,
-`core/tests/serviceTests.cpp:1554`; `test_a_song_from_before_tracks_adopts_them`, `:1626`) and
-`solaris_app_ui` (`test_a_lane_is_an_instruments_track`, `app/tests/ui/uiTests.cpp:220`: a rename
+`core/tests/serviceTests.cpp:1573`; `test_a_song_from_before_tracks_adopts_them`, `:1626`) and
+`solaris_app_ui` (`test_a_lane_is_an_instruments_track`, `app/tests/ui/uiTests.cpp:221`: a rename
 followed, a clip dragged onto another track re-routed with its colour caught mid-ease, Track of ▸ and
 Plain Lane caught mid-fade, a browser drop onto a track → `--lane new`). Mutants seen red, then
 restored: no re-route onto a track, no adoption, a track not showing its strip's name, the line placed
@@ -1233,12 +1233,12 @@ cutting it; the pattern's notes repeat inside it with a seam at each repeat (`pa
 the live length). **Moved** (R-CLIP-8): the clip drag's `clip move --lane` onto another instrument's track
 re-routes it (DR-LANE-3); audio is refused there and eases home.
 
-Guarded by `test_midi_clips_are_made_looped_moved_and_listed` (`app/tests/ui/uiTests.cpp:289`): a
+Guarded by `test_midi_clips_are_made_looped_moved_and_listed` (`app/tests/ui/uiTests.cpp:290`): a
 double-click on the Bass track → the exact line and a clip of a new pattern through the bass; the empty
 track's menu; the end dragged → the snapped length while held with nothing sent, one line on release,
 no ease back; a shell's `set ac_1.length=6` caught mid-ease; a clip dragged onto the drums' track plays
 through the drums. Mutants seen red, then restored: a length that snaps, an edge never taken. Shot
-`clip-end-dragging` (`app/tests/shots/renderShots.cpp:460`), both sizes, looked at.
+`clip-end-dragging` (`app/tests/shots/renderShots.cpp:478`), both sizes, looked at.
 
 ### DR-BROWSE-4 The song's MIDI list (R-BROWSE-4)
 The Song tab lists a MIDI header, **New MIDI**, then every pattern, then the samples under SAMPLES
@@ -1267,53 +1267,102 @@ the DSP repo alone the plugins offer none and a host draws its generic view.
 
 **The content is Solaris's DevicePanel**, generated from the registry (law 2): `InstrumentEditor`
 (`plugins/InstrumentEditor.cpp`) builds a model of ONE device each frame the host's values moved
-(`refresh`, `:45`) with `deviceModelOf` (`core/service/RegistryModel.cpp:7` — the ONE registry→model
+(`refresh`, `:59`) with `deviceModelOf` (`core/service/RegistryModel.cpp:7` — the ONE registry→model
 mapping, which the service now uses too, `core/service/ServiceModel.cpp:58`), the panel's song controls
-off (`DevicePanel::songControls`, `app/widgets/DevicePanel.h:79`: the header names the instrument with the
-suite's mark and teal dot instead, `app/widgets/DevicePanel.cpp:543`). Solaris's accent and embedded fonts
-are installed before a widget is built. The panel speaks text as in Solaris; `command` (`:68`) turns
+off (`DevicePanel::songControls`, `app/widgets/DevicePanel.h:86`: the header names the instrument with the
+suite's mark and teal dot instead, `app/widgets/DevicePanel.cpp:569`). Solaris's accent and embedded fonts
+are installed before a widget is built. The panel speaks text as in Solaris; `command` (`:82`) turns
 `set dv_1.<name>=<value>` into the host's edit through `ParamAccess` — begun ONCE per parameter per
-press, performed per step (a step that moved nothing says nothing, `:84`), ended when the pointer lets
-go (`pointer`, `:103`), a click or a double-click's reset all three at once. `ControllerAccess`
+press, performed per step (a step that moved nothing says nothing, `:98`), ended when the pointer lets
+go (`pointer`, `:117`), a click or a double-click's reset all three at once. `ControllerAccess`
 (`plugins/PluginAccess.h:15`) is the plugin's side: the controller's `editPerform` normalises by
 `normalizedFromValue`. A value the HOST changes is a new revision: the slider's thumb springs there
-(Artboard's Slider eases a programmatic value) and the row it changed is lit (`:52`) — and nothing is
+(Artboard's Slider eases a programmatic value) and the row it changed is lit (`:66`) — and nothing is
 echoed back as an edit.
 
 **The view** (`plugins/X11View.cpp`): an X11 child of the host's window on a connection of its own
-(`attached`, `:72`), with the XEmbed info hosts read on creation (`:82`); the host's `IRunLoop` — queried
+(`attached`, `:76`), with the XEmbed info hosts read on creation (`:82`); the host's `IRunLoop` — queried
 from the plug frame — drives it: our connection's descriptor for input, a 16 ms timer for frames (`:99`).
-Each frame is drawn into a back buffer and copied to the window (`frame`, `:171`). Resizable: the host's
-size is the editor's, never below 360×320 (`checkSizeConstraint`, `:128`); it opens at 520×600.
+Each frame is drawn into a back buffer and copied to the window (`frame`, `:175`). Resizable: the host's
+size is the editor's, never below 360×320 (`checkSizeConstraint`, `:132`); it opens at 520×600.
 `createEditor` (`:243`). Everything linked into the module is position-independent (`solaris_app`,
 `artboard_core`, `solaris_instrument_editor`).
 
 Guarded by `solaris_plugin_editor` (`plugins/tests/editorTests.cpp`, the editor over the REAL plugin
 controller with a fake host's component handler, headless): a row per registry parameter at both sizes
-(`:146`); a drag → beginEdit once, performEdit per step equal to `normalizedFromValue` of the value the
+(`:164`); a drag → beginEdit once, performEdit per step equal to `normalizedFromValue` of the value the
 editor chose, strictly rising, endEdit on release; a choice clicked → the next name, begun/performed/
-ended (`:163`); a host change caught between, then lit, nothing echoed (`:216`); the drum machine's
-editor builds (`:239`). The validator passes both plugins with the editor linked in. Mutants seen red,
+ended (`:194`); a host change caught between, then lit, nothing echoed (`:251`); the drum machine's
+editor builds (`:316`). The validator passes both plugins with the editor linked in. Mutants seen red,
 then restored: no beginEdit, an end per step, a host change never reaching the panel, a linear mapping in
 the plugin. **Live (L5, 2026-10-09):** `vst3_editorhost` (the SDK's X11 host) opened Drum Machine's editor
 in a real host window, 520×600, drawn as above; a drag sent to its window moved Kick Decay 450 ms →
 29.9 ms with its row lit.
 
 **Drum Machine's pads** (E6; DSP `9634166`, REQ-device-9 and REQ-vst-7). A kit — a type with `noteNames` —
-gets a `PadGrid` (`plugins/InstrumentEditor.cpp:126`) in the panel's band (`DevicePanel::band`,
-`app/widgets/DevicePanel.h:82`: room under the title, the rows below it; opt-in, 0 in Solaris), five to a
-row (`:250`): a pad per key the registry names, in its order, each joined to its parameters by the
-registry's `notePrefixes` (`:135` — the join D-3 lacked). A press plays the pad through the plugin —
+gets a `PadGrid` (`plugins/InstrumentEditor.cpp:140`) in the panel's band (`DevicePanel::band`,
+`app/widgets/DevicePanel.h:89`: room under the title, the rows below it; opt-in, 0 in Solaris), five to a
+row (`:264`): a pad per key the registry names, in its order, each joined to its parameters by the
+registry's `notePrefixes` (`:149` — the join D-3 lacked). A press plays the pad through the plugin —
 `ParamAccess::play`, the controller's `playNote`, an `arstro.note` message to the processor, heard at the
-next block — and picks it; the release is its note-off (`handleGesture`, `:185`). The pick eases its ring in
-and the hit flashes and dies away like the sound (`advance`, `:160`); the panel scrolls, eased, so the pad's
-group begins at the top (`DevicePanel::revealGroup`, `app/widgets/DevicePanel.cpp:410`, called at `:32`).
+next block — and picks it; the release is its note-off (`handleGesture`, `:199`). The pick eases its ring in
+and the hit flashes and dies away like the sound (`advance`, `:174`); the panel scrolls, eased, so the pad's
+group begins at the top (`DevicePanel::revealGroup`, `app/widgets/DevicePanel.cpp:414`, called at `:33`).
 Playing a pad edits nothing.
 
-Guarded by `test_a_pad_plays_and_shows_its_parameters` (`plugins/tests/editorTests.cpp:250`: the pads are
+Guarded by `test_a_pad_plays_and_shows_its_parameters` (`plugins/tests/editorTests.cpp:327`: the pads are
 the registry's, Closed Hat joined to `chat`; a press plays 42 at 100, the release 42 at 0; flash and pick
 caught mid-ease; the CHAT group at the top of the rows; no edit) and `test_a_pad_is_heard_through_the_processor`
-(`:294`: the REAL processor and controller connected by the SDK's host classes — silence, then a pad clicked
+(`:372`: the REAL processor and controller connected by the SDK's host classes — silence, then a pad clicked
 in the editor heard as the kick at the next block, peak 0.358). Mutants seen red, then restored: a pad not
 played, the pick snapped, the least scroll instead of the group, the controller never sending the note.
 **Live (L5):** in `vst3_editorhost` a click on Closed Hat picked it and brought the CHAT group to the top.
+
+### DR-UI-12 An instrument's face is an analog synth panel (R-UI-12; R-WIN-2, R-VST-7 amended)
+`AnalogFace` (`app/widgets/AnalogFace.cpp`) is an instrument's DevicePanel body — built in the rows' place when
+the device is an instrument (`DevicePanel::build`, `app/widgets/DevicePanel.cpp:194`; `analogFace`, opt-out,
+`app/widgets/DevicePanel.h:79`), so the same face is Solaris's window and the plugins' editor. Still generated
+(law 2): `build` (`:128`) makes a module per parameter group in the registry's order, the ungrouped last, titled
+by `devices[].groups` (DSP REQ-device-10, G2), a knob per number and a switch per choice; a module's SCREEN is
+chosen by what its parameters say (`:156`): a `wave` choice → the oscillator, `cutoff` + `res` → the filter,
+`attack` `decay` `sustain` `release` → the envelope. `layoutFor` (`:213`) flows the modules into the width —
+rows share their height and spare width; at 980 px the synth's six fill two rows, at 390 one a row. The panel
+scrolls the face (R6). Values are written through the shared `ParamFormat.h` (`toUnit`/`fromUnit`, the
+readout, the stored text), so a knob and a list row read alike.
+
+**Knobs** (`paintKnob`, `:504`): a 270° dial, its arc in the accent from the minimum or from zero for a range that
+spans it, detents for a whole-number range of a few steps (`:517`), a cap lit from above (a radial fill between
+two theme greys), the label and the value in its unit under it; a bound one names its binding in the accent and
+draws its arc fainter; the last change a halo. **Switches** (`paintSwitch`, `:560`): a key per choice drawn as its
+shape (sine, saw, square, triangle; lowpass, bandpass, highpass, notch — `drawGlyph`) or named, the light sliding
+(`:567`). **Screens** (`paintScreen`, `:592`): the oscillator (`:626` — its wave morphing with the switch's light,
+its level, its pitch as cycles, its unison voices spread by the detune), the filter (`:659` — `responseDb`, `:114`:
+the DSP's documented SVF prototype (S4) at (S5)'s Q, its mode morphing, the cutoff marked and where the envelope
+sweeps it), the envelope (`:696` — linear stages, as the library's ADSR, each stage as wide as the root of its time).
+Tokens: `surface::moduleBg`, `screenBg`, `knobCap`, `knobTrack`, `screenGrid` (`app/Theme.h:82`).
+
+**Motion and gestures** (`advance`, `:272`; `handleGesture`, `:429`). A value set anywhere turns its knob there
+(220 ms) and every screen redraws through the turning knob; a switch's light slides (220 ms); the last change's
+halo fades in and out. A drag is direct manipulation — up turns it up, Shift five times finer (`:455`), the knob
+the pointer's — and each step that moved the value is ONE `set` through the panel; a bound knob takes no drag
+(`:439`); a double-click is the default; a right-click opens the parameter's menu (`DevicePanel::openParamMenuFor`,
+`app/widgets/DevicePanel.cpp:484`, R-WIN-3); the wheel scrolls. Show IDs puts each address over its label (`:742`).
+An instrument's window opens 820 × 580 (`app/widgets/FloatWindow.cpp:143`), three modules a row; an effect's
+keeps the list at 390 × 520. The plugins' editor opens at the face's own size — 980 wide, as tall as its modules
+(`InstrumentEditor::preferredSize`, `plugins/InstrumentEditor.cpp:40`, asked by `plugins/X11View.cpp:64`).
+
+**The filter screen found a defect** (D-4): measured against the real `StateVariableFilter`, every resonance
+peaked at −3.01 dB — the synth's Resonance had never done anything (`tick` read a smoothed value only the block
+path advances). Fixed in the DSP library (`66b5ecb`, REQ-svf-2 amended); the screen and the filter now agree to
+0.000 dB over 4 modes × 3 resonances × 5 frequencies.
+
+Guarded by `solaris_app_ui` (`test_an_instruments_face_is_an_analog_panel`, `app/tests/ui/uiTests.cpp:406`: six
+titled modules, a window ≥ 800 wide; a shell's change caught mid-turn and lit; a key's light caught mid-slide;
+a double-click's default; the menu's Create Automation, after which the knob names `au_1` and takes no drag; the
+flow at 390 and 980; an effect's list) and `solaris_plugin_editor` (`plugins/tests/editorTests.cpp:164`: the
+modules, screens and rows at 980, one a row at the minimum; `:194` a knob dragged up → beginEdit once, performEdit
+= the shared mapping of each value, strictly rising, endEdit, Shift 5× finer, a key's choice; `:251` the host's
+change caught mid-turn and a choice's light mid-slide; `:279` the filter screen against the filter). Mutants seen
+red, then restored: a knob that snaps, a light that snaps, a bound knob that drags, the screen's Q drifting.
+Shots `device-panel` (the face), `device-face-turning` (mid-turn and mid-morph), `effect-window`
+(`app/tests/shots/renderShots.cpp:234`, `:245`), and the plugin's `plugin-editor-synth.png` — looked at.

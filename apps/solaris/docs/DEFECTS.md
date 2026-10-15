@@ -37,6 +37,17 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-4 The Basic Synth's Resonance did nothing — closed in G3, DSP `66b5ecb`
+- **Found:** 2026-10-15, building the analog face's filter screen (R-UI-12): its test measures the real filter
+  against the documented prototype, and every resonance peaked at −3.01 dB (Q 0.707).
+- **Reproduction:** `clip add --instrument synth`, a note, `set dv_1.filter.cutoff=1000 dv_1.filter.res=0` →
+  render; again with `res=0.9` → the two renders were byte-identical (band 800–1250 Hz: 43.44 dB both).
+- **Cause:** `StateVariableFilter::tick` (the per-sample path the synth and the drum voices use) took `k` from the
+  SMOOTHED resonance, which only the block path advances; a resonance written after construction never arrived.
+- **Fix:** `tick` derives `k` from the resonance's target, re-derived only when it changes (REQ-svf-2 amended).
+- **Guard:** DSP `SVF_tick_follows_a_resonance_set_after_it_was_made`, `BasicSynth_resonance_is_heard` (both seen
+  red before the fix); Solaris `test_the_filter_screen_is_the_filter`.
+
 ### D-1 A refused edit announced changes it did not make — closed in U2, `413fec4`
 - **Found:** 2026-10-08, building U2's one-command instrument drop (reading `changed()`).
 - **Symptom:** `clip add --src new.wav --in -1` is refused and the project is restored, but the

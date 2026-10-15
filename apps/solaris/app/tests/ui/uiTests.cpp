@@ -5,6 +5,7 @@
 #undef NDEBUG
 #endif
 #include "../Rig.h"
+#include "../../widgets/AnalogFace.h"
 #include "../../widgets/AutomationPanel.h"
 #include "../../widgets/DevicePanel.h"
 #include "../../widgets/ParamMenu.h"
@@ -402,6 +403,77 @@ static void test_midi_clips_are_made_looped_moved_and_listed()
     pass("MIDI clips: a double-click on a track makes one there (its menu too); an end dragged is the pointer's, one `set .length` on release, a shell's eases; moved onto another track it plays through it; the Song tab lists the MIDI, New MIDI grows in, a pattern dropped on a track or below plays through the right instrument, unplayed off a track says so, a double-click opens its roll (R-CLIP-6…8, R-BROWSE-4)");
 }
 
+static void test_an_instruments_face_is_an_analog_panel()
+{
+    // R-UI-12 in Solaris's window: modules titled by the registry, knobs and switches, screens; every value eased; the
+    // parameter menu on a knob; a bound knob names its binding and takes no drag; the modules wrap; an effect keeps its list
+    sltest::Rig r("ui-face", 1440, 900);
+    r.cmd("project new " + r.song("Face") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");                 // ch_2, dv_1
+    r.cmd("device add ch_2 --type reverb");                                  // dv_2
+    r.settle();
+    auto &wl = r.app->project().windows();
+    wl.openDevice("dv_1");
+    r.settle();
+    auto &p = *wl.devicePanel("dv_1");
+    auto *f = p.face();
+    assert(f && f->sectionCount() == 6 && f->sectionTitle(0) == "Oscillator 1" && f->sectionTitle(5) == "Mix & Output");
+    assert(wl.window("dev:dv_1")->width.value() >= 800.0);                   // opened wide enough for its modules
+    // a shell's change turns the knob there — caught mid-turn — and lights it
+    const double res0 = f->turnLive("filter.res");
+    r.cmd("set dv_1.filter.res=0.9");
+    r.frame();
+    r.frame();
+    assert(f->turnLive("filter.res") > res0 && f->turnLive("filter.res") < 0.9);
+    r.settle();
+    assert(std::fabs(f->turnLive("filter.res") - 0.9) < 1e-9 && f->litAmount("filter.res") == 1.0);
+    // a key: that choice — one line; the light slides there
+    const int wi = f->controlIndex("osc1.wave");
+    r.click(world(*f, f->keyRect(wi, 3)));                                      // triangle
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "set dv_1.osc1.wave=triangle") && f->lightLive("osc1.wave") > 1.0 && f->lightLive("osc1.wave") < 3.0);
+    r.settle();
+    assert(f->lightLive("osc1.wave") == 3.0 && f->valueText("osc1.wave") == "triangle");
+    // a knob double-clicked: its default
+    const artboard::Rect vol = world(*f, f->dialRect(f->controlIndex("volume")));
+    r.cmd("set dv_1.volume=-3");
+    r.settle();
+    r.click(cx(vol), cy(vol));
+    r.click(cx(vol), cy(vol));
+    r.settle();
+    assert(sentLine(r, "set dv_1.volume=-12") && r.svc->model().strips[0].devices[0].params[(size_t)f->controlIndex("volume")].name == "volume");
+    // its menu on a right-click (R-WIN-3): Create Automation binds it
+    const artboard::Rect cut = world(*f, f->dialRect(f->controlIndex("filter.cutoff")));
+    r.click(cx(cut), cy(cut), 2);
+    r.settle();
+    auto &menu = r.app->menu();
+    int create = -1;
+    for (int k = 0; k < menu.itemCount(); ++k)
+        if (menu.item(k).label == "Create Automation") create = k;
+    assert(menu.isOpen() && create >= 0);
+    r.click(menu.itemRect(create));
+    r.settle();
+    // bound: it names its binding under its knob and takes no drag (its menu clears it)
+    assert(contains(f->valueText("filter.cutoff"), "au_1"));
+    const size_t n = r.sent.size();
+    r.drag(cx(cut), cy(cut), cx(cut), cy(cut) - 40.0, 5);
+    r.settle();
+    assert(r.sent.size() == n);
+    // the modules flow: one a row in a narrow window, the sources together in a wide one
+    f->layoutFor(390.0);
+    for (int k = 0; k < f->sectionCount(); ++k) assert(f->sectionRect(k).x == arstro::solaris_ui::AnalogFace::kPad);
+    f->layoutFor(980.0);
+    assert(f->sectionRect(0).y == f->sectionRect(1).y && f->sectionRect(1).y == f->sectionRect(2).y);
+    r.settle();
+    // an effect keeps its list
+    wl.openDevice("dv_2");
+    r.settle();
+    auto &q = *wl.devicePanel("dv_2");
+    assert(q.face() == nullptr && q.rowCount() > 0 && q.slider("size") != nullptr);
+    pass("an instrument's window is its analog face: six titled modules; a shell's change turns a knob (mid-turn) and lights it; a key slides its light; a double-click is the default; the menu binds a knob, which then names its binding and takes no drag; the modules flow with the width; an effect keeps its list (R-UI-12)");
+}
+
 static void test_instrument_drop_and_clip_drag()
 {
     sltest::Rig r("ui-drop", 1280, 800);
@@ -618,17 +690,14 @@ static void test_mixer_matrix_effects_and_device_panel()
     r.settle();
     auto &p = *wl.devicePanel(dv);
     assert(p.device() == dv && p.rowCount() == (int)r.svc->model().strips[0].devices[0].params.size());
-    assert(p.slider("filter.cutoff") != nullptr && p.slider("osc1.wave") == nullptr); // a choice is not a slider
+    auto *face = p.face();                                               // an instrument: its analog face (R-UI-12)
+    assert(face && face->isKnob(face->controlIndex("filter.cutoff")) && !face->isKnob(face->controlIndex("osc1.wave"))); // a choice is a switch
     assert(contains(w->title(), "Basic Synth"));
-    // a slider dragged is `set <dv>.<param>=…` in its unit (a log taper: cutoff moves in ratios)
-    int cut = -1;
-    for (int i = 0; i < p.rowCount(); ++i)
-        if (p.rowParam(i) == "filter.cutoff") cut = i;
-    p.reveal("filter.cutoff");                                           // below the fold of the window: scroll to it
+    // a knob dragged up is `set <dv>.<param>=…` in its unit (a log taper: cutoff moves in ratios)
+    p.reveal("filter.cutoff");                                           // scroll to it when the window is short
     r.settle();
-    const artboard::Rect row = world(p, p.rowRect(cut));
-    const double sx = row.x + arstro::cosmo_v2::SliderRow::kLabelWidth + 20.0;
-    r.drag(sx, cy(row), sx + 40.0, cy(row), 5);
+    const artboard::Rect dial = world(*face, face->dialRect(face->controlIndex("filter.cutoff")));
+    r.drag(cx(dial), cy(dial), cx(dial), cy(dial) - 40.0, 5);
     r.settle();
     bool cutoff = false;
     for (const auto &l : r.sent) cutoff |= l.rfind("set " + dv + ".filter.cutoff=", 0) == 0;
@@ -1866,6 +1935,7 @@ int main()
     test_home_unsaved_confirm_and_recents();
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();
+    test_an_instruments_face_is_an_analog_panel();
     test_a_lane_is_an_instruments_track();
     test_midi_clips_are_made_looped_moved_and_listed();
     test_ruler_seek_keys_and_selection();

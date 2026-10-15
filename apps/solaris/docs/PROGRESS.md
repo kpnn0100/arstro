@@ -17,12 +17,8 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► G — the 2026-10-15 brief: an analog face for the instruments** (user request; R-UI-12):
-- **G1** the requirement (R-UI-12; R-WIN-2 and R-VST-7 amended).
-- **G2** the registry's group labels (DSP REQ-device-10) published in the model (`devices[].groups`).
-- **G3** the analog face — sections, knobs, switches, displays — in Solaris's instrument windows and the
-  plugins' editors (R-UI-12).
-Then B13 (the MIDI keyboard, R-EDM-10) — B13+ are Claude's own suggestions; ask before a long run. T2, T3
+**► B13 — the MIDI keyboard** (R-EDM-10), then R-EDM-11…20 one task each (B13+ below). B13+ are Claude's own
+EDM suggestions — ask before a long run. The 2026-10-15 brief (G1–G3, the analog face) is built; T2 and T3
 are small and may go first.
 
 ---
@@ -244,7 +240,12 @@ umbrella's pointer — `arstro.rule` §7).
       — DSP `c8a15eb` `DeviceType::groupLabels` (every instrument group titled); `devices[].groups` (`prefix`,
       `label`) filled by the shared `deviceModelOf`, documented, API regenerated; L2 test (mutant: an untitled
       group, red in the DSP unit test). The DR text lands with the face (DR-UI-12, G3).
-- [ ] **G3** The analog face in Solaris's instrument windows and the plugins' editors (R-UI-12).
+- [x] **G3** The analog face in Solaris's instrument windows and the plugins' editors (R-UI-12).
+      — DR-UI-12: `AnalogFace` as an instrument's DevicePanel body — titled modules, 270° knobs (detents, bipolar
+      arcs, lit caps), sliding-light switches with shape keys, screens (wave with unison, the filter's DSP prototype,
+      ADSR) — generated from the registry; everything eased; one `set` per drag step, Shift fine, double-click
+      default, the parameter menu, bound knobs inert; windows 820 wide, the plugin editor at its own size (980).
+      Found and fixed D-4 (the synth's Resonance did nothing; DSP `66b5ecb`). 4 mutants caught.
 - [ ] **B13+** R-EDM-10…20, one task each, in that order unless the user reorders.
 
 ### T — tasks found on the way

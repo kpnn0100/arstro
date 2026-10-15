@@ -140,7 +140,12 @@ namespace solaris_ui
             panel->onCopy = [this](const std::string &text) { if (onCopy) onCopy(text); };
             panel->idsAmount = [this] { return idsAmount ? idsAmount() : 0.0; };
             panel->bind(mModel, mInteracting);
-            w = &place(std::make_shared<FloatWindow>(key, panel), 390.0, 520.0);
+            // an instrument's window opens wide enough for its face's modules, three a row (R-UI-12); an effect's list is narrow
+            bool instrument = false;
+            for (const auto &s : mModel.strips)
+                for (const auto &d : s.devices)
+                    if (d.id == dv) instrument = d.instrument && panel->analogFace;
+            w = instrument ? &place(std::make_shared<FloatWindow>(key, panel), 820.0, 580.0) : &place(std::make_shared<FloatWindow>(key, panel), 390.0, 520.0);
         }
         w->open();
         bind(mModel, mInteracting); // its title, now

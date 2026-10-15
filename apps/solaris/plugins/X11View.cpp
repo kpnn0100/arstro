@@ -16,6 +16,7 @@
 #include "pluginterfaces/gui/iplugview.h"
 #include "public.sdk/source/common/pluginview.h"
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 // X11 last: its macros (Bool, None, Status) must not reach the SDK's headers
 #include <X11/Xlib.h>
@@ -59,8 +60,11 @@ namespace vst3
             explicit X11View(Controller &c)
                 : CPluginView(nullptr), mAccess(c), mEditor(c.type(), mAccess), mT0(std::chrono::steady_clock::now())
             {
-                ViewRect r(0, 0, (int32)solaris_ui::InstrumentEditor::kWidth, (int32)solaris_ui::InstrumentEditor::kHeight);
+                double w = solaris_ui::InstrumentEditor::kWidth, h = solaris_ui::InstrumentEditor::kHeight;
+                mEditor.preferredSize(w, h); // an instrument's face asks for its own size (R-UI-12)
+                ViewRect r(0, 0, (int32)std::ceil(w), (int32)std::ceil(h));
                 setRect(r);
+                mEditor.setSize(w, h);
             }
             ~X11View() SMTG_OVERRIDE { close(); }
 

@@ -78,6 +78,12 @@ namespace solaris_ui
         inline artboard::Color meterHigh() { return palette::destructive(); }
         inline artboard::Color solo() { return artboard::Color::hex(0xE3B341); }      // = meterMid: one amber
         inline artboard::Color skeleton() { return palette::whiteAlpha(0.045); }
+        // the analog face (R-UI-12): a module a recessed card, a screen cosmo's curve-plot black, a knob's cap a key's grey
+        inline artboard::Color moduleBg() { return palette::card(); }
+        inline artboard::Color screenBg() { return palette::curvePlotBg(); }
+        inline artboard::Color knobCap() { return palette::secondary(); }
+        inline artboard::Color knobTrack() { return palette::whiteAlpha(0.09); }
+        inline artboard::Color screenGrid() { return palette::whiteAlpha(0.04); }
         /** A strip's colour index (−1 = by kind) → a desaturated hue for its clips' plates. */
         inline artboard::Color track(int index)
         {

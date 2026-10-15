@@ -40,6 +40,7 @@ namespace solaris_ui
 {
     class ParamBody;
     class ParamIds;
+    class AnalogFace;
 
     class DevicePanel : public artboard::Segment
     {
@@ -73,6 +74,12 @@ namespace solaris_ui
         /** A right-click at a window point: true when it lands on a parameter row (its menu opened).
          *  The App offers right-clicks here first — a row's slider would otherwise swallow it. */
         bool contextClick(artboard::Point world);
+        /** R-UI-12: an instrument shows its analog face (sections, knobs, switches, screens) instead of the list.
+         *  Opt-out only for a test of the list; an effect always has the list. */
+        bool analogFace = true;
+        AnalogFace *face() const { return mFace.get(); }
+        /** A parameter's menu (R-WIN-3) — what a row or a knob offers. */
+        void openParamMenuFor(const solaris::ParamModel &spec, int choice, artboard::Point world);
 
         /** The song's controls in the header — On/Bypassed, Remove, Piano Roll. Off in a plugin's own editor
          *  (R-VST-7), where the panel is the whole instrument: its header names it instead. Opt-in, default on. */
@@ -109,6 +116,7 @@ namespace solaris_ui
         bool mPresent = false, mBuilt = false, mInteracting = false;
         std::shared_ptr<ParamBody> mBody;
         std::shared_ptr<ParamIds> mIds;     // over the rows: each row's address, faded in by Show IDs
+        std::shared_ptr<AnalogFace> mFace;  // an instrument's face, in the rows' place (R-UI-12)
         artboard::AnimatedProperty mBypass{0.0};
         bool mBypassInit = false, mBypassLast = false;
         interstellar_v1::EasedScroll mScroll;

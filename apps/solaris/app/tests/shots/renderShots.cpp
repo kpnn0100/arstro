@@ -231,6 +231,24 @@ namespace
                  r.click(world(d, d.chipRect("ch_3", 0))); // Bass's Basic Synth
                  r.settle();
              }},
+            {"device-face-turning", // R-UI-12: a shell's change mid-turn — the knob on its way, the screen redrawn through it
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 r.app->project().windows().openDevice("dv_2");
+                 r.settle();
+                 r.cmd("set dv_2.filter.res=0.85 dv_2.filter.cutoff=900 dv_2.osc1.wave=square");
+                 r.frame();
+                 r.frame();
+                 r.frame();
+             }},
+            {"effect-window", // R-UI-12: an effect keeps its parameter list
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 r.app->project().windows().openDevice("dv_3");
+                 r.settle();
+             }},
             {"device-window-bound",
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

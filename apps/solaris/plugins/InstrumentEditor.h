@@ -91,6 +91,9 @@ namespace solaris_ui
         // the size a host opens it at, and the least it may be resized to (R4: it lays out from its size)
         static constexpr double kWidth = 520.0, kHeight = 600.0, kMinWidth = 360.0, kMinHeight = 320.0;
         static constexpr const char *kDevice = "dv_1"; // the one device of its model
+        static constexpr double kFaceWidth = 980.0;     // an instrument's face opens this wide: two rows of modules (R-UI-12)
+        /** The size a host should open it at: an instrument's face, as tall as its modules need at kFaceWidth. */
+        void preferredSize(double &w, double &h);
 
         InstrumentEditor(const DeviceType &type, ParamAccess &access);
         void setSize(double w, double h);

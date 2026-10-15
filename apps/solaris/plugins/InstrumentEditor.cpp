@@ -1,6 +1,7 @@
 #include "InstrumentEditor.h"
 #include "EmbeddedFonts.h"
 #include "RegistryModel.h"
+#include "widgets/AnalogFace.h"
 #include "../../interstellar/app/widgets/TextFit.h"
 #include <algorithm>
 #include <cmath>
@@ -34,6 +35,19 @@ namespace solaris_ui
         }
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
         refresh();
+    }
+
+    void InstrumentEditor::preferredSize(double &w, double &h)
+    {
+        mPanel->advance(0.0); // built from the model the constructor bound
+        if (AnalogFace *f = mPanel->face())
+        {
+            w = kFaceWidth;
+            h = DevicePanel::kHeaderH + (mPads ? mPads->contentHeight() : 0.0) + f->layoutFor(w);
+            return;
+        }
+        w = kWidth;
+        h = kHeight;
     }
 
     void InstrumentEditor::setSize(double w, double h)

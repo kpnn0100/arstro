@@ -1,5 +1,7 @@
 #include "DevicePanel.h"
+#include "AnalogFace.h"
 #include "ParamMenu.h"
+#include "ParamFormat.h"
 #include "../../../interstellar/app/widgets/Glyphs.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
 #include "../../../cosmo/widgets/SliderRow.h"
@@ -22,34 +24,6 @@ namespace solaris_ui
         Color fade(Color c, double a) { c.a *= a; return c; }
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
 
-        std::string number(double v, int decimals)
-        {
-            char b[32];
-            std::snprintf(b, sizeof b, "%.*f", decimals, v);
-            std::string s = b;
-            if (s == "-0" || s == "-0.0" || s == "-0.00") s = s.substr(1);
-            return s;
-        }
-        /** The readout: engineering units, as few digits as say it. */
-        std::string formatValue(const solaris::ParamModel &p, double v)
-        {
-            const double a = std::fabs(v);
-            if (p.unit == "Hz") return a >= 1000.0 ? number(v / 1000.0, a >= 10000.0 ? 1 : 2) + " kHz" : number(v, a >= 100.0 ? 0 : 1) + " Hz";
-            if (p.unit == "ms") return number(v, a >= 100.0 ? 0 : 1) + " ms";
-            if (p.unit == "dB") return number(v, 1) + " dB";
-            if (p.unit == "st" || p.unit == "ct" || p.unit == "oct")
-                return (v > 0 ? "+" : "") + number(v, p.integer ? 0 : 1) + " " + p.unit;
-            if (p.unit.empty() && !p.integer && p.min >= 0.0 && p.max <= 1.0) return number(v * 100.0, 0) + " %";
-            return number(v, p.integer ? 0 : 2) + (p.unit.empty() ? "" : " " + p.unit);
-        }
-        /** The text a `set` stores: enough digits that a drag lands where it was let go. */
-        std::string storeText(double v, bool integer)
-        {
-            if (integer) return number(std::round(v), 0);
-            char b[32];
-            std::snprintf(b, sizeof b, "%.6g", v);
-            return b;
-        }
         std::string sectionOf(const std::string &name)
         {
             const auto dot = name.find('.');
@@ -57,19 +31,12 @@ namespace solaris_ui
             for (auto &c : s) c = (char)std::toupper((unsigned char)c);
             return s;
         }
-        bool logTaper(const solaris::ParamModel &p) { return p.logScale && p.min > 0.0 && p.max > p.min; }
-        double toPos(const solaris::ParamModel &p, double v)
-        {
-            if (!logTaper(p)) return v;
-            return std::log(std::max(v, p.min) / p.min) / std::log(p.max / p.min);
-        }
-        double fromPos(const solaris::ParamModel &p, double s)
-        {
-            double v = logTaper(p) ? p.min * std::pow(p.max / p.min, std::clamp(s, 0.0, 1.0)) : s;
-            if (p.integer) v = std::round(v);
-            return std::clamp(v, p.min, p.max);
-        }
     }
+    using paramfmt::formatValue;
+    using paramfmt::storeText;
+    using paramfmt::logTaper;
+    using paramfmt::toPos;
+    using paramfmt::fromPos;
 
     /** The scrolled body: the rows (SliderRows as children), section headers, choice rows and the light. */
     class ParamBody : public Segment
@@ -224,6 +191,16 @@ namespace solaris_ui
 
     void DevicePanel::build(const solaris::DeviceModel &d)
     {
+        if (d.instrument && analogFace)
+        {
+            // R-UI-12: an instrument's face — the same generated parameters, as a hardware panel
+            mFace = std::make_shared<AnalogFace>(*this);
+            mFace->build(d);
+            addChild(mFace);
+            mBody->visible = false;
+            mBuilt = true;
+            return;
+        }
         ParamBody &b = *mBody;
         double y = 6.5;
         std::string section = "\x01";
@@ -295,6 +272,7 @@ namespace solaris_ui
                     if (onOpenPattern) onOpenPattern(p.id);
                     break;
                 }
+        if (mFace) mFace->bind(*d, m.bindings);
         mBody->lastChanged = d->lastChanged;
         for (auto &r : mBody->rows)
             for (const auto &p : d->params)
@@ -311,6 +289,17 @@ namespace solaris_ui
     {
         const double W = width.value(), H = height.value();
         const double bodyH = std::max(0.0, H - bodyTop());
+        if (mFace)
+        {
+            // the face flows its modules into the width; the panel scrolls it (R6)
+            mScroll.setExtent(bodyTop(), bodyH, mFace->layoutFor(W));
+            mFace->x.set(0.0);
+            mFace->y.set(bodyTop());
+            mFace->width.set(W);
+            mFace->height.set(bodyH);
+            mFace->scroll = mScroll.value();
+            return;
+        }
         mScroll.setExtent(bodyTop(), bodyH, mBody->contentH);
         mBody->x.set(0.0);
         mBody->y.set(bodyTop());
@@ -361,15 +350,22 @@ namespace solaris_ui
         Segment::advance(nowMs);
     }
 
-    int DevicePanel::rowCount() const { return (int)mBody->rows.size(); }
+    int DevicePanel::rowCount() const { return mFace ? mFace->controlCount() : (int)mBody->rows.size(); }
 
     std::string DevicePanel::rowParam(int i) const
     {
+        if (mFace) return mFace->controlParam(i);
         return i >= 0 && i < rowCount() ? mBody->rows[(size_t)i].spec.name : std::string();
     }
 
     Rect DevicePanel::rowRect(int i) const
     {
+        if (mFace)
+        {
+            Rect r = mFace->controlRect(i); // a knob's cell or a switch's row, in the panel's coordinates
+            r.y += bodyTop();
+            return r;
+        }
         if (i < 0 || i >= rowCount()) return Rect{};
         return Rect{space::padX(), bodyTop() + mBody->rows[(size_t)i].top - mScroll.value(), width.value() - 2.0 * space::padX(),
                     cosmo_v2::SliderRow::kRowHeight};
@@ -384,6 +380,7 @@ namespace solaris_ui
 
     std::string DevicePanel::readout(const std::string &param) const
     {
+        if (mFace) return mFace->valueText(param);
         for (const auto &r : mBody->rows)
             if (r.spec.name == param)
             {
@@ -396,6 +393,7 @@ namespace solaris_ui
 
     double DevicePanel::litAmount(const std::string &param) const
     {
+        if (mFace) return mFace->litAmount(param);
         for (const auto &r : mBody->rows)
             if (r.spec.name == param) return r.lit.value();
         return 0.0;
@@ -403,12 +401,25 @@ namespace solaris_ui
 
     void DevicePanel::reveal(const std::string &param)
     {
+        if (mFace)
+        {
+            const int i = mFace->controlIndex(param);
+            if (i >= 0) mScroll.reveal(mFace->contentTop(i), AnalogFace::kCellH);
+            return;
+        }
         for (const auto &r : mBody->rows)
             if (r.spec.name == param) mScroll.reveal(r.top, cosmo_v2::SliderRow::kRowHeight);
     }
 
     void DevicePanel::revealGroup(const std::string &prefix)
     {
+        if (mFace)
+        {
+            // the module, at the top
+            const double top = mFace->sectionTop(prefix);
+            if (top >= 0.0) mScroll.reveal(std::max(0.0, top - AnalogFace::kPad), std::max(0.0, height.value() - bodyTop()));
+            return;
+        }
         // the group's section header, at the top: the group's first row, and the header just above it
         for (const auto &r : mBody->rows)
             if (r.spec.name.rfind(prefix + ".", 0) == 0)
@@ -456,26 +467,41 @@ namespace solaris_ui
 
     void DevicePanel::openParamMenu(int i, Point world)
     {
-        if (!onMenu || i < 0 || i >= rowCount()) return;
+        if (i < 0 || i >= rowCount()) return;
+        if (mFace)
+        {
+            const int k = mFace->controlIndex(mFace->controlParam(i));
+            const solaris::DeviceModel *d = model();
+            if (!d || k < 0) return;
+            for (const auto &p : d->params)
+                if (p.name == mFace->controlParam(i)) openParamMenuFor(p, (int)std::lround(p.value), world);
+            return;
+        }
         const ParamBody::Row &r = mBody->rows[(size_t)i];
-        // the shared menu (R-WIN-3, R-UI-11): this row says what it is, ParamMenu says what can be done
+        openParamMenuFor(r.spec, r.choice, world);
+    }
+
+    void DevicePanel::openParamMenuFor(const solaris::ParamModel &spec, int choice, Point world)
+    {
+        if (!onMenu) return;
+        // the shared menu (R-WIN-3, R-UI-11): this row or knob says what it is, ParamMenu says what can be done
         ParamTarget p;
-        p.address = mDevice + "." + r.spec.name;
-        p.formula = r.spec.formula;
-        p.bindable = r.spec.choices.empty();
+        p.address = mDevice + "." + spec.name;
+        p.formula = spec.formula;
+        p.bindable = spec.choices.empty();
         if (p.bindable)
         {
-            double v = r.spec.value;
+            double v = spec.value;
             for (const auto &b : mModel.bindings) // a bound value: what it evaluates to now (R-MIX-16)
                 if (b.address == p.address) v = b.live;
-            p.value = formatValue(r.spec, v);
-            p.reset = storeText(r.spec.def, r.spec.integer);
+            p.value = formatValue(spec, v);
+            p.reset = storeText(spec.def, spec.integer);
         }
         else
         {
-            const int n = (int)r.spec.choices.size();
-            p.value = r.choice >= 0 && r.choice < n ? r.spec.choices[(size_t)r.choice] : std::string();
-            p.reset = r.spec.choices[(size_t)std::clamp((int)std::lround(r.spec.def), 0, n - 1)];
+            const int n = (int)spec.choices.size();
+            p.value = choice >= 0 && choice < n ? spec.choices[(size_t)choice] : std::string();
+            p.reset = spec.choices[(size_t)std::clamp((int)std::lround(spec.def), 0, n - 1)];
         }
         PropertyHooks h;
         h.command = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
