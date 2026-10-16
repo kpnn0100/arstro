@@ -211,12 +211,19 @@ namespace solaris
             {K::Eval, "eval", "<address>", 1, 1, {"at=<beats>", "explain"},
              "The value an address plays at a beat (default 0); --explain shows its formula and every name it reads.", "R-AUTO-8"},
 
-            {K::Render, "render", "", 0, 0, {"out=<file.wav>", "from=<beats>", "to=<beats>", "stems=<ch,…|all>", "ports", "bits=<24|32f>", "measure"},
+            {K::Render, "render", "", 0, 0,
+             {"out=<file>", "format=<wav|flac|mp3|ogg|opus>", "rate=<Hz>", "bits=<16|24|32f>", "kbps=<n>", "normalize=<LUFS>",
+              "ceiling=<dBTP>", "from=<beats>", "to=<beats>", "stems=<ch,…|all>", "ports", "measure"},
              "Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader "
-             "output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until "
+             "output to <out>.<ch>.<ext>; with --ports, each output port to <out>.<port>.<ext>. The tail runs until "
              "−90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) "
-             "is compensated and trimmed (R-MIX-17). --measure prints the master's integrated loudness, the most of its "
-             "momentary and short-term, its true peak and its lowest correlation (R-METER-1).", "R-RENDER-2", false, {"out"}},
+             "is compensated and trimmed (R-MIX-17). The format is the extension — .wav, .flac, .mp3, .ogg (Vorbis), "
+             ".opus — or --format (R-EXPORT-1). --rate renders the song AT that rate (Opus: 48000, its default; MP3 to "
+             "48000); --bits 16 | 24 (WAV and FLAC; default 24) | 32f (WAV) — 16 and 24 TPDF-dithered; --kbps for the lossy "
+             "ones (MP3 32…320, default 320; Ogg 45…500, 256; Opus 6…510, 192). --normalize gains every file alike to that "
+             "integrated loudness, held so the master's true peak stays under --ceiling (dBTP, default −1) — said on a "
+             "`normalize` line. --measure prints the written master's integrated loudness, the most of its momentary and "
+             "short-term, its true peak and its lowest correlation (R-METER-1).", "R-RENDER-2", false, {"out"}},
 
             {K::MatrixPrint, "matrix print", "", 0, 0, {"json"}, "Every route and send at once: rows = strips, columns = destinations.", "R-MIX-9"},
             {K::Audit, "audit", "", 0, 0, {}, "The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping.", "R-MIX-10"},

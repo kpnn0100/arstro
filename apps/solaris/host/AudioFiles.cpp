@@ -119,7 +119,8 @@ namespace solaris_host
         if (nch < 1) { err = "nothing to write"; return false; }
         const size_t frames = channels[0].size();
         const bool flt = bits == 32;
-        const int bytes = flt ? 4 : 3;
+        const int bytes = flt ? 4 : bits == 16 ? 2 : 3;
+        const double scale = bits == 16 ? 32768.0 : 8388608.0; // 2^(bits−1): the dither's grid lands on integers
         FILE *f = std::fopen(path.c_str(), "wb");
         if (!f) { err = "cannot write " + path; return false; }
         auto u32 = [&](uint32_t v) { std::fwrite(&v, 4, 1, f); };
@@ -143,18 +144,142 @@ namespace solaris_host
                 }
                 else
                 {
-                    // TPDF-free rounding to 24 bits, clipped (a render writes what was mixed; the meter says if it clipped)
-                    const double c = std::max(-1.0, std::min(1.0, (double)s));
-                    const int32_t v = (int32_t)std::lround(c * 8388607.0);
+                    // the service dithered onto this grid (R-EXPORT-1); here only the integer, clipped
+                    const int32_t v = (int32_t)std::max(-scale, std::min(scale - 1.0, (double)std::lround((double)s * scale)));
                     buf.push_back((uint8_t)(v & 0xff));
                     buf.push_back((uint8_t)((v >> 8) & 0xff));
-                    buf.push_back((uint8_t)((v >> 16) & 0xff));
+                    if (bytes == 3) buf.push_back((uint8_t)((v >> 16) & 0xff));
                 }
             }
         const bool ok = std::fwrite(buf.data(), 1, buf.size(), f) == buf.size();
         std::fclose(f);
         if (!ok) err = "short write to " + path;
         return ok;
+    }
+
+    bool writeAudio(const std::string &path, const std::vector<std::vector<float>> &channels, int rate,
+                    const std::string &format, int bits, int kbps, std::string &err)
+    {
+#ifndef SOLARIS_HAVE_FFMPEG
+        (void)path; (void)channels; (void)rate; (void)bits; (void)kbps;
+        err = "this build has no FFmpeg, so it cannot write " + format;
+        return false;
+#else
+        const int nch = (int)channels.size();
+        if (nch < 1 || nch > 2) { err = "nothing to write"; return false; }
+        const size_t frames = channels[0].size();
+        const char *encoder = format == "flac" ? "flac" : format == "mp3" ? "libmp3lame" : format == "ogg" ? "libvorbis" : format == "opus" ? "libopus" : nullptr;
+        if (!encoder) { err = "no encoder for `" + format + "`"; return false; }
+        const AVCodec *codec = avcodec_find_encoder_by_name(encoder);
+        if (!codec) { err = std::string("this FFmpeg has no ") + encoder + " encoder"; return false; }
+        AVFormatContext *fmt = nullptr;
+        if (avformat_alloc_output_context2(&fmt, nullptr, format == "ogg" ? "ogg" : format.c_str(), path.c_str()) < 0 || !fmt)
+        {
+            err = "cannot make a " + format + " file";
+            return false;
+        }
+        AVCodecContext *cc = avcodec_alloc_context3(codec);
+        AVFrame *fr = av_frame_alloc();
+        AVPacket *pkt = av_packet_alloc();
+        bool ok = false;
+        auto done = [&](const std::string &e) {
+            err = e;
+            return false;
+        };
+        do
+        {
+            AVStream *st = avformat_new_stream(fmt, nullptr);
+            if (!st || !cc || !fr || !pkt) { done("out of memory"); break; }
+            // the sample format: FLAC takes integers (16, or 24 in the top of 32); the lossy ones float, else 16
+            const bool flac = format == "flac";
+            AVSampleFormat want[] = {AV_SAMPLE_FMT_FLTP, AV_SAMPLE_FMT_FLT, AV_SAMPLE_FMT_S16P, AV_SAMPLE_FMT_S16};
+            AVSampleFormat sf = AV_SAMPLE_FMT_NONE;
+            if (flac) sf = bits == 16 ? AV_SAMPLE_FMT_S16 : AV_SAMPLE_FMT_S32;
+            else
+                for (AVSampleFormat w : want)
+                    for (const AVSampleFormat *p = codec->sample_fmts; p && *p != AV_SAMPLE_FMT_NONE && sf == AV_SAMPLE_FMT_NONE; ++p)
+                        if (*p == w) sf = w;
+            if (sf == AV_SAMPLE_FMT_NONE) { done(std::string(encoder) + " takes no sample format this writer has"); break; }
+            cc->sample_fmt = sf;
+            cc->sample_rate = rate;
+            cc->time_base = AVRational{1, rate};
+#if SOLARIS_AV_CH_LAYOUT
+            av_channel_layout_default(&cc->ch_layout, nch);
+#else
+            cc->channel_layout = (uint64_t)av_get_default_channel_layout(nch);
+            cc->channels = nch;
+#endif
+            if (flac && bits == 24) cc->bits_per_raw_sample = 24;
+            if (!flac) cc->bit_rate = (int64_t)kbps * 1000;
+            if (fmt->oformat->flags & AVFMT_GLOBALHEADER) cc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+            if (avcodec_open2(cc, codec, nullptr) < 0) { done(std::string("cannot open the ") + encoder + " encoder at " + std::to_string(rate) + " Hz"); break; }
+            if (avcodec_parameters_from_context(st->codecpar, cc) < 0) { done("cannot describe the stream"); break; }
+            st->time_base = cc->time_base;
+            if (!(fmt->oformat->flags & AVFMT_NOFILE) && avio_open(&fmt->pb, path.c_str(), AVIO_FLAG_WRITE) < 0) { done("cannot write " + path); break; }
+            if (avformat_write_header(fmt, nullptr) < 0) { done("cannot write the " + format + " header"); break; }
+            const bool variable = codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE;
+            const bool smallLast = codec->capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME;
+            const int block = variable || cc->frame_size <= 0 ? 4096 : cc->frame_size;
+            auto drain = [&]() -> bool {
+                while (true)
+                {
+                    const int r = avcodec_receive_packet(cc, pkt);
+                    if (r == AVERROR(EAGAIN) || r == AVERROR_EOF) return true;
+                    if (r < 0) return false;
+                    av_packet_rescale_ts(pkt, cc->time_base, st->time_base);
+                    pkt->stream_index = st->index;
+                    if (av_interleaved_write_frame(fmt, pkt) < 0) return false;
+                }
+            };
+            bool failed = false;
+            for (size_t pos = 0; pos < frames && !failed; pos += (size_t)block)
+            {
+                const int have = (int)std::min<size_t>((size_t)block, frames - pos);
+                const int n = smallLast || variable ? have : block; // a codec that needs whole frames: the last one padded with silence
+                av_frame_unref(fr);
+                fr->nb_samples = n;
+                fr->format = sf;
+                fr->sample_rate = rate;
+#if SOLARIS_AV_CH_LAYOUT
+                av_channel_layout_copy(&fr->ch_layout, &cc->ch_layout);
+#else
+                fr->channel_layout = cc->channel_layout;
+                fr->channels = nch;
+#endif
+                if (av_frame_get_buffer(fr, 0) < 0 || av_frame_make_writable(fr) < 0) { failed = true; break; }
+                const bool planar = av_sample_fmt_is_planar(sf);
+                for (int ch = 0; ch < nch; ++ch)
+                    for (int i = 0; i < n; ++i)
+                    {
+                        const float x = i < have ? channels[(size_t)ch][pos + (size_t)i] : 0.0f;
+                        const int at = planar ? i : i * nch + ch;
+                        uint8_t *base = fr->data[planar ? ch : 0];
+                        switch (sf)
+                        {
+                        case AV_SAMPLE_FMT_FLTP: case AV_SAMPLE_FMT_FLT: ((float *)base)[at] = x; break;
+                        case AV_SAMPLE_FMT_S16P: case AV_SAMPLE_FMT_S16:
+                            ((int16_t *)base)[at] = (int16_t)std::max(-32768.0, std::min(32767.0, (double)std::lround((double)x * 32768.0)));
+                            break;
+                        default: // S32: 24 bits in the top of 32 (FFmpeg's FLAC reads them there)
+                            ((int32_t *)base)[at] = (int32_t)std::max(-8388608.0, std::min(8388607.0, (double)std::lround((double)x * 8388608.0))) * 256;
+                            break;
+                        }
+                    }
+                fr->pts = (int64_t)pos;
+                if (avcodec_send_frame(cc, fr) < 0 || !drain()) failed = true;
+            }
+            if (failed) { done("the " + format + " encoder failed"); break; }
+            if (avcodec_send_frame(cc, nullptr) < 0 || !drain()) { done("the " + format + " encoder failed to finish"); break; }
+            if (av_write_trailer(fmt) < 0) { done("cannot finish " + path); break; }
+            ok = true;
+        } while (false);
+        av_packet_free(&pkt);
+        av_frame_free(&fr);
+        avcodec_free_context(&cc);
+        if (fmt && !(fmt->oformat->flags & AVFMT_NOFILE)) avio_closep(&fmt->pb);
+        avformat_free_context(fmt);
+        return ok;
+#endif
     }
 }
 }

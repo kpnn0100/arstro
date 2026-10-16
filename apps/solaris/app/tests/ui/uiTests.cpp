@@ -650,6 +650,90 @@ static void test_lists_travel_when_the_song_changes_shape()
     pass("Lists travel (§1): a clip from a shell fades in, a `clip move` eases, a lane removed slides the next up, a tab cross-fades");
 }
 
+static void test_the_export_sheet_is_one_render_line()
+{
+    // R-EXPORT-1: File › Export… — a combo a choice, the rows that do not apply greyed (eased) and inert, and Export…
+    // the host's save dialog, then ONE render line
+    sltest::Rig r("ui-export", 1280, 800);
+    r.cmd("project new " + r.song("Mixdown") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    r.settle();
+    std::string asked, suggested;
+    r.app->onPickSave = [&](const std::string &title, const std::string &s, std::function<void(const std::string &)> done) {
+        asked = title;
+        suggested = s;
+        done(r.dir + "/Mixdown out" + s.substr(s.rfind('.')));
+    };
+    auto &ms = r.app->project().bar().menus();
+    r.click(world(ms, ms.titleRect(0)));
+    r.settle();
+    assert(ms.menu(0).items[5].label == "Export\xE2\x80\xA6");
+    r.click(world(ms, ms.itemRect(0, 5)));
+    r.frame();
+    r.frame();
+    auto &ex = r.app->exportSheet();
+    assert(ex.isOpen() && ex.appearAmount() > 0.0 && ex.appearAmount() < 1.0); // it fades in
+    r.settle();
+    using ES = arstro::solaris_ui::ExportSheet;
+    assert(ex.rowAmount(ES::kBits) == 1.0 && ex.rowAmount(ES::kQuality) == 0.0 && ex.flags() == "--format wav --bits 24");
+    auto pick = [&](int row, int i) {
+        r.click(ex.controlRect(row));
+        r.settle();
+        assert(ex.comboOpen(row));
+        r.click(ex.optionRect(row, i));
+    };
+    // MP3: its quality comes up and the bit depth greys — eased, caught mid-way
+    pick(ES::kFormat, 2);
+    r.frame();
+    r.frame();
+    assert(ex.rowAmount(ES::kQuality) > 0.0 && ex.rowAmount(ES::kQuality) < 1.0 && ex.rowAmount(ES::kBits) > 0.0);
+    r.settle();
+    assert(ex.rowAmount(ES::kBits) == 0.0 && ex.flags() == "--format mp3 --kbps 320");
+    r.click(ex.controlRect(ES::kBits)); // a greyed row takes no click
+    r.settle();
+    assert(!ex.comboOpen(ES::kBits));
+    // 44.1 kHz, 192 kbps, −14 LUFS (its ceiling comes up with it), a stem per strip
+    pick(ES::kRate, 1);
+    r.settle();
+    pick(ES::kQuality, 1);
+    r.settle();
+    assert(ex.rowAmount(ES::kCeiling) == 0.0);
+    pick(ES::kLoudness, 3);
+    r.settle();
+    assert(ex.rowAmount(ES::kCeiling) == 1.0);
+    r.click(ex.controlRect(ES::kStems));
+    r.settle();
+    const std::string want = "--format mp3 --rate 44100 --kbps 192 --normalize -14 --ceiling -1 --stems all";
+    assert(ex.flags() == want);
+    r.click(ex.exportRect());
+    r.settle();
+    assert(!ex.isOpen() && asked == "Export the mix" && suggested == "Mixdown.mp3");
+    assert(r.sent.back() == "render --out \"" + r.dir + "/Mixdown out.mp3\" " + want);
+    assert(contains(r.app->toastText(), "no mp3 writer")); // this rig's host has no encoders: the service's own sentence
+    // a choice the format cannot take moves: 32-bit float, then FLAC — 24-bit, its label cross-fading there
+    r.click(world(ms, ms.titleRect(0)));
+    r.settle();
+    r.click(world(ms, ms.itemRect(0, 5)));
+    r.settle();
+    pick(ES::kFormat, 0);
+    r.settle();
+    pick(ES::kBits, 2);
+    r.settle();
+    assert(ex.flags() == "--format wav --rate 44100 --bits 32f --normalize -14 --ceiling -1 --stems all");
+    pick(ES::kFormat, 1);
+    r.frame();
+    r.frame();
+    assert(ex.shownValue(ES::kBits) == "24-bit");
+    r.settle();
+    assert(ex.flags() == "--format flac --rate 44100 --bits 24 --normalize -14 --ceiling -1 --stems all");
+    r.key(27);
+    r.settle();
+    assert(!ex.isOpen());
+    pass("Export (R-EXPORT-1): File › Export… fades in; MP3 brings its quality up and greys the bit depth (eased, inert); rate, "
+         "quality, loudness (its ceiling with it) and stems make ONE render line after the host's save dialog; FLAC moves a float "
+         "depth to 24-bit; Escape closes");
+}
+
 static void test_meters_and_the_loudness_window()
 {
     // R-METER-2: an RMS core, a held line and a clip light on every meter; R-METER-1: the master's LUFS chip opens
@@ -3150,6 +3234,7 @@ int main()
     test_lists_travel_when_the_song_changes_shape();
     test_mixer_dock_strips();
     test_meters_and_the_loudness_window();
+    test_the_export_sheet_is_one_render_line();
     test_mixer_matrix_effects_and_device_panel();
     test_song_bar_menus_and_settings_sections();
     test_device_window_lists_parameters_and_binds_them();

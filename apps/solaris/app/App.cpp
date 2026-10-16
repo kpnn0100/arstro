@@ -37,6 +37,7 @@ namespace solaris_ui
         mHome = std::make_shared<HomeScreen>();
         mProject = std::make_shared<ProjectScreen>();
         mSettings = std::make_shared<SettingsSheet>();
+        mExport = std::make_shared<ExportSheet>();
         mConfirm = std::make_shared<cosmo_v2::ConfirmDialog>(palette::primary());
         mMenu = std::make_shared<cosmo_v2::ContextMenu>();
         mModalRoot = std::make_shared<Segment>();
@@ -80,6 +81,10 @@ namespace solaris_ui
         };
 
         mSettings->onCommand = [this](const std::string &line) { dispatch(line); };
+        // R-EXPORT-1: the sheet's choices, then the host names the file — ONE render line
+        mExport->onExport = [this](const std::string &flags, const std::string &suggested) {
+            if (onPickSave) onPickSave("Export the mix", suggested, [this, flags](const std::string &p) { dispatch("render --out " + quote(p) + " " + flags); });
+        };
         mSettings->onAddFolder = [this] {
             if (onPickFolder) onPickFolder([this](const std::string &path) { dispatch("folder add " + quote(path)); });
         };
@@ -93,11 +98,12 @@ namespace solaris_ui
                 else mHistory->onGesture(g);
                 return;
             }
-            if (g.type == Gesture::Type::RightClick && mScreen == "project" && !mConfirm->isOpen() && !mSettings->isOpen() &&
+            if (g.type == Gesture::Type::RightClick && mScreen == "project" && !mConfirm->isOpen() && !mSettings->isOpen() && !mExport->isOpen() &&
                 mProject->contextClick(g.pos))
                 return; // a window's parameter row: its menu (a slider would swallow the click)
             if (mConfirm->isOpen()) { mConfirm->onGesture(g); return; }
             if (mSettings->isOpen()) { mSettings->onGesture(g); return; }
+            if (mExport->isOpen()) { mExport->onGesture(g); return; }
             if (g.type == Gesture::Type::Down && mScreen == "project")
             {
                 // R-ROLL-8: the keyboard follows the pointer — a press in the front roll gives it the keys
@@ -129,6 +135,7 @@ namespace solaris_ui
                  const auto &m = mHooks.model ? mHooks.model() : emptyModel();
                  if (onPickSave) onPickSave("Render the mix", m.projectName + ".wav", [this](const std::string &p) { dispatch("render --out " + quote(p)); });
              }},
+            {"Export\xE2\x80\xA6", [this] { mExport->show(mHooks.model ? mHooks.model() : emptyModel()); }}, // R-EXPORT-1
             {"Render Stems\xE2\x80\xA6", [this] {
                  const auto &m = mHooks.model ? mHooks.model() : emptyModel();
                  std::string ids;
@@ -198,7 +205,7 @@ namespace solaris_ui
 
     void App::layoutAll()
     {
-        for (Segment *s : {(Segment *)mHome.get(), (Segment *)mProject.get(), (Segment *)mSettings.get(), (Segment *)mModalRoot.get(), (Segment *)mConfirm.get(),
+        for (Segment *s : {(Segment *)mHome.get(), (Segment *)mProject.get(), (Segment *)mSettings.get(), (Segment *)mExport.get(), (Segment *)mModalRoot.get(), (Segment *)mConfirm.get(),
                            (Segment *)mMenu.get(), (Segment *)mHistory.get()})
         {
             s->x.set(0);
@@ -367,7 +374,7 @@ namespace solaris_ui
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         if (m.revision != mBoundRevision || m.transport.playing || m.audition.playing || m.audition.playing != mBoundAudition) return true;
         if (mHome->opacity.isAnimating() || mProject->opacity.isAnimating() || mToast.isAnimating() || mToast.value() > 0.0) return true;
-        if (mSettings->appearAmount() > 0.0 || mMenu->isOpen() || mHistory->appearAmount() > 0.0) return true;
+        if (mSettings->appearAmount() > 0.0 || mExport->appearAmount() > 0.0 || mMenu->isOpen() || mHistory->appearAmount() > 0.0) return true;
         return nowMs - mLastActivityMs < kActiveWindowMs;
     }
 
@@ -408,7 +415,7 @@ namespace solaris_ui
     Cursor App::cursor() const
     {
         // a modal takes the pointer: the arrow over it (and over what it covers)
-        if (mMenu->isOpen() || mConfirm->isOpen() || mSettings->isOpen() || mHistory->isOpen() || mScreen != "project") return Cursor::Default;
+        if (mMenu->isOpen() || mConfirm->isOpen() || mSettings->isOpen() || mExport->isOpen() || mHistory->isOpen() || mScreen != "project") return Cursor::Default;
         return mProject->cursorAt(mPointer);
     }
 
@@ -418,6 +425,7 @@ namespace solaris_ui
         if (mMenu->isOpen()) { mMenu->dispatchKey(e); return true; }
         if (mConfirm->isOpen()) { mConfirm->handleKey(e); return true; }
         if (mSettings->isOpen()) return mSettings->handleKey(e);
+        if (mExport->isOpen()) return mExport->handleKey(e);
         if (e.type != KeyEvent::Type::Down) return false;
         if (mHistory->isOpen())
         {
@@ -565,6 +573,9 @@ namespace solaris_ui
         mSettings->advance(nowMs);
         mSettings->render(target);        // its card, its pages and their controls (R-SET-5/6) …
         mSettings->renderOverlay(target); // … and an open combo's list, over everything
+        mExport->advance(nowMs);          // R-EXPORT-1: the same, for File › Export…
+        mExport->render(target);
+        mExport->renderOverlay(target);
         mModalRoot->advance(nowMs);
         mModalRoot->renderOverlay(target);
 

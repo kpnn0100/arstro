@@ -692,6 +692,25 @@ namespace
                  r.click(world(d, d.loudnessRect()));
                  r.settle();
              }},
+            {"export-sheet", // R-EXPORT-1: File › Export… — MP3 chosen: its quality up, the bit depth greyed; a loudness target
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 auto &ms = r.app->project().bar().menus();
+                 r.click(world(ms, ms.titleRect(0)));
+                 r.settle();
+                 r.click(world(ms, ms.itemRect(0, 5)));
+                 r.settle();
+                 auto &ex = r.app->exportSheet();
+                 using ES = arstro::solaris_ui::ExportSheet;
+                 for (auto [row, i] : {std::pair<int, int>{ES::kFormat, 2}, {ES::kLoudness, 3}})
+                 {
+                     r.click(ex.controlRect(row));
+                     r.settle();
+                     r.click(ex.optionRect(row, i));
+                     r.settle();
+                 }
+             }},
             {"confirm-unsaved",
              [](sltest::Rig &r) {
                  songWithStrips(r, "Night Drive");

@@ -45,6 +45,7 @@ namespace
         solaris::SolarisService::Host h;
         h.decodeAudio = solaris_host::decodeAudio;
         h.writeWav = solaris_host::writeWav;
+        h.writeAudio = solaris_host::writeAudio;
         h.listDir = solaris_host::listDir;
         h.listDevices = solaris_host::listDevices;
 #ifdef SOLARIS_HAVE_PULSE

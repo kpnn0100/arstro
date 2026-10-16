@@ -144,6 +144,7 @@ namespace solaris_cli
             solaris::SolarisService::Host host;
             host.decodeAudio = solaris_host::decodeAudio;
             host.writeWav = solaris_host::writeWav;
+            host.writeAudio = solaris_host::writeAudio;
             host.listDir = solaris_host::listDir;
             host.listDevices = solaris_host::listDevices;
 #ifdef SOLARIS_HAVE_PULSE

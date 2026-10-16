@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N6 — delivery formats: FLAC / MP3 / OGG / Opus, rate, bits, dither, normalise; File › Export…** (R-EXPORT-1), then N7… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window. B13+ wait (ask).
+**► N7 — `strip duck --under`: a side-chain in one gesture** (R-MIX-18), then N8… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window. B13+ wait (ask).
 
 ---
 
@@ -412,8 +412,13 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       on the samples; each frame's gain meets ±8 neighbours' needs; latency L + 16. DR-EDM-4a: an L2 render reads
       −1.0000 dBTP (sample-peak mode −0.52). 2 mutants red. Found: a 4×-only detector held the meter's grid but
       read 0.19 dB over on the quarter grid — the requirement's "4×" amended to 8×, with why.
-- [ ] **N6** Delivery formats: FLAC / MP3 / OGG / Opus, rate, bits, dither, normalise to LUFS; File › Export…
+- [x] **N6** Delivery formats: FLAC / MP3 / OGG / Opus, rate, bits, dither, normalise to LUFS; File › Export…
       (R-EXPORT-1).
+      — DSP `c23768c` + `d97a6cd` (REQ-out-dither-1: TPDF from two Noise uniforms; an exact zero kept silent). DR-EXPORT-1:
+      the host's FFmpeg encoders behind `writeAudio`; `--rate` renders the song AT the rate (no resampler); normalise
+      held under a true-peak ceiling; integer depths dithered, seeded per file. File › Export… is `ExportSheet`. L2 + L3
+      (ffprobe, ebur128) + UI + a shot; 5 Solaris mutants and 2 DSP mutants red. Found: a default render's silence
+      turned to dither hiss — fixed in the library ((D0)), not by the caller.
 - [ ] **N7** `strip duck --under`: a side-chain in one gesture (R-MIX-18).
 **Phase 2 — play it in**
 - [ ] **N8** The PipeWire driver, xruns counted (R-DEV-9).

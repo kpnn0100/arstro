@@ -24,6 +24,7 @@
 #include "widgets/HomeScreen.h"
 #include "widgets/ProjectScreen.h"
 #include "widgets/SettingsSheet.h"
+#include "widgets/ExportSheet.h"
 #include "../../cosmo/widgets/ConfirmDialog.h"
 #include "../../cosmo/widgets/ContextMenu.h"
 #include "../../cosmo/widgets/HistoryView.h"
@@ -85,6 +86,7 @@ namespace solaris_ui
         HomeScreen &home() { return *mHome; }
         ProjectScreen &project() { return *mProject; }
         SettingsSheet &settings() { return *mSettings; }
+        ExportSheet &exportSheet() { return *mExport; } // R-EXPORT-1: File › Export…
         cosmo_v2::ConfirmDialog &confirm() { return *mConfirm; }
         cosmo_v2::ContextMenu &menu() { return *mMenu; }
         artboard::Segment *activeRoot();
@@ -113,6 +115,7 @@ namespace solaris_ui
         std::shared_ptr<HomeScreen> mHome;
         std::shared_ptr<ProjectScreen> mProject;
         std::shared_ptr<SettingsSheet> mSettings;
+        std::shared_ptr<ExportSheet> mExport;
         std::shared_ptr<cosmo_v2::ConfirmDialog> mConfirm;
         std::shared_ptr<cosmo_v2::ContextMenu> mMenu;  // cosmo's: a route, an effect, rename — modal while open
         std::shared_ptr<artboard::Segment> mModalRoot; // hosts cosmo's dialog: its advance is the tree's

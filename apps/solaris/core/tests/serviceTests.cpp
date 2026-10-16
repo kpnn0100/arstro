@@ -98,7 +98,8 @@ namespace
         std::shared_ptr<Capture> capture = std::make_shared<Capture>();
         bool canPlay = true;
         std::map<std::string, std::vector<std::vector<float>>> written;
-        std::map<std::string, int> bits;
+        std::map<std::string, int> bits, rates, kbps;
+        std::map<std::string, std::string> formats;   // R-EXPORT-1: what each file was written as
         SolarisService::Host host()
         {
             SolarisService::Host h;
@@ -111,9 +112,20 @@ namespace
                     out.samples[(size_t)i * 2] = out.samples[(size_t)i * 2 + 1] = (float)(0.5 * std::sin(2 * M_PI * 1000.0 * i / rate));
                 return true;
             };
-            h.writeWav = [this](const std::string &path, const std::vector<std::vector<float>> &ch, int, int b, std::string &) {
+            h.writeWav = [this](const std::string &path, const std::vector<std::vector<float>> &ch, int rate, int b, std::string &) {
                 written[path] = ch;
                 bits[path] = b;
+                rates[path] = rate;
+                formats[path] = "wav";
+                return true;
+            };
+            h.writeAudio = [this](const std::string &path, const std::vector<std::vector<float>> &ch, int rate, const std::string &f, int b,
+                                  int k, std::string &) {
+                written[path] = ch;
+                bits[path] = b;
+                rates[path] = rate;
+                kbps[path] = k;
+                formats[path] = f;
                 return true;
             };
             h.listDir = [](const std::string &path, std::vector<BrowserEntry> &out, std::string &err) {
@@ -483,7 +495,7 @@ static void test_a_sampler_plays_its_sound_by_the_key()
     assert(dm->takesSample && dm->sample == "kick.wav");
     assert(r.ok("get dv_1.sample") == "kick.wav\n");
     const std::string out = dir + "/sampler.wav";
-    r.ok("render --out " + out + " --to 4");
+    r.ok("render --out " + out + " --to 4 --bits 32f");               // the mix as mixed: no dither (R-EXPORT-1)
     const auto &L = r.fake.written[out][0];
     // at the root it IS the file, sample for sample (unity pan law at centre, 0 dB fader and master)
     bool exact = true;
@@ -1061,7 +1073,7 @@ static void test_render_writes_the_mix_deterministically()
     r.ok("render --out " + dir + "/bar.wav --from 1 --to 3 --bits 32f");
     assert(r.fake.written[dir + "/bar.wav"][0].size() == 48000 && r.fake.bits[dir + "/bar.wav"] == 32);
     assert(contains(r.no("render --out x.wav --stems ch_9"), "no strip"));
-    assert(r.no("render") == "render needs --out <file.wav>");
+    assert(r.no("render") == "render needs --out <file>");
     pass("render: the mixdown, stems and ports; silent before the first note, the tail to −90 dBFS, byte-identical twice (R-RENDER-1…3)");
 }
 
@@ -1373,7 +1385,7 @@ static void test_live_playback_is_the_offline_render()
     waitFrames(r, 96000 + 4800); // 4 beats, and a tenth of a second more: the position is what is HEARD, a latency behind
     r.ok("transport stop");
     assert(!r.svc.model().transport.playing && r.svc.model().transport.position >= 4.0); // 4 beats heard
-    r.ok("render --out " + scratch() + "/live.wav --ports --to 4");
+    r.ok("render --out " + scratch() + "/live.wav --ports --to 4 --bits 32f"); // the mix as mixed, undithered (R-EXPORT-1)
     const auto &port = r.fake.written[scratch() + "/live.Main.wav"];
     const auto &live = r.fake.capture->sink;
     for (size_t i = 0; i < 96000; ++i)
@@ -2488,7 +2500,7 @@ static void test_latency_is_compensated_and_a_render_starts_on_the_beat()
     r.ok("set ch_2.gain=-12 ch_3.gain=-12");                           // under every ceiling: no gain is reduced
     auto render = [&](const std::string &name, const std::string &more = std::string()) {
         const std::string out = dir + "/" + name + ".wav";
-        r.ok("render --out " + out + " --stems ch_2,ch_3 --ports" + more);
+        r.ok("render --out " + out + " --stems ch_2,ch_3 --ports --bits 32f" + more); // undithered: files compared to the bit
         return std::make_tuple(r.fake.written[out], r.fake.written[dir + "/" + name + ".ch_2.wav"],
                                r.fake.written[dir + "/" + name + ".ch_3.wav"], r.fake.written[dir + "/" + name + ".Main.wav"]);
     };
@@ -2541,13 +2553,88 @@ static void test_latency_is_compensated_and_a_render_starts_on_the_beat()
     r.ok("set dv_1.lookahead=5");
     waitFrames(r, 30000);
     r.ok("transport stop");
-    r.ok("render --out " + dir + "/five.wav --ports");
+    r.ok("render --out " + dir + "/five.wav --ports --bits 32f");
     const auto &five = r.fake.written[dir + "/five.Main.wav"];
     bool met = true;
     // (the tone is periodic in 48 samples, so its END tells the twins apart: un-re-planned, one would stop 144 early)
     for (size_t f = 20000; f < 24400; ++f) met &= live[2 * f] == five[0][f - 240] && live[2 * f + 1] == five[1][f - 240];
     assert(met);
     pass("latency compensated (R-MIX-17): a limiter's twin meets it at Main (the mix is their sum to the bit); a master limiter's render starts on beat 0, byte-identical to none; stems each from beat 0; live is the render, 96 frames later");
+}
+
+static void test_delivery_formats()
+{
+    // R-EXPORT-1: the format by the extension (or --format), the song rendered AT --rate, integer depths dithered onto
+    // their grid, lossy ones at --kbps, --normalize to a loudness held under a true-peak ceiling; refusals name the way
+    Run r;
+    r.ok("project new " + freshSong("export") + " --bpm 120");
+    for (int k = 0; k < 4; ++k) r.ok("clip add --src tone.wav --at " + std::to_string(k) + " --length 1"); // 2 s of a 1 kHz sine at 0.5
+    const std::string d = scratch() + "/export";
+    auto &f = r.fake;
+    r.ok("render --out " + d + ".flac --to 4");
+    assert(f.formats[d + ".flac"] == "flac" && f.bits[d + ".flac"] == 24 && f.rates[d + ".flac"] == 48000);
+    r.ok("render --out " + d + ".mp3 --to 4");
+    assert(f.formats[d + ".mp3"] == "mp3" && f.kbps[d + ".mp3"] == 320);
+    r.ok("render --out " + d + ".ogg --to 4 --kbps 160");
+    assert(f.formats[d + ".ogg"] == "ogg" && f.kbps[d + ".ogg"] == 160);
+    r.ok("render --out " + d + ".opus --to 4");
+    assert(f.formats[d + ".opus"] == "opus" && f.rates[d + ".opus"] == 48000 && f.kbps[d + ".opus"] == 192);
+    r.ok("render --out " + d + ".bin --format ogg --to 4");
+    assert(f.formats[d + ".bin"] == "ogg");
+    // the song AT 44.1 kHz: 2 s are 88200 frames, and the tone is still 1 kHz (its file decoded at that rate)
+    r.ok("render --out " + d + "44.wav --to 4 --rate 44100");
+    const auto &w44 = f.written[d + "44.wav"][0];
+    assert(f.rates[d + "44.wav"] == 44100 && w44.size() == 88200);
+    int ups = 0;
+    for (size_t i = 1; i < 44100; ++i) ups += w44[i - 1] < 0.0f && w44[i] >= 0.0f;
+    assert(ups >= 998 && ups <= 1001);
+    // 16 bits: on the grid, dithered (not every sample the plain rounding), and the same bytes twice
+    r.ok("render --out " + d + "16.wav --to 4 --bits 16");
+    const auto a16 = f.written[d + "16.wav"];
+    r.ok("render --out " + d + "f32.wav --to 4 --bits 32f");
+    const auto &raw = f.written[d + "f32.wav"][0];
+    bool grid = true;
+    int moved = 0;
+    for (size_t i = 0; i < a16[0].size(); ++i)
+    {
+        const double k = (double)a16[0][i] * 32768.0;
+        grid &= k == std::floor(k);
+        moved += a16[0][i] != (float)(std::round((double)raw[i] * 32768.0) / 32768.0);
+    }
+    assert(grid && f.bits[d + "16.wav"] == 16 && moved > 1000);
+    r.ok("render --out " + d + "16.wav --to 4 --bits 16");
+    assert(f.written[d + "16.wav"] == a16);
+    assert(raw.size() == a16[0].size());
+    // --normalize: every file alike to the loudness — the line says what it did, the meter agrees
+    const std::string said = r.ok("render --out " + d + "n.wav --to 4 --bits 32f --normalize -20 --stems ch_1");
+    const std::string stem = d + "n.ch_1.wav";
+    assert(contains(said, "normalize integrated=-20.0 gain=-14.0") && !contains(said, "held"));
+    arstro::LoudnessMeter lm(2);
+    const auto &n = f.written[d + "n.wav"];
+    lm.process(n[0].data(), n[1].data(), (int)n[0].size());
+    assert(std::fabs(lm.integrated() + 20.0) < 0.05);
+    assert(f.written.count(stem) && std::fabs(f.written[stem][0][1000] - n[0][1000]) < 1e-6f); // Main's stem: the mix, scaled alike
+    // held by the ceiling: −1 LUFS would put a sine's peak over −1 dBTP; it stops where the peak meets it
+    const std::string held = r.ok("render --out " + d + "h.wav --to 4 --bits 32f --normalize -1 --ceiling -2");
+    assert(contains(held, "truePeak=-2.0 held=ceiling"));
+    arstro::TruePeakMeter tp(2);
+    const auto &h = f.written[d + "h.wav"];
+    tp.process(h[0].data(), h[1].data(), (int)h[0].size());
+    assert(tp.peakDb() <= -2.0 + 1e-3 && tp.peakDb() > -2.1);
+    // refusals, each naming the way
+    assert(contains(r.no("render --out " + d + ".aiff"), ".wav, .flac, .mp3, .ogg or .opus"));
+    assert(contains(r.no("render --out " + d + ".mp3 --bits 16"), "no bit depth"));
+    assert(contains(r.no("render --out " + d + ".flac --bits 32f"), "16 or 24 for flac"));
+    assert(contains(r.no("render --out " + d + ".wav --kbps 128"), "--kbps is for mp3, ogg and opus"));
+    assert(contains(r.no("render --out " + d + ".mp3 --kbps 400"), "32 … 320"));
+    assert(contains(r.no("render --out " + d + ".opus --rate 44100"), "48 kHz"));
+    assert(contains(r.no("render --out " + d + ".mp3 --rate 96000"), "up to 48 kHz"));
+    assert(contains(r.no("render --out " + d + ".wav --ceiling -1"), "goes with --normalize"));
+    assert(contains(r.no("render --out " + d + ".wav --normalize 3"), "−60 … 0"));
+    assert(contains(r.no("render --out " + d + ".wav --format aiff"), "wav, flac, mp3, ogg or opus"));
+    pass("delivery formats (R-EXPORT-1): FLAC / MP3 / Ogg / Opus by the extension or --format; the song rendered AT 44.1 kHz "
+         "(88200 frames for 2 s, the tone still 1 kHz); 16 bits on the grid, dithered, the same bytes twice; --normalize gains "
+         "every file alike to −20 LUFS (the meter agrees), held at a −2 dBTP ceiling; refusals name the way");
 }
 
 static void test_a_true_peak_limiter_on_the_master()
@@ -2705,6 +2792,7 @@ int main()
     test_instrument_tracks();
     test_a_song_from_before_tracks_adopts_them();
     test_latency_is_compensated_and_a_render_starts_on_the_beat();
+    test_delivery_formats();
     test_a_true_peak_limiter_on_the_master();
     test_forward_is_processing_order_and_moves_renumber();
     test_lanes_are_reordered();

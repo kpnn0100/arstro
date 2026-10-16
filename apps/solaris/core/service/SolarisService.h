@@ -43,9 +43,13 @@ namespace solaris
         {
             /** Decode `path` to PCM at `rate` (1 or 2 channels). False + `err` if it cannot. */
             std::function<bool(const std::string &path, int rate, engine::Pcm &out, std::string &err)> decodeAudio;
-            /** Write `channels` (equal lengths) as a WAV at `rate`; bits 24 = PCM, 32 = float. */
+            /** Write `channels` (equal lengths) as a WAV at `rate`; bits 16 / 24 = PCM (x·2^(bits−1), clamped), 32 = float. */
             std::function<bool(const std::string &path, const std::vector<std::vector<float>> &channels, int rate,
                                int bits, std::string &err)> writeWav;
+            /** R-EXPORT-1: write them as `format` — flac (bits 16 / 24), mp3, ogg (Vorbis), opus — at `kbps` for the
+             *  lossy ones. Empty = this build has no encoders (the core holds no codec, R-SVC-4). */
+            std::function<bool(const std::string &path, const std::vector<std::vector<float>> &channels, int rate,
+                               const std::string &format, int bits, int kbps, std::string &err)> writeAudio;
             /** The entries of a folder (no "." / ".."). False + `err` if it cannot be listed. */
             std::function<bool(const std::string &path, std::vector<BrowserEntry> &out, std::string &err)> listDir;
             /** The machine's audio devices, inputs and outputs. */
