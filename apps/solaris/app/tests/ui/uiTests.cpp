@@ -3690,6 +3690,65 @@ static void test_lane_groups_on_the_timeline()
     pass("lane groups on the timeline (R-ARR-3): the chevron folds and opens a group, one line, eased — the chevron turns, the clips travel into one row; a clip dragged on the folded row carries the group's clips, one `clips move`; the folded row's menu opens it; a lane's menu puts it into a group and out");
 }
 
+static void test_recording_audio_from_the_window()
+{
+    // R-REC-1: an audio line's R in the mixer — with no input, a menu of the song's input ports ("Arm with Mic": ONE line);
+    // lit red, eased; R again disarms; the strip menu's Monitor…; the ruler punches the loop's span — a red line, eased
+    sltest::Rig r("ui-recaudio", 1280, 800);
+    r.cmd("project new " + r.song("RecAudio") + ".slp --bpm 120");
+    r.cmd("port add Mic --dir in");
+    r.cmd("strip add --kind audio --name Vox");
+    std::string vox, bus;
+    for (const auto &s : r.svc->model().strips) { if (s.name == "Vox") vox = s.id; if (s.kind == "bus" && bus.empty()) bus = s.id; }
+    r.settle();
+    auto &d = r.app->project().dock();
+    auto &menu = r.app->menu();
+    assert(d.armRect(vox).w > 0 && d.armRect(bus).w == 0.0 && d.muteRect(vox).right() <= d.soloRect(vox).x && d.soloRect(vox).right() <= d.armRect(vox).x);
+    r.click(world(d, d.armRect(vox)));
+    r.settle();
+    assert(menu.isOpen() && menuItem(r, "Arm with Mic") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Arm with Mic")));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "strip arm " + vox + " --input prt_2") && r.svc->model().armed == vox);
+    const double mid = d.armAmount(vox);
+    assert(mid > 0.0 && mid < 1.0);
+    r.settle();
+    assert(d.armAmount(vox) == 1.0);
+    r.click(world(d, d.armRect(vox)));
+    r.settle();
+    assert(sentLine(r, "strip arm none") && d.armAmount(vox) == 0.0);
+    // its menu: Monitor… → On
+    const artboard::Rect card = world(d, d.cardRect(vox));
+    r.click(card.x + 20.0, card.y + 16.0, 2);
+    r.settle();
+    assert(menuItem(r, "Monitor\xE2\x80\xA6") >= 0 && menuItem(r, "Input\xE2\x80\xA6") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Monitor\xE2\x80\xA6")));
+    r.settle();
+    assert(menuItem(r, "On") >= 0);
+    r.click(menu.itemRect(menuItem(r, "On")));
+    r.settle();
+    assert(sentLine(r, "set " + vox + ".monitor=on"));
+    for (const auto &s : r.svc->model().strips) if (s.id == vox) assert(s.monitor == "on");
+    // the ruler punches the loop's span: a red line, eased in
+    r.cmd("transport loop 4 8");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    const artboard::Rect band = world(tl, artboard::Rect{tl.beatToX(5.0), 0.0, 1.0, arstro::solaris_ui::Timeline::kMarkH});
+    r.click(cx(band), cy(band), 2);
+    r.settle();
+    assert(menuItem(r, "Punch the loop's span") >= 0 && menuItem(r, "Punch off") < 0);
+    r.click(menu.itemRect(menuItem(r, "Punch the loop's span")));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "transport punch 4 8"));
+    const double pin = tl.punchAmount();
+    assert(pin > 0.0 && pin < 1.0);
+    r.settle();
+    assert(tl.punchAmount() == 1.0 && std::fabs(tl.punchRect().x - tl.beatToX(4.0)) < 0.01);
+    pass("recording audio from the window (R-REC-1): R on an audio line — no input: the input ports offered, one line — lit red eased, again disarms; Monitor… On; the ruler punches the loop's span, a red line eased in");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -3734,6 +3793,7 @@ int main()
     test_markers_on_the_ruler();
     test_time_edits_from_the_ruler();
     test_lane_groups_on_the_timeline();
+    test_recording_audio_from_the_window();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();

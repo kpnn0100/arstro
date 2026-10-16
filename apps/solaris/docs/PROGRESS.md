@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N16 — record audio: arm, monitor, record, punch, loop takes** (R-REC-1), then N17… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N17 — takes and comping** (R-REC-2), then N18… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -466,13 +466,15 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       D-10, D-11 (test defects) closed. Part 2: `set <ln>.group`; the timeline — an open group's bar and chevron, a
       folded group ONE row (each lane's clips in its band, eased), its clips dragged together, the menus.
 **Phase 3 — work with audio**
-- [~] **N16** Record audio: arm, monitor, record, punch, loop takes (R-REC-1).
+- [x] **N16** Record audio: arm, monitor, record, punch, loop takes (R-REC-1).
       Part 1 (2026-10-16): the core — `IAudioIn`, a strip's `input`/`monitor`, `port add`, arming an audio line, monitoring
       (auto/on/off), the player reading input each cycle (heard through the strip; a take through a ring a recorder
       thread drains), the take landed sample-aligned (out + in latency), `transport punch`; a loopback fake proves it to
       the sample. Part 2 (same day): the host's capture — `AudioInPulse` (a read thread), `AudioInPipewire` (the realtime
       callback), `AudioRing::push` (never waits; overflow counted), the driver setting with PulseAudio the fallback.
-      Part 3: the window. Loop takes: N17. Live check owed: a recording through this machine's real input.
+      Part 3 (same day): the window — M | S | R on audio and instrument strips (R lit red, eased; no input: the input
+      ports offered), Input… and Monitor… in an audio line's menu, the ruler's Punch the loop's span (a red line, eased).
+      Loop takes: N17. Live check owed: a recording through this machine's real input.
 - [ ] **N17** Takes and comping (R-REC-2).
 - [ ] **N18** Audio editing on the lanes: split, fades and gain drawn, crossfades, reverse, consolidate, slice
       (R-EDIT-1).

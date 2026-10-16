@@ -672,6 +672,18 @@ namespace
                  r.frame();
                  r.frame();
              }},
+            {"recording-audio",   // R-REC-1: the vocal line armed (its R lit red) for its Mic, a punch over the loop
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("port add Mic --dir in --channels 1");
+                 std::string vox;
+                 for (const auto &s : r.svc->model().strips)
+                     if (s.kind == "audio" && vox.empty()) vox = s.id;
+                 r.cmd("strip arm " + vox + " --input Mic");
+                 r.cmd("transport loop 4 8");
+                 r.cmd("transport punch 4 8");
+                 r.settle();
+             }},
             {"loop-region",   // R-EDM-7: the brace on the ruler, the region tinted on the lanes
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

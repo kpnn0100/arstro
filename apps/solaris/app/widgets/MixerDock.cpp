@@ -47,6 +47,7 @@ namespace solaris_ui
         struct Geo
         {
             Rect chips[kSlots], sends[2], pan, zone, mute, solo, out;
+            Rect arm;              // R-REC-1: an armable strip's R (empty for a bus and the master)
             Rect clip;             // R-METER-2: the clip light, over the meters (its hit area: `clipHit`)
             double readoutY = 0;
         };
@@ -65,6 +66,15 @@ namespace solaris_ui
             g.clip = Rect{g.zone.x + g.zone.w * 0.62, g.zone.y + 0.5, 8.0, 3.25}; // above the meters (paintFader's mx)
             return g;
         }
+        /** R-REC-1: an armable strip's M | S | R — the M/S row in three. */
+        void armRow(Geo &g)
+        {
+            const double x = g.mute.x, all = g.solo.right() - x, bw = (all - 6.5) / 3.0;
+            g.mute.w = bw;
+            g.solo = Rect{x + bw + 3.25, g.mute.y, bw, g.mute.h};
+            g.arm = Rect{x + 2.0 * (bw + 3.25), g.mute.y, bw, g.mute.h};
+        }
+        bool armable(const solaris::StripModel *s) { return s && (s->kind == "audio" || s->kind == "instrument"); }
         /** The clip light is small; the click it takes is not (a finger-friendly 16 × 9.75 around it). */
         Rect clipHit(const Rect &c) { return Rect{c.x - 4.0, c.y - 3.25, c.w + 8.0, 9.75}; }
         /** LUFS as the master's chip says it ("−14.2 LUFS"). */
@@ -387,12 +397,31 @@ namespace solaris_ui
     Rect MixerDock::muteRect(const std::string &id) const
     {
         const Rect c = cardRect(id);
-        return c.w > 0 && id != "master" ? geoOf(c.x, c.w, c.y, c.h).mute : Rect{};
+        if (c.w <= 0 || id == "master") return Rect{};
+        Geo g = geoOf(c.x, c.w, c.y, c.h);
+        if (armable(strip(id))) armRow(g);
+        return g.mute;
+    }
+    Rect MixerDock::armRect(const std::string &id) const
+    {
+        const Rect c = cardRect(id);
+        if (c.w <= 0 || id == "master" || !armable(strip(id))) return Rect{};
+        Geo g = geoOf(c.x, c.w, c.y, c.h);
+        armRow(g);
+        return g.arm;
+    }
+    double MixerDock::armAmount(const std::string &id) const
+    {
+        const Live *l = liveOf(id);
+        return l ? l->arm.value() : 0.0;
     }
     Rect MixerDock::soloRect(const std::string &id) const
     {
         const Rect c = cardRect(id);
-        return c.w > 0 && id != "master" ? geoOf(c.x, c.w, c.y, c.h).solo : Rect{};
+        if (c.w <= 0 || id == "master") return Rect{};
+        Geo g = geoOf(c.x, c.w, c.y, c.h);
+        if (armable(strip(id))) armRow(g);
+        return g.solo;
     }
     Rect MixerDock::outRect(const std::string &id) const
     {
@@ -580,6 +609,7 @@ namespace solaris_ui
                 l.pan.set(pan); l.panLast = pan;
                 l.mute.set(mute ? 1.0 : 0.0); l.muteLast = mute;
                 l.solo.set(solo ? 1.0 : 0.0); l.soloLast = solo;
+                l.arm.set(mModel.armed == id ? 1.0 : 0.0); l.armLast = mModel.armed == id;
                 l.dim.set(audible ? 0.0 : 1.0); l.dimLast = !audible;
                 l.colFrom = l.colTo = col; l.colT.set(1.0); l.colLast = colour;
                 l.placed = true;
@@ -604,6 +634,11 @@ namespace solaris_ui
             }
             if (mute != l.muteLast) { l.mute.animateTo(mute ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.muteLast = mute; }
             if (solo != l.soloLast) { l.solo.animateTo(solo ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.soloLast = solo; }
+            if (const bool arm = mModel.armed == id; arm != l.armLast) // R-REC-1
+            {
+                l.arm.animateTo(arm ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs);
+                l.armLast = arm;
+            }
             if (audible == l.dimLast) { l.dim.animateTo(audible ? 0.0 : 1.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.dimLast = !audible; }
             if (colour != l.colLast)
             {
@@ -647,6 +682,7 @@ namespace solaris_ui
             l.pan.update(nowMs);
             l.mute.update(nowMs);
             l.solo.update(nowMs);
+            l.arm.update(nowMs);
             l.dim.update(nowMs);
             l.colT.update(nowMs);
         };
@@ -844,7 +880,8 @@ namespace solaris_ui
             {
                 h.id = c.id;
                 if (c.header) { h.part = Part::Fold; return h; }
-                const Geo g = geoOf(cx, cw, bodyTop(), bodyH());
+                Geo g = geoOf(cx, cw, bodyTop(), bodyH());
+                if (armable(strip(c.id))) armRow(g); // R-REC-1: M | S | R
                 h.part = Part::Header;
                 for (int k = 0; k < chipSlots(c.id); ++k)
                     if (g.chips[k].contains(p)) { h.part = Part::Chip; h.index = k; }
@@ -855,6 +892,7 @@ namespace solaris_ui
                 if (clipHit(g.clip).contains(p)) h.part = Part::Clip;
                 if (g.mute.contains(p)) h.part = Part::Mute;
                 if (g.solo.contains(p)) h.part = Part::Solo;
+                if (g.arm.contains(p)) h.part = Part::Arm;
                 if (g.out.contains(p)) h.part = Part::Out;
                 return h;
             }
@@ -1060,6 +1098,22 @@ namespace solaris_ui
             case Part::Solo:
                 if (const auto *s = strip(h.id)) send("set " + h.id + ".solo=" + (s->solo ? "false" : "true"));
                 break;
+            case Part::Arm: // R-REC-1: armed → disarmed; an audio line with no input asks which (the song's input ports)
+                if (const auto *s = strip(h.id))
+                {
+                    if (mModel.armed == h.id) send("strip arm none");
+                    else if (s->kind == "audio" && s->input.empty() && onMenu)
+                    {
+                        std::vector<cosmo_v2::ContextMenu::Item> ins;
+                        const std::string id = h.id;
+                        for (const auto &po : mModel.ports)
+                            if (po.dir == "in") ins.push_back({"Arm with " + po.name, [this, id, pid = po.id] { send("strip arm " + id + " --input " + pid); }});
+                        if (ins.empty()) ins.push_back({"Add an input port (In)", [this] { send("port add In --dir in"); }});
+                        onMenu(std::move(ins), world);
+                    }
+                    else send("strip arm " + h.id);
+                }
+                break;
             case Part::Out: openOut(h.id, world); break;
             case Part::Fold:
             {
@@ -1182,6 +1236,23 @@ namespace solaris_ui
                     }
                 if (!under.empty())
                     items.push_back({"Duck Under \xE2\x96\xB8", [this, under, world] { if (onMenu) onMenu(under, world); }});
+                if (s.kind == "audio") // R-REC-1: what it records, and when its input is heard through it
+                {
+                    std::vector<cosmo_v2::ContextMenu::Item> ins, mon;
+                    for (const auto &po : mModel.ports)
+                        if (po.dir == "in")
+                            ins.push_back({po.name + (po.id == s.input ? "  \xC2\xB7 now" : ""), [this, id, pid = po.id] { send("set " + id + ".input=" + pid); }});
+                    if (!s.input.empty()) ins.push_back({"No input", [this, id] { send("set " + id + ".input=none"); }});
+                    ins.push_back({"Add an input port\xE2\x80\xA6", [this, world] {
+                                       if (onRename) onRename("In", world, [this](const std::string &n) { if (!n.empty()) send("port add " + q(n) + " --dir in"); });
+                                   }});
+                    items.push_back({"Input\xE2\x80\xA6", [this, ins, world] { if (onMenu) onMenu(ins, world); }});
+                    for (const char *m : {"auto", "on", "off"})
+                        mon.push_back({std::string(m == std::string("auto") ? "Auto (stopped or recording)" : m == std::string("on") ? "On" : "Off") +
+                                           (s.monitor == m ? "  \xC2\xB7 now" : ""),
+                                       [this, id, m] { send("set " + id + ".monitor=" + m); }});
+                    items.push_back({"Monitor\xE2\x80\xA6", [this, mon, world] { if (onMenu) onMenu(mon, world); }});
+                }
                 items.push_back({"Delete strip", [this, id] { send("strip delete " + id); }});
                 onMenu(std::move(items), world);
             }
@@ -1272,7 +1343,8 @@ namespace solaris_ui
         const Live *l = liveOf(id);
         if (!l || w < 1.0) return;
         const double by = bodyTop(), bh = bodyH();
-        const Geo g = geoOf(x, w, by, bh);
+        Geo g = geoOf(x, w, by, bh);
+        if (armable(s)) armRow(g); // R-REC-1: M | S | R
         t.save();
         t.clipRect(x, kTabsH, w, height.value() - kTabsH); // a card narrowing (a fold, a removal) clips, never spills
         drawRoundedRect(t, Rect{x, by, w, bh}, 0.0, Paint::filled(fade(palette::card(), a)));
@@ -1381,6 +1453,7 @@ namespace solaris_ui
         };
         toggle(g.mute, "M", l->mute.value(), palette::whiteAlpha(0.82), (int)Part::Mute);
         toggle(g.solo, "S", l->solo.value(), surface::solo(), (int)Part::Solo);
+        if (g.arm.w > 0) toggle(g.arm, "R", l->arm.value(), palette::destructive(), (int)Part::Arm); // R-REC-1: armed, red
         // where it goes
         {
             const Rect r = g.out;

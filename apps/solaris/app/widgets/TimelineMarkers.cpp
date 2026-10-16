@@ -202,7 +202,9 @@ namespace solaris_ui
                 {
                     const double f = mLoopFrom, t = mLoopTo;
                     items.push_back({"Delete the loop's time", [send, f, t] { send("time delete --from " + beatText(f) + " --to " + beatText(t)); }});
+                    items.push_back({"Punch the loop's span", [send, f, t] { send("transport punch " + beatText(f) + " " + beatText(t)); }}); // R-REC-1
                 }
+                if (mPunchTo > mPunchFrom) items.push_back({"Punch off", [send] { send("transport punch off"); }});
             }
             onMenu(std::move(items), world);
             return true;

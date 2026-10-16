@@ -143,7 +143,7 @@ forward is taken, backward refused naming both ends; `strip move` that would poi
 default route). The same rule is PUBLISHED: `targetsOf` (`model/Project.cpp:871`) lists what a strip
 may feed — later strips in processing order, `master`, the output ports — as `strips[].targets`
 (`core/service/ServiceModel.cpp:225`), and `keyTargetsOf` (`:756`) its strips as `strips[].keyTargets`;
-a front end offers exactly that list (the route picker, `MixerDock::openOut`, `app/widgets/MixerDock.cpp:859`),
+a front end offers exactly that list (the route picker, `MixerDock::openOut`, `app/widgets/MixerDock.cpp:897`),
 and the test routes to every entry offered.
 
 ### DR-ENG-1 The engine renders a MixGraph through the DSP library's devices (R-MIX-1/5/6, R-DSP-1/5, R-RENDER-1)
@@ -720,18 +720,18 @@ instrument's face reflows its modules. Three strokes mark the corner, brighter u
 saved, not a command (R-WIN-4). Closes the UX audit's U-5.
 
 ### DR-AUTO-5 Automation on the timeline (R-AUTO-6)
-`Timeline` (`app/widgets/Timeline.cpp:212`) appends a row per automation after the lanes, keyed
+`Timeline` (`app/widgets/Timeline.cpp:214`) appends a row per automation after the lanes, keyed
 `auto:<au>` in the same `AnimatedRows` (a lane added slides them down; a new one grows in), its header
 the accent stripe, its name and the address that reads it. `TimelineAuto.cpp` draws the curve over the
-beat grid by the ENGINE's keys (`keysOf`, `:44` → `engine::curveKeys`; `paintCurve`, `:346`, samples
+beat grid by the ENGINE's keys (`keysOf`, `:44` → `engine::curveKeys`; `paintCurve`, `:348`, samples
 each non-linear segment with `anim::segment`) — holding the first value before the first point and the
 last after, linear / hold / smooth / bezier per segment, on a log scale for Hz and ms (`valueToY`,
-`:108`) — with the points as handles and a bezier point's two handle stems (`paintAutomation`, `:432`).
-`autoGesture` (`:474`): a click on the row adds a point at the
-lanes' snap step under the pointer (DR-UI-10; `:591`) with the value under it (`auto point add`) once the double-click has had its chance — 350 ms, a ghost point
-drawn at once and fading in meanwhile (`:610`, sent by `advanceAuto`, `:305`; **AMENDED (R-AUTO-11)**:
+`:108`) — with the points as handles and a bezier point's two handle stems (`paintAutomation`, `:441`).
+`autoGesture` (`:483`): a click on the row adds a point at the
+lanes' snap step under the pointer (DR-UI-10; `:600`) with the value under it (`auto point add`) once the double-click has had its chance — 350 ms, a ghost point
+drawn at once and fading in meanwhile (`:644`, sent by `advanceAuto`, `:307`; **AMENDED (R-AUTO-11)**:
 a double-click there opens the window instead); a point dragged is drawn under the pointer while held
-(its beat on the same step, `:509`) and sends ONE `auto point move <au> --at <from> --to <to> --value <v>` on release,
+(its beat on the same step, `:518`) and sends ONE `auto point move <au> --at <from> --to <to> --value <v>` on release,
 staying where it was let go; a double-click ON a point deletes it; a right-click offers Linear / Hold /
 Smooth / Bezier, Delete Point and Delete Automation (`auto delete --unbind`). A curve the model changes
 eases there point by point over 220 ms — handles too; a point added or removed, or a shape changed,
@@ -940,7 +940,7 @@ a key does not pull its source into a solo (`Compile.cpp:52`), so a soloed bass 
 kick stays silent; a MUTED strip keys nothing (live, a mute in a song with keys swaps the engine,
 `core/service/ServiceTransport.cpp:406`). The audit names a key that no compressor with Sidechain on
 hears (`core/service/ServiceModel.cpp:499`). In the dock a key reads "key <target>" in the solo amber,
-and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:1166`).
+and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:1220`).
 Measured (L2): a ghost kick (−120 dB fader, pre-fader key) through −30 dB at 4:1 dips a −6 dBFS bass
 6–22.5 dB 15–35 ms after each kick, back within 1 dB before the next; identical with the bass soloed;
 nothing with the kick muted.
@@ -974,12 +974,12 @@ on beat 0 either way. Mutants (in the DSP suites): no between-sample detection, 
 
 ### DR-EDM-7 The loop region on the ruler (R-EDM-7, R-TIME-4)
 `Timeline` draws the model's `transport.loopFrom … loopTo` as a brace on the ruler, its ends marked, in
-the accent, and tints the region on the lanes under the clips (`app/widgets/Timeline.cpp:1236`, `:1086`;
-`loopRect`, `:547`). It is eased (`:415`): it fades in where it is when a loop appears, fades out when
-it goes, and a loop changed by anyone moves there over 220 ms. `loopGesture` (`:555`): Shift-drag on the
+the accent, and tints the region on the lanes under the clips (`app/widgets/Timeline.cpp:1270`, `:1120`;
+`loopRect`, `:556`). It is eased (`:424`): it fades in where it is when a loop appears, fades out when
+it goes, and a loop changed by anyone moves there over 220 ms. `loopGesture` (`:564`): Shift-drag on the
 ruler draws the brace under the pointer (both ends on the lanes' snap step, like a seek — DR-UI-10,
-`:564`) and sends ONE `transport loop <from> <to>` on release, the brace staying where it was let go
-(both ends on one line is a Shift-click: no region, `:578`); a click inside the brace sends `transport
+`:573`) and sends ONE `transport loop <from> <to>` on release, the brace staying where it was let go
+(both ends on one line is a Shift-click: no region, `:587`); a click inside the brace sends `transport
 loop off`; a plain click elsewhere on the ruler still seeks. The engine already loops (DR-PLAY-1), so
 the playhead wraps at the brace's end while playing.
 
@@ -1068,7 +1068,7 @@ unless it already IS one (`auto create <address>`), Formula… (cosmo's rename f
 "=", → `set <address>="=<typed>"`, quoted when it has a space), Clear Binding when bound (`bind clear
 <address>`), Reset to Default (`set <address>=<default>`), and Copy Address / Copy Value / Copy as Formula
 (DR-UI-11). The device window (`DevicePanel::openParamMenu`, `app/widgets/DevicePanel.cpp:468`) and the dock
-(`MixerDock::openParam`, `app/widgets/MixerDock.cpp:911`, offered first on a right-click, `:1127`) both call
+(`MixerDock::openParam`, `app/widgets/MixerDock.cpp:949`, offered first on a right-click, `:1181`) both call
 it, so the menus cannot drift; a hosted third-party VST3's parameter list (R-VST-6, not built yet) will call
 it the same way. In the dock: a fader → `<ch>.gain`, a pan → `<ch>.pan`, a send's row on a card or its cell
 in the matrix → `<sd>.gain`, the master fader → `project.masterGain` (the addresses that already bind,
@@ -1088,13 +1088,13 @@ order to addresses. While playing, `refreshModel` keeps the pumped values and ev
 since (`ServiceModel.cpp:81`, `:340`). At most 256 bindings report (`Player::kMaxBinds`). Not in the stable
 dump: it moves with the transport.
 
-**The dock draws it** (`MixerDock::advance`, `app/widgets/MixerDock.cpp:554`): a bound fader or pan takes its
+**The dock draws it** (`MixerDock::advance`, `app/widgets/MixerDock.cpp:583`): a bound fader or pan takes its
 live value; while playing it is SET each frame — it follows the audio like the playhead — and stopped a change
 (a seek, a curve edited) eases 220 ms; a new driver (the formula changed) or play pressed mid-ease is a
-catch-up ease that lands when it ends and then follows (`follow`, `:590`). A bound send shows its live
+catch-up ease that lands when it ends and then follows (`follow`, `:620`). A bound send shows its live
 level. What drives each: a tag over the fader — `auto au_1`, `= ch_3.gain`, `= -2 + 2 * s…` (`paintTag`,
-`:1193`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
-in and out (200 ms) and its text cross-fades when the formula changes (`:668`).
+`:1264`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
+in and out (200 ms) and its text cross-fades when the formula changes (`:704`).
 
 Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1419`): stopped, `live` is
 `eval`'s number at the position; playing (a fake clock device), a −2 dB-a-beat ramp is within 0.1 dB of the
@@ -1119,15 +1119,15 @@ View menu does (View › Show IDs / Hide IDs, `app/App.cpp:170`).
 200 ms; `idsAmount()` is the live value) and hands it to every widget that draws ids; `drawNameWithId`
 (`app/widgets/ParamMenu.cpp:84`) draws a name with its id right-aligned in the accent's mono, the name giving
 way by the EASED amount. Where: lane headers (the lane's id; a strip's own row, the strip's) and automation
-rows (`au_n`) (`app/widgets/Timeline.cpp:1301`, `:830`); clips (`ac_n`, and a note clip's pattern `pt_n`;
-`:673` — "linked ×N" fades out for them); in the dock each strip card (`ch_n`), the master (`master`), each
+rows (`au_n`) (`app/widgets/Timeline.cpp:1335`, `:864`); clips (`ac_n`, and a note clip's pattern `pt_n`;
+`:707` — "linked ×N" fades out for them); in the dock each strip card (`ch_n`), the master (`master`), each
 rack chip (`dv_n`) and each send (`sd_n`, cross-fading with "→ name") (`paintCard`,
-`app/widgets/MixerDock.cpp:1256`); a device window's rows show their FULL address (`dv_1.filter.cutoff`) in a
+`app/widgets/MixerDock.cpp:1327`); a device window's rows show their FULL address (`dv_1.filter.cutoff`) in a
 pill over the label (`ParamIds`, `app/widgets/DevicePanel.cpp:146`); its header already names its id.
 
 **Copied, by the host.** Copy Address / Copy Value / Copy as Formula on a device parameter row and on the
 dock's faders, pans, sends and master (DR-MIX-16; a choice row has no "as Formula" — no formula reads a
-choice); Copy ID on a clip (`app/widgets/Timeline.cpp:997`), a strip's and a mixer tab's menu in the dock; Copy ID
+choice); Copy ID on a clip (`app/widgets/Timeline.cpp:1031`), a strip's and a mixer tab's menu in the dock; Copy ID
 and Copy as Formula (`=au_1`) on an automation row (`app/widgets/TimelineAuto.cpp:560`). The clipboard is the
 HOST's (the core has none, R-SVC-4): `App::onCopy`, which `linux_main.cpp:229` gives GTK's CLIPBOARD and
 PRIMARY selections and the test rig records (`Rig::copied`). A copy says so: `App::copy` (`app/App.cpp:212`)
@@ -1508,16 +1508,16 @@ renumbered, refused out of range, undone) and, drawn, by `test_instrument_drop_a
 (`app/tests/ui/uiTests.cpp:492`: a lane moved from a shell slides to the top with its clip, caught mid-tween).
 
 ### DR-TIME-6 The ruler dragged (R-TIME-6)
-`Timeline::rulerGesture` (`app/widgets/Timeline.cpp:702`, called first in `handleGesture`, `:797`) takes a
+`Timeline::rulerGesture` (`app/widgets/Timeline.cpp:736`, called first in `handleGesture`, `:831`) takes a
 press on the ruler without Shift and waits: a click is still the seek (R-TIME-5) or clears the loop
 (R-EDM-7). A drag decides ONCE, by where it began: within `kBraceGrip` (6.5 px) of an end of the loop's
-brace, or on its body, in the ruler's lower half (`:722`), it moves the loop; anywhere else it scrubs.
-Scrubbing, the playhead is the pointer's on the snap step (`advance`, `:431`, overrides both the eased
+brace, or on its body, in the ruler's lower half (`:756`), it moves the loop; anywhere else it scrubs.
+Scrubbing, the playhead is the pointer's on the snap step (`advance`, `:440`, overrides both the eased
 seek and following the audio while it is held) and a `transport seek` goes at each new line — a fader
 sends each step the same way; a seek is transport, not an edit, so no undo step and the song stays
 saved — and once more on release if the last line was not sent; the playhead is `set` there, so
 nothing eases back. The brace is the pointer's while held (`loopSpan`, `loopRect`), moved with its length
-kept or resized never shorter than one step, and ONE `transport loop <a> <b>` goes on release (`:783`),
+kept or resized never shorter than one step, and ONE `transport loop <a> <b>` goes on release (`:817`),
 the brace placed where it was let go so the model's echo moves nothing.
 
 Guarded by `test_the_ruler_is_dragged` (`app/tests/ui/uiTests.cpp:1676`): held, the playhead equals the
@@ -1539,7 +1539,7 @@ starts it at 0. Published as `transport.cue`. In the window: the play/stop key (
 stop --return`, the stop-here key (Ctrl+Space) is `transport stop`, either one while stopped plays (`App::songAction`,
 `app/App.cpp:364`, the keys being the keymap's — DR-SET-4); the song bar's Stop and a roll's ■ return too (`:54`).
 On the ruler an outlined mark stands at the cue while playing — where Stop takes the time bar back — fading in
-with the play and out with it (`Timeline`, `app/widgets/Timeline.cpp:1366`, eased at `:440`), beside the
+with the play and out with it (`Timeline`, `app/widgets/Timeline.cpp:1400`, eased at `:449`), beside the
 playhead's filled one. L2 `test_stop_returns_to_the_cue_or_stays`; UI `test_space_returns_and_ctrl_space_stays`
 (Ctrl+Space, then Space plays on from there, then Space's stop is back at the cue); shot `ruler-cue`. Mutants: a
 stop that ignores `--return`, a mark that snaps, every play moving the cue — all seen red.
@@ -1572,8 +1572,8 @@ Published: `lanes[].name` (what it shows), `lanes[].strip`, `lanes[].ownName`
 (`core/service/ServiceModel.cpp:235`); `ls` marks `· track of <ch>` (`core/service/ServiceCompose.cpp:668`).
 
 **The view.** A track's row takes its strip's colour unless it has its own and names its instrument
-under its name (`Timeline::bind`, `app/widgets/Timeline.cpp:161`), that line fading in and out as the
-lane becomes and stops being a track (`advance`, `:457`). A lane header's right-click (`:923`): Track
+under its name (`Timeline::bind`, `app/widgets/Timeline.cpp:163`), that line fading in and out as the
+lane becomes and stops being a track (`advance`, `:466`). A lane header's right-click (`:957`): Track
 of ▸ (the instrument strips) → `set <ln>.strip=<ch>`, Plain Lane → `…=none`, Copy ID. A sample or an
 instrument dropped from the browser onto a track asks for a lane of its own (`--lane new`,
 `app/widgets/ProjectScreen.cpp:120`) — it could not play through another's instrument.
@@ -1588,15 +1588,15 @@ restored: no re-route onto a track, no adoption, a track not showing its strip's
 instead of faded, a drop onto a track not redirected.
 
 ### DR-CLIP-6 MIDI clips made on a track, looped by their end, moved between tracks (R-CLIP-6, R-CLIP-7, R-CLIP-8)
-**Made** (R-CLIP-6): a double-click on an instrument's track where no clip is (`app/widgets/Timeline.cpp:915`)
-or its right-click menu's New MIDI Clip (`:946`) sends ONE `clip add --lane <ln> --at <the snap step>
---length <a bar>` (`newClipOn`, `:691`) — the track's instrument implied (DR-LANE-3), a new empty pattern
+**Made** (R-CLIP-6): a double-click on an instrument's track where no clip is (`app/widgets/Timeline.cpp:949`)
+or its right-click menu's New MIDI Clip (`:980`) sends ONE `clip add --lane <ln> --at <the snap step>
+--length <a bar>` (`newClipOn`, `:725`) — the track's instrument implied (DR-LANE-3), a new empty pattern
 made; a double-click on the clip opens its piano roll as before (R-ROLL-1). **Looped** (R-CLIP-7): a press
-within `kEdgeGrip` (6.5 px) of a clip's right edge takes its END (`:815`); dragged, its length is the
-pointer's on the grid you see, never shorter than a step (`:837`); let go, it stays where it was let go
-and ONE `set <ac>.length=<beats>` is sent (`:855`). A clip's drawn length is eased like its place (`len`,
-`:570`; `liveLength`, `:326`), so a length set from a shell or an undo grows or shrinks it rather than
-cutting it; the pattern's notes repeat inside it with a seam at each repeat (`paintClip`, `:1053`, from
+within `kEdgeGrip` (6.5 px) of a clip's right edge takes its END (`:849`); dragged, its length is the
+pointer's on the grid you see, never shorter than a step (`:871`); let go, it stays where it was let go
+and ONE `set <ac>.length=<beats>` is sent (`:889`). A clip's drawn length is eased like its place (`len`,
+`:579`; `liveLength`, `:328`), so a length set from a shell or an undo grows or shrinks it rather than
+cutting it; the pattern's notes repeat inside it with a seam at each repeat (`paintClip`, `:1087`, from
 the live length). **Moved** (R-CLIP-8): the clip drag's `clip move --lane` onto another instrument's track
 re-routes it (DR-LANE-3); audio is refused there and eases home.
 
@@ -1612,11 +1612,11 @@ through the drums. Mutants seen red, then restored: a length that snaps, an edge
 copies go to that lane under the move's rule (R-CLIP-8) — onto an instrument's track a MIDI copy plays through that
 instrument (the pattern still shared, R-CLIP-3; "it plays through ch_3" said), an audio copy is refused there, a plain
 lane (or `none`) keeps its strip. In the window, the lanes' clip drag reads Shift at every step of the drag
-(`Timeline`, `app/widgets/Timeline.cpp:881`) and as it is let go: held, the drop is ONE `clip duplicate <ac> --at <b>
-[--lane <ln>]` and the original stays where it is (`:927`); not held, it is the `clip move` it always was. While held
+(`Timeline`, `app/widgets/Timeline.cpp:915`) and as it is let go: held, the drop is ONE `clip duplicate <ac> --at <b>
+[--lane <ln>]` and the original stays where it is (`:961`); not held, it is the `clip move` it always was. While held
 `mCopyAmt` eases in (120 ms): the original, dimmed during a move, comes back to full strength, and a "+" in the accent
-fades onto the copy in hand (`:1324`) — pressed or let go mid-drag, it eases back. `expectCopy` (`:409`) makes the next
-clip the model brings the selection (`bind`, `:202`) and — after a drop — places it at full strength where the
+fades onto the copy in hand (`:1358`) — pressed or let go mid-drag, it eases back. `expectCopy` (`:418`) makes the next
+clip the model brings the selection (`bind`, `:204`) and — after a drop — places it at full strength where the
 pointer left it, never fading in what was already shown; a refused copy brings none and the expectation lapses.
 Ctrl+C and Ctrl+V are the keymap's `lanes.copy` / `lanes.paste` (DR-SET-4) and the Edit menu's Copy Clip / Paste Clip:
 copy keeps the selected clip's id in the window (nothing sent; a toast says it, naming the paste key); paste
@@ -1770,10 +1770,10 @@ U-1. UI test `test_the_tempo_is_set_in_the_song_bar` (mutant: a tempo that snaps
 ### DR-UI-14 The pointer says a drag resizes (R-UI-14)
 `Cursor` (`app/Cursor.h`): Default, ResizeH ↔, ResizeV ↕, ResizeDiag ⤡, each with its CSS name. Every widget with a
 grip answers twice, from the SAME zone its press takes: `dragCursor()` — the cursor a resize in hand keeps, wherever the
-pointer is — and `cursorAt(local)`. `Timeline` (`app/widgets/Timeline.cpp:409`): ↔ over a clip's end (`kEdgeGrip`,
+pointer is — and `cursorAt(local)`. `Timeline` (`app/widgets/Timeline.cpp:418`): ↔ over a clip's end (`kEdgeGrip`,
 R-CLIP-7) and the loop brace's ends (`kBraceGrip`, the ruler's lower half), and while either is held (pressed, not yet
 moved, included). `PianoRoll` (`app/widgets/PianoRoll.cpp:578`): ↔ a note's end (the zone `noteAt` gives, D-7) and the
-pattern's end handle, ↕ a velocity bar, and while any is held. `MixerDock` (`app/widgets/MixerDock.cpp:796`): ↕ its top
+pattern's end handle, ↕ a velocity bar, and while any is held. `MixerDock` (`app/widgets/MixerDock.cpp:832`): ↕ its top
 edge (`Part::Resize`). `WindowLayer` (`app/widgets/FloatWindow.cpp:304`): ⤡ a window's corner (`FloatWindow::resizing`
 while it is held); the front-most window under the point decides, so it covers the lanes beneath. `ProjectScreen::
 cursorAt` (`app/widgets/ProjectScreen.cpp:20`) asks every drag in hand first, then the window, the dock, the lanes;
@@ -1835,7 +1835,7 @@ the same meters 100 ms at a time and prints ONE line, `measure integrated= momen
 correlationMin=` (LUFS, LUFS, LUFS, dBTP, −1…+1; the lowest correlation only where the momentary is above −70 LUFS —
 silence has no phase; `core/service/ServiceRender.cpp:49`). The window: the master's card has a chip with the
 integrated LUFS where a strip has mute and solo (`MixerDock::loudnessRect`; caught up over 220 ms, "— LUFS" cross-faded
-in for none — `app/widgets/MixerDock.cpp:656`); a click opens the Loudness window (`WindowLayer::openLoudness`,
+in for none — `app/widgets/MixerDock.cpp:692`); a click opens the Loudness window (`WindowLayer::openLoudness`,
 `app/widgets/FloatWindow.cpp:274`), a `LoudnessPanel` (`app/widgets/LoudnessPanel.cpp`): the five readings (each
 catching up over 220 ms; nothing measured cross-fades to "—"), the correlation's needle, the 61 bands on −72…0 dB
 (rising in 40 ms, falling in 300) and Reset — `meters clear`. L2 `test_meters_measure_what_plays` (a −6 dBFS 1 kHz
@@ -1855,9 +1855,9 @@ a stop zeroes peaks, RMS and holds and leaves the lights lit. `meters clear` (`c
 not an edit, `meters.cleared`) puts every light out, zeroes the holds and starts the true peak and integrated loudness
 again: on the audio thread it is a `Live::ClearMeters` MESSAGE (`core/Player.cpp:197`), so it lands in order after a
 gain edit sent before it; until the thread has taken it (`Player::clearing`) `pump` reads no holds, flags or loudness,
-which are from before it. The window (`MixerDock::paintFader`, `app/widgets/MixerDock.cpp:1232`): the peak a lighter bar,
+which are from before it. The window (`MixerDock::paintFader`, `app/widgets/MixerDock.cpp:1303`): the peak a lighter bar,
 the RMS its solid core, the held peak a 1.5 px line in its zone's colour, all eased (40 ms up, 300 ms down); above the
-meters a clip light lit red, eased, whose click is `meters clear` (`:1055`). L2 `test_meters_measure_what_plays` (RMS
+meters a clip light lit red, eased, whose click is `meters clear` (`:1093`). L2 `test_meters_measure_what_plays` (RMS
 0.354 and a held 0.5 for a 0.5 sine; +12 dB lights both latches; a clear while playing allocates nothing on the audio
 thread; latched through a stop and an edit), `test_held_peak_holds_then_falls`; UI `test_meters_and_the_loudness_window`.
 Mutants: no hold (the held line = the peak), a latch lost on refresh, the clip light snapping — each seen red. The
@@ -1901,7 +1901,7 @@ back in processing order is refused by `send add`'s rule (R-MIX-4) and the whole
 ducked is refused naming its send. It prints the compressor, then `made: send=…`. A real kick peaks under full scale
 and cuts less than the amount: the default Drum Machine kick, 12 dB asked, takes the bass 7.3 dB down just after it,
 back within 2 dB before the next beat at 120 bpm. The window: a strip's right-click menu has Duck Under ▸ listing every
-strip whose published `keyTargets` include it — the strips that may key it — each ONE line (`app/widgets/MixerDock.cpp:1175`).
+strip whose published `keyTargets` include it — the strips that may key it — each ONE line (`app/widgets/MixerDock.cpp:1229`).
 L2 `test_strip_duck_is_one_line` (the settings, the key, the duck measured on the bass's stem, one undo, six
 refusals); UI `test_a_strip_ducks_under_another_from_its_menu`. Mutants: Sidechain left off, the send not a key,
 the submenu's strips from the wrong side of `keyTargets` — each seen red.
@@ -1945,7 +1945,7 @@ strip sounds through its rack, its sends and the master as it will in the song; 
 before the song plays and started after it stops (one consumer at a time; the queue drained in between). `midi
 devices` lists the inputs (Settings' Audio page: MIDI input), `midiMessages` counts what came. The window: an
 instrument track's header has an arm button, a ring lit red as it is armed, eased (`armRect`,
-`app/widgets/Timeline.cpp:308`). Live: `solaris_midi_tests` plays into the kernel's Midi Through from a second
+`app/widgets/Timeline.cpp:310`). Live: `solaris_midi_tests` plays into the kernel's Midi Through from a second
 ALSA client — a note on, the pedal, its off and a centred bend arrive as their bytes. L2
 `test_a_keyboard_plays_the_armed_strip` (silent until struck; struck, it sounds through the monitor and through the
 song from beat 4; let go, it dies away; under the pedal it rings on until the pedal comes up; no allocation on the
@@ -2030,7 +2030,7 @@ section ignoring the next marker, a loop taking only its length, markers outside
 The ruler grows a band at its top for them (`Timeline::kMarkH` 13 of `kRulerH` 35.75, `app/widgets/Timeline.h:93`; the
 bars' labels and the brace's grip — the lower half of the bars' band — below it): a flag per marker at its beat, its
 name MEASURED (the width a press hits is the one last drawn), a section a band to its `end`, a hairline down through
-the bars (`paintMarkers`, `app/widgets/TimelineMarkers.cpp:215`). Keyed by id: a marker fades in and out, a move made
+the bars (`paintMarkers`, `app/widgets/TimelineMarkers.cpp:217`). Keyed by id: a marker fades in and out, a move made
 elsewhere eases there, a song opened places them (`advanceMarkers`, `:87`). On a flag (`markerUnder`, `:65` — the last
 drawn on top), each ONE line (`markerGesture`, `:121`): a click → `transport seek <mk>`; a double-click → `transport
 loop <mk>`; a drag moves it on the grid you see, its section with it, the pointer's while held, and `marker move <mk>
@@ -2077,14 +2077,14 @@ selection. The model: `lanes[].group`, `groups[]` (id, name, folded, its lanes �
 emptied group kept — each red (the last only once the test read the song itself: the model lists no empty group).
 A lane's `.group` (`core/service/SolarisService.cpp:922`): `set <ln>.group=<lg>` joins it (gathered with it),
 `=none` leaves its group, placed right after the run it left. **The timeline.** An open group's lanes carry a bar down
-their headers' edge (`app/widgets/Timeline.cpp:1461`, from where the rows ARE) and, on the first, a chevron and the
-group's name in the header's bottom band. Folded, the group is ONE row (`:137`): its lanes fade out, the rows below
-ease up, its clips travel into it — each lane's clips in their own band of the row (`clipBox`, `:355`; band and height
+their headers' edge (`app/widgets/Timeline.cpp:1495`, from where the rows ARE) and, on the first, a chevron and the
+group's name in the header's bottom band. Folded, the group is ONE row (`:139`): its lanes fade out, the rows below
+ease up, its clips travel into it — each lane's clips in their own band of the row (`clipBox`, `:357`; band and height
 eased), so they never lie on one another — and its header says the group's name, "a group, folded", "▸ N LANES". The
-chevron turns as it folds and opens (`:597`), and a click on it or on the name (`groupToggleRect`, `:360`) is ONE `set
-<lg>.folded=on|off`. A clip dragged on a folded row carries the group's clips (`:886`; never before beat 0), the
-pointer's while held, then ONE `clips move "<ac> …" --by <beats>` where they were let go (`:949`). The folded row's
-menu (`:1040`): Open group · Rename group… · Ungroup · Copy ID; a lane's (`:1066`): New group · Into group… · Leave
+chevron turns as it folds and opens (`:631`), and a click on it or on the name (`groupToggleRect`, `:369`) is ONE `set
+<lg>.folded=on|off`. A clip dragged on a folded row carries the group's clips (`:920`; never before beat 0), the
+pointer's while held, then ONE `clips move "<ac> …" --by <beats>` where they were let go (`:983`). The folded row's
+menu (`:1074`): Open group · Rename group… · Ungroup · Copy ID; a lane's (`:1100`): New group · Into group… · Leave
 group · Fold group · Ungroup. UI `test_lane_groups_on_the_timeline`; shots `lane-groups`, `lane-group-folded`,
 `lane-group-folding`. Mutants: the chevron snapping, a folded row dragging one clip, folding keeping the lanes — each
 red.
@@ -2134,4 +2134,15 @@ is the capture's writer: what fits goes in, the rest dropped and counted. The se
 (`core/service/ServiceInput.cpp:92`); the CLI, the web face and the window wire both. Ring
 `AudioRing: a capture's push never waits …`; L2 the fallback said in `test_an_armed_audio_line_is_monitored_as_set`.
 Mutants: the overflow not counted, the driver setting ignored — red. Not run on this machine's real input (the user's
-microphone): a live recording is owed. The window's arm and monitor are N16's third part.
+microphone): a live recording is owed. **The window.** An audio or instrument strip's M | S row is M | S | R in the mixer
+(`armRow`, `app/widgets/MixerDock.cpp:70`; a bus and the master keep M | S), R lit red when the strip is armed, eased.
+R (`:1101`) disarms an armed strip (`strip arm none`); on an audio line with no input it offers the song's input
+ports — "Arm with Mic" is ONE `strip arm <ch> --input <port>` — or, with none, "Add an input port (In)" (`port add In
+--dir in`); else it arms (`strip arm <ch>`). An audio line's menu (`:1239`): Input… (the input ports, the current one
+marked, No input, Add an input port… — a name typed in cosmo's field) and Monitor… (Auto · On · Off — `set
+<ch>.monitor=`). The ruler's menu adds Punch the loop's span (`transport punch <loop>`) and Punch off
+(`app/widgets/TimelineMarkers.cpp:205`); the punch is a red line atop the bars (`Timeline::punchRect`,
+`app/widgets/Timeline.cpp:361`), eased in and out, its ends travelling when it moves (`:607`). The song bar's Record
+records whichever strip is armed. UI `test_recording_audio_from_the_window` (the Rig's host now has a capture that
+hears nothing); shot `recording-audio`. Mutants: the R light snapping, R arming with no input asked, the punch
+snapping in — each red. Loop takes are R-REC-2's (N17).

@@ -110,6 +110,8 @@ namespace solaris_ui
         mPlaying = m.transport.playing;
         mLoopFrom = m.transport.loopFrom;
         mLoopTo = m.transport.loopTo;
+        mPunchFrom = m.transport.punchFrom; // R-REC-1
+        mPunchTo = m.transport.punchTo;
         if (m.projectPath != mSong)
         {
             // another song: nothing of the last one may travel into it
@@ -356,6 +358,13 @@ namespace solaris_ui
         return Rect{x0, top + 3.0 + off * h, std::max(3.0, x1 - x0 - 1.0), std::max(2.0, frac * h - (frac < 0.999 ? 1.0 : 0.0))};
     }
 
+    Rect Timeline::punchRect() const
+    {
+        if (mPunchAmt.value() <= 0.001 && !(mPunchTo > mPunchFrom)) return Rect{};
+        const double a = beatToX(mPunchA.value()), b = beatToX(mPunchB.value());
+        return Rect{a, kMarkH + 1.5, std::max(0.0, b - a), 3.0}; // atop the bars, under the markers' band
+    }
+
     // R-ARR-3: a group's chevron and name — on its folded row, or its first lane's header, in the bottom band
     Rect Timeline::groupToggleRect(const std::string &lg) const
     {
@@ -594,6 +603,31 @@ namespace solaris_ui
         }
         advanceAuto(nowMs); // a click's point waiting out the double-click (R-AUTO-11)
         advanceMarkers(nowMs); // R-ARR-1
+        {
+            // R-REC-1: the punch — present or not, eased; its ends travel when it moves (from where they ARE)
+            const bool on = mPunchTo > mPunchFrom;
+            if (!mPunchInit)
+            {
+                mPunchA.set(mPunchFrom);
+                mPunchB.set(mPunchTo);
+                mPunchAmt.set(on ? 1.0 : 0.0);
+                mPunchALast = mPunchFrom;
+                mPunchBLast = mPunchTo;
+                mPunchOnLast = on;
+                mPunchInit = true;
+            }
+            if (on != mPunchOnLast) { mPunchAmt.animateTo(on ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); mPunchOnLast = on; }
+            if (on && (mPunchFrom != mPunchALast || mPunchTo != mPunchBLast))
+            {
+                if (mPunchAmt.value() <= 0.001) { mPunchA.set(mPunchFrom); mPunchB.set(mPunchTo); } // appearing: nowhere to travel from
+                else { mPunchA.animateTo(mPunchFrom, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); mPunchB.animateTo(mPunchTo, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); }
+                mPunchALast = mPunchFrom;
+                mPunchBLast = mPunchTo;
+            }
+            mPunchA.update(nowMs);
+            mPunchB.update(nowMs);
+            mPunchAmt.update(nowMs);
+        }
         for (const auto &r : mRows) // R-ARR-3: a group's chevron turns, eased, as it folds and opens
         {
             if (r.group.empty()) continue;
@@ -1495,6 +1529,13 @@ namespace solaris_ui
         }
         t.restore();
         paintMarkers(t); // R-ARR-1: the ruler's band
+        if (const Rect pr = punchRect(); pr.w > 0 && mPunchAmt.value() > 0.001) // R-REC-1: where a recording keeps — red
+        {
+            t.save();
+            t.clipRect(kHeaderW, 0, W - kHeaderW, kRulerH);
+            drawRoundedRect(t, pr, radius::control(), Paint::filled(fade(palette::destructive(), 0.9 * mPunchAmt.value())));
+            t.restore();
+        }
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, kRulerH - 0.5); t.lineTo(W, kRulerH - 0.5); t.strokePath();
 

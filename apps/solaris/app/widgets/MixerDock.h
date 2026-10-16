@@ -93,6 +93,9 @@ namespace solaris_ui
         double panLive(const std::string &id) const;
         artboard::Rect muteRect(const std::string &id) const;
         artboard::Rect soloRect(const std::string &id) const;
+        /** R-REC-1: an audio or instrument strip's arm button (R) — empty for a bus and the master — and how lit (LIVE). */
+        artboard::Rect armRect(const std::string &id) const;
+        double armAmount(const std::string &id) const;
         double muteAmount(const std::string &id) const;
         artboard::Rect outRect(const std::string &id) const;
         artboard::Rect chipRect(const std::string &id, int slot) const; // the slot's chip (a device, "+N", "+ Effect")
@@ -147,14 +150,14 @@ namespace solaris_ui
         /** A strip's (or the master's) picture: each value the model sets, eased. */
         struct Live
         {
-            artboard::AnimatedProperty fader{0.0}, pan{0.0}, mute{0.0}, solo{0.0}, dim{0.0}, colT{1.0};
+            artboard::AnimatedProperty fader{0.0}, pan{0.0}, mute{0.0}, solo{0.0}, dim{0.0}, colT{1.0}, arm{0.0}; // arm: R-REC-1
             artboard::AnimatedProperty meter[2] = {artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
             artboard::AnimatedProperty rms[2] = {artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};  // R-METER-2
             artboard::AnimatedProperty hold[2] = {artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
             artboard::AnimatedProperty clip{0.0};
             double faderLast = 0, panLast = 0, meterLast[2] = {0, 0}, rmsLast[2] = {0, 0}, holdLast[2] = {0, 0};
             bool clipLast = false;
-            bool muteLast = false, soloLast = false, dimLast = false, placed = false;
+            bool muteLast = false, soloLast = false, dimLast = false, placed = false, armLast = false;
             artboard::Color colFrom, colTo;
             int colLast = -1;
             // R-MIX-16: what drives the fader / pan; a change of it eases (catches up) before following the engine
@@ -194,7 +197,7 @@ namespace solaris_ui
             artboard::AnimatedProperty a{0.0}, t{1.0};
             bool on = false, placed = false;
         };
-        enum class Part { None, Tab, AddMixer, ToggleDock, Resize, Header, Chip, Send, Pan, Fader, Mute, Solo, Out, Fold, Cell, AddLine, Clip, Loudness };
+        enum class Part { None, Tab, AddMixer, ToggleDock, Resize, Header, Chip, Send, Pan, Fader, Mute, Solo, Out, Fold, Cell, AddLine, Clip, Loudness, Arm };
         struct Hit
         {
             Part part = Part::None;

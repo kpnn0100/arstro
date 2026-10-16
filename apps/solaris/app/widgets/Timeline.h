@@ -174,6 +174,9 @@ namespace solaris_ui
         double loopAmount() const { return mLoopAmt.value(); } // LIVE presence, 0 … 1
         double loopFromLive() const { return mLoopA.value(); } // LIVE, beats
         double loopToLive() const { return mLoopB.value(); }   // LIVE, beats
+        // R-REC-1: the punch — a red line atop the bars where a recording keeps; eased in, out and between spans
+        artboard::Rect punchRect() const;
+        double punchAmount() const { return mPunchAmt.value(); } // LIVE presence
         // R-ARR-1: the markers on the ruler's band — local geometry as DRAWN, LIVE values
         // R-ARR-3: lane groups — the chevron and name (on a folded row, or an open group's first lane), how folded the
         // chevron shows (LIVE, 0 open … 1 folded), the row a folded group is (−1 none)
@@ -404,6 +407,9 @@ namespace solaris_ui
             bool placed = false, gone = false;
         };
         std::vector<MarkerLive> mMarkers;
+        double mPunchFrom = 0, mPunchTo = 0, mPunchALast = -1, mPunchBLast = -1; // R-REC-1: the model's punch
+        artboard::AnimatedProperty mPunchA{0.0}, mPunchB{0.0}, mPunchAmt{0.0};
+        bool mPunchOnLast = false, mPunchInit = false;
         // R-ARR-3: each group's chevron, eased; a folded group's clips dragged together
         std::map<std::string, artboard::AnimatedProperty> mGroupTurn;
         std::map<std::string, double> mGroupTurnLast;

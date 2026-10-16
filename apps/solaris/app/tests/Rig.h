@@ -105,6 +105,15 @@ namespace sltest
             return true;
         };
         h.midiIn = [] { return std::unique_ptr<arstro::solaris::IMidiIn>(new QuietMidi()); };
+        /** R-REC-1: a capture device that hears nothing — enough to arm an audio line, monitor it, record silence. */
+        struct QuietIn : arstro::solaris::IAudioIn
+        {
+            int ch = 2;
+            bool open(const std::string &, int, int channels, int, std::string &) override { ch = channels; return true; }
+            int read(float *x, int n) override { std::fill(x, x + (size_t)n * (size_t)ch, 0.0f); return n; }
+            double latency() override { return 0.0; }
+        };
+        if (audio) h.audioIn = [] { return std::unique_ptr<arstro::solaris::IAudioIn>(new QuietIn()); };
         h.settingsPath = dir + "/settings.txt";
         h.recentsPath = dir + "/recents";
         return h;
