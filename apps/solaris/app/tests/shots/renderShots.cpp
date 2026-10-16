@@ -765,6 +765,22 @@ namespace
                  const artboard::Rect h = world(tl, tl.fadeHandleRect(ac, false));
                  r.drag(h.x + h.w * 0.5, h.y + h.h * 0.5, h.x + h.w * 0.5 + 2.0 * 28.0, h.y + h.h * 0.5, 6, false);
              }},
+            {"browser-library", // R-PRESET-3: a sample folder — a favourite's star lit, tags beside two sounds
+             [](sltest::Rig &r) {
+                 std::filesystem::remove(r.dir + "/library");
+                 r.cmd("folder add " + r.dir);
+                 mixedSong(r, "Night Drive");
+                 r.cmd("sample favourite \"" + r.dir + "/808 kick.wav\"");
+                 r.cmd("sample tag \"" + r.dir + "/808 kick.wav\" punchy");
+                 r.cmd("sample tag \"" + r.dir + "/808 kick.wav\" drums");
+                 r.cmd("sample tag \"" + r.dir + "/bass loop 128.wav\" loop");
+                 r.settle();
+                 auto &b = r.app->project().browser();
+                 r.click(world(b, b.tabRect(0)));
+                 r.settle();
+                 r.click(world(b, b.rowRect(0)));
+                 r.settle();
+             }},
             {"home-templates", // R-PRESET-2: Home's From template… open — the shipped templates
              [](sltest::Rig &r) {
                  const std::filesystem::path shipped = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "templates";

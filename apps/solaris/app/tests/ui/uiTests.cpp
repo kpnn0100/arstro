@@ -282,7 +282,7 @@ static void test_browser_tabs_and_sample_drag()
     // back to Samples: the folder from Settings, browsed by a click
     r.click(world(b, b.tabRect(0)));
     r.settle();
-    assert(b.rowCount() == 1 && b.row(0).kind == "folder");
+    assert(b.rowCount() == 3 && b.row(0).kind == "folder" && b.row(1).kind == "search" && b.row(2).kind == "favourites"); // R-PRESET-3 under it
     r.click(world(b, b.rowRect(0)));
     r.settle();
     assert(sentLine(r, "browse /music/Samples"));
@@ -4214,6 +4214,87 @@ static void test_templates_in_the_window()
     pass("templates in the window (R-PRESET-2): Home's From template… lists them, the factory's marked; picked, the host asks where and one `project new --template`; File › Save as Template… typed one `template save`; New from Template… offers it; a plain new song carries none");
 }
 
+static void test_the_sample_library_in_the_browser()
+{
+    // R-PRESET-3: a sound's star is ONE `sample favourite` (lit, eased); its menu's Tag… typed is ONE `sample tag`, Remove
+    // tag one `sample untag`; under the folders, Search samples… typed is ONE `browse --search` and the list crosses to
+    // what it found, back to the folders by its first row; Favourites one `browse --favourites`
+    sltest::Rig r("ui-library", 1280, 800);
+    std::filesystem::remove(r.dir + "/library");
+    r.cmd("folder add " + r.dir);
+    r.cmd("project new " + r.song("Lib") + ".slp --bpm 120");
+    r.settle();
+    auto &b = r.app->project().browser();
+    auto &menu = r.app->menu();
+    auto quote = [](const std::string &x) { return x.find_first_of(" \t\"") == std::string::npos ? x : "\"" + x + "\""; };
+    auto find = [&](const std::string &label) {
+        for (int i = 0; i < b.rowCount(); ++i)
+            if (b.row(i).label == label) return i;
+        return -1;
+    };
+    r.click(world(b, b.tabRect(0)));
+    r.settle();
+    r.click(world(b, b.rowRect(0)));                                         // the folder
+    r.settle();
+    int k = find("808 kick.wav");
+    const std::string kick = b.row(k).value;
+    assert(k > 0 && b.starRect(k).w > 0 && b.starAmount(kick) == 0.0);
+    r.click(world(b, b.starRect(k)));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "sample favourite " + quote(kick) + " on"));
+    const double lighting = b.starAmount(kick);
+    assert(lighting > 0.0 && lighting < 1.0);
+    r.settle();
+    assert(b.starAmount(kick) == 1.0);
+    // Tag…, typed
+    k = find("808 kick.wav");
+    r.click(cx(world(b, b.rowRect(k))) - 40.0, cy(world(b, b.rowRect(k))), 2);
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "Tag\xE2\x80\xA6")));
+    r.settle();
+    artboard::KeyEvent typed;
+    typed.type = artboard::KeyEvent::Type::Text;
+    typed.text = "punchy";
+    r.app->key(typed);
+    r.key(13);
+    r.settle();
+    assert(sentLine(r, "sample tag " + quote(kick) + " punchy"));
+    bool tagged = false;
+    for (const auto &e : r.svc->model().library) tagged |= e.path == kick && e.tags == std::vector<std::string>{"punchy"} && e.favourite;
+    assert(tagged);
+    // under the folders: a search, typed
+    r.click(world(b, b.rowRect(0)));                                         // up
+    r.settle();
+    const int sr = find("Search samples\xE2\x80\xA6");
+    assert(sr >= 1 && b.row(sr).kind == "search");
+    r.click(world(b, b.rowRect(sr)));
+    r.settle();
+    typed.text = "open";
+    r.app->key(typed);
+    r.key(13);
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "browse --search open") && b.search() == "open");
+    r.settle();
+    assert(b.row(0).kind == "clearsearch" && find("open hat.wav") > 0 && find("808 kick.wav") < 0);
+    // back to the folders by its first row
+    r.click(world(b, b.rowRect(0)));
+    r.settle();
+    assert(b.search().empty() && b.row(0).kind == "folder");
+    // the favourites
+    r.click(world(b, b.rowRect(find("Favourites"))));
+    r.settle();
+    assert(sentLine(r, "browse --favourites") && b.row(0).kind == "clearsearch" && b.rowCount() == 2 && b.row(1).value == kick);
+    // Remove tag, from its menu there
+    r.click(cx(world(b, b.rowRect(1))) - 40.0, cy(world(b, b.rowRect(1))), 2);
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "Remove tag \xC2\xB7 punchy")));
+    r.settle();
+    assert(sentLine(r, "sample untag " + quote(kick) + " punchy"));
+    pass("the sample library in the browser (R-PRESET-3): a star one `sample favourite`, lit eased; Tag… typed one `sample tag`; Search samples… typed one `browse --search`, the list crossing to what it found, back by its first row; Favourites one `browse --favourites`; Remove tag one `sample untag`");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -4265,6 +4346,7 @@ int main()
     test_tempo_changes_on_the_ruler();
     test_presets_in_the_window();
     test_templates_in_the_window();
+    test_the_sample_library_in_the_browser();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();

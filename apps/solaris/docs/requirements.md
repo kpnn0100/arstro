@@ -1011,8 +1011,8 @@ stops itself; it never allocates on its thread and is never in a render (a rende
 service's `pump` (`:70`) carries its progress into `audition.{file, playing, progress}` and announces its
 end (`audition.changed … playing=0`); the model keeps it across refreshes, and the App re-binds while it
 plays and once when it ends (`app/App.cpp:272`). In the browser a click on a sample hears it, a click on
-the one being heard stops it (`app/widgets/Browser.cpp:327`); its row fills as it plays with an accent
-bar along its foot, keyed by the file and eased in and out (`:192`, `:352`) — a double-click still places
+the one being heard stops it (`app/widgets/Browser.cpp:440`); its row fills as it plays with an accent
+bar along its foot, keyed by the file and eased in and out (`:260`, `:483`) — a double-click still places
 it. Settings › Playback has PREVIEW LEVEL. Measured (L2): the live stream carries the decoded file at
 the audition level, sample for sample; it ends itself, said.
 
@@ -1631,9 +1631,9 @@ pastes all at the time bar, the dropped copy fading in — all seen red.
 
 ### DR-BROWSE-4 The song's MIDI list (R-BROWSE-4)
 The Song tab lists a MIDI header, **New MIDI**, then every pattern, then the samples under SAMPLES
-(`Browser::rebuild`, `app/widgets/Browser.cpp:143`) — keyed rows that grow in and fade out. A pattern's row
+(`Browser::rebuild`, `app/widgets/Browser.cpp:192`) — keyed rows that grow in and fade out. A pattern's row
 reads its name and, in mono at the right, its length (bars when whole bars), its note count and the
-strips that play it, or "unplayed" (`bind`, `:62`, from the model's `patterns[].strips`, published with
+strips that play it, or "unplayed" (`bind`, `:94`, from the model's `patterns[].strips`, published with
 `patterns[].lastStrip` — the strip its newest clip plays through — by `core/service/ServiceModel.cpp:332`).
 New MIDI sends `pattern new --name "MIDI <n>"` (`:366`); a double-click opens the pattern's piano roll
 (`:373`); its menu (`:379`): Rename… (`set <pt>.name=`), Piano Roll, Duplicate, Copy ID, Delete (the
@@ -2325,9 +2325,9 @@ lists nothing real). L2 `test_presets_are_saved_loaded_and_dropped`, `test_the_s
 onto a device of its type). Mutants: a load keeping the values it does not name, a bad value skipped and the rest
 loaded, a save an edit of the song, the factory's before the user's, a drop's preset ignored — each red. `preset list`
 reads the folders afresh (`core/service/ServicePresets.cpp:137`), so presets written since show. **The window** (N22
-part 2, 2026-10-17): the browser's fourth tab, Presets (`app/widgets/Browser.cpp:118`) — each type that has presets, its
+part 2, 2026-10-17): the browser's fourth tab, Presets (`app/widgets/Browser.cpp:167`) — each type that has presets, its
 label in capitals as a header, then its presets, the factory's marked "factory" at the right; keyed rows, so a saved one
-grows in. The four tabs are as wide as their names need (`tabRect`, `:195`) and the highlight eases its width with its
+grows in. The four tabs are as wide as their names need (`tabRect`, `:263`) and the highlight eases its width with its
 place. A preset row drags like an instrument: an instrument's dropped on the lanes is ONE `clip add --instrument <t>
 --preset <name> --at … --length 4 [--lane …]` (`app/widgets/ProjectScreen.cpp:150`); an effect's says it loads onto its
 device. A device window's header has Presets (`app/widgets/DevicePanel.cpp:540`): its type's presets (the factory's
@@ -2370,5 +2370,13 @@ text in any case or it carries a tag starting with it; then the library's own fi
 the browser's entries, `browser.search` the text (`favourites`), `browse.changed path=search:<text>`. A plain `browse
 <folder>` clears the search. L2 `test_the_sample_library_tags_and_finds`. Mutants: a tag kept as typed, a search blind
 to tags, the library's own files not searched, the favourites listing everything tagged, an untagged file left with
-nothing — each red.
+nothing — each red. **The window** (`app/widgets/Browser.cpp`): under the sample folders, Search samples… (the rename
+field; ONE `browse --search <text>`, `:404`) and Favourites (ONE `browse --favourites`); the tab then shows what was
+found under a first row naming the search, which takes it back to the folders (no line); nothing found says so in words.
+Every sound row carries its star at the right (`starRect`, `:242`) — lit as the library says, eased whoever changed it
+(LIVE `starAmount`) — a click ONE `sample favourite <file> on|off`; its tags beside it, muted mono; right-clicked
+(`:459`): Tag… (typed: ONE `sample tag`), Remove tag · <tag> (ONE `sample untag`), Favourite / Not a favourite. The
+folders keep their rows' places (Search and Favourites come after them). UI `test_the_sample_library_in_the_browser`;
+shot `browser-library`. Mutants: the star sending the opposite, the star snapping, a search not shown, back from a search
+staying in it, Remove tag tagging again — each red.
 

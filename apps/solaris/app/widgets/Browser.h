@@ -45,7 +45,7 @@ namespace solaris_ui
 
         struct Item
         {
-            std::string kind;   // folder | dir | up | audio | instrument | effect | pattern | newmidi | preset | header | empty (label + note: the words)
+            std::string kind;   // folder | dir | up | audio | instrument | effect | pattern | newmidi | preset | search | favourites | clearsearch | header | empty (label + note: the words)
             std::string label, value, note;
             std::string strip;  // a pattern: the strip its newest clip plays through ("" = none) — where a drop off a track goes (R-BROWSE-4)
             std::string role;   // R-PRESET-1: a preset's — `instrument` or `effect` (its type is `value`, its name `label`)
@@ -68,6 +68,10 @@ namespace solaris_ui
         double auditionAmount(const std::string &file) const;
         /** Row i's LIVE opacity — a test tells a cross-fade from a cut. */
         double rowAlpha(int i) const;
+        // R-PRESET-3: a sound row's star (local; empty on other rows), how lit it is (LIVE, eased), the search shown
+        artboard::Rect starRect(int i) const;
+        double starAmount(const std::string &file) const;
+        const std::string &search() const { return mSearch; }
 
         std::function<void(const std::string &line)> onCommand;
         std::function<void()> onOpenSettings;
@@ -103,6 +107,12 @@ namespace solaris_ui
         std::vector<std::pair<std::string, std::string>> mSongSounds; // label, src
         std::vector<Item> mSongMidi;                  // R-BROWSE-4: the song's patterns, as rows
         std::vector<solaris::PresetModel> mPresets;   // R-PRESET-1
+        // R-PRESET-3: the library — a file's tags and star (its fill eased), the search the Samples tab shows ('' none;
+        // `favourites`)
+        std::map<std::string, solaris::LibraryEntry> mLib;
+        struct Star { artboard::AnimatedProperty amt{0.0}; double last = -1.0; };
+        mutable std::map<std::string, Star> mStars;
+        std::string mSearch;
         std::vector<Item> mRows;                      // the list as it is: hit-testing, row()
         // R-EDM-9: the preview, keyed by file — its fill fades in on the row heard, out on the one left
         struct Aud { artboard::AnimatedProperty amt{0.0}; bool want = false, last = false, placed = false; double progress = 0; };

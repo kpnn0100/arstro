@@ -46,6 +46,38 @@ namespace solaris_ui
                 std::snprintf(buf, sizeof buf, "%g beat%s", beats, beats == 1 ? "" : "s");
             return buf;
         }
+        /** R-PRESET-3: a five-pointed star in `b` — outlined, its fill `lit` (0 … 1) of the colour. */
+        void starGlyph(IRenderTarget &t, const Rect &b, const Color &c, double lit)
+        {
+            const double cx = b.x + b.w * 0.5, cy = b.y + b.h * 0.53, ro = b.w * 0.5, ri = ro * 0.42;
+            t.beginPath();
+            for (int k = 0; k < 10; ++k)
+            {
+                const double ang = -M_PI / 2.0 + k * M_PI / 5.0, rr = k % 2 == 0 ? ro : ri;
+                const double x = cx + rr * std::cos(ang), y = cy + rr * std::sin(ang);
+                if (k == 0) t.moveTo(x, y);
+                else t.lineTo(x, y);
+            }
+            t.closePath();
+            if (lit > 0.001)
+            {
+                Color f = c;
+                f.a *= lit;
+                t.setFill(f);
+                t.fillPath();
+                t.beginPath();
+                for (int k = 0; k < 10; ++k)
+                {
+                    const double ang = -M_PI / 2.0 + k * M_PI / 5.0, rr = k % 2 == 0 ? ro : ri;
+                    const double x = cx + rr * std::cos(ang), y = cy + rr * std::sin(ang);
+                    if (k == 0) t.moveTo(x, y);
+                    else t.lineTo(x, y);
+                }
+                t.closePath();
+            }
+            t.setStroke(c, 1.1);
+            t.strokePath();
+        }
         void waveGlyph(IRenderTarget &t, const Rect &b, const Color &c)
         {
             const double h[5] = {0.35, 0.8, 1.0, 0.6, 0.3};
@@ -67,8 +99,11 @@ namespace solaris_ui
         mAudFile = m.audition.file;
         mAudPlaying = m.audition.playing;
         mAudProgress = m.audition.progress;
-        // the folder browsed last is what the Samples tab shows, once the user went into one
-        if (!mPath.empty() && m.browser.path == mPath) mEntries = m.browser.entries;
+        // the folder browsed last is what the Samples tab shows, once the user went into one — or the search it made
+        if (!mSearch.empty()) { if (m.browser.search == mSearch) mEntries = m.browser.entries; }
+        else if (!mPath.empty() && m.browser.path == mPath) mEntries = m.browser.entries;
+        mLib.clear(); // R-PRESET-3
+        for (const auto &e : m.library) mLib[e.path] = e;
         // R-BROWSE-4: the song's MIDI — each pattern with its length, its notes and who plays it
         mSongMidi.clear();
         std::map<std::string, std::string> stripName;
@@ -94,10 +129,24 @@ namespace solaris_ui
     void Browser::rebuild()
     {
         mRows.clear();
-        if (mTab == kSamples)
+        if (mTab == kSamples && !mSearch.empty())
+        {
+            // R-PRESET-3: what a search found — its row back to the folders first
+            mRows.push_back(Item{"clearsearch", mSearch == "favourites" ? std::string("Favourites") : "Search \xC2\xB7 " + mSearch, "", ""});
+            for (const auto &e : mEntries)
+                if (e.kind == "audio") mRows.push_back(Item{"audio", e.name, e.path, ""});
+        }
+        else if (mTab == kSamples)
         {
             if (mPath.empty())
+            {
                 for (const auto &f : mFolders) mRows.push_back(Item{"folder", baseName(f), f, f});
+                if (!mFolders.empty() || !mLib.empty()) // R-PRESET-3: a search and the favourites, under the folders
+                {
+                    mRows.push_back(Item{"search", "Search samples\xE2\x80\xA6", "", ""});
+                    mRows.push_back(Item{"favourites", "Favourites", "", ""});
+                }
+            }
             else
             {
                 const auto slash = mPath.find_last_of('/');
@@ -152,6 +201,12 @@ namespace solaris_ui
         const std::string gen = std::to_string(mGen) + "|";
         std::vector<std::pair<std::string, Item>> keyed;
         for (const auto &it : mRows) keyed.emplace_back(gen + it.kind + "|" + it.value + "|" + it.label, it);
+        if (mTab == kSamples && !mSearch.empty() && mRows.size() == 1)
+        {
+            Item e{"empty", mSearch == "favourites" ? "No favourites yet." : "Nothing found.", "", ""};
+            e.note = mSearch == "favourites" ? "A sound's star makes it one." : "Try part of a name, or a tag.";
+            keyed.emplace_back(gen + "empty|" + e.label, e);
+        }
         if (mRows.empty())
         {
             Item e{"empty", "", "", ""};
@@ -182,6 +237,19 @@ namespace solaris_ui
     {
         const auto *r = mMotion.byIndex(i);
         return r && r->placed ? r->liveAlpha() : 0.0;
+    }
+
+    Rect Browser::starRect(int i) const
+    {
+        if (i < 0 || i >= (int)mRows.size() || mRows[(size_t)i].kind != "audio") return Rect{};
+        const Rect r = rowRect(i);
+        return Rect{width.value() - space::padX() - 13.0, r.y + (r.h - 13.0) * 0.5, 13.0, 13.0};
+    }
+
+    double Browser::starAmount(const std::string &file) const
+    {
+        const auto it = mStars.find(file);
+        return it == mStars.end() ? 0.0 : it->second.amt.value();
     }
 
     void Browser::setTab(int t)
@@ -243,6 +311,18 @@ namespace solaris_ui
         mTabX.update(nowMs);
         mTabW.update(nowMs);
         mMotion.advance(nowMs);
+        // R-PRESET-3: each shown sound's star — lit as the library says, eased whoever changed it
+        for (const auto &it : mRows)
+            if (it.kind == "audio")
+            {
+                Star &s = mStars[it.value];
+                const auto lib = mLib.find(it.value);
+                const double want = lib != mLib.end() && lib->second.favourite ? 1.0 : 0.0;
+                if (s.last < 0.0) s.amt.set(want);
+                else if (want != s.last) s.amt.animateTo(want, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+                s.last = want;
+            }
+        for (auto &s : mStars) s.second.amt.update(nowMs);
         // the preview's fill: on the row heard, its progress following the audio; eased in and out
         if (mAudPlaying && !mAudFile.empty()) mAud[mAudFile];
         for (auto it = mAud.begin(); it != mAud.end();)
@@ -308,10 +388,43 @@ namespace solaris_ui
         {
             for (int t = 0; t < kTabs; ++t)
                 if (tabRect(t).contains(local)) { setTab(t); return true; }
-            if (mTab == kSamples && mFolders.empty() && onOpenSettings) { onOpenSettings(); return true; }
             const int r = rowAt(local);
+            if (mTab == kSamples && mFolders.empty() && mSearch.empty() && (r < 0 || (mRows[(size_t)r].kind != "search" && mRows[(size_t)r].kind != "favourites")) && onOpenSettings)
+            { onOpenSettings(); return true; }
             if (r < 0) return true;
             const Item it = mRows[(size_t)r];
+            // R-PRESET-3: a star, a search, the favourites, back from a search — each ONE line (or none)
+            if (it.kind == "audio" && starRect(r).contains(local))
+            {
+                const auto lib = mLib.find(it.value);
+                const bool fav = lib != mLib.end() && lib->second.favourite;
+                if (onCommand) onCommand("sample favourite " + q(it.value) + (fav ? " off" : " on"));
+                return true;
+            }
+            if (it.kind == "search")
+            {
+                const Point world = g.pos;
+                if (onRename)
+                    onRename("", world, [this](const std::string &text) {
+                        if (text.empty()) return;
+                        mSearch = text;
+                        mEntries.clear();
+                        navigate();
+                        if (onCommand) onCommand("browse --search " + q(text));
+                        rebuild();
+                    });
+                return true;
+            }
+            if (it.kind == "favourites" || it.kind == "clearsearch")
+            {
+                mSearch = it.kind == "favourites" ? "favourites" : "";
+                mPath.clear();
+                mEntries.clear();
+                navigate();
+                if (!mSearch.empty() && onCommand) onCommand("browse --favourites");
+                rebuild();
+                return true;
+            }
             if (it.kind == "folder" || it.kind == "dir" || it.kind == "up")
             {
                 std::string target = it.value;
@@ -340,8 +453,26 @@ namespace solaris_ui
         }
         case Gesture::Type::RightClick:
         {
-            // a pattern's menu (R-BROWSE-4): each one line
             const int r = rowAt(local);
+            if (r >= 0 && mRows[(size_t)r].kind == "audio" && onMenu)
+            {
+                // R-PRESET-3: a sound's menu — a tag typed, a tag taken off, the star — each one line
+                const std::string file = mRows[(size_t)r].value;
+                const auto lib = mLib.find(file);
+                const bool fav = lib != mLib.end() && lib->second.favourite;
+                const Point world = g.pos;
+                std::vector<cosmo_v2::ContextMenu::Item> items;
+                items.push_back({"Tag\xE2\x80\xA6", [this, file, world] {
+                                     if (onRename) onRename("", world, [this, file](const std::string &tag) { if (onCommand && !tag.empty()) onCommand("sample tag " + q(file) + " " + q(tag)); });
+                                 }});
+                if (lib != mLib.end())
+                    for (const auto &tag : lib->second.tags)
+                        items.push_back({"Remove tag \xC2\xB7 " + tag, [this, file, tag] { if (onCommand) onCommand("sample untag " + q(file) + " " + tag); }});
+                items.push_back({fav ? "Not a favourite" : "Favourite", [this, file, fav] { if (onCommand) onCommand("sample favourite " + q(file) + (fav ? " off" : " on")); }});
+                onMenu(std::move(items), world);
+                return true;
+            }
+            // a pattern's menu (R-BROWSE-4): each one line
             if (r < 0 || mRows[(size_t)r].kind != "pattern" || !onMenu) return true;
             const std::string id = mRows[(size_t)r].value, name = mRows[(size_t)r].label;
             const Point world = g.pos;
@@ -421,7 +552,13 @@ namespace solaris_ui
             const Rect ib{space::padX(), cy - 6.0, 12.0, 12.0};
             const Color ic = fade(lerpColor(palette::mutedForeground(), palette::foreground(), 0.4 * hv), a);
             if (it.kind == "folder" || it.kind == "dir") cosmo_v2::icon::folder(t, ib, ic, 1.1);
-            else if (it.kind == "up") glyph::line(t, ib.x + 8.0, ib.y + 2.0, ib.x + 3.0, ib.y + 6.0, ic, 1.3), glyph::line(t, ib.x + 3.0, ib.y + 6.0, ib.x + 8.0, ib.y + 10.0, ic, 1.3);
+            else if (it.kind == "up" || it.kind == "clearsearch") glyph::line(t, ib.x + 8.0, ib.y + 2.0, ib.x + 3.0, ib.y + 6.0, ic, 1.3), glyph::line(t, ib.x + 3.0, ib.y + 6.0, ib.x + 8.0, ib.y + 10.0, ic, 1.3);
+            else if (it.kind == "search")
+            {
+                drawCircle(t, ib.x + 5.0, ib.y + 5.0, 3.6, Paint::stroked(ic, 1.2)); // a lens and its handle
+                glyph::line(t, ib.x + 7.6, ib.y + 7.6, ib.x + 11.0, ib.y + 11.0, ic, 1.3);
+            }
+            else if (it.kind == "favourites") starGlyph(t, ib, ic, 0.0);
             else if (it.kind == "audio") waveGlyph(t, ib, ic);
             else if (it.kind == "instrument" || (it.kind == "preset" && it.role == "instrument")) glyph::speaker(t, ib, ic, 1.1);
             else if (it.kind == "pattern" || it.kind == "midi") notesGlyph(t, ib, ic);
@@ -435,6 +572,26 @@ namespace solaris_ui
             const double px = mono ? 10.0 : 11.0;
             const char *fam = mono ? font::mono() : font::sans();
             double labelW = W - ib.right() - 2 * space::padX();
+            if (it.kind == "audio")
+            {
+                // R-PRESET-3: its star at the right (filled as far as it is lit), its tags beside it — muted mono
+                const Rect sr{W - space::padX() - 13.0, cy - 6.5, 13.0, 13.0};
+                const auto st = mStars.find(it.value);
+                const double lit = st == mStars.end() ? 0.0 : st->second.amt.value();
+                starGlyph(t, sr, fade(lerpColor(palette::mutedForeground(), palette::primary(), lit), a * (0.45 + 0.55 * std::max(lit, hv))), lit);
+                labelW = std::max(0.0, labelW - 19.0);
+                const auto lib = mLib.find(it.value);
+                if (lib != mLib.end() && !lib->second.tags.empty())
+                {
+                    std::string tags;
+                    for (const auto &tg : lib->second.tags) tags += (tags.empty() ? "" : " \xC2\xB7 ") + tg;
+                    const std::string meta = textfit::ellipsize(t, tags, W * 0.4, 9.0, font::mono());
+                    const double mw = t.measureText(meta, 9.0, font::mono());
+                    t.setFill(fade(palette::mutedForeground(), a));
+                    t.drawText(meta, sr.x - 6.0 - mw, textfit::baseline(cy, 9.0), 9.0, font::mono());
+                    labelW = std::max(0.0, labelW - mw - 8.0);
+                }
+            }
             if ((it.kind == "pattern" || it.kind == "preset") && !it.note.empty())
             {
                 // its length, notes and who plays it, at the right — mono (numbers), muted; the name gets the rest
