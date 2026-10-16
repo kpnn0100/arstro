@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N18 part 2 — audio editing in the window: fade corners and a gain line on a clip, split at the time bar, Reverse / Consolidate / Slice in a clip's menu, crossfades drawn** (R-EDIT-1; part 1 — the grammar — is built), then N19… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N19 — DSP: a time-stretcher and pitch shifter (phase vocoder, transients)** (R-WARP-1's DSP half), then N20… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -481,12 +481,14 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       Part 2 (same day): `clips[].plays` (the comp resolved, in the model); the window — "N takes", Show takes (a row per
       take under the lane, lit where it plays, cross-faded), a drag across a take is one `clip comp`, a double-click the
       whole clip.
-- [~] **N18** Audio editing on the lanes: split, fades and gain drawn, crossfades, reverse, consolidate, slice
+- [x] **N18** Audio editing on the lanes: split, fades and gain drawn, crossfades, reverse, consolidate, slice
       (R-EDIT-1).
       Part 1 (2026-10-16): DSP `485785f` — the Sampler's `slices` mode (REQ-inst-sampler-2) and `detectOnsets`
       (REQ-onset-1); Solaris — `set <ac>.reverse`, overlapping clips on a lane crossfaded (`clips[].fadeInHeard/
       fadeOutHeard`), `clip split`, `clip consolidate` (a raw render to `Bounces/`), `clip slice --every|--transients`
-      and `--every --kit` (a Sampler that plays the same, to the sample). Part 2: the window.
+      and `--every --kit` (a Sampler that plays the same, to the sample). Part 2 (same day): the window — a clip's fade
+      handles and gain line (one `set` when let go), its crossfade drawn as heard, Split at the time bar · Reverse ·
+      Consolidate N clips · Slice ▸ in its menu, Ctrl+E (`lanes.split`).
 - [ ] **N19** DSP: a time-stretcher and pitch shifter (phase vocoder, transients) (R-WARP-1's DSP half).
 - [ ] **N20** Warp and pitch on audio clips, BPM detected (R-WARP-1).
 - [ ] **N21** A tempo map (R-TEMPO-1).

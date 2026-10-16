@@ -55,6 +55,20 @@ namespace
     }
     using sltest::world;
 
+    // R-EDIT-1: a drum loop with its fades and a lifted gain, a second over its end (a crossfade), a reversed vocal
+    void clipEditSong(sltest::Rig &r)
+    {
+        r.cmd("project new \"" + r.song("Edits") + ".slp\" --bpm 120");
+        r.cmd("clip add --src drums.wav --at 0 --length 8");
+        const std::string a = r.svc->model().clips.back().id;
+        r.cmd("set " + a + ".fadeIn=0.5 " + a + ".fadeOut=0.5 " + a + ".gain=4");
+        r.cmd("clip add --src drums.wav --at 6 --length 6");
+        const std::string b = r.svc->model().clips.back().id;
+        r.cmd("set " + b + ".gain=-6");
+        r.cmd("clip add --src vox.wav --at 14 --length 4");
+        r.cmd("set " + r.svc->model().clips.back().id + ".reverse=true");
+    }
+
     std::vector<Shot> shots()
     {
         return {
@@ -715,6 +729,20 @@ namespace
                  r.settle();
                  r.app->project().timeline().showTakes(vox, true);
                  r.settle();
+             }},
+            {"clip-edit",   // R-EDIT-1: fades and a gain line on a clip, its crossfade with the next on the lane, a reversed clip
+             [](sltest::Rig &r) {
+                 clipEditSong(r);
+                 r.settle();
+             }},
+            {"clip-edit-dragging", // R-EDIT-1: the first clip's fade in held by the pointer, the fade drawn where it is
+             [](sltest::Rig &r) {
+                 clipEditSong(r);
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const std::string ac = r.svc->model().clips[0].id;
+                 const artboard::Rect h = world(tl, tl.fadeHandleRect(ac, false));
+                 r.drag(h.x + h.w * 0.5, h.y + h.h * 0.5, h.x + h.w * 0.5 + 2.0 * 28.0, h.y + h.h * 0.5, 6, false);
              }},
             {"loop-region",   // R-EDM-7: the brace on the ruler, the region tinted on the lanes
              [](sltest::Rig &r) {

@@ -192,6 +192,17 @@ namespace solaris_ui
         bool takesShown(const std::string &ac) const { return mTakesOpen.count(ac) > 0; }
         artboard::Rect takeRowRect(const std::string &ac, int take) const;
         double takeLit(const std::string &ac, int take, double beat) const;
+        // R-EDIT-1: an audio clip's fade handles (local, as DRAWN — empty when it is too narrow to take them), its gain
+        // line's height (local; NaN when none), and the LIVE values: its own fade (beats), the fade heard, its gain (dB),
+        // how reversed it shows (0 … 1). While a handle or the line is dragged, the pointer's.
+        artboard::Rect fadeHandleRect(const std::string &ac, bool out) const;
+        double gainLineY(const std::string &ac) const;
+        double clipFadeLive(const std::string &ac, bool out) const;
+        double clipHeardFadeLive(const std::string &ac, bool out) const;
+        double clipGainLive(const std::string &ac) const;
+        double clipReversedLive(const std::string &ac) const;
+        /** R-EDIT-1: the clip's audio-editing lines for its menu — split at the time bar, reverse, consolidate, slice. */
+        void clipEditItems(const solaris::ClipModel &c, std::vector<cosmo_v2::ContextMenu::Item> &items, const artboard::Point &world);
         double groupTurn(const std::string &lg) const;
         int groupRow(const std::string &lg) const;
         artboard::Rect markerRect(const std::string &mk) const;  // its flag and name; empty when none
@@ -274,6 +285,9 @@ namespace solaris_ui
             artboard::AnimatedProperty at{0.0}, row{0.0}, alpha{0.0}, hueT{1.0}, len{0.0}; // len: beats, eased (R-CLIP-7)
             artboard::AnimatedProperty off{0.0}, frac{1.0}; // R-ARR-3: its band of the row, eased as a group folds
             double offLast = 0.0, fracLast = 1.0;
+            // R-EDIT-1: its own fades, the fades heard (an overlap's crossfade), its gain as an amplitude, reversed — eased
+            artboard::AnimatedProperty fin{0.0}, fout{0.0}, hin{0.0}, hout{0.0}, amp{1.0}, rev{0.0};
+            double finLast = 0.0, foutLast = 0.0, hinLast = 0.0, houtLast = 0.0, ampLast = 1.0, revLast = 0.0;
             artboard::Color hueFrom, hueTo; // its strip's colour, cross-faded when the strip's changes
             int hueLast = 0;
             bool placed = false, gone = false;
@@ -442,6 +456,18 @@ namespace solaris_ui
         void advanceTakes(double nowMs);
         void paintTakes(artboard::IRenderTarget &t) const;
         bool takeGesture(const artboard::Gesture &g, const artboard::Point &local);
+        // R-EDIT-1 (TimelineClipEdit.cpp): a fade handle or the gain line pressed (1 fade in, 2 fade out, 3 gain), the
+        // clip, the pointer's value while dragged
+        int mEditZone = 0;
+        std::string mEditClip;
+        double mEditValue = 0.0;
+        bool mEditMoved = false;
+        int clipEditZoneAt(const artboard::Point &p, std::string &id) const;
+        bool clipEditable(const ClipLive &l, const artboard::Rect &r) const;
+        bool clipEditGesture(const artboard::Gesture &g, const artboard::Point &local);
+        static void placeClipEdit(ClipLive &l);
+        static void advanceClipEdit(ClipLive &l, double nowMs);
+        void paintClipEdit(artboard::IRenderTarget &t, const ClipView &v, const artboard::Rect &r, double a, const artboard::Color &hue) const;
         std::map<std::string, artboard::AnimatedProperty> mGroupTurn;
         std::map<std::string, double> mGroupTurnLast;
         std::string mDragGroup;

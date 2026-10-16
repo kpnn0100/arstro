@@ -20,6 +20,7 @@ namespace solaris
             {"lanes.duplicate", "Lanes", "Duplicate the clip", "Ctrl+D"},
             {"lanes.copy", "Lanes", "Copy the clip", "Ctrl+C"},             // R-CLIP-10
             {"lanes.paste", "Lanes", "Paste it at the time bar", "Ctrl+V"},
+            {"lanes.split", "Lanes", "Split the clip at the time bar", "Ctrl+E"},   // R-EDIT-1
             {"roll.selectAll", "Piano roll", "Select all", "Ctrl+A"},
             {"roll.deselect", "Piano roll", "Deselect", "Escape"},
             {"roll.delete", "Piano roll", "Delete", "Delete, Backspace"},

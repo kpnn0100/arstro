@@ -3816,6 +3816,119 @@ static void test_takes_under_their_clip()
     pass("takes under their clip (R-REC-2): Show takes inserts a row per take, the last lit; a drag across take 1 is one `clip comp`, its light crossing over eased; a double-click on take 2 the whole clip; Hide takes");
 }
 
+static void test_a_clips_fades_gain_and_edits()
+{
+    // R-EDIT-1: an audio clip's fade handles and gain line — dragged, the drawing is the pointer's; let go, ONE `set`;
+    // moved by the model, eased. Two clips overlapping on a lane show their crossfade. The menu: Reverse (its mark eased
+    // in), Consolidate the clips it runs into, Slice ▸, Split at the time bar; Ctrl+E splits the selected clip there
+    sltest::Rig r("ui-clipedit", 1280, 800);
+    r.cmd("project new " + r.song("Edit") + ".slp --bpm 120");
+    r.cmd("clip add --src vox.wav --at 0 --length 4");              // looping half a second: 4 beats, 112 px
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    const std::string ac = r.svc->model().clips[0].id;
+    auto wx = [&](double beat) { return world(tl, artboard::Rect{tl.beatToX(beat), 0, 0, 0}).x; };
+    // the fade in's handle, dragged a beat: the drawing follows the pointer, then ONE line
+    const artboard::Rect hi = world(tl, tl.fadeHandleRect(ac, false));
+    assert(hi.w > 0 && tl.clipFadeLive(ac, false) == 0.0);
+    r.drag(cx(hi), cy(hi), cx(hi) + 28.0, cy(hi), 6, false);
+    assert(tl.clipFadeLive(ac, false) == 1.0 && tl.clipHeardFadeLive(ac, false) == 1.0);
+    assert(!sentLine(r, "set " + ac + ".fadeIn=1"));                // not until it is let go
+    r.app->pointer(2, cx(hi) + 28.0, cy(hi), 0, r.now);
+    r.frame();
+    assert(sentLine(r, "set " + ac + ".fadeIn=1") && r.svc->model().clips[0].fadeIn == 1.0);
+    r.frame();
+    assert(tl.clipFadeLive(ac, false) == 1.0);                      // where it was let go: no jump back and forth
+    // moved by the model: eased
+    r.cmd("set " + ac + ".fadeIn=0.5");
+    r.frame();
+    r.frame();
+    const double easing = tl.clipFadeLive(ac, false);
+    assert(easing > 0.5 && easing < 1.0);
+    r.settle();
+    assert(tl.clipFadeLive(ac, false) == 0.5);
+    // the fade out's handle, half a beat in from the end
+    const artboard::Rect ho = world(tl, tl.fadeHandleRect(ac, true));
+    r.drag(cx(ho), cy(ho), cx(ho) - 14.0, cy(ho), 6);
+    r.frame();
+    assert(sentLine(r, "set " + ac + ".fadeOut=0.5"));
+    // the gain line: up from 0 dB, louder; the line is where the pointer left it
+    const artboard::Rect cr = world(tl, tl.clipRect(ac));
+    const double gy = world(tl, artboard::Rect{0, tl.gainLineY(ac), 0, 0}).y;
+    r.drag(wx(2.0), gy, wx(2.0), gy - 6.0, 6);
+    r.frame();
+    const double louder = r.svc->model().clips[0].gain;
+    assert(louder > 5.0 && louder < 7.0 && tl.clipGainLive(ac) == louder);
+    assert(std::fabs(world(tl, artboard::Rect{0, tl.gainLineY(ac), 0, 0}).y - (gy - 6.0)) < 0.5);
+    r.cmd("set " + ac + ".gain=-6");
+    r.frame();
+    r.frame();
+    const double g = tl.clipGainLive(ac);
+    assert(g < louder && g > -6.0);
+    r.settle();
+    assert(std::fabs(tl.clipGainLive(ac) + 6.0) < 1e-9);
+    // a clip over its end on the lane: the crossfade drawn, eased in
+    r.cmd("clip add --src vox.wav --at 3 --length 2");
+    std::string over;
+    for (const auto &c : r.svc->model().clips)
+        if (c.at == 3.0) over = c.id;
+    r.frame();
+    r.frame();
+    const double xf = tl.clipHeardFadeLive(ac, true);
+    assert(xf > 0.5 && xf < 1.0);                                   // its own 0.5 growing to the overlap's 1
+    r.settle();
+    assert(tl.clipHeardFadeLive(ac, true) == 1.0 && tl.clipHeardFadeLive(over, false) == 1.0 && tl.clipFadeLive(ac, true) == 0.5);
+    // the menu: Reverse — its mark eased in; Consolidate the two it runs into; a loop is not sliced
+    auto &menu = r.app->menu();
+    r.click(cr.x + 30.0, cy(cr), 2);
+    r.settle();
+    assert(menuItem(r, "Reverse") >= 0 && menuItem(r, "Consolidate 2 clips") >= 0 && menuItem(r, "Slice \xE2\x96\xB8") < 0);
+    r.click(menu.itemRect(menuItem(r, "Reverse")));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "set " + ac + ".reverse=true") && tl.clipReversedLive(ac) > 0.0 && tl.clipReversedLive(ac) < 1.0);
+    r.settle();
+    r.click(cr.x + 30.0, cy(cr), 2);
+    r.settle();
+    assert(menuItem(r, "Play forwards") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Consolidate 2 clips")));
+    r.settle();
+    assert(sentLine(r, "clip consolidate " + ac + " " + over));
+    // a plain clip: Slice ▸ Every half beat; Split at the time bar; Ctrl+E
+    r.cmd("clip add --src vox.wav --at 8");
+    std::string plain;
+    for (const auto &c : r.svc->model().clips)
+        if (c.at == 8.0) plain = c.id;
+    r.cmd("transport seek 8.5");
+    r.settle();
+    const artboard::Rect pr = world(tl, tl.clipRect(plain));
+    r.click(cx(pr), cy(pr), 2);
+    r.settle();
+    assert(menuItem(r, "Split at the time bar") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Slice \xE2\x96\xB8")));
+    r.settle();
+    assert(menuItem(r, "At its hits") >= 0 && menuItem(r, "To a kit, a slice a beat") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Every half beat")));
+    r.settle();
+    assert(sentLine(r, "clip slice " + plain + " --every 0.5") && r.svc->model().clips.size() == 3);
+    r.cmd("undo");
+    r.settle();
+    r.click(cx(pr), cy(pr), 2);
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "Split at the time bar")));
+    r.settle();
+    assert(sentLine(r, "clip split " + plain + " --at 8.5"));
+    r.cmd("undo");
+    r.settle();
+    r.sent.clear();
+    r.click(cx(pr), cy(pr));                                        // selected
+    r.settle();
+    r.key('E', true);
+    r.settle();
+    assert(sentLine(r, "clip split " + plain + " --at 8.5"));
+    pass("a clip's edits (R-EDIT-1): fade handles and the gain line follow the pointer and send ONE `set` when let go; moved by the model, eased; an overlap's crossfade drawn, eased in; the menu's Reverse (eased), Consolidate 2 clips, Slice ▸ Every half beat, Split at the time bar; Ctrl+E splits there");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -3862,6 +3975,7 @@ int main()
     test_lane_groups_on_the_timeline();
     test_recording_audio_from_the_window();
     test_takes_under_their_clip();
+    test_a_clips_fades_gain_and_edits();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();

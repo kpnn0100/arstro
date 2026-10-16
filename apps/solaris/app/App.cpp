@@ -179,7 +179,7 @@ namespace solaris_ui
     {
         const std::string key = m.undoLabel + "|" + m.redoLabel + "|" + (mProject->dockOpen() ? "1" : "0") + (mProject->browserOpen() ? "1" : "0") +
                                 (m.settings.metronome ? "1" : "0") + (m.settings.showIds ? "1" : "0") + keyHint(m, "song.undo") + keyHint(m, "song.redo") +
-                                keyHint(m, "lanes.duplicate") + keyHint(m, "lanes.delete") + keyHint(m, "lanes.copy") + keyHint(m, "lanes.paste");
+                                keyHint(m, "lanes.duplicate") + keyHint(m, "lanes.delete") + keyHint(m, "lanes.copy") + keyHint(m, "lanes.paste") + keyHint(m, "lanes.split");
         if (key == mMenuKey) return; // labels change only when what they name does — a re-keyed action too
         mMenuKey = key;
         auto &ms = mProject->bar().menus();
@@ -192,6 +192,7 @@ namespace solaris_ui
             {"Copy Clip" + keyHint(m, "lanes.copy"), [this] { songAction(mHooks.model ? mHooks.model() : emptyModel(), "lanes.copy"); }},
             {"Paste Clip" + keyHint(m, "lanes.paste"), [this] { pasteClip(mHooks.model ? mHooks.model() : emptyModel()); }},
             {"Delete Clip" + keyHint(m, "lanes.delete"), [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip delete " + c); }},
+            {"Split Clip at the Time Bar" + keyHint(m, "lanes.split"), [this] { songAction(mHooks.model ? mHooks.model() : emptyModel(), "lanes.split"); }},
         });
         ms.setItems(3, {
             {mProject->dockOpen() ? "Hide Mixer" : "Show Mixer", [this] { mProject->setDockOpen(!mProject->dockOpen()); mMenuKey.clear(); refreshMenus(mHooks.model ? mHooks.model() : emptyModel()); }},
@@ -514,6 +515,7 @@ namespace solaris_ui
         if (sel.empty()) return false;
         if (id == "lanes.delete") return dispatch("clip delete " + sel);
         if (id == "lanes.duplicate") return dispatch("clip duplicate " + sel); // a linked copy after it
+        if (id == "lanes.split") return dispatch("clip split " + sel + " --at " + Timeline::beatText(std::round(m.transport.position * 960.0) / 960.0)); // R-EDIT-1
         if (id == "lanes.copy")
         {
             // R-CLIP-10: nothing is sent — the window keeps which clip; Ctrl+V makes the copy

@@ -5688,6 +5688,12 @@
         "defaults": "Ctrl+V"
       },
       {
+        "id": "lanes.split",
+        "area": "Lanes",
+        "label": "Split the clip at the time bar",
+        "defaults": "Ctrl+E"
+      },
+      {
         "id": "roll.selectAll",
         "area": "Piano roll",
         "label": "Select all",

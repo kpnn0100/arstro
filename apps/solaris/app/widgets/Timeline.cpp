@@ -432,6 +432,8 @@ namespace solaris_ui
     Cursor Timeline::dragCursor() const
     {
         if (mResizing || !mSpanAu.empty()) return Cursor::ResizeH; // a clip's end, an automation span's grip (R-AUTO-12)
+        if (mEditZone == 1 || mEditZone == 2) return Cursor::ResizeH; // a fade handle held (R-EDIT-1)
+        if (mEditZone == 3) return Cursor::ResizeV;                   // the gain line held
         const RulerDrag held = mRuler == RulerDrag::Pending ? mRulerZone : mRuler; // pressed on an end, not yet moved
         return held == RulerDrag::LoopFrom || held == RulerDrag::LoopTo ? Cursor::ResizeH : Cursor::Default;
     }
@@ -448,6 +450,13 @@ namespace solaris_ui
         // an automation span's grip (R-AUTO-12) — as the press reads it
         if (local.x >= kHeaderW && local.y >= kRulerH)
             if (const std::string au = autoAt(local.y); !au.empty() && spanGripAt(au, local) >= 0) return Cursor::ResizeH;
+        // an audio clip's fade handles and gain line (R-EDIT-1) — as the press reads them
+        {
+            std::string eid;
+            const int z = clipEditZoneAt(local, eid);
+            if (z == 1 || z == 2) return Cursor::ResizeH;
+            if (z == 3) return Cursor::ResizeV;
+        }
         // a clip's end (R-CLIP-7) — as the press reads it
         const std::string id = clipAt(local);
         if (!id.empty())
@@ -677,6 +686,7 @@ namespace solaris_ui
                 l.frac.set(l.v.bandFrac);
                 l.offLast = l.v.bandOff;
                 l.fracLast = l.v.bandFrac;
+                placeClipEdit(l);
                 const bool instant = l.v.c.id == mInstantClip; // a Shift-drop: the pointer already showed it there
                 l.alpha.set(fadeIn && !instant ? 0.0 : 1.0);
                 l.aLast = l.alpha.value();
@@ -703,6 +713,7 @@ namespace solaris_ui
             if (l.v.bandFrac != l.fracLast) { l.frac.animateTo(l.v.bandFrac, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.fracLast = l.v.bandFrac; }
             l.off.update(nowMs);
             l.frac.update(nowMs);
+            advanceClipEdit(l, nowMs); // R-EDIT-1: fades, gain, reversed — eased
             if (aWant != l.aLast) { l.alpha.animateTo(aWant, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); l.aLast = aWant; }
             l.at.update(nowMs);
             l.row.update(nowMs);
@@ -909,6 +920,7 @@ namespace solaris_ui
     {
         if (autoGesture(g, local)) return true; // an automation row's curve and points (R-AUTO-6)
         if (takeGesture(g, local)) return true; // a take's row: a range of it into the comp (R-REC-2)
+        if (clipEditGesture(g, local)) return true; // an audio clip's fade handles and gain line (R-EDIT-1)
         if (markerGesture(g, local)) return true; // a marker's flag on the ruler's band (R-ARR-1)
         if (rulerGesture(g, local)) return true; // the ruler dragged: the playhead, the loop's brace (R-TIME-6)
         if (loopGesture(g, local)) return true; // the loop region on the ruler (R-EDM-7)
@@ -1177,6 +1189,7 @@ namespace solaris_ui
                 const bool shown = mTakesOpen.count(id) > 0;
                 items.push_back({shown ? "Hide takes" : "Show takes", [this, id, shown] { showTakes(id, !shown); }});
             }
+            clipEditItems(c, items, world); // R-EDIT-1: split, reverse, consolidate, slice
             items.push_back({"Duplicate", [this, id] { if (onCommand) onCommand("clip duplicate " + id); }});
             items.push_back({"Copy ID", [this, id] { if (onCopy) onCopy(id); }}); // R-UI-11
             items.push_back({"Delete", [this, id] { if (onCommand) onCommand("clip delete " + id); }});
@@ -1262,10 +1275,8 @@ namespace solaris_ui
         }
         else if (v.c.kind == "audio")
         {
-            // no peaks yet (the waveform arrives with the peaks hook): the source span and its loop seams
-            t.setStroke(fade(hue, 0.6 * a), 1.0);
-            const double mid = r.y + r.h * 0.6;
-            t.beginPath(); t.moveTo(r.x + 4.0, mid); t.lineTo(r.right() - 4.0, mid); t.strokePath();
+            // no peaks yet (the waveform arrives with the peaks hook): its gain line, its fades as heard (R-EDIT-1)
+            paintClipEdit(t, v, r, a, hue);
             if (v.c.offline)
             {
                 t.setFill(fade(palette::destructive(), a));
