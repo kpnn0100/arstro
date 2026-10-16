@@ -232,6 +232,7 @@ namespace
             h.factoryPresetsPath = scratch() + "/presets/factory";
             h.templatesPath = scratch() + "/templates/user";   // R-PRESET-2: likewise
             h.factoryTemplatesPath = scratch() + "/templates/factory";
+            h.libraryPath = scratch() + "/library";                 // R-PRESET-3: likewise
             if (canPlay)
                 h.audioOut = [this] {
                     auto o = std::make_unique<FakeOut>();
@@ -3388,6 +3389,59 @@ static void test_templates_start_songs()
     pass("templates (R-PRESET-2): the open song kept (no edit) — its files absolute, markers and tempo with it; a song from it named and id'd its own, the template's tempo unless told, its sample named absolutely; the factory's start songs; the user's of a name first; listed, deleted, a factory's refused; refusals");
 }
 
+static void test_the_sample_library_tags_and_finds()
+{
+    // R-PRESET-3: tags and favourites kept in the machine's library (on Home, no song: not an edit), in lower case; a
+    // search by name through the sample folders and their sub-folders, by tag, and the library's own files wherever
+    // they are; the favourites; untagged and unfavoured; refusals
+    fs::remove(scratch() + "/library");
+    Run r;
+    const std::string kick = scratch() + "/kick.wav", far = "/elsewhere/Drums/snare 2.wav";
+    r.ok("folder add " + scratch());
+    assert(r.ok("sample tag " + kick + " Punchy") == kick + "\tpunchy\n");
+    r.ok("sample tag " + kick + " drums");
+    r.ok("sample tag \"" + far + "\" drums");
+    r.ok("sample favourite \"" + far + "\"");
+    std::string kept;
+    {
+        std::ifstream f(scratch() + "/library");
+        std::stringstream ss;
+        ss << f.rdbuf();
+        kept = ss.str();
+    }
+    assert(contains(kept, kick + "\tdrums,punchy\n") && contains(kept, far + "\tdrums,favourite\n"));
+    const auto &lib = r.svc.model().library;
+    assert(lib.size() == 2 && lib[0].path == far && lib[0].favourite && lib[0].tags == std::vector<std::string>{"drums"} && lib[1].tags.size() == 2);
+    // by name through the folders (the fake folder holds kick.wav and Loops/ at every level): the first found is the top's
+    std::string out = r.ok("browse --search KIC");
+    assert(contains(out, "audio\t" + kick + "\n") && !contains(out, "notes.txt") && r.svc.model().browser.search == "KIC");
+    // by tag: the library's own, wherever it is
+    out = r.ok("browse --search dru");
+    assert(contains(out, far) && contains(out, kick));
+    out = r.ok("browse --search pun");
+    assert(contains(out, kick) && !contains(out, far));
+    // the favourites
+    out = r.ok("browse --favourites");
+    assert(out == "audio\t" + far + "\n" && r.svc.model().browser.search == "favourites" && r.svc.model().browser.entries.size() == 1);
+    // untagged, unfavoured: gone from the library when nothing is left
+    r.ok("sample untag " + kick + " punchy");
+    r.ok("sample untag " + kick + " drums");
+    r.ok("sample favourite \"" + far + "\" off");
+    assert(r.svc.model().library.size() == 1 && !r.svc.model().library[0].favourite);
+    bool said = false;
+    for (const auto &e : r.events) said |= contains(e, "library.changed") && contains(e, far);
+    assert(said);
+    // a plain folder listing clears the search
+    r.ok("browse " + scratch());
+    assert(r.svc.model().browser.search.empty());
+    // refusals
+    assert(contains(r.no("sample tag " + kick + " \"two words\""), "letters, digits or dashes"));
+    assert(contains(r.no("sample favourite " + kick + " maybe"), "on|off"));
+    assert(contains(r.no("browse"), "--search"));
+    assert(contains(r.no("browse --search x --favourites"), "not both"));
+    pass("the sample library (R-PRESET-3): tags and favourites kept in lower case on Home (not an edit), said; search by name through the folders, by tag, the library's own wherever they are; the favourites; untagged and unfavoured; a folder listing clears the search; refusals");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -4654,6 +4708,7 @@ int main()
     test_presets_are_saved_loaded_and_dropped();
     test_the_shipped_presets_load();
     test_templates_start_songs();
+    test_the_sample_library_tags_and_finds();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

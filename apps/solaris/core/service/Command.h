@@ -50,6 +50,7 @@ namespace solaris
             TempoAdd, TempoMove, TempoDelete,                // R-TEMPO-1
             PresetSave, PresetLoad, PresetList, PresetDelete, // R-PRESET-1
             TemplateSave, TemplateList, TemplateDelete,       // R-PRESET-2
+            SampleTag, SampleUntag, SampleFavourite,          // R-PRESET-3
             Ls, Show, PatternPrint,                                                                   // R-SVC-8: read back
             Undo, Redo, HistoryPrint, HistoryJump,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,

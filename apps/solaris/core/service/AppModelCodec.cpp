@@ -322,6 +322,11 @@ namespace solaris
             {"browser.entries[].name", "string", ""},
             {"browser.entries[].path", "string", ""},
             {"browser.entries[].kind", "string", "dir | audio | song | other"},
+            {"browser.search", "string", "R-PRESET-3: what the entries were searched for ('' a folder listed; `favourites`)"},
+            {"library", "object[]", "R-PRESET-3: every tagged sound in the machine's library, by path"},
+            {"library[].path", "string", "absolute"},
+            {"library[].tags", "string[]", "lower case, sorted — `favourite` not among them"},
+            {"library[].favourite", "bool", ""},
             {"revision", "int", "bumps on every change", false},
         };
         return f;
@@ -700,7 +705,10 @@ namespace solaris
         j.set("chords", vocab(m.chords)).set("scales", vocab(m.scales)).set("grooves", vocab(m.grooves));
         Json entries = Json::array();
         for (const auto &e : m.browser.entries) entries.push(Json::object().set("name", e.name).set("path", e.path).set("kind", e.kind));
-        j.set("browser", Json::object().set("path", m.browser.path).set("entries", entries));
+        j.set("browser", Json::object().set("path", m.browser.path).set("entries", entries).set("search", m.browser.search));
+        Json library = Json::array(); // R-PRESET-3
+        for (const auto &x : m.library) library.push(Json::object().set("path", x.path).set("tags", strings(x.tags)).set("favourite", x.favourite));
+        j.set("library", library);
         if (!stable) j.set("revision", m.revision);
         return j;
     }

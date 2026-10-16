@@ -1069,11 +1069,38 @@
     },
     {
       "verb": "browse",
-      "usage": "browse <folder>",
-      "args": "<folder>",
-      "flags": [],
-      "summary": "List a folder for the browser: sub-folders, audio files, songs.",
+      "usage": "browse [folder] [--search <text>] [--favourites]",
+      "args": "[folder]",
+      "flags": [
+        "search=<text>",
+        "favourites"
+      ],
+      "summary": "List a folder for the browser: sub-folders, audio files, songs. --search <text> (R-PRESET-3): the audio files whose name holds it or that carry a tag starting with it — in the sample folders (or <folder>) eight levels down, the first 200, and the library's tagged files; --favourites: the favourites.",
       "requirement": "R-BROWSE-1"
+    },
+    {
+      "verb": "sample tag",
+      "usage": "sample tag <file> <tag>",
+      "args": "<file> <tag>",
+      "flags": [],
+      "summary": "Tag a sound in the machine's library (R-PRESET-3): a word of letters, digits or dashes, kept in lower case. No undo.",
+      "requirement": "R-PRESET-3"
+    },
+    {
+      "verb": "sample untag",
+      "usage": "sample untag <file> <tag>",
+      "args": "<file> <tag>",
+      "flags": [],
+      "summary": "Take a tag off a sound (R-PRESET-3).",
+      "requirement": "R-PRESET-3"
+    },
+    {
+      "verb": "sample favourite",
+      "usage": "sample favourite <file> [on|off]",
+      "args": "<file> [on|off]",
+      "flags": [],
+      "summary": "Mark a sound a favourite, or not (R-PRESET-3; on when not said).",
+      "requirement": "R-PRESET-3"
     },
     {
       "verb": "recents remove",
@@ -1326,7 +1353,15 @@
         "path",
         "entries"
       ],
-      "summary": "The browser now lists this folder."
+      "summary": "The browser now lists this folder — or, a search (path `search:<text>` / `favourites`), what it found."
+    },
+    {
+      "name": "library.changed",
+      "fields": [
+        "path",
+        "tags"
+      ],
+      "summary": "R-PRESET-3: a file's tags (favourite among them) changed and were saved; tags comma-separated, '' none."
     },
     {
       "name": "recents.changed",
@@ -3269,6 +3304,36 @@
       "path": "browser.entries[].kind",
       "type": "string",
       "summary": "dir | audio | song | other",
+      "stable": true
+    },
+    {
+      "path": "browser.search",
+      "type": "string",
+      "summary": "R-PRESET-3: what the entries were searched for ('' a folder listed; `favourites`)",
+      "stable": true
+    },
+    {
+      "path": "library",
+      "type": "object[]",
+      "summary": "R-PRESET-3: every tagged sound in the machine's library, by path",
+      "stable": true
+    },
+    {
+      "path": "library[].path",
+      "type": "string",
+      "summary": "absolute",
+      "stable": true
+    },
+    {
+      "path": "library[].tags",
+      "type": "string[]",
+      "summary": "lower case, sorted — `favourite` not among them",
+      "stable": true
+    },
+    {
+      "path": "library[].favourite",
+      "type": "bool",
+      "summary": "",
       "stable": true
     },
     {

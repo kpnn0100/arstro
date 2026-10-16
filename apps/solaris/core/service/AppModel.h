@@ -201,6 +201,15 @@ namespace solaris
     {
         std::string path;                        // the folder last browsed ("" = none)
         std::vector<BrowserEntry> entries;       // folders first, then by name
+        std::string search;                      // R-PRESET-3: what was searched ('' a folder listed; `favourites`)
+    };
+
+    /** R-PRESET-3: a sound in the machine's library — its tags (lower case, sorted), whether it is a favourite. */
+    struct LibraryEntry
+    {
+        std::string path;
+        std::vector<std::string> tags;           // `favourite` not among them: that is `favourite`
+        bool favourite = false;
     };
 
     struct DeviceInfo
@@ -395,6 +404,7 @@ namespace solaris
         std::vector<TempoModel> tempos;          // R-TEMPO-1: the tempo map's changes, by time (the start's is `bpm`)
         std::vector<PresetModel> presets;        // R-PRESET-1: every preset, by type then name (the machine's — any screen)
         std::vector<TemplateModel> templates;    // R-PRESET-2: every song template, by name (the machine's — any screen)
+        std::vector<LibraryEntry> library;       // R-PRESET-3: every tagged sound, by path (the machine's — any screen)
         std::vector<LaneGroupModel> groups;      // R-ARR-3: in the order of their first lanes
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };

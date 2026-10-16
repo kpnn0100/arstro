@@ -939,7 +939,15 @@ a process is the host's (law 12).
   before the factory's. `template list`, `template delete <name>` (a factory's refused). Saving and deleting change the
   machine. The model publishes `templates[]` (name, factory) for the window.)
 - **R-PRESET-3 A sample library**: tags and favourites on files (`sample tag <file> <tag>`), search by name and tag
-  (`browse --search`), in the browser.
+  (`browse --search`), in the browser. (**Detailed while building it, N24 — 2026-10-17.** The LIBRARY is the machine's
+  (never a song's): a text file in its data folder (`$XDG_DATA_HOME/solaris/library`, `SOLARIS_LIBRARY` overriding), a
+  line per file that has tags — its absolute path, then its tags. A tag is a word of 1 … 32 letters, digits or dashes,
+  kept in lower case; `favourite` is one like any other, with its own command. `sample tag <file> <tag>`, `sample untag
+  <file> <tag>`, `sample favourite <file> [on|off]` (on when not said) — no undo, no unsaved mark. `browse --search
+  <text>` finds audio files whose name holds the text (any case) or that carry a tag starting with it, in the sample
+  folders (or `<folder>` when given) and their sub-folders — eight levels down, the first 200 found — and the
+  library's tagged files wherever they are; `browse --favourites` lists the favourites. Found files are the browser's
+  entries (`browser.search` says what was searched). The model publishes `library[]` (path, tags, favourite).)
 - **R-VST-6 Hosting other makers' VST3** (R-EDM-17): `plugins scan` lists `~/.vst3` and the system folders;
   `device add <ch> --plugin <id>` loads one, each in its OWN process (`solaris-plughost`), audio exchanged through
   shared memory a block at a time; a plugin that crashes or overruns its budget goes offline (its strip passes

@@ -76,6 +76,15 @@ namespace solaris_host
 #endif
     }
 
+    std::string libraryPath()
+    {
+        if (const char *l = std::getenv("SOLARIS_LIBRARY")) return l;
+        const char *xd = std::getenv("XDG_DATA_HOME"), *home = std::getenv("HOME");
+        if (xd) return std::string(xd) + "/solaris/library";
+        if (home) return std::string(home) + "/.local/share/solaris/library";
+        return std::string();
+    }
+
 #ifdef SOLARIS_HAVE_PULSE
     namespace
     {

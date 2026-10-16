@@ -308,6 +308,13 @@ namespace solaris
         }
         case K::Browse:
         {
+            if (c.has("search") || c.has("favourites")) // R-PRESET-3
+            {
+                if (c.has("search") && c.has("favourites")) { err = "browse --search <text> or --favourites, not both"; return false; }
+                if (c.has("search") && c.flag("search").empty()) { err = "--search needs some text"; return false; }
+                return searchSamples(c.arg(0), c.flag("search"), c.has("favourites"), err);
+            }
+            if (c.arg(0).empty()) { err = "browse <folder> — or --search <text>, --favourites"; return false; }
             if (!mHost.listDir) { err = "this build cannot list folders"; return false; }
             std::vector<BrowserEntry> entries;
             std::string why;
@@ -318,6 +325,7 @@ namespace solaris
             });
             mBrowser.path = c.arg(0);
             mBrowser.entries = entries;
+            mBrowser.search.clear();
             for (const auto &e : entries) mOutput += e.kind + "\t" + e.name + "\n";
             emit(Event(Event::Kind::BrowseChanged).with("path", mBrowser.path).with("entries", (long long)entries.size()));
             return true;

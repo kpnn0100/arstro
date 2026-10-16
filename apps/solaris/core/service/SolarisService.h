@@ -75,6 +75,7 @@ namespace solaris
             std::string factoryPresetsPath; // … the factory's, shipped with the app (never written)
             std::string templatesPath;        // R-PRESET-2: the user's song templates folder ("" = none can be saved)
             std::string factoryTemplatesPath; // … the factory's, shipped with the app (never written)
+            std::string libraryPath;          // R-PRESET-3: the sample library — tags and favourites ("" = not kept)
         };
 
         explicit SolarisService(Host host = Host());
@@ -134,6 +135,13 @@ namespace solaris
         void scanTemplates();
         std::vector<TemplateModel> mTemplates;
         bool mTemplatesScanned = false;
+        // R-PRESET-3 (ServiceLibrary.cpp): the machine's sample library — path → its tags (sorted, lower case)
+        bool libraryCommand(const Command &c, std::string &err);
+        bool searchSamples(const std::string &folder, const std::string &text, bool favourites, std::string &err);
+        void loadLibrary();
+        bool saveLibrary(std::string &err);
+        std::map<std::string, std::vector<std::string>> mLibrary;
+        bool mLibraryLoaded = false;
         // R-EDIT-1 (ServiceAudioEdit.cpp): audio clips cut, joined, sliced — a cut is `splitClip`, which slice repeats
         bool audioEditCommand(const Command &c, std::string &err);
         bool splitClip(const std::string &id, double at, std::string &made, std::string &err);

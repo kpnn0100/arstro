@@ -111,7 +111,10 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `folder remove <path>` | Remove a sample folder from the list (the folder itself is untouched). | R-SET-1 |
 | `folder move <path> [--to <index>]` | Reorder the sample folders. | R-SET-1 |
 | `devices list` | List this machine's audio devices (ids for `settings set output=…`). | R-DEV-1 |
-| `browse <folder>` | List a folder for the browser: sub-folders, audio files, songs. | R-BROWSE-1 |
+| `browse [folder] [--search <text>] [--favourites]` | List a folder for the browser: sub-folders, audio files, songs. --search <text> (R-PRESET-3): the audio files whose name holds it or that carry a tag starting with it — in the sample folders (or <folder>) eight levels down, the first 200, and the library's tagged files; --favourites: the favourites. | R-BROWSE-1 |
+| `sample tag <file> <tag>` | Tag a sound in the machine's library (R-PRESET-3): a word of letters, digits or dashes, kept in lower case. No undo. | R-PRESET-3 |
+| `sample untag <file> <tag>` | Take a tag off a sound (R-PRESET-3). | R-PRESET-3 |
+| `sample favourite <file> [on\|off]` | Mark a sound a favourite, or not (R-PRESET-3; on when not said). | R-PRESET-3 |
 | `recents remove <path>` | Take a song off Home's recent list (the file is untouched). | R-HOME-1 |
 | `transport play [--from <beats>] [--clip <ac>]` | Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position. --clip plays that clip's span looped, the whole song sounding there (the piano roll's play, R-ROLL-6): it follows the clip as it is edited, and the song's own loop comes back at `transport stop`, a plain `transport play` or a `transport loop`. | R-PLAY-1 |
 | `transport stop [--return]` | Stop; the transport stays where it was heard — or, with --return, goes back to the cue: where the time bar was last put (a seek, or a play's --from or --clip; `transport.cue`). A plain stop's place is temporary: the next play starts there but the cue stays. | R-TIME-7 |
@@ -254,7 +257,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `audit.report` | findings | How many findings `audit` printed. |
 | `settings.changed` | what | A machine setting changed and was saved: sampleRate, bufferSize, output, input, port.<name>, folders, key.<action> (R-SET-4) … |
 | `devices.changed` | count | `devices list` found this many devices. |
-| `browse.changed` | path, entries | The browser now lists this folder. |
+| `browse.changed` | path, entries | The browser now lists this folder — or, a search (path `search:<text>` / `favourites`), what it found. |
+| `library.changed` | path, tags | R-PRESET-3: a file's tags (favourite among them) changed and were saved; tags comma-separated, '' none. |
 | `recents.changed` | count | Home's recent songs changed. |
 | `transport.changed` | playing, position, loop | Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`. |
 | `audition.changed` | file, playing | A sample previewed from the browser started (playing 1) or ended — stopped, or to its end (playing 0). |
@@ -581,6 +585,11 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `browser.entries[].name` | string |  |
 | `browser.entries[].path` | string |  |
 | `browser.entries[].kind` | string | dir \| audio \| song \| other |
+| `browser.search` | string | R-PRESET-3: what the entries were searched for ('' a folder listed; `favourites`) |
+| `library` | object[] | R-PRESET-3: every tagged sound in the machine's library, by path |
+| `library[].path` | string | absolute |
+| `library[].tags` | string[] | lower case, sorted — `favourite` not among them |
+| `library[].favourite` | bool |  |
 | `revision` | int | bumps on every change *(not in `--stable`)* |
 
 ## Devices — the DSP library's registry

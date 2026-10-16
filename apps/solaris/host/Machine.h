@@ -25,5 +25,8 @@ namespace solaris_host
     /** R-PRESET-2: the user's templates folder (SOLARIS_TEMPLATES, else the XDG data folder's solaris/templates) and the
      *  factory's shipped with the app (SOLARIS_FACTORY_TEMPLATES, else the one this build was made with). */
     void templatePaths(std::string &user, std::string &factory);
+    /** R-PRESET-3: the machine's sample library — tags and favourites (SOLARIS_LIBRARY, else the XDG data folder's
+     *  solaris/library). */
+    std::string libraryPath();
 }
 }

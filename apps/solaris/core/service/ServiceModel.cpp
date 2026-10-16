@@ -135,6 +135,16 @@ namespace solaris
         }
         mModel.devices = mDevices;
         mModel.browser = mBrowser;
+        if (!mLibraryLoaded) loadLibrary(); // R-PRESET-3: the machine's — on Home too
+        mModel.library.clear();
+        for (const auto &e : mLibrary)
+        {
+            LibraryEntry le{e.first, {}, false};
+            for (const auto &t : e.second)
+                if (t == "favourite") le.favourite = true;
+                else le.tags.push_back(t);
+            mModel.library.push_back(le);
+        }
         for (const auto &t : DeviceRegistry::types())
         {
             DeviceTypeModel tm{t.name, t.label, t.kind == DeviceKind::Instrument ? "instrument" : "effect", {}};

@@ -39,6 +39,7 @@ namespace solaris
             SettingsChanged,  // what
             DevicesChanged,   // count
             BrowseChanged,    // path, entries
+            LibraryChanged,   // path, tags — R-PRESET-3
             RecentsChanged,   // count
             TransportChanged, // playing, position, loop
             AuditionChanged,  // file, playing

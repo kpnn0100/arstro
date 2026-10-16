@@ -361,7 +361,14 @@ namespace solaris
             {K::FolderRemove, "folder remove", "<path>", 1, 1, {}, "Remove a sample folder from the list (the folder itself is untouched).", "R-SET-1"},
             {K::FolderMove, "folder move", "<path>", 1, 1, {"to=<index>"}, "Reorder the sample folders.", "R-SET-1"},
             {K::DevicesList, "devices list", "", 0, 0, {}, "List this machine's audio devices (ids for `settings set output=…`).", "R-DEV-1"},
-            {K::Browse, "browse", "<folder>", 1, 1, {}, "List a folder for the browser: sub-folders, audio files, songs.", "R-BROWSE-1"},
+            {K::Browse, "browse", "[folder]", 0, 1, {"search=<text>", "favourites"},
+             "List a folder for the browser: sub-folders, audio files, songs. --search <text> (R-PRESET-3): the audio files "
+             "whose name holds it or that carry a tag starting with it — in the sample folders (or <folder>) eight levels "
+             "down, the first 200, and the library's tagged files; --favourites: the favourites.", "R-BROWSE-1"},
+            {K::SampleTag, "sample tag", "<file> <tag>", 2, 2, {},
+             "Tag a sound in the machine's library (R-PRESET-3): a word of letters, digits or dashes, kept in lower case. No undo.", "R-PRESET-3"},
+            {K::SampleUntag, "sample untag", "<file> <tag>", 2, 2, {}, "Take a tag off a sound (R-PRESET-3).", "R-PRESET-3"},
+            {K::SampleFavourite, "sample favourite", "<file> [on|off]", 1, 2, {}, "Mark a sound a favourite, or not (R-PRESET-3; on when not said).", "R-PRESET-3"},
             {K::RecentsRemove, "recents remove", "<path>", 1, 1, {}, "Take a song off Home's recent list (the file is untouched).", "R-HOME-1"},
 
             {K::TransportPlay, "transport play", "", 0, 0, {"from=<beats>", "clip=<ac>"},

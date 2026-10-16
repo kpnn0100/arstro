@@ -17,7 +17,8 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
   4.4 passes with the fourth dropped by rule — then four runs under a parallel build.
 - **Seen again, 2026-10-17 (N23's mutant run):** `test_record_the_keyboard_into_a_clip` failed once on a held note's
   length (D-11's widened range), run straight after a `-j16` build — the same cause: the fake devices are paced by an
-  audio thread a busy machine deschedules. Both tests green in every idle run.
+  audio thread a busy machine deschedules. Both tests green in every idle run. And once more (N24's mutant run, the
+  restored build's first run): the same keyboard test — then three idle runs green.
 
 ### D-2 A strip's new name does not reach its lane or its pattern — lane half FIXED in E3 (DR-LANE-3), pattern half open
 - **Found:** 2026-10-09, making the canon (C5) with `solaris-cc` alone.
