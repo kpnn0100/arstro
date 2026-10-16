@@ -2855,6 +2855,12 @@
       "stable": false
     },
     {
+      "path": "transport.tempoId",
+      "type": "string",
+      "summary": "R-TEMPO-1: the change in effect there — tp_n, or '' before the first (the song's bpm)",
+      "stable": false
+    },
+    {
       "path": "transport.loopFrom",
       "type": "number",
       "summary": "beats",

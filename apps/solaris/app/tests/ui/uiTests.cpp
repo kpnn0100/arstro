@@ -3987,6 +3987,95 @@ static void test_a_clip_warped_from_its_menu()
     pass("a clip warped from its menu (R-WARP-1): Tempo… typed is one `set .bpm`; Warp one `set .warp=true`, its tag eased in; Pitch ▸ +7 one line, the tag crossing over; Unwarp");
 }
 
+static void test_tempo_changes_on_the_ruler()
+{
+    // R-TEMPO-1: a change on the ruler's band fades in; dragged, its flag is the pointer's and the release ONE `tempo
+    // move --at`; a tempo changed elsewhere counts there; its menu — Glide into it, Tempo… typed — one line each; the
+    // ruler's menu adds one, typed; the song bar shows the tempo where the time bar is and sets the change in effect
+    // there; Delete fades it out
+    sltest::Rig r("ui-tempo", 1280, 800);
+    r.cmd("project new " + r.song("Tempo") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 32");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &menu = r.app->menu();
+    r.cmd("tempo add --at 8 --bpm 140");
+    const std::string tp = r.svc->model().tempos[0].id;
+    r.frame();
+    r.frame();
+    const double in = tl.tempoAlpha(tp);
+    assert(in > 0.0 && in < 1.0);
+    r.settle();
+    assert(tl.tempoAlpha(tp) == 1.0 && tl.tempoBeat(tp) == 8.0);
+    // dragged four beats on: the pointer's, then one line
+    const artboard::Rect f = world(tl, tl.tempoRect(tp));
+    r.drag(f.x + 4.0, cy(f), f.x + 4.0 + 4 * 28.0, cy(f), 6, false);
+    assert(tl.tempoBeat(tp) == 12.0 && !sentLine(r, "tempo move " + tp + " --at 12"));
+    r.app->pointer(2, f.x + 4.0 + 4 * 28.0, cy(f), 0, r.now);
+    r.frame();
+    assert(sentLine(r, "tempo move " + tp + " --at 12") && r.svc->model().tempos[0].at == 12.0);
+    // changed elsewhere: its flag counts there
+    r.cmd("tempo move " + tp + " --bpm 100");
+    r.frame();
+    r.frame();
+    const double counting = tl.tempoShown(tp);
+    assert(counting < 140.0 && counting > 100.0);
+    r.settle();
+    assert(tl.tempoShown(tp) == 100.0);
+    // its menu: glide into it; its tempo typed
+    const artboard::Rect f2 = world(tl, tl.tempoRect(tp));
+    r.click(f2.x + 4.0, cy(f2), 2);
+    r.settle();
+    assert(menuItem(r, "Glide into it") >= 0 && menuItem(r, "Delete tempo change") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Glide into it")));
+    r.settle();
+    assert(sentLine(r, "tempo move " + tp + " --ramp true") && r.svc->model().tempos[0].ramp);
+    r.click(f2.x + 4.0, cy(f2), 2);
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "Tempo\xE2\x80\xA6")));
+    r.settle();
+    artboard::KeyEvent typed;
+    typed.type = artboard::KeyEvent::Type::Text;
+    typed.text = "90";
+    r.app->key(typed);
+    r.key(13);
+    r.settle();
+    assert(sentLine(r, "tempo move " + tp + " --bpm 90"));
+    // the ruler's menu: a change from here, typed
+    const double x4 = world(tl, artboard::Rect{tl.beatToX(4.0), 0, 0, 0}).x;
+    r.click(x4 + 1.0, f2.y + f2.h * 0.5, 2);
+    r.settle();
+    assert(menuItem(r, "Tempo change here\xE2\x80\xA6") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Tempo change here\xE2\x80\xA6")));
+    r.settle();
+    typed.text = "75";
+    r.app->key(typed);
+    r.key(13);
+    r.settle();
+    assert(sentLine(r, "tempo add --at 4 --bpm 75") && r.svc->model().tempos.size() == 2);
+    // the song bar: the tempo where the time bar is, and the line that changes it there
+    auto &bar = r.app->project().bar();
+    r.cmd("transport seek 14");
+    r.settle();
+    assert(std::fabs(bar.bpmShown() - 90.0) < 1e-6 && bar.tempoLine("95") == "tempo move " + tp + " --bpm 95");
+    r.cmd("transport seek 2");
+    r.settle();
+    assert(std::fabs(bar.bpmShown() - 120.0) < 1e-6 && bar.tempoLine("95") == "set project.bpm=95");
+    // deleted: it fades out
+    const artboard::Rect f3 = world(tl, tl.tempoRect(tp));
+    r.click(f3.x + 4.0, cy(f3), 2);
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "Delete tempo change")));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "tempo delete " + tp));
+    const double out = tl.tempoAlpha(tp);
+    assert(out > 0.0 && out < 1.0);
+    r.settle();
+    assert(tl.tempoAlpha(tp) == 0.0);
+    pass("tempo changes on the ruler (R-TEMPO-1): one fades in; dragged, the pointer's, then one `tempo move --at`; changed elsewhere it counts there; Glide into it and Tempo… one line each; the ruler's Tempo change here… typed; the song bar shows the tempo at the time bar and sets the change in effect; Delete fades it out");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -4035,6 +4124,7 @@ int main()
     test_takes_under_their_clip();
     test_a_clips_fades_gain_and_edits();
     test_a_clip_warped_from_its_menu();
+    test_tempo_changes_on_the_ruler();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();

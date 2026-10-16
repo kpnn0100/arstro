@@ -97,7 +97,7 @@ namespace solaris
         mModel.transport.loopClip = mClipLoop;
         mModel.transport.cue = mCue;
         if (!mModel.transport.playing) mModel.transport.position = mPosition;
-        mModel.transport.tempo = mProject.tempos.empty() ? mProject.header.bpm : tempoMapOf(mProject).bpmAt(mModel.transport.position); // R-TEMPO-1
+        tempoAt(mModel.transport.position, mModel.transport.tempo, mModel.transport.tempoId); // R-TEMPO-1
         mModel.revision = rev + 1;
         mModel.lastError = lastError;
         mModel.audit = mAudit;

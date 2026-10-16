@@ -513,6 +513,15 @@ namespace solaris
         return tempoMapOf(mProject).beatAt(sample);
     }
 
+    void SolarisService::tempoAt(double beat, double &bpm, std::string &id) const
+    {
+        id.clear();
+        if (mProject.tempos.empty()) { bpm = mProject.header.bpm; return; }
+        bpm = tempoMapOf(mProject).bpmAt(beat);
+        for (const auto &t : mProject.tempos)
+            if (t.at <= beat + 1e-9) id = t.id;
+    }
+
     std::shared_ptr<const engine::Pcm> SolarisService::pcmFor(const std::string &src)
     {
         if (mPcmRate != mProject.header.sampleRate)

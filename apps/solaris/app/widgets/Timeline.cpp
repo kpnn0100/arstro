@@ -122,11 +122,13 @@ namespace solaris_ui
             mStripes.clear();
             mTracks.clear();
             mMarkers.clear(); // R-ARR-1
+            mTempos.clear();  // R-TEMPO-1
             mTakesOpen.clear(); // R-REC-2
             mTakeLit.clear();
             mEver = mBound = mEmptyInit = mLoopInit = false;
         }
         bindMarkers(m); // R-ARR-1: after a song change has cleared the last song's
+        bindTempos(m);  // R-TEMPO-1
         bindTakes(m);   // R-REC-2
         std::map<std::string, int> colourOf; // the service resolves a strip's colour (stable by id)
         for (const auto &st : m.strips) colourOf[st.id] = st.colour;
@@ -626,6 +628,7 @@ namespace solaris_ui
         }
         advanceAuto(nowMs); // a click's point waiting out the double-click (R-AUTO-11)
         advanceMarkers(nowMs); // R-ARR-1
+        advanceTempos(nowMs);  // R-TEMPO-1
         advanceTakes(nowMs);   // R-REC-2
         {
             // R-REC-1: the punch — present or not, eased; its ends travel when it moves (from where they ARE)
@@ -921,6 +924,7 @@ namespace solaris_ui
         if (autoGesture(g, local)) return true; // an automation row's curve and points (R-AUTO-6)
         if (takeGesture(g, local)) return true; // a take's row: a range of it into the comp (R-REC-2)
         if (clipEditGesture(g, local)) return true; // an audio clip's fade handles and gain line (R-EDIT-1)
+        if (tempoGesture(g, local)) return true;  // a tempo change's flag on the ruler's band (R-TEMPO-1)
         if (markerGesture(g, local)) return true; // a marker's flag on the ruler's band (R-ARR-1)
         if (rulerGesture(g, local)) return true; // the ruler dragged: the playhead, the loop's brace (R-TIME-6)
         if (loopGesture(g, local)) return true; // the loop region on the ruler (R-EDM-7)
@@ -1582,6 +1586,7 @@ namespace solaris_ui
         }
         t.restore();
         paintMarkers(t); // R-ARR-1: the ruler's band
+        paintTempos(t);  // R-TEMPO-1: over it, at their beats
         if (const Rect pr = punchRect(); pr.w > 0 && mPunchAmt.value() > 0.001) // R-REC-1: where a recording keeps — red
         {
             t.save();

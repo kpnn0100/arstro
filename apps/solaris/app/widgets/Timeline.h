@@ -209,6 +209,12 @@ namespace solaris_ui
         double groupTurn(const std::string &lg) const;
         int groupRow(const std::string &lg) const;
         artboard::Rect markerRect(const std::string &mk) const;  // its flag and name; empty when none
+        // R-TEMPO-1: a tempo change's flag on the ruler's band (local, as DRAWN), how present it is (LIVE), its beat
+        // (LIVE — the pointer's while dragged), the tempo its flag shows (LIVE, eased)
+        artboard::Rect tempoRect(const std::string &tp) const;
+        double tempoAlpha(const std::string &tp) const;
+        double tempoBeat(const std::string &tp) const;
+        double tempoShown(const std::string &tp) const;
         double markerAlpha(const std::string &mk) const;         // LIVE presence, 0 … 1
         double markerBeat(const std::string &mk) const;          // LIVE beat — the pointer's while it is dragged
         double markerEnd(const std::string &mk) const;           // LIVE end of its section
@@ -439,6 +445,26 @@ namespace solaris_ui
             bool placed = false, gone = false;
         };
         std::vector<MarkerLive> mMarkers;
+        // R-TEMPO-1 (TimelineTempo.cpp): the tempo changes on the ruler's band, keyed — a flag at its beat, its tempo
+        struct TempoLive
+        {
+            solaris::TempoModel t;
+            artboard::AnimatedProperty at{0.0}, alpha{0.0}, bpm{120.0};
+            double atLast = -1.0, bpmLast = -1.0;
+            bool placed = false, gone = false;
+        };
+        std::vector<TempoLive> mTempos;
+        double mSongBpm = 120.0;                       // the start's tempo (a glide into the first change starts there)
+        std::string mTempoPress;
+        bool mTempoDragging = false;
+        double mTempoGrab = 0.0, mTempoLive = 0.0;
+        mutable std::map<std::string, double> mTempoW; // a flag's width as last MEASURED (R5)
+        const TempoLive *tempoLive(const std::string &tp) const;
+        std::string tempoUnder(const artboard::Point &local) const;
+        void bindTempos(const solaris::AppModel &m);
+        void advanceTempos(double nowMs);
+        void paintTempos(artboard::IRenderTarget &t) const;
+        bool tempoGesture(const artboard::Gesture &g, const artboard::Point &local);
         double mPunchFrom = 0, mPunchTo = 0, mPunchALast = -1, mPunchBLast = -1; // R-REC-1: the model's punch
         artboard::AnimatedProperty mPunchA{0.0}, mPunchB{0.0}, mPunchAmt{0.0};
         bool mPunchOnLast = false, mPunchInit = false;

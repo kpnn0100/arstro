@@ -195,13 +195,13 @@ holds no codec and no device API: decoding and WAV writing are `Host` functions 
 
 ### DR-SVC-2 Unknown input is refused, naming it (R-SVC-3)
 An unknown verb or flag fails in `parseCommand` with the nearest candidates (`strp add` →
-`did you mean: strip add?`). An address goes through `setAddress` (`core/service/SolarisService.cpp:590`):
+`did you mean: strip add?`). An address goes through `setAddress` (`core/service/SolarisService.cpp:599`):
 an unknown node, field or DEVICE PARAMETER is refused with the nearest name (`set
 dv_1.filter.cutof=1` → `did you mean: filter.cutoff?`); a value out of range is refused with the
 range; a device parameter's value is read against the DSP registry — a choice by name or index (listing
-the choices on a miss), a number inside the spec's range (`:726`; **amended, R-SVC-8, 2026-10-09**: it was
+the choices on a miss), a number inside the spec's range (`:735`; **amended, R-SVC-8, 2026-10-09**: it was
 clamped in silence, now a value outside is REFUSED naming the range with its unit, and a non-whole value
-of an integer parameter is refused) — and stored as its canonical text. `get` (`getAddress`, `:819`) reads every field `set` writes plus derived ones (`<clip>.length` resolved, `<strip>.out`,
+of an integer parameter is refused) — and stored as its canonical text. `get` (`getAddress`, `:828`) reads every field `set` writes plus derived ones (`<clip>.length` resolved, `<strip>.out`,
 a device parameter not stored = the registry default). A refusal is a `command.rejected` event and
 `lastError`.
 
@@ -543,7 +543,7 @@ Values at time zero are applied before the devices' warm-up (`:197`); a seek eva
 +12 dB from beat 2, byte-identical at chunks of 77, 128 and 1000, no zipper, no allocation.
 
 ### DR-AUTO-4 The service: commands, `set`, `eval`, the model (R-AUTO-1…5, 8, 9)
-`set <address>="=<formula>"` binds (`core/service/SolarisService.cpp:604`); a plain number clears the
+`set <address>="=<formula>"` binds (`core/service/SolarisService.cpp:613`); a plain number clears the
 binding and sets the value; `get` prints the formula; an unquoted formula with spaces is refused with
 the quoting shown. `auto create <address>` (`core/service/ServiceAuto.cpp:125`) makes `au_n` named
 "<owner> · <label>", ranged as the address, holding its value from beat 0 to the song's end (at least
@@ -720,18 +720,18 @@ instrument's face reflows its modules. Three strokes mark the corner, brighter u
 saved, not a command (R-WIN-4). Closes the UX audit's U-5.
 
 ### DR-AUTO-5 Automation on the timeline (R-AUTO-6)
-`Timeline` (`app/widgets/Timeline.cpp:228`) appends a row per automation after the lanes, keyed
+`Timeline` (`app/widgets/Timeline.cpp:230`) appends a row per automation after the lanes, keyed
 `auto:<au>` in the same `AnimatedRows` (a lane added slides them down; a new one grows in), its header
 the accent stripe, its name and the address that reads it. `TimelineAuto.cpp` draws the curve over the
-beat grid by the ENGINE's keys (`keysOf`, `:44` → `engine::curveKeys`; `paintCurve`, `:362`, samples
+beat grid by the ENGINE's keys (`keysOf`, `:44` → `engine::curveKeys`; `paintCurve`, `:364`, samples
 each non-linear segment with `anim::segment`) — holding the first value before the first point and the
 last after, linear / hold / smooth / bezier per segment, on a log scale for Hz and ms (`valueToY`,
-`:109`) — with the points as handles and a bezier point's two handle stems (`paintAutomation`, `:464`).
-`autoGesture` (`:506`): a click on the row adds a point at the
-lanes' snap step under the pointer (DR-UI-10; `:623`) with the value under it (`auto point add`) once the double-click has had its chance — 350 ms, a ghost point
-drawn at once and fading in meanwhile (`:668`, sent by `advanceAuto`, `:321`; **AMENDED (R-AUTO-11)**:
+`:109`) — with the points as handles and a bezier point's two handle stems (`paintAutomation`, `:466`).
+`autoGesture` (`:508`): a click on the row adds a point at the
+lanes' snap step under the pointer (DR-UI-10; `:625`) with the value under it (`auto point add`) once the double-click has had its chance — 350 ms, a ghost point
+drawn at once and fading in meanwhile (`:671`, sent by `advanceAuto`, `:323`; **AMENDED (R-AUTO-11)**:
 a double-click there opens the window instead); a point dragged is drawn under the pointer while held
-(its beat on the same step, `:541`) and sends ONE `auto point move <au> --at <from> --to <to> --value <v>` on release,
+(its beat on the same step, `:543`) and sends ONE `auto point move <au> --at <from> --to <to> --value <v>` on release,
 staying where it was let go; a double-click ON a point deletes it; a right-click offers Linear / Hold /
 Smooth / Bezier, Delete Point and Delete Automation (`auto delete --unbind`). A curve the model changes
 eases there point by point over 220 ms — handles too; a point added or removed, or a shape changed,
@@ -974,12 +974,12 @@ on beat 0 either way. Mutants (in the DSP suites): no between-sample detection, 
 
 ### DR-EDM-7 The loop region on the ruler (R-EDM-7, R-TIME-4)
 `Timeline` draws the model's `transport.loopFrom … loopTo` as a brace on the ruler, its ends marked, in
-the accent, and tints the region on the lanes under the clips (`app/widgets/Timeline.cpp:1313`, `:1148`;
-`loopRect`, `:579`). It is eased (`:440`): it fades in where it is when a loop appears, fades out when
-it goes, and a loop changed by anyone moves there over 220 ms. `loopGesture` (`:587`): Shift-drag on the
+the accent, and tints the region on the lanes under the clips (`app/widgets/Timeline.cpp:1317`, `:1152`;
+`loopRect`, `:581`). It is eased (`:442`): it fades in where it is when a loop appears, fades out when
+it goes, and a loop changed by anyone moves there over 220 ms. `loopGesture` (`:589`): Shift-drag on the
 ruler draws the brace under the pointer (both ends on the lanes' snap step, like a seek — DR-UI-10,
-`:596`) and sends ONE `transport loop <from> <to>` on release, the brace staying where it was let go
-(both ends on one line is a Shift-click: no region, `:610`); a click inside the brace sends `transport
+`:598`) and sends ONE `transport loop <from> <to>` on release, the brace staying where it was let go
+(both ends on one line is a Shift-click: no region, `:612`); a click inside the brace sends `transport
 loop off`; a plain click elsewhere on the ruler still seeks. The engine already loops (DR-PLAY-1), so
 the playhead wraps at the brace's end while playing.
 
@@ -1119,15 +1119,15 @@ View menu does (View › Show IDs / Hide IDs, `app/App.cpp:170`).
 200 ms; `idsAmount()` is the live value) and hands it to every widget that draws ids; `drawNameWithId`
 (`app/widgets/ParamMenu.cpp:84`) draws a name with its id right-aligned in the accent's mono, the name giving
 way by the EASED amount. Where: lane headers (the lane's id; a strip's own row, the strip's) and automation
-rows (`au_n`) (`app/widgets/Timeline.cpp:1378`, `:890`); clips (`ac_n`, and a note clip's pattern `pt_n`;
-`:733` — "linked ×N" fades out for them); in the dock each strip card (`ch_n`), the master (`master`), each
+rows (`au_n`) (`app/widgets/Timeline.cpp:1382`, `:893`); clips (`ac_n`, and a note clip's pattern `pt_n`;
+`:736` — "linked ×N" fades out for them); in the dock each strip card (`ch_n`), the master (`master`), each
 rack chip (`dv_n`) and each send (`sd_n`, cross-fading with "→ name") (`paintCard`,
 `app/widgets/MixerDock.cpp:1327`); a device window's rows show their FULL address (`dv_1.filter.cutoff`) in a
 pill over the label (`ParamIds`, `app/widgets/DevicePanel.cpp:146`); its header already names its id.
 
 **Copied, by the host.** Copy Address / Copy Value / Copy as Formula on a device parameter row and on the
 dock's faders, pans, sends and master (DR-MIX-16; a choice row has no "as Formula" — no formula reads a
-choice); Copy ID on a clip (`app/widgets/Timeline.cpp:1059`), a strip's and a mixer tab's menu in the dock; Copy ID
+choice); Copy ID on a clip (`app/widgets/Timeline.cpp:1063`), a strip's and a mixer tab's menu in the dock; Copy ID
 and Copy as Formula (`=au_1`) on an automation row (`app/widgets/TimelineAuto.cpp:560`). The clipboard is the
 HOST's (the core has none, R-SVC-4): `App::onCopy`, which `linux_main.cpp:229` gives GTK's CLIPBOARD and
 PRIMARY selections and the test rig records (`Rig::copied`). A copy says so: `App::copy` (`app/App.cpp:213`)
@@ -1203,7 +1203,7 @@ window caught mid-fade, the facts present, `now` and a new row caught mid-tween,
 
 ### DR-AUTO-8 An automation loops; a pump in one line (R-AUTO-12, R-AUTO-13)
 `Automation::loop`, `at`, `length` (beats, `model/Project.h`) — `set <au>.loop|at|length=<beats ≥ 0>`
-(`core/service/SolarisService.cpp:727`), read back by `get`, published on `automations[]`, written on `#aauto` only
+(`core/service/SolarisService.cpp:736`), read back by `get`, published on `automations[]`, written on `#aauto` only
 when it loops (`model/Project.cpp:868`, docs/project-format.md §8a), refused below 0 naming the field. `compileCurve`
 turns them into samples (`core/Compile.cpp:515`) and the engine's `Curve::cyclePos` (`engine/Expr.h:186`) folds a
 position into the cycle before the same evaluator reads the curve: `(s − from) mod loop` inside the span, the cycle's
@@ -1277,7 +1277,7 @@ edits lost between calls, comment lines reprinting ids). The guide is `docs/AGEN
   `ls` (`lsText`, `ServiceCompose.cpp:329`), `show <id>` (`showText`, `:404` — a device's non-default
   parameters with unit and default, a formula where one drives it), `pattern print` (`:294`, the notation
   with the pitch's number and name after `#`, a kit's pads by name), `state print --json --compact`
-  (`compactJson`, `core/service/AppModelCodec.cpp:362`; `Json::dumpCompact`, `core/service/Json.cpp:118`):
+  (`compactJson`, `core/service/AppModelCodec.cpp:363`; `Json::dumpCompact`, `core/service/Json.cpp:118`):
   the song only, one line, a device's non-default parameters as `name=value`, notes in the notation.
 - **Honest values.** A device parameter outside its registry range is refused naming the range and unit
   (`SolarisService.cpp:713`), as is an automation point (`inAutoRange`, `core/service/ServiceAuto.cpp:69` — a value within printing's
@@ -1508,16 +1508,16 @@ renumbered, refused out of range, undone) and, drawn, by `test_instrument_drop_a
 (`app/tests/ui/uiTests.cpp:492`: a lane moved from a shell slides to the top with its clip, caught mid-tween).
 
 ### DR-TIME-6 The ruler dragged (R-TIME-6)
-`Timeline::rulerGesture` (`app/widgets/Timeline.cpp:762`, called first in `handleGesture`, `:857`) takes a
+`Timeline::rulerGesture` (`app/widgets/Timeline.cpp:765`, called first in `handleGesture`, `:860`) takes a
 press on the ruler without Shift and waits: a click is still the seek (R-TIME-5) or clears the loop
 (R-EDM-7). A drag decides ONCE, by where it began: within `kBraceGrip` (6.5 px) of an end of the loop's
-brace, or on its body, in the ruler's lower half (`:782`), it moves the loop; anywhere else it scrubs.
-Scrubbing, the playhead is the pointer's on the snap step (`advance`, `:463`, overrides both the eased
+brace, or on its body, in the ruler's lower half (`:785`), it moves the loop; anywhere else it scrubs.
+Scrubbing, the playhead is the pointer's on the snap step (`advance`, `:465`, overrides both the eased
 seek and following the audio while it is held) and a `transport seek` goes at each new line — a fader
 sends each step the same way; a seek is transport, not an edit, so no undo step and the song stays
 saved — and once more on release if the last line was not sent; the playhead is `set` there, so
 nothing eases back. The brace is the pointer's while held (`loopSpan`, `loopRect`), moved with its length
-kept or resized never shorter than one step, and ONE `transport loop <a> <b>` goes on release (`:843`),
+kept or resized never shorter than one step, and ONE `transport loop <a> <b>` goes on release (`:846`),
 the brace placed where it was let go so the model's echo moves nothing.
 
 Guarded by `test_the_ruler_is_dragged` (`app/tests/ui/uiTests.cpp:1676`): held, the playhead equals the
@@ -1539,7 +1539,7 @@ starts it at 0. Published as `transport.cue`. In the window: the play/stop key (
 stop --return`, the stop-here key (Ctrl+Space) is `transport stop`, either one while stopped plays (`App::songAction`,
 `app/App.cpp:365`, the keys being the keymap's — DR-SET-4); the song bar's Stop and a roll's ■ return too (`:54`).
 On the ruler an outlined mark stands at the cue while playing — where Stop takes the time bar back — fading in
-with the play and out with it (`Timeline`, `app/widgets/Timeline.cpp:1443`, eased at `:472`), beside the
+with the play and out with it (`Timeline`, `app/widgets/Timeline.cpp:1447`, eased at `:474`), beside the
 playhead's filled one. L2 `test_stop_returns_to_the_cue_or_stays`; UI `test_space_returns_and_ctrl_space_stays`
 (Ctrl+Space, then Space plays on from there, then Space's stop is back at the cue); shot `ruler-cue`. Mutants: a
 stop that ignores `--return`, a mark that snaps, every play moving the cue — all seen red.
@@ -1561,7 +1561,7 @@ an instrument with no track and clips on plain lanes keeps R-SVC-8's rule. `clip
 are refused there by name. `clip move` (`:742`): onto a track a note clip is re-routed in the same
 edit (one undo step) and the output says `<ac> plays through <ch> (<name>)`; `--strip <other>` on a
 track moves it to that one's track; audio and `--lane` with a different `--strip` are refused. `lane add
---strip <ch>` (`:494`); `set <ln>.strip=<ch>|none` (`core/service/SolarisService.cpp:702` — refused while
+--strip <ch>` (`:494`); `set <ln>.strip=<ch>|none` (`core/service/SolarisService.cpp:711` — refused while
 the lane holds another strip's or an audio clip; `none` keeps the name it showed). `strip relink` takes
 the strip's tracks with its clips (`ServiceEdit.cpp:324`); `strip delete` leaves them plain lanes named
 as they were (`:267`). A song saved before tracks (no `tracks` line) is adopted on opening
@@ -1572,8 +1572,8 @@ Published: `lanes[].name` (what it shows), `lanes[].strip`, `lanes[].ownName`
 (`core/service/ServiceModel.cpp:236`); `ls` marks `· track of <ch>` (`core/service/ServiceCompose.cpp:668`).
 
 **The view.** A track's row takes its strip's colour unless it has its own and names its instrument
-under its name (`Timeline::bind`, `app/widgets/Timeline.cpp:167`), that line fading in and out as the
-lane becomes and stops being a track (`advance`, `:489`). A lane header's right-click (`:985`): Track
+under its name (`Timeline::bind`, `app/widgets/Timeline.cpp:169`), that line fading in and out as the
+lane becomes and stops being a track (`advance`, `:491`). A lane header's right-click (`:989`): Track
 of ▸ (the instrument strips) → `set <ln>.strip=<ch>`, Plain Lane → `…=none`, Copy ID. A sample or an
 instrument dropped from the browser onto a track asks for a lane of its own (`--lane new`,
 `app/widgets/ProjectScreen.cpp:120`) — it could not play through another's instrument.
@@ -1588,15 +1588,15 @@ restored: no re-route onto a track, no adoption, a track not showing its strip's
 instead of faded, a drop onto a track not redirected.
 
 ### DR-CLIP-6 MIDI clips made on a track, looped by their end, moved between tracks (R-CLIP-6, R-CLIP-7, R-CLIP-8)
-**Made** (R-CLIP-6): a double-click on an instrument's track where no clip is (`app/widgets/Timeline.cpp:977`)
-or its right-click menu's New MIDI Clip (`:1008`) sends ONE `clip add --lane <ln> --at <the snap step>
---length <a bar>` (`newClipOn`, `:751`) — the track's instrument implied (DR-LANE-3), a new empty pattern
+**Made** (R-CLIP-6): a double-click on an instrument's track where no clip is (`app/widgets/Timeline.cpp:981`)
+or its right-click menu's New MIDI Clip (`:1012`) sends ONE `clip add --lane <ln> --at <the snap step>
+--length <a bar>` (`newClipOn`, `:754`) — the track's instrument implied (DR-LANE-3), a new empty pattern
 made; a double-click on the clip opens its piano roll as before (R-ROLL-1). **Looped** (R-CLIP-7): a press
-within `kEdgeGrip` (6.5 px) of a clip's right edge takes its END (`:875`); dragged, its length is the
-pointer's on the grid you see, never shorter than a step (`:897`); let go, it stays where it was let go
-and ONE `set <ac>.length=<beats>` is sent (`:915`). A clip's drawn length is eased like its place (`len`,
-`:602`; `liveLength`, `:342`), so a length set from a shell or an undo grows or shrinks it rather than
-cutting it; the pattern's notes repeat inside it with a seam at each repeat (`paintClip`, `:1115`, from
+within `kEdgeGrip` (6.5 px) of a clip's right edge takes its END (`:878`); dragged, its length is the
+pointer's on the grid you see, never shorter than a step (`:900`); let go, it stays where it was let go
+and ONE `set <ac>.length=<beats>` is sent (`:918`). A clip's drawn length is eased like its place (`len`,
+`:604`; `liveLength`, `:344`), so a length set from a shell or an undo grows or shrinks it rather than
+cutting it; the pattern's notes repeat inside it with a seam at each repeat (`paintClip`, `:1119`, from
 the live length). **Moved** (R-CLIP-8): the clip drag's `clip move --lane` onto another instrument's track
 re-routes it (DR-LANE-3); audio is refused there and eases home.
 
@@ -1612,11 +1612,11 @@ through the drums. Mutants seen red, then restored: a length that snaps, an edge
 copies go to that lane under the move's rule (R-CLIP-8) — onto an instrument's track a MIDI copy plays through that
 instrument (the pattern still shared, R-CLIP-3; "it plays through ch_3" said), an audio copy is refused there, a plain
 lane (or `none`) keeps its strip. In the window, the lanes' clip drag reads Shift at every step of the drag
-(`Timeline`, `app/widgets/Timeline.cpp:943`) and as it is let go: held, the drop is ONE `clip duplicate <ac> --at <b>
-[--lane <ln>]` and the original stays where it is (`:989`); not held, it is the `clip move` it always was. While held
+(`Timeline`, `app/widgets/Timeline.cpp:947`) and as it is let go: held, the drop is ONE `clip duplicate <ac> --at <b>
+[--lane <ln>]` and the original stays where it is (`:993`); not held, it is the `clip move` it always was. While held
 `mCopyAmt` eases in (120 ms): the original, dimmed during a move, comes back to full strength, and a "+" in the accent
-fades onto the copy in hand (`:1401`) — pressed or let go mid-drag, it eases back. `expectCopy` (`:432`) makes the next
-clip the model brings the selection (`bind`, `:218`) and — after a drop — places it at full strength where the
+fades onto the copy in hand (`:1405`) — pressed or let go mid-drag, it eases back. `expectCopy` (`:434`) makes the next
+clip the model brings the selection (`bind`, `:220`) and — after a drop — places it at full strength where the
 pointer left it, never fading in what was already shown; a refused copy brings none and the expectation lapses.
 Ctrl+C and Ctrl+V are the keymap's `lanes.copy` / `lanes.paste` (DR-SET-4) and the Edit menu's Copy Clip / Paste Clip:
 copy keeps the selected clip's id in the window (nothing sent; a toast says it, naming the paste key); paste
@@ -1770,7 +1770,7 @@ U-1. UI test `test_the_tempo_is_set_in_the_song_bar` (mutant: a tempo that snaps
 ### DR-UI-14 The pointer says a drag resizes (R-UI-14)
 `Cursor` (`app/Cursor.h`): Default, ResizeH ↔, ResizeV ↕, ResizeDiag ⤡, each with its CSS name. Every widget with a
 grip answers twice, from the SAME zone its press takes: `dragCursor()` — the cursor a resize in hand keeps, wherever the
-pointer is — and `cursorAt(local)`. `Timeline` (`app/widgets/Timeline.cpp:432`): ↔ over a clip's end (`kEdgeGrip`,
+pointer is — and `cursorAt(local)`. `Timeline` (`app/widgets/Timeline.cpp:434`): ↔ over a clip's end (`kEdgeGrip`,
 R-CLIP-7) and the loop brace's ends (`kBraceGrip`, the ruler's lower half), and while either is held (pressed, not yet
 moved, included). `PianoRoll` (`app/widgets/PianoRoll.cpp:578`): ↔ a note's end (the zone `noteAt` gives, D-7) and the
 pattern's end handle, ↕ a velocity bar, and while any is held. `MixerDock` (`app/widgets/MixerDock.cpp:832`): ↕ its top
@@ -1787,7 +1787,7 @@ forgetting its cursor, a modal not the arrow — all seen red. The GTK half is c
 ### DR-SAFE-1 Autosave and recovery (R-SAFE-1, R-SAFE-2)
 While a song has unsaved edits the service writes it beside itself, `<song>.slp.autosave` — the `.slp` text exactly as a
 save would write it — through a temporary file renamed over the last one, so a crash mid-write keeps the previous
-autosave (`SolarisService::autosave`, `core/service/SolarisService.cpp:575`). When: once `settings.autosave` seconds
+autosave (`SolarisService::autosave`, `core/service/SolarisService.cpp:584`). When: once `settings.autosave` seconds
 (default 60; `settings set autosave=<1…3600|off>`) have passed since the song opened or was last autosaved — checked by
 `pump`, so an idle window still writes (`core/service/ServiceTransport.cpp:115`) — and AT ONCE after an edit whose verb
 deletes or removes something (`dispatch`, `core/service/SolarisService.cpp:331`). Each write is announced (`project.autosaved path=`). A save drops it
@@ -1945,7 +1945,7 @@ strip sounds through its rack, its sends and the master as it will in the song; 
 before the song plays and started after it stops (one consumer at a time; the queue drained in between). `midi
 devices` lists the inputs (Settings' Audio page: MIDI input), `midiMessages` counts what came. The window: an
 instrument track's header has an arm button, a ring lit red as it is armed, eased (`armRect`,
-`app/widgets/Timeline.cpp:324`). Live: `solaris_midi_tests` plays into the kernel's Midi Through from a second
+`app/widgets/Timeline.cpp:326`). Live: `solaris_midi_tests` plays into the kernel's Midi Through from a second
 ALSA client — a note on, the pedal, its off and a centred bend arrive as their bytes. L2
 `test_a_keyboard_plays_the_armed_strip` (silent until struck; struck, it sounds through the monitor and through the
 song from beat 4; let go, it dies away; under the pedal it rings on until the pedal comes up; no allocation on the
@@ -2030,7 +2030,7 @@ section ignoring the next marker, a loop taking only its length, markers outside
 The ruler grows a band at its top for them (`Timeline::kMarkH` 13 of `kRulerH` 35.75, `app/widgets/Timeline.h:98`; the
 bars' labels and the brace's grip — the lower half of the bars' band — below it): a flag per marker at its beat, its
 name MEASURED (the width a press hits is the one last drawn), a section a band to its `end`, a hairline down through
-the bars (`paintMarkers`, `app/widgets/TimelineMarkers.cpp:217`). Keyed by id: a marker fades in and out, a move made
+the bars (`paintMarkers`, `app/widgets/TimelineMarkers.cpp:221`). Keyed by id: a marker fades in and out, a move made
 elsewhere eases there, a song opened places them (`advanceMarkers`, `:87`). On a flag (`markerUnder`, `:65` — the last
 drawn on top), each ONE line (`markerGesture`, `:121`): a click → `transport seek <mk>`; a double-click → `transport
 loop <mk>`; a drag moves it on the grid you see, its section with it, the pointer's while held, and `marker move <mk>
@@ -2052,7 +2052,7 @@ loop, that starts before `--from` and runs into the span is shortened by the ove
 any other clip across `--from` or `--to` is REFUSED, naming it — nothing changes; a section or a looping span across an
 edge shrinks, one whose head is in the span starts at `--from`. **The loop** (the session's, `:153`) moves, grows or
 shrinks the same, ends when taken out entirely, and stays where it is on undo. The output says what moved, what went,
-and what crossed. **The ruler's menu** (right-click away from a flag, `app/widgets/TimelineMarkers.cpp:197`): Insert a
+and what crossed. **The ruler's menu** (right-click away from a flag, `app/widgets/TimelineMarkers.cpp:201`): Insert a
 bar here (`time insert --at <the bar's start> --length <a bar>`), Delete this bar, and — with a loop — Delete the loop's
 time. L2 `test_time_insert_and_delete_move_the_whole_song`; UI `test_time_edits_from_the_ruler` (a clip moved eases
 there); shot `ruler-menu`. Mutants: the inside clips kept, insert leaving automation points, a plain audio clip let
@@ -2068,23 +2068,23 @@ first lane's place and drops a group with no lane; a song opened scattered is ga
 their order (a lane leaves any group it was in; prints the id); `lane ungroup <lg>` lets them go; `lane move <lg> --to
 <i>` moves the group whole, never into another group's run (`:232`); a LANE moved (`core/service/ServiceEdit.cpp:539`)
 joins the group whose run it lands inside and leaves its own when it lands outside it; a lane deleted can leave its
-group empty, and the group goes. `set lg_1.name=` / `set lg_1.folded=on|off` (`core/service/SolarisService.cpp:1009`), `get`
+group empty, and the group goes. `set lg_1.name=` / `set lg_1.folded=on|off` (`core/service/SolarisService.cpp:1018`), `get`
 (and a lane's `.group`). `clips move "<ac> …" --by <beats>` (`:246`) moves clips in time as ONE edit, refused whole
 when a clip is not the song's or would start before beat 0 — a folded group's clips dragged together, or any
 selection. The model: `lanes[].group`, `groups[]` (id, name, folded, its lanes — in the order of their first lanes);
 `ls` prints a group before its first lane. L2 `test_lane_groups_gather_fold_and_move_together`; model
 `test_lane_groups_round_trip_and_are_checked`. Mutants: groups not gathered, a lane landing in a run not joining it, an
 emptied group kept — each red (the last only once the test read the song itself: the model lists no empty group).
-A lane's `.group` (`core/service/SolarisService.cpp:980`): `set <ln>.group=<lg>` joins it (gathered with it),
+A lane's `.group` (`core/service/SolarisService.cpp:989`): `set <ln>.group=<lg>` joins it (gathered with it),
 `=none` leaves its group, placed right after the run it left. **The timeline.** An open group's lanes carry a bar down
-their headers' edge (`app/widgets/Timeline.cpp:1548`, from where the rows ARE) and, on the first, a chevron and the
-group's name in the header's bottom band. Folded, the group is ONE row (`:143`): its lanes fade out, the rows below
-ease up, its clips travel into it — each lane's clips in their own band of the row (`clipBox`, `:371`; band and height
+their headers' edge (`app/widgets/Timeline.cpp:1552`, from where the rows ARE) and, on the first, a chevron and the
+group's name in the header's bottom band. Folded, the group is ONE row (`:145`): its lanes fade out, the rows below
+ease up, its clips travel into it — each lane's clips in their own band of the row (`clipBox`, `:373`; band and height
 eased), so they never lie on one another — and its header says the group's name, "a group, folded", "▸ N LANES". The
-chevron turns as it folds and opens (`:655`), and a click on it or on the name (`groupToggleRect`, `:383`) is ONE `set
-<lg>.folded=on|off`. A clip dragged on a folded row carries the group's clips (`:948`; never before beat 0), the
-pointer's while held, then ONE `clips move "<ac> …" --by <beats>` where they were let go (`:1011`). The folded row's
-menu (`:1102`): Open group · Rename group… · Ungroup · Copy ID; a lane's (`:1128`): New group · Into group… · Leave
+chevron turns as it folds and opens (`:658`), and a click on it or on the name (`groupToggleRect`, `:385`) is ONE `set
+<lg>.folded=on|off`. A clip dragged on a folded row carries the group's clips (`:952`; never before beat 0), the
+pointer's while held, then ONE `clips move "<ac> …" --by <beats>` where they were let go (`:1015`). The folded row's
+menu (`:1106`): Open group · Rename group… · Ungroup · Copy ID; a lane's (`:1132`): New group · Into group… · Leave
 group · Fold group · Ungroup. UI `test_lane_groups_on_the_timeline`; shots `lane-groups`, `lane-group-folded`,
 `lane-group-folding`. Mutants: the chevron snapping, a folded row dragging one clip, folding keeping the lanes — each
 red.
@@ -2096,7 +2096,7 @@ never blocks (what has not arrived is silence, counted by `missed`), `latency()`
 `port add <name> --dir in [--channels 1|2]`, the machine's settings mapping it to a device as any port, `port.<name>=
 <device>:<channel>`) and `monitor` (`auto` | `on` | `off`) are the song's (`#atrack … input=prt_2 monitor=off`, written
 when set; checked: the input an input port, `model/Project.cpp:1053`), set by `set <ch>.input=<port>|none` /
-`set <ch>.monitor=` (`core/service/SolarisService.cpp:866`). **Arming** (`strip arm <ch> [--input <port>]`,
+`set <ch>.monitor=` (`core/service/SolarisService.cpp:875`). **Arming** (`strip arm <ch> [--input <port>]`,
 `core/service/ServiceInput.cpp:522`): an audio line arms for its input — `--input` sets it first, and only then is the
 line an edit; with no input it is refused naming the song's input ports (or `port add`); one strip armed at a time, as
 the keyboard's. **Monitoring** (`monitorHears`, `:105`): `on` heard whenever armed, `off` never, `auto` while stopped or
@@ -2141,8 +2141,8 @@ ports — "Arm with Mic" is ONE `strip arm <ch> --input <port>` — or, with non
 --dir in`); else it arms (`strip arm <ch>`). An audio line's menu (`:1239`): Input… (the input ports, the current one
 marked, No input, Add an input port… — a name typed in cosmo's field) and Monitor… (Auto · On · Off — `set
 <ch>.monitor=`). The ruler's menu adds Punch the loop's span (`transport punch <loop>`) and Punch off
-(`app/widgets/TimelineMarkers.cpp:205`); the punch is a red line atop the bars (`Timeline::punchRect`,
-`app/widgets/Timeline.cpp:375`), eased in and out, its ends travelling when it moves (`:631`). The song bar's Record
+(`app/widgets/TimelineMarkers.cpp:209`); the punch is a red line atop the bars (`Timeline::punchRect`,
+`app/widgets/Timeline.cpp:377`), eased in and out, its ends travelling when it moves (`:634`). The song bar's Record
 records whichever strip is armed. UI `test_recording_audio_from_the_window` (the Rig's host now has a capture that
 hears nothing); shot `recording-audio`. Mutants: the R light snapping, R arming with no input asked, the punch
 snapping in — each red. Loop takes are R-REC-2's (N17).
@@ -2172,8 +2172,8 @@ there, 0.2 at the seam, done 5 ms either side; a range over part of another keep
 turn's tail given to the next pass, the compile ignoring the comp, no crossfade, an overlapped range losing its rest,
 D-12's path — each red. **The window.** The model publishes the comp RESOLVED — `clips[].plays`, runs covering the clip,
 each the take heard there (`core/service/ServiceModel.cpp:294`) — so a front end only draws it. A clip with takes says how
-many at its top right where there is room beside its name (`app/widgets/Timeline.cpp:1226`); its menu offers Show takes
-· Hide takes (`:1187`; the view's — `showTakes`, `app/widgets/TimelineTakes.cpp:29`, re-binds at once): a row per take
+many at its top right where there is room beside its name (`app/widgets/Timeline.cpp:1230`); its menu offers Show takes
+· Hide takes (`:1191`; the view's — `showTakes`, `app/widgets/TimelineTakes.cpp:29`, re-binds at once): a row per take
 under the clip's lane (`Timeline.cpp:178`; keyed rows, so the rows below slide down and back, eased), its span drawn
 faint and lit where `plays` gives it the take (`paintTakes`, `:142`) — cross-faded from what was lit when the comp
 changes (`bindTakes`, `:51`). On a take's row (`takeGesture`, `:80`): a drag across it, on the grid you see and
@@ -2184,7 +2184,7 @@ edit — each red.
 
 ### DR-EDIT-1 Audio editing on the lanes (R-EDIT-1)
 **Reverse.** `Clip::reverse` (`#aclip … reverse=true`, written only when set — `model/Project.cpp:380`), `set <ac>.reverse=
-true|false` (`core/service/SolarisService.cpp:936`; a note clip refused) and `get`; compiled to `Region::reverse`, which the
+true|false` (`core/service/SolarisService.cpp:945`; a note clip refused) and `get`; compiled to `Region::reverse`, which the
 engine reads from its span's end (`engine/Engine.cpp:531`) — a loop's every repetition backwards; a clip with takes
 mirrored stretch by stretch (`core/Compile.cpp:340`). **Crossfades** (C6, `heardFades`, `core/Compile.cpp:116`): an audio
 clip's fade in grows to cover a clip of its strip on its lane that began before it and ends inside it, its fade out one
@@ -2228,7 +2228,7 @@ where the pointer was — a refusal eases it back. The pointer says ↔ on a han
 them. Each clip's fades, its fades as HEARD (`clips[].fadeInHeard/OutHeard`, so an overlap's crossfade is drawn as an X),
 its gain and its reversed mark are eased per clip (`advanceClipEdit`, `:88`); drawn (`paintClipEdit`, `:266`): the gain
 line, what each heard fade takes away shaded with a line along it, the handles, "reversed" by the line at its right.
-Its menu (`clipEditItems`, `:332`, `app/widgets/Timeline.cpp:1192`): Split at the time bar (where the time bar is inside
+Its menu (`clipEditItems`, `:332`, `app/widgets/Timeline.cpp:1196`): Split at the time bar (where the time bar is inside
 it) · Reverse / Play forwards · Consolidate — the clips it runs into on its lane through its strip, touching or
 overlapping, "Consolidate N clips" when more than itself · Slice ▸ Every bar / beat / half beat · At its hits (not a
 comped clip) · To a kit, a slice a beat (no Slice on a loop). Ctrl+E — the keymap's `lanes.split`
@@ -2244,11 +2244,11 @@ file, else the song's — so `clipLengthBeats` gives a warped clip its span's ow
 cut it at them. **Played** (C7): `stretchKey` (`:31`) names what a warped or pitched clip plays —
 `stretch:<bpm/song bpm>:<semitones>:<in>:<out>:<src>`, exact numbers; empty for a plain clip or one with takes — and the
 compile asks the sound provider for that key in place of the file (`:356`), the region reading the whole stretched
-sound. The service makes a key's sound once (`pcmFor`, `core/service/SolarisService.cpp:524`): the file's span through
+sound. The service makes a key's sound once (`pcmFor`, `core/service/SolarisService.cpp:533`): the file's span through
 the DSP library's `timeStretch` at the song's rate (`stretched`, `core/service/ServiceAudioEdit.cpp:52`), kept beside the
 decoded files — sixteen at most before those no clip plays go — and a render at another rate stretches the file decoded
 at that rate (`core/service/ServiceRender.cpp:140`). A song tempo change changes the key, so the next build stretches
-again. **Set** (`core/service/SolarisService.cpp:911`): `warp=true` with no `bpm` listens first — `tempoOf`
+again. **Set** (`core/service/SolarisService.cpp:920`): `warp=true` with no `bpm` listens first — `tempoOf`
 (`core/service/ServiceAudioEdit.cpp:80`, the DSP library's `estimateTempo` on the span's channel mean, to a thousandth)
 — in the same edit, and nothing heard refuses naming `.bpm`; `bpm` 20 … 999, `pitch` −24 … +24; a note clip and a clip
 with takes refuse all three. `clip add --src … --warp` (`core/service/ServiceEdit.cpp:689`) listens on import; `--warp`
@@ -2292,4 +2292,15 @@ sixteenth at its middle's tempo. Model `tempos[]` (with `seconds`), `transport.t
 `test_the_metronome_follows_the_tempo_map` (clicks at 0, 0.5, 1, 2, 3 s, none at 1.5 s; played from beat 3, a click at
 once and a second on). Mutants: the compile ignoring the map, a glide held, the metronome on the start's grid, the
 transport's sample from the start's tempo, a time insert leaving the tempo, the MIDI file keeping one tempo, a warped
-clip on the start's ratio — each red.
+clip on the start's ratio — each red. **The window** (`app/widgets/TimelineTempo.cpp`): each change a flag on the
+ruler's band at its beat saying its tempo ("140 bpm"), a glide into it a slope from the change before (`paintTempos`,
+`:178`); keyed — a change fades in and out, one moved or retimed elsewhere eases or counts there (`advanceTempos`, `:87`;
+LIVE `tempoAlpha`, `tempoBeat`, `tempoShown`; `tempoRect`, `:38`). Pressed before the markers (`tempoGesture`, `:113`):
+dragged, its flag is the pointer's on the grid and the release ONE `tempo move <tp> --at`; clicked, the song seeks
+there; right-clicked — Tempo… (the rename field; ONE `tempo move --bpm`), Glide into it / Step to it (`--ramp`), Delete
+tempo change, Copy ID. The ruler's menu offers Tempo change here… after beat 0 (typed: ONE `tempo add --at --bpm`;
+`app/widgets/TimelineMarkers.cpp:198`). The song bar shows the tempo where the time bar is (`app/widgets/SongBar.cpp:55`,
+eased as ever) and its drag or typed value sets the change in effect there — `project.bpm` before the first — from
+`transport.tempoId` (`tempoAt`, `core/service/SolarisService.cpp:516`). UI `test_tempo_changes_on_the_ruler`; shot
+`tempo-map`. Mutants: a change appearing at once, the drag sent while held, the song bar at the start's tempo, the song
+bar always setting the song's tempo, a retimed change snapping — each red.

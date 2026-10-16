@@ -132,7 +132,7 @@ namespace solaris
         TransportModel &t = mModel.transport;
         t.playing = mPlayer->running();
         t.position = beatOfSample((double)mPlayer->heard()); // R-TEMPO-1: through the map
-        t.tempo = mProject.tempos.empty() ? mProject.header.bpm : tempoMapOf(mProject).bpmAt(t.position);
+        tempoAt(t.position, t.tempo, t.tempoId);
         t.latencyMs = std::round(mPlayer->latency() * 10000.0) / 10.0;
         // R-METER-2: while a `meters clear` is on its way to the audio thread, its holds, latches and loudness are
         // from before it — the model keeps what the clear set

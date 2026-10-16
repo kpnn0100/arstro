@@ -263,6 +263,7 @@ namespace solaris
             {"transport.playing", "bool", ""},
             {"transport.position", "number", "beats — what is heard", false},
             {"transport.tempo", "number", "R-TEMPO-1: the tempo where the time bar is (bpm)", false},
+            {"transport.tempoId", "string", "R-TEMPO-1: the change in effect there — tp_n, or '' before the first (the song's bpm)", false},
             {"transport.loopFrom", "number", "beats"},
             {"transport.loopTo", "number", "beats; equal to loopFrom = no loop"},
             {"transport.punchFrom", "number", "R-REC-1: beats — a recording keeps only from here … (the session's)"},
@@ -645,7 +646,7 @@ namespace solaris
         j.set("devices", devs);
         Json tr = Json::object();
         tr.set("playing", m.transport.playing);
-        if (!stable) tr.set("position", m.transport.position).set("tempo", m.transport.tempo);
+        if (!stable) tr.set("position", m.transport.position).set("tempo", m.transport.tempo).set("tempoId", m.transport.tempoId);
         tr.set("loopFrom", m.transport.loopFrom).set("loopTo", m.transport.loopTo).set("loopClip", m.transport.loopClip).set("cue", m.transport.cue)
             .set("punchFrom", m.transport.punchFrom).set("punchTo", m.transport.punchTo);
         if (!stable) tr.set("latencyMs", m.transport.latencyMs);

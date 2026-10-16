@@ -753,6 +753,16 @@ namespace
                  const artboard::Rect h = world(tl, tl.fadeHandleRect(ac, false));
                  r.drag(h.x + h.w * 0.5, h.y + h.h * 0.5, h.x + h.w * 0.5 + 2.0 * 28.0, h.y + h.h * 0.5, 6, false);
              }},
+            {"tempo-map",   // R-TEMPO-1: 140 from bar 3, gliding to 100 by bar 5 — flags on the ruler's band, the glide's slope; the
+                            // song bar at the time bar's tempo
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("marker add Verse --at 0");
+                 r.cmd("tempo add --at 8 --bpm 140");
+                 r.cmd("tempo add --at 16 --bpm 100 --ramp");
+                 r.cmd("transport seek 10");
+                 r.settle();
+             }},
             {"loop-region",   // R-EDM-7: the brace on the ruler, the region tinted on the lanes
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

@@ -515,6 +515,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.playing` | bool |  |
 | `transport.position` | number | beats — what is heard *(not in `--stable`)* |
 | `transport.tempo` | number | R-TEMPO-1: the tempo where the time bar is (bpm) *(not in `--stable`)* |
+| `transport.tempoId` | string | R-TEMPO-1: the change in effect there — tp_n, or '' before the first (the song's bpm) *(not in `--stable`)* |
 | `transport.loopFrom` | number | beats |
 | `transport.loopTo` | number | beats; equal to loopFrom = no loop |
 | `transport.punchFrom` | number | R-REC-1: beats — a recording keeps only from here … (the session's) |

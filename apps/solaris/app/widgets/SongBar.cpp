@@ -51,7 +51,9 @@ namespace solaris_ui
         mPlayingWanted = m.transport.playing;
         mRecordingWanted = m.transport.recording; // R-MIDI-2
         mPosition = m.transport.position;
-        mBpm = m.bpm;
+        // R-TEMPO-1: the tempo where the time bar is — and what a drag changes: the change in effect there, else the song's
+        mBpm = m.tempos.empty() ? m.bpm : m.transport.tempo;
+        mTempoId = m.tempos.empty() ? std::string() : m.transport.tempoId;
         mBeatsPerBar = std::max(1, std::atoi(m.sig.c_str()));
         mPeak[0] = m.transport.masterPeak[0];
         mPeak[1] = m.transport.masterPeak[1];
@@ -156,7 +158,7 @@ namespace solaris_ui
                 if (buf != mBpmSent && mBpmLive != mBpm)
                 {
                     mBpmSent = buf;
-                    if (onCommand) onCommand(std::string("set project.bpm=") + buf); // one line per step that moved it
+                    if (onCommand) onCommand(tempoLine(buf)); // one line per step that moved it
                 }
                 return true;
             }
@@ -171,7 +173,7 @@ namespace solaris_ui
                 char buf[32];
                 std::snprintf(buf, sizeof buf, "%g", mBpm);
                 onEditText(buf, g.pos, [this](const std::string &text) {
-                    if (onCommand && !text.empty()) onCommand("set project.bpm=" + text); // the service refuses what is not a tempo
+                    if (onCommand && !text.empty()) onCommand(tempoLine(text)); // the service refuses what is not a tempo
                 });
                 return true;
             }

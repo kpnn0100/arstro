@@ -909,7 +909,10 @@ a process is the host's (law 12).
   `tempos[]` (each with where it is heard, in seconds) and `transport.tempo`, the tempo where the time bar is.
   **AMENDED (one model of tempo — law 16; the same day):** "automating `project.bpm` writes it" reads as: the tempo map
   IS `project.bpm`'s automation — `auto create project.bpm` and a formula on it are refused, naming `tempo add`; the
-  window edits the changes as a lane of points (part 3), so there is never a second, competing curve of the tempo.)
+  window edits the changes as a lane of points (part 3), so there is never a second, competing curve of the tempo.
+  "The ruler follows it" (part 3, the same day): the ruler stays in bars and beats (the song's time is beats); each change
+  is a flag on its band, a glide drawn as a slope, dragged, retyped, glided or deleted there; the song bar shows the tempo
+  where the time bar is and a drag on it changes the change in effect there (`transport.tempoId`).)
 
 **Phase 4 — open the ecosystem**
 - **R-PRESET-1 Device presets** (R-EDM-20): `preset save <dv> <name>`, `preset load <dv> <name>`, a preset store

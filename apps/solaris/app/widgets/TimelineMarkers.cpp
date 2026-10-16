@@ -194,6 +194,10 @@ namespace solaris_ui
                 const double at = snap(xToBeat(local.x));
                 const std::string name = "Marker " + std::to_string(mMarkers.size() + 1);
                 items.push_back({"Add marker here", [send, at, name] { send("marker add " + quoted(name) + " --at " + beatText(at)); }});
+                if (at > 0.0 && onRename) // R-TEMPO-1: the tempo from here, typed
+                    items.push_back({"Tempo change here\xE2\x80\xA6", [this, send, at, world] {
+                                         onRename("", world, [send, at](const std::string &v) { if (!v.empty()) send("tempo add --at " + beatText(at) + " --bpm " + v); });
+                                     }});
                 // R-ARR-2: time across the whole song — the bar under the pointer, or the loop's span
                 const double bar = std::floor(std::max(0.0, xToBeat(local.x)) / mBeatsPerBar) * mBeatsPerBar, len = (double)mBeatsPerBar;
                 items.push_back({"Insert a bar here", [send, bar, len] { send("time insert --at " + beatText(bar) + " --length " + beatText(len)); }});

@@ -126,6 +126,8 @@ namespace solaris
         /** R-TEMPO-1: a beat's sample in the song, and a sample's beat — through its tempo map (b·spb for one tempo). */
         double sampleOfBeat(double beat) const;
         double beatOfSample(double sample) const;
+        /** R-TEMPO-1: the tempo at `beat`, and the change in effect there ('' before the first). */
+        void tempoAt(double beat, double &bpm, std::string &id) const;
         /** R-WARP-1: a clip's own tempo heard in its span (the DSP library's estimate); 0 when none is. */
         double tempoOf(const Clip &c);
         bool consolidateClips(const Command &c, std::string &err);

@@ -298,6 +298,7 @@ namespace solaris
         std::string loopClip;                    // the clip `transport play --clip` loops ('' = the song's loop) — R-ROLL-6
         double cue = 0;                          // beats: where the time bar was last put; `transport stop --return` goes back there — R-TIME-7
         double tempo = 120;                      // R-TEMPO-1: the tempo where the time bar is (the map's)
+        std::string tempoId;                     // … the change in effect there ('' before the first: the song's bpm)
         double latencyMs = 0;                    // the clock device's, while playing
         std::string device;                      // the clock device ("" = the system default)
         float masterPeak[2] = {0, 0};

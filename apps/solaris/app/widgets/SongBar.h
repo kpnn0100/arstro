@@ -48,6 +48,8 @@ namespace solaris_ui
         double recordAmount() const { return mRecLit.value(); }  // R-MIDI-2: 1 = recording, lit red (LIVE)
         double meterLevel(int ch) const { return mMeter[ch].value(); }
         double bpmShown() const { return mBpmDrag ? mBpmLive : mBpmShown.value(); } // the tempo as DRAWN (LIVE)
+        /** R-TEMPO-1: the line that sets the tempo shown — the song's, or the change in effect at the time bar. */
+        std::string tempoLine(const std::string &v) const { return mTempoId.empty() ? "set project.bpm=" + v : "tempo move " + mTempoId + " --bpm " + v; }
 
         std::function<void()> onHome, onPlayToggle, onSave, onSettings, onRecordToggle;
         std::function<bool(const std::string &line)> onCommand;
@@ -67,6 +69,7 @@ namespace solaris_ui
         std::string mName;
         bool mDirty = false, mPlayingWanted = false, mRecordingWanted = false;
         double mPosition = 0, mBpm = 120;
+        std::string mTempoId; // R-TEMPO-1: the change in effect at the time bar ('' = the song's bpm)
         artboard::AnimatedProperty mBpmShown{120.0};
         double mBpmLast = -1, mBpmPress = 0, mBpmPressY = 0, mBpmLive = 0, mNowMs = 0;
         bool mBpmDrag = false;
