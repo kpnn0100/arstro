@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — J4: the sheet's Keyboard section; the hotkeys request done.*
+*Last updated: 2026-10-16 — J5: Ctrl+Space's place is temporary; the cue stays where it was put.*
 
 ---
 
@@ -340,6 +340,9 @@ umbrella's pointer — `arstro.rule` §7).
       — DR-SET-4 (the sheet): per area, an action a line; listening eased (accent, "Press a key…" cross-faded);
       Backspace removes, Escape cancels; a refusal toasted; chips keyed by combo, growing in and shrinking out;
       Reset as one line. UI test, 2 shots; 2 mutants seen red. The 2026-10-16 request is done (J1–J4).
+- [x] **J5** The user's follow-up: Ctrl+Space's place is temporary — a plain play no longer moves the cue, so
+      Space's stop after a Ctrl+Space goes back to where the time bar was put (R-TIME-7/8 AMENDED; DR-TIME-7).
+      L2 + UI tests extended; mutant (every play moves the cue) seen red in both.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

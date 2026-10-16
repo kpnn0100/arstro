@@ -196,7 +196,7 @@ namespace solaris
             {"transport.position", "number", "beats — what is heard", false},
             {"transport.loopFrom", "number", "beats"},
             {"transport.loopTo", "number", "beats; equal to loopFrom = no loop"},
-            {"transport.cue", "number", "beats: where the time bar was last put (a seek, or where play began) — `transport stop --return` goes back there (R-TIME-7)"},
+            {"transport.cue", "number", "beats: where the time bar was last put (a seek, or a play's --from / --clip; never a plain play) — `transport stop --return` goes back there (R-TIME-7)"},
             {"transport.loopClip", "string", "the clip the loop follows (`transport play --clip`, the piano roll's play); '' = the song's own loop"},
             {"transport.latencyMs", "number", "the clock device's", false},
             {"transport.device", "string", "the clock device ('' = the system default)"},

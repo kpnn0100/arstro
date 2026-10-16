@@ -1444,15 +1444,25 @@ static void test_stop_returns_to_the_cue_or_stays()
     waitFrames(r, r.fake.capture->frames.load() + 48000); // the helper waits for a total: wait from now                                       // a second: two beats on
     r.ok("transport stop --return");                            // back where it was put (R-TIME-7)
     assert(!t.playing && t.position == 6.0 && t.cue == 6.0);
-    // stop where it is (R-TIME-8): the next play starts there, and there is the new cue
+    // stop where it is (R-TIME-8): the next play starts there — but that place is temporary: the cue stays where the
+    // time bar was put, so the next stop with the return goes back THERE, not to where the plain stop left it
     r.ok("transport play");
     waitFrames(r, r.fake.capture->frames.load() + 48000); // the helper waits for a total: wait from now
     r.ok("transport stop");
     const double here = t.position;
     assert(here > 7.0 && t.cue == 6.0);
     r.ok("transport play");
-    assert(r.svc.model().transport.cue == here);
+    assert(r.svc.model().transport.cue == 6.0 && r.svc.model().transport.position >= here);
+    waitFrames(r, r.fake.capture->frames.load() + 24000);
+    r.ok("transport stop --return");
+    assert(r.svc.model().transport.position == 6.0 && r.svc.model().transport.cue == 6.0);
+    // a play that says where it begins puts the time bar there
+    r.ok("transport play --from 3");
+    assert(r.svc.model().transport.cue == 3.0);
+    r.ok("transport stop --return");
+    assert(r.svc.model().transport.position == 3.0);
     // a seek while playing is the time bar put there too
+    r.ok("transport play");
     r.ok("transport seek 2");
     waitFrames(r, r.fake.capture->frames.load() + 24000);
     r.ok("transport stop --return");
@@ -1466,7 +1476,7 @@ static void test_stop_returns_to_the_cue_or_stays()
     // a new song starts its cue at 0
     r.ok("project new " + freshSong("cue2") + " --bpm 120");
     assert(r.svc.model().transport.cue == 0.0);
-    pass("The cue (R-TIME-7/8): `transport stop --return` puts the time bar back where it was put — a seek, or where play began (a roll's clip too); a plain stop stays where heard and the next play starts there");
+    pass("The cue (R-TIME-7/8, amended): `transport stop --return` puts the time bar back where it was put — a seek, --from, a roll's clip; a plain stop stays where heard, the next play starts there, and the cue stays put");
 }
 
 static void test_a_clip_plays_looped_and_gives_the_songs_loop_back()

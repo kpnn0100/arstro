@@ -924,19 +924,25 @@ static void test_space_returns_and_ctrl_space_stays()
     r.frame();
     r.frame();
     assert(tl.cueAmount() > 0.0 && tl.cueAmount() < 1.0);         // and fades out
-    // Ctrl+Space: stop where it is; the next play starts there
+    // Ctrl+Space: stop where it is — a temporary place: Space plays on from there, and its stop goes back to 6
     r.key(32);
     for (int k = 0; k < 30; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
     r.key(32, true);
-    assert(r.sent.back() == "transport stop" && !t.playing && t.position > 6.0);
+    assert(r.sent.back() == "transport stop" && !t.playing && t.position > 6.0 && t.cue == 6.0);
     const double here = t.position;
-    // the song bar's Stop returns too: here is the new cue
     r.key(32);
+    assert(r.sent.back() == "transport play" && t.playing && t.position >= here && t.cue == 6.0);
+    for (int k = 0; k < 20; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+    assert(tl.cueBeat() == 6.0);                                  // the mark still stands where the time bar was put
+    r.key(32);
+    assert(r.sent.back() == "transport stop --return" && t.position == 6.0);
+    // the song bar's Stop returns too
+    r.key(32, true);                                              // stopped: Ctrl+Space plays as Space does
     for (int k = 0; k < 20; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
     auto &bar = r.app->project().bar();
     r.click(world(bar, bar.hitRect(arstro::solaris_ui::SongBar::kPlay)));
-    assert(r.sent.back() == "transport stop --return" && t.position == here);
-    pass("Space stops back where the time bar was put, Ctrl+Space stops where it is, the song bar's Stop returns; the cue is marked on the ruler while playing, fading in and out (R-TIME-7/8)");
+    assert(r.sent.back() == "transport stop --return" && t.position == 6.0);
+    pass("Space stops back where the time bar was put, Ctrl+Space stops where it is — a temporary place: the next play starts there and its Space stop still goes back to where the time bar was put; the song bar's Stop returns; the cue is marked on the ruler while playing (R-TIME-7/8)");
 }
 
 static void test_the_tempo_is_set_in_the_song_bar()

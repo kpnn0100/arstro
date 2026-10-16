@@ -222,7 +222,8 @@ namespace solaris
              "own loop comes back at `transport stop`, a plain `transport play` or a `transport loop`.", "R-PLAY-1"},
             {K::TransportStop, "transport stop", "", 0, 0, {"return"},
              "Stop; the transport stays where it was heard — or, with --return, goes back to the cue: where the time bar "
-             "was last put (a seek, or where play began; `transport.cue`).", "R-TIME-7"},
+             "was last put (a seek, or a play's --from or --clip; `transport.cue`). A plain stop's place is temporary: "
+             "the next play starts there but the cue stays.", "R-TIME-7"},
             {K::TransportSeek, "transport seek", "<beats>", 1, 1, {}, "Move the transport (playing or not).", "R-TIME-4"},
             {K::TransportLoop, "transport loop", "<from|off> [to]", 1, 2, {}, "Loop between two beats while playing; `off` ends it.", "R-TIME-4"},
             {K::Audition, "audition", "<file|stop>", 1, 1, {},

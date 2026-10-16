@@ -280,14 +280,20 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   Drum Machine, and is NEVER in a render; the loop region is drawn on the ruler and dragged there.)
 - **R-TIME-7 Stop returns the time bar to where it was put** (user request, 2026-10-16: *"remember where user
   put the time bar, when stop using space return to that time bar"*). The transport keeps a CUE — where the
-  user last put the time bar: a seek (a ruler click or drag, the start key), or where play began (`transport
-  play`, `--from`, a roll's clip). `transport stop --return` stops and puts the time bar back at the cue; the
-  play/stop key (Space by default) and the song bar's Stop are that. The cue is published
-  (`transport.cue`) and marked on the ruler while playing — where the time bar will go back — fading in and
-  out with the play.
+  user last PUT the time bar: a seek (a ruler click or drag, the start key), or a play that says where it
+  begins (`--from`, a roll's clip). A plain `transport play` starts wherever the time bar stands and leaves the
+  cue alone. `transport stop --return` stops and puts the time bar back at the cue; the play/stop key (Space
+  by default) and the song bar's Stop are that. The cue is published (`transport.cue`) and marked on the
+  ruler while playing — where the time bar will go back — fading in and out with the play.
+  (**AMENDED (user follow-up, 2026-10-16:** *"Ctrl space only temp remember that position, when use space to
+  stop again back to original position that user set"*). The first cut also moved the cue to wherever ANY
+  play began, so after a Ctrl+Space stop the next Space stop came back to the Ctrl+Space position, not to the
+  one the user had set. A plain play no longer moves the cue.)
 - **R-TIME-8 Or stop where it is** (same request: *"when ctrl space stop at the time user stop"*): the
   stop-here key (Ctrl+Space by default) stops and leaves the time bar where it was heard (`transport stop`, as
-  before); the next play starts from there, and there is the new cue. Pressed while stopped, either key plays.
+  before); the next play starts from there. That place is TEMPORARY: it is not the cue, so a play/stop key
+  stop after it goes back to where the user put the time bar (R-TIME-7). Pressed while stopped, either key
+  plays. (**AMENDED (same follow-up, 2026-10-16):** it said "and there is the new cue".)
 
 ---
 

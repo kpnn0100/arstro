@@ -287,7 +287,9 @@ namespace solaris
                 if (!c.has("from") || mPosition < mLoopFrom || mPosition >= mLoopTo) mPosition = mLoopFrom;
             }
             else endClipLoop(); // the song's play: the song's loop
-            mCue = mPosition;   // R-TIME-7: where play begins is where the time bar was put
+            // R-TIME-7 (amended): a play that SAYS where it begins puts the time bar there; a plain play starts where it
+            // stands — after a stop-here that place is temporary, and the cue stays where the user put the time bar
+            if (c.has("from") || c.has("clip")) mCue = mPosition;
             mModel.transport.loopFrom = mLoopFrom;
             mModel.transport.loopTo = mLoopTo;
             mModel.transport.loopClip = mClipLoop;

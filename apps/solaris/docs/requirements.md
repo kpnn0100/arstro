@@ -1375,17 +1375,20 @@ drag keeping the brace's end. Shots `ruler-scrubbing` and `loop-brace-moving`
 (`app/tests/shots/renderShots.cpp:447`, `:438`), both sizes, looked at.
 
 ### DR-TIME-7 Stop takes the time bar back to where it was put — or leaves it (R-TIME-7, R-TIME-8)
-The service keeps a CUE (`mCue`): a `transport seek` puts it where the time bar went (`core/service/ServiceTransport.cpp:341`
-— a ruler click or drag, the start key), and every `transport play` puts it where play begins, `--from` and a
-roll's clip included (`:290`). `transport stop --return` stops and moves the time bar back to the cue (`:328`); a
-plain `transport stop` leaves it where it was heard (R-TIME-4), so the next play starts there and there is the new
-cue. A new or opened song starts it at 0. Published as `transport.cue`. In the window: the play/stop key (Space)
-while playing is `transport stop --return`, Ctrl+Space is `transport stop`, either one while stopped plays
-(`App::key`, `app/App.cpp:334`); the song bar's Stop and a roll's ■ return too (`:53`). On the ruler an outlined
-mark stands at the cue while playing — where Stop takes the time bar back — fading in with the play and out with
-it (`Timeline`, `app/widgets/Timeline.cpp:1165`, eased at `:352`), beside the playhead's filled one. L2
-`test_stop_returns_to_the_cue_or_stays`; UI `test_space_returns_and_ctrl_space_stays`; shot `ruler-cue`. Mutants:
-a stop that ignores `--return`, a mark that snaps — both seen red.
+The service keeps a CUE (`mCue`): where the user PUT the time bar. A `transport seek` puts it where the time bar went
+(`core/service/ServiceTransport.cpp:343` — a ruler click or drag, the start key), and a play that says where it
+begins puts it there — `--from`, a roll's `--clip` (`:290`); a plain `transport play` starts wherever the time bar
+stands and leaves the cue alone. `transport stop --return` stops and moves the time bar back to the cue (`:330`); a
+plain `transport stop` leaves it where it was heard (R-TIME-4) — a TEMPORARY place: the next play starts there, and
+a stop with the return after it still goes back to the cue (R-TIME-8, amended 2026-10-16). A new or opened song
+starts it at 0. Published as `transport.cue`. In the window: the play/stop key (Space) while playing is `transport
+stop --return`, the stop-here key (Ctrl+Space) is `transport stop`, either one while stopped plays (`App::songAction`,
+`app/App.cpp:352`, the keys being the keymap's — DR-SET-4); the song bar's Stop and a roll's ■ return too (`:53`).
+On the ruler an outlined mark stands at the cue while playing — where Stop takes the time bar back — fading in
+with the play and out with it (`Timeline`, `app/widgets/Timeline.cpp:1166`, eased at `:355`), beside the
+playhead's filled one. L2 `test_stop_returns_to_the_cue_or_stays`; UI `test_space_returns_and_ctrl_space_stays`
+(Ctrl+Space, then Space plays on from there, then Space's stop is back at the cue); shot `ruler-cue`. Mutants: a
+stop that ignores `--return`, a mark that snaps, every play moving the cue — all seen red.
 
 ### DR-LANE-3 Instrument tracks (R-LANE-3; R-LANE-1 amended)
 **The model.** `Lane::track` (`model/Project.h`) names the instrument strip a lane is the TRACK of; the

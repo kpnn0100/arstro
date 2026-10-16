@@ -26,7 +26,7 @@ helpers it borrows.
 | Settings › Add folder… | the host's folder picker → `folder add "<path>"` |
 | Song bar › Home | `project close` — behind cosmo's ConfirmDialog when unsaved (Save → `project save` then close) |
 | Song bar › Play/Stop, Space | `transport play` / `transport stop --return` — back where the time bar was put (R-TIME-7) |
-| Ctrl+Space | stopped: as Space; playing: `transport stop` — the time bar stays where it was heard (R-TIME-8) |
+| Ctrl+Space | stopped: as Space; playing: `transport stop` — the time bar stays where it was heard, for now: the next play starts there, and Space's stop after it goes back to where the time bar was put (R-TIME-8) |
 | Song bar › the tempo dragged up/down (Shift: fine) · double-clicked | `set project.bpm=<n>` per step that moved it · the App's field → one `set project.bpm=<typed>` (R-UI-13) |
 | Song bar › Save, Ctrl+S | `project save` |
 | Enter | `transport seek 0` |
