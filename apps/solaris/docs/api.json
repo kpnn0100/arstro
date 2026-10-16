@@ -614,6 +614,38 @@
       "requirement": "R-ARR-1"
     },
     {
+      "verb": "tempo add",
+      "usage": "tempo add --at <beats> --bpm <20-999> [--ramp]",
+      "args": "",
+      "flags": [
+        "at=<beats>",
+        "bpm=<20-999>",
+        "ramp"
+      ],
+      "summary": "Change the song's tempo (R-TEMPO-1): --bpm from --at (beats after 0; the start's tempo is `project.bpm`) on — or, with --ramp, reached there gliding from the tempo before. Every beat-to-time conversion follows the map: the render, playback, the metronome, recording, warped clips, the MIDI file. Prints its id.",
+      "requirement": "R-TEMPO-1"
+    },
+    {
+      "verb": "tempo move",
+      "usage": "tempo move <tp> [--at <beats>] [--bpm <20-999>] [--ramp <true|false>]",
+      "args": "<tp>",
+      "flags": [
+        "at=<beats>",
+        "bpm=<20-999>",
+        "ramp=<true|false>"
+      ],
+      "summary": "Move a tempo change (--at), change its --bpm, or whether it is reached gliding (--ramp true|false).",
+      "requirement": "R-TEMPO-1"
+    },
+    {
+      "verb": "tempo delete",
+      "usage": "tempo delete <tp>",
+      "args": "<tp>",
+      "flags": [],
+      "summary": "Delete a tempo change: the tempo before it holds on.",
+      "requirement": "R-TEMPO-1"
+    },
+    {
       "verb": "time insert",
       "usage": "time insert --at <beats> --length <beats>",
       "args": "",
@@ -2265,6 +2297,42 @@
       "stable": true
     },
     {
+      "path": "tempos",
+      "type": "object[]",
+      "summary": "R-TEMPO-1: the tempo map's changes, by time — before the first, `bpm`",
+      "stable": true
+    },
+    {
+      "path": "tempos[].id",
+      "type": "string",
+      "summary": "tp_n",
+      "stable": true
+    },
+    {
+      "path": "tempos[].at",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "tempos[].bpm",
+      "type": "number",
+      "summary": "beats a minute from there",
+      "stable": true
+    },
+    {
+      "path": "tempos[].ramp",
+      "type": "bool",
+      "summary": "reached gliding (linearly in beats) from the tempo before",
+      "stable": true
+    },
+    {
+      "path": "tempos[].seconds",
+      "type": "number",
+      "summary": "where it is heard (computed through the map)",
+      "stable": true
+    },
+    {
       "path": "automations",
       "type": "object[]",
       "summary": "every automation (R-AUTO-4)",
@@ -2778,6 +2846,12 @@
       "path": "transport.position",
       "type": "number",
       "summary": "beats — what is heard",
+      "stable": false
+    },
+    {
+      "path": "transport.tempo",
+      "type": "number",
+      "summary": "R-TEMPO-1: the tempo where the time bar is (bpm)",
       "stable": false
     },
     {

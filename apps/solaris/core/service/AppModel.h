@@ -252,6 +252,15 @@ namespace solaris
         double at = 0, length = 0, end = 0;      // beats; length 0 = a point
     };
 
+    /** R-TEMPO-1: a change of the song's tempo — and where it falls in time (computed through the map). */
+    struct TempoModel
+    {
+        std::string id;
+        double at = 0, bpm = 120;                // beats; beats a minute
+        bool ramp = false;                       // reached gliding from the tempo before
+        double seconds = 0;                      // where it is heard
+    };
+
     /** R-ROLL-11: a word the grammar takes, and what it means — the roll's menus offer what the service accepts. */
     struct VocabModel
     {
@@ -288,6 +297,7 @@ namespace solaris
         double punchFrom = 0, punchTo = 0;       // R-REC-1: beats a recording keeps; equal = all of it (the session's)
         std::string loopClip;                    // the clip `transport play --clip` loops ('' = the song's loop) — R-ROLL-6
         double cue = 0;                          // beats: where the time bar was last put; `transport stop --return` goes back there — R-TIME-7
+        double tempo = 120;                      // R-TEMPO-1: the tempo where the time bar is (the map's)
         double latencyMs = 0;                    // the clock device's, while playing
         std::string device;                      // the clock device ("" = the system default)
         float masterPeak[2] = {0, 0};
@@ -367,6 +377,7 @@ namespace solaris
         std::vector<DeviceTypeModel> deviceTypes; // the registry, instruments first (R-DSP-2)
         std::vector<VocabModel> chords, scales, grooves; // R-ROLL-11: `--chord` qualities ("" major), `pattern scale`'s, `--groove`'s
         std::vector<MarkerModel> markers;        // R-ARR-1: by time
+        std::vector<TempoModel> tempos;          // R-TEMPO-1: the tempo map's changes, by time (the start's is `bpm`)
         std::vector<LaneGroupModel> groups;      // R-ARR-3: in the order of their first lanes
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };

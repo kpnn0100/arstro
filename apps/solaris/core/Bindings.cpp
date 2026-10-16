@@ -22,6 +22,7 @@ namespace solaris
         const std::string &f = out.field;
         if (out.node == "project")
         {
+            if (f == "bpm") { err = "project.bpm is the start of the tempo map — its changes are `tempo add --at <b> --bpm <v> [--ramp]` (R-TEMPO-1)"; return false; }
             if (f != "masterGain") { err = "project." + f + " is not a number a formula can drive (project.masterGain is)"; return false; }
             out.kind = AddressSpec::MasterGain;
             out.owner = "Master";

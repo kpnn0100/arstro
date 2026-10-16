@@ -259,7 +259,22 @@ namespace solaris
             const std::string out = c.kind == K::PatternExport ? c.arg(1) : c.arg(0);
             std::ofstream f(out, std::ios::binary);
             if (!f) { err = "cannot write " + out; return false; }
-            f << writeMidi(p.header.name, p.header.bpm, p.header.sig, tracks);
+            // R-TEMPO-1: the map's changes — a glide written as a step every sixteenth, each at the tempo half way through it
+            std::vector<std::pair<double, double>> tempos;
+            if (!p.tempos.empty())
+            {
+                const auto tm = tempoMapOf(p);
+                double prev = 0.0;
+                for (const auto &t : p.tempos)
+                {
+                    if (t.ramp)
+                        for (double b = prev; b < t.at - 1e-9; b += 0.25)
+                            if (b > 0.0) tempos.push_back({b, tm.bpmAt(std::min(t.at, b + 0.125))});
+                    tempos.push_back({t.at, t.bpm});
+                    prev = t.at;
+                }
+            }
+            f << writeMidi(p.header.name, p.header.bpm, p.header.sig, tracks, tempos);
             if (!f) { err = "cannot write " + out; return false; }
             mOutput = out + "\n";
             return true;

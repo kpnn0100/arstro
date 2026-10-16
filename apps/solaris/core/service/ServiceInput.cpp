@@ -128,13 +128,13 @@ namespace solaris
         // rendered (and the engine's own lag), and what was sung then arrived Li later
         mRecording = mRecordingAudio = false;
         Project &p = mProject;
-        const double rate = p.header.sampleRate, spb = 60.0 / p.header.bpm * rate;
+        const double rate = p.header.sampleRate;
         const long long shift = std::llround((outLatency + inLatency) * rate) + graphLatency;
         // R-REC-2: the song looped while recording — a take of each pass over the loop
         if (mLoopTo > mLoopFrom && take.marks.size() > 1)
         {
             const double loopFrom = toTick(mLoopFrom), loopTo = toTick(mLoopTo);
-            const long long A = std::llround(loopFrom * spb), L = std::llround(loopTo * spb) - A;
+            const long long A = std::llround(sampleOfBeat(loopFrom)), L = std::llround(sampleOfBeat(loopTo)) - A; // R-TEMPO-1
             std::map<int, std::pair<std::vector<float>, std::vector<float>>> passes;
             std::map<int, long long> covered;
             for (size_t m = 0; m < take.marks.size(); ++m)
@@ -212,8 +212,8 @@ namespace solaris
         double fromBeat = mRecordFrom, toBeat = -1.0;
         if (mPunchTo > mPunchFrom) { fromBeat = std::max(fromBeat, mPunchFrom); toBeat = mPunchTo; }
         const double at = toTick(fromBeat);                 // the clip's place, on the tick grid …
-        const long long a = std::llround(at * spb);          // … and the take cut from that very sample
-        const long long b = toBeat >= 0 ? std::llround(toBeat * spb) : first + n;
+        const long long a = std::llround(sampleOfBeat(at));  // … and the take cut from that very sample (R-TEMPO-1: the map's)
+        const long long b = toBeat >= 0 ? std::llround(sampleOfBeat(toBeat)) : first + n;
         std::vector<std::vector<float>> ch(2);
         if (take.from >= 0 && b > a)
             for (long long t = a; t < std::min(b, first + n); ++t)
@@ -307,7 +307,7 @@ namespace solaris
         // beat early is the downbeat (a count-in's anticipation); starts on the `recordQuantize` grid
         mRecording = false;
         Project &p = mProject;
-        const double spb = 60.0 / p.header.bpm * p.header.sampleRate, from = mRecordFrom;
+        const double from = mRecordFrom;
         struct Open
         {
             double at = 0;
@@ -331,7 +331,7 @@ namespace solaris
         std::map<std::string, std::pair<double, double>> lastKept;   // lane → (beat, value)
         for (const auto &pl : mTaken)
         {
-            const double b = (double)pl.at / spb;
+            const double b = beatOfSample((double)pl.at); // R-TEMPO-1: where it was heard, through the map
             if (pl.kind != 0)
             {
                 if (b < from - 0.5) continue;
@@ -353,13 +353,13 @@ namespace solaris
             if (pl.kind == 1 || pl.kind == 2) lastOf[pl.kind - 1] = &pl;
         for (int k = 0; k < 2; ++k)
         {
-            if (!lastOf[k] || (double)lastOf[k]->at / spb < from - 0.5) continue;
+            if (!lastOf[k] || beatOfSample((double)lastOf[k]->at) < from - 0.5) continue;
             const std::string lane = k == 0 ? "bend" : "cc1";
-            const double b = std::max(from, (double)lastOf[k]->at / spb);
+            const double b = std::max(from, beatOfSample((double)lastOf[k]->at));
             const auto it = lastKept.find(lane);
             if (it == lastKept.end() || std::fabs(it->second.first - b) > 1e-9) wheels.push_back(ExprPoint{lane, b, lastOf[k]->value, {}});
         }
-        for (int pitch = 0; pitch < 128; ++pitch) close(pitch, std::max(from, (double)stoppedAt / spb)); // still held: to the stop
+        for (int pitch = 0; pitch < 128; ++pitch) close(pitch, std::max(from, beatOfSample((double)stoppedAt))); // still held: to the stop
         mTaken.clear();
         for (auto &w : wheels) w.at = toTick(w.at);
         if (notes.empty() && wheels.empty())

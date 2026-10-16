@@ -144,6 +144,12 @@ namespace solaris
                 else if (m.length > 0 && e > a + eps) { m.length = toTick(m.length - (std::min(e, b) - a)); ++marks; }
             }
         }
+        // R-TEMPO-1: a tempo change after the edit moves with what it changes; one inside a deleted span goes (the tempo
+        // there is the one before it)
+        if (!insert)
+            p.tempos.erase(std::remove_if(p.tempos.begin(), p.tempos.end(), [&](const TempoPoint &t) { return t.at >= a - eps && t.at < b - eps; }), p.tempos.end());
+        for (auto &t : p.tempos)
+            if (t.at >= (insert ? a : b) - eps) t.at = toTick(t.at + (insert ? span : -span));
         // the loop (the session's): moved, grown or shrunk the same; a loop taken out entirely ends
         if (mLoopTo > mLoopFrom)
         {
@@ -154,8 +160,8 @@ namespace solaris
             if (!(mLoopTo > mLoopFrom + eps)) mLoopFrom = mLoopTo = 0;
             if (mPlayer)
             {
-                const double spb = 60.0 / std::max(1.0, p.header.bpm) * p.header.sampleRate;
-                mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(mLoopFrom * spb) : 0, mLoopTo > mLoopFrom ? (long long)std::llround(mLoopTo * spb) : 0);
+                mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(sampleOfBeat(mLoopFrom)) : 0,
+                                 mLoopTo > mLoopFrom ? (long long)std::llround(sampleOfBeat(mLoopTo)) : 0);
             }
         }
         sortMarkers(p);
@@ -260,6 +266,70 @@ namespace solaris
         default:
             return false;
         }
+    }
+
+    bool SolarisService::tempoCommand(const Command &c, std::string &err)
+    {
+        // R-TEMPO-1: the map's points — after beat 0 (the start's is the song's bpm), one to a beat, kept in order
+        Project &p = mProject;
+        auto bpmFlag = [&](double &v) {
+            if (!parseNumber(c.flag("bpm"), v) || v < 20 || v > 999) { err = "--bpm is 20 … 999, got `" + c.flag("bpm") + "`"; return false; }
+            return true;
+        };
+        auto atFlag = [&](double &v) {
+            if (!parseNumber(c.flag("at"), v) || !std::isfinite(v)) { err = "--at is beats, got `" + c.flag("at") + "`"; return false; }
+            v = toTick(v);
+            if (v <= 0) { err = "a tempo change is after the start — the tempo at beat 0 is the song's: set project.bpm=<v>"; return false; }
+            return true;
+        };
+        auto taken = [&](double at, const std::string &self) {
+            for (const auto &t : p.tempos)
+                if (t.id != self && std::fabs(t.at - at) < 1e-9) { err = t.id + " already changes the tempo at " + canonicalBeats(at) + " — move it, or `tempo move " + t.id + " --bpm`"; return true; }
+            return false;
+        };
+        auto sortTempos = [&] { std::stable_sort(p.tempos.begin(), p.tempos.end(), [](const TempoPoint &x, const TempoPoint &y) { return x.at < y.at; }); };
+        if (c.kind == K::TempoAdd)
+        {
+            TempoPoint t;
+            if (!atFlag(t.at) || !bpmFlag(t.bpm) || taken(t.at, "")) return false;
+            t.ramp = c.has("ramp");
+            t.id = p.nextId("tp");
+            p.tempos.push_back(t);
+            sortTempos();
+            changed("tempo.added", t.id);
+            mOutput = t.id + "\n";
+            return true;
+        }
+        TempoPoint *t = p.tempo(c.arg(0));
+        if (!t)
+        {
+            err = "no tempo change `" + c.arg(0) + "`";
+            if (!p.tempos.empty())
+            {
+                err += " — the song's:";
+                for (const auto &x : p.tempos) err += " " + x.id + " (" + canonicalNumber(x.bpm) + " bpm at " + canonicalBeats(x.at) + ")";
+            }
+            return false;
+        }
+        const std::string id = t->id;
+        if (c.kind == K::TempoDelete)
+        {
+            p.tempos.erase(std::remove_if(p.tempos.begin(), p.tempos.end(), [&](const TempoPoint &x) { return x.id == id; }), p.tempos.end());
+            changed("tempo.deleted", id);
+            return true;
+        }
+        if (!c.has("at") && !c.has("bpm") && !c.has("ramp")) { err = "tempo move needs --at, --bpm and/or --ramp"; return false; }
+        double at = t->at, bpm = t->bpm;
+        bool ramp = t->ramp;
+        if (c.has("at") && (!atFlag(at) || taken(at, id))) return false;
+        if (c.has("bpm") && !bpmFlag(bpm)) return false;
+        if (c.has("ramp") && !parseBool(c.flag("ramp"), ramp)) { err = "--ramp is true or false"; return false; }
+        t->at = at;
+        t->bpm = bpm;
+        t->ramp = ramp;
+        sortTempos();
+        changed("tempo.moved", id);
+        return true;
     }
 
     bool SolarisService::arrangeCommand(const Command &c, std::string &err)

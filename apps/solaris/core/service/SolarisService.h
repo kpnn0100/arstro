@@ -116,12 +116,16 @@ namespace solaris
         bool arrangeCommand(const Command &c, std::string &err); // markers (R-ARR-1), time insert / delete (R-ARR-2)
         bool timeCommand(const Command &c, std::string &err);    // R-ARR-2
         bool groupCommand(const Command &c, std::string &err);   // R-ARR-3: lane groups, a group moved, clips moved together
+        bool tempoCommand(const Command &c, std::string &err);   // R-TEMPO-1 (ServiceArrange.cpp): the tempo map's points
         // R-EDIT-1 (ServiceAudioEdit.cpp): audio clips cut, joined, sliced — a cut is `splitClip`, which slice repeats
         bool audioEditCommand(const Command &c, std::string &err);
         bool splitClip(const std::string &id, double at, std::string &made, std::string &err);
         bool sliceToKit(const Clip &clip, double step, std::string &err);
         /** R-WARP-1: a stretch key's sound — its file's span (from `base`) stretched at `rate` by the DSP library. */
         static std::shared_ptr<const engine::Pcm> stretched(const std::string &key, const std::function<std::shared_ptr<const engine::Pcm>(const std::string &)> &base, int rate);
+        /** R-TEMPO-1: a beat's sample in the song, and a sample's beat — through its tempo map (b·spb for one tempo). */
+        double sampleOfBeat(double beat) const;
+        double beatOfSample(double sample) const;
         /** R-WARP-1: a clip's own tempo heard in its span (the DSP library's estimate); 0 when none is. */
         double tempoOf(const Clip &c);
         bool consolidateClips(const Command &c, std::string &err);

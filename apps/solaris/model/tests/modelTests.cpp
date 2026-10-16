@@ -542,6 +542,26 @@ static void test_markers_round_trip_and_name_their_sections()
     pass("markers in the .slp (R-ARR-1): #amarker read and written back in place, a fixed point; mk_ ids; a section's end — its length, else the next marker, else the song's end; nameless or doubled refused");
 }
 
+static void test_tempo_changes_round_trip_and_are_checked()
+{
+    // R-TEMPO-1: #atempo — a change from a beat on, `ramp` written only when on; written back in place, tp_ ids; at beat
+    // 0, out of order or out of range refused
+    const std::string head = "arstro-project = 1\napp = solaris\nid = prj\n#amixer id=mx_1 name=Sources order=0\n";
+    Project p;
+    std::string err;
+    assert(parseProject(head + "#atempo id=tp_1 at=16.0 bpm=140.0\n#atempo id=tp_2 at=32.0 bpm=90.5 ramp=true\n", p, err));
+    assert(p.tempos.size() == 2 && p.tempos[1].ramp && !p.tempos[0].ramp && p.tempos[1].bpm == 90.5);
+    const std::string text = serializeProject(p);
+    assert(contains(text, "#atempo id=tp_1 at=16.0 bpm=140.0\n#atempo id=tp_2 at=32.0 bpm=90.5 ramp=true\n"));
+    Project q;
+    assert(parseProject(text, q, err) && serializeProject(q) == text && p.nextId("tp") == "tp_3" && p.tempo("tp_2"));
+    Project bad;
+    assert(!parseProject(head + "#atempo id=tp_1 at=0.0 bpm=100.0\n", bad, err) && contains(err, "the tempo at the start is the song's bpm"));
+    assert(!parseProject(head + "#atempo id=tp_1 at=8.0 bpm=100.0\n#atempo id=tp_2 at=4.0 bpm=90.0\n", bad, err) && contains(err, "is not after tp_1"));
+    assert(!parseProject(head + "#atempo id=tp_1 at=8.0 bpm=5.0\n", bad, err) && contains(err, "(20 … 999)"));
+    pass("tempo changes in the .slp (R-TEMPO-1): #atempo read and written back in place, ramp only when on; tp_ ids; at the start, out of order or out of range refused");
+}
+
 static void test_lane_groups_round_trip_and_are_checked()
 {
     // R-ARR-3: #alanegroup before the lanes naming it, `folded` written only when on; a lane's group must exist
@@ -604,6 +624,7 @@ int main()
     test_expression_lanes_round_trip_and_are_checked();
     test_note_chance_and_scales_round_trip_and_are_checked();
     test_markers_round_trip_and_name_their_sections();
+    test_tempo_changes_round_trip_and_are_checked();
     test_lane_groups_round_trip_and_are_checked();
     test_takes_and_their_comp_round_trip();
     std::printf("\n%d passed, 0 failed\n", passed);

@@ -896,7 +896,20 @@ a process is the host's (law 12).
   first). The model publishes `clips[].warp`, `.bpm`, `.pitch`.)
 - **R-TEMPO-1 A tempo map** (R-EDM-14): `tempo add --at <b> --bpm <v> [--ramp]`, the ruler and every beat↔second
   conversion follow it; render, playback, the metronome, warp and MIDI export agree; automating `project.bpm`
-  writes it.
+  writes it. (**Detailed while building it, N21 — 2026-10-16.**
+  The song's tempo is its `bpm` from beat 0 and a CHANGE at a later beat (`#atempo id=tp_1 at=16.0 bpm=140.0
+  ramp=true`): from there on that tempo — or, `ramp`, reached there gliding linearly (in beats) from the tempo before.
+  `tempo add --at <b> --bpm <v> [--ramp]` (prints its id), `tempo move <tp> [--at] [--bpm] [--ramp true|false]`,
+  `tempo delete <tp>`; one change to a beat, after beat 0, 20 … 999 bpm. Every beat↔sample conversion goes through
+  the map — clips, notes, fades, the wheels, the render's range, playback's start, seek, loop and count-in, the time
+  bar heard, the metronome's beats, a recording's notes and takes, formulas' `beat` and `bpm`, a warped clip's stretch
+  (its own beats heard where the song puts them — the DSP's time map, REQ-stretch-4). A curve stays in BEATS (it is
+  read at the song's beat). A song of one tempo renders the bytes it did. `time insert|delete` carry the changes as
+  they carry markers. The MIDI file writes each change (a glide as a step every sixteenth). The model publishes
+  `tempos[]` (each with where it is heard, in seconds) and `transport.tempo`, the tempo where the time bar is.
+  **AMENDED (one model of tempo — law 16; the same day):** "automating `project.bpm` writes it" reads as: the tempo map
+  IS `project.bpm`'s automation — `auto create project.bpm` and a formula on it are refused, naming `tempo add`; the
+  window edits the changes as a lane of points (part 3), so there is never a second, competing curve of the tempo.)
 
 **Phase 4 — open the ecosystem**
 - **R-PRESET-1 Device presets** (R-EDM-20): `preset save <dv> <name>`, `preset load <dv> <name>`, a preset store

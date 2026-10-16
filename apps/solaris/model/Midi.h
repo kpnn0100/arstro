@@ -64,7 +64,9 @@ namespace solaris
         std::vector<ExprPoint> controls; // R-MIDI-3: beats; written at each point and every 1/32 beat of a ramp
     };
 
-    /** A format-1 file at 960 PPQ: a tempo track (tempo, meter, name), then a track per entry. */
-    std::string writeMidi(const std::string &songName, double bpm, const std::string &sig, const std::vector<MidiOutTrack> &tracks);
+    /** A format-1 file at 960 PPQ: a tempo track (tempo, meter, name — and R-TEMPO-1 each later (beat, bpm) of
+     *  `tempos`, in rising beats), then a track per entry. */
+    std::string writeMidi(const std::string &songName, double bpm, const std::string &sig, const std::vector<MidiOutTrack> &tracks,
+                          const std::vector<std::pair<double, double>> &tempos = {});
 }
 }

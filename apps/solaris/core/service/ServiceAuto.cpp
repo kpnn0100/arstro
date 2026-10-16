@@ -294,7 +294,7 @@ namespace solaris
         if (c.has("at") && !numberFlag(c, "at", at, err)) return false;
         const CompileResult cr = compile(mProject, [](const std::string &) { return std::shared_ptr<const engine::Pcm>(); });
         const engine::MixGraph &g = cr.graph;
-        const long long sample = std::llround(at * g.clock.samplesPerBeat);
+        const long long sample = std::llround(g.clock.map.isConstant() ? at * g.clock.samplesPerBeat : g.clock.map.sampleAt(at)); // R-TEMPO-1
         std::vector<double> vars(engine::kClockSlots + g.curves.size() + g.binds.size(), 0.0), values(g.binds.size(), 0.0);
         for (size_t b = 0; b < g.binds.size(); ++b) values[b] = g.binds[b].own;
         engine::evaluateBinds(g.clock, g.curves, g.binds, sample, vars.data(), values.data());

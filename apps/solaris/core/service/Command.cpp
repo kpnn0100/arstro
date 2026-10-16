@@ -218,6 +218,14 @@ namespace solaris
             {K::MarkerMove, "marker move", "<mk>", 1, 1, {"at=<beats>", "length=<beats>"},
              "Move a marker (--at) and/or set its section's --length (0: a point again).", "R-ARR-1"},
             {K::MarkerDelete, "marker delete", "<mk>", 1, 1, {}, "Delete a marker.", "R-ARR-1"},
+            {K::TempoAdd, "tempo add", "", 0, 0, {"at=<beats>", "bpm=<20-999>", "ramp"},
+             "Change the song's tempo (R-TEMPO-1): --bpm from --at (beats after 0; the start's tempo is `project.bpm`) on — "
+             "or, with --ramp, reached there gliding from the tempo before. Every beat-to-time conversion follows the map: "
+             "the render, playback, the metronome, recording, warped clips, the MIDI file. Prints its id.", "R-TEMPO-1", false,
+             {"at", "bpm"}},
+            {K::TempoMove, "tempo move", "<tp>", 1, 1, {"at=<beats>", "bpm=<20-999>", "ramp=<true|false>"},
+             "Move a tempo change (--at), change its --bpm, or whether it is reached gliding (--ramp true|false).", "R-TEMPO-1"},
+            {K::TempoDelete, "tempo delete", "<tp>", 1, 1, {}, "Delete a tempo change: the tempo before it holds on.", "R-TEMPO-1"},
             {K::TimeInsert, "time insert", "", 0, 0, {"at=<beats>", "length=<beats>"},
              "Open a gap in the whole song (R-ARR-2), ONE edit: every clip, automation point, marker and the loop at or after --at "
              "moves --length beats later; a section, a looping automation's span or the loop that holds --at grows by it. A clip "

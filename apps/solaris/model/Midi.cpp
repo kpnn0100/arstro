@@ -186,7 +186,8 @@ namespace solaris
         return beats + (double)(tick - from) * tickSeconds / (us / 1e6);
     }
 
-    std::string writeMidi(const std::string &songName, double bpm, const std::string &sig, const std::vector<MidiOutTrack> &tracks)
+    std::string writeMidi(const std::string &songName, double bpm, const std::string &sig, const std::vector<MidiOutTrack> &tracks,
+                          const std::vector<std::pair<double, double>> &tempos)
     {
         std::string o = "MThd";
         put32(o, 6);
@@ -212,10 +213,20 @@ namespace solaris
             putVlq(t, 0);
             t += (char)0xFF; t += (char)0x58; t += (char)0x04;
             t += (char)std::clamp(num, 1, 255); t += (char)pow2; t += (char)24; t += (char)8;
-            const unsigned long us = (unsigned long)std::llround(60000000.0 / std::max(1.0, bpm));
-            putVlq(t, 0);
-            t += (char)0xFF; t += (char)0x51; t += (char)0x03;
-            t += (char)((us >> 16) & 0xFF); t += (char)((us >> 8) & 0xFF); t += (char)(us & 0xFF);
+            auto tempo = [&](long long delta, double v) {
+                const unsigned long us = (unsigned long)std::llround(60000000.0 / std::max(1.0, v));
+                putVlq(t, (unsigned long)delta);
+                t += (char)0xFF; t += (char)0x51; t += (char)0x03;
+                t += (char)((us >> 16) & 0xFF); t += (char)((us >> 8) & 0xFF); t += (char)(us & 0xFF);
+            };
+            tempo(0, bpm);
+            long long last = 0; // R-TEMPO-1: each later change at its tick
+            for (const auto &x : tempos)
+            {
+                const long long tick = std::max(last, (long long)std::llround(x.first * 960.0));
+                tempo(tick - last, x.second);
+                last = tick;
+            }
             putVlq(t, 0);
             t += (char)0xFF; t += (char)0x2F; t += (char)0x00;
             chunk(t);

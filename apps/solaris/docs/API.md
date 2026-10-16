@@ -67,6 +67,9 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `marker rename <mk> <name> [--note <text>]` | Rename a marker (and set its --note). | R-ARR-1 |
 | `marker move <mk> [--at <beats>] [--length <beats>]` | Move a marker (--at) and/or set its section's --length (0: a point again). | R-ARR-1 |
 | `marker delete <mk>` | Delete a marker. | R-ARR-1 |
+| `tempo add --at <beats> --bpm <20-999> [--ramp]` | Change the song's tempo (R-TEMPO-1): --bpm from --at (beats after 0; the start's tempo is `project.bpm`) on — or, with --ramp, reached there gliding from the tempo before. Every beat-to-time conversion follows the map: the render, playback, the metronome, recording, warped clips, the MIDI file. Prints its id. | R-TEMPO-1 |
+| `tempo move <tp> [--at <beats>] [--bpm <20-999>] [--ramp <true\|false>]` | Move a tempo change (--at), change its --bpm, or whether it is reached gliding (--ramp true\|false). | R-TEMPO-1 |
+| `tempo delete <tp>` | Delete a tempo change: the tempo before it holds on. | R-TEMPO-1 |
 | `time insert --at <beats> --length <beats>` | Open a gap in the whole song (R-ARR-2), ONE edit: every clip, automation point, marker and the loop at or after --at moves --length beats later; a section, a looping automation's span or the loop that holds --at grows by it. A clip that starts before --at and crosses it stays (it is named — split it to open the gap through it, R-EDIT-1). The loop is the session's: undo leaves it. | R-ARR-2 |
 | `time delete --from <beats> --to <beats>` | Take a span out of the whole song (R-ARR-2), ONE edit: what lies wholly inside it goes (clips, automation points, markers), what follows moves earlier by its length; a section, a looping span or the loop that crosses it shrinks. A clip that repeats its material (a note clip, an audio clip set to loop) and starts before --from is shortened by the overlap; any other clip crossing --from or --to is refused, naming it — split it first (R-EDIT-1) or move it. | R-ARR-2 |
 | `pattern scale <pt> <key> <scale> \| off` | Lock a pattern to a scale (R-ROLL-11) — `pattern scale pt_1 D dorian`: a note placed (`note add`, its --chord, `notes add`) lands on the scale's nearest pitch, a tie going down (so a major chord stamped on any degree is that degree's own triad); a note moved in pitch (`note move --to-pitch`, `notes move --semi`) goes on to the scale's next pitch the way it moved. A move in time, an import, a step row, a recording and `pattern transpose` keep their pitches; notes already written stay. `off` unlocks it. The scales are under Notation. Prints its notes. | R-ROLL-11 |
@@ -419,6 +422,12 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `markers[].at` | number | beats |
 | `markers[].length` | number | beats — a section; 0 a point |
 | `markers[].end` | number | where its section ends: at + length, else the next marker, else the song's end |
+| `tempos` | object[] | R-TEMPO-1: the tempo map's changes, by time — before the first, `bpm` |
+| `tempos[].id` | string | tp_n |
+| `tempos[].at` | number | beats |
+| `tempos[].bpm` | number | beats a minute from there |
+| `tempos[].ramp` | bool | reached gliding (linearly in beats) from the tempo before |
+| `tempos[].seconds` | number | where it is heard (computed through the map) |
 | `automations` | object[] | every automation (R-AUTO-4) |
 | `automations[].id` | string | au_n — what a formula names |
 | `automations[].name` | string | "<owner> · <parameter>" when made from one |
@@ -505,6 +514,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport` | object | play, position, loop (R-TIME-4) |
 | `transport.playing` | bool |  |
 | `transport.position` | number | beats — what is heard *(not in `--stable`)* |
+| `transport.tempo` | number | R-TEMPO-1: the tempo where the time bar is (bpm) *(not in `--stable`)* |
 | `transport.loopFrom` | number | beats |
 | `transport.loopTo` | number | beats; equal to loopFrom = no loop |
 | `transport.punchFrom` | number | R-REC-1: beats — a recording keeps only from here … (the session's) |

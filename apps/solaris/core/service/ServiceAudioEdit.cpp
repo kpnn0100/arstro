@@ -52,19 +52,21 @@ namespace solaris
     std::shared_ptr<const engine::Pcm> SolarisService::stretched(const std::string &key, const std::function<std::shared_ptr<const engine::Pcm>(const std::string &)> &base,
                                                                  int rate)
     {
-        // R-WARP-1: the span of its file, stretched by the ratio and moved by the semitones the key names (REQ-stretch-1…3)
-        double ratio = 1, semis = 0, in = 0, out = 0;
-        std::string src;
-        if (!parseStretchKey(key, ratio, semis, in, out, src)) return nullptr;
-        auto pcm = base(src);
+        // R-WARP-1: the span of its file, stretched by the ratio — or, R-TEMPO-1, along the map — and moved by the
+        // semitones the key names (REQ-stretch-1…4)
+        StretchSpec spec;
+        if (!parseStretchKey(key, rate, spec)) return nullptr;
+        const double in = spec.in, out = spec.out;
+        auto pcm = base(spec.src);
         if (!pcm || pcm->frames <= 0) return nullptr;
         const long long i0 = std::clamp<long long>(std::llround(in * rate), 0, pcm->frames), i1 = std::clamp<long long>(std::llround(out * rate), i0, pcm->frames);
         std::vector<std::vector<float>> ch((size_t)pcm->channels, std::vector<float>((size_t)(i1 - i0)));
         for (int c = 0; c < pcm->channels; ++c)
             for (long long i = i0; i < i1; ++i) ch[(size_t)c][(size_t)(i - i0)] = pcm->at(i, c);
         StretchParams sp;
-        sp.ratio = ratio;
-        sp.semitones = semis;
+        sp.ratio = spec.ratio;
+        sp.semitones = spec.semitones;
+        sp.map = spec.map;
         const auto y = timeStretch(ch, rate, sp);
         auto made = std::make_shared<engine::Pcm>();
         made->channels = pcm->channels;

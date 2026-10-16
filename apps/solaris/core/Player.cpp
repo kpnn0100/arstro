@@ -411,9 +411,11 @@ namespace solaris
             mClick->process(io, 2, to - cur);
             cur = to;
         };
-        for (long long k = (long long)std::ceil((double)pos / spb - 1e-9);; ++k)
+        // R-TEMPO-1: under a tempo that changes, each beat where the playing engine's map puts it
+        const engine::TempoMap *tm = mEng && !mEng->graph().clock.map.isConstant() ? &mEng->graph().clock.map : nullptr;
+        for (long long k = (long long)std::ceil((tm ? tm->beatAt((double)pos) : (double)pos / spb) - 1e-9);; ++k)
         {
-            const long long at = std::llround((double)k * spb);
+            const long long at = std::llround(tm ? tm->sampleAt((double)k) : (double)k * spb);
             if (at >= pos + n) break;
             if (at < pos) continue;
             run((int)(at - pos));

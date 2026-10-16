@@ -69,6 +69,8 @@ namespace solaris
         return (int)takes.size();
     }
     Marker *Project::marker(const std::string &id) { return findId(markers, id); }
+    TempoPoint *Project::tempo(const std::string &id) { return findId(tempos, id); }
+    const TempoPoint *Project::tempo(const std::string &id) const { return findId(tempos, id); }
     LaneGroup *Project::group(const std::string &id) { return findId(groups, id); }
     const LaneGroup *Project::group(const std::string &id) const { return findId(groups, id); }
     const Marker *Project::marker(const std::string &id) const { return findId(markers, id); }
@@ -159,6 +161,7 @@ namespace solaris
         for (const auto &x : clips) ids.push_back(x.id);
         for (const auto &x : automations) ids.push_back(x.id);
         for (const auto &x : markers) ids.push_back(x.id);
+        for (const auto &x : tempos) ids.push_back(x.id);
         return ids;
     }
 
@@ -334,6 +337,14 @@ namespace solaris
             else if (k == "chance") n.chance = std::clamp(r.num(k, v, 1.0), 0.0, 1.0); // R-ROLL-11
             else n.unknown.emplace_back(k, v);
         }
+        void apply(Reader &r, TempoPoint &n, const std::string &k, const std::string &v)
+        {
+            if (k == "id") n.id = v;
+            else if (k == "at") n.at = toTick(r.num(k, v, 0.0));
+            else if (k == "bpm") n.bpm = r.num(k, v, 120.0);
+            else if (k == "ramp") n.ramp = r.boolean(k, v, false);
+            else n.unknown.emplace_back(k, v);
+        }
         void apply(Reader &r, Marker &n, const std::string &k, const std::string &v)
         {
             if (k == "id") n.id = v;
@@ -420,7 +431,7 @@ namespace solaris
         Reader r{report ? report : &localReport, {}};
 
         // What a continuation line or a comment attaches to.
-        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Group, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Raw };
+        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Group, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Tempo, Raw };
         Cur cur = Cur::None;
         bool seenNode = false, sawMagic = false, sawTracks = false;
         std::map<std::string, std::vector<Note>> inlineNotes; // note clips written the suite's inline way
@@ -443,6 +454,7 @@ namespace solaris
             case Cur::Point: return &p.automations.back().remarks;
             case Cur::Bind: return &p.bindings.back().remarks;
             case Cur::Marker: return &p.markers.back().remarks;
+            case Cur::Tempo: return &p.tempos.back().remarks;
             default: return nullptr;
             }
         };
@@ -545,6 +557,7 @@ namespace solaris
                 }
                 else if (tok.type == "abind") { p.bindings.emplace_back(); fill(p.bindings.back()); cur = Cur::Bind; }
                 else if (tok.type == "amarker") { p.markers.emplace_back(); fill(p.markers.back()); cur = Cur::Marker; } // R-ARR-1
+                else if (tok.type == "atempo") { p.tempos.emplace_back(); fill(p.tempos.back()); cur = Cur::Tempo; }    // R-TEMPO-1
                 else { p.raw.push_back(RawNode{{line}}); cur = Cur::Raw; }
                 continue;
             }
@@ -879,6 +892,10 @@ namespace solaris
         for (const auto &n : p.markers)
             emit(out, "", Line("amarker").kv("id", n.id).str("name", n.name).kv("at", canonicalBeats(n.at)).kvIf(n.length > 0, "length", canonicalBeats(n.length))
                               .strIf("note", n.note).unknown(n.unknown), n.remarks);
+        group(!p.tempos.empty()); // R-TEMPO-1
+        for (const auto &n : p.tempos)
+            emit(out, "", Line("atempo").kv("id", n.id).kv("at", canonicalBeats(n.at)).kv("bpm", canonicalNumber(n.bpm)).kvIf(n.ramp, "ramp", "true").unknown(n.unknown),
+                 n.remarks);
         group(!p.raw.empty());
         for (const auto &r : p.raw)
             for (const auto &l : r.lines) out += l + "\n";
@@ -1050,6 +1067,13 @@ namespace solaris
         }
         for (const auto &l : p.lanes) // R-ARR-3: a lane's group is one the song has
             if (!l.group.empty() && !p.group(l.group)) e.push_back("lane " + l.id + " is in group `" + l.group + "`, which the song does not have");
+        for (size_t i = 0; i < p.tempos.size(); ++i) // R-TEMPO-1: after the start, each at its own beat, in order, a tempo
+        {
+            const auto &t = p.tempos[i];
+            if (t.at <= 0) e.push_back("tempo " + t.id + " is at beat " + canonicalBeats(t.at) + " — the tempo at the start is the song's bpm");
+            if (i > 0 && t.at <= p.tempos[i - 1].at) e.push_back("tempo " + t.id + " is not after " + p.tempos[i - 1].id);
+            if (!(t.bpm >= 20 && t.bpm <= 999)) e.push_back("tempo " + t.id + " is " + canonicalNumber(t.bpm) + " bpm (20 … 999)");
+        }
         for (const auto &m : p.markers) // R-ARR-1: a place in the song, named
         {
             if (m.name.empty()) e.push_back("marker " + m.id + " has no name");

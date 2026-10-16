@@ -1623,6 +1623,39 @@ static void test_the_metronome_clicks_live_and_never_in_a_render()
     pass("metronome: a click on every beat's exact sample while playing, the bar's first another pad, off at once; never in a render (R-TIME-4, R-EDM-2)");
 }
 
+static void test_the_metronome_follows_the_tempo_map()
+{
+    // R-TEMPO-1: 120 bpm, then 60 from beat 2 — playing, a click on each beat where the map puts it (0, 0.5, 1, 2, 3 s),
+    // none where 120's grid would have put beat 3; stopped, the time bar's beat and tempo through the map
+    Run r;
+    r.ok("project new " + freshSong("clickmap") + " --bpm 120");
+    r.ok("tempo add --at 2 --bpm 60");
+    r.ok("settings set metronome=on metronomeLevel=0");
+    r.ok("transport play");
+    waitFrames(r, 144000 + 4800);
+    r.ok("transport stop");
+    const auto &live = r.fake.capture->sink;
+    for (size_t at : {(size_t)0, (size_t)24000, (size_t)48000, (size_t)96000, (size_t)144000})
+    {
+        const float on = peakOf(live, 2 * at, 2 * (at + 2400)), before = at == 0 ? 0.0f : peakOf(live, 2 * (at - 48), 2 * at);
+        if (!(on > 0.05f && before < 0.1f * on)) std::printf("    at %zu: click %.4f, just before %.4f\n", at, on, before);
+        assert(on > 0.05f && before < 0.1f * on);
+    }
+    assert(peakOf(live, 2 * 72000, 2 * (72000 + 2400)) == 0.0f); // 120's beat 3: nothing there now
+    const double pos = r.svc.model().transport.position;
+    assert(pos > 3.0 && std::fabs(r.svc.model().transport.tempo - 60.0) < 1e-9);
+    // played from beat 3: it starts on that beat's sample — its click at once, the next a second on
+    const size_t mark = live.size() / 2;
+    r.ok("transport play --from 3");
+    waitFrames(r, (long long)mark + 48000 + 4800);
+    r.ok("transport stop");
+    const auto &again = r.fake.capture->sink;
+    const float first = peakOf(again, 2 * mark, 2 * (mark + 2400)), next = peakOf(again, 2 * (mark + 48000), 2 * (mark + 48000 + 2400));
+    std::printf("    from beat 3: %.3f at once, %.3f a second on, %.4f between\n", first, next, peakOf(again, 2 * (mark + 12000), 2 * (mark + 36000)));
+    assert(first > 0.05f && next > 0.05f && peakOf(again, 2 * (mark + 12000), 2 * (mark + 36000)) == 0.0f);
+    pass("the metronome follows the tempo map (R-TEMPO-1): a click where the map puts each beat — none on the old grid; the time bar's beat and tempo through it; played from beat 3, its sample");
+}
+
 static void test_audition_plays_a_sample_outside_the_song()
 {
     Run r;
@@ -3080,6 +3113,92 @@ static void test_a_warped_clip_follows_the_tempo()
     pass("warp (R-WARP-1): a groove dropped warped is heard at 100 bpm, its 8 beats its own; a sine warped plays its 2 beats in the song's second at 440 Hz, an octave up at 880 as long, pure; the song slowed, its beats last; .slp; split at its own beat; refusals");
 }
 
+static void test_a_tempo_map_moves_time()
+{
+    // R-TEMPO-1: a click file at beats 2, 6 and 8; 120 bpm until beat 4, then 60 — each lands where the map puts its
+    // beat; a glide back to 120 by beat 8 — where its closed form puts 6 and 8; the tempo where the time bar is; the
+    // MIDI file's tempo changes; a warped clip across the change, 440 Hz on both sides; a time insert carries the change;
+    // the .slp; refusals
+    Run r;
+    r.ok("project new " + freshSong("tempo") + " --bpm 120");
+    std::vector<float> click(24000, 0.0f);
+    for (int i = 0; i < 480; ++i) click[(size_t)i] = (float)(0.8 * std::sin(2 * M_PI * 1000.0 * i / 48000.0));
+    const std::string path = scratch() + "/tempo-click.wav";
+    r.fake.written[path] = {click, click};
+    for (const char *at : {"2", "6", "8"}) r.ok("clip add --src " + path + " --at " + at);
+    const std::string tp = firstLine(r.ok("tempo add --at 4 --bpm 60"));
+    assert(contains(r.text(), "#atempo id=" + tp + " at=4.0 bpm=60.0"));
+    auto onsets = [&](const std::string &name) {
+        const std::string out = scratch() + "/" + name + ".wav";
+        r.ok("render --out " + out + " --from 0 --to 12 --bits 32f");
+        const auto &L = r.fake.written[out][0];
+        std::vector<long long> at;
+        for (size_t i = 0; i < L.size(); ++i)
+            if (std::fabs(L[i]) > 0.05f && (at.empty() || (long long)i > at.back() + 4800)) at.push_back((long long)i);
+        return at;
+    };
+    auto near = [](long long a, long long b) { return std::llabs(a - b - 1) <= 1; }; // the burst's first sample is a zero: found one after
+    auto got = onsets("tempo-step");
+    std::printf("    120 then 60 from beat 4: %lld %lld %lld\n", got.size() > 0 ? got[0] : -1, got.size() > 1 ? got[1] : -1, got.size() > 2 ? got[2] : -1);
+    assert(got.size() == 3 && near(got[0], 48000) && near(got[1], 192000) && near(got[2], 288000));
+    // a glide from 60 at 4 to 120 at 8: k = 15 bpm a beat, s(b) = 96000 + 48000·(60/15)·ln(bpm(b)/60)
+    const std::string tp2 = firstLine(r.ok("tempo add --at 8 --bpm 120 --ramp"));
+    got = onsets("tempo-glide");
+    const long long six = std::llround(96000 + 48000.0 * 4.0 * std::log(90.0 / 60.0)), eight = std::llround(96000 + 48000.0 * 4.0 * std::log(2.0));
+    std::printf("    gliding: beat 6 at %lld (%lld), beat 8 at %lld (%lld)\n", got.size() > 1 ? got[1] : -1, six, got.size() > 2 ? got[2] : -1, eight);
+    assert(got.size() == 3 && near(got[0], 48000) && near(got[1], six) && near(got[2], eight));
+    // the model: each change and where it is heard; the tempo where the time bar is
+    r.ok("transport seek 6");
+    const auto &m = r.svc.model();
+    assert(m.tempos.size() == 2 && m.tempos[0].id == tp && m.tempos[1].ramp && std::fabs(m.tempos[1].seconds - (2.0 + 4.0 * std::log(2.0))) < 1e-9);
+    assert(std::fabs(r.svc.model().transport.tempo - 90.0) < 1e-9);
+    // the MIDI file: 120 at 0, then the glide's steps, then 120 at beat 8
+    const std::string mid = scratch() + "/tempo.mid";
+    const std::string nc = firstLine(r.ok("clip add --instrument synth --at 0 --length 4"));
+    r.ok("notes add " + r.clip(nc)->pattern + " C4@0");
+    r.ok("project export-midi " + mid);
+    r.ok("undo");
+    r.ok("undo");
+    std::string bytes;
+    {
+        std::ifstream f(mid, std::ios::binary);
+        std::stringstream ss;
+        ss << f.rdbuf();
+        bytes = ss.str();
+    }
+    std::vector<double> bpms;
+    for (size_t i = 0; i + 5 < bytes.size(); ++i)
+        if ((unsigned char)bytes[i] == 0xFF && bytes[i + 1] == 0x51 && bytes[i + 2] == 0x03)
+        {
+            const unsigned long us = ((unsigned long)(unsigned char)bytes[i + 3] << 16) | ((unsigned long)(unsigned char)bytes[i + 4] << 8) | (unsigned char)bytes[i + 5];
+            bpms.push_back(60000000.0 / (double)us);
+        }
+    std::printf("    the MIDI file's tempos: %zu, first %.1f, at 4 %.1f, last %.1f\n", bpms.size(), bpms.front(), bpms.size() > 1 ? bpms[1] : 0.0, bpms.back());
+    assert(bpms.size() == 1 + 1 + 16 + 1 && std::fabs(bpms[0] - 120) < 0.01 && std::fabs(bpms[1] - 60) < 0.01 && std::fabs(bpms.back() - 120) < 0.01);
+    // a warped clip across the change (the glide gone): its own 2 beats from 3 — half a second at 120, a second at 60
+    r.ok("tempo delete " + tp2);
+    const std::string w = firstLine(r.ok("clip add --src " + sineFile(r, "tempo-sine", 440.0, 48000) + " --at 3"));
+    r.ok("set " + w + ".bpm=120 " + w + ".warp=true");
+    r.ok("set " + r.clip(r.svc.model().clips[0].id)->track + ".mute=true");
+    const std::string out = scratch() + "/tempo-warp.wav";
+    r.ok("render --out " + out + " --from 0 --to 8 --bits 32f");
+    const auto &W = r.fake.written[out][0];
+    const double fa = hzOf(W, 72000 + 2400, 96000 - 2400), fb = hzOf(W, 96000 + 4800, 144000 - 4800);
+    std::printf("    warped across it: %.3f Hz then %.3f Hz; %.4f after\n", fa, fb, rmsIn(W, 146400, 190000));
+    assert(std::fabs(fa / 440.0 - 1.0) < 0.003 && std::fabs(fb / 440.0 - 1.0) < 0.003 && rmsIn(W, 146400, 190000) < 1e-3 && rmsIn(W, 100000, 140000) > 0.3);
+    // a time insert before it carries it
+    r.ok("time insert --at 1 --length 2");
+    assert(r.svc.project()->tempo(tp)->at == 6.0);
+    r.ok("undo");
+    // refusals
+    assert(contains(r.no("tempo add --at 0 --bpm 90"), "the tempo at beat 0 is the song's"));
+    assert(contains(r.no("tempo add --at 4 --bpm 90"), "already changes the tempo at 4.0"));
+    assert(contains(r.no("tempo add --at 5 --bpm 5"), "--bpm is 20 … 999"));
+    assert(contains(r.no("tempo move tp_99 --bpm 90"), "no tempo change"));
+    assert(contains(r.no("auto create project.bpm"), "tempo add"));
+    pass("a tempo map (R-TEMPO-1): clips land where the map puts their beats — a step and a glide to the sample of its closed form; the tempo at the time bar; the MIDI file's changes (a glide in sixteenths); a warped clip across a change keeps 440 Hz; a time insert carries the change; the .slp; refusals");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -4341,6 +4460,8 @@ int main()
     test_consolidate_renders_clips_into_one();
     test_slice_cuts_a_clip_or_makes_a_kit();
     test_a_warped_clip_follows_the_tempo();
+    test_a_tempo_map_moves_time();
+    test_the_metronome_follows_the_tempo_map();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

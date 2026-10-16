@@ -187,6 +187,9 @@ namespace solaris
         case K::ClipSplit: case K::ClipConsolidate: case K::ClipSlice:
             ok = audioEditCommand(c, err);
             break;
+        case K::TempoAdd: case K::TempoMove: case K::TempoDelete:
+            ok = tempoCommand(c, err);
+            break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:
         case K::PatternArpeggiate:
@@ -496,6 +499,18 @@ namespace solaris
         // Inside the song's folder: stored relative, so the folder moves as one. Outside: absolute.
         if (!rel.empty() && *rel.begin() != "..") return rel.generic_string();
         return abs.generic_string();
+    }
+
+    double SolarisService::sampleOfBeat(double beat) const
+    {
+        if (mProject.tempos.empty()) return beat * (60.0 / mProject.header.bpm * mProject.header.sampleRate);
+        return tempoMapOf(mProject).sampleAt(beat);
+    }
+
+    double SolarisService::beatOfSample(double sample) const
+    {
+        if (mProject.tempos.empty()) return sample / (60.0 / mProject.header.bpm * mProject.header.sampleRate);
+        return tempoMapOf(mProject).beatAt(sample);
     }
 
     std::shared_ptr<const engine::Pcm> SolarisService::pcmFor(const std::string &src)

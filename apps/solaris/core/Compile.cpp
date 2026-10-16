@@ -11,8 +11,16 @@ namespace arstro
 {
 namespace solaris
 {
+    engine::TempoMap tempoMapOf(const Project &p)
+    {
+        auto m = engine::TempoMap::constant(p.header.bpm, p.header.sampleRate);
+        for (const auto &t : p.tempos) m.add(t.at, t.bpm, t.ramp);
+        return m;
+    }
+
     long long beatsToSamples(const Project &p, double beats)
     {
+        if (!p.tempos.empty()) return (long long)std::llround(tempoMapOf(p).sampleAt(beats)); // R-TEMPO-1
         return (long long)std::llround(beats * 60.0 / p.header.bpm * p.header.sampleRate);
     }
 
@@ -23,28 +31,83 @@ namespace solaris
     std::string stretchKey(const Project &p, const Clip &c)
     {
         if (!c.isAudio() || !c.takes.empty() || (!(c.warp && c.bpm > 0) && c.pitch == 0.0)) return std::string();
-        const double ratio = c.warp && c.bpm > 0 ? c.bpm / p.header.bpm : 1.0;
+        const bool warped = c.warp && c.bpm > 0;
+        if (warped && !p.tempos.empty())
+        {
+            // R-TEMPO-1: under a tempo that changes, the map itself — its own beats to where the song hears them
+            std::string pts;
+            for (const auto &t : p.tempos) pts += (pts.empty() ? "" : ";") + canonicalNumber(t.at) + "," + canonicalNumber(t.bpm) + (t.ramp ? ",r" : "");
+            return "stretch:map:" + canonicalNumber(c.bpm) + ":" + canonicalNumber(c.pitch) + ":" + canonicalNumber(c.in) + ":" + canonicalNumber(c.out) + ":" +
+                   canonicalNumber(c.at) + ":" + canonicalNumber(p.header.bpm) + ":" + pts + ":" + c.src;
+        }
+        const double ratio = warped ? c.bpm / p.header.bpm : 1.0;
         return "stretch:" + canonicalNumber(ratio) + ":" + canonicalNumber(c.pitch) + ":" + canonicalNumber(c.in) + ":" + canonicalNumber(c.out) + ":" + c.src;
     }
 
-    bool parseStretchKey(const std::string &key, double &ratio, double &semitones, double &in, double &out, std::string &src)
+    bool parseStretchKey(const std::string &key, int rate, StretchSpec &out)
     {
         if (key.compare(0, 8, "stretch:") != 0) return false;
         size_t at = 8;
-        double *v[4] = {&ratio, &semitones, &in, &out};
-        for (double *x : v)
-        {
+        auto field = [&](std::string &f) {
             const size_t colon = key.find(':', at);
-            if (colon == std::string::npos || !parseNumber(key.substr(at, colon - at), *x)) return false;
+            if (colon == std::string::npos) return false;
+            f = key.substr(at, colon - at);
             at = colon + 1;
+            return true;
+        };
+        std::string f;
+        if (key.compare(8, 4, "map:") == 0)
+        {
+            at = 12;
+            double clipBpm = 0, clipAt = 0, songBpm = 0;
+            double *v[6] = {&clipBpm, &out.semitones, &out.in, &out.out, &clipAt, &songBpm};
+            for (double *x : v)
+                if (!field(f) || !parseNumber(f, *x)) return false;
+            std::string pts;
+            if (!field(pts)) return false;
+            out.src = key.substr(at);
+            if (out.src.empty() || clipBpm <= 0 || songBpm <= 0 || out.out <= out.in) return false;
+            auto tm = engine::TempoMap::constant(songBpm, rate);
+            size_t a = 0;
+            while (a < pts.size())
+            {
+                size_t e = pts.find(';', a);
+                if (e == std::string::npos) e = pts.size();
+                const std::string one = pts.substr(a, e - a);
+                double b = 0, bpm = 0;
+                const size_t c1 = one.find(','), c2 = one.find(',', c1 + 1);
+                if (c1 == std::string::npos || !parseNumber(one.substr(0, c1), b) || !parseNumber(one.substr(c1 + 1, c2 == std::string::npos ? std::string::npos : c2 - c1 - 1), bpm))
+                    return false;
+                tm.add(b, bpm, c2 != std::string::npos);
+                a = e + 1;
+            }
+            // its own beats u, every sixteenth and at its end: heard at s(at + u) − s(at), read at u·60/bpm seconds in
+            const double U = (out.out - out.in) * clipBpm / 60.0, s0 = tm.sampleAt(clipAt);
+            for (double u = 0.0;; u += 0.25)
+            {
+                const double uu = std::min(u, U);
+                out.map.push_back({tm.sampleAt(clipAt + uu) - s0, uu * 60.0 / clipBpm * rate});
+                if (uu >= U) break;
+            }
+            out.ratio = out.map.back().first / std::max(1.0, out.map.back().second);
+            return true;
         }
-        src = key.substr(at);
-        return !src.empty();
+        double *v[4] = {&out.ratio, &out.semitones, &out.in, &out.out};
+        for (double *x : v)
+            if (!field(f) || !parseNumber(f, *x)) return false;
+        out.src = key.substr(at);
+        return !out.src.empty();
     }
 
     double clipLengthBeats(const Project &p, const Clip &c)
     {
-        if (c.isAudio()) return (c.loop && c.length > 0) ? c.length : (c.out - c.in) / clipSecondsPerBeat(p, c); // R-WARP-1: its own beats
+        if (c.isAudio())
+        {
+            if (c.loop && c.length > 0) return c.length;
+            if ((c.warp && c.bpm > 0) || p.tempos.empty()) return (c.out - c.in) / clipSecondsPerBeat(p, c); // R-WARP-1: its own beats
+            const auto tm = tempoMapOf(p); // R-TEMPO-1: its seconds, where it is in the song
+            return tm.beatAt(tm.sampleAt(c.at) + (c.out - c.in) * p.header.sampleRate) - c.at;
+        }
         if (c.length > 0) return c.length;
         const Pattern *pt = p.pattern(c.pattern);
         return pt ? pt->length : 0.0;
@@ -188,7 +251,11 @@ namespace solaris
         }
         const auto silent = silentStrips(p);
         std::map<std::string, std::pair<int, int>> sendAt; // send id → (graph strip, its index in that strip's sends)
-        const double spb = 60.0 / p.header.bpm * p.header.sampleRate; // samples per beat
+        const double spb = 60.0 / p.header.bpm * p.header.sampleRate; // samples per beat (at the start)
+        // R-TEMPO-1: a beat's sample through the song's map — for a song of one tempo, b·spb exactly as ever
+        const engine::TempoMap tm = tempoMapOf(p);
+        const bool oneTempo = tm.isConstant();
+        auto S = [&](double b) { return (long long)std::llround(oneTempo ? b * spb : tm.sampleAt(b)); };
 
         for (const Strip *s : order)
         {
@@ -232,7 +299,7 @@ namespace solaris
             for (const auto &c : p.clips)
             {
                 if (c.track != s->id) continue;
-                const long long start = (long long)std::llround(c.at * spb);
+                const long long start = S(c.at);
                 if (c.isAudio() && es.kind == engine::Strip::Audio && !c.takes.empty())
                 {
                     // (C5) R-REC-2: each stretch of the clip from the take its comp gives it — the regions overlap 5 ms
@@ -252,7 +319,7 @@ namespace solaris
                         else runs.push_back({t, {cuts[k], cuts[k + 1]}});
                     }
                     const long long x5 = (long long)std::llround(0.005 * p.header.sampleRate);
-                    const long long clipFrames = (long long)std::llround((c.at + len) * spb) - start;
+                    const long long clipFrames = S(c.at + len) - start;
                     double fin = 0, fout = 0;
                     heardFades(p, c, fin, fout);
                     for (size_t k = 0; k < runs.size(); ++k)
@@ -262,8 +329,8 @@ namespace solaris
                         rg.clip = c.id;
                         rg.pcm = pcm ? pcm(take.src) : nullptr;
                         if (!rg.pcm) r.warnings.push_back("clip " + c.id + ": take " + std::to_string(runs[k].first) + ", " + take.src + ", is offline — silent");
-                        const long long a = (long long)std::llround(runs[k].second.first * spb) - (k > 0 ? x5 : 0);
-                        const long long b = (long long)std::llround(runs[k].second.second * spb) + (k + 1 < runs.size() ? x5 : 0);
+                        const long long a = S(runs[k].second.first) - (k > 0 ? x5 : 0);
+                        const long long b = S(runs[k].second.second) + (k + 1 < runs.size() ? x5 : 0);
                         rg.start = a;
                         rg.frames = b - a;
                         rg.srcOffset = (long long)std::llround(c.in * p.header.sampleRate) + (a - start); // a take begins where the clip does
@@ -276,8 +343,8 @@ namespace solaris
                             rg.srcOffset = (long long)std::llround(c.in * p.header.sampleRate) + clipFrames - (a - start) - rg.frames;
                         }
                         rg.gain = engine::dbToLinear(c.gain);
-                        rg.fadeIn = k > 0 ? 2 * x5 : (long long)std::llround(fin * spb);
-                        rg.fadeOut = k + 1 < runs.size() ? 2 * x5 : (long long)std::llround(fout * spb);
+                        rg.fadeIn = k > 0 ? 2 * x5 : oneTempo ? (long long)std::llround(fin * spb) : S(c.at + fin) - start;
+                        rg.fadeOut = k + 1 < runs.size() ? 2 * x5 : oneTempo ? (long long)std::llround(fout * spb) : S(c.at + len) - S(c.at + len - fout);
                         g.end = std::max(g.end, rg.start + rg.frames);
                         es.regions.push_back(rg);
                     }
@@ -296,12 +363,13 @@ namespace solaris
                     rg.srcFrames = !key.empty() && rg.pcm ? rg.pcm->frames : (long long)std::llround((c.out - c.in) * p.header.sampleRate * ratio);
                     rg.loop = c.loop;
                     rg.reverse = c.reverse; // R-EDIT-1
-                    rg.frames = (c.loop && c.length > 0) ? (long long)std::llround((c.at + c.length) * spb) - start : rg.srcFrames;
+                    rg.frames = (c.loop && c.length > 0) ? S(c.at + c.length) - start : rg.srcFrames;
                     rg.gain = engine::dbToLinear(c.gain);
                     double fin = 0, fout = 0;
                     heardFades(p, c, fin, fout); // (C6) R-EDIT-1: an overlap on its lane crossfades
-                    rg.fadeIn = (long long)std::llround(fin * spb);
-                    rg.fadeOut = (long long)std::llround(fout * spb);
+                    const double len = clipLengthBeats(p, c);
+                    rg.fadeIn = oneTempo ? (long long)std::llround(fin * spb) : S(c.at + fin) - start;
+                    rg.fadeOut = oneTempo ? (long long)std::llround(fout * spb) : S(c.at + len) - S(c.at + len - fout);
                     g.end = std::max(g.end, rg.start + rg.frames);
                     es.regions.push_back(rg);
                 }
@@ -321,8 +389,8 @@ namespace solaris
                             if (on >= len || !noteSounds(n, c.id, rep)) continue;
                             const double off = std::min(on + n.length, len);
                             const int v = std::clamp((int)std::lround(n.vel * vel), 1, 127);
-                            es.notes.push_back(engine::NoteEvent{(long long)std::llround((c.at + on) * spb), n.pitch, v, true});
-                            es.notes.push_back(engine::NoteEvent{(long long)std::llround((c.at + off) * spb), n.pitch, 0, false});
+                            es.notes.push_back(engine::NoteEvent{S(c.at + on), n.pitch, v, true});
+                            es.notes.push_back(engine::NoteEvent{S(c.at + off), n.pitch, 0, false});
                         }
                     // (C3) R-MIDI-3: the wheels — each repetition's lane from its start, a ramp a step every kControl
                     // samples, each point on its sample; at the clip's end, at rest again
@@ -334,10 +402,8 @@ namespace solaris
                         if (pts.empty()) continue;
                         std::stable_sort(pts.begin(), pts.end(), [](const ExprPoint *a, const ExprPoint *b) { return a->at < b->at; });
                         const int kind = lane[0] == 'b' ? 0 : 1;
-                        const double step = (double)engine::kControlSamples / spb; // beats
-                        auto emit = [&](double beat, double value) {
-                            es.controls.push_back(engine::ControlEvent{(long long)std::llround((c.at + beat) * spb), kind, value});
-                        };
+                        const double step = (double)engine::kControlSamples / (oneTempo ? spb : tm.samplesPerBeatAt(c.at)); // beats
+                        auto emit = [&](double beat, double value) { es.controls.push_back(engine::ControlEvent{S(c.at + beat), kind, value}); };
                         for (double k = 0; k < len; k += pt->length)
                         {
                             const double end = std::min(k + pt->length, len);
@@ -353,7 +419,7 @@ namespace solaris
                         }
                         emit(len, 0.0);
                     }
-                    g.end = std::max(g.end, (long long)std::llround((c.at + len) * spb));
+                    g.end = std::max(g.end, S(c.at + len));
                 }
             }
             std::stable_sort(es.controls.begin(), es.controls.end(), [](const engine::ControlEvent &a, const engine::ControlEvent &b) { return a.at < b.at; });
@@ -377,6 +443,7 @@ namespace solaris
 
         // automation and formulas (R-AUTO-7): curves in samples, bindings ordered so a link reads an earlier one
         g.clock.samplesPerBeat = spb;
+        g.clock.map = tm; // R-TEMPO-1: formulas and curves read the song's beat through it
         g.clock.beatsPerBar = std::max(1, std::atoi(p.header.sig.c_str()));
         g.clock.bpm = p.header.bpm;
         g.clock.rate = p.header.sampleRate;

@@ -268,6 +268,17 @@ namespace solaris
         Remarks remarks;
     };
 
+    /** R-TEMPO-1: a change of the song's tempo — `bpm` from beat `at` on; `ramp`: reached there gliding (linearly, in
+     *  beats) from the tempo before. Before the first, the header's `bpm` holds. */
+    struct TempoPoint
+    {
+        std::string id;
+        double at = 0.0, bpm = 120.0;   // beats; beats a minute
+        bool ramp = false;
+        Fields unknown;
+        Remarks remarks;
+    };
+
     /** A node this build does not know: kept verbatim, written back where it was read. */
     struct RawNode
     {
@@ -289,6 +300,7 @@ namespace solaris
         std::vector<Automation> automations;
         std::vector<Binding> bindings;
         std::vector<Marker> markers;    // R-ARR-1: sorted by (at, id)
+        std::vector<TempoPoint> tempos; // R-TEMPO-1: sorted by at, each at a beat of its own after 0
         std::vector<RawNode> raw;
 
         // ── lookups (nullptr = none) ──
@@ -302,6 +314,8 @@ namespace solaris
         Clip *clip(const std::string &id);
         Automation *automation(const std::string &id);
         Marker *marker(const std::string &id);
+        TempoPoint *tempo(const std::string &id);  // R-TEMPO-1
+        const TempoPoint *tempo(const std::string &id) const;
         LaneGroup *group(const std::string &id);
         const LaneGroup *group(const std::string &id) const;
         const Marker *marker(const std::string &id) const;

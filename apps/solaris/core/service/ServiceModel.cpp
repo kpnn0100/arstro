@@ -97,6 +97,7 @@ namespace solaris
         mModel.transport.loopClip = mClipLoop;
         mModel.transport.cue = mCue;
         if (!mModel.transport.playing) mModel.transport.position = mPosition;
+        mModel.transport.tempo = mProject.tempos.empty() ? mProject.header.bpm : tempoMapOf(mProject).bpmAt(mModel.transport.position); // R-TEMPO-1
         mModel.revision = rev + 1;
         mModel.lastError = lastError;
         mModel.audit = mAudit;
@@ -343,6 +344,11 @@ namespace solaris
             for (const auto &mk : p.markers) mModel.markers.push_back(MarkerModel{mk.id, mk.name, mk.note, mk.at, mk.length, p.sectionEnd(mk, end)});
             std::stable_sort(mModel.markers.begin(), mModel.markers.end(), [](const MarkerModel &a, const MarkerModel &b) { return a.at < b.at; });
         }
+        if (!p.tempos.empty()) // R-TEMPO-1: each change, and where it is heard
+        {
+            const auto tm = tempoMapOf(p);
+            for (const auto &t : p.tempos) mModel.tempos.push_back(TempoModel{t.id, t.at, t.bpm, t.ramp, tm.sampleAt(t.at) / p.header.sampleRate});
+        }
         for (const auto &po : p.ports) mModel.ports.push_back(PortModel{po.id, po.name, po.dir, po.channels});
         mModel.matrix.columns = matrixColumnsOf(p); // R-MIX-9: the same columns `matrix print` prints
 
@@ -445,7 +451,9 @@ namespace solaris
         const engine::MixGraph &g = cr.graph;
         std::vector<double> vars(engine::kClockSlots + g.curves.size() + g.binds.size(), 0.0), values(g.binds.size(), 0.0);
         for (size_t b = 0; b < g.binds.size(); ++b) values[b] = g.binds[b].own;
-        engine::evaluateBinds(g.clock, g.curves, g.binds, std::llround(beat * g.clock.samplesPerBeat), vars.data(), values.data());
+        // R-TEMPO-1: the beat's sample through the map (the evaluator reads the beat back through it)
+        engine::evaluateBinds(g.clock, g.curves, g.binds, std::llround(g.clock.map.isConstant() ? beat * g.clock.samplesPerBeat : g.clock.map.sampleAt(beat)), vars.data(),
+                              values.data());
         for (auto &bm : mModel.bindings)
         {
             const auto it = std::find(cr.bindAddresses.begin(), cr.bindAddresses.end(), bm.address);

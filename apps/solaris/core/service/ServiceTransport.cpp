@@ -44,7 +44,7 @@ namespace solaris
     {
         if (!mPlayer) return;
         if (mPlayer->running() && mOpen)
-            mPosition = (double)mPlayer->heard() / (60.0 / mProject.header.bpm * mProject.header.sampleRate);
+            mPosition = beatOfSample((double)mPlayer->heard()); // R-TEMPO-1: through the map
         mPlayer.reset();
         mLiveStrips.clear();
         mLiveDevices.clear();
@@ -131,8 +131,8 @@ namespace solaris
         mPlayer->collect();
         TransportModel &t = mModel.transport;
         t.playing = mPlayer->running();
-        const double spb = 60.0 / mProject.header.bpm * mProject.header.sampleRate;
-        t.position = (double)mPlayer->heard() / spb;
+        t.position = beatOfSample((double)mPlayer->heard()); // R-TEMPO-1: through the map
+        t.tempo = mProject.tempos.empty() ? mProject.header.bpm : tempoMapOf(mProject).bpmAt(t.position);
         t.latencyMs = std::round(mPlayer->latency() * 10000.0) / 10.0;
         // R-METER-2: while a `meters clear` is on its way to the audio thread, its holds, latches and loudness are
         // from before it — the model keeps what the clear set
@@ -152,7 +152,7 @@ namespace solaris
             while (mPlayer->takePlayed(pl))
             {
                 mTaken.push_back(pl);
-                if (pl.velocity > 0 && (double)pl.at / spb >= mRecordFrom - 0.5) ++t.recorded; // what will land (not a count-in's)
+                if (pl.velocity > 0 && beatOfSample((double)pl.at) >= mRecordFrom - 0.5) ++t.recorded; // what will land (not a count-in's)
             }
             t.recording = true;
             t.countingIn = mPlayer->countingIn();
@@ -353,7 +353,13 @@ namespace solaris
             Command play;
             play.kind = K::TransportPlay;
             if (c.has("from")) play.flags = {{"from", c.flag("from")}};
-            mCountInFrames = (long long)std::llround(bars * std::max(1, std::atoi(mProject.header.sig.c_str())) * spb);
+            // R-TEMPO-1: the bars before the start, at the tempo there
+            {
+                const double beats = bars * std::max(1, std::atoi(mProject.header.sig.c_str()));
+                const double from = c.has("from") && parseNumber(c.flag("from"), x) ? x : mPosition;
+                mCountInFrames = mProject.tempos.empty() ? (long long)std::llround(beats * spb)
+                                                         : (long long)std::llround(beats * tempoMapOf(mProject).samplesPerBeatAt(from));
+            }
             if (!transportCommand(play, err)) { mCountInFrames = 0; return false; }
             if (audio)
             {
@@ -429,12 +435,12 @@ namespace solaris
             attachInput(*mPlayer, mLiveStrips, true, false); // R-REC-1: an armed audio line's input, beside the output
             mPlayer->setCountIn(mCountInFrames); // R-MIDI-2: a recording's count-in, else none
             mCountInFrames = 0;
-            mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(mLoopFrom * spb) : 0,
-                             mLoopTo > mLoopFrom ? (long long)std::llround(mLoopTo * spb) : 0);
+            mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(sampleOfBeat(mLoopFrom)) : 0,
+                             mLoopTo > mLoopFrom ? (long long)std::llround(sampleOfBeat(mLoopTo)) : 0);
             mModel.transport.device = mSettings.output;
             mPlayer->setTempo(spb, std::max(1, std::atoi(mProject.header.sig.c_str())));
             mPlayer->setClick(mSettings.metronome, engine::dbToLinear(mSettings.metronomeLevel));
-            mPlayer->start(std::move(out), std::move(eng), routes, 2, mSettings.bufferSize, (long long)std::llround(mPosition * spb), mLiveGen);
+            mPlayer->start(std::move(out), std::move(eng), routes, 2, mSettings.bufferSize, (long long)std::llround(sampleOfBeat(mPosition)), mLiveGen);
             announce();
             return true;
         }
@@ -470,7 +476,7 @@ namespace solaris
                     outLat = mPlayer->latency();
                     inLat = mPlayer->inputLatency();
                     graphLat = mPlayer->graphLatency();
-                    if (mOpen) mPosition = (double)stoppedAt / spb;
+                    if (mOpen) mPosition = beatOfSample((double)stoppedAt);
                     mPlayer->stop();
                     take = mPlayer->endTake();
                 }
@@ -504,7 +510,7 @@ namespace solaris
             {
                 Player::Live m;
                 m.kind = Player::Live::Seek;
-                m.sample = (long long)std::llround(mPosition * spb);
+                m.sample = (long long)std::llround(sampleOfBeat(mPosition));
                 mPlayer->send(m);
             }
             announce();
@@ -546,8 +552,8 @@ namespace solaris
                 mLoopTo = toTick(b);
             }
             if (mPlayer)
-                mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(mLoopFrom * spb) : 0,
-                                 mLoopTo > mLoopFrom ? (long long)std::llround(mLoopTo * spb) : 0);
+                mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(sampleOfBeat(mLoopFrom)) : 0,
+                                 mLoopTo > mLoopFrom ? (long long)std::llround(sampleOfBeat(mLoopTo)) : 0);
             mModel.transport.loopFrom = mLoopFrom;
             mModel.transport.loopTo = mLoopTo;
             mModel.transport.loopClip.clear();
@@ -567,9 +573,8 @@ namespace solaris
         mLoopTo = mSongLoopTo;
         if (mPlayer)
         {
-            const double spb = 60.0 / std::max(1.0, mProject.header.bpm) * mProject.header.sampleRate;
-            mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(mLoopFrom * spb) : 0,
-                             mLoopTo > mLoopFrom ? (long long)std::llround(mLoopTo * spb) : 0);
+            mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(sampleOfBeat(mLoopFrom)) : 0,
+                             mLoopTo > mLoopFrom ? (long long)std::llround(sampleOfBeat(mLoopTo)) : 0);
         }
     }
 
@@ -586,8 +591,7 @@ namespace solaris
         mLoopTo = cl->at + len;
         if (mPlayer)
         {
-            const double spb = 60.0 / std::max(1.0, mProject.header.bpm) * mProject.header.sampleRate;
-            mPlayer->setLoop((long long)std::llround(mLoopFrom * spb), (long long)std::llround(mLoopTo * spb));
+            mPlayer->setLoop((long long)std::llround(sampleOfBeat(mLoopFrom)), (long long)std::llround(sampleOfBeat(mLoopTo)));
         }
     }
 

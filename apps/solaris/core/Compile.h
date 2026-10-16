@@ -16,6 +16,7 @@
  */
 #pragma once
 #include "MixGraph.h"
+#include "Tempo.h"
 #include "Project.h"
 #include <functional>
 #include <map>
@@ -59,7 +60,17 @@ namespace solaris
     /** R-WARP-1: the sound a warped or pitched clip plays, as the key a PcmProvider is asked for —
      *  "stretch:<ratio>:<semitones>:<in>:<out>:<src>" (exact numbers); empty when it plays its file as it is. */
     std::string stretchKey(const Project &p, const Clip &c);
-    bool parseStretchKey(const std::string &key, double &ratio, double &semitones, double &in, double &out, std::string &src);
+    /** What a stretch key asks for, at `rate`: the file and span, the semitones, and a ratio — or, a warped clip under a
+     *  tempo that changes (R-TEMPO-1), the time map from its own beats to where the song hears them. */
+    struct StretchSpec
+    {
+        std::string src;
+        double in = 0, out = 0, semitones = 0, ratio = 1;
+        std::vector<std::pair<double, double>> map; // (output frame, input frame); empty: the ratio
+    };
+    bool parseStretchKey(const std::string &key, int rate, StretchSpec &out);
+    /** R-TEMPO-1: the song's tempo map — its bpm from the start, each `#atempo` after. */
+    engine::TempoMap tempoMapOf(const Project &p);
 
     /** R-EDIT-1: an audio clip's fades as heard, in beats — its own, each grown to cover an overlap on its lane
      *  through its strip (the earlier clip's fade out and the later's fade in: a crossfade). */

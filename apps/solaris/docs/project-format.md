@@ -219,6 +219,10 @@ makes.
 | `reverse` | `true`: the span played backwards, `out` to `in` (R-EDIT-1; written only when set) | — |
 | `warp` · `bpm` · `pitch` | `true`: it lasts its span's own beats at `bpm` (its tempo), stretched to the song's · its tempo · semitones its span is moved, its length kept (R-WARP-1; each written only when set) | — |
 
+**Tempo changes (R-TEMPO-1).** `#atempo id=tp_1 at=16.0 bpm=140.0 ramp=true` — from beat `at` on, `bpm`; with
+`ramp`, reached there gliding linearly (in beats) from the tempo before. Before the first, the header's `bpm`. One to a
+beat, after beat 0, in order of `at`; written after the markers.
+
 Two audio clips on one lane playing through one strip that overlap — the later beginning inside the earlier and ending
 after it — crossfade: each one's fade is played at least as long as the overlap (R-EDIT-1). Nothing of it is stored;
 the fades written are the clips' own.

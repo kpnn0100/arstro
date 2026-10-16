@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N21 part 2 — a tempo map in the song: `#atempo`, the engine's clock, transport, metronome, recording, MIDI export, warped clips following it** (R-TEMPO-1; part 1 — the DSP's time map — is built), then part 3 (the window), then Phase 4 (N22…) in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N21 part 3 — the tempo map in the window: the changes on the ruler, the song bar's tempo where the time bar is, a change added and dragged** (R-TEMPO-1; parts 1–2 are built), then Phase 4 (N22…) in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -502,6 +502,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
 - [~] **N21** A tempo map (R-TEMPO-1).
       Part 1 (2026-10-16): DSP `6f2df21` — a stretch following a time map (REQ-stretch-4), for warped clips under a
       changing tempo; D-14 (the tempo estimate's (B4) left disabled by a cut-off mutant run) closed.
+      Part 2 (same day): `#atempo` and `tempo add|move|delete`; `engine/Tempo.h` (closed-form constant and gliding
+      segments) in the clock; the compile, transport, loop, count-in, metronome, recording, formulas, warped clips and
+      the MIDI file through it; a song of one tempo renders the bytes it did. `project.bpm` as a formula target refused
+      (the map is its automation — R-TEMPO-1 amended).
 **Phase 4 — open the ecosystem**
 - [ ] **N22** Device presets and the browser's Presets tab (R-PRESET-1).
 - [ ] **N23** Song templates (R-PRESET-2).

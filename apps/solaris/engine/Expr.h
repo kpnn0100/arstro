@@ -19,6 +19,7 @@
  *  there).
  */
 #pragma once
+#include "Tempo.h"
 #include "../../interstellar/model/Anim.h"
 #include <algorithm>
 #include <cmath>
@@ -207,17 +208,25 @@ namespace engine
         Expr expr;
     };
 
-    /** The song's position as a formula sees it — slots 0…3. */
+    /** The song's position as a formula sees it — slots 0…3. Under a tempo map (R-TEMPO-1) the beat and the tempo
+     *  are the map's; a song of one tempo reads exactly as before. */
     struct Clock
     {
         double samplesPerBeat = 24000, beatsPerBar = 4, bpm = 120, rate = 48000;
+        TempoMap map; // one constant segment unless the song's tempo changes
         void fill(double *vars, long long sample) const
         {
-            const double beat = (double)sample / samplesPerBeat;
+            const bool one = map.isConstant();
+            const double beat = one ? (double)sample / samplesPerBeat : map.beatAt((double)sample);
             vars[0] = beat;
             vars[1] = beat / beatsPerBar;
-            vars[2] = bpm;
+            vars[2] = one ? bpm : map.bpmAt(beat);
             vars[3] = (double)sample / rate;
+        }
+        /** Where a curve is read: curves are compiled in beats at `samplesPerBeat`, so under a map, the beat's sample there. */
+        long long curveSample(long long sample) const
+        {
+            return map.isConstant() ? sample : (long long)std::llround(map.beatAt((double)sample) * samplesPerBeat);
         }
     };
     constexpr int kClockSlots = 4;
@@ -228,7 +237,8 @@ namespace engine
                               long long sample, double *vars, double *values)
     {
         clock.fill(vars, sample);
-        for (size_t c = 0; c < curves.size(); ++c) vars[kClockSlots + c] = curves[c].valueAt(sample);
+        const long long at = clock.curveSample(sample);
+        for (size_t c = 0; c < curves.size(); ++c) vars[kClockSlots + c] = curves[c].valueAt(at);
         const size_t base = kClockSlots + curves.size();
         for (size_t b = 0; b < binds.size(); ++b)
         {

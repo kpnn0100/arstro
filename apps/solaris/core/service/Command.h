@@ -47,6 +47,7 @@ namespace solaris
             PortAdd, TransportPunch,                         // R-REC-1
             ClipComp,                                        // R-REC-2
             ClipSplit, ClipConsolidate, ClipSlice,           // R-EDIT-1
+            TempoAdd, TempoMove, TempoDelete,                // R-TEMPO-1
             Ls, Show, PatternPrint,                                                                   // R-SVC-8: read back
             Undo, Redo, HistoryPrint, HistoryJump,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,
