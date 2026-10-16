@@ -4351,7 +4351,72 @@ static void test_a_plugins_device_window()
     r.settle();
     auto &q = *wl.devicePanel("dv_2");
     assert(q.isPlugin() && q.rowCount() == 3 && q.rowParam(0) == "p7");
-    std::printf("[PASS] a plugin's device window (R-VST-6, N26): its list, Editor sending device editor (lit, eased; again --close), offline a band sliding open with why and Reload (device reload), the rows pushed with it — each caught mid-tween\n");
+    pass("a plugin's device window (R-VST-6, N26): its list, Editor sending device editor (lit, eased; again --close), offline a band sliding open with why and Reload (device reload), the rows pushed with it — each caught mid-tween");
+}
+
+static void test_midi_learn_in_the_window()
+{
+    // R-CTRL-1 (N27 part 2): a fader's menu — and a device row's — offers Learn MIDI CC (one line); the song bar's pill
+    // eases in saying for what, a click on it cancels (one line) and it eases out; Forget CC <n> where one is mapped;
+    // Settings › MIDI lists the mappings — one the song lacks dimmed — × forgets one (one line), its row shrinking out
+    sltest::Rig r("ui-learn", 1440, 900);
+    r.cmd("project new " + r.song("Learn") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");                 // ch_2, dv_1
+    r.settle();
+    auto &d = r.app->project().dock();
+    auto &bar = r.app->project().bar();
+    menuPick(r, world(d, d.faderRect("ch_2")), "Learn MIDI CC");
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "map learn ch_2.gain") && bar.learnAmount() > 0.0 && bar.learnAmount() < 1.0 && bar.learnShown() == "ch_2.gain");
+    r.settle();
+    assert(bar.learnAmount() == 1.0);
+    r.click(bar.hitRect(arstro::solaris_ui::SongBar::kLearn));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "map learn --cancel") && bar.learnAmount() < 1.0 && bar.learnAmount() > 0.0);
+    r.settle();
+    assert(bar.learnAmount() == 0.0 && r.svc->model().mapLearning.empty());
+    // mapped: Forget CC <n> in its menu — and a device row's menu offers Learn too
+    r.cmd("map add 74 ch_2.gain");
+    r.settle();
+    r.click(world(d, d.faderRect("ch_2")), 2);
+    r.settle();
+    assert(menuItem(r, "Forget CC 74") >= 0 && menuItem(r, "Learn MIDI CC") >= 0);
+    r.click(r.app->menu().itemRect(menuItem(r, "Forget CC 74")));
+    r.settle();
+    assert(sentLine(r, "map remove 74") && r.svc->model().settings.mappings.empty());
+    auto &wl = r.app->project().windows();
+    wl.openDevice("dv_1");
+    r.settle();
+    auto &p = *wl.devicePanel("dv_1");
+    p.reveal("volume");
+    r.settle();
+    const int vol = p.face()->controlIndex("volume");
+    menuPick(r, world(*p.face(), p.face()->dialRect(vol)), "Learn MIDI CC");
+    assert(sentLine(r, "map learn dv_1.volume"));
+    r.cmd("map learn --cancel");
+    // Settings › MIDI: the mappings, one inert; × forgets one — its row shrinking out, caught mid-way
+    r.cmd("map add 74 ch_2.gain");
+    r.cmd("map add 21 dv_1.filter.cutoff");
+    r.cmd("project new " + r.song("Learn2") + ".slp --bpm 120");               // dv_1 is not in this song
+    r.cmd("clip add --src kick.wav --at 0");                                   // ch_2 is
+    r.settle();
+    r.app->openSettings();
+    r.settle();
+    auto &sh = r.app->settings();
+    r.click(sh.railRect(arstro::solaris_ui::SettingsSheet::kMidi));
+    r.settle();
+    const auto &maps = r.svc->model().settings.mappings;
+    assert(maps.size() == 2 && !maps[0].inert && maps[1].inert);
+    assert(sh.mapRowAmount("74") == 1.0 && sh.mapRowAmount("21") == 1.0);
+    r.click(sh.mapRemoveRect(1));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "map remove 21") && sh.mapRowAmount("21") > 0.0 && sh.mapRowAmount("21") < 1.0);
+    r.settle();
+    assert(sh.mapRowAmount("21") == 0.0 && sh.mapRowAmount("74") == 1.0);
+    pass("MIDI learn in the window (R-CTRL-1): Learn MIDI CC in a fader's and a knob's menu (one line); the song bar's pill eases in, a click cancels, it eases out; Forget CC; Settings › MIDI lists them, one inert, × forgets one, its row shrinking out");
 }
 
 int main()
@@ -4420,6 +4485,7 @@ int main()
     test_the_ruler_is_dragged();
     test_a_sample_dropped_on_a_sampler_loads_it();
     test_a_plugins_device_window();
+    test_midi_learn_in_the_window();
     test_a_sample_is_heard_from_the_browser();
     test_the_grid_follows_the_zoom();
     std::printf("\n%d passed, 0 failed\n", passed);

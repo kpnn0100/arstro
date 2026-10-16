@@ -491,7 +491,7 @@ is cosmo's `SliderRow` with the opt-in `formatValue` (Hz/kHz, ms, dB, st/ct/oct 
 %), a `logScale` parameter through a log taper, an `integer` one rounded; a choice is a row stepping
 its names. It is the parameter LIST: the value column says what decides each row (`bindingText`,
 `app/widgets/ParamMenu.cpp:33`) — its number, `auto au_1`, `= ch_2.gain`, `= <formula>` cut to the column — and the row
-`DeviceModel::lastChanged` names is lit, the light easing from row to row (`ParamBody`, `:75`). A
+`DeviceModel::lastChanged` names is lit, the light easing from row to row (`ParamBody`, `:89`). A
 right-click offers Create Automation, Formula… (cosmo's rename field), Clear Binding, Reset to Default
 (`openParamMenu`, `:443`) — **AMENDED (R-MIX-16, R-UI-11, 2026-10-09):** built by the shared `ParamMenu`
 (`paramMenuItems`, `:470`), the same menu the dock's numbers offer (DR-MIX-16), with Copy Address / Copy
@@ -660,15 +660,15 @@ character: GTK's keysym with no modifier (`linux_main.cpp:190`, `keyCodeOfKeysym
 host's mapping). Mutants: no conflict refusal, the window reading the defaults instead of the model — both seen red.
 
 **The sheet's Keyboard page** (`SettingsSheet`, the last section — DR-SET-5; laid out and measured in the paint,
-`paintKeyboard`, `app/widgets/SettingsSheet.cpp:869`): a muted micro-label per area, then an action a line — its label,
+`paintKeyboard`, `app/widgets/SettingsSheet.cpp:969`): a muted micro-label per area, then an action a line — its label,
 its keys as chips right-aligned, a "+" at the right edge, a dot before it while it is not its defaults; "Reset to
-defaults" beside the page's title, quiet while nothing is changed. A chip clicked (or "+") LISTENS (`listen`, `:443`;
-the gesture at `:655`, a double-click a click there): its border and wash turn to the accent and its label cross-fades
-to "Press a key…", its width easing between the two. The next key (`handleKey`, `:692`) is the slot's combo —
+defaults" beside the page's title, quiet while nothing is changed. A chip clicked (or "+") LISTENS (`listen`, `:463`;
+the gesture at `:699`, a double-click a click there): its border and wash turn to the accent and its label cross-fades
+to "Press a key…", its width easing between the two. The next key (`handleKey`, `:739`) is the slot's combo —
 `settings set "key.<action>=<the keys>"`, ONE line; Backspace removes the slot's key, Escape cancels, a key no combo
 can name keeps it listening, a click elsewhere lets it go. A key another action has is refused by the service and
 the App's toast says which action. Reset is ONE line, `key.<id>=default` for every changed action. The chips are
-keyed by combo (`bind`, `:308`): a key that arrives grows in from no width, one that leaves shrinks out where it was,
+keyed by combo (`bind`, `:328`): a key that arrives grows in from no width, one that leaves shrinks out where it was,
 so its neighbours slide (design rule §1). Escape and Enter cannot be listened for with the sheet (they cancel and
 — as Backspace — have their own meaning there); `settings set` takes them. UI `test_the_keyboard_section`
 (listening caught mid-ease, a chip caught growing while the old one shrinks, a refusal toasted, Reset as one line);
@@ -678,20 +678,20 @@ seen red.
 ### DR-SET-5 Settings in pages; a choice is a combo box (R-SET-5, R-SET-6)
 The sheet is a fixed card (720 × 520, smaller in a small window): a title band, a RAIL of the six sections — Audio,
 Playback, New songs, Sample folders, Interface, Keyboard (`railRect`) — and beside it ONE page, under a footer with
-Done (`onPaint`, `app/widgets/SettingsSheet.cpp:729`). Each section is a `Page` child (`:166`): clipped (its own paint
+Done (`onPaint`, `app/widgets/SettingsSheet.cpp:776`). Each section is a `Page` child (`:168`): clipped (its own paint
 too — `clipToBounds` clips only children), input-transparent (its controls take clicks; what the sheet draws goes to
-the sheet), with its own eased scroll. A section clicked is `showSection` — no line, the view's — and `advance` (`:537`)
+the sheet), with its own eased scroll. A section clicked is `showSection` — no line, the view's — and `advance` (`:557`)
 cross-fades the chosen page in as the last fades out (200 ms) and slides the rail's highlight to it (220 ms), each
 name easing to the foreground as the highlight reaches it; an open list closes and a listening key stops. The sheet
-opens again on the page it was left on. A setting that is one value of a list is a `SettingCombo` (`:99`):
-Artboard's `ComboBox` in cosmo's tokens (`comboStyle`, `:74`, as Genesis dresses it) — the drop, the list, its scroll
+opens again on the page it was left on. A setting that is one value of a list is a `SettingCombo` (`:101`):
+Artboard's `ComboBox` in cosmo's tokens (`comboStyle`, `:76`, as Genesis dresses it) — the drop, the list, its scroll
 and a pick are the library's; the field is drawn here (FR-41) so its label CROSS-FADES to a new value, whoever set
 it. A row picked is ONE `settings set <key>=<value>` line. A value the list lacks — a device not connected now, a
-tempo or a level set from a shell — is an entry of its own ("137 bpm (set elsewhere)", `bind`, `:252`), so the setting
-is never invisible. An on/off setting is a `SettingToggle` (`:144`): Artboard's `ToggleSwitch`, its knob drawn from an
+tempo or a level set from a shell — is an entry of its own ("137 bpm (set elsewhere)", `bind`, `:254`), so the setting
+is never invisible. An on/off setting is a `SettingToggle` (`:146`): Artboard's `ToggleSwitch`, its knob drawn from an
 eased copy of `on()`, so a value set from the model slides as a click does; a click is ONE `settings set …=on|off`.
-Controls are laid out each frame (`layoutPages`, `:490`) — name and note left, control right — and a control scrolled
-out of its page is hidden so it takes no input. Escape closes an open list first, then the sheet (`:722`); a click
+Controls are laid out each frame (`layoutPages`, `:510`) — name and note left, control right — and a control scrolled
+out of its page is hidden so it takes no input. Escape closes an open list first, then the sheet (`:769`); a click
 anywhere off a list closes it. The App draws the sheet in both passes now — its card, pages and controls, then an open
 list over everything (`app/App.cpp:460`). UI `test_settings_combos_send_lines_and_ease` (a list dropped, a row one
 line, the label caught mid cross-fade, a shell's change eased), `test_settings_in_pages` (the cross-fade and the
@@ -940,7 +940,7 @@ a key does not pull its source into a solo (`Compile.cpp:52`), so a soloed bass 
 kick stays silent; a MUTED strip keys nothing (live, a mute in a song with keys swaps the engine,
 `core/service/ServiceTransport.cpp:436`). The audit names a key that no compressor with Sidechain on
 hears (`core/service/ServiceModel.cpp:548`). In the dock a key reads "key <target>" in the solo amber,
-and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:1221`).
+and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:1222`).
 Measured (L2): a ghost kick (−120 dB fader, pre-fader key) through −30 dB at 4:1 dips a −6 dBFS bass
 6–22.5 dB 15–35 ms after each kick, back within 1 dB before the next; identical with the bass soloed;
 nothing with the kick muted.
@@ -1062,13 +1062,13 @@ Mutants — a fixed 1/4 snap, a level's alpha taken from the TARGET zoom (it pop
 snaps — each fail it. Shots `lanes-zoomed-in`, `lanes-zoomed-out`, `lanes-zoom-mid` (mid Ctrl+wheel)
 (`app/tests/shots/renderShots.cpp:193`).
 ### DR-MIX-16 The mixer's numbers bound (R-MIX-16)
-**One menu.** `paramMenuItems` (`app/widgets/ParamMenu.cpp:43`) builds the right-click menu of every number a
+**One menu.** `paramMenuItems` (`app/widgets/ParamMenu.cpp:51`) builds the right-click menu of every number a
 formula can drive from a `ParamTarget` (address, formula, value as shown, reset, bindable): Create Automation
 unless it already IS one (`auto create <address>`), Formula… (cosmo's rename field seeded with the formula or
 "=", → `set <address>="=<typed>"`, quoted when it has a space), Clear Binding when bound (`bind clear
 <address>`), Reset to Default (`set <address>=<default>`), and Copy Address / Copy Value / Copy as Formula
 (DR-UI-11). The device window (`DevicePanel::openParamMenu`, `app/widgets/DevicePanel.cpp:499`) and the dock
-(`MixerDock::openParam`, `app/widgets/MixerDock.cpp:950`, offered first on a right-click, `:1182`) both call
+(`MixerDock::openParam`, `app/widgets/MixerDock.cpp:950`, offered first on a right-click, `:1183`) both call
 it, so the menus cannot drift; a hosted third-party VST3's parameter list (R-VST-6, not built yet) will call
 it the same way. In the dock: a fader → `<ch>.gain`, a pan → `<ch>.pan`, a send's row on a card or its cell
 in the matrix → `<sd>.gain`, the master fader → `project.masterGain` (the addresses that already bind,
@@ -1093,7 +1093,7 @@ live value; while playing it is SET each frame — it follows the audio like the
 (a seek, a curve edited) eases 220 ms; a new driver (the formula changed) or play pressed mid-ease is a
 catch-up ease that lands when it ends and then follows (`follow`, `:621`). A bound send shows its live
 level. What drives each: a tag over the fader — `auto au_1`, `= ch_3.gain`, `= -2 + 2 * s…` (`paintTag`,
-`:1265`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
+`:1266`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
 in and out (200 ms) and its text cross-fades when the formula changes (`:705`).
 
 Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1575`): stopped, `live` is
@@ -1117,12 +1117,12 @@ View menu does (View › Show IDs / Hide IDs, `app/App.cpp:177`).
 
 **Drawn, faded.** `ProjectScreen` eases ONE amount from the model's setting (`app/widgets/ProjectScreen.cpp:204`,
 200 ms; `idsAmount()` is the live value) and hands it to every widget that draws ids; `drawNameWithId`
-(`app/widgets/ParamMenu.cpp:84`) draws a name with its id right-aligned in the accent's mono, the name giving
+(`app/widgets/ParamMenu.cpp:98`) draws a name with its id right-aligned in the accent's mono, the name giving
 way by the EASED amount. Where: lane headers (the lane's id; a strip's own row, the strip's) and automation
 rows (`au_n`) (`app/widgets/Timeline.cpp:1382`, `:893`); clips (`ac_n`, and a note clip's pattern `pt_n`;
 `:736` — "linked ×N" fades out for them); in the dock each strip card (`ch_n`), the master (`master`), each
 rack chip (`dv_n`) and each send (`sd_n`, cross-fading with "→ name") (`paintCard`,
-`app/widgets/MixerDock.cpp:1328`); a device window's rows show their FULL address (`dv_1.filter.cutoff`) in a
+`app/widgets/MixerDock.cpp:1329`); a device window's rows show their FULL address (`dv_1.filter.cutoff`) in a
 pill over the label (`ParamIds`, `app/widgets/DevicePanel.cpp:146`); its header already names its id.
 
 **Copied, by the host.** Copy Address / Copy Value / Copy as Formula on a device parameter row and on the
@@ -1230,7 +1230,7 @@ start `set <au>.at=… <au>.length=…` so the end stays put. A span set from an
 row ("every 1 beat · from beat 4 for 8 beats") and offers it as a combo box in its header (`SettingCombo`,
 `app/widgets/AutomationPanel.cpp:45`: Off, 1/4, 1/2, 1, 2 beats, 1, 2, 4 bars, and a value set elsewhere kept
 visible) — a row picked is ONE `set <au>.loop=…`. Right-click any bindable number (`ParamMenu`,
-`app/widgets/ParamMenu.cpp:53`): Create Pump beside Create Automation — `auto create <address> --pump`. UI
+`app/widgets/ParamMenu.cpp:61`): Create Pump beside Create Automation — `auto create <address> --pump`. UI
 `test_a_looping_automation_is_seen_and_made` (Create Pump from a fader; the span where the model says; the grip's
 cursor; both grips one line each; a shell's span eased, caught mid-way; a click in a repeat folded into the cycle; the
 Loop combo one line, its label caught cross-fading); shot `automation-pump`. Mutants: a span that snaps, a click in a
@@ -1659,7 +1659,7 @@ the DSP repo alone the plugins offer none and a host draws its generic view.
 (`refresh`, `:59`) with `deviceModelOf` (`core/service/RegistryModel.cpp:7` — the ONE registry→model
 mapping, which the service now uses too, `core/service/ServiceModel.cpp:59`), the panel's song controls
 off (`DevicePanel::songControls`, `app/widgets/DevicePanel.h:95`: the header names the instrument with the
-suite's mark and teal dot instead, `app/widgets/DevicePanel.cpp:627`). Solaris's accent and embedded fonts
+suite's mark and teal dot instead, `app/widgets/DevicePanel.cpp:628`). Solaris's accent and embedded fonts
 are installed before a widget is built. The panel speaks text as in Solaris; `command` (`:82`) turns
 `set dv_1.<name>=<value>` into the host's edit through `ParamAccess` — begun ONCE per parameter per
 press, performed per step (a step that moved nothing says nothing, `:98`), ended when the pointer lets
@@ -1855,9 +1855,9 @@ a stop zeroes peaks, RMS and holds and leaves the lights lit. `meters clear` (`c
 not an edit, `meters.cleared`) puts every light out, zeroes the holds and starts the true peak and integrated loudness
 again: on the audio thread it is a `Live::ClearMeters` MESSAGE (`core/Player.cpp:199`), so it lands in order after a
 gain edit sent before it; until the thread has taken it (`Player::clearing`) `pump` reads no holds, flags or loudness,
-which are from before it. The window (`MixerDock::paintFader`, `app/widgets/MixerDock.cpp:1304`): the peak a lighter bar,
+which are from before it. The window (`MixerDock::paintFader`, `app/widgets/MixerDock.cpp:1305`): the peak a lighter bar,
 the RMS its solid core, the held peak a 1.5 px line in its zone's colour, all eased (40 ms up, 300 ms down); above the
-meters a clip light lit red, eased, whose click is `meters clear` (`:1094`). L2 `test_meters_measure_what_plays` (RMS
+meters a clip light lit red, eased, whose click is `meters clear` (`:1095`). L2 `test_meters_measure_what_plays` (RMS
 0.354 and a held 0.5 for a 0.5 sine; +12 dB lights both latches; a clear while playing allocates nothing on the audio
 thread; latched through a stop and an edit), `test_held_peak_holds_then_falls`; UI `test_meters_and_the_loudness_window`.
 Mutants: no hold (the held line = the peak), a latch lost on refresh, the clip light snapping — each seen red. The
@@ -1901,7 +1901,7 @@ back in processing order is refused by `send add`'s rule (R-MIX-4) and the whole
 ducked is refused naming its send. It prints the compressor, then `made: send=…`. A real kick peaks under full scale
 and cuts less than the amount: the default Drum Machine kick, 12 dB asked, takes the bass 7.3 dB down just after it,
 back within 2 dB before the next beat at 120 bpm. The window: a strip's right-click menu has Duck Under ▸ listing every
-strip whose published `keyTargets` include it — the strips that may key it — each ONE line (`app/widgets/MixerDock.cpp:1230`).
+strip whose published `keyTargets` include it — the strips that may key it — each ONE line (`app/widgets/MixerDock.cpp:1231`).
 L2 `test_strip_duck_is_one_line` (the settings, the key, the duck measured on the bass's stem, one undo, six
 refusals); UI `test_a_strip_ducks_under_another_from_its_menu`. Mutants: Sidechain left off, the send not a key,
 the submenu's strips from the wrong side of `keyTargets` — each seen red.
@@ -2136,9 +2136,9 @@ is the capture's writer: what fits goes in, the rest dropped and counted. The se
 Mutants: the overflow not counted, the driver setting ignored — red. Not run on this machine's real input (the user's
 microphone): a live recording is owed. **The window.** An audio or instrument strip's M | S row is M | S | R in the mixer
 (`armRow`, `app/widgets/MixerDock.cpp:71`; a bus and the master keep M | S), R lit red when the strip is armed, eased.
-R (`:1102`) disarms an armed strip (`strip arm none`); on an audio line with no input it offers the song's input
+R (`:1103`) disarms an armed strip (`strip arm none`); on an audio line with no input it offers the song's input
 ports — "Arm with Mic" is ONE `strip arm <ch> --input <port>` — or, with none, "Add an input port (In)" (`port add In
---dir in`); else it arms (`strip arm <ch>`). An audio line's menu (`:1240`): Input… (the input ports, the current one
+--dir in`); else it arms (`strip arm <ch>`). An audio line's menu (`:1241`): Input… (the input ports, the current one
 marked, No input, Add an input port… — a name typed in cosmo's field) and Monitor… (Auto · On · Off — `set
 <ch>.monitor=`). The ruler's menu adds Punch the loop's span (`transport punch <loop>`) and Punch off
 (`app/widgets/TimelineMarkers.cpp:209`); the punch is a red line atop the bars (`Timeline::punchRect`,
@@ -2330,7 +2330,7 @@ label in capitals as a header, then its presets, the factory's marked "factory" 
 grows in. The four tabs are as wide as their names need (`tabRect`, `:263`) and the highlight eases its width with its
 place. A preset row drags like an instrument: an instrument's dropped on the lanes is ONE `clip add --instrument <t>
 --preset <name> --at … --length 4 [--lane …]` (`app/widgets/ProjectScreen.cpp:150`); an effect's says it loads onto its
-device. A device window's header has Presets (`app/widgets/DevicePanel.cpp:573`): its type's presets (the factory's
+device. A device window's header has Presets (`app/widgets/DevicePanel.cpp:574`): its type's presets (the factory's
 marked), each ONE `preset load`, then Save as preset… (the rename field; ONE `preset save`). UI
 `test_presets_in_the_window`; shots `browser-presets`, `device-presets-menu`. Mutants: the drop forgetting its preset, a
 preset clicked saving over it, the highlight's width jumping, a factory preset unmarked — each red.
@@ -2508,12 +2508,12 @@ is started with) — it opened the editor on the desktop for a moment; DISPLAY i
 parameter list even when it is an instrument (`:194` — its face is its own editor); the list reads a plugin's 0 … 1
 values as percentages (`setPluginType` gives them no unit — a plugin's units are its plain value's,
 `core/PluginDevice.cpp:31`). Its header names the plugin where a registry device names its type, and where Presets
-stands (a plugin's presets are its own) is **Editor** (`editorRect`, `DevicePanel.cpp:484`; drawn `:649`): a click is
-`device editor <dv>`, or `--close` while its window is open (`:568`), and its fill eases to the accent while that window
+stands (a plugin's presets are its own) is **Editor** (`editorRect`, `DevicePanel.cpp:484`; drawn `:650`): a click is
+`device editor <dv>`, or `--close` while its window is open (`:569`), and its fill eases to the accent while that window
 is open (`editorAmount`). Offline — never started, crashed, overran — a band slides open under the header
-(`kOfflineH` = 29.25, `app/widgets/DevicePanel.h:50`; drawn `DevicePanel.cpp:686`, its content riding the band's
+(`kOfflineH` = 29.25, `app/widgets/DevicePanel.h:50`; drawn `DevicePanel.cpp:687`, its content riding the band's
 lower edge): "Offline — <why>" in the destructive colour, and **Reload** (`reloadRect`, `:485`) — `device reload <dv>`
-(`:564`); the rows below are pushed down with it, because `bodyTop()` (`DevicePanel.h:99`) includes the eased band.
+(`:565`); the rows below are pushed down with it, because `bodyTop()` (`DevicePanel.h:99`) includes the eased band.
 Both ease from the model wherever the change came from (`DevicePanel.cpp:347`; the first placement is set, not
 animated). The rig's host plays two in-process plugins (`RigPlugin`, `app/tests/Rig.h:59`; one named by
 `rigPluginCrash()` is offline at once). UI `test_a_plugins_device_window` (`app/tests/ui/uiTests.cpp:4298`): an
@@ -2524,7 +2524,7 @@ mid-close; an effect plugin's list. Shots: plugin-device, plugin-offline, plugin
 plugin instrument given a face, Editor never closing. Found while looking at the shots: a plugin's "%" unit hung on
 its normalised value read "0.45 %" beside a unitless one's "60 %" — the units dropped.
 
-### DR-CTRL-1 MIDI learn and the transport keys (R-CTRL-1) — part 1, the service
+### DR-CTRL-1 MIDI learn and the transport keys (R-CTRL-1) — part 1, the service; part 2, the window
 **A control** is `<n>` (any channel) or `<ch>/<n>` (`controlKey`, `core/service/ServiceControl.cpp:23`, refusing
 anything else by its form). `map add <cc> <address>` (`mapCommand`, `:135`) takes any address `describeAddress` takes
 — a number a formula can drive, in the open song — replaces the control's old mapping, keeps it in the machine's
@@ -2554,4 +2554,22 @@ channel ignored, the learned value taken, the transport keys ignored, a mapping 
 not said, the mappings not kept. Found while building it: the first "not an edit" check could not fail (the song was
 already unsaved) — it now saves first; and one mutant did not compile, so its run tested the old binary — rewritten
 and run again.
+
+**Part 2 — the window.** The shared parameter menu (`app/widgets/ParamMenu.cpp`) offers every number **Learn MIDI CC**
+(`:85` — `map learn <address>`) and, for each control that moves it, **Forget CC <n>** (`map remove <n>`); the
+widget fills `ParamTarget::controls` from `settings.mappings[]` (`controlsFor`, `:43`; the dock,
+`app/widgets/MixerDock.cpp:982`; a device's rows and knobs, `app/widgets/DevicePanel.cpp:523`). While a learn waits, the
+song bar shows a pill after the tempo (`app/widgets/SongBar.cpp:282`; its rect `:81`, up to the meter, 260 at most) —
+"MIDI learn · <address> — move a control" — easing in and out (`:124`; the address kept while it fades), and a click on
+it is `map learn --cancel` (`:200`). Settings has a **MIDI** page (`SettingsSheet::kMidi`): each mapping a row —
+`CC <n>`, the address, dimmed and "not in this song" when inert — with × forgetting it (`map remove`,
+`app/widgets/SettingsSheet.cpp:727`); the rows are keyed by control, a new one growing in and a forgotten one shrinking
+out (`:265`, `:623`; drawn `:876`), the first placement set. UI `test_midi_learn_in_the_window`
+(`app/tests/ui/uiTests.cpp:4357`): Learn from a fader's menu — the line, the pill caught mid-fade, a click on it
+cancelling (caught mid-fade out); Forget CC 74's line; a knob's menu offering Learn; the MIDI page with one inert row,
+× sending its line and the row caught mid-shrink. Shots: midi-learn (a fader's menu with Learn and Forget, the pill),
+settings-midi (three mappings, one inert) at both sizes. Mutants (each red): the pill snapping, no Learn item, no
+Forget item, the pill not cancelling, a forgotten row snapping out, × sending nothing. Found while building it: two
+UI tests (this one and N26's device-window test) reported with a bare `printf`, so the suite's count missed them —
+both go through `pass` now (65).
 

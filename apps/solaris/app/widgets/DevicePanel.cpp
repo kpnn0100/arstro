@@ -520,6 +520,7 @@ namespace solaris_ui
         p.address = mDevice + "." + spec.name;
         p.formula = spec.formula;
         p.bindable = spec.choices.empty();
+        p.controls = controlsFor(mModel, p.address); // R-CTRL-1
         if (p.bindable)
         {
             double v = spec.value;

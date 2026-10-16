@@ -979,6 +979,7 @@ namespace solaris_ui
         const double v = shownValue(p.address);
         p.value = h.part == Part::Pan ? num(v, 2) : dbText(v) + " dB";
         p.reset = "0"; // unity gain, the centre
+        p.controls = controlsFor(mModel, p.address); // R-CTRL-1
         PropertyHooks hk;
         hk.command = [this](const std::string &l) { return send(l); };
         hk.rename = [this](const std::string &cur, Point at, std::function<void(const std::string &)> done) { if (onRename) onRename(cur, at, std::move(done)); };

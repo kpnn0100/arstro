@@ -23,7 +23,8 @@ namespace solaris_ui
         constexpr double kHeaderH = 60.0;    // the card's title band
         constexpr double kFooterH = 56.0;    // Done, under a hairline
         constexpr double kPageTop = 34.0;    // a page's title, then its first row
-        constexpr int kDoneId = 900, kAddId = 901, kResetId = 902, kRailBase = 950, kRemoveBase = 1000, kKeyChipBase = 2000, kKeyAddBase = 4000;
+        constexpr int kDoneId = 900, kAddId = 901, kResetId = 902, kRailBase = 950, kRemoveBase = 1000, kKeyChipBase = 2000, kKeyAddBase = 4000,
+                      kMapRemoveBase = 6000; // R-CTRL-1
         constexpr double kKeyRowGap = 4.0;   // R-SET-4: the keymap's rows sit close — one action a line
         constexpr double kRowLabelGap = 13.0;
         constexpr double kAreaGap = 22.0;
@@ -35,7 +36,7 @@ namespace solaris_ui
         const char *kKeys[SettingsSheet::kRows] = {"output", "input", "sampleRate", "bufferSize", "metronome", "metronomeLevel",
                                                    "auditionLevel", "newBpm", "newSig", "reducedMotion", "autosave", "driver", "midiInputs", "recordQuantize", "countIn"};
         // the sections (R-SET-3, R-SET-5) and the rows each page holds
-        const char *kTitles[SettingsSheet::kSections] = {"Audio", "Playback", "New songs", "Sample folders", "Interface", "Keyboard"};
+        const char *kTitles[SettingsSheet::kSections] = {"Audio", "Playback", "New songs", "Sample folders", "Interface", "Keyboard", "MIDI"};
         const std::vector<int> kPageRows[SettingsSheet::kSections] = {
             {SettingsSheet::kOutput, SettingsSheet::kInput, SettingsSheet::kRate, SettingsSheet::kBuffer, SettingsSheet::kDriver, SettingsSheet::kMidiIn},
             {SettingsSheet::kMetronome, SettingsSheet::kClickLevel, SettingsSheet::kPreviewLevel, SettingsSheet::kRecQuant, SettingsSheet::kCountIn},
@@ -43,6 +44,7 @@ namespace solaris_ui
             {},
             {SettingsSheet::kMotion, SettingsSheet::kAutosave},
             {},
+            {}, // R-CTRL-1: the MIDI controls mapped (paintMidi)
         };
         bool isToggle(int row) { return row == SettingsSheet::kMetronome || row == SettingsSheet::kMotion; }
         std::string num(double v)
@@ -260,6 +262,24 @@ namespace solaris_ui
         mLatencyMs = s.latencyMs;
         mFolders = s.folders;
         mSettings = s;
+        // R-CTRL-1: the mapping rows, keyed by control — a forgotten one stays to shrink out, a new one is appended
+        for (auto &r : mMapRows)
+        {
+            r.leaving = true;
+            for (const auto &x : s.mappings)
+                if (x.cc == r.m.cc) { r.m = x; r.leaving = false; }
+        }
+        for (const auto &x : s.mappings)
+        {
+            bool have = false;
+            for (const auto &r : mMapRows) have |= r.m.cc == x.cc && !r.leaving;
+            if (!have)
+            {
+                MapRow r;
+                r.m = x;
+                mMapRows.push_back(std::move(r));
+            }
+        }
         // a combo shows the value the setting HAS — one its list lacks (a device not connected now, a tempo set from
         // a shell) is an entry of its own, so the setting is never invisible (R-SET-6)
         for (int r = 0; r < kRows; ++r)
@@ -600,8 +620,29 @@ namespace solaris_ui
             else ++it;
         }
         mHover.advance(nowMs);
+        // R-CTRL-1: the mapping rows grow in and shrink out; the first placement is set
+        for (auto &r : mMapRows)
+        {
+            if (r.fresh)
+            {
+                if (mMapPlaced) r.amount.animateTo(1.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs);
+                else r.amount.set(1.0);
+                r.fresh = false;
+            }
+            if (r.leaving && !r.amount.isAnimating() && r.amount.value() > 0.0) r.amount.animateTo(0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs);
+            r.amount.update(nowMs);
+        }
+        mMapRows.erase(std::remove_if(mMapRows.begin(), mMapRows.end(), [](const MapRow &r) { return r.leaving && r.amount.value() <= 0.0; }), mMapRows.end());
+        mMapPlaced = true;
         layoutPages();
         Segment::advance(nowMs);
+    }
+
+    double SettingsSheet::mapRowAmount(const std::string &cc) const
+    {
+        for (const auto &r : mMapRows)
+            if (r.m.cc == cc) return r.amount.value();
+        return 0.0;
     }
 
     // ── input ─────────────────────────────────────────────────────────────────────────────────────
@@ -617,6 +658,9 @@ namespace solaris_ui
             for (size_t i = 0; i < mRemove.size(); ++i)
                 if (mRemove[i].contains(p)) return kRemoveBase + (int)i;
         }
+        if (mSection == kMidi)
+            for (size_t i = 0; i < mMapRemove.size(); ++i)
+                if (mMapRemove[i].contains(p)) return kMapRemoveBase + (int)i;
         if (mSection == kKeyboard)
         {
             if (mKeyReset.contains(p)) return kResetId;
@@ -678,6 +722,9 @@ namespace solaris_ui
                 if (!line.empty() && onCommand) onCommand("settings set" + line); // ONE line, every changed action
                 return true;
             }
+            if (mSection == kMidi) // R-CTRL-1: a mapping forgotten — one line
+                for (size_t i = 0; i < mMapRemove.size() && i < mMapRemoveCc.size(); ++i)
+                    if (mMapRemove[i].contains(local)) { if (onCommand) onCommand("map remove " + mMapRemoveCc[i]); return true; }
             if (mSection == kFolders)
             {
                 if (mAddFolder.contains(local)) { if (onAddFolder) onAddFolder(); return true; }
@@ -777,6 +824,7 @@ namespace solaris_ui
         t.drawText(kTitles[s], 0.0, oy + 16.0, 14.0, font::sansSemiBold());
         if (s == kFolders) paintFolders(t, w, oy, px, py);
         else if (s == kKeyboard) paintKeyboard(t, w, oy, px, py);
+        else if (s == kMidi) paintMidi(t, w, oy, px, py);
         else paintRows(t, s, w, oy);
         page.scroll.drawBar(t, page.width.value(), 1.0);
         t.restore();
@@ -823,6 +871,58 @@ namespace solaris_ui
             }
         }
         mPages[(size_t)s]->contentH = kPageTop + (double)rows.size() * kRowH + 8.0;
+    }
+
+    void SettingsSheet::paintMidi(IRenderTarget &t, double w, double oy, double px, double py) const
+    {
+        // R-CTRL-1: each MIDI control and the number it moves — one the open song lacks dimmed, saying so; × forgets it
+        t.setFill(palette::mutedForeground());
+        t.drawText("controls and what they move", t.measureText(kTitles[kMidi], 14.0, font::sansSemiBold()) + 10.0, oy + 16.0, 10.0, font::sans());
+        mMapRemove.clear();
+        mMapRemoveCc.clear();
+        double fy = oy + kPageTop;
+        if (mMapRows.empty())
+        {
+            t.setFill(fade(palette::mutedForeground(), 0.8));
+            t.drawText(textfit::ellipsize(t, "None yet \xE2\x80\x94 right-click a number \xE2\x80\xBA Learn MIDI CC, and move a control.", w, kFontPx, font::sans()), 0.0,
+                       textfit::baseline(fy + kFolderRowH * 0.5, kFontPx), kFontPx, font::sans());
+            fy += kFolderRowH;
+        }
+        for (size_t i = 0; i < mMapRows.size(); ++i)
+        {
+            const MapRow &mr = mMapRows[i];
+            const double a = mr.amount.value(), h = kFolderRowH * a;
+            if (h <= 0.01) continue;
+            const Rect row{0.0, fy, w, kFolderRowH};
+            const Rect rm{row.right() - 22.0, row.y + (row.h - 18.0) * 0.5, 18.0, 18.0};
+            t.save();
+            t.clipRect(0.0, fy, w, h); // growing in, shrinking out: the row's height eased, its content revealed
+            if (!mr.leaving)
+            {
+                mMapRemove.push_back(Rect{rm.x + px, rm.y + py, rm.w, rm.h});
+                mMapRemoveCc.push_back(mr.m.cc);
+            }
+            const double hv = mr.leaving ? 0.0 : mHover.amount(kMapRemoveBase + (int)mMapRemove.size() - 1);
+            if (i + 1 < mMapRows.size())
+            {
+                t.setStroke(fade(palette::border(), a), 1.0);
+                t.beginPath(); t.moveTo(row.x, fy + h); t.lineTo(row.right(), fy + h); t.strokePath();
+            }
+            const double base = textfit::baseline(row.y + row.h * 0.5, 10.0);
+            t.setFill(fade(palette::foreground(), a));
+            t.drawText("CC " + mr.m.cc, row.x, base, 10.0, font::mono());
+            const double ax = row.x + 72.0; // u(22): "CC 16/127" fits
+            t.setFill(fade(mr.m.inert ? palette::mutedForeground() : palette::foreground(), a));
+            const std::string what = mr.m.address + (mr.m.inert ? "  \xC2\xB7 not in this song" : "");
+            t.drawText(textfit::ellipsize(t, what, std::max(0.0, rm.x - 8.0 - ax), 10.0, font::mono()), ax, base, 10.0, font::mono());
+            if (hv > 0.001) drawRoundedRect(t, rm, radius::control(), Paint::filled(palette::hoverWash(hv)));
+            const Color xc = fade(lerpColor(palette::mutedForeground(), palette::destructive(), hv), a);
+            glyph::line(t, rm.x + 5.5, rm.y + 5.5, rm.right() - 5.5, rm.bottom() - 5.5, xc, 1.3);
+            glyph::line(t, rm.right() - 5.5, rm.y + 5.5, rm.x + 5.5, rm.bottom() - 5.5, xc, 1.3);
+            t.restore();
+            fy += h;
+        }
+        mPages[kMidi]->contentH = (fy + 12.0) - oy;
     }
 
     void SettingsSheet::paintFolders(IRenderTarget &t, double w, double oy, double px, double py) const

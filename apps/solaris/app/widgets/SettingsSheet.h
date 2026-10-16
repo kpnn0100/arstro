@@ -81,7 +81,7 @@ namespace solaris_ui
     {
     public:
         enum Row { kOutput = 0, kInput, kRate, kBuffer, kMetronome, kClickLevel, kPreviewLevel, kNewBpm, kNewSig, kMotion, kAutosave, kDriver, kMidiIn, kRecQuant, kCountIn, kRows };
-        enum Section { kAudio = 0, kPlayback, kNewSongs, kFolders, kInterface, kKeyboard, kSections };
+        enum Section { kAudio = 0, kPlayback, kNewSongs, kFolders, kInterface, kKeyboard, kMidi, kSections }; // kMidi: R-CTRL-1
         static constexpr double kCardW = 720.0, kCardH = 520.0;
         static constexpr double kRailW = 164.0;   // the sections' column
         static constexpr double kPad = 24.0;
@@ -123,6 +123,10 @@ namespace solaris_ui
         artboard::Rect doneRect() const { return mDone; }
         artboard::Rect addFolderRect() const { return mAddFolder; }
         artboard::Rect folderRemoveRect(int i) const { return i >= 0 && i < (int)mRemove.size() ? mRemove[(size_t)i] : artboard::Rect{}; }
+        /** R-CTRL-1, the MIDI page: mapping `i`'s remove (`settings.mappings[i]`), from the last paint. */
+        artboard::Rect mapRemoveRect(int i) const { return i >= 0 && i < (int)mMapRemove.size() ? mMapRemove[(size_t)i] : artboard::Rect{}; }
+        /** LIVE: a mapping row's presence — it grows in when made and shrinks out when forgotten (keyed by its control). */
+        double mapRowAmount(const std::string &cc) const;
         /** Scroll (eased) the CURRENT page so a rect from the last paint is inside it. */
         void revealRect(const artboard::Rect &r);
 
@@ -180,6 +184,7 @@ namespace solaris_ui
         void paintRows(artboard::IRenderTarget &t, int s, double w, double oy) const;
         void paintFolders(artboard::IRenderTarget &t, double w, double oy, double px, double py) const;
         void paintKeyboard(artboard::IRenderTarget &t, double w, double oy, double px, double py) const;
+        void paintMidi(artboard::IRenderTarget &t, double w, double oy, double px, double py) const;
         std::string current(int row) const; // the row's setting, as its options' values spell it
         void closeCombos();
         bool anyComboOpen() const;
@@ -210,6 +215,16 @@ namespace solaris_ui
         cosmo_v2::HoverFade mHover;
         // measured in the last paint
         mutable std::vector<artboard::Rect> mRemove;
+        mutable std::vector<artboard::Rect> mMapRemove; // R-CTRL-1
+        mutable std::vector<std::string> mMapRemoveCc;   // … whose each is
+        struct MapRow
+        {
+            solaris::MapModel m;
+            artboard::AnimatedProperty amount{0.0};
+            bool fresh = true, leaving = false;
+        };
+        std::vector<MapRow> mMapRows;                    // the model's, and the forgotten ones still shrinking
+        bool mMapPlaced = false;
         mutable artboard::Rect mDone, mAddFolder;
 
         // R-SET-4

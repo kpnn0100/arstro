@@ -35,7 +35,7 @@ namespace solaris_ui
     {
     public:
         static constexpr double kHeight = 29.25;
-        enum Hit { kNone = -1, kHome = 0, kPlay, kSave, kSettings, kBpm, kRecord }; // kHome: the wordmark; kRecord: R-MIDI-2
+        enum Hit { kNone = -1, kHome = 0, kPlay, kSave, kSettings, kBpm, kRecord, kLearn }; // kHome: the wordmark; kRecord: R-MIDI-2; kLearn: R-CTRL-1
         static constexpr double kBpmStepPx = 3.25; // space::u(1) of vertical drag: one step
         static constexpr double kNameMin = 120.0; // the song's name keeps this much before the transport moves right
 
@@ -46,6 +46,9 @@ namespace solaris_ui
         artboard::Rect hitRect(int which) const;
         double playAmount() const { return mPlaying.value(); }   // 0 = the play glyph, 1 = the stop glyph (LIVE)
         double recordAmount() const { return mRecLit.value(); }  // R-MIDI-2: 1 = recording, lit red (LIVE)
+        /** R-CTRL-1: while a `map learn` waits, a pill after the tempo says for what (a click cancels it) — LIVE, eased. */
+        double learnAmount() const { return mLearn.value(); }
+        const std::string &learnShown() const { return mLearnShown; }
         double meterLevel(int ch) const { return mMeter[ch].value(); }
         double bpmShown() const { return mBpmDrag ? mBpmLive : mBpmShown.value(); } // the tempo as DRAWN (LIVE)
         /** R-TEMPO-1: the line that sets the tempo shown — the song's, or the change in effect at the time bar. */
@@ -77,6 +80,8 @@ namespace solaris_ui
         int mBeatsPerBar = 4;
         float mPeak[2] = {0, 0};
         artboard::AnimatedProperty mRecLit{0.0};
+        std::string mLearning, mLearnShown; // R-CTRL-1: what a learn waits for; what the pill says (kept while it fades out)
+        artboard::AnimatedProperty mLearn{0.0};
         artboard::AnimatedProperty mPlaying{0.0}, mDirtyDot{0.0}, mMeter[2]{artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
         bool mInit = false;
         cosmo_v2::HoverFade mHover;

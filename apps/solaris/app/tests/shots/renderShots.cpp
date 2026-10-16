@@ -854,6 +854,29 @@ namespace
                  r.frame();
                  r.frame(); // and the shot's own frame: a third of the way
              }},
+            {"midi-learn", // R-CTRL-1: a fader's menu with Learn MIDI CC and Forget CC 74; the song bar's pill, a learn waiting
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("map add 74 ch_3.gain");
+                 r.cmd("map learn ch_3.pan");
+                 r.settle();
+                 auto &d = r.app->project().dock();
+                 r.click(world(d, d.faderRect("ch_3")), 2);
+                 r.settle();
+             }},
+            {"settings-midi", // … Settings › MIDI: the mappings, one the song lacks dimmed
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("map add 74 ch_3.gain");
+                 r.cmd("map add 2/21 dv_3.mix");
+                 r.cmd("map add 7 project.masterGain");
+                 r.cmd("device remove dv_3");
+                 r.settle();
+                 r.app->openSettings();
+                 r.settle();
+                 r.click(r.app->settings().railRect(arstro::solaris_ui::SettingsSheet::kMidi));
+                 r.settle();
+             }},
             {"tempo-map",   // R-TEMPO-1: 140 from bar 3, gliding to 100 by bar 5 — flags on the ruler's band, the glide's slope; the
                             // song bar at the time bar's tempo
              [](sltest::Rig &r) {

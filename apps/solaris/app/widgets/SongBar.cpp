@@ -57,6 +57,8 @@ namespace solaris_ui
         mBeatsPerBar = std::max(1, std::atoi(m.sig.c_str()));
         mPeak[0] = m.transport.masterPeak[0];
         mPeak[1] = m.transport.masterPeak[1];
+        mLearning = m.mapLearning; // R-CTRL-1
+        if (!mLearning.empty()) mLearnShown = mLearning;
     }
 
     Rect SongBar::hitRect(int which) const
@@ -76,6 +78,12 @@ namespace solaris_ui
             const Rect p = hitRect(kPlay);
             return Rect{p.right() + 12.0 + 9 * 0.6 * 11.0 + 12.0, cy - kBtnH * 0.5, 68.25, kBtnH};
         }
+        case kLearn:
+        {
+            // R-CTRL-1: after the tempo, up to the meter (u(80) at most)
+            const double x = hitRect(kBpm).right() + 12.0, right = hitRect(kSave).x - 14.0 - kMeterW - 12.0;
+            return Rect{x, cy - kBtnH * 0.5, std::clamp(right - x, 0.0, 260.0), kBtnH};
+        }
         default: return Rect{};
         }
     }
@@ -84,6 +92,7 @@ namespace solaris_ui
     {
         for (int i = kHome; i <= kRecord; ++i)
             if (hitRect(i).contains(p)) return i;
+        if (mLearn.value() > 0.5 && hitRect(kLearn).contains(p)) return kLearn; // only while it is there
         return kNone;
     }
 
@@ -93,6 +102,7 @@ namespace solaris_ui
         {
             mPlaying.set(mPlayingWanted ? 1.0 : 0.0);
             mRecLit.set(mRecordingWanted ? 1.0 : 0.0);
+            mLearn.set(mLearning.empty() ? 0.0 : 1.0);
             mDirtyDot.set(mDirty ? 1.0 : 0.0);
             mInit = true;
         }
@@ -111,6 +121,7 @@ namespace solaris_ui
         mBpmShown.update(nowMs);
         toward(mPlaying, mPlayingWanted ? 1.0 : 0.0, motion::kCrossFadeMs);
         toward(mRecLit, mRecordingWanted ? 1.0 : 0.0, motion::kCrossFadeMs);
+        toward(mLearn, mLearning.empty() ? 0.0 : 1.0, motion::kCrossFadeMs);
         toward(mDirtyDot, mDirty ? 1.0 : 0.0, motion::kCrossFadeMs);
         for (int c = 0; c < 2; ++c)
         {
@@ -186,6 +197,7 @@ namespace solaris_ui
             case kRecord: if (onRecordToggle) onRecordToggle(); break;
             case kSave: if (onSave) onSave(); break;
             case kSettings: if (onSettings) onSettings(); break;
+            case kLearn: if (onCommand) onCommand("map learn --cancel"); break; // R-CTRL-1
             default: break;
             }
             return true;
@@ -267,6 +279,19 @@ namespace solaris_ui
             t.drawText(buf, br.x + 4.0, textfit::baseline(cy, 11.0), 11.0, font::mono());
         }
 
+        // R-CTRL-1: a learn waiting — what for; a click cancels it
+        if (mLearn.value() > 0.001)
+        {
+            const double a = mLearn.value();
+            const Rect r = hitRect(kLearn);
+            const double hv = mHover.amount(kLearn);
+            drawRoundedRect(t, r, radius::control(), Paint::filledStroked(palette::primaryAlpha((0.14 + 0.08 * hv) * a), palette::primaryAlpha(0.6 * a), 1.0));
+            Color c = palette::foreground();
+            c.a *= a;
+            t.setFill(c);
+            t.drawText(textfit::ellipsize(t, "MIDI learn \xC2\xB7 " + mLearnShown + " \xE2\x80\x94 move a control", std::max(0.0, r.w - 16.0), 10.0, font::sans()),
+                       r.x + 8.0, textfit::baseline(cy, 10.0), 10.0, font::sans());
+        }
         // master meter, L over R
         {
             const Rect save = hitRect(kSave);

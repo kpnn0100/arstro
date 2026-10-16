@@ -40,6 +40,14 @@ namespace solaris_ui
         return out;
     }
 
+    std::vector<std::string> controlsFor(const solaris::AppModel &m, const std::string &address)
+    {
+        std::vector<std::string> out;
+        for (const auto &x : m.settings.mappings)
+            if (x.address == address) out.push_back(x.cc);
+        return out;
+    }
+
     std::vector<cosmo_v2::ContextMenu::Item> paramMenuItems(const ParamTarget &p, const PropertyHooks &h, Point world)
     {
         std::vector<cosmo_v2::ContextMenu::Item> items;
@@ -70,6 +78,12 @@ namespace solaris_ui
         {
             const std::string def = p.reset;
             items.push_back({"Reset to Default", [cmd, address, def] { if (cmd) cmd("set " + address + "=" + def); }});
+        }
+        if (p.bindable)
+        {
+            // R-CTRL-1: the next MIDI control moved moves it; one that does, forgotten
+            items.push_back({"Learn MIDI CC", [cmd, address] { if (cmd) cmd("map learn " + address); }});
+            for (const auto &cc : p.controls) items.push_back({"Forget CC " + cc, [cmd, cc] { if (cmd) cmd("map remove " + cc); }});
         }
         // R-UI-11: the host's clipboard — an address to paste into a formula or a script
         auto copy = h.copy;

@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N27 part 2 — MIDI learn in the window: Learn MIDI CC / Forget CC in a number's menu, the song bar while a learn waits, the mappings in Settings' MIDI page** (R-CTRL-1; part 1 — the grammar, the controls, MMC — is built), then N28… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N28 — Control surfaces: Mackie Control / HUI** (R-CTRL-2; N27 — MIDI learn, the transport keys — is built), then N29… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -540,11 +540,13 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       step, never echoed back). Live: Basic Synth's own editor through the helper, a knob dragged came back as edits.
       Part 2 (same day): the device window — a plugin's list (no face; values as percentages), Editor in the Presets
       place (lit while open), offline a band sliding open with why and Reload.
-- [~] **N27** MIDI learn (R-CTRL-1).
+- [x] **N27** MIDI learn (R-CTRL-1).
       Part 1 (2026-10-17): `map add|remove|list|learn` (the machine's settings, never the song's); controllers moving
       their numbers (a gain by the fader law — moved to `FaderLaw.h`, one copy — a parameter by its taper), landing as
       `set` lines; MIDI Machine Control (play, stop, record, a bar on / back) parsed by the ALSA host; inert mappings
       said by `audit`; `settings.mappings[]`, `mapLearning`.
+      Part 2 (same day): Learn MIDI CC / Forget CC <n> in every number's menu; the song bar's pill while a learn waits
+      (a click cancels); Settings › MIDI — the mappings, × forgets one; each eased.
 - [ ] **N28** Control surfaces: Mackie Control / HUI (R-CTRL-2).
 - [ ] **N29** A CPU meter (R-PERF-1).
 - [ ] **N30** A multi-core engine, byte-identical (R-PERF-2).

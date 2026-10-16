@@ -14,6 +14,7 @@
  */
 #pragma once
 #include "../Theme.h"
+#include "AppModel.h"
 #include "../../../cosmo/widgets/ContextMenu.h"
 #include <functional>
 #include <string>
@@ -39,9 +40,14 @@ namespace solaris_ui
         std::string value;     // Copy Value: as shown, with its unit ("1.20 kHz", "-6.0 dB")
         std::string reset;     // Reset to Default's value as `set` takes it ("" = no reset)
         bool bindable = true;  // a number; a choice or a switch is neither bound nor read by a formula (R-AUTO-1)
+        std::vector<std::string> controls; // R-CTRL-1: the MIDI controls that move it (`settings.mappings[]`)
     };
 
-    /** Create Automation, Formula…, Clear Binding, Reset to Default, Copy Address, Copy Value, Copy as Formula. */
+    /** R-CTRL-1: the MIDI controls the machine maps to `address`. */
+    std::vector<std::string> controlsFor(const solaris::AppModel &m, const std::string &address);
+
+    /** Create Automation, Formula…, Clear Binding, Reset to Default, Learn MIDI CC / Forget CC <n> (R-CTRL-1), Copy
+     *  Address, Copy Value, Copy as Formula. */
     std::vector<cosmo_v2::ContextMenu::Item> paramMenuItems(const ParamTarget &p, const PropertyHooks &h, artboard::Point world);
 
     /** The automation a formula IS ("au_1" for "=au_1"); "" when it is a link or an expression. */
