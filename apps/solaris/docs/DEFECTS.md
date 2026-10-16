@@ -47,6 +47,17 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-14 The DSP library's tempo estimate shipped without its sub-frame refinement — closed in N21 part 1, DSP `6f2df21`
+- **Found:** 2026-10-16, building N21's time map: `Tempo_is_found` turned red with no change to the tempo code (133 bpm
+  read 132.35).
+- **Cause:** a mutant (B3, "no parabola": `best + 0.0 * off`) was left in `src/meter/Onsets.cpp` — the mutant run was
+  piped through `head`, which ended the script after it applied that mutant and before it put the file back — and DSP
+  `c526f8d` was committed without the tests being run again. Solaris N20 (`824957b`, `24b16bf`) was built on it; its own
+  tests passed, a groove of whole beats being snapped (B5) whatever (B4) said.
+- **Fix:** the line restored (DSP `6f2df21`). A mutant script is never piped to anything that can stop reading early;
+  the tests run again after every mutant run, before a commit.
+- **Guard:** `Tempo_is_found` (133 → 132.95; red at 132.35 without (B4)).
+
 ### D-12 A recorded clip pointed beside the working folder, not the song — closed in N17
 - **Found:** 2026-10-16, building N17's takes: the test's decoder now hands back what was recorded, and a take's clip
   played a half-second sine — the file it named was not found.
