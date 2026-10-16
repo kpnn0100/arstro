@@ -50,7 +50,9 @@ namespace solaris
             const bool running = mRecRun.load();
             while (mRecQ.pop(c))
             {
-                if (mTake.from < 0) mTake.from = c.at;
+                if (mTake.from < 0) mTake.from = mTakeNext = c.at;
+                if (c.at != mTakeNext || mTake.marks.empty()) mTake.marks.push_back({(long long)mTake.left.size(), c.at}); // R-REC-2: a loop turned
+                mTakeNext = c.at + c.n;
                 mTake.left.insert(mTake.left.end(), c.l.begin(), c.l.begin() + c.n);
                 mTake.right.insert(mTake.right.end(), c.r.begin(), c.r.begin() + c.n);
             }

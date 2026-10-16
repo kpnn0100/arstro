@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 ✅ DR-REC-1 — loop takes are R-REC-2's)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 ✅ DR-REC-1 — loop takes are R-REC-2's; R-REC-2 🚧 DR-REC-2 — the core)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -842,7 +842,16 @@ a process is the host's (law 12).
   (N17). The host's capture is a seam beside the output's (PulseAudio and PipeWire); without one, recording audio is
   refused by name.)
 - **R-REC-2 Takes and comping**: each pass over a loop is a take on the clip; the comp is chosen by ranges
-  (`clip comp <ac> --take <n> --from --to`), the takes shown under the clip.
+  (`clip comp <ac> --take <n> --from --to`), the takes shown under the clip. (**Detailed while building it, N17 — 2026-10-16.**
+  Recording an audio line while the song loops makes ONE clip spanning the loop and a TAKE of each pass over it — what
+  was heard there that pass (the latency taken out as R-REC-1 says, so the input heard just after the loop turned is
+  the end of the pass before, not the start of the next) — each written beside the song as its own file; a pass that
+  covers less than half the loop is dropped. The takes are the clip's, in the order they were played
+  (`#aclip … ` then `#take src=…` lines), numbered from 1. The COMP is ranges of the song's beats, each naming the take
+  that plays there (`#comp take=2 from=4.0 to=5.5`); where no range says, the LAST take plays. `clip comp <ac> --take
+  <n> [--from <b> --to <b>]` (the whole clip without a range) is ONE edit — the range overwrites what it covers. A
+  comped clip plays each range from its take, crossfaded 5 ms at each seam so a cut never clicks; a render of it is as
+  pure as any. A recording with no loop is one take, as before.)
 - **R-EDIT-1 Audio editing on the lanes** (R-EDM-12): `clip split <ac> --at <b>`; a clip's fades and gain dragged
   on the clip (its corners and a gain line; `set <ac>.fadeIn/.fadeOut/.gain` exist); overlapping clips on a lane
   crossfade by their fades; `set <ac>.reverse=on`; `clip consolidate <ac>…` (bounce in place to one audio clip);

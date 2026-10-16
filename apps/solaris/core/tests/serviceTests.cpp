@@ -101,7 +101,7 @@ namespace
         std::string mode = "loop", *device = nullptr;
         bool fails = false; // R-DEV-9: a PipeWire capture that links nowhere
         double inLat = 0, outLat = 0;
-        long long delay = 0, start = -1, got = 0;
+        long long delay = 0, start = -1, got = 0, period = 0; // period: "steps" — a level per pass of this many frames
         int ch = 2, rate = 48000;
         bool open(const std::string &dev, int r, int channels, int, std::string &err) override
         {
@@ -120,6 +120,8 @@ namespace
                 float l = 0, r = 0;
                 const long long j = start + got + i - delay;
                 if (mode == "tone") l = r = (float)(0.5 * std::sin(2 * M_PI * 1000.0 * (double)(got + i) / rate));
+                else if (mode == "steps" && period > 0) // R-REC-2: 0.1 the first pass HEARD, 0.2 the next … (a pass is `period`)
+                    l = r = 0.1f * (float)(1 + std::max(0LL, (got + i - delay) / period));
                 else if (j >= 0 && (size_t)(2 * j + 1) < cap->sink.size()) { l = cap->sink[(size_t)(2 * j)]; r = cap->sink[(size_t)(2 * j + 1)]; }
                 x[(size_t)i * ch] = l;
                 if (ch > 1) x[(size_t)i * ch + 1] = r;
@@ -163,6 +165,7 @@ namespace
         bool canPlay = true;
         std::string pipewire;          // R-DEV-9: "" this host has no PipeWire driver, "ok" it opens, "fail" it links nowhere
         double outLatency = 0, inLatency = 0; // R-REC-1: what the clock device and the capture report
+        long long inPeriod = 0;                // R-REC-2: "steps" — a pass's frames
         bool canRecord = true;
         std::string inMode = "loop", inDevice; // R-REC-1: the capture's sound; the device it was opened on
         std::shared_ptr<std::function<void(const MidiEvent &)>> midi = std::make_shared<std::function<void(const MidiEvent &)>>();
@@ -173,8 +176,21 @@ namespace
         SolarisService::Host host()
         {
             SolarisService::Host h;
-            h.decodeAudio = [](const std::string &path, int rate, engine::Pcm &out, std::string &err) {
+            h.decodeAudio = [this](const std::string &path, int rate, engine::Pcm &out, std::string &err) {
                 if (contains(path, "missing")) { err = "no such file"; return false; }
+                if (written.count(path)) // R-REC-2: a file this host wrote (a recording) is what it wrote
+                {
+                    const auto &ch = written[path];
+                    out.channels = 2;
+                    out.frames = (long long)ch[0].size();
+                    out.samples.resize((size_t)out.frames * 2);
+                    for (long long i = 0; i < out.frames; ++i)
+                    {
+                        out.samples[(size_t)i * 2] = ch[0][(size_t)i];
+                        out.samples[(size_t)i * 2 + 1] = ch.size() > 1 ? ch[1][(size_t)i] : ch[0][(size_t)i];
+                    }
+                    return true;
+                }
                 out.channels = 2;
                 out.frames = rate / 2;
                 out.samples.resize((size_t)out.frames * 2);
@@ -225,6 +241,7 @@ namespace
                     i->mode = inMode;
                     i->inLat = inLatency;
                     i->outLat = outLatency;
+                    i->period = inPeriod;
                     i->device = &inDevice;
                     return std::unique_ptr<IAudioIn>(std::move(i));
                 };
@@ -2548,8 +2565,11 @@ static void test_record_audio_lands_where_it_was_played()
     assert(got == want);
     const std::string clip = firstLine(landed);
     assert(contains(landed, "into Recordings/Vox 1.wav") && r.clip(clip) && r.clip(clip)->at == 0.0 && r.clip(clip)->track == vox);
+    assert(r.clip(clip)->src == "Recordings/Vox 1.wav" && contains(r.text(), "src=\"Recordings/Vox 1.wav\"")); // beside the song, kept relative to it
     assert(r.svc.model().undoDepth == depth + 2 && r.svc.model().undoLabel == "Record");
-    // punched 1 … 3: the clip starts at 1, two beats long, the burst a beat into it
+    // punched 1 … 3: the clip starts at 1, two beats long, the burst a beat into it (the first take muted: what it plays
+    // would come back down the cable too — the input is taken before the strip, so the take still hears the song)
+    r.ok("set " + vox + ".mute=true");
     r.ok("transport punch 1 3");
     assert(r.svc.model().transport.punchFrom == 1.0 && r.svc.model().transport.punchTo == 3.0);
     const long long f1 = r.fake.capture->frames.load();
@@ -2626,6 +2646,71 @@ static void test_an_armed_audio_line_is_monitored_as_set()
     const std::string a = deaf.output().substr(0, deaf.output().find('\n'));
     assert(!deaf.dispatchText("strip arm " + a + " --input In", err) && contains(err, "cannot record audio"));
     pass("monitoring (R-REC-1): auto heard while stopped, on the device the settings give the port; off stops it at once; a build with no capture refuses to arm an audio line");
+}
+
+static void test_a_looped_recording_makes_takes_and_a_comp_chooses()
+{
+    // R-REC-2: recording while the song loops 4 … 6 — the capture's level rises 0.1 each pass as it is HEARD (out + in
+    // latency), so each take must be one level throughout: 0.1, 0.2, 0.3; the fourth pass, under half, is dropped. The
+    // clip spans the loop; the last take plays where the comp does not say; `clip comp` puts take 1 over 4.5 … 5,
+    // crossfaded 5 ms at each seam; one undo; refusals
+    Run r;
+    r.fake.outLatency = 0.02;
+    r.fake.inLatency = 0.01;
+    r.fake.inMode = "steps";
+    r.fake.inPeriod = 2 * 24000;                                    // a pass: two beats at 120 bpm
+    const std::string song = freshSong("takes");
+    r.ok("project new " + song + " --bpm 120");
+    r.ok("port add Mic --dir in");
+    const std::string vox = firstLine(r.ok("strip add --kind audio --name Vox"));
+    r.ok("set " + vox + ".monitor=off");
+    r.ok("strip arm " + vox + " --input Mic");
+    r.ok("transport loop 4 6");
+    const long long f0 = r.fake.capture->frames.load();
+    r.ok("transport record --from 4 --count-in 0");
+    waitFrames(r, f0 + (long long)(3.4 * 2 * 24000));               // three passes and a bit
+    const std::string said = r.ok("transport stop");
+    assert(contains(said, "recorded 3 takes of 1.0 s"));
+    const std::string clip = firstLine(said);
+    const ClipModel *c = r.clip(clip);
+    const std::string folder = song.substr(0, song.find_last_of('/'));
+    assert(c && c->at == 4.0 && c->length == 2.0 && c->takes.size() == 3 && c->comp.empty() && c->takes[2] == "Recordings/Vox 3.wav");
+    assert(c->src == "Recordings/Vox 3.wav");                       // the clip plays the last take, beside the song
+    for (int k = 1; k <= 3; ++k)
+    {
+        const auto &w = r.fake.written[folder + "/Recordings/Vox " + std::to_string(k) + ".wav"][0];
+        float lo = 1, hi = 0;
+        for (float v : w) { lo = std::min(lo, v); hi = std::max(hi, v); }
+        if (std::fabs(lo - 0.1f * k) > 1e-6f || std::fabs(hi - 0.1f * k) > 1e-6f) std::printf("    take %d: %.4f … %.4f\n", k, lo, hi);
+        assert(w.size() == 2 * 24000 && std::fabs(lo - 0.1f * k) < 1e-6f && std::fabs(hi - 0.1f * k) < 1e-6f); // one pass, as heard
+    }
+    assert(contains(r.text(), "  #take src=\"Recordings/Vox 1.wav\"\n"));
+    // the comp: take 1 over 4.5 … 5 — elsewhere the last; crossfaded 5 ms at each seam
+    const int depth = r.svc.model().undoDepth;
+    r.ok("clip comp " + clip + " --take 1 --from 4.5 --to 5");
+    assert(r.clip(clip)->comp.size() == 1 && r.svc.model().undoDepth == depth + 1 && contains(r.text(), "#comp take=1 from=4.5 to=5.0"));
+    r.ok("transport loop off");
+    const std::string out = scratch() + "/takes.wav";
+    r.ok("render --out " + out + " --from 4 --to 6 --bits 32f");
+    const auto &L = r.fake.written[out][0];
+    auto at = [&](double beat) { return L[(size_t)std::llround((beat - 4.0) * 24000)]; };
+    assert(std::fabs(at(4.25) - 0.3f) < 1e-4f && std::fabs(at(4.75) - 0.1f) < 1e-4f && std::fabs(at(5.5) - 0.3f) < 1e-4f);
+    const float seam = at(5.0);                                     // half way through the crossfade
+    assert(seam > 0.15f && seam < 0.25f);
+    assert(std::fabs(L[(size_t)(24000 + 260)] - 0.3f) < 1e-4f && std::fabs(L[(size_t)(24000 - 260)] - 0.1f) < 1e-4f); // 5 ms either side: done
+    // a range over part of another: the rest of it stays
+    r.ok("clip comp " + clip + " --take 2 --from 4.75 --to 5.5");
+    const auto comp = r.clip(clip)->comp;
+    assert(comp.size() == 2 && comp[0].take == 1 && comp[0].to == 4.75 && comp[1].take == 2 && comp[1].from == 4.75 && comp[1].to == 5.5);
+    r.ok("undo");
+    r.ok("undo");
+    assert(r.clip(clip)->comp.empty());
+    // refusals
+    assert(contains(r.no("clip comp " + clip + " --take 4"), "--take is 1 … 3"));
+    assert(contains(r.no("clip comp " + clip + " --take 1 --from 7 --to 8"), "the range is empty"));
+    r.ok("clip add --src kick.wav --at 0");
+    assert(contains(r.no("clip comp " + r.svc.model().clips.back().id + " --take 1"), "has no takes"));
+    pass("takes (R-REC-2): a looped recording — each pass a take, one level throughout as HEARD (the latency taken out, the turn's tail the pass before's), a short last pass dropped; the clip spans the loop, the last take by default; a comp range plays its take, crossfaded 5 ms; a range over part of another keeps the rest; undo; refusals");
 }
 
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
@@ -3882,6 +3967,7 @@ int main()
     test_lane_groups_gather_fold_and_move_together();
     test_record_audio_lands_where_it_was_played();
     test_an_armed_audio_line_is_monitored_as_set();
+    test_a_looped_recording_makes_takes_and_a_comp_chooses();
     test_scale_lock_places_and_moves_notes_on_the_scale();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();

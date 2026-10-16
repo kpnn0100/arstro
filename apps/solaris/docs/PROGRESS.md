@@ -475,7 +475,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       Part 3 (same day): the window — M | S | R on audio and instrument strips (R lit red, eased; no input: the input
       ports offered), Input… and Monitor… in an audio line's menu, the ruler's Punch the loop's span (a red line, eased).
       Loop takes: N17. Live check owed: a recording through this machine's real input.
-- [ ] **N17** Takes and comping (R-REC-2).
+- [~] **N17** Takes and comping (R-REC-2).
+      Part 1 (2026-10-16): a looped recording → a take per pass (each heard as heard: the turn's tail the pass before's),
+      `#take`/`#comp`, `clip comp`, the compile playing the comp with 5 ms crossfades; D-12 (a take's path) closed.
+      Part 2: the takes under the clip in the window.
 - [ ] **N18** Audio editing on the lanes: split, fades and gain drawn, crossfades, reverse, consolidate, slice
       (R-EDIT-1).
 - [ ] **N19** DSP: a time-stretcher and pitch shifter (phase vocoder, transients) (R-WARP-1's DSP half).

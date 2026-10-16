@@ -130,6 +130,84 @@ namespace solaris
         Project &p = mProject;
         const double rate = p.header.sampleRate, spb = 60.0 / p.header.bpm * rate;
         const long long shift = std::llround((outLatency + inLatency) * rate) + graphLatency;
+        // R-REC-2: the song looped while recording — a take of each pass over the loop
+        if (mLoopTo > mLoopFrom && take.marks.size() > 1)
+        {
+            const double loopFrom = toTick(mLoopFrom), loopTo = toTick(mLoopTo);
+            const long long A = std::llround(loopFrom * spb), L = std::llround(loopTo * spb) - A;
+            std::map<int, std::pair<std::vector<float>, std::vector<float>>> passes;
+            std::map<int, long long> covered;
+            for (size_t m = 0; m < take.marks.size(); ++m)
+            {
+                const long long i0 = take.marks[m].first, i1 = m + 1 < take.marks.size() ? take.marks[m + 1].first : (long long)take.left.size();
+                for (long long i = i0; i < i1; ++i)
+                {
+                    long long h = take.marks[m].second + (i - i0) - shift; // where it was HEARD
+                    int pass = (int)m;
+                    if (h < A && m > 0) { h += L; pass = (int)m - 1; } // just after the loop turned: the pass before's end
+                    if (h < A || h >= A + L) continue;                // before the loop (a pre-roll): no pass of it
+                    auto &buf = passes[pass];
+                    if (buf.first.empty()) { buf.first.assign((size_t)L, 0.0f); buf.second.assign((size_t)L, 0.0f); }
+                    buf.first[(size_t)(h - A)] = take.left[(size_t)i];
+                    buf.second[(size_t)(h - A)] = take.right[(size_t)i];
+                    ++covered[pass];
+                }
+            }
+            std::vector<std::vector<std::vector<float>>> kept; // a pass that heard less than half the loop is dropped
+            for (auto &kv : passes)
+                if (covered[kv.first] * 2 >= L) kept.push_back({std::move(kv.second.first), std::move(kv.second.second)});
+            if (kept.size() >= 2)
+            {
+                const Strip *s = p.strip(mRecordStrip);
+                const std::string strip = s ? s->name : mRecordStrip;
+                const auto slash = mPath.find_last_of('/');
+                const std::string dir = (slash == std::string::npos ? std::string(".") : mPath.substr(0, slash)) + "/Recordings";
+                std::set<std::string> there;
+                std::vector<BrowserEntry> entries;
+                std::string listErr;
+                if (mHost.listDir && mHost.listDir(dir, entries, listErr))
+                    for (const auto &e : entries) there.insert(e.name);
+                for (const auto &cl : p.clips)
+                {
+                    there.insert(cl.src.substr(cl.src.find_last_of('/') + 1));
+                    for (const auto &t : cl.takes) there.insert(t.src.substr(t.src.find_last_of('/') + 1));
+                }
+                if (!mHost.writeWav) { err = "this build cannot write a recording"; return false; }
+                std::vector<Take> takes;
+                int k = 1;
+                for (const auto &ch : kept)
+                {
+                    while (there.count(strip + " " + std::to_string(k) + ".wav")) ++k;
+                    const std::string name = strip + " " + std::to_string(k) + ".wav";
+                    there.insert(name);
+                    if (!mHost.writeWav(dir + "/" + name, ch, (int)rate, 32, err)) { if (err.empty()) err = "cannot write " + dir + "/" + name; return false; }
+                    mPcm.erase(resolvePath(dir + "/" + name)); // a file of that name decoded before (an undone take) is not this one
+                    takes.push_back(Take{relativePath(dir + "/" + name), {}}); // beside the song, as `clip add` keeps a source
+                }
+                Command cc;
+                cc.kind = K::ClipAdd;
+                cc.flags = {{"src", resolvePath(takes.back().src)}, {"strip", mRecordStrip}, {"at", canonicalBeats(loopFrom)}};
+                if (!clipCommand(cc, err)) return false;
+                const std::string clip = mOutput.substr(0, mOutput.find('\n'));
+                Clip *cl = p.clip(clip);
+                if (!cl) { err = "the take's clip is gone"; return false; }
+                cl->takes = takes; // R-REC-2: every pass a take; the last plays where the comp does not say
+                cl->length = toTick(loopTo - loopFrom);
+                changed("clip.takes", clip);
+                const std::string secs = canonicalNumber(std::round((double)L / rate * 1000.0) / 1000.0);
+                mOutput = clip + "\nrecorded " + std::to_string(takes.size()) + " takes of " + secs + " s\n";
+                emit(Event(Event::Kind::RecordFinished).with("clip", clip).with("notes", 0).with("seconds", secs).with("takes", (int)takes.size()));
+                return true;
+            }
+            if (kept.size() == 1) // one whole pass: a clip of it, as a recording with no loop
+            {
+                take.left = std::move(kept[0][0]);
+                take.right = std::move(kept[0][1]);
+                take.from = A + shift; // so the take's first frame maps to the loop's start below
+                take.marks.clear();
+                mRecordFrom = loopFrom;
+            }
+        }
         const long long first = take.from - shift, n = (long long)take.left.size();
         double fromBeat = mRecordFrom, toBeat = -1.0;
         if (mPunchTo > mPunchFrom) { fromBeat = std::max(fromBeat, mPunchFrom); toBeat = mPunchTo; }
@@ -168,10 +246,10 @@ namespace solaris
         const std::string name = strip + " " + std::to_string(k) + ".wav";
         if (!mHost.writeWav) { err = "this build cannot write a recording"; return false; }
         if (!mHost.writeWav(dir + "/" + name, ch, (int)rate, 32, err)) { if (err.empty()) err = "cannot write " + dir + "/" + name; return false; }
-        mPcm.erase("Recordings/" + name); // a file of that name decoded before (an undone take) is not this one
+        mPcm.erase(resolvePath(dir + "/" + name)); // a file of that name decoded before (an undone take) is not this one
         Command cc;
         cc.kind = K::ClipAdd;
-        cc.flags = {{"src", "Recordings/" + name}, {"strip", mRecordStrip}, {"at", canonicalBeats(at)}};
+        cc.flags = {{"src", dir + "/" + name}, {"strip", mRecordStrip}, {"at", canonicalBeats(at)}}; // `clip add` keeps it relative to the song
         if (!clipCommand(cc, err)) return false;
         const std::string clip = mOutput.substr(0, mOutput.find('\n'));
         const std::string secs = canonicalNumber(std::round((double)ch[0].size() / rate * 1000.0) / 1000.0);

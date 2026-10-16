@@ -126,6 +126,11 @@ namespace solaris
             {"clips[].loop", "bool", ""},
             {"clips[].offline", "bool", "the file could not be read"},
             {"clips[].linked", "int", "clips playing the same pattern, this one included (R-CLIP-3)"},
+            {"clips[].takes", "string[]", "R-REC-2: a loop recording's passes, the files, in the order played (1-based in the comp)"},
+            {"clips[].comp", "object[]", "R-REC-2: which take plays where — song beats [from, to); elsewhere the last take"},
+            {"clips[].comp[].take", "int", "1-based"},
+            {"clips[].comp[].from", "number", "beats"},
+            {"clips[].comp[].to", "number", "beats"},
             {"patterns", "object[]", "every pattern"},
             {"patterns[].id", "string", ""},
             {"patterns[].name", "string", ""},
@@ -536,11 +541,15 @@ namespace solaris
         j.set("groups", groups);
         Json clips = Json::array();
         for (const auto &c : m.clips)
+        {
+            Json comp = Json::array(); // R-REC-2
+            for (const auto &x : c.comp) comp.push(Json::object().set("take", x.take).set("from", x.from).set("to", x.to));
             clips.push(Json::object()
                            .set("id", c.id).set("name", c.name).set("track", c.track).set("lane", c.lane).set("kind", c.kind)
                            .set("src", c.src).set("pattern", c.pattern).set("at", c.at).set("length", c.length).set("in", c.in)
                            .set("out", c.out).set("gain", c.gain).set("fadeIn", c.fadeIn).set("fadeOut", c.fadeOut)
-                           .set("loop", c.loop).set("offline", c.offline).set("linked", c.linked));
+                           .set("loop", c.loop).set("offline", c.offline).set("linked", c.linked).set("takes", strings(c.takes)).set("comp", comp));
+        }
         j.set("clips", clips);
         Json patterns = Json::array();
         for (const auto &p : m.patterns)

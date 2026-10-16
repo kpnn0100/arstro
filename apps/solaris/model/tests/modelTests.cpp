@@ -564,6 +564,30 @@ static void test_lane_groups_round_trip_and_are_checked()
     pass("lane groups in the .slp (R-ARR-3): #alanegroup before its lanes, folded only when on, a fixed point; lg_ ids; a lane naming a group the song lacks refused");
 }
 
+static void test_takes_and_their_comp_round_trip()
+{
+    // R-REC-2: #take and #comp under their #aclip, written back in place; takeAt — the comp's range (the latest written
+    // where they meet), else the last take; a comp naming a take the clip lacks, refused
+    const std::string head = "arstro-project = 1\napp = solaris\nid = prj\n#amixer id=mx_1 name=Sources order=0\n"
+                             "#atrack id=ch_2 name=Vox kind=audio mixer=mx_1 order=0 gain=0.0 pan=0.0\n";
+    const std::string clip = "#aclip id=ac_1 track=ch_2 src=\"Recordings/Vox 3.wav\" at=4.0 in=0.0 out=2.0 length=4.0\n"
+                             "  #take src=\"Recordings/Vox 1.wav\"\n  #take src=\"Recordings/Vox 2.wav\"\n  #take src=\"Recordings/Vox 3.wav\"\n";
+    Project p;
+    std::string err;
+    assert(parseProject(head + clip + "  #comp take=1 from=4.0 to=6.0\n  #comp take=2 from=5.0 to=5.5\n", p, err));
+    const Clip &c = p.clips[0];
+    assert(c.takes.size() == 3 && c.comp.size() == 2 && c.takes[1].src == "Recordings/Vox 2.wav");
+    assert(c.takeAt(4.5) == 1 && c.takeAt(5.25) == 2 && c.takeAt(5.75) == 1 && c.takeAt(7.0) == 3); // the latest range wins; else the last
+    const std::string text = serializeProject(p);
+    assert(contains(text, "  #take src=\"Recordings/Vox 1.wav\"\n") && contains(text, "  #comp take=2 from=5.0 to=5.5\n"));
+    Project q;
+    assert(parseProject(text, q, err) && serializeProject(q) == text);
+    Project bad;
+    assert(!parseProject(head + clip + "  #comp take=4 from=4.0 to=5.0\n", bad, err) && contains(err, "names take 4") && contains(err, "it has 3"));
+    assert(!parseProject(head + "#take src=a.wav\n", bad, err) && contains(err, "#take outside an #aclip"));
+    pass("takes and their comp in the .slp (R-REC-2): #take / #comp under the clip, a fixed point; the comp's range plays (the latest where they meet), else the last take; a take the clip lacks refused");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -581,6 +605,7 @@ int main()
     test_note_chance_and_scales_round_trip_and_are_checked();
     test_markers_round_trip_and_name_their_sections();
     test_lane_groups_round_trip_and_are_checked();
+    test_takes_and_their_comp_round_trip();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

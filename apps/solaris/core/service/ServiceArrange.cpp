@@ -267,6 +267,38 @@ namespace solaris
         Project &p = mProject;
         if (c.kind == K::TimeInsert || c.kind == K::TimeDelete) return timeCommand(c, err);
         if (c.kind == K::LaneGroup || c.kind == K::LaneUngroup || c.kind == K::ClipsMove || c.kind == K::LaneMove) return groupCommand(c, err);
+        if (c.kind == K::ClipComp)
+        {
+            // R-REC-2: a take over a range of the clip — what it covers overwritten; the ranges kept apart and in order
+            Clip *cl = p.clip(c.arg(0));
+            if (!cl) { err = "no clip `" + c.arg(0) + "`"; return false; }
+            if (cl->takes.empty()) { err = cl->id + " has no takes — recording it while the song loops makes them"; return false; }
+            double take = 0, from = cl->at, to = cl->at + clipLengthBeats(p, *cl);
+            if (!parseNumber(c.flag("take"), take) || take != std::floor(take) || take < 1 || take > (double)cl->takes.size())
+            { err = "--take is 1 … " + std::to_string(cl->takes.size()); return false; }
+            const double a0 = from, a1 = to;
+            if (c.has("from") && !parseNumber(c.flag("from"), from)) { err = "--from is beats"; return false; }
+            if (c.has("to") && !parseNumber(c.flag("to"), to)) { err = "--to is beats"; return false; }
+            from = toTick(std::max(a0, from));
+            to = toTick(std::min(a1, to));
+            if (!(to > from)) { err = "the range is empty — it must be inside " + cl->id + " (" + canonicalBeats(a0) + " … " + canonicalBeats(a1) + ")"; return false; }
+            std::vector<CompRange> out;
+            for (const auto &r : cl->comp)
+            {
+                if (r.to <= from + 1e-9 || r.from >= to - 1e-9) { out.push_back(r); continue; } // apart
+                if (r.from < from - 1e-9) { CompRange h = r; h.to = from; out.push_back(h); }  // its head stays
+                if (r.to > to + 1e-9) { CompRange t = r; t.from = to; out.push_back(t); }      // its tail stays
+            }
+            out.push_back(CompRange{(int)take, from, to, {}});
+            std::sort(out.begin(), out.end(), [](const CompRange &x, const CompRange &y) { return x.from < y.from; });
+            std::vector<CompRange> merged; // neighbours of one take are one range
+            for (const auto &r : out)
+                if (!merged.empty() && merged.back().take == r.take && std::fabs(merged.back().to - r.from) < 1e-9) merged.back().to = r.to;
+                else merged.push_back(r);
+            cl->comp = merged;
+            changed("clip.comp", cl->id);
+            return true;
+        }
         if (c.kind == K::MarkerAdd)
         {
             Marker m;

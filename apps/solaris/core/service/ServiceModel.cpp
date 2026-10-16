@@ -285,6 +285,8 @@ namespace solaris
                 cm.offline = mOffline.count(path) || (!mPcm.count(path) && !std::ifstream(path).good());
             }
             else cm.linked = uses[c.pattern];
+            for (const auto &t : c.takes) cm.takes.push_back(t.src); // R-REC-2
+            for (const auto &x : c.comp) cm.comp.push_back(ClipModel::CompModel{x.take, x.from, x.to});
             mModel.lengthBeats = std::max(mModel.lengthBeats, cm.at + cm.length);
             mModel.clips.push_back(cm);
         }

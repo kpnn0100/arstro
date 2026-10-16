@@ -146,6 +146,9 @@ namespace solaris
         bool loop = false;
         bool offline = false;                    // the file could not be read (audio)
         int linked = 1;                          // clips playing the same pattern, this one included
+        std::vector<std::string> takes;          // R-REC-2: a loop recording's passes (files), 1-based in the comp
+        struct CompModel { int take = 1; double from = 0, to = 0; };
+        std::vector<CompModel> comp;             // R-REC-2: which take plays where; elsewhere the last
     };
 
     struct NoteModel

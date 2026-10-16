@@ -193,7 +193,46 @@ namespace solaris
             {
                 if (c.track != s->id) continue;
                 const long long start = (long long)std::llround(c.at * spb);
-                if (c.isAudio() && es.kind == engine::Strip::Audio)
+                if (c.isAudio() && es.kind == engine::Strip::Audio && !c.takes.empty())
+                {
+                    // (C5) R-REC-2: each stretch of the clip from the take its comp gives it — the regions overlap 5 ms
+                    // either side of a seam, faded across it, so a cut never clicks; the clip's own fades at its ends
+                    const double len = clipLengthBeats(p, c);
+                    std::vector<double> cuts{c.at, c.at + len};
+                    for (const auto &x : c.comp)
+                        for (double b : {x.from, x.to})
+                            if (b > c.at + 1e-9 && b < c.at + len - 1e-9) cuts.push_back(b);
+                    std::sort(cuts.begin(), cuts.end());
+                    cuts.erase(std::unique(cuts.begin(), cuts.end(), [](double a, double b) { return std::fabs(a - b) < 1e-9; }), cuts.end());
+                    std::vector<std::pair<int, std::pair<double, double>>> runs; // take, [from, to) — neighbours of one take merged
+                    for (size_t k = 0; k + 1 < cuts.size(); ++k)
+                    {
+                        const int t = c.takeAt(0.5 * (cuts[k] + cuts[k + 1]));
+                        if (!runs.empty() && runs.back().first == t) runs.back().second.second = cuts[k + 1];
+                        else runs.push_back({t, {cuts[k], cuts[k + 1]}});
+                    }
+                    const long long x5 = (long long)std::llround(0.005 * p.header.sampleRate);
+                    for (size_t k = 0; k < runs.size(); ++k)
+                    {
+                        const auto &take = c.takes[(size_t)runs[k].first - 1];
+                        engine::Region rg;
+                        rg.clip = c.id;
+                        rg.pcm = pcm ? pcm(take.src) : nullptr;
+                        if (!rg.pcm) r.warnings.push_back("clip " + c.id + ": take " + std::to_string(runs[k].first) + ", " + take.src + ", is offline — silent");
+                        const long long a = (long long)std::llround(runs[k].second.first * spb) - (k > 0 ? x5 : 0);
+                        const long long b = (long long)std::llround(runs[k].second.second * spb) + (k + 1 < runs.size() ? x5 : 0);
+                        rg.start = a;
+                        rg.frames = b - a;
+                        rg.srcOffset = (long long)std::llround(c.in * p.header.sampleRate) + (a - start); // a take begins where the clip does
+                        rg.srcFrames = rg.pcm ? rg.pcm->frames : rg.frames;
+                        rg.gain = engine::dbToLinear(c.gain);
+                        rg.fadeIn = k > 0 ? 2 * x5 : (long long)std::llround(c.fadeIn * spb);
+                        rg.fadeOut = k + 1 < runs.size() ? 2 * x5 : (long long)std::llround(c.fadeOut * spb);
+                        g.end = std::max(g.end, rg.start + rg.frames);
+                        es.regions.push_back(rg);
+                    }
+                }
+                else if (c.isAudio() && es.kind == engine::Strip::Audio)
                 {
                     engine::Region rg;
                     rg.clip = c.id;

@@ -219,6 +219,19 @@ makes.
 
 ---
 
+**Takes (R-REC-2).** A loop recording's clip carries its passes and its comp under it:
+
+```
+#aclip id=ac_5 track=ch_3 lane=ln_2 src="Recordings/Vox 3.wav" at=4.0 in=0.0 out=1.0 length=2.0
+  #take src="Recordings/Vox 1.wav"
+  #take src="Recordings/Vox 2.wav"
+  #take src="Recordings/Vox 3.wav"
+  #comp take=1 from=4.5 to=5.0
+```
+
+Takes are numbered from 1 in the order they were played; a `#comp` range (song beats) names the take that plays there,
+the last take elsewhere; the seams are crossfaded 5 ms. `clip comp` writes them.
+
 ## 9a. Markers — `#amarker` (R-ARR-1)
 
 ```
@@ -276,6 +289,7 @@ marker add <name> --at b [--length b] [--note t] | marker rename <mk> <name> | m
 time insert --at b --length b | time delete --from b --to b      ; the whole song, ONE edit (R-ARR-2)
 lane group <ln> … [--name n] | lane ungroup <lg> | lane move <lg> --to i | clips move "<ac> …" --by b   ; R-ARR-3
 port add <name> [--dir in|out] [--channels 1|2] | strip arm <ch> [--input <port>] | transport record | transport punch <a> <b>|off   ; R-REC-1
+clip comp <ac> --take n [--from b --to b]   ; R-REC-2
 transport play | transport stop | transport seek <b|mk> | transport loop <a> <b> | transport loop <mk> | transport loop off
 render --out <f.wav> [--from b] [--to b] [--stems ch,…] [--ports] [--bits 24|32f]
 matrix print [--json] | audit | state print [--json] [--stable] | registry [--json] | api [--json|--md]

@@ -61,6 +61,13 @@ namespace solaris
     const Pattern *Project::pattern(const std::string &id) const { return findId(patterns, id); }
     const Clip *Project::clip(const std::string &id) const { return findId(clips, id); }
     Automation *Project::automation(const std::string &id) { return findId(automations, id); }
+    int Clip::takeAt(double beat) const
+    {
+        if (takes.empty()) return 0;
+        for (auto it = comp.rbegin(); it != comp.rend(); ++it) // the latest range written wins where they meet
+            if (beat >= it->from - 1e-9 && beat < it->to - 1e-9) return it->take;
+        return (int)takes.size();
+    }
     Marker *Project::marker(const std::string &id) { return findId(markers, id); }
     LaneGroup *Project::group(const std::string &id) { return findId(groups, id); }
     const LaneGroup *Project::group(const std::string &id) const { return findId(groups, id); }
@@ -291,6 +298,18 @@ namespace solaris
             else if (k == "colour") n.colour = r.integer(k, v, -1);
             else n.unknown.emplace_back(k, v);
         }
+        void apply(Reader &, Take &n, const std::string &k, const std::string &v)
+        {
+            if (k == "src") n.src = v;
+            else n.unknown.emplace_back(k, v);
+        }
+        void apply(Reader &r, CompRange &n, const std::string &k, const std::string &v)
+        {
+            if (k == "take") n.take = r.integer(k, v, 1);
+            else if (k == "from") n.from = toTick(r.num(k, v, 0.0));
+            else if (k == "to") n.to = toTick(r.num(k, v, 0.0));
+            else n.unknown.emplace_back(k, v);
+        }
         void apply(Reader &, LaneGroup &n, const std::string &k, const std::string &v)
         {
             if (k == "id") n.id = v;
@@ -469,6 +488,16 @@ namespace solaris
                 else if (tok.type == "alane") { p.lanes.emplace_back(); fill(p.lanes.back()); cur = Cur::Lane; }
                 else if (tok.type == "alanegroup") { p.groups.emplace_back(); fill(p.groups.back()); cur = Cur::Group; } // R-ARR-3
                 else if (tok.type == "apattern") { p.patterns.emplace_back(); fill(p.patterns.back()); cur = Cur::Pattern; }
+                else if (tok.type == "take" || tok.type == "comp") // R-REC-2: a clip's takes and its comp
+                {
+                    if (cur != Cur::Clip)
+                    {
+                        err = "line " + std::to_string(lineNo) + ": #" + tok.type + " outside an #aclip";
+                        return false;
+                    }
+                    if (tok.type == "take") { Take x; for (const auto &f : tok.fields) apply(r, x, f.first, f.second); p.clips.back().takes.push_back(x); }
+                    else { CompRange x; for (const auto &f : tok.fields) apply(r, x, f.first, f.second); p.clips.back().comp.push_back(x); }
+                }
                 else if (tok.type == "note")
                 {
                     Note n;
@@ -806,6 +835,10 @@ namespace solaris
                 if (n.gain != 0) l.kv("gain", canonicalNumber(n.gain));
             }
             emit(out, "", l.unknown(n.unknown), n.remarks);
+            for (const auto &x : n.takes) // R-REC-2
+                out += "  " + Line("take").str("src", x.src).unknown(x.unknown).s + "\n";
+            for (const auto &x : n.comp)
+                out += "  " + Line("comp").kv("take", std::to_string(x.take)).kv("from", canonicalBeats(x.from)).kv("to", canonicalBeats(x.to)).unknown(x.unknown).s + "\n";
         }
         group(!p.automations.empty());
         for (const auto &n : p.automations)
@@ -985,6 +1018,14 @@ namespace solaris
                 if (x.value < lo - 1e-9 || x.value > hi + 1e-9 || x.at < 0)
                     e.push_back("pattern " + pt.id + "'s " + canon + " point at " + canonicalBeats(x.at) + " is out of range (" + canonicalNumber(lo) + " … " + canonicalNumber(hi) + ")");
             }
+        }
+        for (const auto &c : p.clips) // R-REC-2: takes are an audio clip's; a comp names one of them, forwards
+        {
+            if (!c.takes.empty() && !c.isAudio()) e.push_back("clip " + c.id + " has takes but is not audio");
+            for (const auto &x : c.comp)
+                if (x.take < 1 || x.take > (int)c.takes.size() || !(x.to > x.from))
+                    e.push_back("clip " + c.id + "'s comp names take " + std::to_string(x.take) + " over " + canonicalBeats(x.from) + " … " + canonicalBeats(x.to) +
+                                " (it has " + std::to_string(c.takes.size()) + ")");
         }
         for (const auto &s : p.strips) // R-REC-1: an input is an input port; monitoring one of three
         {

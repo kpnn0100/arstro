@@ -188,6 +188,20 @@ namespace solaris
      *  clock, so a render is pure, and two clips of one pattern vary apart. */
     bool noteSounds(const Note &n, const std::string &clip, long long repetition);
 
+    /** R-REC-2: one pass over a loop, recorded — a file of the clip's span. */
+    struct Take
+    {
+        std::string src;
+        Fields unknown;
+    };
+    /** R-REC-2: where take `take` (1-based) plays — song beats [from, to). */
+    struct CompRange
+    {
+        int take = 1;
+        double from = 0.0, to = 0.0;
+        Fields unknown;
+    };
+
     struct Clip
     {
         std::string id, name, track, lane, src, pattern; // src: audio clip; pattern: note clip
@@ -197,10 +211,14 @@ namespace solaris
         double gain = 0.0;              // dB
         double fadeIn = 0.0, fadeOut = 0.0; // beats
         bool loop = false;
+        std::vector<Take> takes;        // R-REC-2: a loop recording's passes, in the order played (1-based)
+        std::vector<CompRange> comp;    // R-REC-2: which take plays where; elsewhere the LAST
         Fields unknown;
         Remarks remarks;
 
         bool isAudio() const { return !src.empty(); }
+        /** R-REC-2: the take that plays at `beat` (1-based) — the comp's, else the last; 0 when it has no takes. */
+        int takeAt(double beat) const;
     };
 
     /** A point of an automation (R-AUTO-4): the shape governs the segment AFTER it — a bezier point

@@ -45,6 +45,7 @@ namespace solaris
             TimeInsert, TimeDelete,                          // R-ARR-2
             LaneGroup, LaneUngroup, ClipsMove,               // R-ARR-3
             PortAdd, TransportPunch,                         // R-REC-1
+            ClipComp,                                        // R-REC-2
             Ls, Show, PatternPrint,                                                                   // R-SVC-8: read back
             Undo, Redo, HistoryPrint, HistoryJump,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,

@@ -181,7 +181,7 @@ namespace solaris
             ok = midiCommand(c, err);
             break;
         case K::MarkerAdd: case K::MarkerRename: case K::MarkerMove: case K::MarkerDelete: case K::TimeInsert: case K::TimeDelete:
-        case K::LaneGroup: case K::LaneUngroup: case K::ClipsMove:
+        case K::LaneGroup: case K::LaneUngroup: case K::ClipsMove: case K::ClipComp:
             ok = arrangeCommand(c, err);
             break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:

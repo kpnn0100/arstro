@@ -121,6 +121,9 @@ namespace solaris
             std::vector<float> left, right;
             long long from = -1;
             long long dropped = 0; // frames the ring could not hold (the recorder fell behind)
+            // R-REC-2: where the song's position jumped (a loop turned): (frame of the take, the song sample read there) —
+            // the first is (0, from)
+            std::vector<std::pair<long long, long long>> marks;
         };
         void startTake();
         Take endTake();
@@ -237,6 +240,7 @@ namespace solaris
         LockFreeQueue<InChunk> mRecQ{512};     // ~5 s at 48 kHz in flight: the recorder drains it every 2 ms
         std::thread mRecorder;
         Take mTake;                             // the recorder thread's while it runs
+        long long mTakeNext = 0;                // the song sample the next chunk follows on from (the recorder's)
         std::atomic<long long> mSlotsWritten{0};
         long long mOutFrames = 0;               // the audio thread's: frames handed to the device
         int mGeneration = 0;                    // the audio thread's: the engine it plays

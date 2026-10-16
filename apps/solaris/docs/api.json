@@ -1045,6 +1045,18 @@
       "requirement": "R-MIDI-2"
     },
     {
+      "verb": "clip comp",
+      "usage": "clip comp <ac> --take <n> [--from <beats>] [--to <beats>]",
+      "args": "<ac>",
+      "flags": [
+        "take=<n>",
+        "from=<beats>",
+        "to=<beats>"
+      ],
+      "summary": "Choose which take plays where (R-REC-2): take <n> (1-based) from --from to --to (song beats; the whole clip without them) — ONE edit, the range overwriting what it covers. Where no range says, the last take plays; the seams are crossfaded 5 ms. A loop recording makes the takes.",
+      "requirement": "R-REC-2"
+    },
+    {
       "verb": "transport punch",
       "usage": "transport punch <from|off> [to]",
       "args": "<from|off> [to]",
@@ -1241,9 +1253,10 @@
       "fields": [
         "clip",
         "notes",
-        "seconds"
+        "seconds",
+        "takes"
       ],
-      "summary": "A recording landed: its notes in this clip ('' — nothing was played) (R-MIDI-2); an audio take, how long it is (R-REC-1)."
+      "summary": "A recording landed: its notes in this clip ('' — nothing was played) (R-MIDI-2); an audio take, how long it is (R-REC-1); how many takes a looped recording made (R-REC-2)."
     },
     {
       "name": "strip.armed",
@@ -1959,6 +1972,36 @@
       "path": "clips[].linked",
       "type": "int",
       "summary": "clips playing the same pattern, this one included (R-CLIP-3)",
+      "stable": true
+    },
+    {
+      "path": "clips[].takes",
+      "type": "string[]",
+      "summary": "R-REC-2: a loop recording's passes, the files, in the order played (1-based in the comp)",
+      "stable": true
+    },
+    {
+      "path": "clips[].comp",
+      "type": "object[]",
+      "summary": "R-REC-2: which take plays where — song beats [from, to); elsewhere the last take",
+      "stable": true
+    },
+    {
+      "path": "clips[].comp[].take",
+      "type": "int",
+      "summary": "1-based",
+      "stable": true
+    },
+    {
+      "path": "clips[].comp[].from",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "clips[].comp[].to",
+      "type": "number",
+      "summary": "beats",
       "stable": true
     },
     {

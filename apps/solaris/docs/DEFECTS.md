@@ -37,6 +37,15 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-12 A recorded clip pointed beside the working folder, not the song — closed in N17
+- **Found:** 2026-10-16, building N17's takes: the test's decoder now hands back what was recorded, and a take's clip
+  played a half-second sine — the file it named was not found.
+- **Cause:** `commitAudioTake` gave `clip add` the source `Recordings/<name>`; `clip add` reads a relative source against
+  the working folder (as a shell would) and keeps it relative to the song — so the clip named `<cwd>/Recordings/…`.
+- **Fix:** the full path is given (`clip add` keeps it relative to the song); takes the same; the decode cache cleared by
+  the resolved path.
+- **Guard:** `test_record_audio_lands_where_it_was_played` (the clip's source `Recordings/Vox 1.wav`) — red with the old line.
+
 ### D-11 The keyboard-recording test failed now and then under a busy machine — closed in N15
 - **Found:** 2026-10-16, running the service suite four times while building N15.
 - **Symptom:** `test_record_the_keyboard_into_a_clip` asserted a held note of 0.3 … 0.8 beats; one run in four read
