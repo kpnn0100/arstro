@@ -3150,6 +3150,12 @@
       "stable": true
     },
     {
+      "path": "settings.threads",
+      "type": "string",
+      "summary": "R-PERF-2: auto (the cores but one, at most 8) | 1 … 16 — the engine's threads, live and in a render",
+      "stable": true
+    },
+    {
       "path": "devices",
       "type": "object[]",
       "summary": "from the last `devices list`",

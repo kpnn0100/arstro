@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 ✅ DR-REC-1 — loop takes are R-REC-2's; R-REC-2 ✅ DR-REC-2; R-EDIT-1 ✅ DR-EDIT-1; R-WARP-1 ✅ DR-WARP-1; R-TEMPO-1 ✅ DR-TEMPO-1; R-PRESET-1 ✅ DR-PRESET-1; R-PRESET-2 ✅ DR-PRESET-2; R-PRESET-3 ✅ DR-PRESET-3; R-VST-6 ✅ DR-VST-6 — the wheels to a plugin wait; R-CTRL-1 ✅ DR-CTRL-1; R-CTRL-2 ✅ DR-CTRL-2 — not yet against a real surface; R-PERF-1 ✅ DR-PERF-1)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 ✅ DR-REC-1 — loop takes are R-REC-2's; R-REC-2 ✅ DR-REC-2; R-EDIT-1 ✅ DR-EDIT-1; R-WARP-1 ✅ DR-WARP-1; R-TEMPO-1 ✅ DR-TEMPO-1; R-PRESET-1 ✅ DR-PRESET-1; R-PRESET-2 ✅ DR-PRESET-2; R-PRESET-3 ✅ DR-PRESET-3; R-VST-6 ✅ DR-VST-6 — the wheels to a plugin wait; R-CTRL-1 ✅ DR-CTRL-1; R-CTRL-2 ✅ DR-CTRL-2 — not yet against a real surface; R-PERF-1 ✅ DR-PERF-1; R-PERF-2 ✅ DR-PERF-2)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -1026,7 +1026,15 @@ a process is the host's (law 12).
   playing: `transport.cpu`, `transport.cpuPeak`, `strips[].cpu`; stopped, 0. Drawn in the song bar before the master
   meter: "CPU" and its percentage over a thin bar, easing as a value catching up, the destructive colour from 80 %.)
 - **R-PERF-2 A multi-core engine**: strips that do not feed each other render in parallel on a worker pool,
-  byte-identical to one thread (R-RENDER-1).
+  byte-identical to one thread (R-RENDER-1). (**Detailed while building it, N30 — 2026-10-17:** a strip NOTHING feeds — no
+  route, send or key into it — does its own work (its clips or notes, its instrument, its rack) before the others, on
+  a pool, in any order: nothing it reads is written by another strip. Then everything else runs as on one thread, in
+  processing order — the fed strips' own work, and every strip's fader, pan, sends, keys and outputs — so each sum is
+  added in the same order, and the bytes are one thread's. Workers take the audio thread's floating-point mode. The
+  audio thread takes items too and never waits to START (a worker still leaving an old job: it works alone); it waits
+  only for the items it handed out. `settings set threads=auto|1…16` — the machine's (auto: the cores but one, at most
+  8); live playback and a render both use it. Measured: a render and live playback, one thread against several,
+  byte-identical; an engine run with its free strips in reverse order, byte-identical.)
 - **R-PERF-3 Freeze / bounce** (R-EDM-18): `strip freeze <ch>` renders the strip to audio and plays that instead
   (its devices idle); `strip unfreeze`; `strip bounce <ch>` makes the audio a clip on a new strip.
 - **R-DEV-1/2/4 Several devices** (R-EDM-19, P2): a port on a second device played clocked to the first,

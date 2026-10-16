@@ -4126,6 +4126,56 @@ static void test_the_cpu_meter()
     pass("the CPU meter (R-PERF-1): playing, the load published — finite, its worst block held — and each strip's share (a chord's synth more than an empty bus); stopped, 0; a render untimed, its bytes the same");
 }
 
+static void test_the_engine_on_several_threads()
+{
+    // R-PERF-2: `settings set threads` — a render on one thread and on four, byte-identical; live playback on four is
+    // that render (as one thread's is, DR-PLAY-1); auto and refusals
+    Run r;
+    r.ok("project new " + freshSong("threads") + " --bpm 120");
+    for (const char *inst : {"synth", "drums", "synth", "drums", "piano"})
+    {
+        const std::string ac = firstLine(r.ok(std::string("clip add --instrument ") + inst + " --at 0 --length 8"));
+        const std::string pt = r.clip(ac)->pattern;
+        r.ok("notes add " + pt + " \"C3@0:2 G3@1:1:90 E4@2:3 C5@4:2:70 A3@6:1\"");
+    }
+    r.ok("strip add --kind bus --name Verb");
+    const std::string verb = r.svc.model().strips.back().id;
+    r.ok("device add " + verb + " --type reverb");
+    const auto strips = r.svc.model().strips; // a copy: each command below rebuilds the model it lives in (D-15)
+    for (const auto &s : strips)
+        if (s.kind == "instrument") r.ok("send add " + s.id + " --to " + verb + " --gain -6");
+    const std::string dir = scratch();
+    auto render = [&](const std::string &threads) {
+        r.ok("settings set threads=" + threads);
+        const std::string out = dir + "/threads-" + threads + ".wav";
+        r.ok("render --out " + out + " --to 8 --bits 32f");
+        return r.fake.written[out];
+    };
+    const auto one = render("1"), four = render("4");
+    float peak = 0;
+    for (float v : one[0]) peak = std::max(peak, std::fabs(v));
+    assert(peak > 0.05f && one == four);
+    // live, four threads: what the device hears is the render, frame for frame
+    r.ok("settings set threads=4");
+    r.fake.capture->sink.clear();
+    r.fake.capture->frames = 0;
+    r.ok("transport play --from 0");
+    waitFrames(r, 96000);
+    r.ok("transport stop");
+    r.ok("render --out " + dir + "/threads-ports.wav --to 8 --bits 32f --ports");
+    const auto &port = r.fake.written[dir + "/threads-ports.Main.wav"];
+    const auto &live = r.fake.capture->sink;
+    bool same = port.size() == 2 && live.size() >= 2 * 90000; // (no device here is latent: no lag to allow for)
+    for (size_t i = 0; same && i < 90000; ++i) same = live[2 * i] == port[0][i] && live[2 * i + 1] == port[1][i];
+    assert(same);
+    r.ok("settings set threads=auto");
+    assert(r.svc.model().settings.threads == "auto");
+    assert(contains(r.no("settings set threads=0"), "threads is auto or 1 … 16"));
+    assert(contains(r.no("settings set threads=17"), "threads is auto or 1 … 16"));
+    assert(contains(r.no("settings set threads=two"), "threads is auto or 1 … 16"));
+    pass("the engine on several threads (R-PERF-2): a render on one thread and on four, byte-identical; live on four is that render, frame for frame; auto; refusals");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -5400,6 +5450,7 @@ int main()
     test_the_surface_codecs();
     test_a_control_surface();
     test_the_cpu_meter();
+    test_the_engine_on_several_threads();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

@@ -10,6 +10,7 @@
 #include "Notation.h"
 #include "Player.h"
 #include "SolarisService.h"
+#include "WorkerPool.h"
 #include "device/Device.h"
 #include <chrono>
 #include <cmath>
@@ -466,6 +467,7 @@ namespace solaris
             mModel.transport.driver = driver; // R-DEV-9: what it plays through
             stopMonitor();                    // R-MIDI-2: one consumer of the keyboard at a time — the song's player now
             mPlayer = std::make_unique<Player>();
+            mPlayer->setThreads(WorkerPool::threadsFor(mSettings.threads)); // R-PERF-2
             if (mMidiQ) { mPlayer->setMidi(mMidiQ.get()); mPlayer->setArmed(armedIn(mLiveStrips)); }
             attachInput(*mPlayer, mLiveStrips, true, false); // R-REC-1: an armed audio line's input, beside the output
             mPlayer->setCountIn(mCountInFrames); // R-MIDI-2: a recording's count-in, else none

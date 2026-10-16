@@ -276,6 +276,7 @@ namespace solaris
         std::vector<MapModel> mappings;          // R-CTRL-1: the MIDI controls and what they move
         std::string surface = "none";            // R-CTRL-2: none | mcu | hui
         std::string surfacePort;                 // … its port, in and out
+        std::string threads = "auto";            // R-PERF-2: auto | 1 … 16
     };
 
     /** R-ARR-1: a named place in the song, and where its section ends (computed: its length, else the next marker). */

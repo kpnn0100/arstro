@@ -4,6 +4,7 @@ add_library(solaris_core STATIC
   Compile.cpp
   PluginDevice.cpp
   Surface.cpp
+  WorkerPool.cpp
   Formula.cpp
   Bindings.cpp
   Settings.cpp

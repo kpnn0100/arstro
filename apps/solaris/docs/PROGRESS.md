@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N30 — a multi-core engine** (R-PERF-2; N29 — the CPU meter — is built; owed: a check against a real Mackie / HUI surface), then N31… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N31 — freeze and bounce** (R-PERF-3; N30 — the multi-core engine — is built; owed: a check against a real Mackie / HUI surface), then N32… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -557,7 +557,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       2026-10-17: the player times each block (all but the device's wait) over its duration — smoothed, its worst
       held; the engine adds up each strip's time when asked (never in a render); `transport.cpu|cpuPeak`,
       `strips[].cpu`; the song bar's readout, catching up.
-- [ ] **N30** A multi-core engine, byte-identical (R-PERF-2).
+- [x] **N30** A multi-core engine, byte-identical (R-PERF-2).
+      2026-10-17: the strips nothing feeds do their own work on a pool first, then everything else in processing
+      order (each sum in one thread's order); `WorkerPool`; `settings threads`; live and render both. A TSan build
+      found D-16 (closed).
 - [ ] **N31** Freeze and bounce (R-PERF-3).
 - [ ] **N32** Several audio devices, drift-corrected (R-DEV-1/2/4).
 **Phase 5 — grow the sound and the craft**

@@ -108,6 +108,8 @@ namespace solaris
         mOut = std::move(out);
         mEng = eng.release();
         mEng->measureTime(true); // R-PERF-1: its strips' time, for the CPU meter
+        if (!mPool || mPool->threads() != mThreads) mPool = std::make_unique<WorkerPool>(mThreads); // R-PERF-2
+        mEng->setParallel(mPool.get());
         mRoutes = std::move(routes);
         mChannels = std::max(1, channels);
         mBlock = std::max(32, block);
@@ -208,6 +210,7 @@ namespace solaris
             mGraphLatency.store(mEng->outputLatency(), std::memory_order_relaxed);
             mEng->prepare(mPb, mBlock); // the port count may have changed: within capacity it does not allocate
             mEng->measureTime(true);    // R-PERF-1
+            mEng->setParallel(mPool.get()); // R-PERF-2
             mEng->tapMaster(mTapL.data(), mTapR.data(), mBlock);
             if (!mRetired.push(old)) delete old; // the service is not collecting: better a free here than a leak
             break;

@@ -178,6 +178,24 @@ namespace engine
         mStrips = std::move(strips);
         mMasterRack = std::move(master);
         mStripNs.assign(mStrips.size(), 0); // R-PERF-1
+        // R-PERF-2: the strips nothing feeds — no route, send or key into them
+        {
+            std::vector<char> fed(mStrips.size(), 0);
+            for (const auto &s : mGraph.strips)
+            {
+                if (s.out.kind == Target::Strip && s.out.index >= 0 && s.out.index < (int)fed.size()) fed[(size_t)s.out.index] = 1;
+                for (const auto &x : s.sends)
+                    if (x.to.kind == Target::Strip && x.to.index >= 0 && x.to.index < (int)fed.size()) fed[(size_t)x.to.index] = 1;
+            }
+            mFree.clear();
+            mIsFree.assign(fed.size(), 0);
+            for (size_t i = 0; i < fed.size(); ++i)
+                if (!fed[i])
+                {
+                    mFree.push_back((int)i);
+                    mIsFree[i] = 1;
+                }
+        }
         for (auto &b : mGraph.binds) // R-VST-6: a made device's parameter by name (its list is its own); not there: inert
             if ((b.kind == Bind::DeviceParam || b.kind == Bind::MasterDeviceParam) && b.param < 0 && !b.paramName.empty())
             {
@@ -498,6 +516,258 @@ namespace engine
         }
     }
 
+    void Engine::ownWorkOf(void *self, int i)
+    {
+        auto *e = static_cast<Engine *>(self);
+        e->ownWork((size_t)e->mFree[(size_t)i], e->mPieceP0, e->mPieceN, e->mPieceOff);
+    }
+
+    void Engine::ownWork(size_t si, long long p0, int n, int off)
+    {
+        // a strip's OWN work — its clips or notes, its instrument, its rack — into its input (R-PERF-2: for a strip
+        // nothing feeds, any thread, any order)
+
+        // R-PERF-1: this strip's time, when asked (a clock read either side; nothing else changes)
+        struct Timed
+        {
+            bool on;
+            long long &sum;
+            std::chrono::steady_clock::time_point t0;
+            Timed(bool o, long long &s) : on(o), sum(s), t0(o ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point()) {}
+            ~Timed() { if (on) sum += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count(); }
+        } timed(mTime, mStripNs[si]);
+        const Strip &d = mGraph.strips[si];
+        StripState &st = *mStrips[si];
+        double *L = st.inL.data(), *R = st.inR.data();
+        // R-MIX-17: its own sound waits, in its own delay, for the latest arrival at its input
+        const bool srcLate = st.srcDelay.length() > 0;
+        double *SL = L, *SR = R;
+        if (srcLate)
+        {
+            SL = st.srcL.data();
+            SR = st.srcR.data();
+            std::fill(SL, SL + n, 0.0);
+            std::fill(SR, SR + n, 0.0);
+        }
+
+        if (d.kind == Strip::Audio)
+        {
+            for (const Region &rg : d.regions)
+            {
+                if (!rg.pcm || rg.frames <= 0) continue;
+                const long long a = std::max(p0, rg.start), b = std::min(p0 + n, rg.start + rg.frames);
+                for (long long t = a; t < b; ++t)
+                {
+                    const long long local = t - rg.start;
+                    long long src = local;
+                    if (rg.loop && rg.srcFrames > 0) src %= rg.srcFrames;
+                    else if (src >= rg.srcFrames) continue;
+                    if (rg.reverse) src = rg.srcFrames - 1 - src; // R-EDIT-1: from the span's end
+                    src += rg.srcOffset;
+                    if (src < 0 || src >= rg.pcm->frames) continue; // outside the file is silence
+                    const double g = rg.gain * fadeGain(local, rg.frames, rg.fadeIn, rg.fadeOut);
+                    SL[t - p0] += g * rg.pcm->at(src, 0);
+                    SR[t - p0] += g * rg.pcm->at(src, 1);
+                }
+            }
+            // R-REC-1: its input, monitored — `off` is where this piece sits in the render
+            for (int i = 0; i < n && off + i < st.liveInFrames; ++i)
+            {
+                SL[i] += st.liveInL[(size_t)(off + i)];
+                SR[i] += st.liveInR[(size_t)(off + i)];
+            }
+        }
+        size_t firstFx = 0;
+        if (d.kind == Strip::Instrument && !st.rack.empty())
+        {
+            firstFx = 1;
+            Device &inst = *st.rack[0];
+            const bool playing = !d.rack[0].bypass;
+            long long cur = p0;
+            // R-MIDI-2: what was played live since the last piece, at its start
+            while (st.liveTail != st.liveHead)
+            {
+                const auto &e = st.live[(size_t)st.liveTail];
+                if (e.kind == 1) inst.pitchBend(e.value);
+                else if (e.kind == 2) inst.modWheel(e.value);
+                else if (e.velocity > 0) inst.noteOn(e.pitch, e.velocity);
+                else inst.noteOff(e.pitch);
+                st.liveTail = (st.liveTail + 1) % (int)st.live.size();
+            }
+            // (M5) split the block at every note event — and every wheel event (R-MIDI-3) — so each starts on its
+            // exact sample; at one sample a wheel before a note, so a note starts bent where its lane says
+            for (;;)
+            {
+                const bool note = st.nextEvent < d.notes.size() && d.notes[st.nextEvent].at < p0 + n;
+                const bool wheel = st.nextControl < d.controls.size() && d.controls[st.nextControl].at < p0 + n;
+                if (!note && !wheel) break;
+                const bool takeWheel = wheel && (!note || d.controls[st.nextControl].at <= d.notes[st.nextEvent].at);
+                const long long at = takeWheel ? d.controls[st.nextControl].at : d.notes[st.nextEvent].at;
+                if (at > cur && playing)
+                {
+                    Sample *io[2] = {SL + (cur - p0), SR + (cur - p0)};
+                    inst.process(io, 2, (int)(at - cur));
+                }
+                cur = std::max(cur, at);
+                if (takeWheel)
+                {
+                    const ControlEvent &e = d.controls[st.nextControl++];
+                    if (e.kind == 0) inst.pitchBend(e.value);
+                    else inst.modWheel(e.value);
+                    continue;
+                }
+                const NoteEvent &e = d.notes[st.nextEvent];
+                if (e.on) inst.noteOn(e.note, e.velocity);
+                else inst.noteOff(e.note);
+                ++st.nextEvent;
+            }
+            if (cur < p0 + n && playing)
+            {
+                Sample *io[2] = {SL + (cur - p0), SR + (cur - p0)};
+                inst.process(io, 2, (int)(p0 + n - cur));
+            }
+        }
+        if (srcLate)
+            for (int i = 0; i < n; ++i)
+            {
+                double a = SL[i], b = SR[i];
+                st.srcDelay.step(a, b);
+                L[i] += a;
+                R[i] += b;
+            }
+        for (size_t k = firstFx; k < st.rack.size(); ++k)
+        {
+            if (d.rack[k].bypass)
+            {
+                st.bypassDelay[k].run(L, R, n); // R-MIX-17: bypassed, it still takes its time
+                continue;
+            }
+            Sample *io[2] = {L, R};
+            if (st.rack[k]->type().takesKey)
+            {
+                // R-MIX-15: a compressor's detector hears the strip's key (silence when nothing keys it)
+                const Sample *key[2] = {st.keyL.data(), st.keyR.data()};
+                if (st.keyDelay[k].length() > 0)
+                {
+                    // R-MIX-17: the audio reaches it late by the devices before it; so does its key
+                    std::copy(st.keyL.begin(), st.keyL.begin() + n, st.kdL.begin());
+                    std::copy(st.keyR.begin(), st.keyR.begin() + n, st.kdR.begin());
+                    st.keyDelay[k].run(st.kdL.data(), st.kdR.data(), n);
+                    key[0] = st.kdL.data();
+                    key[1] = st.kdR.data();
+                }
+                st.rack[k]->setKey(key, 2);
+            }
+            st.rack[k]->process(io, 2, n);
+        }
+    }
+
+    void Engine::routeStrip(size_t si, long long p0, int n, PortBuffers &out, int off)
+    {
+        // R-PERF-1: this strip's time, when asked
+        struct Timed
+        {
+            bool on;
+            long long &sum;
+            std::chrono::steady_clock::time_point t0;
+            Timed(bool o, long long &s) : on(o), sum(s), t0(o ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point()) {}
+            ~Timed() { if (on) sum += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count(); }
+        } timed(mTime, mStripNs[si]);
+        // its fader, pan, sends, keys and output — in processing order, always (R-PERF-2)
+        const Strip &d = mGraph.strips[si];
+        StripState &st = *mStrips[si];
+        double *L = st.inL.data(), *R = st.inR.data();
+            bool keys = false;
+        for (const auto &s : d.sends) keys |= s.key;
+        // R-MIX-17: a delayed connection drains what it holds while nothing more goes in — what was
+        // sent before a mute still arrives, in time
+        auto drain = [&](const Target &to, bool key, DelayLine &dl) {
+            if (dl.length() == 0) return;
+            if (key) routeKey(to, mZero.data(), mZero.data(), n, 1.0, &dl);
+            else route(to, mZero.data(), mZero.data(), n, 1.0, out, off, &dl);
+        };
+        if (d.silent && !(keys && d.keyLive))
+        {
+            // A muted or solo-silenced strip sends nothing anywhere.
+            std::fill(st.outL.begin(), st.outL.begin() + n, 0.0);
+            std::fill(st.outR.begin(), st.outR.begin() + n, 0.0);
+            drain(d.out, false, st.outDelay);
+            for (size_t k = 0; k < d.sends.size(); ++k) drain(d.sends[k].to, d.sends[k].key, st.sendDelay[k]);
+        }
+        else
+        {
+            // silenced by another's solo, a strip still keys: only its key sends run (R-MIX-15)
+            auto runs = [&](size_t k) { return !d.silent || d.sends[k].key; };
+            // a bound value ramps from A to B across the control period that began at `ramp` (R-AUTO-7)
+            auto rampAt = [&](int i) { return std::min(1.0, std::max(0.0, (double)(p0 + i - st.ramp) / kControl)); };
+            auto sendTo = [&](size_t k, const double *sL, const double *sR) {
+                const Send &s = d.sends[k];
+                DelayLine *dl = &st.sendDelay[k];
+                auto deliver = [&](const double *a, const double *b, double g) {
+                    if (s.key) routeKey(s.to, a, b, n, g, dl);
+                    else route(s.to, a, b, n, g, out, off, dl);
+                };
+                if (!st.sendBound[k]) { deliver(sL, sR, s.gain); return; }
+                for (int i = 0; i < n; ++i)
+                {
+                    const double g = st.sendA[k] + (st.sendB[k] - st.sendA[k]) * rampAt(i);
+                    st.tmpL[i] = sL[i] * g;
+                    st.tmpR[i] = sR[i] * g;
+                }
+                deliver(st.tmpL.data(), st.tmpR.data(), 1.0);
+            };
+            for (size_t k = 0; k < d.sends.size(); ++k)
+                if (d.sends[k].pre)
+                {
+                    if (runs(k)) sendTo(k, L, R);
+                    else drain(d.sends[k].to, d.sends[k].key, st.sendDelay[k]);
+                }
+            if (st.gainBound || st.panBound)
+            {
+                for (int i = 0; i < n; ++i)
+                {
+                    const double f = rampAt(i);
+                    const double g = st.gainBound ? st.gainA + (st.gainB - st.gainA) * f : d.gain;
+                    const double pan = st.panBound ? st.panA + (st.panB - st.panA) * f : d.pan;
+                    double gl = 1, gr = 1;
+                    balancePan(pan, gl, gr);
+                    st.outL[i] = L[i] * g * gl;
+                    st.outR[i] = R[i] * g * gr;
+                }
+            }
+            else
+            {
+                double gl = 1, gr = 1;
+                balancePan(d.pan, gl, gr);
+                for (int i = 0; i < n; ++i)
+                {
+                    st.outL[i] = L[i] * d.gain * gl;
+                    st.outR[i] = R[i] * d.gain * gr;
+                }
+            }
+            for (size_t k = 0; k < d.sends.size(); ++k)
+                if (!d.sends[k].pre)
+                {
+                    if (runs(k)) sendTo(k, st.outL.data(), st.outR.data());
+                    else drain(d.sends[k].to, d.sends[k].key, st.sendDelay[k]);
+                }
+            if (d.silent)
+            {
+                std::fill(st.outL.begin(), st.outL.begin() + n, 0.0);
+                std::fill(st.outR.begin(), st.outR.begin() + n, 0.0);
+                drain(d.out, false, st.outDelay);
+            }
+            else
+                route(d.out, st.outL.data(), st.outR.data(), n, 1.0, out, off, &st.outDelay);
+        }
+        meter(mStripMeters[si], st.outL.data(), st.outR.data(), n);
+        for (int i = 0; i < n; ++i) { st.sumSq[0] += st.outL[i] * st.outL[i]; st.sumSq[1] += st.outR[i] * st.outR[i]; }
+        st.counted += n;
+        for (size_t k = 0; k < mCapture.size(); ++k)
+            if (mCapture[k] == (int)si)
+                for (int i = 0; i < n; ++i) { mCaptured[k][0][off + i] = (float)st.outL[i]; mCaptured[k][1][off + i] = (float)st.outR[i]; }
+    }
+
     void Engine::renderPiece(long long p0, int n, PortBuffers &out, int off)
     {
         for (auto &st : mStrips)
@@ -510,231 +780,21 @@ namespace engine
         std::fill(mMasterL.begin(), mMasterL.begin() + n, 0.0);
         std::fill(mMasterR.begin(), mMasterR.begin() + n, 0.0);
 
+        // R-PERF-2: the strips nothing feeds do their own work first — on the pool, in any order: nothing they read is
+        // written by another strip. Then, in processing order, every other strip's own work and ALL routing, so each sum
+        // is added in the order one thread adds it.
+        const bool ahead = mParallel && mFree.size() > 1; // this piece's decision: no mark outlives it
+        if (ahead)
+        {
+            mPieceP0 = p0;
+            mPieceN = n;
+            mPieceOff = off;
+            mParallel->run((int)mFree.size(), &Engine::ownWorkOf, this);
+        }
         for (size_t si = 0; si < mStrips.size(); ++si)
         {
-            // R-PERF-1: this strip's time, when asked (a clock read either side; nothing else changes)
-            struct Timed
-            {
-                bool on;
-                long long &sum;
-                std::chrono::steady_clock::time_point t0;
-                Timed(bool o, long long &s) : on(o), sum(s), t0(o ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point()) {}
-                ~Timed() { if (on) sum += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count(); }
-            } timed(mTime, mStripNs[si]);
-            const Strip &d = mGraph.strips[si];
-            StripState &st = *mStrips[si];
-            double *L = st.inL.data(), *R = st.inR.data();
-            // R-MIX-17: its own sound waits, in its own delay, for the latest arrival at its input
-            const bool srcLate = st.srcDelay.length() > 0;
-            double *SL = L, *SR = R;
-            if (srcLate)
-            {
-                SL = st.srcL.data();
-                SR = st.srcR.data();
-                std::fill(SL, SL + n, 0.0);
-                std::fill(SR, SR + n, 0.0);
-            }
-
-            if (d.kind == Strip::Audio)
-            {
-                for (const Region &rg : d.regions)
-                {
-                    if (!rg.pcm || rg.frames <= 0) continue;
-                    const long long a = std::max(p0, rg.start), b = std::min(p0 + n, rg.start + rg.frames);
-                    for (long long t = a; t < b; ++t)
-                    {
-                        const long long local = t - rg.start;
-                        long long src = local;
-                        if (rg.loop && rg.srcFrames > 0) src %= rg.srcFrames;
-                        else if (src >= rg.srcFrames) continue;
-                        if (rg.reverse) src = rg.srcFrames - 1 - src; // R-EDIT-1: from the span's end
-                        src += rg.srcOffset;
-                        if (src < 0 || src >= rg.pcm->frames) continue; // outside the file is silence
-                        const double g = rg.gain * fadeGain(local, rg.frames, rg.fadeIn, rg.fadeOut);
-                        SL[t - p0] += g * rg.pcm->at(src, 0);
-                        SR[t - p0] += g * rg.pcm->at(src, 1);
-                    }
-                }
-                // R-REC-1: its input, monitored — `off` is where this piece sits in the render
-                for (int i = 0; i < n && off + i < st.liveInFrames; ++i)
-                {
-                    SL[i] += st.liveInL[(size_t)(off + i)];
-                    SR[i] += st.liveInR[(size_t)(off + i)];
-                }
-            }
-            size_t firstFx = 0;
-            if (d.kind == Strip::Instrument && !st.rack.empty())
-            {
-                firstFx = 1;
-                Device &inst = *st.rack[0];
-                const bool playing = !d.rack[0].bypass;
-                long long cur = p0;
-                // R-MIDI-2: what was played live since the last piece, at its start
-                while (st.liveTail != st.liveHead)
-                {
-                    const auto &e = st.live[(size_t)st.liveTail];
-                    if (e.kind == 1) inst.pitchBend(e.value);
-                    else if (e.kind == 2) inst.modWheel(e.value);
-                    else if (e.velocity > 0) inst.noteOn(e.pitch, e.velocity);
-                    else inst.noteOff(e.pitch);
-                    st.liveTail = (st.liveTail + 1) % (int)st.live.size();
-                }
-                // (M5) split the block at every note event — and every wheel event (R-MIDI-3) — so each starts on its
-                // exact sample; at one sample a wheel before a note, so a note starts bent where its lane says
-                for (;;)
-                {
-                    const bool note = st.nextEvent < d.notes.size() && d.notes[st.nextEvent].at < p0 + n;
-                    const bool wheel = st.nextControl < d.controls.size() && d.controls[st.nextControl].at < p0 + n;
-                    if (!note && !wheel) break;
-                    const bool takeWheel = wheel && (!note || d.controls[st.nextControl].at <= d.notes[st.nextEvent].at);
-                    const long long at = takeWheel ? d.controls[st.nextControl].at : d.notes[st.nextEvent].at;
-                    if (at > cur && playing)
-                    {
-                        Sample *io[2] = {SL + (cur - p0), SR + (cur - p0)};
-                        inst.process(io, 2, (int)(at - cur));
-                    }
-                    cur = std::max(cur, at);
-                    if (takeWheel)
-                    {
-                        const ControlEvent &e = d.controls[st.nextControl++];
-                        if (e.kind == 0) inst.pitchBend(e.value);
-                        else inst.modWheel(e.value);
-                        continue;
-                    }
-                    const NoteEvent &e = d.notes[st.nextEvent];
-                    if (e.on) inst.noteOn(e.note, e.velocity);
-                    else inst.noteOff(e.note);
-                    ++st.nextEvent;
-                }
-                if (cur < p0 + n && playing)
-                {
-                    Sample *io[2] = {SL + (cur - p0), SR + (cur - p0)};
-                    inst.process(io, 2, (int)(p0 + n - cur));
-                }
-            }
-            if (srcLate)
-                for (int i = 0; i < n; ++i)
-                {
-                    double a = SL[i], b = SR[i];
-                    st.srcDelay.step(a, b);
-                    L[i] += a;
-                    R[i] += b;
-                }
-            for (size_t k = firstFx; k < st.rack.size(); ++k)
-            {
-                if (d.rack[k].bypass)
-                {
-                    st.bypassDelay[k].run(L, R, n); // R-MIX-17: bypassed, it still takes its time
-                    continue;
-                }
-                Sample *io[2] = {L, R};
-                if (st.rack[k]->type().takesKey)
-                {
-                    // R-MIX-15: a compressor's detector hears the strip's key (silence when nothing keys it)
-                    const Sample *key[2] = {st.keyL.data(), st.keyR.data()};
-                    if (st.keyDelay[k].length() > 0)
-                    {
-                        // R-MIX-17: the audio reaches it late by the devices before it; so does its key
-                        std::copy(st.keyL.begin(), st.keyL.begin() + n, st.kdL.begin());
-                        std::copy(st.keyR.begin(), st.keyR.begin() + n, st.kdR.begin());
-                        st.keyDelay[k].run(st.kdL.data(), st.kdR.data(), n);
-                        key[0] = st.kdL.data();
-                        key[1] = st.kdR.data();
-                    }
-                    st.rack[k]->setKey(key, 2);
-                }
-                st.rack[k]->process(io, 2, n);
-            }
-
-            bool keys = false;
-            for (const auto &s : d.sends) keys |= s.key;
-            // R-MIX-17: a delayed connection drains what it holds while nothing more goes in — what was
-            // sent before a mute still arrives, in time
-            auto drain = [&](const Target &to, bool key, DelayLine &dl) {
-                if (dl.length() == 0) return;
-                if (key) routeKey(to, mZero.data(), mZero.data(), n, 1.0, &dl);
-                else route(to, mZero.data(), mZero.data(), n, 1.0, out, off, &dl);
-            };
-            if (d.silent && !(keys && d.keyLive))
-            {
-                // A muted or solo-silenced strip sends nothing anywhere.
-                std::fill(st.outL.begin(), st.outL.begin() + n, 0.0);
-                std::fill(st.outR.begin(), st.outR.begin() + n, 0.0);
-                drain(d.out, false, st.outDelay);
-                for (size_t k = 0; k < d.sends.size(); ++k) drain(d.sends[k].to, d.sends[k].key, st.sendDelay[k]);
-            }
-            else
-            {
-                // silenced by another's solo, a strip still keys: only its key sends run (R-MIX-15)
-                auto runs = [&](size_t k) { return !d.silent || d.sends[k].key; };
-                // a bound value ramps from A to B across the control period that began at `ramp` (R-AUTO-7)
-                auto rampAt = [&](int i) { return std::min(1.0, std::max(0.0, (double)(p0 + i - st.ramp) / kControl)); };
-                auto sendTo = [&](size_t k, const double *sL, const double *sR) {
-                    const Send &s = d.sends[k];
-                    DelayLine *dl = &st.sendDelay[k];
-                    auto deliver = [&](const double *a, const double *b, double g) {
-                        if (s.key) routeKey(s.to, a, b, n, g, dl);
-                        else route(s.to, a, b, n, g, out, off, dl);
-                    };
-                    if (!st.sendBound[k]) { deliver(sL, sR, s.gain); return; }
-                    for (int i = 0; i < n; ++i)
-                    {
-                        const double g = st.sendA[k] + (st.sendB[k] - st.sendA[k]) * rampAt(i);
-                        st.tmpL[i] = sL[i] * g;
-                        st.tmpR[i] = sR[i] * g;
-                    }
-                    deliver(st.tmpL.data(), st.tmpR.data(), 1.0);
-                };
-                for (size_t k = 0; k < d.sends.size(); ++k)
-                    if (d.sends[k].pre)
-                    {
-                        if (runs(k)) sendTo(k, L, R);
-                        else drain(d.sends[k].to, d.sends[k].key, st.sendDelay[k]);
-                    }
-                if (st.gainBound || st.panBound)
-                {
-                    for (int i = 0; i < n; ++i)
-                    {
-                        const double f = rampAt(i);
-                        const double g = st.gainBound ? st.gainA + (st.gainB - st.gainA) * f : d.gain;
-                        const double pan = st.panBound ? st.panA + (st.panB - st.panA) * f : d.pan;
-                        double gl = 1, gr = 1;
-                        balancePan(pan, gl, gr);
-                        st.outL[i] = L[i] * g * gl;
-                        st.outR[i] = R[i] * g * gr;
-                    }
-                }
-                else
-                {
-                    double gl = 1, gr = 1;
-                    balancePan(d.pan, gl, gr);
-                    for (int i = 0; i < n; ++i)
-                    {
-                        st.outL[i] = L[i] * d.gain * gl;
-                        st.outR[i] = R[i] * d.gain * gr;
-                    }
-                }
-                for (size_t k = 0; k < d.sends.size(); ++k)
-                    if (!d.sends[k].pre)
-                    {
-                        if (runs(k)) sendTo(k, st.outL.data(), st.outR.data());
-                        else drain(d.sends[k].to, d.sends[k].key, st.sendDelay[k]);
-                    }
-                if (d.silent)
-                {
-                    std::fill(st.outL.begin(), st.outL.begin() + n, 0.0);
-                    std::fill(st.outR.begin(), st.outR.begin() + n, 0.0);
-                    drain(d.out, false, st.outDelay);
-                }
-                else
-                    route(d.out, st.outL.data(), st.outR.data(), n, 1.0, out, off, &st.outDelay);
-            }
-            meter(mStripMeters[si], st.outL.data(), st.outR.data(), n);
-            for (int i = 0; i < n; ++i) { st.sumSq[0] += st.outL[i] * st.outL[i]; st.sumSq[1] += st.outR[i] * st.outR[i]; }
-            st.counted += n;
-            for (size_t k = 0; k < mCapture.size(); ++k)
-                if (mCapture[k] == (int)si)
-                    for (int i = 0; i < n; ++i) { mCaptured[k][0][off + i] = (float)st.outL[i]; mCaptured[k][1][off + i] = (float)st.outR[i]; }
+            if (!(ahead && mIsFree[si])) ownWork(si, p0, n, off);
+            routeStrip(si, p0, n, out, off);
         }
 
         for (size_t k = 0; k < mMasterRack.size(); ++k)

@@ -83,6 +83,15 @@ namespace engine
         }
     };
 
+    /** R-PERF-2: runs `count` independent items — `fn(ctx, i)` for each i, in any order, on any thread — and returns
+     *  when all are done. The engine hands it the own work of the strips nothing feeds; the core's pool is one. */
+    class IParallel
+    {
+    public:
+        virtual ~IParallel() = default;
+        virtual void run(int count, void (*fn)(void *ctx, int i), void *ctx) = 0;
+    };
+
     class Engine
     {
     public:
@@ -90,6 +99,10 @@ namespace engine
         /** R-PERF-1: add up each strip's processing time (ns) in `stripNanos()` — for the player's CPU meter; off in a
          *  render (no deadline). Each `render` starts the sums again. */
         void measureTime(bool on) { mTime = on; }
+        /** R-PERF-2: a pool for the strips nothing feeds (null: one thread). The bytes are the same either way. */
+        void setParallel(IParallel *p) { mParallel = p; }
+        /** … those strips (graph indices), from the last build. */
+        const std::vector<int> &freeStrips() const { return mFree; }
         const std::vector<long long> &stripNanos() const { return mStripNs; }
         static constexpr int kControl = kControlSamples; // bindings are evaluated at every multiple of this sample
 
@@ -161,6 +174,14 @@ namespace engine
         ~Engine();
 
     private:
+        void ownWork(size_t si, long long p0, int n, int off);
+        void routeStrip(size_t si, long long p0, int n, PortBuffers &out, int off);
+        static void ownWorkOf(void *self, int i);
+        IParallel *mParallel = nullptr;        // R-PERF-2
+        std::vector<int> mFree;                // … the strips nothing feeds
+        std::vector<char> mIsFree;             // … by graph index
+        long long mPieceP0 = 0;
+        int mPieceN = 0, mPieceOff = 0;
         bool mTime = false;                 // R-PERF-1
         std::vector<long long> mStripNs;    // … each strip's ns this render (sized at build)
         struct StripState;

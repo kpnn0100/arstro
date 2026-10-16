@@ -28,6 +28,7 @@
 #include "AudioIn.h"
 #include "AudioOut.h"
 #include "Engine.h"
+#include "WorkerPool.h"
 #include "MidiIn.h"
 #include <bitset>
 #include "base/LockFreeQueue.h"
@@ -139,6 +140,8 @@ namespace solaris
         /** R-PERF-1: the audio thread's load — its time on a block (all but the device's wait) over the block's
          *  duration, smoothed over about a third of a second; its worst block since the last take; strip i's share. */
         float cpu() const { return mCpu.load(std::memory_order_relaxed); }
+        /** R-PERF-2: how many threads render (the audio thread one of them) — before `start`. */
+        void setThreads(int n) { mThreads = std::max(1, n); }
         float takeCpuPeak() { return mCpuPeak.exchange(0.0f, std::memory_order_relaxed); }
         float stripCpu(int i) const { return i >= 0 && i < kMaxStrips ? mStripCpu[(size_t)i].load(std::memory_order_relaxed) : 0.0f; }
         /** The held peak: the most of the last 1.5 s, then falling 20 dB a second. */
@@ -186,6 +189,8 @@ namespace solaris
         std::atomic<bool> mRun{false};
         std::unique_ptr<IAudioOut> mOut;
         engine::Engine *mEng = nullptr;
+        int mThreads = 1;                     // R-PERF-2
+        std::unique_ptr<WorkerPool> mPool;    // … the strips nothing feeds, rendered on it
         std::vector<Route> mRoutes;
         int mChannels = 2, mBlock = 256, mRate = 48000;
         engine::PortBuffers mPb;

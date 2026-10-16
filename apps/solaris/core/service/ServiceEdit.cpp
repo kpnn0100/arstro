@@ -822,6 +822,7 @@ namespace solaris
             const double len = clipLengthBeats(p, *src);
             double first = 0;
             if (!beatsFlag(c, "at", toTick(src->at + len), first, err)) return false;
+            const std::string srcTrack = src->track; // D-16: `src` points into p.clips, which a push_back below may move
             for (int k = 0; k < count; ++k)
             {
                 copy.id = p.nextId("ac");
@@ -830,7 +831,7 @@ namespace solaris
                 changed("clip.added", copy.id);
                 if (k == 0) mOutput = copy.id + "\n";
             }
-            if (copy.track != src->track)
+            if (copy.track != srcTrack)
                 if (const Strip *s = p.strip(copy.track)) mOutput += "it plays through " + s->id + " (" + s->name + ")\n";
             return true;
         }

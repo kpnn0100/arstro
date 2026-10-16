@@ -13,6 +13,7 @@
 #include "Engine.h"
 #include "Format.h"
 #include "SolarisService.h"
+#include "WorkerPool.h"
 #include "meter/Meters.h"
 #include "output/Dither.h"
 #include "base/AudioConfig.h"
@@ -186,6 +187,8 @@ namespace solaris
         }
 
         engine::Engine eng;
+        WorkerPool pool(WorkerPool::threadsFor(mSettings.threads)); // R-PERF-2: byte-identical to one thread
+        eng.setParallel(&pool);
         if (!eng.build(cr.graph, err)) return false;
         double from = 0, to = -1;
         if (c.has("from")) { if (!parseNumber(c.flag("from"), v) || v < 0) { err = "--from must be beats ≥ 0"; return false; } from = v; }

@@ -741,6 +741,62 @@ static void test_live_input_is_heard_through_its_strip()
     pass("live input (R-REC-1): an audio strip's input heard through its fader for one render, aligned across pieces, then gone; other strips take none; no allocation");
 }
 
+static void test_the_strips_nothing_feeds_render_in_any_order()
+{
+    // R-PERF-2: the strips nothing feeds do their own work first, in any order — run here in reverse and interleaved by
+    // a runner with no threads at all — and the bytes are one thread's; a fed strip (a bus) is never among them
+    auto graph = [] {
+        MixGraph g = basic();
+        std::vector<Strip> strips = {g.strips[0]};
+        for (int k = 0; k < 4; ++k)
+        {
+            Strip s;
+            s.id = "ch_" + std::to_string(10 + k);
+            s.kind = Strip::Instrument;
+            s.rack = {DeviceDesc{"dv_" + std::to_string(10 + k), k % 2 ? "drums" : "synth", {}, false},
+                      DeviceDesc{"dv_" + std::to_string(20 + k), k % 2 ? "compressor" : "chorus", {}, false}};
+            for (int n = 0; n < 6; ++n) s.notes.push_back(NoteEvent{n * 7000LL + k * 333, 40 + k * 7 + (n % 3) * 4, 100, true});
+            s.sends = {Send{Target{Target::Strip, 6}, 0.3, false}}; // to the reverb
+            strips.push_back(s);
+        }
+        Strip mainBus = g.strips[1];
+        Strip verb;
+        verb.id = "ch_9";
+        verb.kind = Strip::Bus;
+        verb.rack = {DeviceDesc{"dv_9", "reverb", {{"mix", 1.0}}, false}};
+        verb.out = Target{Target::Master, -1};
+        strips.push_back(mainBus); // 5
+        strips.push_back(verb);    // 6
+        for (size_t i = 0; i < 5; ++i) strips[i].out = Target{Target::Strip, 5};
+        g.strips = strips;
+        return g;
+    };
+    struct Reverse : IParallel
+    {
+        void run(int count, void (*fn)(void *, int), void *ctx) override { for (int i = count - 1; i >= 0; --i) fn(ctx, i); }
+    } reverse;
+    struct Interleaved : IParallel
+    {
+        void run(int count, void (*fn)(void *, int), void *ctx) override
+        {
+            for (int i = 1; i < count; i += 2) fn(ctx, i);
+            for (int i = 0; i < count; i += 2) fn(ctx, i);
+        }
+    } interleaved;
+    Engine a, b, c;
+    std::string err;
+    assert(a.build(graph(), err) && b.build(graph(), err) && c.build(graph(), err));
+    b.setParallel(&reverse);
+    c.setParallel(&interleaved);
+    assert((b.freeStrips() == std::vector<int>{0, 1, 2, 3, 4})); // Main (5) and the reverb (6) are fed
+    const auto x = renderAll(a, 48000, 128), y = renderAll(b, 48000, 128), z = renderAll(c, 48000, 100);
+    assert(x.ports[0][0] == y.ports[0][0] && x.ports[0][1] == y.ports[0][1] && x.ports[0][0] == z.ports[0][0] && x.ports[0][1] == z.ports[0][1]);
+    float peak = 0;
+    for (float v : x.ports[0][0]) peak = std::max(peak, std::fabs(v));
+    assert(peak > 0.05f);
+    pass("the strips nothing feeds render in any order (R-PERF-2): reversed and interleaved, byte-identical to one thread over a second of two synths, two kits and a shared reverb; the fed ones (a bus, the reverb) never among them");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -757,6 +813,7 @@ int main()
     test_curves_are_interstellars_keyframes();
     test_latency_is_compensated_everywhere_signals_meet();
     test_live_input_is_heard_through_its_strip();
+    test_the_strips_nothing_feeds_render_in_any_order();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

@@ -277,6 +277,7 @@ namespace solaris
             {"settings.mappings[].inert", "bool", "the open song has no such address"},
             {"settings.surface", "string", "R-CTRL-2: none | mcu (Mackie Control) | hui — `settings set surface=…`"},
             {"settings.surfacePort", "string", "… the MIDI port it is on, in and out (the keyboard never listens there)"},
+            {"settings.threads", "string", "R-PERF-2: auto (the cores but one, at most 8) | 1 … 16 — the engine's threads, live and in a render"},
             {"devices", "object[]", "from the last `devices list`"},
             {"devices[].id", "string", "what `settings set output=` takes"},
             {"devices[].name", "string", ""},
@@ -684,7 +685,7 @@ namespace solaris
                               .set("newBpm", m.settings.newBpm).set("newSig", m.settings.newSig).set("reducedMotion", m.settings.reducedMotion)
                               .set("showIds", m.settings.showIds).set("autosave", m.settings.autosave).set("driver", m.settings.driver).set("midiInputs", m.settings.midiInputs).set("recordQuantize", m.settings.recordQuantize)
                               .set("countIn", m.settings.countIn).set("keys", keys).set("mappings", mappings)
-                              .set("surface", m.settings.surface).set("surfacePort", m.settings.surfacePort));
+                              .set("surface", m.settings.surface).set("surfacePort", m.settings.surfacePort).set("threads", m.settings.threads));
         Json midi = Json::array();
         for (const auto &d : m.midiDevices) midi.push(Json::object().set("id", d.id).set("name", d.name).set("listening", d.listening));
         j.set("armed", m.armed).set("midiDevices", midi).set("mapLearning", m.mapLearning);

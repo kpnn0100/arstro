@@ -554,6 +554,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.mappings[].inert` | bool | the open song has no such address |
 | `settings.surface` | string | R-CTRL-2: none \| mcu (Mackie Control) \| hui — `settings set surface=…` |
 | `settings.surfacePort` | string | … the MIDI port it is on, in and out (the keyboard never listens there) |
+| `settings.threads` | string | R-PERF-2: auto (the cores but one, at most 8) \| 1 … 16 — the engine's threads, live and in a render |
 | `devices` | object[] | from the last `devices list` |
 | `devices[].id` | string | what `settings set output=` takes |
 | `devices[].name` | string |  |

@@ -56,6 +56,15 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-16 `clip duplicate` read its source clip after the copy may have moved it — closed in N30
+- **Found:** 2026-10-17, a ThreadSanitizer build of the service tests (built to check N30's pool) reported a
+  heap-use-after-free in `clipCommand`: `ServiceEdit.cpp`'s `clip duplicate` compared `copy.track != src->track`
+  after `p.clips.push_back(copy)` — `src` points into `p.clips`, which the push may reallocate.
+- **Effect:** a read of freed memory after every duplicate that grew the vector: the "it plays through …" line could
+  be said wrongly or not at all; undefined behaviour, crash possible.
+- **Fix:** the source's track read before the copies are pushed.
+- **Guard:** the TSan run of the suite (no report from it since); the duplicate tests themselves.
+
 ### D-15 The shipped-presets test read the model through a reference its own commands freed — closed in N25 part 2
 - **Found:** 2026-10-17, building N25 part 2: `test_the_shipped_presets_load` failed once on `assert(t)` (a preset whose
   type the registry did not know) and once refused `preset load dv_4 ""` (a preset with no name) — with no change to

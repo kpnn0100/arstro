@@ -36,6 +36,7 @@ namespace solaris
         std::string midiInputs = "all";         // R-MIDI-2: all | none | port names, comma-separated
         std::string surface = "none";           // R-CTRL-2: none | mcu (Mackie Control) | hui
         std::string surfacePort;                // … the port it is on, in and out — never the keyboard's
+        std::string threads = "auto";           // R-PERF-2: auto | 1 … 16 — the engine's threads
         std::string recordQuantize = "off";     // R-MIDI-2: off | 1/4 | 1/8 | 1/16 | 1/32 — a recorded note's start
         int countIn = 0;                        // R-MIDI-2: bars of click before a recording (0 = none)
         // R-SET-4: `key.<action> = <combos>` — only the actions this machine re-keyed (the rest keep their defaults)

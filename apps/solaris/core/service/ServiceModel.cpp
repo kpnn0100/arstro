@@ -139,6 +139,7 @@ namespace solaris
         mModel.mapLearning = mMapLearning;
         mModel.settings.surface = mSettings.surface; // R-CTRL-2
         mModel.settings.surfacePort = mSettings.surfacePort;
+        mModel.settings.threads = mSettings.threads; // R-PERF-2
         mModel.surface.protocol = mSettings.surface;
         mModel.surface.connected = mSurfaceIn != nullptr;
         mModel.surface.why = mSurfaceWhy;

@@ -161,6 +161,12 @@ namespace solaris
                     next.surface = v;
                 }
                 else if (k == "surfacePort") next.surfacePort = v; // a port's name; "" none
+                else if (k == "threads")
+                {
+                    // R-PERF-2: the engine's threads — the next play and every render use them
+                    if (v != "auto" && (!parseNumber(v, x) || x < 1 || x > 16 || x != std::floor(x))) { err = "threads is auto or 1 … 16"; return false; }
+                    next.threads = v == "auto" ? v : std::to_string((int)x);
+                }
                 else if (k == "midiInputs")
                 {
                     // R-MIDI-2: which keyboards Solaris listens to — reopened at once when it listens
@@ -199,9 +205,9 @@ namespace solaris
                 else
                 {
                     err = "no setting `" + k + "`";
-                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver", "midiInputs", "recordQuantize", "countIn", "surface", "surfacePort"});
+                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver", "midiInputs", "recordQuantize", "countIn", "surface", "surfacePort", "threads"});
                     err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>, metronome, "
-                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, autosave, driver, midiInputs, recordQuantize, countIn, surface, surfacePort, key.<action>)")
+                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, autosave, driver, midiInputs, recordQuantize, countIn, surface, surfacePort, threads, key.<action>)")
                                         : " (did you mean: " + near[0] + "?)";
                     return false;
                 }
