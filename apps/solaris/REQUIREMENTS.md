@@ -963,7 +963,20 @@ a process is the host's (law 12).
   state kept in the song as the plugin gives it. One helper process per plugin instance plays it — audio and events
   through shared memory a block at a time, the audio thread waiting at most the block's duration; a render runs its
   own instance and waits. Its latency compensated (R-MIX-17). The helper dying or overrunning takes it offline (an
-  effect passes dry, an instrument is silent, the model says why); a missing bundle too, the song still opening.)
+  effect passes dry, an instrument is silent, the model says why); a missing bundle too, the song still opening.
+  (**Detailed further while building it, N25 part 2 — 2026-10-17:** an instrument plugin is an instrument strip's —
+  `strip add --kind instrument --plugin <id|name>` and `clip add --plugin` (one drop, R-BROWSE-3); `device add --plugin`
+  takes an effect and refuses an instrument naming the line that takes it. A plugin is named by its id or its name in
+  any case. Live, a block may wait its own duration, an engine block's (128 frames) at least — the engine splits at
+  every note, so a plugin's notes and value changes go with the next block, at its start; a render waits up to 60 s a
+  block. Offline is for good — the helper ended then and there — until `device reload <dv>` (not an edit) starts a new
+  one from the last state; a plugin that goes offline is said once (`plugin.offline device why`), shown in
+  `devices[].offline/why` and in `audit`; a render says which were offline, and so silent or dry in its file. An effect
+  gone offline passes its input still as late as its latency (the engine compensated it), never early. The song's
+  set values win over its state: a plugin is given its state, then the values the song sets; its state is asked for
+  whenever the song or its autosave is written. A note preview and the input monitor play their own instance (another
+  stream), never the song's. A plugin's presets are its own (`preset save|load` refused). Not yet: the pitch and mod
+  wheels are not sent to a plugin (VST3 maps them to parameters through the plugin's own MIDI mapping — a later task).)
 - **R-CTRL-1 MIDI learn**: right-click a number › Learn MIDI CC — the next CC moved binds it (`map add <cc>
   <address>`); mappings are the machine's settings; the transport keys of a keyboard (MMC) work.
 - **R-CTRL-2 Control surfaces**: a Mackie Control / HUI surface's faders, pans, mutes, solos and transport follow

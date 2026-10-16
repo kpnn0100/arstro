@@ -23,6 +23,8 @@
 #include "MixGraph.h"
 #include "MidiIn.h"
 #include "Player.h"
+#include "PluginDevice.h"
+#include "PluginHost.h"
 #include "Auditioner.h"
 #include "NotePreview.h"
 #include "Project.h"
@@ -38,6 +40,8 @@ namespace arstro
 {
 namespace solaris
 {
+    struct CompileResult;
+
     class SolarisService
     {
     public:
@@ -80,6 +84,10 @@ namespace solaris
              *  line per bundle that could not be read. Empty = this build hosts no plugins. */
             std::function<bool(std::vector<PluginModel> &out, std::vector<std::string> &problems, std::string &err)> scanPlugins;
             std::string pluginsPath;          // … the machine's list of what was found ("" = not kept)
+            /** R-VST-6: one instance of class `uid` in `bundle`, started where it cannot take the song with it (the
+             *  host's: a process of its own) — null and why when it cannot be. Empty = this build plays no plugins. */
+            std::function<std::unique_ptr<IPluginInstance>(const std::string &bundle, const std::string &uid, double rate, int maxBlock,
+                                                           std::string &err)> loadPlugin;
         };
 
         explicit SolarisService(Host host = Host());
@@ -151,6 +159,24 @@ namespace solaris
         void loadPlugins();
         std::vector<PluginModel> mPlugins;
         bool mPluginsLoaded = false;
+        // … and those a song plays: a connection per device, made on first need and kept across engine swaps (a render
+        // and a note preview make their own); `vst3` devices' type is their connection's
+        const PluginModel *findPlugin(const std::string &idOrName, std::string &err);
+        bool pluginNode(const std::string &idOrName, DeviceNode &out, std::string &err);
+        std::shared_ptr<PluginConnection> startPlugin(const DeviceNode &d, int rate, const std::string &state);
+        std::shared_ptr<PluginConnection> livePlugin(const DeviceNode &d);
+        /** The device's type: the registry's, or a plugin's from its connection (null when neither). */
+        const DeviceType *typeOf(const DeviceNode &d);
+        /** Who plays each `vst3` device of a compiled song: the live connections (Live); or new ones at the song's
+         *  rate, from where the live ones stand — for another stream, with a budget (Own: a monitor, a note preview), or
+         *  for a render, waited for (Render). */
+        enum class PluginUse { Live, Own, Render };
+        std::vector<std::pair<std::string, std::shared_ptr<PluginConnection>>> attachPlugins(CompileResult &cr, const Project &p, PluginUse use);
+        void prunePlugins();             // connections of devices no longer in the song
+        void capturePluginStates();      // each playing plugin's state into its node (before the song is written)
+        bool pluginReload(const Command &c, std::string &err);
+        DeviceModel pluginFacts(const DeviceNode &d, DeviceModel m);
+        std::map<std::string, std::shared_ptr<PluginConnection>> mPluginLive;
         // R-EDIT-1 (ServiceAudioEdit.cpp): audio clips cut, joined, sliced — a cut is `splitClip`, which slice repeats
         bool audioEditCommand(const Command &c, std::string &err);
         bool splitClip(const std::string &id, double at, std::string &made, std::string &err);

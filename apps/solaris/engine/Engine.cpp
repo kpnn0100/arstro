@@ -50,14 +50,14 @@ namespace engine
     {
         std::unique_ptr<Device> makeDevice(const DeviceDesc &d, std::string &err)
         {
-            auto dev = DeviceRegistry::create(d.type);
+            auto dev = d.make ? d.make() : DeviceRegistry::create(d.type);
             if (!dev)
             {
-                err = "unknown device type `" + d.type + "` (" + d.id + ")";
+                err = d.make ? "device " + d.id + " could not be made" : "unknown device type `" + d.type + "` (" + d.id + ")";
                 return nullptr;
             }
             for (const auto &p : d.params)
-                if (!dev->setParam(p.first, p.second))
+                if (!dev->setParam(p.first, p.second) && !d.make) // R-VST-6: a plugin's list is its own
                 {
                     err = "device " + d.id + " (" + d.type + ") has no parameter `" + p.first + "`";
                     return nullptr;
@@ -176,6 +176,12 @@ namespace engine
         mGraph = graph;
         mStrips = std::move(strips);
         mMasterRack = std::move(master);
+        for (auto &b : mGraph.binds) // R-VST-6: a made device's parameter by name (its list is its own); not there: inert
+            if ((b.kind == Bind::DeviceParam || b.kind == Bind::MasterDeviceParam) && b.param < 0 && !b.paramName.empty())
+            {
+                const Device &dev = b.kind == Bind::DeviceParam ? *mStrips[(size_t)b.strip]->rack[(size_t)b.index] : *mMasterRack[(size_t)b.index];
+                b.param = dev.type().paramIndex(b.paramName);
+            }
         mMasterL.assign(kBlock, 0.0);
         mMasterR.assign(kBlock, 0.0);
         mStripMeters.assign(mGraph.strips.size(), Meter{});
@@ -199,9 +205,11 @@ namespace engine
         // the values at time zero go in BEFORE the warm-up, so its block of silence finishes their ramps too
         evalBinds(0, true);
         compensate(); // with those values: a bound lookahead is read at its starting value
-        for (auto &st : mStrips)
-            for (auto &dev : st->rack) warm(*dev);
-        for (auto &dev : mMasterRack) warm(*dev);
+        for (size_t i = 0; i < mStrips.size(); ++i)
+            for (size_t k = 0; k < mStrips[i]->rack.size(); ++k)
+                if (!mGraph.strips[i].rack[k].make) warm(*mStrips[i]->rack[k]); // R-VST-6: a made device is not
+        for (size_t k = 0; k < mMasterRack.size(); ++k)
+            if (!mGraph.masterRack[k].make) warm(*mMasterRack[k]);
         return true;
     }
 

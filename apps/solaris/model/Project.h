@@ -96,6 +96,9 @@ namespace solaris
         Fields params;
         Remarks remarks;
         std::string sample;   // R-EDM-8: a sampler's sound — a path, stored as a clip's src is (relative to the song)
+        // R-VST-6: type `vst3` — another maker's plugin: its class (UID), its bundle, what it is called and whether it is
+        // an instrument (so a song still says so where the bundle is missing), and its state as the plugin gave it (base64)
+        std::string plugin, bundle, pluginName, pluginKind, state;
     };
 
     struct Rack

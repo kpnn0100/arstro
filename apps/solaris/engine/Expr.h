@@ -203,6 +203,7 @@ namespace engine
         int strip = -1;      // StripGain/Pan, SendGain, DeviceParam
         int index = -1;      // SendGain: the send; DeviceParam/MasterDeviceParam: the device in the rack
         int param = -1;      // DeviceParam/MasterDeviceParam: the registry parameter's index
+        std::string paramName; // … or, a made device's (a plugin's, R-VST-6), its name — the index found at build
         double lo = 0, hi = 1, own = 0; // the clamp, and the value before any evaluation
         bool integer = false;
         Expr expr;

@@ -38,6 +38,7 @@ namespace solaris
           mRecentsStale(o.mRecentsStale), mDevices(o.mDevices), mBrowser(o.mBrowser), mPosition(o.mPosition),
           mLoopFrom(o.mLoopFrom), mLoopTo(o.mLoopTo)
     {
+        mPluginLive = o.mPluginLive; // R-VST-6: the same plugins answer what their parameters are
     }
 
     void SolarisService::stopPlayer()
@@ -54,6 +55,7 @@ namespace solaris
     bool SolarisService::buildLive(std::unique_ptr<engine::Engine> &out, std::string &err)
     {
         CompileResult cr = compile(mProject, [this](const std::string &src) { return pcmFor(src); });
+        attachPlugins(cr, mProject, PluginUse::Live); // R-VST-6: the connections outlive this engine
         auto eng = std::make_unique<engine::Engine>();
         if (!eng->build(cr.graph, err)) return false;
         mLiveStrips = cr.stripIds;
@@ -68,6 +70,12 @@ namespace solaris
 
     int SolarisService::latencyOf(const DeviceNode &d)
     {
+        // R-VST-6: a plugin's is its own, as it reports it
+        if (d.type == "vst3")
+        {
+            const auto c = livePlugin(d);
+            return c->offline() ? 0 : std::max(0, c->inst->latency());
+        }
         // R-MIX-17: a probe of the type (made once, on this thread) set to the node's stored values
         const DeviceType *t = DeviceRegistry::find(d.type);
         if (!t) return 0;
@@ -127,6 +135,16 @@ namespace solaris
                 emit(Event(Event::Kind::AuditionChanged).with("file", mModel.audition.file).with("playing", "0"));
             }
         }
+        // R-VST-6: a plugin that stopped playing (its process died, it overran) is said once, and the model shows it
+        bool down = false;
+        for (auto &kv : mPluginLive)
+            if (kv.second->offline() && !kv.second->told)
+            {
+                kv.second->told = true;
+                emit(Event(Event::Kind::PluginOffline).with("device", kv.first).with("why", kv.second->why()));
+                down = true;
+            }
+        if (down) refreshModel();
         if (!mPlayer) return;
         mPlayer->collect();
         TransportModel &t = mModel.transport;
@@ -286,6 +304,7 @@ namespace solaris
         // bindings are left out: a formula may read the song's other addresses — the preview is the strip's
         // values as they stand
         CompileResult cr = compile(p, [this](const std::string &src) { return pcmFor(src); });
+        attachPlugins(cr, p, PluginUse::Own); // R-VST-6: its own stream, its own instance
         auto voice = std::make_unique<NotePreview::Voice>();
         voice->engine = std::make_unique<engine::Engine>();
         if (!voice->engine->build(cr.graph, err)) return false;
@@ -646,7 +665,7 @@ namespace solaris
                 if (field == "bypass") { m.kind = Player::Live::DeviceBypass; m.value = d->bypass ? 1 : 0; }
                 else
                 {
-                    const DeviceType *t = DeviceRegistry::find(d->type);
+                    const DeviceType *t = typeOf(*d); // a plugin's, from its connection (R-VST-6)
                     const int pi = t ? t->paramIndex(field) : -1;
                     if (pi < 0 || field.size() >= sizeof m.name) { structural = true; break; }
                     // R-MIX-17: a value that moves the device's latency (a limiter's lookahead) re-plans the compensation

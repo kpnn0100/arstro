@@ -195,7 +195,18 @@ namespace solaris
             s.order = nextOrder(orders);
             s.out = c.has("out") ? (c.flag("out") == "master" ? std::string() : c.flag("out")) : defaultOutFor(s.mixer);
             std::string instrument;
-            if (kind == "instrument")
+            DeviceNode plugin; // R-VST-6: --plugin, another maker's instrument
+            if (kind == "instrument" && c.has("plugin"))
+            {
+                if (c.has("instrument")) { err = "--instrument or --plugin, not both"; return false; }
+                if (c.has("sample")) { err = "--sample is for a sampler, not a plugin"; return false; }
+                if (!pluginNode(c.flag("plugin"), plugin, err)) return false;
+                if (plugin.pluginKind != "instrument")
+                { err = "`" + plugin.pluginName + "` is an effect — put it in a rack (device add <ch> --plugin " + plugin.plugin + ")"; return false; }
+                instrument = "vst3";
+                s.name = c.flag("name", plugin.pluginName);
+            }
+            else if (kind == "instrument")
             {
                 instrument = c.flag("instrument", "synth");
                 const DeviceType *t = DeviceRegistry::find(instrument);
@@ -211,7 +222,7 @@ namespace solaris
             }
             else
             {
-                if (c.has("instrument")) { err = "--instrument is for --kind instrument"; return false; }
+                if (c.has("instrument") || c.has("plugin")) { err = std::string(c.has("plugin") ? "--plugin" : "--instrument") + " is for --kind instrument"; return false; }
                 s.name = c.flag("name", kind == "bus" ? "Bus" : "Audio");
             }
             p.strips.push_back(s);
@@ -220,7 +231,7 @@ namespace solaris
             {
                 Rack r;
                 r.track = s.id;
-                DeviceNode dn;
+                DeviceNode dn = plugin;
                 dn.id = p.nextId("dv");
                 dn.type = instrument;
                 if (c.has("sample"))
@@ -419,9 +430,19 @@ namespace solaris
             const std::string track = c.arg(0);
             const Strip *s = track == "master" ? nullptr : p.strip(track);
             if (track != "master" && !s) { err = "no strip `" + track + "` (or `master`)"; return false; }
-            const std::string type = c.flag("type");
-            const DeviceType *t = DeviceRegistry::find(type);
-            if (!t)
+            DeviceNode made;
+            if (c.has("plugin"))
+            {
+                // R-VST-6: another maker's effect, from the machine's list
+                if (c.has("type")) { err = "--type or --plugin, not both"; return false; }
+                if (c.has("preset")) { err = "a plugin's presets are its own — --preset is for a registry device"; return false; }
+                if (!pluginNode(c.flag("plugin"), made, err)) return false;
+                if (made.pluginKind == "instrument")
+                { err = "`" + made.pluginName + "` is an instrument — make it an instrument strip (strip add --kind instrument --plugin " + made.plugin + ")"; return false; }
+            }
+            const std::string type = c.has("plugin") ? std::string() : c.flag("type");
+            const DeviceType *t = c.has("plugin") ? nullptr : DeviceRegistry::find(type);
+            if (!t && !c.has("plugin"))
             {
                 std::vector<std::string> names;
                 for (const auto &x : DeviceRegistry::types()) names.push_back(x.name);
@@ -437,7 +458,7 @@ namespace solaris
                 return false;
             }
             const bool instrumentStrip = s && s->kind == "instrument";
-            if (t->kind == DeviceKind::Instrument)
+            if (t && t->kind == DeviceKind::Instrument)
             { err = "a strip plays ONE instrument, its first device — make an instrument strip (strip add --kind instrument --instrument " + type + ")"; return false; }
             Rack *r = p.rack(track);
             if (!r) { p.racks.push_back(Rack{track, {}, {}, {}}); r = &p.racks.back(); }
@@ -445,7 +466,9 @@ namespace solaris
             if (!intFlag(c, "at", 0, (int)r->devices.size(), at, at, err)) return false;
             if (instrumentStrip && at == 0) at = 1; // the instrument stays first
             const std::string id = p.nextId("dv");
-            r->devices.insert(r->devices.begin() + at, DeviceNode{id, type, false, {}, {}});
+            if (!c.has("plugin")) made = DeviceNode{id, type, false, {}, {}};
+            made.id = id;
+            r->devices.insert(r->devices.begin() + at, made);
             changed("device.added", id);
             if (c.has("preset") && !applyPreset(id, c.flag("preset"), err)) return false; // R-PRESET-1: dropped with its preset
             mOutput = id + "\n";
@@ -616,7 +639,7 @@ namespace solaris
             if (!owner.empty())
             {
                 if (c.has("src")) { err = trackName(c.flag("lane"), owner) + ", an instrument — an audio clip needs a lane of its own (R-LANE-3)"; return false; }
-                if (c.has("instrument")) { err = trackName(c.flag("lane"), owner) + " — a new instrument gets its own track: give --lane new (R-LANE-3)"; return false; }
+                if (c.has("instrument") || c.has("plugin")) { err = trackName(c.flag("lane"), owner) + " — a new instrument gets its own track: give --lane new (R-LANE-3)"; return false; }
                 if (c.has("strip") && c.flag("strip") != owner)
                 {
                     err = trackName(c.flag("lane"), owner) + " — a clip on it plays through " + owner + "; leave out --strip, or put it on " + c.flag("strip") + "'s track (R-LANE-3)";
@@ -624,14 +647,17 @@ namespace solaris
                 }
             }
             if (c.has("warp") && !c.has("src")) { err = "--warp is for an audio clip (--src)"; return false; }
-            if (c.has("preset") && !c.has("instrument")) { err = "--preset goes with --instrument (a new instrument, dropped with its preset)"; return false; }
+            if (c.has("preset") && !c.has("instrument")) { err = c.has("plugin") ? "a plugin's presets are its own — --preset goes with --instrument" : "--preset goes with --instrument (a new instrument, dropped with its preset)"; return false; }
             std::string made; // --instrument: a new instrument strip, made by `strip add`'s own rules (R-BROWSE-3: one drop, one command)
-            if (c.has("instrument"))
+            if (c.has("instrument") || c.has("plugin"))
             {
-                if (c.has("src") || c.has("strip")) { err = "--instrument makes its own strip — give it without --src or --strip"; return false; }
+                const std::string flag = c.has("plugin") ? "--plugin" : "--instrument";
+                if (c.has("src") || c.has("strip")) { err = flag + " makes its own strip — give it without --src or --strip"; return false; }
                 Command sc;
                 sc.kind = K::StripAdd;
-                sc.flags = {{"kind", "instrument"}, {"instrument", c.flag("instrument")}};
+                sc.flags = {{"kind", "instrument"}};
+                if (c.has("instrument")) sc.flags.emplace_back("instrument", c.flag("instrument"));
+                if (c.has("plugin")) sc.flags.emplace_back("plugin", c.flag("plugin")); // R-VST-6: a plugin, one drop
                 if (c.has("sample")) sc.flags.emplace_back("sample", c.flag("sample")); // a sampler and its sound, one drop
                 if (!mixCommand(sc, err)) return false;
                 made = p.strips.back().id;

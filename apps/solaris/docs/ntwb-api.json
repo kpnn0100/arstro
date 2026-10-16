@@ -93,6 +93,10 @@
       "doc": "R-VST-6: a scan found this many plugins; problems: bundles that could not be read.",
       "data": "{line, fields: {count, problems}}"
     },
+    "plugin.offline": {
+      "doc": "R-VST-6: a song's plugin is not playing — it never started, crashed or overran its budget; an effect passes dry, an instrument is silent (`device reload <dv>`). Said once.",
+      "data": "{line, fields: {device, why}}"
+    },
     "recents.changed": {
       "doc": "Home's recent songs changed.",
       "data": "{line, fields: {count}}"

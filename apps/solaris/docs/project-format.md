@@ -106,6 +106,13 @@ as a clip's `src` is (relative to the song when inside its folder), written righ
 `#aeffect id=dv_4 type=sampler sample="samples/vox chop.wav" mode=one-shot`.
 `track=master` is the master's rack. A key the registry does not know is kept and reported by
 `audit`; a value outside its range is clamped and counted.
+Another maker's plugin (R-VST-6) is `type=vst3`: its class id (`plugin=`, the UID), its `name`, its `kind`
+(`instrument` | `effect` — so a strip stays what it was where the bundle is missing) and its `bundle` (absolute, where
+the scan found it), written right after `type`; its parameters as `p<id>=<0 … 1>` (only those the song set); and
+`state=` LAST — the plugin's own state, base64, asked of it whenever the song is written. Opened, a plugin is given its
+state, then the values the song sets. A bundle this machine does not have leaves the device offline, the song open:
+`#aeffect id=dv_5 type=vst3 plugin=9FEB6596B6B044A4A46AC1C4145CD7D7 name="Arstro Basic Synth" kind=instrument
+bundle=/home/me/.vst3/ArstroBasicSynth.vst3 p0=0.6 state=YXJzdHJv…`.
 
 ## 7. Lanes — `#alane`
 

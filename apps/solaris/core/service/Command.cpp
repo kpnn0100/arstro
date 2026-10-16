@@ -69,11 +69,12 @@ namespace solaris
              "Move a mixer to position <index> (0 = first). Refused if it would make any route point backward.", "R-MIX-4"},
 
             {K::StripAdd, "strip add", "", 0, 0,
-             {"kind=<audio|instrument|bus>", "name=<text>", "mixer=<mx>", "instrument=<type>", "sample=<file>", "out=<target>"},
+             {"kind=<audio|instrument|bus>", "name=<text>", "mixer=<mx>", "instrument=<type>", "plugin=<id|name>", "sample=<file>", "out=<target>"},
              "Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: "
              "\"Main\" — the bus that leaves the nearest later mixer with buses, else the one leaving its own mixer "
              "(the new strip is then placed BEFORE it, so the route goes forward), else master. An instrument strip "
-             "gets its instrument (default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8).", "R-MIX-1"},
+             "gets its instrument (default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8); "
+             "--plugin <id|name> makes it another maker's instrument plugin, from `plugins list` (R-VST-6).", "R-MIX-1"},
             {K::StripDelete, "strip delete", "<ch>", 1, 1, {"with-clips"},
              "Delete a strip and its rack. Refused while clips play through it or strips route to it, unless "
              "--with-clips (its clips go too).", "R-MIX-1"},
@@ -109,9 +110,10 @@ namespace solaris
              "to a strip (R-MIX-15).", "R-MIX-5"},
             {K::SendDelete, "send delete", "<sd>", 1, 1, {}, "Remove a send.", "R-MIX-5"},
 
-            {K::DeviceAdd, "device add", "<ch|master>", 1, 1, {"type=<registry type>", "at=<index>", "preset=<name>"},
+            {K::DeviceAdd, "device add", "<ch|master>", 1, 1, {"type=<registry type>", "plugin=<id|name>", "at=<index>", "preset=<name>"},
              "Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an "
-             "instrument strip.", "R-FX-5"},
+             "instrument strip. --plugin <id|name> (instead of --type) inserts another maker's effect plugin, from "
+             "`plugins list`: it plays in a process of its own, its parameters are p<id>, numbers 0 … 1 (R-VST-6).", "R-FX-5"},
             {K::DeviceRemove, "device remove", "<dv>", 1, 1, {}, "Remove a device from its rack. An instrument strip keeps its instrument.", "R-FX-5"},
             {K::DeviceMove, "device move", "<dv>", 1, 1, {"to=<index>"}, "Move a device within its rack.", "R-FX-5"},
 
@@ -131,11 +133,12 @@ namespace solaris
             {K::LaneUngroup, "lane ungroup", "<lg>", 1, 1, {}, "Let a group's lanes go; the group is gone, the lanes stay where they are.", "R-ARR-3"},
 
             {K::ClipAdd, "clip add", "", 0, 0,
-             {"src=<file>", "strip=<ch>", "instrument=<type>", "sample=<file>", "pattern=<pt>", "lane=<ln|new>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>", "warp", "preset=<name>"},
+             {"src=<file>", "strip=<ch>", "instrument=<type>", "plugin=<id|name>", "sample=<file>", "pattern=<pt>", "lane=<ln|new>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>", "warp", "preset=<name>"},
              "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the "
              "first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of "
              "--pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument "
-             "strip of that type — what dropping an instrument does (R-BROWSE-3). With no --lane it goes on the lane "
+             "strip of that type — what dropping an instrument does (R-BROWSE-3); --plugin <id|name> the same with another "
+             "maker's instrument plugin (R-VST-6). With no --lane it goes on the lane "
              "its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for "
              "a new one (R-SVC-8). On an instrument's TRACK (--lane <ln>) a note clip plays through that instrument — "
              "--strip may be left out, --pattern places that pattern; audio and --instrument are refused there (R-LANE-3). "
@@ -374,6 +377,9 @@ namespace solaris
              "/usr/local/lib/vst3) — each bundle read in a process of its own, so one that crashes loses only itself (said). "
              "Prints each found and each problem; the list is the machine's, kept.", "R-VST-6"},
             {K::PluginsList, "plugins list", "", 0, 0, {}, "The VST3 plugins the last scan found (R-VST-6).", "R-VST-6"},
+            {K::DeviceReload, "device reload", "<dv>", 1, 1, {},
+             "Start a plugin device's process again — after a crash or an overrun took it offline — from its last state "
+             "(R-VST-6). Not an edit. Prints `playing`, or `offline: <why>`.", "R-VST-6"},
             {K::RecentsRemove, "recents remove", "<path>", 1, 1, {}, "Take a song off Home's recent list (the file is untouched).", "R-HOME-1"},
 
             {K::TransportPlay, "transport play", "", 0, 0, {"from=<beats>", "clip=<ac>"},

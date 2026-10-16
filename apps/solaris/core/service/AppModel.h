@@ -44,6 +44,9 @@ namespace solaris
         bool takesSample = false;               // R-EDM-8: it plays a recorded sound (a sampler)
         std::string sample;                     // that sound, as stored (relative to the song); "" = none
         std::vector<ParamGroupModel> groups;    // R-UI-12: its parameter groups' titles, the registry's (REQ-device-10)
+        std::string plugin;                     // R-VST-6: type vst3 — the plugin's class id (its name is `label`)
+        bool offline = false;                   // … not playing: never started, crashed, overran — an effect passes dry,
+        std::string why;                        //    an instrument is silent; and why (`device reload` starts it again)
     };
 
     struct AutoPointModel

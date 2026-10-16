@@ -159,9 +159,99 @@ namespace
         std::vector<std::string> listening() const override { return on; }
     };
 
+    // R-VST-6: other makers' plugins, played "elsewhere" — here in process, through the same seam. Sweet Pad sounds a
+    // sine per held note at 0.4 × Level (p1, 0.5); Air Verb passes its input × 2·Gain (p7, 0.5: unity), `latency`
+    // samples late and saying so. One named by `crash` fails its next block of sound (offline, "it crashed (test)"); its state is
+    // its values as text; every state set is kept.
+    struct PluginWorld
+    {
+        int started = 0, latency = 0;
+        std::string crash;                 // a class id
+        bool liveOnMain = false;           // a block with a live budget processed on the service's thread (a warm-up would)
+        std::vector<std::string> statesSet;
+    };
+    class FakePlugin : public IPluginInstance
+    {
+    public:
+        FakePlugin(std::shared_ptr<PluginWorld> w, const std::string &uid, double rate) : w(std::move(w)), uid(uid), rate(rate)
+        {
+            inst = uid == "0123456789ABCDEF0123456789ABCDEF";
+            ps = inst ? std::vector<PluginParamInfo>{{1, "Level", "", 0.5, 0}, {2, "Tone", "%", 0.25, 0}}
+                      : std::vector<PluginParamInfo>{{7, "Gain", "dB", 0.5, 0}};
+            for (const auto &p : ps) values[p.id] = p.def;
+            lat = inst ? 0 : this->w->latency;
+            for (auto &r : ring) r.assign((size_t)lat + 1, 0.0f);
+        }
+        bool isInstrument() const override { return inst; }
+        int latency() const override { return lat; }
+        const std::vector<PluginParamInfo> &params() const override { return ps; }
+        bool process(const float *const *in, float *const *out, int frames, bool reset, const PluginNote *notes, int nNotes,
+                     const PluginChange *changes, int nChanges, double budget) override
+        {
+            if (frames > 0 && budget < 1.0 && std::this_thread::get_id() == gMainThread) w->liveOnMain = true;
+            if (dead) return false;
+            if (w->crash == uid && frames > 0) { dead = true; return false; } // at a block: after its engine was built
+            if (reset) held.clear();
+            for (int k = 0; k < nChanges; ++k) values[changes[k].id] = changes[k].value;
+            for (int k = 0; k < nNotes; ++k)
+                if (notes[k].on) held[notes[k].pitch] = 0.0;
+                else held.erase(notes[k].pitch);
+            for (int i = 0; i < frames; ++i)
+            {
+                if (inst)
+                {
+                    double v = 0;
+                    for (auto &h : held)
+                    {
+                        v += std::sin(h.second);
+                        h.second += 2 * M_PI * 440.0 * std::pow(2.0, (h.first - 69) / 12.0) / rate;
+                    }
+                    out[0][i] = out[1][i] = (float)(0.4 * values[1] * v);
+                    continue;
+                }
+                for (int c = 0; c < 2; ++c)
+                {
+                    ring[c][(size_t)at] = in[c][i];
+                    out[c][i] = (float)(2.0 * values[7]) * ring[c][(size_t)((at + 1) % (lat + 1))]; // `lat` late
+                }
+                at = (at + 1) % (lat + 1);
+            }
+            return true;
+        }
+        bool offline() const override { return dead; }
+        std::string why() const override { return dead ? "it crashed (test)" : std::string(); }
+        bool getState(std::string &s, std::string &) override
+        {
+            s.clear();
+            for (const auto &v : values) s += std::to_string(v.first) + ":" + canonicalNumber(v.second) + ",";
+            return true;
+        }
+        bool setState(const std::string &s, std::string &) override
+        {
+            w->statesSet.push_back(s);
+            std::stringstream ss(s);
+            std::string kv;
+            while (std::getline(ss, kv, ','))
+                if (kv.find(':') != std::string::npos) values[(uint32_t)std::stoul(kv)] = std::stod(kv.substr(kv.find(':') + 1));
+            return true;
+        }
+
+    private:
+        std::shared_ptr<PluginWorld> w;
+        std::string uid;
+        double rate;
+        bool inst = false, dead = false;
+        int lat = 0, at = 0;
+        std::vector<PluginParamInfo> ps;
+        std::map<uint32_t, double> values;
+        std::map<int, double> held;  // pitch → phase
+        std::vector<float> ring[2];
+    };
+
     struct Fake
     {
         std::string settings, recents; // "" = not persisted
+        std::shared_ptr<PluginWorld> plugins = std::make_shared<PluginWorld>();
         std::shared_ptr<Capture> capture = std::make_shared<Capture>();
         bool canPlay = true;
         std::string pipewire;          // R-DEV-9: "" this host has no PipeWire driver, "ok" it opens, "fail" it links nowhere
@@ -239,6 +329,11 @@ namespace
                        PluginModel{"FEDCBA9876543210FEDCBA9876543210", "Air Verb", "Acme", "effect", "/vst3/Air.vst3"}};
                 problems = {"Broken.vst3: the plugin crashed while being read (Aborted)"};
                 return true;
+            };
+            h.loadPlugin = [w = plugins](const std::string &bundle, const std::string &uid, double rate, int, std::string &err) -> std::unique_ptr<IPluginInstance> {
+                if (contains(bundle, "Gone")) { err = bundle + " is not a module directory."; return nullptr; }
+                ++w->started;
+                return std::make_unique<FakePlugin>(w, uid, rate);
             };
             if (canPlay)
                 h.audioOut = [this] {
@@ -3309,7 +3404,8 @@ static void test_the_shipped_presets_load()
     r.ok("project new " + freshSong("shipped") + " --bpm 120");
     const std::string audio = firstLine(r.ok("strip add --kind audio --name Bus"));
     int n = 0;
-    for (const auto &x : r.svc.model().presets)
+    const auto presets = r.svc.model().presets; // a copy: each command below rebuilds the model it lives in
+    for (const auto &x : presets)
     {
         assert(x.factory);
         const arstro::DeviceType *t = arstro::DeviceRegistry::find(x.type);
@@ -3468,6 +3564,120 @@ static void test_plugins_are_scanned_and_listed()
     assert(again.svc.model().plugins.size() == 2 && again.svc.model().plugins[1].path == "/vst3/Sweet.vst3");
     assert(contains(again.ok("plugins list"), "Sweet Pad (Acme)"));
     pass("plugins (R-VST-6): a scan's finds and its problems said, the list the machine's — kept and read back; `plugins list`");
+}
+
+static void test_a_plugin_plays_in_a_song()
+{
+    // R-VST-6: another maker's plugin in a song — an instrument strip made of one (and the refusals around it), its
+    // parameters p<id> set, read, bound; a render on its own instance; an effect plugin replacing its input, its latency
+    // compensated; one that crashes taken offline (said once, in the model, an instrument silent, an effect dry) and
+    // reloaded; its state saved with the song and given back; a bundle that is not there offline, the song still open
+    Run r;
+    const std::string dir = scratch();
+    PluginWorld &w = *r.fake.plugins;
+    r.ok("plugins scan");
+    const std::string song = freshSong("plugin");
+    r.ok("project new " + song + " --bpm 120");
+    assert(contains(r.no("clip add --plugin \"Sweet Pda\" --at 0"), "did you mean: Sweet Pad"));
+    assert(contains(r.no("device add ch_1 --plugin \"Sweet Pad\""), "is an instrument — make it an instrument strip"));
+    assert(contains(r.no("strip add --kind instrument --plugin \"Air Verb\""), "is an effect — put it in a rack"));
+    assert(contains(r.no("device add ch_1 --plugin \"Air Verb\" --type reverb"), "not both"));
+    assert(contains(r.no("strip add --kind bus --plugin \"Sweet Pad\""), "--plugin is for --kind instrument"));
+    assert(w.started == 0);
+    const std::string made = r.ok("clip add --plugin \"sweet pad\" --at 0 --length 4"); // by name, any case
+    assert(contains(made, "made: strip=ch_2 device=dv_1 pattern=pt_1"));
+    r.ok("notes add pt_1 \"A4@0:2\"");
+    const StripModel *s = r.strip("ch_2");
+    assert(s && s->name == "Sweet Pad" && s->devices.size() == 1);
+    {
+        const DeviceModel &d = s->devices[0];
+        assert(d.type == "vst3" && d.plugin == "0123456789ABCDEF0123456789ABCDEF" && d.label == "Sweet Pad" && d.instrument && !d.offline && d.why.empty());
+        assert(d.params.size() == 2 && d.params[0].name == "p1" && d.params[0].label == "Level" && d.params[0].value == 0.5 && d.params[0].max == 1.0);
+    }
+    assert(contains(r.text(), "#aeffect id=dv_1 type=vst3 plugin=0123456789ABCDEF0123456789ABCDEF name=\"Sweet Pad\" kind=instrument bundle=/vst3/Sweet.vst3"));
+    assert(w.started == 1); // the live one, made when the model first asked
+    auto render = [&](const std::string &name) {
+        const std::string out = dir + "/" + name + ".wav";
+        r.ok("render --out " + out + " --to 4 --bits 32f");
+        return r.fake.written[out][0];
+    };
+    auto rms = [](const std::vector<float> &x, size_t a, size_t b) {
+        double sum = 0;
+        for (size_t i = a; i < b && i < x.size(); ++i) sum += (double)x[i] * x[i];
+        return std::sqrt(sum / (double)(b - a));
+    };
+    const auto half = render("pl-half");
+    assert(w.started == 2); // a render plays its own
+    const double a = rms(half, 0, 48000);
+    assert(std::fabs(a - 0.2 / std::sqrt(2.0)) < 0.002 && rms(half, 50000, 96000) < 1e-6); // 0.4 × 0.5, the note's two beats
+    r.ok("set dv_1.p1=0.25");
+    assert(r.ok("get dv_1.p1") == "0.25\n" && r.ok("get dv_1.p2") == "0.25\n"); // set, and the plugin's default
+    assert(contains(r.no("set dv_1.p1=1.5"), "dv_1.p1 must be between 0.0 and 1.0"));
+    assert(contains(r.no("set dv_1.p9=0.5"), "p1"));
+    assert(std::fabs(rms(render("pl-quarter"), 0, 48000) / a - 0.5) < 0.01);
+    r.ok("set dv_1.p1=\"=0\"");                                     // a formula drives it (R-AUTO-1): by name, at build
+    assert(rms(render("pl-bound"), 0, 48000) == 0.0);
+    r.ok("bind clear dv_1.p1");
+    // an effect plugin replaces its input — at Gain 0.5 unity — and its latency is compensated: the same render
+    w.latency = 64;
+    r.ok("device add ch_2 --plugin \"Air Verb\"");                  // dv_2
+    assert(r.strip("ch_2")->devices.size() == 2 && !r.strip("ch_2")->devices[1].instrument);
+    const auto plain = render("pl-plain");
+    bool same = plain.size() == half.size();
+    for (size_t i = 0; same && i < plain.size(); ++i) same = std::fabs(plain[i] * 2 - half[i]) < 1e-6f; // Level 0.25 now: half
+    assert(same);
+    r.ok("set dv_2.p7=1");                                             // × 2
+    assert(std::fabs(rms(render("pl-loud"), 0, 48000) / rms(plain, 0, 48000) - 2.0) < 0.01);
+    // crashed in a render: its file says so — the effect passes dry, the instrument is silent
+    w.crash = "FEDCBA9876543210FEDCBA9876543210";
+    r.events.clear();
+    const auto dry = render("pl-dry");
+    float apart = dry.size() == plain.size() ? 0.0f : 1.0f;
+    for (size_t i = 0; i < dry.size() && i < plain.size(); ++i) apart = std::max(apart, std::fabs(dry[i] - plain[i]));
+    assert(apart < 1e-6f); // sample for sample: from its first block, and its latency kept (the engine compensated it)
+    bool said = false;
+    for (const auto &e : r.events) said |= contains(e, "render: dv_2 (Air Verb) was offline — it crashed (test); its input passes dry");
+    assert(said);
+    // … and live: playing, it goes offline — said once, the model shows why; `device reload` starts it again
+    r.ok("transport play --from 0");
+    waitFrames(r, 9600);
+    r.ok("wait 0.05");
+    r.ok("transport stop");
+    int told = 0;
+    for (const auto &e : r.events) told += contains(e, "plugin.offline") && contains(e, "device=dv_2") && contains(e, "it crashed (test)");
+    assert(told == 1 && !w.liveOnMain); // only the audio thread plays a live instance: an engine is never warmed through one
+    assert(r.strip("ch_2")->devices[1].offline && r.strip("ch_2")->devices[1].why == "it crashed (test)");
+    assert(contains(r.ok("audit"), "offline: dv_2 (Air Verb) — it crashed (test) (device reload dv_2)"));
+    assert(contains(r.no("device reload dv_9"), "no device"));
+    w.crash.clear();
+    const bool dirty = r.svc.model().dirty;
+    assert(r.ok("device reload dv_2") == "playing\n" && !r.strip("ch_2")->devices[1].offline);
+    assert(r.svc.model().dirty == dirty); // not an edit
+    assert(contains(r.no("device reload ch_2"), "no device") && contains(r.no("preset save dv_2 Mine"), "its presets are its own"));
+    // its state is the song's when it is saved — and given back when it is opened
+    r.ok("project save");
+    const std::string text = r.text();
+    assert(contains(text, "p1=0.25 state=1:0.25,2:0.25,\n") && contains(text, "p7=1.0 state=7:1.0,\n")); // the reloaded one too
+    w.statesSet.clear();
+    r.ok("project close");
+    r.ok("project open " + song);
+    assert(r.strip("ch_2")->devices[0].params[0].value == 0.25);
+    assert(std::find(w.statesSet.begin(), w.statesSet.end(), "1:0.25,2:0.25,") != w.statesSet.end());
+    // a bundle that is not on this machine: the song opens, the device offline, said
+    r.ok("project close");
+    {
+        std::string t = text;
+        t.replace(t.find("/vst3/Air.vst3"), 14, "/vst3/Gone.vst3");
+        std::ofstream(song, std::ios::binary) << t;
+    }
+    r.events.clear();
+    r.ok("project open " + song);
+    const DeviceModel &gone = r.strip("ch_2")->devices[1];
+    assert(gone.offline && contains(gone.why, "Gone.vst3 is not a module directory") && gone.label == "Air Verb");
+    told = 0;
+    for (const auto &e : r.events) told += contains(e, "plugin.offline") && contains(e, "device=dv_2");
+    assert(told == 1 && std::fabs(rms(render("pl-gone"), 0, 48000) / a - 0.5) < 0.01); // dry: what the instrument plays
+    pass("a plugin in a song (R-VST-6): an instrument strip of one, refused where it does not belong; p<id> set, read, bound; a render's own instance; an effect replaces its input, its latency compensated; crashed — dry or silent, said once, in the model and the audit, reloaded; its state saved and given back; a missing bundle offline, the song open");
 }
 
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
@@ -4738,6 +4948,7 @@ int main()
     test_templates_start_songs();
     test_the_sample_library_tags_and_finds();
     test_plugins_are_scanned_and_listed();
+    test_a_plugin_plays_in_a_song();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

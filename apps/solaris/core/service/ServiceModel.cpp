@@ -26,14 +26,14 @@ namespace solaris
 {
     namespace
     {
-        DeviceModel deviceModel(const DeviceNode &d)
+        /** `t`: the registry's type, or a plugin's from its connection (R-VST-6); null when this build has neither. */
+        DeviceModel deviceModel(const DeviceNode &d, const DeviceType *t)
         {
             DeviceModel m;
             m.id = d.id;
             m.type = d.type;
             m.bypass = d.bypass;
             m.sample = d.sample;
-            const DeviceType *t = DeviceRegistry::find(d.type);
             m.known = t != nullptr;
             m.takesSample = t && t->takesSample;
             if (!t)
@@ -58,6 +58,7 @@ namespace solaris
                 values.push_back(v);
             }
             DeviceModel full = deviceModelOf(*t, values);
+            full.type = m.type;
             full.id = m.id;
             full.bypass = m.bypass;
             full.sample = m.sample;
@@ -83,6 +84,7 @@ namespace solaris
         if (mPlayer && mPlayer->running())
             for (const auto &b : mModel.bindings) wasLive[b.address] = b.live;
         mModel = AppModel();
+        prunePlugins(); // R-VST-6: a removed plugin's process ends (once no engine plays it)
         mModel.transport = transport;
         mModel.audition = audition;
         mModel.loudness = loudness;
@@ -238,7 +240,7 @@ namespace solaris
                     sm.sends.back().sidechain = sd.sidechain;
                 }
             if (const Rack *r = p.rack(s->id))
-                for (const auto &d : r->devices) sm.devices.push_back(deviceModel(d));
+                for (const auto &d : r->devices) sm.devices.push_back(pluginFacts(d, deviceModel(d, typeOf(d))));
             // fed by (R-MIX-8)
             std::set<std::string> lanes, from;
             for (const auto &c : p.clips)
@@ -260,7 +262,7 @@ namespace solaris
             mModel.strips.push_back(sm);
         }
         if (const Rack *r = p.rack("master"))
-            for (const auto &d : r->devices) mModel.masterDevices.push_back(deviceModel(d));
+            for (const auto &d : r->devices) mModel.masterDevices.push_back(pluginFacts(d, deviceModel(d, typeOf(d))));
 
         std::vector<const Lane *> lanes;
         for (const auto &l : p.lanes) lanes.push_back(&l);
@@ -544,6 +546,15 @@ namespace solaris
         for (const auto &r : p.racks)
             for (const auto &d : r.devices)
             {
+                if (d.type == "vst3")
+                {
+                    // R-VST-6: a plugin that is not playing — an effect passes dry, an instrument is silent
+                    const auto it = mPluginLive.find(d.id);
+                    if (it == mPluginLive.end() || it->second->offline())
+                        out.push_back("offline: " + d.id + " (" + (d.pluginName.empty() ? std::string("a plugin") : d.pluginName) + ") — " +
+                                      (it == mPluginLive.end() ? std::string("not started") : it->second->why()) + " (device reload " + d.id + ")");
+                    continue;
+                }
                 const DeviceType *t = DeviceRegistry::find(d.type);
                 if (!t) { out.push_back("unknown device: " + d.id + " is `" + d.type + "`, which this build does not have"); continue; }
                 for (const auto &kv : d.params)

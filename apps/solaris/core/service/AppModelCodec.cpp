@@ -69,6 +69,9 @@ namespace solaris
             {"strips[].devices[].sample", "string", "that sound, as stored (relative to the song); \"\" = none"},
             {"strips[].devices[].known", "bool", "false when this build's registry lacks the type (kept, not played)"},
             {"strips[].devices[].lastChanged", "string", "the parameter last written, by anyone (R-WIN-2)"},
+            {"strips[].devices[].plugin", "string", "R-VST-6: type vst3 — another maker's plugin, its class id (its name is `label`); \"\" = a registry device"},
+            {"strips[].devices[].offline", "bool", "R-VST-6: the plugin is not playing (never started, crashed, overran) — an effect passes dry, an instrument is silent"},
+            {"strips[].devices[].why", "string", "R-VST-6: why it is offline (`device reload <dv>` starts it again)"},
             {"strips[].devices[].groups", "object[]", "R-UI-12: its parameter groups' titles, the registry's — `prefix` (before a parameter's dot, \"\" for none) and `label`"},
             {"strips[].devices[].groups[].prefix", "string", "the prefix before a parameter's dot; \"\" = the parameters with none"},
             {"strips[].devices[].groups[].label", "string", "its title, for a person"},
@@ -367,6 +370,7 @@ namespace solaris
                 a.push(Json::object().set("id", d.id).set("type", d.type).set("label", d.label)
                            .set("instrument", d.instrument).set("bypass", d.bypass).set("known", d.known).set("lastChanged", d.lastChanged)
                            .set("takesSample", d.takesSample).set("sample", d.sample)
+                           .set("plugin", d.plugin).set("offline", d.offline).set("why", d.why)
                            .set("groups", groupsOf(d.groups))
                            .set("params", params));
             }
@@ -391,6 +395,8 @@ namespace solaris
                 j.set("id", d.id).set("type", d.type);
                 if (d.bypass) j.set("bypass", true);
                 if (!d.sample.empty()) j.set("sample", d.sample);
+                if (!d.plugin.empty()) j.set("plugin", d.plugin).set("label", d.label); // R-VST-6
+                if (d.offline) j.set("offline", d.why);
                 a.push(j.set("params", params));
             }
             return a;

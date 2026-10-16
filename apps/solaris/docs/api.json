@@ -134,17 +134,18 @@
     },
     {
       "verb": "strip add",
-      "usage": "strip add [--kind <audio|instrument|bus>] [--name <text>] [--mixer <mx>] [--instrument <type>] [--sample <file>] [--out <target>]",
+      "usage": "strip add [--kind <audio|instrument|bus>] [--name <text>] [--mixer <mx>] [--instrument <type>] [--plugin <id|name>] [--sample <file>] [--out <target>]",
       "args": "",
       "flags": [
         "kind=<audio|instrument|bus>",
         "name=<text>",
         "mixer=<mx>",
         "instrument=<type>",
+        "plugin=<id|name>",
         "sample=<file>",
         "out=<target>"
       ],
-      "summary": "Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: \"Main\" — the bus that leaves the nearest later mixer with buses, else the one leaving its own mixer (the new strip is then placed BEFORE it, so the route goes forward), else master. An instrument strip gets its instrument (default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8).",
+      "summary": "Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: \"Main\" — the bus that leaves the nearest later mixer with buses, else the one leaving its own mixer (the new strip is then placed BEFORE it, so the route goes forward), else master. An instrument strip gets its instrument (default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8); --plugin <id|name> makes it another maker's instrument plugin, from `plugins list` (R-VST-6).",
       "requirement": "R-MIX-1"
     },
     {
@@ -243,14 +244,15 @@
     },
     {
       "verb": "device add",
-      "usage": "device add <ch|master> [--type <registry type>] [--at <index>] [--preset <name>]",
+      "usage": "device add <ch|master> [--type <registry type>] [--plugin <id|name>] [--at <index>] [--preset <name>]",
       "args": "<ch|master>",
       "flags": [
         "type=<registry type>",
+        "plugin=<id|name>",
         "at=<index>",
         "preset=<name>"
       ],
-      "summary": "Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an instrument strip.",
+      "summary": "Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an instrument strip. --plugin <id|name> (instead of --type) inserts another maker's effect plugin, from `plugins list`: it plays in a process of its own, its parameters are p<id>, numbers 0 … 1 (R-VST-6).",
       "requirement": "R-FX-5"
     },
     {
@@ -321,12 +323,13 @@
     },
     {
       "verb": "clip add",
-      "usage": "clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--sample <file>] [--pattern <pt>] [--lane <ln|new>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>] [--warp] [--preset <name>]",
+      "usage": "clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--plugin <id|name>] [--sample <file>] [--pattern <pt>] [--lane <ln|new>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>] [--warp] [--preset <name>]",
       "args": "",
       "flags": [
         "src=<file>",
         "strip=<ch>",
         "instrument=<type>",
+        "plugin=<id|name>",
         "sample=<file>",
         "pattern=<pt>",
         "lane=<ln|new>",
@@ -337,7 +340,7 @@
         "warp",
         "preset=<name>"
       ],
-      "summary": "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of --pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). With no --lane it goes on the lane its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for a new one (R-SVC-8). On an instrument's TRACK (--lane <ln>) a note clip plays through that instrument — --strip may be left out, --pattern places that pattern; audio and --instrument are refused there (R-LANE-3). --warp (with --src): it follows the song's tempo, its own detected now (R-WARP-1; refused when none is heard). Prints the clip, then `made:` and whatever else it made.",
+      "summary": "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of --pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3); --plugin <id|name> the same with another maker's instrument plugin (R-VST-6). With no --lane it goes on the lane its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for a new one (R-SVC-8). On an instrument's TRACK (--lane <ln>) a note clip plays through that instrument — --strip may be left out, --pattern places that pattern; audio and --instrument are refused there (R-LANE-3). --warp (with --src): it follows the song's tempo, its own detected now (R-WARP-1; refused when none is heard). Prints the clip, then `made:` and whatever else it made.",
       "requirement": "R-MIX-2"
     },
     {
@@ -1119,6 +1122,14 @@
       "requirement": "R-VST-6"
     },
     {
+      "verb": "device reload",
+      "usage": "device reload <dv>",
+      "args": "<dv>",
+      "flags": [],
+      "summary": "Start a plugin device's process again — after a crash or an overrun took it offline — from its last state (R-VST-6). Not an edit. Prints `playing`, or `offline: <why>`.",
+      "requirement": "R-VST-6"
+    },
+    {
       "verb": "recents remove",
       "usage": "recents remove <path>",
       "args": "<path>",
@@ -1386,6 +1397,14 @@
         "problems"
       ],
       "summary": "R-VST-6: a scan found this many plugins; problems: bundles that could not be read."
+    },
+    {
+      "name": "plugin.offline",
+      "fields": [
+        "device",
+        "why"
+      ],
+      "summary": "R-VST-6: a song's plugin is not playing — it never started, crashed or overran its budget; an effect passes dry, an instrument is silent (`device reload <dv>`). Said once."
     },
     {
       "name": "recents.changed",
@@ -1816,6 +1835,24 @@
       "path": "strips[].devices[].lastChanged",
       "type": "string",
       "summary": "the parameter last written, by anyone (R-WIN-2)",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].plugin",
+      "type": "string",
+      "summary": "R-VST-6: type vst3 — another maker's plugin, its class id (its name is `label`); \"\" = a registry device",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].offline",
+      "type": "bool",
+      "summary": "R-VST-6: the plugin is not playing (never started, crashed, overran) — an effect passes dry, an instrument is silent",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].why",
+      "type": "string",
+      "summary": "R-VST-6: why it is offline (`device reload <dv>` starts it again)",
       "stable": true
     },
     {

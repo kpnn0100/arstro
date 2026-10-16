@@ -170,6 +170,7 @@ namespace solaris
             for (const auto &d : r.devices)
                 if (d.id == dv) node = &d;
         if (!node) { err = "no device `" + dv + "`"; return false; }
+        if (node->type == "vst3") { err = dv + " is a plugin (" + node->pluginName + ") — its presets are its own (R-VST-6)"; return false; }
         if (c.kind == K::PresetLoad) return applyPreset(dv, name, err);
         // K::PresetSave: the device's set values, as the .slp keeps them, and its sound
         const std::string path = presetFile(node->type, name, false);

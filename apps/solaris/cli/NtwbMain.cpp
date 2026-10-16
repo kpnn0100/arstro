@@ -17,6 +17,7 @@
  */
 #include "AudioFiles.h"
 #include "Faces.h"
+#include "PluginInstance.h"
 #include "Plugins.h"
 #include "Machine.h"
 #include "NtwbAdapter.h"
@@ -176,6 +177,7 @@ namespace solaris_cli
             host.scanPlugins = [](std::vector<arstro::solaris::PluginModel> &out, std::vector<std::string> &problems, std::string &err) {
                 return solaris_host::scanPlugins(solaris_host::pluginSearchPath(), out, problems, err);
             };
+            host.loadPlugin = solaris_host::loadPlugin; // R-VST-6: each in a process of its own
             solaris::SolarisService svc(host);
 
             ntwb::Client::Options o;

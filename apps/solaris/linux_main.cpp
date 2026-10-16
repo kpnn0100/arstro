@@ -20,6 +20,7 @@
 #include "ControlServer.h"
 #include "EmbeddedFonts.h"
 #include "KeyInput.h"
+#include "PluginInstance.h"
 #include "Plugins.h"
 #include "Machine.h"
 #include "SolarisService.h"
@@ -77,6 +78,7 @@ namespace
         h.scanPlugins = [](std::vector<arstro::solaris::PluginModel> &out, std::vector<std::string> &problems, std::string &err) {
             return solaris_host::scanPlugins(solaris_host::pluginSearchPath(), out, problems, err);
         };
+        h.loadPlugin = solaris_host::loadPlugin; // R-VST-6: each in a process of its own
         return h;
     }
 

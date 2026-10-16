@@ -18,6 +18,7 @@
  */
 #include "AudioFiles.h"
 #include "Faces.h"
+#include "PluginInstance.h"
 #include "Plugins.h"
 #include "Machine.h"
 #ifdef SOLARIS_HAVE_PULSE
@@ -144,6 +145,7 @@ int main(int argc, char **argv)
     host.scanPlugins = [](std::vector<arstro::solaris::PluginModel> &out, std::vector<std::string> &problems, std::string &err) {
         return solaris_host::scanPlugins(solaris_host::pluginSearchPath(), out, problems, err);
     };
+    host.loadPlugin = solaris_host::loadPlugin; // R-VST-6: each in a process of its own
     SolarisService svc(host);
     // The event stream IS the log: a shell run with --watch shows exactly what a window would.
     svc.subscribe([watch](const Event &e) {

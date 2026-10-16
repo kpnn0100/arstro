@@ -289,7 +289,12 @@ namespace solaris
             else if (k == "type") n.type = v;
             else if (k == "bypass") n.bypass = r.boolean(k, v, false);
             else if (k == "sample") n.sample = v;
-            else n.params.emplace_back(k, v); // the registry's, checked by the core
+            else if (n.type == "vst3" && k == "plugin") n.plugin = v; // R-VST-6
+            else if (n.type == "vst3" && k == "bundle") n.bundle = v;
+            else if (n.type == "vst3" && k == "name") n.pluginName = v;
+            else if (n.type == "vst3" && k == "kind") n.pluginKind = v;
+            else if (n.type == "vst3" && k == "state") n.state = v;
+            else n.params.emplace_back(k, v); // the registry's (a plugin's p<id>), checked by the core
         }
         void apply(Reader &r, Lane &n, const std::string &k, const std::string &v)
         {
@@ -804,7 +809,9 @@ namespace solaris
                 l.kv("id", d.id).kv("type", d.type);
                 if (d.bypass) l.kv("bypass", "true");
                 l.strIf("sample", d.sample);
+                l.strIf("plugin", d.plugin).strIf("name", d.pluginName).strIf("kind", d.pluginKind).strIf("bundle", d.bundle);
                 for (const auto &kv : d.params) l.str(kv.first, kv.second);
+                l.strIf("state", d.state); // last: the long one
                 emit(out, "  ", l, d.remarks);
             }
         }

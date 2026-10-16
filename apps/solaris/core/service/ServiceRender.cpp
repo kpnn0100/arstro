@@ -159,6 +159,7 @@ namespace solaris
             ~RateBack() { AudioConfig::instance().setSampleRate(rate); }
         } rateBack;
         CompileResult cr = compile(rated, pcmAt);
+        const auto plugins = attachPlugins(cr, rated, PluginUse::Render); // R-VST-6: its own instances, at its rate, waited for (R-RENDER-1)
         for (const auto &w : cr.warnings) emit(Event(Event::Kind::Info).with("text", w));
 
         std::vector<int> stems;
@@ -225,6 +226,11 @@ namespace solaris
             // (R-RENDER-3) past the end: stop at the first block the master spends below −90 dBFS
             if (!inSong && eng.masterMeter().peak[0] < floor && eng.masterMeter().peak[1] < floor) break;
         }
+        // R-VST-6: a plugin that was not playing is in the file as silence (an instrument) or dry (an effect) — said
+        for (const auto &pl : plugins)
+            if (pl.second->offline())
+                emit(Event(Event::Kind::Info).with("text", "render: " + pl.first + " (" + pl.second->type.label + ") was offline — " + pl.second->why() +
+                                                               (pl.second->instrument ? "; it is silent in the file" : "; its input passes dry in the file")));
         // R-MIX-17: each file from the song's `start` — the master and the ports `lag` late, a stem its strip's
         const size_t len = master[0].size() - (size_t)lag;
         auto trim = [len](std::vector<float> &ch, long long late) {

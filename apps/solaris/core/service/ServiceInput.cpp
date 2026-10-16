@@ -277,6 +277,7 @@ namespace solaris
         p.clips.clear();
         p.bindings.clear();
         CompileResult cr = compile(p, [this](const std::string &src) { return pcmFor(src); });
+        attachPlugins(cr, p, PluginUse::Own); // R-VST-6: its own stream, its own instance
         auto eng = std::make_unique<engine::Engine>();
         std::string err;
         if (!eng->build(cr.graph, err)) return;

@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N25 part 2 — a VST3 plugin played out of process: `device add --plugin`, shared-memory blocks, parameters, latency, state** (R-VST-6; part 1 — the scan — is built), then N26… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N26 — a VST3 plugin's own editor window, and its offline state and Reload in the device panel** (R-VST-6; N25 — scan, play, state, offline — is built), then N27… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -523,10 +523,17 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       Part 1 (2026-10-17): the machine's library file; `sample tag|untag|favourite`; `browse --search` (names through
       the folders, tags, the library's own) and `--favourites`; `library[]`, `browser.search` in the model.
       Part 2 (same day): the Samples tab — Search samples…, Favourites, a star and tags on every sound, Tag… / Remove tag.
-- [~] **N25** VST3 hosting: scan, an out-of-process host, process, latency, parameters (R-VST-6).
+- [x] **N25** VST3 hosting: scan, an out-of-process host, process, latency, parameters (R-VST-6).
       Design round 2026-10-17 (discussion.md Round 9). Part 1 (same day): `solaris-plughost --scan`, the host's scan (a
       bundle per process — a crashing module loses only itself), `plugins scan|list`, the machine's list, `plugins[]`.
-- [ ] **N26** VST3 hosting: a plugin's own editor window; crash and overrun → offline (R-VST-6).
+      Part 2 (same day): `solaris-plughost --serve` (one instance; blocks through shared memory and two eventfds, state
+      over its socket); the host's `loadPlugin` (a budget; dead, frozen or refusing → offline for good, the helper
+      killed); the core's `IPluginInstance` seam and `PluginDevice`; the engine's made devices (never warmed); `vst3`
+      devices in the `.slp` (class, name, kind, bundle, `p<id>`, state); `strip add|clip add|device add --plugin`,
+      `device reload`, `plugin.offline`, `devices[].plugin/offline/why`; a render's own instances. Basic Synth as a
+      plugin renders what the native synth renders, to the bit.
+- [ ] **N26** VST3 hosting: a plugin's own editor window; its offline state and Reload in the device panel (crash and
+      overrun → offline is N25's) (R-VST-6).
 - [ ] **N27** MIDI learn (R-CTRL-1).
 - [ ] **N28** Control surfaces: Mackie Control / HUI (R-CTRL-2).
 - [ ] **N29** A CPU meter (R-PERF-1).

@@ -28,7 +28,7 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 - **Reproduction:** `project new d.slp` · `clip add --instrument synth --at 0 --length 4` ·
   `set ch_2.name=Bass` · `ls`.
 - **Cause:** the lane and the pattern copy the strip's name when they are made (`laneFor`,
-  `core/service/ServiceEdit.cpp:463`); nothing links them after.
+  `core/service/ServiceEdit.cpp:486`); nothing links them after.
 - **Recommended fix:** a lane or pattern made for a strip keeps that strip's name while it was never
   renamed itself — renaming the strip renames the ones still carrying its old name, in the same edit.
   Needs an R-LANE line first (lanes are organisation only, R-LANE-1, so the rule is about names alone).
@@ -50,6 +50,17 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
   42 "Closed Hat" ↔ `chat` — and the plugins' editor uses it for its pads. The fix above is now a lookup.)
 
 ## Closed
+
+### D-15 The shipped-presets test read the model through a reference its own commands freed — closed in N25 part 2
+- **Found:** 2026-10-17, building N25 part 2: `test_the_shipped_presets_load` failed once on `assert(t)` (a preset whose
+  type the registry did not know) and once refused `preset load dv_4 ""` (a preset with no name) — with no change to
+  presets anywhere.
+- **Cause:** the test walked `r.svc.model().presets` by reference while each `clip add` / `preset load` in the loop
+  rebuilt the model (`mModel = AppModel()`), freeing that vector; it read freed memory, and passed for as long as the
+  allocator happened to hand the same block back. N25's model refresh allocates differently, and the luck ran out.
+- **Fix:** the loop walks a copy taken before it.
+- **Guard:** the test itself — green in every run since; the other loops over the model in the suite dispatch nothing
+  inside them.
 
 ### D-14 The DSP library's tempo estimate shipped without its sub-frame refinement — closed in N21 part 1, DSP `6f2df21`
 - **Found:** 2026-10-16, building N21's time map: `Tempo_is_found` turned red with no change to the tempo code (133 bpm

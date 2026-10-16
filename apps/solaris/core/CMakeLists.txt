@@ -2,6 +2,7 @@
 # the model and the engine. No codec, no device API, no OS path (R-SVC-4).
 add_library(solaris_core STATIC
   Compile.cpp
+  PluginDevice.cpp
   Formula.cpp
   Bindings.cpp
   Settings.cpp

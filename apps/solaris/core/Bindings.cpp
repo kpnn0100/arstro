@@ -1,5 +1,7 @@
 #include "Bindings.h"
 #include "Compile.h"
+#include "Format.h"
+#include "PluginDevice.h"
 #include "device/Device.h"
 #include <algorithm>
 #include <set>
@@ -60,6 +62,24 @@ namespace solaris
             for (const auto &d : r.devices)
             {
                 if (d.id != out.node) continue;
+                if (d.type == "vst3")
+                {
+                    // R-VST-6: another maker's plugin — a parameter is a number 0 … 1 by its id (its title is the plugin's)
+                    uint32_t id = 0;
+                    if (!pluginParamId(f, id)) { err = out.node + " (" + (d.pluginName.empty() ? std::string("a plugin") : d.pluginName) + ") has no parameter `" + f + "` — a plugin's are p<id>"; return false; }
+                    out.kind = AddressSpec::DeviceParam;
+                    out.masterRack = r.track == "master";
+                    const Strip *s = p.strip(r.track);
+                    out.owner = out.masterRack ? std::string("Master") : (s ? s->name : r.track);
+                    out.label = f;
+                    out.lo = 0;
+                    out.hi = 1;
+                    out.paramIndex = -1;
+                    out.value = 0;
+                    for (const auto &kv : d.params)
+                        if (kv.first == f) parseNumber(kv.second, out.value);
+                    return true;
+                }
                 const DeviceType *t = DeviceRegistry::find(d.type);
                 if (!t) { err = out.node + " is a `" + d.type + "`, which this build does not know"; return false; }
                 const int i = t->paramIndex(f);

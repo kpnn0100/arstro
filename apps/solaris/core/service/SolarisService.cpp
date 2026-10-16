@@ -115,7 +115,7 @@ namespace solaris
             case K::PresetSave: case K::PresetList: case K::PresetDelete: // R-PRESET-1: the machine's presets, not the song
             case K::TemplateSave: case K::TemplateList: case K::TemplateDelete: // R-PRESET-2: … and its templates
             case K::SampleTag: case K::SampleUntag: case K::SampleFavourite:    // R-PRESET-3: … and its library
-            case K::PluginsScan: case K::PluginsList:                           // R-VST-6: … and its plugins
+            case K::PluginsScan: case K::PluginsList: case K::DeviceReload:     // R-VST-6: … and its plugins
                 return false;
             default:
                 return true;
@@ -205,6 +205,9 @@ namespace solaris
             break;
         case K::PluginsScan: case K::PluginsList:
             ok = pluginsCommand(c, err);
+            break;
+        case K::DeviceReload:
+            ok = pluginReload(c, err);
             break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:
@@ -607,6 +610,7 @@ namespace solaris
         {
             std::ofstream f(tmp, std::ios::binary);
             if (!f) return false;
+            capturePluginStates(); // R-VST-6: each plugin as it stands
             f << serializeProject(mProject);
             if (!f) return false;
         }
@@ -630,6 +634,7 @@ namespace solaris
     {
         auto open = [&](Project p, const std::string &path) {
             stopPlayer();
+            mPluginLive.clear(); // R-VST-6: the last song's plugins end; this one's start as the model asks for them
             mPosition = mLoopFrom = mLoopTo = mCue = 0;
             mClipLoop.clear();
             mModel.transport = TransportModel();
@@ -653,6 +658,7 @@ namespace solaris
         auto write = [&](const std::string &path) {
             std::ofstream f(path, std::ios::binary);
             if (!f) { err = "cannot write " + path; return false; }
+            capturePluginStates(); // R-VST-6: each plugin's state, as the plugin gives it
             f << serializeProject(mProject);
             return (bool)f;
         };
@@ -764,6 +770,7 @@ namespace solaris
             dropAutosave(mPath); // R-SAFE-1: closing is choosing — saved or discarded, nothing to recover
             mRecentsStale = true; // Home is where the cards matter: re-read them (a song may have moved meanwhile)
             stopPlayer();
+            mPluginLive.clear(); // R-VST-6: its plugins' processes end
             mPosition = mLoopFrom = mLoopTo = mCue = 0;
             mClipLoop.clear();
             mModel.transport = TransportModel();
@@ -1096,7 +1103,7 @@ namespace solaris
         if (DeviceNode *d = p.device(id))
         {
             if (f == "bypass") { if (!boolean(value, b, err)) return false; d->bypass = b; stored = boolText(b); return true; }
-            const DeviceType *t = DeviceRegistry::find(d->type);
+            const DeviceType *t = typeOf(*d); // R-VST-6: a plugin's parameters are its own, p<id> 0 … 1
             if (!t) { err = "this build has no `" + d->type + "` device, so " + id + "'s parameters cannot be checked"; return false; }
             if (f == "sample" && t->takesSample)
             {
@@ -1223,9 +1230,11 @@ namespace solaris
                         put("bypass", boolText(d.bypass));
                         put("type", d.type);
                         put("sample", d.sample);
+                        put("plugin", d.plugin); // R-VST-6
                         for (const auto &kv : d.params) put(kv.first.c_str(), kv.second);
                         if (!have)
-                            if (const DeviceType *t = DeviceRegistry::find(d.type))
+                            if (const DeviceType *t = d.type != "vst3" ? DeviceRegistry::find(d.type)
+                                                      : mPluginLive.count(d.id) ? &mPluginLive.at(d.id)->type : nullptr) // R-VST-6
                             {
                                 const int i = t->paramIndex(f);
                                 if (i >= 0) put(f.c_str(), paramText(t->params[i], t->params[i].def)); // not stored = the default

@@ -2,6 +2,7 @@
 #include "Bindings.h"
 #include "Format.h"
 #include "MixLaws.h"
+#include "PluginDevice.h"
 #include "device/Device.h"
 #include <algorithm>
 #include <cmath>
@@ -183,6 +184,31 @@ namespace solaris
             out.id = d.id;
             out.type = d.type;
             out.bypass = d.bypass;
+            if (d.type == "vst3")
+            {
+                // R-VST-6: another maker's plugin — its parameters are numbers 0 … 1 by id; what plays it is the caller's
+                // (attachPlugins); until then an offline stand-in, so the graph always builds
+                ok = true;
+                std::vector<std::string> names;
+                for (const auto &kv : d.params)
+                {
+                    uint32_t id = 0;
+                    double v = 0;
+                    if (!pluginParamId(kv.first, id)) { warnings.push_back("device " + d.id + " (vst3): `" + kv.first + "` is not a plugin parameter (p<id>) — ignored"); continue; }
+                    if (!parseNumber(kv.second, v) || !std::isfinite(v)) { warnings.push_back("device " + d.id + ": `" + kv.first + "=" + kv.second + "` is not a value — ignored"); continue; }
+                    out.params.emplace_back(kv.first, std::min(1.0, std::max(0.0, v)));
+                    names.push_back(kv.first);
+                }
+                auto c = std::make_shared<PluginConnection>();
+                c->uid = d.plugin;
+                c->bundle = d.bundle;
+                c->name = d.pluginName;
+                c->instrument = d.pluginKind == "instrument";
+                c->failed = "not started";
+                setPluginType(*c, names);
+                out.make = [c] { return makePluginDevice(c, false); };
+                return out;
+            }
             const DeviceType *t = DeviceRegistry::find(d.type);
             ok = t != nullptr;
             if (!t)
@@ -289,7 +315,9 @@ namespace solaris
             if (es.kind == engine::Strip::Instrument)
             {
                 const DeviceType *first = es.rack.empty() ? nullptr : DeviceRegistry::find(es.rack[0].type);
-                if (!instrumentOk || !first || first->kind != DeviceKind::Instrument)
+                const Rack *rk = p.rack(s->id);
+                const bool plugin = !es.rack.empty() && es.rack[0].type == "vst3" && rk && rk->devices[0].pluginKind == "instrument"; // R-VST-6
+                if (!instrumentOk || (!plugin && (!first || first->kind != DeviceKind::Instrument)))
                 {
                     r.warnings.push_back("strip " + s->id + " has no instrument this build can play — it is silent");
                     es.kind = engine::Strip::Bus; // its effects still process what is routed to it
@@ -489,6 +517,7 @@ namespace solaris
                 b.strip = it->second.first;
                 b.index = it->second.second;
                 b.param = sp.paramIndex;
+                if (sp.paramIndex < 0) b.paramName = sp.field; // R-VST-6: a plugin's, found by name at build
                 break;
             }
             }

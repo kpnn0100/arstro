@@ -13,6 +13,7 @@
  */
 #pragma once
 #include "Expr.h"
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -20,6 +21,7 @@
 
 namespace arstro
 {
+class Device;
 namespace solaris
 {
 namespace engine
@@ -48,6 +50,10 @@ namespace engine
         std::vector<std::pair<std::string, double>> params; // registry names, engineering units
         bool bypass = false;
         std::shared_ptr<const Pcm> sample;                  // R-EDM-8: a sampler's sound, decoded at the song's rate
+        /** R-VST-6: a device the caller makes (another maker's plugin, played elsewhere) instead of the registry's
+         *  `type`. Its parameters are set by name as any; one it does not have is skipped (a plugin's list is its
+         *  own). It is NOT warmed: what it plays may be another engine's until this one is swapped in. */
+        std::function<std::unique_ptr<Device>()> make;
     };
 
     /** An audio clip, in samples. */
