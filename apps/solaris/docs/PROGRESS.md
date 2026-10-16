@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N32 — several audio devices, drift-corrected** (R-DEV-1/2/4; N31 — freeze and bounce — is built), then N33… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N32 part 2 — the followers in the core** (R-DEV-1/2/4/5: a ring and a thread per follower device, held by the DSP's FillController + AdaptiveResampler, every port heard at the same moment, `transport.devices[]`; part 1 — the DSP pieces — is built), then parts 3–4, then N33… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -566,7 +566,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       the song's end and its tail), frozen beside the song and played instead (its rack not built), or bounced onto a
       new strip; `strips[].frozen`; `frozen=` on `#atrack`; the audit. Part 2: the mixer strip's menu (Freeze /
       Unfreeze / Bounce to a new strip, offered by `fromStrips`) and a frozen rack receding under FROZEN, eased.
-- [ ] **N32** Several audio devices, drift-corrected (R-DEV-1/2/4).
+- [~] **N32** Several audio devices, drift-corrected (R-DEV-1/2/4).
+      2026-10-17: the design round (discussion Round 11). Part 1, the DSP library (f3d6683): `AdaptiveResampler`
+      (REQ-resample-2) and `FillController` (REQ-resample-3), REQ-resample-1's kernel shared as `SincKernel`. Next:
+      part 2, the followers in the core (rings, threads, alignment, `transport.devices[]`); part 3, an input on another
+      device; part 4, Settings › Audio.
 **Phase 5 — grow the sound and the craft**
 - [ ] **N33** DSP instruments: wavetable, FM, multi-sample (SFZ), granular, 808 (R-INST-7…11) — a commit each.
 - [ ] **N34** DSP effects: multiband, gate, transient, de-esser, saturator, phaser, flanger, imager, convolution,
