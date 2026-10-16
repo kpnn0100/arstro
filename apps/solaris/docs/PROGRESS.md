@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N15 — lane groups** (R-ARR-3), then N16… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
+**► N16 — record audio: arm, monitor, record, punch, loop takes** (R-REC-1), then N17… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
 
 ---
 
@@ -460,10 +460,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
 - [x] **N14** Time insert / delete across the song (R-ARR-2).
       2026-10-16: `time insert|delete` — clips, automation points (a looping span), markers, the loop; what crosses an edge
       decided first (insert: stays, named; delete: a repeating clip shortened, any other refused); the ruler's menu.
-- [~] **N15** Lane groups (R-ARR-3).
+- [x] **N15** Lane groups (R-ARR-3).
       Part 1 (2026-10-16): `#alanegroup` + a lane's `group=`, side by side (`gatherLaneGroups`, also on open), `lane
       group|ungroup`, `lane move <lg>`, a lane joining/leaving by where it lands, `set lg.folded`, `clips move --by`.
-      D-10, D-11 (test defects) closed. Part 2: the timeline — the group's bar, its fold, a folded row's clips dragged.
+      D-10, D-11 (test defects) closed. Part 2: `set <ln>.group`; the timeline — an open group's bar and chevron, a
+      folded group ONE row (each lane's clips in its band, eased), its clips dragged together, the menus.
 **Phase 3 — work with audio**
 - [ ] **N16** Record audio: arm, monitor, record, punch, loop takes (R-REC-1).
 - [ ] **N17** Takes and comping (R-REC-2).

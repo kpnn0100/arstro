@@ -54,6 +54,12 @@
  *  R-ARR-2). Keyed by id:
  *  each fades in and out, and a move made elsewhere eases there.
  *
+ *  LANE GROUPS (R-ARR-3): an open group's lanes carry a bar down their headers' edge and, on the first, its name with
+ *  a chevron; folded, the group is ONE row holding all its lanes' clips — its lanes fade out, the clips travel into it,
+ *  the rows below ease up. The chevron (turning, eased) is `set <lg>.folded=on|off`; a clip dragged on a folded row
+ *  takes the group's clips with it — ONE `clips move "<ac> …" --by <beats>`. A lane header's menu groups it (a new
+ *  group, into one, out of its own, ungroup); a folded row's opens, renames or ungroups it.
+ *
  *  Editing is command lines (`onCommand`): a click on the ruler → `transport seek <beat>` (on the grid
  *  you see); a clip dragged → `clip move <id> --at <beat> [--lane <ln>]` on release, on the same grid.
  *  Beats are printed to the tick (`beatText`). While dragging the clip follows the pointer exactly —
@@ -169,6 +175,11 @@ namespace solaris_ui
         double loopFromLive() const { return mLoopA.value(); } // LIVE, beats
         double loopToLive() const { return mLoopB.value(); }   // LIVE, beats
         // R-ARR-1: the markers on the ruler's band — local geometry as DRAWN, LIVE values
+        // R-ARR-3: lane groups — the chevron and name (on a folded row, or an open group's first lane), how folded the
+        // chevron shows (LIVE, 0 open … 1 folded), the row a folded group is (−1 none)
+        artboard::Rect groupToggleRect(const std::string &lg) const;
+        double groupTurn(const std::string &lg) const;
+        int groupRow(const std::string &lg) const;
         artboard::Rect markerRect(const std::string &mk) const;  // its flag and name; empty when none
         double markerAlpha(const std::string &mk) const;         // LIVE presence, 0 … 1
         double markerBeat(const std::string &mk) const;          // LIVE beat — the pointer's while it is dragged
@@ -207,6 +218,9 @@ namespace solaris_ui
             int colour = -1;
             std::string automation;       // an automation row: its id
             std::string strip, sub;       // R-LANE-3: an instrument's track — whose, and the instrument named under it
+            std::string group, groupName; // R-ARR-3: the lane group it is in, or (folded) the group it IS
+            bool groupHead = false, folded = false; // the open group's first lane; a folded group's one row
+            int groupLanes = 0;
         };
         /** A track's instrument line, fading in and out as the lane becomes a track and stops being one. */
         struct TrackLive
@@ -234,6 +248,7 @@ namespace solaris_ui
             int colour = 0;
             double patternLength = 0;
             std::vector<solaris::NoteModel> notes;
+            double bandOff = 0.0, bandFrac = 1.0; // R-ARR-3: in a folded group's row, its lane's band of it
         };
         /** A clip's picture: eased to where the model puts it, in when it arrives, out when it goes. */
         struct ClipLive
@@ -241,6 +256,8 @@ namespace solaris_ui
             ClipView v;
             double atTarget = 0, rowTarget = 0, atLast = 0, rowLast = 0, aLast = 0, lenTarget = 0, lenLast = 0;
             artboard::AnimatedProperty at{0.0}, row{0.0}, alpha{0.0}, hueT{1.0}, len{0.0}; // len: beats, eased (R-CLIP-7)
+            artboard::AnimatedProperty off{0.0}, frac{1.0}; // R-ARR-3: its band of the row, eased as a group folds
+            double offLast = 0.0, fracLast = 1.0;
             artboard::Color hueFrom, hueTo; // its strip's colour, cross-faded when the strip's changes
             int hueLast = 0;
             bool placed = false, gone = false;
@@ -278,7 +295,7 @@ namespace solaris_ui
         int pointNear(const std::string &au, const artboard::Point &local) const;
         const ClipLive *live(const std::string &id) const;
         double rowY(int i) const; // row i's LIVE top, before scrolling
-        artboard::Rect clipBox(const ClipView &v, double at, double y, double len) const;
+        artboard::Rect clipBox(const ClipView &v, double at, double y, double len, double off = 0.0, double frac = 1.0) const;
         void paintClip(artboard::IRenderTarget &t, const ClipView &v, const artboard::Rect &r, double alpha, double ring, const artboard::Color &hue, double len) const;
         double liveLength(const ClipLive &l) const;   // what is drawn: the pointer's while its end is held, else eased
         bool newClipOn(const artboard::Point &local);   // R-CLIP-6: a MIDI clip on the track under the pointer
@@ -387,6 +404,12 @@ namespace solaris_ui
             bool placed = false, gone = false;
         };
         std::vector<MarkerLive> mMarkers;
+        // R-ARR-3: each group's chevron, eased; a folded group's clips dragged together
+        std::map<std::string, artboard::AnimatedProperty> mGroupTurn;
+        std::map<std::string, double> mGroupTurnLast;
+        std::string mDragGroup;
+        std::vector<std::string> mDragGroupClips;
+        double groupDelta() const;                     // beats the group's clips are carried while dragged
         mutable std::map<std::string, double> mMarkW;  // a flag's width as last MEASURED (R5) — what a press hits
         std::string mMarkPress;
         bool mMarkDragging = false;

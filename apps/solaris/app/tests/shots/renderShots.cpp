@@ -639,6 +639,39 @@ namespace
                  r.click(band.x, band.y + band.h * 0.5, 2);
                  r.settle();
              }},
+            {"lane-groups",   // R-ARR-3: Drums and Bass a group, open (its bar, its chevron and name); then a folded one
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 std::string ids;
+                 for (const auto &l : r.svc->model().lanes)
+                     if (l.name == "Drums" || l.name == "Bass") ids += " " + l.id;
+                 r.cmd("lane group" + ids + " --name Rhythm");
+                 r.settle();
+             }},
+            {"lane-group-folded",   // R-ARR-3: the group folded — ONE row, its clips in it, "2 LANES"
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 std::string ids;
+                 for (const auto &l : r.svc->model().lanes)
+                     if (l.name == "Drums" || l.name == "Bass") ids += " " + l.id;
+                 r.cmd("lane group" + ids + " --name Rhythm");
+                 r.cmd("set lg_1.folded=on");
+                 r.settle();
+             }},
+            {"lane-group-folding",   // R-ARR-3: mid-fold — the chevron turning, the lanes fading, the clips on their way up
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 std::string ids;
+                 for (const auto &l : r.svc->model().lanes)
+                     if (l.name == "Drums" || l.name == "Bass") ids += " " + l.id;
+                 r.cmd("lane group" + ids + " --name Rhythm");
+                 r.settle();
+                 r.cmd("set lg_1.folded=on");
+                 r.frame();
+                 r.frame();
+                 r.frame();
+                 r.frame();
+             }},
             {"loop-region",   // R-EDM-7: the brace on the ruler, the region tinted on the lanes
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

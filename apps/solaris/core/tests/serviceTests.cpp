@@ -2402,6 +2402,12 @@ static void test_lane_groups_gather_fold_and_move_together()
     assert(r.svc.model().groups.empty() && groupOf(b).empty() && (order() == std::vector<std::string>{a, d, b, c}));
     r.ok("undo");
     assert(r.svc.model().groups.size() == 1 && groupOf(b) == "lg_1");
+    // a lane's .group: joins (gathered with it), leaves (placed after its run)
+    r.ok("set " + a + ".group=lg_1");
+    assert(groupOf(a) == "lg_1" && r.ok("get " + a + ".group") == "lg_1\n" && r.svc.model().groups[0].lanes.size() == 3);
+    r.ok("set " + a + ".group=none");
+    assert(groupOf(a).empty() && r.svc.model().groups[0].lanes.size() == 2 && (order() == std::vector<std::string>{b, c, a, d})); // joining gathered the group at a; leaving, a is right after its run
+    assert(contains(r.no("set " + a + ".group=lg_9"), "no lane group `lg_9`"));
     // a group left with no lane goes
     r.ok("lane group " + d + " --name Solo");
     r.ok("lane delete " + d);

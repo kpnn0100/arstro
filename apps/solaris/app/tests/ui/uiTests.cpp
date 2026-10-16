@@ -3611,6 +3611,85 @@ static void test_time_edits_from_the_ruler()
     pass("time edits from the ruler (R-ARR-2): Insert a bar here, Delete this bar, Delete the loop's time — each one line; the clips eased there");
 }
 
+static void test_lane_groups_on_the_timeline()
+{
+    // R-ARR-3: a group's chevron folds it (eased: the chevron turns, its clips travel into ONE row); a clip dragged on the
+    // folded row carries the group's clips — ONE `clips move`; the folded row's menu opens it; a lane's menu puts it
+    // into a group and out again
+    sltest::Rig r("ui-groups", 1280, 800);
+    r.cmd("project new " + r.song("Groups") + ".slp --bpm 120");
+    r.cmd("lane add A");
+    r.cmd("lane add B");
+    r.cmd("lane add C");
+    std::string a, b, c;
+    for (const auto &l : r.svc->model().lanes) { if (l.name == "A") a = l.id; if (l.name == "B") b = l.id; if (l.name == "C") c = l.id; }
+    r.cmd("clip add --instrument synth --at 0 --length 4 --lane " + a);
+    const std::string c1 = r.svc->model().clips.back().id, track = r.svc->model().clips.back().track;
+    r.cmd("clip add --strip " + track + " --at 4 --length 4 --lane " + b);
+    const std::string c2 = r.svc->model().clips.back().id;
+    r.cmd("lane group " + a + " " + b + " --name Drums");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    assert(tl.groupToggleRect("lg_1").w > 0.0 && tl.groupTurn("lg_1") == 0.0 && tl.groupRow("lg_1") < 0);
+    const double y2 = tl.clipRect(c2).y;
+    // folded by its chevron: ONE line; the chevron turns and c2 travels up into the group's row, eased
+    r.click(world(tl, tl.groupToggleRect("lg_1")));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "set lg_1.folded=on") && tl.groupRow("lg_1") >= 0);
+    const double turn = tl.groupTurn("lg_1"), mid = tl.clipRect(c2).y;
+    assert(turn > 0.0 && turn < 1.0 && mid < y2 - 0.5 && mid > tl.clipRect(c1).y + 0.5);
+    r.settle();
+    {
+        // one row: each lane's clips in its own band of it, so they never lie on one another
+        const artboard::Rect row = tl.rowRect(tl.groupRow("lg_1")), k1 = tl.clipRect(c1), k2 = tl.clipRect(c2);
+        assert(tl.groupTurn("lg_1") == 1.0 && k1.y >= row.y && k2.bottom() <= row.bottom() && k2.y >= k1.bottom() - 0.01 && k1.h < row.h * 0.5);
+    }
+    // a clip dragged on the folded row carries the other: the pointer's while held, then ONE line
+    const artboard::Rect k1 = world(tl, tl.clipRect(c1));
+    const double x0 = tl.clipRect(c2).x, dx = tl.beatToX(2.0) - tl.beatToX(0.0);
+    r.drag(k1.x + 10.0, cy(k1), k1.x + 10.0 + dx, cy(k1), 6, false);
+    assert(std::fabs(tl.clipRect(c2).x - (x0 + dx)) < 0.5); // carried
+    r.app->pointer(2, k1.x + 10.0 + dx, cy(k1), 0, r.now);
+    r.frame();
+    assert(sentLine(r, "clips move \"" + c1 + " " + c2 + "\" --by 2") || sentLine(r, "clips move \"" + c2 + " " + c1 + "\" --by 2"));
+    assert(std::fabs(tl.clipRect(c2).x - (x0 + dx)) < 0.5); // where it was let go
+    r.settle();
+    assert(r.svc->model().clips[0].at == 2.0 && r.svc->model().clips[1].at == 6.0);
+    // the folded row's menu: Open group
+    auto &menu = r.app->menu();
+    const artboard::Rect head = world(tl, artboard::Rect{20.0, tl.rowRect(tl.groupRow("lg_1")).y + 10.0, 1.0, 1.0});
+    r.click(head.x, head.y, 2);
+    r.settle();
+    assert(menu.isOpen() && menuItem(r, "Open group") >= 0 && menuItem(r, "Ungroup") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Open group")));
+    r.settle();
+    assert(sentLine(r, "set lg_1.folded=off") && tl.groupRow("lg_1") < 0 && tl.groupTurn("lg_1") == 0.0);
+    // a lane's menu: into the group, and out again
+    int rc = -1;
+    for (int i = 0; i < tl.rowCount(); ++i)
+        if (tl.rowLane(i) == c) rc = i;
+    const artboard::Rect lc = world(tl, artboard::Rect{20.0, tl.rowRect(rc).y + 10.0, 1.0, 1.0});
+    r.click(lc.x, lc.y, 2);
+    r.settle();
+    assert(menuItem(r, "New group") >= 0 && menuItem(r, "Into group\xE2\x80\xA6") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Into group\xE2\x80\xA6")));
+    r.settle();
+    assert(menuItem(r, "Drums") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Drums")));
+    r.settle();
+    assert(sentLine(r, "set " + c + ".group=lg_1") && r.svc->model().groups[0].lanes.size() == 3);
+    for (int i = 0; i < tl.rowCount(); ++i)
+        if (tl.rowLane(i) == c) rc = i;
+    const artboard::Rect lc2 = world(tl, artboard::Rect{20.0, tl.rowRect(rc).y + 10.0, 1.0, 1.0});
+    r.click(lc2.x, lc2.y, 2);
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "Leave group")));
+    r.settle();
+    assert(sentLine(r, "set " + c + ".group=none") && r.svc->model().groups[0].lanes.size() == 2);
+    pass("lane groups on the timeline (R-ARR-3): the chevron folds and opens a group, one line, eased — the chevron turns, the clips travel into one row; a clip dragged on the folded row carries the group's clips, one `clips move`; the folded row's menu opens it; a lane's menu puts it into a group and out");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -3654,6 +3733,7 @@ int main()
     test_the_rolls_note_tools();
     test_markers_on_the_ruler();
     test_time_edits_from_the_ruler();
+    test_lane_groups_on_the_timeline();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();

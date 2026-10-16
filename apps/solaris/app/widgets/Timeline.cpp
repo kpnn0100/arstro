@@ -125,11 +125,38 @@ namespace solaris_ui
         std::map<std::string, int> colourOf; // the service resolves a strip's colour (stable by id)
         for (const auto &st : m.strips) colourOf[st.id] = st.colour;
         mRows.clear();
-        std::map<std::string, int> rowOfLane, rowOfStrip;
+        std::map<std::string, int> rowOfLane, rowOfStrip, rowOfGroup;
+        std::map<std::string, const solaris::LaneGroupModel *> groupOf; // R-ARR-3
+        for (const auto &g : m.groups)
+            for (const auto &ln : g.lanes) groupOf[ln] = &g;
         for (const auto &l : m.lanes)
         {
+            const solaris::LaneGroupModel *g = groupOf.count(l.id) ? groupOf[l.id] : nullptr;
+            if (g && g->folded)
+            {
+                // R-ARR-3: a folded group is ONE row, its lanes' clips in it
+                if (!rowOfGroup.count(g->id))
+                {
+                    rowOfGroup[g->id] = (int)mRows.size();
+                    Row gr{"group:" + g->id, "", g->name, -1};
+                    gr.group = g->id;
+                    gr.groupName = g->name;
+                    gr.folded = true;
+                    gr.groupLanes = (int)g->lanes.size();
+                    mRows.push_back(gr);
+                }
+                rowOfLane[l.id] = rowOfGroup[g->id];
+                continue;
+            }
             rowOfLane[l.id] = (int)mRows.size();
             Row r{l.id, l.id, l.name, l.colour};
+            if (g)
+            {
+                r.group = g->id;
+                r.groupName = g->name;
+                r.groupHead = !g->lanes.empty() && g->lanes.front() == l.id;
+                r.groupLanes = (int)g->lanes.size();
+            }
             if (!l.strip.empty())
             {
                 // R-LANE-3: an instrument's track — its stripe the strip's colour (unless it has its own), its
@@ -158,6 +185,13 @@ namespace solaris_ui
             ClipView v;
             v.c = c;
             v.row = c.lane.empty() ? rowOfStrip[c.track] : (rowOfLane.count(c.lane) ? rowOfLane[c.lane] : 0);
+            if (!c.lane.empty() && groupOf.count(c.lane) && groupOf[c.lane]->folded) // R-ARR-3: its lane's band of the group's row
+            {
+                const auto &ls = groupOf[c.lane]->lanes;
+                const size_t k = (size_t)(std::find(ls.begin(), ls.end(), c.lane) - ls.begin());
+                v.bandOff = (double)k / (double)ls.size();
+                v.bandFrac = 1.0 / (double)ls.size();
+            }
             v.colour = colourOf.count(c.track) ? colourOf[c.track] : 0;
             for (const auto &p : m.patterns)
                 if (p.id == c.pattern) { v.notes = p.notes; v.patternLength = p.length; }
@@ -314,19 +348,54 @@ namespace solaris_ui
         return l ? liveLength(*l) : 0.0;
     }
 
-    Rect Timeline::clipBox(const ClipView &, double at, double y, double len) const
+    Rect Timeline::clipBox(const ClipView &, double at, double y, double len, double off, double frac) const
     {
-        const double top = kRulerH + y - mScrollY.value();
+        const double top = kRulerH + y - mScrollY.value(), h = kRowH - 6.0;
         const double x0 = beatToX(at), x1 = beatToX(at + std::max(0.25, len));
-        return Rect{x0, top + 3.0, std::max(3.0, x1 - x0 - 1.0), kRowH - 6.0};
+        // R-ARR-3: in a folded group's row each lane keeps a band of it, so its clips never lie on one another
+        return Rect{x0, top + 3.0 + off * h, std::max(3.0, x1 - x0 - 1.0), std::max(2.0, frac * h - (frac < 0.999 ? 1.0 : 0.0))};
+    }
+
+    // R-ARR-3: a group's chevron and name — on its folded row, or its first lane's header, in the bottom band
+    Rect Timeline::groupToggleRect(const std::string &lg) const
+    {
+        for (const auto &row : mRowMotion.rows())
+            if (!row.gone && row.data.group == lg && (row.data.folded || row.data.groupHead))
+                return Rect{6.0, kRulerH + row.liveY() - mScrollY.value() + 34.0, kHeaderW - 12.0, 13.0};
+        return Rect{};
+    }
+    double Timeline::groupTurn(const std::string &lg) const
+    {
+        const auto it = mGroupTurn.find(lg);
+        return it == mGroupTurn.end() ? 0.0 : it->second.value();
+    }
+    int Timeline::groupRow(const std::string &lg) const
+    {
+        for (size_t i = 0; i < mRows.size(); ++i)
+            if (mRows[i].folded && mRows[i].group == lg) return (int)i;
+        return -1;
+    }
+    double Timeline::groupDelta() const
+    {
+        if (mDragGroup.empty() || !mDragging) return 0.0;
+        double d = 0.0, first = 1e300;
+        for (const auto &v : mClips)
+        {
+            if (v.c.id == mPressClip) d = mDragBeat - v.c.at;
+            if (std::find(mDragGroupClips.begin(), mDragGroupClips.end(), v.c.id) != mDragGroupClips.end()) first = std::min(first, v.c.at);
+        }
+        return std::max(d, first < 1e299 ? -first : d); // none of them before beat 0
     }
 
     Rect Timeline::clipRect(const std::string &id) const
     {
         const ClipLive *l = live(id);
         if (!l) return Rect{};
-        if (mDragging && id == mPressClip) return clipBox(l->v, mDragBeat, rowY(mDragRow), liveLength(*l));
-        return l->placed ? clipBox(l->v, l->at.value(), l->row.value() * kRowH, liveLength(*l)) : clipBox(l->v, l->atTarget, l->rowTarget * kRowH, liveLength(*l));
+        if (mDragging && id == mPressClip) return clipBox(l->v, mDragBeat, rowY(mDragRow), liveLength(*l), l->off.value(), l->frac.value());
+        if (!mDragGroup.empty() && mDragging && std::find(mDragGroupClips.begin(), mDragGroupClips.end(), id) != mDragGroupClips.end())
+            return clipBox(l->v, l->v.c.at + groupDelta(), l->row.value() * kRowH, liveLength(*l), l->off.value(), l->frac.value()); // carried with the group
+        return l->placed ? clipBox(l->v, l->at.value(), l->row.value() * kRowH, liveLength(*l), l->off.value(), l->frac.value())
+                         : clipBox(l->v, l->atTarget, l->rowTarget * kRowH, liveLength(*l), l->v.bandOff, l->v.bandFrac);
     }
 
     std::string Timeline::clipAt(const Point &p) const
@@ -525,6 +594,17 @@ namespace solaris_ui
         }
         advanceAuto(nowMs); // a click's point waiting out the double-click (R-AUTO-11)
         advanceMarkers(nowMs); // R-ARR-1
+        for (const auto &r : mRows) // R-ARR-3: a group's chevron turns, eased, as it folds and opens
+        {
+            if (r.group.empty()) continue;
+            const double want = r.folded ? 1.0 : 0.0;
+            auto &turn = mGroupTurn[r.group];
+            const auto last = mGroupTurnLast.find(r.group);
+            if (last == mGroupTurnLast.end()) turn.set(want);
+            else if (last->second != want) turn.animateTo(want, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mGroupTurnLast[r.group] = want;
+        }
+        for (auto &g : mGroupTurn) g.second.update(nowMs);
         const bool fadeIn = mEver && !reducedMotion();
         mRowMotion.advance(nowMs);
         {
@@ -544,6 +624,10 @@ namespace solaris_ui
                 l.lenLast = l.lenTarget;
                 l.atLast = l.atTarget;
                 l.rowLast = l.rowTarget;
+                l.off.set(l.v.bandOff);
+                l.frac.set(l.v.bandFrac);
+                l.offLast = l.v.bandOff;
+                l.fracLast = l.v.bandFrac;
                 const bool instant = l.v.c.id == mInstantClip; // a Shift-drop: the pointer already showed it there
                 l.alpha.set(fadeIn && !instant ? 0.0 : 1.0);
                 l.aLast = l.alpha.value();
@@ -566,6 +650,10 @@ namespace solaris_ui
             if (l.rowTarget != l.rowLast) { l.row.animateTo(l.rowTarget, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.rowLast = l.rowTarget; }
             if (l.lenTarget != l.lenLast) { l.len.animateTo(l.lenTarget, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.lenLast = l.lenTarget; }
             l.len.update(nowMs);
+            if (l.v.bandOff != l.offLast) { l.off.animateTo(l.v.bandOff, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.offLast = l.v.bandOff; }
+            if (l.v.bandFrac != l.fracLast) { l.frac.animateTo(l.v.bandFrac, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.fracLast = l.v.bandFrac; }
+            l.off.update(nowMs);
+            l.frac.update(nowMs);
             if (aWant != l.aLast) { l.alpha.animateTo(aWant, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); l.aLast = aWant; }
             l.at.update(nowMs);
             l.row.update(nowMs);
@@ -795,6 +883,15 @@ namespace solaris_ui
                 if (local.x >= r.right() - kEdgeGrip && r.w > 3.0 * kEdgeGrip) { mEdgeClip = mPressClip; mPressClip.clear(); }
             }
             if (const ClipLive *l = live(mPressClip)) mGrab = xToBeat(local.x) - l->at.value(); // where it is DRAWN: a drag never teleports
+            mDragGroup.clear(); // R-ARR-3: a clip on a folded group's row carries the group's clips
+            mDragGroupClips.clear();
+            for (const auto &v : mClips)
+                if (v.c.id == mPressClip && v.row >= 0 && v.row < (int)mRows.size() && mRows[(size_t)v.row].folded)
+                {
+                    mDragGroup = mRows[(size_t)v.row].group;
+                    for (const auto &o : mClips)
+                        if (o.row == v.row) mDragGroupClips.push_back(o.c.id);
+                }
             return true;
         case Gesture::Type::DragStart:
             if (!mEdgeClip.empty())
@@ -819,8 +916,8 @@ namespace solaris_ui
             }
             if (mDragging)
             {
-                mDropCopy = g.shift; // R-CLIP-9: held, the drop duplicates
-                mDragBeat = snap(xToBeat(local.x) - mGrab);
+                mDropCopy = g.shift && mDragGroup.empty(); // R-CLIP-9: held, the drop duplicates (a group's drag never copies)
+                mDragBeat = std::max(0.0, snap(xToBeat(local.x) - mGrab));
                 int row = rowAt(local.y);
                 for (const auto &v : mClips)
                     if (v.c.id == mPressClip && (row < 0 || row >= (int)mRows.size() || mRows[(size_t)row].lane.empty())) row = v.row;
@@ -847,6 +944,25 @@ namespace solaris_ui
                 return true;
             }
             mEdgeClip.clear();
+            if (mDragging && !mDragGroup.empty())
+            {
+                // R-ARR-3: the group's clips where they were let go — the pointer was the animation — then ONE line
+                const double d = groupDelta();
+                mDragging = false;
+                std::string ids;
+                for (auto &l : mLive)
+                    if (!l.gone && std::find(mDragGroupClips.begin(), mDragGroupClips.end(), l.v.c.id) != mDragGroupClips.end())
+                    {
+                        l.at.set(l.v.c.at + d);
+                        l.atTarget = l.atLast = l.v.c.at + d;
+                        ids += (ids.empty() ? "" : " ") + l.v.c.id;
+                    }
+                mDragGroup.clear();
+                mDragGroupClips.clear();
+                mPressClip.clear();
+                if (std::fabs(d) > 1e-9 && onCommand) onCommand("clips move \"" + ids + "\" --by " + beats(d));
+                return true;
+            }
             if (mDragging)
             {
                 mDragging = false;
@@ -891,6 +1007,12 @@ namespace solaris_ui
                 if (onCommand) onCommand("transport seek " + beats(snap(xToBeat(local.x)))); // on the grid you see (R-TIME-5)
                 return true;
             }
+            for (const auto &r : mRows) // R-ARR-3: a group's chevron and name — folded or opened, ONE line
+                if (!r.group.empty() && (r.folded || r.groupHead) && groupToggleRect(r.group).contains(local))
+                {
+                    if (onCommand) onCommand("set " + r.group + ".folded=" + (r.folded ? "off" : "on"));
+                    return true;
+                }
             for (int i = 0; i < (int)mRows.size(); ++i)
             {
                 // R-MIDI-2: an instrument track's arm button — ONE line, arming it (or disarming it, armed)
@@ -913,6 +1035,20 @@ namespace solaris_ui
             {
                 // a lane's menu (R-LANE-3): whose track it is — or a plain lane — each one line
                 const int ri = rowAt(local.y);
+                if (ri >= 0 && ri < (int)mRows.size() && mRows[(size_t)ri].folded && onMenu)
+                {
+                    // R-ARR-3: a folded group's row — open it, rename it, ungroup it
+                    const std::string lg = mRows[(size_t)ri].group, name = mRows[(size_t)ri].groupName;
+                    const Point world = g.pos;
+                    onMenu({{"Open group", [this, lg] { if (onCommand) onCommand("set " + lg + ".folded=off"); }},
+                            {"Rename group\xE2\x80\xA6", [this, lg, name, world] {
+                                 if (onRename) onRename(name, world, [this, lg](const std::string &n) { if (onCommand && !n.empty()) onCommand("set " + lg + ".name=" + q(n)); });
+                             }},
+                            {"Ungroup", [this, lg] { if (onCommand) onCommand("lane ungroup " + lg); }},
+                            {"Copy ID", [this, lg] { if (onCopy) onCopy(lg); }}},
+                           world);
+                    return true;
+                }
                 if (ri < 0 || ri >= (int)mRows.size() || mRows[(size_t)ri].lane.empty() || !onMenu) return true;
                 const std::string ln = mRows[(size_t)ri].lane, owner = mRows[(size_t)ri].strip;
                 std::vector<cosmo_v2::ContextMenu::Item> owners, items;
@@ -926,6 +1062,27 @@ namespace solaris_ui
                 const Point world = g.pos;
                 if (!owners.empty()) items.push_back({"Track of \xE2\x96\xB8", [this, owners, world] { if (onMenu) onMenu(owners, world); }});
                 if (!owner.empty()) items.push_back({"Plain Lane", [this, ln] { if (onCommand) onCommand("set " + ln + ".strip=none"); }});
+                {
+                    // R-ARR-3: its group — a new one, into another, out of its own, folded, ungrouped
+                    const std::string lg = mRows[(size_t)ri].group;
+                    std::vector<cosmo_v2::ContextMenu::Item> into;
+                    std::set<std::string> seen;
+                    for (const auto &r : mRows)
+                        if (!r.group.empty() && seen.insert(r.group).second && r.group != lg)
+                            into.push_back({r.groupName, [this, ln, gid = r.group] { if (onCommand) onCommand("set " + ln + ".group=" + gid); }});
+                    if (lg.empty())
+                    {
+                        const std::string name = "Group " + std::to_string(seen.size() + 1);
+                        items.push_back({"New group", [this, ln, name] { if (onCommand) onCommand("lane group " + ln + " --name " + q(name)); }});
+                    }
+                    if (!into.empty()) items.push_back({"Into group\xE2\x80\xA6", [this, into, world] { if (onMenu) onMenu(into, world); }});
+                    if (!lg.empty())
+                    {
+                        items.push_back({"Leave group", [this, ln] { if (onCommand) onCommand("set " + ln + ".group=none"); }});
+                        items.push_back({"Fold group", [this, lg] { if (onCommand) onCommand("set " + lg + ".folded=on"); }});
+                        items.push_back({"Ungroup", [this, lg] { if (onCommand) onCommand("lane ungroup " + lg); }});
+                    }
+                }
                 items.push_back({"Copy ID", [this, ln] { if (onCopy) onCopy(ln); }}); // R-UI-11
                 onMenu(std::move(items), world);
                 return true;
@@ -1173,8 +1330,10 @@ namespace solaris_ui
             const ClipView &v = l.v;
             const double a = l.placed ? l.alpha.value() : 0.0;
             if (a <= 0.001) continue;
-            const bool dragged = !l.gone && mDragging && v.c.id == mPressClip;
-            const Rect r = clipBox(v, l.at.value(), l.row.value() * kRowH, liveLength(l));
+            const bool carried = !l.gone && mDragging && !mDragGroup.empty() &&
+                                 std::find(mDragGroupClips.begin(), mDragGroupClips.end(), v.c.id) != mDragGroupClips.end(); // R-ARR-3
+            const bool dragged = !l.gone && mDragging && (v.c.id == mPressClip || carried);
+            const Rect r = clipBox(v, l.at.value(), l.row.value() * kRowH, liveLength(l), l.off.value(), l.frac.value());
             if (r.right() < kHeaderW || r.x > W || r.bottom() < kRulerH || r.y > H) continue;
             const double ring = l.gone ? 0.0 : (v.c.id == mSelected ? mSelIn.value() : (v.c.id == mPrevSelected ? mSelOut.value() : 0.0));
             // dragged: the original dims where it was — unless Shift makes it a copy, when it stays at full strength
@@ -1185,10 +1344,14 @@ namespace solaris_ui
             const double hv = hi >= 0 ? mHover.amount(hi) : 0.0;
             if (hv > 0.001 && !dragged) drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv * a)));
         }
+        if (mDragging && !mDragGroup.empty())
+            for (const auto &id : mDragGroupClips) // R-ARR-3: the group's clips carried with the one in hand
+                if (const ClipLive *l = live(id); l && id != mPressClip)
+                    paintClip(t, l->v, clipRect(id), 1.0, 0.0, lerpColor(l->hueFrom, l->hueTo, l->hueT.value()), liveLength(*l));
         if (mDragging)
             if (const ClipLive *l = live(mPressClip))
             {
-                const Rect dr = clipBox(l->v, mDragBeat, rowY(mDragRow), liveLength(*l));
+                const Rect dr = clipBox(l->v, mDragBeat, rowY(mDragRow), liveLength(*l), l->off.value(), l->frac.value());
                 paintClip(t, l->v, dr, 1.0, 1.0, lerpColor(l->hueFrom, l->hueTo, l->hueT.value()), liveLength(*l));
                 const double k = mCopyAmt.value();
                 if (k > 0.001)
@@ -1249,10 +1412,24 @@ namespace solaris_ui
                 t.beginPath(); t.moveTo(0, r.bottom() - 0.5); t.lineTo(W, r.bottom() - 0.5); t.strokePath();
                 continue;
             }
-            const bool own = d.lane.empty();
+            const bool own = d.lane.empty() && !d.folded;
             const double nameW = d.strip.empty() ? kHeaderW - 20.0 : kHeaderW - 40.0; // a track keeps room for its arm button
-            drawNameWithId(t, d.label, own ? row.key.substr(row.key.find(':') + 1) : d.lane, 12.0, textfit::baseline(r.y + 16.0, 11.0), nameW, 11.0,
-                           font::sans(), own ? palette::mutedForeground() : palette::foreground(), idsAmount ? idsAmount() : 0.0, a);
+            drawNameWithId(t, d.label, d.folded ? d.group : own ? row.key.substr(row.key.find(':') + 1) : d.lane, 12.0, textfit::baseline(r.y + 16.0, 11.0), nameW,
+                           11.0, font::sans(), own ? palette::mutedForeground() : palette::foreground(), idsAmount ? idsAmount() : 0.0, a);
+            if (d.folded || d.groupHead)
+            {
+                // R-ARR-3: the chevron (turning as it folds) and the group's name — or, folded, how many lanes it holds
+                const double turn = groupTurn(d.group), cx = 15.0, cy = r.y + 40.5, ang = -1.5707963 * turn;
+                auto pt = [&](double x, double y) { return Point{cx + x * std::cos(ang) - y * std::sin(ang), cy + x * std::sin(ang) + y * std::cos(ang)}; };
+                const Point p0 = pt(-3.5, -1.75), p1 = pt(3.5, -1.75), p2 = pt(0.0, 2.25);
+                t.setFill(fade(palette::secondaryForeground(), a));
+                t.beginPath(); t.moveTo(p0.x, p0.y); t.lineTo(p1.x, p1.y); t.lineTo(p2.x, p2.y); t.closePath(); t.fillPath();
+                std::string band = d.folded ? std::to_string(d.groupLanes) + (d.groupLanes == 1 ? " LANE" : " LANES") : d.groupName;
+                if (!d.folded)
+                    for (auto &ch : band) ch = (char)std::toupper((unsigned char)ch);
+                t.setFill(fade(palette::mutedForeground(), a));
+                t.drawText(textfit::ellipsize(t, band, kHeaderW - 34.0, 8.0, font::sansSemiBold()), 23.0, textfit::baseline(cy, 8.0), 8.0, font::sansSemiBold(), 0.13 * 8.0);
+            }
             if (!d.strip.empty())
             {
                 // R-MIDI-2: the arm button — a ring, filled red as it is armed
@@ -1266,6 +1443,11 @@ namespace solaris_ui
                 t.setFill(fade(palette::mutedForeground(), a));
                 t.drawText("its strip's row", 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::sans());
             }
+            else if (d.folded)
+            {
+                t.setFill(fade(palette::mutedForeground(), a));
+                t.drawText("a group, folded", 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::sans());
+            }
             else if (const auto tk = mTracks.find(d.lane); tk != mTracks.end() && tk->second.amt.value() > 0.001 && !tk->second.sub.empty())
             {
                 // R-LANE-3: an instrument's track names its instrument
@@ -1274,6 +1456,23 @@ namespace solaris_ui
             }
             t.setStroke(fade(palette::border(), a), 1.0);
             t.beginPath(); t.moveTo(0, r.bottom() - 0.5); t.lineTo(W, r.bottom() - 0.5); t.strokePath();
+        }
+        {
+            // R-ARR-3: an open group's bar down its lanes' headers — from where its rows ARE (eased), as faint as they are
+            std::map<std::string, std::pair<double, double>> span;
+            std::map<std::string, double> alpha;
+            for (const auto &row : mRowMotion.rows())
+            {
+                if (row.data.group.empty() || row.data.folded || row.liveAlpha() <= 0.001) continue;
+                const double y = kRulerH + row.liveY() - mScrollY.value();
+                auto it = span.find(row.data.group);
+                if (it == span.end()) span[row.data.group] = {y, y + kRowH};
+                else { it->second.first = std::min(it->second.first, y); it->second.second = std::max(it->second.second, y + kRowH); }
+                alpha[row.data.group] = std::max(alpha[row.data.group], row.liveAlpha());
+            }
+            for (const auto &g : span)
+                drawRoundedRect(t, Rect{5.5, g.second.first + 6.0, 2.0, g.second.second - g.second.first - 12.0}, radius::pill(),
+                                Paint::filled(palette::whiteAlpha(0.22 * alpha[g.first])));
         }
         t.restore();
         t.setStroke(palette::border(), 1.0);

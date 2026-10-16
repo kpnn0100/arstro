@@ -147,7 +147,7 @@ namespace solaris
         o += "| `<strip>.name` · `.gain` · `.pan` · `.mute` · `.solo` · `.colour` | text · dB (−120…12) · −1…1 · bool · bool · −1…15 |\n";
         o += "| `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` | text · beats · beats · beats · beats · dB · bool · s · s |\n";
         o += "| `<lane>.name` · `.colour` · `.strip` (`<ch>` an instrument: the lane is its track; `none`: plain — R-LANE-3) · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |\n";
-        o += "| `<lane group>.name` · `.folded` (R-ARR-3; read: a lane's `.group`) | text · `on` (one row) / `off` |\n";
+        o += "| `<lane group>.name` · `.folded` · `<lane>.group` (R-ARR-3) | text · `on` (one row) / `off` · `<lg>` joins it (gathered with it) / `none` leaves it (placed after it) |\n";
         o += "| `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |\n";
         o += "| `<automation>.name` · `.unit` · `.min` · `.max` · `.loop` · `.at` · `.length` (read: also `.from` · `.points`) | text · text · number · number · beats (0: no loop) · beats · beats (0: to the end) — R-AUTO-12 |\n";
         o += "| any NUMBER above (a strip's gain/pan, a send's gain, `project.masterGain`, a numeric device parameter) `=<formula>` | "

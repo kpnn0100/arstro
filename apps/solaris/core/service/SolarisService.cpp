@@ -889,7 +889,33 @@ namespace solaris
                 stored = value;
                 return true;
             }
-            err = unknownField(id, "a lane", f, {"name", "colour", "strip"});
+            if (f == "group") // R-ARR-3: a lane joins a group (gathered with it) or leaves its own (placed after it)
+            {
+                if (value == "none")
+                {
+                    if (l->group.empty()) { stored = "none"; return true; }
+                    const std::string g = l->group, me = l->id;
+                    l->group.clear();
+                    std::vector<Lane *> order;
+                    for (auto &x : p.lanes) order.push_back(&x);
+                    std::stable_sort(order.begin(), order.end(), [](const Lane *a, const Lane *b) { return a->order < b->order; });
+                    order.erase(std::remove_if(order.begin(), order.end(), [&](const Lane *x) { return x->id == me; }), order.end());
+                    size_t at = order.size();
+                    for (size_t k = 0; k < order.size(); ++k)
+                        if (order[k]->group == g) at = k + 1;
+                    order.insert(order.begin() + (long)std::min(at, order.size()), p.lane(me));
+                    for (size_t k = 0; k < order.size(); ++k) order[k]->order = (int)k;
+                }
+                else
+                {
+                    if (!p.group(value)) { err = "no lane group `" + value + "` (or `none`)"; return false; }
+                    l->group = value;
+                }
+                gatherLaneGroups(p);
+                stored = value;
+                return true;
+            }
+            err = unknownField(id, "a lane", f, {"name", "colour", "strip", "group"});
             return false;
         }
         if (LaneGroup *g = p.group(id)) // R-ARR-3
