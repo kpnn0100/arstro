@@ -322,7 +322,7 @@ audio devices so the user can take advantage of their devices."*
   the driver resamples and the transport says so.
 - **R-DEV-8 Linux first**, over the PulseAudio API (which PipeWire also serves); Windows later.
 
-## R-SET — settings — ✅ IMPLEMENTED (DR-SET-1, DR-SET-2, DR-SET-3, DR-SET-4)
+## R-SET — settings — ✅ IMPLEMENTED (DR-SET-1, DR-SET-2, DR-SET-3, DR-SET-4) — 5, 6 📋 (pages and combo boxes: user request 2026-10-16)
 
 - **R-SET-1 A settings sheet in Cosmo's modal style** — the same scrim, card, chips, fade and Done
   button — with Solaris's rows: output and input devices (the clock is the output), sample rate
@@ -338,9 +338,25 @@ audio devices so the user can take advantage of their devices."*
   interstellar"*): the sheet is in sections as their Engine Settings are — **Audio** (output, input,
   sample rate, buffer), **Playback** (metronome on/off and level), **New songs** (tempo and time
   signature a new song starts with), **Sample folders**, **Interface** (reduced motion) — every
-  option a `settings set <key>=…` line.
+  option a `settings set <key>=…` line. (**AMENDED (R-SET-5, 2026-10-16):** the sections are PAGES now, not
+  titles down one long sheet.)
 - **R-SET-2 Settings are the machine's**, persisted beside the app's other settings, never in a
   project. Each change is a `settings set` line the service validates, applies and persists.
+- **R-SET-5 Settings in sections, a page each** (user request, 2026-10-16: *"setting need to have section,
+  don't put all in 1 page"*). The sheet is a rail of sections — Audio, Playback, New songs, Sample folders,
+  Interface, Keyboard — beside ONE page, the chosen section's; a section clicked cross-fades its page in (never
+  a cut) and the rail's highlight slides to it. A page taller than the sheet scrolls on its own. The sheet opens
+  on the section it was last left on while the app runs (the view's — nothing a script needs). Every control
+  is still one `settings set …` line, and a change from a shell shows on its page.
+- **R-SET-6 A choice is a combo box** (same request: *"for option need to have combo box"*). A setting that is
+  one value of a list — Output, Input, Sample rate, Buffer, Click level, Preview level, a new song's Tempo and
+  Meter — is a combo box: the value it has, a caret; clicked, its list drops (eased, scrolling when long), a
+  row picked is ONE `settings set` line. An on/off setting (Metronome, Reduced motion) is a toggle switch,
+  its thumb sliding. The folder list and the keymap keep their own rows (they are lists, not a choice). The
+  combo box is Artboard's (`ComboBox`), dressed in cosmo's tokens as Genesis dresses it — never a fork. A value
+  the list does not have (a device not connected now, a tempo set from a shell) is still shown, as an entry of
+  its own, so the setting is never invisible. (**AMENDS R-SET-1's "chips"**: the look stays cosmo's — scrim,
+  card, fade, Done — the controls are combo boxes and toggles.)
 - **R-SET-4 Hotkeys are settings** (user request, 2026-10-16: *"need to have setting for hot key"*). Every
   keyboard shortcut is an ACTION with its keys — in areas: Transport (play/stop back to the cue, stop here,
   to the start), Song (save, undo, redo, settings), Lanes (delete and duplicate the selected clip), Piano roll
@@ -391,6 +407,31 @@ audio devices so the user can take advantage of their devices."*
   what it makes are unchanged.)
 
 ---
+
+## R-HIST — the history is a tree, as cosmo's (user request, 2026-10-16: *"need to have tree history like cosmo"*) — 📋 SPECIFIED
+
+Cosmo keeps an image's edits as a branching tree (cosmo DR-HIST-1…3): undo walks to the parent, an edit made
+there starts a NEW branch and leaves the old future as it was, and History ▸ Show History Tree… draws it
+git-style, a node clicked jumping there. Solaris's undo was a stack whose redo half a new edit erased. One
+suite (law 16): the same model, the same view.
+
+- **R-HIST-1 Branching.** Each landed edit is a node — the song as it was made, its label (what made it:
+  `notes add pt_1`, `set ch_2.gain`), its parent. `undo` moves to the parent; `redo` to the NEWEST child (the
+  branch made last); an edit made with children below starts another child — a branch — and every older
+  branch stays. Consecutive `set`s of the same addresses stay ONE node (R-EDM-1). The tree keeps at most 200
+  nodes: past that the oldest nodes off the path to the current one go first. A new, opened or closed song
+  starts its own tree at one root ("Opened" / "New song").
+- **R-HIST-2 Any node, by one line.** `history` prints the tree (one node a line: its number, its parent, its
+  label, `*` at the current one); `history jump <n>` makes node `n` the song — an edit, so the song is
+  unsaved and the player hears it, but NOT a node itself (it moves through the tree, as undo does). The model
+  publishes the tree (`history[]`: id, parent, label; `historyCurrent`), so any front end draws the same tree.
+- **R-HIST-3 The tree, seen.** Edit ▸ Show History Tree… opens cosmo's own history view (reused from
+  `apps/cosmo`, never copied — R-UI-4): root at the top, branches fanning into lanes, the current node lit;
+  a node clicked is ONE `history jump <n>`, the view staying open on the new current; drag pans, Escape or the
+  scrim closes. Its open and close fade, its highlight eases (design rule §1).
+- **R-HIST-4 Kept with the song?** Cosmo saves an image's tree with its project. For a song that is up to 200
+  copies of it in (or beside) the `.slp` — asked of the user, 2026-10-16; until they answer the tree lives as
+  long as the song is open, as the undo stack did.
 
 ## R-VER — versions of a song — 📋 SPECIFIED
 
@@ -614,6 +655,8 @@ controller, normalised parameters and saved state.
 - **R-EDM-1 Undo and redo** of every edit — `undo`, `redo`; Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y; the model
   names what each would undo. A machine setting or the transport is not an edit. Consecutive `set`s of
   the same addresses — a dragged fader — are ONE step (added while building it, B2).
+  (**AMENDED (R-HIST, user request 2026-10-16):** the history is a TREE — an edit after an undo no longer
+  throws the undone steps away; they stay a branch. `redo` takes the newest branch.)
 - **R-EDM-2 Metronome** (R-TIME-4, detailed).
 - **R-EDM-3 Sidechain compression** (R-MIX-15): the DSP Compressor gains a sidechain detector input.
 - **R-EDM-4 A limiter** — a DSP brickwall limiter (lookahead, ceiling, release) for the master: the

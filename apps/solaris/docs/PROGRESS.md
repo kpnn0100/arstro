@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — J5: Ctrl+Space's place is temporary; the cue stays where it was put.*
+*Last updated: 2026-10-16 — K1: settings in pages, combo boxes, the history tree — specified.*
 
 ---
 
 ## NEXT
 
-**► B13+ — R-EDM-10…20** (ask the user first: the order, and whether now). Owed live checks: D-5, D-9.
+**► K2 — settings in pages, combo boxes** (R-SET-5/6), then K3, K4. B13+ wait (ask). Owed live checks: D-5, D-9.
 
 ---
 
@@ -343,6 +343,17 @@ umbrella's pointer — `arstro.rule` §7).
 - [x] **J5** The user's follow-up: Ctrl+Space's place is temporary — a plain play no longer moves the cue, so
       Space's stop after a Ctrl+Space goes back to where the time bar was put (R-TIME-7/8 AMENDED; DR-TIME-7).
       L2 + UI tests extended; mutant (every play moves the cue) seen red in both.
+
+### K — settings in pages, combo boxes, the history tree (user request, 2026-10-16)
+*"setting need to have section, don't put all in 1 page / for option need to have combo box / need to have tree
+history like cosmo".* Requirements: R-SET-5, R-SET-6 (R-SET-1, R-SET-3 amended); R-HIST-1…4 (R-EDM-1 amended).
+- [x] **K1** The requirements, conflict-checked; R-HIST-4 (keep the tree in the song?) asked of the user.
+- [ ] **K2** The sheet in pages: a rail of sections, one page cross-faded in, the rail's highlight sliding; choices
+      as Artboard's `ComboBox` in cosmo's tokens, on/off as a toggle (R-SET-5, R-SET-6).
+- [ ] **K3** The history tree in the service: nodes, branching, `history`, `history jump <n>`, `history[]` +
+      `historyCurrent` in the model (R-HIST-1, R-HIST-2).
+- [ ] **K4** Edit ▸ Show History Tree…: cosmo's `HistoryView` over the model's tree, a click one `history jump`
+      (R-HIST-3).
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
