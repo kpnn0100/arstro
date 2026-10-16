@@ -257,7 +257,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   `clip move <ac> --lane <ln> [--at <b>]`; an audio clip dragged onto an instrument's track is refused
   (it eases home), a note clip onto a plain lane keeps its instrument (organisation, R-LANE-1).
 
-## R-TIME — transport and time — ✅ BUILT (1–4: DR-PLAY-1, the metronome DR-EDM-2, the loop region on the ruler DR-EDM-7) — 5 ✅ (the ruler on the grid, DR-UI-10) — 6 ✅ (the ruler dragged, DR-TIME-6)
+## R-TIME — transport and time — ✅ BUILT (1–4: DR-PLAY-1, the metronome DR-EDM-2, the loop region on the ruler DR-EDM-7) — 5 ✅ (the ruler on the grid, DR-UI-10) — 6 ✅ (the ruler dragged, DR-TIME-6) — 7, 8 📋 (stop back to the cue, or here: user request 2026-10-16)
 
 - **R-TIME-1 Beats are authoritative**, 960 PPQ; seconds are derived from the tempo (was SR-TIME-1).
 - **R-TIME-2 One tempo and one meter** per project; a tempo/meter map is reserved (was SR-TIME-2/5).
@@ -278,6 +278,16 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   2026-10-09, R-EDM-2/7:** the metronome is the machine's setting (`settings set metronome=on`), clicks
   on every beat while playing with the bar's first accented, its sound a pad of the DSP library's
   Drum Machine, and is NEVER in a render; the loop region is drawn on the ruler and dragged there.)
+- **R-TIME-7 Stop returns the time bar to where it was put** (user request, 2026-10-16: *"remember where user
+  put the time bar, when stop using space return to that time bar"*). The transport keeps a CUE — where the
+  user last put the time bar: a seek (a ruler click or drag, the start key), or where play began (`transport
+  play`, `--from`, a roll's clip). `transport stop --return` stops and puts the time bar back at the cue; the
+  play/stop key (Space by default) and the song bar's Stop are that. The cue is published
+  (`transport.cue`) and marked on the ruler while playing — where the time bar will go back — fading in and
+  out with the play.
+- **R-TIME-8 Or stop where it is** (same request: *"when ctrl space stop at the time user stop"*): the
+  stop-here key (Ctrl+Space by default) stops and leaves the time bar where it was heard (`transport stop`, as
+  before); the next play starts from there, and there is the new cue. Pressed while stopped, either key plays.
 
 ---
 
@@ -306,7 +316,7 @@ audio devices so the user can take advantage of their devices."*
   the driver resamples and the transport says so.
 - **R-DEV-8 Linux first**, over the PulseAudio API (which PipeWire also serves); Windows later.
 
-## R-SET — settings — ✅ IMPLEMENTED (DR-SET-1, DR-SET-2, DR-SET-3)
+## R-SET — settings — ✅ IMPLEMENTED (DR-SET-1, DR-SET-2, DR-SET-3) — 4 📋 (hotkeys: user request 2026-10-16)
 
 - **R-SET-1 A settings sheet in Cosmo's modal style** — the same scrim, card, chips, fade and Done
   button — with Solaris's rows: output and input devices (the clock is the output), sample rate
@@ -325,6 +335,17 @@ audio devices so the user can take advantage of their devices."*
   option a `settings set <key>=…` line.
 - **R-SET-2 Settings are the machine's**, persisted beside the app's other settings, never in a
   project. Each change is a `settings set` line the service validates, applies and persists.
+- **R-SET-4 Hotkeys are settings** (user request, 2026-10-16: *"need to have setting for hot key"*). Every
+  keyboard shortcut is an ACTION with its keys — in areas: Transport (play/stop back to the cue, stop here,
+  to the start), Song (save, undo, redo, settings), Lanes (delete and duplicate the selected clip), Piano roll
+  (select all, deselect, delete, duplicate, copy, paste, up, down, octave up and down, left, right). The
+  sheet's **Keyboard** section lists them, each with its keys: a key clicked listens for the next ("Press a
+  key…" — Escape cancels, Backspace removes it), "+" adds one, Reset gives the defaults back. Each change is
+  `settings set key.<action>=<keys>` — a comma list of combos (`Ctrl+Shift+Z, Ctrl+Y`), `none`, or `default`;
+  a key not known, or one another action of the same area uses (the song's three areas count as one; the
+  roll's keys shadow the song's while the roll has the keyboard) is refused naming it. Machine settings
+  (R-SET-2), persisted; the model publishes every action with its label, keys and defaults, so any front end
+  resolves a key the same way.
 
 ## R-HOME — Home — ✅ IMPLEMENTED (DR-HOME-1, DR-UI-1)
 

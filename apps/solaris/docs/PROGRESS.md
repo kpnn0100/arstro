@@ -11,15 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-15 — I4: Perihelion, measured as a master.*
+*Last updated: 2026-10-16 — J1: the time bar remembered, hotkeys as settings.*
 
 ---
 
 ## NEXT
 
-**► B13 — the MIDI keyboard** (R-EDM-10) — Claude's own suggestion: ask before a long run. The 2026-10-15 EDM brief
-is built (I1–I4, I4a). Open: D-5's live check; the audit's wants (a chord stamp or arpeggiator, velocity by hand);
-the library has no true-peak limiter (the track's −1 dBTP was met by headroom, the limiter at −2 dBFS). T2, T3.
+**► J2 — the cue** (R-TIME-7/8), then J3, J4: the 2026-10-16 request. B13+ wait.
 
 ---
 
@@ -325,6 +323,14 @@ umbrella's pointer — `arstro.rule` §7).
       builds +3.1 LU landing under their drops, mono lows / wide highs, a 10 dB pump, the kick within 0.19 ms, 98 % in
       key. Seven mixes to get there (the measure's first key test was fooled by drum noise — rewritten to peaks).
       ctest `edm_track_measured` (label `long`). Delivered to ~/Music/Solaris/perihelion.*.
+
+### J — the time bar remembered, hotkeys as settings (user request, 2026-10-16)
+- [x] **J1** The requirements: R-TIME-7 (stop back to the cue), R-TIME-8 (stop here), R-SET-4 (hotkeys).
+- [ ] **J2** The cue: `transport stop --return`, `transport.cue`, Space returns and Ctrl+Space stays, the Stop button
+      returns, the cue marked on the ruler while playing (R-TIME-7/8).
+- [ ] **J3** The keymap: the actions and their defaults (the service's table), `settings set key.<action>`,
+      `settings.keys` in the model, the App resolving every key through it, the host passing more keys (R-SET-4).
+- [ ] **J4** The sheet's Keyboard section: the keys drawn, a click listening for the next, add, remove, Reset (R-SET-4).
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
