@@ -67,6 +67,8 @@ namespace solaris_ui
         void setOsReducedMotion(bool on) { mOsReducedMotion = on; artboard::setReducedMotion(on || mAppReducedMotion); }
         void openSongPicked(const std::string &path);
         void newSongPicked(const std::string &path);
+        /** R-PRESET-2: a menu of the song templates at `world`; one picked, `onPickSongToCreate` asks where. */
+        void pickTemplate(artboard::Point world);
         void openSettings();
         /** R-HIST-3: Edit ▸ Show History Tree… — cosmo's history view over the model's tree. */
         void openHistory();
@@ -125,6 +127,7 @@ namespace solaris_ui
         // R-CLIP-10: the clip Ctrl+C copied (the window's clipboard), and where the last paste went — a paste with the
         // time bar unmoved lands right after it, so pastes run end to end
         std::string mClipClipboard;
+        std::string mNewTemplate; // R-PRESET-2: the template the next new song starts from ('' none)
         double mPasteAt = -1.0, mPasteNext = 0.0;
         artboard::GestureRecognizer mRecognizer;
         std::string mScreen = "home";

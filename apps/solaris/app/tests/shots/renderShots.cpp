@@ -765,6 +765,18 @@ namespace
                  const artboard::Rect h = world(tl, tl.fadeHandleRect(ac, false));
                  r.drag(h.x + h.w * 0.5, h.y + h.h * 0.5, h.x + h.w * 0.5 + 2.0 * 28.0, h.y + h.h * 0.5, 6, false);
              }},
+            {"home-templates", // R-PRESET-2: Home's From template… open — the shipped templates
+             [](sltest::Rig &r) {
+                 const std::filesystem::path shipped = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "templates";
+                 std::filesystem::remove_all(r.dir + "/templates");
+                 std::filesystem::create_directories(r.dir + "/templates/factory");
+                 std::filesystem::copy(shipped, r.dir + "/templates/factory", std::filesystem::copy_options::recursive);
+                 r.cmd("template list");
+                 r.settle();
+                 auto &home = r.app->home();
+                 r.click(world(home, home.actionRect(2)));
+                 r.settle();
+             }},
             {"browser-presets", // R-PRESET-1: the Presets tab — the shipped presets by type, one of the user's beside them
              [](sltest::Rig &r) {
                  shippedPresets(r);

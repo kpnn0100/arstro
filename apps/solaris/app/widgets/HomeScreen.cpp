@@ -134,6 +134,7 @@ namespace solaris_ui
     {
         for (int i = 0; i < 2; ++i)
             if (actionRect(i).contains(p)) return i;
+        if (actionRect(2).contains(p)) return 3; // R-PRESET-2: From template… (2 is Settings')
         if (settingsRect().contains(p)) return 2;
         if (!gridViewport().contains(p)) return -1;
         if (mCards.empty()) return emptyButtonRect().contains(p) ? 9 : -1;
@@ -159,6 +160,7 @@ namespace solaris_ui
             if (h == 0 || h == 9) { if (onNewSong) onNewSong(); }
             else if (h == 1) { if (onOpenSong) onOpenSong(); }
             else if (h == 2) { if (onSettings) onSettings(); }
+            else if (h == 3) { if (onNewFromTemplate) onNewFromTemplate(g.pos); } // R-PRESET-2
             else if (h >= 10 && onOpenRecent) onOpenRecent(mCards[(size_t)(h - 10)].info.path);
             return true;
         }
@@ -244,10 +246,10 @@ namespace solaris_ui
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(kPad, kLogoDividerY); t.lineTo(kSidebarW - kPad, kLogoDividerY); t.strokePath();
 
-        for (int i = 0; i < 2; ++i)
+        for (int i = 0; i < 3; ++i)
         {
             const Rect r = actionRect(i);
-            const double hv = mHover.amount(i);
+            const double hv = mHover.amount(i == 2 ? 3 : i);
             const bool primary = i == 0;
             if (primary) drawRoundedRect(t, r, radius::control(), Paint::filled(brighten(palette::primary(), interaction::kHoverFillLift * hv)));
             else
@@ -256,9 +258,15 @@ namespace solaris_ui
             const Color fg = primary ? palette::primaryForeground() : lerpColor(palette::mutedForeground(), palette::foreground(), 0.6 + 0.4 * hv);
             const Rect ib{r.x + 14.0, r.y + (r.h - 13.0) * 0.5, 13.0, 13.0};
             if (primary) glyph::plus(t, ib, fg, 1.6);
-            else cosmo_v2::icon::folder(t, ib, fg, 1.2);
+            else if (i == 1) cosmo_v2::icon::folder(t, ib, fg, 1.2);
+            else
+            {
+                // R-PRESET-2: a template — two sheets, one over the other
+                drawRoundedRect(t, Rect{ib.x + 3.0, ib.y, ib.w - 3.0, ib.h - 3.0}, radius::hairline(), Paint::stroked(fg, 1.1));
+                drawRoundedRect(t, Rect{ib.x, ib.y + 3.0, ib.w - 3.0, ib.h - 3.0}, radius::hairline(), Paint::filledStroked(palette::background(), fg, 1.1));
+            }
             t.setFill(fg);
-            t.drawText(primary ? "New song" : "Open song\xE2\x80\xA6", r.x + 36.0, textfit::baseline(r.y + r.h * 0.5, 12.0), 12.0,
+            t.drawText(primary ? "New song" : i == 1 ? "Open song\xE2\x80\xA6" : "From template\xE2\x80\xA6", r.x + 36.0, textfit::baseline(r.y + r.h * 0.5, 12.0), 12.0,
                        primary ? font::sansSemiBold() : font::sans());
         }
 

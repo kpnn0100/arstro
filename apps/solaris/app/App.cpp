@@ -51,7 +51,8 @@ namespace solaris_ui
         mModalRoot->addChild(mConfirm);
         mModalRoot->addChild(mMenu);
 
-        mHome->onNewSong = [this] { if (onPickSongToCreate) onPickSongToCreate(); };
+        mHome->onNewSong = [this] { mNewTemplate.clear(); if (onPickSongToCreate) onPickSongToCreate(); };
+        mHome->onNewFromTemplate = [this](Point world) { pickTemplate(world); }; // R-PRESET-2
         mHome->onOpenSong = [this] { if (onPickSongToOpen) onPickSongToOpen(); };
         mHome->onSettings = [this] { openSettings(); };
         mHome->onOpenRecent = [this](const std::string &p) { dispatch("project open " + quote(p)); };
@@ -129,7 +130,7 @@ namespace solaris_ui
     {
         auto &ms = mProject->bar().menus();
         ms.addMenu({"File", {
-            {"New Song\xE2\x80\xA6", [this] { if (onPickSongToCreate) onPickSongToCreate(); }},
+            {"New Song\xE2\x80\xA6", [this] { mNewTemplate.clear(); if (onPickSongToCreate) onPickSongToCreate(); }},
             {"Open\xE2\x80\xA6", [this] { if (onPickSongToOpen) onPickSongToOpen(); }},
             {"Save            (Ctrl+S)", [this] { dispatch("project save"); }},
             {"Save As\xE2\x80\xA6", [this] {
@@ -150,6 +151,12 @@ namespace solaris_ui
                                 [this, ids](const std::string &p) { dispatch("render --out " + quote(p) + " --stems " + ids); });
              }},
             {"Home", [this] { requestHome(); }},
+            // R-PRESET-2: a song started from a template; the open song kept as one
+            {"New from Template\xE2\x80\xA6", [this] { pickTemplate(Point{60.0, 30.0}); }},
+            {"Save as Template\xE2\x80\xA6", [this] {
+                 mMenu->onRename = [this](const std::string &n) { if (!n.empty()) dispatch("template save " + quote(n)); };
+                 mMenu->openRename("", 60.0, 30.0);
+             }},
         }});
         ms.addMenu({"Edit", {}});   // filled by refreshMenus: its labels name what undo would take back
         ms.addMenu({"Song", {
@@ -268,7 +275,27 @@ namespace solaris_ui
     {
         std::string p = path;
         if (p.size() < 4 || p.compare(p.size() - 4, 4, ".slp") != 0) p += ".slp";
-        dispatch("project new " + quote(p));
+        // R-PRESET-2: from the template picked before the host asked where — ONE line either way
+        const std::string from = mNewTemplate;
+        mNewTemplate.clear();
+        dispatch("project new " + quote(p) + (from.empty() ? std::string() : " --template " + quote(from)));
+    }
+
+    void App::pickTemplate(Point world)
+    {
+        // R-PRESET-2: the templates, yours and the factory's; one picked, the host asks where the new song goes
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        if (m.templates.empty()) { showToast("No templates yet \xE2\x80\x94 File \xE2\x80\xBA Save as Template\xE2\x80\xA6 keeps a song as one"); return; }
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        for (const auto &t : m.templates)
+        {
+            const std::string name = t.name;
+            items.push_back({name + (t.factory ? "  \xC2\xB7 factory" : ""), [this, name] {
+                                 mNewTemplate = name;
+                                 if (onPickSongToCreate) onPickSongToCreate();
+                             }});
+        }
+        mMenu->open(std::move(items), world.x, world.y);
     }
 
     void App::openHistory()

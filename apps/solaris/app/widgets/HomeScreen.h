@@ -46,7 +46,7 @@ namespace solaris_ui
         void layout();
 
         // geometry a test aims at (local coords)
-        artboard::Rect actionRect(int i) const;   // 0 = New, 1 = Open
+        artboard::Rect actionRect(int i) const;   // 0 = New, 1 = Open, 2 = From template… (R-PRESET-2)
         artboard::Rect settingsRect() const;
         artboard::Rect gridViewport() const;
         artboard::Rect cardLive(int i) const;
@@ -57,6 +57,7 @@ namespace solaris_ui
         double wordmarkSize() const { return mWordPx; }
 
         std::function<void()> onNewSong, onOpenSong, onSettings;
+        std::function<void(artboard::Point world)> onNewFromTemplate; // R-PRESET-2: "From template…" — a menu there
         std::function<void(const std::string &path)> onOpenRecent, onForgetRecent;
 
         void advance(double nowMs) override;

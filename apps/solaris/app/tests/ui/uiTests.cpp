@@ -4149,6 +4149,71 @@ static void test_presets_in_the_window()
     pass("presets in the window (R-PRESET-1): the Presets tab by type, the factory's marked; dragged onto the lanes, one `clip add --instrument --preset`; a device window's Presets — a preset loads in one line, Save as preset… typed one line, the tab growing it in");
 }
 
+static void test_templates_in_the_window()
+{
+    // R-PRESET-2: Home's From template… — the templates in a menu, the factory's marked; one picked, the host asked where,
+    // ONE `project new … --template`; File › Save as Template… typed is ONE `template save`; File › New from Template…
+    // offers it then
+    sltest::Rig r("ui-templates", 1280, 800);
+    auto quote = [](const std::string &x) { return x.find_first_of(" \t\"") == std::string::npos ? x : "\"" + x + "\""; }; // App's rule
+    const std::filesystem::path shipped = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "templates";
+    std::filesystem::remove_all(r.dir + "/templates");
+    std::filesystem::create_directories(r.dir + "/templates/factory");
+    std::filesystem::copy(shipped, r.dir + "/templates/factory", std::filesystem::copy_options::recursive);
+    r.cmd("template list"); // the folders read afresh
+    r.settle();
+    auto &home = r.app->home();
+    auto &menu = r.app->menu();
+    std::string where = r.song("From Beat");
+    int asked = 0;
+    r.app->onPickSongToCreate = [&] { ++asked; r.app->newSongPicked(where); };
+    r.click(world(home, home.actionRect(2)));
+    r.settle();
+    assert(menuItem(r, "Beat  \xC2\xB7 factory") >= 0 && menuItem(r, "Piano Ballad  \xC2\xB7 factory") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Beat  \xC2\xB7 factory")));
+    r.settle();
+    assert(asked == 1 && sentLine(r, "project new " + quote(where + ".slp") + " --template Beat"));
+    std::set<std::string> names;
+    for (const auto &st : r.svc->model().strips) names.insert(st.name);
+    assert(r.svc->model().screen == "project" && names.count("Drums") && names.count("Pad") && r.svc->model().bpm == 124.0);
+    // File › Save as Template…, typed
+    auto &ms = r.app->project().bar().menus();
+    int saveAs = -1, fromT = -1;
+    for (int i = 0; i < (int)ms.menu(0).items.size(); ++i)
+    {
+        if (ms.menu(0).items[(size_t)i].label == "Save as Template\xE2\x80\xA6") saveAs = i;
+        if (ms.menu(0).items[(size_t)i].label == "New from Template\xE2\x80\xA6") fromT = i;
+    }
+    assert(saveAs >= 0 && fromT >= 0 && ms.menu(0).items[5].label == "Export\xE2\x80\xA6"); // the others where they were
+    r.click(world(ms, ms.titleRect(0)));
+    r.settle();
+    r.click(world(ms, ms.itemRect(0, saveAs)));
+    r.settle();
+    assert(menu.isRenaming());
+    artboard::KeyEvent typed;
+    typed.type = artboard::KeyEvent::Type::Text;
+    typed.text = "My Beat";
+    r.app->key(typed);
+    r.key(13);
+    r.settle();
+    assert(sentLine(r, "template save \"My Beat\""));
+    // File › New from Template… offers it now, unmarked
+    where = r.song("Again");
+    r.click(world(ms, ms.titleRect(0)));
+    r.settle();
+    r.click(world(ms, ms.itemRect(0, fromT)));
+    r.settle();
+    assert(menuItem(r, "My Beat") >= 0);
+    r.click(menu.itemRect(menuItem(r, "My Beat")));
+    r.settle();
+    assert(asked == 2 && sentLine(r, "project new " + quote(where + ".slp") + " --template \"My Beat\""));
+    // a plain New Song after: no template carried over
+    where = r.song("Plain");
+    r.app->newSongPicked(where);
+    assert(sentLine(r, "project new " + quote(where + ".slp")));
+    pass("templates in the window (R-PRESET-2): Home's From template… lists them, the factory's marked; picked, the host asks where and one `project new --template`; File › Save as Template… typed one `template save`; New from Template… offers it; a plain new song carries none");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -4199,6 +4264,7 @@ int main()
     test_a_clip_warped_from_its_menu();
     test_tempo_changes_on_the_ruler();
     test_presets_in_the_window();
+    test_templates_in_the_window();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();
