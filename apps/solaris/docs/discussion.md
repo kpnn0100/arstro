@@ -410,3 +410,30 @@ change):
   killing the helper — the real event, not a simulation.
 - **Its editor** (N26) is the helper's: it opens the plugin's own view in its own X11 window (the SDK's editorhost
   pattern), placed and named by the window; Solaris's generated panel stays the always-available view.
+
+### Round 10 — 2026-10-17 — control surfaces (R-CTRL-2, N28): the design, before code
+
+A surface is a second MIDI device that the song TALKS BACK to: its faders are motorised, its buttons lit, its strip
+of text names the channels. So, decided here (each a line to change):
+
+- **Two protocols, one shape.** Mackie Control (the de-facto standard — most surfaces, and every "MCU mode") and HUI
+  (Pro Tools' older one) are two CODECS of one surface model: eight channel strips (a fader, a pot, mute, solo, arm,
+  select, a touch sense), a master fader, the transport keys, bank / channel shift; and back, a fader's position, the
+  buttons' lights, the pots' rings, the text. A codec is pure — bytes in, events out; state in, bytes out — so both
+  are tested as tables with no device at all. Mackie: a fader is a 14-bit pitch bend on its channel (the master's on
+  channel 9), a pot a relative CC 16–23, a button a note (on 127 = pressed); back the same, plus the scribble strip
+  as a SysEx. HUI: a fader is a 14-bit pair of CCs, a button a zone/port pair of CCs, a pot a relative CC 64–71; it
+  wants a ping answered.
+- **Its own port, in and out.** `settings set surface=mcu|hui|none` and `surfacePort=<port>` — the machine's, as the
+  keyboard's inputs are. The surface's input port is NEVER the keyboard's (a fader's pitch bend is no bend wheel):
+  the keyboard listens to every port but that one. MIDI OUTPUT is a new seam beside the input (`IMidiOut`, the host's
+  ALSA sequencer).
+- **What it moves** — always through the grammar, as a drag would: a fader → `set <ch>.gain` by the fader law (the
+  one copy, FaderLaw.h), the master → `project.masterGain`, a pot → the strip's pan in steps, mute / solo → `set
+  <ch>.mute|solo`, arm → `strip arm`, the transport keys → `transport …`, bank / channel → which eight strips it shows
+  (the session's, in processing order). A fader being touched is not moved back by the song (the hand outranks the
+  motor); the rest follows the song, whatever changed it.
+- **What it shows** — sent only when it changed (a diff against what was sent): each fader where its strip's gain
+  is, each light as its strip is, the strip's name on the text; an empty slot past the last strip down and dark.
+- **Not yet:** a surface's display of values, its jog wheel, its function keys, more than one surface.
+

@@ -1006,6 +1006,17 @@ a process is the host's (law 12).
   says so; the Settings sheet's MIDI page lists the mappings, each removable.)
 - **R-CTRL-2 Control surfaces**: a Mackie Control / HUI surface's faders, pans, mutes, solos and transport follow
   and move the mixer.
+  (**Detailed before building it, N28 — 2026-10-17**, the design in discussion.md Round 10: `settings set
+  surface=mcu|hui|none` and `surfacePort=<port>` — the machine's; the surface's port is its own, in and out, and the
+  keyboard never listens to it. Eight channel strips over the song's strips in processing order, from a bank the
+  surface moves (bank: eight, channel: one — the session's). In: a fader → `set <ch>.gain` by the fader law, the master
+  fader → `project.masterGain`, a pot → the strip's pan (0.02 a step), mute / solo → `set <ch>.mute|solo` toggled, arm
+  → `strip arm` (again: disarm), Play / Stop / Record / Rewind / Fast Forward → `transport …` as MIDI Machine Control's
+  are. Out — only what changed: each fader at its strip's gain (not one a hand is on), mute / solo / arm lights, each
+  pot's ring at its pan, each strip's name on the text (Mackie's scribble strip; HUI's four-character names); a slot
+  past the last strip at the bottom and dark. HUI's ping is answered. The model: `settings.surface`,
+  `settings.surfacePort`, and `surface` (connected, its bank). Not yet: values on the text, the jog wheel, function
+  keys, several surfaces.)
 - **R-PERF-1 A CPU meter**: the audio thread's load (DSP time over the block's time) and per strip, published and
   drawn in the song bar.
 - **R-PERF-2 A multi-core engine**: strips that do not feed each other render in parallel on a worker pool,
