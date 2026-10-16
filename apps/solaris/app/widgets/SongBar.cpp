@@ -61,8 +61,8 @@ namespace solaris_ui
         const double W = width.value(), cy = kHeight * 0.5;
         switch (which)
         {
-        case kHome: return Rect{78.0, cy - kBtnH * 0.5, 52.0, kBtnH};
-        case kSettings: return Rect{78.0 + 52.0 + 2.0, cy - kBtnH * 0.5, 66.0, kBtnH};
+        case kHome: return Rect{6.0, cy - 10.0, mWordW + 12.0, 20.0}; // the wordmark (R-UI-3 amended)
+        case kSettings: return Rect{12.0 + mWordW + 12.0, cy - kBtnH * 0.5, 66.0, kBtnH};
         case kPlay: return Rect{transportX(), cy - kBtnH * 0.5, kPlayW, kBtnH};
         case kSave: return Rect{W - 12.0 - 48.0, cy - kBtnH * 0.5, 48.0, kBtnH};
         case kBpm:
@@ -194,11 +194,15 @@ namespace solaris_ui
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, H - 0.5); t.lineTo(W, H - 0.5); t.strokePath();
 
-        // wordmark
+        // the wordmark — Home (R-UI-3 amended): washed on hover, as cosmo's and Interstellar's
+        const double wordW = t.measureText("solaris", 13.0, font::sansSemiBold(), -0.03 * 13.0);
+        mWordW = wordW + t.measureText(".", 13.0, font::sansSemiBold());
+        const double homeHv = mHover.amount(kHome);
+        if (homeHv > 0.001) drawRoundedRect(t, hitRect(kHome), radius::control(), Paint::filled(palette::hoverWash(homeHv)));
         t.setFill(palette::foreground());
         t.drawText("solaris", 12.0, textfit::baseline(cy, 13.0), 13.0, font::sansSemiBold(), -0.03 * 13.0);
         t.setFill(palette::primary());
-        t.drawText(".", 12.0 + t.measureText("solaris", 13.0, font::sansSemiBold(), -0.03 * 13.0), textfit::baseline(cy, 13.0), 13.0, font::sansSemiBold());
+        t.drawText(".", 12.0 + wordW, textfit::baseline(cy, 13.0), 13.0, font::sansSemiBold());
 
         auto button = [&](int id, const std::string &label, bool primary) {
             const Rect r = hitRect(id);
@@ -212,7 +216,6 @@ namespace solaris_ui
             }
             return r;
         };
-        button(kHome, "Home", false);
         button(kSettings, "Settings", false);
 
         // the song's name, ellipsized against the space left before the transport; the unsaved dot after it

@@ -1358,7 +1358,26 @@ static void test_song_bar_menus_and_settings_sections()
     r.cmd("settings set reducedMotion=off");
     r.settle();
     assert(!artboard::reducedMotion());
-    pass("Song bar: Settings beside Home; File/Edit/Song/View are command lines (Edit names its undo); outside press closes; View folds the dock and browser, eased; new settings rows are lines");
+    // R-UI-3 (amended): the wordmark IS Home — no Home button; a click on it asks about unsaved changes, then goes Home
+    r.key(27); // the settings sheet above is still open: close it
+    r.settle();
+    {
+        const artboard::Rect wm = world(bar, bar.hitRect(SongBar::kHome));
+        assert(wm.x < 20.0 && wm.right() < bar.hitRect(SongBar::kSettings).x + 1.0);
+        r.cmd("set project.bpm=121"); // an unsaved edit
+        r.settle();
+        r.click(cx(wm), cy(wm));
+        r.settle();
+        assert(r.app->confirm().isOpen() && r.app->screen() == "project"); // the song is unsaved: asked first
+        r.key(27);
+        r.settle();
+        r.cmd("project save");
+        r.settle();
+        r.click(cx(wm), cy(wm));
+        r.settle();
+        assert(sentLine(r, "project close") && r.app->screen() == "home");
+    }
+    pass("Song bar: the wordmark is Home (no Home button); Settings beside it; File/Edit/Song/View are command lines (Edit names its undo); outside press closes; View folds the dock and browser, eased; new settings rows are lines");
 }
 
 static void test_device_window_lists_parameters_and_binds_them()

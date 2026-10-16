@@ -806,7 +806,11 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   mixer dock, the browser, the metronome). Settings is no longer at the right. Every item is a command
   line or a host picker.) (**As built (audit, 2026-10-09):** Song reads Add Mixer, Add Bus, Add Audio
   Line, Add Lane, Quantize Clip — the selected note clip's pattern at the lanes' snap step, one
-  `pattern quantize <pt> --grid <step>` line, DR-UI-9.)
+  `pattern quantize <pt> --grid <step>` line, DR-UI-9.) (**AMENDED (user request, 2026-10-16):** *"remove
+  'Home', when click the logo solaris back to home just like cosmo and interstellar"* — the Home button is gone;
+  the `solaris.` wordmark IS Home, as cosmo's and Interstellar's are: washed on hover, a click goes Home (with the
+  unsaved-changes question, as the button asked). The left reads: wordmark · Settings · the menus. File › Home
+  stays.)
 - **R-UI-4 Cosmo's widgets are reused as libraries** (`SliderRow`, `SegmentedControl`, `PillButton`,
   `IconButton`, `ConfirmDialog`, `MenuStrip`, `HoverFade`); Interstellar's timeline idioms are
   followed, and its header-only helpers (`TextFit`, `EasedScroll`, `Glyphs`) are INCLUDED from

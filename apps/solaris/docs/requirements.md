@@ -605,7 +605,10 @@ closes it, eased); shots `history-tree`, `history-tree-jumping`. Mutant: a highl
 
 
 ### DR-UI-9 The song bar's menus and Settings beside Home (R-UI-3 amended)
-`SongBar` (`app/widgets/SongBar.cpp`): wordmark · Home · Settings · cosmo's `MenuStrip` (laid out by
+(**2026-10-16, R-UI-3 amended again:** the Home button is gone — the `solaris.` wordmark is Home, its hit rect the
+measured word (`SongBar::hitRect(kHome)`), washed on hover; a click is `requestHome`, which asks about unsaved changes.
+UI `test_song_bar_menus_and_settings_sections`, `test_home_unsaved_confirm_and_recents`; mutant (a wordmark that does nothing) seen red.)
+`SongBar` (`app/widgets/SongBar.cpp`): wordmark (Home) · Settings · cosmo's `MenuStrip` (laid out by
 `SongBar::layout`, `:31`) · the song's name; the transport is centred when there is room and otherwise
 starts right of the menus and `kNameMin` (120 px) of name (`transportX`, `:40`), so the bar fits at
 1024; the master meter and Save on the right. `App::buildMenus` (`app/App.cpp:88`): **File** — New

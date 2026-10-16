@@ -1,7 +1,8 @@
 /*
  *  solaris_ui — SongBar: the song screen's top bar (R-UI-3, R-TIME-4, R-PLAY-3).
  *
- *  Left → right: the `solaris.` wordmark (13 px, the dot in the accent), Home, Settings, cosmo's
+ *  Left → right: the `solaris.` wordmark (13 px, the dot in the accent) — it IS Home, as cosmo's and Interstellar's
+ *  are (R-UI-3 amended 2026-10-16) — then Settings, cosmo's
  *  `MenuStrip` (File · Edit · Song · View — R-UI-3 amended: *"settings at top left next to home"*),
  *  the song's name with an unsaved dot; then the transport — Play/Stop, the position as
  *  bar.beat.tick in mono (it changes every frame while playing, so it must not jitter: mono), the
@@ -34,7 +35,7 @@ namespace solaris_ui
     {
     public:
         static constexpr double kHeight = 29.25;
-        enum Hit { kNone = -1, kHome = 0, kPlay, kSave, kSettings, kBpm };
+        enum Hit { kNone = -1, kHome = 0, kPlay, kSave, kSettings, kBpm }; // kHome: the wordmark
         static constexpr double kBpmStepPx = 3.25; // space::u(1) of vertical drag: one step
         static constexpr double kNameMin = 120.0; // the song's name keeps this much before the transport moves right
 
@@ -60,6 +61,7 @@ namespace solaris_ui
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
     private:
+        mutable double mWordW = 52.0; // the `solaris.` wordmark, measured in the paint (Home's hit rect)
         int hitAt(const artboard::Point &p) const;
         std::string mName;
         bool mDirty = false, mPlayingWanted = false;

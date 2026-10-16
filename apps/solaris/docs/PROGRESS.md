@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — L2: the resize cursor.*
+*Last updated: 2026-10-16 — M1: the wordmark is Home.*
 
 ---
 
@@ -373,6 +373,9 @@ history like cosmo".* Requirements: R-SET-5, R-SET-6 (R-SET-1, R-SET-3 amended);
 - [x] **L2** The resize cursor (R-UI-14, user request 2026-10-16): `App::cursor()` from each widget's grip zones and
       the drag in hand; the GTK host sets the window's cursor when it changes.
       — DR-UI-14. UI test; 3 mutants seen red. The GTK half is compiled, not driven live (as D-5): owed.
+
+### M — the wordmark, looping automation, a professional-DAW analysis (user request, 2026-10-16)
+- [x] **M1** No Home button: the `solaris.` wordmark is Home, as cosmo's and Interstellar's (R-UI-3 amended).
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
