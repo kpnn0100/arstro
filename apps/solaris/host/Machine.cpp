@@ -30,6 +30,7 @@ namespace solaris_host
             std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
             if (e.is_directory(ec)) b.kind = "dir";
             else if (ext == ".slp") b.kind = "song";
+            else if (ext == ".mid" || ext == ".midi") b.kind = "midi"; // R-MIDI-1: dropped, a pattern
             else if (std::find(std::begin(kAudio), std::end(kAudio), ext) != std::end(kAudio)) b.kind = "audio";
             else b.kind = "other";
             out.push_back(b);

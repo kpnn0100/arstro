@@ -91,7 +91,7 @@ namespace solaris_ui
         double rowY(int i) const; // row i's LIVE top in the list, before scrolling
         int rowAt(const artboard::Point &p) const;
         double listTop() const { return kTabsH + 1.0; }
-        static bool draggable(const Item &i) { return i.kind == "audio" || i.kind == "instrument" || i.kind == "effect" || i.kind == "pattern"; }
+        static bool draggable(const Item &i) { return i.kind == "audio" || i.kind == "instrument" || i.kind == "effect" || i.kind == "pattern" || i.kind == "midi"; }
 
         int mTab = kSamples;
         std::string mPath;                        // the folder being browsed ("" = the folder list)

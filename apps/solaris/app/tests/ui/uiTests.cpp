@@ -1286,6 +1286,42 @@ static void test_a_recovered_song_is_offered()
     pass("A recovered song is offered (R-SAFE-2): opened with a newer autosave, the window asks — Recover is `project recover` (the kept edits, unsaved); Open the Saved One is `project discard-recovery`");
 }
 
+static void test_a_midi_file_dropped_on_a_track()
+{
+    // R-MIDI-1 in the window: a .mid in the browser, dragged onto an instrument's track, is ONE `pattern import`
+    sltest::Rig r("ui-midi", 1280, 800);
+    r.cmd("folder add " + r.dir);
+    r.cmd("project new " + r.song("Midi") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");                  // ch_2's track ln_1, pt_1
+    r.cmd("notes add pt_1 \"C4@0:1 E4@1:1 G4@2:2\"");
+    r.cmd("pattern export pt_1 " + r.dir + "/groove.mid");                  // a real file where the browser lists it
+    r.settle();
+    auto &b = r.app->project().browser();
+    auto &tl = r.app->project().timeline();
+    r.click(world(b, b.tabRect(0)));
+    r.settle();
+    r.click(world(b, b.rowRect(0)));                                         // the folder
+    r.settle();
+    int mid = -1;
+    for (int i = 0; i < b.rowCount(); ++i)
+        if (b.row(i).label == "groove.mid") mid = i;
+    assert(mid > 0 && b.row(mid).kind == "midi");
+    const artboard::Rect from = world(b, b.rowRect(mid)), track = world(tl, tl.rowRect(0));
+    const double toX = world(tl, artboard::Rect{tl.beatToX(4.0), 0, 0, 0}).x + 2.0;
+    r.drag(cx(from), cy(from), toX, cy(track), 8, false);
+    r.app->pointer(2, toX, cy(track), 0, r.now);
+    r.settle();
+    assert(sentLine(r, "pattern import " + r.dir + "/groove.mid --lane ln_1 --at 4"));
+    const auto &m = r.svc->model();
+    bool placed = false;
+    for (const auto &c : m.clips)
+        if (c.at == 4.0 && c.lane == "ln_1" && c.pattern != "pt_1")
+            for (const auto &p : m.patterns)
+                placed |= p.id == c.pattern && p.notes.size() == 3 && p.notes[2].pitch == 67 && p.notes[2].length == 2.0;
+    assert(placed);
+    pass("A .mid dropped on an instrument's track is ONE `pattern import --lane --at` — its notes, a clip there (R-MIDI-1)");
+}
+
 static void test_space_returns_and_ctrl_space_stays()
 {
     // R-TIME-7/8: Space stops back where the time bar was put; Ctrl+Space stops where it is; the cue is marked
@@ -3028,6 +3064,7 @@ int main()
     test_the_pointer_says_a_drag_resizes();
     test_a_looping_automation_is_seen_and_made();
     test_a_recovered_song_is_offered();
+    test_a_midi_file_dropped_on_a_track();
     test_home_unsaved_confirm_and_recents();
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();

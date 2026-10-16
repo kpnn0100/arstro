@@ -474,6 +474,36 @@
       "requirement": "R-SVC-8"
     },
     {
+      "verb": "pattern import",
+      "usage": "pattern import <file.mid> [--track <n>] [--at <beats>] [--lane <ln>] [--instrument <type>] [--name <text>]",
+      "args": "<file.mid>",
+      "flags": [
+        "track=<n>",
+        "at=<beats>",
+        "lane=<ln>",
+        "instrument=<type>",
+        "name=<text>"
+      ],
+      "summary": "Make patterns of a Standard MIDI File (format 0/1/2; ticks or SMPTE time): one per track with notes, or --track n's alone; whole bars long; named after the track. With --lane <an instrument's track> or --instrument <type>: ONE pattern (every track merged, or --track's) and a clip of it at --at, by `clip add`'s rules — what dropping a .mid does. Prints the (first) pattern; `made:` the rest.",
+      "requirement": "R-MIDI-1"
+    },
+    {
+      "verb": "pattern export",
+      "usage": "pattern export <pt> <file.mid>",
+      "args": "<pt> <file.mid>",
+      "flags": [],
+      "summary": "Write a pattern as a MIDI file (format 1, 960 ticks a beat — Solaris's own, so it imports back exact; channel 10 when a kit plays it).",
+      "requirement": "R-MIDI-1"
+    },
+    {
+      "verb": "project export-midi",
+      "usage": "project export-midi <file.mid>",
+      "args": "<file.mid>",
+      "flags": [],
+      "summary": "Write the song's notes as a MIDI file: a track per instrument strip, every note clip's pattern where the clip plays it (repeated to fill it), the song's tempo and meter.",
+      "requirement": "R-MIDI-1"
+    },
+    {
       "verb": "pattern transpose",
       "usage": "pattern transpose <pt> [--semi <n>]",
       "args": "<pt>",

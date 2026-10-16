@@ -128,6 +128,8 @@ namespace solaris_ui
         const bool track = row < mTimeline->rowCount() && !mTimeline->rowTrack(row).empty();
         const std::string onLane = lane.empty() || track ? std::string(" --lane new") : " --lane " + q(lane);
         if (it.kind == "audio") return onCommand("clip add --src " + q(it.value) + " --at " + beats(beat) + onLane);
+        if (it.kind == "midi") // R-MIDI-1: a .mid is a pattern — on a track it plays through it, anywhere else a new synth's
+            return onCommand("pattern import " + q(it.value) + (track ? " --lane " + q(lane) : std::string(" --instrument synth")) + " --at " + beats(beat));
         if (it.kind == "instrument") return onCommand("clip add --instrument " + it.value + " --at " + beats(beat) + " --length 4" + onLane);
         if (it.kind == "pattern")
         {

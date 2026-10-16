@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable

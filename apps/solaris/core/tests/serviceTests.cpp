@@ -1369,9 +1369,9 @@ static void test_live_playback_is_the_offline_render()
     r.events.clear();
     r.ok("transport play");
     assert(r.svc.model().transport.playing && contains(r.events.back(), "[evt] transport.changed playing=1 position=0.0 loop=off"));
-    waitFrames(r, 96000);
+    waitFrames(r, 96000 + 4800); // 4 beats, and a tenth of a second more: the position is what is HEARD, a latency behind
     r.ok("transport stop");
-    assert(!r.svc.model().transport.playing && r.svc.model().transport.position >= 4.0); // 96000 frames = 4 beats heard
+    assert(!r.svc.model().transport.playing && r.svc.model().transport.position >= 4.0); // 4 beats heard
     r.ok("render --out " + scratch() + "/live.wav --ports --to 4");
     const auto &port = r.fake.written[scratch() + "/live.Main.wav"];
     const auto &live = r.fake.capture->sink;
@@ -2111,6 +2111,117 @@ static void test_a_clip_copied_onto_another_lane()
     pass("clip duplicate --lane (R-CLIP-9): a MIDI copy onto another track plays through it, linked; a plain lane keeps its instrument; audio onto a track refused; one edit");
 }
 
+// R-MIDI-1: Standard MIDI Files — a pattern exported and imported back is the same notes to the tick; a file made
+// elsewhere (running status, note-on velocity 0, 96 ticks a beat, named tracks; SMPTE time through its tempo) reads
+// as its beats; a dropped .mid is one line — a clip on a track or a new instrument; the song exports as it plays
+static void test_midi_files()
+{
+    Run r;
+    const std::string dir = scratch();
+    r.ok("project new " + freshSong("midi") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");
+    const std::string pt = r.svc.model().clips[0].pattern;
+    r.ok("notes add " + pt + " \"C4@0:1:90 E4@0.5:0.25:70 G4@1.3333:0.6667:100 C5@3.75:0.25:127\"");
+    auto notesOf = [&](const std::string &id) {
+        for (const auto &x : r.svc.model().patterns)
+            if (x.id == id) return x.notes;
+        return std::vector<NoteModel>{};
+    };
+    // exported, imported: the same notes to the tick
+    const std::string mid = dir + "/pattern.mid";
+    r.ok("pattern export " + pt + " " + mid);
+    {
+        std::ifstream f(mid, std::ios::binary);
+        char head[4] = {};
+        f.read(head, 4);
+        assert(std::string(head, 4) == "MThd");
+    }
+    const std::string back = firstLine(r.ok("pattern import " + mid));
+    const auto a = notesOf(pt), b = notesOf(back);
+    assert(a.size() == 4 && a.size() == b.size());
+    for (size_t i = 0; i < a.size(); ++i)
+    {
+        assert(a[i].pitch == b[i].pitch && a[i].at == b[i].at && a[i].length == b[i].length && a[i].vel == b[i].vel);
+    }
+    // a file made elsewhere: format 1, 96 ticks a beat, two named tracks, running status, a note-on of velocity 0 as its off
+    auto vlq = [](std::string &o, unsigned v) {
+        std::string t(1, (char)(v & 0x7F));
+        while (v >>= 7) t.insert(t.begin(), (char)((v & 0x7F) | 0x80));
+        o += t;
+    };
+    auto be = [](std::string &o, unsigned long v, int n) { for (int i = n - 1; i >= 0; --i) o += (char)((v >> (8 * i)) & 0xFF); };
+    auto track = [&](const std::string &name, const std::string &events) {
+        std::string body;
+        vlq(body, 0); body += "\xFF\x03"; vlq(body, (unsigned)name.size()); body += name;
+        body += events;
+        vlq(body, 0); body += std::string("\xFF\x2F\x00", 3);
+        std::string chunk = "MTrk";
+        be(chunk, body.size(), 4);
+        return chunk + body;
+    };
+    auto header = [&](int format, int tracks, unsigned division) {
+        std::string h = "MThd";
+        be(h, 6, 4); be(h, (unsigned long)format, 2); be(h, (unsigned long)tracks, 2); be(h, division, 2);
+        return h;
+    };
+    std::string bass, lead;
+    // bass: C2 at beat 0 for a beat (an 0x80 off), then F2 at beat 1 — running status, its off a note-on of velocity 0
+    vlq(bass, 0); bass += "\x90\x24\x64"; vlq(bass, 96); bass += std::string("\x80\x24\x00", 3);
+    vlq(bass, 0); bass += "\x90\x29\x50"; vlq(bass, 48); bass += std::string("\x29\x00", 2);
+    vlq(bass, 96); bass += "\x90\x2B\x40"; vlq(bass, 48); bass += std::string("\x80\x2B\x00", 3); // G2 later: F2 must END at its velocity-0 on
+    vlq(lead, 192); lead += "\x91\x48\x7F"; vlq(lead, 24); lead += std::string("\x48\x00", 2);
+    const std::string made = dir + "/made.mid";
+    std::ofstream(made, std::ios::binary) << header(1, 2, 96) + track("Bass", bass) + track("Lead", lead);
+    const std::string out = r.ok("pattern import " + made);
+    const std::string pBass = firstLine(out);
+    const std::string pLead = out.substr(out.find("pattern=") + 8, out.find('\n', out.find("pattern=")) - out.find("pattern=") - 8);
+    {
+        const auto nb = notesOf(pBass), nl = notesOf(pLead);
+        assert(nb.size() == 3 && nb[0].pitch == 36 && nb[0].at == 0.0 && nb[0].length == 1.0 && nb[0].vel == 100);
+        assert(nb[2].pitch == 43 && nb[2].at == 2.5 && nb[2].length == 0.5);
+        assert(nb[1].pitch == 41 && nb[1].at == 1.0 && nb[1].length == 0.5 && nb[1].vel == 80);
+        assert(nl.size() == 1 && nl[0].pitch == 72 && nl[0].at == 2.0 && nl[0].length == 0.25);
+        for (const auto &x : r.svc.model().patterns)
+            if (x.id == pBass) assert(x.name == "Bass" && x.length == 4.0);
+    }
+    // SMPTE time: 25 frames of 40 ticks a second, 120 bpm — a note at tick 1000 (one second) is beat 2
+    std::string smpte;
+    vlq(smpte, 0); smpte += std::string("\xFF\x51\x03\x07\xA1\x20", 6); // 500 000 µs a quarter
+    vlq(smpte, 1000); smpte += "\x90\x3C\x64"; vlq(smpte, 250); smpte += std::string("\x80\x3C\x00", 3);
+    const std::string sm = dir + "/smpte.mid";
+    std::ofstream(sm, std::ios::binary) << header(0, 1, 0xE728) + track("Time", smpte); // −25 fps, 40 ticks a frame
+    const auto ns = notesOf(firstLine(r.ok("pattern import " + sm)));
+    assert(ns.size() == 1 && ns[0].at == 2.0 && ns[0].length == 0.5);
+    // dropped on a track: ONE line — the tracks merged into one pattern, a clip of it there
+    const std::string ln = r.svc.model().clips[0].lane;
+    r.events.clear();
+    const std::string dropped = r.ok("pattern import " + made + " --lane " + ln + " --at 8");
+    const std::string merged = firstLine(dropped);
+    assert(notesOf(merged).size() == 4 && contains(dropped, "made: clip="));
+    bool onTrack = false;
+    for (const auto &cl : r.svc.model().clips) onTrack |= cl.pattern == merged && cl.lane == ln && cl.at == 8.0 && cl.track == r.svc.model().clips[0].track;
+    assert(onTrack);
+    assert(contains(r.ok("undo"), "pattern import"));                    // one edit: the pattern and the clip together
+    // on empty space: a new instrument of it
+    const std::string drums = r.ok("pattern import " + made + " --track 1 --instrument drums --at 4");
+    assert(contains(drums, " clip=") && contains(drums, "made: strip="));
+    // the song, as it plays: a 4-beat pattern on an 8-beat clip at beat 8 is its notes twice, from beat 8
+    r.ok("clip add --strip " + r.svc.model().clips[0].track + " --pattern " + pt + " --at 8 --length 8");
+    const std::string song = dir + "/song.mid";
+    r.ok("project export-midi " + song);
+    const auto sn = notesOf(firstLine(r.ok("pattern import " + song + " --track 1")));
+    int fromEight = 0;
+    for (const auto &x : sn) fromEight += x.at >= 8.0 && x.at < 16.0;
+    assert(fromEight == 8 && sn.size() == 12);                          // 4 at beat 0 + 8 from the long clip
+    // refused, naming why
+    std::ofstream(dir + "/not.mid") << "hello";
+    assert(contains(r.no("pattern import " + dir + "/not.mid"), "not a MIDI file"));
+    assert(contains(r.no("pattern import " + made + " --track 3"), "--track is one of the file's 2 tracks"));
+    assert(contains(r.no("pattern import " + dir + "/nowhere.mid"), "cannot read"));
+    assert(contains(r.no("pattern export pt_99 " + song), "no pattern `pt_99`"));
+    pass("MIDI files (R-MIDI-1): a pattern exported and imported back is the same notes to the tick; a file made elsewhere — running status, velocity-0 offs, 96 ticks a beat, named tracks, SMPTE time through its tempo — reads as its beats; a .mid dropped on a track is one line (merged, a clip), on space a new instrument; the song exports as it plays");
+}
+
 static void test_instrument_tracks()
 {
     // R-LANE-3: a lane may be an instrument's TRACK — what is put on it plays through it
@@ -2453,6 +2564,7 @@ int main()
     test_reading_a_song_back();
     test_an_instruments_groups_are_titled();
     test_a_clip_copied_onto_another_lane();
+    test_midi_files();
     test_instrument_tracks();
     test_a_song_from_before_tracks_adopts_them();
     test_latency_is_compensated_and_a_render_starts_on_the_beat();

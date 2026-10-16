@@ -96,6 +96,7 @@ namespace solaris
         std::string lsText() const;
         bool showText(const std::string &id, std::string &out, std::string &err) const;
         bool historyCommand(const Command &c, std::string &err); // undo / redo / history / history jump
+        bool midiCommand(const Command &c, std::string &err);    // pattern import / export, project export-midi (R-MIDI-1)
         // R-SAFE: autosave and recovery
         static double steadySeconds();
         static std::string autosavePath(const std::string &song);

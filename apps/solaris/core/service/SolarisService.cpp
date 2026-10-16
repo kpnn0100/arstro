@@ -111,6 +111,7 @@ namespace solaris
             case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait:
             case K::Audition: case K::NotePreview: case K::None:
             case K::Ls: case K::Show: case K::PatternPrint: // R-SVC-8: reading back
+            case K::PatternExport: case K::ProjectExportMidi: // R-MIDI-1: writing a file, not the song
                 return false;
             default:
                 return true;
@@ -174,6 +175,9 @@ namespace solaris
         case K::ClipAdd: case K::ClipMove: case K::ClipDuplicate: case K::ClipUnique: case K::ClipDelete:
         case K::PatternNew: case K::NoteAdd: case K::NoteDelete: case K::NoteMove: case K::PatternQuantize:
             ok = clipCommand(c, err);
+            break;
+        case K::PatternImport: case K::PatternExport: case K::ProjectExportMidi:
+            ok = midiCommand(c, err);
             break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose:

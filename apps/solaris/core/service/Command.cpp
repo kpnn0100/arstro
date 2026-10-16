@@ -169,6 +169,17 @@ namespace solaris
             {K::PatternClear, "pattern clear", "<pt>", 1, 1, {"pitch=<pitch>"}, "Remove every note (or only --pitch's).", "R-SVC-8"},
             {K::PatternDelete, "pattern delete", "<pt>", 1, 1, {},
              "Delete a pattern. Refused while a clip plays it (naming the clips).", "R-SVC-8"},
+            {K::PatternImport, "pattern import", "<file.mid>", 1, 1, {"track=<n>", "at=<beats>", "lane=<ln>", "instrument=<type>", "name=<text>"},
+             "Make patterns of a Standard MIDI File (format 0/1/2; ticks or SMPTE time): one per track with notes, or "
+             "--track n's alone; whole bars long; named after the track. With --lane <an instrument's track> or "
+             "--instrument <type>: ONE pattern (every track merged, or --track's) and a clip of it at --at, by `clip "
+             "add`'s rules — what dropping a .mid does. Prints the (first) pattern; `made:` the rest.", "R-MIDI-1"},
+            {K::PatternExport, "pattern export", "<pt> <file.mid>", 2, 2, {},
+             "Write a pattern as a MIDI file (format 1, 960 ticks a beat — Solaris's own, so it imports back exact; "
+             "channel 10 when a kit plays it).", "R-MIDI-1"},
+            {K::ProjectExportMidi, "project export-midi", "<file.mid>", 1, 1, {},
+             "Write the song's notes as a MIDI file: a track per instrument strip, every note clip's pattern where the "
+             "clip plays it (repeated to fill it), the song's tempo and meter.", "R-MIDI-1"},
             {K::PatternTranspose, "pattern transpose", "<pt>", 1, 1, {"semi=<n>"},
              "Move every note by --semi semitones (negative = down). Refused if a note would leave 0–127.", "R-SVC-8"},
             {K::PatternPrint, "pattern print", "<pt>", 1, 1, {},

@@ -1740,3 +1740,23 @@ once per offer (`App::askRecovery`, `app/App.cpp:303`: Recover · Open the Saved
 Autosave combo. L2 `test_autosave_and_recovery` (the clock, a removal at once, atomic, save and close drop it, a dead
 session's autosave offered, recovered, discarded, off writes nothing); UI `test_a_recovered_song_is_offered`. Mutants:
 a removal not written at once, the window not asking — both seen red.
+
+### DR-MIDI-1 MIDI files (R-MIDI-1)
+The model reads and writes Standard MIDI Files as pure functions, bytes in and out, beside the `.slp` parser
+(`model/Midi.cpp`): `parseMidi` (`:54`) reads formats 0, 1 and 2 — running status, a note-on of velocity 0 as a note-off,
+notes paired first-in first-out per channel and pitch, a note still sounding at its track's end ended there, meta names
+and tempos, system exclusive skipped — and both divisions; `midiBeats` (`:170`) turns a tick into beats (ticks over the
+division, or for SMPTE time seconds through the tempo map, 120 bpm until its first tempo); `writeMidi` (`:187`) writes
+format 1 at 960 ticks a beat — Solaris's own tick — a tempo track (name, meter, tempo) and a track per entry, offs
+before ons at one tick. The service reads and writes the files (`core/service/ServiceMidi.cpp`): `pattern import`
+(`:48`) makes a pattern per track with notes (or `--track n`'s), named after the track, whole bars long, a pitch
+started twice at one tick kept once (the longer); with `--lane` / `--instrument` the tracks are merged into ONE pattern
+and a clip of it is made by `clip add`'s own rules (`:112`) — so a track's instrument plays it, or a new strip is made.
+`pattern export` and `project export-midi` (`:125`) write a pattern, or the song as it plays (a track per instrument
+strip, each note clip's pattern at its place, repeated to fill it and cut at its end; a kit on channel 10). The
+browser lists `.mid` files (the host classes them `midi`) and a drop is ONE line (`ProjectScreen::place`,
+`app/widgets/ProjectScreen.cpp:131`): on a track `pattern import <file> --lane <ln> --at <b>`, elsewhere `--instrument
+synth`. L2 `test_midi_files` (a pattern's round trip to the tick; a hand-made file with running status, velocity-0
+offs, 96 ticks a beat, named tracks; SMPTE time through its tempo; a drop on a track merged, one undo; a new
+instrument; the song exported as it plays; refusals); UI `test_a_midi_file_dropped_on_a_track`. Mutants: velocity 0
+not an off, running status unread — both seen red.

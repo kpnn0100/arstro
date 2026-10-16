@@ -100,7 +100,7 @@ namespace solaris_ui
                 const auto slash = mPath.find_last_of('/');
                 mRows.push_back(Item{"up", baseName(mPath), slash == std::string::npos ? std::string() : mPath.substr(0, slash), ""});
                 for (const auto &e : mEntries)
-                    if (e.kind == "dir" || e.kind == "audio") mRows.push_back(Item{e.kind, e.name, e.path, ""});
+                    if (e.kind == "dir" || e.kind == "audio" || e.kind == "midi") mRows.push_back(Item{e.kind, e.name, e.path, ""}); // R-MIDI-1
             }
         }
         else if (mTab == kInstruments)
@@ -384,7 +384,7 @@ namespace solaris_ui
             else if (it.kind == "up") glyph::line(t, ib.x + 8.0, ib.y + 2.0, ib.x + 3.0, ib.y + 6.0, ic, 1.3), glyph::line(t, ib.x + 3.0, ib.y + 6.0, ib.x + 8.0, ib.y + 10.0, ic, 1.3);
             else if (it.kind == "audio") waveGlyph(t, ib, ic);
             else if (it.kind == "instrument") glyph::speaker(t, ib, ic, 1.1);
-            else if (it.kind == "pattern") notesGlyph(t, ib, ic);
+            else if (it.kind == "pattern" || it.kind == "midi") notesGlyph(t, ib, ic);
             else if (it.kind == "newmidi")
             {
                 glyph::line(t, ib.x + 6.0, ib.y + 2.0, ib.x + 6.0, ib.y + 10.0, ic, 1.3);

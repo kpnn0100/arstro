@@ -63,7 +63,8 @@ namespace sltest
         h.listDir = [](const std::string &path, std::vector<arstro::solaris::BrowserEntry> &out, std::string &err) {
             if (path.find("nowhere") != std::string::npos) { err = "no such folder"; return false; }
             out = {{"Kicks", path + "/Kicks", "dir"}, {"808 kick.wav", path + "/808 kick.wav", "audio"},
-                   {"open hat.wav", path + "/open hat.wav", "audio"}, {"bass loop 128.wav", path + "/bass loop 128.wav", "audio"}};
+                   {"open hat.wav", path + "/open hat.wav", "audio"}, {"bass loop 128.wav", path + "/bass loop 128.wav", "audio"},
+                   {"groove.mid", path + "/groove.mid", "midi"}}; // R-MIDI-1 — last, so no other row moves
             return true;
         };
         h.listDevices = [](std::vector<arstro::solaris::DeviceInfo> &out, std::string &) {
