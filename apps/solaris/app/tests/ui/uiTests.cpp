@@ -3572,6 +3572,45 @@ static void test_markers_on_the_ruler()
     pass("markers on the ruler (R-ARR-1): a flag clicked seeks, double-clicked loops its section, dragged moves it (one line, its section with it), right-clicked renames or deletes it; elsewhere adds one; a shell's move eases, a new one fades in, a deleted one fades out");
 }
 
+static void test_time_edits_from_the_ruler()
+{
+    // R-ARR-2: the ruler's menu — a bar of time opened where it was right-clicked, that bar taken out, the loop's span
+    // taken out — each ONE line; what moves eases there
+    sltest::Rig r("ui-time", 1280, 800);
+    r.cmd("project new " + r.song("Time") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    r.cmd("clip add --strip " + r.svc->model().clips[0].track + " --pattern " + r.svc->model().clips[0].pattern + " --at 8 --length 4"); // ac_2
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &menu = r.app->menu();
+    const artboard::Rect band = world(tl, artboard::Rect{tl.beatToX(5.0), 0.0, 1.0, arstro::solaris_ui::Timeline::kMarkH});
+    r.click(cx(band), cy(band), 2);
+    r.settle();
+    assert(menuItem(r, "Insert a bar here") >= 0 && menuItem(r, "Delete this bar") >= 0 && menuItem(r, "Delete the loop's time") < 0);
+    const double x8 = tl.clipRect("ac_2").x;
+    r.click(menu.itemRect(menuItem(r, "Insert a bar here")));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "time insert --at 4 --length 4") && r.svc->model().clips[1].at == 12.0);
+    const double mid = tl.clipRect("ac_2").x;
+    assert(mid > x8 + 0.5 && mid < x8 + tl.beatToX(4.0) - tl.beatToX(0.0) - 0.5); // on its way
+    r.settle();
+    r.click(cx(band), cy(band), 2);
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "Delete this bar")));
+    r.settle();
+    assert(sentLine(r, "time delete --from 4 --to 8") && r.svc->model().clips[1].at == 8.0 && std::fabs(tl.clipRect("ac_2").x - x8) < 0.01);
+    r.cmd("transport loop 8 12");
+    r.settle();
+    r.click(cx(band), cy(band), 2);
+    r.settle();
+    assert(menuItem(r, "Delete the loop's time") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Delete the loop's time")));
+    r.settle();
+    assert(sentLine(r, "time delete --from 8 --to 12") && r.svc->model().clips.size() == 1);
+    pass("time edits from the ruler (R-ARR-2): Insert a bar here, Delete this bar, Delete the loop's time — each one line; the clips eased there");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -3614,6 +3653,7 @@ int main()
     test_the_rolls_lane_draws_the_wheels();
     test_the_rolls_note_tools();
     test_markers_on_the_ruler();
+    test_time_edits_from_the_ruler();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();

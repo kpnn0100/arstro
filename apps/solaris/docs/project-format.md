@@ -264,6 +264,7 @@ clip add --strip <ch> [--pattern pt] [--lane ln] [--at b] [--length b]   ; notes
 clip move <ac> [--at b] [--lane ln] [--strip ch] | clip duplicate <ac> [--at b] | clip unique <ac> | clip delete <ac>
 pattern new [--name n] [--length b] | note add <pt> --pitch p --at b [--length b] [--vel v] | note delete <pt> --pitch p --at b
 marker add <name> --at b [--length b] [--note t] | marker rename <mk> <name> | marker move <mk> [--at b] [--length b] | marker delete <mk>
+time insert --at b --length b | time delete --from b --to b      ; the whole song, ONE edit (R-ARR-2)
 transport play | transport stop | transport seek <b|mk> | transport loop <a> <b> | transport loop <mk> | transport loop off
 render --out <f.wav> [--from b] [--to b] [--stems ch,…] [--ports] [--bits 24|32f]
 matrix print [--json] | audit | state print [--json] [--stable] | registry [--json] | api [--json|--md]

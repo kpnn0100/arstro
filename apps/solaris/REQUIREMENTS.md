@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -802,7 +802,15 @@ a process is the host's (law 12).
   `markers[].end` so no front end re-derives it. `transport seek <mk>` and `transport loop <mk>` reach them — the
   ruler's click and double-click, one line each.)
 - **R-ARR-2 Time edits across the song**: `time insert --at <b> --length <b>` and `time delete --from <b> --to <b>`
-  move every clip, automation point, marker and loop after it — ONE edit.
+  move every clip, automation point, marker and loop after it — ONE edit. (**Detailed while building it, N14 — 2026-10-16.**
+  What CROSSES an edit point is decided before anything moves. Inserting, a clip that starts before the point and
+  runs over it stays where it is and is named (there is no `clip split` yet — R-EDIT-1); a section, a looping
+  automation's span or the loop that holds the point grows. Deleting, what lies wholly inside the span goes (clips,
+  automation points, markers); a clip that repeats its material — a note clip, or an audio clip set to loop — and
+  starts before the span is shortened by the overlap, since what repeats keeps repeating; any other clip across an
+  edge is REFUSED, naming it, and nothing changes. The loop is the session's, not the song's: a time edit moves it,
+  and undo leaves it where it is. The ruler's right-click offers a bar opened or taken out there, and the loop's span
+  taken out.)
 - **R-ARR-3 Lane groups**: lanes folded into a named group (`lane group <ln>… --name`), the group collapsed or
   opened (eased); its clips moved together.
 

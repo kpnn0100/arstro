@@ -49,7 +49,9 @@
  *  MARKERS (R-ARR-1): the ruler's top band holds the song's markers — a flag with its name at its beat, a section
  *  (a marker with a length) a band to its end. A click on one → `transport seek <mk>`, a double-click → `transport
  *  loop <mk>` (its section), a drag moves it (the pointer's while held; ONE `marker move` on release), a right-click
- *  offers looping it, renaming it and deleting it; a right-click elsewhere on the ruler adds one there. Keyed by id:
+ *  offers looping it, renaming it and deleting it; a right-click elsewhere on the ruler adds one there — or opens a
+ *  bar of time there, takes that bar out, or takes the loop's span out of the whole song (`time insert|delete`,
+ *  R-ARR-2). Keyed by id:
  *  each fades in and out, and a move made elsewhere eases there.
  *
  *  Editing is command lines (`onCommand`): a click on the ruler → `transport seek <beat>` (on the grid

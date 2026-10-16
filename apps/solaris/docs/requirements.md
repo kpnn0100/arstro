@@ -137,7 +137,7 @@ mixer and renumbers the mixer 0…n−1 (`placeStrip`, `:61`; `case K::StripMove
 renumbers mixers — an order never ties. A new project is `newProject` (`model/Project.cpp:169`): Sources (`mx_1`), Buses (`mx_2`)
 holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the master (R-MIX-3).
 Guarded by `test_routing_only_goes_forward` and `test_forward_is_processing_order_and_moves_renumber`
-(`core/tests/serviceTests.cpp:2658`: a bus made on Buses goes before Main and feeds it; a same-mixer route
+(`core/tests/serviceTests.cpp:2733`: a bus made on Buses goes before Main and feeds it; a same-mixer route
 forward is taken, backward refused naming both ends; `strip move` that would point one back refused;
 `--order 0` first and renumbered; mutant checked: the old later-mixer rule refuses the new bus's
 default route). The same rule is PUBLISHED: `targetsOf` (`model/Project.cpp:852`) lists what a strip
@@ -179,7 +179,7 @@ checks a 0.5 region at pan +0.5, −6 dB to 1e-7 against the closed forms.
 
 ### DR-SVC-1 One way in, one way out (R-SVC-1, R-SVC-2, R-G-4)
 `SolarisService` (`core/service/SolarisService.h`) is the application: `dispatchText(line)` parses
-with the grammar TABLE (`commandSpecs`, `core/service/Command.cpp:26`; `parseCommand`, `:385` —
+with the grammar TABLE (`commandSpecs`, `core/service/Command.cpp:26`; `parseCommand`, `:396` —
 longest verb match, flags checked against the row) and `dispatch` (`core/service/SolarisService.cpp:120`)
 runs it; out come the `AppModel` (`core/service/AppModel.h`, refreshed after every command) and
 `Event`s whose `formatEvent` text is the log line. **Every edit is all-or-nothing**: the project is
@@ -1021,7 +1021,7 @@ the audition level, sample for sample; it ends itself, said.
 **The levels.** The lanes' grid has seven: a bar (the song's meter), a beat, and 1/2, 1/4, 1/8, 1/16
 and 1/32 of a beat (`Timeline::gridSpan`, `app/widgets/Timeline.cpp:59`). How much of a level is drawn
 is a smoothstep of its line spacing at the EASED zoom — nothing closer than 6 px, all of it from 16 px
-apart (`kGridHidePx`, `kGridFullPx`, `app/widgets/Timeline.h:88`; `room`, `Timeline.cpp:30`;
+apart (`kGridHidePx`, `kGridFullPx`, `app/widgets/Timeline.h:90`; `room`, `Timeline.cpp:30`;
 `gridAlpha`, `:64`) — recomputed every frame, so a Ctrl+wheel zoom (eased 220 ms) fades a level in or
 out with it and never pops one. A line is drawn once, by the coarsest level it belongs to: bars
 strongest (white 7 %), beats next (4 %), the divisions faintest (2.2 %); every fourth bar is always
@@ -1247,7 +1247,7 @@ edits lost between calls, comment lines reprinting ids). The guide is `docs/AGEN
 - **Scripts that say where.** A refusal prints `refused: line N: …` — the script's own line number, or
   the chained command's (`run`, `:143`); `--keep-going` runs past refusals and still exits 3 (`:212`).
   `parseCommand` drops a `#` that starts a word outside quotes (`withoutComment`,
-  `core/service/Command.cpp:391`) — `F#3` stays a pitch; a comment or blank line clears the output
+  `core/service/Command.cpp:402`) — `F#3` stays a pitch; a comment or blank line clears the output
   (`core/service/SolarisService.cpp:59`), so nothing is printed twice.
 - **Everything made is said.** `dispatch` diffs the song's ids around an edit (`:236`): the first line
   stays the command's own id, then `made: strip=… device=… pattern=… lane=… clip=…` lists the rest by
@@ -1284,7 +1284,7 @@ edits lost between calls, comment lines reprinting ids). The guide is `docs/AGEN
   rounding of a bound is that bound, so a dragged point at the top edge still lands).
 - The API document gains the Notation section and each kit's pads (`core/service/ApiDoc.cpp:145`, `:81`).
 
-Guarded by `solaris_service` (`core/tests/serviceTests.cpp:1434` … `:2519`: the notation tables; comment
+Guarded by `solaris_service` (`core/tests/serviceTests.cpp:1434` … `:2594`: the notation tables; comment
 lines print nothing; every made id printed and announced; notes add by name, a bad token, an unknown pad,
 chords, one undo step; steps and pattern edits; the lane rule and `--count`; reading back, out-of-range
 refusals) and `solaris_cli_session` (`tests/cli_session.cmake`: line numbers, `--keep-going`, exit 4,
@@ -1487,7 +1487,7 @@ puts Main and a cue sent straight to Phones at 96 together; a key from a limited
 audio 96 to meet it, and a limiter before the keyed compressor delays the key 96 — the keyed strip's output
 exactly the unlimited one 96 later (and it does duck). Mutants: every delay sized 0 → the twins fail;
 no key delay in the rack → the key check fails. Service (`test_latency_is_compensated_and_a_render_starts_on_the_beat`,
-`core/tests/serviceTests.cpp:2583`): two strips of one tone, a limiter on one — each stem from beat 0 and
+`core/tests/serviceTests.cpp:2658`): two strips of one tone, a limiter on one — each stem from beat 0 and
 equal, the mix exactly their sum and equal to the render with no limiter; a master limiter's render, port
 and stems byte-identical to none (under its ceiling it is exactly its delay); `--to` exact; live, the
 device's frames are the render 96 later; a lookahead set to 5 ms WHILE playing keeps the twins met — the
@@ -1503,7 +1503,7 @@ mix is at lag 0.
 `core/service/ServiceEdit.cpp:520`) puts the lane at row `index` (0 = the top) and renumbers every lane
 0…n−1 in the new order — one edit, one undo step; an index past the last row or an unknown lane is
 refused. The lanes draw it through Interstellar's `AnimatedRows`, keyed by lane, so the rows slide
-(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:2694`: to the top and back,
+(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:2769`: to the top and back,
 renumbered, refused out of range, undone) and, drawn, by `test_instrument_drop_and_clip_drag`
 (`app/tests/ui/uiTests.cpp:492`: a lane moved from a shell slides to the top with its clip, caught mid-tween).
 
@@ -1580,7 +1580,7 @@ instrument dropped from the browser onto a track asks for a lane of its own (`--
 
 Guarded by `solaris_model` (`model/tests/modelTests.cpp:369`: the four refusals; `tracks` read, refused
 other than `on`, written in the canonical text), `solaris_service` (`test_instrument_tracks`,
-`core/tests/serviceTests.cpp:1694`; `test_a_song_from_before_tracks_adopts_them`, `:2479`) and
+`core/tests/serviceTests.cpp:1694`; `test_a_song_from_before_tracks_adopts_them`, `:2554`) and
 `solaris_app_ui` (`test_a_lane_is_an_instruments_track`, `app/tests/ui/uiTests.cpp:236`: a rename
 followed, a clip dragged onto another track re-routed with its colour caught mid-ease, Track of ▸ and
 Plain Lane caught mid-fade, a browser drop onto a track → `--lane new`). Mutants seen red, then
@@ -2022,15 +2022,15 @@ a `length` it is a SECTION; without, a point whose section runs to the next mark
 (`Project::sectionEnd`, `model/Project.cpp:66`) — published as `markers[].end` beside `at`, `length`, `name`, `note`, by
 time (`core/service/ServiceModel.cpp:307`). `marker add <name> --at [--length] [--note]` (prints its id), `marker rename
 <mk> <name> [--note]`, `marker move <mk> [--at] [--length]`, `marker delete <mk>` — edits like any, kept sorted by time
-(`core/service/ServiceArrange.cpp:40`); `ls` lists them with their sections. `transport seek <mk>` goes to its beat and
+(`core/service/ServiceArrange.cpp:171`); `ls` lists them with their sections. `transport seek <mk>` goes to its beat and
 `transport loop <mk>` loops its section (`markerSpan`, `ServiceArrange.cpp:31`; `core/service/ServiceTransport.cpp:475`,
 `:496`), an empty section — the last point at or past the song's end — refused. L2
 `test_markers_name_places_and_sections`; model `test_markers_round_trip_and_name_their_sections`. Mutants: a point's
 section ignoring the next marker, a loop taking only its length, markers outside the id space — each red. **The ruler.**
-The ruler grows a band at its top for them (`Timeline::kMarkH` 13 of `kRulerH` 35.75, `app/widgets/Timeline.h:85`; the
+The ruler grows a band at its top for them (`Timeline::kMarkH` 13 of `kRulerH` 35.75, `app/widgets/Timeline.h:87`; the
 bars' labels and the brace's grip — the lower half of the bars' band — below it): a flag per marker at its beat, its
 name MEASURED (the width a press hits is the one last drawn), a section a band to its `end`, a hairline down through
-the bars (`paintMarkers`, `app/widgets/TimelineMarkers.cpp:206`). Keyed by id: a marker fades in and out, a move made
+the bars (`paintMarkers`, `app/widgets/TimelineMarkers.cpp:215`). Keyed by id: a marker fades in and out, a move made
 elsewhere eases there, a song opened places them (`advanceMarkers`, `:87`). On a flag (`markerUnder`, `:65` — the last
 drawn on top), each ONE line (`markerGesture`, `:121`): a click → `transport seek <mk>`; a double-click → `transport
 loop <mk>`; a drag moves it on the grid you see, its section with it, the pointer's while held, and `marker move <mk>
@@ -2039,3 +2039,22 @@ loop <mk>`; a drag moves it on the grid you see, its section with it, the pointe
 "Marker <n>" --at <b>`). Elsewhere on the band the ruler is the ruler (a seek, a scrub). UI `test_markers_on_the_ruler`;
 shots `markers`, `markers-arriving`. Mutants: a shell's move snapping, a dropped flag not where it was let go, a
 double-click seeking, markers bound before a song change clears them (a bug found while building it) — each red.
+
+### DR-ARR-2 Time edits across the song (R-ARR-2)
+`time insert --at <b> --length <b>` and `time delete --from <b> --to <b>` — ONE edit each across the whole song
+(`SolarisService::timeCommand`, `core/service/ServiceArrange.cpp:43`). What crosses an edge and what lies inside are
+decided before anything moves (`:60`). **Insert:** every clip starting at or after `--at` moves `--length` later; one
+starting before it and running over it stays and is named in the output (no `clip split` yet, R-EDIT-1); a
+non-looping automation's points at or after it move, a looping automation's span (`at`) moves or, holding the point,
+grows (`:100`); markers at or after it move, a section holding it grows (`:127`). **Delete:** clips, automation points
+and markers wholly inside the span go; what follows moves earlier by its length; a note clip, or an audio clip set to
+loop, that starts before `--from` and runs into the span is shortened by the overlap (what repeats keeps repeating);
+any other clip across `--from` or `--to` is REFUSED, naming it — nothing changes; a section or a looping span across an
+edge shrinks, one whose head is in the span starts at `--from`. **The loop** (the session's, `:147`) moves, grows or
+shrinks the same, ends when taken out entirely, and stays where it is on undo. The output says what moved, what went,
+and what crossed. **The ruler's menu** (right-click away from a flag, `app/widgets/TimelineMarkers.cpp:197`): Insert a
+bar here (`time insert --at <the bar's start> --length <a bar>`), Delete this bar, and — with a loop — Delete the loop's
+time. L2 `test_time_insert_and_delete_move_the_whole_song`; UI `test_time_edits_from_the_ruler` (a clip moved eases
+there); shot `ruler-menu`. Mutants: the inside clips kept, insert leaving automation points, a plain audio clip let
+across an edge, the ruler inserting at the pointer and not the bar — each red. Found while building it: a clip moved
+INTO the span by the shift was then taken as inside and deleted — the inside is decided first now.

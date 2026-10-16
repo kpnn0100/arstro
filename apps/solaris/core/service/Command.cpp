@@ -200,6 +200,17 @@ namespace solaris
             {K::MarkerMove, "marker move", "<mk>", 1, 1, {"at=<beats>", "length=<beats>"},
              "Move a marker (--at) and/or set its section's --length (0: a point again).", "R-ARR-1"},
             {K::MarkerDelete, "marker delete", "<mk>", 1, 1, {}, "Delete a marker.", "R-ARR-1"},
+            {K::TimeInsert, "time insert", "", 0, 0, {"at=<beats>", "length=<beats>"},
+             "Open a gap in the whole song (R-ARR-2), ONE edit: every clip, automation point, marker and the loop at or after --at "
+             "moves --length beats later; a section, a looping automation's span or the loop that holds --at grows by it. A clip "
+             "that starts before --at and crosses it stays (it is named — split it to open the gap through it, R-EDIT-1). The "
+             "loop is the session's: undo leaves it.", "R-ARR-2", false, {"at", "length"}},
+            {K::TimeDelete, "time delete", "", 0, 0, {"from=<beats>", "to=<beats>"},
+             "Take a span out of the whole song (R-ARR-2), ONE edit: what lies wholly inside it goes (clips, automation points, "
+             "markers), what follows moves earlier by its length; a section, a looping span or the loop that crosses it shrinks. "
+             "A clip that repeats its material (a note clip, an audio clip set to loop) and starts before --from is shortened by "
+             "the overlap; any other clip crossing --from or --to is refused, naming it — split it first (R-EDIT-1) or move it.",
+             "R-ARR-2", false, {"from", "to"}},
             {K::PatternScale, "pattern scale", "<pt> <key> <scale> | off", 2, 3, {},
              "Lock a pattern to a scale (R-ROLL-11) — `pattern scale pt_1 D dorian`: a note placed (`note add`, its --chord, "
              "`notes add`) lands on the scale's nearest pitch, a tie going down (so a major chord stamped on any degree is "

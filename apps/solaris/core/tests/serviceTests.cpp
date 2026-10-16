@@ -2275,6 +2275,81 @@ static void test_markers_name_places_and_sections()
     pass("markers (R-ARR-1): added, by time, a section by length or to the next marker or the song's end; seek and loop by marker; moved, renamed, deleted, undone; .slp and ls; refusals name the way");
 }
 
+static void test_time_insert_and_delete_move_the_whole_song()
+{
+    // R-ARR-2: ONE edit across the song — clips, automation points, markers and the loop; a clip across an edge is said
+    // (insert) or, unless what it plays repeats, refused (delete), before anything moves
+    Run r;
+    r.ok("project new " + freshSong("time") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");          // ac_1 0 … 4 (ch_2, pt_1)
+    r.ok("clip add --strip ch_2 --pattern pt_1 --at 8 --length 4");  // ac_2 8 … 12
+    r.ok("clip add --strip ch_2 --pattern pt_1 --at 2 --length 8");  // ac_3 2 … 10: across 4 and 8
+    r.ok("auto create ch_2.gain");                                   // au_1
+    for (const char *pt : {"0 --value -6", "6 --value 0", "12 --value -3"}) r.ok(std::string("auto point add au_1 --at ") + pt);
+    r.ok("marker add A --at 0");
+    r.ok("marker add B --at 6 --length 4");
+    r.ok("marker add C --at 12");
+    r.ok("transport loop 5 9");
+    auto clip = [&](const std::string &id) { return r.clip(id); };
+    auto points = [&] {
+        std::vector<double> v;
+        for (const auto &x : r.svc.model().automations[0].points) v.push_back(x.at);
+        return v;
+    };
+    auto marker = [&](const std::string &id) -> const MarkerModel & {
+        for (const auto &m : r.svc.model().markers)
+            if (m.id == id) return m;
+        assert(false);
+        return r.svc.model().markers[0];
+    };
+    const std::string before = r.text();
+    const std::vector<double> was = points(); // `auto create` seeds its own points too
+    auto shifted = [&](double from, double by, double cutTo) { // what a time edit should make of them
+        std::vector<double> v;
+        for (double x : was)
+        {
+            if (x >= from && x < cutTo) continue;
+            v.push_back(x >= from ? x + by : x);
+        }
+        return v;
+    };
+    // insert a bar at 4: what is at or after it moves; a section, the loop that holds it grows; ac_3 crosses it — said
+    const std::string opened = r.ok("time insert --at 4 --length 4");
+    assert(contains(opened, "opened 4.0 beats at 4.0") && contains(opened, "ac_3 crosses beat 4.0 — it stays"));
+    assert(clip("ac_1")->at == 0.0 && clip("ac_2")->at == 12.0 && clip("ac_3")->at == 2.0 && clip("ac_3")->length == 8.0);
+    assert(points() == shifted(4.0, 4.0, 4.0) && points()[1] == 10.0 && points()[2] == 16.0);
+    assert(marker("mk_1").at == 0.0 && marker("mk_2").at == 10.0 && marker("mk_2").length == 4.0 && marker("mk_3").at == 16.0);
+    assert(r.svc.model().transport.loopFrom == 9.0 && r.svc.model().transport.loopTo == 13.0);
+    r.ok("undo");                                                    // ONE step back — the loop is the session's and stays
+    assert(r.text() == before && r.svc.model().transport.loopFrom == 9.0);
+    r.ok("transport loop 5 9");
+    // delete 4 … 8: a plain audio clip across an edge is refused, naming it, and nothing moves
+    const std::string audio = firstLine(r.ok("clip add --src kick.wav --at 3.5")); // half a second: 3.5 … 4.5, not looping
+    const std::string refused = r.no("time delete --from 4 --to 8");
+    assert(contains(refused, audio + " crosses an edge of 4.0 … 8.0") && contains(refused, "nothing changed") && clip("ac_2")->at == 8.0);
+    r.ok("clip delete " + audio);
+    const std::string inside = firstLine(r.ok("clip add --strip ch_2 --pattern pt_1 --at 5 --length 2")); // wholly inside: it goes
+    const std::string took = r.ok("time delete --from 4 --to 8");
+    assert(contains(took, "took out 4.0 beats at 4.0") && contains(took, "1 clip gone"));
+    assert(!clip(inside) && clip("ac_1")->at == 0.0 && clip("ac_2")->at == 4.0);
+    assert(clip("ac_3")->at == 2.0 && clip("ac_3")->length == 4.0);  // a note clip across --from: shortened by the overlap
+    const std::vector<double> after = points(), want = [&] { // the point inside went; the ones after moved
+        std::vector<double> v;
+        for (double x : was)
+            if (x < 4.0) v.push_back(x);
+            else if (x >= 8.0) v.push_back(x - 4.0);
+        return v;
+    }();
+    assert(after == want && std::find(after.begin(), after.end(), 6.0) == after.end() && std::find(after.begin(), after.end(), 8.0) != after.end());
+    assert(marker("mk_2").at == 4.0 && marker("mk_2").length == 2.0 && marker("mk_3").at == 8.0); // B's head was in the span
+    assert(r.svc.model().transport.loopFrom == 4.0 && r.svc.model().transport.loopTo == 5.0);
+    // refusals name the way
+    assert(contains(r.no("time insert --at 4"), "--length"));
+    assert(contains(r.no("time insert --at 4 --length 0"), "more than 0"));
+    assert(contains(r.no("time delete --from 8 --to 4"), "--to must be after --from"));
+    pass("time edits (R-ARR-2): insert moves what is after and grows what holds it, a crossing clip said; delete takes out what is inside and moves what follows, a looping clip shortened, a plain one across an edge refused before anything moves; ONE undo; the loop the session's");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -3525,6 +3600,7 @@ int main()
     test_expression_lanes_go_through_midi_files();
     test_the_keyboards_wheels_play_and_record();
     test_markers_name_places_and_sections();
+    test_time_insert_and_delete_move_the_whole_song();
     test_scale_lock_places_and_moves_notes_on_the_scale();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();

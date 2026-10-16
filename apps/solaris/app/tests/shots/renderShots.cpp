@@ -628,6 +628,17 @@ namespace
                  r.frame();
                  r.frame();
              }},
+            {"ruler-menu",   // R-ARR-1/2: the ruler right-clicked — a marker there, a bar opened or taken out, the loop's time
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("marker add Intro --at 0");
+                 r.cmd("transport loop 8 12");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect band = world(tl, artboard::Rect{tl.beatToX(5.0), 0.0, 1.0, arstro::solaris_ui::Timeline::kMarkH});
+                 r.click(band.x, band.y + band.h * 0.5, 2);
+                 r.settle();
+             }},
             {"loop-region",   // R-EDM-7: the brace on the ruler, the region tinted on the lanes
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

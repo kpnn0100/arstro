@@ -572,6 +572,28 @@
       "requirement": "R-ARR-1"
     },
     {
+      "verb": "time insert",
+      "usage": "time insert --at <beats> --length <beats>",
+      "args": "",
+      "flags": [
+        "at=<beats>",
+        "length=<beats>"
+      ],
+      "summary": "Open a gap in the whole song (R-ARR-2), ONE edit: every clip, automation point, marker and the loop at or after --at moves --length beats later; a section, a looping automation's span or the loop that holds --at grows by it. A clip that starts before --at and crosses it stays (it is named — split it to open the gap through it, R-EDIT-1). The loop is the session's: undo leaves it.",
+      "requirement": "R-ARR-2"
+    },
+    {
+      "verb": "time delete",
+      "usage": "time delete --from <beats> --to <beats>",
+      "args": "",
+      "flags": [
+        "from=<beats>",
+        "to=<beats>"
+      ],
+      "summary": "Take a span out of the whole song (R-ARR-2), ONE edit: what lies wholly inside it goes (clips, automation points, markers), what follows moves earlier by its length; a section, a looping span or the loop that crosses it shrinks. A clip that repeats its material (a note clip, an audio clip set to loop) and starts before --from is shortened by the overlap; any other clip crossing --from or --to is refused, naming it — split it first (R-EDIT-1) or move it.",
+      "requirement": "R-ARR-2"
+    },
+    {
       "verb": "pattern scale",
       "usage": "pattern scale <pt> <key> <scale> | off",
       "args": "<pt> <key> <scale> | off",

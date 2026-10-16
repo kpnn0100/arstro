@@ -1,7 +1,10 @@
 // SolarisService — the song's arrangement (R-ARR): markers — named places, a section each (R-ARR-1). Interstellar's
 // marker (id, name, at, note) in the song's beats, with a length making it a section; `transport seek|loop <mk>`
-// reach them. Every edit here runs inside `dispatch`'s all-or-nothing.
+// reach them. Time opened and taken out across the whole song (R-ARR-2). Every edit here runs inside `dispatch`'s
+// all-or-nothing — and a time edit decides every refusal before it moves anything.
+#include "Compile.h"
 #include "Format.h"
+#include "Player.h"
 #include "SolarisService.h"
 #include <algorithm>
 #include <cmath>
@@ -37,9 +40,138 @@ namespace solaris
         return true;
     }
 
+    bool SolarisService::timeCommand(const Command &c, std::string &err)
+    {
+        // R-ARR-2: the whole song at once — clips, automation points (a looping automation's span), markers, the loop
+        Project &p = mProject;
+        const double eps = 0.5 / kPpq;
+        auto num = [&](const char *name, double &out) {
+            if (!parseNumber(c.flag(name), out) || !std::isfinite(out) || out < 0) { err = std::string("--") + name + " is a number of beats ≥ 0, got `" + c.flag(name) + "`"; return false; }
+            out = toTick(out);
+            return true;
+        };
+        const bool insert = c.kind == K::TimeInsert;
+        double a = 0, b = 0;
+        if (insert ? (!num("at", a) || !num("length", b)) : (!num("from", a) || !num("to", b))) return false;
+        if (insert ? !(b > 0) : !(b > a)) { err = insert ? "--length must be more than 0 beats" : "--to must be after --from"; return false; }
+        const double span = insert ? b : b - a;
+        size_t clips = 0, gone = 0, autos = 0, marks = 0;
+        std::string notes;
+        // what crosses an edge and what lies inside: decided before anything moves
+        std::vector<std::string> crossing, shortened, inside;
+        for (const auto &cl : p.clips)
+        {
+            const double end = cl.at + clipLengthBeats(p, cl);
+            if (insert) { if (cl.at < a - eps && end > a + eps) crossing.push_back(cl.id); continue; }
+            if (cl.at >= a - eps && cl.at < b - eps && end <= b + eps) { inside.push_back(cl.id); continue; }
+            const bool crossesFrom = cl.at < a - eps && end > a + eps, headInside = cl.at >= a - eps && cl.at < b - eps && end > b + eps;
+            if (crossesFrom && (!cl.isAudio() || cl.loop)) shortened.push_back(cl.id); // what repeats keeps repeating
+            else if (crossesFrom || headInside) crossing.push_back(cl.id);
+        }
+        if (!insert && !crossing.empty())
+        {
+            err = "";
+            for (const auto &id : crossing) err += (err.empty() ? "" : ", ") + id;
+            err += (crossing.size() == 1 ? " crosses" : " cross") + std::string(" an edge of ") + canonicalBeats(a) + " … " + canonicalBeats(b) +
+                   " — split it there first (R-EDIT-1) or move it; nothing changed";
+            return false;
+        }
+        // clips
+        for (auto &cl : p.clips)
+        {
+            const double end = cl.at + clipLengthBeats(p, cl);
+            if (insert) { if (cl.at >= a - eps) { cl.at = toTick(cl.at + span); ++clips; } continue; }
+            if (std::find(inside.begin(), inside.end(), cl.id) != inside.end()) continue;
+            if (std::find(shortened.begin(), shortened.end(), cl.id) != shortened.end())
+            {
+                const double overlap = std::min(end, b) - a;
+                cl.length = toTick(clipLengthBeats(p, cl) - overlap);
+                ++clips;
+            }
+            else if (cl.at >= b - eps) { cl.at = toTick(cl.at - span); ++clips; }
+        }
+        if (!insert)
+        {
+            const size_t before = p.clips.size();
+            p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [&](const Clip &cl) { return std::find(inside.begin(), inside.end(), cl.id) != inside.end(); }),
+                          p.clips.end());
+            gone = before - p.clips.size();
+        }
+        // automations: a curve's points in song beats; a looping one's span (its points are its cycle's)
+        for (auto &au : p.automations)
+        {
+            bool moved = false;
+            if (au.loop > 0)
+            {
+                const double s = au.at, e = au.length > 0 ? au.at + au.length : 1e300;
+                if (insert)
+                {
+                    if (s >= a - eps) { au.at = toTick(s + span); moved = true; }
+                    else if (au.length > 0 && e > a + eps) { au.length = toTick(au.length + span); moved = true; }
+                }
+                else if (s >= b - eps) { au.at = toTick(s - span); moved = true; }
+                else if (s >= a - eps) { au.at = a; if (au.length > 0) au.length = toTick(std::max(1.0 / kPpq, e - b)); moved = true; }
+                else if (au.length > 0 && e > a + eps) { au.length = toTick(au.length - (std::min(e, b) - a)); moved = true; }
+            }
+            else
+            {
+                const size_t n = au.points.size();
+                if (!insert)
+                    au.points.erase(std::remove_if(au.points.begin(), au.points.end(), [&](const AutoPoint &x) { return x.at >= a - eps && x.at < b - eps; }), au.points.end());
+                moved |= n != au.points.size();
+                for (auto &x : au.points)
+                    if (x.at >= (insert ? a : b) - eps) { x.at = toTick(x.at + (insert ? span : -span)); moved = true; }
+            }
+            autos += moved ? 1 : 0;
+        }
+        // markers: a place after moves; one inside a deleted span goes; a section across the edit grows or shrinks
+        {
+            const size_t n = p.markers.size();
+            if (!insert)
+                p.markers.erase(std::remove_if(p.markers.begin(), p.markers.end(), [&](const Marker &m) { return m.at >= a - eps && m.at < b - eps && (m.length <= 0 || m.at + m.length <= b + eps); }),
+                                p.markers.end());
+            marks += n - p.markers.size();
+            for (auto &m : p.markers)
+            {
+                const double e = m.at + m.length;
+                if (insert)
+                {
+                    if (m.at >= a - eps) { m.at = toTick(m.at + span); ++marks; }
+                    else if (m.length > 0 && e > a + eps) { m.length = toTick(m.length + span); ++marks; }
+                }
+                else if (m.at >= b - eps) { m.at = toTick(m.at - span); ++marks; }
+                else if (m.at >= a - eps) { m.at = a; m.length = toTick(e - b); ++marks; }          // a section's head in the span
+                else if (m.length > 0 && e > a + eps) { m.length = toTick(m.length - (std::min(e, b) - a)); ++marks; }
+            }
+        }
+        // the loop (the session's): moved, grown or shrunk the same; a loop taken out entirely ends
+        if (mLoopTo > mLoopFrom)
+        {
+            auto at = [&](double x) { return insert ? (x >= a - eps ? x + span : x) : (x >= b - eps ? x - span : x > a ? a : x); };
+            const double f = at(mLoopFrom), t = insert && mLoopTo > a + eps && mLoopFrom < a - eps ? mLoopTo + span : at(mLoopTo);
+            mLoopFrom = toTick(f);
+            mLoopTo = toTick(t);
+            if (!(mLoopTo > mLoopFrom + eps)) mLoopFrom = mLoopTo = 0;
+            if (mPlayer)
+            {
+                const double spb = 60.0 / std::max(1.0, p.header.bpm) * p.header.sampleRate;
+                mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(mLoopFrom * spb) : 0, mLoopTo > mLoopFrom ? (long long)std::llround(mLoopTo * spb) : 0);
+            }
+        }
+        sortMarkers(p);
+        changed(insert ? "time.inserted" : "time.deleted", "song");
+        auto count = [](size_t k, const char *one, const char *many) { return std::to_string(k) + " " + (k == 1 ? one : many); };
+        mOutput = std::string(insert ? "opened " : "took out ") + canonicalBeats(span) + " beats at " + canonicalBeats(a) + ": " + count(clips, "clip", "clips") +
+                  (insert ? " moved" : " moved or shortened") + (gone ? ", " + count(gone, "clip", "clips") + " gone" : std::string()) + ", " +
+                  count(autos, "automation", "automations") + ", " + count(marks, "marker", "markers") + "\n";
+        for (const auto &id : crossing) mOutput += id + " crosses beat " + canonicalBeats(a) + " — it stays (split it to open the gap through it, R-EDIT-1)\n";
+        return true;
+    }
+
     bool SolarisService::arrangeCommand(const Command &c, std::string &err)
     {
         Project &p = mProject;
+        if (c.kind == K::TimeInsert || c.kind == K::TimeDelete) return timeCommand(c, err);
         if (c.kind == K::MarkerAdd)
         {
             Marker m;

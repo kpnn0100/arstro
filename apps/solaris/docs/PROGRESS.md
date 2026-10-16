@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N14 — time edits across the song: `time insert` / `time delete`** (R-ARR-2), then N15… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
+**► N15 — lane groups** (R-ARR-3), then N16… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
 
 ---
 
@@ -457,7 +457,9 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       Part 1 (2026-10-16): Interstellar's marker in beats — `#amarker` (`length` a section), `marker add|rename|move|delete`,
       `markers[]` with each section's `end`, `transport seek|loop <mk>`. Part 2: the ruler's top band (`kRulerH` 35.75) —
       flags, sections, click seeks, double-click loops, drag moves, right-click renames/deletes/adds; eased, keyed.
-- [ ] **N14** Time insert / delete across the song (R-ARR-2).
+- [x] **N14** Time insert / delete across the song (R-ARR-2).
+      2026-10-16: `time insert|delete` — clips, automation points (a looping span), markers, the loop; what crosses an edge
+      decided first (insert: stays, named; delete: a repeating clip shortened, any other refused); the ruler's menu.
 - [ ] **N15** Lane groups (R-ARR-3).
 **Phase 3 — work with audio**
 - [ ] **N16** Record audio: arm, monitor, record, punch, loop takes (R-REC-1).

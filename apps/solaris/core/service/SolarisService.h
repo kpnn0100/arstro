@@ -107,7 +107,8 @@ namespace solaris
         bool autoCommand(const Command &c, std::string &err);   // ServiceAuto.cpp
         // R-SVC-8 (ServiceCompose.cpp): notes in bulk and by name, steps, pattern edits; the read-back views
         bool composeCommand(const Command &c, std::string &err);
-        bool arrangeCommand(const Command &c, std::string &err); // markers (R-ARR-1)
+        bool arrangeCommand(const Command &c, std::string &err); // markers (R-ARR-1), time insert / delete (R-ARR-2)
+        bool timeCommand(const Command &c, std::string &err);    // R-ARR-2
         /** A marker's id → its beat, and its section's end — `transport seek|loop <mk>`. False: not a marker. */
         bool markerSpan(const std::string &id, double &from, double &to) const;
         bool readCommand(const Command &c, std::string &err);
