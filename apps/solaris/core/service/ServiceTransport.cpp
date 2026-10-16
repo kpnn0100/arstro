@@ -78,6 +78,33 @@ namespace solaris
         return probe->latency();
     }
 
+    std::unique_ptr<IAudioOut> SolarisService::openOutput(int rate, int block, std::string &driver, std::string &err)
+    {
+        // R-DEV-9: the setting's driver — PipeWire not there, or linking nowhere, plays through PulseAudio (the fallback),
+        // said ONCE so the user knows why the buffer is not what they asked; `settings set driver=pipewire` tries again
+        driver.clear();
+        if (mSettings.driver == "pipewire" && !mPipewireDown)
+        {
+            std::string why = "this build has no PipeWire driver";
+            if (mHost.audioOutFor)
+                if (auto out = mHost.audioOutFor("pipewire"))
+                {
+                    why.clear();
+                    if (out->open(mSettings.output, rate, 2, block, why)) { driver = "pipewire"; return out; }
+                }
+            emit(Event(Event::Kind::Info).with("text", (why.empty() ? std::string("PipeWire did not open") : why) + " — playing through PulseAudio"));
+            mPipewireDown = true; // not tried again (a preview would wait 2 s each time) until the driver is set again
+        }
+        auto out = mHost.audioOut ? mHost.audioOut() : nullptr;
+        if (!out || !out->open(mSettings.output, rate, 2, block, err))
+        {
+            if (err.empty()) err = "cannot open the output device";
+            return nullptr;
+        }
+        driver = "pulse";
+        return out;
+    }
+
     void SolarisService::pump()
     {
         // R-SAFE-1: an unsaved song is written beside itself on the clock, whatever else is happening
@@ -109,6 +136,7 @@ namespace solaris
             t.masterRms[c] = mPlayer->rms(2 * Player::kMaxStrips + c);
             if (fresh) t.masterHold[c] = mPlayer->hold(2 * Player::kMaxStrips + c);
         }
+        t.xruns = mPlayer->xruns(); // R-DEV-5: what the device says (−1: it cannot count them)
         if (fresh && mPlayer->takeClip(Player::kMaxStrips)) mMasterClip = true; // a latch: only `meters clear` puts it out
         t.masterClip = mMasterClip;
         for (size_t i = 0; fresh && i < mLiveStrips.size() && i < (size_t)Player::kMaxStrips; ++i)
@@ -162,12 +190,9 @@ namespace solaris
         if (!fs::path(path).is_absolute() && !mPath.empty() && fs::exists(resolvePath(path))) path = resolvePath(path);
         auto pcm = pcmFor(path);
         if (!pcm) { err = mHost.decodeAudio ? "cannot read " + a + " as audio" : "this build has no audio decoder"; return false; }
-        auto out = mHost.audioOut ? mHost.audioOut() : nullptr;
-        if (!out || !out->open(mSettings.output, mPcmRate, 2, mSettings.bufferSize, err))
-        {
-            if (err.empty()) err = "cannot open the output device";
-            return false;
-        }
+        std::string driver;
+        auto out = openOutput(mPcmRate, mSettings.bufferSize, driver, err);
+        if (!out) return false;
         if (!mAudition) mAudition = std::make_unique<Auditioner>();
         mAudition->start(std::move(out), pcm, path, engine::dbToLinear(mSettings.auditionLevel), mSettings.bufferSize);
         mModel.audition = AuditionModel{path, true, 0.0};
@@ -254,12 +279,9 @@ namespace solaris
         mPreview->hear(std::move(voice));
         if (!mPreview->running())
         {
-            auto out = mHost.audioOut();
-            if (!out || !out->open(mSettings.output, mProject.header.sampleRate, 2, block, err))
-            {
-                if (err.empty()) err = "cannot open the output device";
-                return false;
-            }
+            std::string driver;
+            auto out = openOutput(mProject.header.sampleRate, block, driver, err);
+            if (!out) return false;
             mPreview->start(std::move(out), block);
         }
         emit(Event(Event::Kind::NotePreviewed).with("strip", s->id).with("pitch", std::to_string(pitch)));
@@ -339,12 +361,10 @@ namespace solaris
                     if (p.first == ports[i].name) channel = std::atoi(p.second.substr(p.second.rfind(':') + 1).c_str());
                 routes.push_back(Player::Route{(int)i, channel});
             }
-            auto out = mHost.audioOut();
-            if (!out || !out->open(mSettings.output, mProject.header.sampleRate, 2, mSettings.bufferSize, err))
-            {
-                if (err.empty()) err = "cannot open the output device";
-                return false;
-            }
+            std::string driver;
+            auto out = openOutput(mProject.header.sampleRate, mSettings.bufferSize, driver, err);
+            if (!out) return false;
+            mModel.transport.driver = driver; // R-DEV-9: what it plays through
             mPlayer = std::make_unique<Player>();
             mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(mLoopFrom * spb) : 0,
                              mLoopTo > mLoopFrom ? (long long)std::llround(mLoopTo * spb) : 0);

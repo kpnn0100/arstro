@@ -384,6 +384,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.reducedMotion` | bool | the UI's tweens collapse (with the OS's own setting) |
 | `settings.showIds` | bool | every object's id drawn beside its name (R-UI-11) |
 | `settings.autosave` | int | seconds between autosaves of an unsaved song; 0 = off (R-SAFE-1) |
+| `settings.driver` | string | pulse \| pipewire: how the clock device is reached (R-DEV-9) |
 | `settings.keys` | object[] | every keyboard action (R-SET-4), in the sheet's order — a pressed combo is looked up here |
 | `settings.keys[].id` | string | transport.play … — set with `settings set key.<id>=<combos>` |
 | `settings.keys[].area` | string | Transport \| Song \| Lanes \| Piano roll (the first three are one keyboard) |
@@ -409,6 +410,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.masterRms` | number[] | the master's RMS over 300 ms, L/R (R-METER-2) *(not in `--stable`)* |
 | `transport.masterHold` | number[] | the master's held peak, L/R *(not in `--stable`)* |
 | `transport.masterClip` | bool | the master reached full scale since `meters clear` *(not in `--stable`)* |
+| `transport.driver` | string | what the clock device plays through now: pulse \| pipewire ('' stopped) — R-DEV-9 *(not in `--stable`)* |
+| `transport.xruns` | int | underruns since play (−1: this driver cannot count them) — R-DEV-5 *(not in `--stable`)* |
 | `loudness` | object | the master as measured while playing, kept after a stop (R-METER-1, ITU-R BS.1770-4) *(not in `--stable`)* |
 | `loudness.momentary` | number | LUFS over the last 400 ms; −144 = nothing measured *(not in `--stable`)* |
 | `loudness.shortTerm` | number | LUFS over the last 3 s *(not in `--stable`)* |

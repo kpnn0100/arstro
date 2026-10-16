@@ -24,6 +24,9 @@
 #include "SolarisService.h"
 #ifdef SOLARIS_HAVE_PULSE
 #include "AudioOutPulse.h"
+#ifdef SOLARIS_HAVE_PIPEWIRE
+#include "AudioOutPipewire.h"
+#endif
 #endif
 #include "../../core/Artboard/src/adapter/native/CairoTarget.h"
 #include <gtk/gtk.h>
@@ -50,6 +53,9 @@ namespace
         h.listDevices = solaris_host::listDevices;
 #ifdef SOLARIS_HAVE_PULSE
         h.audioOut = [] { return std::unique_ptr<solaris::IAudioOut>(new solaris_host::AudioOutPulse()); };
+#endif
+#ifdef SOLARIS_HAVE_PIPEWIRE
+        h.audioOutFor = [](const std::string &d) { return d == "pipewire" ? std::unique_ptr<solaris::IAudioOut>(new solaris_host::AudioOutPipewire()) : nullptr; }; // R-DEV-9
 #endif
         solaris_host::machinePaths(h.settingsPath, h.recentsPath); // the same files solaris-cc uses
         return h;

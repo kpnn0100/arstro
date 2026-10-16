@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N8 — the PipeWire driver and xruns** (Phase 2 begins), then N9… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window. B13+ wait (ask).
+**► N9 — a MIDI keyboard: ALSA sequencer input, arm, record, count-in, input quantize** (R-MIDI-2), then N10… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
 
 ---
 
@@ -424,7 +424,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       1 ms, half a beat. L2 (the duck measured on the stem: 7.3 dB after a kick, back within 2) + UI (Duck Under ▸);
       3 mutants red. Found: measuring the duck on the master hides it (the kick is in the mix) — the stem.
 **Phase 2 — play it in**
-- [ ] **N8** The PipeWire driver, xruns counted (R-DEV-9).
+- [x] **N8** The PipeWire driver, xruns counted (R-DEV-9).
+      — DR-DEV-9: `AudioOutPipewire` (pw_stream, `node.latency` from the buffer) over an SPSC `AudioRing` (xruns counted
+      once primed); `openOutput` for every stream, PulseAudio the fallback, said once; `transport.driver` / `.xruns`;
+      Settings › Audio › Driver. Ring tests + L2 + UI; live failure path checked with no device reached; 2 mutants red.
+      Owed: playback on a PipeWire server (this machine's server is PulseAudio).
 - [ ] **N9** A MIDI keyboard: devices, arm, play live, record into a clip, count-in, input quantize (R-MIDI-2).
 - [ ] **N10** DSP: pitch bend and mod wheel in the instruments; glide / legato in the Basic Synth (R-MIDI-3's DSP
       half, R-INST-6).

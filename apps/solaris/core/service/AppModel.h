@@ -208,6 +208,7 @@ namespace solaris
         std::string newSig = "4/4";
         bool showIds = false;                    // R-UI-11: every object's id beside its name
         int autosave = 60;                       // R-SAFE-1: seconds; 0 = off
+        std::string driver = "pulse";             // R-DEV-9: pulse | pipewire
         std::vector<KeyActionModel> keys;        // R-SET-4: every shortcut, in the sheet's order
     };
 
@@ -246,6 +247,8 @@ namespace solaris
         float masterRms[2] = {0, 0};             // R-METER-2, as a strip's
         float masterHold[2] = {0, 0};
         bool masterClip = false;
+        std::string driver;                      // R-DEV-9: what the clock device plays through now ("" stopped)
+        long long xruns = -1;                    // R-DEV-5: underruns since play; −1 = this driver cannot count them
     };
 
     /** R-METER-1: the master as measured while playing (BS.1770-4) — kept after a stop, so a played song's

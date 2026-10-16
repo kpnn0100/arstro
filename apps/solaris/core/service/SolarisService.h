@@ -56,6 +56,9 @@ namespace solaris
             std::function<bool(std::vector<DeviceInfo> &out, std::string &err)> listDevices;
             /** A stream to the clock device (R-PLAY-1). Empty = this build cannot play. */
             std::function<std::unique_ptr<IAudioOut>()> audioOut;
+            /** R-DEV-9: a stream through a named driver ("pipewire"); null when the build has none — `audioOut` (PulseAudio)
+             *  is the fallback. */
+            std::function<std::unique_ptr<IAudioOut>(const std::string &driver)> audioOutFor;
             std::string settingsPath; // the machine's settings file ("" = not persisted)
             std::string recentsPath;  // the recent songs, one path per line ("" = not persisted)
         };
@@ -88,6 +91,8 @@ namespace solaris
         bool render(const Command &c, std::string &err);
         bool machineCommand(const Command &c, std::string &err);
         bool transportCommand(const Command &c, std::string &err);
+        /** R-DEV-9: the clock device through the setting's driver, PulseAudio the fallback; `driver` says which. */
+        std::unique_ptr<IAudioOut> openOutput(int rate, int block, std::string &driver, std::string &err);
         bool autoCommand(const Command &c, std::string &err);   // ServiceAuto.cpp
         // R-SVC-8 (ServiceCompose.cpp): notes in bulk and by name, steps, pattern edits; the read-back views
         bool composeCommand(const Command &c, std::string &err);
@@ -169,6 +174,7 @@ namespace solaris
         std::vector<std::string> mAudit, mLastRenderPeaks;
         std::set<std::string> mClipLatch;  // R-METER-2: strips that reached full scale since `meters clear`
         bool mMasterClip = false;          // … and the master
+        bool mPipewireDown = false;        // R-DEV-9: PipeWire would not open this session — PulseAudio until the driver is set again
         Settings mSettings;
         std::vector<std::string> mRecents;
         std::vector<RecentModel> mRecentCards; // parsed from the files: rebuilt only when stale

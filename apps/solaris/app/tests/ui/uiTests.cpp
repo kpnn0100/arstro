@@ -98,6 +98,20 @@ static void test_settings_combos_send_lines_and_ease()
     r.click(s.optionRect(SettingsSheet::kBuffer, 1));                    // 128 samples
     assert(sentLine(r, "settings set bufferSize=128") && r.svc->model().settings.bufferSize == 128);
     r.settle();
+    // R-DEV-9: the driver, a combo on the Audio page — ONE line, the label cross-fading to it
+    assert(s.shownValue(SettingsSheet::kDriver) == "PulseAudio" && SettingsSheet::sectionOf(SettingsSheet::kDriver) == SettingsSheet::kAudio);
+    s.revealRect(s.controlRect(SettingsSheet::kDriver)); // the page may be shorter than its rows
+    r.settle();
+    r.click(s.controlRect(SettingsSheet::kDriver));
+    r.settle();
+    assert(s.comboOpen(SettingsSheet::kDriver));
+    r.click(s.optionRect(SettingsSheet::kDriver, 1));
+    assert(sentLine(r, "settings set driver=pipewire") && r.svc->model().settings.driver == "pipewire");
+    first = 0.0;
+    for (int k = 0; k < 20 && first == 0.0; ++k) { r.frame(); first = s.labelAmount(SettingsSheet::kDriver); }
+    assert(first > 0.0 && first < 1.0);
+    r.settle();
+    assert(s.shownValue(SettingsSheet::kDriver) == "PipeWire \xE2\x80\x94 low latency");
     // a setting changed from a shell shows here too, eased: the sheet draws the model
     r.cmd("settings set sampleRate=96000");
     first = 0.0;

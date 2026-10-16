@@ -21,6 +21,9 @@
 #include "Machine.h"
 #ifdef SOLARIS_HAVE_PULSE
 #include "AudioOutPulse.h"
+#ifdef SOLARIS_HAVE_PIPEWIRE
+#include "AudioOutPipewire.h"
+#endif
 #endif
 #include "SolarisService.h"
 #include <cstdio>
@@ -115,6 +118,9 @@ int main(int argc, char **argv)
     host.listDevices = solaris_host::listDevices;
 #ifdef SOLARIS_HAVE_PULSE
     host.audioOut = [] { return std::unique_ptr<IAudioOut>(new solaris_host::AudioOutPulse()); };
+#endif
+#ifdef SOLARIS_HAVE_PIPEWIRE
+    host.audioOutFor = [](const std::string &d) { return d == "pipewire" ? std::unique_ptr<IAudioOut>(new solaris_host::AudioOutPipewire()) : nullptr; }; // R-DEV-9
 #endif
     // The same settings and recents files the window uses: `settings set` here and the Settings
     // dialog are one setting.

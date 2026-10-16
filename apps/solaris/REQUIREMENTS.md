@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -756,7 +756,9 @@ a process is the host's (law 12).
 **Phase 2 — play it in**
 - **R-DEV-9 Low latency on PipeWire**: a native PipeWire output and input (beside PulseAudio, which stays the
   fallback): buffers down to 64 frames; the driver chosen in Settings › Audio (`settings set driver=pipewire|pulse`);
-  every xrun counted and published (R-DEV-5).
+  every xrun counted and published (R-DEV-5). (Built 2026-10-16, the OUTPUT — DR-DEV-9; the input lands with the
+  recording task N16; a failed PipeWire is said once and not retried until the driver is set again. Owed: a live
+  check on a PipeWire server.)
 - **R-MIDI-2 A MIDI keyboard** (R-EDM-10): MIDI input devices listed (`midi devices`) and enabled in Settings
   (ALSA sequencer, in the host); notes played sound through the ARMED instrument strip at once (`strip arm <ch>`),
   sustain pedal honoured; `transport record` with a strip armed records them into a new note clip at the play

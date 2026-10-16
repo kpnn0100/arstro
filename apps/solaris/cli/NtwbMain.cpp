@@ -22,6 +22,9 @@
 #include "SolarisService.h"
 #ifdef SOLARIS_HAVE_PULSE
 #include "AudioOutPulse.h"
+#ifdef SOLARIS_HAVE_PIPEWIRE
+#include "AudioOutPipewire.h"
+#endif
 #endif
 #include <chrono>
 #include <cstdio>
@@ -149,6 +152,9 @@ namespace solaris_cli
             host.listDevices = solaris_host::listDevices;
 #ifdef SOLARIS_HAVE_PULSE
             host.audioOut = [] { return std::unique_ptr<solaris::IAudioOut>(new solaris_host::AudioOutPulse()); };
+#endif
+#ifdef SOLARIS_HAVE_PIPEWIRE
+            host.audioOutFor = [](const std::string &d) { return d == "pipewire" ? std::unique_ptr<solaris::IAudioOut>(new solaris_host::AudioOutPipewire()) : nullptr; }; // R-DEV-9
 #endif
             solaris_host::machinePaths(host.settingsPath, host.recentsPath); // the window's settings and recents
             solaris::SolarisService svc(host);

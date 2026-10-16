@@ -110,6 +110,7 @@ namespace solaris
         mModel.settings.reducedMotion = mSettings.reducedMotion;
         mModel.settings.showIds = mSettings.showIds;
         mModel.settings.autosave = mSettings.autosave;
+        mModel.settings.driver = mSettings.driver;
         mModel.recovery = mRecovery;
         mModel.recoveryAge = mRecoveryAge;
         for (const auto &a : keyActions())

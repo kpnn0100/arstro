@@ -82,6 +82,8 @@ namespace solaris
         long long heard() const;
         long long rendered() const { return mRendered.load(); }
         double latency() const { return mLatency.load(); }
+        /** R-DEV-5: the device's underruns since `start` (−1: its driver cannot count them). */
+        long long xruns() const { return mOut ? mOut->xruns() : -1; }
         /** Destroy engines the thread handed back (call on the service's thread). */
         void collect();
         /** Peaks of the last block: strip i at [2i, 2i+1], the master at [2·kMaxStrips, +1]. */

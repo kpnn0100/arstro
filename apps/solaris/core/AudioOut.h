@@ -1,6 +1,7 @@
 /*
- *  solaris_core — the audio OUTPUT seam (R-PLAY-1, R-DEV-8). The core names it; the host fills it
- *  with the sound server (PulseAudio's API, which PipeWire also serves). Interleaved float.
+ *  solaris_core — the audio OUTPUT seam (R-PLAY-1, R-DEV-8, R-DEV-9). The core names it; the host fills it
+ *  with the sound server — PulseAudio's API (which PipeWire also serves), or PipeWire's own (`settings set
+ *  driver=pipewire`, for small buffers and counted xruns). Interleaved float.
  *
  *  `write` BLOCKS until the device has room: that back-pressure is the clock — the player renders
  *  exactly as fast as the device plays, and what is heard now is what was written minus `latency`.
@@ -23,6 +24,9 @@ namespace solaris
         virtual double latency() = 0;
         /** Drop what is queued but not yet heard (a stop, a seek). */
         virtual void flush() {}
+        /** R-DEV-5, R-DEV-9: the underruns since `open` — the device asked and nothing was there; −1 when this
+         *  driver cannot count them (PulseAudio's simple API does not say). Safe from any thread. */
+        virtual long long xruns() const { return -1; }
     };
 }
 }

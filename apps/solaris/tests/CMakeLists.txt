@@ -11,6 +11,13 @@ if(TARGET solaris_control)
   add_test(NAME solaris_control COMMAND solaris_control_tests)
 endif()
 
+# R-DEV-9: the PipeWire driver's ring — the player's thread and the server's realtime callback — with no sound server
+add_executable(solaris_ring_tests faces/ringTests.cpp)
+target_include_directories(solaris_ring_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../host)
+find_package(Threads REQUIRED)
+target_link_libraries(solaris_ring_tests PRIVATE Threads::Threads)
+add_test(NAME solaris_ring COMMAND solaris_ring_tests)
+
 # the web face's adapter over ntwb::MemoryTransport, and `ntwb install` into a scratch data dir
 add_executable(solaris_ntwb_tests faces/ntwbAdapterTests.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../cli/NtwbAdapter.cpp)
 target_include_directories(solaris_ntwb_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../cli)

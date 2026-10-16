@@ -31,13 +31,13 @@ namespace solaris_ui
         Color fade(Color c, double a) { c.a *= a; return c; }
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
         const char *kLabels[SettingsSheet::kRows] = {"Output", "Input", "Sample rate", "Buffer", "Metronome", "Click level",
-                                                     "Preview level", "Tempo", "Meter", "Reduced motion", "Autosave"};
+                                                     "Preview level", "Tempo", "Meter", "Reduced motion", "Autosave", "Driver"};
         const char *kKeys[SettingsSheet::kRows] = {"output", "input", "sampleRate", "bufferSize", "metronome", "metronomeLevel",
-                                                   "auditionLevel", "newBpm", "newSig", "reducedMotion", "autosave"};
+                                                   "auditionLevel", "newBpm", "newSig", "reducedMotion", "autosave", "driver"};
         // the sections (R-SET-3, R-SET-5) and the rows each page holds
         const char *kTitles[SettingsSheet::kSections] = {"Audio", "Playback", "New songs", "Sample folders", "Interface", "Keyboard"};
         const std::vector<int> kPageRows[SettingsSheet::kSections] = {
-            {SettingsSheet::kOutput, SettingsSheet::kInput, SettingsSheet::kRate, SettingsSheet::kBuffer},
+            {SettingsSheet::kOutput, SettingsSheet::kInput, SettingsSheet::kRate, SettingsSheet::kBuffer, SettingsSheet::kDriver},
             {SettingsSheet::kMetronome, SettingsSheet::kClickLevel, SettingsSheet::kPreviewLevel},
             {SettingsSheet::kNewBpm, SettingsSheet::kNewSig},
             {},
@@ -210,6 +210,7 @@ namespace solaris_ui
         for (int d : {-18, -12, -6, 0}) mChips[kPreviewLevel].push_back(Chip{std::to_string(d) + " dB", std::to_string(d)});
         for (int b : {100, 120, 124, 126, 128, 140, 150, 174}) mChips[kNewBpm].push_back(Chip{std::to_string(b) + " bpm", std::to_string(b)});
         for (const char *m : {"4/4", "3/4", "6/8", "7/8"}) mChips[kNewSig].push_back(Chip{m, m});
+        mChips[kDriver] = {Chip{"PulseAudio", "pulse"}, Chip{"PipeWire \xE2\x80\x94 low latency", "pipewire"}}; // R-DEV-9
         mChips[kAutosave] = {Chip{"Off", "off"}, Chip{"Every 30 s", "30"}, Chip{"Every minute", "60"}, Chip{"Every 2 minutes", "120"}, Chip{"Every 5 minutes", "300"}};
         mChips[kOutput] = mChips[kInput] = {Chip{"System default", ""}};
         for (int s = 0; s < kSections; ++s)
@@ -342,6 +343,7 @@ namespace solaris_ui
         case kNewSig: return mSettings.newSig;
         case kMotion: return mSettings.reducedMotion ? "on" : "off";
         case kAutosave: return mSettings.autosave > 0 ? std::to_string(mSettings.autosave) : std::string("off");
+        case kDriver: return mSettings.driver;
         default: return std::string();
         }
     }
@@ -787,6 +789,7 @@ namespace solaris_ui
             if (r == kNewSig) note = "\xE2\x80\xA6 and in this meter";
             if (r == kMotion) note = "every tween collapses \xE2\x80\x94 the system's own setting counts too";
             if (r == kAutosave) note = "an unsaved song is kept beside it \xE2\x80\x94 recovered if Solaris stops";
+            if (r == kDriver) note = "PipeWire for small buffers and counted xruns \xE2\x80\x94 PulseAudio if it will not open";
             if (r == kBuffer)
             {
                 char b[64];

@@ -136,6 +136,13 @@ namespace solaris
                     next.ports.erase(std::remove_if(next.ports.begin(), next.ports.end(), [&](const auto &p) { return p.first == name; }), next.ports.end());
                     if (!v.empty()) next.ports.emplace_back(name, v);
                 }
+                else if (k == "driver")
+                {
+                    // R-DEV-9: how the clock device is reached — the next play opens it
+                    if (v != "pulse" && v != "pipewire") { err = "driver is pulse or pipewire"; return false; }
+                    next.driver = v;
+                    mPipewireDown = false; // set again: PipeWire is tried again
+                }
                 else if (k == "autosave")
                 {
                     // R-SAFE-1: seconds between autosaves, or off
@@ -168,9 +175,9 @@ namespace solaris
                 else
                 {
                     err = "no setting `" + k + "`";
-                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave"});
+                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver"});
                     err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>, metronome, "
-                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, autosave, key.<action>)")
+                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, autosave, driver, key.<action>)")
                                         : " (did you mean: " + near[0] + "?)";
                     return false;
                 }
@@ -211,7 +218,7 @@ namespace solaris
                               .set("folders", folders).set("ports", ports).set("metronome", mSettings.metronome)
                               .set("metronomeLevel", mSettings.metronomeLevel).set("auditionLevel", mSettings.auditionLevel).set("newBpm", mSettings.newBpm)
                               .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion)
-                              .set("showIds", mSettings.showIds).set("autosave", mSettings.autosave).set("keys", [&] {
+                              .set("showIds", mSettings.showIds).set("autosave", mSettings.autosave).set("driver", mSettings.driver).set("keys", [&] {
                                   Json keys = Json::array(); // only the re-keyed actions, as the file has them
                                   for (const auto &k : mSettings.keys) keys.push(Json::string(k.first + "=" + k.second));
                                   return keys;

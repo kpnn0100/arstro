@@ -2112,6 +2112,12 @@
       "stable": true
     },
     {
+      "path": "settings.driver",
+      "type": "string",
+      "summary": "pulse | pipewire: how the clock device is reached (R-DEV-9)",
+      "stable": true
+    },
+    {
       "path": "settings.keys",
       "type": "object[]",
       "summary": "every keyboard action (R-SET-4), in the sheet's order — a pressed combo is looked up here",
@@ -2259,6 +2265,18 @@
       "path": "transport.masterClip",
       "type": "bool",
       "summary": "the master reached full scale since `meters clear`",
+      "stable": false
+    },
+    {
+      "path": "transport.driver",
+      "type": "string",
+      "summary": "what the clock device plays through now: pulse | pipewire ('' stopped) — R-DEV-9",
+      "stable": false
+    },
+    {
+      "path": "transport.xruns",
+      "type": "int",
+      "summary": "underruns since play (−1: this driver cannot count them) — R-DEV-5",
       "stable": false
     },
     {

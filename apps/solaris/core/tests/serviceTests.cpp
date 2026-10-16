@@ -91,12 +91,24 @@ namespace
         }
         double latency() override { return 0.0; }
     };
+    /** R-DEV-9: a PipeWire stream that opens and has had three underruns — or one that links nowhere. */
+    struct PipewireOut : FakeOut
+    {
+        bool fails = false;
+        bool open(const std::string &, int, int, int, std::string &err) override
+        {
+            if (fails) err = "PipeWire: the stream linked to no output within 2 s";
+            return !fails;
+        }
+        long long xruns() const override { return 3; }
+    };
 
     struct Fake
     {
         std::string settings, recents; // "" = not persisted
         std::shared_ptr<Capture> capture = std::make_shared<Capture>();
         bool canPlay = true;
+        std::string pipewire;          // R-DEV-9: "" this host has no PipeWire driver, "ok" it opens, "fail" it links nowhere
         std::map<std::string, std::vector<std::vector<float>>> written;
         std::map<std::string, int> bits, rates, kbps;
         std::map<std::string, std::string> formats;   // R-EXPORT-1: what each file was written as
@@ -147,6 +159,13 @@ namespace
                     o->cap = capture;
                     return std::unique_ptr<IAudioOut>(std::move(o));
                 };
+            h.audioOutFor = [this](const std::string &driver) -> std::unique_ptr<IAudioOut> {
+                if (driver != "pipewire" || pipewire.empty()) return nullptr;
+                auto o = std::make_unique<PipewireOut>();
+                o->cap = capture;
+                o->fails = pipewire == "fail";
+                return o;
+            };
             return h;
         }
     };
@@ -1789,6 +1808,64 @@ static void test_render_measure()
     pass("render --measure prints the mixdown's integrated loudness, its most momentary and short-term, its true peak and its lowest correlation (R-METER-1)");
 }
 
+static void test_the_driver_and_its_fallback()
+{
+    // R-DEV-9: `settings set driver=pipewire|pulse`, saved; PipeWire when asked and it opens — its xruns published
+    // (R-DEV-5); PulseAudio when it will not open or the build has none, said once; the transport says which
+    const std::string dir = scratch();
+    const std::string settings = dir + "/driver.settings";
+    std::error_code ec;
+    fs::remove(settings, ec);
+    Run r(settings, "");
+    assert(r.svc.model().settings.driver == "pulse");
+    r.ok("settings set driver=pipewire");
+    assert(r.svc.model().settings.driver == "pipewire");
+    assert(contains(r.no("settings set driver=alsa"), "pulse or pipewire"));
+    {
+        Run again(settings, "");
+        assert(again.svc.model().settings.driver == "pipewire"); // a second process reads it back
+    }
+    r.ok("project new " + freshSong("driver") + " --bpm 120");
+    auto said = [&](const std::string &part) {
+        return std::any_of(r.events.begin(), r.events.end(), [&](const std::string &e) { return contains(e, part); });
+    };
+    // this host has no PipeWire driver: PulseAudio, and why
+    r.events.clear();
+    r.ok("transport play");
+    assert(r.svc.model().transport.driver == "pulse" && said("this build has no PipeWire driver — playing through PulseAudio"));
+    assert(r.svc.model().transport.xruns == -1);                       // Pulse's simple API cannot count them
+    r.ok("transport stop");
+    assert(r.svc.model().transport.driver.empty());
+    // a PipeWire that links nowhere: PulseAudio, its reason said (the driver set again: tried again)
+    r.fake.pipewire = "fail";
+    r.ok("settings set driver=pipewire");
+    r.events.clear();
+    r.ok("transport play");
+    assert(r.svc.model().transport.driver == "pulse" && said("linked to no output within 2 s — playing through PulseAudio"));
+    r.ok("transport stop");
+    // said once: not tried again (a preview would wait each time) — until the driver is set again
+    r.fake.pipewire = "ok";
+    r.events.clear();
+    r.ok("transport play");
+    assert(r.svc.model().transport.driver == "pulse" && !said("playing through PulseAudio"));
+    r.ok("transport stop");
+    r.ok("settings set driver=pipewire");
+    // one that opens: played through it, its underruns in the model
+    r.events.clear();
+    r.ok("transport play");
+    r.ok("wait 0.02");
+    assert(r.svc.model().transport.driver == "pipewire" && r.svc.model().transport.xruns == 3 && !said("playing through PulseAudio"));
+    r.ok("transport stop");
+    // asked for Pulse, PipeWire is not tried
+    r.ok("settings set driver=pulse");
+    r.ok("transport play");
+    assert(r.svc.model().transport.driver == "pulse");
+    r.ok("transport stop");
+    pass("the driver (R-DEV-9): `settings set driver=pipewire|pulse`, saved; PipeWire when asked and it opens, its xruns in the "
+         "model (R-DEV-5); PulseAudio when it links nowhere or the build has none, said once with why, tried again when set again; "
+         "the transport says which");
+}
+
 static void test_loop_and_seek()
 {
     Run r;
@@ -2836,6 +2913,7 @@ int main()
     test_a_pattern_grows_to_hold_its_notes();
     test_edits_while_playing_are_heard();
     test_meters_measure_what_plays();
+    test_the_driver_and_its_fallback();
     test_held_peak_holds_then_falls();
     test_render_measure();
     test_loop_and_seek();
