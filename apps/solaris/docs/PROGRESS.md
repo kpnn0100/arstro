@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N28 — Control surfaces: Mackie Control / HUI** (R-CTRL-2; N27 — MIDI learn, the transport keys — is built), then N29… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N28 part 2 — the surface in the window: Settings › MIDI chooses it (protocol, port) and says whether it is connected** (R-CTRL-2; part 1 — the codecs, the service — is built), then N29… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -547,7 +547,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       said by `audit`; `settings.mappings[]`, `mapLearning`.
       Part 2 (same day): Learn MIDI CC / Forget CC <n> in every number's menu; the song bar's pill while a learn waits
       (a click cancels); Settings › MIDI — the mappings, × forgets one; each eased.
-- [ ] **N28** Control surfaces: Mackie Control / HUI (R-CTRL-2).
+- [~] **N28** Control surfaces: Mackie Control / HUI (R-CTRL-2).
+      Design round 2026-10-17 (discussion.md Round 10). Part 1 (same day): `core/Surface` — Mackie Control and HUI as
+      pure codecs of one surface model; the MIDI output seam and ALSA's; `settings surface|surfacePort`, the keyboard
+      deaf to that port; `ServiceSurface` — its moves as lines, what it shows as a diff, a touched fader left to the
+      hand, banks; `surface.changed`; `surface` in the model. Not yet checked against a real surface.
 - [ ] **N29** A CPU meter (R-PERF-1).
 - [ ] **N30** A multi-core engine, byte-identical (R-PERF-2).
 - [ ] **N31** Freeze and bounce (R-PERF-3).

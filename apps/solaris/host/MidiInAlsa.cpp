@@ -127,5 +127,76 @@ namespace solaris_host
         mPort = -1;
         mListening.clear();
     }
+
+    // ── R-CTRL-2: out ────────────────────────────────────────────────────────────────────────────────
+
+    MidiOutAlsa::~MidiOutAlsa() { close(); }
+
+    bool MidiOutAlsa::open(const std::string &port, std::string &err)
+    {
+        close();
+        if (snd_seq_open(&mSeq, "default", SND_SEQ_OPEN_OUTPUT, 0) < 0) { mSeq = nullptr; err = "the ALSA sequencer cannot be opened"; return false; }
+        snd_seq_set_client_name(mSeq, "Solaris");
+        mPort = snd_seq_create_simple_port(mSeq, "Solaris surface out", SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ,
+                                           SND_SEQ_PORT_TYPE_MIDI_GENERIC | SND_SEQ_PORT_TYPE_APPLICATION);
+        if (mPort < 0) { err = "the ALSA sequencer gave no port"; close(); return false; }
+        // the writable port of that name
+        snd_seq_client_info_t *ci;
+        snd_seq_port_info_t *pi;
+        snd_seq_client_info_alloca(&ci);
+        snd_seq_port_info_alloca(&pi);
+        snd_seq_client_info_set_client(ci, -1);
+        bool connected = false;
+        const int self = snd_seq_client_id(mSeq);
+        while (!connected && snd_seq_query_next_client(mSeq, ci) >= 0)
+        {
+            const int client = snd_seq_client_info_get_client(ci);
+            if (client == 0 || client == self) continue;
+            snd_seq_port_info_set_client(pi, client);
+            snd_seq_port_info_set_port(pi, -1);
+            while (snd_seq_query_next_port(mSeq, pi) >= 0)
+            {
+                const unsigned caps = snd_seq_port_info_get_capability(pi);
+                if ((caps & SND_SEQ_PORT_CAP_WRITE) == 0 || (caps & SND_SEQ_PORT_CAP_SUBS_WRITE) == 0) continue;
+                if (port != snd_seq_port_info_get_name(pi)) continue;
+                connected = snd_seq_connect_to(mSeq, mPort, client, snd_seq_port_info_get_port(pi)) >= 0;
+                break;
+            }
+        }
+        if (!connected) { err = "no MIDI port `" + port + "` takes output"; close(); return false; }
+        snd_midi_event_t *enc = nullptr;
+        if (snd_midi_event_new(4096, &enc) < 0) { err = "no MIDI encoder"; close(); return false; }
+        mEncoder = enc;
+        return true;
+    }
+
+    void MidiOutAlsa::send(const std::vector<uint8_t> &bytes)
+    {
+        if (!mSeq || !mEncoder) return;
+        auto *enc = static_cast<snd_midi_event_t *>(mEncoder);
+        size_t at = 0;
+        while (at < bytes.size())
+        {
+            snd_seq_event_t ev;
+            snd_seq_ev_clear(&ev);
+            const long used = snd_midi_event_encode(enc, bytes.data() + at, (long)(bytes.size() - at), &ev);
+            if (used <= 0) break;
+            at += (size_t)used;
+            if (ev.type == SND_SEQ_EVENT_NONE) continue; // a message not finished yet
+            snd_seq_ev_set_source(&ev, mPort);
+            snd_seq_ev_set_subs(&ev);
+            snd_seq_ev_set_direct(&ev);
+            snd_seq_event_output_direct(mSeq, &ev);
+        }
+    }
+
+    void MidiOutAlsa::close()
+    {
+        if (mEncoder) snd_midi_event_free(static_cast<snd_midi_event_t *>(mEncoder));
+        mEncoder = nullptr;
+        if (mSeq) snd_seq_close(mSeq);
+        mSeq = nullptr;
+        mPort = -1;
+    }
 }
 }

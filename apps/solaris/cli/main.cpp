@@ -134,6 +134,7 @@ int main(int argc, char **argv)
 #ifdef SOLARIS_HAVE_ALSA
     host.listMidiInputs = solaris_host::listMidiInputs; // R-MIDI-2
     host.midiIn = [] { return std::unique_ptr<IMidiIn>(new solaris_host::MidiInAlsa()); };
+    host.midiOut = [] { return std::unique_ptr<IMidiOut>(new solaris_host::MidiOutAlsa()); }; // R-CTRL-2: a surface's port
 #endif
     // The same settings and recents files the window uses: `settings set` here and the Settings
     // dialog are one setting.

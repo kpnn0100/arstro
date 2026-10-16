@@ -137,6 +137,12 @@ namespace solaris
         }
         for (const auto &m : mSettings.maps) mModel.settings.mappings.push_back(MapModel{m.first, m.second, mapInert(m.second)}); // R-CTRL-1
         mModel.mapLearning = mMapLearning;
+        mModel.settings.surface = mSettings.surface; // R-CTRL-2
+        mModel.settings.surfacePort = mSettings.surfacePort;
+        mModel.surface.protocol = mSettings.surface;
+        mModel.surface.connected = mSurfaceIn != nullptr;
+        mModel.surface.why = mSurfaceWhy;
+        mModel.surface.bank = mSurfaceBank;
         mModel.devices = mDevices;
         mModel.browser = mBrowser;
         if (!mPluginsLoaded) loadPlugins(); // R-VST-6: the machine's

@@ -245,6 +245,15 @@ namespace solaris
         bool inert = false; // the open song has no such address (or no song is open)
     };
 
+    /** R-CTRL-2: the control surface, as it is now (the session's). */
+    struct SurfaceModel
+    {
+        std::string protocol = "none";           // none | mcu | hui (the setting)
+        bool connected = false;
+        std::string why;                         // why it is not ("" when it is, or none is set)
+        int bank = 0;                            // the first strip of its eight, 0-based in processing order
+    };
+
     struct SettingsModel
     {
         int sampleRate = 48000, bufferSize = 256;
@@ -264,6 +273,8 @@ namespace solaris
         int countIn = 0;
         std::vector<KeyActionModel> keys;        // R-SET-4: every shortcut, in the sheet's order
         std::vector<MapModel> mappings;          // R-CTRL-1: the MIDI controls and what they move
+        std::string surface = "none";            // R-CTRL-2: none | mcu | hui
+        std::string surfacePort;                 // … its port, in and out
     };
 
     /** R-ARR-1: a named place in the song, and where its section ends (computed: its length, else the next marker). */
@@ -415,6 +426,7 @@ namespace solaris
         LoudnessModel loudness;                  // R-METER-1
         std::string armed;                       // R-MIDI-2: the strip the keyboard plays ("" none) — the session's
         std::string mapLearning;                 // R-CTRL-1: the address a `map learn` waits to bind ('' none) — the session's
+        SurfaceModel surface;                    // R-CTRL-2
         std::vector<MidiPortModel> midiDevices;  // `midi devices`: this machine's MIDI inputs
         long long midiMessages = 0;              // messages the keyboard sent since Solaris started (an activity light)
         AuditionModel audition;

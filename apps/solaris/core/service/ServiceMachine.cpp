@@ -154,6 +154,13 @@ namespace solaris
                     if (!parseNumber(v, x) || x < 0 || x > 4 || x != std::floor(x)) { err = "countIn is bars, 0 … 4"; return false; }
                     next.countIn = (int)x;
                 }
+                else if (k == "surface")
+                {
+                    // R-CTRL-2: a control surface — connected at the next pump, on its port
+                    if (v != "none" && v != "mcu" && v != "hui") { err = "surface is none, mcu (Mackie Control) or hui"; return false; }
+                    next.surface = v;
+                }
+                else if (k == "surfacePort") next.surfacePort = v; // a port's name; "" none
                 else if (k == "midiInputs")
                 {
                     // R-MIDI-2: which keyboards Solaris listens to — reopened at once when it listens
@@ -192,9 +199,9 @@ namespace solaris
                 else
                 {
                     err = "no setting `" + k + "`";
-                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver", "midiInputs", "recordQuantize", "countIn"});
+                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver", "midiInputs", "recordQuantize", "countIn", "surface", "surfacePort"});
                     err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>, metronome, "
-                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, autosave, driver, midiInputs, recordQuantize, countIn, key.<action>)")
+                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, autosave, driver, midiInputs, recordQuantize, countIn, surface, surfacePort, key.<action>)")
                                         : " (did you mean: " + near[0] + "?)";
                     return false;
                 }
@@ -221,7 +228,7 @@ namespace solaris
             mSettings = next;
             if (!saveSettings(err)) { mSettings = keep; return false; }
             if (mPlayer) mPlayer->setClick(mSettings.metronome, engine::dbToLinear(mSettings.metronomeLevel)); // heard at once
-            if (mMidiIn && mMidiOpenFor != mSettings.midiInputs)
+            if (mMidiIn && mMidiOpenFor != midiFor())
             {
                 std::string e; // R-MIDI-2: listening now to the keyboards it names
                 if (!ensureMidi(e)) emit(Event(Event::Kind::Info).with("text", "MIDI: " + e));

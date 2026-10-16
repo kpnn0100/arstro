@@ -270,6 +270,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `library.changed` | path, tags | R-PRESET-3: a file's tags (favourite among them) changed and were saved; tags comma-separated, '' none. |
 | `plugins.changed` | count, problems | R-VST-6: a scan found this many plugins; problems: bundles that could not be read. |
 | `plugin.offline` | device, why | R-VST-6: a song's plugin is not playing — it never started, crashed or overran its budget; an effect passes dry, an instrument is silent (`device reload <dv>`). Said once. |
+| `surface.changed` | protocol, connected, bank, why | R-CTRL-2: the control surface connected (1) or not (0, why), or moved to another bank of eight. |
 | `map.learned` | cc, address | R-CTRL-1: the MIDI control moved during a `map learn` is bound to the address (on its channel: `<ch>/<n>`). |
 | `plugin.editor` | device, open | R-VST-6: a plugin's own editor window opened (1) or closed (0) — by `device editor`, or its window's own close. |
 | `recents.changed` | count | Home's recent songs changed. |
@@ -530,6 +531,11 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.midiInputs` | string | all \| none \| MIDI port names, comma-separated: the keyboards Solaris listens to (R-MIDI-2) |
 | `armed` | string | the strip the MIDI keyboard plays ('' none) — the session's, never saved (R-MIDI-2) |
 | `mapLearning` | string | R-CTRL-1: the address a `map learn` waits to bind ('' none) — the session's |
+| `surface` | object | R-CTRL-2: the control surface as it is now — the session's |
+| `surface.protocol` | string | none \| mcu \| hui |
+| `surface.connected` | bool | its port is open, in and out |
+| `surface.why` | string | why it is not connected ('' when it is, or none is set) |
+| `surface.bank` | int | the first of its eight strips, 0-based, in processing order |
 | `midiDevices` | object[] | this machine's MIDI inputs, as `midi devices` last listed them (R-MIDI-2) |
 | `midiDevices[].id` | string | what `settings set midiInputs=` names |
 | `midiDevices[].name` | string |  |
@@ -545,6 +551,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.mappings[].cc` | string | `<n>` (any channel) or `<ch>/<n>` |
 | `settings.mappings[].address` | string | the number it moves |
 | `settings.mappings[].inert` | bool | the open song has no such address |
+| `settings.surface` | string | R-CTRL-2: none \| mcu (Mackie Control) \| hui — `settings set surface=…` |
+| `settings.surfacePort` | string | … the MIDI port it is on, in and out (the keyboard never listens there) |
 | `devices` | object[] | from the last `devices list` |
 | `devices[].id` | string | what `settings set output=` takes |
 | `devices[].name` | string |  |

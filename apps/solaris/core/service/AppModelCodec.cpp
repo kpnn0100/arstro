@@ -254,6 +254,11 @@ namespace solaris
             {"settings.midiInputs", "string", "all | none | MIDI port names, comma-separated: the keyboards Solaris listens to (R-MIDI-2)"},
             {"armed", "string", "the strip the MIDI keyboard plays ('' none) — the session's, never saved (R-MIDI-2)"},
             {"mapLearning", "string", "R-CTRL-1: the address a `map learn` waits to bind ('' none) — the session's"},
+            {"surface", "object", "R-CTRL-2: the control surface as it is now — the session's"},
+            {"surface.protocol", "string", "none | mcu | hui"},
+            {"surface.connected", "bool", "its port is open, in and out"},
+            {"surface.why", "string", "why it is not connected ('' when it is, or none is set)"},
+            {"surface.bank", "int", "the first of its eight strips, 0-based, in processing order"},
             {"midiDevices", "object[]", "this machine's MIDI inputs, as `midi devices` last listed them (R-MIDI-2)"},
             {"midiDevices[].id", "string", "what `settings set midiInputs=` names"},
             {"midiDevices[].name", "string", ""},
@@ -269,6 +274,8 @@ namespace solaris
             {"settings.mappings[].cc", "string", "`<n>` (any channel) or `<ch>/<n>`"},
             {"settings.mappings[].address", "string", "the number it moves"},
             {"settings.mappings[].inert", "bool", "the open song has no such address"},
+            {"settings.surface", "string", "R-CTRL-2: none | mcu (Mackie Control) | hui — `settings set surface=…`"},
+            {"settings.surfacePort", "string", "… the MIDI port it is on, in and out (the keyboard never listens there)"},
             {"devices", "object[]", "from the last `devices list`"},
             {"devices[].id", "string", "what `settings set output=` takes"},
             {"devices[].name", "string", ""},
@@ -673,10 +680,12 @@ namespace solaris
                               .set("metronome", m.settings.metronome).set("metronomeLevel", m.settings.metronomeLevel).set("auditionLevel", m.settings.auditionLevel)
                               .set("newBpm", m.settings.newBpm).set("newSig", m.settings.newSig).set("reducedMotion", m.settings.reducedMotion)
                               .set("showIds", m.settings.showIds).set("autosave", m.settings.autosave).set("driver", m.settings.driver).set("midiInputs", m.settings.midiInputs).set("recordQuantize", m.settings.recordQuantize)
-                              .set("countIn", m.settings.countIn).set("keys", keys).set("mappings", mappings));
+                              .set("countIn", m.settings.countIn).set("keys", keys).set("mappings", mappings)
+                              .set("surface", m.settings.surface).set("surfacePort", m.settings.surfacePort));
         Json midi = Json::array();
         for (const auto &d : m.midiDevices) midi.push(Json::object().set("id", d.id).set("name", d.name).set("listening", d.listening));
         j.set("armed", m.armed).set("midiDevices", midi).set("mapLearning", m.mapLearning);
+        j.set("surface", Json::object().set("protocol", m.surface.protocol).set("connected", m.surface.connected).set("why", m.surface.why).set("bank", (long long)m.surface.bank));
         if (!stable) j.set("midiMessages", (int)m.midiMessages);
         Json devs = Json::array();
         for (const auto &d : m.devices)

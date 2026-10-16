@@ -16,6 +16,7 @@
 #include "Keymap.h"
 #include "Notation.h"
 #include "SolarisService.h"
+#include "Surface.h"
 #include "meter/Meters.h"
 #include <algorithm>
 #include <atomic>
@@ -149,16 +150,30 @@ namespace
     /** R-MIDI-2: a keyboard the test plays: `open` hands the sink over; the test calls it as the host's thread would. */
     struct FakeMidi : IMidiIn
     {
-        std::shared_ptr<std::function<void(const MidiEvent &)>> sink;
+        std::shared_ptr<std::function<void(const MidiEvent &)>> sink, surface; // R-CTRL-2: the surface's port its own
         std::vector<std::string> on;
+        bool isSurface = false;
         bool open(const std::vector<std::string> &ports, std::function<void(const MidiEvent &)> s, std::string &) override
         {
-            *sink = std::move(s);
+            isSurface = ports.size() == 1 && ports[0] == "X-Touch";
+            *(isSurface ? surface : sink) = std::move(s);
             on = ports.empty() ? std::vector<std::string>{"Keys", "Pads"} : ports;
             return true;
         }
-        void close() override { *sink = nullptr; }
+        void close() override { *(isSurface ? surface : sink) = nullptr; }
         std::vector<std::string> listening() const override { return on; }
+    };
+    /** R-CTRL-2: the surface's output — every byte it was sent. */
+    struct FakeMidiOut : IMidiOut
+    {
+        std::shared_ptr<std::vector<uint8_t>> sent;
+        bool open(const std::string &port, std::string &err) override
+        {
+            if (port != "X-Touch") { err = "no MIDI port `" + port + "` takes output"; return false; }
+            return true;
+        }
+        void send(const std::vector<uint8_t> &b) override { sent->insert(sent->end(), b.begin(), b.end()); }
+        void close() override {}
     };
 
     // R-VST-6: other makers' plugins, played "elsewhere" — here in process, through the same seam. Sweet Pad sounds a
@@ -292,6 +307,11 @@ namespace
         std::string inMode = "loop", inDevice; // R-REC-1: the capture's sound; the device it was opened on
         std::shared_ptr<std::function<void(const MidiEvent &)>> midi = std::make_shared<std::function<void(const MidiEvent &)>>();
         void key(uint8_t status, uint8_t d1, uint8_t d2) const { if (*midi) (*midi)(MidiEvent{status, d1, d2}); }
+        // R-CTRL-2: a surface on port "X-Touch" (listed only when a test asks), what it sends us and what we send it
+        bool withSurface = false;
+        std::shared_ptr<std::function<void(const MidiEvent &)>> surfaceIn = std::make_shared<std::function<void(const MidiEvent &)>>();
+        std::shared_ptr<std::vector<uint8_t>> surfaceOut = std::make_shared<std::vector<uint8_t>>();
+        void surfaceKey(uint8_t status, uint8_t d1, uint8_t d2) const { if (*surfaceIn) (*surfaceIn)(MidiEvent{status, d1, d2}); }
         std::map<std::string, std::vector<std::vector<float>>> written;
         std::map<std::string, int> bits, rates, kbps;
         std::map<std::string, std::string> formats;   // R-EXPORT-1: what each file was written as
@@ -393,14 +413,21 @@ namespace
                 i->fails = pipewire == "fail";
                 return i;
             };
-            h.listMidiInputs = [](std::vector<MidiPort> &out, std::string &) {
+            h.listMidiInputs = [this](std::vector<MidiPort> &out, std::string &) {
                 out = {MidiPort{"Keys", "Keys"}, MidiPort{"Pads", "Pads"}};
+                if (withSurface) out.push_back(MidiPort{"X-Touch", "X-Touch"});
                 return true;
             };
             h.midiIn = [this] {
                 auto m = std::make_unique<FakeMidi>();
                 m->sink = midi;
+                m->surface = surfaceIn;
                 return std::unique_ptr<IMidiIn>(std::move(m));
+            };
+            h.midiOut = [this] {
+                auto m = std::make_unique<FakeMidiOut>();
+                m->sent = surfaceOut;
+                return std::unique_ptr<IMidiOut>(std::move(m));
             };
             h.audioOutFor = [this](const std::string &driver) -> std::unique_ptr<IAudioOut> {
                 if (driver != "pipewire" || pipewire.empty()) return nullptr;
@@ -3888,6 +3915,182 @@ static void test_midi_learn_and_the_transport_keys()
     pass("MIDI learn (R-CTRL-1): a control moves its number — the fader law, a parameter's taper — the sweep's last landing, one undo step; on its channel when named; learned (its value not taken), cancelled, removed; MMC plays and stops; refusals; inert in a song without it, said; the machine's, kept");
 }
 
+static void test_the_surface_codecs()
+{
+    // R-CTRL-2: Mackie Control and HUI as tables — messages in, events out; a state in, the bytes that show it out (only
+    // what changed; a touched fader left alone); HUI's ping
+    auto ev = [](SurfaceCodec &c, uint8_t a, uint8_t b, uint8_t d) {
+        SurfaceEvent e;
+        return c.decode(MidiEvent{a, b, d}, e) ? e : SurfaceEvent{};
+    };
+    auto has = [](const std::vector<uint8_t> &v, std::vector<uint8_t> n) { return std::search(v.begin(), v.end(), n.begin(), n.end()) != v.end(); };
+    auto mcu = makeSurfaceCodec("mcu");
+    assert(mcu && !makeSurfaceCodec("xyz"));
+    SurfaceEvent e = ev(*mcu, 0xE2, 0x7F, 0x7F);
+    assert(e.kind == SurfaceEvent::Fader && e.strip == 2 && e.value == 1.0);
+    e = ev(*mcu, 0xE8, 0x00, 0x40);
+    assert(e.kind == SurfaceEvent::Master && std::fabs(e.value - 8192.0 / 16383.0) < 1e-12);
+    e = ev(*mcu, 0xB0, 0x13, 0x05);
+    assert(e.kind == SurfaceEvent::Pot && e.strip == 3 && e.value == 5.0);
+    assert(ev(*mcu, 0xB0, 0x13, 0x43).value == -3.0);
+    assert(ev(*mcu, 0x90, 0x10, 0x7F).kind == SurfaceEvent::Mute && ev(*mcu, 0x90, 0x09, 0x7F).kind == SurfaceEvent::Solo && ev(*mcu, 0x90, 0x09, 0x7F).strip == 1);
+    assert(ev(*mcu, 0x90, 0x02, 0x7F).kind == SurfaceEvent::Arm && ev(*mcu, 0x90, 0x1A, 0x7F).kind == SurfaceEvent::Select);
+    assert(ev(*mcu, 0x90, 0x10, 0x00).kind == SurfaceEvent::None); // let go: nothing
+    assert(ev(*mcu, 0x90, 0x5E, 0x7F).kind == SurfaceEvent::Play && ev(*mcu, 0x90, 0x5D, 0x7F).kind == SurfaceEvent::Stop && ev(*mcu, 0x90, 0x5F, 0x7F).kind == SurfaceEvent::Record);
+    assert(ev(*mcu, 0x90, 0x5B, 0x7F).kind == SurfaceEvent::Rewind && ev(*mcu, 0x90, 0x5C, 0x7F).kind == SurfaceEvent::Forward);
+    assert(ev(*mcu, 0x90, 0x2F, 0x7F).kind == SurfaceEvent::BankRight && ev(*mcu, 0x90, 0x30, 0x7F).kind == SurfaceEvent::ChannelLeft);
+    assert(ev(*mcu, 0x90, 0x68, 0x7F).kind == SurfaceEvent::Touch && ev(*mcu, 0x90, 0x68, 0x00).kind == SurfaceEvent::Release && ev(*mcu, 0x90, 0x70, 0x7F).strip == 8);
+    SurfaceState was, now;
+    now.strips[0] = SurfaceStrip{true, 0.5, 0.0, true, false, false, "Kick drum"};
+    now.master = 1.0;
+    std::array<bool, kSurfaceStrips + 1> none{};
+    std::vector<uint8_t> out;
+    mcu->encode(was, now, true, none, out);
+    assert(has(out, {0xE0, 0x00, 0x40}) && has(out, {0x90, 0x10, 0x7F}) && has(out, {0xB0, 0x30, 0x16}) && has(out, {0xE8, 0x7F, 0x7F}));
+    assert(has(out, {0xE1, 0x00, 0x00}) && has(out, {0xB0, 0x31, 0x00}));                           // an empty slot: down, dark
+    assert(has(out, {0xF0, 0x00, 0x00, 0x66, 0x14, 0x12, 0x00, 'K', 'i', 'c', 'k', ' ', 'd', ' '}));  // six characters and a gap
+    out.clear();
+    mcu->encode(now, now, false, none, out);
+    assert(out.empty()); // nothing changed: nothing sent
+    SurfaceState lit = now;
+    lit.strips[0].mute = false;
+    mcu->encode(now, lit, false, none, out);
+    assert((out == std::vector<uint8_t>{0x90, 0x10, 0x00}));
+    out.clear();
+    lit.strips[0].fader = 0.75;
+    auto touched = none;
+    touched[0] = true;
+    mcu->encode(now, lit, false, touched, out);
+    assert(!has(out, {0xE0}));                                                                      // the hand's
+    // HUI
+    auto hui = makeSurfaceCodec("hui");
+    SurfaceEvent h;
+    assert(!hui->decode(MidiEvent{0xB0, 0x00, 0x40}, h));                                          // the high half waits for the low
+    e = ev(*hui, 0xB0, 0x20, 0x00);
+    assert(e.kind == SurfaceEvent::Fader && e.strip == 0 && std::fabs(e.value - 8192.0 / 16383.0) < 1e-12);
+    ev(*hui, 0xB0, 0x0F, 0x02);
+    assert(ev(*hui, 0xB0, 0x2F, 0x42).kind == SurfaceEvent::Mute);
+    ev(*hui, 0xB0, 0x0F, 0x02);
+    assert(ev(*hui, 0xB0, 0x2F, 0x40).kind == SurfaceEvent::Touch && ev(*hui, 0xB0, 0x2F, 0x00).kind == SurfaceEvent::Release);
+    ev(*hui, 0xB0, 0x0F, 0x0E);
+    assert(ev(*hui, 0xB0, 0x2F, 0x44).kind == SurfaceEvent::Play);
+    ev(*hui, 0xB0, 0x0F, 0x0A);
+    assert(ev(*hui, 0xB0, 0x2F, 0x43).kind == SurfaceEvent::BankRight);
+    assert(ev(*hui, 0xB0, 0x41, 0x42).value == 2.0 && ev(*hui, 0xB0, 0x41, 0x02).value == -2.0 && ev(*hui, 0x90, 0x00, 0x7F).kind == SurfaceEvent::Ping);
+    out.clear();
+    hui->encode(was, now, true, none, out);
+    assert(has(out, {0xB0, 0x00, 0x40, 0xB0, 0x20, 0x00}) && has(out, {0xB0, 0x0C, 0x00, 0xB0, 0x2C, 0x42}));
+    assert(has(out, {0xF0, 0x00, 0x00, 0x66, 0x05, 0x00, 0x10, 0x00, 'K', 'i', 'c', 'k', 0xF7}));
+    out.clear();
+    hui->keepAlive(out);
+    assert((out == std::vector<uint8_t>{0x90, 0x00, 0x00}));
+    assert(ringPosition(-1.0) == 1 && ringPosition(0.0) == 6 && ringPosition(1.0) == 11);
+    pass("surface codecs (R-CTRL-2): Mackie Control and HUI decoded — faders 14-bit, pots relative, buttons pressed, touch, transport, bank — and encoded as a diff: faders, lights, rings, names; nothing when nothing changed; a touched fader left alone; HUI's ping");
+}
+
+static void test_a_control_surface()
+{
+    // R-CTRL-2: a surface on its own port (the keyboard deaf to it): it connects and shows everything; its fader moves a
+    // gain by the fader law, its pot a pan, its buttons mute and the transport; the song's changes move it back —
+    // not a fader a hand is on, until let go; another bank; none disconnects; HUI pings; refusals
+    Run r;
+    r.fake.withSurface = true;
+    r.ok("project new " + freshSong("surface") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");
+    r.ok("clip add --src kick.wav --at 0");
+    const auto &strips = r.svc.model().strips;
+    const std::string a = strips[0].id, b = strips[1].id;
+    r.events.clear();
+    r.ok("settings set surface=mcu surfacePort=X-Touch");
+    r.ok("wait 0.02");
+    assert(r.svc.model().surface.connected && r.svc.model().settings.surface == "mcu" && r.svc.model().surface.why.empty());
+    bool said = false;
+    for (const auto &e : r.events) said |= contains(e, "surface.changed protocol=mcu connected=1 bank=0");
+    assert(said);
+    auto &out = *r.fake.surfaceOut;
+    auto has = [&](std::vector<uint8_t> n) { return std::search(out.begin(), out.end(), n.begin(), n.end()) != out.end(); };
+    assert(has({0xF0, 0x00, 0x00, 0x66, 0x14, 0x12, 0x00}));                                      // it shows everything
+    out.clear();
+    r.ok("wait 0.03");
+    assert(out.empty());                                                                           // … and then only what changes
+    // the keyboard is deaf to the surface's port
+    r.ok("strip arm " + a);
+    assert(contains(r.ok("midi devices"), "Keys  (listening)") && !contains(r.ok("midi devices"), "X-Touch  (listening)"));
+    r.ok("strip arm none");
+    // its fader: the fader law (the top is +6 dB); its pot: a pan; its mute — and they show at once (every command ends
+    // with a pump)
+    out.clear();
+    r.fake.surfaceKey(0xE0, 0x7F, 0x7F);
+    r.fake.surfaceKey(0xB1, 0x10, 0x00);                                                           // (a pot on channel 2: Mackie's are on 1)
+    r.fake.surfaceKey(0xB0, 0x11, 0x05);                                                           // strip 2's pot, five steps clockwise
+    r.fake.surfaceKey(0x90, 0x10, 0x7F);                                                           // strip 1's mute
+    r.ok("wait 0.02");
+    assert(r.ok("get " + a + ".gain") == "6.0\n" && r.ok("get " + b + ".pan") == "0.1\n" && r.ok("get " + a + ".mute") == "true\n");
+    assert(has({0x90, 0x10, 0x7F}) && has({0xB0, 0x31, 0x17}));                                   // its light, its ring
+    // the song moves it back
+    out.clear();
+    r.ok("set " + b + ".gain=-6");
+    const int v = (int)std::lround(faderPos(-6.0) * 16383.0);
+    assert(has({0xE1, (uint8_t)(v & 0x7F), (uint8_t)(v >> 7)}));
+    // not a fader a hand is on — until it is let go
+    r.fake.surfaceKey(0x90, 0x69, 0x7F);
+    r.ok("wait 0.02");
+    out.clear();
+    r.ok("set " + b + ".gain=-12");
+    r.ok("wait 0.02");
+    assert(!has({0xE1}));
+    r.fake.surfaceKey(0x90, 0x69, 0x00);
+    r.ok("wait 0.02");
+    const int w = (int)std::lround(faderPos(-12.0) * 16383.0);
+    assert(has({0xE1, (uint8_t)(w & 0x7F), (uint8_t)(w >> 7)}));
+    // the transport keys, and the play light
+    out.clear();
+    r.fake.surfaceKey(0x90, 0x5E, 0x7F);
+    r.ok("wait 0.02");
+    r.ok("wait 0.05");
+    assert(r.svc.model().transport.playing && has({0x90, 0x5E, 0x7F}));
+    r.fake.surfaceKey(0x90, 0x5D, 0x7F);
+    r.ok("wait 0.02");
+    r.ok("wait 0.02");
+    assert(!r.svc.model().transport.playing);
+    // another bank: one channel on — its first strip is the song's second
+    r.events.clear();
+    r.fake.surfaceKey(0x90, 0x31, 0x7F);
+    r.ok("wait 0.02");
+    assert(r.svc.model().surface.bank == 1);
+    r.fake.surfaceKey(0xE0, 0x00, 0x00);                                                           // strip 1 is now `b`: to the bottom
+    r.ok("wait 0.02");
+    assert(r.ok("get " + b + ".gain") == "-120.0\n");
+    said = false;
+    for (const auto &e : r.events) said |= contains(e, "surface.changed protocol=mcu connected=1 bank=1");
+    assert(said);
+    // none: disconnected, said; the keyboard hears every port again
+    r.events.clear();
+    r.ok("settings set surface=none");
+    r.ok("wait 0.02");
+    assert(!r.svc.model().surface.connected);
+    said = false;
+    for (const auto &e : r.events) said |= contains(e, "surface.changed protocol=none connected=0");
+    assert(said);
+    // HUI: its fader pair; its ping
+    r.ok("set " + a + ".gain=0");
+    out.clear();
+    r.ok("settings set surface=hui");
+    r.ok("wait 0.02");
+    r.fake.surfaceKey(0xB0, 0x00, 0x7F);
+    r.fake.surfaceKey(0xB0, 0x20, 0x7F);
+    r.ok("wait 0.02");
+    r.ok("wait 0.02");
+    assert(r.svc.model().surface.connected && r.ok("get " + a + ".gain") == "6.0\n" && has({0x90, 0x00, 0x00}));
+    // refusals, and a port that is not there
+    assert(contains(r.no("settings set surface=xyz"), "surface is none, mcu (Mackie Control) or hui"));
+    r.ok("settings set surface=mcu surfacePort=Nowhere");
+    r.ok("wait 0.02");
+    assert(!r.svc.model().surface.connected && contains(r.svc.model().surface.why, "Nowhere"));
+    r.ok("settings set surface=none surfacePort=");
+    pass("a control surface (R-CTRL-2): on its own port, the keyboard deaf to it; connected it shows everything; its fader (the fader law), pot and mute move the song; the song moves it back — not a touched fader until let go; the transport keys and light; another bank; none disconnects; HUI's fader pair and ping; refusals; a missing port said");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -5159,6 +5362,8 @@ int main()
     test_a_plugin_plays_in_a_song();
     test_a_plugins_own_editor();
     test_midi_learn_and_the_transport_keys();
+    test_the_surface_codecs();
+    test_a_control_surface();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

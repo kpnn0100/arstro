@@ -15,6 +15,8 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
   the third then under half and dropped. Not reproduced, so not yet measured.
 - **Recommended fix:** wait on the heard position (the song past the third turn) rather than on captured frames, or
   4.4 passes with the fourth dropped by rule — then four runs under a parallel build.
+- **Seen again, 2026-10-17 (N28's mutant run):** `test_record_the_keyboard_into_a_clip` (a held note's length) once
+  more, the restored suite run straight after a `-j16` build; twice green right after.
 - **Seen again, 2026-10-17 (N26's mutant run):** the RESTORED suite, straight after a `-j16` build, failed once in
   `Run::no` (a line expected to be refused was accepted) — which line, the run's filter did not keep (it now keeps the
   `accepted` line). Six idle runs since, green. Logged here as the same family until the line is known.

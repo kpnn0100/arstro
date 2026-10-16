@@ -168,6 +168,7 @@ namespace solaris_cli
 #ifdef SOLARIS_HAVE_ALSA
             host.listMidiInputs = solaris_host::listMidiInputs; // R-MIDI-2
             host.midiIn = [] { return std::unique_ptr<solaris::IMidiIn>(new solaris_host::MidiInAlsa()); };
+            host.midiOut = [] { return std::unique_ptr<solaris::IMidiOut>(new solaris_host::MidiOutAlsa()); }; // R-CTRL-2: a surface's port
 #endif
             solaris_host::machinePaths(host.settingsPath, host.recentsPath); // the window's settings and recents
             solaris_host::presetPaths(host.presetsPath, host.factoryPresetsPath); // R-PRESET-1

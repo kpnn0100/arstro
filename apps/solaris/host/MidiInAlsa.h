@@ -7,6 +7,7 @@
  */
 #pragma once
 #include "MidiIn.h"
+#include "MidiOut.h"
 #include <atomic>
 #include <thread>
 
@@ -34,6 +35,22 @@ namespace solaris_host
         std::atomic<bool> mRun{false};
         std::function<void(const solaris::MidiEvent &)> mSink;
         std::vector<std::string> mListening;
+    };
+
+    /** R-CTRL-2: a control surface told where its faders go, its lights, its text — the ALSA sequencer, connected to
+     *  the writable port of that name; bytes encoded to sequencer events (system exclusive too). */
+    class MidiOutAlsa : public solaris::IMidiOut
+    {
+    public:
+        ~MidiOutAlsa() override;
+        bool open(const std::string &port, std::string &err) override;
+        void send(const std::vector<uint8_t> &bytes) override;
+        void close() override;
+
+    private:
+        _snd_seq *mSeq = nullptr;
+        int mPort = -1;
+        void *mEncoder = nullptr; // snd_midi_event_t
     };
 }
 }

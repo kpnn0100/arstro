@@ -27,6 +27,7 @@ namespace solaris
     SolarisService::~SolarisService()
     {
         if (mMidiIn) mMidiIn->close(); // its thread first: it pushes into the queue the players drain
+        stopSurface();                 // R-CTRL-2: its listener too
         mMonitor.reset();
         stopPlayer();
     }
@@ -139,6 +140,7 @@ namespace solaris
         // MIDI controls that moved, the transport keys pressed (R-CTRL-1)
         gatherPluginEdits();
         controlMidi();
+        surfacePump(); // R-CTRL-2
         if (mDepth == 0) applyPendingEdits();
         // R-VST-6: a plugin that stopped playing (its process died, it overran) is said once, and the model shows it
         bool down = false;

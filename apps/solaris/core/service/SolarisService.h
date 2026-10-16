@@ -22,6 +22,8 @@
 #include "Event.h"
 #include "MixGraph.h"
 #include "MidiIn.h"
+#include "MidiOut.h"
+#include "Surface.h"
 #include "Player.h"
 #include "PluginDevice.h"
 #include "PluginHost.h"
@@ -68,6 +70,8 @@ namespace solaris
             /** R-MIDI-2: this machine's MIDI inputs, and a listener to them. Empty = this build has no MIDI input. */
             std::function<bool(std::vector<MidiPort> &out, std::string &err)> listMidiInputs;
             std::function<std::unique_ptr<IMidiIn>()> midiIn;
+            /** R-CTRL-2: a MIDI output, for a control surface's faders, lights and text. Empty = none. */
+            std::function<std::unique_ptr<IMidiOut>()> midiOut;
             /** R-REC-1: a stream from a capture device — what an armed audio strip monitors and records. Empty = this
              *  build cannot record audio. */
             std::function<std::unique_ptr<IAudioIn>()> audioIn;
@@ -299,7 +303,23 @@ namespace solaris
         bool mapInert(const std::string &address) const;
         std::shared_ptr<std::atomic<long long>> mMidiCount = std::make_shared<std::atomic<long long>>(0);
         std::unique_ptr<IMidiIn> mMidiIn;
-        std::string mMidiOpenFor;          // the `midiInputs` it was opened with
+        std::string mMidiOpenFor;          // the `midiInputs` (and the surface's port it leaves out) it was opened with
+        std::string midiFor() const { return mSettings.midiInputs + (mSettings.surface != "none" ? "|" + mSettings.surfacePort : std::string()); }
+        // R-CTRL-2 (ServiceSurface.cpp): a control surface on its own port — its codec, what it was last sent, its bank
+        void surfacePump();
+        void startSurface();
+        void stopSurface();
+        SurfaceState surfaceState() const;
+        std::unique_ptr<SurfaceCodec> mSurfaceCodec;
+        std::unique_ptr<IMidiIn> mSurfaceIn;
+        std::unique_ptr<IMidiOut> mSurfaceOut;
+        std::shared_ptr<LockFreeQueue<MidiEvent>> mSurfaceQ;
+        std::string mSurfaceFor = "none|", mSurfaceWhy; // the settings it was started for; why it is not connected
+        SurfaceState mSurfaceShown;
+        std::array<bool, kSurfaceStrips + 1> mSurfaceTouched{};
+        bool mSurfaceAll = true;
+        int mSurfaceBank = 0;                // the first of its eight strips, in processing order
+        double mSurfacePing = 0.0;
         std::string mArmed;                // the armed strip ("" none) — the session's, not the song's
         std::unique_ptr<Player> mMonitor;
         std::vector<std::string> mMonitorStrips;

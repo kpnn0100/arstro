@@ -3,6 +3,7 @@
 add_library(solaris_core STATIC
   Compile.cpp
   PluginDevice.cpp
+  Surface.cpp
   Formula.cpp
   Bindings.cpp
   Settings.cpp
@@ -28,6 +29,7 @@ add_library(solaris_core STATIC
   service/ServiceLibrary.cpp
   service/ServicePlugins.cpp
   service/ServiceControl.cpp
+  service/ServiceSurface.cpp
   service/Notation.cpp
   service/RegistryModel.cpp
   service/Keymap.cpp

@@ -1451,6 +1451,16 @@
       "summary": "R-VST-6: a song's plugin is not playing — it never started, crashed or overran its budget; an effect passes dry, an instrument is silent (`device reload <dv>`). Said once."
     },
     {
+      "name": "surface.changed",
+      "fields": [
+        "protocol",
+        "connected",
+        "bank",
+        "why"
+      ],
+      "summary": "R-CTRL-2: the control surface connected (1) or not (0, why), or moved to another bank of eight."
+    },
+    {
       "name": "map.learned",
       "fields": [
         "cc",
@@ -3002,6 +3012,36 @@
       "stable": true
     },
     {
+      "path": "surface",
+      "type": "object",
+      "summary": "R-CTRL-2: the control surface as it is now — the session's",
+      "stable": true
+    },
+    {
+      "path": "surface.protocol",
+      "type": "string",
+      "summary": "none | mcu | hui",
+      "stable": true
+    },
+    {
+      "path": "surface.connected",
+      "type": "bool",
+      "summary": "its port is open, in and out",
+      "stable": true
+    },
+    {
+      "path": "surface.why",
+      "type": "string",
+      "summary": "why it is not connected ('' when it is, or none is set)",
+      "stable": true
+    },
+    {
+      "path": "surface.bank",
+      "type": "int",
+      "summary": "the first of its eight strips, 0-based, in processing order",
+      "stable": true
+    },
+    {
       "path": "midiDevices",
       "type": "object[]",
       "summary": "this machine's MIDI inputs, as `midi devices` last listed them (R-MIDI-2)",
@@ -3089,6 +3129,18 @@
       "path": "settings.mappings[].inert",
       "type": "bool",
       "summary": "the open song has no such address",
+      "stable": true
+    },
+    {
+      "path": "settings.surface",
+      "type": "string",
+      "summary": "R-CTRL-2: none | mcu (Mackie Control) | hui — `settings set surface=…`",
+      "stable": true
+    },
+    {
+      "path": "settings.surfacePort",
+      "type": "string",
+      "summary": "… the MIDI port it is on, in and out (the keyboard never listens there)",
       "stable": true
     },
     {
