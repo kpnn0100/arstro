@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N4 — the master's loudness meters in the model and the window; strip meters** (R-METER-1/2), then N5… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor. B13+ wait. Owed live checks: D-5, D-9, the resize cursor. B13+ wait (ask). Owed live checks: D-5, D-9.
+**► N5 — DSP: the Limiter's true-peak mode** (R-EDM-4a), then N6… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window. B13+ wait (ask).
 
 ---
 
@@ -398,8 +398,15 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
 - [x] **N3** DSP: loudness (BS.1770 gated), true peak, correlation, spectrum meters (R-METER-1's DSP half).
       — DSP `926a2b4` (REQ-meter-1…4, `src/meter/`): integrated loudness equal to BS.1770-4 computed independently
       (−8.053 vs −8.053 LUFS), true peak within 0.06 dB; 3 mutants seen red.
-- [ ] **N4** The master's loudness meters in the model and the window; strip meters RMS / held peak / clip latch
+- [x] **N4** The master's loudness meters in the model and the window; strip meters RMS / held peak / clip latch
       (R-METER-1, R-METER-2).
+      — DR-METER-1/2. The engine taps its master into the player's buffers; the player runs the DSP meters and the
+      ballistics per block (in samples) and publishes atomics; the service keeps the clip latch, `meters clear` (a
+      Live message, so it lands after the edit before it), `render --measure` (one line). Window: RMS core, held line,
+      clip light on every meter; the master's LUFS chip opens the Loudness window. L2 (a −6 dBFS sine reads −6.02
+      LUFS / dBTP, correlation 1, its band; holds fall; no allocation on a clear) + UI + 2 shots. 9 mutants red; the
+      pending-clear guard's race not reproduced by its mutant (kept — the message ordering is the main fix, found by
+      a mutant run that tripped on it).
 - [ ] **N5** DSP: the Limiter's true-peak mode (R-EDM-4a).
 - [ ] **N6** Delivery formats: FLAC / MP3 / OGG / Opus, rate, bits, dither, normalise to LUFS; File › Export…
       (R-EXPORT-1).

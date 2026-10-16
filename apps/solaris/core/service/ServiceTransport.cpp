@@ -100,15 +100,44 @@ namespace solaris
         const double spb = 60.0 / mProject.header.bpm * mProject.header.sampleRate;
         t.position = (double)mPlayer->heard() / spb;
         t.latencyMs = std::round(mPlayer->latency() * 10000.0) / 10.0;
-        t.masterPeak[0] = mPlayer->peak(2 * Player::kMaxStrips);
-        t.masterPeak[1] = mPlayer->peak(2 * Player::kMaxStrips + 1);
+        // R-METER-2: while a `meters clear` is on its way to the audio thread, its holds, latches and loudness are
+        // from before it — the model keeps what the clear set
+        const bool fresh = !mPlayer->clearing();
+        for (int c = 0; c < 2; ++c)
+        {
+            t.masterPeak[c] = mPlayer->peak(2 * Player::kMaxStrips + c);
+            t.masterRms[c] = mPlayer->rms(2 * Player::kMaxStrips + c);
+            if (fresh) t.masterHold[c] = mPlayer->hold(2 * Player::kMaxStrips + c);
+        }
+        if (fresh && mPlayer->takeClip(Player::kMaxStrips)) mMasterClip = true; // a latch: only `meters clear` puts it out
+        t.masterClip = mMasterClip;
+        for (size_t i = 0; fresh && i < mLiveStrips.size() && i < (size_t)Player::kMaxStrips; ++i)
+            if (mPlayer->takeClip((int)i)) mClipLatch.insert(mLiveStrips[i]);
         for (auto &s : mModel.strips)
+        {
             for (size_t i = 0; i < mLiveStrips.size() && i < (size_t)Player::kMaxStrips; ++i)
                 if (mLiveStrips[i] == s.id)
-                {
-                    s.peak[0] = mPlayer->peak((int)(2 * i));
-                    s.peak[1] = mPlayer->peak((int)(2 * i + 1));
-                }
+                    for (int c = 0; c < 2; ++c)
+                    {
+                        s.peak[c] = mPlayer->peak((int)(2 * i) + c);
+                        s.rms[c] = mPlayer->rms((int)(2 * i) + c);
+                        if (fresh) s.hold[c] = mPlayer->hold((int)(2 * i) + c);
+                    }
+            s.clip = mClipLatch.count(s.id) > 0;
+        }
+        // R-METER-1: the master's loudness, as the player measured it
+        if (t.playing && fresh)
+        {
+            Player::Loudness l;
+            mPlayer->loudness(l);
+            LoudnessModel &lm = mModel.loudness;
+            lm.momentary = l.momentary;
+            lm.shortTerm = l.shortTerm;
+            lm.integrated = l.integrated;
+            lm.truePeak = l.truePeak;
+            lm.correlation = l.correlation;
+            lm.spectrum.assign(l.spectrum.begin(), l.spectrum.end());
+        }
         // R-MIX-16: what each formula evaluated to for the block heard now, by the engine that played it
         if (!mLiveBinds.empty() && mPlayer->liveValues(mLiveGen, mLiveValues))
             for (auto &bm : mModel.bindings)
@@ -326,11 +355,29 @@ namespace solaris
             announce();
             return true;
         }
+        case K::MetersClear:
+        {
+            // R-METER-2: the latches and holds out, the master's true peak and integrated loudness started again
+            mClipLatch.clear();
+            mMasterClip = false;
+            if (mPlayer) mPlayer->clearMeters();
+            for (auto &s : mModel.strips) { s.clip = false; s.hold[0] = s.hold[1] = 0; }
+            mModel.transport.masterClip = false;
+            mModel.transport.masterHold[0] = mModel.transport.masterHold[1] = 0;
+            const std::vector<double> bands = mModel.loudness.spectrum;
+            mModel.loudness = LoudnessModel();
+            mModel.loudness.spectrum = bands; // a 300 ms view: it follows the sound, not the clear
+            emit(Event(Event::Kind::MetersCleared));
+            return true;
+        }
         case K::TransportStop:
             stopPlayer();
             endClipLoop();
             if (c.has("return")) mPosition = mCue; // R-TIME-7: back to where the time bar was put
+            for (auto &s : mModel.strips) // R-METER-2: a stopped strip reads nothing — but its clip light stays lit
+                for (int ch = 0; ch < 2; ++ch) s.peak[ch] = s.rms[ch] = s.hold[ch] = 0;
             mModel.transport = TransportModel();
+            mModel.transport.masterClip = mMasterClip;
             mModel.transport.position = mPosition;
             mModel.transport.cue = mCue;
             mModel.transport.loopFrom = mLoopFrom;

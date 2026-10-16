@@ -11,6 +11,7 @@
 #include "../../widgets/AutomationPanel.h"
 #include "../../widgets/SettingsSheet.h"
 #include "../../widgets/DevicePanel.h"
+#include "../../widgets/LoudnessPanel.h"
 #include "../../widgets/ParamMenu.h"
 #include "../../widgets/PianoRoll.h"
 #include "../../../../cosmo/widgets/SliderRow.h"
@@ -647,6 +648,78 @@ static void test_lists_travel_when_the_song_changes_shape()
     r.settle();
     assert(b.rowAlpha(1) == 1.0);
     pass("Lists travel (§1): a clip from a shell fades in, a `clip move` eases, a lane removed slides the next up, a tab cross-fades");
+}
+
+static void test_meters_and_the_loudness_window()
+{
+    // R-METER-2: an RMS core, a held line and a clip light on every meter; R-METER-1: the master's LUFS chip opens
+    // the Loudness window — every number the model's, eased
+    sltest::Rig r("ui-meters", 1280, 800);
+    r.cmd("project new " + r.song("Meters") + ".slp --bpm 120");
+    for (int k = 0; k < 4; ++k) r.cmd("clip add --src tone.wav --at " + std::to_string(k) + " --length 1"); // its strip: a 382 Hz sine at 0.4
+    const std::string ch = r.svc->model().clips.front().track;  // on the first mixer, the page shown
+    r.cmd("set " + ch + ".gain=12");                             // ×4: over full scale
+    r.settle();
+    auto &d = r.app->project().dock();
+    const auto S = [&r, ch]() -> const arstro::solaris::StripModel & {
+        for (const auto &s : r.svc->model().strips)
+            if (s.id == ch) return s;
+        assert(false);
+        return r.svc->model().strips[0];
+    };
+    assert(S().id == ch && d.clipAmount(ch) == 0.0 && d.lufsLive() == -70.0);
+    r.cmd("transport play");
+    bool lit = false;
+    for (int k = 0; k < 200 && !lit; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); lit = S().clip; }
+    assert(lit && r.svc->model().transport.masterClip);
+    r.frame();
+    assert(d.clipAmount(ch) > 0.0 && d.clipAmount(ch) < 1.0);   // the light comes up, eased
+    for (int k = 0; k < 110; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); } // ≈ 0.45 s of audio (the rig plays at a quarter speed)
+    assert(d.clipAmount(ch) == 1.0 && d.clipAmount("master") == 1.0);
+    assert(d.rmsLive(ch, 0) > 0.5 && d.rmsLive(ch, 0) < d.meterLive(ch, 0));  // the RMS core under the peak
+    assert(d.holdLive(ch, 0) >= d.meterLive(ch, 0) - 0.02);
+    assert(r.svc->model().loudness.integrated > -143.0);
+    // the clip light clicked: ONE line, every light out — eased
+    r.cmd("set " + ch + ".gain=0");
+    for (int k = 0; k < 10; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+    r.click(world(d, d.clipRect(ch)));
+    assert(r.sent.back() == "meters clear" && !S().clip && !r.svc->model().transport.masterClip);
+    r.frame();
+    r.frame();
+    assert(d.clipAmount(ch) > 0.0 && d.clipAmount(ch) < 1.0);
+    for (int k = 0; k < 20; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+    assert(d.clipAmount(ch) == 0.0);
+    for (int k = 0; k < 110; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+    r.cmd("transport stop");
+    r.settle();
+    // stopped, the loudness stays to be read: the master's chip shows the integrated, caught up
+    const auto &L = r.svc->model().loudness;
+    assert(L.integrated > -143.0 && std::fabs(d.lufsLive() - std::max(-70.0, L.integrated)) < 1e-6);
+    r.click(world(d, d.loudnessRect()));
+    auto &wl = r.app->project().windows();
+    r.frame();
+    r.frame();
+    assert(wl.isOpen("loudness") && wl.window("loudness")->appearAmount() > 0.0 && wl.window("loudness")->appearAmount() < 1.0);
+    r.settle();
+    auto &lp = *wl.loudnessPanel();
+    using LP = arstro::solaris_ui::LoudnessPanel;
+    assert(std::fabs(lp.readingLive(LP::Integrated) - L.integrated) < 1e-6 && lp.readingShown(LP::Integrated) == 1.0);
+    assert(std::fabs(lp.readingLive(LP::TruePeak) - L.truePeak) < 1e-6 && std::fabs(lp.readingLive(LP::Correlation) - L.correlation) < 1e-6);
+    int loudest = 0;
+    for (int b = 1; b < LP::kBands; ++b)
+        if (lp.bandLive(b) > lp.bandLive(loudest)) loudest = b;
+    assert(loudest == 25 || loudest == 26);                      // 382 Hz: between the 354 and 397 Hz bands
+    // Reset: ONE line; the integrated fades to "—" (caught mid-fade), the master's chip with it
+    r.click(world(lp, lp.resetRect()));
+    assert(r.sent.back() == "meters clear" && r.svc->model().loudness.integrated == -144.0);
+    r.frame();
+    r.frame();
+    assert(lp.readingShown(LP::Integrated) > 0.0 && lp.readingShown(LP::Integrated) < 1.0);
+    r.settle();
+    assert(lp.readingShown(LP::Integrated) == 0.0 && lp.readingShown(LP::Momentary) == 0.0);
+    pass("Meters (R-METER-1/2): over full scale the clip lights come up eased and latch; a click on one is `meters clear` and they go out eased; "
+         "the RMS core sits under the peak and the held line above it; stopped, the master's chip shows the integrated LUFS, caught up; it "
+         "opens the Loudness window (fading in) whose readings and 1/6-octave bands are the model's; Reset is one line and the numbers fade to —");
 }
 
 static void test_mixer_dock_strips()
@@ -3076,6 +3149,7 @@ int main()
     test_ids_shown_and_copied();
     test_lists_travel_when_the_song_changes_shape();
     test_mixer_dock_strips();
+    test_meters_and_the_loudness_window();
     test_mixer_matrix_effects_and_device_panel();
     test_song_bar_menus_and_settings_sections();
     test_device_window_lists_parameters_and_binds_them();

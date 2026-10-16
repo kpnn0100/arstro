@@ -103,6 +103,16 @@ namespace solaris_ui
         artboard::Rect cellRect(const std::string &from, const std::string &to) const; // the matrix
         artboard::Rect addLineRect() const;          // the shown page's "+ Line" (R-MIX-13), where it is DRAWN
         double meterLive(const std::string &id, int channel) const;
+        /** R-METER-2, LIVE as drawn (0…1 on the meter's −60…+6 dBFS scale): the RMS core, the held-peak line; the
+         *  clip light's LIT amount and where it is (a click: `meters clear`). */
+        double rmsLive(const std::string &id, int channel) const;
+        double holdLive(const std::string &id, int channel) const;
+        double clipAmount(const std::string &id) const;
+        artboard::Rect clipRect(const std::string &id) const;
+        /** R-METER-1: the master's loudness chip (its integrated LUFS; a click opens the Loudness window) and the
+         *  LUFS it shows, LIVE. */
+        artboard::Rect loudnessRect() const;
+        double lufsLive() const { return mLufs.value(); }
         /** R-MIX-16: what a bound control's tag says ("" when the address is not bound), and its LIVE presence. */
         std::string tagText(const std::string &address) const;
         double tagAmount(const std::string &address) const;
@@ -119,6 +129,7 @@ namespace solaris_ui
         std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onRename;
         std::function<void()> onToggle;              // the chevron: fold the dock away or bring it back
         std::function<void(const std::string &dv)> onOpenDevice;      // a chip: the device's window (R-WIN-1)
+        std::function<void()> onOpenLoudness;                         // the master's LUFS chip (R-METER-1)
         std::function<bool(const std::string &dv)> isDeviceOpen;      // its chip is outlined while it is
         std::function<void(double worldY)> onResize; // the top edge dragged (direct manipulation)
         /** R-UI-14: ↕ while its top edge is in hand, and over it. */
@@ -138,7 +149,11 @@ namespace solaris_ui
         {
             artboard::AnimatedProperty fader{0.0}, pan{0.0}, mute{0.0}, solo{0.0}, dim{0.0}, colT{1.0};
             artboard::AnimatedProperty meter[2] = {artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
-            double faderLast = 0, panLast = 0, meterLast[2] = {0, 0};
+            artboard::AnimatedProperty rms[2] = {artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};  // R-METER-2
+            artboard::AnimatedProperty hold[2] = {artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
+            artboard::AnimatedProperty clip{0.0};
+            double faderLast = 0, panLast = 0, meterLast[2] = {0, 0}, rmsLast[2] = {0, 0}, holdLast[2] = {0, 0};
+            bool clipLast = false;
             bool muteLast = false, soloLast = false, dimLast = false, placed = false;
             artboard::Color colFrom, colTo;
             int colLast = -1;
@@ -179,7 +194,7 @@ namespace solaris_ui
             artboard::AnimatedProperty a{0.0}, t{1.0};
             bool on = false, placed = false;
         };
-        enum class Part { None, Tab, AddMixer, ToggleDock, Resize, Header, Chip, Send, Pan, Fader, Mute, Solo, Out, Fold, Cell, AddLine };
+        enum class Part { None, Tab, AddMixer, ToggleDock, Resize, Header, Chip, Send, Pan, Fader, Mute, Solo, Out, Fold, Cell, AddLine, Clip, Loudness };
         struct Hit
         {
             Part part = Part::None;
@@ -234,6 +249,8 @@ namespace solaris_ui
         int mTab = 0;
         bool mInteracting = false, mBound = false, mEver = false, mWasPlaying = false;
         double mNowMs = 0.0;
+        artboard::AnimatedProperty mLufs{-70.0}, mLufsOn{0.0}; // R-METER-1: the master's integrated loudness, and whether there is one
+        double mLufsLast = -144.0;
         artboard::AnimatedProperty mHiX{0.0}, mHiW{0.0};
         bool mHiInit = false;
         double mHiXLast = 0, mHiWLast = 0;

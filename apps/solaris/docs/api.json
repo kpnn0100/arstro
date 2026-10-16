@@ -624,7 +624,7 @@
     },
     {
       "verb": "render",
-      "usage": "render --out <file.wav> [--from <beats>] [--to <beats>] [--stems <ch,…|all>] [--ports] [--bits <24|32f>]",
+      "usage": "render --out <file.wav> [--from <beats>] [--to <beats>] [--stems <ch,…|all>] [--ports] [--bits <24|32f>] [--measure]",
       "args": "",
       "flags": [
         "out=<file.wav>",
@@ -632,9 +632,10 @@
         "to=<beats>",
         "stems=<ch,…|all>",
         "ports",
-        "bits=<24|32f>"
+        "bits=<24|32f>",
+        "measure"
       ],
-      "summary": "Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) is compensated and trimmed (R-MIX-17).",
+      "summary": "Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) is compensated and trimmed (R-MIX-17). --measure prints the master's integrated loudness, the most of its momentary and short-term, its true peak and its lowest correlation (R-METER-1).",
       "requirement": "R-RENDER-2"
     },
     {
@@ -790,6 +791,14 @@
       "flags": [],
       "summary": "Move the transport (playing or not).",
       "requirement": "R-TIME-4"
+    },
+    {
+      "verb": "meters clear",
+      "usage": "meters clear",
+      "args": "",
+      "flags": [],
+      "summary": "Clear the meters: every clip light and held peak, and the master's true peak and integrated loudness start again (the song is not edited; a click on a clip light).",
+      "requirement": "R-METER-2"
     },
     {
       "verb": "transport loop",
@@ -974,6 +983,11 @@
         "age"
       ],
       "summary": "The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2)."
+    },
+    {
+      "name": "meters.cleared",
+      "fields": [],
+      "summary": "The clip lights and held peaks are out; the master's true peak and integrated loudness start again (R-METER-2)."
     }
   ],
   "model": [
@@ -1425,6 +1439,24 @@
       "path": "strips[].peak",
       "type": "number[]",
       "summary": "the last played block's peaks, L/R (R-PLAY-3)",
+      "stable": false
+    },
+    {
+      "path": "strips[].rms",
+      "type": "number[]",
+      "summary": "RMS over the last 300 ms, L/R (R-METER-2)",
+      "stable": false
+    },
+    {
+      "path": "strips[].hold",
+      "type": "number[]",
+      "summary": "the held peak, L/R: the most of the last 1.5 s, then falling 20 dB a second",
+      "stable": false
+    },
+    {
+      "path": "strips[].clip",
+      "type": "bool",
+      "summary": "reached full scale since `meters clear` — a latch",
       "stable": false
     },
     {
@@ -2193,6 +2225,66 @@
       "path": "transport.masterPeak",
       "type": "number[]",
       "summary": "L/R peaks of the last played block",
+      "stable": false
+    },
+    {
+      "path": "transport.masterRms",
+      "type": "number[]",
+      "summary": "the master's RMS over 300 ms, L/R (R-METER-2)",
+      "stable": false
+    },
+    {
+      "path": "transport.masterHold",
+      "type": "number[]",
+      "summary": "the master's held peak, L/R",
+      "stable": false
+    },
+    {
+      "path": "transport.masterClip",
+      "type": "bool",
+      "summary": "the master reached full scale since `meters clear`",
+      "stable": false
+    },
+    {
+      "path": "loudness",
+      "type": "object",
+      "summary": "the master as measured while playing, kept after a stop (R-METER-1, ITU-R BS.1770-4)",
+      "stable": false
+    },
+    {
+      "path": "loudness.momentary",
+      "type": "number",
+      "summary": "LUFS over the last 400 ms; −144 = nothing measured",
+      "stable": false
+    },
+    {
+      "path": "loudness.shortTerm",
+      "type": "number",
+      "summary": "LUFS over the last 3 s",
+      "stable": false
+    },
+    {
+      "path": "loudness.integrated",
+      "type": "number",
+      "summary": "LUFS, gated (−70 absolute, −10 LU relative), since play or `meters clear`",
+      "stable": false
+    },
+    {
+      "path": "loudness.truePeak",
+      "type": "number",
+      "summary": "dBTP (4× oversampled), the most since play or `meters clear`",
+      "stable": false
+    },
+    {
+      "path": "loudness.correlation",
+      "type": "number",
+      "summary": "stereo correlation over 300 ms, −1 … +1 (0: nothing to compare)",
+      "stable": false
+    },
+    {
+      "path": "loudness.spectrum",
+      "type": "number[]",
+      "summary": "61 bands of 1/6 octave, dB re a full-scale sine: band b's centre is 1000·2^((b−34)/6) Hz",
       "stable": false
     },
     {

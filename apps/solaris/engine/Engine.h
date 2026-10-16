@@ -108,6 +108,9 @@ namespace engine
         /** Capture the master bus (after its rack and gain) on every render — the mixdown. */
         void captureMaster(bool on) { mCaptureMaster = on; }
         const std::vector<std::vector<float>> &capturedMaster() const { return mCapturedMaster; }
+        /** The master as it leaves (what `capturedMaster` holds), written into the CALLER's buffers at each
+         *  render's frame offset — the player's meters read it (R-METER-1). Never allocates; null = none. */
+        void tapMaster(float *left, float *right, int capacity) { mTapL = left; mTapR = right; mTapCap = capacity; }
 
         /** R-MIX-17: samples every port and the captured master lag the song — the most any path
          *  to an output carries; an offline render trims it, live playback subtracts it. */
@@ -165,6 +168,8 @@ namespace engine
         std::vector<std::vector<std::vector<float>>> mCaptured;
         bool mCaptureMaster = false;
         std::vector<std::vector<float>> mCapturedMaster;
+        float *mTapL = nullptr, *mTapR = nullptr;          // tapMaster's: the caller's buffers
+        int mTapCap = 0;
         long long mPos = 0;
         std::vector<double> mVars, mBindValues, mApplied;   // sized at build: evaluation never allocates
         bool mMasterBound = false;

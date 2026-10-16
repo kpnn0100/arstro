@@ -211,11 +211,12 @@ namespace solaris
             {K::Eval, "eval", "<address>", 1, 1, {"at=<beats>", "explain"},
              "The value an address plays at a beat (default 0); --explain shows its formula and every name it reads.", "R-AUTO-8"},
 
-            {K::Render, "render", "", 0, 0, {"out=<file.wav>", "from=<beats>", "to=<beats>", "stems=<ch,…|all>", "ports", "bits=<24|32f>"},
+            {K::Render, "render", "", 0, 0, {"out=<file.wav>", "from=<beats>", "to=<beats>", "stems=<ch,…|all>", "ports", "bits=<24|32f>", "measure"},
              "Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader "
              "output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until "
              "−90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) "
-             "is compensated and trimmed (R-MIX-17).", "R-RENDER-2", false, {"out"}},
+             "is compensated and trimmed (R-MIX-17). --measure prints the master's integrated loudness, the most of its "
+             "momentary and short-term, its true peak and its lowest correlation (R-METER-1).", "R-RENDER-2", false, {"out"}},
 
             {K::MatrixPrint, "matrix print", "", 0, 0, {"json"}, "Every route and send at once: rows = strips, columns = destinations.", "R-MIX-9"},
             {K::Audit, "audit", "", 0, 0, {}, "The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping.", "R-MIX-10"},
@@ -257,6 +258,9 @@ namespace solaris
              "was last put (a seek, or a play's --from or --clip; `transport.cue`). A plain stop's place is temporary: "
              "the next play starts there but the cue stays.", "R-TIME-7"},
             {K::TransportSeek, "transport seek", "<beats>", 1, 1, {}, "Move the transport (playing or not).", "R-TIME-4"},
+            {K::MetersClear, "meters clear", "", 0, 0, {},
+             "Clear the meters: every clip light and held peak, and the master's true peak and integrated loudness "
+             "start again (the song is not edited; a click on a clip light).", "R-METER-2"},
             {K::TransportLoop, "transport loop", "<from|off> [to]", 1, 2, {}, "Loop between two beats while playing; `off` ends it.", "R-TIME-4"},
             {K::Audition, "audition", "<file|stop>", 1, 1, {},
              "Hear a sample now, outside the song (the browser's preview): through the output device at the "

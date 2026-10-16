@@ -84,6 +84,9 @@ namespace solaris
             {"strips[].devices[].params[].integer", "bool", "whole steps only"},
             {"strips[].devices[].params[].formula", "string", "the formula driving it, \"\" = its own value plays (R-AUTO-1)"},
             {"strips[].peak", "number[]", "the last played block's peaks, L/R (R-PLAY-3)", false},
+            {"strips[].rms", "number[]", "RMS over the last 300 ms, L/R (R-METER-2)", false},
+            {"strips[].hold", "number[]", "the held peak, L/R: the most of the last 1.5 s, then falling 20 dB a second", false},
+            {"strips[].clip", "bool", "reached full scale since `meters clear` — a latch", false},
             {"strips[].clipCount", "int", "fed by: clips playing through it (R-MIX-8)"},
             {"strips[].fromLanes", "string[]", "fed by: the lanes those clips are drawn on"},
             {"strips[].fromStrips", "string[]", "fed by: strips whose output or a send lands here"},
@@ -213,6 +216,16 @@ namespace solaris
             {"transport.latencyMs", "number", "the clock device's", false},
             {"transport.device", "string", "the clock device ('' = the system default)"},
             {"transport.masterPeak", "number[]", "L/R peaks of the last played block", false},
+            {"transport.masterRms", "number[]", "the master's RMS over 300 ms, L/R (R-METER-2)", false},
+            {"transport.masterHold", "number[]", "the master's held peak, L/R", false},
+            {"transport.masterClip", "bool", "the master reached full scale since `meters clear`", false},
+            {"loudness", "object", "the master as measured while playing, kept after a stop (R-METER-1, ITU-R BS.1770-4)", false},
+            {"loudness.momentary", "number", "LUFS over the last 400 ms; −144 = nothing measured", false},
+            {"loudness.shortTerm", "number", "LUFS over the last 3 s", false},
+            {"loudness.integrated", "number", "LUFS, gated (−70 absolute, −10 LU relative), since play or `meters clear`", false},
+            {"loudness.truePeak", "number", "dBTP (4× oversampled), the most since play or `meters clear`", false},
+            {"loudness.correlation", "number", "stereo correlation over 300 ms, −1 … +1 (0: nothing to compare)", false},
+            {"loudness.spectrum", "number[]", "61 bands of 1/6 octave, dB re a full-scale sine: band b's centre is 1000·2^((b−34)/6) Hz", false},
             {"audition", "object", "a sample heard from the browser, outside the song (R-EDM-9)"},
             {"audition.file", "string", "the file previewed ('' = none)"},
             {"audition.playing", "bool", ""},
@@ -432,7 +445,11 @@ namespace solaris
                             .set("out", s.out).set("gain", s.gain).set("pan", s.pan).set("gainFormula", s.gainFormula)
                             .set("panFormula", s.panFormula).set("mute", s.mute).set("solo", s.solo)
                             .set("audible", s.audible).set("colour", s.colour).set("sends", sends).set("devices", devices(s.devices));
-            if (!stable) st.set("peak", Json::array().push(Json::number(s.peak[0])).push(Json::number(s.peak[1])));
+            if (!stable)
+                st.set("peak", Json::array().push(Json::number(s.peak[0])).push(Json::number(s.peak[1])))
+                    .set("rms", Json::array().push(Json::number(s.rms[0])).push(Json::number(s.rms[1])))
+                    .set("hold", Json::array().push(Json::number(s.hold[0])).push(Json::number(s.hold[1])))
+                    .set("clip", s.clip);
             st.set("clipCount", s.clipCount).set("fromLanes", strings(s.fromLanes)).set("fromStrips", strings(s.fromStrips))
                 .set("targets", strings(s.targets)).set("keyTargets", strings(s.keyTargets));
             strips.push(st);
@@ -513,8 +530,20 @@ namespace solaris
         tr.set("loopFrom", m.transport.loopFrom).set("loopTo", m.transport.loopTo).set("loopClip", m.transport.loopClip).set("cue", m.transport.cue);
         if (!stable) tr.set("latencyMs", m.transport.latencyMs);
         tr.set("device", m.transport.device);
-        if (!stable) tr.set("masterPeak", Json::array().push(Json::number(m.transport.masterPeak[0])).push(Json::number(m.transport.masterPeak[1])));
+        if (!stable)
+            tr.set("masterPeak", Json::array().push(Json::number(m.transport.masterPeak[0])).push(Json::number(m.transport.masterPeak[1])))
+                .set("masterRms", Json::array().push(Json::number(m.transport.masterRms[0])).push(Json::number(m.transport.masterRms[1])))
+                .set("masterHold", Json::array().push(Json::number(m.transport.masterHold[0])).push(Json::number(m.transport.masterHold[1])))
+                .set("masterClip", m.transport.masterClip);
         j.set("transport", tr);
+        if (!stable)
+        {
+            Json bands = Json::array();
+            for (double b : m.loudness.spectrum) bands.push(Json::number(b));
+            j.set("loudness", Json::object().set("momentary", m.loudness.momentary).set("shortTerm", m.loudness.shortTerm)
+                                  .set("integrated", m.loudness.integrated).set("truePeak", m.loudness.truePeak)
+                                  .set("correlation", m.loudness.correlation).set("spectrum", bands));
+        }
         Json au = Json::object();
         au.set("file", m.audition.file).set("playing", m.audition.playing);
         if (!stable) au.set("progress", m.audition.progress);

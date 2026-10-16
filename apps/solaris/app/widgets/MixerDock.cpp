@@ -47,6 +47,7 @@ namespace solaris_ui
         struct Geo
         {
             Rect chips[kSlots], sends[2], pan, zone, mute, solo, out;
+            Rect clip;             // R-METER-2: the clip light, over the meters (its hit area: `clipHit`)
             double readoutY = 0;
         };
         Geo geoOf(double x, double w, double by, double bh)
@@ -61,7 +62,17 @@ namespace solaris_ui
             g.mute = Rect{x + 6.5, g.zone.bottom() + 22.0, bw, 19.5};
             g.solo = Rect{g.mute.right() + 3.25, g.mute.y, bw, 19.5};
             g.out = Rect{x + 6.5, g.zone.bottom() + 45.5, w - 13.0, 19.5};
+            g.clip = Rect{g.zone.x + g.zone.w * 0.62, g.zone.y + 0.5, 8.0, 3.25}; // above the meters (paintFader's mx)
             return g;
+        }
+        /** The clip light is small; the click it takes is not (a finger-friendly 16 × 9.75 around it). */
+        Rect clipHit(const Rect &c) { return Rect{c.x - 4.0, c.y - 3.25, c.w + 8.0, 9.75}; }
+        /** LUFS as the master's chip says it ("−14.2 LUFS"). */
+        std::string lufsText(double v)
+        {
+            char b[32];
+            std::snprintf(b, sizeof b, "%.1f LUFS", v);
+            return b;
         }
         /** "→ text": the arrow DRAWN — the embedded Roboto has no U+2192 (app/NOTES.md). */
         void arrowText(IRenderTarget &t, const std::string &text, double x, double cy, double maxW, double px, const char *fam, const Color &c)
@@ -435,6 +446,33 @@ namespace solaris_ui
         const Live *l = liveOf(id);
         return l && ch >= 0 && ch < 2 ? l->meter[ch].value() : 0.0;
     }
+    double MixerDock::rmsLive(const std::string &id, int ch) const
+    {
+        const Live *l = liveOf(id);
+        return l && ch >= 0 && ch < 2 ? l->rms[ch].value() : 0.0;
+    }
+    double MixerDock::holdLive(const std::string &id, int ch) const
+    {
+        const Live *l = liveOf(id);
+        return l && ch >= 0 && ch < 2 ? l->hold[ch].value() : 0.0;
+    }
+    double MixerDock::clipAmount(const std::string &id) const
+    {
+        const Live *l = liveOf(id);
+        return l ? l->clip.value() : 0.0;
+    }
+    Rect MixerDock::clipRect(const std::string &id) const
+    {
+        const Rect c = cardRect(id);
+        return c.w > 0 ? geoOf(c.x, c.w, c.y, c.h).clip : Rect{};
+    }
+    Rect MixerDock::loudnessRect() const
+    {
+        const Rect c = cardRect("master");
+        if (c.w <= 0) return Rect{};
+        const Geo g = geoOf(c.x, c.w, c.y, c.h);
+        return Rect{g.mute.x, g.mute.y, g.solo.right() - g.mute.x, g.mute.h}; // the row a strip's mute and solo are on
+    }
 
     Rect MixerDock::tabRect(int t) const
     {
@@ -520,7 +558,8 @@ namespace solaris_ui
         // every strip's eased picture, and the master's
         const bool playing = mModel.transport.playing, started = playing && !mWasPlaying;
         mWasPlaying = playing;
-        auto drive = [&](const std::string &id, double gain, double pan, bool mute, bool solo, bool audible, const float *peak, int colour) {
+        auto drive = [&](const std::string &id, double gain, double pan, bool mute, bool solo, bool audible, const float *peak, int colour,
+                         const float *rms, const float *hold, bool clip) {
             Live &l = live(id);
             const bool draggingFader = mDragging && mPress.part == Part::Fader && mPress.id == id;
             const bool draggingPan = mDragging && mPress.part == Part::Pan && mPress.id == id;
@@ -583,7 +622,27 @@ namespace solaris_ui
                     l.meterLast[c] = m;
                 }
                 l.meter[c].update(nowMs);
+                // R-METER-2: the RMS core as the peak bar; the held line rises at once-ish and falls as the model says
+                const double r = meterLevel(rms[c]), hd = meterLevel(hold[c]);
+                if (r != l.rmsLast[c])
+                {
+                    l.rms[c].animateTo(r, r > l.rms[c].value() ? kMeterAttackMs : motion::kMeterFallMs, Easing::EaseOutCubic, nowMs);
+                    l.rmsLast[c] = r;
+                }
+                if (hd != l.holdLast[c])
+                {
+                    l.hold[c].animateTo(hd, hd > l.hold[c].value() ? kMeterAttackMs : motion::kMeterFallMs, Easing::EaseOutCubic, nowMs);
+                    l.holdLast[c] = hd;
+                }
+                l.rms[c].update(nowMs);
+                l.hold[c].update(nowMs);
             }
+            if (clip != l.clipLast)
+            {
+                l.clip.animateTo(clip ? 1.0 : 0.0, clip ? kMeterAttackMs : motion::kSelectMs, Easing::EaseOutCubic, nowMs);
+                l.clipLast = clip;
+            }
+            l.clip.update(nowMs);
             l.fader.update(nowMs);
             l.pan.update(nowMs);
             l.mute.update(nowMs);
@@ -591,8 +650,20 @@ namespace solaris_ui
             l.dim.update(nowMs);
             l.colT.update(nowMs);
         };
-        for (const auto &s : mModel.strips) drive(s.id, s.gain, s.pan, s.mute, s.solo, s.audible, s.peak, s.colour);
-        drive("master", mModel.masterGain, 0.0, false, false, true, mModel.transport.masterPeak, -1);
+        for (const auto &s : mModel.strips) drive(s.id, s.gain, s.pan, s.mute, s.solo, s.audible, s.peak, s.colour, s.rms, s.hold, s.clip);
+        const auto &tr = mModel.transport;
+        drive("master", mModel.masterGain, 0.0, false, false, true, tr.masterPeak, -1, tr.masterRms, tr.masterHold, tr.masterClip);
+        // R-METER-1: the master's integrated loudness, caught up to (it is the meter's, not the user's); "—" fades in for none
+        const double lufs = mModel.loudness.integrated;
+        if (lufs != mLufsLast)
+        {
+            const bool on = lufs > -143.0;
+            if (on) mLufs.animateTo(std::max(-70.0, lufs), motion::kCatchUpMs, Easing::EaseOutCubic, nowMs);
+            mLufsOn.animateTo(on ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mLufsLast = lufs;
+        }
+        mLufs.update(nowMs);
+        mLufsOn.update(nowMs);
         // what drives each bound control: a tag that fades in and out, its text cross-fading when it changes
         std::set<std::string> boundNow;
         for (const auto &s : mModel.strips)
@@ -757,6 +828,8 @@ namespace solaris_ui
             const Rect c = cardRect("master");
             const Geo g = geoOf(c.x, c.w, c.y, c.h);
             if (g.zone.contains(p)) h.part = Part::Fader;
+            if (clipHit(g.clip).contains(p)) h.part = Part::Clip;
+            if (loudnessRect().contains(p)) h.part = Part::Loudness;
             for (int k = 0; k < chipSlots("master"); ++k)
                 if (g.chips[k].contains(p)) { h.part = Part::Chip; h.index = k; }
             return h;
@@ -779,6 +852,7 @@ namespace solaris_ui
                     if (g.sends[k].contains(p)) { h.part = Part::Send; h.index = k; }
                 if (g.pan.contains(p)) h.part = Part::Pan;
                 if (g.zone.contains(p)) h.part = Part::Fader;
+                if (clipHit(g.clip).contains(p)) h.part = Part::Clip;
                 if (g.mute.contains(p)) h.part = Part::Mute;
                 if (g.solo.contains(p)) h.part = Part::Solo;
                 if (g.out.contains(p)) h.part = Part::Out;
@@ -978,6 +1052,8 @@ namespace solaris_ui
             case Part::AddMixer: send("mixer add"); break;
             case Part::AddLine: openAddLine(world); break;
             case Part::ToggleDock: if (onToggle) onToggle(); break;
+            case Part::Clip: send("meters clear"); break;                 // R-METER-2: every clip light out
+            case Part::Loudness: if (onOpenLoudness) onOpenLoudness(); break; // R-METER-1
             case Part::Mute:
                 if (const auto *s = strip(h.id)) send("set " + h.id + ".mute=" + (s->mute ? "false" : "true"));
                 break;
@@ -1143,23 +1219,35 @@ namespace solaris_ui
             t.beginPath(); t.moveTo(trackX - 9.0, std::round(y) + 0.5); t.lineTo(trackX - 4.0, std::round(y) + 0.5); t.strokePath();
         }
         drawRoundedRect(t, Rect{trackX - 2.0, top, 4.0, span}, radius::pill(), Paint::filled(fade(palette::input(), a)));
-        // the meters, L and R: green, amber above −12 dBFS, red above −3
+        // the meters, L and R: green, amber above −12 dBFS, red above −3 — the peak a lighter bar, the RMS its solid core,
+        // the held peak a line (R-METER-2)
+        const double y12 = (48.0 / 66.0), y3 = (57.0 / 66.0);
+        auto zoneColour = [&](double v) { return v >= y3 ? surface::meterHigh() : v >= y12 ? surface::meterMid() : surface::meterLow(); };
         for (int c = 0; c < 2; ++c)
         {
             const double mx = z.x + z.w * 0.62 + c * 5.0;
             drawRoundedRect(t, Rect{mx, top, 3.0, span}, radius::hairline(), Paint::filled(fade(palette::whiteAlpha(0.05), a)));
-            const double lv = l.meter[c].value();
-            if (lv <= 0.001) continue;
-            const double y12 = (48.0 / 66.0), y3 = (57.0 / 66.0);
-            auto seg = [&](double from, double to, const Color &col) {
-                const double f = std::min(lv, to);
-                if (f <= from) return;
-                drawRoundedRect(t, Rect{mx, bottom - f * span, 3.0, (f - from) * span}, radius::hairline(), Paint::filled(fade(col, a)));
+            auto bar = [&](double lv, double alpha) {
+                if (lv <= 0.001) return;
+                auto seg = [&](double from, double to, const Color &col) {
+                    const double f = std::min(lv, to);
+                    if (f <= from) return;
+                    drawRoundedRect(t, Rect{mx, bottom - f * span, 3.0, (f - from) * span}, radius::hairline(), Paint::filled(fade(col, a * alpha)));
+                };
+                seg(0.0, y12, surface::meterLow());
+                seg(y12, y3, surface::meterMid());
+                seg(y3, 1.0, surface::meterHigh());
             };
-            seg(0.0, y12, surface::meterLow());
-            seg(y12, y3, surface::meterMid());
-            seg(y3, 1.0, surface::meterHigh());
+            bar(l.meter[c].value(), 0.45);
+            bar(l.rms[c].value(), 1.0);
+            const double hv = l.hold[c].value();
+            if (hv > 0.001)
+                drawRoundedRect(t, Rect{mx, std::round(bottom - hv * span) - 0.5, 3.0, 1.5}, 0.0, Paint::filled(fade(zoneColour(hv), a)));
         }
+        // the clip light: a latch, lit red; a click puts every one out (`meters clear`)
+        const double lit = l.clip.value();
+        const Rect cl{z.x + z.w * 0.62, z.y + 0.5, 8.0, 3.25};
+        drawRoundedRect(t, cl, radius::hairline(), Paint::filled(fade(lerpColor(palette::whiteAlpha(0.08), surface::meterHigh(), lit), a)));
         // the thumb
         const double ty = bottom - l.fader.value() * span;
         drawRoundedRect(t, Rect{trackX - 10.0, ty - 4.5, 20.0, 9.0}, radius::control(), Paint::filledStroked(fade(palette::secondary(), a), fade(palette::foreground(), 0.8 * a), 1.0));
@@ -1359,6 +1447,22 @@ namespace solaris_ui
         const std::string rd = dbText(faderDb(l->fader.value()));
         t.setFill(fade(lerpColor(palette::secondaryForeground(), palette::primary(), tagAmount("project.masterGain")), a));
         t.drawText(rd, x + (w - t.measureText(rd, 10.0, font::mono())) * 0.5, g.readoutY, 10.0, font::mono());
+        // R-METER-1: the integrated loudness, on a chip that opens the Loudness window
+        {
+            const Rect lr{g.mute.x, g.mute.y, g.solo.right() - g.mute.x, g.mute.h};
+            const double hv = mHover.amount(hoverId((int)Part::Loudness, "master>", -1));
+            drawRoundedRect(t, lr, radius::control(), Paint::filled(fade(lerpColor(palette::secondary(), palette::card(), hv), a)));
+            const double on = mLufsOn.value();
+            const double px = 10.0;
+            auto centred = [&](const std::string &s, double alpha, const Color &col) {
+                if (alpha <= 0.001) return;
+                const std::string e = textfit::ellipsize(t, s, lr.w - 8.0, px, font::mono());
+                t.setFill(fade(col, a * alpha));
+                t.drawText(e, lr.x + (lr.w - t.measureText(e, px, font::mono())) * 0.5, textfit::baseline(lr.y + lr.h * 0.5, px), px, font::mono());
+            };
+            centred(lufsText(mLufs.value()), on, palette::foreground());
+            centred("\xE2\x80\x94 LUFS", 1.0 - on, palette::mutedForeground()); // nothing measured yet
+        }
         std::string outs;
         for (const auto &o : mModel.masterOut) outs += (outs.empty() ? "" : ", ") + labelOf(o);
         arrowText(t, outs.empty() ? std::string("no port") : outs, x + 6.5, g.out.y + g.out.h * 0.5, w - 13.0, 10.0, font::sans(), fade(palette::mutedForeground(), a));

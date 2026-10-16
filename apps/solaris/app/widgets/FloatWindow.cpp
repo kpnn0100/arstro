@@ -2,6 +2,7 @@
 #include "DevicePanel.h"
 #include "PianoRoll.h"
 #include "AutomationPanel.h"
+#include "LoudnessPanel.h"
 #include "../../../interstellar/app/widgets/Glyphs.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
 #include <algorithm>
@@ -270,6 +271,28 @@ namespace solaris_ui
         return *w;
     }
 
+    FloatWindow &WindowLayer::openLoudness()
+    {
+        FloatWindow *w = window("loudness");
+        if (!w)
+        {
+            auto panel = std::make_shared<LoudnessPanel>();
+            panel->onCommand = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
+            panel->bind(mModel);
+            w = &place(std::make_shared<FloatWindow>("loudness", panel), 390.0, 357.5);
+            w->setTitle("Loudness \xE2\x80\x94 Master");
+        }
+        w->open();
+        bind(mModel, mInteracting);
+        return *w;
+    }
+
+    LoudnessPanel *WindowLayer::loudnessPanel() const
+    {
+        FloatWindow *w = window("loudness");
+        return w ? static_cast<LoudnessPanel *>(&w->content()) : nullptr;
+    }
+
     AutomationPanel *WindowLayer::automationPanel(const std::string &au) const
     {
         FloatWindow *w = window("auto:" + au);
@@ -390,6 +413,7 @@ namespace solaris_ui
                 w.setTitle(panel.title());                    // a rename from anywhere retitles it
                 if (!panel.present() && w.isOpen()) w.close(); // an automation deleted by anyone takes its window with it
             }
+            else if (kv.first == "loudness") static_cast<LoudnessPanel &>(w.content()).bind(m);
         }
     }
 

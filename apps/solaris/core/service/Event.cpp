@@ -53,6 +53,7 @@ namespace solaris
             {EK::ProjectAutosaved, "project.autosaved", {"path"}, "The unsaved song was written beside it (`<song>.autosave`, R-SAFE-1)."},
             {EK::ProjectRecovery, "project.recovery", {"path", "age"},
              "The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2)."},
+            {EK::MetersCleared, "meters.cleared", {}, "The clip lights and held peaks are out; the master's true peak and integrated loudness start again (R-METER-2)."},
         };
         return specs;
     }

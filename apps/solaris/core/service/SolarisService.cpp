@@ -109,7 +109,7 @@ namespace solaris
             case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
             case K::DevicesList: case K::Browse: case K::RecentsRemove:
             case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait:
-            case K::Audition: case K::NotePreview: case K::None:
+            case K::Audition: case K::NotePreview: case K::MetersClear: case K::None:
             case K::Ls: case K::Show: case K::PatternPrint: // R-SVC-8: reading back
             case K::PatternExport: case K::ProjectExportMidi: // R-MIDI-1: writing a file, not the song
                 return false;
@@ -230,7 +230,7 @@ namespace solaris
         case K::DevicesList: case K::Browse: case K::RecentsRemove:
             ok = machineCommand(c, err);
             break;
-        case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait: case K::Audition:
+        case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait: case K::Audition: case K::MetersClear:
         case K::NotePreview:
             ok = transportCommand(c, err);
             break;
@@ -307,6 +307,11 @@ namespace solaris
             // another song: its own tree, rooted at the song as it opened
             historyReset(c.kind == K::ProjectClose ? std::string() : c.kind == K::ProjectNew ? "New song" : c.kind == K::ProjectRecover ? "Recovered" : "Opened");
             mCoalesce.clear();
+            mClipLatch.clear(); // R-METER-2: another song's meters start out
+            mMasterClip = false;
+            mModel.loudness = LoudnessModel();
+            mModel.transport.masterClip = false;
+            for (auto &st : mModel.strips) st.clip = false;
         }
         // R-SAFE-1: an edit that landed — written beside the song at once when it removed something, else on the clock
         if ((editing || history) && mOpen && mSettings.autosave > 0)

@@ -476,7 +476,7 @@ R-VER, applied to an arrangement:
 - **R-RENDER-3 A range or the whole song**, with the tail rendered until the output falls below
   −90 dBFS or a 10 s cap (was SR-RENDER-3/4).
 
-## R-PLAY — real-time playback — ✅ IMPLEMENTED on one device (1–2: DR-PLAY-1/2) — 🚧 3 partly (per-block peaks in the model, DR-PLAY-3; RMS, a held peak and a clip latch are not in the model yet) — several devices: P2, R-DEV-2/4
+## R-PLAY — real-time playback — ✅ IMPLEMENTED on one device (1–2: DR-PLAY-1/2) — 3 ✅ (peaks DR-PLAY-3; RMS, held peak, clip latch DR-METER-2) — several devices: P2, R-DEV-2/4
 
 - **R-PLAY-1 Playback runs the same graph the render runs** on the clock device's callback;
   offline and live produce the same samples (was SR-RT-1..3, SR-SCOPE-2).
@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -731,9 +731,12 @@ a process is the host's (law 12).
   loudness in LUFS (ITU-R BS.1770-4, gated), true peak in dBTP (4× oversampled), stereo correlation, and a spectrum
   (1/6-octave, 20 Hz–20 kHz) — computed by the DSP library's meters on the audio thread without allocating,
   published in the model while playing and printed by `render --measure` for a render. The master's meter shows
-  them (a Loudness panel opened from it); its numbers ease.
+  them (a Loudness panel opened from it); its numbers ease. (Built 2026-10-16: kept after a stop, so a played
+  song's integrated loudness can be read; the panel opens from the master's LUFS chip — DR-METER-1.)
 - **R-METER-2 Strip meters** (R-PLAY-3, completed): RMS beside peak, a held peak (1.5 s, then falling), a clip
-  latch cleared by a click — on every strip and the master.
+  latch cleared by a click — on every strip and the master. (Built 2026-10-16: measured by the player, in samples, and
+  published — a window cannot compute them from a peak per frame; falling 20 dB a second; the click is `meters
+  clear` — DR-METER-2.)
 - **R-EDM-4a A true-peak limiter**: the DSP Limiter gains `truePeak` (on: inter-sample peaks detected 4×
   oversampled), so a render with it on never exceeds its ceiling in dBTP, measured.
 - **R-EXPORT-1 Delivery formats** (R-EDM-16): `render --out <file>` writes WAV, FLAC, MP3, OGG Vorbis or Opus by the

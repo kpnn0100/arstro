@@ -6,7 +6,15 @@ namespace arstro
 {
 namespace solaris
 {
-    Player::Player() : mSlots(new LiveSlot[kLiveSlots]) {}
+    Player::Player() : mSlots(new LiveSlot[kLiveSlots])
+    {
+        mMeanSq.assign(2 * kMaxStrips + 2, 0.0);
+        mHeld.assign(2 * kMaxStrips + 2, 0.0);
+        mHeldFor.assign(2 * kMaxStrips + 2, 0);
+        for (int i = 0; i < 2 * kMaxStrips + 2; ++i) { mRms[(size_t)i].store(0.0f); mHold[(size_t)i].store(0.0f); }
+        for (int i = 0; i <= kMaxStrips; ++i) mClip[(size_t)i].store(false);
+        for (auto &b : mSpectrum) b.store((float)LoudnessMeter::kSilence);
+    }
 
     Player::~Player()
     {
@@ -34,7 +42,27 @@ namespace solaris
         mClickL.assign((size_t)mBlock, 0.0);
         mClickR.assign((size_t)mBlock, 0.0);
         mClickWas = false;
-        for (int i = 0; i < 2 * kMaxStrips + 2; ++i) mPeaks[(size_t)i].store(0.0f);
+        for (int i = 0; i < 2 * kMaxStrips + 2; ++i) { mPeaks[(size_t)i].store(0.0f); mRms[(size_t)i].store(0.0f); mHold[(size_t)i].store(0.0f); }
+        // R-METER-1: the meters read the song's rate, which the engine's build set (AudioConfig)
+        std::fill(mMeanSq.begin(), mMeanSq.end(), 0.0);
+        std::fill(mHeld.begin(), mHeld.end(), 0.0);
+        std::fill(mHeldFor.begin(), mHeldFor.end(), 0);
+        mTapL.assign((size_t)mBlock, 0.0f);
+        mTapR.assign((size_t)mBlock, 0.0f);
+        mEng->tapMaster(mTapL.data(), mTapR.data(), mBlock);
+        mLoud = std::make_unique<LoudnessMeter>(2);
+        mTrue = std::make_unique<TruePeakMeter>(2);
+        mCorr = std::make_unique<CorrelationMeter>();
+        mSpec = std::make_unique<SpectrumAnalyser>();
+        mLoudBlocks = -1;
+        mMomentary.store(LoudnessMeter::kSilence);
+        mShortTerm.store(LoudnessMeter::kSilence);
+        mIntegrated.store(LoudnessMeter::kSilence);
+        mTruePeak.store(LoudnessMeter::kSilence);
+        mCorrelation.store(0.0);
+        for (auto &b : mSpectrum) b.store((float)LoudnessMeter::kSilence);
+        mClearPending.store(false);
+        mClearNow = false;
         mEng->seek(from);
         mGraphLatency.store(mEng->outputLatency());
         mRendered.store(from);
@@ -87,6 +115,7 @@ namespace solaris
             else mEng->setDeviceParam(m.strip, m.device, m.name, m.value);
             break;
         case Live::Seek: mEng->seek(m.sample); break;
+        case Live::ClearMeters: mClearNow = true; break; // R-METER-2: done in `measure`, after this block renders
         case Live::Swap:
         {
             // A structural edit: the new engine continues from here; the old one goes back to be freed.
@@ -96,6 +125,7 @@ namespace solaris
             mGeneration = m.generation;
             mGraphLatency.store(mEng->outputLatency(), std::memory_order_relaxed);
             mEng->prepare(mPb, mBlock); // the port count may have changed: within capacity it does not allocate
+            mEng->tapMaster(mTapL.data(), mTapR.data(), mBlock);
             if (!mRetired.push(old)) delete old; // the service is not collecting: better a free here than a leak
             break;
         }
@@ -154,6 +184,82 @@ namespace solaris
         if ((q & 1u) || s.seq.load(std::memory_order_relaxed) != q) return false; // overwritten while read: keep the last
         out.swap(v);
         return true;
+    }
+
+    void Player::clearMeters()
+    {
+        mClearPending.store(true, std::memory_order_release);
+        Live m;
+        m.kind = Live::ClearMeters;
+        if (!mIn.push(m)) mClearPending.store(false); // a full queue: nothing will take it
+    }
+
+    void Player::loudness(Loudness &out) const
+    {
+        out.momentary = mMomentary.load(std::memory_order_relaxed);
+        out.shortTerm = mShortTerm.load(std::memory_order_relaxed);
+        out.integrated = mIntegrated.load(std::memory_order_relaxed);
+        out.truePeak = mTruePeak.load(std::memory_order_relaxed);
+        out.correlation = mCorrelation.load(std::memory_order_relaxed);
+        for (int b = 0; b < SpectrumAnalyser::kBands; ++b) out.spectrum[(size_t)b] = mSpectrum[(size_t)b].load(std::memory_order_relaxed);
+    }
+
+    void Player::ballistics(int k, float peak, double meanSquare, int n)
+    {
+        // R-METER-2: RMS through a 300 ms one-pole; the held peak kept 1.5 s, then falling 20 dB a second
+        const double a = 1.0 - std::exp(-(double)n / (0.3 * mRate));
+        mMeanSq[(size_t)k] += a * (meanSquare - mMeanSq[(size_t)k]);
+        mRms[(size_t)k].store((float)std::sqrt(std::max(0.0, mMeanSq[(size_t)k])), std::memory_order_relaxed);
+        double &held = mHeld[(size_t)k];
+        long long &age = mHeldFor[(size_t)k];
+        if (peak >= held) { held = peak; age = 0; }
+        else if ((age += n) > (long long)(1.5 * mRate)) held = std::max((double)peak, held * std::pow(10.0, -20.0 * n / mRate / 20.0));
+        mHold[(size_t)k].store((float)held, std::memory_order_relaxed);
+    }
+
+    void Player::measure(int n)
+    {
+        // stores and the meters' own processing only — no allocation, no lock (R-PLAY-2)
+        if (mClearNow)
+        {
+            mClearNow = false;
+            mLoud->reset(); // the spectrum is not reset: it is a 300 ms view, and its reset would allocate
+            mTrue->reset();
+            mCorr->reset();
+            mLoudBlocks = -1;
+            std::fill(mHeld.begin(), mHeld.end(), 0.0);
+            std::fill(mHeldFor.begin(), mHeldFor.end(), 0);
+            for (int i = 0; i <= kMaxStrips; ++i) mClip[(size_t)i].store(false, std::memory_order_relaxed);
+            mClearPending.store(false, std::memory_order_release); // what is measured from here is after the clear
+        }
+        const auto &meters = mEng->stripMeters();
+        for (size_t s = 0; s < meters.size() && s < (size_t)kMaxStrips; ++s)
+        {
+            for (int c = 0; c < 2; ++c)
+                ballistics((int)(2 * s) + c, meters[s].peak[c], (double)meters[s].rms[c] * meters[s].rms[c], n);
+            if (meters[s].peak[0] >= 1.0f || meters[s].peak[1] >= 1.0f) mClip[s].store(true, std::memory_order_relaxed);
+        }
+        const float *L = mTapL.data(), *R = mTapR.data();
+        double sum[2] = {0, 0};
+        for (int i = 0; i < n; ++i) { sum[0] += (double)L[i] * L[i]; sum[1] += (double)R[i] * R[i]; }
+        const auto &mm = mEng->masterMeter();
+        for (int c = 0; c < 2; ++c) ballistics(2 * kMaxStrips + c, mm.peak[c], n > 0 ? sum[c] / n : 0.0, n);
+        if (mm.peak[0] >= 1.0f || mm.peak[1] >= 1.0f) mClip[kMaxStrips].store(true, std::memory_order_relaxed);
+        // R-METER-1: the master's loudness, true peak, correlation and spectrum
+        mLoud->process(L, R, n);
+        mTrue->process(L, R, n);
+        mCorr->process(L, R, n);
+        mSpec->process(L, R, n);
+        mMomentary.store(mLoud->momentary(), std::memory_order_relaxed);
+        mShortTerm.store(mLoud->shortTerm(), std::memory_order_relaxed);
+        if (mLoud->blocks() != mLoudBlocks) // the gated mean walks its histogram: only when a block was added
+        {
+            mLoudBlocks = mLoud->blocks();
+            mIntegrated.store(mLoud->integrated(), std::memory_order_relaxed);
+        }
+        mTruePeak.store(mTrue->peakDb(), std::memory_order_relaxed);
+        mCorrelation.store(mCorr->correlation(), std::memory_order_relaxed);
+        for (int b = 0; b < SpectrumAnalyser::kBands; ++b) mSpectrum[(size_t)b].store((float)mSpec->bandDb(b), std::memory_order_relaxed);
     }
 
     void Player::click(long long pos, int n)
@@ -219,6 +325,7 @@ namespace solaris
             }
             mPeaks[2 * kMaxStrips].store(mEng->masterMeter().peak[0], std::memory_order_relaxed);
             mPeaks[2 * kMaxStrips + 1].store(mEng->masterMeter().peak[1], std::memory_order_relaxed);
+            measure(n);
             const bool clickOn = mClickOn.load(std::memory_order_relaxed);
             if (clickOn) click(pos - mGraphLatency.load(std::memory_order_relaxed), n); // on the beat the music is on (R-MIX-17)
             else if (mClickWas && mClick) mClick->reset(); // off: no tail waits to resume

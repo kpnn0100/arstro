@@ -18,12 +18,19 @@
  *  brackets each write, so a reader never takes half of one), stamped with the frames handed to the
  *  device so far and the engine's generation. The service reads the slot the listener HEARS now —
  *  the device still holds `latency` of what was rendered — from the engine it last sent.
+ *
+ *  The meters (R-METER-1, R-METER-2) are measured here too, after each block, by the DSP library's meters
+ *  built in `start`: every strip's and the master's RMS (300 ms), held peak (1.5 s, then falling 20 dB a
+ *  second) and clip latch, and the master's loudness, true peak, correlation and spectrum off a tap of the
+ *  engine's master. All published through atomics; `clearMeters` is a flag the thread takes at its next block.
  */
 #pragma once
 #include "AudioOut.h"
 #include "Engine.h"
 #include "base/LockFreeQueue.h"
 #include "device/Device.h"
+#include "meter/Meters.h"
+#include <array>
 #include <atomic>
 #include <memory>
 #include <thread>
@@ -38,7 +45,7 @@ namespace solaris
     public:
         struct Live
         {
-            enum Kind { StripGain, StripPan, StripSilent, MasterGain, DeviceParam, DeviceBypass, Seek, Swap } kind = Seek;
+            enum Kind { StripGain, StripPan, StripSilent, MasterGain, DeviceParam, DeviceBypass, Seek, Swap, ClearMeters } kind = Seek;
             int strip = 0, device = 0;         // strip −1 = the master's rack
             double value = 0;
             char name[48] = {0};               // a device parameter's registry name
@@ -79,6 +86,25 @@ namespace solaris
         void collect();
         /** Peaks of the last block: strip i at [2i, 2i+1], the master at [2·kMaxStrips, +1]. */
         float peak(int index) const { return mPeaks[(size_t)index].load(std::memory_order_relaxed); }
+        /** R-METER-2, indexed as `peak`: the RMS over the last 300 ms (a one-pole on the blocks' mean squares). */
+        float rms(int index) const { return mRms[(size_t)index].load(std::memory_order_relaxed); }
+        /** The held peak: the most of the last 1.5 s, then falling 20 dB a second. */
+        float hold(int index) const { return mHold[(size_t)index].load(std::memory_order_relaxed); }
+        /** Whether strip i (the master: kMaxStrips) reached full scale since the last call — and forget it. */
+        bool takeClip(int strip) { return mClip[(size_t)strip].exchange(false, std::memory_order_relaxed); }
+        /** R-METER-1: the master as measured — LUFS, dBTP (the most since play or `clearMeters`), −1…+1, dB a band. */
+        struct Loudness
+        {
+            double momentary = LoudnessMeter::kSilence, shortTerm = LoudnessMeter::kSilence, integrated = LoudnessMeter::kSilence;
+            double truePeak = LoudnessMeter::kSilence, correlation = 0;
+            std::array<double, SpectrumAnalyser::kBands> spectrum{};
+        };
+        void loudness(Loudness &out) const;
+        /** Forget the held peaks, the clip latches, the true peak and the integrated loudness: a message, so the
+         *  thread does it in order with the edits sent before it (a gain brought down, then the clip light cleared). */
+        void clearMeters();
+        /** A clear is sent and not yet taken: what the meters say now is from before it — not to be read. */
+        bool clearing() const { return mClearPending.load(std::memory_order_acquire); }
         /** R-MIX-16: every binding's value (the engine's bind order) as evaluated for the block the listener
          *  hears now — or the oldest kept, while the device still holds more than the ring. Only values of
          *  the engine of `generation`; false when there are none yet (call on the service's thread). */
@@ -97,6 +123,8 @@ namespace solaris
         void apply(const Live &m);
         void click(long long pos, int n);
         void keepLive(long long out); // the audio thread: this block's binding values into the ring
+        void measure(int n);          // the audio thread: this block into the meters (R-METER-1, R-METER-2)
+        void ballistics(int k, float peak, double meanSquare, int n); // one meter's RMS and held peak
 
         std::thread mThread;
         std::atomic<bool> mRun{false};
@@ -112,6 +140,23 @@ namespace solaris
         std::atomic<double> mLatency{0};
         std::atomic<long long> mGraphLatency{0}; // the playing engine's outputLatency (R-MIX-17)
         std::unique_ptr<std::atomic<float>[]> mPeaks{new std::atomic<float>[2 * kMaxStrips + 2]};
+        // R-METER-1/2: sized at construction or in `start`; the thread only stores
+        std::unique_ptr<std::atomic<float>[]> mRms{new std::atomic<float>[2 * kMaxStrips + 2]};
+        std::unique_ptr<std::atomic<float>[]> mHold{new std::atomic<float>[2 * kMaxStrips + 2]};
+        std::unique_ptr<std::atomic<bool>[]> mClip{new std::atomic<bool>[kMaxStrips + 1]};
+        std::vector<double> mMeanSq, mHeld;     // the audio thread's: each meter's mean square and held peak
+        std::vector<long long> mHeldFor;        // samples since the held peak was set
+        std::vector<float> mTapL, mTapR;        // the engine's master, a block (Engine::tapMaster)
+        std::unique_ptr<LoudnessMeter> mLoud;
+        std::unique_ptr<TruePeakMeter> mTrue;
+        std::unique_ptr<CorrelationMeter> mCorr;
+        std::unique_ptr<SpectrumAnalyser> mSpec;
+        long long mLoudBlocks = -1;             // the gating blocks the integrated loudness was last read at
+        std::atomic<double> mMomentary{LoudnessMeter::kSilence}, mShortTerm{LoudnessMeter::kSilence},
+            mIntegrated{LoudnessMeter::kSilence}, mTruePeak{LoudnessMeter::kSilence}, mCorrelation{0};
+        std::array<std::atomic<float>, SpectrumAnalyser::kBands> mSpectrum{};
+        std::atomic<bool> mClearPending{false};
+        bool mClearNow = false;                 // the audio thread's: a ClearMeters message taken, for `measure`
         std::unique_ptr<Device> mClick;
         std::vector<Sample> mClickL, mClickR;
         std::atomic<bool> mClickOn{false};

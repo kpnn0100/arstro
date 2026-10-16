@@ -657,6 +657,8 @@ namespace engine
         meter(mMasterMeter, mMasterL.data(), mMasterR.data(), n);
         if (mCaptureMaster)
             for (int i = 0; i < n; ++i) { mCapturedMaster[0][off + i] = (float)mMasterL[i]; mCapturedMaster[1][off + i] = (float)mMasterR[i]; }
+        if (mTapL && mTapR && off + n <= mTapCap)
+            for (int i = 0; i < n; ++i) { mTapL[off + i] = (float)mMasterL[i]; mTapR[off + i] = (float)mMasterR[i]; }
         for (int p : mGraph.masterPorts) route(Target{Target::Port, p}, mMasterL.data(), mMasterR.data(), n, 1.0, out, off);
     }
 

@@ -163,6 +163,8 @@ namespace solaris
         std::set<std::string> mOffline;                                 // resolved paths that would not decode
         int mPcmRate = 0;
         std::vector<std::string> mAudit, mLastRenderPeaks;
+        std::set<std::string> mClipLatch;  // R-METER-2: strips that reached full scale since `meters clear`
+        bool mMasterClip = false;          // … and the master
         Settings mSettings;
         std::vector<std::string> mRecents;
         std::vector<RecentModel> mRecentCards; // parsed from the files: rebuilt only when stale

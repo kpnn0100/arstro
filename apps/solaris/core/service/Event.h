@@ -44,7 +44,8 @@ namespace solaris
             AuditionChanged,  // file, playing
             NotePreviewed,    // strip, pitch
             ProjectAutosaved, // path — R-SAFE-1
-            ProjectRecovery   // path, age — R-SAFE-2: an autosave newer than the song
+            ProjectRecovery,  // path, age — R-SAFE-2: an autosave newer than the song
+            MetersCleared     // — R-METER-2
         };
 
         Kind kind = Kind::Info;

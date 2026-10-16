@@ -68,7 +68,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `auto point shape <au> [--at <beats>] [--shape <linear\|hold\|smooth\|bezier>] [--speed-in <v/beat>] [--influence-in <%>] [--speed-out <v/beat>] [--influence-out <%>]` | Set how the curve leaves the point at --at. A BEZIER point is Interstellar's key (R-ANIM-2): on each side a speed — the slope there, in the automation's unit per beat — and an influence, how far into the neighbouring segment it pulls (0 < x ≤ 100 %); flags not given are kept. One line per handle gesture. | R-AUTO-10 |
 | `bind clear <address>` | Clear an address's formula: it plays its own stored value again. (`set <address>=<number>` clears and sets.) | R-AUTO-1 |
 | `eval <address> [--at <beats>] [--explain]` | The value an address plays at a beat (default 0); --explain shows its formula and every name it reads. | R-AUTO-8 |
-| `render --out <file.wav> [--from <beats>] [--to <beats>] [--stems <ch,…\|all>] [--ports] [--bits <24\|32f>]` | Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) is compensated and trimmed (R-MIX-17). | R-RENDER-2 |
+| `render --out <file.wav> [--from <beats>] [--to <beats>] [--stems <ch,…\|all>] [--ports] [--bits <24\|32f>] [--measure]` | Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader output to <out>.<ch>.wav; with --ports, each output port to <out>.<port>.wav. The tail runs until −90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) is compensated and trimmed (R-MIX-17). --measure prints the master's integrated loudness, the most of its momentary and short-term, its true peak and its lowest correlation (R-METER-1). | R-RENDER-2 |
 | `matrix print [--json]` | Every route and send at once: rows = strips, columns = destinations. | R-MIX-9 |
 | `audit` | The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping. | R-MIX-10 |
 | `state print [--json] [--stable] [--compact]` | The whole AppModel; --stable omits what changes with time. --json --compact: the SONG only (no registry, machine, recents or browser), on one line; a device lists only its non-default parameters as `name=value`, a pattern its notes in the `notes add` notation. | R-SVC-2 |
@@ -86,6 +86,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `transport play [--from <beats>] [--clip <ac>]` | Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position. --clip plays that clip's span looped, the whole song sounding there (the piano roll's play, R-ROLL-6): it follows the clip as it is edited, and the song's own loop comes back at `transport stop`, a plain `transport play` or a `transport loop`. | R-PLAY-1 |
 | `transport stop [--return]` | Stop; the transport stays where it was heard — or, with --return, goes back to the cue: where the time bar was last put (a seek, or a play's --from or --clip; `transport.cue`). A plain stop's place is temporary: the next play starts there but the cue stays. | R-TIME-7 |
 | `transport seek <beats>` | Move the transport (playing or not). | R-TIME-4 |
+| `meters clear` | Clear the meters: every clip light and held peak, and the master's true peak and integrated loudness start again (the song is not edited; a click on a clip light). | R-METER-2 |
 | `transport loop <from\|off> [to]` | Loop between two beats while playing; `off` ends it. | R-TIME-4 |
 | `audition <file\|stop>` | Hear a sample now, outside the song (the browser's preview): through the output device at the audition level, to its end; `stop` ends it. Not an edit, never in a render. | R-EDM-9 |
 | `wait <seconds>` | Let time pass (playback goes on, the model's transport and meters update) — for scripts that listen. | R-PLAY-3 |
@@ -192,6 +193,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `note.previewed` | strip, pitch | A note was heard through a strip, outside the song (`note preview`, the piano roll's sound — R-ROLL-7). |
 | `project.autosaved` | path | The unsaved song was written beside it (`<song>.autosave`, R-SAFE-1). |
 | `project.recovery` | path, age | The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2). |
+| `meters.cleared` |  | The clip lights and held peaks are out; the master's true peak and integrated loudness start again (R-METER-2). |
 
 ## Model (`state print --json`)
 
@@ -272,6 +274,9 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].devices[].params[].integer` | bool | whole steps only |
 | `strips[].devices[].params[].formula` | string | the formula driving it, "" = its own value plays (R-AUTO-1) |
 | `strips[].peak` | number[] | the last played block's peaks, L/R (R-PLAY-3) *(not in `--stable`)* |
+| `strips[].rms` | number[] | RMS over the last 300 ms, L/R (R-METER-2) *(not in `--stable`)* |
+| `strips[].hold` | number[] | the held peak, L/R: the most of the last 1.5 s, then falling 20 dB a second *(not in `--stable`)* |
+| `strips[].clip` | bool | reached full scale since `meters clear` — a latch *(not in `--stable`)* |
 | `strips[].clipCount` | int | fed by: clips playing through it (R-MIX-8) |
 | `strips[].fromLanes` | string[] | fed by: the lanes those clips are drawn on |
 | `strips[].fromStrips` | string[] | fed by: strips whose output or a send lands here |
@@ -400,6 +405,16 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.latencyMs` | number | the clock device's *(not in `--stable`)* |
 | `transport.device` | string | the clock device ('' = the system default) |
 | `transport.masterPeak` | number[] | L/R peaks of the last played block *(not in `--stable`)* |
+| `transport.masterRms` | number[] | the master's RMS over 300 ms, L/R (R-METER-2) *(not in `--stable`)* |
+| `transport.masterHold` | number[] | the master's held peak, L/R *(not in `--stable`)* |
+| `transport.masterClip` | bool | the master reached full scale since `meters clear` *(not in `--stable`)* |
+| `loudness` | object | the master as measured while playing, kept after a stop (R-METER-1, ITU-R BS.1770-4) *(not in `--stable`)* |
+| `loudness.momentary` | number | LUFS over the last 400 ms; −144 = nothing measured *(not in `--stable`)* |
+| `loudness.shortTerm` | number | LUFS over the last 3 s *(not in `--stable`)* |
+| `loudness.integrated` | number | LUFS, gated (−70 absolute, −10 LU relative), since play or `meters clear` *(not in `--stable`)* |
+| `loudness.truePeak` | number | dBTP (4× oversampled), the most since play or `meters clear` *(not in `--stable`)* |
+| `loudness.correlation` | number | stereo correlation over 300 ms, −1 … +1 (0: nothing to compare) *(not in `--stable`)* |
+| `loudness.spectrum` | number[] | 61 bands of 1/6 octave, dB re a full-scale sine: band b's centre is 1000·2^((b−34)/6) Hz *(not in `--stable`)* |
 | `audition` | object | a sample heard from the browser, outside the song (R-EDM-9) |
 | `audition.file` | string | the file previewed ('' = none) |
 | `audition.playing` | bool |  |

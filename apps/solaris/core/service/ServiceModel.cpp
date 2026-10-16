@@ -77,12 +77,15 @@ namespace solaris
         const std::string lastError = mModel.lastError;
         const TransportModel transport = mModel.transport;
         const AuditionModel audition = mModel.audition; // the machine's preview: no song decides it
+        const LoudnessModel loudness = mModel.loudness; // R-METER-1: measured, kept after a stop
         std::map<std::string, double> wasLive;          // while playing, `pump` owns bindings[].live: kept
         if (mPlayer && mPlayer->running())
             for (const auto &b : mModel.bindings) wasLive[b.address] = b.live;
         mModel = AppModel();
         mModel.transport = transport;
         mModel.audition = audition;
+        mModel.loudness = loudness;
+        mModel.transport.masterClip = mMasterClip;
         mModel.transport.loopFrom = mLoopFrom;
         mModel.transport.loopTo = mLoopTo;
         mModel.transport.loopClip = mClipLoop;
@@ -197,6 +200,7 @@ namespace solaris
             sm.mute = s->mute;
             sm.solo = s->solo;
             sm.audible = !silent.count(s->id);
+            sm.clip = mClipLatch.count(s->id) > 0; // R-METER-2: a latch outlives a stop and an edit
             for (const auto &sd : p.sends)
                 if (sd.from == s->id)
                 {

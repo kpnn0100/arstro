@@ -12,7 +12,8 @@
  *
  *  The WindowLayer covers the song view under the song bar and holds the windows, keyed: one per
  *  device (`dev:<dv>`, a DevicePanel inside — R-WIN-1's "a window of that synth"), one per pattern
- *  (`roll:<pt>`, the piano roll, R-ROLL-1), one per automation (`auto:<au>`, its facts — R-AUTO-11).
+ *  (`roll:<pt>`, the piano roll, R-ROLL-1), one per automation (`auto:<au>`, its facts — R-AUTO-11),
+ *  and one Loudness window (`loudness`, the master as measured — R-METER-1).
  *  It is not itself a target: a click between windows falls
  *  through to the lanes and the dock. The App offers it right-clicks first (`contextClick`), because
  *  a parameter row's slider would swallow them.
@@ -36,6 +37,7 @@ namespace solaris_ui
     class DevicePanel;
     class PianoRoll;
     class AutomationPanel;
+    class LoudnessPanel;
 
     class ResizeGrip;
 
@@ -104,6 +106,9 @@ namespace solaris_ui
         /** Open (or bring forward) the window of automation `au` (R-AUTO-11). */
         FloatWindow &openAutomation(const std::string &au);
         AutomationPanel *automationPanel(const std::string &au) const;
+        /** Open (or bring forward) the Loudness window (R-METER-1). */
+        FloatWindow &openLoudness();
+        LoudnessPanel *loudnessPanel() const;
         bool isOpen(const std::string &key) const;
         void close(const std::string &key);
 

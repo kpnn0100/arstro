@@ -670,6 +670,28 @@ namespace
                  r.click(world(ms, ms.titleRect(1))); // Edit: it names what undo would take back
                  r.settle();
              }},
+            {"meters-playing", // R-METER-2: playing — the RMS core under the peak, the held line, the drums' clip light lit
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("note add pt_2 --pitch 40 --at 0 --length 16");
+                 r.cmd("set ch_2.gain=8");
+                 r.settle();
+                 r.cmd("transport play");
+                 for (int k = 0; k < 90; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+             }},
+            {"loudness-window", // R-METER-1: played and stopped — the master's LUFS chip opened its window
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("note add pt_2 --pitch 40 --at 0 --length 16");
+                 r.settle();
+                 r.cmd("transport play");
+                 for (int k = 0; k < 150; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+                 r.cmd("transport stop");
+                 r.settle();
+                 auto &d = r.app->project().dock();
+                 r.click(world(d, d.loudnessRect()));
+                 r.settle();
+             }},
             {"confirm-unsaved",
              [](sltest::Rig &r) {
                  songWithStrips(r, "Night Drive");

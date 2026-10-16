@@ -9,8 +9,10 @@
 #include "Engine.h"
 #include "Format.h"
 #include "SolarisService.h"
+#include "meter/Meters.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -28,6 +30,35 @@ namespace solaris
         }
         double dbfs(float lin) { return lin > 0 ? 20.0 * std::log10(lin) : -1000.0; }
         std::string dbText(float lin) { return lin > 0 ? canonicalNumber(std::round(dbfs(lin) * 10.0) / 10.0) : "-inf"; }
+        std::string fixed(double v, int places)
+        {
+            if (v <= LoudnessMeter::kSilence + 0.5) return "-inf";
+            char b[32];
+            std::snprintf(b, sizeof b, "%.*f", places, v);
+            return b;
+        }
+        /** R-METER-1: a mixdown through the DSP library's meters, 100 ms at a time, as one line. */
+        std::string measured(const std::vector<std::vector<float>> &master, size_t len, int rate)
+        {
+            LoudnessMeter lm(2);
+            TruePeakMeter tp(2);
+            CorrelationMeter cm;
+            const size_t step = (size_t)std::max(1, rate / 10);
+            double maxM = LoudnessMeter::kSilence, maxS = LoudnessMeter::kSilence, minCorr = 1.0;
+            bool heard = false;
+            for (size_t i = 0; i < len; i += step)
+            {
+                const int k = (int)std::min(step, len - i);
+                lm.process(master[0].data() + i, master[1].data() + i, k);
+                tp.process(master[0].data() + i, master[1].data() + i, k);
+                cm.process(master[0].data() + i, master[1].data() + i, k);
+                maxM = std::max(maxM, lm.momentary());
+                maxS = std::max(maxS, lm.shortTerm());
+                if (lm.momentary() > -70.0) { minCorr = std::min(minCorr, cm.correlation()); heard = true; } // silence has no phase
+            }
+            return "measure integrated=" + fixed(lm.integrated(), 1) + " momentaryMax=" + fixed(maxM, 1) + " shortTermMax=" + fixed(maxS, 1) +
+                   " truePeak=" + fixed(tp.peakDb(), 1) + " correlationMin=" + (heard ? fixed(minCorr, 2) : std::string("-")) + "\n";
+        }
     }
 
     bool SolarisService::render(const Command &c, std::string &err)
@@ -137,6 +168,7 @@ namespace solaris
                 if (!mHost.writeWav(f, portData[i], rate, bits, err)) return false;
                 mOutput += f + "\n";
             }
+        if (c.has("measure")) mOutput += measured(master, len, rate); // LUFS, LUFS, LUFS, dBTP, −1…+1
 
         // Peaks for `audit` (R-MIX-10): any strip, or the master, that went over full scale.
         mLastRenderPeaks.clear();

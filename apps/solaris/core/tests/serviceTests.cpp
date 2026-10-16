@@ -1618,6 +1618,101 @@ static void test_edits_while_playing_are_heard()
     pass("while playing: a clip added is heard (an engine swap); a gain change is heard at the next block (R-PLAY-1)");
 }
 
+static void test_meters_measure_what_plays()
+{
+    // R-METER-1, R-METER-2: a 1 kHz sine at 0.5 in both channels reads −6.02 LUFS (BS.1770-4: a full-scale sine in
+    // both is 0), −6.02 dBTP, correlation 1, its 1/6-octave band at −6 dB; RMS 0.354; held 0.5
+    Run r;
+    r.ok("project new " + freshSong("meters") + " --bpm 120");
+    for (int k = 0; k < 16; ++k) r.ok("clip add --src tone.wav --at " + std::to_string(k) + " --length 1"); // 8 s: a beat is the tone's half second
+    r.fake.capture->sink.reserve(2 * 2000000);
+    r.ok("transport play");
+    waitFrames(r, 96000);
+    const LoudnessModel &l = r.svc.model().loudness;
+    const TransportModel &t = r.svc.model().transport;
+    if (std::fabs(l.integrated + 6.02) > 0.2 || std::fabs(l.truePeak + 6.02) > 0.2)
+        std::printf("    momentary %.3f short %.3f integrated %.3f true peak %.3f corr %.3f band34 %.3f\n", l.momentary, l.shortTerm,
+                    l.integrated, l.truePeak, l.correlation, l.spectrum.size() > 34 ? l.spectrum[34] : 0.0);
+    assert(std::fabs(l.momentary + 6.02) < 0.2 && std::fabs(l.shortTerm + 6.02) < 0.3 && std::fabs(l.integrated + 6.02) < 0.2);
+    assert(std::fabs(l.truePeak + 6.02) < 0.2 && l.correlation > 0.99);
+    assert(l.spectrum.size() == 61 && std::fabs(l.spectrum[34] + 6.02) < 1.5 && l.spectrum[22] < l.spectrum[34] - 20.0);
+    const StripModel *ch = r.strip("ch_2");
+    assert(std::fabs(ch->rms[0] - 0.3536f) < 0.02f && std::fabs(ch->rms[1] - 0.3536f) < 0.02f && ch->rms[0] < ch->peak[0]);
+    assert(std::fabs(ch->hold[0] - 0.5f) < 0.01f && !ch->clip);
+    assert(std::fabs(t.masterRms[0] - 0.3536f) < 0.02f && std::fabs(t.masterHold[1] - 0.5f) < 0.01f && !t.masterClip);
+    // over full scale: the clip lights latch, on the strip and the master
+    r.ok("set ch_2.gain=12");
+    waitFrames(r, r.fake.capture->frames.load() + 24000);
+    assert(r.strip("ch_2")->clip && t.masterClip && r.strip("ch_2")->hold[0] > 1.0f);
+    // a meters clear while playing: the audio thread takes it without allocating
+    gThreadAllocs = 0;
+    gCountThreads = true;
+    r.ok("set ch_2.gain=0");
+    r.ok("meters clear");
+    waitFrames(r, r.fake.capture->frames.load() + 24000);
+    gCountThreads = false;
+    const long allocs = gThreadAllocs.load();
+    if (allocs) std::printf("    %ld allocations on the audio thread\n", allocs);
+    assert(allocs == 0);
+    assert(!r.strip("ch_2")->clip && !t.masterClip && r.strip("ch_2")->hold[0] < 0.51f);
+    assert(std::fabs(l.integrated + 6.02) < 0.3 && std::fabs(l.truePeak + 6.02) < 0.2); // started again: −6 since the clear, not the +6 before it
+    assert(std::any_of(r.events.begin(), r.events.end(), [](const std::string &e) { return contains(e, "meters.cleared"); }));
+    // a latch outlives a stop; the bars fall to nothing
+    r.ok("set ch_2.gain=12");
+    waitFrames(r, r.fake.capture->frames.load() + 24000);
+    r.ok("transport stop");
+    assert(r.strip("ch_2")->clip && t.masterClip && r.strip("ch_2")->peak[0] == 0.0f && r.strip("ch_2")->rms[0] == 0.0f);
+    assert(std::fabs(l.integrated) < 20.0);                     // the loudness is kept after a stop, to be read
+    r.ok("set ch_2.gain=0");                                     // an edit refreshes the model: still lit
+    assert(r.strip("ch_2")->clip && r.svc.model().transport.masterClip);
+    r.ok("meters clear");
+    assert(!r.strip("ch_2")->clip && !r.svc.model().transport.masterClip && r.svc.model().loudness.integrated == -144.0);
+    pass("the meters (R-METER-1, R-METER-2): a −6 dBFS sine reads −6.02 LUFS momentary, short-term and integrated, −6.02 dBTP, "
+         "correlation 1, its 1/6-octave band; RMS 0.354 and a held 0.5 on the strip and the master; over full scale the clip "
+         "lights latch through a stop and an edit; `meters clear` puts them out and starts the loudness again, with no allocation");
+}
+
+static void test_held_peak_holds_then_falls()
+{
+    // R-METER-2: one second of tone, then silence — held 1.5 s after the last peak, then falling 20 dB a second
+    Run r;
+    r.ok("project new " + freshSong("hold") + " --bpm 120");
+    r.ok("clip add --src tone.wav --at 0 --length 1");
+    r.ok("clip add --src tone.wav --at 1 --length 1");
+    r.fake.capture->sink.reserve(2 * 2000000);
+    r.ok("transport play");
+    waitFrames(r, 48000 * 17 / 10);                              // 1.7 s: the tone ended 0.7 s ago
+    const StripModel *ch = r.strip("ch_2");
+    const float held = ch->hold[0], rms = ch->rms[0];
+    assert(ch->peak[0] == 0.0f && held > 0.49f && rms < 0.25f); // the bar has fallen; the held line has not
+    waitFrames(r, 48000 * 37 / 10);                              // 3.7 s: a second past the hold, falling
+    ch = r.strip("ch_2");
+    if (ch->hold[0] > 0.2f) std::printf("    held %.4f at 3.7 s\n", ch->hold[0]);
+    assert(ch->hold[0] < 0.2f && ch->hold[0] > 0.0f);
+    r.ok("transport stop");
+    pass("a held peak stays 1.5 s after the last peak, then falls 20 dB a second; the RMS falls with the sound (R-METER-2)");
+}
+
+static void test_render_measure()
+{
+    // R-METER-1: a render's mixdown measured, one line
+    Run r;
+    r.ok("project new " + freshSong("measure") + " --bpm 120");
+    for (int k = 0; k < 8; ++k) r.ok("clip add --src tone.wav --at " + std::to_string(k) + " --length 1");
+    const std::string out = r.ok("render --out " + scratch() + "/measure.wav --to 8 --measure");
+    const size_t at = out.find("measure ");
+    assert(at != std::string::npos);
+    double integrated = 0, mMax = 0, sMax = 0, tp = 0, corr = 0;
+    const int got = std::sscanf(out.c_str() + at, "measure integrated=%lf momentaryMax=%lf shortTermMax=%lf truePeak=%lf correlationMin=%lf",
+                                &integrated, &mMax, &sMax, &tp, &corr);
+    if (got != 5) std::printf("    %s", out.c_str() + at);
+    assert(got == 5);
+    assert(std::fabs(integrated + 6.0) < 0.15 && std::fabs(mMax + 6.0) < 0.15 && std::fabs(sMax + 6.0) < 0.15);
+    assert(std::fabs(tp + 6.0) < 0.15 && corr > 0.99);
+    assert(!contains(r.ok("render --out " + scratch() + "/plain.wav --to 8"), "measure"));
+    pass("render --measure prints the mixdown's integrated loudness, its most momentary and short-term, its true peak and its lowest correlation (R-METER-1)");
+}
+
 static void test_loop_and_seek()
 {
     Run r;
@@ -2550,6 +2645,9 @@ int main()
     test_notes_move_and_delete_a_selection_as_one_edit();
     test_a_pattern_grows_to_hold_its_notes();
     test_edits_while_playing_are_heard();
+    test_meters_measure_what_plays();
+    test_held_peak_holds_then_falls();
+    test_render_measure();
     test_loop_and_seek();
     test_stop_returns_to_the_cue_or_stays();
     test_a_clip_plays_looped_and_gives_the_songs_loop_back();

@@ -56,6 +56,7 @@ namespace solaris_ui
         mTimeline->onCopy = copy;
         mTimeline->idsAmount = ids;
         mDock->onOpenDevice = [this](const std::string &dv) { mWindows->openDevice(dv); };
+        mDock->onOpenLoudness = [this] { mWindows->openLoudness(); }; // R-METER-1
         mDock->isDeviceOpen = [this](const std::string &dv) { return mWindows->isOpen("dev:" + dv); };
 
         mBrowser->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };

@@ -94,6 +94,9 @@ namespace solaris
         std::vector<DeviceModel> devices;
         // "fed by" (R-MIX-8)
         float peak[2] = {0, 0};                 // the last played block's peaks, L/R (0 when stopped)
+        float rms[2] = {0, 0};                  // R-METER-2: RMS over 300 ms, L/R
+        float hold[2] = {0, 0};                 // the held peak: the most of 1.5 s, then falling 20 dB/s
+        bool clip = false;                      // reached full scale since `meters clear` (a latch)
         int clipCount = 0;
         std::vector<std::string> fromLanes;     // lanes its clips are drawn on
         std::vector<std::string> fromStrips;    // strips whose output or a send lands here
@@ -240,6 +243,19 @@ namespace solaris
         double latencyMs = 0;                    // the clock device's, while playing
         std::string device;                      // the clock device ("" = the system default)
         float masterPeak[2] = {0, 0};
+        float masterRms[2] = {0, 0};             // R-METER-2, as a strip's
+        float masterHold[2] = {0, 0};
+        bool masterClip = false;
+    };
+
+    /** R-METER-1: the master as measured while playing (BS.1770-4) — kept after a stop, so a played song's
+     *  integrated loudness can be read; −144 = nothing measured. */
+    struct LoudnessModel
+    {
+        double momentary = -144, shortTerm = -144, integrated = -144; // LUFS: 400 ms, 3 s, gated since play / clear
+        double truePeak = -144;                  // dBTP: the most since play / `meters clear`
+        double correlation = 0;                  // −1 … +1, over 300 ms
+        std::vector<double> spectrum;            // dB re a full-scale sine, 61 bands: band b at 1000·2^((b−34)/6) Hz
     };
 
     /** One node of the song's history tree (R-HIST-2): the song as an edit left it. */
@@ -283,6 +299,7 @@ namespace solaris
         std::vector<DeviceInfo> devices;         // from the last `devices list`
         BrowserModel browser;
         TransportModel transport;
+        LoudnessModel loudness;                  // R-METER-1
         AuditionModel audition;
         std::vector<DeviceTypeModel> deviceTypes; // the registry, instruments first (R-DSP-2)
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
