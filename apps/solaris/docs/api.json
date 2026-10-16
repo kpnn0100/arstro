@@ -4083,6 +4083,437 @@
       ]
     },
     {
+      "type": "wavetable",
+      "label": "Wavetable",
+      "kind": "instrument",
+      "summary": "Two wavetable oscillators — six built-in tables, or a sound of 2048-point cycles — moved through by a position and the filter envelope; band-limited at every pitch; a resonant filter, two envelopes; 16 voices.",
+      "params": [
+        {
+          "name": "osc1.table",
+          "label": "Table",
+          "unit": "",
+          "choices": [
+            "basic",
+            "pulse",
+            "harmonics",
+            "formant",
+            "sync",
+            "fold",
+            "sample"
+          ],
+          "default": "basic"
+        },
+        {
+          "name": "osc1.position",
+          "label": "Position",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.66,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc1.posenv",
+          "label": "Env > Position",
+          "unit": "",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc1.octave",
+          "label": "Octave",
+          "unit": "oct",
+          "min": -3.0,
+          "max": 3.0,
+          "default": 0.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc1.semi",
+          "label": "Semi",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc1.fine",
+          "label": "Fine",
+          "unit": "ct",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc1.level",
+          "label": "Level",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.8,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc1.voices",
+          "label": "Unison",
+          "unit": "",
+          "min": 1.0,
+          "max": 5.0,
+          "default": 3.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc1.detune",
+          "label": "Detune",
+          "unit": "ct",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 12.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc1.width",
+          "label": "Width",
+          "unit": "ct",
+          "min": 0.0,
+          "max": 50.0,
+          "default": 10.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.table",
+          "label": "Table",
+          "unit": "",
+          "choices": [
+            "basic",
+            "pulse",
+            "harmonics",
+            "formant",
+            "sync",
+            "fold",
+            "sample"
+          ],
+          "default": "harmonics"
+        },
+        {
+          "name": "osc2.position",
+          "label": "Position",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.3,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.posenv",
+          "label": "Env > Position",
+          "unit": "",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.octave",
+          "label": "Octave",
+          "unit": "oct",
+          "min": -3.0,
+          "max": 3.0,
+          "default": -1.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc2.semi",
+          "label": "Semi",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc2.fine",
+          "label": "Fine",
+          "unit": "ct",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.level",
+          "label": "Level",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.voices",
+          "label": "Unison",
+          "unit": "",
+          "min": 1.0,
+          "max": 5.0,
+          "default": 1.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc2.detune",
+          "label": "Detune",
+          "unit": "ct",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 15.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.width",
+          "label": "Width",
+          "unit": "ct",
+          "min": 0.0,
+          "max": 50.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "noise",
+          "label": "Noise",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "filter.mode",
+          "label": "Mode",
+          "unit": "",
+          "choices": [
+            "lowpass",
+            "bandpass",
+            "highpass",
+            "notch"
+          ],
+          "default": "lowpass"
+        },
+        {
+          "name": "filter.cutoff",
+          "label": "Cutoff",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 20000.0,
+          "default": 6000.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "filter.res",
+          "label": "Resonance",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.25,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "filter.env",
+          "label": "Env Amount",
+          "unit": "oct",
+          "min": -8.0,
+          "max": 8.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "filter.keytrack",
+          "label": "Key Track",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "fenv.attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 3.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "fenv.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 350.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "fenv.sustain",
+          "label": "Sustain",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.25,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "fenv.release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 300.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "amp.attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 3.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "amp.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 120.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "amp.sustain",
+          "label": "Sustain",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.8,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "amp.release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 250.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "volume",
+          "label": "Volume",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": -12.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "velocity",
+          "label": "Velocity",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.8,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "voice.mode",
+          "label": "Voice Mode",
+          "unit": "",
+          "choices": [
+            "poly",
+            "mono",
+            "legato"
+          ],
+          "default": "poly"
+        },
+        {
+          "name": "voice.glide",
+          "label": "Glide",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 2000.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "voice.bend",
+          "label": "Bend Range",
+          "unit": "st",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 2.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "vibrato.depth",
+          "label": "Vibrato",
+          "unit": "st",
+          "min": 0.0,
+          "max": 2.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "vibrato.rate",
+          "label": "Vibrato Rate",
+          "unit": "Hz",
+          "min": 0.1,
+          "max": 20.0,
+          "default": 5.5,
+          "integer": false,
+          "log": true
+        }
+      ]
+    },
+    {
       "type": "piano",
       "label": "Piano",
       "kind": "instrument",

@@ -395,6 +395,19 @@ namespace
                  r.app->project().windows().openDevice(dv);
                  r.settle();
              }},
+            {"wavetable-window", // R-INST-7: the wavetable's face — its two table oscillators, filter, envelopes, from the registry
+             [](sltest::Rig &r) {
+                 r.cmd("project new " + r.song("Tables") + ".slp --bpm 120");
+                 r.cmd("strip add --kind instrument --instrument wavetable --name Tables");
+                 r.settle();
+                 std::string dv;
+                 for (const auto &st : r.svc->model().strips)
+                     for (const auto &d : st.devices)
+                         if (d.type == "wavetable" && dv.empty()) dv = d.id;
+                 r.cmd("set " + dv + ".osc1.posenv=0.4 " + dv + ".osc2.level=0.35");
+                 r.app->project().windows().openDevice(dv);
+                 r.settle();
+             }},
             {"effect-window", // R-UI-12: an effect keeps its parameter list
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

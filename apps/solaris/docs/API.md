@@ -693,6 +693,54 @@ Two oscillators and noise through a resonant filter and an amplitude envelope; 1
 | `vibrato.depth` | 0.0 … 2.0 st | 0.5 st |
 | `vibrato.rate` | 0.1 … 20.0 Hz | 5.5 Hz |
 
+### `wavetable` — Wavetable (instrument)
+
+Two wavetable oscillators — six built-in tables, or a sound of 2048-point cycles — moved through by a position and the filter envelope; band-limited at every pitch; a resonant filter, two envelopes; 16 voices.
+
+| parameter | range | default |
+|---|---|---|
+| `osc1.table` | basic · pulse · harmonics · formant · sync · fold · sample | basic |
+| `osc1.position` | 0.0 … 1.0 | 0.66 |
+| `osc1.posenv` | -1.0 … 1.0 | 0.0 |
+| `osc1.octave` | -3.0 … 3.0 oct | 0.0 oct |
+| `osc1.semi` | -12.0 … 12.0 st | 0.0 st |
+| `osc1.fine` | -100.0 … 100.0 ct | 0.0 ct |
+| `osc1.level` | 0.0 … 1.0 | 0.8 |
+| `osc1.voices` | 1.0 … 5.0 | 3.0 |
+| `osc1.detune` | 0.0 … 100.0 ct | 12.0 ct |
+| `osc1.width` | 0.0 … 50.0 ct | 10.0 ct |
+| `osc2.table` | basic · pulse · harmonics · formant · sync · fold · sample | harmonics |
+| `osc2.position` | 0.0 … 1.0 | 0.3 |
+| `osc2.posenv` | -1.0 … 1.0 | 0.0 |
+| `osc2.octave` | -3.0 … 3.0 oct | -1.0 oct |
+| `osc2.semi` | -12.0 … 12.0 st | 0.0 st |
+| `osc2.fine` | -100.0 … 100.0 ct | 0.0 ct |
+| `osc2.level` | 0.0 … 1.0 | 0.0 |
+| `osc2.voices` | 1.0 … 5.0 | 1.0 |
+| `osc2.detune` | 0.0 … 100.0 ct | 15.0 ct |
+| `osc2.width` | 0.0 … 50.0 ct | 0.0 ct |
+| `noise` | 0.0 … 1.0 | 0.0 |
+| `filter.mode` | lowpass · bandpass · highpass · notch | lowpass |
+| `filter.cutoff` | 20.0 … 20000.0 Hz | 6000.0 Hz |
+| `filter.res` | 0.0 … 1.0 | 0.25 |
+| `filter.env` | -8.0 … 8.0 oct | 1.0 oct |
+| `filter.keytrack` | 0.0 … 1.0 | 0.5 |
+| `fenv.attack` | 0.0 … 10000.0 ms | 3.0 ms |
+| `fenv.decay` | 0.0 … 10000.0 ms | 350.0 ms |
+| `fenv.sustain` | 0.0 … 1.0 | 0.25 |
+| `fenv.release` | 0.0 … 10000.0 ms | 300.0 ms |
+| `amp.attack` | 0.0 … 10000.0 ms | 3.0 ms |
+| `amp.decay` | 0.0 … 10000.0 ms | 120.0 ms |
+| `amp.sustain` | 0.0 … 1.0 | 0.8 |
+| `amp.release` | 0.0 … 10000.0 ms | 250.0 ms |
+| `volume` | -60.0 … 6.0 dB | -12.0 dB |
+| `velocity` | 0.0 … 1.0 | 0.8 |
+| `voice.mode` | poly · mono · legato | poly |
+| `voice.glide` | 0.0 … 2000.0 ms | 0.0 ms |
+| `voice.bend` | 0.0 … 24.0 st | 2.0 st |
+| `vibrato.depth` | 0.0 … 2.0 st | 0.5 st |
+| `vibrato.rate` | 0.1 … 20.0 Hz | 5.5 Hz |
+
 ### `piano` — Piano (instrument)
 
 A physical piano: felt hammers on stiff, inharmonic strings through a shared bridge and soundboard; sustain and soft pedals; 16 voices, a held key never stolen while a released one rings.

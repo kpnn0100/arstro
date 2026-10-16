@@ -701,7 +701,7 @@ static void test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_ch
 
     const std::string before = r.text();
     r.events.clear();
-    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth piano drums sampler)"));
+    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth wavetable piano drums sampler)"));
     assert(contains(r.no("clip add --instrument synth --strip ch_2"), "without --src or --strip"));
     assert(contains(r.no("clip add --instrument synth --length -1"), "--length"));   // the strip was made, then the clip refused
     assert(r.text() == before && r.events.size() == 3);                                // three rejections, no change
@@ -730,7 +730,7 @@ static void test_a_relative_src_is_found_in_the_songs_folder()
     assert(r.clip("ac_1")->src == "samples/snare.wav");                 // stored relative to the song
     r.ok("clip add --src samples/snare.wav --at 4");                    // what the browser's Song tab hands back
     assert(r.clip("ac_2")->track == r.clip("ac_1")->track);            // the SAME file: the same strip
-    assert(r.svc.model().strips.size() == 2 && r.svc.model().deviceTypes.size() == 12 && r.svc.model().deviceTypes[0].kind == "instrument");
+    assert(r.svc.model().strips.size() == 2 && r.svc.model().deviceTypes.size() == arstro::DeviceRegistry::types().size() && r.svc.model().deviceTypes[0].kind == "instrument");
     pass("a relative src names a file in the song's folder first — the Song tab re-places a sound with one `clip add`");
 }
 
@@ -4666,6 +4666,41 @@ static void test_an_input_on_another_device_follows_the_clock()
     pass("an input on another device (R-DEV-1/2/4): held to the clock in real time — the monitored tone continuous and at its level, the input published with its latency and drift; the input chosen beside the clock read as it is");
 }
 
+static void test_the_wavetable_plays_with_no_code_of_its_own()
+{
+    // R-INST-7: the DSP library's "wavetable" is an instrument here as the registry describes it — dropped as one line,
+    // its parameters addresses, a sound given as its sample a table (`set <dv>.sample=`), the render its sound
+    Run r;
+    const std::string dir = scratch(), cycle = dir + "/square-cycle.wav";
+    std::vector<float> sq(2048);
+    for (int i = 0; i < 2048; ++i) sq[(size_t)i] = i < 1024 ? 0.8f : -0.8f;
+    r.fake.written[cycle] = {sq, sq};
+    r.ok("project new " + freshSong("wavetable") + " --bpm 120");
+    r.ok("clip add --instrument wavetable --at 0 --length 4");
+    r.ok("notes add pt_1 \"A4@0:2\"");
+    const DeviceModel *d = nullptr;
+    for (const auto &st : r.svc.model().strips)
+        for (const auto &dv : st.devices)
+            if (dv.type == "wavetable") d = &dv;
+    assert(d && d->instrument && d->takesSample && d->label == "Wavetable");
+    assert(r.ok("get dv_1.osc1.table") == "basic\n");
+    auto render = [&](const std::string &name) {
+        const std::string out = dir + "/" + name + ".wav";
+        r.ok("render --out " + out + " --to 4 --bits 32f");
+        return r.fake.written[out][0];
+    };
+    auto peakOf = [](const std::vector<float> &v) { float p = 0; for (float x : v) p = std::max(p, std::fabs(x)); return p; };
+    const auto basic = render("wt-basic");
+    assert(peakOf(basic) > 0.05f);
+    r.ok("set dv_1.sample=" + cycle + " dv_1.osc1.table=sample");
+    const auto fromSound = render("wt-sound");
+    double apart = 0;
+    for (size_t i = 0; i < basic.size() && i < fromSound.size(); ++i) apart = std::max(apart, (double)std::fabs(basic[i] - fromSound[i]));
+    assert(peakOf(fromSound) > 0.05f && apart > 0.05);
+    assert(contains(r.text(), "osc1.table=sample"));
+    pass("the wavetable (R-INST-7): the DSP library's instrument, here as its registry says — one line to drop, its parameters addresses, a sound given as its table, its render");
+}
+
 static void test_freeze_and_bounce()
 {
     // R-PERF-3: a strip's own sound frozen beside the song and played instead — the song sounds as it did (to float
@@ -6035,6 +6070,7 @@ int main()
     test_the_cpu_meter();
     test_the_engine_on_several_threads();
     test_freeze_and_bounce();
+    test_the_wavetable_plays_with_no_code_of_its_own();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

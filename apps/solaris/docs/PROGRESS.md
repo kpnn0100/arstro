@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N33** — DSP instruments: wavetable, FM, multi-sample (SFZ), granular, 808 (R-INST-7…11) — a commit each. (N32 — several audio devices — is built; owed live: a follower on a second real card), then N34… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N33** — DSP instruments: FM next (R-INST-8; the wavetable, R-INST-7, is built), then multi-sample (SFZ), granular, 808 — a commit each. (N32 — several audio devices — is built; owed live: a follower on a second real card), then N34… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -581,7 +581,9 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       `input` in `transport.devices[]`. Part 4: Settings › Audio's PORTS — each song port on its device (a field whose
       menu is one `settings set port.` line), its line saying where it plays, and while playing how its device is.
 **Phase 5 — grow the sound and the craft**
-- [ ] **N33** DSP instruments: wavetable, FM, multi-sample (SFZ), granular, 808 (R-INST-7…11) — a commit each.
+- [~] **N33** DSP instruments: wavetable, FM, multi-sample (SFZ), granular, 808 (R-INST-7…11) — a commit each.
+      2026-10-17: the wavetable (DSP ad3f2a3: `Wavetable`, `Oscillator::Table`, BasicSynth's table oscillators, the
+      registry's "wavetable") — here with no code of its own. Next: FM (R-INST-8).
 - [ ] **N34** DSP effects: multiband, gate, transient, de-esser, saturator, phaser, flanger, imager, convolution,
       pitch shifter, vocoder, tuner (R-FX-6…17) — a commit each.
 - [ ] **N35** Group / VCA faders (R-MIX-19).
