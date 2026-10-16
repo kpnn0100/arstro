@@ -92,6 +92,29 @@ namespace
                  r.click(r.app->settings().chipRect(2, 3)); // 96 kHz: its fill eases in
                  r.pump(5 * sltest::Rig::kFrameMs);
              }},
+            {"settings-keyboard",
+             [](sltest::Rig &r) {
+                 // R-SET-4: re-keyed actions carry a dot, Reset is live; the section scrolled into the card
+                 r.cmd("settings set key.transport.play=\"F5, Space\" key.song.redo=Ctrl+Y key.roll.octaveUp=none");
+                 r.settle();
+                 r.app->openSettings();
+                 r.settle();
+                 auto &s = r.app->settings();
+                 s.revealRect(s.keyChipRect("song.redo", 0));
+                 r.settle();
+             }},
+            {"settings-key-listening",
+             [](sltest::Rig &r) {
+                 // mid-tween: a chip clicked cross-fades to "Press a key…", its width easing to the new label's
+                 r.settle();
+                 r.app->openSettings();
+                 r.settle();
+                 auto &s = r.app->settings();
+                 s.revealRect(s.keyChipRect("transport.toStart", 0));
+                 r.settle();
+                 r.click(s.keyChipRect("transport.play", 0));
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
             {"project-open",
              [](sltest::Rig &r) {
                  songWithStrips(r, "Night Drive");

@@ -624,6 +624,22 @@ character: GTK's keysym with no modifier (`linux_main.cpp:162`, `keyCodeOfKeysym
 `test_the_keys_are_the_machines` (re-keyed by a script, the window follows; the roll's keys shadow the song's; the
 host's mapping). Mutants: no conflict refusal, the window reading the defaults instead of the model — both seen red.
 
+**The sheet's Keyboard section** (`SettingsSheet`, last of its sections; laid out and measured in the paint,
+`app/widgets/SettingsSheet.cpp:602`): a muted micro-label per area, then an action a line — its label, its keys as
+chips right-aligned, a "+" at the right edge, a dot in the gutter while it is not its defaults; "Reset to defaults"
+beside the section title, quiet while nothing is changed. A chip clicked (or "+") LISTENS (`listen`, `:151`; the
+gesture at `:351`, a double-click a click there): its border and wash turn to the accent and its label cross-fades
+to "Press a key…", its width easing between the two. The next key (`handleKey`, `:391`) is the slot's combo —
+`settings set "key.<action>=<the keys>"`, ONE line; Backspace removes the slot's key, Escape cancels, a key no combo
+can name keeps it listening, a click elsewhere lets it go. A key another action has is refused by the service and
+the App's toast says which action. Reset is ONE line, `key.<id>=default` for every changed action. The chips are
+keyed by combo (`bind`, `:113`): a key that arrives grows in from no width, one that leaves shrinks out where it was,
+so its neighbours slide (design rule §1). Escape and Enter cannot be listened for with the sheet (they cancel and
+— as Backspace — have their own meaning there); `settings set` takes them. UI `test_the_keyboard_section`
+(listening caught mid-ease, a chip caught growing while the old one shrinks, a refusal toasted, Reset as one line);
+shots `settings-keyboard`, `settings-key-listening`. Mutants: a listening look that snaps, chips that snap — both
+seen red.
+
 ### DR-WIN-1 Windows inside the song view (R-WIN-1, R-WIN-4)
 `FloatWindow` (`app/widgets/FloatWindow.cpp`): a frame — a 26 px title bar (title, ×) over its content.
 Dragged by the title it follows the pointer exactly, kept inside the layer; touched anywhere it is

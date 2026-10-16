@@ -316,7 +316,7 @@ audio devices so the user can take advantage of their devices."*
   the driver resamples and the transport says so.
 - **R-DEV-8 Linux first**, over the PulseAudio API (which PipeWire also serves); Windows later.
 
-## R-SET — settings — ✅ IMPLEMENTED (DR-SET-1, DR-SET-2, DR-SET-3) — 4 🔶 (hotkeys, user request 2026-10-16: the keymap DR-SET-4; the sheet's Keyboard section next)
+## R-SET — settings — ✅ IMPLEMENTED (DR-SET-1, DR-SET-2, DR-SET-3, DR-SET-4)
 
 - **R-SET-1 A settings sheet in Cosmo's modal style** — the same scrim, card, chips, fade and Done
   button — with Solaris's rows: output and input devices (the clock is the output), sample rate

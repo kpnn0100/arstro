@@ -7,7 +7,11 @@
  *  (R-SET-3): **Audio** — Output (the clock device), Input, Sample rate, Buffer (the latency it
  *  costs, said beside it); **Playback** — Metronome, Click level; **New songs** — Tempo, Meter;
  *  **Sample folders** — a list with a remove button per folder and "Add folder…"; **Interface** —
- *  Reduced motion. Not cosmo's class: its rows are an image engine's.
+ *  Reduced motion; **Keyboard** (R-SET-4) — every keymap action by area, its keys as chips: a chip
+ *  clicked LISTENS for the next key (Escape cancels, Backspace removes it), "+" listens for one more,
+ *  Reset gives every changed action its defaults — each ONE `settings set key.<action>=…`; a key that
+ *  another action has is refused by the service, and the App's toast says which. Not cosmo's class:
+ *  its rows are an image engine's.
  *
  *  Every control is a command line (`onCommand`): `settings set output=<id>`, `folder add <path>`,
  *  `folder remove <path>` — the sheet holds no setting of its own; it draws `AppModel::settings` and
@@ -23,6 +27,7 @@
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/HoverFade.h"
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -59,6 +64,17 @@ namespace solaris_ui
         /** Scroll (eased) so a rect from the last paint is inside the card. */
         void revealRect(const artboard::Rect &r);
 
+        // R-SET-4, the Keyboard section — geometry from the last paint; `i` indexes the action's keys in the model
+        artboard::Rect keyChipRect(const std::string &action, int i) const;
+        artboard::Rect keyAddRect(const std::string &action) const;
+        artboard::Rect keyResetRect() const { return mKeyReset; }
+        /** The action a click is listening for ("" when none) and the slot the next key lands in. */
+        const std::string &listeningFor() const { return mListenAction; }
+        int listeningSlot() const { return mListenSlot; }
+        /** LIVE, eased: a slot's listening look, and a combo chip's presence (it grows in and shrinks out). */
+        double listenAmount(const std::string &action, int slot) const;
+        double keyChipAmount(const std::string &action, const std::string &combo) const;
+
         void advance(double nowMs) override;
         void onOverlay(artboard::IRenderTarget &t) const override;
         bool handleKey(const artboard::KeyEvent &e) override;
@@ -72,6 +88,30 @@ namespace solaris_ui
         {
             std::string label, value;
         };
+        struct KeyChipLive
+        {
+            std::string combo;
+            artboard::AnimatedProperty amt{0.0};
+            bool gone = false, placed = false;
+            double last = -1.0;
+        };
+        struct KeyRowLive
+        {
+            std::string id;
+            std::vector<KeyChipLive> chips;     // the model's keys in order, and the ones leaving where they were
+            artboard::AnimatedProperty changed{0.0}; // not its defaults: a dot beside it
+            bool placed = false;
+            double last = -1.0;
+        };
+        struct Eased
+        {
+            artboard::AnimatedProperty p{0.0};
+            double last = 0.0;
+        };
+        void listen(const std::string &action, int slot);
+        void stopListening() { mListenAction.clear(); mListenSlot = -1; }
+        const solaris::KeyActionModel *keyModel(const std::string &id) const;
+        static std::string slotKey(const std::string &action, int slot) { return action + "#" + std::to_string(slot); }
         int chosen(int row) const;
         std::string current(int row) const; // the row's setting, as its chips' values spell it
         int hoverId(const artboard::Point &p) const;
@@ -95,6 +135,17 @@ namespace solaris_ui
         mutable std::vector<artboard::Rect> mRemove;
         mutable artboard::Rect mDone, mAddFolder, mCard;
         mutable double mContentH = 0.0;
+        // R-SET-4
+        std::vector<KeyRowLive> mKeyRows;
+        bool mKeysEver = false;
+        std::string mListenAction;
+        int mListenSlot = -1;
+        std::map<std::string, Eased> mListen;  // "<action>#<slot>" → its listening look
+        Eased mResetLive;
+        bool mResetPlaced = false;
+        mutable std::map<std::string, std::vector<artboard::Rect>> mKeyChipRects;
+        mutable std::map<std::string, artboard::Rect> mKeyAddRects;
+        mutable artboard::Rect mKeyReset;
     };
 }
 }

@@ -813,6 +813,86 @@ static void test_the_keys_are_the_machines()
     pass("The keys are the machine's (R-SET-4): a combo is looked up in the model's keymap — re-keyed by a script, Space stops playing and F5 plays, the roll's keys follow and shadow the song's; the host names the key, not the character");
 }
 
+static void test_the_keyboard_section()
+{
+    // R-SET-4: the sheet's Keyboard section — a key clicked listens for the next, "+" for one more; Escape cancels,
+    // Backspace removes, a key another action has is refused (and said); Reset — each ONE `settings set key.…`
+    sltest::Rig r("ui-keysheet", 1280, 800);
+    r.settle();
+    r.key(188, true);                                                // Ctrl+Comma, from Home
+    r.settle();
+    auto &s = r.app->settings();
+    assert(s.isOpen());
+    s.revealRect(s.keyChipRect("song.save", 0));
+    r.settle();
+    auto keysOf = [&](const std::string &id) {
+        for (const auto &k : r.svc->model().settings.keys)
+            if (k.id == id) return k.keys;
+        return std::vector<std::string>{};
+    };
+    auto keyMod = [&](int code, bool shift, bool ctrl) {
+        artboard::KeyEvent e;
+        e.type = artboard::KeyEvent::Type::Down;
+        e.keyCode = code;
+        e.shift = shift;
+        e.ctrl = ctrl;
+        r.app->key(e);
+        r.frame();
+    };
+    // a key clicked listens: its look eases in
+    r.click(s.keyChipRect("transport.play", 0));
+    assert(s.listeningFor() == "transport.play" && s.listeningSlot() == 0);
+    double first = 0.0;
+    for (int k = 0; k < 20 && first == 0.0; ++k) { r.frame(); first = s.listenAmount("transport.play", 0); }
+    assert(first > 0.0 && first < 1.0);
+    r.key(116);                                                      // F5
+    assert(r.sent.back() == "settings set key.transport.play=F5" && keysOf("transport.play") == std::vector<std::string>{"F5"});
+    assert(s.listeningFor().empty());
+    double grow = 0.0, shrink = 1.0;
+    for (int k = 0; k < 20 && grow == 0.0; ++k)
+    {
+        r.frame();
+        grow = s.keyChipAmount("transport.play", "F5");
+        shrink = s.keyChipAmount("transport.play", "Space");
+    }
+    assert(grow > 0.0 && grow < 1.0 && shrink > 0.0 && shrink < 1.0); // the new key grows in as the old shrinks out
+    r.settle();
+    assert(s.keyChipAmount("transport.play", "Space") == 0.0 && s.keyChipAmount("transport.play", "F5") == 1.0);
+    // "+" listens for one more
+    r.click(s.keyAddRect("transport.play"));
+    assert(s.listeningFor() == "transport.play" && s.listeningSlot() == 1);
+    keyMod(116, true, false);
+    assert(r.sent.back() == "settings set \"key.transport.play=F5, Shift+F5\"" && (keysOf("transport.play") == std::vector<std::string>{"F5", "Shift+F5"}));
+    r.settle();
+    // a key another action of the song's keyboard has: refused by the service, the toast says which; nothing changes
+    r.click(s.keyChipRect("song.save", 0));
+    keyMod('D', false, true);
+    assert(r.sent.back() == "settings set key.song.save=Ctrl+D" && keysOf("song.save") == std::vector<std::string>{"Ctrl+S"});
+    assert(r.app->toastText().find("key.lanes.duplicate") != std::string::npos && s.isOpen());
+    r.settle();
+    // Escape cancels — nothing sent, the sheet stays; Backspace removes the key
+    const size_t mark = r.sent.size();
+    r.click(s.keyChipRect("transport.play", 1));
+    r.key(27);
+    assert(r.sent.size() == mark && s.isOpen() && s.listeningFor().empty());
+    r.click(s.keyChipRect("transport.play", 1));                   // a second press so soon is a double-click: still a key chip's click
+    r.key(8);
+    r.key(8);
+    assert(r.sent.back() == "settings set key.transport.play=F5" && keysOf("transport.play") == std::vector<std::string>{"F5"});
+    r.settle();
+    // Reset: ONE line for every changed action
+    r.cmd("settings set key.roll.copy=none");
+    r.settle();
+    r.click(s.keyResetRect());
+    assert(r.sent.back() == "settings set key.transport.play=default key.roll.copy=default");
+    assert(keysOf("transport.play") == std::vector<std::string>{"Space"} && keysOf("roll.copy") == std::vector<std::string>{"Ctrl+C"});
+    // not listening, Escape closes the sheet
+    r.key(27);
+    r.settle();
+    assert(!s.isOpen());
+    pass("The sheet's Keyboard section (R-SET-4): a key clicked listens (eased) for the next, \"+\" for one more; Escape cancels, Backspace removes, a key another action has is refused and said; keys grow in and shrink out; Reset is one line");
+}
+
 static void test_space_returns_and_ctrl_space_stays()
 {
     // R-TIME-7/8: Space stops back where the time bar was put; Ctrl+Space stops where it is; the cue is marked
@@ -2520,6 +2600,7 @@ int main()
     test_the_tempo_is_set_in_the_song_bar();
     test_space_returns_and_ctrl_space_stays();
     test_the_keys_are_the_machines();
+    test_the_keyboard_section();
     test_home_unsaved_confirm_and_recents();
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();

@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — J3: the keymap (and D-9).*
+*Last updated: 2026-10-16 — J4: the sheet's Keyboard section; the hotkeys request done.*
 
 ---
 
 ## NEXT
 
-**► J4 — the sheet's Keyboard section** (R-SET-4): the 2026-10-16 request. B13+ wait.
+**► B13+ — R-EDM-10…20** (ask the user first: the order, and whether now). Owed live checks: D-5, D-9.
 
 ---
 
@@ -336,7 +336,10 @@ umbrella's pointer — `arstro.rule` §7).
       action holding a key; the API's Keyboard section generated. The host now names the key (unshifted keysym:
       F-keys, Tab, Home/End, PageUp/Down, punctuation) and sends what it types — D-9 found and closed here.
       L2 + UI tests; 2 mutants seen red.
-- [ ] **J4** The sheet's Keyboard section: the keys drawn, a click listening for the next, add, remove, Reset (R-SET-4).
+- [x] **J4** The sheet's Keyboard section: the keys drawn, a click listening for the next, add, remove, Reset (R-SET-4).
+      — DR-SET-4 (the sheet): per area, an action a line; listening eased (accent, "Press a key…" cross-faded);
+      Backspace removes, Escape cancels; a refusal toasted; chips keyed by combo, growing in and shrinking out;
+      Reset as one line. UI test, 2 shots; 2 mutants seen red. The 2026-10-16 request is done (J1–J4).
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
