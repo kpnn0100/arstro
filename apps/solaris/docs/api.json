@@ -2005,6 +2005,30 @@
       "stable": true
     },
     {
+      "path": "clips[].plays",
+      "type": "object[]",
+      "summary": "R-REC-2: the comp resolved — runs covering the clip, each the take heard there (the last where the comp says nothing)",
+      "stable": true
+    },
+    {
+      "path": "clips[].plays[].take",
+      "type": "int",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "clips[].plays[].from",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "clips[].plays[].to",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
       "path": "patterns",
       "type": "object[]",
       "summary": "every pattern",

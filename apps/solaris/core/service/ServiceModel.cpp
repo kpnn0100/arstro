@@ -287,6 +287,22 @@ namespace solaris
             else cm.linked = uses[c.pattern];
             for (const auto &t : c.takes) cm.takes.push_back(t.src); // R-REC-2
             for (const auto &x : c.comp) cm.comp.push_back(ClipModel::CompModel{x.take, x.from, x.to});
+            if (!c.takes.empty()) // R-REC-2: the runs the compile plays — computed here once, so a front end only draws them
+            {
+                const double end = c.at + clipLengthBeats(p, c);
+                std::vector<double> cuts{c.at, end};
+                for (const auto &x : c.comp)
+                    for (double b : {x.from, x.to})
+                        if (b > c.at + 1e-9 && b < end - 1e-9) cuts.push_back(b);
+                std::sort(cuts.begin(), cuts.end());
+                for (size_t k = 0; k + 1 < cuts.size(); ++k)
+                {
+                    if (cuts[k + 1] - cuts[k] < 1e-9) continue;
+                    const int t = c.takeAt(0.5 * (cuts[k] + cuts[k + 1]));
+                    if (!cm.plays.empty() && cm.plays.back().take == t) cm.plays.back().to = cuts[k + 1];
+                    else cm.plays.push_back(ClipModel::CompModel{t, cuts[k], cuts[k + 1]});
+                }
+            }
             mModel.lengthBeats = std::max(mModel.lengthBeats, cm.at + cm.length);
             mModel.clips.push_back(cm);
         }

@@ -60,6 +60,11 @@
  *  takes the group's clips with it — ONE `clips move "<ac> …" --by <beats>`. A lane header's menu groups it (a new
  *  group, into one, out of its own, ungroup); a folded row's opens, renames or ungroups it.
  *
+ *  TAKES (R-REC-2): a clip with takes says how many; its menu shows them — a row per take under its lane, keyed (rows
+ *  below slide down, eased) — each lit where the comp plays it (the model's `plays`, cross-faded as the comp changes). A
+ *  drag across a take is ONE `clip comp <ac> --take <k> --from --to` (the grid you see); a double-click, that take for
+ *  the whole clip. Which clips show their takes is the view's.
+ *
  *  Editing is command lines (`onCommand`): a click on the ruler → `transport seek <beat>` (on the grid
  *  you see); a clip dragged → `clip move <id> --at <beat> [--lane <ln>]` on release, on the same grid.
  *  Beats are printed to the tick (`beatText`). While dragging the clip follows the pointer exactly —
@@ -181,6 +186,12 @@ namespace solaris_ui
         // R-ARR-3: lane groups — the chevron and name (on a folded row, or an open group's first lane), how folded the
         // chevron shows (LIVE, 0 open … 1 folded), the row a folded group is (−1 none)
         artboard::Rect groupToggleRect(const std::string &lg) const;
+        // R-REC-2: a clip's takes under it — shown or not (the view's), a take's row (local; empty when hidden), how lit a
+        // take is at a beat (LIVE, 0 … 1: where the comp plays it), the range a drag on it has (the pointer's)
+        void showTakes(const std::string &ac, bool on);
+        bool takesShown(const std::string &ac) const { return mTakesOpen.count(ac) > 0; }
+        artboard::Rect takeRowRect(const std::string &ac, int take) const;
+        double takeLit(const std::string &ac, int take, double beat) const;
         double groupTurn(const std::string &lg) const;
         int groupRow(const std::string &lg) const;
         artboard::Rect markerRect(const std::string &mk) const;  // its flag and name; empty when none
@@ -222,6 +233,8 @@ namespace solaris_ui
             std::string automation;       // an automation row: its id
             std::string strip, sub;       // R-LANE-3: an instrument's track — whose, and the instrument named under it
             std::string group, groupName; // R-ARR-3: the lane group it is in, or (folded) the group it IS
+            std::string takeClip;         // R-REC-2: a take's row — whose clip, and which take (1-based)
+            int take = 0;
             bool groupHead = false, folded = false; // the open group's first lane; a folded group's one row
             int groupLanes = 0;
         };
@@ -411,6 +424,24 @@ namespace solaris_ui
         artboard::AnimatedProperty mPunchA{0.0}, mPunchB{0.0}, mPunchAmt{0.0};
         bool mPunchOnLast = false, mPunchInit = false;
         // R-ARR-3: each group's chevron, eased; a folded group's clips dragged together
+        // R-REC-2: the clips whose takes are shown; each take row's lit runs, cross-faded from the last; a drag on one
+        std::set<std::string> mTakesOpen;
+        const solaris::AppModel *mModelRef = nullptr; // the model last bound — the view's own changes re-bind from it
+        struct TakeLit
+        {
+            std::vector<std::pair<double, double>> from, to;
+            artboard::AnimatedProperty t{1.0};
+            bool placed = false;
+        };
+        std::map<std::string, TakeLit> mTakeLit;  // by "<ac>#<k>"
+        std::string mTakeClip;
+        int mTakeIdx = 0;
+        double mTakeA = 0, mTakeB = 0;
+        bool mTakeDragging = false;
+        void bindTakes(const solaris::AppModel &m);
+        void advanceTakes(double nowMs);
+        void paintTakes(artboard::IRenderTarget &t) const;
+        bool takeGesture(const artboard::Gesture &g, const artboard::Point &local);
         std::map<std::string, artboard::AnimatedProperty> mGroupTurn;
         std::map<std::string, double> mGroupTurnLast;
         std::string mDragGroup;

@@ -377,6 +377,10 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `clips[].comp[].take` | int | 1-based |
 | `clips[].comp[].from` | number | beats |
 | `clips[].comp[].to` | number | beats |
+| `clips[].plays` | object[] | R-REC-2: the comp resolved — runs covering the clip, each the take heard there (the last where the comp says nothing) |
+| `clips[].plays[].take` | int |  |
+| `clips[].plays[].from` | number | beats |
+| `clips[].plays[].to` | number | beats |
 | `patterns` | object[] | every pattern |
 | `patterns[].id` | string |  |
 | `patterns[].name` | string |  |

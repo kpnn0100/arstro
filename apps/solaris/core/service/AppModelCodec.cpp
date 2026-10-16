@@ -131,6 +131,10 @@ namespace solaris
             {"clips[].comp[].take", "int", "1-based"},
             {"clips[].comp[].from", "number", "beats"},
             {"clips[].comp[].to", "number", "beats"},
+            {"clips[].plays", "object[]", "R-REC-2: the comp resolved — runs covering the clip, each the take heard there (the last where the comp says nothing)"},
+            {"clips[].plays[].take", "int", ""},
+            {"clips[].plays[].from", "number", "beats"},
+            {"clips[].plays[].to", "number", "beats"},
             {"patterns", "object[]", "every pattern"},
             {"patterns[].id", "string", ""},
             {"patterns[].name", "string", ""},
@@ -544,11 +548,14 @@ namespace solaris
         {
             Json comp = Json::array(); // R-REC-2
             for (const auto &x : c.comp) comp.push(Json::object().set("take", x.take).set("from", x.from).set("to", x.to));
+            Json plays = Json::array();
+            for (const auto &x : c.plays) plays.push(Json::object().set("take", x.take).set("from", x.from).set("to", x.to));
             clips.push(Json::object()
                            .set("id", c.id).set("name", c.name).set("track", c.track).set("lane", c.lane).set("kind", c.kind)
                            .set("src", c.src).set("pattern", c.pattern).set("at", c.at).set("length", c.length).set("in", c.in)
                            .set("out", c.out).set("gain", c.gain).set("fadeIn", c.fadeIn).set("fadeOut", c.fadeOut)
-                           .set("loop", c.loop).set("offline", c.offline).set("linked", c.linked).set("takes", strings(c.takes)).set("comp", comp));
+                           .set("loop", c.loop).set("offline", c.offline).set("linked", c.linked).set("takes", strings(c.takes)).set("comp", comp)
+                           .set("plays", plays));
         }
         j.set("clips", clips);
         Json patterns = Json::array();

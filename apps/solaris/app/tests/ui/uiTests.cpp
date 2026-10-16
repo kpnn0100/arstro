@@ -3749,6 +3749,73 @@ static void test_recording_audio_from_the_window()
     pass("recording audio from the window (R-REC-1): R on an audio line — no input: the input ports offered, one line — lit red eased, again disarms; Monitor… On; the ruler punches the loop's span, a red line eased in");
 }
 
+static void test_takes_under_their_clip()
+{
+    // R-REC-2: a clip with three takes says so; its menu shows them — a row per take under its lane, inserted eased — the
+    // last lit (the default); a drag across take 1 is ONE `clip comp`, its light crossing over eased; a double-click on
+    // take 2 is that take for the whole clip; Hide takes
+    sltest::Rig r("ui-takes", 1280, 800);
+    const std::string path = r.song("Takes") + ".slp";
+    r.cmd("project new " + path + " --bpm 120");
+    r.cmd("clip add --src vox.wav --at 0");                         // half a second: a beat long
+    r.cmd("set " + r.svc->model().clips[0].id + ".length=4");
+    r.cmd("set " + r.svc->model().clips[0].id + ".loop=true");
+    r.cmd("project save");
+    std::string text;
+    {
+        std::ifstream f(path);
+        std::stringstream ss;
+        ss << f.rdbuf();
+        text = ss.str();
+    }
+    const auto at = text.find("#aclip");
+    const auto eol = text.find('\n', at);
+    text.insert(eol + 1, "  #take src=a.wav\n  #take src=b.wav\n  #take src=c.wav\n");
+    {
+        std::ofstream f(path);
+        f << text;
+    }
+    r.cmd("project open " + path);
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    const std::string ac = r.svc->model().clips[0].id;
+    assert(r.svc->model().clips[0].takes.size() == 3 && !tl.takesShown(ac) && tl.takeRowRect(ac, 1).h == 0.0);
+    const int rows = tl.rowCount();
+    auto &menu = r.app->menu();
+    const artboard::Rect cr = world(tl, tl.clipRect(ac));
+    r.click(cr.x + 20.0, cy(cr), 2);
+    r.settle();
+    assert(menuItem(r, "Show takes") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Show takes")));
+    r.settle();
+    assert(tl.takesShown(ac) && tl.rowCount() == rows + 3 && tl.takeRowRect(ac, 3).h > 0.0);
+    assert(tl.takeLit(ac, 3, 1.5) == 1.0 && tl.takeLit(ac, 1, 1.5) == 0.0); // the last plays where the comp says nothing
+    // a drag across take 1, beats 1 … 2: ONE line; the light crosses over, eased
+    const artboard::Rect t1 = world(tl, tl.takeRowRect(ac, 1));
+    const double x1 = world(tl, artboard::Rect{tl.beatToX(1.0), 0, 0, 0}).x, x2 = world(tl, artboard::Rect{tl.beatToX(2.0), 0, 0, 0}).x;
+    r.drag(x1 + 1.0, cy(t1), x2 + 1.0, cy(t1), 6);
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "clip comp " + ac + " --take 1 --from 1 --to 2"));
+    const double mid = tl.takeLit(ac, 1, 1.5);
+    assert(mid > 0.0 && mid < 1.0 && tl.takeLit(ac, 3, 1.5) > 0.0);
+    r.settle();
+    assert(tl.takeLit(ac, 1, 1.5) == 1.0 && tl.takeLit(ac, 3, 1.5) == 0.0 && tl.takeLit(ac, 3, 2.5) == 1.0);
+    // a double-click on take 2: the whole clip
+    const artboard::Rect t2 = world(tl, tl.takeRowRect(ac, 2));
+    r.click(x2 + 40.0, cy(t2));
+    r.click(x2 + 40.0, cy(t2));
+    r.settle();
+    assert(sentLine(r, "clip comp " + ac + " --take 2") && tl.takeLit(ac, 2, 0.5) == 1.0 && tl.takeLit(ac, 2, 3.5) == 1.0);
+    // hidden again
+    r.click(cr.x + 20.0, cy(cr), 2);
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "Hide takes")));
+    r.settle();
+    assert(!tl.takesShown(ac) && tl.rowCount() == rows);
+    pass("takes under their clip (R-REC-2): Show takes inserts a row per take, the last lit; a drag across take 1 is one `clip comp`, its light crossing over eased; a double-click on take 2 the whole clip; Hide takes");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -3794,6 +3861,7 @@ int main()
     test_time_edits_from_the_ruler();
     test_lane_groups_on_the_timeline();
     test_recording_audio_from_the_window();
+    test_takes_under_their_clip();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();

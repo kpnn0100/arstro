@@ -149,6 +149,7 @@ namespace solaris
         std::vector<std::string> takes;          // R-REC-2: a loop recording's passes (files), 1-based in the comp
         struct CompModel { int take = 1; double from = 0, to = 0; };
         std::vector<CompModel> comp;             // R-REC-2: which take plays where; elsewhere the last
+        std::vector<CompModel> plays;            // … resolved: runs covering the clip, each its take (what is heard)
     };
 
     struct NoteModel

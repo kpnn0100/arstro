@@ -100,6 +100,7 @@ namespace solaris_ui
 
     void Timeline::bind(const solaris::AppModel &m)
     {
+        mModelRef = &m;
         mBeatsPerBar = std::max(1, std::atoi(m.sig.c_str()));
         mArmed = m.armed; // R-MIDI-2
         mStrips.clear();
@@ -121,9 +122,12 @@ namespace solaris_ui
             mStripes.clear();
             mTracks.clear();
             mMarkers.clear(); // R-ARR-1
+            mTakesOpen.clear(); // R-REC-2
+            mTakeLit.clear();
             mEver = mBound = mEmptyInit = mLoopInit = false;
         }
         bindMarkers(m); // R-ARR-1: after a song change has cleared the last song's
+        bindTakes(m);   // R-REC-2
         std::map<std::string, int> colourOf; // the service resolves a strip's colour (stable by id)
         for (const auto &st : m.strips) colourOf[st.id] = st.colour;
         mRows.clear();
@@ -171,6 +175,16 @@ namespace solaris_ui
                             if (d.instrument && r.sub.empty()) r.sub = d.label;
             }
             mRows.push_back(r);
+            for (const auto &c : m.clips) // R-REC-2: a clip's takes, shown, are rows under its lane
+                if (c.lane == l.id && !c.takes.empty() && mTakesOpen.count(c.id))
+                    for (int k = 1; k <= (int)c.takes.size(); ++k)
+                    {
+                        Row tr{"take:" + c.id + ":" + std::to_string(k), "", "Take " + std::to_string(k), r.colour};
+                        tr.takeClip = c.id;
+                        tr.take = k;
+                        tr.strip = "";
+                        mRows.push_back(tr);
+                    }
         }
         for (const auto &c : m.clips)
             if (c.lane.empty() && !rowOfStrip.count(c.track))
@@ -603,6 +617,7 @@ namespace solaris_ui
         }
         advanceAuto(nowMs); // a click's point waiting out the double-click (R-AUTO-11)
         advanceMarkers(nowMs); // R-ARR-1
+        advanceTakes(nowMs);   // R-REC-2
         {
             // R-REC-1: the punch — present or not, eased; its ends travel when it moves (from where they ARE)
             const bool on = mPunchTo > mPunchFrom;
@@ -893,6 +908,7 @@ namespace solaris_ui
     bool Timeline::handleGesture(const Gesture &g, const Point &local)
     {
         if (autoGesture(g, local)) return true; // an automation row's curve and points (R-AUTO-6)
+        if (takeGesture(g, local)) return true; // a take's row: a range of it into the comp (R-REC-2)
         if (markerGesture(g, local)) return true; // a marker's flag on the ruler's band (R-ARR-1)
         if (rulerGesture(g, local)) return true; // the ruler dragged: the playhead, the loop's brace (R-TIME-6)
         if (loopGesture(g, local)) return true; // the loop region on the ruler (R-EDM-7)
@@ -1156,6 +1172,11 @@ namespace solaris_ui
                 const std::string pt = c.pattern;
                 items.push_back({"Piano Roll", [this, pt, id] { if (onOpenPattern) onOpenPattern(pt, id); }});
             }
+            if (!c.takes.empty()) // R-REC-2: its takes under it — the view's
+            {
+                const bool shown = mTakesOpen.count(id) > 0;
+                items.push_back({shown ? "Hide takes" : "Show takes", [this, id, shown] { showTakes(id, !shown); }});
+            }
             items.push_back({"Duplicate", [this, id] { if (onCommand) onCommand("clip duplicate " + id); }});
             items.push_back({"Copy ID", [this, id] { if (onCopy) onCopy(id); }}); // R-UI-11
             items.push_back({"Delete", [this, id] { if (onCommand) onCommand("clip delete " + id); }});
@@ -1189,6 +1210,17 @@ namespace solaris_ui
         drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(hue, 0.32 * a), fade(hue, 0.85 * a), 1.0));
         t.save();
         t.clipRect(r.x, r.y, r.w, r.h);
+        if (!v.c.takes.empty()) // R-REC-2: how many takes it has, at its top right — where there is room beside its name (R5)
+        {
+            const std::string n = std::to_string(v.c.takes.size()) + " takes";
+            const std::string name = v.c.name.empty() ? v.c.id : v.c.name;
+            const double nw = t.measureText(n, 9.0, font::sans());
+            if (r.w > nw + t.measureText(name, 11.0, font::sans()) + 24.0)
+            {
+                t.setFill(fade(palette::foreground(), 0.75 * a));
+                t.drawText(n, r.right() - nw - 5.0, r.y + 12.0, 9.0, font::sans());
+            }
+        }
         const double px = 10.0;
         const double lx = std::max(r.x, kHeaderW) + 5.0; // a clip begun off-screen keeps its name at the visible edge
         const double ids = idsAmount ? idsAmount() : 0.0; // R-UI-11: its id (and its pattern's) beside its name
@@ -1404,6 +1436,7 @@ namespace solaris_ui
                 }
             }
         paintAutomation(t); // the curves, in the clips' clip
+        paintTakes(t);      // R-REC-2: a clip's takes, under its lane
         // the browser's drop hint: where it would land
         if (mDropAmt.value() > 0.001 && mDropRow >= 0)
         {
@@ -1432,6 +1465,15 @@ namespace solaris_ui
             const auto st = mStripes.find(row.key);
             if (st != mStripes.end() && st->second.placed) stripe = lerpColor(st->second.from, st->second.to, st->second.t.value());
             drawRoundedRect(t, Rect{0, r.y + 6.0, 3.0, r.h - 12.0}, radius::control(), Paint::filled(fade(stripe, a)));
+            if (!d.takeClip.empty())
+            {
+                // R-REC-2: a take's row — its number, indented under its clip's lane
+                t.setFill(fade(palette::mutedForeground(), a));
+                t.drawText(d.label, 22.0, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
+                t.setStroke(fade(palette::border(), a), 1.0);
+                t.beginPath(); t.moveTo(0, r.bottom() - 0.5); t.lineTo(W, r.bottom() - 0.5); t.strokePath();
+                continue;
+            }
             if (!d.automation.empty())
             {
                 // an automation row: the accent stripe, its name, what reads it

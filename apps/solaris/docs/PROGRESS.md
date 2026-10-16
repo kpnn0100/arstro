@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N17 — takes and comping** (R-REC-2), then N18… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N18 — audio editing on the lanes: split, fades and gain drawn, crossfades, reverse, consolidate, slice** (R-EDIT-1), then N19… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -475,10 +475,12 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       Part 3 (same day): the window — M | S | R on audio and instrument strips (R lit red, eased; no input: the input
       ports offered), Input… and Monitor… in an audio line's menu, the ruler's Punch the loop's span (a red line, eased).
       Loop takes: N17. Live check owed: a recording through this machine's real input.
-- [~] **N17** Takes and comping (R-REC-2).
+- [x] **N17** Takes and comping (R-REC-2).
       Part 1 (2026-10-16): a looped recording → a take per pass (each heard as heard: the turn's tail the pass before's),
       `#take`/`#comp`, `clip comp`, the compile playing the comp with 5 ms crossfades; D-12 (a take's path) closed.
-      Part 2: the takes under the clip in the window.
+      Part 2 (same day): `clips[].plays` (the comp resolved, in the model); the window — "N takes", Show takes (a row per
+      take under the lane, lit where it plays, cross-faded), a drag across a take is one `clip comp`, a double-click the
+      whole clip.
 - [ ] **N18** Audio editing on the lanes: split, fades and gain drawn, crossfades, reverse, consolidate, slice
       (R-EDIT-1).
 - [ ] **N19** DSP: a time-stretcher and pitch shifter (phase vocoder, transients) (R-WARP-1's DSP half).

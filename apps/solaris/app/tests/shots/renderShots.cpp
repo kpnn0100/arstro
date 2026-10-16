@@ -9,6 +9,8 @@
  *
  *  --check fails if any shot is a single colour (a blank frame is the cheapest broken state to miss).
  */
+#include <fstream>
+#include <sstream>
 #include "../Rig.h"
 #include "../../widgets/PianoRoll.h"
 #include <thread>
@@ -682,6 +684,36 @@ namespace
                  r.cmd("strip arm " + vox + " --input Mic");
                  r.cmd("transport loop 4 8");
                  r.cmd("transport punch 4 8");
+                 r.settle();
+             }},
+            {"takes",   // R-REC-2: the vocal's three takes shown under it, take 1 comped over 2.5 … 3, the rest the last's
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 std::string vox, path;
+                 for (const auto &c : r.svc->model().clips)
+                     if (c.kind == "audio" && vox.empty()) vox = c.id;
+                 path = r.svc->model().projectPath;
+                 r.cmd("set " + vox + ".length=4");
+                 r.cmd("set " + vox + ".loop=true");
+                 r.cmd("project save");
+                 std::string text;
+                 {
+                     std::ifstream f(path);
+                     std::stringstream ss;
+                     ss << f.rdbuf();
+                     text = ss.str();
+                 }
+                 const auto at = text.find("#aclip id=" + vox + " ");
+                 text.insert(text.find('\n', at) + 1, "  #take src=vox-a.wav\n  #take src=vox-b.wav\n  #take src=vox-c.wav\n");
+                 {
+                     std::ofstream f(path);
+                     f << text;
+                 }
+                 r.cmd("project open \"" + path + "\"");
+                 const double from = r.svc->model().clips.empty() ? 0.0 : [&] { for (const auto &c : r.svc->model().clips) if (c.id == vox) return c.at; return 0.0; }();
+                 r.cmd("clip comp " + vox + " --take 1 --from " + std::to_string(from) + " --to " + std::to_string(from + 0.5));
+                 r.settle();
+                 r.app->project().timeline().showTakes(vox, true);
                  r.settle();
              }},
             {"loop-region",   // R-EDM-7: the brace on the ruler, the region tinted on the lanes
