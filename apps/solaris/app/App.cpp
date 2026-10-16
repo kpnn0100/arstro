@@ -417,7 +417,8 @@ namespace solaris_ui
         }
         // the modals float over whichever screen opened them; advanced always, so a close can finish
         mSettings->advance(nowMs);
-        mSettings->renderOverlay(target);
+        mSettings->render(target);        // its card, its pages and their controls (R-SET-5/6) …
+        mSettings->renderOverlay(target); // … and an open combo's list, over everything
         mModalRoot->advance(nowMs);
         mModalRoot->renderOverlay(target);
 

@@ -78,19 +78,40 @@ namespace
                  r.app->openSettings();
                  r.settle();
              }},
+            {"settings-folders",
+             [](sltest::Rig &r) {
+                 r.cmd("folder add \"/home/me/Music/Samples/Drum Kits/909\"");
+                 r.cmd("folder add /home/me/Music/Loops");
+                 r.settle();
+                 r.app->openSettings();
+                 r.settle();
+                 r.click(r.app->settings().railRect(arstro::solaris_ui::SettingsSheet::kFolders));
+                 r.settle();
+             }},
             {"settings-mid-open",
              [](sltest::Rig &r) {
                  r.settle();
                  r.app->openSettings();
                  r.pump(3 * sltest::Rig::kFrameMs); // ~48 ms into the 150 ms fade
              }},
-            {"settings-chip-changing",
+            {"settings-combo-open",
              [](sltest::Rig &r) {
+                 // R-SET-6: the Sample rate combo's list, dropping (mid-reveal) over the page
                  r.settle();
                  r.app->openSettings();
                  r.settle();
-                 r.click(r.app->settings().chipRect(2, 3)); // 96 kHz: its fill eases in
-                 r.pump(5 * sltest::Rig::kFrameMs);
+                 r.click(r.app->settings().controlRect(arstro::solaris_ui::SettingsSheet::kRate));
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
+            {"settings-page-changing",
+             [](sltest::Rig &r) {
+                 // R-SET-5: Audio fading out as Playback fades in, the rail's highlight on its way
+                 r.cmd("settings set metronome=on");
+                 r.settle();
+                 r.app->openSettings();
+                 r.settle();
+                 r.click(r.app->settings().railRect(arstro::solaris_ui::SettingsSheet::kPlayback));
+                 r.pump(4 * sltest::Rig::kFrameMs);
              }},
             {"settings-keyboard",
              [](sltest::Rig &r) {
@@ -100,6 +121,8 @@ namespace
                  r.app->openSettings();
                  r.settle();
                  auto &s = r.app->settings();
+                 r.click(s.railRect(arstro::solaris_ui::SettingsSheet::kKeyboard));
+                 r.settle();
                  s.revealRect(s.keyChipRect("song.redo", 0));
                  r.settle();
              }},
@@ -110,7 +133,7 @@ namespace
                  r.app->openSettings();
                  r.settle();
                  auto &s = r.app->settings();
-                 s.revealRect(s.keyChipRect("transport.toStart", 0));
+                 r.click(s.railRect(arstro::solaris_ui::SettingsSheet::kKeyboard));
                  r.settle();
                  r.click(s.keyChipRect("transport.play", 0));
                  r.pump(4 * sltest::Rig::kFrameMs);

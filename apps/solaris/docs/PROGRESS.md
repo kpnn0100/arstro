@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — K1: settings in pages, combo boxes, the history tree — specified.*
+*Last updated: 2026-10-16 — K2: settings in pages, combo boxes.*
 
 ---
 
 ## NEXT
 
-**► K2 — settings in pages, combo boxes** (R-SET-5/6), then K3, K4. B13+ wait (ask). Owed live checks: D-5, D-9.
+**► K3 — the history tree in the service** (R-HIST-1/2), then K4. B13+ wait (ask). Owed live checks: D-5, D-9.
 
 ---
 
@@ -348,8 +348,11 @@ umbrella's pointer — `arstro.rule` §7).
 *"setting need to have section, don't put all in 1 page / for option need to have combo box / need to have tree
 history like cosmo".* Requirements: R-SET-5, R-SET-6 (R-SET-1, R-SET-3 amended); R-HIST-1…4 (R-EDM-1 amended).
 - [x] **K1** The requirements, conflict-checked; R-HIST-4 (keep the tree in the song?) asked of the user.
-- [ ] **K2** The sheet in pages: a rail of sections, one page cross-faded in, the rail's highlight sliding; choices
+- [x] **K2** The sheet in pages: a rail of sections, one page cross-faded in, the rail's highlight sliding; choices
       as Artboard's `ComboBox` in cosmo's tokens, on/off as a toggle (R-SET-5, R-SET-6).
+      — DR-SET-5: `SettingCombo` / `SettingToggle` (Artboard's controls, fields drawn here — a value from the model
+      cross-fades / slides); pages clipped, input-transparent, their own scroll. 2 UI tests (one new), 4 shots;
+      3 mutants seen red. Found on the way: `clipToBounds` clips a segment's children, not its own paint.
 - [ ] **K3** The history tree in the service: nodes, branching, `history`, `history jump <n>`, `history[]` +
       `historyCurrent` in the model (R-HIST-1, R-HIST-2).
 - [ ] **K4** Edit ▸ Show History Tree…: cosmo's `HistoryView` over the model's tree, a click one `history jump`

@@ -1,33 +1,35 @@
 /*
- *  solaris_ui — SettingsSheet: the machine's settings, in cosmo's modal style (R-SET-1, amended).
+ *  solaris_ui — SettingsSheet: the machine's settings, in cosmo's modal style (R-SET-1, R-SET-5, R-SET-6).
  *
- *  Cosmo's SettingsDialog's LOOK — the scrim, the popover card, the row labels tracked +0.06, the
- *  chips (filled accent when chosen, secondary + border otherwise), the eased hover wash, the Done
- *  button, the 150/120 ms fade — in SECTIONS as cosmo's and Interstellar's Engine Settings are
- *  (R-SET-3): **Audio** — Output (the clock device), Input, Sample rate, Buffer (the latency it
- *  costs, said beside it); **Playback** — Metronome, Click level; **New songs** — Tempo, Meter;
- *  **Sample folders** — a list with a remove button per folder and "Add folder…"; **Interface** —
- *  Reduced motion; **Keyboard** (R-SET-4) — every keymap action by area, its keys as chips: a chip
+ *  Cosmo's modal LOOK — the scrim, the popover card, the 150/120 ms fade, the Done button — around a RAIL
+ *  of sections (Audio, Playback, New songs, Sample folders, Interface, Keyboard) and ONE page, the chosen
+ *  section's (R-SET-5): a section clicked cross-fades its page in while the rail's highlight slides to
+ *  it, and a page taller than the card scrolls on its own. A setting that is one value of a list is a
+ *  combo box — Artboard's `ComboBox`, its field drawn here so a value arriving from the model
+ *  cross-fades (`SettingCombo`); an on/off setting is a toggle whose knob eases (`SettingToggle`)
+ *  (R-SET-6). The sample folders and the keymap (R-SET-4) are lists, drawn by their pages: a key chip
  *  clicked LISTENS for the next key (Escape cancels, Backspace removes it), "+" listens for one more,
- *  Reset gives every changed action its defaults — each ONE `settings set key.<action>=…`; a key that
- *  another action has is refused by the service, and the App's toast says which. Not cosmo's class:
- *  its rows are an image engine's.
+ *  Reset gives every changed action its defaults.
  *
  *  Every control is a command line (`onCommand`): `settings set output=<id>`, `folder add <path>`,
- *  `folder remove <path>` — the sheet holds no setting of its own; it draws `AppModel::settings` and
- *  `devices` every frame, so a change made from a shell shows here too. A chip's "chosen" fill is
- *  EASED (200 ms) — a setting arriving from the model is still a visible change (design rule §1).
+ *  `settings set key.<action>=…` — the sheet holds no setting of its own; it draws `AppModel::settings`
+ *  and `devices` when they change, so a change made from a shell shows on its page too.
  *
- *  Chips and paths are MEASURED (they size to their text), so their boxes are computed in the paint
- *  — measurement is only valid during a render (design rule R5) — and kept for the next hit test.
+ *  Drawn in the normal pass (the App renders it after the screens): its own paint, then the pages and
+ *  their controls; an open combo's list in the overlay pass, over everything. The self-drawn parts
+ *  are MEASURED, so their boxes are computed in the paint — measurement is only valid during a render
+ *  (design rule R5) — and kept for the next hit test.
  */
 #pragma once
 #include "../Theme.h"
 #include "AppModel.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/HoverFade.h"
+#include "../../../../core/Artboard/src/ui/concrete/ComboBox.h"
+#include "../../../../core/Artboard/src/ui/concrete/ToggleSwitch.h"
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -35,13 +37,57 @@ namespace arstro
 {
 namespace solaris_ui
 {
+    /** Artboard's ComboBox — its behaviour (the list, its scroll, a pick) untouched — with the field drawn
+     *  in cosmo's tokens and its label CROSS-FADED when the value changes, whoever changed it (FR-41). */
+    class SettingCombo : public artboard::ComboBox
+    {
+    public:
+        SettingCombo();
+        void advance(double nowMs) override;
+        /** Close the list (a click elsewhere, Escape, the sheet closing) — as a click on the field does. */
+        void close();
+        /** LIVE: how far the label has cross-faded to the value it shows now (1 = settled). */
+        double labelAmount() const { return mFade.value(); }
+        const std::string &shown() const { return mTo; }
+
+    protected:
+        void onPaint(artboard::IRenderTarget &t) const override;
+
+    private:
+        std::string mFrom, mTo;
+        artboard::AnimatedProperty mFade{1.0};
+        bool mPlaced = false;
+    };
+
+    /** Artboard's ToggleSwitch, its knob drawn here from an eased copy of `on()` — so a value set from the
+     *  model (`setOn`) slides like a click does (design rule §1). */
+    class SettingToggle : public artboard::ToggleSwitch
+    {
+    public:
+        SettingToggle();
+        void advance(double nowMs) override;
+        double amount() const { return mKnob.value(); } // LIVE: 0 off … 1 on
+
+    protected:
+        void onPaint(artboard::IRenderTarget &t) const override;
+
+    private:
+        artboard::AnimatedProperty mKnob{0.0};
+        double mLast = -1.0;
+        bool mPlaced = false;
+    };
+
     class SettingsSheet : public artboard::Segment
     {
     public:
         enum Row { kOutput = 0, kInput, kRate, kBuffer, kMetronome, kClickLevel, kPreviewLevel, kNewBpm, kNewSig, kMotion, kRows };
-        static constexpr double kCardW = 520.0;
+        enum Section { kAudio = 0, kPlayback, kNewSongs, kFolders, kInterface, kKeyboard, kSections };
+        static constexpr double kCardW = 720.0, kCardH = 520.0;
+        static constexpr double kRailW = 164.0;   // the sections' column
         static constexpr double kPad = 24.0;
-        static constexpr double kChipH = 26.0;
+        static constexpr double kChipH = 26.0;    // the keymap's chips, "Add folder…"
+        static constexpr double kRowH = 56.0;     // a setting: its name and note on the left, its control on the right
+        static constexpr double kComboW = 220.0, kControlH = 28.0;
 
         SettingsSheet();
         void bind(const solaris::AppModel &m);
@@ -54,17 +100,33 @@ namespace solaris_ui
         std::function<void(const std::string &line)> onCommand;
         std::function<void()> onAddFolder;
 
+        // R-SET-5: the sections — geometry in window coordinates, from the last layout
+        void showSection(int s); // as a click on the rail
+        int section() const { return mSection; }
+        artboard::Rect railRect(int s) const;
+        double pageAmount(int s) const;            // LIVE: a page's opacity in the cross-fade
+        double railHighlightY() const { return mRailY.value(); } // LIVE: the highlight's top
+        static const char *sectionTitle(int s);
+        static int sectionOf(int row);
+
+        // R-SET-6: the controls
+        artboard::Rect controlRect(int row) const; // the combo's field or the toggle
+        int optionCount(int row) const;
+        std::string optionLabel(int row, int i) const;
+        artboard::Rect optionRect(int row, int i) const; // a row of the OPEN list
+        bool comboOpen(int row) const;
+        double labelAmount(int row) const;         // LIVE: a combo's label cross-fade (1 = settled)
+        std::string shownValue(int row) const;     // the label a combo shows now
+        double toggleAmount(int row) const;        // LIVE: a toggle's knob
+
         // geometry, from the last paint (a test renders a frame first)
-        artboard::Rect chipRect(int row, int chip) const;
         artboard::Rect doneRect() const { return mDone; }
         artboard::Rect addFolderRect() const { return mAddFolder; }
         artboard::Rect folderRemoveRect(int i) const { return i >= 0 && i < (int)mRemove.size() ? mRemove[(size_t)i] : artboard::Rect{}; }
-        int chipCount(int row) const { return row >= 0 && row < kRows ? (int)mChips[(size_t)row].size() : 0; }
-        double chosenAmount(int row, int chip) const;
-        /** Scroll (eased) so a rect from the last paint is inside the card. */
+        /** Scroll (eased) the CURRENT page so a rect from the last paint is inside it. */
         void revealRect(const artboard::Rect &r);
 
-        // R-SET-4, the Keyboard section — geometry from the last paint; `i` indexes the action's keys in the model
+        // R-SET-4, the Keyboard page — geometry from the last paint; `i` indexes the action's keys in the model
         artboard::Rect keyChipRect(const std::string &action, int i) const;
         artboard::Rect keyAddRect(const std::string &action) const;
         artboard::Rect keyResetRect() const { return mKeyReset; }
@@ -76,14 +138,16 @@ namespace solaris_ui
         double keyChipAmount(const std::string &action, const std::string &combo) const;
 
         void advance(double nowMs) override;
-        void onOverlay(artboard::IRenderTarget &t) const override;
         bool handleKey(const artboard::KeyEvent &e) override;
 
     protected:
+        void onPaint(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
         bool hitTestSelf(const artboard::Point &) const override { return mOpen && !mClosing; }
 
     private:
+        class Page; // a section's page: clipped, cross-faded, its own scroll; painted by `paintPage`
+        friend class Page;
         struct Chip
         {
             std::string label, value;
@@ -108,16 +172,28 @@ namespace solaris_ui
             artboard::AnimatedProperty p{0.0};
             double last = 0.0;
         };
+
+        artboard::Rect cardRect() const;
+        artboard::Rect pageRect() const;
+        void layoutPages();
+        void paintPage(artboard::IRenderTarget &t, int s, const Page &page) const;
+        void paintRows(artboard::IRenderTarget &t, int s, double w, double oy) const;
+        void paintFolders(artboard::IRenderTarget &t, double w, double oy, double px, double py) const;
+        void paintKeyboard(artboard::IRenderTarget &t, double w, double oy, double px, double py) const;
+        std::string current(int row) const; // the row's setting, as its options' values spell it
+        void closeCombos();
+        bool anyComboOpen() const;
+        int hoverId(const artboard::Point &p) const;
         void listen(const std::string &action, int slot);
         void stopListening() { mListenAction.clear(); mListenSlot = -1; }
         const solaris::KeyActionModel *keyModel(const std::string &id) const;
         static std::string slotKey(const std::string &action, int slot) { return action + "#" + std::to_string(slot); }
-        int chosen(int row) const;
-        std::string current(int row) const; // the row's setting, as its chips' values spell it
-        int hoverId(const artboard::Point &p) const;
-        artboard::Rect cardRect() const;
 
-        std::vector<Chip> mChips[kRows];
+        std::vector<Chip> mChips[kRows];       // a combo's options: what it shows, what it sends
+        std::shared_ptr<SettingCombo> mCombos[kRows];
+        std::shared_ptr<SettingToggle> mToggles[kRows];
+        std::vector<std::shared_ptr<Page>> mPages;
+        bool mBound = false;
         std::vector<std::string> mFolders;
         std::string mOutput, mInput;
         int mRate = 48000, mBuffer = 256;
@@ -127,14 +203,15 @@ namespace solaris_ui
         bool mOpen = false, mClosing = false, mShowWanted = false, mCloseWanted = false;
         double mNowMs = 0.0;
         artboard::AnimatedProperty mAppear{0.0};
-        std::vector<artboard::AnimatedProperty> mChosen[kRows];
+        int mSection = kAudio;
+        bool mSectionPlaced = false;
+        artboard::AnimatedProperty mRailY{0.0};
+        double mRailLast = -1.0;
         cosmo_v2::HoverFade mHover;
-        mutable interstellar_v1::EasedScroll mScroll; // its extent is measured in the paint
         // measured in the last paint
-        mutable std::vector<artboard::Rect> mChipRects[kRows];
         mutable std::vector<artboard::Rect> mRemove;
-        mutable artboard::Rect mDone, mAddFolder, mCard;
-        mutable double mContentH = 0.0;
+        mutable artboard::Rect mDone, mAddFolder;
+
         // R-SET-4
         std::vector<KeyRowLive> mKeyRows;
         bool mKeysEver = false;

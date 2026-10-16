@@ -386,13 +386,11 @@ Ctrl+S save, Enter to the start, Ctrl+, settings. Every control's command line i
 
 ### DR-SET-2 The settings sheet (R-SET-1, amended)
 `SettingsSheet` (`app/widgets/SettingsSheet.cpp`) in cosmo's modal style: the scrim, the popover
-card, uppercase labels tracked +0.13 with a plain note, chips that size to their MEASURED text and
-wrap, a filled accent when chosen — the fill EASES over 200 ms whoever chose it (`advance`, `:151`) —
-the folder list with × per folder and "Add folder…", Done; 150 ms open / 120 ms close; Escape, Enter,
-Done and the scrim close it; the card scrolls when the window is short. Opening sends `devices list`
-first (`App::openSettings`, `app/App.cpp:228`). Every chip is `settings set …`, every folder control
-`folder add|remove` (`handleGesture`, `:206`); the sheet draws the model, so a setting changed from a
-shell shows at once.
+card, Done; 150 ms open / 120 ms close (the whole sheet one opacity group, FR-32 — `advance`, `:502`);
+Escape, Enter, Done and the scrim close it. Opening sends `devices list` first (`App::openSettings`).
+Every control is `settings set …`, every folder control `folder add|remove` (`handleGesture`, `:619`);
+the sheet draws the model, so a setting changed from a shell shows on its page, eased. Its rows were
+chips down one long card until K2 — now pages and combo boxes (DR-SET-5).
 
 ### DR-UI-6 Shots and UI tests over the real service (R-UI-6)
 `solaris_app_shots` renders twenty-one named states — Home empty and with cards, Settings at rest,
@@ -589,7 +587,7 @@ width), Metronome On/Off (`settings set metronome=…`), Show/Hide IDs (`setting
 (`refreshMenus`, `:137`). A press outside an open menu closes it first (`:279`), as cosmo's does.
 
 ### DR-SET-3 The settings sheet in sections (R-SET-3)
-`SettingsSheet` (`app/widgets/SettingsSheet.cpp:29`): **Audio** (Output, Input, Sample rate, Buffer),
+`SettingsSheet`: **Audio** (Output, Input, Sample rate, Buffer),
 **Playback** (Metronome Off/On, Click level −18/−12/−6/0 dB), **New songs** (Tempo 100…174, Meter
 4/4 3/4 6/8 7/8), **Sample folders**, **Interface** (Reduced motion) — a 12 px title per section, a
 hairline between; every chip `settings set <key>=…`. The service keeps the new keys in the machine's
@@ -624,21 +622,45 @@ character: GTK's keysym with no modifier (`linux_main.cpp:162`, `keyCodeOfKeysym
 `test_the_keys_are_the_machines` (re-keyed by a script, the window follows; the roll's keys shadow the song's; the
 host's mapping). Mutants: no conflict refusal, the window reading the defaults instead of the model — both seen red.
 
-**The sheet's Keyboard section** (`SettingsSheet`, last of its sections; laid out and measured in the paint,
-`app/widgets/SettingsSheet.cpp:602`): a muted micro-label per area, then an action a line — its label, its keys as
-chips right-aligned, a "+" at the right edge, a dot in the gutter while it is not its defaults; "Reset to defaults"
-beside the section title, quiet while nothing is changed. A chip clicked (or "+") LISTENS (`listen`, `:151`; the
-gesture at `:351`, a double-click a click there): its border and wash turn to the accent and its label cross-fades
-to "Press a key…", its width easing between the two. The next key (`handleKey`, `:391`) is the slot's combo —
+**The sheet's Keyboard page** (`SettingsSheet`, the last section — DR-SET-5; laid out and measured in the paint,
+`paintKeyboard`, `app/widgets/SettingsSheet.cpp:851`): a muted micro-label per area, then an action a line — its label,
+its keys as chips right-aligned, a "+" at the right edge, a dot before it while it is not its defaults; "Reset to
+defaults" beside the page's title, quiet while nothing is changed. A chip clicked (or "+") LISTENS (`listen`, `:429`;
+the gesture at `:641`, a double-click a click there): its border and wash turn to the accent and its label cross-fades
+to "Press a key…", its width easing between the two. The next key (`handleKey`, `:678`) is the slot's combo —
 `settings set "key.<action>=<the keys>"`, ONE line; Backspace removes the slot's key, Escape cancels, a key no combo
 can name keeps it listening, a click elsewhere lets it go. A key another action has is refused by the service and
 the App's toast says which action. Reset is ONE line, `key.<id>=default` for every changed action. The chips are
-keyed by combo (`bind`, `:113`): a key that arrives grows in from no width, one that leaves shrinks out where it was,
+keyed by combo (`bind`, `:298`): a key that arrives grows in from no width, one that leaves shrinks out where it was,
 so its neighbours slide (design rule §1). Escape and Enter cannot be listened for with the sheet (they cancel and
 — as Backspace — have their own meaning there); `settings set` takes them. UI `test_the_keyboard_section`
 (listening caught mid-ease, a chip caught growing while the old one shrinks, a refusal toasted, Reset as one line);
 shots `settings-keyboard`, `settings-key-listening`. Mutants: a listening look that snaps, chips that snap — both
 seen red.
+
+### DR-SET-5 Settings in pages; a choice is a combo box (R-SET-5, R-SET-6)
+The sheet is a fixed card (720 × 520, smaller in a small window): a title band, a RAIL of the six sections — Audio,
+Playback, New songs, Sample folders, Interface, Keyboard (`railRect`) — and beside it ONE page, under a footer with
+Done (`onPaint`, `app/widgets/SettingsSheet.cpp:715`). Each section is a `Page` child (`:166`): clipped (its own paint
+too — `clipToBounds` clips only children), input-transparent (its controls take clicks; what the sheet draws goes to
+the sheet), with its own eased scroll. A section clicked is `showSection` — no line, the view's — and `advance` (`:523`)
+cross-fades the chosen page in as the last fades out (200 ms) and slides the rail's highlight to it (220 ms), each
+name easing to the foreground as the highlight reaches it; an open list closes and a listening key stops. The sheet
+opens again on the page it was left on. A setting that is one value of a list is a `SettingCombo` (`:99`):
+Artboard's `ComboBox` in cosmo's tokens (`comboStyle`, `:74`, as Genesis dresses it) — the drop, the list, its scroll
+and a pick are the library's; the field is drawn here (FR-41) so its label CROSS-FADES to a new value, whoever set
+it. A row picked is ONE `settings set <key>=<value>` line. A value the list lacks — a device not connected now, a
+tempo or a level set from a shell — is an entry of its own ("137 bpm (set elsewhere)", `bind`, `:248`), so the setting
+is never invisible. An on/off setting is a `SettingToggle` (`:144`): Artboard's `ToggleSwitch`, its knob drawn from an
+eased copy of `on()`, so a value set from the model slides as a click does; a click is ONE `settings set …=on|off`.
+Controls are laid out each frame (`layoutPages`, `:476`) — name and note left, control right — and a control scrolled
+out of its page is hidden so it takes no input. Escape closes an open list first, then the sheet (`:708`); a click
+anywhere off a list closes it. The App draws the sheet in both passes now — its card, pages and controls, then an open
+list over everything (`app/App.cpp:420`). UI `test_settings_combos_send_lines_and_ease` (a list dropped, a row one
+line, the label caught mid cross-fade, a shell's change eased), `test_settings_in_pages` (the cross-fade and the
+highlight caught mid-way; a toggle eased from a shell; a value its list lacks shown; Escape closes the list first; the
+sheet reopens on its page); shots `settings-open`, `settings-folders`, `settings-combo-open`, `settings-page-changing`.
+Mutants: a page cut instead of cross-faded, a label that snaps, a knob that snaps — all seen red.
 
 ### DR-WIN-1 Windows inside the song view (R-WIN-1, R-WIN-4)
 `FloatWindow` (`app/widgets/FloatWindow.cpp`): a frame — a 26 px title bar (title, ×) over its content.

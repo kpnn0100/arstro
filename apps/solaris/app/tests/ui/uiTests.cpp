@@ -61,40 +61,104 @@ static void test_new_song_cross_fades_from_home()
     pass("New song: the picker's path becomes `project new`, and Home cross-fades to the song (a tween, caught mid-way)");
 }
 
-static void test_settings_chips_send_lines_and_ease()
+static void test_settings_combos_send_lines_and_ease()
 {
+    using arstro::solaris_ui::SettingsSheet;
     sltest::Rig r("ui-settings", 1280, 800);
     r.settle();
     r.app->openSettings();
     assert(sentLine(r, "devices list"));
     r.frame();
     r.frame();
-    const double mid = r.app->settings().appearAmount();
+    auto &s = r.app->settings();
+    const double mid = s.appearAmount();
     assert(mid > 0.0 && mid < 1.0);                                       // the fade, caught
     r.settle();
-    assert(r.app->settings().isOpen() && r.app->settings().appearAmount() == 1.0);
-    assert(r.app->settings().chipCount(0) == 4);                          // System default + three outputs
-    r.click(r.app->settings().chipRect(0, 3));                            // Scarlett 2i2 USB
+    assert(s.isOpen() && s.appearAmount() == 1.0 && s.section() == SettingsSheet::kAudio);
+    assert(s.optionCount(SettingsSheet::kOutput) == 4 && s.shownValue(SettingsSheet::kOutput) == "System default"); // + three outputs
+    // a combo clicked drops its list; a row picked is ONE line, and the label cross-fades to it
+    r.click(s.controlRect(SettingsSheet::kOutput));
+    r.settle();
+    assert(s.comboOpen(SettingsSheet::kOutput) && s.optionLabel(SettingsSheet::kOutput, 3) == "Scarlett 2i2 USB");
+    r.click(s.optionRect(SettingsSheet::kOutput, 3));
     assert(sentLine(r, "settings set output=usb_interface") && r.svc->model().settings.output == "usb_interface");
-    r.frame();
-    r.frame();
-    const double chosen = r.app->settings().chosenAmount(0, 3);
-    assert(chosen > 0.0 && chosen < 1.0);                                 // the chip's fill eases in
+    assert(!s.comboOpen(SettingsSheet::kOutput));
+    double first = 0.0;
+    for (int k = 0; k < 20 && first == 0.0; ++k) { r.frame(); first = s.labelAmount(SettingsSheet::kOutput); }
+    assert(first > 0.0 && first < 1.0);                                   // the label cross-fades, caught
     r.settle();
-    assert(r.app->settings().chosenAmount(0, 3) == 1.0 && r.app->settings().chosenAmount(0, 0) == 0.0);
-    r.click(r.app->settings().chipRect(3, 1));                            // buffer 128
-    assert(r.svc->model().settings.bufferSize == 128);
-    // a setting changed from a shell shows here too: the sheet draws the model
+    assert(s.labelAmount(SettingsSheet::kOutput) == 1.0 && s.shownValue(SettingsSheet::kOutput) == "Scarlett 2i2 USB");
+    r.click(s.controlRect(SettingsSheet::kBuffer));
+    r.settle();
+    r.click(s.optionRect(SettingsSheet::kBuffer, 1));                    // 128 samples
+    assert(sentLine(r, "settings set bufferSize=128") && r.svc->model().settings.bufferSize == 128);
+    r.settle();
+    // a setting changed from a shell shows here too, eased: the sheet draws the model
     r.cmd("settings set sampleRate=96000");
+    first = 0.0;
+    for (int k = 0; k < 20 && first == 0.0; ++k) { r.frame(); first = s.labelAmount(SettingsSheet::kRate); }
+    assert(first > 0.0 && first < 1.0);
     r.settle();
-    assert(r.app->settings().chosenAmount(2, 3) == 1.0);
+    assert(s.shownValue(SettingsSheet::kRate) == "96 kHz");
     r.key(27);                                                            // Escape closes, eased
     r.frame();
     r.frame();
-    assert(r.app->settings().appearAmount() < 1.0 && r.app->settings().appearAmount() > 0.0);
+    assert(s.appearAmount() < 1.0 && s.appearAmount() > 0.0);
     r.settle();
-    assert(!r.app->settings().isOpen());
-    pass("Settings: each chip is a `settings set` line, the chosen fill eases, a shell's change shows, Escape fades it shut");
+    assert(!s.isOpen());
+    pass("Settings (R-SET-6): a choice is a combo box — its list drops, a row is a `settings set` line, its label cross-fades, a shell's change shows eased; Escape fades the sheet shut");
+}
+
+static void test_settings_in_pages()
+{
+    // R-SET-5: a rail of sections beside ONE page; a section clicked cross-fades its page in, the highlight slides
+    using arstro::solaris_ui::SettingsSheet;
+    sltest::Rig r("ui-settings-pages", 1280, 800);
+    r.settle();
+    r.app->openSettings();
+    r.settle();
+    auto &s = r.app->settings();
+    assert(s.pageAmount(SettingsSheet::kAudio) == 1.0 && s.pageAmount(SettingsSheet::kPlayback) == 0.0);
+    const double y0 = s.railHighlightY();
+    r.click(s.railRect(SettingsSheet::kPlayback));
+    assert(s.section() == SettingsSheet::kPlayback);
+    double in = 0.0;
+    for (int k = 0; k < 20 && in == 0.0; ++k) { r.frame(); in = s.pageAmount(SettingsSheet::kPlayback); }
+    assert(in > 0.0 && in < 1.0 && s.pageAmount(SettingsSheet::kAudio) > 0.0 && s.pageAmount(SettingsSheet::kAudio) < 1.0); // a cross-fade, caught
+    assert(s.railHighlightY() > y0 && s.railHighlightY() < s.railRect(SettingsSheet::kPlayback).y);                     // the highlight on its way
+    r.settle();
+    assert(s.pageAmount(SettingsSheet::kAudio) == 0.0 && s.railHighlightY() == s.railRect(SettingsSheet::kPlayback).y);
+    // a hidden page's controls take no click: where Audio's Output combo was, nothing opens
+    assert(!s.comboOpen(SettingsSheet::kOutput));
+    // an on/off is a toggle: clicked, one line; set from a shell, its knob eases there too
+    r.click(s.controlRect(SettingsSheet::kMetronome));
+    assert(sentLine(r, "settings set metronome=on") && r.svc->model().settings.metronome);
+    r.settle();
+    r.cmd("settings set metronome=off");
+    double knob = 1.0;
+    for (int k = 0; k < 20 && knob == 1.0; ++k) { r.frame(); knob = s.toggleAmount(SettingsSheet::kMetronome); }
+    assert(knob > 0.0 && knob < 1.0);
+    r.settle();
+    assert(s.toggleAmount(SettingsSheet::kMetronome) == 0.0);
+    // a value its list lacks is still shown, as an entry of its own
+    r.cmd("settings set newBpm=137");
+    r.click(s.railRect(SettingsSheet::kNewSongs));
+    r.settle();
+    assert(s.shownValue(SettingsSheet::kNewBpm) == "137 bpm (set elsewhere)");
+    // Escape with a list open closes the list, not the sheet
+    r.click(s.controlRect(SettingsSheet::kNewSig));
+    r.settle();
+    assert(s.comboOpen(SettingsSheet::kNewSig));
+    r.key(27);
+    r.settle();
+    assert(!s.comboOpen(SettingsSheet::kNewSig) && s.isOpen());
+    // the sheet opens again on the page it was left on
+    r.key(27);
+    r.settle();
+    r.app->openSettings();
+    r.settle();
+    assert(s.section() == SettingsSheet::kNewSongs && s.pageAmount(SettingsSheet::kNewSongs) == 1.0);
+    pass("Settings in pages (R-SET-5): a rail of sections, one page cross-faded in as the highlight slides; a toggle eases set from a shell; a value its list lacks is shown; Escape closes an open list first");
 }
 
 static void test_settings_folders()
@@ -105,7 +169,9 @@ static void test_settings_folders()
     r.settle();
     r.app->openSettings();
     r.settle();
-    r.app->settings().revealRect(r.app->settings().folderRemoveRect(0)); // the sheet scrolls (R6): bring it in first
+    r.click(r.app->settings().railRect(arstro::solaris_ui::SettingsSheet::kFolders)); // its page (R-SET-5)
+    r.settle();
+    r.app->settings().revealRect(r.app->settings().folderRemoveRect(0)); // the page scrolls (R6): bring it in first
     r.settle();
     r.click(r.app->settings().folderRemoveRect(0));
     assert(sentLine(r, "folder remove /music/Samples") && r.svc->model().settings.folders == std::vector<std::string>{"/music/Loops"});
@@ -823,6 +889,8 @@ static void test_the_keyboard_section()
     r.settle();
     auto &s = r.app->settings();
     assert(s.isOpen());
+    r.click(s.railRect(arstro::solaris_ui::SettingsSheet::kKeyboard)); // its page (R-SET-5)
+    r.settle();
     s.revealRect(s.keyChipRect("song.save", 0));
     r.settle();
     auto keysOf = [&](const std::string &id) {
@@ -1076,18 +1144,21 @@ static void test_song_bar_menus_and_settings_sections()
     r.click(world(ms, ms.itemRect(3, 2)));
     r.settle();
     assert(sentLine(r, "settings set metronome=on") && r.svc->model().settings.metronome);
-    // the settings sheet's new sections: a chip is a `settings set` line
+    // the settings sheet's pages: a combo's row, a toggle — each a `settings set` line
     r.app->openSettings();
     r.settle();
     using arstro::solaris_ui::SettingsSheet;
-    r.app->settings().revealRect(r.app->settings().chipRect(SettingsSheet::kNewBpm, 4));
+    auto &sheet = r.app->settings();
+    r.click(sheet.railRect(SettingsSheet::kNewSongs));
     r.settle();
-    r.click(r.app->settings().chipRect(SettingsSheet::kNewBpm, 4)); // 128
+    r.click(sheet.controlRect(SettingsSheet::kNewBpm));
+    r.settle();
+    r.click(sheet.optionRect(SettingsSheet::kNewBpm, 4)); // 128
     r.settle();
     assert(sentLine(r, "settings set newBpm=128") && r.svc->model().settings.newBpm == 128.0);
-    r.app->settings().revealRect(r.app->settings().chipRect(SettingsSheet::kMotion, 1));
+    r.click(sheet.railRect(SettingsSheet::kInterface));
     r.settle();
-    r.click(r.app->settings().chipRect(SettingsSheet::kMotion, 1));
+    r.click(sheet.controlRect(SettingsSheet::kMotion));
     r.settle();
     assert(sentLine(r, "settings set reducedMotion=on") && artboard::reducedMotion()); // the setting reaches every primitive
     r.cmd("settings set reducedMotion=off");
@@ -2600,7 +2671,8 @@ int main()
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     arstro::cosmo_v2::registerEmbeddedFonts();
     test_new_song_cross_fades_from_home();
-    test_settings_chips_send_lines_and_ease();
+    test_settings_combos_send_lines_and_ease();
+    test_settings_in_pages();
     test_settings_folders();
     test_song_bar_and_keys();
     test_the_tempo_is_set_in_the_song_bar();
