@@ -102,6 +102,7 @@ namespace solaris_ui
         static std::string keyHint(const solaris::AppModel &m, const std::string &action); // "   (Ctrl+Z)", or "" — the keymap's first key
         void syncHistory(const solaris::AppModel &m); // the open tree view follows the model's tree
         bool songAction(const solaris::AppModel &m, const std::string &id); // true when it did something
+        bool pasteClip(const solaris::AppModel &m);                         // R-CLIP-10
 
         AppHooks mHooks;
         double mW, mH, mNowMs = 0.0, mLastActivityMs = -1e9;
@@ -114,6 +115,10 @@ namespace solaris_ui
         std::shared_ptr<cosmo_v2::HistoryView> mHistory; // R-HIST-3: cosmo's history tree, modal while open
         std::vector<int> mHistoryIds;                    // the view's node i is the model's history id mHistoryIds[i]
         std::vector<std::string> mHistoryLabels;
+        // R-CLIP-10: the clip Ctrl+C copied (the window's clipboard), and where the last paste went — a paste with the
+        // time bar unmoved lands right after it, so pastes run end to end
+        std::string mClipClipboard;
+        double mPasteAt = -1.0, mPasteNext = 0.0;
         artboard::GestureRecognizer mRecognizer;
         std::string mScreen = "home";
         bool mScreenInit = false;

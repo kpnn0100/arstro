@@ -138,6 +138,16 @@ namespace
                  r.click(s.keyChipRect("transport.play", 0));
                  r.pump(4 * sltest::Rig::kFrameMs);
              }},
+            {"clip-copy-dragging",
+             [](sltest::Rig &r) {
+                 // R-CLIP-9: a clip in hand with Shift held — the original stays at full strength, a "+" on the copy
+                 songWithStrips(r, "Copy");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect c = world(tl, tl.clipRect("ac_1"));
+                 r.drag(c.x + 12.0, sltest::cy(c), c.x + 12.0 + (tl.beatToX(8.0) - tl.beatToX(0.0)), sltest::cy(c), 8, false, true);
+                 r.settle();
+             }},
             {"history-tree",
              [](sltest::Rig &r) {
                  // R-HIST-3: a branched history — an edit after two undos started a second line

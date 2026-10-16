@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — K5: R-HIST-4 answered — the tree lives while the song is open.*
+*Last updated: 2026-10-16 — L1: clips copied by Shift-drag and Ctrl+C / Ctrl+V.*
 
 ---
 
@@ -364,6 +364,12 @@ history like cosmo".* Requirements: R-SET-5, R-SET-6 (R-SET-1, R-SET-3 amended);
       seen red. The 2026-10-16 request is done (K1–K4).
 - [x] **K5** R-HIST-4 answered (2026-10-16): the tree lives only while the song is open — never saved. Already how
       it is built; guarded by `test_history_is_a_tree` (a song saved and opened again is one root, "Opened").
+
+### L — copying clips (user request, 2026-10-16)
+*"when hold shift drag and drop, dupplicate the sample/midi clip, same with ctrl C and V".* R-CLIP-9, R-CLIP-10.
+- [x] **L1** `clip duplicate --lane`; Shift-drag duplicates (the original stays, a "+" on the copy, eased); Ctrl+C /
+      Ctrl+V as keymap actions `lanes.copy` / `lanes.paste`, pasting at the time bar, end to end; Edit menu items.
+      — DR-CLIP-9. L2 + UI tests, shot; 4 mutants seen red. A roll with the keys keeps its own Ctrl+C / Ctrl+V.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

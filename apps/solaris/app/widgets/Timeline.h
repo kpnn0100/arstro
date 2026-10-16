@@ -63,6 +63,7 @@
 #include <cmath>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -131,6 +132,11 @@ namespace solaris_ui
         void setDropHint(bool on, double beat = 0.0, int row = -1, const std::string &label = std::string());
         const std::string &selectedClip() const { return mSelected; }
         void selectClip(const std::string &id);
+        /** R-CLIP-9/10: the next clip the model brings is a copy just made — select it; `instant`: the pointer already
+         *  showed it there (a Shift-drop), so it is placed at full strength, not faded in. Lapses at the next bind. */
+        void expectCopy(bool instant);
+        /** LIVE: how much the drag in hand is a COPY (Shift held) — the original at full strength, a "+" on the copy. */
+        double copyAmount() const { return mCopyAmt.value(); }
 
         std::function<void(const std::string &line)> onCommand;
         std::function<void(const std::string &clipId)> onSelect;
@@ -301,6 +307,12 @@ namespace solaris_ui
         std::string mPressClip;
         double mGrab = 0.0;
         bool mDragging = false;
+        bool mDropCopy = false;                        // R-CLIP-9: Shift held — the drop duplicates
+        artboard::AnimatedProperty mCopyAmt{0.0};
+        double mCopyLast = 0.0;
+        std::set<std::string> mKnownClips;             // expectCopy: the clips there before the copy
+        bool mAdoptNew = false, mAdoptInstant = false;
+        std::string mInstantClip;                      // placed at full strength at its first frame
         double mDragBeat = 0.0;
         int mDragRow = 0;
         // the browser's drop hint

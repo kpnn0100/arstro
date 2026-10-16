@@ -5,6 +5,7 @@
 #include "KeyCombo.h"
 #include "Keymap.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 namespace arstro
@@ -166,7 +167,7 @@ namespace solaris_ui
     {
         const std::string key = m.undoLabel + "|" + m.redoLabel + "|" + (mProject->dockOpen() ? "1" : "0") + (mProject->browserOpen() ? "1" : "0") +
                                 (m.settings.metronome ? "1" : "0") + (m.settings.showIds ? "1" : "0") + keyHint(m, "song.undo") + keyHint(m, "song.redo") +
-                                keyHint(m, "lanes.duplicate") + keyHint(m, "lanes.delete");
+                                keyHint(m, "lanes.duplicate") + keyHint(m, "lanes.delete") + keyHint(m, "lanes.copy") + keyHint(m, "lanes.paste");
         if (key == mMenuKey) return; // labels change only when what they name does — a re-keyed action too
         mMenuKey = key;
         auto &ms = mProject->bar().menus();
@@ -176,6 +177,8 @@ namespace solaris_ui
             {redo + keyHint(m, "song.redo"), [this] { dispatch("redo"); }},
             {"Show History Tree\xE2\x80\xA6", [this] { openHistory(); }}, // R-HIST-3, as cosmo's History menu has it
             {"Duplicate Clip" + keyHint(m, "lanes.duplicate"), [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip duplicate " + c); }},
+            {"Copy Clip" + keyHint(m, "lanes.copy"), [this] { songAction(mHooks.model ? mHooks.model() : emptyModel(), "lanes.copy"); }},
+            {"Paste Clip" + keyHint(m, "lanes.paste"), [this] { pasteClip(mHooks.model ? mHooks.model() : emptyModel()); }},
             {"Delete Clip" + keyHint(m, "lanes.delete"), [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip delete " + c); }},
         });
         ms.setItems(3, {
@@ -401,8 +404,35 @@ namespace solaris_ui
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         if (mScreen == "project" && mRollKeys) // R-ROLL-8: the roll the pointer last pressed in takes its keys first
             if (PianoRoll *r = mProject->windows().frontRoll())
-                if (r->action(keyActionFor(m, combo, "roll"))) return true;
+            {
+                const std::string id = keyActionFor(m, combo, "roll");
+                if (r->action(id)) return true;
+                if (id == "roll.copy" || id == "roll.paste") return true; // the notes' even with none to copy — never a clip's (R-CLIP-10)
+            }
         return songAction(m, keyActionFor(m, combo, "song"));
+    }
+
+    bool App::pasteClip(const solaris::AppModel &m)
+    {
+        // R-CLIP-10: a duplicate of the copied clip on its own lane, AT THE TIME BAR — ONE line; again, the time bar
+        // unmoved, right after the last copy
+        if (mClipClipboard.empty()) return false;
+        const solaris::ClipModel *src = nullptr;
+        for (const auto &c : m.clips)
+            if (c.id == mClipClipboard) src = &c;
+        if (!src) { showToast(mClipClipboard + " is gone \xE2\x80\x94 copy a clip again"); mClipClipboard.clear(); return true; }
+        const double pos = m.transport.position;
+        const double at = mPasteAt >= 0.0 && std::fabs(pos - mPasteAt) < 1e-9 ? mPasteNext : pos;
+        const double length = src->length;
+        mProject->timeline().expectCopy(false); // the copy is selected (it fades in: nothing showed it yet)
+        char b[32];
+        std::snprintf(b, sizeof b, "%.6g", std::round(at * 960.0) / 960.0); // on the tick
+        if (dispatch("clip duplicate " + mClipClipboard + " --at " + b))
+        {
+            mPasteAt = pos;
+            mPasteNext = at + length;
+        }
+        return true;
     }
 
     std::string App::keyHint(const solaris::AppModel &m, const std::string &action)
@@ -436,10 +466,21 @@ namespace solaris_ui
         if (id == "song.save") return dispatch("project save");
         if (id == "song.undo") return dispatch("undo");
         if (id == "song.redo") return dispatch("redo"); // R-EDM-1
+        if (id == "lanes.paste") return pasteClip(m);
         const std::string sel = mProject->timeline().selectedClip();
         if (sel.empty()) return false;
         if (id == "lanes.delete") return dispatch("clip delete " + sel);
         if (id == "lanes.duplicate") return dispatch("clip duplicate " + sel); // a linked copy after it
+        if (id == "lanes.copy")
+        {
+            // R-CLIP-10: nothing is sent — the window keeps which clip; Ctrl+V makes the copy
+            mClipClipboard = sel;
+            mPasteAt = -1.0;
+            showToast("Clip copied \xE2\x80\x94 " + std::string(keyHint(m, "lanes.paste").empty() ? "Paste" : keyHint(m, "lanes.paste").substr(4, keyHint(m, "lanes.paste").size() - 5)) +
+                          " puts it at the time bar",
+                      false);
+            return true;
+        }
         return false;
     }
 

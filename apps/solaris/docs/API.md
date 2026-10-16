@@ -36,7 +36,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `lane move <ln> [--to <index>]` | Move a lane to row <index> (0 = the top); the lanes renumber in their new order. | R-LANE-1 |
 | `clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--sample <file>] [--pattern <pt>] [--lane <ln\|new>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>]` | Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of --pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3). With no --lane it goes on the lane its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for a new one (R-SVC-8). On an instrument's TRACK (--lane <ln>) a note clip plays through that instrument — --strip may be left out, --pattern places that pattern; audio and --instrument are refused there (R-LANE-3). Prints the clip, then `made:` and whatever else it made. | R-MIX-2 |
 | `clip move <ac> [--at <beats>] [--lane <ln>] [--strip <ch>]` | Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). Onto an instrument's TRACK a note clip is re-routed to that instrument (and says so); a clip on a track told --strip <another> goes to that one's track; audio is refused on a track (R-LANE-3). | R-LANE-2 |
-| `clip duplicate <ac> [--at <beats>] [--count <n>]` | A copy right after it (or at --at); --count N makes N copies end to end. A note clip's copy plays the SAME pattern — linked. Prints the first copy, then `made:` the rest. | R-CLIP-3 |
+| `clip duplicate <ac> [--at <beats>] [--count <n>] [--lane <ln>]` | A copy right after it (or at --at); --count N makes N copies end to end; --lane puts them on another lane (onto an instrument's TRACK a note clip's copy plays through that instrument; audio is refused there, as a move is — R-CLIP-8). A note clip's copy plays the SAME pattern — linked. Prints the first copy, then `made:` the rest. Shift-drag and Ctrl+V in the window are this line (R-CLIP-9/10). | R-CLIP-3 |
 | `clip unique <ac>` | Give a note clip its own copy of its pattern. | R-CLIP-3 |
 | `clip delete <ac>` | Remove a clip. | R-LANE-1 |
 | `pattern new [--name <text>] [--length <beats>]` | Create an empty pattern. | R-CLIP-2 |
@@ -145,6 +145,8 @@ Every shortcut is an action; `settings set key.<id>=<combos>` gives it this mach
 | `song.settings` | Song | Settings | Ctrl+Comma |
 | `lanes.delete` | Lanes | Delete the clip | Delete, Backspace |
 | `lanes.duplicate` | Lanes | Duplicate the clip | Ctrl+D |
+| `lanes.copy` | Lanes | Copy the clip | Ctrl+C |
+| `lanes.paste` | Lanes | Paste it at the time bar | Ctrl+V |
 | `roll.selectAll` | Piano roll | Select all | Ctrl+A |
 | `roll.deselect` | Piano roll | Deselect | Escape |
 | `roll.delete` | Piano roll | Delete | Delete, Backspace |

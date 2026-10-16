@@ -1934,6 +1934,34 @@ static void test_an_instruments_groups_are_titled()
     pass("an instrument's parameter groups arrive titled by the registry (Oscillator 1 … Mix & Output); an effect's have none (R-UI-12)");
 }
 
+// R-CLIP-9: a copy can go to another lane in the same line — the move's rule: onto an instrument's track a MIDI copy
+// plays through that instrument (the pattern still shared), an audio copy is refused there; a plain lane keeps it
+static void test_a_clip_copied_onto_another_lane()
+{
+    Run r;
+    r.ok("project new " + freshSong("copylane"));
+    r.ok("clip add --instrument drums --at 0 --length 4");                   // ac_1 on ch_2's track ln_1
+    r.ok("clip add --instrument synth --at 0 --length 4");                   // ac_2 on ch_3's track ln_2
+    r.ok("lane add Extra");                                                   // ln_3: a plain lane
+    r.ok("clip add --src kick.wav --at 0 --lane ln_3");                     // ac_3: audio
+    // a MIDI clip copied onto the synth's track: it plays through the synth, the drum pattern still linked
+    const std::string out = r.ok("clip duplicate ac_1 --at 8 --lane ln_2");
+    assert(firstLine(out) == "ac_4" && contains(out, "it plays through ch_3"));
+    assert(r.clip("ac_4")->lane == "ln_2" && r.clip("ac_4")->track == "ch_3" && r.clip("ac_4")->pattern == r.clip("ac_1")->pattern);
+    assert(r.clip("ac_4")->at == 8.0 && r.clip("ac_1")->lane == "ln_1" && r.clip("ac_1")->linked == 2);
+    // onto a plain lane: organisation only — it keeps its instrument
+    r.ok("clip duplicate ac_1 --at 4 --lane ln_3");
+    assert(r.clip("ac_5")->lane == "ln_3" && r.clip("ac_5")->track == "ch_2");
+    // audio onto an instrument's track: refused, as a move is; a lane that is not there, named
+    assert(contains(r.no("clip duplicate ac_3 --at 8 --lane ln_1"), "ac_3 is audio — ln_1 is the track of ch_2"));
+    assert(contains(r.no("clip duplicate ac_3 --lane ln_9"), "no lane `ln_9`"));
+    r.ok("clip duplicate ac_3 --at 8 --lane ln_3");
+    assert(r.clip("ac_6")->lane == "ln_3" && r.clip("ac_6")->src == r.clip("ac_3")->src);
+    // ONE edit: one undo takes the copy back
+    assert(r.ok("undo") == "clip duplicate ac_3\n" && !r.clip("ac_6"));
+    pass("clip duplicate --lane (R-CLIP-9): a MIDI copy onto another track plays through it, linked; a plain lane keeps its instrument; audio onto a track refused; one edit");
+}
+
 static void test_instrument_tracks()
 {
     // R-LANE-3: a lane may be an instrument's TRACK — what is put on it plays through it
@@ -2273,6 +2301,7 @@ int main()
     test_a_clip_joins_its_strips_lane();
     test_reading_a_song_back();
     test_an_instruments_groups_are_titled();
+    test_a_clip_copied_onto_another_lane();
     test_instrument_tracks();
     test_a_song_from_before_tracks_adopts_them();
     test_latency_is_compensated_and_a_render_starts_on_the_beat();

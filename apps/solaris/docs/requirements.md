@@ -634,7 +634,7 @@ it is taller than the window (R6); `revealRect` brings a control in.
 ### DR-SET-4 Hotkeys are settings: the keymap (R-SET-4)
 Every shortcut is an ACTION — `keyActions()` (`core/service/Keymap.cpp:8`): id, area, label, default keys, in the
 sheet's order (Transport: play/stop back to the cue `Space`, stop here `Ctrl+Space`, to the start `Enter`; Song: save,
-undo, redo `Ctrl+Shift+Z, Ctrl+Y`, settings `Ctrl+Comma`; Lanes: delete / duplicate the selected clip; Piano roll:
+undo, redo `Ctrl+Shift+Z, Ctrl+Y`, settings `Ctrl+Comma`; Lanes: delete / duplicate / copy the selected clip, paste it (DR-CLIP-9); Piano roll:
 select all, deselect, delete, duplicate, copy, paste, up / down a semitone, up / down an octave, earlier / later by
 the snap — the keys the app had before they were settings). A combo is spelt ONE way, `Ctrl+Alt+Shift+<key>`
 (`core/service/KeyCombo.h`, a pure header shared by the service and the window): A–Z, 0–9, F1–F12 and named keys
@@ -1508,6 +1508,28 @@ track's menu; the end dragged → the snapped length while held with nothing sen
 no ease back; a shell's `set ac_1.length=6` caught mid-ease; a clip dragged onto the drums' track plays
 through the drums. Mutants seen red, then restored: a length that snaps, an edge never taken. Shot
 `clip-end-dragging` (`app/tests/shots/renderShots.cpp:478`), both sizes, looked at.
+
+### DR-CLIP-9 A clip copied: Shift-drag, Ctrl+C / Ctrl+V (R-CLIP-9, R-CLIP-10)
+`clip duplicate <ac> [--at <b>] [--count <n>] [--lane <ln>]` (`core/service/ServiceEdit.cpp:714`): with `--lane` the
+copies go to that lane under the move's rule (R-CLIP-8) — onto an instrument's track a MIDI copy plays through that
+instrument (the pattern still shared, R-CLIP-3; "it plays through ch_3" said), an audio copy is refused there, a plain
+lane (or `none`) keeps its strip. In the window, the lanes' clip drag reads Shift at every step of the drag
+(`Timeline`, `app/widgets/Timeline.cpp:765`) and as it is let go: held, the drop is ONE `clip duplicate <ac> --at <b>
+[--lane <ln>]` and the original stays where it is (`:802`); not held, it is the `clip move` it always was. While held
+`mCopyAmt` eases in (120 ms): the original, dimmed during a move, comes back to full strength, and a "+" in the accent
+fades onto the copy in hand (`:1130`) — pressed or let go mid-drag, it eases back. `expectCopy` (`:324`) makes the next
+clip the model brings the selection (`bind`, `:165`) and — after a drop — places it at full strength where the
+pointer left it, never fading in what was already shown; a refused copy brings none and the expectation lapses.
+Ctrl+C and Ctrl+V are the keymap's `lanes.copy` / `lanes.paste` (DR-SET-4) and the Edit menu's Copy Clip / Paste Clip:
+copy keeps the selected clip's id in the window (nothing sent; a toast says it, naming the paste key); paste
+(`App::pasteClip`, `app/App.cpp:415`) is ONE `clip duplicate <copied> --at <the time bar>` on its own lane, the copy
+selected — and with the time bar unmoved since the last paste, right after that copy, so pastes run end to end. A copied
+clip since deleted is said, not pasted. While a piano roll has the keys its Ctrl+C / Ctrl+V are the notes' even with
+nothing to copy (`:410`), never a clip's. L2 `test_a_clip_copied_onto_another_lane`; UI
+`test_clips_are_copied_by_shift_drag_and_ctrl_c_v` (the copy look caught mid-ease; the copy at full strength and
+selected; onto another lane; a plain drag still moves; pastes at the time bar, end to end, then where it moved; a
+roll's Ctrl+V sends nothing); shot `clip-copy-dragging`. Mutants: Shift ignored at the drop, the copy look snapping,
+pastes all at the time bar, the dropped copy fading in — all seen red.
 
 ### DR-BROWSE-4 The song's MIDI list (R-BROWSE-4)
 The Song tab lists a MIDI header, **New MIDI**, then every pattern, then the samples under SAMPLES

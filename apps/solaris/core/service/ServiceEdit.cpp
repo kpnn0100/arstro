@@ -709,6 +709,25 @@ namespace solaris
             if (!intFlag(c, "count", 1, 256, 1, count, err)) return false; // R-SVC-8: N copies end to end
             Clip copy = *src;
             copy.remarks = Remarks();
+            if (c.has("lane"))
+            {
+                // R-CLIP-9: the copy on another lane — the same rule as a move's (R-CLIP-8, R-LANE-3)
+                const std::string lane = c.flag("lane") == "none" ? std::string() : c.flag("lane");
+                if (!lane.empty() && !p.lane(lane)) { err = "no lane `" + lane + "`"; return false; }
+                const std::string owner = lane.empty() ? std::string() : p.lane(lane)->track;
+                if (!owner.empty())
+                {
+                    const Strip *o = p.strip(owner);
+                    if (src->isAudio())
+                    {
+                        err = src->id + " is audio — " + lane + " is the track of " + owner + (o ? " (" + o->name + ")" : std::string()) +
+                              ", an instrument; audio needs a lane of its own (R-LANE-3)";
+                        return false;
+                    }
+                    copy.track = owner; // onto a track: it plays through that instrument
+                }
+                copy.lane = lane;
+            }
             const double len = clipLengthBeats(p, *src);
             double first = 0;
             if (!beatsFlag(c, "at", toTick(src->at + len), first, err)) return false;
@@ -720,6 +739,8 @@ namespace solaris
                 changed("clip.added", copy.id);
                 if (k == 0) mOutput = copy.id + "\n";
             }
+            if (copy.track != src->track)
+                if (const Strip *s = p.strip(copy.track)) mOutput += "it plays through " + s->id + " (" + s->name + ")\n";
             return true;
         }
         case K::ClipUnique:

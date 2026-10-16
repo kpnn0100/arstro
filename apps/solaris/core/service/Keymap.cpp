@@ -18,6 +18,8 @@ namespace solaris
             {"song.settings", "Song", "Settings", "Ctrl+Comma"},
             {"lanes.delete", "Lanes", "Delete the clip", "Delete, Backspace"},
             {"lanes.duplicate", "Lanes", "Duplicate the clip", "Ctrl+D"},
+            {"lanes.copy", "Lanes", "Copy the clip", "Ctrl+C"},             // R-CLIP-10
+            {"lanes.paste", "Lanes", "Paste it at the time bar", "Ctrl+V"},
             {"roll.selectAll", "Piano roll", "Select all", "Ctrl+A"},
             {"roll.deselect", "Piano roll", "Deselect", "Escape"},
             {"roll.delete", "Piano roll", "Delete", "Delete, Backspace"},

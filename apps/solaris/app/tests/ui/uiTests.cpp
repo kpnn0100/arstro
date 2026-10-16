@@ -1012,6 +1012,81 @@ static void test_the_history_tree()
     pass("The history tree (R-HIST-3): Edit ▸ Show History Tree… opens cosmo's view over the model's tree, eased; a node clicked is ONE `history jump` and the highlight travels; the undo key walks it; a script's edit shows; Escape closes it");
 }
 
+static void test_clips_are_copied_by_shift_drag_and_ctrl_c_v()
+{
+    // R-CLIP-9/10: Shift held at the drop duplicates; Ctrl+C / Ctrl+V paste at the time bar, end to end
+    sltest::Rig r("ui-clipcopy", 1280, 800);
+    r.cmd("project new " + r.song("Copy") + ".slp --bpm 120");
+    r.cmd("clip add --instrument drums --at 0 --length 4"); // ac_1 on the drums' track (row 0)
+    r.cmd("lane add Extra");                                // a plain lane (row 1)
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto clips = [&] { return r.svc->model().clips.size(); };
+    struct { sltest::Rig &r; const arstro::solaris::ClipModel *operator()(const std::string &id) const {
+        for (const auto &c : r.svc->model().clips) if (c.id == id) return &c;
+        return nullptr; } } clipOf{r};
+    const artboard::Rect origin = world(tl, artboard::Rect{0, 0, 0, 0});
+    artboard::Rect c1 = world(tl, tl.clipRect("ac_1"));
+    // Shift held: the copy look eases in while the clip is in hand (the original stays at full strength, a "+")
+    const double x1 = origin.x + tl.beatToX(8.0) + 12.0;
+    r.drag(c1.x + 12.0, cy(c1), x1, cy(c1), 2, false, true);
+    assert(tl.copyAmount() > 0.0 && tl.copyAmount() < 1.0);
+    r.settle();
+    assert(tl.copyAmount() == 1.0);
+    r.app->pointer(2, x1, cy(c1), 0, r.now, false, true);
+    r.frame();
+    assert(r.sent.back() == "clip duplicate ac_1 --at 8" && clips() == 2);
+    assert(clipOf("ac_1")->at == 0.0 && clipOf("ac_2")->at == 8.0 && clipOf("ac_2")->pattern == clipOf("ac_1")->pattern); // linked
+    assert(tl.selectedClip() == "ac_2" && tl.clipAlpha("ac_2") == 1.0); // where the pointer left it — not faded in
+    r.settle();
+    // onto another lane: one line names it
+    c1 = world(tl, tl.clipRect("ac_1"));
+    const artboard::Rect row1 = world(tl, tl.rowRect(1));
+    const double x2 = origin.x + tl.beatToX(4.0) + 12.0;
+    r.drag(c1.x + 12.0, cy(c1), x2, cy(row1), 8, true, true);
+    assert(r.sent.back() == "clip duplicate ac_1 --at 4 --lane ln_2" && clipOf("ac_3")->lane == "ln_2" && clipOf("ac_1")->lane == "ln_1");
+    r.settle();
+    // without Shift it still moves
+    c1 = world(tl, tl.clipRect("ac_3"));
+    r.drag(c1.x + 12.0, cy(c1), c1.x + 12.0 + (tl.beatToX(2.0) - tl.beatToX(0.0)), cy(c1), 8, true, false);
+    assert(r.sent.back() == "clip move ac_3 --at 6" && clips() == 3 && tl.copyAmount() < 1.0);
+    r.settle();
+    // Ctrl+C the selected clip (nothing sent), Ctrl+V at the time bar; again: right after the last copy
+    c1 = world(tl, tl.clipRect("ac_1"));
+    r.click(c1.x + 12.0, cy(c1));
+    r.settle();
+    const size_t mark = r.sent.size();
+    r.key('C', true);
+    assert(r.sent.size() == mark && r.app->toastText().find("Clip copied") != std::string::npos);
+    r.cmd("transport seek 12");
+    r.settle();
+    r.key('V', true);
+    assert(r.sent.back() == "clip duplicate ac_1 --at 12" && clipOf("ac_4")->at == 12.0 && clipOf("ac_4")->lane == "ln_1");
+    r.settle();
+    assert(tl.selectedClip() == "ac_4");
+    r.key('V', true);
+    assert(r.sent.back() == "clip duplicate ac_1 --at 16");
+    r.cmd("transport seek 24");                             // the time bar moved: the next paste goes there
+    r.settle();
+    r.key('V', true);
+    assert(r.sent.back() == "clip duplicate ac_1 --at 24" && clips() == 6);
+    r.settle();
+    // a piano roll with the keys: its Ctrl+V is the notes', never a clip's
+    c1 = world(tl, tl.clipRect("ac_1"));
+    r.click(c1.x + 12.0, cy(c1));
+    r.click(c1.x + 12.0, cy(c1));
+    r.settle();
+    auto &roll = *r.app->project().windows().roll(clipOf("ac_1")->pattern);
+    const artboard::Rect gw = world(roll, roll.gridRect());
+    r.app->pointer(0, gw.x + 30.0, gw.y + 30.0, 0, r.now, false, false, true);
+    r.app->pointer(2, gw.x + 30.0, gw.y + 30.0, 0, r.now, false, false, true);
+    r.settle();
+    const size_t before = r.sent.size();
+    r.key('V', true);
+    assert(r.sent.size() == before && clips() == 6);
+    pass("Copying clips (R-CLIP-9/10): Shift held at the drop is ONE `clip duplicate --at [--lane]` — the copy look eased, the copy selected where it was let go; without Shift it moves; Ctrl+C / Ctrl+V paste at the time bar, end to end; in a roll Ctrl+V stays the notes'");
+}
+
 static void test_space_returns_and_ctrl_space_stays()
 {
     // R-TIME-7/8: Space stops back where the time bar was put; Ctrl+Space stops where it is; the cue is marked
@@ -2731,6 +2806,7 @@ int main()
     test_the_keys_are_the_machines();
     test_the_keyboard_section();
     test_the_history_tree();
+    test_clips_are_copied_by_shift_drag_and_ctrl_c_v();
     test_home_unsaved_confirm_and_recents();
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();

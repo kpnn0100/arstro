@@ -160,6 +160,18 @@ namespace solaris_ui
                 if (p.id == c.pattern) { v.notes = p.notes; v.patternLength = p.length; }
             mClips.push_back(v);
         }
+        if (mAdoptNew)
+        {
+            // R-CLIP-9/10: the copy just made is the clip that was not there — it is selected; a refusal brings none
+            for (const auto &v : mClips)
+                if (!mKnownClips.count(v.c.id))
+                {
+                    if (mAdoptInstant) mInstantClip = v.c.id;
+                    selectClip(v.c.id);
+                    break;
+                }
+            mAdoptNew = false;
+        }
         // a lane with no colour of its own wears its first clip's strip's, so its stripe says something
         for (auto &r : mRows)
             if (r.colour < 0)
@@ -309,6 +321,14 @@ namespace solaris_ui
         return std::string();
     }
 
+    void Timeline::expectCopy(bool instant)
+    {
+        mKnownClips.clear();
+        for (const auto &v : mClips) mKnownClips.insert(v.c.id);
+        mAdoptNew = true;
+        mAdoptInstant = instant;
+    }
+
     void Timeline::selectClip(const std::string &id)
     {
         if (id == mSelected) return;
@@ -451,6 +471,12 @@ namespace solaris_ui
         advanceAuto(nowMs); // a click's point waiting out the double-click (R-AUTO-11)
         const bool fadeIn = mEver && !reducedMotion();
         mRowMotion.advance(nowMs);
+        {
+            // R-CLIP-9: Shift pressed or let go mid-drag eases between a move and a copy
+            const double cw = mDragging && mDropCopy ? 1.0 : 0.0;
+            if (cw != mCopyLast) { mCopyAmt.animateTo(cw, motion::kHoverMs, Easing::EaseOutCubic, nowMs); mCopyLast = cw; }
+            mCopyAmt.update(nowMs);
+        }
         for (auto &l : mLive)
         {
             const double aWant = l.gone ? 0.0 : 1.0;
@@ -462,8 +488,10 @@ namespace solaris_ui
                 l.lenLast = l.lenTarget;
                 l.atLast = l.atTarget;
                 l.rowLast = l.rowTarget;
-                l.alpha.set(fadeIn ? 0.0 : 1.0);
-                l.aLast = fadeIn ? 0.0 : 1.0;
+                const bool instant = l.v.c.id == mInstantClip; // a Shift-drop: the pointer already showed it there
+                l.alpha.set(fadeIn && !instant ? 0.0 : 1.0);
+                l.aLast = l.alpha.value();
+                if (instant) mInstantClip.clear();
                 l.hueFrom = l.hueTo = surface::track(l.v.colour);
                 l.hueLast = l.v.colour;
                 l.placed = true;
@@ -734,6 +762,7 @@ namespace solaris_ui
             }
             if (mDragging)
             {
+                mDropCopy = g.shift; // R-CLIP-9: held, the drop duplicates
                 mDragBeat = snap(xToBeat(local.x) - mGrab);
                 int row = rowAt(local.y);
                 for (const auto &v : mClips)
@@ -764,9 +793,21 @@ namespace solaris_ui
             if (mDragging)
             {
                 mDragging = false;
+                mDropCopy = g.shift; // as it is when let go
                 std::string send;
+                bool copy = false;
                 for (auto &l : mLive)
-                    if (!l.gone && l.v.c.id == mPressClip)
+                    if (!l.gone && l.v.c.id == mPressClip && mDropCopy)
+                    {
+                        // R-CLIP-9: Shift held — a copy where it was dropped, ONE line; the original stays where it is
+                        const ClipView &v = l.v;
+                        send = "clip duplicate " + v.c.id + " --at " + beats(mDragBeat);
+                        if (mDragRow != v.row) send += " --lane " + q(mRows[(size_t)mDragRow].lane);
+                        copy = true;
+                        break;
+                    }
+                for (auto &l : mLive)
+                    if (!copy && !l.gone && l.v.c.id == mPressClip)
                     {
                         const ClipView &v = l.v;
                         std::string line = "clip move " + v.c.id;
@@ -782,6 +823,7 @@ namespace solaris_ui
                         if (any) send = line;
                         break;
                     }
+                if (copy) expectCopy(true); // the copy appears where the pointer left it, selected
                 if (!send.empty() && onCommand) onCommand(send); // after the loop: the model it brings back re-keys mLive
             }
             mPressClip.clear();
@@ -1069,7 +1111,8 @@ namespace solaris_ui
             const Rect r = clipBox(v, l.at.value(), l.row.value() * kRowH, liveLength(l));
             if (r.right() < kHeaderW || r.x > W || r.bottom() < kRulerH || r.y > H) continue;
             const double ring = l.gone ? 0.0 : (v.c.id == mSelected ? mSelIn.value() : (v.c.id == mPrevSelected ? mSelOut.value() : 0.0));
-            paintClip(t, v, r, (dragged ? 0.35 : 1.0) * a, dragged ? 0.0 : ring, lerpColor(l.hueFrom, l.hueTo, l.hueT.value()), liveLength(l));
+            // dragged: the original dims where it was — unless Shift makes it a copy, when it stays at full strength
+            paintClip(t, v, r, (dragged ? 0.35 + 0.65 * mCopyAmt.value() : 1.0) * a, dragged ? 0.0 : ring, lerpColor(l.hueFrom, l.hueTo, l.hueT.value()), liveLength(l));
             int hi = -1;
             for (size_t i = 0; i < mClips.size() && !l.gone; ++i)
                 if (mClips[i].c.id == v.c.id) hi = (int)i;
@@ -1078,7 +1121,25 @@ namespace solaris_ui
         }
         if (mDragging)
             if (const ClipLive *l = live(mPressClip))
-                paintClip(t, l->v, clipBox(l->v, mDragBeat, rowY(mDragRow), liveLength(*l)), 1.0, 1.0, lerpColor(l->hueFrom, l->hueTo, l->hueT.value()), liveLength(*l));
+            {
+                const Rect dr = clipBox(l->v, mDragBeat, rowY(mDragRow), liveLength(*l));
+                paintClip(t, l->v, dr, 1.0, 1.0, lerpColor(l->hueFrom, l->hueTo, l->hueT.value()), liveLength(*l));
+                const double k = mCopyAmt.value();
+                if (k > 0.001)
+                {
+                    // R-CLIP-9: a "+" on the copy in hand
+                    const Rect b{dr.right() - 18.0, dr.y + 3.0, 15.0, 15.0};
+                    Color bg = palette::primary(), fg = palette::primaryForeground();
+                    bg.a *= k;
+                    fg.a *= k;
+                    drawRoundedRect(t, b, radius::pill(), Paint::filled(bg));
+                    t.setStroke(fg, 1.4);
+                    t.beginPath();
+                    t.moveTo(b.x + 4.0, b.y + b.h * 0.5); t.lineTo(b.right() - 4.0, b.y + b.h * 0.5);
+                    t.moveTo(b.x + b.w * 0.5, b.y + 4.0); t.lineTo(b.x + b.w * 0.5, b.bottom() - 4.0);
+                    t.strokePath();
+                }
+            }
         paintAutomation(t); // the curves, in the clips' clip
         // the browser's drop hint: where it would land
         if (mDropAmt.value() > 0.001 && mDropRow >= 0)

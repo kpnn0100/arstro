@@ -113,9 +113,11 @@ namespace solaris
              "Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). "
              "Onto an instrument's TRACK a note clip is re-routed to that instrument (and says so); a clip on a track "
              "told --strip <another> goes to that one's track; audio is refused on a track (R-LANE-3).", "R-LANE-2"},
-            {K::ClipDuplicate, "clip duplicate", "<ac>", 1, 1, {"at=<beats>", "count=<n>"},
-             "A copy right after it (or at --at); --count N makes N copies end to end. A note clip's copy plays the "
-             "SAME pattern — linked. Prints the first copy, then `made:` the rest.", "R-CLIP-3"},
+            {K::ClipDuplicate, "clip duplicate", "<ac>", 1, 1, {"at=<beats>", "count=<n>", "lane=<ln>"},
+             "A copy right after it (or at --at); --count N makes N copies end to end; --lane puts them on another lane "
+             "(onto an instrument's TRACK a note clip's copy plays through that instrument; audio is refused there, as a "
+             "move is — R-CLIP-8). A note clip's copy plays the SAME pattern — linked. Prints the first copy, then "
+             "`made:` the rest. Shift-drag and Ctrl+V in the window are this line (R-CLIP-9/10).", "R-CLIP-3"},
             {K::ClipUnique, "clip unique", "<ac>", 1, 1, {}, "Give a note clip its own copy of its pattern.", "R-CLIP-3"},
             {K::ClipDelete, "clip delete", "<ac>", 1, 1, {}, "Remove a clip.", "R-LANE-1"},
 

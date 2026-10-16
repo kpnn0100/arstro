@@ -284,13 +284,14 @@
     },
     {
       "verb": "clip duplicate",
-      "usage": "clip duplicate <ac> [--at <beats>] [--count <n>]",
+      "usage": "clip duplicate <ac> [--at <beats>] [--count <n>] [--lane <ln>]",
       "args": "<ac>",
       "flags": [
         "at=<beats>",
-        "count=<n>"
+        "count=<n>",
+        "lane=<ln>"
       ],
-      "summary": "A copy right after it (or at --at); --count N makes N copies end to end. A note clip's copy plays the SAME pattern — linked. Prints the first copy, then `made:` the rest.",
+      "summary": "A copy right after it (or at --at); --count N makes N copies end to end; --lane puts them on another lane (onto an instrument's TRACK a note clip's copy plays through that instrument; audio is refused there, as a move is — R-CLIP-8). A note clip's copy plays the SAME pattern — linked. Prints the first copy, then `made:` the rest. Shift-drag and Ctrl+V in the window are this line (R-CLIP-9/10).",
       "requirement": "R-CLIP-3"
     },
     {
@@ -4409,6 +4410,18 @@
         "area": "Lanes",
         "label": "Duplicate the clip",
         "defaults": "Ctrl+D"
+      },
+      {
+        "id": "lanes.copy",
+        "area": "Lanes",
+        "label": "Copy the clip",
+        "defaults": "Ctrl+C"
+      },
+      {
+        "id": "lanes.paste",
+        "area": "Lanes",
+        "label": "Paste it at the time bar",
+        "defaults": "Ctrl+V"
       },
       {
         "id": "roll.selectAll",
