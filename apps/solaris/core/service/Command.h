@@ -39,7 +39,7 @@ namespace solaris
             PatternNew, NoteAdd, NoteDelete, NoteMove, PatternQuantize,
             NotesAdd, NotesMove, NotesDelete, PatternSteps, PatternDuplicate, PatternClear, PatternDelete, PatternTranspose, // R-SVC-8
             Ls, Show, PatternPrint,                                                                   // R-SVC-8: read back
-            Undo, Redo,
+            Undo, Redo, HistoryPrint, HistoryJump,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,
             Render,
             MatrixPrint, Audit, StatePrint, Api,

@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — K2: settings in pages, combo boxes.*
+*Last updated: 2026-10-16 — K3: the history is a tree.*
 
 ---
 
 ## NEXT
 
-**► K3 — the history tree in the service** (R-HIST-1/2), then K4. B13+ wait (ask). Owed live checks: D-5, D-9.
+**► K4 — Edit ▸ Show History Tree…** (R-HIST-3): cosmo's HistoryView over the model's tree. B13+ wait (ask). Owed live checks: D-5, D-9.
 
 ---
 
@@ -353,8 +353,10 @@ history like cosmo".* Requirements: R-SET-5, R-SET-6 (R-SET-1, R-SET-3 amended);
       — DR-SET-5: `SettingCombo` / `SettingToggle` (Artboard's controls, fields drawn here — a value from the model
       cross-fades / slides); pages clipped, input-transparent, their own scroll. 2 UI tests (one new), 4 shots;
       3 mutants seen red. Found on the way: `clipToBounds` clips a segment's children, not its own paint.
-- [ ] **K3** The history tree in the service: nodes, branching, `history`, `history jump <n>`, `history[]` +
+- [x] **K3** The history tree in the service: nodes, branching, `history`, `history jump <n>`, `history[]` +
       `historyCurrent` in the model (R-HIST-1, R-HIST-2).
+      — DR-HIST-1: `mHist` (ids never reused), undo → parent, redo → newest branch, a jump no node, 200 nodes pruned
+      oldest-off-path first. L2 `test_history_is_a_tree`; 3 mutants seen red.
 - [ ] **K4** Edit ▸ Show History Tree…: cosmo's `HistoryView` over the model's tree, a click one `history jump`
       (R-HIST-3).
 

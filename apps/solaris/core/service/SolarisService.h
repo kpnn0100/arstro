@@ -95,7 +95,7 @@ namespace solaris
         std::string growToHold(Pattern &pt);          // R-ROLL-9: the pattern grows to the bar holding its last note's end; returns what it said
         std::string lsText() const;
         bool showText(const std::string &id, std::string &out, std::string &err) const;
-        bool historyCommand(const Command &c, std::string &err); // undo / redo
+        bool historyCommand(const Command &c, std::string &err); // undo / redo / history / history jump
         std::string labelOf(const Command &c) const;
         bool evalCommand(const Command &c, std::string &err);
         double songEndBeats() const;
@@ -137,10 +137,15 @@ namespace solaris
         std::vector<std::function<void(const Event &)>> mSinks;
         std::vector<Event> mPending; // an edit's events, emitted only once the whole command has landed
         bool mBindingsTouched = false; // a formula or an automation changed: playback needs a new engine
-        struct Step { Project project; std::string label; };
-        std::vector<Step> mUndo, mRedo;  // the song before each edit that landed (R-EDM-1)
-        std::string mCoalesce;           // the newest step's merge key: `set` of the same addresses
+        // R-HIST-1: the history is a TREE of the song as each edit left it, keyed by an id that is never reused
+        struct HistNode { Project project; std::string label; int parent = -1; std::vector<int> kids; };
+        std::map<int, HistNode> mHist;   // ascending id = the order they were made
+        int mHistCur = -1, mHistNext = 0;
+        std::string mCoalesce;           // the newest node's merge key: `set` of the same addresses (R-EDM-1)
         static constexpr size_t kHistory = 200;
+        void historyReset(const std::string &rootLabel); // "" = no song: no tree
+        void historyAdd(const std::string &label);       // the song now, a child of the current node
+        void historyPrune();
         std::map<std::string, std::string> mLastChanged; // device id → the parameter last written (R-WIN-2)
         std::vector<engine::Curve> mNowCurves;           // model.automations[i] compiled: its `now` at the playhead (R-AUTO-11)
         double mNowSpb = 1.0;                            // … at this many samples per beat

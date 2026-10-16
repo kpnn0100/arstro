@@ -546,7 +546,7 @@ static void test_undo_and_redo_every_edit()
     assert(r.ok("undo") == "clip add\n" && r.text() == empty);
     assert(contains(r.no("undo"), "nothing to undo"));
     assert(r.ok("redo") == "clip add\n" && r.text() == withDrums && r.svc.model().redoDepth == 2);
-    // a new edit clears what redo could put back
+    // a new edit is a new node: nothing below it to redo (the undone steps stay a branch — R-HIST-1)
     r.ok("lane add Extra");
     assert(r.svc.model().redoDepth == 0 && contains(r.no("redo"), "nothing to redo"));
     // not edits: a machine setting, the transport, a save
@@ -562,7 +562,71 @@ static void test_undo_and_redo_every_edit()
     // another song: its own history
     r.ok("project open " + song);
     assert(r.svc.model().undoDepth == 0 && contains(r.no("undo"), "nothing to undo"));
-    pass("undo / redo: every edit, byte-exact; a dragged fader is one step; a new edit clears redo; settings, transport and save are not edits (R-EDM-1)");
+    pass("undo / redo: every edit, byte-exact; a dragged fader is one step; nothing to redo below a new edit; settings, transport and save are not edits (R-EDM-1)");
+}
+
+// R-HIST-1/2: the history is a tree — an edit after an undo starts a branch and the old future stays; `history` prints
+// it, `history jump <id>` goes anywhere in it, redo takes the newest branch; 200 nodes, the oldest off-path first
+static void test_history_is_a_tree()
+{
+    Run r;
+    const std::string song = freshSong("tree");
+    r.ok("project new " + song);
+    const std::string empty = r.text();
+    r.ok("clip add --instrument drums --at 0 --length 4");                        // node 1
+    const std::string a = r.text();
+    r.ok("set ch_2.gain=-3");                                                       // node 2
+    const std::string b = r.text();
+    r.ok("undo");                                                                   // back at 1 …
+    r.ok("set ch_2.pan=0.5");                                                       // … node 3: a branch — 2 stays
+    const std::string c = r.text();
+    {
+        const auto &m = r.svc.model();
+        assert(m.history.size() == 4 && m.historyCurrent == 3 && m.history[0].label == "New song" && m.history[0].parent == -1);
+        assert(m.history[2].parent == 1 && m.history[3].parent == 1 && m.history[2].label == "set ch_2.gain");
+    }
+    // the old future is still there: one line goes to it; a jump is no node, and the song is unsaved
+    r.ok("project save");
+    r.events.clear();
+    assert(r.ok("history jump 2") == "set ch_2.gain\n" && r.text() == b && r.svc.model().historyCurrent == 2);
+    assert(r.events.size() == 1 && contains(r.events[0], "what=history.jump node=\"set ch_2.gain\""));
+    assert(r.svc.model().history.size() == 4 && r.svc.model().dirty);
+    // undo goes up; redo goes down the NEWEST branch
+    assert(r.ok("undo") == "set ch_2.gain\n" && r.text() == a);
+    assert(r.svc.model().redoLabel == "set ch_2.pan" && r.ok("redo") == "set ch_2.pan\n" && r.text() == c);
+    // the tree, printed and as JSON
+    const std::string h = r.ok("history");
+    assert(contains(h, "  0\t-\tNew song\n") && contains(h, "  2\t1\tset ch_2.gain\n") && contains(h, "* 3\t1\tset ch_2.pan\n"));
+    assert(contains(r.ok("history --json"), "\"id\": 3,\n    \"parent\": 1,\n    \"label\": \"set ch_2.pan\",\n    \"current\": true"));
+    // refused, naming why
+    assert(contains(r.no("history jump 9"), "no history node `9`") && contains(r.no("history jump x"), "no history node"));
+    // the root is the song as it was made
+    r.ok("history jump 0");
+    assert(r.text() == empty && contains(r.no("undo"), "nothing to undo") && r.svc.model().redoDepth == 2);
+    // a dragged fader is still ONE node
+    r.ok("history jump 1");
+    for (const char *g : {"-1", "-2", "-3"}) r.ok(std::string("set ch_2.gain=") + g);
+    assert(r.svc.model().history.size() == 5 && r.svc.model().historyCurrent == 4);
+    // at most 200 nodes: the oldest leaves off the path go first (the branches 2 and 3), then the path's own root
+    for (int i = 0; i < 230; ++i) r.ok(i % 2 ? std::string("set ch_2.pan=") + (i % 4 < 2 ? "0.1" : "0.2") : std::string("set ch_2.gain=") + (i % 4 < 2 ? "-1" : "-2"));
+    {
+        const auto &m = r.svc.model();
+        assert(m.history.size() == 200);
+        int roots = 0;
+        for (const auto &n : m.history)
+        {
+            assert(n.id != 2 && n.id != 3);
+            if (n.parent < 0) ++roots;
+        }
+        assert(roots == 1 && m.undoDepth == 199);
+    }
+    // another song: its own tree, rooted at it
+    r.ok("project save");
+    r.ok("project open " + song);
+    assert(r.svc.model().history.size() == 1 && r.svc.model().history[0].label == "Opened" && r.svc.model().historyCurrent == 0);
+    r.ok("project close");
+    assert(r.svc.model().history.empty() && r.svc.model().historyCurrent == -1);
+    pass("The history is a tree (R-HIST-1/2): an edit after an undo branches and the old future stays; `history jump` goes anywhere (no node itself); redo takes the newest branch; a drag is one node; 200 nodes, the oldest off-path first; a song opened is its own root");
 }
 
 static void test_formulas_bind_numbers_and_refuse_what_cannot_be_read()
@@ -2175,6 +2239,7 @@ int main()
     test_note_move_and_quantize_edit_the_pattern();
     test_strip_relink_moves_every_clip_in_one_edit();
     test_undo_and_redo_every_edit();
+    test_history_is_a_tree();
     test_formulas_bind_numbers_and_refuse_what_cannot_be_read();
     test_an_automated_gain_renders_its_curve();
     test_a_bezier_gain_renders_what_eval_says_and_the_formula_says();

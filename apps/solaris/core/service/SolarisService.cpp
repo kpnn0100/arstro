@@ -104,7 +104,7 @@ namespace solaris
             switch (k)
             {
             case K::ProjectNew: case K::ProjectOpen: case K::ProjectSave: case K::ProjectClose:
-            case K::Get: case K::Eval: case K::Undo: case K::Redo: case K::Render: case K::MatrixPrint: case K::Audit: case K::StatePrint: case K::Api:
+            case K::Get: case K::Eval: case K::Undo: case K::Redo: case K::HistoryPrint: case K::HistoryJump: case K::Render: case K::MatrixPrint: case K::Audit: case K::StatePrint: case K::Api:
             case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
             case K::DevicesList: case K::Browse: case K::RecentsRemove:
             case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait:
@@ -148,7 +148,7 @@ namespace solaris
             }
             break;
         }
-        case K::Undo: case K::Redo:
+        case K::Undo: case K::Redo: case K::HistoryPrint: case K::HistoryJump:
             ok = historyCommand(c, err);
             break;
         case K::Get:
@@ -257,7 +257,7 @@ namespace solaris
             refreshModel();
             return false;
         }
-        const bool history = c.kind == K::Undo || c.kind == K::Redo;
+        const bool history = c.kind == K::Undo || c.kind == K::Redo || c.kind == K::HistoryJump;
         if (editing)
         {
             // R-SVC-8: everything made is said — the first line stays the command's own id (scripts read
@@ -279,7 +279,8 @@ namespace solaris
             }
             if (!made.empty()) mOutput += "made:" + made + "\n";
 
-            // R-EDM-1: the song before this edit, unless it continues the last one (a fader dragged)
+            // R-HIST-1: the song after this edit is a node — a child of the current one, a BRANCH when that one has
+            // children — unless it continues the last edit (a fader dragged: R-EDM-1), which it overwrites
             std::string key;
             if (c.kind == K::Set)
             {
@@ -289,18 +290,17 @@ namespace solaris
                 key = "set";
                 for (const auto &a : addresses) key += " " + a;
             }
-            if (key.empty() || key != mCoalesce || mUndo.empty())
-            {
-                mUndo.push_back(Step{before, labelOf(c)});
-                if (mUndo.size() > kHistory) mUndo.erase(mUndo.begin());
-            }
+            const auto cur = mHist.find(mHistCur);
+            if (!key.empty() && key == mCoalesce && cur != mHist.end() && cur->second.parent >= 0 && cur->second.kids.empty())
+                cur->second.project = mProject;
+            else
+                historyAdd(labelOf(c));
             mCoalesce = key;
-            mRedo.clear();
         }
         if (c.kind == K::ProjectNew || c.kind == K::ProjectOpen || c.kind == K::ProjectClose)
         {
-            mUndo.clear();   // another song: its own history
-            mRedo.clear();
+            // another song: its own tree, rooted at the song as it opened
+            historyReset(c.kind == K::ProjectClose ? std::string() : c.kind == K::ProjectNew ? "New song" : "Opened");
             mCoalesce.clear();
         }
         if (editing || history) mModel.dirty = true;
@@ -327,21 +327,106 @@ namespace solaris
         return l;
     }
 
+    void SolarisService::historyReset(const std::string &rootLabel)
+    {
+        mHist.clear();
+        mHistCur = -1;
+        mHistNext = 0;
+        if (!rootLabel.empty()) historyAdd(rootLabel);
+    }
+
+    void SolarisService::historyAdd(const std::string &label)
+    {
+        const int id = mHistNext++;
+        HistNode n;
+        n.project = mProject;
+        n.label = label;
+        n.parent = mHistCur;
+        mHist[id] = std::move(n);
+        if (mHistCur >= 0) mHist[mHistCur].kids.push_back(id);
+        mHistCur = id;
+        historyPrune();
+    }
+
+    void SolarisService::historyPrune()
+    {
+        // past kHistory nodes the OLDEST off the path to the current node goes first — a leaf of another branch; when
+        // the tree is one path, its root (the oldest step, as the stack dropped it) and the next node is the root
+        while (mHist.size() > kHistory)
+        {
+            std::set<int> path;
+            for (int i = mHistCur; i >= 0; i = mHist[i].parent) path.insert(i);
+            int victim = -1;
+            for (const auto &n : mHist)
+                if (n.second.kids.empty() && !path.count(n.first)) { victim = n.first; break; } // ascending: the oldest
+            if (victim >= 0)
+            {
+                auto &kids = mHist[mHist[victim].parent].kids;
+                kids.erase(std::remove(kids.begin(), kids.end(), victim), kids.end());
+                mHist.erase(victim);
+                continue;
+            }
+            const int root = mHist.begin()->first;
+            if (root == mHistCur || mHist[root].kids.size() != 1) break; // nothing that may go
+            mHist[mHist[root].kids.front()].parent = -1;
+            mHist.erase(root);
+        }
+    }
+
     bool SolarisService::historyCommand(const Command &c, std::string &err)
     {
         if (!requireOpen(err)) return false;
-        const bool undo = c.kind == K::Undo;
-        auto &from = undo ? mUndo : mRedo;
-        auto &to = undo ? mRedo : mUndo;
-        if (from.empty()) { err = undo ? "nothing to undo" : "nothing to redo"; return false; }
-        Step s = std::move(from.back());
-        from.pop_back();
-        to.push_back(Step{mProject, s.label});
-        mProject = std::move(s.project);
-        mCoalesce.clear();       // the next edit starts a step of its own
+        if (c.kind == K::HistoryPrint)
+        {
+            if (c.has("json"))
+            {
+                Json a = Json::array();
+                for (const auto &n : mHist)
+                    a.push(Json::object().set("id", n.first).set("parent", n.second.parent).set("label", n.second.label).set("current", n.first == mHistCur));
+                mOutput = a.dump();
+                return true;
+            }
+            std::ostringstream o;
+            for (const auto &n : mHist)
+                o << (n.first == mHistCur ? "* " : "  ") << n.first << "\t" << (n.second.parent < 0 ? std::string("-") : std::to_string(n.second.parent))
+                  << "\t" << n.second.label << "\n";
+            mOutput = o.str();
+            return true;
+        }
+        const auto cur = mHist.find(mHistCur);
+        if (cur == mHist.end()) { err = "this song has no history"; return false; }
+        int to = -1;
+        std::string label;
+        if (c.kind == K::Undo)
+        {
+            if (cur->second.parent < 0) { err = "nothing to undo"; return false; }
+            to = cur->second.parent;
+            label = cur->second.label; // what is taken back
+        }
+        else if (c.kind == K::Redo)
+        {
+            if (cur->second.kids.empty()) { err = "nothing to redo"; return false; }
+            to = *std::max_element(cur->second.kids.begin(), cur->second.kids.end()); // the newest branch
+            label = mHist[to].label;
+        }
+        else
+        {
+            double x = 0;
+            if (!parseNumber(c.arg(0), x) || x != std::floor(x) || !mHist.count((int)x))
+            {
+                err = "no history node `" + c.arg(0) + "` (`history` lists them: " + std::to_string(mHist.begin()->first) + " … " +
+                      std::to_string(mHist.rbegin()->first) + ")";
+                return false;
+            }
+            to = (int)x;
+            label = mHist[to].label;
+        }
+        mProject = mHist[to].project;
+        mHistCur = to;
+        mCoalesce.clear();       // the next edit starts a node of its own
         mBindingsTouched = true; // the song changed shape under the player
-        changed(undo ? "undo" : "redo", s.label);
-        mOutput = s.label + "\n";
+        changed(c.kind == K::Undo ? "undo" : c.kind == K::Redo ? "redo" : "history.jump", label);
+        mOutput = label + "\n";
         return true;
     }
 

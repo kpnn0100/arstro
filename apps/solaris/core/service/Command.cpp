@@ -41,10 +41,19 @@ namespace solaris
              "R-SVC-3", true},
             {K::Get, "get", "<address>", 1, 1, {}, "Print an address's stored value.", "R-SVC-1"},
             {K::Undo, "undo", "", 0, 0, {},
-             "Undo the last edit (prints what). Consecutive `set`s of the same addresses — a fader dragged — are ONE "
-             "step. A machine setting, the transport and a save are not edits; a new or opened song starts a new history.",
+             "Undo the last edit (prints what): back to the history node's parent. Consecutive `set`s of the same "
+             "addresses — a fader dragged — are ONE step. A machine setting, the transport and a save are not edits; a new "
+             "or opened song starts a new history.",
              "R-EDM-1"},
-            {K::Redo, "redo", "", 0, 0, {}, "Redo what `undo` took back; a new edit clears it.", "R-EDM-1"},
+            {K::Redo, "redo", "", 0, 0, {},
+             "Redo: forward to the NEWEST branch below the current node (prints what). An edit after an undo no longer "
+             "clears it — it starts another branch, and the old ones stay (R-HIST-1).", "R-EDM-1"},
+            {K::HistoryPrint, "history", "", 0, 0, {"json"},
+             "The song's history as a tree: one node a line — `*` at the current one, its id, its parent's (`-` at the "
+             "root), what made it. --json: the same as `history[]` in the model.", "R-HIST-2"},
+            {K::HistoryJump, "history jump", "<id>", 1, 1, {},
+             "Make history node <id> the song (prints what made it) — as undo does, it moves through the tree and is "
+             "no node itself; the song is unsaved and the player hears it.", "R-HIST-2"},
 
             {K::MixerAdd, "mixer add", "[name]", 0, 1, {}, "Add a mixer page after the last one.", "R-MIX-3"},
             {K::MixerDelete, "mixer delete", "<mx>", 1, 1, {}, "Delete an empty mixer. Refused while strips live on it.", "R-MIX-3"},

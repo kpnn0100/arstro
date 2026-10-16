@@ -14,8 +14,10 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `project close` | Close the song and return Home. | R-UI-1 |
 | `set <address>=<value> …` | Write addresses: project.bpm, <strip>.gain, <clip>.at, <device>.<param> (any DSP registry parameter, in its unit), … — `api` lists every one. An unknown address or parameter is refused. A value starting with `=` is a FORMULA that drives a number (R-AUTO); a plain number clears it. | R-SVC-3 |
 | `get <address>` | Print an address's stored value. | R-SVC-1 |
-| `undo` | Undo the last edit (prints what). Consecutive `set`s of the same addresses — a fader dragged — are ONE step. A machine setting, the transport and a save are not edits; a new or opened song starts a new history. | R-EDM-1 |
-| `redo` | Redo what `undo` took back; a new edit clears it. | R-EDM-1 |
+| `undo` | Undo the last edit (prints what): back to the history node's parent. Consecutive `set`s of the same addresses — a fader dragged — are ONE step. A machine setting, the transport and a save are not edits; a new or opened song starts a new history. | R-EDM-1 |
+| `redo` | Redo: forward to the NEWEST branch below the current node (prints what). An edit after an undo no longer clears it — it starts another branch, and the old ones stay (R-HIST-1). | R-EDM-1 |
+| `history [--json]` | The song's history as a tree: one node a line — `*` at the current one, its id, its parent's (`-` at the root), what made it. --json: the same as `history[]` in the model. | R-HIST-2 |
+| `history jump <id>` | Make history node <id> the song (prints what made it) — as undo does, it moves through the tree and is no node itself; the song is unsaved and the player hears it. | R-HIST-2 |
 | `mixer add [name]` | Add a mixer page after the last one. | R-MIX-3 |
 | `mixer delete <mx>` | Delete an empty mixer. Refused while strips live on it. | R-MIX-3 |
 | `mixer move <mx> [--to <index>]` | Move a mixer to position <index> (0 = first). Refused if it would make any route point backward. | R-MIX-4 |
@@ -198,7 +200,12 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `undoLabel` | string | what `undo` would take back, "" = nothing (R-EDM-1) |
 | `redoLabel` | string | what `redo` would put back |
 | `undoDepth` | int | edits `undo` can take back |
-| `redoDepth` | int | steps `redo` can put back |
+| `redoDepth` | int | steps `redo` can put back (down the newest branches) |
+| `history` | object[] | the song's history TREE, oldest first (R-HIST-2) — what `history` prints |
+| `history[].id` | int | never reused while the song is open; `history jump <id>` |
+| `history[].parent` | int | -1 at the root (the song as it was opened or made) |
+| `history[].label` | string | what made it: the command (`set ch_2.gain`), or New song / Opened |
+| `historyCurrent` | int | the node the song is now (-1: no song) |
 | `masterOut` | string[] | the port ids the master feeds |
 | `mixers` | object[] | mixer pages in order |
 | `mixers[].id` | string |  |

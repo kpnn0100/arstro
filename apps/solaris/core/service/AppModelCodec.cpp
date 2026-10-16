@@ -21,7 +21,12 @@ namespace solaris
             {"undoLabel", "string", "what `undo` would take back, \"\" = nothing (R-EDM-1)"},
             {"redoLabel", "string", "what `redo` would put back"},
             {"undoDepth", "int", "edits `undo` can take back"},
-            {"redoDepth", "int", "steps `redo` can put back"},
+            {"redoDepth", "int", "steps `redo` can put back (down the newest branches)"},
+            {"history", "object[]", "the song's history TREE, oldest first (R-HIST-2) — what `history` prints"},
+            {"history[].id", "int", "never reused while the song is open; `history jump <id>`"},
+            {"history[].parent", "int", "-1 at the root (the song as it was opened or made)"},
+            {"history[].label", "string", "what made it: the command (`set ch_2.gain`), or New song / Opened"},
+            {"historyCurrent", "int", "the node the song is now (-1: no song)"},
             {"masterOut", "string[]", "the port ids the master feeds"},
             {"mixers", "object[]", "mixer pages in order"},
             {"mixers[].id", "string", ""},
@@ -397,6 +402,11 @@ namespace solaris
             .set("bpm", m.bpm).set("sig", m.sig).set("sampleRate", m.sampleRate).set("masterGain", m.masterGain)
             .set("masterGainFormula", m.masterGainFormula).set("undoLabel", m.undoLabel).set("redoLabel", m.redoLabel)
             .set("undoDepth", m.undoDepth).set("redoDepth", m.redoDepth).set("masterOut", strings(m.masterOut));
+        {
+            Json h = Json::array();
+            for (const auto &n : m.history) h.push(Json::object().set("id", n.id).set("parent", n.parent).set("label", n.label));
+            j.set("history", h).set("historyCurrent", m.historyCurrent);
+        }
         Json mixers = Json::array();
         for (const auto &x : m.mixers)
             mixers.push(Json::object().set("id", x.id).set("name", x.name).set("order", x.order).set("strips", strings(x.strips)));

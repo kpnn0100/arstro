@@ -311,10 +311,22 @@ namespace solaris
             return b ? b->formula : std::string();
         };
         mModel.masterGainFormula = formulaOf("project.masterGain");
-        mModel.undoDepth = (int)mUndo.size();
-        mModel.redoDepth = (int)mRedo.size();
-        mModel.undoLabel = mUndo.empty() ? std::string() : mUndo.back().label;
-        mModel.redoLabel = mRedo.empty() ? std::string() : mRedo.back().label;
+        // R-HIST: the tree, and what undo and redo would do from where the song is now
+        for (const auto &n : mHist) mModel.history.push_back(HistoryNodeModel{n.first, n.second.parent, n.second.label});
+        mModel.historyCurrent = mHistCur;
+        {
+            const auto cur = mHist.find(mHistCur);
+            int up = 0, down = 0;
+            for (auto it = cur; it != mHist.end() && it->second.parent >= 0; it = mHist.find(it->second.parent)) ++up;
+            for (auto it = cur; it != mHist.end() && !it->second.kids.empty();
+                 it = mHist.find(*std::max_element(it->second.kids.begin(), it->second.kids.end()))) ++down;
+            mModel.undoDepth = up;
+            mModel.redoDepth = down;
+            mModel.undoLabel = cur != mHist.end() && cur->second.parent >= 0 ? cur->second.label : std::string();
+            mModel.redoLabel = cur != mHist.end() && !cur->second.kids.empty()
+                                   ? mHist.at(*std::max_element(cur->second.kids.begin(), cur->second.kids.end())).label
+                                   : std::string();
+        }
         auto fillDevice = [&](DeviceModel &d) {
             for (auto &pm : d.params) pm.formula = formulaOf(d.id + "." + pm.name);
             const auto lc = mLastChanged.find(d.id);

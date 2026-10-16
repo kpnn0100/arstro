@@ -560,15 +560,33 @@ bindings and automations no formula reads. While playing, a binding or curve edi
 address a formula reads — swaps in a new engine (`core/service/ServiceTransport.cpp:267`).
 
 ### DR-EDM-1 Undo and redo (R-EDM-1)
-After every edit that LANDED, `dispatch` keeps the song as it was before it (`core/service/SolarisService.cpp:281`),
-at most 200 steps; consecutive `set`s of exactly the same addresses extend the newest step instead of
-adding one, so a dragged fader is one step (a rule a script sees the same way). `undo` / `redo`
-(`historyCommand`, `:328`) swap the song with the step, print its label (`set ch_2.gain`, `clip add`,
-`strip delete ch_3`), emit `project.changed what=undo|redo node=<label>`, mark the song unsaved and,
-while playing, swap in a new engine; any new edit clears redo. Not edits: machine settings, the
-transport, a save, `get`/`eval`/`audit`. `project new|open|close` start a new history. The model names
-both (`undoLabel`, `redoLabel`, `undoDepth`, `redoDepth`); the window's Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y
-send `undo` / `redo` (`app/App.cpp`).
+The history is a TREE now (DR-HIST-1): after every edit that LANDED, `dispatch` keeps the song as the edit left it
+as a node (`core/service/SolarisService.cpp:282`); consecutive `set`s of exactly the same addresses overwrite the
+newest node instead of adding one, so a dragged fader is one step (a rule a script sees the same way). `undo` /
+`redo` (`historyCommand`, `:376`) move to the parent / the newest child, print the label of what they take back or
+put back (`set ch_2.gain`, `clip add`, `strip delete ch_3`), emit `project.changed what=undo|redo node=<label>`, mark
+the song unsaved and, while playing, swap in a new engine. A new edit no longer clears redo's steps: they stay a
+branch. Not edits: machine settings, the transport, a save, `get`/`eval`/`audit`, `history`. `project
+new|open|close` start a new tree. The model names both (`undoLabel`, `redoLabel`, `undoDepth`, `redoDepth`); the
+window's undo and redo keys (the keymap's, DR-SET-4) send `undo` / `redo` (`app/App.cpp`).
+
+### DR-HIST-1 The history is a tree (R-HIST-1, R-HIST-2)
+`SolarisService` keeps `mHist`: nodes keyed by an id never reused while the song is open (ascending = the order
+they were made), each the song as an edit left it, its label, its parent and its children
+(`core/service/SolarisService.h`). A new, opened or closed song resets it (`historyReset`, `:330`; `dispatch`, `:302`):
+one root, "New song" or "Opened", the song as it came. An edit that landed is `historyAdd` (`:338`): a child of the
+current node — a BRANCH when that node already has children, and the old ones stay. `undo` goes to the parent,
+`redo` to the child with the highest id (the newest branch), `history jump <id>` to any node (`historyCommand`,
+`:376`): the song becomes that node's, the move is announced (`what=history.jump`), the song is unsaved, the player
+hears it — and a move is no node itself; the next edit after one starts a node of its own. `history` prints the tree
+— `*` at the current node, its id, its parent's (`-` at the root), its label — and `history --json` the same as the
+model's `history[]` (`id`, `parent`, `label`) and `historyCurrent` (`core/service/ServiceModel.cpp:314`, which also
+derives the undo / redo labels and depths from where the song is). At most 200 nodes (`historyPrune`, `:351`): past
+that the oldest leaf OFF the path from the root to the current node goes first; when the tree is one path, its root
+does and the next node becomes the root. L2 `test_history_is_a_tree` (a branch kept, a jump, redo's newest branch,
+the root, a drag one node, the cap, a song opened its own root). Mutants: a new edit dropping the undone branch (the
+old stack), redo taking the oldest branch, pruning the root before an old branch — all seen red.
+
 
 ### DR-UI-9 The song bar's menus and Settings beside Home (R-UI-3 amended)
 `SongBar` (`app/widgets/SongBar.cpp`): wordmark · Home · Settings · cosmo's `MenuStrip` (laid out by

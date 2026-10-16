@@ -239,6 +239,13 @@ namespace solaris
         float masterPeak[2] = {0, 0};
     };
 
+    /** One node of the song's history tree (R-HIST-2): the song as an edit left it. */
+    struct HistoryNodeModel
+    {
+        int id = 0, parent = -1;                 // `history jump <id>`; -1 = the root
+        std::string label;                       // what made it ("set ch_2.gain", "New song")
+    };
+
     struct AppModel
     {
         std::string screen = "home";             // home | project
@@ -248,6 +255,8 @@ namespace solaris
         std::string masterGainFormula;           // R-AUTO-1
         std::string undoLabel, redoLabel;        // what `undo` / `redo` would take back ("" = nothing) — R-EDM-1
         int undoDepth = 0, redoDepth = 0;
+        std::vector<HistoryNodeModel> history;   // R-HIST-2: the song's history tree, oldest first
+        int historyCurrent = -1;                 // the node the song is now
         std::string sig = "4/4";
         int sampleRate = 48000;
         std::vector<std::string> masterOut;
