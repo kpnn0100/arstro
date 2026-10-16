@@ -138,6 +138,37 @@ namespace
                  r.click(s.keyChipRect("transport.play", 0));
                  r.pump(4 * sltest::Rig::kFrameMs);
              }},
+            {"history-tree",
+             [](sltest::Rig &r) {
+                 // R-HIST-3: a branched history — an edit after two undos started a second line
+                 songWithStrips(r, "Branches");
+                 r.cmd("set ch_2.gain=-3");
+                 r.cmd("set ch_3.pan=0.4");
+                 r.cmd("undo");
+                 r.cmd("undo");
+                 r.cmd("set ch_4.gain=-6");
+                 r.cmd("lane add Extra");
+                 r.settle();
+                 r.app->openHistory();
+                 r.settle();
+             }},
+            {"history-tree-jumping",
+             [](sltest::Rig &r) {
+                 // mid-tween: a node clicked, the highlight on its way from the current node to it
+                 songWithStrips(r, "Branches");
+                 r.cmd("set ch_2.gain=-3");
+                 r.cmd("set ch_3.pan=0.4");
+                 r.cmd("undo");
+                 r.cmd("undo");
+                 r.cmd("set ch_4.gain=-6");
+                 r.settle();
+                 r.app->openHistory();
+                 r.settle();
+                 auto &hv = r.app->historyView();
+                 const artboard::Point p = hv.nodePoint(hv.nodeCount() - 2);
+                 r.click(p.x, p.y);
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
             {"project-open",
              [](sltest::Rig &r) {
                  songWithStrips(r, "Night Drive");

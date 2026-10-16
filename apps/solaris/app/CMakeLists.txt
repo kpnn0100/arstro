@@ -41,6 +41,7 @@ set(SL_COSMO_SOURCES
     ${SL_COSMO_DIR}/EmbeddedFonts.cpp
     ${SL_COSMO_DIR}/widgets/ConfirmDialog.cpp
     ${SL_COSMO_DIR}/widgets/ContextMenu.cpp
+    ${SL_COSMO_DIR}/widgets/HistoryView.cpp
     ${SL_COSMO_DIR}/widgets/Icons.cpp
     ${SL_COSMO_DIR}/widgets/MenuStrip.cpp
     ${SL_COSMO_DIR}/widgets/SliderRow.cpp)

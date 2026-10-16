@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — K3: the history is a tree.*
+*Last updated: 2026-10-16 — K4: the history tree, seen; the request done but for R-HIST-4.*
 
 ---
 
 ## NEXT
 
-**► K4 — Edit ▸ Show History Tree…** (R-HIST-3): cosmo's HistoryView over the model's tree. B13+ wait (ask). Owed live checks: D-5, D-9.
+**► R-HIST-4 — keep the tree with the song?** (asked of the user, 2026-10-16). B13+ wait (ask). Owed live checks: D-5, D-9. B13+ wait (ask). Owed live checks: D-5, D-9.
 
 ---
 
@@ -357,8 +357,11 @@ history like cosmo".* Requirements: R-SET-5, R-SET-6 (R-SET-1, R-SET-3 amended);
       `historyCurrent` in the model (R-HIST-1, R-HIST-2).
       — DR-HIST-1: `mHist` (ids never reused), undo → parent, redo → newest branch, a jump no node, 200 nodes pruned
       oldest-off-path first. L2 `test_history_is_a_tree`; 3 mutants seen red.
-- [ ] **K4** Edit ▸ Show History Tree…: cosmo's `HistoryView` over the model's tree, a click one `history jump`
+- [x] **K4** Edit ▸ Show History Tree…: cosmo's `HistoryView` over the model's tree, a click one `history jump`
       (R-HIST-3).
+      — DR-HIST-2: cosmo's view reused; two OPT-IN additions to it (`easeCurrent`: the highlight travels; `hint`:
+      a host's own keys) — cosmo's own tests green. Edit's menu hints follow the keymap. UI test, 2 shots; mutant
+      seen red. The 2026-10-16 request is done (K1–K4) but for R-HIST-4, asked.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

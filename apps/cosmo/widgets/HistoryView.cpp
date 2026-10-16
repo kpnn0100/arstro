@@ -39,8 +39,19 @@ namespace cosmo_v2
         // so the pan itself doesn't visibly jump; later jumps/scrolls glide instead.
         mPanXAnim.set(mPanX); mPanYAnim.set(mPanY);
         mPanIssuedX = mPanX; mPanIssuedY = mPanY;
+        // a new snapshot: every highlight placed at rest (there is nowhere to ease from)
+        mCurAmt.assign(mNodes.size(), artboard::AnimatedProperty{0.0});
+        mCurLast.assign(mNodes.size(), 0.0);
+        for (size_t i = 0; i < mNodes.size(); ++i)
+            if ((int)i == mCurrent) { mCurAmt[i].set(1.0); mCurLast[i] = 1.0; }
         mOpen = true;
         raise();
+    }
+
+    double HistoryView::currentAmount(int i) const
+    {
+        if (!easeCurrent) return i == mCurrent ? 1.0 : 0.0;
+        return i >= 0 && i < (int)mCurAmt.size() ? mCurAmt[(size_t)i].value() : 0.0;
     }
 
     void HistoryView::setCurrent(int current)
@@ -173,6 +184,13 @@ namespace cosmo_v2
         if (mPanX != mPanIssuedX) { mPanXAnim.animateTo(mPanX, mPanDurMs, Easing::EaseOutCubic, nowMs); mPanIssuedX = mPanX; }
         if (mPanY != mPanIssuedY) { mPanYAnim.animateTo(mPanY, mPanDurMs, Easing::EaseOutCubic, nowMs); mPanIssuedY = mPanY; }
 
+        if (easeCurrent)
+            for (size_t i = 0; i < mCurAmt.size(); ++i)
+            {
+                const double want = (int)i == mCurrent ? 1.0 : 0.0;
+                if (want != mCurLast[i]) { mCurAmt[i].animateTo(want, 200.0, Easing::EaseOutCubic, nowMs); mCurLast[i] = want; }
+                mCurAmt[i].update(nowMs);
+            }
         mAppear.update(nowMs);
         mCloseAmt.update(nowMs);
         mPanXAnim.update(nowMs);
@@ -224,7 +242,7 @@ namespace cosmo_v2
         t.setFill(fa(palette::foreground()));
         t.drawText("HISTORY", c.x + kMargin, c.y + 24.0, 12.0, font::sansSemiBold(), 0.12 * 12.0);
         t.setFill(fa(palette::mutedForeground()));
-        t.drawText("click a node to jump  .  Ctrl+Z undo  .  Ctrl+Y redo", c.x + kMargin, c.y + 40.0, 10.0, font::sans());
+        t.drawText(hint, c.x + kMargin, c.y + 40.0, 10.0, font::sans());
 
         // close X: brightens + lifts on hover (mCloseAmt), eased so it never pops (R-G-1)
         const double ch = mCloseAmt.value();
@@ -275,11 +293,28 @@ namespace cosmo_v2
             const Point cn = nodeCenter(i);
             if (cn.y < tr.y - kRowH || cn.y > tr.y + tr.h + kRowH) continue;
             const bool cur = (i == mCurrent);
-            drawCircle(t, cn.x, cn.y, kNodeR,
-                       cur ? Paint::filled(fa(accent))
-                           : Paint::filledStroked(fa(palette::secondary()), fa(palette::border()), 1.5));
-            if (cur) drawCircle(t, cn.x, cn.y, kNodeR + 3.0, Paint::stroked(fa(accent), 1.5));
-            t.setFill(fa(cur ? palette::foreground() : palette::mutedForeground()));
+            if (easeCurrent)
+            {
+                // the highlight eases between nodes: the plain node, the accent faded in over it, the ring with it
+                const double k = currentAmount(i);
+                drawCircle(t, cn.x, cn.y, kNodeR, Paint::filledStroked(fa(palette::secondary()), fa(palette::border()), 1.5));
+                Color a1 = accent;
+                a1.a *= k;
+                if (k > 0.001)
+                {
+                    drawCircle(t, cn.x, cn.y, kNodeR, Paint::filled(fa(a1)));
+                    drawCircle(t, cn.x, cn.y, kNodeR + 3.0, Paint::stroked(fa(a1), 1.5));
+                }
+                t.setFill(fa(lerpColor(palette::mutedForeground(), palette::foreground(), k)));
+            }
+            else
+            {
+                drawCircle(t, cn.x, cn.y, kNodeR,
+                           cur ? Paint::filled(fa(accent))
+                               : Paint::filledStroked(fa(palette::secondary()), fa(palette::border()), 1.5));
+                if (cur) drawCircle(t, cn.x, cn.y, kNodeR + 3.0, Paint::stroked(fa(accent), 1.5));
+                t.setFill(fa(cur ? palette::foreground() : palette::mutedForeground()));
+            }
             const double lx = tr.x + kPadX + mMaxLane * kLaneW + 18.0 - panX();
             t.drawText(mNodes[i].label, lx, cn.y + 4.0, 12.0, font::sans());
         }

@@ -26,6 +26,7 @@
 #include "widgets/SettingsSheet.h"
 #include "../../cosmo/widgets/ConfirmDialog.h"
 #include "../../cosmo/widgets/ContextMenu.h"
+#include "../../cosmo/widgets/HistoryView.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -64,6 +65,9 @@ namespace solaris_ui
         void openSongPicked(const std::string &path);
         void newSongPicked(const std::string &path);
         void openSettings();
+        /** R-HIST-3: Edit ▸ Show History Tree… — cosmo's history view over the model's tree. */
+        void openHistory();
+        cosmo_v2::HistoryView &historyView() { return *mHistory; }
         /** Home, behind cosmo's ConfirmDialog when the song has unsaved changes. */
         void requestHome();
 
@@ -95,6 +99,8 @@ namespace solaris_ui
         static const solaris::AppModel &emptyModel();
         /** R-SET-4: the action a combo means on a keyboard ("song" or "roll") in the model's keymap, or "". */
         static std::string keyActionFor(const solaris::AppModel &m, const std::string &combo, const std::string &group);
+        static std::string keyHint(const solaris::AppModel &m, const std::string &action); // "   (Ctrl+Z)", or "" — the keymap's first key
+        void syncHistory(const solaris::AppModel &m); // the open tree view follows the model's tree
         bool songAction(const solaris::AppModel &m, const std::string &id); // true when it did something
 
         AppHooks mHooks;
@@ -105,6 +111,9 @@ namespace solaris_ui
         std::shared_ptr<cosmo_v2::ConfirmDialog> mConfirm;
         std::shared_ptr<cosmo_v2::ContextMenu> mMenu;  // cosmo's: a route, an effect, rename — modal while open
         std::shared_ptr<artboard::Segment> mModalRoot; // hosts cosmo's dialog: its advance is the tree's
+        std::shared_ptr<cosmo_v2::HistoryView> mHistory; // R-HIST-3: cosmo's history tree, modal while open
+        std::vector<int> mHistoryIds;                    // the view's node i is the model's history id mHistoryIds[i]
+        std::vector<std::string> mHistoryLabels;
         artboard::GestureRecognizer mRecognizer;
         std::string mScreen = "home";
         bool mScreenInit = false;

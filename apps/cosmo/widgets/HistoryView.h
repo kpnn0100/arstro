@@ -35,6 +35,18 @@ namespace cosmo_v2
 
         std::function<void(int)> onSelect;  // a node was clicked -> jump to it
 
+        /** OPT-IN (Solaris R-HIST-3): the current node's highlight EASES from the node it left to the node it
+         *  reaches instead of jumping there (design rule §1). Off by default, so cosmo draws as it always has. */
+        bool easeCurrent = false;
+        /** The line under the title. A host whose keys are settings says its own (Solaris R-SET-4). */
+        std::string hint = "click a node to jump  .  Ctrl+Z undo  .  Ctrl+Y redo";
+        // read-only, for a host's tests: the LIVE open amount, a node's centre (this segment's space) and how lit it is
+        double appearAmount() const { return mAppear.value(); }
+        int nodeCount() const { return (int)mNodes.size(); }
+        int current() const { return mCurrent; }
+        artboard::Point nodePoint(int i) const { return nodeCenter(i); }
+        double currentAmount(int i) const;
+
     protected:
         void onOverlay(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
@@ -70,6 +82,8 @@ namespace cosmo_v2
         bool mCloseHoverPrev = false, mWasOpen = false;
         artboard::AnimatedProperty mAppear{0.0};    // open/close fade + rise
         artboard::AnimatedProperty mCloseAmt{0.0};  // close-X lift fade
+        std::vector<artboard::AnimatedProperty> mCurAmt; // easeCurrent: each node's highlight, eased
+        std::vector<double> mCurLast;
         artboard::AnimatedProperty mPanXAnim{0.0};  // eased pan (glides toward mPanX/mPanY)
         artboard::AnimatedProperty mPanYAnim{0.0};
     };

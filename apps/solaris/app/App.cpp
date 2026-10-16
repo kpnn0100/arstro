@@ -39,6 +39,13 @@ namespace solaris_ui
         mConfirm = std::make_shared<cosmo_v2::ConfirmDialog>(palette::primary());
         mMenu = std::make_shared<cosmo_v2::ContextMenu>();
         mModalRoot = std::make_shared<Segment>();
+        mHistory = std::make_shared<cosmo_v2::HistoryView>();
+        mHistory->easeCurrent = true; // R-HIST-3: the highlight travels, it never jumps (design rule §1)
+        mHistory->onSelect = [this](int i) {
+            // a node clicked is ONE line; the view stays open and follows the model to it (syncHistory)
+            if (i >= 0 && i < (int)mHistoryIds.size()) dispatch("history jump " + std::to_string(mHistoryIds[(size_t)i]));
+        };
+        mModalRoot->addChild(mHistory);
         mModalRoot->addChild(mConfirm);
         mModalRoot->addChild(mMenu);
 
@@ -79,6 +86,12 @@ namespace solaris_ui
         buildMenus();
         mRecognizer.setSink([this](const Gesture &g) {
             if (mMenu->isOpen()) { mMenu->onGesture(g); return; }       // a modal owns input
+            if (mHistory->isOpen())
+            {
+                if (g.type == Gesture::Type::Scroll) mHistory->scrollBy(-g.delta.y / 40.0); // a notch is a row
+                else mHistory->onGesture(g);
+                return;
+            }
             if (g.type == Gesture::Type::RightClick && mScreen == "project" && !mConfirm->isOpen() && !mSettings->isOpen() &&
                 mProject->contextClick(g.pos))
                 return; // a window's parameter row: its menu (a slider would swallow the click)
@@ -152,16 +165,18 @@ namespace solaris_ui
     void App::refreshMenus(const solaris::AppModel &m)
     {
         const std::string key = m.undoLabel + "|" + m.redoLabel + "|" + (mProject->dockOpen() ? "1" : "0") + (mProject->browserOpen() ? "1" : "0") +
-                                (m.settings.metronome ? "1" : "0") + (m.settings.showIds ? "1" : "0");
-        if (key == mMenuKey) return; // labels change only when what they name does
+                                (m.settings.metronome ? "1" : "0") + (m.settings.showIds ? "1" : "0") + keyHint(m, "song.undo") + keyHint(m, "song.redo") +
+                                keyHint(m, "lanes.duplicate") + keyHint(m, "lanes.delete");
+        if (key == mMenuKey) return; // labels change only when what they name does — a re-keyed action too
         mMenuKey = key;
         auto &ms = mProject->bar().menus();
         const std::string undo = m.undoLabel.empty() ? "Undo" : "Undo " + m.undoLabel, redo = m.redoLabel.empty() ? "Redo" : "Redo " + m.redoLabel;
         ms.setItems(1, {
-            {undo + "   (Ctrl+Z)", [this] { dispatch("undo"); }},
-            {redo + "   (Ctrl+Y)", [this] { dispatch("redo"); }},
-            {"Duplicate Clip   (Ctrl+D)", [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip duplicate " + c); }},
-            {"Delete Clip   (Del)", [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip delete " + c); }},
+            {undo + keyHint(m, "song.undo"), [this] { dispatch("undo"); }},
+            {redo + keyHint(m, "song.redo"), [this] { dispatch("redo"); }},
+            {"Show History Tree\xE2\x80\xA6", [this] { openHistory(); }}, // R-HIST-3, as cosmo's History menu has it
+            {"Duplicate Clip" + keyHint(m, "lanes.duplicate"), [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip duplicate " + c); }},
+            {"Delete Clip" + keyHint(m, "lanes.delete"), [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip delete " + c); }},
         });
         ms.setItems(3, {
             {mProject->dockOpen() ? "Hide Mixer" : "Show Mixer", [this] { mProject->setDockOpen(!mProject->dockOpen()); mMenuKey.clear(); refreshMenus(mHooks.model ? mHooks.model() : emptyModel()); }},
@@ -181,7 +196,7 @@ namespace solaris_ui
     void App::layoutAll()
     {
         for (Segment *s : {(Segment *)mHome.get(), (Segment *)mProject.get(), (Segment *)mSettings.get(), (Segment *)mModalRoot.get(), (Segment *)mConfirm.get(),
-                           (Segment *)mMenu.get()})
+                           (Segment *)mMenu.get(), (Segment *)mHistory.get()})
         {
             s->x.set(0);
             s->y.set(0);
@@ -240,6 +255,48 @@ namespace solaris_ui
         dispatch("project new " + quote(p));
     }
 
+    void App::openHistory()
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        if (m.history.empty()) return; // no song: no tree
+        mHistoryIds.clear();
+        mHistoryLabels.clear();
+        std::vector<cosmo_v2::HistoryView::Node> nodes;
+        int cur = -1;
+        for (const auto &n : m.history)
+        {
+            int parent = -1;
+            for (size_t j = 0; j < mHistoryIds.size(); ++j)
+                if (mHistoryIds[j] == n.parent) parent = (int)j; // oldest first: a parent is always listed before its child
+            if (n.id == m.historyCurrent) cur = (int)nodes.size();
+            nodes.push_back(cosmo_v2::HistoryView::Node{parent, n.label});
+            mHistoryIds.push_back(n.id);
+            mHistoryLabels.push_back(n.label);
+        }
+        // the hint names this machine's keys (R-SET-4)
+        auto first = [&](const std::string &id) {
+            const std::string h = keyHint(m, id);
+            return h.empty() ? std::string() : h.substr(4, h.size() - 5); // "   (Ctrl+Z)" → "Ctrl+Z"
+        };
+        std::string hint = "click a node to jump";
+        if (!first("song.undo").empty()) hint += "  \xC2\xB7  " + first("song.undo") + " undo";
+        if (!first("song.redo").empty()) hint += "  \xC2\xB7  " + first("song.redo") + " redo";
+        mHistory->hint = hint;
+        mHistory->show(std::move(nodes), cur);
+    }
+
+    void App::syncHistory(const solaris::AppModel &m)
+    {
+        if (!mHistory->isOpen()) return;
+        if (m.history.empty()) { mHistory->hide(); return; } // the song closed
+        std::vector<int> ids;
+        std::vector<std::string> labels;
+        for (const auto &n : m.history) { ids.push_back(n.id); labels.push_back(n.label); }
+        if (ids != mHistoryIds || labels != mHistoryLabels) { openHistory(); return; } // a new tree (an edit from a shell): its snapshot
+        for (size_t i = 0; i < ids.size(); ++i)
+            if (ids[i] == m.historyCurrent && (int)i != mHistory->current()) mHistory->setCurrent((int)i); // the highlight eases there
+    }
+
     void App::openSettings()
     {
         dispatch("devices list"); // the device chips are what is connected NOW
@@ -271,6 +328,7 @@ namespace solaris_ui
         mHome->bind(m);
         mProject->bind(m);
         mSettings->bind(m);
+        syncHistory(m);
         refreshMenus(m);
         if (m.settings.reducedMotion != mAppReducedMotion)
         {
@@ -284,7 +342,7 @@ namespace solaris_ui
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         if (m.revision != mBoundRevision || m.transport.playing || m.audition.playing || m.audition.playing != mBoundAudition) return true;
         if (mHome->opacity.isAnimating() || mProject->opacity.isAnimating() || mToast.isAnimating() || mToast.value() > 0.0) return true;
-        if (mSettings->appearAmount() > 0.0 || mMenu->isOpen()) return true;
+        if (mSettings->appearAmount() > 0.0 || mMenu->isOpen() || mHistory->appearAmount() > 0.0) return true;
         return nowMs - mLastActivityMs < kActiveWindowMs;
     }
 
@@ -328,6 +386,15 @@ namespace solaris_ui
         if (mConfirm->isOpen()) { mConfirm->handleKey(e); return true; }
         if (mSettings->isOpen()) return mSettings->handleKey(e);
         if (e.type != KeyEvent::Type::Down) return false;
+        if (mHistory->isOpen())
+        {
+            // R-HIST-3: modal — Escape closes it; the undo and redo keys walk the tree it shows
+            if (e.keyCode == 27 && !e.ctrl && !e.alt && !e.shift) { mHistory->hide(); return true; }
+            const auto &hm = mHooks.model ? mHooks.model() : emptyModel();
+            const std::string id = keyActionFor(hm, solaris::comboText(e.keyCode, e.ctrl, e.alt, e.shift), "song");
+            if (id == "song.undo" || id == "song.redo") return songAction(hm, id);
+            return true;
+        }
         // R-SET-4: the combo is looked up in the model's keymap — the keys are this machine's settings
         const std::string combo = solaris::comboText(e.keyCode, e.ctrl, e.alt, e.shift);
         if (combo.empty()) return false;
@@ -336,6 +403,14 @@ namespace solaris_ui
             if (PianoRoll *r = mProject->windows().frontRoll())
                 if (r->action(keyActionFor(m, combo, "roll"))) return true;
         return songAction(m, keyActionFor(m, combo, "song"));
+    }
+
+    std::string App::keyHint(const solaris::AppModel &m, const std::string &action)
+    {
+        // a menu names the key the keymap has NOW (R-SET-4) — re-keyed, the hint follows; no key, no hint
+        for (const auto &k : m.settings.keys)
+            if (k.id == action && !k.keys.empty()) return "   (" + k.keys.front() + ")";
+        return std::string();
     }
 
     std::string App::keyActionFor(const solaris::AppModel &m, const std::string &combo, const std::string &group)

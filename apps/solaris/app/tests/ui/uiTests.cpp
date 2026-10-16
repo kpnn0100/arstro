@@ -961,6 +961,57 @@ static void test_the_keyboard_section()
     pass("The sheet's Keyboard section (R-SET-4): a key clicked listens (eased) for the next, \"+\" for one more; Escape cancels, Backspace removes, a key another action has is refused and said; keys grow in and shrink out; Reset is one line");
 }
 
+static void test_the_history_tree()
+{
+    // R-HIST-3: Edit ▸ Show History Tree… — cosmo's own view over the model's tree; a node clicked is ONE line
+    sltest::Rig r("ui-history", 1280, 800);
+    r.cmd("project new " + r.song("Hist") + ".slp --bpm 120");
+    r.cmd("clip add --instrument drums --at 0 --length 4"); // node 1
+    r.cmd("set ch_2.gain=-3");                              // node 2
+    r.cmd("undo");
+    r.cmd("set ch_2.pan=0.5");                              // node 3: a branch beside 2
+    r.settle();
+    auto &ms = r.app->project().bar().menus();
+    r.click(world(ms, ms.titleRect(1)));                    // Edit
+    r.settle();
+    r.click(world(ms, ms.itemRect(1, 2)));                  // Show History Tree…
+    auto &hv = r.app->historyView();
+    assert(hv.isOpen() && hv.nodeCount() == 4 && hv.current() == 3);
+    r.frame();
+    r.frame();
+    assert(hv.appearAmount() > 0.0 && hv.appearAmount() < 1.0); // it fades in, caught
+    r.settle();
+    // a node clicked: `history jump`, the view stays open, the highlight travels from the old node to the new
+    const artboard::Point p = hv.nodePoint(2);
+    r.click(p.x, p.y);
+    assert(r.sent.back() == "history jump 2" && r.svc->model().historyCurrent == 2 && hv.isOpen());
+    double lit = 0.0;
+    for (int k = 0; k < 20 && lit == 0.0; ++k) { r.frame(); lit = hv.currentAmount(2); }
+    assert(lit > 0.0 && lit < 1.0 && hv.currentAmount(3) > 0.0 && hv.currentAmount(3) < 1.0);
+    r.settle();
+    assert(hv.currentAmount(2) == 1.0 && hv.currentAmount(3) == 0.0);
+    // the undo key walks the tree it shows
+    r.key('Z', true);
+    assert(r.sent.back() == "undo" && r.svc->model().historyCurrent == 1);
+    r.settle();
+    assert(hv.current() == 1);
+    // an edit made elsewhere (a script) while it is open: it shows the new tree
+    r.cmd("set ch_2.gain=-6");                              // node 4: a third branch under 1
+    r.settle();
+    assert(hv.nodeCount() == 5 && hv.current() == 4);
+    // Escape closes it, eased; any other key does nothing while it is open
+    const size_t mark = r.sent.size();
+    r.key(32);
+    assert(r.sent.size() == mark);
+    r.key(27);
+    r.frame();
+    r.frame();
+    assert(!hv.isOpen() && hv.appearAmount() > 0.0 && hv.appearAmount() < 1.0);
+    r.settle();
+    assert(hv.appearAmount() == 0.0);
+    pass("The history tree (R-HIST-3): Edit ▸ Show History Tree… opens cosmo's view over the model's tree, eased; a node clicked is ONE `history jump` and the highlight travels; the undo key walks it; a script's edit shows; Escape closes it");
+}
+
 static void test_space_returns_and_ctrl_space_stays()
 {
     // R-TIME-7/8: Space stops back where the time bar was put; Ctrl+Space stops where it is; the cue is marked
@@ -2679,6 +2730,7 @@ int main()
     test_space_returns_and_ctrl_space_stays();
     test_the_keys_are_the_machines();
     test_the_keyboard_section();
+    test_the_history_tree();
     test_home_unsaved_confirm_and_recents();
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();

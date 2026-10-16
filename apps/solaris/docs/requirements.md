@@ -587,6 +587,21 @@ does and the next node becomes the root. L2 `test_history_is_a_tree` (a branch k
 the root, a drag one node, the cap, a song opened its own root). Mutants: a new edit dropping the undone branch (the
 old stack), redo taking the oldest branch, pruning the root before an old branch — all seen red.
 
+### DR-HIST-2 The tree, seen (R-HIST-3)
+Edit ▸ Show History Tree… (`app/App.cpp:177`, as cosmo's History menu has it) is `App::openHistory` (`:258`): cosmo's
+own `HistoryView` — compiled from `apps/cosmo/widgets`, never copied — shown over a snapshot of the model's
+`history[]` (a node's parent mapped to its index; the hint under the title names this machine's undo and redo keys,
+R-SET-4). It is modal: the gesture sink gives it every gesture while it is open (`:89`; a wheel notch pans a row),
+Escape closes it, and only the undo and redo keys pass through, walking the tree it shows (`App::key`, `:391`). A
+node clicked is ONE `history jump <id>`; the view stays open, and when the model comes back `syncHistory` (`:288`)
+moves its current node there — or, if the tree itself changed (an edit from a script while it is open), shows the
+new snapshot. Solaris opts in to `easeCurrent` (cosmo `widgets/HistoryView.cpp:187`): the highlight EASES from the
+node it leaves to the node it reaches (200 ms) instead of jumping; cosmo leaves it off. Its open and close fade and
+its pan glides as cosmo's do. The Edit menu's other items name the keymap's keys now (`keyHint`, `:408`), so a
+re-keyed undo shows its new key. UI `test_the_history_tree` (opened from the menu, caught fading in; a click is one
+line and the highlight caught mid-way between the two nodes; the undo key walks it; a script's edit shows; Escape
+closes it, eased); shots `history-tree`, `history-tree-jumping`. Mutant: a highlight that snaps — seen red.
+
 
 ### DR-UI-9 The song bar's menus and Settings beside Home (R-UI-3 amended)
 `SongBar` (`app/widgets/SongBar.cpp`): wordmark · Home · Settings · cosmo's `MenuStrip` (laid out by

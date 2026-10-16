@@ -408,7 +408,7 @@ audio devices so the user can take advantage of their devices."*
 
 ---
 
-## R-HIST — the history is a tree, as cosmo's (user request, 2026-10-16: *"need to have tree history like cosmo"*) — 🚧 IN PROGRESS (1, 2 ✅ DR-HIST-1; 3 with K4; 4 asked)
+## R-HIST — the history is a tree, as cosmo's (user request, 2026-10-16: *"need to have tree history like cosmo"*) — ✅ IMPLEMENTED (1, 2 DR-HIST-1; 3 DR-HIST-2) — 4 asked of the user
 
 Cosmo keeps an image's edits as a branching tree (cosmo DR-HIST-1…3): undo walks to the parent, an edit made
 there starts a NEW branch and leaves the old future as it was, and History ▸ Show History Tree… draws it

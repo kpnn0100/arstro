@@ -682,7 +682,11 @@ most-recent branches.
 ### DR-HIST-2 Navigation
 `undo()` → parent; `redo()` → the highest-`seq` child (newest branch); `jumpToHistory(node)` →
 any node. The History modal (`widgets/HistoryView`, Show History Tree…) draws the tree git-log
-style, click-to-jump, drag-to-pan, painted in the overlay pass while modal.
+style, click-to-jump, drag-to-pan, painted in the overlay pass while modal. Two OPT-IN members for a host
+that reuses it (Solaris R-HIST-3, 2026-10-16): `easeCurrent` eases the current node's highlight from the node it
+leaves to the node it reaches (200 ms) instead of jumping, and `hint` replaces the line under the title (a host whose
+keys are settings names its own). Cosmo leaves both at their defaults, so it draws exactly as before; the read-only
+`appearAmount`, `nodeCount`, `current`, `nodePoint` and `currentAmount` are for a host's tests.
 
 ### DR-HIST-3 History persists with the project
 `saveWorkspaceAs` writes each image's full history after its current-params block; `readWorkspaceFile`
