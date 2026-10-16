@@ -504,7 +504,7 @@ static void test_an_instruments_face_is_an_analog_panel()
     r.settle();
     auto &p = *wl.devicePanel("dv_1");
     auto *f = p.face();
-    assert(f && f->sectionCount() == 6 && f->sectionTitle(0) == "Oscillator 1" && f->sectionTitle(5) == "Mix & Output");
+    assert(f && f->sectionCount() == 8 && f->sectionTitle(0) == "Oscillator 1" && f->sectionTitle(5) == "Voice" && f->sectionTitle(7) == "Mix & Output");
     assert(wl.window("dev:dv_1")->width.value() >= 800.0);                   // opened wide enough for its modules
     // a shell's change turns the knob there — caught mid-turn — and lights it
     const double res0 = f->turnLive("filter.res");
@@ -531,7 +531,11 @@ static void test_an_instruments_face_is_an_analog_panel()
     r.click(cx(vol), cy(vol));
     r.click(cx(vol), cy(vol));
     r.settle();
-    assert(sentLine(r, "set dv_1.volume=-12") && r.svc->model().strips[0].devices[0].params[(size_t)f->controlIndex("volume")].name == "volume");
+    // (the face's control order is its modules', not the registry's: the parameter is found by name)
+    double volume = 0.0;
+    for (const auto &pm : r.svc->model().strips[0].devices[0].params)
+        if (pm.name == "volume") volume = pm.value;
+    assert(sentLine(r, "set dv_1.volume=-12") && volume == -12.0);
     // its menu on a right-click (R-WIN-3): Create Automation binds it
     const artboard::Rect cut = world(*f, f->dialRect(f->controlIndex("filter.cutoff")));
     r.click(cx(cut), cy(cut), 2);
@@ -549,9 +553,12 @@ static void test_an_instruments_face_is_an_analog_panel()
     r.drag(cx(cut), cy(cut), cx(cut), cy(cut) - 40.0, 5);
     r.settle();
     assert(r.sent.size() == n);
-    // the modules flow: one a row in a narrow window, the sources together in a wide one
+    // the modules flow: wrapped in a narrow window — nothing spills, the oscillators alone (two small modules, Voice
+    // and Vibrato, may share a row) — the sources together in a wide one
     f->layoutFor(390.0);
-    for (int k = 0; k < f->sectionCount(); ++k) assert(f->sectionRect(k).x == arstro::solaris_ui::AnalogFace::kPad);
+    for (int k = 0; k < f->sectionCount(); ++k)
+        assert(f->sectionRect(k).x >= arstro::solaris_ui::AnalogFace::kPad && f->sectionRect(k).right() <= 390.0 - arstro::solaris_ui::AnalogFace::kPad + 0.5);
+    assert(f->sectionRect(0).x == arstro::solaris_ui::AnalogFace::kPad && f->sectionRect(1).x == arstro::solaris_ui::AnalogFace::kPad);
     f->layoutFor(980.0);
     assert(f->sectionRect(0).y == f->sectionRect(1).y && f->sectionRect(1).y == f->sectionRect(2).y);
     r.settle();

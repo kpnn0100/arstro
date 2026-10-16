@@ -173,22 +173,28 @@ namespace
         assert(f && p.rowCount() == (int)t.params.size());                      // every registry parameter (law 2)
         assert(f->isKnob(f->controlIndex("filter.cutoff")) && !f->isKnob(f->controlIndex("osc1.wave"))); // a choice is a switch
         assert(r.editor.width() == InstrumentEditor::kFaceWidth && r.editor.height() > 400.0 && r.editor.height() < 700.0);
-        const char *titles[] = {"Oscillator 1", "Oscillator 2", "Filter", "Filter Envelope", "Amplifier", "Mix & Output"};
+        // the DSP's REQ-synth2-7/-8 brought Voice (mode, glide, bend) and Vibrato with no Solaris code (law 2)
+        const char *titles[] = {"Oscillator 1", "Oscillator 2", "Filter", "Filter Envelope", "Amplifier", "Voice", "Vibrato", "Mix & Output"};
         using S = arstro::solaris_ui::AnalogFace::Screen;
-        const S screens[] = {S::Wave, S::Wave, S::Filter, S::Envelope, S::Envelope, S::None};
-        assert(f->sectionCount() == 6);
-        for (int k = 0; k < 6; ++k) assert(f->sectionTitle(k) == titles[k] && f->sectionScreen(k) == screens[k]);
-        // at its width the modules share rows: the three sources and the filter on one, the envelopes and the mix on the next
-        assert(f->sectionRect(0).y == f->sectionRect(2).y && f->sectionRect(3).y > f->sectionRect(2).y && f->sectionRect(3).y == f->sectionRect(5).y);
+        const S screens[] = {S::Wave, S::Wave, S::Filter, S::Envelope, S::Envelope, S::None, S::None, S::None};
+        assert(f->sectionCount() == 8);
+        for (int k = 0; k < 8; ++k) assert(f->sectionTitle(k) == titles[k] && f->sectionScreen(k) == screens[k]);
+        // at its width the modules share rows: the sources and the filter on one; the envelopes, the voice and the
+        // vibrato on the next; the mix on the last
+        assert(f->sectionRect(0).y == f->sectionRect(2).y && f->sectionRect(3).y > f->sectionRect(2).y && f->sectionRect(3).y == f->sectionRect(6).y);
+        assert(f->sectionRect(7).y > f->sectionRect(6).y);
         assert(!p.songControls && r.editor.model().strips[0].devices[0].label == "Basic Synth");
         assert(f->contentHeight() <= p.height.value() - p.bodyTop() + 1.0); // no scroll at its own size
         r.write("plugin-editor-synth");
         r.resize(InstrumentEditor::kMinWidth, InstrumentEditor::kMinHeight); // R4: the least a host may make it — the modules wrap
         r.settle();
         assert(r.editor.width() == InstrumentEditor::kMinWidth && p.width.value() == InstrumentEditor::kMinWidth);
-        for (int k = 0; k < f->sectionCount(); ++k) assert(f->sectionRect(k).x == arstro::solaris_ui::AnalogFace::kPad); // one a row
+        // the modules wrap: none spills past the width; the wide ones stand alone, two small ones may share a row
+        for (int k = 0; k < f->sectionCount(); ++k)
+            assert(f->sectionRect(k).x >= arstro::solaris_ui::AnalogFace::kPad && f->sectionRect(k).right() <= p.width.value() - arstro::solaris_ui::AnalogFace::kPad + 0.5);
+        assert(f->sectionRect(0).x == arstro::solaris_ui::AnalogFace::kPad && f->sectionRect(1).x == arstro::solaris_ui::AnalogFace::kPad);
         r.write("plugin-editor-synth-small");
-        pass("the synth's editor is its analog face: six modules titled by the registry, knobs and switches, wave/filter/envelope screens; two rows at its own size (980 wide), one module a row at its minimum (R-UI-12)");
+        pass("the synth's editor is its analog face: eight modules titled by the registry, knobs and switches, wave/filter/envelope screens; three rows at its own size (980 wide), wrapped at its minimum with nothing spilling (R-UI-12)");
     }
 
     void test_a_drag_is_the_hosts_edit_with_the_shared_mapping()

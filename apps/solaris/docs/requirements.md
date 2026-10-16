@@ -1002,7 +1002,7 @@ place (`:620`). **Decision:** the deepest zoom rose from 320 px/beat so that 1/3
 a bar below 11.5 px/beat, a beat from 11.5, 1/2 from 22.4 (a song opens at 28: bars, beats and halves
 drawn, the step 1/2), 1/4 from 55, 1/8 from 107, 1/16 from 209, 1/32 from 408, nothing at 637.
 
-**Proof.** `test_the_grid_follows_the_zoom` (`app/tests/ui/uiTests.cpp:2063`) drives the real service:
+**Proof.** `test_the_grid_follows_the_zoom` (`app/tests/ui/uiTests.cpp:2070`) drives the real service:
 at the default zoom a ruler click at beat 3.3 seeks 3.5 (a fixed quarter says 3.25); a level's alpha
 is caught mid-fade during an eased two-notch zoom, between its two ends; at 1/8 a seek, a clip drag
 (on the step while held, then `clip move ac_1 --at 3.125`) and an instrument dropped from the browser
@@ -1052,7 +1052,7 @@ curve at the heard position at beats 2…12 and falling, a link (`=ch_2.gain / 2
 formula `1000 + 500 * sin(beat)` within 25 Hz; after a structural edit while playing the new engine's order is
 read; 0 allocations on the audio thread. Mutants: `pump` ignoring the player → stuck at 0 dB at beat 2;
 `bindValues()` copied on the audio thread → 1019 allocations. UI `test_the_mixers_numbers_bind_from_the_dock`
-(`app/tests/ui/uiTests.cpp:1846`): a fader's right-click is the parameter menu, Create Automation is `auto create
+(`app/tests/ui/uiTests.cpp:1853`): a fader's right-click is the parameter menu, Create Automation is `auto create
 ch_2.gain` and the tag fades in (caught mid-tween); Formula… on a pan sends `set ch_3.pan="=0.25 - 0.75"` and
 the knob EASES onto −0.5; a send copies `-8.0 dB` and `=sd_1.gain`; the master copies `project.masterGain`;
 Clear Binding fades the tag out; playing, the fader equals `faderPos(live)` every frame and moves. Mutants:
@@ -1086,7 +1086,7 @@ a third-party VST3's parameter list (R-VST-6) builds a `ParamTarget` per row and
 
 Measured. L2 (`test_the_machine_settings_folders_devices_and_recents`): `settings set showIds=on` reaches the
 model and the file and a second process reads it; `showIds=yes` is refused. UI `test_ids_shown_and_copied`
-(`app/tests/ui/uiTests.cpp:1944`): View › Show IDs sends `settings set showIds=on`, the ids' amount caught between 0
+(`app/tests/ui/uiTests.cpp:1951`): View › Show IDs sends `settings set showIds=on`, the ids' amount caught between 0
 and 1, then 1, the item reads Hide IDs; a shell's `showIds=off` fades them out the same way; a parameter row
 copies `dv_1.filter.cutoff`, `900 Hz`, `=dv_1.filter.cutoff` (toasted); a choice row offers no "as Formula";
 a clip copies `ac_1`, an automation `=au_1` and `au_1`. Mutant: the ids SET instead of eased → the mid-tween
@@ -1470,7 +1470,7 @@ nothing eases back. The brace is the pointer's while held (`loopSpan`, `loopRect
 kept or resized never shorter than one step, and ONE `transport loop <a> <b>` goes on release (`:692`),
 the brace placed where it was let go so the model's echo moves nothing.
 
-Guarded by `test_the_ruler_is_dragged` (`app/tests/ui/uiTests.cpp:1669`): held, the playhead equals the
+Guarded by `test_the_ruler_is_dragged` (`app/tests/ui/uiTests.cpp:1676`): held, the playhead equals the
 snapped pointer beat exactly and four or more seeks were sent; let go, it stays; PLAYING, it stays the
 pointer's frame after frame and the song plays on from there; the brace moved 4–8 → 6–10, nothing sent
 until release, then one line; resized by its right end, clamped at its left; a click still seeks. Mutants
@@ -1649,10 +1649,10 @@ and the hit flashes and dies away like the sound (`advance`, `:174`); the panel 
 group begins at the top (`DevicePanel::revealGroup`, `app/widgets/DevicePanel.cpp:414`, called at `:33`).
 Playing a pad edits nothing.
 
-Guarded by `test_a_pad_plays_and_shows_its_parameters` (`plugins/tests/editorTests.cpp:327`: the pads are
+Guarded by `test_a_pad_plays_and_shows_its_parameters` (`plugins/tests/editorTests.cpp:333`: the pads are
 the registry's, Closed Hat joined to `chat`; a press plays 42 at 100, the release 42 at 0; flash and pick
 caught mid-ease; the CHAT group at the top of the rows; no edit) and `test_a_pad_is_heard_through_the_processor`
-(`:372`: the REAL processor and controller connected by the SDK's host classes — silence, then a pad clicked
+(`:378`: the REAL processor and controller connected by the SDK's host classes — silence, then a pad clicked
 in the editor heard as the kick at the next block, peak 0.358). Mutants seen red, then restored: a pad not
 played, the pick snapped, the least scroll instead of the group, the controller never sending the note.
 **Live (L5):** in `vst3_editorhost` a click on Closed Hat picked it and brought the CHAT group to the top.
@@ -1699,9 +1699,9 @@ Guarded by `solaris_app_ui` (`test_an_instruments_face_is_an_analog_panel`, `app
 titled modules, a window ≥ 800 wide; a shell's change caught mid-turn and lit; a key's light caught mid-slide;
 a double-click's default; the menu's Create Automation, after which the knob names `au_1` and takes no drag; the
 flow at 390 and 980; an effect's list) and `solaris_plugin_editor` (`plugins/tests/editorTests.cpp:164`: the
-modules, screens and rows at 980, one a row at the minimum; `:194` a knob dragged up → beginEdit once, performEdit
-= the shared mapping of each value, strictly rising, endEdit, Shift 5× finer, a key's choice; `:251` the host's
-change caught mid-turn and a choice's light mid-slide; `:279` the filter screen against the filter). Mutants seen
+modules, screens and rows at 980, one a row at the minimum; `:200` a knob dragged up → beginEdit once, performEdit
+= the shared mapping of each value, strictly rising, endEdit, Shift 5× finer, a key's choice; `:257` the host's
+change caught mid-turn and a choice's light mid-slide; `:285` the filter screen against the filter). Mutants seen
 red, then restored: a knob that snaps, a light that snaps, a bound knob that drags, the screen's Q drifting.
 Shots `device-panel` (the face), `device-face-turning` (mid-turn and mid-morph), `effect-window`
 (`app/tests/shots/renderShots.cpp:234`, `:245`), and the plugin's `plugin-editor-synth.png` — looked at.
@@ -1920,4 +1920,18 @@ Count-in. L2 `test_record_the_keyboard_into_a_clip` (a bar of count-in clicking 
 it dropped; two notes at beats 5 and 6 on the 1/4 grid, velocities kept, the clip at bar 2, one bar long; one undo;
 overdub adds a third; nothing played; refusals — stable over three runs); UI: Record refused with nothing armed
 (toasted), lit, stopped; shot `recording`. Mutants: no quantize; the count-in not counted back by `heard` — red.
+
+### DR-INST-6 Glide and the wheels in the instruments (R-INST-6; R-MIDI-3's DSP half)
+The DSP library's Basic Synth gained `voice.mode` (poly · mono · legato), `voice.glide` (ms), `voice.bend` (the
+pitch wheel's range, 2 semitones) and `vibrato.depth` / `vibrato.rate` (the mod wheel's vibrato), and every
+instrument device the `pitchBend(−1…+1)` / `modWheel(0…1)` seam — the Sampler bending its rate, a kit and the piano
+ignoring them (DSP `9d99565`: REQ-inst-expr-1, REQ-synth2-7, REQ-synth2-8; pitch moved on an absolute 32-sample grid,
+so a render is the same however time is chopped). Solaris has them with NO code of its own (law 2): the registry
+gives the `.slp` keys, the addresses (`set dv_1.voice.mode=legato`), the API lines and the device window — the
+synth's analog face grew from six modules to eight, Voice (the mode a switch, Glide and Bend Range knobs) and
+Vibrato, in three rows at its 980-wide size with no scroll, wrapping without spilling when narrow. The wheels are
+reached by the engine through the device seam; the keyboard's own wheels and their lanes are N11 (R-MIDI-3). Guarded
+by the DSP suites and the face tests (`test_an_instruments_face_is_an_analog_panel`, the plugin editor's
+`test_the_synth_editor_is_the_registry_in_the_arstro_look`: eight titled modules; a parameter found by NAME, since
+the face orders its controls by module, not by the registry).
 

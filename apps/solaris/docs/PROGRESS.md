@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N10 — DSP: pitch bend and mod wheel in the instruments; glide / legato in the Basic Synth** (R-MIDI-3's DSP half, R-INST-6), then N11… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
+**► N11 — expression lanes: pitch bend and CC on a note clip, in the roll, recorded** (R-MIDI-3), then N12… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
 
 ---
 
@@ -434,8 +434,12 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       audio thread that runs, the sustain pedal, `strip arm` (the session's), the input monitor while stopped, the arm
       ring on a track's header, Settings › MIDI input. Part 2: `transport record` (a count-in pre-roll, notes where
       heard, the take landed at the stop as one undo — new clip or overdub), input quantize, the Record button.
-- [ ] **N10** DSP: pitch bend and mod wheel in the instruments; glide / legato in the Basic Synth (R-MIDI-3's DSP
+- [x] **N10** DSP: pitch bend and mod wheel in the instruments; glide / legato in the Basic Synth (R-MIDI-3's DSP
       half, R-INST-6).
+      — DSP `9d99565` (REQ-inst-expr-1, REQ-synth2-7, -8: an absolute control grid, glide linear in semitones, legato,
+      the wheels; 7 unit tests, `glide_and_bend`; 2 mutants red). DR-INST-6: Solaris has them with no code — the
+      face grew to eight modules. Found: two face tests assumed every module was wide (the small Voice and Vibrato
+      share a row when narrow) and one read a parameter by its face index (now by name).
 - [ ] **N11** Expression lanes: pitch bend and CC on a note clip, in the roll, recorded (R-MIDI-3).
 - [ ] **N12** Note tools: humanise, probability, grooves, scale lock, chord stamps, legato, arpeggiate (R-ROLL-11).
 - [ ] **N13** Markers and sections (R-ARR-1).

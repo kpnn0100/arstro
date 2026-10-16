@@ -498,6 +498,11 @@ Two oscillators and noise through a resonant filter and an amplitude envelope; 1
 | `amp.release` | 0.0 … 10000.0 ms | 250.0 ms |
 | `volume` | -60.0 … 6.0 dB | -12.0 dB |
 | `velocity` | 0.0 … 1.0 | 0.8 |
+| `voice.mode` | poly · mono · legato | poly |
+| `voice.glide` | 0.0 … 2000.0 ms | 0.0 ms |
+| `voice.bend` | 0.0 … 24.0 st | 2.0 st |
+| `vibrato.depth` | 0.0 … 2.0 st | 0.5 st |
+| `vibrato.rate` | 0.1 … 20.0 Hz | 5.5 Hz |
 
 ### `piano` — Piano (instrument)
 
@@ -611,6 +616,7 @@ Plays a recorded sound: pitched by the note (chromatic) or as recorded (one-shot
 | `release` | 1.0 … 5000.0 ms | 30.0 ms |
 | `level` | -40.0 … 12.0 dB | 0.0 dB |
 | `velocity` | 0.0 … 1.0 | 1.0 |
+| `bend` | 0.0 … 24.0 st | 2.0 st |
 
 ### `compressor` — Compressor (effect)
 
