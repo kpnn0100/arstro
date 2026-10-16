@@ -53,6 +53,7 @@ namespace solaris
             {EK::ProjectAutosaved, "project.autosaved", {"path"}, "The unsaved song was written beside it (`<song>.autosave`, R-SAFE-1)."},
             {EK::ProjectRecovery, "project.recovery", {"path", "age"},
              "The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2)."},
+            {EK::RecordFinished, "record.finished", {"clip", "notes"}, "A recording landed: its notes in this clip ('' — nothing was played) (R-MIDI-2)."},
             {EK::StripArmed, "strip.armed", {"strip"}, "The MIDI keyboard plays this strip now ('' — none); the session's, not the song's (R-MIDI-2)."},
             {EK::MetersCleared, "meters.cleared", {}, "The clip lights and held peaks are out; the master's true peak and integrated loudness start again (R-METER-2)."},
         };

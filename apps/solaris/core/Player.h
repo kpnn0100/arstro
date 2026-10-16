@@ -97,6 +97,10 @@ namespace solaris
             int pitch = 0, velocity = 0;
         };
         void setRecording(bool on) { mRecording.store(on); }
+        /** R-MIDI-2: a count-in before the song — `frames` of silence clicked on its beats (the metronome forced on),
+         *  leading into `from` on the beat; set before `start`. While it runs `heard` counts back to `from`. */
+        void setCountIn(long long frames) { mCountIn.store(std::max(0LL, frames)); }
+        bool countingIn() const { return mCountIn.load() > 0; }
         bool takePlayed(Played &p) { return mPlayed.pop(p); } // the service's thread
         /** R-DEV-5: the device's underruns since `start` (−1: its driver cannot count them). */
         long long xruns() const { return mOut ? mOut->xruns() : -1; }
@@ -183,6 +187,7 @@ namespace solaris
         SustainPedal mPedal;
         std::bitset<128> mSounding;             // pitches held down on the armed strip
         int mArmedWas = -1;
+        std::atomic<long long> mCountIn{0};     // R-MIDI-2: frames of count-in still to play
         bool mClearNow = false;                 // the audio thread's: a ClearMeters message taken, for `measure`
         std::unique_ptr<Device> mClick;
         std::vector<Sample> mClickL, mClickR;

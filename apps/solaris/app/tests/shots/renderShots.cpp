@@ -711,6 +711,14 @@ namespace
                      r.settle();
                  }
              }},
+            {"recording", // R-MIDI-2: the Bass armed (its track's ring red), Record lit, the song playing
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("strip arm ch_3");
+                 r.settle();
+                 r.cmd("transport record");
+                 for (int k = 0; k < 40; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+             }},
             {"confirm-unsaved",
              [](sltest::Rig &r) {
                  songWithStrips(r, "Night Drive");

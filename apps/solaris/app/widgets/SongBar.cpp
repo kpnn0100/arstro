@@ -49,6 +49,7 @@ namespace solaris_ui
         mName = m.projectName.empty() ? "Untitled" : m.projectName;
         mDirty = m.dirty;
         mPlayingWanted = m.transport.playing;
+        mRecordingWanted = m.transport.recording; // R-MIDI-2
         mPosition = m.transport.position;
         mBpm = m.bpm;
         mBeatsPerBar = std::max(1, std::atoi(m.sig.c_str()));
@@ -64,6 +65,7 @@ namespace solaris_ui
         case kHome: return Rect{6.0, cy - 10.0, mWordW + 12.0, 20.0}; // the wordmark (R-UI-3 amended)
         case kSettings: return Rect{12.0 + mWordW + 12.0, cy - kBtnH * 0.5, 66.0, kBtnH};
         case kPlay: return Rect{transportX(), cy - kBtnH * 0.5, kPlayW, kBtnH};
+        case kRecord: return Rect{transportX() - 6.5 - kPlayW, cy - kBtnH * 0.5, kPlayW, kBtnH}; // R-MIDI-2: before Play
         case kSave: return Rect{W - 12.0 - 48.0, cy - kBtnH * 0.5, 48.0, kBtnH};
         case kBpm:
         {
@@ -78,7 +80,7 @@ namespace solaris_ui
 
     int SongBar::hitAt(const Point &p) const
     {
-        for (int i = kHome; i <= kBpm; ++i)
+        for (int i = kHome; i <= kRecord; ++i)
             if (hitRect(i).contains(p)) return i;
         return kNone;
     }
@@ -88,6 +90,7 @@ namespace solaris_ui
         if (!mInit)
         {
             mPlaying.set(mPlayingWanted ? 1.0 : 0.0);
+            mRecLit.set(mRecordingWanted ? 1.0 : 0.0);
             mDirtyDot.set(mDirty ? 1.0 : 0.0);
             mInit = true;
         }
@@ -105,6 +108,7 @@ namespace solaris_ui
         }
         mBpmShown.update(nowMs);
         toward(mPlaying, mPlayingWanted ? 1.0 : 0.0, motion::kCrossFadeMs);
+        toward(mRecLit, mRecordingWanted ? 1.0 : 0.0, motion::kCrossFadeMs);
         toward(mDirtyDot, mDirty ? 1.0 : 0.0, motion::kCrossFadeMs);
         for (int c = 0; c < 2; ++c)
         {
@@ -177,6 +181,7 @@ namespace solaris_ui
             {
             case kHome: if (onHome) onHome(); break;
             case kPlay: if (onPlayToggle) onPlayToggle(); break;
+            case kRecord: if (onRecordToggle) onRecordToggle(); break;
             case kSave: if (onSave) onSave(); break;
             case kSettings: if (onSettings) onSettings(); break;
             default: break;
@@ -219,13 +224,21 @@ namespace solaris_ui
         button(kSettings, "Settings", false);
 
         // the song's name, ellipsized against the space left before the transport; the unsaved dot after it
-        const double nameX = mMenus->x.value() + mMenus->contentWidth() + 14.0, nameMax = std::max(0.0, hitRect(kPlay).x - 24.0 - nameX);
+        const double nameX = mMenus->x.value() + mMenus->contentWidth() + 14.0, nameMax = std::max(0.0, hitRect(kRecord).x - 24.0 - nameX);
         const std::string nm = textfit::ellipsize(t, mName, nameMax, 12.0, font::sansMedium());
         t.setFill(palette::foreground());
         t.drawText(nm, nameX, textfit::baseline(cy, 12.0), 12.0, font::sansMedium());
         if (mDirtyDot.value() > 0.001)
             drawCircle(t, nameX + t.measureText(nm, 12.0, font::sansMedium()) + 8.0, cy, 3.0, Paint::filled(fade(palette::primary(), mDirtyDot.value())));
 
+        // R-MIDI-2: record — a red dot; lit while recording, eased
+        {
+            const Rect r = hitRect(kRecord);
+            const double hv = mHover.amount(kRecord), lit = mRecLit.value();
+            drawRoundedRect(t, r, radius::control(), Paint::filledStroked(lerpColor(palette::secondary(), fade(palette::destructive(), 0.3), lit),
+                                                                           lerpColor(palette::border(), palette::destructive(), 0.4 * hv + 0.6 * lit), 1.0));
+            drawCircle(t, r.x + r.w * 0.5, r.y + r.h * 0.5, 4.0, Paint::filled(lerpColor(lerpColor(palette::mutedForeground(), palette::destructive(), 0.6), palette::destructive(), lit)));
+        }
         // transport: play/stop cross-fade
         {
             const Rect r = hitRect(kPlay);

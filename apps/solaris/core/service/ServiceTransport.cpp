@@ -144,7 +144,19 @@ namespace solaris
             if (fresh) t.masterHold[c] = mPlayer->hold(2 * Player::kMaxStrips + c);
         }
         t.xruns = mPlayer->xruns(); // R-DEV-5: what the device says (−1: it cannot count them)
-        if (fresh && mPlayer->takeClip(Player::kMaxStrips)) mMasterClip = true; // a latch: only `meters clear` puts it out
+        if (fresh && mPlayer->takeClip(Player::kMaxStrips)) mMasterClip = true;
+        if (mRecording)
+        {
+            // R-MIDI-2: what the keyboard played, kept as it comes
+            Player::Played pl;
+            while (mPlayer->takePlayed(pl))
+            {
+                mTaken.push_back(pl);
+                if (pl.velocity > 0 && (double)pl.at / spb >= mRecordFrom - 0.5) ++t.recorded; // what will land (not a count-in's)
+            }
+            t.recording = true;
+            t.countingIn = mPlayer->countingIn();
+        } // a latch: only `meters clear` puts it out
         t.masterClip = mMasterClip;
         for (size_t i = 0; fresh && i < mLiveStrips.size() && i < (size_t)Player::kMaxStrips; ++i)
             if (mPlayer->takeClip((int)i)) mClipLatch.insert(mLiveStrips[i]);
@@ -322,9 +334,37 @@ namespace solaris
             pump();
             return true;
         }
+        case K::TransportRecord:
+        {
+            // R-MIDI-2: a play that keeps the armed strip's keyboard — landed at `transport stop`
+            if (!requireOpen(err)) return false;
+            if (mRecording) { err = "already recording — `transport stop` lands the take"; return false; }
+            if (mArmed.empty()) { err = "arm a strip first: `strip arm <ch>`"; return false; }
+            double bars = mSettings.countIn;
+            if (c.has("count-in") && (!parseNumber(c.flag("count-in"), bars) || bars < 0 || bars > 4 || bars != std::floor(bars)))
+            {
+                err = "--count-in is bars, 0 … 4";
+                return false;
+            }
+            Command play;
+            play.kind = K::TransportPlay;
+            if (c.has("from")) play.flags = {{"from", c.flag("from")}};
+            mCountInFrames = (long long)std::llround(bars * std::max(1, std::atoi(mProject.header.sig.c_str())) * spb);
+            if (!transportCommand(play, err)) { mCountInFrames = 0; return false; }
+            mPlayer->setRecording(true);
+            mRecording = true;
+            mOverdub = c.has("overdub");
+            mRecordStrip = mArmed;
+            mRecordFrom = mPosition;
+            mTaken.clear();
+            mModel.transport.recording = true;
+            mModel.transport.recorded = 0;
+            return true;
+        }
         case K::TransportPlay:
         {
             if (!requireOpen(err)) return false;
+            if (mRecording) { err = "recording — `transport stop` lands the take first"; return false; }
             if (!mHost.audioOut) { err = "this build cannot play audio (no output stream)"; return false; }
             if (c.has("from"))
             {
@@ -375,6 +415,8 @@ namespace solaris
             stopMonitor();                    // R-MIDI-2: one consumer of the keyboard at a time — the song's player now
             mPlayer = std::make_unique<Player>();
             if (mMidiQ) { mPlayer->setMidi(mMidiQ.get()); mPlayer->setArmed(armedIn(mLiveStrips)); }
+            mPlayer->setCountIn(mCountInFrames); // R-MIDI-2: a recording's count-in, else none
+            mCountInFrames = 0;
             mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(mLoopFrom * spb) : 0,
                              mLoopTo > mLoopFrom ? (long long)std::llround(mLoopTo * spb) : 0);
             mModel.transport.device = mSettings.output;
@@ -400,6 +442,15 @@ namespace solaris
             return true;
         }
         case K::TransportStop:
+        {
+            // R-MIDI-2: a recording's last notes, and where it stopped, before the player goes
+            long long stoppedAt = 0;
+            if (mRecording && mPlayer)
+            {
+                Player::Played pl;
+                while (mPlayer->takePlayed(pl)) mTaken.push_back(pl);
+                stoppedAt = mPlayer->heard();
+            }
             stopPlayer();
             endClipLoop();
             if (c.has("return")) mPosition = mCue; // R-TIME-7: back to where the time bar was put
@@ -411,12 +462,15 @@ namespace solaris
             mModel.transport.cue = mCue;
             mModel.transport.loopFrom = mLoopFrom;
             mModel.transport.loopTo = mLoopTo;
+            if (mRecording && !commitRecording(stoppedAt, err)) return false; // the take: an edit (dispatch restores on failure)
             startMonitor(); // R-MIDI-2: armed — the keyboard is heard again, through the monitor
             announce();
             return true;
+        }
         case K::TransportSeek:
         {
             if (!requireOpen(err)) return false;
+            if (mRecording) { err = "recording — `transport stop` lands the take first"; return false; }
             if (!parseNumber(c.arg(0), x) || x < 0) { err = "seek takes beats ≥ 0"; return false; }
             mPosition = toTick(x);
             mCue = mPosition; // R-TIME-7: the time bar, put here

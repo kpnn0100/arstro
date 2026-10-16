@@ -143,6 +143,17 @@ namespace solaris
                     next.driver = v;
                     mPipewireDown = false; // set again: PipeWire is tried again
                 }
+                else if (k == "recordQuantize")
+                {
+                    // R-MIDI-2: where a recorded note's start lands
+                    if (v != "off" && v != "1/4" && v != "1/8" && v != "1/16" && v != "1/32") { err = "recordQuantize is off, 1/4, 1/8, 1/16 or 1/32"; return false; }
+                    next.recordQuantize = v;
+                }
+                else if (k == "countIn")
+                {
+                    if (!parseNumber(v, x) || x < 0 || x > 4 || x != std::floor(x)) { err = "countIn is bars, 0 … 4"; return false; }
+                    next.countIn = (int)x;
+                }
                 else if (k == "midiInputs")
                 {
                     // R-MIDI-2: which keyboards Solaris listens to — reopened at once when it listens
@@ -181,9 +192,9 @@ namespace solaris
                 else
                 {
                     err = "no setting `" + k + "`";
-                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver", "midiInputs"});
+                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver", "midiInputs", "recordQuantize", "countIn"});
                     err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>, metronome, "
-                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, autosave, driver, midiInputs, key.<action>)")
+                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, autosave, driver, midiInputs, recordQuantize, countIn, key.<action>)")
                                         : " (did you mean: " + near[0] + "?)";
                     return false;
                 }
@@ -229,7 +240,7 @@ namespace solaris
                               .set("folders", folders).set("ports", ports).set("metronome", mSettings.metronome)
                               .set("metronomeLevel", mSettings.metronomeLevel).set("auditionLevel", mSettings.auditionLevel).set("newBpm", mSettings.newBpm)
                               .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion)
-                              .set("showIds", mSettings.showIds).set("autosave", mSettings.autosave).set("driver", mSettings.driver).set("midiInputs", mSettings.midiInputs).set("keys", [&] {
+                              .set("showIds", mSettings.showIds).set("autosave", mSettings.autosave).set("driver", mSettings.driver).set("midiInputs", mSettings.midiInputs).set("recordQuantize", mSettings.recordQuantize).set("countIn", mSettings.countIn).set("keys", [&] {
                                   Json keys = Json::array(); // only the re-keyed actions, as the file has them
                                   for (const auto &k : mSettings.keys) keys.push(Json::string(k.first + "=" + k.second));
                                   return keys;

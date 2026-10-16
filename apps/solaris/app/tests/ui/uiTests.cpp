@@ -690,7 +690,29 @@ static void test_an_instrument_track_is_armed_from_its_header()
     // the plain rows have none
     for (int i = 0; i < tl.rowCount(); ++i)
         if (tl.rowTrack(i).empty()) assert(tl.armRect(i).w == 0.0);
-    pass("Arm (R-MIDI-2): an instrument track's header arms its strip in ONE `strip arm` line, lit red (eased); again, `strip arm none`; plain rows have no button");
+    // Record, beside Play: nothing armed — refused, the toast says what to do
+    auto &bar = r.app->project().bar();
+    using arstro::solaris_ui::SongBar;
+    r.click(world(bar, bar.hitRect(SongBar::kRecord)));
+    r.settle();
+    assert(r.sent.back() == "transport record" && contains(r.app->toastText(), "arm a strip first"));
+    // armed: recording, lit red (eased); again, the stop that lands the take
+    r.click(world(tl, tl.armRect(row)));
+    r.settle();
+    r.click(world(bar, bar.hitRect(SongBar::kRecord)));
+    assert(r.sent.back() == "transport record" && r.svc->model().transport.recording);
+    r.frame();
+    r.frame();
+    assert(bar.recordAmount() > 0.0 && bar.recordAmount() < 1.0);
+    r.settle();
+    assert(bar.recordAmount() == 1.0);
+    r.click(world(bar, bar.hitRect(SongBar::kRecord)));
+    assert(r.sent.back() == "transport stop" && !r.svc->model().transport.recording);
+    r.settle();
+    assert(bar.recordAmount() == 0.0);
+    pass("Arm and Record (R-MIDI-2): an instrument track's header arms its strip in ONE `strip arm` line, lit red (eased); again, "
+         "`strip arm none`; plain rows have no button; Record beside Play is `transport record` (refused, toasted, with nothing "
+         "armed), lit while recording, and again the `transport stop` that lands the take");
 }
 
 static void test_the_export_sheet_is_one_render_line()

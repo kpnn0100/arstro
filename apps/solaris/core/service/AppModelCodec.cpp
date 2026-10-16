@@ -195,6 +195,8 @@ namespace solaris
             {"settings.showIds", "bool", "every object's id drawn beside its name (R-UI-11)"},
             {"settings.autosave", "int", "seconds between autosaves of an unsaved song; 0 = off (R-SAFE-1)"},
             {"settings.driver", "string", "pulse | pipewire: how the clock device is reached (R-DEV-9)"},
+            {"settings.recordQuantize", "string", "off | 1/4 | 1/8 | 1/16 | 1/32: where a recorded note's start lands (R-MIDI-2)"},
+            {"settings.countIn", "int", "bars of click before a recording, 0 … 4 (R-MIDI-2)"},
             {"settings.midiInputs", "string", "all | none | MIDI port names, comma-separated: the keyboards Solaris listens to (R-MIDI-2)"},
             {"armed", "string", "the strip the MIDI keyboard plays ('' none) — the session's, never saved (R-MIDI-2)"},
             {"midiDevices", "object[]", "this machine's MIDI inputs, as `midi devices` last listed them (R-MIDI-2)"},
@@ -228,6 +230,9 @@ namespace solaris
             {"transport.masterHold", "number[]", "the master's held peak, L/R", false},
             {"transport.masterClip", "bool", "the master reached full scale since `meters clear`", false},
             {"transport.driver", "string", "what the clock device plays through now: pulse | pipewire ('' stopped) — R-DEV-9", false},
+            {"transport.recording", "bool", "`transport record` is keeping the armed strip's keyboard (R-MIDI-2)"},
+            {"transport.countingIn", "bool", "… and its count-in still clicks", false},
+            {"transport.recorded", "int", "notes struck that will land (a count-in's are not)", false},
             {"transport.xruns", "int", "underruns since play (−1: this driver cannot count them) — R-DEV-5", false},
             {"loudness", "object", "the master as measured while playing, kept after a stop (R-METER-1, ITU-R BS.1770-4)", false},
             {"loudness.momentary", "number", "LUFS over the last 400 ms; −144 = nothing measured", false},
@@ -529,7 +534,8 @@ namespace solaris
                               .set("folders", strings(m.settings.folders)).set("ports", strings(m.settings.ports))
                               .set("metronome", m.settings.metronome).set("metronomeLevel", m.settings.metronomeLevel).set("auditionLevel", m.settings.auditionLevel)
                               .set("newBpm", m.settings.newBpm).set("newSig", m.settings.newSig).set("reducedMotion", m.settings.reducedMotion)
-                              .set("showIds", m.settings.showIds).set("autosave", m.settings.autosave).set("driver", m.settings.driver).set("midiInputs", m.settings.midiInputs).set("keys", keys));
+                              .set("showIds", m.settings.showIds).set("autosave", m.settings.autosave).set("driver", m.settings.driver).set("midiInputs", m.settings.midiInputs).set("recordQuantize", m.settings.recordQuantize)
+                              .set("countIn", m.settings.countIn).set("keys", keys));
         Json midi = Json::array();
         for (const auto &d : m.midiDevices) midi.push(Json::object().set("id", d.id).set("name", d.name).set("listening", d.listening));
         j.set("armed", m.armed).set("midiDevices", midi);
@@ -548,7 +554,9 @@ namespace solaris
             tr.set("masterPeak", Json::array().push(Json::number(m.transport.masterPeak[0])).push(Json::number(m.transport.masterPeak[1])))
                 .set("masterRms", Json::array().push(Json::number(m.transport.masterRms[0])).push(Json::number(m.transport.masterRms[1])))
                 .set("masterHold", Json::array().push(Json::number(m.transport.masterHold[0])).push(Json::number(m.transport.masterHold[1])))
-                .set("masterClip", m.transport.masterClip).set("driver", m.transport.driver).set("xruns", (int)m.transport.xruns);
+                .set("masterClip", m.transport.masterClip).set("driver", m.transport.driver).set("xruns", (int)m.transport.xruns)
+                .set("countingIn", m.transport.countingIn).set("recorded", m.transport.recorded);
+        tr.set("recording", m.transport.recording);
         j.set("transport", tr);
         if (!stable)
         {

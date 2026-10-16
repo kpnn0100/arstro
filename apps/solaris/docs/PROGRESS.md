@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N9 — a MIDI keyboard: ALSA sequencer input, arm, record, count-in, input quantize** (R-MIDI-2), then N10… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
+**► N10 — DSP: pitch bend and mod wheel in the instruments; glide / legato in the Basic Synth** (R-MIDI-3's DSP half, R-INST-6), then N11… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
 
 ---
 
@@ -429,10 +429,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       once primed); `openOutput` for every stream, PulseAudio the fallback, said once; `transport.driver` / `.xruns`;
       Settings › Audio › Driver. Ring tests + L2 + UI; live failure path checked with no device reached; 2 mutants red.
       Owed: playback on a PipeWire server (this machine's server is PulseAudio).
-- [~] **N9** A MIDI keyboard: devices, arm, play live, record into a clip, count-in, input quantize (R-MIDI-2).
+- [x] **N9** A MIDI keyboard: devices, arm, play live, record into a clip, count-in, input quantize (R-MIDI-2).
       — part 1 (DR-MIDI-2): ALSA input (live-tested through Midi Through), the service's lock-free queue drained by the
       audio thread that runs, the sustain pedal, `strip arm` (the session's), the input monitor while stopped, the arm
-      ring on a track's header, Settings › MIDI input. Part 2: `transport record`, count-in, input quantize.
+      ring on a track's header, Settings › MIDI input. Part 2: `transport record` (a count-in pre-roll, notes where
+      heard, the take landed at the stop as one undo — new clip or overdub), input quantize, the Record button.
 - [ ] **N10** DSP: pitch bend and mod wheel in the instruments; glide / legato in the Basic Synth (R-MIDI-3's DSP
       half, R-INST-6).
 - [ ] **N11** Expression lanes: pitch bend and CC on a note clip, in the roll, recorded (R-MIDI-3).

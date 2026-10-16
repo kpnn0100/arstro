@@ -115,6 +115,8 @@ namespace solaris
         mModel.settings.autosave = mSettings.autosave;
         mModel.settings.driver = mSettings.driver;
         mModel.settings.midiInputs = mSettings.midiInputs;
+        mModel.settings.recordQuantize = mSettings.recordQuantize;
+        mModel.settings.countIn = mSettings.countIn;
         mModel.recovery = mRecovery;
         mModel.recoveryAge = mRecoveryAge;
         for (const auto &a : keyActions())

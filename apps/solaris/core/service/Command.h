@@ -45,7 +45,7 @@ namespace solaris
             Render,
             MatrixPrint, Audit, StatePrint, Api,
             SettingsSet, SettingsPrint, FolderAdd, FolderRemove, FolderMove, DevicesList, Browse, RecentsRemove,
-            TransportPlay, TransportStop, TransportSeek, TransportLoop, Wait, Audition, NotePreview,
+            TransportPlay, TransportStop, TransportSeek, TransportLoop, TransportRecord, Wait, Audition, NotePreview,
             MetersClear, // R-METER-2
             MidiDevices  // R-MIDI-2
         };

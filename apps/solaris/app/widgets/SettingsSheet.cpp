@@ -31,14 +31,14 @@ namespace solaris_ui
         Color fade(Color c, double a) { c.a *= a; return c; }
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
         const char *kLabels[SettingsSheet::kRows] = {"Output", "Input", "Sample rate", "Buffer", "Metronome", "Click level",
-                                                     "Preview level", "Tempo", "Meter", "Reduced motion", "Autosave", "Driver", "MIDI input"};
+                                                     "Preview level", "Tempo", "Meter", "Reduced motion", "Autosave", "Driver", "MIDI input", "Record quantize", "Count-in"};
         const char *kKeys[SettingsSheet::kRows] = {"output", "input", "sampleRate", "bufferSize", "metronome", "metronomeLevel",
-                                                   "auditionLevel", "newBpm", "newSig", "reducedMotion", "autosave", "driver", "midiInputs"};
+                                                   "auditionLevel", "newBpm", "newSig", "reducedMotion", "autosave", "driver", "midiInputs", "recordQuantize", "countIn"};
         // the sections (R-SET-3, R-SET-5) and the rows each page holds
         const char *kTitles[SettingsSheet::kSections] = {"Audio", "Playback", "New songs", "Sample folders", "Interface", "Keyboard"};
         const std::vector<int> kPageRows[SettingsSheet::kSections] = {
             {SettingsSheet::kOutput, SettingsSheet::kInput, SettingsSheet::kRate, SettingsSheet::kBuffer, SettingsSheet::kDriver, SettingsSheet::kMidiIn},
-            {SettingsSheet::kMetronome, SettingsSheet::kClickLevel, SettingsSheet::kPreviewLevel},
+            {SettingsSheet::kMetronome, SettingsSheet::kClickLevel, SettingsSheet::kPreviewLevel, SettingsSheet::kRecQuant, SettingsSheet::kCountIn},
             {SettingsSheet::kNewBpm, SettingsSheet::kNewSig},
             {},
             {SettingsSheet::kMotion, SettingsSheet::kAutosave},
@@ -212,6 +212,8 @@ namespace solaris_ui
         for (const char *m : {"4/4", "3/4", "6/8", "7/8"}) mChips[kNewSig].push_back(Chip{m, m});
         mChips[kDriver] = {Chip{"PulseAudio", "pulse"}, Chip{"PipeWire \xE2\x80\x94 low latency", "pipewire"}}; // R-DEV-9
         mChips[kMidiIn] = {Chip{"Every MIDI input", "all"}, Chip{"None", "none"}};                         // R-MIDI-2
+        mChips[kRecQuant] = {Chip{"Off", "off"}, Chip{"1/4", "1/4"}, Chip{"1/8", "1/8"}, Chip{"1/16", "1/16"}, Chip{"1/32", "1/32"}};
+        mChips[kCountIn] = {Chip{"None", "0"}, Chip{"1 bar", "1"}, Chip{"2 bars", "2"}, Chip{"4 bars", "4"}};
         mChips[kAutosave] = {Chip{"Off", "off"}, Chip{"Every 30 s", "30"}, Chip{"Every minute", "60"}, Chip{"Every 2 minutes", "120"}, Chip{"Every 5 minutes", "300"}};
         mChips[kOutput] = mChips[kInput] = {Chip{"System default", ""}};
         for (int s = 0; s < kSections; ++s)
@@ -352,6 +354,8 @@ namespace solaris_ui
         case kAutosave: return mSettings.autosave > 0 ? std::to_string(mSettings.autosave) : std::string("off");
         case kDriver: return mSettings.driver;
         case kMidiIn: return mSettings.midiInputs;
+        case kRecQuant: return mSettings.recordQuantize;
+        case kCountIn: return std::to_string(mSettings.countIn);
         default: return std::string();
         }
     }
@@ -799,6 +803,8 @@ namespace solaris_ui
             if (r == kAutosave) note = "an unsaved song is kept beside it \xE2\x80\x94 recovered if Solaris stops";
             if (r == kDriver) note = "PipeWire for small buffers and counted xruns \xE2\x80\x94 PulseAudio if it will not open";
             if (r == kMidiIn) note = "the keyboard an armed strip plays";
+            if (r == kRecQuant) note = "where a recorded note's start lands";
+            if (r == kCountIn) note = "the click before a recording, the song waiting";
             if (r == kBuffer)
             {
                 char b[64];

@@ -833,6 +833,18 @@
       "requirement": "R-METER-2"
     },
     {
+      "verb": "transport record",
+      "usage": "transport record [--from <beats>] [--count-in <bars>] [--overdub]",
+      "args": "",
+      "flags": [
+        "from=<beats>",
+        "count-in=<bars>",
+        "overdub"
+      ],
+      "summary": "Play and record the armed strip's keyboard (R-MIDI-2): at `transport stop` what was played becomes a new note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes it back. --count-in (else `settings countIn`) bars of click first, the song waiting.",
+      "requirement": "R-MIDI-2"
+    },
+    {
       "verb": "transport loop",
       "usage": "transport loop <from|off> [to]",
       "args": "<from|off> [to]",
@@ -1015,6 +1027,14 @@
         "age"
       ],
       "summary": "The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2)."
+    },
+    {
+      "name": "record.finished",
+      "fields": [
+        "clip",
+        "notes"
+      ],
+      "summary": "A recording landed: its notes in this clip ('' — nothing was played) (R-MIDI-2)."
     },
     {
       "name": "strip.armed",
@@ -2141,6 +2161,18 @@
       "stable": true
     },
     {
+      "path": "settings.recordQuantize",
+      "type": "string",
+      "summary": "off | 1/4 | 1/8 | 1/16 | 1/32: where a recorded note's start lands (R-MIDI-2)",
+      "stable": true
+    },
+    {
+      "path": "settings.countIn",
+      "type": "int",
+      "summary": "bars of click before a recording, 0 … 4 (R-MIDI-2)",
+      "stable": true
+    },
+    {
       "path": "settings.midiInputs",
       "type": "string",
       "summary": "all | none | MIDI port names, comma-separated: the keyboards Solaris listens to (R-MIDI-2)",
@@ -2336,6 +2368,24 @@
       "path": "transport.driver",
       "type": "string",
       "summary": "what the clock device plays through now: pulse | pipewire ('' stopped) — R-DEV-9",
+      "stable": false
+    },
+    {
+      "path": "transport.recording",
+      "type": "bool",
+      "summary": "`transport record` is keeping the armed strip's keyboard (R-MIDI-2)",
+      "stable": true
+    },
+    {
+      "path": "transport.countingIn",
+      "type": "bool",
+      "summary": "… and its count-in still clicks",
+      "stable": false
+    },
+    {
+      "path": "transport.recorded",
+      "type": "int",
+      "summary": "notes struck that will land (a count-in's are not)",
       "stable": false
     },
     {

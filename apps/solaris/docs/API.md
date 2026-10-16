@@ -90,6 +90,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `transport seek <beats>` | Move the transport (playing or not). | R-TIME-4 |
 | `midi devices` | This machine's MIDI inputs (ALSA sequencer ports), each marked when Solaris listens to it — the names `settings set midiInputs=` takes. | R-MIDI-2 |
 | `meters clear` | Clear the meters: every clip light and held peak, and the master's true peak and integrated loudness start again (the song is not edited; a click on a clip light). | R-METER-2 |
+| `transport record [--from <beats>] [--count-in <bars>] [--overdub]` | Play and record the armed strip's keyboard (R-MIDI-2): at `transport stop` what was played becomes a new note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes it back. --count-in (else `settings countIn`) bars of click first, the song waiting. | R-MIDI-2 |
 | `transport loop <from\|off> [to]` | Loop between two beats while playing; `off` ends it. | R-TIME-4 |
 | `audition <file\|stop>` | Hear a sample now, outside the song (the browser's preview): through the output device at the audition level, to its end; `stop` ends it. Not an edit, never in a render. | R-EDM-9 |
 | `wait <seconds>` | Let time pass (playback goes on, the model's transport and meters update) — for scripts that listen. | R-PLAY-3 |
@@ -196,6 +197,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `note.previewed` | strip, pitch | A note was heard through a strip, outside the song (`note preview`, the piano roll's sound — R-ROLL-7). |
 | `project.autosaved` | path | The unsaved song was written beside it (`<song>.autosave`, R-SAFE-1). |
 | `project.recovery` | path, age | The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2). |
+| `record.finished` | clip, notes | A recording landed: its notes in this clip ('' — nothing was played) (R-MIDI-2). |
 | `strip.armed` | strip | The MIDI keyboard plays this strip now ('' — none); the session's, not the song's (R-MIDI-2). |
 | `meters.cleared` |  | The clip lights and held peaks are out; the master's true peak and integrated loudness start again (R-METER-2). |
 
@@ -388,6 +390,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.showIds` | bool | every object's id drawn beside its name (R-UI-11) |
 | `settings.autosave` | int | seconds between autosaves of an unsaved song; 0 = off (R-SAFE-1) |
 | `settings.driver` | string | pulse \| pipewire: how the clock device is reached (R-DEV-9) |
+| `settings.recordQuantize` | string | off \| 1/4 \| 1/8 \| 1/16 \| 1/32: where a recorded note's start lands (R-MIDI-2) |
+| `settings.countIn` | int | bars of click before a recording, 0 … 4 (R-MIDI-2) |
 | `settings.midiInputs` | string | all \| none \| MIDI port names, comma-separated: the keyboards Solaris listens to (R-MIDI-2) |
 | `armed` | string | the strip the MIDI keyboard plays ('' none) — the session's, never saved (R-MIDI-2) |
 | `midiDevices` | object[] | this machine's MIDI inputs, as `midi devices` last listed them (R-MIDI-2) |
@@ -421,6 +425,9 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.masterHold` | number[] | the master's held peak, L/R *(not in `--stable`)* |
 | `transport.masterClip` | bool | the master reached full scale since `meters clear` *(not in `--stable`)* |
 | `transport.driver` | string | what the clock device plays through now: pulse \| pipewire ('' stopped) — R-DEV-9 *(not in `--stable`)* |
+| `transport.recording` | bool | `transport record` is keeping the armed strip's keyboard (R-MIDI-2) |
+| `transport.countingIn` | bool | … and its count-in still clicks *(not in `--stable`)* |
+| `transport.recorded` | int | notes struck that will land (a count-in's are not) *(not in `--stable`)* |
 | `transport.xruns` | int | underruns since play (−1: this driver cannot count them) — R-DEV-5 *(not in `--stable`)* |
 | `loudness` | object | the master as measured while playing, kept after a stop (R-METER-1, ITU-R BS.1770-4) *(not in `--stable`)* |
 | `loudness.momentary` | number | LUFS over the last 400 ms; −144 = nothing measured *(not in `--stable`)* |

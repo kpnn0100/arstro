@@ -281,6 +281,11 @@ namespace solaris
             {K::MetersClear, "meters clear", "", 0, 0, {},
              "Clear the meters: every clip light and held peak, and the master's true peak and integrated loudness "
              "start again (the song is not edited; a click on a clip light).", "R-METER-2"},
+            {K::TransportRecord, "transport record", "", 0, 0, {"from=<beats>", "count-in=<bars>", "overdub"},
+             "Play and record the armed strip's keyboard (R-MIDI-2): at `transport stop` what was played becomes a new "
+             "note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip "
+             "under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes "
+             "it back. --count-in (else `settings countIn`) bars of click first, the song waiting.", "R-MIDI-2"},
             {K::TransportLoop, "transport loop", "<from|off> [to]", 1, 2, {}, "Loop between two beats while playing; `off` ends it.", "R-TIME-4"},
             {K::Audition, "audition", "<file|stop>", 1, 1, {},
              "Hear a sample now, outside the song (the browser's preview): through the output device at the "

@@ -35,7 +35,7 @@ namespace solaris_ui
     {
     public:
         static constexpr double kHeight = 29.25;
-        enum Hit { kNone = -1, kHome = 0, kPlay, kSave, kSettings, kBpm }; // kHome: the wordmark
+        enum Hit { kNone = -1, kHome = 0, kPlay, kSave, kSettings, kBpm, kRecord }; // kHome: the wordmark; kRecord: R-MIDI-2
         static constexpr double kBpmStepPx = 3.25; // space::u(1) of vertical drag: one step
         static constexpr double kNameMin = 120.0; // the song's name keeps this much before the transport moves right
 
@@ -45,10 +45,11 @@ namespace solaris_ui
         cosmo_v2::MenuStrip &menus() { return *mMenus; }
         artboard::Rect hitRect(int which) const;
         double playAmount() const { return mPlaying.value(); }   // 0 = the play glyph, 1 = the stop glyph (LIVE)
+        double recordAmount() const { return mRecLit.value(); }  // R-MIDI-2: 1 = recording, lit red (LIVE)
         double meterLevel(int ch) const { return mMeter[ch].value(); }
         double bpmShown() const { return mBpmDrag ? mBpmLive : mBpmShown.value(); } // the tempo as DRAWN (LIVE)
 
-        std::function<void()> onHome, onPlayToggle, onSave, onSettings;
+        std::function<void()> onHome, onPlayToggle, onSave, onSettings, onRecordToggle;
         std::function<bool(const std::string &line)> onCommand;
         /** A value typed in place (the App's field): the current text, where, and what to do with the result. */
         std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onEditText;
@@ -64,7 +65,7 @@ namespace solaris_ui
         mutable double mWordW = 52.0; // the `solaris.` wordmark, measured in the paint (Home's hit rect)
         int hitAt(const artboard::Point &p) const;
         std::string mName;
-        bool mDirty = false, mPlayingWanted = false;
+        bool mDirty = false, mPlayingWanted = false, mRecordingWanted = false;
         double mPosition = 0, mBpm = 120;
         artboard::AnimatedProperty mBpmShown{120.0};
         double mBpmLast = -1, mBpmPress = 0, mBpmPressY = 0, mBpmLive = 0, mNowMs = 0;
@@ -72,6 +73,7 @@ namespace solaris_ui
         std::string mBpmSent;
         int mBeatsPerBar = 4;
         float mPeak[2] = {0, 0};
+        artboard::AnimatedProperty mRecLit{0.0};
         artboard::AnimatedProperty mPlaying{0.0}, mDirtyDot{0.0}, mMeter[2]{artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
         bool mInit = false;
         cosmo_v2::HoverFade mHover;

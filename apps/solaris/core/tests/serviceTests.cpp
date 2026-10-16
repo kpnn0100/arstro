@@ -1961,6 +1961,88 @@ static void test_a_keyboard_plays_the_armed_strip()
          "pedal holds it; not an edit; audio lines and unknown strips refused; `midi devices` says what it listens to");
 }
 
+static void test_record_the_keyboard_into_a_clip()
+{
+    // R-MIDI-2: `transport record` — a count-in (the click, the song waiting; a key struck during it dropped), the take
+    // landed at the stop as a clip on the armed strip's track from the bar it began in, each note where it was heard on
+    // the input-quantize grid; one undo takes it; --overdub adds into the clip under the start
+    Run r;
+    r.ok("project new " + freshSong("record") + " --bpm 120");
+    r.ok("strip add --kind instrument --instrument synth");          // ch_2
+    r.fake.capture->sink.reserve(2 * 4000000);
+    const auto &cap = *r.fake.capture;
+    assert(contains(r.no("transport record"), "arm a strip first"));
+    r.ok("strip arm ch_2");
+    r.ok("settings set recordQuantize=1/4");
+    const int depth = r.svc.model().undoDepth;
+    r.ok("transport record --from 4 --count-in 1");                   // a bar of click, then the song from beat 4
+    const long long f0 = cap.frames.load();
+    assert(r.svc.model().transport.recording);
+    assert(contains(r.no("transport record"), "already recording") && contains(r.no("transport seek 2"), "recording"));
+    assert(contains(r.no("transport play"), "recording"));
+    auto at = [&](double beat) { return f0 + (long long)(beat * 24000); };  // the count-in is beats 0 … 4: heard as the bar before
+    waitFrames(r, at(1.0));
+    assert(r.svc.model().transport.countingIn);
+    r.fake.key(0x90, 72, 90);                                         // struck during the count-in: not in the take
+    r.fake.key(0x80, 72, 0);
+    waitFrames(r, at(4.2));
+    assert(!r.svc.model().transport.countingIn);
+    assert(peakOf(cap.sink, 2 * (size_t)f0, 2 * (size_t)at(0.5)) > 0.05f); // the click counted it in, the metronome off
+    waitFrames(r, at(5.0));
+    r.fake.key(0x90, 60, 100);
+    waitFrames(r, at(5.5));
+    r.fake.key(0x80, 60, 0);
+    waitFrames(r, at(6.0));
+    r.fake.key(0x90, 64, 80);
+    waitFrames(r, at(6.5));
+    r.fake.key(0x80, 64, 0);
+    waitFrames(r, at(7.0));
+    assert(r.svc.model().transport.recorded == 2);
+    r.events.clear();
+    const std::string landed = r.ok("transport stop");
+    const auto &m = r.svc.model();
+    assert(!m.transport.recording && m.undoDepth == depth + 1 && m.undoLabel == "Record");
+    const ClipModel *take = nullptr;
+    for (const auto &c : m.clips)
+        if (c.track == "ch_2") take = &c;
+    assert(take && firstLine(landed) == take->id && take->at == 4.0 && take->length == 4.0);
+    assert(std::any_of(r.events.begin(), r.events.end(), [&](const std::string &e) { return contains(e, "record.finished clip=" + take->id + " notes=2"); }));
+    const PatternModel *pt = nullptr;
+    for (const auto &x : m.patterns)
+        if (x.id == take->pattern) pt = &x;
+    assert(pt && pt->notes.size() == 2);
+    assert(pt->notes[0].pitch == 60 && pt->notes[0].at == 1.0 && pt->notes[0].vel == 100);   // beat 5 → 1 into the bar
+    assert(pt->notes[1].pitch == 64 && pt->notes[1].at == 2.0 && pt->notes[1].vel == 80);
+    assert(pt->notes[0].length > 0.3 && pt->notes[0].length < 0.8);
+    // one undo takes the take; redo brings it back
+    r.ok("undo");
+    assert(r.svc.model().clips.empty());
+    r.ok("redo");
+    assert(r.svc.model().clips.size() == 1);
+    // --overdub: into the clip under the start, no new clip
+    r.ok("transport record --from 4 --overdub");
+    const long long f1 = cap.frames.load();
+    waitFrames(r, f1 + 3 * 24000);
+    r.fake.key(0x90, 67, 70);                                         // beat 7 → 3 into the bar
+    waitFrames(r, f1 + (long long)(3.5 * 24000));
+    r.fake.key(0x80, 67, 0);
+    waitFrames(r, f1 + 4 * 24000);
+    r.ok("transport stop");
+    assert(r.svc.model().clips.size() == 1);
+    for (const auto &x : r.svc.model().patterns)
+        if (x.id == take->pattern)
+            assert(x.notes.size() == 3 && x.notes[2].pitch == 67 && x.notes[2].at == 3.0);
+    // nothing played: nothing lands
+    r.events.clear();
+    r.ok("transport record --from 8");
+    waitFrames(r, cap.frames.load() + 24000);
+    assert(contains(r.ok("transport stop"), "nothing was played") && r.svc.model().clips.size() == 1);
+    assert(contains(r.no("settings set recordQuantize=1/5"), "1/16"));
+    pass("record (R-MIDI-2): a count-in bar clicks with the song waiting (a key struck during it dropped); the take lands at "
+         "the stop as a clip from the bar it began in, notes where they were heard on the 1/4 grid, velocities kept; one "
+         "undo (\"Record\"); --overdub adds into the clip under the start; nothing played lands nothing; refusals");
+}
+
 static void test_loop_and_seek()
 {
     Run r;
@@ -3010,6 +3092,7 @@ int main()
     test_meters_measure_what_plays();
     test_the_driver_and_its_fallback();
     test_a_keyboard_plays_the_armed_strip();
+    test_record_the_keyboard_into_a_clip();
     test_held_peak_holds_then_falls();
     test_render_measure();
     test_loop_and_seek();

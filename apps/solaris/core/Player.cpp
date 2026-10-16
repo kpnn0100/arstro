@@ -91,8 +91,9 @@ namespace solaris
 
     long long Player::heard() const
     {
-        const long long r = mRendered.load() - (long long)std::llround(mLatency.load() * mRate) - mGraphLatency.load();
-        return std::max(0LL, r);
+        // during a count-in the song has not begun: what is heard is that many frames before where it will (R-MIDI-2)
+        const long long r = mRendered.load() - mCountIn.load() - (long long)std::llround(mLatency.load() * mRate) - mGraphLatency.load();
+        return mCountIn.load() > 0 ? r : std::max(0LL, r);
     }
 
     void Player::collect()
@@ -347,6 +348,20 @@ namespace solaris
             Live m;
             while (mIn.pop(m)) apply(m);
             midi(); // R-MIDI-2: a key is heard from this block
+            if (const long long left = mCountIn.load(std::memory_order_relaxed); left > 0)
+            {
+                // R-MIDI-2: the count-in — silence, the click on the song's beats leading into `from` (the engine waits);
+                // aligned as playing is: the music of `from` comes out the engine's latency after the count-in ends
+                const int n = (int)std::min<long long>(mBlock, left);
+                std::fill(mInterleaved.begin(), mInterleaved.begin() + (size_t)n * mChannels, 0.0f);
+                click(mEng->position() - left - mGraphLatency.load(std::memory_order_relaxed), n);
+                mOut->write(mInterleaved.data(), n);
+                mLatency.store(mOut->latency(), std::memory_order_relaxed);
+                mOutFrames += n;
+                mCountIn.store(left - n, std::memory_order_relaxed);
+                mClickWas = true;
+                continue;
+            }
             const long long pos = mEng->position(), a = mLoopA.load(), b = mLoopB.load();
             int n = mBlock;
             if (b > a && pos < b && pos + n > b) n = (int)(b - pos); // stop exactly at the loop's end

@@ -195,6 +195,13 @@ namespace solaris
         std::unique_ptr<Player> mMonitor;
         std::vector<std::string> mMonitorStrips;
         std::vector<MidiPortModel> mMidiPorts; // what `midi devices` last listed
+        // R-MIDI-2: a recording — what the player kept, where it began, how it lands
+        bool mRecording = false, mOverdub = false;
+        std::string mRecordStrip;
+        double mRecordFrom = 0;                // beats: where the song began recording
+        std::vector<Player::Played> mTaken;
+        bool commitRecording(long long stoppedAt, std::string &err); // at the stop: the take into a clip (an edit)
+        long long mCountInFrames = 0;          // a recording's count-in, for the play it starts
         Settings mSettings;
         std::vector<std::string> mRecents;
         std::vector<RecentModel> mRecentCards; // parsed from the files: rebuilt only when stale

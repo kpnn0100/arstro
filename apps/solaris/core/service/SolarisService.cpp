@@ -108,7 +108,7 @@ namespace solaris
             case K::Get: case K::Eval: case K::Undo: case K::Redo: case K::HistoryPrint: case K::HistoryJump: case K::Render: case K::MatrixPrint: case K::Audit: case K::StatePrint: case K::Api:
             case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
             case K::DevicesList: case K::Browse: case K::RecentsRemove:
-            case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait:
+            case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::TransportRecord: case K::Wait:
             case K::Audition: case K::NotePreview: case K::MetersClear: case K::MidiDevices: case K::StripArm: case K::None:
             case K::Ls: case K::Show: case K::PatternPrint: // R-SVC-8: reading back
             case K::PatternExport: case K::ProjectExportMidi: // R-MIDI-1: writing a file, not the song
@@ -123,7 +123,7 @@ namespace solaris
     {
         err.clear();
         mOutput.clear();
-        const bool editing = mutates(c.kind);
+        const bool editing = mutates(c.kind) || (c.kind == K::TransportStop && mRecording); // R-MIDI-2: the take is an edit
         if (editing && !requireOpen(err)) return false;
         const Project before = editing ? mProject : Project();
         mPending.clear();
@@ -233,7 +233,7 @@ namespace solaris
         case K::MidiDevices: case K::StripArm:
             ok = inputCommand(c, err);
             break;
-        case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::Wait: case K::Audition: case K::MetersClear:
+        case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::TransportRecord: case K::Wait: case K::Audition: case K::MetersClear:
         case K::NotePreview:
             ok = transportCommand(c, err);
             break;
@@ -356,6 +356,7 @@ namespace solaris
 
     std::string SolarisService::labelOf(const Command &c) const
     {
+        if (c.kind == K::TransportStop) return "Record"; // R-MIDI-2: a stop that is an edit lands a take
         const CommandSpec *sp = specFor(c.kind);
         std::string l = sp ? sp->verb : "edit";
         if (c.kind == K::Set)

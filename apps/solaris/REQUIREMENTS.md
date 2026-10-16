@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -764,7 +764,8 @@ a process is the host's (law 12).
   sustain pedal honoured; `transport record` with a strip armed records them into a new note clip at the play
   position (or into the clip under the playhead, `--overdub`), with an optional count-in and input quantize
   (`settings set recordQuantize=<grid|off>`). The notes land exactly where they were played (the audio
-  callback's sample time, minus the output latency).
+  callback's sample time, minus the output latency). (Built 2026-10-16 — DR-MIDI-2: the count-in clicks with the song
+  waiting; a take lands at the stop as one undo; inputs chosen by `settings set midiInputs=`; arming is the session's.)
 - **R-MIDI-3 Expression lanes**: pitch bend and any CC on a note clip as a lane in the piano roll (points, like
   automation), played into the instrument (the DSP instruments take pitch bend ±2 semitones and mod wheel →
   their filter or vibrato); recorded from the keyboard.

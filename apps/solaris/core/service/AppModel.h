@@ -210,6 +210,8 @@ namespace solaris
         int autosave = 60;                       // R-SAFE-1: seconds; 0 = off
         std::string driver = "pulse";             // R-DEV-9: pulse | pipewire
         std::string midiInputs = "all";          // R-MIDI-2: all | none | port names
+        std::string recordQuantize = "off";      // R-MIDI-2
+        int countIn = 0;
         std::vector<KeyActionModel> keys;        // R-SET-4: every shortcut, in the sheet's order
     };
 
@@ -250,6 +252,9 @@ namespace solaris
         bool masterClip = false;
         std::string driver;                      // R-DEV-9: what the clock device plays through now ("" stopped)
         long long xruns = -1;                    // R-DEV-5: underruns since play; −1 = this driver cannot count them
+        bool recording = false;                  // R-MIDI-2: `transport record` — the armed strip's keyboard kept
+        bool countingIn = false;                 // … its count-in still clicking
+        int recorded = 0;                        // notes struck that will land (a count-in's are not)
     };
 
     /** R-METER-1: the master as measured while playing (BS.1770-4) — kept after a stop, so a played song's

@@ -63,6 +63,11 @@ namespace solaris_ui
             const auto &m = mHooks.model ? mHooks.model() : emptyModel();
             dispatch(m.transport.playing ? "transport stop --return" : "transport play"); // Stop: back where the time bar was put (R-TIME-7)
         };
+        bar.onRecordToggle = [this] {
+            // R-MIDI-2: record the armed strip's keyboard — the service refuses with nothing armed (the toast says so)
+            const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+            dispatch(m.transport.recording ? "transport stop" : "transport record");
+        };
         bar.onSave = [this] { dispatch("project save"); };
         bar.onSettings = [this] { openSettings(); };
         bar.onCommand = [this](const std::string &line) { return dispatch(line); }; // the tempo (R-UI-13)

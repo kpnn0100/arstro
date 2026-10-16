@@ -6,8 +6,12 @@
 // between (what waited is stale).
 #include "Compile.h"
 #include "Engine.h"
+#include "Format.h"
 #include "SolarisService.h"
 #include <algorithm>
+#include <array>
+#include <cmath>
+#include <map>
 #include <sstream>
 
 namespace arstro
@@ -105,6 +109,112 @@ namespace solaris
         mMonitor->setMidi(mMidiQ.get());
         mMonitor->setArmed(armedIn(mMonitorStrips));
         mMonitor->start(std::move(out), std::move(eng), routes, 2, mSettings.bufferSize, 0, 0);
+    }
+
+    bool SolarisService::commitRecording(long long stoppedAt, std::string &err)
+    {
+        // R-MIDI-2: the take — ons paired with offs (an on again first ends the last), where each was HEARD; half a
+        // beat early is the downbeat (a count-in's anticipation); starts on the `recordQuantize` grid
+        mRecording = false;
+        Project &p = mProject;
+        const double spb = 60.0 / p.header.bpm * p.header.sampleRate, from = mRecordFrom;
+        struct Open
+        {
+            double at = 0;
+            int vel = 0;
+            bool on = false;
+        };
+        std::array<Open, 128> open{};
+        std::vector<Note> notes;
+        auto close = [&](int pitch, double end) {
+            Open &o = open[(size_t)pitch];
+            if (!o.on) return;
+            Note n;
+            n.pitch = pitch;
+            n.vel = std::clamp(o.vel, 1, 127);
+            n.at = o.at;
+            n.length = std::max(1.0 / kPpq, end - o.at);
+            notes.push_back(n);
+            o.on = false;
+        };
+        for (const auto &pl : mTaken)
+        {
+            const double b = (double)pl.at / spb;
+            const int pitch = std::clamp(pl.pitch, 0, 127);
+            close(pitch, b);
+            if (pl.velocity > 0 && b >= from - 0.5) open[(size_t)pitch] = Open{std::max(from, b), pl.velocity, true};
+        }
+        for (int pitch = 0; pitch < 128; ++pitch) close(pitch, std::max(from, (double)stoppedAt / spb)); // still held: to the stop
+        mTaken.clear();
+        if (notes.empty())
+        {
+            mOutput = "nothing was played\n";
+            emit(Event(Event::Kind::RecordFinished).with("clip", "").with("notes", 0));
+            return true;
+        }
+        const std::string &q = mSettings.recordQuantize;
+        const double grid = q == "1/4" ? 1.0 : q == "1/8" ? 0.5 : q == "1/16" ? 0.25 : q == "1/32" ? 0.125 : 0.0;
+        for (auto &n : notes)
+        {
+            if (grid > 0.0) n.at = std::max(0.0, std::round(n.at / grid) * grid);
+            n.at = toTick(n.at);
+            n.length = std::max(1.0 / kPpq, toTick(n.length));
+        }
+        std::stable_sort(notes.begin(), notes.end(), [](const Note &a, const Note &b) { return a.at < b.at || (a.at == b.at && a.pitch < b.pitch); });
+        const double bar = std::max(1, std::atoi(p.header.sig.c_str()));
+        // --overdub: into the strip's clip under the start (its pattern, wrapped where the clip repeats it)
+        if (mOverdub)
+            for (const auto &cl : p.clips)
+            {
+                if (cl.track != mRecordStrip || cl.pattern.empty()) continue;
+                const double len = clipLengthBeats(p, cl);
+                if (from < cl.at - 1e-9 || from >= cl.at + len - 1e-9) continue;
+                Pattern *pt = nullptr;
+                for (auto &x : p.patterns)
+                    if (x.id == cl.pattern) pt = &x;
+                if (!pt) break;
+                std::map<std::pair<long long, int>, Note> merged; // a pitch struck where one already starts: the longer
+                for (const auto &n : pt->notes) merged[{std::llround(n.at * kPpq), n.pitch}] = n;
+                for (auto n : notes)
+                {
+                    double rel = n.at - cl.at;
+                    if (pt->length > 0 && rel >= pt->length) rel = std::fmod(rel, pt->length);
+                    n.at = toTick(std::max(0.0, rel));
+                    const auto key = std::make_pair(std::llround(n.at * kPpq), n.pitch);
+                    auto it = merged.find(key);
+                    if (it == merged.end() || it->second.length < n.length) merged[key] = n;
+                }
+                pt->notes.clear();
+                for (const auto &kv : merged) pt->notes.push_back(kv.second);
+                std::stable_sort(pt->notes.begin(), pt->notes.end(), [](const Note &a, const Note &b) { return a.at < b.at || (a.at == b.at && a.pitch < b.pitch); });
+                changed("note.added", pt->id);
+                mOutput = cl.id + "\n";
+                emit(Event(Event::Kind::RecordFinished).with("clip", cl.id).with("notes", (int)notes.size()));
+                return true;
+            }
+        // a new clip on its track, from the bar the take began in, whole bars long
+        const double at = std::floor(from / bar + 1e-9) * bar;
+        double end = at;
+        Pattern pt;
+        pt.id = p.nextId("pt");
+        const Strip *s = p.strip(mRecordStrip);
+        pt.name = (s ? s->name : mRecordStrip) + " take";
+        for (auto n : notes)
+        {
+            n.at = toTick(n.at - at);
+            pt.notes.push_back(n);
+            end = std::max(end, at + n.at + n.length);
+        }
+        pt.length = std::max(bar, std::ceil((end - at) / bar - 1e-9) * bar);
+        p.patterns.push_back(pt);
+        changed("pattern.added", pt.id);
+        Command cc;
+        cc.kind = K::ClipAdd;
+        cc.flags = {{"strip", mRecordStrip}, {"pattern", pt.id}, {"at", canonicalBeats(at)}};
+        if (!clipCommand(cc, err)) return false;
+        const std::string clip = mOutput.substr(0, mOutput.find('\n'));
+        emit(Event(Event::Kind::RecordFinished).with("clip", clip).with("notes", (int)notes.size()));
+        return true;
     }
 
     bool SolarisService::inputCommand(const Command &c, std::string &err)
