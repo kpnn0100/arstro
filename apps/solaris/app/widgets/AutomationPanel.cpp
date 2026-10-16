@@ -1,4 +1,5 @@
 #include "AutomationPanel.h"
+#include "SettingsSheet.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
 #include <algorithm>
 #include <cmath>
@@ -38,7 +39,24 @@ namespace solaris_ui
         }
     }
 
-    AutomationPanel::AutomationPanel(std::string au) : mAu(std::move(au)) { clipToBounds = true; }
+    AutomationPanel::AutomationPanel(std::string au) : mAu(std::move(au))
+    {
+        clipToBounds = true;
+        // R-AUTO-12: how often it repeats — Artboard's combo in cosmo's tokens, its label cross-fading (SettingCombo)
+        mLoop = std::make_shared<SettingCombo>();
+        mLoop->width.set(112.0);
+        mLoop->height.set(22.75);
+        mLoop->onChange = [this](int i) {
+            if (i >= 0 && i < (int)mLoopBeats.size() && onCommand) onCommand("set " + mAu + ".loop=" + beatText(mLoopBeats[(size_t)i]));
+        };
+        addChild(mLoop);
+    }
+
+    Rect AutomationPanel::loopRect() const
+    {
+        const Rect rn = renameRect();
+        return Rect{rn.x - 6.5 - mLoop->width.value(), rn.y + (rn.h - mLoop->height.value()) * 0.5, mLoop->width.value(), mLoop->height.value()};
+    }
 
     std::string AutomationPanel::title() const { return "Automation \xE2\x80\x94 " + (mModel.name.empty() ? mAu : mModel.name); }
 
@@ -78,6 +96,31 @@ namespace solaris_ui
         add("range:" + range, Row::Info, "Range", range, "");
         add("from:" + mModel.from, Row::Info, "Made from", mModel.from.empty() ? std::string("\xE2\x80\x94") : mModel.from,
             mModel.from.empty() ? "made from nothing" : "");
+        {
+            // R-AUTO-12: the loop, said — its cycle and where it repeats
+            std::string loop = "off", where = "the curve as drawn";
+            if (mModel.loop > 0)
+            {
+                loop = "every " + beatText(mModel.loop) + (mModel.loop == 1.0 ? " beat" : " beats");
+                where = "from beat " + beatText(mModel.at) + (mModel.length > 0 ? " for " + beatText(mModel.length) + " beats" : " to the end");
+            }
+            add("loop:" + loop + "|" + where, Row::Info, "Loop", loop, where);
+        }
+        {
+            // the Loop combo's options: Off, 1/4, 1/2, 1, 2 beats, 1, 2, 4 bars — and a value set elsewhere, kept visible
+            const int bpb = std::max(1, std::atoi(m.sig.c_str()));
+            std::vector<std::pair<std::string, double>> opts = {{"Off", 0.0}, {"1/4 beat", 0.25}, {"1/2 beat", 0.5}, {"1 beat", 1.0}, {"2 beats", 2.0},
+                                                                 {"1 bar", (double)bpb}, {"2 bars", 2.0 * bpb}, {"4 bars", 4.0 * bpb}};
+            int sel = -1;
+            for (size_t i = 0; i < opts.size(); ++i)
+                if (std::fabs(opts[i].second - mModel.loop) < 1e-9) sel = (int)i;
+            if (sel < 0) { opts.emplace_back(beatText(mModel.loop) + " beats", mModel.loop); sel = (int)opts.size() - 1; }
+            std::vector<std::string> labels;
+            mLoopBeats.clear();
+            for (const auto &o : opts) { labels.push_back(o.first); mLoopBeats.push_back(o.second); }
+            if (labels != mLoop->options()) mLoop->setOptions(labels);
+            mLoop->setSelectedIndex(sel);
+        }
         add("now", Row::Now, "At the playhead", "", "");
         add("sec:points:" + std::to_string(mModel.points.size()), Row::Section, "POINTS \xC2\xB7 " + std::to_string(mModel.points.size()), "", "");
         for (const auto &p : mModel.points)
@@ -100,7 +143,13 @@ namespace solaris_ui
         mContentH = rows.size() * kRowH + space::gap();
     }
 
-    void AutomationPanel::layout() { mScroll.setExtent(kHeaderH, std::max(0.0, height.value() - kHeaderH), mContentH); }
+    void AutomationPanel::layout()
+    {
+        mScroll.setExtent(kHeaderH, std::max(0.0, height.value() - kHeaderH), mContentH);
+        const Rect lr = loopRect();
+        mLoop->x.set(lr.x);
+        mLoop->y.set(lr.y);
+    }
 
     void AutomationPanel::advance(double nowMs)
     {
@@ -202,7 +251,7 @@ namespace solaris_ui
         t.setFill(palette::mutedForeground());
         const std::string head = mModel.id + (mModel.unit.empty() ? std::string() : " \xC2\xB7 " + mModel.unit) + " \xC2\xB7 " +
                                  std::to_string(mModel.points.size()) + (mModel.points.size() == 1 ? " point" : " points");
-        t.drawText(textfit::ellipsize(t, head, std::max(0.0, rn.x - 2.0 * pad), 10.0, font::mono()), pad, textfit::baseline(rn.y + rn.h * 0.5, 10.0), 10.0,
+        t.drawText(textfit::ellipsize(t, head, std::max(0.0, loopRect().x - 2.0 * pad), 10.0, font::mono()), pad, textfit::baseline(rn.y + rn.h * 0.5, 10.0), 10.0,
                    font::mono());
         const double hv = mHover.amount(0);
         drawRoundedRect(t, rn, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), hv)));

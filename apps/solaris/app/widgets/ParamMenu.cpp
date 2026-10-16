@@ -48,7 +48,11 @@ namespace solaris_ui
         if (p.bindable)
         {
             if (automationOf(p.formula).empty())
+            {
                 items.push_back({"Create Automation", [cmd, address] { if (cmd) cmd("auto create " + address); }});
+                // R-AUTO-13: the side-chain feel — a dip on every beat, looping (`auto create --pump`)
+                items.push_back({"Create Pump", [cmd, address] { if (cmd) cmd("auto create " + address + " --pump"); }});
+            }
             const std::string current = p.formula.empty() ? std::string("=") : p.formula;
             auto rename = h.rename;
             items.push_back({"Formula\xE2\x80\xA6", [rename, cmd, address, current, world] {

@@ -166,6 +166,8 @@ namespace solaris_ui
         artboard::Point autoPointAt(const std::string &au, int i) const;
         double autoValueAt(const std::string &au, double y) const;  // the value a y in its row means
         double autoEase(const std::string &au) const;               // 1 = its curve at rest (LIVE)
+        /** R-AUTO-12: a looping automation's span — the brace along its row's top (local), its ends the grips; LIVE. */
+        artboard::Rect autoSpanRect(const std::string &au) const;
         /** The point being dragged, as DRAWN (local); (−1, −1) when none. */
         artboard::Point autoDragPoint() const;
         /** A bezier point's handle end as DRAWN (local; side 1 = in, 2 = out) — the pointer's while held; (−1, −1) when none. */
@@ -202,6 +204,10 @@ namespace solaris_ui
             std::vector<solaris::AutoPointModel> from, to, shownBefore;
             artboard::AnimatedProperty t{1.0};
             bool placed = false, changed = false;
+            // R-AUTO-12: where its loop repeats, eased (beats): its start, its end (the song's end when it has no length)
+            artboard::AnimatedProperty spanA{0.0}, spanB{0.0};
+            double spanALast = -1.0, spanBLast = -1.0;
+            bool spanPlaced = false;
         };
         struct ClipView
         {
@@ -237,6 +243,13 @@ namespace solaris_ui
         void paintCurve(artboard::IRenderTarget &t, const AutoLive &l, const std::vector<solaris::AutoPointModel> &pts, const artboard::Rect &row,
                         double alpha, bool handles) const;
         bool autoGesture(const artboard::Gesture &g, const artboard::Point &local);
+        // R-AUTO-12: a looping automation's first cycle is drawn at its span's start — every beat↔x of its points goes
+        // through this; the span shown (the pointer's end while a grip is held); a grip under a point (0 start, 1 end)
+        double autoOffset(const AutoLive &l) const;
+        void spanOf(const AutoLive &l, double &a, double &b) const;
+        int spanGripAt(const std::string &au, const artboard::Point &local) const;
+        void paintLoop(artboard::IRenderTarget &t, const AutoLive &l, const std::vector<solaris::AutoPointModel> &pts, const artboard::Rect &row,
+                       double a) const;
         void advanceAuto(double nowMs);
         std::vector<solaris::AutoPointModel> drawnPoints(const AutoLive &l) const; // shown, with a held point or handle the pointer's
         int handleNear(const std::string &au, const artboard::Point &local, int &side) const;
@@ -258,6 +271,10 @@ namespace solaris_ui
         std::vector<Row> mRows;                       // the model's LANES, in order: hit-testing
         std::vector<std::string> mAutoIds;            // automation rows, after the lanes
         std::map<std::string, AutoLive> mAutos;
+        std::string mSpanAu;                          // R-AUTO-12: a span's grip pressed …
+        int mSpanEnd = -1;                            // … 0 its start, 1 its end
+        double mSpanLive = 0.0;                       // … where the pointer has it (beats)
+        bool mSpanDragging = false;
         std::string mAutoPress;                       // a point pressed / dragged
         int mAutoPoint = -1;
         bool mAutoDragging = false;

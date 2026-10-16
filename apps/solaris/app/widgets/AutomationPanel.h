@@ -19,6 +19,7 @@
 #include "../../../interstellar/app/widgets/AnimatedRows.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/HoverFade.h"
+#include <memory>
 #include <functional>
 #include <string>
 #include <vector>
@@ -50,6 +51,9 @@ namespace solaris_ui
         double nowLive() const { return mNow.value(); }
         double nowTarget() const { return mNowTarget; }
         artboard::Rect renameRect() const;
+        /** R-AUTO-12: the Loop combo box in the header (Off, 1/4 … 4 bars) — one `set <au>.loop=` line. */
+        artboard::Rect loopRect() const;
+        class SettingCombo &loopCombo() { return *mLoop; }
 
         std::function<bool(const std::string &line)> onCommand;
         std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onRename;
@@ -69,6 +73,8 @@ namespace solaris_ui
 
         std::string mAu;
         solaris::AutomationModel mModel;
+        std::shared_ptr<class SettingCombo> mLoop;
+        std::vector<double> mLoopBeats;        // the combo's options, in beats (0 = Off)
         bool mPresent = false, mPlaying = false;
         double mPosition = 0.0;
         interstellar_v1::AnimatedRows<Row> mRows;

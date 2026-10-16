@@ -141,7 +141,7 @@ namespace solaris_ui
         const auto pts = shownPoints(it->second);
         if (i < 0 || i >= (int)pts.size()) return Point{-1, -1};
         const Rect row = autoRowRect(au);
-        return Point{beatToX(pts[(size_t)i].at), valueToY(it->second, pts[(size_t)i].value, row)};
+        return Point{beatToX(pts[(size_t)i].at + autoOffset(it->second)), valueToY(it->second, pts[(size_t)i].value, row)};
     }
 
     double Timeline::autoValueAt(const std::string &au, double y) const
@@ -160,7 +160,7 @@ namespace solaris_ui
     {
         const auto it = mAutos.find(mAutoPress);
         if (!mAutoDragging || mAutoHandle != 0 || it == mAutos.end()) return Point{-1, -1}; // a handle held moves no point
-        return Point{beatToX(mAutoAt), valueToY(it->second, mAutoValue, autoRowRect(mAutoPress))};
+        return Point{beatToX(mAutoAt + autoOffset(it->second)), valueToY(it->second, mAutoValue, autoRowRect(mAutoPress))};
     }
 
     std::vector<solaris::AutoPointModel> Timeline::drawnPoints(const AutoLive &l) const
@@ -190,7 +190,7 @@ namespace solaris_ui
         if (it == mAutos.end()) return Point{-1, -1};
         double b = 0, v = 0;
         if (!handleEnd(drawnPoints(it->second), i, side, b, v)) return Point{-1, -1};
-        return Point{beatToX(b), valueToY(it->second, v, autoRowRect(au))};
+        return Point{beatToX(b + autoOffset(it->second)), valueToY(it->second, v, autoRowRect(au))};
     }
 
     int Timeline::handleNear(const std::string &au, const Point &local, int &side) const
@@ -222,7 +222,7 @@ namespace solaris_ui
         const int i = mAutoPoint;
         if (i < 0 || i >= (int)pts.size()) return;
         const auto &p = pts[(size_t)i];
-        const double b = xToBeat(local.x), v = yToValue(it->second, local.y, autoRowRect(mAutoPress));
+        const double b = xToBeat(local.x) - autoOffset(it->second), v = yToValue(it->second, local.y, autoRowRect(mAutoPress));
         const double dtPrev = i > 0 ? p.at - pts[(size_t)i - 1].at : 0.0, dtNext = i + 1 < (int)pts.size() ? pts[(size_t)i + 1].at - p.at : 0.0;
         auto pct = [](double reach, double dt) { return std::clamp(reach / dt * 100.0, 0.1, 100.0); };
         solaris::AutoPointModel &h = mAutoHeld;
@@ -260,8 +260,103 @@ namespace solaris_ui
         }
     }
 
+    double Timeline::autoOffset(const AutoLive &l) const
+    {
+        if (l.model.loop <= 0) return 0.0;
+        double a = 0, b = 0;
+        spanOf(l, a, b);
+        return a;
+    }
+
+    void Timeline::spanOf(const AutoLive &l, double &a, double &b) const
+    {
+        // eased — but a grip in hand is the pointer's (the other end stays)
+        a = l.spanPlaced ? l.spanA.value() : l.model.at;
+        b = l.spanPlaced ? l.spanB.value() : (l.model.length > 0 ? l.model.at + l.model.length : std::max(mLength, l.model.at + l.model.loop));
+        if (mSpanDragging && mSpanAu == l.model.id) (mSpanEnd == 0 ? a : b) = mSpanLive;
+    }
+
+    int Timeline::spanGripAt(const std::string &au, const Point &local) const
+    {
+        const auto it = mAutos.find(au);
+        if (it == mAutos.end() || it->second.model.loop <= 0) return -1;
+        const Rect row = autoRowRect(au);
+        if (local.y < row.y || local.y > row.y + 9.75) return -1; // the brace's band along the row's top: space::u(3)
+        double a = 0, b = 0;
+        spanOf(it->second, a, b);
+        if (std::fabs(local.x - beatToX(a)) <= 5.0) return 0;
+        if (std::fabs(local.x - beatToX(b)) <= 5.0) return 1;
+        return -1;
+    }
+
+    Rect Timeline::autoSpanRect(const std::string &au) const
+    {
+        const auto it = mAutos.find(au);
+        if (it == mAutos.end() || it->second.model.loop <= 0) return Rect{};
+        double a = 0, b = 0;
+        spanOf(it->second, a, b);
+        const Rect row = autoRowRect(au);
+        return Rect{beatToX(a), row.y, beatToX(b) - beatToX(a), 9.75};
+    }
+
+    void Timeline::paintLoop(IRenderTarget &t, const AutoLive &l, const std::vector<solaris::AutoPointModel> &pts, const Rect &row, double a) const
+    {
+        if (pts.empty() || a <= 0.001) return;
+        const double W = width.value(), L = l.model.loop;
+        double A = 0, B = 0;
+        spanOf(l, A, B);
+        const bool open = l.model.length <= 0 && !(mSpanDragging && mSpanAu == l.model.id && mSpanEnd == 1); // to the song's end, and on
+        const std::vector<anim::Key> keys = keysOf(pts);
+        // the value the engine plays at a beat: its place in the cycle inside the span, the cycle's end outside it
+        auto value = [&](double beat) {
+            const double c = beat < A || (!open && beat >= B) ? L : std::fmod(beat - A, L);
+            return std::clamp(anim::eval(keys, c), l.model.min, l.model.max);
+        };
+        t.beginPath();
+        bool first = true;
+        for (double x = kHeaderW; x <= W + 2.0; x += 2.0)
+        {
+            const double y = valueToY(l, value(xToBeat(x)), row);
+            if (first) t.moveTo(x, y);
+            else t.lineTo(x, y);
+            first = false;
+        }
+        t.setStroke(fade(palette::primary(), 0.4 * a), 1.5);
+        t.strokePath();
+        // a seam at each repeat's start, when the cycles are wide enough to tell apart
+        if (beatToX(L) - beatToX(0.0) >= 6.0)
+        {
+            t.setStroke(fade(palette::whiteAlpha(0.16), a), 1.0);
+            const double end = open ? xToBeat(W) : B;
+            const double k0 = std::max(1.0, std::floor((xToBeat(kHeaderW) - A) / L));
+            for (double b = A + k0 * L; b < end - 1e-9; b += L)
+            {
+                const double x = std::round(beatToX(b)) + 0.5;
+                if (x > W) break;
+                if (x < kHeaderW) continue;
+                t.beginPath(); t.moveTo(x, row.y + kPad); t.lineTo(x, row.bottom() - kPad); t.strokePath();
+            }
+        }
+        // the span: a brace along the row's top, a grip at each end
+        const double xa = beatToX(A), xb = beatToX(B);
+        drawRoundedRect(t, Rect{xa, row.y + 2.0, std::max(0.0, xb - xa), 3.0}, radius::pill(), Paint::filled(fade(palette::primaryAlpha(0.55), a)));
+        for (double x : {xa, xb})
+            drawRoundedRect(t, Rect{x - 1.5, row.y + 1.0, 3.0, 8.0}, radius::pill(), Paint::filled(fade(palette::primary(), a)));
+    }
+
     void Timeline::advanceAuto(double nowMs)
     {
+        // R-AUTO-12: a span set from anywhere eases there (a grip let go is already there — it was the pointer's)
+        for (auto &e : mAutos)
+        {
+            AutoLive &l = e.second;
+            const double a = l.model.at, b = l.model.length > 0 ? l.model.at + l.model.length : std::max(mLength, l.model.at + l.model.loop);
+            if (!l.spanPlaced) { l.spanA.set(a); l.spanB.set(b); l.spanALast = a; l.spanBLast = b; l.spanPlaced = true; }
+            if (a != l.spanALast) { l.spanA.animateTo(a, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.spanALast = a; }
+            if (b != l.spanBLast) { l.spanB.animateTo(b, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.spanBLast = b; }
+            l.spanA.update(nowMs);
+            l.spanB.update(nowMs);
+        }
         // a click on a curve, once it is not a double-click, is the point it asked for (R-AUTO-6, R-AUTO-11)
         if (mPendWaiting && nowMs - mPendMs > kDoubleClickMs + 50.0)
         {
@@ -292,7 +387,8 @@ namespace solaris_ui
                               bool handles) const
     {
         if (pts.empty() || a <= 0.001) return;
-        const double W = width.value();
+        const double W = width.value(), off = autoOffset(l); // R-AUTO-12: a loop's first cycle sits at its span's start
+        auto beatToX = [this, off](double b) { return Timeline::beatToX(b + off); };
         const Color line = fade(palette::primary(), a);
         // the curve, by the engine's own keys (R-AUTO-10): before the first point the first value, after the last the last
         const std::vector<anim::Key> keys = keysOf(pts);
@@ -364,6 +460,16 @@ namespace solaris_ui
             const std::vector<solaris::AutoPointModel> pts = drawnPoints(l); // a held point or handle: the pointer's
             const bool held = mAutoDragging && mAutoPress == l.model.id;
             const double f = l.t.value();
+            const bool loops = l.model.loop > 0;
+            if (loops)
+            {
+                // R-AUTO-12: the whole of it faint (its repeats, and where it rests outside its span), its span's brace;
+                // then its FIRST cycle bright — the one that is edited — clipped to that cycle
+                paintLoop(t, l, pts, r, a);
+                const double x0 = beatToX(autoOffset(l)), x1 = beatToX(autoOffset(l) + l.model.loop);
+                t.save();
+                t.clipRect(x0 - kHandle - 1.5, r.y, std::max(0.0, x1 - x0) + 2.0 * kHandle + 3.0, r.h);
+            }
             if (!held && f < 1.0 && !sameShapes(l.from, l.to))
             {
                 // a point more or fewer, or a shape changed: the two curves cross-fade (handles with them)
@@ -371,11 +477,12 @@ namespace solaris_ui
                 paintCurve(t, l, l.to, r, a * f, true);
             }
             else paintCurve(t, l, pts, r, a, true);
+            if (loops) t.restore();
             // a click's point, drawn at once while it waits out a double-click (R-AUTO-11)
             if (mPendAu == l.model.id && mPendAmt.value() > 0.001)
             {
                 const double pa = a * mPendAmt.value();
-                drawCircle(t, beatToX(mPendAt), valueToY(l, mPendValue, r), kHandle,
+                drawCircle(t, beatToX(mPendAt + autoOffset(l)), valueToY(l, mPendValue, r), kHandle,
                            Paint::filledStroked(fade(palette::popover(), pa), fade(palette::primary(), pa), 1.5));
             }
         }
@@ -392,9 +499,21 @@ namespace solaris_ui
             mAutoPoint = -1;
             mAutoDragging = false;
             mAutoHandle = 0;
+            mSpanAu.clear();
+            mSpanDragging = false;
             if (!inRows) return false;
             const std::string au = autoAt(local.y);
             if (au.empty()) return false;
+            if (const int grip = spanGripAt(au, local); grip >= 0)
+            {
+                // R-AUTO-12: a span's end taken — the pointer has it until it is let go, then ONE line
+                double a = 0, b = 0;
+                spanOf(mAutos.find(au)->second, a, b);
+                mSpanAu = au;
+                mSpanEnd = grip;
+                mSpanLive = grip == 0 ? a : b;
+                return true;
+            }
             mAutoPress = au;
             // a handle's end, unless the pointer is right on a point (R-AUTO-10); Alt on a point pulls handles out
             int side = 0;
@@ -408,11 +527,24 @@ namespace solaris_ui
             return true;
         }
         case Gesture::Type::DragStart:
-            if (mAutoPress.empty() || mAutoPoint < 0) return !mAutoPress.empty();
+            if (!mSpanAu.empty()) mSpanDragging = true;
+            if (!mSpanAu.empty() || mAutoPress.empty() || mAutoPoint < 0) return !mAutoPress.empty() || !mSpanAu.empty();
             mAutoDragging = true;
             [[fallthrough]];
         case Gesture::Type::Drag:
         {
+            if (mSpanDragging)
+            {
+                const auto it = mAutos.find(mSpanAu);
+                if (it == mAutos.end()) return true;
+                const auto &m = it->second.model;
+                double a = 0, b = 0;
+                spanOf(it->second, a, b);
+                const double at = snap(xToBeat(local.x)); // the grid you see; never shorter than one cycle
+                const double endNow = m.length > 0 ? m.at + m.length : b;
+                mSpanLive = mSpanEnd == 0 ? std::clamp(at, 0.0, m.length > 0 ? endNow - m.loop : 1e9) : std::max(at, a + m.loop);
+                return true;
+            }
             if (!mAutoDragging) return !mAutoPress.empty();
             if (mAutoHandle != 0)
             {
@@ -421,13 +553,43 @@ namespace solaris_ui
             }
             const auto it = mAutos.find(mAutoPress);
             if (it == mAutos.end()) return true;
-            mAutoAt = snap(xToBeat(local.x)); // the grid you see (R-UI-10)
+            mAutoAt = snap(xToBeat(local.x)) - autoOffset(it->second); // the grid you see (R-UI-10), in the curve's own beats
+            if (it->second.model.loop > 0) mAutoAt = std::clamp(mAutoAt, 0.0, it->second.model.loop); // a loop's points stay in its cycle
             mAutoValue = yToValue(it->second, local.y, autoRowRect(mAutoPress));
             return true;
         }
         case Gesture::Type::Up:
         case Gesture::Type::Drop:
         {
+            if (!mSpanAu.empty())
+            {
+                // R-AUTO-12: ONE line for the grip's whole gesture; the start keeps the end where it was
+                const auto it = mAutos.find(mSpanAu);
+                std::string line;
+                if (mSpanDragging && it != mAutos.end())
+                {
+                    AutoLive &l = it->second;
+                    const auto &m = l.model;
+                    if (mSpanEnd == 0 && std::fabs(mSpanLive - m.at) > 1e-9)
+                    {
+                        line = "set " + m.id + ".at=" + beats(mSpanLive);
+                        if (m.length > 0) line += " " + m.id + ".length=" + beats(m.at + m.length - mSpanLive);
+                        l.spanA.set(mSpanLive); // where it was let go — the pointer was the animation
+                        l.spanALast = mSpanLive;
+                    }
+                    else if (mSpanEnd == 1)
+                    {
+                        const double len = mSpanLive - m.at;
+                        if (std::fabs(len - m.length) > 1e-9) line = "set " + m.id + ".length=" + beats(len);
+                        l.spanB.set(mSpanLive);
+                        l.spanBLast = mSpanLive;
+                    }
+                }
+                mSpanAu.clear();
+                mSpanDragging = false;
+                if (!line.empty() && onCommand) onCommand(line);
+                return true;
+            }
             if (mAutoPress.empty()) return false;
             if (mAutoDragging && mAutoHandle != 0)
             {
@@ -493,7 +655,9 @@ namespace solaris_ui
             int side = 0;
             if (handleNear(au, local, side) >= 0) return true; // nor on a handle
             const auto it = mAutos.find(au);
-            const double at = snap(xToBeat(local.x)); // the grid you see (R-UI-10)
+            if (spanGripAt(au, local) >= 0) return true; // a click on a span's grip adds nothing (R-AUTO-12)
+            double at = snap(xToBeat(local.x)) - autoOffset(it->second); // the grid you see (R-UI-10), in the curve's own beats
+            if (it->second.model.loop > 0 && at >= it->second.model.loop) at = std::fmod(at, it->second.model.loop); // a repeat: its cycle
             const double v = yToValue(it->second, local.y, autoRowRect(au));
             // a double-click here opens the window (R-AUTO-11): the point waits it out, drawn at once (R2), sent by advanceAuto
             mPendAu = au;

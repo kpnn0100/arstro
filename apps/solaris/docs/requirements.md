@@ -1155,7 +1155,26 @@ way up its range (anything else), `smooth`, and a point at half a beat back at i
 (eval repeats every beat; a render's level at six beats is eval's within 0.15 dB, the dip > 15 dB; `.at` / `.length`
 bound the repeats and outside them it rests at the cycle's end; loop 0 is the curve as drawn; the `.slp` round
 trip). Mutants: an engine that ignores the loop, a file that forgets it — both seen red. (The window's half — the
-row's span and its grips, the Loop combo, ParamMenu › Create Pump — is M2b.)
+row's span and its grips, the Loop combo, ParamMenu › Create Pump — is M2b, below.)
+**In the window (M2b).** A looping automation's row (`Timeline::paintLoop`, `app/widgets/TimelineAuto.cpp:302`) is drawn
+twice over: the whole of it FAINT — sampled every 2 px through the same evaluator and the same cycle rule the engine
+uses, so the repeats and the rest outside the span are what plays — with a seam at each repeat's start (when the
+cycles are 6 px or wider); then its FIRST cycle bright, clipped to that cycle, with its points and handles. That first
+cycle is drawn at the span's start: every beat↔x of the row's points goes through `autoOffset`, so a point dragged
+or added there is in the curve's own beats; a point is kept within its cycle while dragged, and a click in a repeat
+adds the point at its place in the cycle. The span is a brace along the row's top with a grip at each end
+(`spanOf` / `spanGripAt`, `:271` / `:279`; the resize cursor over them, R-UI-14): taken (`:509`), the pointer has it
+— the end never closer than one cycle to the start — and let go (`:566`), ONE line: `set <au>.length=…`, or for the
+start `set <au>.at=… <au>.length=…` so the end stays put. A span set from anywhere eases there (`advanceAuto`,
+`:349`); one let go is already where it lands. The automation's window (`AutomationPanel`) says the loop in a Loop
+row ("every 1 beat · from beat 4 for 8 beats") and offers it as a combo box in its header (`SettingCombo`,
+`app/widgets/AutomationPanel.cpp:45`: Off, 1/4, 1/2, 1, 2 beats, 1, 2, 4 bars, and a value set elsewhere kept
+visible) — a row picked is ONE `set <au>.loop=…`. Right-click any bindable number (`ParamMenu`,
+`app/widgets/ParamMenu.cpp:53`): Create Pump beside Create Automation — `auto create <address> --pump`. UI
+`test_a_looping_automation_is_seen_and_made` (Create Pump from a fader; the span where the model says; the grip's
+cursor; both grips one line each; a shell's span eased, caught mid-way; a click in a repeat folded into the cycle; the
+Loop combo one line, its label caught cross-fading); shot `automation-pump`. Mutants: a span that snaps, a click in a
+repeat not folded — both seen red.
 
 ### DR-SVC-8 Composition is agent-sized (R-SVC-8)
 Built from the audit of an agent's 16-bar song (110 commands, 64 single `note add`s, every id guessed,

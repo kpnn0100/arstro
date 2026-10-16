@@ -323,7 +323,7 @@ namespace solaris_ui
 
     Cursor Timeline::dragCursor() const
     {
-        if (mResizing) return Cursor::ResizeH;
+        if (mResizing || !mSpanAu.empty()) return Cursor::ResizeH; // a clip's end, an automation span's grip (R-AUTO-12)
         const RulerDrag held = mRuler == RulerDrag::Pending ? mRulerZone : mRuler; // pressed on an end, not yet moved
         return held == RulerDrag::LoopFrom || held == RulerDrag::LoopTo ? Cursor::ResizeH : Cursor::Default;
     }
@@ -337,6 +337,9 @@ namespace solaris_ui
         if (rulerRect().contains(local) && br.w > 0 && mLoopTo > mLoopFrom && local.y >= kRulerH * 0.5 &&
             (std::fabs(local.x - br.x) <= kBraceGrip || std::fabs(local.x - br.right()) <= kBraceGrip))
             return Cursor::ResizeH;
+        // an automation span's grip (R-AUTO-12) — as the press reads it
+        if (local.x >= kHeaderW && local.y >= kRulerH)
+            if (const std::string au = autoAt(local.y); !au.empty() && spanGripAt(au, local) >= 0) return Cursor::ResizeH;
         // a clip's end (R-CLIP-7) — as the press reads it
         const std::string id = clipAt(local);
         if (!id.empty())
