@@ -116,6 +116,8 @@ namespace sltest
         if (audio) h.audioIn = [] { return std::unique_ptr<arstro::solaris::IAudioIn>(new QuietIn()); };
         h.settingsPath = dir + "/settings.txt";
         h.recentsPath = dir + "/recents";
+        h.presetsPath = dir + "/presets/user";       // R-PRESET-1: the rig's own, never the machine's
+        h.factoryPresetsPath = dir + "/presets/factory";
         return h;
     }
 

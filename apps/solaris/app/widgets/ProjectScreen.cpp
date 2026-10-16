@@ -96,7 +96,7 @@ namespace solaris_ui
             mWindows->setSampleHint(sampler);
             const bool over = sampler.empty() && overLanes(world, beat, row);
             const bool newLane = row >= mTimeline->rowCount();
-            mTimeline->setDropHint(over && it.kind != "effect", beat, row, it.label + (newLane ? "  \xC2\xB7  new lane" : ""));
+            mTimeline->setDropHint(over && it.kind != "effect" && !(it.kind == "preset" && it.role != "instrument"), beat, row, it.label + (newLane ? "  \xC2\xB7  new lane" : ""));
             mGhostWanted = true;
             mGhostAt = toLocal(world);
             mGhostLabel = it.label;
@@ -147,6 +147,9 @@ namespace solaris_ui
             }
             return onCommand("clip add --pattern " + it.value + " --strip " + it.strip + " --at " + beats(beat) + (lane.empty() ? std::string(" --lane new") : " --lane " + q(lane)));
         }
+        if (it.kind == "preset" && it.role == "instrument") // R-PRESET-1: a new instrument with its preset, ONE line
+            return onCommand("clip add --instrument " + it.value + " --preset " + q(it.label) + " --at " + beats(beat) + " --length 4" + onLane);
+        if (it.kind == "preset" && onNotice) { onNotice("A preset of an effect loads onto its device \xE2\x80\x94 its window's Presets."); return false; }
         if (it.kind == "effect" && onNotice) onNotice("An effect goes on a mixer strip \xE2\x80\x94 drop it in the mixer.");
         return false;
     }

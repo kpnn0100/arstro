@@ -41,13 +41,14 @@ namespace solaris_ui
     public:
         static constexpr double kWidth = 234.0;   // space::u(72): Interstellar's left column
         static constexpr double kTabsH = 29.25;
-        enum Tab { kSamples = 0, kInstruments, kSong, kTabs };
+        enum Tab { kSamples = 0, kInstruments, kSong, kPresets, kTabs }; // R-PRESET-1: Presets last, the others where they were
 
         struct Item
         {
-            std::string kind;   // folder | dir | up | audio | instrument | effect | pattern | newmidi | header | empty (label + note: the words)
+            std::string kind;   // folder | dir | up | audio | instrument | effect | pattern | newmidi | preset | header | empty (label + note: the words)
             std::string label, value, note;
             std::string strip;  // a pattern: the strip its newest clip plays through ("" = none) — where a drop off a track goes (R-BROWSE-4)
+            std::string role;   // R-PRESET-1: a preset's — `instrument` or `effect` (its type is `value`, its name `label`)
         };
 
         Browser();
@@ -62,6 +63,7 @@ namespace solaris_ui
         int rowCount() const { return (int)mRows.size(); }
         const Item &row(int i) const { return mRows[(size_t)i]; }
         double tabHighlightX() const { return mTabX.value(); } // LIVE, for the slide test
+        double tabHighlightW() const { return mTabW.value(); } // LIVE: tabs are as wide as their names — it eases too
         /** R-EDM-9: how much a file's audition fill shows (LIVE, eased) — 0 when it is not being heard. */
         double auditionAmount(const std::string &file) const;
         /** Row i's LIVE opacity — a test tells a cross-fade from a cut. */
@@ -91,7 +93,7 @@ namespace solaris_ui
         double rowY(int i) const; // row i's LIVE top in the list, before scrolling
         int rowAt(const artboard::Point &p) const;
         double listTop() const { return kTabsH + 1.0; }
-        static bool draggable(const Item &i) { return i.kind == "audio" || i.kind == "instrument" || i.kind == "effect" || i.kind == "pattern" || i.kind == "midi"; }
+        static bool draggable(const Item &i) { return i.kind == "audio" || i.kind == "instrument" || i.kind == "effect" || i.kind == "pattern" || i.kind == "midi" || i.kind == "preset"; }
 
         int mTab = kSamples;
         std::string mPath;                        // the folder being browsed ("" = the folder list)
@@ -100,6 +102,7 @@ namespace solaris_ui
         std::vector<solaris::DeviceTypeModel> mTypes;
         std::vector<std::pair<std::string, std::string>> mSongSounds; // label, src
         std::vector<Item> mSongMidi;                  // R-BROWSE-4: the song's patterns, as rows
+        std::vector<solaris::PresetModel> mPresets;   // R-PRESET-1
         std::vector<Item> mRows;                      // the list as it is: hit-testing, row()
         // R-EDM-9: the preview, keyed by file — its fill fades in on the row heard, out on the one left
         struct Aud { artboard::AnimatedProperty amt{0.0}; bool want = false, last = false, placed = false; double progress = 0; };
@@ -112,7 +115,7 @@ namespace solaris_ui
         double mGhostScroll = 0.0;                    // where the list a navigation left was scrolled to
         double mNowMs = 0.0;
         bool mTabInit = false;
-        artboard::AnimatedProperty mTabX{0.0};
+        artboard::AnimatedProperty mTabX{0.0}, mTabW{0.0}; // the highlight's x and width (tabs are as wide as their names)
         interstellar_v1::EasedScroll mScroll;
         cosmo_v2::HoverFade mHover;
         int mPressRow = -1;

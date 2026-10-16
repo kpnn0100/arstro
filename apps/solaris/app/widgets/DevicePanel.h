@@ -66,6 +66,7 @@ namespace solaris_ui
         artboard::Rect bypassRect() const;
         artboard::Rect removeRect() const;
         artboard::Rect rollRect() const;                       // an instrument's "Piano Roll" (R-ROLL-1)
+        artboard::Rect presetsRect() const;                    // R-PRESET-1: "Presets" — its type's, and Save as…
         bool takesSample() const;                              // a sampler: it plays a recorded sound (R-EDM-8)
         std::string sampleText() const;                        // what its header says of that sound
         void setDropHint(bool on) { mDropWant = on; }          // a sample hovering over it: outlined, eased

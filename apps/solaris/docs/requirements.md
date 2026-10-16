@@ -451,11 +451,11 @@ deleted. Every front end draws it as is.
 
 ### DR-UI-8 The mixer dock (R-UI-3, R-MIX-1/5/6/7/9/12, R-MIX-12 amended)
 `MixerDock` (`app/widgets/MixerDock.cpp`) sits under the lanes (`ProjectScreen::dockTarget`,
-`app/widgets/ProjectScreen.cpp:152`: 429 px wanted; its top edge dragged follows the pointer; the
+`app/widgets/ProjectScreen.cpp:155`: 429 px wanted; its top edge dragged follows the pointer; the
 chevron folds it to its tab bar, eased 220 ms; it gives way before the lanes, which keep 130 px).
 Tabs: a mixer page each, "+" (`mixer add`), Matrix; keyed (`syncTabs`) so a tab added slides the
 others along, measured in one weight so choosing a tab moves nothing; the highlight slides, the
-pages cross-fade as layers. A page (`syncCards`, `:193`) is a card per strip in processing order,
+pages cross-fade as layers. A page (`syncCards`, `:196`) is a card per strip in processing order,
 the strips feeding one bus (two or more) gathered under its header; the master pinned right. A card:
 colour, name, "audio · N clips" / "bus · fed by N"; rack chips (four slots: the devices and "+
 Effect", or two, "+N more", "+ Effect"); two sends (→ name, dB, P = pre; a third says "in the
@@ -1011,8 +1011,8 @@ stops itself; it never allocates on its thread and is never in a render (a rende
 service's `pump` (`:70`) carries its progress into `audition.{file, playing, progress}` and announces its
 end (`audition.changed … playing=0`); the model keeps it across refreshes, and the App re-binds while it
 plays and once when it ends (`app/App.cpp:265`). In the browser a click on a sample hears it, a click on
-the one being heard stops it (`app/widgets/Browser.cpp:287`); its row fills as it plays with an accent
-bar along its foot, keyed by the file and eased in and out (`:165`, `:312`) — a double-click still places
+the one being heard stops it (`app/widgets/Browser.cpp:327`); its row fills as it plays with an accent
+bar along its foot, keyed by the file and eased in and out (`:192`, `:352`) — a double-click still places
 it. Settings › Playback has PREVIEW LEVEL. Measured (L2): the live stream carries the decoded file at
 the audition level, sample for sample; it ends itself, said.
 
@@ -1060,14 +1060,14 @@ land on the same step, the step's name caught mid cross-fade; at the deepest zoo
 past beat 2 is exactly `transport seek 2.007`; all the way out a click at 9.9 is `transport seek 8`.
 Mutants — a fixed 1/4 snap, a level's alpha taken from the TARGET zoom (it pops), a deepest zoom that
 snaps — each fail it. Shots `lanes-zoomed-in`, `lanes-zoomed-out`, `lanes-zoom-mid` (mid Ctrl+wheel)
-(`app/tests/shots/renderShots.cpp:181`).
+(`app/tests/shots/renderShots.cpp:193`).
 ### DR-MIX-16 The mixer's numbers bound (R-MIX-16)
 **One menu.** `paramMenuItems` (`app/widgets/ParamMenu.cpp:43`) builds the right-click menu of every number a
 formula can drive from a `ParamTarget` (address, formula, value as shown, reset, bindable): Create Automation
 unless it already IS one (`auto create <address>`), Formula… (cosmo's rename field seeded with the formula or
 "=", → `set <address>="=<typed>"`, quoted when it has a space), Clear Binding when bound (`bind clear
 <address>`), Reset to Default (`set <address>=<default>`), and Copy Address / Copy Value / Copy as Formula
-(DR-UI-11). The device window (`DevicePanel::openParamMenu`, `app/widgets/DevicePanel.cpp:468`) and the dock
+(DR-UI-11). The device window (`DevicePanel::openParamMenu`, `app/widgets/DevicePanel.cpp:474`) and the dock
 (`MixerDock::openParam`, `app/widgets/MixerDock.cpp:949`, offered first on a right-click, `:1181`) both call
 it, so the menus cannot drift; a hosted third-party VST3's parameter list (R-VST-6, not built yet) will call
 it the same way. In the dock: a fader → `<ch>.gain`, a pan → `<ch>.pan`, a send's row on a card or its cell
@@ -1115,7 +1115,7 @@ a send and the master on formulas) and `copied-toast`.
 (`core/service/ServiceMachine.cpp:106`), published as `settings.showIds` — so an agent turns the ids on as the
 View menu does (View › Show IDs / Hide IDs, `app/App.cpp:170`).
 
-**Drawn, faded.** `ProjectScreen` eases ONE amount from the model's setting (`app/widgets/ProjectScreen.cpp:201`,
+**Drawn, faded.** `ProjectScreen` eases ONE amount from the model's setting (`app/widgets/ProjectScreen.cpp:204`,
 200 ms; `idsAmount()` is the live value) and hands it to every widget that draws ids; `drawNameWithId`
 (`app/widgets/ParamMenu.cpp:84`) draws a name with its id right-aligned in the accent's mono, the name giving
 way by the EASED amount. Where: lane headers (the lane's id; a strip's own row, the strip's) and automation
@@ -1526,7 +1526,7 @@ pointer's frame after frame and the song plays on from there; the brace moved 4�
 until release, then one line; resized by its right end, clamped at its left; a click still seeks. Mutants
 seen red, then restored: the playhead following the audio while scrubbing, a seek only on release, a body
 drag keeping the brace's end. Shots `ruler-scrubbing` and `loop-brace-moving`
-(`app/tests/shots/renderShots.cpp:463`, `:454`), both sizes, looked at.
+(`app/tests/shots/renderShots.cpp:475`, `:466`), both sizes, looked at.
 
 ### DR-TIME-7 Stop takes the time bar back to where it was put — or leaves it (R-TIME-7, R-TIME-8)
 The service keeps a CUE (`mCue`): where the user PUT the time bar. A `transport seek` puts it where the time bar went
@@ -1605,7 +1605,7 @@ double-click on the Bass track → the exact line and a clip of a new pattern th
 track's menu; the end dragged → the snapped length while held with nothing sent, one line on release,
 no ease back; a shell's `set ac_1.length=6` caught mid-ease; a clip dragged onto the drums' track plays
 through the drums. Mutants seen red, then restored: a length that snaps, an edge never taken. Shot
-`clip-end-dragging` (`app/tests/shots/renderShots.cpp:494`), both sizes, looked at.
+`clip-end-dragging` (`app/tests/shots/renderShots.cpp:506`), both sizes, looked at.
 
 ### DR-CLIP-9 A clip copied: Shift-drag, Ctrl+C / Ctrl+V (R-CLIP-9, R-CLIP-10)
 `clip duplicate <ac> [--at <b>] [--count <n>] [--lane <ln>]` (`core/service/ServiceEdit.cpp:779`): with `--lane` the
@@ -1631,9 +1631,9 @@ pastes all at the time bar, the dropped copy fading in — all seen red.
 
 ### DR-BROWSE-4 The song's MIDI list (R-BROWSE-4)
 The Song tab lists a MIDI header, **New MIDI**, then every pattern, then the samples under SAMPLES
-(`Browser::rebuild`, `app/widgets/Browser.cpp:117`) — keyed rows that grow in and fade out. A pattern's row
+(`Browser::rebuild`, `app/widgets/Browser.cpp:143`) — keyed rows that grow in and fade out. A pattern's row
 reads its name and, in mono at the right, its length (bars when whole bars), its note count and the
-strips that play it, or "unplayed" (`bind`, `:60`, from the model's `patterns[].strips`, published with
+strips that play it, or "unplayed" (`bind`, `:62`, from the model's `patterns[].strips`, published with
 `patterns[].lastStrip` — the strip its newest clip plays through — by `core/service/ServiceModel.cpp:320`).
 New MIDI sends `pattern new --name "MIDI <n>"` (`:354`); a double-click opens the pattern's piano roll
 (`:361`); its menu (`:367`): Rename… (`set <pt>.name=`), Piano Roll, Duplicate, Copy ID, Delete (the
@@ -1658,8 +1658,8 @@ the DSP repo alone the plugins offer none and a host draws its generic view.
 (`plugins/InstrumentEditor.cpp`) builds a model of ONE device each frame the host's values moved
 (`refresh`, `:59`) with `deviceModelOf` (`core/service/RegistryModel.cpp:7` — the ONE registry→model
 mapping, which the service now uses too, `core/service/ServiceModel.cpp:59`), the panel's song controls
-off (`DevicePanel::songControls`, `app/widgets/DevicePanel.h:86`: the header names the instrument with the
-suite's mark and teal dot instead, `app/widgets/DevicePanel.cpp:569`). Solaris's accent and embedded fonts
+off (`DevicePanel::songControls`, `app/widgets/DevicePanel.h:87`: the header names the instrument with the
+suite's mark and teal dot instead, `app/widgets/DevicePanel.cpp:594`). Solaris's accent and embedded fonts
 are installed before a widget is built. The panel speaks text as in Solaris; `command` (`:82`) turns
 `set dv_1.<name>=<value>` into the host's edit through `ParamAccess` — begun ONCE per parameter per
 press, performed per step (a step that moved nothing says nothing, `:98`), ended when the pointer lets
@@ -1690,7 +1690,7 @@ in a real host window, 520×600, drawn as above; a drag sent to its window moved
 
 **Drum Machine's pads** (E6; DSP `9634166`, REQ-device-9 and REQ-vst-7). A kit — a type with `noteNames` —
 gets a `PadGrid` (`plugins/InstrumentEditor.cpp:140`) in the panel's band (`DevicePanel::band`,
-`app/widgets/DevicePanel.h:89`: room under the title, the rows below it; opt-in, 0 in Solaris), five to a
+`app/widgets/DevicePanel.h:90`: room under the title, the rows below it; opt-in, 0 in Solaris), five to a
 row (`:264`): a pad per key the registry names, in its order, each joined to its parameters by the
 registry's `notePrefixes` (`:149` — the join D-3 lacked). A press plays the pad through the plugin —
 `ParamAccess::play`, the controller's `playNote`, an `arstro.note` message to the processor, heard at the
@@ -1710,8 +1710,8 @@ played, the pick snapped, the least scroll instead of the group, the controller 
 ### DR-UI-12 An instrument's face is an analog synth panel (R-UI-12; R-WIN-2, R-VST-7 amended)
 `AnalogFace` (`app/widgets/AnalogFace.cpp`) is an instrument's DevicePanel body — built in the rows' place when
 the device is an instrument (`DevicePanel::build`, `app/widgets/DevicePanel.cpp:194`; `analogFace`, opt-out,
-`app/widgets/DevicePanel.h:79`), so the same face is Solaris's window and the plugins' editor. Still generated
-(law 2): `build` (`:128`) makes a module per parameter group in the registry's order, the ungrouped last, titled
+`app/widgets/DevicePanel.h:80`), so the same face is Solaris's window and the plugins' editor. Still generated
+(law 2): `build` (`:129`) makes a module per parameter group in the registry's order, the ungrouped last, titled
 by `devices[].groups` (DSP REQ-device-10, G2), a knob per number and a switch per choice; a module's SCREEN is
 chosen by what its parameters say (`:156`): a `wave` choice → the oscillator, `cutoff` + `res` → the filter,
 `attack` `decay` `sustain` `release` → the envelope. `layoutFor` (`:213`) flows the modules into the width —
@@ -1735,7 +1735,7 @@ Tokens: `surface::moduleBg`, `screenBg`, `knobCap`, `knobTrack`, `screenGrid` (`
 halo fades in and out. A drag is direct manipulation — up turns it up, Shift five times finer (`:455`), the knob
 the pointer's — and each step that moved the value is ONE `set` through the panel; a bound knob takes no drag
 (`:439`); a double-click is the default; a right-click opens the parameter's menu (`DevicePanel::openParamMenuFor`,
-`app/widgets/DevicePanel.cpp:484`, R-WIN-3); the wheel scrolls. Show IDs puts each address over its label (`:742`).
+`app/widgets/DevicePanel.cpp:490`, R-WIN-3); the wheel scrolls. Show IDs puts each address over its label (`:742`).
 An instrument's window opens 820 × 580 (`app/widgets/FloatWindow.cpp:144`), three modules a row; an effect's
 keeps the list at 390 × 520. The plugins' editor opens at the face's own size — 980 wide, as tall as its modules
 (`InstrumentEditor::preferredSize`, `plugins/InstrumentEditor.cpp:40`, asked by `plugins/X11View.cpp:64`).
@@ -1754,7 +1754,7 @@ modules, screens and rows at 980, one a row at the minimum; `:200` a knob dragge
 change caught mid-turn and a choice's light mid-slide; `:285` the filter screen against the filter). Mutants seen
 red, then restored: a knob that snaps, a light that snaps, a bound knob that drags, the screen's Q drifting.
 Shots `device-panel` (the face), `device-face-turning` (mid-turn and mid-morph), `effect-window`
-(`app/tests/shots/renderShots.cpp:250`, `:261`), and the plugin's `plugin-editor-synth.png` — looked at.
+(`app/tests/shots/renderShots.cpp:262`, `:273`), and the plugin's `plugin-editor-synth.png` — looked at.
 
 ### DR-UI-13 The song's tempo is set in the song bar (R-UI-13)
 The song bar's "<bpm> bpm" is a control (`SongBar`, `app/widgets/SongBar.cpp`; its hit rect `kBpm`, `:68`, placed
@@ -1805,8 +1805,8 @@ a removal not written at once, the window not asking — both seen red.
 The model reads and writes Standard MIDI Files as pure functions, bytes in and out, beside the `.slp` parser
 (`model/Midi.cpp`): `parseMidi` (`:54`) reads formats 0, 1 and 2 — running status, a note-on of velocity 0 as a note-off,
 notes paired first-in first-out per channel and pitch, a note still sounding at its track's end ended there, meta names
-and tempos, system exclusive skipped — and both divisions; `midiBeats` (`:174`) turns a tick into beats (ticks over the
-division, or for SMPTE time seconds through the tempo map, 120 bpm until its first tempo); `writeMidi` (`:191`) writes
+and tempos, system exclusive skipped — and both divisions; `midiBeats` (`:177`) turns a tick into beats (ticks over the
+division, or for SMPTE time seconds through the tempo map, 120 bpm until its first tempo); `writeMidi` (`:194`) writes
 format 1 at 960 ticks a beat — Solaris's own tick — a tempo track (name, meter, tempo) and a track per entry, offs
 before ons at one tick. The service reads and writes the files (`core/service/ServiceMidi.cpp`): `pattern import`
 (`:48`) makes a pattern per track with notes (or `--track n`'s), named after the track, whole bars long, a pitch
@@ -2323,4 +2323,14 @@ starting with a dot; an existing one refused without --replace; the folder made)
 without `--instrument` refused. The presets folders are read with `std::filesystem` at the host's paths (the test host
 lists nothing real). L2 `test_presets_are_saved_loaded_and_dropped`, `test_the_shipped_presets_load` (every shipped one
 onto a device of its type). Mutants: a load keeping the values it does not name, a bad value skipped and the rest
-loaded, a save an edit of the song, the factory's before the user's, a drop's preset ignored — each red.
+loaded, a save an edit of the song, the factory's before the user's, a drop's preset ignored — each red. `preset list`
+reads the folders afresh (`core/service/ServicePresets.cpp:137`), so presets written since show. **The window** (N22
+part 2, 2026-10-17): the browser's fourth tab, Presets (`app/widgets/Browser.cpp:118`) — each type that has presets, its
+label in capitals as a header, then its presets, the factory's marked "factory" at the right; keyed rows, so a saved one
+grows in. The four tabs are as wide as their names need (`tabRect`, `:195`) and the highlight eases its width with its
+place. A preset row drags like an instrument: an instrument's dropped on the lanes is ONE `clip add --instrument <t>
+--preset <name> --at … --length 4 [--lane …]` (`app/widgets/ProjectScreen.cpp:150`); an effect's says it loads onto its
+device. A device window's header has Presets (`app/widgets/DevicePanel.cpp:540`): its type's presets (the factory's
+marked), each ONE `preset load`, then Save as preset… (the rename field; ONE `preset save`). UI
+`test_presets_in_the_window`; shots `browser-presets`, `device-presets-menu`. Mutants: the drop forgetting its preset, a
+preset clicked saving over it, the highlight's width jumping, a factory preset unmarked — each red.

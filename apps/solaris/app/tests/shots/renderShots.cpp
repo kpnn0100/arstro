@@ -9,9 +9,11 @@
  *
  *  --check fails if any shot is a single colour (a blank frame is the cheapest broken state to miss).
  */
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include "../Rig.h"
+#include "../../widgets/DevicePanel.h"
 #include "../../widgets/PianoRoll.h"
 #include <thread>
 #include <chrono>
@@ -54,6 +56,16 @@ namespace
         r.cmd("send add ch_4 --to ch_5 --gain -12 --pre");
     }
     using sltest::world;
+
+    // R-PRESET-1: the presets shipped with the app, as the rig's factory folder (the shots never read the machine's)
+    void shippedPresets(sltest::Rig &r)
+    {
+        const std::filesystem::path shipped = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "presets";
+        std::filesystem::remove_all(r.dir + "/presets");
+        std::filesystem::create_directories(r.dir + "/presets/factory");
+        std::filesystem::copy(shipped, r.dir + "/presets/factory", std::filesystem::copy_options::recursive);
+        r.cmd("preset list");
+    }
 
     // R-EDIT-1: a drum loop with its fades and a lifted gain, a second over its end (a crossfade), a reversed vocal
     void clipEditSong(sltest::Rig &r)
@@ -752,6 +764,29 @@ namespace
                  const std::string ac = r.svc->model().clips[0].id;
                  const artboard::Rect h = world(tl, tl.fadeHandleRect(ac, false));
                  r.drag(h.x + h.w * 0.5, h.y + h.h * 0.5, h.x + h.w * 0.5 + 2.0 * 28.0, h.y + h.h * 0.5, 6, false);
+             }},
+            {"browser-presets", // R-PRESET-1: the Presets tab — the shipped presets by type, one of the user's beside them
+             [](sltest::Rig &r) {
+                 shippedPresets(r);
+                 mixedSong(r, "Night Drive");
+                 for (const auto &rk : r.svc->project()->racks)
+                     for (const auto &d : rk.devices)
+                         if (d.type == "synth") r.cmd("preset save " + d.id + " \"My Bass\"");
+                 r.app->project().browser().setTab(arstro::solaris_ui::Browser::kPresets);
+                 r.settle();
+             }},
+            {"device-presets-menu", // R-PRESET-1: a synth's window, its Presets open — its type's presets and Save as…
+             [](sltest::Rig &r) {
+                 shippedPresets(r);
+                 r.cmd("project new \"" + r.song("Presets") + ".slp\" --bpm 120");
+                 r.cmd("clip add --instrument synth --at 0 --length 4");
+                 r.settle();
+                 auto &wl = r.app->project().windows();
+                 wl.openDevice("dv_1");
+                 r.settle();
+                 auto &p = *wl.devicePanel("dv_1");
+                 r.click(world(p, p.presetsRect()));
+                 r.settle();
              }},
             {"tempo-map",   // R-TEMPO-1: 140 from bar 3, gliding to 100 by bar 5 — flags on the ruler's band, the glide's slope; the
                             // song bar at the time bar's tempo

@@ -4076,6 +4076,79 @@ static void test_tempo_changes_on_the_ruler()
     pass("tempo changes on the ruler (R-TEMPO-1): one fades in; dragged, the pointer's, then one `tempo move --at`; changed elsewhere it counts there; Glide into it and Tempo… one line each; the ruler's Tempo change here… typed; the song bar shows the tempo at the time bar and sets the change in effect; Delete fades it out");
 }
 
+static void test_presets_in_the_window()
+{
+    // R-PRESET-1: the browser's Presets tab lists them by type, the factory's marked; an instrument's preset dragged onto
+    // the lanes is ONE `clip add --instrument … --preset`; a device window's Presets — a preset is ONE `preset load`,
+    // Save as preset… typed ONE `preset save`, and the tab grows the new one in
+    sltest::Rig r("ui-presets", 1280, 800);
+    std::filesystem::remove_all(r.dir + "/presets");
+    std::filesystem::create_directories(r.dir + "/presets/factory/synth");
+    {
+        std::ofstream f(r.dir + "/presets/factory/synth/Warm.slpreset");
+        f << "arstro-preset = 1\ntype = synth\nfilter.cutoff = 1800.0\n";
+    }
+    r.cmd("project new " + r.song("Presets") + ".slp --bpm 120");
+    r.cmd("preset list"); // the folders read afresh
+    r.settle();
+    auto &br = r.app->project().browser();
+    r.click(world(br, br.tabRect(arstro::solaris_ui::Browser::kSong)));
+    r.settle();
+    const double w0 = br.tabRect(arstro::solaris_ui::Browser::kSong).w, w1 = br.tabRect(arstro::solaris_ui::Browser::kPresets).w;
+    r.click(world(br, br.tabRect(arstro::solaris_ui::Browser::kPresets)));
+    r.frame();
+    r.frame();
+    const double sliding = br.tabHighlightW();
+    assert(w0 != w1 && sliding > std::min(w0, w1) && sliding < std::max(w0, w1)); // the highlight's width eases with its place
+    r.settle();
+    assert(br.tab() == arstro::solaris_ui::Browser::kPresets && br.tabHighlightW() == w1);
+    int warm = -1;
+    for (int i = 0; i < br.rowCount(); ++i)
+        if (br.row(i).kind == "preset" && br.row(i).label == "Warm") warm = i;
+    assert(warm >= 1 && br.row(warm - 1).kind == "header" && br.row(warm).value == "synth" && br.row(warm).note == "factory" && br.row(warm).role == "instrument");
+    // dragged onto the lanes: a new instrument with its preset, one line
+    auto &tl = r.app->project().timeline();
+    const artboard::Rect row = world(br, br.rowRect(warm));
+    const double x = world(tl, artboard::Rect{tl.beatToX(4.0), 0, 0, 0}).x, y = world(tl, artboard::Rect{0, arstro::solaris_ui::Timeline::kRulerH + 30.0, 0, 0}).y;
+    r.drag(cx(row), cy(row), x + 1.0, y, 8);
+    r.settle();
+    assert(sentLine(r, "clip add --instrument synth --preset Warm --at 4 --length 4 --lane new"));
+    const std::string dv = r.svc->project()->racks.back().devices[0].id;
+    // its window's Presets: one loaded, one saved
+    auto &wl = r.app->project().windows();
+    wl.openDevice(dv);
+    r.settle();
+    auto &p = *wl.devicePanel(dv);
+    auto &menu = r.app->menu();
+    r.click(world(p, p.presetsRect()));
+    r.settle();
+    assert(menuItem(r, "Warm  \xC2\xB7 factory") >= 0 && menuItem(r, "Save as preset\xE2\x80\xA6") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Warm  \xC2\xB7 factory")));
+    r.settle();
+    assert(sentLine(r, "preset load " + dv + " \"Warm\""));
+    r.click(world(p, p.presetsRect()));
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "Save as preset\xE2\x80\xA6")));
+    r.settle();
+    artboard::KeyEvent typed;
+    typed.type = artboard::KeyEvent::Type::Text;
+    typed.text = "Mine";
+    r.app->key(typed);
+    r.key(13);
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "preset save " + dv + " \"Mine\""));
+    int mine = -1;
+    for (int i = 0; i < br.rowCount(); ++i)
+        if (br.row(i).kind == "preset" && br.row(i).label == "Mine") mine = i;
+    assert(mine >= 0 && br.row(mine).note.empty());
+    const double grows = br.rowAlpha(mine);
+    assert(grows > 0.0 && grows < 1.0);                              // grown in, not snapped
+    r.settle();
+    assert(br.rowAlpha(mine) == 1.0);
+    pass("presets in the window (R-PRESET-1): the Presets tab by type, the factory's marked; dragged onto the lanes, one `clip add --instrument --preset`; a device window's Presets — a preset loads in one line, Save as preset… typed one line, the tab growing it in");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -4125,6 +4198,7 @@ int main()
     test_a_clips_fades_gain_and_edits();
     test_a_clip_warped_from_its_menu();
     test_tempo_changes_on_the_ruler();
+    test_presets_in_the_window();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();

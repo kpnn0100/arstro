@@ -456,6 +456,12 @@ namespace solaris_ui
         return Rect{r.x - 6.5 - 55.25, r.y, 55.25, 19.5};
     }
 
+    Rect DevicePanel::presetsRect() const
+    {
+        const Rect b = bypassRect();
+        return Rect{b.x - 6.5 - 55.25, b.y, 55.25, 19.5};
+    }
+
     bool DevicePanel::contextClick(Point world)
     {
         const Point local = toLocal(world);
@@ -520,6 +526,7 @@ namespace solaris_ui
             if (!songControls) { mHover.setHovered(-1); return true; }
             if (removeRect().contains(local)) h = 1;
             else if (bypassRect().contains(local)) h = 2;
+            else if (presetsRect().contains(local)) h = 4;
             if (rollRect().contains(local)) h = 3;
             mHover.setHovered(h);
             return true;
@@ -530,6 +537,24 @@ namespace solaris_ui
             if (!d || !songControls) return true;
             if (!d->instrument && removeRect().contains(local)) { if (onCommand) onCommand("device remove " + d->id); return true; }
             if (bypassRect().contains(local)) { if (onCommand) onCommand("set " + d->id + ".bypass=" + (d->bypass ? "false" : "true")); return true; }
+            if (presetsRect().contains(local) && onMenu)
+            {
+                // R-PRESET-1: its type's presets — each ONE `preset load` — and its values saved as one, named
+                std::vector<cosmo_v2::ContextMenu::Item> items;
+                const std::string dv = d->id;
+                for (const auto &x : mModel.presets)
+                    if (x.type == d->type)
+                    {
+                        const std::string name = x.name;
+                        items.push_back({name + (x.factory ? "  \xC2\xB7 factory" : ""), [this, dv, name] { if (onCommand) onCommand("preset load " + dv + " \"" + name + "\""); }});
+                    }
+                const Point world = g.pos;
+                items.push_back({"Save as preset\xE2\x80\xA6", [this, dv, world] {
+                                     if (onRename) onRename("", world, [this, dv](const std::string &n) { if (onCommand && !n.empty()) onCommand("preset save " + dv + " \"" + n + "\""); });
+                                 }});
+                onMenu(std::move(items), g.pos);
+                return true;
+            }
             if (d->instrument && rollRect().contains(local) && !mStrip.empty())
             {
                 // the strip's pattern; a menu when it plays several; a new clip (and pattern) when it has none
@@ -579,12 +604,16 @@ namespace solaris_ui
             t.beginPath(); t.moveTo(0, kHeaderH - 0.5); t.lineTo(W, kHeaderH - 0.5); t.strokePath();
             return;
         }
-        const Rect by = bypassRect();
+        const Rect by = bypassRect(), pr = presetsRect();
         t.setFill(palette::mutedForeground());
         // a sampler names its sound where the others name their type (R-EDM-8)
         const std::string what = d->takesSample ? sampleText() : d->id + " \xC2\xB7 " + d->type;
-        t.drawText(textfit::ellipsize(t, mOwner + " \xC2\xB7 " + what, std::max(0.0, by.x - 2.0 * space::padX()), 10.0, font::mono()),
+        t.drawText(textfit::ellipsize(t, mOwner + " \xC2\xB7 " + what, std::max(0.0, pr.x - 2.0 * space::padX()), 10.0, font::mono()),
                    space::padX(), textfit::baseline(by.y + by.h * 0.5, 10.0), 10.0, font::mono());
+        // R-PRESET-1: Presets — a menu of its type's, and Save as…
+        drawRoundedRect(t, pr, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), mHover.amount(4))));
+        t.setFill(palette::secondaryForeground());
+        t.drawText("Presets", pr.x + (pr.w - t.measureText("Presets", 10.0, font::sans())) * 0.5, textfit::baseline(pr.y + pr.h * 0.5, 10.0), 10.0, font::sans());
         // On / Bypassed: the fill eases whoever changed it
         const double b = mBypass.value();
         drawRoundedRect(t, by, radius::control(), Paint::filled(lerpColor(palette::primary(), palette::secondary(), b)));

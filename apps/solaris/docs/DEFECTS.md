@@ -24,7 +24,7 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 - **Reproduction:** `project new d.slp` · `clip add --instrument synth --at 0 --length 4` ·
   `set ch_2.name=Bass` · `ls`.
 - **Cause:** the lane and the pattern copy the strip's name when they are made (`laneFor`,
-  `core/service/ServiceEdit.cpp:462`); nothing links them after.
+  `core/service/ServiceEdit.cpp:463`); nothing links them after.
 - **Recommended fix:** a lane or pattern made for a strip keeps that strip's name while it was never
   renamed itself — renaming the strip renames the ones still carrying its old name, in the same edit.
   Needs an R-LANE line first (lanes are organisation only, R-LANE-1, so the rule is about names alone).

@@ -134,7 +134,7 @@ namespace solaris
 
     bool SolarisService::presetCommand(const Command &c, std::string &err)
     {
-        if (!mPresetsScanned) scanPresets();
+        if (!mPresetsScanned || c.kind == K::PresetList) scanPresets(); // a listing reads the folders afresh
         if (c.kind == K::PresetList)
         {
             const std::string type = c.arg(0);

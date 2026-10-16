@@ -2,6 +2,8 @@
 #include "../../../interstellar/app/widgets/Glyphs.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
 #include "../../../cosmo/widgets/Icons.h"
+#include <cctype>
+#include <cstring>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -18,7 +20,7 @@ namespace solaris_ui
 
     namespace
     {
-        const char *kTabNames[Browser::kTabs] = {"Samples", "Instruments", "Song"};
+        const char *kTabNames[Browser::kTabs] = {"Samples", "Instruments", "Song", "Presets"};
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
         std::string baseName(const std::string &p)
         {
@@ -61,6 +63,7 @@ namespace solaris_ui
     {
         mFolders = m.settings.folders;
         mTypes = m.deviceTypes;
+        mPresets = m.presets; // R-PRESET-1
         mAudFile = m.audition.file;
         mAudPlaying = m.audition.playing;
         mAudProgress = m.audition.progress;
@@ -112,6 +115,29 @@ namespace solaris_ui
                     if (t.kind == kind) mRows.push_back(Item{kind, t.label, t.name, t.name});
             }
         }
+        else if (mTab == kPresets)
+        {
+            // R-PRESET-1: each type that has presets, in the registry's order — a header, then its presets (the factory's
+            // marked)
+            for (const auto &t : mTypes)
+            {
+                bool any = false;
+                for (const auto &x : mPresets)
+                    if (x.type == t.name)
+                    {
+                        if (!any)
+                        {
+                            std::string h = t.label;
+                            for (auto &ch : h) ch = (char)std::toupper((unsigned char)ch); // headers in capitals, as the other tabs'
+                            mRows.push_back(Item{"header", h, "", ""});
+                        }
+                        any = true;
+                        Item it{"preset", x.name, x.type, x.factory ? "factory" : ""};
+                        it.role = t.kind;
+                        mRows.push_back(it);
+                    }
+            }
+        }
         else
         {
             // R-BROWSE-4: the song's MIDI first (a new one always to hand), then its samples
@@ -132,6 +158,7 @@ namespace solaris_ui
             if (mTab == kSamples && mPath.empty()) { e.label = "No sample folders yet."; e.note = "Add yours in Settings \xE2\x80\x94 click here."; }
             else if (mTab == kSamples) { e.label = "Nothing to play here."; e.note = "Audio files and folders show up in this list."; }
             else if (mTab == kSong) { e.label = "This song plays no samples yet."; e.note = "Drag one in from Samples."; }
+            else if (mTab == kPresets) { e.label = "No presets yet."; e.note = "Save one from a device's window \xE2\x80\x94 Presets."; }
             keyed.emplace_back(gen + "empty|" + e.label, e);
         }
         mMotion.sync(keyed, space::rowH());
@@ -167,8 +194,16 @@ namespace solaris_ui
 
     Rect Browser::tabRect(int t) const
     {
-        const double w = (width.value() - 2 * space::padX()) / kTabs;
-        return Rect{space::padX() + t * w, 4.0, w, kTabsH - 8.0};
+        // each tab as wide as its name needs (four characters' room around it), so "Instruments" fits beside the rest (R5)
+        double sum = 0.0, before = 0.0;
+        for (int k = 0; k < kTabs; ++k)
+        {
+            const double weight = (double)std::strlen(kTabNames[k]) + 4.0;
+            if (k < t) before += weight;
+            sum += weight;
+        }
+        const double room = width.value() - 2 * space::padX();
+        return Rect{space::padX() + room * before / sum, 4.0, room * ((double)std::strlen(kTabNames[t]) + 4.0) / sum, kTabsH - 8.0};
     }
 
     double Browser::auditionAmount(const std::string &file) const
@@ -198,10 +233,15 @@ namespace solaris_ui
     void Browser::advance(double nowMs)
     {
         mNowMs = nowMs;
-        const double want = tabRect(mTab).x;
-        if (!mTabInit) { mTabX.set(want); mTabInit = true; }
-        else if (std::fabs(mTabX.value() - want) > 0.01 && !mTabX.isAnimating()) mTabX.animateTo(want, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
+        const double want = tabRect(mTab).x, wantW = tabRect(mTab).w;
+        if (!mTabInit) { mTabX.set(want); mTabW.set(wantW); mTabInit = true; }
+        else
+        {
+            if (std::fabs(mTabX.value() - want) > 0.01 && !mTabX.isAnimating()) mTabX.animateTo(want, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
+            if (std::fabs(mTabW.value() - wantW) > 0.01 && !mTabW.isAnimating()) mTabW.animateTo(wantW, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
+        }
         mTabX.update(nowMs);
+        mTabW.update(nowMs);
         mMotion.advance(nowMs);
         // the preview's fill: on the row heard, its progress following the audio; eased in and out
         if (mAudPlaying && !mAudFile.empty()) mAud[mAudFile];
@@ -331,7 +371,7 @@ namespace solaris_ui
         // tabs: the highlight SLIDES
         drawRoundedRect(t, Rect{space::padX(), 4.0, W - 2 * space::padX(), kTabsH - 8.0}, radius::hairline(), Paint::filled(palette::segmentedBg()));
         const Rect tr0 = tabRect(0);
-        drawRoundedRect(t, Rect{mTabX.value() + 1.0, tr0.y + 1.0, tr0.w - 2.0, tr0.h - 2.0}, radius::hairline(), Paint::filled(palette::secondary()));
+        drawRoundedRect(t, Rect{mTabX.value() + 1.0, tr0.y + 1.0, mTabW.value() - 2.0, tr0.h - 2.0}, radius::hairline(), Paint::filled(palette::secondary()));
         for (int k = 0; k < kTabs; ++k)
         {
             const Rect r = tabRect(k);
@@ -383,7 +423,7 @@ namespace solaris_ui
             if (it.kind == "folder" || it.kind == "dir") cosmo_v2::icon::folder(t, ib, ic, 1.1);
             else if (it.kind == "up") glyph::line(t, ib.x + 8.0, ib.y + 2.0, ib.x + 3.0, ib.y + 6.0, ic, 1.3), glyph::line(t, ib.x + 3.0, ib.y + 6.0, ib.x + 8.0, ib.y + 10.0, ic, 1.3);
             else if (it.kind == "audio") waveGlyph(t, ib, ic);
-            else if (it.kind == "instrument") glyph::speaker(t, ib, ic, 1.1);
+            else if (it.kind == "instrument" || (it.kind == "preset" && it.role == "instrument")) glyph::speaker(t, ib, ic, 1.1);
             else if (it.kind == "pattern" || it.kind == "midi") notesGlyph(t, ib, ic);
             else if (it.kind == "newmidi")
             {
@@ -395,7 +435,7 @@ namespace solaris_ui
             const double px = mono ? 10.0 : 11.0;
             const char *fam = mono ? font::mono() : font::sans();
             double labelW = W - ib.right() - 2 * space::padX();
-            if (it.kind == "pattern" && !it.note.empty())
+            if ((it.kind == "pattern" || it.kind == "preset") && !it.note.empty())
             {
                 // its length, notes and who plays it, at the right — mono (numbers), muted; the name gets the rest
                 const std::string meta = textfit::ellipsize(t, it.note, W * 0.62, 9.0, font::mono());
