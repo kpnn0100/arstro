@@ -4254,6 +4254,16 @@
           "default": 2.0,
           "integer": false,
           "log": false
+        },
+        {
+          "name": "truePeak",
+          "label": "True Peak",
+          "unit": "",
+          "choices": [
+            "off",
+            "on"
+          ],
+          "default": "off"
         }
       ]
     }

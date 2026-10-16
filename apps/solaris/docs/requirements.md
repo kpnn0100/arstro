@@ -137,7 +137,7 @@ mixer and renumbers the mixer 0…n−1 (`placeStrip`, `:60`; `case K::StripMove
 renumbers mixers — an order never ties. A new project is `newProject` (`model/Project.cpp:157`): Sources (`mx_1`), Buses (`mx_2`)
 holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the master (R-MIX-3).
 Guarded by `test_routing_only_goes_forward` and `test_forward_is_processing_order_and_moves_renumber`
-(`core/tests/serviceTests.cpp:1900`: a bus made on Buses goes before Main and feeds it; a same-mixer route
+(`core/tests/serviceTests.cpp:1901`: a bus made on Buses goes before Main and feeds it; a same-mixer route
 forward is taken, backward refused naming both ends; `strip move` that would point one back refused;
 `--order 0` first and renumbered; mutant checked: the old later-mixer rule refuses the new bus's
 default route). The same rule is PUBLISHED: `targetsOf` (`model/Project.cpp:797`) lists what a strip
@@ -913,6 +913,16 @@ never exceeds its ceiling by construction (measured in the DSP suites). Its look
 (DSP REQ-device-8) and compensated (DR-MIX-17): on the master the render still starts on beat 0; on a strip
 the others wait for it.
 
+### DR-EDM-4a A true-peak limiter (R-EDM-4a)
+The library's limiter has `truePeak` off|on (REQ-fx-limiter-2, DSP `aa56ae2`; off by default, so no song's sound
+moved): on, its ceiling holds BETWEEN samples — detected every ⅛ sample through the meters' interpolator, each
+frame's gain meeting its ±8 neighbours' needs — at 16 samples more latency, which the engine compensates like any
+other (DR-MIX-17). A registry parameter, so `set <dv>.truePeak=on`, its row in the device window, its address and
+its API line come with no Solaris code. L2 `test_a_true_peak_limiter_on_the_master`: a bright square (2.6 kHz,
+filter open) driven into a −1 dB master limiter reads −0.52 dBTP with sample-peak limiting (0.48 dB over between
+samples) and −1.0000 with `truePeak` on, by the library's BS.1770 meter over the rendered file; the render starts
+on beat 0 either way. Mutants (in the DSP suites): no between-sample detection, the neighbourhood 8 short — red.
+
 ### DR-EDM-7 The loop region on the ruler (R-EDM-7, R-TIME-4)
 `Timeline` draws the model's `transport.loopFrom … loopTo` as a brace on the ruler, its ends marked, in
 the accent, and tints the region on the lanes under the clips (`app/widgets/Timeline.cpp:1042`, `:892`;
@@ -1037,7 +1047,7 @@ level. What drives each: a tag over the fader — `auto au_1`, `= ch_3.gain`, `=
 `:1183`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
 in and out (200 ms) and its text cross-fades when the formula changes (`:668`).
 
-Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1237`): stopped, `live` is
+Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1238`): stopped, `live` is
 `eval`'s number at the position; playing (a fake clock device), a −2 dB-a-beat ramp is within 0.1 dB of the
 curve at the heard position at beats 2…12 and falling, a link (`=ch_2.gain / 2`) exactly half of it, a device
 formula `1000 + 500 * sin(beat)` within 25 Hz; after a structural edit while playing the new engine's order is
@@ -1225,7 +1235,7 @@ edits lost between calls, comment lines reprinting ids). The guide is `docs/AGEN
   rounding of a bound is that bound, so a dragged point at the top edge still lands).
 - The API document gains the Notation section and each kit's pads (`core/service/ApiDoc.cpp:127`, `:80`).
 
-Guarded by `solaris_service` (`core/tests/serviceTests.cpp:1313` … `:1761`: the notation tables; comment
+Guarded by `solaris_service` (`core/tests/serviceTests.cpp:1314` … `:1762`: the notation tables; comment
 lines print nothing; every made id printed and announced; notes add by name, a bad token, an unknown pad,
 chords, one undo step; steps and pattern edits; the lane rule and `--count`; reading back, out-of-range
 refusals) and `solaris_cli_session` (`tests/cli_session.cmake`: line numbers, `--keep-going`, exit 4,
@@ -1428,7 +1438,7 @@ puts Main and a cue sent straight to Phones at 96 together; a key from a limited
 audio 96 to meet it, and a limiter before the keyed compressor delays the key 96 — the keyed strip's output
 exactly the unlimited one 96 later (and it does duck). Mutants: every delay sized 0 → the twins fail;
 no key delay in the rack → the key check fails. Service (`test_latency_is_compensated_and_a_render_starts_on_the_beat`,
-`core/tests/serviceTests.cpp:1825`): two strips of one tone, a limiter on one — each stem from beat 0 and
+`core/tests/serviceTests.cpp:1826`): two strips of one tone, a limiter on one — each stem from beat 0 and
 equal, the mix exactly their sum and equal to the render with no limiter; a master limiter's render, port
 and stems byte-identical to none (under its ceiling it is exactly its delay); `--to` exact; live, the
 device's frames are the render 96 later; a lookahead set to 5 ms WHILE playing keeps the twins met — the
@@ -1444,7 +1454,7 @@ mix is at lag 0.
 `core/service/ServiceEdit.cpp:476`) puts the lane at row `index` (0 = the top) and renumbers every lane
 0…n−1 in the new order — one edit, one undo step; an index past the last row or an unknown lane is
 refused. The lanes draw it through Interstellar's `AnimatedRows`, keyed by lane, so the rows slide
-(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:1936`: to the top and back,
+(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:1937`: to the top and back,
 renumbered, refused out of range, undone) and, drawn, by `test_instrument_drop_and_clip_drag`
 (`app/tests/ui/uiTests.cpp:478`: a lane moved from a shell slides to the top with its clip, caught mid-tween).
 
@@ -1521,7 +1531,7 @@ instrument dropped from the browser onto a track asks for a lane of its own (`--
 
 Guarded by `solaris_model` (`model/tests/modelTests.cpp:369`: the four refusals; `tracks` read, refused
 other than `on`, written in the canonical text), `solaris_service` (`test_instrument_tracks`,
-`core/tests/serviceTests.cpp:1573`; `test_a_song_from_before_tracks_adopts_them`, `:1721`) and
+`core/tests/serviceTests.cpp:1574`; `test_a_song_from_before_tracks_adopts_them`, `:1722`) and
 `solaris_app_ui` (`test_a_lane_is_an_instruments_track`, `app/tests/ui/uiTests.cpp:222`: a rename
 followed, a clip dragged onto another track re-routed with its colour caught mid-ease, Track of ▸ and
 Plain Lane caught mid-fade, a browser drop onto a track → `--lane new`). Mutants seen red, then

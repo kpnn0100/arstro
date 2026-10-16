@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -738,7 +738,10 @@ a process is the host's (law 12).
   published — a window cannot compute them from a peak per frame; falling 20 dB a second; the click is `meters
   clear` — DR-METER-2.)
 - **R-EDM-4a A true-peak limiter**: the DSP Limiter gains `truePeak` (on: inter-sample peaks detected 4×
-  oversampled), so a render with it on never exceeds its ceiling in dBTP, measured.
+  oversampled), so a render with it on never exceeds its ceiling in dBTP, measured. (**AMENDED (a 4× detector read
+  0.19 dB over on another 4× grid, 2026-10-16):** detected at 8× — 4× meters disagree on where their points fall, on
+  the quarters or between them, by up to 0.19 dB on a 12 kHz sine 45° out; every ⅛ sample covers both. Built:
+  measured under 10⁻⁵ dB over by the library's meter, −1.001 dBTP for −1 by an independent one — DR-EDM-4a.)
 - **R-EXPORT-1 Delivery formats** (R-EDM-16): `render --out <file>` writes WAV, FLAC, MP3, OGG Vorbis or Opus by the
   file's extension (`--format` to override), at `--rate` and `--bits` (16, 24, 32 float), with TPDF dither when
   bits drop, and `--normalize <LUFS>` (measured integrated loudness to a target, the gain applied, the true peak

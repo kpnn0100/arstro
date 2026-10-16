@@ -13,6 +13,7 @@
 #include "Keymap.h"
 #include "Notation.h"
 #include "SolarisService.h"
+#include "meter/Meters.h"
 #include <algorithm>
 #include <atomic>
 #include <cassert>
@@ -2549,6 +2550,44 @@ static void test_latency_is_compensated_and_a_render_starts_on_the_beat()
     pass("latency compensated (R-MIX-17): a limiter's twin meets it at Main (the mix is their sum to the bit); a master limiter's render starts on beat 0, byte-identical to none; stems each from beat 0; live is the render, 96 frames later");
 }
 
+static void test_a_true_peak_limiter_on_the_master()
+{
+    // R-EDM-4a: the registry's `truePeak` on the master's limiter — a bright square, +6 dB on its strip and 6 more into the
+    // limiter's −1 dB: the render's
+    // true peak (the library's BS.1770 meter) at the ceiling; off, over it between samples; from beat 0 either way
+    Run r;
+    r.ok("project new " + freshSong("truepeak") + " --bpm 120");
+    r.ok("strip add --kind instrument --instrument synth");     // ch_2, dv_1
+    r.ok("clip add --strip ch_2 --length 4");
+    r.ok("note add pt_1 --pitch 100 --at 0 --length 4");         // 2.6 kHz
+    r.ok("set dv_1.osc1.wave=square dv_1.filter.cutoff=20000 ch_2.gain=6");
+    const std::string dir = scratch();
+    auto take = [&](const std::string &name, double &tpDb, long long &onset) {
+        r.ok("render --out " + dir + "/" + name + ".wav --to 4");
+        const auto &w = r.fake.written[dir + "/" + name + ".wav"];
+        arstro::TruePeakMeter m;
+        m.process(w[0].data(), w[1].data(), (int)w[0].size());
+        tpDb = m.peakDb();
+        onset = -1;
+        for (size_t i = 0; i < w[0].size() && onset < 0; ++i)
+            if (std::fabs(w[0][i]) > 1e-4f) onset = (long long)i;
+    };
+    double none = 0, off = 0, on = 0;
+    long long at0 = 0, atOff = 0, atOn = 0;
+    take("none", none, at0);
+    r.ok("device add master --type limiter");                    // dv_2
+    r.ok("set dv_2.ceiling=-1 dv_2.gain=6");
+    take("off", off, atOff);
+    r.ok("set dv_2.truePeak=on");
+    assert(r.ok("get dv_2.truePeak") == "on\n");
+    take("on", on, atOn);
+    if (!(off > -0.9 && on <= -1.0 + 1e-4)) std::printf("    none %.4f off %.4f on %.4f dBTP\n", none, off, on);
+    assert(none > -6.0 && off > -0.9 && on <= -1.0 + 1e-4 && on > -1.5); // ≈ −4, −0.52 (0.48 over between samples), −1.0000
+    assert(atOff == at0 && atOn == at0);                         // its 16 more samples are compensated too (R-MIX-17)
+    pass("a true-peak limiter (R-EDM-4a): `truePeak` on the master's limiter holds a bright square, driven into it, at −1 dBTP "
+         "by the library's meter where sample-peak limiting reads over it between samples; the render still starts on beat 0");
+}
+
 static void test_forward_is_processing_order_and_moves_renumber()
 {
     // R-MIX-4 amended: forward = LATER IN PROCESSING ORDER (mixer order, then strip order) for routes and sends
@@ -2666,6 +2705,7 @@ int main()
     test_instrument_tracks();
     test_a_song_from_before_tracks_adopts_them();
     test_latency_is_compensated_and_a_render_starts_on_the_beat();
+    test_a_true_peak_limiter_on_the_master();
     test_forward_is_processing_order_and_moves_renumber();
     test_lanes_are_reordered();
     std::printf("\n%d passed, 0 failed\n", passed);

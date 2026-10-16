@@ -694,3 +694,4 @@ Brickwall lookahead limiter: the output never exceeds the ceiling.
 | `ceiling` | -24.0 … 0.0 dB | -0.3 dB |
 | `release` | 1.0 … 1000.0 ms | 60.0 ms |
 | `lookahead` | 0.0 … 10.0 ms | 2.0 ms |
+| `truePeak` | off · on | off |

@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N5 — DSP: the Limiter's true-peak mode** (R-EDM-4a), then N6… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window. B13+ wait (ask).
+**► N6 — delivery formats: FLAC / MP3 / OGG / Opus, rate, bits, dither, normalise; File › Export…** (R-EXPORT-1), then N7… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window. B13+ wait (ask).
 
 ---
 
@@ -407,7 +407,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       LUFS / dBTP, correlation 1, its band; holds fall; no allocation on a clear) + UI + 2 shots. 9 mutants red; the
       pending-clear guard's race not reproduced by its mutant (kept — the message ordering is the main fix, found by
       a mutant run that tripped on it).
-- [ ] **N5** DSP: the Limiter's true-peak mode (R-EDM-4a).
+- [x] **N5** DSP: the Limiter's true-peak mode (R-EDM-4a).
+      — DSP `aa56ae2` (REQ-fx-limiter-2, README (L6)): the meters' interpolator made its own type and taken at 8×
+      on the samples; each frame's gain meets ±8 neighbours' needs; latency L + 16. DR-EDM-4a: an L2 render reads
+      −1.0000 dBTP (sample-peak mode −0.52). 2 mutants red. Found: a 4×-only detector held the meter's grid but
+      read 0.19 dB over on the quarter grid — the requirement's "4×" amended to 8×, with why.
 - [ ] **N6** Delivery formats: FLAC / MP3 / OGG / Opus, rate, bits, dither, normalise to LUFS; File › Export…
       (R-EXPORT-1).
 - [ ] **N7** `strip duck --under`: a side-chain in one gesture (R-MIX-18).
