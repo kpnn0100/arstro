@@ -9,6 +9,7 @@
 #include "SolarisService.h"
 #include "device/Device.h"
 #include <algorithm>
+#include <cstdio>
 #include <cmath>
 #include <filesystem>
 
@@ -342,6 +343,49 @@ namespace solaris
             const std::string to = c.flag("to");
             s->out = to == "master" ? std::string() : to;
             changed("route.set", s->id);
+            return true;
+        }
+        case K::StripDuck:
+        {
+            // R-MIX-18: ONE line for the side-chain a producer means — the compressor, its settings and its key,
+            // made by the commands that make each (so each one's rules hold), in one edit
+            const std::string ch = c.arg(0), key = c.flag("under");
+            if (!p.strip(ch)) { err = "no strip `" + ch + "`"; return false; }
+            if (!p.strip(key)) { err = "--under names `" + key + "`, which is no strip"; return false; }
+            if (key == ch) { err = "a strip cannot duck under itself"; return false; }
+            double amount = 8.0;
+            if (c.has("amount") && (!parseNumber(c.flag("amount"), amount) || amount < 1.0 || amount > 24.0)) { err = "--amount is dB, 1 … 24"; return false; }
+            for (const auto &sd : p.sends)
+                if (sd.sidechain && sd.from == key && sd.to == ch)
+                {
+                    err = ch + " already ducks under " + key + " (" + sd.id + ") — its compressor's ratio sets how far";
+                    return false;
+                }
+            Command add;
+            add.kind = K::DeviceAdd;
+            add.args = {ch};
+            add.flags = {{"type", "compressor"}};
+            if (!mixCommand(add, err)) return false;
+            const std::string dv = mOutput.substr(0, mOutput.find('\n'));
+            // a full-scale key is −kThreshold over the threshold: it cuts (0 − kThreshold)·(1 − 1/R) = amount  ⇒
+            // R = −kThreshold / (−kThreshold − amount). A real kick peaks under full scale and cuts less (the default
+            // Drum Machine kick, 12 dB asked: 7.3 dB just after it, back within 2 dB by the next beat at 120 bpm)
+            constexpr double kThreshold = -30.0;
+            const double ratio = -kThreshold / (-kThreshold - amount);
+            const double release = std::clamp(30000.0 / std::max(1.0, p.header.bpm), 5.0, 2000.0); // half a beat, ms
+            char r[32], rel[32];
+            std::snprintf(r, sizeof r, "%.4g", ratio);
+            std::snprintf(rel, sizeof rel, "%.4g", release);
+            std::string stored;
+            for (const auto &kv : std::vector<std::pair<std::string, std::string>>{
+                     {"threshold", "-30"}, {"ratio", r}, {"attack", "1"}, {"release", rel}, {"sidechain", "on"}})
+                if (!setAddress(dv + "." + kv.first, kv.second, stored, err)) return false;
+            Command send;
+            send.kind = K::SendAdd;
+            send.args = {key};
+            send.flags = {{"to", ch}, {"pre", "1"}, {"sidechain", "1"}};
+            if (!mixCommand(send, err)) return false;
+            mOutput = dv + "\n"; // the compressor first; the send is said by `made:`
             return true;
         }
         case K::SendAdd:

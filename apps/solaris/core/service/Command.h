@@ -31,7 +31,7 @@ namespace solaris
             ProjectNew, ProjectOpen, ProjectSave, ProjectClose, ProjectRecover, ProjectDiscardRecovery,
             Set, Get,
             MixerAdd, MixerDelete, MixerMove,
-            StripAdd, StripDelete, StripMove, StripRelink, Route,
+            StripAdd, StripDelete, StripMove, StripRelink, StripDuck, Route,
             SendAdd, SendDelete,
             DeviceAdd, DeviceRemove, DeviceMove,
             LaneAdd, LaneDelete, LaneMove,

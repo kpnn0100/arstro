@@ -476,6 +476,69 @@ static void test_a_sidechain_key_ducks_the_bass()
     pass("sidechain: a key goes forward to a strip's compressor; the bass dips 6–22.5 dB after each kick and is back before the next; soloed it still pumps; the kick muted, nothing; Sidechain off, it compresses on its input; audited, saved (R-MIX-15)");
 }
 
+static void test_strip_duck_is_one_line()
+{
+    // R-MIX-18: `strip duck` — the compressor, its settings and its key in ONE line, one undo; it ducks
+    Run r;
+    const std::string dir = scratch();
+    r.ok("project new " + freshSong("duck") + " --bpm 120");
+    r.ok("clip add --instrument drums --at 0 --length 8");                       // ch_2: the kick, first in order
+    for (int b = 0; b < 8; ++b) r.ok("note add pt_1 --pitch 36 --at " + std::to_string(b));
+    r.ok("clip add --src tone.wav --at 0 --length 8");                           // ch_3: the "bass"
+    auto devicesOf = [&](const std::string &ch) {
+        for (const auto &st : r.svc.model().strips)
+            if (st.id == ch) return st.devices.size();
+        return (size_t)0;
+    };
+    auto dipDb = [&](const std::string &name) {
+        const std::string out = dir + "/" + name + ".wav";
+        r.ok("render --out " + out + " --bits 32f --stems ch_3");          // the bass's own stem: the mix has the kick in it
+        const auto &L = r.fake.written[dir + "/" + name + ".ch_3.wav"][0];
+        auto db = [&](long long a, long long b) {
+            double sum = 0;
+            for (long long i = a; i < b; ++i) sum += (double)L[(size_t)i] * L[(size_t)i];
+            return 10.0 * std::log10(sum / (double)(b - a) + 1e-30);
+        };
+        return std::make_pair(db(48000 + 720, 48000 + 1680), db(72000 - 2160, 72000 - 1200)); // after the kick on beat 2, before the one on beat 3
+    };
+    const auto plain = dipDb("plain");
+    const int depth = r.svc.model().undoDepth;
+    const std::string said = r.ok("strip duck ch_3 --under ch_2 --amount 12");
+    assert(firstLine(said) == "dv_2" && contains(said, "made:") && contains(said, "sd_1"));
+    assert(r.svc.model().undoDepth == depth + 1 && devicesOf("ch_3") == 1);
+    // the compressor: Sidechain on, threshold −30, attack 1 ms, half a beat's release at 120 bpm, the ratio for 12 dB
+    double v = 0;
+    assert(r.ok("get dv_2.sidechain") == "on\n");
+    assert(parseNumber(firstLine(r.ok("get dv_2.threshold")), v) && v == -30.0);
+    assert(parseNumber(firstLine(r.ok("get dv_2.attack")), v) && v == 1.0);
+    assert(parseNumber(firstLine(r.ok("get dv_2.release")), v) && v == 250.0);
+    assert(parseNumber(firstLine(r.ok("get dv_2.ratio")), v) && std::fabs(v - 30.0 / 18.0) < 1e-3);
+    // its key: a pre-fader sidechain send from the kick
+    const auto *kick = r.strip("ch_2");
+    assert(kick->sends.size() == 1 && kick->sends[0].to == "ch_3" && kick->sends[0].pre && kick->sends[0].sidechain);
+    // and it ducks: the bass well down just after a kick, back before the next
+    const auto ducked = dipDb("ducked");
+    const double depth12 = plain.first - ducked.first, back = plain.second - ducked.second;
+    if (!(depth12 > 6.0 && depth12 <= 12.0 && back < 3.0)) std::printf("    ducked %.2f dB just after a kick, %.2f dB just before the next\n", depth12, back);
+    assert(depth12 > 6.0 && depth12 <= 12.0 && back < 3.0); // ≈ 7.3 and 1.8: a kick under full scale cuts less than the amount
+    // one undo takes both back
+    r.ok("undo");
+    assert(devicesOf("ch_3") == 0 && r.strip("ch_2")->sends.empty());
+    r.ok("redo");
+    // refusals, and a refused line leaves nothing behind (all-or-nothing)
+    assert(contains(r.no("strip duck ch_3 --under ch_2"), "already ducks under ch_2 (sd_1)"));
+    const size_t before = devicesOf("ch_2");
+    assert(contains(r.no("strip duck ch_2 --under ch_3"), "LATER in processing order"));
+    assert(devicesOf("ch_2") == before && r.strip("ch_3")->sends.empty());
+    assert(contains(r.no("strip duck ch_3 --under ch_3"), "itself"));
+    assert(contains(r.no("strip duck ch_3 --under ch_9"), "no strip"));
+    assert(contains(r.no("strip duck ch_9 --under ch_2"), "no strip"));
+    assert(contains(r.no("strip duck ch_3 --under ch_2 --amount 30"), "1 … 24"));
+    assert(contains(r.no("strip duck ch_3"), "--under"));
+    pass("strip duck (R-MIX-18): ONE line makes the keyed compressor (Sidechain on, −30 dB, 1 ms, half a beat, the ratio for "
+         "the amount) and its pre-fader key; the bass ducks after each kick; one undo takes both; a refused line leaves nothing");
+}
+
 static void test_a_sampler_plays_its_sound_by_the_key()
 {
     Run r;
@@ -2754,6 +2817,7 @@ int main()
     test_a_bezier_gain_renders_what_eval_says_and_the_formula_says();
     test_an_automation_loops_and_a_pump_is_one_line();
     test_a_sidechain_key_ducks_the_bass();
+    test_strip_duck_is_one_line();
     test_a_sampler_plays_its_sound_by_the_key();
     test_routing_only_goes_forward_and_refusals_change_nothing();
     test_set_and_get_through_the_registry();

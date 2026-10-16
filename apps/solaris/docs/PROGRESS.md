@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N7 — `strip duck --under`: a side-chain in one gesture** (R-MIX-18), then N8… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window. B13+ wait (ask).
+**► N8 — the PipeWire driver and xruns** (Phase 2 begins), then N9… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window. B13+ wait (ask).
 
 ---
 
@@ -419,7 +419,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       held under a true-peak ceiling; integer depths dithered, seeded per file. File › Export… is `ExportSheet`. L2 + L3
       (ffprobe, ebur128) + UI + a shot; 5 Solaris mutants and 2 DSP mutants red. Found: a default render's silence
       turned to dither hiss — fixed in the library ((D0)), not by the caller.
-- [ ] **N7** `strip duck --under`: a side-chain in one gesture (R-MIX-18).
+- [x] **N7** `strip duck --under`: a side-chain in one gesture (R-MIX-18).
+      — DR-MIX-18: `device add` + `set` + `send add --pre --sidechain` in one edit; R = 30/(30 − amount) at −30 dB,
+      1 ms, half a beat. L2 (the duck measured on the stem: 7.3 dB after a kick, back within 2) + UI (Duck Under ▸);
+      3 mutants red. Found: measuring the duck on the master hides it (the kick is in the mix) — the stem.
 **Phase 2 — play it in**
 - [ ] **N8** The PipeWire driver, xruns counted (R-DEV-9).
 - [ ] **N9** A MIDI keyboard: devices, arm, play live, record into a clip, count-in, input quantize (R-MIDI-2).

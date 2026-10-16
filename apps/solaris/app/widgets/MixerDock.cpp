@@ -1172,6 +1172,16 @@ namespace solaris_ui
                         keys.push_back({ks->name, [this, id, k] { send("send add " + id + " --to " + k + " --sidechain"); }});
                 if (!keys.empty())
                     items.push_back({"Sidechain to \xE2\x96\xB8", [this, keys, world] { if (onMenu) onMenu(keys, world); }});
+                // R-MIX-18: ducked under an earlier strip — every strip whose keys may reach this one, one line each
+                std::vector<cosmo_v2::ContextMenu::Item> under;
+                for (const auto &o : mModel.strips)
+                    if (std::find(o.keyTargets.begin(), o.keyTargets.end(), id) != o.keyTargets.end())
+                    {
+                        const std::string oid = o.id;
+                        under.push_back({o.name, [this, id, oid] { send("strip duck " + id + " --under " + oid); }});
+                    }
+                if (!under.empty())
+                    items.push_back({"Duck Under \xE2\x96\xB8", [this, under, world] { if (onMenu) onMenu(under, world); }});
                 items.push_back({"Delete strip", [this, id] { send("strip delete " + id); }});
                 onMenu(std::move(items), world);
             }

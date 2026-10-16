@@ -2631,6 +2631,55 @@ static void test_a_line_added_and_sources_relinked()
     pass("Lines: \"+ Line\" adds an audio line, a bus or any instrument to the page in one line, the card growing in and \"+ Line\" sliding along (eased); a strip's clips move to another line in one `strip relink`; a clip plays through another strip from its menu (R-MIX-13/14)");
 }
 
+static void test_a_strip_ducks_under_another_from_its_menu()
+{
+    // R-MIX-18: right-click the bass › Duck Under ▸ the kick — ONE `strip duck` line; the submenu offers exactly the
+    // strips whose keys may reach it (an earlier strip's keyTargets)
+    sltest::Rig r("ui-duck", 1280, 800);
+    r.cmd("project new " + r.song("Duck") + ".slp --bpm 120");
+    r.cmd("clip add --instrument drums --at 0 --length 4");       // ch_2, the kick
+    r.cmd("clip add --instrument synth --at 0 --length 4");       // ch_3, the bass — later in order
+    r.settle();
+    auto &d = r.app->project().dock();
+    auto &menu = r.app->menu();
+    auto openDuck = [&](const std::string &ch) {
+        const artboard::Rect card = world(d, d.cardRect(ch));
+        r.click(card.x + 20.0, card.y + 16.0, 2);
+        r.settle();
+        int at = -1;
+        for (int i = 0; i < menu.itemCount(); ++i)
+            if (menu.item(i).label.rfind("Duck Under", 0) == 0) at = i;
+        return at;
+    };
+    const int duck = openDuck("ch_3");
+    assert(menu.isOpen() && duck >= 0);
+    r.click(menu.itemRect(duck));
+    r.settle();
+    int kick = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label == "Drum Machine") kick = i;
+    assert(menu.isOpen() && kick >= 0);
+    r.click(menu.itemRect(kick));
+    r.settle();
+    assert(r.sent.back() == "strip duck ch_3 --under ch_2");
+    bool comp = false, keyed = false;
+    for (const auto &st : r.svc->model().strips)
+    {
+        if (st.id == "ch_3")
+            for (const auto &dv : st.devices) comp |= dv.type == "compressor";
+        if (st.id == "ch_2")
+            for (const auto &sd : st.sends) keyed |= sd.to == "ch_3" && sd.sidechain && sd.pre;
+    }
+    assert(comp && keyed);
+    // the kick, first in order, has nothing to duck under: no such item
+    r.key(27);
+    r.settle();
+    assert(openDuck("ch_2") < 0);
+    r.key(27);
+    r.settle();
+    pass("Duck Under (R-MIX-18): a strip's menu ducks it under an earlier strip in ONE `strip duck` line — the compressor and its pre-fader key — offering only the strips that may key it");
+}
+
 static void test_a_strip_keys_a_later_compressor()
 {
     sltest::Rig r("ui-key", 1280, 800);
@@ -3250,6 +3299,7 @@ int main()
     test_a_kits_roll_names_its_pads();
     test_a_line_added_and_sources_relinked();
     test_a_strip_keys_a_later_compressor();
+    test_a_strip_ducks_under_another_from_its_menu();
     test_the_loop_region_on_the_ruler();
     test_the_ruler_is_dragged();
     test_a_sample_dropped_on_a_sampler_loads_it();

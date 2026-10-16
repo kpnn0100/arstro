@@ -178,6 +178,17 @@
       "requirement": "R-MIX-14"
     },
     {
+      "verb": "strip duck",
+      "usage": "strip duck <ch> --under <key-strip> [--amount <dB>]",
+      "args": "<ch>",
+      "flags": [
+        "under=<key-strip>",
+        "amount=<dB>"
+      ],
+      "summary": "A side-chain in one line: a Compressor at the end of <ch>'s rack, its Sidechain on, keyed by a pre-fader sidechain send from --under — attack 1 ms, release half a beat, threshold −30 dB and the ratio that makes a full-scale key cut --amount dB (default 8, 1 … 24). The key must come EARLIER in processing order (R-MIX-4). One edit, one undo; prints the compressor, then `made:`.",
+      "requirement": "R-MIX-18"
+    },
+    {
       "verb": "route",
       "usage": "route <ch> [--to <ch|master|port>]",
       "args": "<ch>",

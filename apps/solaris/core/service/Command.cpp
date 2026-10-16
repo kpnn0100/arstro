@@ -82,6 +82,11 @@ namespace solaris
             {K::StripRelink, "strip relink", "<ch>", 1, 1, {"to=<ch>"},
              "Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips "
              "need an audio strip, note clips an instrument strip; a bus plays no clips.", "R-MIX-14"},
+            {K::StripDuck, "strip duck", "<ch>", 1, 1, {"under=<key-strip>", "amount=<dB>"},
+             "A side-chain in one line: a Compressor at the end of <ch>'s rack, its Sidechain on, keyed by a pre-fader "
+             "sidechain send from --under — attack 1 ms, release half a beat, threshold −30 dB and the ratio that makes "
+             "a full-scale key cut --amount dB (default 8, 1 … 24). The key must come EARLIER in processing order "
+             "(R-MIX-4). One edit, one undo; prints the compressor, then `made:`.", "R-MIX-18", false, {"under"}},
             {K::Route, "route", "<ch>", 1, 1, {"to=<ch|master|port>"},
              "Set a strip's main output: a strip LATER in processing order (a later mixer, or after it on its own), "
              "master, or an output port.", "R-MIX-4"},
