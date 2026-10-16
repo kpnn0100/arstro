@@ -82,11 +82,17 @@ namespace solaris
             {K::StripRelink, "strip relink", "<ch>", 1, 1, {"to=<ch>"},
              "Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips "
              "need an audio strip, note clips an instrument strip; a bus plays no clips.", "R-MIX-14"},
-            {K::StripArm, "strip arm", "<ch|none>", 1, 1, {},
+            {K::StripArm, "strip arm", "<ch|none>", 1, 1, {"input=<port>"},
              "Arm an instrument strip for the MIDI keyboard (R-MIDI-2): what is played sounds through it at once — "
              "through the song while it plays, through an input monitor (the song's mix without its clips) while "
              "stopped — the sustain pedal held; `none` disarms. Not an edit: the song does not keep it. Opens the "
-             "MIDI inputs `settings midiInputs` names.", "R-MIDI-2"},
+             "MIDI inputs `settings midiInputs` names. Or arm an AUDIO line for its input (R-REC-1): heard through it as "
+             "`<ch>.monitor` says, recorded by `transport record`; --input <port> sets its input first (that part an edit).",
+             "R-MIDI-2"},
+            {K::PortAdd, "port add", "<name>", 1, 1, {"dir=<in|out>", "channels=<1|2>"},
+             "A logical port (R-DEV-3): an output the master or a strip can feed, or an INPUT (--dir in) an audio line "
+             "records (R-REC-1); this machine's settings say which device it is (`settings set port.<name>=<device>`). "
+             "Prints its id.", "R-REC-1"},
             {K::StripDuck, "strip duck", "<ch>", 1, 1, {"under=<key-strip>", "amount=<dB>"},
              "A side-chain in one line: a Compressor at the end of <ch>'s rack, its Sidechain on, keyed by a pre-fader "
              "sidechain send from --under — attack 1 ms, release half a beat, threshold −30 dB and the ratio that makes "
@@ -353,7 +359,13 @@ namespace solaris
              "Play and record the armed strip's keyboard (R-MIDI-2): at `transport stop` what was played becomes a new "
              "note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip "
              "under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes "
-             "it back. --count-in (else `settings countIn`) bars of click first, the song waiting.", "R-MIDI-2"},
+             "it back. --count-in (else `settings countIn`) bars of click first, the song waiting. With an AUDIO line "
+             "armed (R-REC-1): its input from where recording begins to the stop, written beside the song "
+             "(`Recordings/<strip> <n>.wav`) and put on the strip as a clip where it began — moved earlier by the "
+             "output's and the input's latency, kept only inside `transport punch` — one undo.", "R-MIDI-2"},
+            {K::TransportPunch, "transport punch", "<from|off> [to]", 1, 2, {},
+             "Punch in and out (R-REC-1): a recording keeps only what the song plays from <from> to <to> beats, and its "
+             "clip starts at <from>; `off` keeps it all. The session's, as the loop.", "R-REC-1"},
             {K::TransportLoop, "transport loop", "<from|off|mk> [to]", 1, 2, {},
              "Loop between two beats while playing — or a marker's section (R-ARR-1: its length, else to the next marker); `off` ends it.", "R-TIME-4"},
             {K::Audition, "audition", "<file|stop>", 1, 1, {},

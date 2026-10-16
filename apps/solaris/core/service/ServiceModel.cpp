@@ -92,6 +92,8 @@ namespace solaris
         mModel.transport.masterClip = mMasterClip;
         mModel.transport.loopFrom = mLoopFrom;
         mModel.transport.loopTo = mLoopTo;
+        mModel.transport.punchFrom = mPunchFrom; // R-REC-1
+        mModel.transport.punchTo = mPunchTo;
         mModel.transport.loopClip = mClipLoop;
         mModel.transport.cue = mCue;
         if (!mModel.transport.playing) mModel.transport.position = mPosition;
@@ -236,6 +238,8 @@ namespace solaris
             sm.fromStrips.assign(from.begin(), from.end());
             sm.targets = targetsOf(p, *s);
             sm.keyTargets = keyTargetsOf(p, *s);
+            sm.input = s->input; // R-REC-1
+            sm.monitor = s->monitor;
             mModel.strips.push_back(sm);
         }
         if (const Rack *r = p.rack("master"))

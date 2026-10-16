@@ -1,5 +1,6 @@
 #include "Player.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 namespace arstro
@@ -19,13 +20,86 @@ namespace solaris
     Player::~Player()
     {
         stop();
+        if (mRecorder.joinable()) endTake(); // a take never ended: its thread joins, its frames go
         collect();
+    }
+
+    void Player::setInput(std::unique_ptr<IAudioIn> in, int channels)
+    {
+        mInput = std::move(in);
+        mInChannels = std::clamp(channels, 1, 2);
+    }
+
+    void Player::startTake()
+    {
+        if (mRecorder.joinable()) endTake();
+        mTake = Take();
+        mTakeDropped.store(0);
+        InChunk c;
+        while (mRecQ.pop(c)) {}
+        mRecRun.store(true);
+        mRecorder = std::thread([this] { recorder(); });
+        mTaking.store(true);
+    }
+
+    void Player::recorder()
+    {
+        InChunk c;
+        for (;;)
+        {
+            const bool running = mRecRun.load();
+            while (mRecQ.pop(c))
+            {
+                if (mTake.from < 0) mTake.from = c.at;
+                mTake.left.insert(mTake.left.end(), c.l.begin(), c.l.begin() + c.n);
+                mTake.right.insert(mTake.right.end(), c.r.begin(), c.r.begin() + c.n);
+            }
+            if (!running) return; // drained after the last push could have been made
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+    }
+
+    Player::Take Player::endTake()
+    {
+        mTaking.store(false);
+        mRecRun.store(false);
+        if (mRecorder.joinable()) mRecorder.join();
+        Take t = std::move(mTake);
+        t.dropped = mTakeDropped.load();
+        mTake = Take();
+        return t;
+    }
+
+    void Player::input(int n, long long pos, bool song)
+    {
+        if (!mInput || n <= 0) return;
+        mInput->read(mInBuf.data(), n);
+        mInLatency.store(mInput->latency(), std::memory_order_relaxed);
+        for (int i = 0; i < n; ++i)
+        {
+            mInL[(size_t)i] = mInBuf[(size_t)i * mInChannels];
+            mInR[(size_t)i] = mInChannels > 1 ? mInBuf[(size_t)i * mInChannels + 1] : mInL[(size_t)i];
+        }
+        if (!song) return; // a count-in: read so the capture never backs up, neither heard nor kept
+        if (mMonOn.load(std::memory_order_relaxed)) mEng->liveInput(mMonStrip.load(std::memory_order_relaxed), mInL.data(), mInR.data(), n);
+        if (!mTaking.load(std::memory_order_relaxed)) return;
+        for (int off = 0; off < n; off += 512)
+        {
+            InChunk c;
+            c.at = pos + off;
+            c.n = std::min(512, n - off);
+            std::copy(mInL.begin() + off, mInL.begin() + off + c.n, c.l.begin());
+            std::copy(mInR.begin() + off, mInR.begin() + off + c.n, c.r.begin());
+            if (!mRecQ.push(c)) mTakeDropped.fetch_add(c.n, std::memory_order_relaxed); // never waits: counted, said at the stop
+        }
     }
 
     bool Player::start(std::unique_ptr<IAudioOut> out, std::unique_ptr<engine::Engine> eng, std::vector<Route> routes,
                        int channels, int block, long long from, int generation)
     {
+        auto input = std::move(mInput); // R-REC-1: set before `start` — the stop below closes what it holds
         stop();
+        mInput = std::move(input);
         mGeneration = generation;
         mOutFrames = 0;
         mSlotsWritten.store(0);
@@ -38,6 +112,9 @@ namespace solaris
         // Everything the thread will touch is sized HERE (R-PLAY-2).
         mEng->prepare(mPb, mBlock);
         mInterleaved.assign((size_t)mBlock * (size_t)mChannels, 0.0f);
+        mInBuf.assign((size_t)mBlock * (size_t)mInChannels, 0.0f); // R-REC-1: the input's block, sized here
+        mInL.assign((size_t)mBlock, 0.0f);
+        mInR.assign((size_t)mBlock, 0.0f);
         mClick = DeviceRegistry::create("drums"); // the metronome's own kit, made here, not on the audio thread
         mClickL.assign((size_t)mBlock, 0.0);
         mClickR.assign((size_t)mBlock, 0.0);
@@ -81,6 +158,7 @@ namespace solaris
         }
         if (mOut) mOut->flush();
         mOut.reset();
+        mInput.reset(); // R-REC-1: the capture closes with the stream it was read beside
         // anything still queued (a swap the thread never took) is the service's to free
         Live m;
         while (mIn.pop(m))
@@ -361,6 +439,7 @@ namespace solaris
                 // R-MIDI-2: the count-in — silence, the click on the song's beats leading into `from` (the engine waits);
                 // aligned as playing is: the music of `from` comes out the engine's latency after the count-in ends
                 const int n = (int)std::min<long long>(mBlock, left);
+                input(n, mEng->position(), false); // R-REC-1: read, neither heard nor kept
                 std::fill(mInterleaved.begin(), mInterleaved.begin() + (size_t)n * mChannels, 0.0f);
                 click(mEng->position() - left - mGraphLatency.load(std::memory_order_relaxed), n);
                 mOut->write(mInterleaved.data(), n);
@@ -373,6 +452,7 @@ namespace solaris
             const long long pos = mEng->position(), a = mLoopA.load(), b = mLoopB.load();
             int n = mBlock;
             if (b > a && pos < b && pos + n > b) n = (int)(b - pos); // stop exactly at the loop's end
+            input(n, pos, true); // R-REC-1: the armed strip hears it in this block; a take keeps it from here
             mEng->render(n, mPb);
             std::fill(mInterleaved.begin(), mInterleaved.begin() + (size_t)n * mChannels, 0.0f);
             for (const Route &r : mRoutes)

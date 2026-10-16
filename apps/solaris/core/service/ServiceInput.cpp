@@ -10,8 +10,10 @@
 #include "SolarisService.h"
 #include <algorithm>
 #include <array>
+#include <climits>
 #include <cmath>
 #include <map>
+#include <set>
 #include <sstream>
 
 namespace arstro
@@ -75,6 +77,101 @@ namespace solaris
         return true;
     }
 
+    // ── R-REC-1: the audio input ────────────────────────────────────────────────────────────────
+
+    std::unique_ptr<IAudioIn> SolarisService::openInput(const Strip &s, int &channels, std::string &err)
+    {
+        // the strip's input port, on the device this machine's settings give it ("" the default input)
+        if (!mHost.audioIn) { err = "this build cannot record audio (no capture)"; return nullptr; }
+        const Port *pt = nullptr;
+        for (const auto &x : mProject.ports)
+            if (x.id == s.input) pt = &x;
+        if (!pt) { err = s.id + " has no input — `set " + s.id + ".input=<port>`"; return nullptr; }
+        channels = std::clamp(pt->channels, 1, 2);
+        auto in = mHost.audioIn();
+        if (!in) { err = "this build cannot record audio (no capture)"; return nullptr; }
+        if (!in->open(mSettings.portDevice(pt->name), mProject.header.sampleRate, channels, mSettings.bufferSize, err)) return nullptr;
+        return in;
+    }
+
+    bool SolarisService::monitorHears(const Strip &s, bool playing, bool recording) const
+    {
+        if (s.monitor == "on") return true;
+        if (s.monitor == "off") return false;
+        return !playing || recording; // auto: stopped, or recording — not while the song plays back
+    }
+
+    void SolarisService::attachInput(Player &pl, const std::vector<std::string> &strips, bool playing, bool recording)
+    {
+        // an armed audio line: its input read beside the output (before `start`), heard as its monitoring says
+        mInputErr.clear();
+        const Strip *s = mArmed.empty() ? nullptr : mProject.strip(mArmed);
+        if (!s || s->kind != "audio") return;
+        int channels = 2;
+        auto in = openInput(*s, channels, mInputErr);
+        if (!in) { emit(Event(Event::Kind::Info).with("text", "the input cannot be heard: " + mInputErr)); return; }
+        pl.setInput(std::move(in), channels);
+        pl.setMonitor(armedIn(strips), monitorHears(*s, playing, recording));
+    }
+
+    bool SolarisService::commitAudioTake(Player::Take take, double outLatency, double inLatency, long long graphLatency, std::string &err)
+    {
+        // R-REC-1: frame i of the take is what the song played at sample from + i − shift — it was heard Lo after it was
+        // rendered (and the engine's own lag), and what was sung then arrived Li later
+        mRecording = mRecordingAudio = false;
+        Project &p = mProject;
+        const double rate = p.header.sampleRate, spb = 60.0 / p.header.bpm * rate;
+        const long long shift = std::llround((outLatency + inLatency) * rate) + graphLatency;
+        const long long first = take.from - shift, n = (long long)take.left.size();
+        double fromBeat = mRecordFrom, toBeat = -1.0;
+        if (mPunchTo > mPunchFrom) { fromBeat = std::max(fromBeat, mPunchFrom); toBeat = mPunchTo; }
+        const double at = toTick(fromBeat);                 // the clip's place, on the tick grid …
+        const long long a = std::llround(at * spb);          // … and the take cut from that very sample
+        const long long b = toBeat >= 0 ? std::llround(toBeat * spb) : first + n;
+        std::vector<std::vector<float>> ch(2);
+        if (take.from >= 0 && b > a)
+            for (long long t = a; t < std::min(b, first + n); ++t)
+            {
+                const long long i = t - first; // before the first frame read: silence (the take began a hair late)
+                ch[0].push_back(i >= 0 ? take.left[(size_t)i] : 0.0f);
+                ch[1].push_back(i >= 0 ? take.right[(size_t)i] : 0.0f);
+            }
+        if (take.dropped > 0)
+            emit(Event(Event::Kind::Info).with("text", "the recorder fell behind: " + std::to_string(take.dropped) + " frames of the input were lost"));
+        if (ch[0].empty())
+        {
+            mOutput = "nothing was recorded\n";
+            emit(Event(Event::Kind::RecordFinished).with("clip", "").with("notes", 0).with("seconds", "0"));
+            return true;
+        }
+        // beside the song: <folder>/Recordings/<strip> <n>.wav — the next number no file there has
+        const Strip *s = p.strip(mRecordStrip);
+        const std::string strip = s ? s->name : mRecordStrip;
+        const auto slash = mPath.find_last_of('/');
+        const std::string dir = (slash == std::string::npos ? std::string(".") : mPath.substr(0, slash)) + "/Recordings";
+        std::set<std::string> there;
+        std::vector<BrowserEntry> entries;
+        std::string listErr;
+        if (mHost.listDir && mHost.listDir(dir, entries, listErr))
+            for (const auto &e : entries) there.insert(e.name);
+        for (const auto &cl : p.clips) there.insert(cl.src.substr(cl.src.find_last_of('/') + 1)); // an undone take's name too
+        int k = 1;
+        while (there.count(strip + " " + std::to_string(k) + ".wav")) ++k;
+        const std::string name = strip + " " + std::to_string(k) + ".wav";
+        if (!mHost.writeWav) { err = "this build cannot write a recording"; return false; }
+        if (!mHost.writeWav(dir + "/" + name, ch, (int)rate, 32, err)) { if (err.empty()) err = "cannot write " + dir + "/" + name; return false; }
+        mPcm.erase("Recordings/" + name); // a file of that name decoded before (an undone take) is not this one
+        Command cc;
+        cc.kind = K::ClipAdd;
+        cc.flags = {{"src", "Recordings/" + name}, {"strip", mRecordStrip}, {"at", canonicalBeats(at)}};
+        if (!clipCommand(cc, err)) return false;
+        const std::string clip = mOutput.substr(0, mOutput.find('\n'));
+        const std::string secs = canonicalNumber(std::round((double)ch[0].size() / rate * 1000.0) / 1000.0);
+        mOutput = clip + "\nrecorded " + secs + " s into Recordings/" + name + "\n";
+        emit(Event(Event::Kind::RecordFinished).with("clip", clip).with("notes", 0).with("seconds", secs));
+        return true;
+    }
+
     void SolarisService::stopMonitor()
     {
         mMonitor.reset(); // its thread joins; its engine goes with it
@@ -85,7 +182,10 @@ namespace solaris
     void SolarisService::startMonitor()
     {
         // armed, open, nothing playing: the strip heard through the song's mix — no clip, no automation, no metronome
-        if (!mOpen || mArmed.empty() || !mMidiQ || (mPlayer && mPlayer->running())) return;
+        if (!mOpen || mArmed.empty() || (mPlayer && mPlayer->running())) return;
+        const Strip *armed = mProject.strip(mArmed);
+        const bool audio = armed && armed->kind == "audio"; // R-REC-1: its input, unless its monitoring is off
+        if (audio ? (!mHost.audioIn || armed->monitor == "off" || armed->input.empty()) : !mMidiQ) return;
         stopMonitor();
         Project p = mProject;
         p.clips.clear();
@@ -106,8 +206,12 @@ namespace solaris
         if (!out) { emit(Event(Event::Kind::Info).with("text", "the input monitor cannot play: " + err)); return; }
         mMonitorStrips = cr.stripIds;
         mMonitor = std::make_unique<Player>();
-        mMonitor->setMidi(mMidiQ.get());
-        mMonitor->setArmed(armedIn(mMonitorStrips));
+        if (audio) attachInput(*mMonitor, mMonitorStrips, false, false);
+        else
+        {
+            mMonitor->setMidi(mMidiQ.get());
+            mMonitor->setArmed(armedIn(mMonitorStrips));
+        }
         mMonitor->start(std::move(out), std::move(eng), routes, 2, mSettings.bufferSize, 0, 0);
     }
 
@@ -273,6 +377,26 @@ namespace solaris
     {
         switch (c.kind)
         {
+        case K::PortAdd:
+        {
+            // R-DEV-3, R-REC-1: a logical port — the machine's settings say which device it is
+            if (!requireOpen(err)) return false;
+            Port pt;
+            pt.id = mProject.nextId("prt");
+            pt.name = c.arg(0);
+            pt.dir = c.flag("dir", "out");
+            if (pt.dir != "in" && pt.dir != "out") { err = "--dir is in or out"; return false; }
+            double chans = 2;
+            if (c.has("channels") && (!parseNumber(c.flag("channels"), chans) || (chans != 1 && chans != 2))) { err = "--channels is 1 or 2"; return false; }
+            pt.channels = (int)chans;
+            for (const auto &x : mProject.ports)
+                if (x.name == pt.name) { err = "a port is already called `" + pt.name + "` (" + x.id + ")"; return false; }
+            pt.order = (int)mProject.ports.size();
+            mProject.ports.push_back(pt);
+            changed("port.added", pt.id);
+            mOutput = pt.id + "\n";
+            return true;
+        }
         case K::MidiDevices:
         {
             if (!mHost.listMidiInputs) { err = "this build has no MIDI input"; return false; }
@@ -306,7 +430,34 @@ namespace solaris
             if (!requireOpen(err)) return false;
             const Strip *s = mProject.strip(ch);
             if (!s) { err = "no strip `" + ch + "`"; return false; }
-            if (s->kind != "instrument") { err = ch + " is " + (s->kind == "bus" ? "a bus" : "an audio line") + ": only an instrument strip plays a keyboard"; return false; }
+            if (s->kind == "bus") { err = ch + " is a bus: arm an instrument strip (the keyboard) or an audio line (its input)"; return false; }
+            if (s->kind == "audio")
+            {
+                // R-REC-1: an audio line armed for its input — set here when --input names one (that part an edit)
+                if (c.has("input"))
+                {
+                    std::string stored;
+                    if (!setAddress(ch + ".input", c.flag("input"), stored, err)) return false;
+                    mPending.push_back(Event(Event::Kind::ParamsChanged).with("address", ch + ".input").with("value", stored));
+                    s = mProject.strip(ch);
+                }
+                if (s->input.empty())
+                {
+                    std::string ins;
+                    for (const auto &x : mProject.ports)
+                        if (x.dir == "in") ins += (ins.empty() ? "" : ", ") + x.id;
+                    err = ch + " has no input: `strip arm " + ch + " --input <port>` (" + (ins.empty() ? std::string("the song has none — `port add <name> --dir in`") : "the song's: " + ins) + ")";
+                    return false;
+                }
+                if (!mHost.audioIn) { err = "this build cannot record audio (no capture)"; return false; }
+                if (mPlayer) mPlayer->setArmed(-1);
+                mArmed = ch;
+                mModel.armed = ch;
+                if (!(mPlayer && mPlayer->running())) startMonitor(); // playing: its input is heard from the next play
+                emit(Event(Event::Kind::StripArmed).with("strip", ch));
+                return true;
+            }
+            if (c.has("input")) { err = "--input is an audio line's: " + ch + " plays a keyboard"; return false; }
             if (!ensureMidi(err)) return false;
             mArmed = ch;
             mModel.armed = ch;

@@ -48,6 +48,8 @@ namespace solaris
             {"strips[].panFormula", "string", "the formula driving the pan, \"\" = none"},
             {"strips[].mute", "bool", ""},
             {"strips[].solo", "bool", ""},
+            {"strips[].input", "string", "R-REC-1: the input port it monitors and records; empty = none"},
+            {"strips[].monitor", "string", "R-REC-1: auto (heard while armed and stopped or recording) | on | off"},
             {"strips[].audible", "bool", "false when muted or silenced by another strip's solo (R-MIX-7)"},
             {"strips[].colour", "int", "an index into the track colours: its own, else from its id — never −1"},
             {"strips[].sends", "object[]", "its sends"},
@@ -241,6 +243,8 @@ namespace solaris
             {"transport.position", "number", "beats — what is heard", false},
             {"transport.loopFrom", "number", "beats"},
             {"transport.loopTo", "number", "beats; equal to loopFrom = no loop"},
+            {"transport.punchFrom", "number", "R-REC-1: beats — a recording keeps only from here … (the session's)"},
+            {"transport.punchTo", "number", "… to here; equal to punchFrom = all of it"},
             {"transport.cue", "number", "beats: where the time bar was last put (a seek, or a play's --from / --clip; never a plain play) — `transport stop --return` goes back there (R-TIME-7)"},
             {"transport.loopClip", "string", "the clip the loop follows (`transport play --clip`, the piano roll's play); '' = the song's own loop"},
             {"transport.latencyMs", "number", "the clock device's", false},
@@ -509,7 +513,7 @@ namespace solaris
             Json st = Json::object();
             st.set("id", s.id).set("name", s.name).set("kind", s.kind).set("mixer", s.mixer).set("order", s.order)
                             .set("out", s.out).set("gain", s.gain).set("pan", s.pan).set("gainFormula", s.gainFormula)
-                            .set("panFormula", s.panFormula).set("mute", s.mute).set("solo", s.solo)
+                            .set("panFormula", s.panFormula).set("mute", s.mute).set("solo", s.solo).set("input", s.input).set("monitor", s.monitor)
                             .set("audible", s.audible).set("colour", s.colour).set("sends", sends).set("devices", devices(s.devices));
             if (!stable)
                 st.set("peak", Json::array().push(Json::number(s.peak[0])).push(Json::number(s.peak[1])))
@@ -609,7 +613,8 @@ namespace solaris
         Json tr = Json::object();
         tr.set("playing", m.transport.playing);
         if (!stable) tr.set("position", m.transport.position);
-        tr.set("loopFrom", m.transport.loopFrom).set("loopTo", m.transport.loopTo).set("loopClip", m.transport.loopClip).set("cue", m.transport.cue);
+        tr.set("loopFrom", m.transport.loopFrom).set("loopTo", m.transport.loopTo).set("loopClip", m.transport.loopClip).set("cue", m.transport.cue)
+            .set("punchFrom", m.transport.punchFrom).set("punchTo", m.transport.punchTo);
         if (!stable) tr.set("latencyMs", m.transport.latencyMs);
         tr.set("device", m.transport.device);
         if (!stable)

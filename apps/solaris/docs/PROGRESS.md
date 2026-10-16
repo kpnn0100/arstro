@@ -466,7 +466,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       D-10, D-11 (test defects) closed. Part 2: `set <ln>.group`; the timeline — an open group's bar and chevron, a
       folded group ONE row (each lane's clips in its band, eased), its clips dragged together, the menus.
 **Phase 3 — work with audio**
-- [ ] **N16** Record audio: arm, monitor, record, punch, loop takes (R-REC-1).
+- [~] **N16** Record audio: arm, monitor, record, punch, loop takes (R-REC-1).
+      Part 1 (2026-10-16): the core — `IAudioIn`, a strip's `input`/`monitor`, `port add`, arming an audio line, monitoring
+      (auto/on/off), the player reading input each cycle (heard through the strip; a take through a ring a recorder
+      thread drains), the take landed sample-aligned (out + in latency), `transport punch`; a loopback fake proves it to
+      the sample. Part 2: the host's capture (PulseAudio, PipeWire). Part 3: the window. Loop takes: N17.
 - [ ] **N17** Takes and comping (R-REC-2).
 - [ ] **N18** Audio editing on the lanes: split, fades and gain drawn, crossfades, reverse, consolidate, slice
       (R-EDIT-1).

@@ -109,7 +109,7 @@ namespace solaris
             case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
             case K::DevicesList: case K::Browse: case K::RecentsRemove:
             case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::TransportRecord: case K::Wait:
-            case K::Audition: case K::NotePreview: case K::MetersClear: case K::MidiDevices: case K::StripArm: case K::None:
+            case K::Audition: case K::NotePreview: case K::MetersClear: case K::MidiDevices: case K::StripArm: case K::TransportPunch: case K::None:
             case K::Ls: case K::Show: case K::PatternPrint: // R-SVC-8: reading back
             case K::PatternExport: case K::ProjectExportMidi: // R-MIDI-1: writing a file, not the song
                 return false;
@@ -123,7 +123,8 @@ namespace solaris
     {
         err.clear();
         mOutput.clear();
-        const bool editing = mutates(c.kind) || (c.kind == K::TransportStop && mRecording); // R-MIDI-2: the take is an edit
+        const bool editing = mutates(c.kind) || (c.kind == K::TransportStop && mRecording) // R-MIDI-2: the take is an edit
+                             || (c.kind == K::StripArm && c.has("input"));                  // R-REC-1: an input set is one
         if (editing && !requireOpen(err)) return false;
         const Project before = editing ? mProject : Project();
         mPending.clear();
@@ -235,10 +236,10 @@ namespace solaris
         case K::DevicesList: case K::Browse: case K::RecentsRemove:
             ok = machineCommand(c, err);
             break;
-        case K::MidiDevices: case K::StripArm:
+        case K::MidiDevices: case K::StripArm: case K::PortAdd:
             ok = inputCommand(c, err);
             break;
-        case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::TransportRecord: case K::Wait: case K::Audition: case K::MetersClear:
+        case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::TransportPunch: case K::TransportRecord: case K::Wait: case K::Audition: case K::MetersClear:
         case K::NotePreview:
             ok = transportCommand(c, err);
             break;
@@ -827,8 +828,37 @@ namespace solaris
         }
         if (Strip *s = p.strip(id))
         {
-            static const std::vector<std::string> fields = {"name", "gain", "pan", "mute", "solo", "colour"};
+            static const std::vector<std::string> fields = {"name", "gain", "pan", "mute", "solo", "colour", "input", "monitor"};
             if (f == "name") { s->name = value; stored = value; return true; }
+            if (f == "input") // R-REC-1: an input port of the song — by id or name — or none
+            {
+                if (value == "none") { s->input.clear(); stored = "none"; return true; }
+                if (s->kind != "audio") { err = id + " is " + (s->kind == "bus" ? "a bus" : "an instrument strip") + ": only an audio line records an input"; return false; }
+                const Port *pt = nullptr;
+                std::string ins;
+                for (const auto &x : p.ports)
+                {
+                    if (x.id == value || x.name == value) pt = &x;
+                    if (x.dir == "in") ins += (ins.empty() ? "" : ", ") + x.id + " (" + x.name + ")";
+                }
+                if (!pt) { err = "no port `" + value + "` — the song's inputs: " + (ins.empty() ? std::string("none (`port add <name> --dir in`)") : ins); return false; }
+                if (pt->dir != "in") { err = pt->id + " is an output port — an input is a port with --dir in"; return false; }
+                s->input = pt->id;
+                stored = pt->id;
+                return true;
+            }
+            if (f == "monitor")
+            {
+                if (value != "auto" && value != "on" && value != "off") { err = id + ".monitor is auto, on or off, got `" + value + "`"; return false; }
+                s->monitor = value;
+                stored = value;
+                if (mArmed == id) // armed: heard (or not) at once — the song's player switches, the monitor starts or stops
+                {
+                    if (mPlayer && mPlayer->running()) mPlayer->setMonitor(armedIn(mLiveStrips), monitorHears(*s, true, mRecordingAudio));
+                    else { stopMonitor(); startMonitor(); }
+                }
+                return true;
+            }
             if (f == "gain") { if (!number(value, x, err) || !inRange(x, -120, 12, "gain (dB)", err)) return false; s->gain = x; stored = canonicalNumber(x); return true; }
             if (f == "pan") { if (!number(value, x, err) || !inRange(x, -1, 1, "pan", err)) return false; s->pan = x; stored = canonicalNumber(x); return true; }
             if (f == "mute") { if (!boolean(value, b, err)) return false; s->mute = b; stored = boolText(b); return true; }
@@ -1058,6 +1088,8 @@ namespace solaris
             put("mute", boolText(s->mute)); put("solo", boolText(s->solo)); put("colour", std::to_string(s->colour));
             put("out", s->out.empty() ? "master" : s->out);
             put("mixer", p.mixerOf(*s) ? p.mixerOf(*s)->id : std::string());
+            put("input", s->input.empty() ? "none" : s->input); // R-REC-1
+            put("monitor", s->monitor);
         }
         else if (const Clip *c = p.clip(id))
         {

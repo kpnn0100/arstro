@@ -81,6 +81,7 @@ namespace
     struct FakeOut : IAudioOut
     {
         std::shared_ptr<Capture> cap;
+        const double *lat = nullptr;   // the latency it reports (R-REC-1's loopback sets one)
         bool open(const std::string &, int, int, int, std::string &) override { return true; }
         bool write(const float *x, int n) override
         {
@@ -89,7 +90,42 @@ namespace
             std::this_thread::sleep_for(std::chrono::microseconds(300)); // a fast, but not runaway, device
             return true;
         }
-        double latency() override { return 0.0; }
+        double latency() override { return lat ? *lat : 0.0; }
+    };
+    /** R-REC-1: a capture device. "loop": a cable from the clock device back into it — frame j read is the frame the
+     *  output was given (out + in latency) × rate frames before, both counted from when it began (the one audio thread
+     *  reads and writes in lock-step). "tone": a 1 kHz sine at 0.5. */
+    struct FakeIn : IAudioIn
+    {
+        std::shared_ptr<Capture> cap;
+        std::string mode = "loop", *device = nullptr;
+        double inLat = 0, outLat = 0;
+        long long delay = 0, start = -1, got = 0;
+        int ch = 2, rate = 48000;
+        bool open(const std::string &dev, int r, int channels, int, std::string &) override
+        {
+            ch = channels;
+            rate = r;
+            delay = std::llround((outLat + inLat) * r);
+            if (device) *device = dev;
+            return true;
+        }
+        int read(float *x, int n) override
+        {
+            if (start < 0) start = cap->frames.load(); // the output frame being written as it began
+            for (int i = 0; i < n; ++i)
+            {
+                float l = 0, r = 0;
+                const long long j = start + got + i - delay;
+                if (mode == "tone") l = r = (float)(0.5 * std::sin(2 * M_PI * 1000.0 * (double)(got + i) / rate));
+                else if (j >= 0 && (size_t)(2 * j + 1) < cap->sink.size()) { l = cap->sink[(size_t)(2 * j)]; r = cap->sink[(size_t)(2 * j + 1)]; }
+                x[(size_t)i * ch] = l;
+                if (ch > 1) x[(size_t)i * ch + 1] = r;
+            }
+            got += n;
+            return n;
+        }
+        double latency() override { return inLat; }
     };
     /** R-DEV-9: a PipeWire stream that opens and has had three underruns — or one that links nowhere. */
     struct PipewireOut : FakeOut
@@ -124,6 +160,9 @@ namespace
         std::shared_ptr<Capture> capture = std::make_shared<Capture>();
         bool canPlay = true;
         std::string pipewire;          // R-DEV-9: "" this host has no PipeWire driver, "ok" it opens, "fail" it links nowhere
+        double outLatency = 0, inLatency = 0; // R-REC-1: what the clock device and the capture report
+        bool canRecord = true;
+        std::string inMode = "loop", inDevice; // R-REC-1: the capture's sound; the device it was opened on
         std::shared_ptr<std::function<void(const MidiEvent &)>> midi = std::make_shared<std::function<void(const MidiEvent &)>>();
         void key(uint8_t status, uint8_t d1, uint8_t d2) const { if (*midi) (*midi)(MidiEvent{status, d1, d2}); }
         std::map<std::string, std::vector<std::vector<float>>> written;
@@ -174,7 +213,18 @@ namespace
                 h.audioOut = [this] {
                     auto o = std::make_unique<FakeOut>();
                     o->cap = capture;
+                    o->lat = &outLatency;
                     return std::unique_ptr<IAudioOut>(std::move(o));
+                };
+            if (canRecord)
+                h.audioIn = [this] {
+                    auto i = std::make_unique<FakeIn>();
+                    i->cap = capture;
+                    i->mode = inMode;
+                    i->inLat = inLatency;
+                    i->outLat = outLatency;
+                    i->device = &inDevice;
+                    return std::unique_ptr<IAudioIn>(std::move(i));
                 };
             h.listMidiInputs = [](std::vector<MidiPort> &out, std::string &) {
                 out = {MidiPort{"Keys", "Keys"}, MidiPort{"Pads", "Pads"}};
@@ -1900,11 +1950,11 @@ static void test_a_keyboard_plays_the_armed_strip()
     Run r;
     r.ok("project new " + freshSong("keys") + " --bpm 120");
     r.ok("strip add --kind instrument --instrument synth");      // ch_2: nothing to play but the keyboard
-    r.ok("clip add --src tone.wav --at 0 --length 1");            // an audio line: not armable
+    r.ok("clip add --src tone.wav --at 0 --length 1");            // an audio line: armed for its INPUT (R-REC-1) — it has none
     const auto &cap = *r.fake.capture;
     r.fake.capture->sink.reserve(2 * 4000000);                    // the fake device keeps what it is given: no allocation
     const int depth = r.svc.model().undoDepth;
-    assert(contains(r.no("strip arm ch_3"), "only an instrument strip plays a keyboard"));
+    assert(contains(r.no("strip arm ch_3"), "has no input"));
     assert(contains(r.no("strip arm ch_9"), "no strip"));
     r.events.clear();
     r.ok("strip arm ch_2");
@@ -2432,6 +2482,129 @@ static void test_lane_groups_gather_fold_and_move_together()
     std::stable_sort(ls.begin(), ls.end(), [](const LaneModel &x, const LaneModel &y) { return x.order < y.order; });
     assert(said && ls.size() == 3 && ls[0].id == "ln_1" && ls[1].id == "ln_3" && ls[2].id == "ln_2");
     pass("lane groups (R-ARR-3): gathered at the first lane's place, folded as the song's, moved whole, a lane joining or leaving by where it lands; clips moved together as one edit; ungrouped and undone; an empty group goes; a scattered song gathered on open; refusals");
+}
+
+namespace
+{
+    // the first sample louder than `level` (−1: none) — where a burst begins
+    long long onset(const std::vector<float> &x, float level, size_t from = 0)
+    {
+        for (size_t i = from; i < x.size(); ++i)
+            if (std::fabs(x[i]) > level) return (long long)i;
+        return -1;
+    }
+}
+
+static void test_record_audio_lands_where_it_was_played()
+{
+    // R-REC-1: a cable from the output back into the input — the capture hears the clock device (out + in latency)
+    // late, as the two report. A burst the song plays at beat 2, recorded from beat 0, is at beat 2 of the take to the
+    // sample — the same sample the offline render puts it on. Punched 1 … 3, the clip starts at 1 and the burst is a beat
+    // into it. One undo each; refusals name the way.
+    Run r;
+    r.fake.outLatency = 0.02; // 960 frames heard late …
+    r.fake.inLatency = 0.01;  // … and 480 more before the input has it
+    const std::string song = freshSong("recaudio");
+    r.ok("project new " + song + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 8");         // ch_2 dv_1 pt_1
+    sineSynth(r, "dv_1");
+    r.ok("set dv_1.amp.release=5");
+    r.ok("note add pt_1 --pitch 69 --at 2 --length 0.25");
+    assert(r.ok("port add Mic --dir in") == "prt_2\n");
+    const std::string vox = firstLine(r.ok("strip add --kind audio --name Vox"));
+    r.ok("set " + vox + ".monitor=off");                            // a cable back would feed itself
+    const int depth = r.svc.model().undoDepth;
+    r.ok("strip arm " + vox + " --input Mic");                       // the input set: an edit; the arming: not
+    assert(r.svc.model().armed == vox && r.svc.model().undoDepth == depth + 1);
+    assert(r.ok("get " + vox + ".input") == "prt_2\n" && contains(r.text(), "input=prt_2 monitor=off"));
+    // where the offline render puts the burst
+    const std::string ref = scratch() + "/recaudio-ref.wav";
+    r.ok("render --out " + ref + " --to 4 --bits 32f");
+    const long long want = onset(r.fake.written[ref][0], 0.01f);
+    assert(want >= 2 * 24000 && want < 2 * 24000 + 48);
+    // recorded from 0: the take's burst on that very sample
+    const long long f0 = r.fake.capture->frames.load();
+    r.ok("transport record --from 0 --count-in 0");
+    assert(r.svc.model().transport.recording);
+    waitFrames(r, f0 + 5 * 24000);
+    const std::string landed = r.ok("transport stop");
+    const std::string folder = song.substr(0, song.find_last_of('/'));
+    const std::string take = folder + "/Recordings/Vox 1.wav";
+    assert(r.fake.written.count(take) && r.fake.bits[take] == 32);
+    const auto &tk = r.fake.written[take];
+    const long long got = onset(tk[0], 0.01f);
+    if (got != want) std::printf("    burst: render %lld, take %lld\n", want, got);
+    assert(got == want);
+    const std::string clip = firstLine(landed);
+    assert(contains(landed, "into Recordings/Vox 1.wav") && r.clip(clip) && r.clip(clip)->at == 0.0 && r.clip(clip)->track == vox);
+    assert(r.svc.model().undoDepth == depth + 2 && r.svc.model().undoLabel == "Record");
+    // punched 1 … 3: the clip starts at 1, two beats long, the burst a beat into it
+    r.ok("transport punch 1 3");
+    assert(r.svc.model().transport.punchFrom == 1.0 && r.svc.model().transport.punchTo == 3.0);
+    const long long f1 = r.fake.capture->frames.load();
+    r.ok("transport record --from 0 --count-in 0");
+    waitFrames(r, f1 + 5 * 24000);
+    const std::string punched = r.ok("transport stop");
+    const std::string take2 = folder + "/Recordings/Vox 2.wav";
+    assert(r.fake.written.count(take2) && r.fake.written[take2][0].size() == 2 * 24000);
+    assert(onset(r.fake.written[take2][0], 0.01f) == want - 24000 && r.clip(firstLine(punched))->at == 1.0);
+    r.ok("undo");                                                  // ONE step takes the take
+    assert(!r.clip(firstLine(punched)) && r.clip(clip));
+    r.ok("transport punch off");
+    // refusals
+    assert(contains(r.no("strip arm " + vox + " --input Main"), "is an output port"));
+    const std::string bare = firstLine(r.ok("strip add --kind audio --name Bare"));
+    assert(contains(r.no("strip arm " + bare), "has no input") && contains(r.no("strip arm " + bare), "prt_2"));
+    assert(contains(r.no("strip arm ch_2 --input Mic"), "--input is an audio line's"));
+    assert(contains(r.no("transport record --overdub"), "--overdub is the keyboard's"));
+    assert(contains(r.no("transport punch 3 1"), "to > from"));
+    assert(contains(r.no("set " + vox + ".monitor=loud"), "auto, on or off"));
+    assert(contains(r.no("port add Mic --dir in"), "already called `Mic`"));
+    pass("audio recording (R-REC-1): through a cable back, the take's burst on the render's very sample (out + in latency taken out); written beside the song, 32-bit, a clip where it began, one undo; punched 1…3 the clip starts at 1; refusals name the way");
+}
+
+static void test_an_armed_audio_line_is_monitored_as_set()
+{
+    // R-REC-1: monitoring — `auto` heard while stopped; `off` never; switching it heard at once; no capture, refused
+    Run r;
+    r.fake.inMode = "tone";
+    r.ok("project new " + freshSong("monitor") + " --bpm 120");
+    r.ok("port add Guitar --dir in --channels 1");
+    r.ok("settings set port.Guitar=usb_in:0");
+    const std::string g = firstLine(r.ok("strip add --kind audio --name Gtr"));
+    const long long f0 = r.fake.capture->frames.load();
+    r.ok("strip arm " + g + " --input Guitar");                      // auto, stopped: the monitor plays its input
+    waitFrames(r, f0 + 24000);
+    assert(r.fake.inDevice == "usb_in");                            // on the device the machine gives the port
+    const size_t heardFrom = r.fake.capture->sink.size();
+    waitFrames(r, (long long)heardFrom / 2 + 12000);
+    float peak = 0;
+    for (size_t i = heardFrom; i < r.fake.capture->sink.size(); ++i) peak = std::max(peak, std::fabs(r.fake.capture->sink[i]));
+    assert(peak > 0.2f);                                             // the tone, through the strip
+    r.ok("set " + g + ".monitor=off");                               // at once: the monitor stops
+    const long long f1 = r.fake.capture->frames.load();
+    r.ok("wait 0.05");
+    assert(r.fake.capture->frames.load() == f1);                     // nothing plays
+    // auto, playing the song back: the input is NOT heard (only while stopped or recording)
+    r.ok("set " + g + ".monitor=auto");
+    r.ok("transport play --from 0");
+    const size_t playFrom = r.fake.capture->sink.size() + 2 * 4096;
+    waitFrames(r, (long long)playFrom / 2 + 24000);
+    float during = 0;
+    for (size_t i = playFrom; i < r.fake.capture->sink.size(); ++i) during = std::max(during, std::fabs(r.fake.capture->sink[i]));
+    r.ok("transport stop");
+    assert(during < 1e-4f);
+    r.ok("strip arm none");
+    Run none;
+    none.fake.canRecord = false;
+    SolarisService deaf(none.fake.host()); // a host with no capture
+    std::string err;
+    assert(deaf.dispatchText("project new " + freshSong("nocapture") + " --bpm 120", err));
+    assert(deaf.dispatchText("port add In --dir in", err));
+    assert(deaf.dispatchText("strip add --kind audio --name A", err));
+    const std::string a = deaf.output().substr(0, deaf.output().find('\n'));
+    assert(!deaf.dispatchText("strip arm " + a + " --input In", err) && contains(err, "cannot record audio"));
+    pass("monitoring (R-REC-1): auto heard while stopped, on the device the settings give the port; off stops it at once; a build with no capture refuses to arm an audio line");
 }
 
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
@@ -3686,6 +3859,8 @@ int main()
     test_markers_name_places_and_sections();
     test_time_insert_and_delete_move_the_whole_song();
     test_lane_groups_gather_fold_and_move_together();
+    test_record_audio_lands_where_it_was_played();
+    test_an_armed_audio_line_is_monitored_as_set();
     test_scale_lock_places_and_moves_notes_on_the_scale();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();

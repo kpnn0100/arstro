@@ -27,7 +27,8 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `strip delete <ch> [--with-clips]` | Delete a strip and its rack. Refused while clips play through it or strips route to it, unless --with-clips (its clips go too). | R-MIX-1 |
 | `strip move <ch> [--mixer <mx>] [--order <n>]` | Move a strip to another mixer (at its end) and/or to position --order <n> on it (0 = first); its mixer's strips renumber in their new order, as `mixer move` renumbers mixers. Refused if a route would point backward. | R-MIX-3 |
 | `strip relink <ch> [--to <ch>]` | Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips need an audio strip, note clips an instrument strip; a bus plays no clips. | R-MIX-14 |
-| `strip arm <ch\|none>` | Arm an instrument strip for the MIDI keyboard (R-MIDI-2): what is played sounds through it at once — through the song while it plays, through an input monitor (the song's mix without its clips) while stopped — the sustain pedal held; `none` disarms. Not an edit: the song does not keep it. Opens the MIDI inputs `settings midiInputs` names. | R-MIDI-2 |
+| `strip arm <ch\|none> [--input <port>]` | Arm an instrument strip for the MIDI keyboard (R-MIDI-2): what is played sounds through it at once — through the song while it plays, through an input monitor (the song's mix without its clips) while stopped — the sustain pedal held; `none` disarms. Not an edit: the song does not keep it. Opens the MIDI inputs `settings midiInputs` names. Or arm an AUDIO line for its input (R-REC-1): heard through it as `<ch>.monitor` says, recorded by `transport record`; --input <port> sets its input first (that part an edit). | R-MIDI-2 |
+| `port add <name> [--dir <in\|out>] [--channels <1\|2>]` | A logical port (R-DEV-3): an output the master or a strip can feed, or an INPUT (--dir in) an audio line records (R-REC-1); this machine's settings say which device it is (`settings set port.<name>=<device>`). Prints its id. | R-REC-1 |
 | `strip duck <ch> --under <key-strip> [--amount <dB>]` | A side-chain in one line: a Compressor at the end of <ch>'s rack, its Sidechain on, keyed by a pre-fader sidechain send from --under — attack 1 ms, release half a beat, threshold −30 dB and the ratio that makes a full-scale key cut --amount dB (default 8, 1 … 24). The key must come EARLIER in processing order (R-MIX-4). One edit, one undo; prints the compressor, then `made:`. | R-MIX-18 |
 | `route <ch> [--to <ch\|master\|port>]` | Set a strip's main output: a strip LATER in processing order (a later mixer, or after it on its own), master, or an output port. | R-MIX-4 |
 | `send add <ch> [--to <ch\|master\|port>] [--gain <dB>] [--pre] [--sidechain]` | Add a send (post-fader unless --pre). Same forward-only rule as `route`. With --sidechain it is a KEY: it feeds the target's compressors' detectors (their Sidechain switch), not its input, and goes to a strip (R-MIX-15). | R-MIX-5 |
@@ -107,7 +108,8 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `transport seek <beats\|mk>` | Move the transport (playing or not) — to a beat, or to a marker (R-ARR-1). | R-TIME-4 |
 | `midi devices` | This machine's MIDI inputs (ALSA sequencer ports), each marked when Solaris listens to it — the names `settings set midiInputs=` takes. | R-MIDI-2 |
 | `meters clear` | Clear the meters: every clip light and held peak, and the master's true peak and integrated loudness start again (the song is not edited; a click on a clip light). | R-METER-2 |
-| `transport record [--from <beats>] [--count-in <bars>] [--overdub]` | Play and record the armed strip's keyboard (R-MIDI-2): at `transport stop` what was played becomes a new note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes it back. --count-in (else `settings countIn`) bars of click first, the song waiting. | R-MIDI-2 |
+| `transport record [--from <beats>] [--count-in <bars>] [--overdub]` | Play and record the armed strip's keyboard (R-MIDI-2): at `transport stop` what was played becomes a new note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes it back. --count-in (else `settings countIn`) bars of click first, the song waiting. With an AUDIO line armed (R-REC-1): its input from where recording begins to the stop, written beside the song (`Recordings/<strip> <n>.wav`) and put on the strip as a clip where it began — moved earlier by the output's and the input's latency, kept only inside `transport punch` — one undo. | R-MIDI-2 |
+| `transport punch <from\|off> [to]` | Punch in and out (R-REC-1): a recording keeps only what the song plays from <from> to <to> beats, and its clip starts at <from>; `off` keeps it all. The session's, as the loop. | R-REC-1 |
 | `transport loop <from\|off\|mk> [to]` | Loop between two beats while playing — or a marker's section (R-ARR-1: its length, else to the next marker); `off` ends it. | R-TIME-4 |
 | `audition <file\|stop>` | Hear a sample now, outside the song (the browser's preview): through the output device at the audition level, to its end; `stop` ends it. Not an edit, never in a render. | R-EDM-9 |
 | `wait <seconds>` | Let time pass (playback goes on, the model's transport and meters update) — for scripts that listen. | R-PLAY-3 |
@@ -244,7 +246,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `note.previewed` | strip, pitch | A note was heard through a strip, outside the song (`note preview`, the piano roll's sound — R-ROLL-7). |
 | `project.autosaved` | path | The unsaved song was written beside it (`<song>.autosave`, R-SAFE-1). |
 | `project.recovery` | path, age | The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2). |
-| `record.finished` | clip, notes | A recording landed: its notes in this clip ('' — nothing was played) (R-MIDI-2). |
+| `record.finished` | clip, notes, seconds | A recording landed: its notes in this clip ('' — nothing was played) (R-MIDI-2); an audio take, how long it is (R-REC-1). |
 | `strip.armed` | strip | The MIDI keyboard plays this strip now ('' — none); the session's, not the song's (R-MIDI-2). |
 | `meters.cleared` |  | The clip lights and held peaks are out; the master's true peak and integrated loudness start again (R-METER-2). |
 
@@ -291,6 +293,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].panFormula` | string | the formula driving the pan, "" = none |
 | `strips[].mute` | bool |  |
 | `strips[].solo` | bool |  |
+| `strips[].input` | string | R-REC-1: the input port it monitors and records; empty = none |
+| `strips[].monitor` | string | R-REC-1: auto (heard while armed and stopped or recording) \| on \| off |
 | `strips[].audible` | bool | false when muted or silenced by another strip's solo (R-MIX-7) |
 | `strips[].colour` | int | an index into the track colours: its own, else from its id — never −1 |
 | `strips[].sends` | object[] | its sends |
@@ -483,6 +487,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.position` | number | beats — what is heard *(not in `--stable`)* |
 | `transport.loopFrom` | number | beats |
 | `transport.loopTo` | number | beats; equal to loopFrom = no loop |
+| `transport.punchFrom` | number | R-REC-1: beats — a recording keeps only from here … (the session's) |
+| `transport.punchTo` | number | … to here; equal to punchFrom = all of it |
 | `transport.cue` | number | beats: where the time bar was last put (a seek, or a play's --from / --clip; never a plain play) — `transport stop --return` goes back there (R-TIME-7) |
 | `transport.loopClip` | string | the clip the loop follows (`transport play --clip`, the piano roll's play); '' = the song's own loop |
 | `transport.latencyMs` | number | the clock device's *(not in `--stable`)* |

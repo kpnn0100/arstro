@@ -72,6 +72,8 @@ namespace solaris
         int order = 0, colour = -1;
         double gain = 0.0, pan = 0.0;
         bool mute = false, solo = false;
+        std::string input;              // R-REC-1: the input port (dir=in) it monitors and records; "" none
+        std::string monitor = "auto";   // R-REC-1: auto | on | off — when its input is heard through it
         Fields unknown;
         Remarks remarks;
     };

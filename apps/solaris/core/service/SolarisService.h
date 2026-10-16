@@ -16,6 +16,7 @@
  */
 #pragma once
 #include "AppModel.h"
+#include "AudioIn.h"
 #include "AudioOut.h"
 #include "Command.h"
 #include "Event.h"
@@ -63,6 +64,9 @@ namespace solaris
             /** R-MIDI-2: this machine's MIDI inputs, and a listener to them. Empty = this build has no MIDI input. */
             std::function<bool(std::vector<MidiPort> &out, std::string &err)> listMidiInputs;
             std::function<std::unique_ptr<IMidiIn>()> midiIn;
+            /** R-REC-1: a stream from a capture device — what an armed audio strip monitors and records. Empty = this
+             *  build cannot record audio. */
+            std::function<std::unique_ptr<IAudioIn>()> audioIn;
             std::string settingsPath; // the machine's settings file ("" = not persisted)
             std::string recentsPath;  // the recent songs, one path per line ("" = not persisted)
         };
@@ -110,6 +114,12 @@ namespace solaris
         bool arrangeCommand(const Command &c, std::string &err); // markers (R-ARR-1), time insert / delete (R-ARR-2)
         bool timeCommand(const Command &c, std::string &err);    // R-ARR-2
         bool groupCommand(const Command &c, std::string &err);   // R-ARR-3: lane groups, a group moved, clips moved together
+        // R-REC-1: the capture — opened for the armed audio strip's input port; whether its monitoring is heard now;
+        // the take landed as a WAV beside the song and a clip of it
+        std::unique_ptr<IAudioIn> openInput(const Strip &s, int &channels, std::string &err);
+        bool monitorHears(const Strip &s, bool playing, bool recording) const;
+        void attachInput(Player &pl, const std::vector<std::string> &strips, bool playing, bool recording);
+        bool commitAudioTake(Player::Take take, double outLatency, double inLatency, long long graphLatency, std::string &err);
         /** A marker's id → its beat, and its section's end — `transport seek|loop <mk>`. False: not a marker. */
         bool markerSpan(const std::string &id, double &from, double &to) const;
         bool readCommand(const Command &c, std::string &err);
@@ -202,6 +212,9 @@ namespace solaris
         std::vector<MidiPortModel> mMidiPorts; // what `midi devices` last listed
         // R-MIDI-2: a recording — what the player kept, where it began, how it lands
         bool mRecording = false, mOverdub = false;
+        bool mRecordingAudio = false;          // R-REC-1: the take is the armed audio strip's input
+        std::string mInputErr;                 // R-REC-1: why the last input could not be opened
+        double mPunchFrom = 0, mPunchTo = 0;   // R-REC-1: beats; equal = no punch (the session's)
         std::string mRecordStrip;
         double mRecordFrom = 0;                // beats: where the song began recording
         std::vector<Player::Played> mTaken;

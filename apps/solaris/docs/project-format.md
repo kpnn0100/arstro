@@ -71,6 +71,11 @@ Solaris adds two keys, both optional, so an Interstellar `.isp` keeps its meanin
 
 A route to a strip on the same or an earlier mixer is **refused**, naming both ends (R-MIX-4).
 
+**Recording (R-REC-1).** An audio strip may name its INPUT, an input port, and how it is monitored:
+`#atrack id=ch_3 name=Vox kind=audio … input=prt_2 monitor=off` — both written only when set (`monitor` is `auto`
+unless set: heard while armed and stopped or recording). An input port is `#aport id=prt_2 name=Mic dir=in
+channels=1`; `port add` makes one.
+
 ## 5. Sends — `#asend`
 
 ```
@@ -270,6 +275,7 @@ pattern new [--name n] [--length b] | note add <pt> --pitch p --at b [--length b
 marker add <name> --at b [--length b] [--note t] | marker rename <mk> <name> | marker move <mk> [--at b] [--length b] | marker delete <mk>
 time insert --at b --length b | time delete --from b --to b      ; the whole song, ONE edit (R-ARR-2)
 lane group <ln> … [--name n] | lane ungroup <lg> | lane move <lg> --to i | clips move "<ac> …" --by b   ; R-ARR-3
+port add <name> [--dir in|out] [--channels 1|2] | strip arm <ch> [--input <port>] | transport record | transport punch <a> <b>|off   ; R-REC-1
 transport play | transport stop | transport seek <b|mk> | transport loop <a> <b> | transport loop <mk> | transport loop off
 render --out <f.wav> [--from b] [--to b] [--stems ch,…] [--ports] [--bits 24|32f]
 matrix print [--json] | audit | state print [--json] [--stable] | registry [--json] | api [--json|--md]

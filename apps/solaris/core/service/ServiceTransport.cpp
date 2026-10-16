@@ -340,6 +340,10 @@ namespace solaris
             if (!requireOpen(err)) return false;
             if (mRecording) { err = "already recording — `transport stop` lands the take"; return false; }
             if (mArmed.empty()) { err = "arm a strip first: `strip arm <ch>`"; return false; }
+            const Strip *armed = mProject.strip(mArmed);
+            const bool audio = armed && armed->kind == "audio"; // R-REC-1: its input, not a keyboard
+            if (audio && mPath.empty()) { err = "save the song first — a recording is written beside it"; return false; }
+            if (audio && c.has("overdub")) { err = "--overdub is the keyboard's: an audio take is a clip of its own"; return false; }
             double bars = mSettings.countIn;
             if (c.has("count-in") && (!parseNumber(c.flag("count-in"), bars) || bars < 0 || bars > 4 || bars != std::floor(bars)))
             {
@@ -351,7 +355,14 @@ namespace solaris
             if (c.has("from")) play.flags = {{"from", c.flag("from")}};
             mCountInFrames = (long long)std::llround(bars * std::max(1, std::atoi(mProject.header.sig.c_str())) * spb);
             if (!transportCommand(play, err)) { mCountInFrames = 0; return false; }
-            mPlayer->setRecording(true);
+            if (audio)
+            {
+                if (!mPlayer->hasInput()) { const std::string why = mInputErr; stopPlayer(); err = "cannot record " + mArmed + ": " + why; return false; }
+                mPlayer->setMonitor(armedIn(mLiveStrips), monitorHears(*armed, true, true));
+                mPlayer->startTake();
+            }
+            else mPlayer->setRecording(true);
+            mRecordingAudio = audio;
             mRecording = true;
             mOverdub = c.has("overdub");
             mRecordStrip = mArmed;
@@ -415,6 +426,7 @@ namespace solaris
             stopMonitor();                    // R-MIDI-2: one consumer of the keyboard at a time — the song's player now
             mPlayer = std::make_unique<Player>();
             if (mMidiQ) { mPlayer->setMidi(mMidiQ.get()); mPlayer->setArmed(armedIn(mLiveStrips)); }
+            attachInput(*mPlayer, mLiveStrips, true, false); // R-REC-1: an armed audio line's input, beside the output
             mPlayer->setCountIn(mCountInFrames); // R-MIDI-2: a recording's count-in, else none
             mCountInFrames = 0;
             mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(mLoopFrom * spb) : 0,
@@ -445,11 +457,23 @@ namespace solaris
         {
             // R-MIDI-2: a recording's last notes, and where it stopped, before the player goes
             long long stoppedAt = 0;
+            Player::Take take; // R-REC-1: an audio take — taken once the audio thread has joined, so nothing more comes
+            double outLat = 0, inLat = 0;
+            long long graphLat = 0;
             if (mRecording && mPlayer)
             {
                 Player::Played pl;
                 while (mPlayer->takePlayed(pl)) mTaken.push_back(pl);
                 stoppedAt = mPlayer->heard();
+                if (mRecordingAudio)
+                {
+                    outLat = mPlayer->latency();
+                    inLat = mPlayer->inputLatency();
+                    graphLat = mPlayer->graphLatency();
+                    if (mOpen) mPosition = (double)stoppedAt / spb;
+                    mPlayer->stop();
+                    take = mPlayer->endTake();
+                }
             }
             stopPlayer();
             endClipLoop();
@@ -462,7 +486,8 @@ namespace solaris
             mModel.transport.cue = mCue;
             mModel.transport.loopFrom = mLoopFrom;
             mModel.transport.loopTo = mLoopTo;
-            if (mRecording && !commitRecording(stoppedAt, err)) return false; // the take: an edit (dispatch restores on failure)
+            if (mRecording && !(mRecordingAudio ? commitAudioTake(std::move(take), outLat, inLat, graphLat, err) : commitRecording(stoppedAt, err)))
+                return false; // the take: an edit (dispatch restores on failure)
             startMonitor(); // R-MIDI-2: armed — the keyboard is heard again, through the monitor
             announce();
             return true;
@@ -482,6 +507,24 @@ namespace solaris
                 m.sample = (long long)std::llround(mPosition * spb);
                 mPlayer->send(m);
             }
+            announce();
+            return true;
+        }
+        case K::TransportPunch:
+        {
+            // R-REC-1: what a recording keeps — the session's, as the loop
+            if (!requireOpen(err)) return false;
+            if (c.arg(0) == "off") mPunchFrom = mPunchTo = 0;
+            else
+            {
+                double a = 0, b = 0;
+                if (!parseNumber(c.arg(0), a) || a < 0 || !parseNumber(c.arg(1), b) || b <= a)
+                { err = "transport punch <from> <to> (beats, to > from) — or `transport punch off`"; return false; }
+                mPunchFrom = toTick(a);
+                mPunchTo = toTick(b);
+            }
+            mModel.transport.punchFrom = mPunchFrom;
+            mModel.transport.punchTo = mPunchTo;
             announce();
             return true;
         }

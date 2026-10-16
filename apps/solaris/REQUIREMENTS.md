@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 🚧 DR-REC-1 — the core)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -825,7 +825,22 @@ a process is the host's (law 12).
 - **R-REC-1 Record audio** (R-EDM-11): an input port monitored through an armed audio strip (`strip arm <ch>
   --input <port>`, `set <ch>.monitor=on|off|auto`); `transport record` writes the input to a new WAV beside the song
   and makes a clip of it where recording began, sample-aligned (the input latency compensated); punch in/out
-  (`transport punch <from> <to>`) and loop recording making TAKES (R-REC-2).
+  (`transport punch <from> <to>`) and loop recording making TAKES (R-REC-2). (**Detailed while building it, N16 —
+  2026-10-16.** A strip's INPUT is the song's — `set <ch>.input=<port>|none`, an input port (`#aport … dir=in`) the
+  machine's settings map to a capture device (`port.<name>=<device>`, R-DEV-3); `strip arm <ch> --input <port>` sets it
+  and arms in one line. Arming stays the session's and one strip at a time (as R-MIDI-2). MONITORING is the song's —
+  `set <ch>.monitor=auto|on|off` (`auto` unless set): `on` the input is heard through the strip — its rack, its fader,
+  its meter — whenever it is armed; `off` never; `auto` while armed and the transport is stopped or recording, not
+  while it plays the song back. RECORDING (`transport record [--from] [--count-in]` with an audio strip armed) keeps
+  the input from the moment recording begins to the stop; at the stop it is written beside the song —
+  `<song folder>/Recordings/<strip> <n>.wav`, 32-bit float, the next free number — and a clip of it is put on the
+  strip where recording began, all ONE undo ("Record"); a song never saved is refused (there is nowhere beside it
+  yet). ALIGNED: the take is moved earlier by the output's latency plus the input's (what was played was heard Lo
+  after it was rendered; what was sung arrived Li after it was sung), both as the devices report them — a loop of the
+  output back into the input lands on the beat it left. PUNCH: `transport punch <from> <to>` | `off` (the session's,
+  as the loop): a recording keeps only `[from, to)` of the song and its clip starts at `from`. Loop takes are R-REC-2's
+  (N17). The host's capture is a seam beside the output's (PulseAudio and PipeWire); without one, recording audio is
+  refused by name.)
 - **R-REC-2 Takes and comping**: each pass over a loop is a take on the clip; the comp is chosen by ranges
   (`clip comp <ac> --take <n> --from --to`), the takes shown under the clip.
 - **R-EDIT-1 Audio editing on the lanes** (R-EDM-12): `clip split <ac> --at <b>`; a clip's fades and gain dragged

@@ -143,6 +143,11 @@ namespace engine
         /** R-MIDI-2: a note played live into instrument strip `strip` — velocity 0 lets it go — heard from the start
          *  of the next piece rendered. The thread that renders calls it (the player, between blocks); no allocation. */
         void liveNote(int strip, int pitch, int velocity);
+        /** R-REC-1: what an AUDIO strip's input hears for the NEXT `render` — `frames` stereo frames, heard through its
+         *  chain (its rack, its fader, its meter) as a clip of it is; frames past the render are dropped, and each render
+         *  clears it. Copies into buffers sized at build: never allocates. */
+        void liveInput(int strip, const float *left, const float *right, int frames);
+        static constexpr int kMaxLiveInput = 8192; // frames a render may take of it
         /** R-MIDI-3: a wheel moved live — kind 0 the pitch bend (−1 … +1), 1 the mod wheel (0 … 1) — the same ring. */
         void liveControl(int strip, int kind, double value);
         /** Every binding's value as last evaluated (R-AUTO-7), in the graph's bind order. */

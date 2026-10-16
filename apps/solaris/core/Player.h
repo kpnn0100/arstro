@@ -25,6 +25,7 @@
  *  engine's master. All published through atomics; `clearMeters` is a flag the thread takes at its next block.
  */
 #pragma once
+#include "AudioIn.h"
 #include "AudioOut.h"
 #include "Engine.h"
 #include "MidiIn.h"
@@ -104,6 +105,25 @@ namespace solaris
         void setCountIn(long long frames) { mCountIn.store(std::max(0LL, frames)); }
         bool countingIn() const { return mCountIn.load() > 0; }
         bool takePlayed(Played &p) { return mPlayed.pop(p); } // the service's thread
+        /** R-REC-1: the capture device (the service opens it; set before `start`, closed by `stop`). Each cycle a block is
+         *  read — never waiting — and the armed AUDIO strip hears it through its chain while monitoring is on. */
+        void setInput(std::unique_ptr<IAudioIn> in, int channels);
+        void setMonitor(int strip, bool on) { mMonStrip.store(strip); mMonOn.store(on); }
+        double inputLatency() const { return mInLatency.load(); }
+        bool hasInput() const { return (bool)mInput; }
+        long long graphLatency() const { return mGraphLatency.load(); } // R-MIX-17: what the engine's output lags by
+        /** R-REC-1: keep what the input brings, from the next frame read (not during a count-in): the audio thread hands
+         *  it to a ring a recorder thread of the player's drains into the take — so a long take needs no one to pump it.
+         *  `endTake` (after `stop`, so nothing more can come) gives it back with the song sample its first frame was read
+         *  at (−1: none was). */
+        struct Take
+        {
+            std::vector<float> left, right;
+            long long from = -1;
+            long long dropped = 0; // frames the ring could not hold (the recorder fell behind)
+        };
+        void startTake();
+        Take endTake();
         /** R-DEV-5: the device's underruns since `start` (−1: its driver cannot count them). */
         long long xruns() const { return mOut ? mOut->xruns() : -1; }
         /** Destroy engines the thread handed back (call on the service's thread). */
@@ -150,6 +170,8 @@ namespace solaris
         void measure(int n);          // the audio thread: this block into the meters (R-METER-1, R-METER-2)
         void midi();                  // the audio thread: the keyboard's messages since the last block (R-MIDI-2)
         void ballistics(int k, float peak, double meanSquare, int n); // one meter's RMS and held peak
+        void input(int n, long long pos, bool song); // the audio thread: a block of the input — monitored, kept (R-REC-1)
+        void recorder();                             // the recorder thread: the ring into the take
 
         std::thread mThread;
         std::atomic<bool> mRun{false};
@@ -198,6 +220,23 @@ namespace solaris
         std::atomic<int> mBpb{4};
         bool mClickWas = false;
         std::unique_ptr<LiveSlot[]> mSlots;     // sized at construction: the audio thread only stores
+        // R-REC-1: the input — the device and its buffers sized in `start`; the ring the take goes through
+        std::unique_ptr<IAudioIn> mInput;
+        int mInChannels = 2;
+        std::vector<float> mInBuf, mInL, mInR;
+        std::atomic<int> mMonStrip{-1};
+        std::atomic<bool> mMonOn{false}, mTaking{false}, mRecRun{false};
+        std::atomic<double> mInLatency{0};
+        std::atomic<long long> mTakeDropped{0};
+        struct InChunk
+        {
+            long long at = 0; // the song sample (the engine's position) its first frame was read at
+            int n = 0;
+            std::array<float, 512> l{}, r{};
+        };
+        LockFreeQueue<InChunk> mRecQ{512};     // ~5 s at 48 kHz in flight: the recorder drains it every 2 ms
+        std::thread mRecorder;
+        Take mTake;                             // the recorder thread's while it runs
         std::atomic<long long> mSlotsWritten{0};
         long long mOutFrames = 0;               // the audio thread's: frames handed to the device
         int mGeneration = 0;                    // the audio thread's: the engine it plays

@@ -254,6 +254,8 @@ namespace solaris
             else if (k == "pan") n.pan = std::clamp(r.num(k, v, 0.0), -1.0, 1.0);
             else if (k == "mute") n.mute = r.boolean(k, v, false);
             else if (k == "solo") n.solo = r.boolean(k, v, false);
+            else if (k == "input") n.input = v;     // R-REC-1 — checked by validateProject
+            else if (k == "monitor") n.monitor = v;
             else n.unknown.emplace_back(k, v);
         }
         void apply(Reader &r, Send &n, const std::string &k, const std::string &v)
@@ -739,6 +741,7 @@ namespace solaris
             if (n.solo) l.kv("solo", "true");
             l.strIf("out", n.out);
             if (n.colour >= 0) l.kv("colour", std::to_string(n.colour));
+            l.strIf("input", n.input).kvIf(n.monitor != "auto", "monitor", n.monitor); // R-REC-1: only when set
             emit(out, "", l.unknown(n.unknown), n.remarks);
         }
         group(!p.sends.empty());
@@ -982,6 +985,19 @@ namespace solaris
                 if (x.value < lo - 1e-9 || x.value > hi + 1e-9 || x.at < 0)
                     e.push_back("pattern " + pt.id + "'s " + canon + " point at " + canonicalBeats(x.at) + " is out of range (" + canonicalNumber(lo) + " … " + canonicalNumber(hi) + ")");
             }
+        }
+        for (const auto &s : p.strips) // R-REC-1: an input is an input port; monitoring one of three
+        {
+            if (!s.input.empty())
+            {
+                const Port *pt = nullptr;
+                for (const auto &x : p.ports)
+                    if (x.id == s.input) pt = &x;
+                if (!pt) e.push_back("strip " + s.id + "'s input `" + s.input + "` is not a port of the song");
+                else if (pt->dir != "in") e.push_back("strip " + s.id + "'s input " + s.input + " is an output port");
+            }
+            if (s.monitor != "auto" && s.monitor != "on" && s.monitor != "off")
+                e.push_back("strip " + s.id + "'s monitor is `" + s.monitor + "` (auto, on or off)");
         }
         for (const auto &l : p.lanes) // R-ARR-3: a lane's group is one the song has
             if (!l.group.empty() && !p.group(l.group)) e.push_back("lane " + l.id + " is in group `" + l.group + "`, which the song does not have");

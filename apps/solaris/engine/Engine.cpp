@@ -38,6 +38,9 @@ namespace engine
         struct LiveNote { int pitch = 0, velocity = 0; int kind = 0; double value = 0; }; // kind 0 a note, 1 bend, 2 mod
         std::array<LiveNote, 64> live{};
         int liveHead = 0, liveTail = 0;
+        // R-REC-1: an audio strip's input for the next render (sized at build; `liveInput` copies, a render clears)
+        std::vector<double> liveInL, liveInR;
+        int liveInFrames = 0;
     };
 
     Engine::Engine() = default;
@@ -137,6 +140,7 @@ namespace engine
                 return false;
             }
             st->inL.assign(kBlock, 0.0); st->inR.assign(kBlock, 0.0);
+            if (s.kind == Strip::Audio) { st->liveInL.assign(kMaxLiveInput, 0.0); st->liveInR.assign(kMaxLiveInput, 0.0); } // R-REC-1
             st->outL.assign(kBlock, 0.0); st->outR.assign(kBlock, 0.0);
             st->tmpL.assign(kBlock, 0.0); st->tmpR.assign(kBlock, 0.0);
             st->keyL.assign(kBlock, 0.0); st->keyR.assign(kBlock, 0.0);
@@ -390,6 +394,15 @@ namespace engine
         st.liveHead = next;
     }
 
+    void Engine::liveInput(int strip, const float *left, const float *right, int frames)
+    {
+        if (strip < 0 || strip >= (int)mStrips.size() || mGraph.strips[(size_t)strip].kind != Strip::Audio) return;
+        auto &st = *mStrips[(size_t)strip];
+        const int n = std::clamp(frames, 0, (int)st.liveInL.size());
+        for (int i = 0; i < n; ++i) { st.liveInL[(size_t)i] = left[i]; st.liveInR[(size_t)i] = right[i]; }
+        st.liveInFrames = n;
+    }
+
     void Engine::liveControl(int strip, int kind, double value)
     {
         if (strip < 0 || strip >= (int)mStrips.size() || mGraph.strips[(size_t)strip].kind != Strip::Instrument) return;
@@ -521,6 +534,12 @@ namespace engine
                         SL[t - p0] += g * rg.pcm->at(src, 0);
                         SR[t - p0] += g * rg.pcm->at(src, 1);
                     }
+                }
+                // R-REC-1: its input, monitored — `off` is where this piece sits in the render
+                for (int i = 0; i < n && off + i < st.liveInFrames; ++i)
+                {
+                    SL[i] += st.liveInL[(size_t)(off + i)];
+                    SR[i] += st.liveInR[(size_t)(off + i)];
                 }
             }
             size_t firstFx = 0;
@@ -792,6 +811,7 @@ namespace engine
             if (mStrips[i]->counted > 0)
                 for (int c = 0; c < 2; ++c)
                     mStripMeters[i].rms[c] = (float)std::sqrt(mStrips[i]->sumSq[c] / mStrips[i]->counted);
+        for (auto &st : mStrips) st->liveInFrames = 0; // R-REC-1: an input is for one render
     }
 }
 }

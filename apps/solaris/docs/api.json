@@ -179,11 +179,24 @@
     },
     {
       "verb": "strip arm",
-      "usage": "strip arm <ch|none>",
+      "usage": "strip arm <ch|none> [--input <port>]",
       "args": "<ch|none>",
-      "flags": [],
-      "summary": "Arm an instrument strip for the MIDI keyboard (R-MIDI-2): what is played sounds through it at once — through the song while it plays, through an input monitor (the song's mix without its clips) while stopped — the sustain pedal held; `none` disarms. Not an edit: the song does not keep it. Opens the MIDI inputs `settings midiInputs` names.",
+      "flags": [
+        "input=<port>"
+      ],
+      "summary": "Arm an instrument strip for the MIDI keyboard (R-MIDI-2): what is played sounds through it at once — through the song while it plays, through an input monitor (the song's mix without its clips) while stopped — the sustain pedal held; `none` disarms. Not an edit: the song does not keep it. Opens the MIDI inputs `settings midiInputs` names. Or arm an AUDIO line for its input (R-REC-1): heard through it as `<ch>.monitor` says, recorded by `transport record`; --input <port> sets its input first (that part an edit).",
       "requirement": "R-MIDI-2"
+    },
+    {
+      "verb": "port add",
+      "usage": "port add <name> [--dir <in|out>] [--channels <1|2>]",
+      "args": "<name>",
+      "flags": [
+        "dir=<in|out>",
+        "channels=<1|2>"
+      ],
+      "summary": "A logical port (R-DEV-3): an output the master or a strip can feed, or an INPUT (--dir in) an audio line records (R-REC-1); this machine's settings say which device it is (`settings set port.<name>=<device>`). Prints its id.",
+      "requirement": "R-REC-1"
     },
     {
       "verb": "strip duck",
@@ -1028,8 +1041,16 @@
         "count-in=<bars>",
         "overdub"
       ],
-      "summary": "Play and record the armed strip's keyboard (R-MIDI-2): at `transport stop` what was played becomes a new note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes it back. --count-in (else `settings countIn`) bars of click first, the song waiting.",
+      "summary": "Play and record the armed strip's keyboard (R-MIDI-2): at `transport stop` what was played becomes a new note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes it back. --count-in (else `settings countIn`) bars of click first, the song waiting. With an AUDIO line armed (R-REC-1): its input from where recording begins to the stop, written beside the song (`Recordings/<strip> <n>.wav`) and put on the strip as a clip where it began — moved earlier by the output's and the input's latency, kept only inside `transport punch` — one undo.",
       "requirement": "R-MIDI-2"
+    },
+    {
+      "verb": "transport punch",
+      "usage": "transport punch <from|off> [to]",
+      "args": "<from|off> [to]",
+      "flags": [],
+      "summary": "Punch in and out (R-REC-1): a recording keeps only what the song plays from <from> to <to> beats, and its clip starts at <from>; `off` keeps it all. The session's, as the loop.",
+      "requirement": "R-REC-1"
     },
     {
       "verb": "transport loop",
@@ -1219,9 +1240,10 @@
       "name": "record.finished",
       "fields": [
         "clip",
-        "notes"
+        "notes",
+        "seconds"
       ],
-      "summary": "A recording landed: its notes in this clip ('' — nothing was played) (R-MIDI-2)."
+      "summary": "A recording landed: its notes in this clip ('' — nothing was played) (R-MIDI-2); an audio take, how long it is (R-REC-1)."
     },
     {
       "name": "strip.armed",
@@ -1469,6 +1491,18 @@
       "path": "strips[].solo",
       "type": "bool",
       "summary": "",
+      "stable": true
+    },
+    {
+      "path": "strips[].input",
+      "type": "string",
+      "summary": "R-REC-1: the input port it monitors and records; empty = none",
+      "stable": true
+    },
+    {
+      "path": "strips[].monitor",
+      "type": "string",
+      "summary": "R-REC-1: auto (heard while armed and stopped or recording) | on | off",
       "stable": true
     },
     {
@@ -2621,6 +2655,18 @@
       "path": "transport.loopTo",
       "type": "number",
       "summary": "beats; equal to loopFrom = no loop",
+      "stable": true
+    },
+    {
+      "path": "transport.punchFrom",
+      "type": "number",
+      "summary": "R-REC-1: beats — a recording keeps only from here … (the session's)",
+      "stable": true
+    },
+    {
+      "path": "transport.punchTo",
+      "type": "number",
+      "summary": "… to here; equal to punchFrom = all of it",
       "stable": true
     },
     {

@@ -706,6 +706,41 @@ static void test_latency_is_compensated_everywhere_signals_meet()
     pass("latency compensated (R-MIX-17): a limiter's twin is delayed to meet it at a bus, by output or by send, bypassed or not, chunked any way; the ports meet; keys meet the audio");
 }
 
+static void test_live_input_is_heard_through_its_strip()
+{
+    // R-REC-1: an audio strip's input, for ONE render — heard through its fader (a strip like any), then gone; split
+    // into pieces it stays sample-aligned; an instrument strip takes none; nothing allocates
+    MixGraph g = basic();
+    Engine e;
+    std::string err;
+    assert(e.build(g, err));
+    PortBuffers out;
+    e.prepare(out, 512);
+    std::vector<float> L(512), R(512);
+    for (int i = 0; i < 512; ++i) { L[(size_t)i] = 0.5f * std::sin(i * 0.05f); R[(size_t)i] = 0.25f * std::sin(i * 0.05f); }
+    e.setStripGain(0, 0.5);
+    e.liveInput(0, L.data(), R.data(), 512);
+    gAllocs = 0;
+    gCounting = true;
+    e.render(512, out); // two engine pieces (kBlock 256): the second reads the input from where the first stopped
+    gCounting = false;
+    assert(gAllocs.load() == 0);
+    double err2 = 0;
+    for (int i = 0; i < 512; ++i)
+        err2 = std::max(err2, std::fabs((double)out.ports[0][0][(size_t)i] - 0.5 * L[(size_t)i]) + std::fabs((double)out.ports[0][1][(size_t)i] - 0.5 * R[(size_t)i]));
+    if (err2 > 1e-5) std::printf("    worst %.6f\n", err2);
+    assert(err2 < 1e-5);
+    e.render(256, out); // the next render: no input given — silence
+    float peak = 0;
+    for (float v : out.ports[0][0]) peak = std::max(peak, std::fabs(v));
+    assert(peak == 0.0f);
+    e.liveInput(1, L.data(), R.data(), 512); // a bus takes none (nor would an instrument)
+    e.render(256, out);
+    for (float v : out.ports[0][0]) peak = std::max(peak, std::fabs(v));
+    assert(peak == 0.0f);
+    pass("live input (R-REC-1): an audio strip's input heard through its fader for one render, aligned across pieces, then gone; other strips take none; no allocation");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -721,6 +756,7 @@ int main()
     test_bindings_drive_gain_and_parameters_at_control_rate();
     test_curves_are_interstellars_keyframes();
     test_latency_is_compensated_everywhere_signals_meet();
+    test_live_input_is_heard_through_its_strip();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 
 #ifdef SOLARIS_HAVE_FFMPEG
 extern "C" {
@@ -121,6 +122,12 @@ namespace solaris_host
         const bool flt = bits == 32;
         const int bytes = flt ? 4 : bits == 16 ? 2 : 3;
         const double scale = bits == 16 ? 32768.0 : 8388608.0; // 2^(bits−1): the dither's grid lands on integers
+        {
+            // R-REC-1: a recording goes into a folder beside the song that may not be there yet
+            std::error_code ec;
+            const auto dir = std::filesystem::path(path).parent_path();
+            if (!dir.empty()) std::filesystem::create_directories(dir, ec);
+        }
         FILE *f = std::fopen(path.c_str(), "wb");
         if (!f) { err = "cannot write " + path; return false; }
         auto u32 = [&](uint32_t v) { std::fwrite(&v, 4, 1, f); };

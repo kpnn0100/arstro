@@ -89,6 +89,8 @@ namespace solaris
         double gain = 0, pan = 0;               // dB, −1…+1
         std::string gainFormula, panFormula;    // R-AUTO-1: "" = the stored value plays
         bool mute = false, solo = false;
+        std::string input;                      // R-REC-1: the input port it monitors and records ("" none)
+        std::string monitor = "auto";           // R-REC-1: auto | on | off
         bool audible = true;                    // false when muted or silenced by another strip's solo
         std::vector<SendModel> sends;
         std::vector<DeviceModel> devices;
@@ -275,6 +277,7 @@ namespace solaris
         bool playing = false;
         double position = 0;                     // beats — what is HEARD (rendered minus the device's latency)
         double loopFrom = 0, loopTo = 0;         // beats; equal = no loop
+        double punchFrom = 0, punchTo = 0;       // R-REC-1: beats a recording keeps; equal = all of it (the session's)
         std::string loopClip;                    // the clip `transport play --clip` loops ('' = the song's loop) — R-ROLL-6
         double cue = 0;                          // beats: where the time bar was last put; `transport stop --return` goes back there — R-TIME-7
         double latencyMs = 0;                    // the clock device's, while playing
