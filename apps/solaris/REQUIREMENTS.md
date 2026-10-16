@@ -855,7 +855,30 @@ a process is the host's (law 12).
 - **R-EDIT-1 Audio editing on the lanes** (R-EDM-12): `clip split <ac> --at <b>`; a clip's fades and gain dragged
   on the clip (its corners and a gain line; `set <ac>.fadeIn/.fadeOut/.gain` exist); overlapping clips on a lane
   crossfade by their fades; `set <ac>.reverse=on`; `clip consolidate <ac>…` (bounce in place to one audio clip);
-  `clip slice <ac> --every <b>|--transients` making a Sampler kit or clips.
+  `clip slice <ac> --every <b>|--transients` making a Sampler kit or clips. (**Detailed while building it, N18 —
+  2026-10-16.** SPLIT: `clip split <ac> --at <b>` cuts an AUDIO clip in two where `b` falls inside it — the first
+  half keeps the clip's id and its fade in, the second is a new clip (its id said) from `b` with the fade out, each
+  fade no longer than its half; the two play what the one did, to the sample (a fade across the cut aside). A
+  reversed clip's first half is the END of its span; a clip with takes keeps every take in both halves and its comp
+  divided at the cut. A looping clip is cut only where a repetition begins (the refusal names the nearest two); a
+  note clip is refused — its notes are its pattern's, shared (R-CLIP-3). REVERSE: `set <ac>.reverse=true|false` (a
+  boolean like every other) plays an audio clip's span backwards, `out` to `in`, its takes too (`#aclip … reverse=true`). CROSSFADES: where two audio
+  clips on one lane, playing through one strip, overlap — the later beginning inside the earlier and ending after
+  it — the earlier's fade out and the later's fade in each last at least the overlap (linear in amplitude,
+  R-MIX-11), so one passes into the other without a click; a clip wholly inside another is mixed, not faded. What is
+  heard is published (`clips[].fadeInHeard`, `.fadeOutHeard`), the clip's own fades left as set. CONSOLIDATE:
+  `clip consolidate <ac> <ac>…` joins audio clips of ONE strip into one: what they play — gains, fades, crossfades,
+  reverse, comps — rendered raw (before the strip's devices, fader and pan), from the first one's start to the last
+  one's end, written beside the song (`Bounces/<strip> <n>.wav`, 32-bit float) and put where they were, on the
+  first one's lane — one edit. A note clip is refused (its sound is its instrument's: a strip's bounce is
+  R-PERF-3). SLICE: `clip slice <ac> --every <b>` cuts an audio clip into clips every `b` beats from its start;
+  `--transients [--sensitivity 0…1]` where the DSP library's onset detector (REQ-onset-1) finds a sound begins in
+  what the clip plays — one edit, the new clips said. `--every <b> --kit` instead makes a new instrument track: a
+  Sampler of the clip's file playing its span in N equal slices (`mode=slices`, `slices`, `start`/`end` the span; N
+  the whole number of slices nearest the clip's length over `b`, 1 … 64) and a note clip where the clip was, whose
+  notes — root + k at the k-th slice's place — play the slices in order, so the kit plays what the clip did; the
+  clip stays (mute or delete it). A reversed clip's kit plays its slices reversed, in its order. A looping clip is
+  not sliced; a comped one only `--every` (consolidate it first for its transients).)
 - **R-WARP-1 Time-stretch** (R-EDM-13, R-CLIP-5): an audio clip follows the song's tempo (`set <ac>.warp=on`, its
   own BPM detected on import or set, `.bpm`), pitch kept; `set <ac>.pitch=<semitones>` shifts pitch, tempo kept —
   a DSP time-stretcher (phase vocoder with transient handling), rendered deterministically.

@@ -1057,6 +1057,37 @@
       "requirement": "R-REC-2"
     },
     {
+      "verb": "clip split",
+      "usage": "clip split <ac> --at <beats>",
+      "args": "<ac>",
+      "flags": [
+        "at=<beats>"
+      ],
+      "summary": "Cut an audio clip in two at --at (song beats, inside it) — ONE edit (R-EDIT-1): the first half keeps the id and the fade in, the second (printed) begins at --at with the fade out; together they play what the one did. A reversed clip's first half is its span's end; a clip with takes keeps them all, its comp divided. A looping clip is cut only where a repetition begins; a note clip not at all (its notes are its pattern's).",
+      "requirement": "R-EDIT-1"
+    },
+    {
+      "verb": "clip consolidate",
+      "usage": "clip consolidate <ac> [<ac> …]",
+      "args": "<ac> [<ac> …]",
+      "flags": [],
+      "summary": "Join audio clips of one strip into ONE (R-EDIT-1): what they play — gain, fades, crossfades, reverse, comps — rendered raw (before the strip's devices, fader and pan) from the first's start to the last's end, written beside the song as Bounces/<strip> <n>.wav (32-bit float) and put in their place on the first's lane; one edit, the new clip printed. A note clip is refused (a strip's bounce is R-PERF-3).",
+      "requirement": "R-EDIT-1"
+    },
+    {
+      "verb": "clip slice",
+      "usage": "clip slice <ac> [--every <beats>] [--transients] [--sensitivity <0-1>] [--kit]",
+      "args": "<ac>",
+      "flags": [
+        "every=<beats>",
+        "transients",
+        "sensitivity=<0-1>",
+        "kit"
+      ],
+      "summary": "Cut an audio clip into clips (R-EDIT-1): --every <beats> from its start, or --transients where a sound begins (the DSP library's onset detector, REQ-onset-1; --sensitivity 0 … 1, 0.5) — ONE edit, the clips printed. --every with --kit makes a new instrument track instead: a Sampler of the clip's file in N equal slices (mode=slices) and a note clip in the clip's place playing them in order (root + k for slice k), so it plays what the clip did; the clip stays. A looping clip is not sliced.",
+      "requirement": "R-EDIT-1"
+    },
+    {
       "verb": "transport punch",
       "usage": "transport punch <from|off> [to]",
       "args": "<from|off> [to]",
@@ -2026,6 +2057,24 @@
       "path": "clips[].plays[].to",
       "type": "number",
       "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "clips[].reverse",
+      "type": "bool",
+      "summary": "R-EDIT-1: the span played backwards (audio)",
+      "stable": true
+    },
+    {
+      "path": "clips[].fadeInHeard",
+      "type": "number",
+      "summary": "beats — R-EDIT-1: the fade in as heard: grown to cover an earlier clip overlapping it on its lane (a crossfade)",
+      "stable": true
+    },
+    {
+      "path": "clips[].fadeOutHeard",
+      "type": "number",
+      "summary": "beats — R-EDIT-1: the fade out as heard: grown to cover a later clip overlapping it on its lane",
       "stable": true
     },
     {
@@ -4271,7 +4320,7 @@
       "type": "sampler",
       "label": "Sampler",
       "kind": "instrument",
-      "summary": "Plays a recorded sound: pitched by the note (chromatic) or as recorded (one-shot); a span, reverse, an ADSR.",
+      "summary": "Plays a recorded sound: pitched by the note (chromatic), as recorded (one-shot), or as a kit of its span's equal slices (slices); a span, reverse, an ADSR.",
       "params": [
         {
           "name": "mode",
@@ -4279,7 +4328,8 @@
           "unit": "",
           "choices": [
             "chromatic",
-            "one-shot"
+            "one-shot",
+            "slices"
           ],
           "default": "chromatic"
         },
@@ -4390,6 +4440,16 @@
           "min": 0.0,
           "max": 24.0,
           "default": 2.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "slices",
+          "label": "Slices",
+          "unit": "",
+          "min": 1.0,
+          "max": 64.0,
+          "default": 8.0,
           "integer": true,
           "log": false
         }

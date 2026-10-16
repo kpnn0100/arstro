@@ -55,6 +55,10 @@ namespace solaris
     /** A clip's length in beats, resolved (the file span at the tempo, or its pattern's). */
     double clipLengthBeats(const Project &p, const Clip &c);
 
+    /** R-EDIT-1: an audio clip's fades as heard, in beats — its own, each grown to cover an overlap on its lane
+     *  through its strip (the earlier clip's fade out and the later's fade in: a crossfade). */
+    void heardFades(const Project &p, const Clip &c, double &fadeIn, double &fadeOut);
+
     /** A stored parameter text → its value per the spec (a choice by name or index). False if neither. */
     bool parseParam(const ParamSpec &spec, const std::string &text, double &value);
     /** The canonical text a value is stored as (a choice's name; a number via canonicalNumber). */

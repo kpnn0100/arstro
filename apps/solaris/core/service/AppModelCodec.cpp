@@ -135,6 +135,9 @@ namespace solaris
             {"clips[].plays[].take", "int", ""},
             {"clips[].plays[].from", "number", "beats"},
             {"clips[].plays[].to", "number", "beats"},
+            {"clips[].reverse", "bool", "R-EDIT-1: the span played backwards (audio)"},
+            {"clips[].fadeInHeard", "number", "beats — R-EDIT-1: the fade in as heard: grown to cover an earlier clip overlapping it on its lane (a crossfade)"},
+            {"clips[].fadeOutHeard", "number", "beats — R-EDIT-1: the fade out as heard: grown to cover a later clip overlapping it on its lane"},
             {"patterns", "object[]", "every pattern"},
             {"patterns[].id", "string", ""},
             {"patterns[].name", "string", ""},
@@ -555,7 +558,7 @@ namespace solaris
                            .set("src", c.src).set("pattern", c.pattern).set("at", c.at).set("length", c.length).set("in", c.in)
                            .set("out", c.out).set("gain", c.gain).set("fadeIn", c.fadeIn).set("fadeOut", c.fadeOut)
                            .set("loop", c.loop).set("offline", c.offline).set("linked", c.linked).set("takes", strings(c.takes)).set("comp", comp)
-                           .set("plays", plays));
+                           .set("plays", plays).set("reverse", c.reverse).set("fadeInHeard", c.fadeInHeard).set("fadeOutHeard", c.fadeOutHeard));
         }
         j.set("clips", clips);
         Json patterns = Json::array();

@@ -216,6 +216,11 @@ makes.
 | `pattern` | — | the `#apattern` it plays |
 | `length` | beats it fills when `loop=true` | beats; longer than the pattern loops it |
 | `gain`, `fadeIn`, `fadeOut` | dB, beats, beats | `gain` only |
+| `reverse` | `true`: the span played backwards, `out` to `in` (R-EDIT-1; written only when set) | — |
+
+Two audio clips on one lane playing through one strip that overlap — the later beginning inside the earlier and ending
+after it — crossfade: each one's fade is played at least as long as the overlap (R-EDIT-1). Nothing of it is stored;
+the fades written are the clips' own.
 
 ---
 

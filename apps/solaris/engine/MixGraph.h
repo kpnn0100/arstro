@@ -60,6 +60,7 @@ namespace engine
         long long srcOffset = 0;          // source frame at `start`
         long long srcFrames = 0;          // source span; with `loop` the region repeats it
         bool loop = false;
+        bool reverse = false;             // R-EDIT-1: the source span read from its end
         double gain = 1.0;                // linear
         long long fadeIn = 0, fadeOut = 0; // samples
     };

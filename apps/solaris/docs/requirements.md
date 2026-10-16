@@ -2181,3 +2181,40 @@ inside the clip, is ONE `clip comp <ac> --take <k> --from --to` (the pointer's r
 double-click, that take for the whole clip (`clip comp <ac> --take <k>`). UI `test_takes_under_their_clip`; shot
 `takes`. Mutants: the lit takes snapping over, a drag taking the whole clip, Show takes changing nothing until the next
 edit — each red.
+
+### DR-EDIT-1 Audio editing on the lanes (R-EDIT-1)
+**Reverse.** `Clip::reverse` (`#aclip … reverse=true`, written only when set — `model/Project.cpp:369`), `set <ac>.reverse=
+true|false` (`core/service/SolarisService.cpp:878`; a note clip refused) and `get`; compiled to `Region::reverse`, which the
+engine reads from its span's end (`engine/Engine.cpp:531`) — a loop's every repetition backwards; a clip with takes
+mirrored stretch by stretch (`core/Compile.cpp:249`). **Crossfades** (C6, `heardFades`, `core/Compile.cpp:29`): an audio
+clip's fade in grows to cover a clip of its strip on its lane that began before it and ends inside it, its fade out one
+that begins inside it and ends after — a clip wholly inside another, or one on another lane, is mixed; the compile plays
+the grown fades, the model publishes them (`clips[].fadeInHeard`, `.fadeOutHeard`, `core/service/ServiceModel.cpp:283`)
+and the clips keep their own. **Split** (`splitClip`, `core/service/ServiceAudioEdit.cpp:51`): `clip split <ac> --at <b>`,
+`b` on the tick grid strictly inside the clip; the second half a new clip after the first in the list, its id printed —
+the halves' `in`/`out` meet where the cut is (a reversed clip's first half its span's end), the fade in the first's and
+the fade out the second's (each no longer than its half), the comp cut in two, every take kept by both. A looping clip
+(`:65`) is cut only within half a tick of where a repetition begins — each half loops from its start — and the refusal
+names the nearest such beats inside it; a note clip is refused (R-CLIP-3). **Consolidate** (`consolidateClips`, `:236`):
+audio clips of one strip; a copy of the song holding only them and their strip — no devices, no sends, no bindings, the
+strip at 0 dB, centred, to a master at 0 dB — compiled and rendered by an engine of its own from the first one's start
+to the last one's end (its output latency trimmed), written as `Bounces/<strip> <n>.wav` (32-bit float, the next free
+number, a clip's name counted as taken so an undone bounce is never overwritten); the clips deleted and one `clip add`
+in their place on the first one's lane — one edit. **Slice** (`audioEditCommand`, `:122`): `--every <b>` cuts every `b`
+from the clip's start; `--transients` decodes what the clip plays (its span, mixed to mono, reversed when the clip is)
+and cuts at the DSP library's `detectOnsets` (`:170`, REQ-onset-1; `--sensitivity`), dropping a cut within half a tick
+of either end; each cut a `splitClip`. It prints the first piece; `made:` names the others in order. `--every --kit`
+(`sliceToKit`, `:192`): N = the clip's length over `b`, rounded (1 … 64); a `clip add --instrument sampler --sample <the
+clip's file> --lane new` at the clip's place and length, its Sampler set `mode=slices slices=N start=in/T end=out/T`
+(T the file's length) and `reverse` as the clip, its pattern N notes — note k at k·len/N, root + k (root the registry's
+default; a reversed clip root + N−1−k), velocity 127; the clip itself stays. Refused: a looping clip; both or neither of
+`--every`/`--transients`; `--kit` without `--every`; `--sensitivity` without `--transients`; a step not shorter than the
+clip; more than 64 slices; transients of a comped clip. L2 `test_a_clip_is_split_and_plays_the_same` (the halves' render
+equal to the whole's, to the sample, with gain and fades; a reversed clip the file backwards, split equal too; a loop cut
+at 12 not 10, its render equal), `test_overlapping_clips_on_a_lane_crossfade` (a level of 0.5 held through the overlap;
+another lane, or inside, 1.0), `test_consolidate_renders_clips_into_one` (the file raw — the tone, the gap silent, the
+reversed second at −6 dB; the song after within 1.5e-8 of before, through a filter, fader and pan), `test_slice_cuts_a_
+clip_or_makes_a_kit` (every beat: equal render; transients: 5, 6, 6.5, 7 — reversed, each swell's start; the kit alone
+equal to the clip alone to the sample, forwards and reversed). Mutants: reverse ignored by the engine, no crossfade, the
+second half reading from the start, a reversed split keeping the start, consolidate keeping the fader, a reversed kit in
+the span's order, a loop cut anywhere, transients found in the file's order — each red.

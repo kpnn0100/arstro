@@ -110,6 +110,9 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `meters clear` | Clear the meters: every clip light and held peak, and the master's true peak and integrated loudness start again (the song is not edited; a click on a clip light). | R-METER-2 |
 | `transport record [--from <beats>] [--count-in <bars>] [--overdub]` | Play and record the armed strip's keyboard (R-MIDI-2): at `transport stop` what was played becomes a new note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes it back. --count-in (else `settings countIn`) bars of click first, the song waiting. With an AUDIO line armed (R-REC-1): its input from where recording begins to the stop, written beside the song (`Recordings/<strip> <n>.wav`) and put on the strip as a clip where it began — moved earlier by the output's and the input's latency, kept only inside `transport punch` — one undo. | R-MIDI-2 |
 | `clip comp <ac> --take <n> [--from <beats>] [--to <beats>]` | Choose which take plays where (R-REC-2): take <n> (1-based) from --from to --to (song beats; the whole clip without them) — ONE edit, the range overwriting what it covers. Where no range says, the last take plays; the seams are crossfaded 5 ms. A loop recording makes the takes. | R-REC-2 |
+| `clip split <ac> --at <beats>` | Cut an audio clip in two at --at (song beats, inside it) — ONE edit (R-EDIT-1): the first half keeps the id and the fade in, the second (printed) begins at --at with the fade out; together they play what the one did. A reversed clip's first half is its span's end; a clip with takes keeps them all, its comp divided. A looping clip is cut only where a repetition begins; a note clip not at all (its notes are its pattern's). | R-EDIT-1 |
+| `clip consolidate <ac> [<ac> …]` | Join audio clips of one strip into ONE (R-EDIT-1): what they play — gain, fades, crossfades, reverse, comps — rendered raw (before the strip's devices, fader and pan) from the first's start to the last's end, written beside the song as Bounces/<strip> <n>.wav (32-bit float) and put in their place on the first's lane; one edit, the new clip printed. A note clip is refused (a strip's bounce is R-PERF-3). | R-EDIT-1 |
+| `clip slice <ac> [--every <beats>] [--transients] [--sensitivity <0-1>] [--kit]` | Cut an audio clip into clips (R-EDIT-1): --every <beats> from its start, or --transients where a sound begins (the DSP library's onset detector, REQ-onset-1; --sensitivity 0 … 1, 0.5) — ONE edit, the clips printed. --every with --kit makes a new instrument track instead: a Sampler of the clip's file in N equal slices (mode=slices) and a note clip in the clip's place playing them in order (root + k for slice k), so it plays what the clip did; the clip stays. A looping clip is not sliced. | R-EDIT-1 |
 | `transport punch <from\|off> [to]` | Punch in and out (R-REC-1): a recording keeps only what the song plays from <from> to <to> beats, and its clip starts at <from>; `off` keeps it all. The session's, as the loop. | R-REC-1 |
 | `transport loop <from\|off\|mk> [to]` | Loop between two beats while playing — or a marker's section (R-ARR-1: its length, else to the next marker); `off` ends it. | R-TIME-4 |
 | `audition <file\|stop>` | Hear a sample now, outside the song (the browser's preview): through the output device at the audition level, to its end; `stop` ends it. Not an edit, never in a render. | R-EDM-9 |
@@ -121,7 +124,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 |---|---|
 | `project.name` · `project.bpm` · `project.sig` · `project.masterGain` · `project.sampleRate` | text · 20…999 · n/d · dB · Hz |
 | `<strip>.name` · `.gain` · `.pan` · `.mute` · `.solo` · `.colour` | text · dB (−120…12) · −1…1 · bool · bool · −1…15 |
-| `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` | text · beats · beats · beats · beats · dB · bool · s · s |
+| `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` · `.reverse` | text · beats · beats · beats · beats · dB · bool · s · s · bool (audio, R-EDIT-1) |
 | `<lane>.name` · `.colour` · `.strip` (`<ch>` an instrument: the lane is its track; `none`: plain — R-LANE-3) · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
 | `<lane group>.name` · `.folded` · `<lane>.group` (R-ARR-3) | text · `on` (one row) / `off` · `<lg>` joins it (gathered with it) / `none` leaves it (placed after it) |
 | `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |
@@ -381,6 +384,9 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `clips[].plays[].take` | int |  |
 | `clips[].plays[].from` | number | beats |
 | `clips[].plays[].to` | number | beats |
+| `clips[].reverse` | bool | R-EDIT-1: the span played backwards (audio) |
+| `clips[].fadeInHeard` | number | beats — R-EDIT-1: the fade in as heard: grown to cover an earlier clip overlapping it on its lane (a crossfade) |
+| `clips[].fadeOutHeard` | number | beats — R-EDIT-1: the fade out as heard: grown to cover a later clip overlapping it on its lane |
 | `patterns` | object[] | every pattern |
 | `patterns[].id` | string |  |
 | `patterns[].name` | string |  |
@@ -693,11 +699,11 @@ Pads — a pitch by name: `kick` 36 · `rim` 37 · `snare` 38 · `clap` 39 · `l
 
 ### `sampler` — Sampler (instrument)
 
-Plays a recorded sound: pitched by the note (chromatic) or as recorded (one-shot); a span, reverse, an ADSR.
+Plays a recorded sound: pitched by the note (chromatic), as recorded (one-shot), or as a kit of its span's equal slices (slices); a span, reverse, an ADSR.
 
 | parameter | range | default |
 |---|---|---|
-| `mode` | chromatic · one-shot | chromatic |
+| `mode` | chromatic · one-shot · slices | chromatic |
 | `root` | 0.0 … 127.0 | 60.0 |
 | `start` | 0.0 … 1.0 | 0.0 |
 | `end` | 0.0 … 1.0 | 1.0 |
@@ -709,6 +715,7 @@ Plays a recorded sound: pitched by the note (chromatic) or as recorded (one-shot
 | `level` | -40.0 … 12.0 dB | 0.0 dB |
 | `velocity` | 0.0 … 1.0 | 1.0 |
 | `bend` | 0.0 … 24.0 st | 2.0 st |
+| `slices` | 1.0 … 64.0 | 8.0 |
 
 ### `compressor` — Compressor (effect)
 

@@ -366,6 +366,7 @@ namespace solaris
             else if (k == "fadeIn") n.fadeIn = toTick(r.num(k, v, 0.0));
             else if (k == "fadeOut") n.fadeOut = toTick(r.num(k, v, 0.0));
             else if (k == "loop") n.loop = r.boolean(k, v, false);
+            else if (k == "reverse") n.reverse = r.boolean(k, v, false); // R-EDIT-1
             else n.unknown.emplace_back(k, v);
         }
 
@@ -827,6 +828,7 @@ namespace solaris
                 if (n.fadeIn > 0) l.kv("fadeIn", canonicalBeats(n.fadeIn));
                 if (n.fadeOut > 0) l.kv("fadeOut", canonicalBeats(n.fadeOut));
                 if (n.loop) l.kv("loop", "true");
+                if (n.reverse) l.kv("reverse", "true"); // R-EDIT-1: written only when set
             }
             else
             {

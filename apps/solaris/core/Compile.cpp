@@ -26,6 +26,22 @@ namespace solaris
         return pt ? pt->length : 0.0;
     }
 
+    void heardFades(const Project &p, const Clip &c, double &fadeIn, double &fadeOut)
+    {
+        fadeIn = c.fadeIn;
+        fadeOut = c.fadeOut;
+        if (!c.isAudio()) return;
+        // (C6) the later of two overlapping clips begins inside the earlier and ends after it; one inside another is mixed
+        const double cs = c.at, ce = c.at + clipLengthBeats(p, c), eps = 1e-9;
+        for (const auto &d : p.clips)
+        {
+            if (&d == &c || !d.isAudio() || d.track != c.track || d.lane != c.lane) continue;
+            const double ds = d.at, de = d.at + clipLengthBeats(p, d);
+            if (ds < cs - eps && de > cs + eps && de < ce - eps) fadeIn = std::max(fadeIn, de - cs);
+            if (ds > cs + eps && ds < ce - eps && de > ce + eps) fadeOut = std::max(fadeOut, ce - ds);
+        }
+    }
+
     // a parameter's text is the DSP library's (REQ-device-7) — the same text a VST3 plugin's state stores
     bool parseParam(const ParamSpec &spec, const std::string &text, double &value) { return paramFromText(spec, text, value); }
 
@@ -212,6 +228,9 @@ namespace solaris
                         else runs.push_back({t, {cuts[k], cuts[k + 1]}});
                     }
                     const long long x5 = (long long)std::llround(0.005 * p.header.sampleRate);
+                    const long long clipFrames = (long long)std::llround((c.at + len) * spb) - start;
+                    double fin = 0, fout = 0;
+                    heardFades(p, c, fin, fout);
                     for (size_t k = 0; k < runs.size(); ++k)
                     {
                         const auto &take = c.takes[(size_t)runs[k].first - 1];
@@ -225,9 +244,16 @@ namespace solaris
                         rg.frames = b - a;
                         rg.srcOffset = (long long)std::llround(c.in * p.header.sampleRate) + (a - start); // a take begins where the clip does
                         rg.srcFrames = rg.pcm ? rg.pcm->frames : rg.frames;
+                        if (c.reverse)
+                        {
+                            // R-EDIT-1: the clip read from its end — this stretch, the clip's span mirrored
+                            rg.reverse = true;
+                            rg.srcFrames = rg.frames;
+                            rg.srcOffset = (long long)std::llround(c.in * p.header.sampleRate) + clipFrames - (a - start) - rg.frames;
+                        }
                         rg.gain = engine::dbToLinear(c.gain);
-                        rg.fadeIn = k > 0 ? 2 * x5 : (long long)std::llround(c.fadeIn * spb);
-                        rg.fadeOut = k + 1 < runs.size() ? 2 * x5 : (long long)std::llround(c.fadeOut * spb);
+                        rg.fadeIn = k > 0 ? 2 * x5 : (long long)std::llround(fin * spb);
+                        rg.fadeOut = k + 1 < runs.size() ? 2 * x5 : (long long)std::llround(fout * spb);
                         g.end = std::max(g.end, rg.start + rg.frames);
                         es.regions.push_back(rg);
                     }
@@ -242,10 +268,13 @@ namespace solaris
                     rg.srcOffset = (long long)std::llround(c.in * p.header.sampleRate);
                     rg.srcFrames = (long long)std::llround((c.out - c.in) * p.header.sampleRate);
                     rg.loop = c.loop;
+                    rg.reverse = c.reverse; // R-EDIT-1
                     rg.frames = (c.loop && c.length > 0) ? (long long)std::llround((c.at + c.length) * spb) - start : rg.srcFrames;
                     rg.gain = engine::dbToLinear(c.gain);
-                    rg.fadeIn = (long long)std::llround(c.fadeIn * spb);
-                    rg.fadeOut = (long long)std::llround(c.fadeOut * spb);
+                    double fin = 0, fout = 0;
+                    heardFades(p, c, fin, fout); // (C6) R-EDIT-1: an overlap on its lane crossfades
+                    rg.fadeIn = (long long)std::llround(fin * spb);
+                    rg.fadeOut = (long long)std::llround(fout * spb);
                     g.end = std::max(g.end, rg.start + rg.frames);
                     es.regions.push_back(rg);
                 }

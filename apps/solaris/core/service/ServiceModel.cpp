@@ -279,6 +279,8 @@ namespace solaris
             cm.fadeIn = c.fadeIn;
             cm.fadeOut = c.fadeOut;
             cm.loop = c.loop;
+            cm.reverse = c.reverse;
+            heardFades(p, c, cm.fadeInHeard, cm.fadeOutHeard); // R-EDIT-1: the crossfade, decided once for every front end
             if (c.isAudio())
             {
                 const std::string path = resolvePath(c.src);

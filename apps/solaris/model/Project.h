@@ -211,6 +211,7 @@ namespace solaris
         double gain = 0.0;              // dB
         double fadeIn = 0.0, fadeOut = 0.0; // beats
         bool loop = false;
+        bool reverse = false;           // R-EDIT-1: an audio clip's span played backwards, `out` to `in`
         std::vector<Take> takes;        // R-REC-2: a loop recording's passes, in the order played (1-based)
         std::vector<CompRange> comp;    // R-REC-2: which take plays where; elsewhere the LAST
         Fields unknown;

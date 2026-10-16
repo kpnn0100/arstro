@@ -2713,6 +2713,256 @@ static void test_a_looped_recording_makes_takes_and_a_comp_chooses()
     pass("takes (R-REC-2): a looped recording — each pass a take, one level throughout as HEARD (the latency taken out, the turn's tail the pass before's), a short last pass dropped; the clip spans the loop, the last take by default; a comp range plays its take, crossfaded 5 ms; a range over part of another keeps the rest; undo; refusals");
 }
 
+namespace
+{
+    // R-EDIT-1: a file the fake host hands back — two tones, so where a sample came from in it can be told
+    std::string toneFile(Run &r, const std::string &name, long long frames)
+    {
+        const std::string path = scratch() + "/" + name + ".wav";
+        std::vector<std::vector<float>> ch(2, std::vector<float>((size_t)frames));
+        for (long long i = 0; i < frames; ++i)
+            ch[0][(size_t)i] = ch[1][(size_t)i] = (float)(0.4 * std::sin(2 * M_PI * 440.0 * i / 48000) + 0.2 * std::sin(2 * M_PI * 1234.5 * i / 48000));
+        r.fake.written[path] = ch;
+        return path;
+    }
+    std::vector<float> heardL(Run &r, const std::string &name, double from, double to)
+    {
+        const std::string out = scratch() + "/" + name + ".wav";
+        r.ok("render --out " + out + " --from " + std::to_string(from) + " --to " + std::to_string(to) + " --bits 32f");
+        return r.fake.written[out][0];
+    }
+    double worstDiff(const std::vector<float> &a, const std::vector<float> &b)
+    {
+        double d = a.size() == b.size() ? 0.0 : 1e9;
+        for (size_t i = 0; i < std::min(a.size(), b.size()); ++i) d = std::max(d, (double)std::fabs(a[i] - b[i]));
+        return d;
+    }
+    // a slice's pieces: the first line, then what `made:` names (R-SVC-8), in order
+    std::vector<std::string> piecesOf(const std::string &said)
+    {
+        std::vector<std::string> out{firstLine(said)};
+        const auto at = said.find("clip=");
+        if (at == std::string::npos) return out;
+        std::string cur;
+        for (size_t i = at + 5; i < said.size() && said[i] != ' ' && said[i] != '\n'; ++i)
+            if (said[i] == ',') { out.push_back(cur); cur.clear(); }
+            else cur += said[i];
+        if (!cur.empty()) out.push_back(cur);
+        return out;
+    }
+}
+
+static void test_a_clip_is_split_and_plays_the_same()
+{
+    // R-EDIT-1: `clip split` — two halves playing what the one did, to the sample (the gain both's, the fade in the
+    // first's, the fade out the second's); a reversed clip played from its span's end, its first half that end; a
+    // looping clip cut only where a repetition begins; one edit; refusals
+    Run r;
+    r.ok("project new " + freshSong("split") + " --bpm 120");
+    const std::string src = toneFile(r, "split-src", 96000);       // 2 s: 4 beats
+    const std::string ac = firstLine(r.ok("clip add --src " + src + " --at 1"));
+    r.ok("set " + ac + ".gain=-3 " + ac + ".fadeIn=0.25 " + ac + ".fadeOut=0.5");
+    const auto whole = heardL(r, "split-whole", 0, 6);
+    const int depth = r.svc.model().undoDepth;
+    const std::string second = firstLine(r.ok("clip split " + ac + " --at 2.5"));
+    assert(r.svc.model().undoDepth == depth + 1 && r.svc.model().clips.size() == 2);
+    {
+        const ClipModel *a = r.clip(ac), *b = r.clip(second);
+        assert(a && b && a->at == 1 && a->length == 1.5 && a->in == 0 && a->out == 0.75 && a->fadeIn == 0.25 && a->fadeOut == 0);
+        assert(b->at == 2.5 && b->length == 2.5 && b->in == 0.75 && b->out == 2 && b->fadeIn == 0 && b->fadeOut == 0.5 && b->gain == -3);
+        assert(b->lane == a->lane && b->track == a->track);
+    }
+    assert(heardL(r, "split-halves", 0, 6) == whole);              // to the sample
+    r.ok("undo");
+    assert(r.svc.model().clips.size() == 1 && r.clip(ac)->out == 2);
+    // reversed: the span from its end; split, its first half is that end
+    r.ok("set " + ac + ".fadeIn=0 " + ac + ".fadeOut=0 " + ac + ".gain=0 " + ac + ".reverse=true");
+    assert(contains(r.text(), "reverse=true") && r.clip(ac)->reverse && r.ok("get " + ac + ".reverse") == "true\n");
+    const auto back = heardL(r, "split-back", 1, 5);
+    const auto file = r.fake.written[src][0];
+    for (size_t i = 0; i < 96000; i += 997) assert(std::fabs(back[i] - file[95999 - i]) < 1e-6f);
+    const std::string half = firstLine(r.ok("clip split " + ac + " --at 2"));
+    assert(r.clip(ac)->in == 1.5 && r.clip(ac)->out == 2 && r.clip(half)->in == 0 && r.clip(half)->out == 1.5 && r.clip(half)->reverse);
+    assert(heardL(r, "split-back2", 1, 5) == back);
+    // looping: cut only where a repetition begins
+    const std::string loop = firstLine(r.ok("clip add --src " + src + " --at 8 --length 12")); // repeats every 4 beats
+    const auto looped = heardL(r, "split-loop", 8, 20);
+    const std::string said = r.no("clip split " + loop + " --at 10");
+    assert(contains(said, "loops every 4.0 beats") && contains(said, ": 12.0"));
+    const std::string rest = firstLine(r.ok("clip split " + loop + " --at 12"));
+    assert(r.clip(loop)->length == 4 && r.clip(rest)->at == 12 && r.clip(rest)->length == 8 && r.clip(rest)->loop);
+    assert(heardL(r, "split-loop2", 8, 20) == looped);
+    // refusals
+    assert(contains(r.no("clip split " + ac + " --at 0.5"), "must fall inside"));
+    assert(contains(r.no("clip split " + ac + " --at 2"), "must fall inside")); // its end
+    assert(contains(r.no("clip split ac_99 --at 1"), "no clip"));
+    const std::string notes = firstLine(r.ok("clip add --instrument synth --at 0 --length 4"));
+    assert(contains(r.no("clip split " + notes + " --at 1"), "is a note clip"));
+    assert(contains(r.no("set " + notes + ".reverse=true"), "is a note clip"));
+    pass("split (R-EDIT-1): two halves play what the one did, to the sample — the gain both's, the fade in the first's, the fade out the second's; one edit; reversed, the span from its end and its first half that end; a loop cut only where a repetition begins, the refusal naming it; outside, a note clip refused");
+}
+
+static void test_overlapping_clips_on_a_lane_crossfade()
+{
+    // R-EDIT-1: two clips of one strip on one lane overlapping — the earlier fades out and the later in across the
+    // overlap (linear: a level both carry stays that level through it); the heard fades published, the clips' own
+    // untouched; on another lane, or one wholly inside another, they mix
+    Run r;
+    r.ok("project new " + freshSong("xfade") + " --bpm 120");
+    const std::string path = scratch() + "/xfade-dc.wav";
+    r.fake.written[path] = std::vector<std::vector<float>>(2, std::vector<float>(48000, 0.5f)); // 1 s, 2 beats, of 0.5
+    const std::string a = firstLine(r.ok("clip add --src " + path + " --at 0"));
+    const std::string b = firstLine(r.ok("clip add --src " + path + " --at 1.5"));
+    assert(r.clip(b)->track == r.clip(a)->track && r.clip(b)->lane == r.clip(a)->lane);
+    assert(r.clip(a)->fadeOutHeard == 0.5 && r.clip(b)->fadeInHeard == 0.5 && r.clip(a)->fadeInHeard == 0 && r.clip(b)->fadeOutHeard == 0);
+    assert(r.clip(a)->fadeOut == 0 && r.clip(b)->fadeIn == 0 && !contains(r.text(), "fadeIn"));
+    const auto L = heardL(r, "xfade", 0, 3.5);
+    for (double beat : {0.5, 1.501, 1.6, 1.75, 1.9, 1.999, 2.5, 3.0})
+    {
+        const float v = L[(size_t)std::llround(beat * 24000)];
+        if (std::fabs(v - 0.5f) > 1e-4f) std::printf("    at %.3f: %.5f\n", beat, v);
+        assert(std::fabs(v - 0.5f) < 1e-4f);
+    }
+    // its own fade longer than the overlap: its own
+    r.ok("set " + b + ".fadeIn=1");
+    assert(r.clip(b)->fadeInHeard == 1);
+    r.ok("undo");
+    // on another lane: they mix
+    r.ok("clip move " + b + " --lane none");
+    assert(r.clip(a)->fadeOutHeard == 0 && r.clip(b)->fadeInHeard == 0);
+    assert(std::fabs(heardL(r, "xfade2", 0, 3.5)[(size_t)(1.75 * 24000)] - 1.0f) < 1e-4f);
+    r.ok("undo");
+    // one inside another: they mix
+    const std::string c = firstLine(r.ok("clip add --src " + path + " --at 0.5 --strip " + r.clip(a)->track));
+    r.ok("set " + c + ".out=0.25");                                 // 0.5 … 1.0, inside a
+    assert(r.clip(c)->lane == r.clip(a)->lane && r.clip(c)->fadeInHeard == 0 && r.clip(c)->fadeOutHeard == 0 && r.clip(a)->fadeOutHeard == 0.5);
+    assert(std::fabs(heardL(r, "xfade3", 0, 3.5)[(size_t)(0.75 * 24000)] - 1.0f) < 1e-4f);
+    pass("crossfades (R-EDIT-1): overlapping clips on a lane fade across the overlap — a level both carry holds through it; the heard fades published, the clips' own kept; a longer fade of its own stays; another lane, or one inside another, mixes");
+}
+
+static void test_consolidate_renders_clips_into_one()
+{
+    // R-EDIT-1: two clips of one strip — the second reversed, quieter, faded — joined into ONE clip of a file beside the
+    // song: what they played, raw, the gap silent; the strip's fader, pan and device still after it, so the song sounds
+    // as it did; one edit; refusals
+    Run r;
+    const std::string song = freshSong("bounce");
+    r.ok("project new " + song + " --bpm 120");
+    const std::string src = toneFile(r, "bounce-src", 48000);      // 1 s: 2 beats
+    const std::string a = firstLine(r.ok("clip add --src " + src + " --at 1"));
+    const std::string b = firstLine(r.ok("clip add --src " + src + " --at 4"));
+    const std::string ch = r.clip(a)->track;
+    r.ok("set " + b + ".reverse=true " + b + ".gain=-6 " + b + ".fadeOut=0.5 " + ch + ".gain=-4 " + ch + ".pan=0.3");
+    r.ok("device add " + ch + " --type filter");
+    const auto before = heardL(r, "bounce-before", 0, 7);
+    const int depth = r.svc.model().undoDepth;
+    const std::string one = firstLine(r.ok("clip consolidate " + a + " " + b));
+    assert(r.svc.model().undoDepth == depth + 1);
+    const std::string file = song.substr(0, song.find_last_of('/')) + "/Bounces/bounce-src 1.wav";
+    assert(r.fake.written.count(file) && r.fake.bits[file] == 32);
+    const auto raw = r.fake.written[file];
+    const auto tone = r.fake.written[src][0];
+    const ClipModel *c = r.clip(one);
+    assert(c && r.svc.model().clips.size() == 1 && c->at == 1 && c->length == 5 && c->track == ch && c->src == "Bounces/bounce-src 1.wav");
+    assert(raw[0].size() == 5 * 24000 && raw[0][1000] == tone[1000] && raw[1][1000] == tone[1000]); // raw: no fader, pan, filter
+    assert(raw[0][60000] == 0.0f);                                  // the gap
+    const float rev = raw[0][72000 + 1000], want = (float)(tone[47999 - 1000] * std::pow(10.0, -6.0 / 20.0));
+    assert(std::fabs(rev - want) < 1e-6f);                          // the second: reversed, at its gain
+    const double diff = worstDiff(heardL(r, "bounce-after", 0, 7), before);
+    std::printf("    the song after: worst difference %.2e\n", diff);
+    assert(diff < 1e-5);
+    r.ok("undo");
+    assert(r.svc.model().clips.size() == 2 && r.clip(a) && r.clip(b));
+    // refusals
+    const std::string notes = firstLine(r.ok("clip add --instrument synth --at 0 --length 4"));
+    assert(contains(r.no("clip consolidate " + a + " " + notes), "is a note clip"));
+    const std::string other = firstLine(r.ok("clip add --src " + toneFile(r, "bounce-other", 4800) + " --at 0"));
+    assert(contains(r.no("clip consolidate " + a + " " + other), "consolidate joins clips of one strip"));
+    assert(contains(r.no("clip consolidate ac_99"), "no clip"));
+    pass("consolidate (R-EDIT-1): clips of one strip into ONE clip of a 32-bit file beside the song — what they played, raw (gain, fade, reverse in it; the strip's fader, pan, filter not), the gap silent; the song sounds as it did; one edit; a note clip, two strips refused");
+}
+
+static void test_slice_cuts_a_clip_or_makes_a_kit()
+{
+    // R-EDIT-1: a drum loop — hits at beats 0, 1, 2, 2.5, 3 of 4 — sliced every beat (clips playing what it did),
+    // where its hits begin (the DSP library's onsets; reversed, where each swell does), or into a Sampler kit and a note clip that plays the same —
+    // reversed, its slices reversed in its order; one edit each; refusals
+    Run r;
+    r.ok("project new " + freshSong("slice") + " --bpm 120");
+    const std::string path = scratch() + "/slice-drums.wav";
+    std::vector<std::vector<float>> drums(2, std::vector<float>(96000, 0.0f));
+    for (double beat : {0.0, 1.0, 2.0, 2.5, 3.0})
+        for (long long i = 0; i < 9000; ++i)
+        {
+            const size_t at = (size_t)std::llround(beat * 24000) + (size_t)i;
+            drums[0][at] = drums[1][at] = (float)(0.8 * std::exp(-i / 2000.0) * std::sin(2 * M_PI * 180.0 * i / 48000));
+        }
+    r.fake.written[path] = drums;
+    const std::string ac = firstLine(r.ok("clip add --src " + path + " --at 4"));
+    const auto whole = heardL(r, "slice-whole", 4, 8);
+    const int depth = r.svc.model().undoDepth;
+    // every beat
+    auto made = piecesOf(r.ok("clip slice " + ac + " --every 1"));
+    assert(made.size() == 4 && made[0] == ac && r.svc.model().undoDepth == depth + 1);
+    for (int k = 0; k < 4; ++k) assert(r.clip(made[(size_t)k])->at == 4 + k && r.clip(made[(size_t)k])->length == 1);
+    assert(heardL(r, "slice-every", 4, 8) == whole);
+    r.ok("undo");
+    assert(r.svc.model().clips.size() == 1);
+    // where a hit begins — not at its start
+    made = piecesOf(r.ok("clip slice " + ac + " --transients"));
+    std::string ats;
+    for (const auto &id : made) ats += " " + canonicalBeats(r.clip(id)->at);
+    std::printf("    cut at%s\n", ats.c_str());
+    assert(made.size() == 5);
+    const double want[] = {4, 5, 6, 6.5, 7};
+    for (size_t k = 0; k < 5; ++k) assert(std::fabs(r.clip(made[k])->at - want[k]) < 0.01);
+    assert(worstDiff(heardL(r, "slice-hits", 4, 8), whole) < 1e-6);
+    r.ok("undo");
+    // a kit: a Sampler in four slices, a note clip playing them in order — alone, it plays what the clip did
+    const std::string kit = firstLine(r.ok("clip slice " + ac + " --every 1 --kit"));
+    const std::string kitStrip = r.clip(kit)->track, dv = r.svc.project()->rack(kitStrip)->devices[0].id;
+    assert(r.strip(kitStrip)->kind == "instrument" && r.clip(kit)->at == 4 && r.clip(kit)->length == 4 && r.clip(ac));
+    assert(r.ok("get " + dv + ".mode") == "slices\n" && r.ok("get " + dv + ".slices") == "4.0\n");
+    {
+        const PatternModel *pt = patternIn(r, r.clip(kit)->pattern);
+        assert(pt && pt->notes.size() == 4);
+        for (int k = 0; k < 4; ++k) assert(pt->notes[(size_t)k].pitch == 60 + k && pt->notes[(size_t)k].at == k && pt->notes[(size_t)k].vel == 127);
+    }
+    r.ok("set " + r.clip(ac)->track + ".mute=true");
+    double diff = worstDiff(heardL(r, "slice-kit", 4, 8), whole);
+    std::printf("    the kit against the clip: worst difference %.2e\n", diff);
+    assert(diff < 1e-4);
+    r.ok("undo");
+    r.ok("undo");
+    // reversed: the kit plays its slices reversed, the span's last first
+    r.ok("set " + ac + ".reverse=true");
+    const auto backwards = heardL(r, "slice-back", 4, 8);
+    // reversed, each hit is a swell: cut where it begins — the clip's order, not the file's
+    made = piecesOf(r.ok("clip slice " + ac + " --transients"));
+    const double swells[] = {4, 4.625, 5.125, 5.625, 6.625, 7.625};
+    assert(made.size() == 6);
+    for (size_t k = 0; k < 6; ++k) assert(std::fabs(r.clip(made[k])->at - swells[k]) < 0.01);
+    r.ok("undo");
+    const std::string kit2 = firstLine(r.ok("clip slice " + ac + " --every 1 --kit"));
+    const std::string dv2 = r.svc.project()->rack(r.clip(kit2)->track)->devices[0].id;
+    assert(r.ok("get " + dv2 + ".reverse") == "on\n" && patternIn(r, r.clip(kit2)->pattern)->notes[0].pitch == 63);
+    r.ok("set " + r.clip(ac)->track + ".mute=true");
+    diff = worstDiff(heardL(r, "slice-kit2", 4, 8), backwards);
+    std::printf("    the reversed kit against the clip: worst difference %.2e\n", diff);
+    assert(diff < 1e-4);
+    // refusals
+    assert(contains(r.no("clip slice " + ac + " --every 1 --transients"), "one of"));
+    assert(contains(r.no("clip slice " + ac), "one of"));
+    assert(contains(r.no("clip slice " + ac + " --transients --kit"), "--kit slices --every"));
+    assert(contains(r.no("clip slice " + ac + " --every 1 --sensitivity 0.5"), "--sensitivity goes with --transients"));
+    assert(contains(r.no("clip slice " + ac + " --every 4"), "is not shorter than"));
+    assert(contains(r.no("clip slice " + ac + " --every 0.05 --kit"), "64 at most"));
+    const std::string loop = firstLine(r.ok("clip add --src " + path + " --at 20 --length 8"));
+    assert(contains(r.no("clip slice " + loop + " --every 1"), "loops"));
+    assert(contains(r.no("clip slice " + kit2 + " --every 1"), "is a note clip"));
+    pass("slice (R-EDIT-1): every beat — clips playing what it did; at its hits (the DSP onsets) — cuts within a hundredth of a beat, reversed where each swell begins; a kit — a Sampler in four slices and a note clip, alone the same sound, reversed its slices reversed in its order; one edit each; refusals");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -3969,6 +4219,10 @@ int main()
     test_an_armed_audio_line_is_monitored_as_set();
     test_a_looped_recording_makes_takes_and_a_comp_chooses();
     test_scale_lock_places_and_moves_notes_on_the_scale();
+    test_a_clip_is_split_and_plays_the_same();
+    test_overlapping_clips_on_a_lane_crossfade();
+    test_consolidate_renders_clips_into_one();
+    test_slice_cuts_a_clip_or_makes_a_kit();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

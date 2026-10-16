@@ -6,6 +6,16 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Open
 
+### D-13 The looped-recording test once counted fewer takes, run straight after a parallel build
+- **Found:** 2026-10-16, running N18's mutants: one run of `solaris_service_tests`, started the moment a `-j16` build
+  finished, failed `test_a_looped_recording_makes_takes_and_a_comp_chooses` at `contains(said, "recorded 3 takes of
+  1.0 s")`; the mutant under test (in `clip consolidate`) touches nothing it runs. Twelve runs since, idle or not, green.
+- **Suspected cause:** as D-11 — the fake capture is paced by the audio thread, and `waitFrames` lets the test thread
+  stop the transport after 3.4 passes as COUNTED; a descheduled audio thread can leave the passes HEARD short of three,
+  the third then under half and dropped. Not reproduced, so not yet measured.
+- **Recommended fix:** wait on the heard position (the song past the third turn) rather than on captured frames, or
+  4.4 passes with the fourth dropped by rule — then four runs under a parallel build.
+
 ### D-2 A strip's new name does not reach its lane or its pattern — lane half FIXED in E3 (DR-LANE-3), pattern half open
 - **Found:** 2026-10-09, making the canon (C5) with `solaris-cc` alone.
 - **Symptom:** after the reproduction below, `ls` shows `ch_2 "Bass"` but still

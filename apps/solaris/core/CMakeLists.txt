@@ -22,6 +22,7 @@ add_library(solaris_core STATIC
   service/ServiceAuto.cpp
   service/ServiceCompose.cpp
   service/ServiceArrange.cpp
+  service/ServiceAudioEdit.cpp
   service/Notation.cpp
   service/RegistryModel.cpp
   service/Keymap.cpp

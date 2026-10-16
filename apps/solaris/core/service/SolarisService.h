@@ -116,6 +116,11 @@ namespace solaris
         bool arrangeCommand(const Command &c, std::string &err); // markers (R-ARR-1), time insert / delete (R-ARR-2)
         bool timeCommand(const Command &c, std::string &err);    // R-ARR-2
         bool groupCommand(const Command &c, std::string &err);   // R-ARR-3: lane groups, a group moved, clips moved together
+        // R-EDIT-1 (ServiceAudioEdit.cpp): audio clips cut, joined, sliced — a cut is `splitClip`, which slice repeats
+        bool audioEditCommand(const Command &c, std::string &err);
+        bool splitClip(const std::string &id, double at, std::string &made, std::string &err);
+        bool sliceToKit(const Clip &clip, double step, std::string &err);
+        bool consolidateClips(const Command &c, std::string &err);
         // R-REC-1: the capture — opened for the armed audio strip's input port; whether its monitoring is heard now;
         // the take landed as a WAV beside the song and a clip of it
         std::unique_ptr<IAudioIn> openInput(const Strip &s, int &channels, std::string &err);

@@ -184,6 +184,9 @@ namespace solaris
         case K::LaneGroup: case K::LaneUngroup: case K::ClipsMove: case K::ClipComp:
             ok = arrangeCommand(c, err);
             break;
+        case K::ClipSplit: case K::ClipConsolidate: case K::ClipSlice:
+            ok = audioEditCommand(c, err);
+            break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:
         case K::PatternArpeggiate:
@@ -869,9 +872,17 @@ namespace solaris
         }
         if (Clip *c = p.clip(id))
         {
-            static const std::vector<std::string> fields = {"name", "at", "in", "out", "length", "gain", "fadeIn", "fadeOut", "loop"};
+            static const std::vector<std::string> fields = {"name", "at", "in", "out", "length", "gain", "fadeIn", "fadeOut", "loop", "reverse"};
             if (f == "name") { c->name = value; stored = value; return true; }
             if (f == "loop") { if (!boolean(value, b, err)) return false; c->loop = b; stored = boolText(b); return true; }
+            if (f == "reverse") // R-EDIT-1
+            {
+                if (!c->isAudio()) { err = id + " is a note clip — `reverse` plays an audio clip's span backwards"; return false; }
+                if (!boolean(value, b, err)) return false;
+                c->reverse = b;
+                stored = boolText(b);
+                return true;
+            }
             if (std::find(fields.begin(), fields.end(), f) == fields.end()) { err = unknownField(id, "a clip", f, fields); return false; }
             if (!number(value, x, err)) return false;
             if (f == "gain") { if (!inRange(x, -120, 12, "gain (dB)", err)) return false; c->gain = x; stored = canonicalNumber(x); return true; }
@@ -1096,7 +1107,7 @@ namespace solaris
             put("name", c->name); put("at", canonicalBeats(c->at)); put("length", canonicalBeats(clipLengthBeats(p, *c)));
             put("gain", canonicalNumber(c->gain)); put("fadeIn", canonicalBeats(c->fadeIn)); put("fadeOut", canonicalBeats(c->fadeOut));
             put("loop", boolText(c->loop)); put("track", c->track); put("lane", c->lane);
-            if (c->isAudio()) { put("in", canonicalSeconds(c->in)); put("out", canonicalSeconds(c->out)); put("src", c->src); }
+            if (c->isAudio()) { put("in", canonicalSeconds(c->in)); put("out", canonicalSeconds(c->out)); put("src", c->src); put("reverse", boolText(c->reverse)); }
             else put("pattern", c->pattern);
         }
         else if (const Lane *l = p.lane(id)) { put("name", l->name); put("colour", std::to_string(l->colour)); put("strip", l->track.empty() ? "none" : l->track); put("group", l->group.empty() ? "none" : l->group); }

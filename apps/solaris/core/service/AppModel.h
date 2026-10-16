@@ -150,6 +150,8 @@ namespace solaris
         struct CompModel { int take = 1; double from = 0, to = 0; };
         std::vector<CompModel> comp;             // R-REC-2: which take plays where; elsewhere the last
         std::vector<CompModel> plays;            // … resolved: runs covering the clip, each its take (what is heard)
+        bool reverse = false;                    // R-EDIT-1: its span played backwards (audio)
+        double fadeInHeard = 0, fadeOutHeard = 0; // R-EDIT-1: its fades grown over an overlap on its lane (beats)
     };
 
     struct NoteModel

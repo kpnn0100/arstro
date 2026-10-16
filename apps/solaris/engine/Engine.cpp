@@ -528,6 +528,7 @@ namespace engine
                         long long src = local;
                         if (rg.loop && rg.srcFrames > 0) src %= rg.srcFrames;
                         else if (src >= rg.srcFrames) continue;
+                        if (rg.reverse) src = rg.srcFrames - 1 - src; // R-EDIT-1: from the span's end
                         src += rg.srcOffset;
                         if (src < 0 || src >= rg.pcm->frames) continue; // outside the file is silence
                         const double g = rg.gain * fadeGain(local, rg.frames, rg.fadeIn, rg.fadeOut);

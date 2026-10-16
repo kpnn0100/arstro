@@ -367,6 +367,23 @@ namespace solaris
              "Choose which take plays where (R-REC-2): take <n> (1-based) from --from to --to (song beats; the whole clip "
              "without them) — ONE edit, the range overwriting what it covers. Where no range says, the last take plays; the "
              "seams are crossfaded 5 ms. A loop recording makes the takes.", "R-REC-2", false, {"take"}},
+            {K::ClipSplit, "clip split", "<ac>", 1, 1, {"at=<beats>"},
+             "Cut an audio clip in two at --at (song beats, inside it) — ONE edit (R-EDIT-1): the first half keeps the id "
+             "and the fade in, the second (printed) begins at --at with the fade out; together they play what the one did. "
+             "A reversed clip's first half is its span's end; a clip with takes keeps them all, its comp divided. A looping "
+             "clip is cut only where a repetition begins; a note clip not at all (its notes are its pattern's).", "R-EDIT-1",
+             false, {"at"}},
+            {K::ClipConsolidate, "clip consolidate", "<ac> [<ac> …]", 1, -1, {},
+             "Join audio clips of one strip into ONE (R-EDIT-1): what they play — gain, fades, crossfades, reverse, comps — "
+             "rendered raw (before the strip's devices, fader and pan) from the first's start to the last's end, written "
+             "beside the song as Bounces/<strip> <n>.wav (32-bit float) and put in their place on the first's lane; one "
+             "edit, the new clip printed. A note clip is refused (a strip's bounce is R-PERF-3).", "R-EDIT-1"},
+            {K::ClipSlice, "clip slice", "<ac>", 1, 1, {"every=<beats>", "transients", "sensitivity=<0-1>", "kit"},
+             "Cut an audio clip into clips (R-EDIT-1): --every <beats> from its start, or --transients where a sound "
+             "begins (the DSP library's onset detector, REQ-onset-1; --sensitivity 0 … 1, 0.5) — ONE edit, the clips "
+             "printed. --every with --kit makes a new instrument track instead: a Sampler of the clip's file in N equal "
+             "slices (mode=slices) and a note clip in the clip's place playing them in order (root + k for slice k), so "
+             "it plays what the clip did; the clip stays. A looping clip is not sliced.", "R-EDIT-1"},
             {K::TransportPunch, "transport punch", "<from|off> [to]", 1, 2, {},
              "Punch in and out (R-REC-1): a recording keeps only what the song plays from <from> to <to> beats, and its "
              "clip starts at <from>; `off` keeps it all. The session's, as the loop.", "R-REC-1"},
