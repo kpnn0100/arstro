@@ -156,7 +156,12 @@ file of linear / hold / smooth points is byte-identical to one written before be
 shape they are ignored. `smooth` is After Effects' Ease on the segment after the point (speed 0,
 influence ⅓ at both ends — the smoothstep it always was); a bezier next point's own handle wins on its
 side. The curve never leaves `min … max` (a handle's overshoot stops there).
-`from` is the address it was made from — a hint, never a link. A binding (R-AUTO-1) decides one
+`from` is the address it was made from — a hint, never a link. **A loop** (R-AUTO-12): `loop=<beats>` makes the
+curve's first `loop` beats a cycle, repeated from `at=<beats>` (0 when absent) for `length=<beats>` (to the song's
+end when absent); outside that span the value is where a cycle ends. The three are written only when it loops
+(`loop` > 0), so a file that never loops is byte-identical to one written before loops existed:
+`#aauto id=au_2 name="Bass · Gain (pump)" unit=dB min=-120.0 max=12.0 from=ch_3.gain loop=1.0 at=32.0 length=64.0`.
+A binding (R-AUTO-1) decides one
 address's value: `formula` as typed, with its `=`. One per address; the stored value under it (the
 strip's `gain=`, the device's parameter) stays, and plays again when the binding is cleared. An
 `#aauto` written in the suite schema's earlier sketch (indented `<beats> = <value>` lines, `node=`,

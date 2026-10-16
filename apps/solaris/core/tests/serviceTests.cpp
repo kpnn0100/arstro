@@ -740,6 +740,72 @@ static void test_an_automated_gain_renders_its_curve()
     pass("an automated gain renders its curve: −5 dB at beat 2, −15 dB at beat 6 of a 0 → −20 dB ramp, within 0.1 dB; saved as #aauto/#abind; an unreadable formula is inert and audited");
 }
 
+// R-AUTO-12/13: a pump — a one-beat cycle repeated through the song — MEASURED: eval repeats every beat, the render
+// follows eval, the span limits where it repeats (outside: where a cycle ends), loop 0 is the curve as drawn, the .slp
+// keeps it
+static void test_an_automation_loops_and_a_pump_is_one_line()
+{
+    Run r;
+    const std::string dir = scratch(), song = freshSong("pump");
+    r.ok("project new " + song + " --bpm 120");
+    r.ok("clip add --src tone.wav --at 0 --length 16");                 // ch_2: a 1 kHz sine at 0.5, looped
+    assert(r.ok("auto create ch_2.gain --pump") == "au_1\n");
+    {
+        const auto &a = r.svc.model().automations[0];
+        assert(a.loop == 1.0 && a.at == 0.0 && a.length == 0.0 && contains(a.name, "(pump)"));
+        assert(a.points.size() == 2 && a.points[0].value == -18.0 && a.points[0].shape == "smooth" && a.points[1].at == 0.5 && a.points[1].value == 0.0);
+        assert(r.svc.model().bindings[0].formula == "=au_1");
+    }
+    auto ev = [&](double beat) {
+        const std::string e = r.ok("eval ch_2.gain --at " + canonicalNumber(beat));
+        return std::atof(e.substr(e.find(" = ") + 3).c_str());
+    };
+    assert(ev(0) == -18.0 && ev(0.5) == 0.0 && ev(0.75) == 0.0);
+    assert(ev(0.25) < -1.0 && ev(0.25) > -17.0);                       // on its way back up
+    for (double b : {0.05, 0.25, 0.4})
+        for (int k : {1, 3, 7, 12}) assert(std::fabs(ev(b + k) - ev(b)) < 1e-9); // every beat the same
+    // rendered: the dip on every beat is what eval says
+    const std::string out = dir + "/pump.wav";
+    r.ok("render --out " + out + " --to 8");
+    const auto &L = r.fake.written[out][0];
+    auto dbAround = [&](double beat) {
+        const long long s = std::llround(beat * 24000);
+        double sum = 0;
+        for (long long i = s - 240; i < s + 240; ++i) sum += (double)L[(size_t)i] * L[(size_t)i]; // ten periods of 1 kHz
+        return 20.0 * std::log10(std::sqrt(sum / 480.0) / (0.5 / std::sqrt(2.0)));
+    };
+    for (double b : {1.05, 2.25, 3.4, 4.75, 6.05, 7.25})
+    {
+        if (std::fabs(dbAround(b) - ev(b)) >= 0.15) std::printf("    beat %.2f: rendered %.3f dB, eval %.3f dB\n", b, dbAround(b), ev(b));
+        assert(std::fabs(dbAround(b) - ev(b)) < 0.15);
+    }
+    assert(dbAround(6.05) < dbAround(6.75) - 15.0);                     // the pump, heard: down on the beat
+    // its span — from beat 4 for 8 beats; outside it rests where a cycle ends (0 dB here)
+    const double dip = ev(0.05);
+    r.ok("set au_1.at=4 au_1.length=8");
+    assert(ev(0.05) == 0.0 && ev(2.05) == 0.0 && ev(4.05) == dip && ev(11.05) == dip && ev(12.05) == 0.0);
+    assert(r.ok("get au_1.loop") == "1.0\n" && r.ok("get au_1.at") == "4.0\n" && r.ok("get au_1.length") == "8.0\n");
+    // off: the curve as drawn — after its point at 0.5 it holds 0 dB
+    r.ok("set au_1.loop=0");
+    assert(ev(4.05) == 0.0 && ev(0.05) == dip);
+    r.ok("undo");
+    assert(r.svc.model().automations[0].loop == 1.0);
+    // refused, naming why
+    assert(contains(r.no("set au_1.loop=-1"), "beats from 0"));
+    assert(contains(r.no("set au_1.lop=1"), "loop"));
+    // the .slp keeps it, and reads it back
+    r.ok("project save");
+    std::ifstream f(song);
+    const std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    assert(contains(text, "loop=1") && contains(text, "at=4") && contains(text, "length=8"));
+    r.ok("project open " + song);
+    {
+        const auto &a = r.svc.model().automations[0];
+        assert(a.loop == 1.0 && a.at == 4.0 && a.length == 8.0);
+    }
+    pass("An automation loops (R-AUTO-12/13): `auto create --pump` is a one-beat dip repeated through the song — eval repeats every beat and the render is what eval says (the dip heard, > 15 dB); .at / .length bound where it repeats, resting where a cycle ends; loop 0 is the curve as drawn; the .slp keeps it");
+}
+
 static void test_a_bezier_gain_renders_what_eval_says_and_the_formula_says()
 {
     // R-AUTO-10: a bezier automation, shaped by one line per handle gesture, MEASURED: the rendered
@@ -2271,6 +2337,7 @@ int main()
     test_formulas_bind_numbers_and_refuse_what_cannot_be_read();
     test_an_automated_gain_renders_its_curve();
     test_a_bezier_gain_renders_what_eval_says_and_the_formula_says();
+    test_an_automation_loops_and_a_pump_is_one_line();
     test_a_sidechain_key_ducks_the_bass();
     test_a_sampler_plays_its_sound_by_the_key();
     test_routing_only_goes_forward_and_refusals_change_nothing();

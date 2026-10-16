@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — M1: the wordmark is Home.*
+*Last updated: 2026-10-16 — M2a: an automation loops; a pump in one line.*
 
 ---
 
 ## NEXT
 
-**► B13+ — R-EDM-10…20** (ask the user first: the order, and whether now). Owed live checks: D-5, D-9, the resize cursor. B13+ wait (ask). Owed live checks: D-5, D-9.
+**► M2b — the loop seen and made in the window** (R-AUTO-12/13), then M3. B13+ wait. Owed live checks: D-5, D-9, the resize cursor. B13+ wait (ask). Owed live checks: D-5, D-9.
 
 ---
 
@@ -376,6 +376,12 @@ history like cosmo".* Requirements: R-SET-5, R-SET-6 (R-SET-1, R-SET-3 amended);
 
 ### M — the wordmark, looping automation, a professional-DAW analysis (user request, 2026-10-16)
 - [x] **M1** No Home button: the `solaris.` wordmark is Home, as cosmo's and Interstellar's (R-UI-3 amended).
+- [x] **M2a** A looping automation in the service and the engine: `<au>.loop/.at/.length`, `#aauto` keys, the curve's
+      cycle compiled; `auto create --pump` (R-AUTO-12, R-AUTO-13). Measured: a render's level at known beats, `eval`.
+      — DR-AUTO-8. L2 test measured (render = eval within 0.15 dB, the dip > 15 dB); 2 mutants seen red.
+- [ ] **M2b** Seen and made in the window: the row's span (cycles, seams, ends dragged), the window's Loop combo,
+      ParamMenu › Create Pump (R-AUTO-12, R-AUTO-13).
+- [ ] **M3** A full analysis — what a professional DAW needs that Solaris lacks — in `docs/pro-daw-analysis.md`.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

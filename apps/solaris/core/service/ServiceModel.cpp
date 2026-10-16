@@ -351,6 +351,9 @@ namespace solaris
             am.from = a.from;
             am.min = a.min;
             am.max = a.max;
+            am.loop = a.loop;
+            am.at = a.at;
+            am.length = a.length;
             for (const auto &pt : a.points)
                 am.points.push_back(AutoPointModel{pt.at, pt.value, pt.shape, pt.speedIn, pt.inflIn, pt.speedOut, pt.inflOut});
             for (const auto &bm : mModel.bindings)

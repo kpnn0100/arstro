@@ -484,7 +484,7 @@ R-VER, applied to an arrangement:
 - **R-PLAY-3 Meters** on every strip and the master: peak and RMS per channel, a held peak, a clip
   latch — the numbers in the model, not only drawn.
 
-## R-AUTO — automation and parameter formulas — ✅ IMPLEMENTED (user request, 2026-10-09; DR-AUTO-1…5, made from a window: DR-UI-5) — 10 ✅ (bezier, DR-AUTO-6), 11 ✅ (its window, DR-AUTO-7)
+## R-AUTO — automation and parameter formulas — ✅ IMPLEMENTED (user request, 2026-10-09; DR-AUTO-1…5, made from a window: DR-UI-5) — 10 ✅ (bezier, DR-AUTO-6), 11 ✅ (its window, DR-AUTO-7) — 12, 13 🚧 (a looping automation, a pump: in the service and the engine ✅ DR-AUTO-8; seen in the window: M2b)
 
 The user: *"all number param can be link, apply formula, create automation, apply formula with
 automation like FL Studio. Automation is created separately, make the formula core of the binding.
@@ -543,6 +543,23 @@ the object it belongs to, shows it on the timeline, and that property will use a
   information of automation"*): its window (R-WIN) shows its name (renamable), id, unit and range,
   the address it was made from, its points (beat, value, shape), every formula that reads it (address
   and formula), and its value at the playhead — all from the model, nothing re-derived.
+- **R-AUTO-12 An automation LOOPS, like FL Studio's automation clip** (user request, 2026-10-16: *"there should be
+  option to loop the automation clip like FL studio, so that we can manipulate property in a loop"*). An
+  automation has a loop length (`<au>.loop`, beats; 0 = off, the curve as drawn): its first `loop` beats are one
+  CYCLE, repeated through its SPAN — from `<au>.at` for `<au>.length` beats (0 = to the end of the song); outside
+  the span it rests at the value a cycle ends on. One `set` line each; stored on `#aauto`. Evaluated by the engine
+  from compiled data as every curve is (R-AUTO-7), so `eval`, playback and a render agree, measured. On the
+  timeline the automation's row shows the span — the first cycle as drawn (edited as ever), each repeat after it
+  drawn dimmer with a seam at its start — and the span's two ends are grips (the resize cursor, R-UI-14): dragged,
+  ONE `set <au>.at=` / `set <au>.length=` line. Its window offers the loop as a combo box (Off, 1/4, 1/2, 1, 2
+  beats, 1, 2, 4 bars) — one line.
+- **R-AUTO-13 A pump in one gesture** (the same request: *"right now setup a side chain is hard"*): the side-chain
+  FEEL without a side-chain — `auto create <address> --pump` makes the property's automation already looping every
+  beat: down on the beat, back to the property's value by the middle of the beat (smooth), then held — and binds
+  it, as `auto create` does. The dip is 18 dB for a level in dB, otherwise most of the way to the bottom of the
+  range (to 20 % of the way up from it). Right-click a number (a fader, a knob, a parameter row — ParamMenu) offers
+  "Create Pump" — the same one line. (A real side-chain — a compressor keyed by the kick, R-MIX-15 — stays; making
+  it one gesture is in the analysis, M3.)
 
 ## R-WIN — windows inside the song view — ✅ IMPLEMENTED (user request, 2026-10-09; DR-WIN-1, DR-UI-5) — 5 ✅ (resized by the corner, DR-WIN-5)
 

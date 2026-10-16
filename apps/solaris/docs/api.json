@@ -477,10 +477,12 @@
     },
     {
       "verb": "auto create",
-      "usage": "auto create <address>",
+      "usage": "auto create <address> [--pump]",
       "args": "<address>",
-      "flags": [],
-      "summary": "Automate a number: a new automation named \"<owner> · <parameter>\", ranged as it, holding its value from beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id.",
+      "flags": [
+        "pump"
+      ],
+      "summary": "Automate a number: a new automation named \"<owner> · <parameter>\", ranged as it, holding its value from beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id. --pump: already LOOPING every beat (R-AUTO-13) — down on the beat (18 dB for a level, else to 20 % of its range), back to its value by the middle of the beat: the side-chain feel. Loop any automation with `set <au>.loop=<beats>` (`.at`, `.length`: where it repeats, R-AUTO-12).",
       "requirement": "R-AUTO-5"
     },
     {
@@ -1662,6 +1664,24 @@
       "path": "automations[].max",
       "type": "number",
       "summary": "",
+      "stable": true
+    },
+    {
+      "path": "automations[].loop",
+      "type": "number",
+      "summary": "beats (R-AUTO-12): its first `loop` beats repeat — 0: it does not loop",
+      "stable": true
+    },
+    {
+      "path": "automations[].at",
+      "type": "number",
+      "summary": "beats: where the repeating starts",
+      "stable": true
+    },
+    {
+      "path": "automations[].length",
+      "type": "number",
+      "summary": "beats it repeats for — 0: to the song's end; outside, where a cycle ends",
       "stable": true
     },
     {

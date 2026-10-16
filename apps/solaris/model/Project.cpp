@@ -315,6 +315,9 @@ namespace solaris
             else if (k == "from") n.from = v;
             else if (k == "min") n.min = r.num(k, v, 0.0);
             else if (k == "max") n.max = r.num(k, v, 1.0);
+            else if (k == "loop") n.loop = toTick(r.num(k, v, 0.0)); // R-AUTO-12
+            else if (k == "at") n.at = toTick(r.num(k, v, 0.0));
+            else if (k == "length") n.length = toTick(r.num(k, v, 0.0));
             else n.unknown.emplace_back(k, v);
         }
         void apply(Reader &r, AutoPoint &n, const std::string &k, const std::string &v)
@@ -740,6 +743,12 @@ namespace solaris
             Line l("aauto");
             l.kv("id", n.id).str("name", n.name).strIf("unit", n.unit).kv("min", canonicalNumber(n.min)).kv("max", canonicalNumber(n.max))
                 .strIf("from", n.from);
+            if (n.loop > 0) // R-AUTO-12: written only when it loops — a song that never loops reads as it always did
+            {
+                l.kv("loop", canonicalBeats(n.loop));
+                if (n.at > 0) l.kv("at", canonicalBeats(n.at));
+                if (n.length > 0) l.kv("length", canonicalBeats(n.length));
+            }
             emit(out, "", l.unknown(n.unknown), n.remarks);
             for (const auto &x : n.points)
             {
@@ -949,6 +958,8 @@ namespace solaris
             for (const auto &a : p.automations)
             {
                 if (!(a.min < a.max)) e.push_back(a.id + "'s range " + canonicalNumber(a.min) + "…" + canonicalNumber(a.max) + " is empty");
+                if (!(a.loop >= 0 && a.at >= 0 && a.length >= 0 && std::isfinite(a.loop + a.at + a.length)))
+                    e.push_back(a.id + "'s loop, at and length are beats ≥ 0");
                 for (const auto &pt : a.points)
                 {
                     if (pt.shape != "linear" && pt.shape != "hold" && pt.shape != "smooth" && pt.shape != "bezier")

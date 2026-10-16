@@ -1141,6 +1141,22 @@ edit (`app/widgets/AutomationPanel.cpp:105`). Rename is cosmo's field over the h
 (R-AUTO-6). Measured (L2): `now` equals `eval` at the sought beat and the cubic while playing; (UI) the
 window caught mid-fade, the facts present, `now` and a new row caught mid-tween, the rename one line.
 
+### DR-AUTO-8 An automation loops; a pump in one line (R-AUTO-12, R-AUTO-13)
+`Automation::loop`, `at`, `length` (beats, `model/Project.h`) — `set <au>.loop|at|length=<beats ≥ 0>`
+(`core/service/SolarisService.cpp:660`), read back by `get`, published on `automations[]`, written on `#aauto` only
+when it loops (`model/Project.cpp:746`, docs/project-format.md §8a), refused below 0 naming the field. `compileCurve`
+turns them into samples (`core/Compile.cpp:350`) and the engine's `Curve::cyclePos` (`engine/Expr.h:185`) folds a
+position into the cycle before the same evaluator reads the curve: `(s − from) mod loop` inside the span, the cycle's
+end (`loop`) outside it — no allocation, deterministic, so a render, playback and `eval` agree (R-AUTO-7) and the
+model's `now` is that value too. `auto create <address> --pump` (`core/service/ServiceAuto.cpp:139`) makes the
+automation a one-beat cycle — a point on the beat at the property's value less 18 dB (a level in dB) or 20 % of the
+way up its range (anything else), `smooth`, and a point at half a beat back at its value — loop 1, named
+"<owner> · <parameter> (pump)", bound as `auto create` binds. L2 `test_an_automation_loops_and_a_pump_is_one_line`
+(eval repeats every beat; a render's level at six beats is eval's within 0.15 dB, the dip > 15 dB; `.at` / `.length`
+bound the repeats and outside them it rests at the cycle's end; loop 0 is the curve as drawn; the `.slp` round
+trip). Mutants: an engine that ignores the loop, a file that forgets it — both seen red. (The window's half — the
+row's span and its grips, the Loop combo, ParamMenu › Create Pump — is M2b.)
+
 ### DR-SVC-8 Composition is agent-sized (R-SVC-8)
 Built from the audit of an agent's 16-bar song (110 commands, 64 single `note add`s, every id guessed,
 edits lost between calls, comment lines reprinting ids). The guide is `docs/AGENTS.md`.

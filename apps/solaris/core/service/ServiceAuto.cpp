@@ -134,8 +134,21 @@ namespace solaris
             a.min = spec.lo;
             a.max = spec.hi;
             a.from = address;
-            a.points.push_back(AutoPoint{0.0, spec.value, "linear", {}});
-            a.points.push_back(AutoPoint{toTick(songEndBeats()), spec.value, "linear", {}});
+            if (c.has("pump"))
+            {
+                // R-AUTO-13: a cycle of one beat, repeated through the song — down on the beat, eased back to the
+                // property's value by its middle, held there (where a cycle ends, so where it rests outside its span)
+                const double low = spec.unit == "dB" ? std::max(spec.lo, spec.value - 18.0) : spec.lo + 0.2 * (spec.value - spec.lo);
+                a.points.push_back(AutoPoint{0.0, low, "smooth", {}});
+                a.points.push_back(AutoPoint{0.5, spec.value, "linear", {}});
+                a.loop = 1.0;
+                a.name += " (pump)";
+            }
+            else
+            {
+                a.points.push_back(AutoPoint{0.0, spec.value, "linear", {}});
+                a.points.push_back(AutoPoint{toTick(songEndBeats()), spec.value, "linear", {}});
+            }
             p.automations.push_back(a);
             const std::string formula = "=" + a.id;
             if (Binding *b = p.binding(address)) b->formula = formula; // automating replaces a formula (undoable)

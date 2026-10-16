@@ -54,7 +54,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `pattern delete <pt>` | Delete a pattern. Refused while a clip plays it (naming the clips). | R-SVC-8 |
 | `pattern transpose <pt> [--semi <n>]` | Move every note by --semi semitones (negative = down). Refused if a note would leave 0–127. | R-SVC-8 |
 | `pattern print <pt>` | Its notes, one per line in the `notes add` notation (pitch as a name or pad), the number after `#`. | R-SVC-8 |
-| `auto create <address>` | Automate a number: a new automation named "<owner> · <parameter>", ranged as it, holding its value from beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id. | R-AUTO-5 |
+| `auto create <address> [--pump]` | Automate a number: a new automation named "<owner> · <parameter>", ranged as it, holding its value from beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id. --pump: already LOOPING every beat (R-AUTO-13) — down on the beat (18 dB for a level, else to 20 % of its range), back to its value by the middle of the beat: the side-chain feel. Loop any automation with `set <au>.loop=<beats>` (`.at`, `.length`: where it repeats, R-AUTO-12). | R-AUTO-5 |
 | `auto add [--name <text>] [--min <v>] [--max <v>] [--unit <text>]` | An automation from nothing (default range 0…1). It moves nothing until a formula reads it. Prints the id. | R-AUTO-4 |
 | `auto delete <au> [--unbind]` | Delete an automation. Refused while a formula reads it, unless --unbind (those bindings are cleared). | R-AUTO-4 |
 | `auto point add <au> [--at <beats>] [--value <v>] [--shape <linear\|hold\|smooth\|bezier>]` | Add a point (one at the same beat is replaced). Its shape governs the segment after it (a bezier point's handles start flat: speed 0, influence 33.333 %). | R-AUTO-6 |
@@ -94,7 +94,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` | text · beats · beats · beats · beats · dB · bool · s · s |
 | `<lane>.name` · `.colour` · `.strip` (`<ch>` an instrument: the lane is its track; `none`: plain — R-LANE-3) · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
 | `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |
-| `<automation>.name` · `.unit` · `.min` · `.max` (read: also `.from` · `.points`) | text · text · number · number |
+| `<automation>.name` · `.unit` · `.min` · `.max` · `.loop` · `.at` · `.length` (read: also `.from` · `.points`) | text · text · number · number · beats (0: no loop) · beats · beats (0: to the end) — R-AUTO-12 |
 | any NUMBER above (a strip's gain/pan, a send's gain, `project.masterGain`, a numeric device parameter) `=<formula>` | binds it (R-AUTO-1): numbers, `+ - * / ^ ( )`, `sin cos tan abs sign min max clamp lerp pow exp log sqrt floor ceil round frac`, `pi`, `beat bar bpm t`, an automation id (`au_1`), another numeric address (a link). `get` prints the formula; a plain number clears it |
 
 ## Notation (R-SVC-8)
@@ -315,6 +315,9 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `automations[].from` | string | the address it was made from (a hint, not a link) |
 | `automations[].min` | number |  |
 | `automations[].max` | number |  |
+| `automations[].loop` | number | beats (R-AUTO-12): its first `loop` beats repeat — 0: it does not loop |
+| `automations[].at` | number | beats: where the repeating starts |
+| `automations[].length` | number | beats it repeats for — 0: to the song's end; outside, where a cycle ends |
 | `automations[].points` | object[] | sorted by at |
 | `automations[].points[].at` | number | beats |
 | `automations[].points[].value` | number | in the automation's unit |

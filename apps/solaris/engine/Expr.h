@@ -177,11 +177,21 @@ namespace engine
     {
         std::vector<anim::Key> keys;              // t in samples, ascending; speeds per sample
         double lo = -HUGE_VAL, hi = HUGE_VAL;     // the automation's range
+        // Solaris R-AUTO-12: a loop — the first `loop` samples are a cycle, repeated from `from` for `span` samples
+        // (0: for ever); outside the span the value a cycle ends on. loop 0: the curve as drawn
+        long long loop = 0, from = 0, span = 0;
 
+        /** Where in the drawn curve sample `s` reads: itself, or its place in the cycle. */
+        long long cyclePos(long long s) const
+        {
+            if (loop <= 0) return s;
+            if (s < from || (span > 0 && s >= from + span)) return loop; // resting: where a cycle ends
+            return (s - from) % loop;
+        }
         double valueAt(long long s) const
         {
             if (keys.empty()) return 0.0;
-            return std::min(std::max(anim::eval(keys, (double)s), lo), hi); // Interstellar's evaluator: no allocation
+            return std::min(std::max(anim::eval(keys, (double)cyclePos(s)), lo), hi); // Interstellar's evaluator: no allocation
         }
     };
 

@@ -161,6 +161,9 @@ namespace solaris
     {
         std::string id, name, unit, from; // `from`: the address it was made from (a hint, never a link)
         double min = 0.0, max = 1.0;
+        // R-AUTO-12: its first `loop` beats are a CYCLE, repeated from `at` for `length` beats (0: to the song's end);
+        // outside that span it rests where a cycle ends. loop 0: the curve as drawn
+        double loop = 0.0, at = 0.0, length = 0.0;
         std::vector<AutoPoint> points;    // sorted by `at`
         Fields unknown;
         Remarks remarks;

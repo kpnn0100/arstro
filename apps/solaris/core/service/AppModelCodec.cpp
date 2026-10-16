@@ -134,6 +134,9 @@ namespace solaris
             {"automations[].from", "string", "the address it was made from (a hint, not a link)"},
             {"automations[].min", "number", ""},
             {"automations[].max", "number", ""},
+            {"automations[].loop", "number", "beats (R-AUTO-12): its first `loop` beats repeat — 0: it does not loop"},
+            {"automations[].at", "number", "beats: where the repeating starts"},
+            {"automations[].length", "number", "beats it repeats for — 0: to the song's end; outside, where a cycle ends"},
             {"automations[].points", "object[]", "sorted by at"},
             {"automations[].points[].at", "number", "beats"},
             {"automations[].points[].value", "number", "in the automation's unit"},
@@ -371,8 +374,10 @@ namespace solaris
                 {
                     Json pts = Json::array();
                     for (const auto &pt : a.points) pts.push(Json::string(beatText(pt.at) + "=" + canonicalNumber(pt.value) + (pt.shape == "linear" ? "" : " " + pt.shape)));
-                    autos.push(Json::object().set("id", a.id).set("name", a.name).set("min", a.min).set("max", a.max).set("points", pts)
-                                   .set("usedBy", strings(a.usedBy)));
+                    Json ao = Json::object().set("id", a.id).set("name", a.name).set("min", a.min).set("max", a.max).set("points", pts)
+                                  .set("usedBy", strings(a.usedBy));
+                    if (a.loop > 0) ao.set("loop", a.loop).set("at", a.at).set("length", a.length); // R-AUTO-12
+                    autos.push(ao);
                 }
                 j.set("automations", autos);
             }
@@ -459,7 +464,8 @@ namespace solaris
                 pts.push(Json::object().set("at", pt.at).set("value", pt.value).set("shape", pt.shape).set("speedIn", pt.speedIn)
                              .set("inflIn", pt.inflIn).set("speedOut", pt.speedOut).set("inflOut", pt.inflOut));
             Json ao = Json::object().set("id", a.id).set("name", a.name).set("unit", a.unit).set("from", a.from).set("min", a.min)
-                          .set("max", a.max).set("points", pts).set("usedBy", strings(a.usedBy));
+                          .set("max", a.max).set("loop", a.loop).set("at", a.at).set("length", a.length).set("points", pts)
+                          .set("usedBy", strings(a.usedBy));
             if (!stable) ao.set("now", a.now);
             autos.push(ao);
         }

@@ -167,9 +167,12 @@ namespace solaris
             {K::PatternPrint, "pattern print", "<pt>", 1, 1, {},
              "Its notes, one per line in the `notes add` notation (pitch as a name or pad), the number after `#`.", "R-SVC-8"},
 
-            {K::AutoCreate, "auto create", "<address>", 1, 1, {},
+            {K::AutoCreate, "auto create", "<address>", 1, 1, {"pump"},
              "Automate a number: a new automation named \"<owner> · <parameter>\", ranged as it, holding its value from "
-             "beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id.", "R-AUTO-5"},
+             "beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id. --pump: "
+             "already LOOPING every beat (R-AUTO-13) — down on the beat (18 dB for a level, else to 20 % of its range), back "
+             "to its value by the middle of the beat: the side-chain feel. Loop any automation with `set <au>.loop=<beats>` "
+             "(`.at`, `.length`: where it repeats, R-AUTO-12).", "R-AUTO-5"},
             {K::AutoAdd, "auto add", "", 0, 0, {"name=<text>", "min=<v>", "max=<v>", "unit=<text>"},
              "An automation from nothing (default range 0…1). It moves nothing until a formula reads it. Prints the id.", "R-AUTO-4"},
             {K::AutoDelete, "auto delete", "<au>", 1, 1, {"unbind"},

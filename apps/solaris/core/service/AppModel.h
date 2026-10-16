@@ -57,6 +57,7 @@ namespace solaris
     {
         std::string id, name, unit, from;
         double min = 0, max = 1;
+        double loop = 0, at = 0, length = 0;    // R-AUTO-12: beats — its first `loop` repeat from `at` for `length` (0: on)
         std::vector<AutoPointModel> points;
         std::vector<std::string> usedBy;        // addresses whose formula reads it
         double now = 0;                         // its value at the playhead, by the engine's evaluator (R-AUTO-11)

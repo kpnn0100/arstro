@@ -657,7 +657,17 @@ namespace solaris
                 mBindingsTouched = true;
                 return true;
             }
-            err = unknownField(id, "an automation", f, {"name", "unit", "min", "max"}) + " — points are `auto point …`";
+            if (f == "loop" || f == "at" || f == "length")
+            {
+                // R-AUTO-12: beats ≥ 0 (loop 0 = it does not loop; length 0 = to the song's end)
+                if (!number(value, x, err)) return false;
+                if (!(x >= 0) || x > 100000) { err = id + "." + f + " is beats from 0" + (f == "loop" ? " (0: no loop)" : f == "length" ? " (0: to the song's end)" : ""); return false; }
+                (f == "loop" ? a->loop : f == "at" ? a->at : a->length) = toTick(x);
+                stored = canonicalBeats(toTick(x));
+                mBindingsTouched = true;
+                return true;
+            }
+            err = unknownField(id, "an automation", f, {"name", "unit", "min", "max", "loop", "at", "length"}) + " — points are `auto point …`";
             return false;
         }
 
@@ -861,6 +871,7 @@ namespace solaris
         {
             put("name", a->name); put("unit", a->unit); put("min", canonicalNumber(a->min)); put("max", canonicalNumber(a->max));
             put("from", a->from); put("points", std::to_string(a->points.size()));
+            put("loop", canonicalBeats(a->loop)); put("at", canonicalBeats(a->at)); put("length", canonicalBeats(a->length)); // R-AUTO-12
         }
         else if (id == "project")
         {

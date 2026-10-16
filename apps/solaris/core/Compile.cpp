@@ -347,6 +347,9 @@ namespace solaris
         curve.keys = engine::curveKeys(pts);
         curve.lo = a.min;
         curve.hi = a.max;
+        curve.loop = a.loop > 0 ? std::llround(a.loop * spb) : 0; // R-AUTO-12
+        curve.from = std::llround(a.at * spb);
+        curve.span = std::llround(a.length * spb);
         return curve;
     }
 }
