@@ -39,6 +39,7 @@
  *  cross-fade.
  */
 #pragma once
+#include "../Cursor.h"
 #include "../Theme.h"
 #include "AppModel.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
@@ -120,6 +121,9 @@ namespace solaris_ui
         std::function<void(const std::string &dv)> onOpenDevice;      // a chip: the device's window (R-WIN-1)
         std::function<bool(const std::string &dv)> isDeviceOpen;      // its chip is outlined while it is
         std::function<void(double worldY)> onResize; // the top edge dragged (direct manipulation)
+        /** R-UI-14: ↕ while its top edge is in hand, and over it. */
+        Cursor dragCursor() const;
+        Cursor cursorAt(const artboard::Point &local) const;
         std::function<void(const std::string &text)> onCopy;          // the host's clipboard (R-UI-11)
         std::function<double()> idsAmount;                            // View › Show IDs, eased by the screen
 

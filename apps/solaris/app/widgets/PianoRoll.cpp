@@ -446,6 +446,28 @@ namespace solaris_ui
         return nullptr;
     }
 
+    Cursor PianoRoll::dragCursor() const
+    {
+        if (mDrag == Drag::Resize || mDrag == Drag::End) return Cursor::ResizeH;
+        return mDrag == Drag::Velocity ? Cursor::ResizeV : Cursor::Default;
+    }
+
+    Cursor PianoRoll::cursorAt(const Point &local) const
+    {
+        const Cursor held = dragCursor();
+        if (held != Cursor::Default || mDrag != Drag::None) return held;
+        if (endRect().contains(local)) return Cursor::ResizeH;
+        if (mMode == Notes && gridRect().contains(local))
+        {
+            bool edge = false;
+            if (noteAt(local, edge) && edge) return Cursor::ResizeH; // the zone noteAt gives the press (D-7)
+        }
+        if (velRect().contains(local))
+            for (auto it = mNotes.rbegin(); it != mNotes.rend(); ++it)
+                if (!it->gone && std::fabs(beatToX(it->n.at) + 1.5 - local.x) <= 5.0) return Cursor::ResizeV; // as the press finds a bar
+        return Cursor::Default;
+    }
+
     bool PianoRoll::contextClick(Point world)
     {
         const Point p = toLocal(world);

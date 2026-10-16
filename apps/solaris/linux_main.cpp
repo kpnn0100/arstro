@@ -62,7 +62,21 @@ namespace
         GtkWidget *window = nullptr, *area = nullptr;
         gint64 startUs = 0;
         std::unique_ptr<solaris_host::ControlServer> control; // R-SVC-5: only with --control; last, so it goes first
+        int cursor = -1;                                       // the cursor shown (R-UI-14)
     };
+
+    // R-UI-14: the App says what the pointer looks like; the window shows the OS's own cursor for it, when it changes
+    void showCursor(Host *a)
+    {
+        const arstro::solaris_ui::Cursor c = a->app->cursor();
+        if ((int)c == a->cursor) return;
+        GdkWindow *w = gtk_widget_get_window(a->area);
+        if (!w) return;
+        a->cursor = (int)c;
+        GdkCursor *cur = gdk_cursor_new_from_name(gdk_window_get_display(w), arstro::solaris_ui::cursorName(c));
+        gdk_window_set_cursor(w, cur); // null: the parent's — the arrow
+        if (cur) g_object_unref(cur);
+    }
 
     double nowMs(const Host &a) { return a.startUs == 0 ? 0.0 : (g_get_monotonic_time() - a.startUs) / 1000.0; }
 
@@ -113,6 +127,7 @@ namespace
         gtk_widget_grab_focus(w);
         a->app->pointer(e->type == GDK_BUTTON_PRESS ? 0 : 2, e->x, e->y, e->button == 3 ? 2 : 0, nowMs(*a), (e->state & GDK_MOD1_MASK) != 0,
                         (e->state & GDK_SHIFT_MASK) != 0, (e->state & GDK_CONTROL_MASK) != 0);
+        showCursor(a);
         gtk_widget_queue_draw(a->area);
         return TRUE;
     }
@@ -122,6 +137,7 @@ namespace
         auto *a = static_cast<Host *>(user);
         a->app->pointer(1, e->x, e->y, 0, nowMs(*a), (e->state & GDK_MOD1_MASK) != 0, (e->state & GDK_SHIFT_MASK) != 0,
                         (e->state & GDK_CONTROL_MASK) != 0);
+        showCursor(a);
         gtk_widget_queue_draw(a->area);
         return TRUE;
     }

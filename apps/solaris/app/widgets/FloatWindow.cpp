@@ -21,6 +21,7 @@ namespace solaris_ui
     {
     public:
         explicit ResizeGrip(FloatWindow &w) : mWin(w) {}
+        bool held() const { return mHeld; }
         void advance(double nowMs) override
         {
             if (!isHovered() && !mHeld) mHover.clear();
@@ -273,6 +274,44 @@ namespace solaris_ui
     {
         FloatWindow *w = window("auto:" + au);
         return w ? static_cast<AutomationPanel *>(&w->content()) : nullptr;
+    }
+
+    bool FloatWindow::resizing() const { return mGrip && mGrip->held(); }
+
+    Cursor WindowLayer::dragCursor() const
+    {
+        for (const auto &ch : children())
+        {
+            auto *w = dynamic_cast<FloatWindow *>(ch.get());
+            if (!w || !w->isOpen()) continue;
+            if (w->resizing()) return Cursor::ResizeDiag;
+            if (w->key().rfind("roll:", 0) == 0)
+            {
+                const Cursor c = static_cast<PianoRoll &>(w->content()).dragCursor();
+                if (c != Cursor::Default) return c;
+            }
+        }
+        return Cursor::Default;
+    }
+
+    bool WindowLayer::cursorAt(const Point &world, Cursor &c) const
+    {
+        // the front-most window under the point decides — it covers what is beneath it
+        for (auto it = children().rbegin(); it != children().rend(); ++it)
+        {
+            auto *w = dynamic_cast<FloatWindow *>(it->get());
+            if (!w || !w->isOpen() || !w->hitTest(world)) continue;
+            const Point local = w->toLocal(world);
+            c = Cursor::Default;
+            if (w->gripRect().contains(local)) c = Cursor::ResizeDiag;
+            else if (w->key().rfind("roll:", 0) == 0)
+            {
+                auto &roll = static_cast<PianoRoll &>(w->content());
+                c = roll.cursorAt(roll.toLocal(world));
+            }
+            return true;
+        }
+        return false;
     }
 
     PianoRoll *WindowLayer::frontRoll() const

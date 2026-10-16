@@ -54,6 +54,7 @@
  */
 #pragma once
 #include "../Theme.h"
+#include "../Cursor.h"
 #include "AppModel.h"
 #include "../../../interstellar/app/widgets/AnimatedRows.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
@@ -137,6 +138,10 @@ namespace solaris_ui
         void expectCopy(bool instant);
         /** LIVE: how much the drag in hand is a COPY (Shift held) — the original at full strength, a "+" on the copy. */
         double copyAmount() const { return mCopyAmt.value(); }
+        /** R-UI-14: the cursor a resize in hand keeps (Default when none), and the one a grip under `local` wants —
+         *  the same zones a press takes (a clip's end, the loop brace's ends). */
+        Cursor dragCursor() const;
+        Cursor cursorAt(const artboard::Point &local) const;
 
         std::function<void(const std::string &line)> onCommand;
         std::function<void(const std::string &clipId)> onSelect;

@@ -722,6 +722,14 @@ namespace solaris_ui
 
     // ── input ────────────────────────────────────────────────────────────────────────────────
 
+    Cursor MixerDock::dragCursor() const { return mDragging && mPress.part == Part::Resize ? Cursor::ResizeV : Cursor::Default; }
+
+    Cursor MixerDock::cursorAt(const Point &local) const
+    {
+        if (mDragging) return dragCursor();
+        return hitAt(local).part == Part::Resize ? Cursor::ResizeV : Cursor::Default;
+    }
+
     MixerDock::Hit MixerDock::hitAt(const Point &p) const
     {
         Hit h;

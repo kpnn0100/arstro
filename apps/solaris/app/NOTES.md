@@ -57,6 +57,7 @@ helpers it borrows.
 | Lanes › a click on a clip | nothing — selection is the view's (U4 links it to the strip) |
 | Lanes › Delete / Backspace with a clip selected | `clip delete <ac>` |
 | Lanes › Ctrl+D with a clip selected | `clip duplicate <ac>` (a note clip's copy is linked) |
+| Pointer over a resize grip (a clip's end, the loop brace's ends, a note's end, the pattern's end · the dock's top edge, a velocity bar · a window's corner) | nothing — the cursor is ↔ · ↕ · ⤡ there and while it is held (`App::cursor`, R-UI-14) |
 | Lanes › a clip dragged with Shift held when let go | `clip duplicate <ac> --at <beat> [--lane <ln>]` — the original stays; a "+" on the copy while Shift is held (R-CLIP-9) |
 | Lanes › Ctrl+C · Ctrl+V (Edit › Copy Clip · Paste Clip) | nothing (the window keeps the clip; a toast) · `clip duplicate <ac> --at <the time bar>` — again, the time bar unmoved: right after the last copy (R-CLIP-10) |
 | Lanes › Ctrl+wheel · wheel · Shift+wheel | nothing — zoom about the pointer (×1.25 a notch, 4.7–637 px a beat; the grid's levels fade with it and the snap step follows), scroll, scroll sideways (the view's) |

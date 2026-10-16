@@ -1087,6 +1087,74 @@ static void test_clips_are_copied_by_shift_drag_and_ctrl_c_v()
     pass("Copying clips (R-CLIP-9/10): Shift held at the drop is ONE `clip duplicate --at [--lane]` — the copy look eased, the copy selected where it was let go; without Shift it moves; Ctrl+C / Ctrl+V paste at the time bar, end to end; in a roll Ctrl+V stays the notes'");
 }
 
+static void test_the_pointer_says_a_drag_resizes()
+{
+    // R-UI-14: over a grip that changes a size the pointer is a resize cursor — the zone a press takes — and it stays
+    // while the resize is in hand; a window covers what is beneath; a modal is the arrow
+    using arstro::solaris_ui::Cursor;
+    assert(std::string(arstro::solaris_ui::cursorName(Cursor::ResizeH)) == "ew-resize" &&
+           std::string(arstro::solaris_ui::cursorName(Cursor::ResizeDiag)) == "nwse-resize");
+    sltest::Rig r("ui-cursor", 1280, 800);
+    r.cmd("project new " + r.song("Cursor") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 8");
+    r.cmd("notes add pt_1 \"C4@0:2\"");
+    r.cmd("transport loop 12 16");
+    r.settle();
+    auto hover = [&](double x, double y) {
+        r.app->pointer(1, x, y, 0, r.now);
+        r.frame();
+        return r.app->cursor();
+    };
+    auto &tl = r.app->project().timeline();
+    // a clip's end ↔, its body the arrow
+    const artboard::Rect c = world(tl, tl.clipRect("ac_1"));
+    assert(hover(c.right() - 2.0, cy(c)) == Cursor::ResizeH);
+    assert(hover(c.x + 20.0, cy(c)) == Cursor::Default);
+    // the loop brace's ends ↔ (the lower half of the ruler, as a press takes them); its body moves it: the arrow
+    const artboard::Rect br = world(tl, tl.loopRect()), ruler = world(tl, tl.rulerRect());
+    const double by = ruler.y + ruler.h * 0.75;
+    assert(hover(br.x, by) == Cursor::ResizeH && hover(br.right(), by) == Cursor::ResizeH);
+    assert(hover(br.x + br.w * 0.5, by) == Cursor::Default);
+    // a clip's end in hand: ↔ wherever the pointer goes, until it is let go
+    r.app->pointer(0, c.right() - 2.0, cy(c), 0, r.now);
+    r.frame();
+    r.app->pointer(1, c.right() + 60.0, cy(c) + 90.0, 0, r.now);
+    r.frame();
+    assert(r.app->cursor() == Cursor::ResizeH);
+    r.app->pointer(2, c.right() + 60.0, cy(c) + 90.0, 0, r.now);
+    r.frame();
+    assert(r.app->cursor() == Cursor::Default && r.sent.back().rfind("set ac_1.length=", 0) == 0);
+    r.settle();
+    // the dock's top edge ↕
+    auto &dock = r.app->project().dock();
+    const artboard::Rect d = world(dock, artboard::Rect{0, 0, dock.width.value(), dock.height.value()});
+    assert(hover(d.x + 300.0, d.y + 2.0) == Cursor::ResizeV);
+    assert(hover(d.x + 300.0, d.y + 40.0) == Cursor::Default);
+    // a roll's window: its corner ⤡; in it a note's end ↔, the pattern's end ↔, a velocity bar ↕ — over the lanes
+    const artboard::Rect c2 = world(tl, tl.clipRect("ac_1"));
+    r.click(c2.x + 12.0, cy(c2));
+    r.click(c2.x + 12.0, cy(c2));
+    r.settle();
+    auto &wl = r.app->project().windows();
+    auto &roll = *wl.roll("pt_1");
+    auto *win = wl.window("roll:pt_1");
+    const artboard::Rect grip = world(*win, win->gripRect());
+    assert(hover(cx(grip), cy(grip)) == Cursor::ResizeDiag);
+    const artboard::Rect n = world(roll, roll.noteRect(60, 0.0));
+    assert(hover(n.right() - 1.0, cy(n)) == Cursor::ResizeH && hover(n.x + 3.0, cy(n)) == Cursor::Default);
+    const artboard::Rect end = world(roll, roll.endRect());
+    assert(hover(cx(end), cy(end)) == Cursor::ResizeH);
+    const artboard::Rect vel = world(roll, roll.velRect()), rw = world(roll, artboard::Rect{0, 0, 0, 0});
+    assert(hover(rw.x + roll.beatToX(0.0) + 1.5, cy(vel)) == Cursor::ResizeV);
+    // a window covers what is beneath it: over the window's body, never the lane's clip edge under it
+    assert(hover(n.x + 3.0, cy(n)) == Cursor::Default);
+    // a modal: the arrow, even over a grip beneath it
+    r.app->openSettings();
+    r.settle();
+    assert(hover(cx(grip), cy(grip)) == Cursor::Default);
+    pass("The pointer says a drag resizes (R-UI-14): ↔ a clip's end, the brace's ends, a note's end and the pattern's end; ↕ the dock's top edge and a velocity bar; ⤡ a window's corner — where a press takes them, kept while in hand; a window covers the lanes; a modal is the arrow");
+}
+
 static void test_space_returns_and_ctrl_space_stays()
 {
     // R-TIME-7/8: Space stops back where the time bar was put; Ctrl+Space stops where it is; the cue is marked
@@ -2807,6 +2875,7 @@ int main()
     test_the_keyboard_section();
     test_the_history_tree();
     test_clips_are_copied_by_shift_drag_and_ctrl_c_v();
+    test_the_pointer_says_a_drag_resizes();
     test_home_unsaved_confirm_and_recents();
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();

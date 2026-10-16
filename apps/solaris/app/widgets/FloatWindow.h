@@ -18,6 +18,7 @@
  *  a parameter row's slider would swallow them.
  */
 #pragma once
+#include "../Cursor.h"
 #include "../Theme.h"
 #include "AppModel.h"
 #include "../../../cosmo/widgets/ContextMenu.h"
@@ -63,6 +64,7 @@ namespace solaris_ui
         void layout();
         void advance(double nowMs) override;
         bool hitTest(const artboard::Point &p) const override { return mWanted && Segment::hitTest(p); }
+        bool resizing() const; // its corner in hand (R-UI-14)
 
         std::function<void()> onClosed;
 
@@ -94,6 +96,10 @@ namespace solaris_ui
         FloatWindow &openRoll(const std::string &pt, const std::string &ac = std::string());
         /** The piano roll in front of every other window, or null (Space plays it, R-ROLL-6). */
         PianoRoll *frontRoll() const;
+        /** R-UI-14: the cursor a drag in hand in any window keeps (Default when none); and, for a point, whether a window
+         *  is there — it covers what is beneath — and the cursor it wants (its corner ⤡, a roll's grips). */
+        Cursor dragCursor() const;
+        bool cursorAt(const artboard::Point &world, Cursor &c) const;
         PianoRoll *roll(const std::string &pt) const;
         /** Open (or bring forward) the window of automation `au` (R-AUTO-11). */
         FloatWindow &openAutomation(const std::string &au);

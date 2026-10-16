@@ -784,7 +784,7 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
   near-mono and the highs wide, the sidechain's pump in dB, the kick on every beat of the drops, the notes in
   the key, every section's energy where the form puts it. A sound the library lacks for it is made there first.
 
-## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12) — 13 ✅ (the tempo set in the song bar, DR-UI-13)
+## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12) — 13 ✅ (the tempo set in the song bar, DR-UI-13) — 14 ✅ (the resize cursor, DR-UI-14)
 
 - **R-UI-1 Two screens, as Interstellar:** Home (R-HOME) and the Project view.
 - **R-UI-2 The accent is teal, `#159387`, the only forked token** — teal because orange, the
@@ -871,6 +871,14 @@ audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 - **R-UI-13 The song's tempo is set where it is shown** (U-1, R-SVC-11): the song bar's "<bpm> bpm" is a control
   — dragged up or down, a bpm a step (Shift: a tenth), one `set project.bpm=<n>` per step that moved it (as a
   fader sends each step); a double-click types one in. Drawn eased when it changes from elsewhere (§1).
+- **R-UI-14 The pointer says a drag resizes** (user request, 2026-10-16: *"when on the edge to expand/shrink item,
+  cursor change to resize icon so that it more clear to do"*). Over a grip that changes a SIZE the pointer is a
+  resize cursor — ↔ over a clip's end (R-CLIP-7), a note's end and the pattern's end handle in a piano roll, the
+  loop brace's two ends on the ruler; ↕ over the mixer dock's top edge and a note's velocity bar; ⤡ over a
+  window's corner (R-WIN-5) — exactly where a press would take that grip (the same zone, never a second guess), and
+  it stays that while the resize is in hand, wherever the pointer goes; anywhere else, and over any modal (the
+  settings, a menu, the history tree, a dialog), the arrow. A window covers what is beneath it. The App decides the
+  shape; the host only shows it (law 12) — the OS's own cursors, which do not ease (an OS cursor is not drawn by us).
 
 ## R-NFR — non-functional — 📋 SPECIFIED
 

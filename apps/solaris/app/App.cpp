@@ -361,6 +361,7 @@ namespace solaris_ui
         }
         if (kind == 2) mProject->setInteracting(false);
         RawPointer rp{};
+        mPointer = Point{x, y};
         rp.kind = kind == 0 ? RawPointer::Kind::Down : (kind == 2 ? RawPointer::Kind::Up : RawPointer::Kind::Move);
         rp.pos = Point{x, y};
         rp.button = button == 2 ? PointerButton::Right : PointerButton::Left;
@@ -380,6 +381,13 @@ namespace solaris_ui
         rp.shift = shift; // D-5: the roll's and the lanes' sideways scroll
         rp.scroll = Point{0.0, -notches * 40.0}; // + notches = wheel up = toward the start (Interstellar's notch)
         mRecognizer.feed(rp);
+    }
+
+    Cursor App::cursor() const
+    {
+        // a modal takes the pointer: the arrow over it (and over what it covers)
+        if (mMenu->isOpen() || mConfirm->isOpen() || mSettings->isOpen() || mHistory->isOpen() || mScreen != "project") return Cursor::Default;
+        return mProject->cursorAt(mPointer);
     }
 
     bool App::key(const KeyEvent &e)

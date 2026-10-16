@@ -321,6 +321,32 @@ namespace solaris_ui
         return std::string();
     }
 
+    Cursor Timeline::dragCursor() const
+    {
+        if (mResizing) return Cursor::ResizeH;
+        const RulerDrag held = mRuler == RulerDrag::Pending ? mRulerZone : mRuler; // pressed on an end, not yet moved
+        return held == RulerDrag::LoopFrom || held == RulerDrag::LoopTo ? Cursor::ResizeH : Cursor::Default;
+    }
+
+    Cursor Timeline::cursorAt(const Point &local) const
+    {
+        const Cursor held = dragCursor();
+        if (held != Cursor::Default || mDragging || mLoopDragging || mRuler != RulerDrag::None) return held;
+        // the loop brace's ends — as the press reads them (rulerGesture)
+        const Rect br = loopRect();
+        if (rulerRect().contains(local) && br.w > 0 && mLoopTo > mLoopFrom && local.y >= kRulerH * 0.5 &&
+            (std::fabs(local.x - br.x) <= kBraceGrip || std::fabs(local.x - br.right()) <= kBraceGrip))
+            return Cursor::ResizeH;
+        // a clip's end (R-CLIP-7) — as the press reads it
+        const std::string id = clipAt(local);
+        if (!id.empty())
+        {
+            const Rect r = clipRect(id);
+            if (local.x >= r.right() - kEdgeGrip && r.w > 3.0 * kEdgeGrip) return Cursor::ResizeH;
+        }
+        return Cursor::Default;
+    }
+
     void Timeline::expectCopy(bool instant)
     {
         mKnownClips.clear();

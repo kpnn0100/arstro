@@ -42,6 +42,9 @@ namespace solaris_ui
         SongBar &bar() { return *mBar; }
         Browser &browser() { return *mBrowser; }
         Timeline &timeline() { return *mTimeline; }
+        /** R-UI-14: the pointer's shape at a world point — a resize in hand first (wherever the pointer is), then the
+         *  window over the point, then the dock's top edge, then the lanes. */
+        Cursor cursorAt(const artboard::Point &world) const;
         MixerDock &dock() { return *mDock; }
         WindowLayer &windows() { return *mWindows; }
         /** A right-click, offered before anyone else: a window's parameter row takes it (R-WIN-3). */

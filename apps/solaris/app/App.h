@@ -49,6 +49,8 @@ namespace solaris_ui
          *  a touchpad) arrives as Shift (D-5). */
         void wheel(double x, double y, double notches, bool ctrl = false, bool shift = false);
         bool key(const artboard::KeyEvent &e);
+        /** R-UI-14: what the pointer should look like where it is now — the host shows it after every pointer event. */
+        Cursor cursor() const;
 
         /** Send one command line. A refusal becomes the toast, with the service's sentence. */
         bool dispatch(const std::string &line);
@@ -106,6 +108,7 @@ namespace solaris_ui
 
         AppHooks mHooks;
         double mW, mH, mNowMs = 0.0, mLastActivityMs = -1e9;
+        artboard::Point mPointer{-1.0, -1.0};            // where the pointer last was (R-UI-14)
         std::shared_ptr<HomeScreen> mHome;
         std::shared_ptr<ProjectScreen> mProject;
         std::shared_ptr<SettingsSheet> mSettings;

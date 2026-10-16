@@ -1669,3 +1669,19 @@ tempo, said in its toast (`:164`). It is lit while held, washed on hover, and a 
 drawn easing there over 220 ms (`kCatchUpMs`) — `bpmShown()` is the LIVE value (`:243`). Closes the UX audit's
 U-1. UI test `test_the_tempo_is_set_in_the_song_bar` (mutant: a tempo that snaps, seen red).
 
+### DR-UI-14 The pointer says a drag resizes (R-UI-14)
+`Cursor` (`app/Cursor.h`): Default, ResizeH ↔, ResizeV ↕, ResizeDiag ⤡, each with its CSS name. Every widget with a
+grip answers twice, from the SAME zone its press takes: `dragCursor()` — the cursor a resize in hand keeps, wherever the
+pointer is — and `cursorAt(local)`. `Timeline` (`app/widgets/Timeline.cpp:324`): ↔ over a clip's end (`kEdgeGrip`,
+R-CLIP-7) and the loop brace's ends (`kBraceGrip`, the ruler's lower half), and while either is held (pressed, not yet
+moved, included). `PianoRoll` (`app/widgets/PianoRoll.cpp:449`): ↔ a note's end (the zone `noteAt` gives, D-7) and the
+pattern's end handle, ↕ a velocity bar, and while any is held. `MixerDock` (`app/widgets/MixerDock.cpp:725`): ↕ its top
+edge (`Part::Resize`). `WindowLayer` (`app/widgets/FloatWindow.cpp:281`): ⤡ a window's corner (`FloatWindow::resizing`
+while it is held); the front-most window under the point decides, so it covers the lanes beneath. `ProjectScreen::
+cursorAt` (`app/widgets/ProjectScreen.cpp:20`) asks every drag in hand first, then the window, the dock, the lanes;
+`App::cursor` (`app/App.cpp:386`) gives the arrow while a modal is open (a menu, a dialog, the settings, the history
+tree) or off the song, else the screen's answer at the last pointer position (`App::pointer` keeps it). The GTK host
+asks after every pointer event and, when it changed, sets the window's cursor by name (`showCursor`,
+`linux_main.cpp:69`) — the OS's own cursors, which do not ease. UI `test_the_pointer_says_a_drag_resizes` (every grip;
+a clip's end held off the edge; a window over the lanes; a modal). Mutants: no clip-end zone, a resize in hand
+forgetting its cursor, a modal not the arrow — all seen red. The GTK half is compiled and read, not driven live (D-5).

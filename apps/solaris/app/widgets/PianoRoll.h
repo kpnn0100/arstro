@@ -38,6 +38,7 @@
  *  and out with the play.
  */
 #pragma once
+#include "../Cursor.h"
 #include "../Theme.h"
 #include "AppModel.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
@@ -84,6 +85,10 @@ namespace solaris_ui
         /** A keyboard action (R-SET-4: `roll.selectAll`, `roll.up` …) while this roll has the keys — the App looks the
             combo up in the model's keymap; true when the roll took it (a selection's actions need a selection). */
         bool action(const std::string &id);
+        /** R-UI-14: the cursor a drag in hand keeps, and the one the grip under `local` wants (a note's end, the
+         *  pattern's end handle: ↔; a velocity bar: ↕) — the zones a press takes. */
+        Cursor dragCursor() const;
+        Cursor cursorAt(const artboard::Point &local) const;
         /** The note clipboard every roll shares (Ctrl+C in one, Ctrl+V in any). */
         void setClipboard(std::shared_ptr<std::vector<solaris::NoteModel>> c) { mClipboard = std::move(c); }
         double keyLit(int pitch) const;                     // a pressed key's light, LIVE

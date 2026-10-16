@@ -17,6 +17,17 @@ namespace solaris_ui
         std::string beats(double b) { return Timeline::beatText(b); } // to the tick
     }
 
+    Cursor ProjectScreen::cursorAt(const Point &world) const
+    {
+        for (const Cursor c : {mWindows->dragCursor(), mDock->dragCursor(), mTimeline->dragCursor()})
+            if (c != Cursor::Default) return c;
+        Cursor c = Cursor::Default;
+        if (mWindows->cursorAt(world, c)) return c;
+        if (!mDock->isFadedOut() && mDock->hitTest(world)) return mDock->cursorAt(mDock->toLocal(world));
+        if (!mTimeline->isFadedOut() && mTimeline->localBounds().contains(mTimeline->toLocal(world))) return mTimeline->cursorAt(mTimeline->toLocal(world));
+        return Cursor::Default;
+    }
+
     ProjectScreen::ProjectScreen()
     {
         clipToBounds = true;
