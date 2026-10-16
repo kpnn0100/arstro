@@ -120,14 +120,31 @@ namespace solaris
         Fields unknown;
     };
 
+    /** R-MIDI-3: a point of an expression lane — the pitch wheel (`bend`, −1 … +1) or a controller (`cc<N>`, 0 … 1;
+     *  `cc1` the mod wheel) — linear to the next, held before the first and after the last. */
+    struct ExprPoint
+    {
+        std::string lane;
+        double at = 0.0, value = 0.0;   // beats from the pattern's start
+        Fields unknown;
+    };
+
     struct Pattern
     {
         std::string id, name;
         double length = 4.0;            // beats
         std::vector<Note> notes;        // sorted by (at, pitch)
+        std::vector<ExprPoint> expr;    // R-MIDI-3: sorted by (lane, at)
         Fields unknown;
         Remarks remarks;
     };
+
+    /** R-MIDI-3: a lane's one spelling — `bend`, `cc0` … `cc127` (`mod` is `cc1`); false for anything else. */
+    bool exprLane(const std::string &name, std::string &canonical);
+    /** The values a lane takes: −1 … +1 for `bend`, 0 … 1 for a controller; its rest (0 either way). */
+    void exprRange(const std::string &lane, double &lo, double &hi);
+    /** A lane's value at `at` beats into its pattern: linear between points, held at the ends; `rest` when empty. */
+    double exprAt(const std::vector<ExprPoint> &expr, const std::string &lane, double at, double rest = 0.0);
 
     struct Clip
     {

@@ -288,6 +288,13 @@ namespace solaris
             else if (k == "length") n.length = toTick(r.num(k, v, 0.25));
             else n.unknown.emplace_back(k, v);
         }
+        void apply(Reader &r, ExprPoint &n, const std::string &k, const std::string &v)
+        {
+            if (k == "lane") n.lane = v;
+            else if (k == "at") n.at = toTick(r.num(k, v, 0.0));
+            else if (k == "value") n.value = r.num(k, v, 0.0);
+            else n.unknown.emplace_back(k, v);
+        }
         void apply(Reader &r, Clip &n, const std::string &k, const std::string &v)
         {
             if (k == "id") n.id = v;
@@ -354,7 +361,7 @@ namespace solaris
         Reader r{report ? report : &localReport, {}};
 
         // What a continuation line or a comment attaches to.
-        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Pattern, Note, Clip, Auto, Point, Bind, Raw };
+        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Pattern, Note, Expr, Clip, Auto, Point, Bind, Raw };
         Cur cur = Cur::None;
         bool seenNode = false, sawMagic = false, sawTracks = false;
         std::map<std::string, std::vector<Note>> inlineNotes; // note clips written the suite's inline way
@@ -427,13 +434,28 @@ namespace solaris
                 {
                     Note n;
                     for (const auto &f : tok.fields) apply(r, n, f.first, f.second);
-                    if (cur == Cur::Pattern || cur == Cur::Note) { p.patterns.back().notes.push_back(n); cur = Cur::Note; }
+                    if (cur == Cur::Pattern || cur == Cur::Note || cur == Cur::Expr) { p.patterns.back().notes.push_back(n); cur = Cur::Note; }
                     else if (cur == Cur::Clip) inlineNotes[p.clips.back().id].push_back(n);
                     else
                     {
                         err = "line " + std::to_string(lineNo) + ": #note outside an #apattern or a note #aclip";
                         return false;
                     }
+                }
+                else if (tok.type == "expr")
+                {
+                    // R-MIDI-3: a point of one of the pattern's expression lanes
+                    if (!(cur == Cur::Pattern || cur == Cur::Note || cur == Cur::Expr))
+                    {
+                        err = "line " + std::to_string(lineNo) + ": #expr outside an #apattern";
+                        return false;
+                    }
+                    ExprPoint x;
+                    for (const auto &f : tok.fields) apply(r, x, f.first, f.second);
+                    std::string canon;
+                    if (exprLane(x.lane, canon)) x.lane = canon;
+                    p.patterns.back().expr.push_back(x);
+                    cur = Cur::Expr;
                 }
                 else if (tok.type == "aclip") { p.clips.emplace_back(); fill(p.clips.back()); cur = Cur::Clip; }
                 else if (tok.type == "aauto") { p.automations.emplace_back(); fill(p.automations.back()); cur = Cur::Auto; }
@@ -714,6 +736,8 @@ namespace solaris
             for (const auto &x : n.notes)
                 out += "  " + Line("note").kv("pitch", std::to_string(x.pitch)).kv("at", canonicalBeats(x.at))
                                   .kv("length", canonicalBeats(x.length)).kv("vel", std::to_string(x.vel)).unknown(x.unknown).s + "\n";
+            for (const auto &x : n.expr) // R-MIDI-3
+                out += "  " + Line("expr").kv("lane", x.lane).kv("at", canonicalBeats(x.at)).kv("value", canonicalNumber(x.value)).unknown(x.unknown).s + "\n";
         }
         group(!p.clips.empty());
         for (const auto &n : p.clips)
@@ -896,7 +920,19 @@ namespace solaris
             }
         }
         for (const auto &pt : p.patterns)
+        {
             if (!(pt.length > 0)) e.push_back("pattern " + pt.id + " has no length");
+            for (const auto &x : pt.expr)
+            {
+                // R-MIDI-3: a lane we know, a value in its range
+                std::string canon;
+                double lo = 0, hi = 1;
+                if (!exprLane(x.lane, canon)) { e.push_back("pattern " + pt.id + " has an expression lane `" + x.lane + "` (bend, mod or cc0…cc127)"); continue; }
+                exprRange(canon, lo, hi);
+                if (x.value < lo - 1e-9 || x.value > hi + 1e-9 || x.at < 0)
+                    e.push_back("pattern " + pt.id + "'s " + canon + " point at " + canonicalBeats(x.at) + " is out of range (" + canonicalNumber(lo) + " … " + canonicalNumber(hi) + ")");
+            }
+        }
         for (const auto &l : p.lanes)
         {
             // R-LANE-3: a track belongs to an instrument
@@ -972,6 +1008,40 @@ namespace solaris
             }
         }
         return e;
+    }
+
+    bool exprLane(const std::string &name, std::string &canonical)
+    {
+        if (name == "bend" || name == "mod") { canonical = name == "mod" ? "cc1" : "bend"; return true; }
+        if (name.size() < 3 || name.compare(0, 2, "cc") != 0) return false;
+        for (size_t i = 2; i < name.size(); ++i)
+            if (name[i] < '0' || name[i] > '9') return false;
+        const int n = std::atoi(name.c_str() + 2);
+        if (n < 0 || n > 127 || name.size() > 5) return false;
+        canonical = "cc" + std::to_string(n);
+        return true;
+    }
+
+    void exprRange(const std::string &lane, double &lo, double &hi)
+    {
+        lo = lane == "bend" ? -1.0 : 0.0;
+        hi = 1.0;
+    }
+
+    double exprAt(const std::vector<ExprPoint> &expr, const std::string &lane, double at, double rest)
+    {
+        const ExprPoint *before = nullptr, *after = nullptr;
+        for (const auto &x : expr)
+        {
+            if (x.lane != lane) continue;
+            if (x.at <= at) { if (!before || x.at >= before->at) before = &x; }
+            else if (!after || x.at < after->at) after = &x;
+        }
+        if (!before && !after) return rest;
+        if (!before) return after->value;  // held before the first
+        if (!after) return before->value;  // … and after the last
+        const double t = (at - before->at) / std::max(1e-12, after->at - before->at);
+        return before->value + (after->value - before->value) * t;
     }
 }
 }

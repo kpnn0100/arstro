@@ -2043,6 +2043,172 @@ static void test_record_the_keyboard_into_a_clip()
          "undo (\"Record\"); --overdub adds into the clip under the start; nothing played lands nothing; refusals");
 }
 
+namespace
+{
+    /** The frequency of x over [a, b): positive-going zero crossings, interpolated. */
+    double zeroHz(const std::vector<float> &x, size_t a, size_t b)
+    {
+        double first = -1, last = -1;
+        int n = 0;
+        for (size_t i = a + 1; i < b && i < x.size(); ++i)
+            if (x[i - 1] < 0.0f && x[i] >= 0.0f)
+            {
+                const double t = (double)(i - 1) + x[i - 1] / (x[i - 1] - x[i]);
+                if (first < 0) first = t;
+                else ++n;
+                last = t;
+            }
+        return n > 0 ? n * 48000.0 / (last - first) : 0.0;
+    }
+    void sineSynth(Run &r, const std::string &dv)
+    {
+        r.ok("set " + dv + ".osc1.wave=sine " + dv + ".osc2.level=0 " + dv + ".filter.cutoff=20000 " + dv + ".filter.env=0 " + dv +
+             ".filter.keytrack=0 " + dv + ".amp.attack=0 " + dv + ".amp.sustain=1");
+    }
+}
+
+static void test_expression_lanes_play_the_wheels()
+{
+    // R-MIDI-3: a pattern's lanes — the pitch wheel heard as pitch (a ramp, then held), at rest after its clip, a seek
+    // landing bent; `mod` is `cc1`; kept in the .slp; refusals name the way
+    Run r;
+    const std::string song = freshSong("expr");
+    r.ok("project new " + song + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");          // ch_2 dv_1, ac_1 pt_1
+    sineSynth(r, "dv_1");
+    r.ok("note add pt_1 --pitch 69 --at 0 --length 4");
+    r.ok("expr add pt_1 --lane bend --at 0 --value 0");
+    r.ok("expr add pt_1 --lane bend --at 2 --value 1");             // two semitones up over two beats (the default range)
+    r.ok("clip add --strip ch_2 --at 4 --length 4");                 // ac_2, pt_2: the same note, no lane
+    r.ok("note add pt_2 --pitch 69 --at 0 --length 4");
+    const auto *pt = [&]() -> const PatternModel * { for (const auto &x : r.svc.model().patterns) if (x.id == "pt_1") return &x; return nullptr; }();
+    assert(pt && pt->expr.size() == 2 && pt->expr[1].lane == "bend" && pt->expr[1].at == 2.0 && pt->expr[1].value == 1.0);
+    const std::string out = scratch() + "/expr.wav";
+    r.ok("render --out " + out + " --to 8 --bits 32f");
+    const auto &L = r.fake.written[out][0];
+    const double start = zeroHz(L, 480, 2400), mid = zeroHz(L, 24000 - 1200, 24000 + 1200), held = zeroHz(L, 3 * 24000, 4 * 24000 - 480);
+    const double after = zeroHz(L, 5 * 24000, 7 * 24000);
+    if (std::fabs(held - 493.88) > 1.0) std::printf("    start %.2f mid %.2f held %.2f after %.2f Hz\n", start, mid, held, after);
+    assert(std::fabs(start - 440.0) < 2.0);                          // at rest
+    assert(std::fabs(mid - 440.0 * std::pow(2.0, 1.0 / 12.0)) < 2.0); // half way up the ramp: a semitone
+    assert(std::fabs(held - 440.0 * std::pow(2.0, 2.0 / 12.0)) < 1.0); // held after its last point
+    assert(std::fabs(after - 440.0) < 1.0);                          // the next clip: at rest again
+    // a seek into the bent part: it plays bent from the first sample (a seek silences a note begun before it, so an
+    // E5 struck at beat 3 is what sounds — two semitones up, F#5)
+    r.ok("note add pt_1 --pitch 76 --at 3 --length 1");
+    const std::string from3 = scratch() + "/expr3.wav";
+    r.ok("render --out " + from3 + " --from 3 --to 4 --bits 32f");
+    const double seeked = zeroHz(r.fake.written[from3][0], 240, 12000);
+    if (std::fabs(seeked - 739.99) > 1.5) std::printf("    after the seek %.2f Hz\n", seeked);
+    assert(std::fabs(seeked - 739.99) < 1.5);
+    // `mod` is cc1; values in range; a lane we know
+    r.ok("expr add pt_1 --lane mod --at 1 --value 0.5");
+    bool cc1 = false;
+    for (const auto &x : r.svc.model().patterns[0].expr) cc1 |= x.lane == "cc1" && x.value == 0.5;
+    assert(cc1);
+    assert(contains(r.no("expr add pt_1 --lane bend --at 1 --value 1.5"), "--value for bend is -1"));
+    assert(contains(r.no("expr add pt_1 --lane mod --at 1 --value -0.1"), "--value for cc1 is 0"));
+    assert(contains(r.no("expr add pt_1 --lane pan --at 1 --value 0"), "bend, mod or cc0 … cc127"));
+    assert(contains(r.no("expr delete pt_1 --lane bend --at 3"), "no bend point at 3"));
+    assert(contains(r.no("expr add pt_9 --lane bend --at 1 --value 0"), "no pattern"));
+    r.ok("expr add pt_1 --lane cc74 --at 0 --value 0.25");           // any controller: kept, exported, not played
+    // the .slp keeps them, sorted by lane then beat
+    r.ok("project save");
+    std::ifstream f(song);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    assert(contains(ss.str(), "#expr lane=bend at=2.0 value=1") && contains(ss.str(), "#expr lane=cc1 at=1.0 value=0.5") &&
+           contains(ss.str(), "#expr lane=cc74 at=0.0 value=0.25"));
+    Run again;
+    again.ok("project open " + song);
+    size_t points = 0;
+    for (const auto &x : again.svc.model().patterns)
+        if (x.id == "pt_1") points = x.expr.size();
+    assert(points == 4);
+    r.ok("expr delete pt_1 --lane cc74 --at 0");
+    r.ok("expr clear pt_1 --lane cc1");
+    r.ok("undo");                                                     // an edit like any: undone
+    r.ok("expr clear pt_1");
+    assert(r.svc.model().patterns[0].expr.empty());
+    pass("expression lanes (R-MIDI-3): a bend lane heard as pitch — at rest, half way up the ramp a semitone, held two after its "
+         "last point, the next clip at rest, a seek landing bent; `mod` is cc1; any controller kept; in the .slp; refusals; undoable");
+}
+
+static void test_expression_lanes_go_through_midi_files()
+{
+    // R-MIDI-3: exported as pitch-bend and controller messages (a ramp stepped every 1/32 beat), read back as lanes
+    Run r;
+    r.ok("project new " + freshSong("exprmidi") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");
+    r.ok("note add pt_1 --pitch 60 --at 0 --length 4");
+    r.ok("expr add pt_1 --lane bend --at 0 --value -0.5");
+    r.ok("expr add pt_1 --lane bend --at 1 --value 0.5");
+    r.ok("expr add pt_1 --lane mod --at 2 --value 1");
+    const std::string mid = scratch() + "/expr.mid";
+    r.ok("pattern export pt_1 " + mid);
+    const std::string got = firstLine(r.ok("pattern import " + mid));
+    const PatternModel *pt = nullptr;
+    for (const auto &x : r.svc.model().patterns)
+        if (x.id == got) pt = &x;
+    assert(pt);
+    std::vector<ExprPoint> lanes;
+    for (const auto &x : pt->expr) lanes.push_back(ExprPoint{x.lane, x.at, x.value, {}});
+    const double atHalf = exprAt(lanes, "bend", 0.5), atOne = exprAt(lanes, "bend", 1.5), mod = exprAt(lanes, "cc1", 3.0);
+    if (std::fabs(atHalf) > 0.01 || std::fabs(atOne - 0.5) > 0.01) std::printf("    bend %.4f / %.4f, mod %.4f\n", atHalf, atOne, mod);
+    assert(std::fabs(atHalf) < 0.01 && std::fabs(atOne - 0.5) < 0.01 && std::fabs(mod - 1.0) < 1e-9);
+    assert(std::fabs(exprAt(lanes, "bend", 0.0) + 0.5) < 0.001);
+    pass("expression lanes through a MIDI file (R-MIDI-3): bend and the mod wheel exported as their messages (a ramp stepped), imported as lanes — the same curve to 1 %");
+}
+
+static void test_the_keyboards_wheels_play_and_record()
+{
+    // R-MIDI-3: the keyboard's own wheels — into the armed strip at once, and into a take's lanes
+    Run r;
+    r.ok("project new " + freshSong("wheels") + " --bpm 120");
+    r.ok("strip add --kind instrument --instrument synth");            // ch_2 dv_1
+    sineSynth(r, "dv_1");
+    r.fake.capture->sink.reserve(2 * 4000000);
+    const auto &cap = *r.fake.capture;
+    r.ok("strip arm ch_2");
+    r.fake.key(0x90, 69, 100);
+    r.fake.key(0xE0, 0x00, 0x7F);                                    // the wheel nearly full up: 16256 → +0.984
+    const size_t bent = cap.frames.load();
+    waitFrames(r, bent + 24000);
+    std::vector<float> left;
+    for (size_t i = 2 * (bent + 4800); i + 1 < 2 * (bent + 24000) && i < cap.sink.size(); i += 2) left.push_back(cap.sink[i]);
+    const double heard = zeroHz(left, 0, left.size());
+    if (std::fabs(heard - 440.0 * std::pow(2.0, 2.0 * 0.984375 / 12.0)) > 2.0) std::printf("    heard %.2f Hz\n", heard);
+    assert(std::fabs(heard - 440.0 * std::pow(2.0, 2.0 * 0.984375 / 12.0)) < 2.0);
+    r.fake.key(0x80, 69, 0);
+    r.fake.key(0xE0, 0x00, 0x40);                                    // back to the centre
+    // recorded: a take whose bend lane follows the wheel
+    r.ok("transport record --from 4");
+    const long long f0 = cap.frames.load();
+    waitFrames(r, f0 + 24000);
+    r.fake.key(0x90, 64, 100);
+    r.fake.key(0xE0, 0x00, 0x60);                                    // +0.5
+    waitFrames(r, f0 + 48000);
+    r.fake.key(0xE0, 0x00, 0x40);                                    // the centre
+    r.fake.key(0xB0, 1, 127);                                        // the mod wheel up
+    waitFrames(r, f0 + 72000);
+    r.fake.key(0x80, 64, 0);
+    waitFrames(r, f0 + 84000);
+    r.ok("transport stop");
+    const PatternModel *take = nullptr;
+    for (const auto &x : r.svc.model().patterns) take = &x;
+    assert(take);
+    bool up = false, centre = false, mod = false;
+    for (const auto &x : take->expr)
+    {
+        up |= x.lane == "bend" && x.value == 0.5 && x.at > 0.9 && x.at < 1.6;
+        centre |= x.lane == "bend" && x.value == 0.0 && x.at > 1.9;
+        mod |= x.lane == "cc1" && x.value == 1.0;
+    }
+    if (!(up && centre && mod)) for (const auto &x : take->expr) std::printf("    %s @ %.3f = %.3f\n", x.lane.c_str(), x.at, x.value);
+    assert(up && centre && mod && take->notes.size() == 1);
+    pass("the keyboard's wheels (R-MIDI-3): the pitch wheel bends the armed strip at once; in a take, the bend and the mod wheel land as its lanes where they moved");
+}
+
 static void test_loop_and_seek()
 {
     Run r;
@@ -3093,6 +3259,9 @@ int main()
     test_the_driver_and_its_fallback();
     test_a_keyboard_plays_the_armed_strip();
     test_record_the_keyboard_into_a_clip();
+    test_expression_lanes_play_the_wheels();
+    test_expression_lanes_go_through_midi_files();
+    test_the_keyboards_wheels_play_and_record();
     test_held_peak_holds_then_falls();
     test_render_measure();
     test_loop_and_seek();

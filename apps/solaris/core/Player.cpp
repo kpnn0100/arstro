@@ -298,6 +298,14 @@ namespace solaris
             {
                 if (mPedal.off(pitch)) play(strip, pitch, 0);
             }
+            else if (e.kind() == 0xE0 || (e.kind() == 0xB0 && e.d1 == 1))
+            {
+                // R-MIDI-3: the wheels — into the armed strip's instrument, kept while recording
+                const bool bend = e.kind() == 0xE0;
+                const double v = bend ? std::clamp(((int)((e.d2 & 0x7F) << 7 | (e.d1 & 0x7F)) - 8192) / 8192.0, -1.0, 1.0) : (e.d2 & 0x7F) / 127.0;
+                mEng->liveControl(strip, bend ? 0 : 1, v);
+                if (recording) mPlayed.push(Played{heard(), 0, 0, bend ? 1 : 2, v});
+            }
             else if (e.kind() == 0xB0 && e.d1 == 64) mPedal.pedal(e.d2, [&](int p) { play(strip, p, 0); });
             else if (e.kind() == 0xB0 && (e.d1 == 120 || e.d1 == 123)) // all sound / all notes off
             {

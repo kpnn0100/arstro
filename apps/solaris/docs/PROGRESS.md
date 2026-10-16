@@ -440,7 +440,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       the wheels; 7 unit tests, `glide_and_bend`; 2 mutants red). DR-INST-6: Solaris has them with no code — the
       face grew to eight modules. Found: two face tests assumed every module was wide (the small Voice and Vibrato
       share a row when narrow) and one read a parameter by its face index (now by name).
-- [ ] **N11** Expression lanes: pitch bend and CC on a note clip, in the roll, recorded (R-MIDI-3).
+- [~] **N11** Expression lanes: pitch bend and CC on a note clip, in the roll, recorded (R-MIDI-3).
+      — part 1 (DR-MIDI-3): `#expr` lanes on a pattern, `expr add/delete/clear`, compiled to control events (ramps on the
+      64-sample grid, at rest after a clip, restored on seek), the keyboard's wheels live and recorded, MIDI files both
+      ways. Part 2: the lane in the piano roll.
 - [ ] **N12** Note tools: humanise, probability, grooves, scale lock, chord stamps, legato, arpeggiate (R-ROLL-11).
 - [ ] **N13** Markers and sections (R-ARR-1).
 - [ ] **N14** Time insert / delete across the song (R-ARR-2).

@@ -438,6 +438,32 @@ static void test_ids_order_and_lookups()
     pass("ids never reuse a number; processing order is mixer order then strip order");
 }
 
+static void test_expression_lanes_round_trip_and_are_checked()
+{
+    // R-MIDI-3: #expr points under an #apattern — read, written back in place, `mod` read as cc1; a lane we do not
+    // know or a value out of its range refused, naming it; exprAt is linear between points and holds at the ends
+    const std::string head = "arstro-project = 1\napp = solaris\nid = prj\n#amixer id=mx_1 name=Sources order=0\n";
+    Project p;
+    std::string err;
+    assert(parseProject(head + "#apattern id=pt_1 length=4.0\n  #note pitch=60 at=0.0 length=1.0 vel=100\n"
+                               "  #expr lane=bend at=0.0 value=-0.5\n  #expr lane=bend at=2.0 value=0.5\n  #expr lane=mod at=1.0 value=1\n", p, err));
+    assert(p.patterns[0].expr.size() == 3 && p.patterns[0].expr[2].lane == "cc1" && p.patterns[0].notes.size() == 1);
+    const std::string text = serializeProject(p);
+    assert(contains(text, "  #expr lane=bend at=2.0 value=0.5\n") && contains(text, "  #expr lane=cc1 at=1.0 value=1"));
+    Project q;
+    assert(parseProject(text, q, err) && serializeProject(q) == text); // a fixed point
+    const auto &e = p.patterns[0].expr;
+    assert(exprAt(e, "bend", 1.0) == 0.0 && exprAt(e, "bend", -1.0) == -0.5 && exprAt(e, "bend", 3.0) == 0.5);
+    assert(exprAt(e, "cc1", 0.0) == 1.0 && exprAt(e, "cc74", 1.0, 0.25) == 0.25);
+    std::string canon;
+    assert(exprLane("cc127", canon) && canon == "cc127" && !exprLane("cc128", canon) && !exprLane("pan", canon) && !exprLane("cc", canon));
+    Project bad;
+    assert(!parseProject(head + "#apattern id=pt_1 length=4.0\n  #expr lane=bend at=0.0 value=2\n", bad, err) && contains(err, "out of range"));
+    assert(!parseProject(head + "#apattern id=pt_1 length=4.0\n  #expr lane=pan at=0.0 value=0\n", bad, err) && contains(err, "expression lane `pan`"));
+    assert(!parseProject(head + "#expr lane=bend at=0.0 value=0\n", bad, err) && contains(err, "#expr outside an #apattern"));
+    pass("expression lanes in the .slp (R-MIDI-3): #expr read and written back in place, a fixed point; mod is cc1; exprAt linear and held; a lane or value out of its range refused, naming it");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -451,6 +477,7 @@ int main()
     test_structural_errors_are_refused_with_names();
     test_numeric_corruption_is_repaired_and_counted();
     test_ids_order_and_lookups();
+    test_expression_lanes_round_trip_and_are_checked();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

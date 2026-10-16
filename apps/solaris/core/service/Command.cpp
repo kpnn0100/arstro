@@ -179,6 +179,13 @@ namespace solaris
             {K::PatternClear, "pattern clear", "<pt>", 1, 1, {"pitch=<pitch>"}, "Remove every note (or only --pitch's).", "R-SVC-8"},
             {K::PatternDelete, "pattern delete", "<pt>", 1, 1, {},
              "Delete a pattern. Refused while a clip plays it (naming the clips).", "R-SVC-8"},
+            {K::ExprAdd, "expr add", "<pt>", 1, 1, {"lane=<bend|mod|cc<N>>", "at=<beats>", "value=<v>"},
+             "A point on one of a pattern's expression lanes (R-MIDI-3): the pitch wheel (`bend`, −1 … +1) or a controller "
+             "(`cc0` … `cc127`, 0 … 1; `mod` is `cc1`) — linear to the next point, held before the first and after the last; "
+             "a point already at that beat is moved to the value. The instruments play `bend` and `cc1` (their wheels); every "
+             "lane goes out in a MIDI file.", "R-MIDI-3", false, {"lane", "at", "value"}},
+            {K::ExprDelete, "expr delete", "<pt>", 1, 1, {"lane=<lane>", "at=<beats>"}, "Remove the lane's point at --at.", "R-MIDI-3", false, {"lane", "at"}},
+            {K::ExprClear, "expr clear", "<pt>", 1, 1, {"lane=<lane>"}, "Remove a lane's points (--lane), or every lane's.", "R-MIDI-3"},
             {K::PatternImport, "pattern import", "<file.mid>", 1, 1, {"track=<n>", "at=<beats>", "lane=<ln>", "instrument=<type>", "name=<text>"},
              "Make patterns of a Standard MIDI File (format 0/1/2; ticks or SMPTE time): one per track with notes, or "
              "--track n's alone; whole bars long; named after the track. With --lane <an instrument's track> or "

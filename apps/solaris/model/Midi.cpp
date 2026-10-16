@@ -131,6 +131,8 @@ namespace solaris
                 const int ch = (int)(ev & 0x0F);
                 const unsigned d1 = r.u8();
                 const unsigned d2 = (kind == 0xC0 || kind == 0xD0) ? 0 : r.u8();
+                if (kind == 0xE0) track.controls.push_back(MidiControl{tick, ch, "bend", std::clamp(((int)((d2 << 7) | d1) - 8192) / 8192.0, -1.0, 1.0)});
+                else if (kind == 0xB0) track.controls.push_back(MidiControl{tick, ch, "cc" + std::to_string(d1 & 0x7F), (d2 & 0x7F) / 127.0});
                 if (kind == 0x90 && d2 > 0) open[{ch, (int)d1}].emplace_back(tick, (int)d2);
                 else if (kind == 0x80 || (kind == 0x90 && d2 == 0))
                 {
@@ -228,6 +230,19 @@ namespace solaris
                 const long long on = std::llround(n.at * 960.0), off = std::max(on + 1, (long long)std::llround((n.at + n.length) * 960.0));
                 evs.push_back(Ev{on, 1, (unsigned char)(0x90 | ch), (unsigned char)std::clamp(n.pitch, 0, 127), (unsigned char)std::clamp(n.vel, 1, 127)});
                 evs.push_back(Ev{off, 0, (unsigned char)(0x80 | ch), (unsigned char)std::clamp(n.pitch, 0, 127), 0});
+            }
+            for (const auto &x : tr.controls)
+            {
+                // R-MIDI-3: before a note at the same tick (order −1), so the note starts where the wheel stands
+                const long long t = std::llround(x.at * 960.0);
+                if (x.lane == "bend")
+                {
+                    const int v = std::clamp((int)std::lround(x.value * 8192.0) + 8192, 0, 16383);
+                    evs.push_back(Ev{t, -1, (unsigned char)(0xE0 | ch), (unsigned char)(v & 0x7F), (unsigned char)(v >> 7)});
+                }
+                else if (x.lane.size() > 2 && x.lane.compare(0, 2, "cc") == 0)
+                    evs.push_back(Ev{t, -1, (unsigned char)(0xB0 | ch), (unsigned char)std::clamp(std::atoi(x.lane.c_str() + 2), 0, 127),
+                                     (unsigned char)std::clamp((int)std::lround(x.value * 127.0), 0, 127)});
             }
             // at one tick, offs before ons: a note repeated on the same pitch is two notes, not one held
             std::stable_sort(evs.begin(), evs.end(), [](const Ev &a, const Ev &b) { return a.tick < b.tick || (a.tick == b.tick && a.order < b.order); });

@@ -71,6 +71,17 @@ namespace engine
         bool on = true;
     };
 
+    /** The engine's control period: bindings evaluated, and a lane's ramp stepped, at every multiple of it. */
+    inline constexpr int kControlSamples = 64;
+
+    /** R-MIDI-3: a wheel's value from this sample on — kind 0 the pitch bend (−1 … +1), 1 the mod wheel (0 … 1). */
+    struct ControlEvent
+    {
+        long long at = 0;
+        int kind = 0;
+        double value = 0;
+    };
+
     struct Send
     {
         Target to;
@@ -90,6 +101,7 @@ namespace engine
         std::vector<DeviceDesc> rack;     // an instrument strip's rack[0] is its instrument
         std::vector<Region> regions;      // audio strips
         std::vector<NoteEvent> notes;     // instrument strips; sorted by `at`, offs before ons
+        std::vector<ControlEvent> controls; // R-MIDI-3: the wheels, sorted by `at` (a ramp a step every kControl samples)
         Target out;
         std::vector<Send> sends;
     };

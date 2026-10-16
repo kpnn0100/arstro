@@ -95,6 +95,8 @@ namespace solaris
         {
             long long at = 0;
             int pitch = 0, velocity = 0;
+            int kind = 0;          // R-MIDI-3: 0 a note; 1 the pitch wheel, 2 the mod wheel — `value`
+            double value = 0;
         };
         void setRecording(bool on) { mRecording.store(on); }
         /** R-MIDI-2: a count-in before the song — `frames` of silence clicked on its beats (the metronome forced on),

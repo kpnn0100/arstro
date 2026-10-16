@@ -56,6 +56,9 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `pattern duplicate <pt> [--name <text>]` | A new pattern with the same notes and length (named "<name> copy"). Prints its id. | R-SVC-8 |
 | `pattern clear <pt> [--pitch <pitch>]` | Remove every note (or only --pitch's). | R-SVC-8 |
 | `pattern delete <pt>` | Delete a pattern. Refused while a clip plays it (naming the clips). | R-SVC-8 |
+| `expr add <pt> --lane <bend\|mod\|cc<N>> --at <beats> --value <v>` | A point on one of a pattern's expression lanes (R-MIDI-3): the pitch wheel (`bend`, −1 … +1) or a controller (`cc0` … `cc127`, 0 … 1; `mod` is `cc1`) — linear to the next point, held before the first and after the last; a point already at that beat is moved to the value. The instruments play `bend` and `cc1` (their wheels); every lane goes out in a MIDI file. | R-MIDI-3 |
+| `expr delete <pt> --lane <lane> --at <beats>` | Remove the lane's point at --at. | R-MIDI-3 |
+| `expr clear <pt> [--lane <lane>]` | Remove a lane's points (--lane), or every lane's. | R-MIDI-3 |
 | `pattern import <file.mid> [--track <n>] [--at <beats>] [--lane <ln>] [--instrument <type>] [--name <text>]` | Make patterns of a Standard MIDI File (format 0/1/2; ticks or SMPTE time): one per track with notes, or --track n's alone; whole bars long; named after the track. With --lane <an instrument's track> or --instrument <type>: ONE pattern (every track merged, or --track's) and a clip of it at --at, by `clip add`'s rules — what dropping a .mid does. Prints the (first) pattern; `made:` the rest. | R-MIDI-1 |
 | `pattern export <pt> <file.mid>` | Write a pattern as a MIDI file (format 1, 960 ticks a beat — Solaris's own, so it imports back exact; channel 10 when a kit plays it). | R-MIDI-1 |
 | `project export-midi <file.mid>` | Write the song's notes as a MIDI file: a track per instrument strip, every note clip's pattern where the clip plays it (repeated to fill it), the song's tempo and meter. | R-MIDI-1 |
@@ -328,6 +331,10 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `patterns[].notes[].at` | number | beats from the pattern's start |
 | `patterns[].notes[].length` | number | beats |
 | `patterns[].notes[].vel` | int | 1…127 |
+| `patterns[].expr` | object[] | R-MIDI-3: expression lanes' points, sorted by (lane, at) — linear between, held at the ends |
+| `patterns[].expr[].lane` | string | bend (−1 … +1) \| cc0 … cc127 (0 … 1; cc1 the mod wheel) |
+| `patterns[].expr[].at` | number | beats from the pattern's start |
+| `patterns[].expr[].value` | number | bend −1 … +1, a controller 0 … 1 |
 | `automations` | object[] | every automation (R-AUTO-4) |
 | `automations[].id` | string | au_n — what a formula names |
 | `automations[].name` | string | "<owner> · <parameter>" when made from one |

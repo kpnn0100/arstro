@@ -24,10 +24,20 @@ namespace solaris
         long long on = 0, off = 0;   // ticks
     };
 
+    /** R-MIDI-3: a wheel or controller as the file has it — lane `bend` (−1 … +1) or `cc<N>` (0 … 1). */
+    struct MidiControl
+    {
+        long long tick = 0;
+        int channel = 0;
+        std::string lane;
+        double value = 0;
+    };
+
     struct MidiTrack
     {
         std::string name;            // its FF 03 name, "" when it has none
         std::vector<MidiNote> notes; // in the order they started
+        std::vector<MidiControl> controls; // R-MIDI-3: in file order
     };
 
     struct MidiFile
@@ -51,6 +61,7 @@ namespace solaris
         std::string name;
         int channel = 0;             // 0 … 15 (9: General MIDI drums)
         std::vector<Note> notes;     // beats, as a pattern's
+        std::vector<ExprPoint> controls; // R-MIDI-3: beats; written at each point and every 1/32 beat of a ramp
     };
 
     /** A format-1 file at 960 PPQ: a tempo track (tempo, meter, name), then a track per entry. */

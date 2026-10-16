@@ -132,6 +132,10 @@ namespace solaris
             {"patterns[].notes[].at", "number", "beats from the pattern's start"},
             {"patterns[].notes[].length", "number", "beats"},
             {"patterns[].notes[].vel", "int", "1…127"},
+            {"patterns[].expr", "object[]", "R-MIDI-3: expression lanes' points, sorted by (lane, at) — linear between, held at the ends"},
+            {"patterns[].expr[].lane", "string", "bend (−1 … +1) | cc0 … cc127 (0 … 1; cc1 the mod wheel)"},
+            {"patterns[].expr[].at", "number", "beats from the pattern's start"},
+            {"patterns[].expr[].value", "number", "bend −1 … +1, a controller 0 … 1"},
             {"automations", "object[]", "every automation (R-AUTO-4)"},
             {"automations[].id", "string", "au_n — what a formula names"},
             {"automations[].name", "string", "\"<owner> · <parameter>\" when made from one"},
@@ -396,7 +400,14 @@ namespace solaris
                 Json notes = Json::array();
                 for (const auto &n : p.notes)
                     notes.push(Json::string(pitchName(n.pitch) + "@" + beatText(n.at) + ":" + beatText(n.length) + ":" + std::to_string(n.vel)));
-                patterns.push(Json::object().set("id", p.id).set("name", p.name).set("length", p.length).set("clips", p.clips).set("notes", notes));
+                Json pj = Json::object().set("id", p.id).set("name", p.name).set("length", p.length).set("clips", p.clips).set("notes", notes);
+                if (!p.expr.empty())
+                {
+                    Json ex = Json::array(); // R-MIDI-3: "<lane>@<beat>=<value>"
+                    for (const auto &x : p.expr) ex.push(Json::string(x.lane + "@" + beatText(x.at) + "=" + canonicalNumber(x.value)));
+                    pj.set("expr", ex);
+                }
+                patterns.push(pj);
             }
             j.set("patterns", patterns);
             if (!m.automations.empty())
@@ -489,8 +500,10 @@ namespace solaris
             Json notes = Json::array();
             for (const auto &n : p.notes)
                 notes.push(Json::object().set("pitch", n.pitch).set("at", n.at).set("length", n.length).set("vel", n.vel));
+            Json ex = Json::array();
+            for (const auto &x : p.expr) ex.push(Json::object().set("lane", x.lane).set("at", x.at).set("value", x.value));
             patterns.push(Json::object().set("id", p.id).set("name", p.name).set("length", p.length).set("clips", p.clips).set("notes", notes)
-                              .set("strip", p.strip).set("instrument", p.instrument).set("strips", strings(p.strips)).set("lastStrip", p.lastStrip));
+                              .set("expr", ex).set("strip", p.strip).set("instrument", p.instrument).set("strips", strings(p.strips)).set("lastStrip", p.lastStrip));
         }
         j.set("patterns", patterns);
         Json autos = Json::array();

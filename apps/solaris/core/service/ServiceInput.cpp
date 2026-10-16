@@ -137,16 +137,42 @@ namespace solaris
             notes.push_back(n);
             o.on = false;
         };
+        std::vector<ExprPoint> wheels; // R-MIDI-3: the keyboard's wheels, where they moved — thinned
+        std::map<std::string, std::pair<double, double>> lastKept;   // lane → (beat, value)
         for (const auto &pl : mTaken)
         {
             const double b = (double)pl.at / spb;
+            if (pl.kind != 0)
+            {
+                if (b < from - 0.5) continue;
+                const std::string lane = pl.kind == 1 ? "bend" : "cc1";
+                const auto it = lastKept.find(lane);
+                // a point where the wheel moved by more than a hair, or a sixteenth on since the last kept
+                if (it != lastKept.end() && std::fabs(pl.value - it->second.second) < 0.005 && b - it->second.first < 0.25) continue;
+                lastKept[lane] = {b, pl.value};
+                wheels.push_back(ExprPoint{lane, std::max(from, b), pl.value, {}});
+                continue;
+            }
             const int pitch = std::clamp(pl.pitch, 0, 127);
             close(pitch, b);
             if (pl.velocity > 0 && b >= from - 0.5) open[(size_t)pitch] = Open{std::max(from, b), pl.velocity, true};
         }
+        // each wheel's LAST move is kept, however small — where it came to rest
+        const Player::Played *lastOf[2] = {nullptr, nullptr};
+        for (const auto &pl : mTaken)
+            if (pl.kind == 1 || pl.kind == 2) lastOf[pl.kind - 1] = &pl;
+        for (int k = 0; k < 2; ++k)
+        {
+            if (!lastOf[k] || (double)lastOf[k]->at / spb < from - 0.5) continue;
+            const std::string lane = k == 0 ? "bend" : "cc1";
+            const double b = std::max(from, (double)lastOf[k]->at / spb);
+            const auto it = lastKept.find(lane);
+            if (it == lastKept.end() || std::fabs(it->second.first - b) > 1e-9) wheels.push_back(ExprPoint{lane, b, lastOf[k]->value, {}});
+        }
         for (int pitch = 0; pitch < 128; ++pitch) close(pitch, std::max(from, (double)stoppedAt / spb)); // still held: to the stop
         mTaken.clear();
-        if (notes.empty())
+        for (auto &w : wheels) w.at = toTick(w.at);
+        if (notes.empty() && wheels.empty())
         {
             mOutput = "nothing was played\n";
             emit(Event(Event::Kind::RecordFinished).with("clip", "").with("notes", 0));
@@ -187,6 +213,25 @@ namespace solaris
                 pt->notes.clear();
                 for (const auto &kv : merged) pt->notes.push_back(kv.second);
                 std::stable_sort(pt->notes.begin(), pt->notes.end(), [](const Note &a, const Note &b) { return a.at < b.at || (a.at == b.at && a.pitch < b.pitch); });
+                // R-MIDI-3: a wheel moved in the take writes its lane over the take's span — the old points there go
+                std::map<std::string, std::pair<double, double>> span;
+                std::vector<ExprPoint> moved;
+                for (auto w : wheels)
+                {
+                    double rel = w.at - cl.at;
+                    if (pt->length > 0 && rel >= pt->length) rel = std::fmod(rel, pt->length);
+                    w.at = toTick(std::max(0.0, rel));
+                    auto it = span.find(w.lane);
+                    if (it == span.end()) span[w.lane] = {w.at, w.at};
+                    else it->second = {std::min(it->second.first, w.at), std::max(it->second.second, w.at)};
+                    moved.push_back(w);
+                }
+                pt->expr.erase(std::remove_if(pt->expr.begin(), pt->expr.end(), [&](const ExprPoint &x) {
+                                   const auto it = span.find(x.lane);
+                                   return it != span.end() && x.at >= it->second.first - 1e-9 && x.at <= it->second.second + 1e-9;
+                               }), pt->expr.end());
+                pt->expr.insert(pt->expr.end(), moved.begin(), moved.end());
+                std::stable_sort(pt->expr.begin(), pt->expr.end(), [](const ExprPoint &a, const ExprPoint &b) { return a.lane < b.lane || (a.lane == b.lane && a.at < b.at); });
                 changed("note.added", pt->id);
                 mOutput = cl.id + "\n";
                 emit(Event(Event::Kind::RecordFinished).with("clip", cl.id).with("notes", (int)notes.size()));
@@ -205,6 +250,13 @@ namespace solaris
             pt.notes.push_back(n);
             end = std::max(end, at + n.at + n.length);
         }
+        for (auto w : wheels) // R-MIDI-3: the wheels as the take's lanes
+        {
+            w.at = toTick(w.at - at);
+            pt.expr.push_back(w);
+            end = std::max(end, at + w.at);
+        }
+        std::stable_sort(pt.expr.begin(), pt.expr.end(), [](const ExprPoint &a, const ExprPoint &b) { return a.lane < b.lane || (a.lane == b.lane && a.at < b.at); });
         pt.length = std::max(bar, std::ceil((end - at) / bar - 1e-9) * bar);
         p.patterns.push_back(pt);
         changed("pattern.added", pt.id);

@@ -130,6 +130,18 @@ A pattern is the notes a note clip plays (R-CLIP-2); clips that share a pattern 
 (R-CLIP-3). `at` is beats from the pattern's start; `vel` 1–127. Notes are kept sorted by
 (`at`, `pitch`), which is also the merge key a future semantic merge unions by.
 
+**Expression lanes (R-MIDI-3)** follow its notes, sorted by (`lane`, `at`):
+
+```
+  #expr lane=bend at=0.0 value=0
+  #expr lane=bend at=2.0 value=1
+  #expr lane=cc1 at=1.0 value=0.5
+```
+
+`lane` is `bend` (the pitch wheel, −1 … +1) or `cc0` … `cc127` (a controller, 0 … 1; `cc1` the mod wheel; `mod` is
+read as `cc1`). A lane is linear from point to point and held before its first and after its last; the clip that
+plays it returns it to rest (0) where it ends. A lane we do not know, or a value out of its range, is refused.
+
 A suite file whose note clip carries inline `#note` children (audio-format §2.2) is read as a
 pattern named after the clip, and written back as one — the only normalisation the parser makes.
 

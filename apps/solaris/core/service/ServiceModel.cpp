@@ -294,6 +294,7 @@ namespace solaris
                     pm.lastStrip = c.track; // the clips are in the order they were made: the last is the newest
                 }
             for (const auto &n : pt.notes) pm.notes.push_back(NoteModel{n.pitch, n.vel, n.at, n.length});
+            for (const auto &x : pt.expr) pm.expr.push_back(ExprPointModel{x.lane, x.at, x.value}); // R-MIDI-3
             mModel.patterns.push_back(pm);
         }
         for (const auto &po : p.ports) mModel.ports.push_back(PortModel{po.id, po.name, po.dir, po.channels});

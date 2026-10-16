@@ -227,9 +227,39 @@ namespace solaris
                             es.notes.push_back(engine::NoteEvent{(long long)std::llround((c.at + on) * spb), n.pitch, v, true});
                             es.notes.push_back(engine::NoteEvent{(long long)std::llround((c.at + off) * spb), n.pitch, 0, false});
                         }
+                    // (C3) R-MIDI-3: the wheels — each repetition's lane from its start, a ramp a step every kControl
+                    // samples, each point on its sample; at the clip's end, at rest again
+                    for (const char *lane : {"bend", "cc1"})
+                    {
+                        std::vector<const ExprPoint *> pts;
+                        for (const auto &x : pt->expr)
+                            if (x.lane == lane) pts.push_back(&x);
+                        if (pts.empty()) continue;
+                        std::stable_sort(pts.begin(), pts.end(), [](const ExprPoint *a, const ExprPoint *b) { return a->at < b->at; });
+                        const int kind = lane[0] == 'b' ? 0 : 1;
+                        const double step = (double)engine::kControlSamples / spb; // beats
+                        auto emit = [&](double beat, double value) {
+                            es.controls.push_back(engine::ControlEvent{(long long)std::llround((c.at + beat) * spb), kind, value});
+                        };
+                        for (double k = 0; k < len; k += pt->length)
+                        {
+                            const double end = std::min(k + pt->length, len);
+                            emit(k, exprAt(pt->expr, lane, 0.0));
+                            for (size_t i = 0; i < pts.size(); ++i)
+                            {
+                                if (k + pts[i]->at >= end) break;
+                                emit(k + pts[i]->at, pts[i]->value);
+                                if (i + 1 < pts.size() && pts[i + 1]->value != pts[i]->value)
+                                    for (double t = pts[i]->at + step; t < pts[i + 1]->at && k + t < end; t += step)
+                                        emit(k + t, exprAt(pt->expr, lane, t));
+                            }
+                        }
+                        emit(len, 0.0);
+                    }
                     g.end = std::max(g.end, (long long)std::llround((c.at + len) * spb));
                 }
             }
+            std::stable_sort(es.controls.begin(), es.controls.end(), [](const engine::ControlEvent &a, const engine::ControlEvent &b) { return a.at < b.at; });
             // (C2) by time; at one sample, note-offs before note-ons, so a repeated note retriggers
             std::stable_sort(es.notes.begin(), es.notes.end(), [](const engine::NoteEvent &a, const engine::NoteEvent &b) {
                 return a.at != b.at ? a.at < b.at : (!a.on && b.on);

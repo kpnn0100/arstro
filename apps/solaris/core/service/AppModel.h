@@ -143,12 +143,20 @@ namespace solaris
         double at = 0, length = 0.25;
     };
 
+    /** R-MIDI-3: a point of a pattern's expression lane. */
+    struct ExprPointModel
+    {
+        std::string lane;                        // bend | cc0 … cc127 (cc1 the mod wheel)
+        double at = 0, value = 0;
+    };
+
     struct PatternModel
     {
         std::string id, name;
         double length = 4;
         int clips = 0;
         std::vector<NoteModel> notes;
+        std::vector<ExprPointModel> expr;        // R-MIDI-3: sorted by (lane, at)
         std::string strip;                       // the strip its first clip plays through ("" = none yet)
         std::string instrument;                  // that strip's instrument type ("synth", "drums")
         std::vector<std::string> strips;         // R-BROWSE-4: every strip a clip of it plays through, in clip order

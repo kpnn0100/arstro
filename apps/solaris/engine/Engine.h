@@ -87,7 +87,7 @@ namespace engine
     {
     public:
         static constexpr int kBlock = 128;
-        static constexpr int kControl = 64; // bindings are evaluated at every multiple of this sample
+        static constexpr int kControl = kControlSamples; // bindings are evaluated at every multiple of this sample
 
         /** Build every device. False + `err` on a graph that routes backward or names an unknown
          *  device type (a registry type missing from this build would be a silent part). */
@@ -143,6 +143,8 @@ namespace engine
         /** R-MIDI-2: a note played live into instrument strip `strip` — velocity 0 lets it go — heard from the start
          *  of the next piece rendered. The thread that renders calls it (the player, between blocks); no allocation. */
         void liveNote(int strip, int pitch, int velocity);
+        /** R-MIDI-3: a wheel moved live — kind 0 the pitch bend (−1 … +1), 1 the mod wheel (0 … 1) — the same ring. */
+        void liveControl(int strip, int kind, double value);
         /** Every binding's value as last evaluated (R-AUTO-7), in the graph's bind order. */
         const std::vector<double> &bindValues() const { return mBindValues; }
 

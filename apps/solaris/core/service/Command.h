@@ -39,6 +39,7 @@ namespace solaris
             PatternNew, NoteAdd, NoteDelete, NoteMove, PatternQuantize,
             NotesAdd, NotesMove, NotesDelete, PatternSteps, PatternDuplicate, PatternClear, PatternDelete, PatternTranspose, // R-SVC-8
             PatternImport, PatternExport, ProjectExportMidi, // R-MIDI-1
+            ExprAdd, ExprDelete, ExprClear,                  // R-MIDI-3
             Ls, Show, PatternPrint,                                                                   // R-SVC-8: read back
             Undo, Redo, HistoryPrint, HistoryJump,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,

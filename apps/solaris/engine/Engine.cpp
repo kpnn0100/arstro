@@ -18,6 +18,7 @@ namespace engine
         std::vector<double> inL, inR, outL, outR;
         std::vector<double> keyL, keyR;           // R-MIX-15: what earlier strips keyed it with, this piece
         size_t nextEvent = 0;                     // the first note event at or after the position
+        size_t nextControl = 0;                   // R-MIDI-3: the first wheel event at or after it
         double sumSq[2] = {0, 0};
         long long counted = 0;
         // bound gain / pan / sends ramp from A to B across one control period starting at `ramp`
@@ -34,7 +35,7 @@ namespace engine
         std::vector<DelayLine> keyDelay;          // per keyed device: the latency of the devices before it
         std::vector<double> srcL, srcR, kdL, kdR; // its own sound before its delay; a delayed key
         // R-MIDI-2: notes played live, waiting for the next piece — a fixed ring, one thread
-        struct LiveNote { int pitch = 0, velocity = 0; };
+        struct LiveNote { int pitch = 0, velocity = 0; int kind = 0; double value = 0; }; // kind 0 a note, 1 bend, 2 mod
         std::array<LiveNote, 64> live{};
         int liveHead = 0, liveTail = 0;
     };
@@ -358,7 +359,23 @@ namespace engine
             const auto &notes = mGraph.strips[i].notes;
             st.nextEvent = (size_t)(std::lower_bound(notes.begin(), notes.end(), mPos,
                                                      [](const NoteEvent &e, long long p) { return e.at < p; }) - notes.begin());
-            if (mGraph.strips[i].kind == Strip::Instrument && !st.rack.empty()) st.rack[0]->reset();
+            const auto &wheels = mGraph.strips[i].controls;
+            st.nextControl = (size_t)(std::lower_bound(wheels.begin(), wheels.end(), mPos,
+                                                       [](const ControlEvent &e, long long p) { return e.at < p; }) - wheels.begin());
+            if (mGraph.strips[i].kind == Strip::Instrument && !st.rack.empty())
+            {
+                st.rack[0]->reset();
+                // R-MIDI-3: a jump lands where the wheels stand — the last value of each before it, else at rest
+                double bend = 0.0, mod = 0.0;
+                bool haveBend = false, haveMod = false;
+                for (size_t k = st.nextControl; k-- > 0 && !(haveBend && haveMod);) // the latest of each, backwards
+                {
+                    if (wheels[k].kind == 0 && !haveBend) { bend = wheels[k].value; haveBend = true; }
+                    if (wheels[k].kind != 0 && !haveMod) { mod = wheels[k].value; haveMod = true; }
+                }
+                st.rack[0]->pitchBend(bend);
+                st.rack[0]->modWheel(mod);
+            }
         }
         evalBinds(mPos, true); // a jump has no value to ramp from
     }
@@ -370,6 +387,16 @@ namespace engine
         const int next = (st.liveHead + 1) % (int)st.live.size();
         if (next == st.liveTail) return; // 63 waiting already: a flood is dropped, never a stall
         st.live[(size_t)st.liveHead] = StripState::LiveNote{std::clamp(pitch, 0, 127), std::clamp(velocity, 0, 127)};
+        st.liveHead = next;
+    }
+
+    void Engine::liveControl(int strip, int kind, double value)
+    {
+        if (strip < 0 || strip >= (int)mStrips.size() || mGraph.strips[(size_t)strip].kind != Strip::Instrument) return;
+        auto &st = *mStrips[(size_t)strip];
+        const int next = (st.liveHead + 1) % (int)st.live.size();
+        if (next == st.liveTail) return;
+        st.live[(size_t)st.liveHead] = StripState::LiveNote{0, 0, kind == 0 ? 1 : 2, value};
         st.liveHead = next;
     }
 
@@ -507,20 +534,35 @@ namespace engine
                 while (st.liveTail != st.liveHead)
                 {
                     const auto &e = st.live[(size_t)st.liveTail];
-                    if (e.velocity > 0) inst.noteOn(e.pitch, e.velocity);
+                    if (e.kind == 1) inst.pitchBend(e.value);
+                    else if (e.kind == 2) inst.modWheel(e.value);
+                    else if (e.velocity > 0) inst.noteOn(e.pitch, e.velocity);
                     else inst.noteOff(e.pitch);
                     st.liveTail = (st.liveTail + 1) % (int)st.live.size();
                 }
-                // (M5) split the block at every note event so it starts on its exact sample
-                while (st.nextEvent < d.notes.size() && d.notes[st.nextEvent].at < p0 + n)
+                // (M5) split the block at every note event — and every wheel event (R-MIDI-3) — so each starts on its
+                // exact sample; at one sample a wheel before a note, so a note starts bent where its lane says
+                for (;;)
                 {
-                    const NoteEvent &e = d.notes[st.nextEvent];
-                    if (e.at > cur && playing)
+                    const bool note = st.nextEvent < d.notes.size() && d.notes[st.nextEvent].at < p0 + n;
+                    const bool wheel = st.nextControl < d.controls.size() && d.controls[st.nextControl].at < p0 + n;
+                    if (!note && !wheel) break;
+                    const bool takeWheel = wheel && (!note || d.controls[st.nextControl].at <= d.notes[st.nextEvent].at);
+                    const long long at = takeWheel ? d.controls[st.nextControl].at : d.notes[st.nextEvent].at;
+                    if (at > cur && playing)
                     {
                         Sample *io[2] = {SL + (cur - p0), SR + (cur - p0)};
-                        inst.process(io, 2, (int)(e.at - cur));
+                        inst.process(io, 2, (int)(at - cur));
                     }
-                    cur = std::max(cur, e.at);
+                    cur = std::max(cur, at);
+                    if (takeWheel)
+                    {
+                        const ControlEvent &e = d.controls[st.nextControl++];
+                        if (e.kind == 0) inst.pitchBend(e.value);
+                        else inst.modWheel(e.value);
+                        continue;
+                    }
+                    const NoteEvent &e = d.notes[st.nextEvent];
                     if (e.on) inst.noteOn(e.note, e.velocity);
                     else inst.noteOff(e.note);
                     ++st.nextEvent;

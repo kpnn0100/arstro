@@ -30,6 +30,26 @@ namespace solaris
             return true;
         }
         int beatsPerBar(const Project &p) { return std::max(1, std::atoi(p.header.sig.c_str())); }
+        /** R-MIDI-3: a pattern's lanes over [0, len) beats, moved by `offset`: each point, and every 1/32 beat of a ramp
+         *  (a file has no ramps — a player steps through them). */
+        void lanesInto(const Pattern &pt, double offset, double len, std::vector<ExprPoint> &out)
+        {
+            std::map<std::string, std::vector<const ExprPoint *>> lanes;
+            for (const auto &x : pt.expr) lanes[x.lane].push_back(&x);
+            for (auto &kv : lanes)
+            {
+                auto &pts = kv.second;
+                std::stable_sort(pts.begin(), pts.end(), [](const ExprPoint *a, const ExprPoint *b) { return a->at < b->at; });
+                out.push_back(ExprPoint{kv.first, offset, exprAt(pt.expr, kv.first, 0.0), {}});
+                for (size_t i = 0; i < pts.size() && pts[i]->at < len; ++i)
+                {
+                    out.push_back(ExprPoint{kv.first, offset + pts[i]->at, pts[i]->value, {}});
+                    if (i + 1 < pts.size() && pts[i + 1]->value != pts[i]->value)
+                        for (double t = pts[i]->at + 1.0 / 32.0; t < pts[i + 1]->at - 1e-9 && t < len; t += 1.0 / 32.0)
+                            out.push_back(ExprPoint{kv.first, offset + t, exprAt(pt.expr, kv.first, t), {}});
+                }
+            }
+        }
         /** The General MIDI drum channel for a kit's strip, else a channel of its own (9 skipped). */
         int channelFor(const Project &p, const std::string &strip, int &next)
         {
@@ -45,6 +65,52 @@ namespace solaris
         Project &p = mProject;
         switch (c.kind)
         {
+        case K::ExprAdd:
+        case K::ExprDelete:
+        case K::ExprClear:
+        {
+            // R-MIDI-3: a pattern's expression lanes — points, kept sorted by (lane, at)
+            Pattern *pt = nullptr;
+            for (auto &x : p.patterns)
+                if (x.id == c.arg(0)) pt = &x;
+            if (!pt) { err = "no pattern `" + c.arg(0) + "`"; return false; }
+            std::string lane;
+            if (c.has("lane") && !exprLane(c.flag("lane"), lane)) { err = "--lane is bend, mod or cc0 … cc127, not `" + c.flag("lane") + "`"; return false; }
+            double at = 0, value = 0;
+            if (c.has("at") && (!parseNumber(c.flag("at"), at) || at < 0)) { err = "--at must be beats ≥ 0"; return false; }
+            at = toTick(at);
+            auto same = [&](const ExprPoint &x) { return x.lane == lane && std::fabs(x.at - at) < 0.5 / kPpq; };
+            if (c.kind == K::ExprAdd)
+            {
+                double lo = 0, hi = 1;
+                exprRange(lane, lo, hi);
+                if (!parseNumber(c.flag("value"), value) || value < lo || value > hi)
+                {
+                    err = "--value for " + lane + " is " + canonicalNumber(lo) + " … " + canonicalNumber(hi);
+                    return false;
+                }
+                bool moved = false;
+                for (auto &x : pt->expr)
+                    if (same(x)) { x.value = value; moved = true; }
+                if (!moved) pt->expr.push_back(ExprPoint{lane, at, value, {}});
+                if (at >= pt->length) // R-ROLL-9: a pattern grows to hold what is placed in it
+                {
+                    const double bar = beatsPerBar(p);
+                    pt->length = std::ceil((at + 1e-9) / bar) * bar;
+                }
+            }
+            else if (c.kind == K::ExprDelete)
+            {
+                const size_t before = pt->expr.size();
+                pt->expr.erase(std::remove_if(pt->expr.begin(), pt->expr.end(), same), pt->expr.end());
+                if (pt->expr.size() == before) { err = pt->id + " has no " + lane + " point at " + canonicalBeats(at); return false; }
+            }
+            else
+                pt->expr.erase(std::remove_if(pt->expr.begin(), pt->expr.end(), [&](const ExprPoint &x) { return lane.empty() || x.lane == lane; }), pt->expr.end());
+            std::stable_sort(pt->expr.begin(), pt->expr.end(), [](const ExprPoint &a, const ExprPoint &b) { return a.lane < b.lane || (a.lane == b.lane && a.at < b.at); });
+            changed("expr.changed", pt->id);
+            return true;
+        }
         case K::PatternImport:
         {
             std::string path = c.arg(0);
@@ -100,6 +166,18 @@ namespace solaris
                         end = std::max(end, x.at + x.length);
                     }
                 for (const auto &kv : byStart) pt.notes.push_back(kv.second);
+                // R-MIDI-3: the tracks' wheels and controllers as lanes — a repeat of the same value dropped
+                std::map<std::string, double> last;
+                for (int ti : groups[gi])
+                    for (const auto &m : mf.tracks[(size_t)ti].controls)
+                    {
+                        const auto it = last.find(m.lane);
+                        if (it != last.end() && std::fabs(it->second - m.value) < 1e-9) continue;
+                        last[m.lane] = m.value;
+                        pt.expr.push_back(ExprPoint{m.lane, toTick(midiBeats(mf, m.tick)), m.value, {}});
+                        end = std::max(end, pt.expr.back().at);
+                    }
+                std::stable_sort(pt.expr.begin(), pt.expr.end(), [](const ExprPoint &a, const ExprPoint &b) { return a.lane < b.lane || (a.lane == b.lane && a.at < b.at); });
                 std::stable_sort(pt.notes.begin(), pt.notes.end(), [](const Note &a, const Note &b) { return a.at < b.at || (a.at == b.at && a.pitch < b.pitch); });
                 pt.length = std::max(bar, std::ceil(end / bar - 1e-9) * bar); // whole bars that hold every note
                 p.patterns.push_back(pt);
@@ -133,7 +211,8 @@ namespace solaris
                 std::string strip;
                 for (const auto &cl : p.clips)
                     if (cl.pattern == pt->id) { strip = cl.track; break; }
-                tracks.push_back(MidiOutTrack{pt->name, channelFor(p, strip, next), pt->notes});
+                tracks.push_back(MidiOutTrack{pt->name, channelFor(p, strip, next), pt->notes, {}});
+                lanesInto(*pt, 0.0, pt->length, tracks.back().controls); // R-MIDI-3
             }
             else
             {
@@ -151,6 +230,7 @@ namespace solaris
                         if (!pt || pt->length <= 0) continue;
                         const double len = clipLengthBeats(p, cl);
                         for (double rep = 0.0; rep < len - 1e-9; rep += pt->length)
+                        {
                             for (const auto &n : pt->notes)
                             {
                                 if (rep + n.at >= len - 1e-9) continue;
@@ -159,6 +239,14 @@ namespace solaris
                                 x.length = std::min(n.length, len - (rep + n.at));
                                 t.notes.push_back(x);
                             }
+                            lanesInto(*pt, cl.at + rep, std::min(pt->length, len - rep), t.controls); // R-MIDI-3
+                        }
+                        if (!pt->expr.empty()) // at rest again where the clip ends
+                        {
+                            std::map<std::string, int> seen;
+                            for (const auto &x : pt->expr)
+                                if (!seen[x.lane]++) t.controls.push_back(ExprPoint{x.lane, cl.at + len, 0.0, {}});
+                        }
                     }
                     if (t.notes.empty()) continue;
                     std::stable_sort(t.notes.begin(), t.notes.end(), [](const Note &a, const Note &b) { return a.at < b.at; });
