@@ -291,7 +291,7 @@ namespace solaris_ui
     bool PianoRoll::togglePlay()
     {
         if (mClip.empty()) return false; // on no track: nothing to sound through
-        send(mLooping && mPlaying ? std::string("transport stop") : "transport play --clip " + mClip);
+        send(mLooping && mPlaying ? std::string("transport stop --return") : "transport play --clip " + mClip); // ■: back to the clip's start (R-TIME-7)
         return true;
     }
     Rect PianoRoll::modeRect(int m) const

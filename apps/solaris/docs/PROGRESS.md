@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — J1: the time bar remembered, hotkeys as settings.*
+*Last updated: 2026-10-16 — J2: the cue.*
 
 ---
 
 ## NEXT
 
-**► J2 — the cue** (R-TIME-7/8), then J3, J4: the 2026-10-16 request. B13+ wait.
+**► J3 — the keymap** (R-SET-4), then J4: the 2026-10-16 request. B13+ wait.
 
 ---
 
@@ -326,8 +326,10 @@ umbrella's pointer — `arstro.rule` §7).
 
 ### J — the time bar remembered, hotkeys as settings (user request, 2026-10-16)
 - [x] **J1** The requirements: R-TIME-7 (stop back to the cue), R-TIME-8 (stop here), R-SET-4 (hotkeys).
-- [ ] **J2** The cue: `transport stop --return`, `transport.cue`, Space returns and Ctrl+Space stays, the Stop button
+- [x] **J2** The cue: `transport stop --return`, `transport.cue`, Space returns and Ctrl+Space stays, the Stop button
       returns, the cue marked on the ruler while playing (R-TIME-7/8).
+      — DR-TIME-7: the cue set by a seek or where play begins; Space / Stop / a roll's ■ return, Ctrl+Space stays; an
+      outlined mark on the ruler while playing. L2 + UI tests, shot `ruler-cue`; 2 mutants seen red.
 - [ ] **J3** The keymap: the actions and their defaults (the service's table), `settings set key.<action>`,
       `settings.keys` in the model, the App resolving every key through it, the host passing more keys (R-SET-4).
 - [ ] **J4** The sheet's Keyboard section: the keys drawn, a click listening for the next, add, remove, Reset (R-SET-4).

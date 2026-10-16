@@ -166,6 +166,7 @@ namespace solaris
         std::map<std::string, std::shared_ptr<Device>> mLatencyProbes; // per type: what its stored values make its latency
         int latencyOf(const DeviceNode &d);
         double mPosition = 0, mLoopFrom = 0, mLoopTo = 0;             // beats
+        double mCue = 0;                                              // R-TIME-7: where the user last put the time bar (a seek, or where play began)
         std::string mClipLoop;                                        // R-ROLL-6: the clip `transport play --clip` loops ('' = the song's loop)
         double mSongLoopFrom = 0, mSongLoopTo = 0;                    // … and the song's loop, given back when it ends
     };

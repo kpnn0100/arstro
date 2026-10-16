@@ -1359,6 +1359,45 @@ static void test_loop_and_seek()
     pass("loop repeats its span while playing; seek moves the transport (R-TIME-4)");
 }
 
+static void test_stop_returns_to_the_cue_or_stays()
+{
+    Run r;
+    r.ok("project new " + freshSong("cue") + " --bpm 120");
+    r.ok("strip add --kind instrument --instrument drums");
+    r.ok("clip add --strip ch_2 --length 16");
+    const auto &t = r.svc.model().transport;
+    // the time bar put at beat 6: the cue
+    r.ok("transport seek 6");
+    assert(t.cue == 6.0 && t.position == 6.0);
+    r.ok("transport play");
+    waitFrames(r, r.fake.capture->frames.load() + 48000); // the helper waits for a total: wait from now                                       // a second: two beats on
+    r.ok("transport stop --return");                            // back where it was put (R-TIME-7)
+    assert(!t.playing && t.position == 6.0 && t.cue == 6.0);
+    // stop where it is (R-TIME-8): the next play starts there, and there is the new cue
+    r.ok("transport play");
+    waitFrames(r, r.fake.capture->frames.load() + 48000); // the helper waits for a total: wait from now
+    r.ok("transport stop");
+    const double here = t.position;
+    assert(here > 7.0 && t.cue == 6.0);
+    r.ok("transport play");
+    assert(r.svc.model().transport.cue == here);
+    // a seek while playing is the time bar put there too
+    r.ok("transport seek 2");
+    waitFrames(r, r.fake.capture->frames.load() + 24000);
+    r.ok("transport stop --return");
+    assert(r.svc.model().transport.position == 2.0);
+    // the roll's play begins at its clip: stopped with the return, the clip's start
+    r.ok("clip add --strip ch_2 --pattern pt_1 --at 20 --length 4");
+    r.ok("transport play --clip ac_2");
+    waitFrames(r, r.fake.capture->frames.load() + 24000);
+    r.ok("transport stop --return");
+    assert(r.svc.model().transport.position == 20.0 && r.svc.model().transport.cue == 20.0);
+    // a new song starts its cue at 0
+    r.ok("project new " + freshSong("cue2") + " --bpm 120");
+    assert(r.svc.model().transport.cue == 0.0);
+    pass("The cue (R-TIME-7/8): `transport stop --return` puts the time bar back where it was put — a seek, or where play began (a roll's clip too); a plain stop stays where heard and the next play starts there");
+}
+
 static void test_a_clip_plays_looped_and_gives_the_songs_loop_back()
 {
     Run r;
@@ -2074,6 +2113,7 @@ int main()
     test_a_pattern_grows_to_hold_its_notes();
     test_edits_while_playing_are_heard();
     test_loop_and_seek();
+    test_stop_returns_to_the_cue_or_stays();
     test_a_clip_plays_looped_and_gives_the_songs_loop_back();
     test_a_bound_value_is_published_live();
     test_a_refusal_is_an_event_and_lands_in_lastError();

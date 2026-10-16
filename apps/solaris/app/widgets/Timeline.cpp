@@ -105,6 +105,7 @@ namespace solaris_ui
         for (const auto &s : m.strips) mStrips.push_back(StripRef{s.id, s.name, s.kind});
         mLength = m.lengthBeats;
         mPosition = m.transport.position;
+        mCue = m.transport.cue;
         mPlaying = m.transport.playing;
         mLoopFrom = m.transport.loopFrom;
         mLoopTo = m.transport.loopTo;
@@ -348,6 +349,13 @@ namespace solaris_ui
         else if (std::fabs(mPlayhead.value() - mPosition) > 1e-6 && !mPlayhead.isAnimating())
             mPlayhead.animateTo(mPosition, 140.0, Easing::EaseOutCubic, nowMs); // a seek eases
         mPlayhead.update(nowMs);
+        // R-TIME-7: the cue's mark — where Stop takes the time bar back — fades in with the play and out with it
+        if (mPlaying != mCueShown)
+        {
+            mCueAmt.animateTo(mPlaying ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mCueShown = mPlaying;
+        }
+        mCueAmt.update(nowMs);
         mPpb.update(nowMs);
         // the snap step follows the EASED zoom; its name on the ruler cross-fades when it changes (§1)
         if (const std::string name = snapLabel(); mStepNames.empty() || mStepNames.back().text != name)
@@ -1154,6 +1162,22 @@ namespace solaris_ui
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, kRulerH - 0.5); t.lineTo(W, kRulerH - 0.5); t.strokePath();
 
+        // the cue (R-TIME-7): an outlined mark on the ruler where Stop takes the time bar back, while playing
+        if (mCueAmt.value() > 0.001)
+        {
+            const double cx = std::round(beatToX(mCue)) + 0.5;
+            if (cx >= kHeaderW - 1.0 && cx <= W)
+            {
+                const double ca = mCueAmt.value();
+                Color pc = surface::playhead();
+                pc.a *= 0.85 * ca;
+                t.setStroke(pc, 1.25);
+                t.beginPath(); t.moveTo(cx - 5.0, 0.75); t.lineTo(cx + 5.0, 0.75); t.lineTo(cx, 7.5); t.closePath(); t.strokePath();
+                pc.a *= 0.35;
+                t.setStroke(pc, 1.0);
+                t.beginPath(); t.moveTo(cx, 7.5); t.lineTo(cx, rulerRect().bottom()); t.strokePath();
+            }
+        }
         // playhead: a position, so `destructive` (Interstellar's reading)
         const double px = beatToX(mPlayhead.value());
         if (px >= kHeaderW - 1.0 && px <= W)

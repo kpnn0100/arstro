@@ -218,7 +218,9 @@ namespace solaris
              "new engine swapped in at the same position. --clip plays that clip's span looped, the whole song "
              "sounding there (the piano roll's play, R-ROLL-6): it follows the clip as it is edited, and the song's "
              "own loop comes back at `transport stop`, a plain `transport play` or a `transport loop`.", "R-PLAY-1"},
-            {K::TransportStop, "transport stop", "", 0, 0, {}, "Stop; the transport stays where it was heard.", "R-TIME-4"},
+            {K::TransportStop, "transport stop", "", 0, 0, {"return"},
+             "Stop; the transport stays where it was heard — or, with --return, goes back to the cue: where the time bar "
+             "was last put (a seek, or where play began; `transport.cue`).", "R-TIME-7"},
             {K::TransportSeek, "transport seek", "<beats>", 1, 1, {}, "Move the transport (playing or not).", "R-TIME-4"},
             {K::TransportLoop, "transport loop", "<from|off> [to]", 1, 2, {}, "Loop between two beats while playing; `off` ends it.", "R-TIME-4"},
             {K::Audition, "audition", "<file|stop>", 1, 1, {},

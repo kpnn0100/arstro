@@ -77,7 +77,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `browse <folder>` | List a folder for the browser: sub-folders, audio files, songs. | R-BROWSE-1 |
 | `recents remove <path>` | Take a song off Home's recent list (the file is untouched). | R-HOME-1 |
 | `transport play [--from <beats>] [--clip <ac>]` | Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position. --clip plays that clip's span looped, the whole song sounding there (the piano roll's play, R-ROLL-6): it follows the clip as it is edited, and the song's own loop comes back at `transport stop`, a plain `transport play` or a `transport loop`. | R-PLAY-1 |
-| `transport stop` | Stop; the transport stays where it was heard. | R-TIME-4 |
+| `transport stop [--return]` | Stop; the transport stays where it was heard — or, with --return, goes back to the cue: where the time bar was last put (a seek, or where play began; `transport.cue`). | R-TIME-7 |
 | `transport seek <beats>` | Move the transport (playing or not). | R-TIME-4 |
 | `transport loop <from\|off> [to]` | Loop between two beats while playing; `off` ends it. | R-TIME-4 |
 | `audition <file\|stop>` | Hear a sample now, outside the song (the browser's preview): through the output device at the audition level, to its end; `stop` ends it. Not an edit, never in a render. | R-EDM-9 |
@@ -338,6 +338,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.position` | number | beats — what is heard *(not in `--stable`)* |
 | `transport.loopFrom` | number | beats |
 | `transport.loopTo` | number | beats; equal to loopFrom = no loop |
+| `transport.cue` | number | beats: where the time bar was last put (a seek, or where play began) — `transport stop --return` goes back there (R-TIME-7) |
 | `transport.loopClip` | string | the clip the loop follows (`transport play --clip`, the piano roll's play); '' = the song's own loop |
 | `transport.latencyMs` | number | the clock device's *(not in `--stable`)* |
 | `transport.device` | string | the clock device ('' = the system default) |

@@ -708,11 +708,13 @@
     },
     {
       "verb": "transport stop",
-      "usage": "transport stop",
+      "usage": "transport stop [--return]",
       "args": "",
-      "flags": [],
-      "summary": "Stop; the transport stays where it was heard.",
-      "requirement": "R-TIME-4"
+      "flags": [
+        "return"
+      ],
+      "summary": "Stop; the transport stays where it was heard — or, with --return, goes back to the cue: where the time bar was last put (a seek, or where play began; `transport.cue`).",
+      "requirement": "R-TIME-7"
     },
     {
       "verb": "transport seek",
@@ -1971,6 +1973,12 @@
       "path": "transport.loopTo",
       "type": "number",
       "summary": "beats; equal to loopFrom = no loop",
+      "stable": true
+    },
+    {
+      "path": "transport.cue",
+      "type": "number",
+      "summary": "beats: where the time bar was last put (a seek, or where play began) — `transport stop --return` goes back there (R-TIME-7)",
       "stable": true
     },
     {

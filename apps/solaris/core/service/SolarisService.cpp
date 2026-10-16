@@ -392,7 +392,7 @@ namespace solaris
     {
         auto open = [&](Project p, const std::string &path) {
             stopPlayer();
-            mPosition = mLoopFrom = mLoopTo = 0;
+            mPosition = mLoopFrom = mLoopTo = mCue = 0;
             mClipLoop.clear();
             mModel.transport = TransportModel();
             mProject = std::move(p);
@@ -472,7 +472,7 @@ namespace solaris
         case K::ProjectClose:
             mRecentsStale = true; // Home is where the cards matter: re-read them (a song may have moved meanwhile)
             stopPlayer();
-            mPosition = mLoopFrom = mLoopTo = 0;
+            mPosition = mLoopFrom = mLoopTo = mCue = 0;
             mClipLoop.clear();
             mModel.transport = TransportModel();
             mOpen = false;

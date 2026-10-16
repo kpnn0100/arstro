@@ -113,6 +113,8 @@ namespace solaris_ui
         double clipLengthLive(const std::string &id) const;
         bool resizing() const { return mResizing; }
         double playheadBeat() const { return mPlayhead.value(); }  // LIVE (eased on a seek)
+        double cueBeat() const { return mCue; }                    // R-TIME-7: where Stop takes the time bar back
+        double cueAmount() const { return mCueAmt.value(); }       // its mark on the ruler, LIVE (shown while playing)
 
         // the grid follows the zoom (R-UI-10, R-TIME-5) — every value LIVE, from the EASED zoom
         double gridSpan(int level) const;    // beats between a level's lines (a bar is the song's meter)
@@ -269,7 +271,9 @@ namespace solaris_ui
         double mEmptyLast = 0.0;
         int mBeatsPerBar = 4;
         double mLength = 0;                 // the song's end, beats
-        double mPosition = 0;
+        double mPosition = 0, mCue = 0;
+        artboard::AnimatedProperty mCueAmt{0.0};
+        bool mCueShown = false;
         bool mPlaying = false, mInit = false;
         double mNowMs = 0.0;
         artboard::AnimatedProperty mPpb{kZoomPpb}, mPlayhead{0.0};

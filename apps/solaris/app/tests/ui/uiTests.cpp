@@ -742,6 +742,52 @@ static void test_mixer_matrix_effects_and_device_panel()
     pass("Mixer: + Effect is the registry; a chip opens the device's generated window (fade), a slider is `set` in its unit, bypass, a second window on top; the matrix adds a send, and has a column for every strip a route may reach");
 }
 
+static void test_space_returns_and_ctrl_space_stays()
+{
+    // R-TIME-7/8: Space stops back where the time bar was put; Ctrl+Space stops where it is; the cue is marked
+    sltest::Rig r("ui-cue", 1280, 800);
+    r.cmd("project new " + r.song("Cue") + ".slp --bpm 120");
+    r.cmd("clip add --instrument drums --at 0 --length 16");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    const auto &t = r.svc->model().transport;
+    // the time bar put at beat 6 by a click on the ruler
+    const artboard::Rect ruler = world(tl, tl.rulerRect()), origin = world(tl, artboard::Rect{0, 0, 0, 0});
+    r.click(origin.x + tl.beatToX(6.0), cy(ruler));                // beatToX is from the timeline's own left edge
+    r.settle();
+    assert(t.position == 6.0 && t.cue == 6.0 && tl.cueAmount() == 0.0);
+    r.key(32);
+    assert(r.sent.back() == "transport play" && t.playing);
+    double first = 0.0;                                           // the cue's mark fades in with the play
+    for (int k = 0; k < 40 && first == 0.0; ++k)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        r.frame();
+        first = tl.cueAmount();
+    }
+    assert(first > 0.0 && first < 1.0 && tl.cueBeat() == 6.0);
+    for (int k = 0; k < 30; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+    assert(t.position > 6.0);
+    r.key(32);                                                    // Space: back to 6
+    assert(r.sent.back() == "transport stop --return" && !t.playing && t.position == 6.0);
+    r.frame();
+    r.frame();
+    assert(tl.cueAmount() > 0.0 && tl.cueAmount() < 1.0);         // and fades out
+    // Ctrl+Space: stop where it is; the next play starts there
+    r.key(32);
+    for (int k = 0; k < 30; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+    r.key(32, true);
+    assert(r.sent.back() == "transport stop" && !t.playing && t.position > 6.0);
+    const double here = t.position;
+    // the song bar's Stop returns too: here is the new cue
+    r.key(32);
+    for (int k = 0; k < 20; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+    auto &bar = r.app->project().bar();
+    r.click(world(bar, bar.hitRect(arstro::solaris_ui::SongBar::kPlay)));
+    assert(r.sent.back() == "transport stop --return" && t.position == here);
+    pass("Space stops back where the time bar was put, Ctrl+Space stops where it is, the song bar's Stop returns; the cue is marked on the ruler while playing, fading in and out (R-TIME-7/8)");
+}
+
 static void test_the_tempo_is_set_in_the_song_bar()
 {
     sltest::Rig r("ui-tempo", 1280, 800);
@@ -1343,16 +1389,17 @@ static void test_the_roll_plays_its_clip()
     }
     assert(first > 0.0 && first < 1.0 && roll.playheadBeat() >= 0.0 && roll.playheadBeat() < 4.0);
     assert(roll.looping());
-    // Space stops whatever plays; the song's loop comes back
+    // Space stops whatever plays — back where the time bar was put (R-TIME-7: here the clip's start); the song's loop comes back
     r.key(32);
-    assert(r.sent.back() == "transport stop" && t.loopClip.empty() && t.loopFrom == 0.0 && t.loopTo == 2.0);
+    assert(r.sent.back() == "transport stop --return" && t.loopClip.empty() && t.loopFrom == 0.0 && t.loopTo == 2.0);
+    assert(t.position == 4.0);
     r.settle();
     assert(roll.playheadAlpha() == 0.0 && !roll.looping());
     // stopped, with the roll in front, Space is the roll's ▶
     r.key(32);
     assert(r.sent.back() == "transport play --clip " + ac2);
     r.key(32);
-    assert(r.sent.back() == "transport stop");
+    assert(r.sent.back() == "transport stop --return");
     // a pattern on no track: nothing to sound through — its ▶ says nothing; Space plays the song
     r.cmd("pattern new --name Loose");
     const std::string pt2 = r.svc->model().patterns.back().id;
@@ -2400,6 +2447,7 @@ int main()
     test_settings_folders();
     test_song_bar_and_keys();
     test_the_tempo_is_set_in_the_song_bar();
+    test_space_returns_and_ctrl_space_stays();
     test_home_unsaved_confirm_and_recents();
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();

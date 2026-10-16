@@ -50,7 +50,7 @@ namespace solaris_ui
         bar.onHome = [this] { requestHome(); };
         bar.onPlayToggle = [this] {
             const auto &m = mHooks.model ? mHooks.model() : emptyModel();
-            dispatch(m.transport.playing ? "transport stop" : "transport play");
+            dispatch(m.transport.playing ? "transport stop --return" : "transport play"); // Stop: back where the time bar was put (R-TIME-7)
         };
         bar.onSave = [this] { dispatch("project save"); };
         bar.onSettings = [this] { openSettings(); };
@@ -331,7 +331,8 @@ namespace solaris_ui
             if (e.keyCode == 32) // Space: play / stop, as every DAW
             {
                 const auto &m = mHooks.model ? mHooks.model() : emptyModel();
-                if (m.transport.playing) return dispatch("transport stop");
+                // Space stops back where the time bar was put; Ctrl+Space stops where it is (R-TIME-7/8)
+                if (m.transport.playing) return dispatch(e.ctrl ? "transport stop" : "transport stop --return");
                 if (PianoRoll *r = mProject->windows().frontRoll()) // a roll in front: its ▶ (R-ROLL-6)
                     if (r->togglePlay()) return true;
                 return dispatch("transport play");

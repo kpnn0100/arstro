@@ -85,6 +85,7 @@ namespace solaris
         mModel.transport.loopFrom = mLoopFrom;
         mModel.transport.loopTo = mLoopTo;
         mModel.transport.loopClip = mClipLoop;
+        mModel.transport.cue = mCue;
         if (!mModel.transport.playing) mModel.transport.position = mPosition;
         mModel.revision = rev + 1;
         mModel.lastError = lastError;

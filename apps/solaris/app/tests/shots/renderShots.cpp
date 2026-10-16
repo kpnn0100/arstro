@@ -401,6 +401,14 @@ namespace
                  r.cmd("transport play --clip " + ac);
                  for (int k = 0; k < 50; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
              }},
+            {"ruler-cue",   // R-TIME-7: playing — the cue's outlined mark where Stop takes the time bar back
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("transport seek 2");
+                 r.settle();
+                 r.cmd("transport play");
+                 for (int k = 0; k < 70; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+             }},
             {"piano-roll-note-in",   // mid-transition: a note fading in where it was clicked
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

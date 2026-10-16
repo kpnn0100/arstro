@@ -287,6 +287,7 @@ namespace solaris
                 if (!c.has("from") || mPosition < mLoopFrom || mPosition >= mLoopTo) mPosition = mLoopFrom;
             }
             else endClipLoop(); // the song's play: the song's loop
+            mCue = mPosition;   // R-TIME-7: where play begins is where the time bar was put
             mModel.transport.loopFrom = mLoopFrom;
             mModel.transport.loopTo = mLoopTo;
             mModel.transport.loopClip = mClipLoop;
@@ -324,8 +325,10 @@ namespace solaris
         case K::TransportStop:
             stopPlayer();
             endClipLoop();
+            if (c.has("return")) mPosition = mCue; // R-TIME-7: back to where the time bar was put
             mModel.transport = TransportModel();
             mModel.transport.position = mPosition;
+            mModel.transport.cue = mCue;
             mModel.transport.loopFrom = mLoopFrom;
             mModel.transport.loopTo = mLoopTo;
             announce();
@@ -335,6 +338,7 @@ namespace solaris
             if (!requireOpen(err)) return false;
             if (!parseNumber(c.arg(0), x) || x < 0) { err = "seek takes beats ≥ 0"; return false; }
             mPosition = toTick(x);
+            mCue = mPosition; // R-TIME-7: the time bar, put here
             if (mPlayer && mPlayer->running())
             {
                 Player::Live m;
