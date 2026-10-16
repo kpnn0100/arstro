@@ -196,6 +196,9 @@ namespace solaris
         case K::LaneGroup: case K::LaneUngroup: case K::ClipsMove: case K::ClipComp:
             ok = arrangeCommand(c, err);
             break;
+        case K::StripFreeze: case K::StripUnfreeze: case K::StripBounce:
+            ok = freezeCommand(c, err);
+            break;
         case K::ClipSplit: case K::ClipConsolidate: case K::ClipSlice:
             ok = audioEditCommand(c, err);
             break;

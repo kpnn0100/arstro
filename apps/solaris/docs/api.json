@@ -170,6 +170,30 @@
       "requirement": "R-MIX-3"
     },
     {
+      "verb": "strip freeze",
+      "usage": "strip freeze <ch>",
+      "args": "<ch>",
+      "flags": [],
+      "summary": "Render a strip's OWN sound — its clips or notes through its instrument and rack, at unity, before its fader, to the song's end and its tail — beside the song (Frozen/<strip> <id>.wav, 32-bit float) and play that instead: its clips, notes and devices kept but idle; its fader, pan, sends and output as ever. Only a strip nothing feeds; the song saved (R-PERF-3).",
+      "requirement": "R-PERF-3"
+    },
+    {
+      "verb": "strip unfreeze",
+      "usage": "strip unfreeze <ch>",
+      "args": "<ch>",
+      "flags": [],
+      "summary": "Play a frozen strip's own work again (the file stays) (R-PERF-3).",
+      "requirement": "R-PERF-3"
+    },
+    {
+      "verb": "strip bounce",
+      "usage": "strip bounce <ch>",
+      "args": "<ch>",
+      "flags": [],
+      "summary": "Render a strip's own sound as a freeze does (Bounces/<strip> <n>.wav) and put it as an audio clip at beat 0 on a NEW strip; the strip itself untouched. Prints the clip, then `made:` (R-PERF-3).",
+      "requirement": "R-PERF-3"
+    },
+    {
       "verb": "strip relink",
       "usage": "strip relink <ch> [--to <ch>]",
       "args": "<ch>",
@@ -2056,6 +2080,12 @@
       "type": "number",
       "summary": "R-PERF-1: its share of the audio thread's time, of a block (0 stopped)",
       "stable": false
+    },
+    {
+      "path": "strips[].frozen",
+      "type": "string",
+      "summary": "R-PERF-3: the file it plays instead of its own work ('' not frozen) — `strip freeze|unfreeze`",
+      "stable": true
     },
     {
       "path": "strips[].clipCount",

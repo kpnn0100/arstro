@@ -191,6 +191,12 @@ namespace solaris
         std::map<std::string, std::shared_ptr<PluginConnection>> mPluginLive;
         // R-EDIT-1 (ServiceAudioEdit.cpp): audio clips cut, joined, sliced — a cut is `splitClip`, which slice repeats
         bool audioEditCommand(const Command &c, std::string &err);
+        // R-PERF-3: a strip's own sound rendered — frozen into it, or bounced onto a new strip
+        bool freezeCommand(const Command &c, std::string &err);
+        bool renderOwnSound(const Project &p, const std::string &strip, std::vector<std::vector<float>> &out, std::string &err);
+        /** Beside the song: Bounces/<stem> <n>.wav, the next number no file there (and no clip) has, 32-bit float —
+         *  the path written ("" refused: err says why). `clip consolidate` and `strip bounce` share it. */
+        std::string writeBounce(const std::string &stem, const std::vector<std::vector<float>> &ch, std::string &err);
         bool splitClip(const std::string &id, double at, std::string &made, std::string &err);
         bool sliceToKit(const Clip &clip, double step, std::string &err);
         /** R-WARP-1: a stretch key's sound — its file's span (from `base`) stretched at `rate` by the DSP library. */

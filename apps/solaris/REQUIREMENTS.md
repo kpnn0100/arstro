@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 ✅ DR-REC-1 — loop takes are R-REC-2's; R-REC-2 ✅ DR-REC-2; R-EDIT-1 ✅ DR-EDIT-1; R-WARP-1 ✅ DR-WARP-1; R-TEMPO-1 ✅ DR-TEMPO-1; R-PRESET-1 ✅ DR-PRESET-1; R-PRESET-2 ✅ DR-PRESET-2; R-PRESET-3 ✅ DR-PRESET-3; R-VST-6 ✅ DR-VST-6 — the wheels to a plugin wait; R-CTRL-1 ✅ DR-CTRL-1; R-CTRL-2 ✅ DR-CTRL-2 — not yet against a real surface; R-PERF-1 ✅ DR-PERF-1; R-PERF-2 ✅ DR-PERF-2)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 ✅ DR-REC-1 — loop takes are R-REC-2's; R-REC-2 ✅ DR-REC-2; R-EDIT-1 ✅ DR-EDIT-1; R-WARP-1 ✅ DR-WARP-1; R-TEMPO-1 ✅ DR-TEMPO-1; R-PRESET-1 ✅ DR-PRESET-1; R-PRESET-2 ✅ DR-PRESET-2; R-PRESET-3 ✅ DR-PRESET-3; R-VST-6 ✅ DR-VST-6 — the wheels to a plugin wait; R-CTRL-1 ✅ DR-CTRL-1; R-CTRL-2 ✅ DR-CTRL-2 — not yet against a real surface; R-PERF-1 ✅ DR-PERF-1; R-PERF-2 ✅ DR-PERF-2; R-PERF-3 🚧 DR-PERF-3 — the grammar; the mixer's menu is part 2)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -1036,7 +1036,17 @@ a process is the host's (law 12).
   8); live playback and a render both use it. Measured: a render and live playback, one thread against several,
   byte-identical; an engine run with its free strips in reverse order, byte-identical.)
 - **R-PERF-3 Freeze / bounce** (R-EDM-18): `strip freeze <ch>` renders the strip to audio and plays that instead
-  (its devices idle); `strip unfreeze`; `strip bounce <ch>` makes the audio a clip on a new strip.
+  (its devices idle); `strip unfreeze`; `strip bounce <ch>` makes the audio a clip on a new strip. (**Detailed while building it, N31 — 2026-10-17:** what is rendered is the
+  strip's OWN sound — its clips or notes through its instrument and rack, its devices' automation with them — at unity,
+  centred, before its fader: from the song's start to its end and the tail after (until it falls under −90 dB, 10 s at
+  most), 32-bit float, beside the song (`Frozen/<strip> <id>.wav`; a bounce: `Bounces/<strip> <n>.wav`). Frozen, the
+  strip plays that file from the start instead — its clips, notes and devices kept but idle (not built: they cost
+  nothing) — and its fader, pan, mute, solo, sends and output work as before; the song sounds as it did (to float
+  precision). Only a strip NOTHING feeds can be frozen (its sound is its own); the file is beside the song's (an open
+  song always has one — `project new` writes it). `strip unfreeze <ch>` plays its own work again (the file stays: an undo may want it). Both are edits (one undo
+  each). `strip bounce <ch>` puts the same render as an audio clip at beat 0 on a NEW strip (R-MIX-2's rule for a new
+  file), the strip itself untouched. The model: `strips[].frozen` (the file, "" none); `audit` says a frozen strip's
+  edits are not heard until it is unfrozen.)
 - **R-DEV-1/2/4 Several devices** (R-EDM-19, P2): a port on a second device played clocked to the first,
   drift-corrected (R-DEV-2), latency aligned (R-DEV-4).
 

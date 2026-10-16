@@ -6,6 +6,7 @@
 #include "Engine.h"
 #include "Format.h"
 #include "SolarisService.h"
+#include "WorkerPool.h"
 #include "device/Device.h"
 #include "meter/Onsets.h"
 #include "spectral/TimeStretch.h"
@@ -332,9 +333,21 @@ namespace solaris
         }
         for (auto &x : ch) x.erase(x.begin(), x.begin() + (long)lag);
 
-        // beside the song: <folder>/Bounces/<strip> <n>.wav — the next number no file there has
         const Strip *s = p.strip(track);
-        const std::string stem = s ? s->name : track;
+        const std::string file = writeBounce(s ? s->name : track, ch, err);
+        if (file.empty()) return false;
+
+        p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [&](const Clip &x) { return std::find(ids.begin(), ids.end(), x.id) != ids.end(); }), p.clips.end());
+        for (const auto &x : ids) changed("clip.deleted", x);
+        Command add;
+        add.kind = K::ClipAdd;
+        add.flags = {{"src", file}, {"strip", track}, {"at", canonicalBeats(from)}}; // `clip add` keeps it relative to the song
+        if (!lane.empty()) add.flags.emplace_back("lane", lane);
+        return clipCommand(add, err); // prints the new clip
+    }
+
+    std::string SolarisService::writeBounce(const std::string &stem, const std::vector<std::vector<float>> &ch, std::string &err)
+    {
         const auto slash = mPath.find_last_of('/');
         const std::string dir = (slash == std::string::npos ? std::string(".") : mPath.substr(0, slash)) + "/Bounces";
         std::set<std::string> there;
@@ -342,21 +355,110 @@ namespace solaris
         std::string listErr;
         if (mHost.listDir && mHost.listDir(dir, entries, listErr))
             for (const auto &x : entries) there.insert(x.name);
-        for (const auto &cl : p.clips) there.insert(cl.src.substr(cl.src.find_last_of('/') + 1)); // an undone bounce's name too
+        for (const auto &cl : mProject.clips) there.insert(cl.src.substr(cl.src.find_last_of('/') + 1)); // an undone bounce's name too
         int k = 1;
         while (there.count(stem + " " + std::to_string(k) + ".wav")) ++k;
-        const std::string name = stem + " " + std::to_string(k) + ".wav";
-        if (!mHost.writeWav) { err = "this build cannot write audio"; return false; }
-        if (!mHost.writeWav(dir + "/" + name, ch, p.header.sampleRate, 32, err)) { if (err.empty()) err = "cannot write " + dir + "/" + name; return false; }
-        mPcm.erase(resolvePath(dir + "/" + name)); // a file of that name decoded before (an undone bounce) is not this one
+        const std::string file = dir + "/" + stem + " " + std::to_string(k) + ".wav";
+        if (!mHost.writeWav) { err = "this build cannot write audio"; return ""; }
+        if (!mHost.writeWav(file, ch, mProject.header.sampleRate, 32, err)) { if (err.empty()) err = "cannot write " + file; return ""; }
+        mPcm.erase(resolvePath(file)); // a file of that name decoded before (an undone bounce) is not this one
+        return file;
+    }
 
-        p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [&](const Clip &x) { return std::find(ids.begin(), ids.end(), x.id) != ids.end(); }), p.clips.end());
-        for (const auto &x : ids) changed("clip.deleted", x);
+    // ── R-PERF-3: freeze and bounce ──────────────────────────────────────────────────────────────
+
+    bool SolarisService::renderOwnSound(const Project &p, const std::string &strip, std::vector<std::vector<float>> &out, std::string &err)
+    {
+        // the strip alone, its own work: its clips or notes through its rack (its devices' automation with them), at
+        // unity, centred, to the master at unity — from the start to the song's end and its tail
+        Project q = p;
+        std::set<std::string> devices;
+        if (const Rack *rk = p.rack(strip))
+            for (const auto &d : rk->devices) devices.insert(d.id);
+        q.strips.erase(std::remove_if(q.strips.begin(), q.strips.end(), [&](const Strip &s) { return s.id != strip; }), q.strips.end());
+        for (auto &s : q.strips)
+        {
+            s.gain = 0;
+            s.pan = 0;
+            s.mute = s.solo = false;
+            s.out.clear();
+            s.frozen.clear(); // its own work, frozen or not
+        }
+        q.clips.erase(std::remove_if(q.clips.begin(), q.clips.end(), [&](const Clip &c) { return c.track != strip; }), q.clips.end());
+        q.racks.erase(std::remove_if(q.racks.begin(), q.racks.end(), [&](const Rack &r) { return r.track != strip; }), q.racks.end());
+        q.sends.clear();
+        q.bindings.erase(std::remove_if(q.bindings.begin(), q.bindings.end(), [&](const Binding &b) { return !devices.count(b.address.substr(0, b.address.find('.'))); }),
+                         q.bindings.end());
+        q.header.masterGain = 0;
+        CompileResult cr = compile(q, [this](const std::string &src) { return pcmFor(src); });
+        attachPlugins(cr, q, PluginUse::Render); // R-VST-6: its own instances
+        engine::Engine eng;
+        WorkerPool pool(WorkerPool::threadsFor(mSettings.threads));
+        eng.setParallel(&pool);
+        if (!eng.build(cr.graph, err)) return false;
+        eng.seek(0);
+        eng.captureMaster(true);
+        const long long lag = eng.outputLatency(), end = cr.graph.end + lag, cap = 10LL * p.header.sampleRate;
+        const float floor = (float)std::pow(10.0, -90.0 / 20.0);
+        out.assign(2, {});
+        engine::PortBuffers pb;
+        for (long long pos = 0;;)
+        {
+            const bool inSong = pos < end;
+            if (!inSong && pos - end >= cap) break;
+            const int n = inSong ? (int)std::min<long long>(4096, end - pos) : 4096;
+            eng.render(n, pb);
+            const auto &m = eng.capturedMaster();
+            for (int k = 0; k < 2; ++k) out[(size_t)k].insert(out[(size_t)k].end(), m[(size_t)k].begin(), m[(size_t)k].end());
+            pos += n;
+            if (!inSong && eng.masterMeter().peak[0] < floor && eng.masterMeter().peak[1] < floor) break; // its tail has died
+        }
+        for (auto &x : out) x.erase(x.begin(), x.begin() + (long)std::min<long long>(lag, (long long)x.size()));
+        return true;
+    }
+
+    bool SolarisService::freezeCommand(const Command &c, std::string &err)
+    {
+        Project &p = mProject;
+        Strip *s = p.strip(c.arg(0));
+        if (!s) { err = "no strip `" + c.arg(0) + "`"; return false; }
+        const std::string id = s->id, name = s->name;
+        if (c.kind == K::StripUnfreeze)
+        {
+            if (s->frozen.empty()) { err = id + " is not frozen"; return false; }
+            s->frozen.clear(); // its own work again; the file stays (an undo may want it)
+            changed("strip.unfrozen", id);
+            mOutput = id + " plays its own work again\n";
+            return true;
+        }
+        if (c.kind == K::StripFreeze && !s->frozen.empty()) { err = id + " is frozen already — `strip unfreeze " + id + "` first"; return false; }
+        // its sound must be its own: nothing routed, sent or keyed into it
+        for (const auto &o : p.strips)
+            if (o.out == id) { err = id + " is fed by " + o.id + " (" + o.name + ") — only a strip nothing feeds has a sound of its own to render"; return false; }
+        for (const auto &sd : p.sends)
+            if (sd.to == id) { err = id + " is fed by " + sd.from + " (" + sd.id + ") — only a strip nothing feeds has a sound of its own to render"; return false; }
+        if (!mHost.writeWav) { err = "this build cannot write audio"; return false; }
+        std::vector<std::vector<float>> ch;
+        if (!renderOwnSound(p, id, ch, err)) return false;
+        if (c.kind == K::StripFreeze)
+        {
+            // beside the song: Frozen/<strip> <id>.wav — the same name each freeze (a refreeze replaces it)
+            const auto slash = mPath.find_last_of('/');
+            const std::string file = (slash == std::string::npos ? std::string(".") : mPath.substr(0, slash)) + "/Frozen/" + name + " " + id + ".wav";
+            if (!mHost.writeWav(file, ch, p.header.sampleRate, 32, err)) { if (err.empty()) err = "cannot write " + file; return false; }
+            mPcm.erase(resolvePath(file)); // a file of that name decoded before is not this one
+            s->frozen = relativePath(file);
+            changed("strip.frozen", id);
+            mOutput = id + " frozen into " + s->frozen + "\n";
+            return true;
+        }
+        // K::StripBounce: a bounce file, as a clip on a new strip
+        const std::string file = writeBounce(name, ch, err);
+        if (file.empty()) return false;
         Command add;
         add.kind = K::ClipAdd;
-        add.flags = {{"src", dir + "/" + name}, {"strip", track}, {"at", canonicalBeats(from)}}; // `clip add` keeps it relative to the song
-        if (!lane.empty()) add.flags.emplace_back("lane", lane);
-        return clipCommand(add, err); // prints the new clip
+        add.flags = {{"src", file}, {"at", "0"}}; // a new file: a new strip (R-MIX-2)
+        return clipCommand(add, err);
     }
 }
 }

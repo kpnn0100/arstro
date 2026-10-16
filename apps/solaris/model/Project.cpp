@@ -266,6 +266,7 @@ namespace solaris
             else if (k == "solo") n.solo = r.boolean(k, v, false);
             else if (k == "input") n.input = v;     // R-REC-1 — checked by validateProject
             else if (k == "monitor") n.monitor = v;
+            else if (k == "frozen") n.frozen = v; // R-PERF-3
             else n.unknown.emplace_back(k, v);
         }
         void apply(Reader &r, Send &n, const std::string &k, const std::string &v)
@@ -793,6 +794,7 @@ namespace solaris
             l.strIf("out", n.out);
             if (n.colour >= 0) l.kv("colour", std::to_string(n.colour));
             l.strIf("input", n.input).kvIf(n.monitor != "auto", "monitor", n.monitor); // R-REC-1: only when set
+            l.strIf("frozen", n.frozen);                                              // R-PERF-3
             emit(out, "", l.unknown(n.unknown), n.remarks);
         }
         group(!p.sends.empty());

@@ -94,6 +94,7 @@ namespace solaris
             {"strips[].hold", "number[]", "the held peak, L/R: the most of the last 1.5 s, then falling 20 dB a second", false},
             {"strips[].clip", "bool", "reached full scale since `meters clear` — a latch", false},
             {"strips[].cpu", "number", "R-PERF-1: its share of the audio thread's time, of a block (0 stopped)", false},
+            {"strips[].frozen", "string", "R-PERF-3: the file it plays instead of its own work ('' not frozen) — `strip freeze|unfreeze`"},
             {"strips[].clipCount", "int", "fed by: clips playing through it (R-MIX-8)"},
             {"strips[].fromLanes", "string[]", "fed by: the lanes those clips are drawn on"},
             {"strips[].fromStrips", "string[]", "fed by: strips whose output or a send lands here"},
@@ -585,7 +586,7 @@ namespace solaris
                     .set("hold", Json::array().push(Json::number(s.hold[0])).push(Json::number(s.hold[1])))
                     .set("clip", s.clip).set("cpu", s.cpu);
             st.set("clipCount", s.clipCount).set("fromLanes", strings(s.fromLanes)).set("fromStrips", strings(s.fromStrips))
-                .set("targets", strings(s.targets)).set("keyTargets", strings(s.keyTargets));
+                .set("targets", strings(s.targets)).set("keyTargets", strings(s.keyTargets)).set("frozen", s.frozen);
             strips.push(st);
         }
         j.set("strips", strips);

@@ -32,6 +32,7 @@ namespace solaris
             Set, Get,
             MixerAdd, MixerDelete, MixerMove,
             StripAdd, StripDelete, StripMove, StripRelink, StripDuck, StripArm, Route,
+            StripFreeze, StripUnfreeze, StripBounce,         // R-PERF-3
             SendAdd, SendDelete,
             DeviceAdd, DeviceRemove, DeviceMove,
             LaneAdd, LaneDelete, LaneMove,

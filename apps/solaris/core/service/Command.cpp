@@ -81,6 +81,15 @@ namespace solaris
             {K::StripMove, "strip move", "<ch>", 1, 1, {"mixer=<mx>", "order=<n>"},
              "Move a strip to another mixer (at its end) and/or to position --order <n> on it (0 = first); its mixer's "
              "strips renumber in their new order, as `mixer move` renumbers mixers. Refused if a route would point backward.", "R-MIX-3"},
+            {K::StripFreeze, "strip freeze", "<ch>", 1, 1, {},
+             "Render a strip's OWN sound — its clips or notes through its instrument and rack, at unity, before its fader, to "
+             "the song's end and its tail — beside the song (Frozen/<strip> <id>.wav, 32-bit float) and play that instead: "
+             "its clips, notes and devices kept but idle; its fader, pan, sends and output as ever. Only a strip nothing "
+             "feeds; the song saved (R-PERF-3).", "R-PERF-3"},
+            {K::StripUnfreeze, "strip unfreeze", "<ch>", 1, 1, {}, "Play a frozen strip's own work again (the file stays) (R-PERF-3).", "R-PERF-3"},
+            {K::StripBounce, "strip bounce", "<ch>", 1, 1, {},
+             "Render a strip's own sound as a freeze does (Bounces/<strip> <n>.wav) and put it as an audio clip at beat 0 on "
+             "a NEW strip; the strip itself untouched. Prints the clip, then `made:` (R-PERF-3).", "R-PERF-3"},
             {K::StripRelink, "strip relink", "<ch>", 1, 1, {"to=<ch>"},
              "Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips "
              "need an audio strip, note clips an instrument strip; a bus plays no clips.", "R-MIX-14"},

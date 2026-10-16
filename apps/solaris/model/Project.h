@@ -74,6 +74,7 @@ namespace solaris
         bool mute = false, solo = false;
         std::string input;              // R-REC-1: the input port (dir=in) it monitors and records; "" none
         std::string monitor = "auto";   // R-REC-1: auto | on | off — when its input is heard through it
+        std::string frozen;             // R-PERF-3: the file it plays instead of its own work ("" not frozen), as a clip's src
         Fields unknown;
         Remarks remarks;
     };

@@ -104,6 +104,7 @@ namespace solaris
         float hold[2] = {0, 0};                 // the held peak: the most of 1.5 s, then falling 20 dB/s
         bool clip = false;                      // reached full scale since `meters clear` (a latch)
         float cpu = 0;                          // R-PERF-1: its share of the audio thread's time (0 … 1 of a block), while playing
+        std::string frozen;                     // R-PERF-3: the file it plays instead of its own work ("" not frozen)
         int clipCount = 0;
         std::vector<std::string> fromLanes;     // lanes its clips are drawn on
         std::vector<std::string> fromStrips;    // strips whose output or a send lands here

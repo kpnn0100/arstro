@@ -4176,6 +4176,99 @@ static void test_the_engine_on_several_threads()
     pass("the engine on several threads (R-PERF-2): a render on one thread and on four, byte-identical; live on four is that render, frame for frame; auto; refusals");
 }
 
+static void test_freeze_and_bounce()
+{
+    // R-PERF-3: a strip's own sound frozen beside the song and played instead — the song sounds as it did (to float
+    // precision), its fader, pan and send live, its devices idle (an edit there unheard until unfrozen, said by audit);
+    // unfreeze, undone; refusals (fed, not frozen, frozen twice); bounce — the same sound as a clip on a new strip
+    Run r;
+    const std::string song = freshSong("freeze"), dir = scratch();
+    r.ok("project new " + song + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");
+    r.ok("notes add pt_1 \"C4@0:2 E4@1:2 G4@2:2\"");
+    const std::string ch = r.clip("ac_1")->track;
+    r.ok("clip add --instrument synth --at 0 --length 4"); // another strip's clip: no warning of it
+    r.ok("device add " + ch + " --type chorus");
+    r.ok("device add " + ch + " --type limiter"); // its lookahead: the file is trimmed to start on time
+    r.ok("set " + ch + ".gain=-6 " + ch + ".pan=0.3");
+    const std::string verb = firstLine(r.ok("strip add --kind bus --name Verb"));
+    r.ok("device add " + verb + " --type reverb");
+    r.ok("send add " + ch + " --to " + verb + " --gain -9");
+    assert(contains(r.no("strip freeze " + verb), "is fed by"));
+    assert(contains(r.no("strip freeze ch_99"), "no strip"));
+    assert(contains(r.no("strip unfreeze " + ch), "is not frozen"));
+    auto render = [&](const std::string &name) {
+        const std::string out = dir + "/" + name + ".wav";
+        r.events.clear();
+        r.ok("render --out " + out + " --to 6 --bits 32f");
+        for (const auto &e : r.events) assert(!contains(e, "cannot be read"));
+        return r.fake.written[out];
+    };
+    auto apart = [](const std::vector<std::vector<float>> &a, const std::vector<std::vector<float>> &b) {
+        float worst = a.size() == b.size() && a[0].size() == b[0].size() ? 0.0f : 1e9f;
+        for (size_t c = 0; worst < 1e9f && c < a.size(); ++c)
+            for (size_t i = 0; i < a[c].size(); ++i) worst = std::max(worst, std::fabs(a[c][i] - b[c][i]));
+        return worst;
+    };
+    const auto before = render("fz-before");
+    float peak = 0;
+    for (float v : before[0]) peak = std::max(peak, std::fabs(v));
+    assert(peak > 0.05f);
+    const std::string said = r.ok("strip freeze " + ch);
+    const std::string file = "Frozen/Basic Synth " + ch + ".wav";
+    assert(said == ch + " frozen into " + file + "\n" && r.strip(ch)->frozen == file && contains(r.text(), "frozen=\"" + file + "\""));
+    assert(r.fake.written.count(dir + "/" + file) && r.fake.written[dir + "/" + file][0].size() > 96000); // the song and its tail
+    const auto frozen = render("fz-frozen");
+    std::printf("    frozen against its own work: %.3g apart\n", apart(before, frozen));
+    assert(apart(before, frozen) < 1e-6f);                       // the song sounds as it did; fader, pan, send live
+    assert(contains(r.no("strip freeze " + ch), "frozen already"));
+    // its devices idle: an edit there is kept, not heard — and said
+    r.ok("set dv_1.volume=-30");
+    assert(apart(render("fz-edited"), frozen) == 0.0f && contains(r.ok("audit"), "frozen: " + ch));
+    r.ok("set " + ch + ".gain=-12");                              // its fader is live
+    assert(apart(render("fz-fader"), frozen) > 0.01f);
+    r.ok("set " + ch + ".gain=-6");
+    // unfrozen: its own work again — the edit heard; undone: frozen again
+    r.ok("strip unfreeze " + ch);
+    assert(r.strip(ch)->frozen.empty() && apart(render("fz-unfrozen"), frozen) > 0.01f);
+    const auto unfrozen = render("fz-unfrozen2");
+    r.ok("undo");
+    assert(r.strip(ch)->frozen == file && apart(render("fz-undone"), frozen) == 0.0f);
+    // frozen again: the file rewritten and heard anew (never the decode of the one it replaced)
+    r.ok("strip unfreeze " + ch);
+    r.ok("strip freeze " + ch);
+    assert(apart(render("fz-refrozen"), unfrozen) < 1e-6f);
+    r.ok("strip unfreeze " + ch);
+    // bounce: its own sound as a clip at beat 0 on a NEW strip; the strip itself untouched
+    const size_t strips = r.svc.model().strips.size();
+    const std::string out = r.ok("strip bounce " + ch);
+    assert(contains(out, "made: strip=") && r.svc.model().strips.size() == strips + 1 && r.strip(ch)->frozen.empty());
+    const ClipModel *bc = r.clip(firstLine(out));
+    assert(bc && bc->src == "Bounces/Basic Synth 1.wav" && bc->at == 0.0 && bc->track != ch);
+    assert(r.fake.written.count(dir + "/Bounces/Basic Synth 1.wav"));
+    // a frozen file that cannot be read: the song opens, the strip is silent, and the render says why
+    r.ok("strip freeze " + ch);
+    r.ok("project save");
+    std::string text;
+    {
+        std::ifstream in(song);
+        std::stringstream ss;
+        ss << in.rdbuf();
+        text = ss.str();
+    }
+    const std::string key = "frozen=\"" + file + "\"";
+    assert(contains(text, key));
+    text.replace(text.find(key), key.size(), "frozen=\"Frozen/missing.wav\"");
+    { std::ofstream(song) << text; }
+    r.ok("project open " + song);
+    r.events.clear();
+    r.ok("render --out " + dir + "/fz-missing.wav --to 6 --bits 32f");
+    bool warned = false;
+    for (const auto &e : r.events) warned = warned || contains(e, "strip " + ch + " is frozen, but its file Frozen/missing.wav cannot be read");
+    assert(warned);
+    pass("freeze and bounce (R-PERF-3): a strip's own sound frozen beside the song and played instead — the song as it was (float precision), its fader, pan and send live, its devices idle (an edit unheard, said); unfreeze, undo and a refreeze heard anew; refusals; bounce onto a new strip, the strip untouched");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -5451,6 +5544,7 @@ int main()
     test_a_control_surface();
     test_the_cpu_meter();
     test_the_engine_on_several_threads();
+    test_freeze_and_bounce();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

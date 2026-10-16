@@ -267,6 +267,7 @@ namespace solaris
             sm.targets = targetsOf(p, *s);
             sm.keyTargets = keyTargetsOf(p, *s);
             sm.input = s->input; // R-REC-1
+            sm.frozen = s->frozen; // R-PERF-3
             sm.monitor = s->monitor;
             mModel.strips.push_back(sm);
         }
@@ -570,6 +571,10 @@ namespace solaris
                     if (t->paramIndex(kv.first) < 0) out.push_back("unknown parameter: " + d.id + " (" + d.type + ") has no `" + kv.first + "`");
             }
         if (p.header.masterOut.empty()) out.push_back("unreachable: the master feeds no port");
+        // R-PERF-3: a frozen strip plays its file — what changes in its clips and devices is not heard until unfrozen
+        for (const auto &s : p.strips)
+            if (!s.frozen.empty())
+                out.push_back("frozen: " + s.id + " (" + s.name + ") plays " + s.frozen + " — its clips' and devices' edits are not heard until `strip unfreeze " + s.id + "`");
         // R-CTRL-1: a MIDI control mapped to a number this song does not have moves nothing
         for (const auto &m : mSettings.maps)
             if (mapInert(m.second)) out.push_back("inert mapping: MIDI control " + m.first + " moves " + m.second + ", which this song does not have");

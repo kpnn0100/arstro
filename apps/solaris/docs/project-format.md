@@ -76,6 +76,11 @@ A route to a strip on the same or an earlier mixer is **refused**, naming both e
 unless set: heard while armed and stopped or recording). An input port is `#aport id=prt_2 name=Mic dir=in
 channels=1`; `port add` makes one.
 
+**Frozen (R-PERF-3).** A strip may be FROZEN: `#atrack id=ch_2 name=Lead kind=instrument … frozen="Frozen/Lead
+ch_2.wav"` — the file (relative to the song) it plays from the start instead of its own work; its clips, notes and
+devices are kept, idle. Written only when set; `strip freeze <ch>` writes the file and the key, `strip unfreeze <ch>`
+drops the key (the file stays). A file that cannot be read leaves the strip silent, and says so.
+
 ## 5. Sends — `#asend`
 
 ```

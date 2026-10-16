@@ -299,6 +299,25 @@ namespace solaris
                     sendAt[sd.id] = {(int)g.strips.size(), (int)es.sends.size()};
                     es.sends.push_back(engine::Send{target(sd.to, stripIndex, portIndex), engine::dbToLinear(sd.gain), sd.pre, sd.sidechain});
                 }
+            if (!s->frozen.empty())
+            {
+                // R-PERF-3: frozen — it plays its file from the start instead of its own work (its clips, notes and
+                // devices kept but idle: not built); its fader, pan, sends and output as ever
+                es.kind = engine::Strip::Audio;
+                if (auto pc = pcm ? pcm(s->frozen) : nullptr)
+                {
+                    engine::Region rg;
+                    rg.clip = s->id + ":frozen";
+                    rg.pcm = pc;
+                    rg.frames = rg.srcFrames = pc->frames;
+                    es.regions.push_back(rg);
+                }
+                else r.warnings.push_back("strip " + s->id + " is frozen, but its file " + s->frozen + " cannot be read — it is silent");
+                for (const auto &c : p.clips) // the song ends where it did: its clips' ends, not the file's tail
+                    if (c.track == s->id) g.end = std::max(g.end, S(c.at + clipLengthBeats(p, c)));
+                g.strips.push_back(es);
+                continue;
+            }
             bool instrumentOk = true;
             if (const Rack *rk = p.rack(s->id))
                 for (size_t k = 0; k < rk->devices.size(); ++k)

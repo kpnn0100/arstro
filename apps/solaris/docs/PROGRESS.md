@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N31 — freeze and bounce** (R-PERF-3; N30 — the multi-core engine — is built; owed: a check against a real Mackie / HUI surface), then N32… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N31 part 2 — freeze and bounce in the mixer** (R-PERF-3: the strip's menu — Freeze / Unfreeze / Bounce — and a frozen strip drawn as frozen; part 1, the grammar, is built), then N32… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -561,7 +561,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       2026-10-17: the strips nothing feeds do their own work on a pool first, then everything else in processing
       order (each sum in one thread's order); `WorkerPool`; `settings threads`; live and render both. A TSan build
       found D-16 (closed).
-- [ ] **N31** Freeze and bounce (R-PERF-3).
+- [~] **N31** Freeze and bounce (R-PERF-3).
+      2026-10-17, part 1: `strip freeze|unfreeze|bounce` — a strip's own sound rendered by an engine of its own (to
+      the song's end and its tail), frozen beside the song and played instead (its rack not built), or bounced onto a
+      new strip; `strips[].frozen`; `frozen=` on `#atrack`; the audit. Part 2: the mixer's menu and the frozen look.
 - [ ] **N32** Several audio devices, drift-corrected (R-DEV-1/2/4).
 **Phase 5 — grow the sound and the craft**
 - [ ] **N33** DSP instruments: wavetable, FM, multi-sample (SFZ), granular, 808 (R-INST-7…11) — a commit each.
