@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — N2: MIDI files.*
+*Last updated: 2026-10-16 — N3: the DSP library's meters.*
 
 ---
 
 ## NEXT
 
-**► N3 — DSP: loudness, true peak, correlation, spectrum meters** (R-METER-1), then N4… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor. B13+ wait. Owed live checks: D-5, D-9, the resize cursor. B13+ wait (ask). Owed live checks: D-5, D-9.
+**► N4 — the master's loudness meters in the model and the window; strip meters** (R-METER-1/2), then N5… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor. B13+ wait. Owed live checks: D-5, D-9, the resize cursor. B13+ wait (ask). Owed live checks: D-5, D-9.
 
 ---
 
@@ -395,7 +395,9 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       — DR-MIDI-1. L2 + UI tests; 2 mutants seen red (the velocity-0 one survived a first test: the test grew a note).
       Found on the way: the live-playback test read the HEARD position the instant 96000 frames were taken — a latency
       short at times (as J5's); it waits a tenth of a second more.
-- [ ] **N3** DSP: loudness (BS.1770 gated), true peak, correlation, spectrum meters (R-METER-1's DSP half).
+- [x] **N3** DSP: loudness (BS.1770 gated), true peak, correlation, spectrum meters (R-METER-1's DSP half).
+      — DSP `926a2b4` (REQ-meter-1…4, `src/meter/`): integrated loudness equal to BS.1770-4 computed independently
+      (−8.053 vs −8.053 LUFS), true peak within 0.06 dB; 3 mutants seen red.
 - [ ] **N4** The master's loudness meters in the model and the window; strip meters RMS / held peak / clip latch
       (R-METER-1, R-METER-2).
 - [ ] **N5** DSP: the Limiter's true-peak mode (R-EDM-4a).
