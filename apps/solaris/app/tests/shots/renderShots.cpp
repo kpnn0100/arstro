@@ -606,6 +606,28 @@ namespace
                  r.app->project().windows().openDevice(dv);
                  r.settle();
              }},
+            {"markers",   // R-ARR-1: the ruler's band — flags and names, a section's band, the chorus looped
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("marker add Intro --at 0");
+                 r.cmd("marker add Verse --at 4");
+                 r.cmd("marker add Chorus --at 8 --length 4");
+                 r.cmd("marker add Outro --at 14");
+                 r.cmd("transport loop mk_3");
+                 r.settle();
+             }},
+            {"markers-arriving",   // R-ARR-1: a marker fading in, another on its way to where a shell moved it
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("marker add Intro --at 0");
+                 r.cmd("marker add Chorus --at 8 --length 4");
+                 r.settle();
+                 r.cmd("marker move mk_2 --at 12");
+                 r.cmd("marker add Bridge --at 6");
+                 r.frame();
+                 r.frame();
+                 r.frame();
+             }},
             {"loop-region",   // R-EDM-7: the brace on the ruler, the region tinted on the lanes
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

@@ -46,6 +46,12 @@
  *  window (R-AUTO-11) — so a click on the curve waits out the double-click before it adds a point,
  *  drawn at once as a ghost that fades in.
  *
+ *  MARKERS (R-ARR-1): the ruler's top band holds the song's markers — a flag with its name at its beat, a section
+ *  (a marker with a length) a band to its end. A click on one → `transport seek <mk>`, a double-click → `transport
+ *  loop <mk>` (its section), a drag moves it (the pointer's while held; ONE `marker move` on release), a right-click
+ *  offers looping it, renaming it and deleting it; a right-click elsewhere on the ruler adds one there. Keyed by id:
+ *  each fades in and out, and a move made elsewhere eases there.
+ *
  *  Editing is command lines (`onCommand`): a click on the ruler → `transport seek <beat>` (on the grid
  *  you see); a clip dragged → `clip move <id> --at <beat> [--lane <ln>]` on release, on the same grid.
  *  Beats are printed to the tick (`beatText`). While dragging the clip follows the pointer exactly —
@@ -76,7 +82,8 @@ namespace solaris_ui
     {
     public:
         static constexpr double kHeaderW = 117.0;   // space::u(36): Interstellar's time origin
-        static constexpr double kRulerH = 22.75;    // space::u(7)
+        static constexpr double kMarkH = 13.0;      // space::u(4): the markers' band, the ruler's top (R-ARR-1)
+        static constexpr double kRulerH = 35.75;    // space::u(11): the markers' band, then the bars and the loop's brace
         static constexpr double kRowH = 48.75;      // space::u(15)
         // the grid (R-UI-10): level 0 a bar, 1 a beat, 2…6 a half … a thirty-second of a beat
         static constexpr int kGridLevels = 7;
@@ -159,6 +166,12 @@ namespace solaris_ui
         double loopAmount() const { return mLoopAmt.value(); } // LIVE presence, 0 … 1
         double loopFromLive() const { return mLoopA.value(); } // LIVE, beats
         double loopToLive() const { return mLoopB.value(); }   // LIVE, beats
+        // R-ARR-1: the markers on the ruler's band — local geometry as DRAWN, LIVE values
+        artboard::Rect markerRect(const std::string &mk) const;  // its flag and name; empty when none
+        double markerAlpha(const std::string &mk) const;         // LIVE presence, 0 … 1
+        double markerBeat(const std::string &mk) const;          // LIVE beat — the pointer's while it is dragged
+        double markerEnd(const std::string &mk) const;           // LIVE end of its section
+        std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onRename;
         // the ruler dragged (R-TIME-6): the playhead is the pointer's while held
         bool scrubbing() const { return mRuler == RulerDrag::Scrub; }
         bool braceDragging() const { return mRuler == RulerDrag::LoopBody || mRuler == RulerDrag::LoopFrom || mRuler == RulerDrag::LoopTo; }
@@ -363,6 +376,25 @@ namespace solaris_ui
         double mBraceA0 = 0.0, mBraceB0 = 0.0;        // the brace's span when it was taken
         double mBraceA = 0.0, mBraceB = 0.0;          // … and where the pointer has it
         bool rulerGesture(const artboard::Gesture &g, const artboard::Point &local);
+        // R-ARR-1: the markers — keyed by id, eased; a flag pressed, and dragged (the pointer's)
+        struct MarkerLive
+        {
+            solaris::MarkerModel m;
+            artboard::AnimatedProperty at{0.0}, end{0.0}, alpha{0.0};
+            double atLast = -1.0, endLast = -1.0;
+            bool placed = false, gone = false;
+        };
+        std::vector<MarkerLive> mMarkers;
+        mutable std::map<std::string, double> mMarkW;  // a flag's width as last MEASURED (R5) — what a press hits
+        std::string mMarkPress;
+        bool mMarkDragging = false;
+        double mMarkGrab = 0.0, mMarkLive = 0.0;
+        const MarkerLive *markerLive(const std::string &mk) const;
+        std::string markerUnder(const artboard::Point &local) const;
+        void bindMarkers(const solaris::AppModel &m);
+        void advanceMarkers(double nowMs);
+        void paintMarkers(artboard::IRenderTarget &t) const;
+        bool markerGesture(const artboard::Gesture &g, const artboard::Point &local);
     };
 }
 }

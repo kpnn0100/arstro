@@ -118,8 +118,10 @@ namespace solaris_ui
             mLive.clear();
             mStripes.clear();
             mTracks.clear();
+            mMarkers.clear(); // R-ARR-1
             mEver = mBound = mEmptyInit = mLoopInit = false;
         }
+        bindMarkers(m); // R-ARR-1: after a song change has cleared the last song's
         std::map<std::string, int> colourOf; // the service resolves a strip's colour (stable by id)
         for (const auto &st : m.strips) colourOf[st.id] = st.colour;
         mRows.clear();
@@ -348,7 +350,7 @@ namespace solaris_ui
         if (held != Cursor::Default || mDragging || mLoopDragging || mRuler != RulerDrag::None) return held;
         // the loop brace's ends — as the press reads them (rulerGesture)
         const Rect br = loopRect();
-        if (rulerRect().contains(local) && br.w > 0 && mLoopTo > mLoopFrom && local.y >= kRulerH * 0.5 &&
+        if (rulerRect().contains(local) && br.w > 0 && mLoopTo > mLoopFrom && local.y >= kMarkH + (kRulerH - kMarkH) * 0.5 &&
             (std::fabs(local.x - br.x) <= kBraceGrip || std::fabs(local.x - br.right()) <= kBraceGrip))
             return Cursor::ResizeH;
         // an automation span's grip (R-AUTO-12) — as the press reads it
@@ -522,6 +524,7 @@ namespace solaris_ui
             l.t.update(nowMs);
         }
         advanceAuto(nowMs); // a click's point waiting out the double-click (R-AUTO-11)
+        advanceMarkers(nowMs); // R-ARR-1
         const bool fadeIn = mEver && !reducedMotion();
         mRowMotion.advance(nowMs);
         {
@@ -691,7 +694,7 @@ namespace solaris_ui
             mPressClip.clear();
             mRulerZone = RulerDrag::Scrub;
             const Rect br = loopRect();
-            if (br.w > 0 && mLoopTo > mLoopFrom && local.y >= kRulerH * 0.5)
+            if (br.w > 0 && mLoopTo > mLoopFrom && local.y >= kMarkH + (kRulerH - kMarkH) * 0.5) // the bars' band's lower half
             {
                 if (std::fabs(local.x - br.x) <= kBraceGrip) mRulerZone = RulerDrag::LoopFrom;
                 else if (std::fabs(local.x - br.right()) <= kBraceGrip) mRulerZone = RulerDrag::LoopTo;
@@ -768,6 +771,7 @@ namespace solaris_ui
     bool Timeline::handleGesture(const Gesture &g, const Point &local)
     {
         if (autoGesture(g, local)) return true; // an automation row's curve and points (R-AUTO-6)
+        if (markerGesture(g, local)) return true; // a marker's flag on the ruler's band (R-ARR-1)
         if (rulerGesture(g, local)) return true; // the ruler dragged: the playhead, the loop's brace (R-TIME-6)
         if (loopGesture(g, local)) return true; // the loop region on the ruler (R-EDM-7)
         switch (g.type)
@@ -1078,12 +1082,12 @@ namespace solaris_ui
         // the corner over the lane headers names the snap step (R-UI-10), cross-faded as it changes
         const double nameX = 12.0 + t.measureText("Snap", 9.0, font::sans()) + 6.0;
         t.setFill(palette::mutedForeground());
-        t.drawText("Snap", 12.0, 13.0, 9.0, font::sans());
+        t.drawText("Snap", 12.0, kMarkH + 13.0, 9.0, font::sans());
         for (const auto &n : mStepNames)
             if (n.a.value() > 0.001)
             {
                 t.setFill(fade(palette::foreground(), 0.8 * n.a.value()));
-                t.drawText(textfit::ellipsize(t, n.text, kHeaderW - 8.0 - nameX, 9.0, font::mono()), nameX, 13.0, 9.0, font::mono());
+                t.drawText(textfit::ellipsize(t, n.text, kHeaderW - 8.0 - nameX, 9.0, font::mono()), nameX, kMarkH + 13.0, 9.0, font::mono());
             }
         t.save();
         t.clipRect(kHeaderW, 0, W - kHeaderW, kRulerH);
@@ -1125,7 +1129,7 @@ namespace solaris_ui
             if (a <= 0.001) continue;
             const double x = std::round(beatToX((double)n)) + 0.5;
             t.setFill(fade(palette::mutedForeground(), (beat == 0 ? 1.0 : 0.7) * a));
-            t.drawText(s, x + 4.0, 13.0, 9.0, font::mono());
+            t.drawText(s, x + 4.0, kMarkH + 13.0, 9.0, font::mono());
         }
         t.restore();
     }
@@ -1291,6 +1295,7 @@ namespace solaris_ui
             }
         }
         t.restore();
+        paintMarkers(t); // R-ARR-1: the ruler's band
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, kRulerH - 0.5); t.lineTo(W, kRulerH - 0.5); t.strokePath();
 

@@ -71,6 +71,9 @@ namespace solaris_ui
         mTimeline->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
         mTimeline->onOpenPattern = [this](const std::string &pt, const std::string &ac) { mWindows->openRoll(pt, ac); };
         mTimeline->onOpenAutomation = [this](const std::string &au) { mWindows->openAutomation(au); }; // R-AUTO-11
+        mTimeline->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) { // R-ARR-1: a marker
+            if (onRename) onRename(cur, world, std::move(done));
+        };
         mDock->onCommand = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
         mDock->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
         mDock->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {

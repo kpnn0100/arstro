@@ -3490,6 +3490,88 @@ static void test_the_grid_follows_the_zoom()
          "land on the finest level you see — a bar far out, the tick at the deepest zoom (R-UI-10, R-TIME-5)");
 }
 
+static void test_markers_on_the_ruler()
+{
+    // R-ARR-1: the ruler's band — a marker's flag clicked seeks to it, double-clicked loops its section, dragged moves
+    // it (the pointer's while held, ONE line, staying where it was let go), right-clicked renames or deletes it; a
+    // right-click elsewhere on the ruler adds one; a shell's move eases there, a new one fades in
+    sltest::Rig r("ui-markers", 1280, 800);
+    r.cmd("project new " + r.song("Markers") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 32");
+    r.cmd("marker add Intro --at 0");
+    r.cmd("marker add Chorus --at 8 --length 4");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    assert(tl.markerAlpha("mk_1") == 1.0 && tl.markerEnd("mk_1") == 8.0 && tl.markerEnd("mk_2") == 12.0);
+    const artboard::Rect f = world(tl, tl.markerRect("mk_2"));
+    assert(f.w > 20.0 && f.h == arstro::solaris_ui::Timeline::kMarkH);
+    r.click(cx(f), cy(f));
+    r.settle();
+    assert(sentLine(r, "transport seek mk_2") && r.svc->model().transport.position == 8.0);
+    r.click(cx(f), cy(f));
+    r.click(cx(f), cy(f));
+    r.settle();
+    assert(sentLine(r, "transport loop mk_2") && r.svc->model().transport.loopFrom == 8.0 && r.svc->model().transport.loopTo == 12.0);
+    // dragged to beat 16: the pointer's while held, then ONE line, and it stays there
+    const double to = world(tl, artboard::Rect{tl.beatToX(16.0), 0, 0, 0}).x;
+    r.drag(f.x + 4.0, cy(f), to + 4.0, cy(f), 6, false);
+    assert(std::fabs(tl.markerBeat("mk_2") - 16.0) < 1e-9 && std::fabs(tl.markerEnd("mk_2") - 20.0) < 1e-9); // its section travels with it
+    r.app->pointer(2, to + 4.0, cy(f), 0, r.now);
+    r.frame();
+    assert(sentLine(r, "marker move mk_2 --at 16") && tl.markerBeat("mk_2") == 16.0);
+    r.settle();
+    assert(r.svc->model().markers[1].at == 16.0 && tl.markerBeat("mk_2") == 16.0);
+    // a shell's move eases there; a new marker fades in
+    r.cmd("marker move mk_1 --at 4");
+    r.frame();
+    r.frame();
+    const double mid = tl.markerBeat("mk_1");
+    assert(mid > 0.0 && mid < 4.0);
+    r.settle();
+    assert(tl.markerBeat("mk_1") == 4.0);
+    r.cmd("marker add Outro --at 24");
+    r.frame();
+    r.frame();
+    const double in = tl.markerAlpha("mk_3");
+    assert(in > 0.0 && in < 1.0);
+    r.settle();
+    // a right-click on a flag: Rename… (cosmo's field — ONE line) and Delete
+    auto &menu = r.app->menu();
+    const artboard::Rect f3 = world(tl, tl.markerRect("mk_3"));
+    r.click(cx(f3), cy(f3), 2);
+    r.settle();
+    assert(menu.isOpen() && menuItem(r, "Rename\xE2\x80\xA6") >= 0 && menuItem(r, "Delete marker") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Rename\xE2\x80\xA6")));
+    r.settle();
+    assert(menu.isRenaming());
+    artboard::KeyEvent typed;
+    typed.type = artboard::KeyEvent::Type::Text;
+    typed.text = "Big Outro";
+    r.app->key(typed);
+    r.key(13);
+    r.settle();
+    assert(sentLine(r, "marker rename mk_3 \"Big Outro\"") && r.svc->model().markers[2].name == "Big Outro");
+    r.click(cx(f3), cy(f3), 2);
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "Delete marker")));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "marker delete mk_3"));
+    const double out = tl.markerAlpha("mk_3");
+    assert(out > 0.0 && out < 1.0); // fading out where it was
+    r.settle();
+    assert(tl.markerAlpha("mk_3") == 0.0);
+    // a right-click on the ruler away from any flag: a marker there, on the grid you see
+    const artboard::Rect band = world(tl, artboard::Rect{tl.beatToX(28.0), 0.0, 1.0, arstro::solaris_ui::Timeline::kMarkH});
+    r.click(cx(band), cy(band), 2);
+    r.settle();
+    assert(menuItem(r, "Add marker here") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Add marker here")));
+    r.settle();
+    assert(sentLine(r, "marker add \"Marker 3\" --at 28") && r.svc->model().markers.size() == 3);
+    pass("markers on the ruler (R-ARR-1): a flag clicked seeks, double-clicked loops its section, dragged moves it (one line, its section with it), right-clicked renames or deletes it; elsewhere adds one; a shell's move eases, a new one fades in, a deleted one fades out");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -3531,6 +3613,7 @@ int main()
     test_piano_roll_edits_the_pattern();
     test_the_rolls_lane_draws_the_wheels();
     test_the_rolls_note_tools();
+    test_markers_on_the_ruler();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();
