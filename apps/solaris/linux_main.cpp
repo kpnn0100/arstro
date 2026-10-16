@@ -19,6 +19,7 @@
 #include "AudioFiles.h"
 #include "ControlServer.h"
 #include "EmbeddedFonts.h"
+#include "KeyInput.h"
 #include "Machine.h"
 #include "SolarisService.h"
 #ifdef SOLARIS_HAVE_PULSE
@@ -158,7 +159,7 @@ namespace
 
     void onSizeAllocate(GtkWidget *, GtkAllocation *alloc, gpointer user) { static_cast<Host *>(user)->app->setSize(alloc->width, alloc->height); }
 
-    gboolean onKey(GtkWidget *, GdkEventKey *e, gpointer user)
+    gboolean onKey(GtkWidget *w, GdkEventKey *e, gpointer user)
     {
         auto *a = static_cast<Host *>(user);
         artboard::KeyEvent ke;
@@ -166,25 +167,23 @@ namespace
         ke.shift = (e->state & GDK_SHIFT_MASK) != 0;
         ke.ctrl = (e->state & GDK_CONTROL_MASK) != 0;
         ke.alt = (e->state & GDK_MOD1_MASK) != 0;
-        switch (e->keyval)
+        // R-SET-4: the KEY, not the character it makes — the keysym with no modifier, so Shift+1 is "Shift+1"
+        guint base = e->keyval;
+        gdk_keymap_translate_keyboard_state(gdk_keymap_get_for_display(gtk_widget_get_display(w)), e->hardware_keycode,
+                                            (GdkModifierType)0, e->group, &base, nullptr, nullptr, nullptr);
+        ke.keyCode = arstro::solaris_ui::keyCodeOfKeysym(base);
+        bool handled = ke.keyCode && a->app->key(ke);
+        // D-9: what the press types reaches a field being typed in (a rename, the tempo) — as Text, after the key
+        const gunichar u = gdk_keyval_to_unicode(e->keyval);
+        if (arstro::solaris_ui::keyTypes(u, ke.ctrl, ke.alt))
         {
-        case GDK_KEY_BackSpace: ke.keyCode = 8; break;
-        case GDK_KEY_Return: case GDK_KEY_KP_Enter: ke.keyCode = 13; break;
-        case GDK_KEY_Escape: ke.keyCode = 27; break;
-        case GDK_KEY_space: ke.keyCode = 32; break;
-        case GDK_KEY_Left: ke.keyCode = 37; break;
-        case GDK_KEY_Up: ke.keyCode = 38; break;
-        case GDK_KEY_Right: ke.keyCode = 39; break;
-        case GDK_KEY_Down: ke.keyCode = 40; break;
-        case GDK_KEY_Delete: ke.keyCode = 46; break;
-        case GDK_KEY_comma: ke.keyCode = ','; break;
-        default:
-        {
-            const gunichar u = gdk_keyval_to_unicode(gdk_keyval_to_upper(e->keyval));
-            if (u >= '0' && u <= 'Z') ke.keyCode = (int)u; // the app's shortcuts use upper-case codes
+            char utf8[8] = {0};
+            g_unichar_to_utf8(u, utf8);
+            artboard::KeyEvent text;
+            text.type = artboard::KeyEvent::Type::Text;
+            text.text = utf8;
+            handled = a->app->key(text) || handled;
         }
-        }
-        const bool handled = ke.keyCode && a->app->key(ke);
         gtk_widget_queue_draw(a->area);
         return handled ? TRUE : FALSE;
     }

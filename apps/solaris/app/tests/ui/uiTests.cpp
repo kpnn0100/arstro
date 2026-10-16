@@ -5,6 +5,8 @@
 #undef NDEBUG
 #endif
 #include "../Rig.h"
+#include "../../KeyInput.h"
+#include "KeyCombo.h"
 #include "../../widgets/AnalogFace.h"
 #include "../../widgets/AutomationPanel.h"
 #include "../../widgets/DevicePanel.h"
@@ -740,6 +742,75 @@ static void test_mixer_matrix_effects_and_device_panel()
     r.settle();
     assert(r.sent.size() == back);
     pass("Mixer: + Effect is the registry; a chip opens the device's generated window (fade), a slider is `set` in its unit, bypass, a second window on top; the matrix adds a send, and has a column for every strip a route may reach");
+}
+
+static void test_the_keys_are_the_machines()
+{
+    // R-SET-4: a pressed combo is looked up in the model's keymap — re-keyed from anywhere, the window follows
+    using arstro::solaris_ui::keyCodeOfKeysym;
+    using arstro::solaris_ui::keyTypes;
+    // the host's half: the KEY pressed (its unshifted keysym), named as the keymap names it; what it types, apart
+    assert(keyCodeOfKeysym('a') == 'A' && keyCodeOfKeysym('1') == '1' && keyCodeOfKeysym(0xffc2) == 116); // F5
+    assert(keyCodeOfKeysym(',') == 188 && keyCodeOfKeysym(0xff52) == 38 && keyCodeOfKeysym(0xfe20) == 9 && keyCodeOfKeysym(0xffe1) == 0); // Shift_L: none
+    assert(arstro::solaris::comboText(keyCodeOfKeysym(0xffc2), false, false, true) == "Shift+F5");
+    assert(keyTypes('a', false, false) && keyTypes(' ', false, false) && !keyTypes('a', true, false) && !keyTypes(0x0d, false, false) && !keyTypes(0x7f, false, false));
+
+    sltest::Rig r("ui-keys", 1280, 800);
+    r.cmd("project new " + r.song("Keys") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 8");
+    const std::string ac = r.svc->model().clips[0].id, pt = r.svc->model().clips[0].pattern;
+    r.cmd("notes add " + pt + " \"C4@0 E4@1\"");
+    r.settle();
+    const auto &t = r.svc->model().transport;
+    auto keyMod = [&](int code, bool shift, bool ctrl) {
+        artboard::KeyEvent e;
+        e.type = artboard::KeyEvent::Type::Down;
+        e.keyCode = code;
+        e.shift = shift;
+        e.ctrl = ctrl;
+        r.app->key(e);
+        r.frame();
+    };
+    // re-keyed by a script, not the window: Space no longer plays; F5 does, and Shift+F5 stops here
+    r.cmd("settings set key.transport.play=F5 key.transport.stopHere=Shift+F5");
+    r.settle();
+    size_t mark = r.sent.size();
+    r.key(32);
+    r.key(32, true);
+    assert(r.sent.size() == mark && !t.playing);
+    r.key(116);
+    assert(r.sent.back() == "transport play" && t.playing);
+    for (int k = 0; k < 20; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+    keyMod(116, true, false);
+    assert(r.sent.back() == "transport stop" && !t.playing && t.position > 0.0);
+    // the roll's keys, re-keyed: the roll follows
+    r.cmd("settings set key.roll.up=K key.roll.selectAll=Ctrl+Shift+A key.roll.delete=Ctrl+S");
+    auto &tl = r.app->project().timeline();
+    auto &wl = r.app->project().windows();
+    const artboard::Rect clip = world(tl, tl.clipRect(ac));
+    r.click(clip.x + 12.0, cy(clip));
+    r.click(clip.x + 12.0, cy(clip));
+    r.settle();
+    auto &roll = *wl.roll(pt);
+    const artboard::Rect gw = world(roll, roll.gridRect());
+    r.app->pointer(0, gw.x + 30.0, gw.y + 30.0, 0, r.now, false, false, true); // a Ctrl-press on its empty grid: the keys are its
+    r.app->pointer(2, gw.x + 30.0, gw.y + 30.0, 0, r.now, false, false, true);
+    r.settle();
+    keyMod('A', false, true);
+    assert(roll.selectionCount() == 0);                               // Ctrl+A is no longer select-all
+    keyMod('A', true, true);
+    assert(roll.selectionCount() == 2);
+    mark = r.sent.size();
+    keyMod(38, false, false);
+    assert(r.sent.size() == mark);                                    // ↑ is no key now
+    keyMod('K', false, false);
+    assert(r.sent.back() == "notes move " + pt + " \"60@0 64@1\" --by 0 --semi 1");
+    // the roll's keys shadow the song's while it has them: Ctrl+S deletes the selection; with none, it saves
+    keyMod('S', false, true);
+    assert(r.sent.back() == "notes delete " + pt + " \"61@0 65@1\"" && roll.selectionCount() == 0);
+    keyMod('S', false, true);
+    assert(r.sent.back() == "project save");
+    pass("The keys are the machine's (R-SET-4): a combo is looked up in the model's keymap — re-keyed by a script, Space stops playing and F5 plays, the roll's keys follow and shadow the song's; the host names the key, not the character");
 }
 
 static void test_space_returns_and_ctrl_space_stays()
@@ -2448,6 +2519,7 @@ int main()
     test_song_bar_and_keys();
     test_the_tempo_is_set_in_the_song_bar();
     test_space_returns_and_ctrl_space_stays();
+    test_the_keys_are_the_machines();
     test_home_unsaved_confirm_and_recents();
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();

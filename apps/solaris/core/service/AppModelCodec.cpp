@@ -179,6 +179,12 @@ namespace solaris
             {"settings.newSig", "string", "a new song's meter without --sig"},
             {"settings.reducedMotion", "bool", "the UI's tweens collapse (with the OS's own setting)"},
             {"settings.showIds", "bool", "every object's id drawn beside its name (R-UI-11)"},
+            {"settings.keys", "object[]", "every keyboard action (R-SET-4), in the sheet's order — a pressed combo is looked up here"},
+            {"settings.keys[].id", "string", "transport.play … — set with `settings set key.<id>=<combos>`"},
+            {"settings.keys[].area", "string", "Transport | Song | Lanes | Piano roll (the first three are one keyboard)"},
+            {"settings.keys[].label", "string", ""},
+            {"settings.keys[].keys", "string[]", "its combos on this machine, canonical (Ctrl+Alt+Shift+<key>); empty = no key"},
+            {"settings.keys[].defaults", "string[]", "what `default` gives back"},
             {"devices", "object[]", "from the last `devices list`"},
             {"devices[].id", "string", "what `settings set output=` takes"},
             {"devices[].name", "string", ""},
@@ -467,12 +473,15 @@ namespace solaris
             recents.push(Json::object().set("path", r.path).set("name", r.name).set("bpm", r.bpm).set("lengthBeats", r.lengthBeats)
                              .set("strips", r.strips).set("missing", r.missing));
         j.set("recents", recents);
+        Json keys = Json::array();
+        for (const auto &k : m.settings.keys)
+            keys.push(Json::object().set("id", k.id).set("area", k.area).set("label", k.label).set("keys", strings(k.keys)).set("defaults", strings(k.defaults)));
         j.set("settings", Json::object().set("sampleRate", m.settings.sampleRate).set("bufferSize", m.settings.bufferSize)
                               .set("latencyMs", m.settings.latencyMs).set("output", m.settings.output).set("input", m.settings.input)
                               .set("folders", strings(m.settings.folders)).set("ports", strings(m.settings.ports))
                               .set("metronome", m.settings.metronome).set("metronomeLevel", m.settings.metronomeLevel).set("auditionLevel", m.settings.auditionLevel)
                               .set("newBpm", m.settings.newBpm).set("newSig", m.settings.newSig).set("reducedMotion", m.settings.reducedMotion)
-                              .set("showIds", m.settings.showIds));
+                              .set("showIds", m.settings.showIds).set("keys", keys));
         Json devs = Json::array();
         for (const auto &d : m.devices)
             devs.push(Json::object().set("id", d.id).set("name", d.name).set("dir", d.dir).set("channels", d.channels).set("rate", d.rate));

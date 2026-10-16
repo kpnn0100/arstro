@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — J2: the cue.*
+*Last updated: 2026-10-16 — J3: the keymap (and D-9).*
 
 ---
 
 ## NEXT
 
-**► J3 — the keymap** (R-SET-4), then J4: the 2026-10-16 request. B13+ wait.
+**► J4 — the sheet's Keyboard section** (R-SET-4): the 2026-10-16 request. B13+ wait.
 
 ---
 
@@ -330,8 +330,12 @@ umbrella's pointer — `arstro.rule` §7).
       returns, the cue marked on the ruler while playing (R-TIME-7/8).
       — DR-TIME-7: the cue set by a seek or where play begins; Space / Stop / a roll's ■ return, Ctrl+Space stays; an
       outlined mark on the ruler while playing. L2 + UI tests, shot `ruler-cue`; 2 mutants seen red.
-- [ ] **J3** The keymap: the actions and their defaults (the service's table), `settings set key.<action>`,
+- [x] **J3** The keymap: the actions and their defaults (the service's table), `settings set key.<action>`,
       `settings.keys` in the model, the App resolving every key through it, the host passing more keys (R-SET-4).
+      — DR-SET-4: 21 actions in four areas (two keyboards); combos spelt one way (`KeyCombo.h`); refusals name the
+      action holding a key; the API's Keyboard section generated. The host now names the key (unshifted keysym:
+      F-keys, Tab, Home/End, PageUp/Down, punctuation) and sends what it types — D-9 found and closed here.
+      L2 + UI tests; 2 mutants seen red.
 - [ ] **J4** The sheet's Keyboard section: the keys drawn, a click listening for the next, add, remove, Reset (R-SET-4).
 
 ### T — tasks found on the way

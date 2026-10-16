@@ -2,6 +2,8 @@
 #include "../../interstellar/app/widgets/TextFit.h"
 #include "widgets/FloatWindow.h"
 #include "widgets/PianoRoll.h"
+#include "KeyCombo.h"
+#include "Keymap.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -326,29 +328,43 @@ namespace solaris_ui
         if (mConfirm->isOpen()) { mConfirm->handleKey(e); return true; }
         if (mSettings->isOpen()) return mSettings->handleKey(e);
         if (e.type != KeyEvent::Type::Down) return false;
-        if (mScreen == "project")
+        // R-SET-4: the combo is looked up in the model's keymap — the keys are this machine's settings
+        const std::string combo = solaris::comboText(e.keyCode, e.ctrl, e.alt, e.shift);
+        if (combo.empty()) return false;
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        if (mScreen == "project" && mRollKeys) // R-ROLL-8: the roll the pointer last pressed in takes its keys first
+            if (PianoRoll *r = mProject->windows().frontRoll())
+                if (r->action(keyActionFor(m, combo, "roll"))) return true;
+        return songAction(m, keyActionFor(m, combo, "song"));
+    }
+
+    std::string App::keyActionFor(const solaris::AppModel &m, const std::string &combo, const std::string &group)
+    {
+        for (const auto &k : m.settings.keys)
+            if (solaris::keyGroup(k.area) == group && std::find(k.keys.begin(), k.keys.end(), combo) != k.keys.end()) return k.id;
+        return std::string();
+    }
+
+    bool App::songAction(const solaris::AppModel &m, const std::string &id)
+    {
+        if (id == "song.settings") { openSettings(); return true; }
+        if (id.empty() || mScreen != "project") return false;
+        if (id == "transport.play" || id == "transport.stopHere")
         {
-            if (e.keyCode == 32) // Space: play / stop, as every DAW
-            {
-                const auto &m = mHooks.model ? mHooks.model() : emptyModel();
-                // Space stops back where the time bar was put; Ctrl+Space stops where it is (R-TIME-7/8)
-                if (m.transport.playing) return dispatch(e.ctrl ? "transport stop" : "transport stop --return");
-                if (PianoRoll *r = mProject->windows().frontRoll()) // a roll in front: its ▶ (R-ROLL-6)
-                    if (r->togglePlay()) return true;
-                return dispatch("transport play");
-            }
-            if (mRollKeys) // R-ROLL-8: the roll the pointer last pressed in takes its keys (a selection's)
-                if (PianoRoll *r = mProject->windows().frontRoll())
-                    if (r->key(e)) return true;
-            if (e.ctrl && e.keyCode == 'S') return dispatch("project save");
-            if (e.ctrl && ((e.keyCode == 'Z' && e.shift) || e.keyCode == 'Y')) return dispatch("redo"); // R-EDM-1
-            if (e.ctrl && e.keyCode == 'Z') return dispatch("undo");
-            const std::string sel = mProject->timeline().selectedClip();
-            if (!sel.empty() && (e.keyCode == 46 || e.keyCode == 8)) return dispatch("clip delete " + sel); // Delete / Backspace
-            if (!sel.empty() && e.ctrl && e.keyCode == 'D') return dispatch("clip duplicate " + sel);     // a linked copy after it
-            if (e.keyCode == 13 && !e.ctrl) return dispatch("transport seek 0");
+            // play/stop goes back where the time bar was put; stop-here leaves it where it was heard (R-TIME-7/8)
+            if (m.transport.playing) return dispatch(id == "transport.play" ? "transport stop --return" : "transport stop");
+            if (PianoRoll *r = mProject->windows().frontRoll()) // a roll in front: its ▶ (R-ROLL-6)
+                if (r->togglePlay()) return true;
+            return dispatch("transport play");
         }
-        if (e.ctrl && e.keyCode == ',') { openSettings(); return true; }
+        if (id == "transport.toStart") return dispatch("transport seek 0");
+        if (id == "song.save") return dispatch("project save");
+        if (id == "song.undo") return dispatch("undo");
+        if (id == "song.redo") return dispatch("redo"); // R-EDM-1
+        const std::string sel = mProject->timeline().selectedClip();
+        if (sel.empty()) return false;
+        if (id == "lanes.delete") return dispatch("clip delete " + sel);
+        if (id == "lanes.duplicate") return dispatch("clip duplicate " + sel); // a linked copy after it
         return false;
     }
 

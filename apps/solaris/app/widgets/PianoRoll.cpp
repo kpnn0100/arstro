@@ -244,36 +244,37 @@ namespace solaris_ui
         for (const auto &n : ns) mSel.insert(key(n.pitch, n.at));
     }
 
-    bool PianoRoll::key(const KeyEvent &e)
+    bool PianoRoll::action(const std::string &id)
     {
-        if (e.type != KeyEvent::Type::Down || mMode != Notes) return false;
-        if (e.ctrl && e.keyCode == 'A')
+        if (mMode != Notes) return false;
+        if (id == "roll.selectAll")
         {
             mSel.clear();
             for (const auto &n : mModel.notes) mSel.insert(key(n.pitch, n.at));
             return true;
         }
-        if (e.ctrl && e.keyCode == 'V')
+        if (id == "roll.paste")
         {
             if (!mClipboard || mClipboard->empty()) return false;
             addSelected(*mClipboard); // at the same beats, selected: ready to be dragged where it goes
             return true;
         }
         if (mSel.empty()) return false;
-        if (e.keyCode == 27) { mSel.clear(); return true; }  // Escape lets go
-        if (e.keyCode == 46 || e.keyCode == 8)               // Delete / Backspace
+        if (id == "roll.deselect") { mSel.clear(); return true; }  // lets go
+        if (id == "roll.delete")
         {
             if (sendOk("notes delete " + mPattern + " " + tokens(selectedNotes()))) mSel.clear();
             return true;
         }
-        if (e.keyCode == 38 || e.keyCode == 40) { moveSelection(0.0, (e.keyCode == 38 ? 1 : -1) * (e.shift ? 12 : 1)); return true; }
-        if (e.keyCode == 37 || e.keyCode == 39) { moveSelection((e.keyCode == 39 ? 1.0 : -1.0) * (mSnap > 0 ? mSnap : 0.25), 0); return true; }
-        if (e.ctrl && e.keyCode == 'C')
+        const int semi = id == "roll.up" ? 1 : id == "roll.down" ? -1 : id == "roll.octaveUp" ? 12 : id == "roll.octaveDown" ? -12 : 0;
+        if (semi) { moveSelection(0.0, semi); return true; }
+        if (id == "roll.left" || id == "roll.right") { moveSelection((id == "roll.right" ? 1.0 : -1.0) * (mSnap > 0 ? mSnap : 0.25), 0); return true; }
+        if (id == "roll.copy")
         {
             if (mClipboard) *mClipboard = selectedNotes();
             return true;
         }
-        if (e.ctrl && e.keyCode == 'D')
+        if (id == "roll.duplicate")
         {
             // a copy right after the selection: its span — the earliest start to the latest end — up to the snap
             auto ns = selectedNotes();

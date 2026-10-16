@@ -81,8 +81,9 @@ namespace solaris_ui
         int selectionCount() const { return (int)mSel.size(); }
         double selectAmount(int pitch, double at) const;   // a note's selection light, LIVE
         artboard::Rect boxRect() const;                     // the box being drawn (empty when none)
-        /** A key while this roll has the keyboard: true when it took it. */
-        bool key(const artboard::KeyEvent &e);
+        /** A keyboard action (R-SET-4: `roll.selectAll`, `roll.up` …) while this roll has the keys — the App looks the
+            combo up in the model's keymap; true when the roll took it (a selection's actions need a selection). */
+        bool action(const std::string &id);
         /** The note clipboard every roll shares (Ctrl+C in one, Ctrl+V in any). */
         void setClipboard(std::shared_ptr<std::vector<solaris::NoteModel>> c) { mClipboard = std::move(c); }
         double keyLit(int pitch) const;                     // a pressed key's light, LIVE

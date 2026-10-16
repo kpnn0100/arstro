@@ -183,6 +183,13 @@ namespace solaris
         bool missing = false;                    // the file is gone or no longer a song
     };
 
+    /** One keyboard action and its keys on this machine (R-SET-4) — a front end looks a pressed combo up here. */
+    struct KeyActionModel
+    {
+        std::string id, area, label;             // "transport.play" · "Transport" · what the sheet shows
+        std::vector<std::string> keys, defaults; // canonical combos ("Ctrl+Shift+Z"); keys empty = no key
+    };
+
     struct SettingsModel
     {
         int sampleRate = 48000, bufferSize = 256;
@@ -195,6 +202,7 @@ namespace solaris
         double auditionLevel = -6;              // dB: a sample previewed from the browser (R-EDM-9)
         std::string newSig = "4/4";
         bool showIds = false;                    // R-UI-11: every object's id beside its name
+        std::vector<KeyActionModel> keys;        // R-SET-4: every shortcut, in the sheet's order
     };
 
     /** One entry of the DSP library's device registry — what the browser lists (R-BROWSE-1). */

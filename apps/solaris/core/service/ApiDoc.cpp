@@ -4,6 +4,8 @@
 #include "Event.h"
 #include "Format.h"
 #include "Json.h"
+#include "KeyCombo.h"
+#include "Keymap.h"
 #include "Notation.h"
 #include "device/Device.h"
 
@@ -94,6 +96,15 @@ namespace solaris
                                 .set("note", "<pitch>@<beat>[:<length>[:<vel>]]")
                                 .set("steps", "x = a note, X = an accent (127), . or - = a rest; spaces and | ignored")
                                 .set("chords", chords));
+        Json actions = Json::array(), names = Json::array();
+        for (const auto &a : keyActions())
+            actions.push(Json::object().set("id", a.id).set("area", a.area).set("label", a.label).set("defaults", a.defaults));
+        for (const auto &k : namedKeys()) names.push(Json::string(k.name));
+        doc.set("keyboard", Json::object()
+                                .set("setting", "key.<id>=<combos> | none | default (R-SET-4)")
+                                .set("combo", "[Ctrl+][Alt+][Shift+]<key>; a list is comma-separated")
+                                .set("keys", "A-Z, 0-9, F1-F12 and these").set("named", names)
+                                .set("actions", actions));
         return doc.dump();
     }
 
@@ -139,6 +150,15 @@ namespace solaris
             for (int k : q.intervals) iv += (iv.empty() ? "" : " ") + std::to_string(k);
             o += "| " + md(names) + " | " + iv + " | " + q.label + " |\n";
         }
+        o += "\n## Keyboard (R-SET-4)\n\nEvery shortcut is an action; `settings set key.<id>=<combos>` gives it this machine's keys "
+             "(`none` takes them all away, `default` gives these back). A combo is `[Ctrl+][Alt+][Shift+]<key>` — the key A–Z, 0–9, "
+             "F1–F12";
+        for (const auto &k : namedKeys()) o += std::string(", ") + k.name;
+        o += " — and a list is comma-separated (`\"Ctrl+Shift+Z, Ctrl+Y\"`, quoted for its space). Transport, Song and Lanes are one "
+             "keyboard and the piano roll another: a combo means one action on each, and the roll's shadow the song's while a "
+             "roll has the keys. `settings.keys` in the model is every action with its keys now.\n\n";
+        o += "| action | area | what | default |\n|---|---|---|---|\n";
+        for (const auto &a : keyActions()) o += "| `" + a.id + "` | " + a.area + " | " + md(a.label) + " | " + md(a.defaults) + " |\n";
         o += "\n## Events\n\nEach is one line: `[evt] <name> key=value …` — the log line, the `--watch` stream.\n\n";
         o += "| event | fields | when |\n|---|---|---|\n";
         for (const auto &e : eventSpecs())

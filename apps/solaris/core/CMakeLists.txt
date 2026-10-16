@@ -22,7 +22,8 @@ add_library(solaris_core STATIC
   service/ServiceAuto.cpp
   service/ServiceCompose.cpp
   service/Notation.cpp
-  service/RegistryModel.cpp)
+  service/RegistryModel.cpp
+  service/Keymap.cpp)
 target_include_directories(solaris_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/service)
 find_package(Threads REQUIRED)
 target_link_libraries(solaris_core PUBLIC solaris_model solaris_engine Threads::Threads)

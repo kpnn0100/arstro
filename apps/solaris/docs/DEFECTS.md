@@ -37,6 +37,19 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-9 Nothing typed in the window reached a field — a rename or the tempo typed nothing — closed in J3
+- **Found:** 2026-10-16, reading the host's key mapping for the keymap (R-SET-4).
+- **Symptom:** in the real window, a rename field (a strip's, a lane's, a clip's) or the tempo's typed value took no
+  characters: Backspace and Enter worked, letters and digits did nothing. Every UI test typed by sending a Text event
+  straight into `App::key`, so the suite never saw it.
+- **Cause:** the GTK host (`linux_main.cpp`, `onKey`) sent only key-down codes; the rename field (cosmo's
+  `ContextMenu::handleKey`) takes characters only from Text events.
+- **Fix:** the host sends a Text event with what the press types (a printable character, no Ctrl or Alt —
+  `keyTypes`, `app/KeyInput.h`) after the key's Down, as Genesis's host does.
+- **Guard:** `test_the_keys_are_the_machines` covers `keyTypes` (a letter and a space type; Ctrl+letter, Enter and
+  Delete do not). The GTK half is compiled and read, not driven live — as D-5, this GTK build ignores synthetic X
+  events and XTest is not to be used on the user's display. Live check owed: rename a strip by typing.
+
 ### D-8 A synth's volume, automated or set while a note sounded, did nothing to that note — closed in I4a, DSP `0707803`
 - **Found:** 2026-10-15, making the EDM track (R-SVC-12): the riser — one long note — was automated to swell from
   −40 dB to −4 dB through each build; measured, each build's last bars were no louder than its first.

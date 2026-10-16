@@ -202,7 +202,9 @@ namespace solaris
             {K::SettingsSet, "settings set", "<key>=<value> …", 1, -1, {},
              "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), "
              "bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), "
-             "port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on|off), showIds (on|off: every object's id beside its name, R-UI-11). Saved at once.",
+             "port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on|off), showIds (on|off: every object's id beside its name, R-UI-11), "
+             "key.<action>=<combos> (R-SET-4: a keyboard action's keys — a comma list such as \"Ctrl+Shift+Z, Ctrl+Y\", `none`, or `default`; "
+             "a combo another action of the same keyboard has is refused naming it — the actions are in this document's Keyboard section). Saved at once.",
              "R-SET-1", true},
             {K::SettingsPrint, "settings print", "", 0, 0, {"json"}, "The machine's settings.", "R-SET-1"},
             {K::FolderAdd, "folder add", "<path>", 1, 1, {}, "Add a sample folder to the browser's quick-access list.", "R-SET-1"},

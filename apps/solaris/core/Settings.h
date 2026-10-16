@@ -31,6 +31,8 @@ namespace solaris
         std::string newSig = "4/4";             // … and without --sig
         bool reducedMotion = false;             // the UI's tweens collapse (design rule §2.6), with the OS's
         bool showIds = false;                   // R-UI-11: every object's id drawn beside its name (View › Show IDs)
+        // R-SET-4: `key.<action> = <combos>` — only the actions this machine re-keyed (the rest keep their defaults)
+        std::vector<std::pair<std::string, std::string>> keys;
 
         std::string text() const;
         static Settings parse(const std::string &text);

@@ -4,6 +4,8 @@
 #include "Compile.h"
 #include "Format.h"
 #include "Json.h"
+#include "KeyCombo.h"
+#include "Keymap.h"
 #include "SolarisService.h"
 #include "MixLaws.h"
 #include "Player.h"
@@ -86,7 +88,7 @@ namespace solaris
         case K::SettingsSet:
         {
             Settings next = mSettings;
-            std::vector<std::string> what;
+            std::vector<std::string> what, keyed;
             for (const auto &f : c.fields)
             {
                 const std::string &k = f.first, &v = f.second;
@@ -134,16 +136,55 @@ namespace solaris
                     next.ports.erase(std::remove_if(next.ports.begin(), next.ports.end(), [&](const auto &p) { return p.first == name; }), next.ports.end());
                     if (!v.empty()) next.ports.emplace_back(name, v);
                 }
+                else if (k.rfind("key.", 0) == 0)
+                {
+                    // R-SET-4: an action's keys — a comma list of combos, `none`, or `default`
+                    const std::string id = k.substr(4);
+                    const KeyAction *a = keyAction(id);
+                    if (!a)
+                    {
+                        std::vector<std::string> ids;
+                        for (const auto &x : keyActions()) ids.push_back(x.id);
+                        const auto near = nearest(id, ids);
+                        err = "no keyboard action `" + id + "`" + (near.empty() ? std::string(" (`solaris-cc api` lists them)") : " (did you mean: key." + near[0] + "?)");
+                        return false;
+                    }
+                    next.keys.erase(std::remove_if(next.keys.begin(), next.keys.end(), [&](const auto &o) { return o.first == id; }), next.keys.end());
+                    if (keyLower(keyTrim(v)) != "default")
+                    {
+                        std::vector<std::string> combos;
+                        if (!parseCombos(v, combos, err)) { err = k + ": " + err; return false; }
+                        if (combos != keysOf(*a, {})) next.keys.emplace_back(id, combosText(combos)); // its defaults again: no line
+                    }
+                    keyed.push_back(id);
+                }
                 else
                 {
                     err = "no setting `" + k + "`";
                     const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds"});
                     err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>, metronome, "
-                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds)")
+                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, key.<action>)")
                                         : " (did you mean: " + near[0] + "?)";
                     return false;
                 }
                 what.push_back(k);
+            }
+            // a combo means one action on one keyboard: the song's (Transport, Song, Lanes) or the roll's — checked
+            // once every key of the line is in, so one line can swap two actions' keys
+            for (const auto &id : keyed)
+            {
+                const KeyAction &a = *keyAction(id);
+                const auto mine = keysOf(a, next.keys);
+                for (const auto &b : keyActions())
+                {
+                    if (b.id == a.id || keyGroup(b.area) != keyGroup(a.area)) continue;
+                    for (const auto &c : keysOf(b, next.keys))
+                        if (std::find(mine.begin(), mine.end(), c) != mine.end())
+                        {
+                            err = c + " is already \"" + b.label + "\" (key." + b.id + ") — give that one another key first, or `key." + b.id + "=none`";
+                            return false;
+                        }
+                }
             }
             const Settings keep = mSettings;
             mSettings = next;
@@ -163,7 +204,11 @@ namespace solaris
                               .set("folders", folders).set("ports", ports).set("metronome", mSettings.metronome)
                               .set("metronomeLevel", mSettings.metronomeLevel).set("auditionLevel", mSettings.auditionLevel).set("newBpm", mSettings.newBpm)
                               .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion)
-                              .set("showIds", mSettings.showIds).dump();
+                              .set("showIds", mSettings.showIds).set("keys", [&] {
+                                  Json keys = Json::array(); // only the re-keyed actions, as the file has them
+                                  for (const auto &k : mSettings.keys) keys.push(Json::string(k.first + "=" + k.second));
+                                  return keys;
+                              }()).dump();
             }
             return true;
         case K::FolderAdd:

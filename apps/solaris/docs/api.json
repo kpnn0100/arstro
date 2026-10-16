@@ -632,7 +632,7 @@
       "usage": "settings set <key>=<value> …",
       "args": "<key>=<value> …",
       "flags": [],
-      "summary": "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on|off), showIds (on|off: every object's id beside its name, R-UI-11). Saved at once.",
+      "summary": "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on|off), showIds (on|off: every object's id beside its name, R-UI-11), key.<action>=<combos> (R-SET-4: a keyboard action's keys — a comma list such as \"Ctrl+Shift+Z, Ctrl+Y\", `none`, or `default`; a combo another action of the same keyboard has is refused naming it — the actions are in this document's Keyboard section). Saved at once.",
       "requirement": "R-SET-1"
     },
     {
@@ -844,7 +844,7 @@
       "fields": [
         "what"
       ],
-      "summary": "A machine setting changed and was saved: sampleRate, bufferSize, output, input, port.<name>, folders."
+      "summary": "A machine setting changed and was saved: sampleRate, bufferSize, output, input, port.<name>, folders, key.<action> (R-SET-4) …"
     },
     {
       "name": "devices.changed",
@@ -1907,6 +1907,42 @@
       "path": "settings.showIds",
       "type": "bool",
       "summary": "every object's id drawn beside its name (R-UI-11)",
+      "stable": true
+    },
+    {
+      "path": "settings.keys",
+      "type": "object[]",
+      "summary": "every keyboard action (R-SET-4), in the sheet's order — a pressed combo is looked up here",
+      "stable": true
+    },
+    {
+      "path": "settings.keys[].id",
+      "type": "string",
+      "summary": "transport.play … — set with `settings set key.<id>=<combos>`",
+      "stable": true
+    },
+    {
+      "path": "settings.keys[].area",
+      "type": "string",
+      "summary": "Transport | Song | Lanes | Piano roll (the first three are one keyboard)",
+      "stable": true
+    },
+    {
+      "path": "settings.keys[].label",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "settings.keys[].keys",
+      "type": "string[]",
+      "summary": "its combos on this machine, canonical (Ctrl+Alt+Shift+<key>); empty = no key",
+      "stable": true
+    },
+    {
+      "path": "settings.keys[].defaults",
+      "type": "string[]",
+      "summary": "what `default` gives back",
       "stable": true
     },
     {
@@ -4236,6 +4272,167 @@
           14
         ],
         "label": "minor ninth"
+      }
+    ]
+  },
+  "keyboard": {
+    "setting": "key.<id>=<combos> | none | default (R-SET-4)",
+    "combo": "[Ctrl+][Alt+][Shift+]<key>; a list is comma-separated",
+    "keys": "A-Z, 0-9, F1-F12 and these",
+    "named": [
+      "Backspace",
+      "Tab",
+      "Enter",
+      "Escape",
+      "Space",
+      "PageUp",
+      "PageDown",
+      "End",
+      "Home",
+      "Left",
+      "Up",
+      "Right",
+      "Down",
+      "Insert",
+      "Delete",
+      "Semicolon",
+      "Equal",
+      "Comma",
+      "Minus",
+      "Period",
+      "Slash",
+      "Backquote",
+      "BracketLeft",
+      "Backslash",
+      "BracketRight",
+      "Quote"
+    ],
+    "actions": [
+      {
+        "id": "transport.play",
+        "area": "Transport",
+        "label": "Play / stop — back to where the time bar was put",
+        "defaults": "Space"
+      },
+      {
+        "id": "transport.stopHere",
+        "area": "Transport",
+        "label": "Stop here",
+        "defaults": "Ctrl+Space"
+      },
+      {
+        "id": "transport.toStart",
+        "area": "Transport",
+        "label": "To the start",
+        "defaults": "Enter"
+      },
+      {
+        "id": "song.save",
+        "area": "Song",
+        "label": "Save",
+        "defaults": "Ctrl+S"
+      },
+      {
+        "id": "song.undo",
+        "area": "Song",
+        "label": "Undo",
+        "defaults": "Ctrl+Z"
+      },
+      {
+        "id": "song.redo",
+        "area": "Song",
+        "label": "Redo",
+        "defaults": "Ctrl+Shift+Z, Ctrl+Y"
+      },
+      {
+        "id": "song.settings",
+        "area": "Song",
+        "label": "Settings",
+        "defaults": "Ctrl+Comma"
+      },
+      {
+        "id": "lanes.delete",
+        "area": "Lanes",
+        "label": "Delete the clip",
+        "defaults": "Delete, Backspace"
+      },
+      {
+        "id": "lanes.duplicate",
+        "area": "Lanes",
+        "label": "Duplicate the clip",
+        "defaults": "Ctrl+D"
+      },
+      {
+        "id": "roll.selectAll",
+        "area": "Piano roll",
+        "label": "Select all",
+        "defaults": "Ctrl+A"
+      },
+      {
+        "id": "roll.deselect",
+        "area": "Piano roll",
+        "label": "Deselect",
+        "defaults": "Escape"
+      },
+      {
+        "id": "roll.delete",
+        "area": "Piano roll",
+        "label": "Delete",
+        "defaults": "Delete, Backspace"
+      },
+      {
+        "id": "roll.duplicate",
+        "area": "Piano roll",
+        "label": "Duplicate",
+        "defaults": "Ctrl+D"
+      },
+      {
+        "id": "roll.copy",
+        "area": "Piano roll",
+        "label": "Copy",
+        "defaults": "Ctrl+C"
+      },
+      {
+        "id": "roll.paste",
+        "area": "Piano roll",
+        "label": "Paste",
+        "defaults": "Ctrl+V"
+      },
+      {
+        "id": "roll.up",
+        "area": "Piano roll",
+        "label": "Up a semitone",
+        "defaults": "Up"
+      },
+      {
+        "id": "roll.down",
+        "area": "Piano roll",
+        "label": "Down a semitone",
+        "defaults": "Down"
+      },
+      {
+        "id": "roll.octaveUp",
+        "area": "Piano roll",
+        "label": "Up an octave",
+        "defaults": "Shift+Up"
+      },
+      {
+        "id": "roll.octaveDown",
+        "area": "Piano roll",
+        "label": "Down an octave",
+        "defaults": "Shift+Down"
+      },
+      {
+        "id": "roll.left",
+        "area": "Piano roll",
+        "label": "Earlier by the snap",
+        "defaults": "Left"
+      },
+      {
+        "id": "roll.right",
+        "area": "Piano roll",
+        "label": "Later by the snap",
+        "defaults": "Right"
       }
     ]
   }

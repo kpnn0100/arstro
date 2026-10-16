@@ -6,6 +6,7 @@
 #include "Compile.h"
 #include "Format.h"
 #include "Json.h"
+#include "Keymap.h"
 #include "RegistryModel.h"
 #include "SolarisService.h"
 #include "device/Device.h"
@@ -105,6 +106,12 @@ namespace solaris
         mModel.settings.newSig = mSettings.newSig;
         mModel.settings.reducedMotion = mSettings.reducedMotion;
         mModel.settings.showIds = mSettings.showIds;
+        for (const auto &a : keyActions())
+        {
+            KeyActionModel k{a.id, a.area, a.label, keysOf(a, mSettings.keys), {}};
+            keysOf(a, {}).swap(k.defaults);
+            mModel.settings.keys.push_back(std::move(k));
+        }
         mModel.devices = mDevices;
         mModel.browser = mBrowser;
         for (const auto &t : DeviceRegistry::types())

@@ -93,6 +93,9 @@ namespace solaris_ui
         void copy(const std::string &text);
         static std::string quote(const std::string &s);
         static const solaris::AppModel &emptyModel();
+        /** R-SET-4: the action a combo means on a keyboard ("song" or "roll") in the model's keymap, or "". */
+        static std::string keyActionFor(const solaris::AppModel &m, const std::string &combo, const std::string &group);
+        bool songAction(const solaris::AppModel &m, const std::string &id); // true when it did something
 
         AppHooks mHooks;
         double mW, mH, mNowMs = 0.0, mLastActivityMs = -1e9;

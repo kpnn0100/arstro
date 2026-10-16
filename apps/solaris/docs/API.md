@@ -68,7 +68,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `ls` | The song as a tree of ids and names: mixers → strips (kind, devices, output, sends), the master, lanes → clips (at, length, pattern or file), patterns (length, notes, clips), automations. | R-SVC-8 |
 | `show <id>` | One node's fields that differ from their defaults; a device's non-default parameters with their units (and the default); `show project` for the song. | R-SVC-8 |
 | `api [--json] [--md]` | This document: every command, event, model field and device parameter. | R-API-1 |
-| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on\|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on\|off), showIds (on\|off: every object's id beside its name, R-UI-11). Saved at once. | R-SET-1 |
+| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on\|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on\|off), showIds (on\|off: every object's id beside its name, R-UI-11), key.<action>=<combos> (R-SET-4: a keyboard action's keys — a comma list such as "Ctrl+Shift+Z, Ctrl+Y", `none`, or `default`; a combo another action of the same keyboard has is refused naming it — the actions are in this document's Keyboard section). Saved at once. | R-SET-1 |
 | `settings print [--json]` | The machine's settings. | R-SET-1 |
 | `folder add <path>` | Add a sample folder to the browser's quick-access list. | R-SET-1 |
 | `folder remove <path>` | Remove a sample folder from the list (the folder itself is untouched). | R-SET-1 |
@@ -128,6 +128,34 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `Cmaj9` | 0 4 7 11 14 | major ninth |
 | `Cm9` | 0 3 7 10 14 | minor ninth |
 
+## Keyboard (R-SET-4)
+
+Every shortcut is an action; `settings set key.<id>=<combos>` gives it this machine's keys (`none` takes them all away, `default` gives these back). A combo is `[Ctrl+][Alt+][Shift+]<key>` — the key A–Z, 0–9, F1–F12, Backspace, Tab, Enter, Escape, Space, PageUp, PageDown, End, Home, Left, Up, Right, Down, Insert, Delete, Semicolon, Equal, Comma, Minus, Period, Slash, Backquote, BracketLeft, Backslash, BracketRight, Quote — and a list is comma-separated (`"Ctrl+Shift+Z, Ctrl+Y"`, quoted for its space). Transport, Song and Lanes are one keyboard and the piano roll another: a combo means one action on each, and the roll's shadow the song's while a roll has the keys. `settings.keys` in the model is every action with its keys now.
+
+| action | area | what | default |
+|---|---|---|---|
+| `transport.play` | Transport | Play / stop — back to where the time bar was put | Space |
+| `transport.stopHere` | Transport | Stop here | Ctrl+Space |
+| `transport.toStart` | Transport | To the start | Enter |
+| `song.save` | Song | Save | Ctrl+S |
+| `song.undo` | Song | Undo | Ctrl+Z |
+| `song.redo` | Song | Redo | Ctrl+Shift+Z, Ctrl+Y |
+| `song.settings` | Song | Settings | Ctrl+Comma |
+| `lanes.delete` | Lanes | Delete the clip | Delete, Backspace |
+| `lanes.duplicate` | Lanes | Duplicate the clip | Ctrl+D |
+| `roll.selectAll` | Piano roll | Select all | Ctrl+A |
+| `roll.deselect` | Piano roll | Deselect | Escape |
+| `roll.delete` | Piano roll | Delete | Delete, Backspace |
+| `roll.duplicate` | Piano roll | Duplicate | Ctrl+D |
+| `roll.copy` | Piano roll | Copy | Ctrl+C |
+| `roll.paste` | Piano roll | Paste | Ctrl+V |
+| `roll.up` | Piano roll | Up a semitone | Up |
+| `roll.down` | Piano roll | Down a semitone | Down |
+| `roll.octaveUp` | Piano roll | Up an octave | Shift+Up |
+| `roll.octaveDown` | Piano roll | Down an octave | Shift+Down |
+| `roll.left` | Piano roll | Earlier by the snap | Left |
+| `roll.right` | Piano roll | Later by the snap | Right |
+
 ## Events
 
 Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` stream.
@@ -146,7 +174,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `render.finished` | out, frames, peak | A render was written; peak is the master's, dBFS. |
 | `render.failed` | why | A render stopped with an error. |
 | `audit.report` | findings | How many findings `audit` printed. |
-| `settings.changed` | what | A machine setting changed and was saved: sampleRate, bufferSize, output, input, port.<name>, folders. |
+| `settings.changed` | what | A machine setting changed and was saved: sampleRate, bufferSize, output, input, port.<name>, folders, key.<action> (R-SET-4) … |
 | `devices.changed` | count | `devices list` found this many devices. |
 | `browse.changed` | path, entries | The browser now lists this folder. |
 | `recents.changed` | count | Home's recent songs changed. |
@@ -327,6 +355,12 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.newSig` | string | a new song's meter without --sig |
 | `settings.reducedMotion` | bool | the UI's tweens collapse (with the OS's own setting) |
 | `settings.showIds` | bool | every object's id drawn beside its name (R-UI-11) |
+| `settings.keys` | object[] | every keyboard action (R-SET-4), in the sheet's order — a pressed combo is looked up here |
+| `settings.keys[].id` | string | transport.play … — set with `settings set key.<id>=<combos>` |
+| `settings.keys[].area` | string | Transport \| Song \| Lanes \| Piano roll (the first three are one keyboard) |
+| `settings.keys[].label` | string |  |
+| `settings.keys[].keys` | string[] | its combos on this machine, canonical (Ctrl+Alt+Shift+<key>); empty = no key |
+| `settings.keys[].defaults` | string[] | what `default` gives back |
 | `devices` | object[] | from the last `devices list` |
 | `devices[].id` | string | what `settings set output=` takes |
 | `devices[].name` | string |  |

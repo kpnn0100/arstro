@@ -74,7 +74,7 @@
       "data": "{line, fields: {findings}}"
     },
     "settings.changed": {
-      "doc": "A machine setting changed and was saved: sampleRate, bufferSize, output, input, port.<name>, folders.",
+      "doc": "A machine setting changed and was saved: sampleRate, bufferSize, output, input, port.<name>, folders, key.<action> (R-SET-4) …",
       "data": "{line, fields: {what}}"
     },
     "devices.changed": {

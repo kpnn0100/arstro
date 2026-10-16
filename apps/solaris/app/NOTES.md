@@ -12,6 +12,7 @@ helpers it borrows.
 | Home › Open song… | the host's open picker → `project open "<path>"` |
 | Home › a card | `project open "<path>"` |
 | Home › a card, right-click | `recents remove "<path>"` |
+| Any shortcut on this page | the DEFAULT keys: each is a keymap action (R-SET-4) — `settings set key.<action>=<combos>` re-keys it, the model's `settings.keys` has this machine's; `App::key` looks every press up there (a roll with the keys first). API.md › Keyboard lists them |
 | Home / song bar › Settings (beside Home), Ctrl+, | `devices list`, then the sheet opens |
 | Song bar › File › New Song… · Open… · Save · Save As… · Render… · Render Stems… · Home | picker → `project new` · picker → `project open` · `project save` · picker → `project save "<path>"` · picker → `render --out "<path>"` · picker → `render --out "<path>" --stems <every strip>` · `project close` |
 | Song bar › Edit › Undo · Redo · Duplicate Clip · Delete Clip | `undo` · `redo` · `clip duplicate <ac>` · `clip delete <ac>` |
@@ -82,7 +83,7 @@ helpers it borrows.
 | Piano roll › a click on a note · Shift+click · Ctrl+drag anywhere on the grid (even from a note) · Ctrl+A · Escape | the selection — the view's (R-ROLL-8) |
 | Piano roll › the selection dragged · ↑/↓ (Shift: octave) · ←/→ | `notes move <pt> "<pitch@beat> …" --by <beats> --semi <n>` — ONE line |
 | Piano roll › Delete/Backspace · Ctrl+D · Ctrl+C then Ctrl+V (any roll) | `notes delete <pt> "…"` · `notes add <pt> "<pitch@beat:len:vel> …"` (a copy after the selection) · the shared clipboard, then `notes add` at the same beats |
-| Piano roll › ▶ (■ while its clip loops) · Space with a roll in front, stopped | `transport play --clip <ac>` (the clip it was opened from, else the pattern's first) · `transport stop`; Space stops whatever plays (R-ROLL-6) |
+| Piano roll › ▶ (■ while its clip loops) · Space with a roll in front, stopped | `transport play --clip <ac>` (the clip it was opened from, else the pattern's first) · `transport stop --return` (R-TIME-7); Space stops whatever plays (R-ROLL-6) |
 | Piano roll › Snap · Notes/Steps · Ctrl+wheel · wheel | nothing — the view's (Steps zooms to fit) |
 | Piano roll › Length ▾ (its menu) | nothing — the length a click makes (the view's; R-ROLL-10) |
 | A window's bottom-right corner dragged | nothing — its size (the view's; R-WIN-5) |

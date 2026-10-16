@@ -599,6 +599,31 @@ View, not the sheet — `core/Settings.cpp`),
 with the OS's own setting into `artboard::setReducedMotion` (design rule §2.6). The sheet scrolls when
 it is taller than the window (R6); `revealRect` brings a control in.
 
+### DR-SET-4 Hotkeys are settings: the keymap (R-SET-4)
+Every shortcut is an ACTION — `keyActions()` (`core/service/Keymap.cpp:8`): id, area, label, default keys, in the
+sheet's order (Transport: play/stop back to the cue `Space`, stop here `Ctrl+Space`, to the start `Enter`; Song: save,
+undo, redo `Ctrl+Shift+Z, Ctrl+Y`, settings `Ctrl+Comma`; Lanes: delete / duplicate the selected clip; Piano roll:
+select all, deselect, delete, duplicate, copy, paste, up / down a semitone, up / down an octave, earlier / later by
+the snap — the keys the app had before they were settings). A combo is spelt ONE way, `Ctrl+Alt+Shift+<key>`
+(`core/service/KeyCombo.h`, a pure header shared by the service and the window): A–Z, 0–9, F1–F12 and named keys
+(Space, Enter, Escape, Backspace, Delete, Tab, arrows, Home/End/PageUp/PageDown/Insert, punctuation by name — `Comma`);
+the codes are the window's, a letter or digit its ASCII, the rest Windows' virtual-key numbers. `settings set
+key.<id>=<combos>` (`core/service/ServiceMachine.cpp:141`) takes any case and order and keeps the canonical spelling;
+`none` takes every key away, `default` gives the defaults back (and drops the line); an unknown action is refused
+with the nearest, a key not in the table naming it, and — once every key of the line is in, so one line can swap two
+actions — a combo another action of the same keyboard has (Transport, Song and Lanes are one; the roll's is its own)
+naming that action (`:172`). Only re-keyed actions are written to the machine's file (`key.<id> = <combos>`,
+`core/Settings.cpp`); a hand-edited line that does not read is the defaults (`keysOf`, `Keymap.cpp:46`). The model
+publishes every action with its keys and defaults (`settings.keys`, `core/service/ServiceModel.cpp:109`); the API
+document's Keyboard section is generated from the same table. In the window `App::key` (`app/App.cpp:324`) spells the
+press (`comboText`) and looks it up there: while a roll has the keys (R-ROLL-8) its keyboard first — `PianoRoll::action`
+(`app/widgets/PianoRoll.cpp:247`), which declines a selection's action with no selection — then the song's
+(`songAction`, `:348`), so the roll's keys shadow the song's only while it uses them. The host names the KEY, not the
+character: GTK's keysym with no modifier (`linux_main.cpp:162`, `keyCodeOfKeysym` in `app/KeyInput.h`), so Shift+1 is
+"Shift+1"; what the press types follows as a Text event (D-9). L2 `test_keys_are_settings`; UI
+`test_the_keys_are_the_machines` (re-keyed by a script, the window follows; the roll's keys shadow the song's; the
+host's mapping). Mutants: no conflict refusal, the window reading the defaults instead of the model — both seen red.
+
 ### DR-WIN-1 Windows inside the song view (R-WIN-1, R-WIN-4)
 `FloatWindow` (`app/widgets/FloatWindow.cpp`): a frame — a 26 px title bar (title, ×) over its content.
 Dragged by the title it follows the pointer exactly, kept inside the layer; touched anywhere it is

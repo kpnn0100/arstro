@@ -22,6 +22,7 @@ namespace solaris
         o << "newSig = " << newSig << "\n";
         o << "reducedMotion = " << (reducedMotion ? "on" : "off") << "\n";
         o << "showIds = " << (showIds ? "on" : "off") << "\n";
+        for (const auto &k : keys) o << "key." << k.first << " = " << k.second << "\n";
         return o.str();
     }
 
@@ -53,6 +54,7 @@ namespace solaris
             else if (k == "newSig" && !v.empty()) s.newSig = v;
             else if (k == "reducedMotion") s.reducedMotion = v == "on";
             else if (k == "showIds") s.showIds = v == "on";
+            else if (k.rfind("key.", 0) == 0 && k.size() > 4) s.keys.emplace_back(k.substr(4), v); // checked when used (keysOf)
         }
         return s;
     }

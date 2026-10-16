@@ -9,6 +9,8 @@
 #include "Command.h"
 #include "Event.h"
 #include "Format.h"
+#include "KeyCombo.h"
+#include "Keymap.h"
 #include "Notation.h"
 #include "SolarisService.h"
 #include <algorithm>
@@ -989,6 +991,75 @@ static void test_the_dump_and_the_document()
     assert(contains(md, "| `filter.cutoff` | 20.0 … 20000.0 Hz | 2400.0 Hz |"));
     assert(r.ok("state print") == "screen project · Song · 120.0 bpm · 2 mixers · 3 strips · 2 lanes · 2 clips · unsaved\n");
     pass("state print --stable is deterministic and every key is documented; api lists every verb and every DSP parameter (R-API-1)");
+}
+
+// R-SET-4: every shortcut is an action whose keys are this machine's settings — read in any spelling, kept in one,
+// refused when another action of the same keyboard has the combo, published with the defaults, and saved
+static void test_keys_are_settings()
+{
+    // the combo, spelt one way: the window spells a press with it, the service a setting
+    std::string c, err;
+    assert(parseCombo("shift+ctrl+z", c, err) && c == "Ctrl+Shift+Z");
+    assert(parseCombo(" alt + f12 ", c, err) && c == "Alt+F12");
+    assert(parseCombo("Ctrl+,", c, err) && c == "Ctrl+Comma" && comboText(188, true, false, false) == c);
+    assert(comboText('A', false, false, false) == "A" && comboText(7, false, false, false).empty()); // no such key
+    assert(!parseCombo("Ctrl", c, err) && contains(err, "names no key"));
+    assert(!parseCombo("Ctrl+Foo", c, err) && contains(err, "no key `Foo`"));
+    assert(!parseCombo("Meta+A", c, err) && contains(err, "not Ctrl, Alt or Shift"));
+    assert(keyCodeOf("F13") == 0 && keyCodeOf("pgdn") == 34 && keyCodeOf("space") == 32);
+    std::vector<std::string> cs;
+    assert(parseCombos("Ctrl+Y,ctrl+y, Ctrl+Shift+Z", cs, err) && cs == (std::vector<std::string>{"Ctrl+Y", "Ctrl+Shift+Z"}));
+    assert(parseCombos("none", cs, err) && cs.empty() && combosText(cs) == "none");
+    assert(!parseCombos("Ctrl+Z,,F5", cs, err) && contains(err, "an empty combo"));
+
+    const std::string settings = scratch() + "/keys-settings.txt", recents = scratch() + "/keys-recents";
+    fs::remove(settings);
+    {
+        Run r(settings, recents);
+        const auto keyOf = [&](const std::string &id) -> const KeyActionModel & {
+            for (const auto &k : r.svc.model().settings.keys)
+                if (k.id == id) return k;
+            assert(!"no such action");
+            return r.svc.model().settings.keys[0];
+        };
+        // every action is published with its keys and its defaults, in the sheet's order
+        assert(r.svc.model().settings.keys.size() == keyActions().size() && r.svc.model().settings.keys[0].id == "transport.play");
+        assert(keyOf("transport.play").keys == std::vector<std::string>{"Space"} && keyOf("transport.stopHere").keys == std::vector<std::string>{"Ctrl+Space"});
+        assert((keyOf("song.redo").keys == std::vector<std::string>{"Ctrl+Shift+Z", "Ctrl+Y"}) && keyOf("roll.octaveUp").area == "Piano roll");
+        // set: any spelling in, the canonical one kept; the event names the action
+        r.events.clear();
+        r.ok("settings set key.transport.play=\"shift+ctrl+p, F5\"");
+        assert((keyOf("transport.play").keys == std::vector<std::string>{"Ctrl+Shift+P", "F5"}) && keyOf("transport.play").defaults == std::vector<std::string>{"Space"});
+        assert(r.events.size() == 1 && contains(r.events[0], "settings.changed what=key.transport.play"));
+        assert(contains(r.ok("settings print"), "key.transport.play = Ctrl+Shift+P, F5"));
+        // refused, naming why — and nothing changes
+        assert(contains(r.no("settings set key.transport.plya=F6"), "did you mean: key.transport.play?"));
+        assert(contains(r.no("settings set key.song.save=Ctrl+Nope"), "no key `Nope`"));
+        assert(contains(r.no("settings set key.song.save=Ctrl+D"), "Ctrl+D is already \"Duplicate the clip\" (key.lanes.duplicate)"));
+        assert(contains(r.no("settings set key.lanes.delete=F5"), "(key.transport.play)"));     // the song's areas are one keyboard
+        assert(contains(r.no("settings set key.roll.copy=Ctrl+V"), "(key.roll.paste)"));          // the roll's is one too
+        assert(keyOf("song.save").keys == std::vector<std::string>{"Ctrl+S"} && keyOf("lanes.delete").keys.size() == 2);
+        // the roll's keys may be the song's (they shadow them while a roll has the keys); one line may swap two
+        r.ok("settings set key.roll.selectAll=Ctrl+S");
+        r.ok("settings set key.lanes.duplicate=none key.song.save=Ctrl+D");
+        assert(keyOf("song.save").keys == std::vector<std::string>{"Ctrl+D"} && keyOf("lanes.duplicate").keys.empty());
+        // default: back to the defaults, and no line in the file for it
+        r.ok("settings set key.roll.selectAll=default key.song.save=Ctrl+S");
+        assert(keyOf("roll.selectAll").keys == std::vector<std::string>{"Ctrl+A"});
+        assert(!contains(r.ok("settings print"), "key.roll.selectAll") && !contains(r.ok("settings print"), "key.song.save"));
+        assert(contains(r.ok("settings print --json"), "\"lanes.duplicate=none\""));
+    }
+    // the machine's keys survive the process; a hand-edited line that does not read is the defaults
+    Run again(settings, recents);
+    for (const auto &k : again.svc.model().settings.keys)
+    {
+        if (k.id == "transport.play") assert((k.keys == std::vector<std::string>{"Ctrl+Shift+P", "F5"}));
+        if (k.id == "lanes.duplicate") assert(k.keys.empty());
+    }
+    const Settings hand = Settings::parse("key.song.save = Ctrl+Nope\nkey.song.undo = F9\n");
+    assert(keysOf(*keyAction("song.save"), hand.keys) == std::vector<std::string>{"Ctrl+S"});
+    assert(keysOf(*keyAction("song.undo"), hand.keys) == std::vector<std::string>{"F9"});
+    pass("Hotkeys are settings (R-SET-4): every action published with its keys and defaults; key.<action> takes any spelling, keeps one, refuses a key another action of its keyboard has, none / default; saved");
 }
 
 static void test_the_machine_settings_folders_devices_and_recents()
@@ -2105,6 +2176,7 @@ int main()
     test_render_writes_the_mix_deterministically();
     test_the_dump_and_the_document();
     test_the_machine_settings_folders_devices_and_recents();
+    test_keys_are_settings();
     test_live_playback_is_the_offline_render();
     test_the_metronome_clicks_live_and_never_in_a_render();
     test_audition_plays_a_sample_outside_the_song();
