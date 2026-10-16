@@ -153,6 +153,14 @@ namespace sltest
             return true;
         };
         h.midiIn = [] { return std::unique_ptr<arstro::solaris::IMidiIn>(new QuietMidi()); };
+        /** R-CTRL-2: a surface's output that takes anything and goes nowhere. */
+        struct QuietOut : arstro::solaris::IMidiOut
+        {
+            bool open(const std::string &, std::string &) override { return true; }
+            void send(const std::vector<uint8_t> &) override {}
+            void close() override {}
+        };
+        h.midiOut = [] { return std::unique_ptr<arstro::solaris::IMidiOut>(new QuietOut()); };
         /** R-REC-1: a capture device that hears nothing — enough to arm an audio line, monitor it, record silence. */
         struct QuietIn : arstro::solaris::IAudioIn
         {

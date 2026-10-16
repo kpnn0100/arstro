@@ -362,7 +362,7 @@ namespace solaris_ui
 
     void App::openSettings()
     {
-        dispatch("devices list"); // the device chips are what is connected NOW
+        dispatch("devices list"); // the device chips are what is connected NOW — the MIDI ports too (a surface's, R-CTRL-2)
         mSettings->show();
     }
 

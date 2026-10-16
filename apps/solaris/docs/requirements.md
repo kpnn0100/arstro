@@ -660,15 +660,15 @@ character: GTK's keysym with no modifier (`linux_main.cpp:191`, `keyCodeOfKeysym
 host's mapping). Mutants: no conflict refusal, the window reading the defaults instead of the model — both seen red.
 
 **The sheet's Keyboard page** (`SettingsSheet`, the last section — DR-SET-5; laid out and measured in the paint,
-`paintKeyboard`, `app/widgets/SettingsSheet.cpp:969`): a muted micro-label per area, then an action a line — its label,
+`paintKeyboard`, `app/widgets/SettingsSheet.cpp:1024`): a muted micro-label per area, then an action a line — its label,
 its keys as chips right-aligned, a "+" at the right edge, a dot before it while it is not its defaults; "Reset to
-defaults" beside the page's title, quiet while nothing is changed. A chip clicked (or "+") LISTENS (`listen`, `:463`;
-the gesture at `:699`, a double-click a click there): its border and wash turn to the accent and its label cross-fades
-to "Press a key…", its width easing between the two. The next key (`handleKey`, `:739`) is the slot's combo —
+defaults" beside the page's title, quiet while nothing is changed. A chip clicked (or "+") LISTENS (`listen`, `:476`;
+the gesture at `:728`, a double-click a click there): its border and wash turn to the accent and its label cross-fades
+to "Press a key…", its width easing between the two. The next key (`handleKey`, `:768`) is the slot's combo —
 `settings set "key.<action>=<the keys>"`, ONE line; Backspace removes the slot's key, Escape cancels, a key no combo
 can name keeps it listening, a click elsewhere lets it go. A key another action has is refused by the service and
 the App's toast says which action. Reset is ONE line, `key.<id>=default` for every changed action. The chips are
-keyed by combo (`bind`, `:328`): a key that arrives grows in from no width, one that leaves shrinks out where it was,
+keyed by combo (`bind`, `:339`): a key that arrives grows in from no width, one that leaves shrinks out where it was,
 so its neighbours slide (design rule §1). Escape and Enter cannot be listened for with the sheet (they cancel and
 — as Backspace — have their own meaning there); `settings set` takes them. UI `test_the_keyboard_section`
 (listening caught mid-ease, a chip caught growing while the old one shrinks, a refusal toasted, Reset as one line);
@@ -678,20 +678,20 @@ seen red.
 ### DR-SET-5 Settings in pages; a choice is a combo box (R-SET-5, R-SET-6)
 The sheet is a fixed card (720 × 520, smaller in a small window): a title band, a RAIL of the six sections — Audio,
 Playback, New songs, Sample folders, Interface, Keyboard (`railRect`) — and beside it ONE page, under a footer with
-Done (`onPaint`, `app/widgets/SettingsSheet.cpp:776`). Each section is a `Page` child (`:168`): clipped (its own paint
+Done (`onPaint`, `app/widgets/SettingsSheet.cpp:805`). Each section is a `Page` child (`:170`): clipped (its own paint
 too — `clipToBounds` clips only children), input-transparent (its controls take clicks; what the sheet draws goes to
-the sheet), with its own eased scroll. A section clicked is `showSection` — no line, the view's — and `advance` (`:557`)
+the sheet), with its own eased scroll. A section clicked is `showSection` — no line, the view's — and `advance` (`:570`)
 cross-fades the chosen page in as the last fades out (200 ms) and slides the rail's highlight to it (220 ms), each
 name easing to the foreground as the highlight reaches it; an open list closes and a listening key stops. The sheet
-opens again on the page it was left on. A setting that is one value of a list is a `SettingCombo` (`:101`):
-Artboard's `ComboBox` in cosmo's tokens (`comboStyle`, `:76`, as Genesis dresses it) — the drop, the list, its scroll
+opens again on the page it was left on. A setting that is one value of a list is a `SettingCombo` (`:103`):
+Artboard's `ComboBox` in cosmo's tokens (`comboStyle`, `:78`, as Genesis dresses it) — the drop, the list, its scroll
 and a pick are the library's; the field is drawn here (FR-41) so its label CROSS-FADES to a new value, whoever set
 it. A row picked is ONE `settings set <key>=<value>` line. A value the list lacks — a device not connected now, a
-tempo or a level set from a shell — is an entry of its own ("137 bpm (set elsewhere)", `bind`, `:254`), so the setting
-is never invisible. An on/off setting is a `SettingToggle` (`:146`): Artboard's `ToggleSwitch`, its knob drawn from an
+tempo or a level set from a shell — is an entry of its own ("137 bpm (set elsewhere)", `bind`, `:258`), so the setting
+is never invisible. An on/off setting is a `SettingToggle` (`:148`): Artboard's `ToggleSwitch`, its knob drawn from an
 eased copy of `on()`, so a value set from the model slides as a click does; a click is ONE `settings set …=on|off`.
-Controls are laid out each frame (`layoutPages`, `:510`) — name and note left, control right — and a control scrolled
-out of its page is hidden so it takes no input. Escape closes an open list first, then the sheet (`:769`); a click
+Controls are laid out each frame (`layoutPages`, `:523`) — name and note left, control right — and a control scrolled
+out of its page is hidden so it takes no input. Escape closes an open list first, then the sheet (`:798`); a click
 anywhere off a list closes it. The App draws the sheet in both passes now — its card, pages and controls, then an open
 list over everything (`app/App.cpp:460`). UI `test_settings_combos_send_lines_and_ease` (a list dropped, a row one
 line, the label caught mid cross-fade, a shell's change eased), `test_settings_in_pages` (the cross-fade and the
@@ -2563,8 +2563,8 @@ song bar shows a pill after the tempo (`app/widgets/SongBar.cpp:282`; its rect `
 "MIDI learn · <address> — move a control" — easing in and out (`:124`; the address kept while it fades), and a click on
 it is `map learn --cancel` (`:200`). Settings has a **MIDI** page (`SettingsSheet::kMidi`): each mapping a row —
 `CC <n>`, the address, dimmed and "not in this song" when inert — with × forgetting it (`map remove`,
-`app/widgets/SettingsSheet.cpp:727`); the rows are keyed by control, a new one growing in and a forgotten one shrinking
-out (`:265`, `:623`; drawn `:876`), the first placement set. UI `test_midi_learn_in_the_window`
+`app/widgets/SettingsSheet.cpp:756`); the rows are keyed by control, a new one growing in and a forgotten one shrinking
+out (`:270`, `:652`; drawn `:928`), the first placement set. UI `test_midi_learn_in_the_window`
 (`app/tests/ui/uiTests.cpp:4357`): Learn from a fader's menu — the line, the pill caught mid-fade, a click on it
 cancelling (caught mid-fade out); Forget CC 74's line; a knob's menu offering Learn; the MIDI page with one inert row,
 × sending its line and the row caught mid-shrink. Shots: midi-learn (a fader's menu with Learn and Forget, the pill),
@@ -2573,7 +2573,7 @@ Forget item, the pill not cancelling, a forgotten row snapping out, × sending n
 UI tests (this one and N26's device-window test) reported with a bare `printf`, so the suite's count missed them —
 both go through `pass` now (65).
 
-### DR-CTRL-2 Control surfaces (R-CTRL-2) — part 1, the codecs and the service
+### DR-CTRL-2 Control surfaces (R-CTRL-2) — part 1, the codecs and the service; part 2, Settings
 **One model, two codecs** (`core/Surface.h`; discussion.md Round 10): eight channel strips — a fader, a pot, mute,
 solo, arm, select, a touch — a master fader, the transport keys, bank / channel shift; back: each fader's travel, the
 lights, each pot's ring (`ringPosition`, `core/Surface.cpp:9`: eleven lights, 6 the centre), each strip's name. A codec
@@ -2613,3 +2613,15 @@ sent back, HUI's pot turned the wrong way, an empty slot left up and lit, HUI ne
 HUI's first ping waited out the second the Mackie session had started — a connection pings at once now; and the first
 idle check was missing, so "everything every time" survived — added.
 
+**Part 2 — Settings.** The MIDI page's first two rows (`SettingsSheet::kSurface`, `kSurfacePort`,
+`app/widgets/SettingsSheet.h:84`) are combos like every setting's — Control surface: None, Mackie Control, HUI; Surface
+port: None and the MIDI ports `devices list` names (`app/widgets/SettingsSheet.cpp:305`) — each choice one `settings
+set` line; the mapped controls follow under a micro-label (`:858`). The surface row's note (`rowNote`, `:866`) says
+what the model says: what a surface does, "connected · strips 1–8" (its bank), or "not connected — <why>"; a change
+cross-fades from the old line (`:636`). The rig's host has a MIDI output that goes nowhere (`QuietOut`,
+`app/tests/Rig.h:157`). UI `test_a_surface_chosen_in_settings` (`app/tests/ui/uiTests.cpp:4422`): Mackie Control
+picked — its line, the note caught mid-fade, then "no port"; a port picked — its line (the whole `key=value` quoted, as
+the sheet spells any), "connected · strips 1–8"; None — its line, disconnected. Shot settings-midi now shows a Mackie
+Control surface connected over the mappings. Mutants (each red): the note snapping, the combo sending another key, the
+port list without the machine's ports, the note blind to the connection; a fifth — Settings no longer asking for the
+MIDI ports — SURVIVED, and showed the ask was redundant (`devices list` already lists them): removed.

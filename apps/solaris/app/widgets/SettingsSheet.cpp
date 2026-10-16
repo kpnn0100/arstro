@@ -32,9 +32,11 @@ namespace solaris_ui
         Color fade(Color c, double a) { c.a *= a; return c; }
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
         const char *kLabels[SettingsSheet::kRows] = {"Output", "Input", "Sample rate", "Buffer", "Metronome", "Click level",
-                                                     "Preview level", "Tempo", "Meter", "Reduced motion", "Autosave", "Driver", "MIDI input", "Record quantize", "Count-in"};
+                                                     "Preview level", "Tempo", "Meter", "Reduced motion", "Autosave", "Driver", "MIDI input", "Record quantize", "Count-in",
+                                                     "Control surface", "Surface port"};
         const char *kKeys[SettingsSheet::kRows] = {"output", "input", "sampleRate", "bufferSize", "metronome", "metronomeLevel",
-                                                   "auditionLevel", "newBpm", "newSig", "reducedMotion", "autosave", "driver", "midiInputs", "recordQuantize", "countIn"};
+                                                   "auditionLevel", "newBpm", "newSig", "reducedMotion", "autosave", "driver", "midiInputs", "recordQuantize", "countIn",
+                                                   "surface", "surfacePort"};
         // the sections (R-SET-3, R-SET-5) and the rows each page holds
         const char *kTitles[SettingsSheet::kSections] = {"Audio", "Playback", "New songs", "Sample folders", "Interface", "Keyboard", "MIDI"};
         const std::vector<int> kPageRows[SettingsSheet::kSections] = {
@@ -44,7 +46,7 @@ namespace solaris_ui
             {},
             {SettingsSheet::kMotion, SettingsSheet::kAutosave},
             {},
-            {}, // R-CTRL-1: the MIDI controls mapped (paintMidi)
+            {SettingsSheet::kSurface, SettingsSheet::kSurfacePort}, // R-CTRL-2; then R-CTRL-1's mapped controls (paintMidi)
         };
         bool isToggle(int row) { return row == SettingsSheet::kMetronome || row == SettingsSheet::kMotion; }
         std::string num(double v)
@@ -214,6 +216,8 @@ namespace solaris_ui
         for (const char *m : {"4/4", "3/4", "6/8", "7/8"}) mChips[kNewSig].push_back(Chip{m, m});
         mChips[kDriver] = {Chip{"PulseAudio", "pulse"}, Chip{"PipeWire \xE2\x80\x94 low latency", "pipewire"}}; // R-DEV-9
         mChips[kMidiIn] = {Chip{"Every MIDI input", "all"}, Chip{"None", "none"}};                         // R-MIDI-2
+        mChips[kSurface] = {Chip{"None", "none"}, Chip{"Mackie Control", "mcu"}, Chip{"HUI", "hui"}};       // R-CTRL-2
+        mChips[kSurfacePort] = {Chip{"None", ""}};
         mChips[kRecQuant] = {Chip{"Off", "off"}, Chip{"1/4", "1/4"}, Chip{"1/8", "1/8"}, Chip{"1/16", "1/16"}, Chip{"1/32", "1/32"}};
         mChips[kCountIn] = {Chip{"None", "0"}, Chip{"1 bar", "1"}, Chip{"2 bars", "2"}, Chip{"4 bars", "4"}};
         mChips[kAutosave] = {Chip{"Off", "off"}, Chip{"Every 30 s", "30"}, Chip{"Every minute", "60"}, Chip{"Every 2 minutes", "120"}, Chip{"Every 5 minutes", "300"}};
@@ -262,6 +266,7 @@ namespace solaris_ui
         mLatencyMs = s.latencyMs;
         mFolders = s.folders;
         mSettings = s;
+        mSurface = m.surface;
         // R-CTRL-1: the mapping rows, keyed by control — a forgotten one stays to shrink out, a new one is appended
         for (auto &r : mMapRows)
         {
@@ -296,6 +301,12 @@ namespace solaris_ui
                 const std::string dir = r == kOutput ? "out" : "in";
                 for (const auto &d : m.devices)
                     if (d.dir == dir) chips.push_back(Chip{d.name, d.id});
+            }
+            else if (r == kSurfacePort)
+            {
+                // R-CTRL-2: the surface's own port — any the machine lists
+                chips = {Chip{"None", ""}};
+                for (const auto &d : m.midiDevices) chips.push_back(Chip{d.name, d.id});
             }
             else if (r == kMidiIn)
             {
@@ -376,6 +387,8 @@ namespace solaris_ui
         case kMidiIn: return mSettings.midiInputs;
         case kRecQuant: return mSettings.recordQuantize;
         case kCountIn: return std::to_string(mSettings.countIn);
+        case kSurface: return mSettings.surface;
+        case kSurfacePort: return mSettings.surfacePort;
         default: return std::string();
         }
     }
@@ -620,6 +633,22 @@ namespace solaris_ui
             else ++it;
         }
         mHover.advance(nowMs);
+        // R-CTRL-2: the surface's note — connected, or why not — cross-fades to its new text
+        {
+            const std::string n = rowNote(kSurface);
+            if (n != mSurfNote)
+            {
+                if (mSurfNotePlaced)
+                {
+                    mSurfNoteOld = mSurfNote;
+                    mSurfNoteFade.set(0.0);
+                    mSurfNoteFade.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+                }
+                mSurfNote = n;
+                mSurfNotePlaced = true;
+            }
+            mSurfNoteFade.update(nowMs);
+        }
         // R-CTRL-1: the mapping rows grow in and shrink out; the first placement is set
         for (auto &r : mMapRows)
         {
@@ -824,10 +853,45 @@ namespace solaris_ui
         t.drawText(kTitles[s], 0.0, oy + 16.0, 14.0, font::sansSemiBold());
         if (s == kFolders) paintFolders(t, w, oy, px, py);
         else if (s == kKeyboard) paintKeyboard(t, w, oy, px, py);
-        else if (s == kMidi) paintMidi(t, w, oy, px, py);
+        else if (s == kMidi)
+        {
+            paintRows(t, s, w, oy); // R-CTRL-2: the surface's rows, then R-CTRL-1's mapped controls
+            paintMidi(t, w, oy, px, py);
+        }
         else paintRows(t, s, w, oy);
         page.scroll.drawBar(t, page.width.value(), 1.0);
         t.restore();
+    }
+
+    std::string SettingsSheet::rowNote(int r) const
+    {
+        std::string note;
+        if (r == kOutput) note = "the clock \xE2\x80\x94 every other device follows it";
+        if (r == kInput) note = "where a recording comes from";
+        if (r == kRate) note = "new songs start here";
+        if (r == kMetronome) note = "clicks while playing \xE2\x80\x94 never in a render";
+        if (r == kClickLevel) note = "how loud the click is";
+        if (r == kPreviewLevel) note = "a sample heard from the browser";
+        if (r == kNewBpm) note = "a new song starts at this tempo";
+        if (r == kNewSig) note = "\xE2\x80\xA6 and in this meter";
+        if (r == kMotion) note = "every tween collapses \xE2\x80\x94 the system's own setting counts too";
+        if (r == kAutosave) note = "an unsaved song is kept beside it \xE2\x80\x94 recovered if Solaris stops";
+        if (r == kDriver) note = "PipeWire for small buffers and counted xruns \xE2\x80\x94 PulseAudio if it will not open";
+        if (r == kMidiIn) note = "the keyboard an armed strip plays";
+        if (r == kRecQuant) note = "where a recorded note's start lands";
+        if (r == kCountIn) note = "the click before a recording, the song waiting";
+        if (r == kSurface) // R-CTRL-2: as it is now
+            note = mSurface.protocol == "none" ? "faders, pans, buttons and the transport on a Mackie Control or HUI surface"
+                   : mSurface.connected       ? "connected \xC2\xB7 strips " + std::to_string(mSurface.bank + 1) + "\xE2\x80\x93" + std::to_string(mSurface.bank + 8)
+                                              : "not connected \xE2\x80\x94 " + mSurface.why;
+        if (r == kSurfacePort) note = "its own port, in and out \xE2\x80\x94 the keyboard does not listen there";
+        if (r == kBuffer)
+        {
+            char b[64];
+            std::snprintf(b, sizeof b, "%.1f ms of latency", mLatencyMs);
+            note = b;
+        }
+        return note;
     }
 
     void SettingsSheet::paintRows(IRenderTarget &t, int s, double w, double oy) const
@@ -838,31 +902,19 @@ namespace solaris_ui
         {
             const int r = rows[i];
             const double top = oy + kPageTop + (double)i * kRowH;
-            std::string note;
-            if (r == kOutput) note = "the clock \xE2\x80\x94 every other device follows it";
-            if (r == kInput) note = "where a recording comes from";
-            if (r == kRate) note = "new songs start here";
-            if (r == kMetronome) note = "clicks while playing \xE2\x80\x94 never in a render";
-            if (r == kClickLevel) note = "how loud the click is";
-            if (r == kPreviewLevel) note = "a sample heard from the browser";
-            if (r == kNewBpm) note = "a new song starts at this tempo";
-            if (r == kNewSig) note = "\xE2\x80\xA6 and in this meter";
-            if (r == kMotion) note = "every tween collapses \xE2\x80\x94 the system's own setting counts too";
-            if (r == kAutosave) note = "an unsaved song is kept beside it \xE2\x80\x94 recovered if Solaris stops";
-            if (r == kDriver) note = "PipeWire for small buffers and counted xruns \xE2\x80\x94 PulseAudio if it will not open";
-            if (r == kMidiIn) note = "the keyboard an armed strip plays";
-            if (r == kRecQuant) note = "where a recorded note's start lands";
-            if (r == kCountIn) note = "the click before a recording, the song waiting";
-            if (r == kBuffer)
-            {
-                char b[64];
-                std::snprintf(b, sizeof b, "%.1f ms of latency", mLatencyMs);
-                note = b;
-            }
+            const std::string note = rowNote(r);
             const double room = w - (isToggle(r) ? 40.0 : kComboW) - 20.0;
             t.setFill(palette::foreground());
             t.drawText(textfit::ellipsize(t, kLabels[r], room, 12.0, font::sans()), 0.0, top + 23.0, 12.0, font::sans());
-            t.setFill(palette::mutedForeground());
+            if (r == kSurface && mSurfNoteFade.value() < 1.0)
+            {
+                // R-CTRL-2: the old line out, the new in
+                const double a = mSurfNoteFade.value();
+                t.setFill(fade(palette::mutedForeground(), 1.0 - a));
+                t.drawText(textfit::ellipsize(t, mSurfNoteOld, room, 10.0, font::sans()), 0.0, top + 39.0, 10.0, font::sans());
+                t.setFill(fade(palette::mutedForeground(), a));
+            }
+            else t.setFill(palette::mutedForeground());
             t.drawText(textfit::ellipsize(t, note, room, 10.0, font::sans()), 0.0, top + 39.0, 10.0, font::sans());
             if (i + 1 < rows.size())
             {
@@ -876,11 +928,14 @@ namespace solaris_ui
     void SettingsSheet::paintMidi(IRenderTarget &t, double w, double oy, double px, double py) const
     {
         // R-CTRL-1: each MIDI control and the number it moves — one the open song lacks dimmed, saying so; × forgets it
+        // under the surface's rows: the mapped controls, titled as a section (R-SET-5's micro-label)
+        double fy = oy + kPageTop + (double)kPageRows[kMidi].size() * kRowH + 14.0;
         t.setFill(palette::mutedForeground());
-        t.drawText("controls and what they move", t.measureText(kTitles[kMidi], 14.0, font::sansSemiBold()) + 10.0, oy + 16.0, 10.0, font::sans());
+        t.drawText("MAPPED CONTROLS", 0.0, fy, 9.0, font::sansSemiBold(), 0.13 * 9.0);
+        t.drawText("controls and what they move", t.measureText("MAPPED CONTROLS", 9.0, font::sansSemiBold()) + 0.13 * 9.0 * 15 + 10.0, fy, 10.0, font::sans());
+        fy += 8.0;
         mMapRemove.clear();
         mMapRemoveCc.clear();
-        double fy = oy + kPageTop;
         if (mMapRows.empty())
         {
             t.setFill(fade(palette::mutedForeground(), 0.8));

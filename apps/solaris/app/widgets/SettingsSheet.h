@@ -80,7 +80,8 @@ namespace solaris_ui
     class SettingsSheet : public artboard::Segment
     {
     public:
-        enum Row { kOutput = 0, kInput, kRate, kBuffer, kMetronome, kClickLevel, kPreviewLevel, kNewBpm, kNewSig, kMotion, kAutosave, kDriver, kMidiIn, kRecQuant, kCountIn, kRows };
+        enum Row { kOutput = 0, kInput, kRate, kBuffer, kMetronome, kClickLevel, kPreviewLevel, kNewBpm, kNewSig, kMotion, kAutosave, kDriver, kMidiIn, kRecQuant, kCountIn,
+                   kSurface, kSurfacePort, kRows }; // kSurface…: R-CTRL-2, the MIDI page
         enum Section { kAudio = 0, kPlayback, kNewSongs, kFolders, kInterface, kKeyboard, kMidi, kSections }; // kMidi: R-CTRL-1
         static constexpr double kCardW = 720.0, kCardH = 520.0;
         static constexpr double kRailW = 164.0;   // the sections' column
@@ -118,6 +119,8 @@ namespace solaris_ui
         double labelAmount(int row) const;         // LIVE: a combo's label cross-fade (1 = settled)
         std::string shownValue(int row) const;     // the label a combo shows now
         double toggleAmount(int row) const;        // LIVE: a toggle's knob
+        std::string rowNote(int row) const;        // the line under a setting's name (R-CTRL-2: a surface's, connected or why)
+        double surfaceNoteAmount() const { return mSurfNoteFade.value(); } // LIVE: the surface's note cross-fading to its new text
 
         // geometry, from the last paint (a test renders a frame first)
         artboard::Rect doneRect() const { return mDone; }
@@ -204,6 +207,10 @@ namespace solaris_ui
         int mRate = 48000, mBuffer = 256;
         double mLatencyMs = 0;
         solaris::SettingsModel mSettings;
+        solaris::SurfaceModel mSurface; // R-CTRL-2: connected, or why not
+        std::string mSurfNote, mSurfNoteOld; // … its note, and the one it cross-fades from
+        artboard::AnimatedProperty mSurfNoteFade{1.0};
+        bool mSurfNotePlaced = false;
 
         bool mOpen = false, mClosing = false, mShowWanted = false, mCloseWanted = false;
         double mNowMs = 0.0;

@@ -864,9 +864,10 @@ namespace
                  r.click(world(d, d.faderRect("ch_3")), 2);
                  r.settle();
              }},
-            {"settings-midi", // … Settings › MIDI: the mappings, one the song lacks dimmed
+            {"settings-midi", // … Settings › MIDI: a Mackie Control surface connected; the mappings, one the song lacks dimmed
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");
+                 r.cmd("settings set surface=mcu surfacePort=\"Keystation 49\"");
                  r.cmd("map add 74 ch_3.gain");
                  r.cmd("map add 2/21 dv_3.mix");
                  r.cmd("map add 7 project.masterGain");

@@ -4419,6 +4419,45 @@ static void test_midi_learn_in_the_window()
     pass("MIDI learn in the window (R-CTRL-1): Learn MIDI CC in a fader's and a knob's menu (one line); the song bar's pill eases in, a click cancels, it eases out; Forget CC; Settings › MIDI lists them, one inert, × forgets one, its row shrinking out");
 }
 
+static void test_a_surface_chosen_in_settings()
+{
+    // R-CTRL-2 (N28 part 2): Settings › MIDI — the control surface and its port are combos (each choice one `settings
+    // set` line); the row's note says whether it is connected — cross-fading to its new text — and why not
+    sltest::Rig r("ui-surface", 1440, 900);
+    r.cmd("project new " + r.song("Surface") + ".slp --bpm 120");
+    r.settle();
+    r.app->openSettings();
+    r.settle();
+    using arstro::solaris_ui::SettingsSheet;
+    auto &sh = r.app->settings();
+    r.click(sh.railRect(SettingsSheet::kMidi));
+    r.settle();
+    assert(contains(sh.rowNote(SettingsSheet::kSurface), "Mackie Control or HUI"));
+    auto pick = [&](int row, const std::string &label) {
+        r.click(sh.controlRect(row));
+        r.settle();
+        int k = -1;
+        for (int i = 0; i < sh.optionCount(row); ++i)
+            if (sh.optionLabel(row, i) == label) k = i;
+        assert(k >= 0);
+        r.click(sh.optionRect(row, k));
+    };
+    pick(SettingsSheet::kSurface, "Mackie Control");
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "settings set surface=mcu") && sh.surfaceNoteAmount() > 0.0 && sh.surfaceNoteAmount() < 1.0);
+    r.settle();
+    assert(sh.rowNote(SettingsSheet::kSurface) == "not connected \xE2\x80\x94 no port \xE2\x80\x94 `settings set surfacePort=<port>`");
+    pick(SettingsSheet::kSurfacePort, "Keystation 49");
+    r.settle();
+    assert(sentLine(r, "settings set \"surfacePort=Keystation 49\"") && sh.shownValue(SettingsSheet::kSurfacePort) == "Keystation 49");
+    assert(sh.rowNote(SettingsSheet::kSurface) == "connected \xC2\xB7 strips 1\xE2\x80\x93" "8" && r.svc->model().surface.connected); // (a hex escape is greedy)
+    pick(SettingsSheet::kSurface, "None");
+    r.settle();
+    assert(sentLine(r, "settings set surface=none") && !r.svc->model().surface.connected);
+    pass("a surface chosen in Settings (R-CTRL-2): Settings › MIDI's Control surface and Surface port combos — one line each; the note says connected (its strips) or why not, cross-fading");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -4486,6 +4525,7 @@ int main()
     test_a_sample_dropped_on_a_sampler_loads_it();
     test_a_plugins_device_window();
     test_midi_learn_in_the_window();
+    test_a_surface_chosen_in_settings();
     test_a_sample_is_heard_from_the_browser();
     test_the_grid_follows_the_zoom();
     std::printf("\n%d passed, 0 failed\n", passed);
