@@ -143,7 +143,7 @@ forward is taken, backward refused naming both ends; `strip move` that would poi
 default route). The same rule is PUBLISHED: `targetsOf` (`model/Project.cpp:936`) lists what a strip
 may feed — later strips in processing order, `master`, the output ports — as `strips[].targets`
 (`core/service/ServiceModel.cpp:253`), and `keyTargetsOf` (`:756`) its strips as `strips[].keyTargets`;
-a front end offers exactly that list (the route picker, `MixerDock::openOut`, `app/widgets/MixerDock.cpp:898`),
+a front end offers exactly that list (the route picker, `MixerDock::openOut`, `app/widgets/MixerDock.cpp:912`),
 and the test routes to every entry offered.
 
 ### DR-ENG-1 The engine renders a MixGraph through the DSP library's devices (R-MIX-1/5/6, R-DSP-1/5, R-RENDER-1)
@@ -940,7 +940,7 @@ a key does not pull its source into a solo (`Compile.cpp:52`), so a soloed bass 
 kick stays silent; a MUTED strip keys nothing (live, a mute in a song with keys swaps the engine,
 `core/service/ServiceTransport.cpp:448`). The audit names a key that no compressor with Sidechain on
 hears (`core/service/ServiceModel.cpp:556`). In the dock a key reads "key <target>" in the solo amber,
-and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:1222`).
+and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:1236`).
 Measured (L2): a ghost kick (−120 dB fader, pre-fader key) through −30 dB at 4:1 dips a −6 dBFS bass
 6–22.5 dB 15–35 ms after each kick, back within 1 dB before the next; identical with the bass soloed;
 nothing with the kick muted.
@@ -1068,7 +1068,7 @@ unless it already IS one (`auto create <address>`), Formula… (cosmo's rename f
 "=", → `set <address>="=<typed>"`, quoted when it has a space), Clear Binding when bound (`bind clear
 <address>`), Reset to Default (`set <address>=<default>`), and Copy Address / Copy Value / Copy as Formula
 (DR-UI-11). The device window (`DevicePanel::openParamMenu`, `app/widgets/DevicePanel.cpp:499`) and the dock
-(`MixerDock::openParam`, `app/widgets/MixerDock.cpp:950`, offered first on a right-click, `:1183`) both call
+(`MixerDock::openParam`, `app/widgets/MixerDock.cpp:964`, offered first on a right-click, `:1197`) both call
 it, so the menus cannot drift; a hosted third-party VST3's parameter list (R-VST-6, not built yet) will call
 it the same way. In the dock: a fader → `<ch>.gain`, a pan → `<ch>.pan`, a send's row on a card or its cell
 in the matrix → `<sd>.gain`, the master fader → `project.masterGain` (the addresses that already bind,
@@ -1088,13 +1088,13 @@ order to addresses. While playing, `refreshModel` keeps the pumped values and ev
 since (`ServiceModel.cpp:81`, `:340`). At most 256 bindings report (`Player::kMaxBinds`). Not in the stable
 dump: it moves with the transport.
 
-**The dock draws it** (`MixerDock::advance`, `app/widgets/MixerDock.cpp:584`): a bound fader or pan takes its
+**The dock draws it** (`MixerDock::advance`, `app/widgets/MixerDock.cpp:589`): a bound fader or pan takes its
 live value; while playing it is SET each frame — it follows the audio like the playhead — and stopped a change
 (a seek, a curve edited) eases 220 ms; a new driver (the formula changed) or play pressed mid-ease is a
-catch-up ease that lands when it ends and then follows (`follow`, `:621`). A bound send shows its live
+catch-up ease that lands when it ends and then follows (`follow`, `:629`). A bound send shows its live
 level. What drives each: a tag over the fader — `auto au_1`, `= ch_3.gain`, `= -2 + 2 * s…` (`paintTag`,
-`:1266`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
-in and out (200 ms) and its text cross-fades when the formula changes (`:705`).
+`:1285`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
+in and out (200 ms) and its text cross-fades when the formula changes (`:719`).
 
 Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1602`): stopped, `live` is
 `eval`'s number at the position; playing (a fake clock device), a −2 dB-a-beat ramp is within 0.1 dB of the
@@ -1122,7 +1122,7 @@ way by the EASED amount. Where: lane headers (the lane's id; a strip's own row, 
 rows (`au_n`) (`app/widgets/Timeline.cpp:1382`, `:893`); clips (`ac_n`, and a note clip's pattern `pt_n`;
 `:736` — "linked ×N" fades out for them); in the dock each strip card (`ch_n`), the master (`master`), each
 rack chip (`dv_n`) and each send (`sd_n`, cross-fading with "→ name") (`paintCard`,
-`app/widgets/MixerDock.cpp:1329`); a device window's rows show their FULL address (`dv_1.filter.cutoff`) in a
+`app/widgets/MixerDock.cpp:1348`); a device window's rows show their FULL address (`dv_1.filter.cutoff`) in a
 pill over the label (`ParamIds`, `app/widgets/DevicePanel.cpp:146`); its header already names its id.
 
 **Copied, by the host.** Copy Address / Copy Value / Copy as Formula on a device parameter row and on the
@@ -1773,7 +1773,7 @@ grip answers twice, from the SAME zone its press takes: `dragCursor()` — the c
 pointer is — and `cursorAt(local)`. `Timeline` (`app/widgets/Timeline.cpp:434`): ↔ over a clip's end (`kEdgeGrip`,
 R-CLIP-7) and the loop brace's ends (`kBraceGrip`, the ruler's lower half), and while either is held (pressed, not yet
 moved, included). `PianoRoll` (`app/widgets/PianoRoll.cpp:578`): ↔ a note's end (the zone `noteAt` gives, D-7) and the
-pattern's end handle, ↕ a velocity bar, and while any is held. `MixerDock` (`app/widgets/MixerDock.cpp:833`): ↕ its top
+pattern's end handle, ↕ a velocity bar, and while any is held. `MixerDock` (`app/widgets/MixerDock.cpp:847`): ↕ its top
 edge (`Part::Resize`). `WindowLayer` (`app/widgets/FloatWindow.cpp:304`): ⤡ a window's corner (`FloatWindow::resizing`
 while it is held); the front-most window under the point decides, so it covers the lanes beneath. `ProjectScreen::
 cursorAt` (`app/widgets/ProjectScreen.cpp:20`) asks every drag in hand first, then the window, the dock, the lanes;
@@ -1835,7 +1835,7 @@ the same meters 100 ms at a time and prints ONE line, `measure integrated= momen
 correlationMin=` (LUFS, LUFS, LUFS, dBTP, −1…+1; the lowest correlation only where the momentary is above −70 LUFS —
 silence has no phase; `core/service/ServiceRender.cpp:50`). The window: the master's card has a chip with the
 integrated LUFS where a strip has mute and solo (`MixerDock::loudnessRect`; caught up over 220 ms, "— LUFS" cross-faded
-in for none — `app/widgets/MixerDock.cpp:693`); a click opens the Loudness window (`WindowLayer::openLoudness`,
+in for none — `app/widgets/MixerDock.cpp:707`); a click opens the Loudness window (`WindowLayer::openLoudness`,
 `app/widgets/FloatWindow.cpp:274`), a `LoudnessPanel` (`app/widgets/LoudnessPanel.cpp`): the five readings (each
 catching up over 220 ms; nothing measured cross-fades to "—"), the correlation's needle, the 61 bands on −72…0 dB
 (rising in 40 ms, falling in 300) and Reset — `meters clear`. L2 `test_meters_measure_what_plays` (a −6 dBFS 1 kHz
@@ -1855,9 +1855,9 @@ a stop zeroes peaks, RMS and holds and leaves the lights lit. `meters clear` (`c
 not an edit, `meters.cleared`) puts every light out, zeroes the holds and starts the true peak and integrated loudness
 again: on the audio thread it is a `Live::ClearMeters` MESSAGE (`core/Player.cpp:202`), so it lands in order after a
 gain edit sent before it; until the thread has taken it (`Player::clearing`) `pump` reads no holds, flags or loudness,
-which are from before it. The window (`MixerDock::paintFader`, `app/widgets/MixerDock.cpp:1305`): the peak a lighter bar,
+which are from before it. The window (`MixerDock::paintFader`, `app/widgets/MixerDock.cpp:1324`): the peak a lighter bar,
 the RMS its solid core, the held peak a 1.5 px line in its zone's colour, all eased (40 ms up, 300 ms down); above the
-meters a clip light lit red, eased, whose click is `meters clear` (`:1095`). L2 `test_meters_measure_what_plays` (RMS
+meters a clip light lit red, eased, whose click is `meters clear` (`:1109`). L2 `test_meters_measure_what_plays` (RMS
 0.354 and a held 0.5 for a 0.5 sine; +12 dB lights both latches; a clear while playing allocates nothing on the audio
 thread; latched through a stop and an edit), `test_held_peak_holds_then_falls`; UI `test_meters_and_the_loudness_window`.
 Mutants: no hold (the held line = the peak), a latch lost on refresh, the clip light snapping — each seen red. The
@@ -1901,7 +1901,7 @@ back in processing order is refused by `send add`'s rule (R-MIX-4) and the whole
 ducked is refused naming its send. It prints the compressor, then `made: send=…`. A real kick peaks under full scale
 and cuts less than the amount: the default Drum Machine kick, 12 dB asked, takes the bass 7.3 dB down just after it,
 back within 2 dB before the next beat at 120 bpm. The window: a strip's right-click menu has Duck Under ▸ listing every
-strip whose published `keyTargets` include it — the strips that may key it — each ONE line (`app/widgets/MixerDock.cpp:1231`).
+strip whose published `keyTargets` include it — the strips that may key it — each ONE line (`app/widgets/MixerDock.cpp:1245`).
 L2 `test_strip_duck_is_one_line` (the settings, the key, the duck measured on the bass's stem, one undo, six
 refusals); UI `test_a_strip_ducks_under_another_from_its_menu`. Mutants: Sidechain left off, the send not a key,
 the submenu's strips from the wrong side of `keyTargets` — each seen red.
@@ -2136,9 +2136,9 @@ is the capture's writer: what fits goes in, the rest dropped and counted. The se
 Mutants: the overflow not counted, the driver setting ignored — red. Not run on this machine's real input (the user's
 microphone): a live recording is owed. **The window.** An audio or instrument strip's M | S row is M | S | R in the mixer
 (`armRow`, `app/widgets/MixerDock.cpp:71`; a bus and the master keep M | S), R lit red when the strip is armed, eased.
-R (`:1103`) disarms an armed strip (`strip arm none`); on an audio line with no input it offers the song's input
+R (`:1117`) disarms an armed strip (`strip arm none`); on an audio line with no input it offers the song's input
 ports — "Arm with Mic" is ONE `strip arm <ch> --input <port>` — or, with none, "Add an input port (In)" (`port add In
---dir in`); else it arms (`strip arm <ch>`). An audio line's menu (`:1241`): Input… (the input ports, the current one
+--dir in`); else it arms (`strip arm <ch>`). An audio line's menu (`:1255`): Input… (the input ports, the current one
 marked, No input, Add an input port… — a name typed in cosmo's field) and Monitor… (Auto · On · Off — `set
 <ch>.monitor=`). The ruler's menu adds Punch the loop's span (`transport punch <loop>`) and Punch off
 (`app/widgets/TimelineMarkers.cpp:209`); the punch is a red line atop the bars (`Timeline::punchRect`,
@@ -2558,7 +2558,7 @@ and run again.
 **Part 2 — the window.** The shared parameter menu (`app/widgets/ParamMenu.cpp`) offers every number **Learn MIDI CC**
 (`:85` — `map learn <address>`) and, for each control that moves it, **Forget CC <n>** (`map remove <n>`); the
 widget fills `ParamTarget::controls` from `settings.mappings[]` (`controlsFor`, `:43`; the dock,
-`app/widgets/MixerDock.cpp:982`; a device's rows and knobs, `app/widgets/DevicePanel.cpp:523`). While a learn waits, the
+`app/widgets/MixerDock.cpp:996`; a device's rows and knobs, `app/widgets/DevicePanel.cpp:523`). While a learn waits, the
 song bar shows a pill after the tempo (`app/widgets/SongBar.cpp:297`; its rect `:82`, up to the meter, 260 at most) —
 "MIDI learn · <address> — move a control" — easing in and out (`:132`; the address kept while it fades), and a click on
 it is `map learn --cancel` (`:215`). Settings has a **MIDI** page (`SettingsSheet::kMidi`): each mapping a row —
@@ -2644,7 +2644,7 @@ drawn value is a value catching up (`:133`), so a stop eases it down. The learn 
 `test_the_cpu_meter` (`core/tests/serviceTests.cpp:4094`): playing, a load in (0, 10) and a worst block kept; a
 chord's synth costs more than an empty bus, and no strip more than the whole (≈ 2 % of a block against ≈ 0 here);
 stopped, all 0; a render before and after playing, the same bytes. UI `test_the_cpu_in_the_song_bar`
-(`app/tests/ui/uiTests.cpp:4461`): the readout caught on its way up and on its way down. The meters-playing shot shows
+(`app/tests/ui/uiTests.cpp:4519`): the readout caught on its way up and on its way down. The meters-playing shot shows
 it. Mutants (each red): the load not over the block's duration, the strips never timed, a strip's sums never
 restarted, the worst block never kept, the readout snapping. Found while building it: two survived first — "a strip's
 sums never restarted" (the test's bound was loose: a strip's share is now held to the whole load's) and "the worst
@@ -2709,5 +2709,15 @@ frozen; unfreeze keeping the file; frozen twice; the bounce onto the strip itsel
 trimmed; a refreeze's stale decode kept; the unreadable file unsaid. Found while building it: the unreadable-file
 warning bound to the clip loop's `if` (a dangling `else`) — every other strip's clip said "cannot be read"; the
 refusal for an unsaved song could never fire (an open song always has its file) and is gone; consolidate's naming
-became `writeBounce`, one copy for both.
+became `writeBounce`, one copy for both. **Drawn** (part 2): a strip's menu in the mixer
+(`app/widgets/MixerDock.cpp:1274`) — "Unfreeze" on a frozen strip; "Freeze" (`:1275`) and "Bounce to a new strip"
+(`:1276`) on a strip nothing feeds, read from the model's `fromStrips` (outputs, sends and keys — the service's rule);
+each one line. A frozen strip's eased amount (`:651`, `frozenAmount` `:419`, the cross-fade's time) dims its rack
+(`:1387`) under a chip-sized FROZEN pill in the accent (`:1412`, its word ellipsized on a narrow card). Test: UI
+`test_a_strip_freezes_from_its_menu` (`app/tests/ui/uiTests.cpp:4461`: a fed bus offers neither; Freeze sends its line,
+the amount caught mid-ease both ways; Unfreeze; Bounce makes a strip). Shots: mixer-frozen, mixer-frozen-mid. Mutants
+(each red): the look snapping; never advancing; Freeze, or Bounce, offered on a fed strip; Unfreeze never offered;
+Freeze sending the wrong line. Found while testing it: Escape closes a context menu only while renaming, so the Duck
+Under test's last check ("no such item") passed whether or not its menu opened — it now asserts the menu opened and
+closes it by a click away.
 

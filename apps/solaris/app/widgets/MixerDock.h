@@ -96,6 +96,8 @@ namespace solaris_ui
         /** R-REC-1: an audio or instrument strip's arm button (R) — empty for a bus and the master — and how lit (LIVE). */
         artboard::Rect armRect(const std::string &id) const;
         double armAmount(const std::string &id) const;
+        /** R-PERF-3: how frozen a strip is DRAWN (eased 0 … 1): its rack receding under the "FROZEN" pill. */
+        double frozenAmount(const std::string &id) const;
         double muteAmount(const std::string &id) const;
         artboard::Rect outRect(const std::string &id) const;
         artboard::Rect chipRect(const std::string &id, int slot) const; // the slot's chip (a device, "+N", "+ Effect")
@@ -151,13 +153,14 @@ namespace solaris_ui
         struct Live
         {
             artboard::AnimatedProperty fader{0.0}, pan{0.0}, mute{0.0}, solo{0.0}, dim{0.0}, colT{1.0}, arm{0.0}; // arm: R-REC-1
+            artboard::AnimatedProperty frozen{0.0}; // R-PERF-3
             artboard::AnimatedProperty meter[2] = {artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
             artboard::AnimatedProperty rms[2] = {artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};  // R-METER-2
             artboard::AnimatedProperty hold[2] = {artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
             artboard::AnimatedProperty clip{0.0};
             double faderLast = 0, panLast = 0, meterLast[2] = {0, 0}, rmsLast[2] = {0, 0}, holdLast[2] = {0, 0};
             bool clipLast = false;
-            bool muteLast = false, soloLast = false, dimLast = false, placed = false, armLast = false;
+            bool muteLast = false, soloLast = false, dimLast = false, placed = false, armLast = false, frozenLast = false;
             artboard::Color colFrom, colTo;
             int colLast = -1;
             // R-MIX-16: what drives the fader / pan; a change of it eases (catches up) before following the engine

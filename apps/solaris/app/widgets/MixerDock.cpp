@@ -416,6 +416,11 @@ namespace solaris_ui
         const Live *l = liveOf(id);
         return l ? l->arm.value() : 0.0;
     }
+    double MixerDock::frozenAmount(const std::string &id) const
+    {
+        const Live *l = liveOf(id);
+        return l ? l->frozen.value() : 0.0;
+    }
     Rect MixerDock::soloRect(const std::string &id) const
     {
         const Rect c = cardRect(id);
@@ -591,6 +596,8 @@ namespace solaris_ui
         auto drive = [&](const std::string &id, double gain, double pan, bool mute, bool solo, bool audible, const float *peak, int colour,
                          const float *rms, const float *hold, bool clip) {
             Live &l = live(id);
+            const solaris::StripModel *sm = id == "master" ? nullptr : strip(id);
+            const bool frozen = sm && !sm->frozen.empty(); // R-PERF-3
             const bool draggingFader = mDragging && mPress.part == Part::Fader && mPress.id == id;
             const bool draggingPan = mDragging && mPress.part == Part::Pan && mPress.id == id;
             // R-MIX-16: a bound control is drawn at the value the model publishes — the engine's, while playing
@@ -611,6 +618,7 @@ namespace solaris_ui
                 l.mute.set(mute ? 1.0 : 0.0); l.muteLast = mute;
                 l.solo.set(solo ? 1.0 : 0.0); l.soloLast = solo;
                 l.arm.set(mModel.armed == id ? 1.0 : 0.0); l.armLast = mModel.armed == id;
+                l.frozen.set(frozen ? 1.0 : 0.0); l.frozenLast = frozen;
                 l.dim.set(audible ? 0.0 : 1.0); l.dimLast = !audible;
                 l.colFrom = l.colTo = col; l.colT.set(1.0); l.colLast = colour;
                 l.placed = true;
@@ -639,6 +647,11 @@ namespace solaris_ui
             {
                 l.arm.animateTo(arm ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs);
                 l.armLast = arm;
+            }
+            if (frozen != l.frozenLast) // R-PERF-3
+            {
+                l.frozen.animateTo(frozen ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+                l.frozenLast = frozen;
             }
             if (audible == l.dimLast) { l.dim.animateTo(audible ? 0.0 : 1.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.dimLast = !audible; }
             if (colour != l.colLast)
@@ -684,6 +697,7 @@ namespace solaris_ui
             l.mute.update(nowMs);
             l.solo.update(nowMs);
             l.arm.update(nowMs);
+            l.frozen.update(nowMs);
             l.dim.update(nowMs);
             l.colT.update(nowMs);
         };
@@ -1255,6 +1269,11 @@ namespace solaris_ui
                                        [this, id, m] { send("set " + id + ".monitor=" + m); }});
                     items.push_back({"Monitor\xE2\x80\xA6", [this, mon, world] { if (onMenu) onMenu(mon, world); }});
                 }
+                // R-PERF-3: its own sound frozen into it, or bounced onto a new strip — only a strip nothing feeds (the
+                // service's fromStrips: outputs, sends and keys); a frozen one can always be unfrozen
+                if (!s.frozen.empty()) items.push_back({"Unfreeze", [this, id] { send("strip unfreeze " + id); }});
+                else if (s.fromStrips.empty()) items.push_back({"Freeze", [this, id] { send("strip freeze " + id); }});
+                if (s.fromStrips.empty()) items.push_back({"Bounce to a new strip", [this, id] { send("strip bounce " + id); }});
                 items.push_back({"Delete strip", [this, id] { send("strip delete " + id); }});
                 onMenu(std::move(items), world);
             }
@@ -1363,8 +1382,9 @@ namespace solaris_ui
         t.setFill(fade(palette::mutedForeground(), ca));
         t.drawText(textfit::ellipsize(t, sub, w - 13.0, 9.0, font::sans()), x + 6.5, by + 33.0, 9.0, font::sans());
 
-        // the rack
+        // the rack — frozen, it recedes (its devices idle) under a pill (R-PERF-3)
         const int n = (int)s->devices.size(), slots = chipSlots(id);
+        const double fz = l->frozen.value(), ra = ca * (1.0 - 0.65 * fz); // its devices idle: they recede
         for (int k = 0; k < slots; ++k)
         {
             const Rect r = g.chips[k];
@@ -1382,12 +1402,24 @@ namespace solaris_ui
                 open = isDeviceOpen && isDeviceOpen(d.id);
             }
             if (add)
-                drawRoundedRect(t, r, radius::control(), Paint::stroked(fade(palette::whiteAlpha(0.14 + 0.2 * hv), ca), 1.0));
+                drawRoundedRect(t, r, radius::control(), Paint::stroked(fade(palette::whiteAlpha(0.14 + 0.2 * hv), ra), 1.0));
             else
-                drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(lerpColor(palette::secondary(), palette::popover(), hv), ca),
-                                                                               fade(open ? palette::primary() : palette::whiteAlpha(0.0), ca), 1.0));
+                drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(lerpColor(palette::secondary(), palette::popover(), hv), ra),
+                                                                               fade(open ? palette::primary() : palette::whiteAlpha(0.0), ra), 1.0));
             drawNameWithId(t, label, dv, r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), r.w - 10.0, 10.0, font::sans(),
-                           add || more || bypass ? palette::mutedForeground() : palette::foreground(), ids, ca);
+                           add || more || bypass ? palette::mutedForeground() : palette::foreground(), ids, ra);
+        }
+        if (fz > 0.001 && slots > 0)
+        {
+            const Rect &top = g.chips[0], &last = g.chips[slots - 1];
+            const double cy = (top.y + last.y + last.h) * 0.5, px = 9.0, tr = 0.13 * px;
+            const double pw = top.w, ph = kChipH; // a chip's size, over the rack's middle: nothing of a device peeks past it
+            const std::string word = textfit::ellipsize(t, "FROZEN", pw - 6.5, px, font::sansSemiBold(), tr); // a narrow card: it fits or says less
+            const double tw = textfit::width(t, word, px, font::sansSemiBold(), tr);
+            const Rect pill{top.x + (top.w - pw) * 0.5, cy - ph * 0.5, pw, ph};
+            drawRoundedRect(t, pill, radius::pill(), Paint::filledStroked(fade(palette::popover(), fz * ca), fade(palette::primary(), fz * ca), 1.0));
+            t.setFill(fade(palette::primary(), fz * ca));
+            t.drawText(word, pill.x + (pill.w - tw) * 0.5, textfit::baseline(cy, px), px, font::sansSemiBold(), tr);
         }
         // sends
         const int ns = (int)s->sends.size();

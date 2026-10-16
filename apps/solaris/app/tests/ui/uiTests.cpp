@@ -2884,6 +2884,7 @@ static void test_a_strip_ducks_under_another_from_its_menu()
         const artboard::Rect card = world(d, d.cardRect(ch));
         r.click(card.x + 20.0, card.y + 16.0, 2);
         r.settle();
+        assert(menu.isOpen());
         int at = -1;
         for (int i = 0; i < menu.itemCount(); ++i)
             if (menu.item(i).label.rfind("Duck Under", 0) == 0) at = i;
@@ -2910,11 +2911,10 @@ static void test_a_strip_ducks_under_another_from_its_menu()
     }
     assert(comp && keyed);
     // the kick, first in order, has nothing to duck under: no such item
-    r.key(27);
-    r.settle();
     assert(openDuck("ch_2") < 0);
-    r.key(27);
+    r.click(5.0, 790.0); // away: the menu closes
     r.settle();
+    assert(!menu.isOpen());
     pass("Duck Under (R-MIX-18): a strip's menu ducks it under an earlier strip in ONE `strip duck` line — the compressor and its pre-fader key — offering only the strips that may key it");
 }
 
@@ -4458,6 +4458,64 @@ static void test_a_surface_chosen_in_settings()
     pass("a surface chosen in Settings (R-CTRL-2): Settings › MIDI's Control surface and Surface port combos — one line each; the note says connected (its strips) or why not, cross-fading");
 }
 
+static void test_a_strip_freezes_from_its_menu()
+{
+    // R-PERF-3: the strip's menu — Freeze and Bounce on a strip nothing feeds, Unfreeze on a frozen one, each ONE line;
+    // the rack recedes under the FROZEN pill, eased in and out
+    sltest::Rig r("ui-freeze", 1280, 800);
+    r.cmd("project new " + r.song("Freeze") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4"); // ch_2
+    r.cmd("strip add --kind bus --name Verb --mixer mx_1"); // ch_3, beside it, fed by ch_2's send
+    r.cmd("send add ch_2 --to ch_3");
+    r.settle();
+    auto &d = r.app->project().dock();
+    auto &menu = r.app->menu();
+    auto open = [&](const std::string &ch) {
+        const artboard::Rect card = world(d, d.cardRect(ch));
+        r.click(card.x + 20.0, card.y + 16.0, 2);
+        r.settle();
+        assert(menu.isOpen());
+    };
+    // the bus is fed: neither offered
+    open("ch_3");
+    assert(menuItem(r, "Freeze") < 0 && menuItem(r, "Bounce to a new strip") < 0 && menuItem(r, "Unfreeze") < 0);
+    r.click(5.0, 790.0); // away: the menu closes (Escape closes only a rename)
+    r.settle();
+    assert(!menu.isOpen());
+    assert(d.frozenAmount("ch_2") == 0.0);
+    open("ch_2");
+    assert(menuItem(r, "Freeze") >= 0 && menuItem(r, "Bounce to a new strip") >= 0 && menuItem(r, "Unfreeze") < 0);
+    r.click(menu.itemRect(menuItem(r, "Freeze")));
+    assert(r.sent.back() == "strip freeze ch_2" && !r.svc->model().strips.empty());
+    bool frozen = false;
+    for (const auto &st : r.svc->model().strips) frozen |= st.id == "ch_2" && !st.frozen.empty();
+    assert(frozen);
+    r.frame();
+    r.frame();
+    const double in = d.frozenAmount("ch_2");
+    assert(in > 0.0 && in < 1.0); // it recedes, eased
+    r.settle();
+    assert(d.frozenAmount("ch_2") == 1.0);
+    // frozen: Unfreeze instead of Freeze; Bounce still offered
+    open("ch_2");
+    assert(menuItem(r, "Unfreeze") >= 0 && menuItem(r, "Freeze") < 0 && menuItem(r, "Bounce to a new strip") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Unfreeze")));
+    assert(r.sent.back() == "strip unfreeze ch_2");
+    r.frame();
+    r.frame();
+    const double out = d.frozenAmount("ch_2");
+    assert(out > 0.0 && out < 1.0); // it returns, eased
+    r.settle();
+    assert(d.frozenAmount("ch_2") == 0.0);
+    // bounce: a new strip
+    const size_t strips = r.svc->model().strips.size();
+    open("ch_2");
+    r.click(menu.itemRect(menuItem(r, "Bounce to a new strip")));
+    r.settle();
+    assert(r.sent.back() == "strip bounce ch_2" && r.svc->model().strips.size() == strips + 1);
+    pass("freeze from the mixer (R-PERF-3): Freeze and Bounce on a strip nothing feeds, Unfreeze on a frozen one — one line each; the rack recedes under FROZEN, eased in and out");
+}
+
 static void test_the_cpu_in_the_song_bar()
 {
     // R-PERF-1: playing, the song bar's CPU readout catches up with the model's load — caught on the way — and, stopped,
@@ -4556,6 +4614,7 @@ int main()
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();
+    test_a_strip_freezes_from_its_menu();
     test_a_sample_is_heard_from_the_browser();
     test_the_grid_follows_the_zoom();
     std::printf("\n%d passed, 0 failed\n", passed);

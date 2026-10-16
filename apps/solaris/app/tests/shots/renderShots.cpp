@@ -954,6 +954,19 @@ namespace
                  r.cmd("device add master --type limiter");
                  r.settle();
              }},
+            {"mixer-frozen",      // the bass frozen: its rack recedes under FROZEN (R-PERF-3)
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("strip freeze ch_3");
+                 r.settle();
+             }},
+            {"mixer-frozen-mid",  // the same, mid-ease
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 r.cmd("strip freeze ch_3");
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
             {"mixer-add-line",
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");
