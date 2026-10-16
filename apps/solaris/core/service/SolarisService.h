@@ -96,6 +96,15 @@ namespace solaris
         std::string lsText() const;
         bool showText(const std::string &id, std::string &out, std::string &err) const;
         bool historyCommand(const Command &c, std::string &err); // undo / redo / history / history jump
+        // R-SAFE: autosave and recovery
+        static double steadySeconds();
+        static std::string autosavePath(const std::string &song);
+        static bool recoveryOf(const std::string &song, double &ageSeconds);
+        bool autosave();                          // the unsaved song, written beside it now (atomically)
+        void dropAutosave(const std::string &song);
+        double mLastAutosave = 0.0;               // steady seconds of the last write (or of opening)
+        std::string mRecovery;                    // the open song's autosave on offer (its song's path), "" = none
+        double mRecoveryAge = -1.0;
         std::string labelOf(const Command &c) const;
         bool evalCommand(const Command &c, std::string &err);
         double songEndBeats() const;

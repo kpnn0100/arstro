@@ -100,6 +100,14 @@
     "note.previewed": {
       "doc": "A note was heard through a strip, outside the song (`note preview`, the piano roll's sound — R-ROLL-7).",
       "data": "{line, fields: {strip, pitch}}"
+    },
+    "project.autosaved": {
+      "doc": "The unsaved song was written beside it (`<song>.autosave`, R-SAFE-1).",
+      "data": "{line, fields: {path}}"
+    },
+    "project.recovery": {
+      "doc": "The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2).",
+      "data": "{line, fields: {path, age}}"
     }
   },
   "state": {

@@ -1723,3 +1723,20 @@ asks after every pointer event and, when it changed, sets the window's cursor by
 `linux_main.cpp:69`) — the OS's own cursors, which do not ease. UI `test_the_pointer_says_a_drag_resizes` (every grip;
 a clip's end held off the edge; a window over the lanes; a modal). Mutants: no clip-end zone, a resize in hand
 forgetting its cursor, a modal not the arrow — all seen red. The GTK half is compiled and read, not driven live (D-5).
+
+### DR-SAFE-1 Autosave and recovery (R-SAFE-1, R-SAFE-2)
+While a song has unsaved edits the service writes it beside itself, `<song>.slp.autosave` — the `.slp` text exactly as a
+save would write it — through a temporary file renamed over the last one, so a crash mid-write keeps the previous
+autosave (`SolarisService::autosave`, `core/service/SolarisService.cpp:506`). When: once `settings.autosave` seconds
+(default 60; `settings set autosave=<1…3600|off>`) have passed since the song opened or was last autosaved — checked by
+`pump`, so an idle window still writes (`core/service/ServiceTransport.cpp:83`) — and AT ONCE after an edit whose verb
+deletes or removes something (`dispatch`, `:307`). Each write is announced (`project.autosaved path=`). A save drops it
+(also the old place's, when saved elsewhere); so does a close — closing is choosing. A session that dies leaves it.
+`recoveryOf` (`:494`) finds an autosave NEWER than its song: Home's card says "unsaved changes kept" (`recents[].recovery`);
+`project open` opens the SAVED song and says `recovery: …` (`:606`), emits `project.recovery path= age=`, and the model's
+`recovery` / `recoveryAge` name it until it is answered: `project recover <path>` (`:617`) opens the autosave as the song
+— at `<path>`, unsaved, its history rooted "Recovered" — and `project discard-recovery <path>` deletes it. The window asks
+once per offer (`App::askRecovery`, `app/App.cpp:303`: Recover · Open the Saved One); Settings › Interface has an
+Autosave combo. L2 `test_autosave_and_recovery` (the clock, a removal at once, atomic, save and close drop it, a dead
+session's autosave offered, recovered, discarded, off writes nothing); UI `test_a_recovered_song_is_offered`. Mutants:
+a removal not written at once, the window not asking — both seen red.

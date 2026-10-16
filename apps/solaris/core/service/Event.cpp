@@ -50,6 +50,9 @@ namespace solaris
              "A sample previewed from the browser started (playing 1) or ended — stopped, or to its end (playing 0)."},
             {EK::NotePreviewed, "note.previewed", {"strip", "pitch"},
              "A note was heard through a strip, outside the song (`note preview`, the piano roll's sound — R-ROLL-7)."},
+            {EK::ProjectAutosaved, "project.autosaved", {"path"}, "The unsaved song was written beside it (`<song>.autosave`, R-SAFE-1)."},
+            {EK::ProjectRecovery, "project.recovery", {"path", "age"},
+             "The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2)."},
         };
         return specs;
     }

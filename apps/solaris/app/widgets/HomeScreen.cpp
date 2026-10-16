@@ -209,6 +209,7 @@ namespace solaris_ui
         t.drawText(textfit::ellipsize(t, name, s.w - 24.0, 11.0, font::sansMedium()), mx, s.y + th + 18.0, 11.0, font::sansMedium());
         std::string meta;
         if (c.info.missing) meta = "missing \xE2\x80\x94 moved or deleted";
+        else if (c.info.recovery) meta = "unsaved changes kept \xE2\x80\x94 open it to recover them"; // R-SAFE-2
         else
         {
             char bpm[32];
@@ -216,7 +217,7 @@ namespace solaris_ui
             meta = std::string(bpm) + "  \xC2\xB7  " + lengthLabel(c.info.lengthBeats, c.info.bpm) + "  \xC2\xB7  " +
                    std::to_string(c.info.strips) + (c.info.strips == 1 ? " strip" : " strips");
         }
-        t.setFill(fade(c.info.missing ? palette::destructive() : palette::mutedForeground(), a));
+        t.setFill(fade(c.info.missing ? palette::destructive() : c.info.recovery ? palette::primary() : palette::mutedForeground(), a));
         t.drawText(textfit::ellipsize(t, meta, s.w - 24.0, 10.0, font::sans()), mx, s.y + th + 33.0, 10.0, font::sans());
     }
 

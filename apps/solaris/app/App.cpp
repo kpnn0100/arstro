@@ -300,6 +300,26 @@ namespace solaris_ui
             if (ids[i] == m.historyCurrent && (int)i != mHistory->current()) mHistory->setCurrent((int)i); // the highlight eases there
     }
 
+    void App::askRecovery(const solaris::AppModel &m)
+    {
+        // R-SAFE-2: a song opened with an autosave newer than it — the saved one is open until this is answered
+        const std::string path = m.recovery;
+        cosmo_v2::ConfirmDialog::Button saved, recover;
+        saved.label = "Open the Saved One";
+        saved.onClick = [this, path] { dispatch("project discard-recovery " + quote(path)); };
+        recover.label = "Recover";
+        recover.primary = true;
+        recover.onClick = [this, path] { dispatch("project recover " + quote(path)); };
+        char age[64];
+        const double s = m.recoveryAge;
+        if (s < 90) std::snprintf(age, sizeof age, "%.0f seconds", s);
+        else if (s < 5400) std::snprintf(age, sizeof age, "%.0f minutes", s / 60.0);
+        else std::snprintf(age, sizeof age, "%.0f hours", s / 3600.0);
+        mConfirm->show("Recover unsaved changes?",
+                       "Solaris kept changes to \"" + m.projectName + "\" that were never saved (" + age + " ago). Recover them, or open the song as it was last saved?",
+                       {saved, recover});
+    }
+
     void App::openSettings()
     {
         dispatch("devices list"); // the device chips are what is connected NOW
@@ -332,6 +352,8 @@ namespace solaris_ui
         mProject->bind(m);
         mSettings->bind(m);
         syncHistory(m);
+        if (m.recovery.empty()) mRecoveryAsked.clear();
+        else if (m.recovery != mRecoveryAsked) { mRecoveryAsked = m.recovery; askRecovery(m); }
         refreshMenus(m);
         if (m.settings.reducedMotion != mAppReducedMotion)
         {

@@ -30,9 +30,16 @@ namespace solaris
             {K::ProjectNew, "project new", "<path.slp>", 1, 1, {"bpm=<n>", "sig=<n/d>", "rate=<hz>", "name=<text>"},
              "Create a song and open it: Mixer 1 \"Sources\", Mixer 2 \"Buses\" with the bus \"Main\" → master, "
              "and the output port \"Main\" (R-MIX-3).", "R-HOME-1"},
-            {K::ProjectOpen, "project open", "<path.slp>", 1, 1, {}, "Open a song.", "R-HOME-1"},
+            {K::ProjectOpen, "project open", "<path.slp>", 1, 1, {},
+             "Open a song. If it has an autosave newer than it (unsaved edits from a session that never saved), says "
+             "`recovery: …` and the model's `recovery` names it (R-SAFE-2).", "R-HOME-1"},
             {K::ProjectSave, "project save", "[path.slp]", 0, 1, {}, "Write the .slp (a path saves it there).", "R-FMT-2"},
-            {K::ProjectClose, "project close", "", 0, 0, {}, "Close the song and return Home.", "R-UI-1"},
+            {K::ProjectClose, "project close", "", 0, 0, {}, "Close the song and return Home (its autosave is dropped: closing is choosing).", "R-UI-1"},
+            {K::ProjectRecover, "project recover", "<path.slp>", 1, 1, {},
+             "Open the song from its autosave (`<path>.autosave`, written while it had unsaved edits — R-SAFE-1): the "
+             "song as it was, unsaved, saved to <path> by `project save`.", "R-SAFE-2"},
+            {K::ProjectDiscardRecovery, "project discard-recovery", "<path.slp>", 1, 1, {},
+             "Delete a song's autosave — the saved song is the one kept.", "R-SAFE-2"},
 
             {K::Set, "set", "<address>=<value> …", 1, -1, {},
              "Write addresses: project.bpm, <strip>.gain, <clip>.at, <device>.<param> (any DSP registry "
@@ -217,7 +224,7 @@ namespace solaris
              "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), "
              "bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), "
              "port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on|off), showIds (on|off: every object's id beside its name, R-UI-11), "
-             "key.<action>=<combos> (R-SET-4: a keyboard action's keys — a comma list such as \"Ctrl+Shift+Z, Ctrl+Y\", `none`, or `default`; "
+             "autosave (seconds between autosaves of an unsaved song, or off — R-SAFE-1), key.<action>=<combos> (R-SET-4: a keyboard action's keys — a comma list such as \"Ctrl+Shift+Z, Ctrl+Y\", `none`, or `default`; "
              "a combo another action of the same keyboard has is refused naming it — the actions are in this document's Keyboard section). Saved at once.",
              "R-SET-1", true},
             {K::SettingsPrint, "settings print", "", 0, 0, {"json"}, "The machine's settings.", "R-SET-1"},

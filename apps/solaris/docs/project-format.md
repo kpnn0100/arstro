@@ -234,3 +234,9 @@ render --out <f.wav> [--from b] [--to b] [--stems ch,…] [--ports] [--bits 24|3
 matrix print [--json] | audit | state print [--json] [--stable] | registry [--json] | api [--json|--md]
 settings set <key>=<value> … | settings print | devices list | browse <folder>
 ```
+
+## Autosave — `<song>.slp.autosave` (R-SAFE-1)
+
+While a song has unsaved edits, Solaris writes it beside itself as `<song>.slp.autosave`: the same `.slp` text a save
+would write, replaced atomically. A save or a close deletes it; one that outlives its song's last save is offered for
+recovery when the song is opened (`project recover`).

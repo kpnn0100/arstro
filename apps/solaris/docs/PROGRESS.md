@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — N0: R-PRO specified; N1… queued.*
+*Last updated: 2026-10-16 — N1: autosave and recovery.*
 
 ---
 
 ## NEXT
 
-**► N1 — autosave and recovery** (R-SAFE), then N2… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor. B13+ wait. Owed live checks: D-5, D-9, the resize cursor. B13+ wait (ask). Owed live checks: D-5, D-9.
+**► N2 — MIDI files** (R-MIDI-1), then N3… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor. B13+ wait. Owed live checks: D-5, D-9, the resize cursor. B13+ wait (ask). Owed live checks: D-5, D-9.
 
 ---
 
@@ -389,7 +389,8 @@ history like cosmo".* Requirements: R-SET-5, R-SET-6 (R-SET-1, R-SET-3 amended);
 ### N — a professional DAW: "implement all" of the analysis (user request, 2026-10-16; discussion round 8; R-PRO)
 One task a commit, in this order. A DSP half is its own commit in the submodule first.
 **Phase 1 — finish a track safely and deliver it**
-- [ ] **N1** Autosave and recovery (R-SAFE-1/2).
+- [x] **N1** Autosave and recovery (R-SAFE-1/2).
+      — DR-SAFE-1. L2 + UI tests; 2 mutants seen red.
 - [ ] **N2** MIDI files: import, export, a `.mid` dropped (R-MIDI-1).
 - [ ] **N3** DSP: loudness (BS.1770 gated), true peak, correlation, spectrum meters (R-METER-1's DSP half).
 - [ ] **N4** The master's loudness meters in the model and the window; strip meters RMS / held peak / clip latch

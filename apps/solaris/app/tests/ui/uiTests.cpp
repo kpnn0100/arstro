@@ -19,6 +19,9 @@ using arstro::solaris_ui::Timeline;
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <fstream>
+#include <filesystem>
+#include <chrono>
 #include <string>
 #include <thread>
 
@@ -1239,6 +1242,48 @@ static void test_a_looping_automation_is_seen_and_made()
     r.settle();
     assert(combo.shown() == "2 beats");
     pass("A looping automation, in the window (R-AUTO-12/13): Create Pump from a fader's menu is one line; the row's span drawn, its grips the resize cursor and one line each (the start keeping the end); a span set elsewhere eases; a click in a repeat adds the point in the cycle; the window's Loop combo is one line, its label cross-fading");
+}
+
+static void test_a_recovered_song_is_offered()
+{
+    // R-SAFE-2 in the window: a song opened with an autosave newer than it — asked, Recover or the saved one
+    sltest::Rig r("ui-recover", 1280, 800);
+    const std::string song = r.song("Kept") + ".slp", as = song + ".autosave";
+    r.cmd("project new " + song + " --bpm 120 --name Kept");
+    r.cmd("clip add --instrument drums --at 0 --length 4");
+    r.cmd("project save");
+    r.cmd("project close");
+    r.settle();
+    // a session that died with edits: the autosave beside the song, newer than it
+    auto plant = [&](const std::string &name) {
+        std::ifstream in(song);
+        std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        const auto line = text.find("\nname ");                    // the header's `name = …`, whatever it says now
+        assert(line != std::string::npos);
+        const auto eq = text.find("= ", line), end = text.find('\n', line + 1);
+        text.replace(eq + 2, end - eq - 2, name);
+        std::ofstream(as) << text;
+        std::filesystem::last_write_time(as, std::filesystem::last_write_time(song) + std::chrono::seconds(5));
+    };
+    plant("Rescued");
+    r.cmd("project open " + song);
+    r.settle();
+    auto &cf = r.app->confirm();
+    assert(cf.isOpen() && r.svc->model().projectName == "Kept");   // the saved one is open until it is answered
+    assert(cf.activate(1));                                          // Recover
+    r.settle();
+    assert(sentLine(r, "project recover " + song) && r.svc->model().projectName == "Rescued" && r.svc->model().dirty);
+    // the saved one instead: the autosave is dropped
+    r.cmd("project save");
+    r.cmd("project close");
+    plant("Lost");
+    r.cmd("project open " + song);
+    r.settle();
+    assert(cf.isOpen());
+    assert(cf.activate(0));                                          // Open the Saved One
+    r.settle();
+    assert(sentLine(r, "project discard-recovery " + song) && !std::filesystem::exists(as) && r.svc->model().projectName == "Rescued");
+    pass("A recovered song is offered (R-SAFE-2): opened with a newer autosave, the window asks — Recover is `project recover` (the kept edits, unsaved); Open the Saved One is `project discard-recovery`");
 }
 
 static void test_space_returns_and_ctrl_space_stays()
@@ -2982,6 +3027,7 @@ int main()
     test_clips_are_copied_by_shift_drag_and_ctrl_c_v();
     test_the_pointer_says_a_drag_resizes();
     test_a_looping_automation_is_seen_and_made();
+    test_a_recovered_song_is_offered();
     test_home_unsaved_confirm_and_recents();
     test_browser_tabs_and_sample_drag();
     test_instrument_drop_and_clip_drag();

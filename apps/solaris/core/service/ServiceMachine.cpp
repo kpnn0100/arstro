@@ -136,6 +136,13 @@ namespace solaris
                     next.ports.erase(std::remove_if(next.ports.begin(), next.ports.end(), [&](const auto &p) { return p.first == name; }), next.ports.end());
                     if (!v.empty()) next.ports.emplace_back(name, v);
                 }
+                else if (k == "autosave")
+                {
+                    // R-SAFE-1: seconds between autosaves, or off
+                    if (v == "off") next.autosave = 0;
+                    else if (!parseNumber(v, x) || x < 1 || x > 3600 || x != std::floor(x)) { err = "autosave is seconds from 1 to 3600, or off"; return false; }
+                    else next.autosave = (int)x;
+                }
                 else if (k.rfind("key.", 0) == 0)
                 {
                     // R-SET-4: an action's keys — a comma list of combos, `none`, or `default`
@@ -161,9 +168,9 @@ namespace solaris
                 else
                 {
                     err = "no setting `" + k + "`";
-                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds"});
+                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave"});
                     err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>, metronome, "
-                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, key.<action>)")
+                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, autosave, key.<action>)")
                                         : " (did you mean: " + near[0] + "?)";
                     return false;
                 }
@@ -204,7 +211,7 @@ namespace solaris
                               .set("folders", folders).set("ports", ports).set("metronome", mSettings.metronome)
                               .set("metronomeLevel", mSettings.metronomeLevel).set("auditionLevel", mSettings.auditionLevel).set("newBpm", mSettings.newBpm)
                               .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion)
-                              .set("showIds", mSettings.showIds).set("keys", [&] {
+                              .set("showIds", mSettings.showIds).set("autosave", mSettings.autosave).set("keys", [&] {
                                   Json keys = Json::array(); // only the re-keyed actions, as the file has them
                                   for (const auto &k : mSettings.keys) keys.push(Json::string(k.first + "=" + k.second));
                                   return keys;

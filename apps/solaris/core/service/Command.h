@@ -28,7 +28,7 @@ namespace solaris
         enum class Kind
         {
             None,
-            ProjectNew, ProjectOpen, ProjectSave, ProjectClose,
+            ProjectNew, ProjectOpen, ProjectSave, ProjectClose, ProjectRecover, ProjectDiscardRecovery,
             Set, Get,
             MixerAdd, MixerDelete, MixerMove,
             StripAdd, StripDelete, StripMove, StripRelink, Route,

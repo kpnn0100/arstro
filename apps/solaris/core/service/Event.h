@@ -42,7 +42,9 @@ namespace solaris
             RecentsChanged,   // count
             TransportChanged, // playing, position, loop
             AuditionChanged,  // file, playing
-            NotePreviewed     // strip, pitch
+            NotePreviewed,    // strip, pitch
+            ProjectAutosaved, // path — R-SAFE-1
+            ProjectRecovery   // path, age — R-SAFE-2: an autosave newer than the song
         };
 
         Kind kind = Kind::Info;

@@ -103,6 +103,7 @@ namespace solaris_ui
         static std::string keyActionFor(const solaris::AppModel &m, const std::string &combo, const std::string &group);
         static std::string keyHint(const solaris::AppModel &m, const std::string &action); // "   (Ctrl+Z)", or "" — the keymap's first key
         void syncHistory(const solaris::AppModel &m); // the open tree view follows the model's tree
+        void askRecovery(const solaris::AppModel &m); // R-SAFE-2: Recover / Open the saved one
         bool songAction(const solaris::AppModel &m, const std::string &id); // true when it did something
         bool pasteClip(const solaris::AppModel &m);                         // R-CLIP-10
 
@@ -135,6 +136,7 @@ namespace solaris_ui
         double mToastShownAt = -1e9;
         bool mOsReducedMotion = false, mAppReducedMotion = false;
         std::string mMenuKey;                // what the dynamic menu labels were built from
+        std::string mRecoveryAsked;          // R-SAFE-2: the song whose autosave the window has asked about
     };
 }
 }

@@ -9,9 +9,11 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | usage | what | asked by |
 |---|---|---|
 | `project new <path.slp> [--bpm <n>] [--sig <n/d>] [--rate <hz>] [--name <text>]` | Create a song and open it: Mixer 1 "Sources", Mixer 2 "Buses" with the bus "Main" → master, and the output port "Main" (R-MIX-3). | R-HOME-1 |
-| `project open <path.slp>` | Open a song. | R-HOME-1 |
+| `project open <path.slp>` | Open a song. If it has an autosave newer than it (unsaved edits from a session that never saved), says `recovery: …` and the model's `recovery` names it (R-SAFE-2). | R-HOME-1 |
 | `project save [path.slp]` | Write the .slp (a path saves it there). | R-FMT-2 |
-| `project close` | Close the song and return Home. | R-UI-1 |
+| `project close` | Close the song and return Home (its autosave is dropped: closing is choosing). | R-UI-1 |
+| `project recover <path.slp>` | Open the song from its autosave (`<path>.autosave`, written while it had unsaved edits — R-SAFE-1): the song as it was, unsaved, saved to <path> by `project save`. | R-SAFE-2 |
+| `project discard-recovery <path.slp>` | Delete a song's autosave — the saved song is the one kept. | R-SAFE-2 |
 | `set <address>=<value> …` | Write addresses: project.bpm, <strip>.gain, <clip>.at, <device>.<param> (any DSP registry parameter, in its unit), … — `api` lists every one. An unknown address or parameter is refused. A value starting with `=` is a FORMULA that drives a number (R-AUTO); a plain number clears it. | R-SVC-3 |
 | `get <address>` | Print an address's stored value. | R-SVC-1 |
 | `undo` | Undo the last edit (prints what): back to the history node's parent. Consecutive `set`s of the same addresses — a fader dragged — are ONE step. A machine setting, the transport and a save are not edits; a new or opened song starts a new history. | R-EDM-1 |
@@ -70,7 +72,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `ls` | The song as a tree of ids and names: mixers → strips (kind, devices, output, sends), the master, lanes → clips (at, length, pattern or file), patterns (length, notes, clips), automations. | R-SVC-8 |
 | `show <id>` | One node's fields that differ from their defaults; a device's non-default parameters with their units (and the default); `show project` for the song. | R-SVC-8 |
 | `api [--json] [--md]` | This document: every command, event, model field and device parameter. | R-API-1 |
-| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on\|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on\|off), showIds (on\|off: every object's id beside its name, R-UI-11), key.<action>=<combos> (R-SET-4: a keyboard action's keys — a comma list such as "Ctrl+Shift+Z, Ctrl+Y", `none`, or `default`; a combo another action of the same keyboard has is refused naming it — the actions are in this document's Keyboard section). Saved at once. | R-SET-1 |
+| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on\|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on\|off), showIds (on\|off: every object's id beside its name, R-UI-11), autosave (seconds between autosaves of an unsaved song, or off — R-SAFE-1), key.<action>=<combos> (R-SET-4: a keyboard action's keys — a comma list such as "Ctrl+Shift+Z, Ctrl+Y", `none`, or `default`; a combo another action of the same keyboard has is refused naming it — the actions are in this document's Keyboard section). Saved at once. | R-SET-1 |
 | `settings print [--json]` | The machine's settings. | R-SET-1 |
 | `folder add <path>` | Add a sample folder to the browser's quick-access list. | R-SET-1 |
 | `folder remove <path>` | Remove a sample folder from the list (the folder itself is untouched). | R-SET-1 |
@@ -185,6 +187,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.changed` | playing, position, loop | Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`. |
 | `audition.changed` | file, playing | A sample previewed from the browser started (playing 1) or ended — stopped, or to its end (playing 0). |
 | `note.previewed` | strip, pitch | A note was heard through a strip, outside the song (`note preview`, the piano roll's sound — R-ROLL-7). |
+| `project.autosaved` | path | The unsaved song was written beside it (`<song>.autosave`, R-SAFE-1). |
+| `project.recovery` | path, age | The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2). |
 
 ## Model (`state print --json`)
 
@@ -208,6 +212,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `history[].parent` | int | -1 at the root (the song as it was opened or made) |
 | `history[].label` | string | what made it: the command (`set ch_2.gain`), or New song / Opened |
 | `historyCurrent` | int | the node the song is now (-1: no song) |
+| `recovery` | string | the open song's path when it has an autosave newer than it — `project recover` restores it (R-SAFE-2) |
+| `recoveryAge` | number | how old that autosave is, seconds (-1: none) *(not in `--stable`)* |
 | `masterOut` | string[] | the port ids the master feeds |
 | `mixers` | object[] | mixer pages in order |
 | `mixers[].id` | string |  |
@@ -352,6 +358,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `recents[].lengthBeats` | number |  |
 | `recents[].strips` | int |  |
 | `recents[].missing` | bool | the file is gone or no longer a song |
+| `recents[].recovery` | bool | an autosave newer than it: unsaved edits to recover (R-SAFE-2) |
 | `settings` | object | the MACHINE's settings (R-SET-2) |
 | `settings.sampleRate` | int | new songs, and the clock device's rate |
 | `settings.bufferSize` | int | frames per device write |
@@ -367,6 +374,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.newSig` | string | a new song's meter without --sig |
 | `settings.reducedMotion` | bool | the UI's tweens collapse (with the OS's own setting) |
 | `settings.showIds` | bool | every object's id drawn beside its name (R-UI-11) |
+| `settings.autosave` | int | seconds between autosaves of an unsaved song; 0 = off (R-SAFE-1) |
 | `settings.keys` | object[] | every keyboard action (R-SET-4), in the sheet's order — a pressed combo is looked up here |
 | `settings.keys[].id` | string | transport.play … — set with `settings set key.<id>=<combos>` |
 | `settings.keys[].area` | string | Transport \| Song \| Lanes \| Piano roll (the first three are one keyboard) |

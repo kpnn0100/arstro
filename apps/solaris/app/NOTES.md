@@ -13,6 +13,8 @@ helpers it borrows.
 | Home › a card | `project open "<path>"` |
 | Home › a card, right-click | `recents remove "<path>"` |
 | Any shortcut on this page | the DEFAULT keys: each is a keymap action (R-SET-4) — `settings set key.<action>=<combos>` re-keys it, the model's `settings.keys` has this machine's; `App::key` looks every press up there (a roll with the keys first). API.md › Keyboard lists them |
+| Opening a song with a newer autosave › Recover · Open the Saved One | `project recover <path>` · `project discard-recovery <path>` (R-SAFE-2) |
+| Settings › Interface › Autosave (combo) | `settings set autosave=<seconds|off>` (R-SAFE-1) |
 | Song bar › the `solaris.` wordmark | Home: `project close` (an unsaved song asks Save / Discard / Cancel first) — R-UI-3 amended |
 | Home / song bar › Settings (beside the wordmark), Ctrl+, | `devices list`, then the sheet opens |
 | Song bar › File › New Song… · Open… · Save · Save As… · Render… · Render Stems… · Home | picker → `project new` · picker → `project open` · `project save` · picker → `project save "<path>"` · picker → `render --out "<path>"` · picker → `render --out "<path>" --stems <every strip>` · `project close` |

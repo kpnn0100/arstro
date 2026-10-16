@@ -27,6 +27,8 @@ namespace solaris
             {"history[].parent", "int", "-1 at the root (the song as it was opened or made)"},
             {"history[].label", "string", "what made it: the command (`set ch_2.gain`), or New song / Opened"},
             {"historyCurrent", "int", "the node the song is now (-1: no song)"},
+            {"recovery", "string", "the open song's path when it has an autosave newer than it — `project recover` restores it (R-SAFE-2)"},
+            {"recoveryAge", "number", "how old that autosave is, seconds (-1: none)", false},
             {"masterOut", "string[]", "the port ids the master feeds"},
             {"mixers", "object[]", "mixer pages in order"},
             {"mixers[].id", "string", ""},
@@ -172,6 +174,7 @@ namespace solaris
             {"recents[].lengthBeats", "number", ""},
             {"recents[].strips", "int", ""},
             {"recents[].missing", "bool", "the file is gone or no longer a song"},
+            {"recents[].recovery", "bool", "an autosave newer than it: unsaved edits to recover (R-SAFE-2)"},
             {"settings", "object", "the MACHINE's settings (R-SET-2)"},
             {"settings.sampleRate", "int", "new songs, and the clock device's rate"},
             {"settings.bufferSize", "int", "frames per device write"},
@@ -187,6 +190,7 @@ namespace solaris
             {"settings.newSig", "string", "a new song's meter without --sig"},
             {"settings.reducedMotion", "bool", "the UI's tweens collapse (with the OS's own setting)"},
             {"settings.showIds", "bool", "every object's id drawn beside its name (R-UI-11)"},
+            {"settings.autosave", "int", "seconds between autosaves of an unsaved song; 0 = off (R-SAFE-1)"},
             {"settings.keys", "object[]", "every keyboard action (R-SET-4), in the sheet's order — a pressed combo is looked up here"},
             {"settings.keys[].id", "string", "transport.play … — set with `settings set key.<id>=<combos>`"},
             {"settings.keys[].area", "string", "Transport | Song | Lanes | Piano roll (the first three are one keyboard)"},
@@ -410,7 +414,8 @@ namespace solaris
         {
             Json h = Json::array();
             for (const auto &n : m.history) h.push(Json::object().set("id", n.id).set("parent", n.parent).set("label", n.label));
-            j.set("history", h).set("historyCurrent", m.historyCurrent);
+            j.set("history", h).set("historyCurrent", m.historyCurrent).set("recovery", m.recovery);
+            if (!stable) j.set("recoveryAge", m.recoveryAge);
         }
         Json mixers = Json::array();
         for (const auto &x : m.mixers)
@@ -487,7 +492,7 @@ namespace solaris
         Json recents = Json::array();
         for (const auto &r : m.recents)
             recents.push(Json::object().set("path", r.path).set("name", r.name).set("bpm", r.bpm).set("lengthBeats", r.lengthBeats)
-                             .set("strips", r.strips).set("missing", r.missing));
+                             .set("strips", r.strips).set("missing", r.missing).set("recovery", r.recovery));
         j.set("recents", recents);
         Json keys = Json::array();
         for (const auto &k : m.settings.keys)
@@ -497,7 +502,7 @@ namespace solaris
                               .set("folders", strings(m.settings.folders)).set("ports", strings(m.settings.ports))
                               .set("metronome", m.settings.metronome).set("metronomeLevel", m.settings.metronomeLevel).set("auditionLevel", m.settings.auditionLevel)
                               .set("newBpm", m.settings.newBpm).set("newSig", m.settings.newSig).set("reducedMotion", m.settings.reducedMotion)
-                              .set("showIds", m.settings.showIds).set("keys", keys));
+                              .set("showIds", m.settings.showIds).set("autosave", m.settings.autosave).set("keys", keys));
         Json devs = Json::array();
         for (const auto &d : m.devices)
             devs.push(Json::object().set("id", d.id).set("name", d.name).set("dir", d.dir).set("channels", d.channels).set("rate", d.rate));

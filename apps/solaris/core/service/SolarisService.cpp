@@ -6,6 +6,7 @@
 #include "Format.h"
 #include "device/Device.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -103,7 +104,7 @@ namespace solaris
         {
             switch (k)
             {
-            case K::ProjectNew: case K::ProjectOpen: case K::ProjectSave: case K::ProjectClose:
+            case K::ProjectNew: case K::ProjectOpen: case K::ProjectSave: case K::ProjectClose: case K::ProjectRecover: case K::ProjectDiscardRecovery:
             case K::Get: case K::Eval: case K::Undo: case K::Redo: case K::HistoryPrint: case K::HistoryJump: case K::Render: case K::MatrixPrint: case K::Audit: case K::StatePrint: case K::Api:
             case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
             case K::DevicesList: case K::Browse: case K::RecentsRemove:
@@ -132,7 +133,7 @@ namespace solaris
         bool ok = false;
         switch (c.kind)
         {
-        case K::ProjectNew: case K::ProjectOpen: case K::ProjectSave: case K::ProjectClose:
+        case K::ProjectNew: case K::ProjectOpen: case K::ProjectSave: case K::ProjectClose: case K::ProjectRecover: case K::ProjectDiscardRecovery:
             ok = projectCommand(c, err);
             break;
         case K::Set:
@@ -297,11 +298,19 @@ namespace solaris
                 historyAdd(labelOf(c));
             mCoalesce = key;
         }
-        if (c.kind == K::ProjectNew || c.kind == K::ProjectOpen || c.kind == K::ProjectClose)
+        if (c.kind == K::ProjectNew || c.kind == K::ProjectOpen || c.kind == K::ProjectClose || c.kind == K::ProjectRecover)
         {
             // another song: its own tree, rooted at the song as it opened
-            historyReset(c.kind == K::ProjectClose ? std::string() : c.kind == K::ProjectNew ? "New song" : "Opened");
+            historyReset(c.kind == K::ProjectClose ? std::string() : c.kind == K::ProjectNew ? "New song" : c.kind == K::ProjectRecover ? "Recovered" : "Opened");
             mCoalesce.clear();
+        }
+        // R-SAFE-1: an edit that landed — written beside the song at once when it removed something, else on the clock
+        if ((editing || history) && mOpen && mSettings.autosave > 0)
+        {
+            const CommandSpec *sp = specFor(c.kind);
+            const std::string verb = sp ? sp->verb : std::string();
+            const bool removal = verb.find("delete") != std::string::npos || verb.find("remove") != std::string::npos;
+            if (removal || steadySeconds() - mLastAutosave >= mSettings.autosave) autosave();
         }
         if (editing || history) mModel.dirty = true;
         if (editing || history) followClipLoop(); // R-ROLL-6: the looped clip, as edited
@@ -473,6 +482,53 @@ namespace solaris
         return pcm;
     }
 
+    // ── R-SAFE: autosave and recovery ────────────────────────────────────────────────────────────
+
+    double SolarisService::steadySeconds()
+    {
+        return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+
+    std::string SolarisService::autosavePath(const std::string &song) { return song + ".autosave"; }
+
+    bool SolarisService::recoveryOf(const std::string &song, double &ageSeconds)
+    {
+        // an autosave NEWER than the song: edits made after its last save, never saved
+        std::error_code ec;
+        const fs::path a = autosavePath(song);
+        if (!fs::exists(a, ec) || !fs::exists(song, ec)) return false;
+        const auto ta = fs::last_write_time(a, ec), ts = fs::last_write_time(song, ec);
+        if (ec || ta <= ts) return false;
+        ageSeconds = std::max(0.0, std::chrono::duration<double>(fs::file_time_type::clock::now() - ta).count());
+        return true;
+    }
+
+    bool SolarisService::autosave()
+    {
+        if (!mOpen || mPath.empty() || !mModel.dirty || mSettings.autosave <= 0) return false;
+        const std::string to = autosavePath(mPath), tmp = to + ".tmp";
+        {
+            std::ofstream f(tmp, std::ios::binary);
+            if (!f) return false;
+            f << serializeProject(mProject);
+            if (!f) return false;
+        }
+        std::error_code ec;
+        fs::rename(tmp, to, ec); // atomic: a crash mid-write leaves the last good one
+        if (ec) { fs::remove(tmp, ec); return false; }
+        mLastAutosave = steadySeconds();
+        mRecentsStale = true;
+        emit(Event(Event::Kind::ProjectAutosaved).with("path", to));
+        return true;
+    }
+
+    void SolarisService::dropAutosave(const std::string &song)
+    {
+        std::error_code ec;
+        if (!song.empty() && fs::remove(autosavePath(song), ec)) mRecentsStale = true;
+        if (song == mRecovery) { mRecovery.clear(); mRecoveryAge = -1.0; }
+    }
+
     bool SolarisService::projectCommand(const Command &c, std::string &err)
     {
         auto open = [&](Project p, const std::string &path) {
@@ -487,6 +543,9 @@ namespace solaris
             mOffline.clear();
             mAudit.clear();
             mLastRenderPeaks.clear();
+            mLastAutosave = steadySeconds(); // R-SAFE-1: the clock starts with the song
+            mRecovery.clear();
+            mRecoveryAge = -1.0;
             refreshModel();
             mModel.dirty = false;
             touchRecent(path);
@@ -541,6 +600,42 @@ namespace solaris
             adoptTracks(p, rep.notes);
             open(std::move(p), path);
             for (const auto &n : rep.notes) emit(Event(Event::Kind::Info).with("text", n));
+            double age = 0;
+            if (recoveryOf(path, age))
+            {
+                // R-SAFE-2: said, and offered — the saved song is what is open until `project recover`
+                mRecovery = path;
+                mRecoveryAge = age;
+                char b[32];
+                std::snprintf(b, sizeof b, "%.0f", age);
+                mOutput += "recovery: " + autosavePath(path) + " (" + b + " s old) — `project recover " + path + "` restores it, `project discard-recovery " +
+                           path + "` drops it\n";
+                emit(Event(Event::Kind::ProjectRecovery).with("path", autosavePath(path)).with("age", age));
+            }
+            return true;
+        }
+        case K::ProjectRecover:
+        {
+            const std::string path = c.arg(0), from = autosavePath(path);
+            std::ifstream f(from, std::ios::binary);
+            if (!f) { err = "no autosave for " + path + " (" + from + ")"; return false; }
+            std::stringstream ss;
+            ss << f.rdbuf();
+            Project p;
+            ParseReport rep;
+            if (!parseProject(ss.str(), p, err, &rep)) { err = from + ": " + err; return false; }
+            adoptTracks(p, rep.notes);
+            open(std::move(p), path); // the song is <path>: `project save` writes it there and drops the autosave
+            mModel.dirty = true;      // what was recovered is not saved yet
+            mOutput = "recovered " + path + " from " + from + "\n";
+            return true;
+        }
+        case K::ProjectDiscardRecovery:
+        {
+            const std::string path = c.arg(0);
+            std::error_code ec;
+            if (!fs::exists(autosavePath(path), ec)) { err = "no autosave for " + path; return false; }
+            dropAutosave(path);
             return true;
         }
         case K::ProjectSave:
@@ -548,6 +643,8 @@ namespace solaris
             if (!requireOpen(err)) return false;
             const std::string path = c.arg(0, mPath);
             if (!write(path)) return false;
+            dropAutosave(mPath); // R-SAFE-1: saved — nothing left to recover (its old place too, when saved elsewhere)
+            dropAutosave(path);
             mRecentsStale = true; // its card shows the saved name and length
             if (path != mPath) { mPath = path; mPcm.clear(); mOffline.clear(); touchRecent(path); } // relative media now resolve from here
             mModel.dirty = false;
@@ -555,6 +652,7 @@ namespace solaris
             return true;
         }
         case K::ProjectClose:
+            dropAutosave(mPath); // R-SAFE-1: closing is choosing — saved or discarded, nothing to recover
             mRecentsStale = true; // Home is where the cards matter: re-read them (a song may have moved meanwhile)
             stopPlayer();
             mPosition = mLoopFrom = mLoopTo = mCue = 0;

@@ -80,6 +80,8 @@ namespace solaris
 
     void SolarisService::pump()
     {
+        // R-SAFE-1: an unsaved song is written beside itself on the clock, whatever else is happening
+        if (mOpen && mModel.dirty && mSettings.autosave > 0 && steadySeconds() - mLastAutosave >= mSettings.autosave) autosave();
         if (mPreview) mPreview->collect(); // R-ROLL-7: what its thread is done with, freed here
         if (mAudition)
         {

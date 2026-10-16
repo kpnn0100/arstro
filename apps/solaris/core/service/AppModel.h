@@ -182,6 +182,7 @@ namespace solaris
         double bpm = 0, lengthBeats = 0;
         int strips = 0;
         bool missing = false;                    // the file is gone or no longer a song
+        bool recovery = false;                   // R-SAFE-2: an autosave newer than it — unsaved edits to recover
     };
 
     /** One keyboard action and its keys on this machine (R-SET-4) — a front end looks a pressed combo up here. */
@@ -203,6 +204,7 @@ namespace solaris
         double auditionLevel = -6;              // dB: a sample previewed from the browser (R-EDM-9)
         std::string newSig = "4/4";
         bool showIds = false;                    // R-UI-11: every object's id beside its name
+        int autosave = 60;                       // R-SAFE-1: seconds; 0 = off
         std::vector<KeyActionModel> keys;        // R-SET-4: every shortcut, in the sheet's order
     };
 
@@ -257,6 +259,8 @@ namespace solaris
         std::string undoLabel, redoLabel;        // what `undo` / `redo` would take back ("" = nothing) — R-EDM-1
         int undoDepth = 0, redoDepth = 0;
         std::vector<HistoryNodeModel> history;   // R-HIST-2: the song's history tree, oldest first
+        std::string recovery;                    // R-SAFE-2: the open song has an autosave newer than it ("" = no) — its song's path
+        double recoveryAge = -1;                 // … how old, seconds
         int historyCurrent = -1;                 // the node the song is now
         std::string sig = "4/4";
         int sampleRate = 48000;

@@ -1192,6 +1192,89 @@ static void test_keys_are_settings()
     pass("Hotkeys are settings (R-SET-4): every action published with its keys and defaults; key.<action> takes any spelling, keeps one, refuses a key another action of its keyboard has, none / default; saved");
 }
 
+// R-SAFE-1/2: an unsaved song is written beside itself — on the clock, and at once after a removal; a save or a close
+// drops it; a session that died leaves it, the next open offers it, `project recover` restores it
+static void test_autosave_and_recovery()
+{
+    const std::string settings = scratch() + "/as-settings.txt", recents = scratch() + "/as-recents";
+    fs::remove(settings);
+    fs::remove(recents);
+    const std::string song = freshSong("autosave"), as = song + ".autosave";
+    fs::remove(as);
+    auto slurp = [](const std::string &path) {
+        std::ifstream f(path);
+        return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    };
+    {
+        Run r(settings, recents);
+        r.ok("settings set autosave=1");
+        r.ok("project new " + song + " --bpm 120");
+        r.ok("clip add --instrument drums --at 0 --length 4");          // an edit, not yet a second after opening
+        assert(!fs::exists(as));
+        r.events.clear();
+        r.ok("wait 1.2");                                                // the clock: written beside it
+        assert(fs::exists(as) && contains(slurp(as), "#aclip") && !contains(slurp(song), "#aclip"));
+        bool said = false;
+        for (const auto &e : r.events) said |= contains(e, "project.autosaved path=" + as);
+        assert(said && !fs::exists(as + ".tmp"));                       // atomic: the temporary file is gone
+        // a removal is written at once, not on the clock
+        r.ok("clip add --instrument synth --at 4 --length 4");
+        const std::string made = r.svc.model().clips.back().id;
+        r.ok("wait 1.2");
+        assert(contains(slurp(as), "id=" + made));
+        r.ok("clip delete " + made);
+        assert(!contains(slurp(as), "id=" + made));
+        // a save drops it
+        r.ok("project save");
+        assert(!fs::exists(as));
+        // edits after the save, then the session dies: no save, no close
+        r.ok("set ch_2.gain=-6");
+        r.ok("wait 1.2");
+        assert(fs::exists(as) && contains(slurp(as), "gain=-6"));
+    }
+    {
+        Run again(settings, recents);
+        assert(!again.svc.model().recents.empty() && again.svc.model().recents[0].recovery); // Home's card says so
+        const std::string out = again.ok("project open " + song);
+        assert(contains(out, "recovery: " + as) && again.svc.model().recovery == song && again.svc.model().recoveryAge >= 0.0);
+        assert(again.svc.model().strips[0].gain == 0.0 || again.svc.model().strips[1].gain == 0.0); // the SAVED song is what opened
+        again.ok("project recover " + song);
+        bool recovered = false;
+        for (const auto &s : again.svc.model().strips) recovered |= s.id == "ch_2" && s.gain == -6.0;
+        assert(recovered && again.svc.model().dirty && again.svc.model().recovery.empty() && again.svc.model().history[0].label == "Recovered");
+        again.ok("project save");
+        assert(!fs::exists(as) && contains(slurp(song), "gain=-6"));
+        // refused, naming why
+        assert(contains(again.no("project recover " + song), "no autosave for"));
+        assert(contains(again.no("project discard-recovery " + song), "no autosave for"));
+        // an unsaved edit, the session dies again; this time the saved one is kept
+        again.ok("set ch_2.gain=-3");
+        again.ok("wait 1.2");
+        assert(fs::exists(as));
+    }
+    {
+        Run third(settings, recents);
+        assert(contains(third.ok("project open " + song), "recovery: "));
+        third.ok("project discard-recovery " + song);
+        assert(!fs::exists(as) && third.svc.model().recovery.empty());
+        // closing is choosing: an unsaved edit's autosave goes with the close
+        third.ok("set ch_2.gain=-1");
+        third.ok("wait 1.2");
+        assert(fs::exists(as));
+        third.ok("project close");
+        assert(!fs::exists(as));
+        // off: nothing written
+        third.ok("settings set autosave=off");
+        third.ok("project open " + song);
+        third.ok("set ch_2.gain=-2");
+        third.ok("clip delete ac_1");
+        third.ok("wait 1.2");
+        assert(!fs::exists(as));
+        assert(contains(third.no("settings set autosave=0"), "seconds from 1 to 3600, or off"));
+    }
+    pass("Autosave and recovery (R-SAFE-1/2): written beside an unsaved song on the clock and at once after a removal, atomically; a save or a close drops it; a dead session leaves it — Home marks the card, `project open` offers it, `project recover` restores it unsaved, `discard-recovery` drops it; off writes nothing");
+}
+
 static void test_the_machine_settings_folders_devices_and_recents()
 {
     const std::string settings = scratch() + "/settings.txt", recents = scratch() + "/recents";
@@ -2347,6 +2430,7 @@ int main()
     test_render_writes_the_mix_deterministically();
     test_the_dump_and_the_document();
     test_the_machine_settings_folders_devices_and_recents();
+    test_autosave_and_recovery();
     test_keys_are_settings();
     test_live_playback_is_the_offline_render();
     test_the_metronome_clicks_live_and_never_in_a_render();

@@ -106,6 +106,9 @@ namespace solaris
         mModel.settings.newSig = mSettings.newSig;
         mModel.settings.reducedMotion = mSettings.reducedMotion;
         mModel.settings.showIds = mSettings.showIds;
+        mModel.settings.autosave = mSettings.autosave;
+        mModel.recovery = mRecovery;
+        mModel.recoveryAge = mRecoveryAge;
         for (const auto &a : keyActions())
         {
             KeyActionModel k{a.id, a.area, a.label, keysOf(a, mSettings.keys), {}};
@@ -141,6 +144,8 @@ namespace solaris
                     r.bpm = song.header.bpm;
                     r.strips = (int)song.strips.size();
                     for (const auto &c : song.clips) r.lengthBeats = std::max(r.lengthBeats, c.at + clipLengthBeats(song, c));
+                    double age = 0;
+                    r.recovery = recoveryOf(path, age); // R-SAFE-2
                 }
                 mRecentCards.push_back(r);
             }
