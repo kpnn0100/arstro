@@ -296,6 +296,7 @@ namespace solaris
         std::shared_ptr<LockFreeQueue<MidiEvent>> mCtlQ;
         std::string mMapLearning;            // the address a `map learn` waits to bind
         bool mControlTried = false;          // the input was asked to open for the mappings (said once if it cannot)
+        double mCpuHeld = 0, mCpuHeldAt = 0; // R-PERF-1: the worst block, held a second
         std::vector<std::string> mControlLines; // what controls moved and keys pressed, as lines — landed as an editor's
         bool mapCommand(const Command &c, std::string &err);
         void controlMidi();

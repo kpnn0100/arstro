@@ -4091,6 +4091,41 @@ static void test_a_control_surface()
     pass("a control surface (R-CTRL-2): on its own port, the keyboard deaf to it; connected it shows everything; its fader (the fader law), pot and mute move the song; the song moves it back — not a touched fader until let go; the transport keys and light; another bank; none disconnects; HUI's fader pair and ping; refusals; a missing port said");
 }
 
+static void test_the_cpu_meter()
+{
+    // R-PERF-1: while playing, the audio thread's load is published — finite, a fraction of a block for this small song,
+    // its worst block held — and each strip's share: a synth playing a chord costs more than an empty bus; stopped, 0;
+    // a render is never timed (its bytes the same either way: R-RENDER-1)
+    Run r;
+    r.ok("project new " + freshSong("cpu") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 16");
+    r.ok("notes add pt_1 \"C4@0:16 E4@0:16 G4@0:16 C5@0:16 E5@0:16\"");
+    const std::string synth = r.svc.model().clips.back().track;
+    const std::string bus = firstLine(r.ok("strip add --kind bus --name Empty"));
+    assert(r.svc.model().transport.cpu == 0.0f);
+    r.ok("render --out " + scratch() + "/cpu-a.wav --to 2 --bits 32f");
+    r.ok("transport play --from 0");
+    waitFrames(r, 48000);
+    r.ok("wait 0.05");
+    const TransportModel &t = r.svc.model().transport;
+    std::printf("    load %.4f, worst %.4f\n", t.cpu, t.cpuPeak);
+    assert(t.cpu > 0.0f && t.cpu < 10.0f && t.cpuPeak > 0.0f && std::isfinite(t.cpuPeak));
+    float sc = -1, bc = -1;
+    for (const auto &s : r.svc.model().strips)
+    {
+        if (s.id == synth) sc = s.cpu;
+        if (s.id == bus) bc = s.cpu;
+    }
+    std::printf("    the synth %.5f, the empty bus %.5f\n", sc, bc);
+    assert(sc > 0.0f && sc <= t.cpu * 1.2f + 1e-3f && bc >= 0.0f && sc > bc); // a strip's time is part of the block's
+    r.ok("transport stop");
+    assert(r.svc.model().transport.cpu == 0.0f && r.svc.model().transport.cpuPeak == 0.0f);
+    for (const auto &s : r.svc.model().strips) assert(s.cpu == 0.0f);
+    r.ok("render --out " + scratch() + "/cpu-b.wav --to 2 --bits 32f");
+    assert(r.fake.written[scratch() + "/cpu-a.wav"] == r.fake.written[scratch() + "/cpu-b.wav"]);
+    pass("the CPU meter (R-PERF-1): playing, the load published — finite, its worst block held — and each strip's share (a chord's synth more than an empty bus); stopped, 0; a render untimed, its bytes the same");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -5364,6 +5399,7 @@ int main()
     test_midi_learn_and_the_transport_keys();
     test_the_surface_codecs();
     test_a_control_surface();
+    test_the_cpu_meter();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

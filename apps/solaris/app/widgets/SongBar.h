@@ -49,6 +49,9 @@ namespace solaris_ui
         /** R-CTRL-1: while a `map learn` waits, a pill after the tempo says for what (a click cancels it) — LIVE, eased. */
         double learnAmount() const { return mLearn.value(); }
         const std::string &learnShown() const { return mLearnShown; }
+        /** R-PERF-1: "CPU" and the load before the master meter — the value as DRAWN (LIVE, catching up), and where. */
+        double cpuShown() const { return mCpuShown.value(); }
+        artboard::Rect cpuRect() const;
         double meterLevel(int ch) const { return mMeter[ch].value(); }
         double bpmShown() const { return mBpmDrag ? mBpmLive : mBpmShown.value(); } // the tempo as DRAWN (LIVE)
         /** R-TEMPO-1: the line that sets the tempo shown — the song's, or the change in effect at the time bar. */
@@ -82,6 +85,8 @@ namespace solaris_ui
         artboard::AnimatedProperty mRecLit{0.0};
         std::string mLearning, mLearnShown; // R-CTRL-1: what a learn waits for; what the pill says (kept while it fades out)
         artboard::AnimatedProperty mLearn{0.0};
+        double mCpu = 0.0, mCpuTarget = 0.0;  // R-PERF-1: the model's load; what the drawn value heads for
+        artboard::AnimatedProperty mCpuShown{0.0};
         artboard::AnimatedProperty mPlaying{0.0}, mDirtyDot{0.0}, mMeter[2]{artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
         bool mInit = false;
         cosmo_v2::HoverFade mHover;

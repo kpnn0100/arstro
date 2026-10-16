@@ -58,6 +58,7 @@ namespace solaris_ui
         mPeak[0] = m.transport.masterPeak[0];
         mPeak[1] = m.transport.masterPeak[1];
         mLearning = m.mapLearning; // R-CTRL-1
+        mCpu = m.transport.cpu;    // R-PERF-1
         if (!mLearning.empty()) mLearnShown = mLearning;
     }
 
@@ -80,12 +81,19 @@ namespace solaris_ui
         }
         case kLearn:
         {
-            // R-CTRL-1: after the tempo, up to the meter (u(80) at most)
-            const double x = hitRect(kBpm).right() + 12.0, right = hitRect(kSave).x - 14.0 - kMeterW - 12.0;
+            // R-CTRL-1: after the tempo, up to the CPU readout (u(80) at most)
+            const double x = hitRect(kBpm).right() + 12.0, right = cpuRect().x - 12.0;
             return Rect{x, cy - kBtnH * 0.5, std::clamp(right - x, 0.0, 260.0), kBtnH};
         }
         default: return Rect{};
         }
+    }
+
+    Rect SongBar::cpuRect() const
+    {
+        // R-PERF-1: before the master meter — "CPU 12%" over its thin bar; u(18) wide
+        const Rect save = hitRect(kSave);
+        return Rect{save.x - 14.0 - kMeterW - 12.0 - 58.5, kHeight * 0.5 - 9.0, 58.5, 18.0};
     }
 
     int SongBar::hitAt(const Point &p) const
@@ -122,6 +130,13 @@ namespace solaris_ui
         toward(mPlaying, mPlayingWanted ? 1.0 : 0.0, motion::kCrossFadeMs);
         toward(mRecLit, mRecordingWanted ? 1.0 : 0.0, motion::kCrossFadeMs);
         toward(mLearn, mLearning.empty() ? 0.0 : 1.0, motion::kCrossFadeMs);
+        // R-PERF-1: the load, a value catching up to a source it does not control
+        if (mCpu != mCpuTarget)
+        {
+            mCpuShown.animateTo(mCpu, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); // from where it is drawn
+            mCpuTarget = mCpu;
+        }
+        mCpuShown.update(nowMs);
         toward(mDirtyDot, mDirty ? 1.0 : 0.0, motion::kCrossFadeMs);
         for (int c = 0; c < 2; ++c)
         {
@@ -291,6 +306,21 @@ namespace solaris_ui
             t.setFill(c);
             t.drawText(textfit::ellipsize(t, "MIDI learn \xC2\xB7 " + mLearnShown + " \xE2\x80\x94 move a control", std::max(0.0, r.w - 16.0), 10.0, font::sans()),
                        r.x + 8.0, textfit::baseline(cy, 10.0), 10.0, font::sans());
+        }
+        // R-PERF-1: the audio thread's load — muted, the destructive colour from 80 %
+        {
+            const Rect r = cpuRect();
+            const double v = std::max(0.0, mCpuShown.value());
+            const Color c = lerpColor(palette::mutedForeground(), palette::destructive(), std::clamp((v - 0.7) / 0.1, 0.0, 1.0));
+            t.setFill(palette::mutedForeground());
+            t.drawText("CPU", r.x, r.y + 10.0, 9.0, font::sansSemiBold(), 0.13 * 9.0);
+            char pct[16];
+            std::snprintf(pct, sizeof pct, "%d%%", (int)std::lround(v * 100.0));
+            t.setFill(c);
+            t.drawText(pct, r.right() - t.measureText(pct, 10.0, font::mono()), r.y + 10.0, 10.0, font::mono());
+            const Rect track{r.x, r.bottom() - 3.0, r.w, 2.0};
+            drawRoundedRect(t, track, radius::pill(), Paint::filled(palette::whiteAlpha(0.06)));
+            if (v > 0.0) drawRoundedRect(t, Rect{track.x, track.y, track.w * std::min(1.0, v), track.h}, radius::pill(), Paint::filled(c));
         }
         // master meter, L over R
         {

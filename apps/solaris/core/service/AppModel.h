@@ -103,6 +103,7 @@ namespace solaris
         float rms[2] = {0, 0};                  // R-METER-2: RMS over 300 ms, L/R
         float hold[2] = {0, 0};                 // the held peak: the most of 1.5 s, then falling 20 dB/s
         bool clip = false;                      // reached full scale since `meters clear` (a latch)
+        float cpu = 0;                          // R-PERF-1: its share of the audio thread's time (0 … 1 of a block), while playing
         int clipCount = 0;
         std::vector<std::string> fromLanes;     // lanes its clips are drawn on
         std::vector<std::string> fromStrips;    // strips whose output or a send lands here
@@ -360,6 +361,8 @@ namespace solaris
         bool masterClip = false;
         std::string driver;                      // R-DEV-9: what the clock device plays through now ("" stopped)
         long long xruns = -1;                    // R-DEV-5: underruns since play; −1 = this driver cannot count them
+        float cpu = 0, cpuPeak = 0;              // R-PERF-1: the audio thread's load (a block's work over its duration),
+                                                 //   smoothed; its worst block in the last second (over 1: a missed deadline)
         bool recording = false;                  // R-MIDI-2: `transport record` — the armed strip's keyboard kept
         bool countingIn = false;                 // … its count-in still clicking
         int recorded = 0;                        // notes struck that will land (a count-in's are not)

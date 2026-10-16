@@ -87,6 +87,10 @@ namespace engine
     {
     public:
         static constexpr int kBlock = 128;
+        /** R-PERF-1: add up each strip's processing time (ns) in `stripNanos()` — for the player's CPU meter; off in a
+         *  render (no deadline). Each `render` starts the sums again. */
+        void measureTime(bool on) { mTime = on; }
+        const std::vector<long long> &stripNanos() const { return mStripNs; }
         static constexpr int kControl = kControlSamples; // bindings are evaluated at every multiple of this sample
 
         /** Build every device. False + `err` on a graph that routes backward or names an unknown
@@ -157,6 +161,8 @@ namespace engine
         ~Engine();
 
     private:
+        bool mTime = false;                 // R-PERF-1
+        std::vector<long long> mStripNs;    // … each strip's ns this render (sized at build)
         struct StripState;
         void renderPiece(long long p0, int n, PortBuffers &out, int outOffset);
         void route(const Target &t, const double *L, const double *R, int n, double gain, PortBuffers &out, int outOffset,

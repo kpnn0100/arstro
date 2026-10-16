@@ -2052,6 +2052,12 @@
       "stable": false
     },
     {
+      "path": "strips[].cpu",
+      "type": "number",
+      "summary": "R-PERF-1: its share of the audio thread's time, of a block (0 stopped)",
+      "stable": false
+    },
+    {
       "path": "strips[].clipCount",
       "type": "int",
       "summary": "fed by: clips playing through it (R-MIX-8)",
@@ -3309,6 +3315,18 @@
       "path": "transport.xruns",
       "type": "int",
       "summary": "underruns since play (−1: this driver cannot count them) — R-DEV-5",
+      "stable": false
+    },
+    {
+      "path": "transport.cpu",
+      "type": "number",
+      "summary": "R-PERF-1: the audio thread's load — a block's work over its duration, smoothed (0 stopped)",
+      "stable": false
+    },
+    {
+      "path": "transport.cpuPeak",
+      "type": "number",
+      "summary": "… its worst single block in the last second, unsmoothed (over 1: a block that missed its deadline)",
       "stable": false
     },
     {

@@ -4458,6 +4458,35 @@ static void test_a_surface_chosen_in_settings()
     pass("a surface chosen in Settings (R-CTRL-2): Settings › MIDI's Control surface and Surface port combos — one line each; the note says connected (its strips) or why not, cross-fading");
 }
 
+static void test_the_cpu_in_the_song_bar()
+{
+    // R-PERF-1: playing, the song bar's CPU readout catches up with the model's load — caught on the way — and, stopped,
+    // eases back to 0 rather than dropping
+    sltest::Rig r("ui-cpu", 1440, 900);
+    r.cmd("project new " + r.song("Cpu") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 16");
+    r.cmd("notes add pt_1 \"C4@0:16 E4@0:16 G4@0:16\"");
+    r.settle();
+    auto &bar = r.app->project().bar();
+    assert(bar.cpuShown() == 0.0 && bar.cpuRect().w > 0.0);
+    r.cmd("transport play");
+    for (int k = 0; k < 400 && r.svc->model().transport.cpu <= 0.0f; ++k)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        r.frame();
+    }
+    assert(r.svc->model().transport.cpu > 0.0f);
+    r.frame();
+    assert(bar.cpuShown() > 0.0 && bar.cpuShown() < r.svc->model().transport.cpu); // on its way up
+    r.cmd("transport stop");
+    r.frame();
+    r.frame();
+    assert(bar.cpuShown() > 0.0);                                                    // on its way down
+    r.settle();
+    assert(bar.cpuShown() == 0.0);
+    pass("the CPU in the song bar (R-PERF-1): playing, the readout catches up with the load (caught on its way); stopped, it eases back to 0");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -4526,6 +4555,7 @@ int main()
     test_a_plugins_device_window();
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
+    test_the_cpu_in_the_song_bar();
     test_a_sample_is_heard_from_the_browser();
     test_the_grid_follows_the_zoom();
     std::printf("\n%d passed, 0 failed\n", passed);

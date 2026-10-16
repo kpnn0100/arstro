@@ -48,6 +48,7 @@ namespace solaris
         if (mPlayer->running() && mOpen)
             mPosition = beatOfSample((double)mPlayer->heard()); // R-TEMPO-1: through the map
         mPlayer.reset();
+        mCpuHeld = 0; // R-PERF-1: the next play's worst block is its own (a stop resets the transport's model itself)
         mLiveStrips.clear();
         mLiveDevices.clear();
         mLiveBinds.clear();
@@ -169,6 +170,13 @@ namespace solaris
             if (fresh) t.masterHold[c] = mPlayer->hold(2 * Player::kMaxStrips + c);
         }
         t.xruns = mPlayer->xruns(); // R-DEV-5: what the device says (−1: it cannot count them)
+        // R-PERF-1: the load, and its worst block — held a second
+        t.cpu = mPlayer->cpu();
+        {
+            const double now = steadySeconds(), worst = mPlayer->takeCpuPeak();
+            if (worst >= mCpuHeld || now - mCpuHeldAt > 1.0) { mCpuHeld = worst; mCpuHeldAt = now; }
+            t.cpuPeak = (float)mCpuHeld;
+        }
         if (fresh && mPlayer->takeClip(Player::kMaxStrips)) mMasterClip = true;
         if (mRecording)
         {
@@ -192,6 +200,7 @@ namespace solaris
                     for (int c = 0; c < 2; ++c)
                     {
                         s.peak[c] = mPlayer->peak((int)(2 * i) + c);
+                    s.cpu = c == 0 ? mPlayer->stripCpu((int)i) : s.cpu; // R-PERF-1
                         s.rms[c] = mPlayer->rms((int)(2 * i) + c);
                         if (fresh) s.hold[c] = mPlayer->hold((int)(2 * i) + c);
                     }

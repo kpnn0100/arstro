@@ -107,6 +107,7 @@ namespace solaris
         mSlotsWritten.store(0);
         mOut = std::move(out);
         mEng = eng.release();
+        mEng->measureTime(true); // R-PERF-1: its strips' time, for the CPU meter
         mRoutes = std::move(routes);
         mChannels = std::max(1, channels);
         mBlock = std::max(32, block);
@@ -206,6 +207,7 @@ namespace solaris
             mGeneration = m.generation;
             mGraphLatency.store(mEng->outputLatency(), std::memory_order_relaxed);
             mEng->prepare(mPb, mBlock); // the port count may have changed: within capacity it does not allocate
+            mEng->measureTime(true);    // R-PERF-1
             mEng->tapMaster(mTapL.data(), mTapR.data(), mBlock);
             if (!mRetired.push(old)) delete old; // the service is not collecting: better a free here than a leak
             break;
@@ -431,6 +433,24 @@ namespace solaris
         }
     }
 
+    void Player::timed(int frames, std::chrono::steady_clock::time_point t0)
+    {
+        // R-PERF-1: the block's time over its duration; smoothed (a third of a second), its worst kept until taken
+        const double rate = std::max(1, mEng->graph().sampleRate), blockNs = frames / rate * 1e9;
+        if (blockNs <= 0.0) return;
+        const double ns = (double)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
+        const double load = ns / blockNs, k = std::min(1.0, frames / rate / 0.33);
+        mCpu.store((float)(mCpu.load(std::memory_order_relaxed) + k * (load - mCpu.load(std::memory_order_relaxed))), std::memory_order_relaxed);
+        float peak = mCpuPeak.load(std::memory_order_relaxed);
+        while ((float)load > peak && !mCpuPeak.compare_exchange_weak(peak, (float)load, std::memory_order_relaxed)) {}
+        const auto &strips = mEng->stripNanos();
+        for (size_t s = 0; s < strips.size() && s < (size_t)kMaxStrips; ++s)
+        {
+            const float was = mStripCpu[s].load(std::memory_order_relaxed);
+            mStripCpu[s].store((float)(was + k * (strips[s] / blockNs - was)), std::memory_order_relaxed);
+        }
+    }
+
     void Player::run()
     {
         while (mRun.load())
@@ -453,6 +473,7 @@ namespace solaris
                 mClickWas = true;
                 continue;
             }
+            const auto t0 = std::chrono::steady_clock::now(); // R-PERF-1: the block's work starts
             const long long pos = mEng->position(), a = mLoopA.load(), b = mLoopB.load();
             int n = mBlock;
             if (b > a && pos < b && pos + n > b) n = (int)(b - pos); // stop exactly at the loop's end
@@ -483,6 +504,7 @@ namespace solaris
             if (clickOn) click(pos - mGraphLatency.load(std::memory_order_relaxed), n); // on the beat the music is on (R-MIX-17)
             else if (mClickWas && mClick) mClick->reset(); // off: no tail waits to resume
             mClickWas = clickOn;
+            timed(n, t0); // R-PERF-1: all but the device's wait
             mOut->write(mInterleaved.data(), n); // blocks: the device is the clock
             mLatency.store(mOut->latency(), std::memory_order_relaxed);
             mOutFrames += n;

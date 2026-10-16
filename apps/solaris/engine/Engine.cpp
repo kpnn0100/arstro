@@ -2,6 +2,7 @@
 #include "MixLaws.h"
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include "base/AudioConfig.h"
 #include "device/Device.h"
@@ -176,6 +177,7 @@ namespace engine
         mGraph = graph;
         mStrips = std::move(strips);
         mMasterRack = std::move(master);
+        mStripNs.assign(mStrips.size(), 0); // R-PERF-1
         for (auto &b : mGraph.binds) // R-VST-6: a made device's parameter by name (its list is its own); not there: inert
             if ((b.kind == Bind::DeviceParam || b.kind == Bind::MasterDeviceParam) && b.param < 0 && !b.paramName.empty())
             {
@@ -510,6 +512,15 @@ namespace engine
 
         for (size_t si = 0; si < mStrips.size(); ++si)
         {
+            // R-PERF-1: this strip's time, when asked (a clock read either side; nothing else changes)
+            struct Timed
+            {
+                bool on;
+                long long &sum;
+                std::chrono::steady_clock::time_point t0;
+                Timed(bool o, long long &s) : on(o), sum(s), t0(o ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point()) {}
+                ~Timed() { if (on) sum += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count(); }
+            } timed(mTime, mStripNs[si]);
             const Strip &d = mGraph.strips[si];
             StripState &st = *mStrips[si];
             double *L = st.inL.data(), *R = st.inR.data();
@@ -800,6 +811,7 @@ namespace engine
         mMasterMeter = Meter{{0, 0}, {0, 0}, {mMasterMeter.maxPeak[0], mMasterMeter.maxPeak[1]}};
         for (auto &st : mStrips) { st->sumSq[0] = st->sumSq[1] = 0; st->counted = 0; }
 
+        if (mTime) std::fill(mStripNs.begin(), mStripNs.end(), 0LL); // R-PERF-1: this render's sums
         int done = 0;
         const bool bound = !mGraph.binds.empty();
         while (done < frames)

@@ -93,6 +93,7 @@ namespace solaris
             {"strips[].rms", "number[]", "RMS over the last 300 ms, L/R (R-METER-2)", false},
             {"strips[].hold", "number[]", "the held peak, L/R: the most of the last 1.5 s, then falling 20 dB a second", false},
             {"strips[].clip", "bool", "reached full scale since `meters clear` — a latch", false},
+            {"strips[].cpu", "number", "R-PERF-1: its share of the audio thread's time, of a block (0 stopped)", false},
             {"strips[].clipCount", "int", "fed by: clips playing through it (R-MIX-8)"},
             {"strips[].fromLanes", "string[]", "fed by: the lanes those clips are drawn on"},
             {"strips[].fromStrips", "string[]", "fed by: strips whose output or a send lands here"},
@@ -304,6 +305,8 @@ namespace solaris
             {"transport.countingIn", "bool", "… and its count-in still clicks", false},
             {"transport.recorded", "int", "notes struck that will land (a count-in's are not)", false},
             {"transport.xruns", "int", "underruns since play (−1: this driver cannot count them) — R-DEV-5", false},
+            {"transport.cpu", "number", "R-PERF-1: the audio thread's load — a block's work over its duration, smoothed (0 stopped)", false},
+            {"transport.cpuPeak", "number", "… its worst single block in the last second, unsmoothed (over 1: a block that missed its deadline)", false},
             {"loudness", "object", "the master as measured while playing, kept after a stop (R-METER-1, ITU-R BS.1770-4)", false},
             {"loudness.momentary", "number", "LUFS over the last 400 ms; −144 = nothing measured", false},
             {"loudness.shortTerm", "number", "LUFS over the last 3 s", false},
@@ -579,7 +582,7 @@ namespace solaris
                 st.set("peak", Json::array().push(Json::number(s.peak[0])).push(Json::number(s.peak[1])))
                     .set("rms", Json::array().push(Json::number(s.rms[0])).push(Json::number(s.rms[1])))
                     .set("hold", Json::array().push(Json::number(s.hold[0])).push(Json::number(s.hold[1])))
-                    .set("clip", s.clip);
+                    .set("clip", s.clip).set("cpu", s.cpu);
             st.set("clipCount", s.clipCount).set("fromLanes", strings(s.fromLanes)).set("fromStrips", strings(s.fromStrips))
                 .set("targets", strings(s.targets)).set("keyTargets", strings(s.keyTargets));
             strips.push(st);
@@ -703,7 +706,8 @@ namespace solaris
                 .set("masterRms", Json::array().push(Json::number(m.transport.masterRms[0])).push(Json::number(m.transport.masterRms[1])))
                 .set("masterHold", Json::array().push(Json::number(m.transport.masterHold[0])).push(Json::number(m.transport.masterHold[1])))
                 .set("masterClip", m.transport.masterClip).set("driver", m.transport.driver).set("xruns", (int)m.transport.xruns)
-                .set("countingIn", m.transport.countingIn).set("recorded", m.transport.recorded);
+                .set("countingIn", m.transport.countingIn).set("recorded", m.transport.recorded)
+                .set("cpu", m.transport.cpu).set("cpuPeak", m.transport.cpuPeak);
         tr.set("recording", m.transport.recording);
         j.set("transport", tr);
         if (!stable)

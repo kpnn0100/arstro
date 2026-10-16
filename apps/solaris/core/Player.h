@@ -35,6 +35,7 @@
 #include "meter/Meters.h"
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -135,6 +136,11 @@ namespace solaris
         float peak(int index) const { return mPeaks[(size_t)index].load(std::memory_order_relaxed); }
         /** R-METER-2, indexed as `peak`: the RMS over the last 300 ms (a one-pole on the blocks' mean squares). */
         float rms(int index) const { return mRms[(size_t)index].load(std::memory_order_relaxed); }
+        /** R-PERF-1: the audio thread's load — its time on a block (all but the device's wait) over the block's
+         *  duration, smoothed over about a third of a second; its worst block since the last take; strip i's share. */
+        float cpu() const { return mCpu.load(std::memory_order_relaxed); }
+        float takeCpuPeak() { return mCpuPeak.exchange(0.0f, std::memory_order_relaxed); }
+        float stripCpu(int i) const { return i >= 0 && i < kMaxStrips ? mStripCpu[(size_t)i].load(std::memory_order_relaxed) : 0.0f; }
         /** The held peak: the most of the last 1.5 s, then falling 20 dB a second. */
         float hold(int index) const { return mHold[(size_t)index].load(std::memory_order_relaxed); }
         /** Whether strip i (the master: kMaxStrips) reached full scale since the last call — and forget it. */
@@ -205,6 +211,9 @@ namespace solaris
         std::atomic<double> mMomentary{LoudnessMeter::kSilence}, mShortTerm{LoudnessMeter::kSilence},
             mIntegrated{LoudnessMeter::kSilence}, mTruePeak{LoudnessMeter::kSilence}, mCorrelation{0};
         std::array<std::atomic<float>, SpectrumAnalyser::kBands> mSpectrum{};
+        std::atomic<float> mCpu{0.0f}, mCpuPeak{0.0f};       // R-PERF-1
+        std::array<std::atomic<float>, kMaxStrips> mStripCpu{};
+        void timed(int frames, std::chrono::steady_clock::time_point t0);
         std::atomic<bool> mClearPending{false};
         // R-MIDI-2: the keyboard — the queue is the service's; the rest the audio thread's
         LockFreeQueue<MidiEvent> *mMidi = nullptr;

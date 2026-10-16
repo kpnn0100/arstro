@@ -371,6 +371,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].rms` | number[] | RMS over the last 300 ms, L/R (R-METER-2) *(not in `--stable`)* |
 | `strips[].hold` | number[] | the held peak, L/R: the most of the last 1.5 s, then falling 20 dB a second *(not in `--stable`)* |
 | `strips[].clip` | bool | reached full scale since `meters clear` — a latch *(not in `--stable`)* |
+| `strips[].cpu` | number | R-PERF-1: its share of the audio thread's time, of a block (0 stopped) *(not in `--stable`)* |
 | `strips[].clipCount` | int | fed by: clips playing through it (R-MIX-8) |
 | `strips[].fromLanes` | string[] | fed by: the lanes those clips are drawn on |
 | `strips[].fromStrips` | string[] | fed by: strips whose output or a send lands here |
@@ -581,6 +582,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.countingIn` | bool | … and its count-in still clicks *(not in `--stable`)* |
 | `transport.recorded` | int | notes struck that will land (a count-in's are not) *(not in `--stable`)* |
 | `transport.xruns` | int | underruns since play (−1: this driver cannot count them) — R-DEV-5 *(not in `--stable`)* |
+| `transport.cpu` | number | R-PERF-1: the audio thread's load — a block's work over its duration, smoothed (0 stopped) *(not in `--stable`)* |
+| `transport.cpuPeak` | number | … its worst single block in the last second, unsmoothed (over 1: a block that missed its deadline) *(not in `--stable`)* |
 | `loudness` | object | the master as measured while playing, kept after a stop (R-METER-1, ITU-R BS.1770-4) *(not in `--stable`)* |
 | `loudness.momentary` | number | LUFS over the last 400 ms; −144 = nothing measured *(not in `--stable`)* |
 | `loudness.shortTerm` | number | LUFS over the last 3 s *(not in `--stable`)* |
