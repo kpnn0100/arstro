@@ -107,6 +107,9 @@ namespace solaris
         bool autoCommand(const Command &c, std::string &err);   // ServiceAuto.cpp
         // R-SVC-8 (ServiceCompose.cpp): notes in bulk and by name, steps, pattern edits; the read-back views
         bool composeCommand(const Command &c, std::string &err);
+        bool arrangeCommand(const Command &c, std::string &err); // markers (R-ARR-1)
+        /** A marker's id → its beat, and its section's end — `transport seek|loop <mk>`. False: not a marker. */
+        bool markerSpan(const std::string &id, double &from, double &to) const;
         bool readCommand(const Command &c, std::string &err);
         /** A pitch as written — a number, a name (C4 = 60) or a pad of the kit that plays `pattern`. */
         bool pitchOf(const std::string &text, const std::string &pattern, int &midi, std::string &err) const;

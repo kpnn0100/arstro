@@ -453,7 +453,9 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       rows off it dim, eased), Chord ▾ (a click stamps it), Tools ▾ (on the selection), the grooves in Quantize…; a
       Chance lane; velocity and chance changed elsewhere ease; the vocabularies published (`chords`, `scales`,
       `grooves`); the roll's window 720 × 520; menu carets drawn (the font has no ▾).
-- [ ] **N13** Markers and sections (R-ARR-1).
+- [~] **N13** Markers and sections (R-ARR-1).
+      Part 1 (2026-10-16): Interstellar's marker in beats — `#amarker` (`length` a section), `marker add|rename|move|delete`,
+      `markers[]` with each section's `end`, `transport seek|loop <mk>`. Part 2: the ruler.
 - [ ] **N14** Time insert / delete across the song (R-ARR-2).
 - [ ] **N15** Lane groups (R-ARR-3).
 **Phase 3 — work with audio**

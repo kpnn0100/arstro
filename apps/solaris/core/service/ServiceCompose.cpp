@@ -770,6 +770,17 @@ namespace solaris
             o << "pattern " << pt.id << " " << q(pt.name) << " " << beatText(pt.length) << " beats · " << countOf(pt.notes.size(), "note", "notes")
               << " · " << countOf(clips, "clip", "clips") << "\n";
         }
+        {
+            std::vector<const Marker *> mks; // R-ARR-1: by time, each to its section's end
+            for (const auto &mk : p.markers) mks.push_back(&mk);
+            std::stable_sort(mks.begin(), mks.end(), [](const Marker *a, const Marker *b) { return a->at < b->at; });
+            for (const Marker *mk : mks)
+            {
+                const double end = p.sectionEnd(*mk, songEndBeats());
+                o << "marker " << mk->id << " " << q(mk->name) << " @" << beatText(mk->at) << (end > mk->at ? " .. " + beatText(end) : std::string())
+                  << (mk->length > 0 ? " (a section)" : "") << "\n";
+            }
+        }
         for (const auto &a : p.automations)
         {
             std::string drives;

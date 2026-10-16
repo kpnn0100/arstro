@@ -210,6 +210,17 @@ makes.
 
 ---
 
+## 9a. Markers — `#amarker` (R-ARR-1)
+
+```
+#amarker id=mk_1 name=Intro at=0.0
+#amarker id=mk_2 name=Chorus at=16.0 length=8.0 note="the big one"
+```
+
+Interstellar's `#marker` (`id`, `name`, `at`, `note`) in beats, with `length` added: a marker with a length is a
+section; without one it is a point whose section runs to the next marker (or the song's end). `length` and `note`
+are written only when set; `name` is required. `transport seek <mk>` / `transport loop <mk>` use them.
+
 ## 10. Canonical serialization
 
 Header keys in §1's order, then unknown header keys in read order. Nodes grouped by type in this
@@ -252,7 +263,8 @@ clip add --src <file> [--lane ln] [--at b] [--strip ch]          ; audio — a n
 clip add --strip <ch> [--pattern pt] [--lane ln] [--at b] [--length b]   ; notes
 clip move <ac> [--at b] [--lane ln] [--strip ch] | clip duplicate <ac> [--at b] | clip unique <ac> | clip delete <ac>
 pattern new [--name n] [--length b] | note add <pt> --pitch p --at b [--length b] [--vel v] | note delete <pt> --pitch p --at b
-transport play | transport stop | transport seek <b> | transport loop <a> <b> | transport loop off
+marker add <name> --at b [--length b] [--note t] | marker rename <mk> <name> | marker move <mk> [--at b] [--length b] | marker delete <mk>
+transport play | transport stop | transport seek <b|mk> | transport loop <a> <b> | transport loop <mk> | transport loop off
 render --out <f.wav> [--from b] [--to b] [--stems ch,…] [--ports] [--bits 24|32f]
 matrix print [--json] | audit | state print [--json] [--stable] | registry [--json] | api [--json|--md]
 settings set <key>=<value> … | settings print | devices list | browse <folder>

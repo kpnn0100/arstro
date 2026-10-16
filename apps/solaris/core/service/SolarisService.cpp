@@ -179,6 +179,9 @@ namespace solaris
         case K::PatternImport: case K::PatternExport: case K::ProjectExportMidi: case K::ExprAdd: case K::ExprDelete: case K::ExprClear:
             ok = midiCommand(c, err);
             break;
+        case K::MarkerAdd: case K::MarkerRename: case K::MarkerMove: case K::MarkerDelete:
+            ok = arrangeCommand(c, err);
+            break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:
         case K::PatternArpeggiate:

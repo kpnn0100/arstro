@@ -2225,6 +2225,56 @@ namespace
     }
 }
 
+static void test_markers_name_places_and_sections()
+{
+    // R-ARR-1: a marker a named place, with a length a section; a point's section runs to the next marker (else the
+    // song's end); `transport seek|loop <mk>` reach them; edits sorted by time, undoable; refusals name the way
+    Run r;
+    r.ok("project new " + freshSong("markers") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 40");         // the song ends at 40
+    assert(r.ok("marker add Intro --at 0") == "mk_1\n");
+    assert(r.ok("marker add Outro --at 32") == "mk_2\n");
+    assert(r.ok("marker add Chorus --at 16 --length 8 --note \"big one\"") == "mk_3\n");
+    {
+        const auto &mk = r.svc.model().markers;
+        assert(mk.size() == 3 && mk[0].id == "mk_1" && mk[1].id == "mk_3" && mk[2].id == "mk_2"); // by time
+        assert(mk[0].end == 16.0 && mk[1].end == 24.0 && mk[2].end == 40.0 && mk[1].note == "big one" && mk[1].length == 8.0);
+    }
+    assert(contains(r.text(), "#amarker id=mk_3 name=Chorus at=16.0 length=8.0 note=\"big one\""));
+    assert(contains(r.ok("ls"), "marker mk_3 \"Chorus\" @16 .. 24 (a section)") && contains(r.ok("ls"), "marker mk_2 \"Outro\" @32 .. 40\n"));
+    // seek and loop by marker
+    r.ok("transport seek mk_3");
+    assert(r.svc.model().transport.position == 16.0);
+    r.ok("transport loop mk_1");
+    assert(r.svc.model().transport.loopFrom == 0.0 && r.svc.model().transport.loopTo == 16.0);
+    r.ok("transport loop mk_3");
+    assert(r.svc.model().transport.loopFrom == 16.0 && r.svc.model().transport.loopTo == 24.0);
+    r.ok("transport loop off");
+    // moved: still by time, and a point's section follows its neighbour
+    r.ok("marker move mk_2 --at 20");
+    r.ok("marker move mk_3 --length 0");                           // a point again: to the next marker
+    {
+        const auto &mk = r.svc.model().markers;
+        assert(mk[1].id == "mk_3" && mk[1].end == 20.0 && mk[2].id == "mk_2" && mk[2].at == 20.0 && mk[2].end == 40.0);
+    }
+    r.ok("marker rename mk_2 Bridge --note \"the turn\"");
+    assert(r.svc.model().markers[2].name == "Bridge" && r.svc.model().markers[2].note == "the turn");
+    r.ok("marker delete mk_1");
+    assert(r.svc.model().markers.size() == 2 && r.svc.model().markers[0].id == "mk_3");
+    r.ok("undo");
+    assert(r.svc.model().markers.size() == 3);
+    // refusals
+    assert(contains(r.no("marker add Verse"), "--at"));
+    assert(contains(r.no("marker add Verse --at -2"), "--at is a number of beats"));
+    const std::string none = r.no("marker move mk_9 --at 1");
+    assert(contains(none, "no marker `mk_9`") && contains(none, "mk_3 (Chorus)"));
+    assert(contains(r.no("marker move mk_3"), "needs --at and/or --length"));
+    assert(contains(r.no("transport seek mk_9"), "or a marker"));
+    assert(r.ok("marker add End --at 40") == "mk_4\n");             // at the song's end: no section to loop
+    assert(contains(r.no("transport loop mk_4"), "section is empty"));
+    pass("markers (R-ARR-1): added, by time, a section by length or to the next marker or the song's end; seek and loop by marker; moved, renamed, deleted, undone; .slp and ls; refusals name the way");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -3474,6 +3524,7 @@ int main()
     test_expression_lanes_play_the_wheels();
     test_expression_lanes_go_through_midi_files();
     test_the_keyboards_wheels_play_and_record();
+    test_markers_name_places_and_sections();
     test_scale_lock_places_and_moves_notes_on_the_scale();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();

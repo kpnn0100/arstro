@@ -192,6 +192,14 @@ namespace solaris
              "lane goes out in a MIDI file.", "R-MIDI-3", false, {"lane", "at", "value"}},
             {K::ExprDelete, "expr delete", "<pt>", 1, 1, {"lane=<lane>", "at=<beats>"}, "Remove the lane's point at --at.", "R-MIDI-3", false, {"lane", "at"}},
             {K::ExprClear, "expr clear", "<pt>", 1, 1, {"lane=<lane>"}, "Remove a lane's points (--lane), or every lane's.", "R-MIDI-3"},
+            {K::MarkerAdd, "marker add", "<name>", 1, 1, {"at=<beats>", "length=<beats>", "note=<text>"},
+             "A named place in the song (R-ARR-1 — Interstellar's marker, in beats): with --length a SECTION, else a point whose "
+             "section runs to the next marker (or the song's end). On the ruler; `transport seek <mk>` goes there, `transport "
+             "loop <mk>` loops its section. Prints its id.", "R-ARR-1", false, {"at"}},
+            {K::MarkerRename, "marker rename", "<mk> <name>", 2, 2, {"note=<text>"}, "Rename a marker (and set its --note).", "R-ARR-1"},
+            {K::MarkerMove, "marker move", "<mk>", 1, 1, {"at=<beats>", "length=<beats>"},
+             "Move a marker (--at) and/or set its section's --length (0: a point again).", "R-ARR-1"},
+            {K::MarkerDelete, "marker delete", "<mk>", 1, 1, {}, "Delete a marker.", "R-ARR-1"},
             {K::PatternScale, "pattern scale", "<pt> <key> <scale> | off", 2, 3, {},
              "Lock a pattern to a scale (R-ROLL-11) — `pattern scale pt_1 D dorian`: a note placed (`note add`, its --chord, "
              "`notes add`) lands on the scale's nearest pitch, a tie going down (so a major chord stamped on any degree is "
@@ -312,7 +320,7 @@ namespace solaris
              "Stop; the transport stays where it was heard — or, with --return, goes back to the cue: where the time bar "
              "was last put (a seek, or a play's --from or --clip; `transport.cue`). A plain stop's place is temporary: "
              "the next play starts there but the cue stays.", "R-TIME-7"},
-            {K::TransportSeek, "transport seek", "<beats>", 1, 1, {}, "Move the transport (playing or not).", "R-TIME-4"},
+            {K::TransportSeek, "transport seek", "<beats|mk>", 1, 1, {}, "Move the transport (playing or not) — to a beat, or to a marker (R-ARR-1).", "R-TIME-4"},
             {K::MidiDevices, "midi devices", "", 0, 0, {},
              "This machine's MIDI inputs (ALSA sequencer ports), each marked when Solaris listens to it — the names "
              "`settings set midiInputs=` takes.", "R-MIDI-2"},
@@ -324,7 +332,8 @@ namespace solaris
              "note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip "
              "under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes "
              "it back. --count-in (else `settings countIn`) bars of click first, the song waiting.", "R-MIDI-2"},
-            {K::TransportLoop, "transport loop", "<from|off> [to]", 1, 2, {}, "Loop between two beats while playing; `off` ends it.", "R-TIME-4"},
+            {K::TransportLoop, "transport loop", "<from|off|mk> [to]", 1, 2, {},
+             "Loop between two beats while playing — or a marker's section (R-ARR-1: its length, else to the next marker); `off` ends it.", "R-TIME-4"},
             {K::Audition, "audition", "<file|stop>", 1, 1, {},
              "Hear a sample now, outside the song (the browser's preview): through the output device at the "
              "audition level, to its end; `stop` ends it. Not an edit, never in a render.", "R-EDM-9"},

@@ -471,7 +471,8 @@ namespace solaris
         {
             if (!requireOpen(err)) return false;
             if (mRecording) { err = "recording — `transport stop` lands the take first"; return false; }
-            if (!parseNumber(c.arg(0), x) || x < 0) { err = "seek takes beats ≥ 0"; return false; }
+            double to = 0;
+            if (!markerSpan(c.arg(0), x, to) && (!parseNumber(c.arg(0), x) || x < 0)) { err = "seek takes beats ≥ 0 or a marker (mk_1)"; return false; } // R-ARR-1
             mPosition = toTick(x);
             mCue = mPosition; // R-TIME-7: the time bar, put here
             if (mPlayer && mPlayer->running())
@@ -492,8 +493,12 @@ namespace solaris
             else
             {
                 double a = 0, b = 0;
-                if (!parseNumber(c.arg(0), a) || a < 0 || !parseNumber(c.arg(1), b) || b <= a)
-                { err = "transport loop <from> <to> (beats, to > from) — or `transport loop off`"; return false; }
+                if (markerSpan(c.arg(0), a, b)) // R-ARR-1: a marker's section
+                {
+                    if (!(b > a)) { err = c.arg(0) + "'s section is empty (it is the last marker, at or past the song's end) — give it a --length"; return false; }
+                }
+                else if (!parseNumber(c.arg(0), a) || a < 0 || !parseNumber(c.arg(1), b) || b <= a)
+                { err = "transport loop <from> <to> (beats, to > from), a marker's section (`transport loop mk_1`) — or `transport loop off`"; return false; }
                 mLoopFrom = toTick(a);
                 mLoopTo = toTick(b);
             }

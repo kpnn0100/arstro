@@ -531,6 +531,47 @@
       "requirement": "R-MIDI-3"
     },
     {
+      "verb": "marker add",
+      "usage": "marker add <name> --at <beats> [--length <beats>] [--note <text>]",
+      "args": "<name>",
+      "flags": [
+        "at=<beats>",
+        "length=<beats>",
+        "note=<text>"
+      ],
+      "summary": "A named place in the song (R-ARR-1 — Interstellar's marker, in beats): with --length a SECTION, else a point whose section runs to the next marker (or the song's end). On the ruler; `transport seek <mk>` goes there, `transport loop <mk>` loops its section. Prints its id.",
+      "requirement": "R-ARR-1"
+    },
+    {
+      "verb": "marker rename",
+      "usage": "marker rename <mk> <name> [--note <text>]",
+      "args": "<mk> <name>",
+      "flags": [
+        "note=<text>"
+      ],
+      "summary": "Rename a marker (and set its --note).",
+      "requirement": "R-ARR-1"
+    },
+    {
+      "verb": "marker move",
+      "usage": "marker move <mk> [--at <beats>] [--length <beats>]",
+      "args": "<mk>",
+      "flags": [
+        "at=<beats>",
+        "length=<beats>"
+      ],
+      "summary": "Move a marker (--at) and/or set its section's --length (0: a point again).",
+      "requirement": "R-ARR-1"
+    },
+    {
+      "verb": "marker delete",
+      "usage": "marker delete <mk>",
+      "args": "<mk>",
+      "flags": [],
+      "summary": "Delete a marker.",
+      "requirement": "R-ARR-1"
+    },
+    {
       "verb": "pattern scale",
       "usage": "pattern scale <pt> <key> <scale> | off",
       "args": "<pt> <key> <scale> | off",
@@ -906,10 +947,10 @@
     },
     {
       "verb": "transport seek",
-      "usage": "transport seek <beats>",
-      "args": "<beats>",
+      "usage": "transport seek <beats|mk>",
+      "args": "<beats|mk>",
       "flags": [],
-      "summary": "Move the transport (playing or not).",
+      "summary": "Move the transport (playing or not) — to a beat, or to a marker (R-ARR-1).",
       "requirement": "R-TIME-4"
     },
     {
@@ -942,10 +983,10 @@
     },
     {
       "verb": "transport loop",
-      "usage": "transport loop <from|off> [to]",
-      "args": "<from|off> [to]",
+      "usage": "transport loop <from|off|mk> [to]",
+      "args": "<from|off|mk> [to]",
       "flags": [],
-      "summary": "Loop between two beats while playing; `off` ends it.",
+      "summary": "Loop between two beats while playing — or a marker's section (R-ARR-1: its length, else to the next marker); `off` ends it.",
       "requirement": "R-TIME-4"
     },
     {
@@ -1924,6 +1965,48 @@
       "path": "patterns[].expr[].value",
       "type": "number",
       "summary": "bend −1 … +1, a controller 0 … 1",
+      "stable": true
+    },
+    {
+      "path": "markers",
+      "type": "object[]",
+      "summary": "R-ARR-1: named places in the song, by time",
+      "stable": true
+    },
+    {
+      "path": "markers[].id",
+      "type": "string",
+      "summary": "mk_n",
+      "stable": true
+    },
+    {
+      "path": "markers[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "markers[].note",
+      "type": "string",
+      "summary": "free text (Interstellar's marker note)",
+      "stable": true
+    },
+    {
+      "path": "markers[].at",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "markers[].length",
+      "type": "number",
+      "summary": "beats — a section; 0 a point",
+      "stable": true
+    },
+    {
+      "path": "markers[].end",
+      "type": "number",
+      "summary": "where its section ends: at + length, else the next marker, else the song's end",
       "stable": true
     },
     {

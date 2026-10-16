@@ -226,6 +226,13 @@ namespace solaris
         std::vector<KeyActionModel> keys;        // R-SET-4: every shortcut, in the sheet's order
     };
 
+    /** R-ARR-1: a named place in the song, and where its section ends (computed: its length, else the next marker). */
+    struct MarkerModel
+    {
+        std::string id, name, note;
+        double at = 0, length = 0, end = 0;      // beats; length 0 = a point
+    };
+
     /** R-ROLL-11: a word the grammar takes, and what it means — the roll's menus offer what the service accepts. */
     struct VocabModel
     {
@@ -339,6 +346,7 @@ namespace solaris
         AuditionModel audition;
         std::vector<DeviceTypeModel> deviceTypes; // the registry, instruments first (R-DSP-2)
         std::vector<VocabModel> chords, scales, grooves; // R-ROLL-11: `--chord` qualities ("" major), `pattern scale`'s, `--groove`'s
+        std::vector<MarkerModel> markers;        // R-ARR-1: by time
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };
 }

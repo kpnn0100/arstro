@@ -198,6 +198,15 @@ A mixer is a page of strips; its `order` is the processing order. A port is a **
 input — the project never names a device; the machine's settings map a port to a device's
 channels. The header's `masterOut` names the port(s) the master feeds.
 
+### 2.10 `#amarker` — a named place (Solaris; Interstellar's `#marker`)
+
+```
+#amarker id=mk_2 name=Chorus at=16.0 length=8.0 note="the big one"
+```
+
+Interstellar's timeline marker (`id`, `name`, `at`, `note`), in the project's timebase, with `length` added: a marker
+with a length is a section. A point marker's section runs to the next marker. Interstellar preserves it, unknown to it.
+
 ---
 
 ## 3. The master

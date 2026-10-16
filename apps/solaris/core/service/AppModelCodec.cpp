@@ -139,6 +139,13 @@ namespace solaris
             {"patterns[].expr[].lane", "string", "bend (−1 … +1) | cc0 … cc127 (0 … 1; cc1 the mod wheel)"},
             {"patterns[].expr[].at", "number", "beats from the pattern's start"},
             {"patterns[].expr[].value", "number", "bend −1 … +1, a controller 0 … 1"},
+            {"markers", "object[]", "R-ARR-1: named places in the song, by time"},
+            {"markers[].id", "string", "mk_n"},
+            {"markers[].name", "string", ""},
+            {"markers[].note", "string", "free text (Interstellar's marker note)"},
+            {"markers[].at", "number", "beats"},
+            {"markers[].length", "number", "beats — a section; 0 a point"},
+            {"markers[].end", "number", "where its section ends: at + length, else the next marker, else the song's end"},
             {"automations", "object[]", "every automation (R-AUTO-4)"},
             {"automations[].id", "string", "au_n — what a formula names"},
             {"automations[].name", "string", "\"<owner> · <parameter>\" when made from one"},
@@ -424,6 +431,12 @@ namespace solaris
                 patterns.push(pj);
             }
             j.set("patterns", patterns);
+            if (!m.markers.empty())
+            {
+                Json mk = Json::array(); // R-ARR-1: "<id> <name>@<at>..<end>"
+                for (const auto &x : m.markers) mk.push(Json::string(x.id + " " + x.name + "@" + beatText(x.at) + ".." + beatText(x.end)));
+                j.set("markers", mk);
+            }
             if (!m.automations.empty())
             {
                 Json autos = Json::array();
@@ -521,6 +534,10 @@ namespace solaris
                               .set("scale", p.scale).set("scaleMask", p.scaleMask));
         }
         j.set("patterns", patterns);
+        Json markers = Json::array(); // R-ARR-1
+        for (const auto &x : m.markers)
+            markers.push(Json::object().set("id", x.id).set("name", x.name).set("note", x.note).set("at", x.at).set("length", x.length).set("end", x.end));
+        j.set("markers", markers);
         Json autos = Json::array();
         for (const auto &a : m.automations)
         {

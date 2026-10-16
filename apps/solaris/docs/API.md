@@ -59,6 +59,10 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `expr add <pt> --lane <bend\|mod\|cc<N>> --at <beats> --value <v>` | A point on one of a pattern's expression lanes (R-MIDI-3): the pitch wheel (`bend`, −1 … +1) or a controller (`cc0` … `cc127`, 0 … 1; `mod` is `cc1`) — linear to the next point, held before the first and after the last; a point already at that beat is moved to the value. The instruments play `bend` and `cc1` (their wheels); every lane goes out in a MIDI file. | R-MIDI-3 |
 | `expr delete <pt> --lane <lane> --at <beats>` | Remove the lane's point at --at. | R-MIDI-3 |
 | `expr clear <pt> [--lane <lane>]` | Remove a lane's points (--lane), or every lane's. | R-MIDI-3 |
+| `marker add <name> --at <beats> [--length <beats>] [--note <text>]` | A named place in the song (R-ARR-1 — Interstellar's marker, in beats): with --length a SECTION, else a point whose section runs to the next marker (or the song's end). On the ruler; `transport seek <mk>` goes there, `transport loop <mk>` loops its section. Prints its id. | R-ARR-1 |
+| `marker rename <mk> <name> [--note <text>]` | Rename a marker (and set its --note). | R-ARR-1 |
+| `marker move <mk> [--at <beats>] [--length <beats>]` | Move a marker (--at) and/or set its section's --length (0: a point again). | R-ARR-1 |
+| `marker delete <mk>` | Delete a marker. | R-ARR-1 |
 | `pattern scale <pt> <key> <scale> \| off` | Lock a pattern to a scale (R-ROLL-11) — `pattern scale pt_1 D dorian`: a note placed (`note add`, its --chord, `notes add`) lands on the scale's nearest pitch, a tie going down (so a major chord stamped on any degree is that degree's own triad); a note moved in pitch (`note move --to-pitch`, `notes move --semi`) goes on to the scale's next pitch the way it moved. A move in time, an import, a step row, a recording and `pattern transpose` keep their pitches; notes already written stay. `off` unlocks it. The scales are under Notation. Prints its notes. | R-ROLL-11 |
 | `notes set <pt> "<pitch@beat> …" [--vel <1-127>] [--chance <0-1>] [--length <beats>]` | Set several notes' --vel, --chance and/or --length as ONE edit — the piano roll's selection. Refused whole, naming the first, when a name matches no note. | R-ROLL-11 |
 | `pattern humanise <pt> [--timing <beats>] [--vel <0-127>] [--seed <n>] [--notes <"pitch@beat …">]` | Loosen the notes (R-ROLL-11): each start moved within ± --timing beats and each velocity within ± --vel (with neither: 0.02 and 8), a triangular spread from a seed — the same --seed on the same notes writes the same notes (by default a hash of the notes; printed). A note never goes before beat 0, nor onto another of its pitch (it keeps its time). --notes: only those notes (the roll's selection). | R-ROLL-11 |
@@ -95,11 +99,11 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `recents remove <path>` | Take a song off Home's recent list (the file is untouched). | R-HOME-1 |
 | `transport play [--from <beats>] [--clip <ac>]` | Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position. --clip plays that clip's span looped, the whole song sounding there (the piano roll's play, R-ROLL-6): it follows the clip as it is edited, and the song's own loop comes back at `transport stop`, a plain `transport play` or a `transport loop`. | R-PLAY-1 |
 | `transport stop [--return]` | Stop; the transport stays where it was heard — or, with --return, goes back to the cue: where the time bar was last put (a seek, or a play's --from or --clip; `transport.cue`). A plain stop's place is temporary: the next play starts there but the cue stays. | R-TIME-7 |
-| `transport seek <beats>` | Move the transport (playing or not). | R-TIME-4 |
+| `transport seek <beats\|mk>` | Move the transport (playing or not) — to a beat, or to a marker (R-ARR-1). | R-TIME-4 |
 | `midi devices` | This machine's MIDI inputs (ALSA sequencer ports), each marked when Solaris listens to it — the names `settings set midiInputs=` takes. | R-MIDI-2 |
 | `meters clear` | Clear the meters: every clip light and held peak, and the master's true peak and integrated loudness start again (the song is not edited; a click on a clip light). | R-METER-2 |
 | `transport record [--from <beats>] [--count-in <bars>] [--overdub]` | Play and record the armed strip's keyboard (R-MIDI-2): at `transport stop` what was played becomes a new note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes it back. --count-in (else `settings countIn`) bars of click first, the song waiting. | R-MIDI-2 |
-| `transport loop <from\|off> [to]` | Loop between two beats while playing; `off` ends it. | R-TIME-4 |
+| `transport loop <from\|off\|mk> [to]` | Loop between two beats while playing — or a marker's section (R-ARR-1: its length, else to the next marker); `off` ends it. | R-TIME-4 |
 | `audition <file\|stop>` | Hear a sample now, outside the song (the browser's preview): through the output device at the audition level, to its end; `stop` ends it. Not an edit, never in a render. | R-EDM-9 |
 | `wait <seconds>` | Let time pass (playback goes on, the model's transport and meters update) — for scripts that listen. | R-PLAY-3 |
 
@@ -372,6 +376,13 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `patterns[].expr[].lane` | string | bend (−1 … +1) \| cc0 … cc127 (0 … 1; cc1 the mod wheel) |
 | `patterns[].expr[].at` | number | beats from the pattern's start |
 | `patterns[].expr[].value` | number | bend −1 … +1, a controller 0 … 1 |
+| `markers` | object[] | R-ARR-1: named places in the song, by time |
+| `markers[].id` | string | mk_n |
+| `markers[].name` | string |  |
+| `markers[].note` | string | free text (Interstellar's marker note) |
+| `markers[].at` | number | beats |
+| `markers[].length` | number | beats — a section; 0 a point |
+| `markers[].end` | number | where its section ends: at + length, else the next marker, else the song's end |
 | `automations` | object[] | every automation (R-AUTO-4) |
 | `automations[].id` | string | au_n — what a formula names |
 | `automations[].name` | string | "<owner> · <parameter>" when made from one |

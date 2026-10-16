@@ -41,6 +41,7 @@ namespace solaris
             PatternImport, PatternExport, ProjectExportMidi, // R-MIDI-1
             ExprAdd, ExprDelete, ExprClear,                  // R-MIDI-3
             PatternScale, NotesSet, PatternHumanise, PatternLegato, PatternArpeggiate, // R-ROLL-11
+            MarkerAdd, MarkerRename, MarkerMove, MarkerDelete, // R-ARR-1
             Ls, Show, PatternPrint,                                                                   // R-SVC-8: read back
             Undo, Redo, HistoryPrint, HistoryJump,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,

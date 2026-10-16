@@ -61,6 +61,16 @@ namespace solaris
     const Pattern *Project::pattern(const std::string &id) const { return findId(patterns, id); }
     const Clip *Project::clip(const std::string &id) const { return findId(clips, id); }
     Automation *Project::automation(const std::string &id) { return findId(automations, id); }
+    Marker *Project::marker(const std::string &id) { return findId(markers, id); }
+    const Marker *Project::marker(const std::string &id) const { return findId(markers, id); }
+    double Project::sectionEnd(const Marker &m, double songEnd) const
+    {
+        if (m.length > 0) return m.at + m.length;
+        double next = std::max(songEnd, m.at);
+        for (const auto &x : markers)
+            if (x.at > m.at + 0.5 / kPpq) next = std::min(next, x.at);
+        return std::max(next, m.at);
+    }
     const Automation *Project::automation(const std::string &id) const { return findId(automations, id); }
     Binding *Project::binding(const std::string &address)
     {
@@ -138,6 +148,7 @@ namespace solaris
         for (const auto &x : patterns) ids.push_back(x.id);
         for (const auto &x : clips) ids.push_back(x.id);
         for (const auto &x : automations) ids.push_back(x.id);
+        for (const auto &x : markers) ids.push_back(x.id);
         return ids;
     }
 
@@ -291,6 +302,15 @@ namespace solaris
             else if (k == "chance") n.chance = std::clamp(r.num(k, v, 1.0), 0.0, 1.0); // R-ROLL-11
             else n.unknown.emplace_back(k, v);
         }
+        void apply(Reader &r, Marker &n, const std::string &k, const std::string &v)
+        {
+            if (k == "id") n.id = v;
+            else if (k == "name") n.name = v;
+            else if (k == "note") n.note = v;
+            else if (k == "at") n.at = toTick(r.num(k, v, 0.0));
+            else if (k == "length") n.length = toTick(r.num(k, v, 0.0));
+            else n.unknown.emplace_back(k, v);
+        }
         void apply(Reader &r, ExprPoint &n, const std::string &k, const std::string &v)
         {
             if (k == "lane") n.lane = v;
@@ -364,7 +384,7 @@ namespace solaris
         Reader r{report ? report : &localReport, {}};
 
         // What a continuation line or a comment attaches to.
-        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Pattern, Note, Expr, Clip, Auto, Point, Bind, Raw };
+        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Raw };
         Cur cur = Cur::None;
         bool seenNode = false, sawMagic = false, sawTracks = false;
         std::map<std::string, std::vector<Note>> inlineNotes; // note clips written the suite's inline way
@@ -385,6 +405,7 @@ namespace solaris
             case Cur::Auto:
             case Cur::Point: return &p.automations.back().remarks;
             case Cur::Bind: return &p.bindings.back().remarks;
+            case Cur::Marker: return &p.markers.back().remarks;
             default: return nullptr;
             }
         };
@@ -475,6 +496,7 @@ namespace solaris
                     cur = Cur::Point;
                 }
                 else if (tok.type == "abind") { p.bindings.emplace_back(); fill(p.bindings.back()); cur = Cur::Bind; }
+                else if (tok.type == "amarker") { p.markers.emplace_back(); fill(p.markers.back()); cur = Cur::Marker; } // R-ARR-1
                 else { p.raw.push_back(RawNode{{line}}); cur = Cur::Raw; }
                 continue;
             }
@@ -793,6 +815,10 @@ namespace solaris
         group(!p.bindings.empty());
         for (const auto &n : p.bindings)
             emit(out, "", Line("abind").kv("address", n.address).str("formula", n.formula).unknown(n.unknown), n.remarks);
+        group(!p.markers.empty()); // R-ARR-1
+        for (const auto &n : p.markers)
+            emit(out, "", Line("amarker").kv("id", n.id).str("name", n.name).kv("at", canonicalBeats(n.at)).kvIf(n.length > 0, "length", canonicalBeats(n.length))
+                              .strIf("note", n.note).unknown(n.unknown), n.remarks);
         group(!p.raw.empty());
         for (const auto &r : p.raw)
             for (const auto &l : r.lines) out += l + "\n";
@@ -940,6 +966,11 @@ namespace solaris
                 if (x.value < lo - 1e-9 || x.value > hi + 1e-9 || x.at < 0)
                     e.push_back("pattern " + pt.id + "'s " + canon + " point at " + canonicalBeats(x.at) + " is out of range (" + canonicalNumber(lo) + " … " + canonicalNumber(hi) + ")");
             }
+        }
+        for (const auto &m : p.markers) // R-ARR-1: a place in the song, named
+        {
+            if (m.name.empty()) e.push_back("marker " + m.id + " has no name");
+            if (m.at < 0 || m.length < 0) e.push_back("marker " + m.id + " is before the song's start or shorter than nothing");
         }
         for (const auto &l : p.lanes)
         {

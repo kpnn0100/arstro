@@ -219,6 +219,16 @@ namespace solaris
         Remarks remarks;
     };
 
+    /** R-ARR-1: a named place in the song — Interstellar's `#marker` (id, name, at, note) in the song's beats, with a
+     *  `length` making it a SECTION (0: a point, whose section runs to the next marker). */
+    struct Marker
+    {
+        std::string id, name, note;
+        double at = 0.0, length = 0.0;  // beats
+        Fields unknown;
+        Remarks remarks;
+    };
+
     /** A node this build does not know: kept verbatim, written back where it was read. */
     struct RawNode
     {
@@ -238,6 +248,7 @@ namespace solaris
         std::vector<Clip> clips;
         std::vector<Automation> automations;
         std::vector<Binding> bindings;
+        std::vector<Marker> markers;    // R-ARR-1: sorted by (at, id)
         std::vector<RawNode> raw;
 
         // ── lookups (nullptr = none) ──
@@ -250,6 +261,11 @@ namespace solaris
         Pattern *pattern(const std::string &id);
         Clip *clip(const std::string &id);
         Automation *automation(const std::string &id);
+        Marker *marker(const std::string &id);
+        const Marker *marker(const std::string &id) const;
+        /** R-ARR-1: where a marker's section ends — at + length, or (a point) the next marker after it, else the song's
+         *  end (`songEnd`, beats); never before its own start. */
+        double sectionEnd(const Marker &m, double songEnd) const;
         Binding *binding(const std::string &address);
         const Automation *automation(const std::string &id) const;
         const Binding *binding(const std::string &address) const;

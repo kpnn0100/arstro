@@ -303,6 +303,11 @@ namespace solaris
             for (const auto &x : pt.expr) pm.expr.push_back(ExprPointModel{x.lane, x.at, x.value}); // R-MIDI-3
             mModel.patterns.push_back(pm);
         }
+        {
+            const double end = songEndBeats(); // R-ARR-1: by time, each with its section's end
+            for (const auto &mk : p.markers) mModel.markers.push_back(MarkerModel{mk.id, mk.name, mk.note, mk.at, mk.length, p.sectionEnd(mk, end)});
+            std::stable_sort(mModel.markers.begin(), mModel.markers.end(), [](const MarkerModel &a, const MarkerModel &b) { return a.at < b.at; });
+        }
         for (const auto &po : p.ports) mModel.ports.push_back(PortModel{po.id, po.name, po.dir, po.channels});
         mModel.matrix.columns = matrixColumnsOf(p); // R-MIX-9: the same columns `matrix print` prints
 

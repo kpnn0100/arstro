@@ -519,6 +519,29 @@ static void test_note_chance_and_scales_round_trip_and_are_checked()
     pass("note chance and scales in the .slp (R-ROLL-11): written only when set, a fixed point; a key or scale we do not know refused naming it; nearest with ties down (a major chord on each degree its own triad), up and down, the keyboard's end; the chance roll pure, at its odds, apart per clip");
 }
 
+static void test_markers_round_trip_and_name_their_sections()
+{
+    // R-ARR-1: #amarker — Interstellar's marker in beats, `length` a section; written back in place (a fixed point), its
+    // id in the id space; a point's section runs to the next marker, else the song's end; nameless or negative refused
+    const std::string head = "arstro-project = 1\napp = solaris\nid = prj\n#amixer id=mx_1 name=Sources order=0\n";
+    Project p;
+    std::string err;
+    assert(parseProject(head + "#amarker id=mk_1 name=Intro at=0.0\n#amarker id=mk_2 name=Chorus at=16.0 length=8.0 note=\"big\"\n"
+                               "#amarker id=mk_3 name=Outro at=32.0\n", p, err));
+    assert(p.markers.size() == 3 && p.markers[1].name == "Chorus" && p.markers[1].length == 8.0 && p.markers[1].note == "big");
+    const std::string text = serializeProject(p);
+    assert(contains(text, "#amarker id=mk_2 name=Chorus at=16.0 length=8.0 note=big\n") && contains(text, "#amarker id=mk_1 name=Intro at=0.0\n"));
+    Project q;
+    assert(parseProject(text, q, err) && serializeProject(q) == text);
+    assert(p.nextId("mk") == "mk_4" && p.marker("mk_3") && !p.marker("mk_9"));
+    assert(p.sectionEnd(p.markers[0], 40.0) == 16.0 && p.sectionEnd(p.markers[1], 40.0) == 24.0 && p.sectionEnd(p.markers[2], 40.0) == 40.0);
+    assert(p.sectionEnd(p.markers[2], 20.0) == 32.0); // a song ending before it: no section, never backwards
+    Project bad;
+    assert(!parseProject(head + "#amarker id=mk_1 at=4.0\n", bad, err) && contains(err, "marker mk_1 has no name"));
+    assert(!parseProject(head + "#amarker id=mk_1 name=A at=4.0\n#amarker id=mk_1 name=B at=8.0\n", bad, err) && contains(err, "share the id `mk_1`"));
+    pass("markers in the .slp (R-ARR-1): #amarker read and written back in place, a fixed point; mk_ ids; a section's end — its length, else the next marker, else the song's end; nameless or doubled refused");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -534,6 +557,7 @@ int main()
     test_ids_order_and_lookups();
     test_expression_lanes_round_trip_and_are_checked();
     test_note_chance_and_scales_round_trip_and_are_checked();
+    test_markers_round_trip_and_name_their_sections();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }
