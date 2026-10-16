@@ -28,6 +28,7 @@
 #include "AudioIn.h"
 #include "AudioOut.h"
 #include "Follower.h"
+#include "DriftIn.h"
 #include "Engine.h"
 #include "WorkerPool.h"
 #include "MidiIn.h"
@@ -140,6 +141,8 @@ namespace solaris
         int clockDelay() const { return mClockDelay; }
         /** R-DEV-5: what each follower says (the service's thread, while it runs). */
         std::vector<Follower::State> followerStates() const;
+        /** R-DEV-1/2: the input, when it is on another device and held to the clock (else null). */
+        const DriftIn *driftInput() const { return dynamic_cast<const DriftIn *>(mInput.get()); }
         /** Destroy engines the thread handed back (call on the service's thread). */
         void collect();
         /** Peaks of the last block: strip i at [2i, 2i+1], the master at [2·kMaxStrips, +1]. */

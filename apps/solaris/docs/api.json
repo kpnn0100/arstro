@@ -3368,7 +3368,7 @@
     {
       "path": "transport.devices",
       "type": "object[]",
-      "summary": "R-DEV-5: while playing, every device the song plays through — the clock first, then each FOLLOWER (a device a port is mapped to, held to the clock, R-DEV-1/2); none stopped",
+      "summary": "R-DEV-5: while playing, every device the song plays through — the clock first, then each FOLLOWER (a device a port is mapped to, held to the clock, R-DEV-1/2), and an armed input on another device; none stopped",
       "stable": false
     },
     {
@@ -3380,7 +3380,7 @@
     {
       "path": "transport.devices[].role",
       "type": "string",
-      "summary": "clock | follower",
+      "summary": "clock | follower | input (an input on another device, held to the clock — R-DEV-1/2)",
       "stable": false
     },
     {
@@ -3392,7 +3392,7 @@
     {
       "path": "transport.devices[].driftPpm",
       "type": "number",
-      "summary": "a follower's crystal against the clock's, ppm: + it runs fast (0 the clock)",
+      "summary": "a follower's or an input's crystal against the clock's, ppm: + it runs fast (0 the clock)",
       "stable": false
     },
     {

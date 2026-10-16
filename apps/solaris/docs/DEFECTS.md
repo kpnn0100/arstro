@@ -27,6 +27,9 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
   the third then under half and dropped. Not reproduced, so not yet measured.
 - **Recommended fix:** wait on the heard position (the song past the third turn) rather than on captured frames, or
   4.4 passes with the fourth dropped by rule — then four runs under a parallel build.
+- **Seen again, 2026-10-17 (N32 part 3's mutant run):** `test_a_looped_recording_makes_takes_and_a_comp_chooses` once
+  more ("recorded 3 takes"), a mutant in `DriftIn` (which that test never builds — its input is the default one)
+  built with `-j16` the moment before; the same mutant run again went past it.
 - **Seen again, 2026-10-17 (N28's mutant run):** `test_record_the_keyboard_into_a_clip` (a held note's length) once
   more, the restored suite run straight after a `-j16` build; twice green right after.
 - **Seen again, 2026-10-17 (N26's mutant run):** the RESTORED suite, straight after a `-j16` build, failed once in

@@ -50,6 +50,7 @@ namespace solaris_host
                 int e2 = 0;
                 if (pa_simple_read(mPa, buf.data(), buf.size() * sizeof(float), &e2) < 0) break;
                 mRing.push(buf.data(), mBuffer);
+                mStamp.mark(mBuffer); // R-DEV-2: when it landed
                 const pa_usec_t us = pa_simple_get_latency(mPa, &e2);
                 if (us != (pa_usec_t)-1) mServerLatency.store((double)us / 1e6);
             }

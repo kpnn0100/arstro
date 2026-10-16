@@ -137,7 +137,7 @@ mixer and renumbers the mixer 0…n−1 (`placeStrip`, `:61`; `case K::StripMove
 renumbers mixers — an order never ties. A new project is `newProject` (`model/Project.cpp:182`): Sources (`mx_1`), Buses (`mx_2`)
 holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the master (R-MIX-3).
 Guarded by `test_routing_only_goes_forward` and `test_forward_is_processing_order_and_moves_renumber`
-(`core/tests/serviceTests.cpp:4678`: a bus made on Buses goes before Main and feeds it; a same-mixer route
+(`core/tests/serviceTests.cpp:4892`: a bus made on Buses goes before Main and feeds it; a same-mixer route
 forward is taken, backward refused naming both ends; `strip move` that would point one back refused;
 `--order 0` first and renumbered; mutant checked: the old later-mixer rule refuses the new bus's
 default route). The same rule is PUBLISHED: `targetsOf` (`model/Project.cpp:936`) lists what a strip
@@ -341,7 +341,7 @@ player stops exactly at the loop's end and seeks back. `wait <seconds>` lets tim
 `outputLatency`, `Player::heard`, `core/Player.cpp:234`, R-MIX-17), the latency and the peaks into the
 model; the metronome clicks on the beat the music is on (`:568`), the bound values read are those of
 the heard block (`:303`). A live `set` that moves a device's latency (a limiter's lookahead) builds a
-new engine instead of a message (`latencyOf`, `core/service/ServiceTransport.cpp:74`, checked at `:501`),
+new engine instead of a message (`latencyOf`, `core/service/ServiceTransport.cpp:74`, checked at `:513`),
 so the compensation is never stale. Guarded by `test_live_playback_is_the_offline_render` (a fake clock device: 4 beats
 of drums + synth + a reverb send, **sample for sample equal to `render --ports`**),
 `test_edits_while_playing_are_heard` (a clip added mid-play is heard after the swap; `gain=-120`
@@ -557,7 +557,7 @@ send or a device drops the bindings that drive them. `eval <address> [--at] [--e
 `strips[].gainFormula/panFormula`, `sends[].gainFormula`, `masterGainFormula`, `devices[].lastChanged` and — **AMENDED (R-MIX-16, 2026-10-09)** —
 `bindings[].live`, each binding's value at the heard position (`evaluateLive`, `:443`; DR-MIX-16); `audit` (`:435`) names inert
 bindings and automations no formula reads. While playing, a binding or curve edit — or a `set` on an
-address a formula reads — swaps in a new engine (`core/service/ServiceTransport.cpp:451`).
+address a formula reads — swaps in a new engine (`core/service/ServiceTransport.cpp:463`).
 
 ### DR-EDM-1 Undo and redo (R-EDM-1)
 The history is a TREE now (DR-HIST-1): after every edit that LANDED, `dispatch` keeps the song as the edit left it
@@ -769,12 +769,12 @@ re-fading (`PianoRoll::bind`, `PianoRoll.cpp:68`; `PianoRoll::advance`, `PianoRo
 wheel scrolls, eased; a length changed from a shell moves the end, eased.
 
 ### DR-ROLL-6 Play from the roll (R-ROLL-6)
-**Grammar.** `transport play --clip <ac>` (`core/service/ServiceTransport.cpp:322`) plays the clip's span —
+**Grammar.** `transport play --clip <ac>` (`core/service/ServiceTransport.cpp:334`) plays the clip's span —
 `at` … `at + clipLengthBeats` — LOOPED, the whole song sounding there, from its start (or from `--from` when
 that lies inside it); a clip unknown or of no length is refused naming it. The song's loop is kept aside and
 given back by `transport stop`, by a plain `transport play` (the song's) and when the clip is deleted
-(`endClipLoop`, `:466`); a `transport loop` set meanwhile is the song's and stays. After every edit the
-loop follows the clip — moved, resized, a looped clip lengthened (`followClipLoop`, `:480`, called from
+(`endClipLoop`, `:478`); a `transport loop` set meanwhile is the song's and stays. After every edit the
+loop follows the clip — moved, resized, a looped clip lengthened (`followClipLoop`, `:492`, called from
 `dispatch`, `core/service/SolarisService.cpp:354`) — sent to the Player at once. The model publishes it:
 `transport.loopClip` (`core/service/AppModel.h:340`), with `loopFrom`/`loopTo` the clip's span while it
 loops. L2: `test_a_clip_plays_looped_and_gives_the_songs_loop_back` hears the clip's kick at the top of
@@ -790,10 +790,10 @@ play (`App::key`, `app/App.cpp:363`). The playhead is drawn where the clip is he
 less the clip's start, modulo the pattern's length for a looped clip — fading in and out with the play
 (`:616`), and the grid follows it a page at a time, eased, when it leaves the view (`:277`).
 ### DR-ROLL-7 A note is heard when it is made (R-ROLL-7)
-**Grammar.** `note preview <ch> <pitch> [--vel <1…127>] [--length <beats>]` (`core/service/ServiceTransport.cpp:289`)
+**Grammar.** `note preview <ch> <pitch> [--vel <1…127>] [--length <beats>]` (`core/service/ServiceTransport.cpp:301`)
 — not an edit (no undo step, the song stays saved), never in a render; refused naming why for a strip that is not
 an instrument's, an unknown strip, a pitch out of 0–127 and a velocity out of range. A pitch is a number, a name
-(A4) or the strip's kit's pad. It compiles a song of its own (`:329`): the song's header, ports and mixers, the strip
+(A4) or the strip's kit's pad. It compiles a song of its own (`:341`): the song's header, ports and mixers, the strip
 — routed straight to the master, unmuted, unsoloed, its fader and pan kept — its rack, and a one-note pattern on a
 clip at beat 0; master gain 0 dB, no master rack, no bindings (a formula may read the song's other addresses: the
 preview is the strip's values as they stand). The SAME `compile` and `Engine` as the song, so the preview is the
@@ -938,7 +938,7 @@ the DSP Compressor with Sidechain on detects on it (DSP REQ-fx-sidechain-1); sil
 it. A strip silenced by another's SOLO still keys (`keyLive`, `core/Compile.cpp:274`; `engine/Engine.cpp:718`) and
 a key does not pull its source into a solo (`Compile.cpp:52`), so a soloed bass keeps its pump while the
 kick stays silent; a MUTED strip keys nothing (live, a mute in a song with keys swaps the engine,
-`core/service/ServiceTransport.cpp:482`). The audit names a key that no compressor with Sidechain on
+`core/service/ServiceTransport.cpp:494`). The audit names a key that no compressor with Sidechain on
 hears (`core/service/ServiceModel.cpp:556`). In the dock a key reads "key <target>" in the solo amber,
 and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:1236`).
 Measured (L2): a ghost kick (−120 dB fader, pre-fader key) through −30 dB at 4:1 dips a −6 dBFS bass
@@ -1007,7 +1007,7 @@ with or without a song open. The file is decoded through the clips' cache and pl
 `Auditioner` (`core/Auditioner.cpp:40`) — its OWN output stream and thread, so a preview is heard
 whether the song plays or not, at the `auditionLevel` setting (dB, default −6), to its end, then it
 stops itself; it never allocates on its thread and is never in a render (a render does not know it).
-`auditionCommand` (`core/service/ServiceTransport.cpp:261`) refuses a file it cannot read naming it; the
+`auditionCommand` (`core/service/ServiceTransport.cpp:273`) refuses a file it cannot read naming it; the
 service's `pump` (`:76`) carries its progress into `audition.{file, playing, progress}` and announces its
 end (`audition.changed … playing=0`); the model keeps it across refreshes, and the App re-binds while it
 plays and once when it ends (`app/App.cpp:272`). In the browser a click on a sample hears it, a click on
@@ -1080,7 +1080,7 @@ engine's own `evaluateBinds` at the transport's position (an inert binding: its 
 `eval <address> --at <position>`. Playing: after every block the `Player` copies `Engine::bindValues()` into a
 ring of 64 slots of pre-sized atomics (`keepLive`, `core/Player.cpp:280` — stores only; a sequence number
 brackets each write), each stamped with the frames handed to the device and the generation of the engine
-that played it; `pump` (`core/service/ServiceTransport.cpp:235`) reads the slot the listener hears now —
+that played it; `pump` (`core/service/ServiceTransport.cpp:247`) reads the slot the listener hears now —
 the newest at or before the newest minus the device's latency, of the engine the service last built
 (`liveValues`, `core/Player.cpp:298`; `buildLive` bumps the generation, `ServiceTransport.cpp:58`, and a
 `Swap` carries it, so a new bind order is never read with the old one) — and maps the engine's bind
@@ -1096,7 +1096,7 @@ level. What drives each: a tag over the fader — `auto au_1`, `= ch_3.gain`, `=
 `:1285`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
 in and out (200 ms) and its text cross-fades when the formula changes (`:719`).
 
-Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1659`): stopped, `live` is
+Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1706`): stopped, `live` is
 `eval`'s number at the position; playing (a fake clock device), a −2 dB-a-beat ramp is within 0.1 dB of the
 curve at the heard position at beats 2…12 and falling, a link (`=ch_2.gain / 2`) exactly half of it, a device
 formula `1000 + 500 * sin(beat)` within 25 Hz; after a structural edit while playing the new engine's order is
@@ -1192,7 +1192,7 @@ points (beat, value, shape — a bezier point's speeds and influences), every fo
 (`usedBy`, each with its binding's formula from `bindings[]`), and its value at the playhead —
 `automations[].now`, which the service computes with the engine's own compiled curve
 (`compileCurve`) at `transport.position` in `refreshModel` (`core/service/ServiceModel.cpp:412`,
-`refreshNow`, `:428`) and again in `pump` while playing (`core/service/ServiceTransport.cpp:258`); it is
+`refreshNow`, `:428`) and again in `pump` while playing (`core/service/ServiceTransport.cpp:270`); it is
 left out of `state print --stable`, as the position is. The rows are an `AnimatedRows` keyed by what
 they say — a point added slides the rows below and fades in, an edit or a rename cross-fades its row;
 the value at the playhead follows the transport continuously while playing and eases to a seek or an
@@ -1284,7 +1284,7 @@ edits lost between calls, comment lines reprinting ids). The guide is `docs/AGEN
   rounding of a bound is that bound, so a dragged point at the top edge still lands).
 - The API document gains the Notation section and each kit's pads (`core/service/ApiDoc.cpp:145`, `:81`).
 
-Guarded by `solaris_service` (`core/tests/serviceTests.cpp:1735` … `:3213`: the notation tables; comment
+Guarded by `solaris_service` (`core/tests/serviceTests.cpp:1782` … `:3260`: the notation tables; comment
 lines print nothing; every made id printed and announced; notes add by name, a bad token, an unknown pad,
 chords, one undo step; steps and pattern edits; the lane rule and `--count`; reading back, out-of-range
 refusals) and `solaris_cli_session` (`tests/cli_session.cmake`: line numbers, `--keep-going`, exit 4,
@@ -1470,7 +1470,7 @@ it from the start of the mixdown and the ports, a stem its strip's own latency
 (`core/Player.cpp:234`, set at `start` and on every swap, `:269`); the metronome clicks on the music's beat
 (`:568`) and the published bound values are the heard block's (`:303`). A live `set` that moves a
 device's latency (a lookahead) builds a new engine instead of a message (`latencyOf`,
-`core/service/ServiceTransport.cpp:74`, checked at `:501`; the live engine's latencies recorded by
+`core/service/ServiceTransport.cpp:74`, checked at `:513`; the live engine's latencies recorded by
 `buildLive`, `:68`, via `Engine::deviceLatency`, `engine/Engine.cpp:458`).
 
 **Stated limits.** Bound values (automation, formulas — R-AUTO-7) are evaluated at the engine's position,
@@ -1487,7 +1487,7 @@ puts Main and a cue sent straight to Phones at 96 together; a key from a limited
 audio 96 to meet it, and a limiter before the keyed compressor delays the key 96 — the keyed strip's output
 exactly the unlimited one 96 later (and it does duck). Mutants: every delay sized 0 → the twins fail;
 no key delay in the rack → the key check fails. Service (`test_latency_is_compensated_and_a_render_starts_on_the_beat`,
-`core/tests/serviceTests.cpp:4603`): two strips of one tone, a limiter on one — each stem from beat 0 and
+`core/tests/serviceTests.cpp:4817`): two strips of one tone, a limiter on one — each stem from beat 0 and
 equal, the mix exactly their sum and equal to the render with no limiter; a master limiter's render, port
 and stems byte-identical to none (under its ceiling it is exactly its delay); `--to` exact; live, the
 device's frames are the render 96 later; a lookahead set to 5 ms WHILE playing keeps the twins met — the
@@ -1503,7 +1503,7 @@ mix is at lag 0.
 `core/service/ServiceEdit.cpp:545`) puts the lane at row `index` (0 = the top) and renumbers every lane
 0…n−1 in the new order — one edit, one undo step; an index past the last row or an unknown lane is
 refused. The lanes draw it through Interstellar's `AnimatedRows`, keyed by lane, so the rows slide
-(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:4714`: to the top and back,
+(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:4928`: to the top and back,
 renumbered, refused out of range, undone) and, drawn, by `test_instrument_drop_and_clip_drag`
 (`app/tests/ui/uiTests.cpp:492`: a lane moved from a shell slides to the top with its clip, caught mid-tween).
 
@@ -1530,9 +1530,9 @@ drag keeping the brace's end. Shots `ruler-scrubbing` and `loop-brace-moving`
 
 ### DR-TIME-7 Stop takes the time bar back to where it was put — or leaves it (R-TIME-7, R-TIME-8)
 The service keeps a CUE (`mCue`): where the user PUT the time bar. A `transport seek` puts it where the time bar went
-(`core/service/ServiceTransport.cpp:622` — a ruler click or drag, the start key), and a play that says where it
-begins puts it there — `--from`, a roll's `--clip` (`:475`); a plain `transport play` starts wherever the time bar
-stands and leaves the cue alone. `transport stop --return` stops and moves the time bar back to the cue (`:601`); a
+(`core/service/ServiceTransport.cpp:634` — a ruler click or drag, the start key), and a play that says where it
+begins puts it there — `--from`, a roll's `--clip` (`:487`); a plain `transport play` starts wherever the time bar
+stands and leaves the cue alone. `transport stop --return` stops and moves the time bar back to the cue (`:613`); a
 plain `transport stop` leaves it where it was heard (R-TIME-4) — a TEMPORARY place: the next play starts there, and
 a stop with the return after it still goes back to the cue (R-TIME-8, amended 2026-10-16). A new or opened song
 starts it at 0. Published as `transport.cue`. In the window: the play/stop key (Space) while playing is `transport
@@ -1580,7 +1580,7 @@ instrument dropped from the browser onto a track asks for a lane of its own (`--
 
 Guarded by `solaris_model` (`model/tests/modelTests.cpp:369`: the four refusals; `tracks` read, refused
 other than `on`, written in the canonical text), `solaris_service` (`test_instrument_tracks`,
-`core/tests/serviceTests.cpp:2029`; `test_a_song_from_before_tracks_adopts_them`, `:3173`) and
+`core/tests/serviceTests.cpp:2076`; `test_a_song_from_before_tracks_adopts_them`, `:3220`) and
 `solaris_app_ui` (`test_a_lane_is_an_instruments_track`, `app/tests/ui/uiTests.cpp:236`: a rename
 followed, a clip dragged onto another track re-routed with its colour caught mid-ease, Track of ▸ and
 Plain Lane caught mid-fade, a browser drop onto a track → `--lane new`). Mutants seen red, then
@@ -1828,7 +1828,7 @@ holds — into buffers the CALLER owns (`Engine::tapMaster`, `engine/Engine.h:13
 (`LoudnessMeter`, `TruePeakMeter`, `CorrelationMeter`, `SpectrumAnalyser` — REQ-meter-1…4), built in `start` after the
 engine's build set the rate; after every block `Player::measure` (`core/Player.cpp:365`) runs the tap through them and
 stores momentary, short-term, integrated (re-read only when a gating block was added), true peak (the most since play
-or a clear), correlation and 61 bands into atomics. `pump` publishes them as `loudness` (`core/service/ServiceTransport.cpp:244`)
+or a clear), correlation and 61 bands into atomics. `pump` publishes them as `loudness` (`core/service/ServiceTransport.cpp:256`)
 — not in the stable dump, −144 for nothing measured, KEPT after a stop so a played song's integrated loudness can be
 read, reset by another song (`core/service/SolarisService.cpp:361`). `render --measure` runs the trimmed mixdown through
 the same meters 100 ms at a time and prints ONE line, `measure integrated= momentaryMax= shortTermMax= truePeak=
@@ -1851,7 +1851,7 @@ For every strip and the master, after every block (`Player::ballistics`, `core/P
 A block at or over full scale sets the strip's clip flag; `pump` takes the flags (exchange) into a latch the SERVICE
 keeps (`mClipLatch`, published by `refreshModel`, `core/service/ServiceModel.cpp:244`), so a clip light outlives a
 stop and an edit. Published: `strips[].rms/.hold/.clip`, `transport.masterRms/.masterHold/.masterClip` (not stable);
-a stop zeroes peaks, RMS and holds and leaves the lights lit. `meters clear` (`core/service/ServiceTransport.cpp:564`,
+a stop zeroes peaks, RMS and holds and leaves the lights lit. `meters clear` (`core/service/ServiceTransport.cpp:576`,
 not an edit, `meters.cleared`) puts every light out, zeroes the holds and starts the true peak and integrated loudness
 again: on the audio thread it is a `Live::ClearMeters` MESSAGE (`core/Player.cpp:261`), so it lands in order after a
 gain edit sent before it; until the thread has taken it (`Player::clearing`) `pump` reads no holds, flags or loudness,
@@ -1929,15 +1929,15 @@ missing sink. Mutants: an xrun counted before the first write; a failed PipeWire
 **Owed live:** playback through PipeWire on a real device at 64 frames (the user's machine runs a PulseAudio server).
 
 ### DR-DEV-1 Several devices: each follower held to the clock, every port heard together (R-DEV-1, R-DEV-2, R-DEV-4, R-DEV-5)
-**Which.** At play (`core/service/ServiceTransport.cpp:487`) each output port goes where this machine's map puts it:
+**Which.** At play (`core/service/ServiceTransport.cpp:499`) each output port goes where this machine's map puts it:
 the clock (`settings.output`), or another device — a FOLLOWER, opened through the clock's driver with the channels
-its ports need; one that will not open (`:521`) is silent, said by an Info line ("the device … did not open (why) —
-its ports are silent") and shown in the model; the song plays on. **Together** (R-DEV-4; `:531`): each path's delay
+its ports need; one that will not open (`:533`) is silent, said by an Info line ("the device … did not open (why) —
+its ports are silent") and shown in the model; the song plays on. **Together** (R-DEV-4; `:543`): each path's delay
 from a frame rendered to its being heard is its device's latency as opened — plus, for a follower, its fill target
 over the rate (the least: `Follower::minTarget`, `core/Follower.h:73`, the lookahead and two of each block). The
 slowest path sets when; the clock is delayed to it by a delay line on its channels (`Player::delayClock`,
-`core/Player.cpp:201`; `setClockDelay`, `core/service/ServiceTransport.cpp:549` — the heard position counts it), and
-each follower's target is the rest (`:545`), its drift as last measured kept for the next play. **Feeding** (the audio
+`core/Player.cpp:201`; `setClockDelay`, `core/service/ServiceTransport.cpp:561` — the heard position counts it), and
+each follower's target is the rest (`:557`), its drift as last measured kept for the next play. **Feeding** (the audio
 thread): after each render `feedFollowers` (`core/Player.cpp:178`, called `:571`; silence through a count-in, `:531`)
 mixes each follower's ports at their channels and `push`es them (`core/Follower.cpp:60`): an SPSC ring sized at
 start, no lock, no allocation; a full ring drops the block, counted; each push time-stamped under a seqlock. **Held**
@@ -1949,11 +1949,11 @@ skipped to the nearest frame; starved (`:143`, the clock stalled) or far ahead (
 and primed again. Its state for the model: drift, smoothed fill, the target as ramped (`:138`, an atomic — the
 controller is its thread's), device latency read after each write. **Seen** (R-DEV-5; `pump`,
 `core/service/ServiceTransport.cpp:186`): `transport.devices[]` while playing — the clock, each follower (latency,
-drift, xruns, starved, dropped), each that would not open (`:199`, its problem); none stopped
-(`core/service/AppModel.h:349`). Tests: L2 `test_a_follower_alone` (`core/tests/serviceTests.cpp:4249`: in simulated
+drift, xruns, starved, dropped), each that would not open (`:211`, its problem); none stopped
+(`core/service/AppModel.h:349`). Tests: L2 `test_a_follower_alone` (`core/tests/serviceTests.cpp:4296`: in simulated
 time, a clock 200 ppm slow and unlike blocks — an impulse out exactly its target after it was made, within a frame;
 a stalled clock: starved, primed again, on time; a stalled device: pushes dropped, on time again at once);
-`test_a_port_on_another_device_follows_the_clock` (`:4349`: devices paced in REAL time, a follower 300 ppm fast — its
+`test_a_port_on_another_device_follows_the_clock` (`:4396`: devices paced in REAL time, a follower 300 ppm fast — its
 1 kHz continuous and at its level, an impulse heard on both within 1 ms (measured 0.02–0.12 ms) whichever path is
 slower; a device that will not open said and silent; the devices published; the drift kept). Mutants (each red): no
 clock delay; no priming skip; the target not aligned; the time since a push ignored; the resampler's hold uncounted;
@@ -1964,6 +1964,34 @@ the target after its device stalled, it was a block off again (the last push sta
 it is emptied and primed instead; a ThreadSanitizer run found `state` reading the controller's target off its thread
 (fixed: an atomic) and five races inside the test fakes (D-17). Not yet: a follower at a rate unlike the song's;
 re-aligning when a device's latency changes after play; an input on another device (N32 part 3).
+
+### DR-DEV-1a An input on another device, held to the clock (R-DEV-1, R-DEV-2, R-DEV-4)
+**Which** (`openInput`, `core/service/ServiceInput.cpp:114`): an input port unmapped (the default input) or mapped to
+`settings.input` — the input chosen beside the clock in Settings — shares the clock's crystal and is read as it is
+(`:115`); one on any other device is wrapped in a `DriftIn`, its drift as last measured kept for the next play. **The
+seam** (`core/AudioIn.h:33`): `held` says what a capture holds now and when its last block landed and its size;
+`CaptureStamp` (`:42`) is the seqlock a host marks after each push (`host/AudioInPulse.cpp:53`,
+`host/AudioInPipewire.cpp:54`); a capture that cannot say is read as it is. **Held** (`DriftIn::read`,
+`core/DriftIn.cpp:47`, the audio thread — it IS an input, the player reads it as any): the output follower's loop the
+other way round — the fill continuous (`:63`: what the capture holds less its last block, plus what its device made
+since that block landed, plus what the resampler holds), steering the FillController whose step the
+AdaptiveResampler reads at; primed (`:70`) to its target, the excess skipped; far ahead (`:79`, the clock stalled):
+emptied, primed again; starved (`:91`, its device stalled): silence, counted, primed again. Its drift is published
+the input's way round (`:31`: the controller's consumer is the clock). Its latency (`:100`) is its device's — what it
+reports less its ring, read beside the ring (`:61`) — plus the target: the player's input latency, so a recording's
+alignment counts it (R-DEV-4). **Seen**: `transport.devices[]` gains it, role `input`
+(`core/service/ServiceTransport.cpp:199`; `Player::driftInput`, `core/Player.h:145`). Tests: L2
+`test_an_input_held_alone` (`core/tests/serviceTests.cpp:4531`: in simulated time, a capture 200 ppm fast landing
+256-frame blocks read 128 at a time — an impulse read exactly its target after it landed, within a frame; its device
+stalled: starved, primed again, on time; the clock stalled: emptied, primed again, on time);
+`test_an_input_on_another_device_follows_the_clock` (`:4617`: a capture paced in REAL time 500 ppm fast, monitored
+through an armed line — the tone on the clock continuous and at its level; its latency its device's and its target's;
+its drift read the right way; the Settings input read as it is). Mutants (each red): never held; the Settings input
+held too; no priming skip; the time since a landing ignored; the resampler's hold uncounted; a starve not priming
+again; far ahead left alone; the step the wrong way; the latency without the target; the drift the wrong sign; the
+start drift ignored. Found while building it: the device's latency was first taken AFTER the read had emptied the
+ring it subtracted — 3 ms short, measured. Not yet: a recording through a held input measured against a cable (its
+alignment is by its latency, as a default input's is).
 
 ### DR-MIDI-2 A MIDI keyboard: ports, arm, heard at once, recorded (R-MIDI-2)
 The host listens through the ALSA sequencer (`host/MidiInAlsa.cpp:56`): one client "Solaris" with one input port,
@@ -1989,14 +2017,14 @@ song from beat 4; let go, it dies away; under the pedal it rings on until the pe
 audio thread; refusals; not an edit; eight messages counted); UI `test_an_instrument_track_is_armed_from_its_header`.
 Mutants: the pedal ignored, the song's player not handed the keyboard (first SURVIVED: the test played from beat 0
 and the tone clip masked the key — it plays from beat 4 now, silent until struck), the arm light snapping — red.
-**Recording.** `transport record [--from b] [--count-in bars] [--overdub]` (`core/service/ServiceTransport.cpp:407`) is a
+**Recording.** `transport record [--from b] [--count-in bars] [--overdub]` (`core/service/ServiceTransport.cpp:419`) is a
 play that keeps the armed strip's notes: the player stamps each where it was HEARD (`Player::heard` — rendered minus
 the device's and the engine's latency) into a lock-free queue the service empties as it pumps. A count-in (the flag,
 else `settings countIn`, 0…4 bars) is a pre-roll of silence clicked on the song's beats with the metronome forced on,
 the engine waiting (`core/Player.cpp:525`), aligned as playing is; while it runs `heard` counts back to the start, so
 a key struck during it lands before the take and is dropped (half a beat early is the downbeat). `transport stop`
 lands it — an EDIT, so dispatch snapshots, validates and records one undo, labelled "Record" (`commitRecording`,
-`core/service/ServiceInput.cpp:323`): ons paired with offs (an on again ends the last; still held, to the stop),
+`core/service/ServiceInput.cpp:334`): ons paired with offs (an on again ends the last; still held, to the stop),
 starts on `settings recordQuantize` (off, 1/4 … 1/32), then a new note clip on the strip's track from the bar the
 take began in, whole bars long (pattern "<strip> take"), or with `--overdub` notes added into the strip's clip under
 the start (wrapped where it repeats; a pitch struck where one already starts keeps the longer). Nothing played lands
@@ -2060,8 +2088,8 @@ a `length` it is a SECTION; without, a point whose section runs to the next mark
 time (`core/service/ServiceModel.cpp:369`). `marker add <name> --at [--length] [--note]` (prints its id), `marker rename
 <mk> <name> [--note]`, `marker move <mk> [--at] [--length]`, `marker delete <mk>` — edits like any, kept sorted by time
 (`core/service/ServiceArrange.cpp:335`); `ls` lists them with their sections. `transport seek <mk>` goes to its beat and
-`transport loop <mk>` loops its section (`markerSpan`, `ServiceArrange.cpp:31`; `core/service/ServiceTransport.cpp:623`,
-`:662`), an empty section — the last point at or past the song's end — refused. L2
+`transport loop <mk>` loops its section (`markerSpan`, `ServiceArrange.cpp:31`; `core/service/ServiceTransport.cpp:635`,
+`:674`), an empty section — the last point at or past the song's end — refused. L2
 `test_markers_name_places_and_sections`; model `test_markers_round_trip_and_name_their_sections`. Mutants: a point's
 section ignoring the next marker, a loop taking only its length, markers outside the id space — each red. **The ruler.**
 The ruler grows a band at its top for them (`Timeline::kMarkH` 13 of `kRulerH` 35.75, `app/widgets/Timeline.h:98`; the
@@ -2134,17 +2162,17 @@ never blocks (what has not arrived is silence, counted by `missed`), `latency()`
 <device>:<channel>`) and `monitor` (`auto` | `on` | `off`) are the song's (`#atrack … input=prt_2 monitor=off`, written
 when set; checked: the input an input port, `model/Project.cpp:1062`), set by `set <ch>.input=<port>|none` /
 `set <ch>.monitor=` (`core/service/SolarisService.cpp:925`). **Arming** (`strip arm <ch> [--input <port>]`,
-`core/service/ServiceInput.cpp:541`): an audio line arms for its input — `--input` sets it first, and only then is the
+`core/service/ServiceInput.cpp:552`): an audio line arms for its input — `--input` sets it first, and only then is the
 line an edit; with no input it is refused naming the song's input ports (or `port add`); one strip armed at a time, as
-the keyboard's. **Monitoring** (`monitorHears`, `:123`): `on` heard whenever armed, `off` never, `auto` while stopped or
+the keyboard's. **Monitoring** (`monitorHears`, `:134`): `on` heard whenever armed, `off` never, `auto` while stopped or
 recording — not while the song plays back. Stopped, the input monitor (the song's mix without its clips, R-MIDI-2's)
-plays it; playing, the song's player does — the input opened beside the output (`attachInput`, `:130`; `openInput`,
-`:100`, on the port's device). A change of `.monitor` on the armed strip is heard at once (`SolarisService.cpp:947`). **The path.** Each
+plays it; playing, the song's player does — the input opened beside the output (`attachInput`, `:141`; `openInput`,
+`:102`, on the port's device). A change of `.monitor` on the armed strip is heard at once (`SolarisService.cpp:947`). **The path.** Each
 cycle the player reads a block of the input before it renders (`Player::input`, `core/Player.cpp:75`) and the engine
 hears it through the armed strip's chain — its rack, its fader, its meter — as a clip of it (`Engine::liveInput`,
 `engine/Engine.cpp:425`; mixed at `:798` by where each piece sits in the block; sized at build: no allocation). A
 count-in reads it and neither hears nor keeps it. **Recording** (`transport record` with an audio line armed,
-`core/service/ServiceTransport.cpp:414`): `startTake` (`core/Player.cpp:33`) — the audio thread pushes what it reads into a
+`core/service/ServiceTransport.cpp:426`): `startTake` (`core/Player.cpp:33`) — the audio thread pushes what it reads into a
 lock-free ring (never waiting; a frame the ring cannot hold is counted and said at the stop) and a recorder thread of
 the player's drains it into the take every 2 ms (`:45`), so a long take needs nobody to pump it. At the stop the audio
 thread joins first, so nothing more can come (`ServiceTransport.cpp:461`), and `commitAudioTake`
@@ -2168,7 +2196,7 @@ buffers as the output's, linked within two seconds or refused naming why. Both: 
 reads it and never waits — missing frames are silence and counted (`missed`). `AudioRing::push` (`host/AudioRing.h:94`)
 is the capture's writer: what fits goes in, the rest dropped and counted. The service tries the setting's driver
 (`Host::audioInFor`, as the output's) and falls back to PulseAudio, saying so once
-(`core/service/ServiceInput.cpp:110`); the CLI, the web face and the window wire both. Ring
+(`core/service/ServiceInput.cpp:121`); the CLI, the web face and the window wire both. Ring
 `AudioRing: a capture's push never waits …`; L2 the fallback said in `test_an_armed_audio_line_is_monitored_as_set`.
 Mutants: the overflow not counted, the driver setting ignored — red. Not run on this machine's real input (the user's
 microphone): a live recording is owed. **The window.** An audio or instrument strip's M | S row is M | S | R in the mixer
@@ -2189,9 +2217,9 @@ A clip's TAKES (`Clip::takes`, `#take src=…` under its `#aclip`) and its COMP 
 read and written in place (`model/Project.cpp:512`); `Clip::takeAt` (`:64`) is the take that plays at a beat — the comp
 range's (the latest written where they meet), else the LAST; a comp naming a take the clip lacks is refused. **Made by
 recording while the song loops**: the recorder thread notes each jump of the song's position — a loop turning — with
-the take's frame there (`Player::Take::marks`, `core/Player.cpp:54`); at the stop (`core/service/ServiceInput.cpp:151`)
+the take's frame there (`Player::Take::marks`, `core/Player.cpp:54`); at the stop (`core/service/ServiceInput.cpp:162`)
 every frame is placed where it was HEARD (its read position minus the latency, as DR-REC-1 says), and a frame heard
-before the loop's start just after it turned is the END of the pass before (`:165`) — so each pass is exactly what was
+before the loop's start just after it turned is the END of the pass before (`:176`) — so each pass is exactly what was
 heard over the loop. A pass that heard less than half the loop is dropped; two or more make ONE clip spanning the loop,
 every pass a take — its own file, `Recordings/<strip> <n>.wav`, the next free numbers — the clip's own source the last;
 one whole pass is a plain clip; none, as before. `record.finished` says `takes`. `clip comp <ac> --take <n> [--from
@@ -2476,7 +2504,7 @@ song's rate, gives it the song's state, then the song's set values (a no-frame b
 for another plugin, bundle or rate, and says `plugin.offline device why` once if it cannot start; `typeOf` (`:160`) is
 how `set`/`get` (`SolarisService.cpp:1120`), live updates and the model read a plugin's parameters; `attachPlugins`
 (`ServicePlugins.cpp:166`) gives each compiled `vst3` node its player — the live connection (`buildLive`, `ServiceTransport.cpp:61`), a new
-one with a budget for another stream (a note preview `:324`, the input monitor `ServiceInput.cpp:298`), or a new one that
+one with a budget for another stream (a note preview `:336`, the input monitor `ServiceInput.cpp:309`), or a new one that
 is waited for (a render, `ServiceRender.cpp:163`, which says afterwards which were offline and so silent or dry in the
 file); `pluginFacts` (`ServicePlugins.cpp:198`) puts `plugin`, `offline`, `why` and the plugin's name in `devices[]`; `prunePlugins`
 (`:314`, every refresh) ends the connections of devices no longer in the song; `capturePluginStates` (`:324`) asks each
@@ -2528,7 +2556,7 @@ move those the song already sets, a closed window is said, a new latency rebuild
 (`applyPendingEdits`, `ServicePlugins.cpp:285`) when no command is running — `dispatch` counts them
 (`SolarisService.cpp:135`), since `wait` pumps from inside one — else first thing in the next `dispatchText` (`:51`);
 consecutive ones are one undo step (R-EDM-1's coalescing). What a plugin set is not sent back to it
-(`ServiceTransport.cpp:652`): an echo landing mid-drag would pull its knob back. Tests: L2 `test_a_plugins_own_editor`
+(`ServiceTransport.cpp:664`): an echo landing mid-drag would pull its knob back. Tests: L2 `test_a_plugins_own_editor`
 (the fake's editor: titled, not an edit, said; values turned while playing land after the `wait` that gathered them,
 or at once from a `pump` with no command running; never echoed; a drag one undo step; a preset of its own; the window's
 close said; refusals); faces `solaris_plugins` (DISPLAY cleared before any helper starts — a test never opens a window
@@ -2568,7 +2596,7 @@ anything else by its form). `map add <cc> <address>` (`mapCommand`, `:135`) take
 settings (`map.<cc> = <address>`, `core/Settings.cpp:34`, read back `:75`) and says `settings.changed what=map.<cc>`;
 `map remove`, `map list` (`(inert)` beside what the open song lacks); `map learn <address>` waits (`mapLearning` in the
 model), `--cancel` stops. All four are in `mutates`' list — never an edit, never in the song. **Listening**: the MIDI
-input's sink (`ServiceInput.cpp:87`) puts every controller and every MIDI Machine Control message into a second queue,
+input's sink (`ServiceInput.cpp:89`) puts every controller and every MIDI Machine Control message into a second queue,
 the service's; the input opens when a mapping is added or a learn starts, and once at `pump` while there are mappings
 (`controlMidi`, `ServiceControl.cpp:70`). **What a control does** (`pump`, `ServiceTransport.cpp:144`): during a learn the
 first controller moved is bound on ITS channel (`:108` — its value not taken; `map.learned cc address`); otherwise its
@@ -2582,7 +2610,7 @@ editor's do (`applyPendingEdits`, `ServicePlugins.cpp:287`: when no command runs
 heard, as any edit (only a plugin's own are kept from echoing back). **The host** (`host/MidiInAlsa.cpp:99`) parses a
 SysEx `F0 7F <dev> 06 <cmd> F7` into `{0xF0, cmd, 0x7F}` (`MidiEvent::mmc`, `core/MidiIn.h:28`); other SysEx does not
 arrive. The model: `settings.mappings[]` (cc, address, inert) and `mapLearning`; `audit` says a mapping the song lacks
-(`ServiceModel.cpp:573`). L2 `test_midi_learn_and_the_transport_keys` (`core/tests/serviceTests.cpp:3876`): not an edit,
+(`ServiceModel.cpp:573`). L2 `test_midi_learn_and_the_transport_keys` (`core/tests/serviceTests.cpp:3923`): not an edit,
 in the settings file; the top of a control is +6 dB, a sweep lands its last value and undoes in one step; a channel's
 mapping deaf to another channel; a cutoff by its taper; learned on its channel with its value not taken; cancelled;
 removed; MMC plays and stops; refusals (128, 17/1, a name, a missing strip, no mapping, no address); inert in another
@@ -2628,7 +2656,7 @@ changed; a slot past the last strip down, dark and blank; a fader a hand is on l
 output (`core/MidiOut.h`), the ALSA sequencer's in the host (`MidiOutAlsa`, `host/MidiInAlsa.cpp:135` — connected to
 the writable port of that name; bytes encoded to sequencer events, SysEx too, `:173`). **Settings**: `surface =
 none|mcu|hui`, `surfacePort = <port>` (`core/Settings.cpp:69`; `settings set`, `core/service/ServiceMachine.cpp:157`,
-refusing another protocol). The keyboard never listens on the surface's port (`ServiceInput.cpp:68` — every port but
+refusing another protocol). The keyboard never listens on the surface's port (`ServiceInput.cpp:70` — every port but
 it when it listens to all). **The service** (`core/service/ServiceSurface.cpp`): `surfacePump` (`:95`, from `pump`,
 `ServiceTransport.cpp:145`, so at the end of every command too) starts the surface when the settings changed
 (`startSurface`, `:27` — its port in and out; the codec; everything sent as it connects, HUI pinged at once, `:58`;
@@ -2640,7 +2668,7 @@ the song has it). The lines land as a MIDI control's. Then what it shows (`surfa
 in processing order from the bank: their faders by `faderPos`, pans, mute / solo, arm, names; the master; playing,
 recording) is encoded against what it was sent, and sent; HUI's ping once a second. The model: `settings.surface`,
 `settings.surfacePort`, `surface` (protocol, connected, why, bank). Tests: L2 `test_the_surface_codecs`
-(`core/tests/serviceTests.cpp:3975`: both codecs as tables) and `test_a_control_surface` (`:3991`: connected, the
+(`core/tests/serviceTests.cpp:4022`: both codecs as tables) and `test_a_control_surface` (`:4038`: connected, the
 keyboard deaf to the port, everything shown and then nothing while nothing changes; a fader to +6 dB, a pot, a mute
 and their light and ring at once; the song moving a fader back, not one touched until let go; play and stop and the
 play light; a channel on, the first fader then the song's second strip; none disconnects; HUI's fader pair and ping; a
@@ -2672,13 +2700,13 @@ strip's processing time only when asked (`measureTime`, `engine/Engine.h:101`; t
 plays, `Player.cpp:112` and at a swap `:271`): a clock read either side of the strip's work in each piece
 (`engine/Engine.cpp:530`, an RAII stamp so every `continue` counts), the sums restarted each render (`:874`); the
 player smooths each strip's sum over the block's duration as its share. A render is never timed (it has no deadline)
-and its bytes do not depend on it. **The model** (`pump`, `core/service/ServiceTransport.cpp:208`): `transport.cpu`
+and its bytes do not depend on it. **The model** (`pump`, `core/service/ServiceTransport.cpp:220`): `transport.cpu`
 (smoothed), `transport.cpuPeak` (the worst single block in the last second — unsmoothed, over 1 a missed deadline),
-`strips[].cpu` (mapped engine index → strip, `:238`); stopped, the transport's model is reset (the held worst too,
+`strips[].cpu` (mapped engine index → strip, `:250`); stopped, the transport's model is reset (the held worst too,
 `:53`). **Drawn**: the song bar's readout before the master meter (`SongBar::cpuRect`, `app/widgets/SongBar.cpp:92`):
 "CPU" tracked, the percentage in mono, a thin bar under them, muted and the destructive colour from 80 % (`:310`); the
 drawn value is a value catching up (`:133`), so a stop eases it down. The learn pill now ends before it. L2
-`test_the_cpu_meter` (`core/tests/serviceTests.cpp:4151`): playing, a load in (0, 10) and a worst block kept; a
+`test_the_cpu_meter` (`core/tests/serviceTests.cpp:4198`): playing, a load in (0, 10) and a worst block kept; a
 chord's synth costs more than an empty bus, and no strip more than the whole (≈ 2 % of a block against ≈ 0 here);
 stopped, all 0; a render before and after playing, the same bytes. UI `test_the_cpu_in_the_song_bar`
 (`app/tests/ui/uiTests.cpp:4519`): the readout caught on its way up and on its way down. The meters-playing shot shows
@@ -2704,12 +2732,12 @@ publishes it by an atomic pointer, bumps a generation, notifies (without the mut
 piece its help), takes items, and waits only for the items handed out. Workers (`loop`, `:70`) count themselves in
 before reading the job and take the caller's floating-point mode (`:83`). `threadsFor` (`:34`): auto = the cores but
 one, at most 8. **Where.** The player makes the pool for the threads the setting gives (`core/Player.cpp:113`; from
-`ServiceTransport.cpp:550`) and sets it on every engine it plays, a swapped one too (`:247`); a render makes one for
+`ServiceTransport.cpp:562`) and sets it on every engine it plays, a swapped one too (`:259`); a render makes one for
 its engine (`core/service/ServiceRender.cpp:190`). `settings set threads=auto|1…16` (`ServiceMachine.cpp:164`; kept,
 `core/Settings.cpp:71`; `settings.threads` in the model). Tests: engine `test_the_strips_nothing_feeds_render_in_any_order`
 (`engine/tests/engineTests.cpp:744`: two synths, two kits and a shared reverb — the free strips run reversed and
 interleaved by a runner with no threads at all: byte-identical to one thread; the bus and the reverb never free); L2
-`test_the_engine_on_several_threads` (`core/tests/serviceTests.cpp:4186`: five instruments sending to a reverb — a
+`test_the_engine_on_several_threads` (`core/tests/serviceTests.cpp:4233`: five instruments sending to a reverb — a
 render on one thread and on four byte-identical; live playback on four the render, frame for frame; auto; refusals);
 every existing live-equals-render test now runs with the pool (auto). Mutants (each red): a fed strip taken for free, the
 free strips' own work never done, a free strip's own work done twice, a fed strip's own work skipped when the pool
@@ -2737,7 +2765,7 @@ devices cost nothing; their edits are kept and unheard); its fader, pan, mute, s
 song's end still its clips' ends (`:316`), not the file's tail; a file that cannot be read leaves it silent, said by
 the compile (`:315`). **The file**: `frozen="…"` on its `#atrack` line (`model/Project.cpp:269`, written `:797`).
 **The model**: `strips[].frozen` (`core/service/ServiceModel.cpp:270`); `audit` names each frozen strip and the file it
-plays (`:576`). Test: L2 `test_freeze_and_bounce` (`core/tests/serviceTests.cpp:4455`: an instrument through a chorus
+plays (`:576`). Test: L2 `test_freeze_and_bounce` (`core/tests/serviceTests.cpp:4669`: an instrument through a chorus
 and a lookahead limiter, faded, panned and sending to a reverb bus — frozen, the song renders within 3·10⁻⁸ of its own
 work; a device edit unheard and in the audit; its fader live; unfrozen, the edit heard; undone, frozen again; refrozen,
 the new file heard; refusals; a bounce onto a new strip; a file made unreadable opens silent and said). Mutants (each

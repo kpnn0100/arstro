@@ -154,8 +154,35 @@ namespace
     /** R-REC-1: a capture device. "loop": a cable from the clock device back into it — frame j read is the frame the
      *  output was given (out + in latency) × rate frames before, both counted from when it began (the one audio thread
      *  reads and writes in lock-step). "tone": a 1 kHz sine at 0.5. */
+    /** R-DEV-1/2: a capture paced in REAL time on its own crystal (`ppm`): a 1 kHz tone at 0.5, landing a block at a
+     *  time into a ring the reader takes from; it says what it holds and when its last block landed (`held`). */
+    struct PacedIn
+    {
+        double ppm = 0, latency = 0;
+        int block = 256;
+    };
     struct FakeIn : IAudioIn
     {
+        std::shared_ptr<std::map<std::string, PacedIn>> pacedIns; // R-DEV-1: by device
+        const PacedIn *paced = nullptr;
+        double t0 = 0;               // steady seconds when it opened
+        long long consumed = 0;      // frames read
+        long long landed(double now) const // frames landed by `now`: whole blocks
+        {
+            const double trueRate = rate * (1 + paced->ppm * 1e-6);
+            return (long long)std::floor((now - t0) * trueRate / paced->block) * paced->block;
+        }
+        bool held(long long &frames, long long &lastNs, int &lastFrames) const override
+        {
+            if (!paced) return false;
+            const double now = steadyNow(), trueRate = rate * (1 + paced->ppm * 1e-6);
+            const long long l = landed(now);
+            if (l <= 0) return false;
+            frames = l - consumed;
+            lastNs = (long long)std::llround((t0 + (double)l / trueRate) * 1e9);
+            lastFrames = paced->block;
+            return true;
+        }
         std::shared_ptr<Capture> cap;
         std::string mode = "loop", *device = nullptr;
         bool fails = false; // R-DEV-9: a PipeWire capture that links nowhere
@@ -167,12 +194,26 @@ namespace
             if (fails) { err = "PipeWire: the stream linked to no input within 2 s"; return false; }
             ch = channels;
             rate = r;
+            if (pacedIns && pacedIns->count(dev)) { paced = &pacedIns->at(dev); t0 = steadyNow(); }
             delay = std::llround((outLat + inLat) * r);
             if (device) *device = dev;
             return true;
         }
         int read(float *x, int n) override
         {
+            if (paced) // its own crystal: what has landed, then silence
+            {
+                const double trueRate = rate * (1 + paced->ppm * 1e-6);
+                const long long have = landed(steadyNow()) - consumed;
+                const int k = (int)std::max(0LL, std::min<long long>(n, have));
+                for (int i = 0; i < n; ++i)
+                {
+                    const float v = i < k ? (float)(0.5 * std::sin(2 * M_PI * 1000.0 * (double)(consumed + i) / trueRate)) : 0.0f;
+                    for (int c = 0; c < ch; ++c) x[(size_t)i * ch + c] = v;
+                }
+                consumed += k;
+                return k;
+            }
             if (start < 0) start = cap->frames.load(); // the output frame being written as it began
             for (int i = 0; i < n; ++i)
             {
@@ -188,7 +229,11 @@ namespace
             got += n;
             return n;
         }
-        double latency() override { return inLat; }
+        double latency() override
+        {
+            if (paced) return paced->latency + (double)std::max(0LL, landed(steadyNow()) - consumed) / rate; // its device's, and its ring
+            return inLat;
+        }
     };
     /** R-DEV-9: a PipeWire stream that opens and has had three underruns — or one that links nowhere. */
     struct PipewireOut : FakeOut
@@ -355,6 +400,7 @@ namespace
         std::shared_ptr<PluginWorld> plugins = std::make_shared<PluginWorld>();
         std::shared_ptr<Capture> capture = std::make_shared<Capture>();
         std::shared_ptr<std::map<std::string, Paced>> devices = std::make_shared<std::map<std::string, Paced>>(); // R-DEV-1
+        std::shared_ptr<std::map<std::string, PacedIn>> pacedIns = std::make_shared<std::map<std::string, PacedIn>>();
         bool canPlay = true;
         std::string pipewire;          // R-DEV-9: "" this host has no PipeWire driver, "ok" it opens, "fail" it links nowhere
         double outLatency = 0, inLatency = 0; // R-REC-1: what the clock device and the capture report
@@ -459,6 +505,7 @@ namespace
                     i->outLat = outLatency;
                     i->period = inPeriod;
                     i->device = &inDevice;
+                    i->pacedIns = pacedIns;
                     return std::unique_ptr<IAudioIn>(std::move(i));
                 };
             h.audioInFor = [this](const std::string &driver) -> std::unique_ptr<IAudioIn> { // R-DEV-9: a capture through PipeWire
@@ -4452,6 +4499,173 @@ static void test_a_port_on_another_device_follows_the_clock()
     pass("a port on another device (R-DEV-1/2/4/5): a follower held to the clock in real time — its sound continuous and at its level, the impulse heard on both at the same moment (within 1 ms) whichever path is slower; a device that will not open said and silent, the song playing on; the devices published while playing; a follower's drift kept for the next play");
 }
 
+namespace
+{
+    /** R-DEV-2: a capture in SIMULATED time — blocks land when the test says; it says what it holds (`held`). */
+    struct SimIn : IAudioIn
+    {
+        std::vector<float> stream;            // every frame it captured
+        std::vector<long long> landedAt;      // each block's landing (ns)
+        int block = 256;
+        long long consumed = 0;
+        bool open(const std::string &, int, int, int, std::string &) override { return true; }
+        bool held(long long &frames, long long &lastNs, int &lastFrames) const override
+        {
+            if (landedAt.empty()) return false;
+            frames = (long long)stream.size() - consumed;
+            lastNs = landedAt.back();
+            lastFrames = block;
+            return true;
+        }
+        int read(float *x, int n) override
+        {
+            const int k = (int)std::max(0LL, std::min<long long>(n, (long long)stream.size() - consumed));
+            for (int i = 0; i < n; ++i) x[i] = i < k ? stream[(size_t)(consumed + i)] : 0.0f;
+            consumed += k;
+            return k;
+        }
+        double latency() override { return (double)((long long)stream.size() - consumed) / 48000.0; }
+    };
+}
+
+static void test_an_input_held_alone()
+{
+    // R-DEV-2/4, DriftIn in SIMULATED time: a capture 200 ppm fast landing 256-frame blocks, the clock reading 128 at a
+    // time, started at that drift — an impulse is read exactly `target` frames after it landed (within a frame); its
+    // device stalling starves it (silence, counted, primed again, on time); the clock stalling leaves it far ahead
+    // (emptied, primed again, on time)
+    auto owned = std::make_unique<SimIn>();
+    SimIn *in = owned.get();
+    const double target = 1040.0, fin = 48000.0 * (1 + 200e-6), fc = 48000.0;
+    DriftIn d(std::move(owned), "sim-in", 48000, 1, 128, target, 200.0);
+    d.now = simNow;
+    assert(d.state().driftPpm == 200.0);
+    double tLand = 0, tRead = 0;
+    std::vector<std::pair<double, int>> impulses; // when each impulse's frame is due by the continuous clock (s), and nothing else
+    std::vector<float> out;
+    std::vector<double> readAt;
+    std::vector<float> buf(128);
+    auto run = [&](double until, bool deviceStalls, bool clockStalls) {
+        while (std::min(tLand, tRead) < until)
+        {
+            if (tLand <= tRead)
+            {
+                if (!deviceStalls)
+                {
+                    for (int i = 0; i < in->block; ++i)
+                    {
+                        const long long k = (long long)in->stream.size();
+                        const bool hit = k % 9600 == 4800;
+                        in->stream.push_back(hit ? 1.0f : 0.0f);
+                        if (hit) impulses.emplace_back(tLand + i / fin, 0); // landed with its block, at its place in it
+                    }
+                    in->landedAt.push_back((long long)std::llround(tLand * 1e9));
+                }
+                tLand += in->block / fin;
+            }
+            else
+            {
+                if (!clockStalls)
+                {
+                    gSimNs = (long long)std::llround(tRead * 1e9);
+                    d.read(buf.data(), 128);
+                    out.insert(out.end(), buf.begin(), buf.end());
+                    readAt.push_back(tRead);
+                }
+                tRead += 128 / fc;
+            }
+        }
+    };
+    auto lateness = [&](double from, double to) {
+        double worst = 0;
+        int seen = 0;
+        for (const auto &im : impulses)
+        {
+            if (im.first < from || im.first >= to) continue;
+            const double want = im.first + target / fc;
+            long long best = -1;
+            for (size_t b = 0; b < readAt.size(); ++b)
+                if (std::fabs(readAt[b] - want) < 0.01)
+                    for (int j = 0; j < 128; ++j)
+                    {
+                        const long long k = (long long)b * 128 + j;
+                        if (best < 0 || out[(size_t)k] > out[(size_t)best]) best = k;
+                    }
+            if (best < 1 || best + 1 >= (long long)out.size() || out[(size_t)best] < 0.5f) return 1e9;
+            const double a = out[(size_t)best - 1], m = out[(size_t)best], b = out[(size_t)best + 1];
+            const double at = readAt[(size_t)(best / 128)] + (best % 128 + 0.5 * (a - b) / (a - 2 * m + b)) / fc;
+            worst = std::max(worst, std::fabs(at - want) * fc);
+            ++seen;
+        }
+        return seen ? worst : 1e9;
+    };
+    run(3.0, false, false);
+    const double onTime = lateness(0.5, 2.8);
+    run(3.06, true, false); // its device stalls 60 ms
+    run(6.0, false, false);
+    const double afterStall = lateness(3.5, 5.8);
+    const long long starved = d.state().starved;
+    run(6.3, false, true);  // the clock stalls 300 ms
+    run(9.0, false, false);
+    const double afterClock = lateness(7.0, 8.8);
+    std::printf("    an input alone: read %.2f frames from its target's delay; after its device stalled (%lld blocks starved) %.2f; after the clock stalled %.2f\n",
+                onTime, starved, afterStall, afterClock);
+    assert(onTime <= 1.0 && afterStall <= 1.0 && afterClock <= 1.0 && starved > 0);
+    pass("an input held alone (R-DEV-2/4): in simulated time what it captures is read exactly its target after it landed (within a frame), its drift as started; a stalled device starves it — silent, primed again, on time; a stalled clock — emptied, primed again, on time");
+}
+
+static void test_an_input_on_another_device_follows_the_clock()
+{
+    // R-DEV-1/2/4: the guitar's input on card-in (its crystal 500 ppm fast, 3 ms), the clock paced in real time too —
+    // the armed line monitors it: what reaches the clock is its tone, continuous (no gap, no click) and at its level;
+    // the input published while playing, its latency its device's and its target's; the default input untouched
+    Run r;
+    (*r.fake.devices)[""] = Paced{0.0, 0.010};
+    (*r.fake.pacedIns)["card-in"] = PacedIn{500.0, 0.003, 256};
+    r.ok("project new " + freshSong("input-device") + " --bpm 120");
+    const std::string ch = firstLine(r.ok("strip add --kind audio --name Guitar"));
+    r.ok("port add Guitar --dir in --channels 1");
+    r.ok("set " + ch + ".input=prt_2 " + ch + ".monitor=on");
+    r.ok("settings set port.Guitar=card-in:0");
+    r.ok("strip arm " + ch);
+    r.ok("transport play");
+    r.ok("wait 1.0");
+    {
+        const auto devs = r.svc.model().transport.devices;
+        const AudioDeviceModel *in = nullptr;
+        for (const auto &d : devs)
+            if (d.role == "input") in = &d;
+        assert(in && in->id == "card-in" && in->starved == 0 && in->driftPpm > 0.0); // its crystal fast, and read so
+        std::printf("    the input on card-in: %.1f ms, %+.2f ppm so far\n", in->latencyMs, in->driftPpm);
+        assert(in->latencyMs > 3.0 + 21.0 && in->latencyMs < 3.0 + 21.7 + 12.0); // its device's, the target's (and its ring's turn)
+    }
+    r.ok("wait 0.6");
+    r.ok("transport stop");
+    const Paced &clock = (*r.fake.devices)[""];
+    const long long from = 24000, to = from + 48000;
+    assert(clock.frames > to);
+    double steepest = 0.0, e = 0.0;
+    for (long long k = from; k < to; ++k)
+    {
+        const double v = clock.sink[(size_t)(k * 2)];
+        steepest = std::max(steepest, std::fabs(v - clock.sink[(size_t)((k - 1) * 2)]));
+        e += v * v;
+    }
+    const double level = 20 * std::log10(std::sqrt(e / 48000.0) / (0.5 / std::sqrt(2.0)));
+    std::printf("    the guitar on the clock: its steepest step %.4f (the sine's own %.4f), its level %+.3f dB\n", steepest, 0.5 * 2 * M_PI * 1000.0 / 48000.0, level);
+#ifndef __SANITIZE_THREAD__
+    assert(steepest < 0.5 * 2 * M_PI * 1000.0 / 48000.0 * 1.02 && std::fabs(level) < 0.05);
+#endif
+    // the input chosen beside the clock in Settings shares its crystal: read as it is, not held
+    r.ok("settings set input=card-in");
+    r.ok("transport play --from 0");
+    bool held = false;
+    for (const auto &dv : r.svc.model().transport.devices) held = held || dv.role == "input";
+    r.ok("transport stop");
+    assert(!held);
+    pass("an input on another device (R-DEV-1/2/4): held to the clock in real time — the monitored tone continuous and at its level, the input published with its latency and drift; the input chosen beside the clock read as it is");
+}
+
 static void test_freeze_and_bounce()
 {
     // R-PERF-3: a strip's own sound frozen beside the song and played instead — the song sounds as it did (to float
@@ -5823,6 +6037,8 @@ int main()
     test_freeze_and_bounce();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
+    test_an_input_held_alone();
+    test_an_input_on_another_device_follows_the_clock();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

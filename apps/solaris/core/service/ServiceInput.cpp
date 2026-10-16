@@ -8,6 +8,8 @@
 #include "Engine.h"
 #include "Format.h"
 #include "SolarisService.h"
+#include "DriftIn.h"
+#include "Follower.h"
 #include <algorithm>
 #include <array>
 #include <climits>
@@ -107,17 +109,26 @@ namespace solaris
         if (!pt) { err = s.id + " has no input — `set " + s.id + ".input=<port>`"; return nullptr; }
         channels = std::clamp(pt->channels, 1, 2);
         const std::string device = mSettings.portDevice(pt->name);
+        // R-DEV-1/2: the default input, or the one chosen beside the clock in Settings, shares its crystal; an input on
+        // any other device is held to the clock — read through the resampler, its buffer at a target
+        auto held = [&](std::unique_ptr<IAudioIn> in) -> std::unique_ptr<IAudioIn> {
+            if (device.empty() || device == mSettings.input) return in;
+            const int block = mSettings.bufferSize;
+            double start = 0.0;
+            if (auto d = mDriftOf.find(device); d != mDriftOf.end()) start = d->second; // locked from the start
+            return std::make_unique<DriftIn>(std::move(in), device, mProject.header.sampleRate, channels, block, Follower::minTarget(block, block), start);
+        };
         if (mHost.audioInFor && mSettings.driver != "pulse") // R-DEV-9: the setting's driver first, PulseAudio the fallback
             if (auto in = mHost.audioInFor(mSettings.driver))
             {
                 std::string why;
-                if (in->open(device, mProject.header.sampleRate, channels, mSettings.bufferSize, why)) return in;
+                if (in->open(device, mProject.header.sampleRate, channels, mSettings.bufferSize, why)) return held(std::move(in));
                 emit(Event(Event::Kind::Info).with("text", "recording through PulseAudio: " + why));
             }
         auto in = mHost.audioIn();
         if (!in) { err = "this build cannot record audio (no capture)"; return nullptr; }
         if (!in->open(device, mProject.header.sampleRate, channels, mSettings.bufferSize, err)) return nullptr;
-        return in;
+        return held(std::move(in));
     }
 
     bool SolarisService::monitorHears(const Strip &s, bool playing, bool recording) const

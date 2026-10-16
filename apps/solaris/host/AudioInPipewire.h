@@ -26,6 +26,12 @@ namespace solaris_host
         int read(float *interleaved, int frames) override;
         double latency() override;
         long long missed() const override { return mMissed.load() + mRing.dropped(); }
+        /** R-DEV-2: the ring's frames and when its last block landed. */
+        bool held(long long &frames, long long &lastNs, int &lastFrames) const override
+        {
+            frames = mRing.filled();
+            return mStamp.read(lastNs, lastFrames);
+        }
 
         static void onProcess(void *self); // PipeWire's realtime thread
         void onState(int state, const char *error);
@@ -35,6 +41,7 @@ namespace solaris_host
         pw_thread_loop *mLoop = nullptr;
         pw_stream *mStream = nullptr;
         AudioRing mRing;
+        solaris::CaptureStamp mStamp; // R-DEV-2: each block's landing
         int mChannels = 2, mRate = 48000, mBuffer = 256;
         std::atomic<int> mState{0};
         std::atomic<long long> mMissed{0};

@@ -10,6 +10,7 @@ add_library(solaris_core STATIC
   Settings.cpp
   Player.cpp
   Follower.cpp
+  DriftIn.cpp
   Auditioner.cpp
   NotePreview.cpp
   service/Json.cpp

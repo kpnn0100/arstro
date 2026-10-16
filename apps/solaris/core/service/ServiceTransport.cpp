@@ -196,6 +196,18 @@ namespace solaris
                 t.devices.push_back(d);
                 mDriftOf[st.device] = st.driftPpm;
             }
+            if (const DriftIn *in = mPlayer->driftInput()) // an input on another device, held to the clock
+            {
+                const DriftIn::State st = in->state();
+                AudioDeviceModel d;
+                d.id = st.device;
+                d.role = "input";
+                d.latencyMs = std::round(st.latency * 10000.0) / 10.0;
+                d.driftPpm = std::round(st.driftPpm * 100.0) / 100.0;
+                d.starved = st.starved;
+                t.devices.push_back(d);
+                mDriftOf[st.device] = st.driftPpm;
+            }
             for (const auto &kv : mFollowerDown)
             {
                 AudioDeviceModel d;

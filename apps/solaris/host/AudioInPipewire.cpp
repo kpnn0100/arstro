@@ -51,6 +51,7 @@ namespace solaris_host
             const uint32_t offset = std::min(buf->datas[0].chunk->offset, buf->datas[0].maxsize);
             const uint32_t size = std::min(buf->datas[0].chunk->size, buf->datas[0].maxsize - offset);
             self->mRing.push(reinterpret_cast<const float *>(reinterpret_cast<const char *>(src) + offset), (int)(size / stride));
+            self->mStamp.mark((int)(size / stride)); // R-DEV-2: when it landed
         }
         pw_time t{};
         if (pw_stream_get_time(self->mStream, &t) == 0 && t.rate.denom > 0)

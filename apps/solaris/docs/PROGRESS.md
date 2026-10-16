@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N32 part 3 — an input on another device** (R-DEV-1/2/4: an input not on the clock read through the resampler, its buffer held by a FillController — the input seam says what it holds; parts 1–2 — the DSP pieces, the output followers — are built), then part 4 (Settings › Audio), then N33… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N32 part 4 — Settings › Audio** (R-DEV-5/R-SET-1: the devices a song plays through while it plays — role, latency, drift, xruns — and which port is on which device; parts 1–3 — the DSP pieces, the output followers, an input on another device — are built), then N33… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -576,6 +576,9 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       ports to devices, aligns the paths, remembers each device's drift, says a device that will not open;
       `transport.devices[]`. Measured in real time: an impulse heard on two devices 0.02–0.12 ms apart. D-17 filed (the
       test fakes race under TSan; the product is clean).
+      Part 3: `DriftIn` — an input on any device but the default or Settings' input, held to the clock (the input
+      seam's `held` + `CaptureStamp`, marked by both host captures); its latency its device's and its target's; role
+      `input` in `transport.devices[]`.
 **Phase 5 — grow the sound and the craft**
 - [ ] **N33** DSP instruments: wavetable, FM, multi-sample (SFZ), granular, 808 (R-INST-7…11) — a commit each.
 - [ ] **N34** DSP effects: multiband, gate, transient, de-esser, saturator, phaser, flanger, imager, convolution,

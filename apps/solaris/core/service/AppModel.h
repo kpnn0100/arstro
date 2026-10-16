@@ -349,10 +349,10 @@ namespace solaris
     struct AudioDeviceModel
     {
         std::string id;                          // as the settings name it ("" = the system default)
-        std::string role;                        // clock | follower
+        std::string role;                        // clock | follower | input (on another device, held to the clock)
         double latencyMs = 0;                    // from a frame rendered to its being heard — every device the same
                                                  //   (R-DEV-4) but one that is silent
-        double driftPpm = 0;                     // a follower's crystal against the clock's: + it runs fast
+        double driftPpm = 0;                     // a follower's or an input's crystal against the clock's: + it runs fast
         long long xruns = -1;                    // its device's underruns (−1: the driver cannot count them)
         long long starved = 0;                   // a follower's blocks with too little to play (the clock stalled)
         long long dropped = 0;                   // … the clock's pushes it had no room for (its device stalled)
