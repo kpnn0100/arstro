@@ -573,7 +573,8 @@ window's undo and redo keys (the keymap's, DR-SET-4) send `undo` / `redo` (`app/
 ### DR-HIST-1 The history is a tree (R-HIST-1, R-HIST-2)
 `SolarisService` keeps `mHist`: nodes keyed by an id never reused while the song is open (ascending = the order
 they were made), each the song as an edit left it, its label, its parent and its children
-(`core/service/SolarisService.h`). A new, opened or closed song resets it (`historyReset`, `:330`; `dispatch`, `:302`):
+(`core/service/SolarisService.h`), in memory only — never saved, with or beside the song (R-HIST-4, the user's
+choice). A new, opened or closed song resets it (`historyReset`, `:330`; `dispatch`, `:302`):
 one root, "New song" or "Opened", the song as it came. An edit that landed is `historyAdd` (`:338`): a child of the
 current node — a BRANCH when that node already has children, and the old ones stay. `undo` goes to the parent,
 `redo` to the child with the highest id (the newest branch), `history jump <id>` to any node (`historyCommand`,

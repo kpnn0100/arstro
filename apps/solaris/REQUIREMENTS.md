@@ -408,7 +408,7 @@ audio devices so the user can take advantage of their devices."*
 
 ---
 
-## R-HIST — the history is a tree, as cosmo's (user request, 2026-10-16: *"need to have tree history like cosmo"*) — ✅ IMPLEMENTED (1, 2 DR-HIST-1; 3 DR-HIST-2) — 4 asked of the user
+## R-HIST — the history is a tree, as cosmo's (user request, 2026-10-16: *"need to have tree history like cosmo"*) — ✅ IMPLEMENTED (1, 2, 4 DR-HIST-1; 3 DR-HIST-2)
 
 Cosmo keeps an image's edits as a branching tree (cosmo DR-HIST-1…3): undo walks to the parent, an edit made
 there starts a NEW branch and leaves the old future as it was, and History ▸ Show History Tree… draws it
@@ -429,9 +429,11 @@ suite (law 16): the same model, the same view.
   `apps/cosmo`, never copied — R-UI-4): root at the top, branches fanning into lanes, the current node lit;
   a node clicked is ONE `history jump <n>`, the view staying open on the new current; drag pans, Escape or the
   scrim closes. Its open and close fade, its highlight eases (design rule §1).
-- **R-HIST-4 Kept with the song?** Cosmo saves an image's tree with its project. For a song that is up to 200
-  copies of it in (or beside) the `.slp` — asked of the user, 2026-10-16; until they answer the tree lives as
-  long as the song is open, as the undo stack did.
+- **R-HIST-4 The tree lives while the song is open** (the user's answer, 2026-10-16: *"only while the song is
+  open"*). It is never written — not into the `.slp`, not beside it; a song saved and opened again starts a new
+  tree at one root, as the undo stack did. Cosmo saves an image's tree with its project (cosmo R-PERSIST-1); for a
+  song that would be up to 200 copies of it, and the user chose not to. This is a deliberate difference from
+  cosmo, not a gap.
 
 ## R-VER — versions of a song — 📋 SPECIFIED
 
