@@ -28,7 +28,7 @@ namespace solaris
                 ParamSpec s;
                 s.name = "p" + std::to_string(p.id);
                 s.label = p.title.empty() ? s.name : p.title;
-                s.unit = p.units;
+                // no unit: the plugin's units are its plain value's, and Solaris holds the normalised 0 … 1 (read as a %)
                 s.min = 0.0;
                 s.max = 1.0;
                 s.def = std::min(1.0, std::max(0.0, p.def));

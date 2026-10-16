@@ -47,6 +47,7 @@ namespace solaris_ui
     public:
         static constexpr double kHeaderH = 35.75;  // space::u(11)
         static constexpr double kValueW = 91.0;    // space::u(28): "auto au_12", "= ch_2.gain", "12.5 kHz"
+        static constexpr double kOfflineH = 29.25; // space::barH(): a plugin's offline band — why, and Reload (R-VST-6)
 
         explicit DevicePanel(std::string deviceId);
         const std::string &device() const { return mDevice; }
@@ -67,6 +68,13 @@ namespace solaris_ui
         artboard::Rect removeRect() const;
         artboard::Rect rollRect() const;                       // an instrument's "Piano Roll" (R-ROLL-1)
         artboard::Rect presetsRect() const;                    // R-PRESET-1: "Presets" — its type's, and Save as…
+        // R-VST-6 (N26): another maker's plugin — its list (no face), "Editor" in the Presets place (its own window;
+        // lit, eased, while open), and offline a band under the header saying why, with Reload (eased in and out)
+        bool isPlugin() const;
+        artboard::Rect editorRect() const;
+        artboard::Rect reloadRect() const;
+        double editorAmount() const { return mEditorLit.value(); } // LIVE
+        double offlineAmount() const { return mOffline.value(); }  // LIVE
         bool takesSample() const;                              // a sampler: it plays a recorded sound (R-EDM-8)
         std::string sampleText() const;                        // what its header says of that sound
         void setDropHint(bool on) { mDropWant = on; }          // a sample hovering over it: outlined, eased
@@ -88,7 +96,7 @@ namespace solaris_ui
         /** Room under the header an embedder fills (a kit's pads in a plugin's editor, R-VST-7); the rows begin
          *  below it. Opt-in, default 0: Solaris's windows lay out exactly as before. */
         double band = 0.0;
-        double bodyTop() const { return kHeaderH + band; }
+        double bodyTop() const { return kHeaderH + band + mOffline.value() * kOfflineH; } // the band pushes the rows, eased
         /** Scroll, eased, so the group whose parameters are `<prefix>.*` begins at the top (a pad picked). */
         void revealGroup(const std::string &prefix);
 
@@ -124,6 +132,8 @@ namespace solaris_ui
         cosmo_v2::HoverFade mHover;
         artboard::AnimatedProperty mDrop{0.0};
         bool mDropWant = false, mDropLast = false;
+        artboard::AnimatedProperty mOffline{0.0}, mEditorLit{0.0};
+        bool mPluginInit = false, mOfflineLast = false, mEditorLast = false;
     };
 }
 }

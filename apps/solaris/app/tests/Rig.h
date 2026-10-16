@@ -48,6 +48,54 @@ namespace sltest
         return d.string();
     }
 
+    /** R-VST-6: other makers' plugins, in process behind the host's seam — Sweet Pad (an instrument: a quiet sine per
+     *  held note) and Air Verb (an effect passing its input). One named by `rigPluginCrash()` has crashed — offline
+     *  from then on; its own editor is a flag (no window). */
+    inline std::string &rigPluginCrash()
+    {
+        static std::string uid;
+        return uid;
+    }
+    class RigPlugin : public arstro::solaris::IPluginInstance
+    {
+    public:
+        RigPlugin(const std::string &uid, double rate) : mUid(uid), mRate(rate)
+        {
+            mInst = uid == "0123456789ABCDEF0123456789ABCDEF";
+            mParams = mInst ? std::vector<arstro::solaris::PluginParamInfo>{{1, "Level", "", 0.5, 0}, {2, "Brightness", "%", 0.25, 0}}
+                            : std::vector<arstro::solaris::PluginParamInfo>{{7, "Mix", "%", 0.3, 0}, {8, "Size", "", 0.6, 0}, {9, "Damping", "", 0.5, 0}};
+        }
+        bool isInstrument() const override { return mInst; }
+        int latency() const override { return 0; }
+        const std::vector<arstro::solaris::PluginParamInfo> &params() const override { return mParams; }
+        bool process(const float *const *in, float *const *out, int frames, bool reset, const arstro::solaris::PluginNote *notes, int nNotes,
+                     const arstro::solaris::PluginChange *, int, double) override
+        {
+            if (offline()) return false;
+            if (reset) mHeld = 0;
+            for (int k = 0; k < nNotes; ++k) mHeld += notes[k].on ? 1 : -1;
+            for (int i = 0; i < frames; ++i)
+                for (int c = 0; c < 2; ++c)
+                    out[c][i] = mInst ? (mHeld > 0 ? (float)(0.2 * std::sin(mPhase)) : 0.0f) : (in && in[c] ? in[c][i] : 0.0f);
+            mPhase += 2.0 * M_PI * 440.0 / mRate * frames;
+            return true;
+        }
+        bool offline() const override { return mDead || rigPluginCrash() == mUid; } // named: it has crashed, at once
+        std::string why() const override { return offline() ? "its process ended (Segmentation fault)" : std::string(); }
+        bool getState(std::string &s, std::string &) override { s = "rig"; return true; }
+        bool setState(const std::string &, std::string &) override { return true; }
+        bool openEditor(const std::string &, std::string &) override { mEditor = true; return true; }
+        bool closeEditor(std::string &) override { mEditor = false; return true; }
+        bool editorOpen() const override { return mEditor && !offline(); }
+
+    private:
+        std::string mUid;
+        double mRate, mPhase = 0.0;
+        bool mInst = false, mDead = false, mEditor = false;
+        int mHeld = 0;
+        std::vector<arstro::solaris::PluginParamInfo> mParams;
+    };
+
     inline SolarisService::Host fakeHost(const std::string &dir, bool audio = true)
     {
         SolarisService::Host h;
@@ -121,7 +169,15 @@ namespace sltest
         h.templatesPath = dir + "/templates/user";   // R-PRESET-2: likewise
         h.factoryTemplatesPath = dir + "/templates/factory";
         h.libraryPath = dir + "/library";                 // R-PRESET-3: likewise
-        h.pluginsPath = dir + "/plugins";                 // R-VST-6: likewise
+        h.pluginsPath = dir + "/plugins";                 // R-VST-6: likewise — and two plugins, played in process
+        h.scanPlugins = [](std::vector<arstro::solaris::PluginModel> &out, std::vector<std::string> &, std::string &) {
+            out = {arstro::solaris::PluginModel{"0123456789ABCDEF0123456789ABCDEF", "Sweet Pad", "Acme", "instrument", "/vst3/Sweet.vst3"},
+                   arstro::solaris::PluginModel{"FEDCBA9876543210FEDCBA9876543210", "Air Verb", "Acme", "effect", "/vst3/Air.vst3"}};
+            return true;
+        };
+        h.loadPlugin = [](const std::string &, const std::string &uid, double rate, int, std::string &) -> std::unique_ptr<arstro::solaris::IPluginInstance> {
+            return std::make_unique<RigPlugin>(uid, rate);
+        };
         return h;
     }
 

@@ -191,7 +191,7 @@ namespace solaris_ui
 
     void DevicePanel::build(const solaris::DeviceModel &d)
     {
-        if (d.instrument && analogFace)
+        if (d.instrument && analogFace && d.plugin.empty()) // a plugin's face is its own editor (N26): here, its list
         {
             // R-UI-12: an instrument's face — the same generated parameters, as a hardware panel
             mFace = std::make_shared<AnalogFace>(*this);
@@ -344,6 +344,20 @@ namespace solaris_ui
             mDropLast = mDropWant;
         }
         mDrop.update(nowMs);
+        // R-VST-6 (N26): a plugin's offline band and its Editor light, eased whoever changed them
+        const bool off = d && d->offline, ed = d && d->editor;
+        if (!mPluginInit && d)
+        {
+            mOffline.set(off ? 1.0 : 0.0);
+            mEditorLit.set(ed ? 1.0 : 0.0);
+            mOfflineLast = off;
+            mEditorLast = ed;
+            mPluginInit = true;
+        }
+        if (off != mOfflineLast) { mOffline.animateTo(off ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); mOfflineLast = off; }
+        if (ed != mEditorLast) { mEditorLit.animateTo(ed ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); mEditorLast = ed; }
+        mOffline.update(nowMs);
+        mEditorLit.update(nowMs);
         mScroll.advance(nowMs);
         if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
@@ -462,6 +476,17 @@ namespace solaris_ui
         return Rect{b.x - 6.5 - 55.25, b.y, 55.25, 19.5};
     }
 
+    bool DevicePanel::isPlugin() const
+    {
+        const solaris::DeviceModel *d = model();
+        return d && !d->plugin.empty();
+    }
+    Rect DevicePanel::editorRect() const { return presetsRect(); } // a plugin's presets are its own: its editor stands there
+    Rect DevicePanel::reloadRect() const
+    {
+        return Rect{width.value() - space::padX() - 55.25, kHeaderH + band + (kOfflineH - 19.5) * 0.5, 55.25, 19.5};
+    }
+
     bool DevicePanel::contextClick(Point world)
     {
         const Point local = toLocal(world);
@@ -527,6 +552,7 @@ namespace solaris_ui
             if (removeRect().contains(local)) h = 1;
             else if (bypassRect().contains(local)) h = 2;
             else if (presetsRect().contains(local)) h = 4;
+            if (mOffline.value() > 0.5 && reloadRect().contains(local)) h = 5;
             if (rollRect().contains(local)) h = 3;
             mHover.setHovered(h);
             return true;
@@ -535,6 +561,13 @@ namespace solaris_ui
         {
             const solaris::DeviceModel *d = model();
             if (!d || !songControls) return true;
+            if (!d->plugin.empty() && d->offline && reloadRect().contains(local)) { if (onCommand) onCommand("device reload " + d->id); return true; }
+            if (!d->plugin.empty() && editorRect().contains(local))
+            {
+                // its own editor, in a window its process makes — or closed, when it is open (N26)
+                if (onCommand) onCommand("device editor " + d->id + (d->editor ? " --close" : ""));
+                return true;
+            }
             if (!d->instrument && removeRect().contains(local)) { if (onCommand) onCommand("device remove " + d->id); return true; }
             if (bypassRect().contains(local)) { if (onCommand) onCommand("set " + d->id + ".bypass=" + (d->bypass ? "false" : "true")); return true; }
             if (presetsRect().contains(local) && onMenu)
@@ -605,15 +638,28 @@ namespace solaris_ui
             return;
         }
         const Rect by = bypassRect(), pr = presetsRect();
+        const bool plugin = !d->plugin.empty();
         t.setFill(palette::mutedForeground());
-        // a sampler names its sound where the others name their type (R-EDM-8)
-        const std::string what = d->takesSample ? sampleText() : d->id + " \xC2\xB7 " + d->type;
+        // a sampler names its sound where the others name their type (R-EDM-8); a plugin, itself (R-VST-6)
+        const std::string what = d->takesSample ? sampleText() : d->id + " \xC2\xB7 " + (plugin ? d->label : d->type);
         t.drawText(textfit::ellipsize(t, mOwner + " \xC2\xB7 " + what, std::max(0.0, pr.x - 2.0 * space::padX()), 10.0, font::mono()),
                    space::padX(), textfit::baseline(by.y + by.h * 0.5, 10.0), 10.0, font::mono());
-        // R-PRESET-1: Presets — a menu of its type's, and Save as…
-        drawRoundedRect(t, pr, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), mHover.amount(4))));
-        t.setFill(palette::secondaryForeground());
-        t.drawText("Presets", pr.x + (pr.w - t.measureText("Presets", 10.0, font::sans())) * 0.5, textfit::baseline(pr.y + pr.h * 0.5, 10.0), 10.0, font::sans());
+        if (plugin)
+        {
+            // N26: Editor — its own window; lit while it is open
+            const double e = mEditorLit.value();
+            drawRoundedRect(t, pr, radius::control(),
+                            Paint::filled(lerpColor(lerpColor(palette::secondary(), palette::popover(), mHover.amount(4)), palette::primary(), e)));
+            t.setFill(lerpColor(palette::secondaryForeground(), palette::primaryForeground(), e));
+            t.drawText("Editor", pr.x + (pr.w - t.measureText("Editor", 10.0, font::sans())) * 0.5, textfit::baseline(pr.y + pr.h * 0.5, 10.0), 10.0, font::sans());
+        }
+        else
+        {
+            // R-PRESET-1: Presets — a menu of its type's, and Save as…
+            drawRoundedRect(t, pr, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), mHover.amount(4))));
+            t.setFill(palette::secondaryForeground());
+            t.drawText("Presets", pr.x + (pr.w - t.measureText("Presets", 10.0, font::sans())) * 0.5, textfit::baseline(pr.y + pr.h * 0.5, 10.0), 10.0, font::sans());
+        }
         // On / Bypassed: the fill eases whoever changed it
         const double b = mBypass.value();
         drawRoundedRect(t, by, radius::control(), Paint::filled(lerpColor(palette::primary(), palette::secondary(), b)));
@@ -637,6 +683,27 @@ namespace solaris_ui
         }
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, kHeaderH - 0.5); t.lineTo(W, kHeaderH - 0.5); t.strokePath();
+        // R-VST-6 (N26): a plugin not playing — the band slides open under the header: why, and Reload
+        const double off = mOffline.value();
+        if (off > 0.001)
+        {
+            const double top = kHeaderH + band, bh = off * kOfflineH;
+            t.save();
+            t.clipRect(0, top, W, bh);
+            drawRoundedRect(t, Rect{0, top, W, kOfflineH}, 0.0, Paint::filled(lerpColor(palette::card(), palette::destructive(), 0.16)));
+            const Rect rl = reloadRect();
+            const double cy = top + bh - kOfflineH * 0.5; // the content slides in with the band's bottom edge
+            const double shift = cy - (rl.y + rl.h * 0.5);
+            drawRoundedRect(t, Rect{rl.x, rl.y + shift, rl.w, rl.h}, radius::control(),
+                            Paint::filled(lerpColor(palette::secondary(), palette::popover(), mHover.amount(5))));
+            t.setFill(palette::secondaryForeground());
+            t.drawText("Reload", rl.x + (rl.w - t.measureText("Reload", 10.0, font::sans())) * 0.5, textfit::baseline(cy, 10.0), 10.0, font::sans());
+            t.setFill(palette::destructive());
+            const std::string why = "Offline \xE2\x80\x94 " + (d->why.empty() ? std::string("not playing") : d->why);
+            t.drawText(textfit::ellipsize(t, why, std::max(0.0, rl.x - 2.0 * space::padX()), 10.0, font::sans()), space::padX(),
+                       textfit::baseline(cy, 10.0), 10.0, font::sans());
+            t.restore();
+        }
         // a sample hovering over a sampler: the window outlined in the accent, eased (R-EDM-8)
         if (mDrop.value() > 0.001)
             drawRoundedRect(t, Rect{1.0, 1.0, W - 2.0, height.value() - 2.0}, radius::control(),

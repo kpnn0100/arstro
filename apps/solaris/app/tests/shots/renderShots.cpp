@@ -816,6 +816,44 @@ namespace
                  r.click(world(p, p.presetsRect()));
                  r.settle();
              }},
+            {"plugin-device", // R-VST-6 (N26): another maker's effect's window — its list, Editor lit (its own window open)
+             [](sltest::Rig &r) {
+                 sltest::rigPluginCrash().clear();
+                 r.cmd("plugins scan");
+                 r.cmd("project new \"" + r.song("Plugins") + ".slp\" --bpm 120");
+                 r.cmd("clip add --plugin \"Sweet Pad\" --at 0 --length 4");
+                 r.cmd("device add ch_2 --plugin \"Air Verb\"");
+                 r.cmd("set dv_2.p7=0.45");
+                 r.cmd("device editor dv_2");
+                 r.settle();
+                 r.app->project().windows().openDevice("dv_2");
+                 r.settle();
+             }},
+            {"plugin-offline", // … and an instrument plugin that crashed: the band under the header, why, Reload
+             [](sltest::Rig &r) {
+                 sltest::rigPluginCrash().clear();
+                 r.cmd("plugins scan");
+                 r.cmd("project new \"" + r.song("Plugins") + ".slp\" --bpm 120");
+                 r.cmd("clip add --plugin \"Sweet Pad\" --at 0 --length 4");
+                 r.settle();
+                 r.app->project().windows().openDevice("dv_1");
+                 r.settle();
+                 sltest::rigPluginCrash() = "0123456789ABCDEF0123456789ABCDEF";
+                 r.settle();
+             }},
+            {"plugin-offline-mid", // … caught sliding open (the rows pushed down with it)
+             [](sltest::Rig &r) {
+                 sltest::rigPluginCrash().clear();
+                 r.cmd("plugins scan");
+                 r.cmd("project new \"" + r.song("Plugins") + ".slp\" --bpm 120");
+                 r.cmd("clip add --plugin \"Sweet Pad\" --at 0 --length 4");
+                 r.settle();
+                 r.app->project().windows().openDevice("dv_1");
+                 r.settle();
+                 sltest::rigPluginCrash() = "0123456789ABCDEF0123456789ABCDEF";
+                 r.frame();
+                 r.frame(); // and the shot's own frame: a third of the way
+             }},
             {"tempo-map",   // R-TEMPO-1: 140 from bar 3, gliding to 100 by bar 5 — flags on the ruler's band, the glide's slope; the
                             // song bar at the time bar's tempo
              [](sltest::Rig &r) {

@@ -995,7 +995,7 @@ device's description (`core/Compile.cpp:215`); the engine hands it in at build, 
 (`engine/Engine.cpp:65`); a change of sound is a structural live update (an engine swap). The model
 gives `devices[].takesSample`, `.sample` and `deviceTypes[].takesSample`; the audit names a sampler with
 no sound or an unreadable one (`core/service/ServiceModel.cpp:525`). In the UI a sampler's window names
-its sound where others name their type (`DevicePanel::sampleText`, `app/widgets/DevicePanel.cpp:442`),
+its sound where others name their type (`DevicePanel::sampleText`, `app/widgets/DevicePanel.cpp:456`),
 and a browser sample dragged over it lights the window (eased) and drops as ONE `set <dv>.sample=`
 (`WindowLayer::samplerAt`, `app/widgets/FloatWindow.cpp:303`; `app/widgets/ProjectScreen.cpp:100`).
 Measured (L2): at the root the render IS the decoded file sample for sample (a mutant whose engine skips
@@ -1067,7 +1067,7 @@ formula can drive from a `ParamTarget` (address, formula, value as shown, reset,
 unless it already IS one (`auto create <address>`), Formula… (cosmo's rename field seeded with the formula or
 "=", → `set <address>="=<typed>"`, quoted when it has a space), Clear Binding when bound (`bind clear
 <address>`), Reset to Default (`set <address>=<default>`), and Copy Address / Copy Value / Copy as Formula
-(DR-UI-11). The device window (`DevicePanel::openParamMenu`, `app/widgets/DevicePanel.cpp:474`) and the dock
+(DR-UI-11). The device window (`DevicePanel::openParamMenu`, `app/widgets/DevicePanel.cpp:499`) and the dock
 (`MixerDock::openParam`, `app/widgets/MixerDock.cpp:949`, offered first on a right-click, `:1181`) both call
 it, so the menus cannot drift; a hosted third-party VST3's parameter list (R-VST-6, not built yet) will call
 it the same way. In the dock: a fader → `<ch>.gain`, a pan → `<ch>.pan`, a send's row on a card or its cell
@@ -1658,8 +1658,8 @@ the DSP repo alone the plugins offer none and a host draws its generic view.
 (`plugins/InstrumentEditor.cpp`) builds a model of ONE device each frame the host's values moved
 (`refresh`, `:59`) with `deviceModelOf` (`core/service/RegistryModel.cpp:7` — the ONE registry→model
 mapping, which the service now uses too, `core/service/ServiceModel.cpp:59`), the panel's song controls
-off (`DevicePanel::songControls`, `app/widgets/DevicePanel.h:87`: the header names the instrument with the
-suite's mark and teal dot instead, `app/widgets/DevicePanel.cpp:594`). Solaris's accent and embedded fonts
+off (`DevicePanel::songControls`, `app/widgets/DevicePanel.h:95`: the header names the instrument with the
+suite's mark and teal dot instead, `app/widgets/DevicePanel.cpp:627`). Solaris's accent and embedded fonts
 are installed before a widget is built. The panel speaks text as in Solaris; `command` (`:82`) turns
 `set dv_1.<name>=<value>` into the host's edit through `ParamAccess` — begun ONCE per parameter per
 press, performed per step (a step that moved nothing says nothing, `:98`), ended when the pointer lets
@@ -1690,13 +1690,13 @@ in a real host window, 520×600, drawn as above; a drag sent to its window moved
 
 **Drum Machine's pads** (E6; DSP `9634166`, REQ-device-9 and REQ-vst-7). A kit — a type with `noteNames` —
 gets a `PadGrid` (`plugins/InstrumentEditor.cpp:140`) in the panel's band (`DevicePanel::band`,
-`app/widgets/DevicePanel.h:90`: room under the title, the rows below it; opt-in, 0 in Solaris), five to a
+`app/widgets/DevicePanel.h:98`: room under the title, the rows below it; opt-in, 0 in Solaris), five to a
 row (`:264`): a pad per key the registry names, in its order, each joined to its parameters by the
 registry's `notePrefixes` (`:149` — the join D-3 lacked). A press plays the pad through the plugin —
 `ParamAccess::play`, the controller's `playNote`, an `arstro.note` message to the processor, heard at the
 next block — and picks it; the release is its note-off (`handleGesture`, `:199`). The pick eases its ring in
 and the hit flashes and dies away like the sound (`advance`, `:174`); the panel scrolls, eased, so the pad's
-group begins at the top (`DevicePanel::revealGroup`, `app/widgets/DevicePanel.cpp:414`, called at `:33`).
+group begins at the top (`DevicePanel::revealGroup`, `app/widgets/DevicePanel.cpp:428`, called at `:33`).
 Playing a pad edits nothing.
 
 Guarded by `test_a_pad_plays_and_shows_its_parameters` (`plugins/tests/editorTests.cpp:333`: the pads are
@@ -1710,8 +1710,8 @@ played, the pick snapped, the least scroll instead of the group, the controller 
 ### DR-UI-12 An instrument's face is an analog synth panel (R-UI-12; R-WIN-2, R-VST-7 amended)
 `AnalogFace` (`app/widgets/AnalogFace.cpp`) is an instrument's DevicePanel body — built in the rows' place when
 the device is an instrument (`DevicePanel::build`, `app/widgets/DevicePanel.cpp:194`; `analogFace`, opt-out,
-`app/widgets/DevicePanel.h:80`), so the same face is Solaris's window and the plugins' editor. Still generated
-(law 2): `build` (`:129`) makes a module per parameter group in the registry's order, the ungrouped last, titled
+`app/widgets/DevicePanel.h:88`), so the same face is Solaris's window and the plugins' editor. Still generated
+(law 2): `build` (`AnalogFace.cpp:128`) makes a module per parameter group in the registry's order, the ungrouped last, titled
 by `devices[].groups` (DSP REQ-device-10, G2), a knob per number and a switch per choice; a module's SCREEN is
 chosen by what its parameters say (`:156`): a `wave` choice → the oscillator, `cutoff` + `res` → the filter,
 `attack` `decay` `sustain` `release` → the envelope. `layoutFor` (`:213`) flows the modules into the width —
@@ -1735,7 +1735,7 @@ Tokens: `surface::moduleBg`, `screenBg`, `knobCap`, `knobTrack`, `screenGrid` (`
 halo fades in and out. A drag is direct manipulation — up turns it up, Shift five times finer (`:455`), the knob
 the pointer's — and each step that moved the value is ONE `set` through the panel; a bound knob takes no drag
 (`:439`); a double-click is the default; a right-click opens the parameter's menu (`DevicePanel::openParamMenuFor`,
-`app/widgets/DevicePanel.cpp:490`, R-WIN-3); the wheel scrolls. Show IDs puts each address over its label (`:742`).
+`app/widgets/DevicePanel.cpp:515`, R-WIN-3); the wheel scrolls. Show IDs puts each address over its label (`:742`).
 An instrument's window opens 820 × 580 (`app/widgets/FloatWindow.cpp:144`), three modules a row; an effect's
 keeps the list at 390 × 520. The plugins' editor opens at the face's own size — 980 wide, as tall as its modules
 (`InstrumentEditor::preferredSize`, `plugins/InstrumentEditor.cpp:40`, asked by `plugins/X11View.cpp:64`).
@@ -2330,7 +2330,7 @@ label in capitals as a header, then its presets, the factory's marked "factory" 
 grows in. The four tabs are as wide as their names need (`tabRect`, `:263`) and the highlight eases its width with its
 place. A preset row drags like an instrument: an instrument's dropped on the lanes is ONE `clip add --instrument <t>
 --preset <name> --at … --length 4 [--lane …]` (`app/widgets/ProjectScreen.cpp:150`); an effect's says it loads onto its
-device. A device window's header has Presets (`app/widgets/DevicePanel.cpp:540`): its type's presets (the factory's
+device. A device window's header has Presets (`app/widgets/DevicePanel.cpp:573`): its type's presets (the factory's
 marked), each ONE `preset load`, then Save as preset… (the rename field; ONE `preset save`). UI
 `test_presets_in_the_window`; shots `browser-presets`, `device-presets-menu`. Mutants: the drop forgetting its preset, a
 preset clicked saving over it, the highlight's width jumping, a factory preset unmarked — each red.
@@ -2381,7 +2381,7 @@ shot `browser-library`. Mutants: the star sending the opposite, the star snappin
 staying in it, Remove tag tagging again — each red.
 
 
-### DR-VST-6 Hosting other makers' VST3 (R-VST-6) — part 1, found; part 2, played; N26, its own editor
+### DR-VST-6 Hosting other makers' VST3 (R-VST-6) — part 1, found; part 2, played; N26, its own editor and its window
 **The helper** (`apps/solaris/plughost/`, built where the DSP library found the SDK — `vst3_hosting`): `solaris-plughost
 --scan <bundle>` (`plughost/main.cpp:68`) loads the module with the SDK's `VST3::Hosting::Module`, prints a line per audio
 processor class — `class`, its UID, `instrument` (an "Instrument" sub-category) or `effect`, its name, its vendor — and
@@ -2503,3 +2503,23 @@ closed, no process left. Mutants (each red): pump never landing an edit, an edit
 ignored, the window's close not said, a running command not counted, the editor taken for an edit. Found while
 building it: the first faces run cleared DISPLAY only after its helper had started (a helper takes the environment it
 is started with) — it opened the editor on the desktop for a moment; DISPLAY is now cleared first thing.
+
+**N26 part 2 — in its device window.** `DevicePanel` (`app/widgets/DevicePanel.cpp`): a plugin device is built as its
+parameter list even when it is an instrument (`:194` — its face is its own editor); the list reads a plugin's 0 … 1
+values as percentages (`setPluginType` gives them no unit — a plugin's units are its plain value's,
+`core/PluginDevice.cpp:31`). Its header names the plugin where a registry device names its type, and where Presets
+stands (a plugin's presets are its own) is **Editor** (`editorRect`, `DevicePanel.cpp:484`; drawn `:649`): a click is
+`device editor <dv>`, or `--close` while its window is open (`:568`), and its fill eases to the accent while that window
+is open (`editorAmount`). Offline — never started, crashed, overran — a band slides open under the header
+(`kOfflineH` = 29.25, `app/widgets/DevicePanel.h:50`; drawn `DevicePanel.cpp:686`, its content riding the band's
+lower edge): "Offline — <why>" in the destructive colour, and **Reload** (`reloadRect`, `:485`) — `device reload <dv>`
+(`:564`); the rows below are pushed down with it, because `bodyTop()` (`DevicePanel.h:99`) includes the eased band.
+Both ease from the model wherever the change came from (`DevicePanel.cpp:347`; the first placement is set, not
+animated). The rig's host plays two in-process plugins (`RigPlugin`, `app/tests/Rig.h:59`; one named by
+`rigPluginCrash()` is offline at once). UI `test_a_plugins_device_window` (`app/tests/ui/uiTests.cpp:4298`): an
+instrument plugin's list (no face); Editor's line and its light caught mid-tween, again `--close`; a crash — the band
+caught mid-slide, the rows pushed by exactly the band at rest, the model's why; Reload's line, the band caught
+mid-close; an effect plugin's list. Shots: plugin-device, plugin-offline, plugin-offline-mid at both sizes. Mutants
+(each red): the band snapping, the Editor light snapping, Reload sending nothing, the band not pushing the rows, a
+plugin instrument given a face, Editor never closing. Found while looking at the shots: a plugin's "%" unit hung on
+its normalised value read "0.45 %" beside a unitless one's "60 %" — the units dropped.

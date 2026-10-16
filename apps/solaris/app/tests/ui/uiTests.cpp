@@ -4295,6 +4295,65 @@ static void test_the_sample_library_in_the_browser()
     pass("the sample library in the browser (R-PRESET-3): a star one `sample favourite`, lit eased; Tag… typed one `sample tag`; Search samples… typed one `browse --search`, the list crossing to what it found, back by its first row; Favourites one `browse --favourites`; Remove tag one `sample untag`");
 }
 
+static void test_a_plugins_device_window()
+{
+    // R-VST-6 (N26): a plugin's device window — its parameter list (an instrument's too: its face is its own editor),
+    // "Editor" where Presets stands sending `device editor` (lit, eased, while its window is open; again, `--close`),
+    // and offline a band sliding open under the header — why, and Reload (`device reload`) — the rows pushed with it;
+    // each caught mid-tween
+    sltest::Rig r("ui-plugin", 1440, 900);
+    sltest::rigPluginCrash().clear();
+    r.cmd("plugins scan");
+    r.cmd("project new " + r.song("Plugin") + ".slp --bpm 120");
+    r.cmd("clip add --plugin \"Sweet Pad\" --at 0 --length 4");          // ch_2, dv_1
+    r.cmd("device add ch_2 --plugin \"Air Verb\"");                       // dv_2
+    r.settle();
+    auto &wl = r.app->project().windows();
+    wl.openDevice("dv_1");
+    r.settle();
+    auto &p = *wl.devicePanel("dv_1");
+    assert(p.isPlugin() && !p.face() && p.rowCount() == 2 && p.rowParam(0) == "p1" && p.rowParam(1) == "p2");
+    r.click(world(p, p.editorRect()));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "device editor dv_1") && p.editorAmount() > 0.0 && p.editorAmount() < 1.0);
+    r.settle();
+    assert(p.editorAmount() == 1.0);
+    r.click(world(p, p.editorRect()));
+    r.settle();
+    assert(sentLine(r, "device editor dv_1 --close") && p.editorAmount() == 0.0);
+    // it crashes: the band slides open, the rows with it
+    const double top0 = p.bodyTop();
+    const double row0 = p.rowRect(0).y;
+    sltest::rigPluginCrash() = "0123456789ABCDEF0123456789ABCDEF";
+    r.frame();
+    r.frame();
+    r.frame();
+    assert(p.offlineAmount() > 0.0 && p.offlineAmount() < 1.0 && p.bodyTop() > top0 && p.bodyTop() < top0 + arstro::solaris_ui::DevicePanel::kOfflineH);
+    r.settle();
+    assert(p.offlineAmount() == 1.0 && std::fabs(p.bodyTop() - top0 - arstro::solaris_ui::DevicePanel::kOfflineH) < 1e-9);
+    assert(p.rowRect(0).y > row0);
+    const arstro::solaris::DeviceModel *d = nullptr;
+    for (const auto &s : r.svc->model().strips)
+        for (const auto &x : s.devices)
+            if (x.id == "dv_1") d = &x;
+    assert(d && d->offline && d->why == "its process ended (Segmentation fault)");
+    // Reload: one line; playing again, the band slides shut
+    sltest::rigPluginCrash().clear();
+    r.click(world(p, p.reloadRect()));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "device reload dv_1") && p.offlineAmount() > 0.0 && p.offlineAmount() < 1.0);
+    r.settle();
+    assert(p.offlineAmount() == 0.0 && p.bodyTop() == top0);
+    // an effect plugin: its list too, Remove still there
+    wl.openDevice("dv_2");
+    r.settle();
+    auto &q = *wl.devicePanel("dv_2");
+    assert(q.isPlugin() && q.rowCount() == 3 && q.rowParam(0) == "p7");
+    std::printf("[PASS] a plugin's device window (R-VST-6, N26): its list, Editor sending device editor (lit, eased; again --close), offline a band sliding open with why and Reload (device reload), the rows pushed with it — each caught mid-tween\n");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -4360,6 +4419,7 @@ int main()
     test_the_loop_region_on_the_ruler();
     test_the_ruler_is_dragged();
     test_a_sample_dropped_on_a_sampler_loads_it();
+    test_a_plugins_device_window();
     test_a_sample_is_heard_from_the_browser();
     test_the_grid_follows_the_zoom();
     std::printf("\n%d passed, 0 failed\n", passed);

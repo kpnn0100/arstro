@@ -3,7 +3,7 @@
  *  solaris_core — another maker's plugin as a library Device (R-VST-6; docs/discussion.md Round 9).
  *
  *  A CONNECTION is one instance of the plugin (the host's, behind IPluginInstance) with what Solaris knows of it: its
- *  class, bundle and name, its parameters as a DeviceType (`p<id>`, numbers 0 … 1, the plugin's titles and units), and
+ *  class, bundle and name, its parameters as a DeviceType (`p<id>`, numbers 0 … 1 under the plugin's titles), and
  *  why it is offline when it is. The live connection outlives the engines that play it — an edit swaps the engine, not
  *  the plugin's process — and a render makes its own.
  *
