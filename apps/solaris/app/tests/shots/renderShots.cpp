@@ -735,6 +735,15 @@ namespace
                  clipEditSong(r);
                  r.settle();
              }},
+            {"clip-warp",   // R-WARP-1: the drums warped at their own 120, the vocal warped at 60 and a fifth up — their tags
+             [](sltest::Rig &r) {
+                 clipEditSong(r);
+                 const auto &cs = r.svc->model().clips;
+                 const std::string drums = cs.front().id, vox = cs.back().id;
+                 r.cmd("set " + drums + ".bpm=120 " + drums + ".warp=true");
+                 r.cmd("set " + vox + ".bpm=60 " + vox + ".warp=true " + vox + ".pitch=7");
+                 r.settle();
+             }},
             {"clip-edit-dragging", // R-EDIT-1: the first clip's fade in held by the pointer, the fade drawn where it is
              [](sltest::Rig &r) {
                  clipEditSong(r);

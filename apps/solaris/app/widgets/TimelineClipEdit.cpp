@@ -59,6 +59,30 @@ namespace solaris_ui
         l.houtLast = c.fadeOutHeard;
         l.ampLast = ampOf(c.gain);
         l.revLast = c.reverse ? 1.0 : 0.0;
+        l.tagFrom.clear();
+        l.tagTo = clipTag(c);
+        l.tagT.set(1.0);
+    }
+
+    std::string Timeline::clipTag(const solaris::ClipModel &c)
+    {
+        auto num = [](double v) {
+            char b[32];
+            std::snprintf(b, sizeof b, "%.6g", std::round(v * 1000.0) / 1000.0);
+            return std::string(b);
+        };
+        std::string s;
+        if (c.warp && c.bpm > 0) s = num(c.bpm) + " bpm";
+        if (c.pitch != 0.0) s += (s.empty() ? "" : " \xC2\xB7 ") + std::string(c.pitch > 0 ? "+" : "\xE2\x88\x92") + num(std::fabs(c.pitch)) + " st";
+        return s;
+    }
+
+    double Timeline::clipTagAlpha(const std::string &ac, const std::string &text) const
+    {
+        const ClipLive *l = live(ac);
+        if (!l || text.empty()) return 0.0;
+        const double t = l->tagT.value();
+        return (l->tagTo == text ? t : 0.0) + (l->tagFrom == text ? 1.0 - t : 0.0);
     }
 
     void Timeline::advanceClipEdit(ClipLive &l, double nowMs)
@@ -74,6 +98,16 @@ namespace solaris_ui
         ease(l.hout, l.houtLast, c.fadeOutHeard);
         ease(l.amp, l.ampLast, ampOf(c.gain));
         ease(l.rev, l.revLast, c.reverse ? 1.0 : 0.0);
+        const std::string tag = clipTag(c);
+        if (tag != l.tagTo)
+        {
+            // from what is SHOWN: a change mid-fade leaves the nearer of the two
+            l.tagFrom = l.tagT.value() >= 0.5 ? l.tagTo : l.tagFrom;
+            l.tagTo = tag;
+            l.tagT.set(0.0);
+            l.tagT.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+        }
+        l.tagT.update(nowMs);
     }
 
     double Timeline::clipFadeLive(const std::string &ac, bool out) const
@@ -264,18 +298,34 @@ namespace solaris_ui
                 const bool held = mEditMoved && mEditClip == v.c.id && mEditZone == (out ? 2 : 1);
                 drawRoundedRect(t, h, radius::hairline(), Paint::filled(fade(palette::foreground(), (held ? 1.0 : 0.7) * a)));
             }
-        // reversed: said at the right, just above its gain line (below it when the line is high), never on it
+        // reversed at the right, its tempo and pitch at the left: just above its gain line (below it when the line is
+        // high), never on it
+        const double base = gy - 3.25 - 9.0 >= top ? gy - 3.25 : std::min(bottom, gy + 3.25 + 9.0 * 0.7);
         const double rev = l ? l->rev.value() : (v.c.reverse ? 1.0 : 0.0);
+        double rightUsed = 0.0;
         if (rev > 0.001)
         {
             const std::string s = "reversed";
             const double w = t.measureText(s, 9.0, font::sans());
             if (r.w > w + 60.0)
             {
-                const double base = gy - 3.25 - 9.0 >= top ? gy - 3.25 : std::min(bottom, gy + 3.25 + 9.0 * 0.7);
                 t.setFill(fade(palette::mutedForeground(), rev * a));
                 t.drawText(s, r.right() - w - 6.0, base, 9.0, font::sans());
+                rightUsed = w + 12.0;
             }
+        }
+        const std::string from = l ? l->tagFrom : std::string(), to = l ? l->tagTo : clipTag(v.c);
+        const double tt = l ? l->tagT.value() : 1.0;
+        const double tagX = std::max(std::max(r.x, kHeaderW), r.x + hin * ppb) + 5.0; // past its fade in, never on its line
+        for (int k = 0; k < 2; ++k)
+        {
+            const std::string &s = k == 0 ? from : to;
+            const double al = k == 0 ? 1.0 - tt : tt;
+            if (s.empty() || al <= 0.001) continue;
+            const double room = r.right() - 5.0 - rightUsed - tagX;
+            if (room < 24.0) continue;
+            t.setFill(fade(palette::foreground(), 0.7 * al * a));
+            t.drawText(interstellar_v1::textfit::ellipsize(t, s, room, 9.0, font::mono()), tagX, base, 9.0, font::mono());
         }
     }
 
@@ -308,6 +358,26 @@ namespace solaris_ui
         for (const ClipView *x : run) ids += " " + x->c.id;
         items.push_back({run.size() > 1 ? "Consolidate " + std::to_string(run.size()) + " clips" : std::string("Consolidate"),
                          [this, ids] { if (onCommand) onCommand("clip consolidate" + ids); }});
+        // R-WARP-1: the song's tempo, its own typed, its pitch
+        const bool warped = c.warp;
+        items.push_back({warped ? "Unwarp" : "Warp to the song's tempo", [this, id, warped] { if (onCommand) onCommand("set " + id + ".warp=" + (warped ? "false" : "true")); }});
+        if (onRename)
+        {
+            char b[32];
+            std::snprintf(b, sizeof b, "%.6g", c.bpm);
+            const std::string now = c.bpm > 0 ? std::string(b) : std::string();
+            items.push_back({"Tempo\xE2\x80\xA6", [this, id, now, world] {
+                                 onRename(now, world, [this, id](const std::string &n) { if (onCommand && !n.empty()) onCommand("set " + id + ".bpm=" + n); });
+                             }});
+        }
+        std::vector<cosmo_v2::ContextMenu::Item> pitch;
+        for (int st : {12, 7, 5, 1, 0, -1, -5, -7, -12})
+        {
+            const std::string label = (st > 0 ? "+" : st < 0 ? "\xE2\x88\x92" : "") + std::to_string(std::abs(st)) + (st == 0 ? " (as recorded)" : " st") +
+                                      (std::fabs(c.pitch - st) < 1e-9 ? "  \xC2\xB7 now" : "");
+            pitch.push_back({label, [this, id, st] { if (onCommand) onCommand("set " + id + ".pitch=" + std::to_string(st)); }});
+        }
+        items.push_back({"Pitch \xE2\x96\xB8", [this, pitch, world] { if (onMenu) onMenu(pitch, world); }});
         if (c.loop) return; // a looping clip is not sliced (unloop it first)
         std::vector<cosmo_v2::ContextMenu::Item> slice;
         auto every = [this, id](double b) { return [this, id, b] { if (onCommand) onCommand("clip slice " + id + " --every " + beatText(b)); }; };

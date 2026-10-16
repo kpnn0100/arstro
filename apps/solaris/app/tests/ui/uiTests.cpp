@@ -3929,6 +3929,64 @@ static void test_a_clips_fades_gain_and_edits()
     pass("a clip's edits (R-EDIT-1): fade handles and the gain line follow the pointer and send ONE `set` when let go; moved by the model, eased; an overlap's crossfade drawn, eased in; the menu's Reverse (eased), Consolidate 2 clips, Slice ▸ Every half beat, Split at the time bar; Ctrl+E splits there");
 }
 
+static void test_a_clip_warped_from_its_menu()
+{
+    // R-WARP-1: Tempo… typed is ONE `set <ac>.bpm`; Warp to the song's tempo one `set <ac>.warp=true`, its tag ("60 bpm")
+    // eased in; Pitch ▸ +7 one `set <ac>.pitch=7`, the tag crossing over to "60 bpm · +7 st"; Unwarp
+    sltest::Rig r("ui-warp", 1280, 800);
+    r.cmd("project new " + r.song("Warp") + ".slp --bpm 120");
+    r.cmd("clip add --src vox.wav --at 0 --length 4");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &menu = r.app->menu();
+    const std::string ac = r.svc->model().clips[0].id;
+    const artboard::Rect cr = world(tl, tl.clipRect(ac));
+    auto open = [&] {
+        r.click(cr.x + 30.0, cy(cr), 2);
+        r.settle();
+    };
+    open();
+    assert(menuItem(r, "Warp to the song's tempo") >= 0 && menuItem(r, "Tempo\xE2\x80\xA6") >= 0 && menuItem(r, "Pitch \xE2\x96\xB8") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Tempo\xE2\x80\xA6")));
+    r.settle();
+    assert(menu.isRenaming());
+    artboard::KeyEvent typed;
+    typed.type = artboard::KeyEvent::Type::Text;
+    typed.text = "60";
+    r.app->key(typed);
+    r.key(13);
+    r.settle();
+    assert(sentLine(r, "set " + ac + ".bpm=60") && r.svc->model().clips[0].bpm == 60.0);
+    open();
+    r.click(menu.itemRect(menuItem(r, "Warp to the song's tempo")));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "set " + ac + ".warp=true") && r.svc->model().clips[0].warp);
+    const double in = tl.clipTagAlpha(ac, "60 bpm");
+    assert(in > 0.0 && in < 1.0);
+    r.settle();
+    assert(tl.clipTagAlpha(ac, "60 bpm") == 1.0);
+    open();
+    r.click(menu.itemRect(menuItem(r, "Pitch \xE2\x96\xB8")));
+    r.settle();
+    assert(menuItem(r, "0 (as recorded)  \xC2\xB7 now") >= 0);
+    r.click(menu.itemRect(menuItem(r, "+7 st")));
+    r.frame();
+    r.frame();
+    const std::string both = "60 bpm \xC2\xB7 +7 st";
+    assert(sentLine(r, "set " + ac + ".pitch=7") && r.svc->model().clips[0].pitch == 7.0);
+    const double over = tl.clipTagAlpha(ac, both), out = tl.clipTagAlpha(ac, "60 bpm");
+    assert(over > 0.0 && over < 1.0 && out > 0.0 && out < 1.0);
+    r.settle();
+    assert(tl.clipTagAlpha(ac, both) == 1.0 && tl.clipTagAlpha(ac, "60 bpm") == 0.0);
+    open();
+    assert(menuItem(r, "Unwarp") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Unwarp")));
+    r.settle();
+    assert(sentLine(r, "set " + ac + ".warp=false") && !r.svc->model().clips[0].warp && tl.clipTagAlpha(ac, "+7 st") == 1.0);
+    pass("a clip warped from its menu (R-WARP-1): Tempo… typed is one `set .bpm`; Warp one `set .warp=true`, its tag eased in; Pitch ▸ +7 one line, the tag crossing over; Unwarp");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -3976,6 +4034,7 @@ int main()
     test_recording_audio_from_the_window();
     test_takes_under_their_clip();
     test_a_clips_fades_gain_and_edits();
+    test_a_clip_warped_from_its_menu();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();

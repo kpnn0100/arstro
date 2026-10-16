@@ -201,6 +201,9 @@ namespace solaris_ui
         double clipHeardFadeLive(const std::string &ac, bool out) const;
         double clipGainLive(const std::string &ac) const;
         double clipReversedLive(const std::string &ac) const;
+        /** R-WARP-1: how much of `text` the clip's tag shows (LIVE, 0 … 1) — its tempo when warped, its pitch when moved. */
+        double clipTagAlpha(const std::string &ac, const std::string &text) const;
+        static std::string clipTag(const solaris::ClipModel &c);
         /** R-EDIT-1: the clip's audio-editing lines for its menu — split at the time bar, reverse, consolidate, slice. */
         void clipEditItems(const solaris::ClipModel &c, std::vector<cosmo_v2::ContextMenu::Item> &items, const artboard::Point &world);
         double groupTurn(const std::string &lg) const;
@@ -288,6 +291,8 @@ namespace solaris_ui
             // R-EDIT-1: its own fades, the fades heard (an overlap's crossfade), its gain as an amplitude, reversed — eased
             artboard::AnimatedProperty fin{0.0}, fout{0.0}, hin{0.0}, hout{0.0}, amp{1.0}, rev{0.0};
             double finLast = 0.0, foutLast = 0.0, hinLast = 0.0, houtLast = 0.0, ampLast = 1.0, revLast = 0.0;
+            std::string tagFrom, tagTo;              // R-WARP-1: "100 bpm · +7 st", cross-faded as it changes
+            artboard::AnimatedProperty tagT{1.0};
             artboard::Color hueFrom, hueTo; // its strip's colour, cross-faded when the strip's changes
             int hueLast = 0;
             bool placed = false, gone = false;

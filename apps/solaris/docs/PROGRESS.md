@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N20 part 2 — warp and pitch in the window: Warp to the song's tempo, Pitch, the clip's tempo shown** (R-WARP-1; part 1 — the grammar — is built), then N21… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N21 — a tempo map** (R-TEMPO-1), then Phase 4 (N22…) in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -494,10 +494,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       locking; a time map rigid around each onset, so an attack lands at ratio·onset whole — nothing of it ahead, where a
       plain vocoder smears it 20 ms early) and `resample` (REQ-resample-1, Kaiser sinc). 440 Hz kept to the millihertz at
       ×1.5 and ×0.6; a fifth up 659.255 Hz; deterministic.
-- [~] **N20** Warp and pitch on audio clips, BPM detected (R-WARP-1).
+- [x] **N20** Warp and pitch on audio clips, BPM detected (R-WARP-1).
       Part 1 (2026-10-16): DSP `c526f8d` — `estimateTempo` (REQ-tempo-1); Solaris — `warp`/`bpm`/`pitch` on an audio
       clip (`set`, `clip add --warp` heard on import), its own beats when warped, its span stretched once per key by the
-      DSP library (`stretchKey`), model fields. Part 2: the window.
+      DSP library (`stretchKey`), model fields. Part 2 (same day): the window — Warp / Unwarp, Tempo… typed, Pitch ▸ in a
+      clip's menu; its tag "60 bpm · +7 st" cross-faded.
 - [ ] **N21** A tempo map (R-TEMPO-1).
 **Phase 4 — open the ecosystem**
 - [ ] **N22** Device presets and the browser's Presets tab (R-PRESET-1).

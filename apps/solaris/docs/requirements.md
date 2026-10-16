@@ -2220,15 +2220,15 @@ second half reading from the start, a reversed split keeping the start, consolid
 the span's order, a loop cut anywhere, transients found in the file's order — each red. **The window**
 (`app/widgets/TimelineClipEdit.cpp`). An audio clip wide enough (four grips) and not in a folded band takes, under its
 name, a fade handle at each end — at its OWN fade — and a gain line across it: the amplitude, 0 dB a quarter of the way
-up its body, +12 dB at the top (`gainLineY`, `:108`), so a press at the clip's middle still takes the clip. Pressed
-(`clipEditZoneAt`, `:128` — a handle within a grip across and 1.5 units down; the line within one unit, between the
+up its body, +12 dB at the top (`gainLineY`, `:142`), so a press at the clip's middle still takes the clip. Pressed
+(`clipEditZoneAt`, `:162` — a handle within a grip across and 1.5 units down; the line within one unit, between the
 handles), the pointer is the value: a handle's fade from the clip as DRAWN, to the tick, never past the other fade; the
-line's level to 0.1 dB (`clipEditGesture`, `:148`); let go, ONE `set <ac>.fadeIn|fadeOut|gain=…`, the drawing left
+line's level to 0.1 dB (`clipEditGesture`, `:182`); let go, ONE `set <ac>.fadeIn|fadeOut|gain=…`, the drawing left
 where the pointer was — a refusal eases it back. The pointer says ↔ on a handle and ↕ on the line, as the press reads
 them. Each clip's fades, its fades as HEARD (`clips[].fadeInHeard/OutHeard`, so an overlap's crossfade is drawn as an X),
-its gain and its reversed mark are eased per clip (`advanceClipEdit`, `:64`); drawn (`paintClipEdit`, `:232`): the gain
+its gain and its reversed mark are eased per clip (`advanceClipEdit`, `:88`); drawn (`paintClipEdit`, `:266`): the gain
 line, what each heard fade takes away shaded with a line along it, the handles, "reversed" by the line at its right.
-Its menu (`clipEditItems`, `:282`, `app/widgets/Timeline.cpp:1192`): Split at the time bar (where the time bar is inside
+Its menu (`clipEditItems`, `:332`, `app/widgets/Timeline.cpp:1192`): Split at the time bar (where the time bar is inside
 it) · Reverse / Play forwards · Consolidate — the clips it runs into on its lane through its strip, touching or
 overlapping, "Consolidate N clips" when more than itself · Slice ▸ Every bar / beat / half beat · At its hits (not a
 comped clip) · To a kit, a slice a beat (no Slice on a loop). Ctrl+E — the keymap's `lanes.split`
@@ -2258,4 +2258,11 @@ a 2 s sine at its own 60 bpm warped into a 120 song — its 2 beats in one secon
 semitones 880.000 Hz as long, twice the same bytes; the song at 60 — two seconds; split at its own beat; refusals).
 Not covered at L2: a render at another rate (the fake decoder hands back what it was given at any rate). Mutants: the
 compile playing the file, the song's beats for a warped clip, the ratio upside down, no listening (120 always), the
-pitch never moved — each red.
+pitch never moved — each red. **The window** (`app/widgets/TimelineClipEdit.cpp`): an audio clip's menu
+(`clipEditItems`, `:361`) offers Warp to the song's tempo / Unwarp (`set <ac>.warp=true|false`), Tempo… (the rename field
+with its tempo; what is typed is ONE `set <ac>.bpm=…`) and Pitch ▸ (+12, +7, +5, +1, 0 as recorded, −1, −5, −7, −12; the
+current one marked "· now"; ONE `set <ac>.pitch=…`). The clip says its tempo when warped and its pitch when moved —
+`clipTag` (`:67`), "60 bpm · +7 st" — at its left past its fade in, above its gain line, cross-faded from what was shown
+when it changes (`advanceClipEdit`, `:88`; LIVE `clipTagAlpha`, `:80`). UI `test_a_clip_warped_from_its_menu`; shot
+`clip-warp`. Mutants: the tag snapping, Tempo… setting the pitch, a pitch item sending the wrong number, Warp always
+on — each red.
