@@ -332,7 +332,8 @@ audio devices so the user can take advantage of their devices."*
   master → speakers on device A; a headphone cue (sends) → device B; the click → device B only.
 - **R-DEV-7 The project rate is the project's.** The clock device opens at it when it can; otherwise
   the driver resamples and the transport says so.
-- **R-DEV-8 Linux first**, over the PulseAudio API (which PipeWire also serves); Windows later.
+- **R-DEV-8 Linux first**, over the PulseAudio API (which PipeWire also serves); Windows later. (**AMENDED
+  (R-DEV-9, 2026-10-16):** a native PipeWire driver beside it, for low latency; PulseAudio stays the fallback.)
 
 ## R-SET — settings — ✅ IMPLEMENTED (DR-SET-1, DR-SET-2, DR-SET-3, DR-SET-4, DR-SET-5)
 
@@ -708,13 +709,145 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 📋 SPECIFIED
+
+Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
+area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
+in the model, and drawn eased (law 14); new sound is the DSP library's (law 1); a device, a file format, a driver or
+a process is the host's (law 12).
+
+**Phase 1 — finish a track safely and deliver it**
+- **R-SAFE-1 Autosave.** While a song has unsaved edits, the service writes it beside the song every 60 s and after
+  any edit that removes something (`<song>.slp.autosave`), atomically (a temporary file, then renamed); a save or a
+  close removes it. `settings set autosave=<seconds|off>`.
+- **R-SAFE-2 Recovery.** Opening a song whose autosave is NEWER than it offers it: `project open <path>` says so
+  (`recovery: <path>.autosave from <time>`); `project recover <path>` opens the autosave as the song, unsaved;
+  `project discard-recovery <path>` deletes it. Home marks the card; the window asks Recover / Open the saved one.
+- **R-MIDI-1 MIDI files.** `pattern import <file.mid> [--track <n>] [--clip --at <b>]` makes a pattern (or a clip of
+  one) from a Standard MIDI File (type 0 or 1; notes and velocities; the file's tempo map read for the beats);
+  `pattern export <pt> <file.mid>` and `project export-midi <file.mid>` write one (a track per instrument, the
+  song's tempo). Dropping a `.mid` from the browser onto a track is the import, one line. Round trip exact to the tick.
+- **R-METER-1 Mastering meters** (R-EDM-15): the master's integrated, short-term (3 s) and momentary (400 ms)
+  loudness in LUFS (ITU-R BS.1770-4, gated), true peak in dBTP (4× oversampled), stereo correlation, and a spectrum
+  (1/6-octave, 20 Hz–20 kHz) — computed by the DSP library's meters on the audio thread without allocating,
+  published in the model while playing and printed by `render --measure` for a render. The master's meter shows
+  them (a Loudness panel opened from it); its numbers ease.
+- **R-METER-2 Strip meters** (R-PLAY-3, completed): RMS beside peak, a held peak (1.5 s, then falling), a clip
+  latch cleared by a click — on every strip and the master.
+- **R-EDM-4a A true-peak limiter**: the DSP Limiter gains `truePeak` (on: inter-sample peaks detected 4×
+  oversampled), so a render with it on never exceeds its ceiling in dBTP, measured.
+- **R-EXPORT-1 Delivery formats** (R-EDM-16): `render --out <file>` writes WAV, FLAC, MP3, OGG Vorbis or Opus by the
+  file's extension (`--format` to override), at `--rate` and `--bits` (16, 24, 32 float), with TPDF dither when
+  bits drop, and `--normalize <LUFS>` (measured integrated loudness to a target, the gain applied, the true peak
+  kept under `--ceiling`); encoders are FFmpeg's, in the host. File › Export… is a sheet for the same line.
+- **R-MIX-18 A side-chain in one gesture**: `strip duck <ch> --under <key-strip> [--amount <dB>]` inserts a
+  Compressor (fast attack, release from the tempo, ratio for the amount) on `<ch>` keyed by a sidechain send from
+  the key strip — ONE command (R-BROWSE-3's rule); right-click a strip › Duck Under ▸ <strip>.
+
+**Phase 2 — play it in**
+- **R-DEV-9 Low latency on PipeWire**: a native PipeWire output and input (beside PulseAudio, which stays the
+  fallback): buffers down to 64 frames; the driver chosen in Settings › Audio (`settings set driver=pipewire|pulse`);
+  every xrun counted and published (R-DEV-5).
+- **R-MIDI-2 A MIDI keyboard** (R-EDM-10): MIDI input devices listed (`midi devices`) and enabled in Settings
+  (ALSA sequencer, in the host); notes played sound through the ARMED instrument strip at once (`strip arm <ch>`),
+  sustain pedal honoured; `transport record` with a strip armed records them into a new note clip at the play
+  position (or into the clip under the playhead, `--overdub`), with an optional count-in and input quantize
+  (`settings set recordQuantize=<grid|off>`). The notes land exactly where they were played (the audio
+  callback's sample time, minus the output latency).
+- **R-MIDI-3 Expression lanes**: pitch bend and any CC on a note clip as a lane in the piano roll (points, like
+  automation), played into the instrument (the DSP instruments take pitch bend ±2 semitones and mod wheel →
+  their filter or vibrato); recorded from the keyboard.
+- **R-ROLL-11 Note tools**: velocity humanise and timing humanise (seeded, so a render is pure), note
+  probability (seeded per note), groove templates beside swing, scale lock (a key and a scale snap new and moved
+  notes), chord stamps (a chord placed in one click), legato (notes stretched to the next), and
+  `pattern arpeggiate <pt> --rate --mode up|down|updown|random --octaves` (a MIDI effect written as notes).
+- **R-INST-6 Glide**: the Basic Synth gains a mono / legato mode with portamento time (DSP).
+- **R-ARR-1 Markers and sections**: `marker add <name> --at <b> [--length <b>]`, rename, move, delete; drawn on the
+  ruler, clicked to jump, double-clicked to loop the section; the model lists them.
+- **R-ARR-2 Time edits across the song**: `time insert --at <b> --length <b>` and `time delete --from <b> --to <b>`
+  move every clip, automation point, marker and loop after it — ONE edit.
+- **R-ARR-3 Lane groups**: lanes folded into a named group (`lane group <ln>… --name`), the group collapsed or
+  opened (eased); its clips moved together.
+
+**Phase 3 — work with audio**
+- **R-REC-1 Record audio** (R-EDM-11): an input port monitored through an armed audio strip (`strip arm <ch>
+  --input <port>`, `set <ch>.monitor=on|off|auto`); `transport record` writes the input to a new WAV beside the song
+  and makes a clip of it where recording began, sample-aligned (the input latency compensated); punch in/out
+  (`transport punch <from> <to>`) and loop recording making TAKES (R-REC-2).
+- **R-REC-2 Takes and comping**: each pass over a loop is a take on the clip; the comp is chosen by ranges
+  (`clip comp <ac> --take <n> --from --to`), the takes shown under the clip.
+- **R-EDIT-1 Audio editing on the lanes** (R-EDM-12): `clip split <ac> --at <b>`; a clip's fades and gain dragged
+  on the clip (its corners and a gain line; `set <ac>.fadeIn/.fadeOut/.gain` exist); overlapping clips on a lane
+  crossfade by their fades; `set <ac>.reverse=on`; `clip consolidate <ac>…` (bounce in place to one audio clip);
+  `clip slice <ac> --every <b>|--transients` making a Sampler kit or clips.
+- **R-WARP-1 Time-stretch** (R-EDM-13, R-CLIP-5): an audio clip follows the song's tempo (`set <ac>.warp=on`, its
+  own BPM detected on import or set, `.bpm`), pitch kept; `set <ac>.pitch=<semitones>` shifts pitch, tempo kept —
+  a DSP time-stretcher (phase vocoder with transient handling), rendered deterministically.
+- **R-TEMPO-1 A tempo map** (R-EDM-14): `tempo add --at <b> --bpm <v> [--ramp]`, the ruler and every beat↔second
+  conversion follow it; render, playback, the metronome, warp and MIDI export agree; automating `project.bpm`
+  writes it.
+
+**Phase 4 — open the ecosystem**
+- **R-PRESET-1 Device presets** (R-EDM-20): `preset save <dv> <name>`, `preset load <dv> <name>`, a preset store
+  per device type in the machine's data folder (factory presets shipped beside it); the browser's Presets tab
+  lists and drops them (R-BROWSE's preset half).
+- **R-PRESET-2 Song templates**: `project new <path> --template <name>`; File › Save as Template.
+- **R-PRESET-3 A sample library**: tags and favourites on files (`sample tag <file> <tag>`), search by name and tag
+  (`browse --search`), in the browser.
+- **R-VST-6 Hosting other makers' VST3** (R-EDM-17): `plugins scan` lists `~/.vst3` and the system folders;
+  `device add <ch> --plugin <id>` loads one, each in its OWN process (`solaris-plughost`), audio exchanged through
+  shared memory a block at a time; a plugin that crashes or overruns its budget goes offline (its strip passes
+  dry, said in the model) and never takes the song with it; its latency compensated (R-MIX-17); its parameters
+  addressable and automatable; its own editor in a window (the host's X11 embed).
+- **R-CTRL-1 MIDI learn**: right-click a number › Learn MIDI CC — the next CC moved binds it (`map add <cc>
+  <address>`); mappings are the machine's settings; the transport keys of a keyboard (MMC) work.
+- **R-CTRL-2 Control surfaces**: a Mackie Control / HUI surface's faders, pans, mutes, solos and transport follow
+  and move the mixer.
+- **R-PERF-1 A CPU meter**: the audio thread's load (DSP time over the block's time) and per strip, published and
+  drawn in the song bar.
+- **R-PERF-2 A multi-core engine**: strips that do not feed each other render in parallel on a worker pool,
+  byte-identical to one thread (R-RENDER-1).
+- **R-PERF-3 Freeze / bounce** (R-EDM-18): `strip freeze <ch>` renders the strip to audio and plays that instead
+  (its devices idle); `strip unfreeze`; `strip bounce <ch>` makes the audio a clip on a new strip.
+- **R-DEV-1/2/4 Several devices** (R-EDM-19, P2): a port on a second device played clocked to the first,
+  drift-corrected (R-DEV-2), latency aligned (R-DEV-4).
+
+**Phase 5 — grow the sound and the craft**
+- **R-INST-7 Wavetable synth** · **R-INST-8 FM synth (4 operators)** · **R-INST-9 Multi-sample instrument**
+  (SFZ import, velocity layers, round robin) · **R-INST-10 Granular sampler** · **R-INST-11 808** (a tuned bass
+  drum with glide and drive) — each a DSP instrument with a registry entry (law 1).
+- **R-FX-6 Multiband compressor** · **R-FX-7 Gate / expander** · **R-FX-8 Transient shaper** · **R-FX-9 De-esser**
+  · **R-FX-10 Saturator / bitcrusher** · **R-FX-11 Phaser** · **R-FX-12 Flanger** · **R-FX-13 Stereo imager**
+  (width, mono below a frequency) · **R-FX-14 Convolution reverb** (an impulse-response file) · **R-FX-15 Pitch
+  shifter** · **R-FX-16 Vocoder** (a sidechain carrier) · **R-FX-17 Tuner** (a meter, not a sound) — each a DSP
+  effect with a registry entry.
+- **R-MIX-19 Group / VCA faders**: a VCA moves the gain of the strips assigned to it, adding its dB.
+- **R-MIX-20 Per-strip tools**: phase invert, width, mono check on the master; solo-safe on buses.
+- **R-VER build** (R-VER-1…4, specified): versions of a song.
+- **R-COLLECT-1 Collect and save**: `project collect` copies every file the song uses into its folder and rewrites
+  the paths; a relink window for missing files (`clip relink <ac> <file>`, or a folder searched).
+- **R-LAUNCH-1 A clip launcher**: a session grid (scenes × tracks) whose slots start in time with the song, beside
+  the arrangement; launched clips recorded into the arrangement.
+- **R-VIDEO-1 A video lane**: a video file shown in a window, synced to the transport (decoded by the host's
+  FFmpeg), with an offset; a render can carry it into the export.
+- **R-COLLAB-1 Sharing a song through a folder**: no server — a song saved into a shared (or Git) folder; when the
+  file changed under an open song, its edits and the other's are merged node by node (by id), a conflict on one
+  node asked about.
+- **R-ACCESS-1 Accessibility**: a UI scale setting (eased), a high-contrast theme, every control's name and value
+  published for assistive technology (AT-SPI through the host), all of it reachable from the keyboard.
+- **R-ACCESS-2 Localisation**: every UI string from a table; a language setting.
+- **R-ASSIST-1 Analysis tools (signal processing, no AI model)**: harmonic / percussive separation of an audio
+  clip into two clips; monophonic audio-to-MIDI (pitch tracking); chord detection of a clip or the song
+  (chroma), shown on the ruler.
+
 ## Reserved areas — 📋 SPECIFIED, not scheduled
 
 - **R-REC** recording from input ports into the armed strip, sample-aligned (was SR-REC-1..3,
-  SR-ROUTE-4).
+  SR-ROUTE-4). (**Specified 2026-10-16 — R-REC-1/2 in R-PRO.**)
 - ~~**R-AUTO** automation curves on any registry parameter and strip gain/pan (was SR-AUTO-1..3).~~
   Specified 2026-10-09 — see R-AUTO above.
-- **R-MIDI** CC lanes, per-note expression, SMF import/export (was SR-MIDI-1..3).
+- **R-MIDI** CC lanes, per-note expression, SMF import/export (was SR-MIDI-1..3). (**Specified 2026-10-16 —
+  R-MIDI-1/2/3 in R-PRO.**)
 
 ---
 

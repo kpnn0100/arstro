@@ -357,3 +357,25 @@ User's direction (verbatim, condensed):
 - Became: R-INST-1/2 amended, R-SVC-12 in [`../REQUIREMENTS.md`](../REQUIREMENTS.md); ledger tasks I1… in
   [`PROGRESS.md`](PROGRESS.md).
 
+### Round 8 — 2026-10-16 — "implement all": a professional DAW
+
+- User: *"implement all"* — every feature of [`pro-daw-analysis.md`](pro-daw-analysis.md) (P0, P1, P2).
+- Decided without asking (each one line to change), recorded so nobody re-decides them:
+  - **The analysis's phase order** (§4) is the build order; each phase leaves the app usable end to end.
+  - **PipeWire is the low-latency driver.** JACK is not installed on the machine; PipeWire serves JACK clients
+    anyway. PulseAudio stays the fallback (R-DEV-8 amended).
+  - **MIDI input is ALSA's sequencer**, in the host; tests drive a fake MIDI source through the same seam.
+  - **Encoders are FFmpeg's** (flac, libmp3lame, libvorbis, libopus are present), in the host — the core
+    still carries no codec (law 12).
+  - **Other makers' plugins run out of process** (`solaris-plughost`, one per plugin): shared-memory audio a
+    block at a time, a crash or an overrun takes the plugin offline, never the song.
+  - **No server and no AI model.** Collaboration is a shared (or Git) folder with a node-by-node merge;
+    the assistive tools are signal processing (harmonic / percussive separation, monophonic pitch tracking,
+    chroma chords) and say so.
+  - **What cannot be tried on this machine is said, not claimed**: a real MIDI keyboard, a control surface, a
+    second audio device — each is built against a fake through the host seam, tested there, and its live check
+    written down as owed.
+- Became: R-PRO (R-SAFE, R-MIDI-1…3, R-METER, R-EDM-4a, R-EXPORT, R-MIX-18…20, R-DEV-9, R-ROLL-11, R-INST-6…11,
+  R-ARR, R-REC-1/2, R-EDIT, R-WARP, R-TEMPO, R-PRESET, R-VST-6, R-CTRL, R-PERF, R-FX-6…17, R-COLLECT, R-LAUNCH,
+  R-VIDEO, R-COLLAB, R-ACCESS, R-ASSIST) in [`../REQUIREMENTS.md`](../REQUIREMENTS.md); ledger tasks N1… in
+  [`PROGRESS.md`](PROGRESS.md).

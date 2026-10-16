@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — M3: the professional-DAW analysis.*
+*Last updated: 2026-10-16 — N0: R-PRO specified; N1… queued.*
 
 ---
 
 ## NEXT
 
-**► Ask the user which phase of `docs/pro-daw-analysis.md` §4 comes first** (it suggests phase 1: autosave, MIDI files, mastering meters, export formats, the one-gesture side-chain). B13+ (R-EDM-10…20) folds into those phases. Owed live checks: D-5, D-9, the resize cursor. B13+ wait. Owed live checks: D-5, D-9, the resize cursor. B13+ wait (ask). Owed live checks: D-5, D-9.
+**► N1 — autosave and recovery** (R-SAFE), then N2… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor. B13+ wait. Owed live checks: D-5, D-9, the resize cursor. B13+ wait (ask). Owed live checks: D-5, D-9.
 
 ---
 
@@ -385,6 +385,63 @@ history like cosmo".* Requirements: R-SET-5, R-SET-6 (R-SET-1, R-SET-3 amended);
 - [x] **M3** A full analysis — what a professional DAW needs that Solaris lacks — in `docs/pro-daw-analysis.md`.
       — P0 blockers (autosave, a MIDI keyboard, recording, low-latency audio, other makers' plugins, warp and tempo,
       MIDI files, mastering meters + a true-peak limiter, export formats), P1, P2, and a five-phase order.
+
+### N — a professional DAW: "implement all" of the analysis (user request, 2026-10-16; discussion round 8; R-PRO)
+One task a commit, in this order. A DSP half is its own commit in the submodule first.
+**Phase 1 — finish a track safely and deliver it**
+- [ ] **N1** Autosave and recovery (R-SAFE-1/2).
+- [ ] **N2** MIDI files: import, export, a `.mid` dropped (R-MIDI-1).
+- [ ] **N3** DSP: loudness (BS.1770 gated), true peak, correlation, spectrum meters (R-METER-1's DSP half).
+- [ ] **N4** The master's loudness meters in the model and the window; strip meters RMS / held peak / clip latch
+      (R-METER-1, R-METER-2).
+- [ ] **N5** DSP: the Limiter's true-peak mode (R-EDM-4a).
+- [ ] **N6** Delivery formats: FLAC / MP3 / OGG / Opus, rate, bits, dither, normalise to LUFS; File › Export…
+      (R-EXPORT-1).
+- [ ] **N7** `strip duck --under`: a side-chain in one gesture (R-MIX-18).
+**Phase 2 — play it in**
+- [ ] **N8** The PipeWire driver, xruns counted (R-DEV-9).
+- [ ] **N9** A MIDI keyboard: devices, arm, play live, record into a clip, count-in, input quantize (R-MIDI-2).
+- [ ] **N10** DSP: pitch bend and mod wheel in the instruments; glide / legato in the Basic Synth (R-MIDI-3's DSP
+      half, R-INST-6).
+- [ ] **N11** Expression lanes: pitch bend and CC on a note clip, in the roll, recorded (R-MIDI-3).
+- [ ] **N12** Note tools: humanise, probability, grooves, scale lock, chord stamps, legato, arpeggiate (R-ROLL-11).
+- [ ] **N13** Markers and sections (R-ARR-1).
+- [ ] **N14** Time insert / delete across the song (R-ARR-2).
+- [ ] **N15** Lane groups (R-ARR-3).
+**Phase 3 — work with audio**
+- [ ] **N16** Record audio: arm, monitor, record, punch, loop takes (R-REC-1).
+- [ ] **N17** Takes and comping (R-REC-2).
+- [ ] **N18** Audio editing on the lanes: split, fades and gain drawn, crossfades, reverse, consolidate, slice
+      (R-EDIT-1).
+- [ ] **N19** DSP: a time-stretcher and pitch shifter (phase vocoder, transients) (R-WARP-1's DSP half).
+- [ ] **N20** Warp and pitch on audio clips, BPM detected (R-WARP-1).
+- [ ] **N21** A tempo map (R-TEMPO-1).
+**Phase 4 — open the ecosystem**
+- [ ] **N22** Device presets and the browser's Presets tab (R-PRESET-1).
+- [ ] **N23** Song templates (R-PRESET-2).
+- [ ] **N24** A sample library: tags, favourites, search (R-PRESET-3).
+- [ ] **N25** VST3 hosting: scan, an out-of-process host, process, latency, parameters (R-VST-6).
+- [ ] **N26** VST3 hosting: a plugin's own editor window; crash and overrun → offline (R-VST-6).
+- [ ] **N27** MIDI learn (R-CTRL-1).
+- [ ] **N28** Control surfaces: Mackie Control / HUI (R-CTRL-2).
+- [ ] **N29** A CPU meter (R-PERF-1).
+- [ ] **N30** A multi-core engine, byte-identical (R-PERF-2).
+- [ ] **N31** Freeze and bounce (R-PERF-3).
+- [ ] **N32** Several audio devices, drift-corrected (R-DEV-1/2/4).
+**Phase 5 — grow the sound and the craft**
+- [ ] **N33** DSP instruments: wavetable, FM, multi-sample (SFZ), granular, 808 (R-INST-7…11) — a commit each.
+- [ ] **N34** DSP effects: multiband, gate, transient, de-esser, saturator, phaser, flanger, imager, convolution,
+      pitch shifter, vocoder, tuner (R-FX-6…17) — a commit each.
+- [ ] **N35** Group / VCA faders (R-MIX-19).
+- [ ] **N36** Phase invert, width, mono check, solo-safe (R-MIX-20).
+- [ ] **N37** Versions of a song (R-VER-1…4).
+- [ ] **N38** Collect and save; relink (R-COLLECT-1).
+- [ ] **N39** A clip launcher (R-LAUNCH-1).
+- [ ] **N40** A video lane (R-VIDEO-1).
+- [ ] **N41** Sharing through a folder: merge by node (R-COLLAB-1).
+- [ ] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1).
+- [ ] **N43** Localisation (R-ACCESS-2).
+- [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
