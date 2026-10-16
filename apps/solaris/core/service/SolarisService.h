@@ -67,6 +67,8 @@ namespace solaris
             /** R-REC-1: a stream from a capture device — what an armed audio strip monitors and records. Empty = this
              *  build cannot record audio. */
             std::function<std::unique_ptr<IAudioIn>()> audioIn;
+            /** … through a named driver ("pipewire"), as `audioOutFor`; null when the build has none — `audioIn` the fallback. */
+            std::function<std::unique_ptr<IAudioIn>(const std::string &driver)> audioInFor;
             std::string settingsPath; // the machine's settings file ("" = not persisted)
             std::string recentsPath;  // the recent songs, one path per line ("" = not persisted)
         };

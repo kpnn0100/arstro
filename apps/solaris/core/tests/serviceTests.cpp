@@ -99,11 +99,13 @@ namespace
     {
         std::shared_ptr<Capture> cap;
         std::string mode = "loop", *device = nullptr;
+        bool fails = false; // R-DEV-9: a PipeWire capture that links nowhere
         double inLat = 0, outLat = 0;
         long long delay = 0, start = -1, got = 0;
         int ch = 2, rate = 48000;
-        bool open(const std::string &dev, int r, int channels, int, std::string &) override
+        bool open(const std::string &dev, int r, int channels, int, std::string &err) override
         {
+            if (fails) { err = "PipeWire: the stream linked to no input within 2 s"; return false; }
             ch = channels;
             rate = r;
             delay = std::llround((outLat + inLat) * r);
@@ -226,6 +228,15 @@ namespace
                     i->device = &inDevice;
                     return std::unique_ptr<IAudioIn>(std::move(i));
                 };
+            h.audioInFor = [this](const std::string &driver) -> std::unique_ptr<IAudioIn> { // R-DEV-9: a capture through PipeWire
+                if (driver != "pipewire" || pipewire.empty() || !canRecord) return nullptr;
+                auto i = std::make_unique<FakeIn>();
+                i->cap = capture;
+                i->mode = inMode;
+                i->device = &inDevice;
+                i->fails = pipewire == "fail";
+                return i;
+            };
             h.listMidiInputs = [](std::vector<MidiPort> &out, std::string &) {
                 out = {MidiPort{"Keys", "Keys"}, MidiPort{"Pads", "Pads"}};
                 return true;
@@ -2595,6 +2606,16 @@ static void test_an_armed_audio_line_is_monitored_as_set()
     r.ok("transport stop");
     assert(during < 1e-4f);
     r.ok("strip arm none");
+    // R-DEV-9: the driver set to PipeWire and its capture linking nowhere — said once, recorded through PulseAudio
+    r.fake.pipewire = "fail";
+    r.ok("settings set driver=pipewire");
+    r.events.clear();
+    r.ok("strip arm " + g);
+    bool said = false;
+    for (const auto &e : r.events) said |= contains(e, "recording through PulseAudio: PipeWire: the stream linked to no input");
+    assert(said && r.svc.model().armed == g);
+    r.ok("strip arm none");
+    r.ok("settings set driver=pulse");
     Run none;
     none.fake.canRecord = false;
     SolarisService deaf(none.fake.host()); // a host with no capture

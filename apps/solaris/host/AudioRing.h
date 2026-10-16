@@ -31,6 +31,7 @@ namespace solaris_host
             mXruns.store(0);
             mPrimed.store(false);
             mDrop.store(false);
+            mDropped.store(0);
         }
         /** Frames waiting to be heard. */
         int filled() const
@@ -88,6 +89,23 @@ namespace solaris_host
             mTail.store(t, std::memory_order_release);
             return n;
         }
+        /** R-REC-1: a writer that may not wait — a capture's (a sound server's realtime callback, or its read thread):
+         *  what fits goes in, the rest is DROPPED and counted (`dropped`). Returns the frames that went in. */
+        int push(const float *x, int frames)
+        {
+            const int n = std::min(std::max(0, capacity() - filled()), frames);
+            size_t h = mHead.load(std::memory_order_relaxed);
+            for (int i = 0; i < n; ++i)
+            {
+                std::memcpy(&mData[h * (size_t)mChannels], x + (size_t)i * (size_t)mChannels, sizeof(float) * (size_t)mChannels);
+                h = (h + 1) % mCap;
+            }
+            mHead.store(h, std::memory_order_release);
+            if (n > 0) mPrimed.store(true, std::memory_order_release);
+            if (n < frames) mDropped.fetch_add(frames - n, std::memory_order_relaxed);
+            return n;
+        }
+        long long dropped() const { return mDropped.load(std::memory_order_relaxed); }
         /** The writer: drop what is queued (the reader takes it at its next read); no xrun until written again. */
         void clear()
         {
@@ -100,7 +118,7 @@ namespace solaris_host
         size_t mCap = 1;
         std::vector<float> mData;
         std::atomic<size_t> mHead{0}, mTail{0};
-        std::atomic<long long> mXruns{0};
+        std::atomic<long long> mXruns{0}, mDropped{0};
         std::atomic<bool> mPrimed{false}, mDrop{false};
     };
 }

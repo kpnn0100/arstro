@@ -137,7 +137,7 @@ mixer and renumbers the mixer 0…n−1 (`placeStrip`, `:61`; `case K::StripMove
 renumbers mixers — an order never ties. A new project is `newProject` (`model/Project.cpp:172`): Sources (`mx_1`), Buses (`mx_2`)
 holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the master (R-MIX-3).
 Guarded by `test_routing_only_goes_forward` and `test_forward_is_processing_order_and_moves_renumber`
-(`core/tests/serviceTests.cpp:2990`: a bus made on Buses goes before Main and feeds it; a same-mixer route
+(`core/tests/serviceTests.cpp:3011`: a bus made on Buses goes before Main and feeds it; a same-mixer route
 forward is taken, backward refused naming both ends; `strip move` that would point one back refused;
 `--order 0` first and renumbered; mutant checked: the old later-mixer rule refuses the new bus's
 default route). The same rule is PUBLISHED: `targetsOf` (`model/Project.cpp:871`) lists what a strip
@@ -654,7 +654,7 @@ document's Keyboard section is generated from the same table. In the window `App
 press (`comboText`) and looks it up there: while a roll has the keys (R-ROLL-8) its keyboard first — `PianoRoll::action`
 (`app/widgets/PianoRoll.cpp:318`), which declines a selection's action with no selection — then the song's
 (`songAction`, `:441`), so the roll's keys shadow the song's only while it uses them. The host names the KEY, not the
-character: GTK's keysym with no modifier (`linux_main.cpp:176`, `keyCodeOfKeysym` in `app/KeyInput.h`), so Shift+1 is
+character: GTK's keysym with no modifier (`linux_main.cpp:180`, `keyCodeOfKeysym` in `app/KeyInput.h`), so Shift+1 is
 "Shift+1"; what the press types follows as a Text event (D-9). L2 `test_keys_are_settings`; UI
 `test_the_keys_are_the_machines` (re-keyed by a script, the window follows; the roll's keys shadow the song's; the
 host's mapping). Mutants: no conflict refusal, the window reading the defaults instead of the model — both seen red.
@@ -1096,7 +1096,7 @@ level. What drives each: a tag over the fader — `auto au_1`, `= ch_3.gain`, `=
 `:1193`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
 in and out (200 ms) and its text cross-fades when the formula changes (`:668`).
 
-Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1408`): stopped, `live` is
+Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1419`): stopped, `live` is
 `eval`'s number at the position; playing (a fake clock device), a −2 dB-a-beat ramp is within 0.1 dB of the
 curve at the heard position at beats 2…12 and falling, a link (`=ch_2.gain / 2`) exactly half of it, a device
 formula `1000 + 500 * sin(beat)` within 25 Hz; after a structural edit while playing the new engine's order is
@@ -1129,7 +1129,7 @@ pill over the label (`ParamIds`, `app/widgets/DevicePanel.cpp:146`); its header 
 dock's faders, pans, sends and master (DR-MIX-16; a choice row has no "as Formula" — no formula reads a
 choice); Copy ID on a clip (`app/widgets/Timeline.cpp:997`), a strip's and a mixer tab's menu in the dock; Copy ID
 and Copy as Formula (`=au_1`) on an automation row (`app/widgets/TimelineAuto.cpp:560`). The clipboard is the
-HOST's (the core has none, R-SVC-4): `App::onCopy`, which `linux_main.cpp:225` gives GTK's CLIPBOARD and
+HOST's (the core has none, R-SVC-4): `App::onCopy`, which `linux_main.cpp:229` gives GTK's CLIPBOARD and
 PRIMARY selections and the test rig records (`Rig::copied`). A copy says so: `App::copy` (`app/App.cpp:212`)
 toasts "Copied dv_1.filter.cutoff", outlined in the accent (a refusal's toast stays red). When hosting lands,
 a third-party VST3's parameter list (R-VST-6) builds a `ParamTarget` per row and offers this same menu.
@@ -1239,13 +1239,13 @@ repeat not folded — both seen red.
 ### DR-SVC-8 Composition is agent-sized (R-SVC-8)
 Built from the audit of an agent's 16-bar song (110 commands, 64 single `note add`s, every id guessed,
 edits lost between calls, comment lines reprinting ids). The guide is `docs/AGENTS.md`.
-- **A session that lasts.** `solaris-cc shell [--song <f>]` (`cli/main.cpp:165`) reads stdin lines into
+- **A session that lasts.** `solaris-cc shell [--song <f>]` (`cli/main.cpp:169`) reads stdin lines into
   ONE service — the open song, its ids and its undo history last the session; `--song` opens the file
   or makes it when it is not there; a refusal is reported and the session goes on (exit 3 at the end).
-  Every run ends in `finish` (`:155`): a song left with unsaved edits is named on stderr and the run
+  Every run ends in `finish` (`:159`): a song left with unsaved edits is named on stderr and the run
   exits **4**, unless `--discard`.
 - **Scripts that say where.** A refusal prints `refused: line N: …` — the script's own line number, or
-  the chained command's (`run`, `:143`); `--keep-going` runs past refusals and still exits 3 (`:212`).
+  the chained command's (`run`, `:147`); `--keep-going` runs past refusals and still exits 3 (`:216`).
   `parseCommand` drops a `#` that starts a word outside quotes (`withoutComment`,
   `core/service/Command.cpp:425`) — `F#3` stays a pitch; a comment or blank line clears the output
   (`core/service/SolarisService.cpp:59`), so nothing is printed twice.
@@ -1284,7 +1284,7 @@ edits lost between calls, comment lines reprinting ids). The guide is `docs/AGEN
   rounding of a bound is that bound, so a dragged point at the top edge still lands).
 - The API document gains the Notation section and each kit's pads (`core/service/ApiDoc.cpp:145`, `:81`).
 
-Guarded by `solaris_service` (`core/tests/serviceTests.cpp:1484` … `:2851`: the notation tables; comment
+Guarded by `solaris_service` (`core/tests/serviceTests.cpp:1495` … `:2872`: the notation tables; comment
 lines print nothing; every made id printed and announced; notes add by name, a bad token, an unknown pad,
 chords, one undo step; steps and pattern edits; the lane rule and `--count`; reading back, out-of-range
 refusals) and `solaris_cli_session` (`tests/cli_session.cmake`: line numbers, `--keep-going`, exit 4,
@@ -1349,9 +1349,9 @@ the chords pumping 10.3 dB on the kick; the kick on all 128 drop beats within 0.
 A minor; the sub to the air. ctest `edm_track_measured` (label `long`, ~1 min).
 
 ### DR-SVC-5 The control channel and attach (R-SVC-5, R-SVC-6)
-**The window.** `solaris --control <socket> [song.slp]` (`linux_main.cpp:254`) builds a `ControlServer`
+**The window.** `solaris --control <socket> [song.slp]` (`linux_main.cpp:258`) builds a `ControlServer`
 on the window's own service after any song opened and polls it from its own 16 ms GLib timeout
-(`onControl`, `:157`; `:268`) — not the frame clock, so a minimised window is still drivable. The
+(`onControl`, `:161`; `:272`) — not the frame clock, so a minimised window is still drivable. The
 wire is cosmo's `ControlChannel` **compiled in place** (`apps/cosmo/ControlChannel.cpp:382` `poll`,
 `:402` `broadcast`; target `solaris_control`, `host/CMakeLists.txt:29`): a non-blocking Unix line
 socket that moves lines and never parses them, replaces a stale socket node, refuses any other file
@@ -1370,13 +1370,13 @@ order, one write may carry many. **`wait` is the loop's** (`:77`): a valid `wait
 up — instead of sleeping the GTK thread as the service's own `wait` would (`core/service/
 ServiceTransport.cpp:131`); one the service would refuse is handed to it and refused at once.
 
-**attach** (`cli/Attach.cpp:55`, hooked at `cli/main.cpp:91` before any service is built — it builds
+**attach** (`cli/Attach.cpp:55`, hooked at `cli/main.cpp:93` before any service is built — it builds
 none): lines from `--script`, chained ` : ` args, or stdin; sends ONE line, waits for its `[ok]`
-(matched by echo) or `[refused]`, then the next (`:155`–`:189`), so a script ends when its last answer
+(matched by echo) or `[refused]`, then the next (`:159`–`:193`), so a script ends when its last answer
 arrives, never on a quiet-period guess. It prints what solaris-cc prints where solaris-cc prints it:
 output on stdout, event lines on stderr (always — watching is the point), `refused: <why>` and exit 3
-on a refusal (`:213`); `--follow` keeps printing events; `--timeout` (300 s). Empty lines are not sent:
-the channel delivers none, so none would be answered (`:184`).
+on a refusal (`:217`); `--follow` keeps printing events; `--timeout` (300 s). Empty lines are not sent:
+the channel delivers none, so none would be answered (`:188`).
 
 **Proof.** `solaris_control` (`tests/faces/controlTests.cpp`, no display needed): the wire for eight
 lines — events, outputs, refusals, a comment, the stable dump — equals what a second service given
@@ -1410,13 +1410,13 @@ audition) when it changed (≤ 20/s), because `pump()` moves those with no revis
 `docs/ntwb-api.json` (ctest `solaris_ntwb_api_current`, `cli/CMakeLists.txt:20`); it points to
 `docs/API.md` for the grammar instead of copying it.
 
-**`solaris-cc ntwb`** (`cli/NtwbMain.cpp:192`): `api`; `install [--data-dir D] [--web-dir W]` (`:83`)
+**`solaris-cc ntwb`** (`cli/NtwbMain.cpp:196`): `api`; `install [--data-dir D] [--web-dir W]` (`:85`)
 writes `D/solaris/{ntwb.json, api.json, web/}` (D defaults to `$XDG_DATA_HOME/ntwb/apps`) — the web
-UI plus what it borrows, copied not forked: cosmo's `js/core/signal.js` + `dom.js` (`:99`) and cosmo's
-typeface (`:105`); the manifest is `single: true` (`:136`) — one engine on the clock device, its pages
-sharing the song; `uninstall [--data-dir D]`; `serve` (`:148`) — the service with the window's host
+UI plus what it borrows, copied not forked: cosmo's `js/core/signal.js` + `dom.js` (`:101`) and cosmo's
+typeface (`:107`); the manifest is `single: true` (`:138`) — one engine on the clock device, its pages
+sharing the song; `uninstall [--data-dir D]`; `serve` (`:150`) — the service with the window's host
 (files, devices, the clock device, the machine's settings and recents), the adapter, and the loop that
-owns the clock: `client.poll(8)`, `pump()`, `tick()` (`:180`).
+owns the clock: `client.poll(8)`, `pump()`, `tick()` (`:184`).
 
 **The page** (`web/`, no build step, MVVM): `js/model/session.js` (NTWB → signals; intents → lines),
 `js/vm/song.js` (the shared shapes — the lanes' rows by Timeline's rule (`:53`), clips with their
@@ -1487,7 +1487,7 @@ puts Main and a cue sent straight to Phones at 96 together; a key from a limited
 audio 96 to meet it, and a limiter before the keyed compressor delays the key 96 — the keyed strip's output
 exactly the unlimited one 96 later (and it does duck). Mutants: every delay sized 0 → the twins fail;
 no key delay in the rack → the key check fails. Service (`test_latency_is_compensated_and_a_render_starts_on_the_beat`,
-`core/tests/serviceTests.cpp:2915`): two strips of one tone, a limiter on one — each stem from beat 0 and
+`core/tests/serviceTests.cpp:2936`): two strips of one tone, a limiter on one — each stem from beat 0 and
 equal, the mix exactly their sum and equal to the render with no limiter; a master limiter's render, port
 and stems byte-identical to none (under its ceiling it is exactly its delay); `--to` exact; live, the
 device's frames are the render 96 later; a lookahead set to 5 ms WHILE playing keeps the twins met — the
@@ -1503,7 +1503,7 @@ mix is at lag 0.
 `core/service/ServiceEdit.cpp:521`) puts the lane at row `index` (0 = the top) and renumbers every lane
 0…n−1 in the new order — one edit, one undo step; an index past the last row or an unknown lane is
 refused. The lanes draw it through Interstellar's `AnimatedRows`, keyed by lane, so the rows slide
-(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:3026`: to the top and back,
+(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:3047`: to the top and back,
 renumbered, refused out of range, undone) and, drawn, by `test_instrument_drop_and_clip_drag`
 (`app/tests/ui/uiTests.cpp:492`: a lane moved from a shell slides to the top with its clip, caught mid-tween).
 
@@ -1580,7 +1580,7 @@ instrument dropped from the browser onto a track asks for a lane of its own (`--
 
 Guarded by `solaris_model` (`model/tests/modelTests.cpp:369`: the four refusals; `tracks` read, refused
 other than `on`, written in the canonical text), `solaris_service` (`test_instrument_tracks`,
-`core/tests/serviceTests.cpp:1745`; `test_a_song_from_before_tracks_adopts_them`, `:2811`) and
+`core/tests/serviceTests.cpp:1756`; `test_a_song_from_before_tracks_adopts_them`, `:2832`) and
 `solaris_app_ui` (`test_a_lane_is_an_instruments_track`, `app/tests/ui/uiTests.cpp:236`: a rename
 followed, a clip dragged onto another track re-routed with its colour caught mid-ease, Track of ▸ and
 Plain Lane caught mid-fade, a browser drop onto a track → `--lane new`). Mutants seen red, then
@@ -1780,7 +1780,7 @@ cursorAt` (`app/widgets/ProjectScreen.cpp:20`) asks every drag in hand first, th
 `App::cursor` (`app/App.cpp:398`) gives the arrow while a modal is open (a menu, a dialog, the settings, the history
 tree) or off the song, else the screen's answer at the last pointer position (`App::pointer` keeps it). The GTK host
 asks after every pointer event and, when it changed, sets the window's cursor by name (`showCursor`,
-`linux_main.cpp:83`) — the OS's own cursors, which do not ease. UI `test_the_pointer_says_a_drag_resizes` (every grip;
+`linux_main.cpp:87`) — the OS's own cursors, which do not ease. UI `test_the_pointer_says_a_drag_resizes` (every grip;
 a clip's end held off the edge; a window over the lanes; a modal). Mutants: no clip-end zone, a resize in hand
 forgetting its cursor, a modal not the arrow — all seen red. The GTK half is compiled and read, not driven live (D-5).
 
@@ -1959,7 +1959,7 @@ else `settings countIn`, 0…4 bars) is a pre-roll of silence clicked on the son
 the engine waiting (`core/Player.cpp:439`), aligned as playing is; while it runs `heard` counts back to the start, so
 a key struck during it lands before the take and is dropped (half a beat early is the downbeat). `transport stop`
 lands it — an EDIT, so dispatch snapshots, validates and records one undo, labelled "Record" (`commitRecording`,
-`core/service/ServiceInput.cpp:218`): ons paired with offs (an on again ends the last; still held, to the stop),
+`core/service/ServiceInput.cpp:226`): ons paired with offs (an on again ends the last; still held, to the stop),
 starts on `settings recordQuantize` (off, 1/4 … 1/32), then a new note clip on the strip's track from the bar the
 take began in, whole bars long (pattern "<strip> take"), or with `--overdub` notes added into the strip's clip under
 the start (wrapped where it repeats; a pitch struck where one already starts keeps the longer). Nothing played lands
@@ -2097,11 +2097,11 @@ never blocks (what has not arrived is silence, counted by `missed`), `latency()`
 <device>:<channel>`) and `monitor` (`auto` | `on` | `off`) are the song's (`#atrack … input=prt_2 monitor=off`, written
 when set; checked: the input an input port, `model/Project.cpp:989`), set by `set <ch>.input=<port>|none` /
 `set <ch>.monitor=` (`core/service/SolarisService.cpp:833`). **Arming** (`strip arm <ch> [--input <port>]`,
-`core/service/ServiceInput.cpp:436`): an audio line arms for its input — `--input` sets it first, and only then is the
+`core/service/ServiceInput.cpp:444`): an audio line arms for its input — `--input` sets it first, and only then is the
 line an edit; with no input it is refused naming the song's input ports (or `port add`); one strip armed at a time, as
-the keyboard's. **Monitoring** (`monitorHears`, `:97`): `on` heard whenever armed, `off` never, `auto` while stopped or
+the keyboard's. **Monitoring** (`monitorHears`, `:105`): `on` heard whenever armed, `off` never, `auto` while stopped or
 recording — not while the song plays back. Stopped, the input monitor (the song's mix without its clips, R-MIDI-2's)
-plays it; playing, the song's player does — the input opened beside the output (`attachInput`, `:104`; `openInput`,
+plays it; playing, the song's player does — the input opened beside the output (`attachInput`, `:112`; `openInput`,
 `:82`, on the port's device). A change of `.monitor` on the armed strip is heard at once (`:855`). **The path.** Each
 cycle the player reads a block of the input before it renders (`Player::input`, `core/Player.cpp:73`) and the engine
 hears it through the armed strip's chain — its rack, its fader, its meter — as a clip of it (`Engine::liveInput`,
@@ -2123,5 +2123,15 @@ ms: the burst the render puts on sample 48 000 is on sample 48 000 of the take; 
 long with the burst a beat in; one undo), `test_an_armed_audio_line_is_monitored_as_set` (auto heard stopped, on the
 port's device; off stops it at once; auto not heard while the song plays back; no capture refused); engine
 `test_live_input_is_heard_through_its_strip`. Mutants: no latency taken out, only the output's, punch ignored, auto heard
-during playback, the engine reading the input from each piece's start — each red. The host's capture (PulseAudio,
-PipeWire) is N16's second part, the window's arm and monitor its third.
+during playback, the engine reading the input from each piece's start — each red. **The host's capture.**
+`host/AudioInPulse` (the PulseAudio simple API, which PipeWire serves): a thread of its own reads a buffer at a time
+(blocking) and pushes into an `AudioRing` without waiting; the latency is read on that thread and handed over by an
+atomic (pa_simple is one thread's). `host/AudioInPipewire`: PipeWire's realtime callback pushes what it captured, small
+buffers as the output's, linked within two seconds or refused naming why. Both: half a second of ring; the player
+reads it and never waits — missing frames are silence and counted (`missed`). `AudioRing::push` (`host/AudioRing.h:94`)
+is the capture's writer: what fits goes in, the rest dropped and counted. The service tries the setting's driver
+(`Host::audioInFor`, as the output's) and falls back to PulseAudio, saying so once
+(`core/service/ServiceInput.cpp:92`); the CLI, the web face and the window wire both. Ring
+`AudioRing: a capture's push never waits …`; L2 the fallback said in `test_an_armed_audio_line_is_monitored_as_set`.
+Mutants: the overflow not counted, the driver setting ignored — red. Not run on this machine's real input (the user's
+microphone): a live recording is owed. The window's arm and monitor are N16's third part.

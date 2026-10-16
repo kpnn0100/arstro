@@ -73,6 +73,21 @@ int main()
         std::printf("[PASS] AudioRing: a writer with no room waits; %d frames across two threads, each once and in order; a dead stream lets it go\n", k);
         ++passed;
     }
+    {
+        // R-REC-1: a capture's writer never waits — what fits goes in, the rest is dropped and counted; order kept
+        AudioRing cap;
+        cap.reset(1, 4);
+        const float six[] = {1, 2, 3, 4, 5, 6};
+        assert(cap.push(six, 6) == 4 && cap.dropped() == 2 && cap.filled() == 4);
+        std::vector<float> out(3, -1.0f);
+        assert(cap.read(out.data(), 3) == 3 && out[0] == 1 && out[1] == 2 && out[2] == 3);
+        assert(cap.push(six + 4, 2) == 2 && cap.dropped() == 2);   // room again: nothing more lost
+        assert(cap.read(out.data(), 3) == 3 && out[0] == 4 && out[1] == 5 && out[2] == 6);
+        cap.reset(1, 4);
+        assert(cap.dropped() == 0);
+        std::printf("[PASS] AudioRing: a capture's push never waits — the overflow dropped and counted, the order kept (R-REC-1)\n");
+        ++passed;
+    }
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

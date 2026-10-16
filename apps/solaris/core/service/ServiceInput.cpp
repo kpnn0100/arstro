@@ -88,9 +88,17 @@ namespace solaris
             if (x.id == s.input) pt = &x;
         if (!pt) { err = s.id + " has no input — `set " + s.id + ".input=<port>`"; return nullptr; }
         channels = std::clamp(pt->channels, 1, 2);
+        const std::string device = mSettings.portDevice(pt->name);
+        if (mHost.audioInFor && mSettings.driver != "pulse") // R-DEV-9: the setting's driver first, PulseAudio the fallback
+            if (auto in = mHost.audioInFor(mSettings.driver))
+            {
+                std::string why;
+                if (in->open(device, mProject.header.sampleRate, channels, mSettings.bufferSize, why)) return in;
+                emit(Event(Event::Kind::Info).with("text", "recording through PulseAudio: " + why));
+            }
         auto in = mHost.audioIn();
         if (!in) { err = "this build cannot record audio (no capture)"; return nullptr; }
-        if (!in->open(mSettings.portDevice(pt->name), mProject.header.sampleRate, channels, mSettings.bufferSize, err)) return nullptr;
+        if (!in->open(device, mProject.header.sampleRate, channels, mSettings.bufferSize, err)) return nullptr;
         return in;
     }
 

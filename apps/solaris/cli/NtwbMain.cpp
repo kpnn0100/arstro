@@ -21,8 +21,10 @@
 #include "NtwbAdapter.h"
 #include "SolarisService.h"
 #ifdef SOLARIS_HAVE_PULSE
+#include "AudioInPulse.h"
 #include "AudioOutPulse.h"
 #ifdef SOLARIS_HAVE_PIPEWIRE
+#include "AudioInPipewire.h"
 #include "AudioOutPipewire.h"
 #endif
 #ifdef SOLARIS_HAVE_ALSA
@@ -155,9 +157,11 @@ namespace solaris_cli
             host.listDevices = solaris_host::listDevices;
 #ifdef SOLARIS_HAVE_PULSE
             host.audioOut = [] { return std::unique_ptr<solaris::IAudioOut>(new solaris_host::AudioOutPulse()); };
+            host.audioIn = [] { return std::unique_ptr<solaris::IAudioIn>(new solaris_host::AudioInPulse()); }; // R-REC-1
 #endif
 #ifdef SOLARIS_HAVE_PIPEWIRE
             host.audioOutFor = [](const std::string &d) { return d == "pipewire" ? std::unique_ptr<solaris::IAudioOut>(new solaris_host::AudioOutPipewire()) : nullptr; }; // R-DEV-9
+            host.audioInFor = [](const std::string &d) { return d == "pipewire" ? std::unique_ptr<solaris::IAudioIn>(new solaris_host::AudioInPipewire()) : nullptr; }; // R-REC-1
 #endif
 #ifdef SOLARIS_HAVE_ALSA
             host.listMidiInputs = solaris_host::listMidiInputs; // R-MIDI-2
