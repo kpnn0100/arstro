@@ -2647,6 +2647,60 @@
       "stable": true
     },
     {
+      "path": "chords",
+      "type": "object[]",
+      "summary": "R-ROLL-11: the qualities `note add --chord <root><name>` takes",
+      "stable": true
+    },
+    {
+      "path": "chords[].name",
+      "type": "string",
+      "summary": "\"\" (major), m, 7, maj7, m7 …",
+      "stable": true
+    },
+    {
+      "path": "chords[].label",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "scales",
+      "type": "object[]",
+      "summary": "R-ROLL-11: the scales `pattern scale <pt> <key> <name>` takes",
+      "stable": true
+    },
+    {
+      "path": "scales[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "scales[].label",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "grooves",
+      "type": "object[]",
+      "summary": "R-ROLL-11: the templates `pattern quantize --groove <name>` takes",
+      "stable": true
+    },
+    {
+      "path": "grooves[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "grooves[].label",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
       "path": "browser",
       "type": "object",
       "summary": "the folder last browsed",

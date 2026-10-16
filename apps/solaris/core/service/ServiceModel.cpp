@@ -7,6 +7,7 @@
 #include "Format.h"
 #include "Json.h"
 #include "Keymap.h"
+#include "Notation.h"
 #include "RegistryModel.h"
 #include "SolarisService.h"
 #include "device/Device.h"
@@ -134,6 +135,9 @@ namespace solaris
             tm.takesSample = t.takesSample;
             mModel.deviceTypes.push_back(tm);
         }
+        for (const auto &q : chordQualities()) mModel.chords.push_back(VocabModel{q.names[0], q.label}); // R-ROLL-11
+        for (const auto &k : scaleKinds()) mModel.scales.push_back(VocabModel{k.names[0], k.label});
+        for (const auto &g : grooves()) mModel.grooves.push_back(VocabModel{g.name, g.label});
         if (mRecentsStale)
         {
             // Home's cards read each song's header: done when the list or a song changes, not per command

@@ -226,6 +226,12 @@ namespace solaris
         std::vector<KeyActionModel> keys;        // R-SET-4: every shortcut, in the sheet's order
     };
 
+    /** R-ROLL-11: a word the grammar takes, and what it means — the roll's menus offer what the service accepts. */
+    struct VocabModel
+    {
+        std::string name, label;
+    };
+
     /** One entry of the DSP library's device registry — what the browser lists (R-BROWSE-1). */
     struct NoteNameModel
     {
@@ -332,6 +338,7 @@ namespace solaris
         long long midiMessages = 0;              // messages the keyboard sent since Solaris started (an activity light)
         AuditionModel audition;
         std::vector<DeviceTypeModel> deviceTypes; // the registry, instruments first (R-DSP-2)
+        std::vector<VocabModel> chords, scales, grooves; // R-ROLL-11: `--chord` qualities ("" major), `pattern scale`'s, `--groove`'s
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };
 }

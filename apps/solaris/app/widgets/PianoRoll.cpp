@@ -21,6 +21,17 @@ namespace solaris_ui
         constexpr double kQuantW = 71.5;  // space::u(22)
         constexpr double kPlayW = 29.25;  // space::u(9): the roll's ▶
         constexpr double kLenW = 91.0;    // space::u(28): "Length 1/16 ▾"
+        constexpr double kScaleW = 91.0;  // space::u(28): "C major ▾" (R-ROLL-11)
+        constexpr double kChordW = 78.0;  // space::u(24): "Chord m7 ▾"
+        constexpr double kToolsW = 61.75; // space::u(19): "Tools ▾"
+        const char *const kKeyNames[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+        // a chip's menu caret, drawn — the UI font has no ▾
+        void caret(IRenderTarget &t, const Rect &r)
+        {
+            const double x = r.right() - 11.0, y = r.y + r.h * 0.5 - 1.5;
+            t.setFill(palette::mutedForeground());
+            t.beginPath(); t.moveTo(x, y); t.lineTo(x + 6.0, y); t.lineTo(x + 3.0, y + 3.5); t.closePath(); t.fillPath();
+        }
         constexpr double kEdge = 5.0;     // a note's right edge, grabbed to resize
         constexpr double kTol = 0.5 / 960.0;
         Color fade(Color c, double a) { c.a *= a; return c; }
@@ -81,6 +92,9 @@ namespace solaris_ui
         mNames.clear();
         for (const auto &t : m.deviceTypes)
             if (t.name == pt->instrument) mNames = t.noteNames;
+        mChords = m.chords; // R-ROLL-11: what the menus offer is what the service takes
+        mScales = m.scales;
+        mGrooves = m.grooves;
         // the roll's clip (R-ROLL-6): the one it was opened from while it lasts, else the first in time
         const solaris::ClipModel *cl = nullptr;
         for (const auto &c : m.clips)
@@ -144,7 +158,7 @@ namespace solaris_ui
 
     // ── geometry ────────────────────────────────────────────────────────────────────────────
 
-    Rect PianoRoll::gridRect() const { return Rect{kKeysW, kToolH, std::max(0.0, width.value() - kKeysW), std::max(0.0, height.value() - kToolH - kVelH)}; }
+    Rect PianoRoll::gridRect() const { return Rect{kKeysW, kBarH, std::max(0.0, width.value() - kKeysW), std::max(0.0, height.value() - kBarH - kVelH)}; }
     Rect PianoRoll::velRect() const { return Rect{kKeysW, height.value() - kVelH, std::max(0.0, width.value() - kKeysW), kVelH}; }
 
     // R-MIDI-3: the lane below — its tabs in the keys' column, a value's height, a point under the pointer
@@ -194,8 +208,8 @@ namespace solaris_ui
     }
     double PianoRoll::beatToX(double b) const { return kKeysW + b * mPpb.value() - mScrollX.value(); }
     double PianoRoll::xToBeat(double x) const { return (x - kKeysW + mScrollX.value()) / std::max(1e-6, mPpb.value()); }
-    double PianoRoll::pitchToY(int p) const { return kToolH + (127 - p) * kNoteH - mScrollY.value(); }
-    int PianoRoll::yToPitch(double y) const { return std::clamp(127 - (int)std::floor((y - kToolH + mScrollY.value()) / kNoteH), 0, 127); }
+    double PianoRoll::pitchToY(int p) const { return kBarH + (127 - p) * kNoteH - mScrollY.value(); }
+    int PianoRoll::yToPitch(double y) const { return std::clamp(127 - (int)std::floor((y - kBarH + mScrollY.value()) / kNoteH), 0, 127); }
 
     Rect PianoRoll::noteRect(int pitch, double at) const
     {
@@ -256,7 +270,7 @@ namespace solaris_ui
         {
             if (!s.empty()) s += " ";
             s += std::to_string(n.pitch + semi) + "@" + beats(n.at + by);
-            if (full) s += ":" + beats(n.length) + ":" + std::to_string(n.vel);
+            if (full) s += ":" + beats(n.length) + ":" + std::to_string(n.vel) + (n.chance < 1.0 ? ":" + beats(n.chance) : std::string()); // R-ROLL-11
         }
         return "\"" + s + "\"";
     }
@@ -357,8 +371,30 @@ namespace solaris_ui
         const Rect last = snapRect(4);
         return Rect{last.right() + 19.5 + m * kModeW, 4.875, kModeW, kToolH - 9.75};
     }
-    Rect PianoRoll::quantizeRect() const { return Rect{modeRect(1).right() + 13.0, 4.875, kQuantW, kToolH - 9.75}; }
-    Rect PianoRoll::lengthRect() const { return Rect{quantizeRect().right() + 6.5, 4.875, kLenW, kToolH - 9.75}; }
+    // the second row (R-ROLL-11): what is done to the notes — Quantize…, the length a click makes, the scale, the chord, the tools
+    Rect PianoRoll::quantizeRect() const { return Rect{space::padX(), kToolH + 4.875, kQuantW, kToolH - 9.75}; }
+    Rect PianoRoll::lengthRect() const { return Rect{quantizeRect().right() + 6.5, kToolH + 4.875, kLenW, kToolH - 9.75}; }
+    Rect PianoRoll::scaleRect() const { return Rect{lengthRect().right() + 6.5, kToolH + 4.875, kScaleW, kToolH - 9.75}; }
+    Rect PianoRoll::chordRect() const { return Rect{scaleRect().right() + 6.5, kToolH + 4.875, kChordW, kToolH - 9.75}; }
+    Rect PianoRoll::toolsRect() const { return Rect{chordRect().right() + 6.5, kToolH + 4.875, kToolsW, kToolH - 9.75}; }
+    double PianoRoll::rowOut(int pitch) const { return pitch >= 0 && pitch <= 127 ? mScaleOut[pitch % 12].value() : 0.0; }
+    double PianoRoll::noteVel(int pitch, double at) const
+    {
+        for (const auto &l : mNotes)
+            if (!l.gone && key(l.n.pitch, l.n.at) == key(pitch, at)) return l.velLast < 0 ? l.n.vel : l.vel.value();
+        return -1.0;
+    }
+    double PianoRoll::noteChance(int pitch, double at) const
+    {
+        for (const auto &l : mNotes)
+            if (!l.gone && key(l.n.pitch, l.n.at) == key(pitch, at)) return l.velLast < 0 ? l.n.chance : l.chance.value();
+        return -1.0;
+    }
+    std::string PianoRoll::notesFlag() const
+    {
+        const auto sel = selectedNotes(); // R-ROLL-11: a tool acts on the selection when there is one, else on the pattern
+        return sel.empty() ? std::string() : " --notes " + tokens(sel);
+    }
 
     std::string PianoRoll::lengthName(double b)
     {
@@ -371,12 +407,12 @@ namespace solaris_ui
     Rect PianoRoll::endRect() const
     {
         const double x = beatToX(mDrag == Drag::End ? mLiveEnd : mEnd.value());
-        return Rect{x - 4.875, kToolH, 9.75, 13.0};
+        return Rect{x - 4.875, kBarH, 9.75, 13.0};
     }
     Rect PianoRoll::stepCell(int row, int step) const
     {
         const double w = 0.25 * mPpb.value();
-        return Rect{beatToX(step * 0.25) + 1.0, kToolH + 6.5 + row * kStepH + 2.0, std::max(2.0, w - 2.0), kStepH - 4.0};
+        return Rect{beatToX(step * 0.25) + 1.0, kBarH + 6.5 + row * kStepH + 2.0, std::max(2.0, w - 2.0), kStepH - 4.0};
     }
 
     void PianoRoll::layout()
@@ -384,7 +420,7 @@ namespace solaris_ui
         const Rect g = gridRect();
         const double content = std::max(mModel.length, mEnd.value()) + 8.0;
         mScrollX.setExtent(kKeysW, g.w, content * mPpbTarget);
-        mScrollY.setExtent(kToolH, g.h, 128.0 * kNoteH);
+        mScrollY.setExtent(kBarH, g.h, 128.0 * kNoteH);
         if (!mScrolledIn && g.h > 0)
         {
             // first placement: the notes in view (or middle C)
@@ -420,17 +456,32 @@ namespace solaris_ui
                 l.selLast = sel;
             }
             l.sel.update(nowMs);
+            // R-ROLL-11: a velocity or a chance changed elsewhere travels; the first placement has nowhere to travel from
+            if (l.velLast < 0) { l.vel.set(l.n.vel); l.velLast = l.n.vel; l.chance.set(l.n.chance); l.chanceLast = l.n.chance; }
+            if (l.n.vel != l.velLast) { l.vel.animateTo(l.n.vel, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); l.velLast = l.n.vel; }
+            if (l.n.chance != l.chanceLast) { l.chance.animateTo(l.n.chance, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); l.chanceLast = l.n.chance; }
+            l.vel.update(nowMs);
+            l.chance.update(nowMs);
         }
         mNotes.erase(std::remove_if(mNotes.begin(), mNotes.end(), [](const NoteLive &l) { return l.gone && !l.alpha.isAnimating() && l.alpha.value() <= 0.001; }),
                      mNotes.end());
         // R-MIDI-3: the lane shown cross-fades; its points fade in and out and their values travel
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < kLanes; ++i)
         {
             const double want = (int)mLane == i ? 1.0 : 0.0;
             if ((int)mLane != mLaneLast && (i == (int)mLane || i == mLaneLast)) mLaneAmt[i].animateTo(want, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
             mLaneAmt[i].update(nowMs);
         }
         mLaneLast = (int)mLane;
+        // R-ROLL-11: the rows off the scale dim, per pitch class — a scale chosen here or by a shell travels the same
+        for (int pc = 0; pc < 12; ++pc)
+        {
+            const double want = mModel.scaleMask && !(mModel.scaleMask >> pc & 1) ? 1.0 : 0.0;
+            if (!mScalePlaced) { mScaleOut[pc].set(want); mScaleWant[pc] = want; }
+            else if (want != mScaleWant[pc]) { mScaleOut[pc].animateTo(want, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); mScaleWant[pc] = want; }
+            mScaleOut[pc].update(nowMs);
+        }
+        mScalePlaced = mPresent;
         for (auto &x : mExpr)
         {
             if (!x.placed) { x.v.set(x.value); x.last = x.value; x.alpha.set(fadeIn ? 0.0 : 1.0); x.placed = true; if (fadeIn) x.alpha.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); }
@@ -527,7 +578,7 @@ namespace solaris_ui
     Cursor PianoRoll::dragCursor() const
     {
         if (mDrag == Drag::Resize || mDrag == Drag::End) return Cursor::ResizeH;
-        return mDrag == Drag::Velocity || mDrag == Drag::Expr ? Cursor::ResizeV : Cursor::Default;
+        return mDrag == Drag::Velocity || mDrag == Drag::Expr || mDrag == Drag::Chance ? Cursor::ResizeV : Cursor::Default;
     }
 
     Cursor PianoRoll::cursorAt(const Point &local) const
@@ -540,7 +591,7 @@ namespace solaris_ui
             bool edge = false;
             if (noteAt(local, edge) && edge) return Cursor::ResizeH; // the zone noteAt gives the press (D-7)
         }
-        if (velRect().contains(local) && mLane != LaneVelocity) return exprAtPoint(local) ? Cursor::ResizeV : Cursor::Default; // R-MIDI-3
+        if (velRect().contains(local) && wheelLane()) return exprAtPoint(local) ? Cursor::ResizeV : Cursor::Default; // R-MIDI-3
         if (velRect().contains(local))
             for (auto it = mNotes.rbegin(); it != mNotes.rend(); ++it)
                 if (!it->gone && std::fabs(beatToX(it->n.at) + 1.5 - local.x) <= 5.0) return Cursor::ResizeV; // as the press finds a bar
@@ -608,6 +659,9 @@ namespace solaris_ui
             case Drag::Velocity:
                 mLive.vel = std::clamp((int)std::lround((vel.bottom() - 6.0 - local.y) / std::max(1.0, kVelH - 12.0) * 127.0), 1, 127);
                 break;
+            case Drag::Chance: // R-ROLL-11: to a hundredth
+                mLive.chance = std::clamp(std::round((vel.bottom() - 6.0 - local.y) / std::max(1.0, kVelH - 12.0) * 100.0) / 100.0, 0.0, 1.0);
+                break;
             case Drag::End:
                 mLiveEnd = std::max(0.25, snapped(xToBeat(local.x)));
                 break;
@@ -630,6 +684,9 @@ namespace solaris_ui
                 if (modeRect(m).contains(local)) h = 10 + m;
             if (quantizeRect().contains(local)) h = 20;
             if (lengthRect().contains(local)) h = 21;
+            if (scaleRect().contains(local)) h = 22;
+            if (chordRect().contains(local)) h = 23;
+            if (toolsRect().contains(local)) h = 24;
             if (playRect().contains(local) && !mClip.empty()) h = 30;
             mHover.setHovered(h);
             return true;
@@ -675,7 +732,7 @@ namespace solaris_ui
                 preview(mKeyPitch, 100, 0.5);
                 return true;
             }
-            if (vel.contains(local) && mLane != LaneVelocity)
+            if (vel.contains(local) && wheelLane())
             {
                 // R-MIDI-3: a lane point taken — up and down only (its beat is its key)
                 if (const ExprLive *x = exprAtPoint(local))
@@ -691,7 +748,7 @@ namespace solaris_ui
                 for (auto it = mNotes.rbegin(); it != mNotes.rend(); ++it)
                     if (!it->gone && std::fabs(beatToX(it->n.at) + 1.5 - local.x) <= 5.0)
                     {
-                        mDrag = Drag::Velocity;
+                        mDrag = mLane == LaneChance ? Drag::Chance : Drag::Velocity; // R-ROLL-11: the same stems, its odds
                         mPressNote = it->n;
                         mLive = it->n;
                         mPressKey = key(it->n.pitch, it->n.at);
@@ -756,8 +813,14 @@ namespace solaris_ui
             else if (d == Drag::Velocity && mLive.vel != mPressNote.vel)
             {
                 for (auto &l : mNotes)
-                    if (key(l.n.pitch, l.n.at) == mPressKey) l.n.vel = mLive.vel;
+                    if (key(l.n.pitch, l.n.at) == mPressKey) { l.n.vel = l.velLast = mLive.vel; l.vel.set(mLive.vel); } // where the pointer left it
                 send("note move " + id + from + " --vel " + std::to_string(mLive.vel));
+            }
+            else if (d == Drag::Chance && mLive.chance != mPressNote.chance)
+            {
+                for (auto &l : mNotes) // R-ROLL-11: ONE line, where the pointer left it
+                    if (key(l.n.pitch, l.n.at) == mPressKey) { l.n.chance = l.chanceLast = mLive.chance; l.chance.set(mLive.chance); }
+                send("note move " + id + from + " --chance " + beats(mLive.chance));
             }
             else if (d == Drag::Expr)
             {
@@ -781,9 +844,9 @@ namespace solaris_ui
         {
             if (mSwallowClick) { mSwallowClick = false; return true; } // D-6: the short drag just landed
             if (playRect().contains(local)) { togglePlay(); return true; }
-            for (int l = 0; l < 3; ++l) // R-MIDI-3: the lane shown — the view's
+            for (int l = 0; l < kLanes; ++l) // R-MIDI-3: the lane shown — the view's
                 if (laneTabRect(l).contains(local)) { mLane = (Lane)l; return true; }
-            if (vel.contains(local) && mLane != LaneVelocity)
+            if (vel.contains(local) && wheelLane())
             {
                 // a click away from a point: a point there, at the snapped beat and the height's value — ONE line
                 if (exprAtPoint(local)) return true;
@@ -809,11 +872,67 @@ namespace solaris_ui
             if (quantizeRect().contains(local))
             {
                 if (!onMenu) return true;
-                const std::string grid = beats(mSnap > 0 ? mSnap : 0.25), id = mPattern;
-                onMenu({{"Quantize (straight)", [this, id, grid] { send("pattern quantize " + id + " --grid " + grid); }},
-                        {"Quantize, swing 25%", [this, id, grid] { send("pattern quantize " + id + " --grid " + grid + " --swing 0.25"); }},
-                        {"Quantize, swing 50%", [this, id, grid] { send("pattern quantize " + id + " --grid " + grid + " --swing 0.5"); }}},
-                       g.pos);
+                const std::string grid = beats(mSnap > 0 ? mSnap : 0.25), id = mPattern, scope = notesFlag(); // R-ROLL-11: the selection, else all
+                std::vector<cosmo_v2::ContextMenu::Item> items = {
+                    {"Quantize (straight)", [this, id, grid, scope] { send("pattern quantize " + id + " --grid " + grid + scope); }},
+                    {"Quantize, swing 25%", [this, id, grid, scope] { send("pattern quantize " + id + " --grid " + grid + " --swing 0.25" + scope); }},
+                    {"Quantize, swing 50%", [this, id, grid, scope] { send("pattern quantize " + id + " --grid " + grid + " --swing 0.5" + scope); }}};
+                for (const auto &gr : mGrooves) // R-ROLL-11: the grooves the service has
+                    items.push_back({"Groove: " + gr.name, [this, id, scope, n = gr.name] { send("pattern quantize " + id + " --groove " + n + scope); }});
+                onMenu(std::move(items), g.pos);
+                return true;
+            }
+            if (scaleRect().contains(local))
+            {
+                // R-ROLL-11: the pattern's scale in its key (C until one is chosen); Change key… the key, keeping the scale
+                if (!onMenu) return true;
+                const std::string id = mPattern, cur = mModel.scale;
+                const std::string key = cur.empty() ? std::string("C") : cur.substr(0, cur.find(' '));
+                const std::string kind = cur.empty() ? std::string("major") : cur.substr(cur.find(' ') + 1);
+                std::vector<cosmo_v2::ContextMenu::Item> items;
+                items.push_back({"No scale", [this, id] { send("pattern scale " + id + " off"); }});
+                for (const auto &s : mScales)
+                    items.push_back({key + " " + s.name, [this, id, key, n = s.name] { send("pattern scale " + id + " " + key + " " + n); }});
+                const Point at = g.pos;
+                items.push_back({"Change key\xE2\x80\xA6", [this, id, kind, at] {
+                                     std::vector<cosmo_v2::ContextMenu::Item> keys;
+                                     for (const char *k : kKeyNames)
+                                         keys.push_back({std::string(k) + " " + kind, [this, id, kind, k] { send("pattern scale " + id + " " + k + " " + kind); }});
+                                     if (onMenu) onMenu(std::move(keys), at);
+                                 }});
+                onMenu(std::move(items), g.pos);
+                return true;
+            }
+            if (chordRect().contains(local))
+            {
+                // R-ROLL-11: what a click on the grid makes — a note, or this chord on the row clicked (the view's)
+                if (!onMenu) return true;
+                std::vector<cosmo_v2::ContextMenu::Item> items;
+                items.push_back({"Single notes", [this] { mChordOn = false; }});
+                for (const auto &q : mChords)
+                    items.push_back({(q.name.empty() ? std::string("maj") : q.name) + " \xC2\xB7 " + q.label, [this, n = q.name] { mChordOn = true; mChord = n; }});
+                onMenu(std::move(items), g.pos);
+                return true;
+            }
+            if (toolsRect().contains(local))
+            {
+                // R-ROLL-11: each ONE line, on the selection when there is one, else on the pattern
+                if (!onMenu) return true;
+                const std::string id = mPattern, scope = notesFlag(), rate = " --rate " + beats(mSnap > 0 ? mSnap : 0.25);
+                auto sel = selectedNotes();
+                if (sel.empty()) sel = mModel.notes;
+                const std::string named = sel.empty() ? std::string() : tokens(sel);
+                std::vector<cosmo_v2::ContextMenu::Item> items = {
+                    {"Humanise", [this, id, scope] { send("pattern humanise " + id + scope); }},
+                    {"Legato", [this, id, scope] { send("pattern legato " + id + scope); }},
+                    {"Arpeggiate up", [this, id, scope, rate] { send("pattern arpeggiate " + id + rate + " --mode up" + scope); }},
+                    {"Arpeggiate down", [this, id, scope, rate] { send("pattern arpeggiate " + id + rate + " --mode down" + scope); }},
+                    {"Arpeggiate up-down", [this, id, scope, rate] { send("pattern arpeggiate " + id + rate + " --mode updown" + scope); }},
+                    {"Arpeggiate random", [this, id, scope, rate] { send("pattern arpeggiate " + id + rate + " --mode random" + scope); }}};
+                if (!named.empty())
+                    for (const char *odds : {"0.5", "1"})
+                        items.push_back({std::string("Chance ") + (odds[0] == '1' ? "100%" : "50%"), [this, id, named, odds] { send("notes set " + id + " " + named + " --chance " + odds); }});
+                onMenu(std::move(items), g.pos);
                 return true;
             }
             if (mMode == Steps)
@@ -847,7 +966,10 @@ namespace solaris_ui
                 mSel.clear();
                 const double at = mSnap > 0 ? std::max(0.0, std::floor(xToBeat(local.x) / mSnap) * mSnap) : snapped(xToBeat(local.x));
                 const int pitch = yToPitch(local.y);
-                send("note add " + mPattern + " --pitch " + std::to_string(pitch) + " --at " + beats(at) + " --length " + beats(clickLength()));
+                if (mChordOn) // R-ROLL-11: a chord stamped, its root the row clicked — ONE line (a scale-locked pattern makes it the key's)
+                    send("note add " + mPattern + " --chord " + kKeyNames[pitch % 12] + mChord + " --octave " + std::to_string(pitch / 12 - 1) + " --at " + beats(at) +
+                         " --length " + beats(clickLength()));
+                else send("note add " + mPattern + " --pitch " + std::to_string(pitch) + " --at " + beats(at) + " --length " + beats(clickLength()));
                 preview(pitch, 100, clickLength()); // R-ROLL-7: the note made is heard
             }
             return true;
@@ -855,7 +977,7 @@ namespace solaris_ui
         case Gesture::Type::DoubleClick:
         case Gesture::Type::RightClick:
         {
-            if (vel.contains(local) && mLane != LaneVelocity)
+            if (vel.contains(local) && wheelLane())
             {
                 // R-MIDI-3: a point double-clicked (or right-clicked): gone — ONE line
                 if (const ExprLive *x = exprAtPoint(local))
@@ -902,6 +1024,8 @@ namespace solaris_ui
             const double y = pitchToY(p);
             if (y + kNoteH < grid.y || y > grid.bottom()) continue;
             if (black(p)) drawRoundedRect(t, Rect{grid.x, y, grid.w, kNoteH}, 0.0, Paint::filled(fade(palette::whiteAlpha(0.025), a)));
+            const double out = mScaleOut[p % 12].value(); // R-ROLL-11: a row off the scale, dimmed
+            if (out > 0.001) drawRoundedRect(t, Rect{grid.x, y, grid.w, kNoteH}, 0.0, Paint::filled(fade(surface::scrim(1.0), 0.6 * out * a)));
             if (p % 12 == 0)
             {
                 t.setStroke(fade(palette::whiteAlpha(0.07), a), 1.0);
@@ -910,13 +1034,13 @@ namespace solaris_ui
             // the keys
             const Rect k{0, y, kKeysW - 1.0, kNoteH};
             drawRoundedRect(t, Rect{0, y + 0.5, kKeysW - 1.0, kNoteH - 1.0}, 0.0,
-                            Paint::filled(fade(black(p) ? palette::canvasBg() : palette::secondary(), a)));
+                            Paint::filled(fade(lerpColor(black(p) ? palette::canvasBg() : palette::secondary(), palette::canvasBg(), 0.7 * out), a)));
             if (const double lit = keyLit(p); lit > 0.001) // a key pressed: it sounds, lit while held
                 drawRoundedRect(t, Rect{0, y + 0.5, kKeysW - 1.0, kNoteH - 1.0}, 0.0, Paint::filled(fade(palette::primaryAlpha(0.55), a * lit)));
             const std::string nm = noteName(p);
             if (!nm.empty())
             {
-                t.setFill(fade(mNames.empty() ? palette::mutedForeground() : palette::foreground(), a));
+                t.setFill(fade(mNames.empty() ? palette::mutedForeground() : palette::foreground(), a * (1.0 - 0.6 * out)));
                 t.drawText(textfit::ellipsize(t, nm, kKeysW - 8.0, 9.0, font::sans()), 4.0, textfit::baseline(k.y + k.h * 0.5, 9.0), 9.0, font::sans());
             }
         }
@@ -934,9 +1058,11 @@ namespace solaris_ui
             const Rect r{beatToX(n.at), pitchToY(n.pitch) + 1.0, std::max(3.0, n.length * mPpb.value() - 1.0), kNoteH - 2.0};
             if (r.right() < grid.x || r.x > grid.right() || r.bottom() < grid.y || r.y > grid.bottom()) continue;
             const double sel = l.sel.value();
-            const Color c = lerpColor(base, palette::white(), 0.12 + 0.28 * (n.vel / 127.0) + 0.25 * sel);
+            // R-ROLL-11: brighter the louder, fainter the less it sounds — both eased (a humanise, a `notes set` travels)
+            const double v = dragged || l.velLast < 0 ? n.vel : l.vel.value(), ch = dragged || l.velLast < 0 ? n.chance : l.chance.value();
+            const Color c = lerpColor(base, palette::white(), 0.12 + 0.28 * (v / 127.0) + 0.25 * sel);
             drawRoundedRect(t, r, radius::control(),
-                            Paint::filledStroked(fade(c, na * (dragged || carried ? 1.0 : 0.9)), fade(lerpColor(palette::whiteAlpha(0.35), palette::primary(), sel), na), 1.0 + 0.5 * sel));
+                            Paint::filledStroked(fade(c, na * (dragged || carried ? 1.0 : 0.9) * (0.35 + 0.65 * ch)), fade(lerpColor(palette::whiteAlpha(0.35), palette::primary(), sel), na), 1.0 + 0.5 * sel));
         }
         if (mDrag == Drag::Box)
         {
@@ -954,7 +1080,7 @@ namespace solaris_ui
         const Color base = surface::track(mColour);
         for (int r = 0; r < stepRows(); ++r)
         {
-            const double y = kToolH + 6.5 + r * kStepH;
+            const double y = kBarH + 6.5 + r * kStepH;
             const int pitch = mStepPitches[(size_t)r];
             std::string nm = noteName(pitch);
             if (nm.empty()) nm = std::to_string(pitch);
@@ -1020,8 +1146,8 @@ namespace solaris_ui
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, vel.y + 0.5); t.lineTo(W, vel.y + 0.5); t.strokePath();
         {
-            const char *tabs[] = {"Vel", "Bend", "Mod"};
-            for (int l = 0; l < 3; ++l)
+            const char *tabs[] = {"Vel", "Bend", "Mod", "Chance"};
+            for (int l = 0; l < kLanes; ++l)
             {
                 const Rect r = laneTabRect(l);
                 const double on = mLaneAmt[l].value();
@@ -1068,7 +1194,20 @@ namespace solaris_ui
             if (na <= 0.001) continue;
             const bool dragged = mDrag != Drag::None && mDrag != Drag::End && !l.gone && key(l.n.pitch, l.n.at) == mPressKey;
             const solaris::NoteModel n = dragged ? mLive : l.n;
-            const double x = beatToX(n.at) + 1.5, top = vel.bottom() - 6.0 - (n.vel / 127.0) * (kVelH - 12.0);
+            const double v = dragged || l.velLast < 0 ? n.vel : l.vel.value();
+            const double x = beatToX(n.at) + 1.5, top = vel.bottom() - 6.0 - (v / 127.0) * (kVelH - 12.0);
+            t.setStroke(fade(base, na), 2.0);
+            t.beginPath(); t.moveTo(x, vel.bottom() - 6.0); t.lineTo(x, top); t.strokePath();
+            drawCircle(t, x, top, 3.0, Paint::filled(fade(lerpColor(base, palette::white(), 0.3), na)));
+        }
+        for (const auto &l : mNotes)
+        {
+            // R-ROLL-11: the Chance lane — each note's odds, a stem as velocity's is
+            const double na = (l.placed ? l.alpha.value() : 0.0) * mLaneAmt[3].value();
+            if (na <= 0.001) continue;
+            const bool dragged = mDrag == Drag::Chance && !l.gone && key(l.n.pitch, l.n.at) == mPressKey;
+            const double ch = dragged ? mLive.chance : l.velLast < 0 ? l.n.chance : l.chance.value();
+            const double x = beatToX(l.n.at) + 1.5, top = vel.bottom() - 6.0 - ch * (kVelH - 12.0);
             t.setStroke(fade(base, na), 2.0);
             t.beginPath(); t.moveTo(x, vel.bottom() - 6.0); t.lineTo(x, top); t.strokePath();
             drawCircle(t, x, top, 3.0, Paint::filled(fade(lerpColor(base, palette::white(), 0.3), na)));
@@ -1087,9 +1226,9 @@ namespace solaris_ui
         }
 
         // the toolbar
-        drawRoundedRect(t, Rect{0, 0, W, kToolH}, 0.0, Paint::filled(surface::headerBg()));
+        drawRoundedRect(t, Rect{0, 0, W, kBarH}, 0.0, Paint::filled(surface::headerBg()));
         t.setStroke(palette::border(), 1.0);
-        t.beginPath(); t.moveTo(0, kToolH - 0.5); t.lineTo(W, kToolH - 0.5); t.strokePath();
+        t.beginPath(); t.moveTo(0, kBarH - 0.5); t.lineTo(W, kBarH - 0.5); t.strokePath();
         t.setFill(palette::mutedForeground());
         {
             // ▶ / ■: the roll's play — lit while its clip loops; dimmed with nothing to sound through
@@ -1118,18 +1257,32 @@ namespace solaris_ui
         chip(modeRect(1), "Steps", mMode == Steps, 11);
         chip(quantizeRect(), "Quantize\xE2\x80\xA6", false, 20);
         {
-            // R-ROLL-10: the length a click makes, named; "▾" says it is a menu
-            const std::string lbl = "Length " + lengthName(clickLength()) + (mLengthChoice > 0 ? "" : "*") + " \xE2\x96\xBE";
+            // R-ROLL-10: the length a click makes, named; a caret says it is a menu
+            const std::string lbl = "Length " + lengthName(clickLength()) + (mLengthChoice > 0 ? "" : "*");
             const Rect lr = lengthRect();
             const double hv = mHover.amount(21);
             drawRoundedRect(t, lr, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), hv)));
             t.setFill(palette::secondaryForeground());
-            t.drawText(textfit::ellipsize(t, lbl, lr.w - 8.0, 10.0, font::sans()), lr.x + 6.0, textfit::baseline(lr.y + lr.h * 0.5, 10.0), 10.0, font::sans());
+            t.drawText(textfit::ellipsize(t, lbl, lr.w - 22.0, 10.0, font::sans()), lr.x + 6.0, textfit::baseline(lr.y + lr.h * 0.5, 10.0), 10.0, font::sans());
+            caret(t, lr);
+        }
+        {
+            // R-ROLL-11: the scale, the chord a click stamps, the tools — each a menu ("▾")
+            auto menuChip = [&](const Rect &r, const std::string &label, int hoverId) {
+                const double hv = mHover.amount(hoverId);
+                drawRoundedRect(t, r, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), hv)));
+                t.setFill(palette::secondaryForeground());
+                t.drawText(textfit::ellipsize(t, label, r.w - 22.0, 10.0, font::sans()), r.x + 6.0, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
+                caret(t, r);
+            };
+            menuChip(scaleRect(), mModel.scale.empty() ? std::string("Scale") : mModel.scale, 22);
+            menuChip(chordRect(), std::string("Chord") + (mChordOn ? " " + (mChord.empty() ? std::string("maj") : mChord) : std::string()), 23);
+            menuChip(toolsRect(), "Tools", 24);
         }
         const std::string len = beats(mModel.length) + " beats";
         t.setFill(palette::mutedForeground());
-        const double lx = std::max(lengthRect().right() + 13.0, W - space::padX() - t.measureText(len, 10.0, font::mono()));
-        t.drawText(len, lx, textfit::baseline(kToolH * 0.5, 10.0), 10.0, font::mono());
+        const double lx = std::max(toolsRect().right() + 13.0, W - space::padX() - t.measureText(len, 10.0, font::mono()));
+        t.drawText(len, lx, textfit::baseline(kToolH * 1.5, 10.0), 10.0, font::mono());
         if (m < 0.999) mScrollY.drawBar(t, W - 5.0, 1.0 - m);
     }
 }

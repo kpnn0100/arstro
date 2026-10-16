@@ -492,6 +492,15 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `deviceTypes[].takesSample` | bool | it plays a recorded sound: give it one with --sample / <dv>.sample (R-EDM-8) |
 | `deviceTypes[].noteNames[].note` | int |  |
 | `deviceTypes[].noteNames[].name` | string |  |
+| `chords` | object[] | R-ROLL-11: the qualities `note add --chord <root><name>` takes |
+| `chords[].name` | string | "" (major), m, 7, maj7, m7 … |
+| `chords[].label` | string |  |
+| `scales` | object[] | R-ROLL-11: the scales `pattern scale <pt> <key> <name>` takes |
+| `scales[].name` | string |  |
+| `scales[].label` | string |  |
+| `grooves` | object[] | R-ROLL-11: the templates `pattern quantize --groove <name>` takes |
+| `grooves[].name` | string |  |
+| `grooves[].label` | string |  |
 | `browser` | object | the folder last browsed |
 | `browser.path` | string |  |
 | `browser.entries` | object[] | folders first, then by name |

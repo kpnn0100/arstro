@@ -244,7 +244,7 @@ namespace solaris_ui
             roll->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
             roll->setClipboard(mNoteClipboard); // copy in one roll, paste in any
             roll->bind(mModel);
-            w = &place(std::make_shared<FloatWindow>(key, roll), 720.0, 460.0);
+            w = &place(std::make_shared<FloatWindow>(key, roll), 720.0, 520.0); // the tools' row and the four-tab lane (R-ROLL-11) kept from the grid
         }
         if (!ac.empty()) static_cast<PianoRoll &>(w->content()).setClip(ac); // opened from a clip: that clip's roll
         w->open();

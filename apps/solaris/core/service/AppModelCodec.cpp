@@ -260,6 +260,15 @@ namespace solaris
             {"deviceTypes[].takesSample", "bool", "it plays a recorded sound: give it one with --sample / <dv>.sample (R-EDM-8)"},
             {"deviceTypes[].noteNames[].note", "int", ""},
             {"deviceTypes[].noteNames[].name", "string", ""},
+            {"chords", "object[]", "R-ROLL-11: the qualities `note add --chord <root><name>` takes"},
+            {"chords[].name", "string", "\"\" (major), m, 7, maj7, m7 …"},
+            {"chords[].label", "string", ""},
+            {"scales", "object[]", "R-ROLL-11: the scales `pattern scale <pt> <key> <name>` takes"},
+            {"scales[].name", "string", ""},
+            {"scales[].label", "string", ""},
+            {"grooves", "object[]", "R-ROLL-11: the templates `pattern quantize --groove <name>` takes"},
+            {"grooves[].name", "string", ""},
+            {"grooves[].label", "string", ""},
             {"browser", "object", "the folder last browsed"},
             {"browser.path", "string", ""},
             {"browser.entries", "object[]", "folders first, then by name"},
@@ -597,6 +606,12 @@ namespace solaris
             types.push(Json::object().set("name", d.name).set("label", d.label).set("kind", d.kind).set("noteNames", names).set("takesSample", d.takesSample));
         }
         j.set("deviceTypes", types);
+        auto vocab = [](const std::vector<VocabModel> &v) { // R-ROLL-11
+            Json a = Json::array();
+            for (const auto &x : v) a.push(Json::object().set("name", x.name).set("label", x.label));
+            return a;
+        };
+        j.set("chords", vocab(m.chords)).set("scales", vocab(m.scales)).set("grooves", vocab(m.grooves));
         Json entries = Json::array();
         for (const auto &e : m.browser.entries) entries.push(Json::object().set("name", e.name).set("path", e.path).set("kind", e.kind));
         j.set("browser", Json::object().set("path", m.browser.path).set("entries", entries));

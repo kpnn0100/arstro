@@ -37,6 +37,13 @@
  *  pitch-wheel or mod-wheel lane, a curve through its points (linear between, held at the ends). On a lane: a click
  *  adds a point at the snapped beat and the height's value (`expr add`), a point dragged up or down lands its value
  *  (`expr add` at its beat), a double-click removes it (`expr delete`) — each ONE line. The choice is the view's.
+ *  Chance (R-ROLL-11): each note's odds as a stem, dragged as velocity is (`note move --chance`); a note drawn fainter
+ *  the less it sounds.
+ *
+ *  The note tools (R-ROLL-11), each ONE line, on the selection when there is one, else the pattern: Scale ▾ locks the
+ *  pattern (`pattern scale`; Change key… the key) and dims the rows off it; Chord ▾ makes a click stamp that chord, its root
+ *  the row clicked (`note add --chord`); Tools ▾ humanises, makes legato, arpeggiates (at the snap), sets the chance
+ *  (`notes set`); Quantize… offers the grooves. The menus list what the model publishes (`chords`, `scales`, `grooves`).
  *
  *  Nothing snaps on screen (§1): notes are keyed by (pitch, beat) and fade in and out; zoom and
  *  scroll ease; the mode switch cross-fades; the dragged note is the pointer's; the playhead fades in
@@ -63,13 +70,15 @@ namespace solaris_ui
     class PianoRoll : public artboard::Segment
     {
     public:
-        static constexpr double kToolH = 29.25;   // space::u(9)
+        static constexpr double kToolH = 29.25;   // space::u(9): a row of the toolbar
+        static constexpr double kBarH = 58.5;     // space::u(18): the toolbar — ▶, snap, mode; then the tools (R-ROLL-11)
         static constexpr double kKeysW = 58.5;    // space::u(18)
         static constexpr double kNoteH = 13.0;    // space::u(4): a pitch row
         static constexpr double kStepH = 22.75;   // space::u(7): a step row
-        static constexpr double kVelH = 52.0;     // space::u(16): the velocity lane
+        static constexpr double kVelH = 65.0;     // space::u(20): the lane below — four tabs beside it (R-ROLL-11)
         enum Mode { Notes = 0, Steps = 1 };
-        enum Lane { LaneVelocity = 0, LaneBend, LaneMod }; // R-MIDI-3: what the lane below shows
+        enum Lane { LaneVelocity = 0, LaneBend, LaneMod, LaneChance }; // R-MIDI-3, R-ROLL-11: what the lane below shows
+        static constexpr int kLanes = 4;
 
         explicit PianoRoll(std::string patternId);
         const std::string &pattern() const { return mPattern; }
@@ -122,7 +131,7 @@ namespace solaris_ui
         artboard::Rect laneTabRect(int l) const;
         artboard::Rect exprPointRect(const std::string &lane, double at) const;
         double exprLive(const std::string &lane, double at) const; // −1000: no such point
-        double laneAmount(int l) const { return l >= 0 && l < 3 ? mLaneAmt[l].value() : 0.0; }
+        double laneAmount(int l) const { return l >= 0 && l < kLanes ? mLaneAmt[l].value() : 0.0; }
         double exprValueAt(double y) const;             // the value a height in the lane means, for the lane shown
         artboard::Rect noteRect(int pitch, double at) const;
         double noteAlpha(int pitch, double at) const;   // LIVE
@@ -135,6 +144,16 @@ namespace solaris_ui
         double clickLength() const { return mLengthChoice > 0 ? mLengthChoice : mLastLength; }
         void setLengthChoice(double beats) { mLengthChoice = beats; } // 0 = the last length (the default)
         static std::string lengthName(double beats);     // 1/16, 1/4, 1/1 … or "1.75 beats"
+        // R-ROLL-11: the note tools — the pattern's scale (rows off it dimmed, eased), a chord a click stamps, the tools
+        artboard::Rect scaleRect() const;
+        artboard::Rect chordRect() const;
+        artboard::Rect toolsRect() const;
+        void setChord(bool on, const std::string &quality = std::string()) { mChordOn = on; mChord = quality; }
+        bool chordOn() const { return mChordOn; }
+        const std::string &chord() const { return mChord; }   // a `chords` name: "" major, "m7" …
+        double rowOut(int pitch) const;                  // LIVE: 0 in the scale (or none) … 1 off it
+        double noteVel(int pitch, double at) const;      // LIVE: a note's velocity as drawn (−1: no such note)
+        double noteChance(int pitch, double at) const;   // LIVE: … its chance
         artboard::Rect endRect() const;                  // the pattern's end handle
         int stepRows() const { return (int)mStepPitches.size(); }
         int stepRowPitch(int r) const { return r >= 0 && r < stepRows() ? mStepPitches[(size_t)r] : -1; }
@@ -159,9 +178,12 @@ namespace solaris_ui
             double aLast = 0;
             artboard::AnimatedProperty sel{0.0};    // R-ROLL-8: its selection light
             bool selLast = false;
+            artboard::AnimatedProperty vel{0.0}, chance{1.0}; // R-ROLL-11: a change made elsewhere (humanise, a groove, `notes set`) eases in
+            int velLast = -1;
+            double chanceLast = -1.0;
             bool placed = false, gone = false, instant = false;
         };
-        enum class Drag { None, Move, Resize, Velocity, End, Keys, MoveSel, Box, Expr };
+        enum class Drag { None, Move, Resize, Velocity, End, Keys, MoveSel, Box, Expr, Chance };
         /** R-MIDI-3: a lane point as drawn — keyed by (lane, beat), its value eased, fading in and out. */
         struct ExprLive
         {
@@ -171,6 +193,8 @@ namespace solaris_ui
             bool placed = false, gone = false;
         };
         const char *laneName() const { return mLane == LaneBend ? "bend" : "cc1"; }
+        bool wheelLane() const { return mLane == LaneBend || mLane == LaneMod; }
+        std::string notesFlag() const;                  // R-ROLL-11: ` --notes "<selection>"`, or "" (the whole pattern)
         double exprY(double value) const;               // the lane shown: a value's height
         const ExprLive *exprAtPoint(const artboard::Point &p) const;
         static std::string key(int pitch, double at);
@@ -231,11 +255,19 @@ namespace solaris_ui
         double mLiveEnd = 0;
         // R-MIDI-3: the lane below
         Lane mLane = LaneVelocity;
-        artboard::AnimatedProperty mLaneAmt[3] = {artboard::AnimatedProperty{1.0}, artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
+        artboard::AnimatedProperty mLaneAmt[kLanes] = {artboard::AnimatedProperty{1.0}, artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0},
+                                                       artboard::AnimatedProperty{0.0}};
         int mLaneLast = 0;
         std::vector<ExprLive> mExpr;
         double mExprPressAt = 0, mExprLiveValue = 0;
         std::string mExprPressLane;
+        // R-ROLL-11: the tools — what the model offers, the chord a click stamps, the scale's rows (per pitch class, eased)
+        std::vector<solaris::VocabModel> mChords, mScales, mGrooves;
+        bool mChordOn = false;
+        std::string mChord;
+        artboard::AnimatedProperty mScaleOut[12];
+        double mScaleWant[12] = {};
+        bool mScalePlaced = false;
     };
 }
 }

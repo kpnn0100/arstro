@@ -2152,6 +2152,113 @@ static void test_the_rolls_lane_draws_the_wheels()
     pass("the roll's lane (R-MIDI-3): Vel | Bend | Mod cross-fade; a click adds a point, a point dragged up or down lands its value, a double-click removes it — each one line; a shell's change eases");
 }
 
+static void test_the_rolls_note_tools()
+{
+    // R-ROLL-11: Scale ▾ locks the pattern (the rows off it dim, eased; Change key… the key), Chord ▾ makes a click stamp a
+    // chord, Quantize… offers the grooves, Tools ▾ acts on the selection (else the pattern), the Chance lane's stem
+    // dragged lands ONE `note move --chance`; a velocity changed elsewhere eases in
+    sltest::Rig r("ui-tools", 1280, 800);
+    r.cmd("project new " + r.song("Tools") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    const std::string pt = r.svc->model().clips[0].pattern;
+    r.cmd("notes add " + pt + " \"C4@0:1 E4@1:1 G4@2:1\"");
+    r.settle();
+    auto &wl = r.app->project().windows();
+    wl.openRoll(pt);
+    r.settle();
+    auto &roll = *wl.roll(pt);
+    using PR = arstro::solaris_ui::PianoRoll;
+    auto &menu = r.app->menu();
+    auto pick = [&](const std::string &label) {
+        for (int i = 0; i < menu.itemCount(); ++i)
+            if (menu.item(i).label == label) { r.click(menu.itemRect(i)); return true; }
+        std::printf("    no menu item `%s` among %d:", label.c_str(), menu.itemCount());
+        for (int i = 0; i < menu.itemCount(); ++i) std::printf(" [%s]", menu.item(i).label.c_str());
+        std::printf("\n");
+        return false;
+    };
+    // Scale ▾: No scale, the scales in C (none chosen yet), Change key… — the rows off it dim, eased
+    assert(roll.rowOut(61) == 0.0);
+    r.click(world(roll, roll.scaleRect()));
+    r.settle();
+    assert(menu.isOpen() && menu.itemCount() == 2 + (int)r.svc->model().scales.size());
+    assert(pick("C minor") && sentLine(r, "pattern scale " + pt + " C minor"));
+    r.frame();
+    r.frame();
+    const double mid = roll.rowOut(64); // E: off C minor, mid-fade
+    assert(mid > 0.0 && mid < 1.0 && roll.rowOut(63) == 0.0);
+    r.settle();
+    assert(roll.rowOut(64) == 1.0 && roll.rowOut(61) == 1.0 && roll.rowOut(60) == 0.0);
+    r.click(world(roll, roll.scaleRect()));
+    r.settle();
+    assert(pick("Change key\xE2\x80\xA6"));
+    r.settle();
+    assert(menu.isOpen() && menu.itemCount() == 12);
+    assert(pick("D minor") && sentLine(r, "pattern scale " + pt + " D minor"));
+    r.settle();
+    assert(roll.rowOut(64) == 0.0 && roll.rowOut(60) == 0.0 && roll.rowOut(63) == 1.0); // D E F G A A# C
+    // Chord ▾ major: a click on E4 at beat 3 stamps it — in D minor, E's own triad (E G A#)
+    r.click(world(roll, roll.chordRect()));
+    r.settle();
+    assert(pick("maj \xC2\xB7 major") && roll.chordOn() && roll.chord().empty());
+    const artboard::Rect rw = world(roll, artboard::Rect{0, 0, 0, 0});
+    r.click(rw.x + roll.beatToX(3.0) + 3.0, rw.y + roll.pitchToY(64) + PR::kNoteH * 0.5);
+    assert(sentLine(r, "note add " + pt + " --chord E --octave 4 --at 3 --length 0.25"));
+    r.settle();
+    int at3 = 0;
+    for (const auto &n : r.svc->model().patterns[0].notes)
+        if (n.at == 3.0) at3 += n.pitch == 64 || n.pitch == 67 || n.pitch == 70;
+    assert(at3 == 3);
+    r.click(world(roll, roll.chordRect()));
+    r.settle();
+    assert(pick("Single notes") && !roll.chordOn());
+    // a velocity set by a shell eases there
+    r.cmd("notes set " + pt + " \"60@0\" --vel 40");
+    r.frame();
+    r.frame();
+    const double v = roll.noteVel(60, 0.0);
+    assert(v > 40.0 && v < 100.0);
+    r.settle();
+    assert(roll.noteVel(60, 0.0) == 40.0);
+    // the Chance lane: C4's stem dragged half way down — ONE line at release, where the pointer left it
+    r.click(world(roll, roll.laneTabRect(PR::LaneChance)));
+    r.settle();
+    assert(roll.laneAmount(PR::LaneChance) == 1.0 && roll.laneAmount(PR::LaneVelocity) == 0.0);
+    const artboard::Rect vel = world(roll, roll.velRect());
+    const double bottom = vel.bottom() - 6.0, h = PR::kVelH - 12.0, x = rw.x + roll.beatToX(0.0) + 1.5;
+    r.drag(x, bottom - h, x, bottom - 0.5 * h, 6);
+    r.settle();
+    assert(sentLine(r, "note move " + pt + " --pitch 60 --at 0 --chance 0.5") && roll.noteChance(60, 0.0) == 0.5);
+    assert(r.svc->model().patterns[0].notes[0].chance == 0.5);
+    // Quantize… → a groove, on the whole pattern (nothing selected)
+    r.click(world(roll, roll.quantizeRect()));
+    r.settle();
+    assert(pick("Groove: hip-hop") && sentLine(r, "pattern quantize " + pt + " --groove hip-hop"));
+    r.settle();
+    // a note selected: Tools ▾ acts on it alone
+    const artboard::Rect c4 = world(roll, roll.noteRect(60, 0.0));
+    r.click(cx(c4), cy(c4));
+    r.settle();
+    assert(roll.selectionCount() == 1);
+    r.click(world(roll, roll.toolsRect()));
+    r.settle();
+    assert(pick("Chance 100%") && sentLine(r, "notes set " + pt + " \"60@0\" --chance 1"));
+    r.frame();
+    r.frame();
+    const double ch = roll.noteChance(60, 0.0);
+    assert(ch > 0.5 && ch < 1.0); // the chance travels too
+    r.settle();
+    r.click(world(roll, roll.toolsRect()));
+    r.settle();
+    assert(pick("Legato") && sentLine(r, "pattern legato " + pt + " --notes \"60@0\""));
+    r.settle();
+    assert(r.svc->model().patterns[0].notes[0].length == 4.0); // alone: to the pattern's end
+    r.click(world(roll, roll.toolsRect()));
+    r.settle();
+    assert(pick("Arpeggiate up-down") && sentLine(r, "pattern arpeggiate " + pt + " --rate 0.25 --mode updown --notes \"60@0\""));
+    pass("the roll's note tools (R-ROLL-11): Scale ▾ and Change key… lock the pattern, the rows off it dim eased; Chord ▾ stamps the key's own triad; a groove from Quantize…; the Chance lane's drag one line; Tools ▾ on the selection; velocity and chance changed elsewhere ease in");
+}
+
 static void test_piano_roll_edits_the_pattern()
 {
     sltest::Rig r("ui-roll", 1280, 800);
@@ -2221,7 +2328,7 @@ static void test_piano_roll_edits_the_pattern()
     r.click(world(roll, roll.quantizeRect()));
     r.settle();
     auto &menu = r.app->menu();
-    assert(menu.isOpen() && menu.itemCount() == 3);
+    assert(menu.isOpen() && menu.itemCount() == 3 + (int)r.svc->model().grooves.size()); // R-ROLL-11: then the grooves
     r.click(menu.itemRect(1));
     r.settle();
     assert(sentLine(r, "pattern quantize " + pt + " --grid 0.5 --swing 0.25"));
@@ -3423,6 +3530,7 @@ int main()
     test_bezier_handles_and_the_automation_window();
     test_piano_roll_edits_the_pattern();
     test_the_rolls_lane_draws_the_wheels();
+    test_the_rolls_note_tools();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();

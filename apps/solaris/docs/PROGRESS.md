@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N12 — note tools: humanise, probability, groove, scale lock, chord stamps, legato, arpeggiate** (R-ROLL-11), then N13… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
+**► N13 — markers and sections** (R-ARR-1), then N14… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
 
 ---
 
@@ -445,11 +445,14 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       64-sample grid, at rest after a clip, restored on seek), the keyboard's wheels live and recorded, MIDI files both
       ways. Part 2: the roll's lower lane on Vel | Bend | Mod — a click adds a point, a drag sets it, a double-click
       removes it, each one `expr` line; eased; a shot.
-- [~] **N12** Note tools: humanise, probability, grooves, scale lock, chord stamps, legato, arpeggiate (R-ROLL-11).
+- [x] **N12** Note tools: humanise, probability, grooves, scale lock, chord stamps, legato, arpeggiate (R-ROLL-11).
       Part 1 (2026-10-16): the grammar — `pattern scale` (placed notes to the nearest, a tie down; moved on the way they
       went), `Note::chance` rolled per clip and pass by a hash (the render and the song's MIDI file agree), `notes set`,
       `pattern humanise` / `legato` / `arpeggiate`, `pattern quantize --groove --strength --notes` (nine templates);
-      chord stamps were already `note add --chord`. Part 2: the roll's tools, scale rows and Chance lane.
+      chord stamps were already `note add --chord`. Part 2: the roll's toolbar in two rows — Scale ▾ (Change key…; the
+      rows off it dim, eased), Chord ▾ (a click stamps it), Tools ▾ (on the selection), the grooves in Quantize…; a
+      Chance lane; velocity and chance changed elsewhere ease; the vocabularies published (`chords`, `scales`,
+      `grooves`); the roll's window 720 × 520; menu carets drawn (the font has no ▾).
 - [ ] **N13** Markers and sections (R-ARR-1).
 - [ ] **N14** Time insert / delete across the song (R-ARR-2).
 - [ ] **N15** Lane groups (R-ARR-3).

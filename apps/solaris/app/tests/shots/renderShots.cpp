@@ -499,6 +499,33 @@ namespace
                  r.app->project().windows().roll("pt_2")->setLane(arstro::solaris_ui::PianoRoll::LaneBend);
                  r.settle();
              }},
+            {"piano-roll-tools",   // R-ROLL-11: D minor — the rows off it dimmed; a stamped chord; the lane on Chance, faint notes
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("pattern scale pt_2 D minor");
+                 r.cmd("notes add pt_2 \"D3@0:0.5:110 F3@0.5:0.25:80:0.5 A3@1:0.5:100 C4@1.5:0.25:70:0.25 D4@2:0.5:105:0.75\"");
+                 r.cmd("note add pt_2 --chord D --octave 3 --at 3 --length 1"); // D minor's own: D F A
+                 r.settle();
+                 r.app->project().windows().openRoll("pt_2");
+                 auto *roll = r.app->project().windows().roll("pt_2");
+                 roll->setLane(arstro::solaris_ui::PianoRoll::LaneChance);
+                 roll->setChord(true, "m7");
+                 r.settle();
+             }},
+            {"piano-roll-scale-fading",   // R-ROLL-11: the scale just changed (D minor → D major) — the rows mid-fade
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("pattern scale pt_2 D minor");
+                 r.cmd("notes add pt_2 \"D3@0:0.5 F3@0.5:0.5 A3@1:0.5 D4@2:0.5\"");
+                 r.settle();
+                 r.app->project().windows().openRoll("pt_2");
+                 r.settle();
+                 r.cmd("pattern scale pt_2 D major");
+                 r.frame();
+                 r.frame();
+                 r.frame();
+                 r.frame();
+             }},
             {"piano-roll-playing",   // R-ROLL-6: its ▶ lit, the clip looping, the playhead where it is heard
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");
