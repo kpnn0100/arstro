@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "MixLaws.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include "base/AudioConfig.h"
 #include "device/Device.h"
@@ -32,6 +33,10 @@ namespace engine
         std::vector<DelayLine> bypassDelay;       // per device: its latency, run in its place while it is bypassed
         std::vector<DelayLine> keyDelay;          // per keyed device: the latency of the devices before it
         std::vector<double> srcL, srcR, kdL, kdR; // its own sound before its delay; a delayed key
+        // R-MIDI-2: notes played live, waiting for the next piece — a fixed ring, one thread
+        struct LiveNote { int pitch = 0, velocity = 0; };
+        std::array<LiveNote, 64> live{};
+        int liveHead = 0, liveTail = 0;
     };
 
     Engine::Engine() = default;
@@ -358,6 +363,16 @@ namespace engine
         evalBinds(mPos, true); // a jump has no value to ramp from
     }
 
+    void Engine::liveNote(int strip, int pitch, int velocity)
+    {
+        if (strip < 0 || strip >= (int)mStrips.size() || mGraph.strips[(size_t)strip].kind != Strip::Instrument) return;
+        auto &st = *mStrips[(size_t)strip];
+        const int next = (st.liveHead + 1) % (int)st.live.size();
+        if (next == st.liveTail) return; // 63 waiting already: a flood is dropped, never a stall
+        st.live[(size_t)st.liveHead] = StripState::LiveNote{std::clamp(pitch, 0, 127), std::clamp(velocity, 0, 127)};
+        st.liveHead = next;
+    }
+
     void Engine::clearPeaks()
     {
         for (auto &m : mStripMeters) m.maxPeak[0] = m.maxPeak[1] = 0;
@@ -488,6 +503,14 @@ namespace engine
                 Device &inst = *st.rack[0];
                 const bool playing = !d.rack[0].bypass;
                 long long cur = p0;
+                // R-MIDI-2: what was played live since the last piece, at its start
+                while (st.liveTail != st.liveHead)
+                {
+                    const auto &e = st.live[(size_t)st.liveTail];
+                    if (e.velocity > 0) inst.noteOn(e.pitch, e.velocity);
+                    else inst.noteOff(e.pitch);
+                    st.liveTail = (st.liveTail + 1) % (int)st.live.size();
+                }
                 // (M5) split the block at every note event so it starts on its exact sample
                 while (st.nextEvent < d.notes.size() && d.notes[st.nextEvent].at < p0 + n)
                 {

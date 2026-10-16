@@ -195,6 +195,13 @@ namespace solaris
             {"settings.showIds", "bool", "every object's id drawn beside its name (R-UI-11)"},
             {"settings.autosave", "int", "seconds between autosaves of an unsaved song; 0 = off (R-SAFE-1)"},
             {"settings.driver", "string", "pulse | pipewire: how the clock device is reached (R-DEV-9)"},
+            {"settings.midiInputs", "string", "all | none | MIDI port names, comma-separated: the keyboards Solaris listens to (R-MIDI-2)"},
+            {"armed", "string", "the strip the MIDI keyboard plays ('' none) — the session's, never saved (R-MIDI-2)"},
+            {"midiDevices", "object[]", "this machine's MIDI inputs, as `midi devices` last listed them (R-MIDI-2)"},
+            {"midiDevices[].id", "string", "what `settings set midiInputs=` names"},
+            {"midiDevices[].name", "string", ""},
+            {"midiDevices[].listening", "bool", "Solaris is subscribed to it"},
+            {"midiMessages", "int", "messages the keyboard sent since start — an activity light", false},
             {"settings.keys", "object[]", "every keyboard action (R-SET-4), in the sheet's order — a pressed combo is looked up here"},
             {"settings.keys[].id", "string", "transport.play … — set with `settings set key.<id>=<combos>`"},
             {"settings.keys[].area", "string", "Transport | Song | Lanes | Piano roll (the first three are one keyboard)"},
@@ -522,7 +529,11 @@ namespace solaris
                               .set("folders", strings(m.settings.folders)).set("ports", strings(m.settings.ports))
                               .set("metronome", m.settings.metronome).set("metronomeLevel", m.settings.metronomeLevel).set("auditionLevel", m.settings.auditionLevel)
                               .set("newBpm", m.settings.newBpm).set("newSig", m.settings.newSig).set("reducedMotion", m.settings.reducedMotion)
-                              .set("showIds", m.settings.showIds).set("autosave", m.settings.autosave).set("driver", m.settings.driver).set("keys", keys));
+                              .set("showIds", m.settings.showIds).set("autosave", m.settings.autosave).set("driver", m.settings.driver).set("midiInputs", m.settings.midiInputs).set("keys", keys));
+        Json midi = Json::array();
+        for (const auto &d : m.midiDevices) midi.push(Json::object().set("id", d.id).set("name", d.name).set("listening", d.listening));
+        j.set("armed", m.armed).set("midiDevices", midi);
+        if (!stable) j.set("midiMessages", (int)m.midiMessages);
         Json devs = Json::array();
         for (const auto &d : m.devices)
             devs.push(Json::object().set("id", d.id).set("name", d.name).set("dir", d.dir).set("channels", d.channels).set("rate", d.rate));

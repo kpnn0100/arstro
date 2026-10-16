@@ -24,6 +24,7 @@ namespace solaris
         o << "showIds = " << (showIds ? "on" : "off") << "\n";
         o << "autosave = " << (autosave > 0 ? std::to_string(autosave) : std::string("off")) << "\n";
         o << "driver = " << driver << "\n";
+        o << "midiInputs = " << midiInputs << "\n";
         for (const auto &k : keys) o << "key." << k.first << " = " << k.second << "\n";
         return o.str();
     }
@@ -58,6 +59,7 @@ namespace solaris
             else if (k == "showIds") s.showIds = v == "on";
             else if (k == "autosave") { const int a = v == "off" ? 0 : std::atoi(v.c_str()); if (a == 0 || (a >= 1 && a <= 3600)) s.autosave = a; }
             else if (k == "driver") { if (v == "pulse" || v == "pipewire") s.driver = v; }
+            else if (k == "midiInputs") { if (!v.empty()) s.midiInputs = v; }
             else if (k.rfind("key.", 0) == 0 && k.size() > 4) s.keys.emplace_back(k.substr(4), v); // checked when used (keysOf)
         }
         return s;

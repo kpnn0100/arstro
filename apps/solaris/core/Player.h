@@ -27,6 +27,8 @@
 #pragma once
 #include "AudioOut.h"
 #include "Engine.h"
+#include "MidiIn.h"
+#include <bitset>
 #include "base/LockFreeQueue.h"
 #include "device/Device.h"
 #include "meter/Meters.h"
@@ -82,6 +84,20 @@ namespace solaris
         long long heard() const;
         long long rendered() const { return mRendered.load(); }
         double latency() const { return mLatency.load(); }
+        /** R-MIDI-2: the queue a keyboard fills (the service's — it outlives the player) and the strip its notes play
+         *  (−1: none — they are dropped). The queue is set before `start`; the armed strip may change while it runs,
+         *  and the notes still held on the strip it left are let go. */
+        void setMidi(LockFreeQueue<MidiEvent> *q) { mMidi = q; }
+        void setArmed(int strip) { mArmed.store(strip); }
+        /** R-MIDI-2: while on, every note played is kept where it was HEARD — rendered minus every latency, as `heard`
+         *  says — velocity 0 its end (the pedal's held ends where the pedal came up). */
+        struct Played
+        {
+            long long at = 0;
+            int pitch = 0, velocity = 0;
+        };
+        void setRecording(bool on) { mRecording.store(on); }
+        bool takePlayed(Played &p) { return mPlayed.pop(p); } // the service's thread
         /** R-DEV-5: the device's underruns since `start` (−1: its driver cannot count them). */
         long long xruns() const { return mOut ? mOut->xruns() : -1; }
         /** Destroy engines the thread handed back (call on the service's thread). */
@@ -126,6 +142,7 @@ namespace solaris
         void click(long long pos, int n);
         void keepLive(long long out); // the audio thread: this block's binding values into the ring
         void measure(int n);          // the audio thread: this block into the meters (R-METER-1, R-METER-2)
+        void midi();                  // the audio thread: the keyboard's messages since the last block (R-MIDI-2)
         void ballistics(int k, float peak, double meanSquare, int n); // one meter's RMS and held peak
 
         std::thread mThread;
@@ -158,6 +175,14 @@ namespace solaris
             mIntegrated{LoudnessMeter::kSilence}, mTruePeak{LoudnessMeter::kSilence}, mCorrelation{0};
         std::array<std::atomic<float>, SpectrumAnalyser::kBands> mSpectrum{};
         std::atomic<bool> mClearPending{false};
+        // R-MIDI-2: the keyboard — the queue is the service's; the rest the audio thread's
+        LockFreeQueue<MidiEvent> *mMidi = nullptr;
+        std::atomic<int> mArmed{-1};
+        std::atomic<bool> mRecording{false};
+        LockFreeQueue<Played> mPlayed{4096};
+        SustainPedal mPedal;
+        std::bitset<128> mSounding;             // pitches held down on the armed strip
+        int mArmedWas = -1;
         bool mClearNow = false;                 // the audio thread's: a ClearMeters message taken, for `measure`
         std::unique_ptr<Device> mClick;
         std::vector<Sample> mClickL, mClickR;

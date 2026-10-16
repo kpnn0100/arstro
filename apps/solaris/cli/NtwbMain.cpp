@@ -25,6 +25,9 @@
 #ifdef SOLARIS_HAVE_PIPEWIRE
 #include "AudioOutPipewire.h"
 #endif
+#ifdef SOLARIS_HAVE_ALSA
+#include "MidiInAlsa.h"
+#endif
 #endif
 #include <chrono>
 #include <cstdio>
@@ -155,6 +158,10 @@ namespace solaris_cli
 #endif
 #ifdef SOLARIS_HAVE_PIPEWIRE
             host.audioOutFor = [](const std::string &d) { return d == "pipewire" ? std::unique_ptr<solaris::IAudioOut>(new solaris_host::AudioOutPipewire()) : nullptr; }; // R-DEV-9
+#endif
+#ifdef SOLARIS_HAVE_ALSA
+            host.listMidiInputs = solaris_host::listMidiInputs; // R-MIDI-2
+            host.midiIn = [] { return std::unique_ptr<solaris::IMidiIn>(new solaris_host::MidiInAlsa()); };
 #endif
             solaris_host::machinePaths(host.settingsPath, host.recentsPath); // the window's settings and recents
             solaris::SolarisService svc(host);

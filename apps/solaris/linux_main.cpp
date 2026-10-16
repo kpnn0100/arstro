@@ -27,6 +27,9 @@
 #ifdef SOLARIS_HAVE_PIPEWIRE
 #include "AudioOutPipewire.h"
 #endif
+#ifdef SOLARIS_HAVE_ALSA
+#include "MidiInAlsa.h"
+#endif
 #endif
 #include "../../core/Artboard/src/adapter/native/CairoTarget.h"
 #include <gtk/gtk.h>
@@ -56,6 +59,10 @@ namespace
 #endif
 #ifdef SOLARIS_HAVE_PIPEWIRE
         h.audioOutFor = [](const std::string &d) { return d == "pipewire" ? std::unique_ptr<solaris::IAudioOut>(new solaris_host::AudioOutPipewire()) : nullptr; }; // R-DEV-9
+#endif
+#ifdef SOLARIS_HAVE_ALSA
+        h.listMidiInputs = solaris_host::listMidiInputs; // R-MIDI-2
+        h.midiIn = [] { return std::unique_ptr<solaris::IMidiIn>(new solaris_host::MidiInAlsa()); };
 #endif
         solaris_host::machinePaths(h.settingsPath, h.recentsPath); // the same files solaris-cc uses
         return h;

@@ -45,7 +45,8 @@ namespace solaris
             NotePreviewed,    // strip, pitch
             ProjectAutosaved, // path — R-SAFE-1
             ProjectRecovery,  // path, age — R-SAFE-2: an autosave newer than the song
-            MetersCleared     // — R-METER-2
+            MetersCleared,    // — R-METER-2
+            StripArmed        // strip — R-MIDI-2 ('' disarmed)
         };
 
         Kind kind = Kind::Info;

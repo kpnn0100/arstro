@@ -88,6 +88,23 @@ namespace sltest
             double latency() override { return 0.0; }
         };
         if (audio) h.audioOut = [] { return std::unique_ptr<arstro::solaris::IAudioOut>(new SilentOut()); };
+        // R-MIDI-2: a keyboard that is there and plays nothing — `strip arm` works, the monitor runs silent
+        struct QuietMidi : arstro::solaris::IMidiIn
+        {
+            std::vector<std::string> on;
+            bool open(const std::vector<std::string> &ports, std::function<void(const arstro::solaris::MidiEvent &)>, std::string &) override
+            {
+                on = ports.empty() ? std::vector<std::string>{"Keystation 49"} : ports;
+                return true;
+            }
+            void close() override {}
+            std::vector<std::string> listening() const override { return on; }
+        };
+        h.listMidiInputs = [](std::vector<arstro::solaris::MidiPort> &out, std::string &) {
+            out = {arstro::solaris::MidiPort{"Keystation 49", "Keystation 49"}};
+            return true;
+        };
+        h.midiIn = [] { return std::unique_ptr<arstro::solaris::IMidiIn>(new QuietMidi()); };
         h.settingsPath = dir + "/settings.txt";
         h.recentsPath = dir + "/recents";
         return h;

@@ -18,6 +18,18 @@ find_package(Threads REQUIRED)
 target_link_libraries(solaris_ring_tests PRIVATE Threads::Threads)
 add_test(NAME solaris_ring COMMAND solaris_ring_tests)
 
+# R-MIDI-2: the ALSA sequencer input, live through the kernel's Midi Through (no sound device; 77 = skipped)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+  pkg_check_modules(SOLARIS_TEST_ALSA IMPORTED_TARGET alsa)
+endif()
+if(SOLARIS_TEST_ALSA_FOUND AND TARGET solaris_host)
+  add_executable(solaris_midi_tests faces/midiTests.cpp)
+  target_link_libraries(solaris_midi_tests PRIVATE solaris_host PkgConfig::SOLARIS_TEST_ALSA)
+  add_test(NAME solaris_midi COMMAND solaris_midi_tests)
+  set_tests_properties(solaris_midi PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
+endif()
+
 # the web face's adapter over ntwb::MemoryTransport, and `ntwb install` into a scratch data dir
 add_executable(solaris_ntwb_tests faces/ntwbAdapterTests.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../cli/NtwbAdapter.cpp)
 target_include_directories(solaris_ntwb_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../cli)

@@ -143,6 +143,12 @@ namespace solaris
                     next.driver = v;
                     mPipewireDown = false; // set again: PipeWire is tried again
                 }
+                else if (k == "midiInputs")
+                {
+                    // R-MIDI-2: which keyboards Solaris listens to — reopened at once when it listens
+                    if (v.empty()) { err = "midiInputs is all, none, or port names separated by commas"; return false; }
+                    next.midiInputs = v;
+                }
                 else if (k == "autosave")
                 {
                     // R-SAFE-1: seconds between autosaves, or off
@@ -175,9 +181,9 @@ namespace solaris
                 else
                 {
                     err = "no setting `" + k + "`";
-                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver"});
+                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver", "midiInputs"});
                     err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>, metronome, "
-                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, autosave, driver, key.<action>)")
+                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, autosave, driver, midiInputs, key.<action>)")
                                         : " (did you mean: " + near[0] + "?)";
                     return false;
                 }
@@ -204,6 +210,11 @@ namespace solaris
             mSettings = next;
             if (!saveSettings(err)) { mSettings = keep; return false; }
             if (mPlayer) mPlayer->setClick(mSettings.metronome, engine::dbToLinear(mSettings.metronomeLevel)); // heard at once
+            if (mMidiIn && mMidiOpenFor != mSettings.midiInputs)
+            {
+                std::string e; // R-MIDI-2: listening now to the keyboards it names
+                if (!ensureMidi(e)) emit(Event(Event::Kind::Info).with("text", "MIDI: " + e));
+            }
             for (const auto &w : what) emit(Event(Event::Kind::SettingsChanged).with("what", w));
             return true;
         }
@@ -218,7 +229,7 @@ namespace solaris
                               .set("folders", folders).set("ports", ports).set("metronome", mSettings.metronome)
                               .set("metronomeLevel", mSettings.metronomeLevel).set("auditionLevel", mSettings.auditionLevel).set("newBpm", mSettings.newBpm)
                               .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion)
-                              .set("showIds", mSettings.showIds).set("autosave", mSettings.autosave).set("driver", mSettings.driver).set("keys", [&] {
+                              .set("showIds", mSettings.showIds).set("autosave", mSettings.autosave).set("driver", mSettings.driver).set("midiInputs", mSettings.midiInputs).set("keys", [&] {
                                   Json keys = Json::array(); // only the re-keyed actions, as the file has them
                                   for (const auto &k : mSettings.keys) keys.push(Json::string(k.first + "=" + k.second));
                                   return keys;
@@ -268,6 +279,19 @@ namespace solaris
             for (const auto &d : mDevices)
                 mOutput += d.dir + "\t" + d.id + "\t" + std::to_string(d.channels) + " ch · " + std::to_string(d.rate) + " Hz\t" + d.name + "\n";
             if (mDevices.empty()) mOutput = "no audio devices\n";
+            if (mHost.listMidiInputs)
+            {
+                // R-MIDI-2: the MIDI inputs too, for Settings — quietly: a machine with none still lists its audio
+                std::vector<MidiPort> ports;
+                std::string e;
+                if (mHost.listMidiInputs(ports, e))
+                {
+                    const std::vector<std::string> on = mMidiIn ? mMidiIn->listening() : std::vector<std::string>{};
+                    mMidiPorts.clear();
+                    for (const auto &pt : ports) mMidiPorts.push_back(MidiPortModel{pt.id, pt.name, std::find(on.begin(), on.end(), pt.id) != on.end()});
+                    mModel.midiDevices = mMidiPorts;
+                }
+            }
             emit(Event(Event::Kind::DevicesChanged).with("count", (long long)mDevices.size()));
             return true;
         }

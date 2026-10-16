@@ -20,6 +20,7 @@
 #include "Command.h"
 #include "Event.h"
 #include "MixGraph.h"
+#include "MidiIn.h"
 #include "Player.h"
 #include "Auditioner.h"
 #include "NotePreview.h"
@@ -59,6 +60,9 @@ namespace solaris
             /** R-DEV-9: a stream through a named driver ("pipewire"); null when the build has none — `audioOut` (PulseAudio)
              *  is the fallback. */
             std::function<std::unique_ptr<IAudioOut>(const std::string &driver)> audioOutFor;
+            /** R-MIDI-2: this machine's MIDI inputs, and a listener to them. Empty = this build has no MIDI input. */
+            std::function<bool(std::vector<MidiPort> &out, std::string &err)> listMidiInputs;
+            std::function<std::unique_ptr<IMidiIn>()> midiIn;
             std::string settingsPath; // the machine's settings file ("" = not persisted)
             std::string recentsPath;  // the recent songs, one path per line ("" = not persisted)
         };
@@ -93,6 +97,13 @@ namespace solaris
         bool transportCommand(const Command &c, std::string &err);
         /** R-DEV-9: the clock device through the setting's driver, PulseAudio the fallback; `driver` says which. */
         std::unique_ptr<IAudioOut> openOutput(int rate, int block, std::string &driver, std::string &err);
+        // R-MIDI-2: the keyboard — its ports, the armed strip, the input monitor (ServiceInput.cpp)
+        bool inputCommand(const Command &c, std::string &err);
+        bool ensureMidi(std::string &err);          // the inputs open, as `midiInputs` names them
+        void startMonitor();                         // armed and stopped: the strip heard through the song's mix
+        void stopMonitor();
+        void drainMidi();                            // no consumer runs: what waited is stale
+        int armedIn(const std::vector<std::string> &strips) const;
         bool autoCommand(const Command &c, std::string &err);   // ServiceAuto.cpp
         // R-SVC-8 (ServiceCompose.cpp): notes in bulk and by name, steps, pattern edits; the read-back views
         bool composeCommand(const Command &c, std::string &err);
@@ -175,6 +186,15 @@ namespace solaris
         std::set<std::string> mClipLatch;  // R-METER-2: strips that reached full scale since `meters clear`
         bool mMasterClip = false;          // … and the master
         bool mPipewireDown = false;        // R-DEV-9: PipeWire would not open this session — PulseAudio until the driver is set again
+        // R-MIDI-2: the queue the keyboard's thread fills and the running player (or monitor) drains; created by ensureMidi
+        std::shared_ptr<LockFreeQueue<MidiEvent>> mMidiQ;
+        std::shared_ptr<std::atomic<long long>> mMidiCount = std::make_shared<std::atomic<long long>>(0);
+        std::unique_ptr<IMidiIn> mMidiIn;
+        std::string mMidiOpenFor;          // the `midiInputs` it was opened with
+        std::string mArmed;                // the armed strip ("" none) — the session's, not the song's
+        std::unique_ptr<Player> mMonitor;
+        std::vector<std::string> mMonitorStrips;
+        std::vector<MidiPortModel> mMidiPorts; // what `midi devices` last listed
         Settings mSettings;
         std::vector<std::string> mRecents;
         std::vector<RecentModel> mRecentCards; // parsed from the files: rebuilt only when stale

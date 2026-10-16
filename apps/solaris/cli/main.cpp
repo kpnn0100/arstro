@@ -24,6 +24,9 @@
 #ifdef SOLARIS_HAVE_PIPEWIRE
 #include "AudioOutPipewire.h"
 #endif
+#ifdef SOLARIS_HAVE_ALSA
+#include "MidiInAlsa.h"
+#endif
 #endif
 #include "SolarisService.h"
 #include <cstdio>
@@ -121,6 +124,10 @@ int main(int argc, char **argv)
 #endif
 #ifdef SOLARIS_HAVE_PIPEWIRE
     host.audioOutFor = [](const std::string &d) { return d == "pipewire" ? std::unique_ptr<IAudioOut>(new solaris_host::AudioOutPipewire()) : nullptr; }; // R-DEV-9
+#endif
+#ifdef SOLARIS_HAVE_ALSA
+    host.listMidiInputs = solaris_host::listMidiInputs; // R-MIDI-2
+    host.midiIn = [] { return std::unique_ptr<IMidiIn>(new solaris_host::MidiInAlsa()); };
 #endif
     // The same settings and recents files the window uses: `settings set` here and the Settings
     // dialog are one setting.

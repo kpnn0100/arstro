@@ -27,6 +27,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `strip delete <ch> [--with-clips]` | Delete a strip and its rack. Refused while clips play through it or strips route to it, unless --with-clips (its clips go too). | R-MIX-1 |
 | `strip move <ch> [--mixer <mx>] [--order <n>]` | Move a strip to another mixer (at its end) and/or to position --order <n> on it (0 = first); its mixer's strips renumber in their new order, as `mixer move` renumbers mixers. Refused if a route would point backward. | R-MIX-3 |
 | `strip relink <ch> [--to <ch>]` | Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips need an audio strip, note clips an instrument strip; a bus plays no clips. | R-MIX-14 |
+| `strip arm <ch\|none>` | Arm an instrument strip for the MIDI keyboard (R-MIDI-2): what is played sounds through it at once — through the song while it plays, through an input monitor (the song's mix without its clips) while stopped — the sustain pedal held; `none` disarms. Not an edit: the song does not keep it. Opens the MIDI inputs `settings midiInputs` names. | R-MIDI-2 |
 | `strip duck <ch> --under <key-strip> [--amount <dB>]` | A side-chain in one line: a Compressor at the end of <ch>'s rack, its Sidechain on, keyed by a pre-fader sidechain send from --under — attack 1 ms, release half a beat, threshold −30 dB and the ratio that makes a full-scale key cut --amount dB (default 8, 1 … 24). The key must come EARLIER in processing order (R-MIX-4). One edit, one undo; prints the compressor, then `made:`. | R-MIX-18 |
 | `route <ch> [--to <ch\|master\|port>]` | Set a strip's main output: a strip LATER in processing order (a later mixer, or after it on its own), master, or an output port. | R-MIX-4 |
 | `send add <ch> [--to <ch\|master\|port>] [--gain <dB>] [--pre] [--sidechain]` | Add a send (post-fader unless --pre). Same forward-only rule as `route`. With --sidechain it is a KEY: it feeds the target's compressors' detectors (their Sidechain switch), not its input, and goes to a strip (R-MIX-15). | R-MIX-5 |
@@ -87,6 +88,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `transport play [--from <beats>] [--clip <ac>]` | Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position. --clip plays that clip's span looped, the whole song sounding there (the piano roll's play, R-ROLL-6): it follows the clip as it is edited, and the song's own loop comes back at `transport stop`, a plain `transport play` or a `transport loop`. | R-PLAY-1 |
 | `transport stop [--return]` | Stop; the transport stays where it was heard — or, with --return, goes back to the cue: where the time bar was last put (a seek, or a play's --from or --clip; `transport.cue`). A plain stop's place is temporary: the next play starts there but the cue stays. | R-TIME-7 |
 | `transport seek <beats>` | Move the transport (playing or not). | R-TIME-4 |
+| `midi devices` | This machine's MIDI inputs (ALSA sequencer ports), each marked when Solaris listens to it — the names `settings set midiInputs=` takes. | R-MIDI-2 |
 | `meters clear` | Clear the meters: every clip light and held peak, and the master's true peak and integrated loudness start again (the song is not edited; a click on a clip light). | R-METER-2 |
 | `transport loop <from\|off> [to]` | Loop between two beats while playing; `off` ends it. | R-TIME-4 |
 | `audition <file\|stop>` | Hear a sample now, outside the song (the browser's preview): through the output device at the audition level, to its end; `stop` ends it. Not an edit, never in a render. | R-EDM-9 |
@@ -194,6 +196,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `note.previewed` | strip, pitch | A note was heard through a strip, outside the song (`note preview`, the piano roll's sound — R-ROLL-7). |
 | `project.autosaved` | path | The unsaved song was written beside it (`<song>.autosave`, R-SAFE-1). |
 | `project.recovery` | path, age | The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2). |
+| `strip.armed` | strip | The MIDI keyboard plays this strip now ('' — none); the session's, not the song's (R-MIDI-2). |
 | `meters.cleared` |  | The clip lights and held peaks are out; the master's true peak and integrated loudness start again (R-METER-2). |
 
 ## Model (`state print --json`)
@@ -385,6 +388,13 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.showIds` | bool | every object's id drawn beside its name (R-UI-11) |
 | `settings.autosave` | int | seconds between autosaves of an unsaved song; 0 = off (R-SAFE-1) |
 | `settings.driver` | string | pulse \| pipewire: how the clock device is reached (R-DEV-9) |
+| `settings.midiInputs` | string | all \| none \| MIDI port names, comma-separated: the keyboards Solaris listens to (R-MIDI-2) |
+| `armed` | string | the strip the MIDI keyboard plays ('' none) — the session's, never saved (R-MIDI-2) |
+| `midiDevices` | object[] | this machine's MIDI inputs, as `midi devices` last listed them (R-MIDI-2) |
+| `midiDevices[].id` | string | what `settings set midiInputs=` names |
+| `midiDevices[].name` | string |  |
+| `midiDevices[].listening` | bool | Solaris is subscribed to it |
+| `midiMessages` | int | messages the keyboard sent since start — an activity light *(not in `--stable`)* |
 | `settings.keys` | object[] | every keyboard action (R-SET-4), in the sheet's order — a pressed combo is looked up here |
 | `settings.keys[].id` | string | transport.play … — set with `settings set key.<id>=<combos>` |
 | `settings.keys[].area` | string | Transport \| Song \| Lanes \| Piano roll (the first three are one keyboard) |

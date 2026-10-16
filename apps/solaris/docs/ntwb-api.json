@@ -109,6 +109,10 @@
       "doc": "The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2).",
       "data": "{line, fields: {path, age}}"
     },
+    "strip.armed": {
+      "doc": "The MIDI keyboard plays this strip now ('' — none); the session's, not the song's (R-MIDI-2).",
+      "data": "{line, fields: {strip}}"
+    },
     "meters.cleared": {
       "doc": "The clip lights and held peaks are out; the master's true peak and integrated loudness start again (R-METER-2).",
       "data": "{line, fields: {}}"

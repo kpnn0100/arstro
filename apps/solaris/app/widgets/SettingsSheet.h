@@ -80,7 +80,7 @@ namespace solaris_ui
     class SettingsSheet : public artboard::Segment
     {
     public:
-        enum Row { kOutput = 0, kInput, kRate, kBuffer, kMetronome, kClickLevel, kPreviewLevel, kNewBpm, kNewSig, kMotion, kAutosave, kDriver, kRows };
+        enum Row { kOutput = 0, kInput, kRate, kBuffer, kMetronome, kClickLevel, kPreviewLevel, kNewBpm, kNewSig, kMotion, kAutosave, kDriver, kMidiIn, kRows };
         enum Section { kAudio = 0, kPlayback, kNewSongs, kFolders, kInterface, kKeyboard, kSections };
         static constexpr double kCardW = 720.0, kCardH = 520.0;
         static constexpr double kRailW = 164.0;   // the sections' column

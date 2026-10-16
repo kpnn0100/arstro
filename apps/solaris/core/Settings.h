@@ -33,6 +33,7 @@ namespace solaris
         bool showIds = false;                   // R-UI-11: every object's id drawn beside its name (View › Show IDs)
         int autosave = 60;                      // R-SAFE-1: seconds between autosaves of an unsaved song; 0 = off
         std::string driver = "pulse";            // R-DEV-9: pulse | pipewire — how the clock device is reached
+        std::string midiInputs = "all";         // R-MIDI-2: all | none | port names, comma-separated
         // R-SET-4: `key.<action> = <combos>` — only the actions this machine re-keyed (the rest keep their defaults)
         std::vector<std::pair<std::string, std::string>> keys;
 

@@ -101,6 +101,9 @@ namespace solaris_ui
         std::string rowLabel(int i) const { return i >= 0 && i < (int)mRows.size() ? mRows[(size_t)i].label : std::string(); }
         /** R-LANE-3: how much of a lane's "instrument track" line is drawn (LIVE, 0 … 1), and what it says. */
         double trackAmount(const std::string &lane) const;
+        /** R-MIDI-2: an instrument track's arm button (local; a click is `strip arm`), and how lit it is (LIVE). */
+        artboard::Rect armRect(int row) const;
+        double armAmount(const std::string &strip) const;
         std::string trackLabel(const std::string &lane) const;
         std::string rowLane(int i) const { return i >= 0 && i < (int)mRows.size() ? mRows[(size_t)i].lane : std::string(); }
         artboard::Rect rowRect(int i) const;
@@ -293,6 +296,9 @@ namespace solaris_ui
         std::vector<ClipLive> mLive;                  // by clip id, ghosts included
         std::map<std::string, Stripe> mStripes;       // by row key
         std::map<std::string, TrackLive> mTracks;     // by lane id (R-LANE-3)
+        std::string mArmed;                           // R-MIDI-2: the model's armed strip
+        std::map<std::string, artboard::AnimatedProperty> mArm; // its button's light, by strip
+        std::map<std::string, double> mArmLast;
         std::string mSong;                            // another song: everything placed afresh
         bool mBound = false, mEver = false, mEmptyInit = false;
         artboard::AnimatedProperty mEmptyAmt{0.0};

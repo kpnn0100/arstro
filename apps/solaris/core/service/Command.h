@@ -31,7 +31,7 @@ namespace solaris
             ProjectNew, ProjectOpen, ProjectSave, ProjectClose, ProjectRecover, ProjectDiscardRecovery,
             Set, Get,
             MixerAdd, MixerDelete, MixerMove,
-            StripAdd, StripDelete, StripMove, StripRelink, StripDuck, Route,
+            StripAdd, StripDelete, StripMove, StripRelink, StripDuck, StripArm, Route,
             SendAdd, SendDelete,
             DeviceAdd, DeviceRemove, DeviceMove,
             LaneAdd, LaneDelete, LaneMove,
@@ -46,7 +46,8 @@ namespace solaris
             MatrixPrint, Audit, StatePrint, Api,
             SettingsSet, SettingsPrint, FolderAdd, FolderRemove, FolderMove, DevicesList, Browse, RecentsRemove,
             TransportPlay, TransportStop, TransportSeek, TransportLoop, Wait, Audition, NotePreview,
-            MetersClear // R-METER-2
+            MetersClear, // R-METER-2
+            MidiDevices  // R-MIDI-2
         };
         Kind kind = Kind::None;
         std::vector<std::string> args;                           // positionals after the verb

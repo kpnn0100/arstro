@@ -28,6 +28,14 @@ if(SOLARIS_PIPEWIRE_FOUND)
   target_compile_definitions(solaris_host PUBLIC SOLARIS_HAVE_PIPEWIRE=1)
 endif()
 
+# R-MIDI-2: a MIDI keyboard through the ALSA sequencer
+pkg_check_modules(SOLARIS_ALSA IMPORTED_TARGET alsa)
+if(SOLARIS_ALSA_FOUND)
+  target_sources(solaris_host PRIVATE MidiInAlsa.cpp)
+  target_link_libraries(solaris_host PRIVATE PkgConfig::SOLARIS_ALSA)
+  target_compile_definitions(solaris_host PUBLIC SOLARIS_HAVE_ALSA=1)
+endif()
+
 # R-SVC-5: the window's control channel. cosmo's ControlChannel is COMPILED IN PLACE (a non-blocking
 # Unix line socket that moves lines and never parses them — linked, not copied, as R-UI-4 reuses
 # cosmo's widgets); ControlLog.cpp gives it the one log symbol it needs from cosmo's host, and

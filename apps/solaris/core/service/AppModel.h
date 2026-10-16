@@ -209,6 +209,7 @@ namespace solaris
         bool showIds = false;                    // R-UI-11: every object's id beside its name
         int autosave = 60;                       // R-SAFE-1: seconds; 0 = off
         std::string driver = "pulse";             // R-DEV-9: pulse | pipewire
+        std::string midiInputs = "all";          // R-MIDI-2: all | none | port names
         std::vector<KeyActionModel> keys;        // R-SET-4: every shortcut, in the sheet's order
     };
 
@@ -268,6 +269,13 @@ namespace solaris
         std::string label;                       // what made it ("set ch_2.gain", "New song")
     };
 
+    /** R-MIDI-2: a MIDI input this machine has. */
+    struct MidiPortModel
+    {
+        std::string id, name;
+        bool listening = false;                  // Solaris is subscribed to it now
+    };
+
     struct AppModel
     {
         std::string screen = "home";             // home | project
@@ -303,6 +311,9 @@ namespace solaris
         BrowserModel browser;
         TransportModel transport;
         LoudnessModel loudness;                  // R-METER-1
+        std::string armed;                       // R-MIDI-2: the strip the keyboard plays ("" none) — the session's
+        std::vector<MidiPortModel> midiDevices;  // `midi devices`: this machine's MIDI inputs
+        long long midiMessages = 0;              // messages the keyboard sent since Solaris started (an activity light)
         AuditionModel audition;
         std::vector<DeviceTypeModel> deviceTypes; // the registry, instruments first (R-DSP-2)
         long long revision = 0;                  // bumps on every change — NOT in the stable dump

@@ -114,6 +114,8 @@ helpers it borrows.
 | Right-click a number › Create Pump | `auto create <address> --pump` — a one-beat dip, looping (R-AUTO-13) |
 | Automation window › Rename | cosmo's field → `set <au>.name="<typed>"` |
 | Mixer › a meter's clip light (any strip, the master) | `meters clear` — every light out, the holds zeroed, the master's true peak and integrated loudness started again (R-METER-2) |
+| Lanes › an instrument track's header › the arm ring | `strip arm <ch>` · `strip arm none` when it is armed (R-MIDI-2) |
+| Settings › Audio › MIDI input (combo) | `settings set midiInputs=all\|none\|<port>` (R-MIDI-2) |
 | Settings › Audio › Driver (combo) | `settings set driver=pulse\|pipewire` (R-DEV-9) |
 | Mixer › right-click a strip › Duck Under ▸ <strip> | `strip duck <ch> --under <key>` — a keyed compressor and its pre-fader key in one line (R-MIX-18); the strips offered are those whose `keyTargets` include it |
 | Mixer › the master's LUFS chip (where a strip has M / S) | its `loudness` WINDOW (the view's; R-METER-1) |

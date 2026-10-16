@@ -664,6 +664,35 @@ static void test_lists_travel_when_the_song_changes_shape()
     pass("Lists travel (§1): a clip from a shell fades in, a `clip move` eases, a lane removed slides the next up, a tab cross-fades");
 }
 
+static void test_an_instrument_track_is_armed_from_its_header()
+{
+    // R-MIDI-2: an instrument track's header has an arm button — ONE `strip arm` line; it lights red, eased; again, disarmed
+    sltest::Rig r("ui-arm", 1280, 800);
+    r.cmd("project new " + r.song("Arm") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");     // ch_2 on its own track
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    int row = -1;
+    for (int i = 0; i < tl.rowCount(); ++i)
+        if (tl.rowTrack(i) == "ch_2") row = i;
+    assert(row >= 0 && tl.armRect(row).w > 0.0 && tl.armAmount("ch_2") == 0.0);
+    r.click(world(tl, tl.armRect(row)));
+    assert(r.sent.back() == "strip arm ch_2" && r.svc->model().armed == "ch_2");
+    r.frame();
+    r.frame();
+    assert(tl.armAmount("ch_2") > 0.0 && tl.armAmount("ch_2") < 1.0); // it lights, eased
+    r.settle();
+    assert(tl.armAmount("ch_2") == 1.0);
+    r.click(world(tl, tl.armRect(row)));
+    assert(r.sent.back() == "strip arm none" && r.svc->model().armed.empty());
+    r.settle();
+    assert(tl.armAmount("ch_2") == 0.0);
+    // the plain rows have none
+    for (int i = 0; i < tl.rowCount(); ++i)
+        if (tl.rowTrack(i).empty()) assert(tl.armRect(i).w == 0.0);
+    pass("Arm (R-MIDI-2): an instrument track's header arms its strip in ONE `strip arm` line, lit red (eased); again, `strip arm none`; plain rows have no button");
+}
+
 static void test_the_export_sheet_is_one_render_line()
 {
     // R-EXPORT-1: File › Export… — a combo a choice, the rows that do not apply greyed (eased) and inert, and Export…
@@ -3298,6 +3327,7 @@ int main()
     test_mixer_dock_strips();
     test_meters_and_the_loudness_window();
     test_the_export_sheet_is_one_render_line();
+    test_an_instrument_track_is_armed_from_its_header();
     test_mixer_matrix_effects_and_device_panel();
     test_song_bar_menus_and_settings_sections();
     test_device_window_lists_parameters_and_binds_them();

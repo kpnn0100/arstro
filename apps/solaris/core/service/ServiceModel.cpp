@@ -85,6 +85,9 @@ namespace solaris
         mModel.transport = transport;
         mModel.audition = audition;
         mModel.loudness = loudness;
+        mModel.armed = mArmed;            // R-MIDI-2: the session's
+        mModel.midiDevices = mMidiPorts;
+        mModel.midiMessages = mMidiCount->load(std::memory_order_relaxed);
         mModel.transport.masterClip = mMasterClip;
         mModel.transport.loopFrom = mLoopFrom;
         mModel.transport.loopTo = mLoopTo;
@@ -111,6 +114,7 @@ namespace solaris
         mModel.settings.showIds = mSettings.showIds;
         mModel.settings.autosave = mSettings.autosave;
         mModel.settings.driver = mSettings.driver;
+        mModel.settings.midiInputs = mSettings.midiInputs;
         mModel.recovery = mRecovery;
         mModel.recoveryAge = mRecoveryAge;
         for (const auto &a : keyActions())

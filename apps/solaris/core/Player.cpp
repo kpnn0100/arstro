@@ -262,6 +262,51 @@ namespace solaris
         for (int b = 0; b < SpectrumAnalyser::kBands; ++b) mSpectrum[(size_t)b].store((float)mSpec->bandDb(b), std::memory_order_relaxed);
     }
 
+    void Player::midi()
+    {
+        // R-MIDI-2: no allocation, no lock — the engine's live ring, the pedal's bits, the record queue
+        if (!mMidi) return;
+        const int strip = mArmed.load(std::memory_order_relaxed);
+        const bool recording = mRecording.load(std::memory_order_relaxed);
+        auto play = [&](int s, int pitch, int velocity) {
+            mEng->liveNote(s, pitch, velocity);
+            if (velocity > 0) mSounding.set((size_t)pitch);
+            else mSounding.reset((size_t)pitch);
+            if (recording && s == strip) mPlayed.push(Played{heard(), pitch, velocity});
+        };
+        if (strip != mArmedWas)
+        {
+            // armed elsewhere: what was still held on the strip it left is let go there
+            for (int p = 0; p < 128; ++p)
+                if (mSounding.test((size_t)p) && mArmedWas >= 0) play(mArmedWas, p, 0);
+            mSounding.reset();
+            mPedal.reset();
+            mArmedWas = strip;
+        }
+        MidiEvent e;
+        while (mMidi->pop(e))
+        {
+            if (strip < 0) continue;
+            const int pitch = e.d1 & 0x7F;
+            if (e.noteOn())
+            {
+                if (mPedal.on(pitch)) play(strip, pitch, 0); // struck again under the pedal: a fresh attack
+                play(strip, pitch, e.d2 & 0x7F);
+            }
+            else if (e.noteOff())
+            {
+                if (mPedal.off(pitch)) play(strip, pitch, 0);
+            }
+            else if (e.kind() == 0xB0 && e.d1 == 64) mPedal.pedal(e.d2, [&](int p) { play(strip, p, 0); });
+            else if (e.kind() == 0xB0 && (e.d1 == 120 || e.d1 == 123)) // all sound / all notes off
+            {
+                mPedal.reset();
+                for (int p = 0; p < 128; ++p)
+                    if (mSounding.test((size_t)p)) play(strip, p, 0);
+            }
+        }
+    }
+
     void Player::click(long long pos, int n)
     {
         // every beat in [pos, pos + n) on its exact sample — the bar's first accented (R-TIME-4)
@@ -301,6 +346,7 @@ namespace solaris
         {
             Live m;
             while (mIn.pop(m)) apply(m);
+            midi(); // R-MIDI-2: a key is heard from this block
             const long long pos = mEng->position(), a = mLoopA.load(), b = mLoopB.load();
             int n = mBlock;
             if (b > a && pos < b && pos + n > b) n = (int)(b - pos); // stop exactly at the loop's end

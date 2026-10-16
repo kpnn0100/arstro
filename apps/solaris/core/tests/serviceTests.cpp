@@ -103,12 +103,29 @@ namespace
         long long xruns() const override { return 3; }
     };
 
+    /** R-MIDI-2: a keyboard the test plays: `open` hands the sink over; the test calls it as the host's thread would. */
+    struct FakeMidi : IMidiIn
+    {
+        std::shared_ptr<std::function<void(const MidiEvent &)>> sink;
+        std::vector<std::string> on;
+        bool open(const std::vector<std::string> &ports, std::function<void(const MidiEvent &)> s, std::string &) override
+        {
+            *sink = std::move(s);
+            on = ports.empty() ? std::vector<std::string>{"Keys", "Pads"} : ports;
+            return true;
+        }
+        void close() override { *sink = nullptr; }
+        std::vector<std::string> listening() const override { return on; }
+    };
+
     struct Fake
     {
         std::string settings, recents; // "" = not persisted
         std::shared_ptr<Capture> capture = std::make_shared<Capture>();
         bool canPlay = true;
         std::string pipewire;          // R-DEV-9: "" this host has no PipeWire driver, "ok" it opens, "fail" it links nowhere
+        std::shared_ptr<std::function<void(const MidiEvent &)>> midi = std::make_shared<std::function<void(const MidiEvent &)>>();
+        void key(uint8_t status, uint8_t d1, uint8_t d2) const { if (*midi) (*midi)(MidiEvent{status, d1, d2}); }
         std::map<std::string, std::vector<std::vector<float>>> written;
         std::map<std::string, int> bits, rates, kbps;
         std::map<std::string, std::string> formats;   // R-EXPORT-1: what each file was written as
@@ -159,6 +176,15 @@ namespace
                     o->cap = capture;
                     return std::unique_ptr<IAudioOut>(std::move(o));
                 };
+            h.listMidiInputs = [](std::vector<MidiPort> &out, std::string &) {
+                out = {MidiPort{"Keys", "Keys"}, MidiPort{"Pads", "Pads"}};
+                return true;
+            };
+            h.midiIn = [this] {
+                auto m = std::make_unique<FakeMidi>();
+                m->sink = midi;
+                return std::unique_ptr<IMidiIn>(std::move(m));
+            };
             h.audioOutFor = [this](const std::string &driver) -> std::unique_ptr<IAudioOut> {
                 if (driver != "pipewire" || pipewire.empty()) return nullptr;
                 auto o = std::make_unique<PipewireOut>();
@@ -1866,6 +1892,75 @@ static void test_the_driver_and_its_fallback()
          "the transport says which");
 }
 
+static void test_a_keyboard_plays_the_armed_strip()
+{
+    // R-MIDI-2: `strip arm` — what the keyboard plays sounds through that strip at once: through an input monitor
+    // (the song's mix without its clips) while stopped, through the song while it plays; the pedal holds; not an edit
+    Run r;
+    r.ok("project new " + freshSong("keys") + " --bpm 120");
+    r.ok("strip add --kind instrument --instrument synth");      // ch_2: nothing to play but the keyboard
+    r.ok("clip add --src tone.wav --at 0 --length 1");            // an audio line: not armable
+    const auto &cap = *r.fake.capture;
+    r.fake.capture->sink.reserve(2 * 4000000);                    // the fake device keeps what it is given: no allocation
+    const int depth = r.svc.model().undoDepth;
+    assert(contains(r.no("strip arm ch_3"), "only an instrument strip plays a keyboard"));
+    assert(contains(r.no("strip arm ch_9"), "no strip"));
+    r.events.clear();
+    r.ok("strip arm ch_2");
+    assert(r.svc.model().armed == "ch_2" && contains(r.events.back(), "strip.armed strip=ch_2"));
+    assert(r.svc.model().undoDepth == depth && !contains(r.text(), "armed"));  // the session's, never the song's
+    assert(contains(r.ok("midi devices"), "Keys  (listening)") && r.svc.model().midiDevices.size() == 2);
+    // stopped: the monitor runs, silent until a key is struck
+    waitFrames(r, cap.frames.load() + 9600);
+    const size_t quiet = cap.frames.load();
+    assert(peakOf(cap.sink, 0, 2 * quiet) == 0.0f);
+    gThreadAllocs = 0;
+    gCountThreads = true;                                         // from here the audio thread must not allocate
+    r.fake.key(0x90, 69, 110);                                    // A4 struck
+    waitFrames(r, quiet + 12000);
+    const size_t struck = quiet;
+    assert(peakOf(cap.sink, 2 * struck, 2 * (struck + 12000)) > 0.05f);
+    r.fake.key(0x80, 69, 0);                                      // let go: it dies away
+    const size_t off = cap.frames.load();
+    waitFrames(r, off + 72000);
+    assert(peakOf(cap.sink, 2 * (off + 48000), 2 * (off + 72000)) < 1e-3f);
+    // the pedal: let go under it, the note rings on; up, it dies away
+    r.fake.key(0xB0, 64, 127);
+    r.fake.key(0x90, 72, 110);
+    r.fake.key(0x80, 72, 0);
+    const size_t held = cap.frames.load();
+    waitFrames(r, held + 48000);
+    assert(peakOf(cap.sink, 2 * (held + 36000), 2 * (held + 48000)) > 0.01f);
+    r.fake.key(0xB0, 64, 0);
+    const size_t up = cap.frames.load();
+    waitFrames(r, up + 72000);
+    assert(peakOf(cap.sink, 2 * (up + 48000), 2 * (up + 72000)) < 1e-3f);
+    gCountThreads = false;
+    const long allocs = gThreadAllocs.load();
+    if (allocs) std::printf("    %ld allocations on the audio thread\n", allocs);
+    assert(allocs == 0);
+    // playing: the song's player takes the keyboard (the monitor stops), the note sounds through the song (from beat 4:
+    // past the tone clip, so what sounds is the key)
+    r.ok("transport play --from 4");
+    waitFrames(r, cap.frames.load() + 4800);
+    const size_t before = cap.frames.load();
+    assert(peakOf(cap.sink, 2 * (before - 2400), 2 * before) == 0.0f);   // silent until struck
+    r.fake.key(0x90, 60, 110);
+    const size_t played = cap.frames.load();
+    waitFrames(r, played + 12000);
+    assert(peakOf(cap.sink, 2 * played, 2 * (played + 12000)) > 0.05f);
+    r.fake.key(0x80, 60, 0);
+    r.ok("transport stop");
+    // disarmed: the monitor goes; struck now, nothing sounds
+    r.ok("strip arm none");
+    assert(r.svc.model().armed.empty() && contains(r.events.back(), "strip.armed strip="));
+    r.ok("wait 0.01");
+    assert(r.svc.model().midiMessages == 8);                      // every message the keyboard sent, counted
+    pass("a MIDI keyboard (R-MIDI-2): `strip arm` an instrument strip — struck, it sounds at once through the input monitor "
+         "while stopped and through the song while playing, no allocation on the audio thread; let go, it dies away; the "
+         "pedal holds it; not an edit; audio lines and unknown strips refused; `midi devices` says what it listens to");
+}
+
 static void test_loop_and_seek()
 {
     Run r;
@@ -2914,6 +3009,7 @@ int main()
     test_edits_while_playing_are_heard();
     test_meters_measure_what_plays();
     test_the_driver_and_its_fallback();
+    test_a_keyboard_plays_the_armed_strip();
     test_held_peak_holds_then_falls();
     test_render_measure();
     test_loop_and_seek();

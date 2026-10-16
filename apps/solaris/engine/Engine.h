@@ -140,6 +140,9 @@ namespace engine
         /** A device parameter, live (registry name). False when there is no such strip/device/name. */
         bool setDeviceParam(int strip, int device, const std::string &name, double value);
         bool setMasterDeviceParam(int device, const std::string &name, double value);
+        /** R-MIDI-2: a note played live into instrument strip `strip` — velocity 0 lets it go — heard from the start
+         *  of the next piece rendered. The thread that renders calls it (the player, between blocks); no allocation. */
+        void liveNote(int strip, int pitch, int velocity);
         /** Every binding's value as last evaluated (R-AUTO-7), in the graph's bind order. */
         const std::vector<double> &bindValues() const { return mBindValues; }
 

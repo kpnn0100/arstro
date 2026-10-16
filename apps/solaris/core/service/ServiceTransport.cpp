@@ -24,7 +24,12 @@ namespace solaris
     using K = Command::Kind;
     namespace fs = std::filesystem;
 
-    SolarisService::~SolarisService() { stopPlayer(); }
+    SolarisService::~SolarisService()
+    {
+        if (mMidiIn) mMidiIn->close(); // its thread first: it pushes into the queue the players drain
+        mMonitor.reset();
+        stopPlayer();
+    }
 
     SolarisService::SolarisService(const SolarisService &o)
         : mHost(o.mHost), mProject(o.mProject), mOpen(o.mOpen), mPath(o.mPath), mModel(o.mModel), mOutput(o.mOutput),
@@ -110,6 +115,8 @@ namespace solaris
         // R-SAFE-1: an unsaved song is written beside itself on the clock, whatever else is happening
         if (mOpen && mModel.dirty && mSettings.autosave > 0 && steadySeconds() - mLastAutosave >= mSettings.autosave) autosave();
         if (mPreview) mPreview->collect(); // R-ROLL-7: what its thread is done with, freed here
+        mModel.midiMessages = mMidiCount->load(std::memory_order_relaxed); // R-MIDI-2: the keyboard's activity
+        if (mMonitor) mMonitor->collect();
         if (mAudition)
         {
             // the preview runs on its own: its progress, and its end when it reaches it
@@ -365,7 +372,9 @@ namespace solaris
             auto out = openOutput(mProject.header.sampleRate, mSettings.bufferSize, driver, err);
             if (!out) return false;
             mModel.transport.driver = driver; // R-DEV-9: what it plays through
+            stopMonitor();                    // R-MIDI-2: one consumer of the keyboard at a time — the song's player now
             mPlayer = std::make_unique<Player>();
+            if (mMidiQ) { mPlayer->setMidi(mMidiQ.get()); mPlayer->setArmed(armedIn(mLiveStrips)); }
             mPlayer->setLoop(mLoopTo > mLoopFrom ? (long long)std::llround(mLoopFrom * spb) : 0,
                              mLoopTo > mLoopFrom ? (long long)std::llround(mLoopTo * spb) : 0);
             mModel.transport.device = mSettings.output;
@@ -402,6 +411,7 @@ namespace solaris
             mModel.transport.cue = mCue;
             mModel.transport.loopFrom = mLoopFrom;
             mModel.transport.loopTo = mLoopTo;
+            startMonitor(); // R-MIDI-2: armed — the keyboard is heard again, through the monitor
             announce();
             return true;
         case K::TransportSeek:

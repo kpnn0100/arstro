@@ -101,6 +101,7 @@ namespace solaris_ui
     void Timeline::bind(const solaris::AppModel &m)
     {
         mBeatsPerBar = std::max(1, std::atoi(m.sig.c_str()));
+        mArmed = m.armed; // R-MIDI-2
         mStrips.clear();
         for (const auto &s : m.strips) mStrips.push_back(StripRef{s.id, s.name, s.kind});
         mLength = m.lengthBeats;
@@ -266,6 +267,19 @@ namespace solaris_ui
         const auto *r = mRowMotion.byIndex(i);
         if (!r) return i * kRowH;                 // below the last row: where a new lane would go
         return r->placed ? r->liveY() : r->yTarget;
+    }
+
+    Rect Timeline::armRect(int i) const
+    {
+        if (i < 0 || i >= (int)mRows.size() || mRows[(size_t)i].strip.empty()) return Rect{};
+        const Rect r = rowRect(i);
+        return Rect{kHeaderW - 24.0, r.y + 9.75, 13.0, 13.0}; // space::u(4): at the header's right, level with the name
+    }
+
+    double Timeline::armAmount(const std::string &strip) const
+    {
+        const auto it = mArm.find(strip);
+        return it == mArm.end() ? 0.0 : it->second.value();
     }
 
     double Timeline::beatToX(double beat) const { return kHeaderW + beat * mPpb.value() - mScrollX.value(); }
@@ -441,6 +455,16 @@ namespace solaris_ui
                 tk.amt.animateTo(want ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
             }
             tk.amt.update(nowMs);
+        }
+        // R-MIDI-2: an instrument track's arm light, eased on and off
+        for (const auto &row : mRows)
+        {
+            if (row.strip.empty()) continue;
+            const double want = row.strip == mArmed ? 1.0 : 0.0;
+            auto it = mArm.find(row.strip);
+            if (it == mArm.end()) { mArm[row.strip].set(want); mArmLast[row.strip] = want; continue; }
+            if (mArmLast[row.strip] != want) { it->second.animateTo(want, motion::kSelectMs, Easing::EaseOutCubic, nowMs); mArmLast[row.strip] = want; }
+            it->second.update(nowMs);
         }
         mSelIn.update(nowMs);
         mSelOut.update(nowMs);
@@ -863,6 +887,15 @@ namespace solaris_ui
                 if (onCommand) onCommand("transport seek " + beats(snap(xToBeat(local.x)))); // on the grid you see (R-TIME-5)
                 return true;
             }
+            for (int i = 0; i < (int)mRows.size(); ++i)
+            {
+                // R-MIDI-2: an instrument track's arm button — ONE line, arming it (or disarming it, armed)
+                const Rect ar = armRect(i);
+                if (ar.w <= 0.0 || !Rect{ar.x - 3.0, ar.y - 3.0, ar.w + 6.0, ar.h + 6.0}.contains(local)) continue;
+                const std::string s = mRows[(size_t)i].strip;
+                if (onCommand) onCommand(s == mArmed ? std::string("strip arm none") : "strip arm " + s);
+                return true;
+            }
             selectClip(clipAt(local));
             return true;
         case Gesture::Type::DoubleClick:
@@ -1213,8 +1246,17 @@ namespace solaris_ui
                 continue;
             }
             const bool own = d.lane.empty();
-            drawNameWithId(t, d.label, own ? row.key.substr(row.key.find(':') + 1) : d.lane, 12.0, textfit::baseline(r.y + 16.0, 11.0), kHeaderW - 20.0, 11.0,
+            const double nameW = d.strip.empty() ? kHeaderW - 20.0 : kHeaderW - 40.0; // a track keeps room for its arm button
+            drawNameWithId(t, d.label, own ? row.key.substr(row.key.find(':') + 1) : d.lane, 12.0, textfit::baseline(r.y + 16.0, 11.0), nameW, 11.0,
                            font::sans(), own ? palette::mutedForeground() : palette::foreground(), idsAmount ? idsAmount() : 0.0, a);
+            if (!d.strip.empty())
+            {
+                // R-MIDI-2: the arm button — a ring, filled red as it is armed
+                const Rect ar{kHeaderW - 24.0, r.y + 9.75, 13.0, 13.0};
+                const double lit = armAmount(d.strip);
+                drawRoundedRect(t, ar, radius::pill(), Paint::filledStroked(fade(lerpColor(palette::input(), palette::destructive(), lit), a),
+                                                                           fade(lerpColor(palette::mutedForeground(), palette::destructive(), lit), a), 1.0));
+            }
             if (own)
             {
                 t.setFill(fade(palette::mutedForeground(), a));

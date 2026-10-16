@@ -178,6 +178,14 @@
       "requirement": "R-MIX-14"
     },
     {
+      "verb": "strip arm",
+      "usage": "strip arm <ch|none>",
+      "args": "<ch|none>",
+      "flags": [],
+      "summary": "Arm an instrument strip for the MIDI keyboard (R-MIDI-2): what is played sounds through it at once — through the song while it plays, through an input monitor (the song's mix without its clips) while stopped — the sustain pedal held; `none` disarms. Not an edit: the song does not keep it. Opens the MIDI inputs `settings midiInputs` names.",
+      "requirement": "R-MIDI-2"
+    },
+    {
       "verb": "strip duck",
       "usage": "strip duck <ch> --under <key-strip> [--amount <dB>]",
       "args": "<ch>",
@@ -809,6 +817,14 @@
       "requirement": "R-TIME-4"
     },
     {
+      "verb": "midi devices",
+      "usage": "midi devices",
+      "args": "",
+      "flags": [],
+      "summary": "This machine's MIDI inputs (ALSA sequencer ports), each marked when Solaris listens to it — the names `settings set midiInputs=` takes.",
+      "requirement": "R-MIDI-2"
+    },
+    {
       "verb": "meters clear",
       "usage": "meters clear",
       "args": "",
@@ -999,6 +1015,13 @@
         "age"
       ],
       "summary": "The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2)."
+    },
+    {
+      "name": "strip.armed",
+      "fields": [
+        "strip"
+      ],
+      "summary": "The MIDI keyboard plays this strip now ('' — none); the session's, not the song's (R-MIDI-2)."
     },
     {
       "name": "meters.cleared",
@@ -2116,6 +2139,48 @@
       "type": "string",
       "summary": "pulse | pipewire: how the clock device is reached (R-DEV-9)",
       "stable": true
+    },
+    {
+      "path": "settings.midiInputs",
+      "type": "string",
+      "summary": "all | none | MIDI port names, comma-separated: the keyboards Solaris listens to (R-MIDI-2)",
+      "stable": true
+    },
+    {
+      "path": "armed",
+      "type": "string",
+      "summary": "the strip the MIDI keyboard plays ('' none) — the session's, never saved (R-MIDI-2)",
+      "stable": true
+    },
+    {
+      "path": "midiDevices",
+      "type": "object[]",
+      "summary": "this machine's MIDI inputs, as `midi devices` last listed them (R-MIDI-2)",
+      "stable": true
+    },
+    {
+      "path": "midiDevices[].id",
+      "type": "string",
+      "summary": "what `settings set midiInputs=` names",
+      "stable": true
+    },
+    {
+      "path": "midiDevices[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "midiDevices[].listening",
+      "type": "bool",
+      "summary": "Solaris is subscribed to it",
+      "stable": true
+    },
+    {
+      "path": "midiMessages",
+      "type": "int",
+      "summary": "messages the keyboard sent since start — an activity light",
+      "stable": false
     },
     {
       "path": "settings.keys",

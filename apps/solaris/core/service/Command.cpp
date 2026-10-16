@@ -82,6 +82,11 @@ namespace solaris
             {K::StripRelink, "strip relink", "<ch>", 1, 1, {"to=<ch>"},
              "Move EVERY clip playing through <ch> to strip --to, one edit. Refused across kinds: audio clips "
              "need an audio strip, note clips an instrument strip; a bus plays no clips.", "R-MIX-14"},
+            {K::StripArm, "strip arm", "<ch|none>", 1, 1, {},
+             "Arm an instrument strip for the MIDI keyboard (R-MIDI-2): what is played sounds through it at once — "
+             "through the song while it plays, through an input monitor (the song's mix without its clips) while "
+             "stopped — the sustain pedal held; `none` disarms. Not an edit: the song does not keep it. Opens the "
+             "MIDI inputs `settings midiInputs` names.", "R-MIDI-2"},
             {K::StripDuck, "strip duck", "<ch>", 1, 1, {"under=<key-strip>", "amount=<dB>"},
              "A side-chain in one line: a Compressor at the end of <ch>'s rack, its Sidechain on, keyed by a pre-fader "
              "sidechain send from --under — attack 1 ms, release half a beat, threshold −30 dB and the ratio that makes "
@@ -270,6 +275,9 @@ namespace solaris
              "was last put (a seek, or a play's --from or --clip; `transport.cue`). A plain stop's place is temporary: "
              "the next play starts there but the cue stays.", "R-TIME-7"},
             {K::TransportSeek, "transport seek", "<beats>", 1, 1, {}, "Move the transport (playing or not).", "R-TIME-4"},
+            {K::MidiDevices, "midi devices", "", 0, 0, {},
+             "This machine's MIDI inputs (ALSA sequencer ports), each marked when Solaris listens to it — the names "
+             "`settings set midiInputs=` takes.", "R-MIDI-2"},
             {K::MetersClear, "meters clear", "", 0, 0, {},
              "Clear the meters: every clip light and held peak, and the master's true peak and integrated loudness "
              "start again (the song is not edited; a click on a clip light).", "R-METER-2"},
