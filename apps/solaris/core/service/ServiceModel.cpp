@@ -100,6 +100,8 @@ namespace solaris
         tempoAt(mModel.transport.position, mModel.transport.tempo, mModel.transport.tempoId); // R-TEMPO-1
         if (!mPresetsScanned) scanPresets(); // R-PRESET-1: the machine's — on Home too
         mModel.presets = mPresets;
+        if (!mTemplatesScanned) scanTemplates(); // R-PRESET-2
+        mModel.templates = mTemplates;
         mModel.revision = rev + 1;
         mModel.lastError = lastError;
         mModel.audit = mAudit;

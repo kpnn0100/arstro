@@ -27,9 +27,10 @@ namespace solaris
     {
         // The ONE grammar table (R-API-1). Order is the order the API document prints.
         static const std::vector<CommandSpec> specs = {
-            {K::ProjectNew, "project new", "<path.slp>", 1, 1, {"bpm=<n>", "sig=<n/d>", "rate=<hz>", "name=<text>"},
+            {K::ProjectNew, "project new", "<path.slp>", 1, 1, {"bpm=<n>", "sig=<n/d>", "rate=<hz>", "name=<text>", "template=<name>"},
              "Create a song and open it: Mixer 1 \"Sources\", Mixer 2 \"Buses\" with the bus \"Main\" → master, "
-             "and the output port \"Main\" (R-MIX-3).", "R-HOME-1"},
+             "and the output port \"Main\" (R-MIX-3). --template <name>: the template's song instead (R-PRESET-2) — its "
+             "tempo, meter and rate unless --bpm, --sig, --rate say; yours of a name before the factory's.", "R-HOME-1"},
             {K::ProjectOpen, "project open", "<path.slp>", 1, 1, {},
              "Open a song. If it has an autosave newer than it (unsaved edits from a session that never saved), says "
              "`recovery: …` and the model's `recovery` names it (R-SAFE-2).", "R-HOME-1"},
@@ -234,6 +235,12 @@ namespace solaris
              "of a name before the factory's (R-PRESET-1). `device add --preset` and `clip add --instrument --preset` drop "
              "one in.", "R-PRESET-1"},
             {K::PresetList, "preset list", "[type]", 0, 1, {}, "The presets, yours and the factory's, by type (R-PRESET-1).", "R-PRESET-1"},
+            {K::TemplateSave, "template save", "<name>", 1, 1, {"replace"},
+             "Keep the open song as a template in your templates folder (R-PRESET-2) — as it is, every file it names made "
+             "absolute; a name you have refused without --replace. The machine's, not the song's: no undo. "
+             "`project new <path> --template <name>` starts a song from it.", "R-PRESET-2"},
+            {K::TemplateList, "template list", "", 0, 0, {}, "The song templates, yours and the factory's (R-PRESET-2).", "R-PRESET-2"},
+            {K::TemplateDelete, "template delete", "<name>", 1, 1, {}, "Delete a template of yours (a factory's is refused) — no undo (R-PRESET-2).", "R-PRESET-2"},
             {K::PresetDelete, "preset delete", "<type> <name>", 2, 2, {},
              "Delete a preset of yours (a factory's is refused) — the machine's, no undo (R-PRESET-1).", "R-PRESET-1"},
             {K::TimeInsert, "time insert", "", 0, 0, {"at=<beats>", "length=<beats>"},

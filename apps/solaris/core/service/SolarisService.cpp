@@ -113,6 +113,7 @@ namespace solaris
             case K::Ls: case K::Show: case K::PatternPrint: // R-SVC-8: reading back
             case K::PatternExport: case K::ProjectExportMidi: // R-MIDI-1: writing a file, not the song
             case K::PresetSave: case K::PresetList: case K::PresetDelete: // R-PRESET-1: the machine's presets, not the song
+            case K::TemplateSave: case K::TemplateList: case K::TemplateDelete: // R-PRESET-2: … and its templates
                 return false;
             default:
                 return true;
@@ -193,6 +194,9 @@ namespace solaris
             break;
         case K::PresetSave: case K::PresetLoad: case K::PresetList: case K::PresetDelete:
             ok = presetCommand(c, err);
+            break;
+        case K::TemplateSave: case K::TemplateList: case K::TemplateDelete:
+            ok = templateCommand(c, err);
             break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:
@@ -665,6 +669,16 @@ namespace solaris
             std::string id = "prj_";
             for (char ch : stem) id += (std::isalnum((unsigned char)ch) ? ch : '_');
             Project p = newProject(id, c.flag("name", stem), bpm, sig, (int)rate);
+            if (c.has("template"))
+            {
+                // R-PRESET-2: the template's song, its own name and id; its tempo, meter and rate unless said
+                if (!templateSong(c.flag("template"), p, err)) return false;
+                p.header.id = id;
+                p.header.name = c.flag("name", stem);
+                if (c.has("bpm")) p.header.bpm = bpm;
+                if (c.has("sig")) p.header.sig = sig;
+                if (c.has("rate")) p.header.sampleRate = (int)rate;
+            }
             const Project keep = mProject;
             mProject = p;
             if (!write(path)) { mProject = keep; return false; }

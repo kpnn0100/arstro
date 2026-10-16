@@ -8,7 +8,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 
 | usage | what | asked by |
 |---|---|---|
-| `project new <path.slp> [--bpm <n>] [--sig <n/d>] [--rate <hz>] [--name <text>]` | Create a song and open it: Mixer 1 "Sources", Mixer 2 "Buses" with the bus "Main" → master, and the output port "Main" (R-MIX-3). | R-HOME-1 |
+| `project new <path.slp> [--bpm <n>] [--sig <n/d>] [--rate <hz>] [--name <text>] [--template <name>]` | Create a song and open it: Mixer 1 "Sources", Mixer 2 "Buses" with the bus "Main" → master, and the output port "Main" (R-MIX-3). --template <name>: the template's song instead (R-PRESET-2) — its tempo, meter and rate unless --bpm, --sig, --rate say; yours of a name before the factory's. | R-HOME-1 |
 | `project open <path.slp>` | Open a song. If it has an autosave newer than it (unsaved edits from a session that never saved), says `recovery: …` and the model's `recovery` names it (R-SAFE-2). | R-HOME-1 |
 | `project save [path.slp]` | Write the .slp (a path saves it there). | R-FMT-2 |
 | `project close` | Close the song and return Home (its autosave is dropped: closing is choosing). | R-UI-1 |
@@ -73,6 +73,9 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `preset save <dv> <name> [--replace]` | Save a device's set values (and a sampler's sound) as a preset of its type in your presets folder (R-PRESET-1) — a name you have is refused without --replace. The machine's, not the song's: no undo. | R-PRESET-1 |
 | `preset load <dv> <name>` | Set a device to a preset of its type — every value back to its default, then the preset's, ONE edit; yours of a name before the factory's (R-PRESET-1). `device add --preset` and `clip add --instrument --preset` drop one in. | R-PRESET-1 |
 | `preset list [type]` | The presets, yours and the factory's, by type (R-PRESET-1). | R-PRESET-1 |
+| `template save <name> [--replace]` | Keep the open song as a template in your templates folder (R-PRESET-2) — as it is, every file it names made absolute; a name you have refused without --replace. The machine's, not the song's: no undo. `project new <path> --template <name>` starts a song from it. | R-PRESET-2 |
+| `template list` | The song templates, yours and the factory's (R-PRESET-2). | R-PRESET-2 |
+| `template delete <name>` | Delete a template of yours (a factory's is refused) — no undo (R-PRESET-2). | R-PRESET-2 |
 | `preset delete <type> <name>` | Delete a preset of yours (a factory's is refused) — the machine's, no undo (R-PRESET-1). | R-PRESET-1 |
 | `time insert --at <beats> --length <beats>` | Open a gap in the whole song (R-ARR-2), ONE edit: every clip, automation point, marker and the loop at or after --at moves --length beats later; a section, a looping automation's span or the loop that holds --at grows by it. A clip that starts before --at and crosses it stays (it is named — split it to open the gap through it, R-EDIT-1). The loop is the session's: undo leaves it. | R-ARR-2 |
 | `time delete --from <beats> --to <beats>` | Take a span out of the whole song (R-ARR-2), ONE edit: what lies wholly inside it goes (clips, automation points, markers), what follows moves earlier by its length; a section, a looping span or the loop that crosses it shrinks. A clip that repeats its material (a note clip, an audio clip set to loop) and starts before --from is shortened by the overlap; any other clip crossing --from or --to is refused, naming it — split it first (R-EDIT-1) or move it. | R-ARR-2 |
@@ -436,6 +439,9 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `presets[].type` | string | the registry type it is for |
 | `presets[].name` | string |  |
 | `presets[].factory` | bool | shipped with the app (never written or deleted) |
+| `templates` | object[] | R-PRESET-2: every song template — yours, then the factory's of a name you have not — by name |
+| `templates[].name` | string | what `project new --template` takes |
+| `templates[].factory` | bool | shipped with the app (never written or deleted) |
 | `automations` | object[] | every automation (R-AUTO-4) |
 | `automations[].id` | string | au_n — what a formula names |
 | `automations[].name` | string | "<owner> · <parameter>" when made from one |

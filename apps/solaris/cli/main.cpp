@@ -137,6 +137,7 @@ int main(int argc, char **argv)
     // dialog are one setting.
     solaris_host::machinePaths(host.settingsPath, host.recentsPath);
     solaris_host::presetPaths(host.presetsPath, host.factoryPresetsPath); // R-PRESET-1
+    solaris_host::templatePaths(host.templatesPath, host.factoryTemplatesPath); // R-PRESET-2
     SolarisService svc(host);
     // The event stream IS the log: a shell run with --watch shows exactly what a window would.
     svc.subscribe([watch](const Event &e) {

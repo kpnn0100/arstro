@@ -118,6 +118,8 @@ namespace sltest
         h.recentsPath = dir + "/recents";
         h.presetsPath = dir + "/presets/user";       // R-PRESET-1: the rig's own, never the machine's
         h.factoryPresetsPath = dir + "/presets/factory";
+        h.templatesPath = dir + "/templates/user";   // R-PRESET-2: likewise
+        h.factoryTemplatesPath = dir + "/templates/factory";
         return h;
     }
 

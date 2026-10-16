@@ -230,6 +230,8 @@ namespace
             h.recentsPath = recents;
             h.presetsPath = scratch() + "/presets/user";       // R-PRESET-1: never the machine's own folders
             h.factoryPresetsPath = scratch() + "/presets/factory";
+            h.templatesPath = scratch() + "/templates/user";   // R-PRESET-2: likewise
+            h.factoryTemplatesPath = scratch() + "/templates/factory";
             if (canPlay)
                 h.audioOut = [this] {
                     auto o = std::make_unique<FakeOut>();
@@ -3319,6 +3321,73 @@ static void test_the_shipped_presets_load()
     pass("the shipped presets (R-PRESET-1): every one loads onto a device of its type");
 }
 
+static void test_templates_start_songs()
+{
+    // R-PRESET-2: the open song kept as a template (the machine's: no edit) — its files made absolute, its markers and tempo
+    // with it; a song started from it takes its own name and id and the template's tempo unless told; the factory's
+    // shipped ones start songs; the user's of a name first; listed, deleted (a factory's refused); refusals
+    const fs::path shipped = fs::path(__FILE__).parent_path().parent_path().parent_path() / "templates";
+    fs::remove_all(scratch() + "/templates");
+    fs::create_directories(scratch() + "/templates/factory");
+    fs::copy(shipped, scratch() + "/templates/factory", fs::copy_options::recursive);
+    fs::remove_all(scratch() + "/tplA");
+    fs::create_directories(scratch() + "/tplA");
+    const std::string kick = scratch() + "/tplA/kick.wav";
+    Run r;
+    r.fake.written[kick] = {std::vector<float>(4800, 0.25f), std::vector<float>(4800, 0.25f)};
+    r.ok("project new " + scratch() + "/tplA/a.slp --bpm 99");
+    r.ok("clip add --src " + kick + " --at 0");
+    r.ok("marker add Verse --at 4");
+    r.ok("tempo add --at 8 --bpm 140");
+    assert(contains(r.text(), "src=kick.wav"));                      // the song keeps it relative to itself
+    const int depth = r.svc.model().undoDepth;
+    assert(r.ok("template save Mine") == "saved template \"Mine\"\n" && r.svc.model().undoDepth == depth);
+    std::string kept;
+    {
+        std::ifstream f(scratch() + "/templates/user/Mine.slp");
+        std::stringstream ss;
+        ss << f.rdbuf();
+        kept = ss.str();
+    }
+    assert(contains(kept, "src=\"" + kick + "\"") || contains(kept, "src=" + kick));
+    assert(contains(kept, "#amarker") && contains(kept, "#atempo") && contains(kept, "bpm        = 99.0"));
+    auto has = [&](const std::string &name, bool factory) {
+        for (const auto &x : r.svc.model().templates)
+            if (x.name == name && x.factory == factory) return true;
+        return false;
+    };
+    assert(has("Mine", false) && has("Beat", true) && has("Piano Ballad", true));
+    // a song from it: its own name and id, the template's tempo, the sample named wherever it is
+    const std::string b = freshSong("from-mine");
+    r.ok("project new " + b + " --template Mine");
+    assert(r.svc.model().projectName == "from-mine" && r.svc.model().bpm == 99.0 && r.svc.model().markers.size() == 1 && r.svc.model().tempos.size() == 1);
+    assert(r.svc.model().clips.size() == 1 && r.svc.model().clips[0].src == kick && contains(r.text(), "id         = prj_from_mine"));
+    const std::string c = freshSong("from-mine-fast");
+    r.ok("project new " + c + " --template Mine --bpm 120");
+    assert(r.svc.model().bpm == 120.0);
+    // the factory's: a beat's strips and its tempo
+    const std::string d = freshSong("from-beat");
+    r.ok("project new " + d + " --template Beat");
+    std::set<std::string> names;
+    for (const auto &st : r.svc.model().strips) names.insert(st.name);
+    assert(names.count("Drums") && names.count("Bass") && names.count("Pad") && names.count("Reverb") && r.svc.model().bpm == 124.0);
+    // the user's of a name first; listed; deleted, a factory's refused
+    r.ok("set project.bpm=100");
+    r.ok("template save Beat");
+    assert(has("Beat", false) && !has("Beat", true));
+    r.ok("project new " + freshSong("from-my-beat") + " --template Beat");
+    assert(r.svc.model().bpm == 100.0);                              // the user's, not the factory's 124
+    assert(contains(r.ok("template list"), "Beat\n") && contains(r.ok("template list"), "Piano Ballad  (factory)\n"));
+    r.ok("template delete Beat");
+    assert(has("Beat", true) && !has("Beat", false));
+    assert(contains(r.no("template delete Beat"), "is a factory template"));
+    // refusals
+    assert(contains(r.no("project new " + freshSong("nope") + " --template Nope"), "no template `Nope` — there are:"));
+    assert(contains(r.no("template save Mine"), "--replace"));
+    assert(contains(r.no("template save a/b"), "no slash"));
+    pass("templates (R-PRESET-2): the open song kept (no edit) — its files absolute, markers and tempo with it; a song from it named and id'd its own, the template's tempo unless told, its sample named absolutely; the factory's start songs; the user's of a name first; listed, deleted, a factory's refused; refusals");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -4584,6 +4653,7 @@ int main()
     test_the_metronome_follows_the_tempo_map();
     test_presets_are_saved_loaded_and_dropped();
     test_the_shipped_presets_load();
+    test_templates_start_songs();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

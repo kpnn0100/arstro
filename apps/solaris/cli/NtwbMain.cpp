@@ -169,6 +169,7 @@ namespace solaris_cli
 #endif
             solaris_host::machinePaths(host.settingsPath, host.recentsPath); // the window's settings and recents
             solaris_host::presetPaths(host.presetsPath, host.factoryPresetsPath); // R-PRESET-1
+            solaris_host::templatePaths(host.templatesPath, host.factoryTemplatesPath); // R-PRESET-2
             solaris::SolarisService svc(host);
 
             ntwb::Client::Options o;

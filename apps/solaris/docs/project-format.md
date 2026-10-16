@@ -334,3 +334,10 @@ amp.release = 1800.0
 stores (a choice by name, a number canonical); a sampler's adds `sample = <absolute path>`. Loaded, a device takes
 these values and the registry's default for every other.
 
+## Templates — `<folder>/<name>.slp` (R-PRESET-2)
+
+A template is a song file like any other, kept in the user's templates folder (`SOLARIS_TEMPLATES`, else
+`$XDG_DATA_HOME/solaris/templates`) or the factory's shipped with the app (`apps/solaris/templates`). `template save`
+writes the open song with every file it names made absolute; `project new --template` reads it back and gives it the
+new song's id and name.
+

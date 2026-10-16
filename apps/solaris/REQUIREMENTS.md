@@ -928,7 +928,16 @@ a process is the host's (law 12).
   <type> <name>` deletes a user's (a factory's refused). A drop is one line: `device add <ch> --type <t> --preset <name>`
   and `clip add --instrument <t> --preset <name>`. Saving and deleting change the machine, not the song (no undo, no
   unsaved mark). The model publishes `presets[]` (type, name, factory) for the browser.)
-- **R-PRESET-2 Song templates**: `project new <path> --template <name>`; File › Save as Template.
+- **R-PRESET-2 Song templates**: `project new <path> --template <name>`; File › Save as Template. (**Detailed while
+  building it, N23 — 2026-10-17.** A TEMPLATE is a song kept to start others from: `<folder>/<name>.slp`, in the user's
+  templates folder (`$XDG_DATA_HOME/solaris/templates`, `SOLARIS_TEMPLATES` overriding) or the factory's shipped with the
+  app (never written). `template save <name> [--replace]` writes the open song there as it is — its strips, devices,
+  lanes, patterns, clips, markers, tempo — every file it names (a clip's, a sampler's) made absolute, so a song started
+  from it anywhere finds them; an existing name refused without --replace, a name with a path in it refused.
+  `project new <path> --template <name>` starts a song from it: the template's song with the new song's name and id
+  (from its path, or --name), its tempo, meter and rate unless --bpm, --sig, --rate say; the user's template of a name
+  before the factory's. `template list`, `template delete <name>` (a factory's refused). Saving and deleting change the
+  machine. The model publishes `templates[]` (name, factory) for the window.)
 - **R-PRESET-3 A sample library**: tags and favourites on files (`sample tag <file> <tag>`), search by name and tag
   (`browse --search`), in the browser.
 - **R-VST-6 Hosting other makers' VST3** (R-EDM-17): `plugins scan` lists `~/.vst3` and the system folders;

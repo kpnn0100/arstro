@@ -1,0 +1,50 @@
+arstro-project = 1
+app        = solaris
+id         = prj_beat
+name       = beat
+timebase   = beats
+bpm        = 124.0
+sig        = 4/4
+ppq        = 960
+sampleRate = 48000
+masterGain = 0.0
+masterOut  = prt_1
+tracks     = on
+
+#aport id=prt_1 name=Main dir=out channels=2 order=0
+
+#amixer id=mx_1 name=Sources order=0
+#amixer id=mx_2 name=Buses order=1
+
+#atrack id=ch_1 name=Main kind=bus mixer=mx_2 order=1 gain=0.0 pan=0.0
+#atrack id=ch_2 name=Drums kind=instrument mixer=mx_1 order=0 gain=0.0 pan=0.0 out=ch_1
+#atrack id=ch_3 name=Bass kind=instrument mixer=mx_1 order=1 gain=0.0 pan=0.0 out=ch_1
+#atrack id=ch_4 name=Pad kind=instrument mixer=mx_1 order=2 gain=0.0 pan=0.0 out=ch_1
+#atrack id=ch_5 name=Reverb kind=bus mixer=mx_2 order=0 gain=0.0 pan=0.0 out=ch_1
+
+#asend id=sd_1 from=ch_4 to=ch_5 gain=-10.0 pre=false
+#asend id=sd_2 from=ch_2 to=ch_5 gain=-22.0 pre=false
+
+#arack track=ch_2
+  #aeffect id=dv_1 type=drums
+#arack track=ch_3
+  #aeffect id=dv_2 type=synth osc1.wave=square osc1.octave=-1.0 osc2.wave=saw osc2.level=0.5 filter.cutoff=300.0 filter.res=0.35 filter.env=4.0 fenv.attack=0.0 fenv.decay=220.0 fenv.sustain=0.0 amp.attack=0.0 amp.decay=400.0 amp.sustain=0.5 amp.release=60.0 voice.mode=mono volume=-8.0
+#arack track=ch_4
+  #aeffect id=dv_3 type=synth osc1.wave=saw osc1.voices=5.0 osc1.detune=18.0 osc1.width=40.0 osc2.wave=saw osc2.octave=-1.0 osc2.level=0.6 osc2.voices=3.0 osc2.detune=12.0 filter.cutoff=1800.0 filter.res=0.15 filter.env=1.5 fenv.attack=900.0 fenv.decay=1500.0 fenv.sustain=0.4 amp.attack=700.0 amp.release=1800.0 volume=-9.0
+#arack track=ch_5
+  #aeffect id=dv_4 type=reverb size=240.0 decay=4200.0 lowcut=180.0 highcut=9000.0 width=1.0 mix=0.35
+
+#alane id=ln_1 name="" track=ch_2 order=0
+#alane id=ln_2 name="" track=ch_3 order=1
+#alane id=ln_3 name="" track=ch_4 order=2
+
+#apattern id=pt_1 name=Drums length=4.0
+#apattern id=pt_2 name=Bass length=4.0
+#apattern id=pt_3 name=Pad length=4.0
+
+#aclip id=ac_1 name=Drums track=ch_2 lane=ln_1 pattern=pt_1 at=0.0 length=16.0
+#aclip id=ac_2 name=Bass track=ch_3 lane=ln_2 pattern=pt_2 at=0.0 length=16.0
+#aclip id=ac_3 name=Pad track=ch_4 lane=ln_3 pattern=pt_3 at=0.0 length=16.0
+
+#amarker id=mk_1 name=Intro at=0.0
+#amarker id=mk_2 name=Drop at=32.0

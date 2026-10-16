@@ -1,0 +1,41 @@
+arstro-project = 1
+app        = solaris
+id         = prj_ballad
+name       = ballad
+timebase   = beats
+bpm        = 72.0
+sig        = 3/4
+ppq        = 960
+sampleRate = 48000
+masterGain = 0.0
+masterOut  = prt_1
+tracks     = on
+
+#aport id=prt_1 name=Main dir=out channels=2 order=0
+
+#amixer id=mx_1 name=Sources order=0
+#amixer id=mx_2 name=Buses order=1
+
+#atrack id=ch_1 name=Main kind=bus mixer=mx_2 order=1 gain=0.0 pan=0.0
+#atrack id=ch_2 name=Piano kind=instrument mixer=mx_1 order=0 gain=0.0 pan=0.0 out=ch_1
+#atrack id=ch_3 name=Strings kind=instrument mixer=mx_1 order=1 gain=0.0 pan=0.0 out=ch_1
+#atrack id=ch_4 name=Hall kind=bus mixer=mx_2 order=0 gain=0.0 pan=0.0 out=ch_1
+
+#asend id=sd_1 from=ch_2 to=ch_4 gain=-14.0 pre=false
+#asend id=sd_2 from=ch_3 to=ch_4 gain=-8.0 pre=false
+
+#arack track=ch_2
+  #aeffect id=dv_1 type=piano
+#arack track=ch_3
+  #aeffect id=dv_2 type=synth osc1.wave=saw osc1.voices=5.0 osc1.detune=18.0 osc1.width=40.0 osc2.wave=saw osc2.octave=-1.0 osc2.level=0.6 osc2.voices=3.0 osc2.detune=12.0 filter.cutoff=1800.0 filter.res=0.15 filter.env=1.5 fenv.attack=900.0 fenv.decay=1500.0 fenv.sustain=0.4 amp.attack=700.0 amp.release=1800.0 volume=-9.0
+#arack track=ch_4
+  #aeffect id=dv_3 type=reverb size=240.0 decay=4200.0 lowcut=180.0 highcut=9000.0 width=1.0 mix=0.35
+
+#alane id=ln_1 name="" track=ch_2 order=0
+#alane id=ln_2 name="" track=ch_3 order=1
+
+#apattern id=pt_1 name=Piano length=4.0
+#apattern id=pt_2 name=Strings length=4.0
+
+#aclip id=ac_1 name=Piano track=ch_2 lane=ln_1 pattern=pt_1 at=0.0 length=12.0
+#aclip id=ac_2 name=Strings track=ch_3 lane=ln_2 pattern=pt_2 at=0.0 length=12.0

@@ -273,6 +273,7 @@ namespace
         setenv("SOLARIS_SETTINGS", (dir / "cli" / "settings.txt").c_str(), 1);
         setenv("SOLARIS_RECENTS", (dir / "cli" / "recents").c_str(), 1);
         setenv("SOLARIS_PRESETS", (dir / "presets").c_str(), 1); // R-PRESET-1: one presets folder for both, never the machine's
+        setenv("SOLARIS_TEMPLATES", (dir / "templates").c_str(), 1); // R-PRESET-2: likewise
         int status = 0;
         const pid_t a = spawnCc({"--watch", "--script", "../script.txt"}, dir / "cli" / "out.txt", dir / "cli" / "err.txt");
         assert(waitpid(a, &status, 0) == a && WIFEXITED(status) && WEXITSTATUS(status) == 0);
@@ -284,6 +285,7 @@ namespace
         host.settingsPath = (dir / "live" / "settings.txt").string(); // as the window's: its own files
         host.recentsPath = (dir / "live" / "recents").string();
         solaris_host::presetPaths(host.presetsPath, host.factoryPresetsPath); // as the window's (R-PRESET-1)
+        solaris_host::templatePaths(host.templatesPath, host.factoryTemplatesPath); // … and its templates (R-PRESET-2)
         solaris::SolarisService svc(host);
         solaris_host::ControlServer server(svc);
         std::string err;

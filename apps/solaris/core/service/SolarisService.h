@@ -73,6 +73,8 @@ namespace solaris
             std::string recentsPath;  // the recent songs, one path per line ("" = not persisted)
             std::string presetsPath;        // R-PRESET-1: the user's presets folder ("" = none can be saved)
             std::string factoryPresetsPath; // … the factory's, shipped with the app (never written)
+            std::string templatesPath;        // R-PRESET-2: the user's song templates folder ("" = none can be saved)
+            std::string factoryTemplatesPath; // … the factory's, shipped with the app (never written)
         };
 
         explicit SolarisService(Host host = Host());
@@ -126,6 +128,12 @@ namespace solaris
         void scanPresets();
         std::vector<PresetModel> mPresets;
         bool mPresetsScanned = false;
+        // R-PRESET-2 (ServicePresets.cpp): song templates — the user's and the factory's
+        bool templateCommand(const Command &c, std::string &err);
+        bool templateSong(const std::string &name, Project &out, std::string &err);
+        void scanTemplates();
+        std::vector<TemplateModel> mTemplates;
+        bool mTemplatesScanned = false;
         // R-EDIT-1 (ServiceAudioEdit.cpp): audio clips cut, joined, sliced — a cut is `splitClip`, which slice repeats
         bool audioEditCommand(const Command &c, std::string &err);
         bool splitClip(const std::string &id, double at, std::string &made, std::string &err);

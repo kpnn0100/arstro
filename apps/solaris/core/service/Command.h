@@ -49,6 +49,7 @@ namespace solaris
             ClipSplit, ClipConsolidate, ClipSlice,           // R-EDIT-1
             TempoAdd, TempoMove, TempoDelete,                // R-TEMPO-1
             PresetSave, PresetLoad, PresetList, PresetDelete, // R-PRESET-1
+            TemplateSave, TemplateList, TemplateDelete,       // R-PRESET-2
             Ls, Show, PatternPrint,                                                                   // R-SVC-8: read back
             Undo, Redo, HistoryPrint, HistoryJump,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,

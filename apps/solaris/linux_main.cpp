@@ -70,6 +70,7 @@ namespace
 #endif
         solaris_host::machinePaths(h.settingsPath, h.recentsPath); // the same files solaris-cc uses
         solaris_host::presetPaths(h.presetsPath, h.factoryPresetsPath); // R-PRESET-1
+        solaris_host::templatePaths(h.templatesPath, h.factoryTemplatesPath); // R-PRESET-2
         return h;
     }
 

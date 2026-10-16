@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N23 — song templates: `project new --template`, File › Save as Template** (R-PRESET-2), then N24… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N23 part 2 — templates in the window: File › Save as Template…, Home's New from a template** (R-PRESET-2; part 1 — the grammar — is built), then N24… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -514,7 +514,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       save|load|list|delete`, `--preset` on `device add` and `clip add --instrument`; `presets[]` in the model.
       Part 2 (2026-10-17): the browser's Presets tab (tabs as wide as their names, the highlight easing its width), an
       instrument's preset dropped in one line, a device window's Presets (load, Save as…).
-- [ ] **N23** Song templates (R-PRESET-2).
+- [~] **N23** Song templates (R-PRESET-2).
+      Part 1 (2026-10-17): the user's and the factory's templates folders (two shipped, made by `solaris-cc`); `template
+      save|list|delete`; `project new --template` (its own id and name, the template's tempo unless told);
+      `templates[]` in the model.
 - [ ] **N24** A sample library: tags, favourites, search (R-PRESET-3).
 - [ ] **N25** VST3 hosting: scan, an out-of-process host, process, latency, parameters (R-VST-6).
 - [ ] **N26** VST3 hosting: a plugin's own editor window; crash and overrun → offline (R-VST-6).

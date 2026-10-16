@@ -179,6 +179,9 @@ namespace solaris
             {"presets[].type", "string", "the registry type it is for"},
             {"presets[].name", "string", ""},
             {"presets[].factory", "bool", "shipped with the app (never written or deleted)"},
+            {"templates", "object[]", "R-PRESET-2: every song template — yours, then the factory's of a name you have not — by name"},
+            {"templates[].name", "string", "what `project new --template` takes"},
+            {"templates[].factory", "bool", "shipped with the app (never written or deleted)"},
             {"automations", "object[]", "every automation (R-AUTO-4)"},
             {"automations[].id", "string", "au_n — what a formula names"},
             {"automations[].name", "string", "\"<owner> · <parameter>\" when made from one"},
@@ -600,6 +603,9 @@ namespace solaris
         Json presets = Json::array(); // R-PRESET-1
         for (const auto &x : m.presets) presets.push(Json::object().set("type", x.type).set("name", x.name).set("factory", x.factory));
         j.set("presets", presets);
+        Json templates = Json::array(); // R-PRESET-2
+        for (const auto &x : m.templates) templates.push(Json::object().set("name", x.name).set("factory", x.factory));
+        j.set("templates", templates);
         Json autos = Json::array();
         for (const auto &a : m.automations)
         {

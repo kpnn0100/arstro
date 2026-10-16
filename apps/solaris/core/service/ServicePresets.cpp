@@ -188,5 +188,104 @@ namespace solaris
         mOutput = "saved " + node->type + " preset \"" + name + "\"\n";
         return true;
     }
+
+    // ── R-PRESET-2: song templates ─────────────────────────────────────────────────────────────────────────────
+
+    void SolarisService::scanTemplates()
+    {
+        mTemplates.clear();
+        for (bool factory : {false, true})
+        {
+            const std::string &root = factory ? mHost.factoryTemplatesPath : mHost.templatesPath;
+            if (root.empty()) continue;
+            std::error_code ec;
+            std::vector<std::string> names;
+            for (const auto &e : fs::directory_iterator(root, ec))
+                if (e.path().extension() == ".slp") names.push_back(e.path().stem().string());
+            std::sort(names.begin(), names.end());
+            for (const auto &n : names)
+            {
+                bool shadowed = false;
+                for (const auto &x : mTemplates) shadowed |= x.name == n;
+                if (!shadowed) mTemplates.push_back(TemplateModel{n, factory});
+            }
+        }
+        mTemplatesScanned = true;
+    }
+
+    bool SolarisService::templateSong(const std::string &name, Project &out, std::string &err)
+    {
+        if (!nameOk(name, err)) return false;
+        std::error_code ec;
+        std::string path = mHost.templatesPath.empty() ? std::string() : mHost.templatesPath + "/" + name + ".slp";
+        if (path.empty() || !fs::exists(path, ec)) path = mHost.factoryTemplatesPath.empty() ? std::string() : mHost.factoryTemplatesPath + "/" + name + ".slp";
+        if (path.empty() || !fs::exists(path, ec))
+        {
+            scanTemplates();
+            err = "no template `" + name + "`";
+            std::string have;
+            for (const auto &x : mTemplates) have += " \"" + x.name + "\"";
+            err += have.empty() ? " (there are none yet: `template save <name>` keeps the open song as one)" : " — there are:" + have;
+            return false;
+        }
+        std::ifstream f(path, std::ios::binary);
+        std::stringstream ss;
+        ss << f.rdbuf();
+        Project p;
+        if (!parseProject(ss.str(), p, err)) { err = "template \"" + name + "\": " + err; return false; }
+        out = std::move(p);
+        return true;
+    }
+
+    bool SolarisService::templateCommand(const Command &c, std::string &err)
+    {
+        if (!mTemplatesScanned || c.kind == K::TemplateList) scanTemplates(); // a listing reads the folders afresh
+        if (c.kind == K::TemplateList)
+        {
+            std::ostringstream o;
+            for (const auto &x : mTemplates) o << x.name << (x.factory ? "  (factory)" : "") << "\n";
+            mOutput = o.str();
+            return true;
+        }
+        const std::string name = c.arg(0);
+        if (!nameOk(name, err)) return false;
+        std::error_code ec;
+        const std::string mine = mHost.templatesPath.empty() ? std::string() : mHost.templatesPath + "/" + name + ".slp";
+        if (c.kind == K::TemplateDelete)
+        {
+            if (mine.empty() || !fs::exists(mine, ec))
+            {
+                const std::string fac = mHost.factoryTemplatesPath + "/" + name + ".slp";
+                err = !mHost.factoryTemplatesPath.empty() && fs::exists(fac, ec) ? "\"" + name + "\" is a factory template — it cannot be deleted" : "no template `" + name + "` of yours";
+                return false;
+            }
+            if (!fs::remove(mine, ec)) { err = "cannot delete " + mine; return false; }
+            scanTemplates();
+            mOutput = "deleted template \"" + name + "\"\n";
+            return true;
+        }
+        // K::TemplateSave: the open song as it is — every file it names made absolute, so a song started anywhere finds it
+        if (!requireOpen(err)) return false;
+        if (mine.empty()) { err = "this build has no folder for templates"; return false; }
+        if (fs::exists(mine, ec) && !c.has("replace")) { err = "you have a template \"" + name + "\" — give --replace to write over it"; return false; }
+        Project t = mProject;
+        for (auto &cl : t.clips)
+        {
+            if (!cl.src.empty()) cl.src = resolvePath(cl.src);
+            for (auto &tk : cl.takes) tk.src = resolvePath(tk.src);
+        }
+        for (auto &r : t.racks)
+            for (auto &d : r.devices)
+                if (!d.sample.empty()) d.sample = resolvePath(d.sample);
+        fs::create_directories(fs::path(mine).parent_path(), ec);
+        std::ofstream f(mine, std::ios::binary);
+        if (!f) { err = "cannot write " + mine; return false; }
+        f << serializeProject(t);
+        if (!f) { err = "cannot write " + mine; return false; }
+        f.close();
+        scanTemplates();
+        mOutput = "saved template \"" + name + "\"\n";
+        return true;
+    }
 }
 }

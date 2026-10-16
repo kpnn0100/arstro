@@ -64,6 +64,18 @@ namespace solaris_host
 #endif
     }
 
+    void templatePaths(std::string &user, std::string &factory)
+    {
+        const char *xd = std::getenv("XDG_DATA_HOME"), *home = std::getenv("HOME");
+        if (const char *u = std::getenv("SOLARIS_TEMPLATES")) user = u;
+        else if (xd) user = std::string(xd) + "/solaris/templates";
+        else if (home) user = std::string(home) + "/.local/share/solaris/templates";
+        if (const char *f = std::getenv("SOLARIS_FACTORY_TEMPLATES")) factory = f;
+#ifdef SOLARIS_FACTORY_TEMPLATES_DIR
+        else factory = SOLARIS_FACTORY_TEMPLATES_DIR;
+#endif
+    }
+
 #ifdef SOLARIS_HAVE_PULSE
     namespace
     {
