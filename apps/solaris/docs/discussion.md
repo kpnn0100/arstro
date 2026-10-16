@@ -437,3 +437,40 @@ of text names the channels. So, decided here (each a line to change):
   is, each light as its strip is, the strip's name on the text; an empty slot past the last strip down and dark.
 - **Not yet:** a surface's display of values, its jog wheel, its function keys, more than one surface.
 
+
+### Round 11 — 2026-10-17 — several audio devices (R-DEV-1/2/4/5, N32): the design, before code
+
+Today a song plays on ONE device, the clock (`settings.output`); a port the machine's map puts on another device is
+skipped. R-DEV asked for every device at once, the others held to the clock. Decided here (each a line to change):
+
+- **Which devices.** The clock is `settings.output`, as now. A FOLLOWER is every other device that an output port of
+  the playing song is mapped to (`port.<name> = <device>:<channel>`) — mapping a port to a device is what "enables"
+  it (R-DEV-1); there is no second list to keep in step. Each follower gets its own stream (the clock's driver) and
+  its own thread. One that cannot open is silent and said, once; the song plays on (R-DEV-3: never fatal).
+- **Feeding one.** The audio thread renders as now and writes each follower's ports, at their channels, into that
+  follower's ring — single producer, single consumer, made before play, no lock, no allocation. A ring that is full
+  (its device stalled) drops the block and counts it.
+- **Holding it to the clock — the DSP library's** (R-DSP-1). Two pieces, both pure and steppable, so minutes of two
+  crystals running apart are tested in milliseconds with no device: an `AdaptiveResampler` (a windowed-sinc
+  interpolator whose ratio may change every block without a click: 64 taps, a Kaiser window, a table of phases
+  linearly interpolated; its delay a constant half-length) and a `FillController` (a PI loop on the ring's fill,
+  smoothed, steering the ratio so the fill holds its target; its integral IS the drift, published in ppm; clamped at
+  ±2000 ppm — far past any crystal). The follower's thread pulls through them a device block at a time.
+- **Heard at the same moment** (R-DEV-4). Each path's latency is its device's, plus — for a follower — its ring's
+  target and the resampler's half-length. The fill target is the follower's delay control: a follower faster than the
+  clock path gets a larger target; a clock path faster than a follower is delayed by a delay line on the clock's
+  channels (set at play; the heard position counts it). Aligned at play from what each device then reports; a target
+  moved later travels through the loop, a few ppm at a time (never a jump).
+- **An input on another device** — the same loop the other way: the input's ring (the host's) read through a
+  resampler that holds what it has buffered at a target (a new `available()` on the input seam); a recording keeps
+  its per-device alignment (its own latency, already).
+- **Seen** (R-DEV-5): `transport.devices[]` while playing — each device's id, role (clock | follower | input),
+  latency, drift in ppm, xruns, and why it is silent if it is. Settings › Audio shows them, and which ports are where.
+- **Tests.** The DSP pieces by simulation: 48 000 against 48 003 Hz (and ±1000 ppm) for simulated minutes — the
+  fill held within a few frames, the drift read to under 1 ppm, never an underrun; a sine through a changing ratio
+  with no click (its distortion and noise measured). The service with fake devices paced in real time at different
+  rates: a follower's port gets its sound, continuous; an impulse on a clock port and one on a follower port arrive
+  at the same moment within a millisecond; the state published.
+- **Not yet:** a device's own sample rate unlike the song's (the clock opens at the song's, R-DEV-7; a follower at
+  another rate would be the same resampler at a far ratio — later); a follower re-aligned when its latency drifts
+  after play; Windows.

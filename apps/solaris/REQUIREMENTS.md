@@ -1052,7 +1052,18 @@ a process is the host's (law 12).
   devices idle) under a "FROZEN" pill in the accent; both ease in and out, never snap. A freeze renders before it
   answers, as an export does.)
 - **R-DEV-1/2/4 Several devices** (R-EDM-19, P2): a port on a second device played clocked to the first,
-  drift-corrected (R-DEV-2), latency aligned (R-DEV-4).
+  drift-corrected (R-DEV-2), latency aligned (R-DEV-4). (**Detailed before building it, N32 — 2026-10-17, discussion
+  Round 11:** a FOLLOWER is every device other than the clock that an output port of the playing song is mapped to;
+  its own stream and thread, fed by the audio thread through a lock-free ring; a follower that cannot open is silent
+  and said once, the song plays on. The DSP library's `AdaptiveResampler` (windowed sinc, 64 taps, a ratio changeable
+  every block without a click) and `FillController` (a PI loop holding the ring's fill at its target — its integral
+  the drift, in ppm, clamped at ±2000) keep it on the clock: two crystals 1000 ppm apart for simulated minutes hold
+  the fill within a few frames, never underrun, and read the drift to under 1 ppm. Every port is heard at the same
+  moment (within a millisecond, measured): a follower's fill target is its delay; a clock path faster than a follower
+  is delayed on the clock's channels, set at play. An input on another device is held to the clock the same way (the
+  input seam says what it has buffered). Seen while playing: `transport.devices[]` — id, role (clock | follower |
+  input), latency, drift ppm, xruns, why silent — and in Settings › Audio. Not yet: a follower at a rate unlike the
+  song's; re-aligning after play.)
 
 **Phase 5 — grow the sound and the craft**
 - **R-INST-7 Wavetable synth** · **R-INST-8 FM synth (4 operators)** · **R-INST-9 Multi-sample instrument**
