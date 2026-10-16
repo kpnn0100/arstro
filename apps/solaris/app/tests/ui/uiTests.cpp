@@ -4516,6 +4516,68 @@ static void test_a_strip_freezes_from_its_menu()
     pass("freeze from the mixer (R-PERF-3): Freeze and Bounce on a strip nothing feeds, Unfreeze on a frozen one — one line each; the rack recedes under FROZEN, eased in and out");
 }
 
+static void test_settings_puts_a_port_on_a_device()
+{
+    // R-DEV-1/5, Settings › Audio's PORTS: the open song's ports, each on its device — a click on Phones' field lists the
+    // clock and every output; a pick is ONE `settings set port.` line, its field then names the device and its line
+    // cross-fades to say where it plays now; a port added grows in, one removed shrinks out — caught mid-ease
+    sltest::Rig r("ui-ports", 1280, 800);
+    r.cmd("project new " + r.song("Ports") + ".slp --bpm 120");
+    r.cmd("port add Phones --dir out");
+    r.cmd("devices list");
+    r.app->openSettings();
+    r.settle();
+    auto &st = r.app->settings();
+    auto &menu = r.app->menu();
+    assert(st.portRowAmount("Main") == 1.0 && st.portRowAmount("Phones") == 1.0);
+    assert(st.portDeviceLabel("Phones") == "Clock device" && st.portNote("Phones") == "plays on the clock device");
+    assert(st.portFieldRect("Phones").w > 0);
+    st.revealRect(st.portFieldRect("Phones")); // under the devices: the page scrolls to it
+    r.settle();
+    const artboard::Rect f = st.portFieldRect("Phones");
+    r.click(f.x + f.w * 0.5, f.y + f.h * 0.5);
+    r.settle();
+    assert(menu.isOpen() && menu.itemCount() == 4); // the clock, and the rig's three outputs
+    assert(menu.item(0).label == "Clock device  \xC2\xB7 now");
+    int usb = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label == "Scarlett 2i2 USB") usb = i;
+    assert(usb > 0);
+    r.click(menu.itemRect(usb));
+    assert(r.sent.back() == "settings set port.Phones=usb_interface:0");
+    r.frame();
+    r.frame();
+    const double mid = st.portNoteAmount("Phones");
+    assert(mid > 0.0 && mid < 1.0); // its line cross-fading
+    r.settle();
+    assert(st.portDeviceLabel("Phones") == "Scarlett 2i2 USB" && st.portNoteAmount("Phones") == 1.0);
+    assert(st.portNote("Phones") == "plays on Scarlett 2i2 USB from channel 1, held to the clock");
+    // playing: Main's line says how the clock is (the rig's quiet device)
+    r.cmd("transport play");
+    r.settle();
+    const std::string playingNote = st.portNote("Main");
+    r.cmd("transport stop");
+    r.settle();
+    assert(playingNote.rfind("the clock \xC2\xB7 ", 0) == 0 && playingNote.find(" ms") != std::string::npos);
+    assert(st.portNote("Main") == "plays on the clock device");
+    // a port added grows in; undone, it shrinks out
+    r.cmd("port add Cue --dir out");
+    r.frame();
+    r.frame();
+    const double in = st.portRowAmount("Cue");
+    assert(in > 0.0 && in < 1.0);
+    r.settle();
+    assert(st.portRowAmount("Cue") == 1.0);
+    r.cmd("undo"); // the port gone again
+    r.frame();
+    r.frame();
+    const double out = st.portRowAmount("Cue");
+    assert(out > 0.0 && out < 1.0);
+    r.settle();
+    assert(st.portRowAmount("Cue") == 0.0);
+    pass("Settings › Audio's ports (R-DEV-1/5): each port on its device — a pick from the field's list is one `settings set port.` line, the field naming the device, its line cross-fading; a port added grows in, undone shrinks out");
+}
+
 static void test_the_cpu_in_the_song_bar()
 {
     // R-PERF-1: playing, the song bar's CPU readout catches up with the model's load — caught on the way — and, stopped,
@@ -4614,6 +4676,7 @@ int main()
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();
+    test_settings_puts_a_port_on_a_device();
     test_a_strip_freezes_from_its_menu();
     test_a_sample_is_heard_from_the_browser();
     test_the_grid_follows_the_zoom();

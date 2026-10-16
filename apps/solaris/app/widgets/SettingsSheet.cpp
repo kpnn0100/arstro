@@ -24,7 +24,8 @@ namespace solaris_ui
         constexpr double kFooterH = 56.0;    // Done, under a hairline
         constexpr double kPageTop = 34.0;    // a page's title, then its first row
         constexpr int kDoneId = 900, kAddId = 901, kResetId = 902, kRailBase = 950, kRemoveBase = 1000, kKeyChipBase = 2000, kKeyAddBase = 4000,
-                      kMapRemoveBase = 6000; // R-CTRL-1
+                      kMapRemoveBase = 6000, // R-CTRL-1
+                      kPortFieldBase = 7000; // R-DEV-1
         constexpr double kKeyRowGap = 4.0;   // R-SET-4: the keymap's rows sit close — one action a line
         constexpr double kRowLabelGap = 13.0;
         constexpr double kAreaGap = 22.0;
@@ -284,6 +285,63 @@ namespace solaris_ui
                 r.m = x;
                 mMapRows.push_back(std::move(r));
             }
+        }
+        // R-DEV-1/5: the song's ports, keyed by name — where each is on this machine, and (playing) how its device is
+        mDevices = m.devices;
+        auto deviceName = [&](const std::string &id) {
+            for (const auto &d : m.devices)
+                if (d.id == id) return d.name;
+            return id + " (not connected)";
+        };
+        auto ms = [](double v) { char b[32]; std::snprintf(b, sizeof b, "%.1f ms", v); return std::string(b); };
+        for (auto &r : mPortRows) r.leaving = true;
+        for (const auto &pm : m.ports)
+        {
+            PortRow *row = nullptr;
+            for (auto &r : mPortRows)
+                if (r.p.name == pm.name) { row = &r; r.leaving = false; }
+            if (!row)
+            {
+                mPortRows.push_back(PortRow());
+                row = &mPortRows.back();
+            }
+            row->p = pm;
+            row->device.clear();
+            row->channel = 0;
+            for (const auto &kv : s.ports) // "<port>=<device>:<channel>"
+            {
+                const auto eq = kv.find('=');
+                if (eq == std::string::npos || kv.substr(0, eq) != pm.name) continue;
+                const std::string v = kv.substr(eq + 1);
+                const auto colon = v.rfind(':');
+                row->device = colon == std::string::npos ? v : v.substr(0, colon);
+                row->channel = colon == std::string::npos ? 0 : std::atoi(v.c_str() + colon + 1);
+            }
+            const bool out = pm.dir != "in";
+            row->label = row->device.empty() ? std::string(out ? "Clock device" : "Default input") : deviceName(row->device);
+            // its line: where it plays — and, playing, how its device is
+            const bool own = out ? (row->device.empty() || row->device == s.output) : (row->device.empty() || row->device == s.input);
+            std::string note;
+            if (m.transport.playing && !m.transport.devices.empty())
+            {
+                const solaris::AudioDeviceModel *d = nullptr;
+                for (const auto &x : m.transport.devices)
+                    if ((own && out && x.role == "clock") || (!own && x.id == row->device)) d = &x;
+                if (d && !d->problem.empty()) note = "silent \xE2\x80\x94 " + d->problem;
+                else if (d)
+                {
+                    char drift[32];
+                    std::snprintf(drift, sizeof drift, "%+.2f ppm", d->driftPpm);
+                    note = d->role == "clock" ? "the clock \xC2\xB7 " + ms(d->latencyMs) : "held to the clock \xC2\xB7 " + ms(d->latencyMs) + " \xC2\xB7 " + drift;
+                    if (d->xruns >= 0) note += " \xC2\xB7 " + std::to_string(d->xruns) + (d->xruns == 1 ? " xrun" : " xruns");
+                }
+            }
+            if (note.empty())
+            {
+                if (out) note = own ? "plays on the clock device" : "plays on " + row->label + " from channel " + std::to_string(row->channel + 1) + ", held to the clock";
+                else note = own ? "records beside the clock" : "records from " + row->label + ", held to the clock";
+            }
+            row->noteWant = note;
         }
         // a combo shows the value the setting HAS — one its list lacks (a device not connected now, a tempo set from
         // a shell) is an entry of its own, so the setting is never invisible (R-SET-6)
@@ -663,8 +721,85 @@ namespace solaris_ui
         }
         mMapRows.erase(std::remove_if(mMapRows.begin(), mMapRows.end(), [](const MapRow &r) { return r.leaving && r.amount.value() <= 0.0; }), mMapRows.end());
         mMapPlaced = true;
+        // R-DEV-1/5: port rows grow in and shrink out; a line that changes cross-fades (the first placement is set)
+        for (auto &r : mPortRows)
+        {
+            if (r.fresh)
+            {
+                if (mPortsPlaced) r.amount.animateTo(1.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs);
+                else r.amount.set(1.0);
+                r.fresh = false;
+            }
+            if (r.leaving && !r.amount.isAnimating() && r.amount.value() > 0.0) r.amount.animateTo(0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs);
+            if (r.noteWant != r.note)
+            {
+                if (r.notePlaced)
+                {
+                    r.noteOld = r.note;
+                    r.noteFade.set(0.0);
+                    r.noteFade.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+                }
+                r.note = r.noteWant;
+                r.notePlaced = true;
+            }
+            r.amount.update(nowMs);
+            r.noteFade.update(nowMs);
+        }
+        mPortRows.erase(std::remove_if(mPortRows.begin(), mPortRows.end(), [](const PortRow &r) { return r.leaving && r.amount.value() <= 0.0; }), mPortRows.end());
+        mPortsPlaced = true;
         layoutPages();
         Segment::advance(nowMs);
+    }
+
+    Rect SettingsSheet::portFieldRect(const std::string &port) const
+    {
+        for (const auto &f : mPortFields)
+            if (f.first == port) return f.second;
+        return Rect{};
+    }
+    double SettingsSheet::portRowAmount(const std::string &port) const
+    {
+        for (const auto &r : mPortRows)
+            if (r.p.name == port) return r.amount.value();
+        return 0.0;
+    }
+    std::string SettingsSheet::portDeviceLabel(const std::string &port) const
+    {
+        for (const auto &r : mPortRows)
+            if (r.p.name == port) return r.label;
+        return "";
+    }
+    std::string SettingsSheet::portNote(const std::string &port) const
+    {
+        for (const auto &r : mPortRows)
+            if (r.p.name == port) return r.note;
+        return "";
+    }
+    double SettingsSheet::portNoteAmount(const std::string &port) const
+    {
+        for (const auto &r : mPortRows)
+            if (r.p.name == port) return r.noteFade.value();
+        return 1.0;
+    }
+
+    void SettingsSheet::openPortMenu(const PortRow &r, const Point &world)
+    {
+        // R-DEV-1: the clock (or the default input) and every device of its direction — a pick is one line
+        if (!onMenu) return;
+        const bool out = r.p.dir != "in";
+        const std::string name = r.p.name, ch = std::to_string(r.channel);
+        auto line = [this, name](const std::string &v) {
+            if (onCommand) onCommand("settings set " + q("port." + name + "=" + v));
+        };
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        items.push_back({std::string(out ? "Clock device" : "Default input") + (r.device.empty() ? "  \xC2\xB7 now" : ""), [line] { line(""); }});
+        for (const auto &d : mDevices)
+            if (d.dir == (out ? "out" : "in"))
+            {
+                const std::string id = d.id;
+                items.push_back({d.name + (d.id == r.device ? "  \xC2\xB7 now" : ""), [line, id, ch] { line(id + ":" + ch); }});
+            }
+        onMenu(std::move(items), world);
     }
 
     double SettingsSheet::mapRowAmount(const std::string &cc) const
@@ -690,6 +825,9 @@ namespace solaris_ui
         if (mSection == kMidi)
             for (size_t i = 0; i < mMapRemove.size(); ++i)
                 if (mMapRemove[i].contains(p)) return kMapRemoveBase + (int)i;
+        if (mSection == kAudio)
+            for (size_t i = 0; i < mPortFields.size(); ++i)
+                if (mPortFields[i].second.contains(p)) return kPortFieldBase + (int)i;
         if (mSection == kKeyboard)
         {
             if (mKeyReset.contains(p)) return kResetId;
@@ -751,6 +889,14 @@ namespace solaris_ui
                 if (!line.empty() && onCommand) onCommand("settings set" + line); // ONE line, every changed action
                 return true;
             }
+            if (mSection == kAudio) // R-DEV-1: a port's device — the menu of where it may play
+                for (const auto &f : mPortFields)
+                    if (f.second.contains(local))
+                    {
+                        for (const auto &r : mPortRows)
+                            if (r.p.name == f.first && !r.leaving) openPortMenu(r, Point{f.second.x, f.second.bottom() + 2.0});
+                        return true;
+                    }
             if (mSection == kMidi) // R-CTRL-1: a mapping forgotten — one line
                 for (size_t i = 0; i < mMapRemove.size() && i < mMapRemoveCc.size(); ++i)
                     if (mMapRemove[i].contains(local)) { if (onCommand) onCommand("map remove " + mMapRemoveCc[i]); return true; }
@@ -857,6 +1003,11 @@ namespace solaris_ui
         {
             paintRows(t, s, w, oy); // R-CTRL-2: the surface's rows, then R-CTRL-1's mapped controls
             paintMidi(t, w, oy, px, py);
+        }
+        else if (s == kAudio)
+        {
+            paintRows(t, s, w, oy); // the devices, then R-DEV-1's ports
+            paintPorts(t, w, oy, px, py);
         }
         else paintRows(t, s, w, oy);
         page.scroll.drawBar(t, page.width.value(), 1.0);
@@ -978,6 +1129,65 @@ namespace solaris_ui
             fy += h;
         }
         mPages[kMidi]->contentH = (fy + 12.0) - oy;
+    }
+
+    void SettingsSheet::paintPorts(IRenderTarget &t, double w, double oy, double px, double py) const
+    {
+        // R-DEV-1/5: under the devices, the open song's ports — each on its device, and how that device is
+        double fy = oy + kPageTop + (double)kPageRows[kAudio].size() * kRowH + 14.0;
+        t.setFill(palette::mutedForeground());
+        t.drawText("PORTS", 0.0, fy, 9.0, font::sansSemiBold(), 0.13 * 9.0);
+        t.drawText("where this song's ports play on this machine", t.measureText("PORTS", 9.0, font::sansSemiBold()) + 0.13 * 9.0 * 5 + 10.0, fy, 10.0, font::sans());
+        fy += 8.0;
+        mPortFields.clear();
+        if (mPortRows.empty())
+        {
+            t.setFill(fade(palette::mutedForeground(), 0.8));
+            t.drawText(textfit::ellipsize(t, "No song open \xE2\x80\x94 its ports are listed here.", w, kFontPx, font::sans()), 0.0,
+                       textfit::baseline(fy + kFolderRowH * 0.5, kFontPx), kFontPx, font::sans());
+            fy += kFolderRowH;
+        }
+        for (size_t i = 0; i < mPortRows.size(); ++i)
+        {
+            const PortRow &r = mPortRows[i];
+            const double a = r.amount.value(), h = kRowH * a;
+            if (h <= 0.01) continue;
+            t.save();
+            t.clipRect(0.0, fy, w, h); // growing in, shrinking out: the row's height eased, its content revealed
+            const Rect field{w - kComboW, fy + (kRowH - kControlH) * 0.5, kComboW, kControlH};
+            if (!r.leaving) mPortFields.emplace_back(r.p.name, Rect{field.x + px, field.y + py, field.w, field.h});
+            const double hv = r.leaving ? 0.0 : mHover.amount(kPortFieldBase + (int)mPortFields.size() - 1);
+            const double room = w - kComboW - 20.0;
+            t.setFill(fade(palette::foreground(), a));
+            const std::string name = textfit::ellipsize(t, r.p.name, room * 0.6, 12.0, font::sans());
+            t.drawText(name, 0.0, fy + 23.0, 12.0, font::sans());
+            t.setFill(fade(palette::mutedForeground(), a));
+            t.drawText(r.p.dir == "in" ? "in" : "out", t.measureText(name, 12.0, font::sans()) + 8.0, fy + 23.0, 10.0, font::sans());
+            const double nf = r.noteFade.value();
+            if (nf < 1.0 && !r.noteOld.empty())
+            {
+                t.setFill(fade(palette::mutedForeground(), a * (1.0 - nf))); // the old line out, the new in
+                t.drawText(textfit::ellipsize(t, r.noteOld, room, 10.0, font::sans()), 0.0, fy + 39.0, 10.0, font::sans());
+            }
+            t.setFill(fade(palette::mutedForeground(), a * nf));
+            t.drawText(textfit::ellipsize(t, r.note, room, 10.0, font::sans()), 0.0, fy + 39.0, 10.0, font::sans());
+            // the field: as a combo's (SettingCombo), its device named
+            drawRoundedRect(t, field, radius::control(),
+                            Paint::filledStroked(fade(palette::input(), a), fade(lerpColor(palette::border(), palette::primary(), 0.6 * hv), a), 1.0));
+            t.setFill(fade(palette::foreground(), a));
+            t.drawText(textfit::ellipsize(t, r.label, field.w - 36.0, kFontPx, font::sans()), field.x + 10.0, textfit::baseline(field.y + field.h * 0.5, kFontPx), kFontPx,
+                       font::sans());
+            glyph::caretDown(t, Rect{field.right() - 22.0, field.y + (field.h - 10.0) * 0.5, 12.0, 10.0},
+                             fade(lerpColor(palette::mutedForeground(), palette::foreground(), hv), a), 1.3);
+            if (i + 1 < mPortRows.size())
+            {
+                t.setStroke(fade(palette::border(), a), 1.0);
+                t.beginPath(); t.moveTo(0.0, fy + h); t.lineTo(w, fy + h); t.strokePath();
+            }
+            t.restore();
+            fy += h;
+        }
+        mPages[kAudio]->contentH = (fy + 12.0) - oy;
     }
 
     void SettingsSheet::paintFolders(IRenderTarget &t, double w, double oy, double px, double py) const

@@ -21,6 +21,7 @@
  *  (design rule R5) — and kept for the next hit test.
  */
 #pragma once
+#include "../../../cosmo/widgets/ContextMenu.h"
 #include "../Theme.h"
 #include "AppModel.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
@@ -100,6 +101,8 @@ namespace solaris_ui
 
         std::function<void(const std::string &line)> onCommand;
         std::function<void()> onAddFolder;
+        /** R-DEV-1: the menu a port's device field opens (the app's context menu, over the sheet). */
+        std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
 
         // R-SET-5: the sections — geometry in window coordinates, from the last layout
         void showSection(int s); // as a click on the rail
@@ -130,6 +133,13 @@ namespace solaris_ui
         artboard::Rect mapRemoveRect(int i) const { return i >= 0 && i < (int)mMapRemove.size() ? mMapRemove[(size_t)i] : artboard::Rect{}; }
         /** LIVE: a mapping row's presence — it grows in when made and shrinks out when forgotten (keyed by its control). */
         double mapRowAmount(const std::string &cc) const;
+        /** R-DEV-1/5, the Audio page's PORTS — keyed by port name: its device field (window coordinates, the last
+         *  paint), its row's presence (LIVE), the device it shows, its line and that line's cross-fade (LIVE, 1 settled). */
+        artboard::Rect portFieldRect(const std::string &port) const;
+        double portRowAmount(const std::string &port) const;
+        std::string portDeviceLabel(const std::string &port) const;
+        std::string portNote(const std::string &port) const;
+        double portNoteAmount(const std::string &port) const;
         /** Scroll (eased) the CURRENT page so a rect from the last paint is inside it. */
         void revealRect(const artboard::Rect &r);
 
@@ -231,6 +241,21 @@ namespace solaris_ui
             bool fresh = true, leaving = false;
         };
         std::vector<MapRow> mMapRows;                    // the model's, and the forgotten ones still shrinking
+        // R-DEV-1/5: the song's ports — keyed by name; a removed one stays to shrink out
+        struct PortRow
+        {
+            solaris::PortModel p;
+            std::string device, label, note, noteOld, noteWant;
+            int channel = 0;
+            artboard::AnimatedProperty amount{0.0}, noteFade{1.0};
+            bool fresh = true, leaving = false, notePlaced = false;
+        };
+        std::vector<PortRow> mPortRows;
+        bool mPortsPlaced = false;
+        std::vector<solaris::DeviceInfo> mDevices;
+        mutable std::vector<std::pair<std::string, artboard::Rect>> mPortFields; // from the last paint, window coordinates
+        void paintPorts(artboard::IRenderTarget &t, double w, double oy, double px, double py) const;
+        void openPortMenu(const PortRow &r, const artboard::Point &world);
         bool mMapPlaced = false;
         mutable artboard::Rect mDone, mAddFolder;
 

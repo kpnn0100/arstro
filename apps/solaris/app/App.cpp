@@ -87,6 +87,7 @@ namespace solaris_ui
         };
 
         mSettings->onCommand = [this](const std::string &line) { dispatch(line); };
+        mSettings->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { mMenu->open(std::move(items), world.x, world.y); }; // R-DEV-1
         // R-EXPORT-1: the sheet's choices, then the host names the file — ONE render line
         mExport->onExport = [this](const std::string &flags, const std::string &suggested) {
             if (onPickSave) onPickSave("Export the mix", suggested, [this, flags](const std::string &p) { dispatch("render --out " + quote(p) + " " + flags); });

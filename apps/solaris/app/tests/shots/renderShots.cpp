@@ -106,6 +106,32 @@ namespace
                  r.app->openSettings();
                  r.settle();
              }},
+            {"settings-ports",   // R-DEV-1/5: the song's ports under the devices — Phones on the USB interface, Mic on its input
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("port add Phones --dir out");
+                 r.cmd("port add Mic --dir in --channels 1");
+                 r.cmd("devices list");
+                 r.cmd("settings set port.Phones=usb_interface:0 port.Mic=usb_mic:0");
+                 r.app->openSettings();
+                 r.settle();
+                 auto &st = r.app->settings();
+                 st.revealRect(st.portFieldRect("Mic"));
+                 r.settle();
+             }},
+            {"settings-ports-arriving", // a port added while the sheet is open, mid-grow
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("port add Phones --dir out");
+                 r.cmd("devices list");
+                 r.app->openSettings();
+                 r.settle();
+                 auto &st = r.app->settings();
+                 st.revealRect(st.portFieldRect("Phones"));
+                 r.settle();
+                 r.cmd("port add Cue --dir out");
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
             {"settings-folders",
              [](sltest::Rig &r) {
                  r.cmd("folder add \"/home/me/Music/Samples/Drum Kits/909\"");

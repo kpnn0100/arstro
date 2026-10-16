@@ -309,7 +309,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 
 ---
 
-## R-DEV — audio devices: use every device you have — 🚧 IN PROGRESS (listing and the port map ✅ DR-SET-1; output followers held to the clock and aligned ✅ DR-DEV-1; an input on another device ✅ DR-DEV-1a; Settings › Audio — N32 part 4)
+## R-DEV — audio devices: use every device you have — 🚧 IN PROGRESS (listing and the port map ✅ DR-SET-1; output followers held to the clock and aligned ✅ DR-DEV-1; an input on another device ✅ DR-DEV-1a; each port's device seen ✅ DR-DEV-5; a device at a rate unlike the song's, R-DEV-7, not yet)
 
 The user (2026-10-08): *"we can send to multiple output devices; I want solaris to handle multiple
 audio devices so the user can take advantage of their devices."*
@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 ✅ DR-REC-1 — loop takes are R-REC-2's; R-REC-2 ✅ DR-REC-2; R-EDIT-1 ✅ DR-EDIT-1; R-WARP-1 ✅ DR-WARP-1; R-TEMPO-1 ✅ DR-TEMPO-1; R-PRESET-1 ✅ DR-PRESET-1; R-PRESET-2 ✅ DR-PRESET-2; R-PRESET-3 ✅ DR-PRESET-3; R-VST-6 ✅ DR-VST-6 — the wheels to a plugin wait; R-CTRL-1 ✅ DR-CTRL-1; R-CTRL-2 ✅ DR-CTRL-2 — not yet against a real surface; R-PERF-1 ✅ DR-PERF-1; R-PERF-2 ✅ DR-PERF-2; R-PERF-3 ✅ DR-PERF-3)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 ✅ DR-REC-1 — loop takes are R-REC-2's; R-REC-2 ✅ DR-REC-2; R-EDIT-1 ✅ DR-EDIT-1; R-WARP-1 ✅ DR-WARP-1; R-TEMPO-1 ✅ DR-TEMPO-1; R-PRESET-1 ✅ DR-PRESET-1; R-PRESET-2 ✅ DR-PRESET-2; R-PRESET-3 ✅ DR-PRESET-3; R-VST-6 ✅ DR-VST-6 — the wheels to a plugin wait; R-CTRL-1 ✅ DR-CTRL-1; R-CTRL-2 ✅ DR-CTRL-2 — not yet against a real surface; R-PERF-1 ✅ DR-PERF-1; R-PERF-2 ✅ DR-PERF-2; R-PERF-3 ✅ DR-PERF-3; R-DEV-1/2/4 ✅ DR-DEV-1, DR-DEV-1a, DR-DEV-5 — not yet against a second real card)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -1063,7 +1063,12 @@ a process is the host's (law 12).
   is delayed on the clock's channels, set at play. An input on another device is held to the clock the same way (the
   input seam says what it has buffered). Seen while playing: `transport.devices[]` — id, role (clock | follower |
   input), latency, drift ppm, xruns, why silent — and in Settings › Audio. Not yet: a follower at a rate unlike the
-  song's; re-aligning after play.)
+  song's; re-aligning after play. **Detailed while building it, N32 part 4 — 2026-10-17:** Settings › Audio lists the
+  open song's PORTS under its settings, one row each (growing in, shrinking out): its name and direction, a field
+  naming the device it is on — "Clock device" / "Default input" when it is on none — and a line under the name: where
+  it plays when stopped; while playing, its device's state (the clock, or held to it, its latency, drift and xruns, or
+  why it is silent), the line cross-fading as it changes. A click on the field lists the clock (or the default input)
+  and every device of its direction; a pick is ONE line, `settings set port.<name>=<device>:<channel>` (or empty).)
 
 **Phase 5 — grow the sound and the craft**
 - **R-INST-7 Wavetable synth** · **R-INST-8 FM synth (4 operators)** · **R-INST-9 Multi-sample instrument**

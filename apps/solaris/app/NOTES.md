@@ -153,6 +153,7 @@ helpers it borrows.
 | Piano roll › Vel · Bend · Mod · Chance (beside the lower lane) | nothing — the view's: what the lane shows (R-MIDI-3, R-ROLL-11) |
 | Piano roll › the Chance lane › a stem dragged | `note move <pt> --pitch <p> --at <b> --chance <0…1>` on release (R-ROLL-11) |
 | Piano roll › a wheel's lane › a click · a point dragged up/down · a point double-clicked | `expr add <pt> --lane bend\|cc1 --at <b> --value <v>` · the same at its beat, on release · `expr delete <pt> --lane … --at <b>` |
+| Settings › Audio › Ports › a port's device field (menu) | `settings set port.<name>=<device>:<channel>` — or `port.<name>=` (back on the clock / the default input) (R-DEV-1, R-DEV-3); the line under its name says where it plays — playing, how its device is (R-DEV-5) |
 | Settings › Audio › Driver (combo) | `settings set driver=pulse\|pipewire` (R-DEV-9) |
 | Mixer › right-click a strip › Freeze / Unfreeze | `strip freeze <ch>` / `strip unfreeze <ch>` (R-PERF-3) — Freeze only on a strip nothing feeds (`strips[].fromStrips` empty), Unfreeze on a frozen one; frozen, its rack recedes under a FROZEN pill (`frozenAmount`, eased) |
 | Mixer › right-click a strip › Bounce to a new strip | `strip bounce <ch>` (R-PERF-3) — its own sound as a clip at beat 0 on a new strip; only on a strip nothing feeds |
@@ -167,7 +168,7 @@ A refusal is the toast, with the service's own sentence (`App::dispatch`). A cop
 ## Shots — `solaris_app_shots [--outdir D] [--only S] [--size WxH] [--check]`
 
 The REAL App over the REAL service (`tests/Rig.h`): home-empty · home-cards (a long name, a missing
-song) · settings-open (the Audio page: combo boxes) · settings-folders (its page) · settings-mid-open (mid-fade) · settings-combo-open (a list
+song) · settings-open (the Audio page: combo boxes) · settings-ports (Settings › Audio's ports: Phones on the USB interface, Mic on its input, each with its line — R-DEV-1/5) · settings-ports-arriving (a port added, its row mid-grow) · settings-folders (its page) · settings-mid-open (mid-fade) · settings-combo-open (a list
 dropping over the page) · settings-page-changing (Audio fading out as Playback fades in, the highlight on its way) · history-tree (a branched history in cosmo's view) · clip-copy-dragging (Shift held: the original at full strength, a "+" on the copy in hand) · automation-pump (a pump looping from beat 4 for 8: the first cycle bright, the repeats faint, its brace; its window's Loop combo) · history-tree-jumping (a node clicked, the highlight mid-way) · settings-keyboard (re-keyed actions dotted, Reset live) · settings-key-listening (a chip mid cross-fade to "Press a key…") · project-open · home-to-project-mid (mid cross-fade) · toast-refusal ·
 browser-instruments · browser-folder · drag-sample-mid (the ghost and the drop hint) ·
 clip-dragging · clip-selected-zoomed · lanes-zoomed-in (bars to thirty-seconds, the beats named, Snap 1/128) · lanes-zoomed-out (bars only, Snap Bar) · lanes-zoom-mid (mid Ctrl+wheel: a level mid-fade, the step's names cross-fading) · menu-file-open (Edit open, naming its undo) · mixer-sources · mixer-buses · mixer-tab-mid (pages mid

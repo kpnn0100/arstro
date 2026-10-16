@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N32 part 4 — Settings › Audio** (R-DEV-5/R-SET-1: the devices a song plays through while it plays — role, latency, drift, xruns — and which port is on which device; parts 1–3 — the DSP pieces, the output followers, an input on another device — are built), then N33… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N33** — DSP instruments: wavetable, FM, multi-sample (SFZ), granular, 808 (R-INST-7…11) — a commit each. (N32 — several audio devices — is built; owed live: a follower on a second real card), then N34… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -566,7 +566,7 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       the song's end and its tail), frozen beside the song and played instead (its rack not built), or bounced onto a
       new strip; `strips[].frozen`; `frozen=` on `#atrack`; the audit. Part 2: the mixer strip's menu (Freeze /
       Unfreeze / Bounce to a new strip, offered by `fromStrips`) and a frozen rack receding under FROZEN, eased.
-- [~] **N32** Several audio devices, drift-corrected (R-DEV-1/2/4).
+- [x] **N32** Several audio devices, drift-corrected (R-DEV-1/2/4).
       2026-10-17: the design round (discussion Round 11). Part 1, the DSP library (f3d6683): `AdaptiveResampler`
       (REQ-resample-2) and `FillController` (REQ-resample-3), REQ-resample-1's kernel shared as `SincKernel`. Next:
       part 2, the followers in the core (rings, threads, alignment, `transport.devices[]`); part 3, an input on another
@@ -578,7 +578,8 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       test fakes race under TSan; the product is clean).
       Part 3: `DriftIn` — an input on any device but the default or Settings' input, held to the clock (the input
       seam's `held` + `CaptureStamp`, marked by both host captures); its latency its device's and its target's; role
-      `input` in `transport.devices[]`.
+      `input` in `transport.devices[]`. Part 4: Settings › Audio's PORTS — each song port on its device (a field whose
+      menu is one `settings set port.` line), its line saying where it plays, and while playing how its device is.
 **Phase 5 — grow the sound and the craft**
 - [ ] **N33** DSP instruments: wavetable, FM, multi-sample (SFZ), granular, 808 (R-INST-7…11) — a commit each.
 - [ ] **N34** DSP effects: multiband, gate, transient, de-esser, saturator, phaser, flanger, imager, convolution,
