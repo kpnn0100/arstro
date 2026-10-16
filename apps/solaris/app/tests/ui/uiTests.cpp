@@ -931,7 +931,7 @@ static void test_space_returns_and_ctrl_space_stays()
     assert(r.sent.back() == "transport stop" && !t.playing && t.position > 6.0 && t.cue == 6.0);
     const double here = t.position;
     r.key(32);
-    assert(r.sent.back() == "transport play" && t.playing && t.position >= here && t.cue == 6.0);
+    assert(r.sent.back() == "transport play" && t.playing && t.position > here - 0.1 && t.cue == 6.0); // heard: a latency behind, at first
     for (int k = 0; k < 20; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
     assert(tl.cueBeat() == 6.0);                                  // the mark still stands where the time bar was put
     r.key(32);

@@ -1452,7 +1452,8 @@ static void test_stop_returns_to_the_cue_or_stays()
     const double here = t.position;
     assert(here > 7.0 && t.cue == 6.0);
     r.ok("transport play");
-    assert(r.svc.model().transport.cue == 6.0 && r.svc.model().transport.position >= here);
+    // (the position is what is HEARD — the device's latency behind the start for a moment: a tenth of a beat's room)
+    assert(r.svc.model().transport.cue == 6.0 && r.svc.model().transport.position > here - 0.1);
     waitFrames(r, r.fake.capture->frames.load() + 24000);
     r.ok("transport stop --return");
     assert(r.svc.model().transport.position == 6.0 && r.svc.model().transport.cue == 6.0);
