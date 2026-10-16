@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N19 — DSP: a time-stretcher and pitch shifter (phase vocoder, transients)** (R-WARP-1's DSP half), then N20… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N20 — warp and pitch on audio clips, BPM detected** (R-WARP-1; the DSP half — N19 — is built), then N21… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -489,7 +489,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       and `--every --kit` (a Sampler that plays the same, to the sample). Part 2 (same day): the window — a clip's fade
       handles and gain line (one `set` when let go), its crossfade drawn as heard, Split at the time bar · Reverse ·
       Consolidate N clips · Slice ▸ in its menu, Ctrl+E (`lanes.split`).
-- [ ] **N19** DSP: a time-stretcher and pitch shifter (phase vocoder, transients) (R-WARP-1's DSP half).
+- [x] **N19** DSP: a time-stretcher and pitch shifter (phase vocoder, transients) (R-WARP-1's DSP half).
+      2026-10-16, DSP `267a112`: `src/spectral/` — `FFT` (REQ-fft-1), `timeStretch` (REQ-stretch-1…3: identity phase
+      locking; a time map rigid around each onset, so an attack lands at ratio·onset whole — nothing of it ahead, where a
+      plain vocoder smears it 20 ms early) and `resample` (REQ-resample-1, Kaiser sinc). 440 Hz kept to the millihertz at
+      ×1.5 and ×0.6; a fifth up 659.255 Hz; deterministic.
 - [ ] **N20** Warp and pitch on audio clips, BPM detected (R-WARP-1).
 - [ ] **N21** A tempo map (R-TEMPO-1).
 **Phase 4 — open the ecosystem**
