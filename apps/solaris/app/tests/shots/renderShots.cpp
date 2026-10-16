@@ -487,6 +487,18 @@ namespace
                  r.app->project().windows().openRoll("pt_2");
                  r.settle();
              }},
+            {"piano-roll-bend",   // R-MIDI-3: the lane below on Bend — a dip and a rise through its points
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("note add pt_2 --pitch 45 --at 0 --length 2");
+                 r.cmd("note add pt_2 --pitch 48 --at 2 --length 2");
+                 for (auto [at, v] : {std::pair<const char *, const char *>{"0", "0"}, {"0.5", "-0.5"}, {"1.5", "0.25"}, {"2", "0"}, {"3", "0.8"}})
+                     r.cmd(std::string("expr add pt_2 --lane bend --at ") + at + " --value " + v);
+                 r.settle();
+                 r.app->project().windows().openRoll("pt_2");
+                 r.app->project().windows().roll("pt_2")->setLane(arstro::solaris_ui::PianoRoll::LaneBend);
+                 r.settle();
+             }},
             {"piano-roll-playing",   // R-ROLL-6: its ▶ lit, the clip looping, the playhead where it is heard
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

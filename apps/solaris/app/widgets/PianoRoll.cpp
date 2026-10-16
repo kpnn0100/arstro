@@ -113,6 +113,17 @@ namespace solaris_ui
             l->n = n;
             l->gone = false;
         }
+        // R-MIDI-3: the lanes' points, keyed by (lane, beat): kept, new ones fading in, gone ones fading out
+        for (auto &x : mExpr) x.gone = true;
+        for (const auto &e : pt->expr)
+        {
+            ExprLive *l = nullptr;
+            for (auto &x : mExpr)
+                if (x.lane == e.lane && std::fabs(x.at - e.at) < kTol) l = &x;
+            if (!l) { mExpr.emplace_back(); l = &mExpr.back(); l->lane = e.lane; l->at = e.at; }
+            l->value = e.value;
+            l->gone = false;
+        }
         // a selected note gone (deleted, undone, moved by a shell) is no longer selected
         {
             std::set<std::string> present;
@@ -135,6 +146,52 @@ namespace solaris_ui
 
     Rect PianoRoll::gridRect() const { return Rect{kKeysW, kToolH, std::max(0.0, width.value() - kKeysW), std::max(0.0, height.value() - kToolH - kVelH)}; }
     Rect PianoRoll::velRect() const { return Rect{kKeysW, height.value() - kVelH, std::max(0.0, width.value() - kKeysW), kVelH}; }
+
+    // R-MIDI-3: the lane below — its tabs in the keys' column, a value's height, a point under the pointer
+    Rect PianoRoll::laneTabRect(int l) const
+    {
+        const double y = height.value() - kVelH + 4.0;
+        return Rect{4.0, y + l * 15.5, kKeysW - 8.0, 13.0};
+    }
+
+    double PianoRoll::exprY(double value) const
+    {
+        const double top = height.value() - kVelH + 6.0, h = kVelH - 12.0;
+        return mLane == LaneBend ? top + (1.0 - (value + 1.0) * 0.5) * h : top + (1.0 - value) * h;
+    }
+
+    double PianoRoll::exprValueAt(double y) const
+    {
+        const double top = height.value() - kVelH + 6.0, h = kVelH - 12.0, u = std::clamp(1.0 - (y - top) / h, 0.0, 1.0);
+        const double v = mLane == LaneBend ? u * 2.0 - 1.0 : u;
+        return std::round(v * 100.0) / 100.0; // a hundredth: what a hand can mean at this height
+    }
+
+    const PianoRoll::ExprLive *PianoRoll::exprAtPoint(const Point &p) const
+    {
+        for (auto it = mExpr.rbegin(); it != mExpr.rend(); ++it)
+            if (!it->gone && it->lane == laneName() && std::fabs(beatToX(it->at) - p.x) <= 5.0 && std::fabs(exprY(it->v.value()) - p.y) <= 6.0) return &*it;
+        return nullptr;
+    }
+
+    Rect PianoRoll::exprPointRect(const std::string &lane, double at) const
+    {
+        for (const auto &x : mExpr)
+            if (!x.gone && x.lane == lane && std::fabs(x.at - at) < kTol)
+            {
+                const double y = lane == "bend" ? height.value() - kVelH + 6.0 + (1.0 - (x.v.value() + 1.0) * 0.5) * (kVelH - 12.0)
+                                                : height.value() - kVelH + 6.0 + (1.0 - x.v.value()) * (kVelH - 12.0);
+                return Rect{beatToX(x.at) - 3.0, y - 3.0, 6.0, 6.0};
+            }
+        return Rect{};
+    }
+
+    double PianoRoll::exprLive(const std::string &lane, double at) const
+    {
+        for (const auto &x : mExpr)
+            if (!x.gone && x.lane == lane && std::fabs(x.at - at) < kTol) return x.v.value();
+        return -1000.0;
+    }
     double PianoRoll::beatToX(double b) const { return kKeysW + b * mPpb.value() - mScrollX.value(); }
     double PianoRoll::xToBeat(double x) const { return (x - kKeysW + mScrollX.value()) / std::max(1e-6, mPpb.value()); }
     double PianoRoll::pitchToY(int p) const { return kToolH + (127 - p) * kNoteH - mScrollY.value(); }
@@ -366,6 +423,27 @@ namespace solaris_ui
         }
         mNotes.erase(std::remove_if(mNotes.begin(), mNotes.end(), [](const NoteLive &l) { return l.gone && !l.alpha.isAnimating() && l.alpha.value() <= 0.001; }),
                      mNotes.end());
+        // R-MIDI-3: the lane shown cross-fades; its points fade in and out and their values travel
+        for (int i = 0; i < 3; ++i)
+        {
+            const double want = (int)mLane == i ? 1.0 : 0.0;
+            if ((int)mLane != mLaneLast && (i == (int)mLane || i == mLaneLast)) mLaneAmt[i].animateTo(want, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mLaneAmt[i].update(nowMs);
+        }
+        mLaneLast = (int)mLane;
+        for (auto &x : mExpr)
+        {
+            if (!x.placed) { x.v.set(x.value); x.last = x.value; x.alpha.set(fadeIn ? 0.0 : 1.0); x.placed = true; if (fadeIn) x.alpha.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); }
+            if (x.value != x.last && !(mDrag == Drag::Expr && x.lane == mExprPressLane && std::fabs(x.at - mExprPressAt) < kTol))
+            {
+                x.v.animateTo(x.value, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs);
+                x.last = x.value;
+            }
+            if (x.gone && !x.alpha.isAnimating() && x.alpha.value() > 0.0) x.alpha.animateTo(0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            x.v.update(nowMs);
+            x.alpha.update(nowMs);
+        }
+        mExpr.erase(std::remove_if(mExpr.begin(), mExpr.end(), [](const ExprLive &x) { return x.gone && !x.alpha.isAnimating() && x.alpha.value() <= 0.001; }), mExpr.end());
         const bool steps = mMode == Steps;
         if (!mModeInit) { mModeAmt.set(steps ? 1.0 : 0.0); mModeLast = steps; mModeInit = true; }
         else if (steps != mModeLast)
@@ -449,7 +527,7 @@ namespace solaris_ui
     Cursor PianoRoll::dragCursor() const
     {
         if (mDrag == Drag::Resize || mDrag == Drag::End) return Cursor::ResizeH;
-        return mDrag == Drag::Velocity ? Cursor::ResizeV : Cursor::Default;
+        return mDrag == Drag::Velocity || mDrag == Drag::Expr ? Cursor::ResizeV : Cursor::Default;
     }
 
     Cursor PianoRoll::cursorAt(const Point &local) const
@@ -462,6 +540,7 @@ namespace solaris_ui
             bool edge = false;
             if (noteAt(local, edge) && edge) return Cursor::ResizeH; // the zone noteAt gives the press (D-7)
         }
+        if (velRect().contains(local) && mLane != LaneVelocity) return exprAtPoint(local) ? Cursor::ResizeV : Cursor::Default; // R-MIDI-3
         if (velRect().contains(local))
             for (auto it = mNotes.rbegin(); it != mNotes.rend(); ++it)
                 if (!it->gone && std::fabs(beatToX(it->n.at) + 1.5 - local.x) <= 5.0) return Cursor::ResizeV; // as the press finds a bar
@@ -487,6 +566,11 @@ namespace solaris_ui
         (void)grid;
         switch (mDrag)
         {
+            case Drag::Expr:
+                mExprLiveValue = exprValueAt(local.y); // the pointer's (direct manipulation)
+                for (auto &x : mExpr)
+                    if (x.lane == mExprPressLane && std::fabs(x.at - mExprPressAt) < kTol) x.v.set(mExprLiveValue);
+                break;
             case Drag::Move:
                 mLive.at = snapped(xToBeat(local.x) - mGrabBeat);
                 mLive.pitch = std::clamp(yToPitch(local.y) - (int)mGrabPitch, 0, 127);
@@ -591,6 +675,18 @@ namespace solaris_ui
                 preview(mKeyPitch, 100, 0.5);
                 return true;
             }
+            if (vel.contains(local) && mLane != LaneVelocity)
+            {
+                // R-MIDI-3: a lane point taken — up and down only (its beat is its key)
+                if (const ExprLive *x = exprAtPoint(local))
+                {
+                    mDrag = Drag::Expr;
+                    mExprPressLane = x->lane;
+                    mExprPressAt = x->at;
+                    mExprLiveValue = x->value;
+                }
+                return true;
+            }
             if (vel.contains(local))
                 for (auto it = mNotes.rbegin(); it != mNotes.rend(); ++it)
                     if (!it->gone && std::fabs(beatToX(it->n.at) + 1.5 - local.x) <= 5.0)
@@ -663,6 +759,16 @@ namespace solaris_ui
                     if (key(l.n.pitch, l.n.at) == mPressKey) l.n.vel = mLive.vel;
                 send("note move " + id + from + " --vel " + std::to_string(mLive.vel));
             }
+            else if (d == Drag::Expr)
+            {
+                // R-MIDI-3: ONE line — the point at its beat, at the value the pointer left it
+                for (auto &x : mExpr)
+                    if (x.lane == mExprPressLane && std::fabs(x.at - mExprPressAt) < kTol && x.value != mExprLiveValue)
+                    {
+                        x.value = x.last = mExprLiveValue;
+                        send("expr add " + id + " --lane " + mExprPressLane + " --at " + beats(mExprPressAt) + " --value " + beats(mExprLiveValue));
+                    }
+            }
             else if (d == Drag::End && mLiveEnd != mEnd.value())
             {
                 mEnd.set(mLiveEnd);
@@ -675,6 +781,16 @@ namespace solaris_ui
         {
             if (mSwallowClick) { mSwallowClick = false; return true; } // D-6: the short drag just landed
             if (playRect().contains(local)) { togglePlay(); return true; }
+            for (int l = 0; l < 3; ++l) // R-MIDI-3: the lane shown — the view's
+                if (laneTabRect(l).contains(local)) { mLane = (Lane)l; return true; }
+            if (vel.contains(local) && mLane != LaneVelocity)
+            {
+                // a click away from a point: a point there, at the snapped beat and the height's value — ONE line
+                if (exprAtPoint(local)) return true;
+                const double at = std::max(0.0, snapped(xToBeat(local.x)));
+                send("expr add " + mPattern + " --lane " + laneName() + " --at " + beats(at) + " --value " + beats(exprValueAt(local.y)));
+                return true;
+            }
             for (int i = 0; i < 5; ++i)
                 if (snapRect(i).contains(local)) { mSnap = kSnaps[i]; return true; }
             for (int m = 0; m < 2; ++m)
@@ -739,6 +855,13 @@ namespace solaris_ui
         case Gesture::Type::DoubleClick:
         case Gesture::Type::RightClick:
         {
+            if (vel.contains(local) && mLane != LaneVelocity)
+            {
+                // R-MIDI-3: a point double-clicked (or right-clicked): gone — ONE line
+                if (const ExprLive *x = exprAtPoint(local))
+                    send("expr delete " + mPattern + " --lane " + x->lane + " --at " + beats(x->at));
+                return true;
+            }
             if (mMode != Notes || !grid.contains(local)) return true;
             bool edge = false;
             if (const NoteLive *n = noteAt(local, edge))
@@ -891,18 +1014,57 @@ namespace solaris_ui
             drawRoundedRect(t, endRect(), radius::control(), Paint::filled(palette::primary()));
         }
 
-        // the velocity lane
+        // the lane below (R-MIDI-3): Vel | Bend | Mod — the velocities, or a wheel's curve; cross-faded
         drawRoundedRect(t, vel, 0.0, Paint::filled(palette::muted()));
+        drawRoundedRect(t, Rect{0, vel.y, kKeysW, vel.h}, 0.0, Paint::filled(palette::muted()));
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, vel.y + 0.5); t.lineTo(W, vel.y + 0.5); t.strokePath();
-        t.setFill(palette::mutedForeground());
-        t.drawText("VELOCITY", 6.0, textfit::baseline(vel.y + 12.0, 8.0), 8.0, font::sansSemiBold(), 0.13 * 8.0);
+        {
+            const char *tabs[] = {"Vel", "Bend", "Mod"};
+            for (int l = 0; l < 3; ++l)
+            {
+                const Rect r = laneTabRect(l);
+                const double on = mLaneAmt[l].value();
+                drawRoundedRect(t, r, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::primary(), on)));
+                t.setFill(lerpColor(palette::secondaryForeground(), palette::primaryForeground(), on));
+                t.drawText(tabs[l], r.x + (r.w - t.measureText(tabs[l], 9.0, font::sans())) * 0.5, textfit::baseline(r.y + r.h * 0.5, 9.0), 9.0, font::sans());
+            }
+        }
         t.save();
         t.clipRect(vel.x, vel.y, vel.w, vel.h);
         const Color base = surface::track(mColour);
+        for (int ln = 1; ln < 3; ++ln)
+        {
+            // a wheel's lane: the curve through its points (held before the first and after the last), each point a dot
+            const double la = mLaneAmt[ln].value();
+            if (la <= 0.001) continue;
+            const std::string lane = ln == 1 ? "bend" : "cc1";
+            const double top = vel.y + 6.0, h = kVelH - 12.0;
+            auto y = [&](double v) { return ln == 1 ? top + (1.0 - (v + 1.0) * 0.5) * h : top + (1.0 - v) * h; };
+            if (ln == 1)
+            {
+                t.setStroke(fade(palette::whiteAlpha(0.15), la), 1.0);
+                t.beginPath(); t.moveTo(vel.x, std::round(y(0.0)) + 0.5); t.lineTo(W, std::round(y(0.0)) + 0.5); t.strokePath();
+            }
+            std::vector<const ExprLive *> pts;
+            for (const auto &x : mExpr)
+                if (x.lane == lane && x.alpha.value() > 0.001) pts.push_back(&x);
+            std::sort(pts.begin(), pts.end(), [](const ExprLive *a, const ExprLive *b) { return a->at < b->at; });
+            if (!pts.empty())
+            {
+                t.setStroke(fade(base, la), 1.5);
+                t.beginPath();
+                t.moveTo(beatToX(0.0), y(pts.front()->v.value()));
+                for (const auto *p : pts) t.lineTo(beatToX(p->at), y(p->v.value()));
+                t.lineTo(beatToX(std::max(mModel.length, pts.back()->at)), y(pts.back()->v.value()));
+                t.strokePath();
+                for (const auto *p : pts)
+                    drawCircle(t, beatToX(p->at), y(p->v.value()), 3.0, Paint::filled(fade(lerpColor(base, palette::white(), 0.3), la * p->alpha.value())));
+            }
+        }
         for (const auto &l : mNotes)
         {
-            const double na = l.placed ? l.alpha.value() : 0.0;
+            const double na = (l.placed ? l.alpha.value() : 0.0) * mLaneAmt[0].value();
             if (na <= 0.001) continue;
             const bool dragged = mDrag != Drag::None && mDrag != Drag::End && !l.gone && key(l.n.pitch, l.n.at) == mPressKey;
             const solaris::NoteModel n = dragged ? mLive : l.n;

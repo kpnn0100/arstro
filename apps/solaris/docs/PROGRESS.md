@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N11 — expression lanes: pitch bend and CC on a note clip, in the roll, recorded** (R-MIDI-3), then N12… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
+**► N12 — note tools: humanise, probability, groove, scale lock, chord stamps, legato, arpeggiate** (R-ROLL-11), then N13… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server. B13+ wait (ask).
 
 ---
 
@@ -440,10 +440,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       the wheels; 7 unit tests, `glide_and_bend`; 2 mutants red). DR-INST-6: Solaris has them with no code — the
       face grew to eight modules. Found: two face tests assumed every module was wide (the small Voice and Vibrato
       share a row when narrow) and one read a parameter by its face index (now by name).
-- [~] **N11** Expression lanes: pitch bend and CC on a note clip, in the roll, recorded (R-MIDI-3).
+- [x] **N11** Expression lanes: pitch bend and CC on a note clip, in the roll, recorded (R-MIDI-3).
       — part 1 (DR-MIDI-3): `#expr` lanes on a pattern, `expr add/delete/clear`, compiled to control events (ramps on the
       64-sample grid, at rest after a clip, restored on seek), the keyboard's wheels live and recorded, MIDI files both
-      ways. Part 2: the lane in the piano roll.
+      ways. Part 2: the roll's lower lane on Vel | Bend | Mod — a click adds a point, a drag sets it, a double-click
+      removes it, each one `expr` line; eased; a shot.
 - [ ] **N12** Note tools: humanise, probability, grooves, scale lock, chord stamps, legato, arpeggiate (R-ROLL-11).
 - [ ] **N13** Markers and sections (R-ARR-1).
 - [ ] **N14** Time insert / delete across the song (R-ARR-2).

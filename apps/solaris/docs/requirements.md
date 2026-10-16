@@ -652,8 +652,8 @@ naming that action (`:196`). Only re-keyed actions are written to the machine's 
 publishes every action with its keys and defaults (`settings.keys`, `core/service/ServiceModel.cpp:115`); the API
 document's Keyboard section is generated from the same table. In the window `App::key` (`app/App.cpp:336`) spells the
 press (`comboText`) and looks it up there: while a roll has the keys (R-ROLL-8) its keyboard first — `PianoRoll::action`
-(`app/widgets/PianoRoll.cpp:247`), which declines a selection's action with no selection — then the song's
-(`songAction`, `:348`), so the roll's keys shadow the song's only while it uses them. The host names the KEY, not the
+(`app/widgets/PianoRoll.cpp:304`), which declines a selection's action with no selection — then the song's
+(`songAction`, `:405`), so the roll's keys shadow the song's only while it uses them. The host names the KEY, not the
 character: GTK's keysym with no modifier (`linux_main.cpp:176`, `keyCodeOfKeysym` in `app/KeyInput.h`), so Shift+1 is
 "Shift+1"; what the press types follows as a Text event (D-9). L2 `test_keys_are_settings`; UI
 `test_the_keys_are_the_machines` (re-keyed by a script, the window follows; the roll's keys shadow the song's; the
@@ -807,9 +807,9 @@ in the service); the one ringing fades out under it over 480 samples (10 ms), ne
 has stayed under −80 dB for 0.1 s after its note, or four seconds past it; a finished voice goes back through a
 ring of atomic slots and is freed by the service's `pump` (`ServiceTransport.cpp:83`) — the thread never
 allocates, frees or locks.
-**The roll** (`PianoRoll::preview`, `app/widgets/PianoRoll.cpp:163`) sounds through the track of its clip
-(DR-ROLL-6), as a line beside the edit's own: a note added (`:484`, at the last length), a note pressed, each pitch
-row a dragged note enters (`:382`), a Steps cell turned on, and a key pressed or swept (`:358` — the key lit while
+**The roll** (`PianoRoll::preview`, `app/widgets/PianoRoll.cpp:220`) sounds through the track of its clip
+(DR-ROLL-6), as a line beside the edit's own: a note added (`:563`, at the last length), a note pressed, each pitch
+row a dragged note enters (`:460`), a Steps cell turned on, and a key pressed or swept (`:415` — the key lit while
 held, eased in and out); lengths 1/8 to 1 beat. A pattern on no track is made, not heard.
 
 ### DR-ROLL-8 A selection in the roll, and what is done to it (R-ROLL-8)
@@ -847,9 +847,9 @@ UX audit's U-3 (a note past the end was dimmed and never heard). L2 `test_a_patt
 (mutant: a whole-pattern clip that does not follow, seen red).
 
 ### DR-ROLL-10 The length a click makes is shown and chosen (R-ROLL-10)
-The roll's toolbar names it after Quantize… (`PianoRoll::lengthRect`, `app/widgets/PianoRoll.cpp:303`; drawn at
-`:912`): "Length 1/16* ▾" — a note value (`lengthName`, `:305`: 1/32 … 1/1, a beat being a quarter, else
-"<n> beats"), starred while it is the LAST length (the note last made or resized, the default). Its menu (`:635`)
+The roll's toolbar names it after Quantize… (`PianoRoll::lengthRect`, `app/widgets/PianoRoll.cpp:360`; drawn at
+`:1074`): "Length 1/16* ▾" — a note value (`lengthName`, `:362`: 1/32 … 1/1, a beat being a quarter, else
+"<n> beats"), starred while it is the LAST length (the note last made or resized, the default). Its menu (`:731`)
 offers "Last used (…)" and 1/32, 1/16, 1/8, 1/4, 1/2, 1/1; the choice is the view's — no line — and a click on the
 grid makes a note of `clickLength()`, the choice or the last length. Closes the UX audit's U-4.
 
@@ -1722,7 +1722,7 @@ U-1. UI test `test_the_tempo_is_set_in_the_song_bar` (mutant: a tempo that snaps
 grip answers twice, from the SAME zone its press takes: `dragCursor()` — the cursor a resize in hand keeps, wherever the
 pointer is — and `cursorAt(local)`. `Timeline` (`app/widgets/Timeline.cpp:338`): ↔ over a clip's end (`kEdgeGrip`,
 R-CLIP-7) and the loop brace's ends (`kBraceGrip`, the ruler's lower half), and while either is held (pressed, not yet
-moved, included). `PianoRoll` (`app/widgets/PianoRoll.cpp:449`): ↔ a note's end (the zone `noteAt` gives, D-7) and the
+moved, included). `PianoRoll` (`app/widgets/PianoRoll.cpp:527`): ↔ a note's end (the zone `noteAt` gives, D-7) and the
 pattern's end handle, ↕ a velocity bar, and while any is held. `MixerDock` (`app/widgets/MixerDock.cpp:796`): ↕ its top
 edge (`Part::Resize`). `WindowLayer` (`app/widgets/FloatWindow.cpp:304`): ⤡ a window's corner (`FloatWindow::resizing`
 while it is held); the front-most window under the point decides, so it covers the lanes beneath. `ProjectScreen::
@@ -1955,5 +1955,12 @@ take's span. L2 `test_expression_lanes_play_the_wheels` (at rest 440 Hz, half wa
 held two after its last point, the next clip at rest, a seek landing bent; refusals; the .slp; undoable),
 `test_expression_lanes_go_through_midi_files` (the curve to 1 %), `test_the_keyboards_wheels_play_and_record`; model
 `test_expression_lanes_round_trip_and_are_checked`. Mutants: no ramp steps, a seek forgetting the wheel, no rest at a
-clip's end — each red. The piano roll's lane is N11's second part.
+clip's end — each red. **The roll's lane.** Vel | Bend | Mod beside the piano roll's lower lane choose what it shows
+(the view's, cross-faded; `laneTabRect`, `app/widgets/PianoRoll.cpp:151`): the velocities, or the pattern's `bend` or
+`cc1` lane as a curve through its points (linear between, held to the pattern's start and end; bend's centre line
+drawn), each point keyed by (lane, beat), fading in and out, its value easing to a change made elsewhere. On a
+wheel's lane: a click away from a point adds one at the snapped beat and the height's value (to a hundredth), a
+point dragged up or down follows the pointer and lands as ONE `expr add` at its beat, a double-click (or a
+right-click) removes it (`expr delete`). UI `test_the_rolls_lane_draws_the_wheels`; shot `piano-roll-bend`. Mutants:
+the lane switch snapping, a shell's value snapping — red.
 

@@ -33,6 +33,11 @@
  *  paste it, here or in another roll, at the same beats (`notes add`) — the copy becomes the selection.
  *  The keys reach the roll the pointer last pressed in (`App`).
  *
+ *  The lane below (R-MIDI-3): Vel | Bend | Mod beside it choose what it shows — the notes' velocities, or the pattern's
+ *  pitch-wheel or mod-wheel lane, a curve through its points (linear between, held at the ends). On a lane: a click
+ *  adds a point at the snapped beat and the height's value (`expr add`), a point dragged up or down lands its value
+ *  (`expr add` at its beat), a double-click removes it (`expr delete`) — each ONE line. The choice is the view's.
+ *
  *  Nothing snaps on screen (§1): notes are keyed by (pitch, beat) and fade in and out; zoom and
  *  scroll ease; the mode switch cross-fades; the dragged note is the pointer's; the playhead fades in
  *  and out with the play.
@@ -64,6 +69,7 @@ namespace solaris_ui
         static constexpr double kStepH = 22.75;   // space::u(7): a step row
         static constexpr double kVelH = 52.0;     // space::u(16): the velocity lane
         enum Mode { Notes = 0, Steps = 1 };
+        enum Lane { LaneVelocity = 0, LaneBend, LaneMod }; // R-MIDI-3: what the lane below shows
 
         explicit PianoRoll(std::string patternId);
         const std::string &pattern() const { return mPattern; }
@@ -110,6 +116,14 @@ namespace solaris_ui
         int yToPitch(double y) const;
         artboard::Rect gridRect() const;
         artboard::Rect velRect() const;
+        // R-MIDI-3: the lane below — which, its tabs, a point of it (local, as drawn), its LIVE value; the cross-fade
+        void setLane(Lane l) { mLane = l; }
+        Lane lane() const { return mLane; }
+        artboard::Rect laneTabRect(int l) const;
+        artboard::Rect exprPointRect(const std::string &lane, double at) const;
+        double exprLive(const std::string &lane, double at) const; // −1000: no such point
+        double laneAmount(int l) const { return l >= 0 && l < 3 ? mLaneAmt[l].value() : 0.0; }
+        double exprValueAt(double y) const;             // the value a height in the lane means, for the lane shown
         artboard::Rect noteRect(int pitch, double at) const;
         double noteAlpha(int pitch, double at) const;   // LIVE
         artboard::Rect heldRect() const;                 // the note in a drag, where the POINTER has it (empty when none)
@@ -147,7 +161,18 @@ namespace solaris_ui
             bool selLast = false;
             bool placed = false, gone = false, instant = false;
         };
-        enum class Drag { None, Move, Resize, Velocity, End, Keys, MoveSel, Box };
+        enum class Drag { None, Move, Resize, Velocity, End, Keys, MoveSel, Box, Expr };
+        /** R-MIDI-3: a lane point as drawn — keyed by (lane, beat), its value eased, fading in and out. */
+        struct ExprLive
+        {
+            std::string lane;
+            double at = 0, value = 0, last = 0;
+            artboard::AnimatedProperty v{0.0}, alpha{0.0};
+            bool placed = false, gone = false;
+        };
+        const char *laneName() const { return mLane == LaneBend ? "bend" : "cc1"; }
+        double exprY(double value) const;               // the lane shown: a value's height
+        const ExprLive *exprAtPoint(const artboard::Point &p) const;
         static std::string key(int pitch, double at);
         const NoteLive *noteAt(const artboard::Point &p, bool &edge) const;
         std::string noteName(int pitch) const;
@@ -204,6 +229,13 @@ namespace solaris_ui
         double mGrabBeat = 0, mGrabPitch = 0;
         solaris::NoteModel mLive;                   // the dragged note, as the pointer has it
         double mLiveEnd = 0;
+        // R-MIDI-3: the lane below
+        Lane mLane = LaneVelocity;
+        artboard::AnimatedProperty mLaneAmt[3] = {artboard::AnimatedProperty{1.0}, artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
+        int mLaneLast = 0;
+        std::vector<ExprLive> mExpr;
+        double mExprPressAt = 0, mExprLiveValue = 0;
+        std::string mExprPressLane;
     };
 }
 }

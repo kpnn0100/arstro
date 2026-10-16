@@ -2093,6 +2093,65 @@ static void test_bezier_handles_and_the_automation_window()
          "a curve double-click opens it and adds nothing; a point double-click still deletes (R-AUTO-10, R-AUTO-11)");
 }
 
+static void test_the_rolls_lane_draws_the_wheels()
+{
+    // R-MIDI-3: Vel | Bend | Mod beside the roll's lane (the view's, cross-faded); on a wheel's lane a click adds a
+    // point, a point dragged up or down lands its value, a double-click removes it — each ONE line; a shell's change eases
+    sltest::Rig r("ui-lanes", 1280, 800);
+    r.cmd("project new " + r.song("Lanes") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    const std::string pt = r.svc->model().clips[0].pattern;
+    r.cmd("note add " + pt + " --pitch 60 --at 0 --length 4");
+    r.settle();
+    auto &wl = r.app->project().windows();
+    wl.openRoll(pt);
+    r.settle();
+    auto &roll = *wl.roll(pt);
+    using PR = arstro::solaris_ui::PianoRoll;
+    assert(roll.lane() == PR::LaneVelocity && roll.laneAmount(0) == 1.0);
+    r.click(world(roll, roll.laneTabRect(PR::LaneBend)));
+    r.frame();
+    r.frame();
+    assert(roll.lane() == PR::LaneBend && roll.laneAmount(1) > 0.0 && roll.laneAmount(1) < 1.0 && roll.laneAmount(0) > 0.0); // cross-fading
+    r.settle();
+    assert(roll.laneAmount(1) == 1.0 && roll.laneAmount(0) == 0.0);
+    const artboard::Rect rw = world(roll, artboard::Rect{0, 0, 0, 0}), vel = world(roll, roll.velRect());
+    const double top = vel.y + 6.0, h = PR::kVelH - 12.0;
+    auto yOf = [&](double v) { return top + (1.0 - (v + 1.0) * 0.5) * h; }; // the bend lane: −1 at the bottom, +1 at the top
+    // a click: a point at the snapped beat and the height's value
+    r.click(rw.x + roll.beatToX(1.0), yOf(0.5));
+    assert(sentLine(r, "expr add " + pt + " --lane bend --at 1 --value 0.5"));
+    r.settle();
+    assert(roll.exprLive("bend", 1.0) == 0.5);
+    // dragged down: the pointer's own value while held, ONE line at release
+    const artboard::Rect p = world(roll, roll.exprPointRect("bend", 1.0));
+    r.drag(cx(p), cy(p), cx(p), yOf(-0.5), 6, false);
+    assert(std::fabs(roll.exprLive("bend", 1.0) + 0.5) < 0.011);
+    r.app->pointer(2, cx(p), yOf(-0.5), 0, r.now);
+    r.settle();
+    assert(sentLine(r, "expr add " + pt + " --lane bend --at 1 --value -0.5"));
+    // a shell's change eases there
+    r.cmd("expr add " + pt + " --lane bend --at 1 --value 0");
+    r.frame();
+    r.frame();
+    const double mid = roll.exprLive("bend", 1.0);
+    assert(mid > -0.5 && mid < 0.0);
+    r.settle();
+    assert(roll.exprLive("bend", 1.0) == 0.0);
+    // double-clicked: gone
+    const artboard::Rect q = world(roll, roll.exprPointRect("bend", 1.0));
+    r.click(cx(q), cy(q));
+    r.click(cx(q), cy(q));
+    r.settle();
+    assert(sentLine(r, "expr delete " + pt + " --lane bend --at 1"));
+    // the mod wheel's lane: 0 at the bottom, 1 at the top
+    r.click(world(roll, roll.laneTabRect(PR::LaneMod)));
+    r.settle();
+    r.click(rw.x + roll.beatToX(2.0), top + 0.25 * h);
+    assert(sentLine(r, "expr add " + pt + " --lane cc1 --at 2 --value 0.75"));
+    pass("the roll's lane (R-MIDI-3): Vel | Bend | Mod cross-fade; a click adds a point, a point dragged up or down lands its value, a double-click removes it — each one line; a shell's change eases");
+}
+
 static void test_piano_roll_edits_the_pattern()
 {
     sltest::Rig r("ui-roll", 1280, 800);
@@ -3363,6 +3422,7 @@ int main()
     test_automation_rows_draw_and_edit_curves();
     test_bezier_handles_and_the_automation_window();
     test_piano_roll_edits_the_pattern();
+    test_the_rolls_lane_draws_the_wheels();
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();
