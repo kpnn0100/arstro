@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — M2b: the loop seen and made in the window.*
+*Last updated: 2026-10-16 — M3: the professional-DAW analysis.*
 
 ---
 
 ## NEXT
 
-**► M3 — the professional-DAW analysis** (docs/pro-daw-analysis.md). B13+ wait. Owed live checks: D-5, D-9, the resize cursor. B13+ wait (ask). Owed live checks: D-5, D-9.
+**► Ask the user which phase of `docs/pro-daw-analysis.md` §4 comes first** (it suggests phase 1: autosave, MIDI files, mastering meters, export formats, the one-gesture side-chain). B13+ (R-EDM-10…20) folds into those phases. Owed live checks: D-5, D-9, the resize cursor. B13+ wait. Owed live checks: D-5, D-9, the resize cursor. B13+ wait (ask). Owed live checks: D-5, D-9.
 
 ---
 
@@ -382,7 +382,9 @@ history like cosmo".* Requirements: R-SET-5, R-SET-6 (R-SET-1, R-SET-3 amended);
 - [x] **M2b** Seen and made in the window: the row's span (cycles, seams, ends dragged), the window's Loop combo,
       ParamMenu › Create Pump (R-AUTO-12, R-AUTO-13).
       — DR-AUTO-8 (in the window). UI test, shot; 2 mutants seen red.
-- [ ] **M3** A full analysis — what a professional DAW needs that Solaris lacks — in `docs/pro-daw-analysis.md`.
+- [x] **M3** A full analysis — what a professional DAW needs that Solaris lacks — in `docs/pro-daw-analysis.md`.
+      — P0 blockers (autosave, a MIDI keyboard, recording, low-latency audio, other makers' plugins, warp and tempo,
+      MIDI files, mastering meters + a true-peak limiter, export formats), P1, P2, and a five-phase order.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
