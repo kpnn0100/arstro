@@ -70,6 +70,7 @@ namespace
 
 int main()
 {
+    unsetenv("DISPLAY"); // N26: no helper this test starts may open a window on a display (the user's desktop)
     const fs::path dir = fs::temp_directory_path() / ("solaris-plugins-test-" + std::to_string((long)getpid()));
     fs::remove_all(dir);
     fs::create_directories(dir / "Crash.vst3" / "Contents" / "x86_64-linux");
@@ -130,6 +131,12 @@ int main()
         assert(put);
         const bool again = p->getState(st2, err);
         assert(again && st2 == st);
+        // N26: its own editor wants a display — none here (DISPLAY is cleared before any helper starts): refused, and it
+        // plays on
+        err.clear();
+        const bool shown = p->openEditor("Arstro Basic Synth — test", err);
+        assert(!shown && err == "there is no display to open it on" && !p->editorOpen() && !p->offline());
+        assert(play(*p, 4, ok) > 0.01 && ok);
         const pid_t pid = helperPid();
         assert(pid > 0);
         kill(pid, SIGKILL);

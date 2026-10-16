@@ -48,6 +48,7 @@ namespace solaris
 
     bool SolarisService::dispatchText(const std::string &line, std::string &err)
     {
+        if (mDepth == 0) applyPluginEdits(); // R-VST-6: what a plugin's editor turned meanwhile lands first, in order
         const Command c = parseCommand(line, err);
         if (!err.empty())
         {
@@ -115,7 +116,7 @@ namespace solaris
             case K::PresetSave: case K::PresetList: case K::PresetDelete: // R-PRESET-1: the machine's presets, not the song
             case K::TemplateSave: case K::TemplateList: case K::TemplateDelete: // R-PRESET-2: … and its templates
             case K::SampleTag: case K::SampleUntag: case K::SampleFavourite:    // R-PRESET-3: … and its library
-            case K::PluginsScan: case K::PluginsList: case K::DeviceReload:     // R-VST-6: … and its plugins
+            case K::PluginsScan: case K::PluginsList: case K::DeviceReload: case K::DeviceEditor: // R-VST-6: … and its plugins
                 return false;
             default:
                 return true;
@@ -125,6 +126,12 @@ namespace solaris
 
     bool SolarisService::dispatch(const Command &c, std::string &err)
     {
+        struct Depth
+        {
+            int &d;
+            explicit Depth(int &x) : d(x) { ++d; }
+            ~Depth() { --d; }
+        } depth(mDepth); // a command is running: what `pump` gathers waits for it to end
         err.clear();
         mOutput.clear();
         const bool editing = mutates(c.kind) || (c.kind == K::TransportStop && mRecording) // R-MIDI-2: the take is an edit
@@ -208,6 +215,9 @@ namespace solaris
             break;
         case K::DeviceReload:
             ok = pluginReload(c, err);
+            break;
+        case K::DeviceEditor:
+            ok = pluginEditor(c, err);
             break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:

@@ -33,6 +33,16 @@ namespace solaris
         double value = 0.0;    // normalised 0 … 1
     };
 
+    /** What a plugin said on its own (R-VST-6, N26): its editor turned a parameter, changed many of its own (a preset of
+     *  its own), was closed by its window, or its latency changed. */
+    struct PluginEvent
+    {
+        enum Kind { Perform, Values, EditorClosed, Latency } kind = Perform;
+        uint32_t id = 0;
+        double value = 0.0;                              // Perform: 0 … 1; Latency: samples
+        std::vector<std::pair<uint32_t, double>> values; // Values: every parameter, 0 … 1
+    };
+
     class IPluginInstance
     {
     public:
@@ -51,6 +61,12 @@ namespace solaris
         /** Its state as the plugin gives it, base64; and set — off the audio thread. */
         virtual bool getState(std::string &base64, std::string &err) = 0;
         virtual bool setState(const std::string &base64, std::string &err) = 0;
+        /** Its own editor, in a window of its own titled `title` (N26) — off the audio thread. */
+        virtual bool openEditor(const std::string &title, std::string &err) { (void)title; err = "it has no editor here"; return false; }
+        virtual bool closeEditor(std::string &err) { (void)err; return true; }
+        virtual bool editorOpen() const { return false; }
+        /** What it said since the last call, without waiting — off the audio thread. */
+        virtual void takeEvents(std::vector<PluginEvent> &out) { (void)out; }
     };
 }
 }

@@ -97,6 +97,10 @@
       "doc": "R-VST-6: a song's plugin is not playing — it never started, crashed or overran its budget; an effect passes dry, an instrument is silent (`device reload <dv>`). Said once.",
       "data": "{line, fields: {device, why}}"
     },
+    "plugin.editor": {
+      "doc": "R-VST-6: a plugin's own editor window opened (1) or closed (0) — by `device editor`, or its window's own close.",
+      "data": "{line, fields: {device, open}}"
+    },
     "recents.changed": {
       "doc": "Home's recent songs changed.",
       "data": "{line, fields: {count}}"

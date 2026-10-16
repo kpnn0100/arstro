@@ -1130,6 +1130,16 @@
       "requirement": "R-VST-6"
     },
     {
+      "verb": "device editor",
+      "usage": "device editor <dv> [--close]",
+      "args": "<dv>",
+      "flags": [
+        "close"
+      ],
+      "summary": "Open a plugin device's OWN editor in a window of its own — the plugin's process makes it (R-VST-6) — or, with --close, close it. What is turned there reaches the song as `set <dv>.p<id>`. Not an edit. Prints `open` or `closed`.",
+      "requirement": "R-VST-6"
+    },
+    {
       "verb": "recents remove",
       "usage": "recents remove <path>",
       "args": "<path>",
@@ -1405,6 +1415,14 @@
         "why"
       ],
       "summary": "R-VST-6: a song's plugin is not playing — it never started, crashed or overran its budget; an effect passes dry, an instrument is silent (`device reload <dv>`). Said once."
+    },
+    {
+      "name": "plugin.editor",
+      "fields": [
+        "device",
+        "open"
+      ],
+      "summary": "R-VST-6: a plugin's own editor window opened (1) or closed (0) — by `device editor`, or its window's own close."
     },
     {
       "name": "recents.changed",
@@ -1853,6 +1871,12 @@
       "path": "strips[].devices[].why",
       "type": "string",
       "summary": "R-VST-6: why it is offline (`device reload <dv>` starts it again)",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].editor",
+      "type": "bool",
+      "summary": "R-VST-6: the plugin's own editor window is open (`device editor <dv>`)",
       "stable": true
     },
     {

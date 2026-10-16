@@ -176,6 +176,14 @@ namespace solaris
         void capturePluginStates();      // each playing plugin's state into its node (before the song is written)
         bool pluginReload(const Command &c, std::string &err);
         DeviceModel pluginFacts(const DeviceNode &d, DeviceModel m);
+        bool pluginEditor(const Command &c, std::string &err);
+        /** What the plugins said on their own (`pump`): their editors' edits become `set` lines — applied when no
+         *  command is running (else before the next one), and never sent back to the plugin they came from. */
+        void gatherPluginEdits();
+        void applyPluginEdits();
+        std::vector<std::string> mPluginEdits;
+        std::set<std::string> mFromPlugin; // addresses a plugin itself set, while its line lands: not echoed
+        int mDepth = 0;                    // commands running (a `wait` pumps from inside one)
         std::map<std::string, std::shared_ptr<PluginConnection>> mPluginLive;
         // R-EDIT-1 (ServiceAudioEdit.cpp): audio clips cut, joined, sliced — a cut is `splitClip`, which slice repeats
         bool audioEditCommand(const Command &c, std::string &err);

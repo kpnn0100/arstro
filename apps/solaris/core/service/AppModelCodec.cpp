@@ -72,6 +72,7 @@ namespace solaris
             {"strips[].devices[].plugin", "string", "R-VST-6: type vst3 — another maker's plugin, its class id (its name is `label`); \"\" = a registry device"},
             {"strips[].devices[].offline", "bool", "R-VST-6: the plugin is not playing (never started, crashed, overran) — an effect passes dry, an instrument is silent"},
             {"strips[].devices[].why", "string", "R-VST-6: why it is offline (`device reload <dv>` starts it again)"},
+            {"strips[].devices[].editor", "bool", "R-VST-6: the plugin's own editor window is open (`device editor <dv>`)"},
             {"strips[].devices[].groups", "object[]", "R-UI-12: its parameter groups' titles, the registry's — `prefix` (before a parameter's dot, \"\" for none) and `label`"},
             {"strips[].devices[].groups[].prefix", "string", "the prefix before a parameter's dot; \"\" = the parameters with none"},
             {"strips[].devices[].groups[].label", "string", "its title, for a person"},
@@ -370,7 +371,7 @@ namespace solaris
                 a.push(Json::object().set("id", d.id).set("type", d.type).set("label", d.label)
                            .set("instrument", d.instrument).set("bypass", d.bypass).set("known", d.known).set("lastChanged", d.lastChanged)
                            .set("takesSample", d.takesSample).set("sample", d.sample)
-                           .set("plugin", d.plugin).set("offline", d.offline).set("why", d.why)
+                           .set("plugin", d.plugin).set("offline", d.offline).set("why", d.why).set("editor", d.editor)
                            .set("groups", groupsOf(d.groups))
                            .set("params", params));
             }

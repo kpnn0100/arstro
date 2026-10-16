@@ -149,6 +149,49 @@ namespace solaris_host
                 return true;
             }
 
+            bool openEditor(const std::string &title, std::string &err) override
+            {
+                if (offline()) { err = "it is offline: " + why(); return false; }
+                std::string t = title, line;
+                for (auto &ch : t)
+                    if (ch == '\t' || ch == '\n' || ch == '\r') ch = ' ';
+                if (!ask("editor-open\t" + t, line, err)) return false;
+                const auto f = split(line);
+                if (f[0] != "ok") { err = f.size() > 1 ? f[1] : "its editor would not open"; return false; }
+                mEditor = true;
+                return true;
+            }
+            bool closeEditor(std::string &err) override
+            {
+                if (!mEditor || offline()) { mEditor = false; return true; }
+                std::string line;
+                if (!ask("editor-close", line, err)) return false;
+                mEditor = false;
+                return true;
+            }
+            bool editorOpen() const override { return mEditor && !offline(); }
+            void takeEvents(std::vector<solaris::PluginEvent> &out) override
+            {
+                // what it said on its own since the last look — read without waiting
+                while (mCtl >= 0 && !offline())
+                {
+                    pollfd p{mCtl, POLLIN, 0};
+                    if (poll(&p, 1, 0) <= 0 || !(p.revents & (POLLIN | POLLHUP))) break;
+                    char buf[65536];
+                    const ssize_t r = read(mCtl, buf, sizeof buf);
+                    if (r <= 0) { gone(); break; }
+                    mPending.append(buf, (size_t)r);
+                }
+                for (size_t eol; (eol = mPending.find('\n')) != std::string::npos;)
+                {
+                    const std::string line = mPending.substr(0, eol);
+                    mPending.erase(0, eol + 1);
+                    asyncLine(line); // an answer here has no one waiting for it
+                }
+                out.insert(out.end(), mEvents.begin(), mEvents.end());
+                mEvents.clear();
+            }
+
             bool getState(std::string &base64, std::string &err) override
             {
                 if (offline()) { err = "it is offline: " + why(); return false; }
@@ -188,6 +231,46 @@ namespace solaris_host
                     if (WIFSIGNALED(status)) mEnded = " (" + std::string(strsignal(WTERMSIG(status))) + ")";
                 }
             }
+            /** A line it says on its own (N26) — an edit in its editor, its own values, a latency, its window closed: kept. */
+            bool asyncLine(const std::string &line)
+            {
+                const auto f = split(line);
+                if (f[0] == "editor" && f.size() > 1 && f[1] == "closed")
+                {
+                    mEditor = false;
+                    mEvents.push_back(solaris::PluginEvent{solaris::PluginEvent::EditorClosed, 0, 0.0, {}});
+                    return true;
+                }
+                if (f[0] != "edit" || f.size() < 3) return false;
+                solaris::PluginEvent e;
+                if (f[1] == "perform" && f.size() >= 4)
+                {
+                    e.kind = solaris::PluginEvent::Perform;
+                    e.id = (uint32_t)std::strtoul(f[2].c_str(), nullptr, 10);
+                    e.value = std::atof(f[3].c_str());
+                }
+                else if (f[1] == "values")
+                {
+                    e.kind = solaris::PluginEvent::Values;
+                    size_t a = 0;
+                    const std::string &v = f[2];
+                    for (size_t c; (c = v.find(',', a)) != std::string::npos; a = c + 1)
+                    {
+                        const std::string kv = v.substr(a, c - a);
+                        const auto colon = kv.find(':');
+                        if (colon != std::string::npos) e.values.emplace_back((uint32_t)std::strtoul(kv.c_str(), nullptr, 10), std::atof(kv.c_str() + colon + 1));
+                    }
+                }
+                else if (f[1] == "latency")
+                {
+                    e.kind = solaris::PluginEvent::Latency;
+                    e.value = std::atof(f[2].c_str());
+                    mLatency = std::atoi(f[2].c_str());
+                }
+                else return true; // a kind this build does not know: not an answer either
+                mEvents.push_back(e);
+                return true;
+            }
             static std::vector<std::string> split(const std::string &line)
             {
                 std::vector<std::string> f;
@@ -202,7 +285,13 @@ namespace solaris_host
                 for (;;)
                 {
                     const auto eol = mPending.find('\n');
-                    if (eol != std::string::npos) { line = mPending.substr(0, eol); mPending.erase(0, eol + 1); return true; }
+                    if (eol != std::string::npos)
+                    {
+                        line = mPending.substr(0, eol);
+                        mPending.erase(0, eol + 1);
+                        if (asyncLine(line)) continue; // said on its own: kept for takeEvents, not the answer
+                        return true;
+                    }
                     const int left = (int)std::chrono::duration_cast<std::chrono::milliseconds>(until - std::chrono::steady_clock::now()).count();
                     if (left <= 0) return false;
                     pollfd p{mCtl, POLLIN, 0};
@@ -230,8 +319,9 @@ namespace solaris_host
             mutable pid_t mPid = 0;
             int mCtl = -1, mGo = -1, mDone = -1;
             Shared *mShared = nullptr;
-            bool mInstrument = false;
+            bool mInstrument = false, mEditor = false;
             int mLatency = 0;
+            std::vector<solaris::PluginEvent> mEvents;
             std::vector<solaris::PluginParamInfo> mParams;
             std::string mPending;
             mutable std::string mEnded;

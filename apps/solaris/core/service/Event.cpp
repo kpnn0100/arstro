@@ -46,6 +46,7 @@ namespace solaris
             {EK::LibraryChanged, "library.changed", {"path", "tags"}, "R-PRESET-3: a file's tags (favourite among them) changed and were saved; tags comma-separated, '' none."},
             {EK::PluginsChanged, "plugins.changed", {"count", "problems"}, "R-VST-6: a scan found this many plugins; problems: bundles that could not be read."},
             {EK::PluginOffline, "plugin.offline", {"device", "why"}, "R-VST-6: a song's plugin is not playing — it never started, crashed or overran its budget; an effect passes dry, an instrument is silent (`device reload <dv>`). Said once."},
+            {EK::PluginEditor, "plugin.editor", {"device", "open"}, "R-VST-6: a plugin's own editor window opened (1) or closed (0) — by `device editor`, or its window's own close."},
             {EK::RecentsChanged, "recents.changed", {"count"}, "Home's recent songs changed."},
             {EK::TransportChanged, "transport.changed", {"playing", "position", "loop"},
              "Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`."},

@@ -118,6 +118,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `plugins scan` | Find the VST3 plugins where this machine keeps them (R-VST-6: SOLARIS_VST3_PATH, else ~/.vst3, /usr/lib/vst3, /usr/local/lib/vst3) — each bundle read in a process of its own, so one that crashes loses only itself (said). Prints each found and each problem; the list is the machine's, kept. | R-VST-6 |
 | `plugins list` | The VST3 plugins the last scan found (R-VST-6). | R-VST-6 |
 | `device reload <dv>` | Start a plugin device's process again — after a crash or an overrun took it offline — from its last state (R-VST-6). Not an edit. Prints `playing`, or `offline: <why>`. | R-VST-6 |
+| `device editor <dv> [--close]` | Open a plugin device's OWN editor in a window of its own — the plugin's process makes it (R-VST-6) — or, with --close, close it. What is turned there reaches the song as `set <dv>.p<id>`. Not an edit. Prints `open` or `closed`. | R-VST-6 |
 | `recents remove <path>` | Take a song off Home's recent list (the file is untouched). | R-HOME-1 |
 | `transport play [--from <beats>] [--clip <ac>]` | Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position. --clip plays that clip's span looped, the whole song sounding there (the piano roll's play, R-ROLL-6): it follows the clip as it is edited, and the song's own loop comes back at `transport stop`, a plain `transport play` or a `transport loop`. | R-PLAY-1 |
 | `transport stop [--return]` | Stop; the transport stays where it was heard — or, with --return, goes back to the cue: where the time bar was last put (a seek, or a play's --from or --clip; `transport.cue`). A plain stop's place is temporary: the next play starts there but the cue stays. | R-TIME-7 |
@@ -265,6 +266,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `library.changed` | path, tags | R-PRESET-3: a file's tags (favourite among them) changed and were saved; tags comma-separated, '' none. |
 | `plugins.changed` | count, problems | R-VST-6: a scan found this many plugins; problems: bundles that could not be read. |
 | `plugin.offline` | device, why | R-VST-6: a song's plugin is not playing — it never started, crashed or overran its budget; an effect passes dry, an instrument is silent (`device reload <dv>`). Said once. |
+| `plugin.editor` | device, open | R-VST-6: a plugin's own editor window opened (1) or closed (0) — by `device editor`, or its window's own close. |
 | `recents.changed` | count | Home's recent songs changed. |
 | `transport.changed` | playing, position, loop | Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`. |
 | `audition.changed` | file, playing | A sample previewed from the browser started (playing 1) or ended — stopped, or to its end (playing 0). |
@@ -342,6 +344,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].devices[].plugin` | string | R-VST-6: type vst3 — another maker's plugin, its class id (its name is `label`); "" = a registry device |
 | `strips[].devices[].offline` | bool | R-VST-6: the plugin is not playing (never started, crashed, overran) — an effect passes dry, an instrument is silent |
 | `strips[].devices[].why` | string | R-VST-6: why it is offline (`device reload <dv>` starts it again) |
+| `strips[].devices[].editor` | bool | R-VST-6: the plugin's own editor window is open (`device editor <dv>`) |
 | `strips[].devices[].groups` | object[] | R-UI-12: its parameter groups' titles, the registry's — `prefix` (before a parameter's dot, "" for none) and `label` |
 | `strips[].devices[].groups[].prefix` | string | the prefix before a parameter's dot; "" = the parameters with none |
 | `strips[].devices[].groups[].label` | string | its title, for a person |

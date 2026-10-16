@@ -135,6 +135,9 @@ namespace solaris
                 emit(Event(Event::Kind::AuditionChanged).with("file", mModel.audition.file).with("playing", "0"));
             }
         }
+        // R-VST-6 (N26): what the plugins' editors turned becomes the song's — now, unless a command is running
+        gatherPluginEdits();
+        if (mDepth == 0) applyPluginEdits();
         // R-VST-6: a plugin that stopped playing (its process died, it overran) is said once, and the model shows it
         bool down = false;
         for (auto &kv : mPluginLive)
@@ -631,6 +634,7 @@ namespace solaris
         for (const auto &f : c.fields)
         {
             if (structural) break;
+            if (mFromPlugin.count(f.first)) continue; // R-VST-6: it came from the plugin — not sent back
             const auto dot = f.first.find('.');
             const std::string id = f.first.substr(0, dot), field = f.first.substr(dot + 1);
             Player::Live m;

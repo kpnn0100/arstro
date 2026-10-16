@@ -47,6 +47,7 @@ namespace solaris
         std::string plugin;                     // R-VST-6: type vst3 — the plugin's class id (its name is `label`)
         bool offline = false;                   // … not playing: never started, crashed, overran — an effect passes dry,
         std::string why;                        //    an instrument is silent; and why (`device reload` starts it again)
+        bool editor = false;                    // … its own editor window is open (`device editor`, N26)
     };
 
     struct AutoPointModel

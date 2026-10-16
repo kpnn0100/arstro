@@ -380,6 +380,9 @@ namespace solaris
             {K::DeviceReload, "device reload", "<dv>", 1, 1, {},
              "Start a plugin device's process again — after a crash or an overrun took it offline — from its last state "
              "(R-VST-6). Not an edit. Prints `playing`, or `offline: <why>`.", "R-VST-6"},
+            {K::DeviceEditor, "device editor", "<dv>", 1, 1, {"close"},
+             "Open a plugin device's OWN editor in a window of its own — the plugin's process makes it (R-VST-6) — or, with "
+             "--close, close it. What is turned there reaches the song as `set <dv>.p<id>`. Not an edit. Prints `open` or `closed`.", "R-VST-6"},
             {K::RecentsRemove, "recents remove", "<path>", 1, 1, {}, "Take a song off Home's recent list (the file is untouched).", "R-HOME-1"},
 
             {K::TransportPlay, "transport play", "", 0, 0, {"from=<beats>", "clip=<ac>"},

@@ -168,6 +168,11 @@ namespace
         int started = 0, latency = 0;
         std::string crash;                 // a class id
         bool liveOnMain = false;           // a block with a live budget processed on the service's thread (a warm-up would)
+        // N26: its editor — the title it was opened with; no display; what it will say on its own; what it was sent
+        std::string editorTitle;
+        bool noDisplay = false;
+        std::vector<PluginEvent> say;
+        std::vector<std::pair<uint32_t, double>> received;
         std::vector<std::string> statesSet;
     };
     class FakePlugin : public IPluginInstance
@@ -192,7 +197,11 @@ namespace
             if (dead) return false;
             if (w->crash == uid && frames > 0) { dead = true; return false; } // at a block: after its engine was built
             if (reset) held.clear();
-            for (int k = 0; k < nChanges; ++k) values[changes[k].id] = changes[k].value;
+            for (int k = 0; k < nChanges; ++k)
+            {
+                values[changes[k].id] = changes[k].value;
+                if (frames > 0) w->received.emplace_back(changes[k].id, changes[k].value);
+            }
             for (int k = 0; k < nNotes; ++k)
                 if (notes[k].on) held[notes[k].pitch] = 0.0;
                 else held.erase(notes[k].pitch);
@@ -220,6 +229,26 @@ namespace
         }
         bool offline() const override { return dead; }
         std::string why() const override { return dead ? "it crashed (test)" : std::string(); }
+        bool openEditor(const std::string &title, std::string &err) override
+        {
+            if (w->noDisplay) { err = "there is no display to open it on"; return false; }
+            w->editorTitle = title;
+            editor = true;
+            return true;
+        }
+        bool closeEditor(std::string &) override { editor = false; return true; }
+        bool editorOpen() const override { return editor && !dead; }
+        void takeEvents(std::vector<PluginEvent> &out) override
+        {
+            if (!editor) return; // only the one whose editor is open speaks
+            for (const auto &e : w->say)
+            {
+                if (e.kind == PluginEvent::Perform) values[e.id] = e.value; // its editor set it
+                if (e.kind == PluginEvent::EditorClosed) editor = false;
+                out.push_back(e);
+            }
+            w->say.clear();
+        }
         bool getState(std::string &s, std::string &) override
         {
             s.clear();
@@ -240,7 +269,7 @@ namespace
         std::shared_ptr<PluginWorld> w;
         std::string uid;
         double rate;
-        bool inst = false, dead = false;
+        bool inst = false, dead = false, editor = false;
         int lat = 0, at = 0;
         std::vector<PluginParamInfo> ps;
         std::map<uint32_t, double> values;
@@ -3680,6 +3709,84 @@ static void test_a_plugin_plays_in_a_song()
     pass("a plugin in a song (R-VST-6): an instrument strip of one, refused where it does not belong; p<id> set, read, bound; a render's own instance; an effect replaces its input, its latency compensated; crashed — dry or silent, said once, in the model and the audit, reloaded; its state saved and given back; a missing bundle offline, the song open");
 }
 
+static void test_a_plugins_own_editor()
+{
+    // R-VST-6 (N26): `device editor` opens a plugin's own editor (titled by the plugin and its strip; not an edit) and
+    // closes it; what it turns becomes `set <dv>.p<id>` — consecutive ones one undo step — landing once no command runs,
+    // and never sent back to the plugin; a preset of its own moves the values the song sets; its window's own close is
+    // said; refusals — no such device, a registry device, offline, no display
+    Run r;
+    PluginWorld &w = *r.fake.plugins;
+    r.ok("plugins scan");
+    r.ok("project new " + freshSong("editor") + " --bpm 120");
+    r.ok("clip add --plugin \"Sweet Pad\" --at 0 --length 4");         // ch_2, dv_1
+    r.ok("notes add pt_1 \"A4@0:4\"");
+    r.ok("device add ch_2 --plugin \"Air Verb\"");                    // dv_2
+    r.ok("project save");
+    auto storedOf = [&](const std::string &dv) {
+        for (const auto &rk : r.svc.project()->racks)
+            for (const auto &d : rk.devices)
+                if (d.id == dv) return d.params;
+        return Fields();
+    };
+    const bool dirty = r.svc.model().dirty;
+    r.events.clear();
+    assert(r.ok("device editor dv_2") == "open\n");
+    assert(w.editorTitle == "Air Verb — Sweet Pad" && r.strip("ch_2")->devices[1].editor && !r.strip("ch_2")->devices[0].editor);
+    assert(r.svc.model().dirty == dirty); // not an edit
+    bool said = false;
+    for (const auto &e : r.events) said |= contains(e, "plugin.editor device=dv_2 open=1");
+    assert(said);
+    // turned in its editor, while playing: the song takes the last value once the running command (a wait) ends —
+    // one step for the whole drag — and the plugin is not sent it back
+    r.ok("transport play --from 0");
+    waitFrames(r, 4800);
+    w.received.clear();
+    w.say = {PluginEvent{PluginEvent::Perform, 7, 0.6, {}}, PluginEvent{PluginEvent::Perform, 7, 0.7, {}}};
+    r.ok("wait 0.03");                                                   // gathered inside the wait …
+    assert(storedOf("dv_2").empty());                                     // … not yet landed
+    assert(r.ok("get dv_2.p7") == "0.7\n");                             // landed first, before the next command
+    w.say = {PluginEvent{PluginEvent::Perform, 7, 0.75, {}}};
+    r.svc.pump();                                                         // the window's timer: no command running —
+    assert(storedOf("dv_2").size() == 1 && storedOf("dv_2")[0].second == "0.75"); // landed at once
+    assert(r.ok("get dv_2.p7") == "0.75\n");
+    r.ok("wait 0.05");
+    r.ok("transport stop");
+    bool echoed = false;
+    for (const auto &x : w.received) echoed |= x.first == 7;
+    assert(!echoed);
+    r.ok("undo");                                                         // the drag was ONE step
+    assert(storedOf("dv_2").empty());
+    r.ok("redo");
+    // a preset of its own: the values the song sets follow, the others stay its state's
+    w.say = {PluginEvent{PluginEvent::Values, 0, 0.0, {{7, 0.25}}}};
+    r.ok("wait 0.02");
+    assert(r.ok("get dv_2.p7") == "0.25\n");
+    // its window's own close: said, the model shows it
+    r.events.clear();
+    w.say = {PluginEvent{PluginEvent::EditorClosed, 0, 0.0, {}}};
+    r.ok("wait 0.02");
+    assert(!r.strip("ch_2")->devices[1].editor);
+    said = false;
+    for (const auto &e : r.events) said |= contains(e, "plugin.editor device=dv_2 open=0");
+    assert(said);
+    assert(r.ok("device editor dv_1") == "open\n" && r.ok("device editor dv_1 --close") == "closed\n" && !r.strip("ch_2")->devices[0].editor);
+    // refusals
+    r.ok("device add ch_2 --type reverb");                                // dv_3
+    assert(contains(r.no("device editor dv_3"), "only a plugin has an editor of its own"));
+    assert(contains(r.no("device editor dv_9"), "no device"));
+    w.noDisplay = true;
+    assert(contains(r.no("device editor dv_1"), "there is no display to open it on"));
+    w.noDisplay = false;
+    w.crash = "0123456789ABCDEF0123456789ABCDEF";
+    r.ok("transport play --from 0");
+    waitFrames(r, 4800);
+    r.ok("transport stop");
+    assert(contains(r.no("device editor dv_1"), "dv_1 is offline: it crashed (test) — `device reload dv_1` first"));
+    w.crash.clear();
+    pass("a plugin's own editor (R-VST-6, N26): opened titled by plugin and strip, not an edit, said; what it turns lands as set p<id> once no command runs — a drag one step, never echoed; its own preset moves the set values; its window's close said; refused for no device, a registry device, offline, no display");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -4949,6 +5056,7 @@ int main()
     test_the_sample_library_tags_and_finds();
     test_plugins_are_scanned_and_listed();
     test_a_plugin_plays_in_a_song();
+    test_a_plugins_own_editor();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

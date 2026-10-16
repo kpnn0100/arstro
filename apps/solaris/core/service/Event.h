@@ -42,6 +42,7 @@ namespace solaris
             LibraryChanged,   // path, tags — R-PRESET-3
             PluginsChanged,   // count, problems — R-VST-6
             PluginOffline,    // device, why — R-VST-6
+            PluginEditor,     // device, open — R-VST-6
             RecentsChanged,   // count
             TransportChanged, // playing, position, loop
             AuditionChanged,  // file, playing

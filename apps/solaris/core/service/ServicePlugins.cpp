@@ -203,7 +203,105 @@ namespace solaris
         m.offline = c->offline();
         m.why = c->why();
         m.label = c->type.label;
+        m.editor = c->inst && c->inst->editorOpen();
         return m;
+    }
+
+    bool SolarisService::pluginEditor(const Command &c, std::string &err)
+    {
+        if (!requireOpen(err)) return false;
+        const DeviceNode *d = mProject.device(c.arg(0));
+        if (!d) { err = "no device `" + c.arg(0) + "`"; return false; }
+        if (d->type != "vst3") { err = c.arg(0) + " is a " + d->type + " — only a plugin has an editor of its own (its window is Solaris's)"; return false; }
+        const auto conn = livePlugin(*d);
+        if (c.has("close"))
+        {
+            const bool was = conn->inst && conn->inst->editorOpen();
+            if (conn->inst && !conn->inst->closeEditor(err)) return false;
+            refreshModel();
+            if (was) emit(Event(Event::Kind::PluginEditor).with("device", d->id).with("open", "0"));
+            mOutput = "closed\n";
+            return true;
+        }
+        if (conn->offline()) { err = d->id + " is offline: " + conn->why() + " — `device reload " + d->id + "` first"; return false; }
+        std::string owner = "Master";
+        for (const auto &r : mProject.racks)
+            for (const auto &x : r.devices)
+                if (x.id == d->id && r.track != "master")
+                    if (const Strip *s = mProject.strip(r.track)) owner = s->name;
+        const bool was = conn->inst->editorOpen();
+        if (!conn->inst->openEditor((d->pluginName.empty() ? std::string("Plugin") : d->pluginName) + " — " + owner, err)) return false;
+        refreshModel();
+        if (!was) emit(Event(Event::Kind::PluginEditor).with("device", d->id).with("open", "1"));
+        mOutput = "open\n";
+        return true;
+    }
+
+    void SolarisService::gatherPluginEdits()
+    {
+        bool refresh = false, rebuild = false;
+        for (auto &kv : mPluginLive)
+        {
+            const auto &c = kv.second;
+            if (!c->inst) continue;
+            std::vector<PluginEvent> said;
+            c->inst->takeEvents(said);
+            const DeviceNode *d = mOpen ? mProject.device(kv.first) : nullptr;
+            if (said.empty() || !d) continue;
+            std::map<uint32_t, double> set; // the last of each
+            for (const auto &e : said)
+                switch (e.kind)
+                {
+                case PluginEvent::Perform: set[e.id] = e.value; break;
+                case PluginEvent::Values:
+                    // it changed its own (a preset of its own): the values the song SETS follow; the rest are its state's
+                    for (const auto &v : e.values)
+                        for (const auto &p : d->params)
+                        {
+                            double now = 0;
+                            if (p.first == "p" + std::to_string(v.first) && (!parseNumber(p.second, now) || now != v.second)) set[v.first] = v.second;
+                        }
+                    break;
+                case PluginEvent::EditorClosed:
+                    emit(Event(Event::Kind::PluginEditor).with("device", kv.first).with("open", "0"));
+                    refresh = true;
+                    break;
+                case PluginEvent::Latency: rebuild = true; break; // compensated again: a new engine
+                }
+            if (set.empty()) continue;
+            std::string line = "set";
+            for (const auto &x : set) line += " " + kv.first + ".p" + std::to_string(x.first) + "=" + canonicalNumber(std::min(1.0, std::max(0.0, x.second)));
+            mPluginEdits.push_back(line);
+        }
+        if (refresh) refreshModel();
+        if (rebuild && mPlayer && mPlayer->running())
+        {
+            Command c;
+            c.kind = K::DeviceEditor; // not a Set: the engine is built again, its latencies read again
+            liveUpdate(c);
+        }
+    }
+
+    void SolarisService::applyPluginEdits()
+    {
+        std::vector<std::string> lines;
+        lines.swap(mPluginEdits);
+        for (const auto &l : lines)
+        {
+            // the song takes what the plugin set; the plugin is not told it back (an echo landing mid-drag pulls its knob)
+            mFromPlugin.clear();
+            size_t a = 4;
+            for (size_t sp; a < l.size(); a = sp + 1)
+            {
+                sp = l.find(' ', a);
+                if (sp == std::string::npos) sp = l.size();
+                const std::string kv = l.substr(a, sp - a);
+                mFromPlugin.insert(kv.substr(0, kv.find('=')));
+            }
+            std::string err;
+            dispatchText(l, err); // refused (the device gone meanwhile): said as any refusal
+            mFromPlugin.clear();
+        }
     }
 
     void SolarisService::prunePlugins()

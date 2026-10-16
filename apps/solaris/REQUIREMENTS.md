@@ -977,6 +977,16 @@ a process is the host's (law 12).
   whenever the song or its autosave is written. A note preview and the input monitor play their own instance (another
   stream), never the song's. A plugin's presets are its own (`preset save|load` refused). Not yet: the pitch and mod
   wheels are not sent to a plugin (VST3 maps them to parameters through the plugin's own MIDI mapping — a later task).)
+  (**Detailed while building it, N26 — 2026-10-17:** a plugin's OWN editor — `device editor <dv>` opens it in a window
+  of its own made by the helper (the plugin's view in a top-level X11 window titled "<plugin> — <strip>", driven by the
+  helper's run loop: the plugin's own process, so an editor that crashes takes only its plugin offline); `device editor
+  <dv> --close` closes it, and so does the window's own close. Not an edit. The helper plays on a thread of its own, so
+  an editor never delays a block. What is turned in the editor reaches the processor at once (the helper's next block)
+  and the song as `set <dv>.p<id>` — consecutive ones one undo step, as a dragged fader's; a plugin that changes its own
+  values (a preset of its own) puts the song's stored ones to what they became. The model: `devices[].editor` (open),
+  said by `plugin.editor device open`. The device panel (part 2): a plugin device shows its parameter list (no face),
+  an Editor button, and — offline — a banner saying why with Reload (`device reload`), each eased. With no display the
+  editor is refused, saying so; tests never open a window on a display.)
 - **R-CTRL-1 MIDI learn**: right-click a number › Learn MIDI CC — the next CC moved binds it (`map add <cc>
   <address>`); mappings are the machine's settings; the transport keys of a keyboard (MMC) work.
 - **R-CTRL-2 Control surfaces**: a Mackie Control / HUI surface's faders, pans, mutes, solos and transport follow
