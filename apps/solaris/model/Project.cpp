@@ -367,6 +367,9 @@ namespace solaris
             else if (k == "fadeOut") n.fadeOut = toTick(r.num(k, v, 0.0));
             else if (k == "loop") n.loop = r.boolean(k, v, false);
             else if (k == "reverse") n.reverse = r.boolean(k, v, false); // R-EDIT-1
+            else if (k == "warp") n.warp = r.boolean(k, v, false);       // R-WARP-1
+            else if (k == "bpm") n.bpm = r.num(k, v, 0.0);
+            else if (k == "pitch") n.pitch = r.num(k, v, 0.0);
             else n.unknown.emplace_back(k, v);
         }
 
@@ -829,6 +832,9 @@ namespace solaris
                 if (n.fadeOut > 0) l.kv("fadeOut", canonicalBeats(n.fadeOut));
                 if (n.loop) l.kv("loop", "true");
                 if (n.reverse) l.kv("reverse", "true"); // R-EDIT-1: written only when set
+                if (n.warp) l.kv("warp", "true");       // R-WARP-1: likewise
+                if (n.bpm > 0) l.kv("bpm", canonicalNumber(n.bpm));
+                if (n.pitch != 0) l.kv("pitch", canonicalNumber(n.pitch));
             }
             else
             {

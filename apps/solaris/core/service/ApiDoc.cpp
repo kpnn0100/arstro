@@ -145,7 +145,7 @@ namespace solaris
         o += "| address | value |\n|---|---|\n";
         o += "| `project.name` · `project.bpm` · `project.sig` · `project.masterGain` · `project.sampleRate` | text · 20…999 · n/d · dB · Hz |\n";
         o += "| `<strip>.name` · `.gain` · `.pan` · `.mute` · `.solo` · `.colour` | text · dB (−120…12) · −1…1 · bool · bool · −1…15 |\n";
-        o += "| `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` · `.reverse` | text · beats · beats · beats · beats · dB · bool · s · s · bool (audio, R-EDIT-1) |\n";
+        o += "| `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` · `.reverse` · `.warp` · `.bpm` · `.pitch` | text · beats · beats · beats · beats · dB · bool · s · s · bool (audio, R-EDIT-1) · bool · bpm 20 … 999 · semitones −24 … +24 (audio, R-WARP-1) |\n";
         o += "| `<lane>.name` · `.colour` · `.strip` (`<ch>` an instrument: the lane is its track; `none`: plain — R-LANE-3) · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |\n";
         o += "| `<lane group>.name` · `.folded` · `<lane>.group` (R-ARR-3) | text · `on` (one row) / `off` · `<lg>` joins it (gathered with it) / `none` leaves it (placed after it) |\n";
         o += "| `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |\n";

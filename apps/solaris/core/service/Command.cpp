@@ -130,7 +130,7 @@ namespace solaris
             {K::LaneUngroup, "lane ungroup", "<lg>", 1, 1, {}, "Let a group's lanes go; the group is gone, the lanes stay where they are.", "R-ARR-3"},
 
             {K::ClipAdd, "clip add", "", 0, 0,
-             {"src=<file>", "strip=<ch>", "instrument=<type>", "sample=<file>", "pattern=<pt>", "lane=<ln|new>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>"},
+             {"src=<file>", "strip=<ch>", "instrument=<type>", "sample=<file>", "pattern=<pt>", "lane=<ln|new>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>", "warp"},
              "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the "
              "first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of "
              "--pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument "
@@ -138,6 +138,7 @@ namespace solaris
              "its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for "
              "a new one (R-SVC-8). On an instrument's TRACK (--lane <ln>) a note clip plays through that instrument — "
              "--strip may be left out, --pattern places that pattern; audio and --instrument are refused there (R-LANE-3). "
+             "--warp (with --src): it follows the song's tempo, its own detected now (R-WARP-1; refused when none is heard). "
              "Prints the clip, then `made:` and whatever else it made.", "R-MIX-2"},
             {K::ClipMove, "clip move", "<ac>", 1, 1, {"at=<beats>", "lane=<ln>", "strip=<ch>"},
              "Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). "

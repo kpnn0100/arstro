@@ -622,6 +622,7 @@ namespace solaris
                     return false;
                 }
             }
+            if (c.has("warp") && !c.has("src")) { err = "--warp is for an audio clip (--src)"; return false; }
             std::string made; // --instrument: a new instrument strip, made by `strip add`'s own rules (R-BROWSE-3: one drop, one command)
             if (c.has("instrument"))
             {
@@ -685,6 +686,12 @@ namespace solaris
                 if (c.has("length")) { if (!beatsFlag(c, "length", 0, cl.length, err)) return false; cl.loop = true; }
                 cl.name = stem;
                 cl.lane = laneFor(cl.track, stem);
+                if (c.has("warp")) // R-WARP-1: dropped warped — its tempo heard on import
+                {
+                    cl.bpm = tempoOf(cl);
+                    if (cl.bpm <= 0) { err = "no tempo heard in " + c.flag("src") + " — add it without --warp, then set its .bpm and .warp"; return false; }
+                    cl.warp = true;
+                }
             }
             else if (c.has("strip") || !made.empty() || !owner.empty())
             {

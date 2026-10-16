@@ -8,6 +8,7 @@
 #include "SolarisService.h"
 #include "device/Device.h"
 #include "meter/Onsets.h"
+#include "spectral/TimeStretch.h"
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -48,6 +49,44 @@ namespace solaris
         }
     }
 
+    std::shared_ptr<const engine::Pcm> SolarisService::stretched(const std::string &key, const std::function<std::shared_ptr<const engine::Pcm>(const std::string &)> &base,
+                                                                 int rate)
+    {
+        // R-WARP-1: the span of its file, stretched by the ratio and moved by the semitones the key names (REQ-stretch-1…3)
+        double ratio = 1, semis = 0, in = 0, out = 0;
+        std::string src;
+        if (!parseStretchKey(key, ratio, semis, in, out, src)) return nullptr;
+        auto pcm = base(src);
+        if (!pcm || pcm->frames <= 0) return nullptr;
+        const long long i0 = std::clamp<long long>(std::llround(in * rate), 0, pcm->frames), i1 = std::clamp<long long>(std::llround(out * rate), i0, pcm->frames);
+        std::vector<std::vector<float>> ch((size_t)pcm->channels, std::vector<float>((size_t)(i1 - i0)));
+        for (int c = 0; c < pcm->channels; ++c)
+            for (long long i = i0; i < i1; ++i) ch[(size_t)c][(size_t)(i - i0)] = pcm->at(i, c);
+        StretchParams sp;
+        sp.ratio = ratio;
+        sp.semitones = semis;
+        const auto y = timeStretch(ch, rate, sp);
+        auto made = std::make_shared<engine::Pcm>();
+        made->channels = pcm->channels;
+        made->frames = y.empty() ? 0 : (long long)y[0].size();
+        made->samples.resize((size_t)(made->frames * made->channels));
+        for (long long i = 0; i < made->frames; ++i)
+            for (int c = 0; c < made->channels; ++c) made->samples[(size_t)(i * made->channels + c)] = y[(size_t)c][(size_t)i];
+        return made;
+    }
+
+    double SolarisService::tempoOf(const Clip &c)
+    {
+        auto pcm = pcmFor(c.src);
+        if (!pcm || pcm->frames <= 0) return 0.0;
+        const double rate = mProject.header.sampleRate;
+        const long long i0 = std::clamp<long long>(std::llround(c.in * rate), 0, pcm->frames), i1 = std::clamp<long long>(std::llround(c.out * rate), i0, pcm->frames);
+        std::vector<float> mono((size_t)(i1 - i0));
+        for (long long i = i0; i < i1; ++i) mono[(size_t)(i - i0)] = pcm->channels > 1 ? 0.5f * (pcm->at(i, 0) + pcm->at(i, 1)) : pcm->at(i, 0);
+        const double bpm = estimateTempo(mono.data(), (long long)mono.size(), rate); // REQ-tempo-1
+        return bpm > 0 ? std::round(bpm * 1000.0) / 1000.0 : 0.0;                 // to a thousandth: what is written
+    }
+
     bool SolarisService::splitClip(const std::string &id, double at, std::string &made, std::string &err)
     {
         Project &p = mProject;
@@ -65,7 +104,7 @@ namespace solaris
         if (cl.loop)
         {
             // a repetition begins every span: cut there, and each half still loops from its start
-            const double span = secondsToBeats(p, cl.out - cl.in), reps = span > 0 ? (at - a) / span : 0;
+            const double span = (cl.out - cl.in) / clipSecondsPerBeat(p, cl), reps = span > 0 ? (at - a) / span : 0;
             const double k = std::round(reps);
             if (span <= 0 || std::fabs(at - (a + k * span)) > 0.5 / kPpq)
             {
@@ -87,7 +126,7 @@ namespace solaris
         else
         {
             // R-EDIT-1: the halves read on from where the other stopped — a reversed clip's first half is its span's end
-            const double d = (at - a) * 60.0 / p.header.bpm;
+            const double d = (at - a) * clipSecondsPerBeat(p, cl); // R-WARP-1: a warped clip's own beats
             if (!cl.reverse)
             {
                 first.out = cl.in + d;
@@ -161,7 +200,7 @@ namespace solaris
             { err = "--sensitivity is 0 … 1"; return false; }
             auto pcm = pcmFor(cl->src);
             if (!pcm) { err = id + "'s file (" + cl->src + ") is offline — nothing to listen to"; return false; }
-            const double rate = p.header.sampleRate, spb = 60.0 / p.header.bpm * rate;
+            const double rate = p.header.sampleRate, spb = clipSecondsPerBeat(p, *cl) * rate; // a sample of its file per beat of it
             const long long i0 = std::clamp<long long>(std::llround(cl->in * rate), 0, pcm->frames);
             const long long i1 = std::clamp<long long>(std::llround(cl->out * rate), i0, pcm->frames);
             std::vector<float> mono((size_t)(i1 - i0));
@@ -193,6 +232,7 @@ namespace solaris
     {
         Project &p = mProject;
         const Clip cl = clip; // a copy: `clip add` grows the clip list
+        if (cl.warp || cl.pitch != 0.0) { err = cl.id + " is warped or pitched — a kit plays the file as it is: consolidate it first, then slice that"; return false; }
         const double len = clipLengthBeats(p, cl);
         const int n = std::max(1, (int)std::lround(len / step));
         if (n > 64) { err = "--every " + canonicalBeats(step) + " makes " + std::to_string(n) + " slices of " + cl.id + " — a Sampler holds 64 at most"; return false; }

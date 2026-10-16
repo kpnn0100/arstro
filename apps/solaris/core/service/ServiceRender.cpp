@@ -135,8 +135,14 @@ namespace solaris
         Project rated = mProject;
         rated.header.sampleRate = rate;
         std::map<std::string, std::shared_ptr<const engine::Pcm>> decoded; // at the render's rate, when not the song's
-        auto pcmAt = [&](const std::string &src) -> std::shared_ptr<const engine::Pcm> {
+        std::function<std::shared_ptr<const engine::Pcm>(const std::string &)> pcmAt = [&](const std::string &src) -> std::shared_ptr<const engine::Pcm> {
             if (rate == mProject.header.sampleRate) return pcmFor(src);
+            if (src.compare(0, 8, "stretch:") == 0) // R-WARP-1: stretched at the render's rate, from the file decoded at it
+            {
+                auto st = decoded.find(src);
+                if (st != decoded.end()) return st->second;
+                return decoded[src] = stretched(src, pcmAt, rate);
+            }
             const std::string path = resolvePath(src);
             auto it = decoded.find(path);
             if (it != decoded.end()) return it->second;

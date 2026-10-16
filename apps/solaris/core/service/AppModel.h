@@ -152,6 +152,8 @@ namespace solaris
         std::vector<CompModel> plays;            // … resolved: runs covering the clip, each its take (what is heard)
         bool reverse = false;                    // R-EDIT-1: its span played backwards (audio)
         double fadeInHeard = 0, fadeOutHeard = 0; // R-EDIT-1: its fades grown over an overlap on its lane (beats)
+        bool warp = false;                       // R-WARP-1: it follows the song's tempo
+        double bpm = 0, pitch = 0;               // R-WARP-1: its own tempo (0 unknown); semitones it is moved
     };
 
     struct NoteModel

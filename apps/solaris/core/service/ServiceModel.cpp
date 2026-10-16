@@ -280,6 +280,9 @@ namespace solaris
             cm.fadeOut = c.fadeOut;
             cm.loop = c.loop;
             cm.reverse = c.reverse;
+            cm.warp = c.warp; // R-WARP-1
+            cm.bpm = c.bpm;
+            cm.pitch = c.pitch;
             heardFades(p, c, cm.fadeInHeard, cm.fadeOutHeard); // R-EDIT-1: the crossfade, decided once for every front end
             if (c.isAudio())
             {

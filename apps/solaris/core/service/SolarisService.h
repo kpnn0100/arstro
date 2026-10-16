@@ -120,6 +120,10 @@ namespace solaris
         bool audioEditCommand(const Command &c, std::string &err);
         bool splitClip(const std::string &id, double at, std::string &made, std::string &err);
         bool sliceToKit(const Clip &clip, double step, std::string &err);
+        /** R-WARP-1: a stretch key's sound — its file's span (from `base`) stretched at `rate` by the DSP library. */
+        static std::shared_ptr<const engine::Pcm> stretched(const std::string &key, const std::function<std::shared_ptr<const engine::Pcm>(const std::string &)> &base, int rate);
+        /** R-WARP-1: a clip's own tempo heard in its span (the DSP library's estimate); 0 when none is. */
+        double tempoOf(const Clip &c);
         bool consolidateClips(const Command &c, std::string &err);
         // R-REC-1: the capture — opened for the armed audio strip's input port; whether its monitoring is heard now;
         // the take landed as a WAV beside the song and a clip of it

@@ -506,6 +506,24 @@ namespace solaris
             mOffline.clear();
             mPcmRate = mProject.header.sampleRate;
         }
+        if (src.compare(0, 8, "stretch:") == 0) // R-WARP-1: a clip's span stretched — made once, kept while it is used
+        {
+            auto st = mPcm.find(src);
+            if (st != mPcm.end()) return st->second;
+            auto made = stretched(src, [this](const std::string &s) { return pcmFor(s); }, mPcmRate);
+            if (!made) return nullptr;
+            int kept = 0;
+            for (const auto &e : mPcm) kept += e.first.compare(0, 8, "stretch:") == 0 ? 1 : 0;
+            if (kept >= 16) // a tempo dragged makes one a step: what the song no longer plays goes
+            {
+                std::set<std::string> used;
+                for (const auto &c : mProject.clips) used.insert(stretchKey(mProject, c));
+                for (auto e = mPcm.begin(); e != mPcm.end();)
+                    e = e->first.compare(0, 8, "stretch:") == 0 && !used.count(e->first) ? mPcm.erase(e) : std::next(e);
+            }
+            mPcm[src] = made;
+            return made;
+        }
         const std::string path = resolvePath(src);
         auto it = mPcm.find(path);
         if (it != mPcm.end()) return it->second;
@@ -872,9 +890,34 @@ namespace solaris
         }
         if (Clip *c = p.clip(id))
         {
-            static const std::vector<std::string> fields = {"name", "at", "in", "out", "length", "gain", "fadeIn", "fadeOut", "loop", "reverse"};
+            static const std::vector<std::string> fields = {"name", "at", "in", "out", "length", "gain", "fadeIn", "fadeOut", "loop", "reverse", "warp", "bpm", "pitch"};
             if (f == "name") { c->name = value; stored = value; return true; }
             if (f == "loop") { if (!boolean(value, b, err)) return false; c->loop = b; stored = boolText(b); return true; }
+            if (f == "warp" || f == "bpm" || f == "pitch") // R-WARP-1
+            {
+                if (!c->isAudio()) { err = id + " is a note clip — `" + f + "` is an audio clip's"; return false; }
+                if (!c->takes.empty()) { err = id + " is comped from takes — consolidate it first, then " + (f == "pitch" ? "move its pitch" : "warp it"); return false; }
+                if (f == "warp")
+                {
+                    if (!boolean(value, b, err)) return false;
+                    if (b && c->bpm <= 0)
+                    {
+                        // its tempo heard, in the same edit (REQ-tempo-1)
+                        const double heard = tempoOf(*c);
+                        if (heard <= 0) { err = "no tempo heard in " + id + " — set " + id + ".bpm=<its tempo> first"; return false; }
+                        c = p.clip(id);
+                        c->bpm = heard;
+                    }
+                    c->warp = b;
+                    stored = boolText(b);
+                    return true;
+                }
+                if (!number(value, x, err)) return false;
+                if (f == "bpm") { if (!inRange(x, 20, 999, "bpm", err)) return false; c->bpm = x; }
+                else { if (!inRange(x, -24, 24, "pitch (semitones)", err)) return false; c->pitch = x; }
+                stored = canonicalNumber(x);
+                return true;
+            }
             if (f == "reverse") // R-EDIT-1
             {
                 if (!c->isAudio()) { err = id + " is a note clip — `reverse` plays an audio clip's span backwards"; return false; }
@@ -1107,7 +1150,11 @@ namespace solaris
             put("name", c->name); put("at", canonicalBeats(c->at)); put("length", canonicalBeats(clipLengthBeats(p, *c)));
             put("gain", canonicalNumber(c->gain)); put("fadeIn", canonicalBeats(c->fadeIn)); put("fadeOut", canonicalBeats(c->fadeOut));
             put("loop", boolText(c->loop)); put("track", c->track); put("lane", c->lane);
-            if (c->isAudio()) { put("in", canonicalSeconds(c->in)); put("out", canonicalSeconds(c->out)); put("src", c->src); put("reverse", boolText(c->reverse)); }
+            if (c->isAudio())
+            {
+                put("in", canonicalSeconds(c->in)); put("out", canonicalSeconds(c->out)); put("src", c->src); put("reverse", boolText(c->reverse));
+                put("warp", boolText(c->warp)); put("bpm", canonicalNumber(c->bpm)); put("pitch", canonicalNumber(c->pitch)); // R-WARP-1
+            }
             else put("pattern", c->pattern);
         }
         else if (const Lane *l = p.lane(id)) { put("name", l->name); put("colour", std::to_string(l->colour)); put("strip", l->track.empty() ? "none" : l->track); put("group", l->group.empty() ? "none" : l->group); }

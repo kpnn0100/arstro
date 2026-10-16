@@ -18,9 +18,33 @@ namespace solaris
 
     double secondsToBeats(const Project &p, double seconds) { return seconds * p.header.bpm / 60.0; }
 
+    double clipSecondsPerBeat(const Project &p, const Clip &c) { return c.warp && c.bpm > 0 ? 60.0 / c.bpm : 60.0 / p.header.bpm; }
+
+    std::string stretchKey(const Project &p, const Clip &c)
+    {
+        if (!c.isAudio() || !c.takes.empty() || (!(c.warp && c.bpm > 0) && c.pitch == 0.0)) return std::string();
+        const double ratio = c.warp && c.bpm > 0 ? c.bpm / p.header.bpm : 1.0;
+        return "stretch:" + canonicalNumber(ratio) + ":" + canonicalNumber(c.pitch) + ":" + canonicalNumber(c.in) + ":" + canonicalNumber(c.out) + ":" + c.src;
+    }
+
+    bool parseStretchKey(const std::string &key, double &ratio, double &semitones, double &in, double &out, std::string &src)
+    {
+        if (key.compare(0, 8, "stretch:") != 0) return false;
+        size_t at = 8;
+        double *v[4] = {&ratio, &semitones, &in, &out};
+        for (double *x : v)
+        {
+            const size_t colon = key.find(':', at);
+            if (colon == std::string::npos || !parseNumber(key.substr(at, colon - at), *x)) return false;
+            at = colon + 1;
+        }
+        src = key.substr(at);
+        return !src.empty();
+    }
+
     double clipLengthBeats(const Project &p, const Clip &c)
     {
-        if (c.isAudio()) return (c.loop && c.length > 0) ? c.length : secondsToBeats(p, c.out - c.in);
+        if (c.isAudio()) return (c.loop && c.length > 0) ? c.length : (c.out - c.in) / clipSecondsPerBeat(p, c); // R-WARP-1: its own beats
         if (c.length > 0) return c.length;
         const Pattern *pt = p.pattern(c.pattern);
         return pt ? pt->length : 0.0;
@@ -262,11 +286,14 @@ namespace solaris
                 {
                     engine::Region rg;
                     rg.clip = c.id;
-                    rg.pcm = pcm ? pcm(c.src) : nullptr;
+                    const std::string key = stretchKey(p, c); // R-WARP-1: its span stretched, made once by the provider
+                    rg.pcm = pcm ? pcm(key.empty() ? c.src : key) : nullptr;
                     if (!rg.pcm) r.warnings.push_back("clip " + c.id + ": " + c.src + " is offline — silent");
                     rg.start = start;
-                    rg.srcOffset = (long long)std::llround(c.in * p.header.sampleRate);
-                    rg.srcFrames = (long long)std::llround((c.out - c.in) * p.header.sampleRate);
+                    rg.srcOffset = key.empty() ? (long long)std::llround(c.in * p.header.sampleRate) : 0;
+                    // the span's frames — stretched, the stretched sound's (an offline one, as long as it would be)
+                    const double ratio = c.warp && c.bpm > 0 ? c.bpm / p.header.bpm : 1.0;
+                    rg.srcFrames = !key.empty() && rg.pcm ? rg.pcm->frames : (long long)std::llround((c.out - c.in) * p.header.sampleRate * ratio);
                     rg.loop = c.loop;
                     rg.reverse = c.reverse; // R-EDIT-1
                     rg.frames = (c.loop && c.length > 0) ? (long long)std::llround((c.at + c.length) * spb) - start : rg.srcFrames;

@@ -2963,6 +2963,123 @@ static void test_slice_cuts_a_clip_or_makes_a_kit()
     pass("slice (R-EDIT-1): every beat — clips playing what it did; at its hits (the DSP onsets) — cuts within a hundredth of a beat, reversed where each swell begins; a kit — a Sampler in four slices and a note clip, alone the same sound, reversed its slices reversed in its order; one edit each; refusals");
 }
 
+namespace
+{
+    // R-WARP-1: a groove the fake host hands back — a kick on every beat, a snare on 2 and 4, a hat every eighth
+    std::string grooveFile(Run &r, const std::string &name, double bpm, int beats)
+    {
+        const double fs = 48000.0, spb = 60.0 / bpm * fs;
+        const long long n = (long long)std::llround(beats * spb);
+        std::vector<float> x((size_t)n, 0.0f);
+        unsigned seed = 5;
+        auto noise = [&] { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f - 0.5f; };
+        auto hit = [&](double at, int kind) {
+            const long long a = (long long)std::llround(at);
+            for (long long i = 0; i < 12000 && a + i < n; ++i)
+            {
+                double v = 0;
+                if (kind == 0) v = 0.8 * std::exp(-i / 3000.0) * std::sin(2 * M_PI * (60.0 + 80.0 * std::exp(-i / 400.0)) * i / fs);
+                else if (kind == 1) v = 0.5 * std::exp(-i / 1500.0) * noise();
+                else if (i < 2400) v = 0.15 * std::exp(-i / 300.0) * noise();
+                x[(size_t)(a + i)] += (float)v;
+            }
+        };
+        for (int b = 0; b < beats; ++b)
+        {
+            hit(b * spb, 0);
+            if (b % 2 == 1) hit(b * spb, 1);
+            hit(b * spb, 2);
+            hit((b + 0.5) * spb, 2);
+        }
+        const std::string path = scratch() + "/" + name + ".wav";
+        r.fake.written[path] = {x, x};
+        return path;
+    }
+    std::string sineFile(Run &r, const std::string &name, double hz, long long frames)
+    {
+        std::vector<float> x((size_t)frames);
+        for (long long i = 0; i < frames; ++i) x[(size_t)i] = (float)(0.5 * std::sin(2 * M_PI * hz * i / 48000.0));
+        const std::string path = scratch() + "/" + name + ".wav";
+        r.fake.written[path] = {x, x};
+        return path;
+    }
+    double hzOf(const std::vector<float> &x, size_t from, size_t to)
+    {
+        double first = -1, last = -1;
+        int count = 0;
+        for (size_t i = std::max<size_t>(1, from); i < to && i < x.size(); ++i)
+            if (x[i - 1] < 0.0f && x[i] >= 0.0f)
+            {
+                const double t = (double)(i - 1) + x[i - 1] / (x[i - 1] - x[i]);
+                if (first < 0) first = t;
+                last = t;
+                ++count;
+            }
+        return count > 1 ? (count - 1) * 48000.0 / (last - first) : 0.0;
+    }
+    double rmsIn(const std::vector<float> &x, size_t from, size_t to)
+    {
+        double e = 0;
+        for (size_t i = from; i < to && i < x.size(); ++i) e += (double)x[i] * x[i];
+        return std::sqrt(e / (double)std::max<size_t>(1, to - from));
+    }
+}
+
+static void test_a_warped_clip_follows_the_tempo()
+{
+    // R-WARP-1: a groove dropped warped — its tempo heard on import (100, to the thousandth), its 8 beats its own; a
+    // sine told its tempo and warped plays its 2 beats in the song's time, 440 Hz kept; pitched an octave, 880 Hz, as
+    // long; the song slowed, it lasts its beats still; the .slp; pure; a warped split at its own beats; refusals
+    Run r;
+    r.ok("project new " + freshSong("warp") + " --bpm 120");
+    const std::string g = firstLine(r.ok("clip add --src " + grooveFile(r, "warp-groove", 100.0, 8) + " --at 0 --warp"));
+    std::printf("    the groove heard at %.3f bpm\n", r.clip(g)->bpm);
+    assert(r.clip(g)->warp && std::fabs(r.clip(g)->bpm - 100.0) < 1e-3 && std::fabs(r.clip(g)->length - 8.0) < 1e-6);
+    const std::string s = firstLine(r.ok("clip add --src " + sineFile(r, "warp-sine", 440.0, 96000) + " --at 16")); // 2 s: 4 beats at 120
+    assert(r.clip(s)->length == 4 && !r.clip(s)->warp);
+    r.ok("set " + s + ".bpm=60 " + s + ".warp=true");                // its own 60: 2 beats — played in 1 s
+    assert(r.clip(s)->length == 2 && r.clip(s)->bpm == 60);
+    auto heard = [&](const std::string &name, double from, double to) {
+        const std::string out = scratch() + "/" + name + ".wav";
+        r.ok("render --out " + out + " --from " + std::to_string(from) + " --to " + std::to_string(to) + " --bits 32f");
+        return r.fake.written[out][0];
+    };
+    auto L = heard("warp-fast", 16, 19);
+    double hz = hzOf(L, 4800, 43200);
+    std::printf("    warped: %.3f Hz, %.3f in its second, %.5f after it\n", hz, rmsIn(L, 4800, 43200), rmsIn(L, 50400, 72000));
+    assert(std::fabs(hz / 440.0 - 1.0) < 0.003 && std::fabs(rmsIn(L, 4800, 43200) - 0.3536) < 0.02 && rmsIn(L, 50400, 72000) < 1e-3);
+    // an octave up: 880 Hz, as long
+    r.ok("set " + s + ".pitch=12");
+    L = heard("warp-octave", 16, 19);
+    hz = hzOf(L, 4800, 43200);
+    std::printf("    pitched: %.3f Hz\n", hz);
+    assert(std::fabs(hz / 880.0 - 1.0) < 0.003 && rmsIn(L, 4800, 43200) > 0.3 && rmsIn(L, 50400, 72000) < 1e-3);
+    assert(heard("warp-again", 16, 19) == L);                           // pure
+    assert(contains(r.text(), "warp=true bpm=60.0 pitch=12.0") && r.ok("get " + s + ".bpm") == "60.0\n");
+    // the song at 60: its two beats last two seconds
+    r.ok("set project.bpm=60");
+    assert(r.clip(s)->length == 2);
+    L = heard("warp-slow", 16, 19);
+    std::printf("    the song at 60: %.3f in its two seconds, %.5f after\n", rmsIn(L, 9600, 86400), rmsIn(L, 100800, 144000));
+    assert(rmsIn(L, 9600, 86400) > 0.3 && rmsIn(L, 100800, 144000) < 1e-3 && std::fabs(hzOf(L, 9600, 86400) / 880.0 - 1.0) < 0.003);
+    r.ok("set project.bpm=120");
+    // cut at its own beat: a second of its file each
+    const std::string half = firstLine(r.ok("clip split " + s + " --at 17"));
+    assert(r.clip(s)->out == 1.0 && r.clip(half)->in == 1.0 && r.clip(half)->warp && r.clip(half)->bpm == 60 && r.clip(half)->length == 1);
+    r.ok("undo");
+    // refusals
+    const std::string plain = firstLine(r.ok("clip add --src " + sineFile(r, "warp-plain", 330.0, 48000) + " --at 24"));
+    assert(contains(r.no("set " + plain + ".warp=true"), "no tempo heard in " + plain));
+    assert(contains(r.no("clip add --src " + scratch() + "/warp-plain.wav --at 30 --warp"), "no tempo heard"));
+    assert(contains(r.no("set " + plain + ".pitch=30"), "pitch (semitones)"));
+    assert(contains(r.no("set " + plain + ".bpm=5"), "bpm"));
+    assert(contains(r.no("clip add --instrument synth --at 0 --warp"), "--warp is for an audio clip"));
+    const std::string notes = firstLine(r.ok("clip add --instrument synth --at 0 --length 4"));
+    assert(contains(r.no("set " + notes + ".warp=true"), "is a note clip"));
+    assert(contains(r.no("clip slice " + s + " --every 1 --kit"), "consolidate it first"));
+    pass("warp (R-WARP-1): a groove dropped warped is heard at 100 bpm, its 8 beats its own; a sine warped plays its 2 beats in the song's second at 440 Hz, an octave up at 880 as long, pure; the song slowed, its beats last; .slp; split at its own beat; refusals");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -4223,6 +4340,7 @@ int main()
     test_overlapping_clips_on_a_lane_crossfade();
     test_consolidate_renders_clips_into_one();
     test_slice_cuts_a_clip_or_makes_a_kit();
+    test_a_warped_clip_follows_the_tempo();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

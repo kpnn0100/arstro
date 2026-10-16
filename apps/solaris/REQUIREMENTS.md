@@ -881,7 +881,19 @@ a process is the host's (law 12).
   not sliced; a comped one only `--every` (consolidate it first for its transients).)
 - **R-WARP-1 Time-stretch** (R-EDM-13, R-CLIP-5): an audio clip follows the song's tempo (`set <ac>.warp=on`, its
   own BPM detected on import or set, `.bpm`), pitch kept; `set <ac>.pitch=<semitones>` shifts pitch, tempo kept —
-  a DSP time-stretcher (phase vocoder with transient handling), rendered deterministically.
+  a DSP time-stretcher (phase vocoder with transient handling), rendered deterministically. (**Detailed while building
+  it, N20 — 2026-10-16.** An audio clip carries `warp` (on/off), `bpm` (its own tempo; 0 unknown) and `pitch`
+  (semitones), written on its `#aclip` only when set. WARPED, a clip lasts its span's own beats — (out − in)·bpm/60 —
+  whatever the song's tempo, its span stretched by bpm / the song's (pitch kept, REQ-stretch-1, attacks kept,
+  REQ-stretch-3); PITCHED, its span is moved `pitch` semitones, its length kept (REQ-stretch-2); both may hold. Turning
+  `warp` on with no `bpm` detects it in the same edit (REQ-tempo-1 on the clip's span; nothing heard refuses, naming
+  `.bpm`); `clip add --src <file> --warp` drops a file warped, detected on import. `set <ac>.bpm` (20 … 999) and
+  `set <ac>.pitch` (−24 … +24) are its addresses; a note clip or one comped from takes refuses them (consolidate a comp
+  first). A stretched span is made once (per file, span, ratio and pitch) and kept while it is used; a song tempo
+  change makes it again for the new ratio; a render at another rate stretches at that rate. As every render, pure. A
+  warped clip cut (`clip split`, `clip slice`) cuts its span at its own beats — each half stretched apart, so a window's
+  worth either side of the cut may differ from the whole; `--kit` of a warped or pitched clip is refused (consolidate
+  first). The model publishes `clips[].warp`, `.bpm`, `.pitch`.)
 - **R-TEMPO-1 A tempo map** (R-EDM-14): `tempo add --at <b> --bpm <v> [--ramp]`, the ruler and every beat↔second
   conversion follow it; render, playback, the metronome, warp and MIDI export agree; automating `project.bpm`
   writes it.

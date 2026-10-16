@@ -54,6 +54,12 @@ namespace solaris
     std::set<std::string> silentStrips(const Project &p);
     /** A clip's length in beats, resolved (the file span at the tempo, or its pattern's). */
     double clipLengthBeats(const Project &p, const Clip &c);
+    /** R-WARP-1: seconds of its file a beat of the clip plays — its own tempo's when warped, else the song's. */
+    double clipSecondsPerBeat(const Project &p, const Clip &c);
+    /** R-WARP-1: the sound a warped or pitched clip plays, as the key a PcmProvider is asked for —
+     *  "stretch:<ratio>:<semitones>:<in>:<out>:<src>" (exact numbers); empty when it plays its file as it is. */
+    std::string stretchKey(const Project &p, const Clip &c);
+    bool parseStretchKey(const std::string &key, double &ratio, double &semitones, double &in, double &out, std::string &src);
 
     /** R-EDIT-1: an audio clip's fades as heard, in beats — its own, each grown to cover an overlap on its lane
      *  through its strip (the earlier clip's fade out and the later's fade in: a crossfade). */
