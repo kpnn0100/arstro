@@ -701,7 +701,7 @@ static void test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_ch
 
     const std::string before = r.text();
     r.events.clear();
-    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth wavetable piano drums sampler)"));
+    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth wavetable fm piano drums sampler)"));
     assert(contains(r.no("clip add --instrument synth --strip ch_2"), "without --src or --strip"));
     assert(contains(r.no("clip add --instrument synth --length -1"), "--length"));   // the strip was made, then the clip refused
     assert(r.text() == before && r.events.size() == 3);                                // three rejections, no change
@@ -4701,6 +4701,37 @@ static void test_the_wavetable_plays_with_no_code_of_its_own()
     pass("the wavetable (R-INST-7): the DSP library's instrument, here as its registry says — one line to drop, its parameters addresses, a sound given as its table, its render");
 }
 
+static void test_every_instrument_drops_as_one_line_and_sounds()
+{
+    // R-INST-7…11, law 1: every instrument the DSP library's registry describes is one here with no code of its own —
+    // dropped as ONE line, a note in its pattern (a kit's first named key), a render that sounds; one that takes a
+    // sound given one first
+    const std::string dir = scratch(), cycle = dir + "/any-sound.wav";
+    std::vector<float> tone(24000);
+    for (size_t i = 0; i < tone.size(); ++i) tone[i] = (float)(0.6 * std::sin(2 * M_PI * 220.0 * (double)i / 48000.0));
+    int played = 0;
+    for (const auto &t : arstro::DeviceRegistry::types())
+    {
+        if (t.kind != arstro::DeviceKind::Instrument) continue;
+        Run r;
+        r.fake.written[cycle] = {tone, tone};
+        r.ok("project new " + freshSong("every-" + t.name) + " --bpm 120");
+        r.ok("clip add --instrument " + t.name + " --at 0 --length 4");
+        if (t.takesSample) r.ok("set dv_1.sample=" + cycle);
+        const int key = t.noteNames.empty() ? 60 : t.noteNames.front().first;
+        r.ok("notes add pt_1 \"" + std::to_string(key) + "@0:1\"");
+        const std::string out = dir + "/every-" + t.name + ".wav";
+        r.ok("render --out " + out + " --to 4 --bits 32f");
+        float peak = 0;
+        for (float x : r.fake.written[out][0]) peak = std::max(peak, std::fabs(x));
+        std::printf("    %-10s %s: peak %.3f\n", t.name.c_str(), t.label.c_str(), peak);
+        assert(peak > 0.01f);
+        ++played;
+    }
+    assert(played >= 6); // the five of before N33, the wavetable, and each one since
+    pass("every instrument (R-INST-7…11, law 1): each the DSP library's registry describes drops as one line and sounds, with no code here");
+}
+
 static void test_freeze_and_bounce()
 {
     // R-PERF-3: a strip's own sound frozen beside the song and played instead — the song sounds as it did (to float
@@ -6071,6 +6102,7 @@ int main()
     test_the_engine_on_several_threads();
     test_freeze_and_bounce();
     test_the_wavetable_plays_with_no_code_of_its_own();
+    test_every_instrument_drops_as_one_line_and_sounds();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

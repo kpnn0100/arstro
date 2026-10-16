@@ -741,6 +741,51 @@ Two wavetable oscillators — six built-in tables, or a sound of 2048-point cycl
 | `vibrato.depth` | 0.0 … 2.0 st | 0.5 st |
 | `vibrato.rate` | 0.1 … 20.0 Hz | 5.5 Hz |
 
+### `fm` — FM Synth (instrument)
+
+Four sine operators by phase modulation — eight algorithms, operator 4 fed back, an envelope each; 16 voices.
+
+| parameter | range | default |
+|---|---|---|
+| `algorithm` | 1 · 2 · 3 · 4 · 5 · 6 · 7 · 8 | 1 |
+| `feedback` | 0.0 … 1.0 | 0.0 |
+| `op1.ratio` | 0.5 … 16.0 x | 1.0 x |
+| `op1.fine` | -100.0 … 100.0 ct | 0.0 ct |
+| `op1.level` | 0.0 … 1.0 | 1.0 |
+| `op1.attack` | 0.0 … 10000.0 ms | 2.0 ms |
+| `op1.decay` | 0.0 … 10000.0 ms | 400.0 ms |
+| `op1.sustain` | 0.0 … 1.0 | 0.6 |
+| `op1.release` | 0.0 … 10000.0 ms | 300.0 ms |
+| `op1.velocity` | 0.0 … 1.0 | 0.7 |
+| `op2.ratio` | 0.5 … 16.0 x | 1.0 x |
+| `op2.fine` | -100.0 … 100.0 ct | 0.0 ct |
+| `op2.level` | 0.0 … 1.0 | 0.6 |
+| `op2.attack` | 0.0 … 10000.0 ms | 2.0 ms |
+| `op2.decay` | 0.0 … 10000.0 ms | 600.0 ms |
+| `op2.sustain` | 0.0 … 1.0 | 0.3 |
+| `op2.release` | 0.0 … 10000.0 ms | 300.0 ms |
+| `op2.velocity` | 0.0 … 1.0 | 0.7 |
+| `op3.ratio` | 0.5 … 16.0 x | 2.0 x |
+| `op3.fine` | -100.0 … 100.0 ct | 0.0 ct |
+| `op3.level` | 0.0 … 1.0 | 0.3 |
+| `op3.attack` | 0.0 … 10000.0 ms | 2.0 ms |
+| `op3.decay` | 0.0 … 10000.0 ms | 600.0 ms |
+| `op3.sustain` | 0.0 … 1.0 | 0.3 |
+| `op3.release` | 0.0 … 10000.0 ms | 300.0 ms |
+| `op3.velocity` | 0.0 … 1.0 | 0.7 |
+| `op4.ratio` | 0.5 … 16.0 x | 3.5 x |
+| `op4.fine` | -100.0 … 100.0 ct | 0.0 ct |
+| `op4.level` | 0.0 … 1.0 | 0.2 |
+| `op4.attack` | 0.0 … 10000.0 ms | 2.0 ms |
+| `op4.decay` | 0.0 … 10000.0 ms | 600.0 ms |
+| `op4.sustain` | 0.0 … 1.0 | 0.3 |
+| `op4.release` | 0.0 … 10000.0 ms | 300.0 ms |
+| `op4.velocity` | 0.0 … 1.0 | 0.7 |
+| `volume` | -60.0 … 6.0 dB | -12.0 dB |
+| `voice.bend` | 0.0 … 24.0 st | 2.0 st |
+| `vibrato.depth` | 0.0 … 2.0 st | 0.5 st |
+| `vibrato.rate` | 0.1 … 20.0 Hz | 5.5 Hz |
+
 ### `piano` — Piano (instrument)
 
 A physical piano: felt hammers on stiff, inharmonic strings through a shared bridge and soundboard; sustain and soft pedals; 16 voices, a held key never stolen while a released one rings.

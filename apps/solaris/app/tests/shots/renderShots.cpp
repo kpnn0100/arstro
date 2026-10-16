@@ -408,6 +408,19 @@ namespace
                  r.app->project().windows().openDevice(dv);
                  r.settle();
              }},
+            {"fm-window", // R-INST-8: the FM synth's face — four operators, the algorithm and feedback, from the registry
+             [](sltest::Rig &r) {
+                 r.cmd("project new " + r.song("Bells") + ".slp --bpm 120");
+                 r.cmd("strip add --kind instrument --instrument fm --name Bells");
+                 r.settle();
+                 std::string dv;
+                 for (const auto &st : r.svc->model().strips)
+                     for (const auto &d : st.devices)
+                         if (d.type == "fm" && dv.empty()) dv = d.id;
+                 r.cmd("set " + dv + ".algorithm=5 " + dv + ".feedback=0.3");
+                 r.app->project().windows().openDevice(dv);
+                 r.settle();
+             }},
             {"effect-window", // R-UI-12: an effect keeps its parameter list
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

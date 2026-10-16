@@ -4514,6 +4514,400 @@
       ]
     },
     {
+      "type": "fm",
+      "label": "FM Synth",
+      "kind": "instrument",
+      "summary": "Four sine operators by phase modulation — eight algorithms, operator 4 fed back, an envelope each; 16 voices.",
+      "params": [
+        {
+          "name": "algorithm",
+          "label": "Algorithm",
+          "unit": "",
+          "choices": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8"
+          ],
+          "default": "1"
+        },
+        {
+          "name": "feedback",
+          "label": "Feedback",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op1.ratio",
+          "label": "Ratio",
+          "unit": "x",
+          "min": 0.5,
+          "max": 16.0,
+          "default": 1.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op1.fine",
+          "label": "Fine",
+          "unit": "ct",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op1.level",
+          "label": "Level",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op1.attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 2.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op1.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 400.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op1.sustain",
+          "label": "Sustain",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.6,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op1.release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 300.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op1.velocity",
+          "label": "Velocity",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.7,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op2.ratio",
+          "label": "Ratio",
+          "unit": "x",
+          "min": 0.5,
+          "max": 16.0,
+          "default": 1.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op2.fine",
+          "label": "Fine",
+          "unit": "ct",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op2.level",
+          "label": "Level",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.6,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op2.attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 2.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op2.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 600.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op2.sustain",
+          "label": "Sustain",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.3,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op2.release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 300.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op2.velocity",
+          "label": "Velocity",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.7,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op3.ratio",
+          "label": "Ratio",
+          "unit": "x",
+          "min": 0.5,
+          "max": 16.0,
+          "default": 2.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op3.fine",
+          "label": "Fine",
+          "unit": "ct",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op3.level",
+          "label": "Level",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.3,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op3.attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 2.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op3.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 600.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op3.sustain",
+          "label": "Sustain",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.3,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op3.release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 300.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op3.velocity",
+          "label": "Velocity",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.7,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op4.ratio",
+          "label": "Ratio",
+          "unit": "x",
+          "min": 0.5,
+          "max": 16.0,
+          "default": 3.5,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op4.fine",
+          "label": "Fine",
+          "unit": "ct",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op4.level",
+          "label": "Level",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.2,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op4.attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 2.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op4.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 600.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op4.sustain",
+          "label": "Sustain",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.3,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "op4.release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 300.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "op4.velocity",
+          "label": "Velocity",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.7,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "volume",
+          "label": "Volume",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": -12.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "voice.bend",
+          "label": "Bend Range",
+          "unit": "st",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 2.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "vibrato.depth",
+          "label": "Vibrato",
+          "unit": "st",
+          "min": 0.0,
+          "max": 2.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "vibrato.rate",
+          "label": "Vibrato Rate",
+          "unit": "Hz",
+          "min": 0.1,
+          "max": 20.0,
+          "default": 5.5,
+          "integer": false,
+          "log": true
+        }
+      ]
+    },
+    {
       "type": "piano",
       "label": "Piano",
       "kind": "instrument",
