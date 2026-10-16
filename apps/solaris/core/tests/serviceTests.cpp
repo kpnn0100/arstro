@@ -233,6 +233,13 @@ namespace
             h.templatesPath = scratch() + "/templates/user";   // R-PRESET-2: likewise
             h.factoryTemplatesPath = scratch() + "/templates/factory";
             h.libraryPath = scratch() + "/library";                 // R-PRESET-3: likewise
+            h.pluginsPath = scratch() + "/plugins";                 // R-VST-6: likewise — and a scan that finds two, one bundle broken
+            h.scanPlugins = [](std::vector<PluginModel> &out, std::vector<std::string> &problems, std::string &) {
+                out = {PluginModel{"0123456789ABCDEF0123456789ABCDEF", "Sweet Pad", "Acme", "instrument", "/vst3/Sweet.vst3"},
+                       PluginModel{"FEDCBA9876543210FEDCBA9876543210", "Air Verb", "Acme", "effect", "/vst3/Air.vst3"}};
+                problems = {"Broken.vst3: the plugin crashed while being read (Aborted)"};
+                return true;
+            };
             if (canPlay)
                 h.audioOut = [this] {
                     auto o = std::make_unique<FakeOut>();
@@ -3442,6 +3449,27 @@ static void test_the_sample_library_tags_and_finds()
     pass("the sample library (R-PRESET-3): tags and favourites kept in lower case on Home (not an edit), said; search by name through the folders, by tag, the library's own wherever they are; the favourites; untagged and unfavoured; a folder listing clears the search; refusals");
 }
 
+static void test_plugins_are_scanned_and_listed()
+{
+    // R-VST-6: `plugins scan` — what the host found, each a line, and each bundle it could not read; the list the machine's
+    // (kept, read back by the next service, on Home: not an edit); `plugins list`; said
+    fs::remove(scratch() + "/plugins");
+    {
+        Run r;
+        const std::string out = r.ok("plugins scan");
+        assert(contains(out, "0123456789ABCDEF0123456789ABCDEF\tinstrument\tSweet Pad (Acme)\n") && contains(out, "\teffect\tAir Verb (Acme)\n"));
+        assert(contains(out, "problem: Broken.vst3: the plugin crashed while being read (Aborted)\n"));
+        assert(r.svc.model().plugins.size() == 2 && r.svc.model().plugins[0].name == "Air Verb" && r.svc.model().plugins[1].kind == "instrument");
+        bool said = false;
+        for (const auto &e : r.events) said |= contains(e, "plugins.changed") && contains(e, "count=2") && contains(e, "problems=1");
+        assert(said);
+    }
+    Run again; // the machine's list, read back
+    assert(again.svc.model().plugins.size() == 2 && again.svc.model().plugins[1].path == "/vst3/Sweet.vst3");
+    assert(contains(again.ok("plugins list"), "Sweet Pad (Acme)"));
+    pass("plugins (R-VST-6): a scan's finds and its problems said, the list the machine's — kept and read back; `plugins list`");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -4709,6 +4737,7 @@ int main()
     test_the_shipped_presets_load();
     test_templates_start_songs();
     test_the_sample_library_tags_and_finds();
+    test_plugins_are_scanned_and_listed();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

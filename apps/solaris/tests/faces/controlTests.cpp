@@ -15,6 +15,7 @@
 #include "AppModelCodec.h"
 #include "ControlServer.h"
 #include "Machine.h"
+#include "Plugins.h"
 #include "Event.h"
 #include "SolarisService.h"
 #include <cassert>
@@ -275,6 +276,7 @@ namespace
         setenv("SOLARIS_PRESETS", (dir / "presets").c_str(), 1); // R-PRESET-1: one presets folder for both, never the machine's
         setenv("SOLARIS_TEMPLATES", (dir / "templates").c_str(), 1); // R-PRESET-2: likewise
         setenv("SOLARIS_LIBRARY", (dir / "library").c_str(), 1);     // R-PRESET-3: likewise
+        setenv("SOLARIS_PLUGINS", (dir / "plugins").c_str(), 1);     // R-VST-6: likewise
         int status = 0;
         const pid_t a = spawnCc({"--watch", "--script", "../script.txt"}, dir / "cli" / "out.txt", dir / "cli" / "err.txt");
         assert(waitpid(a, &status, 0) == a && WIFEXITED(status) && WEXITSTATUS(status) == 0);
@@ -288,6 +290,7 @@ namespace
         solaris_host::presetPaths(host.presetsPath, host.factoryPresetsPath); // as the window's (R-PRESET-1)
         solaris_host::templatePaths(host.templatesPath, host.factoryTemplatesPath); // … and its templates (R-PRESET-2)
         host.libraryPath = solaris_host::libraryPath();                             // … and its library (R-PRESET-3)
+        host.pluginsPath = solaris_host::pluginsListPath();                         // … and its plugins (R-VST-6)
         solaris::SolarisService svc(host);
         solaris_host::ControlServer server(svc);
         std::string err;

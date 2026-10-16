@@ -18,6 +18,7 @@
  */
 #include "AudioFiles.h"
 #include "Faces.h"
+#include "Plugins.h"
 #include "Machine.h"
 #ifdef SOLARIS_HAVE_PULSE
 #include "AudioInPulse.h"
@@ -139,6 +140,10 @@ int main(int argc, char **argv)
     solaris_host::presetPaths(host.presetsPath, host.factoryPresetsPath); // R-PRESET-1
     solaris_host::templatePaths(host.templatesPath, host.factoryTemplatesPath); // R-PRESET-2
     host.libraryPath = solaris_host::libraryPath(); // R-PRESET-3
+    host.pluginsPath = solaris_host::pluginsListPath(); // R-VST-6
+    host.scanPlugins = [](std::vector<arstro::solaris::PluginModel> &out, std::vector<std::string> &problems, std::string &err) {
+        return solaris_host::scanPlugins(solaris_host::pluginSearchPath(), out, problems, err);
+    };
     SolarisService svc(host);
     // The event stream IS the log: a shell run with --watch shows exactly what a window would.
     svc.subscribe([watch](const Event &e) {

@@ -47,3 +47,15 @@ if(TARGET solaris)
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/acceptance/run.sh $<TARGET_FILE:solaris> $<TARGET_FILE:solaris-cc>)
   set_tests_properties(solaris_equivalence PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
 endif()
+
+# R-VST-6: other makers' plugins found for real — this build's own two and a module that aborts when loaded, each read by
+# solaris-plughost in a process of its own (needs the VST3 SDK, as the helper does)
+if(TARGET solaris-plughost AND TARGET solaris_host)
+  add_library(solaris_crash_module SHARED faces/crashModule.cpp)
+  add_executable(solaris_plugins_tests faces/pluginsTests.cpp)
+  target_link_libraries(solaris_plugins_tests PRIVATE solaris_host)
+  target_compile_definitions(solaris_plugins_tests PRIVATE SOLARIS_CC="$<TARGET_FILE:solaris-cc>" SOLARIS_PLUGHOST_BIN="$<TARGET_FILE:solaris-plughost>"
+                                                           SOLARIS_CRASH_MODULE="$<TARGET_FILE:solaris_crash_module>" ARSTRO_VST3_DIR="${ARSTRO_VST3_DIR}")
+  add_dependencies(solaris_plugins_tests solaris-cc solaris-plughost solaris_crash_module)
+  add_test(NAME solaris_plugins COMMAND solaris_plugins_tests)
+endif()

@@ -277,6 +277,13 @@ namespace solaris
         bool factory = false;
     };
 
+    /** R-VST-6: another maker's VST3 plugin a scan found — its class's id (UID), its name and maker, instrument or
+     *  effect, the bundle it is in. */
+    struct PluginModel
+    {
+        std::string id, name, vendor, kind, path;
+    };
+
     /** R-PRESET-2: a song template — the user's, or the factory's shipped with the app. */
     struct TemplateModel
     {
@@ -405,6 +412,7 @@ namespace solaris
         std::vector<PresetModel> presets;        // R-PRESET-1: every preset, by type then name (the machine's — any screen)
         std::vector<TemplateModel> templates;    // R-PRESET-2: every song template, by name (the machine's — any screen)
         std::vector<LibraryEntry> library;       // R-PRESET-3: every tagged sound, by path (the machine's — any screen)
+        std::vector<PluginModel> plugins;        // R-VST-6: the VST3 plugins the last scan found (the machine's)
         std::vector<LaneGroupModel> groups;      // R-ARR-3: in the order of their first lanes
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };

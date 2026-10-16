@@ -76,6 +76,10 @@ namespace solaris
             std::string templatesPath;        // R-PRESET-2: the user's song templates folder ("" = none can be saved)
             std::string factoryTemplatesPath; // … the factory's, shipped with the app (never written)
             std::string libraryPath;          // R-PRESET-3: the sample library — tags and favourites ("" = not kept)
+            /** R-VST-6: every VST3 bundle where this machine keeps them, read out of process — what was found, and a
+             *  line per bundle that could not be read. Empty = this build hosts no plugins. */
+            std::function<bool(std::vector<PluginModel> &out, std::vector<std::string> &problems, std::string &err)> scanPlugins;
+            std::string pluginsPath;          // … the machine's list of what was found ("" = not kept)
         };
 
         explicit SolarisService(Host host = Host());
@@ -142,6 +146,11 @@ namespace solaris
         bool saveLibrary(std::string &err);
         std::map<std::string, std::vector<std::string>> mLibrary;
         bool mLibraryLoaded = false;
+        // R-VST-6 (ServicePlugins.cpp): other makers' plugins — the machine's list of what a scan found
+        bool pluginsCommand(const Command &c, std::string &err);
+        void loadPlugins();
+        std::vector<PluginModel> mPlugins;
+        bool mPluginsLoaded = false;
         // R-EDIT-1 (ServiceAudioEdit.cpp): audio clips cut, joined, sliced — a cut is `splitClip`, which slice repeats
         bool audioEditCommand(const Command &c, std::string &err);
         bool splitClip(const std::string &id, double at, std::string &made, std::string &err);

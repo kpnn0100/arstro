@@ -115,6 +115,7 @@ namespace solaris
             case K::PresetSave: case K::PresetList: case K::PresetDelete: // R-PRESET-1: the machine's presets, not the song
             case K::TemplateSave: case K::TemplateList: case K::TemplateDelete: // R-PRESET-2: … and its templates
             case K::SampleTag: case K::SampleUntag: case K::SampleFavourite:    // R-PRESET-3: … and its library
+            case K::PluginsScan: case K::PluginsList:                           // R-VST-6: … and its plugins
                 return false;
             default:
                 return true;
@@ -201,6 +202,9 @@ namespace solaris
             break;
         case K::SampleTag: case K::SampleUntag: case K::SampleFavourite:
             ok = libraryCommand(c, err);
+            break;
+        case K::PluginsScan: case K::PluginsList:
+            ok = pluginsCommand(c, err);
             break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:

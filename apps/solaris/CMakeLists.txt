@@ -28,6 +28,9 @@ if(TARGET solaris_app AND TARGET solaris_host)
   endif()
 endif()
 
+# other makers' VST3 plugins, each out of process (R-VST-6): the helper, where the SDK was found
+add_subdirectory(plughost)
+
 # Basic Synth and Drum Machine as VST3 plugins: their own editor, in the Arstro look (R-VST-7)
 if(TARGET solaris_app)
   add_subdirectory(plugins)

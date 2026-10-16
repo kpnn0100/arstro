@@ -369,6 +369,11 @@ namespace solaris
              "Tag a sound in the machine's library (R-PRESET-3): a word of letters, digits or dashes, kept in lower case. No undo.", "R-PRESET-3"},
             {K::SampleUntag, "sample untag", "<file> <tag>", 2, 2, {}, "Take a tag off a sound (R-PRESET-3).", "R-PRESET-3"},
             {K::SampleFavourite, "sample favourite", "<file> [on|off]", 1, 2, {}, "Mark a sound a favourite, or not (R-PRESET-3; on when not said).", "R-PRESET-3"},
+            {K::PluginsScan, "plugins scan", "", 0, 0, {},
+             "Find the VST3 plugins where this machine keeps them (R-VST-6: SOLARIS_VST3_PATH, else ~/.vst3, /usr/lib/vst3, "
+             "/usr/local/lib/vst3) — each bundle read in a process of its own, so one that crashes loses only itself (said). "
+             "Prints each found and each problem; the list is the machine's, kept.", "R-VST-6"},
+            {K::PluginsList, "plugins list", "", 0, 0, {}, "The VST3 plugins the last scan found (R-VST-6).", "R-VST-6"},
             {K::RecentsRemove, "recents remove", "<path>", 1, 1, {}, "Take a song off Home's recent list (the file is untouched).", "R-HOME-1"},
 
             {K::TransportPlay, "transport play", "", 0, 0, {"from=<beats>", "clip=<ac>"},

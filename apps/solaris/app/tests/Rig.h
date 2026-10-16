@@ -121,6 +121,7 @@ namespace sltest
         h.templatesPath = dir + "/templates/user";   // R-PRESET-2: likewise
         h.factoryTemplatesPath = dir + "/templates/factory";
         h.libraryPath = dir + "/library";                 // R-PRESET-3: likewise
+        h.pluginsPath = dir + "/plugins";                 // R-VST-6: likewise
         return h;
     }
 

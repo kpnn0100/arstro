@@ -135,6 +135,8 @@ namespace solaris
         }
         mModel.devices = mDevices;
         mModel.browser = mBrowser;
+        if (!mPluginsLoaded) loadPlugins(); // R-VST-6: the machine's
+        mModel.plugins = mPlugins;
         if (!mLibraryLoaded) loadLibrary(); // R-PRESET-3: the machine's — on Home too
         mModel.library.clear();
         for (const auto &e : mLibrary)

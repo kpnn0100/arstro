@@ -89,6 +89,10 @@
       "doc": "R-PRESET-3: a file's tags (favourite among them) changed and were saved; tags comma-separated, '' none.",
       "data": "{line, fields: {path, tags}}"
     },
+    "plugins.changed": {
+      "doc": "R-VST-6: a scan found this many plugins; problems: bundles that could not be read.",
+      "data": "{line, fields: {count, problems}}"
+    },
     "recents.changed": {
       "doc": "Home's recent songs changed.",
       "data": "{line, fields: {count}}"

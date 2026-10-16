@@ -20,6 +20,7 @@
 #include "ControlServer.h"
 #include "EmbeddedFonts.h"
 #include "KeyInput.h"
+#include "Plugins.h"
 #include "Machine.h"
 #include "SolarisService.h"
 #ifdef SOLARIS_HAVE_PULSE
@@ -72,6 +73,10 @@ namespace
         solaris_host::presetPaths(h.presetsPath, h.factoryPresetsPath); // R-PRESET-1
         solaris_host::templatePaths(h.templatesPath, h.factoryTemplatesPath); // R-PRESET-2
         h.libraryPath = solaris_host::libraryPath(); // R-PRESET-3
+        h.pluginsPath = solaris_host::pluginsListPath(); // R-VST-6
+        h.scanPlugins = [](std::vector<arstro::solaris::PluginModel> &out, std::vector<std::string> &problems, std::string &err) {
+            return solaris_host::scanPlugins(solaris_host::pluginSearchPath(), out, problems, err);
+        };
         return h;
     }
 

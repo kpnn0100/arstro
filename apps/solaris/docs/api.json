@@ -1103,6 +1103,22 @@
       "requirement": "R-PRESET-3"
     },
     {
+      "verb": "plugins scan",
+      "usage": "plugins scan",
+      "args": "",
+      "flags": [],
+      "summary": "Find the VST3 plugins where this machine keeps them (R-VST-6: SOLARIS_VST3_PATH, else ~/.vst3, /usr/lib/vst3, /usr/local/lib/vst3) — each bundle read in a process of its own, so one that crashes loses only itself (said). Prints each found and each problem; the list is the machine's, kept.",
+      "requirement": "R-VST-6"
+    },
+    {
+      "verb": "plugins list",
+      "usage": "plugins list",
+      "args": "",
+      "flags": [],
+      "summary": "The VST3 plugins the last scan found (R-VST-6).",
+      "requirement": "R-VST-6"
+    },
+    {
       "verb": "recents remove",
       "usage": "recents remove <path>",
       "args": "<path>",
@@ -1362,6 +1378,14 @@
         "tags"
       ],
       "summary": "R-PRESET-3: a file's tags (favourite among them) changed and were saved; tags comma-separated, '' none."
+    },
+    {
+      "name": "plugins.changed",
+      "fields": [
+        "count",
+        "problems"
+      ],
+      "summary": "R-VST-6: a scan found this many plugins; problems: bundles that could not be read."
     },
     {
       "name": "recents.changed",
@@ -3334,6 +3358,42 @@
       "path": "library[].favourite",
       "type": "bool",
       "summary": "",
+      "stable": true
+    },
+    {
+      "path": "plugins",
+      "type": "object[]",
+      "summary": "R-VST-6: the VST3 plugins the last scan found (the machine's)",
+      "stable": true
+    },
+    {
+      "path": "plugins[].id",
+      "type": "string",
+      "summary": "the class's UID, 32 hex digits — what `device add --plugin` takes",
+      "stable": true
+    },
+    {
+      "path": "plugins[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "plugins[].vendor",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "plugins[].kind",
+      "type": "string",
+      "summary": "instrument | effect",
+      "stable": true
+    },
+    {
+      "path": "plugins[].path",
+      "type": "string",
+      "summary": "its bundle",
       "stable": true
     },
     {

@@ -2,9 +2,11 @@
 # WAV writing); audio devices, settings and recents land with H1/P1.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SOLARIS_AV IMPORTED_TARGET libavformat libavcodec libavutil libswresample)
-add_library(solaris_host STATIC AudioFiles.cpp Machine.cpp)
+add_library(solaris_host STATIC AudioFiles.cpp Machine.cpp Plugins.cpp)
 target_include_directories(solaris_host PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(solaris_host PUBLIC solaris_core)
+# R-VST-6: the plugin host this build made, when it made one (the SDK found)
+target_compile_definitions(solaris_host PRIVATE $<$<TARGET_EXISTS:solaris-plughost>:SOLARIS_PLUGHOST="$<TARGET_FILE:solaris-plughost>">)
 # R-PRESET-1: the factory presets shipped beside the app (its source tree in this build)
 target_compile_definitions(solaris_host PRIVATE SOLARIS_FACTORY_PRESETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../presets"
                                                   SOLARIS_FACTORY_TEMPLATES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../templates") # R-PRESET-2

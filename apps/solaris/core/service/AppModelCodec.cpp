@@ -327,6 +327,12 @@ namespace solaris
             {"library[].path", "string", "absolute"},
             {"library[].tags", "string[]", "lower case, sorted — `favourite` not among them"},
             {"library[].favourite", "bool", ""},
+            {"plugins", "object[]", "R-VST-6: the VST3 plugins the last scan found (the machine's)"},
+            {"plugins[].id", "string", "the class's UID, 32 hex digits — what `device add --plugin` takes"},
+            {"plugins[].name", "string", ""},
+            {"plugins[].vendor", "string", ""},
+            {"plugins[].kind", "string", "instrument | effect"},
+            {"plugins[].path", "string", "its bundle"},
             {"revision", "int", "bumps on every change", false},
         };
         return f;
@@ -709,6 +715,10 @@ namespace solaris
         Json library = Json::array(); // R-PRESET-3
         for (const auto &x : m.library) library.push(Json::object().set("path", x.path).set("tags", strings(x.tags)).set("favourite", x.favourite));
         j.set("library", library);
+        Json plugins = Json::array(); // R-VST-6
+        for (const auto &x : m.plugins)
+            plugins.push(Json::object().set("id", x.id).set("name", x.name).set("vendor", x.vendor).set("kind", x.kind).set("path", x.path));
+        j.set("plugins", plugins);
         if (!stable) j.set("revision", m.revision);
         return j;
     }
