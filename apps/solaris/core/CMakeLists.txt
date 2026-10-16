@@ -9,6 +9,7 @@ add_library(solaris_core STATIC
   Bindings.cpp
   Settings.cpp
   Player.cpp
+  Follower.cpp
   Auditioner.cpp
   NotePreview.cpp
   service/Json.cpp

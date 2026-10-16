@@ -309,6 +309,15 @@ namespace solaris
             {"transport.xruns", "int", "underruns since play (−1: this driver cannot count them) — R-DEV-5", false},
             {"transport.cpu", "number", "R-PERF-1: the audio thread's load — a block's work over its duration, smoothed (0 stopped)", false},
             {"transport.cpuPeak", "number", "… its worst single block in the last second, unsmoothed (over 1: a block that missed its deadline)", false},
+            {"transport.devices", "object[]", "R-DEV-5: while playing, every device the song plays through — the clock first, then each FOLLOWER (a device a port is mapped to, held to the clock, R-DEV-1/2); none stopped", false},
+            {"transport.devices[].id", "string", "the device as the settings name it ('' = the system default)", false},
+            {"transport.devices[].role", "string", "clock | follower", false},
+            {"transport.devices[].latencyMs", "number", "from a frame rendered to its being heard — the same on every device that plays (R-DEV-4)", false},
+            {"transport.devices[].driftPpm", "number", "a follower's crystal against the clock's, ppm: + it runs fast (0 the clock)", false},
+            {"transport.devices[].xruns", "int", "its underruns (−1: the driver cannot count them)", false},
+            {"transport.devices[].starved", "int", "a follower's blocks with too little to play (the clock stalled; it primes again)", false},
+            {"transport.devices[].dropped", "int", "the clock's blocks a follower had no room for (its own device stalled)", false},
+            {"transport.devices[].problem", "string", "why it is silent ('' it plays) — a follower that would not open", false},
             {"loudness", "object", "the master as measured while playing, kept after a stop (R-METER-1, ITU-R BS.1770-4)", false},
             {"loudness.momentary", "number", "LUFS over the last 400 ms; −144 = nothing measured", false},
             {"loudness.shortTerm", "number", "LUFS over the last 3 s", false},
@@ -710,6 +719,14 @@ namespace solaris
                 .set("masterClip", m.transport.masterClip).set("driver", m.transport.driver).set("xruns", (int)m.transport.xruns)
                 .set("countingIn", m.transport.countingIn).set("recorded", m.transport.recorded)
                 .set("cpu", m.transport.cpu).set("cpuPeak", m.transport.cpuPeak);
+        if (!stable)
+        {
+            Json devs = Json::array(); // R-DEV-5
+            for (const auto &d : m.transport.devices)
+                devs.push(Json::object().set("id", d.id).set("role", d.role).set("latencyMs", d.latencyMs).set("driftPpm", d.driftPpm)
+                              .set("xruns", (int)d.xruns).set("starved", (int)d.starved).set("dropped", (int)d.dropped).set("problem", d.problem));
+            tr.set("devices", devs);
+        }
         tr.set("recording", m.transport.recording);
         j.set("transport", tr);
         if (!stable)

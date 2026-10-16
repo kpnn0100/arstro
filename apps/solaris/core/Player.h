@@ -27,6 +27,7 @@
 #pragma once
 #include "AudioIn.h"
 #include "AudioOut.h"
+#include "Follower.h"
 #include "Engine.h"
 #include "WorkerPool.h"
 #include "MidiIn.h"
@@ -131,6 +132,14 @@ namespace solaris
         Take endTake();
         /** R-DEV-5: the device's underruns since `start` (−1: its driver cannot count them). */
         long long xruns() const { return mOut ? mOut->xruns() : -1; }
+        /** R-DEV-1/2: a FOLLOWER device and the ports it carries (each at its first channel) — set before `start`,
+         *  stopped by `stop`. The audio thread pushes their sound to it each block; it keeps itself on the clock. */
+        void addFollower(std::unique_ptr<Follower> f, std::vector<Route> routes);
+        /** R-DEV-4: the clock's own channels heard `frames` later (a follower slower than it) — set before `start`. */
+        void setClockDelay(int frames) { mClockDelay = std::max(0, frames); }
+        int clockDelay() const { return mClockDelay; }
+        /** R-DEV-5: what each follower says (the service's thread, while it runs). */
+        std::vector<Follower::State> followerStates() const;
         /** Destroy engines the thread handed back (call on the service's thread). */
         void collect();
         /** Peaks of the last block: strip i at [2i, 2i+1], the master at [2·kMaxStrips, +1]. */
@@ -192,6 +201,19 @@ namespace solaris
         int mThreads = 1;                     // R-PERF-2
         std::unique_ptr<WorkerPool> mPool;    // … the strips nothing feeds, rendered on it
         std::vector<Route> mRoutes;
+        // R-DEV-1/2/4: the followers, each with its ports and its block (sized at start), and the clock's delay line
+        struct Feed
+        {
+            std::unique_ptr<Follower> f;
+            std::vector<Route> routes;
+            std::vector<float> buf;
+        };
+        std::vector<Feed> mFollowers;
+        int mClockDelay = 0;
+        std::vector<float> mDelay; // mClockDelay frames of the clock's channels, a ring
+        size_t mDelayAt = 0;
+        void feedFollowers(int n, bool silent);
+        void delayClock(int n);
         int mChannels = 2, mBlock = 256, mRate = 48000;
         engine::PortBuffers mPb;
         std::vector<float> mInterleaved;

@@ -100,8 +100,10 @@ namespace solaris
                        int channels, int block, long long from, int generation)
     {
         auto input = std::move(mInput); // R-REC-1: set before `start` — the stop below closes what it holds
+        auto followers = std::move(mFollowers); // R-DEV-1: so are the followers
         stop();
         mInput = std::move(input);
+        mFollowers = std::move(followers);
         mGeneration = generation;
         mOutFrames = 0;
         mSlotsWritten.store(0);
@@ -117,6 +119,9 @@ namespace solaris
         // Everything the thread will touch is sized HERE (R-PLAY-2).
         mEng->prepare(mPb, mBlock);
         mInterleaved.assign((size_t)mBlock * (size_t)mChannels, 0.0f);
+        for (auto &fd : mFollowers) fd.buf.assign((size_t)mBlock * (size_t)fd.f->channels(), 0.0f); // R-DEV-1
+        mDelay.assign((size_t)mClockDelay * (size_t)mChannels, 0.0f);                              // R-DEV-4
+        mDelayAt = 0;
         mInBuf.assign((size_t)mBlock * (size_t)mInChannels, 0.0f); // R-REC-1: the input's block, sized here
         mInL.assign((size_t)mBlock, 0.0f);
         mInR.assign((size_t)mBlock, 0.0f);
@@ -148,10 +153,62 @@ namespace solaris
         mEng->seek(from);
         mGraphLatency.store(mEng->outputLatency());
         mRendered.store(from);
-        mLatency.store(mOut->latency());
+        mLatency.store(mOut->latency() + (double)mClockDelay / mRate);
         mRun.store(true);
+        for (auto &fd : mFollowers) fd.f->start(); // R-DEV-1: each primes itself on what the audio thread pushes
         mThread = std::thread([this] { run(); });
         return true;
+    }
+
+    void Player::addFollower(std::unique_ptr<Follower> f, std::vector<Route> routes)
+    {
+        Feed fd;
+        fd.f = std::move(f);
+        fd.routes = std::move(routes);
+        mFollowers.push_back(std::move(fd));
+    }
+
+    std::vector<Follower::State> Player::followerStates() const
+    {
+        std::vector<Follower::State> v;
+        for (const auto &fd : mFollowers) v.push_back(fd.f->state());
+        return v;
+    }
+
+    void Player::feedFollowers(int n, bool silent)
+    {
+        // R-DEV-1: each follower's ports, at their channels, pushed — never waiting (a full ring drops, counted)
+        for (auto &fd : mFollowers)
+        {
+            const int C = fd.f->channels();
+            std::fill(fd.buf.begin(), fd.buf.begin() + (size_t)n * C, 0.0f);
+            if (!silent)
+                for (const Route &r : fd.routes)
+                {
+                    if (r.port < 0 || r.port >= (int)mPb.ports.size()) continue;
+                    const auto &ch = mPb.ports[(size_t)r.port];
+                    for (size_t c = 0; c < ch.size(); ++c)
+                    {
+                        const int dst = r.channel + (int)c;
+                        if (dst >= C) break;
+                        for (int i = 0; i < n; ++i) fd.buf[(size_t)i * C + dst] += ch[c][(size_t)i];
+                    }
+                }
+            fd.f->push(fd.buf.data(), n);
+        }
+    }
+
+    void Player::delayClock(int n)
+    {
+        // R-DEV-4: the clock's channels through a delay line, so a slower follower is heard with them
+        if (mClockDelay <= 0) return;
+        const size_t C = (size_t)mChannels, D = (size_t)mClockDelay;
+        for (int i = 0; i < n; ++i)
+        {
+            float *x = &mInterleaved[(size_t)i * C], *d = &mDelay[mDelayAt * C];
+            for (size_t c = 0; c < C; ++c) std::swap(x[c], d[c]);
+            mDelayAt = (mDelayAt + 1) % D;
+        }
     }
 
     void Player::stop()
@@ -161,6 +218,8 @@ namespace solaris
             mRun.store(false);
             mThread.join();
         }
+        for (auto &fd : mFollowers) fd.f->stop(); // R-DEV-1: after the audio thread — nothing pushes now
+        mFollowers.clear();
         if (mOut) mOut->flush();
         mOut.reset();
         mInput.reset(); // R-REC-1: the capture closes with the stream it was read beside
@@ -469,8 +528,10 @@ namespace solaris
                 input(n, mEng->position(), false); // R-REC-1: read, neither heard nor kept
                 std::fill(mInterleaved.begin(), mInterleaved.begin() + (size_t)n * mChannels, 0.0f);
                 click(mEng->position() - left - mGraphLatency.load(std::memory_order_relaxed), n);
+                feedFollowers(n, true); // R-DEV-1: kept fed — silence, the click is the clock's
+                delayClock(n);
                 mOut->write(mInterleaved.data(), n);
-                mLatency.store(mOut->latency(), std::memory_order_relaxed);
+                mLatency.store(mOut->latency() + (double)mClockDelay / mRate, std::memory_order_relaxed);
                 mOutFrames += n;
                 mCountIn.store(left - n, std::memory_order_relaxed);
                 mClickWas = true;
@@ -507,9 +568,11 @@ namespace solaris
             if (clickOn) click(pos - mGraphLatency.load(std::memory_order_relaxed), n); // on the beat the music is on (R-MIX-17)
             else if (mClickWas && mClick) mClick->reset(); // off: no tail waits to resume
             mClickWas = clickOn;
+            feedFollowers(n, false); // R-DEV-1: their ports, before the clock's own wait
+            delayClock(n);           // R-DEV-4
             timed(n, t0); // R-PERF-1: all but the device's wait
             mOut->write(mInterleaved.data(), n); // blocks: the device is the clock
-            mLatency.store(mOut->latency(), std::memory_order_relaxed);
+            mLatency.store(mOut->latency() + (double)mClockDelay / mRate, std::memory_order_relaxed);
             mOutFrames += n;
             keepLive(mOutFrames);
             if (b > a && mEng->position() >= b) mEng->seek(a);

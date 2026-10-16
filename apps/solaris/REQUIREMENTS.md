@@ -309,7 +309,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 
 ---
 
-## R-DEV — audio devices: use every device you have — 🚧 IN PROGRESS (listing and the port map ✅ DR-SET-1; streams with P1/P2)
+## R-DEV — audio devices: use every device you have — 🚧 IN PROGRESS (listing and the port map ✅ DR-SET-1; output followers held to the clock and aligned ✅ DR-DEV-1; an input on another device and Settings › Audio — N32 parts 3–4)
 
 The user (2026-10-08): *"we can send to multiple output devices; I want solaris to handle multiple
 audio devices so the user can take advantage of their devices."*

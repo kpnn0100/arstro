@@ -296,6 +296,8 @@ namespace solaris
         std::set<std::string> mClipLatch;  // R-METER-2: strips that reached full scale since `meters clear`
         bool mMasterClip = false;          // … and the master
         bool mPipewireDown = false;        // R-DEV-9: PipeWire would not open this session — PulseAudio until the driver is set again
+        std::map<std::string, double> mDriftOf;           // R-DEV-2: each follower's drift as last measured (a play starts locked)
+        std::map<std::string, std::string> mFollowerDown; // R-DEV-1: followers this play could not open, and why
         // R-MIDI-2: the queue the keyboard's thread fills and the running player (or monitor) drains; created by ensureMidi
         std::shared_ptr<LockFreeQueue<MidiEvent>> mMidiQ;
         // R-CTRL-1 (ServiceControl.cpp): controllers and MIDI Machine Control, for the service (its `pump`), not a strip

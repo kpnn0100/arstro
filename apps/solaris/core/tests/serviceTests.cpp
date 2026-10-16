@@ -82,19 +82,74 @@ namespace
         std::vector<float> sink;
         std::atomic<long long> frames{0};
     };
+    /** R-DEV-1/2/4: a device paced in REAL time on its own crystal — `ppm` off the nominal rate — that reports
+     *  `latency` plus what it holds, and blocks a write while it holds more than two blocks. Every block it is given is
+     *  kept with WHEN it will be heard, so a test can say when any frame it played was heard. */
+    struct Paced
+    {
+        double ppm = 0, latency = 0;
+        std::string fails;             // non-empty: it will not open, saying this
+        int ch = 0, rate = 0, block = 0;
+        bool opened = false, started = false;
+        double next = 0;               // seconds (steady): when the next frame given will start to be heard, less `latency`
+        long long frames = 0, xruns = 0;
+        std::vector<float> sink;       // what it played, interleaved by `ch`
+        std::vector<std::pair<long long, double>> blocks; // (its first frame, when that frame is heard)
+        double heardAt(long long k) const
+        {
+            for (size_t b = blocks.size(); b-- > 0;)
+                if (blocks[b].first <= k) return blocks[b].second + (double)(k - blocks[b].first) / (rate * (1 + ppm * 1e-6));
+            return -1;
+        }
+    };
+    double steadyNow() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
     struct FakeOut : IAudioOut
     {
         std::shared_ptr<Capture> cap;
         const double *lat = nullptr;   // the latency it reports (R-REC-1's loopback sets one)
-        bool open(const std::string &, int, int, int, std::string &) override { return true; }
+        std::shared_ptr<std::map<std::string, Paced>> devices; // R-DEV-1: devices paced in real time, by id
+        Paced *paced = nullptr;
+        std::atomic<long long> runDry{0}; // its underruns — read from any thread, as the seam says
+        bool open(const std::string &dev, int rate, int ch, int block, std::string &err) override
+        {
+            if (devices && devices->count(dev))
+            {
+                paced = &(*devices)[dev];
+                if (!paced->fails.empty()) { err = paced->fails; return false; }
+                paced->opened = true;
+                paced->ch = ch;
+                paced->rate = rate;
+                paced->block = block;
+            }
+            return true;
+        }
         bool write(const float *x, int n) override
         {
+            if (paced)
+            {
+                Paced &p = *paced;
+                const double trueRate = p.rate * (1 + p.ppm * 1e-6), hold = 2.0 * p.block / trueRate;
+                const double now = steadyNow();
+                if (p.next < now) { if (p.started) { ++p.xruns; runDry.fetch_add(1); } p.next = now; } // it ran dry: an underrun
+                while (p.next - steadyNow() > hold) std::this_thread::sleep_for(std::chrono::microseconds(100));
+                p.blocks.emplace_back(p.frames, p.next + p.latency);
+                p.sink.insert(p.sink.end(), x, x + (size_t)n * p.ch);
+                p.frames += n;
+                p.next += n / trueRate;
+                p.started = true;
+                return true;
+            }
             cap->sink.insert(cap->sink.end(), x, x + 2 * n);
             cap->frames.fetch_add(n);
             std::this_thread::sleep_for(std::chrono::microseconds(300)); // a fast, but not runaway, device
             return true;
         }
-        double latency() override { return lat ? *lat : 0.0; }
+        double latency() override
+        {
+            if (paced) return paced->latency + std::max(0.0, paced->next - steadyNow());
+            return lat ? *lat : 0.0;
+        }
+        long long xruns() const override { return paced ? runDry.load() : -1; }
     };
     /** R-REC-1: a capture device. "loop": a cable from the clock device back into it — frame j read is the frame the
      *  output was given (out + in latency) × rate frames before, both counted from when it began (the one audio thread
@@ -299,6 +354,7 @@ namespace
         std::string settings, recents; // "" = not persisted
         std::shared_ptr<PluginWorld> plugins = std::make_shared<PluginWorld>();
         std::shared_ptr<Capture> capture = std::make_shared<Capture>();
+        std::shared_ptr<std::map<std::string, Paced>> devices = std::make_shared<std::map<std::string, Paced>>(); // R-DEV-1
         bool canPlay = true;
         std::string pipewire;          // R-DEV-9: "" this host has no PipeWire driver, "ok" it opens, "fail" it links nowhere
         double outLatency = 0, inLatency = 0; // R-REC-1: what the clock device and the capture report
@@ -391,6 +447,7 @@ namespace
                     auto o = std::make_unique<FakeOut>();
                     o->cap = capture;
                     o->lat = &outLatency;
+                    o->devices = devices;
                     return std::unique_ptr<IAudioOut>(std::move(o));
                 };
             if (canRecord)
@@ -4176,6 +4233,225 @@ static void test_the_engine_on_several_threads()
     pass("the engine on several threads (R-PERF-2): a render on one thread and on four, byte-identical; live on four is that render, frame for frame; auto; refusals");
 }
 
+namespace
+{
+    long long gSimNs = 0;
+    long long simNow() { return gSimNs; }
+    struct SimOut : IAudioOut
+    {
+        std::vector<float> *got = nullptr;
+        bool open(const std::string &, int, int, int, std::string &) override { return true; }
+        bool write(const float *x, int n) override { got->insert(got->end(), x, x + n); return true; }
+        double latency() override { return 0.0; }
+    };
+}
+
+static void test_a_follower_alone()
+{
+    // R-DEV-2/4, Follower in SIMULATED time (its clock injected, its device a plain list): a clock 200 ppm slow and a
+    // device block unlike the clock's, the follower started at that drift (as a second play is) — an impulse comes out
+    // exactly `target` frames after the clock made it (within a frame); the clock stalling starves it — silence, counted,
+    // primed again, and back on time; its device stalling fills the ring — pushes dropped, counted, and it is emptied
+    // and primed again: on time at once (not drained over a minute)
+    std::vector<float> got;
+    auto o = std::make_unique<SimOut>();
+    o->got = &got;
+    Follower::Config c;
+    c.device = "sim";
+    c.rate = 48000;
+    c.channels = 1;
+    c.block = 128;
+    c.target = 1040;
+    c.startPpm = 200.0; // the truth below: the device 200 ppm fast against the clock
+    Follower f(std::move(o), c);
+    f.now = simNow;
+    assert(f.state().driftPpm == 200.0);
+    const double fc = 48000.0 * (1 - 200e-6), ff = 48000.0;
+    const int bc = 256;
+    long long made = 0;
+    double tPush = 0, tPull = 0;
+    std::vector<std::pair<long long, double>> impulses; // (clock frame, when made — the continuous clock's)
+    std::vector<double> pulledAt;                        // when each device block was pulled
+    std::vector<float> block((size_t)bc);
+    auto run = [&](double until, bool clockStalls, bool deviceStalls) {
+        while (std::min(tPush, tPull) < until)
+        {
+            if (tPush <= tPull)
+            {
+                if (!clockStalls)
+                {
+                    for (int i = 0; i < bc; ++i, ++made)
+                    {
+                        block[(size_t)i] = made % 9600 == 4800 ? 1.0f : 0.0f; // an impulse every 0.2 s
+                        if (block[(size_t)i] != 0.0f) impulses.emplace_back(made, tPush + i / fc);
+                    }
+                    gSimNs = (long long)std::llround(tPush * 1e9);
+                    f.push(block.data(), bc);
+                }
+                tPush += bc / fc;
+            }
+            else
+            {
+                if (!deviceStalls)
+                {
+                    gSimNs = (long long)std::llround(tPull * 1e9);
+                    pulledAt.push_back(tPull);
+                    f.pullOnce();
+                }
+                tPull += c.block / ff;
+            }
+        }
+    };
+    auto lateness = [&](double from, double to) { // each impulse in [from, to): how late it came out, frames past target
+        double worst = 0;
+        int seen = 0;
+        for (const auto &im : impulses)
+        {
+            if (im.second < from || im.second >= to) continue;
+            // where it came out: the device's loudest frame near when it should have (target frames later)
+            const double want = im.second + c.target / ff;
+            long long best = -1;
+            for (size_t b = 0; b < pulledAt.size(); ++b)
+                if (std::fabs(pulledAt[b] - want) < 0.01)
+                    for (int j = 0; j < c.block; ++j)
+                    {
+                        const long long k = (long long)b * c.block + j;
+                        if (k < (long long)got.size() && (best < 0 || got[(size_t)k] > got[(size_t)best])) best = k;
+                    }
+            if (best < 0 || best + 1 >= (long long)got.size() || got[(size_t)best] < 0.5f) return 1e9; // not there
+            // the peak between frames (a parabola through the loudest three): the resampler places an impulse anywhere
+            const double a = got[(size_t)best - 1], m = got[(size_t)best], b = got[(size_t)best + 1];
+            const double at = pulledAt[(size_t)(best / c.block)] + (best % c.block + 0.5 * (a - b) / (a - 2 * m + b)) / ff;
+            worst = std::max(worst, std::fabs(at - want) * ff);
+            ++seen;
+        }
+        return seen ? worst : 1e9;
+    };
+    run(3.0, false, false);
+    const double onTime = lateness(0.5, 2.8);
+    // the clock stalls 60 ms: it starves, is silent, primes again and comes back on time
+    run(3.06, true, false);
+    run(6.0, false, false);
+    const double afterStall = lateness(3.5, 5.8);
+    const long long starved = f.state().starved;
+    // its device stalls 300 ms (the ring holds about 170 ms): pushes dropped; then it plays on
+    run(6.3, false, true);
+    const long long dropped = f.state().dropped;
+    run(9.0, false, false);
+    const double afterDrop = lateness(7.0, 8.8);
+    std::printf("    a follower alone: impulses out %.2f frames from the target's delay; after the clock stalled (%lld blocks starved) %.2f; after its device stalled (%lld pushes dropped) %.2f\n",
+                onTime, starved, afterStall, dropped, afterDrop);
+    assert(onTime <= 1.0 && afterStall <= 1.0 && afterDrop <= 1.0); // a frame: 21 µs
+    assert(starved > 0 && dropped > 0);
+    pass("a follower alone (R-DEV-2/4): in simulated time its sound comes out exactly its target after the clock made it (within a frame), whatever their blocks and a 200 ppm drift; a stalled clock starves it — silent, primed again, on time; a stalled device drops pushes, counted, and it is on time again at once");
+}
+
+static void test_a_port_on_another_device_follows_the_clock()
+{
+#ifdef __SANITIZE_THREAD__
+    constexpr bool kRealTime = false; // ThreadSanitizer runs every thread several times slower: no device keeps pace
+#else
+    constexpr bool kRealTime = true;
+#endif
+    // R-DEV-1/2/4/5: Main on the clock (10 ms of latency), Phones on card-b (its crystal 300 ppm fast, 4 ms), Cue on
+    // card-c (it will not open) — every device paced in REAL time. One sound — an impulse at 0.25 s, then 1 kHz — to
+    // all three: card-c is said and silent, the song plays on; card-b plays it continuously (no gap, no click, its
+    // level), and the impulse is HEARD on both at the same moment (within 1 ms); the devices published while playing
+    Run r;
+    (*r.fake.devices)[""] = Paced{0.0, 0.010};
+    (*r.fake.devices)["card-b"] = Paced{300.0, 0.004};
+    (*r.fake.devices)["card-c"].fails = "no such device";
+    const std::string song = freshSong("devices"), dir = scratch(), file = dir + "/impulse.wav";
+    std::vector<float> x(96000, 0.0f);
+    x[12000] = 1.0f;
+    for (size_t i = 24000; i < x.size(); ++i) x[i] = (float)(0.5 * std::sin(2 * M_PI * 1000.0 * (double)i / 48000.0));
+    r.fake.written[file] = {x, x};
+    r.ok("project new " + song + " --bpm 120");
+    const std::string ch = r.clip(firstLine(r.ok("clip add --src " + file + " --at 0")))->track;
+    r.ok("port add Phones --dir out");
+    r.ok("port add Cue --dir out");
+    r.ok("send add " + ch + " --to prt_2");
+    r.ok("send add " + ch + " --to prt_3");
+    r.ok("settings set port.Phones=card-b:0 port.Cue=card-c:0");
+    r.events.clear();
+    r.ok("transport play");
+    r.ok("wait 1.0");
+    {
+        const auto devs = r.svc.model().transport.devices; // a copy: the next command rebuilds the model
+        assert(devs.size() == 3 && devs[0].role == "clock" && devs[0].id.empty());
+        const AudioDeviceModel *b = nullptr, *c = nullptr;
+        for (const auto &d : devs)
+        {
+            if (d.id == "card-b") b = &d;
+            if (d.id == "card-c") c = &d;
+        }
+        assert(b && b->role == "follower" && b->problem.empty());
+        assert(!kRealTime || (b->starved == 0 && b->dropped == 0 && b->xruns == 0));
+        assert(c && c->role == "follower" && c->problem == "no such device");
+        std::printf("    clock %.1f ms, card-b %.1f ms (%+.2f ppm so far)\n", devs[0].latencyMs, b->latencyMs, b->driftPpm);
+        assert(!kRealTime || std::fabs(b->latencyMs - devs[0].latencyMs) < 12.0); // the same moment, but for what each device holds now
+    }
+    bool said = false;
+    for (const auto &e : r.events) said = said || contains(e, "the device card-c did not open (no such device) — its ports are silent");
+    assert(said);
+    r.ok("wait 1.3");
+    r.ok("transport stop");
+    assert(r.svc.model().transport.devices.empty());
+    const Paced &clock = (*r.fake.devices)[""], &b = (*r.fake.devices)["card-b"];
+    assert(!(*r.fake.devices)["card-c"].opened && b.ch == 2 && clock.frames > 48000 && b.frames > 48000);
+    // the impulse — the loudest frame — on each: when it was heard (card-b's through the resampler, its peak placed)
+    auto peakOf = [](const Paced &p) {
+        long long at = 0;
+        for (long long k = 0; k < p.frames; ++k)
+            if (std::fabs(p.sink[(size_t)(k * p.ch)]) > std::fabs(p.sink[(size_t)(at * p.ch)])) at = k;
+        const double a = p.sink[(size_t)((at - 1) * p.ch)], m = p.sink[(size_t)(at * p.ch)], c = p.sink[(size_t)((at + 1) * p.ch)];
+        assert(m > 0.5f && at > 0); // the impulse itself, not a quiet frame
+        const double frac = 0.5 * (a - c) / (a - 2 * m + c);
+        return std::make_pair(at, p.heardAt(at) + frac / 48000.0);
+    };
+    const auto pc = peakOf(clock), pb = peakOf(b);
+    std::printf("    the impulse heard at %.3f ms on the clock, %.3f ms on card-b: %.3f ms apart\n", 0.0, (pb.second - pc.second) * 1e3,
+                std::fabs(pb.second - pc.second) * 1e3);
+    assert(!kRealTime || std::fabs(pb.second - pc.second) < 1e-3);
+    // card-b's 1 kHz, a second of it: no gap or click (no step past the sine's own slope), at its level
+    double steepest = 0.0, e = 0.0;
+    const long long from = pb.first + 24000, to = from + 48000;
+    assert(to < b.frames);
+    for (long long k = from; k < to; ++k)
+    {
+        const double v = b.sink[(size_t)(k * 2)];
+        steepest = std::max(steepest, std::fabs(v - b.sink[(size_t)((k - 1) * 2)]));
+        e += v * v;
+    }
+    const double level = 20 * std::log10(std::sqrt(e / 48000.0) / (0.5 / std::sqrt(2.0)));
+    std::printf("    card-b's 1 kHz: its steepest step %.4f (the sine's own %.4f), its level %+.3f dB\n", steepest, 0.5 * 2 * M_PI * 1000.0 / 48000.0, level);
+    assert(!kRealTime || (steepest < 0.5 * 2 * M_PI * 1000.0 / 48000.0 * 1.02 && std::fabs(level) < 0.05));
+    // played again, the clock now the SLOWER path (40 ms): nothing on the clock is delayed — the follower's target
+    // carries the difference — and the impulse still heard together; card-b starts from the drift it was left at
+    double was = 0.0;
+    for (auto &kv : *r.fake.devices)
+    {
+        kv.second.sink.clear();
+        kv.second.blocks.clear();
+        kv.second.frames = 0;
+        kv.second.started = false;
+        kv.second.next = 0;
+    }
+    (*r.fake.devices)[""].latency = 0.040;
+    {
+        r.ok("transport play --from 0");
+        const auto devs = r.svc.model().transport.devices;
+        for (const auto &d : devs) if (d.id == "card-b") was = d.driftPpm;
+    }
+    r.ok("wait 0.8");
+    r.ok("transport stop");
+    const auto qc = peakOf((*r.fake.devices)[""]), qb = peakOf((*r.fake.devices)["card-b"]);
+    std::printf("    the clock slower: %.3f ms apart; card-b started at %+.2f ppm\n", std::fabs(qb.second - qc.second) * 1e3, was);
+    assert(!kRealTime || std::fabs(qb.second - qc.second) < 1e-3);
+    assert(was != 0.0); // the drift it was left at, not 0
+    pass("a port on another device (R-DEV-1/2/4/5): a follower held to the clock in real time — its sound continuous and at its level, the impulse heard on both at the same moment (within 1 ms) whichever path is slower; a device that will not open said and silent, the song playing on; the devices published while playing; a follower's drift kept for the next play");
+}
+
 static void test_freeze_and_bounce()
 {
     // R-PERF-3: a strip's own sound frozen beside the song and played instead — the song sounds as it did (to float
@@ -5545,6 +5821,8 @@ int main()
     test_the_cpu_meter();
     test_the_engine_on_several_threads();
     test_freeze_and_bounce();
+    test_a_follower_alone();
+    test_a_port_on_another_device_follows_the_clock();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

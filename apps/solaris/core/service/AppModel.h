@@ -345,6 +345,20 @@ namespace solaris
         double progress = 0;                     // 0 … 1 of the file handed to the device
     };
 
+    /** R-DEV-5: a device the song plays through, while it plays (R-DEV-1: the clock, and each follower). */
+    struct AudioDeviceModel
+    {
+        std::string id;                          // as the settings name it ("" = the system default)
+        std::string role;                        // clock | follower
+        double latencyMs = 0;                    // from a frame rendered to its being heard — every device the same
+                                                 //   (R-DEV-4) but one that is silent
+        double driftPpm = 0;                     // a follower's crystal against the clock's: + it runs fast
+        long long xruns = -1;                    // its device's underruns (−1: the driver cannot count them)
+        long long starved = 0;                   // a follower's blocks with too little to play (the clock stalled)
+        long long dropped = 0;                   // … the clock's pushes it had no room for (its device stalled)
+        std::string problem;                     // why it is silent ("" it plays)
+    };
+
     struct TransportModel
     {
         bool playing = false;
@@ -368,6 +382,7 @@ namespace solaris
         bool recording = false;                  // R-MIDI-2: `transport record` — the armed strip's keyboard kept
         bool countingIn = false;                 // … its count-in still clicking
         int recorded = 0;                        // notes struck that will land (a count-in's are not)
+        std::vector<AudioDeviceModel> devices;   // R-DEV-5: while playing, the clock first; none stopped
     };
 
     /** R-METER-1: the master as measured while playing (BS.1770-4) — kept after a stop, so a played song's

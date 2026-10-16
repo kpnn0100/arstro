@@ -13,6 +13,7 @@
 #include "WorkerPool.h"
 #include "device/Device.h"
 #include <chrono>
+#include <map>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -171,6 +172,39 @@ namespace solaris
             if (fresh) t.masterHold[c] = mPlayer->hold(2 * Player::kMaxStrips + c);
         }
         t.xruns = mPlayer->xruns(); // R-DEV-5: what the device says (−1: it cannot count them)
+        // R-DEV-5: every device it plays through — the clock, each follower (its drift kept for the next play), each
+        // follower that would not open
+        t.devices.clear();
+        if (t.playing)
+        {
+            AudioDeviceModel c;
+            c.id = mSettings.output;
+            c.role = "clock";
+            c.latencyMs = t.latencyMs;
+            c.xruns = t.xruns;
+            t.devices.push_back(c);
+            for (const auto &st : mPlayer->followerStates())
+            {
+                AudioDeviceModel d;
+                d.id = st.device;
+                d.role = "follower";
+                d.latencyMs = std::round(st.latency * 10000.0) / 10.0;
+                d.driftPpm = std::round(st.driftPpm * 100.0) / 100.0;
+                d.xruns = st.xruns;
+                d.starved = st.starved;
+                d.dropped = st.dropped;
+                t.devices.push_back(d);
+                mDriftOf[st.device] = st.driftPpm;
+            }
+            for (const auto &kv : mFollowerDown)
+            {
+                AudioDeviceModel d;
+                d.id = kv.first;
+                d.role = "follower";
+                d.problem = kv.second;
+                t.devices.push_back(d);
+            }
+        }
         // R-PERF-1: the load, and its worst block — held a second
         t.cpu = mPlayer->cpu();
         {
@@ -449,24 +483,70 @@ namespace solaris
             stopPlayer();
             std::unique_ptr<engine::Engine> eng;
             if (!buildLive(eng, err)) return false;
-            // R-DEV-3: a port plays where this machine's settings put it; on the clock device here (P1).
+            // R-DEV-3: a port plays where this machine's settings put it — on the clock device, or on another: a
+            // FOLLOWER (R-DEV-1), opened beside it and held to it (R-DEV-2)
             std::vector<Player::Route> routes;
+            std::map<std::string, std::vector<Player::Route>> followRoutes;
+            std::map<std::string, int> followChannels;
             const auto &ports = eng->graph().ports;
             for (size_t i = 0; i < ports.size(); ++i)
             {
                 const std::string dev = mSettings.portDevice(ports[i].name);
-                if (!dev.empty() && dev != mSettings.output) continue; // another device: P2's followers
                 int channel = 0;
                 for (const auto &p : mSettings.ports)
                     if (p.first == ports[i].name) channel = std::atoi(p.second.substr(p.second.rfind(':') + 1).c_str());
-                routes.push_back(Player::Route{(int)i, channel});
+                if (dev.empty() || dev == mSettings.output) { routes.push_back(Player::Route{(int)i, channel}); continue; }
+                followRoutes[dev].push_back(Player::Route{(int)i, channel});
+                followChannels[dev] = std::max({followChannels[dev], 2, channel + ports[i].channels});
             }
             std::string driver;
             auto out = openOutput(mProject.header.sampleRate, mSettings.bufferSize, driver, err);
             if (!out) return false;
+            // R-DEV-1/4: each follower through the clock's driver — one that will not open is silent and said, the song
+            // plays on; then every path heard at the same moment: the slowest sets when, the clock delayed to it, each
+            // follower's fill target its own delay
+            mFollowerDown.clear();
+            const int rate = mProject.header.sampleRate, block = mSettings.bufferSize;
+            struct Opened
+            {
+                std::string dev;
+                std::unique_ptr<IAudioOut> out;
+                double latency;
+            };
+            std::vector<Opened> opened;
+            for (const auto &kv : followRoutes)
+            {
+                std::unique_ptr<IAudioOut> fo = driver == "pipewire" && mHost.audioOutFor ? mHost.audioOutFor("pipewire") : (mHost.audioOut ? mHost.audioOut() : nullptr);
+                std::string why;
+                if (!fo || !fo->open(kv.first, rate, followChannels[kv.first], block, why))
+                {
+                    if (why.empty()) why = "it would not open";
+                    mFollowerDown[kv.first] = why;
+                    emit(Event(Event::Kind::Info).with("text", "the device " + kv.first + " did not open (" + why + ") — its ports are silent"));
+                    continue;
+                }
+                const double lat = fo->latency();
+                opened.push_back(Opened{kv.first, std::move(fo), lat});
+            }
+            const double clockLat = out->latency(), least = Follower::minTarget(block, block);
+            double heardAt = clockLat; // seconds from render: the slowest path's
+            for (const auto &o : opened) heardAt = std::max(heardAt, o.latency + least / rate);
+            const int clockDelay = (int)std::llround((heardAt - clockLat) * rate);
             mModel.transport.driver = driver; // R-DEV-9: what it plays through
             stopMonitor();                    // R-MIDI-2: one consumer of the keyboard at a time — the song's player now
             mPlayer = std::make_unique<Player>();
+            for (auto &o : opened)
+            {
+                Follower::Config fc;
+                fc.device = o.dev;
+                fc.rate = rate;
+                fc.channels = followChannels[o.dev];
+                fc.block = block;
+                fc.target = std::max(least, (clockLat + (double)clockDelay / rate - o.latency) * rate);
+                if (auto d = mDriftOf.find(o.dev); d != mDriftOf.end()) fc.startPpm = d->second; // locked from the start
+                mPlayer->addFollower(std::make_unique<Follower>(std::move(o.out), fc), followRoutes[o.dev]);
+            }
+            mPlayer->setClockDelay(clockDelay);
             mPlayer->setThreads(WorkerPool::threadsFor(mSettings.threads)); // R-PERF-2
             if (mMidiQ) { mPlayer->setMidi(mMidiQ.get()); mPlayer->setArmed(armedIn(mLiveStrips)); }
             attachInput(*mPlayer, mLiveStrips, true, false); // R-REC-1: an armed audio line's input, beside the output

@@ -3366,6 +3366,60 @@
       "stable": false
     },
     {
+      "path": "transport.devices",
+      "type": "object[]",
+      "summary": "R-DEV-5: while playing, every device the song plays through — the clock first, then each FOLLOWER (a device a port is mapped to, held to the clock, R-DEV-1/2); none stopped",
+      "stable": false
+    },
+    {
+      "path": "transport.devices[].id",
+      "type": "string",
+      "summary": "the device as the settings name it ('' = the system default)",
+      "stable": false
+    },
+    {
+      "path": "transport.devices[].role",
+      "type": "string",
+      "summary": "clock | follower",
+      "stable": false
+    },
+    {
+      "path": "transport.devices[].latencyMs",
+      "type": "number",
+      "summary": "from a frame rendered to its being heard — the same on every device that plays (R-DEV-4)",
+      "stable": false
+    },
+    {
+      "path": "transport.devices[].driftPpm",
+      "type": "number",
+      "summary": "a follower's crystal against the clock's, ppm: + it runs fast (0 the clock)",
+      "stable": false
+    },
+    {
+      "path": "transport.devices[].xruns",
+      "type": "int",
+      "summary": "its underruns (−1: the driver cannot count them)",
+      "stable": false
+    },
+    {
+      "path": "transport.devices[].starved",
+      "type": "int",
+      "summary": "a follower's blocks with too little to play (the clock stalled; it primes again)",
+      "stable": false
+    },
+    {
+      "path": "transport.devices[].dropped",
+      "type": "int",
+      "summary": "the clock's blocks a follower had no room for (its own device stalled)",
+      "stable": false
+    },
+    {
+      "path": "transport.devices[].problem",
+      "type": "string",
+      "summary": "why it is silent ('' it plays) — a follower that would not open",
+      "stable": false
+    },
+    {
       "path": "loudness",
       "type": "object",
       "summary": "the master as measured while playing, kept after a stop (R-METER-1, ITU-R BS.1770-4)",

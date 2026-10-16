@@ -6,6 +6,18 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Open
 
+### D-17 The service tests' fakes race their own threads (ThreadSanitizer; the product is clean)
+- **Found:** 2026-10-17, the TSan run of the service tests made to check N32's followers (the follower's own race —
+  its target read off its thread — was fixed there). Five reports remain, all inside test fakes: (1, 2) the keyboard
+  test reads `Capture::sink` (`peakOf`, serviceTests.cpp) while the player's thread still appends to it in `FakeOut::
+  write`; (3) `FakePlugin`'s offline flag written by the engine's thread in `process`, read by `PluginConnection::
+  offline()` from `pump`; (4) `FakePlugin`'s event list filled in `process`, swapped in `takeEvents` from `pump`.
+- **Effect:** none in the product — the races are between a fake and the test or the service reading it; the asserts
+  read values a few blocks old at worst. But a TSan run is only a guard while it is clean.
+- **Recommended fix:** the capture read only after `transport stop` (or under a mutex the fake takes); the fake
+  plugin's flag an atomic and its event list behind a mutex (it is a fake: a lock costs nothing there). Then the TSan
+  run of the suite clean, and kept so.
+
 ### D-13 The looped-recording test once counted fewer takes, run straight after a parallel build
 - **Found:** 2026-10-16, running N18's mutants: one run of `solaris_service_tests`, started the moment a `-j16` build
   finished, failed `test_a_looped_recording_makes_takes_and_a_comp_chooses` at `contains(said, "recorded 3 takes of
