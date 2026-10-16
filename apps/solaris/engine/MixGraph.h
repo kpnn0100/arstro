@@ -50,6 +50,8 @@ namespace engine
         std::vector<std::pair<std::string, double>> params; // registry names, engineering units
         bool bypass = false;
         std::shared_ptr<const Pcm> sample;                  // R-EDM-8: a sampler's sound, decoded at the song's rate
+        std::string definition;                             // R-INST-9: an instrument's definition (SFZ text) …
+        std::vector<std::pair<std::string, std::shared_ptr<const Pcm>>> named; // … and the sounds it names, by name
         /** R-VST-6: a device the caller makes (another maker's plugin, played elsewhere) instead of the registry's
          *  `type`. Its parameters are set by name as any; one it does not have is skipped (a plugin's list is its
          *  own). It is NOT warmed: what it plays may be another engine's until this one is swapped in. */

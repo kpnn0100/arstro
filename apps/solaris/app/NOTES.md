@@ -308,3 +308,5 @@ _XEMBED_INFO failed").
 - **Rendering at another rate re-tunes the library** (`AudioConfig` is one per process): `render` puts the rate back
   after, and refuses `--rate` while playing.
 
+**A multi-sample's instrument (R-INST-9).** The device panel's header asks for "an .sfz" (`takesDefinition`); give it
+with `set <dv>.sample=<file.sfz>` — a browser drop of an .sfz onto the device is not yet wired.

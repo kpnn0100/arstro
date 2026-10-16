@@ -314,7 +314,7 @@ namespace solaris
         q.sends.clear();
         q.bindings.clear();
         q.header.masterGain = 0;
-        CompileResult cr = compile(q, [this](const std::string &src) { return pcmFor(src); });
+        CompileResult cr = compile(q, [this](const std::string &src) { return pcmFor(src); }, [this](const std::string &s, std::string &t, std::string &w) { return textFor(s, t, w); });
         engine::Engine eng;
         if (!eng.build(cr.graph, err)) return false;
         const long long start = beatsToSamples(p, from), end = beatsToSamples(p, to);
@@ -390,7 +390,7 @@ namespace solaris
         q.bindings.erase(std::remove_if(q.bindings.begin(), q.bindings.end(), [&](const Binding &b) { return !devices.count(b.address.substr(0, b.address.find('.'))); }),
                          q.bindings.end());
         q.header.masterGain = 0;
-        CompileResult cr = compile(q, [this](const std::string &src) { return pcmFor(src); });
+        CompileResult cr = compile(q, [this](const std::string &src) { return pcmFor(src); }, [this](const std::string &s, std::string &t, std::string &w) { return textFor(s, t, w); });
         attachPlugins(cr, q, PluginUse::Render); // R-VST-6: its own instances
         engine::Engine eng;
         WorkerPool pool(WorkerPool::threadsFor(mSettings.threads));

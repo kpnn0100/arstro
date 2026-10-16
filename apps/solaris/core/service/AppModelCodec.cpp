@@ -66,6 +66,7 @@ namespace solaris
             {"strips[].devices[].instrument", "bool", ""},
             {"strips[].devices[].bypass", "bool", ""},
             {"strips[].devices[].takesSample", "bool", "it plays a recorded sound (a sampler, R-EDM-8)"},
+            {"strips[].devices[].takesDefinition", "bool", "R-INST-9: … its sample an instrument's definition — an .sfz naming its sounds (a multi-sample)"},
             {"strips[].devices[].sample", "string", "that sound, as stored (relative to the song); \"\" = none"},
             {"strips[].devices[].known", "bool", "false when this build's registry lacks the type (kept, not played)"},
             {"strips[].devices[].lastChanged", "string", "the parameter last written, by anyone (R-WIN-2)"},
@@ -335,6 +336,7 @@ namespace solaris
             {"deviceTypes[].kind", "string", "instrument | effect"},
             {"deviceTypes[].noteNames", "object[]", "a kit's keys, named (REQ-device-6)"},
             {"deviceTypes[].takesSample", "bool", "it plays a recorded sound: give it one with --sample / <dv>.sample (R-EDM-8)"},
+            {"deviceTypes[].takesDefinition", "bool", "R-INST-9: … an .sfz naming its sounds, given the same way"},
             {"deviceTypes[].noteNames[].note", "int", ""},
             {"deviceTypes[].noteNames[].name", "string", ""},
             {"chords", "object[]", "R-ROLL-11: the qualities `note add --chord <root><name>` takes"},
@@ -396,7 +398,7 @@ namespace solaris
                                     .set("formula", p.formula));
                 a.push(Json::object().set("id", d.id).set("type", d.type).set("label", d.label)
                            .set("instrument", d.instrument).set("bypass", d.bypass).set("known", d.known).set("lastChanged", d.lastChanged)
-                           .set("takesSample", d.takesSample).set("sample", d.sample)
+                           .set("takesSample", d.takesSample).set("takesDefinition", d.takesDefinition).set("sample", d.sample)
                            .set("plugin", d.plugin).set("offline", d.offline).set("why", d.why).set("editor", d.editor)
                            .set("groups", groupsOf(d.groups))
                            .set("params", params));
@@ -746,7 +748,7 @@ namespace solaris
         {
             Json names = Json::array();
             for (const auto &n : d.noteNames) names.push(Json::object().set("note", n.note).set("name", n.name));
-            types.push(Json::object().set("name", d.name).set("label", d.label).set("kind", d.kind).set("noteNames", names).set("takesSample", d.takesSample));
+            types.push(Json::object().set("name", d.name).set("label", d.label).set("kind", d.kind).set("noteNames", names).set("takesSample", d.takesSample).set("takesDefinition", d.takesDefinition));
         }
         j.set("deviceTypes", types);
         auto vocab = [](const std::vector<VocabModel> &v) { // R-ROLL-11

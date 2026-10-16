@@ -42,6 +42,7 @@ namespace solaris
         std::vector<ParamModel> params;
         std::string lastChanged;                // the parameter last written, by anyone (R-WIN-2)
         bool takesSample = false;               // R-EDM-8: it plays a recorded sound (a sampler)
+        bool takesDefinition = false;           // R-INST-9: … its "sample" an instrument's definition (an .sfz) naming its sounds
         std::string sample;                     // that sound, as stored (relative to the song); "" = none
         std::vector<ParamGroupModel> groups;    // R-UI-12: its parameter groups' titles, the registry's (REQ-device-10)
         std::string plugin;                     // R-VST-6: type vst3 — the plugin's class id (its name is `label`)
@@ -335,6 +336,7 @@ namespace solaris
         std::string name, label, kind;           // kind = instrument | effect
         std::vector<NoteNameModel> noteNames;    // a kit's keys; empty for a melodic instrument
         bool takesSample = false;                // R-EDM-8: it plays a recorded sound — give it one (`--sample`, `<dv>.sample`)
+        bool takesDefinition = false;            // R-INST-9: … an instrument's definition (an .sfz), the same way
     };
 
     /** R-EDM-9: a sample heard from the browser, outside the song. */

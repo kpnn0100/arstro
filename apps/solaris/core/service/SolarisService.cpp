@@ -558,6 +558,15 @@ namespace solaris
             if (t.at <= beat + 1e-9) id = t.id;
     }
 
+    bool SolarisService::textFor(const std::string &src, std::string &text, std::string &resolved)
+    {
+        resolved = resolvePath(src);
+        std::ifstream f(resolved, std::ios::binary);
+        if (!f) return false;
+        text.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+        return true;
+    }
+
     std::shared_ptr<const engine::Pcm> SolarisService::pcmFor(const std::string &src)
     {
         if (mPcmRate != mProject.header.sampleRate)
@@ -1126,7 +1135,7 @@ namespace solaris
             {
                 // R-EDM-8: the sound it plays — "" takes it away
                 if (value.empty()) { d->sample.clear(); stored.clear(); return true; }
-                if (!resolveSample(value, d->sample, err)) return false;
+                if (!resolveSample(value, d->sample, err, t->takesDefinition)) return false;
                 stored = d->sample;
                 return true;
             }

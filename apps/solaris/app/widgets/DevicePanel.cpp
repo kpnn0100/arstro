@@ -457,9 +457,9 @@ namespace solaris_ui
     {
         const solaris::DeviceModel *d = model();
         if (!d || !d->takesSample) return std::string();
-        if (d->sample.empty()) return "no sample \xE2\x80\x94 drop one here";
+        if (d->sample.empty()) return d->takesDefinition ? "no instrument \xE2\x80\x94 drop an .sfz here" : "no sample \xE2\x80\x94 drop one here";
         const auto slash = d->sample.find_last_of('/');
-        return "sample " + (slash == std::string::npos ? d->sample : d->sample.substr(slash + 1));
+        return std::string(d->takesDefinition ? "instrument " : "sample ") + (slash == std::string::npos ? d->sample : d->sample.substr(slash + 1));
     }
 
     Rect DevicePanel::rollRect() const { return Rect{width.value() - space::padX() - 71.5, 8.125, 71.5, 19.5}; } // u(22): "Piano Roll" fits

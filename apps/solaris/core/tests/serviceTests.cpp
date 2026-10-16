@@ -701,7 +701,7 @@ static void test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_ch
 
     const std::string before = r.text();
     r.events.clear();
-    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth wavetable fm piano drums sampler)"));
+    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth wavetable fm piano drums multisample sampler)"));
     assert(contains(r.no("clip add --instrument synth --strip ch_2"), "without --src or --strip"));
     assert(contains(r.no("clip add --instrument synth --length -1"), "--length"));   // the strip was made, then the clip refused
     assert(r.text() == before && r.events.size() == 3);                                // three rejections, no change
@@ -4717,7 +4717,13 @@ static void test_every_instrument_drops_as_one_line_and_sounds()
         r.fake.written[cycle] = {tone, tone};
         r.ok("project new " + freshSong("every-" + t.name) + " --bpm 120");
         r.ok("clip add --instrument " + t.name + " --at 0 --length 4");
-        if (t.takesSample) r.ok("set dv_1.sample=" + cycle);
+        if (t.takesDefinition) // an instrument's definition: an .sfz naming the sound, beside it
+        {
+            const std::string sfz = dir + "/any-instrument.sfz";
+            { std::ofstream(sfz) << "<region> sample=any-sound.wav lokey=0 hikey=127 pitch_keycenter=60\n"; }
+            r.ok("set dv_1.sample=" + sfz);
+        }
+        else if (t.takesSample) r.ok("set dv_1.sample=" + cycle);
         const int key = t.noteNames.empty() ? 60 : t.noteNames.front().first;
         r.ok("notes add pt_1 \"" + std::to_string(key) + "@0:1\"");
         const std::string out = dir + "/every-" + t.name + ".wav";
@@ -4730,6 +4736,63 @@ static void test_every_instrument_drops_as_one_line_and_sounds()
     }
     assert(played >= 6); // the five of before N33, the wavetable, and each one since
     pass("every instrument (R-INST-7…11, law 1): each the DSP library's registry describes drops as one line and sounds, with no code here");
+}
+
+static void test_a_multisample_reads_its_sfz()
+{
+    // R-INST-9: the DSP library's "multisample" given an .sfz — its text read here, the sounds it names decoded beside
+    // it: a soft layer (220 Hz) and a loud one taking turns (330 Hz, then 440 Hz); a sound it names that is missing
+    // said and its region silent; an opcode not read said; a file that is no instrument refused; with none, the audit
+    Run r;
+    const std::string dir = scratch();
+    auto tone = [](double hz) {
+        std::vector<float> x(48000);
+        for (size_t i = 0; i < x.size(); ++i) x[i] = (float)(0.5 * std::sin(2 * M_PI * hz * (double)i / 48000.0));
+        return x;
+    };
+    for (const auto &kv : std::vector<std::pair<std::string, double>>{{"soft.wav", 220}, {"loud1.wav", 330}, {"loud2.wav", 440}})
+        r.fake.written[dir + "/kit/" + kv.first] = {tone(kv.second), tone(kv.second)};
+    std::filesystem::create_directories(dir + "/kit");
+    const std::string sfz = dir + "/kit/piano.sfz";
+    {
+        std::ofstream(sfz) << "// two layers, the loud one in turn\n<global> pitch_keycenter=57 lokey=57 hikey=57 ampeg_release=0.01\n"
+                              "<region> sample=soft.wav hivel=63\n<group> lovel=64 seq_length=2\n"
+                              "<region> sample=loud1.wav seq_position=1\n<region> sample=loud2.wav seq_position=2 amp_velcurve_1=0.3\n"
+                              "<region> sample=missing.wav key=70\n";
+    }
+    r.ok("project new " + freshSong("multisample") + " --bpm 120");
+    r.ok("clip add --instrument multisample --at 0 --length 4");
+    assert(contains(r.ok("audit"), "has no instrument — give it an .sfz"));
+    assert(contains(r.no("set dv_1.sample=" + dir + "/nothing-here.sfz"), "cannot read"));
+    r.ok("set dv_1.sample=" + sfz);
+    r.ok("notes add pt_1 \"A3@0:0.5:40 A3@1:0.5:110 A3@2:0.5:110\""); // soft, loud (1st turn), loud (2nd turn)
+    r.events.clear();
+    const std::string out = dir + "/multisample.wav";
+    r.ok("render --out " + out + " --to 3 --bits 32f");
+    bool missingSaid = false, opcodeSaid = false;
+    for (const auto &e : r.events)
+    {
+        missingSaid = missingSaid || contains(e, "cannot read missing.wav (named by");
+        opcodeSaid = opcodeSaid || contains(e, "amp_velcurve_1");
+    }
+    assert(missingSaid && opcodeSaid);
+    const auto &L = r.fake.written[out][0];
+    auto at = [&](int beat, double hz) { // the first 0.2 s of each beat (0.5 s a beat at 120)
+        double re = 0, im = 0;
+        const int from = beat * 24000 + 960, n = 9600; // 0.2 s: whole cycles of 220, 330 and 440 Hz
+        for (int i = 0; i < n; ++i)
+        {
+            const double a = 2 * M_PI * hz * (from + i) / 48000.0;
+            re += L[(size_t)(from + i)] * std::cos(a);
+            im += L[(size_t)(from + i)] * std::sin(a);
+        }
+        return 2.0 * std::hypot(re, im) / n;
+    };
+    std::printf("    beat 0 (velocity 40): 220 Hz %.3f; beat 1: 330 Hz %.3f; beat 2: 440 Hz %.3f\n", at(0, 220), at(1, 330), at(2, 440));
+    assert(at(0, 220) > 0.01 && at(0, 330) < 1e-4 && at(0, 440) < 1e-4);
+    assert(at(1, 330) > 0.05 && at(1, 220) < 1e-4 && at(1, 440) < 1e-4);
+    assert(at(2, 440) > 0.05 && at(2, 330) < 1e-4);
+    pass("a multi-sample (R-INST-9): its .sfz read here, its sounds decoded beside it — velocity layers, round robin; a missing sound and an opcode not read said; a file that is no instrument refused; none, said by the audit");
 }
 
 static void test_freeze_and_bounce()
@@ -6103,6 +6166,7 @@ int main()
     test_freeze_and_bounce();
     test_the_wavetable_plays_with_no_code_of_its_own();
     test_every_instrument_drops_as_one_line_and_sounds();
+    test_a_multisample_reads_its_sfz();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

@@ -159,7 +159,7 @@ namespace solaris
             int rate = AudioConfig::instance().sampleRate();
             ~RateBack() { AudioConfig::instance().setSampleRate(rate); }
         } rateBack;
-        CompileResult cr = compile(rated, pcmAt);
+        CompileResult cr = compile(rated, pcmAt, [this](const std::string &s, std::string &t, std::string &w) { return textFor(s, t, w); });
         const auto plugins = attachPlugins(cr, rated, PluginUse::Render); // R-VST-6: its own instances, at its rate, waited for (R-RENDER-1)
         for (const auto &w : cr.warnings) emit(Event(Event::Kind::Info).with("text", w));
 

@@ -347,6 +347,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].devices[].instrument` | bool |  |
 | `strips[].devices[].bypass` | bool |  |
 | `strips[].devices[].takesSample` | bool | it plays a recorded sound (a sampler, R-EDM-8) |
+| `strips[].devices[].takesDefinition` | bool | R-INST-9: … its sample an instrument's definition — an .sfz naming its sounds (a multi-sample) |
 | `strips[].devices[].sample` | string | that sound, as stored (relative to the song); "" = none |
 | `strips[].devices[].known` | bool | false when this build's registry lacks the type (kept, not played) |
 | `strips[].devices[].lastChanged` | string | the parameter last written, by anyone (R-WIN-2) |
@@ -615,6 +616,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `deviceTypes[].kind` | string | instrument \| effect |
 | `deviceTypes[].noteNames` | object[] | a kit's keys, named (REQ-device-6) |
 | `deviceTypes[].takesSample` | bool | it plays a recorded sound: give it one with --sample / <dv>.sample (R-EDM-8) |
+| `deviceTypes[].takesDefinition` | bool | R-INST-9: … an .sfz naming its sounds, given the same way |
 | `deviceTypes[].noteNames[].note` | int |  |
 | `deviceTypes[].noteNames[].name` | string |  |
 | `chords` | object[] | R-ROLL-11: the qualities `note add --chord <root><name>` takes |
@@ -880,6 +882,16 @@ Pads — a pitch by name: `kick` 36 · `rim` 37 · `snare` 38 · `clap` 39 · `l
 | `ride.level` | -60.0 … 6.0 dB | 0.0 dB |
 | `ride.pan` | -1.0 … 1.0 | 0.0 |
 | `volume` | -60.0 … 6.0 dB | -6.0 dB |
+
+### `multisample` — Multi-sample (instrument)
+
+A recorded instrument read from an SFZ file: its sounds by key and velocity, in turn (round robin) or by chance, looped or one-shot, choking each other; an envelope each; 32 voices.
+
+| parameter | range | default |
+|---|---|---|
+| `volume` | -60.0 … 12.0 dB | 0.0 dB |
+| `velocity` | 0.0 … 1.0 | 1.0 |
+| `voice.bend` | 0.0 … 24.0 st | 2.0 st |
 
 ### `sampler` — Sampler (instrument)
 

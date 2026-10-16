@@ -32,6 +32,9 @@ namespace solaris
 {
     /** The decoded file for a clip's `src` (resolved by the caller), or null when it is offline. */
     using PcmProvider = std::function<std::shared_ptr<const engine::Pcm>(const std::string &src)>;
+    /** R-INST-9: a definition's text (an SFZ), read for `src` as the song stores it — false when it cannot be;
+     *  `resolved` the file it read (the sounds it names lie beside it). */
+    using TextProvider = std::function<bool(const std::string &src, std::string &text, std::string &resolved)>;
 
     struct CompileResult
     {
@@ -43,7 +46,7 @@ namespace solaris
         std::vector<std::string> bindAddresses; // graph bind index → the address it drives
     };
 
-    CompileResult compile(const Project &p, const PcmProvider &pcm);
+    CompileResult compile(const Project &p, const PcmProvider &pcm, const TextProvider &text = TextProvider());
     /** An automation as the engine evaluates it (R-AUTO-7, R-AUTO-10): its points at `samplesPerBeat`,
      *  speeds per sample, ranged as it. The one compiler of a curve — the graph, `eval` and the model's
      *  `automations[].now` all read it. */

@@ -1914,6 +1914,12 @@
       "stable": true
     },
     {
+      "path": "strips[].devices[].takesDefinition",
+      "type": "bool",
+      "summary": "R-INST-9: … its sample an instrument's definition — an .sfz naming its sounds (a multi-sample)",
+      "stable": true
+    },
+    {
       "path": "strips[].devices[].sample",
       "type": "string",
       "summary": "that sound, as stored (relative to the song); \"\" = none",
@@ -3519,6 +3525,12 @@
       "path": "deviceTypes[].takesSample",
       "type": "bool",
       "summary": "it plays a recorded sound: give it one with --sample / <dv>.sample (R-EDM-8)",
+      "stable": true
+    },
+    {
+      "path": "deviceTypes[].takesDefinition",
+      "type": "bool",
+      "summary": "R-INST-9: … an .sfz naming its sounds, given the same way",
       "stable": true
     },
     {
@@ -5760,6 +5772,44 @@
         {
           "name": "cowbell",
           "note": 56
+        }
+      ]
+    },
+    {
+      "type": "multisample",
+      "label": "Multi-sample",
+      "kind": "instrument",
+      "summary": "A recorded instrument read from an SFZ file: its sounds by key and velocity, in turn (round robin) or by chance, looped or one-shot, choking each other; an envelope each; 32 voices.",
+      "params": [
+        {
+          "name": "volume",
+          "label": "Volume",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "velocity",
+          "label": "Velocity",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "voice.bend",
+          "label": "Bend Range",
+          "unit": "st",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 2.0,
+          "integer": true,
+          "log": false
         }
       ]
     },

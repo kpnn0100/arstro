@@ -121,12 +121,20 @@ namespace solaris
         return m ? exitOf(m) : std::string();
     }
 
-    bool SolarisService::resolveSample(const std::string &given, std::string &stored, std::string &err)
+    bool SolarisService::resolveSample(const std::string &given, std::string &stored, std::string &err, bool definition)
     {
         // as a clip's src: a relative name is the song folder's file when there is one, else the caller's
         std::string g = given;
         if (!fs::path(g).is_absolute() && !mPath.empty() && fs::exists(resolvePath(g))) g = resolvePath(g);
         stored = relativePath(g);
+        if (definition)
+        {
+            // R-INST-9: an instrument's definition (an .sfz) — a text this machine can read; what it names, said at build
+            std::string text, where;
+            if (textFor(stored, text, where) && !text.empty()) return true;
+            err = "cannot read " + given + " as an instrument (an .sfz)";
+            return false;
+        }
         if (pcmFor(stored)) return true;
         err = mHost.decodeAudio ? "cannot read " + given + " as audio" : "this build has no audio decoder";
         return false;
@@ -238,7 +246,7 @@ namespace solaris
                 {
                     // R-EDM-8: a sampler made with its sound
                     if (!DeviceRegistry::find(instrument)->takesSample) { err = "--sample is for an instrument that plays one (sampler), not " + instrument; return false; }
-                    if (!resolveSample(c.flag("sample"), dn.sample, err)) return false;
+                    if (!resolveSample(c.flag("sample"), dn.sample, err, DeviceRegistry::find(instrument)->takesDefinition)) return false;
                 }
                 r.devices.push_back(dn);
                 p.racks.push_back(r);

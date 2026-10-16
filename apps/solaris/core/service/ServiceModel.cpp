@@ -36,6 +36,7 @@ namespace solaris
             m.sample = d.sample;
             m.known = t != nullptr;
             m.takesSample = t && t->takesSample;
+            m.takesDefinition = t && t->takesDefinition; // R-INST-9
             if (!t)
             {
                 m.label = d.type;
@@ -163,6 +164,7 @@ namespace solaris
             DeviceTypeModel tm{t.name, t.label, t.kind == DeviceKind::Instrument ? "instrument" : "effect", {}};
             for (const auto &nn : t.noteNames) tm.noteNames.push_back(NoteNameModel{nn.first, nn.second});
             tm.takesSample = t.takesSample;
+            tm.takesDefinition = t.takesDefinition; // R-INST-9
             mModel.deviceTypes.push_back(tm);
         }
         for (const auto &q : chordQualities()) mModel.chords.push_back(VocabModel{q.names[0], q.label}); // R-ROLL-11
@@ -584,7 +586,9 @@ namespace solaris
             for (const auto &d : rk.devices)
                 if (const DeviceType *t = DeviceRegistry::find(d.type); t && t->takesSample)
                 {
-                    if (d.sample.empty()) out.push_back("silent: " + d.id + " (" + t->label + ") has no sample — give it one (set " + d.id + ".sample=<file>)");
+                    if (d.sample.empty())
+                        out.push_back("silent: " + d.id + " (" + t->label + ") has no " + (t->takesDefinition ? "instrument — give it an .sfz" : "sample — give it one") +
+                                      " (set " + d.id + ".sample=<file>)");
                     else if (mOffline.count(resolvePath(d.sample))) out.push_back("offline: " + d.id + "'s sample " + d.sample + " cannot be read");
                 }
         // R-MIX-15: a key nothing listens to — no compressor on that strip with Sidechain on

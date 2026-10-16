@@ -58,7 +58,7 @@ namespace solaris
 
     bool SolarisService::buildLive(std::unique_ptr<engine::Engine> &out, std::string &err)
     {
-        CompileResult cr = compile(mProject, [this](const std::string &src) { return pcmFor(src); });
+        CompileResult cr = compile(mProject, [this](const std::string &src) { return pcmFor(src); }, [this](const std::string &s, std::string &t, std::string &w) { return textFor(s, t, w); });
         attachPlugins(cr, mProject, PluginUse::Live); // R-VST-6: the connections outlive this engine
         auto eng = std::make_unique<engine::Engine>();
         if (!eng->build(cr.graph, err)) return false;
@@ -366,7 +366,7 @@ namespace solaris
         p.clips.push_back(cl);
         // bindings are left out: a formula may read the song's other addresses — the preview is the strip's
         // values as they stand
-        CompileResult cr = compile(p, [this](const std::string &src) { return pcmFor(src); });
+        CompileResult cr = compile(p, [this](const std::string &src) { return pcmFor(src); }, [this](const std::string &s, std::string &t, std::string &w) { return textFor(s, t, w); });
         attachPlugins(cr, p, PluginUse::Own); // R-VST-6: its own stream, its own instance
         auto voice = std::make_unique<NotePreview::Voice>();
         voice->engine = std::make_unique<engine::Engine>();

@@ -4,6 +4,7 @@
 #include "MixLaws.h"
 #include "PluginDevice.h"
 #include "device/Device.h"
+#include "instrument/Sfz.h"
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -178,7 +179,7 @@ namespace solaris
 
     namespace
     {
-        engine::DeviceDesc deviceDesc(const DeviceNode &d, const PcmProvider &pcm, std::vector<std::string> &warnings, bool &ok)
+        engine::DeviceDesc deviceDesc(const DeviceNode &d, const PcmProvider &pcm, const TextProvider &text, std::vector<std::string> &warnings, bool &ok)
         {
             engine::DeviceDesc out;
             out.id = d.id;
@@ -232,6 +233,27 @@ namespace solaris
             if (!d.sample.empty())
             {
                 if (!t->takesSample) warnings.push_back("device " + d.id + " (" + d.type + ") plays no sample — `sample=` ignored");
+                else if (t->takesDefinition)
+                {
+                    // R-INST-9: an instrument's definition (an SFZ): its text, read by the DSP library's parser, and
+                    // each sound it names, beside it — one that cannot be read leaves its regions silent, said
+                    std::string body, where;
+                    if (!text || !text(d.sample, body, where)) warnings.push_back("device " + d.id + ": cannot read its instrument " + d.sample + " — it plays nothing");
+                    else
+                    {
+                        const SfzInstrument sfz = parseSfz(body);
+                        for (const auto &pr : sfz.problems) warnings.push_back("device " + d.id + ": " + d.sample + ": " + pr);
+                        const auto slash = where.find_last_of('/');
+                        const std::string dir = slash == std::string::npos ? std::string(".") : where.substr(0, slash);
+                        for (const auto &name : sfzSounds(sfz))
+                        {
+                            auto snd = pcm ? pcm(dir + "/" + name) : nullptr;
+                            if (!snd) warnings.push_back("device " + d.id + ": cannot read " + name + " (named by " + d.sample + ") — its regions are silent");
+                            else out.named.emplace_back(name, snd);
+                        }
+                        out.definition = body;
+                    }
+                }
                 else if (!(out.sample = pcm ? pcm(d.sample) : nullptr)) warnings.push_back("device " + d.id + ": cannot read its sample " + d.sample + " — it plays nothing");
             }
             return out;
@@ -251,7 +273,7 @@ namespace solaris
         }
     }
 
-    CompileResult compile(const Project &p, const PcmProvider &pcm)
+    CompileResult compile(const Project &p, const PcmProvider &pcm, const TextProvider &text)
     {
         CompileResult r;
         engine::MixGraph &g = r.graph;
@@ -323,7 +345,7 @@ namespace solaris
                 for (size_t k = 0; k < rk->devices.size(); ++k)
                 {
                     bool ok = true;
-                    auto dd = deviceDesc(rk->devices[k], pcm, r.warnings, ok);
+                    auto dd = deviceDesc(rk->devices[k], pcm, text, r.warnings, ok);
                     if (ok)
                     {
                         r.devices[dd.id] = {(int)g.strips.size(), (int)es.rack.size()};
@@ -480,7 +502,7 @@ namespace solaris
             for (const auto &d : mr->devices)
             {
                 bool ok = true;
-                auto dd = deviceDesc(d, pcm, r.warnings, ok);
+                auto dd = deviceDesc(d, pcm, text, r.warnings, ok);
                 if (ok)
                 {
                     r.devices[dd.id] = {-1, (int)g.masterRack.size()};

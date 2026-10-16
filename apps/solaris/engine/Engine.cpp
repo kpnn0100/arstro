@@ -66,6 +66,14 @@ namespace engine
             // R-EDM-8: a sampler's sound, handed in here — at build, never on the audio thread (it copies)
             if (d.sample && dev->type().takesSample)
                 dev->setSample(d.sample->samples.data(), d.sample->frames, d.sample->channels, AudioConfig::instance().sampleRate());
+            // R-INST-9: an instrument's definition and the sounds it names — here too, at build
+            if (!d.definition.empty() && dev->type().takesDefinition)
+            {
+                std::vector<std::string> problems; // said by the compile, which read it first
+                dev->setDefinition(d.definition, problems);
+                for (const auto &n : d.named)
+                    if (n.second) dev->setNamedSample(n.first, n.second->samples.data(), n.second->frames, n.second->channels, AudioConfig::instance().sampleRate());
+            }
             return dev;
         }
 
