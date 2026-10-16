@@ -379,3 +379,34 @@ User's direction (verbatim, condensed):
   R-ARR, R-REC-1/2, R-EDIT, R-WARP, R-TEMPO, R-PRESET, R-VST-6, R-CTRL, R-PERF, R-FX-6…17, R-COLLECT, R-LAUNCH,
   R-VIDEO, R-COLLAB, R-ACCESS, R-ASSIST) in [`../REQUIREMENTS.md`](../REQUIREMENTS.md); ledger tasks N1… in
   [`PROGRESS.md`](PROGRESS.md).
+
+### Round 9 — 2026-10-17 — other makers' VST3 plugins (R-VST-6, N25/N26): the design, before code
+
+Round 8 fixed the shape: one `solaris-plughost` process per plugin, audio through shared memory a block at a time, a
+plugin's crash or overrun never takes the song. The rest, decided here so the code has one answer (each a line to
+change):
+
+- **Where it lives.** Everything that loads a module, starts a process or maps memory is the HOST's (law 12):
+  `apps/solaris/host/` gets the client side, `apps/solaris/plughost/` the helper executable (built only when the VST3 SDK
+  is found, as the DSP library's plugins are). The core sees a seam beside the audio ones — `IPluginHost` (scan, load)
+  and `IPluginInstance` (process a block, its parameters, latency, state, offline + why) — and wraps an instance as a
+  library `Device`, so the engine plays it as any device (latency compensated, R-MIX-17).
+- **Scanning.** `plugins scan` looks in `SOLARIS_VST3_PATH` (colon-separated) or else `~/.vst3`, `/usr/lib/vst3`,
+  `/usr/local/lib/vst3`; each bundle is read by `solaris-plughost --scan <bundle>` in its own process, so a module that
+  crashes while being read loses only itself (said). The list (id = the class's UID, name, vendor, instrument or
+  effect, the bundle) is the machine's, kept in its data folder like the library; `plugins list` prints it; the model
+  publishes it. Tests point the path at this build's own plugins (Basic Synth, Drum Machine) — never the user's.
+- **A plugin in a song** is a device of type `vst3` naming its class and bundle; its parameters are the plugin's (ids,
+  titles, units, steps, read from it), set and automated as numbers 0 … 1 by the parameter's id or its title made an
+  address; the song keeps its state as the plugin gives it (base64). A missing bundle makes the device offline, never
+  the song unopenable (R-DEV-3's rule for ports, here for plugins).
+- **The pipe.** Control is lines over a socket pair (the service grammar's habit); audio is a shared-memory block per
+  instance — inputs, events and parameter changes in, outputs back — handed over with an eventfd each way. The audio
+  thread waits for the answer at most the block's own duration (the BUDGET); later is an overrun. Renders run their own
+  instance (a second process), waiting as long as it takes, so a render stays pure (R-RENDER-1) and never disturbs
+  playback.
+- **Failure.** The helper dying (EOF / exit) or an overrun takes the instance OFFLINE: an effect passes its input dry,
+  an instrument is silent, the model says which and why; `device reload <dv>` starts it again. A crash is tested by
+  killing the helper — the real event, not a simulation.
+- **Its editor** (N26) is the helper's: it opens the plugin's own view in its own X11 window (the SDK's editorhost
+  pattern), placed and named by the window; Solaris's generated panel stays the always-available view.

@@ -952,7 +952,18 @@ a process is the host's (law 12).
   `device add <ch> --plugin <id>` loads one, each in its OWN process (`solaris-plughost`), audio exchanged through
   shared memory a block at a time; a plugin that crashes or overruns its budget goes offline (its strip passes
   dry, said in the model) and never takes the song with it; its latency compensated (R-MIX-17); its parameters
-  addressable and automatable; its own editor in a window (the host's X11 embed).
+  addressable and automatable; its own editor in a window (the host's X11 embed). (**Detailed while building it, N25 —
+  2026-10-17**, the design in discussion.md Round 9. Scanning: `plugins scan` reads `SOLARIS_VST3_PATH` (colon-separated)
+  or else `~/.vst3`, `/usr/lib/vst3`, `/usr/local/lib/vst3`, each bundle in a helper process of its own
+  (`solaris-plughost --scan`) so a module that crashes while read loses only itself, said by name; the list — each class
+  with its id (UID), name, vendor, instrument or effect, bundle — is the machine's, kept in its data folder
+  (`SOLARIS_PLUGINS` overriding), printed by `plugins list`, published as `plugins[]`. A plugin in a song is a device of
+  type `vst3` naming its class and bundle (`device add <ch> --plugin <id>`; an instrument's as the strip's first, as
+  the registry's); its parameters are the plugin's, numbers 0 … 1 by id (`p<id>`) — set, read and bound as any; its
+  state kept in the song as the plugin gives it. One helper process per plugin instance plays it — audio and events
+  through shared memory a block at a time, the audio thread waiting at most the block's duration; a render runs its
+  own instance and waits. Its latency compensated (R-MIX-17). The helper dying or overrunning takes it offline (an
+  effect passes dry, an instrument is silent, the model says why); a missing bundle too, the song still opening.)
 - **R-CTRL-1 MIDI learn**: right-click a number › Learn MIDI CC — the next CC moved binds it (`map add <cc>
   <address>`); mappings are the machine's settings; the transport keys of a keyboard (MMC) work.
 - **R-CTRL-2 Control surfaces**: a Mackie Control / HUI surface's faders, pans, mutes, solos and transport follow
