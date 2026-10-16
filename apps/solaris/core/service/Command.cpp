@@ -380,6 +380,15 @@ namespace solaris
             {K::DeviceReload, "device reload", "<dv>", 1, 1, {},
              "Start a plugin device's process again — after a crash or an overrun took it offline — from its last state "
              "(R-VST-6). Not an edit. Prints `playing`, or `offline: <why>`.", "R-VST-6"},
+            {K::MapAdd, "map add", "<cc> <address>", 2, 2, {},
+             "Bind a MIDI control — `<n>` (0–127, on any channel) or `<ch>/<n>` (on channel 1–16) — to a number a formula can "
+             "drive (R-CTRL-1): moved, it sets it over its travel (a gain by the fader law, a device parameter by its taper). One "
+             "address per control. The machine's setting (`map.<cc>` in its file), not an edit.", "R-CTRL-1"},
+            {K::MapRemove, "map remove", "<cc>", 1, 1, {}, "Forget a MIDI control's mapping (R-CTRL-1).", "R-CTRL-1"},
+            {K::MapList, "map list", "", 0, 0, {}, "Every MIDI mapping: `<cc> <address>`, `(inert)` where the open song has no such address (R-CTRL-1).", "R-CTRL-1"},
+            {K::MapLearn, "map learn", "[<address>]", 0, 1, {"cancel"},
+             "Wait for the next MIDI control moved and bind it — on its channel — to <address> (said: `map.learned`; its "
+             "value is not taken); --cancel stops waiting (R-CTRL-1).", "R-CTRL-1"},
             {K::DeviceEditor, "device editor", "<dv>", 1, 1, {"close"},
              "Open a plugin device's OWN editor in a window of its own — the plugin's process makes it (R-VST-6) — or, with "
              "--close, close it. What is turned there reaches the song as `set <dv>.p<id>`. Not an edit. Prints `open` or `closed`.", "R-VST-6"},

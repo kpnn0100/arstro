@@ -97,6 +97,10 @@
       "doc": "R-VST-6: a song's plugin is not playing — it never started, crashed or overran its budget; an effect passes dry, an instrument is silent (`device reload <dv>`). Said once.",
       "data": "{line, fields: {device, why}}"
     },
+    "map.learned": {
+      "doc": "R-CTRL-1: the MIDI control moved during a `map learn` is bound to the address (on its channel: `<ch>/<n>`).",
+      "data": "{line, fields: {cc, address}}"
+    },
     "plugin.editor": {
       "doc": "R-VST-6: a plugin's own editor window opened (1) or closed (0) — by `device editor`, or its window's own close.",
       "data": "{line, fields: {device, open}}"

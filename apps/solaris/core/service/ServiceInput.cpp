@@ -59,14 +59,16 @@ namespace solaris
     {
         if (!mHost.midiIn) { err = "this build has no MIDI input"; return false; }
         if (!mMidiQ) mMidiQ = std::make_shared<LockFreeQueue<MidiEvent>>(1024);
+        if (!mCtlQ) mCtlQ = std::make_shared<LockFreeQueue<MidiEvent>>(1024); // R-CTRL-1: controllers, for the service
         if (mMidiIn && mMidiOpenFor == mSettings.midiInputs) return true;
         if (!mMidiIn) mMidiIn = mHost.midiIn();
         if (!mMidiIn) { err = "this build has no MIDI input"; return false; }
-        auto q = mMidiQ;
+        auto q = mMidiQ, ctl = mCtlQ;
         auto count = mMidiCount;
-        if (!mMidiIn->open(portsOf(mSettings.midiInputs), [q, count](const MidiEvent &e) {
+        if (!mMidiIn->open(portsOf(mSettings.midiInputs), [q, ctl, count](const MidiEvent &e) {
                 // the host's thread: no lock — a full queue drops (nobody is draining it)
                 q->push(e);
+                if (e.kind() == 0xB0 || e.mmc()) ctl->push(e); // R-CTRL-1: what a mapping or a learn, and the transport, read
                 count->fetch_add(1, std::memory_order_relaxed);
             }, err))
         {

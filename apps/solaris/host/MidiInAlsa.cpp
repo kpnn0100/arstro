@@ -96,6 +96,14 @@ namespace solaris_host
                 case SND_SEQ_EVENT_CONTROLLER:
                     m = {(uint8_t)(0xB0 | (ev->data.control.channel & 0x0F)), (uint8_t)(ev->data.control.param & 0x7F), (uint8_t)(ev->data.control.value & 0x7F)};
                     break;
+                case SND_SEQ_EVENT_SYSEX:
+                {
+                    // R-CTRL-1: MIDI Machine Control — F0 7F <device> 06 <command> F7, any device id
+                    const auto *b = static_cast<const uint8_t *>(ev->data.ext.ptr);
+                    if (!b || ev->data.ext.len < 6 || b[0] != 0xF0 || b[1] != 0x7F || b[3] != 0x06) continue;
+                    m = {0xF0, (uint8_t)(b[4] & 0x7F), 0x7F};
+                    break;
+                }
                 case SND_SEQ_EVENT_PITCHBEND:
                 {
                     const int v = std::clamp(ev->data.control.value + 8192, 0, 16383);

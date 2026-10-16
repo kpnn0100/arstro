@@ -1,4 +1,5 @@
 #include "MixerDock.h"
+#include "FaderLaw.h"
 #include "ParamMenu.h"
 #include "../../../interstellar/app/widgets/Glyphs.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
@@ -109,8 +110,8 @@ namespace solaris_ui
         }
     }
 
-    double MixerDock::faderPos(double dB) { return dB <= -119.95 ? 0.0 : std::clamp(std::pow(10.0, (dB - 6.0) / 40.0), 0.0, 1.0); }
-    double MixerDock::faderDb(double pos) { return pos <= 0.001 ? -120.0 : std::clamp(6.0 + 40.0 * std::log10(pos), -120.0, 6.0); }
+    double MixerDock::faderPos(double dB) { return solaris::faderPos(dB); } // the one law (FaderLaw.h): a MIDI control moves it too
+    double MixerDock::faderDb(double pos) { return solaris::faderDb(pos); }
 
     MixerDock::MixerDock()
     {

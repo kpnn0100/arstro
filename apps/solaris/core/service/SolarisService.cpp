@@ -48,7 +48,7 @@ namespace solaris
 
     bool SolarisService::dispatchText(const std::string &line, std::string &err)
     {
-        if (mDepth == 0) applyPluginEdits(); // R-VST-6: what a plugin's editor turned meanwhile lands first, in order
+        if (mDepth == 0) applyPendingEdits(); // R-VST-6: what a plugin's editor turned meanwhile lands first, in order
         const Command c = parseCommand(line, err);
         if (!err.empty())
         {
@@ -117,6 +117,7 @@ namespace solaris
             case K::TemplateSave: case K::TemplateList: case K::TemplateDelete: // R-PRESET-2: … and its templates
             case K::SampleTag: case K::SampleUntag: case K::SampleFavourite:    // R-PRESET-3: … and its library
             case K::PluginsScan: case K::PluginsList: case K::DeviceReload: case K::DeviceEditor: // R-VST-6: … and its plugins
+            case K::MapAdd: case K::MapRemove: case K::MapList: case K::MapLearn:                 // R-CTRL-1: … and its MIDI mappings
                 return false;
             default:
                 return true;
@@ -218,6 +219,9 @@ namespace solaris
             break;
         case K::DeviceEditor:
             ok = pluginEditor(c, err);
+            break;
+        case K::MapAdd: case K::MapRemove: case K::MapList: case K::MapLearn:
+            ok = mapCommand(c, err);
             break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:

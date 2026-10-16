@@ -135,6 +135,8 @@ namespace solaris
             keysOf(a, {}).swap(k.defaults);
             mModel.settings.keys.push_back(std::move(k));
         }
+        for (const auto &m : mSettings.maps) mModel.settings.mappings.push_back(MapModel{m.first, m.second, mapInert(m.second)}); // R-CTRL-1
+        mModel.mapLearning = mMapLearning;
         mModel.devices = mDevices;
         mModel.browser = mBrowser;
         if (!mPluginsLoaded) loadPlugins(); // R-VST-6: the machine's
@@ -561,6 +563,9 @@ namespace solaris
                     if (t->paramIndex(kv.first) < 0) out.push_back("unknown parameter: " + d.id + " (" + d.type + ") has no `" + kv.first + "`");
             }
         if (p.header.masterOut.empty()) out.push_back("unreachable: the master feeds no port");
+        // R-CTRL-1: a MIDI control mapped to a number this song does not have moves nothing
+        for (const auto &m : mSettings.maps)
+            if (mapInert(m.second)) out.push_back("inert mapping: MIDI control " + m.first + " moves " + m.second + ", which this song does not have");
         for (const auto &pk : mLastRenderPeaks) out.push_back(pk);
         // R-EDM-8: a sampler with no sound, or one it cannot read, plays nothing
         for (const auto &rk : p.racks)

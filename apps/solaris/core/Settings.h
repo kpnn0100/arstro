@@ -38,6 +38,8 @@ namespace solaris
         int countIn = 0;                        // R-MIDI-2: bars of click before a recording (0 = none)
         // R-SET-4: `key.<action> = <combos>` — only the actions this machine re-keyed (the rest keep their defaults)
         std::vector<std::pair<std::string, std::string>> keys;
+        // R-CTRL-1: `map.<cc> = <address>` — a MIDI control (`<n>` or `<ch>/<n>`) and the number it moves
+        std::vector<std::pair<std::string, std::string>> maps;
 
         std::string text() const;
         static Settings parse(const std::string &text);

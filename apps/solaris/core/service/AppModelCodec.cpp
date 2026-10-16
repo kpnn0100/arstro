@@ -253,6 +253,7 @@ namespace solaris
             {"settings.countIn", "int", "bars of click before a recording, 0 … 4 (R-MIDI-2)"},
             {"settings.midiInputs", "string", "all | none | MIDI port names, comma-separated: the keyboards Solaris listens to (R-MIDI-2)"},
             {"armed", "string", "the strip the MIDI keyboard plays ('' none) — the session's, never saved (R-MIDI-2)"},
+            {"mapLearning", "string", "R-CTRL-1: the address a `map learn` waits to bind ('' none) — the session's"},
             {"midiDevices", "object[]", "this machine's MIDI inputs, as `midi devices` last listed them (R-MIDI-2)"},
             {"midiDevices[].id", "string", "what `settings set midiInputs=` names"},
             {"midiDevices[].name", "string", ""},
@@ -264,6 +265,10 @@ namespace solaris
             {"settings.keys[].label", "string", ""},
             {"settings.keys[].keys", "string[]", "its combos on this machine, canonical (Ctrl+Alt+Shift+<key>); empty = no key"},
             {"settings.keys[].defaults", "string[]", "what `default` gives back"},
+            {"settings.mappings", "object[]", "R-CTRL-1: the MIDI controls and what they move (`map add|remove|learn`)"},
+            {"settings.mappings[].cc", "string", "`<n>` (any channel) or `<ch>/<n>`"},
+            {"settings.mappings[].address", "string", "the number it moves"},
+            {"settings.mappings[].inert", "bool", "the open song has no such address"},
             {"devices", "object[]", "from the last `devices list`"},
             {"devices[].id", "string", "what `settings set output=` takes"},
             {"devices[].name", "string", ""},
@@ -660,16 +665,18 @@ namespace solaris
         Json keys = Json::array();
         for (const auto &k : m.settings.keys)
             keys.push(Json::object().set("id", k.id).set("area", k.area).set("label", k.label).set("keys", strings(k.keys)).set("defaults", strings(k.defaults)));
+        Json mappings = Json::array();
+        for (const auto &x : m.settings.mappings) mappings.push(Json::object().set("cc", x.cc).set("address", x.address).set("inert", x.inert));
         j.set("settings", Json::object().set("sampleRate", m.settings.sampleRate).set("bufferSize", m.settings.bufferSize)
                               .set("latencyMs", m.settings.latencyMs).set("output", m.settings.output).set("input", m.settings.input)
                               .set("folders", strings(m.settings.folders)).set("ports", strings(m.settings.ports))
                               .set("metronome", m.settings.metronome).set("metronomeLevel", m.settings.metronomeLevel).set("auditionLevel", m.settings.auditionLevel)
                               .set("newBpm", m.settings.newBpm).set("newSig", m.settings.newSig).set("reducedMotion", m.settings.reducedMotion)
                               .set("showIds", m.settings.showIds).set("autosave", m.settings.autosave).set("driver", m.settings.driver).set("midiInputs", m.settings.midiInputs).set("recordQuantize", m.settings.recordQuantize)
-                              .set("countIn", m.settings.countIn).set("keys", keys));
+                              .set("countIn", m.settings.countIn).set("keys", keys).set("mappings", mappings));
         Json midi = Json::array();
         for (const auto &d : m.midiDevices) midi.push(Json::object().set("id", d.id).set("name", d.name).set("listening", d.listening));
-        j.set("armed", m.armed).set("midiDevices", midi);
+        j.set("armed", m.armed).set("midiDevices", midi).set("mapLearning", m.mapLearning);
         if (!stable) j.set("midiMessages", (int)m.midiMessages);
         Json devs = Json::array();
         for (const auto &d : m.devices)

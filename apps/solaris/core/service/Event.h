@@ -43,6 +43,7 @@ namespace solaris
             PluginsChanged,   // count, problems — R-VST-6
             PluginOffline,    // device, why — R-VST-6
             PluginEditor,     // device, open — R-VST-6
+            MapLearned,       // cc, address — R-CTRL-1
             RecentsChanged,   // count
             TransportChanged, // playing, position, loop
             AuditionChanged,  // file, playing

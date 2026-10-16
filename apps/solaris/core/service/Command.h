@@ -52,6 +52,7 @@ namespace solaris
             TemplateSave, TemplateList, TemplateDelete,       // R-PRESET-2
             SampleTag, SampleUntag, SampleFavourite,          // R-PRESET-3
             PluginsScan, PluginsList, DeviceReload, DeviceEditor, // R-VST-6
+            MapAdd, MapRemove, MapList, MapLearn,            // R-CTRL-1
             Ls, Show, PatternPrint,                                                                   // R-SVC-8: read back
             Undo, Redo, HistoryPrint, HistoryJump,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,

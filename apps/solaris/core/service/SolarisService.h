@@ -180,7 +180,7 @@ namespace solaris
         /** What the plugins said on their own (`pump`): their editors' edits become `set` lines — applied when no
          *  command is running (else before the next one), and never sent back to the plugin they came from. */
         void gatherPluginEdits();
-        void applyPluginEdits();
+        void applyPendingEdits(); // a plugin editor's lines (not echoed back to it) and the MIDI controls' (R-CTRL-1)
         std::vector<std::string> mPluginEdits;
         std::set<std::string> mFromPlugin; // addresses a plugin itself set, while its line lands: not echoed
         int mDepth = 0;                    // commands running (a `wait` pumps from inside one)
@@ -288,6 +288,15 @@ namespace solaris
         bool mPipewireDown = false;        // R-DEV-9: PipeWire would not open this session — PulseAudio until the driver is set again
         // R-MIDI-2: the queue the keyboard's thread fills and the running player (or monitor) drains; created by ensureMidi
         std::shared_ptr<LockFreeQueue<MidiEvent>> mMidiQ;
+        // R-CTRL-1 (ServiceControl.cpp): controllers and MIDI Machine Control, for the service (its `pump`), not a strip
+        std::shared_ptr<LockFreeQueue<MidiEvent>> mCtlQ;
+        std::string mMapLearning;            // the address a `map learn` waits to bind
+        bool mControlTried = false;          // the input was asked to open for the mappings (said once if it cannot)
+        std::vector<std::string> mControlLines; // what controls moved and keys pressed, as lines — landed as an editor's
+        bool mapCommand(const Command &c, std::string &err);
+        void controlMidi();
+        bool controlValue(const std::string &address, double travel, std::string &text);
+        bool mapInert(const std::string &address) const;
         std::shared_ptr<std::atomic<long long>> mMidiCount = std::make_shared<std::atomic<long long>>(0);
         std::unique_ptr<IMidiIn> mMidiIn;
         std::string mMidiOpenFor;          // the `midiInputs` it was opened with

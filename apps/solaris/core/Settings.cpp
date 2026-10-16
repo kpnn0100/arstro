@@ -28,6 +28,7 @@ namespace solaris
         o << "recordQuantize = " << recordQuantize << "\n";
         o << "countIn = " << countIn << "\n";
         for (const auto &k : keys) o << "key." << k.first << " = " << k.second << "\n";
+        for (const auto &m : maps) o << "map." << m.first << " = " << m.second << "\n";
         return o.str();
     }
 
@@ -65,6 +66,7 @@ namespace solaris
             else if (k == "recordQuantize") { if (v == "off" || v == "1/4" || v == "1/8" || v == "1/16" || v == "1/32") s.recordQuantize = v; }
             else if (k == "countIn") { const int b = std::atoi(v.c_str()); if (b >= 0 && b <= 4) s.countIn = b; }
             else if (k.rfind("key.", 0) == 0 && k.size() > 4) s.keys.emplace_back(k.substr(4), v); // checked when used (keysOf)
+            else if (k.rfind("map.", 0) == 0 && k.size() > 4) s.maps.emplace_back(k.substr(4), v); // R-CTRL-1: checked when used
         }
         return s;
     }

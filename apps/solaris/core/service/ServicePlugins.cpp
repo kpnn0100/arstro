@@ -282,8 +282,15 @@ namespace solaris
         }
     }
 
-    void SolarisService::applyPluginEdits()
+    void SolarisService::applyPendingEdits()
     {
+        std::vector<std::string> controls; // R-CTRL-1: a MIDI control's or key's lines — heard as any edit
+        controls.swap(mControlLines);
+        for (const auto &l : controls)
+        {
+            std::string err;
+            dispatchText(l, err); // refused (no song, not armed): said as any refusal
+        }
         std::vector<std::string> lines;
         lines.swap(mPluginEdits);
         for (const auto &l : lines)

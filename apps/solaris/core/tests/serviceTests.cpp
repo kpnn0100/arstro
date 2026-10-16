@@ -9,6 +9,8 @@
 #include "Command.h"
 #include "Event.h"
 #include "device/Device.h"
+#include "Compile.h"
+#include "FaderLaw.h"
 #include "Format.h"
 #include "KeyCombo.h"
 #include "Keymap.h"
@@ -3787,6 +3789,105 @@ static void test_a_plugins_own_editor()
     pass("a plugin's own editor (R-VST-6, N26): opened titled by plugin and strip, not an edit, said; what it turns lands as set p<id> once no command runs — a drag one step, never echoed; its own preset moves the set values; its window's close said; refused for no device, a registry device, offline, no display");
 }
 
+static void test_midi_learn_and_the_transport_keys()
+{
+    // R-CTRL-1: a MIDI control bound to a number (`map add`; the machine's, not an edit) moves it over its travel — a gain
+    // by the fader law, a device's parameter by its taper — the last of a sweep landing, the sweep one undo step; on its
+    // channel only when it names one; `map learn` binds the next control moved (its value not taken), --cancel; `map
+    // remove`; MIDI Machine Control plays and stops; refusals; a mapping the song lacks inert, said by audit; kept
+    const std::string settings = scratch() + "/map-settings.txt";
+    fs::remove(settings);
+    {
+        Run r(settings, std::string());
+        r.ok("project new " + freshSong("learn") + " --bpm 120");
+        r.ok("clip add --instrument synth --at 0 --length 4");               // ch_2, dv_1
+        r.ok("project save");
+        assert(r.ok("map add 74 ch_2.gain") == "74\tch_2.gain\n");
+        assert(!r.svc.model().dirty);                                         // the machine's, not an edit
+        {
+            std::ifstream f(settings);
+            std::stringstream ss;
+            ss << f.rdbuf();
+            assert(contains(ss.str(), "map.74 = ch_2.gain\n"));
+        }
+        assert(r.svc.model().settings.mappings.size() == 1 && r.svc.model().settings.mappings[0].cc == "74" && !r.svc.model().settings.mappings[0].inert);
+        // moved: the fader law, the top +6 dB; a sweep — its last value lands, ONE undo step
+        r.fake.key(0xB0, 74, 127);
+        r.ok("wait 0.02");
+        assert(r.ok("get ch_2.gain") == "6.0\n");
+        for (int v : {100, 64, 32})
+        {
+            r.fake.key(0xB0, 74, (uint8_t)v);
+            r.ok("wait 0.02");
+        }
+        assert(std::fabs(std::stod(r.ok("get ch_2.gain")) - faderDb(32 / 127.0)) < 1e-9);
+        r.ok("undo");
+        assert(r.ok("get ch_2.gain") == "0.0\n");
+        // on its channel only, when it names one
+        r.ok("map add 2/10 ch_2.pan");
+        r.fake.key(0xB0, 10, 127);                                             // channel 1: not this one
+        r.ok("wait 0.02");
+        assert(r.ok("get ch_2.pan") == "0.0\n");
+        r.fake.key(0xB1, 10, 0);
+        r.ok("wait 0.02");
+        assert(r.ok("get ch_2.pan") == "-1.0\n");
+        // a device's parameter by its taper — as its knob turns
+        r.ok("map add 21 dv_1.filter.cutoff");
+        const arstro::DeviceType *t = arstro::DeviceRegistry::find("synth");
+        const arstro::ParamSpec &cut = t->params[(size_t)t->paramIndex("filter.cutoff")];
+        r.fake.key(0xB0, 21, 64);
+        r.ok("wait 0.02");
+        assert(std::fabs(std::stod(r.ok("get dv_1.filter.cutoff")) - arstro::valueFromNormalized(cut, 64 / 127.0)) < 1e-6);
+        r.fake.key(0xB0, 21, 127);
+        r.ok("wait 0.02");
+        assert(std::fabs(std::stod(r.ok("get dv_1.filter.cutoff")) - cut.max) < 1e-9);
+        // learned: the next control moved, on its channel; its value not taken
+        assert(contains(r.ok("map learn dv_1.filter.res"), "move a MIDI control for dv_1.filter.res"));
+        assert(r.svc.model().mapLearning == "dv_1.filter.res");
+        const std::string res0 = r.ok("get dv_1.filter.res");
+        r.events.clear();
+        r.fake.key(0xB2, 30, 99);
+        r.ok("wait 0.02");
+        assert(r.svc.model().mapLearning.empty() && contains(r.ok("map list"), "3/30\tdv_1.filter.res\n"));
+        bool said = false;
+        for (const auto &e : r.events) said |= contains(e, "map.learned cc=3/30 address=dv_1.filter.res");
+        assert(said && r.ok("get dv_1.filter.res") == res0);
+        r.fake.key(0xB2, 30, 127);
+        r.ok("wait 0.02");
+        assert(r.ok("get dv_1.filter.res") != res0);
+        r.ok("map learn ch_2.pan");
+        assert(r.ok("map learn --cancel") == "not waiting\n" && r.svc.model().mapLearning.empty());
+        r.ok("map remove 2/10");
+        r.fake.key(0xB1, 10, 127);
+        r.ok("wait 0.02");
+        assert(r.ok("get ch_2.pan") == "-1.0\n");
+        // MIDI Machine Control: play, stop
+        r.fake.key(0xF0, 0x02, 0x7F);
+        r.ok("wait 0.02");
+        r.ok("wait 0.05");                                                     // landed first thing in this one
+        assert(r.svc.model().transport.playing);
+        r.fake.key(0xF0, 0x01, 0x7F);
+        r.ok("wait 0.02");
+        r.ok("wait 0.02");
+        assert(!r.svc.model().transport.playing);
+        // refusals
+        assert(contains(r.no("map add 128 ch_2.gain"), "is not a MIDI control"));
+        assert(contains(r.no("map add 17/1 ch_2.gain"), "is not a MIDI control"));
+        r.no("map add 5 ch_2.name");
+        r.no("map add 5 ch_9.gain");
+        assert(contains(r.no("map remove 99"), "no mapping for 99"));
+        assert(contains(r.no("map learn"), "map learn <address>"));
+        // another song: what it lacks is inert, and said
+        r.ok("project new " + freshSong("learn2") + " --bpm 120");
+        bool inert = false;
+        for (const auto &m : r.svc.model().settings.mappings) inert |= m.cc == "74" && m.inert;
+        assert(inert && contains(r.ok("audit"), "inert mapping: MIDI control 74 moves ch_2.gain, which this song does not have"));
+    }
+    Run again(settings, std::string());                                      // the machine's: read back
+    assert(again.svc.model().settings.mappings.size() == 3);
+    pass("MIDI learn (R-CTRL-1): a control moves its number — the fader law, a parameter's taper — the sweep's last landing, one undo step; on its channel when named; learned (its value not taken), cancelled, removed; MMC plays and stops; refusals; inert in a song without it, said; the machine's, kept");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -5057,6 +5158,7 @@ int main()
     test_plugins_are_scanned_and_listed();
     test_a_plugin_plays_in_a_song();
     test_a_plugins_own_editor();
+    test_midi_learn_and_the_transport_keys();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

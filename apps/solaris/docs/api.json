@@ -1130,6 +1130,40 @@
       "requirement": "R-VST-6"
     },
     {
+      "verb": "map add",
+      "usage": "map add <cc> <address>",
+      "args": "<cc> <address>",
+      "flags": [],
+      "summary": "Bind a MIDI control — `<n>` (0–127, on any channel) or `<ch>/<n>` (on channel 1–16) — to a number a formula can drive (R-CTRL-1): moved, it sets it over its travel (a gain by the fader law, a device parameter by its taper). One address per control. The machine's setting (`map.<cc>` in its file), not an edit.",
+      "requirement": "R-CTRL-1"
+    },
+    {
+      "verb": "map remove",
+      "usage": "map remove <cc>",
+      "args": "<cc>",
+      "flags": [],
+      "summary": "Forget a MIDI control's mapping (R-CTRL-1).",
+      "requirement": "R-CTRL-1"
+    },
+    {
+      "verb": "map list",
+      "usage": "map list",
+      "args": "",
+      "flags": [],
+      "summary": "Every MIDI mapping: `<cc> <address>`, `(inert)` where the open song has no such address (R-CTRL-1).",
+      "requirement": "R-CTRL-1"
+    },
+    {
+      "verb": "map learn",
+      "usage": "map learn [<address>] [--cancel]",
+      "args": "[<address>]",
+      "flags": [
+        "cancel"
+      ],
+      "summary": "Wait for the next MIDI control moved and bind it — on its channel — to <address> (said: `map.learned`; its value is not taken); --cancel stops waiting (R-CTRL-1).",
+      "requirement": "R-CTRL-1"
+    },
+    {
       "verb": "device editor",
       "usage": "device editor <dv> [--close]",
       "args": "<dv>",
@@ -1415,6 +1449,14 @@
         "why"
       ],
       "summary": "R-VST-6: a song's plugin is not playing — it never started, crashed or overran its budget; an effect passes dry, an instrument is silent (`device reload <dv>`). Said once."
+    },
+    {
+      "name": "map.learned",
+      "fields": [
+        "cc",
+        "address"
+      ],
+      "summary": "R-CTRL-1: the MIDI control moved during a `map learn` is bound to the address (on its channel: `<ch>/<n>`)."
     },
     {
       "name": "plugin.editor",
@@ -2954,6 +2996,12 @@
       "stable": true
     },
     {
+      "path": "mapLearning",
+      "type": "string",
+      "summary": "R-CTRL-1: the address a `map learn` waits to bind ('' none) — the session's",
+      "stable": true
+    },
+    {
       "path": "midiDevices",
       "type": "object[]",
       "summary": "this machine's MIDI inputs, as `midi devices` last listed them (R-MIDI-2)",
@@ -3017,6 +3065,30 @@
       "path": "settings.keys[].defaults",
       "type": "string[]",
       "summary": "what `default` gives back",
+      "stable": true
+    },
+    {
+      "path": "settings.mappings",
+      "type": "object[]",
+      "summary": "R-CTRL-1: the MIDI controls and what they move (`map add|remove|learn`)",
+      "stable": true
+    },
+    {
+      "path": "settings.mappings[].cc",
+      "type": "string",
+      "summary": "`<n>` (any channel) or `<ch>/<n>`",
+      "stable": true
+    },
+    {
+      "path": "settings.mappings[].address",
+      "type": "string",
+      "summary": "the number it moves",
+      "stable": true
+    },
+    {
+      "path": "settings.mappings[].inert",
+      "type": "bool",
+      "summary": "the open song has no such address",
       "stable": true
     },
     {

@@ -989,6 +989,21 @@ a process is the host's (law 12).
   editor is refused, saying so; tests never open a window on a display.)
 - **R-CTRL-1 MIDI learn**: right-click a number › Learn MIDI CC — the next CC moved binds it (`map add <cc>
   <address>`); mappings are the machine's settings; the transport keys of a keyboard (MMC) work.
+  (**Detailed while building it, N27 — 2026-10-17:** a CONTROL is a controller number — `<n>` (0–127, on any channel)
+  or `<ch>/<n>` (on channel 1–16 only). `map add <cc> <address>` binds it to any NUMBER a formula can drive (a strip's
+  gain or pan, a send's gain, the master gain, a device's numeric parameter, a plugin's `p<id>`), one address per
+  control (added again: moved); `map remove <cc>`; `map list`; `map learn <address>` waits for the next controller
+  moved and binds THAT one (said, `map.learned`; its value is not taken), `map learn --cancel` stops waiting. Mappings
+  are the machine's settings (`map.<cc> = <address>` in its file) — not an edit, never in the song; one naming what the
+  open song does not have does nothing, and `audit` says so. A mapped control moving sets its address — 0 … 127 over the
+  address's travel: a gain by the mixer's fader law (the dock's, now one copy for both), a device's parameter by the
+  registry's own normalisation (its taper, as a knob), anything else linearly — as `set <address>=<value>`, landing as
+  a plugin editor's edits do (consecutive ones one undo step). MIDI Machine Control (a keyboard's transport keys):
+  Play and Deferred Play → `transport play`, Stop and Pause → `transport stop`, Record Strobe → `transport record`,
+  Rewind / Fast Forward → a bar back / on (`transport seek`). The MIDI input opens while there are mappings or a learn
+  waits, as for an armed strip. The model: `settings.mappings[]` (cc, address, inert) and `mapLearning`. In the window
+  (part 2): a number's menu offers Learn MIDI CC — and Forget CC <n> when it has one; while a learn waits the song bar
+  says so; the Settings sheet's MIDI page lists the mappings, each removable.)
 - **R-CTRL-2 Control surfaces**: a Mackie Control / HUI surface's faders, pans, mutes, solos and transport follow
   and move the mixer.
 - **R-PERF-1 A CPU meter**: the audio thread's load (DSP time over the block's time) and per strip, published and

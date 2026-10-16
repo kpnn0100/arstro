@@ -135,9 +135,11 @@ namespace solaris
                 emit(Event(Event::Kind::AuditionChanged).with("file", mModel.audition.file).with("playing", "0"));
             }
         }
-        // R-VST-6 (N26): what the plugins' editors turned becomes the song's — now, unless a command is running
+        // R-VST-6 (N26): what the plugins' editors turned becomes the song's — now, unless a command is running; and the
+        // MIDI controls that moved, the transport keys pressed (R-CTRL-1)
         gatherPluginEdits();
-        if (mDepth == 0) applyPluginEdits();
+        controlMidi();
+        if (mDepth == 0) applyPendingEdits();
         // R-VST-6: a plugin that stopped playing (its process died, it overran) is said once, and the model shows it
         bool down = false;
         for (auto &kv : mPluginLive)

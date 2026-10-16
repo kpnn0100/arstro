@@ -238,6 +238,13 @@ namespace solaris
         std::vector<std::string> keys, defaults; // canonical combos ("Ctrl+Shift+Z"); keys empty = no key
     };
 
+    /** R-CTRL-1: a MIDI control (`<n>` or `<ch>/<n>`) and the number it moves. */
+    struct MapModel
+    {
+        std::string cc, address;
+        bool inert = false; // the open song has no such address (or no song is open)
+    };
+
     struct SettingsModel
     {
         int sampleRate = 48000, bufferSize = 256;
@@ -256,6 +263,7 @@ namespace solaris
         std::string recordQuantize = "off";      // R-MIDI-2
         int countIn = 0;
         std::vector<KeyActionModel> keys;        // R-SET-4: every shortcut, in the sheet's order
+        std::vector<MapModel> mappings;          // R-CTRL-1: the MIDI controls and what they move
     };
 
     /** R-ARR-1: a named place in the song, and where its section ends (computed: its length, else the next marker). */
@@ -406,6 +414,7 @@ namespace solaris
         TransportModel transport;
         LoudnessModel loudness;                  // R-METER-1
         std::string armed;                       // R-MIDI-2: the strip the keyboard plays ("" none) — the session's
+        std::string mapLearning;                 // R-CTRL-1: the address a `map learn` waits to bind ('' none) — the session's
         std::vector<MidiPortModel> midiDevices;  // `midi devices`: this machine's MIDI inputs
         long long midiMessages = 0;              // messages the keyboard sent since Solaris started (an activity light)
         AuditionModel audition;

@@ -118,6 +118,10 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `plugins scan` | Find the VST3 plugins where this machine keeps them (R-VST-6: SOLARIS_VST3_PATH, else ~/.vst3, /usr/lib/vst3, /usr/local/lib/vst3) — each bundle read in a process of its own, so one that crashes loses only itself (said). Prints each found and each problem; the list is the machine's, kept. | R-VST-6 |
 | `plugins list` | The VST3 plugins the last scan found (R-VST-6). | R-VST-6 |
 | `device reload <dv>` | Start a plugin device's process again — after a crash or an overrun took it offline — from its last state (R-VST-6). Not an edit. Prints `playing`, or `offline: <why>`. | R-VST-6 |
+| `map add <cc> <address>` | Bind a MIDI control — `<n>` (0–127, on any channel) or `<ch>/<n>` (on channel 1–16) — to a number a formula can drive (R-CTRL-1): moved, it sets it over its travel (a gain by the fader law, a device parameter by its taper). One address per control. The machine's setting (`map.<cc>` in its file), not an edit. | R-CTRL-1 |
+| `map remove <cc>` | Forget a MIDI control's mapping (R-CTRL-1). | R-CTRL-1 |
+| `map list` | Every MIDI mapping: `<cc> <address>`, `(inert)` where the open song has no such address (R-CTRL-1). | R-CTRL-1 |
+| `map learn [<address>] [--cancel]` | Wait for the next MIDI control moved and bind it — on its channel — to <address> (said: `map.learned`; its value is not taken); --cancel stops waiting (R-CTRL-1). | R-CTRL-1 |
 | `device editor <dv> [--close]` | Open a plugin device's OWN editor in a window of its own — the plugin's process makes it (R-VST-6) — or, with --close, close it. What is turned there reaches the song as `set <dv>.p<id>`. Not an edit. Prints `open` or `closed`. | R-VST-6 |
 | `recents remove <path>` | Take a song off Home's recent list (the file is untouched). | R-HOME-1 |
 | `transport play [--from <beats>] [--clip <ac>]` | Play on the clock device (settings output), from --from or where the transport stands. Edits while playing are heard: a gain, a pan, a mute, a solo, a device parameter at once; anything structural by a new engine swapped in at the same position. --clip plays that clip's span looped, the whole song sounding there (the piano roll's play, R-ROLL-6): it follows the clip as it is edited, and the song's own loop comes back at `transport stop`, a plain `transport play` or a `transport loop`. | R-PLAY-1 |
@@ -266,6 +270,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `library.changed` | path, tags | R-PRESET-3: a file's tags (favourite among them) changed and were saved; tags comma-separated, '' none. |
 | `plugins.changed` | count, problems | R-VST-6: a scan found this many plugins; problems: bundles that could not be read. |
 | `plugin.offline` | device, why | R-VST-6: a song's plugin is not playing — it never started, crashed or overran its budget; an effect passes dry, an instrument is silent (`device reload <dv>`). Said once. |
+| `map.learned` | cc, address | R-CTRL-1: the MIDI control moved during a `map learn` is bound to the address (on its channel: `<ch>/<n>`). |
 | `plugin.editor` | device, open | R-VST-6: a plugin's own editor window opened (1) or closed (0) — by `device editor`, or its window's own close. |
 | `recents.changed` | count | Home's recent songs changed. |
 | `transport.changed` | playing, position, loop | Play, stop, seek or loop: playing 1/0, position in beats, loop `from-to` or `off`. |
@@ -524,6 +529,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.countIn` | int | bars of click before a recording, 0 … 4 (R-MIDI-2) |
 | `settings.midiInputs` | string | all \| none \| MIDI port names, comma-separated: the keyboards Solaris listens to (R-MIDI-2) |
 | `armed` | string | the strip the MIDI keyboard plays ('' none) — the session's, never saved (R-MIDI-2) |
+| `mapLearning` | string | R-CTRL-1: the address a `map learn` waits to bind ('' none) — the session's |
 | `midiDevices` | object[] | this machine's MIDI inputs, as `midi devices` last listed them (R-MIDI-2) |
 | `midiDevices[].id` | string | what `settings set midiInputs=` names |
 | `midiDevices[].name` | string |  |
@@ -535,6 +541,10 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.keys[].label` | string |  |
 | `settings.keys[].keys` | string[] | its combos on this machine, canonical (Ctrl+Alt+Shift+<key>); empty = no key |
 | `settings.keys[].defaults` | string[] | what `default` gives back |
+| `settings.mappings` | object[] | R-CTRL-1: the MIDI controls and what they move (`map add\|remove\|learn`) |
+| `settings.mappings[].cc` | string | `<n>` (any channel) or `<ch>/<n>` |
+| `settings.mappings[].address` | string | the number it moves |
+| `settings.mappings[].inert` | bool | the open song has no such address |
 | `devices` | object[] | from the last `devices list` |
 | `devices[].id` | string | what `settings set output=` takes |
 | `devices[].name` | string |  |

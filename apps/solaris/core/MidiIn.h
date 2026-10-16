@@ -18,11 +18,14 @@ namespace arstro
 {
 namespace solaris
 {
-    /** One MIDI message, as the wire spells it: a status byte and its two data bytes. */
+    /** One MIDI message, as the wire spells it: a status byte and its two data bytes. A MIDI Machine Control command
+     *  (a keyboard's transport keys: F0 7F <device> 06 <command> F7) arrives parsed by the host as {0xF0, <command>, 0x7F}
+     *  (R-CTRL-1); other system exclusive messages do not arrive. */
     struct MidiEvent
     {
         uint8_t status = 0, d1 = 0, d2 = 0;
         int kind() const { return status & 0xF0; }
+        bool mmc() const { return status == 0xF0 && d2 == 0x7F; }
         bool noteOn() const { return kind() == 0x90 && d2 > 0; }
         bool noteOff() const { return kind() == 0x80 || (kind() == 0x90 && d2 == 0); }
     };
