@@ -141,6 +141,7 @@ namespace solaris
     {
         int pitch = 60, vel = 100;
         double at = 0, length = 0.25;
+        double chance = 1;                       // R-ROLL-11: the odds it sounds in a repetition, 0 … 1
     };
 
     /** R-MIDI-3: a point of a pattern's expression lane. */
@@ -161,6 +162,8 @@ namespace solaris
         std::string instrument;                  // that strip's instrument type ("synth", "drums")
         std::vector<std::string> strips;         // R-BROWSE-4: every strip a clip of it plays through, in clip order
         std::string lastStrip;                   // … the one its newest clip plays through — where a drop off a track goes
+        std::string scale;                       // R-ROLL-11: "D dorian" — placed and moved notes land on it; "" none
+        int scaleMask = 0;                       // … its pitch classes, bit k for pitch class k (C = 0); 0 none
     };
 
     struct PortModel

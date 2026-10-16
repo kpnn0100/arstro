@@ -130,6 +130,17 @@ A pattern is the notes a note clip plays (R-CLIP-2); clips that share a pattern 
 (R-CLIP-3). `at` is beats from the pattern's start; `vel` 1–127. Notes are kept sorted by
 (`at`, `pitch`), which is also the merge key a future semantic merge unions by.
 
+**R-ROLL-11.** A note's `chance=` (0 … 1) is written only below 1: the odds it sounds in a pass,
+rolled per clip and pass by a hash (`noteSounds`). A pattern's `scale="<key> <scale>"` (a key in
+sharps, a scale of `scaleKinds()` — `C major`, `A# minor-pentatonic`) is written only when set:
+notes placed or moved in pitch land on it; a scale not known is refused by `validate`.
+
+```
+#apattern id=pt_2 name=Lead length=4.0 scale="D dorian"
+  #note pitch=62 at=0.0 length=0.5 vel=100
+  #note pitch=69 at=0.5 length=0.25 vel=90 chance=0.5
+```
+
 **Expression lanes (R-MIDI-3)** follow its notes, sorted by (`lane`, `at`):
 
 ```

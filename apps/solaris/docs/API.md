@@ -44,12 +44,12 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `clip unique <ac>` | Give a note clip its own copy of its pattern. | R-CLIP-3 |
 | `clip delete <ac>` | Remove a clip. | R-LANE-1 |
 | `pattern new [--name <text>] [--length <beats>]` | Create an empty pattern. | R-CLIP-2 |
-| `note add <pt> [--pitch <pitch>] [--at <beats>] [--length <beats>] [--vel <1-127>] [--chord <name>] [--inversion <n>] [--octave <n>]` | Add a note to a pattern — every clip of it changes. A pitch is a number, a name (C4 = 60, F#3, Bb2) or a kit's pad (kick). --chord <Cm7> adds a chord instead (its root in --octave, default 4; --inversion n raises its n lowest notes an octave) as ONE edit — the qualities are under Notation. | R-CLIP-2 |
+| `note add <pt> [--pitch <pitch>] [--at <beats>] [--length <beats>] [--vel <1-127>] [--chance <0-1>] [--chord <name>] [--inversion <n>] [--octave <n>]` | Add a note to a pattern — every clip of it changes. A pitch is a number, a name (C4 = 60, F#3, Bb2) or a kit's pad (kick). --chord <Cm7> adds a chord instead (its root in --octave, default 4; --inversion n raises its n lowest notes an octave) as ONE edit — the qualities are under Notation. --chance: the odds it sounds in a pass (1). A pattern locked to a scale (`pattern scale`) puts each note on the scale's nearest pitch, a tie down — a major chord on any degree becomes that degree's own triad. | R-CLIP-2 |
 | `note delete <pt> [--pitch <pitch>] [--at <beats>]` | Remove the note at that pitch and time. | R-CLIP-2 |
 | `note preview <ch> <pitch> [--vel <1-127>] [--length <beats>]` | Hear one note through instrument strip <ch> — its instrument and its rack, at its fader and pan, as it sounds in the song — on a stream of its own, whether the song plays or not (the piano roll's sound when a note is made, a key pressed). A pitch is a number, a name or the strip's kit's pad; --length beats (default 0.5), --vel (default 100). A preview started while one rings takes over with a short fade. Not an edit, never in a render. | R-ROLL-7 |
-| `note move <pt> [--pitch <pitch>] [--at <beats>] [--to-pitch <pitch>] [--to-at <beats>] [--length <beats>] [--vel <1-127>]` | Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) — one gesture, one line. Refused onto another note. | R-ROLL-2 |
-| `pattern quantize <pt> [--grid <beats>] [--swing <0-0.75>]` | Move every note's start onto the grid (default a sixteenth, 0.25), delaying every second grid step by --swing of a step. Notes that land on one another merge (the louder stays). | R-ROLL-4 |
-| `notes add <pt> "<note> …" [--length <beats>] [--vel <1-127>]` | Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>]] — C4@0:0.5:90, kick@1, E4@2::70. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing lands. Prints how many. A note past the pattern's end grows the pattern to the end of that bar, and a clip that played it whole with it (R-ROLL-9). | R-SVC-8 |
+| `note move <pt> [--pitch <pitch>] [--at <beats>] [--to-pitch <pitch>] [--to-at <beats>] [--length <beats>] [--vel <1-127>] [--chance <0-1>]` | Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) or its chance (--chance) — one gesture, one line. Refused onto another note. In a pattern locked to a scale, --to-pitch goes on to the scale's next pitch the way it moved. | R-ROLL-2 |
+| `pattern quantize <pt> [--grid <beats>] [--swing <0-0.75>] [--groove <name>] [--strength <0-1>] [--notes <"pitch@beat …">]` | Move every note's start onto the grid (default a sixteenth, 0.25), delaying every second grid step by --swing of a step — or onto a --groove (R-ROLL-11: a template's steps, offsets and accents, under Notation; it carries its own grid and swing). --strength moves each start (and velocity) that part of the way (1). --notes: only those notes (the roll's selection). Notes that land on one another merge (the louder stays). | R-ROLL-4 |
+| `notes add <pt> "<note> …" [--length <beats>] [--vel <1-127>]` | Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>[:<chance>]]] — C4@0:0.5:90, kick@1, E4@2::70, hat@1.5:::0.5. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing lands. Prints how many. A note past the pattern's end grows the pattern to the end of that bar, and a clip that played it whole with it (R-ROLL-9). A scale-locked pattern puts each on its scale (R-ROLL-11). | R-SVC-8 |
 | `notes move <pt> "<pitch@beat> …" [--by <beats>] [--semi <n>]` | Move several notes as ONE edit (one undo step) — the piano roll's selection dragged, or moved by the arrow keys: each named by <pitch>@<beat>, all moved --by beats (default 0) and --semi semitones (default 0). Refused whole, naming the first, when a name matches no note, or a note would land on one not moved, below beat 0 or outside 0–127. | R-ROLL-8 |
 | `notes delete <pt> "<pitch@beat> …"` | Remove several notes as ONE edit — the piano roll's selection deleted. Refused whole, naming the first, when a name matches no note. | R-ROLL-8 |
 | `pattern steps <pt> "<steps>" [--pitch <pitch>] [--step <beats>] [--vel <1-127>] [--at <beats>] [--length <beats>]` | A step row: x = a note, X = an accent (velocity 127), . or - = a rest, one per --step (default 0.25) from --at (default 0); spaces and \| are ignored. REPLACES that pitch's notes in the span; --length defaults to a step. One edit. | R-SVC-8 |
@@ -59,6 +59,11 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `expr add <pt> --lane <bend\|mod\|cc<N>> --at <beats> --value <v>` | A point on one of a pattern's expression lanes (R-MIDI-3): the pitch wheel (`bend`, −1 … +1) or a controller (`cc0` … `cc127`, 0 … 1; `mod` is `cc1`) — linear to the next point, held before the first and after the last; a point already at that beat is moved to the value. The instruments play `bend` and `cc1` (their wheels); every lane goes out in a MIDI file. | R-MIDI-3 |
 | `expr delete <pt> --lane <lane> --at <beats>` | Remove the lane's point at --at. | R-MIDI-3 |
 | `expr clear <pt> [--lane <lane>]` | Remove a lane's points (--lane), or every lane's. | R-MIDI-3 |
+| `pattern scale <pt> <key> <scale> \| off` | Lock a pattern to a scale (R-ROLL-11) — `pattern scale pt_1 D dorian`: a note placed (`note add`, its --chord, `notes add`) lands on the scale's nearest pitch, a tie going down (so a major chord stamped on any degree is that degree's own triad); a note moved in pitch (`note move --to-pitch`, `notes move --semi`) goes on to the scale's next pitch the way it moved. A move in time, an import, a step row, a recording and `pattern transpose` keep their pitches; notes already written stay. `off` unlocks it. The scales are under Notation. Prints its notes. | R-ROLL-11 |
+| `notes set <pt> "<pitch@beat> …" [--vel <1-127>] [--chance <0-1>] [--length <beats>]` | Set several notes' --vel, --chance and/or --length as ONE edit — the piano roll's selection. Refused whole, naming the first, when a name matches no note. | R-ROLL-11 |
+| `pattern humanise <pt> [--timing <beats>] [--vel <0-127>] [--seed <n>] [--notes <"pitch@beat …">]` | Loosen the notes (R-ROLL-11): each start moved within ± --timing beats and each velocity within ± --vel (with neither: 0.02 and 8), a triangular spread from a seed — the same --seed on the same notes writes the same notes (by default a hash of the notes; printed). A note never goes before beat 0, nor onto another of its pitch (it keeps its time). --notes: only those notes (the roll's selection). | R-ROLL-11 |
+| `pattern legato <pt> [--notes <"pitch@beat …">]` | End every note where the next start begins — a chord's notes together, the last at the pattern's end; an overlap is shortened as a gap is filled (R-ROLL-11). --notes: only those notes, the next start among them. | R-ROLL-11 |
+| `pattern arpeggiate <pt> [--rate <beats>] [--mode <up\|down\|updown\|random>] [--octaves <1-4>] [--gate <0.05-1>] [--seed <n>] [--notes <"pitch@beat …">]` | A MIDI effect written as notes (R-ROLL-11): on every --rate step of the beat grid (0.25) where notes are held, the next pitch of what is held there — its pitches over --octaves (1), up, down, updown (the turns not repeated) or a seeded random (--seed) — --gate of a step long (1), at the held note's velocity and chance; it starts again from the first after a rest. Replaces the notes it arpeggiated (every note, or --notes); a step on another note of its pitch replaces that one. Prints how many. | R-ROLL-11 |
 | `pattern import <file.mid> [--track <n>] [--at <beats>] [--lane <ln>] [--instrument <type>] [--name <text>]` | Make patterns of a Standard MIDI File (format 0/1/2; ticks or SMPTE time): one per track with notes, or --track n's alone; whole bars long; named after the track. With --lane <an instrument's track> or --instrument <type>: ONE pattern (every track merged, or --track's) and a clip of it at --at, by `clip add`'s rules — what dropping a .mid does. Prints the (first) pattern; `made:` the rest. | R-MIDI-1 |
 | `pattern export <pt> <file.mid>` | Write a pattern as a MIDI file (format 1, 960 ticks a beat — Solaris's own, so it imports back exact; channel 10 when a kit plays it). | R-MIDI-1 |
 | `project export-midi <file.mid>` | Write the song's notes as a MIDI file: a track per instrument strip, every note clip's pattern where the clip plays it (repeated to fill it), the song's tempo and meter. | R-MIDI-1 |
@@ -115,7 +120,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | what | written | e.g. |
 |---|---|---|
 | a pitch (`--pitch`, `--to-pitch`, a note) | a number 0–127, a name — a letter, `#`/`b`, an octave; C4 = 60, c-1 = 0 — or a kit's pad (below, case and `-` ignored) | `60` · `C4` · `F#3` · `Bb2` · `kick` · `closed-hat` |
-| a note (`notes add`) | `<pitch>@<beat>[:<length>[:<vel>]]`; an empty field keeps the default | `C4@0:0.5:90` · `kick@1` · `E4@2::70` |
+| a note (`notes add`) | `<pitch>@<beat>[:<length>[:<vel>[:<chance>]]]`; an empty field keeps the default; the chance 0 … 1 (R-ROLL-11) | `C4@0:0.5:90` · `kick@1` · `E4@2::70` · `hat@1.5:::0.5` |
 | a step row (`pattern steps`) | `x` a note, `X` an accent (127), `.` or `-` a rest; spaces and `\|` ignored | `x...x...x...X...` |
 | a chord (`note add --chord`) | a root (`C`, `F#`, `Bb`) then a quality below; the root sits in `--octave` (4) | `Cm7` · `F#dim` · `Bbmaj7` |
 
@@ -142,6 +147,35 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `C9` | 0 4 7 10 14 | dominant ninth |
 | `Cmaj9` | 0 4 7 11 14 | major ninth |
 | `Cm9` | 0 3 7 10 14 | minor ninth |
+
+| a scale (`pattern scale`, R-ROLL-11) | its pitch classes above the key | |
+|---|---|---|
+| `major` · `ionian` | 0 2 4 5 7 9 11 | major |
+| `minor` · `aeolian` · `natural-minor` | 0 2 3 5 7 8 10 | natural minor |
+| `harmonic-minor` | 0 2 3 5 7 8 11 | harmonic minor |
+| `melodic-minor` | 0 2 3 5 7 9 11 | melodic minor (rising) |
+| `dorian` | 0 2 3 5 7 9 10 | dorian |
+| `phrygian` | 0 1 3 5 7 8 10 | phrygian |
+| `lydian` | 0 2 4 6 7 9 11 | lydian |
+| `mixolydian` | 0 2 4 5 7 9 10 | mixolydian |
+| `locrian` | 0 1 3 5 6 8 10 | locrian |
+| `major-pentatonic` · `pentatonic` | 0 2 4 7 9 | major pentatonic |
+| `minor-pentatonic` | 0 3 5 7 10 | minor pentatonic |
+| `blues` | 0 3 5 6 7 10 | blues (minor pentatonic and the flat fifth) |
+
+A groove (`pattern quantize --groove`, R-ROLL-11) is a cycle of grid steps from beat 0, each moved by its offset (a fraction of a step, + late) and its velocity scaled by its accent — empirical, shaped by ear.
+
+| groove | step | offsets | accents | |
+|---|---|---|---|---|
+| `mpc-54` | 0.25 | 0.0 0.08 | 1.0 1.0 | the MPC's 54 % sixteenth swing |
+| `mpc-58` | 0.25 | 0.0 0.16 | 1.0 1.0 | the MPC's 58 % sixteenth swing |
+| `mpc-62` | 0.25 | 0.0 0.24 | 1.0 1.0 | the MPC's 62 % sixteenth swing |
+| `mpc-66` | 0.25 | 0.0 0.32 | 1.0 1.0 | the MPC's 66 % — a sixteenth triplet |
+| `shuffle` | 0.5 | 0.0 0.3333333333333333 | 1.0 0.8 | an eighth-note triplet shuffle, the off-beat softer |
+| `hip-hop` | 0.25 | 0.0 0.2 0.05 0.25 | 1.0 0.7 0.85 0.65 | laid back: sixteenths late, the off-beats more, the weak ones soft |
+| `house` | 0.25 | 0.0 0.02 -0.03 0.08 | 1.0 0.55 0.9 0.7 | the off-beat eighth early and loud, the last sixteenth late |
+| `push` | 0.5 | 0.0 -0.12 | 1.0 0.9 | the off-beat eighths early — ahead of the beat |
+| `lazy` | 0.25 | 0.0 0.1 0.06 0.14 | 1.0 0.8 0.9 0.75 | every sixteenth behind the beat, the off-beat most |
 
 ## Keyboard (R-SET-4)
 
@@ -331,6 +365,9 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `patterns[].notes[].at` | number | beats from the pattern's start |
 | `patterns[].notes[].length` | number | beats |
 | `patterns[].notes[].vel` | int | 1…127 |
+| `patterns[].notes[].chance` | number | R-ROLL-11: the odds it sounds in a repetition, 0 … 1 — rolled per clip and repetition by a hash |
+| `patterns[].scale` | string | R-ROLL-11: "D dorian" — placed and moved notes land on it; "" none |
+| `patterns[].scaleMask` | int | its pitch classes: bit k for pitch class k (C = 0); 0 none |
 | `patterns[].expr` | object[] | R-MIDI-3: expression lanes' points, sorted by (lane, at) — linear between, held at the ends |
 | `patterns[].expr[].lane` | string | bend (−1 … +1) \| cc0 … cc127 (0 … 1; cc1 the mod wheel) |
 | `patterns[].expr[].at` | number | beats from the pattern's start |

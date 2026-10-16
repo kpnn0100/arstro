@@ -400,7 +400,7 @@ static void test_note_move_and_quantize_edit_the_pattern()
     assert(n.size() == 2 && n[1].pitch == 40 && n[1].at == 1.5 && n[1].length == 1.0 && n[1].vel == 120);
     assert(contains(r.no("note move pt_1 --pitch 40 --at 1.5 --to-pitch 36 --to-at 0"), "a note is already at 36"));
     assert(contains(r.no("note move pt_1 --pitch 41 --at 1.5 --length 2"), "no note 41"));
-    assert(contains(r.no("note move pt_1 --pitch 40 --at 1.5"), "needs --to-pitch, --to-at, --length and/or --vel"));
+    assert(contains(r.no("note move pt_1 --pitch 40 --at 1.5"), "needs --to-pitch, --to-at, --length, --vel and/or --chance"));
     // quantize: onto the grid; swing pushes every second step late; notes landing together merge
     r.ok("note add pt_1 --pitch 42 --at 0.27");
     r.ok("note add pt_1 --pitch 42 --at 0.49");
@@ -2209,6 +2209,218 @@ static void test_the_keyboards_wheels_play_and_record()
     pass("the keyboard's wheels (R-MIDI-3): the pitch wheel bends the armed strip at once; in a take, the bend and the mod wheel land as its lanes where they moved");
 }
 
+namespace
+{
+    const PatternModel *patternIn(const Run &r, const std::string &id)
+    {
+        for (const auto &x : r.svc.model().patterns)
+            if (x.id == id) return &x;
+        return nullptr;
+    }
+    // a pattern's notes as `pattern print` writes them, for comparing whole states
+    std::string notesText(Run &r, const std::string &pt)
+    {
+        const std::string all = r.ok("pattern print " + pt);
+        return all.substr(all.find('\n') + 1);
+    }
+}
+
+static void test_scale_lock_places_and_moves_notes_on_the_scale()
+{
+    // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
+    // is that degree's own triad), moved notes on to its next pitch the way they went; a move in time keeps a pitch
+    Run r;
+    r.ok("project new " + freshSong("scale") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");          // ch_2 dv_1 ac_1 pt_1
+    r.ok("note add pt_1 --pitch C#4 --at 3");                       // written before the lock: it stays
+    assert(r.ok("pattern scale pt_1 C major") == "C major: C D E F G A B\n");
+    assert(r.ok("pattern scale pt_1 Bb dorian") == "A# dorian: A# C C# D# F G G#\n");
+    r.ok("pattern scale pt_1 C major");
+    const PatternModel *pt = patternIn(r, "pt_1");
+    assert(pt && pt->scale == "C major" && pt->scaleMask == 0xAB5);
+    assert(contains(r.text(), "scale=\"C major\""));
+    r.ok("note add pt_1 --pitch 61 --at 0");                        // C#4 → C4 (a tie goes down)
+    r.ok("note add pt_1 --pitch 66 --at 0.5");                      // F#4 → F4
+    assert(contains(r.ok("note add pt_1 --chord A --octave 4 --at 1"), "A: A4 C5 E5")); // A C# E → A minor, in the key
+    r.ok("notes add pt_1 \"D#4@2 G#4@2.5\"");                     // → D4, G4
+    std::string t = notesText(r, "pt_1");
+    for (const char *want : {"C4@0:", "F4@0.5:", "A4@1:", "C5@1:", "E5@1:", "D4@2:", "G4@2.5:", "C#4@3:"}) assert(contains(t, want));
+    assert(!contains(t, "C#5@1") && !contains(t, "D#4") && !contains(t, "G#4"));
+    // moved: up from E goes to F, up from F to G (not F#); down from C to B
+    r.ok("note move pt_1 --pitch E5 --at 1 --to-pitch F5");
+    r.ok("notes move pt_1 \"F4@0.5\" --semi 1");                  // F4 → G4
+    r.ok("notes move pt_1 \"C4@0\" --semi -1");                   // C4 → B3
+    r.ok("notes move pt_1 \"C#4@3\" --by 0.5");                   // in time only: an off-scale note keeps its pitch
+    t = notesText(r, "pt_1");
+    for (const char *want : {"F5@1:", "G4@0.5:", "B3@0:", "C#4@3.5:"}) assert(contains(t, want));
+    // two moved onto one pitch: refused whole (F#4 and F4 both up a step land on G4)
+    r.ok("notes add pt_1 F4@3.75");
+    r.ok("pattern scale pt_1 off");
+    r.ok("notes add pt_1 F#4@3.75");
+    r.ok("pattern scale pt_1 C major");
+    assert(contains(r.no("notes move pt_1 \"F4@3.75 F#4@3.75\" --semi 1"), "with another moved there"));
+    // refusals name the way; off unlocks; undo brings the lock back
+    assert(contains(r.no("pattern scale pt_1 H major"), "`H` is not a key"));
+    assert(contains(r.no("pattern scale pt_1 C bebop"), "`bebop` is not a scale") );
+    assert(contains(r.no("pattern scale pt_1 C"), "a key and a name"));
+    assert(r.ok("pattern scale pt_1 off") == "pt_1: no scale\n" && patternIn(r, "pt_1")->scaleMask == 0);
+    r.ok("note add pt_1 --pitch 61 --at 3.25");                     // unlocked: C#4 stays C#4
+    assert(contains(notesText(r, "pt_1"), "C#4@3.25:"));
+    r.ok("undo");
+    r.ok("undo");
+    assert(patternIn(r, "pt_1")->scale == "C major");
+    pass("scale lock (R-ROLL-11): placed notes on the nearest pitch, a tie down (a stamped A major is A minor in C); moved notes on to the next the way they went; a move in time keeps a pitch; two landing on one refused; key and scale refused by name; off; undone");
+}
+
+static void test_note_chance_is_rolled_per_pass_and_the_render_stays_pure()
+{
+    // R-ROLL-11: a note's chance rolled per clip and per pass by a hash — the same bytes twice, about its odds heard,
+    // two clips of one pattern apart, the song's MIDI file what the render plays; set by a token, a selection, one note
+    Run r;
+    r.ok("project new " + freshSong("chance") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 32");         // ch_2 dv_1 ac_1 pt_1: a 4-beat pattern, 8 passes
+    sineSynth(r, "dv_1");
+    r.ok("set dv_1.amp.release=5");
+    r.ok("notes add pt_1 \"A4@0:0.25:100:0.5 A4@1:0.25:100:0.5 A4@2:0.25:100:0.5 A4@3:0.25:100:0.5\"");
+    const PatternModel *pt = patternIn(r, "pt_1");
+    assert(pt && pt->notes.size() == 4 && pt->notes[0].chance == 0.5);
+    assert(contains(r.text(), "vel=100 chance=0.5") && contains(r.ok("pattern print pt_1"), "A4@0:0.25:100:0.5"));
+    auto heard = [&](const std::string &name, double from, int beats) {
+        const std::string out = scratch() + "/" + name + ".wav";
+        r.ok("render --out " + out + " --from " + std::to_string(from) + " --to " + std::to_string(from + beats) + " --bits 32f");
+        const auto &L = r.fake.written[out][0];
+        std::string got;
+        for (int b = 0; b < beats; ++b)
+        {
+            double e = 0;
+            for (size_t i = (size_t)b * 24000 + 480; i < (size_t)b * 24000 + 4800 && i < L.size(); ++i) e += (double)L[i] * L[i];
+            got += e > 1.0 ? 'x' : '.';
+        }
+        return got;
+    };
+    const std::string once = heard("chance1", 0, 32), twice = heard("chance2", 0, 32);
+    const auto hits = std::count(once.begin(), once.end(), 'x');
+    std::printf("    heard %s (%ld of 32)\n", once.c_str(), (long)hits);
+    assert(once == twice && hits >= 8 && hits <= 24);               // pure; about half
+    // a second clip of the same pattern: its own draws
+    r.ok("clip add --strip ch_2 --pattern pt_1 --at 32 --length 32"); // ac_2
+    const std::string second = heard("chance3", 32, 32);
+    assert(second != once);
+    // the song's MIDI file: exactly the notes the render played
+    const std::string mid = scratch() + "/chance.mid";
+    r.ok("project export-midi " + mid);
+    const std::string got = firstLine(r.ok("pattern import " + mid));
+    const auto played = std::count(once.begin(), once.end(), 'x') + std::count(second.begin(), second.end(), 'x');
+    assert(patternIn(r, got) && (long)patternIn(r, got)->notes.size() == (long)played);
+    // set: a selection, one note; 1 always, 0 never; refusals
+    r.ok("notes set pt_1 \"A4@0 A4@1 A4@2 A4@3\" --chance 1");
+    assert(heard("chance4", 0, 8) == "xxxxxxxx");
+    r.ok("note move pt_1 --pitch A4 --at 0 --chance 0");
+    assert(heard("chance5", 0, 8) == ".xxx.xxx" && patternIn(r, "pt_1")->notes[0].chance == 0.0);
+    assert(contains(r.no("notes set pt_1 \"A4@0\" --chance 2"), "--chance is the odds"));
+    assert(contains(r.no("notes set pt_1 \"A4@0.5\" --vel 90"), "has no note there"));
+    assert(contains(r.no("notes set pt_1 \"A4@0\""), "needs --vel, --chance and/or --length"));
+    assert(contains(r.no("notes add pt_1 \"A4@0:0.25:100:1.5\""), "the chance `1.5` must be 0 to 1"));
+    pass("note chance (R-ROLL-11): rolled per clip and pass by a hash — the same render twice, near its odds, a second clip apart, the MIDI file what the render plays; set by a token, notes set, note move; 1 always, 0 never; refusals");
+}
+
+static void test_the_note_tools_humanise_groove_legato_arpeggiate()
+{
+    // R-ROLL-11: each tool ONE edit, on every note or the ones named; seeded where it draws, so the same line on the same
+    // notes writes the same notes
+    Run r;
+    r.ok("project new " + freshSong("tools") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");          // pt_1
+    r.ok("notes add pt_1 \"C4@0 D4@0.5 E4@1 F4@1.5 G4@2 A4@2.5 B4@3 C5@3.5\" --vel 80");
+    const std::string straight = notesText(r, "pt_1");
+    // humanise: seeded, bounded, reproducible; --notes keeps the rest
+    const std::string said = r.ok("pattern humanise pt_1 --timing 0.05 --vel 10 --seed 7");
+    assert(said == "8 notes humanised (seed 7)\n");
+    const std::string loose = notesText(r, "pt_1");
+    assert(loose != straight);
+    for (const auto &n : patternIn(r, "pt_1")->notes)
+    {
+        const double grid = std::round(n.at * 2) / 2;
+        assert(std::fabs(n.at - grid) <= 0.05 + 1e-9 && n.vel >= 70 && n.vel <= 90);
+    }
+    r.ok("undo");
+    assert(notesText(r, "pt_1") == straight);
+    r.ok("pattern humanise pt_1 --timing 0.05 --vel 10 --seed 7");
+    assert(notesText(r, "pt_1") == loose);                         // the same line, the same notes
+    r.ok("undo");
+    const std::string byDefault = r.ok("pattern humanise pt_1");     // a seed of the notes, printed — and it reproduces
+    const std::string seed = byDefault.substr(byDefault.find("seed ") + 5, byDefault.find(')') - byDefault.find("seed ") - 5);
+    const std::string loose2 = notesText(r, "pt_1");
+    r.ok("undo");
+    r.ok("pattern humanise pt_1 --seed " + seed);
+    assert(notesText(r, "pt_1") == loose2);
+    r.ok("undo");
+    r.ok("pattern humanise pt_1 --timing 0.05 --seed 3 --notes \"C4@0 D4@0.5\"");
+    const std::string some = notesText(r, "pt_1");
+    assert(contains(some, "E4@1:") && contains(some, "C5@3.5:") && contains(some, ":80  #")); // the rest untouched
+    r.ok("undo");
+    // a groove: the hip-hop template on sixteenths — each step's offset and accent; half strength half way
+    r.ok("pattern clear pt_1");
+    r.ok("notes add pt_1 \"C4@0 C4@0.25 C4@0.5 C4@0.75\" --vel 100");
+    r.ok("pattern quantize pt_1 --groove hip-hop");
+    {
+        const auto &n = patternIn(r, "pt_1")->notes;
+        assert(n.size() == 4);
+        const double at[4] = {0, 0.25 + 0.2 * 0.25, 0.5 + 0.05 * 0.25, 0.75 + 0.25 * 0.25};
+        const int vel[4] = {100, 70, 85, 65};
+        for (int i = 0; i < 4; ++i) assert(std::fabs(n[i].at - toTick(at[i])) < 1e-9 && n[i].vel == vel[i]);
+    }
+    r.ok("undo");
+    r.ok("pattern quantize pt_1 --groove hip-hop --strength 0.5");
+    assert(std::fabs(patternIn(r, "pt_1")->notes[1].at - toTick(0.25 + 0.1 * 0.25)) < 1e-9 && patternIn(r, "pt_1")->notes[1].vel == 85);
+    r.ok("undo");
+    assert(contains(r.no("pattern quantize pt_1 --groove bebop"), "no groove `bebop` (mpc-54"));
+    assert(contains(r.no("pattern quantize pt_1 --groove shuffle --swing 0.3"), "carries its own grid and swing"));
+    assert(contains(r.no("pattern quantize pt_1 --strength 2"), "--strength"));
+    // legato: each to the next start, a chord together, the last to the pattern's end; an overlap shortened
+    r.ok("pattern clear pt_1");
+    r.ok("notes add pt_1 \"C4@0:0.25 E4@1:3 G4@1:0.5 B4@3:0.25\"");
+    assert(r.ok("pattern legato pt_1") == "4 notes legato\n");
+    assert(notesText(r, "pt_1") == "C4@0:1:100  # 60\nE4@1:2:100  # 64\nG4@1:2:100  # 67\nB4@3:1:100  # 71\n");
+    r.ok("undo");
+    r.ok("pattern legato pt_1 --notes \"C4@0 B4@3\"");               // the next start among them: C4 runs to beat 3
+    assert(contains(notesText(r, "pt_1"), "C4@0:3:100") && contains(notesText(r, "pt_1"), "E4@1:3:100"));
+    r.ok("undo");
+    // arpeggiate: a held C major triad, eighths
+    r.ok("pattern clear pt_1");
+    r.ok("notes add pt_1 \"C4@0:2:90 E4@0:2:80 G4@0:2:70\"");
+    assert(r.ok("pattern arpeggiate pt_1 --rate 0.5") == "3 notes → 4 steps (up)\n");
+    assert(notesText(r, "pt_1") == "C4@0:0.5:90  # 60\nE4@0.5:0.5:80  # 64\nG4@1:0.5:70  # 67\nC4@1.5:0.5:90  # 60\n");
+    r.ok("undo");
+    r.ok("pattern arpeggiate pt_1 --rate 0.25 --mode updown --octaves 2 --gate 0.5");
+    std::string seq;
+    for (const auto &n : patternIn(r, "pt_1")->notes) seq += std::to_string(n.pitch) + " ";
+    assert(seq == "60 64 67 72 76 79 76 72 ");                        // up two octaves and back, the turns once
+    assert(patternIn(r, "pt_1")->notes[0].length == 0.125);
+    r.ok("undo");
+    r.ok("pattern arpeggiate pt_1 --mode down --rate 1");
+    assert(notesText(r, "pt_1") == "G4@0:1:70  # 67\nE4@1:1:80  # 64\n");
+    r.ok("undo");
+    r.ok("pattern arpeggiate pt_1 --mode random --seed 5 --rate 0.25");
+    const std::string rnd = notesText(r, "pt_1");
+    r.ok("undo");
+    r.ok("pattern arpeggiate pt_1 --mode random --seed 5 --rate 0.25");
+    assert(notesText(r, "pt_1") == rnd);
+    r.ok("undo");
+    // after a rest the arpeggio starts again from the first
+    r.ok("notes add pt_1 \"C4@3:1 E4@3:1\"");
+    r.ok("pattern arpeggiate pt_1 --rate 0.5");
+    assert(contains(notesText(r, "pt_1"), "C4@3:0.5") && contains(notesText(r, "pt_1"), "E4@3.5:0.5"));
+    r.ok("undo");
+    assert(contains(r.no("pattern arpeggiate pt_1 --mode sideways"), "--mode is up, down, updown or random"));
+    assert(contains(r.no("pattern arpeggiate pt_1 --octaves 5"), "--octaves is 1 to 4"));
+    assert(contains(r.no("pattern arpeggiate pt_1 --rate 8"), "--rate is a step"));
+    assert(contains(r.no("pattern arpeggiate pt_1 --notes \"D4@0\""), "has no note there"));
+    r.ok("pattern clear pt_1");
+    assert(contains(r.no("pattern arpeggiate pt_1"), "no notes to arpeggiate"));
+    pass("the note tools (R-ROLL-11): humanise seeded, bounded, reproduced by its printed seed, --notes alone; a groove's offsets and accents, at half strength half way; legato to the next start, a chord together, the last to the end; arpeggiate up, updown over octaves (turns once), down, seeded random, again after a rest; refusals");
+}
+
 static void test_loop_and_seek()
 {
     Run r;
@@ -3262,6 +3474,9 @@ int main()
     test_expression_lanes_play_the_wheels();
     test_expression_lanes_go_through_midi_files();
     test_the_keyboards_wheels_play_and_record();
+    test_scale_lock_places_and_moves_notes_on_the_scale();
+    test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
+    test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();
     test_render_measure();
     test_loop_and_seek();

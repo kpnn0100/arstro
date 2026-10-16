@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 🚧 DR-ROLL-11 — the grammar)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -776,6 +776,22 @@ a process is the host's (law 12).
   probability (seeded per note), groove templates beside swing, scale lock (a key and a scale snap new and moved
   notes), chord stamps (a chord placed in one click), legato (notes stretched to the next), and
   `pattern arpeggiate <pt> --rate --mode up|down|updown|random --octaves` (a MIDI effect written as notes).
+  (**Detailed while building it, N12 — 2026-10-16.** Each tool is ONE edit on the pattern, on its notes or on the
+  ones named by `--notes "<pitch@beat> …"` (the roll's selection), and a seed makes it reproducible: the same line on
+  the same notes writes the same notes. *Probability* is the one decided while playing: a note's `chance` (0 … 1,
+  1 unless set) is rolled per clip and per repetition from a hash of the clip, the repetition, the note's pitch and
+  tick — no clock — so the render stays pure, two clips of one pattern vary apart, and `project export-midi` writes
+  what the render plays. *Scale lock* is the pattern's (`pattern scale <pt> <key> <scale>` | `off`): a note PLACED
+  (`note add`, its `--chord`, `notes add`) lands on the nearest pitch of the scale — a tie goes down, so a major
+  chord stamped on any degree becomes that degree's own triad — and a note MOVED in pitch (`note move --to-pitch`,
+  `notes move --semi`) goes on in the direction it was moved to the next pitch of the scale; a move in time only, an
+  import, a step row, a recording and `pattern transpose` keep their pitches. *Grooves* sit beside swing on
+  `pattern quantize --groove <name> [--strength]`: a named template of per-step offsets and accents, empirical and
+  listed in the API document. *Humanise* moves each start within ± `--timing` beats and each velocity within
+  ± `--vel`. *Legato* ends every note where the next start begins (a chord's notes together), the last at the
+  pattern's end. *Arpeggiate* plays, on every `--rate` step of the beat grid, the next pitch of what is held there
+  (its pitches over `--octaves`, up, down, up-down without repeating the turns, or a seeded random), each step
+  `--gate` of a step long at the held note's velocity, replacing what it arpeggiated.)
 - **R-INST-6 Glide**: the Basic Synth gains a mono / legato mode with portamento time (DSP). (Built 2026-10-16 —
   DR-INST-6: constant-time glide, linear in semitones; legato does not strike again.)
 - **R-ARR-1 Markers and sections**: `marker add <name> --at <b> [--length <b>]`, rename, move, delete; drawn on the

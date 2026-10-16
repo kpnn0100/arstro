@@ -140,10 +140,12 @@ namespace solaris
 
             {K::PatternNew, "pattern new", "", 0, 0, {"name=<text>", "length=<beats>"}, "Create an empty pattern.", "R-CLIP-2"},
             {K::NoteAdd, "note add", "<pt>", 1, 1,
-             {"pitch=<pitch>", "at=<beats>", "length=<beats>", "vel=<1-127>", "chord=<name>", "inversion=<n>", "octave=<n>"},
+             {"pitch=<pitch>", "at=<beats>", "length=<beats>", "vel=<1-127>", "chance=<0-1>", "chord=<name>", "inversion=<n>", "octave=<n>"},
              "Add a note to a pattern — every clip of it changes. A pitch is a number, a name (C4 = 60, F#3, Bb2) or a "
              "kit's pad (kick). --chord <Cm7> adds a chord instead (its root in --octave, default 4; --inversion n "
-             "raises its n lowest notes an octave) as ONE edit — the qualities are under Notation.", "R-CLIP-2"},
+             "raises its n lowest notes an octave) as ONE edit — the qualities are under Notation. --chance: the odds it "
+             "sounds in a pass (1). A pattern locked to a scale (`pattern scale`) puts each note on the scale's nearest "
+             "pitch, a tie down — a major chord on any degree becomes that degree's own triad.", "R-CLIP-2"},
             {K::NoteDelete, "note delete", "<pt>", 1, 1, {"pitch=<pitch>", "at=<beats>"}, "Remove the note at that pitch and time.", "R-CLIP-2"},
             {K::NotePreview, "note preview", "<ch> <pitch>", 2, 2, {"vel=<1-127>", "length=<beats>"},
              "Hear one note through instrument strip <ch> — its instrument and its rack, at its fader and pan, as it "
@@ -151,17 +153,21 @@ namespace solaris
              "when a note is made, a key pressed). A pitch is a number, a name or the strip's kit's pad; --length "
              "beats (default 0.5), --vel (default 100). A preview started while one rings takes over with a short "
              "fade. Not an edit, never in a render.", "R-ROLL-7"},
-            {K::NoteMove, "note move", "<pt>", 1, 1, {"pitch=<pitch>", "at=<beats>", "to-pitch=<pitch>", "to-at=<beats>", "length=<beats>", "vel=<1-127>"},
-             "Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) — "
-             "one gesture, one line. Refused onto another note.", "R-ROLL-2"},
-            {K::PatternQuantize, "pattern quantize", "<pt>", 1, 1, {"grid=<beats>", "swing=<0-0.75>"},
+            {K::NoteMove, "note move", "<pt>", 1, 1, {"pitch=<pitch>", "at=<beats>", "to-pitch=<pitch>", "to-at=<beats>", "length=<beats>", "vel=<1-127>", "chance=<0-1>"},
+             "Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) or "
+             "its chance (--chance) — one gesture, one line. Refused onto another note. In a pattern locked to a scale, "
+             "--to-pitch goes on to the scale's next pitch the way it moved.", "R-ROLL-2"},
+            {K::PatternQuantize, "pattern quantize", "<pt>", 1, 1, {"grid=<beats>", "swing=<0-0.75>", "groove=<name>", "strength=<0-1>", "notes=<\"pitch@beat …\">"},
              "Move every note's start onto the grid (default a sixteenth, 0.25), delaying every second grid step by "
-             "--swing of a step. Notes that land on one another merge (the louder stays).", "R-ROLL-4"},
+             "--swing of a step — or onto a --groove (R-ROLL-11: a template's steps, offsets and accents, under Notation; "
+             "it carries its own grid and swing). --strength moves each start (and velocity) that part of the way (1). "
+             "--notes: only those notes (the roll's selection). Notes that land on one another merge (the louder stays).", "R-ROLL-4"},
             {K::NotesAdd, "notes add", "<pt> \"<note> …\"", 2, -1, {"length=<beats>", "vel=<1-127>"},
-             "Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>]] — C4@0:0.5:90, "
-             "kick@1, E4@2::70. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing "
-             "lands. Prints how many. A note past the pattern's end grows the pattern to the end of that bar, and a clip "
-             "that played it whole with it (R-ROLL-9).", "R-SVC-8"},
+             "Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>[:<chance>]]] — "
+             "C4@0:0.5:90, kick@1, E4@2::70, hat@1.5:::0.5. --length / --vel are the defaults (0.25, 100). A bad token is "
+             "refused by name and nothing lands. Prints how many. A note past the pattern's end grows the pattern to the end "
+             "of that bar, and a clip that played it whole with it (R-ROLL-9). A scale-locked pattern puts each on its "
+             "scale (R-ROLL-11).", "R-SVC-8"},
             {K::NotesMove, "notes move", "<pt> \"<pitch@beat> …\"", 2, -1, {"by=<beats>", "semi=<n>"},
              "Move several notes as ONE edit (one undo step) — the piano roll's selection dragged, or moved by the arrow "
              "keys: each named by <pitch>@<beat>, all moved --by beats (default 0) and --semi semitones (default 0). "
@@ -186,6 +192,31 @@ namespace solaris
              "lane goes out in a MIDI file.", "R-MIDI-3", false, {"lane", "at", "value"}},
             {K::ExprDelete, "expr delete", "<pt>", 1, 1, {"lane=<lane>", "at=<beats>"}, "Remove the lane's point at --at.", "R-MIDI-3", false, {"lane", "at"}},
             {K::ExprClear, "expr clear", "<pt>", 1, 1, {"lane=<lane>"}, "Remove a lane's points (--lane), or every lane's.", "R-MIDI-3"},
+            {K::PatternScale, "pattern scale", "<pt> <key> <scale> | off", 2, 3, {},
+             "Lock a pattern to a scale (R-ROLL-11) — `pattern scale pt_1 D dorian`: a note placed (`note add`, its --chord, "
+             "`notes add`) lands on the scale's nearest pitch, a tie going down (so a major chord stamped on any degree is "
+             "that degree's own triad); a note moved in pitch (`note move --to-pitch`, `notes move --semi`) goes on to the "
+             "scale's next pitch the way it moved. A move in time, an import, a step row, a recording and `pattern "
+             "transpose` keep their pitches; notes already written stay. `off` unlocks it. The scales are under Notation. "
+             "Prints its notes.", "R-ROLL-11"},
+            {K::NotesSet, "notes set", "<pt> \"<pitch@beat> …\"", 2, -1, {"vel=<1-127>", "chance=<0-1>", "length=<beats>"},
+             "Set several notes' --vel, --chance and/or --length as ONE edit — the piano roll's selection. Refused whole, "
+             "naming the first, when a name matches no note.", "R-ROLL-11"},
+            {K::PatternHumanise, "pattern humanise", "<pt>", 1, 1, {"timing=<beats>", "vel=<0-127>", "seed=<n>", "notes=<\"pitch@beat …\">"},
+             "Loosen the notes (R-ROLL-11): each start moved within ± --timing beats and each velocity within ± --vel (with "
+             "neither: 0.02 and 8), a triangular spread from a seed — the same --seed on the same notes writes the same notes "
+             "(by default a hash of the notes; printed). A note never goes before beat 0, nor onto another of its pitch (it "
+             "keeps its time). --notes: only those notes (the roll's selection).", "R-ROLL-11"},
+            {K::PatternLegato, "pattern legato", "<pt>", 1, 1, {"notes=<\"pitch@beat …\">"},
+             "End every note where the next start begins — a chord's notes together, the last at the pattern's end; an "
+             "overlap is shortened as a gap is filled (R-ROLL-11). --notes: only those notes, the next start among them.", "R-ROLL-11"},
+            {K::PatternArpeggiate, "pattern arpeggiate", "<pt>", 1, 1,
+             {"rate=<beats>", "mode=<up|down|updown|random>", "octaves=<1-4>", "gate=<0.05-1>", "seed=<n>", "notes=<\"pitch@beat …\">"},
+             "A MIDI effect written as notes (R-ROLL-11): on every --rate step of the beat grid (0.25) where notes are held, the "
+             "next pitch of what is held there — its pitches over --octaves (1), up, down, updown (the turns not repeated) or "
+             "a seeded random (--seed) — --gate of a step long (1), at the held note's velocity and chance; it starts again "
+             "from the first after a rest. Replaces the notes it arpeggiated (every note, or --notes); a step on another note "
+             "of its pitch replaces that one. Prints how many.", "R-ROLL-11"},
             {K::PatternImport, "pattern import", "<file.mid>", 1, 1, {"track=<n>", "at=<beats>", "lane=<ln>", "instrument=<type>", "name=<text>"},
              "Make patterns of a Standard MIDI File (format 0/1/2; ticks or SMPTE time): one per track with notes, or "
              "--track n's alone; whole bars long; named after the track. With --lane <an instrument's track> or "

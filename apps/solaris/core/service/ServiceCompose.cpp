@@ -65,6 +65,44 @@ namespace solaris
             out = (int)v;
             return true;
         }
+        bool chanceOf(const Command &c, double &out, std::string &err)
+        {
+            if (!c.has("chance")) return true;
+            if (!parseNumber(c.flag("chance"), out) || !(out >= 0 && out <= 1)) { err = "--chance is the odds a note sounds, 0 to 1"; return false; }
+            return true;
+        }
+        // R-ROLL-11: a seeded stream — splitmix64, so the same seed on the same notes writes the same notes
+        struct Rng
+        {
+            unsigned long long s;
+            double next()
+            {
+                unsigned long long z = (s += 0x9E3779B97F4A7C15ULL);
+                z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+                z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+                return (double)((z ^ (z >> 31)) >> 11) / 9007199254740992.0;
+            }
+        };
+        // --seed, or a hash of the notes (so a second run on the changed notes is a new draw), short enough to read back
+        bool seedOf(const Command &c, const Pattern &pt, unsigned long long &out, std::string &err)
+        {
+            if (c.has("seed"))
+            {
+                double v = 0;
+                if (!parseNumber(c.flag("seed"), v) || v != std::floor(v) || v < 0 || v > 9e15) { err = "--seed is a whole number ≥ 0"; return false; }
+                out = (unsigned long long)v;
+                return true;
+            }
+            unsigned long long h = 1469598103934665603ULL;
+            for (const auto &n : pt.notes)
+                for (long long v : {(long long)n.pitch, (long long)std::llround(n.at * kPpq), (long long)std::llround(n.length * kPpq), (long long)n.vel})
+                {
+                    h ^= (unsigned long long)v;
+                    h *= 1099511628211ULL;
+                }
+            out = h % 1000000;
+            return true;
+        }
         // every word of the positionals after the pattern: `notes add pt_1 "C4@0 E4@1" G4@2` is three notes
         std::vector<std::string> wordsAfterFirst(const Command &c)
         {
@@ -169,6 +207,35 @@ namespace solaris
             if (!near.empty()) err += " (did you mean: " + near[0] + "?)";
             return false;
         }
+        // the notes `words` name by pitch@beat (indexes into pt->notes) — refused whole, naming the first that is none
+        auto named = [&](const std::vector<std::string> &words, std::vector<size_t> &which, const char *nothing) {
+            for (size_t i = 0; i < words.size(); ++i)
+            {
+                NoteToken t;
+                int pitch = 0;
+                std::string why;
+                if (!parseNoteToken(words[i], t, why) || !pitchOf(t.pitch, pt->id, pitch, why))
+                { err = "note " + std::to_string(i + 1) + " `" + words[i] + "`: " + why + " — " + nothing; return false; }
+                size_t k = pt->notes.size();
+                for (size_t j = 0; j < pt->notes.size(); ++j)
+                    if (pt->notes[j].pitch == pitch && sameTick(pt->notes[j].at, toTick(t.at))) k = j;
+                if (k == pt->notes.size()) { err = "note " + std::to_string(i + 1) + " `" + words[i] + "`: " + pt->id + " has no note there — " + nothing; return false; }
+                if (std::find(which.begin(), which.end(), k) == which.end()) which.push_back(k);
+            }
+            return true;
+        };
+        // R-ROLL-11: what a tool acts on — the notes --notes names (the roll's selection), else every one
+        auto scope = [&](std::vector<size_t> &which) {
+            if (!c.has("notes"))
+            {
+                for (size_t k = 0; k < pt->notes.size(); ++k) which.push_back(k);
+                return true;
+            }
+            const auto words = tokenize(c.flag("notes"));
+            if (words.empty()) { err = "--notes names notes: \"<pitch>@<beat> …\""; return false; }
+            return named(words, which, "nothing changed");
+        };
+        const int mask = scaleMaskOf(*pt); // R-ROLL-11: 0 unless the pattern is locked to a scale
         switch (c.kind)
         {
         case K::NotesAdd:
@@ -194,6 +261,8 @@ namespace solaris
                 n.length = t.hasLength ? toTick(t.length) : length;
                 if (!(n.length > 0)) { err = "note " + std::to_string(i + 1) + " `" + words[i] + "`: shorter than a tick"; return false; }
                 n.vel = t.hasVel ? t.vel : vel;
+                n.chance = t.hasChance ? t.chance : 1.0; // R-ROLL-11
+                n.pitch = snapToScale(n.pitch, mask, 0); // … and on the scale, when the pattern has one
                 add.push_back(n);
             }
             for (const auto &n : add)
@@ -228,19 +297,7 @@ namespace solaris
             const auto words = wordsAfterFirst(c);
             if (words.empty()) { err = std::string("notes ") + (move ? "move" : "delete") + " needs notes: <pitch>@<beat> …"; return false; }
             std::vector<size_t> which; // indexes into pt->notes
-            for (size_t i = 0; i < words.size(); ++i)
-            {
-                NoteToken t;
-                int pitch = 0;
-                std::string why;
-                if (!parseNoteToken(words[i], t, why) || !pitchOf(t.pitch, pt->id, pitch, why))
-                { err = "note " + std::to_string(i + 1) + " `" + words[i] + "`: " + why + " — nothing changed"; return false; }
-                size_t k = pt->notes.size();
-                for (size_t j = 0; j < pt->notes.size(); ++j)
-                    if (pt->notes[j].pitch == pitch && sameTick(pt->notes[j].at, toTick(t.at))) k = j;
-                if (k == pt->notes.size()) { err = "note " + std::to_string(i + 1) + " `" + words[i] + "`: " + pt->id + " has no note there — nothing changed"; return false; }
-                if (std::find(which.begin(), which.end(), k) == which.end()) which.push_back(k);
-            }
+            if (!named(words, which, "nothing changed")) return false;
             if (!move)
             {
                 std::sort(which.rbegin(), which.rend());
@@ -250,26 +307,262 @@ namespace solaris
                 return true;
             }
             const double shift = toTick(by);
-            for (size_t k : which)
+            std::vector<int> tos; // R-ROLL-11: in a scale-locked pattern each goes on to the scale's next pitch the way it moved
+            for (size_t i = 0; i < which.size(); ++i)
             {
-                const Note &n = pt->notes[k];
-                const int to = n.pitch + semi;
+                const Note &n = pt->notes[which[i]];
+                int to = n.pitch + semi;
                 const double at = n.at + shift;
                 const std::string name = std::to_string(n.pitch) + "@" + beatText(n.at);
                 if (to < 0 || to > 127) { err = "note " + name + " would go to pitch " + std::to_string(to) + ", outside 0–127 — nothing moved"; return false; }
+                if (semi) to = snapToScale(to, mask, semi > 0 ? 1 : -1);
                 if (at < -0.5 / kPpq) { err = "note " + name + " would start before beat 0 — nothing moved"; return false; }
                 for (size_t j = 0; j < pt->notes.size(); ++j)
                     if (std::find(which.begin(), which.end(), j) == which.end() && pt->notes[j].pitch == to && sameTick(pt->notes[j].at, at))
                     { err = "note " + name + " would land on " + std::to_string(to) + "@" + beatText(at) + ", which is not moved — nothing moved"; return false; }
+                for (size_t h = 0; h < i; ++h)
+                    if (tos[h] == to && sameTick(pt->notes[which[h]].at, pt->notes[which[i]].at))
+                    { err = "note " + name + " would land on " + std::to_string(to) + "@" + beatText(at) + " with another moved there — nothing moved"; return false; }
+                tos.push_back(to);
             }
-            for (size_t k : which)
+            for (size_t i = 0; i < which.size(); ++i)
             {
-                pt->notes[k].pitch += semi;
-                pt->notes[k].at = std::max(0.0, pt->notes[k].at + shift);
+                pt->notes[which[i]].pitch = tos[i];
+                pt->notes[which[i]].at = std::max(0.0, pt->notes[which[i]].at + shift);
             }
             sortNotes(*pt);
             changed("notes.moved", pt->id);
             mOutput = countOf(which.size(), "note", "notes") + " moved\n" + growToHold(*pt);
+            return true;
+        }
+        case K::NotesSet:
+        {
+            // R-ROLL-11: a selection's velocity, chance and/or length, ONE edit
+            if (!c.has("vel") && !c.has("chance") && !c.has("length")) { err = "notes set needs --vel, --chance and/or --length"; return false; }
+            int vel = 0;
+            double chance = 1, length = 0;
+            if (!velOf(c, 100, vel, err) || !chanceOf(c, chance, err) || !beatsOf(c, "length", 0.25, length, err)) return false;
+            if (c.has("length") && !(length > 0)) { err = "--length must be more than 0 beats"; return false; }
+            const auto words = wordsAfterFirst(c);
+            if (words.empty()) { err = "notes set needs notes: <pitch>@<beat> …"; return false; }
+            std::vector<size_t> which;
+            if (!named(words, which, "nothing changed")) return false;
+            for (size_t k : which)
+            {
+                Note &n = pt->notes[k];
+                if (c.has("vel")) n.vel = vel;
+                if (c.has("chance")) n.chance = chance;
+                if (c.has("length")) n.length = length;
+            }
+            changed("notes.set", pt->id);
+            mOutput = countOf(which.size(), "note", "notes") + " set\n" + growToHold(*pt);
+            return true;
+        }
+        case K::PatternScale:
+        {
+            std::string text;
+            for (size_t i = 1; i < c.args.size(); ++i) text += (text.empty() ? "" : " ") + c.args[i];
+            if (text == "off")
+            {
+                pt->scale.clear();
+                changed("pattern.scale", pt->id);
+                mOutput = pt->id + ": no scale\n";
+                return true;
+            }
+            std::string canon;
+            int m = 0;
+            if (!parseScale(text, canon, m, err)) return false;
+            pt->scale = canon;
+            int key = 0;
+            parsePitchName(canon.substr(0, canon.find(' ')) + "4", key, err);
+            std::string names;
+            for (int i = 0; i < 12; ++i)
+                if (m >> ((key + i) % 12) & 1)
+                {
+                    std::string nm = pitchName(key + i);
+                    nm.resize(nm.find_first_of("-0123456789"));
+                    names += " " + nm;
+                }
+            changed("pattern.scale", pt->id);
+            mOutput = canon + ":" + names + "\n";
+            return true;
+        }
+        case K::PatternQuantize:
+        {
+            double grid = 0.25, swing = 0, strength = 1;
+            if (c.has("grid") && (!parseNumber(c.flag("grid"), grid) || !(grid >= 1.0 / 32 && grid <= 4)))
+            { err = "--grid must be a step from 1/32 to 4 beats"; return false; }
+            if (c.has("swing") && (!parseNumber(c.flag("swing"), swing) || !(swing >= 0 && swing <= 0.75)))
+            { err = "--swing must be 0 to 0.75 of a step"; return false; }
+            if (c.has("strength") && (!parseNumber(c.flag("strength"), strength) || !(strength >= 0 && strength <= 1)))
+            { err = "--strength is how far each note goes, 0 to 1"; return false; }
+            const Groove *groove = nullptr; // R-ROLL-11
+            if (c.has("groove"))
+            {
+                if (c.has("grid") || c.has("swing")) { err = "a --groove carries its own grid and swing — give it without --grid and --swing"; return false; }
+                groove = findGroove(c.flag("groove"));
+                if (!groove)
+                {
+                    std::string names;
+                    for (const auto &g : grooves()) names += (names.empty() ? "" : ", ") + g.name;
+                    err = "no groove `" + c.flag("groove") + "` (" + names + ")";
+                    return false;
+                }
+            }
+            std::vector<size_t> which;
+            if (!scope(which)) return false;
+            for (size_t k : which)
+            {
+                Note &n = pt->notes[k];
+                const double step = groove ? groove->step : grid;
+                const long long s = std::llround(n.at / step);
+                double target = s * step + ((s % 2) ? swing * grid : 0.0), accent = 1.0; // every second step pushed late
+                if (groove)
+                {
+                    const long long cyc = (long long)groove->offset.size(), i = ((s % cyc) + cyc) % cyc;
+                    target = s * step + groove->offset[(size_t)i] * step;
+                    accent = groove->accent[(size_t)i];
+                }
+                n.at = toTick(std::max(0.0, n.at + strength * (target - n.at)));
+                if (accent != 1.0) n.vel = std::clamp((int)std::lround(n.vel * (1.0 + strength * (accent - 1.0))), 1, 127);
+            }
+            // notes that landed on one another merge: the louder stays
+            std::stable_sort(pt->notes.begin(), pt->notes.end(), [](const Note &a, const Note &b) {
+                return a.at != b.at ? a.at < b.at : (a.pitch != b.pitch ? a.pitch < b.pitch : a.vel > b.vel);
+            });
+            pt->notes.erase(std::unique(pt->notes.begin(), pt->notes.end(), [](const Note &a, const Note &b) {
+                                return a.pitch == b.pitch && sameTick(a.at, b.at);
+                            }),
+                            pt->notes.end());
+            changed("pattern.quantized", pt->id);
+            return true;
+        }
+        case K::PatternHumanise:
+        {
+            double timing = 0.02;
+            int amount = 8;
+            if (c.has("timing") || c.has("vel")) { timing = 0; amount = 0; } // naming one leaves the other alone
+            if (c.has("timing") && (!parseNumber(c.flag("timing"), timing) || !(timing >= 0 && timing <= 1)))
+            { err = "--timing is how far a start may move, 0 to 1 beat either way"; return false; }
+            if (c.has("vel"))
+            {
+                double v = 0;
+                if (!parseNumber(c.flag("vel"), v) || v != std::floor(v) || v < 0 || v > 127) { err = "--vel is how far a velocity may move, a whole number 0 to 127 either way"; return false; }
+                amount = (int)v;
+            }
+            std::vector<size_t> which;
+            unsigned long long seed = 0;
+            if (!scope(which) || !seedOf(c, *pt, seed, err)) return false;
+            Rng rng{seed};
+            for (size_t k : which)
+            {
+                Note &n = pt->notes[k];
+                // a triangular spread (two draws summed): most moves small, none past the amount
+                const double at = toTick(std::max(0.0, n.at + timing * (rng.next() + rng.next() - 1.0)));
+                const int dv = (int)std::lround(amount * (rng.next() + rng.next() - 1.0));
+                bool clash = false;
+                for (size_t j = 0; j < pt->notes.size(); ++j) clash |= j != k && pt->notes[j].pitch == n.pitch && sameTick(pt->notes[j].at, at);
+                if (!clash) n.at = at; // onto another of its pitch: it keeps its time
+                n.vel = std::clamp(n.vel + dv, 1, 127);
+            }
+            sortNotes(*pt);
+            changed("pattern.humanised", pt->id);
+            mOutput = countOf(which.size(), "note", "notes") + " humanised (seed " + std::to_string(seed) + ")\n" + growToHold(*pt);
+            return true;
+        }
+        case K::PatternLegato:
+        {
+            std::vector<size_t> which;
+            if (!scope(which)) return false;
+            std::vector<double> starts;
+            for (size_t k : which) starts.push_back(pt->notes[k].at);
+            std::sort(starts.begin(), starts.end());
+            for (size_t k : which)
+            {
+                Note &n = pt->notes[k];
+                const auto next = std::upper_bound(starts.begin(), starts.end(), n.at + 0.5 / kPpq);
+                const double end = next != starts.end() ? *next : pt->length; // a chord's notes end together; the last at the end
+                if (end > n.at + 0.5 / kPpq) n.length = toTick(end - n.at);
+            }
+            changed("pattern.legato", pt->id);
+            mOutput = countOf(which.size(), "note", "notes") + " legato\n";
+            return true;
+        }
+        case K::PatternArpeggiate:
+        {
+            double rate = 0.25, gate = 1;
+            int octaves = 1;
+            const std::string mode = c.flag("mode", "up");
+            if (c.has("rate") && (!parseNumber(c.flag("rate"), rate) || !(rate >= 1.0 / 32 - 1e-9 && rate <= 4)))
+            { err = "--rate is a step from 1/32 to 4 beats"; return false; }
+            if (c.has("gate") && (!parseNumber(c.flag("gate"), gate) || !(gate >= 0.05 && gate <= 1)))
+            { err = "--gate is how much of a step a note lasts, 0.05 to 1"; return false; }
+            if (c.has("octaves"))
+            {
+                double o = 0;
+                if (!parseNumber(c.flag("octaves"), o) || o != std::floor(o) || o < 1 || o > 4) { err = "--octaves is 1 to 4"; return false; }
+                octaves = (int)o;
+            }
+            if (mode != "up" && mode != "down" && mode != "updown" && mode != "random")
+            { err = "--mode is up, down, updown or random, got `" + mode + "`"; return false; }
+            std::vector<size_t> which;
+            unsigned long long seed = 0;
+            if (!scope(which) || !seedOf(c, *pt, seed, err)) return false;
+            if (which.empty()) { err = pt->id + " has no notes to arpeggiate"; return false; }
+            Rng rng{seed};
+            std::vector<Note> src;
+            double from = 1e300, to = 0;
+            for (size_t k : which)
+            {
+                src.push_back(pt->notes[k]);
+                from = std::min(from, pt->notes[k].at);
+                to = std::max(to, pt->notes[k].at + pt->notes[k].length);
+            }
+            const double eps = 0.5 / kPpq;
+            std::vector<Note> out;
+            long long counter = 0; // the arpeggio's place: back to its first after a rest
+            for (long long s = (long long)std::ceil(from / rate - 1e-9); s * rate < to - eps; ++s)
+            {
+                const double t = toTick(s * rate);
+                std::vector<const Note *> held;
+                for (const auto &n : src)
+                    if (n.at <= t + eps && n.at + n.length > t + eps) held.push_back(&n);
+                if (held.empty()) { counter = 0; continue; }
+                std::sort(held.begin(), held.end(), [](const Note *a, const Note *b) { return a->pitch != b->pitch ? a->pitch < b->pitch : a->vel > b->vel; });
+                held.erase(std::unique(held.begin(), held.end(), [](const Note *a, const Note *b) { return a->pitch == b->pitch; }), held.end());
+                std::vector<std::pair<int, const Note *>> pool; // its pitches, then an octave up, …
+                for (int o = 0; o < octaves; ++o)
+                    for (const Note *h : held)
+                        if (h->pitch + 12 * o <= 127) pool.emplace_back(h->pitch + 12 * o, h);
+                const long long m = (long long)pool.size();
+                long long i = counter % m;
+                if (mode == "down") i = m - 1 - counter % m;
+                else if (mode == "updown")
+                {
+                    const long long cyc = m > 1 ? 2 * m - 2 : 1, p = counter % cyc; // the turns not repeated
+                    i = p < m ? p : 2 * m - 2 - p;
+                }
+                else if (mode == "random") i = std::min(m - 1, (long long)(rng.next() * (double)m));
+                Note x;
+                x.pitch = pool[(size_t)i].first;
+                x.at = t;
+                x.length = toTick(std::max(rate * gate, 1.0 / kPpq));
+                x.vel = pool[(size_t)i].second->vel;
+                x.chance = pool[(size_t)i].second->chance;
+                out.push_back(x);
+                ++counter;
+            }
+            std::sort(which.rbegin(), which.rend());
+            for (size_t k : which) pt->notes.erase(pt->notes.begin() + (long)k);
+            for (const auto &x : out)
+            {
+                pt->notes.erase(std::remove_if(pt->notes.begin(), pt->notes.end(), [&](const Note &o) { return o.pitch == x.pitch && sameTick(o.at, x.at); }),
+                                pt->notes.end()); // a step on another of its pitch replaces it
+                pt->notes.push_back(x);
+            }
+            sortNotes(*pt);
+            changed("pattern.arpeggiated", pt->id);
+            mOutput = countOf(src.size(), "note", "notes") + " → " + countOf(out.size(), "step", "steps") + " (" + mode + ")\n" + growToHold(*pt);
             return true;
         }
         case K::PatternSteps:
@@ -393,14 +686,15 @@ namespace solaris
                 }
             std::ostringstream o;
             o << "# " << pt->id << " " << q(pt->name) << " · " << beatText(pt->length) << " beats · " << countOf(pt->notes.size(), "note", "notes")
-              << " · " << (users.empty() ? std::string("no clip plays it") : "played by " + users) << "\n";
+              << " · " << (users.empty() ? std::string("no clip plays it") : "played by " + users) << (pt->scale.empty() ? "" : " · " + pt->scale) << "\n";
             for (const auto &n : pt->notes)
             {
                 std::string name = pitchName(n.pitch);
                 if (kit)
                     for (const auto &nn : kit->noteNames)
                         if (nn.first == n.pitch) name = padText(nn.second);
-                o << name << "@" << beatText(n.at) << ":" << beatText(n.length) << ":" << n.vel << "  # " << n.pitch
+                o << name << "@" << beatText(n.at) << ":" << beatText(n.length) << ":" << n.vel << (n.chance < 1 ? ":" + canonicalNumber(n.chance) : std::string())
+                  << "  # " << n.pitch
                   << (name != pitchName(n.pitch) ? " " + pitchName(n.pitch) : std::string()) << "\n";
             }
             mOutput = o.str();

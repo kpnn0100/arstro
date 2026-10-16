@@ -860,6 +860,14 @@ namespace solaris
             if (!beatsFlag(c, "length", 0.25, n.length, err)) return false;
             if (!(n.length > 0)) { err = "--length must be more than 0 beats"; return false; }
             if (!intFlag(c, "vel", 1, 127, 100, n.vel, err)) return false;
+            if (c.has("chance") && (!parseNumber(c.flag("chance"), n.chance) || !(n.chance >= 0 && n.chance <= 1)))
+            { err = "--chance is the odds it sounds, 0 to 1"; return false; } // R-ROLL-11
+            if (const int mask = scaleMaskOf(*pt)) // R-ROLL-11: placed on the scale, a tie down — a chord's notes each
+            {
+                for (int &k : pitches) k = snapToScale(k, mask, 0);
+                std::sort(pitches.begin(), pitches.end());
+                pitches.erase(std::unique(pitches.begin(), pitches.end()), pitches.end());
+            }
             std::string names;
             for (int k : pitches)
             {
@@ -882,8 +890,8 @@ namespace solaris
             Pattern *pt = p.pattern(c.arg(0));
             if (!pt) { err = "no pattern `" + c.arg(0) + "`"; return false; }
             if (!c.has("pitch") || !c.has("at")) { err = "a note is named by --pitch and --at"; return false; }
-            if (!c.has("to-pitch") && !c.has("to-at") && !c.has("length") && !c.has("vel"))
-            { err = "note move needs --to-pitch, --to-at, --length and/or --vel"; return false; }
+            if (!c.has("to-pitch") && !c.has("to-at") && !c.has("length") && !c.has("vel") && !c.has("chance"))
+            { err = "note move needs --to-pitch, --to-at, --length, --vel and/or --chance"; return false; }
             int pitch = 0;
             double at = 0;
             if (!pitchOf(c.flag("pitch"), pt->id, pitch, err) || !beatsFlag(c, "at", 0, at, err)) return false;
@@ -900,6 +908,10 @@ namespace solaris
             if (!beatsFlag(c, "length", n->length, next.length, err)) return false;
             if (!(next.length > 0)) { err = "--length must be more than 0 beats"; return false; }
             if (!intFlag(c, "vel", 1, 127, n->vel, next.vel, err)) return false;
+            if (c.has("chance") && (!parseNumber(c.flag("chance"), next.chance) || !(next.chance >= 0 && next.chance <= 1)))
+            { err = "--chance is the odds it sounds, 0 to 1"; return false; } // R-ROLL-11
+            if (const int mask = scaleMaskOf(*pt); mask && next.pitch != n->pitch) // R-ROLL-11: on to the scale's next, the way it moved
+                next.pitch = snapToScale(next.pitch, mask, next.pitch > n->pitch ? 1 : -1);
             const Note *there = at_(next.pitch, next.at);
             if (there && there != n) { err = "a note is already at " + std::to_string(next.pitch) + ", beat " + canonicalBeats(next.at); return false; }
             *n = next;
@@ -908,31 +920,6 @@ namespace solaris
             });
             mOutput = growToHold(*pt); // R-ROLL-9: moved or resized past the end, the pattern holds it
             changed("note.moved", pt->id);
-            return true;
-        }
-        case K::PatternQuantize:
-        {
-            Pattern *pt = p.pattern(c.arg(0));
-            if (!pt) { err = "no pattern `" + c.arg(0) + "`"; return false; }
-            double grid = 0.25, swing = 0;
-            if (c.has("grid") && (!parseNumber(c.flag("grid"), grid) || !(grid >= 1.0 / 32 && grid <= 4)))
-            { err = "--grid must be a step from 1/32 to 4 beats"; return false; }
-            if (c.has("swing") && (!parseNumber(c.flag("swing"), swing) || !(swing >= 0 && swing <= 0.75)))
-            { err = "--swing must be 0 to 0.75 of a step"; return false; }
-            for (auto &n : pt->notes)
-            {
-                const long long k = std::llround(n.at / grid);
-                n.at = toTick(k * grid + ((k % 2) ? swing * grid : 0.0)); // every second step pushed late
-            }
-            // notes that landed on one another merge: the louder stays
-            std::stable_sort(pt->notes.begin(), pt->notes.end(), [](const Note &a, const Note &b) {
-                return a.at != b.at ? a.at < b.at : (a.pitch != b.pitch ? a.pitch < b.pitch : a.vel > b.vel);
-            });
-            pt->notes.erase(std::unique(pt->notes.begin(), pt->notes.end(), [](const Note &a, const Note &b) {
-                                return a.pitch == b.pitch && std::fabs(a.at - b.at) < 0.5 / kPpq;
-                            }),
-                            pt->notes.end());
-            changed("pattern.quantized", pt->id);
             return true;
         }
         default:

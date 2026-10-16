@@ -293,7 +293,9 @@ namespace solaris
                     if (std::find(pm.strips.begin(), pm.strips.end(), c.track) == pm.strips.end()) pm.strips.push_back(c.track);
                     pm.lastStrip = c.track; // the clips are in the order they were made: the last is the newest
                 }
-            for (const auto &n : pt.notes) pm.notes.push_back(NoteModel{n.pitch, n.vel, n.at, n.length});
+            for (const auto &n : pt.notes) pm.notes.push_back(NoteModel{n.pitch, n.vel, n.at, n.length, n.chance});
+            std::string canon, why;
+            if (!pt.scale.empty() && parseScale(pt.scale, canon, pm.scaleMask, why)) pm.scale = canon; // R-ROLL-11
             for (const auto &x : pt.expr) pm.expr.push_back(ExprPointModel{x.lane, x.at, x.value}); // R-MIDI-3
             mModel.patterns.push_back(pm);
         }

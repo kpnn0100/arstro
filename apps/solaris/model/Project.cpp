@@ -1,6 +1,7 @@
 #include "Project.h"
 #include "Format.h"
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <map>
 #include <set>
@@ -278,6 +279,7 @@ namespace solaris
             if (k == "id") n.id = v;
             else if (k == "name") n.name = v;
             else if (k == "length") n.length = toTick(r.num(k, v, 4.0));
+            else if (k == "scale") n.scale = v; // checked by validateProject (R-ROLL-11)
             else n.unknown.emplace_back(k, v);
         }
         void apply(Reader &r, Note &n, const std::string &k, const std::string &v)
@@ -286,6 +288,7 @@ namespace solaris
             else if (k == "vel") n.vel = std::clamp(r.integer(k, v, 100), 1, 127);
             else if (k == "at") n.at = toTick(r.num(k, v, 0.0));
             else if (k == "length") n.length = toTick(r.num(k, v, 0.25));
+            else if (k == "chance") n.chance = std::clamp(r.num(k, v, 1.0), 0.0, 1.0); // R-ROLL-11
             else n.unknown.emplace_back(k, v);
         }
         void apply(Reader &r, ExprPoint &n, const std::string &k, const std::string &v)
@@ -732,10 +735,12 @@ namespace solaris
         group(!p.patterns.empty());
         for (const auto &n : p.patterns)
         {
-            emit(out, "", Line("apattern").kv("id", n.id).strIf("name", n.name).kv("length", canonicalBeats(n.length)).unknown(n.unknown), n.remarks);
+            emit(out, "", Line("apattern").kv("id", n.id).strIf("name", n.name).kv("length", canonicalBeats(n.length)).strIf("scale", n.scale)
+                              .unknown(n.unknown), n.remarks);
             for (const auto &x : n.notes)
                 out += "  " + Line("note").kv("pitch", std::to_string(x.pitch)).kv("at", canonicalBeats(x.at))
-                                  .kv("length", canonicalBeats(x.length)).kv("vel", std::to_string(x.vel)).unknown(x.unknown).s + "\n";
+                                  .kv("length", canonicalBeats(x.length)).kv("vel", std::to_string(x.vel))
+                                  .kvIf(x.chance < 1.0, "chance", canonicalNumber(x.chance)).unknown(x.unknown).s + "\n";
             for (const auto &x : n.expr) // R-MIDI-3
                 out += "  " + Line("expr").kv("lane", x.lane).kv("at", canonicalBeats(x.at)).kv("value", canonicalNumber(x.value)).unknown(x.unknown).s + "\n";
         }
@@ -922,6 +927,9 @@ namespace solaris
         for (const auto &pt : p.patterns)
         {
             if (!(pt.length > 0)) e.push_back("pattern " + pt.id + " has no length");
+            std::string canon, why;
+            int mask = 0;
+            if (!pt.scale.empty() && !parseScale(pt.scale, canon, mask, why)) e.push_back("pattern " + pt.id + "'s scale: " + why); // R-ROLL-11
             for (const auto &x : pt.expr)
             {
                 // R-MIDI-3: a lane we know, a value in its range
@@ -1042,6 +1050,106 @@ namespace solaris
         if (!after) return before->value;  // … and after the last
         const double t = (at - before->at) / std::max(1e-12, after->at - before->at);
         return before->value + (after->value - before->value) * t;
+    }
+
+    const std::vector<ScaleKind> &scaleKinds()
+    {
+        static const std::vector<ScaleKind> k = {
+            {{"major", "ionian"}, {0, 2, 4, 5, 7, 9, 11}, "major"},
+            {{"minor", "aeolian", "natural-minor"}, {0, 2, 3, 5, 7, 8, 10}, "natural minor"},
+            {{"harmonic-minor"}, {0, 2, 3, 5, 7, 8, 11}, "harmonic minor"},
+            {{"melodic-minor"}, {0, 2, 3, 5, 7, 9, 11}, "melodic minor (rising)"},
+            {{"dorian"}, {0, 2, 3, 5, 7, 9, 10}, "dorian"},
+            {{"phrygian"}, {0, 1, 3, 5, 7, 8, 10}, "phrygian"},
+            {{"lydian"}, {0, 2, 4, 6, 7, 9, 11}, "lydian"},
+            {{"mixolydian"}, {0, 2, 4, 5, 7, 9, 10}, "mixolydian"},
+            {{"locrian"}, {0, 1, 3, 5, 6, 8, 10}, "locrian"},
+            {{"major-pentatonic", "pentatonic"}, {0, 2, 4, 7, 9}, "major pentatonic"},
+            {{"minor-pentatonic"}, {0, 3, 5, 7, 10}, "minor pentatonic"},
+            {{"blues"}, {0, 3, 5, 6, 7, 10}, "blues (minor pentatonic and the flat fifth)"},
+        };
+        return k;
+    }
+
+    bool parseScale(const std::string &text, std::string &canonical, int &mask, std::string &err)
+    {
+        static const char *kKeys[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+        std::istringstream in(text);
+        std::string key, name, extra;
+        in >> key >> name >> extra;
+        auto vocabulary = [] {
+            std::string v;
+            for (const auto &k : scaleKinds()) v += (v.empty() ? "" : ", ") + k.names[0];
+            return v;
+        };
+        if (key.empty() || name.empty() || !extra.empty())
+        { err = "a scale is a key and a name — `D dorian`, `Bb minor` (" + vocabulary() + ")"; return false; }
+        static const int kLetter[] = {9, 11, 0, 2, 4, 5, 7}; // A B C D E F G
+        const char l = (char)std::toupper((unsigned char)key[0]);
+        int pc = l >= 'A' && l <= 'G' ? kLetter[l - 'A'] : -1;
+        if (pc >= 0 && key.size() == 2) pc = key[1] == '#' ? pc + 1 : key[1] == 'b' ? pc + 11 : -1;
+        if (pc < 0 || key.size() > 2) { err = "`" + key + "` is not a key (C, F#, Bb …)"; return false; }
+        pc %= 12;
+        std::string lower;
+        for (char ch : name) lower += (char)std::tolower((unsigned char)ch);
+        for (const auto &k : scaleKinds())
+            if (std::find(k.names.begin(), k.names.end(), lower) != k.names.end())
+            {
+                mask = 0;
+                for (int s : k.steps) mask |= 1 << ((pc + s) % 12);
+                canonical = std::string(kKeys[pc]) + " " + k.names[0];
+                return true;
+            }
+        err = "`" + name + "` is not a scale (" + vocabulary() + ")";
+        return false;
+    }
+
+    int snapToScale(int pitch, int mask, int dir)
+    {
+        pitch = std::clamp(pitch, 0, 127);
+        if (!(mask & 0xFFF)) return pitch;
+        auto in = [mask](int p) { return p >= 0 && p <= 127 && (mask >> (p % 12) & 1); };
+        if (dir == 0)
+        {
+            for (int d = 0; d < 12; ++d)
+            {
+                if (in(pitch - d)) return pitch - d; // a tie goes down
+                if (in(pitch + d)) return pitch + d;
+            }
+            return pitch;
+        }
+        for (int p = pitch; p >= 0 && p <= 127; p += dir)
+            if (in(p)) return p;
+        for (int p = pitch; p >= 0 && p <= 127; p -= dir) // the end of the keyboard: the other way
+            if (in(p)) return p;
+        return pitch;
+    }
+
+    int scaleMaskOf(const Pattern &pt)
+    {
+        std::string canon, err;
+        int mask = 0;
+        return !pt.scale.empty() && parseScale(pt.scale, canon, mask, err) ? mask : 0;
+    }
+
+    bool noteSounds(const Note &n, const std::string &clip, long long repetition)
+    {
+        if (n.chance >= 1.0) return true;
+        if (n.chance <= 0.0) return false;
+        // FNV-1a over the clip, then splitmix64's finaliser over the rest: 53 bits → [0, 1)
+        unsigned long long h = 1469598103934665603ULL;
+        for (unsigned char ch : clip) { h ^= ch; h *= 1099511628211ULL; }
+        auto mix = [&h](unsigned long long v) {
+            h ^= v + 0x9E3779B97F4A7C15ULL + (h << 6) + (h >> 2);
+            unsigned long long z = h;
+            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+            z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+            h = z ^ (z >> 31);
+        };
+        mix((unsigned long long)repetition);
+        mix((unsigned long long)n.pitch);
+        mix((unsigned long long)std::llround(n.at * kPpq));
+        return (double)(h >> 11) / 9007199254740992.0 < n.chance;
     }
 }
 }

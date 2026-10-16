@@ -7,6 +7,7 @@
 #include "KeyCombo.h"
 #include "Keymap.h"
 #include "Notation.h"
+#include "Project.h"
 #include "device/Device.h"
 
 namespace arstro
@@ -91,11 +92,28 @@ namespace solaris
             for (int k : q.intervals) iv.push(Json::integer(k));
             chords.push(Json::object().set("names", strings(q.names)).set("intervals", iv).set("label", q.label));
         }
+        Json scales = Json::array(), grooveList = Json::array(); // R-ROLL-11
+        for (const auto &k : scaleKinds())
+        {
+            Json st = Json::array();
+            for (int x : k.steps) st.push(Json::integer(x));
+            scales.push(Json::object().set("names", strings(k.names)).set("steps", st).set("label", k.label));
+        }
+        for (const auto &g : grooves())
+        {
+            Json off = Json::array(), acc = Json::array();
+            for (double x : g.offset) off.push(Json::number(x));
+            for (double x : g.accent) acc.push(Json::number(x));
+            grooveList.push(Json::object().set("name", g.name).set("step", g.step).set("offset", off).set("accent", acc).set("label", g.label));
+        }
         doc.set("notation", Json::object()
                                 .set("pitch", "a number 0-127, a name (C4 = 60, F#3, Bb2, c-1 = 0) or a kit's pad (kick)")
-                                .set("note", "<pitch>@<beat>[:<length>[:<vel>]]")
+                                .set("note", "<pitch>@<beat>[:<length>[:<vel>[:<chance>]]]")
                                 .set("steps", "x = a note, X = an accent (127), . or - = a rest; spaces and | ignored")
-                                .set("chords", chords));
+                                .set("chords", chords)
+                                .set("scale", "<key> <scale> — a key C … B (# or b), a scale below: `D dorian`, `Bb minor`")
+                                .set("scales", scales)
+                                .set("grooves", grooveList));
         Json actions = Json::array(), names = Json::array();
         for (const auto &a : keyActions())
             actions.push(Json::object().set("id", a.id).set("area", a.area).set("label", a.label).set("defaults", a.defaults));
@@ -139,7 +157,8 @@ namespace solaris
         o += "| what | written | e.g. |\n|---|---|---|\n";
         o += "| a pitch (`--pitch`, `--to-pitch`, a note) | a number 0–127, a name — a letter, `#`/`b`, an octave; C4 = 60, c-1 = 0 — or a "
              "kit's pad (below, case and `-` ignored) | `60` · `C4` · `F#3` · `Bb2` · `kick` · `closed-hat` |\n";
-        o += "| a note (`notes add`) | `<pitch>@<beat>[:<length>[:<vel>]]`; an empty field keeps the default | `C4@0:0.5:90` · `kick@1` · `E4@2::70` |\n";
+        o += "| a note (`notes add`) | `<pitch>@<beat>[:<length>[:<vel>[:<chance>]]]`; an empty field keeps the default; the chance 0 … 1 "
+             "(R-ROLL-11) | `C4@0:0.5:90` · `kick@1` · `E4@2::70` · `hat@1.5:::0.5` |\n";
         o += "| a step row (`pattern steps`) | `x` a note, `X` an accent (127), `.` or `-` a rest; spaces and `\\|` ignored | `x...x...x...X...` |\n";
         o += "| a chord (`note add --chord`) | a root (`C`, `F#`, `Bb`) then a quality below; the root sits in `--octave` (4) | `Cm7` · `F#dim` · `Bbmaj7` |\n";
         o += "\n| chord quality | semitones | |\n|---|---|---|\n";
@@ -149,6 +168,24 @@ namespace solaris
             for (const auto &n : q.names) names += (names.empty() ? "" : " · ") + std::string("`") + (n.empty() ? "C" : "C" + n) + "`";
             for (int k : q.intervals) iv += (iv.empty() ? "" : " ") + std::to_string(k);
             o += "| " + md(names) + " | " + iv + " | " + q.label + " |\n";
+        }
+        o += "\n| a scale (`pattern scale`, R-ROLL-11) | its pitch classes above the key | |\n|---|---|---|\n";
+        for (const auto &k : scaleKinds())
+        {
+            std::string names, st;
+            for (const auto &n : k.names) names += (names.empty() ? "" : " · ") + std::string("`") + n + "`";
+            for (int x : k.steps) st += (st.empty() ? "" : " ") + std::to_string(x);
+            o += "| " + md(names) + " | " + st + " | " + k.label + " |\n";
+        }
+        o += "\nA groove (`pattern quantize --groove`, R-ROLL-11) is a cycle of grid steps from beat 0, each moved by its offset (a "
+             "fraction of a step, + late) and its velocity scaled by its accent — empirical, shaped by ear.\n\n";
+        o += "| groove | step | offsets | accents | |\n|---|---|---|---|---|\n";
+        for (const auto &g : grooves())
+        {
+            std::string off, acc;
+            for (double x : g.offset) off += (off.empty() ? "" : " ") + canonicalNumber(x);
+            for (double x : g.accent) acc += (acc.empty() ? "" : " ") + canonicalNumber(x);
+            o += "| `" + g.name + "` | " + canonicalNumber(g.step) + " | " + off + " | " + acc + " | " + g.label + " |\n";
         }
         o += "\n## Keyboard (R-SET-4)\n\nEvery shortcut is an action; `settings set key.<id>=<combos>` gives it this machine's keys "
              "(`none` takes them all away, `default` gives these back). A combo is `[Ctrl+][Alt+][Shift+]<key>` — the key A–Z, 0–9, "

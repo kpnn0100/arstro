@@ -147,7 +147,7 @@ namespace solaris
             else cur += c;
         }
         parts.push_back(cur);
-        if (parts.size() > 3) { err = "`" + token + "` has too many `:` — <pitch>@<beat>[:<length>[:<vel>]]"; return false; }
+        if (parts.size() > 4) { err = "`" + token + "` has too many `:` — <pitch>@<beat>[:<length>[:<vel>[:<chance>]]]"; return false; }
         if (!number(parts[0], out.at) || out.at < 0) { err = "`" + token + "`: the beat `" + parts[0] + "` is not a number ≥ 0"; return false; }
         if (parts.size() > 1 && !parts[1].empty())
         {
@@ -161,7 +161,36 @@ namespace solaris
             out.vel = (int)v;
             out.hasVel = true;
         }
+        if (parts.size() > 3 && !parts[3].empty()) // R-ROLL-11
+        {
+            if (!number(parts[3], out.chance) || out.chance < 0 || out.chance > 1) { err = "`" + token + "`: the chance `" + parts[3] + "` must be 0 to 1"; return false; }
+            out.hasChance = true;
+        }
         return true;
+    }
+
+    const std::vector<Groove> &grooves()
+    {
+        // the MPC's swing: the second sixteenth of each eighth at s % of the eighth — an offset of 2s/100 − 1 steps
+        static const std::vector<Groove> g = {
+            {"mpc-54", "the MPC's 54 % sixteenth swing", 0.25, {0, 0.08}, {1, 1}},
+            {"mpc-58", "the MPC's 58 % sixteenth swing", 0.25, {0, 0.16}, {1, 1}},
+            {"mpc-62", "the MPC's 62 % sixteenth swing", 0.25, {0, 0.24}, {1, 1}},
+            {"mpc-66", "the MPC's 66 % — a sixteenth triplet", 0.25, {0, 0.32}, {1, 1}},
+            {"shuffle", "an eighth-note triplet shuffle, the off-beat softer", 0.5, {0, 1.0 / 3}, {1, 0.8}},
+            {"hip-hop", "laid back: sixteenths late, the off-beats more, the weak ones soft", 0.25, {0, 0.2, 0.05, 0.25}, {1, 0.7, 0.85, 0.65}},
+            {"house", "the off-beat eighth early and loud, the last sixteenth late", 0.25, {0, 0.02, -0.03, 0.08}, {1, 0.55, 0.9, 0.7}},
+            {"push", "the off-beat eighths early — ahead of the beat", 0.5, {0, -0.12}, {1, 0.9}},
+            {"lazy", "every sixteenth behind the beat, the off-beat most", 0.25, {0, 0.1, 0.06, 0.14}, {1, 0.8, 0.9, 0.75}},
+        };
+        return g;
+    }
+
+    const Groove *findGroove(const std::string &name)
+    {
+        for (const auto &g : grooves())
+            if (g.name == name) return &g;
+        return nullptr;
     }
 
     bool parseSteps(const std::string &text, std::vector<int> &steps, std::string &err)

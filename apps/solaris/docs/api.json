@@ -358,18 +358,19 @@
     },
     {
       "verb": "note add",
-      "usage": "note add <pt> [--pitch <pitch>] [--at <beats>] [--length <beats>] [--vel <1-127>] [--chord <name>] [--inversion <n>] [--octave <n>]",
+      "usage": "note add <pt> [--pitch <pitch>] [--at <beats>] [--length <beats>] [--vel <1-127>] [--chance <0-1>] [--chord <name>] [--inversion <n>] [--octave <n>]",
       "args": "<pt>",
       "flags": [
         "pitch=<pitch>",
         "at=<beats>",
         "length=<beats>",
         "vel=<1-127>",
+        "chance=<0-1>",
         "chord=<name>",
         "inversion=<n>",
         "octave=<n>"
       ],
-      "summary": "Add a note to a pattern — every clip of it changes. A pitch is a number, a name (C4 = 60, F#3, Bb2) or a kit's pad (kick). --chord <Cm7> adds a chord instead (its root in --octave, default 4; --inversion n raises its n lowest notes an octave) as ONE edit — the qualities are under Notation.",
+      "summary": "Add a note to a pattern — every clip of it changes. A pitch is a number, a name (C4 = 60, F#3, Bb2) or a kit's pad (kick). --chord <Cm7> adds a chord instead (its root in --octave, default 4; --inversion n raises its n lowest notes an octave) as ONE edit — the qualities are under Notation. --chance: the odds it sounds in a pass (1). A pattern locked to a scale (`pattern scale`) puts each note on the scale's nearest pitch, a tie down — a major chord on any degree becomes that degree's own triad.",
       "requirement": "R-CLIP-2"
     },
     {
@@ -396,7 +397,7 @@
     },
     {
       "verb": "note move",
-      "usage": "note move <pt> [--pitch <pitch>] [--at <beats>] [--to-pitch <pitch>] [--to-at <beats>] [--length <beats>] [--vel <1-127>]",
+      "usage": "note move <pt> [--pitch <pitch>] [--at <beats>] [--to-pitch <pitch>] [--to-at <beats>] [--length <beats>] [--vel <1-127>] [--chance <0-1>]",
       "args": "<pt>",
       "flags": [
         "pitch=<pitch>",
@@ -404,20 +405,24 @@
         "to-pitch=<pitch>",
         "to-at=<beats>",
         "length=<beats>",
-        "vel=<1-127>"
+        "vel=<1-127>",
+        "chance=<0-1>"
       ],
-      "summary": "Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) — one gesture, one line. Refused onto another note.",
+      "summary": "Change the note at --pitch / --at: move it (--to-pitch, --to-at), resize it (--length), set its velocity (--vel) or its chance (--chance) — one gesture, one line. Refused onto another note. In a pattern locked to a scale, --to-pitch goes on to the scale's next pitch the way it moved.",
       "requirement": "R-ROLL-2"
     },
     {
       "verb": "pattern quantize",
-      "usage": "pattern quantize <pt> [--grid <beats>] [--swing <0-0.75>]",
+      "usage": "pattern quantize <pt> [--grid <beats>] [--swing <0-0.75>] [--groove <name>] [--strength <0-1>] [--notes <\"pitch@beat …\">]",
       "args": "<pt>",
       "flags": [
         "grid=<beats>",
-        "swing=<0-0.75>"
+        "swing=<0-0.75>",
+        "groove=<name>",
+        "strength=<0-1>",
+        "notes=<\"pitch@beat …\">"
       ],
-      "summary": "Move every note's start onto the grid (default a sixteenth, 0.25), delaying every second grid step by --swing of a step. Notes that land on one another merge (the louder stays).",
+      "summary": "Move every note's start onto the grid (default a sixteenth, 0.25), delaying every second grid step by --swing of a step — or onto a --groove (R-ROLL-11: a template's steps, offsets and accents, under Notation; it carries its own grid and swing). --strength moves each start (and velocity) that part of the way (1). --notes: only those notes (the roll's selection). Notes that land on one another merge (the louder stays).",
       "requirement": "R-ROLL-4"
     },
     {
@@ -428,7 +433,7 @@
         "length=<beats>",
         "vel=<1-127>"
       ],
-      "summary": "Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>]] — C4@0:0.5:90, kick@1, E4@2::70. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing lands. Prints how many. A note past the pattern's end grows the pattern to the end of that bar, and a clip that played it whole with it (R-ROLL-9).",
+      "summary": "Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>[:<chance>]]] — C4@0:0.5:90, kick@1, E4@2::70, hat@1.5:::0.5. --length / --vel are the defaults (0.25, 100). A bad token is refused by name and nothing lands. Prints how many. A note past the pattern's end grows the pattern to the end of that bar, and a clip that played it whole with it (R-ROLL-9). A scale-locked pattern puts each on its scale (R-ROLL-11).",
       "requirement": "R-SVC-8"
     },
     {
@@ -524,6 +529,64 @@
       ],
       "summary": "Remove a lane's points (--lane), or every lane's.",
       "requirement": "R-MIDI-3"
+    },
+    {
+      "verb": "pattern scale",
+      "usage": "pattern scale <pt> <key> <scale> | off",
+      "args": "<pt> <key> <scale> | off",
+      "flags": [],
+      "summary": "Lock a pattern to a scale (R-ROLL-11) — `pattern scale pt_1 D dorian`: a note placed (`note add`, its --chord, `notes add`) lands on the scale's nearest pitch, a tie going down (so a major chord stamped on any degree is that degree's own triad); a note moved in pitch (`note move --to-pitch`, `notes move --semi`) goes on to the scale's next pitch the way it moved. A move in time, an import, a step row, a recording and `pattern transpose` keep their pitches; notes already written stay. `off` unlocks it. The scales are under Notation. Prints its notes.",
+      "requirement": "R-ROLL-11"
+    },
+    {
+      "verb": "notes set",
+      "usage": "notes set <pt> \"<pitch@beat> …\" [--vel <1-127>] [--chance <0-1>] [--length <beats>]",
+      "args": "<pt> \"<pitch@beat> …\"",
+      "flags": [
+        "vel=<1-127>",
+        "chance=<0-1>",
+        "length=<beats>"
+      ],
+      "summary": "Set several notes' --vel, --chance and/or --length as ONE edit — the piano roll's selection. Refused whole, naming the first, when a name matches no note.",
+      "requirement": "R-ROLL-11"
+    },
+    {
+      "verb": "pattern humanise",
+      "usage": "pattern humanise <pt> [--timing <beats>] [--vel <0-127>] [--seed <n>] [--notes <\"pitch@beat …\">]",
+      "args": "<pt>",
+      "flags": [
+        "timing=<beats>",
+        "vel=<0-127>",
+        "seed=<n>",
+        "notes=<\"pitch@beat …\">"
+      ],
+      "summary": "Loosen the notes (R-ROLL-11): each start moved within ± --timing beats and each velocity within ± --vel (with neither: 0.02 and 8), a triangular spread from a seed — the same --seed on the same notes writes the same notes (by default a hash of the notes; printed). A note never goes before beat 0, nor onto another of its pitch (it keeps its time). --notes: only those notes (the roll's selection).",
+      "requirement": "R-ROLL-11"
+    },
+    {
+      "verb": "pattern legato",
+      "usage": "pattern legato <pt> [--notes <\"pitch@beat …\">]",
+      "args": "<pt>",
+      "flags": [
+        "notes=<\"pitch@beat …\">"
+      ],
+      "summary": "End every note where the next start begins — a chord's notes together, the last at the pattern's end; an overlap is shortened as a gap is filled (R-ROLL-11). --notes: only those notes, the next start among them.",
+      "requirement": "R-ROLL-11"
+    },
+    {
+      "verb": "pattern arpeggiate",
+      "usage": "pattern arpeggiate <pt> [--rate <beats>] [--mode <up|down|updown|random>] [--octaves <1-4>] [--gate <0.05-1>] [--seed <n>] [--notes <\"pitch@beat …\">]",
+      "args": "<pt>",
+      "flags": [
+        "rate=<beats>",
+        "mode=<up|down|updown|random>",
+        "octaves=<1-4>",
+        "gate=<0.05-1>",
+        "seed=<n>",
+        "notes=<\"pitch@beat …\">"
+      ],
+      "summary": "A MIDI effect written as notes (R-ROLL-11): on every --rate step of the beat grid (0.25) where notes are held, the next pitch of what is held there — its pitches over --octaves (1), up, down, updown (the turns not repeated) or a seeded random (--seed) — --gate of a step long (1), at the held note's velocity and chance; it starts again from the first after a rest. Replaces the notes it arpeggiated (every note, or --notes); a step on another note of its pitch replaces that one. Prints how many.",
+      "requirement": "R-ROLL-11"
     },
     {
       "verb": "pattern import",
@@ -1819,6 +1882,24 @@
       "path": "patterns[].notes[].vel",
       "type": "int",
       "summary": "1…127",
+      "stable": true
+    },
+    {
+      "path": "patterns[].notes[].chance",
+      "type": "number",
+      "summary": "R-ROLL-11: the odds it sounds in a repetition, 0 … 1 — rolled per clip and repetition by a hash",
+      "stable": true
+    },
+    {
+      "path": "patterns[].scale",
+      "type": "string",
+      "summary": "R-ROLL-11: \"D dorian\" — placed and moved notes land on it; \"\" none",
+      "stable": true
+    },
+    {
+      "path": "patterns[].scaleMask",
+      "type": "int",
+      "summary": "its pitch classes: bit k for pitch class k (C = 0); 0 none",
       "stable": true
     },
     {
@@ -4537,7 +4618,7 @@
   ],
   "notation": {
     "pitch": "a number 0-127, a name (C4 = 60, F#3, Bb2, c-1 = 0) or a kit's pad (kick)",
-    "note": "<pitch>@<beat>[:<length>[:<vel>]]",
+    "note": "<pitch>@<beat>[:<length>[:<vel>[:<chance>]]]",
     "steps": "x = a note, X = an accent (127), . or - = a rest; spaces and | ignored",
     "chords": [
       {
@@ -4795,6 +4876,319 @@
           14
         ],
         "label": "minor ninth"
+      }
+    ],
+    "scale": "<key> <scale> — a key C … B (# or b), a scale below: `D dorian`, `Bb minor`",
+    "scales": [
+      {
+        "names": [
+          "major",
+          "ionian"
+        ],
+        "steps": [
+          0,
+          2,
+          4,
+          5,
+          7,
+          9,
+          11
+        ],
+        "label": "major"
+      },
+      {
+        "names": [
+          "minor",
+          "aeolian",
+          "natural-minor"
+        ],
+        "steps": [
+          0,
+          2,
+          3,
+          5,
+          7,
+          8,
+          10
+        ],
+        "label": "natural minor"
+      },
+      {
+        "names": [
+          "harmonic-minor"
+        ],
+        "steps": [
+          0,
+          2,
+          3,
+          5,
+          7,
+          8,
+          11
+        ],
+        "label": "harmonic minor"
+      },
+      {
+        "names": [
+          "melodic-minor"
+        ],
+        "steps": [
+          0,
+          2,
+          3,
+          5,
+          7,
+          9,
+          11
+        ],
+        "label": "melodic minor (rising)"
+      },
+      {
+        "names": [
+          "dorian"
+        ],
+        "steps": [
+          0,
+          2,
+          3,
+          5,
+          7,
+          9,
+          10
+        ],
+        "label": "dorian"
+      },
+      {
+        "names": [
+          "phrygian"
+        ],
+        "steps": [
+          0,
+          1,
+          3,
+          5,
+          7,
+          8,
+          10
+        ],
+        "label": "phrygian"
+      },
+      {
+        "names": [
+          "lydian"
+        ],
+        "steps": [
+          0,
+          2,
+          4,
+          6,
+          7,
+          9,
+          11
+        ],
+        "label": "lydian"
+      },
+      {
+        "names": [
+          "mixolydian"
+        ],
+        "steps": [
+          0,
+          2,
+          4,
+          5,
+          7,
+          9,
+          10
+        ],
+        "label": "mixolydian"
+      },
+      {
+        "names": [
+          "locrian"
+        ],
+        "steps": [
+          0,
+          1,
+          3,
+          5,
+          6,
+          8,
+          10
+        ],
+        "label": "locrian"
+      },
+      {
+        "names": [
+          "major-pentatonic",
+          "pentatonic"
+        ],
+        "steps": [
+          0,
+          2,
+          4,
+          7,
+          9
+        ],
+        "label": "major pentatonic"
+      },
+      {
+        "names": [
+          "minor-pentatonic"
+        ],
+        "steps": [
+          0,
+          3,
+          5,
+          7,
+          10
+        ],
+        "label": "minor pentatonic"
+      },
+      {
+        "names": [
+          "blues"
+        ],
+        "steps": [
+          0,
+          3,
+          5,
+          6,
+          7,
+          10
+        ],
+        "label": "blues (minor pentatonic and the flat fifth)"
+      }
+    ],
+    "grooves": [
+      {
+        "name": "mpc-54",
+        "step": 0.25,
+        "offset": [
+          0.0,
+          0.08
+        ],
+        "accent": [
+          1.0,
+          1.0
+        ],
+        "label": "the MPC's 54 % sixteenth swing"
+      },
+      {
+        "name": "mpc-58",
+        "step": 0.25,
+        "offset": [
+          0.0,
+          0.16
+        ],
+        "accent": [
+          1.0,
+          1.0
+        ],
+        "label": "the MPC's 58 % sixteenth swing"
+      },
+      {
+        "name": "mpc-62",
+        "step": 0.25,
+        "offset": [
+          0.0,
+          0.24
+        ],
+        "accent": [
+          1.0,
+          1.0
+        ],
+        "label": "the MPC's 62 % sixteenth swing"
+      },
+      {
+        "name": "mpc-66",
+        "step": 0.25,
+        "offset": [
+          0.0,
+          0.32
+        ],
+        "accent": [
+          1.0,
+          1.0
+        ],
+        "label": "the MPC's 66 % — a sixteenth triplet"
+      },
+      {
+        "name": "shuffle",
+        "step": 0.5,
+        "offset": [
+          0.0,
+          0.3333333333333333
+        ],
+        "accent": [
+          1.0,
+          0.8
+        ],
+        "label": "an eighth-note triplet shuffle, the off-beat softer"
+      },
+      {
+        "name": "hip-hop",
+        "step": 0.25,
+        "offset": [
+          0.0,
+          0.2,
+          0.05,
+          0.25
+        ],
+        "accent": [
+          1.0,
+          0.7,
+          0.85,
+          0.65
+        ],
+        "label": "laid back: sixteenths late, the off-beats more, the weak ones soft"
+      },
+      {
+        "name": "house",
+        "step": 0.25,
+        "offset": [
+          0.0,
+          0.02,
+          -0.03,
+          0.08
+        ],
+        "accent": [
+          1.0,
+          0.55,
+          0.9,
+          0.7
+        ],
+        "label": "the off-beat eighth early and loud, the last sixteenth late"
+      },
+      {
+        "name": "push",
+        "step": 0.5,
+        "offset": [
+          0.0,
+          -0.12
+        ],
+        "accent": [
+          1.0,
+          0.9
+        ],
+        "label": "the off-beat eighths early — ahead of the beat"
+      },
+      {
+        "name": "lazy",
+        "step": 0.25,
+        "offset": [
+          0.0,
+          0.1,
+          0.06,
+          0.14
+        ],
+        "accent": [
+          1.0,
+          0.8,
+          0.9,
+          0.75
+        ],
+        "label": "every sixteenth behind the beat, the off-beat most"
       }
     ]
   },

@@ -173,14 +173,15 @@ namespace solaris
             ok = evalCommand(c, err);
             break;
         case K::ClipAdd: case K::ClipMove: case K::ClipDuplicate: case K::ClipUnique: case K::ClipDelete:
-        case K::PatternNew: case K::NoteAdd: case K::NoteDelete: case K::NoteMove: case K::PatternQuantize:
+        case K::PatternNew: case K::NoteAdd: case K::NoteDelete: case K::NoteMove:
             ok = clipCommand(c, err);
             break;
         case K::PatternImport: case K::PatternExport: case K::ProjectExportMidi: case K::ExprAdd: case K::ExprDelete: case K::ExprClear:
             ok = midiCommand(c, err);
             break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
-        case K::PatternTranspose:
+        case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:
+        case K::PatternArpeggiate:
             ok = composeCommand(c, err);
             break;
         case K::Ls: case K::Show: case K::PatternPrint:

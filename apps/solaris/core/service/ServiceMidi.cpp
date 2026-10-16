@@ -229,11 +229,12 @@ namespace solaris
                         const Pattern *pt = p.pattern(cl.pattern);
                         if (!pt || pt->length <= 0) continue;
                         const double len = clipLengthBeats(p, cl);
-                        for (double rep = 0.0; rep < len - 1e-9; rep += pt->length)
+                        long long pass = 0;
+                        for (double rep = 0.0; rep < len - 1e-9; rep += pt->length, ++pass)
                         {
                             for (const auto &n : pt->notes)
                             {
-                                if (rep + n.at >= len - 1e-9) continue;
+                                if (rep + n.at >= len - 1e-9 || !noteSounds(n, cl.id, pass)) continue; // R-ROLL-11: what the render plays
                                 Note x = n;
                                 x.at = toTick(cl.at + rep + n.at);
                                 x.length = std::min(n.length, len - (rep + n.at));

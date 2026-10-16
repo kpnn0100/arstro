@@ -464,6 +464,61 @@ static void test_expression_lanes_round_trip_and_are_checked()
     pass("expression lanes in the .slp (R-MIDI-3): #expr read and written back in place, a fixed point; mod is cc1; exprAt linear and held; a lane or value out of its range refused, naming it");
 }
 
+static void test_note_chance_and_scales_round_trip_and_are_checked()
+{
+    // R-ROLL-11: a note's chance and a pattern's scale — read, written only when set, a fixed point; a scale we do not
+    // know refused naming it; the snap rules; the chance roll pure, at its odds, and apart per clip and repetition
+    const std::string head = "arstro-project = 1\napp = solaris\nid = prj\n#amixer id=mx_1 name=Sources order=0\n";
+    Project p;
+    std::string err;
+    assert(parseProject(head + "#apattern id=pt_1 length=4.0 scale=\"Bb minor\"\n  #note pitch=60 at=0.0 length=1.0 vel=100 chance=0.25\n"
+                               "  #note pitch=62 at=1.0 length=1.0 vel=100\n", p, err));
+    assert(p.patterns[0].scale == "Bb minor" && p.patterns[0].notes[0].chance == 0.25 && p.patterns[0].notes[1].chance == 1.0);
+    const std::string text = serializeProject(p);
+    assert(contains(text, "length=4.0 scale=\"Bb minor\"") && contains(text, "vel=100 chance=0.25\n") && contains(text, "pitch=62 at=1.0 length=1.0 vel=100\n"));
+    Project q;
+    assert(parseProject(text, q, err) && serializeProject(q) == text); // a fixed point
+    Project bad;
+    assert(!parseProject(head + "#apattern id=pt_1 length=4.0 scale=\"H major\"\n", bad, err) && contains(err, "`H` is not a key"));
+    assert(!parseProject(head + "#apattern id=pt_1 length=4.0 scale=\"C bebop\"\n", bad, err) && contains(err, "`bebop` is not a scale") && contains(err, "dorian"));
+    std::string canon;
+    int mask = 0;
+    assert(parseScale("Bb minor", canon, mask, err) && canon == "A# minor");
+    assert(parseScale("c MAJOR", canon, mask, err) && canon == "C major" && mask == 0xAB5); // C D E F G A B
+    assert(snapToScale(61, mask, 0) == 60 && snapToScale(63, mask, 0) == 62 && snapToScale(66, mask, 0) == 65); // ties go down
+    assert(snapToScale(61, mask, +1) == 62 && snapToScale(64, mask, +1) == 64 && snapToScale(66, mask, -1) == 65);
+    assert(snapToScale(127, mask, +1) == 127 && snapToScale(61, 0, 0) == 61); // G9 is in C major; no scale keeps it
+    assert(parseScale("E major", canon, mask, err) && snapToScale(127, mask, +1) == 126); // G9 not in E major: the other way, F#9
+    // a major triad stamped on each degree of C major snaps to that degree's own triad
+    assert(parseScale("C major", canon, mask, err));
+    const int triad[3] = {0, 4, 7};
+    const char *want[7] = {"0 4 7", "2 5 9", "4 7 11", "5 9 12", "7 11 14", "9 12 16", "11 14 17"};
+    const int degree[7] = {0, 2, 4, 5, 7, 9, 11};
+    for (int d = 0; d < 7; ++d)
+    {
+        std::string got;
+        for (int k : triad) got += (got.empty() ? "" : " ") + std::to_string(snapToScale(60 + degree[d] + k, mask, 0) - 60);
+        assert(got == want[d]);
+    }
+    // the chance roll: always at 1, never at 0, the same answer twice, near its odds over many passes, apart per clip
+    Note n;
+    n.chance = 1.0;
+    assert(noteSounds(n, "ac_1", 7));
+    n.chance = 0.0;
+    assert(!noteSounds(n, "ac_1", 7));
+    n.chance = 0.3;
+    int a = 0, same = 0;
+    for (long long r = 0; r < 4000; ++r)
+    {
+        const bool x = noteSounds(n, "ac_1", r);
+        assert(x == noteSounds(n, "ac_1", r));
+        a += x;
+        same += x == noteSounds(n, "ac_2", r);
+    }
+    assert(a > 1100 && a < 1300 && same < 3000);
+    pass("note chance and scales in the .slp (R-ROLL-11): written only when set, a fixed point; a key or scale we do not know refused naming it; nearest with ties down (a major chord on each degree its own triad), up and down, the keyboard's end; the chance roll pure, at its odds, apart per clip");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -478,6 +533,7 @@ int main()
     test_numeric_corruption_is_repaired_and_counted();
     test_ids_order_and_lookups();
     test_expression_lanes_round_trip_and_are_checked();
+    test_note_chance_and_scales_round_trip_and_are_checked();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

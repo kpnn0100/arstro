@@ -445,7 +445,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       64-sample grid, at rest after a clip, restored on seek), the keyboard's wheels live and recorded, MIDI files both
       ways. Part 2: the roll's lower lane on Vel | Bend | Mod — a click adds a point, a drag sets it, a double-click
       removes it, each one `expr` line; eased; a shot.
-- [ ] **N12** Note tools: humanise, probability, grooves, scale lock, chord stamps, legato, arpeggiate (R-ROLL-11).
+- [~] **N12** Note tools: humanise, probability, grooves, scale lock, chord stamps, legato, arpeggiate (R-ROLL-11).
+      Part 1 (2026-10-16): the grammar — `pattern scale` (placed notes to the nearest, a tie down; moved on the way they
+      went), `Note::chance` rolled per clip and pass by a hash (the render and the song's MIDI file agree), `notes set`,
+      `pattern humanise` / `legato` / `arpeggiate`, `pattern quantize --groove --strength --notes` (nine templates);
+      chord stamps were already `note add --chord`. Part 2: the roll's tools, scale rows and Chance lane.
 - [ ] **N13** Markers and sections (R-ARR-1).
 - [ ] **N14** Time insert / delete across the song (R-ARR-2).
 - [ ] **N15** Lane groups (R-ARR-3).

@@ -216,12 +216,14 @@ namespace solaris
                     if (!pt || pt->length <= 0) continue;
                     const double len = clipLengthBeats(p, c);
                     const double vel = engine::dbToLinear(c.gain); // clip gain scales velocity
-                    // (C1) a clip longer than its pattern loops it; a note is cut at the clip's end
-                    for (double k = 0; k < len; k += pt->length)
+                    // (C1) a clip longer than its pattern loops it; a note is cut at the clip's end; (C4) R-ROLL-11 a
+                    // note of chance < 1 is rolled per repetition — a hash, never a clock
+                    long long rep = 0;
+                    for (double k = 0; k < len; k += pt->length, ++rep)
                         for (const auto &n : pt->notes)
                         {
                             const double on = k + n.at;
-                            if (on >= len) continue;
+                            if (on >= len || !noteSounds(n, c.id, rep)) continue;
                             const double off = std::min(on + n.length, len);
                             const int v = std::clamp((int)std::lround(n.vel * vel), 1, 127);
                             es.notes.push_back(engine::NoteEvent{(long long)std::llround((c.at + on) * spb), n.pitch, v, true});

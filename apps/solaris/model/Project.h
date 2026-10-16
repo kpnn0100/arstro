@@ -117,6 +117,7 @@ namespace solaris
     {
         int pitch = 60, vel = 100;
         double at = 0.0, length = 0.25; // beats from the pattern's start
+        double chance = 1.0;            // R-ROLL-11: the odds it sounds in a repetition, 0 … 1 (`noteSounds`)
         Fields unknown;
     };
 
@@ -135,6 +136,7 @@ namespace solaris
         double length = 4.0;            // beats
         std::vector<Note> notes;        // sorted by (at, pitch)
         std::vector<ExprPoint> expr;    // R-MIDI-3: sorted by (lane, at)
+        std::string scale;              // R-ROLL-11: "D dorian" (`parseScale`'s spelling) locks placed and moved notes; "" none
         Fields unknown;
         Remarks remarks;
     };
@@ -145,6 +147,29 @@ namespace solaris
     void exprRange(const std::string &lane, double &lo, double &hi);
     /** A lane's value at `at` beats into its pattern: linear between points, held at the ends; `rest` when empty. */
     double exprAt(const std::vector<ExprPoint> &expr, const std::string &lane, double at, double rest = 0.0);
+
+    /** R-ROLL-11: a scale a pattern can be locked to — its spellings (the first canonical), its pitch classes above the
+     *  key, ascending, and what the API document calls it. */
+    struct ScaleKind
+    {
+        std::vector<std::string> names;
+        std::vector<int> steps;
+        std::string label;
+    };
+    const std::vector<ScaleKind> &scaleKinds();
+    /** "D dorian", "Bb minor-pentatonic" → its one spelling ("D dorian", "A# minor-pentatonic" — a key in sharps, as
+     *  pitches are named) and its pitch classes, bit k for pitch class k (C = 0). False with `err` naming the words. */
+    bool parseScale(const std::string &text, std::string &canonical, int &mask, std::string &err);
+    /** A pitch onto a scale's mask: `dir` 0 the nearest (a tie goes DOWN — so a major chord stamped on any degree is
+     *  that degree's own triad), +1 the first at or above, −1 the first at or below; within 0 … 127, the other way when
+     *  the end is reached. Mask 0 (no scale) keeps the pitch. */
+    int snapToScale(int pitch, int mask, int dir);
+    /** A pattern's scale as a mask — 0 when it has none (or one validateProject would refuse). */
+    int scaleMaskOf(const Pattern &pt);
+    /** R-ROLL-11: whether a note sounds in a clip's `repetition` (0 the first pass of its pattern): always at chance 1,
+     *  never at 0, else a hash of the clip, the repetition, the note's pitch and tick against its chance — never a
+     *  clock, so a render is pure, and two clips of one pattern vary apart. */
+    bool noteSounds(const Note &n, const std::string &clip, long long repetition);
 
     struct Clip
     {

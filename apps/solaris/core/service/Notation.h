@@ -5,7 +5,9 @@
  *  all read the same tables:
  *
  *      pitch      60 · C4 · F#3 · Bb2 · c-1          C4 = 60 (MIDI), c-1 = 0, G9 = 127
- *      note       <pitch>@<beat>[:<length>[:<vel>]]  C4@0:0.5:90 · kick@1 · E4@2::70 (length left default)
+ *      note       <pitch>@<beat>[:<length>[:<vel>[:<chance>]]]
+ *                                                    C4@0:0.5:90 · kick@1 · E4@2::70 (length left default) ·
+ *                                                    hat@1.5:::0.5 (sounds half the passes, R-ROLL-11)
  *      steps      x...x...X..x....                   x = a note, X = an accent (127), . or - = a rest;
  *                                                    spaces and | are ignored ("x... x... | x...")
  *      chord      <root><quality>                    C · Cm7 · F#dim · Bbmaj7 · Gsus4 — `chordQualities()`
@@ -49,11 +51,24 @@ namespace solaris
         std::string pitch;              // as written — resolved by the caller (a number, a name or a pad)
         double at = 0, length = 0;      // beats
         int vel = 0;
-        bool hasLength = false, hasVel = false;
+        double chance = 1;              // R-ROLL-11: 0 … 1
+        bool hasLength = false, hasVel = false, hasChance = false;
     };
-    /** `<pitch>@<beat>[:<length>[:<vel>]]`; an empty length or velocity keeps the default. */
+    /** `<pitch>@<beat>[:<length>[:<vel>[:<chance>]]]`; an empty field keeps the default. */
     bool parseNoteToken(const std::string &token, NoteToken &out, std::string &err);
     /** A step string → one entry per step: 0 = rest, 1 = a note, 2 = an accent. */
     bool parseSteps(const std::string &text, std::vector<int> &steps, std::string &err);
+
+    /** R-ROLL-11: a groove template `pattern quantize --groove` moves notes onto — a cycle of grid steps from beat 0,
+     *  each with an offset (a fraction of a step, + late) and an accent (a velocity scale). Empirical: shaped by ear
+     *  after the MPC's swing and the shuffles of the styles they are named for, not derived. */
+    struct Groove
+    {
+        std::string name, label;
+        double step = 0.25;             // beats
+        std::vector<double> offset, accent;
+    };
+    const std::vector<Groove> &grooves();
+    const Groove *findGroove(const std::string &name);
 }
 }
