@@ -5,7 +5,7 @@ if(TARGET solaris_control)
   # the control channel with no window: line order, `wait` holding the queue, and `attach` printing
   # exactly what `solaris-cc --watch --script` prints (tests/faces/controlTests.cpp)
   add_executable(solaris_control_tests faces/controlTests.cpp)
-  target_link_libraries(solaris_control_tests PRIVATE solaris_control solaris_core)
+  target_link_libraries(solaris_control_tests PRIVATE solaris_control solaris_host solaris_core) # solaris_host: presetPaths, as the window
   target_compile_definitions(solaris_control_tests PRIVATE SOLARIS_CC="$<TARGET_FILE:solaris-cc>")
   add_dependencies(solaris_control_tests solaris-cc)
   add_test(NAME solaris_control COMMAND solaris_control_tests)

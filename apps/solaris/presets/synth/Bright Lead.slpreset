@@ -1,0 +1,16 @@
+arstro-preset = 1
+type = synth
+name = Bright Lead
+; two saws a few cents apart, gliding between notes, a little vibrato
+osc1.wave = saw
+osc2.wave = saw
+osc2.fine = 7.0
+filter.cutoff = 5200.0
+filter.res = 0.25
+amp.attack = 5.0
+amp.release = 180.0
+voice.mode = legato
+voice.glide = 60.0
+vibrato.depth = 0.15
+vibrato.rate = 5.5
+volume = -10.0

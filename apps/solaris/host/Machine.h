@@ -19,5 +19,8 @@ namespace solaris_host
     bool listDevices(std::vector<solaris::DeviceInfo> &out, std::string &err);
     /** The settings and recents files (created folders included); SOLARIS_SETTINGS / SOLARIS_RECENTS override. */
     void machinePaths(std::string &settings, std::string &recents);
+    /** R-PRESET-1: the user's presets folder (SOLARIS_PRESETS, else the XDG data folder's solaris/presets) and the
+     *  factory's shipped with the app (SOLARIS_FACTORY_PRESETS, else the one this build was made with). */
+    void presetPaths(std::string &user, std::string &factory);
 }
 }

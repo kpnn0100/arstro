@@ -108,7 +108,7 @@ namespace solaris
              "to a strip (R-MIX-15).", "R-MIX-5"},
             {K::SendDelete, "send delete", "<sd>", 1, 1, {}, "Remove a send.", "R-MIX-5"},
 
-            {K::DeviceAdd, "device add", "<ch|master>", 1, 1, {"type=<registry type>", "at=<index>"},
+            {K::DeviceAdd, "device add", "<ch|master>", 1, 1, {"type=<registry type>", "at=<index>", "preset=<name>"},
              "Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an "
              "instrument strip.", "R-FX-5"},
             {K::DeviceRemove, "device remove", "<dv>", 1, 1, {}, "Remove a device from its rack. An instrument strip keeps its instrument.", "R-FX-5"},
@@ -130,7 +130,7 @@ namespace solaris
             {K::LaneUngroup, "lane ungroup", "<lg>", 1, 1, {}, "Let a group's lanes go; the group is gone, the lanes stay where they are.", "R-ARR-3"},
 
             {K::ClipAdd, "clip add", "", 0, 0,
-             {"src=<file>", "strip=<ch>", "instrument=<type>", "sample=<file>", "pattern=<pt>", "lane=<ln|new>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>", "warp"},
+             {"src=<file>", "strip=<ch>", "instrument=<type>", "sample=<file>", "pattern=<pt>", "lane=<ln|new>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>", "warp", "preset=<name>"},
              "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the "
              "first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of "
              "--pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument "
@@ -226,6 +226,16 @@ namespace solaris
             {K::TempoMove, "tempo move", "<tp>", 1, 1, {"at=<beats>", "bpm=<20-999>", "ramp=<true|false>"},
              "Move a tempo change (--at), change its --bpm, or whether it is reached gliding (--ramp true|false).", "R-TEMPO-1"},
             {K::TempoDelete, "tempo delete", "<tp>", 1, 1, {}, "Delete a tempo change: the tempo before it holds on.", "R-TEMPO-1"},
+            {K::PresetSave, "preset save", "<dv> <name>", 2, 2, {"replace"},
+             "Save a device's set values (and a sampler's sound) as a preset of its type in your presets folder "
+             "(R-PRESET-1) — a name you have is refused without --replace. The machine's, not the song's: no undo.", "R-PRESET-1"},
+            {K::PresetLoad, "preset load", "<dv> <name>", 2, 2, {},
+             "Set a device to a preset of its type — every value back to its default, then the preset's, ONE edit; yours "
+             "of a name before the factory's (R-PRESET-1). `device add --preset` and `clip add --instrument --preset` drop "
+             "one in.", "R-PRESET-1"},
+            {K::PresetList, "preset list", "[type]", 0, 1, {}, "The presets, yours and the factory's, by type (R-PRESET-1).", "R-PRESET-1"},
+            {K::PresetDelete, "preset delete", "<type> <name>", 2, 2, {},
+             "Delete a preset of yours (a factory's is refused) — the machine's, no undo (R-PRESET-1).", "R-PRESET-1"},
             {K::TimeInsert, "time insert", "", 0, 0, {"at=<beats>", "length=<beats>"},
              "Open a gap in the whole song (R-ARR-2), ONE edit: every clip, automation point, marker and the loop at or after --at "
              "moves --length beats later; a section, a looping automation's span or the loop that holds --at grows by it. A clip "

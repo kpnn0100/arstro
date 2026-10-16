@@ -168,6 +168,7 @@ namespace solaris_cli
             host.midiIn = [] { return std::unique_ptr<solaris::IMidiIn>(new solaris_host::MidiInAlsa()); };
 #endif
             solaris_host::machinePaths(host.settingsPath, host.recentsPath); // the window's settings and recents
+            solaris_host::presetPaths(host.presetsPath, host.factoryPresetsPath); // R-PRESET-1
             solaris::SolarisService svc(host);
 
             ntwb::Client::Options o;

@@ -5,6 +5,8 @@ pkg_check_modules(SOLARIS_AV IMPORTED_TARGET libavformat libavcodec libavutil li
 add_library(solaris_host STATIC AudioFiles.cpp Machine.cpp)
 target_include_directories(solaris_host PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(solaris_host PUBLIC solaris_core)
+# R-PRESET-1: the factory presets shipped beside the app (its source tree in this build)
+target_compile_definitions(solaris_host PRIVATE SOLARIS_FACTORY_PRESETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../presets")
 if(SOLARIS_AV_FOUND)
   target_link_libraries(solaris_host PRIVATE PkgConfig::SOLARIS_AV)
   target_compile_definitions(solaris_host PRIVATE SOLARIS_HAVE_FFMPEG=1)

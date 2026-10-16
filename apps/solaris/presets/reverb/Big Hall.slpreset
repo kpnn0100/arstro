@@ -1,0 +1,9 @@
+arstro-preset = 1
+type = reverb
+name = Big Hall
+size = 240.0
+decay = 4200.0
+lowcut = 180.0
+highcut = 9000.0
+width = 1.0
+mix = 0.35

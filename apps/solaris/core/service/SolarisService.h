@@ -71,6 +71,8 @@ namespace solaris
             std::function<std::unique_ptr<IAudioIn>(const std::string &driver)> audioInFor;
             std::string settingsPath; // the machine's settings file ("" = not persisted)
             std::string recentsPath;  // the recent songs, one path per line ("" = not persisted)
+            std::string presetsPath;        // R-PRESET-1: the user's presets folder ("" = none can be saved)
+            std::string factoryPresetsPath; // … the factory's, shipped with the app (never written)
         };
 
         explicit SolarisService(Host host = Host());
@@ -117,6 +119,13 @@ namespace solaris
         bool timeCommand(const Command &c, std::string &err);    // R-ARR-2
         bool groupCommand(const Command &c, std::string &err);   // R-ARR-3: lane groups, a group moved, clips moved together
         bool tempoCommand(const Command &c, std::string &err);   // R-TEMPO-1 (ServiceArrange.cpp): the tempo map's points
+        // R-PRESET-1 (ServicePresets.cpp): the presets of each device type, the user's and the factory's
+        bool presetCommand(const Command &c, std::string &err);
+        bool applyPreset(const std::string &dv, const std::string &name, std::string &err);
+        std::string presetFile(const std::string &type, const std::string &name, bool factory) const;
+        void scanPresets();
+        std::vector<PresetModel> mPresets;
+        bool mPresetsScanned = false;
         // R-EDIT-1 (ServiceAudioEdit.cpp): audio clips cut, joined, sliced — a cut is `splitClip`, which slice repeats
         bool audioEditCommand(const Command &c, std::string &err);
         bool splitClip(const std::string &id, double at, std::string &made, std::string &err);

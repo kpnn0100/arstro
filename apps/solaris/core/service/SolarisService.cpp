@@ -112,6 +112,7 @@ namespace solaris
             case K::Audition: case K::NotePreview: case K::MetersClear: case K::MidiDevices: case K::StripArm: case K::TransportPunch: case K::None:
             case K::Ls: case K::Show: case K::PatternPrint: // R-SVC-8: reading back
             case K::PatternExport: case K::ProjectExportMidi: // R-MIDI-1: writing a file, not the song
+            case K::PresetSave: case K::PresetList: case K::PresetDelete: // R-PRESET-1: the machine's presets, not the song
                 return false;
             default:
                 return true;
@@ -189,6 +190,9 @@ namespace solaris
             break;
         case K::TempoAdd: case K::TempoMove: case K::TempoDelete:
             ok = tempoCommand(c, err);
+            break;
+        case K::PresetSave: case K::PresetLoad: case K::PresetList: case K::PresetDelete:
+            ok = presetCommand(c, err);
             break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:

@@ -14,6 +14,7 @@
 #endif
 #include "AppModelCodec.h"
 #include "ControlServer.h"
+#include "Machine.h"
 #include "Event.h"
 #include "SolarisService.h"
 #include <cassert>
@@ -271,6 +272,7 @@ namespace
         fs::current_path(dir / "cli");
         setenv("SOLARIS_SETTINGS", (dir / "cli" / "settings.txt").c_str(), 1);
         setenv("SOLARIS_RECENTS", (dir / "cli" / "recents").c_str(), 1);
+        setenv("SOLARIS_PRESETS", (dir / "presets").c_str(), 1); // R-PRESET-1: one presets folder for both, never the machine's
         int status = 0;
         const pid_t a = spawnCc({"--watch", "--script", "../script.txt"}, dir / "cli" / "out.txt", dir / "cli" / "err.txt");
         assert(waitpid(a, &status, 0) == a && WIFEXITED(status) && WEXITSTATUS(status) == 0);
@@ -281,6 +283,7 @@ namespace
         solaris::SolarisService::Host host;
         host.settingsPath = (dir / "live" / "settings.txt").string(); // as the window's: its own files
         host.recentsPath = (dir / "live" / "recents").string();
+        solaris_host::presetPaths(host.presetsPath, host.factoryPresetsPath); // as the window's (R-PRESET-1)
         solaris::SolarisService svc(host);
         solaris_host::ControlServer server(svc);
         std::string err;

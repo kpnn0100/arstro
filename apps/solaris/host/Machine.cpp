@@ -52,6 +52,18 @@ namespace solaris_host
         if (!recents.empty()) fs::create_directories(fs::path(recents).parent_path(), ec);
     }
 
+    void presetPaths(std::string &user, std::string &factory)
+    {
+        const char *xd = std::getenv("XDG_DATA_HOME"), *home = std::getenv("HOME");
+        if (const char *u = std::getenv("SOLARIS_PRESETS")) user = u;
+        else if (xd) user = std::string(xd) + "/solaris/presets";
+        else if (home) user = std::string(home) + "/.local/share/solaris/presets";
+        if (const char *f = std::getenv("SOLARIS_FACTORY_PRESETS")) factory = f;
+#ifdef SOLARIS_FACTORY_PRESETS_DIR
+        else factory = SOLARIS_FACTORY_PRESETS_DIR;
+#endif
+    }
+
 #ifdef SOLARIS_HAVE_PULSE
     namespace
     {

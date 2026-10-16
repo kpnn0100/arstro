@@ -917,7 +917,17 @@ a process is the host's (law 12).
 **Phase 4 — open the ecosystem**
 - **R-PRESET-1 Device presets** (R-EDM-20): `preset save <dv> <name>`, `preset load <dv> <name>`, a preset store
   per device type in the machine's data folder (factory presets shipped beside it); the browser's Presets tab
-  lists and drops them (R-BROWSE's preset half).
+  lists and drops them (R-BROWSE's preset half). (**Detailed while building it, N22 — 2026-10-16.** A PRESET is a
+  device's set values (the registry's names and texts, as the `.slp` keeps them, and a sampler's sound) under a name,
+  in a text file `<folder>/<type>/<name>.slpreset`. Two folders: the USER's — the machine's data folder
+  (`$XDG_DATA_HOME/solaris/presets`, `SOLARIS_PRESETS` overriding, as the settings) — and the FACTORY's, shipped with the
+  app and never written. `preset save <dv> <name> [--replace]` writes the user's (an existing name refused without
+  --replace; a name with a path in it refused); `preset load <dv> <name>` sets the device to it — every value back to
+  the registry's default first, then the preset's, ONE edit, each value checked as `set` checks it (a preset of another
+  type refused); the user's preset of a name wins over the factory's. `preset list [<type>]` prints them; `preset delete
+  <type> <name>` deletes a user's (a factory's refused). A drop is one line: `device add <ch> --type <t> --preset <name>`
+  and `clip add --instrument <t> --preset <name>`. Saving and deleting change the machine, not the song (no undo, no
+  unsaved mark). The model publishes `presets[]` (type, name, factory) for the browser.)
 - **R-PRESET-2 Song templates**: `project new <path> --template <name>`; File › Save as Template.
 - **R-PRESET-3 A sample library**: tags and favourites on files (`sample tag <file> <tag>`), search by name and tag
   (`browse --search`), in the browser.

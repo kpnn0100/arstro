@@ -69,6 +69,7 @@ namespace
         h.midiIn = [] { return std::unique_ptr<solaris::IMidiIn>(new solaris_host::MidiInAlsa()); };
 #endif
         solaris_host::machinePaths(h.settingsPath, h.recentsPath); // the same files solaris-cc uses
+        solaris_host::presetPaths(h.presetsPath, h.factoryPresetsPath); // R-PRESET-1
         return h;
     }
 

@@ -447,6 +447,7 @@ namespace solaris
             const std::string id = p.nextId("dv");
             r->devices.insert(r->devices.begin() + at, DeviceNode{id, type, false, {}, {}});
             changed("device.added", id);
+            if (c.has("preset") && !applyPreset(id, c.flag("preset"), err)) return false; // R-PRESET-1: dropped with its preset
             mOutput = id + "\n";
             return true;
         }
@@ -623,6 +624,7 @@ namespace solaris
                 }
             }
             if (c.has("warp") && !c.has("src")) { err = "--warp is for an audio clip (--src)"; return false; }
+            if (c.has("preset") && !c.has("instrument")) { err = "--preset goes with --instrument (a new instrument, dropped with its preset)"; return false; }
             std::string made; // --instrument: a new instrument strip, made by `strip add`'s own rules (R-BROWSE-3: one drop, one command)
             if (c.has("instrument"))
             {
@@ -633,6 +635,7 @@ namespace solaris
                 if (c.has("sample")) sc.flags.emplace_back("sample", c.flag("sample")); // a sampler and its sound, one drop
                 if (!mixCommand(sc, err)) return false;
                 made = p.strips.back().id;
+                if (c.has("preset") && !applyPreset(p.rack(made)->devices.front().id, c.flag("preset"), err)) return false; // R-PRESET-1
             }
             if (c.has("src"))
             {

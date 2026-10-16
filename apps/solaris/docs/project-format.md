@@ -311,3 +311,26 @@ settings set <key>=<value> … | settings print | devices list | browse <folder>
 While a song has unsaved edits, Solaris writes it beside itself as `<song>.slp.autosave`: the same `.slp` text a save
 would write, replaced atomically. A save or a close deletes it; one that outlives its song's last save is offered for
 recovery when the song is opened (`project recover`).
+
+---
+
+## Presets — `<folder>/<type>/<name>.slpreset` (R-PRESET-1)
+
+Not part of a song: a device's set values under a name, in the user's presets folder (`SOLARIS_PRESETS`, else
+`$XDG_DATA_HOME/solaris/presets`) or the factory's shipped with the app (`apps/solaris/presets`). Lines of `key = value`;
+`;` begins a comment.
+
+```
+arstro-preset = 1
+type = synth
+name = Warm Pad
+; two detuned saws an octave apart
+osc1.wave = saw
+filter.cutoff = 1800.0
+amp.release = 1800.0
+```
+
+`type` is the registry type it is for; every other key is a parameter of that type, its value the text the `.slp`
+stores (a choice by name, a number canonical); a sampler's adds `sample = <absolute path>`. Loaded, a device takes
+these values and the registry's default for every other.
+

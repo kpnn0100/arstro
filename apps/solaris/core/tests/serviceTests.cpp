@@ -8,6 +8,7 @@
 #include "AppModelCodec.h"
 #include "Command.h"
 #include "Event.h"
+#include "device/Device.h"
 #include "Format.h"
 #include "KeyCombo.h"
 #include "Keymap.h"
@@ -227,6 +228,8 @@ namespace
             };
             h.settingsPath = settings;
             h.recentsPath = recents;
+            h.presetsPath = scratch() + "/presets/user";       // R-PRESET-1: never the machine's own folders
+            h.factoryPresetsPath = scratch() + "/presets/factory";
             if (canPlay)
                 h.audioOut = [this] {
                     auto o = std::make_unique<FakeOut>();
@@ -3199,6 +3202,123 @@ static void test_a_tempo_map_moves_time()
     pass("a tempo map (R-TEMPO-1): clips land where the map puts their beats — a step and a glide to the sample of its closed form; the tempo at the time bar; the MIDI file's changes (a glide in sixteenths); a warped clip across a change keeps 440 Hz; a time insert carries the change; the .slp; refusals");
 }
 
+namespace
+{
+    void writeText(const std::string &path, const std::string &text)
+    {
+        fs::create_directories(fs::path(path).parent_path());
+        std::ofstream f(path, std::ios::binary);
+        f << text;
+    }
+    std::string readText(const std::string &path)
+    {
+        std::ifstream f(path, std::ios::binary);
+        std::stringstream ss;
+        ss << f.rdbuf();
+        return ss.str();
+    }
+}
+
+static void test_presets_are_saved_loaded_and_dropped()
+{
+    // R-PRESET-1: a synth's values saved as a preset of the user's (the machine's: no edit), loaded back over others —
+    // every value to its default first, ONE edit; a factory preset loaded; a drop with a preset is one line; the user's
+    // of a name before the factory's; listed and deleted (a factory's refused); refusals — a missing one naming those
+    // there are, a preset of another type, an unknown value (nothing changed), a name with a slash, saving over one
+    fs::remove_all(scratch() + "/presets");
+    writeText(scratch() + "/presets/factory/synth/Warm.slpreset", "arstro-preset = 1\ntype = synth\nname = Warm\nosc1.wave = saw\nfilter.cutoff = 1800.0\n");
+    writeText(scratch() + "/presets/factory/reverb/Hall.slpreset", "arstro-preset = 1\ntype = reverb\nmix = 0.35\n");
+    Run r;
+    r.ok("project new " + freshSong("presets") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");           // ch_2, dv_1
+    r.ok("set dv_1.filter.cutoff=500 dv_1.amp.attack=30");
+    const int depth = r.svc.model().undoDepth;
+    const bool dirty = r.svc.model().dirty;
+    assert(r.ok("preset save dv_1 \"My Pad\"") == "saved synth preset \"My Pad\"\n");
+    const std::string mine = readText(scratch() + "/presets/user/synth/My Pad.slpreset");
+    assert(contains(mine, "type = synth\n") && contains(mine, "filter.cutoff = 500.0\n") && contains(mine, "amp.attack = 30.0\n"));
+    assert(r.svc.model().undoDepth == depth && r.svc.model().dirty == dirty); // the machine's, not the song's
+    auto has = [&](const std::string &type, const std::string &name, bool factory) {
+        for (const auto &x : r.svc.model().presets)
+            if (x.type == type && x.name == name && x.factory == factory) return true;
+        return false;
+    };
+    assert(has("synth", "My Pad", false) && has("synth", "Warm", true) && has("reverb", "Hall", true));
+    // loaded over other values: the preset's, the rest at their defaults — ONE edit
+    r.ok("set dv_1.filter.cutoff=2000 dv_1.volume=-3");
+    const int before = r.svc.model().undoDepth;
+    r.ok("preset load dv_1 \"My Pad\"");
+    assert(r.svc.model().undoDepth == before + 1);
+    assert(r.ok("get dv_1.filter.cutoff") == "500.0\n" && r.ok("get dv_1.amp.attack") == "30.0\n" && r.ok("get dv_1.volume") != "-3.0\n");
+    r.ok("undo");
+    assert(r.ok("get dv_1.filter.cutoff") == "2000.0\n");
+    // the factory's
+    r.ok("preset load dv_1 Warm");
+    assert(r.ok("get dv_1.osc1.wave") == "saw\n" && r.ok("get dv_1.filter.cutoff") == "1800.0\n" && r.ok("get dv_1.amp.attack") != "30.0\n");
+    // a drop with a preset: one line
+    const std::string ac = firstLine(r.ok("clip add --instrument synth --at 8 --length 4 --preset Warm"));
+    const std::string dv2 = r.svc.project()->rack(r.clip(ac)->track)->devices[0].id;
+    assert(r.ok("get " + dv2 + ".filter.cutoff") == "1800.0\n");
+    const std::string fx = firstLine(r.ok("device add ch_2 --type reverb --preset Hall"));
+    assert(r.ok("get " + fx + ".mix") == "0.35\n");
+    // yours of a name before the factory's; listed; deleted — a factory's refused
+    r.ok("set dv_1.filter.cutoff=777");
+    r.ok("preset save dv_1 Warm");
+    assert(has("synth", "Warm", false) && !has("synth", "Warm", true));
+    r.ok("preset load " + dv2 + " Warm");
+    assert(r.ok("get " + dv2 + ".filter.cutoff") == "777.0\n");
+    const std::string list = r.ok("preset list synth");
+    assert(contains(list, "synth: My Pad\n") && contains(list, "synth: Warm\n") && !contains(list, "reverb"));
+    r.ok("preset delete synth Warm");
+    assert(has("synth", "Warm", true) && !has("synth", "Warm", false));
+    assert(contains(r.no("preset delete synth Warm"), "is a factory preset"));
+    // refusals
+    assert(contains(r.no("preset save dv_1 \"My Pad\""), "--replace"));
+    r.ok("preset save dv_1 \"My Pad\" --replace");
+    assert(contains(r.no("preset load dv_1 Nope"), "no synth preset `Nope` — the synth's: \"My Pad\" \"Warm\""));
+    assert(contains(r.no("preset load dv_1 Hall"), "no synth preset `Hall`"));
+    writeText(scratch() + "/presets/user/synth/Odd.slpreset", "arstro-preset = 1\ntype = reverb\nmix = 0.5\n");
+    assert(contains(r.no("preset load dv_1 Odd"), "is a reverb preset"));
+    writeText(scratch() + "/presets/user/synth/Bad.slpreset", "arstro-preset = 1\ntype = synth\nfilter.cutoff = 300.0\nfilter.cutof = 3\n");
+    const std::string cut = r.ok("get dv_1.filter.cutoff");
+    assert(contains(r.no("preset load dv_1 Bad"), "preset `Bad`") && r.ok("get dv_1.filter.cutoff") == cut); // all or nothing
+    assert(contains(r.no("preset save dv_1 a/b"), "no slash"));
+    assert(contains(r.no("clip add --src " + scratch() + "/x.wav --preset Warm"), "--preset goes with --instrument"));
+    pass("presets (R-PRESET-1): saved as the user's (no edit, no unsaved mark); loaded over other values — the rest to their defaults, ONE edit, undone; a factory's; dropped with a clip or a device in one line; the user's of a name first; listed; deleted, a factory's refused; refusals — missing (naming those there are), another type, an unknown value (nothing changed), a slash, writing over one");
+}
+
+static void test_the_shipped_presets_load()
+{
+    // R-PRESET-1: every factory preset shipped with the app (apps/solaris/presets) loads onto a device of its type —
+    // each of its values one `set` would take
+    const fs::path shipped = fs::path(__FILE__).parent_path().parent_path().parent_path() / "presets";
+    fs::remove_all(scratch() + "/presets");
+    fs::create_directories(scratch() + "/presets/factory");
+    fs::copy(shipped, scratch() + "/presets/factory", fs::copy_options::recursive);
+    Run r;
+    r.ok("project new " + freshSong("shipped") + " --bpm 120");
+    const std::string audio = firstLine(r.ok("strip add --kind audio --name Bus"));
+    int n = 0;
+    for (const auto &x : r.svc.model().presets)
+    {
+        assert(x.factory);
+        const arstro::DeviceType *t = arstro::DeviceRegistry::find(x.type);
+        assert(t);
+        std::string dv;
+        if (t->kind == arstro::DeviceKind::Instrument)
+        {
+            const std::string ac = firstLine(r.ok("clip add --instrument " + x.type + " --at 0 --length 4"));
+            dv = r.svc.project()->rack(r.clip(ac)->track)->devices[0].id;
+        }
+        else dv = firstLine(r.ok("device add " + audio + " --type " + x.type));
+        r.ok("preset load " + dv + " \"" + x.name + "\"");
+        ++n;
+    }
+    std::printf("    %d shipped presets loaded\n", n);
+    assert(n >= 5);
+    pass("the shipped presets (R-PRESET-1): every one loads onto a device of its type");
+}
+
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
 {
     // R-ROLL-11: a pattern locked to a scale — placed notes on its nearest pitch (a tie down: a major chord on any degree
@@ -4462,6 +4582,8 @@ int main()
     test_a_warped_clip_follows_the_tempo();
     test_a_tempo_map_moves_time();
     test_the_metronome_follows_the_tempo_map();
+    test_presets_are_saved_loaded_and_dropped();
+    test_the_shipped_presets_load();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();
     test_held_peak_holds_then_falls();

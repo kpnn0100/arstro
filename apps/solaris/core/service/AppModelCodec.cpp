@@ -175,6 +175,10 @@ namespace solaris
             {"tempos[].bpm", "number", "beats a minute from there"},
             {"tempos[].ramp", "bool", "reached gliding (linearly in beats) from the tempo before"},
             {"tempos[].seconds", "number", "where it is heard (computed through the map)"},
+            {"presets", "object[]", "R-PRESET-1: every device preset — yours, then the factory's of a name you have not — by type, then name"},
+            {"presets[].type", "string", "the registry type it is for"},
+            {"presets[].name", "string", ""},
+            {"presets[].factory", "bool", "shipped with the app (never written or deleted)"},
             {"automations", "object[]", "every automation (R-AUTO-4)"},
             {"automations[].id", "string", "au_n — what a formula names"},
             {"automations[].name", "string", "\"<owner> · <parameter>\" when made from one"},
@@ -593,6 +597,9 @@ namespace solaris
         Json tempos = Json::array(); // R-TEMPO-1
         for (const auto &x : m.tempos) tempos.push(Json::object().set("id", x.id).set("at", x.at).set("bpm", x.bpm).set("ramp", x.ramp).set("seconds", x.seconds));
         j.set("tempos", tempos);
+        Json presets = Json::array(); // R-PRESET-1
+        for (const auto &x : m.presets) presets.push(Json::object().set("type", x.type).set("name", x.name).set("factory", x.factory));
+        j.set("presets", presets);
         Json autos = Json::array();
         for (const auto &a : m.automations)
         {

@@ -261,6 +261,13 @@ namespace solaris
         double seconds = 0;                      // where it is heard
     };
 
+    /** R-PRESET-1: a preset of a device type — the user's, or the factory's shipped with the app. */
+    struct PresetModel
+    {
+        std::string type, name;
+        bool factory = false;
+    };
+
     /** R-ROLL-11: a word the grammar takes, and what it means — the roll's menus offer what the service accepts. */
     struct VocabModel
     {
@@ -379,6 +386,7 @@ namespace solaris
         std::vector<VocabModel> chords, scales, grooves; // R-ROLL-11: `--chord` qualities ("" major), `pattern scale`'s, `--groove`'s
         std::vector<MarkerModel> markers;        // R-ARR-1: by time
         std::vector<TempoModel> tempos;          // R-TEMPO-1: the tempo map's changes, by time (the start's is `bpm`)
+        std::vector<PresetModel> presets;        // R-PRESET-1: every preset, by type then name (the machine's — any screen)
         std::vector<LaneGroupModel> groups;      // R-ARR-3: in the order of their first lanes
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };

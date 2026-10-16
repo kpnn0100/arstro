@@ -1,0 +1,20 @@
+arstro-preset = 1
+type = synth
+name = Pluck Bass
+; a square under a saw, one voice, the filter snapping shut after each note
+osc1.wave = square
+osc1.octave = -1.0
+osc2.wave = saw
+osc2.level = 0.5
+filter.cutoff = 300.0
+filter.res = 0.35
+filter.env = 4.0
+fenv.attack = 0.0
+fenv.decay = 220.0
+fenv.sustain = 0.0
+amp.attack = 0.0
+amp.decay = 400.0
+amp.sustain = 0.5
+amp.release = 60.0
+voice.mode = mono
+volume = -8.0

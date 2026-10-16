@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N22 — device presets and the browser's Presets tab** (R-PRESET-1; Phase 4 — open the ecosystem), then N23… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N22 part 2 — presets in the window: the browser's Presets tab (listed, dropped), a device window's Presets menu (load, save as…)** (R-PRESET-1; part 1 — the grammar — is built), then N23… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -509,7 +509,9 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       Part 3 (same day): the window — flags on the ruler's band (dragged, retyped, glided, deleted), Tempo change here…,
       the song bar at the time bar's tempo setting the change in effect there.
 **Phase 4 — open the ecosystem**
-- [ ] **N22** Device presets and the browser's Presets tab (R-PRESET-1).
+- [~] **N22** Device presets and the browser's Presets tab (R-PRESET-1).
+      Part 1 (2026-10-16): `.slpreset` files in the user's folder and the factory's (five shipped); `preset
+      save|load|list|delete`, `--preset` on `device add` and `clip add --instrument`; `presets[]` in the model.
 - [ ] **N23** Song templates (R-PRESET-2).
 - [ ] **N24** A sample library: tags, favourites, search (R-PRESET-3).
 - [ ] **N25** VST3 hosting: scan, an out-of-process host, process, latency, parameters (R-VST-6).

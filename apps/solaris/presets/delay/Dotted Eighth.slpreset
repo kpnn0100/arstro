@@ -1,0 +1,8 @@
+arstro-preset = 1
+type = delay
+name = Dotted Eighth
+; 375 ms: a dotted eighth at 120 bpm
+time = 375.0
+feedback = 0.4
+tone = 4500.0
+mix = 0.3

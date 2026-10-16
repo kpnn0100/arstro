@@ -1,0 +1,22 @@
+arstro-preset = 1
+type = synth
+name = Warm Pad
+; two detuned saws an octave apart, slow in, slow out, a low-pass that opens a little with each note
+osc1.wave = saw
+osc1.voices = 5.0
+osc1.detune = 18.0
+osc1.width = 40.0
+osc2.wave = saw
+osc2.octave = -1.0
+osc2.level = 0.6
+osc2.voices = 3.0
+osc2.detune = 12.0
+filter.cutoff = 1800.0
+filter.res = 0.15
+filter.env = 1.5
+fenv.attack = 900.0
+fenv.decay = 1500.0
+fenv.sustain = 0.4
+amp.attack = 700.0
+amp.release = 1800.0
+volume = -9.0

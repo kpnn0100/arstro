@@ -136,6 +136,7 @@ int main(int argc, char **argv)
     // The same settings and recents files the window uses: `settings set` here and the Settings
     // dialog are one setting.
     solaris_host::machinePaths(host.settingsPath, host.recentsPath);
+    solaris_host::presetPaths(host.presetsPath, host.factoryPresetsPath); // R-PRESET-1
     SolarisService svc(host);
     // The event stream IS the log: a shell run with --watch shows exactly what a window would.
     svc.subscribe([watch](const Event &e) {
