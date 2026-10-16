@@ -180,6 +180,7 @@ namespace solaris
             ok = midiCommand(c, err);
             break;
         case K::MarkerAdd: case K::MarkerRename: case K::MarkerMove: case K::MarkerDelete: case K::TimeInsert: case K::TimeDelete:
+        case K::LaneGroup: case K::LaneUngroup: case K::ClipsMove:
             ok = arrangeCommand(c, err);
             break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
@@ -276,7 +277,7 @@ namespace solaris
             // it); `made:` names the rest by kind, so an agent never has to predict an id
             static const std::vector<std::pair<std::string, std::string>> kinds = {
                 {"ch_", "strip"}, {"dv_", "device"}, {"pt_", "pattern"}, {"ln_", "lane"}, {"ac_", "clip"},
-                {"au_", "automation"}, {"sd_", "send"}, {"mx_", "mixer"}, {"prt_", "port"}};
+                {"au_", "automation"}, {"sd_", "send"}, {"mx_", "mixer"}, {"prt_", "port"}, {"lg_", "group"}, {"mk_", "marker"}};
             const std::string primary = mOutput.substr(0, mOutput.find('\n'));
             std::vector<std::string> fresh;
             for (const auto &id : mProject.allIds())
@@ -632,6 +633,7 @@ namespace solaris
             ParseReport rep;
             if (!parseProject(ss.str(), p, err, &rep)) { err = path + ": " + err; return false; }
             adoptTracks(p, rep.notes);
+            if (gatherLaneGroups(p)) rep.notes.push_back("lane groups gathered: each group's lanes side by side (R-ARR-3)");
             open(std::move(p), path);
             for (const auto &n : rep.notes) emit(Event(Event::Kind::Info).with("text", n));
             double age = 0;
@@ -659,6 +661,7 @@ namespace solaris
             ParseReport rep;
             if (!parseProject(ss.str(), p, err, &rep)) { err = from + ": " + err; return false; }
             adoptTracks(p, rep.notes);
+            gatherLaneGroups(p);
             open(std::move(p), path); // the song is <path>: `project save` writes it there and drops the autosave
             mModel.dirty = true;      // what was recovered is not saved yet
             mOutput = "recovered " + path + " from " + from + "\n";
@@ -889,6 +892,19 @@ namespace solaris
             err = unknownField(id, "a lane", f, {"name", "colour", "strip"});
             return false;
         }
+        if (LaneGroup *g = p.group(id)) // R-ARR-3
+        {
+            if (f == "name") { g->name = value; stored = value; return true; }
+            if (f == "folded")
+            {
+                if (value != "on" && value != "off") { err = id + ".folded is on or off, got `" + value + "`"; return false; }
+                g->folded = value == "on";
+                stored = value;
+                return true;
+            }
+            err = unknownField(id, "a lane group", f, {"name", "folded"}) + " — its lanes are `lane group` / `lane ungroup`";
+            return false;
+        }
         if (Mixer *m = p.mixer(id))
         {
             if (f == "name") { m->name = value; stored = value; return true; }
@@ -1025,7 +1041,8 @@ namespace solaris
             if (c->isAudio()) { put("in", canonicalSeconds(c->in)); put("out", canonicalSeconds(c->out)); put("src", c->src); }
             else put("pattern", c->pattern);
         }
-        else if (const Lane *l = p.lane(id)) { put("name", l->name); put("colour", std::to_string(l->colour)); put("strip", l->track.empty() ? "none" : l->track); }
+        else if (const Lane *l = p.lane(id)) { put("name", l->name); put("colour", std::to_string(l->colour)); put("strip", l->track.empty() ? "none" : l->track); put("group", l->group.empty() ? "none" : l->group); }
+        else if (const LaneGroup *g = p.group(id)) { put("name", g->name); put("folded", g->folded ? "on" : "off"); } // R-ARR-3
         else if (const Mixer *m = p.mixer(id)) { put("name", m->name); put("order", std::to_string(m->order)); }
         else if (const Pattern *pt = p.pattern(id)) { put("name", pt->name); put("length", canonicalBeats(pt->length)); }
         else if (const Port *po = p.port(id)) { put("name", po->name); put("channels", std::to_string(po->channels)); }

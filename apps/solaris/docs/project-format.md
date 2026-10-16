@@ -118,6 +118,10 @@ instrument's track on opening, and writes the line when it saves.
 #alane id=ln_2 name="" track=ch_4 order=1
 ```
 
+**Groups (R-ARR-3).** `#alanegroup id=lg_1 name=Drums folded=on` (`folded` only when on) is written before the lanes;
+a lane in it says `group=lg_1`. A group's lanes are side by side in the lane order — a song read with them scattered
+is gathered at each group's first lane, and said so. Folded, the group is one row on the timeline.
+
 ## 8. Patterns — `#apattern` / `#note`
 
 ```
@@ -265,6 +269,7 @@ clip move <ac> [--at b] [--lane ln] [--strip ch] | clip duplicate <ac> [--at b] 
 pattern new [--name n] [--length b] | note add <pt> --pitch p --at b [--length b] [--vel v] | note delete <pt> --pitch p --at b
 marker add <name> --at b [--length b] [--note t] | marker rename <mk> <name> | marker move <mk> [--at b] [--length b] | marker delete <mk>
 time insert --at b --length b | time delete --from b --to b      ; the whole song, ONE edit (R-ARR-2)
+lane group <ln> … [--name n] | lane ungroup <lg> | lane move <lg> --to i | clips move "<ac> …" --by b   ; R-ARR-3
 transport play | transport stop | transport seek <b|mk> | transport loop <a> <b> | transport loop <mk> | transport loop off
 render --out <f.wav> [--from b] [--to b] [--stems ch,…] [--ports] [--bits 24|32f]
 matrix print [--json] | audit | state print [--json] [--stable] | registry [--json] | api [--json|--md]

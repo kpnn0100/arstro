@@ -514,6 +514,7 @@ namespace solaris
             if (clips && !c.has("with-clips")) { err = std::to_string(clips) + " clip(s) are drawn on " + id + " — move them, or add --with-clips"; return false; }
             p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [&](const Clip &x) { return x.lane == id; }), p.clips.end());
             p.lanes.erase(std::remove_if(p.lanes.begin(), p.lanes.end(), [&](const Lane &x) { return x.id == id; }), p.lanes.end());
+            gatherLaneGroups(p); // R-ARR-3: a group left with no lane goes
             changed("lane.deleted", id);
             return true;
         }
@@ -521,6 +522,7 @@ namespace solaris
         {
             // R-LANE-1: lanes are reordered — renumbered in their new order, as `mixer move` does
             const std::string id = c.arg(0);
+            if (p.group(id)) return arrangeCommand(c, err); // R-ARR-3: a group moves whole
             if (!p.lane(id)) { err = "no lane `" + id + "`"; return false; }
             if (!c.has("to")) { err = "lane move needs --to <index>"; return false; }
             int to = 0;
@@ -533,6 +535,15 @@ namespace solaris
                 if (l->id != id) ids.push_back(l->id);
             ids.insert(ids.begin() + to, id);
             for (size_t i = 0; i < ids.size(); ++i) p.lane(ids[i])->order = (int)i;
+            {
+                // R-ARR-3: landing between two lanes of one group joins it; leaving its own group's run leaves it
+                Lane *l = p.lane(id);
+                const std::string above = to > 0 ? p.lane(ids[(size_t)to - 1])->group : std::string();
+                const std::string below = to + 1 < (int)ids.size() ? p.lane(ids[(size_t)to + 1])->group : std::string();
+                if (!above.empty() && above == below) l->group = above;
+                else if (!l->group.empty() && above != l->group && below != l->group) l->group.clear();
+                gatherLaneGroups(p);
+            }
             changed("lane.moved", id);
             return true;
         }

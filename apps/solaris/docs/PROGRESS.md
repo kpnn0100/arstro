@@ -460,7 +460,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
 - [x] **N14** Time insert / delete across the song (R-ARR-2).
       2026-10-16: `time insert|delete` — clips, automation points (a looping span), markers, the loop; what crosses an edge
       decided first (insert: stays, named; delete: a repeating clip shortened, any other refused); the ruler's menu.
-- [ ] **N15** Lane groups (R-ARR-3).
+- [~] **N15** Lane groups (R-ARR-3).
+      Part 1 (2026-10-16): `#alanegroup` + a lane's `group=`, side by side (`gatherLaneGroups`, also on open), `lane
+      group|ungroup`, `lane move <lg>`, a lane joining/leaving by where it lands, `set lg.folded`, `clips move --by`.
+      D-10, D-11 (test defects) closed. Part 2: the timeline — the group's bar, its fold, a folded row's clips dragged.
 **Phase 3 — work with audio**
 - [ ] **N16** Record audio: arm, monitor, record, punch, loop takes (R-REC-1).
 - [ ] **N17** Takes and comping (R-REC-2).

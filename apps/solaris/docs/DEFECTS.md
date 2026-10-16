@@ -37,6 +37,23 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-11 The keyboard-recording test failed now and then under a busy machine — closed in N15
+- **Found:** 2026-10-16, running the service suite four times while building N15.
+- **Symptom:** `test_record_the_keyboard_into_a_clip` asserted a held note of 0.3 … 0.8 beats; one run in four read
+  more — a key is stamped where the AUDIO thread drains it, so a test thread descheduled after `waitFrames` lets the
+  audio run on before the key reaches it.
+- **Fix:** 0.25 … 1.0 beats — half a beat held, still told apart from nothing and from a whole beat.
+- **Guard:** the test itself, four runs in a row green.
+
+### D-10 A test held a reference into the model across commands — it read freed memory — closed in N15
+- **Found:** 2026-10-16, N15's new model fields moved allocations and `test_notes_move_and_delete_a_selection_as_one_edit`
+  began to fail one run in three, on notes that were there.
+- **Cause:** `const auto &n = model().patterns[0].notes` kept across `r.ok(…)`; every refresh rebuilds the model, so
+  the reference pointed into a freed vector — it had worked by the allocator's luck.
+- **Fix:** the test reads the notes afresh each time (`notesNow()`); the other held references in the suite were
+  checked — each is read before the next command. (A front end copies what it binds; no product code holds one.)
+- **Guard:** the test, four runs in a row green.
+
 ### D-9 Nothing typed in the window reached a field — a rename or the tempo typed nothing — closed in J3
 - **Found:** 2026-10-16, reading the host's key mapping for the keymap (R-SET-4).
 - **Symptom:** in the real window, a rename field (a strip's, a lane's, a clip's) or the tempo's typed value took no

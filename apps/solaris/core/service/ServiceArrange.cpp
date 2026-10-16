@@ -168,10 +168,105 @@ namespace solaris
         return true;
     }
 
+    bool SolarisService::groupCommand(const Command &c, std::string &err)
+    {
+        // R-ARR-3: a group is organisation only; its lanes side by side (`gatherLaneGroups` keeps them so)
+        Project &p = mProject;
+        auto ordered = [&p] {
+            std::vector<Lane *> v;
+            for (auto &l : p.lanes) v.push_back(&l);
+            std::stable_sort(v.begin(), v.end(), [](const Lane *a, const Lane *b) { return a->order < b->order; });
+            return v;
+        };
+        switch (c.kind)
+        {
+        case K::LaneGroup:
+        {
+            std::vector<std::string> ids;
+            for (const auto &a : c.args)
+                for (const auto &w : tokenize(a))
+                {
+                    if (!p.lane(w)) { err = "no lane `" + w + "` — nothing was grouped"; return false; }
+                    if (std::find(ids.begin(), ids.end(), w) == ids.end()) ids.push_back(w);
+                }
+            LaneGroup g;
+            g.id = p.nextId("lg");
+            g.name = c.flag("name", "Group " + std::to_string(p.groups.size() + 1));
+            if (g.name.empty()) { err = "a group needs a name"; return false; }
+            // gathered at the first one's place, in their order
+            std::vector<Lane *> out;
+            bool placed = false;
+            for (Lane *l : ordered())
+            {
+                const bool named = std::find(ids.begin(), ids.end(), l->id) != ids.end();
+                if (!named) { out.push_back(l); continue; }
+                if (placed) continue;
+                placed = true;
+                for (Lane *m : ordered())
+                    if (std::find(ids.begin(), ids.end(), m->id) != ids.end()) out.push_back(m);
+            }
+            for (size_t i = 0; i < out.size(); ++i) out[i]->order = (int)i;
+            for (const auto &id : ids) p.lane(id)->group = g.id;
+            p.groups.push_back(g);
+            gatherLaneGroups(p); // another group a lane left stays whole; one left empty goes
+            changed("group.added", g.id);
+            mOutput = g.id + "\n";
+            return true;
+        }
+        case K::LaneUngroup:
+        {
+            if (!p.group(c.arg(0))) { err = "no lane group `" + c.arg(0) + "`"; return false; }
+            const std::string id = c.arg(0);
+            for (auto &l : p.lanes)
+                if (l.group == id) l.group.clear();
+            p.groups.erase(std::remove_if(p.groups.begin(), p.groups.end(), [&](const LaneGroup &g) { return g.id == id; }), p.groups.end());
+            changed("group.deleted", id);
+            return true;
+        }
+        case K::LaneMove: // a group, whole: its first lane to --to, never inside another group's run
+        {
+            const std::string id = c.arg(0);
+            if (!c.has("to")) { err = "lane move needs --to <index>"; return false; }
+            double v = 0;
+            if (!parseNumber(c.flag("to"), v) || v != std::floor(v) || v < 0 || v > (double)p.lanes.size() - 1)
+            { err = "--to is a row from 0 to " + std::to_string(p.lanes.size() - 1); return false; }
+            std::vector<Lane *> rest, block;
+            for (Lane *l : ordered()) (l->group == id ? block : rest).push_back(l);
+            size_t at = std::min((size_t)v, rest.size());
+            while (at > 0 && at < rest.size() && !rest[at]->group.empty() && rest[at]->group == rest[at - 1]->group) ++at; // past a run it would split
+            rest.insert(rest.begin() + (long)at, block.begin(), block.end());
+            for (size_t i = 0; i < rest.size(); ++i) rest[i]->order = (int)i;
+            changed("group.moved", id);
+            return true;
+        }
+        case K::ClipsMove:
+        {
+            double by = 0;
+            if (!parseNumber(c.flag("by"), by) || !std::isfinite(by) || std::fabs(by) > 1e6) { err = "--by is a number of beats (negative = earlier), got `" + c.flag("by") + "`"; return false; }
+            std::vector<Clip *> which;
+            for (const auto &a : c.args)
+                for (const auto &w : tokenize(a))
+                {
+                    Clip *cl = p.clip(w);
+                    if (!cl) { err = "no clip `" + w + "` — nothing moved"; return false; }
+                    if (cl->at + by < -0.5 / kPpq) { err = w + " would start before beat 0 — nothing moved"; return false; }
+                    if (std::find(which.begin(), which.end(), cl) == which.end()) which.push_back(cl);
+                }
+            for (Clip *cl : which) cl->at = toTick(std::max(0.0, cl->at + by));
+            changed("clips.moved", which.empty() ? std::string() : which.front()->id);
+            mOutput = std::to_string(which.size()) + (which.size() == 1 ? " clip" : " clips") + " moved\n";
+            return true;
+        }
+        default:
+            return false;
+        }
+    }
+
     bool SolarisService::arrangeCommand(const Command &c, std::string &err)
     {
         Project &p = mProject;
         if (c.kind == K::TimeInsert || c.kind == K::TimeDelete) return timeCommand(c, err);
+        if (c.kind == K::LaneGroup || c.kind == K::LaneUngroup || c.kind == K::ClipsMove || c.kind == K::LaneMove) return groupCommand(c, err);
         if (c.kind == K::MarkerAdd)
         {
             Marker m;

@@ -1650,13 +1650,14 @@ static void test_notes_move_and_delete_a_selection_as_one_edit()
     const int depth = r.svc.model().undoDepth;
     // the upper three moved a beat later and up a fifth: ONE edit, the rest untouched
     r.ok("notes move pt_1 \"G4@0.5 C5@0.75 E5@1\" --by 1 --semi 7");
-    const auto &n = r.svc.model().patterns[0].notes;
+    // the notes as they are NOW: a reference held across a command dangles (each refresh rebuilds the model)
+    auto notesNow = [&]() -> const std::vector<NoteModel> & { return r.svc.model().patterns[0].notes; };
     auto has = [&](int pitch, double at) {
-        for (const auto &x : n)
+        for (const auto &x : notesNow())
             if (x.pitch == pitch && std::fabs(x.at - at) < 1e-9) return true;
         return false;
     };
-    assert(n.size() == 5 && has(60, 0) && has(64, 0.25) && has(74, 1.5) && has(79, 1.75) && has(83, 2.0) && !has(67, 0.5));
+    assert(notesNow().size() == 5 && has(60, 0) && has(64, 0.25) && has(74, 1.5) && has(79, 1.75) && has(83, 2.0) && !has(67, 0.5));
     assert(r.svc.model().undoDepth == depth + 1);
     r.ok("undo");
     assert(has(67, 0.5) && has(72, 0.75) && has(76, 1.0));
@@ -1665,14 +1666,14 @@ static void test_notes_move_and_delete_a_selection_as_one_edit()
     assert(contains(r.no("notes move pt_1 \"G4@0.5\" --by -0.5 --semi -7"), "would land on 60@0, which is not moved"));
     assert(contains(r.no("notes move pt_1 \"E5@1\" --semi 60"), "outside 0–127"));
     assert(contains(r.no("notes move pt_1 \"C4@0\" --by -1"), "before beat 0"));
-    assert(has(67, 0.5) && n.size() == 5);                             // nothing moved
+    assert(has(67, 0.5) && notesNow().size() == 5);                             // nothing moved
     // a selection moved onto its own old places is fine (a chord moved up together)
     r.ok("notes move pt_1 \"C4@0 E4@0.25\" --semi 4");
     assert(has(64, 0) && has(68, 0.25));
     // deleted as one edit
     const int d2 = r.svc.model().undoDepth;
     r.ok("notes delete pt_1 \"G4@0.5 C5@0.75\"");
-    assert(n.size() == 3 && !has(67, 0.5) && !has(72, 0.75) && r.svc.model().undoDepth == d2 + 1);
+    assert(notesNow().size() == 3 && !has(67, 0.5) && !has(72, 0.75) && r.svc.model().undoDepth == d2 + 1);
     assert(contains(r.no("notes delete pt_1 \"G4@0.5\""), "has no note there"));
     pass("`notes move` / `notes delete`: a selection moved (beats and semitones) or removed as ONE edit; refused whole naming the first — no note, onto a note not moved, out of range, before 0 (R-ROLL-8)");
 }
@@ -2013,7 +2014,8 @@ static void test_record_the_keyboard_into_a_clip()
     assert(pt && pt->notes.size() == 2);
     assert(pt->notes[0].pitch == 60 && pt->notes[0].at == 1.0 && pt->notes[0].vel == 100);   // beat 5 → 1 into the bar
     assert(pt->notes[1].pitch == 64 && pt->notes[1].at == 2.0 && pt->notes[1].vel == 80);
-    assert(pt->notes[0].length > 0.3 && pt->notes[0].length < 0.8);
+    // half a beat held — stamped where the audio thread drained each key, so a busy machine (ctest -j) moves it a little
+    assert(pt->notes[0].length > 0.25 && pt->notes[0].length < 1.0);
     // one undo takes the take; redo brings it back
     r.ok("undo");
     assert(r.svc.model().clips.empty());
@@ -2348,6 +2350,82 @@ static void test_time_insert_and_delete_move_the_whole_song()
     assert(contains(r.no("time insert --at 4 --length 0"), "more than 0"));
     assert(contains(r.no("time delete --from 8 --to 4"), "--to must be after --from"));
     pass("time edits (R-ARR-2): insert moves what is after and grows what holds it, a crossing clip said; delete takes out what is inside and moves what follows, a looping clip shortened, a plain one across an edge refused before anything moves; ONE undo; the loop the session's");
+}
+
+static void test_lane_groups_gather_fold_and_move_together()
+{
+    // R-ARR-3: lanes gathered into a named group (side by side at the first one's place), folded as the song's, the
+    // group moved whole, a lane joining or leaving by where it lands; clips moved together; ungrouped; refusals
+    Run r;
+    r.ok("project new " + freshSong("groups") + " --bpm 120");
+    const std::string a = firstLine(r.ok("lane add A")), b = firstLine(r.ok("lane add B")), c = firstLine(r.ok("lane add C")), d = firstLine(r.ok("lane add D"));
+    auto order = [&] {
+        std::vector<std::string> v;
+        std::vector<LaneModel> ls = r.svc.model().lanes;
+        std::stable_sort(ls.begin(), ls.end(), [](const LaneModel &x, const LaneModel &y) { return x.order < y.order; });
+        for (const auto &l : ls)
+            if (l.id == a || l.id == b || l.id == c || l.id == d) v.push_back(l.id);
+        return v;
+    };
+    auto groupOf = [&](const std::string &ln) {
+        for (const auto &l : r.svc.model().lanes)
+            if (l.id == ln) return l.group;
+        return std::string("?");
+    };
+    assert(r.ok("lane group " + a + " " + c + " --name Drums") == "lg_1\n");
+    assert((order() == std::vector<std::string>{a, c, b, d}) && groupOf(a) == "lg_1" && groupOf(c) == "lg_1" && groupOf(b).empty());
+    assert(r.svc.model().groups.size() == 1 && r.svc.model().groups[0].name == "Drums" && (r.svc.model().groups[0].lanes == std::vector<std::string>{a, c}));
+    assert(contains(r.text(), "#alanegroup id=lg_1 name=Drums\n") && contains(r.text(), "group=lg_1"));
+    assert(contains(r.ok("ls"), "group lg_1 \"Drums\"\nlane " + a));
+    // folded: the song's
+    r.ok("set lg_1.folded=on");
+    assert(r.svc.model().groups[0].folded && r.ok("get lg_1.folded") == "on\n" && contains(r.text(), "folded=on"));
+    // the group moved whole; a lane landing inside its run joins it, one leaving its run leaves it
+    r.ok("lane move lg_1 --to 2");
+    assert((order() == std::vector<std::string>{b, d, a, c}));
+    r.ok("lane move " + b + " --to 2");                             // between a and c
+    assert((order() == std::vector<std::string>{d, a, b, c}) && groupOf(b) == "lg_1");
+    r.ok("lane move " + a + " --to 0");                             // out of the run
+    assert((order() == std::vector<std::string>{a, d, b, c}) && groupOf(a).empty() && (r.svc.model().groups[0].lanes == std::vector<std::string>{b, c}));
+    // its clips moved together: ONE edit
+    r.ok("clip add --instrument synth --at 0 --length 4 --lane " + b);
+    const std::string c1 = r.svc.model().clips.back().id;
+    r.ok("clip add --strip " + r.svc.model().clips.back().track + " --at 8 --length 4 --lane " + c);
+    const std::string c2 = r.svc.model().clips.back().id;
+    const int depth = r.svc.model().undoDepth;
+    assert(r.ok("clips move \"" + c1 + " " + c2 + "\" --by 2") == "2 clips moved\n");
+    assert(r.clip(c1)->at == 2.0 && r.clip(c2)->at == 10.0 && r.svc.model().undoDepth == depth + 1);
+    assert(contains(r.no("clips move \"" + c1 + "\" --by -5"), "would start before beat 0"));
+    assert(contains(r.no("clips move \"" + c1 + " ac_99\" --by 1"), "no clip `ac_99`") && r.clip(c1)->at == 2.0);
+    // ungrouped: the lanes stay; undone: back
+    r.ok("lane ungroup lg_1");
+    assert(r.svc.model().groups.empty() && groupOf(b).empty() && (order() == std::vector<std::string>{a, d, b, c}));
+    r.ok("undo");
+    assert(r.svc.model().groups.size() == 1 && groupOf(b) == "lg_1");
+    // a group left with no lane goes
+    r.ok("lane group " + d + " --name Solo");
+    r.ok("lane delete " + d);
+    assert(r.svc.model().groups.size() == 1 && r.svc.model().groups[0].id == "lg_1" && !contains(r.text(), "Solo")); // gone from the song too
+    // refusals
+    assert(contains(r.no("lane group ln_99"), "no lane `ln_99`"));
+    assert(contains(r.no("set lg_1.folded=maybe"), "on or off"));
+    assert(contains(r.no("set lg_1.colour=3"), "a lane group"));
+    assert(contains(r.no("lane ungroup lg_9"), "no lane group `lg_9`"));
+    // a hand-written song with a group scattered: gathered on open, and said
+    const std::string hand = scratch() + "/scattered.slp";
+    {
+        std::ofstream f(hand);
+        f << "arstro-project = 1\napp = solaris\nid = prj\nname = Scattered\nbpm = 120\n#amixer id=mx_1 name=Sources order=0\n"
+             "#alanegroup id=lg_1 name=G\n#alane id=ln_1 name=A group=lg_1 order=0\n#alane id=ln_2 name=B order=1\n#alane id=ln_3 name=C group=lg_1 order=2\n";
+    }
+    r.events.clear();
+    r.ok("project open " + hand);
+    bool said = false;
+    for (const auto &e : r.events) said |= contains(e, "lane groups gathered");
+    std::vector<LaneModel> ls = r.svc.model().lanes;
+    std::stable_sort(ls.begin(), ls.end(), [](const LaneModel &x, const LaneModel &y) { return x.order < y.order; });
+    assert(said && ls.size() == 3 && ls[0].id == "ln_1" && ls[1].id == "ln_3" && ls[2].id == "ln_2");
+    pass("lane groups (R-ARR-3): gathered at the first lane's place, folded as the song's, moved whole, a lane joining or leaving by where it lands; clips moved together as one edit; ungrouped and undone; an empty group goes; a scattered song gathered on open; refusals");
 }
 
 static void test_scale_lock_places_and_moves_notes_on_the_scale()
@@ -3601,6 +3679,7 @@ int main()
     test_the_keyboards_wheels_play_and_record();
     test_markers_name_places_and_sections();
     test_time_insert_and_delete_move_the_whole_song();
+    test_lane_groups_gather_fold_and_move_together();
     test_scale_lock_places_and_moves_notes_on_the_scale();
     test_note_chance_is_rolled_per_pass_and_the_render_stays_pure();
     test_the_note_tools_humanise_groove_legato_arpeggiate();

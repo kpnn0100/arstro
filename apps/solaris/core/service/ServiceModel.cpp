@@ -244,7 +244,15 @@ namespace solaris
         std::vector<const Lane *> lanes;
         for (const auto &l : p.lanes) lanes.push_back(&l);
         std::stable_sort(lanes.begin(), lanes.end(), [](const Lane *a, const Lane *b) { return a->order < b->order; });
-        for (const Lane *l : lanes) mModel.lanes.push_back(LaneModel{l->id, laneTitle(p, *l), l->order, l->colour, l->track, !l->name.empty() || l->track.empty()});
+        for (const Lane *l : lanes) mModel.lanes.push_back(LaneModel{l->id, laneTitle(p, *l), l->order, l->colour, l->track, !l->name.empty() || l->track.empty(), l->group});
+        for (const Lane *l : lanes) // R-ARR-3: in the order of their first lanes
+        {
+            const LaneGroup *g = l->group.empty() ? nullptr : p.group(l->group);
+            if (!g) continue;
+            auto it = std::find_if(mModel.groups.begin(), mModel.groups.end(), [&](const LaneGroupModel &x) { return x.id == g->id; });
+            if (it == mModel.groups.end()) { mModel.groups.push_back(LaneGroupModel{g->id, g->name, g->folded, {}}); it = mModel.groups.end() - 1; }
+            it->lanes.push_back(l->id);
+        }
 
         std::map<std::string, int> uses;
         for (const auto &c : p.clips)

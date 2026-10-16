@@ -542,6 +542,28 @@ static void test_markers_round_trip_and_name_their_sections()
     pass("markers in the .slp (R-ARR-1): #amarker read and written back in place, a fixed point; mk_ ids; a section's end — its length, else the next marker, else the song's end; nameless or doubled refused");
 }
 
+static void test_lane_groups_round_trip_and_are_checked()
+{
+    // R-ARR-3: #alanegroup before the lanes naming it, `folded` written only when on; a lane's group must exist
+    const std::string head = "arstro-project = 1\napp = solaris\nid = prj\n#amixer id=mx_1 name=Sources order=0\n";
+    Project p;
+    std::string err;
+    assert(parseProject(head + "#alanegroup id=lg_1 name=Drums folded=on\n#alane id=ln_1 name=Kick group=lg_1 order=0\n#alane id=ln_2 name=Hats group=lg_1 order=1\n"
+                               "#alane id=ln_3 name=Bass order=2\n", p, err));
+    assert(p.groups.size() == 1 && p.groups[0].folded && p.lanes[0].group == "lg_1" && p.lanes[2].group.empty());
+    const std::string text = serializeProject(p);
+    assert(contains(text, "#alanegroup id=lg_1 name=Drums folded=on\n") && contains(text, "#alane id=ln_2 name=Hats group=lg_1 order=1\n"));
+    assert(text.find("#alanegroup") < text.find("#alane id=ln_1"));
+    Project q;
+    assert(parseProject(text, q, err) && serializeProject(q) == text);
+    assert(p.nextId("lg") == "lg_2" && p.group("lg_1") && !p.group("lg_2"));
+    p.groups[0].folded = false;
+    assert(!contains(serializeProject(p), "folded"));
+    Project bad;
+    assert(!parseProject(head + "#alane id=ln_1 name=Kick group=lg_9 order=0\n", bad, err) && contains(err, "in group `lg_9`"));
+    pass("lane groups in the .slp (R-ARR-3): #alanegroup before its lanes, folded only when on, a fixed point; lg_ ids; a lane naming a group the song lacks refused");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -558,6 +580,7 @@ int main()
     test_expression_lanes_round_trip_and_are_checked();
     test_note_chance_and_scales_round_trip_and_are_checked();
     test_markers_round_trip_and_name_their_sections();
+    test_lane_groups_round_trip_and_are_checked();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

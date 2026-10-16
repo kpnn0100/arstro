@@ -113,8 +113,15 @@ namespace solaris
              "through it, and it shows the strip's name until given its own (R-LANE-3).", "R-LANE-1"},
             {K::LaneDelete, "lane delete", "<ln>", 1, 1, {"with-clips"},
              "Delete a lane. Refused while clips are drawn on it, unless --with-clips.", "R-LANE-1"},
-            {K::LaneMove, "lane move", "<ln>", 1, 1, {"to=<index>"},
-             "Move a lane to row <index> (0 = the top); the lanes renumber in their new order.", "R-LANE-1"},
+            {K::LaneMove, "lane move", "<ln|lg>", 1, 1, {"to=<index>"},
+             "Move a lane to row <index> (0 = the top); the lanes renumber in their new order. A lane moved out of its group's "
+             "run leaves it, one moved into another group's run joins it; a group (lg_n) moves whole, its first lane to <index> "
+             "(R-ARR-3).", "R-LANE-1"},
+            {K::LaneGroup, "lane group", "<ln> …", 1, -1, {"name=<text>"},
+             "Gather lanes into a NEW named group (R-ARR-3): side by side at the first one's place, in their order; a lane "
+             "already in another group leaves it. Folded (`set <lg>.folded=on`) the group is one row showing all its clips. "
+             "Prints its id.", "R-ARR-3"},
+            {K::LaneUngroup, "lane ungroup", "<lg>", 1, 1, {}, "Let a group's lanes go; the group is gone, the lanes stay where they are.", "R-ARR-3"},
 
             {K::ClipAdd, "clip add", "", 0, 0,
              {"src=<file>", "strip=<ch>", "instrument=<type>", "sample=<file>", "pattern=<pt>", "lane=<ln|new>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>"},
@@ -162,6 +169,10 @@ namespace solaris
              "--swing of a step — or onto a --groove (R-ROLL-11: a template's steps, offsets and accents, under Notation; "
              "it carries its own grid and swing). --strength moves each start (and velocity) that part of the way (1). "
              "--notes: only those notes (the roll's selection). Notes that land on one another merge (the louder stays).", "R-ROLL-4"},
+            {K::ClipsMove, "clips move", "\"<ac> …\"", 1, -1, {"by=<beats>"},
+             "Move several clips in time as ONE edit (R-ARR-3 — a folded group's clips dragged together; any selection): each "
+             "--by beats (negative = earlier). Refused whole, naming the first, when a clip is not the song's or would start "
+             "before beat 0.", "R-ARR-3", false, {"by"}},
             {K::NotesAdd, "notes add", "<pt> \"<note> …\"", 2, -1, {"length=<beats>", "vel=<1-127>"},
              "Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>[:<chance>]]] — "
              "C4@0:0.5:90, kick@1, E4@2::70, hat@1.5:::0.5. --length / --vel are the defaults (0.25, 100). A bad token is "

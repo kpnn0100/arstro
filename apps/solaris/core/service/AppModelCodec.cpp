@@ -100,6 +100,12 @@ namespace solaris
             {"lanes[].colour", "int", "−1 = none"},
             {"lanes[].strip", "string", "R-LANE-3: the instrument strip it is the track of — what is on it plays through it; empty = a plain lane"},
             {"lanes[].ownName", "bool", "false: a track showing its instrument strip's name (renaming the strip renames it)"},
+            {"lanes[].group", "string", "R-ARR-3: the lane group it is in; empty = none"},
+            {"groups", "object[]", "R-ARR-3: lane groups, in the order of their first lanes — each group's lanes side by side"},
+            {"groups[].id", "string", "lg_n"},
+            {"groups[].name", "string", ""},
+            {"groups[].folded", "bool", "folded: its lanes are ONE row on the timeline"},
+            {"groups[].lanes", "string[]", "its lanes, in order"},
             {"clips", "object[]", "every clip"},
             {"clips[].id", "string", ""},
             {"clips[].name", "string", ""},
@@ -396,9 +402,16 @@ namespace solaris
             {
                 Json x = Json::object().set("id", l.id).set("name", l.name);
                 if (!l.strip.empty()) x.set("track", l.strip);
+                if (!l.group.empty()) x.set("group", l.group); // R-ARR-3
                 lanes.push(x);
             }
             j.set("lanes", lanes);
+            if (!m.groups.empty())
+            {
+                Json gs = Json::array(); // R-ARR-3: "<id> <name>[ folded]"
+                for (const auto &g : m.groups) gs.push(Json::string(g.id + " " + g.name + (g.folded ? " folded" : "")));
+                j.set("groups", gs);
+            }
             Json clips = Json::array();
             for (const auto &c : m.clips)
             {
@@ -511,8 +524,12 @@ namespace solaris
         j.set("masterDevices", devices(m.masterDevices));
         Json lanes = Json::array();
         for (const auto &l : m.lanes)
-            lanes.push(Json::object().set("id", l.id).set("name", l.name).set("order", l.order).set("colour", l.colour).set("strip", l.strip).set("ownName", l.ownName));
+            lanes.push(Json::object().set("id", l.id).set("name", l.name).set("order", l.order).set("colour", l.colour).set("strip", l.strip).set("ownName", l.ownName)
+                           .set("group", l.group));
         j.set("lanes", lanes);
+        Json groups = Json::array(); // R-ARR-3
+        for (const auto &g : m.groups) groups.push(Json::object().set("id", g.id).set("name", g.name).set("folded", g.folded).set("lanes", strings(g.lanes)));
+        j.set("groups", groups);
         Json clips = Json::array();
         for (const auto &c : m.clips)
             clips.push(Json::object()

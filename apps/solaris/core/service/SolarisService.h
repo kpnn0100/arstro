@@ -109,6 +109,7 @@ namespace solaris
         bool composeCommand(const Command &c, std::string &err);
         bool arrangeCommand(const Command &c, std::string &err); // markers (R-ARR-1), time insert / delete (R-ARR-2)
         bool timeCommand(const Command &c, std::string &err);    // R-ARR-2
+        bool groupCommand(const Command &c, std::string &err);   // R-ARR-3: lane groups, a group moved, clips moved together
         /** A marker's id → its beat, and its section's end — `transport seek|loop <mk>`. False: not a marker. */
         bool markerSpan(const std::string &id, double &from, double &to) const;
         bool readCommand(const Command &c, std::string &err);

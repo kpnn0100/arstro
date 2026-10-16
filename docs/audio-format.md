@@ -174,7 +174,8 @@ In Solaris `to` may also be `master` or a `#aport` id (a headphone cue straight 
 Organisation only: it holds any clips, from any strips. Where a clip is drawn, never what it sounds
 through — unless it names an instrument `#atrack`, `track=ch_2`: then it is that instrument's track
 and what is on it plays through it (Solaris R-LANE-3; a Solaris file carries the header line
-`tracks = on`). Interstellar preserves both, unknown to it.
+`tracks = on`). Interstellar preserves both, unknown to it. Lanes may be gathered into a named group,
+`#alanegroup id=lg_1 name=Drums [folded=on]`, each naming it — `#alane … group=lg_1` (Solaris R-ARR-3).
 
 ### 2.8 `#apattern` — notes shared by clips (Solaris)
 

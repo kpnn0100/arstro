@@ -749,9 +749,14 @@ namespace solaris
             else o << c.pattern;
             o << " via " << c.track << "\n";
         };
+        std::string lastGroup;
         for (const Lane *l : lanes)
         {
-            o << "lane " << l->id << " " << q(laneTitle(p, *l)) << (l->track.empty() ? std::string() : " · track of " + l->track) << "\n";
+            if (!l->group.empty() && l->group != lastGroup) // R-ARR-3: a group, before its first lane
+                if (const LaneGroup *g = p.group(l->group)) o << "group " << g->id << " " << q(g->name) << (g->folded ? " · folded" : "") << "\n";
+            lastGroup = l->group;
+            o << "lane " << l->id << " " << q(laneTitle(p, *l)) << (l->track.empty() ? std::string() : " · track of " + l->track)
+              << (l->group.empty() ? std::string() : " · in " + l->group) << "\n";
             for (const auto &c : p.clips)
                 if (c.lane == l->id) clipLine(c);
         }

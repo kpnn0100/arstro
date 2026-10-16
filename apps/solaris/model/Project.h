@@ -108,7 +108,18 @@ namespace solaris
     {
         std::string id, name;
         std::string track;              // R-LANE-3: the instrument strip this lane is the TRACK of; empty = organisation only
+        std::string group;              // R-ARR-3: the lane group it is in (lg_n); empty = none
         int order = 0, colour = -1;
+        Fields unknown;
+        Remarks remarks;
+    };
+
+    /** R-ARR-3: a named group of lanes — organisation only, as a lane is; its lanes side by side in the lane order.
+     *  Folded, they are one row on the timeline. */
+    struct LaneGroup
+    {
+        std::string id, name;
+        bool folded = false;
         Fields unknown;
         Remarks remarks;
     };
@@ -164,6 +175,10 @@ namespace solaris
      *  that degree's own triad), +1 the first at or above, −1 the first at or below; within 0 … 127, the other way when
      *  the end is reached. Mask 0 (no scale) keeps the pitch. */
     int snapToScale(int pitch, int mask, int dir);
+    struct Project;
+    /** R-ARR-3: each group's lanes side by side — at its first lane's place, in their order — a group with no lane
+     *  gone, the lanes renumbered 0…n−1. True when anything changed (a hand-written song, or after a lane edit). */
+    bool gatherLaneGroups(Project &p);
     /** A pattern's scale as a mask — 0 when it has none (or one validateProject would refuse). */
     int scaleMaskOf(const Pattern &pt);
     /** R-ROLL-11: whether a note sounds in a clip's `repetition` (0 the first pass of its pattern): always at chance 1,
@@ -244,6 +259,7 @@ namespace solaris
         std::vector<Send> sends;
         std::vector<Rack> racks;
         std::vector<Lane> lanes;
+        std::vector<LaneGroup> groups;  // R-ARR-3
         std::vector<Pattern> patterns;
         std::vector<Clip> clips;
         std::vector<Automation> automations;
@@ -262,6 +278,8 @@ namespace solaris
         Clip *clip(const std::string &id);
         Automation *automation(const std::string &id);
         Marker *marker(const std::string &id);
+        LaneGroup *group(const std::string &id);
+        const LaneGroup *group(const std::string &id) const;
         const Marker *marker(const std::string &id) const;
         /** R-ARR-1: where a marker's section ends — at + length, or (a point) the next marker after it, else the song's
          *  end (`songEnd`, beats); never before its own start. */

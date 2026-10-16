@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 🚧 DR-ARR-3 — the grammar)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -812,7 +812,14 @@ a process is the host's (law 12).
   and undo leaves it where it is. The ruler's right-click offers a bar opened or taken out there, and the loop's span
   taken out.)
 - **R-ARR-3 Lane groups**: lanes folded into a named group (`lane group <ln>… --name`), the group collapsed or
-  opened (eased); its clips moved together.
+  opened (eased); its clips moved together. (**Detailed while building it, N15 — 2026-10-16.** A group is organisation
+  only, as a lane is (R-LANE-1): `#alanegroup id=lg_1 name=Drums [folded=on]`, each of its lanes naming it
+  (`#alane … group=lg_1`), its lanes side by side in the lane order — `lane group` gathers them at the first one's
+  place, `lane move <lg> --to <i>` moves the group whole, a lane moved out of its group's run leaves it and one moved
+  into another's run joins it, a group left with no lane goes. `lane ungroup <lg>` lets its lanes go. Its name and
+  whether it is folded are the song's (`set lg_1.name=`, `set lg_1.folded=on|off`). Folded, its lanes are ONE row
+  showing all their clips; dragged there, they move together — `clips move "<ac> …" --by <beats>`, one edit, a
+  grammar any front end can use for a selection of clips.)
 
 **Phase 3 — work with audio**
 - **R-REC-1 Record audio** (R-EDM-11): an input port monitored through an armed audio strip (`strip arm <ch>

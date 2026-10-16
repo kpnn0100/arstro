@@ -123,6 +123,15 @@ namespace solaris
         int order = 0, colour = -1;
         std::string strip;                       // R-LANE-3: the instrument strip it is the track of; empty = plain
         bool ownName = true;                     // false: a track showing its strip's name
+        std::string group;                       // R-ARR-3: the lane group it is in ("" none)
+    };
+
+    /** R-ARR-3: a named group of lanes, side by side; folded, one row on the timeline. */
+    struct LaneGroupModel
+    {
+        std::string id, name;
+        bool folded = false;
+        std::vector<std::string> lanes;          // its lanes, in order
     };
 
     struct ClipModel
@@ -347,6 +356,7 @@ namespace solaris
         std::vector<DeviceTypeModel> deviceTypes; // the registry, instruments first (R-DSP-2)
         std::vector<VocabModel> chords, scales, grooves; // R-ROLL-11: `--chord` qualities ("" major), `pattern scale`'s, `--groove`'s
         std::vector<MarkerModel> markers;        // R-ARR-1: by time
+        std::vector<LaneGroupModel> groups;      // R-ARR-3: in the order of their first lanes
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };
 }

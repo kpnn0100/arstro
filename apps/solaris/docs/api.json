@@ -278,13 +278,31 @@
     },
     {
       "verb": "lane move",
-      "usage": "lane move <ln> [--to <index>]",
-      "args": "<ln>",
+      "usage": "lane move <ln|lg> [--to <index>]",
+      "args": "<ln|lg>",
       "flags": [
         "to=<index>"
       ],
-      "summary": "Move a lane to row <index> (0 = the top); the lanes renumber in their new order.",
+      "summary": "Move a lane to row <index> (0 = the top); the lanes renumber in their new order. A lane moved out of its group's run leaves it, one moved into another group's run joins it; a group (lg_n) moves whole, its first lane to <index> (R-ARR-3).",
       "requirement": "R-LANE-1"
+    },
+    {
+      "verb": "lane group",
+      "usage": "lane group <ln> … [--name <text>]",
+      "args": "<ln> …",
+      "flags": [
+        "name=<text>"
+      ],
+      "summary": "Gather lanes into a NEW named group (R-ARR-3): side by side at the first one's place, in their order; a lane already in another group leaves it. Folded (`set <lg>.folded=on`) the group is one row showing all its clips. Prints its id.",
+      "requirement": "R-ARR-3"
+    },
+    {
+      "verb": "lane ungroup",
+      "usage": "lane ungroup <lg>",
+      "args": "<lg>",
+      "flags": [],
+      "summary": "Let a group's lanes go; the group is gone, the lanes stay where they are.",
+      "requirement": "R-ARR-3"
     },
     {
       "verb": "clip add",
@@ -424,6 +442,16 @@
       ],
       "summary": "Move every note's start onto the grid (default a sixteenth, 0.25), delaying every second grid step by --swing of a step — or onto a --groove (R-ROLL-11: a template's steps, offsets and accents, under Notation; it carries its own grid and swing). --strength moves each start (and velocity) that part of the way (1). --notes: only those notes (the roll's selection). Notes that land on one another merge (the louder stays).",
       "requirement": "R-ROLL-4"
+    },
+    {
+      "verb": "clips move",
+      "usage": "clips move \"<ac> …\" --by <beats>",
+      "args": "\"<ac> …\"",
+      "flags": [
+        "by=<beats>"
+      ],
+      "summary": "Move several clips in time as ONE edit (R-ARR-3 — a folded group's clips dragged together; any selection): each --by beats (negative = earlier). Refused whole, naming the first, when a clip is not the song's or would start before beat 0.",
+      "requirement": "R-ARR-3"
     },
     {
       "verb": "notes add",
@@ -1753,6 +1781,42 @@
       "path": "lanes[].ownName",
       "type": "bool",
       "summary": "false: a track showing its instrument strip's name (renaming the strip renames it)",
+      "stable": true
+    },
+    {
+      "path": "lanes[].group",
+      "type": "string",
+      "summary": "R-ARR-3: the lane group it is in; empty = none",
+      "stable": true
+    },
+    {
+      "path": "groups",
+      "type": "object[]",
+      "summary": "R-ARR-3: lane groups, in the order of their first lanes — each group's lanes side by side",
+      "stable": true
+    },
+    {
+      "path": "groups[].id",
+      "type": "string",
+      "summary": "lg_n",
+      "stable": true
+    },
+    {
+      "path": "groups[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "groups[].folded",
+      "type": "bool",
+      "summary": "folded: its lanes are ONE row on the timeline",
+      "stable": true
+    },
+    {
+      "path": "groups[].lanes",
+      "type": "string[]",
+      "summary": "its lanes, in order",
       "stable": true
     },
     {

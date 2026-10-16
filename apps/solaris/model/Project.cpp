@@ -62,6 +62,8 @@ namespace solaris
     const Clip *Project::clip(const std::string &id) const { return findId(clips, id); }
     Automation *Project::automation(const std::string &id) { return findId(automations, id); }
     Marker *Project::marker(const std::string &id) { return findId(markers, id); }
+    LaneGroup *Project::group(const std::string &id) { return findId(groups, id); }
+    const LaneGroup *Project::group(const std::string &id) const { return findId(groups, id); }
     const Marker *Project::marker(const std::string &id) const { return findId(markers, id); }
     double Project::sectionEnd(const Marker &m, double songEnd) const
     {
@@ -145,6 +147,7 @@ namespace solaris
         for (const auto &r : racks)
             for (const auto &d : r.devices) ids.push_back(d.id);
         for (const auto &x : lanes) ids.push_back(x.id);
+        for (const auto &x : groups) ids.push_back(x.id);
         for (const auto &x : patterns) ids.push_back(x.id);
         for (const auto &x : clips) ids.push_back(x.id);
         for (const auto &x : automations) ids.push_back(x.id);
@@ -281,8 +284,16 @@ namespace solaris
             if (k == "id") n.id = v;
             else if (k == "name") n.name = v;
             else if (k == "track") n.track = v;
+            else if (k == "group") n.group = v; // R-ARR-3
             else if (k == "order") n.order = r.integer(k, v, 0);
             else if (k == "colour") n.colour = r.integer(k, v, -1);
+            else n.unknown.emplace_back(k, v);
+        }
+        void apply(Reader &, LaneGroup &n, const std::string &k, const std::string &v)
+        {
+            if (k == "id") n.id = v;
+            else if (k == "name") n.name = v;
+            else if (k == "folded") n.folded = v == "on" || v == "true" || v == "1";
             else n.unknown.emplace_back(k, v);
         }
         void apply(Reader &r, Pattern &n, const std::string &k, const std::string &v)
@@ -384,7 +395,7 @@ namespace solaris
         Reader r{report ? report : &localReport, {}};
 
         // What a continuation line or a comment attaches to.
-        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Raw };
+        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Group, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Raw };
         Cur cur = Cur::None;
         bool seenNode = false, sawMagic = false, sawTracks = false;
         std::map<std::string, std::vector<Note>> inlineNotes; // note clips written the suite's inline way
@@ -399,6 +410,7 @@ namespace solaris
             case Cur::Rack: return &p.racks.back().remarks;
             case Cur::Device: return &p.racks.back().devices.back().remarks;
             case Cur::Lane: return &p.lanes.back().remarks;
+            case Cur::Group: return &p.groups.back().remarks;
             case Cur::Pattern:
             case Cur::Note: return &p.patterns.back().remarks;
             case Cur::Clip: return &p.clips.back().remarks;
@@ -453,6 +465,7 @@ namespace solaris
                     cur = Cur::Device;
                 }
                 else if (tok.type == "alane") { p.lanes.emplace_back(); fill(p.lanes.back()); cur = Cur::Lane; }
+                else if (tok.type == "alanegroup") { p.groups.emplace_back(); fill(p.groups.back()); cur = Cur::Group; } // R-ARR-3
                 else if (tok.type == "apattern") { p.patterns.emplace_back(); fill(p.patterns.back()); cur = Cur::Pattern; }
                 else if (tok.type == "note")
                 {
@@ -746,11 +759,14 @@ namespace solaris
                 emit(out, "  ", l, d.remarks);
             }
         }
+        group(!p.groups.empty()); // R-ARR-3: the groups before the lanes that name them
+        for (const auto &n : p.groups)
+            emit(out, "", Line("alanegroup").kv("id", n.id).str("name", n.name).kvIf(n.folded, "folded", "on").unknown(n.unknown), n.remarks);
         group(!p.lanes.empty());
         for (const auto &n : p.lanes)
         {
             Line l("alane");
-            l.kv("id", n.id).str("name", n.name).kvIf(!n.track.empty(), "track", n.track).kv("order", std::to_string(n.order));
+            l.kv("id", n.id).str("name", n.name).kvIf(!n.track.empty(), "track", n.track).kvIf(!n.group.empty(), "group", n.group).kv("order", std::to_string(n.order));
             if (n.colour >= 0) l.kv("colour", std::to_string(n.colour));
             emit(out, "", l.unknown(n.unknown), n.remarks);
         }
@@ -967,6 +983,8 @@ namespace solaris
                     e.push_back("pattern " + pt.id + "'s " + canon + " point at " + canonicalBeats(x.at) + " is out of range (" + canonicalNumber(lo) + " … " + canonicalNumber(hi) + ")");
             }
         }
+        for (const auto &l : p.lanes) // R-ARR-3: a lane's group is one the song has
+            if (!l.group.empty() && !p.group(l.group)) e.push_back("lane " + l.id + " is in group `" + l.group + "`, which the song does not have");
         for (const auto &m : p.markers) // R-ARR-1: a place in the song, named
         {
             if (m.name.empty()) e.push_back("marker " + m.id + " has no name");
@@ -1154,6 +1172,28 @@ namespace solaris
         for (int p = pitch; p >= 0 && p <= 127; p -= dir) // the end of the keyboard: the other way
             if (in(p)) return p;
         return pitch;
+    }
+
+    bool gatherLaneGroups(Project &p)
+    {
+        std::vector<Lane *> order;
+        for (auto &l : p.lanes) order.push_back(&l);
+        std::stable_sort(order.begin(), order.end(), [](const Lane *a, const Lane *b) { return a->order < b->order; });
+        std::vector<Lane *> out;
+        std::set<std::string> done;
+        for (Lane *l : order)
+        {
+            if (l->group.empty()) { out.push_back(l); continue; }
+            if (!done.insert(l->group).second) continue; // gathered with its group's first
+            for (Lane *m : order)
+                if (m->group == l->group) out.push_back(m);
+        }
+        bool changed = false;
+        for (size_t i = 0; i < out.size(); ++i)
+            if (out[i]->order != (int)i) { out[i]->order = (int)i; changed = true; }
+        const size_t before = p.groups.size();
+        p.groups.erase(std::remove_if(p.groups.begin(), p.groups.end(), [&](const LaneGroup &g) { return !done.count(g.id); }), p.groups.end());
+        return changed || p.groups.size() != before;
     }
 
     int scaleMaskOf(const Pattern &pt)
