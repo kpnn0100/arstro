@@ -97,11 +97,26 @@ namespace sltest
         std::vector<arstro::solaris::PluginParamInfo> mParams;
     };
 
+    /** R-ASSIST-1: sounds a test made, by file name — decoded as they are (mono, at 48 kHz); any other file is a sine. */
+    inline std::map<std::string, std::vector<float>> &rigSounds()
+    {
+        static std::map<std::string, std::vector<float>> sounds;
+        return sounds;
+    }
+
     inline SolarisService::Host fakeHost(const std::string &dir, bool audio = true)
     {
         SolarisService::Host h;
-        h.decodeAudio = [](const std::string &, int rate, arstro::solaris::engine::Pcm &out, std::string &) {
+        h.decodeAudio = [](const std::string &path, int rate, arstro::solaris::engine::Pcm &out, std::string &) {
             out.channels = 2;
+            const auto made = rigSounds().find(fs::path(path).filename().string()); // R-ASSIST-1: a sound a test made, by its name
+            if (made != rigSounds().end())
+            {
+                out.frames = (long long)made->second.size();
+                out.samples.resize((size_t)out.frames * 2);
+                for (long long i = 0; i < out.frames; ++i) out.samples[(size_t)i * 2] = out.samples[(size_t)i * 2 + 1] = made->second[(size_t)i];
+                return true;
+            }
             out.frames = rate / 2;
             out.samples.resize((size_t)out.frames * 2);
             for (long long i = 0; i < out.frames; ++i)

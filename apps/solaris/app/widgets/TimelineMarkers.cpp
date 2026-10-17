@@ -174,7 +174,7 @@ namespace solaris_ui
         }
         case Gesture::Type::RightClick:
         {
-            if (!rulerRect().contains(local) || !onMenu) return false;
+            if ((!rulerRect().contains(local) && !chordBandRect().contains(local)) || !onMenu) return false; // the chords' band is the ruler's
             const std::string mk = markerUnder(local);
             const Point world = g.pos;
             std::vector<cosmo_v2::ContextMenu::Item> items;
@@ -209,6 +209,9 @@ namespace solaris_ui
                     items.push_back({say("Punch the loop's span"), [send, f, t] { send("transport punch " + beatText(f) + " " + beatText(t)); }}); // R-REC-1
                 }
                 if (mPunchTo > mPunchFrom) items.push_back({say("Punch off"), [send] { send("transport punch off"); }});
+                // R-ASSIST-1: the song's chords — heard from its whole mix; taken out
+                items.push_back({say("Detect chords"), [send] { send("chords detect"); }});
+                if (mChordsWanted) items.push_back({say("Clear chords"), [send] { send("chords clear"); }});
             }
             onMenu(std::move(items), world);
             return true;

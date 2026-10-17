@@ -4789,6 +4789,153 @@ static void test_the_video_lane()
     pass("the video lane (R-VIDEO-1): the picture's row grows in between the ruler and the lanes, which slide with it; its span the model's beats; thumbnails at the model's points, the row's height, asked once, fading in; dragged the pointer's, ONE `set vd_1.at=` on release, no jump; moved elsewhere, eased; removed, closed");
 }
 
+namespace
+{
+    // R-ASSIST-1: sounds the analysis hears — C Am F G a second each (two beats at 120), and a melody (A4 C5 E5)
+    void addTone(std::vector<float> &x, int midi, double t0, double t1, double amp, double decay = 1e9)
+    {
+        const double f = 440.0 * std::pow(2.0, (midi - 69) / 12.0);
+        for (long long i = (long long)(t0 * 48000); i < (long long)(t1 * 48000) && i < (long long)x.size(); ++i)
+        {
+            const double t = (i - t0 * 48000) / 48000;
+            x[(size_t)i] += (float)(amp * std::min(1.0, t / 0.005) * std::exp(-t / decay) * std::sin(2 * M_PI * f * t));
+        }
+    }
+    std::vector<float> progressionSound()
+    {
+        std::vector<float> x((size_t)(4 * 48000), 0.0f);
+        const int triads[4][3] = {{60, 64, 67}, {57, 60, 64}, {53, 57, 60}, {55, 59, 62}};
+        for (int k = 0; k < 4; ++k)
+            for (int m : triads[k]) addTone(x, m, k, k + 1.0, 0.2);
+        return x;
+    }
+    std::vector<float> melodySound()
+    {
+        std::vector<float> x((size_t)(2.0 * 48000), 0.0f);
+        addTone(x, 69, 0.10, 0.55, 0.5, 0.4);
+        addTone(x, 72, 0.60, 1.10, 0.5, 0.15);
+        addTone(x, 76, 1.20, 1.70, 0.4, 0.4);
+        return x;
+    }
+}
+
+static void test_the_chords_band()
+{
+    // R-ASSIST-1 (Round 22, part 3): a clip's menu — Detect chords, To MIDI, Separate harmonic / percussive, each ONE line;
+    // the chords' band growing in at the ruler's foot with the lanes sliding under it, each chord fading in over its span,
+    // named, an accessible; the ruler's menu on the band — a bar inserted slides them, Clear chords fades them out and
+    // closes the band, Detect chords hears the whole song
+    sltest::rigSounds()["progression.wav"] = progressionSound();
+    sltest::rigSounds()["melody.wav"] = melodySound();
+    sltest::Rig r("ui-chords", 1280, 800);
+    r.cmd("project new " + r.song("Chords") + ".slp --bpm 120");
+    r.cmd("clip add --src " + r.dir + "/progression.wav --at 4");
+    r.cmd("clip add --src " + r.dir + "/melody.wav --at 16 --lane new");
+    r.settle();
+    const std::string prog = r.svc->model().clips[0].id, tune = r.svc->model().clips[1].id;
+    auto &tl = r.app->project().timeline();
+    auto &menu = r.app->menu();
+    using arstro::solaris_ui::Timeline;
+    const double row0 = tl.rowRect(0).y;
+    assert(tl.chordRowAmount() == 0.0 && tl.top() == Timeline::kRulerH && tl.chordRect("cd_1").w == 0.0);
+    // the clip's menu: Detect chords — ONE line; the band grows, the lanes slide with it, each chord fades in
+    const artboard::Rect cr = world(tl, tl.clipRect(prog));
+    r.click(cr.x + 30.0, cy(cr), 2);
+    r.settle();
+    assert(menuItem(r, "Separate harmonic / percussive") >= 0 && menuItem(r, "To MIDI") >= 0 && menuItem(r, "Detect chords") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Detect chords")));
+    double grow = -1, fadeIn = -1;
+    for (int k = 0; k < 40 && (grow < 0 || fadeIn < 0); ++k)
+    {
+        r.frame();
+        const double a = tl.chordRowAmount();
+        if (a > 0.0 && a < 1.0)
+        {
+            grow = a;
+            assert(std::fabs(tl.rowRect(0).y - (row0 + a * Timeline::kChordH)) < 1e-6); // the lanes slide with it
+        }
+        const double f = tl.chordAlpha("cd_1");
+        if (f > 0.0 && f < 1.0) fadeIn = f;
+    }
+    r.settle();
+    assert(sentLine(r, "chords detect " + prog) && r.svc->model().songChords.size() == 4);
+    assert(grow > 0.0 && fadeIn > 0.0 && tl.chordRowAmount() == 1.0 && tl.rowRect(0).y == row0 + Timeline::kChordH && tl.chordAlpha("cd_4") == 1.0);
+    const artboard::Rect c1 = tl.chordRect("cd_1");
+    assert(std::fabs(c1.x - tl.beatToX(4.0)) < 1e-6 && std::fabs(c1.right() - tl.beatToX(6.0)) < 1e-6 && c1.y >= Timeline::kRulerH && c1.bottom() <= tl.top());
+    std::vector<std::string> drawn;
+    for (const auto &d : r.wordsOf(tl)) drawn.push_back(d.text);
+    for (const char *w : {"CHORDS", "C", "Am", "F", "G"}) assert(std::find(drawn.begin(), drawn.end(), std::string(w)) != drawn.end());
+    bool named = false;
+    for (const auto &n : r.app->accessibles())
+        if (n.key == "chords.cd_2") named = n.name == "Chord Am" && n.role == "listitem" && n.value == "beats 6 to 8";
+    assert(named);
+    // a picture's row goes under the band, the lanes under both
+    r.cmd("video set " + r.dir + "/film.mp4");
+    r.settle();
+    assert(std::fabs(tl.videoSpanRect().y - (Timeline::kRulerH + Timeline::kChordH + Timeline::kThumbPad)) < 1e-6);
+    assert(tl.top() == Timeline::kRulerH + Timeline::kChordH + Timeline::kVideoH && tl.rowRect(0).y == row0 + Timeline::kChordH + Timeline::kVideoH);
+    r.cmd("video remove");
+    r.settle();
+    // the ruler's menu, on the band: a bar inserted at its start — the chords slide there
+    const artboard::Rect band = world(tl, artboard::Rect{tl.beatToX(1.0), Timeline::kRulerH + 4.0, 1.0, 1.0});
+    r.click(cx(band), cy(band), 2);
+    r.settle();
+    assert(menuItem(r, "Insert a bar here") >= 0 && menuItem(r, "Detect chords") >= 0 && menuItem(r, "Clear chords") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Insert a bar here")));
+    double slid = -1;
+    for (int k = 0; k < 30 && slid < 0; ++k)
+    {
+        r.frame();
+        const double x = tl.chordRect("cd_1").x;
+        if (x > tl.beatToX(4.0) + 0.5 && x < tl.beatToX(8.0) - 0.5) slid = x;
+    }
+    r.settle();
+    assert(sentLine(r, "time insert --at 0 --length 4") && slid > 0.0 && std::fabs(tl.chordRect("cd_1").x - tl.beatToX(8.0)) < 1e-6);
+    // Clear chords: each fades out, the band closes, the lanes slide back up
+    r.click(cx(band), cy(band), 2);
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "Clear chords")));
+    double fadeOut = -1, shut = -1;
+    for (int k = 0; k < 40 && (fadeOut < 0 || shut < 0); ++k)
+    {
+        r.frame();
+        const double f = tl.chordAlpha("cd_3"), a = tl.chordRowAmount();
+        if (f > 0.0 && f < 1.0) fadeOut = f;
+        if (a > 0.0 && a < 1.0) shut = a;
+    }
+    r.settle();
+    assert(sentLine(r, "chords clear") && r.svc->model().songChords.empty());
+    assert(fadeOut > 0.0 && shut > 0.0 && tl.chordRowAmount() == 0.0 && tl.chordAlpha("cd_3") == 0.0 && tl.rowRect(0).y == row0);
+    // the ruler's Detect chords: the whole song's mix — no Clear while there are none
+    const artboard::Rect ruler = world(tl, artboard::Rect{tl.beatToX(1.0), Timeline::kMarkH + 4.0, 1.0, 1.0});
+    r.click(cx(ruler), cy(ruler), 2);
+    r.settle();
+    assert(menuItem(r, "Detect chords") >= 0 && menuItem(r, "Clear chords") < 0);
+    r.click(menu.itemRect(menuItem(r, "Detect chords")));
+    r.settle();
+    assert(sentLine(r, "chords detect") && r.svc->model().songChords.size() == 4 && r.svc->model().songChords[0].at == 8.0 && tl.chordRowAmount() == 1.0);
+    // the melody's menu: To MIDI — a track of its notes; the progression's: Separate — two clips in its place
+    const artboard::Rect mr = world(tl, tl.clipRect(tune));
+    r.click(mr.x + 30.0, cy(mr), 2);
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "To MIDI")));
+    r.settle();
+    bool notes = false;
+    for (const auto &p : r.svc->model().patterns) notes = notes || (p.name == "melody notes" && p.notes.size() == 3);
+    assert(sentLine(r, "clip to-midi " + tune) && notes);
+    const artboard::Rect pr = world(tl, tl.clipRect(prog));
+    r.click(pr.x + 30.0, cy(pr), 2);
+    r.settle();
+    r.click(menu.itemRect(menuItem(r, "Separate harmonic / percussive")));
+    r.settle();
+    int halves = 0;
+    for (const auto &c : r.svc->model().clips) halves += c.name == "progression harmonic" || c.name == "progression percussive";
+    assert(sentLine(r, "clip separate " + prog) && halves == 2);
+    for (const auto &c : r.svc->model().clips) assert(c.id != prog);
+    sltest::rigSounds().clear();
+    pass("the chords' band (R-ASSIST-1): a clip's Detect chords — ONE line; the band grows in at the ruler's foot, the lanes sliding with it; each chord fading in over its span, named, an accessible; a bar inserted slides them; Clear chords fades them out and closes the band; the ruler's Detect chords hears the song; To MIDI and Separate land");
+}
+
 static void test_export_with_the_video()
 {
     // R-VIDEO-1 (Round 18, part 3): File › Export…'s "With the video" — greyed and inert while the song has no picture; on,
@@ -5715,6 +5862,7 @@ namespace
         for (const auto &x : m.clips) { v.push_back(x.name); v.push_back(x.id); }
         for (const auto &x : m.patterns) { v.push_back(x.name); v.push_back(x.id); }
         for (const auto &x : m.markers) { v.push_back(x.name); v.push_back(x.id); }
+        for (const auto &x : m.songChords) { v.push_back(x.name); v.push_back(x.id); } // R-ASSIST-1: a chord's name is the song's
         for (const auto &x : m.automations) { v.push_back(x.name); v.push_back(x.id); for (const auto &u : x.usedBy) v.push_back(u); }
         for (const auto &x : m.groups) { v.push_back(x.name); v.push_back(x.id); }
         for (const auto &x : m.scenes) { v.push_back(x.name); v.push_back(x.id); }
@@ -5913,7 +6061,11 @@ static void test_every_word_the_lanes_draw_is_from_the_table()
         if (st.kind == "instrument") inst = st.id;
     r.cmd("auto create " + inst + ".gain");
     r.cmd("scene add Verse");
+    sltest::rigSounds()["progression.wav"] = progressionSound(); // R-ASSIST-1: the chords' band, and its words
+    r.cmd("clip add --src progression.wav --at 8 --lane new");
+    r.cmd("chords detect " + r.svc->model().clips.back().id);
     r.settle();
+    assert(!r.svc->model().songChords.empty());
     auto &ps = r.app->project();
     auto &tl = ps.timeline();
     auto words = [&] { return modelWords(r.svc->model()); };
@@ -5926,7 +6078,7 @@ static void test_every_word_the_lanes_draw_is_from_the_table()
     }
     bad += untranslated(r.wordsOf(tl), words(), "the lanes");
     for (const auto &n : r.app->accessibles())
-        if (n.key.rfind("lanes.", 0) == 0 || n.key.rfind("browser.", 0) == 0)
+        if (n.key.rfind("lanes.", 0) == 0 || n.key.rfind("browser.", 0) == 0 || n.key.rfind("chords.", 0) == 0)
         {
             bad += untranslated({sltest::Drawn{n.name, 0, 0, 1}}, words(), "a lane's or a row's name");
             if (!n.value.empty()) bad += untranslated({sltest::Drawn{n.value, 0, 0, 1}}, words(), "a lane's or a row's value");
@@ -5946,6 +6098,8 @@ static void test_every_word_the_lanes_draw_is_from_the_table()
     menuAt(world(tl, tl.tempoRect(r.svc->model().tempos[0].id)), "a tempo's menu");
     const artboard::Rect ruler = world(tl, tl.rulerRect());
     menuAt(artboard::Rect{ruler.x + Timeline::kHeaderW + 300.0, ruler.bottom() - 8.0, 4.0, 4.0}, "the ruler's menu");
+    menuAt(artboard::Rect{ruler.x + Timeline::kHeaderW + 300.0, ruler.bottom() + 6.0, 4.0, 4.0}, "the chords' band's menu");
+    sltest::rigSounds().clear();
     // a take, shown: its row's words (R-REC-2 makes takes; the session grid next)
     ps.setSessionOpen(true);
     r.settle();
@@ -6146,6 +6300,7 @@ int main()
     test_the_session_view();
     test_the_video_window();
     test_the_video_lane();
+    test_the_chords_band();
     test_export_with_the_video();
     test_conflicts_are_asked_in_a_sheet();
     test_the_ui_scale_and_high_contrast();

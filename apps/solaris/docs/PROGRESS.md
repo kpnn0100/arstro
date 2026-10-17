@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-16 — N3: the DSP library's meters.*
+*Last updated: 2026-10-17 — N44: the analysis tools; the R-PRO ledger (N1…N44) built.*
 
 ---
 
 ## NEXT
 
-**► N44 part 3 — the window** (R-ASSIST-1; Round 22: a clip's menu — Separate Harmonic / Percussive, To MIDI, Detect Chords; the ruler's menu — Detect Chords, Clear Chords; a chord band under the markers' that the ruler grows into, the lanes easing down; each chord keyed, fading and sliding; its accessible name; shots; the new words in `vi.strings`) — the last of the ledger (the user: *"implement all"*). Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► The R-PRO ledger is built — N1…N44** (the user: *"implement all"* of `docs/pro-daw-analysis.md`). What comes next is the user's call. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -73,8 +73,9 @@ umbrella's pointer — `arstro.rule` §7).
       lock-free queues, structural edits by graph swap. — DR-PLAY-1/2/3; live = offline sample for
       sample; edits heard; the audio path allocates nothing (counted); DSP `317bed2`. Plays on this
       machine through PulseAudio.
-- [ ] **P2** Several devices: followers through an adaptive resampler (a DSP module), latency
-      compensation, per-device drift/xrun/latency in the model.
+- [x] **P2** Several devices: followers through an adaptive resampler (a DSP module), latency
+      compensation, per-device drift/xrun/latency in the model. — built as N32 (DR-DEV-1, DR-DEV-1a,
+      DR-DEV-5) and N8 (xruns, DR-DEV-9); reconciled 2026-10-17.
 
 ### U — the UI (cosmo + interstellar family, teal accent)
 - [x] **U1** Home + Settings (devices, rate, buffer, folders, port map). — DR-UI-1, DR-SET-2,
@@ -97,8 +98,8 @@ umbrella's pointer — `arstro.rule` §7).
       window runs. Waveforms and the meters' peak hold wait for U4/P2.
 - [ ] **U4** Linked selection; Arrange by Channel; drag and drop onto the dock (an effect onto a
       rack, a sample onto a strip); the audit panel; waveforms (a peaks hook).
-- [ ] **U5** Note editing: piano roll for the synth, step grid for the drum machine (views of a
-      pattern).
+- [x] **U5** Note editing: piano roll for the synth, step grid for the drum machine (views of a
+      pattern). — built as B6 and H (DR-ROLL-1, step mode); reconciled 2026-10-17.
 
 ### B — the 2026-10-09 brief (user: *"no need discussion, implement all needed features"*)
 - [x] **B0** Requirements: R-AUTO, R-WIN, R-ROLL, R-VST, R-EDM written; R-INST-4, R-MIX-4 (sidechain),
@@ -699,7 +700,7 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       choices (re-shown in its advance); a device window's buttons and lines; the face's "Main"; the loudness and video
       windows; vi.strings 499 lines — the window's every word; the en-XA test for this side; shots dock-vi, dock-pseudo.
       N43 DONE.
-- [~] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1). Round 22 (the design): the analysis in
+- [x] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1). Round 22 (the design): the analysis in
       the DSP library (an exact STFT; median-filter separation, soft masks; YIN tracking split at onsets; chroma, the 24
       triads, Viterbi); `clip separate`, `clip to-midi`, `chords detect` / `chords clear`, each one edit; `#achord`; a
       ruler band. Parts: (1) DSP; (2) the service; (3) the window.
@@ -712,6 +713,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       chords replaced, one across an edge cut) and `chords clear`; consolidate's raw render lifted out as
       `renderClipsRaw`; `#achord`; the model's `songChords[]` (`chords` was taken by `--chord`'s vocabulary — Round 22
       amended); `chords.detected`; the time edits move chords as sections. L2 three tests, model one; six mutants red.
+      Part 3 (the window, `TimelineChords.cpp`): a chords' band at the ruler's foot, eased in and out, the picture's row
+      and the lanes sliding under it; each chord keyed, fading and easing, named, an accessible; a clip's menu —
+      Separate harmonic / percussive, To MIDI, Detect chords; the ruler's (the band too) — Detect chords, Clear chords;
+      the rig plays back sounds a test made; UI `test_the_chords_band`, en-XA covers the band; shots chords-band,
+      chords-band-growing, chords-menu; vi.strings; nine mutants red. DR-UI-10's stale anchors re-pointed. N44 DONE.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

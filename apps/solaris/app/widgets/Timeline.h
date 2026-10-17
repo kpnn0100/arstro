@@ -251,13 +251,21 @@ namespace solaris_ui
         static constexpr double kVideoH = 39.0;    // space::u(12): the picture's row
         static constexpr double kThumbPad = 3.25;  // space::u(1): its span's inset
         static constexpr int kThumbAsksPerFrame = 3; // decodes on the UI thread: a few a frame, so a zoom never stalls one
-        double top() const { return kRulerH + mVideoH.value(); }    // where the lanes begin — LIVE
+        double top() const { return kRulerH + mChordH.value() + mVideoH.value(); } // where the lanes begin — LIVE
+        double videoTop() const { return kRulerH + mChordH.value(); }             // the picture's row, under the chords' — LIVE
         double videoRowAmount() const { return mVideoH.value() / kVideoH; } // LIVE, 0 … 1
         artboard::Rect videoSpanRect() const;                      // the picture's span as DRAWN (local)
         double videoAtLive() const;                                // its first frame's beat as drawn (the pointer's while held)
         double thumbAmount(double time) const;                     // a thumbnail's fade-in, LIVE (−1: never asked)
         int thumbsDrawn() const { return mThumbsDrawn; }           // tiles the last paint drew
         bool videoDragging() const { return mVideoDragging; }
+        // R-ASSIST-1 (TimelineChords.cpp): the song's chords — a band of their own at the ruler's foot, above the picture's
+        // row, there only while the song has chords: it grows in and out and everything under it slides (`top`). Each
+        // chord its name over its span, keyed by id — fading in and out, easing to where the model moves it.
+        static constexpr double kChordH = 19.5;    // space::u(6): the chords' band
+        double chordRowAmount() const { return mChordH.value() / kChordH; } // LIVE, 0 … 1
+        artboard::Rect chordRect(const std::string &id) const;      // a chord's span as DRAWN (local); empty: none
+        double chordAlpha(const std::string &id) const;              // its fade, LIVE (0: none)
         std::function<bool(const std::string &file, double t, int boxW, int boxH, VideoImage &out)> videoThumb;
 
         void advance(double nowMs) override;
@@ -369,6 +377,21 @@ namespace solaris_ui
         mutable artboard::IRenderTarget *mThumbOwner = nullptr;
         mutable std::vector<int> mThumbRelease;                    // ids of a picture gone, released at the next paint
         mutable int mThumbsDrawn = 0;
+        struct ChordLive
+        {
+            solaris::ChordModel c;
+            artboard::AnimatedProperty at{0.0}, len{0.0}, alpha{0.0};
+            double atLast = -1.0, lenLast = -1.0;
+            bool placed = false, gone = false;
+        };
+        std::vector<ChordLive> mChords;
+        artboard::AnimatedProperty mChordH{0.0};
+        bool mChordsWanted = false, mChordApplied = false;
+        artboard::Rect chordRectOf(const ChordLive &l) const;
+        artboard::Rect chordBandRect() const;                      // the band right of the header (local), as tall as it is now
+        void bindChords(const solaris::AppModel &m);
+        void advanceChords(double nowMs);
+        void paintChords(artboard::IRenderTarget &t) const;
         void advanceVideo(double nowMs);
         void paintVideo(artboard::IRenderTarget &t) const;
         bool videoGesture(const artboard::Gesture &g, const artboard::Point &local);

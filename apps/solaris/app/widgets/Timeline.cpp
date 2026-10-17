@@ -124,12 +124,14 @@ namespace solaris_ui
             mTracks.clear();
             mMarkers.clear(); // R-ARR-1
             mTempos.clear();  // R-TEMPO-1
+            mChords.clear();  // R-ASSIST-1
             mTakesOpen.clear(); // R-REC-2
             mTakeLit.clear();
             mEver = mBound = mEmptyInit = mLoopInit = false;
         }
         bindMarkers(m); // R-ARR-1: after a song change has cleared the last song's
         bindTempos(m);  // R-TEMPO-1
+        bindChords(m);  // R-ASSIST-1
         bindTakes(m);   // R-REC-2
         std::map<std::string, int> colourOf; // the service resolves a strip's colour (stable by id)
         for (const auto &st : m.strips) colourOf[st.id] = st.colour;
@@ -341,6 +343,15 @@ namespace solaris_ui
                 arm.checked = mArmed == row.strip;
                 out.push_back(arm);
             }
+        }
+        for (const auto &l : mChords) // R-ASSIST-1: each chord on screen, named — its span its value
+        {
+            if (l.gone || !l.placed || mChordH.value() <= 0.5) continue;
+            const Rect r = chordRectOf(l);
+            const double x0 = std::max(r.x, kHeaderW), x1 = std::min(r.right(), width.value());
+            if (x1 <= x0) continue;
+            out.push_back(a11yNode("chords." + l.c.id, "listitem", fillIn(tr("Chord {1}"), l.c.name), worldRect(*this, Rect{x0, r.y, x1 - x0, r.h}),
+                                   fillIn(tr("beats {1} to {2}"), beatText(l.c.at), beatText(l.c.at + l.c.length))));
         }
     }
 
@@ -648,6 +659,7 @@ namespace solaris_ui
             l.t.update(nowMs);
         }
         advanceAuto(nowMs); // a click's point waiting out the double-click (R-AUTO-11)
+        advanceChords(nowMs);  // R-ASSIST-1: before the picture's row — it moves down under the band
         advanceVideo(nowMs);   // R-VIDEO-1: before the markers — the lanes' top moves with its row
         advanceMarkers(nowMs); // R-ARR-1
         advanceTempos(nowMs);  // R-TEMPO-1
@@ -1610,7 +1622,8 @@ namespace solaris_ui
             }
         }
         t.restore();
-        paintVideo(t);   // R-VIDEO-1: the picture's row, between the ruler and the lanes
+        paintChords(t);  // R-ASSIST-1: the chords' band at the ruler's foot
+        paintVideo(t);   // R-VIDEO-1: the picture's row, between the ruler (and its chords) and the lanes
         paintMarkers(t); // R-ARR-1: the ruler's band
         paintTempos(t);  // R-TEMPO-1: over it, at their beats
         if (const Rect pr = punchRect(); pr.w > 0 && mPunchAmt.value() > 0.001) // R-REC-1: where a recording keeps — red

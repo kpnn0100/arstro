@@ -58,6 +58,25 @@ namespace
     }
     using sltest::world;
 
+    // R-ASSIST-1: a song the analysis hears chords in — Night Drive with a pad playing C Am F G from bar 2, two beats
+    // each, detected (the rig plays back the sound made here)
+    void chordSong(sltest::Rig &r)
+    {
+        std::vector<float> x((size_t)(4 * 48000), 0.0f);
+        const int triads[4][3] = {{60, 64, 67}, {57, 60, 64}, {53, 57, 60}, {55, 59, 62}};
+        for (int k = 0; k < 4; ++k)
+            for (int m : triads[k])
+                for (long long i = k * 48000LL; i < (k + 1) * 48000LL; ++i)
+                {
+                    const double t = (i - k * 48000.0) / 48000.0;
+                    x[(size_t)i] += (float)(0.2 * std::min(1.0, t / 0.005) * std::sin(2 * M_PI * 440.0 * std::pow(2.0, (m - 69) / 12.0) * t));
+                }
+        sltest::rigSounds()["pad-chords.wav"] = x;
+        mixedSong(r, "Night Drive");
+        std::ofstream(r.dir + "/pad-chords.wav") << "a sound"; // on disk: a file the song names is never "missing"
+        r.cmd("clip add --src " + r.dir + "/pad-chords.wav --at 4 --lane new");
+    }
+
     // R-PRESET-1: the presets shipped with the app, as the rig's factory folder (the shots never read the machine's)
     void shippedPresets(sltest::Rig &r)
     {
@@ -547,6 +566,31 @@ namespace
                  const artboard::Rect sr = world(tl, tl.videoSpanRect());
                  const double y = sr.y + sr.h * 0.5, x = sr.x + 40.0;
                  r.drag(x, y, x + 2.0 * tl.pxPerBeat(), y, 8, false);
+             }},
+            {"chords-band", // R-ASSIST-1: the song's chords at the ruler's foot — C Am F G over the pad's clip, the lanes under them
+             [](sltest::Rig &r) {
+                 chordSong(r);
+                 r.settle();
+                 r.cmd("chords detect " + r.svc->model().clips.back().id);
+                 r.settle();
+             }},
+            {"chords-band-growing", // R-ASSIST-1: just detected — the band growing in, the lanes sliding down, each chord fading in
+             [](sltest::Rig &r) {
+                 chordSong(r);
+                 r.settle();
+                 r.cmd("chords detect " + r.svc->model().clips.back().id);
+                 r.pump(2 * sltest::Rig::kFrameMs); // a third of the way
+             }},
+            {"chords-menu", // R-ASSIST-1: the band right-clicked — the ruler's menu: Detect chords from the mix, Clear chords
+             [](sltest::Rig &r) {
+                 chordSong(r);
+                 r.settle();
+                 r.cmd("chords detect " + r.svc->model().clips.back().id);
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect band = world(tl, artboard::Rect{tl.beatToX(13.0), arstro::solaris_ui::Timeline::kRulerH + 4.0, 1.0, 1.0});
+                 r.click(band.x, band.y, 2);
+                 r.settle();
              }},
             {"conflicts-sheet", // R-COLLAB-1: another window changed the song's file — the bass and the tempo changed both ways: the
                                 // sheet asks, each row its lines here and in the file, Keep Mine / Take Theirs

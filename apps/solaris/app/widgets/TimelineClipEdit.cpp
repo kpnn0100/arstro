@@ -358,6 +358,10 @@ namespace solaris_ui
         for (const ClipView *x : run) ids += " " + x->c.id;
         items.push_back({run.size() > 1 ? say("Consolidate {1} clips", (long)run.size()) : say("Consolidate"),
                          [this, ids] { if (onCommand) onCommand("clip consolidate" + ids); }});
+        // R-ASSIST-1: what the DSP library hears in it — its two halves, its melody, its chords
+        items.push_back({say("Separate harmonic / percussive"), [this, id] { if (onCommand) onCommand("clip separate " + id); }});
+        items.push_back({say("To MIDI"), [this, id] { if (onCommand) onCommand("clip to-midi " + id); }});
+        items.push_back({say("Detect chords"), [this, id] { if (onCommand) onCommand("chords detect " + id); }});
         // R-WARP-1: the song's tempo, its own typed, its pitch
         const bool warped = c.warp;
         items.push_back({warped ? say("Unwarp") : say("Warp to the song's tempo"), [this, id, warped] { if (onCommand) onCommand("set " + id + ".warp=" + (warped ? "false" : "true")); }});

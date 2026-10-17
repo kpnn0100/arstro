@@ -39,7 +39,7 @@ namespace solaris_ui
         if (mVideoShown.empty()) return Rect{0, 0, 0, 0};
         const double a = videoAtLive(), b = mVideoEnd.value() + (a - mVideoAt.value());
         const double x0 = beatToX(a), x1 = beatToX(b);
-        return Rect{x0, kRulerH + kThumbPad, std::max(0.0, x1 - x0), std::max(0.0, mVideoH.value() - 2.0 * kThumbPad)};
+        return Rect{x0, videoTop() + kThumbPad, std::max(0.0, x1 - x0), std::max(0.0, mVideoH.value() - 2.0 * kThumbPad)};
     }
 
     double Timeline::thumbW() const
@@ -155,7 +155,7 @@ namespace solaris_ui
         for (int id : mThumbRelease) t.releaseImage(id);
         mThumbRelease.clear();
         if (h <= 0.5 || mVideoShown.empty()) return;
-        const double W = width.value(), y0 = kRulerH;
+        const double W = width.value(), y0 = videoTop();
         t.save();
         t.clipRect(0, y0, W, h);
         // its ground, and its header: "Video", the file
@@ -212,7 +212,7 @@ namespace solaris_ui
         {
             mVideoPressed = false;
             const Rect sr = videoSpanRect();
-            if (mVideo.id.empty() || local.x < kHeaderW || local.y < kRulerH || local.y >= top() || !sr.contains(local)) return false;
+            if (mVideo.id.empty() || local.x < kHeaderW || local.y < videoTop() || local.y >= top() || !sr.contains(local)) return false;
             mVideoPressed = true;
             mVideoGrab = xToBeat(local.x) - mVideoAt.value(); // where it is DRAWN: a drag never teleports
             mVideoDragAt = mVideoAt.value();

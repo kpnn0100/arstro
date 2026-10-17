@@ -309,6 +309,8 @@
 "Snap" = "Bắt";
 "Bar" = "Ô nhịp";
 "Markers" = "Mốc";
+"Chords" = "Hợp âm";
+"beats {1} to {2}" = "phách {1} đến {2}";
 "Lane" = "Làn";
 "track of {1}" = "làn của {1}";
 "{1} record arm" = "{1} sẵn sàng thu";
@@ -353,6 +355,9 @@
 "Every beat" = "Mỗi phách";
 "Every half beat" = "Mỗi nửa phách";
 "To a kit, a slice a beat" = "Thành bộ trống, mỗi phách một lát";
+"Separate harmonic / percussive" = "Tách phần ngân / phần gõ";
+"To MIDI" = "Thành MIDI";
+"Detect chords" = "Nhận diện hợp âm";
 "Linear" = "Tuyến tính";
 "Hold" = "Giữ";
 "Smooth" = "Mượt";
@@ -370,6 +375,7 @@
 "Delete the loop's time" = "Xóa thời gian của vòng lặp";
 "Punch the loop's span" = "Thu chèn trong vòng lặp";
 "Punch off" = "Tắt thu chèn";
+"Clear chords" = "Xóa hợp âm";
 "Step to it" = "Đổi ngay";
 "Glide into it" = "Trượt dần tới";
 "Delete tempo change" = "Xóa thay đổi nhịp độ";
