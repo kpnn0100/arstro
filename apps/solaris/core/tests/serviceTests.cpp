@@ -3872,6 +3872,7 @@ static void test_a_plugins_own_editor()
     assert(said);
     // turned in its editor, while playing: the song takes the last value once the running command (a wait) ends —
     // one step for the whole drag — and the plugin is not sent it back
+    r.fake.capture->frames = 0; // counted from this play (D-19)
     r.ok("transport play --from 0");
     waitFrames(r, 4800);
     w.received.clear();
@@ -3912,6 +3913,7 @@ static void test_a_plugins_own_editor()
     assert(contains(r.no("device editor dv_1"), "there is no display to open it on"));
     w.noDisplay = false;
     w.crash = "0123456789ABCDEF0123456789ABCDEF";
+    r.fake.capture->frames = 0; // counted from this play: the plugin has run a block, so crashed (D-19)
     r.ok("transport play --from 0");
     waitFrames(r, 4800);
     r.ok("transport stop");

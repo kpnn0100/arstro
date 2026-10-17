@@ -85,6 +85,16 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-19 The plugin-editor test stopped before its plugin could crash — closed in N34 (the phaser's bump)
+- **Found:** 2026-10-17, the ctest run after N34's phaser commit was rebased: `test_a_plugins_own_editor` failed at
+  `accepted \`device editor dv_1\` (expected a refusal)` — the run before, the same code, green.
+- **Cause:** `waitFrames(r, 4800)` compares the fake capture's frames since the test began; an earlier play in the
+  same test had waited for 9600, so the wait returned at once and `transport stop` raced the player's first block —
+  when it won, the fake plugin never ran a block, never crashed, and its editor opened. The same shape guarded the
+  editor-drag play above it.
+- **Fix:** the capture's count zeroed before each of those plays (as the tests at serviceTests.cpp:4267 and :5939
+  already do), so each wait means "this play has run 4800 frames". Test-only; the product was right.
+
 ### D-16 `clip duplicate` read its source clip after the copy may have moved it — closed in N30
 - **Found:** 2026-10-17, a ThreadSanitizer build of the service tests (built to check N30's pool) reported a
   heap-use-after-free in `clipCommand`: `ServiceEdit.cpp`'s `clip duplicate` compared `copy.track != src->track`
