@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N33** — DSP instruments: granular (R-INST-10) next (the wavetable, the FM synth and the multi-sample, R-INST-7…9, are built), then the 808 — a commit each. (N32 — several audio devices — is built; owed live: a follower on a second real card), then N34… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
+**► N33** — DSP instruments: the 808 (R-INST-11) next (the wavetable, FM, multi-sample and granular, R-INST-7…10, are built) — the last of them. (N32 — several audio devices — is built; owed live: a follower on a second real card), then N34… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input. B13+ wait (ask).
 
 ---
 
@@ -586,7 +586,7 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       registry's "wavetable") — here with no code of its own. The FM synth (DSP 3cb818d: `FMSynth`, eight algorithms,
       the registry's "fm"); every instrument now held by one test (dropped, sounding). The multi-sample (DSP 2cf1457:
       `parseSfz`, `MultiSampler`, a device's definition and named sounds) — its .sfz read here, its sounds decoded beside
-      it. Next: granular (R-INST-10).
+      it. The granular sampler (DSP eb1d014: `GranularSampler`, the registry's "granular"). Next: the 808 (R-INST-11).
 - [ ] **N34** DSP effects: multiband, gate, transient, de-esser, saturator, phaser, flanger, imager, convolution,
       pitch shifter, vocoder, tuner (R-FX-6…17) — a commit each.
 - [ ] **N35** Group / VCA faders (R-MIX-19).

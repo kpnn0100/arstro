@@ -5776,6 +5776,164 @@
       ]
     },
     {
+      "type": "granular",
+      "label": "Granular",
+      "kind": "instrument",
+      "summary": "A recorded sound as a cloud of short grains — their size, density and place (scanned, sprayed), pitched by the note, sprayed in pitch and pan; an envelope; 16 voices.",
+      "params": [
+        {
+          "name": "grain.size",
+          "label": "Size",
+          "unit": "ms",
+          "min": 5.0,
+          "max": 500.0,
+          "default": 80.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "grain.density",
+          "label": "Density",
+          "unit": "/s",
+          "min": 1.0,
+          "max": 200.0,
+          "default": 30.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "grain.position",
+          "label": "Position",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.3,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "grain.scan",
+          "label": "Scan",
+          "unit": "/s",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "grain.spray",
+          "label": "Spray",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.05,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "grain.pitch",
+          "label": "Pitch",
+          "unit": "st",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "grain.pspray",
+          "label": "Pitch Spray",
+          "unit": "ct",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 5.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "grain.spread",
+          "label": "Spread",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "root",
+          "label": "Root",
+          "unit": "",
+          "min": 0.0,
+          "max": 127.0,
+          "default": 60.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "amp.attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 50.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "amp.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 0.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "amp.sustain",
+          "label": "Sustain",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "amp.release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 300.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "volume",
+          "label": "Volume",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 12.0,
+          "default": -6.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "velocity",
+          "label": "Velocity",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "multisample",
       "label": "Multi-sample",
       "kind": "instrument",

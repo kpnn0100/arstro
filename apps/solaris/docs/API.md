@@ -883,6 +883,28 @@ Pads — a pitch by name: `kick` 36 · `rim` 37 · `snare` 38 · `clap` 39 · `l
 | `ride.pan` | -1.0 … 1.0 | 0.0 |
 | `volume` | -60.0 … 6.0 dB | -6.0 dB |
 
+### `granular` — Granular (instrument)
+
+A recorded sound as a cloud of short grains — their size, density and place (scanned, sprayed), pitched by the note, sprayed in pitch and pan; an envelope; 16 voices.
+
+| parameter | range | default |
+|---|---|---|
+| `grain.size` | 5.0 … 500.0 ms | 80.0 ms |
+| `grain.density` | 1.0 … 200.0 /s | 30.0 /s |
+| `grain.position` | 0.0 … 1.0 | 0.3 |
+| `grain.scan` | -1.0 … 1.0 /s | 0.0 /s |
+| `grain.spray` | 0.0 … 1.0 | 0.05 |
+| `grain.pitch` | -24.0 … 24.0 st | 0.0 st |
+| `grain.pspray` | 0.0 … 100.0 ct | 5.0 ct |
+| `grain.spread` | 0.0 … 1.0 | 0.5 |
+| `root` | 0.0 … 127.0 | 60.0 |
+| `amp.attack` | 0.0 … 10000.0 ms | 50.0 ms |
+| `amp.decay` | 0.0 … 10000.0 ms | 0.0 ms |
+| `amp.sustain` | 0.0 … 1.0 | 1.0 |
+| `amp.release` | 0.0 … 10000.0 ms | 300.0 ms |
+| `volume` | -60.0 … 12.0 dB | -6.0 dB |
+| `velocity` | 0.0 … 1.0 | 0.5 |
+
 ### `multisample` — Multi-sample (instrument)
 
 A recorded instrument read from an SFZ file: its sounds by key and velocity, in turn (round robin) or by chance, looped or one-shot, choking each other; an envelope each; 32 voices.
