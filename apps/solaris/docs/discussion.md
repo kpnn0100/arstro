@@ -869,3 +869,53 @@ the suite later. Decided (each a line to change):
 - **Not yet:** the registry's words and the service's lines translated; right-to-left languages; plural rules beyond
   English's one / other and a language with one form; the web face's own text; a translator's tooling beyond the scan's
   list of missing keys.
+
+### Round 22 — 2026-10-17 — analysis tools (R-ASSIST-1, N44): the design, before code
+
+R-ASSIST-1: harmonic / percussive separation of an audio clip into two clips; monophonic audio-to-MIDI (pitch
+tracking); chord detection of a clip or the song (chroma), shown on the ruler — signal processing, no AI model.
+Decided (each a line to change):
+
+- **The analysis is the DSP library's** (R-DSP-1): three offline functions over a whole sound, as `detectOnsets` and
+  `estimateTempo` already are — done once, off any audio thread, allocating, deterministic (no clock, no threads, no
+  randomness: the same sound gives the same answer, R-RENDER-1). A new `src/analysis/` module composes what the library
+  has — its FFT (REQ-fft-1), the tuner's YIN (REQ-tuner-1, its estimator lifted into a function both use), its onsets
+  (REQ-onset-1) — and adds a short-time Fourier transform with an exact inverse (Hann windows overlapping by four: the
+  sum of their squares is constant, so an untouched spectrum resynthesises the sound to rounding). Each gets a `## Math`,
+  unit tests and a rendered integration test, `REQ-analysis-1…4`, its own commit and push; Solaris then bumps the pointer.
+- **Separation: median filtering (Fitzgerald), soft masks.** The magnitude spectrogram filtered along time (17 frames) is
+  what sustains; along frequency (17 bins) what is sharp in time. Wiener masks M_H = H²/(H² + P²), M_P = 1 − M_H, taken
+  from the channels' sum so both channels split alike (the image kept), applied to each channel's spectrum and
+  resynthesised. The masks sum to one, so the harmonic and the percussive sum back to the clip — a test measures it.
+- **Audio to MIDI: monophonic, by YIN.** The mono sum framed (a 2048-sample window every 256 at 48 kHz, scaled with the
+  rate); a frame voiced when YIN finds a period under its threshold and the frame is above −50 dBFS; its note the nearest
+  semitone; a five-frame median over the notes; a note where one pitch lasts 60 ms or more, split where the library's
+  onsets find a new attack on the same pitch; its velocity from its loudest frame (−60 … 0 dBFS → 1 … 127). Seconds out;
+  the service puts them in beats through the song's tempo map at the clip's place. Not yet: bends, chords, polyphony.
+- **Chords: chroma and templates, smoothed.** A 8192-point STFT of the mono sum; each bin from 110 Hz to 4 kHz adds its
+  power to its pitch class (a triangle a semitone wide around the nearest note); the frames averaged over each beat of
+  the song's tempo map (the service hands the beat times in); each beat scored against the 24 major and minor triads
+  (cosine), "N" — no chord — when the best is under 0.6 or the beat is silent; a Viterbi pass with a stay bonus (a chord
+  is likely to last) so a passing note does not flip it; equal beats merged into spans. The names as a musician writes
+  them: C, Am, F#, Bbm.
+- **The grammar — each ONE command, ONE edit (undo takes it back whole):**
+  `clip separate <ac>` — the clip's sound (as it plays: its source span) split; two files written beside the song
+  (`Separated/<name> harmonic.wav`, `… percussive.wav`, the host's writer, as a bounce's are); the clip replaced by two
+  clips at its place, on two new lanes under its own, each with its own strip (R-MIX-2) named after it.
+  `clip to-midi <ac> [--instrument <type>]` — its notes as a pattern ("<name> notes") on a new instrument track (a
+  synth unless named) at the clip's place.
+  `chords detect [<ac>]` — the song's chords from that clip, or from the whole song's mix (rendered as a render is):
+  they replace the song's chords; `chords clear`. Saved in the song (`#achord at= length= name=` — Interstellar has no
+  such node, so it is Solaris's alone), in the model (`chords[]`: id, at, length, name), an event each
+  (`chords.detected n=`).
+- **The window:** a clip's menu gains "Separate Harmonic / Percussive", "To MIDI" and "Detect Chords"; the ruler's menu
+  "Detect Chords" (the song) and "Clear Chords". The chords on the ruler: a band of their own under the markers', there
+  only while the song has chords — the ruler grows into it and the lanes ease down (`Timeline::top()`, eased); each
+  chord's name at its span, keyed by id, fading in and out, sliding when the map moves it; its accessible name its chord.
+- **Long sounds:** the analysis runs inside its command, as a render, a freeze or a bounce does (a few seconds for a
+  minute of sound); a progress bar and a cancel are Not yet.
+- **Parts** (a commit each): (1) the DSP library's analysis module; (2) the service — the three commands, the chords in
+  the song and the model, L2 tests over synthetic sound the fake host plays back (a sine with clicks, a melody, a chord
+  progression); (3) the window — the menus, the ruler's chord band, shots.
+- **Not yet:** polyphonic transcription, pitch bend in the notes, chord qualities beyond major and minor (sevenths,
+  suspensions), key detection, more than two stems (drums, bass, vocals need a model — R-ASSIST-1 says no AI model).
