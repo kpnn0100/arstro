@@ -4819,7 +4819,7 @@ static void test_every_effect_drops_as_one_line_and_passes_sound()
         assert(finite && (peak > 0.001f || t.takesKey));
         ++added;
     }
-    assert(added >= 11); // the eight before N34, the multiband, the gate, the transient shaper
+    assert(added >= 12); // the eight before N34, the multiband, the gate, the transient shaper, the de-esser
     pass("every effect (R-FX-6…17, law 1): each the DSP library's registry describes drops onto a strip as one line and passes sound, with no code here");
 }
 

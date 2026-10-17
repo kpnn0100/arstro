@@ -1005,6 +1005,17 @@ A gate and a downward expander: below its threshold turned down by the ratio, he
 | `release` | 1.0 … 5000.0 ms | 100.0 ms |
 | `sidechain` | off · on | off |
 
+### `deesser` — De-esser (effect)
+
+Sibilance held down: a high-pass hears it, its level held at the threshold — the band alone turned down (split) or the whole sound (wide).
+
+| parameter | range | default |
+|---|---|---|
+| `frequency` | 2000.0 … 16000.0 Hz | 6000.0 Hz |
+| `threshold` | -60.0 … 0.0 dB | -30.0 dB |
+| `range` | 0.0 … 24.0 dB | 12.0 dB |
+| `mode` | split · wide | split |
+
 ### `transient` — Transient Shaper (effect)
 
 More or less attack, more or less sustain, whatever the level: a fast envelope against two slow ones.

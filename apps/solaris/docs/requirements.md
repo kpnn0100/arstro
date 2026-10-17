@@ -2136,7 +2136,8 @@ REQ-fx-multiband-1, DSP 122d264) — three Linkwitz-Riley bands summing flat, ea
 REQ-fx-gate-1, DSP f0cb867) — a gate and downward expander with hold and range, keyable (`takesKey`: its key is a
 strip's, as the compressor's; unkeyed and quiet it may render silence, which the test allows a keyed type);
 "transient" (R-FX-8; REQ-fx-transient-1, DSP bb091f1) — attack and sustain by a fast envelope against two slow ones,
-the input to the bit at 0 %.
+the input to the bit at 0 %; "deesser" (R-FX-9; REQ-fx-deesser-1, DSP ed63bbd) — a high-pass hears the sibilance,
+held at the threshold within a range, a dynamic high shelf (split) or the whole sound (wide) turned down.
 
 ### DR-MIDI-3 Expression lanes (R-MIDI-3)
 A pattern carries expression lanes beside its notes (`model/Project.h` `ExprPoint`; `#expr lane= at= value=` in the
