@@ -541,3 +541,30 @@ is a hand on many faders at once. Decided here (each a line to change):
   sound (rendered: a member at its own plus the VCA's dB, mute and solo through it, a bound member offset); (2) live
   and the model's fields and the API; (3) the dock — the VCA's strip, a member's tag, the menu, shots.
 - **Not yet:** a VCA following a VCA; a VCA's own gain automated or bound to a formula (refused, said); a VCA's pan.
+
+
+### Round 14 — 2026-10-17 — per-strip tools (R-MIX-20, N36): the design, before code
+
+R-MIX-20 names four: a phase invert, a width, a mono check on the master, and solo-safe on buses. Decided (each a line
+to change):
+
+- **Phase and width are a strip's own** (`set <ch>.phase=on|off`, `set <ch>.width=0 … 200` %), stored on its
+  `#atrack` line when not their defaults (`phase=invert`, `width=150`). The engine applies them to the strip's own
+  sound after its rack and BEFORE its pre-fader sends and its fader — an insert at the head of the strip's own
+  controls: width by mid and side (`s × width`, 0 mono, 100 as it is, 200 the side doubled), then the polarity
+  (both channels × −1). At their defaults the samples pass untouched (no arithmetic at all). A VCA has neither.
+- **Live** (part 2): a width dragged while playing reaches the engine as a message, ramped across the block so a drag
+  never steps; a phase toggled likewise. No rebuild.
+- **The mono check is the listener's, not the song's:** `transport mono on|off` folds what the speakers get to mono
+  (L = R = (L + R)/2, every output's pairs) while it is on — the Player's, after the engine; a render or an export
+  never hears it, a song does not keep it. `transport.mono` says it. (The master's own width stays the master
+  limiter's or an imager's business.)
+- **Solo-safe:** `set <bus>.soloSafe=on|off` (`soloSafe=true` on its line) — a bus a solo never silences (a reverb
+  return kept while a vocal is soloed, even when the vocal does not feed it); refused on a line that is not a bus
+  (R-MIX-20: "on buses"). Decided in `silentStrips`, once, with the rest; its mute still mutes it.
+- **Seen** (part 3): a strip's menu — Invert Phase (a check), Width ▸ (0 · 50 · 100 · 150 · 200 %), and on a bus
+  Solo-safe (a check); its card says Ø when inverted and its width when not 100 % (each faded in); a solo-safe bus's S
+  shows a ring; the master card a "Mono" toggle, lit while on.
+- **Parts** (a commit each): (1) the model, the compile, the engine and the grammar — phase, width, solo-safe — and
+  the mono check; (2) live (no rebuild) and the model's fields and the API; (3) the dock.
+- **Not yet:** a width automated or bound to a formula (refused, said); polarity per channel.

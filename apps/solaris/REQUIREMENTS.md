@@ -1130,7 +1130,13 @@ a process is the host's (law 12).
   after it; a muted VCA mutes its members, a soloed one solos them. Its fader moved while playing moves its members at
   once. The model says whom a strip follows and whom a VCA moves; the dock shows a VCA with no meter, and on a member
   the dB its VCA adds. Not yet: nesting, a VCA's own gain automated, a VCA's pan.)
-- **R-MIX-20 Per-strip tools**: phase invert, width, mono check on the master; solo-safe on buses.
+- **R-MIX-20 Per-strip tools**: phase invert, width, mono check on the master; solo-safe on buses. (**Detailed before
+  building, N36 — 2026-10-17, docs/discussion.md Round 14:** a strip's phase (on/off) and width (0 … 200 %: mono … the
+  side doubled) are its own, applied to its sound after its rack and before its pre-fader sends and fader, untouched
+  at their defaults, and moved live with no rebuild; the mono check is the listener's — `transport mono on|off` folds
+  what the speakers get to mono, never a render or the song; a bus may be solo-safe — a solo never silences it, its
+  mute still does; a line that is not a bus is refused. Seen in the strip's menu and on its card; the master's Mono
+  lit while on. Not yet: a width automated or bound; polarity per channel.)
 - **R-VER build** (R-VER-1…4, specified): versions of a song.
 - **R-COLLECT-1 Collect and save**: `project collect` copies every file the song uses into its folder and rewrites
   the paths; a relink window for missing files (`clip relink <ac> <file>`, or a folder searched).
