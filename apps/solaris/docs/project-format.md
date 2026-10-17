@@ -294,6 +294,17 @@ seconds as a clip's). `length` is beats a loop lasts (absent: the pattern's, or 
 (dB) are written when set. One slot a cell. A slot is its own node — not a clip off the timeline — so nothing that
 reads the arrangement sees it; launching it is live (never rendered) until recorded.
 
+## 9a″. The picture — `#avideo` (R-VIDEO-1; docs/discussion.md Round 18)
+
+```
+#avideo id=vd_1 src=picture.mp4 offset=4.0
+```
+
+One a song: the video the song is scored to. `src` names its file as a clip's does (in the song's folder by its name,
+else absolutely — collect gathers it); `offset` is seconds on the song's clock (the tempo map's) at which its first frame
+shows — negative, it began before the song. Written after the session grid. A second `#avideo`, or one naming no file,
+is refused. A file the host cannot read leaves the song open and the picture offline.
+
 ## 9b. Versions — `#aversion` (R-VER; docs/discussion.md Round 15)
 
 ```

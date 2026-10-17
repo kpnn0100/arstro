@@ -76,8 +76,20 @@ namespace solaris
         if (!requireOpen(err)) return false;
         const std::string out = c.flag("out");
         if (out.empty()) { err = "render needs --out <file>"; return false; }
+        // R-VIDEO-1: --video — the picture and the mix in ONE file
+        const bool withVideo = c.has("video");
+        if (withVideo)
+        {
+            if (mProject.videos.empty()) { err = "the song has no video — `video set <file>`"; return false; }
+            std::string ext = fs::path(out).extension().string();
+            for (auto &ch : ext) ch = (char)std::tolower((unsigned char)ch);
+            if (ext != ".mp4" && ext != ".mov" && ext != ".mkv") { err = "--video writes a picture: .mp4, .mov or .mkv"; return false; }
+            for (const char *f : {"format", "stems", "ports", "bits", "kbps"})
+                if (c.has(f)) { err = std::string("--video writes ONE file, the picture and the mix — not with --") + f; return false; }
+            if (!mHost.muxVideo) { err = "this build writes no video"; return false; }
+        }
         // R-EXPORT-1: the format is --format, else the file's extension
-        std::string format = c.flag("format");
+        std::string format = withVideo ? std::string("video") : c.flag("format");
         if (format.empty())
         {
             std::string ext = fs::path(out).extension().string();
@@ -85,8 +97,8 @@ namespace solaris
             format = ext == ".wav" ? "wav" : ext == ".flac" ? "flac" : ext == ".mp3" ? "mp3" : ext == ".ogg" || ext == ".oga" ? "ogg" : ext == ".opus" ? "opus" : "";
             if (format.empty()) { err = "`" + out + "`: the format is its extension — .wav, .flac, .mp3, .ogg or .opus (or --format)"; return false; }
         }
-        if (format != "wav" && format != "flac" && format != "mp3" && format != "ogg" && format != "opus") { err = "--format is wav, flac, mp3, ogg or opus"; return false; }
-        const bool lossy = format == "mp3" || format == "ogg" || format == "opus";
+        if (format != "wav" && format != "flac" && format != "mp3" && format != "ogg" && format != "opus" && format != "video") { err = "--format is wav, flac, mp3, ogg or opus"; return false; }
+        const bool lossy = format == "mp3" || format == "ogg" || format == "opus" || format == "video"; // the picture's mix: no dither
         if (lossy && c.has("bits")) { err = "a " + format + " file has no bit depth (--kbps sets how much it keeps)"; return false; }
         const std::string bitsText = c.flag("bits", "24");
         int bits = 24;
@@ -132,7 +144,7 @@ namespace solaris
             if (!normalize) { err = "--ceiling goes with --normalize"; return false; }
             if (!parseNumber(c.flag("ceiling"), ceiling) || ceiling < -24 || ceiling > 0) { err = "--ceiling is dBTP, −24 … 0"; return false; }
         }
-        if (format == "wav" ? !mHost.writeWav : !mHost.writeAudio) { err = "this build has no " + format + " writer"; return false; }
+        if (!withVideo && (format == "wav" ? !mHost.writeWav : !mHost.writeAudio)) { err = "this build has no " + format + " writer"; return false; }
 
         Project rated = mProject;
         if (c.has("version")) // R-VER-4: every version renders by name — its resolution, whichever one is open
@@ -144,6 +156,7 @@ namespace solaris
             rated = std::move(q);
         }
         rated.header.sampleRate = rate;
+        if (withVideo && rated.videos.empty()) { err = c.flag("version") + " has no video"; return false; } // R-VIDEO-1: a version's own picture
         std::map<std::string, std::shared_ptr<const engine::Pcm>> decoded; // at the render's rate, when not the song's
         std::function<std::shared_ptr<const engine::Pcm>(const std::string &)> pcmAt = [&](const std::string &src) -> std::shared_ptr<const engine::Pcm> {
             if (rate == mProject.header.sampleRate) return pcmFor(src);
@@ -296,7 +309,14 @@ namespace solaris
             ++fileNo;
             return format == "wav" ? mHost.writeWav(path, chs, rate, bits, err) : mHost.writeAudio(path, chs, rate, format, bits, kbps, err);
         };
-        if (!write(out, master)) return false;
+        if (withVideo)
+        {
+            // R-VIDEO-1: the picture's first frame is `offset` seconds into the song — in this file, less where it starts
+            const Video &vd = rated.videos[0];
+            const double startAt = vd.offset - (double)beatsToSamples(rated, from) / rate;
+            if (!mHost.muxVideo(resolvePath(vd.src), startAt, master, rate, out, err)) return false;
+        }
+        else if (!write(out, master)) return false;
         mOutput = out + "\n";
         for (size_t k = 0; k < stems.size(); ++k)
         {

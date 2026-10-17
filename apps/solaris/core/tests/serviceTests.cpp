@@ -417,6 +417,8 @@ namespace
         std::map<std::string, std::vector<std::vector<float>>> written;
         std::map<std::string, int> bits, rates, kbps;
         std::map<std::string, std::string> formats;   // R-EXPORT-1: what each file was written as
+        struct Muxed { std::string video; double startAt = 0; size_t frames = 0; int rate = 0; };
+        std::map<std::string, Muxed> muxed;           // R-VIDEO-1: each picture written, and where its first frame went
         SolarisService::Host host()
         {
             SolarisService::Host h;
@@ -456,6 +458,22 @@ namespace
                 rates[path] = rate;
                 kbps[path] = k;
                 formats[path] = f;
+                return true;
+            };
+            // R-VIDEO-1: a picture is any .mp4/.mov/.mkv not named "gone" — ten seconds, 1280×720 at 25 frames a second
+            h.probeVideo = [](const std::string &path, VideoInfo &vi, std::string &err) {
+                const bool pic = contains(path, ".mp4") || contains(path, ".mov") || contains(path, ".mkv");
+                if (!pic || contains(path, "gone")) { err = pic ? "no such file" : "it has no picture"; return false; }
+                vi.duration = 10.0;
+                vi.width = 1280;
+                vi.height = 720;
+                vi.fps = 25.0;
+                return true;
+            };
+            h.muxVideo = [this](const std::string &video, double startAt, const std::vector<std::vector<float>> &mix, int rate, const std::string &out,
+                                std::string &) {
+                muxed[out] = Muxed{video, startAt, mix[0].size(), rate};
+                written[out] = mix;
                 return true;
             };
             h.listDir = [](const std::string &path, std::vector<BrowserEntry> &out, std::string &err) {
@@ -4295,6 +4313,99 @@ namespace
     };
 }
 
+static void test_a_video_lane()
+{
+    // R-VIDEO-1: one picture a song — set (probed; a file that is no picture refused), its offset an address, the model
+    // saying where the picture is at the heard position (through the tempo map, moving while playing), the .slp, undo,
+    // remove; render --video: the mix muxed beside it, its first frame where the offset and --from put it; refusals
+    Run r;
+    const std::string song = freshSong("video");
+    r.ok("project new " + song + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 16");
+    assert(r.svc.model().video.id.empty() && r.svc.model().video.time == -1);
+    assert(contains(r.no("video remove"), "the song has no video"));
+    const std::string dir = scratch() + "/";                  // the song's folder: a file there is named by its name
+    assert(contains(r.no("video set " + dir + "song.wav"), "as a video: it has no picture"));
+    assert(contains(r.no("video set " + dir + "picture.mp4 --offset 99999"), "--offset is seconds"));
+    assert(!contains(r.text(), "#avideo"));
+    r.events.clear();
+    const std::string vd = firstLine(r.ok("video set " + dir + "picture.mp4 --offset 2"));
+    assert(vd == "vd_1" && contains(r.text(), "#avideo id=vd_1 src=picture.mp4 offset=2.0"));
+    assert(contains(r.events.back(), "video.set") && contains(r.events.back(), "vd_1"));
+    const VideoModel *v = &r.svc.model().video;
+    assert(v->id == "vd_1" && v->src == "picture.mp4" && v->offset == 2.0 && v->duration == 10.0 && v->width == 1280 && v->height == 720 &&
+           v->fps == 25.0 && !v->offline);
+    // where the picture is: the time bar at 0 is before it (it starts 2 s in); beat 8 at 120 bpm is 4 s — 2 s into it
+    assert(v->time == -1);
+    r.ok("transport seek 8");
+    assert(std::fabs(r.svc.model().video.time - 2.0) < 1e-9);
+    // through the tempo map: 60 bpm from beat 4 — beat 8 is 2 s + 4 s = 6 s, 4 s into the picture
+    r.ok("tempo add --at 4 --bpm 60");
+    r.ok("transport seek 8");
+    assert(std::fabs(r.svc.model().video.time - 4.0) < 1e-9);
+    r.ok("transport seek 40"); // 2 + 36 s: past its ten seconds
+    assert(r.svc.model().video.time == -1);
+    r.ok("undo"); // the tempo change
+    // the offset is an address; out of range refused
+    r.ok("set vd_1.offset=-1.5");
+    assert(r.svc.model().video.offset == -1.5 && firstLine(r.ok("get vd_1.offset")) == "-1.5");
+    assert(contains(r.no("set vd_1.offset=40000"), "offset (s) must be between -36000.0 and 36000.0"));
+    assert(contains(r.no("set vd_1.speed=2"), "`vd_1` (a video) has no field `speed` (it has: offset)"));
+    // another picture in its place keeps its id and offset; a second node is refused by the file
+    r.ok("video set " + dir + "other.mov");
+    assert(r.svc.model().video.id == "vd_1" && r.svc.model().video.src == "other.mov" && r.svc.model().video.offset == -1.5);
+    r.ok("undo");
+    assert(r.svc.model().video.src == "picture.mp4");
+    // playing: the picture's time moves with the playhead, frame by frame
+    r.ok("set vd_1.offset=0");
+    r.ok("transport seek 0");
+    r.ok("transport play");
+    waitFrames(r, 48000 + 4800);
+    const double t1 = r.svc.model().video.time;
+    waitFrames(r, 96000 + 4800);
+    const double t2 = r.svc.model().video.time;
+    // and as the window keeps it: pumped each frame, no command between — the picture's time is the heard position's
+    const long long f0 = r.fake.capture->frames.load();
+    for (int i = 0; i < 400 && r.fake.capture->frames.load() < f0 + 9600; ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        r.svc.pump();
+    }
+    const double t3 = r.svc.model().video.time, heard = r.svc.model().transport.position;
+    r.ok("transport stop");
+    std::printf("    the picture while playing: %.3f s, then %.3f s; pumped, %.3f s at beat %.3f\n", t1, t2, t3, heard);
+    assert(t1 > 0.9 && t2 > t1 + 0.9 && t3 > t2 + 0.1 && std::fabs(t3 - heard * 0.5) < 1e-9);
+    // render --video: the mix beside the picture; its first frame `offset` seconds in, less where the render starts
+    r.ok("set vd_1.offset=2");
+    const std::string out = scratch() + "/video-out.mp4";
+    r.ok("render --out " + out + " --video --to 16");
+    assert(r.fake.muxed.count(out) && contains(r.fake.muxed[out].video, "picture.mp4") && r.fake.muxed[out].startAt == 2.0 &&
+           r.fake.muxed[out].rate == 48000 && r.fake.muxed[out].frames == 384000);
+    r.ok("render --out " + scratch() + "/video-cut.mkv --video --from 8 --to 16"); // from 4 s: the picture began 2 s before
+    assert(r.fake.muxed[scratch() + "/video-cut.mkv"].startAt == -2.0);
+    assert(contains(r.no("render --out " + scratch() + "/video.wav --video"), "--video writes a picture: .mp4, .mov or .mkv"));
+    assert(contains(r.no("render --out " + out + " --video --stems all"), "not with --stems"));
+    assert(contains(r.no("render --out " + out + " --video --bits 16"), "not with --bits"));
+    // a picture the host cannot read: the song still opens, the picture offline
+    r.ok("project save");
+    {
+        std::string t = r.text();
+        const size_t at = t.find("src=picture.mp4");
+        t.replace(at, 15, "src=gone.mp4");
+        std::ofstream(song) << t;
+        Run q;
+        q.ok("project open " + song);
+        assert(q.svc.model().video.id == "vd_1" && q.svc.model().video.offline && q.svc.model().video.duration == 0);
+    }
+    // remove: no picture, and render --video refused
+    r.ok("video remove");
+    assert(r.svc.model().video.id.empty() && !contains(r.text(), "#avideo"));
+    assert(contains(r.no("render --out " + out + " --video"), "the song has no video"));
+    r.ok("undo");
+    assert(r.svc.model().video.id == "vd_1");
+    pass("a video lane: one picture a song, probed by the host, its offset an address; the model says where it is through the tempo map, moving while playing; render --video muxes the mix beside it at its offset (R-VIDEO-1)");
+}
+
 static void test_a_follower_alone()
 {
     // R-DEV-2/4, Follower in SIMULATED time (its clock injected, its device a plain list): a clock 200 ppm slow and a
@@ -7113,6 +7224,7 @@ int main()
     test_the_session_grid();
     test_launching_is_heard();
     test_launches_are_recorded_into_the_arrangement();
+    test_a_video_lane();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

@@ -870,6 +870,24 @@
       "requirement": "R-LAUNCH-1"
     },
     {
+      "verb": "video set",
+      "usage": "video set <file> [--offset <seconds>]",
+      "args": "<file>",
+      "flags": [
+        "offset=<seconds>"
+      ],
+      "summary": "The song's picture (R-VIDEO-1) — added, or another in its place: read by the host (its length, size, frame rate; a file that is no video is refused); its first frame shows --offset seconds into the song (the song's clock; negative: it began before). One a song. Prints its id.",
+      "requirement": "R-VIDEO-1"
+    },
+    {
+      "verb": "video remove",
+      "usage": "video remove",
+      "args": "",
+      "flags": [],
+      "summary": "The song has no picture again.",
+      "requirement": "R-VIDEO-1"
+    },
+    {
       "verb": "preset save",
       "usage": "preset save <dv> <name> [--replace]",
       "args": "<dv> <name>",
@@ -1160,7 +1178,7 @@
     },
     {
       "verb": "render",
-      "usage": "render --out <file> [--format <wav|flac|mp3|ogg|opus>] [--rate <Hz>] [--bits <16|24|32f>] [--kbps <n>] [--normalize <LUFS>] [--ceiling <dBTP>] [--from <beats>] [--to <beats>] [--stems <ch,…|all>] [--ports] [--measure] [--version <version|main>]",
+      "usage": "render --out <file> [--format <wav|flac|mp3|ogg|opus>] [--rate <Hz>] [--bits <16|24|32f>] [--kbps <n>] [--normalize <LUFS>] [--ceiling <dBTP>] [--from <beats>] [--to <beats>] [--stems <ch,…|all>] [--ports] [--measure] [--version <version|main>] [--video]",
       "args": "",
       "flags": [
         "out=<file>",
@@ -1175,9 +1193,10 @@
         "stems=<ch,…|all>",
         "ports",
         "measure",
-        "version=<version|main>"
+        "version=<version|main>",
+        "video"
       ],
-      "summary": "Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader output to <out>.<ch>.<ext>; with --ports, each output port to <out>.<port>.<ext>. The tail runs until −90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) is compensated and trimmed (R-MIX-17). The format is the extension — .wav, .flac, .mp3, .ogg (Vorbis), .opus — or --format (R-EXPORT-1). --rate renders the song AT that rate (Opus: 48000, its default; MP3 to 48000); --bits 16 | 24 (WAV and FLAC; default 24) | 32f (WAV) — 16 and 24 TPDF-dithered; --kbps for the lossy ones (MP3 32…320, default 320; Ogg 45…500, 256; Opus 6…510, 192). --normalize gains every file alike to that integrated loudness, held so the master's true peak stays under --ceiling (dBTP, default −1) — said on a `normalize` line. --measure prints the written master's integrated loudness, the most of its momentary and short-term, its true peak and its lowest correlation (R-METER-1). --version renders that version (or main) whichever is open — every version renders by name (R-VER-4).",
+      "summary": "Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader output to <out>.<ch>.<ext>; with --ports, each output port to <out>.<port>.<ext>. The tail runs until −90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) is compensated and trimmed (R-MIX-17). The format is the extension — .wav, .flac, .mp3, .ogg (Vorbis), .opus — or --format (R-EXPORT-1). --rate renders the song AT that rate (Opus: 48000, its default; MP3 to 48000); --bits 16 | 24 (WAV and FLAC; default 24) | 32f (WAV) — 16 and 24 TPDF-dithered; --kbps for the lossy ones (MP3 32…320, default 320; Ogg 45…500, 256; Opus 6…510, 192). --normalize gains every file alike to that integrated loudness, held so the master's true peak stays under --ceiling (dBTP, default −1) — said on a `normalize` line. --measure prints the written master's integrated loudness, the most of its momentary and short-term, its true peak and its lowest correlation (R-METER-1). --version renders that version (or main) whichever is open — every version renders by name (R-VER-4). --video writes the picture and the mix into ONE file — .mp4, .mov or .mkv: the picture's stream copied, where its offset puts it in the range rendered; the mix as AAC (FLAC in MKV) — no --format, --stems, --ports, --bits or --kbps with it (R-VIDEO-1).",
       "requirement": "R-RENDER-2"
     },
     {
@@ -2678,6 +2697,66 @@
       "path": "launchQuantize",
       "type": "string",
       "summary": "R-LAUNCH-1: where a launch, a stop or a return lands — bar, beat or none",
+      "stable": true
+    },
+    {
+      "path": "video",
+      "type": "object",
+      "summary": "R-VIDEO-1: the song's picture — `id` \"\" when it has none",
+      "stable": true
+    },
+    {
+      "path": "video.id",
+      "type": "string",
+      "summary": "vd_n",
+      "stable": true
+    },
+    {
+      "path": "video.src",
+      "type": "string",
+      "summary": "its file, as the song names it",
+      "stable": true
+    },
+    {
+      "path": "video.offset",
+      "type": "number",
+      "summary": "seconds into the song (its clock, the tempo map's) its first frame shows",
+      "stable": true
+    },
+    {
+      "path": "video.duration",
+      "type": "number",
+      "summary": "seconds, as the host read it",
+      "stable": true
+    },
+    {
+      "path": "video.width",
+      "type": "int",
+      "summary": "pixels",
+      "stable": true
+    },
+    {
+      "path": "video.height",
+      "type": "int",
+      "summary": "pixels",
+      "stable": true
+    },
+    {
+      "path": "video.fps",
+      "type": "number",
+      "summary": "frames a second",
+      "stable": true
+    },
+    {
+      "path": "video.offline",
+      "type": "bool",
+      "summary": "the host cannot read it",
+      "stable": true
+    },
+    {
+      "path": "video.time",
+      "type": "number",
+      "summary": "the picture's seconds at the heard position (−1: before it starts or after it ends) — moving while playing",
       "stable": true
     },
     {

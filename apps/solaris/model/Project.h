@@ -301,6 +301,16 @@ namespace solaris
         Remarks remarks;
     };
 
+    /** R-VIDEO-1: the song's picture — its first frame shows `offset` seconds into the song (its clock, the tempo map's);
+     *  negative, the picture began before the song. One a song. */
+    struct Video
+    {
+        std::string id, src;            // src stored as a clip's is
+        double offset = 0.0;            // seconds
+        Fields unknown;
+        Remarks remarks;
+    };
+
     /** R-TEMPO-1: a change of the song's tempo — `bpm` from beat `at` on; `ramp`: reached there gliding (linearly, in
      *  beats) from the tempo before. Before the first, the header's `bpm` holds. */
     struct TempoPoint
@@ -350,6 +360,7 @@ namespace solaris
         std::vector<RawNode> raw;
         std::vector<Scene> scenes;      // R-LAUNCH-1: the session grid's rows, in creation order (`order` places them)
         std::vector<Slot> slots;        // R-LAUNCH-1: its cells
+        std::vector<Video> videos;      // R-VIDEO-1: its picture — one at most
         std::vector<Version> versions;  // R-VER: in creation order, each based on main or an earlier one
         /** R-VER: the version open — its resolution is what the nodes above hold ("" = main, the song itself). Never
          *  written: a song opens on main. */

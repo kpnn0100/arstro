@@ -302,6 +302,11 @@ namespace solaris
              "On the next quantum the strip (or every strip in the session) plays nothing — the session's, silent.", "R-LAUNCH-1"},
             {K::LaunchBack, "launch back", "[<strip>]", 0, 1, {},
              "On the next quantum the strip (or every strip in the session) follows the arrangement again.", "R-LAUNCH-1"},
+            {K::VideoSet, "video set", "<file>", 1, 1, {"offset=<seconds>"},
+             "The song's picture (R-VIDEO-1) — added, or another in its place: read by the host (its length, size, frame "
+             "rate; a file that is no video is refused); its first frame shows --offset seconds into the song (the "
+             "song's clock; negative: it began before). One a song. Prints its id.", "R-VIDEO-1"},
+            {K::VideoRemove, "video remove", "", 0, 0, {}, "The song has no picture again.", "R-VIDEO-1"},
             {K::PresetSave, "preset save", "<dv> <name>", 2, 2, {"replace"},
              "Save a device's set values (and a sampler's sound) as a preset of its type in your presets folder "
              "(R-PRESET-1) — a name you have is refused without --replace. The machine's, not the song's: no undo.", "R-PRESET-1"},
@@ -398,7 +403,7 @@ namespace solaris
 
             {K::Render, "render", "", 0, 0,
              {"out=<file>", "format=<wav|flac|mp3|ogg|opus>", "rate=<Hz>", "bits=<16|24|32f>", "kbps=<n>", "normalize=<LUFS>",
-              "ceiling=<dBTP>", "from=<beats>", "to=<beats>", "stems=<ch,…|all>", "ports", "measure", "version=<version|main>"},
+              "ceiling=<dBTP>", "from=<beats>", "to=<beats>", "stems=<ch,…|all>", "ports", "measure", "version=<version|main>", "video"},
              "Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader "
              "output to <out>.<ch>.<ext>; with --ports, each output port to <out>.<port>.<ext>. The tail runs until "
              "−90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) "
@@ -409,7 +414,9 @@ namespace solaris
              "integrated loudness, held so the master's true peak stays under --ceiling (dBTP, default −1) — said on a "
              "`normalize` line. --measure prints the written master's integrated loudness, the most of its momentary and "
              "short-term, its true peak and its lowest correlation (R-METER-1). --version renders that version (or main) "
-             "whichever is open — every version renders by name (R-VER-4).", "R-RENDER-2", false, {"out"}},
+             "whichever is open — every version renders by name (R-VER-4). --video writes the picture and the mix into ONE "
+             "file — .mp4, .mov or .mkv: the picture's stream copied, where its offset puts it in the range rendered; the "
+             "mix as AAC (FLAC in MKV) — no --format, --stems, --ports, --bits or --kbps with it (R-VIDEO-1).", "R-RENDER-2", false, {"out"}},
 
             {K::MatrixPrint, "matrix print", "", 0, 0, {"json"}, "Every route and send at once: rows = strips, columns = destinations.", "R-MIX-9"},
             {K::Audit, "audit", "", 0, 0, {}, "The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping.", "R-MIX-10"},

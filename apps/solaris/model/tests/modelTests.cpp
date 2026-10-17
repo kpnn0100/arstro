@@ -892,6 +892,28 @@ static void test_scenes_and_slots_round_trip_and_are_checked()
     pass("scenes and slots in the .slp (R-LAUNCH-1): #ascene / #aslot after the arrangement, a fixed point; launchQuantize only when not a bar; a slot in no scene, for no strip or the wrong kind, of both or neither, in a full cell refused by name; a note clip's offset written back, an audio clip's refused");
 }
 
+static void test_the_picture_round_trips_and_is_checked()
+{
+    // R-VIDEO-1: #avideo after the session grid, a fixed point (a quoted file, a negative offset, a key it does not know
+    // kept); its id counted with the rest; a second picture, or one naming no file, refused
+    const std::string head = "arstro-project = 1\napp = solaris\nid = prj\n#amixer id=mx_1 name=Sources order=0\n";
+    const std::string pic = "#avideo id=vd_1 src=\"film/cut 3.mp4\" offset=-2.5 tint=sepia\n";
+    Project p;
+    std::string err;
+    assert(parseProject(head + pic, p, err));
+    assert(p.videos.size() == 1 && p.videos[0].id == "vd_1" && p.videos[0].src == "film/cut 3.mp4" && p.videos[0].offset == -2.5);
+    assert(p.nextId("vd") == "vd_2");
+    const std::string text = serializeProject(p);
+    assert(contains(text, pic));
+    Project q;
+    assert(parseProject(text, q, err) && serializeProject(q) == text);
+    Project two;
+    assert(!parseProject(head + pic + "#avideo id=vd_2 src=b.mp4 offset=0.0\n", two, err) && contains(err, "one picture a song"));
+    Project none;
+    assert(!parseProject(head + "#avideo id=vd_1 offset=1.0\n", none, err) && contains(err, "video vd_1 names no file"));
+    pass("the picture in the .slp (R-VIDEO-1): #avideo, a fixed point — a quoted file, a negative offset, an unknown key kept; its id counted; a second, or one naming no file, refused");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -917,6 +939,7 @@ int main()
     test_freeze_thaw_and_rebase_a_frozen_version();
     test_versions_chain_are_checked_and_never_reuse_an_id();
     test_scenes_and_slots_round_trip_and_are_checked();
+    test_the_picture_round_trips_and_is_checked();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

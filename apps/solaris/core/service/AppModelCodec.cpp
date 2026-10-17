@@ -160,6 +160,16 @@ namespace solaris
             {"slots[].length", "number", "beats a loop lasts — the pattern's, or the file span's, when not set"},
             {"slots[].gain", "number", "dB"},
             {"launchQuantize", "string", "R-LAUNCH-1: where a launch, a stop or a return lands — bar, beat or none"},
+            {"video", "object", "R-VIDEO-1: the song's picture — `id` \"\" when it has none"},
+            {"video.id", "string", "vd_n"},
+            {"video.src", "string", "its file, as the song names it"},
+            {"video.offset", "number", "seconds into the song (its clock, the tempo map's) its first frame shows"},
+            {"video.duration", "number", "seconds, as the host read it"},
+            {"video.width", "int", "pixels"},
+            {"video.height", "int", "pixels"},
+            {"video.fps", "number", "frames a second"},
+            {"video.offline", "bool", "the host cannot read it"},
+            {"video.time", "number", "the picture's seconds at the heard position (−1: before it starts or after it ends) — moving while playing"},
             {"clips", "object[]", "every clip"},
             {"clips[].id", "string", ""},
             {"clips[].name", "string", ""},
@@ -559,6 +569,7 @@ namespace solaris
                 j.set("versions", vs);
                 j.set("version", m.version);
             }
+            if (!m.video.id.empty()) j.set("video", Json::string(m.video.id + " " + m.video.src + " @" + canonicalNumber(m.video.offset) + "s")); // R-VIDEO-1
             if (!m.slots.empty()) // R-LAUNCH-1: the grid, scene by scene
             {
                 Json sl = Json::array();
@@ -707,6 +718,9 @@ namespace solaris
             slots.push(Json::object().set("id", x.id).set("name", x.name).set("scene", x.scene).set("strip", x.strip).set("pattern", x.pattern)
                            .set("src", x.src).set("length", x.length).set("gain", x.gain));
         j.set("scenes", scenes).set("slots", slots).set("launchQuantize", m.launchQuantize);
+        j.set("video", Json::object().set("id", m.video.id).set("src", m.video.src).set("offset", m.video.offset).set("duration", m.video.duration)
+                           .set("width", (long long)m.video.width).set("height", (long long)m.video.height).set("fps", m.video.fps)
+                           .set("offline", m.video.offline).set("time", m.video.time)); // R-VIDEO-1
         Json clips = Json::array();
         for (const auto &c : m.clips)
         {

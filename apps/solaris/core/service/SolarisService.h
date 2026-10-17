@@ -42,6 +42,13 @@ namespace arstro
 {
 namespace solaris
 {
+    /** R-VIDEO-1: what the host reads of a video — its length (s), its size, its frame rate. */
+    struct VideoInfo
+    {
+        double duration = 0.0, fps = 0.0;
+        int width = 0, height = 0;
+    };
+
     struct CompileResult;
 
     class SolarisService
@@ -58,6 +65,13 @@ namespace solaris
              *  lossy ones. Empty = this build has no encoders (the core holds no codec, R-SVC-4). */
             std::function<bool(const std::string &path, const std::vector<std::vector<float>> &channels, int rate,
                                const std::string &format, int bits, int kbps, std::string &err)> writeAudio;
+            /** R-VIDEO-1: a video's length, size and frame rate. False + `err` when it is no video; empty = this build
+             *  reads none. */
+            std::function<bool(const std::string &path, VideoInfo &out, std::string &err)> probeVideo;
+            /** R-VIDEO-1: write `out` (.mp4 / .mov / .mkv): the picture's own stream copied — its first frame `startAt` seconds
+             *  into the file (negative: its first part cut), cut at the mix's end — and the mix beside it (AAC; FLAC in MKV). */
+            std::function<bool(const std::string &video, double startAt, const std::vector<std::vector<float>> &mix, int rate,
+                               const std::string &out, std::string &err)> muxVideo;
             /** The entries of a folder (no "." / ".."). False + `err` if it cannot be listed. */
             std::function<bool(const std::string &path, std::vector<BrowserEntry> &out, std::string &err)> listDir;
             /** The machine's audio devices, inputs and outputs. */
@@ -149,6 +163,11 @@ namespace solaris
         bool rewriteFiles(const std::map<std::string, std::string> &to, std::string &err); // the whole document, read back
         bool filesCommand(const Command &c, std::string &err);
         bool sessionCommand(const Command &c, std::string &err); // R-LAUNCH-1 (ServiceSession.cpp): scenes, slots, launching
+        bool videoCommand(const Command &c, std::string &err);   // R-VIDEO-1 (ServiceVideo.cpp): the song's picture
+        std::map<std::string, std::pair<bool, VideoInfo>> mVideoInfo; // R-VIDEO-1: a picture's probe, by resolved path
+        const VideoInfo *videoInfo(const std::string &src);           // … probed once (null: it cannot be read)
+        double videoTime(double beat);                                // the picture's seconds at a song beat; −1 outside it
+        void fillVideo(double beat);                                  // the model's `video`, at a song beat
         // R-LAUNCH-1: what each strip in the session plays (by strip id) — and what will land, and when
         struct Launch
         {

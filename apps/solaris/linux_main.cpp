@@ -17,6 +17,7 @@
  */
 #include "App.h"
 #include "AudioFiles.h"
+#include "VideoFiles.h"
 #include "ControlServer.h"
 #include "EmbeddedFonts.h"
 #include "KeyInput.h"
@@ -56,6 +57,8 @@ namespace
         h.decodeAudio = solaris_host::decodeAudio;
         h.writeWav = solaris_host::writeWav;
         h.writeAudio = solaris_host::writeAudio;
+        h.probeVideo = solaris_host::probeVideo; // R-VIDEO-1
+        h.muxVideo = solaris_host::muxVideo;
         h.listDir = solaris_host::listDir;
         h.listDevices = solaris_host::listDevices;
 #ifdef SOLARIS_HAVE_PULSE

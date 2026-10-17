@@ -270,6 +270,9 @@ namespace solaris
         case K::Launch: case K::LaunchStop: case K::LaunchBack:
             ok = sessionCommand(c, err);
             break;
+        case K::VideoSet: case K::VideoRemove:
+            ok = videoCommand(c, err);
+            break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:
         case K::PatternArpeggiate:
@@ -368,7 +371,7 @@ namespace solaris
             static const std::vector<std::pair<std::string, std::string>> kinds = {
                 {"ch_", "strip"}, {"dv_", "device"}, {"pt_", "pattern"}, {"ln_", "lane"}, {"ac_", "clip"},
                 {"au_", "automation"}, {"sd_", "send"}, {"mx_", "mixer"}, {"prt_", "port"}, {"lg_", "group"}, {"mk_", "marker"},
-                {"vr_", "version"}, {"sc_", "scene"}, {"sl_", "slot"}};
+                {"vr_", "version"}, {"sc_", "scene"}, {"sl_", "slot"}, {"vd_", "video"}};
             const std::string primary = mOutput.substr(0, mOutput.find('\n'));
             std::vector<std::string> fresh;
             for (const auto &id : mProject.allIds())
@@ -1002,6 +1005,15 @@ namespace solaris
             err = unknownField(id, "the song", f, fields);
             return false;
         }
+        for (auto &v : p.videos) // R-VIDEO-1: the picture's offset — seconds on the song's clock
+            if (v.id == id)
+            {
+                if (f != "offset") { err = unknownField(id, "a video", f, {"offset"}); return false; }
+                if (!number(value, x, err) || !inRange(x, -36000, 36000, "offset (s)", err)) return false;
+                v.offset = x;
+                stored = canonicalNumber(x);
+                return true;
+            }
         if (Scene *sc = p.scene(id)) // R-LAUNCH-1: a row of the grid
         {
             if (f != "name") { err = unknownField(id, "a scene", f, {"name"}); return false; }
@@ -1359,6 +1371,7 @@ namespace solaris
             put("masterGain", canonicalNumber(p.header.masterGain)); put("sampleRate", std::to_string(p.header.sampleRate));
             put("launchQuantize", p.header.launchQuantize); // R-LAUNCH-1
         }
+        else if (!p.videos.empty() && p.videos[0].id == id) { put("src", p.videos[0].src); put("offset", canonicalNumber(p.videos[0].offset)); } // R-VIDEO-1
         else if (const Scene *sc = p.scene(id)) { put("name", sc->name); put("order", std::to_string(sc->order)); } // R-LAUNCH-1
         else if (const Slot *sl = p.slot(id))
         {

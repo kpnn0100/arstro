@@ -174,6 +174,7 @@ namespace solaris
         for (const auto &x : markers) ids.push_back(x.id);
         for (const auto &x : scenes) ids.push_back(x.id); // R-LAUNCH-1
         for (const auto &x : slots) ids.push_back(x.id);
+        for (const auto &x : videos) ids.push_back(x.id); // R-VIDEO-1
         for (const auto &x : tempos) ids.push_back(x.id);
         for (const auto &x : versions) ids.push_back(x.id); // R-VER
         return ids;
@@ -406,6 +407,13 @@ namespace solaris
             else if (k == "ramp") n.ramp = r.boolean(k, v, false);
             else n.unknown.emplace_back(k, v);
         }
+        void apply(Reader &r, Video &n, const std::string &k, const std::string &v) // R-VIDEO-1
+        {
+            if (k == "id") n.id = v;
+            else if (k == "src") n.src = v;
+            else if (k == "offset") n.offset = r.num(k, v, 0.0);
+            else n.unknown.emplace_back(k, v);
+        }
         void apply(Reader &r, Scene &n, const std::string &k, const std::string &v) // R-LAUNCH-1
         {
             if (k == "id") n.id = v;
@@ -514,7 +522,7 @@ namespace solaris
         Reader r{report ? report : &localReport, {}};
 
         // What a continuation line or a comment attaches to.
-        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Group, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Tempo, Raw, Version, Scene, Slot };
+        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Group, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Tempo, Raw, Version, Scene, Slot, Video };
         Cur cur = Cur::None;
         bool seenNode = false, sawMagic = false, sawTracks = false;
         std::map<std::string, std::vector<Note>> inlineNotes; // note clips written the suite's inline way
@@ -539,6 +547,7 @@ namespace solaris
             case Cur::Marker: return &p.markers.back().remarks;
             case Cur::Scene: return &p.scenes.back().remarks;
             case Cur::Slot: return &p.slots.back().remarks;
+            case Cur::Video: return &p.videos.back().remarks;
             case Cur::Tempo: return &p.tempos.back().remarks;
             case Cur::Version: return &p.versions.back().remarks;
             default: return nullptr;
@@ -652,6 +661,7 @@ namespace solaris
                 else if (tok.type == "aversion") { p.versions.emplace_back(); fill(p.versions.back()); cur = Cur::Version; } // R-VER
                 else if (tok.type == "ascene") { p.scenes.emplace_back(); fill(p.scenes.back()); cur = Cur::Scene; } // R-LAUNCH-1
                 else if (tok.type == "aslot") { p.slots.emplace_back(); fill(p.slots.back()); cur = Cur::Slot; }
+                else if (tok.type == "avideo") { p.videos.emplace_back(); fill(p.videos.back()); cur = Cur::Video; } // R-VIDEO-1
                 else { p.raw.push_back(RawNode{{line}}); cur = Cur::Raw; }
                 continue;
             }
@@ -1030,6 +1040,9 @@ namespace solaris
                      .kvIf(n.in != 0, "in", canonicalSeconds(n.in)).kvIf(n.out != 0, "out", canonicalSeconds(n.out))
                      .kvIf(n.length > 0, "length", canonicalBeats(n.length)).kvIf(n.gain != 0, "gain", canonicalNumber(n.gain)).unknown(n.unknown),
                  n.remarks);
+        group(!p.videos.empty()); // R-VIDEO-1
+        for (const auto &n : p.videos)
+            emit(out, "", Line("avideo").kv("id", n.id).str("src", n.src).kv("offset", canonicalNumber(n.offset)).unknown(n.unknown), n.remarks);
         group(!p.raw.empty());
         for (const auto &r : p.raw)
             for (const auto &l : r.lines) out += l + "\n";
@@ -1250,6 +1263,9 @@ namespace solaris
         auto aKind = [](const std::string &k) { return (k == "instrument" || k == "audio" ? "an " : "a ") + k + " strip"; };
         for (const auto &c : p.clips) // R-LAUNCH-1: a note clip may start into its pattern; an audio clip starts into its file (`in`)
             if (c.offset < 0 || (c.offset > 0 && c.isAudio())) e.push_back("clip " + c.id + ": offset is a note clip's, beats ≥ 0 into its pattern");
+        if (p.videos.size() > 1) e.push_back("the song has " + std::to_string(p.videos.size()) + " videos — one picture a song"); // R-VIDEO-1
+        for (const auto &v : p.videos)
+            if (v.src.empty()) e.push_back("video " + v.id + " names no file");
         for (const auto &sl : p.slots) // R-LAUNCH-1: a slot waits in a scene for a strip that can play it
         {
             if (!p.scene(sl.scene)) e.push_back("slot " + sl.id + " is in `" + sl.scene + "`, which is no scene");

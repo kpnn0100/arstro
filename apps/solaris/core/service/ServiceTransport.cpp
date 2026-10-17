@@ -174,6 +174,7 @@ namespace solaris
         tempoAt(t.position, t.tempo, t.tempoId);
         advanceLaunches(t.position); // R-LAUNCH-1: what was due by now has landed
         t.launched = launchedModel(t.position);
+        mModel.video.time = videoTime(t.position); // R-VIDEO-1: the picture moves with the playhead
         t.latencyMs = std::round(mPlayer->latency() * 10000.0) / 10.0;
         t.swaps = mLiveGen - mPlayGen;
         // R-METER-2: while a `meters clear` is on its way to the audio thread, its holds, latches and loudness are

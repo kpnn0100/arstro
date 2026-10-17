@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N40 — A video lane** (R-VIDEO-1; N39 — the clip launcher — is built), then N41… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N40 part 2 — the video window, the lane, the Export sheet's toggle** (R-VIDEO-1; part 1 — the service and the host — is built), then N41… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -635,7 +635,12 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       the song renders exactly what was heard. Part 4: View › Session — the grid in the lanes' place, every gesture
       one line, fills and pulses eased; shots session-view(-mid), launch-recorded. N39 DONE.
 - [~] **N40** A video lane (R-VIDEO-1). Round 18 (the design): one picture a song with an offset; the host probes,
-      decodes, muxes; `video.time` in the model; `render --video` copies the stream beside the mix. Next: part 1.
+      decodes, muxes; `video.time` in the model; `render --video` copies the stream beside the mix. Part 1: the service
+      and the host — `#avideo`, `video set|remove`, `set vd_1.offset`, the probe kept per file, `video` in the model
+      (`time` through the tempo map, moved by the pump), `VideoReader` (a frame at a time, fitted, forward with no
+      seek), `render --video` and `muxVideo` (the stream copied, a keyframe cut, the end in decode order, the mix
+      interleaved); L2 with a fake host, L3 `solaris_video` against the real FFmpeg and ffprobe. Next: part 2 — the
+      window, the lane, the Export sheet's toggle, shots.
 - [ ] **N41** Sharing through a folder: merge by node (R-COLLAB-1).
 - [ ] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1).
 - [ ] **N43** Localisation (R-ACCESS-2).

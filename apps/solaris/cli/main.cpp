@@ -17,6 +17,7 @@
  *  agent's work is never dropped in silence (R-SVC-8). `--watch` streams every event to stderr.
  */
 #include "AudioFiles.h"
+#include "VideoFiles.h"
 #include "Faces.h"
 #include "PluginInstance.h"
 #include "Plugins.h"
@@ -121,6 +122,8 @@ int main(int argc, char **argv)
     host.decodeAudio = solaris_host::decodeAudio;
     host.writeWav = solaris_host::writeWav;
     host.writeAudio = solaris_host::writeAudio;
+    host.probeVideo = solaris_host::probeVideo; // R-VIDEO-1
+    host.muxVideo = solaris_host::muxVideo;
     host.listDir = solaris_host::listDir;
     host.listDevices = solaris_host::listDevices;
 #ifdef SOLARIS_HAVE_PULSE

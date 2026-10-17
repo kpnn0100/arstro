@@ -329,6 +329,17 @@ namespace solaris
         double gain = 0;                         // dB
     };
 
+    /** R-VIDEO-1: the song's picture — and where it is at the heard position. */
+    struct VideoModel
+    {
+        std::string id, src;                     // "" id: no picture
+        double offset = 0;                       // seconds into the song its first frame shows
+        double duration = 0, fps = 0;            // as the host read it
+        int width = 0, height = 0;
+        bool offline = false;                    // the host cannot read it
+        double time = -1;                        // the picture's seconds at the heard position (−1: outside it)
+    };
+
     /** R-COLLECT-1: a file the song names that cannot be read — and what uses it. */
     struct MissingModel
     {
@@ -529,6 +540,7 @@ namespace solaris
         std::vector<SceneModel> scenes;          // R-LAUNCH-1: the session grid's rows, by order
         std::vector<SlotModel> slots;            // … its cells, by scene order then processing order
         std::string launchQuantize = "bar";      // R-LAUNCH-1: where a launch lands — bar | beat | none
+        VideoModel video;                        // R-VIDEO-1: the song's picture ("" id: none)
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };
 }
