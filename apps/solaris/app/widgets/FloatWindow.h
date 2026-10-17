@@ -13,7 +13,8 @@
  *  The WindowLayer covers the song view under the song bar and holds the windows, keyed: one per
  *  device (`dev:<dv>`, a DevicePanel inside — R-WIN-1's "a window of that synth"), one per pattern
  *  (`roll:<pt>`, the piano roll, R-ROLL-1), one per automation (`auto:<au>`, its facts — R-AUTO-11),
- *  and one Loudness window (`loudness`, the master as measured — R-METER-1).
+ *  one Loudness window (`loudness`, the master as measured — R-METER-1) and one Video window (`video`, the song's
+ *  picture at the heard position, its frames the host's — R-VIDEO-1).
  *  It is not itself a target: a click between windows falls
  *  through to the lanes and the dock. The App offers it right-clicks first (`contextClick`), because
  *  a parameter row's slider would swallow them.
@@ -38,6 +39,8 @@ namespace solaris_ui
     class PianoRoll;
     class AutomationPanel;
     class LoudnessPanel;
+    class VideoPanel;
+    struct VideoImage;
 
     class ResizeGrip;
 
@@ -109,6 +112,9 @@ namespace solaris_ui
         /** Open (or bring forward) the Loudness window (R-METER-1). */
         FloatWindow &openLoudness();
         LoudnessPanel *loudnessPanel() const;
+        /** Open (or bring forward) the Video window — the song's picture at the heard position (R-VIDEO-1). */
+        FloatWindow &openVideo();
+        VideoPanel *videoPanel() const;
         bool isOpen(const std::string &key) const;
         void close(const std::string &key);
 
@@ -126,6 +132,8 @@ namespace solaris_ui
         std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onRename;
         std::function<void(const std::string &text)> onCopy;    // the host's clipboard (R-UI-11)
         std::function<double()> idsAmount;                      // View › Show IDs, eased by the screen
+        /** R-VIDEO-1: the host's decoder — the frame showing `t` seconds into `file`, fitted to a box. */
+        std::function<bool(const std::string &file, double t, int boxW, int boxH, VideoImage &out)> videoFrame;
 
     protected:
         bool hitTestSelf(const artboard::Point &) const override { return false; } // only the windows take input

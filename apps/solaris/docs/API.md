@@ -481,6 +481,9 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `video.fps` | number | frames a second |
 | `video.offline` | bool | the host cannot read it |
 | `video.time` | number | the picture's seconds at the heard position (−1: before it starts or after it ends) — moving while playing |
+| `video.path` | string | the file as the host opens it — resolved against the song's folder |
+| `video.at` | number | the beat its first frame shows on (through the tempo map; negative: before the song) |
+| `video.end` | number | the beat it ends on (its length after `at`, through the tempo map) |
 | `clips` | object[] | every clip |
 | `clips[].id` | string |  |
 | `clips[].name` | string |  |

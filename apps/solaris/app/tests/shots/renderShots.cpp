@@ -506,6 +506,29 @@ namespace
                  r.app->project().setSessionOpen(true);
                  r.pump(5 * sltest::Rig::kFrameMs);
              }},
+            {"video-window", // R-VIDEO-1: View › Show Video — the song's picture at the time bar (the rig's dusk sky; its amber band's
+                             // edge is the frame's time), letterboxed; the foot: the file, its size and rate, the picture's time
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 std::ofstream(r.dir + "/night-drive-cut.mp4") << "a picture"; // on disk: a file the song names is never "missing"
+                 r.cmd("video set " + r.dir + "/night-drive-cut.mp4 --offset 0.5");
+                 r.cmd("transport seek 9");
+                 r.settle();
+                 r.app->project().windows().openVideo();
+                 r.settle();
+             }},
+            {"video-window-mid", // R-VIDEO-1: a jump mid cross-dissolve — the frame at beat 9 giving way to the frame at beat 17
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 std::ofstream(r.dir + "/night-drive-cut.mp4") << "a picture"; // on disk: a file the song names is never "missing"
+                 r.cmd("video set " + r.dir + "/night-drive-cut.mp4 --offset 0.5");
+                 r.cmd("transport seek 9");
+                 r.settle();
+                 r.app->project().windows().openVideo();
+                 r.settle();
+                 r.cmd("transport seek 17");
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
             {"launch-recorded", // R-LAUNCH-1: what a recorded launch leaves — the bass cut at bar 2 and again at bar 3, its tail starting
                                 // into its pattern (offset), the session's riff between on its lane
              [](sltest::Rig &r) {

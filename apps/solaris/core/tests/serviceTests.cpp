@@ -4335,6 +4335,8 @@ static void test_a_video_lane()
     const VideoModel *v = &r.svc.model().video;
     assert(v->id == "vd_1" && v->src == "picture.mp4" && v->offset == 2.0 && v->duration == 10.0 && v->width == 1280 && v->height == 720 &&
            v->fps == 25.0 && !v->offline);
+    // where it lies on the song's beats (120 bpm: 2 s is beat 4, its ten seconds end on 24), and the file the host opens
+    assert(v->at == 4.0 && v->end == 24.0 && fs::path(v->path) == fs::path(dir + "picture.mp4"));
     // where the picture is: the time bar at 0 is before it (it starts 2 s in); beat 8 at 120 bpm is 4 s — 2 s into it
     assert(v->time == -1);
     r.ok("transport seek 8");
@@ -4343,12 +4345,14 @@ static void test_a_video_lane()
     r.ok("tempo add --at 4 --bpm 60");
     r.ok("transport seek 8");
     assert(std::fabs(r.svc.model().video.time - 4.0) < 1e-9);
+    assert(std::fabs(r.svc.model().video.at - 4.0) < 1e-9 && std::fabs(r.svc.model().video.end - 14.0) < 1e-9); // 2 s + 10 s at a beat a second
     r.ok("transport seek 40"); // 2 + 36 s: past its ten seconds
     assert(r.svc.model().video.time == -1);
     r.ok("undo"); // the tempo change
     // the offset is an address; out of range refused
     r.ok("set vd_1.offset=-1.5");
     assert(r.svc.model().video.offset == -1.5 && firstLine(r.ok("get vd_1.offset")) == "-1.5");
+    assert(r.svc.model().video.at == -3.0 && r.svc.model().video.end == 17.0); // begun before the song: at beat 0's tempo
     assert(contains(r.no("set vd_1.offset=40000"), "offset (s) must be between -36000.0 and 36000.0"));
     assert(contains(r.no("set vd_1.speed=2"), "`vd_1` (a video) has no field `speed` (it has: offset)"));
     // another picture in its place keeps its id and offset; a second node is refused by the file

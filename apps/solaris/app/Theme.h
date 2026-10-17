@@ -51,6 +51,7 @@ namespace solaris_ui
         inline constexpr double kModalCloseMs = 120.0;
         inline constexpr double kScrollMs = 180.0;     // eased scroll everywhere; scrim
         inline constexpr double kCrossFadeMs = 200.0;  // page cross-fade
+        inline constexpr double kDissolveMs = 160.0;   // a picture's cross-dissolve — LINEAR, as cosmo's photo's
         inline constexpr double kSelectMs = 200.0;     // selection ring / wash slide
         inline constexpr double kSlideMs = 220.0;      // tab / segmented highlight travel
         inline constexpr double kCatchUpMs = 220.0;    // a value catching up to a source it does not control

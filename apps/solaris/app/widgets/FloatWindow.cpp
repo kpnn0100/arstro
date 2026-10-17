@@ -3,6 +3,7 @@
 #include "PianoRoll.h"
 #include "AutomationPanel.h"
 #include "LoudnessPanel.h"
+#include "VideoPanel.h"
 #include "../../../interstellar/app/widgets/Glyphs.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
 #include <algorithm>
@@ -287,6 +288,27 @@ namespace solaris_ui
         return *w;
     }
 
+    FloatWindow &WindowLayer::openVideo()
+    {
+        FloatWindow *w = window("video");
+        if (!w)
+        {
+            auto panel = std::make_shared<VideoPanel>();
+            panel->frameSource = [this](const std::string &file, double t, int bw, int bh, VideoImage &out) { return videoFrame && videoFrame(file, t, bw, bh, out); };
+            panel->bind(mModel);
+            w = &place(std::make_shared<FloatWindow>("video", panel), 448.0, 299.0); // 16:9 over its foot, under the title
+        }
+        w->open();
+        bind(mModel, mInteracting);
+        return *w;
+    }
+
+    VideoPanel *WindowLayer::videoPanel() const
+    {
+        FloatWindow *w = window("video");
+        return w ? static_cast<VideoPanel *>(&w->content()) : nullptr;
+    }
+
     LoudnessPanel *WindowLayer::loudnessPanel() const
     {
         FloatWindow *w = window("loudness");
@@ -414,6 +436,12 @@ namespace solaris_ui
                 if (!panel.present() && w.isOpen()) w.close(); // an automation deleted by anyone takes its window with it
             }
             else if (kv.first == "loudness") static_cast<LoudnessPanel &>(w.content()).bind(m);
+            else if (kv.first == "video") // R-VIDEO-1: titled by its file
+            {
+                static_cast<VideoPanel &>(w.content()).bind(m);
+                const size_t slash = m.video.src.find_last_of('/');
+                w.setTitle(m.video.id.empty() ? std::string("Video") : "Video \xE2\x80\x94 " + (slash == std::string::npos ? m.video.src : m.video.src.substr(slash + 1)));
+            }
         }
     }
 

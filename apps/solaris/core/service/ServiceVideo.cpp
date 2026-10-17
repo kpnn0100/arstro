@@ -55,6 +55,17 @@ namespace solaris
             m.fps = vi->fps;
         }
         m.time = videoTime(beat);
+        // where it lies on the song's beats — a picture begun before the song, at beat 0's tempo
+        m.path = resolvePath(v.src);
+        auto beatAt = [this](double sec) {
+            if (sec >= 0) return beatOfSample(sec * mProject.header.sampleRate);
+            double bpm = 0;
+            std::string id;
+            tempoAt(0, bpm, id);
+            return sec * bpm / 60.0;
+        };
+        m.at = beatAt(v.offset);
+        m.end = beatAt(v.offset + m.duration);
     }
 
     bool SolarisService::videoCommand(const Command &c, std::string &err)

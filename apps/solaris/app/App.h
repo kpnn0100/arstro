@@ -26,6 +26,7 @@
 #include "widgets/SettingsSheet.h"
 #include "widgets/ExportSheet.h"
 #include "widgets/RelinkSheet.h"
+#include "widgets/VideoPanel.h"
 #include "../../cosmo/widgets/ConfirmDialog.h"
 #include "../../cosmo/widgets/ContextMenu.h"
 #include "../../cosmo/widgets/HistoryView.h"
@@ -66,6 +67,9 @@ namespace solaris_ui
         /** The HOST's clipboard (R-UI-11; the core has none, R-SVC-4): Copy Address / Value / as Formula / ID put
          *  their text here, and the app says so ("Copied dv_1.filter.cutoff"). */
         std::function<void(const std::string &text)> onCopy;
+        /** R-VIDEO-1: the HOST's decoder (the core carries no codec, R-SVC-4) — the frame showing `t` seconds into `file`,
+         *  fitted to boxW × boxH. Without it the Video window says where the song is and shows no frame. */
+        VideoFrameSource onVideoFrame;
         /** The OS's own "reduce motion" (the host reads it once); the app ORs it with its setting (R-SET-3). */
         void setOsReducedMotion(bool on) { mOsReducedMotion = on; artboard::setReducedMotion(on || mAppReducedMotion); }
         void openSongPicked(const std::string &path);

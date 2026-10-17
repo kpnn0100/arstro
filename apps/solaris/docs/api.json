@@ -2760,6 +2760,24 @@
       "stable": true
     },
     {
+      "path": "video.path",
+      "type": "string",
+      "summary": "the file as the host opens it — resolved against the song's folder",
+      "stable": true
+    },
+    {
+      "path": "video.at",
+      "type": "number",
+      "summary": "the beat its first frame shows on (through the tempo map; negative: before the song)",
+      "stable": true
+    },
+    {
+      "path": "video.end",
+      "type": "number",
+      "summary": "the beat it ends on (its length after `at`, through the tempo map)",
+      "stable": true
+    },
+    {
       "path": "clips",
       "type": "object[]",
       "summary": "every clip",

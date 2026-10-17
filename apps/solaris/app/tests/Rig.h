@@ -18,6 +18,7 @@
 #include "SolarisService.h"
 #include "adapter/native/CairoTarget.h"
 #include <cairo/cairo.h>
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -108,6 +109,17 @@ namespace sltest
             return true;
         };
         h.writeWav = [](const std::string &, const std::vector<std::vector<float>> &, int, int, std::string &) { return true; };
+        // R-VIDEO-1: a picture is any .mp4/.mov/.mkv — ten seconds, 640×360 at 25 frames a second
+        h.probeVideo = [](const std::string &path, arstro::solaris::VideoInfo &vi, std::string &err) {
+            const auto ext = fs::path(path).extension().string();
+            if (ext != ".mp4" && ext != ".mov" && ext != ".mkv") { err = "it has no picture"; return false; }
+            vi.duration = 10.0;
+            vi.width = 640;
+            vi.height = 360;
+            vi.fps = 25.0;
+            return true;
+        };
+        h.muxVideo = [](const std::string &, double, const std::vector<std::vector<float>> &, int, const std::string &, std::string &) { return true; };
         h.listDir = [](const std::string &path, std::vector<arstro::solaris::BrowserEntry> &out, std::string &err) {
             if (path.find("nowhere") != std::string::npos) { err = "no such folder"; return false; }
             out = {{"Kicks", path + "/Kicks", "dir"}, {"808 kick.wav", path + "/808 kick.wav", "audio"},
@@ -201,6 +213,8 @@ namespace sltest
         double now = 1000.0;
         std::vector<std::string> sent;   // every line the app dispatched, in order
         std::vector<std::string> copied; // the host's clipboard: every text the app copied (R-UI-11)
+        struct VideoAsk { std::string file; double t; int w, h; };
+        std::vector<VideoAsk> videoAsks; // R-VIDEO-1: every frame the app asked the host for
 
         /** `name` picks a scratch folder, emptied: no songs, settings or recents from a previous run. */
         /** `audio` = false: a machine with no output device (a refusal to test). */
@@ -217,6 +231,28 @@ namespace sltest
             };
             app = std::make_unique<arstro::solaris_ui::App>(hooks, w, h);
             app->onCopy = [this](const std::string &text) { copied.push_back(text); };
+            // R-VIDEO-1: the host's decoder, faked — a 16:9 picture fitted to the box: a dusk sky, an amber band whose
+            // left edge is the frame's time (a second a tenth of the width), so each frame reads as its own
+            app->onVideoFrame = [this](const std::string &file, double t, int bw, int bh, arstro::solaris_ui::VideoImage &out) {
+                videoAsks.push_back({file, t, bw, bh});
+                const double k = std::min(bw / 640.0, bh / 360.0);
+                out.width = std::max(1, (int)std::lround(640 * k));
+                out.height = std::max(1, (int)std::lround(360 * k));
+                out.time = std::floor(t * 25.0 + 1e-9) / 25.0;
+                out.rgba.assign((size_t)out.width * (size_t)out.height * 4, 255);
+                const int edge = (int)(out.width * std::fmod(out.time, 10.0) / 10.0);
+                for (int y = 0; y < out.height; ++y)
+                    for (int x = 0; x < out.width; ++x)
+                    {
+                        uint8_t *p = &out.rgba[((size_t)y * (size_t)out.width + (size_t)x) * 4];
+                        const double v = (double)y / out.height;
+                        const bool band = v > 0.62 && v < 0.70 && x >= edge;
+                        p[0] = band ? 233 : (uint8_t)(27 + 31 * v);
+                        p[1] = band ? 162 : (uint8_t)(42 - 14 * v);
+                        p[2] = band ? 59 : (uint8_t)(73 + 1 * v);
+                    }
+                return true;
+            };
             alloc();
         }
         ~Rig() { release(); }

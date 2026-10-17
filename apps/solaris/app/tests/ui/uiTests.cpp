@@ -12,6 +12,7 @@
 #include "../../widgets/SettingsSheet.h"
 #include "../../widgets/DevicePanel.h"
 #include "../../widgets/LoudnessPanel.h"
+#include "../../widgets/VideoPanel.h"
 #include "../../widgets/ParamMenu.h"
 #include "../../widgets/PianoRoll.h"
 #include "../../../../cosmo/widgets/SliderRow.h"
@@ -4585,6 +4586,121 @@ static void test_relink_and_collect_from_the_file_menu()
     pass("relink and collect from the File menu (R-COLLECT-1): opened with files missing, said; Relink… lists them — Locate… one line, the found row fading out and the next sliding up, caught mid-way; Search a Folder… one line; nothing missing said; Collect and Save one line, said");
 }
 
+static void test_the_video_window()
+{
+    // R-VIDEO-1 (Round 18, part 2): View › Show Video opens a window (faded in) with the frame at the model's video.time,
+    // the host asked only when the time, the file or the box changed — at the box's size; outside the picture's span the
+    // words say where the song is, the picture fading out and in over them, the words cross-fading; a jump
+    // cross-dissolves, a step does not; playing asks frame after frame; resized, a frame at the new size; none, said;
+    // Hide Video, and × relabels the menu
+    sltest::Rig r("ui-video", 1280, 800);
+    r.cmd("project new " + r.song("Film") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 64");
+    r.cmd("video set " + r.dir + "/film.mp4 --offset 1"); // vd_1: ten seconds from 1 s (beat 2)
+    r.settle();
+    auto &ps = r.app->project();
+    auto &ms = ps.bar().menus();
+    auto viewItem = [&](const std::string &label) {
+        for (int i = 0; i < (int)ms.menu(3).items.size(); ++i)
+            if (ms.menu(3).items[(size_t)i].label == label) return i;
+        return -1;
+    };
+    r.click(world(ms, ms.titleRect(3)));
+    r.settle();
+    assert(viewItem("Show Video") >= 0);
+    r.click(world(ms, ms.itemRect(3, viewItem("Show Video"))));
+    r.frame();
+    r.frame();
+    arstro::solaris_ui::FloatWindow *win = ps.windows().window("video");
+    assert(win && win->appearAmount() > 0.0 && win->appearAmount() < 1.0); // faded in, not cut
+    r.settle();
+    arstro::solaris_ui::VideoPanel *vp = ps.windows().videoPanel();
+    assert(vp && win->title() == "Video \xE2\x80\x94 film.mp4");
+    // before it starts: said, nothing asked of the host
+    assert(vp->words() == "Before the picture" && vp->pictureAmount() == 0.0 && r.videoAsks.empty());
+    // the time bar at beat 4 (2 s): the picture's second 1 — asked once, at the box's size; the picture fades in
+    r.cmd("transport seek 4");
+    double mid = -1;
+    for (int k = 0; k < 30 && mid < 0; ++k)
+    {
+        r.frame();
+        const double a = vp->pictureAmount();
+        if (a > 0.0 && a < 1.0) mid = a;
+    }
+    r.settle();
+    const artboard::Rect box = vp->boxRect();
+    assert(mid > 0.0 && vp->pictureAmount() == 1.0 && r.videoAsks.size() == 1);
+    assert(r.videoAsks[0].file == r.svc->model().video.path && std::fabs(r.videoAsks[0].t - 1.0) < 1e-9);
+    assert(r.videoAsks[0].w == (int)std::lround(box.w) && r.videoAsks[0].h == (int)std::lround(box.h) && std::fabs(vp->frameTime() - 1.0) < 1e-9);
+    const artboard::Rect pic = vp->pictureRect(); // letterboxed: 16:9, centred in the box
+    assert(std::fabs(pic.w / pic.h - 16.0 / 9.0) < 0.02 && std::fabs(pic.x + pic.w * 0.5 - box.w * 0.5) < 0.5 && std::fabs(pic.y + pic.h * 0.5 - box.h * 0.5) < 0.5);
+    // a jump (to beat 12, 6 s: second 5) cross-dissolves; a step (an eighth of a beat) does not
+    r.cmd("transport seek 12");
+    double dmid = -1;
+    for (int k = 0; k < 30 && dmid < 0; ++k)
+    {
+        r.frame();
+        const double d = vp->dissolveAmount();
+        if (d > 0.0 && d < 1.0) dmid = d;
+    }
+    r.settle();
+    assert(dmid > 0.0 && vp->dissolveAmount() == 1.0 && std::fabs(vp->frameTime() - 5.0) < 1e-9);
+    r.cmd("transport seek 12.125");
+    bool stepped = true;
+    for (int k = 0; k < 12; ++k)
+    {
+        r.frame();
+        stepped = stepped && vp->dissolveAmount() == 1.0;
+    }
+    assert(stepped && std::fabs(r.videoAsks.back().t - 5.0625) < 1e-9);
+    // nothing changed: nothing asked
+    const size_t asked = r.videoAsks.size();
+    r.pump(200);
+    assert(r.videoAsks.size() == asked);
+    // playing: frame after frame, each later than the last
+    r.cmd("transport play");
+    for (int k = 0; k < 400 && r.videoAsks.size() < asked + 4; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); } // the rig plays at a quarter speed
+    r.cmd("transport stop");
+    assert(r.videoAsks.size() >= asked + 4);
+    for (size_t i = asked + 1; i < r.videoAsks.size(); ++i) assert(r.videoAsks[i].t >= r.videoAsks[i - 1].t);
+    // resized by its corner: a frame at the new size
+    const artboard::Rect grip = world(*win, win->gripRect());
+    r.drag(grip.x + grip.w * 0.5, grip.y + grip.h * 0.5, grip.x + grip.w * 0.5 + 120, grip.y + grip.h * 0.5 + 60);
+    r.settle();
+    assert(r.videoAsks.back().w == (int)std::lround(vp->boxRect().w) && r.videoAsks.back().w > r.videoAsks[0].w);
+    // past its end (beat 30, 15 s): the picture fades out over the words, which cross-fade to "After"
+    r.cmd("transport seek 30");
+    double out = -1, words = -1;
+    for (int k = 0; k < 30 && (out < 0 || words < 0); ++k)
+    {
+        r.frame();
+        if (vp->pictureAmount() > 0.0 && vp->pictureAmount() < 1.0) out = vp->pictureAmount();
+        if (vp->wordsAmount() > 0.0 && vp->wordsAmount() < 1.0) words = vp->wordsAmount();
+    }
+    r.settle();
+    assert(out > 0.0 && words > 0.0 && vp->pictureAmount() == 0.0 && vp->words() == "After the picture");
+    // none: said
+    r.cmd("video remove");
+    r.settle();
+    assert(vp->words() == "No picture in this song" && win->title() == "Video");
+    // Hide Video; reopened, × closes it and the menu says Show again
+    r.click(world(ms, ms.titleRect(3)));
+    r.settle();
+    assert(viewItem("Hide Video") >= 0);
+    r.click(world(ms, ms.itemRect(3, viewItem("Hide Video"))));
+    r.settle();
+    assert(!win->isOpen() && win->appearAmount() == 0.0 && viewItem("Show Video") >= 0);
+    r.click(world(ms, ms.titleRect(3)));
+    r.settle();
+    r.click(world(ms, ms.itemRect(3, viewItem("Show Video"))));
+    r.settle();
+    assert(win->isOpen() && viewItem("Hide Video") >= 0);
+    r.click(world(*win, win->closeRect()));
+    r.settle();
+    assert(!win->isOpen() && viewItem("Show Video") >= 0);
+    pass("the video window (R-VIDEO-1): View › Show Video, faded in; the frame at the model's time, asked of the host once a change, at the box's size, letterboxed; the picture fading over the words — before, after, none; a jump dissolves, a step does not; playing, frame after frame; resized, a frame at the new size; Hide Video and × relabel the menu");
+}
+
 static void test_the_session_view()
 {
     // R-LAUNCH-1 (Round 17, part 4): View › Show Session cross-fades the grid into the lanes' place; every gesture is ONE
@@ -5128,6 +5244,7 @@ int main()
     test_versions_from_the_song_bar();
     test_relink_and_collect_from_the_file_menu();
     test_the_session_view();
+    test_the_video_window();
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();

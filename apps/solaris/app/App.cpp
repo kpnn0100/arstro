@@ -81,6 +81,9 @@ namespace solaris_ui
         mProject->onCommand = [this](const std::string &line) { return dispatch(line); };
         mProject->onNotice = [this](const std::string &s) { showToast(s); };
         mProject->onCopy = [this](const std::string &text) { copy(text); };
+        mProject->windows().videoFrame = [this](const std::string &file, double t, int bw, int bh, VideoImage &out) { // R-VIDEO-1
+            return onVideoFrame && onVideoFrame(file, t, bw, bh, out);
+        };
         mProject->browser().onOpenSettings = [this] { openSettings(); };
         mProject->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { mMenu->open(std::move(items), world.x, world.y); };
         mProject->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
@@ -211,7 +214,7 @@ namespace solaris_ui
     void App::refreshMenus(const solaris::AppModel &m)
     {
         const std::string key = m.undoLabel + "|" + m.redoLabel + "|" + (mProject->dockOpen() ? "1" : "0") + (mProject->browserOpen() ? "1" : "0") + (mProject->sessionOpen() ? "1" : "0") +
-                                (m.settings.metronome ? "1" : "0") + (m.settings.showIds ? "1" : "0") + keyHint(m, "song.undo") + keyHint(m, "song.redo") +
+                                (mProject->windows().isOpen("video") ? "1" : "0") + (m.settings.metronome ? "1" : "0") + (m.settings.showIds ? "1" : "0") + keyHint(m, "song.undo") + keyHint(m, "song.redo") +
                                 keyHint(m, "lanes.duplicate") + keyHint(m, "lanes.delete") + keyHint(m, "lanes.copy") + keyHint(m, "lanes.paste") + keyHint(m, "lanes.split");
         if (key == mMenuKey) return; // labels change only when what they name does — a re-keyed action too
         mMenuKey = key;
@@ -240,6 +243,16 @@ namespace solaris_ui
              }},
             {"Settings\xE2\x80\xA6   (Ctrl+,)", [this] { openSettings(); }},
             {mProject->sessionOpen() ? "Show Arrangement" : "Show Session", [this] { mProject->setSessionOpen(!mProject->sessionOpen()); mMenuKey.clear(); refreshMenus(mHooks.model ? mHooks.model() : emptyModel()); }}, // R-LAUNCH-1
+            {mProject->windows().isOpen("video") ? "Hide Video" : "Show Video", [this] { // R-VIDEO-1: the song's picture, in a window
+                 if (mProject->windows().isOpen("video")) mProject->windows().close("video");
+                 else
+                     mProject->windows().openVideo().onClosed = [this] { // closed by its ×: the menu says Show again
+                         mMenuKey.clear();
+                         refreshMenus(mHooks.model ? mHooks.model() : emptyModel());
+                     };
+                 mMenuKey.clear();
+                 refreshMenus(mHooks.model ? mHooks.model() : emptyModel());
+             }},
         });
     }
 

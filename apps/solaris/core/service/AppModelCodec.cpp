@@ -170,6 +170,9 @@ namespace solaris
             {"video.fps", "number", "frames a second"},
             {"video.offline", "bool", "the host cannot read it"},
             {"video.time", "number", "the picture's seconds at the heard position (−1: before it starts or after it ends) — moving while playing"},
+            {"video.path", "string", "the file as the host opens it — resolved against the song's folder"},
+            {"video.at", "number", "the beat its first frame shows on (through the tempo map; negative: before the song)"},
+            {"video.end", "number", "the beat it ends on (its length after `at`, through the tempo map)"},
             {"clips", "object[]", "every clip"},
             {"clips[].id", "string", ""},
             {"clips[].name", "string", ""},
@@ -720,7 +723,8 @@ namespace solaris
         j.set("scenes", scenes).set("slots", slots).set("launchQuantize", m.launchQuantize);
         j.set("video", Json::object().set("id", m.video.id).set("src", m.video.src).set("offset", m.video.offset).set("duration", m.video.duration)
                            .set("width", (long long)m.video.width).set("height", (long long)m.video.height).set("fps", m.video.fps)
-                           .set("offline", m.video.offline).set("time", m.video.time)); // R-VIDEO-1
+                           .set("offline", m.video.offline).set("time", m.video.time)
+                           .set("path", m.video.path).set("at", m.video.at).set("end", m.video.end)); // R-VIDEO-1
         Json clips = Json::array();
         for (const auto &c : m.clips)
         {

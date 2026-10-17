@@ -338,6 +338,8 @@ namespace solaris
         int width = 0, height = 0;
         bool offline = false;                    // the host cannot read it
         double time = -1;                        // the picture's seconds at the heard position (−1: outside it)
+        std::string path;                        // the file as the host opens it (resolved against the song's folder)
+        double at = 0, end = 0;                  // the beats it starts and ends on — through the tempo map
     };
 
     /** R-COLLECT-1: a file the song names that cannot be read — and what uses it. */
