@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N42 part 2 — the accessible list and the keyboard's focus** (R-ACCESS-1; part 1 — the scale and the contrast — is built), then N43… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N42 part 3 — the ATK bridge: the accessible list to AT-SPI** (R-ACCESS-1; parts 1–2 are built), then N43… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -667,7 +667,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       AT-SPI by the host through ATK. Part 1: `settings set uiScale=` (cosmo's steps; another refused) and
       `highContrast=on|off` (a toggle beside Reduced motion — the design's `contrast=` became it); the App eases both —
       laid out, drawn and hit-tested at the drawn scale; cosmo's palette gained `setContrast` (its 41 shots
-      byte-identical). Next: part 2 — the accessible list and the keyboard's focus.
+      byte-identical). Part 2: `A11yNode` (app/A11y.h) — the song bar, Home, the browser, the lanes' headers, the
+      dock, device windows and the modals list their controls; `App::accessibles` in reading order, a modal's alone;
+      activation the click a node stands for (a second recogniser on its own clock); Tab / Shift+Tab, Enter / Space,
+      arrows (Shift a tenth), Escape; the ring travelling and fading. Next: part 3 — the ATK bridge in the host.
 - [ ] **N43** Localisation (R-ACCESS-2).
 - [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).
 

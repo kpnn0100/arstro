@@ -63,6 +63,16 @@ namespace solaris_ui
         return Rect{};
     }
 
+    void RelinkSheet::accessibles(std::vector<A11yNode> &out)
+    {
+        for (const auto &l : mLocate) // as the last paint placed them: the rows in view, none leaving
+            for (const auto &r : mRows)
+                if (r.path == l.first)
+                    out.push_back(a11yNode("relink." + r.path, "button", "Locate " + r.name, l.second, r.folder.empty() ? r.users : r.folder + " \xC2\xB7 " + r.users));
+        out.push_back(a11yNode("relink.search", "button", "Search a Folder\xE2\x80\xA6", mSearch));
+        out.push_back(a11yNode("relink.done", "button", "Done", mDone));
+    }
+
     Rect RelinkSheet::cardRect() const
     {
         const double W = width.value(), H = height.value();

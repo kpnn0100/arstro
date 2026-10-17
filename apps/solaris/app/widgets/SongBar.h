@@ -26,6 +26,7 @@
  */
 #pragma once
 #include "../Theme.h"
+#include "../A11y.h"
 #include "AppModel.h"
 #include "../../../cosmo/widgets/HoverFade.h"
 #include "../../../cosmo/widgets/MenuStrip.h"
@@ -52,6 +53,9 @@ namespace solaris_ui
         void layout();
         cosmo_v2::MenuStrip &menus() { return *mMenus; }
         artboard::Rect hitRect(int which) const;
+        /** R-ACCESS-1: its controls as accessible nodes — Home, Settings, the version, Record, Play, the tempo (a slider:
+         *  ±1 bpm, fine 0.1), Save (the menus' titles are the App's: a menu open is a modal of its own). */
+        void accessibles(std::vector<A11yNode> &out);
         double playAmount() const { return mPlaying.value(); }   // 0 = the play glyph, 1 = the stop glyph (LIVE)
         double recordAmount() const { return mRecLit.value(); }  // R-MIDI-2: 1 = recording, lit red (LIVE)
         /** R-CTRL-1: while a `map learn` waits, a pill after the tempo says for what (a click cancels it) — LIVE, eased. */

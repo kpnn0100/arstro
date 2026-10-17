@@ -24,6 +24,7 @@
  */
 #pragma once
 #include "../Theme.h"
+#include "../A11y.h"
 #include "AppModel.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/ContextMenu.h"
@@ -62,6 +63,10 @@ namespace solaris_ui
         int rowCount() const;
         std::string rowParam(int i) const;
         artboard::Rect rowRect(int i) const;
+        /** R-ACCESS-1: each parameter in view as a slider (or a combo, for choices): its label, its readout, a step by its
+         *  registry description — a choice by one, an integer by one, a log-scaled value by a ratio, else a hundredth of
+         *  its range (fine: a thousandth) — ONE `set <dv>.<param>=` line a step. */
+        void accessibles(std::vector<A11yNode> &out);
         cosmo_v2::SliderRow *slider(const std::string &param) const;
         std::string readout(const std::string &param) const;   // the value column's text
         double litAmount(const std::string &param) const;      // the last-change light, LIVE

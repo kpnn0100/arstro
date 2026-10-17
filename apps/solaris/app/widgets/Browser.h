@@ -22,6 +22,7 @@
  */
 #pragma once
 #include "../Theme.h"
+#include "../A11y.h"
 #include "AppModel.h"
 #include "../../../interstellar/app/widgets/AnimatedRows.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
@@ -60,6 +61,8 @@ namespace solaris_ui
         // geometry a test aims at (local)
         artboard::Rect tabRect(int t) const;
         artboard::Rect rowRect(int i) const;
+        /** R-ACCESS-1: its tabs, and each row in view — a folder, a sound, an instrument, a pattern, a preset. */
+        void accessibles(std::vector<A11yNode> &out);
         int rowCount() const { return (int)mRows.size(); }
         const Item &row(int i) const { return mRows[(size_t)i]; }
         double tabHighlightX() const { return mTabX.value(); } // LIVE, for the slide test

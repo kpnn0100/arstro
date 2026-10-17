@@ -427,6 +427,45 @@ namespace solaris_ui
         }
     }
 
+    void SettingsSheet::accessibles(std::vector<A11yNode> &out)
+    {
+        for (int sec = 0; sec < kSections; ++sec)
+        {
+            A11yNode n = a11yNode("settings.section." + std::to_string(sec), "tab", kTitles[sec], railRect(sec));
+            n.checked = sec == mSection;
+            out.push_back(n);
+        }
+        for (int r : kPageRows[mSection])
+        {
+            const Rect c = controlRect(r);
+            if (c.w <= 0) continue;
+            const std::string now = current(r);
+            if (isToggle(r))
+            {
+                A11yNode t = a11yNode(std::string("settings.") + kKeys[r], "toggle", kLabels[r], c, now);
+                t.checked = now == "on";
+                out.push_back(t);
+                continue;
+            }
+            std::string shown = now;
+            for (const auto &chip : mChips[r])
+                if (chip.value == now) shown = chip.label;
+            A11yNode n = a11yNode(std::string("settings.") + kKeys[r], "combo", kLabels[r], c, shown);
+            n.step = [this, r, now](int dir, bool) { // the next choice: the line picking it sends
+                const auto &chips = mChips[r];
+                if (chips.empty() || !onCommand) return;
+                int at = -1;
+                for (size_t i = 0; i < chips.size(); ++i)
+                    if (chips[i].value == now) at = (int)i;
+                const int next = std::clamp(at + dir, 0, (int)chips.size() - 1);
+                if (next != at) onCommand(std::string("settings set ") + q(std::string(kKeys[r]) + "=" + chips[(size_t)next].value));
+            };
+            n.activate = [step = n.step]() { step(+1, false); };
+            out.push_back(n);
+        }
+        out.push_back(a11yNode("settings.done", "button", "Done", doneRect()));
+    }
+
     std::string SettingsSheet::current(int row) const
     {
         switch (row)

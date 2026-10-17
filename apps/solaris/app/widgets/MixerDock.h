@@ -46,6 +46,7 @@
 #pragma once
 #include "../Cursor.h"
 #include "../Theme.h"
+#include "../A11y.h"
 #include "AppModel.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/ContextMenu.h"
@@ -93,6 +94,9 @@ namespace solaris_ui
         // a strip's card on the page shown ("master" = the master's)
         artboard::Rect cardRect(const std::string &id) const;
         artboard::Rect faderRect(const std::string &id) const;
+        /** R-ACCESS-1: the pages' tabs; on the page shown, each strip's fader and pan (sliders: ±0.5 dB / ±5 %, fine a
+         *  tenth — ONE `set` line a step), its mute, solo and arm; the master's fader and Mono. */
+        void accessibles(std::vector<A11yNode> &out);
         double faderLive(const std::string &id) const;          // the thumb's LIVE position, 0…1
         artboard::Rect panRect(const std::string &id) const;
         double panLive(const std::string &id) const;

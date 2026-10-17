@@ -602,6 +602,24 @@ namespace
                  r.cmd("settings set highContrast=on");
                  r.settle();
              }},
+            {"keyboard-focus", // R-ACCESS-1: the keyboard's focus on the Bass fader — its ring, the accent's
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 r.key(9);
+                 for (int i = 0; i < 80 && r.app->focusKey() != "dock.ch_3.fader"; ++i) r.key(9);
+                 r.settle();
+             }},
+            {"keyboard-focus-mid", // R-ACCESS-1: Tab from the Bass fader to its pan — the ring travelling between them
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 r.key(9);
+                 for (int i = 0; i < 80 && r.app->focusKey() != "dock.ch_3.fader"; ++i) r.key(9);
+                 r.settle();
+                 r.key(9);
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
             {"launch-recorded", // R-LAUNCH-1: what a recorded launch leaves — the bass cut at bar 2 and again at bar 3, its tail starting
                                 // into its pattern (offset), the session's riff between on its lane
              [](sltest::Rig &r) {

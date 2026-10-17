@@ -69,6 +69,22 @@ namespace solaris_ui
     }
 
     Rect HomeScreen::toScreen(const Rect &c) const { return Rect{gridLeft() + c.x, gridTop() + c.y - mScroll.value(), c.w, c.h}; }
+    void HomeScreen::accessibles(std::vector<A11yNode> &out)
+    {
+        static const char *kActions[] = {"New song", "Open song\xE2\x80\xA6", "From template\xE2\x80\xA6"};
+        for (int i = 0; i < 3; ++i) out.push_back(a11yNode("home.action." + std::to_string(i), "button", kActions[i], worldRect(*this, actionRect(i))));
+        out.push_back(a11yNode("home.settings", "button", "Settings", worldRect(*this, settingsRect())));
+        const Rect vp = gridViewport();
+        for (int i = 0; i < (int)mCards.size(); ++i)
+        {
+            const Rect r = cardLive(i);
+            if (r.w <= 0 || r.bottom() < vp.y || r.y > vp.bottom()) continue; // scrolled out: not reachable until in view
+            const auto &c = mCards[(size_t)i].info;
+            out.push_back(a11yNode("home.recent." + c.path, "listitem", c.name.empty() ? c.path : c.name, worldRect(*this, r),
+                                   c.missing ? "missing" : c.recovery ? "unsaved edits to recover" : std::string()));
+        }
+    }
+
     Rect HomeScreen::gridViewport() const
     {
         return Rect{gridLeft(), gridTop(), std::max(0.0, width.value() - kPad - gridLeft()), std::max(0.0, height.value() - gridTop())};

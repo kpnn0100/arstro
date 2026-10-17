@@ -169,6 +169,33 @@ namespace solaris_ui
         }
     }
 
+    void ExportSheet::accessibles(std::vector<A11yNode> &out)
+    {
+        for (int r = 0; r < kRows; ++r)
+        {
+            const Rect c = controlRect(r);
+            if (c.w <= 0) continue;
+            const bool toggle = r == kStems || r == kVideo;
+            A11yNode n = a11yNode("export." + std::to_string(r), toggle ? "toggle" : "combo", kLabels[r], c,
+                                  toggle ? (value(r).empty() ? "off" : "on") : shownValue(r));
+            n.enabled = applies(r);
+            n.checked = toggle && !value(r).empty();
+            if (!toggle)
+            {
+                n.step = [this, r](int dir, bool) { // the next choice, as a pick: the format moves what follows it
+                    const int at = mCombos[r]->selectedIndex(), next = std::clamp(at + dir, 0, optionCount(r) - 1);
+                    if (next == at) return;
+                    mCombos[r]->setSelectedIndex(next);
+                    if (r == kFormat) formatChanged();
+                };
+                n.activate = [step = n.step]() { step(+1, false); };
+            }
+            out.push_back(n);
+        }
+        out.push_back(a11yNode("export.export", "button", "Export\xE2\x80\xA6", exportRect()));
+        out.push_back(a11yNode("export.cancel", "button", "Cancel", cancelRect()));
+    }
+
     Segment *ExportSheet::control(int row) const
     {
         return row == kStems ? (Segment *)mStems.get() : row == kVideo ? (Segment *)mVideo.get() : (Segment *)mCombos[row].get();

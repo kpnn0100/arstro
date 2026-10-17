@@ -4,6 +4,7 @@
 #include "../../../interstellar/app/widgets/Glyphs.h"
 #include "../../../interstellar/app/widgets/TextFit.h"
 #include <algorithm>
+#include <tuple>
 #include <cmath>
 #include <cstdio>
 #include <set>
@@ -119,6 +120,64 @@ namespace solaris_ui
     }
 
     // ── the model ────────────────────────────────────────────────────────────────────────────
+
+    void MixerDock::accessibles(std::vector<A11yNode> &out)
+    {
+        for (int t = 0; t < tabCount(); ++t)
+        {
+            const bool mixer = t < (int)mMixers.size();
+            A11yNode n = a11yNode("dock.tab." + (mixer ? mMixers[(size_t)t].id : std::string("matrix")), "tab", mixer ? mMixers[(size_t)t].name : std::string("Matrix"),
+                                  worldRect(*this, tabRect(t)));
+            n.checked = t == mTab;
+            out.push_back(n);
+        }
+        std::vector<std::string> ids;
+        if (!onMatrix()) // the matrix's cells: Not yet
+            if (const auto it = mPages.find(mMixers[(size_t)mTab].id); it != mPages.end())
+                for (const auto &c : it->second.cards)
+                    if (!c.header && !c.gone) ids.push_back(c.id);
+        ids.push_back("master");
+        for (const auto &id : ids)
+        {
+            const bool master = id == "master";
+            const solaris::StripModel *s = master ? nullptr : strip(id);
+            if (!master && !s) continue;
+            const Rect fr = faderRect(id);
+            if (fr.w <= 1.0 || fr.x + fr.w < 0.0 || fr.x > width.value()) continue; // scrolled out of the page
+            const std::string name = master ? std::string("Master") : s->name;
+            const double gain = master ? mModel.masterGain : s->gain;
+            A11yNode f = a11yNode("dock." + id + ".fader", "slider", name + " fader", worldRect(*this, fr), dbText(gain) + " dB");
+            f.step = [this, id, gain, master](int dir, bool fine) {
+                const double v = std::clamp(rnd(gain + dir * (fine ? 0.1 : 0.5), 0.1), -120.0, 12.0);
+                send(master ? "set project.masterGain=" + num(v, 1) : "set " + id + ".gain=" + num(v, 1));
+            };
+            out.push_back(f);
+            if (master)
+            {
+                A11yNode mono = a11yNode("dock.master.mono", "toggle", "Mono", worldRect(*this, monoRect()), mModel.transport.mono ? "on" : "off");
+                mono.checked = mModel.transport.mono;
+                out.push_back(mono);
+                continue;
+            }
+            const double pan = s->pan;
+            A11yNode p = a11yNode("dock." + id + ".pan", "slider", name + " pan", worldRect(*this, panRect(id)),
+                                  pan == 0.0 ? std::string("centre") : num(std::fabs(pan) * 100.0, 0) + (pan < 0 ? " % left" : " % right"));
+            p.step = [this, id, pan](int dir, bool fine) { send("set " + id + ".pan=" + num(std::clamp(rnd(pan + dir * (fine ? 0.01 : 0.05), 0.01), -1.0, 1.0), 2)); };
+            out.push_back(p);
+            for (const auto &[part, label, on] : {std::make_tuple(std::string("mute"), std::string("mute"), s->mute), std::make_tuple(std::string("solo"), std::string("solo"), s->solo)})
+            {
+                A11yNode t = a11yNode("dock." + id + "." + part, "toggle", name + " " + label, worldRect(*this, part == "mute" ? muteRect(id) : soloRect(id)), on ? "on" : "off");
+                t.checked = on;
+                out.push_back(t);
+            }
+            if (const Rect ar = armRect(id); ar.w > 0)
+            {
+                A11yNode a = a11yNode("dock." + id + ".arm", "toggle", name + " record arm", worldRect(*this, ar), mModel.armed == id ? "on" : "off");
+                a.checked = mModel.armed == id;
+                out.push_back(a);
+            }
+        }
+    }
 
     const solaris::StripModel *MixerDock::strip(const std::string &id) const
     {

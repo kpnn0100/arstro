@@ -22,6 +22,7 @@
 #pragma once
 #include "../Cursor.h"
 #include "../Theme.h"
+#include "../A11y.h"
 #include "AppModel.h"
 #include "../../../cosmo/widgets/ContextMenu.h"
 #include "../../../cosmo/widgets/HoverFade.h"
@@ -117,6 +118,9 @@ namespace solaris_ui
         VideoPanel *videoPanel() const;
         bool isOpen(const std::string &key) const;
         void close(const std::string &key);
+        /** R-ACCESS-1: each open window, front last — its close button, and a device window's parameters (the other
+         *  windows' contents: Not yet). */
+        void accessibles(std::vector<A11yNode> &out);
 
         void bind(const solaris::AppModel &m, bool interacting);
         void layout();

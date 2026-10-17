@@ -389,6 +389,17 @@ namespace solaris_ui
         return w ? static_cast<DevicePanel *>(&w->content()) : nullptr;
     }
 
+    void WindowLayer::accessibles(std::vector<A11yNode> &out)
+    {
+        for (const auto &ch : children()) // stacking order: the front window last
+        {
+            auto *w = dynamic_cast<FloatWindow *>(ch.get());
+            if (!w || !w->isOpen()) continue;
+            out.push_back(a11yNode("window." + w->key() + ".close", "button", "Close " + w->title(), worldRect(*w, w->closeRect())));
+            if (w->key().rfind("dev:", 0) == 0) static_cast<DevicePanel &>(w->content()).accessibles(out);
+        }
+    }
+
     bool WindowLayer::isOpen(const std::string &key) const
     {
         const FloatWindow *w = window(key);

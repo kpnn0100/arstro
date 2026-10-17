@@ -15,6 +15,7 @@
 #pragma once
 #include "../Theme.h"
 #include "AppModel.h"
+#include "../A11y.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/HoverFade.h"
 #include <functional>
@@ -51,6 +52,9 @@ namespace solaris_ui
         double rowAmount(const std::string &node) const;         // 0 … 1: its fade (−1: no such row)
         double rowY(const std::string &node) const;              // its eased place in the list (content px)
         artboard::Rect mineRect(const std::string &node) const;   // its Keep Mine
+        /** R-ACCESS-1: each node asked — Keep Mine and Take Theirs, named by what it is, the sides as their value — the
+         *  "all" buttons (enabled while something is asked), Done. */
+        void accessibles(std::vector<A11yNode> &out);
         artboard::Rect theirsRect(const std::string &node) const; // its Take Theirs
         artboard::Rect allMineRect() const { return mAllMine; }
         artboard::Rect allTheirsRect() const { return mAllTheirs; }

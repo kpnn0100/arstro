@@ -14,6 +14,7 @@
 #pragma once
 #include "../Theme.h"
 #include "AppModel.h"
+#include "../A11y.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/HoverFade.h"
 #include <functional>
@@ -50,6 +51,8 @@ namespace solaris_ui
         double rowAmount(const std::string &path) const;             // 0 … 1: its fade (−1: no such row)
         double rowY(const std::string &path) const;                  // its eased place in the list (content px)
         artboard::Rect locateRect(const std::string &path) const;
+        /** R-ACCESS-1: each missing file's Locate… (named by the file), Search a Folder…, Done. */
+        void accessibles(std::vector<A11yNode> &out);
         artboard::Rect searchRect() const { return mSearch; }
         artboard::Rect doneRect() const { return mDone; }
         double cardHeight() const { return mCardH.value(); }         // LIVE: it grows and shrinks with its rows, eased

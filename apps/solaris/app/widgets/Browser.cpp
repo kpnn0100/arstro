@@ -280,6 +280,24 @@ namespace solaris_ui
         return it == mAud.end() ? 0.0 : it->second.amt.value();
     }
 
+    void Browser::accessibles(std::vector<A11yNode> &out)
+    {
+        for (int t = 0; t < kTabs; ++t)
+        {
+            A11yNode n = a11yNode("browser.tab." + std::to_string(t), "tab", kTabNames[t], worldRect(*this, tabRect(t)));
+            n.checked = t == mTab;
+            out.push_back(n);
+        }
+        for (int i = 0; i < (int)mRows.size(); ++i)
+        {
+            const Rect r = rowRect(i);
+            const auto &it = mRows[(size_t)i];
+            if (r.bottom() <= listTop() || r.y >= height.value() || it.kind == "header" || it.kind == "empty") continue; // out of view; words
+            out.push_back(a11yNode("browser.row." + it.kind + "." + (it.value.empty() ? it.label : it.value), "listitem", it.label,
+                                   worldRect(*this, r), it.note.empty() ? it.kind : it.note));
+        }
+    }
+
     Rect Browser::rowRect(int i) const
     {
         return Rect{0.0, listTop() + rowY(i) - mScroll.value(), width.value(), space::rowH()};

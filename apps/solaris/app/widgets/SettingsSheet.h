@@ -23,6 +23,7 @@
 #pragma once
 #include "../../../cosmo/widgets/ContextMenu.h"
 #include "../Theme.h"
+#include "../A11y.h"
 #include "AppModel.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/HoverFade.h"
@@ -115,6 +116,9 @@ namespace solaris_ui
 
         // R-SET-6: the controls
         artboard::Rect controlRect(int row) const; // the combo's field or the toggle
+        /** R-ACCESS-1: the sections (tabs), the shown page's rows — a combo stepped through its choices (Enter: the next),
+         *  ONE `settings set` line a step; a toggle, its click — and Done. */
+        void accessibles(std::vector<A11yNode> &out);
         int optionCount(int row) const;
         std::string optionLabel(int row, int i) const;
         artboard::Rect optionRect(int row, int i) const; // a row of the OPEN list

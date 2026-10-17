@@ -5030,6 +5030,104 @@ static void test_the_ui_scale_and_high_contrast()
     pass("the UI scale and high contrast (R-ACCESS-1): Settings › Interface ONE line each; the shell zooms, laid out at the drawn scale, a click landing where it is drawn; the tokens fade to black and white; back from a shell, eased");
 }
 
+static void test_the_keyboard_reaches_every_control()
+{
+    // R-ACCESS-1 (Round 20, part 2): the accessible list — the song bar first, its menus after Settings, a strip's fader
+    // with its value; Tab puts the focus on the first control (its ring fading in), Tab and Shift+Tab move it (the ring
+    // travelling); Space / Enter are the click a control stands for — ONE line; the arrows step a value — ONE line a
+    // step, Shift a tenth; Escape lets go (the ring fading out) and Space is the keymap's again; a modal's controls alone
+    sltest::Rig r("ui-keys", 1280, 800);
+    r.cmd("project new " + r.song("Keys") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4"); // ch_2, "Basic Synth"
+    r.settle();
+    using arstro::solaris_ui::A11yNode;
+    auto find = [&r](const std::string &key) {
+        static std::vector<A11yNode> nodes;
+        nodes = r.app->accessibles();
+        for (const auto &n : nodes)
+            if (n.key == key) return &n;
+        return (const A11yNode *)nullptr;
+    };
+    {
+        const auto nodes = r.app->accessibles();
+        assert(nodes.size() > 12 && nodes[0].key == "bar.home" && nodes[1].key == "bar.settings" && nodes[2].key == "menu.File" && nodes[2].role == "menu");
+    }
+    const A11yNode *fader = find("dock.ch_2.fader");
+    assert(fader && fader->role == "slider" && fader->name == "Basic Synth fader" && fader->value == "0.0 dB");
+    assert(find("bar.tempo")->value == "120 bpm" && find("browser.tab.0")->checked && find("dock.ch_2.mute")->role == "toggle");
+    // Tab: the first control, its ring fading in
+    r.key(9);
+    r.frame();
+    r.frame();
+    assert(r.app->focusHeld() && r.app->focusKey() == "bar.home" && r.app->focusAmount() > 0.0 && r.app->focusAmount() < 1.0);
+    r.settle();
+    const artboard::Rect home = find("bar.home")->bounds, settings = find("bar.settings")->bounds;
+    assert(std::fabs(r.app->focusRing().x - home.x) < 1e-6 && std::fabs(r.app->focusRing().w - home.w) < 1e-6);
+    // Tab: the next, the ring travelling there; Shift+Tab back
+    r.key(9);
+    r.frame();
+    r.frame();
+    const double rx = r.app->focusRing().x;
+    assert(r.app->focusKey() == "bar.settings" && rx > home.x && rx < settings.x);
+    r.settle();
+    r.key(9, false, true);
+    r.settle();
+    assert(r.app->focusKey() == "bar.home");
+    // to Play: Space is its click — ONE line
+    for (int i = 0; i < 20 && r.app->focusKey() != "bar.play"; ++i) r.key(9);
+    assert(r.app->focusKey() == "bar.play");
+    const size_t before = r.sent.size();
+    r.key(32);
+    r.settle();
+    assert(r.sent.size() == before + 1 && r.sent.back() == "transport play" && r.svc->model().transport.playing);
+    r.key(32); // the same control, now Stop: its click again
+    r.settle();
+    assert(!r.svc->model().transport.playing);
+    // to the fader: the arrows step it — ONE line a step, Shift a tenth
+    for (int i = 0; i < 60 && r.app->focusKey() != "dock.ch_2.fader"; ++i) r.key(9);
+    assert(r.app->focusKey() == "dock.ch_2.fader");
+    r.key(39);
+    r.settle();
+    assert(r.sent.back() == "set ch_2.gain=0.5");
+    r.key(37, false, true);
+    r.settle();
+    assert(r.sent.back() == "set ch_2.gain=0.4" && find("dock.ch_2.fader")->value == "+0.4 dB");
+    // Escape lets go, the ring fading out; Space is the keymap's again (play)
+    r.key(27);
+    r.frame();
+    r.frame();
+    assert(!r.app->focusHeld() && r.app->focusAmount() > 0.0 && r.app->focusAmount() < 1.0);
+    r.settle();
+    assert(r.app->focusAmount() == 0.0);
+    r.key(32);
+    r.settle();
+    assert(r.svc->model().transport.playing);
+    r.cmd("transport stop");
+    r.settle();
+    // a modal's controls alone: Settings — Tab walks its sections and rows; Enter on Interface; a combo stepped
+    r.app->openSettings();
+    r.settle();
+    for (const auto &n : r.app->accessibles()) assert(n.key.rfind("settings.", 0) == 0); // the sheet's alone
+    r.key(9);
+    assert(r.app->focusKey().rfind("settings.", 0) == 0);
+    for (int i = 0; i < 20 && r.app->focusKey() != "settings.section.4"; ++i) r.key(9);
+    r.key(13);
+    r.settle();
+    for (int i = 0; i < 20 && r.app->focusKey() != "settings.uiScale"; ++i) r.key(9);
+    assert(r.app->focusKey() == "settings.uiScale");
+    r.key(39);
+    r.settle();
+    assert(r.sent.back() == "settings set uiScale=125" && r.svc->model().settings.uiScale == 125);
+    r.key(37);
+    r.settle();
+    assert(r.sent.back() == "settings set uiScale=100");
+    r.key(27); // lets go of the focus …
+    r.key(27); // … then the sheet's own Escape closes it
+    r.settle();
+    assert(!r.app->settings().isOpen());
+    pass("the keyboard reaches every control (R-ACCESS-1): the accessible list in reading order, values named; Tab and Shift+Tab move the focus, its ring fading in and travelling; Space / Enter the click a control stands for, ONE line; the arrows a value's step, ONE line, Shift a tenth; Escape lets go and Space plays again; a modal's controls alone");
+}
+
 static void test_the_session_view()
 {
     // R-LAUNCH-1 (Round 17, part 4): View › Show Session cross-fades the grid into the lanes' place; every gesture is ONE
@@ -5578,6 +5676,7 @@ int main()
     test_export_with_the_video();
     test_conflicts_are_asked_in_a_sheet();
     test_the_ui_scale_and_high_contrast();
+    test_the_keyboard_reaches_every_control();
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();

@@ -11,6 +11,7 @@
  */
 #pragma once
 #include "SettingsSheet.h"
+#include "../A11y.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -44,6 +45,9 @@ namespace solaris_ui
 
         // what a test reaches (window coordinates, from the last layout)
         artboard::Rect controlRect(int row) const;
+        /** R-ACCESS-1: each row — a combo stepped through its choices (as a pick: the format moves what follows), a
+         *  toggle its click; a row that does not apply is there but not enabled — and Export…, Cancel. */
+        void accessibles(std::vector<A11yNode> &out);
         int optionCount(int row) const;
         std::string optionLabel(int row, int i) const;
         artboard::Rect optionRect(int row, int i) const; // a row of the OPEN list

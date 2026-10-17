@@ -324,6 +324,26 @@ namespace solaris_ui
         return r->placed ? r->liveY() : r->yTarget;
     }
 
+    void Timeline::accessibles(std::vector<A11yNode> &out)
+    {
+        for (int i = 0; i < (int)mRows.size(); ++i)
+        {
+            const Rect r = rowRect(i);
+            if (r.bottom() <= top() || r.y >= height.value()) continue; // scrolled out
+            const auto &row = mRows[(size_t)i];
+            if (!row.automation.empty() || !row.takeClip.empty()) continue; // an automation's row, a take's: Not yet
+            out.push_back(a11yNode("lanes." + row.key, "listitem", row.label.empty() ? "Lane" : row.label, worldRect(*this, Rect{r.x, r.y, kHeaderW, r.h}),
+                                   row.strip.empty() ? std::string() : "track of " + row.strip));
+            if (const Rect a = armRect(i); a.w > 0)
+            {
+                A11yNode arm = a11yNode("lanes." + row.key + ".arm", "toggle", (row.label.empty() ? std::string("Lane") : row.label) + " record arm",
+                                        worldRect(*this, a), mArmed == row.strip ? "on" : "off");
+                arm.checked = mArmed == row.strip;
+                out.push_back(arm);
+            }
+        }
+    }
+
     Rect Timeline::armRect(int i) const
     {
         if (i < 0 || i >= (int)mRows.size() || mRows[(size_t)i].strip.empty()) return Rect{};

@@ -389,6 +389,43 @@ namespace solaris_ui
         Segment::advance(nowMs);
     }
 
+    void DevicePanel::accessibles(std::vector<A11yNode> &out)
+    {
+        const solaris::DeviceModel *d = model();
+        if (!d) return;
+        for (int i = 0; i < rowCount(); ++i)
+        {
+            const Rect r = rowRect(i);
+            if (r.w <= 0 || r.bottom() <= bodyTop() || r.y >= height.value()) continue; // scrolled out
+            const std::string param = rowParam(i);
+            const solaris::ParamModel *spec = nullptr;
+            for (const auto &p : d->params)
+                if (p.name == param) spec = &p;
+            if (!spec) continue;
+            A11yNode n = a11yNode("device." + mDevice + "." + param, spec->choices.empty() ? "slider" : "combo", spec->label.empty() ? param : spec->label,
+                                  worldRect(*this, r), readout(param));
+            const solaris::ParamModel p = *spec;
+            n.step = [this, p](int dir, bool fine) {
+                double v = p.value;
+                if (!p.choices.empty()) // a choice: the next one, by its name
+                {
+                    const int c = std::clamp((int)std::lround(v) + dir, 0, (int)p.choices.size() - 1);
+                    if (onCommand) onCommand("set " + mDevice + "." + p.name + "=" + p.choices[(size_t)c]);
+                    return;
+                }
+                if (p.integer) v += dir;
+                else if (p.logScale && p.min > 0) v *= std::pow(p.max / p.min, dir * (fine ? 0.001 : 0.01));
+                else v += dir * (p.max - p.min) * (fine ? 0.001 : 0.01);
+                v = std::clamp(v, p.min, p.max);
+                char b[32];
+                std::snprintf(b, sizeof b, "%.6g", v);
+                if (onCommand) onCommand("set " + mDevice + "." + p.name + "=" + b);
+            };
+            if (!p.choices.empty()) n.activate = [step = n.step]() { step(+1, false); }; // a combo: Enter takes the next choice
+            out.push_back(n);
+        }
+    }
+
     int DevicePanel::rowCount() const { return mFace ? mFace->controlCount() : (int)mBody->rows.size(); }
 
     std::string DevicePanel::rowParam(int i) const

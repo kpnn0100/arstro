@@ -319,12 +319,13 @@ namespace sltest
             }
             if (releaseIt) { app->pointer(2, x1, y1, 0, now, false, shift); frame(); }
         }
-        void key(int code, bool ctrl = false)
+        void key(int code, bool ctrl = false, bool shift = false)
         {
             artboard::KeyEvent e;
             e.type = artboard::KeyEvent::Type::Down;
             e.keyCode = code;
             e.ctrl = ctrl;
+            e.shift = shift;
             app->key(e);
         }
         bool write(const std::string &path) { return cairo_surface_write_to_png(mSurf, path.c_str()) == CAIRO_STATUS_SUCCESS; }

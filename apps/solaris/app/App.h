@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "AppHooks.h"
+#include "A11y.h"
 #include "Theme.h"
 #include "widgets/HomeScreen.h"
 #include "widgets/ProjectScreen.h"
@@ -55,6 +56,23 @@ namespace solaris_ui
         double contrastAmount() const { return mContrast.value(); }   // LIVE: 0 normal … 1 high
         double logicalWidth() const { return mW; }
         double logicalHeight() const { return mH; }
+
+        /** R-ACCESS-1: every control the window shows as an accessible node, in reading order — the song bar (its menus'
+         *  titles after Settings), the browser, the lanes' headers, the dock, the open windows; a modal's — a menu open,
+         *  a dialog, a sheet — ALONE while it is open. What the keyboard walks and the host gives AT-SPI. */
+        std::vector<A11yNode> accessibles();
+        /** A node by its key, as the keyboard does it: its activation (the click it stands for), its step. False when
+         *  there is no such node, or it is not enabled. */
+        bool activateNode(const std::string &key);
+        bool stepNode(const std::string &key, int dir, bool fine);
+        /** The keyboard's focus: Tab / Shift+Tab move it through the enabled nodes, Enter and Space activate, the arrows
+         *  step (Shift: a tenth), Escape lets go. While it is held those keys are its; else they are the keymap's. */
+        const std::string &focusKey() const { return mFocusKey; }
+        bool focusHeld() const { return mFocusOn; }
+        double focusAmount() const { return mRingA.value(); }        // LIVE: the ring's fade
+        artboard::Rect focusRing() const { return artboard::Rect{mRingX.value(), mRingY.value(), mRingW.value(), mRingH.value()}; } // LIVE
+        /** Said when the keyboard's focus moves (the host tells AT-SPI): the node's key. */
+        std::function<void(const std::string &key)> onFocusMoved;
         void render(artboard::IRenderTarget &target, double nowMs);
         bool needsRedraw(double nowMs) const;
 
@@ -145,6 +163,15 @@ namespace solaris_ui
         std::string mMissingSaidFor; // R-COLLECT-1: the song whose missing files a toast has said
         std::shared_ptr<ConflictsSheet> mConflicts; // R-COLLAB-1
         double mPhysW = 1.0, mPhysH = 1.0;          // R-ACCESS-1: the window, in device pixels
+        std::string mFocusKey;                      // R-ACCESS-1: the keyboard's focus
+        bool mFocusOn = false;
+        artboard::AnimatedProperty mRingX{0.0}, mRingY{0.0}, mRingW{0.0}, mRingH{0.0}, mRingA{0.0};
+        artboard::Rect mRingTarget{0.0, 0.0, 0.0, 0.0};
+        double mRingWantA = 0.0, mKeyClickClock = 0.0;
+        bool mRingPlaced = false;
+        bool focusKeyPress(const artboard::KeyEvent &e);
+        void advanceFocus(double nowMs);
+        void clickAt(artboard::Point p);
         artboard::AnimatedProperty mScale{1.0}, mContrast{0.0};
         int mScaleWant = -1, mContrastWant = -1;
         void applyLogicalSize();
@@ -162,6 +189,7 @@ namespace solaris_ui
         std::string mNewTemplate; // R-PRESET-2: the template the next new song starts from ('' none)
         double mPasteAt = -1.0, mPasteNext = 0.0;
         artboard::GestureRecognizer mRecognizer;
+        artboard::GestureRecognizer mKeyClicks;     // R-ACCESS-1: the keyboard's clicks — their own, so they never pair
         std::string mScreen = "home";
         bool mScreenInit = false;
         bool mRollKeys = false; // R-ROLL-8: the pointer last pressed in the front piano roll — the keys go to it

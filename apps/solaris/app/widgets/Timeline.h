@@ -76,6 +76,7 @@
 #include "../Cursor.h"
 #include "AppModel.h"
 #include "VideoPanel.h"
+#include "../A11y.h"
 #include "../../../interstellar/app/widgets/AnimatedRows.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/ContextMenu.h"
@@ -128,6 +129,9 @@ namespace solaris_ui
         std::string trackLabel(const std::string &lane) const;
         std::string rowLane(int i) const { return i >= 0 && i < (int)mRows.size() ? mRows[(size_t)i].lane : std::string(); }
         artboard::Rect rowRect(int i) const;
+        /** R-ACCESS-1: each lane in view — its header (a list item: its name, the strip it is the track of) and an
+         *  instrument track's arm. The clips: Not yet. */
+        void accessibles(std::vector<A11yNode> &out);
         artboard::Rect clipRect(const std::string &id) const;
         artboard::Rect rulerRect() const;
         double pxPerBeat() const { return mPpb.value(); }          // LIVE (eased)

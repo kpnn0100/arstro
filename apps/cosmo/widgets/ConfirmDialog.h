@@ -47,6 +47,14 @@ namespace cosmo_v2
          *  should cost a deliberate click — but reachable so a test can take that branch. */
         bool confirmDestructive();
         int buttonCount() const { return (int)mButtons.size(); }
+        const std::string &buttonLabel(int i) const { return mButtons[(size_t)i].label; } // what a keyboard or a screen reader names it
+        /** Where button `i` is (its own coordinates — the dialog covers the window), for a keyboard's focus to sit on. */
+        artboard::Rect buttonRect(int i) const
+        {
+            std::vector<artboard::Rect> r;
+            buttonRects(r);
+            return i >= 0 && i < (int)r.size() ? r[(size_t)i] : artboard::Rect{};
+        }
 
         /** Handle a key while open: Escape cancels, Enter/Return takes the primary action.
          *  Returns true when the key was consumed, so the caller stops routing it. */

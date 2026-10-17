@@ -80,6 +80,29 @@ namespace solaris_ui
             if (v.id == mVersion) mChipWanted = v.name + (v.frozen ? " \xC2\xB7 frozen" : "");
     }
 
+    void SongBar::accessibles(std::vector<A11yNode> &out)
+    {
+        auto at = [this](int which) { return worldRect(*this, hitRect(which)); };
+        out.push_back(a11yNode("bar.home", "button", "Home", at(kHome)));
+        out.push_back(a11yNode("bar.settings", "button", "Settings", at(kSettings)));
+        if (mChipW.value() > 1.0) out.push_back(a11yNode("bar.version", "button", "Version", at(kVersion), mChipTo));
+        A11yNode rec = a11yNode("bar.record", "toggle", "Record", at(kRecord), mRecordingWanted ? "on" : "off");
+        rec.checked = mRecordingWanted;
+        out.push_back(rec);
+        out.push_back(a11yNode("bar.play", "button", mPlayingWanted ? "Stop" : "Play", at(kPlay)));
+        char b[32];
+        std::snprintf(b, sizeof b, "%g bpm", std::round(mBpm * 10.0) / 10.0);
+        A11yNode bpm = a11yNode("bar.tempo", "slider", "Tempo", at(kBpm), b);
+        bpm.step = [this](int dir, bool fine) { // the drag's step, ONE line
+            const double step = fine ? 0.1 : 1.0, v = std::clamp(std::round((mBpm + dir * step) / step) * step, 20.0, 999.0);
+            char t[32];
+            std::snprintf(t, sizeof t, "%g", std::round(v * 10.0) / 10.0);
+            if (onCommand) onCommand(tempoLine(t));
+        };
+        out.push_back(bpm);
+        out.push_back(a11yNode("bar.save", "button", "Save", at(kSave), mDirty ? "unsaved" : ""));
+    }
+
     Rect SongBar::hitRect(int which) const
     {
         const double W = width.value(), cy = kHeight * 0.5;

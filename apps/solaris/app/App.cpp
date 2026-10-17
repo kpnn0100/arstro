@@ -119,7 +119,7 @@ namespace solaris_ui
         };
 
         buildMenus();
-        mRecognizer.setSink([this](const Gesture &g) {
+        auto sink = [this](const Gesture &g) {
             if (mMenu->isOpen()) { mMenu->onGesture(g); return; }       // a modal owns input
             if (mHistory->isOpen())
             {
@@ -143,7 +143,9 @@ namespace solaris_ui
             }
             if (mScreen == "home") mHome->onGesture(g);
             else mProject->onGesture(g);
-        });
+        };
+        mRecognizer.setSink(sink);
+        mKeyClicks.setSink(sink); // R-ACCESS-1: a node's activation is the click it stands for — through the same routes
         layoutAll();
     }
 
@@ -480,7 +482,7 @@ namespace solaris_ui
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         if (m.revision != mBoundRevision || m.transport.playing || m.audition.playing || m.audition.playing != mBoundAudition) return true;
         if (mHome->opacity.isAnimating() || mProject->opacity.isAnimating() || mToast.isAnimating() || mToast.value() > 0.0) return true;
-        if (mScale.isAnimating() || mContrast.isAnimating()) return true; // R-ACCESS-1: a zoom, a contrast fade
+        if (mScale.isAnimating() || mContrast.isAnimating() || mFocusOn || mRingA.value() > 0.0) return true; // R-ACCESS-1: a zoom, a fade, the ring
         if (m.settings.uiScale != mScaleWant || (m.settings.highContrast ? 1 : 0) != mContrastWant) return true;
         if (mSettings->appearAmount() > 0.0 || mExport->appearAmount() > 0.0 || mRelink->appearAmount() > 0.0 || mConflicts->appearAmount() > 0.0 || mMenu->isOpen() || mHistory->appearAmount() > 0.0) return true;
         return nowMs - mLastActivityMs < kActiveWindowMs;
@@ -524,6 +526,167 @@ namespace solaris_ui
         mRecognizer.feed(rp);
     }
 
+    // ── R-ACCESS-1: the accessible list, and the keyboard's focus over it ─────────────────────────────────────────────
+
+    std::vector<A11yNode> App::accessibles()
+    {
+        std::vector<A11yNode> out;
+        auto &ms = mProject->bar().menus();
+        // a modal's alone while it is open
+        if (mMenu->isOpen())
+        {
+            if (mMenu->isRenaming()) return out; // a field being typed in: the keys are its
+            for (int i = 0; i < mMenu->itemCount(); ++i)
+                out.push_back(a11yNode("menu.item." + std::to_string(i), "menuitem", mMenu->item(i).label, mMenu->itemRect(i)));
+            return out;
+        }
+        if (mConfirm->isOpen())
+        {
+            for (int i = 0; i < mConfirm->buttonCount(); ++i)
+            {
+                A11yNode n = a11yNode("confirm." + std::to_string(i), "button", mConfirm->buttonLabel(i), worldRect(*mConfirm, mConfirm->buttonRect(i)));
+                n.activate = [this, i] { mConfirm->activate(i); };
+                out.push_back(n);
+            }
+            return out;
+        }
+        if (mSettings->isOpen()) { mSettings->accessibles(out); return out; }
+        if (mExport->isOpen()) { mExport->accessibles(out); return out; }
+        if (mRelink->isOpen()) { mRelink->accessibles(out); return out; }
+        if (mConflicts->isOpen()) { mConflicts->accessibles(out); return out; }
+        if (mHistory->isOpen()) return out; // the history's tree: Not yet
+        if (mScreen == "home") { mHome->accessibles(out); return out; }
+        if (ms.openIndex() >= 0) // a menu of the song bar's, open: its items
+        {
+            const int open = ms.openIndex();
+            for (int i = 0; i < (int)ms.menu(open).items.size(); ++i)
+                out.push_back(a11yNode("menu." + ms.menu(open).title + "." + std::to_string(i), "menuitem", ms.menu(open).items[(size_t)i].label,
+                                       worldRect(ms, ms.itemRect(open, i))));
+            return out;
+        }
+        // the song view, in reading order
+        std::vector<A11yNode> bar;
+        mProject->bar().accessibles(bar);
+        for (auto &n : bar)
+        {
+            out.push_back(n);
+            if (n.key == "bar.settings") // the menus' titles, where they sit: after Settings
+                for (int i = 0; i < ms.menuCount(); ++i)
+                    out.push_back(a11yNode("menu." + ms.menu(i).title, "menu", ms.menu(i).title + " menu", worldRect(ms, ms.titleRect(i))));
+        }
+        if (mProject->browserOpen()) mProject->browser().accessibles(out);
+        if (!mProject->sessionOpen()) mProject->timeline().accessibles(out); // the session grid: Not yet
+        if (mProject->dockOpen()) mProject->dock().accessibles(out);
+        mProject->windows().accessibles(out);
+        return out;
+    }
+
+    bool App::activateNode(const std::string &key)
+    {
+        for (auto &n : accessibles())
+            if (n.key == key)
+            {
+                if (!n.enabled) return false;
+                if (n.activate) n.activate();
+                else clickAt(Point{n.bounds.x + n.bounds.w * 0.5, n.bounds.y + n.bounds.h * 0.5});
+                return true;
+            }
+        return false;
+    }
+
+    bool App::stepNode(const std::string &key, int dir, bool fine)
+    {
+        for (auto &n : accessibles())
+            if (n.key == key)
+            {
+                if (!n.enabled || !n.step) return false;
+                n.step(dir, fine);
+                return true;
+            }
+        return false;
+    }
+
+    void App::clickAt(Point p)
+    {
+        // the click a node stands for — a press and a release at its centre, through the same routes as a pointer's,
+        // on a recogniser of its own whose clock runs a second a click, so two never make a double-click
+        mKeyClickClock += 1000.0;
+        RawPointer rp{};
+        rp.pos = p;
+        rp.button = PointerButton::Left;
+        rp.kind = RawPointer::Kind::Down;
+        rp.timeMs = mKeyClickClock;
+        mKeyClicks.feed(rp);
+        rp.kind = RawPointer::Kind::Up;
+        rp.timeMs = mKeyClickClock + 1.0;
+        mKeyClicks.feed(rp);
+    }
+
+    bool App::focusKeyPress(const KeyEvent &e)
+    {
+        if (e.type != KeyEvent::Type::Down || e.ctrl || e.alt) return false;
+        if (mSettings->isOpen() && !mSettings->listeningFor().empty()) return false; // a key being captured is the sheet's
+        if (mMenu->isOpen() && mMenu->isRenaming()) return false;                  // a field being typed in
+        const int k = e.keyCode;
+        if (k == 9) // Tab, Shift+Tab: the next / the previous enabled node
+        {
+            std::vector<std::string> keys;
+            for (const auto &n : accessibles())
+                if (n.enabled && n.bounds.w > 0 && n.bounds.h > 0) keys.push_back(n.key);
+            if (keys.empty()) return true;
+            const auto it = std::find(keys.begin(), keys.end(), mFocusKey);
+            const int n = (int)keys.size();
+            int at = 0;
+            if (mFocusOn && it != keys.end()) at = ((int)(it - keys.begin()) + (e.shift ? -1 : 1) + n) % n;
+            else at = e.shift ? n - 1 : 0;
+            mFocusKey = keys[(size_t)at];
+            mFocusOn = true;
+            if (onFocusMoved) onFocusMoved(mFocusKey);
+            return true;
+        }
+        if (!mFocusOn) return false;
+        if (k == 27) { mFocusOn = false; return true; }                       // Escape: let go
+        if (k == 13 || k == 32) { activateNode(mFocusKey); return true; }     // Enter, Space: the click it stands for
+        if (k >= 37 && k <= 40) { stepNode(mFocusKey, k == 37 || k == 40 ? -1 : 1, e.shift); return true; } // the arrows: its step
+        return false;
+    }
+
+    void App::advanceFocus(double nowMs)
+    {
+        // the ring: over the focused node, travelling between nodes, fading in and out — a node gone lets the focus go
+        Rect want{0, 0, 0, 0};
+        bool on = false;
+        if (mFocusOn)
+        {
+            for (const auto &n : accessibles())
+                if (n.key == mFocusKey) { want = n.bounds; on = true; break; }
+            if (!on) mFocusOn = false;
+        }
+        const double a = on ? 1.0 : 0.0;
+        if (a != mRingWantA)
+        {
+            mRingA.animateTo(a, a > 0.0 ? motion::kHoverMs : motion::kModalCloseMs, Easing::EaseOutCubic, nowMs);
+            mRingWantA = a;
+        }
+        if (on)
+        {
+            if (!mRingPlaced || (mRingA.value() <= 0.001 && !mRingA.isAnimating()))
+            {
+                mRingX.set(want.x); mRingY.set(want.y); mRingW.set(want.w); mRingH.set(want.h);
+                mRingPlaced = true;
+            }
+            else if (want.x != mRingTarget.x || want.y != mRingTarget.y || want.w != mRingTarget.w || want.h != mRingTarget.h)
+            {
+                mRingX.animateTo(want.x, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
+                mRingY.animateTo(want.y, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
+                mRingW.animateTo(want.w, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
+                mRingH.animateTo(want.h, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
+            }
+            mRingTarget = want;
+        }
+        for (auto *p : {&mRingX, &mRingY, &mRingW, &mRingH, &mRingA}) p->update(nowMs);
+    }
+
     Cursor App::cursor() const
     {
         // a modal takes the pointer: the arrow over it (and over what it covers)
@@ -534,6 +697,7 @@ namespace solaris_ui
     bool App::key(const KeyEvent &e)
     {
         mLastActivityMs = mNowMs;
+        if (focusKeyPress(e)) return true; // R-ACCESS-1: Tab, and while the focus is held Enter / Space / the arrows / Escape
         if (mMenu->isOpen()) { mMenu->dispatchKey(e); return true; }
         if (mConfirm->isOpen()) { mConfirm->handleKey(e); return true; }
         if (mSettings->isOpen()) return mSettings->handleKey(e);
@@ -715,6 +879,17 @@ namespace solaris_ui
         mModalRoot->advance(nowMs);
         mModalRoot->renderOverlay(target, root);
 
+        advanceFocus(nowMs); // R-ACCESS-1: the keyboard's focus ring, over everything but the toast
+        if (const double fa = mRingA.value(); fa > 0.001)
+        {
+            const Rect fr = focusRing();
+            target.save();
+            target.setTransform(root);
+            Color c = palette::primary();
+            c.a = 0.9 * fa;
+            drawRoundedRect(target, Rect{fr.x - 2.0, fr.y - 2.0, fr.w + 4.0, fr.h + 4.0}, radius::control() + 2.0, Paint::stroked(c, 2.0));
+            target.restore();
+        }
         const double ta = mToast.value();
         if (ta > 0.001 && !mToastText.empty())
         {

@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "../Theme.h"
+#include "../A11y.h"
 #include "AppModel.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/HoverFade.h"
@@ -47,6 +48,8 @@ namespace solaris_ui
 
         // geometry a test aims at (local coords)
         artboard::Rect actionRect(int i) const;   // 0 = New, 1 = Open, 2 = From template… (R-PRESET-2)
+        /** R-ACCESS-1: New song, Open song…, From template…, Settings, and each recent song in view. */
+        void accessibles(std::vector<A11yNode> &out);
         artboard::Rect settingsRect() const;
         artboard::Rect gridViewport() const;
         artboard::Rect cardLive(int i) const;

@@ -168,6 +168,29 @@ namespace solaris_ui
         return Rect{};
     }
 
+    void ConflictsSheet::accessibles(std::vector<A11yNode> &out)
+    {
+        auto joined = [](const std::vector<std::string> &v) {
+            std::string s;
+            for (const auto &x : v) s += (s.empty() ? "" : "; ") + x;
+            return s;
+        };
+        for (const auto &m : mMine) // as the last paint placed them: the rows in view, none leaving
+            for (const auto &r : mRows)
+                if (r.node == m.first)
+                {
+                    out.push_back(a11yNode("conflicts." + r.node + ".mine", "button", "Keep mine \xE2\x80\x94 " + r.what, m.second, joined(r.mine)));
+                    out.push_back(a11yNode("conflicts." + r.node + ".theirs", "button", "Take theirs \xE2\x80\x94 " + r.what, theirsRect(r.node), joined(r.theirs)));
+                }
+        A11yNode all = a11yNode("conflicts.allMine", "button", "Keep All Mine", mAllMine);
+        all.enabled = !mWanted.empty();
+        out.push_back(all);
+        all = a11yNode("conflicts.allTheirs", "button", "Take All Theirs", mAllTheirs);
+        all.enabled = !mWanted.empty();
+        out.push_back(all);
+        out.push_back(a11yNode("conflicts.done", "button", "Done", mDone));
+    }
+
     Rect ConflictsSheet::cardRect() const
     {
         const double W = width.value(), H = height.value();
