@@ -251,6 +251,8 @@ namespace solaris
         {
         case Live::StripGain: mEng->setStripGain(m.strip, m.value); break;
         case Live::StripPan: mEng->setStripPan(m.strip, m.value); break;
+        case Live::StripWidth: mEng->setStripWidth(m.strip, m.value); break;       // R-MIX-20: ramped across the next block
+        case Live::StripInvert: mEng->setStripInvert(m.strip, m.value != 0); break; // … through silence, across the next block
         case Live::StripSilent: mEng->setStripSilent(m.strip, m.value != 0); break;
         case Live::MasterGain: mEng->setMasterGain(m.value); break;
         case Live::DeviceBypass: mEng->setDeviceBypass(m.strip, m.device, m.value != 0); break;

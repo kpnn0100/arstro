@@ -808,8 +808,20 @@ namespace solaris
                 m.strip = strip;
                 m.value = mProject.strip(id)->pan;
             }
+            else if (strip >= 0 && field == "width") // R-MIX-20: ramped across a block, no rebuild
+            {
+                m.kind = Player::Live::StripWidth;
+                m.strip = strip;
+                m.value = mProject.strip(id)->width / 100.0;
+            }
+            else if (strip >= 0 && field == "phase") // … through silence across a block
+            {
+                m.kind = Player::Live::StripInvert;
+                m.strip = strip;
+                m.value = mProject.strip(id)->phase ? 1 : 0;
+            }
             else if (strip >= 0 && field == "mute" && keys) { structural = true; break; } // a muted strip stops keying: compile it (R-MIX-15)
-            else if (strip >= 0 && (field == "mute" || field == "solo")) { silences = true; continue; }
+            else if (strip >= 0 && (field == "mute" || field == "solo" || field == "soloSafe")) { silences = true; continue; }
             else if (const Strip *vca = mProject.strip(id); vca && vca->kind == "vca" && field == "gain")
             {
                 // R-MIX-19: its members move with it — each its own plus the VCA's, as live messages; a member whose

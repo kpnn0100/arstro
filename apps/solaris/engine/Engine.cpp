@@ -26,6 +26,7 @@ namespace engine
         bool gainBound = false, panBound = false;
         double gainA = 1, gainB = 1, panA = 0, panB = 0;
         double widthWas = 1.0;              // R-MIX-20: the width the last block ended at (a change ramps across a block)
+        double signWas = 1.0;               // … its polarity likewise (a flip crosses through silence)
         std::vector<double> wL, wR;         // … its width and polarity applied
         long long ramp = 0;
         std::vector<char> sendBound;
@@ -157,6 +158,7 @@ namespace engine
             st->keyL.assign(kBlock, 0.0); st->keyR.assign(kBlock, 0.0);
             st->wL.assign(kBlock, 0.0); st->wR.assign(kBlock, 0.0); // R-MIX-20
             st->widthWas = s.width;
+            st->signWas = s.invert ? -1.0 : 1.0;
             st->gainA = st->gainB = s.gain;
             st->panA = st->panB = s.pan;
             st->sendBound.assign(s.sends.size(), 0);
@@ -739,17 +741,18 @@ namespace engine
             };
             // R-MIX-20: its width (mid and side; a change ramps across the block) and its polarity — after its rack,
             // before its pre sends and fader; at their defaults nothing is touched
-            if (d.invert || d.width != 1.0 || st.widthWas != 1.0)
+            if (d.invert || d.width != 1.0 || st.widthWas != 1.0 || st.signWas != 1.0)
             {
-                const double sign = d.invert ? -1.0 : 1.0, w0 = st.widthWas, w1 = d.width;
+                const double s0 = st.signWas, s1 = d.invert ? -1.0 : 1.0, w0 = st.widthWas, w1 = d.width;
                 for (int i = 0; i < n; ++i)
                 {
-                    const double w = w0 + (w1 - w0) * (double)(i + 1) / n;
+                    const double f = (double)(i + 1) / n, w = w0 + (w1 - w0) * f, sign = s0 + (s1 - s0) * f;
                     const double m = 0.5 * (L[i] + R[i]), s = 0.5 * (L[i] - R[i]) * w;
                     st.wL[i] = sign * (m + s);
                     st.wR[i] = sign * (m - s);
                 }
                 st.widthWas = w1;
+                st.signWas = s1;
                 L = st.wL.data();
                 R = st.wR.data();
             }
@@ -880,6 +883,14 @@ namespace engine
     void Engine::setStripPan(int strip, double pan)
     {
         if (strip >= 0 && strip < (int)mGraph.strips.size()) mGraph.strips[strip].pan = pan;
+    }
+    void Engine::setStripWidth(int strip, double width)
+    {
+        if (strip >= 0 && strip < (int)mGraph.strips.size()) mGraph.strips[strip].width = width;
+    }
+    void Engine::setStripInvert(int strip, bool invert)
+    {
+        if (strip >= 0 && strip < (int)mGraph.strips.size()) mGraph.strips[strip].invert = invert;
     }
     void Engine::setStripSilent(int strip, bool silent)
     {

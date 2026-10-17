@@ -389,6 +389,9 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].vca` | string | R-MIX-19: the VCA (a strip of kind vca) it follows — `set <ch>.vca=…`; "" none |
 | `strips[].vcaGain` | number | R-MIX-19: the dB its VCA adds to its own gain (0 for none) |
 | `strips[].members` | string[] | R-MIX-19: on a VCA, the strips that follow it, in processing order |
+| `strips[].phase` | bool | R-MIX-20: its polarity inverted (after its rack) — `set <ch>.phase=on\|off` |
+| `strips[].width` | number | R-MIX-20: its stereo width, % (0 one channel … 100 as it is … 200 the side doubled) |
+| `strips[].soloSafe` | bool | R-MIX-20: a bus no solo silences — `set <bus>.soloSafe=true\|false` |
 | `strips[].clipCount` | int | fed by: clips playing through it (R-MIX-8) |
 | `strips[].fromLanes` | string[] | fed by: the lanes those clips are drawn on |
 | `strips[].fromStrips` | string[] | fed by: strips whose output or a send lands here |

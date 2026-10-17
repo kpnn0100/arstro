@@ -104,6 +104,9 @@ namespace solaris
             {"strips[].vca", "string", "R-MIX-19: the VCA (a strip of kind vca) it follows — `set <ch>.vca=…`; \"\" none"},
             {"strips[].vcaGain", "number", "R-MIX-19: the dB its VCA adds to its own gain (0 for none)"},
             {"strips[].members", "string[]", "R-MIX-19: on a VCA, the strips that follow it, in processing order"},
+            {"strips[].phase", "bool", "R-MIX-20: its polarity inverted (after its rack) — `set <ch>.phase=on|off`"},
+            {"strips[].width", "number", "R-MIX-20: its stereo width, % (0 one channel … 100 as it is … 200 the side doubled)"},
+            {"strips[].soloSafe", "bool", "R-MIX-20: a bus no solo silences — `set <bus>.soloSafe=true|false`"},
             {"strips[].clipCount", "int", "fed by: clips playing through it (R-MIX-8)"},
             {"strips[].fromLanes", "string[]", "fed by: the lanes those clips are drawn on"},
             {"strips[].fromStrips", "string[]", "fed by: strips whose output or a send lands here"},
@@ -620,7 +623,8 @@ namespace solaris
                     .set("clip", s.clip).set("cpu", s.cpu);
             st.set("clipCount", s.clipCount).set("fromLanes", strings(s.fromLanes)).set("fromStrips", strings(s.fromStrips))
                 .set("targets", strings(s.targets)).set("keyTargets", strings(s.keyTargets)).set("frozen", s.frozen)
-                    .set("vca", s.vca).set("vcaGain", s.vcaGain).set("members", strings(s.members));
+                    .set("vca", s.vca).set("vcaGain", s.vcaGain).set("members", strings(s.members))
+                    .set("phase", s.phase).set("width", s.width).set("soloSafe", s.soloSafe);
             strips.push(st);
         }
         j.set("strips", strips);

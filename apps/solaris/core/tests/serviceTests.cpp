@@ -5242,6 +5242,53 @@ static void test_solo_safe_keeps_a_tail()
     pass("solo-safe (R-MIX-20): a solo begun while playing cuts a bus's echoes at once — a solo-safe bus's go on");
 }
 
+static void test_per_strip_tools_live()
+{
+    // R-MIX-20 (Round 14, part 2): while playing, a strip's width and phase move with no engine rebuilt — the width
+    // ramped across a block, the polarity crossing through silence across one (no click); solo-safe too. The model
+    // says each
+    Run r;
+    r.ok("project new " + freshSong("tools-live") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 8");                 // ch_2: held, through a reverb
+    r.ok("notes add pt_1 \"C3@0:8 G3@0:8\"");
+    r.ok("device add ch_2 --type reverb");
+    r.ok("strip add --kind bus --name Verb");                               // ch_3
+    auto swaps = [&] { r.ok("wait 0.02"); return r.svc.model().transport.swaps; };
+    r.fake.capture->frames = 0;
+    r.ok("transport play --from 0");
+    waitFrames(r, 24000);
+    assert(swaps() == 0);
+    r.ok("set ch_2.width=0");
+    long long mark = r.fake.capture->frames.load();
+    waitFrames(r, mark + 12000);
+    const auto &sink = r.fake.capture->sink;
+    double lr = 0;
+    for (size_t i = 2 * (size_t)(mark + 4800); i + 1 < 2 * (size_t)(mark + 12000) && i + 1 < sink.size(); i += 2)
+        lr = std::max(lr, (double)std::fabs(sink[i] - sink[i + 1]));
+    assert(swaps() == 0);
+    r.ok("set ch_2.width=100");
+    waitFrames(r, r.fake.capture->frames.load() + 4800);
+    // the polarity flipped: no step past what the sound itself takes
+    const long long before = r.fake.capture->frames.load();
+    r.ok("set ch_2.phase=on");
+    waitFrames(r, before + 12000);
+    double ownStep = 0, flipStep = 0;
+    for (size_t i = 2 * (size_t)(before - 9600) + 2; i < 2 * (size_t)before; i += 2) ownStep = std::max(ownStep, (double)std::fabs(sink[i] - sink[i - 2]));
+    for (size_t i = 2 * (size_t)before + 2; i < 2 * (size_t)(before + 12000) && i < sink.size(); i += 2) flipStep = std::max(flipStep, (double)std::fabs(sink[i] - sink[i - 2]));
+    assert(swaps() == 0);
+    r.ok("set ch_3.soloSafe=true");
+    assert(swaps() == 0);
+    r.ok("transport stop");
+    for (const auto &st : r.svc.model().strips)
+    {
+        if (st.id == "ch_2") assert(st.phase && st.width == 100.0 && !st.soloSafe);
+        if (st.id == "ch_3") assert(st.soloSafe);
+    }
+    std::printf("    live: width 0 → L − R %.2g; a polarity flip's largest step %.4f (the sound's own %.4f); no rebuild\n", lr, flipStep, ownStep);
+    assert(lr == 0.0 && ownStep > 0.001 && flipStep < 1.5 * ownStep);
+    pass("per-strip tools live (R-MIX-20): width and phase moved while playing with no rebuild — width 0 one channel exactly, a polarity flip with no click; solo-safe too; the model says each");
+}
+
 static void test_freeze_and_bounce()
 {
     // R-PERF-3: a strip's own sound frozen beside the song and played instead — the song sounds as it did (to float
@@ -6623,6 +6670,7 @@ int main()
     test_a_vca_muted_member_keys_nothing();
     test_per_strip_tools();
     test_solo_safe_keeps_a_tail();
+    test_per_strip_tools_live();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

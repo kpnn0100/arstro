@@ -117,6 +117,9 @@ namespace solaris
         std::string vca;                        // R-MIX-19: the VCA it follows ("" none)
         double vcaGain = 0;                     // … the dB that VCA adds to it (0 for none)
         std::vector<std::string> members;       // … on a VCA: the strips that follow it, in processing order
+        bool phase = false;                     // R-MIX-20: its polarity inverted
+        double width = 100;                     // … its width, % (0 … 200)
+        bool soloSafe = false;                  // … a bus no solo silences
         int clipCount = 0;
         std::vector<std::string> fromLanes;     // lanes its clips are drawn on
         std::vector<std::string> fromStrips;    // strips whose output or a send lands here

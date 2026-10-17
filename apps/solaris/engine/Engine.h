@@ -150,6 +150,8 @@ namespace engine
         // ── live edits, from the thread that renders (the player drains them between blocks) ──
         void setStripGain(int strip, double linear);
         void setStripPan(int strip, double pan);
+        void setStripWidth(int strip, double width);   // R-MIX-20: 0 … 2; the next block ramps to it
+        void setStripInvert(int strip, bool invert);   // … the next block crosses through silence to it
         void setStripSilent(int strip, bool silent);
         void setMasterGain(double linear) { mGraph.masterGain = linear; }
         void setDeviceBypass(int strip, int device, bool bypass);  // strip −1 = the master's rack

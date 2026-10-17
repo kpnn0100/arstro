@@ -354,6 +354,48 @@ static void test_meters_seek_capture_and_live_params()
     pass("meters report peak and RMS; seek moves; a strip can be captured as a stem; params change live");
 }
 
+static void test_width_and_polarity_ramp_across_a_block()
+{
+    // R-MIX-20: a strip's polarity set live crosses through silence across the next block — sign 1 + (−2)(i + 1)/n,
+    // never a step — and its width ramps the same way (1 → 0: mid and a shrinking side); exactly, on a constant source
+    MixGraph g = basic();
+    auto pc = std::make_shared<Pcm>();
+    pc->channels = 2;
+    pc->frames = 4096;
+    for (int i = 0; i < 4096; ++i) { pc->samples.push_back(0.6f); pc->samples.push_back(0.2f); }
+    Region r;
+    r.pcm = pc;
+    r.start = 0;
+    r.frames = r.srcFrames = 4096;
+    g.strips[0].regions = {r};
+    Engine e;
+    std::string err;
+    assert(e.build(g, err));
+    PortBuffers out;
+    e.render(256, out);
+    assert(out.ports[0][0][255] == 0.6f && out.ports[0][1][255] == 0.2f);
+    e.setStripInvert(0, true);
+    e.render(128, out);
+    double off = 0;
+    for (int i = 0; i < 128; ++i)
+    {
+        const double sign = 1.0 - 2.0 * (i + 1) / 128.0;
+        off = std::max({off, std::fabs(out.ports[0][0][(size_t)i] - 0.6 * sign), std::fabs(out.ports[0][1][(size_t)i] - 0.2 * sign)});
+    }
+    e.setStripWidth(0, 0.0);
+    e.render(128, out);
+    for (int i = 0; i < 128; ++i)
+    {
+        const double w = 1.0 - (i + 1) / 128.0;
+        off = std::max({off, std::fabs(out.ports[0][0][(size_t)i] + (0.4 + 0.2 * w)), std::fabs(out.ports[0][1][(size_t)i] + (0.4 - 0.2 * w))});
+    }
+    e.render(128, out);
+    for (int i = 0; i < 128; ++i) off = std::max({off, std::fabs(out.ports[0][0][(size_t)i] + 0.4), std::fabs(out.ports[0][1][(size_t)i] + 0.4)});
+    std::printf("    polarity and width ramps off their formulas by %.2g\n", off);
+    assert(off < 1e-6);
+    pass("a strip's polarity crosses through silence across a block and its width ramps — exactly (R-MIX-20)");
+}
+
 static void test_live_render_allocates_nothing_and_takes_live_edits()
 {
     MixGraph g = basic();
@@ -808,6 +850,7 @@ int main()
     test_notes_start_on_their_exact_sample();
     test_render_is_deterministic_however_it_is_chopped();
     test_meters_seek_capture_and_live_params();
+    test_width_and_polarity_ramp_across_a_block();
     test_live_render_allocates_nothing_and_takes_live_edits();
     test_bindings_drive_gain_and_parameters_at_control_rate();
     test_curves_are_interstellars_keyframes();

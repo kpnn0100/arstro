@@ -2151,6 +2151,24 @@
       "stable": true
     },
     {
+      "path": "strips[].phase",
+      "type": "bool",
+      "summary": "R-MIX-20: its polarity inverted (after its rack) — `set <ch>.phase=on|off`",
+      "stable": true
+    },
+    {
+      "path": "strips[].width",
+      "type": "number",
+      "summary": "R-MIX-20: its stereo width, % (0 one channel … 100 as it is … 200 the side doubled)",
+      "stable": true
+    },
+    {
+      "path": "strips[].soloSafe",
+      "type": "bool",
+      "summary": "R-MIX-20: a bus no solo silences — `set <bus>.soloSafe=true|false`",
+      "stable": true
+    },
+    {
       "path": "strips[].clipCount",
       "type": "int",
       "summary": "fed by: clips playing through it (R-MIX-8)",

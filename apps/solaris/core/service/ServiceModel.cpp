@@ -277,6 +277,9 @@ namespace solaris
             if (s->kind == "vca")
                 for (const Strip *o : p.stripsInOrder())
                     if (o->vca == s->id) sm.members.push_back(o->id);
+            sm.phase = s->phase; // R-MIX-20
+            sm.width = s->width;
+            sm.soloSafe = s->soloSafe;
             sm.monitor = s->monitor;
             mModel.strips.push_back(sm);
         }
