@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N44 part 1 — the DSP library's analysis module** (R-ASSIST-1; Round 22 is the design: `src/analysis/` — an exact STFT, separation, pitch tracking with the tuner's YIN shared, chords; REQ-analysis-1…4; the submodule's own commit and push), then the service, then the window (the user: *"implement all"*). Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N44 part 2 — the service** (R-ASSIST-1; Round 22: `clip separate`, `clip to-midi`, `chords detect` / `chords clear`, `#achord`, the model's `chords[]`, L2 tests over sounds the fake host plays back), then the window (the user: *"implement all"*). Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -703,6 +703,9 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       the DSP library (an exact STFT; median-filter separation, soft masks; YIN tracking split at onsets; chroma, the 24
       triads, Viterbi); `clip separate`, `clip to-midi`, `chords detect` / `chords clear`, each one edit; `#achord`; a
       ruler band. Parts: (1) DSP; (2) the service; (3) the window.
+      Part 1 (DSP f0d6fc1): `src/analysis/` — Stft (exact inverse), Separate (median filters, Wiener masks), Transcribe
+      (the tuner's YIN lifted into `meter/Yin`, onsets), Chords (chroma, 24 triads, Viterbi); REQ-analysis-1…4; 294 unit
+      tests, 63 integration checks through the Basic Synth; the pointer bumped.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
