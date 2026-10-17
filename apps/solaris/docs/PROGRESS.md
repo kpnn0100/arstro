@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N39 — A clip launcher** (R-LAUNCH-1; N38 — collect and relink — is built), then N40… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N40 — A video lane** (R-VIDEO-1; N39 — the clip launcher — is built), then N41… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -626,13 +626,14 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       service — `project files|collect|relink`, `clip relink`, `missing[]`; D-23 found and fixed (a dry run was an edit).
       Part 2: File › Collect and Save (one line), File › Relink… (asks first, then the window: Locate…, Search a
       Folder…, rows keyed and eased), a toast on open; shots relink-window, relink-found-mid. N38 DONE.
-- [~] **N39** A clip launcher (R-LAUNCH-1). Round 17 (the design): scenes × strips, slots as their own nodes; launching
+- [x] **N39** A clip launcher (R-LAUNCH-1). Round 17 (the design): scenes × strips, slots as their own nodes; launching
       live (quantized, the same graph, messages); recording lands the spans and cuts the arrangement under them. Part 1:
       the grid — `#ascene`/`#aslot`, `launchQuantize`, `scene add|delete|move`, `slot add|delete`, the fields. Part 2:
       launching, heard — slots in the graph, `launch`/`launch stop`/`launch back` quantized ahead of the render, live
       messages, a swap carrying the session, `transport.launched[]`. Part 3: recorded — `transport record` takes the
       session (with nothing armed, only it); spans land as clips, the arrangement under them cut, a note clip's `offset=`;
-      the song renders exactly what was heard. Next: part 4 — the session view.
+      the song renders exactly what was heard. Part 4: View › Session — the grid in the lanes' place, every gesture
+      one line, fills and pulses eased; shots session-view(-mid), launch-recorded. N39 DONE.
 - [ ] **N40** A video lane (R-VIDEO-1).
 - [ ] **N41** Sharing through a folder: merge by node (R-COLLAB-1).
 - [ ] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1).

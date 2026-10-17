@@ -210,7 +210,7 @@ namespace solaris_ui
 
     void App::refreshMenus(const solaris::AppModel &m)
     {
-        const std::string key = m.undoLabel + "|" + m.redoLabel + "|" + (mProject->dockOpen() ? "1" : "0") + (mProject->browserOpen() ? "1" : "0") +
+        const std::string key = m.undoLabel + "|" + m.redoLabel + "|" + (mProject->dockOpen() ? "1" : "0") + (mProject->browserOpen() ? "1" : "0") + (mProject->sessionOpen() ? "1" : "0") +
                                 (m.settings.metronome ? "1" : "0") + (m.settings.showIds ? "1" : "0") + keyHint(m, "song.undo") + keyHint(m, "song.redo") +
                                 keyHint(m, "lanes.duplicate") + keyHint(m, "lanes.delete") + keyHint(m, "lanes.copy") + keyHint(m, "lanes.paste") + keyHint(m, "lanes.split");
         if (key == mMenuKey) return; // labels change only when what they name does — a re-keyed action too
@@ -239,6 +239,7 @@ namespace solaris_ui
                  dispatch(std::string("settings set showIds=") + (mm.settings.showIds ? "off" : "on"));
              }},
             {"Settings\xE2\x80\xA6   (Ctrl+,)", [this] { openSettings(); }},
+            {mProject->sessionOpen() ? "Show Arrangement" : "Show Session", [this] { mProject->setSessionOpen(!mProject->sessionOpen()); mMenuKey.clear(); refreshMenus(mHooks.model ? mHooks.model() : emptyModel()); }}, // R-LAUNCH-1
         });
     }
 

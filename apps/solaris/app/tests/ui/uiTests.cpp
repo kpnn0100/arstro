@@ -4585,6 +4585,99 @@ static void test_relink_and_collect_from_the_file_menu()
     pass("relink and collect from the File menu (R-COLLECT-1): opened with files missing, said; Relink… lists them — Locate… one line, the found row fading out and the next sliding up, caught mid-way; Search a Folder… one line; nothing missing said; Collect and Save one line, said");
 }
 
+static void test_the_session_view()
+{
+    // R-LAUNCH-1 (Round 17, part 4): View › Show Session cross-fades the grid into the lanes' place; every gesture is ONE
+    // line — an empty cell's menu (the song's patterns) → `slot add`, "+ Scene" → `scene add`, a slot → `launch` (stopped:
+    // it plays at once, its fill easing in), a queued slot's pulse fading in and, stopped first, out; ■ → `launch stop`;
+    // a scene's ▶ → `launch <sc>`; Back to Arrangement → `launch back`; a slot's Delete → `slot delete`; and back again
+    sltest::Rig r("ui-session", 1280, 800);
+    r.cmd("project new " + r.song("Session") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");                // ch_2, pt_1
+    r.cmd("pattern new --name Lead --length 1");                           // pt_2
+    r.cmd("scene add Verse");                                              // sc_1
+    r.settle();
+    auto &ps = r.app->project();
+    auto &sv = ps.session();
+    auto &ms = ps.bar().menus();
+    auto &menu = r.app->menu();
+    auto viewItem = [&](const std::string &label) {
+        for (int i = 0; i < (int)ms.menu(3).items.size(); ++i)
+            if (ms.menu(3).items[(size_t)i].label == label) return i;
+        return -1;
+    };
+    r.click(world(ms, ms.titleRect(3)));
+    r.settle();
+    assert(viewItem("Show Session") >= 0);
+    r.click(world(ms, ms.itemRect(3, viewItem("Show Session"))));
+    r.frame();
+    r.frame();
+    assert(ps.sessionAmount() > 0.0 && ps.sessionAmount() < 1.0);           // cross-fading, not cut
+    r.settle();
+    assert(ps.sessionAmount() == 1.0);
+    // an empty cell: the song's patterns → ONE line
+    r.click(world(sv, sv.cellRect("sc_1", "ch_2")));
+    r.settle();
+    assert(menu.isOpen() && menuItem(r, "Lead") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Lead")));
+    r.settle();
+    assert(sentLine(r, "slot add sc_1 ch_2 --pattern pt_2") && r.svc->model().slots.size() == 1);
+    r.click(world(sv, sv.addSceneRect()));
+    r.settle();
+    assert(sentLine(r, "scene add") && r.svc->model().scenes.size() == 2);
+    // the slot, stopped: ONE launch; the transport starts and it plays at once — its fill easing in
+    r.click(world(sv, sv.cellRect("sc_1", "ch_2")));
+    double mid = -1;
+    for (int k = 0; k < 30 && mid < 0; ++k)
+    {
+        r.frame();
+        const double a = sv.playAmount("sl_1");
+        if (a > 0.0 && a < 1.0) mid = a;
+    }
+    assert(sentLine(r, "launch sl_1") && r.svc->model().transport.playing && mid > 0.0);
+    r.settle();
+    assert(sv.playAmount("sl_1") == 1.0);
+    // another slot, launched while playing: queued for the next bar — its pulse fades in; stopped first, it fades out
+    r.cmd("slot add sc_2 ch_2 --pattern pt_1");                             // sl_2
+    r.settle();
+    r.click(world(sv, sv.cellRect("sc_2", "ch_2")));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "launch sl_2") && sv.queuedAmount("sl_2") > 0.0 && sv.queuedAmount("sl_2") < 1.0);
+    r.settle();
+    assert(sv.queuedAmount("sl_2") == 1.0 && sv.playAmount("sl_2") == 0.0); // queued, not playing yet …
+    assert(sv.playAmount("sl_1") == 1.0);                                   // … the first plays on until its bar
+    r.click(world(sv, sv.stopRect("ch_2")));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "launch stop ch_2") && sv.queuedAmount("sl_2") < 1.0);
+    r.settle();
+    assert(sv.queuedAmount("sl_2") == 0.0);
+    r.click(world(sv, sv.sceneLaunchRect("sc_1")));
+    r.settle();
+    assert(sentLine(r, "launch sc_1"));
+    r.click(world(sv, sv.backRect()));
+    r.settle();
+    assert(sentLine(r, "launch back"));
+    // a slot's menu: Delete
+    {
+        const artboard::Rect c = world(sv, sv.cellRect("sc_2", "ch_2"));
+        r.click(c.x + c.w * 0.5, c.y + c.h * 0.5, 2);
+        r.settle();
+        assert(menu.isOpen() && menuItem(r, "Delete Slot") >= 0);
+        r.click(menu.itemRect(menuItem(r, "Delete Slot")));
+        r.settle();
+        assert(sentLine(r, "slot delete sl_2") && r.svc->model().slots.size() == 1);
+    }
+    r.cmd("transport stop");
+    r.click(world(ms, ms.titleRect(3)));
+    r.settle();
+    r.click(world(ms, ms.itemRect(3, viewItem("Show Arrangement"))));
+    r.settle();
+    assert(ps.sessionAmount() == 0.0);
+    pass("the session view (R-LAUNCH-1): View › Session cross-fades in; an empty cell's patterns, + Scene, a slot, ■, a scene's ▶, Back to Arrangement, Delete — ONE line each; a launched slot's fill eases in, a queued one's pulse fades in and out; and back");
+}
+
 static void test_a_tuners_window()
 {
     // R-FX-17 (Round 12, part 3): a tuner's window — a band under its header: the note large, a needle for the cents
@@ -5034,6 +5127,7 @@ int main()
     test_per_strip_tools_in_the_dock();
     test_versions_from_the_song_bar();
     test_relink_and_collect_from_the_file_menu();
+    test_the_session_view();
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();

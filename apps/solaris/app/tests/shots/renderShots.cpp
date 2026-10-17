@@ -40,6 +40,7 @@ namespace
         r.cmd("note add pt_1 --pitch 36 --at 0");
         r.cmd("strip add --kind instrument --instrument synth --name Bass");
         r.cmd("clip add --strip ch_3 --length 16");
+        std::ofstream(r.dir + "/vocal take 3.wav") << "RIFF"; // on disk, as a song's file is (the rig decodes it as a tone) — not "missing"
         r.cmd("clip add --src \"" + r.dir + "/vocal take 3.wav\" --at 8");
         r.cmd("strip add --kind bus --name Verb");
         r.cmd("send add ch_3 --to ch_5 --gain -8");
@@ -460,6 +461,65 @@ namespace
                  r.settle();
                  r.cmd("version open main");
                  r.pump(5 * sltest::Rig::kFrameMs);
+             }},
+            {"session-view", // R-LAUNCH-1: View › Session — Verse playing (its fills, their loops' progress), the bass's Drop slot queued
+                             // (its outline pulsing), an empty cell, + Scene, each column's ■, Back to Arrangement
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("pattern new --name \"Bass B\" --length 4");
+                 r.cmd("pattern new --name Fill --length 1");
+                 r.cmd("scene add Verse");
+                 r.cmd("scene add Drop");
+                 r.cmd("scene add Break");
+                 const auto &m = r.svc->model();
+                 std::string drums, bass, bassPt, drumPt;
+                 for (const auto &s : m.strips)
+                 {
+                     if (s.name == "Drums") drums = s.id;
+                     if (s.name == "Bass") bass = s.id;
+                 }
+                 for (const auto &c : m.clips)
+                 {
+                     if (c.track == drums && !c.pattern.empty()) drumPt = c.pattern;
+                     if (c.track == bass && !c.pattern.empty()) bassPt = c.pattern;
+                 }
+                 r.cmd("slot add sc_1 " + drums + " --pattern " + drumPt);
+                 r.cmd("slot add sc_1 " + bass + " --pattern " + bassPt);
+                 r.cmd("slot add sc_2 " + drums + " --pattern " + drumPt + " --length 2");
+                 r.cmd("slot add sc_2 " + bass + " --pattern pt_" + std::to_string(m.patterns.size() - 1));
+                 r.cmd("slot add sc_3 " + drums + " --pattern pt_" + std::to_string(m.patterns.size()));
+                 r.app->project().setSessionOpen(true);
+                 r.settle();
+                 r.cmd("launch sc_1");
+                 r.pump(1500.0);
+                 std::string queued;
+                 for (const auto &sl : r.svc->model().slots)
+                     if (sl.scene == "sc_2" && sl.strip == bass) queued = sl.id;
+                 r.cmd("launch " + queued);
+                 r.pump(400.0);
+             }},
+            {"session-view-mid", // R-LAUNCH-1: View › Session mid cross-fade — the lanes giving way to the grid
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("scene add Verse");
+                 r.settle();
+                 r.app->project().setSessionOpen(true);
+                 r.pump(5 * sltest::Rig::kFrameMs);
+             }},
+            {"launch-recorded", // R-LAUNCH-1: what a recorded launch leaves — the bass cut at bar 2 and again at bar 3, its tail starting
+                                // into its pattern (offset), the session's riff between on its lane
+             [](sltest::Rig &r) {
+                 r.cmd("project new " + r.song("Recorded") + ".slp --bpm 120");
+                 r.cmd("clip add --instrument synth --at 0 --length 4");          // pt_1, ac_1
+                 r.cmd("set pt_1.length=3");
+                 r.cmd("notes add pt_1 \"A2@0:0.5 A2@1:0.5 C3@2:0.5\"");
+                 r.cmd("pattern new --name Riff --length 1");                     // pt_2
+                 r.cmd("notes add pt_2 \"F#5@0:0.5 A5@0.5:0.25\"");
+                 const std::string lane = r.svc->model().clips[0].lane;
+                 r.cmd("clip add --strip ch_2 --pattern pt_2 --lane " + lane + " --at 4 --length 4");
+                 r.cmd("clip duplicate ac_1 --at 8");
+                 r.cmd("set ac_3.length=8 ac_3.offset=8");
+                 r.settle();
              }},
             {"relink-window", // R-COLLECT-1: File › Relink… on a song whose three samples moved — each row its name, the folder
                               // it was in and what uses it (a version's clip as vr_1:…), Locate…; Search a Folder… and Done

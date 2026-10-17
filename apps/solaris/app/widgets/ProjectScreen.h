@@ -25,6 +25,7 @@
 #include "FloatWindow.h"
 #include "MixerDock.h"
 #include "SongBar.h"
+#include "SessionView.h"
 #include "Timeline.h"
 #include <functional>
 #include <memory>
@@ -53,6 +54,11 @@ namespace solaris_ui
         double dockHeight() const { return mDockH.value(); } // LIVE
         void setDockOpen(bool open) { mDockOpen = open; }
         bool dockOpen() const { return mDockOpen; }
+        /** R-LAUNCH-1: View › Session — the grid cross-fades into the lanes' place, and back. */
+        void setSessionOpen(bool open) { mSessionOpen = open; }
+        bool sessionOpen() const { return mSessionOpen; }
+        double sessionAmount() const { return mSessionAmt.value(); } // LIVE: 0 the lanes … 1 the grid
+        SessionView &session() { return *mSession; }
         /** View › Browser: the left panel folds away (its width eased) and comes back. */
         void setBrowserOpen(bool open) { mBrowserOpen = open; }
         bool browserOpen() const { return mBrowserOpen; }
@@ -88,6 +94,9 @@ namespace solaris_ui
         std::shared_ptr<SongBar> mBar;
         std::shared_ptr<Browser> mBrowser;
         std::shared_ptr<Timeline> mTimeline;
+        std::shared_ptr<SessionView> mSession; // R-LAUNCH-1
+        bool mSessionOpen = false, mSessionLast = false;
+        artboard::AnimatedProperty mSessionAmt{0.0};
         std::shared_ptr<MixerDock> mDock;
         std::shared_ptr<WindowLayer> mWindows;
         double mDockWant = 429.0;          // space::u(132): what the user last dragged it to

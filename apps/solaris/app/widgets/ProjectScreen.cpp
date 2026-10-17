@@ -36,6 +36,10 @@ namespace solaris_ui
         mTimeline = std::make_shared<Timeline>();
         mDock = std::make_shared<MixerDock>();
         addChild(mTimeline);
+        mSession = std::make_shared<SessionView>(); // R-LAUNCH-1: the grid, in the lanes' place when shown
+        mSession->opacity.set(0.0);
+        mSession->visible = false;
+        addChild(mSession);
         addChild(mDock);
         addChild(mBrowser);
         mWindows = std::make_shared<WindowLayer>();
@@ -68,6 +72,11 @@ namespace solaris_ui
         };
         mBrowser->onCopy = copy;
         mTimeline->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
+        mSession->onCommand = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
+        mSession->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
+        mSession->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
+            if (onRename) onRename(cur, world, std::move(done));
+        };
         mTimeline->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
         mTimeline->onOpenPattern = [this](const std::string &pt, const std::string &ac) { mWindows->openRoll(pt, ac); };
         mTimeline->onOpenAutomation = [this](const std::string &au) { mWindows->openAutomation(au); }; // R-AUTO-11
@@ -161,6 +170,7 @@ namespace solaris_ui
         mBar->bind(m);
         mBrowser->bind(m);
         mTimeline->bind(m);
+        mSession->bind(m);
         mDock->bind(m, mInteracting);
         mWindows->bind(m, mInteracting);
     }
@@ -186,6 +196,17 @@ namespace solaris_ui
         mTimeline->x.set(bw); mTimeline->y.set(top);
         mTimeline->width.set(rw);                                    // the flexible column last (§4)
         mTimeline->height.set(std::max(0.0, H - top - dockH));       // from the LIVE dock height: the seam never tears
+        // R-LAUNCH-1: the grid in the same place — cross-faded; the one going takes no input
+        const double sa = mSessionAmt.value();
+        mSession->x.set(bw); mSession->y.set(top);
+        mSession->width.set(rw);
+        mSession->height.set(std::max(0.0, H - top - dockH));
+        mTimeline->opacity.set(1.0 - sa);
+        mSession->opacity.set(sa);
+        mTimeline->visible = sa < 0.999;
+        mSession->visible = sa > 0.001;
+        mTimeline->inputTransparent = sa >= 0.5;
+        mSession->inputTransparent = sa < 0.5;
         mDock->x.set(bw); mDock->y.set(top + std::max(0.0, H - top - dockH));
         mDock->width.set(rw);
         mDock->height.set(dockH);
@@ -212,6 +233,12 @@ namespace solaris_ui
         if (!mBrowserInit) { mBrowserW.set(bwWant); mBrowserLast = mBrowserOpen; mBrowserInit = true; }
         else if (mBrowserOpen != mBrowserLast) { mBrowserW.animateTo(bwWant, motion::kSlideMs, Easing::EaseOutCubic, nowMs); mBrowserLast = mBrowserOpen; }
         mBrowserW.update(nowMs);
+        if (mSessionOpen != mSessionLast) // R-LAUNCH-1: View › Session — a cross-fade, never a cut
+        {
+            mSessionAmt.animateTo(mSessionOpen ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mSessionLast = mSessionOpen;
+        }
+        mSessionAmt.update(nowMs);
         // Show IDs: the ids fade in and out together, wherever they are drawn (§1: a setting is not exempt)
         if (!mIdsInit) { mIds.set(mIdsWant ? 1.0 : 0.0); mIdsLast = mIdsWant; mIdsInit = true; }
         else if (mIdsWant != mIdsLast) { mIds.animateTo(mIdsWant ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); mIdsLast = mIdsWant; }
