@@ -2,7 +2,8 @@
  *  solaris_ui — ExportSheet: File › Export… — a sheet for ONE `render` line (R-EXPORT-1).
  *
  *  Cosmo's modal look, as the Settings sheet's (the scrim, the card, the 150/120 ms fade): a combo box a choice —
- *  Format, Sample rate, Bit depth, Quality, Loudness, Ceiling — and a toggle for a stem per strip. A row that does
+ *  Format, Sample rate, Bit depth, Quality, Loudness, Ceiling — and toggles for a stem per strip and, when the song has a
+ *  picture, for writing it with the mix (R-VIDEO-1: then the Format is MP4 or MKV, the line `render … --video`). A row that does
  *  not apply to the format chosen (a bit depth for MP3, a quality for FLAC, a rate for Opus, a ceiling with no
  *  loudness target) greys out, eased, and takes no input. The sheet holds no setting: Export… asks the host to
  *  name the file (the extension the format's) and the App sends `render --out <file> --format …` — the line a
@@ -22,7 +23,7 @@ namespace solaris_ui
     class ExportSheet : public artboard::Segment
     {
     public:
-        enum Row { kFormat = 0, kRate, kBits, kQuality, kLoudness, kCeiling, kStems, kRows };
+        enum Row { kFormat = 0, kRate, kBits, kQuality, kLoudness, kCeiling, kStems, kVideo, kRows }; // kVideo: R-VIDEO-1
         static constexpr double kCardW = 520.0;
         static constexpr double kPad = 24.0;
         static constexpr double kRowH = 46.0;      // a choice: its name and note on the left, its control on the right
@@ -37,7 +38,7 @@ namespace solaris_ui
 
         /** What Export sends after `render --out <file>`: `--format …` and every choice that applies. */
         std::string flags() const;
-        std::string extension() const;              // ".wav", ".flac", ".mp3", ".ogg", ".opus"
+        std::string extension() const;              // ".wav", ".flac", ".mp3", ".ogg", ".opus" — ".mp4", ".mkv" with the video
         /** Export…: the flags and the file name to suggest; the App asks the host for the path. */
         std::function<void(const std::string &flags, const std::string &suggested)> onExport;
 
@@ -70,12 +71,18 @@ namespace solaris_ui
         void setOptions(int row, std::vector<Opt> opts, const std::string &select);
         std::string value(int row) const;
         void formatChanged();                       // the quality list, and a choice the new format cannot take
+        void videoChanged();                        // R-VIDEO-1: with the video, the formats are MP4 and MKV; without, the audio's
+        bool withVideo() const { return mHasVideo && mVideo->on(); }
+        artboard::Segment *control(int row) const;  // a row's combo or toggle
         void closeCombos();
         void layoutControls();
 
         std::vector<Opt> mOpts[kRows];
         std::shared_ptr<SettingCombo> mCombos[kRows];
-        std::shared_ptr<SettingToggle> mStems;
+        std::shared_ptr<SettingToggle> mStems, mVideo;
+        std::vector<Opt> mAudioFormats;             // the Format list without the video
+        std::string mAudioFormat = "wav";           // the audio format left when the video was turned on
+        bool mHasVideo = false;                     // the song has a picture (R-VIDEO-1)
         artboard::AnimatedProperty mRowOn[kRows];
         double mRowLast[kRows];
         bool mRowsPlaced = false;

@@ -178,6 +178,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` · `.reverse` · `.warp` · `.bpm` · `.pitch` · `.offset` | text · beats · beats · beats · beats · dB · bool · s · s · bool (audio, R-EDIT-1) · bool · bpm 20 … 999 · semitones −24 … +24 (audio, R-WARP-1) · beats into its pattern (a note clip's, R-LAUNCH-1) |
 | `<lane>.name` · `.colour` · `.strip` (`<ch>` an instrument: the lane is its track; `none`: plain — R-LANE-3) · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
 | `<video>.offset` (R-VIDEO-1) | seconds on the song's clock (the tempo map's) its first frame shows, −36000 … 36000 — negative: it began before the song |
+| `<video>.at` (R-VIDEO-1) | the beat its first frame shows on — set, it moves the offset through the tempo map (before beat 0, at beat 0's tempo); the lane's drag |
 | `<version>.name` (R-VER) | text — never `main`, one per version; set on the version itself, never recorded as a change of the open one |
 | `<lane group>.name` · `.folded` · `<lane>.group` (R-ARR-3) | text · `on` (one row) / `off` · `<lg>` joins it (gathered with it) / `none` leaves it (placed after it) |
 | `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |
@@ -484,6 +485,9 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `video.path` | string | the file as the host opens it — resolved against the song's folder |
 | `video.at` | number | the beat its first frame shows on (through the tempo map; negative: before the song) |
 | `video.end` | number | the beat it ends on (its length after `at`, through the tempo map) |
+| `video.thumbs` | object[] | a point every second of the picture (every length/240 s for a long one) — where the lane draws a thumbnail |
+| `video.thumbs[].beat` | number | the song's beat (through the tempo map) |
+| `video.thumbs[].time` | number | the picture's seconds there |
 | `clips` | object[] | every clip |
 | `clips[].id` | string |  |
 | `clips[].name` | string |  |

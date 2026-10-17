@@ -143,14 +143,14 @@ namespace solaris_ui
     {
         const double W = width.value(), H = height.value();
         t.save();
-        t.clipRect(kHeaderW, kRulerH, W - kHeaderW, H - kRulerH);
+        t.clipRect(kHeaderW, top(), W - kHeaderW, H - top());
         for (const auto &row : mRowMotion.rows())
         {
             const Row &d = row.data;
             if (d.takeClip.empty() || row.liveAlpha() <= 0.001) continue;
             const ClipLive *cl = live(d.takeClip);
             if (!cl) continue;
-            const double a = row.liveAlpha(), top = kRulerH + row.liveY() - mScrollY.value();
+            const double a = row.liveAlpha(), top = this->top() + row.liveY() - mScrollY.value();
             const double at = cl->at.value(), len = liveLength(*cl);
             const Rect r{beatToX(at), top + 6.0, std::max(3.0, beatToX(at + len) - beatToX(at) - 1.0), kRowH - 12.0};
             const Color hue = lerpColor(cl->hueFrom, cl->hueTo, cl->hueT.value());

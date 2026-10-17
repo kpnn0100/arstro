@@ -1008,10 +1008,12 @@ namespace solaris
         for (auto &v : p.videos) // R-VIDEO-1: the picture's offset — seconds on the song's clock
             if (v.id == id)
             {
-                if (f != "offset") { err = unknownField(id, "a video", f, {"offset"}); return false; }
-                if (!number(value, x, err) || !inRange(x, -36000, 36000, "offset (s)", err)) return false;
-                v.offset = x;
-                stored = canonicalNumber(x);
+                if (f != "offset" && f != "at") { err = unknownField(id, "a video", f, {"offset", "at"}); return false; }
+                if (!number(value, x, err)) return false;
+                const double sec = f == "at" ? videoSecondsOf(x) : x; // `at`: a beat, through the tempo map (a lane's drag)
+                if (!inRange(sec, -36000, 36000, "offset (s)", err)) return false;
+                v.offset = sec;
+                stored = canonicalNumber(f == "at" ? x : sec);
                 return true;
             }
         if (Scene *sc = p.scene(id)) // R-LAUNCH-1: a row of the grid
@@ -1371,7 +1373,7 @@ namespace solaris
             put("masterGain", canonicalNumber(p.header.masterGain)); put("sampleRate", std::to_string(p.header.sampleRate));
             put("launchQuantize", p.header.launchQuantize); // R-LAUNCH-1
         }
-        else if (!p.videos.empty() && p.videos[0].id == id) { put("src", p.videos[0].src); put("offset", canonicalNumber(p.videos[0].offset)); } // R-VIDEO-1
+        else if (!p.videos.empty() && p.videos[0].id == id) { put("src", p.videos[0].src); put("offset", canonicalNumber(p.videos[0].offset)); put("at", canonicalNumber(videoBeatOf(p.videos[0].offset))); } // R-VIDEO-1
         else if (const Scene *sc = p.scene(id)) { put("name", sc->name); put("order", std::to_string(sc->order)); } // R-LAUNCH-1
         else if (const Slot *sl = p.slot(id))
         {

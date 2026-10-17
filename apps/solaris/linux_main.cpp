@@ -95,8 +95,8 @@ namespace
         gint64 startUs = 0;
         std::unique_ptr<solaris_host::ControlServer> control; // R-SVC-5: only with --control; last, so it goes first
         int cursor = -1;                                       // the cursor shown (R-UI-14)
-        solaris_host::VideoReader video;                       // R-VIDEO-1: the Video window's decoder, on its file
-        std::string videoFile;
+        solaris_host::VideoReader video, thumbs;               // R-VIDEO-1: the Video window's decoder, and the lane's
+        std::string videoFile, thumbFile;
     };
 
     // R-UI-14: the App says what the pointer looks like; the window shows the OS's own cursor for it, when it changes
@@ -272,21 +272,29 @@ int main(int argc, char **argv)
         gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), text.c_str(), (gint)text.size());
     };
     a->app->setOsReducedMotion(!animations); // the OS's "reduce motion" (design rule §2.6); the app's own setting ORs in
-    a->app->onVideoFrame = [a](const std::string &file, double t, int bw, int bh, arstro::solaris_ui::VideoImage &out) { // R-VIDEO-1
+    // R-VIDEO-1: a frame of the song's picture — one decoder for the window, one for the lane's thumbnails
+    auto frameFrom = [](solaris_host::VideoReader &reader, std::string &opened, const std::string &file, double t, int bw, int bh,
+                        arstro::solaris_ui::VideoImage &out) {
         std::string err;
-        if (file != a->videoFile)
+        if (file != opened)
         {
-            a->videoFile.clear();
-            if (!a->video.open(file, err)) return false;
-            a->videoFile = file;
+            opened.clear();
+            if (!reader.open(file, err)) return false;
+            opened = file;
         }
         solaris_host::VideoFrame f;
-        if (!a->video.frame(t, bw, bh, f, err)) return false;
+        if (!reader.frame(t, bw, bh, f, err)) return false;
         out.width = f.width;
         out.height = f.height;
         out.time = f.time;
         out.rgba = std::move(f.rgba);
         return true;
+    };
+    a->app->onVideoFrame = [a, frameFrom](const std::string &file, double t, int bw, int bh, arstro::solaris_ui::VideoImage &out) {
+        return frameFrom(a->video, a->videoFile, file, t, bw, bh, out);
+    };
+    a->app->onVideoThumb = [a, frameFrom](const std::string &file, double t, int bw, int bh, arstro::solaris_ui::VideoImage &out) {
+        return frameFrom(a->thumbs, a->thumbFile, file, t, bw, bh, out);
     };
     a->app->onPickFile = [a](const std::string &title, std::function<void(const std::string &)> done) { // R-COLLECT-1: Locate…
         const std::string p = pick(a, GTK_FILE_CHOOSER_ACTION_OPEN, title.c_str(), "_Open", false, std::string());

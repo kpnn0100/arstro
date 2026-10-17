@@ -168,6 +168,9 @@ namespace solaris
         const VideoInfo *videoInfo(const std::string &src);           // … probed once (null: it cannot be read)
         double videoTime(double beat);                                // the picture's seconds at a song beat; −1 outside it
         void fillVideo(double beat);                                  // the model's `video`, at a song beat
+        double videoBeatOf(double sec) const;                         // the song's beat at a second on its clock (before 0: beat 0's tempo)
+        double videoSecondsOf(double beat) const;                     // … and back
+        static constexpr double kVideoThumbs = 240.0;                 // the most thumbnail points a picture publishes
         // R-LAUNCH-1: what each strip in the session plays (by strip id) — and what will land, and when
         struct Launch
         {

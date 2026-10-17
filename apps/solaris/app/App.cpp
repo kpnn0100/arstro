@@ -84,6 +84,9 @@ namespace solaris_ui
         mProject->windows().videoFrame = [this](const std::string &file, double t, int bw, int bh, VideoImage &out) { // R-VIDEO-1
             return onVideoFrame && onVideoFrame(file, t, bw, bh, out);
         };
+        mProject->timeline().videoThumb = [this](const std::string &file, double t, int bw, int bh, VideoImage &out) { // R-VIDEO-1: the lane's
+            return onVideoThumb ? onVideoThumb(file, t, bw, bh, out) : onVideoFrame && onVideoFrame(file, t, bw, bh, out);
+        };
         mProject->browser().onOpenSettings = [this] { openSettings(); };
         mProject->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { mMenu->open(std::move(items), world.x, world.y); };
         mProject->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {

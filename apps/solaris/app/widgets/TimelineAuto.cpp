@@ -448,9 +448,9 @@ namespace solaris_ui
             const auto it = mAutos.find(row.data.automation);
             if (it == mAutos.end()) continue;
             const AutoLive &l = it->second;
-            const Rect r{0.0, kRulerH + row.liveY() - mScrollY.value(), width.value(), kRowH};
+            const Rect r{0.0, top() + row.liveY() - mScrollY.value(), width.value(), kRowH};
             const double a = row.liveAlpha();
-            if (r.bottom() < kRulerH || r.y > height.value() || a <= 0.001) continue;
+            if (r.bottom() < top() || r.y > height.value() || a <= 0.001) continue;
             // the range's two ends, faint
             t.setStroke(fade(palette::whiteAlpha(0.06), a), 1.0);
             for (double y : {r.y + kPad, r.bottom() - kPad})
@@ -490,7 +490,7 @@ namespace solaris_ui
 
     bool Timeline::autoGesture(const Gesture &g, const Point &local)
     {
-        const bool inRows = local.x >= kHeaderW && local.y >= kRulerH;
+        const bool inRows = local.x >= kHeaderW && local.y >= top();
         switch (g.type)
         {
         case Gesture::Type::Down:
@@ -670,7 +670,7 @@ namespace solaris_ui
         }
         case Gesture::Type::DoubleClick:
         {
-            if (local.x < kHeaderW && local.y >= kRulerH)
+            if (local.x < kHeaderW && local.y >= top())
             {
                 // an automation row's HEADER: its window (R-AUTO-11)
                 const std::string au = autoAt(local.y);

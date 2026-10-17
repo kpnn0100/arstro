@@ -329,6 +329,12 @@ namespace solaris
         double gain = 0;                         // dB
     };
 
+    /** R-VIDEO-1: a point of the picture on the song's beats — where the lane draws a thumbnail. */
+    struct VideoThumbModel
+    {
+        double beat = 0, time = 0;               // the song's beat; the picture's seconds there
+    };
+
     /** R-VIDEO-1: the song's picture — and where it is at the heard position. */
     struct VideoModel
     {
@@ -340,6 +346,7 @@ namespace solaris
         double time = -1;                        // the picture's seconds at the heard position (−1: outside it)
         std::string path;                        // the file as the host opens it (resolved against the song's folder)
         double at = 0, end = 0;                  // the beats it starts and ends on — through the tempo map
+        std::vector<VideoThumbModel> thumbs;     // a point every second of it (fewer for a long one), through the tempo map
     };
 
     /** R-COLLECT-1: a file the song names that cannot be read — and what uses it. */

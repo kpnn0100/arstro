@@ -173,6 +173,9 @@ namespace solaris
             {"video.path", "string", "the file as the host opens it — resolved against the song's folder"},
             {"video.at", "number", "the beat its first frame shows on (through the tempo map; negative: before the song)"},
             {"video.end", "number", "the beat it ends on (its length after `at`, through the tempo map)"},
+            {"video.thumbs", "object[]", "a point every second of the picture (every length/240 s for a long one) — where the lane draws a thumbnail"},
+            {"video.thumbs[].beat", "number", "the song's beat (through the tempo map)"},
+            {"video.thumbs[].time", "number", "the picture's seconds there"},
             {"clips", "object[]", "every clip"},
             {"clips[].id", "string", ""},
             {"clips[].name", "string", ""},
@@ -721,10 +724,12 @@ namespace solaris
             slots.push(Json::object().set("id", x.id).set("name", x.name).set("scene", x.scene).set("strip", x.strip).set("pattern", x.pattern)
                            .set("src", x.src).set("length", x.length).set("gain", x.gain));
         j.set("scenes", scenes).set("slots", slots).set("launchQuantize", m.launchQuantize);
+        Json thumbs = Json::array();
+        for (const auto &th : m.video.thumbs) thumbs.push(Json::object().set("beat", th.beat).set("time", th.time));
         j.set("video", Json::object().set("id", m.video.id).set("src", m.video.src).set("offset", m.video.offset).set("duration", m.video.duration)
                            .set("width", (long long)m.video.width).set("height", (long long)m.video.height).set("fps", m.video.fps)
                            .set("offline", m.video.offline).set("time", m.video.time)
-                           .set("path", m.video.path).set("at", m.video.at).set("end", m.video.end)); // R-VIDEO-1
+                           .set("path", m.video.path).set("at", m.video.at).set("end", m.video.end).set("thumbs", thumbs)); // R-VIDEO-1
         Json clips = Json::array();
         for (const auto &c : m.clips)
         {

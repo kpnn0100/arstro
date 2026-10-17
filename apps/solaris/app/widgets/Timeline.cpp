@@ -108,6 +108,7 @@ namespace solaris_ui
         mLength = m.lengthBeats;
         mPosition = m.transport.position;
         mCue = m.transport.cue;
+        mVideo = m.video; // R-VIDEO-1: the picture's row
         mPlaying = m.transport.playing;
         mLoopFrom = m.transport.loopFrom;
         mLoopTo = m.transport.loopTo;
@@ -341,17 +342,17 @@ namespace solaris_ui
 
     int Timeline::rowAt(double y) const
     {
-        if (y < kRulerH) return -1;
+        if (y < top()) return -1;
         for (int i = 0; i < (int)mRows.size(); ++i)   // the rows as drawn — live, mid-tween included
         {
             const Rect r = rowRect(i);
             if (y >= r.y && y < r.bottom()) return i;
         }
-        const int r = (int)std::floor((y - kRulerH + mScrollY.value()) / kRowH);
+        const int r = (int)std::floor((y - top() + mScrollY.value()) / kRowH);
         return std::clamp(r, 0, (int)mRows.size());
     }
 
-    Rect Timeline::rowRect(int i) const { return Rect{0.0, kRulerH + rowY(i) - mScrollY.value(), width.value(), kRowH}; }
+    Rect Timeline::rowRect(int i) const { return Rect{0.0, top() + rowY(i) - mScrollY.value(), width.value(), kRowH}; }
     Rect Timeline::rulerRect() const { return Rect{kHeaderW, 0.0, std::max(0.0, width.value() - kHeaderW), kRulerH}; }
 
     double Timeline::liveLength(const ClipLive &l) const
@@ -368,7 +369,7 @@ namespace solaris_ui
 
     Rect Timeline::clipBox(const ClipView &, double at, double y, double len, double off, double frac) const
     {
-        const double top = kRulerH + y - mScrollY.value(), h = kRowH - 6.0;
+        const double top = this->top() + y - mScrollY.value(), h = kRowH - 6.0;
         const double x0 = beatToX(at), x1 = beatToX(at + std::max(0.25, len));
         // R-ARR-3: in a folded group's row each lane keeps a band of it, so its clips never lie on one another
         return Rect{x0, top + 3.0 + off * h, std::max(3.0, x1 - x0 - 1.0), std::max(2.0, frac * h - (frac < 0.999 ? 1.0 : 0.0))};
@@ -386,7 +387,7 @@ namespace solaris_ui
     {
         for (const auto &row : mRowMotion.rows())
             if (!row.gone && row.data.group == lg && (row.data.folded || row.data.groupHead))
-                return Rect{6.0, kRulerH + row.liveY() - mScrollY.value() + 34.0, kHeaderW - 12.0, 13.0};
+                return Rect{6.0, top() + row.liveY() - mScrollY.value() + 34.0, kHeaderW - 12.0, 13.0};
         return Rect{};
     }
     double Timeline::groupTurn(const std::string &lg) const
@@ -425,7 +426,7 @@ namespace solaris_ui
 
     std::string Timeline::clipAt(const Point &p) const
     {
-        if (p.x < kHeaderW || p.y < kRulerH) return std::string();
+        if (p.x < kHeaderW || p.y < top()) return std::string();
         for (auto it = mLive.rbegin(); it != mLive.rend(); ++it) // topmost (drawn last) first; a ghost takes no input
             if (!it->gone && clipRect(it->v.c.id).contains(p)) return it->v.c.id;
         return std::string();
@@ -450,7 +451,7 @@ namespace solaris_ui
             (std::fabs(local.x - br.x) <= kBraceGrip || std::fabs(local.x - br.right()) <= kBraceGrip))
             return Cursor::ResizeH;
         // an automation span's grip (R-AUTO-12) — as the press reads it
-        if (local.x >= kHeaderW && local.y >= kRulerH)
+        if (local.x >= kHeaderW && local.y >= top())
             if (const std::string au = autoAt(local.y); !au.empty() && spanGripAt(au, local) >= 0) return Cursor::ResizeH;
         // an audio clip's fade handles and gain line (R-EDIT-1) — as the press reads them
         {
@@ -505,7 +506,7 @@ namespace solaris_ui
     {
         const double viewW = std::max(0.0, width.value() - kHeaderW);
         mScrollX.setExtent(kHeaderW, viewW, std::max(viewW, (mLength + 4.0 * mBeatsPerBar) * mPpbTarget));
-        mScrollY.setExtent(kRulerH, std::max(0.0, height.value() - kRulerH), (mRows.size() + mAutoIds.size() + 1) * kRowH);
+        mScrollY.setExtent(top(), std::max(0.0, height.value() - top()), (mRows.size() + mAutoIds.size() + 1) * kRowH);
     }
 
     void Timeline::advance(double nowMs)
@@ -627,6 +628,7 @@ namespace solaris_ui
             l.t.update(nowMs);
         }
         advanceAuto(nowMs); // a click's point waiting out the double-click (R-AUTO-11)
+        advanceVideo(nowMs);   // R-VIDEO-1: before the markers — the lanes' top moves with its row
         advanceMarkers(nowMs); // R-ARR-1
         advanceTempos(nowMs);  // R-TEMPO-1
         advanceTakes(nowMs);   // R-REC-2
@@ -820,7 +822,7 @@ namespace solaris_ui
     {
         // R-CLIP-6: a one-bar MIDI clip on the instrument's track under the pointer, on the snap step — ONE
         // `clip add`, the track's instrument implied, a new empty pattern for it
-        if (local.x < kHeaderW || local.y < kRulerH || !onCommand) return false;
+        if (local.x < kHeaderW || local.y < top() || !onCommand) return false;
         const int ri = rowAt(local.y);
         if (ri < 0 || ri >= (int)mRows.size() || mRows[(size_t)ri].strip.empty()) return false;
         onCommand("clip add --lane " + q(mRows[(size_t)ri].lane) + " --at " + beats(snap(xToBeat(local.x))) + " --length " + beats((double)mBeatsPerBar));
@@ -921,6 +923,7 @@ namespace solaris_ui
 
     bool Timeline::handleGesture(const Gesture &g, const Point &local)
     {
+        if (videoGesture(g, local)) return true; // the picture's span, dragged (R-VIDEO-1)
         if (autoGesture(g, local)) return true; // an automation row's curve and points (R-AUTO-6)
         if (takeGesture(g, local)) return true; // a take's row: a range of it into the comp (R-REC-2)
         if (clipEditGesture(g, local)) return true; // an audio clip's fade handles and gain line (R-EDIT-1)
@@ -1097,7 +1100,7 @@ namespace solaris_ui
             return true;
         case Gesture::Type::RightClick:
         {
-            if (local.x < kHeaderW && local.y >= kRulerH)
+            if (local.x < kHeaderW && local.y >= top())
             {
                 // a lane's menu (R-LANE-3): whose track it is — or a plain lane — each one line
                 const int ri = rowAt(local.y);
@@ -1309,7 +1312,7 @@ namespace solaris_ui
                 if (la <= 0.001) continue;
                 const double x = std::round(beatToX(n * span)) + 0.5;
                 t.setStroke(palette::whiteAlpha(strength * la), 1.0);
-                t.beginPath(); t.moveTo(x, kRulerH); t.lineTo(x, H); t.strokePath();
+                t.beginPath(); t.moveTo(x, top()); t.lineTo(x, H); t.strokePath();
             }
         }
     }
@@ -1381,11 +1384,11 @@ namespace solaris_ui
 
         // rows and the grid
         t.save();
-        t.clipRect(0, kRulerH, W, H - kRulerH);
+        t.clipRect(0, top(), W, H - top());
         for (const auto &row : mRowMotion.rows())
         {
-            const double y = kRulerH + row.liveY() - mScrollY.value(), a = row.liveAlpha();
-            if (y + kRowH < kRulerH || y > H || a <= 0.001) continue;
+            const double y = top() + row.liveY() - mScrollY.value(), a = row.liveAlpha();
+            if (y + kRowH < top() || y > H || a <= 0.001) continue;
             // the zebra is a function of the LIVE slot, so a row sliding to an odd slot shades as it goes
             const double odd = 0.5 - 0.5 * std::cos(M_PI * row.liveY() / kRowH);
             drawRoundedRect(t, Rect{kHeaderW, y, W - kHeaderW, kRowH}, 0.0, Paint::filled(fade(surface::laneBg(), (1.0 - odd) * a)));
@@ -1406,7 +1409,7 @@ namespace solaris_ui
 
         // clips
         t.save();
-        t.clipRect(kHeaderW, kRulerH, W - kHeaderW, H - kRulerH);
+        t.clipRect(kHeaderW, top(), W - kHeaderW, H - top());
         for (const auto &l : mLive)
         {
             const ClipView &v = l.v;
@@ -1416,7 +1419,7 @@ namespace solaris_ui
                                  std::find(mDragGroupClips.begin(), mDragGroupClips.end(), v.c.id) != mDragGroupClips.end(); // R-ARR-3
             const bool dragged = !l.gone && mDragging && (v.c.id == mPressClip || carried);
             const Rect r = clipBox(v, l.at.value(), l.row.value() * kRowH, liveLength(l), l.off.value(), l.frac.value());
-            if (r.right() < kHeaderW || r.x > W || r.bottom() < kRulerH || r.y > H) continue;
+            if (r.right() < kHeaderW || r.x > W || r.bottom() < top() || r.y > H) continue;
             const double ring = l.gone ? 0.0 : (v.c.id == mSelected ? mSelIn.value() : (v.c.id == mPrevSelected ? mSelOut.value() : 0.0));
             // dragged: the original dims where it was — unless Shift makes it a copy, when it stays at full strength
             paintClip(t, v, r, (dragged ? 0.35 + 0.65 * mCopyAmt.value() : 1.0) * a, dragged ? 0.0 : ring, lerpColor(l.hueFrom, l.hueTo, l.hueT.value()), liveLength(l));
@@ -1467,15 +1470,15 @@ namespace solaris_ui
         t.restore();
 
         // lane headers
-        drawRoundedRect(t, Rect{0, kRulerH, kHeaderW, H - kRulerH}, 0.0, Paint::filled(surface::headerBg()));
+        drawRoundedRect(t, Rect{0, top(), kHeaderW, H - top()}, 0.0, Paint::filled(surface::headerBg()));
         t.save();
-        t.clipRect(0, kRulerH, kHeaderW, H - kRulerH);
+        t.clipRect(0, top(), kHeaderW, H - top());
         auto stripeColour = [](int c) { return c >= 0 ? surface::track(c) : palette::whiteAlpha(0.12); };
         for (const auto &row : mRowMotion.rows())
         {
-            const Rect r{0.0, kRulerH + row.liveY() - mScrollY.value(), W, kRowH};
+            const Rect r{0.0, top() + row.liveY() - mScrollY.value(), W, kRowH};
             const double a = row.liveAlpha();
-            if (r.bottom() < kRulerH || r.y > H || a <= 0.001) continue;
+            if (r.bottom() < top() || r.y > H || a <= 0.001) continue;
             const Row &d = row.data;
             Color stripe = stripeColour(d.colour);
             const auto st = mStripes.find(row.key);
@@ -1556,7 +1559,7 @@ namespace solaris_ui
             for (const auto &row : mRowMotion.rows())
             {
                 if (row.data.group.empty() || row.data.folded || row.liveAlpha() <= 0.001) continue;
-                const double y = kRulerH + row.liveY() - mScrollY.value();
+                const double y = top() + row.liveY() - mScrollY.value();
                 auto it = span.find(row.data.group);
                 if (it == span.end()) span[row.data.group] = {y, y + kRowH};
                 else { it->second.first = std::min(it->second.first, y); it->second.second = std::max(it->second.second, y + kRowH); }
@@ -1586,6 +1589,7 @@ namespace solaris_ui
             }
         }
         t.restore();
+        paintVideo(t);   // R-VIDEO-1: the picture's row, between the ruler and the lanes
         paintMarkers(t); // R-ARR-1: the ruler's band
         paintTempos(t);  // R-TEMPO-1: over it, at their beats
         if (const Rect pr = punchRect(); pr.w > 0 && mPunchAmt.value() > 0.001) // R-REC-1: where a recording keeps — red
@@ -1632,10 +1636,10 @@ namespace solaris_ui
             const double cx = kHeaderW + (W - kHeaderW) * 0.5;
             t.setFill(fade(palette::mutedForeground(), ea));
             const std::string ae = textfit::ellipsize(t, a, W - kHeaderW - 32.0, 13.0, font::sans());
-            t.drawText(ae, cx - t.measureText(ae, 13.0, font::sans()) * 0.5, kRulerH + 90.0, 13.0, font::sans());
+            t.drawText(ae, cx - t.measureText(ae, 13.0, font::sans()) * 0.5, top() + 90.0, 13.0, font::sans());
             t.setFill(fade(palette::mutedForeground(), 0.75 * ea));
             const std::string be = textfit::ellipsize(t, b, W - kHeaderW - 32.0, 11.0, font::sans());
-            t.drawText(be, cx - t.measureText(be, 11.0, font::sans()) * 0.5, kRulerH + 110.0, 11.0, font::sans());
+            t.drawText(be, cx - t.measureText(be, 11.0, font::sans()) * 0.5, top() + 110.0, 11.0, font::sans());
         }
         mScrollY.drawBar(t, W - 5.0);
     }

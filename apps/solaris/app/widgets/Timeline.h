@@ -75,6 +75,7 @@
 #include "../Theme.h"
 #include "../Cursor.h"
 #include "AppModel.h"
+#include "VideoPanel.h"
 #include "../../../interstellar/app/widgets/AnimatedRows.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/ContextMenu.h"
@@ -238,6 +239,23 @@ namespace solaris_ui
         /** A click's point waiting out the double-click: its ghost's LIVE opacity (0 = none). */
         double autoPendingAmount() const { return mPendAmt.value(); }
 
+        // R-VIDEO-1: the song's picture — a row between the ruler and the lanes, pinned as the ruler is; it grows in when the
+        // song gains one and out when it loses it, and the lanes slide with it (`top`). Its span (the picture's beats, the
+        // model's — through the tempo map) eases to where the model puts it, and dragged it is the pointer's: ONE
+        // `set <vd>.at=<beat>` on release. Thumbnails at the model's points (`video.thumbs`), a tile apart, decoded by the
+        // host (`videoThumb`) a few a frame, kept, each fading in as it arrives.
+        static constexpr double kVideoH = 39.0;    // space::u(12): the picture's row
+        static constexpr double kThumbPad = 3.25;  // space::u(1): its span's inset
+        static constexpr int kThumbAsksPerFrame = 3; // decodes on the UI thread: a few a frame, so a zoom never stalls one
+        double top() const { return kRulerH + mVideoH.value(); }    // where the lanes begin — LIVE
+        double videoRowAmount() const { return mVideoH.value() / kVideoH; } // LIVE, 0 … 1
+        artboard::Rect videoSpanRect() const;                      // the picture's span as DRAWN (local)
+        double videoAtLive() const;                                // its first frame's beat as drawn (the pointer's while held)
+        double thumbAmount(double time) const;                     // a thumbnail's fade-in, LIVE (−1: never asked)
+        int thumbsDrawn() const { return mThumbsDrawn; }           // tiles the last paint drew
+        bool videoDragging() const { return mVideoDragging; }
+        std::function<bool(const std::string &file, double t, int boxW, int boxH, VideoImage &out)> videoThumb;
+
         void advance(double nowMs) override;
 
     protected:
@@ -327,6 +345,32 @@ namespace solaris_ui
         void paintLoop(artboard::IRenderTarget &t, const AutoLive &l, const std::vector<solaris::AutoPointModel> &pts, const artboard::Rect &row,
                        double a) const;
         void advanceAuto(double nowMs);
+        // R-VIDEO-1: the picture's row (TimelineVideo.cpp)
+        struct Thumb
+        {
+            std::vector<uint8_t> rgba;
+            int w = 0, h = 0;
+            bool ok = false;
+            artboard::AnimatedProperty a{0.0};
+            mutable int id = 0;
+        };
+        solaris::VideoModel mVideo;
+        std::string mVideoShown;                                   // the id drawn — a new picture is placed, not slid in
+        artboard::AnimatedProperty mVideoH{0.0}, mVideoAt{0.0}, mVideoEnd{0.0};
+        bool mVideoApplied = false, mVideoPressed = false, mVideoDragging = false;
+        double mVideoAtLast = 0, mVideoEndLast = 0, mVideoGrab = 0, mVideoDragAt = 0;
+        std::map<long long, Thumb> mThumbs;                        // by the picture's time (ms), at the row's height
+        std::string mThumbFile;
+        int mThumbH = 0;
+        mutable artboard::IRenderTarget *mThumbOwner = nullptr;
+        mutable std::vector<int> mThumbRelease;                    // ids of a picture gone, released at the next paint
+        mutable int mThumbsDrawn = 0;
+        void advanceVideo(double nowMs);
+        void paintVideo(artboard::IRenderTarget &t) const;
+        bool videoGesture(const artboard::Gesture &g, const artboard::Point &local);
+        double videoShift() const;                                 // beats the drawn picture is from the model's
+        double thumbW() const;                                     // a tile's width at the row's height
+        std::vector<std::pair<double, const solaris::VideoThumbModel *>> thumbTiles() const; // (x, point), a tile apart
         std::vector<solaris::AutoPointModel> drawnPoints(const AutoLive &l) const; // shown, with a held point or handle the pointer's
         int handleNear(const std::string &au, const artboard::Point &local, int &side) const;
         void dragHandle(const artboard::Point &local, bool alt);

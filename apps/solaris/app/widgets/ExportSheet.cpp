@@ -18,14 +18,15 @@ namespace solaris_ui
         constexpr double kFooterH = 56.0;  // Cancel · Export…, under a hairline
         constexpr int kExportId = 900, kCancelId = 901;
         constexpr double kDimmed = 0.35;   // a row that does not apply: still there, so the sheet does not jump
-        const char *kLabels[ExportSheet::kRows] = {"Format", "Sample rate", "Bit depth", "Quality", "Loudness", "Ceiling", "Stems"};
+        const char *kLabels[ExportSheet::kRows] = {"Format", "Sample rate", "Bit depth", "Quality", "Loudness", "Ceiling", "Stems", "With the video"};
         const char *kNotes[ExportSheet::kRows] = {"the file's kind \xE2\x80\x94 its extension follows",
                                                   "the song rendered at it: no resampler",
                                                   "16 and 24 are dithered (TPDF)",
                                                   "how much a lossy file keeps",
                                                   "the whole mix gained to an integrated loudness",
                                                   "\xE2\x80\xA6 held so its true peak stays under this",
-                                                  "a file per strip beside the mix, gained alike"};
+                                                  "a file per strip beside the mix, gained alike",
+                                                  "the song's picture and the mix in one file"};
         Color fade(Color c, double a) { c.a *= a; return c; }
         bool lossy(const std::string &f) { return f == "mp3" || f == "ogg" || f == "opus"; }
     }
@@ -34,6 +35,7 @@ namespace solaris_ui
     {
         for (double &l : mRowLast) l = -1.0;
         mOpts[kFormat] = {{"WAV", "wav"}, {"FLAC", "flac"}, {"MP3", "mp3"}, {"Ogg Vorbis", "ogg"}, {"Opus", "opus"}};
+        mAudioFormats = mOpts[kFormat];
         mOpts[kRate] = {{"The song's", ""}, {"44.1 kHz", "44100"}, {"48 kHz", "48000"}, {"88.2 kHz", "88200"}, {"96 kHz", "96000"}};
         mOpts[kBits] = {{"16-bit", "16"}, {"24-bit", "24"}, {"32-bit float", "32f"}};
         mOpts[kLoudness] = {{"Off", ""}, {"\xE2\x88\x92" "23 LUFS \xE2\x80\x94 broadcast", "-23"}, {"\xE2\x88\x92" "16 LUFS \xE2\x80\x94 podcasts", "-16"},
@@ -41,10 +43,12 @@ namespace solaris_ui
         mOpts[kCeiling] = {{"\xE2\x88\x92" "0.3 dBTP", "-0.3"}, {"\xE2\x88\x92" "1 dBTP", "-1"}, {"\xE2\x88\x92" "2 dBTP", "-2"}};
         for (int r = 0; r < kRows; ++r)
         {
-            if (r == kStems)
+            if (r == kStems || r == kVideo)
             {
-                mStems = std::make_shared<SettingToggle>();
-                addChild(mStems);
+                auto tg = std::make_shared<SettingToggle>();
+                addChild(tg);
+                (r == kStems ? mStems : mVideo) = tg;
+                if (r == kVideo) tg->onChange = [this](bool) { videoChanged(); };
                 continue;
             }
             auto cb = std::make_shared<SettingCombo>();
@@ -76,6 +80,7 @@ namespace solaris_ui
     std::string ExportSheet::value(int row) const
     {
         if (row == kStems) return mStems->on() ? "on" : "";
+        if (row == kVideo) return withVideo() ? "on" : "";
         const int i = mCombos[row]->selectedIndex();
         return i >= 0 && i < (int)mOpts[row].size() ? mOpts[row][(size_t)i].value : std::string();
     }
@@ -92,15 +97,32 @@ namespace solaris_ui
         if (f == "mp3" && std::atoi(value(kRate).c_str()) > 48000) mCombos[kRate]->setSelectedIndex(2); // MP3: to 48 kHz
     }
 
+    void ExportSheet::videoChanged()
+    {
+        // R-VIDEO-1: with the video the file is a picture's — MP4 or MKV; without, the audio format it was left at
+        if (withVideo())
+        {
+            const std::string f = value(kFormat);
+            if (f != "mp4" && f != "mkv") mAudioFormat = f;
+            setOptions(kFormat, {{"MP4", "mp4"}, {"MKV", "mkv"}}, f == "mkv" ? "mkv" : "mp4");
+        }
+        else if (value(kFormat) == "mp4" || value(kFormat) == "mkv")
+            setOptions(kFormat, mAudioFormats, mAudioFormat);
+        formatChanged();
+    }
+
     bool ExportSheet::applies(int row) const
     {
         const std::string f = value(kFormat);
+        const bool video = withVideo();
         switch (row)
         {
         case kRate: return f != "opus";            // an Opus file is 48 kHz
-        case kBits: return !lossy(f);
-        case kQuality: return lossy(f);
+        case kBits: return !lossy(f) && !video;    // the picture's mix is encoded as its container's (AAC / FLAC)
+        case kQuality: return lossy(f) && !video;
         case kCeiling: return !value(kLoudness).empty();
+        case kStems: return !video;                // ONE file: the picture and the mix
+        case kVideo: return mHasVideo;
         default: return true;
         }
     }
@@ -113,12 +135,12 @@ namespace solaris_ui
     {
         // the choices that apply, as `render` spells them (R-EXPORT-1)
         const std::string f = value(kFormat);
-        std::string s = "--format " + f;
+        std::string s = withVideo() ? "--video" : "--format " + f; // R-VIDEO-1: the extension says MP4 or MKV
         if (applies(kRate) && !value(kRate).empty()) s += " --rate " + value(kRate);
         if (applies(kBits)) s += " --bits " + value(kBits);
         if (applies(kQuality)) s += " --kbps " + value(kQuality);
         if (!value(kLoudness).empty()) s += " --normalize " + value(kLoudness) + " --ceiling " + value(kCeiling);
-        if (mStems->on()) s += " --stems all";
+        if (applies(kStems) && mStems->on()) s += " --stems all";
         return s;
     }
 
@@ -136,7 +158,7 @@ namespace solaris_ui
         const Rect c = cardRect();
         for (int r = 0; r < kRows; ++r)
         {
-            Segment *s = r == kStems ? (Segment *)mStems.get() : (Segment *)mCombos[r].get();
+            Segment *s = control(r);
             const double top = c.y + kHeaderH + r * kRowH;
             s->x.set(c.right() - kPad - s->width.value());
             s->y.set(top + (kRowH - s->height.value()) * 0.5);
@@ -147,10 +169,15 @@ namespace solaris_ui
         }
     }
 
+    Segment *ExportSheet::control(int row) const
+    {
+        return row == kStems ? (Segment *)mStems.get() : row == kVideo ? (Segment *)mVideo.get() : (Segment *)mCombos[row].get();
+    }
+
     Rect ExportSheet::controlRect(int row) const
     {
         if (row < 0 || row >= kRows) return Rect{};
-        const Segment *s = row == kStems ? (const Segment *)mStems.get() : (const Segment *)mCombos[row].get();
+        const Segment *s = control(row);
         const Point p = s->worldTransform().apply(Point{0.0, 0.0});
         return Rect{p.x, p.y, s->width.value(), s->height.value()};
     }
@@ -180,6 +207,12 @@ namespace solaris_ui
     {
         mName = m.projectName.empty() ? std::string("Untitled") : m.projectName;
         mSongRate = m.sampleRate;
+        mHasVideo = !m.video.id.empty(); // R-VIDEO-1: no picture, no video row (greyed, so the sheet never jumps)
+        if (!mHasVideo && mVideo->on())
+        {
+            mVideo->setOn(false);
+            videoChanged();
+        }
         char b[48];
         std::snprintf(b, sizeof b, "The song's \xE2\x80\x94 %g kHz", mSongRate / 1000.0);
         auto rates = mOpts[kRate];
@@ -284,7 +317,7 @@ namespace solaris_ui
         for (int r = 0; r < kRows; ++r)
         {
             const double top = c.y + kHeaderH + r * kRowH, a = kDimmed + (1.0 - kDimmed) * mRowOn[r].value();
-            const double room = c.w - 2.0 * kPad - (r == kStems ? 40.0 : kComboW) - 16.0;
+            const double room = c.w - 2.0 * kPad - (r == kStems || r == kVideo ? 40.0 : kComboW) - 16.0;
             t.setFill(fade(palette::foreground(), a));
             t.drawText(textfit::ellipsize(t, kLabels[r], room, 12.0, font::sans()), c.x + kPad, top + 19.0, 12.0, font::sans());
             t.setFill(fade(palette::mutedForeground(), a));

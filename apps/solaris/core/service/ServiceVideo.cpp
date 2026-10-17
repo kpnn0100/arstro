@@ -1,8 +1,10 @@
 // SolarisService — the song's picture (R-VIDEO-1; docs/discussion.md Round 18): one video a song, its first frame
 // `offset` seconds into the song's clock. The host reads it (the core carries no codec, R-SVC-4); the model says where
 // the picture is at the heard position (`video.time`), so a front end never re-derives the tempo map (law 13).
+#include "Compile.h"
 #include "Format.h"
 #include "SolarisService.h"
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 
@@ -55,17 +57,36 @@ namespace solaris
             m.fps = vi->fps;
         }
         m.time = videoTime(beat);
-        // where it lies on the song's beats — a picture begun before the song, at beat 0's tempo
+        // where it lies on the song's beats, and a beat every so many of its seconds — the lane's thumbnails — so a front
+        // end needs no tempo map (law 13); the map built once
         m.path = resolvePath(v.src);
-        auto beatAt = [this](double sec) {
-            if (sec >= 0) return beatOfSample(sec * mProject.header.sampleRate);
-            double bpm = 0;
-            std::string id;
-            tempoAt(0, bpm, id);
-            return sec * bpm / 60.0;
-        };
+        const engine::TempoMap map = mProject.tempos.empty() ? engine::TempoMap::constant(mProject.header.bpm, mProject.header.sampleRate) : tempoMapOf(mProject);
+        auto beatAt = [&](double sec) { return sec >= 0 ? map.beatAt(sec * mProject.header.sampleRate) : sec * map.bpmAt(0) / 60.0; };
         m.at = beatAt(v.offset);
         m.end = beatAt(v.offset + m.duration);
+        if (m.duration > 0)
+        {
+            const double step = std::max(1.0, m.duration / kVideoThumbs); // a second apart, or fewer for a long picture
+            for (int k = 0; k * step <= m.duration + 1e-9; ++k) m.thumbs.push_back(VideoThumbModel{beatAt(v.offset + k * step), k * step});
+        }
+    }
+
+    double SolarisService::videoBeatOf(double sec) const
+    {
+        double bpm = 0;
+        std::string id;
+        if (sec >= 0) return beatOfSample(sec * mProject.header.sampleRate);
+        tempoAt(0, bpm, id); // before the song: beat 0's tempo
+        return sec * bpm / 60.0;
+    }
+
+    double SolarisService::videoSecondsOf(double beat) const
+    {
+        double bpm = 0;
+        std::string id;
+        if (beat >= 0) return sampleOfBeat(beat) / mProject.header.sampleRate;
+        tempoAt(0, bpm, id);
+        return beat * 60.0 / bpm;
     }
 
     bool SolarisService::videoCommand(const Command &c, std::string &err)

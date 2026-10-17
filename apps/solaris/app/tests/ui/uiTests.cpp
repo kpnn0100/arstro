@@ -4701,6 +4701,155 @@ static void test_the_video_window()
     pass("the video window (R-VIDEO-1): View › Show Video, faded in; the frame at the model's time, asked of the host once a change, at the box's size, letterboxed; the picture fading over the words — before, after, none; a jump dissolves, a step does not; playing, frame after frame; resized, a frame at the new size; Hide Video and × relabel the menu");
 }
 
+static void test_the_video_lane()
+{
+    // R-VIDEO-1 (Round 18, part 3): the picture's row between the ruler and the lanes — growing in with the lanes sliding
+    // down under it; its span the model's beats; thumbnails asked of the host at the model's points, a few a frame, at the
+    // row's height, each fading in; dragged, the pointer's with nothing sent, ONE `set vd_1.at=` on release, no jump; a
+    // move made elsewhere eased there; removed, the row closing and the lanes sliding back
+    sltest::Rig r("ui-video-lane", 1280, 800);
+    r.cmd("project new " + r.song("Lane") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 32");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    using arstro::solaris_ui::Timeline;
+    const double row0 = tl.rowRect(0).y;
+    assert(tl.videoRowAmount() == 0.0 && tl.top() == Timeline::kRulerH && row0 >= Timeline::kRulerH);
+    r.cmd("video set " + r.dir + "/film.mp4 --offset 1"); // beat 2; its ten seconds end on beat 22
+    double grow = -1, fadeIn = -1;
+    size_t mostAFrame = 0;
+    for (int k = 0; k < 40 && (grow < 0 || fadeIn < 0); ++k)
+    {
+        const size_t before = r.thumbAsks.size();
+        r.frame();
+        mostAFrame = std::max(mostAFrame, r.thumbAsks.size() - before);
+        const double a = tl.videoRowAmount();
+        if (a > 0.0 && a < 1.0)
+        {
+            grow = a;
+            assert(std::fabs(tl.rowRect(0).y - (row0 + a * Timeline::kVideoH)) < 1e-6); // the lanes slide with it
+        }
+        const double f = tl.thumbAmount(0.0);
+        if (f > 0.0 && f < 1.0) fadeIn = f;
+    }
+    r.settle();
+    assert(grow > 0.0 && fadeIn > 0.0 && tl.videoRowAmount() == 1.0 && tl.rowRect(0).y == row0 + Timeline::kVideoH);
+    assert(mostAFrame >= 1 && mostAFrame <= (size_t)Timeline::kThumbAsksPerFrame); // a few a frame: decodes never stall one
+    artboard::Rect sr = tl.videoSpanRect();
+    assert(std::fabs(sr.x - tl.beatToX(2.0)) < 1e-6 && std::fabs(sr.right() - tl.beatToX(22.0)) < 1e-6);
+    // the thumbnails: at the model's points, the row's height, a few a frame, kept (none asked twice)
+    const auto &pts = r.svc->model().video.thumbs;
+    assert(pts.size() == 11 && r.thumbAsks.size() >= 3 && tl.thumbsDrawn() == (int)r.thumbAsks.size());
+    std::set<long long> seen;
+    for (const auto &a : r.thumbAsks)
+    {
+        bool onPoint = false;
+        for (const auto &p : pts) onPoint = onPoint || std::fabs(p.time - a.t) < 1e-9;
+        assert(onPoint && a.h == (int)std::lround(Timeline::kVideoH - 2.0 * Timeline::kThumbPad) && seen.insert(std::llround(a.t * 1000)).second);
+    }
+    // dragged two beats on: the pointer's while held, nothing sent; ONE line on release, and no jump after it
+    const artboard::Rect wsr = world(tl, sr);
+    const double y = wsr.y + wsr.h * 0.5, x0 = wsr.x + 30.0, dx = 2.0 * tl.pxPerBeat();
+    const size_t sent0 = r.sent.size();
+    r.drag(x0, y, x0 + dx, y, 8, false);
+    assert(tl.videoDragging() && std::fabs(tl.videoAtLive() - 4.0) < 1e-9 && r.sent.size() == sent0);
+    assert(std::fabs(tl.videoSpanRect().x - tl.beatToX(4.0)) < 1e-6);
+    r.app->pointer(2, x0 + dx, y, 0, r.now);
+    r.frame();
+    assert(sentLine(r, "set vd_1.at=4") && r.sent.size() == sent0 + 1 && r.svc->model().video.offset == 2.0);
+    assert(!tl.videoDragging() && tl.videoAtLive() == 4.0);
+    r.frame();
+    assert(tl.videoAtLive() == 4.0); // the model's answer is where it was let go: nothing moves
+    // moved elsewhere (a shell's offset: 4 s is beat 8): eased there
+    r.cmd("set vd_1.offset=4");
+    double moving = -1;
+    for (int k = 0; k < 30 && moving < 0; ++k)
+    {
+        r.frame();
+        const double a = tl.videoAtLive();
+        if (a > 4.0 && a < 8.0) moving = a;
+    }
+    r.settle();
+    assert(moving > 0.0 && tl.videoAtLive() == 8.0);
+    // removed: the row closes, the lanes slide back up
+    r.cmd("video remove");
+    double shut = -1;
+    for (int k = 0; k < 30 && shut < 0; ++k)
+    {
+        r.frame();
+        const double a = tl.videoRowAmount();
+        if (a > 0.0 && a < 1.0) shut = a;
+    }
+    r.settle();
+    assert(shut > 0.0 && tl.videoRowAmount() == 0.0 && tl.top() == Timeline::kRulerH && tl.rowRect(0).y == row0);
+    pass("the video lane (R-VIDEO-1): the picture's row grows in between the ruler and the lanes, which slide with it; its span the model's beats; thumbnails at the model's points, the row's height, asked once, fading in; dragged the pointer's, ONE `set vd_1.at=` on release, no jump; moved elsewhere, eased; removed, closed");
+}
+
+static void test_export_with_the_video()
+{
+    // R-VIDEO-1 (Round 18, part 3): File › Export…'s "With the video" — greyed and inert while the song has no picture; on,
+    // the Format is MP4 or MKV, the bit depth, quality and stems grey (eased), and Export… is ONE `render … --video`; off
+    // again, the audio format it was left at
+    sltest::Rig r("ui-export-video", 1280, 800);
+    r.cmd("project new " + r.song("Scored") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    r.settle();
+    std::string suggested;
+    r.app->onPickSave = [&](const std::string &, const std::string &s, std::function<void(const std::string &)> done) {
+        suggested = s;
+        done(r.dir + "/Scored out" + s.substr(s.rfind('.')));
+    };
+    auto &ms = r.app->project().bar().menus();
+    auto &ex = r.app->exportSheet();
+    using ES = arstro::solaris_ui::ExportSheet;
+    auto open = [&] {
+        r.click(world(ms, ms.titleRect(0)));
+        r.settle();
+        r.click(world(ms, ms.itemRect(0, 5)));
+        r.settle();
+        assert(ex.isOpen());
+    };
+    auto pick = [&](int row, int i) {
+        r.click(ex.controlRect(row));
+        r.settle();
+        assert(ex.comboOpen(row));
+        r.click(ex.optionRect(row, i));
+        r.settle();
+    };
+    open();
+    assert(!ex.applies(ES::kVideo) && ex.rowAmount(ES::kVideo) == 0.0); // no picture: greyed …
+    r.click(ex.controlRect(ES::kVideo));
+    r.settle();
+    assert(ex.flags() == "--format wav --bits 24");                      // … and inert
+    r.key(27);
+    r.settle();
+    r.cmd("video set " + r.dir + "/score.mp4");
+    r.settle();
+    open();
+    assert(ex.applies(ES::kVideo) && ex.rowAmount(ES::kVideo) == 1.0);
+    r.click(ex.controlRect(ES::kVideo));
+    r.frame();
+    r.frame();
+    assert(ex.rowAmount(ES::kBits) > 0.0 && ex.rowAmount(ES::kBits) < 1.0); // greying, eased
+    r.settle();
+    assert(ex.flags() == "--video" && ex.extension() == ".mp4" && ex.optionCount(ES::kFormat) == 2 && ex.optionLabel(ES::kFormat, 1) == "MKV");
+    assert(ex.rowAmount(ES::kBits) == 0.0 && ex.rowAmount(ES::kQuality) == 0.0 && ex.rowAmount(ES::kStems) == 0.0 && ex.rowAmount(ES::kRate) == 1.0);
+    pick(ES::kFormat, 1);
+    pick(ES::kLoudness, 3);
+    assert(ex.flags() == "--video --normalize -14 --ceiling -1" && ex.extension() == ".mkv");
+    r.click(ex.exportRect());
+    r.settle();
+    assert(suggested == "Scored.mkv" && r.sent.back() == "render --out \"" + r.dir + "/Scored out.mkv\" --video --normalize -14 --ceiling -1");
+    // off again: the audio format it was left at
+    open();
+    r.click(ex.controlRect(ES::kVideo));
+    r.settle();
+    assert(ex.flags() == "--format wav --bits 24 --normalize -14 --ceiling -1" && ex.optionCount(ES::kFormat) == 5);
+    r.key(27);
+    r.settle();
+    pass("Export with the video (R-VIDEO-1): greyed and inert with no picture; on, MP4 or MKV, the bit depth, quality and stems greyed (eased), ONE `render … --video`; off, the audio format it was left at");
+}
+
 static void test_the_session_view()
 {
     // R-LAUNCH-1 (Round 17, part 4): View › Show Session cross-fades the grid into the lanes' place; every gesture is ONE
@@ -5245,6 +5394,8 @@ int main()
     test_relink_and_collect_from_the_file_menu();
     test_the_session_view();
     test_the_video_window();
+    test_the_video_lane();
+    test_export_with_the_video();
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();

@@ -4354,7 +4354,18 @@ static void test_a_video_lane()
     assert(r.svc.model().video.offset == -1.5 && firstLine(r.ok("get vd_1.offset")) == "-1.5");
     assert(r.svc.model().video.at == -3.0 && r.svc.model().video.end == 17.0); // begun before the song: at beat 0's tempo
     assert(contains(r.no("set vd_1.offset=40000"), "offset (s) must be between -36000.0 and 36000.0"));
-    assert(contains(r.no("set vd_1.speed=2"), "`vd_1` (a video) has no field `speed` (it has: offset)"));
+    assert(contains(r.no("set vd_1.speed=2"), "`vd_1` (a video) has no field `speed` (it has: offset, at)"));
+    // `at`: a beat, moved through the tempo map (the lane's drag) — 120 bpm: beat 6 is 3 s; before the song, beat 0's tempo
+    r.ok("set vd_1.at=6");
+    assert(r.svc.model().video.offset == 3.0 && r.svc.model().video.at == 6.0 && firstLine(r.ok("get vd_1.at")) == "6.0");
+    {
+        const auto &th = r.svc.model().video.thumbs; // a point a second: 11 over its ten seconds, from beat 6
+        assert(th.size() == 11 && th[0].beat == 6.0 && th[0].time == 0.0 && th[10].beat == 26.0 && th[10].time == 10.0);
+    }
+    r.ok("set vd_1.at=-2");
+    assert(r.svc.model().video.offset == -1.0);
+    assert(contains(r.no("set vd_1.at=100000"), "offset (s) must be between"));
+    r.ok("set vd_1.offset=-1.5");
     // another picture in its place keeps its id and offset; a second node is refused by the file
     r.ok("video set " + dir + "other.mov");
     assert(r.svc.model().video.id == "vd_1" && r.svc.model().video.src == "other.mov" && r.svc.model().video.offset == -1.5);

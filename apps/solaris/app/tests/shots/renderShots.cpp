@@ -529,6 +529,25 @@ namespace
                  r.cmd("transport seek 17");
                  r.pump(4 * sltest::Rig::kFrameMs);
              }},
+            {"video-lane", // R-VIDEO-1: the picture's row between the ruler and the lanes — its span from bar 1's second beat, its
+                           // thumbnails (the rig's dusk sky: the amber band's edge each tile's time), its name pinned at the left
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 std::ofstream(r.dir + "/night-drive-cut.mp4") << "a picture";
+                 r.cmd("video set " + r.dir + "/night-drive-cut.mp4 --offset 0.5");
+                 r.pump(2000.0); // the thumbnails decoded, a few a frame, and faded in
+             }},
+            {"video-lane-dragging", // R-VIDEO-1: the picture's span held by the pointer, two beats on — ringed, nothing sent yet
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 std::ofstream(r.dir + "/night-drive-cut.mp4") << "a picture";
+                 r.cmd("video set " + r.dir + "/night-drive-cut.mp4 --offset 0.5");
+                 r.pump(2000.0);
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect sr = world(tl, tl.videoSpanRect());
+                 const double y = sr.y + sr.h * 0.5, x = sr.x + 40.0;
+                 r.drag(x, y, x + 2.0 * tl.pxPerBeat(), y, 8, false);
+             }},
             {"launch-recorded", // R-LAUNCH-1: what a recorded launch leaves — the bass cut at bar 2 and again at bar 3, its tail starting
                                 // into its pattern (offset), the session's riff between on its lane
              [](sltest::Rig &r) {
@@ -1262,6 +1281,30 @@ namespace
                  auto &ex = r.app->exportSheet();
                  using ES = arstro::solaris_ui::ExportSheet;
                  for (auto [row, i] : {std::pair<int, int>{ES::kFormat, 2}, {ES::kLoudness, 3}})
+                 {
+                     r.click(ex.controlRect(row));
+                     r.settle();
+                     r.click(ex.optionRect(row, i));
+                     r.settle();
+                 }
+             }},
+            {"export-with-video", // R-VIDEO-1: File › Export… on a song with a picture — With the video on: MKV, the bit depth,
+                                  // quality and stems greyed, a loudness target
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 std::ofstream(r.dir + "/night-drive-cut.mp4") << "a picture";
+                 r.cmd("video set " + r.dir + "/night-drive-cut.mp4 --offset 0.5");
+                 r.settle();
+                 auto &ms = r.app->project().bar().menus();
+                 r.click(world(ms, ms.titleRect(0)));
+                 r.settle();
+                 r.click(world(ms, ms.itemRect(0, 5)));
+                 r.settle();
+                 auto &ex = r.app->exportSheet();
+                 using ES = arstro::solaris_ui::ExportSheet;
+                 r.click(ex.controlRect(ES::kVideo));
+                 r.settle();
+                 for (auto [row, i] : {std::pair<int, int>{ES::kFormat, 1}, {ES::kLoudness, 3}})
                  {
                      r.click(ex.controlRect(row));
                      r.settle();

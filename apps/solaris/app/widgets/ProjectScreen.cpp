@@ -126,7 +126,7 @@ namespace solaris_ui
     bool ProjectScreen::overLanes(const Point &world, double &beat, int &row) const
     {
         const Point p = mTimeline->toLocal(world);
-        if (p.x < Timeline::kHeaderW || p.y < Timeline::kRulerH || p.x > mTimeline->width.value() || p.y > mTimeline->height.value()) return false;
+        if (p.x < Timeline::kHeaderW || p.y < mTimeline->top() || p.x > mTimeline->width.value() || p.y > mTimeline->height.value()) return false;
         beat = mTimeline->snap(mTimeline->xToBeat(p.x)); // the lanes' one grid (R-UI-10): the hint and the drop agree
         row = mTimeline->rowAt(p.y);
         return row >= 0;

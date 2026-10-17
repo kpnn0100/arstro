@@ -2778,6 +2778,24 @@
       "stable": true
     },
     {
+      "path": "video.thumbs",
+      "type": "object[]",
+      "summary": "a point every second of the picture (every length/240 s for a long one) — where the lane draws a thumbnail",
+      "stable": true
+    },
+    {
+      "path": "video.thumbs[].beat",
+      "type": "number",
+      "summary": "the song's beat (through the tempo map)",
+      "stable": true
+    },
+    {
+      "path": "video.thumbs[].time",
+      "type": "number",
+      "summary": "the picture's seconds there",
+      "stable": true
+    },
+    {
       "path": "clips",
       "type": "object[]",
       "summary": "every clip",

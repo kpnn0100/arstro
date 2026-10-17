@@ -157,6 +157,7 @@ namespace solaris
         o += "| `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` · `.reverse` · `.warp` · `.bpm` · `.pitch` · `.offset` | text · beats · beats · beats · beats · dB · bool · s · s · bool (audio, R-EDIT-1) · bool · bpm 20 … 999 · semitones −24 … +24 (audio, R-WARP-1) · beats into its pattern (a note clip's, R-LAUNCH-1) |\n";
         o += "| `<lane>.name` · `.colour` · `.strip` (`<ch>` an instrument: the lane is its track; `none`: plain — R-LANE-3) · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |\n";
         o += "| `<video>.offset` (R-VIDEO-1) | seconds on the song's clock (the tempo map's) its first frame shows, −36000 … 36000 — negative: it began before the song |\n";
+        o += "| `<video>.at` (R-VIDEO-1) | the beat its first frame shows on — set, it moves the offset through the tempo map (before beat 0, at beat 0's tempo); the lane's drag |\n";
         o += "| `<version>.name` (R-VER) | text — never `main`, one per version; set on the version itself, never recorded as a change of the open one |\n";
         o += "| `<lane group>.name` · `.folded` · `<lane>.group` (R-ARR-3) | text · `on` (one row) / `off` · `<lg>` joins it (gathered with it) / `none` leaves it (placed after it) |\n";
         o += "| `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |\n";

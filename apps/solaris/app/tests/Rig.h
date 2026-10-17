@@ -214,7 +214,8 @@ namespace sltest
         std::vector<std::string> sent;   // every line the app dispatched, in order
         std::vector<std::string> copied; // the host's clipboard: every text the app copied (R-UI-11)
         struct VideoAsk { std::string file; double t; int w, h; };
-        std::vector<VideoAsk> videoAsks; // R-VIDEO-1: every frame the app asked the host for
+        std::vector<VideoAsk> videoAsks; // R-VIDEO-1: every frame the Video window asked the host for
+        std::vector<VideoAsk> thumbAsks; // … and every thumbnail the lane asked for (a decoder of its own, as the host's)
 
         /** `name` picks a scratch folder, emptied: no songs, settings or recents from a previous run. */
         /** `audio` = false: a machine with no output device (a refusal to test). */
@@ -233,8 +234,7 @@ namespace sltest
             app->onCopy = [this](const std::string &text) { copied.push_back(text); };
             // R-VIDEO-1: the host's decoder, faked — a 16:9 picture fitted to the box: a dusk sky, an amber band whose
             // left edge is the frame's time (a second a tenth of the width), so each frame reads as its own
-            app->onVideoFrame = [this](const std::string &file, double t, int bw, int bh, arstro::solaris_ui::VideoImage &out) {
-                videoAsks.push_back({file, t, bw, bh});
+            auto paint = [](double t, int bw, int bh, arstro::solaris_ui::VideoImage &out) {
                 const double k = std::min(bw / 640.0, bh / 360.0);
                 out.width = std::max(1, (int)std::lround(640 * k));
                 out.height = std::max(1, (int)std::lround(360 * k));
@@ -252,6 +252,14 @@ namespace sltest
                         p[2] = band ? 59 : (uint8_t)(73 + 1 * v);
                     }
                 return true;
+            };
+            app->onVideoFrame = [this, paint](const std::string &file, double t, int bw, int bh, arstro::solaris_ui::VideoImage &out) {
+                videoAsks.push_back({file, t, bw, bh});
+                return paint(t, bw, bh, out);
+            };
+            app->onVideoThumb = [this, paint](const std::string &file, double t, int bw, int bh, arstro::solaris_ui::VideoImage &out) {
+                thumbAsks.push_back({file, t, bw, bh});
+                return paint(t, bw, bh, out);
             };
             alloc();
         }

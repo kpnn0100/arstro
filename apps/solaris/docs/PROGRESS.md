@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N40 part 3 — the lane's video row and the Export sheet's "With the video"** (R-VIDEO-1; parts 1–2 — the service, the host, the window — are built), then N41… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N41 — Sharing a song through a folder** (R-COLLAB-1; a design round first — N40, the video lane, is built), then N42… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -634,7 +634,7 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       session (with nothing armed, only it); spans land as clips, the arrangement under them cut, a note clip's `offset=`;
       the song renders exactly what was heard. Part 4: View › Session — the grid in the lanes' place, every gesture
       one line, fills and pulses eased; shots session-view(-mid), launch-recorded. N39 DONE.
-- [~] **N40** A video lane (R-VIDEO-1). Round 18 (the design): one picture a song with an offset; the host probes,
+- [x] **N40** A video lane (R-VIDEO-1). Round 18 (the design): one picture a song with an offset; the host probes,
       decodes, muxes; `video.time` in the model; `render --video` copies the stream beside the mix. Part 1: the service
       and the host — `#avideo`, `video set|remove`, `set vd_1.offset`, the probe kept per file, `video` in the model
       (`time` through the tempo map, moved by the pump), `VideoReader` (a frame at a time, fitted, forward with no
@@ -642,8 +642,12 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       interleaved); L2 with a fake host, L3 `solaris_video` against the real FFmpeg and ffprobe. Part 2 (the plan's
       part 2 cut in two — the window, then the lane and the export): View › Show Video — `VideoPanel` in a window, the
       frame at `video.time` from the host's decoder (`App::onVideoFrame`), asked only on a change; the picture fading
-      over the words, a jump dissolving; `video.path`/`at`/`end` in the model; shots video-window(-mid). Next: part 3 —
-      the lane's video row (thumbnails; dragged, the offset) and the Export sheet's "With the video".
+      over the words, a jump dissolving; `video.path`/`at`/`end` in the model; shots video-window(-mid). Part 3: the
+      picture's row between the ruler and the lanes (`top()` the lanes' LIVE top) — thumbnails at the model's
+      `video.thumbs` points from a second host decoder, a few a frame, kept, faded in; dragged → ONE `set <vd>.at=<beat>`;
+      the Export sheet's "With the video" (MP4 / MKV, `--video`); shots video-lane(-dragging), export-with-video. Found
+      on the way: stale anchors in DR-AUTO-5, DR-CLIP-6 and DR-UI-10's step/zoom paragraphs re-pointed by symbol (D-22).
+      N40 DONE (a live look at the GTK window's decoder owed).
 - [ ] **N41** Sharing through a folder: merge by node (R-COLLAB-1).
 - [ ] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1).
 - [ ] **N43** Localisation (R-ACCESS-2).

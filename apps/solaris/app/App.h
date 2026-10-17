@@ -70,6 +70,9 @@ namespace solaris_ui
         /** R-VIDEO-1: the HOST's decoder (the core carries no codec, R-SVC-4) — the frame showing `t` seconds into `file`,
          *  fitted to boxW × boxH. Without it the Video window says where the song is and shows no frame. */
         VideoFrameSource onVideoFrame;
+        /** … and the lane's thumbnails: a decoder of their own, so their seeks never cost the window's playing frames
+         *  (without it, `onVideoFrame`'s). */
+        VideoFrameSource onVideoThumb;
         /** The OS's own "reduce motion" (the host reads it once); the app ORs it with its setting (R-SET-3). */
         void setOsReducedMotion(bool on) { mOsReducedMotion = on; artboard::setReducedMotion(on || mAppReducedMotion); }
         void openSongPicked(const std::string &path);
