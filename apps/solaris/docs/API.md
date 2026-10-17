@@ -991,6 +991,27 @@ Low cut, low shelf, three peaks, high shelf, high cut.
 | `highcut.on` | off · on | off |
 | `highcut.freq` | 1000.0 … 20000.0 Hz | 18000.0 Hz |
 
+### `multiband` — Multiband (effect)
+
+Three bands split by Linkwitz-Riley crossovers, each compressed alone; flat when nothing is.
+
+| parameter | range | default |
+|---|---|---|
+| `low.split` | 20.0 … 1000.0 Hz | 200.0 Hz |
+| `high.split` | 500.0 … 12000.0 Hz | 2500.0 Hz |
+| `low.threshold` | -60.0 … 0.0 dB | -20.0 dB |
+| `low.ratio` | 1.0 … 20.0 :1 | 3.0 :1 |
+| `low.gain` | -24.0 … 24.0 dB | 0.0 dB |
+| `mid.threshold` | -60.0 … 0.0 dB | -20.0 dB |
+| `mid.ratio` | 1.0 … 20.0 :1 | 3.0 :1 |
+| `mid.gain` | -24.0 … 24.0 dB | 0.0 dB |
+| `high.threshold` | -60.0 … 0.0 dB | -20.0 dB |
+| `high.ratio` | 1.0 … 20.0 :1 | 3.0 :1 |
+| `high.gain` | -24.0 … 24.0 dB | 0.0 dB |
+| `attack` | 0.1 … 200.0 ms | 10.0 ms |
+| `release` | 5.0 … 2000.0 ms | 150.0 ms |
+| `output` | -24.0 … 24.0 dB | 0.0 dB |
+
 ### `reverb` — Reverb (effect)
 
 Feedback-delay-network reverb, decorrelated stereo.

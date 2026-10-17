@@ -6485,6 +6485,154 @@
       ]
     },
     {
+      "type": "multiband",
+      "label": "Multiband",
+      "kind": "effect",
+      "summary": "Three bands split by Linkwitz-Riley crossovers, each compressed alone; flat when nothing is.",
+      "params": [
+        {
+          "name": "low.split",
+          "label": "Low Split",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 1000.0,
+          "default": 200.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "high.split",
+          "label": "High Split",
+          "unit": "Hz",
+          "min": 500.0,
+          "max": 12000.0,
+          "default": 2500.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "low.threshold",
+          "label": "Low Threshold",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 0.0,
+          "default": -20.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "low.ratio",
+          "label": "Low Ratio",
+          "unit": ":1",
+          "min": 1.0,
+          "max": 20.0,
+          "default": 3.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "low.gain",
+          "label": "Low Gain",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mid.threshold",
+          "label": "Mid Threshold",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 0.0,
+          "default": -20.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mid.ratio",
+          "label": "Mid Ratio",
+          "unit": ":1",
+          "min": 1.0,
+          "max": 20.0,
+          "default": 3.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "mid.gain",
+          "label": "Mid Gain",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "high.threshold",
+          "label": "High Threshold",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 0.0,
+          "default": -20.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "high.ratio",
+          "label": "High Ratio",
+          "unit": ":1",
+          "min": 1.0,
+          "max": 20.0,
+          "default": 3.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "high.gain",
+          "label": "High Gain",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.1,
+          "max": 200.0,
+          "default": 10.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 5.0,
+          "max": 2000.0,
+          "default": 150.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "output",
+          "label": "Output",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "reverb",
       "label": "Reverb",
       "kind": "effect",

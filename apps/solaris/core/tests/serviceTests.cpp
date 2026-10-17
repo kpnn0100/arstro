@@ -4795,6 +4795,34 @@ static void test_a_multisample_reads_its_sfz()
     pass("a multi-sample (R-INST-9): its .sfz read here, its sounds decoded beside it — velocity layers, round robin; a missing sound and an opcode not read said; a file that is no instrument refused; none, said by the audit");
 }
 
+static void test_every_effect_drops_as_one_line_and_passes_sound()
+{
+    // R-FX-6…17, law 1: every effect the DSP library's registry describes is one here with no code of its own — added
+    // to a synth's strip as ONE line, a render finite and sounding (one that needs a key may be silent without it)
+    const std::string dir = scratch();
+    int added = 0;
+    for (const auto &t : arstro::DeviceRegistry::types())
+    {
+        if (t.kind != arstro::DeviceKind::Effect) continue;
+        Run r;
+        r.ok("project new " + freshSong("fx-" + t.name) + " --bpm 120");
+        r.ok("clip add --instrument synth --at 0 --length 4");
+        r.ok("notes add pt_1 \"C4@0:2 G4@2:2\"");
+        r.ok("device add ch_2 --type " + t.name);
+        const std::string out = dir + "/fx-" + t.name + ".wav";
+        r.ok("render --out " + out + " --to 4 --bits 32f");
+        float peak = 0;
+        bool finite = true;
+        for (const auto &ch : r.fake.written[out])
+            for (float x : ch) { finite = finite && std::isfinite(x); peak = std::max(peak, std::fabs(x)); }
+        std::printf("    %-11s %s: peak %.3f\n", t.name.c_str(), t.label.c_str(), peak);
+        assert(finite && (peak > 0.001f || t.takesKey));
+        ++added;
+    }
+    assert(added >= 8); // the eight before N34, and each one since
+    pass("every effect (R-FX-6…17, law 1): each the DSP library's registry describes drops onto a strip as one line and passes sound, with no code here");
+}
+
 static void test_freeze_and_bounce()
 {
     // R-PERF-3: a strip's own sound frozen beside the song and played instead — the song sounds as it did (to float
@@ -6167,6 +6195,7 @@ int main()
     test_the_wavetable_plays_with_no_code_of_its_own();
     test_every_instrument_drops_as_one_line_and_sounds();
     test_a_multisample_reads_its_sfz();
+    test_every_effect_drops_as_one_line_and_passes_sound();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();
