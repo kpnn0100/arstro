@@ -6592,6 +6592,54 @@
       ]
     },
     {
+      "type": "pitch",
+      "label": "Pitch Shifter",
+      "kind": "effect",
+      "summary": "A sound moved up or down, its length kept: two taps sweeping a delay line, crossfaded; its latency reported.",
+      "params": [
+        {
+          "name": "semitones",
+          "label": "Semitones",
+          "unit": "st",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "cents",
+          "label": "Cents",
+          "unit": "ct",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "window",
+          "label": "Window",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 100.0,
+          "default": 40.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "mix",
+          "label": "Mix",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "imager",
       "label": "Imager",
       "kind": "effect",

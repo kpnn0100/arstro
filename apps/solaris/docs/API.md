@@ -1014,6 +1014,17 @@ A recorded room: an impulse response (a sample) convolved with the sound, its la
 | `mix` | 0.0 … 1.0 | 0.3 |
 | `level` | -24.0 … 12.0 dB | 0.0 dB |
 
+### `pitch` — Pitch Shifter (effect)
+
+A sound moved up or down, its length kept: two taps sweeping a delay line, crossfaded; its latency reported.
+
+| parameter | range | default |
+|---|---|---|
+| `semitones` | -24.0 … 24.0 st | 0.0 st |
+| `cents` | -100.0 … 100.0 ct | 0.0 ct |
+| `window` | 10.0 … 100.0 ms | 40.0 ms |
+| `mix` | 0.0 … 1.0 | 1.0 |
+
 ### `imager` — Imager (effect)
 
 Wider or narrower, and mono below a frequency: mid and side, the side scaled, its lows taken away.

@@ -4821,7 +4821,7 @@ static void test_every_effect_drops_as_one_line_and_passes_sound()
         assert(finite && (peak > 0.001f || t.takesKey));
         ++added;
     }
-    assert(added >= 18); // the eight before N34; multiband, gate, transient, de-esser, saturator, bitcrusher, phaser, flanger, imager, convolution
+    assert(added >= 19); // the eight before N34; multiband, gate, transient, de-esser, saturator, bitcrusher, phaser, flanger, imager, convolution, pitch
     pass("every effect (R-FX-6…17, law 1): each the DSP library's registry describes drops onto a strip as one line and passes sound, with no code here");
 }
 

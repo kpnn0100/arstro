@@ -2150,7 +2150,8 @@ convolution --sample <file>` drops it with its file in one line (`core/service/S
 type that takes a sample; refused for one that does not, for a plugin, and for a file that is not audio). Its 256
 samples of latency are compensated by DR-MIX-17 with no code here. Test: L2 `test_a_convolution_reverb_takes_its_
 response` (`core/tests/serviceTests.cpp:4828`): an impulse response leaves the song as it sounded at mix 0.6, to
-3e−17 — the latency compensated; its file read back; the refusals.
+3e−17 — the latency compensated; its file read back; the refusals. "pitch" (R-FX-15; REQ-fx-pitch-1, DSP 8ceaa31) —
+two crossfaded taps sweeping a delay line; its latency (1 + half its window) compensated, no code here.
 
 ### DR-MIDI-3 Expression lanes (R-MIDI-3)
 A pattern carries expression lanes beside its notes (`model/Project.h` `ExprPoint`; `#expr lane= at= value=` in the
