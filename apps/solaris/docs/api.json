@@ -6485,6 +6485,84 @@
       ]
     },
     {
+      "type": "gate",
+      "label": "Gate",
+      "kind": "effect",
+      "summary": "A gate and a downward expander: below its threshold turned down by the ratio, held open before it closes; keyed by another track if asked.",
+      "params": [
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "unit": "dB",
+          "min": -80.0,
+          "max": 0.0,
+          "default": -40.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "ratio",
+          "label": "Ratio",
+          "unit": ":1",
+          "min": 1.0,
+          "max": 100.0,
+          "default": 100.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "range",
+          "label": "Range",
+          "unit": "dB",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 80.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.01,
+          "max": 100.0,
+          "default": 1.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "hold",
+          "label": "Hold",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 2000.0,
+          "default": 20.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 1.0,
+          "max": 5000.0,
+          "default": 100.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "sidechain",
+          "label": "Sidechain",
+          "unit": "",
+          "choices": [
+            "off",
+            "on"
+          ],
+          "default": "off"
+        }
+      ]
+    },
+    {
       "type": "multiband",
       "label": "Multiband",
       "kind": "effect",

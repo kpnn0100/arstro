@@ -2132,7 +2132,9 @@ Each is the registry's and nothing more here: `device add <ch> --type <name>`, i
 generated panel. Test: L2 `test_every_effect_drops_as_one_line_and_passes_sound`
 (`core/tests/serviceTests.cpp:4798`: every effect the registry has, added to a synth's strip as one line, a render
 finite and sounding — written once, it holds every effect to come). **The effects:** "multiband" (R-FX-6;
-REQ-fx-multiband-1, DSP 122d264) — three Linkwitz-Riley bands summing flat, each a Compressor.
+REQ-fx-multiband-1, DSP 122d264) — three Linkwitz-Riley bands summing flat, each a Compressor; "gate" (R-FX-7;
+REQ-fx-gate-1, DSP f0cb867) — a gate and downward expander with hold and range, keyable (`takesKey`: its key is a
+strip's, as the compressor's; unkeyed and quiet it may render silence, which the test allows a keyed type).
 
 ### DR-MIDI-3 Expression lanes (R-MIDI-3)
 A pattern carries expression lanes beside its notes (`model/Project.h` `ExprPoint`; `#expr lane= at= value=` in the

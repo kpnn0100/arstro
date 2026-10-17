@@ -991,6 +991,20 @@ Low cut, low shelf, three peaks, high shelf, high cut.
 | `highcut.on` | off · on | off |
 | `highcut.freq` | 1000.0 … 20000.0 Hz | 18000.0 Hz |
 
+### `gate` — Gate (effect)
+
+A gate and a downward expander: below its threshold turned down by the ratio, held open before it closes; keyed by another track if asked.
+
+| parameter | range | default |
+|---|---|---|
+| `threshold` | -80.0 … 0.0 dB | -40.0 dB |
+| `ratio` | 1.0 … 100.0 :1 | 100.0 :1 |
+| `range` | 0.0 … 100.0 dB | 80.0 dB |
+| `attack` | 0.01 … 100.0 ms | 1.0 ms |
+| `hold` | 0.0 … 2000.0 ms | 20.0 ms |
+| `release` | 1.0 … 5000.0 ms | 100.0 ms |
+| `sidechain` | off · on | off |
+
 ### `multiband` — Multiband (effect)
 
 Three bands split by Linkwitz-Riley crossovers, each compressed alone; flat when nothing is.
