@@ -669,3 +669,45 @@ for missing files (`clip relink <ac> <file>`, or a folder searched). Decided (ea
 - **Parts** (a commit each): (1) the service — files listed, collect, the relinks, `missing[]`, the API; (2) the File
   menu, the Relink window, the toast on open, shots.
 - **Not yet:** collecting a plugin's bundle (not media); finding a missing file by its content when its name changed.
+
+### Round 17 — 2026-10-17 — a clip launcher (R-LAUNCH-1, N39): the design, before code
+
+R-LAUNCH-1: a session grid (scenes × tracks) whose slots start in time with the song, beside the arrangement; launched
+clips recorded into the arrangement. Decided (each a line to change):
+
+- **The grid is the song's: scenes × strips.** A scene is a row (`#ascene id=sc_1 name=Verse order=0`); a slot is a
+  clip that waits in a scene for a strip (`#aslot id=sl_1 scene=sc_1 strip=ch_2 pattern=pt_1 length=4.0`, or an audio
+  slot with `src=` and `in`/`out` as a clip has, and `name`/`gain`). A slot is its own node, not a clip off the
+  timeline, so nothing that reads the arrangement has to learn to skip it; a pattern slot shares its pattern as a clip
+  does (R-CLIP-3). A slot of an instrument strip plays a pattern, of an audio strip a file — refused otherwise, as a
+  clip is. Columns are the strips that can hold one (instrument and audio), in processing order. Versions and collect
+  see slots as any node (`src=` included).
+- **Launching is live, as the keyboard is** (R-MIDI-2's precedent): heard while playing, never in a render, until it is
+  recorded. A strip follows the arrangement until a slot on it is launched; from then it is the session's — playing
+  that slot, looped, or silent once stopped — until `launch back` returns it to the arrangement. Every launch, stop and
+  return lands on the next quantum of the song's time — `project.launchQuantize` = `bar` (the default), `beat`, or
+  `none` — computed by the service ahead of what the engine has rendered, never in the past.
+- **The grammar:** `scene add [<name>] [--at <i>]`, `scene delete <sc>` (its slots with it), `scene move <sc> --to
+  <i>`, `set <sc>.name=`; `slot add <sc> <strip> (--pattern <pt> | --clip <ac> | --src <file>) [--length <beats>]`
+  (`--clip`: a clip's pattern or file and its length), `slot delete <sl>`, `set <sl>.name|length|gain=`; `launch <sl>`,
+  `launch <sc>` (its slots; a strip with no slot in it keeps what it plays), `launch stop <strip>|all`, `launch back
+  [<strip>]`. The model: `scenes[]`, `slots[]`, and `transport.launched[]` — per strip in the session: the slot, queued
+  or playing or stopping, the beat it starts, how far through its loop it is.
+- **Heard from the same graph** (R-PLAY-1): the compile puts every slot of a strip in the graph (its notes relative to
+  its start, or its region); a launch, a stop and a return are live messages to the Player with the sample they land
+  on — no engine rebuilt. At a launch the strip's notes sounding end there and the slot's start on the sample; a slot
+  keeps its own phase, so a song loop jumping back does not restart it.
+- **Recorded into the arrangement:** while `transport record` runs, what each strip played from the session lands, on
+  stop, as clips on its lane — a slot's span as a clip of its pattern (or file), looping — and the strip's own clips
+  under that span give way (one inside goes; one crossing an edge is cut there), so the song plays back what was heard.
+  A note clip may now start into its pattern (`offset=` beats, as an audio clip's `in`), so a clip cut at its start
+  still plays its second half. ONE undo, "Record".
+- **Seen** (part 4): View › Session — the grid in the timeline's place, cross-faded: a column per strip (its colour and
+  name), a row per scene (its name and ▶ at the end), a slot's name in its cell; ▶ on a slot launches it, ■ under a
+  column stops it, "Back to Arrangement" returns them all; a queued slot pulses until it starts; a playing one fills its
+  cell with its loop's progress. Every one a command line.
+- **Parts** (a commit each): (1) the model — scenes, slots, the grammar, `launchQuantize`, the fields; (2) launching,
+  heard — the graph's slots, the messages, quantized, `transport.launched[]`; (3) recording launches, `offset=`; (4) the
+  session view.
+- **Not yet:** follow actions; launching from a MIDI controller (the map grammar will reach it: `launch` is a line);
+  recording INTO a slot.
