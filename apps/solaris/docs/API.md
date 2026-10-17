@@ -1005,6 +1005,16 @@ A gate and a downward expander: below its threshold turned down by the ratio, he
 | `release` | 1.0 … 5000.0 ms | 100.0 ms |
 | `sidechain` | off · on | off |
 
+### `transient` — Transient Shaper (effect)
+
+More or less attack, more or less sustain, whatever the level: a fast envelope against two slow ones.
+
+| parameter | range | default |
+|---|---|---|
+| `attack` | -100.0 … 100.0 % | 0.0 % |
+| `sustain` | -100.0 … 100.0 % | 0.0 % |
+| `output` | -24.0 … 24.0 dB | 0.0 dB |
+
 ### `multiband` — Multiband (effect)
 
 Three bands split by Linkwitz-Riley crossovers, each compressed alone; flat when nothing is.

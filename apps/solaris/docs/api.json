@@ -6563,6 +6563,44 @@
       ]
     },
     {
+      "type": "transient",
+      "label": "Transient Shaper",
+      "kind": "effect",
+      "summary": "More or less attack, more or less sustain, whatever the level: a fast envelope against two slow ones.",
+      "params": [
+        {
+          "name": "attack",
+          "label": "Attack",
+          "unit": "%",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "sustain",
+          "label": "Sustain",
+          "unit": "%",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "output",
+          "label": "Output",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "multiband",
       "label": "Multiband",
       "kind": "effect",

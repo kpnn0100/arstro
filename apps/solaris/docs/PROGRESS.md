@@ -591,7 +591,7 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
 - [~] **N34** DSP effects: multiband, gate, transient, de-esser, saturator, phaser, flanger, imager, convolution,
       pitch shifter, vocoder, tuner (R-FX-6…17) — a commit each.
       2026-10-17: the multiband (DSP 122d264); every effect held by one L2 test. The gate / expander (DSP f0cb867).
-      Next: transient shaper (R-FX-8).
+      The transient shaper (DSP bb091f1). Next: de-esser (R-FX-9).
 - [ ] **N35** Group / VCA faders (R-MIX-19).
 - [ ] **N36** Phase invert, width, mono check, solo-safe (R-MIX-20).
 - [ ] **N37** Versions of a song (R-VER-1…4).
