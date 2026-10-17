@@ -82,7 +82,7 @@ namespace solaris_ui
     {
     public:
         enum Row { kOutput = 0, kInput, kRate, kBuffer, kMetronome, kClickLevel, kPreviewLevel, kNewBpm, kNewSig, kMotion, kAutosave, kDriver, kMidiIn, kRecQuant, kCountIn,
-                   kSurface, kSurfacePort, kRows }; // kSurface…: R-CTRL-2, the MIDI page
+                   kSurface, kSurfacePort, kUiScale, kContrast, kRows }; // kSurface…: R-CTRL-2, the MIDI page; kUiScale, kContrast: R-ACCESS-1
         enum Section { kAudio = 0, kPlayback, kNewSongs, kFolders, kInterface, kKeyboard, kMidi, kSections }; // kMidi: R-CTRL-1
         static constexpr double kCardW = 720.0, kCardH = 520.0;
         static constexpr double kRailW = 164.0;   // the sections' column

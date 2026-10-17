@@ -3277,6 +3277,12 @@ setter takes effect whichever is called first. Guarded by `test_accent_is_a_runt
 `cosmo_widget_tests` (7 checks), checked to FAIL on the old `static const` theme at exactly the
 cached-theme assertion. Cosmo's own pixels: all 41 `cosmo_shots` states byte-identical before and
 after the change.
+The CONTRAST slot (Solaris R-ACCESS-1, 2026-10-17): `palette::contrastSlot()` (`Theme.h`), the same function-local
+static, 0 by default; `setContrast(k)` clamps to 0 … 1; `neutral(normal, high[, alpha, highAlpha])` returns `normal`
+moved toward `high` by it — every neutral token reads through it (background → black, foreground → white, mutedForeground
+`0x636363` → `0xC0C0C0`, border's alpha 0.072 → 0.45, the per-surface grounds → black …), the accent and the semantic
+colours untouched. `sharedTheme()` rebuilds when the contrast it was built with has moved. Cosmo never sets it: all 41
+`cosmo_shots` states byte-identical before and after (compared).
 
 ### DR-G-4 A section header is a row, and the rule is its flexible member (R-G-4)
 Reported: *"there is a separate line at colour section that overlap the color picker icon, make it

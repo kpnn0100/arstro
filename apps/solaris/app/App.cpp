@@ -33,6 +33,8 @@ namespace solaris_ui
 
     App::App(AppHooks hooks, double width, double height) : mHooks(std::move(hooks)), mW(width), mH(height)
     {
+        mPhysW = std::max(1.0, width); // R-ACCESS-1: the window as the host gives it — at 100 % the logical size too
+        mPhysH = std::max(1.0, height);
         installSolarisAccent(); // FIRST: widgets read the accent when they are built
         mHome = std::make_shared<HomeScreen>();
         mProject = std::make_shared<ProjectScreen>();
@@ -278,9 +280,18 @@ namespace solaris_ui
 
     void App::setSize(double width, double height)
     {
-        mW = std::max(1.0, width);
-        mH = std::max(1.0, height);
+        mPhysW = std::max(1.0, width);
+        mPhysH = std::max(1.0, height);
         mLastActivityMs = mNowMs;
+        applyLogicalSize();
+    }
+
+    void App::applyLogicalSize()
+    {
+        // logical units from here down: the window divided by the scale DRAWN now (R-ACCESS-1)
+        const double s = std::max(0.25, mScale.value());
+        mW = std::max(1.0, mPhysW / s);
+        mH = std::max(1.0, mPhysH / s);
         layoutAll();
     }
 
@@ -469,12 +480,16 @@ namespace solaris_ui
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         if (m.revision != mBoundRevision || m.transport.playing || m.audition.playing || m.audition.playing != mBoundAudition) return true;
         if (mHome->opacity.isAnimating() || mProject->opacity.isAnimating() || mToast.isAnimating() || mToast.value() > 0.0) return true;
+        if (mScale.isAnimating() || mContrast.isAnimating()) return true; // R-ACCESS-1: a zoom, a contrast fade
+        if (m.settings.uiScale != mScaleWant || (m.settings.highContrast ? 1 : 0) != mContrastWant) return true;
         if (mSettings->appearAmount() > 0.0 || mExport->appearAmount() > 0.0 || mRelink->appearAmount() > 0.0 || mConflicts->appearAmount() > 0.0 || mMenu->isOpen() || mHistory->appearAmount() > 0.0) return true;
         return nowMs - mLastActivityMs < kActiveWindowMs;
     }
 
     void App::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)
     {
+        x /= mScale.value(); // R-ACCESS-1: the inverse of the root transform, once, at the entry point
+        y /= mScale.value();
         mLastActivityMs = mNowMs;
         if (kind == 0)
         {
@@ -496,6 +511,8 @@ namespace solaris_ui
 
     void App::wheel(double x, double y, double notches, bool ctrl, bool shift)
     {
+        x /= mScale.value(); // R-ACCESS-1
+        y /= mScale.value();
         mLastActivityMs = mNowMs;
         RawPointer rp{};
         rp.kind = RawPointer::Kind::Scroll;
@@ -651,8 +668,25 @@ namespace solaris_ui
             mToast.animateTo(0.0, motion::kToastOutMs, Easing::EaseInOutCubic, nowMs);
         mToast.update(nowMs);
         mRecognizer.advance(nowMs);
+        // R-ACCESS-1: the scale and the contrast are the model's settings, eased here (a setting has no clock)
+        {
+            const int sc = m.settings.uiScale > 0 ? m.settings.uiScale : 100;
+            if (mScaleWant < 0) mScale.set(sc / 100.0); // the first frame: placed, nowhere to zoom from
+            else if (sc != mScaleWant) mScale.animateTo(sc / 100.0, kScaleAnimMs, Easing::EaseOutCubic, nowMs);
+            mScaleWant = sc;
+            mScale.update(nowMs);
+            if (std::fabs(mW - std::max(1.0, mPhysW / mScale.value())) > 1e-9 || std::fabs(mH - std::max(1.0, mPhysH / mScale.value())) > 1e-9)
+                applyLogicalSize(); // each frame of a zoom: the layout follows the drawn scale
+            const int hc = m.settings.highContrast ? 1 : 0;
+            if (mContrastWant < 0) mContrast.set(hc);
+            else if (hc != mContrastWant) mContrast.animateTo(hc, kScaleAnimMs, Easing::EaseInOutCubic, nowMs);
+            mContrastWant = hc;
+            mContrast.update(nowMs);
+            palette::setContrast(mContrast.value()); // every token read from here on is blended by it
+        }
+        const Transform root = rootTransform();
 
-        drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(palette::background()));
+        drawRoundedRect(target, Rect{0, 0, mPhysW, mPhysH}, 0.0, Paint::filled(palette::background()));
         for (Segment *s : {(Segment *)mHome.get(), (Segment *)mProject.get()})
         {
             const bool wanted = (s == mHome.get()) == (mScreen == "home");
@@ -664,26 +698,28 @@ namespace solaris_ui
         for (Segment *s : {(Segment *)mHome.get(), (Segment *)mProject.get()})
         {
             if (s->opacity.value() <= Segment::kOpacityEpsilon) continue;
-            s->render(target);
-            s->renderOverlay(target);
+            s->render(target, root);
+            s->renderOverlay(target, root);
         }
         // the modals float over whichever screen opened them; advanced always, so a close can finish
         mSettings->advance(nowMs);
-        mSettings->render(target);        // its card, its pages and their controls (R-SET-5/6) …
-        mSettings->renderOverlay(target); // … and an open combo's list, over everything
-        mExport->advance(nowMs);          // R-EXPORT-1: the same, for File › Export…
-        mExport->render(target);
-        mExport->renderOverlay(target);
-        mRelink->advance(nowMs);          // R-COLLECT-1: File › Relink…
-        mRelink->render(target);
-        mConflicts->advance(nowMs);       // R-COLLAB-1: what a sync asked
-        mConflicts->render(target);
+        mSettings->render(target, root);        // its card, its pages and their controls (R-SET-5/6) …
+        mSettings->renderOverlay(target, root); // … and an open combo's list, over everything
+        mExport->advance(nowMs);                // R-EXPORT-1: the same, for File › Export…
+        mExport->render(target, root);
+        mExport->renderOverlay(target, root);
+        mRelink->advance(nowMs);                // R-COLLECT-1: File › Relink…
+        mRelink->render(target, root);
+        mConflicts->advance(nowMs);             // R-COLLAB-1: what a sync asked
+        mConflicts->render(target, root);
         mModalRoot->advance(nowMs);
-        mModalRoot->renderOverlay(target);
+        mModalRoot->renderOverlay(target, root);
 
         const double ta = mToast.value();
         if (ta > 0.001 && !mToastText.empty())
         {
+            target.save();
+            target.setTransform(root); // R-ACCESS-1: drawn in logical units, as everything else
             const double px = 12.0;
             const std::string s = textfit::ellipsize(target, mToastText, std::min(640.0, mW - 64.0), px, font::sans());
             const double w = target.measureText(s, px, font::sans()) + 32.0, h = 34.0;
@@ -693,6 +729,7 @@ namespace solaris_ui
             drawRoundedRect(target, r, radius::control(), Paint::filledStroked(bg, bd, 1.0));
             target.setFill(fg);
             target.drawText(s, r.x + 16.0, textfit::baseline(r.y + h * 0.5, px), px, font::sans());
+            target.restore();
         }
     }
 }

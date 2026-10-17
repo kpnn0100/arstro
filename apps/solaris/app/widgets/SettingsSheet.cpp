@@ -34,10 +34,10 @@ namespace solaris_ui
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
         const char *kLabels[SettingsSheet::kRows] = {"Output", "Input", "Sample rate", "Buffer", "Metronome", "Click level",
                                                      "Preview level", "Tempo", "Meter", "Reduced motion", "Autosave", "Driver", "MIDI input", "Record quantize", "Count-in",
-                                                     "Control surface", "Surface port"};
+                                                     "Control surface", "Surface port", "UI scale", "High contrast"};
         const char *kKeys[SettingsSheet::kRows] = {"output", "input", "sampleRate", "bufferSize", "metronome", "metronomeLevel",
                                                    "auditionLevel", "newBpm", "newSig", "reducedMotion", "autosave", "driver", "midiInputs", "recordQuantize", "countIn",
-                                                   "surface", "surfacePort"};
+                                                   "surface", "surfacePort", "uiScale", "highContrast"};
         // the sections (R-SET-3, R-SET-5) and the rows each page holds
         const char *kTitles[SettingsSheet::kSections] = {"Audio", "Playback", "New songs", "Sample folders", "Interface", "Keyboard", "MIDI"};
         const std::vector<int> kPageRows[SettingsSheet::kSections] = {
@@ -45,11 +45,11 @@ namespace solaris_ui
             {SettingsSheet::kMetronome, SettingsSheet::kClickLevel, SettingsSheet::kPreviewLevel, SettingsSheet::kRecQuant, SettingsSheet::kCountIn},
             {SettingsSheet::kNewBpm, SettingsSheet::kNewSig},
             {},
-            {SettingsSheet::kMotion, SettingsSheet::kAutosave},
+            {SettingsSheet::kUiScale, SettingsSheet::kContrast, SettingsSheet::kMotion, SettingsSheet::kAutosave}, // R-ACCESS-1 first
             {},
             {SettingsSheet::kSurface, SettingsSheet::kSurfacePort}, // R-CTRL-2; then R-CTRL-1's mapped controls (paintMidi)
         };
-        bool isToggle(int row) { return row == SettingsSheet::kMetronome || row == SettingsSheet::kMotion; }
+        bool isToggle(int row) { return row == SettingsSheet::kMetronome || row == SettingsSheet::kMotion || row == SettingsSheet::kContrast; }
         std::string num(double v)
         {
             char b[32];
@@ -221,6 +221,7 @@ namespace solaris_ui
         mChips[kSurfacePort] = {Chip{"None", ""}};
         mChips[kRecQuant] = {Chip{"Off", "off"}, Chip{"1/4", "1/4"}, Chip{"1/8", "1/8"}, Chip{"1/16", "1/16"}, Chip{"1/32", "1/32"}};
         mChips[kCountIn] = {Chip{"None", "0"}, Chip{"1 bar", "1"}, Chip{"2 bars", "2"}, Chip{"4 bars", "4"}};
+        for (int u : {75, 90, 100, 125, 150, 175, 200}) mChips[kUiScale].push_back(Chip{std::to_string(u) + " %", std::to_string(u)}); // R-ACCESS-1: cosmo's steps
         mChips[kAutosave] = {Chip{"Off", "off"}, Chip{"Every 30 s", "30"}, Chip{"Every minute", "60"}, Chip{"Every 2 minutes", "120"}, Chip{"Every 5 minutes", "300"}};
         mChips[kOutput] = mChips[kInput] = {Chip{"System default", ""}};
         for (int s = 0; s < kSections; ++s)
@@ -440,6 +441,8 @@ namespace solaris_ui
         case kNewBpm: return num(mSettings.newBpm);
         case kNewSig: return mSettings.newSig;
         case kMotion: return mSettings.reducedMotion ? "on" : "off";
+        case kUiScale: return std::to_string(mSettings.uiScale);       // R-ACCESS-1
+        case kContrast: return mSettings.highContrast ? "on" : "off";
         case kAutosave: return mSettings.autosave > 0 ? std::to_string(mSettings.autosave) : std::string("off");
         case kDriver: return mSettings.driver;
         case kMidiIn: return mSettings.midiInputs;
@@ -1027,6 +1030,8 @@ namespace solaris_ui
         if (r == kNewSig) note = "\xE2\x80\xA6 and in this meter";
         if (r == kMotion) note = "every tween collapses \xE2\x80\x94 the system's own setting counts too";
         if (r == kAutosave) note = "an unsaved song is kept beside it \xE2\x80\x94 recovered if Solaris stops";
+        if (r == kUiScale) note = "the whole window, drawn larger or smaller \xE2\x80\x94 it zooms there";
+        if (r == kContrast) note = "white on black, solid borders, brighter quiet text";
         if (r == kDriver) note = "PipeWire for small buffers and counted xruns \xE2\x80\x94 PulseAudio if it will not open";
         if (r == kMidiIn) note = "the keyboard an armed strip plays";
         if (r == kRecQuant) note = "where a recorded note's start lands";

@@ -44,7 +44,17 @@ namespace solaris_ui
     public:
         App(AppHooks hooks, double width, double height);
 
+        /** The window's PHYSICAL size. Divided by the drawn UI scale into the LOGICAL size every widget lays out in
+         *  (R-ACCESS-1, cosmo R-SCALE-2), so nothing below this call knows a scale exists. */
         void setSize(double width, double height);
+        /** R-ACCESS-1: the shell drawn at the model's `settings.uiScale`, EASED — every frame the logical size is the
+         *  window's divided by the drawn scale and every pointer is divided by it, so the shell zooms, never a cut then
+         *  a reflow (cosmo's kScaleAnimMs). High contrast likewise: one eased amount on cosmo's tokens. */
+        static constexpr double kScaleAnimMs = 260.0;
+        double drawnUiScale() const { return mScale.value(); }        // LIVE
+        double contrastAmount() const { return mContrast.value(); }   // LIVE: 0 normal … 1 high
+        double logicalWidth() const { return mW; }
+        double logicalHeight() const { return mH; }
         void render(artboard::IRenderTarget &target, double nowMs);
         bool needsRedraw(double nowMs) const;
 
@@ -134,6 +144,11 @@ namespace solaris_ui
         std::shared_ptr<RelinkSheet> mRelink;
         std::string mMissingSaidFor; // R-COLLECT-1: the song whose missing files a toast has said
         std::shared_ptr<ConflictsSheet> mConflicts; // R-COLLAB-1
+        double mPhysW = 1.0, mPhysH = 1.0;          // R-ACCESS-1: the window, in device pixels
+        artboard::AnimatedProperty mScale{1.0}, mContrast{0.0};
+        int mScaleWant = -1, mContrastWant = -1;
+        void applyLogicalSize();
+        artboard::Transform rootTransform() const { return artboard::Transform::scaling(mScale.value(), mScale.value()); }
         int mSyncSeen = 0;                          // the syncs a toast has said
         std::shared_ptr<cosmo_v2::ConfirmDialog> mConfirm;
         std::shared_ptr<cosmo_v2::ContextMenu> mMenu;  // cosmo's: a route, an effect, rename — modal while open

@@ -4949,6 +4949,87 @@ static void test_conflicts_are_asked_in_a_sheet()
     pass("conflicts asked in a sheet (R-COLLAB-1): a reload said; a merge that asks opens the sheet, faded in; Keep Mine / Take Theirs ONE line each, the answered row fading where it is and the next sliding up; the \"all\" buttons dimming, eased, inert with nothing asked; File › Conflicts… reopens it; Keep All Mine ONE line");
 }
 
+static void test_the_ui_scale_and_high_contrast()
+{
+    // R-ACCESS-1 (Round 20, part 1): Settings › Interface — the UI scale and High contrast ONE line each; the shell zooms
+    // there (caught mid-way, the logical size the window over the DRAWN scale) and a click lands where it is drawn; the
+    // tokens fade to black and white (caught mid-way); and back, eased, from a shell's line
+    sltest::Rig r("ui-access", 1280, 800);
+    r.cmd("project new " + r.song("Big") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    r.settle();
+    namespace palette = arstro::solaris_ui::palette;
+    using arstro::solaris_ui::SettingsSheet;
+    auto phys = [&r](artboard::Rect q) { // the rig clicks in window pixels: a logical place, at the drawn scale
+        const double k = r.app->drawnUiScale();
+        return artboard::Rect{q.x * k, q.y * k, q.w * k, q.h * k};
+    };
+    r.app->openSettings();
+    r.settle();
+    auto &sheet = r.app->settings();
+    r.click(sheet.railRect(SettingsSheet::kInterface));
+    r.settle();
+    // 150 %: ONE line; the shell zooms there, laid out each frame at the scale drawn
+    r.click(sheet.controlRect(SettingsSheet::kUiScale));
+    r.settle();
+    r.click(sheet.optionRect(SettingsSheet::kUiScale, 4));
+    r.frame();
+    r.frame();
+    const double mid = r.app->drawnUiScale();
+    assert(sentLine(r, "settings set uiScale=150") && mid > 1.0 && mid < 1.5 && std::fabs(r.app->logicalWidth() - 1280.0 / mid) < 1e-6);
+    r.settle();
+    assert(r.app->drawnUiScale() == 1.5 && std::fabs(r.app->logicalWidth() - 1280.0 / 1.5) < 1e-6 && std::fabs(r.app->logicalHeight() - 800.0 / 1.5) < 1e-6);
+    {
+        // DRAWN at the scale: the playhead (red) at 1.5 × its logical place, not at the logical place itself
+        r.app->settings().close();
+        r.settle();
+        auto &tl = r.app->project().timeline();
+        const artboard::Rect at = world(tl, artboard::Rect{tl.beatToX(0.0), 120.0, 0.0, 0.0});
+        auto redNear = [&r](double x, double y) {
+            for (int dx = -1; dx <= 1; ++dx)
+            {
+                const uint32_t p = r.pixel((int)std::floor(x) + dx, (int)y);
+                const int R = (int)((p >> 16) & 0xFF), G = (int)((p >> 8) & 0xFF);
+                if (R > G + 60) return true;
+            }
+            return false;
+        };
+        assert(redNear(at.x * 1.5, at.y * 1.5) && !redNear(at.x, at.y * 1.5));
+        r.app->openSettings();
+        r.settle();
+        r.click(phys(sheet.railRect(SettingsSheet::kInterface)));
+        r.settle();
+    }
+    const double themedBefore = arstro::solaris_ui::sharedTheme().tab.label.color.r; // the shared theme, built at normal
+    // High contrast: ONE line; every token fades toward it
+    r.click(phys(sheet.controlRect(SettingsSheet::kContrast)));
+    r.frame();
+    r.frame();
+    const double c = r.app->contrastAmount();
+    const double fgMid = palette::foreground().r;
+    assert(sentLine(r, "settings set highContrast=on") && c > 0.0 && c < 1.0 && fgMid > 0xDB / 255.0 && fgMid < 1.0);
+    r.settle();
+    assert(r.app->contrastAmount() == 1.0 && palette::foreground().r == 1.0 && palette::background().r == 0.0 && palette::border().a > 0.4);
+    assert(themedBefore < 0.5 && arstro::solaris_ui::sharedTheme().tab.label.color.r > 0.7); // the shared theme (Artboard's widgets) follows
+    // a click lands where it is drawn: the File menu's title, at its place in the window
+    r.key(27);
+    r.settle();
+    auto &ms = r.app->project().bar().menus();
+    r.click(phys(world(ms, ms.titleRect(0))));
+    r.settle();
+    assert(ms.openIndex() == 0);
+    r.click(phys(artboard::Rect{600.0, 500.0, 0.0, 0.0})); // away: closed
+    r.settle();
+    // back from a shell: eased the other way
+    r.cmd("settings set uiScale=100 highContrast=off");
+    r.frame();
+    r.frame();
+    assert(r.app->drawnUiScale() > 1.0 && r.app->drawnUiScale() < 1.5 && r.app->contrastAmount() > 0.0 && r.app->contrastAmount() < 1.0);
+    r.settle();
+    assert(r.app->drawnUiScale() == 1.0 && r.app->contrastAmount() == 0.0 && palette::foreground().r == 0xDB / 255.0 && r.app->logicalWidth() == 1280.0);
+    pass("the UI scale and high contrast (R-ACCESS-1): Settings › Interface ONE line each; the shell zooms, laid out at the drawn scale, a click landing where it is drawn; the tokens fade to black and white; back from a shell, eased");
+}
+
 static void test_the_session_view()
 {
     // R-LAUNCH-1 (Round 17, part 4): View › Show Session cross-fades the grid into the lanes' place; every gesture is ONE
@@ -5496,6 +5577,7 @@ int main()
     test_the_video_lane();
     test_export_with_the_video();
     test_conflicts_are_asked_in_a_sheet();
+    test_the_ui_scale_and_high_contrast();
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();

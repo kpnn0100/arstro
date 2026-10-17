@@ -133,6 +133,8 @@ namespace solaris
         mModel.settings.newBpm = mSettings.newBpm;
         mModel.settings.newSig = mSettings.newSig;
         mModel.settings.reducedMotion = mSettings.reducedMotion;
+        mModel.settings.uiScale = mSettings.uiScale; // R-ACCESS-1
+        mModel.settings.highContrast = mSettings.highContrast;
         mModel.settings.showIds = mSettings.showIds;
         mModel.settings.autosave = mSettings.autosave;
         mModel.settings.driver = mSettings.driver;

@@ -44,10 +44,31 @@ namespace cosmo_v2
     // theme.css tokens, verbatim (hex values as authored in the Figma export).
     namespace palette
     {
-        inline artboard::Color background() { return artboard::Color::hex(0x141414); }
-        inline artboard::Color foreground() { return artboard::Color::hex(0xDBDBDB); }
-        inline artboard::Color card() { return artboard::Color::hex(0x1C1C1C); }
-        inline artboard::Color popover() { return artboard::Color::hex(0x222222); }
+        /** How far the neutrals have moved toward HIGH CONTRAST, 0 … 1 — a RUNTIME amount, the accent slot's pattern
+         *  (R-G-5): Solaris eases it and sets it each frame (its R-ACCESS-1), so a switch fades the whole UI and a token
+         *  is still the only place a colour is named. Cosmo itself never calls `setContrast`, so its pixels do not move. */
+        inline double &contrastSlot()
+        {
+            static double k = 0.0;
+            return k;
+        }
+        inline void setContrast(double k) { contrastSlot() = k < 0.0 ? 0.0 : (k > 1.0 ? 1.0 : k); }
+        inline double contrast() { return contrastSlot(); }
+        /** A neutral: `normal`, moved toward its high-contrast value by the contrast amount. */
+        inline artboard::Color neutral(unsigned normal, unsigned high, double alpha = 1.0, double highAlpha = 1.0)
+        {
+            const double k = contrastSlot();
+            artboard::Color a = artboard::Color::hex(normal);
+            a.a = alpha;
+            if (k <= 0.0) return a;
+            const artboard::Color b = artboard::Color::hex(high);
+            return artboard::Color{a.r + (b.r - a.r) * k, a.g + (b.g - a.g) * k, a.b + (b.b - a.b) * k, alpha + (highAlpha - alpha) * k};
+        }
+
+        inline artboard::Color background() { return neutral(0x141414, 0x000000); }
+        inline artboard::Color foreground() { return neutral(0xDBDBDB, 0xFFFFFF); }
+        inline artboard::Color card() { return neutral(0x1C1C1C, 0x0A0A0A); }
+        inline artboard::Color popover() { return neutral(0x222222, 0x121212); }
         /** THE accent, as a RUNTIME token with cosmo's blue as its default (R-G-5).
          *
          *  A runtime value rather than a literal so a sibling app that REUSES cosmo's widgets as
@@ -73,10 +94,10 @@ namespace cosmo_v2
         inline void setAccent(const artboard::Color &c) { accentSlot() = c; }
         inline artboard::Color primary() { return accentSlot(); }                          // the single accent
         inline artboard::Color primaryForeground() { return artboard::Color::hex(0xFFFFFF); }
-        inline artboard::Color secondary() { return artboard::Color::hex(0x252525); }
-        inline artboard::Color secondaryForeground() { return artboard::Color::hex(0xAAAAAA); }
-        inline artboard::Color muted() { return artboard::Color::hex(0x191919); }
-        inline artboard::Color mutedForeground() { return artboard::Color::hex(0x636363); }
+        inline artboard::Color secondary() { return neutral(0x252525, 0x2E2E2E); }
+        inline artboard::Color secondaryForeground() { return neutral(0xAAAAAA, 0xFFFFFF); }
+        inline artboard::Color muted() { return neutral(0x191919, 0x0A0A0A); }
+        inline artboard::Color mutedForeground() { return neutral(0x636363, 0xC0C0C0); }
         inline artboard::Color destructive() { return artboard::Color::hex(0xE5534B); }
         // The other semantic state colour alongside destructive (neither is "the accent",
         // which stays reserved for interactive/selected state): a confirmation green for
@@ -85,13 +106,13 @@ namespace cosmo_v2
         inline artboard::Color success() { return artboard::Color::hex(0x3FB950); }
         inline artboard::Color successAlpha(double a)
         { return artboard::Color{0x3F / 255.0, 0xB9 / 255.0, 0x50 / 255.0, a}; }
-        inline artboard::Color border() { return artboard::Color{1.0, 1.0, 1.0, 0.072}; }  // rgba(255,255,255,.072)
-        inline artboard::Color input() { return artboard::Color::hex(0x252525); }
+        inline artboard::Color border() { return neutral(0xFFFFFF, 0xFFFFFF, 0.072, 0.45); }  // rgba(255,255,255,.072); solid-ish when high
+        inline artboard::Color input() { return neutral(0x252525, 0x1E1E1E); }
         // Elegant light entry field (the inline group-rename box, DR-TREE-5): a deliberate
         // near-white surface with near-black text -- an inverted island in the dark UI.
         inline artboard::Color inputLight() { return artboard::Color::hex(0xF4F4F5); }      // near-white field bg
         inline artboard::Color inputLightText() { return artboard::Color::hex(0x18181B); }  // near-black field text
-        inline artboard::Color switchBackground() { return artboard::Color::hex(0x444444); }
+        inline artboard::Color switchBackground() { return neutral(0x444444, 0x6A6A6A); }
         inline artboard::Color ring()
         {
             artboard::Color c = accentSlot();   // derived from the accent, so it follows setAccent (R-G-5)
@@ -102,13 +123,13 @@ namespace cosmo_v2
         // Literal per-widget surface colors used directly in the Figma source
         // (bracket values, not theme.css tokens) -- kept here so every widget
         // pulls from one place rather than re-hardcoding hex literals.
-        inline artboard::Color canvasBg() { return artboard::Color::hex(0x0A0A0A); }     // photo stage
-        inline artboard::Color histogramBg() { return artboard::Color::hex(0x0F0F0F); }
-        inline artboard::Color leftRailBg() { return artboard::Color::hex(0x161616); }   // rail + breadcrumb
-        inline artboard::Color filmstripBg() { return artboard::Color::hex(0x121212); }
-        inline artboard::Color folderChipBg() { return artboard::Color::hex(0x1A1A1A); }
-        inline artboard::Color segmentedBg() { return artboard::Color::hex(0x111111); }  // RGB/Hue-Sat-Lum pickers
-        inline artboard::Color curvePlotBg() { return artboard::Color::hex(0x0D0D0D); }
+        inline artboard::Color canvasBg() { return neutral(0x0A0A0A, 0x000000); }     // photo stage
+        inline artboard::Color histogramBg() { return neutral(0x0F0F0F, 0x000000); }
+        inline artboard::Color leftRailBg() { return neutral(0x161616, 0x050505); }   // rail + breadcrumb
+        inline artboard::Color filmstripBg() { return neutral(0x121212, 0x000000); }
+        inline artboard::Color folderChipBg() { return neutral(0x1A1A1A, 0x0F0F0F); }
+        inline artboard::Color segmentedBg() { return neutral(0x111111, 0x000000); }  // RGB/Hue-Sat-Lum pickers
+        inline artboard::Color curvePlotBg() { return neutral(0x0D0D0D, 0x000000); }
         inline artboard::Color white() { return artboard::Color::rgba(255, 255, 255); }
         inline artboard::Color whiteAlpha(double a) { return artboard::Color{1.0, 1.0, 1.0, a}; }
         inline artboard::Color primaryAlpha(double a)

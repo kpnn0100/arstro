@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N42 part 1 — the UI scale and high contrast** (R-ACCESS-1; Round 20 is the design), then N43… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N42 part 2 — the accessible list and the keyboard's focus** (R-ACCESS-1; part 1 — the scale and the contrast — is built), then N43… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -664,7 +664,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
 - [~] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1). Round 20 (the
       design): cosmo's eased UI scale; high contrast as one eased amount on cosmo's tokens; the accessible list
       (every widget's controls: role, name, value, bounds, actions) walked by Tab / Enter / the arrows, and given to
-      AT-SPI by the host through ATK. Next: part 1 — the scale and the contrast.
+      AT-SPI by the host through ATK. Part 1: `settings set uiScale=` (cosmo's steps; another refused) and
+      `highContrast=on|off` (a toggle beside Reduced motion — the design's `contrast=` became it); the App eases both —
+      laid out, drawn and hit-tested at the drawn scale; cosmo's palette gained `setContrast` (its 41 shots
+      byte-identical). Next: part 2 — the accessible list and the keyboard's focus.
 - [ ] **N43** Localisation (R-ACCESS-2).
 - [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).
 

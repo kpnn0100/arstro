@@ -583,6 +583,25 @@ namespace
                  r.click(r.app->conflictsSheet().mineRect("project:bpm"));
                  r.pump(4 * sltest::Rig::kFrameMs);
              }},
+            {"ui-scale-150", // R-ACCESS-1: the whole window drawn at 150 % — the song view laid out in the logical size it leaves
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("settings set uiScale=150");
+                 r.settle();
+             }},
+            {"ui-scale-mid", // R-ACCESS-1: mid-zoom from 100 % to 150 % — laid out each frame at the scale drawn
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 r.cmd("settings set uiScale=150");
+                 r.pump(5 * sltest::Rig::kFrameMs);
+             }},
+            {"high-contrast", // R-ACCESS-1: High contrast — black, white text, light quiet text, solid borders; the accent kept
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("settings set highContrast=on");
+                 r.settle();
+             }},
             {"launch-recorded", // R-LAUNCH-1: what a recorded launch leaves — the bass cut at bar 2 and again at bar 3, its tail starting
                                 // into its pattern (offset), the session's riff between on its lane
              [](sltest::Rig &r) {

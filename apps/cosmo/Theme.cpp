@@ -75,11 +75,13 @@ namespace cosmo_v2
         // three float compares per call.
         static Theme th = makeCosmoV2Theme();
         static Color builtWith = palette::primary();
+        static double contrastWith = palette::contrast(); // … or the contrast (Solaris R-ACCESS-1; cosmo never moves it)
         const Color now = palette::primary();
-        if (now.r != builtWith.r || now.g != builtWith.g || now.b != builtWith.b)
+        if (now.r != builtWith.r || now.g != builtWith.g || now.b != builtWith.b || palette::contrast() != contrastWith)
         {
             th = makeCosmoV2Theme();
             builtWith = now;
+            contrastWith = palette::contrast();
         }
         return th;
     }

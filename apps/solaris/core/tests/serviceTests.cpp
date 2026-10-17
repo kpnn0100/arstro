@@ -4546,6 +4546,29 @@ static void test_a_song_shared_through_a_folder()
     pass("a song shared through a folder (R-COLLAB-1): the other's save reloads it (not unsaved, undoable); nothing changed, nothing done; edits on both merged as ONE edit; a save over a changed file refused; a node changed both ways asked — the save refused, a newer change waiting, --take answering; the same new id renumbered here with its sends; pump looks once a second; a file not yet a song waited for; the save atomic");
 }
 
+static void test_the_ui_scale_and_contrast_are_settings()
+{
+    // R-ACCESS-1 (Round 20, part 1): the UI scale on cosmo's steps and high contrast — the machine's settings, in the
+    // model, printed, kept in the settings file and read back; another scale refused, never rounded
+    const std::string settings = scratch() + "/access-settings.txt";
+    fs::remove(settings);
+    {
+        Run r(settings, std::string());
+        assert(r.svc.model().settings.uiScale == 100 && !r.svc.model().settings.highContrast);
+        r.ok("settings set uiScale=150 highContrast=on");
+        assert(r.svc.model().settings.uiScale == 150 && r.svc.model().settings.highContrast);
+        assert(contains(r.no("settings set uiScale=110"), "uiScale is 75, 90, 100, 125, 150, 175 or 200"));
+        assert(contains(r.no("settings set highContrast=yes"), "highContrast is on or off"));
+        assert(contains(r.no("settings set uiScal=125"), "did you mean: uiScale?"));
+        assert(r.svc.model().settings.uiScale == 150);
+        const std::string printed = r.ok("settings print");
+        assert(contains(printed, "uiScale = 150\n") && contains(printed, "highContrast = on\n"));
+    }
+    Run again(settings, std::string()); // another process: read back
+    assert(again.svc.model().settings.uiScale == 150 && again.svc.model().settings.highContrast);
+    pass("the UI scale and high contrast are settings (R-ACCESS-1): on cosmo's steps (another refused, never rounded), on or off; in the model, printed, kept and read back");
+}
+
 static void test_a_follower_alone()
 {
     // R-DEV-2/4, Follower in SIMULATED time (its clock injected, its device a plain list): a clock 200 ppm slow and a
@@ -7366,6 +7389,7 @@ int main()
     test_launches_are_recorded_into_the_arrangement();
     test_a_video_lane();
     test_a_song_shared_through_a_folder();
+    test_the_ui_scale_and_contrast_are_settings();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

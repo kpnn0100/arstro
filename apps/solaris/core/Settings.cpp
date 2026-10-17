@@ -21,6 +21,8 @@ namespace solaris
         o << "newBpm = " << newBpm << "\n";
         o << "newSig = " << newSig << "\n";
         o << "reducedMotion = " << (reducedMotion ? "on" : "off") << "\n";
+        o << "uiScale = " << uiScale << "\n";                          // R-ACCESS-1
+        o << "highContrast = " << (highContrast ? "on" : "off") << "\n";
         o << "showIds = " << (showIds ? "on" : "off") << "\n";
         o << "autosave = " << (autosave > 0 ? std::to_string(autosave) : std::string("off")) << "\n";
         o << "driver = " << driver << "\n";
@@ -62,6 +64,8 @@ namespace solaris
             else if (k == "newBpm") { const double b = std::atof(v.c_str()); if (b >= 20 && b <= 999) s.newBpm = b; }
             else if (k == "newSig" && !v.empty()) s.newSig = v;
             else if (k == "reducedMotion") s.reducedMotion = v == "on";
+            else if (k == "uiScale") { const int u = std::atoi(v.c_str()); if (u == 75 || u == 90 || u == 100 || u == 125 || u == 150 || u == 175 || u == 200) s.uiScale = u; } // R-ACCESS-1
+            else if (k == "highContrast") s.highContrast = v == "on";
             else if (k == "showIds") s.showIds = v == "on";
             else if (k == "autosave") { const int a = v == "off" ? 0 : std::atoi(v.c_str()); if (a == 0 || (a >= 1 && a <= 3600)) s.autosave = a; }
             else if (k == "driver") { if (v == "pulse" || v == "pipewire") s.driver = v; }

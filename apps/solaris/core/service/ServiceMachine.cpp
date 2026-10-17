@@ -105,10 +105,16 @@ namespace solaris
                 }
                 else if (k == "output") next.output = v;
                 else if (k == "input") next.input = v;
-                else if (k == "metronome" || k == "reducedMotion" || k == "showIds")
+                else if (k == "metronome" || k == "reducedMotion" || k == "showIds" || k == "highContrast")
                 {
                     if (v != "on" && v != "off") { err = k + " is on or off"; return false; }
-                    (k == "metronome" ? next.metronome : k == "reducedMotion" ? next.reducedMotion : next.showIds) = v == "on";
+                    (k == "metronome" ? next.metronome : k == "reducedMotion" ? next.reducedMotion : k == "highContrast" ? next.highContrast : next.showIds) = v == "on";
+                }
+                else if (k == "uiScale") // R-ACCESS-1: cosmo's steps — another number is refused, never rounded quietly
+                {
+                    if (!parseNumber(v, x) || (x != 75 && x != 90 && x != 100 && x != 125 && x != 150 && x != 175 && x != 200))
+                    { err = "uiScale is 75, 90, 100, 125, 150, 175 or 200 (%)"; return false; }
+                    next.uiScale = (int)x;
                 }
                 else if (k == "metronomeLevel" || k == "auditionLevel")
                 {
@@ -205,9 +211,9 @@ namespace solaris
                 else
                 {
                     err = "no setting `" + k + "`";
-                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver", "midiInputs", "recordQuantize", "countIn", "surface", "surfacePort", "threads"});
+                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver", "midiInputs", "recordQuantize", "countIn", "surface", "surfacePort", "threads", "uiScale", "highContrast"});
                     err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>, metronome, "
-                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, showIds, autosave, driver, midiInputs, recordQuantize, countIn, surface, surfacePort, threads, key.<action>)")
+                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, uiScale, highContrast, showIds, autosave, driver, midiInputs, recordQuantize, countIn, surface, surfacePort, threads, key.<action>)")
                                         : " (did you mean: " + near[0] + "?)";
                     return false;
                 }
@@ -252,7 +258,7 @@ namespace solaris
                               .set("output", mSettings.output).set("input", mSettings.input)
                               .set("folders", folders).set("ports", ports).set("metronome", mSettings.metronome)
                               .set("metronomeLevel", mSettings.metronomeLevel).set("auditionLevel", mSettings.auditionLevel).set("newBpm", mSettings.newBpm)
-                              .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion)
+                              .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion).set("uiScale", mSettings.uiScale).set("highContrast", mSettings.highContrast)
                               .set("showIds", mSettings.showIds).set("autosave", mSettings.autosave).set("driver", mSettings.driver).set("midiInputs", mSettings.midiInputs).set("recordQuantize", mSettings.recordQuantize).set("countIn", mSettings.countIn).set("keys", [&] {
                                   Json keys = Json::array(); // only the re-keyed actions, as the file has them
                                   for (const auto &k : mSettings.keys) keys.push(Json::string(k.first + "=" + k.second));

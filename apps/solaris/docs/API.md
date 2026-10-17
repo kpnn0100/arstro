@@ -635,6 +635,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.newBpm` | number | a new song's tempo without --bpm |
 | `settings.newSig` | string | a new song's meter without --sig |
 | `settings.reducedMotion` | bool | the UI's tweens collapse (with the OS's own setting) |
+| `settings.uiScale` | int | R-ACCESS-1: the window drawn at this % — 75, 90, 100, 125, 150, 175 or 200; eased |
+| `settings.highContrast` | bool | R-ACCESS-1: the neutrals toward black, white text and solid borders; eased |
 | `settings.showIds` | bool | every object's id drawn beside its name (R-UI-11) |
 | `settings.autosave` | int | seconds between autosaves of an unsaved song; 0 = off (R-SAFE-1) |
 | `settings.driver` | string | pulse \| pipewire: how the clock device is reached (R-DEV-9) |

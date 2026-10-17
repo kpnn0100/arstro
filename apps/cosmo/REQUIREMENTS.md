@@ -64,6 +64,11 @@ architecture, per-class detailed design, design rationale, and a PlantUML model 
   rendering all 41 named `cosmo_shots` states before and after and comparing the bytes (41 identical),
   not by reading the diff. `sharedTheme()` used to be a `static const` frozen at first call, which would
   have made the setter silently order-dependent; it now rebuilds when the accent has moved.
+  (**Added 2026-10-17 — Solaris R-ACCESS-1:** a second runtime slot, the CONTRAST amount (`palette::setContrast`, 0 … 1):
+  the neutral tokens — background, foreground, the cards, secondary and muted and their text, border, input, the
+  per-surface grounds — blend toward high-contrast values by it, so a sibling app can ease a high-contrast theme without
+  forking a token; `sharedTheme()` rebuilds when it moves. **Cosmo never calls it** — all 41 `cosmo_shots` states
+  byte-identical before and after, compared, not read.)
 
 ## R-EDITSTACK — Right-column edit stack
 

@@ -280,6 +280,8 @@ namespace solaris
         std::vector<std::string> folders;
         std::vector<std::string> ports;          // "<name>=<device>:<channel>"
         bool metronome = false, reducedMotion = false; // R-SET-3
+        int uiScale = 100;                       // R-ACCESS-1: the window drawn at this % (75 · 90 · 100 · 125 · 150 · 175 · 200)
+        bool highContrast = false;               // R-ACCESS-1
         double metronomeLevel = -6, newBpm = 120;
         double auditionLevel = -6;              // dB: a sample previewed from the browser (R-EDM-9)
         std::string newSig = "4/4";
