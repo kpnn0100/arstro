@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N38 — Collect and save; relink** (R-COLLECT-1; N37 — versions of a song — is built), then N39… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N39 — A clip launcher** (R-LAUNCH-1; N38 — collect and relink — is built), then N40… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -621,10 +621,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       Part 3: the song bar — the version chip after the menus (the name follows it), its menu the tree, New Version…
       (ONE line, opened), Freeze/Thaw, Rebase, Rename…, Delete; label, ring and width eased; shots song-versions(-mid).
       N37 DONE. (On the way: DR-UI-1/9/13's App and SongBar anchors re-pointed by symbol.)
-- [~] **N38** Collect and save; relink (R-COLLECT-1). Round 16 (the design): what a song uses — in every version, an
+- [x] **N38** Collect and save; relink (R-COLLECT-1). Round 16 (the design): what a song uses — in every version, an
       `.sfz`'s sounds too; collect into `Samples/` as ONE edit; relink a file or a folder across the song. Part 1: the
       service — `project files|collect|relink`, `clip relink`, `missing[]`; D-23 found and fixed (a dry run was an edit).
-      Next: part 2 — the File menu, the Relink window, the toast on open.
+      Part 2: File › Collect and Save (one line), File › Relink… (asks first, then the window: Locate…, Search a
+      Folder…, rows keyed and eased), a toast on open; shots relink-window, relink-found-mid. N38 DONE.
 - [ ] **N39** A clip launcher (R-LAUNCH-1).
 - [ ] **N40** A video lane (R-VIDEO-1).
 - [ ] **N41** Sharing through a folder: merge by node (R-COLLAB-1).

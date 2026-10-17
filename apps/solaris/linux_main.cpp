@@ -267,6 +267,14 @@ int main(int argc, char **argv)
         gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), text.c_str(), (gint)text.size());
     };
     a->app->setOsReducedMotion(!animations); // the OS's "reduce motion" (design rule §2.6); the app's own setting ORs in
+    a->app->onPickFile = [a](const std::string &title, std::function<void(const std::string &)> done) { // R-COLLECT-1: Locate…
+        const std::string p = pick(a, GTK_FILE_CHOOSER_ACTION_OPEN, title.c_str(), "_Open", false, std::string());
+        if (!p.empty()) done(p);
+    };
+    a->app->onPickDirectory = [a](const std::string &title, std::function<void(const std::string &)> done) { // … Search a Folder…
+        const std::string p = pick(a, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER, title.c_str(), "_Search", false, std::string());
+        if (!p.empty()) done(p);
+    };
     a->app->onPickFolder = [a](std::function<void(const std::string &)> done) {
         const std::string p = pick(a, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER, "Add a sample folder", "_Add", false, std::string());
         if (!p.empty()) done(p);

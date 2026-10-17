@@ -38,6 +38,7 @@ namespace solaris_ui
         mProject = std::make_shared<ProjectScreen>();
         mSettings = std::make_shared<SettingsSheet>();
         mExport = std::make_shared<ExportSheet>();
+        mRelink = std::make_shared<RelinkSheet>();
         mConfirm = std::make_shared<cosmo_v2::ConfirmDialog>(palette::primary());
         mMenu = std::make_shared<cosmo_v2::ContextMenu>();
         mModalRoot = std::make_shared<Segment>();
@@ -90,6 +91,16 @@ namespace solaris_ui
         mSettings->onCommand = [this](const std::string &line) { dispatch(line); };
         mSettings->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { mMenu->open(std::move(items), world.x, world.y); }; // R-DEV-1
         // R-EXPORT-1: the sheet's choices, then the host names the file — ONE render line
+        // R-COLLECT-1: Relink's rows and its search — the host names the file or the folder, then ONE line
+        mRelink->onLocate = [this](const std::string &path) {
+            const auto slash = path.find_last_of('/');
+            if (onPickFile)
+                onPickFile("Locate " + (slash == std::string::npos ? path : path.substr(slash + 1)),
+                           [this, path](const std::string &p) { dispatch("project relink " + quote(path) + " --to " + quote(p)); });
+        };
+        mRelink->onSearchFolder = [this] {
+            if (onPickDirectory) onPickDirectory("Search a folder for the missing files", [this](const std::string &d) { dispatch("project relink --folder " + quote(d)); });
+        };
         mExport->onExport = [this](const std::string &flags, const std::string &suggested) {
             if (onPickSave) onPickSave("Export the mix", suggested, [this, flags](const std::string &p) { dispatch("render --out " + quote(p) + " " + flags); });
         };
@@ -106,12 +117,13 @@ namespace solaris_ui
                 else mHistory->onGesture(g);
                 return;
             }
-            if (g.type == Gesture::Type::RightClick && mScreen == "project" && !mConfirm->isOpen() && !mSettings->isOpen() && !mExport->isOpen() &&
+            if (g.type == Gesture::Type::RightClick && mScreen == "project" && !mConfirm->isOpen() && !mSettings->isOpen() && !mExport->isOpen() && !mRelink->isOpen() &&
                 mProject->contextClick(g.pos))
                 return; // a window's parameter row: its menu (a slider would swallow the click)
             if (mConfirm->isOpen()) { mConfirm->onGesture(g); return; }
             if (mSettings->isOpen()) { mSettings->onGesture(g); return; }
             if (mExport->isOpen()) { mExport->onGesture(g); return; }
+            if (mRelink->isOpen()) { mRelink->onGesture(g); return; }
             if (g.type == Gesture::Type::Down && mScreen == "project")
             {
                 // R-ROLL-8: the keyboard follows the pointer — a press in the front roll gives it the keys
@@ -144,6 +156,18 @@ namespace solaris_ui
                  if (onPickSave) onPickSave("Render the mix", m.projectName + ".wav", [this](const std::string &p) { dispatch("render --out " + quote(p)); });
              }},
             {"Export\xE2\x80\xA6", [this] { mExport->show(mHooks.model ? mHooks.model() : emptyModel()); }}, // R-EXPORT-1
+            // R-COLLECT-1: every file the song names gathered into its folder and saved — ONE line; what is missing, a window
+            {"Collect and Save", [this] {
+                 if (!dispatch("project collect --save")) return;
+                 const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+                 const size_t n = m.missing.size();
+                 showToast(n == 0 ? std::string("Collected into the song's folder, and saved")
+                                  : "Collected and saved \xE2\x80\x94 " + std::to_string(n) + (n == 1 ? " file is" : " files are") + " still missing (File \xE2\x80\xBA Relink\xE2\x80\xA6)");
+             }},
+            {"Relink\xE2\x80\xA6", [this] {
+                 dispatch("project files --missing"); // a file may have gone since the last command: ask, then show the answer
+                 mRelink->show(mHooks.model ? mHooks.model() : emptyModel());
+             }},
             {"Render Stems\xE2\x80\xA6", [this] {
                  const auto &m = mHooks.model ? mHooks.model() : emptyModel();
                  std::string ids;
@@ -220,7 +244,7 @@ namespace solaris_ui
 
     void App::layoutAll()
     {
-        for (Segment *s : {(Segment *)mHome.get(), (Segment *)mProject.get(), (Segment *)mSettings.get(), (Segment *)mExport.get(), (Segment *)mModalRoot.get(), (Segment *)mConfirm.get(),
+        for (Segment *s : {(Segment *)mHome.get(), (Segment *)mProject.get(), (Segment *)mSettings.get(), (Segment *)mExport.get(), (Segment *)mRelink.get(), (Segment *)mModalRoot.get(), (Segment *)mConfirm.get(),
                            (Segment *)mMenu.get(), (Segment *)mHistory.get()})
         {
             s->x.set(0);
@@ -393,6 +417,13 @@ namespace solaris_ui
         mHome->bind(m);
         mProject->bind(m);
         mSettings->bind(m);
+        mRelink->bind(m); // R-COLLECT-1: what is missing now
+        if (m.projectPath != mMissingSaidFor) // a song opened with files missing says so, once
+        {
+            mMissingSaidFor = m.projectPath;
+            const size_t n = m.missing.size();
+            if (n > 0) showToast(std::to_string(n) + (n == 1 ? " file is" : " files are") + " missing \xE2\x80\x94 File \xE2\x80\xBA Relink\xE2\x80\xA6");
+        }
         syncHistory(m);
         if (m.recovery.empty()) mRecoveryAsked.clear();
         else if (m.recovery != mRecoveryAsked) { mRecoveryAsked = m.recovery; askRecovery(m); }
@@ -409,7 +440,7 @@ namespace solaris_ui
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         if (m.revision != mBoundRevision || m.transport.playing || m.audition.playing || m.audition.playing != mBoundAudition) return true;
         if (mHome->opacity.isAnimating() || mProject->opacity.isAnimating() || mToast.isAnimating() || mToast.value() > 0.0) return true;
-        if (mSettings->appearAmount() > 0.0 || mExport->appearAmount() > 0.0 || mMenu->isOpen() || mHistory->appearAmount() > 0.0) return true;
+        if (mSettings->appearAmount() > 0.0 || mExport->appearAmount() > 0.0 || mRelink->appearAmount() > 0.0 || mMenu->isOpen() || mHistory->appearAmount() > 0.0) return true;
         return nowMs - mLastActivityMs < kActiveWindowMs;
     }
 
@@ -450,7 +481,7 @@ namespace solaris_ui
     Cursor App::cursor() const
     {
         // a modal takes the pointer: the arrow over it (and over what it covers)
-        if (mMenu->isOpen() || mConfirm->isOpen() || mSettings->isOpen() || mExport->isOpen() || mHistory->isOpen() || mScreen != "project") return Cursor::Default;
+        if (mMenu->isOpen() || mConfirm->isOpen() || mSettings->isOpen() || mExport->isOpen() || mRelink->isOpen() || mHistory->isOpen() || mScreen != "project") return Cursor::Default;
         return mProject->cursorAt(mPointer);
     }
 
@@ -461,6 +492,7 @@ namespace solaris_ui
         if (mConfirm->isOpen()) { mConfirm->handleKey(e); return true; }
         if (mSettings->isOpen()) return mSettings->handleKey(e);
         if (mExport->isOpen()) return mExport->handleKey(e);
+        if (mRelink->isOpen()) return mRelink->handleKey(e);
         if (e.type != KeyEvent::Type::Down) return false;
         if (mHistory->isOpen())
         {
@@ -612,6 +644,8 @@ namespace solaris_ui
         mExport->advance(nowMs);          // R-EXPORT-1: the same, for File › Export…
         mExport->render(target);
         mExport->renderOverlay(target);
+        mRelink->advance(nowMs);          // R-COLLECT-1: File › Relink…
+        mRelink->render(target);
         mModalRoot->advance(nowMs);
         mModalRoot->renderOverlay(target);
 

@@ -4492,6 +4492,99 @@ static void test_versions_from_the_song_bar()
     pass("versions from the song bar (R-VER): the chip says main; its menu the tree and New Version… — ONE line, opened; the label cross-fades, the ring and the width ease, caught mid-way; Freeze said on the chip; main from a shell eases back; the tree opens a version");
 }
 
+static void test_relink_and_collect_from_the_file_menu()
+{
+    // R-COLLECT-1 (Round 16, part 2): a song opened with files missing says so; File › Relink… lists them — Locate… is
+    // the host's picker, then ONE `project relink <file> --to <picked>`: the found row fades out and the next slides up
+    // into its place, each caught mid-way; Search a Folder… is ONE `project relink --folder <dir>`; with nothing missing
+    // the card says so and shrinks, eased; File › Collect and Save is ONE line, said
+    auto quote = [](const std::string &v) { return v.find_first_of(" \t\"") == std::string::npos && !v.empty() ? v : "\"" + v + "\""; }; // App's
+    sltest::Rig r("ui-relink", 1280, 800);
+    const std::string lib = r.dir + "/relink-lib", found = r.dir + "/relink-found";
+    std::error_code ec;
+    std::filesystem::remove_all(lib, ec);
+    std::filesystem::remove_all(found, ec);
+    std::filesystem::create_directories(lib);
+    std::filesystem::create_directories(found + "/deep");
+    for (const std::string &f : {lib + "/kick.wav", lib + "/hat.wav", found + "/deep/hat.wav", r.dir + "/relink-new-kick.wav"})
+        std::ofstream(f, std::ios::binary) << "RIFF";
+    const std::string song = r.song("Relink") + ".slp";
+    r.cmd("project new " + song + " --bpm 120");
+    r.cmd("clip add --src " + lib + "/kick.wav --at 0");
+    r.cmd("clip add --src " + lib + "/hat.wav --at 4");
+    r.cmd("project save");
+    std::filesystem::remove(lib + "/kick.wav");
+    std::filesystem::remove(lib + "/hat.wav");
+    r.cmd("project close");
+    r.settle();
+    r.cmd("project open " + song);
+    r.settle();
+    assert(contains(r.app->toastText(), "2 files are missing") && contains(r.app->toastText(), "Relink"));
+    const auto missing = r.svc->model().missing;
+    assert(missing.size() == 2);
+    const std::string kick = missing[0].path, hat = missing[1].path;
+
+    auto &ms = r.app->project().bar().menus();
+    auto fileItem = [&](const std::string &label) {
+        for (int i = 0; i < (int)ms.menu(0).items.size(); ++i)
+            if (ms.menu(0).items[(size_t)i].label == label) return i;
+        return -1;
+    };
+    r.click(world(ms, ms.titleRect(0)));
+    r.settle();
+    assert(fileItem("Relink\xE2\x80\xA6") >= 0 && fileItem("Collect and Save") >= 0);
+    r.click(world(ms, ms.itemRect(0, fileItem("Relink\xE2\x80\xA6"))));
+    r.frame();
+    r.frame();
+    auto &rl = r.app->relinkSheet();
+    assert(sentLine(r, "project files --missing"));                        // asked first: a file may have gone since
+    assert(rl.isOpen() && rl.appearAmount() > 0.0 && rl.appearAmount() < 1.0); // it fades in …
+    assert(rl.rowCount() == 2 && rl.rowAmount(kick) == 1.0 && rl.rowAmount(hat) == 1.0); // … its rows with it, not one by one
+    r.settle();
+    const double hatY = rl.rowY(hat), h2 = rl.cardHeight();
+    assert(hatY > rl.rowY(kick));
+
+    // Locate… on the kick: the host's picker, then ONE line; its row fades out, the hat slides up into its place
+    std::string asked;
+    r.app->onPickFile = [&](const std::string &title, std::function<void(const std::string &)> done) {
+        asked = title;
+        done(r.dir + "/relink-new-kick.wav");
+    };
+    r.click(rl.locateRect(kick));
+    r.frame();
+    r.frame();
+    assert(asked == "Locate kick.wav" && sentLine(r, "project relink " + quote(kick) + " --to " + quote(r.dir + "/relink-new-kick.wav")));
+    assert(rl.rowAmount(kick) > 0.0 && rl.rowAmount(kick) < 1.0);              // fading out where it is
+    assert(rl.rowY(hat) < hatY && rl.rowY(hat) > rl.rowY(kick));               // sliding up, not there yet
+    assert(rl.cardHeight() < h2 && rl.cardHeight() > h2 - hatY);               // the card shrinking with it, eased
+    r.settle();
+    assert(rl.rowCount() == 1 && rl.rowAmount(kick) < 0.0 && rl.rowY(hat) == 0.0 && rl.cardHeight() == h2 - hatY);
+
+    // Search a Folder…: the host's folder picker, then ONE line; nothing missing — the card says so
+    std::string where;
+    r.app->onPickDirectory = [&](const std::string &title, std::function<void(const std::string &)> done) {
+        where = title;
+        done(found);
+    };
+    r.click(rl.searchRect());
+    r.frame();
+    assert(contains(where, "missing") && sentLine(r, "project relink --folder " + quote(found)));
+    assert(r.svc->model().missing.empty());
+    r.settle();
+    assert(rl.rowCount() == 0);
+    r.click(rl.doneRect());
+    r.settle();
+    assert(!rl.isOpen());
+
+    // File › Collect and Save: ONE line, then said
+    r.click(world(ms, ms.titleRect(0)));
+    r.settle();
+    r.click(world(ms, ms.itemRect(0, fileItem("Collect and Save"))));
+    r.settle();
+    assert(sentLine(r, "project collect --save") && contains(r.app->toastText(), "Collected") && !r.svc->model().dirty);
+    pass("relink and collect from the File menu (R-COLLECT-1): opened with files missing, said; Relink… lists them — Locate… one line, the found row fading out and the next sliding up, caught mid-way; Search a Folder… one line; nothing missing said; Collect and Save one line, said");
+}
+
 static void test_a_tuners_window()
 {
     // R-FX-17 (Round 12, part 3): a tuner's window — a band under its header: the note large, a needle for the cents
@@ -4940,6 +5033,7 @@ int main()
     test_a_vca_in_the_dock();
     test_per_strip_tools_in_the_dock();
     test_versions_from_the_song_bar();
+    test_relink_and_collect_from_the_file_menu();
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();

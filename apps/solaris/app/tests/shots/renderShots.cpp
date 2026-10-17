@@ -461,6 +461,42 @@ namespace
                  r.cmd("version open main");
                  r.pump(5 * sltest::Rig::kFrameMs);
              }},
+            {"relink-window", // R-COLLECT-1: File › Relink… on a song whose three samples moved — each row its name, the folder
+                              // it was in and what uses it (a version's clip as vr_1:…), Locate…; Search a Folder… and Done
+             [](sltest::Rig &r) {
+                 const std::string lib = r.dir + "/Old Samples";
+                 std::filesystem::create_directories(lib);
+                 for (const char *f : {"/kick 909.wav", "/Vox lead take 3.wav", "/snare.wav"}) std::ofstream(lib + f) << "RIFF";
+                 r.cmd("project new " + r.song("Moved") + ".slp --bpm 120");
+                 r.cmd("clip add --src \"" + lib + "/kick 909.wav\" --at 0");
+                 r.cmd("clip add --src \"" + lib + "/Vox lead take 3.wav\" --at 4");
+                 r.cmd("version new Dub --open");
+                 r.cmd("clip add --src \"" + lib + "/snare.wav\" --at 8");
+                 r.cmd("version open main");
+                 std::filesystem::remove_all(lib);
+                 r.cmd("project files --missing"); // what the File menu's Relink… asks first
+                 r.settle();
+                 r.app->relinkSheet().show(r.svc->model());
+                 r.settle();
+             }},
+            {"relink-found-mid", // R-COLLECT-1: one found — its row fading out where it was, the next two sliding up, the card shrinking
+             [](sltest::Rig &r) {
+                 const std::string lib = r.dir + "/Old Samples";
+                 std::filesystem::create_directories(lib);
+                 for (const char *f : {"/kick 909.wav", "/Vox lead take 3.wav", "/snare.wav"}) std::ofstream(lib + f) << "RIFF";
+                 std::ofstream(r.dir + "/kick 909.wav") << "RIFF";
+                 r.cmd("project new " + r.song("Moved") + ".slp --bpm 120");
+                 r.cmd("clip add --src \"" + lib + "/kick 909.wav\" --at 0");
+                 r.cmd("clip add --src \"" + lib + "/Vox lead take 3.wav\" --at 4");
+                 r.cmd("clip add --src \"" + lib + "/snare.wav\" --at 8");
+                 std::filesystem::remove_all(lib);
+                 r.cmd("project files --missing");
+                 r.settle();
+                 r.app->relinkSheet().show(r.svc->model());
+                 r.settle();
+                 r.cmd("project relink \"" + lib + "/kick 909.wav\" --to \"" + r.dir + "/kick 909.wav\"");
+                 r.pump(2 * sltest::Rig::kFrameMs);
+             }},
             {"tuner-window", // R-FX-17: a tuner's window while a synth holds A4 — the note large, the needle in tune, the rest small
              [](sltest::Rig &r) {
                  r.cmd("project new " + r.song("Tune") + ".slp --bpm 120");

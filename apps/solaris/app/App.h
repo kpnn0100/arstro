@@ -25,6 +25,7 @@
 #include "widgets/ProjectScreen.h"
 #include "widgets/SettingsSheet.h"
 #include "widgets/ExportSheet.h"
+#include "widgets/RelinkSheet.h"
 #include "../../cosmo/widgets/ConfirmDialog.h"
 #include "../../cosmo/widgets/ContextMenu.h"
 #include "../../cosmo/widgets/HistoryView.h"
@@ -60,6 +61,8 @@ namespace solaris_ui
         std::function<void(std::function<void(const std::string &)> done)> onPickFolder;
         /** A file to write: Save As, Render, Render Stems (the host's save dialog; `suggested` names it). */
         std::function<void(const std::string &title, const std::string &suggested, std::function<void(const std::string &)> done)> onPickSave;
+        /** R-COLLECT-1: a file to read (Relink's Locate…) and a folder to search (Search a Folder…) — the host's dialogs. */
+        std::function<void(const std::string &title, std::function<void(const std::string &)> done)> onPickFile, onPickDirectory;
         /** The HOST's clipboard (R-UI-11; the core has none, R-SVC-4): Copy Address / Value / as Formula / ID put
          *  their text here, and the app says so ("Copied dv_1.filter.cutoff"). */
         std::function<void(const std::string &text)> onCopy;
@@ -89,6 +92,7 @@ namespace solaris_ui
         ProjectScreen &project() { return *mProject; }
         SettingsSheet &settings() { return *mSettings; }
         ExportSheet &exportSheet() { return *mExport; } // R-EXPORT-1: File › Export…
+        RelinkSheet &relinkSheet() { return *mRelink; } // R-COLLECT-1: File › Relink…
         cosmo_v2::ConfirmDialog &confirm() { return *mConfirm; }
         cosmo_v2::ContextMenu &menu() { return *mMenu; }
         artboard::Segment *activeRoot();
@@ -118,6 +122,8 @@ namespace solaris_ui
         std::shared_ptr<ProjectScreen> mProject;
         std::shared_ptr<SettingsSheet> mSettings;
         std::shared_ptr<ExportSheet> mExport;
+        std::shared_ptr<RelinkSheet> mRelink;
+        std::string mMissingSaidFor; // R-COLLECT-1: the song whose missing files a toast has said
         std::shared_ptr<cosmo_v2::ConfirmDialog> mConfirm;
         std::shared_ptr<cosmo_v2::ContextMenu> mMenu;  // cosmo's: a route, an effect, rename — modal while open
         std::shared_ptr<artboard::Segment> mModalRoot; // hosts cosmo's dialog: its advance is the tree's
