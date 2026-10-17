@@ -293,6 +293,19 @@ namespace solaris
         std::vector<std::string> lines;
     };
 
+    /** R-VER: a version of the song — its base resolved, with its deltas on top (docs/project-format.md §9b; the
+     *  resolution and the deltas are Versions.h's). Main, the song itself, is not one. */
+    struct Version
+    {
+        std::string id, name;
+        std::string base;                // an EARLIER version's id; empty = main
+        bool frozen = false;             // R-VER-3: its `#vsnapshot` is read instead of its base
+        std::vector<std::string> lines;  // its deltas, its own nodes, then `#vsnapshot` and the song — canonical text,
+                                         // indented as written less the block's two spaces
+        Fields unknown;
+        Remarks remarks;
+    };
+
     struct Project
     {
         Header header;
@@ -310,6 +323,13 @@ namespace solaris
         std::vector<Marker> markers;    // R-ARR-1: sorted by (at, id)
         std::vector<TempoPoint> tempos; // R-TEMPO-1: sorted by at, each at a beat of its own after 0
         std::vector<RawNode> raw;
+        std::vector<Version> versions;  // R-VER: in creation order, each based on main or an earlier one
+        /** R-VER: the version open — its resolution is what the nodes above hold ("" = main, the song itself). Never
+         *  written: a song opens on main. */
+        std::string version;
+        /** R-VER: while a version is open, main's own text (`songText` of the song), which an edit on a version never
+         *  touches — `serializeProject` writes it in place of the nodes above. */
+        std::string mainText;
 
         // ── lookups (nullptr = none) ──
         Port *port(const std::string &id);
@@ -351,10 +371,13 @@ namespace solaris
         /** Strips in processing order. */
         std::vector<const Strip *> stripsInOrder() const;
 
-        /** The next free id with `prefix` (`ch` → `ch_7`), never reusing one in the document. */
+        /** The next free id with `prefix` (`ch` → `ch_7`), never reusing one in the document — main's, every
+         *  version's own nodes and snapshots included (R-VER), so a node a version adds never meets one its base adds. */
         std::string nextId(const std::string &prefix) const;
-        /** Every id in the document, for the uniqueness check and nextId. */
+        /** Every id of the song as it stands (the open version's nodes) and of its versions, for the uniqueness check. */
         std::vector<std::string> allIds() const;
+        const Version *versionOf(const std::string &idOrName) const;
+        Version *versionOf(const std::string &idOrName);
     };
 
     struct ParseReport
@@ -365,8 +388,11 @@ namespace solaris
 
     /** Parse `.slp` text. False with `err` on a syntax or structural error (`validate` is run). */
     bool parseProject(const std::string &text, Project &out, std::string &err, ParseReport *report = nullptr);
-    /** Canonical text (§10). */
+    /** Canonical text (§10): the song — main's, whichever version is open — then its versions (§9b). */
     std::string serializeProject(const Project &p);
+    /** R-VER: the song's own nodes as they stand (the open version's resolution), no versions — what a version's
+     *  deltas are worked out against and what a snapshot holds. */
+    std::string songText(const Project &p);
     /** Every structural error (§11), each one sentence naming what and where. Empty = valid. */
     std::vector<std::string> validateProject(const Project &p);
     /** R-MIX-4, the one rule: may strip `from` feed strip `to` — by its output, a send or a sidechain

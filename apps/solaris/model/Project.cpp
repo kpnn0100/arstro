@@ -162,20 +162,50 @@ namespace solaris
         for (const auto &x : automations) ids.push_back(x.id);
         for (const auto &x : markers) ids.push_back(x.id);
         for (const auto &x : tempos) ids.push_back(x.id);
+        for (const auto &x : versions) ids.push_back(x.id); // R-VER
         return ids;
+    }
+
+    const Version *Project::versionOf(const std::string &idOrName) const
+    {
+        for (const auto &v : versions)
+            if (v.id == idOrName) return &v;
+        for (const auto &v : versions)
+            if (v.name == idOrName) return &v;
+        return nullptr;
+    }
+
+    Version *Project::versionOf(const std::string &idOrName)
+    {
+        return const_cast<Version *>(static_cast<const Project &>(*this).versionOf(idOrName));
     }
 
     std::string Project::nextId(const std::string &prefix) const
     {
         long best = 0;
         const std::string p = prefix + "_";
-        for (const auto &id : allIds())
-        {
-            if (id.compare(0, p.size(), p) != 0) continue;
+        auto see = [&](const std::string &id) {
+            if (id.compare(0, p.size(), p) != 0) return;
             const std::string tail = id.substr(p.size());
-            if (tail.empty() || tail.find_first_not_of("0123456789") != std::string::npos) continue;
+            if (tail.empty() || tail.find_first_not_of("0123456789") != std::string::npos) return;
             best = std::max(best, std::strtol(tail.c_str(), nullptr, 10));
-        }
+        };
+        for (const auto &id : allIds()) see(id);
+        // R-VER: an id main or a version holds out of sight (a node the open version dropped, one only another version
+        // has, one in a snapshot) is still taken — so a node one version adds never meets one its base adds later
+        auto scan = [&](const std::string &text) {
+            const std::string key = "id=" + p;
+            for (size_t at = text.find(key); at != std::string::npos; at = text.find(key, at + 1))
+            {
+                if (at > 0 && text[at - 1] != ' ') continue;
+                size_t end = at + 3;
+                while (end < text.size() && text[end] != ' ' && text[end] != '\n') ++end;
+                see(text.substr(at + 3, end - at - 3));
+            }
+        };
+        scan(mainText);
+        for (const auto &v : versions)
+            for (const auto &l : v.lines) scan(l);
         return p + std::to_string(best + 1);
     }
 
@@ -347,6 +377,14 @@ namespace solaris
             else if (k == "chance") n.chance = std::clamp(r.num(k, v, 1.0), 0.0, 1.0); // R-ROLL-11
             else n.unknown.emplace_back(k, v);
         }
+        void apply(Reader &r, Version &n, const std::string &k, const std::string &v) // R-VER
+        {
+            if (k == "id") n.id = v;
+            else if (k == "name") n.name = v;
+            else if (k == "base") n.base = v;
+            else if (k == "frozen") n.frozen = r.boolean(k, v, false);
+            else n.unknown.emplace_back(k, v);
+        }
         void apply(Reader &r, TempoPoint &n, const std::string &k, const std::string &v)
         {
             if (k == "id") n.id = v;
@@ -441,7 +479,7 @@ namespace solaris
         Reader r{report ? report : &localReport, {}};
 
         // What a continuation line or a comment attaches to.
-        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Group, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Tempo, Raw };
+        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Group, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Tempo, Raw, Version };
         Cur cur = Cur::None;
         bool seenNode = false, sawMagic = false, sawTracks = false;
         std::map<std::string, std::vector<Note>> inlineNotes; // note clips written the suite's inline way
@@ -465,6 +503,7 @@ namespace solaris
             case Cur::Bind: return &p.bindings.back().remarks;
             case Cur::Marker: return &p.markers.back().remarks;
             case Cur::Tempo: return &p.tempos.back().remarks;
+            case Cur::Version: return &p.versions.back().remarks;
             default: return nullptr;
             }
         };
@@ -479,6 +518,11 @@ namespace solaris
             const std::string t = trim(line);
             const bool indented = !line.empty() && (line[0] == ' ' || line[0] == '\t');
             if (cur == Cur::Raw && indented) { p.raw.back().lines.push_back(line); continue; }
+            if (cur == Cur::Version && indented) // R-VER: its deltas and nodes, kept as text — Versions.h reads them
+            {
+                p.versions.back().lines.push_back(line.compare(0, 2, "  ") == 0 ? line.substr(2) : trim(line));
+                continue;
+            }
             if (t.empty()) continue;
             if (t[0] == ';')
             {
@@ -568,6 +612,7 @@ namespace solaris
                 else if (tok.type == "abind") { p.bindings.emplace_back(); fill(p.bindings.back()); cur = Cur::Bind; }
                 else if (tok.type == "amarker") { p.markers.emplace_back(); fill(p.markers.back()); cur = Cur::Marker; } // R-ARR-1
                 else if (tok.type == "atempo") { p.tempos.emplace_back(); fill(p.tempos.back()); cur = Cur::Tempo; }    // R-TEMPO-1
+                else if (tok.type == "aversion") { p.versions.emplace_back(); fill(p.versions.back()); cur = Cur::Version; } // R-VER
                 else { p.raw.push_back(RawNode{{line}}); cur = Cur::Raw; }
                 continue;
             }
@@ -755,6 +800,22 @@ namespace solaris
     }
 
     std::string serializeProject(const Project &p)
+    {
+        // R-VER: the song is main's — the open version's nodes are its resolution, written by its deltas below
+        std::string out = p.version.empty() ? songText(p) : p.mainText;
+        for (const auto &v : p.versions)
+        {
+            Line l("aversion");
+            l.kv("id", v.id).str("name", v.name).strIf("base", v.base).kvIf(v.frozen, "frozen", "true").unknown(v.unknown);
+            out += "\n";
+            emit(out, "", l, Remarks{v.remarks.inlineComment, {}});
+            for (const auto &x : v.lines) out += "  " + x + "\n";
+            for (const auto &c : v.remarks.after) out += c + "\n";
+        }
+        return out;
+    }
+
+    std::string songText(const Project &p)
     {
         std::string out;
         const Header &h = p.header;
@@ -991,6 +1052,24 @@ namespace solaris
                 else if (!seen.insert(id).second) e.push_back("two nodes share the id `" + id + "`");
             }
             if (seen.count("master")) e.push_back("`master` is reserved and cannot be a node id");
+        }
+        // R-VER: a version is named, once, never `main`; its base is main or an EARLIER version (so no chain loops); the
+        // open one is one of them; a frozen one holds its snapshot
+        {
+            std::set<std::string> ids, names;
+            for (const auto &v : p.versions)
+            {
+                if (v.name.empty()) e.push_back("version " + v.id + " has no name");
+                else if (v.name == "main") e.push_back("version " + v.id + " cannot be called `main` — that is the song itself");
+                else if (!names.insert(v.name).second) e.push_back("two versions are called `" + v.name + "`");
+                if (!v.base.empty() && !ids.count(v.base))
+                    e.push_back("version " + v.name + "'s base `" + v.base + "` is no version before it" +
+                                (p.versionOf(v.base) ? " (a base comes first, so no chain loops)" : ""));
+                if (v.frozen && std::find(v.lines.begin(), v.lines.end(), "#vsnapshot") == v.lines.end())
+                    e.push_back("version " + v.name + " is frozen but holds no #vsnapshot");
+                ids.insert(v.id);
+            }
+            if (!p.version.empty() && !ids.count(p.version)) e.push_back("the open version `" + p.version + "` is no version");
         }
         auto describe = [&p](const Strip &s) {
             const Mixer *m = p.mixerOf(s);

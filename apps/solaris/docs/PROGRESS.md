@@ -612,7 +612,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       bus's Solo-safe; the card's Ø and width tag, the safe ring, the master's Mono pill, all eased; shot mixer-tools.
       N36 DONE. (On the way: DR-MIX-4's and the dock's anchors had drifted unseen — re-pointed by symbol.)
 - [~] **N37** Versions of a song (R-VER-1…4). Round 15 (the design): deltas nested in `#aversion`, worked out after
-      every edit on an open version; one freeze lever; Interstellar's verbs. Next: part 1 — the model.
+      every edit on an open version; one freeze lever; Interstellar's verbs. Part 1: the model — `#aversion` read and
+      written after the song, a resolution (drops, sets, unsets, bodies, orders, its own nodes), the deltas worked out
+      from the song an edit left, dangling kept until rebase, freeze/thaw/rebase/revert, ids never reused (DR-VER-1).
+      Next: part 2 — the service.
 - [ ] **N38** Collect and save; relink (R-COLLECT-1).
 - [ ] **N39** A clip launcher (R-LAUNCH-1).
 - [ ] **N40** A video lane (R-VIDEO-1).

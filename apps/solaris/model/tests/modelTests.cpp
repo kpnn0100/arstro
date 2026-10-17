@@ -8,6 +8,8 @@
 #endif
 #include "../Format.h"
 #include "../Project.h"
+#include "../Versions.h"
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <string>
@@ -608,6 +610,241 @@ static void test_takes_and_their_comp_round_trip()
     pass("takes and their comp in the .slp (R-REC-2): #take / #comp under the clip, a fixed point; the comp's range plays (the latest where they meet), else the last take; a take the clip lacks refused");
 }
 
+
+// ── R-VER: versions of a song ─────────────────────────────────────────────────────────────────────────────────────
+
+namespace
+{
+    Project versioned()
+    {
+        Project p;
+        std::string err;
+        const bool ok = parseProject(kCanonical, p, err);
+        assert(ok);
+        return p;
+    }
+    bool hasLine(const std::vector<std::string> &v, const std::string &l) { return std::find(v.begin(), v.end(), l) != v.end(); }
+    std::string firstError(const Project &p)
+    {
+        const auto e = validateProject(p);
+        assert(!e.empty());
+        return e.front();
+    }
+    Project resolved(const Project &p, const std::string &id, std::vector<std::string> *dangling = nullptr)
+    {
+        std::string text, err;
+        const bool ok = resolveVersion(p, id, text, err, dangling);
+        assert(ok);
+        Project q;
+        const bool parsed = parseProject(text, q, err);
+        assert(parsed);
+        return q;
+    }
+}
+
+static void test_a_version_stores_what_it_changes_and_inherits_the_rest()
+{
+    // R-VER-1/2: a version is its base plus deltas — an edit on it stores ONE #vset, never a copy; main's text is
+    // untouched; the file is a fixed point; a base edit arrives where the version does not override; an override wins
+    Project p = versioned();
+    const std::string main = songText(p);
+    std::string err;
+    const std::string vr = newVersion(p, "Instrumental", "", err);
+    assert(vr == "vr_1");
+    assert(openVersion(p, "Instrumental", err) && p.version == "vr_1" && p.mainText == main);
+    assert(songText(p) == main); // nothing changed yet: the version is the song
+    p.strip("ch_2")->mute = true;
+    p.strip("ch_2")->gain = -1.5;
+    recordVersion(p);
+    assert(versionLines(p, "vr_1") == std::vector<std::string>{"#vset node=ch_2 gain=-1.5 mute=true"});
+    const std::string text = serializeProject(p);
+    assert(text.rfind(main, 0) == 0); // main first, as it was
+    assert(contains(text, "\n#aversion id=vr_1 name=Instrumental\n  #vset node=ch_2 gain=-1.5 mute=true\n"));
+    Project q;
+    assert(parseProject(text, q, err) && q.version.empty() && !q.strip("ch_2")->mute && serializeProject(q) == text);
+
+    // main moves on: its pan arrives in the version, its gain does not (the version's own wins)
+    q.strip("ch_2")->pan = 0.5;
+    q.strip("ch_2")->gain = -6.0;
+    const Project v = resolved(q, "vr_1");
+    assert(v.strip("ch_2")->pan == 0.5 && v.strip("ch_2")->gain == -1.5 && v.strip("ch_2")->mute);
+
+    // a field edited back to its base's value inherits again
+    assert(openVersion(q, "vr_1", err));
+    q.strip("ch_2")->gain = -6.0;
+    recordVersion(q);
+    assert(versionLines(q, "vr_1") == std::vector<std::string>{"#vset node=ch_2 mute=true"});
+    pass("a version stores what it changes (R-VER-1/2): one #vset, never a copy; main untouched; a fixed point; the base's pan arrives, its gain does not; edited back, a field inherits again");
+}
+
+static void test_every_kind_of_change_resolves_to_the_song_it_was()
+{
+    // R-VER-2: a drop, a field gone back to its default, a pattern's notes, a rack's order, devices and clips of its
+    // own, the header — the deltas worked out, and resolved (in memory and through the file) to exactly that song
+    Project p = versioned();
+    std::string err;
+    newVersion(p, "Extended", "", err);
+    assert(openVersion(p, "Extended", err));
+    p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [](const Clip &c) { return c.id == "ac_3"; }), p.clips.end());
+    p.strip("ch_3")->mute = false;
+    p.pattern("pt_1")->notes.push_back(Note{72, 80, 2.0, 0.5});
+    Rack *rk = p.rack("ch_3");
+    std::swap(rk->devices[0], rk->devices[1]);
+    DeviceNode extra;
+    extra.id = p.nextId("dv");
+    extra.type = "delay";
+    rk->devices.push_back(extra);
+    Clip c;
+    c.id = p.nextId("ac");
+    c.track = "ch_2";
+    c.lane = "ln_1";
+    c.src = "samples/snare.wav";
+    c.at = 8.0;
+    c.out = 0.25;
+    p.clips.push_back(c);
+    p.header.bpm = 132.0;
+    assert(validateProject(p).empty());
+    recordVersion(p);
+    const std::string edited = songText(p);
+    const auto lines = versionLines(p, "Extended");
+    assert(hasLine(lines, "#vdrop node=ac_3") && hasLine(lines, "#vunset node=ch_3 mute") && hasLine(lines, "#vset node=project bpm=132.0"));
+    assert(hasLine(lines, "#vbody node=pt_1") && hasLine(lines, "  #note pitch=72 at=2.0 length=0.5 vel=80"));
+    assert(hasLine(lines, "#vorder node=rack:ch_3 children=dv_2,dv_1,dv_4") && hasLine(lines, "#aeffect id=dv_4 type=delay"));
+    assert(std::any_of(lines.begin(), lines.end(), [](const std::string &l) { return l.rfind("#aclip id=ac_4 ", 0) == 0; }));
+    for (const auto &l : lines) assert(!contains(l, "ch_4") && !contains(l, "sd_1") && !contains(l, "au_1")); // untouched: nothing stored
+    assert(songText(resolved(p, "Extended")) == edited);
+    Project q;
+    assert(parseProject(serializeProject(p), q, err) && serializeProject(q) == serializeProject(p));
+    assert(openVersion(q, "Extended", err) && songText(q) == edited);
+    assert(openVersion(q, "main", err) && q.version.empty() && songText(q) == songText(versioned()));
+    pass("every kind of change (R-VER-2): a drop, a field back to its default, a pattern's notes, a rack's order, its own device and clip, the header — resolved, in memory and through the file, to exactly the song it was");
+}
+
+static void test_inherit_live_override_wins_dangling_kept_until_rebase()
+{
+    // R-VER-3: the base's edits arrive live — a device's parameter, a pattern's length — except where the version owns
+    // the field (a pattern's notes, a rack's devices); a delta whose node the base dropped is dangling: ignored, kept
+    // through an edit, named by a dry-run rebase, pruned by a rebase
+    Project p = versioned();
+    std::string err;
+    newVersion(p, "Alt", "", err);
+    assert(openVersion(p, "Alt", err));
+    p.pattern("pt_1")->notes.pop_back();
+    p.clip("ac_2")->at = 8.0;
+    recordVersion(p);
+    assert(openVersion(p, "main", err));
+    p.pattern("pt_1")->length = 8.0;
+    p.pattern("pt_1")->notes[0].vel = 50;
+    p.device("dv_1")->params.push_back({"filter.res", "0.5"});
+    p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [](const Clip &c) { return c.id == "ac_2"; }), p.clips.end());
+    std::vector<std::string> dangling;
+    Project v = resolved(p, "Alt", &dangling);
+    assert(v.pattern("pt_1")->length == 8.0 && v.pattern("pt_1")->notes.size() == 2 && v.pattern("pt_1")->notes[0].vel == 100);
+    assert(v.device("dv_1")->params.back().first == "filter.res" && !v.clip("ac_2"));
+    assert(dangling == std::vector<std::string>{"#vset node=ac_2 at=8.0"} && versionFacts(p, "Alt").dangling == 1);
+    assert(openVersion(p, "Alt", err));
+    p.strip("ch_4")->gain = -3.0;
+    recordVersion(p);
+    assert(hasLine(versionLines(p, "Alt"), "#vset node=ac_2 at=8.0")); // kept through an edit: never dropped unsaid
+    std::vector<std::string> report;
+    assert(rebaseVersion(p, "Alt", true, report, err) && report == std::vector<std::string>{"dangling: #vset node=ac_2 at=8.0"});
+    assert(hasLine(versionLines(p, "Alt"), "#vset node=ac_2 at=8.0"));
+    report.clear();
+    assert(rebaseVersion(p, "Alt", false, report, err) && report.size() == 1 && !hasLine(versionLines(p, "Alt"), "#vset node=ac_2 at=8.0"));
+    assert(versionFacts(p, "Alt").dangling == 0 && hasLine(versionLines(p, "Alt"), "#vset node=ch_4 gain=-3.0"));
+    pass("inherit live (R-VER-3): the base's parameter and length arrive, the version's own notes win; a delta on a node the base dropped is dangling — ignored, kept through an edit, named by a dry run, pruned by rebase");
+}
+
+static void test_freeze_thaw_and_rebase_a_frozen_version()
+{
+    // R-VER-3: frozen, a version reads its snapshot — the base's later work does not reach it; the file keeps it; thawed,
+    // its deltas are live again; a frozen version rebased advances to its base's present state, its deltas on top
+    Project p = versioned();
+    std::string err;
+    newVersion(p, "Radio edit", "", err);
+    assert(openVersion(p, "Radio edit", err));
+    p.strip("ch_2")->mute = true;
+    recordVersion(p);
+    assert(freezeVersion(p, "Radio edit", err) && p.versionOf("vr_1")->frozen && hasLine(p.versionOf("vr_1")->lines, "#vsnapshot"));
+    assert(!freezeVersion(p, "Radio edit", err) && contains(err, "already frozen"));
+    assert(openVersion(p, "main", err));
+    p.strip("ch_2")->gain = -9.0;
+    assert(resolved(p, "vr_1").strip("ch_2")->gain == -3.0 && resolved(p, "vr_1").strip("ch_2")->mute);
+    Project q;
+    assert(parseProject(serializeProject(p), q, err) && serializeProject(q) == serializeProject(p) && q.versions[0].frozen);
+    assert(resolved(q, "vr_1").strip("ch_2")->gain == -3.0);
+    std::vector<std::string> report;
+    assert(rebaseVersion(q, "vr_1", false, report, err) && q.versionOf("vr_1")->frozen);
+    assert(resolved(q, "vr_1").strip("ch_2")->gain == -9.0 && resolved(q, "vr_1").strip("ch_2")->mute);
+    p.strip("ch_2")->pan = 0.25;
+    assert(thawVersion(p, "vr_1", err) && !p.versionOf("vr_1")->frozen && !hasLine(p.versionOf("vr_1")->lines, "#vsnapshot"));
+    assert(resolved(p, "vr_1").strip("ch_2")->gain == -9.0 && resolved(p, "vr_1").strip("ch_2")->pan == 0.25 && resolved(p, "vr_1").strip("ch_2")->mute);
+    assert(!thawVersion(p, "vr_1", err) && contains(err, "not frozen"));
+    pass("freeze (R-VER-3): a frozen version reads its snapshot — the base's later gain does not reach it, the file keeps it; rebased, it advances with its mute on top; thawed, its deltas are live again");
+}
+
+static void test_versions_chain_are_checked_and_never_reuse_an_id()
+{
+    // R-VER-1: a version of a version stacks both; a base is main or an EARLIER version; names are one each and never
+    // `main`; a frozen version holds its snapshot; a base cannot be deleted from under another; an id a version holds
+    // is never given again; a version its base broke is reported and cannot be opened; revert drops an override
+    Project p = versioned();
+    std::string err;
+    newVersion(p, "A", "", err);
+    assert(openVersion(p, "A", err));
+    p.strip("ch_2")->mute = true;
+    p.strip("ch_2")->pan = -0.5;
+    Clip c;
+    c.id = p.nextId("ac");
+    c.track = "ch_2";
+    c.src = "samples/hat.wav";
+    c.out = 0.1;
+    p.clips.push_back(c);
+    recordVersion(p);
+    assert(newVersion(p, "B", "A", err) == "vr_2" && openVersion(p, "B", err));
+    p.strip("ch_4")->gain = -4.0;
+    recordVersion(p);
+    assert(versionLines(p, "B") == std::vector<std::string>{"#vset node=ch_4 gain=-4.0"});
+    const Project b = resolved(p, "B");
+    assert(b.strip("ch_2")->mute && b.strip("ch_4")->gain == -4.0 && b.clip("ac_4"));
+    assert(newVersion(p, "C", "nope", err).empty() && contains(err, "no version `nope`") && contains(err, "main, A, B"));
+
+    Project bad = p;
+    bad.versions[0].base = "vr_2";
+    assert(contains(firstError(bad), "is no version before it"));
+    bad = p;
+    bad.versions[1].name = "A";
+    assert(contains(firstError(bad), "two versions are called `A`"));
+    bad.versions[1].name = "main";
+    assert(contains(firstError(bad), "cannot be called `main`"));
+    bad = p;
+    bad.versions[0].frozen = true;
+    assert(contains(firstError(bad), "frozen but holds no #vsnapshot"));
+    assert(!deleteVersion(p, "A", err) && contains(err, "the base of B"));
+
+    assert(openVersion(p, "main", err) && !p.clip("ac_4"));
+    assert(p.nextId("ac") == "ac_5"); // ac_4 is A's own: never given again
+    assert(p.nextId("vr") == "vr_3");
+
+    // revert: one field, then the node; refused on main, where nothing is overridden, on a node of its own
+    assert(!revertVersion(p, "ch_2", "pan", err) && contains(err, "main is the song itself"));
+    assert(openVersion(p, "A", err) && revertVersion(p, "ch_2", "pan", err));
+    assert(p.strip("ch_2")->pan == 0.0 && p.strip("ch_2")->mute && hasLine(versionLines(p, "A"), "#vset node=ch_2 mute=true"));
+    assert(!revertVersion(p, "ch_2", "pan", err) && contains(err, "no override on `ch_2.pan`"));
+    assert(!revertVersion(p, "ac_4", "", err) && contains(err, "A's own"));
+    assert(revertVersion(p, "ch_2", "", err) && !p.strip("ch_2")->mute);
+
+    // broken by its base: main deletes the strip A's own clip plays through
+    assert(openVersion(p, "main", err));
+    p.strips.erase(std::remove_if(p.strips.begin(), p.strips.end(), [](const Strip &s) { return s.id == "ch_2"; }), p.strips.end());
+    p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [](const Clip &x) { return x.track == "ch_2"; }), p.clips.end());
+    p.sends.erase(std::remove_if(p.sends.begin(), p.sends.end(), [](const Send &x) { return x.from == "ch_2"; }), p.sends.end());
+    assert(validateProject(p).empty());
+    assert(contains(versionFacts(p, "A").problem, "ch_2") && !openVersion(p, "A", err) && contains(err, "version A does not stand"));
+    assert(deleteVersion(p, "B", err) && deleteVersion(p, "A", err) && p.versions.empty());
+    pass("versions checked (R-VER-1): B on A stacks both; a base must come first, names are one each and never main, a frozen one holds its snapshot; a base is not deleted from under B; A's own id never given again; revert by field and node; a version its base broke is named and cannot be opened");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -627,6 +864,11 @@ int main()
     test_tempo_changes_round_trip_and_are_checked();
     test_lane_groups_round_trip_and_are_checked();
     test_takes_and_their_comp_round_trip();
+    test_a_version_stores_what_it_changes_and_inherits_the_rest();
+    test_every_kind_of_change_resolves_to_the_song_it_was();
+    test_inherit_live_override_wins_dangling_kept_until_rebase();
+    test_freeze_thaw_and_rebase_a_frozen_version();
+    test_versions_chain_are_checked_and_never_reuse_an_id();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

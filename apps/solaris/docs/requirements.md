@@ -101,25 +101,25 @@ is the network's delay spread, not a pre-delay). R-FX-5, a strip's ordered rack,
 `#amixer`, `#atrack` (strip), `#asend`, `#arack`/`#aeffect`, `#alane`, `#apattern`/`#note`,
 `#aclip` — and links nothing but the standard library: a device is its registry `type` plus its
 parameters as text, which the core checks against the DSP registry. `parseProject`
-(`model/Project.cpp:432`) reads the suite grammar: header `key = value`, node lines, indented
+(`model/Project.cpp:470`) reads the suite grammar: header `key = value`, node lines, indented
 continuation lines, whole-line and inline `;` comments (kept with the node they follow), unknown
 keys (kept in order) and unknown nodes (kept verbatim with their indented lines). The suite's
 inline `#note`s under an `#aclip` become a pattern of their own — the one normalisation, reported.
-`serializeProject` (`model/Project.cpp:753`) writes §10's canonical form: `canonicalNumber`
+`serializeProject` (`model/Project.cpp:798`) writes §10's canonical form: `canonicalNumber`
 (`model/Format.cpp:33`, shortest round-trip, always a point), `canonicalBeats` (`:52`, rounded to
 1/960 beat, fewest decimals that read back to the tick), seconds to the microsecond; defaults of
 optional fields are omitted. **Parse → serialize is a byte-exact fixed point** for canonical text.
-Refused, each naming what and where (`validateProject`, `model/Project.cpp:972`): duplicate ids,
+Refused, each naming what and where (`validateProject`, `model/Project.cpp:1033`): duplicate ids,
 `master` as an id, unknown strip kinds, dangling references, an audio clip on a non-audio strip, a
 note clip on a non-instrument strip, `in ≥ out`, a clip before the song, two racks for one strip,
 an input port as a destination, a header that is not `app = solaris` / `timebase = beats` /
-`ppq = 960`. Repaired and counted (`Reader::num`, `:213`): a non-finite or unreadable number → the
+`ppq = 960`. Repaired and counted (`Reader::num`, `:243`): a non-finite or unreadable number → the
 field's default; out-of-range pan, pitch and velocity clamp. Guarded by `solaris_model` (8 tests;
 mutants checked: dropping unknown keys on write breaks the fixed point).
 
 ### DR-MIX-4 Routing only goes forward (R-MIX-4)
-`validateProject`'s `checkTarget` (`model/Project.cpp:1000`) accepts an `out` or a send target only when
-it is `master`, an output port, or a strip `feedsForward` (`model/Project.cpp:924`) allows — one LATER IN
+`validateProject`'s `checkTarget` (`model/Project.cpp:1079`) accepts an `out` or a send target only when
+it is `master`, an output port, or a strip `feedsForward` (`model/Project.cpp:985`) allows — one LATER IN
 PROCESSING ORDER: on a later mixer, or after it on its own (strip order, then the file's order on a
 tie) — the ONE copy of the rule, for outputs, sends and sidechain keys alike; anything else is refused
 naming both ends, as `ch_1 (Main, on Buses) output → ch_2 (kick, on Sources): a strip can only feed a
@@ -134,15 +134,15 @@ after the command. A new strip whose output is a strip on its OWN mixer is place
 Main: its default output is the bus that LEAVES the nearest later mixer with buses, else the one
 leaving its own (`defaultOutFor`, `:101`). `strip move --order <n>` puts the strip at position n of its
 mixer and renumbers the mixer 0…n−1 (`placeStrip`, `:61`; `case K::StripMove`, `:299`), as `mixer move`
-renumbers mixers — an order never ties. A new project is `newProject` (`model/Project.cpp:182`): Sources (`mx_1`), Buses (`mx_2`)
+renumbers mixers — an order never ties. A new project is `newProject` (`model/Project.cpp:212`): Sources (`mx_1`), Buses (`mx_2`)
 holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the master (R-MIX-3).
 Guarded by `test_routing_only_goes_forward` and `test_forward_is_processing_order_and_moves_renumber`
 (`core/tests/serviceTests.cpp:6530`: a bus made on Buses goes before Main and feeds it; a same-mixer route
 forward is taken, backward refused naming both ends; `strip move` that would point one back refused;
 `--order 0` first and renumbered; mutant checked: the old later-mixer rule refuses the new bus's
-default route). The same rule is PUBLISHED: `targetsOf` (`model/Project.cpp:955`) lists what a strip
+default route). The same rule is PUBLISHED: `targetsOf` (`model/Project.cpp:1016`) lists what a strip
 may feed — later strips in processing order, `master`, the output ports — as `strips[].targets`
-(`core/service/ServiceModel.cpp:270`), and `keyTargetsOf` (`model/Project.cpp:935`) its strips as `strips[].keyTargets`;
+(`core/service/ServiceModel.cpp:270`), and `keyTargetsOf` (`model/Project.cpp:996`) its strips as `strips[].keyTargets`;
 a front end offers exactly that list (the route picker, `MixerDock::openOut`, `app/widgets/MixerDock.cpp:986`),
 and the test routes to every entry offered.
 
@@ -235,7 +235,7 @@ it as `silent`.
 ### DR-MIX-8/9/10 Fed by, the matrix, the audit (R-MIX-8, R-MIX-9, R-MIX-10)
 `refreshModel` (`core/service/ServiceModel.cpp:75`) computes each strip's `clipCount`, `fromLanes`
 and `fromStrips`. `matrix print [--json]` (`matrixText`, `:603`): rows = strips in processing order,
-columns = `matrixColumnsOf` (`model/Project.cpp:954`) — every strip some strip may reach or does reach
+columns = `matrixColumnsOf` (`model/Project.cpp:1015`) — every strip some strip may reach or does reach
 (processing order), master, the output ports, so a route, send or key to an instrument or a same-mixer
 strip has its cell — computed once and published as `matrix.columns` (`ServiceModel.cpp:275`), which the
 GUI's matrix draws (DR-UI-8); `●` = the main output, `-6.0pre` = a send's dB and tap, `key` = a sidechain
@@ -507,11 +507,11 @@ down `bind` re-seeds nothing (`:332`); the body scrolls with its own bar (`revea
 `Automation` (`model/Project.h`): id `au_n`, name, unit, min/max, `from`, points (beat, value, shape
 `linear|hold|smooth|bezier`, sorted; a bezier point's handles — DR-AUTO-6). `Binding`: address +
 formula (with its `=`), one per address. Written after the clips as `#aauto` with `#point` children
-and `#abind` nodes (`serializeProject`); read by `parseProject` (`model/Project.cpp:536`), which also
+and `#abind` nodes (`serializeProject`); read by `parseProject` (`model/Project.cpp:580`), which also
 reads the suite schema's earlier sketch — indented `<beats> = <value>` lines and
-`node=/param=/interp=` — and normalises it once (`:601`). `validateProject` (`:1050`) refuses two
+`node=/param=/interp=` — and normalises it once (`:646`). `validateProject` (`:1129`) refuses two
 bindings on one address, a formula without `=`, a binding on something that does not exist, an empty
-range, an unknown shape and a bezier influence outside 0 < x ≤ 100 % (`:1128`).
+range, an unknown shape and a bezier influence outside 0 < x ≤ 100 % (`:1207`).
 
 ### DR-AUTO-2 Formulas: parsed, resolved, ordered (R-AUTO-2, R-AUTO-3)
 `parseFormula` (`core/Formula.cpp:205`): recursive descent straight to the engine's postfix
@@ -858,22 +858,22 @@ Each tool is ONE edit on a pattern (`core/service/ServiceCompose.cpp`), on every
 "<pitch@beat> …"` names (`scope`, `:228`), and where it draws, a seeded splitmix64 stream (`Rng`, `:75`; `seedOf`,
 `:87` — `--seed`, else a hash of the notes, printed), so the same line on the same notes writes the same notes.
 **Scale lock** — `pattern scale <pt> <key> <scale>` | `off` (`:361`; `#apattern … scale="D dorian"`): twelve scales
-(`scaleKinds`, `model/Project.cpp:1229`; a key in sharps, `parseScale` `:1248`), published as `patterns[].scale` and
+(`scaleKinds`, `model/Project.cpp:1308`; a key in sharps, `parseScale` `:1327`), published as `patterns[].scale` and
 its pitch classes `scaleMask`. A note PLACED — `note add` and each note of its `--chord` (`core/service/ServiceEdit.cpp:931`),
-`notes add` — goes to the nearest pitch of the scale, a tie DOWN (`snapToScale`, `model/Project.cpp:1281`), which
+`notes add` — goes to the nearest pitch of the scale, a tie DOWN (`snapToScale`, `model/Project.cpp:1360`), which
 makes a major chord stamped on any degree that degree's own triad; a note MOVED in pitch (`note move --to-pitch`,
 `ServiceEdit.cpp:923`; `notes move --semi`) goes on the way it moved to the scale's next pitch, two moved notes landing
 on one refused whole. A move in time, an import, a step row, a recording and `pattern transpose` keep their pitches.
 **Chance** — `Note::chance` 0 … 1 (`#note … chance=0.5`, written below 1; the note token's fifth field
 `C4@0:0.25:100:0.5`; `note add|move --chance`, `notes set <pt> "<sel>" --vel --chance --length`, `:341`): the compile
-rolls it per clip and per pass of the pattern (C4, `core/Compile.cpp:442`) by `noteSounds` (`model/Project.cpp:1331`
+rolls it per clip and per pass of the pattern (C4, `core/Compile.cpp:442`) by `noteSounds` (`model/Project.cpp:1410`
 — FNV-1a over the clip id, splitmix64's finaliser over the pass, the pitch and the tick, 53 bits against the chance):
 no clock, so a render is pure and two clips of one pattern vary apart; `project export-midi` rolls the same
 (`core/service/ServiceMidi.cpp:237`), so the file is what the render plays. **Grooves** — `pattern quantize --groove
-<name> [--strength 0…1] [--notes]` (`:390`): nine templates (`grooves`, `core/service/Notation.cpp:172` — the MPC's
+<name> [--strength 0…1] [--notes]` (`core/service/ServiceCompose.cpp:390`): nine templates (`grooves`, `core/service/Notation.cpp:172` — the MPC's
 54/58/62/66 % swings, shuffle, hip-hop, house, push, lazy; empirical, listed in the API document) of grid steps from
 beat 0, each an offset (a fraction of a step) and an accent (a velocity scale); strength moves a start and a velocity
-that part of the way; a groove with `--grid`/`--swing` refused. **Humanise** (`:440`): each start within ± `--timing`
+that part of the way; a groove with `--grid`/`--swing` refused. **Humanise** (`core/service/ServiceCompose.cpp:440`): each start within ± `--timing`
 beats, each velocity within ± `--vel` (neither given: 0.02 and 8), a triangular spread; never before beat 0, never
 onto another of its pitch (it keeps its time). **Legato** (`:473`): each note to the next later start among those
 acted on, a chord's notes together, the last to the pattern's end — overlaps shortened. **Arpeggiate** (`:491`): on
@@ -928,9 +928,9 @@ Solaris's way, 0 of 96 000 samples differing, not silence, its state read back a
 
 ### DR-MIX-15 The sidechain: a key into a later strip's compressor (R-MIX-15, R-EDM-3)
 `send add <ch> --to <ch2> --sidechain [--pre] [--gain]` makes a KEY (`#asend … sidechain=true`,
-`<send>.sidechain` settable): `feedsForward` (`model/Project.cpp:905`) — the one rule, later in processing
+`<send>.sidechain` settable): `feedsForward` (`model/Project.cpp:966`) — the one rule, later in processing
 order, its own mixer included, as for every route since R-MIX-4's amendment — and the validator refuses a
-key to the master or a port (`:989`); `strips[].keyTargets` (`keyTargetsOf`, `:916`) is what a
+key to the master or a port (`:1050`); `strips[].keyTargets` (`keyTargetsOf`, `:977`) is what a
 picker offers. The engine sums a key into the target's KEY buffers instead of its input (`routeKey`,
 `engine/Engine.cpp:505`, through its latency-compensating delay, DR-MIX-17) and hands them to every device
 whose type `takesKey` before it runs (`:653`) —
@@ -1152,8 +1152,8 @@ it allocates nothing (a fixed 48-step bisection on the Bézier's time component,
 audio thread runs it every 64 samples as it runs the formulas. A `#point` (`AutoPoint`,
 `model/Project.h:239`) keeps `shape=` and gains Interstellar's spelling for a bezier point's handles —
 `speedIn inflIn speedOut inflOut`, speeds in the automation's unit PER BEAT (the `.slp`'s timebase),
-influences in % (0 < x ≤ 100), read always (`model/Project.cpp:411`), written only for a bezier point
-(`:870`), so a file of linear / hold / smooth points reads and writes byte for byte as before.
+influences in % (0 < x ≤ 100), read always (`model/Project.cpp:449`), written only for a bezier point
+(`:931`), so a file of linear / hold / smooth points reads and writes byte for byte as before.
 `engine::curveKeys` (`engine/Expr.h:140`) is the ONE mapping of a point onto a key's two sides, used by
 the compiler and the timeline's drawing alike: linear → both sides linear; hold → its out side holds;
 smooth → After Effects' Ease on the segment after it (speed 0, influence ⅓ on both ends — a Bézier
@@ -1205,7 +1205,7 @@ window caught mid-fade, the facts present, `now` and a new row caught mid-tween,
 ### DR-AUTO-8 An automation loops; a pump in one line (R-AUTO-12, R-AUTO-13)
 `Automation::loop`, `at`, `length` (beats, `model/Project.h`) — `set <au>.loop|at|length=<beats ≥ 0>`
 (`core/service/SolarisService.cpp:794`), read back by `get`, published on `automations[]`, written on `#aauto` only
-when it loops (`model/Project.cpp:885`, docs/project-format.md §8a), refused below 0 naming the field. `compileCurve`
+when it loops (`model/Project.cpp:946`, docs/project-format.md §8a), refused below 0 naming the field. `compileCurve`
 turns them into samples (`core/Compile.cpp:617`) and the engine's `Curve::cyclePos` (`engine/Expr.h:186`) folds a
 position into the cycle before the same evaluator reads the curve: `(s − from) mod loop` inside the span, the cycle's
 end (`loop`) outside it — no allocation, deterministic, so a render, playback and `eval` agree (R-AUTO-7) and the
@@ -1548,9 +1548,9 @@ stop that ignores `--return`, a mark that snaps, every play moving the cue — a
 ### DR-LANE-3 Instrument tracks (R-LANE-3; R-LANE-1 amended)
 **The model.** `Lane::track` (`model/Project.h`) names the instrument strip a lane is the TRACK of; the
 file writes it `#alane … track=ch_2` (the suite's word for a strip, as a clip's `track=`), and every
-save writes the header line `tracks = on` (`model/Project.cpp:773`; read at `:605`, any other value
-refused). `validateProject` refuses a track of no strip or of a non-instrument (`:1065`) and a clip on a
-track that does not play through it — audio named as audio (`:1122`). `laneTitle` (`:49`) is the name a
+save writes the header line `tracks = on` (`model/Project.cpp:834`; read at `:650`, any other value
+refused). `validateProject` refuses a track of no strip or of a non-instrument (`:1144`) and a clip on a
+track that does not play through it — audio named as audio (`:1201`). `laneTitle` (`:49`) is the name a
 lane shows: its own, else a track's strip's — so renaming the instrument renames its tracks (D-2's
 lane half).
 
@@ -1579,7 +1579,7 @@ of ▸ (the instrument strips) → `set <ln>.strip=<ch>`, Plain Lane → `…=no
 instrument dropped from the browser onto a track asks for a lane of its own (`--lane new`,
 `app/widgets/ProjectScreen.cpp:120`) — it could not play through another's instrument.
 
-Guarded by `solaris_model` (`model/tests/modelTests.cpp:369`: the four refusals; `tracks` read, refused
+Guarded by `solaris_model` (`model/tests/modelTests.cpp:371`: the four refusals; `tracks` read, refused
 other than `on`, written in the canonical text), `solaris_service` (`test_instrument_tracks`,
 `core/tests/serviceTests.cpp:2076`; `test_a_song_from_before_tracks_adopts_them`, `:3220`) and
 `solaris_app_ui` (`test_a_lane_is_an_instruments_track`, `app/tests/ui/uiTests.cpp:236`: a rename
@@ -1911,8 +1911,8 @@ the submenu's strips from the wrong side of `keyTargets` — each seen red.
 ### DR-MIX-19 Group / VCA faders (R-MIX-19; docs/discussion.md Round 13) — part 1: the model, the compile, the grammar
 A VCA is a strip of kind `vca` (`strip add --kind vca [--name]`, default "VCA"; refused with `--out`,
 `core/service/ServiceEdit.cpp:195`): a name, a colour, a gain, a mute and a solo, and no sound. The model keeps it so
-(`model/Project.cpp:1023`): no output, no rack (`device add` refused there), no sends from it, and nothing routes or
-keys to it (`:1010`); `targetsOf` offers none and gives none (`:958`), so no picker lists one. A strip follows at most
+(`model/Project.cpp:1102`): no output, no rack (`device add` refused there), no sends from it, and nothing routes or
+keys to it (`:1089`); `targetsOf` offers none and gives none (`:1019`), so no picker lists one. A strip follows at most
 one VCA — `set <ch>.vca=<vca id or name>|none` (`core/service/SolarisService.cpp:939`; a VCA follows none; a VCA has no
 `pan`, `input` or `monitor`), `vca=` on its `#atrack` line (docs/project-format.md §4). The compile leaves VCAs out of
 the graph (`core/Compile.cpp:309` — strip indices and meters unchanged) and plays a member at `stripGainDb` — its own
@@ -1962,7 +1962,7 @@ the strip's own sound after its rack and BEFORE its pre-fader sends and its fade
 mid and side (s × width — 0 one channel, 2 the side doubled; a change ramps across the block), then the polarity (both
 channels × −1); at their defaults the stage is skipped — the samples untouched, to the bit. A bus may be solo-safe
 (`set <bus>.soloSafe=true|false`, `soloSafe=true` on its line; refused on a line that is not a bus, by the service and
-by the model, `model/Project.cpp:1021`): a solo never silences it, decided in `silentStrips` with the rest
+by the model, `model/Project.cpp:1100`): a solo never silences it, decided in `silentStrips` with the rest
 (`core/Compile.cpp:190`); its mute still does. A solo already keeps what the soloed strip feeds, so solo-safe keeps a
 bus OUTSIDE that graph running — begun mid-song, a solo cuts an unsafe bus's echoes at once and leaves a safe one's. The
 mono check is the listener's: `transport mono on|off` (`core/service/ServiceTransport.cpp:698`; not an edit, not in the
@@ -1997,6 +1997,45 @@ line that is not a bus offers no Solo-safe; Mono sends `transport mono on` and l
 `transport.mono` true. Mutants seen red: the Ø, the width tag, the ring and Mono each set at once (the mid-fade
 assertions fail), Solo-safe offered on any line, Mono's click sending nothing. Shot `mixer-tools`
 (`app/tests/shots/renderShots.cpp:433`) at both sizes.
+
+### DR-VER-1 Versions of a song (R-VER-1…4; docs/discussion.md Round 15) — part 1: the model
+A version is a `Version` (`model/Project.h:298`): an id, a name, a base (an earlier version's id; none = main) and its
+lines — its deltas, its own nodes, and when frozen `#vsnapshot` and the song — kept as text in its `#aversion` node
+(read with the song, `model/Project.cpp:521`; written after it, `:804`, main's own text first — `songText`, `:818`, is
+the song's nodes alone). The open version is `Project::version`; while one is open the nodes ARE its resolution and
+`mainText` holds main's, which an edit on a version never touches. Validation (`:1056`): names one each, never `main`;
+a base is main or an EARLIER version, so no chain loops; a frozen version holds its snapshot. `nextId` (`:194`) also
+reads main's text and every version's lines, so an id a version holds is never given again — not even one only main
+still has after the open version dropped it.
+
+`model/Versions.cpp` reads a song's canonical text as nodes (`readTable`, `model/Versions.cpp:117`; `keyOf`, `:86`):
+the header (`project`), every node with an id, a rack (`rack:<track>`), a formula (`bind:<address>`); values kept as
+written; a node's id-less lines are its body, a rack's devices its children; comments kept, never versioned. A
+resolution (`resolveText`, `:430`) is the base's, recursively, with the deltas applied (`applyVersion`, `:294`): drops,
+field sets and unsets, bodies, then its own nodes, then the orders — a base child no order lists is not in it; a frozen
+version reads its snapshot. A delta whose node the base lacks is dangling: ignored and listed. **The deltas are worked
+out, never written by a command:** `recordVersion` (`:554`) compares the song now with the base's resolution
+(`diffTables`, `:374`) — each node in the base's order: gone (`#vdrop`), fields changed or added (`#vset`), fields gone
+(`#vunset`), body (`#vbody`), children (`#vorder`); then the nodes of its own in full — and keeps the dangling ones. So
+an inherited node edited stores one `#vset`, never a copy, and a field set back to the base's value inherits again.
+`openVersion` (`:521`) parses a resolution — one that does not stand as a song (the base broke it) is refused, naming
+why; `versionFacts` (`:504`) counts deltas, own nodes and dangling ones and says why one does not stand. `newVersion`
+(`:570`); `freezeVersion` (`:592`) keeps the resolution as a snapshot; `thawVersion` (`:606`) drops it; `rebaseVersion`
+(`:616`) names the dangling deltas and prunes them, or advances a frozen version's snapshot to its base now with its
+deltas on top; `deleteVersion` (`:650`) is refused while another is based on it; `revertVersion` (`:664`) drops the
+open version's deltas on a node or a field, refused on main, a frozen version, a node of its own and where there are none.
+
+Tests (`solaris_model`): `test_a_version_stores_what_it_changes_and_inherits_the_rest` (`model/tests/modelTests.cpp:645`):
+a mute and a gain stored as ONE `#vset`; main's text untouched and first; the file a fixed point; main's later pan
+arrives, its gain does not; a field edited back inherits again. `test_every_kind_of_change_resolves_to_the_song_it_was`
+(`:680`): a drop, a field back to its default, a pattern's notes, a rack's order, its own device and clip, the header —
+resolved, in memory and through the file, to exactly the song it was; untouched nodes store nothing.
+`test_inherit_live_override_wins_dangling_kept_until_rebase` (`:723`), `test_freeze_thaw_and_rebase_a_frozen_version`
+(`:758`), `test_versions_chain_are_checked_and_never_reuse_an_id` (`:786`): a version of a version, the refusals, an id
+never reused, revert, a version its base broke named and not opened. Mutants seen red (9): copy-on-edit (every field
+stored); a set replacing the node's fields; dangling deltas dropped by an edit; frozen ignored; ids reused across
+versions (a new clip took the dropped clip's id); a field back to its default, a rack's order, not recorded; a base after
+its version accepted; a rebase that prunes nothing.
 ### DR-DEV-9 A PipeWire driver; xruns counted (R-DEV-9, R-DEV-5)
 `settings set driver=pulse|pipewire` (default pulse; saved with the machine's settings; Settings › Audio › Driver).
 Every stream the service opens — the player, the browser's audition, the roll's note preview — goes through
@@ -2310,7 +2349,7 @@ the lane switch snapping, a shell's value snapping — red.
 
 ### DR-ARR-1 Markers and sections (R-ARR-1)
 A marker is Interstellar's (law 16 — its `mk_` ids, `name`, `at`, `note` and `marker add <name> --at`) in the song's
-beats, written `#amarker id=mk_1 name=Chorus at=16.0 length=8.0 note="…"` (`model/Project.cpp:568`; `length` and
+beats, written `#amarker id=mk_1 name=Chorus at=16.0 length=8.0 note="…"` (`model/Project.cpp:612`; `length` and
 `note` only when set; in the id space, so `nextId("mk")`; docs/project-format.md §9a, docs/audio-format.md §2.10). With
 a `length` it is a SECTION; without, a point whose section runs to the next marker after it, else the song's end
 (`Project::sectionEnd`, `model/Project.cpp:77`) — published as `markers[].end` beside `at`, `length`, `name`, `note`, by
@@ -2355,8 +2394,8 @@ INTO the span by the shift was then taken as inside and deleted — the inside i
 
 ### DR-ARR-3 Lane groups (R-ARR-3)
 A group is organisation only, as a lane is: `#alanegroup id=lg_1 name=Drums [folded=on]` written before the lanes, each
-of its lanes naming it (`#alane … group=lg_1`; `model/Project.cpp:514`; a lane naming a group the song lacks is refused).
-Its lanes are side by side in the lane order — `gatherLaneGroups` (`model/Project.cpp:1302`) gathers each group at its
+of its lanes naming it (`#alane … group=lg_1`; `model/Project.cpp:558`; a lane naming a group the song lacks is refused).
+Its lanes are side by side in the lane order — `gatherLaneGroups` (`model/Project.cpp:1381`) gathers each group at its
 first lane's place and drops a group with no lane; a song opened scattered is gathered and said so. `lane group <ln> …
 [--name]` (`core/service/ServiceArrange.cpp:189`) makes a NEW group of the lanes, gathered at the first one's place in
 their order (a lane leaves any group it was in; prints the id); `lane ungroup <lg>` lets them go; `lane move <lg> --to
@@ -2389,7 +2428,7 @@ never blocks (what has not arrived is silence, counted by `missed`), `latency()`
 `Host::audioIn` — none, and arming an audio line is refused by name. **The song.** A strip's `input` (an input port —
 `port add <name> --dir in [--channels 1|2]`, the machine's settings mapping it to a device as any port, `port.<name>=
 <device>:<channel>`) and `monitor` (`auto` | `on` | `off`) are the song's (`#atrack … input=prt_2 monitor=off`, written
-when set; checked: the input an input port, `model/Project.cpp:1091`), set by `set <ch>.input=<port>|none` /
+when set; checked: the input an input port, `model/Project.cpp:1170`), set by `set <ch>.input=<port>|none` /
 `set <ch>.monitor=` (`core/service/SolarisService.cpp:936`). **Arming** (`strip arm <ch> [--input <port>]`,
 `core/service/ServiceInput.cpp:552`): an audio line arms for its input — `--input` sets it first, and only then is the
 line an edit; with no input it is refused naming the song's input ports (or `port add`); one strip armed at a time, as
@@ -2443,7 +2482,7 @@ snapping in — each red. Loop takes are R-REC-2's (N17).
 
 ### DR-REC-2 Takes and comping (R-REC-2)
 A clip's TAKES (`Clip::takes`, `#take src=…` under its `#aclip`) and its COMP (`#comp take= from= to=`, song beats) are
-read and written in place (`model/Project.cpp:516`); `Clip::takeAt` (`:64`) is the take that plays at a beat — the comp
+read and written in place (`model/Project.cpp:560`); `Clip::takeAt` (`:64`) is the take that plays at a beat — the comp
 range's (the latest written where they meet), else the LAST; a comp naming a take the clip lacks is refused. **Made by
 recording while the song loops**: the recorder thread notes each jump of the song's position — a loop turning — with
 the take's frame there (`Player::Take::marks`, `core/Player.cpp:54`); at the stop (`core/service/ServiceInput.cpp:162`)
@@ -2477,7 +2516,7 @@ double-click, that take for the whole clip (`clip comp <ac> --take <k>`). UI `te
 edit — each red.
 
 ### DR-EDIT-1 Audio editing on the lanes (R-EDIT-1)
-**Reverse.** `Clip::reverse` (`#aclip … reverse=true`, written only when set — `model/Project.cpp:390`), `set <ac>.reverse=
+**Reverse.** `Clip::reverse` (`#aclip … reverse=true`, written only when set — `model/Project.cpp:428`), `set <ac>.reverse=
 true|false` (`core/service/SolarisService.cpp:1048`; a note clip refused) and `get`; compiled to `Region::reverse`, which the
 engine reads from its span's end (`engine/Engine.cpp:588`) — a loop's every repetition backwards; a clip with takes
 mirrored stretch by stretch (`core/Compile.cpp:433`). **Crossfades** (C6, `heardFades`, `core/Compile.cpp:118`): an audio
@@ -2533,7 +2572,7 @@ heard fades drawn as the clip's own, Ctrl+E doing nothing — each red.
 
 ### DR-WARP-1 Warp and pitch on audio clips (R-WARP-1)
 An audio clip's `warp`, `bpm` and `pitch` (`#aclip … warp=true bpm=100.0 pitch=-3.0`, each written only when set —
-`model/Project.cpp:391`). `clipSecondsPerBeat` (`core/Compile.cpp:31`): a warped clip's beat is 60/bpm seconds of its
+`model/Project.cpp:429`). `clipSecondsPerBeat` (`core/Compile.cpp:31`): a warped clip's beat is 60/bpm seconds of its
 file, else the song's — so `clipLengthBeats` gives a warped clip its span's own beats, and `clip split` / `clip slice`
 cut it at them. **Played** (C7): `stretchKey` (`:33`) names what a warped or pitched clip plays —
 `stretch:<bpm/song bpm>:<semitones>:<in>:<out>:<src>`, exact numbers; empty for a plain clip or one with takes — and the
@@ -2562,7 +2601,7 @@ when it changes (`advanceClipEdit`, `:88`; LIVE `clipTagAlpha`, `:80`). UI `test
 on — each red.
 
 ### DR-TEMPO-1 A tempo map (R-TEMPO-1)
-`#atempo id= at= bpm= [ramp=true]` (`model/Project.cpp:570`; validated after beat 0, rising, 20 … 999). **The map**
+`#atempo id= at= bpm= [ramp=true]` (`model/Project.cpp:614`; validated after beat 0, rising, 20 … 999). **The map**
 (`engine/Tempo.h:23`): plain data in the engine — segments of a constant tempo (T1) or one gliding linearly in beats to
 the next (T2), each with its first beat and sample; `add` (`:45`) appends a change (a glide bends the segment before
 it); `sampleAt` (`:74`) and `beatAt` (`:81`) are closed-form both ways (a glide's time is (60/k)·ln(bpm(b)/bpm0)). One
@@ -2723,7 +2762,7 @@ life), since the engine compensated for it. *The engine* plays it as any device:
 made device is NOT warmed (`:238`): what it plays may be the engine the swap replaces. A binding to a plugin's
 parameter is resolved by name at build (`:207`; `Bindings.cpp:65`, `Compile.cpp` sets `paramName`). *Compile*
 (`Compile.cpp:188`) turns a `vst3` node into its numbers and an offline stand-in the service replaces; an instrument
-strip whose first is a plugin instrument stays one (`:341`). *The model* (`model/Project.cpp:297`): a `vst3` device
+strip whose first is a plugin instrument stays one (`:341`). *The model* (`model/Project.cpp:327`): a `vst3` device
 keeps `plugin` (the UID), `name`, `kind`, `bundle` after its type, its `p<id>` values, and `state` (base64) last.
 *The service* (`core/service/ServicePlugins.cpp`): `findPlugin` (`:74`, by id or name in any case, the nearest named);
 `device add <ch> --plugin` (an effect; an instrument refused, pointing at `strip add --kind instrument --plugin`),
@@ -2992,7 +3031,7 @@ a new file, so a NEW strip (R-MIX-2; `:456`); the strip itself untouched. Each o
 strip** (`core/Compile.cpp:348`): an audio strip with one region, its file from the start; its rack is not built (its
 devices cost nothing; their edits are kept and unheard); its fader, pan, mute, solo, sends and output as ever; the
 song's end still its clips' ends (`:362`), not the file's tail; a file that cannot be read leaves it silent, said by
-the compile (`:361`). **The file**: `frozen="…"` on its `#atrack` line (`model/Project.cpp:269`, written `:801`).
+the compile (`:361`). **The file**: `frozen="…"` on its `#atrack` line (`model/Project.cpp:299`, written `:862`).
 **The model**: `strips[].frozen` (`core/service/ServiceModel.cpp:273`); `audit` names each frozen strip and the file it
 plays (`:588`). Test: L2 `test_freeze_and_bounce` (`core/tests/serviceTests.cpp:5292`: an instrument through a chorus
 and a lookahead limiter, faded, panned and sending to a reverb bus — frozen, the song renders within 3·10⁻⁸ of its own
