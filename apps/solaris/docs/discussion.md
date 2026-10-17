@@ -509,3 +509,35 @@ line to change):
   playing — through `get` and the model; nothing stopped; a `set` refused. UI: the needle caught mid-tween; shots at
   both sizes.
 - **Not yet:** readings in the mixer dock or on a control surface; a tuner that hears more than one note at once.
+
+
+### Round 13 — 2026-10-17 — group / VCA faders (R-MIX-19, N35): the design, before code
+
+R-MIX-19 says one line: a VCA moves the gain of the strips assigned to it, adding its dB. A VCA carries no sound — it
+is a hand on many faders at once. Decided here (each a line to change):
+
+- **A VCA is a strip of its own kind** (`kind=vca`, R-MIX-1's "a channel is a strip" kept): a name, a colour, a
+  fader, a mute and a solo — and NO audio: no clips, no rack, no output, no sends, nothing routes to it. Everything a
+  strip already has — its place in the dock, its gain's address `ch_7.gain`, renaming, colour, order — it has with no
+  new code; what a strip has that a VCA must not, is refused naming the reason (`device add`, `clip add --strip`,
+  `route`, `send add` to or from it).
+- **Membership is the member's:** `set <ch>.vca=<vca strip>` (or `none`) — a strip follows at most one VCA, and a VCA
+  follows none (no nesting, for now). Any audio, instrument or bus strip may follow one. In the `.slp`: `vca=ch_7` on
+  the member's `#astrip` line, a VCA its own `#astrip … kind=vca` line.
+- **What it does — at the compile, so the engine stays as it is:** a member plays at its own gain PLUS the VCA's
+  (dB added, so linear multiplied); a VCA muted mutes its members; a VCA soloed solos them (each as if soloed —
+  `silentStrips` decides, ONCE, as now). A member whose gain is a formula or an automation gets the VCA's dB as an
+  offset after its formula (a `Bind`'s offset, applied after its clamp). The member's own fader shows its OWN gain;
+  the VCA's shows the VCA's.
+- **Live:** the VCA's fader moved while playing moves every member's gain through the existing live messages (each
+  member's own + the VCA's), never an engine swap; a member bound to a formula is the exception — its offset lives in
+  the engine's bind, so the engine is swapped (as a mute in a song with keys is).
+- **Seen:** `strips[].vca` (the VCA it follows, "" none) and, on a VCA, `strips[].members` (computed by the service,
+  so a second front end need not); `strips[].vcaGain` on a member (the dB its VCA adds). The dock: a VCA strip shows
+  its fader, M and S, a "VCA" tag and its members' names — no meter (it carries no sound), no rack, no routing; a
+  member shows a small "VCA <name> +3.0" under its fader, easing as the VCA moves. The strip menu: "VCA ▸" — None and
+  each VCA (one line, `set <ch>.vca=…`). "+ Line" offers "VCA".
+- **Parts** (a commit each): (1) the model, the compile and the grammar — kinds, membership, refusals, the `.slp`, the
+  sound (rendered: a member at its own plus the VCA's dB, mute and solo through it, a bound member offset); (2) live
+  and the model's fields and the API; (3) the dock — the VCA's strip, a member's tag, the menu, shots.
+- **Not yet:** a VCA following a VCA; a VCA's own gain automated or bound to a formula (refused, said); a VCA's pan.

@@ -1122,7 +1122,14 @@ a process is the host's (law 12).
   Round 12): a tuner — the pitch of what passes through it (untouched), as a frequency, the nearest note and its
   cents, against a reference A4; read while playing in its window (a needle that eases), in the model and by
   `get <dv>.<reading>` (never `set`); a device's READINGS described by the registry as its parameters are.)
-- **R-MIX-19 Group / VCA faders**: a VCA moves the gain of the strips assigned to it, adding its dB.
+- **R-MIX-19 Group / VCA faders**: a VCA moves the gain of the strips assigned to it, adding its dB. (**Detailed
+  before building, N35 — 2026-10-17, docs/discussion.md Round 13:** a VCA is a strip of kind `vca` — a name, a colour,
+  a fader, a mute and a solo, and no audio (no clips, rack, output or sends; nothing routes to it, each refused
+  naming why). A strip follows at most one VCA (`set <ch>.vca=<vca>|none`; `vca=` on its `.slp` line); a VCA follows
+  none. A member plays at its own gain plus the VCA's dB — a formula or automation on its gain too, the VCA's dB added
+  after it; a muted VCA mutes its members, a soloed one solos them. Its fader moved while playing moves its members at
+  once. The model says whom a strip follows and whom a VCA moves; the dock shows a VCA with no meter, and on a member
+  the dB its VCA adds. Not yet: nesting, a VCA's own gain automated, a VCA's pan.)
 - **R-MIX-20 Per-strip tools**: phase invert, width, mono check on the master; solo-safe on buses.
 - **R-VER build** (R-VER-1…4, specified): versions of a song.
 - **R-COLLECT-1 Collect and save**: `project collect` copies every file the song uses into its folder and rewrites
