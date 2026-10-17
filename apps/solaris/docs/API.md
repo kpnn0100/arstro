@@ -1014,6 +1014,14 @@ A recorded room: an impulse response (a sample) convolved with the sound, its la
 | `mix` | 0.0 … 1.0 | 0.3 |
 | `level` | -24.0 … 12.0 dB | 0.0 dB |
 
+### `tuner` — Tuner (effect)
+
+The pitch of what passes through, untouched: its frequency, the nearest note and its cents.
+
+| parameter | range | default |
+|---|---|---|
+| `reference` | 415.0 … 466.0 Hz | 440.0 Hz |
+
 ### `vocoder` — Vocoder (effect)
 
 One sound speaking through another: this strip's sound the modulator, the key (another track) the carrier, band by band.

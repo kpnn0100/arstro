@@ -6592,6 +6592,24 @@
       ]
     },
     {
+      "type": "tuner",
+      "label": "Tuner",
+      "kind": "effect",
+      "summary": "The pitch of what passes through, untouched: its frequency, the nearest note and its cents.",
+      "params": [
+        {
+          "name": "reference",
+          "label": "Reference A4",
+          "unit": "Hz",
+          "min": 415.0,
+          "max": 466.0,
+          "default": 440.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "vocoder",
       "label": "Vocoder",
       "kind": "effect",

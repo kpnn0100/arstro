@@ -2157,7 +2157,9 @@ two crossfaded taps sweeping a delay line; its latency (1 + half its window) com
 compressor's (DR-MIX-15), with no code here but the audit's (`core/service/ServiceModel.cpp:607`: a key-taking type
 with no Sidechain switch always listens). Test: L2 `test_a_vocoder_speaks_through_its_key`
 (`core/tests/serviceTests.cpp:4864`): a voice's strip through a synth on another strip, RMS 0.0127; the carrier muted,
-exactly silent; the audit quiet about its key.
+exactly silent; the audit quiet about its key. "tuner" (R-FX-17 part 1; REQ-tuner-1, REQ-device-11, DSP 6c07198) — YIN,
+the audio untouched; its readings (frequency, note, cents, level) are the DSP library's, not yet carried to the model
+(Round 12, part 2).
 
 ### DR-MIDI-3 Expression lanes (R-MIDI-3)
 A pattern carries expression lanes beside its notes (`model/Project.h` `ExprPoint`; `#expr lane= at= value=` in the
