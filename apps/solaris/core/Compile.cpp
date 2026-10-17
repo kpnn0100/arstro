@@ -136,6 +136,13 @@ namespace solaris
 
     std::string paramText(const ParamSpec &spec, double value) { return paramToText(spec, value); }
 
+    double stripGainDb(const Project &p, const Strip &s)
+    {
+        const Strip *v = s.vca.empty() ? nullptr : p.strip(s.vca);
+        const double vg = v && v->kind == "vca" ? v->gain : 0.0;
+        return s.gain <= -119.95 || vg <= -119.95 ? -120.0 : s.gain + vg;
+    }
+
     std::set<std::string> silentStrips(const Project &p)
     {
         std::set<std::string> silent, soloed;
@@ -143,6 +150,13 @@ namespace solaris
         {
             if (s.mute) silent.insert(s.id);
             if (s.solo) soloed.insert(s.id);
+            // R-MIX-19: a VCA's mute mutes its members, its solo solos them — each as if its own
+            if (const Strip *v = s.vca.empty() ? nullptr : p.strip(s.vca))
+                if (v->kind == "vca")
+                {
+                    if (v->mute) silent.insert(s.id);
+                    if (v->solo) soloed.insert(s.id);
+                }
         }
         if (soloed.empty()) return silent;
         // edges: a strip → the strips its output and sends land on
@@ -290,13 +304,20 @@ namespace solaris
         for (const auto &o : p.header.masterOut)
             if (portIndex.count(o)) g.masterPorts.push_back(portIndex[o]);
 
-        const auto order = p.stripsInOrder();
+        std::vector<const Strip *> order;
+        for (const Strip *s : p.stripsInOrder())
+            if (s->kind != "vca") order.push_back(s); // R-MIX-19: a VCA carries no sound — no strip of the graph
         std::map<std::string, int> stripIndex;
         for (const Strip *s : order)
         {
             stripIndex[s->id] = (int)r.stripIds.size();
             r.stripIds.push_back(s->id);
         }
+        // R-MIX-19: the dB a strip's VCA adds (0 for none)
+        auto vcaDb = [&](const Strip &s) {
+            const Strip *v = s.vca.empty() ? nullptr : p.strip(s.vca);
+            return v && v->kind == "vca" ? v->gain : 0.0;
+        };
         const auto silent = silentStrips(p);
         std::map<std::string, std::pair<int, int>> sendAt; // send id → (graph strip, its index in that strip's sends)
         const double spb = 60.0 / p.header.bpm * p.header.sampleRate; // samples per beat (at the start)
@@ -310,7 +331,7 @@ namespace solaris
             engine::Strip es;
             es.id = s->id;
             es.kind = s->kind == "instrument" ? engine::Strip::Instrument : s->kind == "bus" ? engine::Strip::Bus : engine::Strip::Audio;
-            es.gain = engine::dbToLinear(s->gain);
+            es.gain = engine::dbToLinear(stripGainDb(p, *s)); // R-MIX-19: its own plus its VCA's
             es.pan = s->pan;
             es.silent = silent.count(s->id) > 0;
             es.keyLive = !s->mute; // solo-silenced, it still keys (a soloed bass keeps its pump)
@@ -535,8 +556,16 @@ namespace solaris
             {
             case AddressSpec::StripGain:
             case AddressSpec::StripPan:
+                if (!stripIndex.count(sp.node))
+                {
+                    // R-MIX-19: a VCA's own gain bound — not yet (refused at the grammar; a file edited by hand)
+                    r.warnings.push_back("binding " + ob.binding->address + ": a VCA's gain or pan is not bound yet — inert");
+                    continue;
+                }
                 b.kind = sp.kind == AddressSpec::StripGain ? engine::Bind::StripGain : engine::Bind::StripPan;
                 b.strip = stripIndex.at(sp.node);
+                if (sp.kind == AddressSpec::StripGain)
+                    if (const Strip *s = p.strip(sp.node)) b.offset = vcaDb(*s); // R-MIX-19: its VCA's dB, after the formula
                 break;
             case AddressSpec::SendGain:
             {

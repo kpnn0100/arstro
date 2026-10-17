@@ -351,7 +351,7 @@ namespace engine
             case Bind::StripGain:
             {
                 StripState &st = *mStrips[bd.strip];
-                const double lin = v <= -119.95 ? 0.0 : dbToLinear(v);
+                const double lin = v <= -119.95 || bd.offset <= -119.95 ? 0.0 : dbToLinear(v + bd.offset); // R-MIX-19: + its VCA's
                 st.gainA = immediate ? lin : st.gainB;
                 st.gainB = lin;
                 st.ramp = sample;

@@ -205,6 +205,7 @@ namespace engine
         int param = -1;      // DeviceParam/MasterDeviceParam: the registry parameter's index
         std::string paramName; // … or, a made device's (a plugin's, R-VST-6), its name — the index found at build
         double lo = 0, hi = 1, own = 0; // the clamp, and the value before any evaluation
+        double offset = 0;              // StripGain: dB added after the clamp — a VCA's (R-MIX-19)
         bool integer = false;
         Expr expr;
     };

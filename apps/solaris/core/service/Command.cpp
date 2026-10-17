@@ -69,12 +69,14 @@ namespace solaris
              "Move a mixer to position <index> (0 = first). Refused if it would make any route point backward.", "R-MIX-4"},
 
             {K::StripAdd, "strip add", "", 0, 0,
-             {"kind=<audio|instrument|bus>", "name=<text>", "mixer=<mx>", "instrument=<type>", "plugin=<id|name>", "sample=<file>", "out=<target>"},
+             {"kind=<audio|instrument|bus|vca>", "name=<text>", "mixer=<mx>", "instrument=<type>", "plugin=<id|name>", "sample=<file>", "out=<target>"},
              "Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: "
              "\"Main\" — the bus that leaves the nearest later mixer with buses, else the one leaving its own mixer "
              "(the new strip is then placed BEFORE it, so the route goes forward), else master. An instrument strip "
              "gets its instrument (default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8); "
-             "--plugin <id|name> makes it another maker's instrument plugin, from `plugins list` (R-VST-6).", "R-MIX-1"},
+             "--plugin <id|name> makes it another maker's instrument plugin, from `plugins list` (R-VST-6). --kind vca: a "
+             "VCA — a fader, a mute and a solo for the strips that follow it (`set <ch>.vca=<vca>`), their gain its dB "
+             "added; no sound of its own: no output, rack, clips or sends (R-MIX-19).", "R-MIX-1"},
             {K::StripDelete, "strip delete", "<ch>", 1, 1, {"with-clips"},
              "Delete a strip and its rack. Refused while clips play through it or strips route to it, unless "
              "--with-clips (its clips go too).", "R-MIX-1"},

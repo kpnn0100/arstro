@@ -656,7 +656,7 @@ static void test_a_new_song_has_its_mixers_and_round_trips()
     assert(r.svc.model().screen == "home" && !r.svc.project());
     r.ok("project open " + path);
     assert(r.text() == before);
-    assert(r.no("strip add --kind synth") == "--kind must be audio, instrument or bus");
+    assert(r.no("strip add --kind synth") == "--kind must be audio, instrument, bus or vca"); // R-MIX-19 added vca
     assert(contains(r.no("project new " + freshSong("x") + " --bpm 5"), "--bpm"));
     pass("project new: Sources, Buses with Main → master; saved, closed, reopened byte-identical");
 }
@@ -4944,6 +4944,104 @@ static void test_a_tuner_reads_while_playing()
     pass("a tuner (R-FX-17): what it measures reaches the model and `get` while playing — the default synth's A4 read as A3 (its sub-octave square sets the period), one saw as A4; stopped, 0; never set; the values not in the stable dump");
 }
 
+static void test_a_vca_moves_its_members()
+{
+    // R-MIX-19 (Round 13, part 1): a VCA — a strip of kind vca with no sound — adds its dB to the strips that follow
+    // it, mutes and solos them; each shown sample-exact against the same thing done on the member itself
+    const std::string dir = scratch(), song = freshSong("vca");
+    Run r;
+    r.ok("project new " + song + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");                 // ch_2
+    r.ok("notes add pt_1 \"C4@0:2 E4@2:2\"");
+    r.ok("clip add --instrument synth --at 0 --length 4");                 // ch_3
+    r.ok("notes add pt_2 \"G3@0:4\"");
+    assert(r.ok("strip add --kind vca --name Synths") == "ch_4\n");
+    int k = 0;
+    auto render = [&]() {
+        const std::string out = dir + "/vca-" + std::to_string(k++) + ".wav";
+        r.ok("render --out " + out + " --to 4 --bits 32f");
+        return r.fake.written[out];
+    };
+    auto same = [](const std::vector<std::vector<float>> &a, const std::vector<std::vector<float>> &b) {
+        double worst = 0, peak = 0;
+        for (size_t c = 0; c < a.size() && c < b.size(); ++c)
+            for (size_t i = 0; i < a[c].size() && i < b[c].size(); ++i)
+            {
+                worst = std::max(worst, (double)std::fabs(a[c][i] - b[c][i]));
+                peak = std::max(peak, (double)std::fabs(a[c][i]));
+            }
+        return a.size() == b.size() && !a.empty() && a[0].size() == b[0].size() && peak > 0.01 && worst < 1e-6;
+    };
+    const auto plain = render();
+    // ch_2 follows the VCA at −6 dB: as ch_2 at −6 itself
+    r.ok("set ch_2.vca=Synths ch_4.gain=-6");
+    assert(r.ok("get ch_2.vca") == "ch_4\n" && r.ok("get ch_3.vca") == "none\n");
+    const auto viaVca = render();
+    r.ok("set ch_2.vca=none ch_2.gain=-6");
+    assert(same(viaVca, render()));
+    // its mute mutes it; its solo solos it — as the member's own would
+    r.ok("set ch_2.gain=0 ch_2.vca=ch_4 ch_4.gain=0 ch_4.mute=true");
+    const auto vcaMuted = render();
+    r.ok("set ch_4.mute=false ch_2.mute=true");
+    assert(same(vcaMuted, render()));
+    r.ok("set ch_2.mute=false ch_4.solo=true");
+    const auto vcaSoloed = render();
+    r.ok("set ch_4.solo=false ch_2.solo=true");
+    assert(same(vcaSoloed, render()));
+    r.ok("set ch_2.solo=false");
+    assert(same(plain, render()));                                         // at 0 dB, unmuted: no change at all
+    // a member whose gain is a formula: the VCA's dB after it — as the two summed, set plainly
+    r.ok("set ch_2.gain=\"=-3\" ch_4.gain=-6");
+    const auto bound = render();
+    r.ok("set ch_2.gain=-9 ch_2.vca=none");
+    assert(same(bound, render()));
+    r.ok("set ch_2.vca=ch_4 ch_2.gain=0");
+    // the .slp: the VCA its own line, the member says whom it follows
+    r.ok("project save");
+    std::ifstream f(song);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    assert(contains(ss.str(), "kind=vca") && contains(ss.str(), "vca=ch_4"));
+    r.ok("project open " + song);
+    assert(r.ok("get ch_2.vca") == "ch_4\n" && r.ok("get ch_4.gain") == "-6.0\n");
+    // what a VCA has not, refused naming why
+    assert(contains(r.no("strip add --kind vca --out master"), "a VCA carries no sound — it has no output"));
+    assert(contains(r.no("device add ch_4 --type reverb"), "ch_4 is a VCA — it carries no sound, so it holds no device"));
+    assert(contains(r.no("send add ch_4 --to master"), "a VCA — it carries no sound"));
+    assert(contains(r.no("route ch_2 --to ch_4"), "a VCA — it carries no sound: it moves its members' faders"));
+    for (const auto &st : r.svc.model().strips) // nor does any picker offer one, nor does it offer anywhere
+        assert(std::find(st.targets.begin(), st.targets.end(), "ch_4") == st.targets.end() && (st.id != "ch_4" || st.targets.empty()));
+    assert(contains(r.no("set ch_4.pan=0.5"), "ch_4 is a VCA — it carries no sound: it has a gain, a mute and a solo"));
+    assert(contains(r.no("set ch_2.vca=ch_3"), "ch_3 is a instrument strip, not a VCA") || contains(r.no("set ch_2.vca=ch_3"), "not a VCA"));
+    assert(contains(r.no("set ch_4.vca=ch_4"), "a VCA follows no VCA"));
+    assert(contains(r.no("set ch_4.gain=\"=-3\""), "a VCA's gain is a value for now"));
+    assert(contains(r.no("auto create ch_4.gain"), "a VCA's gain is not automated yet"));
+    assert(contains(r.no("clip add --strip ch_4 --at 0 --length 1"), "ch_4"));
+    // live: a member's OWN fader moved while playing carries its VCA's dB too (it once sent its own gain alone) —
+    // heard as loud as the same settings rendered
+    r.ok("set ch_3.mute=true ch_2.gain=-6 ch_4.gain=-20");
+    r.ok("notes add pt_1 \"C3@0:4\"");
+    r.fake.capture->frames = 0;
+    r.ok("transport play --from 0");
+    waitFrames(r, 24000);
+    r.ok("set ch_2.gain=0");
+    const long long mark = r.fake.capture->frames.load();
+    waitFrames(r, mark + 24000);
+    r.ok("transport stop");
+    const float heard = peakOf(r.fake.capture->sink, 2 * (size_t)(mark + 4800), 2 * (size_t)(mark + 24000));
+    const auto offline = render();
+    const float should = peakOf(offline[0], 24000 + 4800, 48000);
+    std::printf("    a member's fader moved live under a −20 dB VCA: heard %.4f, rendered %.4f\n", heard, should);
+    assert(should > 0.001f && std::fabs(20.0 * std::log10(heard / should)) < 1.5);
+    r.ok("set ch_3.mute=false ch_2.gain=0 ch_4.gain=-6");
+    // the VCA deleted: its members their own again, one edit
+    r.ok("strip delete ch_4");
+    assert(r.ok("get ch_2.vca") == "none\n");
+    r.ok("undo");
+    assert(r.ok("get ch_2.vca") == "ch_4\n");
+    pass("a VCA (R-MIX-19): its dB added to its members (as set on the member, sample-exact — a formula member too), its mute and solo theirs; the .slp; refusals for what it has not; deleted, its members their own (one undo)");
+}
+
 static void test_freeze_and_bounce()
 {
     // R-PERF-3: a strip's own sound frozen beside the song and played instead — the song sounds as it did (to float
@@ -6320,6 +6418,7 @@ int main()
     test_a_convolution_reverb_takes_its_response();
     test_a_vocoder_speaks_through_its_key();
     test_a_tuner_reads_while_playing();
+    test_a_vca_moves_its_members();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

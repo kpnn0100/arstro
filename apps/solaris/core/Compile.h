@@ -56,6 +56,9 @@ namespace solaris
     double secondsToBeats(const Project &p, double seconds);
     /** Strip ids that are silent: muted, or silenced by another strip's solo (R-MIX-7). */
     std::set<std::string> silentStrips(const Project &p);
+    /** R-MIX-19: the gain a strip plays at, dB — its own plus its VCA's (either at the −120 floor: the floor). The one
+     *  copy: the compile and a live fader move both read it. */
+    double stripGainDb(const Project &p, const Strip &s);
     /** A clip's length in beats, resolved (the file span at the tempo, or its pattern's). */
     double clipLengthBeats(const Project &p, const Clip &c);
     /** R-WARP-1: seconds of its file a beat of the clip plays — its own tempo's when warped, else the song's. */

@@ -785,7 +785,7 @@ namespace solaris
             {
                 m.kind = Player::Live::StripGain;
                 m.strip = strip;
-                m.value = engine::dbToLinear(mProject.strip(id)->gain);
+                m.value = engine::dbToLinear(stripGainDb(mProject, *mProject.strip(id))); // R-MIX-19: + its VCA's
             }
             else if (strip >= 0 && field == "pan")
             {

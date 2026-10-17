@@ -267,6 +267,7 @@ namespace solaris
             else if (k == "input") n.input = v;     // R-REC-1 — checked by validateProject
             else if (k == "monitor") n.monitor = v;
             else if (k == "frozen") n.frozen = v; // R-PERF-3
+            else if (k == "vca") n.vca = v;       // R-MIX-19
             else n.unknown.emplace_back(k, v);
         }
         void apply(Reader &r, Send &n, const std::string &k, const std::string &v)
@@ -795,6 +796,7 @@ namespace solaris
             if (n.colour >= 0) l.kv("colour", std::to_string(n.colour));
             l.strIf("input", n.input).kvIf(n.monitor != "auto", "monitor", n.monitor); // R-REC-1: only when set
             l.strIf("frozen", n.frozen);                                              // R-PERF-3
+            l.strIf("vca", n.vca);                                                    // R-MIX-19
             emit(out, "", l.unknown(n.unknown), n.remarks);
         }
         group(!p.sends.empty());
@@ -947,8 +949,9 @@ namespace solaris
     std::vector<std::string> targetsOf(const Project &p, const Strip &s)
     {
         std::vector<std::string> out;
+        if (s.kind == "vca") return out; // R-MIX-19: a VCA carries no sound — it goes nowhere
         for (const Strip *t : p.stripsInOrder())
-            if (feedsForward(p, s, *t)) out.push_back(t->id);
+            if (t->kind != "vca" && feedsForward(p, s, *t)) out.push_back(t->id); // … and nothing goes to one
         out.push_back("master");
         for (const Port *pt : outPortsInOrder(p)) out.push_back(pt->id);
         return out;
@@ -998,27 +1001,42 @@ namespace solaris
             const Strip *t = p.strip(to);
             if (!t) { e.push_back(from.id + "'s " + what + " names `" + to + "`, which is no strip, port or `master`"); return; }
             if (t == &from) { e.push_back(from.id + "'s " + what + " goes to itself"); return; }
+            if (t->kind == "vca") { e.push_back(from.id + "'s " + what + " goes to " + t->id + ", a VCA — it carries no sound: it moves its members' faders (R-MIX-19)"); return; }
             if (!feedsForward(p, from, *t))
                 e.push_back(describe(from) + " " + what + " → " + describe(*t) +
                             ": a strip can only feed a strip LATER in processing order (a later mixer, or after it on its own), the master or a port (R-MIX-4)");
         };
         for (const auto &s : p.strips)
         {
-            if (s.kind != "audio" && s.kind != "instrument" && s.kind != "bus")
-                e.push_back(s.id + " has kind `" + s.kind + "` (audio | instrument | bus)");
+            if (s.kind != "audio" && s.kind != "instrument" && s.kind != "bus" && s.kind != "vca")
+                e.push_back(s.id + " has kind `" + s.kind + "` (audio | instrument | bus | vca)");
             if (!s.mixer.empty() && !p.mixer(s.mixer)) e.push_back(s.id + " lives on mixer `" + s.mixer + "`, which does not exist");
-            checkTarget(s, s.out, "output");
+            if (s.kind == "vca")
+            {
+                // R-MIX-19: a VCA carries no sound — no output of its own; it follows no VCA (not yet)
+                if (!s.out.empty() && s.out != "master") e.push_back(s.id + " is a VCA — it carries no sound, so it has no output (R-MIX-19)");
+                if (!s.vca.empty()) e.push_back(s.id + " is a VCA — a VCA follows no VCA (not yet, R-MIX-19)");
+            }
+            else checkTarget(s, s.out, "output");
+            if (!s.vca.empty() && s.kind != "vca")
+            {
+                const Strip *v = p.strip(s.vca);
+                if (!v) e.push_back(s.id + " follows VCA `" + s.vca + "`, which is no strip");
+                else if (v->kind != "vca") e.push_back(s.id + " follows " + v->id + ", a " + v->kind + " strip — only a VCA moves others (R-MIX-19)");
+            }
         }
         for (const auto &sd : p.sends)
         {
             const Strip *from = p.strip(sd.from);
             if (!from) { e.push_back(sd.id + " sends from `" + sd.from + "`, which is no strip"); continue; }
+            if (from->kind == "vca") { e.push_back(sd.id + " sends from " + from->id + ", a VCA — it carries no sound (R-MIX-19)"); continue; }
             if (sd.to.empty()) e.push_back(sd.id + " has no target");
             if (sd.sidechain)
             {
                 // a key goes to a strip's detector: a strip later in processing order, any mixer (R-MIX-15)
                 const Strip *t = p.strip(sd.to);
                 if (!t) e.push_back(sd.id + " is a sidechain key, so it must go to a strip — `" + sd.to + "` is not one");
+                else if (t->kind == "vca") e.push_back(sd.id + " keys " + t->id + ", a VCA — it carries no sound (R-MIX-19)");
                 else if (!feedsForward(p, *from, *t))
                     e.push_back(describe(*from) + " key " + sd.id + " → " + describe(*t) +
                                 ": a sidechain key can only go to a strip LATER in processing order (R-MIX-15)");
@@ -1031,6 +1049,8 @@ namespace solaris
             for (const auto &r : p.racks)
             {
                 if (r.track != "master" && !p.strip(r.track)) e.push_back("a rack belongs to `" + r.track + "`, which is no strip");
+                else if (r.track != "master" && p.strip(r.track)->kind == "vca" && !r.devices.empty())
+                    e.push_back(r.track + " is a VCA — it carries no sound, so it holds no device (R-MIX-19)");
                 if (!tracks.insert(r.track).second) e.push_back("two racks belong to `" + r.track + "`");
                 for (const auto &d : r.devices)
                     if (d.type.empty()) e.push_back("device " + d.id + " has no type");

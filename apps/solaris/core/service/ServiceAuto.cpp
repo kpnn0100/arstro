@@ -127,6 +127,8 @@ namespace solaris
             const std::string address = c.arg(0);
             AddressSpec spec;
             if (!describeAddress(p, address, spec, err)) return false;
+            if ((spec.kind == AddressSpec::StripGain || spec.kind == AddressSpec::StripPan) && p.strip(spec.node) && p.strip(spec.node)->kind == "vca")
+            { err = address + ": a VCA's gain is not automated yet — automate its members (R-MIX-19)"; return false; }
             Automation a;
             a.id = p.nextId("au");
             a.name = spec.owner + " \xC2\xB7 " + spec.label; // "Bass · Cutoff"

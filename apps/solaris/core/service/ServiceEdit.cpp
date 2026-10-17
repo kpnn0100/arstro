@@ -191,7 +191,8 @@ namespace solaris
         case K::StripAdd:
         {
             const std::string kind = c.flag("kind", "audio");
-            if (kind != "audio" && kind != "instrument" && kind != "bus") { err = "--kind must be audio, instrument or bus"; return false; }
+            if (kind != "audio" && kind != "instrument" && kind != "bus" && kind != "vca") { err = "--kind must be audio, instrument, bus or vca"; return false; }
+            if (kind == "vca" && c.has("out")) { err = "a VCA carries no sound — it has no output (R-MIX-19)"; return false; }
             Strip s;
             s.id = p.nextId("ch");
             s.kind = kind;
@@ -201,7 +202,7 @@ namespace solaris
             for (const auto &o : p.strips)
                 if (p.mixerOf(o) && p.mixerOf(o)->id == s.mixer) orders.push_back(o.order);
             s.order = nextOrder(orders);
-            s.out = c.has("out") ? (c.flag("out") == "master" ? std::string() : c.flag("out")) : defaultOutFor(s.mixer);
+            s.out = kind == "vca" ? std::string() : c.has("out") ? (c.flag("out") == "master" ? std::string() : c.flag("out")) : defaultOutFor(s.mixer);
             std::string instrument;
             DeviceNode plugin; // R-VST-6: --plugin, another maker's instrument
             if (kind == "instrument" && c.has("plugin"))
@@ -231,7 +232,7 @@ namespace solaris
             else
             {
                 if (c.has("instrument") || c.has("plugin")) { err = std::string(c.has("plugin") ? "--plugin" : "--instrument") + " is for --kind instrument"; return false; }
-                s.name = c.flag("name", kind == "bus" ? "Bus" : "Audio");
+                s.name = c.flag("name", kind == "bus" ? "Bus" : kind == "vca" ? "VCA" : "Audio");
             }
             p.strips.push_back(s);
             placeBeforeItsTarget(p, s.id);
@@ -281,6 +282,8 @@ namespace solaris
             }
             p.sends.erase(std::remove_if(p.sends.begin(), p.sends.end(), [&](const Send &x) { return x.from == id; }), p.sends.end());
             p.racks.erase(std::remove_if(p.racks.begin(), p.racks.end(), [&](const Rack &x) { return x.track == id; }), p.racks.end());
+            for (auto &o : p.strips)
+                if (o.vca == id) { o.vca.clear(); changed("strip.changed", o.id); } // R-MIX-19: a VCA gone — its members their own again
             for (auto &l : p.lanes)
                 if (l.track == id)
                 {

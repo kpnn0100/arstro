@@ -869,6 +869,8 @@ namespace solaris
         {
             AddressSpec spec;
             if (!describeAddress(p, address, spec, err)) return false;
+            if ((spec.kind == AddressSpec::StripGain || spec.kind == AddressSpec::StripPan) && p.strip(spec.node) && p.strip(spec.node)->kind == "vca")
+            { err = address + ": a VCA's gain is a value for now — not a formula (R-MIX-19)"; return false; }
             if (!checkBinding(p, address, value, err)) { err = address + ": " + err; return false; }
             if (Binding *bd = p.binding(address)) bd->formula = value;
             else p.bindings.push_back(Binding{address, value, {}, {}});
@@ -932,8 +934,33 @@ namespace solaris
         }
         if (Strip *s = p.strip(id))
         {
-            static const std::vector<std::string> fields = {"name", "gain", "pan", "mute", "solo", "colour", "input", "monitor"};
+            static const std::vector<std::string> fields = {"name", "gain", "pan", "mute", "solo", "colour", "input", "monitor", "vca"};
             if (f == "name") { s->name = value; stored = value; return true; }
+            if (f == "vca") // R-MIX-19: the VCA it follows — a strip of kind vca, by id or name — or none
+            {
+                if (value == "none" || value.empty()) { s->vca.clear(); stored = "none"; return true; }
+                if (s->kind == "vca") { err = id + " is a VCA — a VCA follows no VCA (not yet)"; return false; }
+                const Strip *v = nullptr;
+                std::string vcas;
+                for (const auto &x : p.strips)
+                {
+                    if (x.kind != "vca") continue;
+                    if (x.id == value || x.name == value) v = &x;
+                    vcas += (vcas.empty() ? "" : ", ") + x.id + " (" + x.name + ")";
+                }
+                if (!v)
+                {
+                    const Strip *other = p.strip(value);
+                    err = other ? value + " is a " + other->kind + " strip, not a VCA" : "no VCA `" + value + "`";
+                    err += " — the song's VCAs: " + (vcas.empty() ? std::string("none (`strip add --kind vca`)") : vcas);
+                    return false;
+                }
+                s->vca = v->id;
+                stored = v->id;
+                return true;
+            }
+            if (s->kind == "vca" && (f == "pan" || f == "input" || f == "monitor"))
+            { err = id + " is a VCA — it carries no sound: it has a gain, a mute and a solo (R-MIX-19)"; return false; }
             if (f == "input") // R-REC-1: an input port of the song — by id or name — or none
             {
                 if (value == "none") { s->input.clear(); stored = "none"; return true; }
@@ -1229,6 +1256,7 @@ namespace solaris
             put("mixer", p.mixerOf(*s) ? p.mixerOf(*s)->id : std::string());
             put("input", s->input.empty() ? "none" : s->input); // R-REC-1
             put("monitor", s->monitor);
+            put("vca", s->vca.empty() ? "none" : s->vca); // R-MIX-19
         }
         else if (const Clip *c = p.clip(id))
         {

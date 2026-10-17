@@ -81,6 +81,11 @@ ch_2.wav"` — the file (relative to the song) it plays from the start instead o
 devices are kept, idle. Written only when set; `strip freeze <ch>` writes the file and the key, `strip unfreeze <ch>`
 drops the key (the file stays). A file that cannot be read leaves the strip silent, and says so.
 
+**VCAs (R-MIX-19).** A VCA is a strip of its own kind — `#atrack id=ch_4 name=Synths kind=vca mixer=mx_1 order=2
+gain=-6.0` — with no output, no rack, no clips and no sends (each refused when written by hand); a strip that follows
+it says so: `#atrack id=ch_2 name=Lead kind=instrument … vca=ch_4` (written only when set). A member plays at its own
+gain plus its VCA's; the VCA's mute and solo are its members'. A VCA follows no VCA.
+
 ## 5. Sends — `#asend`
 
 ```

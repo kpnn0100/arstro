@@ -599,7 +599,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       DSP 6c07198: YIN and a device's readings). Part 2: the readings carried up — engine, Player ring, model, `get`
       (DR-FX-17). Part 3: its window — the note, an eased needle, shots. N34 DONE (twelve effects; D-18, D-19, D-20 on
       the way).
-- [ ] **N35** Group / VCA faders (R-MIX-19).
+- [~] **N35** Group / VCA faders (R-MIX-19). Round 13 (e580437).
+      Part 1: a strip of kind vca; membership; the compile (its dB added, its mute and solo its members', a bound
+      member's offset); the grammar and the refusals; a member's live fader now carries its VCA's dB (DR-MIX-19).
+      Next: part 2 — a VCA's fader live without a swap, the model's fields, the API.
 - [ ] **N36** Phase invert, width, mono check, solo-safe (R-MIX-20).
 - [ ] **N37** Versions of a song (R-VER-1…4).
 - [ ] **N38** Collect and save; relink (R-COLLECT-1).
