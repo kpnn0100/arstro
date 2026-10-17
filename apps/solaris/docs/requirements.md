@@ -137,12 +137,12 @@ mixer and renumbers the mixer 0…n−1 (`placeStrip`, `:61`; `case K::StripMove
 renumbers mixers — an order never ties. A new project is `newProject` (`model/Project.cpp:226`): Sources (`mx_1`), Buses (`mx_2`)
 holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the master (R-MIX-3).
 Guarded by `test_routing_only_goes_forward` and `test_forward_is_processing_order_and_moves_renumber`
-(`core/tests/serviceTests.cpp:7241`: a bus made on Buses goes before Main and feeds it; a same-mixer route
+(`core/tests/serviceTests.cpp:7274`: a bus made on Buses goes before Main and feeds it; a same-mixer route
 forward is taken, backward refused naming both ends; `strip move` that would point one back refused;
 `--order 0` first and renumbered; mutant checked: the old later-mixer rule refuses the new bus's
 default route). The same rule is PUBLISHED: `targetsOf` (`model/Project.cpp:1085`) lists what a strip
 may feed — later strips in processing order, `master`, the output ports — as `strips[].targets`
-(`core/service/ServiceModel.cpp:282`), and `keyTargetsOf` (`model/Project.cpp:1065`) its strips as `strips[].keyTargets`;
+(`core/service/ServiceModel.cpp:286`), and `keyTargetsOf` (`model/Project.cpp:1065`) its strips as `strips[].keyTargets`;
 a front end offers exactly that list (the route picker, `MixerDock::openOut`, `app/widgets/MixerDock.cpp:1045`),
 and the test routes to every entry offered.
 
@@ -233,18 +233,18 @@ it); muted strips are silent regardless. The model shows it as `strips[].audible
 it as `silent`.
 
 ### DR-MIX-8/9/10 Fed by, the matrix, the audit (R-MIX-8, R-MIX-9, R-MIX-10)
-`refreshModel` (`core/service/ServiceModel.cpp:77`) computes each strip's `clipCount`, `fromLanes`
-and `fromStrips`. `matrix print [--json]` (`matrixText`, `:631`): rows = strips in processing order,
+`refreshModel` (`core/service/ServiceModel.cpp:78`) computes each strip's `clipCount`, `fromLanes`
+and `fromStrips`. `matrix print [--json]` (`matrixText`, `:635`): rows = strips in processing order,
 columns = `matrixColumnsOf` (`model/Project.cpp:1084`) — every strip some strip may reach or does reach
 (processing order), master, the output ports, so a route, send or key to an instrument or a same-mixer
-strip has its cell — computed once and published as `matrix.columns` (`ServiceModel.cpp:278`), which the
+strip has its cell — computed once and published as `matrix.columns` (`ServiceModel.cpp:282`), which the
 GUI's matrix draws (DR-UI-8); `●` = the main output, `-6.0pre` = a send's dB and tap, `key` = a sidechain
 key. (**AMENDED (audit, 2026-10-09):** the columns were the buses only, and the GUI's "strips off the
 first mixer" — a key to an instrument strip was in neither.) Guarded by `test_solo_mute_matrix_and_audit`
 (a key to a strip on its own mixer prints `-3.0key` in its column; mutant: buses-only columns → red).
-`audit` (`:383`): unused strips, strips that reach no output port, single-input and empty buses,
+`audit` (`:387`): unused strips, strips that reach no output port, single-input and empty buses,
 clips on silent strips, offline files, unknown device types and parameters, any strip or the
-master that went over 0 dBFS in the last render, and (R-SVC-8, `:494`) notes past their pattern's end,
+master that went over 0 dBFS in the last render, and (R-SVC-8, `:498`) notes past their pattern's end,
 empty patterns and patterns no clip plays.
 
 ### DR-MIX-13 A line added from the mixer; sources relinked (R-MIX-13, R-MIX-14)
@@ -309,8 +309,8 @@ the window share the files (`machinePaths`: XDG, overridable by `SOLARIS_SETTING
 
 ### DR-HOME-1 The recent songs (R-HOME-1)
 Opening, creating or saving a song under a new path puts it first on the recent list
-(`touchRecent`, `core/service/ServiceMachine.cpp:67`), at most 20, persisted in the host's recents file —
-by its ABSOLUTE path (`absolutePath`, `:58`), so `project open song.slp` from one folder is still found
+(`touchRecent`, `core/service/ServiceMachine.cpp:68`), at most 20, persisted in the host's recents file —
+by its ABSOLUTE path (`absolutePath`, `:59`), so `project open song.slp` from one folder is still found
 by a window started in another (audit, 2026-10-09: it stored `song.slp`); `recents remove` takes either
 form.
 The model's `recents[]` cards carry each song's name, bpm, length and strip count, read from the
@@ -431,10 +431,10 @@ places everything where it is. Empty, it says what to do in words.
 slides 220 ms. Samples lists the folders from Settings; a folder clicked is `browse "<path>"`
 (`:216`) and shows its sub-folders and audio files (mono, the filename rule) under a row back up;
 with no folders it says so and a click opens Settings. Instruments lists `AppModel::deviceTypes`
-(the DSP registry, `core/service/ServiceModel.cpp:138`) — instruments, then effects. Song lists the
-files the song plays. The list is `AnimatedRows` keyed by generation and content (`rebuild`, `:58`):
+(the DSP registry, `core/service/ServiceModel.cpp:142`) — instruments, then effects. Song lists the
+files the song plays. The list is `AnimatedRows` keyed by generation and content (`rebuild`, `:59`):
 a tab or folder changed starts a new generation, so the old list fades where it was scrolled while
-the new one fades in (`navigate`, `:117`); an inserted row fades in, a removed one out. A row is
+the new one fades in (`navigate`, `:118`); an inserted row fades in, a removed one out. A row is
 dragged out: the browser reports the pointer and the drop; `ProjectScreen` draws the ghost (the
 overlay pass) and the timeline's teal drop hint at the beat on the lanes' step (DR-UI-10; `overLanes`,
 `app/widgets/ProjectScreen.cpp:115`), and on release sends ONE line (`place`, `:124`): a sample → `clip add --src "<file>" --at <b> [--lane
@@ -445,7 +445,7 @@ now means "its strip's lane", so the drop says what it wants); an effect → a n
 places at the playhead.
 
 ### DR-UI-7 A strip's colour (R-UI-7)
-The model's `strips[].colour` is resolved by the service (`core/service/ServiceModel.cpp:239`): the
+The model's `strips[].colour` is resolved by the service (`core/service/ServiceModel.cpp:243`): the
 strip's own, else its id's number − 1 — never −1, and unchanged when other strips are added or
 deleted. Every front end draws it as is.
 
@@ -552,10 +552,10 @@ four bars), and binds the address to `=au_n`; `auto add|delete` (refused while r
 **amended, R-SVC-8, 2026-10-09**: it was clamped; `shape` takes a bezier point's handles, DR-AUTO-6), `bind clear`; deleting a strip, a
 send or a device drops the bindings that drive them. `eval <address> [--at] [--explain]`
 (`:263`) compiles and evaluates with the engine's own function and prints each name it reads.
-`refreshModel` (`core/service/ServiceModel.cpp:379`) publishes `bindings[]` (reads, ok, problem),
+`refreshModel` (`core/service/ServiceModel.cpp:383`) publishes `bindings[]` (reads, ok, problem),
 `automations[]` (points with their handles, usedBy, `now` — DR-AUTO-7), `params[].formula`,
 `strips[].gainFormula/panFormula`, `sends[].gainFormula`, `masterGainFormula`, `devices[].lastChanged` and — **AMENDED (R-MIX-16, 2026-10-09)** —
-`bindings[].live`, each binding's value at the heard position (`evaluateLive`, `:483`; DR-MIX-16); `audit` (`:475`) names inert
+`bindings[].live`, each binding's value at the heard position (`evaluateLive`, `:487`; DR-MIX-16); `audit` (`:479`) names inert
 bindings and automations no formula reads. While playing, a binding or curve edit — or a `set` on an
 address a formula reads — swaps in a new engine (`core/service/ServiceTransport.cpp:499`).
 
@@ -581,7 +581,7 @@ current node — a BRANCH when that node already has children, and the old ones 
 `:518`): the song becomes that node's, the move is announced (`what=history.jump`), the song is unsaved, the player
 hears it — and a move is no node itself; the next edit after one starts a node of its own. `history` prints the tree
 — `*` at the current node, its id, its parent's (`-` at the root), its label — and `history --json` the same as the
-model's `history[]` (`id`, `parent`, `label`) and `historyCurrent` (`core/service/ServiceModel.cpp:453`, which also
+model's `history[]` (`id`, `parent`, `label`) and `historyCurrent` (`core/service/ServiceModel.cpp:457`, which also
 derives the undo / redo labels and depths from where the song is). At most 200 nodes (`historyPrune`, `SolarisService.cpp:476`): past
 that the oldest leaf OFF the path from the root to the current node goes first; when the tree is one path, its root
 does and the next node becomes the root. L2 `test_history_is_a_tree` (a branch kept, a jump, redo's newest branch,
@@ -643,13 +643,13 @@ the snap — the keys the app had before they were settings). A combo is spelt O
 (`core/service/KeyCombo.h`, a pure header shared by the service and the window): A–Z, 0–9, F1–F12 and named keys
 (Space, Enter, Escape, Backspace, Delete, Tab, arrows, Home/End/PageUp/PageDown/Insert, punctuation by name — `Comma`);
 the codes are the window's, a letter or digit its ASCII, the rest Windows' virtual-key numbers. `settings set
-key.<id>=<combos>` (`core/service/ServiceMachine.cpp:184`) takes any case and order and keeps the canonical spelling;
+key.<id>=<combos>` (`core/service/ServiceMachine.cpp:200`) takes any case and order and keeps the canonical spelling;
 `none` takes every key away, `default` gives the defaults back (and drops the line); an unknown action is refused
 with the nearest, a key not in the table naming it, and — once every key of the line is in, so one line can swap two
 actions — a combo another action of the same keyboard has (Transport, Song and Lanes are one; the roll's is its own)
-naming that action (`:215`). Only re-keyed actions are written to the machine's file (`key.<id> = <combos>`,
+naming that action (`:231`). Only re-keyed actions are written to the machine's file (`key.<id> = <combos>`,
 `core/Settings.cpp`); a hand-edited line that does not read is the defaults (`keysOf`, `Keymap.cpp:46`). The model
-publishes every action with its keys and defaults (`settings.keys`, `core/service/ServiceModel.cpp:139`); the API
+publishes every action with its keys and defaults (`settings.keys`, `core/service/ServiceModel.cpp:143`); the API
 document's Keyboard section is generated from the same table. In the window `App::key` (`app/App.cpp:425`) spells the
 press (`comboText`) and looks it up there: while a roll has the keys (R-ROLL-8) its keyboard first — `PianoRoll::action`
 (`app/widgets/PianoRoll.cpp:318`), which declines a selection's action with no selection — then the song's
@@ -744,7 +744,7 @@ landing on another's place replaces it; `pattern quantize <pt> [--grid <b>] [--s
 (`:799`) moves every start to `k·grid`, odd `k` delayed by `swing·grid`, two notes landing together
 merging into the louder. Both are edits (undoable, all-or-nothing). The model gives a pattern the strip
 its first clip plays through and that strip's instrument (`patterns[].strip`, `.instrument`), and a
-device type its named keys (`deviceTypes[].noteNames`, `core/service/ServiceModel.cpp:145`) — the DSP
+device type its named keys (`deviceTypes[].noteNames`, `core/service/ServiceModel.cpp:149`) — the DSP
 registry's (REQ-device-6: the Drum Machine's ten pads, Kick = 36 …).
 **The window.** `PianoRoll` (`app/widgets/PianoRoll.cpp`) is the content of a `roll:<pt>` window
 (`WindowLayer::openRoll`, `app/widgets/FloatWindow.cpp:157`), opened by double-clicking a note clip
@@ -776,7 +776,7 @@ given back by `transport stop`, by a plain `transport play` (the song's) and whe
 (`endClipLoop`, `:512`); a `transport loop` set meanwhile is the song's and stays. After every edit the
 loop follows the clip — moved, resized, a looped clip lengthened (`followClipLoop`, `:526`, called from
 `dispatch`, `core/service/SolarisService.cpp:410`) — sent to the Player at once. The model publishes it:
-`transport.loopClip` (`core/service/AppModel.h:430`), with `loopFrom`/`loopTo` the clip's span while it
+`transport.loopClip` (`core/service/AppModel.h:438`), with `loopFrom`/`loopTo` the clip's span while it
 loops. L2: `test_a_clip_plays_looped_and_gives_the_songs_loop_back` hears the clip's kick at the top of
 each of three loops and checks every way back to the song's loop.
 **The window.** A roll knows its clip: the one it was opened from (a double-click or the clip's "Piano
@@ -940,7 +940,7 @@ a key does not pull its source into a solo (`Compile.cpp:52`), so a soloed bass 
 kick stays silent; a MUTED strip keys nothing (live, a mute in a song with keys swaps the engine,
 `core/service/ServiceTransport.cpp:530`). The audit names a key that nothing on its strip listens to — no
 compressor or gate with Sidechain on, and no key-taking type without that switch (the vocoder, whose key is its
-carrier, R-FX-16, always listens) (`core/service/ServiceModel.cpp:641`). In the dock a key reads "key <target>" in the solo amber,
+carrier, R-FX-16, always listens) (`core/service/ServiceModel.cpp:645`). In the dock a key reads "key <target>" in the solo amber,
 and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:1371`).
 Measured (L2): a ghost kick (−120 dB fader, pre-fader key) through −30 dB at 4:1 dips a −6 dBFS bass
 6–22.5 dB 15–35 ms after each kick, back within 1 dB before the next; identical with the bass soloed;
@@ -995,7 +995,7 @@ refused on a type that plays none. Compile decodes it through the same cache as 
 device's description (`core/Compile.cpp:230`); the engine hands it in at build, never on the audio thread
 (`engine/Engine.cpp:78`); a change of sound is a structural live update (an engine swap). The model
 gives `devices[].takesSample`, `.sample` and `deviceTypes[].takesSample`; the audit names a sampler with
-no sound or an unreadable one (`core/service/ServiceModel.cpp:584`). In the UI a sampler's window names
+no sound or an unreadable one (`core/service/ServiceModel.cpp:588`). In the UI a sampler's window names
 its sound where others name their type (`DevicePanel::sampleText`, `app/widgets/DevicePanel.cpp:580`),
 and a browser sample dragged over it lights the window (eased) and drops as ONE `set <dv>.sample=`
 (`WindowLayer::samplerAt`, `app/widgets/FloatWindow.cpp:325`; `app/widgets/ProjectScreen.cpp:109`).
@@ -1076,7 +1076,7 @@ in the matrix → `<sd>.gain`, the master fader → `project.masterGain` (the ad
 R-AUTO-1); Reset is 0 (unity, the centre); any other right-click on a card is still the strip's menu.
 
 **The value at the heard position, published.** `bindings[].live` (`AppModel.h`). Stopped: `evaluateLive`
-(`core/service/ServiceModel.cpp:492`) compiles the song as `eval` does and evaluates every binding with the
+(`core/service/ServiceModel.cpp:496`) compiles the song as `eval` does and evaluates every binding with the
 engine's own `evaluateBinds` at the transport's position (an inert binding: its own value) — so it equals
 `eval <address> --at <position>`. Playing: after every block the `Player` copies `Engine::bindValues()` into a
 ring of 64 slots of pre-sized atomics (`keepLive`, `core/Player.cpp:297` — stores only; a sequence number
@@ -1086,7 +1086,7 @@ the newest at or before the newest minus the device's latency, of the engine the
 (`liveValues`, `core/Player.cpp:345`, its slot `pickSlot`'s, `:305`; `buildLive` bumps the generation, `ServiceTransport.cpp:81`, and a
 `Swap` carries it, so a new bind order is never read with the old one) — and maps the engine's bind
 order to addresses. While playing, `refreshModel` keeps the pumped values and evaluates only a binding new
-since (`ServiceModel.cpp:83`, `:353`). At most 256 bindings report (`Player::kMaxBinds`). Not in the stable
+since (`ServiceModel.cpp:84`, `:357`). At most 256 bindings report (`Player::kMaxBinds`). Not in the stable
 dump: it moves with the transport.
 
 **The dock draws it** (`MixerDock::advance`, `app/widgets/MixerDock.cpp:683`): a bound fader or pan takes its
@@ -1112,8 +1112,8 @@ the dock ignoring `live` → the pan never reaches −0.5; easing instead of fol
 a send and the master on formulas) and `copied-toast`.
 
 ### DR-UI-11 IDs shown and copied (R-UI-11)
-**The setting.** `showIds = on|off` is a MACHINE setting (`core/Settings.cpp:26`), `settings set showIds=…`
-(`core/service/ServiceMachine.cpp:106`), published as `settings.showIds` — so an agent turns the ids on as the
+**The setting.** `showIds = on|off` is a MACHINE setting (`core/Settings.cpp:28`), `settings set showIds=…`
+(`core/service/ServiceMachine.cpp:107`), published as `settings.showIds` — so an agent turns the ids on as the
 View menu does (View › Show IDs / Hide IDs, `app/App.cpp:218`).
 
 **Drawn, faded.** `ProjectScreen` eases ONE amount from the model's setting (`app/widgets/ProjectScreen.cpp:225`,
@@ -1192,8 +1192,8 @@ around an `AutomationPanel`, titled "Automation — <name>" and closed when anyo
 points (beat, value, shape — a bezier point's speeds and influences), every formula that reads it
 (`usedBy`, each with its binding's formula from `bindings[]`), and its value at the playhead —
 `automations[].now`, which the service computes with the engine's own compiled curve
-(`compileCurve`) at `transport.position` in `refreshModel` (`core/service/ServiceModel.cpp:461`,
-`refreshNow`, `:465`) and again in `pump` while playing (`core/service/ServiceTransport.cpp:304`); it is
+(`compileCurve`) at `transport.position` in `refreshModel` (`core/service/ServiceModel.cpp:465`,
+`refreshNow`, `:469`) and again in `pump` while playing (`core/service/ServiceTransport.cpp:304`); it is
 left out of `state print --stable`, as the position is. The rows are an `AnimatedRows` keyed by what
 they say — a point added slides the rows below and fades in, an edit or a rename cross-fades its row;
 the value at the playhead follows the transport continuously while playing and eases to a seek or an
@@ -1269,7 +1269,7 @@ edits lost between calls, comment lines reprinting ids). The guide is `docs/AGEN
   delete` (refused while a clip plays it, naming the clips, `:248`) `| transpose --semi` (refused whole if a
   note would leave 0–127, `:259`). A note written past its pattern's end grows the pattern (DR-ROLL-9 — it used
   to be warned, `pastEndWarning`, `:122`, which the audit still uses); one left outside by an end set back by hand
-  is audited (`core/service/ServiceModel.cpp:607`, with empty and unused patterns).
+  is audited (`core/service/ServiceModel.cpp:611`, with empty and unused patterns).
 - **Arrangement.** `clip duplicate --count N` makes N copies end to end in one edit
   (`ServiceEdit.cpp:725`). A `clip add` with no `--lane` goes on the lane of its strip's newest clip; a new
   lane only for a strip with none; `--lane new` asks for one (`laneFor`, `:550`) — the GUI's drop below the
@@ -1278,7 +1278,7 @@ edits lost between calls, comment lines reprinting ids). The guide is `docs/AGEN
   `ls` (`lsText`, `ServiceCompose.cpp:329`), `show <id>` (`showText`, `:404` — a device's non-default
   parameters with unit and default, a formula where one drives it), `pattern print` (`:294`, the notation
   with the pitch's number and name after `#`, a kit's pads by name), `state print --json --compact`
-  (`compactJson`, `core/service/AppModelCodec.cpp:503`; `Json::dumpCompact`, `core/service/Json.cpp:118`):
+  (`compactJson`, `core/service/AppModelCodec.cpp:507`; `Json::dumpCompact`, `core/service/Json.cpp:118`):
   the song only, one line, a device's non-default parameters as `name=value`, notes in the notation.
 - **Honest values.** A device parameter outside its registry range is refused naming the range and unit
   (`SolarisService.cpp:777`), as is an automation point (`inAutoRange`, `core/service/ServiceAuto.cpp:69` — a value within printing's
@@ -1488,7 +1488,7 @@ puts Main and a cue sent straight to Phones at 96 together; a key from a limited
 audio 96 to meet it, and a limiter before the keyed compressor delays the key 96 — the keyed strip's output
 exactly the unlimited one 96 later (and it does duck). Mutants: every delay sized 0 → the twins fail;
 no key delay in the rack → the key check fails. Service (`test_latency_is_compensated_and_a_render_starts_on_the_beat`,
-`core/tests/serviceTests.cpp:7053`): two strips of one tone, a limiter on one — each stem from beat 0 and
+`core/tests/serviceTests.cpp:7086`): two strips of one tone, a limiter on one — each stem from beat 0 and
 equal, the mix exactly their sum and equal to the render with no limiter; a master limiter's render, port
 and stems byte-identical to none (under its ceiling it is exactly its delay); `--to` exact; live, the
 device's frames are the render 96 later; a lookahead set to 5 ms WHILE playing keeps the twins met — the
@@ -1504,7 +1504,7 @@ mix is at lag 0.
 `core/service/ServiceEdit.cpp:566`) puts the lane at row `index` (0 = the top) and renumbers every lane
 0…n−1 in the new order — one edit, one undo step; an index past the last row or an unknown lane is
 refused. The lanes draw it through Interstellar's `AnimatedRows`, keyed by lane, so the rows slide
-(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:6262`: to the top and back,
+(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:6295`: to the top and back,
 renumbered, refused out of range, undone) and, drawn, by `test_instrument_drop_and_clip_drag`
 (`app/tests/ui/uiTests.cpp:493`: a lane moved from a shell slides to the top with its clip, caught mid-tween).
 
@@ -1570,7 +1570,7 @@ as they were (`:267`). A song saved before tracks (no `tracks` line) is adopted 
 instrument becomes its track, a name it was made with (its strip's, or its instrument's registry
 label) cleared so it shows the strip's, each said as an `info` event; opening stays clean (not dirty).
 Published: `lanes[].name` (what it shows), `lanes[].strip`, `lanes[].ownName`
-(`core/service/ServiceModel.cpp:278`); `ls` marks `· track of <ch>` (`core/service/ServiceCompose.cpp:670`).
+(`core/service/ServiceModel.cpp:282`); `ls` marks `· track of <ch>` (`core/service/ServiceCompose.cpp:670`).
 
 **The view.** A track's row takes its strip's colour unless it has its own and names its instrument
 under its name (`Timeline::bind`, `app/widgets/Timeline.cpp:170`), that line fading in and out as the
@@ -1635,9 +1635,9 @@ The Song tab lists a MIDI header, **New MIDI**, then every pattern, then the sam
 (`Browser::rebuild`, `app/widgets/Browser.cpp:192`) — keyed rows that grow in and fade out. A pattern's row
 reads its name and, in mono at the right, its length (bars when whole bars), its note count and the
 strips that play it, or "unplayed" (`bind`, `:94`, from the model's `patterns[].strips`, published with
-`patterns[].lastStrip` — the strip its newest clip plays through — by `core/service/ServiceModel.cpp:371`).
-New MIDI sends `pattern new --name "MIDI <n>"` (`:386`); a double-click opens the pattern's piano roll
-(`:417`); its menu (`:423`): Rename… (`set <pt>.name=`), Piano Roll, Duplicate, Copy ID, Delete (the
+`patterns[].lastStrip` — the strip its newest clip plays through — by `core/service/ServiceModel.cpp:375`).
+New MIDI sends `pattern new --name "MIDI <n>"` (`:390`); a double-click opens the pattern's piano roll
+(`:421`); its menu (`:427`): Rename… (`set <pt>.name=`), Piano Roll, Duplicate, Copy ID, Delete (the
 service refuses while a clip plays it, naming them). Dragged onto the lanes (`ProjectScreen::place`,
 `app/widgets/ProjectScreen.cpp:136`): onto an instrument's track → `clip add --pattern <pt> --lane <ln>
 --at <b>`, through that instrument; onto a plain lane or below the last → `clip add --pattern <pt> --strip
@@ -1658,7 +1658,7 @@ the DSP repo alone the plugins offer none and a host draws its generic view.
 **The content is Solaris's DevicePanel**, generated from the registry (law 2): `InstrumentEditor`
 (`plugins/InstrumentEditor.cpp`) builds a model of ONE device each frame the host's values moved
 (`refresh`, `:59`) with `deviceModelOf` (`core/service/RegistryModel.cpp:7` — the ONE registry→model
-mapping, which the service now uses too, `core/service/ServiceModel.cpp:62`), the panel's song controls
+mapping, which the service now uses too, `core/service/ServiceModel.cpp:63`), the panel's song controls
 off (`DevicePanel::songControls`, `app/widgets/DevicePanel.h:101`: the header names the instrument with the
 suite's mark and teal dot instead, `app/widgets/DevicePanel.cpp:752`). Solaris's accent and embedded fonts
 are installed before a widget is built. The panel speaks text as in Solaris; `command` (`:82`) turns
@@ -1850,7 +1850,7 @@ For every strip and the master, after every block (`Player::ballistics`, `core/P
 300 ms one-pole on the blocks' mean squares (the engine's per-strip sums; the master's from the tap), and a held peak
 — the most of the last 1.5 s, then falling 20 dB a second — in SAMPLES, so it is the same however the window draws.
 A block at or over full scale sets the strip's clip flag; `pump` takes the flags (exchange) into a latch the SERVICE
-keeps (`mClipLatch`, published by `refreshModel`, `core/service/ServiceModel.cpp:259`), so a clip light outlives a
+keeps (`mClipLatch`, published by `refreshModel`, `core/service/ServiceModel.cpp:263`), so a clip light outlives a
 stop and an edit. Published: `strips[].rms/.hold/.clip`, `transport.masterRms/.masterHold/.masterClip` (not stable);
 a stop zeroes peaks, RMS and holds and leaves the lights lit. `meters clear` (`core/service/ServiceTransport.cpp:614`,
 not an edit, `meters.cleared`) puts every light out, zeroes the holds and starts the true peak and integrated loudness
@@ -1923,7 +1923,7 @@ gain is a formula or an automation gets the VCA's dB as its `Bind`'s offset, add
 rest (`core/Compile.cpp:153`). A VCA's own gain as a formula or an automation is refused for now (`SolarisService.cpp:1001`,
 `core/service/ServiceAuto.cpp:131`; a file edited by hand: inert, said, `Compile.cpp:616`). Deleted, its members are
 their own again in the same edit (`ServiceEdit.cpp:289`). While playing, a change to a VCA swaps the engine (its fast
-path is part 2). Test: L2 `test_a_vca_moves_its_members` (`core/tests/serviceTests.cpp:5221`): a member under a
+path is part 2). Test: L2 `test_a_vca_moves_its_members` (`core/tests/serviceTests.cpp:5254`): a member under a
 −6 dB VCA renders sample-exact as the member at −6; the VCA muted as the member muted; soloed as the member soloed; a
 formula member (=−3) under −6 as the member at −9; the `.slp` round trip; each refusal; no picker offers it; a
 member's own fader moved while playing under a −20 dB VCA heard as the render of the same (0.6 dB); deleted and undone.
@@ -1934,19 +1934,19 @@ with no engine rebuilt; its mute and solo go the silences path, the members' `St
 member whose gain is a formula carries the VCA's dB in the engine's bind, so then the move rebuilds; so does a VCA's
 mute in a song with keys — a member under a muted VCA keys nothing, as one muted itself (`core/Compile.cpp:340`). The
 model: `strips[].vca` (whom it follows), `strips[].vcaGain` (the dB that adds) and, on a VCA, `strips[].members`
-(`core/service/ServiceModel.cpp:291`, in processing order); `transport.swaps` — engines built and swapped in since
+(`core/service/ServiceModel.cpp:295`, in processing order); `transport.swaps` — engines built and swapped in since
 play (`ServiceTransport.cpp:180`, counted from the play's own, `:608`), not in the stable dump — so a script can tell
 an edit carried live from one that rebuilt. Tests: L2 `test_a_vca_moves_its_members_live`
-(`core/tests/serviceTests.cpp:5357`): the VCA to 0 dB while playing heard exactly as rendered (0.3189 both), swaps 0;
+(`core/tests/serviceTests.cpp:5390`): the VCA to 0 dB while playing heard exactly as rendered (0.3189 both), swaps 0;
 its mute silences its member, swaps 0; a formula member's VCA move: one rebuild; the model's fields.
-`test_a_vca_muted_member_keys_nothing` (`:5320`): a ghost kick under a muted VCA renders sample-exact as the kick
+`test_a_vca_muted_member_keys_nothing` (`:5353`): a ghost kick under a muted VCA renders sample-exact as the kick
 muted (the key, unmuted, does duck).
 
 Part 3 — the dock. "+ Line" offers "VCA" (`app/widgets/MixerDock.cpp:1064`, one `strip add --kind vca --mixer`). A VCA's
 card says "VCA · moves N" and names its members where a rack would be (`:1534`): a fader and M and S — no meter
 (`paintFader`'s meters off), no pan, sends or route, none of them pressable (`:1025`); its menu offers no Freeze,
 Bounce or VCA (the service refuses freezing or bouncing one, `core/service/ServiceAudioEdit.cpp:435`), and it dims for its
-own mute only (`core/service/ServiceModel.cpp:258`). A strip's menu offers "VCA ▸" — the song's VCAs, and None when it
+own mute only (`core/service/ServiceModel.cpp:262`). A strip's menu offers "VCA ▸" — the song's VCAs, and None when it
 follows one (`MixerDock.cpp:1401`) — one `set <ch>.vca=`. A member says "VCA <name> <dB>" over its fader (`:1678`):
 the tag fades in and out (`kSelectMs`) and its dB eases as the VCA moves (`kCatchUpMs`, `:745`); beside a bound
 gain's tag it slides to the right half, by the bound tag's eased amount. UI test `test_a_vca_in_the_dock`
@@ -1968,17 +1968,17 @@ bus OUTSIDE that graph running — begun mid-song, a solo cuts an unsafe bus's e
 mono check is the listener's: `transport mono on|off` (`core/service/ServiceTransport.cpp:713`; not an edit, not in the
 song, kept across plays and stops, `transport.mono`) folds each output pair to its mean at the Player — the speakers'
 and every follower's (`core/Player.cpp:601`, `foldMono` `:286`) — and never reaches a render.  Tests: L2 `test_per_strip_tools`
-(`core/tests/serviceTests.cpp:5407`): a synth through a reverb (L and R 0.079 apart) — phase on: the render negated
+(`core/tests/serviceTests.cpp:5440`): a synth through a reverb (L and R 0.079 apart) — phase on: the render negated
 exactly; width 0: L = R exactly; width 200: the side doubled and the mid kept to 6e−8; back at the defaults the render
 identical to the bit; solo-safe keeps a bus audible under another's solo; the refusals; the mono check: the speakers'
 L − R exactly 0 while the render of the same hard-left strip has nothing on the right. `test_solo_safe_keeps_a_tail`
-(`:5364`): a solo begun while a bus's delay repeats — its output 0 at once; solo-safe, 0.237.
+(`:5397`): a solo begun while a bus's delay repeats — its output 0 at once; solo-safe, 0.237.
 
 Part 2 — live, and seen. While playing, a width or a phase reaches the engine as a message
 (`core/service/ServiceTransport.cpp:826`; `core/Player.cpp:254`) with no rebuild: the next block ramps the width and
 crosses the polarity through silence — sign 1 + (−2)(i + 1)/n — so a flip never clicks (`engine/Engine.cpp:913`);
-solo-safe takes the silences path. The model: `strips[].phase`, `width`, `soloSafe` (`core/service/ServiceModel.cpp:292`).
-Tests: L2 `test_per_strip_tools_live` (`core/tests/serviceTests.cpp:5956`): while playing, width 0 — the speakers'
+solo-safe takes the silences path. The model: `strips[].phase`, `width`, `soloSafe` (`core/service/ServiceModel.cpp:296`).
+Tests: L2 `test_per_strip_tools_live` (`core/tests/serviceTests.cpp:5989`): while playing, width 0 — the speakers'
 L − R exactly 0 a block on; a polarity flip whose largest step (0.081) is no larger than the sound's own (0.084);
 solo-safe set; `transport.swaps` 0 throughout; the model's fields. Engine `test_width_and_polarity_ramp_across_a_block`
 (`engine/tests/engineTests.cpp:357`): a constant source (L 0.6, R 0.2) — the polarity's block is the linear crossing,
@@ -2049,9 +2049,9 @@ version itself (`versionOnly`, `:106`: the version verbs, a `set` of a version's
 A frozen open version refuses an edit and a recording, naming the way out (`:171`). `version open` is an edit — a step of
 the history, all-or-nothing, heard while playing (an engine rebuilt, like any structural edit) — but not an unsaved
 change (`:434`): the file never says which version is open, and a song opens on main. The model: `versions[]` (id,
-name, base, frozen, changes, own, dangling, problem) and `version` (`core/service/ServiceModel.cpp:399`; `VersionModel`,
-`core/service/AppModel.h:309`); the Addresses table's `<version>.name` (`core/service/ApiDoc.cpp:161`). Tests: L2
-`test_versions_of_a_song` (`core/tests/serviceTests.cpp:5519`): made and opened in one line; muting there is ONE change;
+name, base, frozen, changes, own, dangling, problem) and `version` (`core/service/ServiceModel.cpp:403`; `VersionModel`,
+`core/service/AppModel.h:317`); the Addresses table's `<version>.name` (`core/service/ApiDoc.cpp:161`). Tests: L2
+`test_versions_of_a_song` (`core/tests/serviceTests.cpp:5552`): made and opened in one line; muting there is ONE change;
 main renders at peak 0.633 and Instrumental at exactly 0, each by name whichever is open; main's later gain arrives, the
 mute stays; undo goes back to main, redo to the version; saved, then opened main: not unsaved; the file opens on main;
 opened while playing, silent a quarter-second on; frozen: an edit and a recording refused, its name still set; thawed,
@@ -2095,9 +2095,9 @@ clip of the song as open (on a version, its change). Files outside the song's fo
 relative. The grammar is `core/service/Command.cpp:279`. Collect and the song-wide relinks work on the whole document,
 so they are allowed while a frozen version is open and are not that version's change (`versionOnly`,
 `core/service/SolarisService.cpp:111`); `--save` saves once the collect has landed (`:427`) — the UI's one line. A
-`--dry-run` is never an edit, whatever the verb (`:162`; D-23). The model's `missing[]` (`core/service/ServiceModel.cpp:418`;
-`MissingModel`, `core/service/AppModel.h:373`): each file named that cannot be read, and what names it.
-Tests: L2 `test_collect_and_relink` (`core/tests/serviceTests.cpp:5629`), with real files outside the song's folder —
+`--dry-run` is never an edit, whatever the verb (`:162`; D-23). The model's `missing[]` (`core/service/ServiceModel.cpp:422`;
+`MissingModel`, `core/service/AppModel.h:381`): each file named that cannot be read, and what names it.
+Tests: L2 `test_collect_and_relink` (`core/tests/serviceTests.cpp:5662`), with real files outside the song's folder —
 listed (a version's own clip as `vr_1:ac_4`, the missing hat); a dry run copies nothing and leaves the song saved, as a
 rebase's dry run does; collected: a stranger's `Samples/kick.wav` left alone, the two `kick.wav` as "kick 2" and
 "kick 3" with their own bytes, the `.sfz` and its two sounds (the third said missing), the version's snare; every
@@ -2141,10 +2141,10 @@ file and its length; a file measured now, as `clip add` measures one), `slot del
 strip's slots count as its clips: `strip delete` is refused while they play through it, unless `--with-clips`
 (`core/service/ServiceEdit.cpp:272`); a pattern a slot plays is not deleted (`core/service/ServiceCompose.cpp:631`).
 The model: `scenes[]` by order, `slots[]` row by row in processing order with each loop's length resolved, and
-`launchQuantize` (`core/service/ServiceModel.cpp:405`; `SceneModel`, `SlotModel`, `core/service/AppModel.h:319`).
+`launchQuantize` (`core/service/ServiceModel.cpp:409`; `SceneModel`, `SlotModel`, `core/service/AppModel.h:327`).
 Tests: `solaris_model` `test_scenes_and_slots_round_trip_and_are_checked` (`model/tests/modelTests.cpp:849`): a fixed
 point, launchQuantize only when not a bar, the seven refusals; L2 `test_the_session_grid`
-(`core/tests/serviceTests.cpp:5729`): scenes placed and moved, slots of a pattern, a clip and a file, their lengths
+(`core/tests/serviceTests.cpp:5762`): scenes placed and moved, slots of a pattern, a clip and a file, their lengths
 resolved, the refusals, names and lengths set, a strip's slots refused then deleted with it, a played pattern held, one
 undo, launchQuantize, a version's own slot. Mutants seen red (6): a cell holding two; a strip's slots outliving it; a
 slot's length not resolved; scene move not placing; launchQuantize not written; a slot's kind not checked. (Equivalent:
@@ -2169,14 +2169,14 @@ blocks — never in the past. `launch <sl|sc>` (`:330`; a scene's slots row by r
 they play at once), `launch stop <strip|all>` and `launch back [<strip>]` (`:374`) — live, not edits, not in history
 (`core/service/Command.cpp:304`). What was due lands in the model when it is heard (`advanceLaunches`, `core/service/ServiceSession.cpp:51`, called by
 `pump`, `core/service/ServiceTransport.cpp:176`); `transport.launched[]` (`launchedModel`,
-`core/service/ServiceSession.cpp:76`; `LaunchModel`, `core/service/AppModel.h:453`): per strip, whether its launch has
+`core/service/ServiceSession.cpp:76`; `LaunchModel`, `core/service/AppModel.h:461`): per strip, whether its launch has
 landed, the slot playing, what lands next and on which beat, and how far through its loop it is. A stop ends the
 session (`core/service/ServiceTransport.cpp:53`); a seek lands what waits (`:687`). Tests: engine
 `test_a_launch_lands_on_its_sample_and_loops` (`engine/tests/engineTests.cpp:842`): an audio slot from 2500, looped
 every 1000 (its file, then silence), stopped at 3600, the arrangement again at 4000 — to the sample; its phase through a
 seek; a swap carrying it; an instrument's launch and return equal, sample for sample, the same notes placed in the
 arrangement (a held note ended on the launch's sample, the session's arrangement notes never replayed); nothing
-allocated. L2 `test_launching_is_heard` (`core/tests/serviceTests.cpp:5786`): launched half a beat in, it lands on beat 4
+allocated. L2 `test_launching_is_heard` (`core/tests/serviceTests.cpp:5819`): launched half a beat in, it lands on beat 4
 — the speakers' A2 0.089 → 0.001 and F♯5 0.001 → 0.087 across the bar; through an engine swap (a device added) it plays
 on; a stop silences it on its bar, back returns the arrangement on its bar; the model says what lands and when; not an
 edit; a render is the arrangement; a stop ends the session; a scene launched while stopped starts the transport.
@@ -2196,7 +2196,7 @@ an audio slot's file as a clip a loop, none over the silence after a short file.
 pattern**: `offset=` beats (`model/Project.h:223`; written only when set; refused on an audio clip, `model/Project.cpp:1264`;
 `set <ac>.offset=`, `core/service/SolarisService.cpp:1245`) — the compile reads its notes and wheels in pattern time and
 moves them back (`core/Compile.cpp:477`); the timeline draws its repetitions shifted (`app/widgets/Timeline.cpp:1276`).
-Tests: L2 `test_launches_are_recorded_into_the_arrangement` (`core/tests/serviceTests.cpp:5884`): refused with nothing
+Tests: L2 `test_launches_are_recorded_into_the_arrangement` (`core/tests/serviceTests.cpp:5917`): refused with nothing
 armed and no grid; recorded with nothing armed — F♯5 launched on beat 4, the arrangement back on 8: the A2-A2-C3 clip
 (0–32) becomes 0–4 and 8–32 starting 8 beats into its 3-beat pattern (on its C3), F♯5's clip on its lane between; the
 song then renders, over the nine beats, exactly what the speakers got (largest difference 0); one undo takes it back
@@ -2233,11 +2233,11 @@ file that is no picture is refused, naming why ("cannot read song.wav as a video
 in its place keeps the id and, unless told, the offset; `--offset` −36000 … 36000. `video remove` (refused with none).
 `set vd_1.offset=` and `get` (`core/service/SolarisService.cpp:1078`, `:1444`). Every one an edit — all-or-nothing,
 undone as one.
-The model says where the picture is (law 13), `video` (`core/service/AppModel.h:358`): its file, offset, length, size,
+The model says where the picture is (law 13), `video` (`core/service/AppModel.h:366`): its file, offset, length, size,
 frame rate, `offline` when the host cannot read it (the song still opens) — the probe kept per resolved file
 (`core/service/ServiceVideo.cpp:17`) — and `time`, the picture's seconds at the heard position through the tempo map
 (`videoTime`, `:31`; −1 before it starts or after it ends). Filled with the model at the time bar when stopped
-(`core/service/ServiceModel.cpp:108`), and moved by `pump` with the playhead while playing — each frame the window
+(`core/service/ServiceModel.cpp:109`), and moved by `pump` with the playhead while playing — each frame the window
 pumps, no command between (`core/service/ServiceTransport.cpp:178`). With it, where the picture lies on the song's beats —
 `at` and `end`, through the tempo map; begun before the song, at beat 0's tempo (`core/service/ServiceVideo.cpp:64`) —
 and `path`, the file as the host opens it, so a front end never resolves a path or a tempo itself.
@@ -2382,7 +2382,7 @@ song becomes the file's (`core/service/ServiceSync.cpp:159`), one step and not u
 orders tidied, validated, as ONE edit; either way the version open here stays open (`:168`), the base becomes theirs, and
 `project.synced how=… theirs=… mine=… conflicts=… renamed=…` is said (`core/service/Event.cpp:36`) with the output naming
 each renumbered id and each node asked. `--take theirs|mine [<node>]` answers one or all (`core/service/ServiceSync.cpp:101`;
-theirs is an edit). The model publishes `sync` (`core/service/AppModel.h:343`): a count a front end says each by, the
+theirs is an edit). The model publishes `sync` (`core/service/AppModel.h:351`): a count a front end says each by, the
 last sentence, the conflicts (node, what, how, both sides' lines), waiting and unreadable. A save to the song's own file
 is refused while a conflict is asked, and while the file has changed since this window read it — unless what is there
 does not read as a song (nothing in it to merge: written whole, said) (`core/service/SolarisService.cpp:888`, `:906`).
@@ -2423,8 +2423,8 @@ asked; the toast), `conflicts-answered-mid` (the tempo answered: its row fading,
 
 ### DR-ACCESS-1 Accessibility (R-ACCESS-1; docs/discussion.md Round 20) — part 1: the UI scale and high contrast; part 2: the accessible list and the keyboard; part 3: the list to AT-SPI
 Two machine settings (`core/Settings.h:33`): `uiScale` — 75, 90, 100, 125, 150, 175 or 200 (cosmo's steps; another
-number is refused, never rounded quietly, `core/service/ServiceMachine.cpp:113`) — and `highContrast` on | off; kept in
-the settings file (`core/Settings.cpp:24`), in the model (`core/service/AppModel.h:283`), on Settings › Interface first:
+number is refused, never rounded quietly, `core/service/ServiceMachine.cpp:129`) — and `highContrast` on | off; kept in
+the settings file (`core/Settings.cpp:25`), in the model (`core/service/AppModel.h:289`), on Settings › Interface first:
 a UI scale combo and a High contrast toggle, ONE `settings set` line each (`app/widgets/SettingsSheet.h:86`;
 `app/widgets/SettingsSheet.cpp:48`). (Round 20 said `contrast=normal|high`; a toggle beside Reduced motion made it
 `highContrast=on|off`.) The App eases both from the model (`app/App.cpp:837`): the scale over 260 ms (cosmo's
@@ -2514,6 +2514,39 @@ screen's Settings at its centre (the desktop was locked, so no frame ran to open
 desktop.
 
 
+### DR-ACCESS-2 Localisation (R-ACCESS-2; docs/discussion.md Round 21) — part 1: the table and the setting
+`solaris_strings` (`strings/Strings.h`; no dependencies — the service links it to validate and list the languages, the
+window will draw through it): English is the key. `tr(en)` is the words for an English string in the language drawn
+now, `trc(context, en)` the same under a context (the key `context|en`), `trn(n, one, other)` a count's form by the
+language's plural rule (`strings/Strings.cpp:247`; a plural a table lacks: English's form for that count), and `fill` puts `{1}` … `{9}` in
+by position (`:272`). A look-up is cached per language and returns a reference that stays put (`lookUp`, `:213`).
+English is the keys themselves; a language's table is a text file, `lang/<code>.strings` — `@language`, `@name`,
+`@plural` (one-other: English's; other: one form for every count) then a line per string, `"English" = "words";`, a
+plural's two English keys side by side with the rule's number of forms — parsed by `parseTable` (`strings/Strings.cpp:115`),
+which refuses, naming the line, a key twice, a translation that drops or adds a placeholder, the wrong number of
+plural forms, a line that is not one, a header it does not know, a string before the header. The tables are compiled
+INTO the binary (`strings/CMakeLists.txt:7`: `embed_strings.cmake`, cosmo's font trick — the file's bytes as an array;
+`load`, `strings/Strings.cpp:87`). The languages: English, each table (today `lang/vi.strings`: Tiếng Việt, one form —
+four lines so far; parts 2–3 make it the window's every word), and `en-XA`, generated (`pseudo`, `:289`): every letter
+accented, a third longer in middle dots, in brackets, its placeholders kept. `resolve` (`:186`): `auto` → the OS's
+language (`vi_VN.UTF-8` → `vi`) when Solaris has it, else English; an unknown code → English; `setLanguage` (`:200`)
+likewise. The setting: `settings set language=auto|en|vi|en-XA` (`core/service/ServiceMachine.cpp:114`; another code
+refused naming the nearest, or listing them), the machine's (`core/Settings.h:35`), kept in the settings file and read
+back only when Solaris has it (`core/Settings.cpp:71`); in the model `settings.language` and `settings.languages[]`
+— code and the language's name in itself (`core/service/AppModel.h:291`; `core/service/ServiceModel.cpp:139`;
+documented `core/service/AppModelCodec.cpp:327`). Tests: `solaris_strings_tests` (`strings/tests/stringsTests.cpp:45`):
+every table compiled in parses, the three languages; refusals by line (a key twice, a placeholder dropped or added in a
+plain, a context's and a plural's line, plural forms under each rule, not quoted, no `;`, no `=`, unclosed, before the
+header, an unknown rule or header, no `@language`); English the keys; Vietnamese from its table — a context, one form
+for every count, what it lacks in English, the words staying put across a thousand look-ups; `en-XA` bracketed, accented,
+a third longer, placeholders kept; `auto` from the OS. L2 `test_the_language_is_a_setting`
+(`core/tests/serviceTests.cpp:4572`): auto by default; the list in itself; vi set; `klingon` refused listing them,
+`vie` → vi, `langauge` → language; printed; en-XA and auto; another process reads vi back and ignores a code the file
+names that Solaris lacks. Mutants seen red (9): a dropped placeholder accepted; a key twice; a plural's forms not
+counted; the OS's region not dropped; the plural form by English's rule; the pseudo-language not longer (red once the
+test measured a long sentence — on one word the brackets alone are a third); one cache for every language; any
+language accepted by `settings set`; the file's language read unchecked. Nothing on screen yet (part 2).
+
 ### DR-DEV-9 A PipeWire driver; xruns counted (R-DEV-9, R-DEV-5)
 `settings set driver=pulse|pipewire` (default pulse; saved with the machine's settings; Settings › Audio › Driver).
 Every stream the service opens — the player, the browser's audition, the roll's note preview — goes through
@@ -2558,10 +2591,10 @@ and primed again. Its state for the model: drift, smoothed fill, the target as r
 controller is its thread's), device latency read after each write. **Seen** (R-DEV-5; `pump`,
 `core/service/ServiceTransport.cpp:202`): `transport.devices[]` while playing — the clock, each follower (latency,
 drift, xruns, starved, dropped), each that would not open (`:227`, its problem); none stopped
-(`core/service/AppModel.h:439`). Tests: L2 `test_a_follower_alone` (`core/tests/serviceTests.cpp:4572`: in simulated
+(`core/service/AppModel.h:447`). Tests: L2 `test_a_follower_alone` (`core/tests/serviceTests.cpp:4605`: in simulated
 time, a clock 200 ppm slow and unlike blocks — an impulse out exactly its target after it was made, within a frame;
 a stalled clock: starved, primed again, on time; a stalled device: pushes dropped, on time again at once);
-`test_a_port_on_another_device_follows_the_clock` (`:4670`: devices paced in REAL time, a follower 300 ppm fast — its
+`test_a_port_on_another_device_follows_the_clock` (`:4703`: devices paced in REAL time, a follower 300 ppm fast — its
 1 kHz continuous and at its level, an impulse heard on both within 1 ms (measured 0.02–0.12 ms) whichever path is
 slower; a device that will not open said and silent; the devices published; the drift kept). Mutants (each red): no
 clock delay; no priming skip; the target not aligned; the time since a push ignored; the resampler's hold uncounted;
@@ -2589,10 +2622,10 @@ the input's way round (`:31`: the controller's consumer is the clock). Its laten
 reports less its ring, read beside the ring (`:61`) — plus the target: the player's input latency, so a recording's
 alignment counts it (R-DEV-4). **Seen**: `transport.devices[]` gains it, role `input`
 (`core/service/ServiceTransport.cpp:215`; `Player::driftInput`, `core/Player.h:149`). Tests: L2
-`test_an_input_held_alone` (`core/tests/serviceTests.cpp:4807`: in simulated time, a capture 200 ppm fast landing
+`test_an_input_held_alone` (`core/tests/serviceTests.cpp:4840`: in simulated time, a capture 200 ppm fast landing
 256-frame blocks read 128 at a time — an impulse read exactly its target after it landed, within a frame; its device
 stalled: starved, primed again, on time; the clock stalled: emptied, primed again, on time);
-`test_an_input_on_another_device_follows_the_clock` (`:4655`: a capture paced in REAL time 500 ppm fast, monitored
+`test_an_input_on_another_device_follows_the_clock` (`:4688`: a capture paced in REAL time 500 ppm fast, monitored
 through an armed line — the tone on the clock continuous and at its level; its latency its device's and its target's;
 its drift read the right way; the Settings input read as it is). Mutants (each red): never held; the Settings input
 held too; no priming skip; the time since a landing ignored; the resampler's hold uncounted; a starve not priming
@@ -2686,7 +2719,7 @@ Fold, or a sound given — a position through it, moved by the filter envelope. 
 parameters are addresses (`<dv>.osc1.table`, `.position`, `.posenv`, …), its `takesSample` makes `set <dv>.sample=`
 its table's source as a sampler's sound is, and its window is the generated face (two oscillator modules with their
 table switches, the filter, the envelopes). Test: L2 `test_the_wavetable_plays_with_no_code_of_its_own`
-(`core/tests/serviceTests.cpp:4945`: dropped as one line, `get` its table, a render that sounds, a square cycle given as
+(`core/tests/serviceTests.cpp:4978`: dropped as one line, `get` its table, a render that sounds, a square cycle given as
 its sample changing that render, the song keeping `osc1.table=sample`). Shot: wavetable-window. Found while building
 it: two tests here held the registry's size and its instruments' names as constants — the device-type count now
 reads the registry; the refusal's list names the five instruments.
@@ -2697,7 +2730,7 @@ phase moved by the operators above it as one of eight algorithms has them, opera
 last two outputs, an envelope, level and velocity sense each; pitch on the 32-sample grid. **Here** it is the
 registry's "fm" and nothing more: dropped as one line, its parameters addresses (`<dv>.algorithm`, `<dv>.op2.ratio`, …),
 its window the generated face (four operator modules with their envelopes, the algorithm and feedback). Test: L2
-`test_every_instrument_drops_as_one_line_and_sounds` (`core/tests/serviceTests.cpp:4980`: every instrument the
+`test_every_instrument_drops_as_one_line_and_sounds` (`core/tests/serviceTests.cpp:5013`: every instrument the
 registry has — the FM synth among them — dropped as one line, a note in its pattern, a render that sounds; one that
 takes a sound given one first — written once, it holds every instrument to come). Shot: fm-window.
 
@@ -2713,9 +2746,9 @@ decoder for each sound it names, beside the .sfz; one that cannot be read is sai
 engine hands the text and the sounds to the device at build (`engine/Engine.cpp:82`), never on the audio thread. The
 model: `devices[].takesDefinition` / `deviceTypes[].takesDefinition`; the panel asks for "an .sfz"
 (`app/widgets/DevicePanel.cpp:584`); `audit` says one with none. Tests: L2 `test_a_multisample_reads_its_sfz`
-(`core/tests/serviceTests.cpp:5017`: an .sfz of a soft layer and a loud one in turn — beat by beat 220, 330, 440 Hz,
+(`core/tests/serviceTests.cpp:5050`: an .sfz of a soft layer and a loud one in turn — beat by beat 220, 330, 440 Hz,
 each alone; a missing sound and an opcode not read said; a file that is no instrument refused; none, said by the audit);
-`test_every_instrument_drops_as_one_line_and_sounds` (`:4704`, now giving a definition-taker its .sfz). Mutants (each
+`test_every_instrument_drops_as_one_line_and_sounds` (`:4737`, now giving a definition-taker its .sfz). Mutants (each
 red): the definition read as a sound; its sounds looked for beside the song; never handed to the device; an .sfz
 refused; its problems unsaid. Not yet: a browser drop of an .sfz onto the device (by `set`, or `--sample` on
 `strip add`).
@@ -2726,19 +2759,19 @@ samples from its note, each read from a place in its sound (scanned, sprayed) at
 Hann-windowed, panned, the cloud divided by its overlap. **Here** it is the registry's "granular" and nothing more: a
 `takesSample` instrument, given its sound as a sampler is (`set <dv>.sample=`), its parameters addresses
 (`<dv>.grain.size`, `.grain.position`, …). Test: L2 `test_every_instrument_drops_as_one_line_and_sounds`
-(`core/tests/serviceTests.cpp:4980`: the granular given a sound, a note, a render that sounds).
+(`core/tests/serviceTests.cpp:5013`: the granular given a sound, a note, a render that sounds).
 
 ### DR-INST-11 The 808 (R-INST-11)
 **The sound** is the DSP library's (REQ-808-1/2, its commit 190ce5f): one voice, a sine whose pitch is punched down to
 the note at each attack and glides between held notes, a damped decay, a seeded click, a normalised drive, a tone.
 **Here** it is the registry's "808" and nothing more: dropped as one line, its parameters addresses (`<dv>.punch`,
 `.glide`, `.amp.decay`, …). Test: L2 `test_every_instrument_drops_as_one_line_and_sounds`
-(`core/tests/serviceTests.cpp:4980`: the 808 on a note, a render that sounds).
+(`core/tests/serviceTests.cpp:5013`: the 808 on a note, a render that sounds).
 
 ### DR-FX-6 N34's effects, each the DSP library's (R-FX-6…17)
 Each is the registry's and nothing more here: `device add <ch> --type <name>`, its parameters addresses, its window the
 generated panel. Test: L2 `test_every_effect_drops_as_one_line_and_passes_sound`
-(`core/tests/serviceTests.cpp:5074`: every effect the registry has, added to a synth's strip as one line, a render
+(`core/tests/serviceTests.cpp:5107`: every effect the registry has, added to a synth's strip as one line, a render
 finite and sounding — written once, it holds every effect to come). **The effects:** "multiband" (R-FX-6;
 REQ-fx-multiband-1, DSP 122d264) — three Linkwitz-Riley bands summing flat, each a Compressor; "gate" (R-FX-7;
 REQ-fx-gate-1, DSP f0cb867) — a gate and downward expander with hold and range, keyable (`takesKey`: its key is a
@@ -2757,13 +2790,13 @@ change it, decoded by the host at the song's rate and handed in at build (DR-EDM
 convolution --sample <file>` drops it with its file in one line (`core/service/ServiceEdit.cpp:485`: any registry
 type that takes a sample; refused for one that does not, for a plugin, and for a file that is not audio). Its 256
 samples of latency are compensated by DR-MIX-17 with no code here. Test: L2 `test_a_convolution_reverb_takes_its_
-response` (`core/tests/serviceTests.cpp:5102`): an impulse response leaves the song as it sounded at mix 0.6, to
+response` (`core/tests/serviceTests.cpp:5135`): an impulse response leaves the song as it sounded at mix 0.6, to
 3e−17 — the latency compensated; its file read back; the refusals. "pitch" (R-FX-15; REQ-fx-pitch-1, DSP 8ceaa31) —
 two crossfaded taps sweeping a delay line; its latency (1 + half its window) compensated, no code here. "vocoder"
 (R-FX-16; REQ-fx-vocoder-1, DSP 051007a) — a channel vocoder whose carrier is its key: routed by a sidechain send as a
-compressor's (DR-MIX-15), with no code here but the audit's (`core/service/ServiceModel.cpp:654`: a key-taking type
+compressor's (DR-MIX-15), with no code here but the audit's (`core/service/ServiceModel.cpp:658`: a key-taking type
 with no Sidechain switch always listens). Test: L2 `test_a_vocoder_speaks_through_its_key`
-(`core/tests/serviceTests.cpp:5138`): a voice's strip through a synth on another strip, RMS 0.0127; the carrier muted,
+(`core/tests/serviceTests.cpp:5171`): a voice's strip through a synth on another strip, RMS 0.0127; the carrier muted,
 exactly silent; the audit quiet about its key. "tuner" (R-FX-17; REQ-tuner-1, REQ-device-11, DSP 6c07198) — YIN,
 the audio untouched; its readings (frequency, note, cents, level) carried to the model and `get` by DR-FX-17.
 
@@ -2777,11 +2810,11 @@ reading is stamped with the same frames and engine generation, and `liveReadings
 listener hears now through `pickSlot`. `buildLive` lists, from the same graph in the same order, which device each
 slot is (`core/service/ServiceTransport.cpp:71`); the live refresh writes the values into `devices[].readings[].value`
 (`:283`). The model's `devices[].readings` (name, label, unit — `RegistryModel.cpp`) are the registry's; the value is
-a measurement, so the stable dump omits it (`AppModelCodec.cpp:453`). Every command rebuilds the model from the
+a measurement, so the stable dump omits it (`AppModelCodec.cpp:457`). Every command rebuilds the model from the
 registry, so stopped, a reading is 0. `get <dv>.<reading>` answers the model's value (`core/service/SolarisService.cpp
 :1269`); `set` on one is refused naming it a reading (`:1238`). The API document lists each type's readings and the
 read-only address. At most 64 readings report (`Player::kMaxReadings`). Test: L2 `test_a_tuner_reads_while_playing`
-(`core/tests/serviceTests.cpp:5169`): the default synth's A4 read as A3 — its sub-octave square sets the period, as
+(`core/tests/serviceTests.cpp:5202`): the default synth's A4 read as A3 — its sub-octave square sets the period, as
 YIN must say — and with that oscillator off, 440.004 Hz (+0.02 cents), note 69, through `get` and the model while
 playing; 0 stopped; `set` refused; the stable dump names the readings but not their values.
 
@@ -2831,7 +2864,7 @@ beats, written `#amarker id=mk_1 name=Chorus at=16.0 length=8.0 note="…"` (`mo
 `note` only when set; in the id space, so `nextId("mk")`; docs/project-format.md §9a, docs/audio-format.md §2.10). With
 a `length` it is a SECTION; without, a point whose section runs to the next marker after it, else the song's end
 (`Project::sectionEnd`, `model/Project.cpp:88`) — published as `markers[].end` beside `at`, `length`, `name`, `note`, by
-time (`core/service/ServiceModel.cpp:394`). `marker add <name> --at [--length] [--note]` (prints its id), `marker rename
+time (`core/service/ServiceModel.cpp:398`). `marker add <name> --at [--length] [--note]` (prints its id), `marker rename
 <mk> <name> [--note]`, `marker move <mk> [--at] [--length]`, `marker delete <mk>` — edits like any, kept sorted by time
 (`core/service/ServiceArrange.cpp:335`); `ls` lists them with their sections. `transport seek <mk>` goes to its beat and
 `transport loop <mk>` loops its section (`markerSpan`, `ServiceArrange.cpp:31`; `core/service/ServiceTransport.cpp:680`,
@@ -2982,7 +3015,7 @@ there, 0.2 at the seam, done 5 ms either side; a range over part of another keep
 `test_takes_and_their_comp_round_trip`; the D-12 guard in `test_record_audio_lands_where_it_was_played`. Mutants: the
 turn's tail given to the next pass, the compile ignoring the comp, no crossfade, an overlapped range losing its rest,
 D-12's path — each red. **The window.** The model publishes the comp RESOLVED — `clips[].plays`, runs covering the clip,
-each the take heard there (`core/service/ServiceModel.cpp:347`) — so a front end only draws it. A clip with takes says how
+each the take heard there (`core/service/ServiceModel.cpp:351`) — so a front end only draws it. A clip with takes says how
 many at its top right where there is room beside its name (`app/widgets/Timeline.cpp:1253`); its menu offers Show takes
 · Hide takes (`:1214`; the view's — `showTakes`, `app/widgets/TimelineTakes.cpp:29`, re-binds at once): a row per take
 under the clip's lane (`Timeline.cpp:179`; keyed rows, so the rows below slide down and back, eased), its span drawn
@@ -3000,7 +3033,7 @@ engine reads from its span's end (`engine/Engine.cpp:731`) — a loop's every re
 mirrored stretch by stretch (`core/Compile.cpp:433`). **Crossfades** (C6, `heardFades`, `core/Compile.cpp:118`): an audio
 clip's fade in grows to cover a clip of its strip on its lane that began before it and ends inside it, its fade out one
 that begins inside it and ends after — a clip wholly inside another, or one on another lane, is mixed; the compile plays
-the grown fades, the model publishes them (`clips[].fadeInHeard`, `.fadeOutHeard`, `core/service/ServiceModel.cpp:340`)
+the grown fades, the model publishes them (`clips[].fadeInHeard`, `.fadeOutHeard`, `core/service/ServiceModel.cpp:344`)
 and the clips keep their own. **Split** (`splitClip`, `core/service/ServiceAudioEdit.cpp:93`): `clip split <ac> --at <b>`,
 `b` on the tick grid strictly inside the clip; the second half a new clip after the first in the list, its id printed —
 the halves' `in`/`out` meet where the cut is (a reversed clip's first half its span's end), the fade in the first's and
@@ -3123,11 +3156,11 @@ Two folders, named by the host (`presetPaths`, `host/Machine.cpp:55`): the user'
 `type`, `name`, then `<param> = <text>` lines as the `.slp` keeps a device's set values (`sample = <path>` for a
 sampler); `;` comments. `scanPresets` (`core/service/ServicePresets.cpp:71`) lists every registry type's — the user's,
 then the factory's of a name the user has not — into the model (`presets[]`, refreshed once and after a save or a
-delete, `core/service/ServiceModel.cpp:115`). `applyPreset` (`:106`): the user's file of the name, else the factory's; its
+delete, `core/service/ServiceModel.cpp:116`). `applyPreset` (`:107`): the user's file of the name, else the factory's; its
 type must be the device's; the device's set values and sound cleared (every value back to its default), then each of
 the preset's through `setAddress` — so a value `set` would refuse refuses the load, and `dispatch` puts the song back:
-nothing changes. `presetCommand` (`:151`): `preset list [type]`; `preset delete <type> <name>` (the user's only; a
-factory's refused by name); `preset save <dv> <name> [--replace]` (`:200`; a name of 1 … 64 characters, no slash, not
+nothing changes. `presetCommand` (`:155`): `preset list [type]`; `preset delete <type> <name>` (the user's only; a
+factory's refused by name); `preset save <dv> <name> [--replace]` (`:204`; a name of 1 … 64 characters, no slash, not
 starting with a dot; an existing one refused without --replace; the folder made) — save, list and delete are in
 `mutates`' list (the machine's: no undo, no unsaved mark); `preset load` is an edit. A drop: `device add … --preset`
 (`core/service/ServiceEdit.cpp:494`) and `clip add --instrument … --preset` apply it in the same command; `--preset`
@@ -3175,7 +3208,7 @@ The library is the machine's: a text file the host names (`libraryPath`, `host/M
 `favourite <file> [on|off]` — the file made absolute, a tag of 1 … 32 letters, digits or dashes kept in lower case, a
 file left with no tags taken out; the file rewritten whole; `library.changed path tags` said; in `mutates`' list (the
 machine's: no undo, works on Home). `searchSamples` (`:120`, from `browse --search <text> [folder]` or `browse
---favourites`, `core/service/ServiceMachine.cpp:330`): the sample folders (or the folder given) walked through the host's
+--favourites`, `core/service/ServiceMachine.cpp:346`): the sample folders (or the folder given) walked through the host's
 `listDir` — eight levels down, 2000 folders at most, the first 200 found — an audio file found when its name holds the
 text in any case or it carries a tag starting with it; then the library's own files wherever they are; sorted by name;
 the browser's entries, `browser.search` the text (`favourites`), `browse.changed path=search:<text>`. A plain `browse
@@ -3339,7 +3372,7 @@ its normalised value read "0.45 %" beside a unitless one's "60 %" — the units 
 **A control** is `<n>` (any channel) or `<ch>/<n>` (`controlKey`, `core/service/ServiceControl.cpp:23`, refusing
 anything else by its form). `map add <cc> <address>` (`mapCommand`, `:135`) takes any address `describeAddress` takes
 — a number a formula can drive, in the open song — replaces the control's old mapping, keeps it in the machine's
-settings (`map.<cc> = <address>`, `core/Settings.cpp:36`, read back `:79`) and says `settings.changed what=map.<cc>`;
+settings (`map.<cc> = <address>`, `core/Settings.cpp:38`, read back `:82`) and says `settings.changed what=map.<cc>`;
 `map remove`, `map list` (`(inert)` beside what the open song lacks); `map learn <address>` waits (`mapLearning` in the
 model), `--cancel` stops. All four are in `mutates`' list — never an edit, never in the song. **Listening**: the MIDI
 input's sink (`ServiceInput.cpp:89`) puts every controller and every MIDI Machine Control message into a second queue,
@@ -3356,7 +3389,7 @@ editor's do (`applyPendingEdits`, `ServicePlugins.cpp:287`: when no command runs
 heard, as any edit (only a plugin's own are kept from echoing back). **The host** (`host/MidiInAlsa.cpp:99`) parses a
 SysEx `F0 7F <dev> 06 <cmd> F7` into `{0xF0, cmd, 0x7F}` (`MidiEvent::mmc`, `core/MidiIn.h:28`); other SysEx does not
 arrive. The model: `settings.mappings[]` (cc, address, inert) and `mapLearning`; `audit` says a mapping the song lacks
-(`ServiceModel.cpp:622`). L2 `test_midi_learn_and_the_transport_keys` (`core/tests/serviceTests.cpp:3943`): not an edit,
+(`ServiceModel.cpp:626`). L2 `test_midi_learn_and_the_transport_keys` (`core/tests/serviceTests.cpp:3943`): not an edit,
 in the settings file; the top of a control is +6 dB, a sweep lands its last value and undoes in one step; a channel's
 mapping deaf to another channel; a cutoff by its taper; learned on its channel with its value not taken; cancelled;
 removed; MMC plays and stops; refusals (128, 17/1, a name, a missing strip, no mapping, no address); inert in another
@@ -3401,7 +3434,7 @@ checked against hardware. Both encode a DIFF of what the surface shows against w
 changed; a slot past the last strip down, dark and blank; a fader a hand is on left to the hand. **The seam**: MIDI
 output (`core/MidiOut.h`), the ALSA sequencer's in the host (`MidiOutAlsa`, `host/MidiInAlsa.cpp:135` — connected to
 the writable port of that name; bytes encoded to sequencer events, SysEx too, `:173`). **Settings**: `surface =
-none|mcu|hui`, `surfacePort = <port>` (`core/Settings.cpp:73`; `settings set`, `core/service/ServiceMachine.cpp:163`,
+none|mcu|hui`, `surfacePort = <port>` (`core/Settings.cpp:76`; `settings set`, `core/service/ServiceMachine.cpp:179`,
 refusing another protocol). The keyboard never listens on the surface's port (`ServiceInput.cpp:70` — every port but
 it when it listens to all). **The service** (`core/service/ServiceSurface.cpp`): `surfacePump` (`:95`, from `pump`,
 `ServiceTransport.cpp:157`, so at the end of every command too) starts the surface when the settings changed
@@ -3479,8 +3512,8 @@ piece its help), takes items, and waits only for the items handed out. Workers (
 before reading the job and take the caller's floating-point mode (`:83`). `threadsFor` (`:34`): auto = the cores but
 one, at most 8. **Where.** The player makes the pool for the threads the setting gives (`core/Player.cpp:113`; from
 `ServiceTransport.cpp:598`) and sets it on every engine it plays, a swapped one too (`:275`); a render makes one for
-its engine (`core/service/ServiceRender.cpp:212`). `settings set threads=auto|1…16` (`ServiceMachine.cpp:170`; kept,
-`core/Settings.cpp:75`; `settings.threads` in the model). Tests: engine `test_the_strips_nothing_feeds_render_in_any_order`
+its engine (`core/service/ServiceRender.cpp:212`). `settings set threads=auto|1…16` (`ServiceMachine.cpp:186`; kept,
+`core/Settings.cpp:78`; `settings.threads` in the model). Tests: engine `test_the_strips_nothing_feeds_render_in_any_order`
 (`engine/tests/engineTests.cpp:786`: two synths, two kits and a shared reverb — the free strips run reversed and
 interleaved by a runner with no threads at all: byte-identical to one thread; the bus and the reverb never free); L2
 `test_the_engine_on_several_threads` (`core/tests/serviceTests.cpp:4253`: five instruments sending to a reverb — a
@@ -3510,8 +3543,8 @@ strip** (`core/Compile.cpp:348`): an audio strip with one region, its file from 
 devices cost nothing; their edits are kept and unheard); its fader, pan, mute, solo, sends and output as ever; the
 song's end still its clips' ends (`:362`), not the file's tail; a file that cannot be read leaves it silent, said by
 the compile (`:361`). **The file**: `frozen="…"` on its `#atrack` line (`model/Project.cpp:313`, written `:907`).
-**The model**: `strips[].frozen` (`core/service/ServiceModel.cpp:285`); `audit` names each frozen strip and the file it
-plays (`:616`). Test: L2 `test_freeze_and_bounce` (`core/tests/serviceTests.cpp:6003`: an instrument through a chorus
+**The model**: `strips[].frozen` (`core/service/ServiceModel.cpp:289`); `audit` names each frozen strip and the file it
+plays (`:620`). Test: L2 `test_freeze_and_bounce` (`core/tests/serviceTests.cpp:6036`: an instrument through a chorus
 and a lookahead limiter, faded, panned and sending to a reverb bus — frozen, the song renders within 3·10⁻⁸ of its own
 work; a device edit unheard and in the audit; its fader live; unfrozen, the edit heard; undone, frozen again; refrozen,
 the new file heard; refusals; a bounce onto a new strip; a file made unreadable opens silent and said). Mutants (each

@@ -324,6 +324,10 @@ namespace solaris
             {"settings.reducedMotion", "bool", "the UI's tweens collapse (with the OS's own setting)"},
             {"settings.uiScale", "int", "R-ACCESS-1: the window drawn at this % — 75, 90, 100, 125, 150, 175 or 200; eased"},
             {"settings.highContrast", "bool", "R-ACCESS-1: the neutrals toward black, white text and solid borders; eased"},
+            {"settings.language", "string", "R-ACCESS-2: auto (the OS's, when Solaris has it) | a code of settings.languages"},
+            {"settings.languages", "object[]", "R-ACCESS-2: every language the window can draw in — English, each table compiled in, en-XA"},
+            {"settings.languages[].code", "string", "R-ACCESS-2: en, vi, en-XA (the pseudo-language) …"},
+            {"settings.languages[].name", "string", "R-ACCESS-2: the language's name in itself"},
             {"settings.showIds", "bool", "every object's id drawn beside its name (R-UI-11)"},
             {"settings.autosave", "int", "seconds between autosaves of an unsaved song; 0 = off (R-SAFE-1)"},
             {"settings.driver", "string", "pulse | pipewire: how the clock device is reached (R-DEV-9)"},
@@ -834,6 +838,11 @@ namespace solaris
                               .set("metronome", m.settings.metronome).set("metronomeLevel", m.settings.metronomeLevel).set("auditionLevel", m.settings.auditionLevel)
                               .set("newBpm", m.settings.newBpm).set("newSig", m.settings.newSig).set("reducedMotion", m.settings.reducedMotion)
                               .set("uiScale", (long long)m.settings.uiScale).set("highContrast", m.settings.highContrast)
+                              .set("language", m.settings.language).set("languages", [&] {
+                                  Json ls = Json::array();
+                                  for (const auto &l : m.settings.languages) ls.push(Json::object().set("code", l.code).set("name", l.name));
+                                  return ls;
+                              }())
                               .set("showIds", m.settings.showIds).set("autosave", m.settings.autosave).set("driver", m.settings.driver).set("midiInputs", m.settings.midiInputs).set("recordQuantize", m.settings.recordQuantize)
                               .set("countIn", m.settings.countIn).set("keys", keys).set("mappings", mappings)
                               .set("surface", m.settings.surface).set("surfacePort", m.settings.surfacePort).set("threads", m.settings.threads));

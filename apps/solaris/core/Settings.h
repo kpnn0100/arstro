@@ -32,6 +32,7 @@ namespace solaris
         bool reducedMotion = false;             // the UI's tweens collapse (design rule §2.6), with the OS's
         int uiScale = 100;                      // R-ACCESS-1: the window drawn at this % (cosmo's steps), eased
         bool highContrast = false;              // R-ACCESS-1: the neutrals toward black, white and solid borders, eased
+        std::string language = "auto";          // R-ACCESS-2: the window's words — auto (the OS's, when Solaris has it) or a code
         bool showIds = false;                   // R-UI-11: every object's id drawn beside its name (View › Show IDs)
         int autosave = 60;                      // R-SAFE-1: seconds between autosaves of an unsaved song; 0 = off
         std::string driver = "pulse";            // R-DEV-9: pulse | pipewire — how the clock device is reached

@@ -4569,6 +4569,39 @@ static void test_the_ui_scale_and_contrast_are_settings()
     pass("the UI scale and high contrast are settings (R-ACCESS-1): on cosmo's steps (another refused, never rounded), on or off; in the model, printed, kept and read back");
 }
 
+static void test_the_language_is_a_setting()
+{
+    // R-ACCESS-2 (Round 21, part 1): the window's language — the machine's setting, auto by default; the model lists
+    // every language the window can draw in (its code, its name in itself); a code Solaris lacks refused naming the
+    // nearest; printed, kept in the settings file and read back
+    const std::string settings = scratch() + "/language-settings.txt";
+    fs::remove(settings);
+    {
+        Run r(settings, std::string());
+        const auto &ls = r.svc.model().settings.languages;
+        assert(r.svc.model().settings.language == "auto");
+        assert(ls.size() == 3 && ls[0].code == "en" && ls[0].name == "English" && ls[1].code == "vi" &&
+               ls[1].name == "Ti\xE1\xBA\xBFng Vi\xE1\xBB\x87t" && ls[2].code == "en-XA");
+        r.ok("settings set language=vi");
+        assert(r.svc.model().settings.language == "vi");
+        assert(contains(r.no("settings set language=klingon"), "no language `klingon` (languages: auto, en, vi, en-XA)"));
+        assert(contains(r.no("settings set language=vie"), "did you mean: vi?")); // ISO 639-2's code
+        assert(contains(r.no("settings set langauge=vi"), "did you mean: language?"));
+        assert(r.svc.model().settings.language == "vi");
+        assert(contains(r.ok("settings print"), "language = vi\n"));
+        r.ok("settings set language=en-XA");
+        r.ok("settings set language=auto");
+        assert(r.svc.model().settings.language == "auto");
+        r.ok("settings set language=vi");
+    }
+    {
+        std::ofstream(settings, std::ios::app) << "language = klingon\n"; // a file naming one Solaris lacks: the last good one stands
+    }
+    Run again(settings, std::string()); // another process: read back
+    assert(again.svc.model().settings.language == "vi" && again.svc.model().settings.languages.size() == 3);
+    pass("the language is a setting (R-ACCESS-2): auto by default; the languages listed in themselves; one Solaris lacks refused naming the nearest; printed, kept and read back");
+}
+
 static void test_a_follower_alone()
 {
     // R-DEV-2/4, Follower in SIMULATED time (its clock injected, its device a plain list): a clock 200 ppm slow and a
@@ -7390,6 +7423,7 @@ int main()
     test_a_video_lane();
     test_a_song_shared_through_a_folder();
     test_the_ui_scale_and_contrast_are_settings();
+    test_the_language_is_a_setting();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

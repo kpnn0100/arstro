@@ -9,6 +9,7 @@
 #include "SolarisService.h"
 #include "MixLaws.h"
 #include "Player.h"
+#include "Strings.h"
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -109,6 +110,21 @@ namespace solaris
                 {
                     if (v != "on" && v != "off") { err = k + " is on or off"; return false; }
                     (k == "metronome" ? next.metronome : k == "reducedMotion" ? next.reducedMotion : k == "highContrast" ? next.highContrast : next.showIds) = v == "on";
+                }
+                else if (k == "language") // R-ACCESS-2: auto, or a language Solaris has — another is refused naming the nearest
+                {
+                    if (v != "auto" && !solaris_strings::known(v))
+                    {
+                        std::vector<std::string> codes{"auto"};
+                        for (const auto &l : solaris_strings::languages()) codes.push_back(l.code);
+                        err = "no language `" + v + "`";
+                        const auto near = nearest(v, codes);
+                        std::string list;
+                        for (const auto &c : codes) list += (list.empty() ? "" : ", ") + c;
+                        err += near.empty() ? " (languages: " + list + ")" : " (did you mean: " + near[0] + "?)";
+                        return false;
+                    }
+                    next.language = v;
                 }
                 else if (k == "uiScale") // R-ACCESS-1: cosmo's steps — another number is refused, never rounded quietly
                 {
@@ -211,9 +227,9 @@ namespace solaris
                 else
                 {
                     err = "no setting `" + k + "`";
-                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver", "midiInputs", "recordQuantize", "countIn", "surface", "surfacePort", "threads", "uiScale", "highContrast"});
+                    const auto near = nearest(k, {"sampleRate", "bufferSize", "output", "input", "metronome", "metronomeLevel", "auditionLevel", "newBpm", "newSig", "reducedMotion", "showIds", "autosave", "driver", "midiInputs", "recordQuantize", "countIn", "surface", "surfacePort", "threads", "uiScale", "highContrast", "language"});
                     err += near.empty() ? std::string(" (settings: sampleRate, bufferSize, output, input, port.<name>, metronome, "
-                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, uiScale, highContrast, showIds, autosave, driver, midiInputs, recordQuantize, countIn, surface, surfacePort, threads, key.<action>)")
+                                                      "metronomeLevel, auditionLevel, newBpm, newSig, reducedMotion, uiScale, highContrast, language, showIds, autosave, driver, midiInputs, recordQuantize, countIn, surface, surfacePort, threads, key.<action>)")
                                         : " (did you mean: " + near[0] + "?)";
                     return false;
                 }
@@ -258,7 +274,7 @@ namespace solaris
                               .set("output", mSettings.output).set("input", mSettings.input)
                               .set("folders", folders).set("ports", ports).set("metronome", mSettings.metronome)
                               .set("metronomeLevel", mSettings.metronomeLevel).set("auditionLevel", mSettings.auditionLevel).set("newBpm", mSettings.newBpm)
-                              .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion).set("uiScale", mSettings.uiScale).set("highContrast", mSettings.highContrast)
+                              .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion).set("uiScale", mSettings.uiScale).set("highContrast", mSettings.highContrast).set("language", mSettings.language)
                               .set("showIds", mSettings.showIds).set("autosave", mSettings.autosave).set("driver", mSettings.driver).set("midiInputs", mSettings.midiInputs).set("recordQuantize", mSettings.recordQuantize).set("countIn", mSettings.countIn).set("keys", [&] {
                                   Json keys = Json::array(); // only the re-keyed actions, as the file has them
                                   for (const auto &k : mSettings.keys) keys.push(Json::string(k.first + "=" + k.second));

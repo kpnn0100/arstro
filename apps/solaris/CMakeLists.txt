@@ -3,6 +3,7 @@
 # Its sound is the DSP library's (R-DSP-1): the engine links arstro_dsp and hosts its devices;
 # nothing below this directory implements DSP.
 add_subdirectory(model)    # the .slp: no sound, no I/O
+add_subdirectory(strings)  # the window's words in the user's language (R-ACCESS-2): no dependencies
 if(TARGET arstro_dsp)
   add_subdirectory(engine) # the MixGraph renderer: hosts arstro_dsp's devices
   add_subdirectory(core)   # the service: grammar, events, model, compile, render

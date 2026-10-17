@@ -3699,6 +3699,30 @@
       "stable": true
     },
     {
+      "path": "settings.language",
+      "type": "string",
+      "summary": "R-ACCESS-2: auto (the OS's, when Solaris has it) | a code of settings.languages",
+      "stable": true
+    },
+    {
+      "path": "settings.languages",
+      "type": "object[]",
+      "summary": "R-ACCESS-2: every language the window can draw in — English, each table compiled in, en-XA",
+      "stable": true
+    },
+    {
+      "path": "settings.languages[].code",
+      "type": "string",
+      "summary": "R-ACCESS-2: en, vi, en-XA (the pseudo-language) …",
+      "stable": true
+    },
+    {
+      "path": "settings.languages[].name",
+      "type": "string",
+      "summary": "R-ACCESS-2: the language's name in itself",
+      "stable": true
+    },
+    {
       "path": "settings.showIds",
       "type": "bool",
       "summary": "every object's id drawn beside its name (R-UI-11)",

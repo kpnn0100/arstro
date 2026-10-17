@@ -1,0 +1,12 @@
+# Solaris — the window's words in Vietnamese (R-ACCESS-2; docs/discussion.md Round 21).
+# English is the key; a line per string: "English" = "Tiếng Việt";  — a context: "ctx|English"; a plural: its two
+# English keys side by side and ONE form (@plural other: one form for every count). Keep each {1} … {9}.
+# Only the window's own words: never a command, an event, the model, the service's lines or the registry's words.
+@language vi
+@name Tiếng Việt
+@plural other
+
+"Settings" = "Cài đặt";
+"Language" = "Ngôn ngữ";
+"menu|Open…" = "Mở…";
+"{1} conflict" "{1} conflicts" = "{1} xung đột";

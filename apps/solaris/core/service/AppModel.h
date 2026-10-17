@@ -249,6 +249,12 @@ namespace solaris
         bool recovery = false;                   // R-SAFE-2: an autosave newer than it — unsaved edits to recover
     };
 
+    /** A language the window can draw in (R-ACCESS-2): its code, and its name in itself. */
+    struct LanguageModel
+    {
+        std::string code, name;
+    };
+
     /** One keyboard action and its keys on this machine (R-SET-4) — a front end looks a pressed combo up here. */
     struct KeyActionModel
     {
@@ -282,6 +288,8 @@ namespace solaris
         bool metronome = false, reducedMotion = false; // R-SET-3
         int uiScale = 100;                       // R-ACCESS-1: the window drawn at this % (75 · 90 · 100 · 125 · 150 · 175 · 200)
         bool highContrast = false;               // R-ACCESS-1
+        std::string language = "auto";           // R-ACCESS-2: auto | a code of `languages`
+        std::vector<LanguageModel> languages;    // R-ACCESS-2: every language the window can draw in
         double metronomeLevel = -6, newBpm = 120;
         double auditionLevel = -6;              // dB: a sample previewed from the browser (R-EDM-9)
         std::string newSig = "4/4";

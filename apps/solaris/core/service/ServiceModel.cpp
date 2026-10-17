@@ -10,6 +10,7 @@
 #include "Notation.h"
 #include "RegistryModel.h"
 #include "SolarisService.h"
+#include "Strings.h"
 #include "Versions.h"
 #include "device/Device.h"
 #include <algorithm>
@@ -135,6 +136,9 @@ namespace solaris
         mModel.settings.reducedMotion = mSettings.reducedMotion;
         mModel.settings.uiScale = mSettings.uiScale; // R-ACCESS-1
         mModel.settings.highContrast = mSettings.highContrast;
+        mModel.settings.language = mSettings.language; // R-ACCESS-2
+        mModel.settings.languages.clear();
+        for (const auto &l : solaris_strings::languages()) mModel.settings.languages.push_back({l.code, l.name});
         mModel.settings.showIds = mSettings.showIds;
         mModel.settings.autosave = mSettings.autosave;
         mModel.settings.driver = mSettings.driver;

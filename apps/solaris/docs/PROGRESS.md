@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N43 part 1 — the table and the setting** (R-ACCESS-2; Round 21 is the design: `solaris_strings`, `lang/vi.strings`, `settings set language=`, the model's fields), then parts 2–3, then N44, in order (the user: *"implement all"*). Owed live checks: N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N43 part 2 — the shell through the table** (R-ACCESS-2; Round 21: Home, the song bar and its menus, Settings, Export, Relink, Conflicts, the confirm dialogs, the toasts, their accessible names; Settings › Interface › Language; the dissolve; the recorded-strings test and the source scan; shots in vi and en-XA), then part 3, then N44, in order (the user: *"implement all"*). Owed live checks: N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -679,7 +679,9 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       (`tr` / `trc` / `trn`, `{1}` placeholders), `lang/<code>.strings` compiled in; English, Vietnamese and the
       pseudo-language `en-XA`; `settings set language=auto|en|vi|en-XA`; a switch dissolves the window; proved by the
       strings drawn in `en-XA` and a scan of the code's keys. Parts: (1) the table and the setting; (2) the shell;
-      (3) the song view.
+      (3) the song view. Part 1: `solaris_strings` (strings/ — tr / trc / trn / fill, plural rules, the pseudo-language,
+      `auto` from the OS; tables parsed with refusals by line and compiled in by embed_strings.cmake), `lang/vi.strings`
+      begun, `settings set language=` (refused naming the nearest), `settings.language` / `settings.languages[]`.
 - [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).
 
 ### T — tasks found on the way

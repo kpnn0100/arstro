@@ -1,4 +1,5 @@
 #include "Settings.h"
+#include "Strings.h"
 #include <cstdlib>
 #include <sstream>
 
@@ -23,6 +24,7 @@ namespace solaris
         o << "reducedMotion = " << (reducedMotion ? "on" : "off") << "\n";
         o << "uiScale = " << uiScale << "\n";                          // R-ACCESS-1
         o << "highContrast = " << (highContrast ? "on" : "off") << "\n";
+        o << "language = " << language << "\n";                       // R-ACCESS-2
         o << "showIds = " << (showIds ? "on" : "off") << "\n";
         o << "autosave = " << (autosave > 0 ? std::to_string(autosave) : std::string("off")) << "\n";
         o << "driver = " << driver << "\n";
@@ -66,6 +68,7 @@ namespace solaris
             else if (k == "reducedMotion") s.reducedMotion = v == "on";
             else if (k == "uiScale") { const int u = std::atoi(v.c_str()); if (u == 75 || u == 90 || u == 100 || u == 125 || u == 150 || u == 175 || u == 200) s.uiScale = u; } // R-ACCESS-1
             else if (k == "highContrast") s.highContrast = v == "on";
+            else if (k == "language" && (v == "auto" || solaris_strings::known(v))) s.language = v; // R-ACCESS-2
             else if (k == "showIds") s.showIds = v == "on";
             else if (k == "autosave") { const int a = v == "off" ? 0 : std::atoi(v.c_str()); if (a == 0 || (a >= 1 && a <= 3600)) s.autosave = a; }
             else if (k == "driver") { if (v == "pulse" || v == "pipewire") s.driver = v; }

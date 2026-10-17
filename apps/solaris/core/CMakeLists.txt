@@ -46,6 +46,7 @@ add_library(solaris_core STATIC
 target_include_directories(solaris_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/service)
 find_package(Threads REQUIRED)
 target_link_libraries(solaris_core PUBLIC solaris_model solaris_engine Threads::Threads)
+target_link_libraries(solaris_core PRIVATE solaris_strings) # R-ACCESS-2: the languages a setting may name
 
 add_executable(solaris_service_tests tests/serviceTests.cpp)
 target_link_libraries(solaris_service_tests PRIVATE solaris_core)
