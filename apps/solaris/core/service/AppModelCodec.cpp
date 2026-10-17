@@ -139,6 +139,20 @@ namespace solaris
             {"missing", "object[]", "R-COLLECT-1: each file the song names (main or any version) that cannot be read — `project relink` finds it"},
             {"missing[].path", "string", "as the song names it (relative to its folder, or absolute)"},
             {"missing[].users", "string[]", "what names it — ids; a version's prefixed `vr_n:`"},
+            {"scenes", "object[]", "R-LAUNCH-1: the session grid's rows, by order"},
+            {"scenes[].id", "string", "sc_n"},
+            {"scenes[].name", "string", ""},
+            {"scenes[].order", "int", "its row, 0 the top"},
+            {"slots", "object[]", "R-LAUNCH-1: the grid's cells — what a strip plays when launched in a scene"},
+            {"slots[].id", "string", "sl_n"},
+            {"slots[].name", "string", "\"\" = its pattern's or file's"},
+            {"slots[].scene", "string", "its row"},
+            {"slots[].strip", "string", "its column: an instrument strip (a pattern) or an audio strip (a file)"},
+            {"slots[].pattern", "string", "pt_n, or \"\""},
+            {"slots[].src", "string", "a file as the song names it, or \"\""},
+            {"slots[].length", "number", "beats a loop lasts — the pattern's, or the file span's, when not set"},
+            {"slots[].gain", "number", "dB"},
+            {"launchQuantize", "string", "R-LAUNCH-1: where a launch, a stop or a return lands — bar, beat or none"},
             {"clips", "object[]", "every clip"},
             {"clips[].id", "string", ""},
             {"clips[].name", "string", ""},
@@ -537,6 +551,12 @@ namespace solaris
                 j.set("versions", vs);
                 j.set("version", m.version);
             }
+            if (!m.slots.empty()) // R-LAUNCH-1: the grid, scene by scene
+            {
+                Json sl = Json::array();
+                for (const auto &x : m.slots) sl.push(Json::string(x.id + " " + x.scene + "/" + x.strip + " " + (x.pattern.empty() ? x.src : x.pattern)));
+                j.set("slots", sl);
+            }
             if (!m.missing.empty()) // R-COLLECT-1: what the song cannot find
             {
                 Json ms = Json::array();
@@ -673,6 +693,12 @@ namespace solaris
         Json missing = Json::array(); // R-COLLECT-1
         for (const auto &x : m.missing) missing.push(Json::object().set("path", x.path).set("users", strings(x.users)));
         j.set("missing", missing);
+        Json scenes = Json::array(), slots = Json::array(); // R-LAUNCH-1
+        for (const auto &x : m.scenes) scenes.push(Json::object().set("id", x.id).set("name", x.name).set("order", (long long)x.order));
+        for (const auto &x : m.slots)
+            slots.push(Json::object().set("id", x.id).set("name", x.name).set("scene", x.scene).set("strip", x.strip).set("pattern", x.pattern)
+                           .set("src", x.src).set("length", x.length).set("gain", x.gain));
+        j.set("scenes", scenes).set("slots", slots).set("launchQuantize", m.launchQuantize);
         Json clips = Json::array();
         for (const auto &c : m.clips)
         {

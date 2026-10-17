@@ -265,6 +265,9 @@ namespace solaris
         case K::ProjectFiles: case K::ProjectCollect: case K::ProjectRelink: case K::ClipRelink:
             ok = filesCommand(c, err);
             break;
+        case K::SceneAdd: case K::SceneDelete: case K::SceneMove: case K::SlotAdd: case K::SlotDelete:
+            ok = sessionCommand(c, err);
+            break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:
         case K::PatternArpeggiate:
@@ -363,7 +366,7 @@ namespace solaris
             static const std::vector<std::pair<std::string, std::string>> kinds = {
                 {"ch_", "strip"}, {"dv_", "device"}, {"pt_", "pattern"}, {"ln_", "lane"}, {"ac_", "clip"},
                 {"au_", "automation"}, {"sd_", "send"}, {"mx_", "mixer"}, {"prt_", "port"}, {"lg_", "group"}, {"mk_", "marker"},
-                {"vr_", "version"}};
+                {"vr_", "version"}, {"sc_", "scene"}, {"sl_", "slot"}};
             const std::string primary = mOutput.substr(0, mOutput.find('\n'));
             std::vector<std::string> fresh;
             for (const auto &id : mProject.allIds())
@@ -973,8 +976,15 @@ namespace solaris
 
         if (id == "project")
         {
-            static const std::vector<std::string> fields = {"name", "bpm", "sig", "masterGain", "sampleRate"};
+            static const std::vector<std::string> fields = {"name", "bpm", "sig", "masterGain", "sampleRate", "launchQuantize"};
             if (f == "name") { p.header.name = value; stored = value; return true; }
+            if (f == "launchQuantize") // R-LAUNCH-1
+            {
+                if (value != "bar" && value != "beat" && value != "none") { err = "project.launchQuantize is bar, beat or none"; return false; }
+                p.header.launchQuantize = value;
+                stored = value;
+                return true;
+            }
             if (f == "bpm") { if (!number(value, x, err) || !inRange(x, 20, 999, "bpm", err)) return false; p.header.bpm = x; stored = canonicalNumber(x); return true; }
             if (f == "masterGain") { if (!number(value, x, err) || !inRange(x, -120, 12, "masterGain", err)) return false; p.header.masterGain = x; stored = canonicalNumber(x); return true; }
             if (f == "sampleRate") { if (!number(value, x, err) || !inRange(x, 8000, 192000, "sampleRate", err)) return false; p.header.sampleRate = (int)x; stored = std::to_string((int)x); return true; }
@@ -988,6 +998,27 @@ namespace solaris
                 return true;
             }
             err = unknownField(id, "the song", f, fields);
+            return false;
+        }
+        if (Scene *sc = p.scene(id)) // R-LAUNCH-1: a row of the grid
+        {
+            if (f != "name") { err = unknownField(id, "a scene", f, {"name"}); return false; }
+            sc->name = value;
+            stored = value;
+            return true;
+        }
+        if (Slot *sl = p.slot(id)) // … and a cell of it
+        {
+            if (f == "name") { sl->name = value; stored = value; return true; }
+            if (f == "length")
+            {
+                if (!number(value, x, err) || !inRange(x, 0, 4096, "length", err)) return false;
+                sl->length = toTick(x);
+                stored = canonicalBeats(sl->length);
+                return true;
+            }
+            if (f == "gain") { if (!number(value, x, err) || !inRange(x, -120, 24, "gain", err)) return false; sl->gain = x; stored = canonicalNumber(x); return true; }
+            err = unknownField(id, "a slot", f, {"name", "length", "gain"});
             return false;
         }
         if (Strip *s = p.strip(id))
@@ -1322,6 +1353,13 @@ namespace solaris
         {
             put("name", p.header.name); put("bpm", canonicalNumber(p.header.bpm)); put("sig", p.header.sig);
             put("masterGain", canonicalNumber(p.header.masterGain)); put("sampleRate", std::to_string(p.header.sampleRate));
+            put("launchQuantize", p.header.launchQuantize); // R-LAUNCH-1
+        }
+        else if (const Scene *sc = p.scene(id)) { put("name", sc->name); put("order", std::to_string(sc->order)); } // R-LAUNCH-1
+        else if (const Slot *sl = p.slot(id))
+        {
+            put("name", sl->name); put("scene", sl->scene); put("strip", sl->strip); put("pattern", sl->pattern); put("src", sl->src);
+            put("length", canonicalBeats(sl->length)); put("gain", canonicalNumber(sl->gain));
         }
         else if (const Strip *s = p.strip(id))
         {

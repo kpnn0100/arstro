@@ -17,6 +17,12 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 - **Effect:** the as-built tier points at lines that are not the code it describes (D-1's class: a doc describing what
   the code no longer is). `anchorcheck_strict` does not see it — it checks an anchor against HEAD's line, which was
   already wrong.
+- **More of the same kind** (found N39 part 1, by the same scan run on every section anchoring into a file the commit
+  edited): about thirty anchors sit on a `{` or `}` line — most already did at HEAD (an anchor written one line after
+  a two-line signature) — in DR-SVC-1, DR-AUTO-1/4/6/8, DR-EDM-1, DR-ROLL-11, DR-MIX-15/16, DR-SVC-8, DR-LANE-3,
+  DR-BROWSE-4, DR-VST-6/7, DR-SAFE-1, DR-ARR-1/3, DR-REC-1, DR-PRESET-1, DR-PERF-3. A brace has no content of its
+  own, so a follower that matches lines by content attaches it to whichever brace is nearest — they drift further with
+  every edit of their file.
 - **Recommended fix:** in each section, write the file before every anchor whose file differs from the last one named
   (`app/widgets/MixerDock.cpp:N`, not `` `:N` ``), at the line the paragraph means; then the scan prints no line past
   its file's end and no `{`, `}` or blank target.
@@ -74,7 +80,7 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 - **Reproduction:** `project new d.slp` · `clip add --instrument synth --at 0 --length 4` ·
   `set ch_2.name=Bass` · `ls`.
 - **Cause:** the lane and the pattern copy the strip's name when they are made (`laneFor`,
-  `core/service/ServiceEdit.cpp:626`); nothing links them after.
+  `core/service/ServiceEdit.cpp:629`); nothing links them after.
 - **Recommended fix:** a lane or pattern made for a strip keeps that strip's name while it was never
   renamed itself — renaming the strip renames the ones still carrying its old name, in the same edit.
   Needs an R-LANE line first (lanes are organisation only, R-LANE-1, so the rule is about names alone).

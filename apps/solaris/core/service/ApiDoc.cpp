@@ -150,6 +150,7 @@ namespace solaris
         o += "\n## Addresses (`set` / `get`)\n\n";
         o += "| address | value |\n|---|---|\n";
         o += "| `project.name` · `project.bpm` · `project.sig` · `project.masterGain` · `project.sampleRate` | text · 20…999 · n/d · dB · Hz |\n";
+        o += "| `project.launchQuantize` · `<scene>.name` · `<slot>.name` · `.length` · `.gain` (R-LAUNCH-1) | bar / beat / none — where a launch lands · text · text · beats a loop lasts (0: the pattern's or the file's) · dB |\n";
         o += "| `<strip>.name` · `.gain` · `.pan` · `.mute` · `.solo` · `.colour` | text · dB (−120…12) · −1…1 · bool · bool · −1…15 |\n";
         o += "| `<strip>.phase` · `.width` · `.soloSafe` (R-MIX-20) | on/off (its polarity, after its rack) · % 0 … 200 (0 one channel, 200 the side doubled) · bool, a bus's only (a solo never silences it) |\n";
         o += "| `<strip>.vca` (R-MIX-19) | the VCA it follows — a strip of kind vca, by id or name — or `none`; a VCA's own gain adds to its members', its mute and solo are theirs; a VCA has no `.pan` and follows no VCA |\n";

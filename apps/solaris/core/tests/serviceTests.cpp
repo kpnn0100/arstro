@@ -5452,6 +5452,63 @@ static void test_collect_and_relink()
     pass("collect and relink (R-COLLECT-1): every file named, every version's too, listed; collected into Samples/ as ONE edit — two kick.wav kept apart and a stranger's left alone, the same bytes reused, an .sfz with its sounds, a version's own clip, the missing named; a dry run changes nothing (D-23); relinked by a folder, a file, a clip; missing[]; Collect and Save one line");
 }
 
+static void test_the_session_grid()
+{
+    // R-LAUNCH-1 (Round 17, part 1): scenes and slots — made, named, placed, moved, deleted, each ONE edit; a slot of a
+    // pattern, of a clip's pattern, of a file; its loop's length resolved in the model; refusals naming why; a strip's
+    // slots go with it; a pattern a slot plays is not deleted from under it; launchQuantize; on a version, its own
+    Run r;
+    r.ok("project new " + freshSong("session") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");                 // ch_2, pt_1, ac_1
+    r.ok("pattern new --name Fill --length 2");                            // pt_2
+    r.ok("clip add --src " + scratch() + "/loop.wav --at 0");              // ch_3 (audio), ac_2
+    r.ok("strip add --kind bus --name Verb");                              // ch_4
+    assert(r.ok("scene add Verse") == "sc_1\n" && r.ok("scene add Drop") == "sc_2\n" && r.ok("scene add Intro --at 0") == "sc_3\n");
+    const auto &m = r.svc.model();
+    assert(m.scenes.size() == 3 && m.scenes[0].name == "Intro" && m.scenes[1].name == "Verse" && m.scenes[2].order == 2);
+    assert(r.ok("slot add sc_1 ch_2 --pattern pt_1") == "sl_1\n");
+    assert(r.ok("slot add sc_2 ch_2 --pattern pt_2 --length 8") == "sl_2\n");
+    assert(r.ok("slot add sc_1 ch_3 --clip ac_2") == "sl_3\n");
+    assert(r.ok("slot add sc_2 ch_3 --src " + scratch() + "/loop.wav") == "sl_4\n");
+    assert(m.slots.size() == 4 && m.slots[0].id == "sl_1" && m.slots[0].length == 4.0); // the pattern's, not set
+    const SlotModel *fill = nullptr;
+    for (const auto &x : m.slots)
+        if (x.id == "sl_2") fill = &x;
+    assert(fill && fill->length == 8.0 && fill->scene == "sc_2" && fill->pattern == "pt_2");
+    assert(contains(r.no("slot add sc_1 ch_2 --pattern pt_2"), "a cell holds one"));
+    assert(contains(r.no("slot add sc_3 ch_4 --pattern pt_1"), "ch_4 is a bus strip"));
+    assert(contains(r.no("slot add sc_3 ch_3 --pattern pt_1"), "plays notes, but ch_3 is an audio strip"));
+    assert(contains(r.no("slot add sc_3 ch_2 --pattern pt_1 --src x.wav"), "ONE thing"));
+    assert(contains(r.no("slot add sc_9 ch_2 --pattern pt_1"), "no scene sc_9"));
+    assert(contains(r.no("slot add sc_3 ch_2 --pattern pt_1 --length 0"), "above 0"));
+    r.ok("set sc_2.name=\"The Drop\" sl_1.length=2 sl_1.gain=-6 sl_1.name=Hook");
+    assert(r.ok("get sl_1.length") == "2.0\n" && r.ok("get sc_2.name") == "The Drop\n" && m.slots[0].name == "Hook" && m.slots[0].gain == -6.0);
+    assert(contains(r.no("set sl_1.colour=2"), "colour") && contains(r.no("set sl_1.length=-1"), "length"));
+    r.ok("scene move sc_2 --to 0");
+    assert(m.scenes[0].id == "sc_2" && m.scenes[1].id == "sc_3");
+    // what the grid plays is held: a pattern a slot plays is not deleted; a strip's slots go with it; a scene's too
+    assert(contains(r.no("pattern delete pt_2"), "sl_2"));
+    r.ok("clip delete ac_2");
+    assert(contains(r.no("strip delete ch_3"), "2 slot(s) of the session grid play through ch_3"));
+    r.ok("strip delete ch_3 --with-clips");
+    assert(m.slots.size() == 2);
+    r.ok("scene delete sc_2");
+    assert(m.scenes.size() == 2 && m.slots.size() == 1 && m.slots[0].id == "sl_1");
+    r.ok("undo");
+    assert(m.scenes.size() == 3 && m.slots.size() == 2); // ONE edit
+    // where a launch lands: a bar by default
+    assert(r.ok("get project.launchQuantize") == "bar\n" && m.launchQuantize == "bar");
+    r.ok("set project.launchQuantize=beat");
+    assert(m.launchQuantize == "beat" && contains(r.text(), "launchQuantize = beat"));
+    assert(contains(r.no("set project.launchQuantize=sometimes"), "bar, beat or none"));
+    // a version's slot is its own node
+    r.ok("version new Live --open");
+    std::string mine = r.ok("slot add sc_3 ch_2 --pattern pt_2");
+    mine.pop_back();
+    assert(contains(r.ok("version diff Live"), "#aslot id=" + mine + " scene=sc_3 strip=ch_2 pattern=pt_2"));
+    pass("the session grid (R-LAUNCH-1): scenes and slots made, named, placed, moved, deleted as ONE edit each; a slot of a pattern, a clip, a file, its loop resolved; refusals by name; a strip's slots go with it; a played pattern held; launchQuantize; a version's own slot");
+}
+
 static void test_per_strip_tools_live()
 {
     // R-MIX-20 (Round 14, part 2): while playing, a strip's width and phase move with no engine rebuilt — the width
@@ -6883,6 +6940,7 @@ int main()
     test_per_strip_tools_live();
     test_versions_of_a_song();
     test_collect_and_relink();
+    test_the_session_grid();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

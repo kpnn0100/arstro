@@ -24,6 +24,7 @@ sampleRate = 48000
 masterGain = 0.0            ; dB
 masterOut  = prt_1          ; the output port(s) the master feeds, comma-separated
 tracks     = on             ; R-LANE-3: lanes may be instruments' tracks (absent = a song from before them)
+launchQuantize = bar        ; R-LAUNCH-1: where a launch lands — bar | beat | none (written only when not bar)
 ```
 
 `timebase` is always `beats` in a Solaris project (audio-format §1). Every time field below is in
@@ -277,6 +278,21 @@ Interstellar's `#marker` (`id`, `name`, `at`, `note`) in beats, with `length` ad
 section; without one it is a point whose section runs to the next marker (or the song's end). `length` and `note`
 are written only when set; `name` is required. `transport seek <mk>` / `transport loop <mk>` use them.
 
+## 9a′. The session grid — `#ascene` / `#aslot` (R-LAUNCH-1; docs/discussion.md Round 17)
+
+```
+#ascene id=sc_1 name=Verse order=0
+#ascene id=sc_2 name=Drop order=1
+#aslot id=sl_1 scene=sc_1 strip=ch_2 pattern=pt_1 length=4.0
+#aslot id=sl_2 name="Drum loop" scene=sc_2 strip=ch_3 src=loops/beat.wav out=2.0 gain=-3.0
+```
+
+A scene is a row (`order` places it, 0 the top); a slot is a cell — what its strip plays when launched in that scene:
+a `pattern` (an instrument strip's, shared as a clip's is) or a file (`src`, an audio strip's, with `in`/`out` in
+seconds as a clip's). `length` is beats a loop lasts (absent: the pattern's, or the file span's); `name` and `gain`
+(dB) are written when set. One slot a cell. A slot is its own node — not a clip off the timeline — so nothing that
+reads the arrangement sees it; launching it is live (never rendered) until recorded.
+
 ## 9b. Versions — `#aversion` (R-VER; docs/discussion.md Round 15)
 
 ```
@@ -318,7 +334,7 @@ opening as main.
 
 Header keys in §1's order, then unknown header keys in read order. Nodes grouped by type in this
 document's order (`#aport`, `#amixer`, `#atrack`, `#asend`, `#arack`, `#alane`, `#apattern`,
-`#aclip`, `#aauto`, `#abind`, then unknown nodes in read order, then `#aversion` in creation order — §9b), each type in creation order; children indented two
+`#aclip`, `#aauto`, `#abind`, `#amarker`, `#atempo`, `#ascene`, `#aslot`, then unknown nodes in read order, then `#aversion` in creation order — §9b), each type in creation order; children indented two
 spaces. Fields in the order the tables give, then unknown keys in read order. Booleans
 `true`/`false`. Numbers: always a decimal point (`0.0`); **times are rounded to the tick (1/960
 beat) and printed with the fewest decimals that read back to the same tick**; seconds to the
@@ -365,6 +381,7 @@ version new <name> [--base vr] [--open] | version open <vr|main> | version list 
 version freeze|thaw <vr> | version rebase <vr> [--dry-run] | version delete <vr> | revert <address|node>
 project files [--missing] | project collect [--dry-run] [--save] | project relink <file> --to <new> | project relink --folder <dir>   ; R-COLLECT-1
 clip relink <ac> <file> [--take n]
+scene add [name] [--at i] | scene delete <sc> | scene move <sc> --to i | slot add <sc> <strip> (--pattern pt | --clip ac | --src f) [--length b] | slot delete <sl>   ; R-LAUNCH-1
 transport play | transport stop | transport seek <b|mk> | transport loop <a> <b> | transport loop <mk> | transport loop off
 render --out <f.wav> [--from b] [--to b] [--stems ch,…] [--ports] [--bits 24|32f] [--version vr|main]
 matrix print [--json] | audit | state print [--json] [--stable] | registry [--json] | api [--json|--md]

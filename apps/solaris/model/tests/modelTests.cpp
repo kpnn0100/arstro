@@ -845,6 +845,48 @@ static void test_versions_chain_are_checked_and_never_reuse_an_id()
     pass("versions checked (R-VER-1): B on A stacks both; a base must come first, names are one each and never main, a frozen one holds its snapshot; a base is not deleted from under B; A's own id never given again; revert by field and node; a version its base broke is named and cannot be opened");
 }
 
+static void test_scenes_and_slots_round_trip_and_are_checked()
+{
+    // R-LAUNCH-1: #ascene / #aslot after the arrangement, a fixed point; launchQuantize written only when not a bar; a
+    // slot in no scene, for no strip, of the wrong kind, of both or neither, or in a full cell refused, naming it
+    const std::string head = "arstro-project = 1\napp = solaris\nid = prj\nlaunchQuantize = beat\n#amixer id=mx_1 name=Sources order=0\n"
+                             "#atrack id=ch_1 name=Lead kind=instrument mixer=mx_1 order=0 gain=0.0 pan=0.0\n"
+                             "#atrack id=ch_2 name=Loop kind=audio mixer=mx_1 order=1 gain=0.0 pan=0.0\n"
+                             "#atrack id=ch_3 name=Bus kind=bus mixer=mx_1 order=2 gain=0.0 pan=0.0\n"
+                             "#apattern id=pt_1 name=hook length=4.0\n  #note pitch=60 at=0.0 length=0.5 vel=100\n";
+    const std::string grid = "#ascene id=sc_1 name=Verse order=0\n#ascene id=sc_2 name=Chorus order=1\n"
+                             "#aslot id=sl_1 scene=sc_1 strip=ch_1 pattern=pt_1\n"
+                             "#aslot id=sl_2 name=\"Drum loop\" scene=sc_2 strip=ch_2 src=loops/beat.wav out=2.0 length=8.0 gain=-3.0\n";
+    Project p;
+    std::string err;
+    assert(parseProject(head + grid, p, err));
+    assert(p.header.launchQuantize == "beat" && p.scenes.size() == 2 && p.slots.size() == 2 && p.slot("sl_2")->length == 8.0);
+    assert(p.scenesInOrder()[1]->name == "Chorus" && p.nextId("sl") == "sl_3" && p.nextId("sc") == "sc_3");
+    const std::string text = serializeProject(p);
+    assert(contains(text, "launchQuantize = beat\n") && contains(text, "#aslot id=sl_2 name=\"Drum loop\" scene=sc_2 strip=ch_2 src=loops/beat.wav out=2.0 length=8.0 gain=-3.0\n"));
+    Project q;
+    assert(parseProject(text, q, err) && serializeProject(q) == text);
+    q.header.launchQuantize = "bar";
+    assert(!contains(serializeProject(q), "launchQuantize")); // the default: not written
+    auto refused = [&](const std::string &extra, const std::string &why) {
+        Project b;
+        std::string e;
+        const bool ok = parseProject(head + grid + extra, b, e);
+        if (ok || !contains(e, why)) std::printf("    expected a refusal naming `%s`, got `%s`\n", why.c_str(), e.c_str());
+        assert(!ok && contains(e, why));
+    };
+    refused("#aslot id=sl_3 scene=sc_9 strip=ch_1 pattern=pt_1\n", "which is no scene");
+    refused("#aslot id=sl_3 scene=sc_2 strip=ch_9 pattern=pt_1\n", "which is no strip");
+    refused("#aslot id=sl_3 scene=sc_2 strip=ch_3 pattern=pt_1\n", "ch_3 is a bus strip");
+    refused("#aslot id=sl_3 scene=sc_2 strip=ch_1 src=a.wav\n", "plays a file, but ch_1 is an instrument strip");
+    refused("#aslot id=sl_3 scene=sc_2 strip=ch_1 pattern=pt_1 src=a.wav\n", "a pattern or a file — one of them");
+    refused("#aslot id=sl_3 scene=sc_1 strip=ch_1 pattern=pt_1\n", "a cell holds one");
+    refused("#aslot id=sl_3 scene=sc_2 strip=ch_1 pattern=pt_9\n", "which is no pattern");
+    Project bad;
+    assert(!parseProject("arstro-project = 1\napp = solaris\nid = prj\nlaunchQuantize = sometimes\n", bad, err) && contains(err, "bar, beat or none"));
+    pass("scenes and slots in the .slp (R-LAUNCH-1): #ascene / #aslot after the arrangement, a fixed point; launchQuantize only when not a bar; a slot in no scene, for no strip or the wrong kind, of both or neither, in a full cell refused by name");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -869,6 +911,7 @@ int main()
     test_inherit_live_override_wins_dangling_kept_until_rebase();
     test_freeze_thaw_and_rebase_a_frozen_version();
     test_versions_chain_are_checked_and_never_reuse_an_id();
+    test_scenes_and_slots_round_trip_and_are_checked();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

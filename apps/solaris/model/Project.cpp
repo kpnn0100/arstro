@@ -74,6 +74,17 @@ namespace solaris
     LaneGroup *Project::group(const std::string &id) { return findId(groups, id); }
     const LaneGroup *Project::group(const std::string &id) const { return findId(groups, id); }
     const Marker *Project::marker(const std::string &id) const { return findId(markers, id); }
+    Scene *Project::scene(const std::string &id) { return findId(scenes, id); }
+    const Scene *Project::scene(const std::string &id) const { return findId(scenes, id); }
+    Slot *Project::slot(const std::string &id) { return findId(slots, id); }
+    const Slot *Project::slot(const std::string &id) const { return findId(slots, id); }
+    std::vector<const Scene *> Project::scenesInOrder() const
+    {
+        std::vector<const Scene *> v;
+        for (const auto &x : scenes) v.push_back(&x);
+        std::stable_sort(v.begin(), v.end(), [](const Scene *a, const Scene *b) { return a->order < b->order; });
+        return v;
+    }
     double Project::sectionEnd(const Marker &m, double songEnd) const
     {
         if (m.length > 0) return m.at + m.length;
@@ -161,6 +172,8 @@ namespace solaris
         for (const auto &x : clips) ids.push_back(x.id);
         for (const auto &x : automations) ids.push_back(x.id);
         for (const auto &x : markers) ids.push_back(x.id);
+        for (const auto &x : scenes) ids.push_back(x.id); // R-LAUNCH-1
+        for (const auto &x : slots) ids.push_back(x.id);
         for (const auto &x : tempos) ids.push_back(x.id);
         for (const auto &x : versions) ids.push_back(x.id); // R-VER
         return ids;
@@ -393,6 +406,27 @@ namespace solaris
             else if (k == "ramp") n.ramp = r.boolean(k, v, false);
             else n.unknown.emplace_back(k, v);
         }
+        void apply(Reader &r, Scene &n, const std::string &k, const std::string &v) // R-LAUNCH-1
+        {
+            if (k == "id") n.id = v;
+            else if (k == "name") n.name = v;
+            else if (k == "order") n.order = (int)r.num(k, v, 0.0);
+            else n.unknown.emplace_back(k, v);
+        }
+        void apply(Reader &r, Slot &n, const std::string &k, const std::string &v)
+        {
+            if (k == "id") n.id = v;
+            else if (k == "name") n.name = v;
+            else if (k == "scene") n.scene = v;
+            else if (k == "strip") n.strip = v;
+            else if (k == "pattern") n.pattern = v;
+            else if (k == "src") n.src = v;
+            else if (k == "in") n.in = r.num(k, v, 0.0);
+            else if (k == "out") n.out = r.num(k, v, 0.0);
+            else if (k == "length") n.length = toTick(r.num(k, v, 0.0));
+            else if (k == "gain") n.gain = r.num(k, v, 0.0);
+            else n.unknown.emplace_back(k, v);
+        }
         void apply(Reader &r, Marker &n, const std::string &k, const std::string &v)
         {
             if (k == "id") n.id = v;
@@ -479,7 +513,7 @@ namespace solaris
         Reader r{report ? report : &localReport, {}};
 
         // What a continuation line or a comment attaches to.
-        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Group, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Tempo, Raw, Version };
+        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Group, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Tempo, Raw, Version, Scene, Slot };
         Cur cur = Cur::None;
         bool seenNode = false, sawMagic = false, sawTracks = false;
         std::map<std::string, std::vector<Note>> inlineNotes; // note clips written the suite's inline way
@@ -502,6 +536,8 @@ namespace solaris
             case Cur::Point: return &p.automations.back().remarks;
             case Cur::Bind: return &p.bindings.back().remarks;
             case Cur::Marker: return &p.markers.back().remarks;
+            case Cur::Scene: return &p.scenes.back().remarks;
+            case Cur::Slot: return &p.slots.back().remarks;
             case Cur::Tempo: return &p.tempos.back().remarks;
             case Cur::Version: return &p.versions.back().remarks;
             default: return nullptr;
@@ -613,6 +649,8 @@ namespace solaris
                 else if (tok.type == "amarker") { p.markers.emplace_back(); fill(p.markers.back()); cur = Cur::Marker; } // R-ARR-1
                 else if (tok.type == "atempo") { p.tempos.emplace_back(); fill(p.tempos.back()); cur = Cur::Tempo; }    // R-TEMPO-1
                 else if (tok.type == "aversion") { p.versions.emplace_back(); fill(p.versions.back()); cur = Cur::Version; } // R-VER
+                else if (tok.type == "ascene") { p.scenes.emplace_back(); fill(p.scenes.back()); cur = Cur::Scene; } // R-LAUNCH-1
+                else if (tok.type == "aslot") { p.slots.emplace_back(); fill(p.slots.back()); cur = Cur::Slot; }
                 else { p.raw.push_back(RawNode{{line}}); cur = Cur::Raw; }
                 continue;
             }
@@ -651,6 +689,11 @@ namespace solaris
                 else if (key == "sampleRate") p.header.sampleRate = r.integer(key, value, 48000);
                 else if (key == "masterGain") p.header.masterGain = r.num(key, value, 0.0);
                 else if (key == "masterOut") p.header.masterOut = splitComma(value);
+                else if (key == "launchQuantize") // R-LAUNCH-1
+                {
+                    if (value != "bar" && value != "beat" && value != "none") { err = "launchQuantize `" + value + "`: bar, beat or none"; return false; }
+                    p.header.launchQuantize = value;
+                }
                 else if (key == "tracks")
                 {
                     if (value != "on") { err = "tracks `" + value + "`: the only value is `on` (R-LANE-3)"; return false; }
@@ -836,6 +879,7 @@ namespace solaris
             out += headerLine("masterOut", v);
         }
         out += headerLine("tracks", "on"); // R-LANE-3: lanes may be tracks — a file without the line predates them
+        if (h.launchQuantize != "bar") out += headerLine("launchQuantize", h.launchQuantize); // R-LAUNCH-1: only when not a bar
         for (const auto &u : h.unknown) out += headerLine(u.first, quoteIfNeeded(u.second));
         for (const auto &c : h.comments) out += c + "\n";
 
@@ -973,6 +1017,16 @@ namespace solaris
         group(!p.tempos.empty()); // R-TEMPO-1
         for (const auto &n : p.tempos)
             emit(out, "", Line("atempo").kv("id", n.id).kv("at", canonicalBeats(n.at)).kv("bpm", canonicalNumber(n.bpm)).kvIf(n.ramp, "ramp", "true").unknown(n.unknown),
+                 n.remarks);
+        group(!p.scenes.empty()); // R-LAUNCH-1
+        for (const auto &n : p.scenes)
+            emit(out, "", Line("ascene").kv("id", n.id).str("name", n.name).kv("order", std::to_string(n.order)).unknown(n.unknown), n.remarks);
+        group(!p.slots.empty());
+        for (const auto &n : p.slots)
+            emit(out, "",
+                 Line("aslot").kv("id", n.id).strIf("name", n.name).kv("scene", n.scene).kv("strip", n.strip).strIf("pattern", n.pattern).strIf("src", n.src)
+                     .kvIf(n.in != 0, "in", canonicalSeconds(n.in)).kvIf(n.out != 0, "out", canonicalSeconds(n.out))
+                     .kvIf(n.length > 0, "length", canonicalBeats(n.length)).kvIf(n.gain != 0, "gain", canonicalNumber(n.gain)).unknown(n.unknown),
                  n.remarks);
         group(!p.raw.empty());
         for (const auto &r : p.raw)
@@ -1190,6 +1244,24 @@ namespace solaris
             if (t.at <= 0) e.push_back("tempo " + t.id + " is at beat " + canonicalBeats(t.at) + " — the tempo at the start is the song's bpm");
             if (i > 0 && t.at <= p.tempos[i - 1].at) e.push_back("tempo " + t.id + " is not after " + p.tempos[i - 1].id);
             if (!(t.bpm >= 20 && t.bpm <= 999)) e.push_back("tempo " + t.id + " is " + canonicalNumber(t.bpm) + " bpm (20 … 999)");
+        }
+        auto aKind = [](const std::string &k) { return (k == "instrument" || k == "audio" ? "an " : "a ") + k + " strip"; };
+        for (const auto &sl : p.slots) // R-LAUNCH-1: a slot waits in a scene for a strip that can play it
+        {
+            if (!p.scene(sl.scene)) e.push_back("slot " + sl.id + " is in `" + sl.scene + "`, which is no scene");
+            const Strip *st = p.strip(sl.strip);
+            if (!st) { e.push_back("slot " + sl.id + " is for `" + sl.strip + "`, which is no strip"); continue; }
+            if (sl.pattern.empty() == sl.src.empty()) e.push_back("slot " + sl.id + " needs a pattern or a file — one of them");
+            else if (!sl.pattern.empty())
+            {
+                if (st->kind != "instrument") e.push_back("slot " + sl.id + " plays notes, but " + st->id + " is " + aKind(st->kind));
+                if (!p.pattern(sl.pattern)) e.push_back("slot " + sl.id + " plays `" + sl.pattern + "`, which is no pattern");
+            }
+            else if (st->kind != "audio") e.push_back("slot " + sl.id + " plays a file, but " + st->id + " is " + aKind(st->kind));
+            if (sl.length < 0 || (sl.out != 0 && sl.out <= sl.in)) e.push_back("slot " + sl.id + " lasts nothing");
+            for (const auto &o : p.slots)
+                if (&o != &sl && o.scene == sl.scene && o.strip == sl.strip && &o < &sl)
+                    e.push_back("slots " + o.id + " and " + sl.id + " are both " + sl.strip + "'s in scene " + sl.scene + " — a cell holds one");
         }
         for (const auto &m : p.markers) // R-ARR-1: a place in the song, named
         {

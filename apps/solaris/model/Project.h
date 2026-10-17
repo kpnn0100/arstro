@@ -45,6 +45,7 @@ namespace solaris
         double masterGain = 0.0;        // dB
         std::vector<std::string> masterOut; // port ids
         bool tracks = true;             // R-LANE-3: false = a song saved before lanes could be tracks (no `tracks` line)
+        std::string launchQuantize = "bar"; // R-LAUNCH-1: where a launch, a stop or a return lands — bar | beat | none
         Fields unknown;
         std::vector<std::string> comments; // whole comment lines before the first node
     };
@@ -276,6 +277,29 @@ namespace solaris
         Remarks remarks;
     };
 
+    /** R-LAUNCH-1: a row of the session grid — slots launched together. */
+    struct Scene
+    {
+        std::string id, name;
+        int order = 0;
+        Fields unknown;
+        Remarks remarks;
+    };
+
+    /** R-LAUNCH-1: a clip waiting in a scene for a strip — a pattern (an instrument strip's) or a file (an audio
+     *  strip's) — launched live, looped; its own node, so nothing that reads the arrangement has to skip it. */
+    struct Slot
+    {
+        std::string id, name, scene, strip;
+        std::string pattern;            // an instrument strip's: shared, as a clip's is (R-CLIP-3)
+        std::string src;                // an audio strip's: a file, stored as a clip's src is
+        double in = 0.0, out = 0.0;     // seconds into the file (audio); out 0 = its end
+        double length = 0.0;            // beats a loop lasts; 0 = the pattern's (audio: the file span's)
+        double gain = 0.0;              // dB
+        Fields unknown;
+        Remarks remarks;
+    };
+
     /** R-TEMPO-1: a change of the song's tempo — `bpm` from beat `at` on; `ramp`: reached there gliding (linearly, in
      *  beats) from the tempo before. Before the first, the header's `bpm` holds. */
     struct TempoPoint
@@ -323,6 +347,8 @@ namespace solaris
         std::vector<Marker> markers;    // R-ARR-1: sorted by (at, id)
         std::vector<TempoPoint> tempos; // R-TEMPO-1: sorted by at, each at a beat of its own after 0
         std::vector<RawNode> raw;
+        std::vector<Scene> scenes;      // R-LAUNCH-1: the session grid's rows, in creation order (`order` places them)
+        std::vector<Slot> slots;        // R-LAUNCH-1: its cells
         std::vector<Version> versions;  // R-VER: in creation order, each based on main or an earlier one
         /** R-VER: the version open — its resolution is what the nodes above hold ("" = main, the song itself). Never
          *  written: a song opens on main. */
@@ -344,6 +370,12 @@ namespace solaris
         Marker *marker(const std::string &id);
         TempoPoint *tempo(const std::string &id);  // R-TEMPO-1
         const TempoPoint *tempo(const std::string &id) const;
+        Scene *scene(const std::string &id);   // R-LAUNCH-1
+        const Scene *scene(const std::string &id) const;
+        Slot *slot(const std::string &id);
+        const Slot *slot(const std::string &id) const;
+        /** Scenes by order (the grid's rows). */
+        std::vector<const Scene *> scenesInOrder() const;
         LaneGroup *group(const std::string &id);
         const LaneGroup *group(const std::string &id) const;
         const Marker *marker(const std::string &id) const;

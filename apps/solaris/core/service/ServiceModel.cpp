@@ -391,6 +391,19 @@ namespace solaris
                 const VersionFacts f = versionFacts(p, v.id);
                 mModel.versions.push_back(VersionModel{v.id, v.name, v.base.empty() ? "main" : v.base, v.frozen, f.deltas, f.own, f.dangling, f.problem});
             }
+            mModel.launchQuantize = p.header.launchQuantize; // R-LAUNCH-1: the grid, its rows by order, its cells row by row
+            for (const Scene *sc : p.scenesInOrder()) mModel.scenes.push_back(SceneModel{sc->id, sc->name, sc->order});
+            for (const Scene *sc : p.scenesInOrder())
+                for (const Strip *st : p.stripsInOrder())
+                    for (const auto &sl : p.slots)
+                    {
+                        if (sl.scene != sc->id || sl.strip != st->id) continue;
+                        double len = sl.length;
+                        if (len <= 0 && !sl.pattern.empty())
+                            if (const Pattern *pt = p.pattern(sl.pattern)) len = pt->length;
+                        if (len <= 0 && !sl.src.empty()) len = (sl.out > sl.in ? sl.out - sl.in : 0.0) * p.header.bpm / 60.0;
+                        mModel.slots.push_back(SlotModel{sl.id, sl.name, sl.scene, sl.strip, sl.pattern, sl.src, len, sl.gain});
+                    }
             for (const auto &f : fileRefs()) // R-COLLECT-1: what the song names and cannot read — every version's
             {
                 std::error_code ec;

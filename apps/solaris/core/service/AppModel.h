@@ -312,6 +312,22 @@ namespace solaris
         std::string problem;                     // why it does not stand as a song ("" when it does)
     };
 
+    /** R-LAUNCH-1: a row of the session grid. */
+    struct SceneModel
+    {
+        std::string id, name;
+        int order = 0;
+    };
+
+    /** R-LAUNCH-1: a cell of it — what a strip plays when launched in that scene. */
+    struct SlotModel
+    {
+        std::string id, name, scene, strip;
+        std::string pattern, src;                // one of them
+        double length = 0;                       // beats a loop lasts — the pattern's (or the file span's) when not set
+        double gain = 0;                         // dB
+    };
+
     /** R-COLLECT-1: a file the song names that cannot be read — and what uses it. */
     struct MissingModel
     {
@@ -497,6 +513,9 @@ namespace solaris
         std::vector<VersionModel> versions;      // R-VER: in creation order, each after its base
         std::string version;                     // R-VER: the open one's id, or "main" ("" with no song)
         std::vector<MissingModel> missing;       // R-COLLECT-1: files the song names that cannot be read (every version's)
+        std::vector<SceneModel> scenes;          // R-LAUNCH-1: the session grid's rows, by order
+        std::vector<SlotModel> slots;            // … its cells, by scene order then processing order
+        std::string launchQuantize = "bar";      // R-LAUNCH-1: where a launch lands — bar | beat | none
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };
 }

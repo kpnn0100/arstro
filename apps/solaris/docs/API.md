@@ -24,7 +24,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `mixer delete <mx>` | Delete an empty mixer. Refused while strips live on it. | R-MIX-3 |
 | `mixer move <mx> [--to <index>]` | Move a mixer to position <index> (0 = first). Refused if it would make any route point backward. | R-MIX-4 |
 | `strip add [--kind <audio\|instrument\|bus\|vca>] [--name <text>] [--mixer <mx>] [--instrument <type>] [--plugin <id\|name>] [--sample <file>] [--out <target>]` | Add a strip. Default mixer: the first for audio/instrument, the second for a bus; default output: "Main" — the bus that leaves the nearest later mixer with buses, else the one leaving its own mixer (the new strip is then placed BEFORE it, so the route goes forward), else master. An instrument strip gets its instrument (default synth) as its first device; --sample <file> gives a sampler its sound (R-EDM-8); --plugin <id\|name> makes it another maker's instrument plugin, from `plugins list` (R-VST-6). --kind vca: a VCA — a fader, a mute and a solo for the strips that follow it (`set <ch>.vca=<vca>`), their gain its dB added; no sound of its own: no output, rack, clips or sends (R-MIX-19). | R-MIX-1 |
-| `strip delete <ch> [--with-clips]` | Delete a strip and its rack. Refused while clips play through it or strips route to it, unless --with-clips (its clips go too). | R-MIX-1 |
+| `strip delete <ch> [--with-clips]` | Delete a strip and its rack. Refused while clips (or slots of the session grid) play through it or strips route to it, unless --with-clips (its clips and slots go too). | R-MIX-1 |
 | `strip move <ch> [--mixer <mx>] [--order <n>]` | Move a strip to another mixer (at its end) and/or to position --order <n> on it (0 = first); its mixer's strips renumber in their new order, as `mixer move` renumbers mixers. Refused if a route would point backward. | R-MIX-3 |
 | `strip freeze <ch>` | Render a strip's OWN sound — its clips or notes through its instrument and rack, at unity, before its fader, to the song's end and its tail — beside the song (Frozen/<strip> <id>.wav, 32-bit float) and play that instead: its clips, notes and devices kept but idle; its fader, pan, sends and output as ever. Only a strip nothing feeds; the song saved (R-PERF-3). | R-PERF-3 |
 | `strip unfreeze <ch>` | Play a frozen strip's own work again (the file stays) (R-PERF-3). | R-PERF-3 |
@@ -86,6 +86,11 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `project collect [--dry-run] [--save]` | Copy every file the song names from outside its folder into <folder>/Samples/ — an .sfz with its sounds into Samples/<its name>/, their layout kept; never over a different file (" 2", " 3"…), the same bytes reused — and point every reference at the copy, in main and every version, as ONE edit (one undo; the copies stay). A missing file is named and left. --dry-run says what it would do; --save saves after. | R-COLLECT-1 |
 | `project relink [<file>] [--to <file>] [--folder <dir>] [--dry-run]` | Point every reference to <file> at --to <file>, in main and every version, ONE edit; or with --folder, look for every MISSING file by its name under <dir> (the first by path order; several found, said) and relink each the same way. --dry-run says what it would do. | R-COLLECT-1 |
 | `clip relink <ac> <file> [--take <n>]` | Point one audio clip's file (or its --take n's) at another — an edit of the song as open (on a version, that version's change). | R-COLLECT-1 |
+| `scene add [<name>] [--at <index>]` | A row of the session grid (R-LAUNCH-1): slots launched together. --at places it (0 the top). Prints its id. | R-LAUNCH-1 |
+| `scene delete <sc>` | Delete a scene and the slots in it. | R-LAUNCH-1 |
+| `scene move <sc> --to <index>` | Move a scene to row --to (the others renumbered). | R-LAUNCH-1 |
+| `slot add <sc> <strip> [--pattern <pt>] [--clip <ac>] [--src <file>] [--length <beats>]` | A cell of the grid: what <strip> plays when it is launched in scene <sc> — a pattern (an instrument strip's, shared as a clip's is), a file (an audio strip's), or --clip <ac>: that clip's pattern or file and length. --length: beats a loop lasts (default the pattern's, or the file span's). One a cell. Prints its id. | R-LAUNCH-1 |
+| `slot delete <sl>` | Delete a slot. | R-LAUNCH-1 |
 | `preset save <dv> <name> [--replace]` | Save a device's set values (and a sampler's sound) as a preset of its type in your presets folder (R-PRESET-1) — a name you have is refused without --replace. The machine's, not the song's: no undo. | R-PRESET-1 |
 | `preset load <dv> <name>` | Set a device to a preset of its type — every value back to its default, then the preset's, ONE edit; yours of a name before the factory's (R-PRESET-1). `device add --preset` and `clip add --instrument --preset` drop one in. | R-PRESET-1 |
 | `preset list [type]` | The presets, yours and the factory's, by type (R-PRESET-1). | R-PRESET-1 |
@@ -161,6 +166,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | address | value |
 |---|---|
 | `project.name` · `project.bpm` · `project.sig` · `project.masterGain` · `project.sampleRate` | text · 20…999 · n/d · dB · Hz |
+| `project.launchQuantize` · `<scene>.name` · `<slot>.name` · `.length` · `.gain` (R-LAUNCH-1) | bar / beat / none — where a launch lands · text · text · beats a loop lasts (0: the pattern's or the file's) · dB |
 | `<strip>.name` · `.gain` · `.pan` · `.mute` · `.solo` · `.colour` | text · dB (−120…12) · −1…1 · bool · bool · −1…15 |
 | `<strip>.phase` · `.width` · `.soloSafe` (R-MIX-20) | on/off (its polarity, after its rack) · % 0 … 200 (0 one channel, 200 the side doubled) · bool, a bus's only (a solo never silences it) |
 | `<strip>.vca` (R-MIX-19) | the VCA it follows — a strip of kind vca, by id or name — or `none`; a VCA's own gain adds to its members', its mute and solo are theirs; a VCA has no `.pan` and follows no VCA |
@@ -438,6 +444,20 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `missing` | object[] | R-COLLECT-1: each file the song names (main or any version) that cannot be read — `project relink` finds it |
 | `missing[].path` | string | as the song names it (relative to its folder, or absolute) |
 | `missing[].users` | string[] | what names it — ids; a version's prefixed `vr_n:` |
+| `scenes` | object[] | R-LAUNCH-1: the session grid's rows, by order |
+| `scenes[].id` | string | sc_n |
+| `scenes[].name` | string |  |
+| `scenes[].order` | int | its row, 0 the top |
+| `slots` | object[] | R-LAUNCH-1: the grid's cells — what a strip plays when launched in a scene |
+| `slots[].id` | string | sl_n |
+| `slots[].name` | string | "" = its pattern's or file's |
+| `slots[].scene` | string | its row |
+| `slots[].strip` | string | its column: an instrument strip (a pattern) or an audio strip (a file) |
+| `slots[].pattern` | string | pt_n, or "" |
+| `slots[].src` | string | a file as the song names it, or "" |
+| `slots[].length` | number | beats a loop lasts — the pattern's, or the file span's, when not set |
+| `slots[].gain` | number | dB |
+| `launchQuantize` | string | R-LAUNCH-1: where a launch, a stop or a return lands — bar, beat or none |
 | `clips` | object[] | every clip |
 | `clips[].id` | string |  |
 | `clips[].name` | string |  |

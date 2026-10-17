@@ -627,7 +627,9 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       Part 2: File › Collect and Save (one line), File › Relink… (asks first, then the window: Locate…, Search a
       Folder…, rows keyed and eased), a toast on open; shots relink-window, relink-found-mid. N38 DONE.
 - [~] **N39** A clip launcher (R-LAUNCH-1). Round 17 (the design): scenes × strips, slots as their own nodes; launching
-      live (quantized, the same graph, messages); recording lands the spans and cuts the arrangement under them. Next: part 1.
+      live (quantized, the same graph, messages); recording lands the spans and cuts the arrangement under them. Part 1:
+      the grid — `#ascene`/`#aslot`, `launchQuantize`, `scene add|delete|move`, `slot add|delete`, the fields. Next: part 2
+      — launching, heard.
 - [ ] **N40** A video lane (R-VIDEO-1).
 - [ ] **N41** Sharing through a folder: merge by node (R-COLLAB-1).
 - [ ] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1).

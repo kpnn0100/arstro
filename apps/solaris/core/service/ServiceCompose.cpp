@@ -628,6 +628,8 @@ namespace solaris
             std::string users;
             for (const auto &cl : p.clips)
                 if (cl.pattern == pt->id) users += (users.empty() ? "" : ", ") + cl.id;
+            for (const auto &sl : p.slots) // R-LAUNCH-1: a slot plays it too
+                if (sl.pattern == pt->id) users += (users.empty() ? "" : ", ") + sl.id;
             if (!users.empty()) { err = pt->id + " is played by " + users + " — delete those clips (or `clip unique` them) first"; return false; }
             const std::string id = pt->id;
             p.patterns.erase(std::remove_if(p.patterns.begin(), p.patterns.end(), [&](const Pattern &x) { return x.id == id; }), p.patterns.end());

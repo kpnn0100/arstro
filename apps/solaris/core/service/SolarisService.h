@@ -148,6 +148,7 @@ namespace solaris
         std::vector<FileRef> fileRefs() const;
         bool rewriteFiles(const std::map<std::string, std::string> &to, std::string &err); // the whole document, read back
         bool filesCommand(const Command &c, std::string &err);
+        bool sessionCommand(const Command &c, std::string &err); // R-LAUNCH-1 (ServiceSession.cpp): scenes, slots, launching
         // R-PRESET-1 (ServicePresets.cpp): the presets of each device type, the user's and the factory's
         bool presetCommand(const Command &c, std::string &err);
         bool applyPreset(const std::string &dv, const std::string &name, std::string &err);

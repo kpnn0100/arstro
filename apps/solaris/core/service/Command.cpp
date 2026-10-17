@@ -78,8 +78,8 @@ namespace solaris
              "VCA — a fader, a mute and a solo for the strips that follow it (`set <ch>.vca=<vca>`), their gain its dB "
              "added; no sound of its own: no output, rack, clips or sends (R-MIX-19).", "R-MIX-1"},
             {K::StripDelete, "strip delete", "<ch>", 1, 1, {"with-clips"},
-             "Delete a strip and its rack. Refused while clips play through it or strips route to it, unless "
-             "--with-clips (its clips go too).", "R-MIX-1"},
+             "Delete a strip and its rack. Refused while clips (or slots of the session grid) play through it or strips "
+             "route to it, unless --with-clips (its clips and slots go too).", "R-MIX-1"},
             {K::StripMove, "strip move", "<ch>", 1, 1, {"mixer=<mx>", "order=<n>"},
              "Move a strip to another mixer (at its end) and/or to position --order <n> on it (0 = first); its mixer's "
              "strips renumber in their new order, as `mixer move` renumbers mixers. Refused if a route would point backward.", "R-MIX-3"},
@@ -284,6 +284,15 @@ namespace solaris
             {K::ClipRelink, "clip relink", "<ac> <file>", 2, 2, {"take=<n>"},
              "Point one audio clip's file (or its --take n's) at another — an edit of the song as open (on a version, "
              "that version's change).", "R-COLLECT-1"},
+            {K::SceneAdd, "scene add", "[<name>]", 0, 1, {"at=<index>"},
+             "A row of the session grid (R-LAUNCH-1): slots launched together. --at places it (0 the top). Prints its id.", "R-LAUNCH-1"},
+            {K::SceneDelete, "scene delete", "<sc>", 1, 1, {}, "Delete a scene and the slots in it.", "R-LAUNCH-1"},
+            {K::SceneMove, "scene move", "<sc>", 1, 1, {"to=<index>"}, "Move a scene to row --to (the others renumbered).", "R-LAUNCH-1", false, {"to"}},
+            {K::SlotAdd, "slot add", "<sc> <strip>", 2, 2, {"pattern=<pt>", "clip=<ac>", "src=<file>", "length=<beats>"},
+             "A cell of the grid: what <strip> plays when it is launched in scene <sc> — a pattern (an instrument strip's, "
+             "shared as a clip's is), a file (an audio strip's), or --clip <ac>: that clip's pattern or file and length. "
+             "--length: beats a loop lasts (default the pattern's, or the file span's). One a cell. Prints its id.", "R-LAUNCH-1"},
+            {K::SlotDelete, "slot delete", "<sl>", 1, 1, {}, "Delete a slot.", "R-LAUNCH-1"},
             {K::PresetSave, "preset save", "<dv> <name>", 2, 2, {"replace"},
              "Save a device's set values (and a sampler's sound) as a preset of its type in your presets folder "
              "(R-PRESET-1) — a name you have is refused without --replace. The machine's, not the song's: no undo.", "R-PRESET-1"},

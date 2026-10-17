@@ -267,10 +267,13 @@ namespace solaris
             for (const auto &sd : p.sends)
                 if (sd.to == id) { err = sd.id + " sends to " + id + " — delete it first"; return false; }
             const bool withClips = c.has("with-clips");
-            int clips = 0;
+            int clips = 0, slots = 0;
             for (const auto &cl : p.clips) clips += cl.track == id ? 1 : 0;
+            for (const auto &sl : p.slots) slots += sl.strip == id ? 1 : 0; // R-LAUNCH-1: its cells in the grid count as its clips
             if (clips && !withClips) { err = std::to_string(clips) + " clip(s) play through " + id + " — move them, or add --with-clips"; return false; }
+            if (slots && !withClips) { err = std::to_string(slots) + " slot(s) of the session grid play through " + id + " — add --with-clips"; return false; }
             p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [&](const Clip &x) { return x.track == id; }), p.clips.end());
+            p.slots.erase(std::remove_if(p.slots.begin(), p.slots.end(), [&](const Slot &x) { return x.strip == id; }), p.slots.end()); // R-LAUNCH-1: its cells
             {
                 // its formulas go with it: the strip's, its sends', its devices' (R-AUTO-1)
                 std::set<std::string> nodes = {id};

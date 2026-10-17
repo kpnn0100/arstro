@@ -155,7 +155,7 @@
       "flags": [
         "with-clips"
       ],
-      "summary": "Delete a strip and its rack. Refused while clips play through it or strips route to it, unless --with-clips (its clips go too).",
+      "summary": "Delete a strip and its rack. Refused while clips (or slots of the session grid) play through it or strips route to it, unless --with-clips (its clips and slots go too).",
       "requirement": "R-MIX-1"
     },
     {
@@ -795,6 +795,55 @@
       ],
       "summary": "Point one audio clip's file (or its --take n's) at another — an edit of the song as open (on a version, that version's change).",
       "requirement": "R-COLLECT-1"
+    },
+    {
+      "verb": "scene add",
+      "usage": "scene add [<name>] [--at <index>]",
+      "args": "[<name>]",
+      "flags": [
+        "at=<index>"
+      ],
+      "summary": "A row of the session grid (R-LAUNCH-1): slots launched together. --at places it (0 the top). Prints its id.",
+      "requirement": "R-LAUNCH-1"
+    },
+    {
+      "verb": "scene delete",
+      "usage": "scene delete <sc>",
+      "args": "<sc>",
+      "flags": [],
+      "summary": "Delete a scene and the slots in it.",
+      "requirement": "R-LAUNCH-1"
+    },
+    {
+      "verb": "scene move",
+      "usage": "scene move <sc> --to <index>",
+      "args": "<sc>",
+      "flags": [
+        "to=<index>"
+      ],
+      "summary": "Move a scene to row --to (the others renumbered).",
+      "requirement": "R-LAUNCH-1"
+    },
+    {
+      "verb": "slot add",
+      "usage": "slot add <sc> <strip> [--pattern <pt>] [--clip <ac>] [--src <file>] [--length <beats>]",
+      "args": "<sc> <strip>",
+      "flags": [
+        "pattern=<pt>",
+        "clip=<ac>",
+        "src=<file>",
+        "length=<beats>"
+      ],
+      "summary": "A cell of the grid: what <strip> plays when it is launched in scene <sc> — a pattern (an instrument strip's, shared as a clip's is), a file (an audio strip's), or --clip <ac>: that clip's pattern or file and length. --length: beats a loop lasts (default the pattern's, or the file span's). One a cell. Prints its id.",
+      "requirement": "R-LAUNCH-1"
+    },
+    {
+      "verb": "slot delete",
+      "usage": "slot delete <sl>",
+      "args": "<sl>",
+      "flags": [],
+      "summary": "Delete a slot.",
+      "requirement": "R-LAUNCH-1"
     },
     {
       "verb": "preset save",
@@ -2479,6 +2528,90 @@
       "path": "missing[].users",
       "type": "string[]",
       "summary": "what names it — ids; a version's prefixed `vr_n:`",
+      "stable": true
+    },
+    {
+      "path": "scenes",
+      "type": "object[]",
+      "summary": "R-LAUNCH-1: the session grid's rows, by order",
+      "stable": true
+    },
+    {
+      "path": "scenes[].id",
+      "type": "string",
+      "summary": "sc_n",
+      "stable": true
+    },
+    {
+      "path": "scenes[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "scenes[].order",
+      "type": "int",
+      "summary": "its row, 0 the top",
+      "stable": true
+    },
+    {
+      "path": "slots",
+      "type": "object[]",
+      "summary": "R-LAUNCH-1: the grid's cells — what a strip plays when launched in a scene",
+      "stable": true
+    },
+    {
+      "path": "slots[].id",
+      "type": "string",
+      "summary": "sl_n",
+      "stable": true
+    },
+    {
+      "path": "slots[].name",
+      "type": "string",
+      "summary": "\"\" = its pattern's or file's",
+      "stable": true
+    },
+    {
+      "path": "slots[].scene",
+      "type": "string",
+      "summary": "its row",
+      "stable": true
+    },
+    {
+      "path": "slots[].strip",
+      "type": "string",
+      "summary": "its column: an instrument strip (a pattern) or an audio strip (a file)",
+      "stable": true
+    },
+    {
+      "path": "slots[].pattern",
+      "type": "string",
+      "summary": "pt_n, or \"\"",
+      "stable": true
+    },
+    {
+      "path": "slots[].src",
+      "type": "string",
+      "summary": "a file as the song names it, or \"\"",
+      "stable": true
+    },
+    {
+      "path": "slots[].length",
+      "type": "number",
+      "summary": "beats a loop lasts — the pattern's, or the file span's, when not set",
+      "stable": true
+    },
+    {
+      "path": "slots[].gain",
+      "type": "number",
+      "summary": "dB",
+      "stable": true
+    },
+    {
+      "path": "launchQuantize",
+      "type": "string",
+      "summary": "R-LAUNCH-1: where a launch, a stop or a return lands — bar, beat or none",
       "stable": true
     },
     {
