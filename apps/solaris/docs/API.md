@@ -91,6 +91,9 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `scene move <sc> --to <index>` | Move a scene to row --to (the others renumbered). | R-LAUNCH-1 |
 | `slot add <sc> <strip> [--pattern <pt>] [--clip <ac>] [--src <file>] [--length <beats>]` | A cell of the grid: what <strip> plays when it is launched in scene <sc> — a pattern (an instrument strip's, shared as a clip's is), a file (an audio strip's), or --clip <ac>: that clip's pattern or file and length. --length: beats a loop lasts (default the pattern's, or the file span's). One a cell. Prints its id. | R-LAUNCH-1 |
 | `slot delete <sl>` | Delete a slot. | R-LAUNCH-1 |
+| `launch <sl\|sc>` | Launch a slot — or every slot of a scene — on the next quantum (`project.launchQuantize`: a bar, a beat, or at once): its strip plays it, looped, instead of the arrangement, until another launch, a stop or `launch back`. Live, as the keyboard is: heard, never rendered, until recorded. Stopped, the transport starts and it plays at once. A strip with no slot in the scene keeps what it plays. Not an edit. | R-LAUNCH-1 |
+| `launch stop <strip\|all>` | On the next quantum the strip (or every strip in the session) plays nothing — the session's, silent. | R-LAUNCH-1 |
+| `launch back [<strip>]` | On the next quantum the strip (or every strip in the session) follows the arrangement again. | R-LAUNCH-1 |
 | `preset save <dv> <name> [--replace]` | Save a device's set values (and a sampler's sound) as a preset of its type in your presets folder (R-PRESET-1) — a name you have is refused without --replace. The machine's, not the song's: no undo. | R-PRESET-1 |
 | `preset load <dv> <name>` | Set a device to a preset of its type — every value back to its default, then the preset's, ONE edit; yours of a name before the factory's (R-PRESET-1). `device add --preset` and `clip add --instrument --preset` drop one in. | R-PRESET-1 |
 | `preset list [type]` | The presets, yours and the factory's, by type (R-PRESET-1). | R-PRESET-1 |
@@ -441,6 +444,13 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `versions[].dangling` | number | changes whose node its base no longer has — ignored until `version rebase` prunes them |
 | `versions[].problem` | string | why it does not stand as a song (its base broke it); "" when it does |
 | `version` | string | R-VER: the open version's id, or `main` — the song on screen and heard is its resolution |
+| `transport.launched` | object[] | R-LAUNCH-1: the strips the session plays (or will) — live, never in a render |
+| `transport.launched[].strip` | string | ch_n |
+| `transport.launched[].session` | bool | its launch has landed: it plays `slot`, not the arrangement |
+| `transport.launched[].slot` | string | the slot playing, "" none (stopped: silent) |
+| `transport.launched[].next` | string | what lands on `at`: a slot's id, `stop`, `back` — "" nothing |
+| `transport.launched[].at` | number | beats |
+| `transport.launched[].progress` | number | 0 … 1 through the playing slot's loop |
 | `missing` | object[] | R-COLLECT-1: each file the song names (main or any version) that cannot be read — `project relink` finds it |
 | `missing[].path` | string | as the song names it (relative to its folder, or absolute) |
 | `missing[].users` | string[] | what names it — ids; a version's prefixed `vr_n:` |

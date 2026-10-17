@@ -5509,6 +5509,104 @@ static void test_the_session_grid()
     pass("the session grid (R-LAUNCH-1): scenes and slots made, named, placed, moved, deleted as ONE edit each; a slot of a pattern, a clip, a file, its loop resolved; refusals by name; a strip's slots go with it; a played pattern held; launchQuantize; a version's own slot");
 }
 
+static void test_launching_is_heard()
+{
+    // R-LAUNCH-1 (Round 17, part 2): a launch lands on the next bar the engine has not rendered — the strip plays its
+    // slot, looped, instead of the arrangement; a stop silences it, `launch back` returns it; a scene launches its
+    // slots; launched while stopped, the transport starts and it plays at once; the model says what lands and when, and
+    // how far through its loop it is; not an edit; never in a render; an engine swap carries it on
+    Run r;
+    const std::string dir = scratch();
+    r.ok("project new " + freshSong("launch") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 32");                // ch_2, pt_1: the arrangement plays A2 each beat
+    r.ok("set pt_1.length=1");
+    r.ok("notes add pt_1 \"A2@0:0.5\"");                                   // (a note held across a return is not restarted, as after a seek)
+    r.ok("set dv_1.amp.release=10");                                       // a short release: a switch is sharp to measure
+    r.ok("pattern new --name Lead --length 1");                            // pt_2: the slot plays F#5
+    r.ok("notes add pt_2 \"F#5@0:0.5\"");
+    r.ok("scene add Verse");
+    r.ok("slot add sc_1 ch_2 --pattern pt_2");                             // sl_1
+    r.ok("project save");
+    auto tone = [&](size_t from, double hz) { // the speakers' left channel, 0.2 s from frame `from`
+        const auto &sink = r.fake.capture->sink;
+        double re = 0, im = 0;
+        for (size_t i = 0; i < 9600; ++i)
+        {
+            const double a = 2 * M_PI * hz * (double)i / 48000.0, x = sink[2 * (from + i)];
+            re += x * std::cos(a);
+            im += x * std::sin(a);
+        }
+        return std::sqrt(re * re + im * im) / 4800.0;
+    };
+    r.fake.capture->frames = 0;
+    r.ok("transport play --from 0");
+    waitFrames(r, 24000);
+    assert(r.ok("launch sl_1") == "launched on beat 4.0\n");            // the next bar after what is rendered
+    const auto &tr = r.svc.model().transport;
+    assert(tr.launched.size() == 1 && tr.launched[0].strip == "ch_2" && !tr.launched[0].session && tr.launched[0].next == "sl_1" &&
+           tr.launched[0].at == 4.0);
+    waitFrames(r, 96000 + 48000 + 9600);                                    // past beat 4 (sample 96000), and heard
+    r.ok("wait 0.05");
+    assert(tr.launched[0].session && tr.launched[0].slot == "sl_1" && tr.launched[0].next.empty());
+    assert(tr.launched[0].progress >= 0.0 && tr.launched[0].progress < 1.0);
+    const double armBefore = tone(48000, 110.0), slotBefore = tone(48000, 740.0), armAfter = tone(96000 + 2400, 110.0),
+                 slotAfter = tone(96000 + 2400, 740.0);
+    std::printf("    before the bar: A2 %.3f, F#5 %.3f; after: A2 %.3f, F#5 %.3f\n", armBefore, slotBefore, armAfter, slotAfter);
+    assert(armBefore > 0.02 && slotBefore < 0.005 && slotAfter > 0.02 && armAfter < 0.005);
+    assert(!r.svc.model().dirty);                                           // live: not an edit
+    // an edit that rebuilds the engine: the slot plays on through the swap
+    const int swaps = tr.swaps;
+    r.ok("device add ch_2 --type reverb");
+    const size_t beatAfter = (size_t)(r.fake.capture->frames.load() / 24000 + 2) * 24000; // a beat's start, after the swap
+    waitFrames(r, (long long)beatAfter + 24000);
+    r.ok("wait 0.05");
+    std::printf("    swaps %d → %d, launched %s, F#5 after the swap %.3f\n", swaps, tr.swaps, tr.launched.empty() ? "-" : tr.launched[0].slot.c_str(),
+                tone(beatAfter + 1200, 740.0));
+    assert(tr.swaps > swaps && tr.launched[0].slot == "sl_1" && tone(beatAfter + 1200, 740.0) > 0.02); // its note on each beat, still
+    // a stop: silent from its bar; back: the arrangement from its bar
+    const std::string stop = r.ok("launch stop ch_2");
+    double stopBeat = 0;
+    std::sscanf(stop.c_str(), "stopping on beat %lf", &stopBeat);
+    assert(stopBeat > 4.0 && std::fmod(stopBeat, 4.0) == 0.0);
+    const size_t stopAt = (size_t)(stopBeat * 24000);
+    waitFrames(r, (long long)stopAt + 24000);
+    r.ok("wait 0.05");
+    assert(tr.launched[0].session && tr.launched[0].slot.empty());
+    std::printf("    stopped: F#5 %.4f, A2 %.4f\n", tone(stopAt + 4800, 740.0), tone(stopAt + 4800, 110.0));
+    assert(tone(stopAt + 4800, 740.0) < 0.005 && tone(stopAt + 4800, 110.0) < 0.005);
+    const std::string back = r.ok("launch back");
+    double backBeat = 0;
+    std::sscanf(back.c_str(), "back to the arrangement on beat %lf", &backBeat);
+    const size_t backAt = (size_t)(backBeat * 24000);
+    waitFrames(r, (long long)backAt + 24000);
+    r.ok("wait 0.05");
+    assert(tr.launched.empty() && tone(backAt + 2400, 110.0) > 0.02);
+    // a render is the arrangement: the launch was live
+    const std::string out = dir + "/launch-render.wav";
+    r.ok("render --out " + out + " --from 4 --to 5 --bits 32f");
+    r.ok("transport stop");
+    assert(r.svc.model().transport.launched.empty()); // a stop ends the session
+    {
+        const auto &L = r.fake.written[out][0];
+        double re = 0, im = 0;
+        for (size_t i = 0; i < 9600; ++i)
+        {
+            const double a = 2 * M_PI * 740.0 * (double)i / 48000.0;
+            re += L[i + 2400] * std::cos(a);
+            im += L[i + 2400] * std::sin(a);
+        }
+        assert(std::sqrt(re * re + im * im) / 4800.0 < 0.005);
+    }
+    // a scene, launched while stopped: the transport starts and it plays at once
+    r.ok("transport seek 8");
+    assert(r.ok("launch sc_1") == "launched on beat 8.0\n" && r.svc.model().transport.playing);
+    assert(r.svc.model().transport.launched.size() == 1);
+    r.ok("transport stop");
+    assert(r.svc.model().transport.launched.empty()); // a stop ends the session: the next play is the arrangement
+    assert(contains(r.no("launch stop all"), "nothing is playing") && contains(r.no("launch sl_9"), "no slot or scene sl_9"));
+    pass("launching is heard (R-LAUNCH-1): on the next bar the engine has not rendered the strip plays its slot, not the arrangement; through an engine swap; a stop silences it, back returns it, each on its bar; the model says what lands and when; not an edit; never in a render; a scene launched while stopped starts the transport");
+}
+
 static void test_per_strip_tools_live()
 {
     // R-MIX-20 (Round 14, part 2): while playing, a strip's width and phase move with no engine rebuilt — the width
@@ -6941,6 +7039,7 @@ int main()
     test_versions_of_a_song();
     test_collect_and_relink();
     test_the_session_grid();
+    test_launching_is_heard();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

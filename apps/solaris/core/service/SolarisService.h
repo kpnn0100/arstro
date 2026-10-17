@@ -149,6 +149,21 @@ namespace solaris
         bool rewriteFiles(const std::map<std::string, std::string> &to, std::string &err); // the whole document, read back
         bool filesCommand(const Command &c, std::string &err);
         bool sessionCommand(const Command &c, std::string &err); // R-LAUNCH-1 (ServiceSession.cpp): scenes, slots, launching
+        // R-LAUNCH-1: what each strip in the session plays (by strip id) — and what will land, and when
+        struct Launch
+        {
+            bool session = false;      // landed: the strip is the session's — playing `slot`, or ("") silent
+            std::string slot;
+            double start = 0;          // the beat `slot` began
+            int pend = 0;              // 0 nothing · 1 a launch or a stop (`pendSlot`, "" stops) · 2 back to the arrangement
+            std::string pendSlot;
+            double at = 0;             // the beat it lands on
+        };
+        std::map<std::string, Launch> mLaunch;
+        double slotBeats(const Slot &sl) const;          // a loop's length in beats (its pattern's, its file's)
+        void advanceLaunches(double heard);              // what was due by the beat heard has landed
+        double launchBeat();                             // the next quantum the engine has not rendered
+        std::vector<LaunchModel> launchedModel(double heard) const; // what `transport.launched` says, at the beat heard
         // R-PRESET-1 (ServicePresets.cpp): the presets of each device type, the user's and the factory's
         bool presetCommand(const Command &c, std::string &err);
         bool applyPreset(const std::string &dv, const std::string &name, std::string &err);

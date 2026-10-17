@@ -846,6 +846,30 @@
       "requirement": "R-LAUNCH-1"
     },
     {
+      "verb": "launch",
+      "usage": "launch <sl|sc>",
+      "args": "<sl|sc>",
+      "flags": [],
+      "summary": "Launch a slot — or every slot of a scene — on the next quantum (`project.launchQuantize`: a bar, a beat, or at once): its strip plays it, looped, instead of the arrangement, until another launch, a stop or `launch back`. Live, as the keyboard is: heard, never rendered, until recorded. Stopped, the transport starts and it plays at once. A strip with no slot in the scene keeps what it plays. Not an edit.",
+      "requirement": "R-LAUNCH-1"
+    },
+    {
+      "verb": "launch stop",
+      "usage": "launch stop <strip|all>",
+      "args": "<strip|all>",
+      "flags": [],
+      "summary": "On the next quantum the strip (or every strip in the session) plays nothing — the session's, silent.",
+      "requirement": "R-LAUNCH-1"
+    },
+    {
+      "verb": "launch back",
+      "usage": "launch back [<strip>]",
+      "args": "[<strip>]",
+      "flags": [],
+      "summary": "On the next quantum the strip (or every strip in the session) follows the arrangement again.",
+      "requirement": "R-LAUNCH-1"
+    },
+    {
       "verb": "preset save",
       "usage": "preset save <dv> <name> [--replace]",
       "args": "<dv> <name>",
@@ -2510,6 +2534,48 @@
       "path": "version",
       "type": "string",
       "summary": "R-VER: the open version's id, or `main` — the song on screen and heard is its resolution",
+      "stable": true
+    },
+    {
+      "path": "transport.launched",
+      "type": "object[]",
+      "summary": "R-LAUNCH-1: the strips the session plays (or will) — live, never in a render",
+      "stable": true
+    },
+    {
+      "path": "transport.launched[].strip",
+      "type": "string",
+      "summary": "ch_n",
+      "stable": true
+    },
+    {
+      "path": "transport.launched[].session",
+      "type": "bool",
+      "summary": "its launch has landed: it plays `slot`, not the arrangement",
+      "stable": true
+    },
+    {
+      "path": "transport.launched[].slot",
+      "type": "string",
+      "summary": "the slot playing, \"\" none (stopped: silent)",
+      "stable": true
+    },
+    {
+      "path": "transport.launched[].next",
+      "type": "string",
+      "summary": "what lands on `at`: a slot's id, `stop`, `back` — \"\" nothing",
+      "stable": true
+    },
+    {
+      "path": "transport.launched[].at",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "transport.launched[].progress",
+      "type": "number",
+      "summary": "0 … 1 through the playing slot's loop",
       "stable": true
     },
     {

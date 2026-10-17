@@ -52,7 +52,8 @@ namespace solaris
     public:
         struct Live
         {
-            enum Kind { StripGain, StripPan, StripSilent, MasterGain, DeviceParam, DeviceBypass, Seek, Swap, ClearMeters, StripWidth, StripInvert } kind = Seek;
+            enum Kind { StripGain, StripPan, StripSilent, MasterGain, DeviceParam, DeviceBypass, Seek, Swap, ClearMeters, StripWidth, StripInvert,
+                        Launch, LaunchBack } kind = Seek; // Launch: `name` the slot's id ("" stops), `sample` where, `value` its phase
             int strip = 0, device = 0;         // strip −1 = the master's rack
             double value = 0;
             char name[48] = {0};               // a device parameter's registry name

@@ -91,6 +91,19 @@ namespace engine
         double value = 0;
     };
 
+    /** R-LAUNCH-1: a slot of the session grid — what a strip plays once launched, looped every `length` samples: its
+     *  notes from the slot's own start (an instrument strip's; offs before ons, none past `length`) or a file's span (an
+     *  audio strip's). */
+    struct SlotPlay
+    {
+        std::string id;
+        long long length = 0;               // samples a loop lasts
+        std::vector<NoteEvent> notes;       // from the slot's start, within [0, length]
+        std::shared_ptr<const Pcm> pcm;     // an audio slot's file (null: offline — silent)
+        long long srcOffset = 0, srcFrames = 0;
+        double gain = 1.0;                  // linear — an audio slot's level
+    };
+
     struct Send
     {
         Target to;
@@ -113,6 +126,7 @@ namespace engine
         std::vector<Region> regions;      // audio strips
         std::vector<NoteEvent> notes;     // instrument strips; sorted by `at`, offs before ons
         std::vector<ControlEvent> controls; // R-MIDI-3: the wheels, sorted by `at` (a ramp a step every kControl samples)
+        std::vector<SlotPlay> slots;      // R-LAUNCH-1: its cells of the session grid — heard only once launched
         Target out;
         std::vector<Send> sends;
     };

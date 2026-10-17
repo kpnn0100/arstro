@@ -50,6 +50,7 @@ namespace solaris
         if (mPlayer->running() && mOpen)
             mPosition = beatOfSample((double)mPlayer->heard()); // R-TEMPO-1: through the map
         mPlayer.reset();
+        mLaunch.clear(); // R-LAUNCH-1: a stop ends the session — the next play is the arrangement
         mCpuHeld = 0; // R-PERF-1: the next play's worst block is its own (a stop resets the transport's model itself)
         mLiveStrips.clear();
         mLiveDevices.clear();
@@ -171,6 +172,8 @@ namespace solaris
         t.playing = mPlayer->running();
         t.position = beatOfSample((double)mPlayer->heard()); // R-TEMPO-1: through the map
         tempoAt(t.position, t.tempo, t.tempoId);
+        advanceLaunches(t.position); // R-LAUNCH-1: what was due by now has landed
+        t.launched = launchedModel(t.position);
         t.latencyMs = std::round(mPlayer->latency() * 10000.0) / 10.0;
         t.swaps = mLiveGen - mPlayGen;
         // R-METER-2: while a `meters clear` is on its way to the audio thread, its holds, latches and loudness are
@@ -673,6 +676,8 @@ namespace solaris
                 m.kind = Player::Live::Seek;
                 m.sample = (long long)std::llround(sampleOfBeat(mPosition));
                 mPlayer->send(m);
+                for (auto &kv : mLaunch) // R-LAUNCH-1: a change waiting lands at once after a jump (the engine lands it)
+                    if (kv.second.pend) kv.second.at = mPosition;
             }
             announce();
             return true;

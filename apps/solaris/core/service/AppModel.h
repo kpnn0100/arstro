@@ -408,6 +408,17 @@ namespace solaris
         std::string problem;                     // why it is silent ("" it plays)
     };
 
+    /** R-LAUNCH-1: a strip in the session — what it plays from the grid, and what will land next. */
+    struct LaunchModel
+    {
+        std::string strip;
+        bool session = false;                    // its launch has landed: it plays `slot` ("" nothing), not the arrangement
+        std::string slot;
+        std::string next;                        // what lands on `at`: a slot's id, "stop", "back" — "" nothing
+        double at = 0;                           // beats
+        double progress = 0;                     // 0 … 1 through the playing slot's loop
+    };
+
     struct TransportModel
     {
         bool playing = false;
@@ -426,6 +437,7 @@ namespace solaris
         bool masterClip = false;
         std::string driver;                      // R-DEV-9: what the clock device plays through now ("" stopped)
         bool mono = false;                       // R-MIX-20: the mono check — the speakers get mono (the listener's, never a render)
+        std::vector<LaunchModel> launched;       // R-LAUNCH-1: the strips in the session (or about to be), by strip id
         int swaps = 0;                           // engines built and swapped in since play — an edit the live path could not carry
         long long xruns = -1;                    // R-DEV-5: underruns since play; −1 = this driver cannot count them
         float cpu = 0, cpuPeak = 0;              // R-PERF-1: the audio thread's load (a block's work over its duration),

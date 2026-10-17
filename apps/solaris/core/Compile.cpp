@@ -520,6 +520,50 @@ namespace solaris
             std::stable_sort(es.notes.begin(), es.notes.end(), [](const engine::NoteEvent &a, const engine::NoteEvent &b) {
                 return a.at != b.at ? a.at < b.at : (!a.on && b.on);
             });
+            // R-LAUNCH-1: its cells of the session grid, heard only once launched — each a loop from its own start, at the
+            // song's first tempo (a slot does not follow a tempo map's changes yet); a pattern shorter than
+            // its slot repeats in it, a note cut at the slot's end; chance rolled per repetition, as a clip's
+            {
+                const double spb0 = 60.0 / p.header.bpm * p.header.sampleRate;
+                auto at0 = [&](double beats) { return (long long)std::llround(beats * spb0); };
+                for (const auto &sl : p.slots)
+                {
+                    if (sl.strip != s->id) continue;
+                    engine::SlotPlay sp;
+                    sp.id = sl.id;
+                    if (!sl.pattern.empty() && es.kind == engine::Strip::Instrument)
+                    {
+                        const Pattern *pt = p.pattern(sl.pattern);
+                        if (!pt || pt->length <= 0) continue;
+                        const double len = sl.length > 0 ? sl.length : pt->length;
+                        sp.length = at0(len);
+                        long long rep = 0;
+                        for (double k = 0; k < len; k += pt->length, ++rep)
+                            for (const auto &n : pt->notes)
+                            {
+                                const double on = k + n.at;
+                                if (on >= len || !noteSounds(n, sl.id, rep)) continue;
+                                sp.notes.push_back(engine::NoteEvent{at0(on), n.pitch, std::clamp(n.vel, 1, 127), true});
+                                sp.notes.push_back(engine::NoteEvent{at0(std::min(on + n.length, len)), n.pitch, 0, false});
+                            }
+                        std::stable_sort(sp.notes.begin(), sp.notes.end(), [](const engine::NoteEvent &a, const engine::NoteEvent &b) {
+                            return a.at != b.at ? a.at < b.at : (!a.on && b.on);
+                        });
+                    }
+                    else if (!sl.src.empty() && es.kind == engine::Strip::Audio)
+                    {
+                        sp.pcm = pcm ? pcm(sl.src) : nullptr;
+                        if (!sp.pcm) r.warnings.push_back("slot " + sl.id + ": " + sl.src + " is offline — silent");
+                        sp.srcOffset = (long long)std::llround(sl.in * p.header.sampleRate);
+                        sp.srcFrames = sl.out > sl.in ? (long long)std::llround((sl.out - sl.in) * p.header.sampleRate)
+                                                      : (sp.pcm ? std::max(0LL, sp.pcm->frames - sp.srcOffset) : 0);
+                        sp.length = sl.length > 0 ? at0(sl.length) : sp.srcFrames;
+                        sp.gain = engine::dbToLinear(sl.gain);
+                    }
+                    else continue;
+                    es.slots.push_back(sp);
+                }
+            }
             g.strips.push_back(es);
         }
         if (const Rack *mr = p.rack("master"))

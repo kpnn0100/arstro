@@ -169,6 +169,20 @@ namespace engine
         static constexpr int kMaxLiveInput = 8192; // frames a render may take of it
         /** R-MIDI-3: a wheel moved live — kind 0 the pitch bend (−1 … +1), 1 the mod wheel (0 … 1) — the same ring. */
         void liveControl(int strip, int kind, double value);
+        /** R-LAUNCH-1: from position `at`, strip `strip` plays its slot `slot` (graph index in `Strip::slots`), looped —
+         *  `phase` samples into its loop (a launch: 0) — instead of the arrangement; `slot` −1: nothing (stopped). What
+         *  sounds on the strip ends there. One pending change a strip: a later one replaces it; one at or before the
+         *  position lands at once. The thread that renders calls it; no allocation. */
+        void launch(int strip, int slot, long long at, long long phase = 0);
+        /** … from `at`, the strip follows the arrangement again. */
+        void launchBack(int strip, long long at);
+        /** … `launch` by the slot's id ("" stops) — what a message carries (no allocation: compared in place). */
+        void launchById(int strip, const char *slotId, long long at, long long phase = 0);
+        /** R-LAUNCH-1: the session as `old` plays it, carried into this engine at the same position (a swap — strips
+         *  and slots matched by id; what the new graph lacks is dropped). The thread that renders calls it. */
+        void adoptSession(const Engine &old);
+        /** … what strip `strip` plays now: −2 the arrangement, −1 nothing, else its slot (graph index). */
+        int launched(int strip) const;
         /** Every binding's value as last evaluated (R-AUTO-7), in the graph's bind order. */
         const std::vector<double> &bindValues() const { return mBindValues; }
         /** R-FX-17 (Round 12): every reading of every device that measures (its type's `readings`), after the last

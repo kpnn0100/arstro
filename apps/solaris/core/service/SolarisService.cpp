@@ -141,6 +141,7 @@ namespace solaris
             case K::PluginsScan: case K::PluginsList: case K::DeviceReload: case K::DeviceEditor: // R-VST-6: … and its plugins
             case K::MapAdd: case K::MapRemove: case K::MapList: case K::MapLearn:                 // R-CTRL-1: … and its MIDI mappings
             case K::VersionList: case K::VersionDiff: case K::ProjectFiles:                       // R-VER, R-COLLECT-1: reading back
+            case K::Launch: case K::LaunchStop: case K::LaunchBack:                               // R-LAUNCH-1: live, as the keyboard is
                 return false;
             default:
                 return true;
@@ -266,6 +267,7 @@ namespace solaris
             ok = filesCommand(c, err);
             break;
         case K::SceneAdd: case K::SceneDelete: case K::SceneMove: case K::SlotAdd: case K::SlotDelete:
+        case K::Launch: case K::LaunchStop: case K::LaunchBack:
             ok = sessionCommand(c, err);
             break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:

@@ -136,6 +136,13 @@ namespace solaris
             {"versions[].dangling", "number", "changes whose node its base no longer has — ignored until `version rebase` prunes them"},
             {"versions[].problem", "string", "why it does not stand as a song (its base broke it); \"\" when it does"},
             {"version", "string", "R-VER: the open version's id, or `main` — the song on screen and heard is its resolution"},
+            {"transport.launched", "object[]", "R-LAUNCH-1: the strips the session plays (or will) — live, never in a render"},
+            {"transport.launched[].strip", "string", "ch_n"},
+            {"transport.launched[].session", "bool", "its launch has landed: it plays `slot`, not the arrangement"},
+            {"transport.launched[].slot", "string", "the slot playing, \"\" none (stopped: silent)"},
+            {"transport.launched[].next", "string", "what lands on `at`: a slot's id, `stop`, `back` — \"\" nothing"},
+            {"transport.launched[].at", "number", "beats"},
+            {"transport.launched[].progress", "number", "0 … 1 through the playing slot's loop"},
             {"missing", "object[]", "R-COLLECT-1: each file the song names (main or any version) that cannot be read — `project relink` finds it"},
             {"missing[].path", "string", "as the song names it (relative to its folder, or absolute)"},
             {"missing[].users", "string[]", "what names it — ids; a version's prefixed `vr_n:`"},
@@ -803,6 +810,11 @@ namespace solaris
             .set("punchFrom", m.transport.punchFrom).set("punchTo", m.transport.punchTo);
         if (!stable) tr.set("latencyMs", m.transport.latencyMs);
         tr.set("device", m.transport.device).set("mono", m.transport.mono);
+        Json launched = Json::array(); // R-LAUNCH-1
+        for (const auto &x : m.transport.launched)
+            launched.push(Json::object().set("strip", x.strip).set("session", x.session).set("slot", x.slot).set("next", x.next).set("at", x.at)
+                              .set("progress", x.progress));
+        tr.set("launched", launched);
         if (!stable)
             tr.set("masterPeak", Json::array().push(Json::number(m.transport.masterPeak[0])).push(Json::number(m.transport.masterPeak[1])))
                 .set("masterRms", Json::array().push(Json::number(m.transport.masterRms[0])).push(Json::number(m.transport.masterRms[1])))

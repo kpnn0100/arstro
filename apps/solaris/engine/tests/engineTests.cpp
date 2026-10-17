@@ -839,6 +839,152 @@ static void test_the_strips_nothing_feeds_render_in_any_order()
     pass("the strips nothing feeds render in any order (R-PERF-2): reversed and interleaved, byte-identical to one thread over a second of two synths, two kits and a shared reverb; the fed ones (a bus, the reverb) never among them");
 }
 
+static void test_a_launch_lands_on_its_sample_and_loops()
+{
+    // R-LAUNCH-1 (Round 17, part 2): a launch, a stop and a return land on their samples; a slot loops from its own
+    // base and keeps its phase through a jump; an instrument's launch sounds exactly as the same notes placed in the
+    // arrangement would; a swap carries the session over; launching allocates nothing
+    auto audioGraph = [] {
+        MixGraph g = basic();
+        Region rg;
+        rg.pcm = constant(0.1f, 48000);
+        rg.start = 0;
+        rg.frames = 48000;
+        rg.srcFrames = 48000;
+        g.strips[0].regions = {rg};
+        SlotPlay sl;
+        sl.id = "sl_1";
+        sl.pcm = constant(0.5f, 300);
+        sl.srcFrames = 300;
+        sl.length = 1000;
+        g.strips[0].slots = {sl};
+        return g;
+    };
+    std::string err;
+    {
+        Engine e;
+        assert(e.build(audioGraph(), err));
+        PortBuffers out;
+        std::vector<float> L;
+        auto run = [&](int n) {
+            e.render(n, out);
+            L.insert(L.end(), out.ports[0][0].begin(), out.ports[0][0].end());
+        };
+        run(2000);
+        e.launch(0, 0, 2500);
+        assert(e.launched(0) == -2); // not yet: it lands on its sample
+        run(1100);                   // to 3100
+        e.launch(0, -1, 3600);       // stop
+        run(400);                    // to 3500
+        assert(e.launched(0) == 0);
+        run(400);                    // to 3900
+        assert(e.launched(0) == -1);
+        e.launchBack(0, 4000);
+        run(1000);                   // to 4900
+        assert(e.launched(0) == -2);
+        auto want = [](long long t) -> float {
+            if (t < 2500) return 0.1f;                        // the arrangement
+            if (t < 3600) return (t - 2500) % 1000 < 300 ? 0.5f : 0.0f; // the slot, looped: its file then silence
+            if (t < 4000) return 0.0f;                        // stopped: the session's, nothing
+            return 0.1f;                                      // back to the arrangement
+        };
+        for (long long t = 0; t < (long long)L.size(); ++t)
+            if (L[(size_t)t] != want(t)) { std::printf("    sample %lld: %g, wanted %g\n", t, L[(size_t)t], want(t)); assert(false); }
+    }
+    {
+        // its own phase: a jump back (a song loop) does not restart it
+        Engine e;
+        assert(e.build(audioGraph(), err));
+        PortBuffers out;
+        e.render(1000, out);
+        e.launch(0, 0, 1000);
+        e.render(650, out); // phase 650 at 1650
+        e.seek(0);
+        e.render(1000, out);
+        for (int k = 0; k < 1000; ++k)
+        {
+            const float w = (k + 650) % 1000 < 300 ? 0.5f : 0.0f;
+            assert(out.ports[0][0][(size_t)k] == w);
+        }
+    }
+    {
+        // a swap: the new engine plays on from where the old one is — phase and all
+        Engine a, b;
+        assert(a.build(audioGraph(), err) && b.build(audioGraph(), err));
+        PortBuffers oa, ob;
+        a.render(2000, oa);
+        a.launch(0, 0, 2500);
+        a.render(1200, oa); // 3200: phase 700
+        b.seek(3200);
+        b.adoptSession(a);
+        a.render(2000, oa);
+        b.render(2000, ob);
+        assert(oa.ports[0][0] == ob.ports[0][0] && b.launched(0) == 0);
+    }
+    {
+        // an instrument's launch: its notes from the launch, looped, the arrangement's after it unheard — exactly what
+        // the same notes placed in the arrangement play
+        auto synthGraph = [](bool launched) {
+            MixGraph g = basic();
+            g.strips[0].kind = Strip::Instrument;
+            g.strips[0].rack = {DeviceDesc{"dv_1", "synth", {{"amp.attack", 0.0}, {"amp.release", 1.0}}, false}};
+            g.strips[0].notes = {NoteEvent{0, 60, 100, true}, NoteEvent{500, 60, 0, false}};
+            // held across the launch: in the session it ends ON the launch's sample, as its own note-off would end it
+            g.strips[0].notes.push_back(NoteEvent{1500, 62, 100, true});
+            g.strips[0].notes.push_back(NoteEvent{launched ? 2600 : 2000, 62, 0, false});
+            g.strips[0].notes.push_back(NoteEvent{5000, 69, 100, true}); // after the return: heard
+            g.strips[0].notes.push_back(NoteEvent{5400, 69, 0, false});
+            if (launched)
+            {
+                g.strips[0].notes.push_back(NoteEvent{3000, 64, 100, true}); // in the session: unheard — not even at the return
+                g.strips[0].notes.push_back(NoteEvent{3800, 64, 0, false});
+                SlotPlay sl;
+                sl.id = "sl_1";
+                sl.length = 1000;
+                sl.notes = {NoteEvent{0, 67, 110, true}, NoteEvent{400, 67, 0, false}};
+                g.strips[0].slots = {sl};
+            }
+            else
+                for (long long k = 2000; k < 4500; k += 1000) // the slot's loops until the return at 4500
+                {
+                    g.strips[0].notes.push_back(NoteEvent{k, 67, 110, true});
+                    g.strips[0].notes.push_back(NoteEvent{k + 400, 67, 0, false});
+                }
+            // by time, offs before ons at one sample — as the compile gives them
+            std::stable_sort(g.strips[0].notes.begin(), g.strips[0].notes.end(),
+                             [](const NoteEvent &x, const NoteEvent &y) { return x.at != y.at ? x.at < y.at : (!x.on && y.on); });
+            return g;
+        };
+        Engine e1, e2;
+        assert(e1.build(synthGraph(true), err) && e2.build(synthGraph(false), err));
+        PortBuffers o1, o2;
+        std::vector<float> a, b;
+        e1.render(1500, o1);
+        a = o1.ports[0][0];
+        PortBuffers o1b;
+        e1.prepare(o1, 2500); // sized first, as the player does: a render then never allocates (R-PLAY-2)
+        e1.prepare(o1b, 2000);
+        e1.launch(0, 0, 2000);
+        gAllocs = 0;
+        gCounting = true;
+        e1.render(2500, o1); // launched, and returned, on the thread that renders: nothing allocated
+        e1.launchBack(0, 4500);
+        e1.render(2000, o1b);
+        gCounting = false;
+        assert(gAllocs.load() == 0);
+        a.insert(a.end(), o1.ports[0][0].begin(), o1.ports[0][0].end());
+        a.insert(a.end(), o1b.ports[0][0].begin(), o1b.ports[0][0].end());
+        e2.render(6000, o2);
+        b = o2.ports[0][0];
+        bool sounding = false;
+        for (size_t t = 2000; t < 2400; ++t) sounding = sounding || a[t] != 0.0f;
+        for (size_t t = 0; t < std::min(a.size(), b.size()); ++t)
+            if (a[t] != b[t]) { std::printf("    first difference at %zu: %g vs %g (sizes %zu, %zu)\n", t, a[t], b[t], a.size(), b.size()); break; }
+        assert(sounding && a == b);
+    }
+    pass("a launch lands on its sample (R-LAUNCH-1): the slot from 2500, looped every 1000 (its file, then silence); stopped at 3600; the arrangement again at 4000; its phase kept through a jump; a swap carries it; an instrument's launch and return sound exactly as their notes placed in the arrangement — a held note ended on the launch's sample, the session's arrangement notes never replayed; nothing allocated");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -851,6 +997,7 @@ int main()
     test_render_is_deterministic_however_it_is_chopped();
     test_meters_seek_capture_and_live_params();
     test_width_and_polarity_ramp_across_a_block();
+    test_a_launch_lands_on_its_sample_and_loops();
     test_live_render_allocates_nothing_and_takes_live_edits();
     test_bindings_drive_gain_and_parameters_at_control_rate();
     test_curves_are_interstellars_keyframes();

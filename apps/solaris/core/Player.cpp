@@ -261,6 +261,8 @@ namespace solaris
             else mEng->setDeviceParam(m.strip, m.device, m.name, m.value);
             break;
         case Live::Seek: mEng->seek(m.sample); break;
+        case Live::Launch: mEng->launchById(m.strip, m.name, m.sample, (long long)m.value); break; // R-LAUNCH-1
+        case Live::LaunchBack: mEng->launchBack(m.strip, m.sample); break;
         case Live::ClearMeters: mClearNow = true; break; // R-METER-2: done in `measure`, after this block renders
         case Live::Swap:
         {
@@ -268,6 +270,7 @@ namespace solaris
             m.engine->seek(mEng->position());
             engine::Engine *old = mEng;
             mEng = m.engine;
+            mEng->adoptSession(*old); // R-LAUNCH-1: what the session plays goes on, phase and all
             mGeneration = m.generation;
             mGraphLatency.store(mEng->outputLatency(), std::memory_order_relaxed);
             mEng->prepare(mPb, mBlock); // the port count may have changed: within capacity it does not allocate

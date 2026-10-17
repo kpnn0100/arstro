@@ -293,6 +293,15 @@ namespace solaris
              "shared as a clip's is), a file (an audio strip's), or --clip <ac>: that clip's pattern or file and length. "
              "--length: beats a loop lasts (default the pattern's, or the file span's). One a cell. Prints its id.", "R-LAUNCH-1"},
             {K::SlotDelete, "slot delete", "<sl>", 1, 1, {}, "Delete a slot.", "R-LAUNCH-1"},
+            {K::Launch, "launch", "<sl|sc>", 1, 1, {},
+             "Launch a slot — or every slot of a scene — on the next quantum (`project.launchQuantize`: a bar, a beat, or at "
+             "once): its strip plays it, looped, instead of the arrangement, until another launch, a stop or `launch back`. "
+             "Live, as the keyboard is: heard, never rendered, until recorded. Stopped, the transport starts and it plays at "
+             "once. A strip with no slot in the scene keeps what it plays. Not an edit.", "R-LAUNCH-1"},
+            {K::LaunchStop, "launch stop", "<strip|all>", 1, 1, {},
+             "On the next quantum the strip (or every strip in the session) plays nothing — the session's, silent.", "R-LAUNCH-1"},
+            {K::LaunchBack, "launch back", "[<strip>]", 0, 1, {},
+             "On the next quantum the strip (or every strip in the session) follows the arrangement again.", "R-LAUNCH-1"},
             {K::PresetSave, "preset save", "<dv> <name>", 2, 2, {"replace"},
              "Save a device's set values (and a sampler's sound) as a preset of its type in your presets folder "
              "(R-PRESET-1) — a name you have is refused without --replace. The machine's, not the song's: no undo.", "R-PRESET-1"},

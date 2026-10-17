@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "MixLaws.h"
 #include <algorithm>
+#include <limits>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -45,6 +46,14 @@ namespace engine
         // R-REC-1: an audio strip's input for the next render (sized at build; `liveInput` copies, a render clears)
         std::vector<double> liveInL, liveInR;
         int liveInFrames = 0;
+        // R-LAUNCH-1: the session — what it plays instead of the arrangement once a launch lands
+        bool session = false;     // the arrangement is not heard
+        int slot = -1;            // the slot playing (−1 none)
+        long long slotBase = 0;   // the position its current loop began at (positions jump; its phase does not)
+        size_t slotNext = 0;      // its next note in this loop
+        int pendKind = 0;         // 0 none · 1 a launch or a stop (pendSlot) · 2 back to the arrangement
+        int pendSlot = -1;
+        long long pendAt = 0, pendPhase = 0;
     };
 
     Engine::Engine() = default;
@@ -405,12 +414,102 @@ namespace engine
         }
     }
 
+    void Engine::launch(int strip, int slot, long long at, long long phase)
+    {
+        if (strip < 0 || strip >= (int)mStrips.size()) return;
+        StripState &st = *mStrips[(size_t)strip];
+        st.pendKind = 1;
+        st.pendSlot = slot >= 0 && slot < (int)mGraph.strips[(size_t)strip].slots.size() ? slot : -1;
+        st.pendAt = at;
+        st.pendPhase = std::max(0LL, phase);
+    }
+
+    void Engine::launchById(int strip, const char *slotId, long long at, long long phase)
+    {
+        if (strip < 0 || strip >= (int)mStrips.size()) return;
+        int k = -1;
+        const auto &slots = mGraph.strips[(size_t)strip].slots;
+        for (size_t i = 0; i < slots.size() && slotId && *slotId; ++i)
+            if (slots[i].id == slotId) k = (int)i;
+        launch(strip, k, at, phase);
+    }
+
+    void Engine::launchBack(int strip, long long at)
+    {
+        if (strip < 0 || strip >= (int)mStrips.size()) return;
+        StripState &st = *mStrips[(size_t)strip];
+        st.pendKind = 2;
+        st.pendSlot = -1;
+        st.pendAt = at;
+    }
+
+    int Engine::launched(int strip) const
+    {
+        if (strip < 0 || strip >= (int)mStrips.size()) return -2;
+        const StripState &st = *mStrips[(size_t)strip];
+        return st.session ? st.slot : -2;
+    }
+
+    void Engine::adoptSession(const Engine &old)
+    {
+        // a swap: the new engine sits where the old one was (the player seeked it there); what each strip played in the
+        // session goes on — matched by strip and slot id, its phase kept
+        auto phaseOf = [](long long pos, long long base, long long len) { return len > 0 ? ((pos - base) % len + len) % len : 0LL; };
+        for (size_t i = 0; i < old.mStrips.size() && i < old.mGraph.strips.size(); ++i)
+        {
+            const StripState &o = *old.mStrips[i];
+            if (!o.session && !o.pendKind) continue;
+            const Strip &os = old.mGraph.strips[i];
+            for (size_t j = 0; j < mGraph.strips.size(); ++j)
+            {
+                if (mGraph.strips[j].id != os.id) continue;
+                const Strip &ns = mGraph.strips[j];
+                StripState &st = *mStrips[j];
+                auto slotIn = [&](int k) {
+                    if (k < 0 || k >= (int)os.slots.size()) return -1;
+                    for (size_t q = 0; q < ns.slots.size(); ++q)
+                        if (ns.slots[q].id == os.slots[(size_t)k].id) return (int)q;
+                    return -1;
+                };
+                st.session = o.session;
+                st.slot = slotIn(o.slot);
+                if (st.slot >= 0)
+                {
+                    const SlotPlay &sp = ns.slots[(size_t)st.slot];
+                    const long long ph = phaseOf(old.mPos, o.slotBase, os.slots[(size_t)o.slot].length) % std::max(1LL, sp.length);
+                    st.slotBase = mPos - ph;
+                    st.slotNext = (size_t)(std::lower_bound(sp.notes.begin(), sp.notes.end(), ph,
+                                                            [](const NoteEvent &e, long long p) { return e.at < p; }) - sp.notes.begin());
+                }
+                st.pendKind = o.pendKind;
+                st.pendSlot = slotIn(o.pendSlot);
+                st.pendAt = o.pendAt;
+                st.pendPhase = o.pendPhase;
+            }
+        }
+    }
+
     void Engine::seek(long long sample)
     {
+        const long long was = mPos;
         mPos = std::max(0LL, sample);
         for (size_t i = 0; i < mStrips.size(); ++i)
         {
             auto &st = *mStrips[i];
+            // R-LAUNCH-1: a slot keeps its own phase through a jump (a song loop does not restart it); a change waiting
+            // lands at once, its quantum's place gone with the jump
+            if (st.session && st.slot >= 0)
+            {
+                const SlotPlay &sp = mGraph.strips[i].slots[(size_t)st.slot];
+                if (sp.length > 0)
+                {
+                    const long long ph = ((was - st.slotBase) % sp.length + sp.length) % sp.length;
+                    st.slotBase = mPos - ph;
+                    st.slotNext = (size_t)(std::lower_bound(sp.notes.begin(), sp.notes.end(), ph,
+                                                            [](const NoteEvent &e, long long p) { return e.at < p; }) - sp.notes.begin());
+                }
+            }
+            if (st.pendKind) st.pendAt = mPos;
             const auto &notes = mGraph.strips[i].notes;
             st.nextEvent = (size_t)(std::lower_bound(notes.begin(), notes.end(), mPos,
                                                      [](const NoteEvent &e, long long p) { return e.at < p; }) - notes.begin());
@@ -573,12 +672,56 @@ namespace engine
             std::fill(SR, SR + n, 0.0);
         }
 
+        // R-LAUNCH-1: a change due lands on its sample — the session's slot (or nothing) from there, or the arrangement
+        // again; what the instrument holds ends there
+        constexpr long long kNever = std::numeric_limits<long long>::max();
+        auto land = [&](long long at) {
+            if (d.kind == Strip::Instrument && !st.rack.empty()) st.rack[0]->allNotesOff();
+            if (st.pendKind == 2) { st.session = false; st.slot = -1; }
+            else
+            {
+                st.session = true;
+                st.slot = st.pendSlot;
+                st.slotBase = at - st.pendPhase;
+                st.slotNext = 0;
+                if (st.slot >= 0)
+                {
+                    const auto &notes = d.slots[(size_t)st.slot].notes;
+                    st.slotNext = (size_t)(std::lower_bound(notes.begin(), notes.end(), st.pendPhase,
+                                                            [](const NoteEvent &e, long long p) { return e.at < p; }) - notes.begin());
+                }
+            }
+            st.pendKind = 0;
+        };
         if (d.kind == Strip::Audio)
         {
+            long long a0 = p0;
+            for (;;)
+            {
+                const long long tPend = st.pendKind ? std::max(st.pendAt, p0) : kNever;
+                const long long b0 = std::min(p0 + n, tPend);
+                if (st.session)
+                {
+                    // R-LAUNCH-1: the slot, looped from its base — a file shorter than its loop leaves the rest silent
+                    if (st.slot >= 0)
+                    {
+                        const SlotPlay &sp = d.slots[(size_t)st.slot];
+                        if (sp.pcm && sp.length > 0)
+                            for (long long t = a0; t < b0; ++t)
+                            {
+                                const long long local = ((t - st.slotBase) % sp.length + sp.length) % sp.length;
+                                const long long src = sp.srcOffset + local;
+                                if (local >= sp.srcFrames || src < 0 || src >= sp.pcm->frames) continue;
+                                SL[t - p0] += sp.gain * sp.pcm->at(src, 0);
+                                SR[t - p0] += sp.gain * sp.pcm->at(src, 1);
+                            }
+                    }
+                }
+                else
             for (const Region &rg : d.regions)
             {
                 if (!rg.pcm || rg.frames <= 0) continue;
-                const long long a = std::max(p0, rg.start), b = std::min(p0 + n, rg.start + rg.frames);
+                const long long a = std::max(a0, rg.start), b = std::min(b0, rg.start + rg.frames);
                 for (long long t = a; t < b; ++t)
                 {
                     const long long local = t - rg.start;
@@ -592,6 +735,10 @@ namespace engine
                     SL[t - p0] += g * rg.pcm->at(src, 0);
                     SR[t - p0] += g * rg.pcm->at(src, 1);
                 }
+            }
+                if (b0 >= p0 + n) break;
+                land(tPend);
+                a0 = b0;
             }
             // R-REC-1: its input, monitored — `off` is where this piece sits in the render
             for (int i = 0; i < n && off + i < st.liveInFrames; ++i)
@@ -619,30 +766,47 @@ namespace engine
             }
             // (M5) split the block at every note event — and every wheel event (R-MIDI-3) — so each starts on its
             // exact sample; at one sample a wheel before a note, so a note starts bent where its lane says
+            // R-LAUNCH-1: and the session — a change due, then the slot's notes from its base, looped; while the strip is
+            // the session's the arrangement's notes and wheels pass unheard
+            const long long end = p0 + n;
             for (;;)
             {
-                const bool note = st.nextEvent < d.notes.size() && d.notes[st.nextEvent].at < p0 + n;
-                const bool wheel = st.nextControl < d.controls.size() && d.controls[st.nextControl].at < p0 + n;
-                if (!note && !wheel) break;
-                const bool takeWheel = wheel && (!note || d.controls[st.nextControl].at <= d.notes[st.nextEvent].at);
-                const long long at = takeWheel ? d.controls[st.nextControl].at : d.notes[st.nextEvent].at;
+                const long long tPend = st.pendKind ? std::max(st.pendAt, p0) : kNever;
+                if (st.session)
+                {
+                    const long long upTo = std::min(end, tPend);
+                    while (st.nextEvent < d.notes.size() && d.notes[st.nextEvent].at < upTo) ++st.nextEvent;
+                    while (st.nextControl < d.controls.size() && d.controls[st.nextControl].at < upTo) ++st.nextControl;
+                }
+                const SlotPlay *sp = st.session && st.slot >= 0 ? &d.slots[(size_t)st.slot] : nullptr;
+                if (sp && sp->length <= 0) sp = nullptr; // a loop of no length plays nothing (it could never advance)
+                if (sp && !sp->notes.empty() && st.slotNext >= sp->notes.size()) // its notes ran out: the next loop
+                {
+                    st.slotBase += sp->length;
+                    st.slotNext = 0;
+                }
+                const long long tSlot = sp && !sp->notes.empty() ? st.slotBase + sp->notes[st.slotNext].at : kNever;
+                const long long tNote = !st.session && st.nextEvent < d.notes.size() ? d.notes[st.nextEvent].at : kNever;
+                const long long tWheel = !st.session && st.nextControl < d.controls.size() ? d.controls[st.nextControl].at : kNever;
+                const long long at = std::min(std::min(tPend, tSlot), std::min(tNote, tWheel));
+                if (at >= end) break;
                 if (at > cur && playing)
                 {
                     Sample *io[2] = {SL + (cur - p0), SR + (cur - p0)};
                     inst.process(io, 2, (int)(at - cur));
                 }
                 cur = std::max(cur, at);
-                if (takeWheel)
+                if (at == tPend) { land(at); continue; } // first at its sample: a launch's sample is the slot's
+                if (at == tWheel && tWheel <= tNote)
                 {
                     const ControlEvent &e = d.controls[st.nextControl++];
                     if (e.kind == 0) inst.pitchBend(e.value);
                     else inst.modWheel(e.value);
                     continue;
                 }
-                const NoteEvent &e = d.notes[st.nextEvent];
+                const NoteEvent &e = at == tNote ? d.notes[st.nextEvent++] : sp->notes[st.slotNext++];
                 if (e.on) inst.noteOn(e.note, e.velocity);
                 else inst.noteOff(e.note);
-                ++st.nextEvent;
             }
             if (cur < p0 + n && playing)
             {

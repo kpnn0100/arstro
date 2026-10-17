@@ -13,7 +13,8 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
   DR-UI-8 (ten, `ProjectScreen.cpp` — the dock's lines), DR-UI-5 (three, `ParamMenu.cpp`), DR-UI-12 (thirteen,
   `ParamFormat.h`/`Theme.h` — the face's), DR-SVC-5 (three, `ControlServer.h`), DR-MIX-17 (nine, `Engine.h` —
   `Engine.cpp`'s), DR-VST-7 (four, `DevicePanel.h`/`PluginAccess.h`), DR-BROWSE-4 (one), DR-PERF-2 (one).
-  DR-ROLL-11's four (`ServiceCompose.cpp` read as `Notation.cpp`'s) were fixed in N37 part 1.
+  DR-ROLL-11's four (`ServiceCompose.cpp` read as `Notation.cpp`'s) were fixed in N37 part 1; DR-MIX-17's (all of
+  them, its `Player.cpp` and `ServiceTransport.cpp` ones too) in N39 part 2.
 - **Effect:** the as-built tier points at lines that are not the code it describes (D-1's class: a doc describing what
   the code no longer is). `anchorcheck_strict` does not see it — it checks an anchor against HEAD's line, which was
   already wrong.
