@@ -4424,6 +4424,74 @@ static void test_per_strip_tools_in_the_dock()
     pass("per-strip tools in the dock (R-MIX-20): Invert Phase, Width ▸ and a bus's Solo-safe one line each — Ø, the width tag and the ring caught fading in; the master's Mono one line, lit eased");
 }
 
+static void test_versions_from_the_song_bar()
+{
+    // R-VER (Round 15, part 3): the song bar's version chip says "main"; its menu is the tree and New Version… (cosmo's
+    // field: ONE line, opened); the label cross-fades, the ring eases in and the chip's width eases to the name, each
+    // caught mid-way; Freeze from the menu, said on the chip; main opened from a shell eases back the same; the tree
+    // opens a version in one line
+    using arstro::solaris_ui::SongBar;
+    sltest::Rig r("ui-versions", 1280, 800);
+    r.cmd("project new " + r.song("Versions") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    r.settle();
+    auto &bar = r.app->project().bar();
+    auto &menu = r.app->menu();
+    assert(bar.versionLabel() == "main" && bar.versionRing() == 0.0 && bar.versionWidth() > 0.0);
+    const double w0 = bar.versionWidth();
+    r.click(world(bar, bar.hitRect(SongBar::kVersion)));
+    r.settle();
+    assert(menu.isOpen() && menu.item(0).label == "main  \xC2\xB7 open" && menuItem(r, "New Version\xE2\x80\xA6") >= 0 && menuItem(r, "Freeze") < 0);
+    r.click(menu.itemRect(menuItem(r, "New Version\xE2\x80\xA6")));
+    r.settle();
+    assert(menu.isRenaming());
+    artboard::KeyEvent typed;
+    typed.type = artboard::KeyEvent::Type::Text;
+    typed.text = "Radio edit";
+    r.app->key(typed);
+    r.key(13);
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "version new \"Radio edit\" --open") && r.svc->model().version == "vr_1");
+    assert(bar.versionLabel() == "Radio edit" && bar.versionFade() > 0.0 && bar.versionFade() < 1.0);
+    assert(bar.versionRing() > 0.0 && bar.versionRing() < 1.0);
+    r.frame();
+    r.frame();
+    const double wMid = bar.versionWidth();
+    r.settle();
+    assert(bar.versionFade() == 1.0 && bar.versionRing() == 1.0 && bar.versionWidth() > w0);
+    assert(wMid > w0 && wMid < bar.versionWidth()); // "Radio edit" is wider than "main": the chip grew, eased
+
+    // on a version, its menu offers what a version can do; Freeze is one line, said on the chip
+    r.click(world(bar, bar.hitRect(SongBar::kVersion)));
+    r.settle();
+    assert(menuItem(r, "    Radio edit  \xC2\xB7 open") >= 0 && menuItem(r, "Rebase") >= 0 && menuItem(r, "Rename\xE2\x80\xA6") >= 0 &&
+           menuItem(r, "Delete Version") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Freeze")));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "version freeze vr_1") && bar.versionLabel() == "Radio edit \xC2\xB7 frozen" && bar.versionFade() < 1.0);
+    r.settle();
+
+    // main opened from a shell: the same ease, the ring going out
+    r.cmd("version open main");
+    r.frame();
+    r.frame();
+    assert(bar.versionLabel() == "main" && bar.versionRing() > 0.0 && bar.versionRing() < 1.0);
+    r.settle();
+    assert(bar.versionRing() == 0.0);
+
+    // the tree: the version under main, opened by ONE line
+    r.click(world(bar, bar.hitRect(SongBar::kVersion)));
+    r.settle();
+    const int at = menuItem(r, "    Radio edit  \xC2\xB7 frozen");
+    assert(at >= 0);
+    r.click(menu.itemRect(at));
+    r.settle();
+    assert(sentLine(r, "version open vr_1") && r.svc->model().version == "vr_1" && bar.versionRing() == 1.0);
+    pass("versions from the song bar (R-VER): the chip says main; its menu the tree and New Version… — ONE line, opened; the label cross-fades, the ring and the width ease, caught mid-way; Freeze said on the chip; main from a shell eases back; the tree opens a version");
+}
+
 static void test_a_tuners_window()
 {
     // R-FX-17 (Round 12, part 3): a tuner's window — a band under its header: the note large, a needle for the cents
@@ -4871,6 +4939,7 @@ int main()
     test_a_tuners_window();
     test_a_vca_in_the_dock();
     test_per_strip_tools_in_the_dock();
+    test_versions_from_the_song_bar();
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();

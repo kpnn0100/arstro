@@ -440,6 +440,27 @@ namespace
                  r.cmd("transport mono on");
                  r.settle();
              }},
+            {"song-versions", // R-VER: "Radio edit" open (the chip ringed in the accent), its menu the tree — main, Instrumental
+                              // (frozen), Radio edit under it — then what a version can do
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("version new Instrumental");
+                 r.cmd("version freeze Instrumental");
+                 r.cmd("version new \"Radio edit\" --base Instrumental");
+                 r.cmd("version open \"Radio edit\"");
+                 r.settle();
+                 auto &bar = r.app->project().bar();
+                 r.click(world(bar, bar.hitRect(arstro::solaris_ui::SongBar::kVersion)));
+                 r.settle();
+             }},
+            {"song-versions-mid", // R-VER: main opened from a shell — "Radio edit" giving way to "main", the ring going out, the chip narrowing
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("version new \"Radio edit\" --open");
+                 r.settle();
+                 r.cmd("version open main");
+                 r.pump(5 * sltest::Rig::kFrameMs);
+             }},
             {"tuner-window", // R-FX-17: a tuner's window while a synth holds A4 — the note large, the needle in tune, the rest small
              [](sltest::Rig &r) {
                  r.cmd("project new " + r.song("Tune") + ".slp --bpm 120");

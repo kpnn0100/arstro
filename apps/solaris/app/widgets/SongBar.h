@@ -14,6 +14,12 @@
  *  one `set project.bpm=<n>` per step that moved it; a double-click types one in (the App's field). A
  *  tempo changed from elsewhere is drawn easing to its new value.
  *
+ *  R-VER: after the menus, the VERSION chip — "main", or the open version's name (" · frozen" when it is) with a ▾ —
+ *  and the song's name after it. Its menu: the versions as a tree (the open one marked), New Version… (a version of
+ *  the open one, opened — ONE line), and for an open version Freeze/Thaw, Rebase, Rename…, Delete. A version opened from
+ *  anywhere: the label cross-fades, the chip's width eases to it (the name and the transport sliding with it), and an
+ *  accent ring eases in while a version, not main, is open.
+ *
  *  The play glyph and the stop glyph CROSS-FADE (200 ms) when the transport changes, whoever
  *  changed it; the unsaved dot fades in and out; the meter rises fast and falls slowly (a meter's
  *  ballistics, eased per frame from the model's peaks — §1 holds: nothing jumps a frame).
@@ -23,9 +29,11 @@
 #include "AppModel.h"
 #include "../../../cosmo/widgets/HoverFade.h"
 #include "../../../cosmo/widgets/MenuStrip.h"
+#include "../../../cosmo/widgets/ContextMenu.h"
 #include <memory>
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace arstro
 {
@@ -35,7 +43,7 @@ namespace solaris_ui
     {
     public:
         static constexpr double kHeight = 29.25;
-        enum Hit { kNone = -1, kHome = 0, kPlay, kSave, kSettings, kBpm, kRecord, kLearn }; // kHome: the wordmark; kRecord: R-MIDI-2; kLearn: R-CTRL-1
+        enum Hit { kNone = -1, kHome = 0, kPlay, kSave, kSettings, kBpm, kRecord, kLearn, kVersion }; // kHome: the wordmark; kRecord: R-MIDI-2; kLearn: R-CTRL-1; kVersion: R-VER
         static constexpr double kBpmStepPx = 3.25; // space::u(1) of vertical drag: one step
         static constexpr double kNameMin = 120.0; // the song's name keeps this much before the transport moves right
 
@@ -52,12 +60,22 @@ namespace solaris_ui
         /** R-PERF-1: "CPU" and the load before the master meter — the value as DRAWN (LIVE, catching up), and where. */
         double cpuShown() const { return mCpuShown.value(); }
         artboard::Rect cpuRect() const;
+        /** R-VER: the chip's label as wanted, and the LIVE eased values a test catches mid-way — the cross-fade to the
+         *  label (0 = the old one, 1 = this one), the ring's amount (a version, not main, open) and the chip's width. */
+        const std::string &versionLabel() const { return mChipTo; }
+        double versionFade() const { return mChipT.value(); }
+        double versionRing() const { return mOnVersion.value(); }
+        double versionWidth() const { return mChipW.value(); }
+        /** R-VER: the menu the chip opens — what a click on it sends, item by item (also what a test reads). */
+        std::vector<cosmo_v2::ContextMenu::Item> versionMenu(artboard::Point world);
         double meterLevel(int ch) const { return mMeter[ch].value(); }
         double bpmShown() const { return mBpmDrag ? mBpmLive : mBpmShown.value(); } // the tempo as DRAWN (LIVE)
         /** R-TEMPO-1: the line that sets the tempo shown — the song's, or the change in effect at the time bar. */
         std::string tempoLine(const std::string &v) const { return mTempoId.empty() ? "set project.bpm=" + v : "tempo move " + mTempoId + " --bpm " + v; }
 
         std::function<void()> onHome, onPlayToggle, onSave, onSettings, onRecordToggle;
+        /** A menu the App hosts (R-VER: the version chip's). */
+        std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
         std::function<bool(const std::string &line)> onCommand;
         /** A value typed in place (the App's field): the current text, where, and what to do with the result. */
         std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onEditText;
@@ -89,6 +107,14 @@ namespace solaris_ui
         artboard::AnimatedProperty mCpuShown{0.0};
         artboard::AnimatedProperty mPlaying{0.0}, mDirtyDot{0.0}, mMeter[2]{artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
         bool mInit = false;
+        // R-VER: the version chip
+        std::vector<solaris::VersionModel> mVersions;
+        std::string mVersion, mChipWanted, mChipFrom, mChipTo; // the open one's id; the label wanted, fading out, fading in
+        double mChipWTarget = -1.0;                      // the width the chip last eased toward
+        artboard::AnimatedProperty mChipT{1.0}, mOnVersion{0.0}, mChipW{0.0};
+        mutable double mChipTextW = 0.0;                 // the wanted label's width, measured in the paint
+        bool mChipPlaced = false;
+        double chipX() const;
         cosmo_v2::HoverFade mHover;
         std::shared_ptr<cosmo_v2::MenuStrip> mMenus;
         double transportX() const;

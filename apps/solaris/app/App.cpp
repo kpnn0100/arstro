@@ -72,6 +72,7 @@ namespace solaris_ui
         bar.onSave = [this] { dispatch("project save"); };
         bar.onSettings = [this] { openSettings(); };
         bar.onCommand = [this](const std::string &line) { return dispatch(line); }; // the tempo (R-UI-13)
+        bar.onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { mMenu->open(std::move(items), world.x, world.y); }; // R-VER
         bar.onEditText = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
             mMenu->onRename = std::move(done);
             mMenu->openRename(cur, world.x, world.y);

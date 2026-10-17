@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N37 — Versions of a song** (R-VER-1…4; N36 — per-strip tools — is built), then N38… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N38 — Collect and save; relink** (R-COLLECT-1; N37 — versions of a song — is built), then N39… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -611,14 +611,16 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       a flip crosses through silence), the model's fields. Part 3: the dock — a strip's Invert Phase, Width ▸ and a
       bus's Solo-safe; the card's Ø and width tag, the safe ring, the master's Mono pill, all eased; shot mixer-tools.
       N36 DONE. (On the way: DR-MIX-4's and the dock's anchors had drifted unseen — re-pointed by symbol.)
-- [~] **N37** Versions of a song (R-VER-1…4). Round 15 (the design): deltas nested in `#aversion`, worked out after
+- [x] **N37** Versions of a song (R-VER-1…4). Round 15 (the design): deltas nested in `#aversion`, worked out after
       every edit on an open version; one freeze lever; Interstellar's verbs. Part 1: the model — `#aversion` read and
       written after the song, a resolution (drops, sets, unsets, bodies, orders, its own nodes), the deltas worked out
       from the song an edit left, dangling kept until rebase, freeze/thaw/rebase/revert, ids never reused (DR-VER-1).
       Part 2: the service — Interstellar's verbs (`version new|list|open|diff|freeze|thaw|rebase|delete`, `revert`,
       `render --version`), one hook in `dispatch` recording an edit on an open version, a frozen one refusing edits,
       opening a history step but not unsaved, `versions[]`/`version`. D-22 filed (bare anchors on the wrong file).
-      Next: part 3 — the song bar.
+      Part 3: the song bar — the version chip after the menus (the name follows it), its menu the tree, New Version…
+      (ONE line, opened), Freeze/Thaw, Rebase, Rename…, Delete; label, ring and width eased; shots song-versions(-mid).
+      N37 DONE. (On the way: DR-UI-1/9/13's App and SongBar anchors re-pointed by symbol.)
 - [ ] **N38** Collect and save; relink (R-COLLECT-1).
 - [ ] **N39** A clip launcher (R-LAUNCH-1).
 - [ ] **N40** A video lane (R-VIDEO-1).
