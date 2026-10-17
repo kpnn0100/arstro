@@ -1,6 +1,7 @@
 // SolarisService — the session grid (R-LAUNCH-1; docs/discussion.md Round 17): scenes (rows) × strips (columns), a slot
 // a pattern or a file waiting in a scene for a strip. Scenes and slots are the song's nodes, edited as any; launching
 // them is live — heard, never rendered, until recorded.
+#include "Compile.h"
 #include "Format.h"
 #include "Player.h"
 #include "SolarisService.h"
@@ -55,6 +56,12 @@ namespace solaris
             Launch &l = it->second;
             if (l.pend && heard + 1e-9 >= l.at)
             {
+                if (mRecording) // what the strip played until now is a span; a slot landing opens the next
+                {
+                    for (auto &sp : mSpans)
+                        if (sp.strip == it->first && sp.to < 0) sp.to = l.at;
+                    if (l.pend == 1 && !l.pendSlot.empty()) mSpans.push_back(Span{it->first, l.pendSlot, l.at, -1, 0});
+                }
                 if (l.pend == 2) { it = mLaunch.erase(it); continue; } // the arrangement again
                 l.session = true;
                 l.slot = l.pendSlot;
@@ -87,6 +94,148 @@ namespace solaris
             out.push_back(m);
         }
         return out;
+    }
+
+    bool SolarisService::commitLaunches(double stopBeat, std::string &err)
+    {
+        // R-LAUNCH-1: what the session played while recording, into the arrangement — so the song plays back what was
+        // heard: each span as clips on its strip's lane, and the strip's own clips under it giving way (one inside goes;
+        // one across an edge is cut there — a note clip's second half starts into its pattern, `offset`)
+        (void)err;
+        mRecording = false;
+        Project &p = mProject;
+        int placed = 0;
+        for (auto &sp : mSpans)
+            if (sp.to < 0) sp.to = stopBeat;
+        for (const Span &sp : mSpans)
+        {
+            const Slot *sl = p.slot(sp.slot);
+            const Strip *st = p.strip(sp.strip);
+            if (!sl || !st || sp.to <= sp.from + 1e-9) continue;
+            const double from = sp.from, to = sp.to;
+            // its lane: an instrument's track, else where its clips are — a new one when it has none
+            std::string lane;
+            for (const auto &l : p.lanes)
+                if (st->kind == "instrument" && l.track == st->id) lane = l.id;
+            if (lane.empty() && st->kind == "audio")
+                for (const auto &c : p.clips)
+                    if (c.track == st->id && !c.lane.empty()) { lane = c.lane; break; }
+            if (lane.empty())
+            {
+                Lane l;
+                l.id = p.nextId("ln");
+                for (const auto &x : p.lanes) l.order = std::max(l.order, x.order + 1);
+                if (st->kind == "instrument") l.track = st->id;
+                else l.name = st->name;
+                p.lanes.push_back(l);
+                lane = l.id;
+            }
+            // the arrangement under the span gives way
+            std::vector<Clip> tails;
+            for (auto it = p.clips.begin(); it != p.clips.end();)
+            {
+                Clip &c = *it;
+                if (c.track != st->id) { ++it; continue; }
+                const double a = c.at, b = c.at + clipLengthBeats(p, c);
+                if (b <= from + 1e-9 || a >= to - 1e-9) { ++it; continue; }
+                const bool head = a < from - 1e-9, tail = b > to + 1e-9;
+                if (!head && !tail) { it = p.clips.erase(it); continue; } // inside: it goes
+                const double secPerBeat = b > a ? (c.out - c.in) / (b - a) : 0.0;
+                Clip t = c;
+                if (tail)
+                {
+                    const double skip = to - a;
+                    t.at = to;
+                    t.fadeIn = 0;
+                    if (c.isAudio())
+                    {
+                        if (c.loop) t.length = b - to; // (a looped file cut at its start restarts its loop — not yet otherwise)
+                        else t.in = c.in + skip * secPerBeat;
+                    }
+                    else
+                    {
+                        t.offset = c.offset + skip;
+                        t.length = b - to;
+                    }
+                }
+                if (head)
+                {
+                    c.fadeOut = 0;
+                    if (c.isAudio() && !c.loop) c.out = c.in + (from - a) * secPerBeat;
+                    else c.length = from - a;
+                    if (tail) tails.push_back(t);
+                }
+                else c = t; // only its tail is left
+                ++it;
+            }
+            for (auto &t : tails)
+            {
+                t.id = p.nextId("ac");
+                p.clips.push_back(t);
+            }
+            // the span, as clips: one when the slot's loop is its pattern's, else one a loop (a slot plays the start of a
+            // longer pattern, or a shorter one repeated)
+            const double len = slotBeats(*sl);
+            if (len <= 0) continue;
+            auto clipAt = [&](double at) {
+                Clip c;
+                c.id = p.nextId("ac");
+                c.name = sl->name;
+                c.track = st->id;
+                c.lane = lane;
+                c.at = at;
+                return c;
+            };
+            if (!sl->pattern.empty())
+            {
+                const Pattern *pt = p.pattern(sl->pattern);
+                if (!pt || pt->length <= 0) continue;
+                if (std::fabs(len - pt->length) < 1e-9)
+                {
+                    Clip c = clipAt(from);
+                    c.pattern = sl->pattern;
+                    c.length = to - from;
+                    c.offset = std::fmod(sp.phase, pt->length);
+                    p.clips.push_back(c);
+                    ++placed;
+                }
+                else
+                    for (double t = from, ph = sp.phase; t < to - 1e-9; ph = 0)
+                    {
+                        const double seg = std::min(len - ph, to - t);
+                        Clip c = clipAt(t);
+                        c.pattern = sl->pattern;
+                        c.length = seg;
+                        c.offset = ph;
+                        p.clips.push_back(c);
+                        ++placed;
+                        t += seg;
+                    }
+            }
+            else
+            {
+                // a file plays the first of each loop it lasts; the rest of the loop is silence — no clip there
+                const double spb = 60.0 / p.header.bpm, span = (sl->out - sl->in) / spb; // beats, at the song's first tempo
+                for (double t = from, ph = sp.phase; t < to - 1e-9; ph = 0)
+                {
+                    const double seg = std::min(len - ph, to - t);
+                    if (ph < span - 1e-9)
+                    {
+                        Clip c = clipAt(t);
+                        c.src = sl->src;
+                        c.in = sl->in + ph * spb;
+                        c.out = c.in + std::min(seg, span - ph) * spb;
+                        c.gain = sl->gain;
+                        p.clips.push_back(c);
+                        ++placed;
+                    }
+                    t += seg;
+                }
+            }
+        }
+        mSpans.clear();
+        if (placed) changed("session.recorded", std::to_string(placed));
+        return true;
     }
 
     bool SolarisService::sessionCommand(const Command &c, std::string &err)

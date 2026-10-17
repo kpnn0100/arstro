@@ -1454,7 +1454,7 @@
         "count-in=<bars>",
         "overdub"
       ],
-      "summary": "Play and record the armed strip's keyboard (R-MIDI-2): at `transport stop` what was played becomes a new note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes it back. --count-in (else `settings countIn`) bars of click first, the song waiting. With an AUDIO line armed (R-REC-1): its input from where recording begins to the stop, written beside the song (`Recordings/<strip> <n>.wav`) and put on the strip as a clip where it began — moved earlier by the output's and the input's latency, kept only inside `transport punch` — one undo.",
+      "summary": "Play and record the armed strip's keyboard (R-MIDI-2): at `transport stop` what was played becomes a new note clip on its track from the bar it began in — or, with --overdub, notes added to the strip's clip under the start — each note where it was HEARD, its start on the `recordQuantize` grid; one undo takes it back. --count-in (else `settings countIn`) bars of click first, the song waiting. With an AUDIO line armed (R-REC-1): its input from where recording begins to the stop, written beside the song (`Recordings/<strip> <n>.wav`) and put on the strip as a clip where it began — moved earlier by the output's and the input's latency, kept only inside `transport punch` — one undo. And what the session grid plays (R-LAUNCH-1) — with nothing armed, only that: each strip's span lands as clips on its lane, its own clips under it cut, so the song plays back what was heard.",
       "requirement": "R-MIDI-2"
     },
     {
@@ -2738,6 +2738,12 @@
       "path": "clips[].length",
       "type": "number",
       "summary": "beats, resolved",
+      "stable": true
+    },
+    {
+      "path": "clips[].offset",
+      "type": "number",
+      "summary": "R-LAUNCH-1: a note clip's start, beats into its pattern (0: its start)",
       "stable": true
     },
     {

@@ -217,6 +217,7 @@ namespace solaris
         double at = 0.0;                // beats
         double in = 0.0, out = 0.0;     // seconds into the file (audio)
         double length = 0.0;            // beats; 0 = unset (audio: the file span; note: the pattern's)
+        double offset = 0.0;            // R-LAUNCH-1: a note clip starts this many beats into its pattern (one cut at its start)
         double gain = 0.0;              // dB
         double fadeIn = 0.0, fadeOut = 0.0; // beats
         bool loop = false;

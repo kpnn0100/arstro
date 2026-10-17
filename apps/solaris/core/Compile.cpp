@@ -474,12 +474,14 @@ namespace solaris
                     const double vel = engine::dbToLinear(c.gain); // clip gain scales velocity
                     // (C1) a clip longer than its pattern loops it; a note is cut at the clip's end; (C4) R-ROLL-11 a
                     // note of chance < 1 is rolled per repetition — a hash, never a clock
+                    // R-LAUNCH-1: a clip may start `offset` beats into its pattern — its notes read in pattern time, then moved
+                    const double off = c.offset;
                     long long rep = 0;
-                    for (double k = 0; k < len; k += pt->length, ++rep)
+                    for (double k = 0; k - off < len; k += pt->length, ++rep)
                         for (const auto &n : pt->notes)
                         {
-                            const double on = k + n.at;
-                            if (on >= len || !noteSounds(n, c.id, rep)) continue;
+                            const double on = k + n.at - off;
+                            if (on < 0 || on >= len || !noteSounds(n, c.id, rep)) continue;
                             const double off = std::min(on + n.length, len);
                             const int v = std::clamp((int)std::lround(n.vel * vel), 1, 127);
                             es.notes.push_back(engine::NoteEvent{S(c.at + on), n.pitch, v, true});
@@ -496,18 +498,23 @@ namespace solaris
                         std::stable_sort(pts.begin(), pts.end(), [](const ExprPoint *a, const ExprPoint *b) { return a->at < b->at; });
                         const int kind = lane[0] == 'b' ? 0 : 1;
                         const double step = (double)engine::kControlSamples / (oneTempo ? spb : tm.samplesPerBeatAt(c.at)); // beats
-                        auto emit = [&](double beat, double value) { es.controls.push_back(engine::ControlEvent{S(c.at + beat), kind, value}); };
-                        for (double k = 0; k < len; k += pt->length)
+                        // pattern time `k + t`, played at clip time `k + t − offset` (R-LAUNCH-1); before the clip: not played
+                        auto emit = [&](double beat, double value) {
+                            if (beat < 0) return;
+                            es.controls.push_back(engine::ControlEvent{S(c.at + beat), kind, value});
+                        };
+                        if (off > 0) emit(0, exprAt(pt->expr, lane, std::fmod(off, pt->length))); // where it starts into its pattern
+                        for (double k = 0; k - off < len; k += pt->length)
                         {
-                            const double end = std::min(k + pt->length, len);
-                            emit(k, exprAt(pt->expr, lane, 0.0));
+                            const double end = std::min(k + pt->length - off, len);
+                            emit(k - off, exprAt(pt->expr, lane, 0.0));
                             for (size_t i = 0; i < pts.size(); ++i)
                             {
-                                if (k + pts[i]->at >= end) break;
-                                emit(k + pts[i]->at, pts[i]->value);
+                                if (k + pts[i]->at - off >= end) break;
+                                emit(k + pts[i]->at - off, pts[i]->value);
                                 if (i + 1 < pts.size() && pts[i + 1]->value != pts[i]->value)
-                                    for (double t = pts[i]->at + step; t < pts[i + 1]->at && k + t < end; t += step)
-                                        emit(k + t, exprAt(pt->expr, lane, t));
+                                    for (double t = pts[i]->at + step; t < pts[i + 1]->at && k + t - off < end; t += step)
+                                        emit(k + t - off, exprAt(pt->expr, lane, t));
                             }
                         }
                         emit(len, 0.0);

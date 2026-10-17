@@ -630,7 +630,9 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       live (quantized, the same graph, messages); recording lands the spans and cuts the arrangement under them. Part 1:
       the grid — `#ascene`/`#aslot`, `launchQuantize`, `scene add|delete|move`, `slot add|delete`, the fields. Part 2:
       launching, heard — slots in the graph, `launch`/`launch stop`/`launch back` quantized ahead of the render, live
-      messages, a swap carrying the session, `transport.launched[]`. Next: part 3 — recording launches.
+      messages, a swap carrying the session, `transport.launched[]`. Part 3: recorded — `transport record` takes the
+      session (with nothing armed, only it); spans land as clips, the arrangement under them cut, a note clip's `offset=`;
+      the song renders exactly what was heard. Next: part 4 — the session view.
 - [ ] **N40** A video lane (R-VIDEO-1).
 - [ ] **N41** Sharing through a folder: merge by node (R-COLLAB-1).
 - [ ] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1).

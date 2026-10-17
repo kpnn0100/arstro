@@ -5607,6 +5607,78 @@ static void test_launching_is_heard()
     pass("launching is heard (R-LAUNCH-1): on the next bar the engine has not rendered the strip plays its slot, not the arrangement; through an engine swap; a stop silences it, back returns it, each on its bar; the model says what lands and when; not an edit; never in a render; a scene launched while stopped starts the transport");
 }
 
+static void test_launches_are_recorded_into_the_arrangement()
+{
+    // R-LAUNCH-1 (Round 17, part 3): recording with nothing armed records the session — at the stop what each strip
+    // played lands as clips on its lane and its own clips under that span give way (cut, a note clip's tail starting into
+    // its pattern), as ONE edit; the song then renders exactly what the speakers got; a slot shorter than its pattern lands
+    // a clip a loop; refused with nothing armed and no grid
+    Run r;
+    const std::string dir = scratch();
+    r.ok("project new " + freshSong("launch-rec") + " --bpm 120");
+    assert(contains(r.no("transport record"), "launch slots of the session grid"));
+    r.ok("clip add --instrument synth --at 0 --length 32");                // ch_2, pt_1, ac_1: A2 A2 C3, every 3 beats
+    r.ok("set pt_1.length=3 dv_1.amp.release=10");
+    r.ok("notes add pt_1 \"A2@0:0.5 A2@1:0.5 C3@2:0.5\"");                 // (8 is not a multiple of 3: the tail starts on C3)
+    r.ok("pattern new --name Lead --length 1");                            // pt_2: F#5
+    r.ok("notes add pt_2 \"F#5@0:0.5\"");
+    r.ok("pattern new --name Riff --length 2");                            // pt_3: C5 then E5 — a slot plays its first beat
+    r.ok("notes add pt_3 \"C5@0:0.5 E5@1:0.5\"");
+    r.ok("scene add Verse");
+    r.ok("slot add sc_1 ch_2 --pattern pt_2");                             // sl_1: its pattern's loop
+    r.ok("scene add Riff");
+    r.ok("slot add sc_2 ch_2 --pattern pt_3 --length 1");                  // sl_2: shorter than its pattern
+    r.fake.capture->frames = 0;
+    r.ok("transport record --count-in 0");
+    waitFrames(r, 24000);
+    assert(r.ok("launch sl_1") == "launched on beat 4.0\n");
+    waitFrames(r, 5 * 24000);
+    assert(r.ok("launch back") == "back to the arrangement on beat 8.0\n");
+    waitFrames(r, 9 * 24000 + 4800);
+    r.ok("transport stop");
+    const Project *p = r.svc.project();
+    // the arrangement gave way: A2 to beat 4, again from 8 (into its pattern by 8); F#5's clip between
+    const Clip *head = p->clip("ac_1");
+    assert(head && head->at == 0.0 && head->length == 4.0);
+    const Clip *tail = nullptr, *lead = nullptr;
+    for (const auto &c : p->clips)
+    {
+        if (c.pattern == "pt_1" && c.at == 8.0) tail = &c;
+        if (c.pattern == "pt_2") lead = &c;
+    }
+    assert(tail && tail->offset == 8.0 && tail->length == 24.0 && lead && lead->at == 4.0 && lead->length == 4.0 && lead->offset == 0.0);
+    assert(lead->lane == head->lane && contains(r.text(), "offset=8"));    // 8 beats into a 3-beat pattern: its C3 first
+    // the song now renders what the speakers got — sample for sample
+    const std::string out = dir + "/launch-rec.wav";
+    r.ok("render --out " + out + " --to 9 --bits 32f");
+    const auto &L = r.fake.written[out][0];
+    const auto &sink = r.fake.capture->sink;
+    double worst = 0, heard = 0;
+    for (size_t i = 0; i < 9 * 24000; ++i)
+    {
+        worst = std::max(worst, (double)std::fabs(L[i] - sink[2 * i]));
+        heard = std::max(heard, (double)std::fabs(sink[2 * i]));
+    }
+    std::printf("    rendered vs heard over 9 beats: largest difference %.3g (of %.3f)\n", worst, heard);
+    assert(heard > 0.05 && worst < 1e-6);
+    // ONE edit: one undo takes the recording back whole
+    r.ok("undo");
+    assert(r.svc.project()->clips.size() == 1 && r.svc.project()->clip("ac_1")->length == 32.0);
+    // a slot shorter than its pattern lands a clip a loop, each the pattern's first beat
+    r.fake.capture->frames = 0;
+    r.ok("transport record --count-in 0 --from 0");
+    waitFrames(r, 24000);
+    assert(r.ok("launch sl_2") == "launched on beat 4.0\n");
+    waitFrames(r, 6 * 24000 + 12000);                                       // three loops: beats 4, 5, 6, and into 7
+    r.ok("transport stop");
+    int riffs = 0;
+    for (const auto &c : r.svc.project()->clips)
+        if (c.pattern == "pt_3") { ++riffs; assert(c.length <= 1.0 && c.offset == 0.0); }
+    std::printf("    a 1-beat slot of a 2-beat pattern: %d clips\n", riffs);
+    assert(riffs >= 3);
+    pass("launches recorded (R-LAUNCH-1): nothing armed records the session — the span lands as a clip, the arrangement under it cut (its tail into its pattern), ONE edit; the song renders exactly what the speakers got; a slot shorter than its pattern lands a clip a loop; refused with nothing to record");
+}
+
 static void test_per_strip_tools_live()
 {
     // R-MIX-20 (Round 14, part 2): while playing, a strip's width and phase move with no engine rebuilt — the width
@@ -7040,6 +7112,7 @@ int main()
     test_collect_and_relink();
     test_the_session_grid();
     test_launching_is_heard();
+    test_launches_are_recorded_into_the_arrangement();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

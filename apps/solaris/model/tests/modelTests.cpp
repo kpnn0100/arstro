@@ -884,7 +884,12 @@ static void test_scenes_and_slots_round_trip_and_are_checked()
     refused("#aslot id=sl_3 scene=sc_2 strip=ch_1 pattern=pt_9\n", "which is no pattern");
     Project bad;
     assert(!parseProject("arstro-project = 1\napp = solaris\nid = prj\nlaunchQuantize = sometimes\n", bad, err) && contains(err, "bar, beat or none"));
-    pass("scenes and slots in the .slp (R-LAUNCH-1): #ascene / #aslot after the arrangement, a fixed point; launchQuantize only when not a bar; a slot in no scene, for no strip or the wrong kind, of both or neither, in a full cell refused by name");
+    // a note clip may start into its pattern (what a recorded launch cuts); an audio clip starts into its file with `in`
+    Project cut;
+    assert(parseProject(head + "#aclip id=ac_1 track=ch_1 pattern=pt_1 at=8.0 length=24.0 offset=8.0\n", cut, err) && cut.clip("ac_1")->offset == 8.0);
+    assert(contains(serializeProject(cut), "#aclip id=ac_1 track=ch_1 pattern=pt_1 at=8.0 length=24.0 offset=8.0\n"));
+    refused("#aclip id=ac_9 track=ch_2 src=a.wav at=0.0 in=0.0 out=1.0 offset=1.0\n", "offset is a note clip's");
+    pass("scenes and slots in the .slp (R-LAUNCH-1): #ascene / #aslot after the arrangement, a fixed point; launchQuantize only when not a bar; a slot in no scene, for no strip or the wrong kind, of both or neither, in a full cell refused by name; a note clip's offset written back, an audio clip's refused");
 }
 
 int main()

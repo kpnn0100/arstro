@@ -164,6 +164,14 @@ namespace solaris
         void advanceLaunches(double heard);              // what was due by the beat heard has landed
         double launchBeat();                             // the next quantum the engine has not rendered
         std::vector<LaunchModel> launchedModel(double heard) const; // what `transport.launched` says, at the beat heard
+        // R-LAUNCH-1: while recording, what each strip played from the session — closed as it changes, landed at the stop
+        struct Span
+        {
+            std::string strip, slot;
+            double from = 0, to = -1, phase = 0; // beats; `to` −1 open; `phase`: beats into its loop at `from`
+        };
+        std::vector<Span> mSpans;
+        bool commitLaunches(double stopBeat, std::string &err); // the spans as clips; the arrangement under them gives way
         // R-PRESET-1 (ServicePresets.cpp): the presets of each device type, the user's and the factory's
         bool presetCommand(const Command &c, std::string &err);
         bool applyPreset(const std::string &dv, const std::string &name, std::string &err);

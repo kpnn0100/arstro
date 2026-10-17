@@ -1108,7 +1108,7 @@ namespace solaris
         }
         if (Clip *c = p.clip(id))
         {
-            static const std::vector<std::string> fields = {"name", "at", "in", "out", "length", "gain", "fadeIn", "fadeOut", "loop", "reverse", "warp", "bpm", "pitch"};
+            static const std::vector<std::string> fields = {"name", "at", "in", "out", "length", "gain", "fadeIn", "fadeOut", "loop", "reverse", "warp", "bpm", "pitch", "offset"};
             if (f == "name") { c->name = value; stored = value; return true; }
             if (f == "loop") { if (!boolean(value, b, err)) return false; c->loop = b; stored = boolText(b); return true; }
             if (f == "warp" || f == "bpm" || f == "pitch") // R-WARP-1
@@ -1156,7 +1156,9 @@ namespace solaris
                 return true;
             }
             if (x < 0) { err = f + " cannot be negative"; return false; }
+            if (f == "offset" && c->isAudio()) { err = id + " is an audio clip — its start into its file is `in`"; return false; } // R-LAUNCH-1
             const double t = toTick(x);
+            if (f == "offset") { c->offset = t; stored = canonicalBeats(t); return true; }
             if (f == "at") c->at = t;
             else if (f == "length") c->length = t;
             else if (f == "fadeIn") c->fadeIn = t;
@@ -1385,6 +1387,7 @@ namespace solaris
             {
                 put("in", canonicalSeconds(c->in)); put("out", canonicalSeconds(c->out)); put("src", c->src); put("reverse", boolText(c->reverse));
                 put("warp", boolText(c->warp)); put("bpm", canonicalNumber(c->bpm)); put("pitch", canonicalNumber(c->pitch)); // R-WARP-1
+                put("offset", canonicalBeats(c->offset)); // R-LAUNCH-1
             }
             else put("pattern", c->pattern);
         }

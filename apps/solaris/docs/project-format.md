@@ -240,6 +240,7 @@ makes.
 | `src` / `in` / `out` | file (relative to the project), source seconds | — |
 | `pattern` | — | the `#apattern` it plays |
 | `length` | beats it fills when `loop=true` | beats; longer than the pattern loops it |
+| `offset` | — | beats into its pattern it starts — a clip cut at its start (a recorded launch's tail, R-LAUNCH-1); written only when set |
 | `gain`, `fadeIn`, `fadeOut` | dB, beats, beats | `gain` only |
 | `reverse` | `true`: the span played backwards, `out` to `in` (R-EDIT-1; written only when set) | — |
 | `warp` · `bpm` · `pitch` | `true`: it lasts its span's own beats at `bpm` (its tempo), stretched to the song's · its tempo · semitones its span is moved, its length kept (R-WARP-1; each written only when set) | — |

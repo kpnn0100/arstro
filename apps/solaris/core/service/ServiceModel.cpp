@@ -317,6 +317,7 @@ namespace solaris
             cm.pattern = c.pattern;
             cm.at = c.at;
             cm.length = clipLengthBeats(p, c);
+            cm.offset = c.offset; // R-LAUNCH-1
             cm.in = c.in;
             cm.out = c.out;
             cm.gain = c.gain;

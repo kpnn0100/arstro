@@ -162,6 +162,7 @@ namespace solaris
         std::string id, name, track, lane, kind; // kind = audio | note
         std::string src, pattern;
         double at = 0, length = 0;               // beats; length RESOLVED (file span at the tempo, or the pattern's)
+        double offset = 0;                       // R-LAUNCH-1: a note clip's start, beats into its pattern
         double in = 0, out = 0;                  // seconds (audio)
         double gain = 0, fadeIn = 0, fadeOut = 0;
         bool loop = false;

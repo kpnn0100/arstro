@@ -1250,16 +1250,17 @@ namespace solaris_ui
             for (const auto &n : v.notes) { lo = std::min(lo, n.pitch); hi = std::max(hi, n.pitch); }
             const double top = r.y + 17.0, h = std::max(4.0, r.bottom() - 3.0 - top);
             const double ppb = mPpb.value();
-            for (double k = 0; k < len - 1e-9; k += v.patternLength)
+            const double off = v.c.offset; // R-LAUNCH-1: a clip may start into its pattern — its repetitions shifted back
+            for (double k = -off; k < len - 1e-9; k += v.patternLength)
             {
-                if (k > 0)
+                if (k > 1e-9)
                 {
                     t.setStroke(fade(hue, 0.5 * a), 1.0);
                     t.beginPath(); t.moveTo(r.x + k * ppb, r.y + 15.0); t.lineTo(r.x + k * ppb, r.bottom()); t.strokePath();
                 }
                 for (const auto &n : v.notes)
                 {
-                    if (k + n.at >= len) continue;
+                    if (k + n.at >= len || k + n.at < 0) continue;
                     const double y = hi == lo ? top + h * 0.5 : top + h * (1.0 - (double)(n.pitch - lo) / (hi - lo)) - 1.5;
                     const double w = std::max(2.0, std::min(n.length, len - k - n.at) * ppb - 1.0);
                     drawRoundedRect(t, Rect{r.x + (k + n.at) * ppb, std::clamp(y, top, top + h - 3.0), w, 3.0}, radius::control(),

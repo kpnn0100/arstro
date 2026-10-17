@@ -170,6 +170,7 @@ namespace solaris
             {"clips[].pattern", "string", "note: the pattern it plays"},
             {"clips[].at", "number", "beats"},
             {"clips[].length", "number", "beats, resolved"},
+            {"clips[].offset", "number", "R-LAUNCH-1: a note clip's start, beats into its pattern (0: its start)"},
             {"clips[].in", "number", "seconds into the file"},
             {"clips[].out", "number", "seconds into the file"},
             {"clips[].gain", "number", "dB"},
@@ -715,7 +716,7 @@ namespace solaris
             for (const auto &x : c.plays) plays.push(Json::object().set("take", x.take).set("from", x.from).set("to", x.to));
             clips.push(Json::object()
                            .set("id", c.id).set("name", c.name).set("track", c.track).set("lane", c.lane).set("kind", c.kind)
-                           .set("src", c.src).set("pattern", c.pattern).set("at", c.at).set("length", c.length).set("in", c.in)
+                           .set("src", c.src).set("pattern", c.pattern).set("at", c.at).set("length", c.length).set("offset", c.offset).set("in", c.in)
                            .set("out", c.out).set("gain", c.gain).set("fadeIn", c.fadeIn).set("fadeOut", c.fadeOut)
                            .set("loop", c.loop).set("offline", c.offline).set("linked", c.linked).set("takes", strings(c.takes)).set("comp", comp)
                            .set("plays", plays).set("reverse", c.reverse).set("fadeInHeard", c.fadeInHeard).set("fadeOutHeard", c.fadeOutHeard)

@@ -491,7 +491,9 @@ namespace solaris
              "it back. --count-in (else `settings countIn`) bars of click first, the song waiting. With an AUDIO line "
              "armed (R-REC-1): its input from where recording begins to the stop, written beside the song "
              "(`Recordings/<strip> <n>.wav`) and put on the strip as a clip where it began — moved earlier by the "
-             "output's and the input's latency, kept only inside `transport punch` — one undo.", "R-MIDI-2"},
+             "output's and the input's latency, kept only inside `transport punch` — one undo. And what the session "
+             "grid plays (R-LAUNCH-1) — with nothing armed, only that: each strip's span lands as clips on its lane, "
+             "its own clips under it cut, so the song plays back what was heard.", "R-MIDI-2"},
             {K::ClipComp, "clip comp", "<ac>", 1, 1, {"take=<n>", "from=<beats>", "to=<beats>"},
              "Choose which take plays where (R-REC-2): take <n> (1-based) from --from to --to (song beats; the whole clip "
              "without them) — ONE edit, the range overwriting what it covers. Where no range says, the last take plays; the "

@@ -23,7 +23,9 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
   a two-line signature) — in DR-SVC-1, DR-AUTO-1/4/6/8, DR-EDM-1, DR-ROLL-11, DR-MIX-15/16, DR-SVC-8, DR-LANE-3,
   DR-BROWSE-4, DR-VST-6/7, DR-SAFE-1, DR-ARR-1/3, DR-REC-1, DR-PRESET-1, DR-PERF-3. A brace has no content of its
   own, so a follower that matches lines by content attaches it to whichever brace is nearest — they drift further with
-  every edit of their file.
+  every edit of their file. The list above is not complete: the same scan, run in N39 part 3 over the files that part
+  edited, finds more of both kinds — DR-PLAY-1, DR-AUTO-5, DR-ROLL-7, DR-VST-1, DR-EDM-7/8/9, DR-UI-10/11, DR-TIME-6/7,
+  DR-CLIP-6/9, DR-REC-2, DR-WARP-1, DR-CTRL-1/2. The scan is the measure, not this list.
 - **Recommended fix:** in each section, write the file before every anchor whose file differs from the last one named
   (`app/widgets/MixerDock.cpp:N`, not `` `:N` ``), at the line the paragraph means; then the scan prints no line past
   its file's end and no `{`, `}` or blank target.

@@ -455,6 +455,7 @@ namespace solaris
             else if (k == "in") n.in = r.num(k, v, 0.0);
             else if (k == "out") n.out = r.num(k, v, 0.0);
             else if (k == "length") n.length = toTick(r.num(k, v, 0.0));
+            else if (k == "offset") n.offset = toTick(r.num(k, v, 0.0)); // R-LAUNCH-1
             else if (k == "gain") n.gain = r.num(k, v, 0.0);
             else if (k == "fadeIn") n.fadeIn = toTick(r.num(k, v, 0.0));
             else if (k == "fadeOut") n.fadeOut = toTick(r.num(k, v, 0.0));
@@ -975,6 +976,7 @@ namespace solaris
             {
                 l.strIf("pattern", n.pattern).kv("at", canonicalBeats(n.at));
                 if (n.length > 0) l.kv("length", canonicalBeats(n.length));
+                if (n.offset > 0) l.kv("offset", canonicalBeats(n.offset)); // R-LAUNCH-1: written only when set
                 if (n.gain != 0) l.kv("gain", canonicalNumber(n.gain));
             }
             emit(out, "", l.unknown(n.unknown), n.remarks);
@@ -1246,6 +1248,8 @@ namespace solaris
             if (!(t.bpm >= 20 && t.bpm <= 999)) e.push_back("tempo " + t.id + " is " + canonicalNumber(t.bpm) + " bpm (20 … 999)");
         }
         auto aKind = [](const std::string &k) { return (k == "instrument" || k == "audio" ? "an " : "a ") + k + " strip"; };
+        for (const auto &c : p.clips) // R-LAUNCH-1: a note clip may start into its pattern; an audio clip starts into its file (`in`)
+            if (c.offset < 0 || (c.offset > 0 && c.isAudio())) e.push_back("clip " + c.id + ": offset is a note clip's, beats ≥ 0 into its pattern");
         for (const auto &sl : p.slots) // R-LAUNCH-1: a slot waits in a scene for a strip that can play it
         {
             if (!p.scene(sl.scene)) e.push_back("slot " + sl.id + " is in `" + sl.scene + "`, which is no scene");

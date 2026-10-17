@@ -453,8 +453,9 @@ namespace solaris
             // R-MIDI-2: a play that keeps the armed strip's keyboard — landed at `transport stop`
             if (!requireOpen(err)) return false;
             if (mRecording) { err = "already recording — `transport stop` lands the take"; return false; }
-            if (mArmed.empty()) { err = "arm a strip first: `strip arm <ch>`"; return false; }
-            const Strip *armed = mProject.strip(mArmed);
+            // R-LAUNCH-1: with nothing armed it records what the session plays — when the song has a grid to launch
+            if (mArmed.empty() && mProject.slots.empty()) { err = "arm a strip first: `strip arm <ch>` (or launch slots of the session grid)"; return false; }
+            const Strip *armed = mArmed.empty() ? nullptr : mProject.strip(mArmed);
             const bool audio = armed && armed->kind == "audio"; // R-REC-1: its input, not a keyboard
             if (audio && mPath.empty()) { err = "save the song first — a recording is written beside it"; return false; }
             if (audio && c.has("overdub")) { err = "--overdub is the keyboard's: an audio take is a clip of its own"; return false; }
@@ -481,13 +482,14 @@ namespace solaris
                 mPlayer->setMonitor(armedIn(mLiveStrips), monitorHears(*armed, true, true));
                 mPlayer->startTake();
             }
-            else mPlayer->setRecording(true);
+            else if (armed) mPlayer->setRecording(true);
             mRecordingAudio = audio;
             mRecording = true;
             mOverdub = c.has("overdub");
             mRecordStrip = mArmed;
             mRecordFrom = mPosition;
             mTaken.clear();
+            mSpans.clear(); // R-LAUNCH-1: the session's spans from here (a play starts the session afresh)
             mModel.transport.recording = true;
             mModel.transport.recorded = 0;
             return true;
@@ -634,6 +636,7 @@ namespace solaris
                 Player::Played pl;
                 while (mPlayer->takePlayed(pl)) mTaken.push_back(pl);
                 stoppedAt = mPlayer->heard();
+                advanceLaunches(beatOfSample((double)stoppedAt)); // R-LAUNCH-1: what landed by the stop, heard
                 if (mRecordingAudio)
                 {
                     outLat = mPlayer->latency();
@@ -656,8 +659,13 @@ namespace solaris
             mModel.transport.cue = mCue;
             mModel.transport.loopFrom = mLoopFrom;
             mModel.transport.loopTo = mLoopTo;
-            if (mRecording && !(mRecordingAudio ? commitAudioTake(std::move(take), outLat, inLat, graphLat, err) : commitRecording(stoppedAt, err)))
-                return false; // the take: an edit (dispatch restores on failure)
+            if (mRecording)
+            {
+                const double stopBeat = beatOfSample((double)stoppedAt);
+                if (!mRecordStrip.empty() && !(mRecordingAudio ? commitAudioTake(std::move(take), outLat, inLat, graphLat, err) : commitRecording(stoppedAt, err)))
+                    return false; // the take: an edit (dispatch restores on failure)
+                if (!commitLaunches(stopBeat, err)) return false; // R-LAUNCH-1: and what the session played
+            }
             startMonitor(); // R-MIDI-2: armed — the keyboard is heard again, through the monitor
             announce();
             return true;
