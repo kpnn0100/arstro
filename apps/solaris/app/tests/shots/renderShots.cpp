@@ -421,6 +421,19 @@ namespace
                  r.app->project().windows().openDevice(dv);
                  r.settle();
              }},
+            {"tuner-window", // R-FX-17: a tuner's window while a synth holds A4 — the note large, the needle in tune, the rest small
+             [](sltest::Rig &r) {
+                 r.cmd("project new " + r.song("Tune") + ".slp --bpm 120");
+                 r.cmd("clip add --instrument synth --at 0 --length 16");
+                 r.cmd("note add pt_1 --pitch 69 --at 0 --length 16");
+                 r.cmd("set dv_1.osc2.level=0");                        // one saw: its period A4's
+                 r.cmd("device add ch_2 --type tuner");
+                 r.settle();
+                 r.app->project().windows().openDevice("dv_2");
+                 r.settle();
+                 r.cmd("transport play");
+                 for (int k = 0; k < 90; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(16)); r.frame(); }
+             }},
             {"effect-window", // R-UI-12: an effect keeps its parameter list
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

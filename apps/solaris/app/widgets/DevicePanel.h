@@ -48,6 +48,7 @@ namespace solaris_ui
         static constexpr double kHeaderH = 35.75;  // space::u(11)
         static constexpr double kValueW = 91.0;    // space::u(28): "auto au_12", "= ch_2.gain", "12.5 kHz"
         static constexpr double kOfflineH = 29.25; // space::barH(): a plugin's offline band — why, and Reload (R-VST-6)
+        static constexpr double kReadingsH = 71.5; // space::u(22): a device that measures — its note, its needle, the rest (R-FX-17)
 
         explicit DevicePanel(std::string deviceId);
         const std::string &device() const { return mDevice; }
@@ -96,7 +97,16 @@ namespace solaris_ui
         /** Room under the header an embedder fills (a kit's pads in a plugin's editor, R-VST-7); the rows begin
          *  below it. Opt-in, default 0: Solaris's windows lay out exactly as before. */
         double band = 0.0;
-        double bodyTop() const { return kHeaderH + band + mOffline.value() * kOfflineH; } // the band pushes the rows, eased
+        double bodyTop() const { return kHeaderH + band + mOffline.value() * kOfflineH + readingsH(); } // the bands push the rows
+        /** R-FX-17 (Round 12): a device that MEASURES (its type's readings — a tuner) shows them in a band under the
+         *  header — the note large, a needle for the cents easing to each reading, the rest small; drawn from the model
+         *  only. Its height is the type's: a type's readings never change. */
+        double readingsH() const;
+        artboard::Rect readingsRect() const;
+        std::string noteText() const;     // the band's large text: "A4", or a dash with no pitch
+        std::string readingsText() const; // its small line: "446.0 Hz · +23 ct · −9.0 dB", "no pitch · −72.0 dB"
+        double needleCents() const { return mNeedle.value(); }     // LIVE: eased toward each reading
+        double pitchedAmount() const { return mPitched.value(); }  // LIVE: 1 while it hears a pitch, eased
         /** Scroll, eased, so the group whose parameters are `<prefix>.*` begins at the top (a pad picked). */
         void revealGroup(const std::string &prefix);
 
@@ -134,6 +144,9 @@ namespace solaris_ui
         bool mDropWant = false, mDropLast = false;
         artboard::AnimatedProperty mOffline{0.0}, mEditorLit{0.0};
         bool mPluginInit = false, mOfflineLast = false, mEditorLast = false;
+        artboard::AnimatedProperty mNeedle{0.0}, mPitched{0.0}; // R-FX-17
+        double mNeedleLast = 0.0;
+        bool mReadInit = false, mPitchedLast = false;
     };
 }
 }

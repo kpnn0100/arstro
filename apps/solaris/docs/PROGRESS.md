@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N34 — DSP effects** (R-FX-6…17: multiband, gate, transient, de-esser, saturator, phaser, flanger, imager, convolution, pitch shifter, vocoder, tuner — a commit each; N33 — five DSP instruments — is built), then N35… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N35 — Group / VCA faders** (R-MIX-19: a VCA moves the gain of the strips assigned to it, adding its dB; N34 — twelve DSP effects, the tuner's readings carried to the model and its window — is built), then N36… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -588,7 +588,7 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       `parseSfz`, `MultiSampler`, a device's definition and named sounds) — its .sfz read here, its sounds decoded beside
       it. The granular sampler (DSP eb1d014: `GranularSampler`, the registry's "granular"). The 808 (DSP 190ce5f:
       `Bass808` — a composition of Phasor, DecayEnvelope, Noise and Biquad's design).
-- [~] **N34** DSP effects: multiband, gate, transient, de-esser, saturator, phaser, flanger, imager, convolution,
+- [x] **N34** DSP effects: multiband, gate, transient, de-esser, saturator, phaser, flanger, imager, convolution,
       pitch shifter, vocoder, tuner (R-FX-6…17) — a commit each.
       2026-10-17: the multiband (DSP 122d264); every effect held by one L2 test. The gate / expander (DSP f0cb867).
       The transient shaper (DSP bb091f1). The de-esser (DSP ed63bbd).
@@ -597,7 +597,8 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       The imager (DSP 04ddda6). The convolution reverb (DSP ac7aa74; `device add --sample`). The pitch shifter
       (DSP 8ceaa31). The vocoder (DSP 051007a; the audit hears a switchless key). The tuner, part 1 (Round 12;
       DSP 6c07198: YIN and a device's readings). Part 2: the readings carried up — engine, Player ring, model, `get`
-      (DR-FX-17). Next: part 3, the window — the note and an eased needle.
+      (DR-FX-17). Part 3: its window — the note, an eased needle, shots. N34 DONE (twelve effects; D-18, D-19, D-20 on
+      the way).
 - [ ] **N35** Group / VCA faders (R-MIX-19).
 - [ ] **N36** Phase invert, width, mono check, solo-safe (R-MIX-20).
 - [ ] **N37** Versions of a song (R-VER-1…4).

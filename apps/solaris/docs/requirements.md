@@ -996,7 +996,7 @@ device's description (`core/Compile.cpp:216`); the engine hands it in at build, 
 (`engine/Engine.cpp:66`); a change of sound is a structural live update (an engine swap). The model
 gives `devices[].takesSample`, `.sample` and `deviceTypes[].takesSample`; the audit names a sampler with
 no sound or an unreadable one (`core/service/ServiceModel.cpp:537`). In the UI a sampler's window names
-its sound where others name their type (`DevicePanel::sampleText`, `app/widgets/DevicePanel.cpp:456`),
+its sound where others name their type (`DevicePanel::sampleText`, `app/widgets/DevicePanel.cpp:543`),
 and a browser sample dragged over it lights the window (eased) and drops as ONE `set <dv>.sample=`
 (`WindowLayer::samplerAt`, `app/widgets/FloatWindow.cpp:303`; `app/widgets/ProjectScreen.cpp:100`).
 Measured (L2): at the root the render IS the decoded file sample for sample (a mutant whose engine skips
@@ -1068,7 +1068,7 @@ formula can drive from a `ParamTarget` (address, formula, value as shown, reset,
 unless it already IS one (`auto create <address>`), Formula… (cosmo's rename field seeded with the formula or
 "=", → `set <address>="=<typed>"`, quoted when it has a space), Clear Binding when bound (`bind clear
 <address>`), Reset to Default (`set <address>=<default>`), and Copy Address / Copy Value / Copy as Formula
-(DR-UI-11). The device window (`DevicePanel::openParamMenu`, `app/widgets/DevicePanel.cpp:499`) and the dock
+(DR-UI-11). The device window (`DevicePanel::openParamMenu`, `app/widgets/DevicePanel.cpp:586`) and the dock
 (`MixerDock::openParam`, `app/widgets/MixerDock.cpp:964`, offered first on a right-click, `:1197`) both call
 it, so the menus cannot drift; a hosted third-party VST3's parameter list (R-VST-6, not built yet) will call
 it the same way. In the dock: a fader → `<ch>.gain`, a pan → `<ch>.pan`, a send's row on a card or its cell
@@ -1527,7 +1527,7 @@ pointer's frame after frame and the song plays on from there; the brace moved 4�
 until release, then one line; resized by its right end, clamped at its left; a click still seeks. Mutants
 seen red, then restored: the playhead following the audio while scrubbing, a seek only on release, a body
 drag keeping the brace's end. Shots `ruler-scrubbing` and `loop-brace-moving`
-(`app/tests/shots/renderShots.cpp:527`, `:492`), both sizes, looked at.
+(`app/tests/shots/renderShots.cpp:540`, `:492`), both sizes, looked at.
 
 ### DR-TIME-7 Stop takes the time bar back to where it was put — or leaves it (R-TIME-7, R-TIME-8)
 The service keeps a CUE (`mCue`): where the user PUT the time bar. A `transport seek` puts it where the time bar went
@@ -1606,7 +1606,7 @@ double-click on the Bass track → the exact line and a clip of a new pattern th
 track's menu; the end dragged → the snapped length while held with nothing sent, one line on release,
 no ease back; a shell's `set ac_1.length=6` caught mid-ease; a clip dragged onto the drums' track plays
 through the drums. Mutants seen red, then restored: a length that snaps, an edge never taken. Shot
-`clip-end-dragging` (`app/tests/shots/renderShots.cpp:558`), both sizes, looked at.
+`clip-end-dragging` (`app/tests/shots/renderShots.cpp:571`), both sizes, looked at.
 
 ### DR-CLIP-9 A clip copied: Shift-drag, Ctrl+C / Ctrl+V (R-CLIP-9, R-CLIP-10)
 `clip duplicate <ac> [--at <b>] [--count <n>] [--lane <ln>]` (`core/service/ServiceEdit.cpp:820`): with `--lane` the
@@ -1659,8 +1659,8 @@ the DSP repo alone the plugins offer none and a host draws its generic view.
 (`plugins/InstrumentEditor.cpp`) builds a model of ONE device each frame the host's values moved
 (`refresh`, `:59`) with `deviceModelOf` (`core/service/RegistryModel.cpp:7` — the ONE registry→model
 mapping, which the service now uses too, `core/service/ServiceModel.cpp:60`), the panel's song controls
-off (`DevicePanel::songControls`, `app/widgets/DevicePanel.h:95`: the header names the instrument with the
-suite's mark and teal dot instead, `app/widgets/DevicePanel.cpp:628`). Solaris's accent and embedded fonts
+off (`DevicePanel::songControls`, `app/widgets/DevicePanel.h:96`: the header names the instrument with the
+suite's mark and teal dot instead, `app/widgets/DevicePanel.cpp:715`). Solaris's accent and embedded fonts
 are installed before a widget is built. The panel speaks text as in Solaris; `command` (`:82`) turns
 `set dv_1.<name>=<value>` into the host's edit through `ParamAccess` — begun ONCE per parameter per
 press, performed per step (a step that moved nothing says nothing, `:98`), ended when the pointer lets
@@ -1691,13 +1691,13 @@ in a real host window, 520×600, drawn as above; a drag sent to its window moved
 
 **Drum Machine's pads** (E6; DSP `9634166`, REQ-device-9 and REQ-vst-7). A kit — a type with `noteNames` —
 gets a `PadGrid` (`plugins/InstrumentEditor.cpp:140`) in the panel's band (`DevicePanel::band`,
-`app/widgets/DevicePanel.h:98`: room under the title, the rows below it; opt-in, 0 in Solaris), five to a
+`app/widgets/DevicePanel.h:99`: room under the title, the rows below it; opt-in, 0 in Solaris), five to a
 row (`:264`): a pad per key the registry names, in its order, each joined to its parameters by the
 registry's `notePrefixes` (`:149` — the join D-3 lacked). A press plays the pad through the plugin —
 `ParamAccess::play`, the controller's `playNote`, an `arstro.note` message to the processor, heard at the
 next block — and picks it; the release is its note-off (`handleGesture`, `:199`). The pick eases its ring in
 and the hit flashes and dies away like the sound (`advance`, `:174`); the panel scrolls, eased, so the pad's
-group begins at the top (`DevicePanel::revealGroup`, `app/widgets/DevicePanel.cpp:428`, called at `:33`).
+group begins at the top (`DevicePanel::revealGroup`, `app/widgets/DevicePanel.cpp:453`, called at `:33`).
 Playing a pad edits nothing.
 
 Guarded by `test_a_pad_plays_and_shows_its_parameters` (`plugins/tests/editorTests.cpp:333`: the pads are
@@ -1711,7 +1711,7 @@ played, the pick snapped, the least scroll instead of the group, the controller 
 ### DR-UI-12 An instrument's face is an analog synth panel (R-UI-12; R-WIN-2, R-VST-7 amended)
 `AnalogFace` (`app/widgets/AnalogFace.cpp`) is an instrument's DevicePanel body — built in the rows' place when
 the device is an instrument (`DevicePanel::build`, `app/widgets/DevicePanel.cpp:194`; `analogFace`, opt-out,
-`app/widgets/DevicePanel.h:88`), so the same face is Solaris's window and the plugins' editor. Still generated
+`app/widgets/DevicePanel.h:89`), so the same face is Solaris's window and the plugins' editor. Still generated
 (law 2): `build` (`AnalogFace.cpp:128`) makes a module per parameter group in the registry's order, the ungrouped last, titled
 by `devices[].groups` (DSP REQ-device-10, G2), a knob per number and a switch per choice; a module's SCREEN is
 chosen by what its parameters say (`:156`): a `wave` choice → the oscillator, `cutoff` + `res` → the filter,
@@ -1736,7 +1736,7 @@ Tokens: `surface::moduleBg`, `screenBg`, `knobCap`, `knobTrack`, `screenGrid` (`
 halo fades in and out. A drag is direct manipulation — up turns it up, Shift five times finer (`:455`), the knob
 the pointer's — and each step that moved the value is ONE `set` through the panel; a bound knob takes no drag
 (`:439`); a double-click is the default; a right-click opens the parameter's menu (`DevicePanel::openParamMenuFor`,
-`app/widgets/DevicePanel.cpp:515`, R-WIN-3); the wheel scrolls. Show IDs puts each address over its label (`:742`).
+`app/widgets/DevicePanel.cpp:602`, R-WIN-3); the wheel scrolls. Show IDs puts each address over its label (`:742`).
 An instrument's window opens 820 × 580 (`app/widgets/FloatWindow.cpp:144`), three modules a row; an effect's
 keeps the list at 390 × 520. The plugins' editor opens at the face's own size — 980 wide, as tall as its modules
 (`InstrumentEditor::preferredSize`, `plugins/InstrumentEditor.cpp:40`, asked by `plugins/X11View.cpp:64`).
@@ -2006,7 +2006,7 @@ a combo's (SettingCombo) naming the device; the page's content grows by them (it
 (`:892`, `openPortMenu` `:785`): a click on the field opens the app's context menu over the sheet
 (`app/App.cpp:90`) — the clock (or the default input), then every device of the port's direction, the current one
 marked — and a pick is ONE line, `settings set port.<name>=<device>:<channel>` (or empty: back on the clock). Test:
-UI `test_settings_puts_a_port_on_a_device` (`app/tests/ui/uiTests.cpp:4519`: Phones' field lists the clock and the
+UI `test_settings_puts_a_port_on_a_device` (`app/tests/ui/uiTests.cpp:4585`: Phones' field lists the clock and the
 rig's three outputs; a pick sends its one line, the field names the device, its line cross-fading — caught
 mid-ease; playing, Main's line says how the clock is; a port added grows in, undone shrinks out — each caught
 mid-ease). Shots: settings-ports, settings-ports-arriving. Mutants (each red): the line snapping; rows snapping in;
@@ -2105,7 +2105,7 @@ parses it with the DSP library's `parseSfz` — each problem a warning (an opcod
 decoder for each sound it names, beside the .sfz; one that cannot be read is said and leaves its regions silent. The
 engine hands the text and the sounds to the device at build (`engine/Engine.cpp:70`), never on the audio thread. The
 model: `devices[].takesDefinition` / `deviceTypes[].takesDefinition`; the panel asks for "an .sfz"
-(`app/widgets/DevicePanel.cpp:460`); `audit` says one with none. Tests: L2 `test_a_multisample_reads_its_sfz`
+(`app/widgets/DevicePanel.cpp:547`); `audit` says one with none. Tests: L2 `test_a_multisample_reads_its_sfz`
 (`core/tests/serviceTests.cpp:4743`: an .sfz of a soft layer and a loud one in turn — beat by beat 220, 330, 440 Hz,
 each alone; a missing sound and an opcode not read said; a file that is no instrument refused; none, said by the audit);
 `test_every_instrument_drops_as_one_line_and_sounds` (`:4704`, now giving a definition-taker its .sfz). Mutants (each
@@ -2177,6 +2177,17 @@ read-only address. At most 64 readings report (`Player::kMaxReadings`). Test: L2
 (`core/tests/serviceTests.cpp:4895`): the default synth's A4 read as A3 — its sub-octave square sets the period, as
 YIN must say — and with that oscillator off, 440.004 Hz (+0.02 cents), note 69, through `get` and the model while
 playing; 0 stopped; `set` refused; the stable dump names the readings but not their values.
+
+The window (Round 12, part 3): a device that measures shows a band under its header (`DevicePanel::readingsH`,
+`app/widgets/DevicePanel.cpp:474`; drawn at `:796`) — the note large (26 px: a display, off the editor's ramp on
+purpose), a needle across −50 … +50 cents easing to each reading at `kCatchUpMs` — a value catching up to a source it
+does not control — and greener the nearer the centre, from the EASED value so the colour never jumps; the pitched
+light (with no pitch a dash, the needle home and faded) eased alike (`:363`); the frequency, the cents (a rounded
+zero is "0", never "−0") and the level small. Drawn from the model only. The rows begin below the band. UI test
+`test_a_tuners_window` (`app/tests/ui/uiTests.cpp:4298`): the band in the window (stopped: no pitch); a panel bound to
+the service's model with A4 +23.45 ct put in — the needle caught at 12.63 ct mid-tween and the light at 0.54, then
+exactly there; the pitch gone — a dash at once, the needle and light caught on their way home; a synth has no band.
+Shot `tuner-window` at both sizes (a synth holding A4: "A4", the needle centred and green, 440.0 Hz · 0 ct).
 
 ### DR-MIDI-3 Expression lanes (R-MIDI-3)
 A pattern carries expression lanes beside its notes (`model/Project.h` `ExprPoint`; `#expr lane= at= value=` in the
@@ -2523,7 +2534,7 @@ label in capitals as a header, then its presets, the factory's marked "factory" 
 grows in. The four tabs are as wide as their names need (`tabRect`, `:263`) and the highlight eases its width with its
 place. A preset row drags like an instrument: an instrument's dropped on the lanes is ONE `clip add --instrument <t>
 --preset <name> --at … --length 4 [--lane …]` (`app/widgets/ProjectScreen.cpp:150`); an effect's says it loads onto its
-device. A device window's header has Presets (`app/widgets/DevicePanel.cpp:574`): its type's presets (the factory's
+device. A device window's header has Presets (`app/widgets/DevicePanel.cpp:661`): its type's presets (the factory's
 marked), each ONE `preset load`, then Save as preset… (the rename field; ONE `preset save`). UI
 `test_presets_in_the_window`; shots `browser-presets`, `device-presets-menu`. Mutants: the drop forgetting its preset, a
 preset clicked saving over it, the highlight's width jumping, a factory preset unmarked — each red.
@@ -2709,7 +2720,7 @@ lower edge): "Offline — <why>" in the destructive colour, and **Reload** (`rel
 (`:565`); the rows below are pushed down with it, because `bodyTop()` (`DevicePanel.h:99`) includes the eased band.
 Both ease from the model wherever the change came from (`DevicePanel.cpp:347`; the first placement is set, not
 animated). The rig's host plays two in-process plugins (`RigPlugin`, `app/tests/Rig.h:59`; one named by
-`rigPluginCrash()` is offline at once). UI `test_a_plugins_device_window` (`app/tests/ui/uiTests.cpp:4298`): an
+`rigPluginCrash()` is offline at once). UI `test_a_plugins_device_window` (`app/tests/ui/uiTests.cpp:4364`): an
 instrument plugin's list (no face); Editor's line and its light caught mid-tween, again `--close`; a crash — the band
 caught mid-slide, the rows pushed by exactly the band at rest, the model's why; Reload's line, the band caught
 mid-close; an effect plugin's list. Shots: plugin-device, plugin-offline, plugin-offline-mid at both sizes. Mutants
@@ -2751,14 +2762,14 @@ and run again.
 **Part 2 — the window.** The shared parameter menu (`app/widgets/ParamMenu.cpp`) offers every number **Learn MIDI CC**
 (`:85` — `map learn <address>`) and, for each control that moves it, **Forget CC <n>** (`map remove <n>`); the
 widget fills `ParamTarget::controls` from `settings.mappings[]` (`controlsFor`, `:43`; the dock,
-`app/widgets/MixerDock.cpp:996`; a device's rows and knobs, `app/widgets/DevicePanel.cpp:523`). While a learn waits, the
+`app/widgets/MixerDock.cpp:996`; a device's rows and knobs, `app/widgets/DevicePanel.cpp:610`). While a learn waits, the
 song bar shows a pill after the tempo (`app/widgets/SongBar.cpp:297`; its rect `:82`, up to the meter, 260 at most) —
 "MIDI learn · <address> — move a control" — easing in and out (`:132`; the address kept while it fades), and a click on
 it is `map learn --cancel` (`:215`). Settings has a **MIDI** page (`SettingsSheet::kMidi`): each mapping a row —
 `CC <n>`, the address, dimmed and "not in this song" when inert — with × forgetting it (`map remove`,
 `app/widgets/SettingsSheet.cpp:902`); the rows are keyed by control, a new one growing in and a forgotten one shrinking
 out (`:271`, `:710`; drawn `:1079`), the first placement set. UI `test_midi_learn_in_the_window`
-(`app/tests/ui/uiTests.cpp:4357`): Learn from a fader's menu — the line, the pill caught mid-fade, a click on it
+(`app/tests/ui/uiTests.cpp:4423`): Learn from a fader's menu — the line, the pill caught mid-fade, a click on it
 cancelling (caught mid-fade out); Forget CC 74's line; a knob's menu offering Learn; the MIDI page with one inert row,
 × sending its line and the row caught mid-shrink. Shots: midi-learn (a fader's menu with Learn and Forget, the pill),
 settings-midi (three mappings, one inert) at both sizes. Mutants (each red): the pill snapping, no Learn item, no
@@ -2812,7 +2823,7 @@ port: None and the MIDI ports `devices list` names (`app/widgets/SettingsSheet.c
 set` line; the mapped controls follow under a micro-label (`:1004`). The surface row's note (`rowNote`, `:1017`) says
 what the model says: what a surface does, "connected · strips 1–8" (its bank), or "not connected — <why>"; a change
 cross-fades from the old line (`:694`). The rig's host has a MIDI output that goes nowhere (`QuietOut`,
-`app/tests/Rig.h:157`). UI `test_a_surface_chosen_in_settings` (`app/tests/ui/uiTests.cpp:4422`): Mackie Control
+`app/tests/Rig.h:157`). UI `test_a_surface_chosen_in_settings` (`app/tests/ui/uiTests.cpp:4488`): Mackie Control
 picked — its line, the note caught mid-fade, then "no port"; a port picked — its line (the whole `key=value` quoted, as
 the sheet spells any), "connected · strips 1–8"; None — its line, disconnected. Shot settings-midi now shows a Mackie
 Control surface connected over the mappings. Mutants (each red): the note snapping, the combo sending another key, the
@@ -2837,7 +2848,7 @@ drawn value is a value catching up (`:133`), so a stop eases it down. The learn 
 `test_the_cpu_meter` (`core/tests/serviceTests.cpp:4200`): playing, a load in (0, 10) and a worst block kept; a
 chord's synth costs more than an empty bus, and no strip more than the whole (≈ 2 % of a block against ≈ 0 here);
 stopped, all 0; a render before and after playing, the same bytes. UI `test_the_cpu_in_the_song_bar`
-(`app/tests/ui/uiTests.cpp:4581`): the readout caught on its way up and on its way down. The meters-playing shot shows
+(`app/tests/ui/uiTests.cpp:4647`): the readout caught on its way up and on its way down. The meters-playing shot shows
 it. Mutants (each red): the load not over the block's duration, the strips never timed, a strip's sums never
 restarted, the worst block never kept, the readout snapping. Found while building it: two survived first — "a strip's
 sums never restarted" (the test's bound was loose: a strip's share is now held to the whole load's) and "the worst
@@ -2907,7 +2918,7 @@ became `writeBounce`, one copy for both. **Drawn** (part 2): a strip's menu in t
 (`:1276`) on a strip nothing feeds, read from the model's `fromStrips` (outputs, sends and keys — the service's rule);
 each one line. A frozen strip's eased amount (`:651`, `frozenAmount` `:419`, the cross-fade's time) dims its rack
 (`:1387`) under a chip-sized FROZEN pill in the accent (`:1412`, its word ellipsized on a narrow card). Test: UI
-`test_a_strip_freezes_from_its_menu` (`app/tests/ui/uiTests.cpp:4461`: a fed bus offers neither; Freeze sends its line,
+`test_a_strip_freezes_from_its_menu` (`app/tests/ui/uiTests.cpp:4527`: a fed bus offers neither; Freeze sends its line,
 the amount caught mid-ease both ways; Unfreeze; Bounce makes a strip). Shots: mixer-frozen, mixer-frozen-mid. Mutants
 (each red): the look snapping; never advancing; Freeze, or Bounce, offered on a fed strip; Unfreeze never offered;
 Freeze sending the wrong line. Found while testing it: Escape closes a context menu only while renaming, so the Duck

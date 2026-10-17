@@ -4295,6 +4295,72 @@ static void test_the_sample_library_in_the_browser()
     pass("the sample library in the browser (R-PRESET-3): a star one `sample favourite`, lit eased; Tag… typed one `sample tag`; Search samples… typed one `browse --search`, the list crossing to what it found, back by its first row; Favourites one `browse --favourites`; Remove tag one `sample untag`");
 }
 
+static void test_a_tuners_window()
+{
+    // R-FX-17 (Round 12, part 3): a tuner's window — a band under its header: the note large, a needle for the cents
+    // easing to each reading, the rest small; no pitch: a dash, the needle home to the centre, faded. Drawn from the
+    // model only: the window's own (stopped: no pitch), then a panel bound to the service's model with what a tuner
+    // hears put in, advanced on a clock — each change caught mid-tween
+    sltest::Rig r("ui-tuner", 1440, 900);
+    r.cmd("project new " + r.song("Tuner") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");                // ch_2, dv_1
+    r.cmd("device add ch_2 --type tuner");                                 // dv_2
+    r.settle();
+    auto &wl = r.app->project().windows();
+    wl.openDevice("dv_2");
+    r.settle();
+    using DP = arstro::solaris_ui::DevicePanel;
+    auto &w = *wl.devicePanel("dv_2");
+    assert(w.readingsH() == DP::kReadingsH && w.bodyTop() >= DP::kHeaderH + DP::kReadingsH); // its rows below the band
+    assert(w.noteText() == "\xE2\x80\x94" && w.pitchedAmount() == 0.0 && w.needleCents() == 0.0 && w.readingsText().find("no pitch") == 0);
+    arstro::solaris::AppModel m = r.svc->model();
+    auto put = [&](double hz, double note, double ct) {
+        for (auto &st : m.strips)
+            for (auto &d : st.devices)
+                if (d.id == "dv_2") { d.readings[0].value = hz; d.readings[1].value = note; d.readings[2].value = ct; d.readings[3].value = -9.0; }
+    };
+    DP p("dv_2");
+    p.width.set(420.0);
+    p.height.set(320.0);
+    put(0.0, 0.0, 0.0);
+    p.bind(m, false);
+    p.advance(0.0);
+    p.layout();
+    assert(p.needleCents() == 0.0 && p.pitchedAmount() == 0.0);
+    // it hears A4 23 cents sharp: the needle and the light ease there
+    put(446.0, 69.0, 23.45);
+    p.bind(m, false);
+    p.advance(1000.0);
+    p.advance(1050.0);
+    const double mid = p.needleCents(), lit = p.pitchedAmount();
+    assert(mid > 0.0 && mid < 23.45 && lit > 0.0 && lit < 1.0);
+    p.advance(1400.0);
+    assert(std::fabs(p.needleCents() - 23.45) < 1e-9 && p.pitchedAmount() == 1.0);
+    assert(p.noteText() == "A4" && p.readingsText() == "446.0 Hz \xC2\xB7 +23 ct \xC2\xB7 \xE2\x88\x92" "9.0 dB");
+    put(440.0, 69.0, -0.3); // a hair flat rounds to 0 ct — never "−0"
+    p.bind(m, false);
+    assert(contains(p.readingsText(), "\xC2\xB7 0 ct \xC2\xB7"));
+    put(446.0, 69.0, 23.45);
+    p.bind(m, false);
+    p.advance(1400.0);
+    // the pitch goes: a dash at once (a text has no in-between), the needle home and the light out, eased
+    put(0.0, 0.0, 0.0);
+    p.bind(m, false);
+    p.advance(2000.0);
+    p.advance(2050.0);
+    assert(p.noteText() == "\xE2\x80\x94" && p.needleCents() > 0.0 && p.needleCents() < 23.45 && p.pitchedAmount() > 0.0 && p.pitchedAmount() < 1.0);
+    p.advance(2400.0);
+    assert(p.needleCents() == 0.0 && p.pitchedAmount() == 0.0 && p.readingsText().find("no pitch") == 0);
+    // a device that measures nothing has no band
+    DP s("dv_1");
+    s.analogFace = false;
+    s.bind(m, false);
+    s.advance(0.0);
+    assert(s.readingsH() == 0.0 && s.bodyTop() == DP::kHeaderH);
+    std::printf("    the needle mid-tween at %.2f ct (its target 23.45), the light %.2f\n", mid, lit);
+    pass("a tuner's window (R-FX-17): a band under the header — the note large, the needle easing to each reading (caught mid-tween, both ways), the rest small; no pitch a dash; a device that measures nothing has none");
+}
+
 static void test_a_plugins_device_window()
 {
     // R-VST-6 (N26): a plugin's device window — its parameter list (an instrument's too: its face is its own editor),
@@ -4673,6 +4739,7 @@ int main()
     test_the_ruler_is_dragged();
     test_a_sample_dropped_on_a_sampler_loads_it();
     test_a_plugins_device_window();
+    test_a_tuners_window();
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();

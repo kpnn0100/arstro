@@ -358,6 +358,31 @@ namespace solaris_ui
         if (ed != mEditorLast) { mEditorLit.animateTo(ed ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); mEditorLast = ed; }
         mOffline.update(nowMs);
         mEditorLit.update(nowMs);
+        // R-FX-17: a measuring device's needle and its pitched light — a value catching up to a source it does not
+        // control, eased however often the readings move
+        if (d && !d->readings.empty())
+        {
+            double cents = 0.0, hz = 0.0;
+            for (const auto &rd : d->readings)
+            {
+                if (rd.name == "cents") cents = rd.value;
+                if (rd.name == "frequency") hz = rd.value;
+            }
+            const bool pitched = hz > 0.0;
+            const double target = pitched ? std::clamp(cents, -50.0, 50.0) : 0.0;
+            if (!mReadInit)
+            {
+                mNeedle.set(target);
+                mPitched.set(pitched ? 1.0 : 0.0);
+                mNeedleLast = target;
+                mPitchedLast = pitched;
+                mReadInit = true;
+            }
+            if (target != mNeedleLast) { mNeedle.animateTo(target, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); mNeedleLast = target; }
+            if (pitched != mPitchedLast) { mPitched.animateTo(pitched ? 1.0 : 0.0, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); mPitchedLast = pitched; }
+        }
+        mNeedle.update(nowMs);
+        mPitched.update(nowMs);
         mScroll.advance(nowMs);
         if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
@@ -444,6 +469,68 @@ namespace solaris_ui
                 mScroll.reveal(top, std::max(0.0, height.value() - bodyTop()));
                 return;
             }
+    }
+
+    double DevicePanel::readingsH() const
+    {
+        const solaris::DeviceModel *d = model();
+        return d && !d->readings.empty() ? kReadingsH : 0.0;
+    }
+
+    Rect DevicePanel::readingsRect() const
+    {
+        return Rect{0.0, kHeaderH + band + mOffline.value() * kOfflineH, width.value(), readingsH()};
+    }
+
+    namespace
+    {
+        const solaris::ReadingModel *readingOf(const solaris::DeviceModel *d, const char *name)
+        {
+            if (d)
+                for (const auto &r : d->readings)
+                    if (r.name == name) return &r;
+            return nullptr;
+        }
+        std::string fixed(double v, int places, bool sign = false)
+        {
+            char b[48];
+            std::snprintf(b, sizeof b, sign ? "%+.*f" : "%.*f", places, v);
+            std::string s = b;
+            if (!s.empty() && s[0] == '-') s = "\xE2\x88\x92" + s.substr(1); // a true minus
+            return s;
+        }
+    }
+
+    std::string DevicePanel::noteText() const
+    {
+        const auto *hz = readingOf(model(), "frequency"), *note = readingOf(model(), "note");
+        if (!hz || hz->value <= 0.0 || !note) return "\xE2\x80\x94"; // no pitch: a dash
+        static const char *names[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+        const int n = (int)std::lround(note->value);
+        return std::string(names[((n % 12) + 12) % 12]) + std::to_string(n / 12 - 1);
+    }
+
+    std::string DevicePanel::readingsText() const
+    {
+        const solaris::DeviceModel *d = model();
+        if (!d) return {};
+        const auto *hz = readingOf(d, "frequency");
+        std::string s;
+        auto add = [&](const std::string &part) { s += (s.empty() ? "" : " \xC2\xB7 ") + part; };
+        if (hz && hz->value <= 0.0) add("no pitch");
+        for (const auto &r : d->readings)
+        {
+            if (r.name == "note") continue;                                   // the large text says it
+            if ((r.name == "frequency" || r.name == "cents") && hz && hz->value <= 0.0) continue;
+            if (r.name == "frequency") add(fixed(r.value, 1) + " Hz");
+            else if (r.name == "cents")
+            {
+                const double c = std::round(r.value) + 0.0; // + 0.0: no "−0"
+                add((c == 0.0 ? std::string("0") : fixed(c, 0, true)) + " ct");
+            }
+            else add(fixed(r.value, 1) + (r.unit.empty() ? "" : " " + r.unit));
+        }
+        return s;
     }
 
     Rect DevicePanel::removeRect() const { return Rect{width.value() - space::padX() - 55.25, 8.125, 55.25, 19.5}; }
@@ -704,6 +791,37 @@ namespace solaris_ui
             t.drawText(textfit::ellipsize(t, why, std::max(0.0, rl.x - 2.0 * space::padX()), 10.0, font::sans()), space::padX(),
                        textfit::baseline(cy, 10.0), 10.0, font::sans());
             t.restore();
+        }
+        // R-FX-17 (Round 12): a device that measures — its band: the note large, a needle across −50 … +50 cents, the rest
+        if (readingsH() > 0.0)
+        {
+            const Rect band = readingsRect();
+            drawRoundedRect(t, band, 0.0, Paint::filled(surface::screenBg()));
+            const double p = mPitched.value(), noteW = space::u(22); // u(22): "A#4" at 26 px with room
+            // the note: a display read across a room — 26 px, off the editor's ramp on purpose, as the analog face's screens
+            t.setFill(lerpColor(palette::mutedForeground(), palette::foreground(), p));
+            t.drawText(noteText(), space::padX(), textfit::baseline(band.y + band.h * 0.42, 26.0), 26.0, font::sansSemiBold());
+            // the needle's track, its ticks at −50, −25, 0, +25, +50
+            const double x0 = space::padX() + noteW, x1 = std::max(x0, W - space::padX()), cy = band.y + band.h * 0.42;
+            auto at = [&](double ct) { return x0 + (x1 - x0) * (ct + 50.0) / 100.0; };
+            t.setStroke(surface::knobTrack(), 1.0);
+            t.beginPath(); t.moveTo(x0, cy); t.lineTo(x1, cy); t.strokePath();
+            for (double ct : {-50.0, -25.0, 0.0, 25.0, 50.0})
+            {
+                const double half = ct == 0.0 ? space::u(3) : space::u(1.5);
+                t.beginPath(); t.moveTo(at(ct), cy - half); t.lineTo(at(ct), cy + half); t.strokePath();
+            }
+            // the needle: the accent, greener the nearer the centre (in tune) — from the EASED value, so never a jump
+            const double n = mNeedle.value(), inTune = std::clamp(1.0 - std::fabs(n) / 5.0, 0.0, 1.0);
+            const artboard::Color nc = lerpColor(palette::primary(), palette::success(), inTune);
+            t.setStroke(artboard::Color{nc.r, nc.g, nc.b, nc.a * (0.25 + 0.75 * p)}, 2.0);
+            t.beginPath(); t.moveTo(at(n), cy - space::u(4)); t.lineTo(at(n), cy + space::u(4)); t.strokePath();
+            // the rest, small
+            t.setFill(palette::mutedForeground());
+            t.drawText(textfit::ellipsize(t, readingsText(), std::max(0.0, W - 2.0 * space::padX()), 10.0, font::mono()), space::padX(),
+                       textfit::baseline(band.y + band.h - space::u(3.5), 10.0), 10.0, font::mono());
+            t.setStroke(palette::border(), 1.0);
+            t.beginPath(); t.moveTo(0, band.y + band.h - 0.5); t.lineTo(W, band.y + band.h - 0.5); t.strokePath();
         }
         // a sample hovering over a sampler: the window outlined in the accent, eased (R-EDM-8)
         if (mDrop.value() > 0.001)
