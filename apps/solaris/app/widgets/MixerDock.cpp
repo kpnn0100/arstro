@@ -416,6 +416,29 @@ namespace solaris_ui
         const Live *l = liveOf(id);
         return l ? l->arm.value() : 0.0;
     }
+    double MixerDock::phaseAmount(const std::string &id) const
+    {
+        const Live *l = liveOf(id);
+        return l ? l->phase.value() : 0.0;
+    }
+    double MixerDock::widthAmount(const std::string &id) const
+    {
+        const Live *l = liveOf(id);
+        return l ? l->widthOn.value() : 0.0;
+    }
+    double MixerDock::safeAmount(const std::string &id) const
+    {
+        const Live *l = liveOf(id);
+        return l ? l->safe.value() : 0.0;
+    }
+    Rect MixerDock::monoRect() const
+    {
+        const Rect c = cardRect("master");
+        if (c.w <= 0) return Rect{};
+        const Geo g = geoOf(c.x, c.w, c.y, c.h);
+        return Rect{g.pan.x, g.pan.y - 3.0, g.pan.w, g.pan.h + 6.0}; // the pan row, a touch taller: a button
+    }
+
     double MixerDock::vcaAmount(const std::string &id) const
     {
         const Live *l = liveOf(id);
@@ -670,6 +693,15 @@ namespace solaris_ui
                 if (member != l.vcaLast) { l.vca.animateTo(member ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.vcaLast = member; }
                 if (vdb != l.vcaDbLast) { l.vcaDb.animateTo(vdb, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); l.vcaDbLast = vdb; }
             }
+            // R-MIX-20: its Ø, its width tag (the number it shows kept while it fades out), a solo-safe bus's ring
+            {
+                const bool ph = sm && sm->phase, wd = sm && sm->width != 100.0, sf = sm && sm->soloSafe;
+                if (wd) l.widthShown = sm->width;
+                if (!l.toolsInit) { l.phase.set(ph ? 1.0 : 0.0); l.widthOn.set(wd ? 1.0 : 0.0); l.safe.set(sf ? 1.0 : 0.0); l.phaseLast = ph; l.widthLast = wd; l.safeLast = sf; l.toolsInit = true; }
+                if (ph != l.phaseLast) { l.phase.animateTo(ph ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.phaseLast = ph; }
+                if (wd != l.widthLast) { l.widthOn.animateTo(wd ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.widthLast = wd; }
+                if (sf != l.safeLast) { l.safe.animateTo(sf ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.safeLast = sf; }
+            }
             if (frozen != l.frozenLast) // R-PERF-3
             {
                 l.frozen.animateTo(frozen ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
@@ -722,6 +754,9 @@ namespace solaris_ui
             l.frozen.update(nowMs);
             l.vca.update(nowMs);
             l.vcaDb.update(nowMs);
+            l.phase.update(nowMs);
+            l.widthOn.update(nowMs);
+            l.safe.update(nowMs);
             l.dim.update(nowMs);
             l.colT.update(nowMs);
         };
@@ -739,6 +774,10 @@ namespace solaris_ui
         }
         mLufs.update(nowMs);
         mLufsOn.update(nowMs);
+        // R-MIX-20: the mono check — the listener's; lit while on
+        if (!mMonoInit) { mMono.set(tr.mono ? 1.0 : 0.0); mMonoLast = tr.mono; mMonoInit = true; }
+        if (tr.mono != mMonoLast) { mMono.animateTo(tr.mono ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); mMonoLast = tr.mono; }
+        mMono.update(nowMs);
         // what drives each bound control: a tag that fades in and out, its text cross-fading when it changes
         std::set<std::string> boundNow;
         for (const auto &s : mModel.strips)
@@ -905,6 +944,7 @@ namespace solaris_ui
             if (g.zone.contains(p)) h.part = Part::Fader;
             if (clipHit(g.clip).contains(p)) h.part = Part::Clip;
             if (loudnessRect().contains(p)) h.part = Part::Loudness;
+            if (monoRect().contains(p)) h.part = Part::Mono; // R-MIX-20
             for (int k = 0; k < chipSlots("master"); ++k)
                 if (g.chips[k].contains(p)) { h.part = Part::Chip; h.index = k; }
             return h;
@@ -1135,6 +1175,7 @@ namespace solaris_ui
             case Part::ToggleDock: if (onToggle) onToggle(); break;
             case Part::Clip: send("meters clear"); break;                 // R-METER-2: every clip light out
             case Part::Loudness: if (onOpenLoudness) onOpenLoudness(); break; // R-METER-1
+            case Part::Mono: send(std::string("transport mono ") + (mModel.transport.mono ? "off" : "on")); break; // R-MIX-20
             case Part::Mute:
                 if (const auto *s = strip(h.id)) send("set " + h.id + ".mute=" + (s->mute ? "false" : "true"));
                 break;
@@ -1311,6 +1352,17 @@ namespace solaris_ui
                     if (!s.vca.empty()) vcas.push_back({"None", [this, id] { send("set " + id + ".vca=none"); }});
                     if (!vcas.empty()) items.push_back({"VCA \xE2\x96\xB8", [this, vcas, world] { if (onMenu) onMenu(vcas, world); }});
                 }
+                if (s.kind != "vca") // R-MIX-20: its polarity, its width; a bus's solo-safe — one line each
+                {
+                    items.push_back({std::string("Invert Phase") + (s.phase ? "  \xC2\xB7 on" : ""), [this, id, on = s.phase] { send("set " + id + ".phase=" + (on ? "off" : "on")); }});
+                    std::vector<cosmo_v2::ContextMenu::Item> widths;
+                    for (int pct : {0, 50, 100, 150, 200})
+                        widths.push_back({std::to_string(pct) + " %" + (pct == 0 ? " (mono)" : "") + (std::fabs(s.width - pct) < 1e-9 ? "  \xC2\xB7 now" : ""),
+                                          [this, id, pct] { send("set " + id + ".width=" + std::to_string(pct)); }});
+                    items.push_back({"Width \xE2\x96\xB8", [this, widths, world] { if (onMenu) onMenu(widths, world); }});
+                    if (s.kind == "bus")
+                        items.push_back({std::string("Solo-safe") + (s.soloSafe ? "  \xC2\xB7 on" : ""), [this, id, on = s.soloSafe] { send("set " + id + ".soloSafe=" + (on ? "false" : "true")); }});
+                }
                 if (s.kind != "vca") // a VCA carries no sound: nothing to freeze or bounce
                 {
                     if (!s.frozen.empty()) items.push_back({"Unfreeze", [this, id] { send("strip unfreeze " + id); }});
@@ -1424,8 +1476,28 @@ namespace solaris_ui
         if (s->kind == "audio" || s->kind == "instrument") sub += " \xC2\xB7 " + std::to_string(s->clipCount) + (s->clipCount == 1 ? " clip" : " clips");
         else if (isVca) sub = "VCA \xC2\xB7 moves " + std::to_string(s->members.size());
         else sub += " \xC2\xB7 fed by " + std::to_string(s->fromStrips.size());
+        // R-MIX-20: "Ø" and its width at the sub line's right, faded in; the sub gives them room as they come
+        const std::string ws = num(l->widthShown, 0) + "%";
+        const double pa = l->phase.value(), wa = l->widthOn.value();
+        const double tw = (pa > 0.001 ? t.measureText("\xC3\x98 ", 9.0, font::sansMedium()) * pa : 0.0) + (wa > 0.001 ? t.measureText(ws, 9.0, font::mono()) * wa : 0.0);
         t.setFill(fade(palette::mutedForeground(), ca));
-        t.drawText(textfit::ellipsize(t, sub, w - 13.0, 9.0, font::sans()), x + 6.5, by + 33.0, 9.0, font::sans());
+        t.drawText(textfit::ellipsize(t, sub, std::max(0.0, w - 13.0 - tw - (tw > 0.0 ? 3.0 : 0.0)), 9.0, font::sans()), x + 6.5, by + 33.0, 9.0, font::sans());
+        {
+            double tx = x + w - 6.5;
+            if (wa > 0.001)
+            {
+                tx -= t.measureText(ws, 9.0, font::mono());
+                t.setFill(fade(palette::secondaryForeground(), ca * wa));
+                t.drawText(ws, tx, by + 33.0, 9.0, font::mono());
+                tx -= 3.0;
+            }
+            if (pa > 0.001)
+            {
+                tx -= t.measureText("\xC3\x98", 9.0, font::sansMedium());
+                t.setFill(fade(palette::primary(), ca * pa));
+                t.drawText("\xC3\x98", tx, by + 33.0, 9.0, font::sansMedium());
+            }
+        }
 
         if (isVca)
         {
@@ -1564,6 +1636,8 @@ namespace solaris_ui
         };
         toggle(g.mute, "M", l->mute.value(), palette::whiteAlpha(0.82), (int)Part::Mute);
         toggle(g.solo, "S", l->solo.value(), surface::solo(), (int)Part::Solo);
+        if (const double sf = l->safe.value(); sf > 0.001) // R-MIX-20: solo-safe — a ring on its S, in the solo amber
+            drawRoundedRect(t, Rect{g.solo.x - 1.5, g.solo.y - 1.5, g.solo.w + 3.0, g.solo.h + 3.0}, radius::control(), Paint::stroked(fade(surface::solo(), sf * a), 1.0));
         if (g.arm.w > 0) toggle(g.arm, "R", l->arm.value(), palette::destructive(), (int)Part::Arm); // R-REC-1: armed, red
         // where it goes
         if (!isVca)
@@ -1636,6 +1710,14 @@ namespace solaris_ui
             else drawRoundedRect(t, r, radius::control(), Paint::filled(fade(lerpColor(palette::secondary(), palette::card(), hv), a)));
             drawNameWithId(t, label, dv, r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), r.w - 10.0, 10.0, font::sans(),
                            add || more ? palette::mutedForeground() : palette::foreground(), ids, a);
+        }
+        // R-MIX-20: the mono check — the listener's; lit while on (a master has no pan: its row is free)
+        {
+            const Rect mr = monoRect();
+            const double on = mMono.value(), hv = mHover.amount(hoverId((int)Part::Mono, "master>", -1));
+            drawRoundedRect(t, mr, radius::control(), Paint::filled(fade(lerpColor(lerpColor(palette::secondary(), palette::card(), hv), palette::primary(), on), a)));
+            t.setFill(fade(lerpColor(palette::secondaryForeground(), palette::primaryForeground(), on), a));
+            t.drawText("Mono", mr.x + (mr.w - t.measureText("Mono", 9.0, font::sansMedium())) * 0.5, textfit::baseline(mr.y + mr.h * 0.5, 9.0), 9.0, font::sansMedium());
         }
         paintFader(t, g.zone, *l, a);
         paintTag(t, "project.masterGain", Rect{x + 6.5, g.pan.bottom() + 2.0, w - 13.0, 12.0}, a);

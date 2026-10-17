@@ -430,6 +430,16 @@ namespace
                  r.cmd("set ch_2.vca=Synths ch_3.vca=Synths ch_4.gain=-6");
                  r.settle();
              }},
+            {"mixer-tools", // R-MIX-20: a synth inverted at 150 % width (Ø, "150%"), a solo-safe bus (its S ringed), the master's Mono lit
+             [](sltest::Rig &r) {
+                 r.cmd("project new " + r.song("Tools") + ".slp --bpm 120");
+                 r.cmd("clip add --instrument synth --at 0 --length 4");
+                 const std::string mx = r.svc->model().mixers[0].id;
+                 r.cmd("strip add --kind bus --name Verb --mixer " + mx);
+                 r.cmd("set ch_2.phase=on ch_2.width=150 ch_3.soloSafe=true");
+                 r.cmd("transport mono on");
+                 r.settle();
+             }},
             {"tuner-window", // R-FX-17: a tuner's window while a synth holds A4 — the note large, the needle in tune, the rest small
              [](sltest::Rig &r) {
                  r.cmd("project new " + r.song("Tune") + ".slp --bpm 120");

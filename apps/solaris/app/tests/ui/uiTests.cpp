@@ -4358,6 +4358,72 @@ static void test_a_vca_in_the_dock()
     pass("a VCA in the dock (R-MIX-19): + Line › VCA one line; a strip's VCA ▸ one `set .vca=`; the member's tag fades in and its dB eases (mid-tween); the VCA's card has no pan or route to press");
 }
 
+static void test_per_strip_tools_in_the_dock()
+{
+    // R-MIX-20 (Round 14, part 3): a strip's menu — Invert Phase, Width ▸, and on a bus Solo-safe — one line each; its
+    // card's Ø and width tag, a safe bus's ring on its S, each caught fading in; the master's Mono one line, lit eased
+    sltest::Rig r("ui-tools", 1280, 800);
+    r.cmd("project new " + r.song("Tools") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");                // ch_2
+    const std::string mx = r.svc->model().mixers[0].id;
+    r.cmd("strip add --kind bus --name Verb --mixer " + mx);               // ch_3, on this page
+    r.settle();
+    auto &d = r.app->project().dock();
+    auto &menu = r.app->menu();
+    auto pick = [&](const std::string &card, const std::string &prefix) {
+        const artboard::Rect c = world(d, d.cardRect(card));
+        r.click(c.x + 20.0, c.y + 16.0, 2);
+        r.settle();
+        int at = -1;
+        for (int i = 0; i < menu.itemCount(); ++i)
+            if (menu.item(i).label.rfind(prefix, 0) == 0) at = i;
+        assert(menu.isOpen() && at >= 0);
+        r.click(menu.itemRect(at));
+    };
+    pick("ch_2", "Invert Phase");
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "set ch_2.phase=on") && d.phaseAmount("ch_2") > 0.0 && d.phaseAmount("ch_2") < 1.0);
+    r.settle();
+    assert(d.phaseAmount("ch_2") == 1.0);
+    pick("ch_2", "Width");
+    r.settle();
+    int w150 = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label.rfind("150 %", 0) == 0) w150 = i;
+    assert(menu.isOpen() && w150 >= 0);
+    r.click(menu.itemRect(w150));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "set ch_2.width=150") && d.widthAmount("ch_2") > 0.0 && d.widthAmount("ch_2") < 1.0);
+    r.settle();
+    assert(d.widthAmount("ch_2") == 1.0);
+    pick("ch_3", "Solo-safe");
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "set ch_3.soloSafe=true") && d.safeAmount("ch_3") > 0.0 && d.safeAmount("ch_3") < 1.0);
+    r.settle();
+    assert(d.safeAmount("ch_3") == 1.0);
+    // a strip that is not a bus has no Solo-safe
+    {
+        const artboard::Rect c = world(d, d.cardRect("ch_2"));
+        r.click(c.x + 20.0, c.y + 16.0, 2);
+        r.settle();
+        for (int i = 0; i < menu.itemCount(); ++i) assert(menu.item(i).label.rfind("Solo-safe", 0) != 0);
+        r.click(600.0, 250.0); // dismissed as a user does: a click elsewhere
+        r.settle();
+        assert(!menu.isOpen());
+    }
+    // the master's Mono: the listener's, one line; lit eased
+    r.click(world(d, d.monoRect()));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "transport mono on") && d.monoAmount() > 0.0 && d.monoAmount() < 1.0);
+    r.settle();
+    assert(d.monoAmount() == 1.0 && r.svc->model().transport.mono);
+    pass("per-strip tools in the dock (R-MIX-20): Invert Phase, Width ▸ and a bus's Solo-safe one line each — Ø, the width tag and the ring caught fading in; the master's Mono one line, lit eased");
+}
+
 static void test_a_tuners_window()
 {
     // R-FX-17 (Round 12, part 3): a tuner's window — a band under its header: the note large, a needle for the cents
@@ -4804,6 +4870,7 @@ int main()
     test_a_plugins_device_window();
     test_a_tuners_window();
     test_a_vca_in_the_dock();
+    test_per_strip_tools_in_the_dock();
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();

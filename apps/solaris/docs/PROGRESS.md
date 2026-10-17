@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N36 — Phase invert, width, mono check, solo-safe** (R-MIX-20: per-strip tools; N35 — group / VCA faders — is built), then N37… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N37 — Versions of a song** (R-VER-1…4; N36 — per-strip tools — is built), then N38… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -605,10 +605,12 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       Part 2: a VCA's fader, mute and solo live with no rebuild (a formula member: one); a VCA-muted member keys
       nothing; strips[].vca / vcaGain / members; transport.swaps. Part 3: the dock — a VCA's card, a member's eased
       tag, "+ Line" › VCA, a strip's VCA ▸, shot mixer-vca. N35 DONE.
-- [~] **N36** Phase invert, width, mono check, solo-safe (R-MIX-20). Round 14 (139db7d).
+- [x] **N36** Phase invert, width, mono check, solo-safe (R-MIX-20). Round 14 (139db7d).
       Part 1: a strip's phase and width in the engine (after its rack, before its fader; untouched at defaults);
       solo-safe buses; the mono check at the Player (DR-MIX-20). Part 2: width and phase live with no rebuild (ramped;
-      a flip crosses through silence), the model's fields. Next: part 3 — the dock.
+      a flip crosses through silence), the model's fields. Part 3: the dock — a strip's Invert Phase, Width ▸ and a
+      bus's Solo-safe; the card's Ø and width tag, the safe ring, the master's Mono pill, all eased; shot mixer-tools.
+      N36 DONE. (On the way: DR-MIX-4's and the dock's anchors had drifted unseen — re-pointed by symbol.)
 - [ ] **N37** Versions of a song (R-VER-1…4).
 - [ ] **N38** Collect and save; relink (R-COLLECT-1).
 - [ ] **N39** A clip launcher (R-LAUNCH-1).

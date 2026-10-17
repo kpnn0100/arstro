@@ -12,6 +12,9 @@
  *
  *  A VCA (R-MIX-19) is a card with a fader, M and S and no sound — its members named where a rack would be, no
  *  meter, pan, sends or route; a member says "VCA <name> <dB>" over its fader, eased as the VCA moves.
+ *  Per-strip tools (R-MIX-20), from the strip's menu: Invert Phase draws "Ø" at the right of the card's sub
+ *  line, Width ▸ "<w>%" beside it when off 100; a bus's Solo-safe rings its S; the master's "Mono" pill,
+ *  where a pan would be, sends `transport mono on|off` — a check, not an edit.
  *  The Matrix (R-MIX-9): a row per strip, grouped by mixer; the columns are the service's
  *  (`matrix.columns`, the same `matrix print` prints): every strip some strip may or does reach, the
  *  master and every output port — so a route or a key to an instrument or a same-mixer strip has its
@@ -27,9 +30,9 @@
  *  follows the engine continuously, like the playhead; stopped, a change of binding or position eases.
  *  With View › Show IDs each card, chip and send shows its id (eased).
  *
- *  Everything is a command line (`onCommand`): `set <ch>.gain|pan|mute|solo=…`,
+ *  Everything is a command line (`onCommand`): `set <ch>.gain|pan|mute|solo|phase|width|soloSafe=…`,
  *  `set project.masterGain=…`, `route`, `send add|delete`, `set <sd>.gain|pre=…`, `device add`,
- *  `mixer add|delete`, `set <mx|ch>.name=…`. Folding, the shown tab, scroll and the dock's height
+ *  `mixer add|delete`, `set <mx|ch>.name=…`, `transport mono`. Folding, the shown tab, scroll and the dock's height
  *  are the view's.
  *
  *  Nothing snaps (§1). Every value the model sets is drawn through an eased copy — a gain or a pan
@@ -100,6 +103,11 @@ namespace solaris_ui
         double armAmount(const std::string &id) const;
         /** R-PERF-3: how frozen a strip is DRAWN (eased 0 … 1): its rack receding under the "FROZEN" pill. */
         double frozenAmount(const std::string &id) const;
+        double phaseAmount(const std::string &id) const;  // R-MIX-20: its Ø, LIVE (0 … 1)
+        double widthAmount(const std::string &id) const;  // … its width tag (shown while not 100 %), LIVE
+        double safeAmount(const std::string &id) const;   // … a solo-safe bus's ring on its S, LIVE
+        double monoAmount() const { return mMono.value(); } // … the master's Mono, lit while on, LIVE
+        artboard::Rect monoRect() const;                  // … where it is (the master's pan row: a master has no pan)
         double vcaAmount(const std::string &id) const;   // R-MIX-19: a member's VCA tag, LIVE (0 none … 1 shown)
         double vcaDbShown(const std::string &id) const;  // … the dB it shows, LIVE (eased as the VCA moves)
         double muteAmount(const std::string &id) const;
@@ -159,6 +167,9 @@ namespace solaris_ui
             artboard::AnimatedProperty fader{0.0}, pan{0.0}, mute{0.0}, solo{0.0}, dim{0.0}, colT{1.0}, arm{0.0}; // arm: R-REC-1
             artboard::AnimatedProperty frozen{0.0}; // R-PERF-3
             artboard::AnimatedProperty vca{0.0}, vcaDb{0.0}; // R-MIX-19: a member's tag — there, and the dB its VCA adds
+            artboard::AnimatedProperty phase{0.0}, widthOn{0.0}, safe{0.0}; // R-MIX-20: its Ø, its width tag, a safe bus's ring
+            double widthShown = 100.0;
+            bool phaseLast = false, widthLast = false, safeLast = false, toolsInit = false;
             std::string vcaName;
             bool vcaLast = false, vcaInit = false;
             double vcaDbLast = 0.0;
@@ -208,7 +219,7 @@ namespace solaris_ui
             artboard::AnimatedProperty a{0.0}, t{1.0};
             bool on = false, placed = false;
         };
-        enum class Part { None, Tab, AddMixer, ToggleDock, Resize, Header, Chip, Send, Pan, Fader, Mute, Solo, Out, Fold, Cell, AddLine, Clip, Loudness, Arm };
+        enum class Part { None, Tab, AddMixer, ToggleDock, Resize, Header, Chip, Send, Pan, Fader, Mute, Solo, Out, Fold, Cell, AddLine, Clip, Loudness, Arm, Mono };
         struct Hit
         {
             Part part = Part::None;
@@ -264,6 +275,8 @@ namespace solaris_ui
         bool mInteracting = false, mBound = false, mEver = false, mWasPlaying = false;
         double mNowMs = 0.0;
         artboard::AnimatedProperty mLufs{-70.0}, mLufsOn{0.0}; // R-METER-1: the master's integrated loudness, and whether there is one
+        artboard::AnimatedProperty mMono{0.0};                // R-MIX-20: the mono check, lit
+        bool mMonoLast = false, mMonoInit = false;
         double mLufsLast = -144.0;
         artboard::AnimatedProperty mHiX{0.0}, mHiW{0.0};
         bool mHiInit = false;
