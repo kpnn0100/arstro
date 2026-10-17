@@ -1014,6 +1014,20 @@ A recorded room: an impulse response (a sample) convolved with the sound, its la
 | `mix` | 0.0 … 1.0 | 0.3 |
 | `level` | -24.0 … 12.0 dB | 0.0 dB |
 
+### `vocoder` — Vocoder (effect)
+
+One sound speaking through another: this strip's sound the modulator, the key (another track) the carrier, band by band.
+
+| parameter | range | default |
+|---|---|---|
+| `bands` | 4.0 … 32.0 | 16.0 |
+| `low` | 50.0 … 500.0 Hz | 100.0 Hz |
+| `high` | 2000.0 … 12000.0 Hz | 8000.0 Hz |
+| `attack` | 0.5 … 50.0 ms | 5.0 ms |
+| `release` | 5.0 … 500.0 ms | 50.0 ms |
+| `mix` | 0.0 … 1.0 | 1.0 |
+| `output` | -24.0 … 24.0 dB | 0.0 dB |
+
 ### `pitch` — Pitch Shifter (effect)
 
 A sound moved up or down, its length kept: two taps sweeping a delay line, crossfaded; its latency reported.

@@ -6592,6 +6592,84 @@
       ]
     },
     {
+      "type": "vocoder",
+      "label": "Vocoder",
+      "kind": "effect",
+      "summary": "One sound speaking through another: this strip's sound the modulator, the key (another track) the carrier, band by band.",
+      "params": [
+        {
+          "name": "bands",
+          "label": "Bands",
+          "unit": "",
+          "min": 4.0,
+          "max": 32.0,
+          "default": 16.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "low",
+          "label": "Low",
+          "unit": "Hz",
+          "min": 50.0,
+          "max": 500.0,
+          "default": 100.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "high",
+          "label": "High",
+          "unit": "Hz",
+          "min": 2000.0,
+          "max": 12000.0,
+          "default": 8000.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.5,
+          "max": 50.0,
+          "default": 5.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 5.0,
+          "max": 500.0,
+          "default": 50.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "mix",
+          "label": "Mix",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "output",
+          "label": "Output",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "pitch",
       "label": "Pitch Shifter",
       "kind": "effect",

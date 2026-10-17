@@ -4821,7 +4821,7 @@ static void test_every_effect_drops_as_one_line_and_passes_sound()
         assert(finite && (peak > 0.001f || t.takesKey));
         ++added;
     }
-    assert(added >= 19); // the eight before N34; multiband, gate, transient, de-esser, saturator, bitcrusher, phaser, flanger, imager, convolution, pitch
+    assert(added >= 20); // the eight before N34; multiband, gate, transient, de-esser, saturator, bitcrusher, phaser, flanger, imager, convolution, pitch, vocoder
     pass("every effect (R-FX-6…17, law 1): each the DSP library's registry describes drops onto a strip as one line and passes sound, with no code here");
 }
 
@@ -4859,6 +4859,37 @@ static void test_a_convolution_reverb_takes_its_response()
     assert(contains(r.no("device add ch_2 --type reverb --sample " + ir), "`reverb` plays no sample"));
     assert(contains(r.no("device add ch_2 --type convolution --sample " + dir + "/missing.wav"), "cannot read"));
     pass("a convolution reverb (R-FX-14): dropped with its impulse response in one line; an impulse leaves the song as it was — its latency compensated with no code here; its file the song's; refusals");
+}
+
+static void test_a_vocoder_speaks_through_its_key()
+{
+    // R-FX-16: the DSP library's "vocoder" on a voice's strip, a synth on another strip its carrier through a sidechain
+    // send (R-MIX-15) — with no code here: the key reaches it as the compressor's does; it has no Sidechain switch, so
+    // the audit does not call its key unheard; the carrier muted (a muted strip sends no key), the vocoder is silent
+    const std::string dir = scratch();
+    Run r;
+    r.ok("project new " + freshSong("vocoder") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");                    // ch_2: the carrier, first in order
+    r.ok("notes add pt_1 \"C3@0:4 G3@0:4 C4@0:4\"");
+    r.ok("clip add --src voice.wav --at 0 --length 4");                       // ch_3: the "voice" (the fake: 1 kHz, 0.5 s)
+    r.ok("set ch_2.gain=-120");                                               // the carrier heard only through the key
+    r.ok("device add ch_3 --type vocoder");
+    r.ok("send add ch_2 --to ch_3 --sidechain --pre");
+    assert(!contains(r.ok("audit"), "sidechain sd_1"));                     // its key is its carrier: heard
+    auto rms = [&](const std::string &name) {
+        const std::string out = dir + "/" + name + ".wav";
+        r.ok("render --out " + out + " --to 2 --bits 32f");
+        const auto &L = r.fake.written[out][0];
+        double sum = 0;
+        for (size_t i = 2400; i < 21600; ++i) sum += (double)L[i] * L[i];  // 50 … 450 ms: while the voice sounds
+        return std::sqrt(sum / 19200.0);
+    };
+    const double spoken = rms("vocoded");
+    r.ok("set ch_2.mute=true");
+    const double unkeyed = rms("unkeyed");
+    std::printf("    the voice through the synth: RMS %.4f; the carrier muted: %.2g\n", spoken, unkeyed);
+    assert(spoken > 0.001 && unkeyed == 0.0);
+    pass("a vocoder (R-FX-16): a voice's strip speaks through a synth on another strip — its carrier a sidechain key, routed as the compressor's, heard by the audit; no key, silence");
 }
 
 static void test_freeze_and_bounce()
@@ -6235,6 +6266,7 @@ int main()
     test_a_multisample_reads_its_sfz();
     test_every_effect_drops_as_one_line_and_passes_sound();
     test_a_convolution_reverb_takes_its_response();
+    test_a_vocoder_speaks_through_its_key();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

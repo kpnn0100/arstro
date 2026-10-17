@@ -591,7 +591,8 @@ namespace solaris
                                       " (set " + d.id + ".sample=<file>)");
                     else if (mOffline.count(resolvePath(d.sample))) out.push_back("offline: " + d.id + "'s sample " + d.sample + " cannot be read");
                 }
-        // R-MIX-15: a key nothing listens to — no compressor on that strip with Sidechain on
+        // R-MIX-15: a key nothing listens to — no compressor on that strip with Sidechain on (a type with no Sidechain
+        // switch, as the vocoder whose key is its carrier, always listens: R-FX-16)
         for (const auto &sd : p.sends)
         {
             if (!sd.sidechain) continue;
@@ -601,6 +602,9 @@ namespace solaris
                 {
                     const DeviceType *t = DeviceRegistry::find(d.type);
                     if (!t || !t->takesKey || d.bypass) continue;
+                    bool switched = false;
+                    for (const auto &ps : t->params) switched |= ps.name == "sidechain";
+                    if (!switched) heard = true;
                     for (const auto &kv : d.params)
                         if (kv.first == "sidechain" && kv.second == "on") heard = true;
                 }

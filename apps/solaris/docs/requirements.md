@@ -137,7 +137,7 @@ mixer and renumbers the mixer 0…n−1 (`placeStrip`, `:61`; `case K::StripMove
 renumbers mixers — an order never ties. A new project is `newProject` (`model/Project.cpp:182`): Sources (`mx_1`), Buses (`mx_2`)
 holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the master (R-MIX-3).
 Guarded by `test_routing_only_goes_forward` and `test_forward_is_processing_order_and_moves_renumber`
-(`core/tests/serviceTests.cpp:5087`: a bus made on Buses goes before Main and feeds it; a same-mixer route
+(`core/tests/serviceTests.cpp:5118`: a bus made on Buses goes before Main and feeds it; a same-mixer route
 forward is taken, backward refused naming both ends; `strip move` that would point one back refused;
 `--order 0` first and renumbered; mutant checked: the old later-mixer rule refuses the new bus's
 default route). The same rule is PUBLISHED: `targetsOf` (`model/Project.cpp:936`) lists what a strip
@@ -938,8 +938,9 @@ the DSP Compressor with Sidechain on detects on it (DSP REQ-fx-sidechain-1); sil
 it. A strip silenced by another's SOLO still keys (`keyLive`, `core/Compile.cpp:296`; `engine/Engine.cpp:726`) and
 a key does not pull its source into a solo (`Compile.cpp:52`), so a soloed bass keeps its pump while the
 kick stays silent; a MUTED strip keys nothing (live, a mute in a song with keys swaps the engine,
-`core/service/ServiceTransport.cpp:494`). The audit names a key that no compressor with Sidechain on
-hears (`core/service/ServiceModel.cpp:558`). In the dock a key reads "key <target>" in the solo amber,
+`core/service/ServiceTransport.cpp:494`). The audit names a key that nothing on its strip listens to — no
+compressor or gate with Sidechain on, and no key-taking type without that switch (the vocoder, whose key is its
+carrier, R-FX-16, always listens) (`core/service/ServiceModel.cpp:594`). In the dock a key reads "key <target>" in the solo amber,
 and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:1236`).
 Measured (L2): a ghost kick (−120 dB fader, pre-fader key) through −30 dB at 4:1 dips a −6 dBFS bass
 6–22.5 dB 15–35 ms after each kick, back within 1 dB before the next; identical with the bass soloed;
@@ -1487,7 +1488,7 @@ puts Main and a cue sent straight to Phones at 96 together; a key from a limited
 audio 96 to meet it, and a limiter before the keyed compressor delays the key 96 — the keyed strip's output
 exactly the unlimited one 96 later (and it does duck). Mutants: every delay sized 0 → the twins fail;
 no key delay in the rack → the key check fails. Service (`test_latency_is_compensated_and_a_render_starts_on_the_beat`,
-`core/tests/serviceTests.cpp:5012`): two strips of one tone, a limiter on one — each stem from beat 0 and
+`core/tests/serviceTests.cpp:5043`): two strips of one tone, a limiter on one — each stem from beat 0 and
 equal, the mix exactly their sum and equal to the render with no limiter; a master limiter's render, port
 and stems byte-identical to none (under its ceiling it is exactly its delay); `--to` exact; live, the
 device's frames are the render 96 later; a lookahead set to 5 ms WHILE playing keeps the twins met — the
@@ -1503,7 +1504,7 @@ mix is at lag 0.
 `core/service/ServiceEdit.cpp:560`) puts the lane at row `index` (0 = the top) and renumbers every lane
 0…n−1 in the new order — one edit, one undo step; an index past the last row or an unknown lane is
 refused. The lanes draw it through Interstellar's `AnimatedRows`, keyed by lane, so the rows slide
-(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:5123`: to the top and back,
+(DR-UI-3). Guarded by `test_lanes_are_reordered` (`core/tests/serviceTests.cpp:5154`: to the top and back,
 renumbered, refused out of range, undone) and, drawn, by `test_instrument_drop_and_clip_drag`
 (`app/tests/ui/uiTests.cpp:492`: a lane moved from a shell slides to the top with its clip, caught mid-tween).
 
@@ -2151,7 +2152,12 @@ type that takes a sample; refused for one that does not, for a plugin, and for a
 samples of latency are compensated by DR-MIX-17 with no code here. Test: L2 `test_a_convolution_reverb_takes_its_
 response` (`core/tests/serviceTests.cpp:4828`): an impulse response leaves the song as it sounded at mix 0.6, to
 3e−17 — the latency compensated; its file read back; the refusals. "pitch" (R-FX-15; REQ-fx-pitch-1, DSP 8ceaa31) —
-two crossfaded taps sweeping a delay line; its latency (1 + half its window) compensated, no code here.
+two crossfaded taps sweeping a delay line; its latency (1 + half its window) compensated, no code here. "vocoder"
+(R-FX-16; REQ-fx-vocoder-1, DSP 051007a) — a channel vocoder whose carrier is its key: routed by a sidechain send as a
+compressor's (DR-MIX-15), with no code here but the audit's (`core/service/ServiceModel.cpp:607`: a key-taking type
+with no Sidechain switch always listens). Test: L2 `test_a_vocoder_speaks_through_its_key`
+(`core/tests/serviceTests.cpp:4864`): a voice's strip through a synth on another strip, RMS 0.0127; the carrier muted,
+exactly silent; the audit quiet about its key.
 
 ### DR-MIDI-3 Expression lanes (R-MIDI-3)
 A pattern carries expression lanes beside its notes (`model/Project.h` `ExprPoint`; `#expr lane= at= value=` in the
@@ -2868,7 +2874,7 @@ devices cost nothing; their edits are kept and unheard); its fader, pan, mute, s
 song's end still its clips' ends (`:338`), not the file's tail; a file that cannot be read leaves it silent, said by
 the compile (`:337`). **The file**: `frozen="…"` on its `#atrack` line (`model/Project.cpp:269`, written `:797`).
 **The model**: `strips[].frozen` (`core/service/ServiceModel.cpp:272`); `audit` names each frozen strip and the file it
-plays (`:578`). Test: L2 `test_freeze_and_bounce` (`core/tests/serviceTests.cpp:4864`: an instrument through a chorus
+plays (`:578`). Test: L2 `test_freeze_and_bounce` (`core/tests/serviceTests.cpp:4895`: an instrument through a chorus
 and a lookahead limiter, faded, panned and sending to a reverb bus — frozen, the song renders within 3·10⁻⁸ of its own
 work; a device edit unheard and in the audit; its fader live; unfrozen, the edit heard; undone, frozen again; refrozen,
 the new file heard; refusals; a bounce onto a new strip; a file made unreadable opens silent and said). Mutants (each
