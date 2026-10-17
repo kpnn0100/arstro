@@ -5721,7 +5721,25 @@ namespace
         for (const auto &x : m.tempos) v.push_back(x.id);
         for (const auto &x : m.lanes) v.push_back(x.id);
         for (const auto &x : m.strips) v.push_back(x.id);
-        for (const auto &x : m.deviceTypes) v.push_back(x.label); // the registry's words
+        for (const auto &x : m.deviceTypes) v.push_back(x.label); // the registry's words — a type's, its parameters', their choices, its groups'
+        auto device = [&v](const arstro::solaris::DeviceModel &d) {
+            v.push_back(d.label);
+            v.push_back(d.id);
+            v.push_back(d.type);
+            for (const auto &p : d.params)
+            {
+                v.push_back(p.label);
+                v.push_back(p.name);
+                v.push_back(p.unit);
+                for (const auto &c : p.choices) v.push_back(c);
+            }
+            for (const auto &g : d.groups) v.push_back(g.label);
+            for (const auto &p : d.params) v.push_back(p.name.substr(0, p.name.find('.'))); // a group's prefix, as a face titles it
+        };
+        for (const auto &x : m.mixers) { v.push_back(x.name); v.push_back(x.id); }
+        for (const auto &x : m.strips)
+            for (const auto &d : x.devices) device(d);
+        for (const auto &d : m.masterDevices) device(d);
         for (const auto &x : m.presets) v.push_back(x.name);
         return v;
     }
@@ -5736,7 +5754,7 @@ namespace
         if (!table) { std::printf("    %s: drew nothing from the table\n", where); return 1; }
         static const char *kNames[] = {"solaris", "v0.1.0", "bpm", "kHz", "dBTP", "dB", "ms", "LUFS", "kbps", "ppm", "PulseAudio", "PipeWire",
                                        "Mackie Control", "HUI", "WAV", "FLAC", "MP3", "Ogg Vorbis", "Opus", "MP4", "MKV", "Ctrl", "Shift", "Alt",
-                                       ".wav", ".flac", ".mp3", ".ogg", ".opus", ".mp4", ".mkv"};
+                                       ".wav", ".flac", ".mp3", ".ogg", ".opus", ".mp4", ".mkv", "ITU-R BS.1770-4"};
         for (size_t i = 0, n = data.size(); i < n; ++i) data.push_back(arstro::solaris_strings::upper(data[i])); // a micro-label's data, uppercased
         for (const char *n : kNames) data.push_back(n);
         std::sort(data.begin(), data.end(), [](const std::string &a, const std::string &b) { return a.size() > b.size(); }); // the longest first
@@ -5753,19 +5771,20 @@ namespace
                 if (cut) continue;
             }
             std::string rest;
-            for (size_t i = 0; i < d.text.size(); ++i)
+            for (size_t i = 0, depth = 0; i < d.text.size(); ++i) // the table's words: "[" … "]", nested, or to the end when ellipsized
             {
-                if (d.text[i] != '[') { rest += d.text[i]; continue; }
-                const size_t close = d.text.find(']', i);
-                if (close == std::string::npos) break; // ellipsized: the table's to its end
-                i = close;
+                if (d.text[i] == '[') ++depth;
+                else if (d.text[i] == ']' && depth > 0) --depth;
+                else if (depth == 0) rest += d.text[i];
             }
             for (const auto &w : data)
                 for (size_t at; !w.empty() && (at = rest.find(w)) != std::string::npos;) rest.erase(at, w.size());
             bool letter = false;
             for (size_t i = 0; i < rest.size(); ++i)
-                if (std::isalpha((unsigned char)rest[i]) && !(rest.size() == 1 || (i + 1 < rest.size() && rest[i + 1] == ')') || (i > 0 && rest[i - 1] == '+')))
-                    letter = true; // a key's single letter ("Ctrl+S") is a key, not a word
+                if (std::isalpha((unsigned char)rest[i]) && !(rest.size() == 1 || (i + 1 < rest.size() && rest[i + 1] == ')') || (i > 0 && rest[i - 1] == '+') ||
+                                                              (i > 0 && std::isdigit((unsigned char)rest[i - 1]) && (i + 1 == rest.size() || !std::isalpha((unsigned char)rest[i + 1]))) ||
+                                                              (i + 1 < rest.size() && (std::isdigit((unsigned char)rest[i + 1]) || rest[i + 1] == '#') && (i == 0 || !std::isalpha((unsigned char)rest[i - 1])))))
+                    letter = true; // a key's single letter ("Ctrl+S") is a key, a number's ("10k") its unit, a note's ("C5") its name — not words
             if (letter)
             {
                 std::printf("    %s: not from the table: \"%s\"\n", where, d.text.c_str());
@@ -5935,6 +5954,87 @@ static void test_every_word_the_lanes_draw_is_from_the_table()
     pass("in en-XA every word the lanes' side draws is the table's — the browser's tabs, the lanes, the ruler, its markers and tempo, the session grid, the menus they open, their accessible names — the model's data kept as it is");
 }
 
+static void test_every_word_the_dock_and_windows_draw_is_from_the_table()
+{
+    // R-ACCESS-2 (Round 21, part 3b): in the pseudo-language every string the mixer dock and the windows draw is the
+    // table's — the dock's pages and the matrix, a strip's, a bus's, a VCA's and the master's cards, the menus they open
+    // (a strip's header, its route, its rack's chip, "+ Line", a fader's number menu); an instrument's face, an effect's
+    // list, the piano roll, an automation's window, the loudness and the video windows — the registry's words and the
+    // model's data kept as they are; the windows' accessible names likewise
+    sltest::Rig r("ui-pseudo-dock", 1440, 900);
+    r.cmd("settings set language=en-XA");
+    r.cmd("project new " + r.song("Dock") + ".slp");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    r.cmd("clip add --src tone.wav --at 4 --length 4");
+    r.cmd("strip add --kind bus --name Verb");
+    r.cmd("strip add --kind vca --name Group");
+    r.cmd("device add master --type compressor");
+    std::string inst, audio, bus, vca, synthDev, fxDev;
+    for (const auto &st : r.svc->model().strips)
+    {
+        if (st.kind == "instrument") { inst = st.id; if (!st.devices.empty()) synthDev = st.devices[0].id; }
+        if (st.kind == "audio") audio = st.id;
+        if (st.kind == "bus") bus = st.id;
+        if (st.kind == "vca") vca = st.id;
+    }
+    r.cmd("send add " + inst + " --to " + bus);
+    r.cmd("route " + audio + " --to master"); // an arrow that says "Master" — the window's word
+    r.cmd("set " + inst + ".vca=" + vca);
+    r.cmd("device add " + audio + " --type eq");
+    for (const auto &st : r.svc->model().strips)
+        if (st.id == audio && !st.devices.empty()) fxDev = st.devices[0].id;
+    r.cmd("auto create " + inst + ".gain");
+    r.settle();
+    auto &ps = r.app->project();
+    auto &dock = ps.dock();
+    auto words = [&] {
+        auto v = modelWords(r.svc->model());
+        v.push_back("arstro"); // the plugins' editor's mark
+        return v;
+    };
+    int bad = untranslated(r.wordsOf(dock), words(), "the dock");
+    for (const auto &n : r.app->accessibles())
+        if (n.key.rfind("dock.", 0) == 0)
+        {
+            bad += untranslated({sltest::Drawn{n.name, 0, 0, 1}}, words(), "a dock's name");
+            if (!n.value.empty()) bad += untranslated({sltest::Drawn{n.value, 0, 0, 1}}, words(), "a dock's value");
+        }
+    auto menuAt = [&](const artboard::Rect &at, int button, const char *where) {
+        r.click(at.x + at.w * 0.5, at.y + at.h * 0.5, button);
+        r.settle();
+        if (!r.app->menu().isOpen()) { std::printf("    %s: no menu\n", where); ++bad; return; }
+        bad += untranslated(r.wordsOf(r.app->menu()), words(), where);
+        r.app->menu().close();
+        r.settle();
+    };
+    const artboard::Rect card = world(dock, dock.cardRect(inst));
+    menuAt(artboard::Rect{card.x + 4.0, card.y + 6.0, 20.0, 12.0}, 2, "a strip's menu");
+    menuAt(world(dock, dock.outRect(inst)), 0, "a route menu");
+    menuAt(world(dock, dock.chipRect(inst, 0)), 2, "a chip's menu");
+    menuAt(world(dock, dock.addLineRect()), 0, "+ Line's menu");
+    menuAt(world(dock, dock.faderRect(inst)), 2, "a fader's number menu");
+    dock.setTab(dock.tabCount() - 1); // the matrix
+    r.settle();
+    bad += untranslated(r.wordsOf(dock), words(), "the matrix");
+    dock.setTab(0);
+    auto &wl = ps.windows();
+    auto window = [&](arstro::solaris_ui::FloatWindow &w, const char *where) {
+        r.settle();
+        bad += untranslated(r.wordsOf(w), words(), where);
+    };
+    window(wl.openDevice(synthDev), "an instrument's face");
+    window(wl.openDevice(fxDev), "an effect's list");
+    window(wl.openRoll(r.svc->model().patterns[0].id), "the piano roll");
+    window(wl.openAutomation(r.svc->model().automations[0].id), "an automation's window");
+    window(wl.openLoudness(), "the loudness window");
+    window(wl.openVideo(), "the video window");
+    for (const auto &n : r.app->accessibles())
+        if (n.key.rfind("window.", 0) == 0 || n.key.rfind("device.", 0) == 0)
+            bad += untranslated({sltest::Drawn{n.name, 0, 0, 1}}, words(), "a window's name");
+    assert(bad == 0);
+    pass("in en-XA every word the dock and the windows draw is the table's — its cards, the matrix, the menus they open, a face, an effect's list, the roll, an automation's, the loudness and the video windows, their names — the registry's words and the model's data kept as they are");
+}
+
 static void test_the_table_has_every_word_the_window_says()
 {
     // R-ACCESS-2 (Round 21, part 2): every English string the window's code hands the table — tr, trc, trn, say, sayn,
@@ -6060,6 +6160,7 @@ int main()
     test_the_window_speaks_the_language();             // R-ACCESS-2
     test_every_word_the_shell_draws_is_from_the_table();
     test_every_word_the_lanes_draw_is_from_the_table();
+    test_every_word_the_dock_and_windows_draw_is_from_the_table();
     test_the_table_has_every_word_the_window_says();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;

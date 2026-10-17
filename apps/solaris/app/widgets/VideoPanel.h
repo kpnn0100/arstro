@@ -52,7 +52,7 @@ namespace solaris_ui
         // what a test reads (LIVE, as drawn)
         double pictureAmount() const { return mShow.value(); }      // 0: the words; 1: the picture
         double dissolveAmount() const { return mDissolve.value(); } // 0 … 1 across a jump (1 at rest)
-        const std::string &words() const { return mWords; }        // what is said when no picture shows
+        std::string words() const { return ::arstro::solaris_ui::shown(mWords); } // what is said when no picture shows, in the language drawn
         double wordsAmount() const { return mWordsMix.value(); }    // the words' cross-fade, 1 at rest
         double frameTime() const { return mHave ? mFrameTime : -1.0; }
         int asks() const { return mAsks; }                          // how often the host was asked for a frame

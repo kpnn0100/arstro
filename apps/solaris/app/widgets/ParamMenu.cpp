@@ -33,7 +33,7 @@ namespace solaris_ui
     std::string bindingText(const std::string &formula, size_t maxChars)
     {
         const std::string au = automationOf(formula);
-        if (!au.empty()) return "auto " + au; // an automation
+        if (!au.empty()) return fillIn(tr("auto {1}"), au); // an automation (R-ACCESS-2: said in the language drawn)
         // a link, or a formula — cut to the column: the whole formula is one `get` away, and its menu shows it
         std::string out = "= " + body(formula);
         if (out.size() > maxChars) out = out.substr(0, maxChars - 1) + "\xE2\x80\xA6";
@@ -57,13 +57,13 @@ namespace solaris_ui
         {
             if (automationOf(p.formula).empty())
             {
-                items.push_back({"Create Automation", [cmd, address] { if (cmd) cmd("auto create " + address); }});
+                items.push_back({say("Create Automation"), [cmd, address] { if (cmd) cmd("auto create " + address); }});
                 // R-AUTO-13: the side-chain feel — a dip on every beat, looping (`auto create --pump`)
-                items.push_back({"Create Pump", [cmd, address] { if (cmd) cmd("auto create " + address + " --pump"); }});
+                items.push_back({say("Create Pump"), [cmd, address] { if (cmd) cmd("auto create " + address + " --pump"); }});
             }
             const std::string current = p.formula.empty() ? std::string("=") : p.formula;
             auto rename = h.rename;
-            items.push_back({"Formula\xE2\x80\xA6", [rename, cmd, address, current, world] {
+            items.push_back({say("Formula\xE2\x80\xA6"), [rename, cmd, address, current, world] {
                                  if (!rename) return;
                                  rename(current, world, [cmd, address](const std::string &typed) {
                                      std::string f = typed;
@@ -72,28 +72,28 @@ namespace solaris_ui
                                      if (cmd) cmd("set " + address + "=" + q(f));
                                  });
                              }});
-            if (!p.formula.empty()) items.push_back({"Clear Binding", [cmd, address] { if (cmd) cmd("bind clear " + address); }});
+            if (!p.formula.empty()) items.push_back({say("Clear Binding"), [cmd, address] { if (cmd) cmd("bind clear " + address); }});
         }
         if (!p.reset.empty())
         {
             const std::string def = p.reset;
-            items.push_back({"Reset to Default", [cmd, address, def] { if (cmd) cmd("set " + address + "=" + def); }});
+            items.push_back({say("Reset to Default"), [cmd, address, def] { if (cmd) cmd("set " + address + "=" + def); }});
         }
         if (p.bindable)
         {
             // R-CTRL-1: the next MIDI control moved moves it; one that does, forgotten
-            items.push_back({"Learn MIDI CC", [cmd, address] { if (cmd) cmd("map learn " + address); }});
+            items.push_back({say("Learn MIDI CC"), [cmd, address] { if (cmd) cmd("map learn " + address); }});
             for (const auto &cc : p.controls) items.push_back({"Forget CC " + cc, [cmd, cc] { if (cmd) cmd("map remove " + cc); }});
         }
         // R-UI-11: the host's clipboard — an address to paste into a formula or a script
         auto copy = h.copy;
-        items.push_back({"Copy Address", [copy, address] { if (copy) copy(address); }});
+        items.push_back({say("Copy Address"), [copy, address] { if (copy) copy(address); }});
         if (!p.value.empty())
         {
             const std::string value = p.value;
-            items.push_back({"Copy Value", [copy, value] { if (copy) copy(value); }});
+            items.push_back({say("Copy Value"), [copy, value] { if (copy) copy(value); }});
         }
-        if (p.bindable) items.push_back({"Copy as Formula", [copy, address] { if (copy) copy("=" + address); }});
+        if (p.bindable) items.push_back({say("Copy as Formula"), [copy, address] { if (copy) copy("=" + address); }});
         return items;
     }
 

@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N43 part 3b — the dock and the windows through the table** (R-ACCESS-2: the mixer dock, the device panels and faces, the piano roll, the automation, loudness, video and tuner windows, the parameter menu; the recorded-strings test and the scan extended; shots), then N44, in order (the user: *"implement all"*). Owed live checks: N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N44 — Analysis tools** (R-ASSIST-1: harmonic / percussive separation, audio to MIDI, chord detection — signal processing, no AI model): a design round first (Round 22 in docs/discussion.md), then its parts, in order (the user: *"implement all"*). Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -675,7 +675,7 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       value, extents at the drawn scale, states, click / increment / decrement back to the App), kept by key, the focus
       said; the window's drawing area hangs it under its accessible, read when a screen reader asks and every 200 ms.
       Read live once through libatspi on a private bus. N42 DONE.
-- [~] **N43** Localisation (R-ACCESS-2). Round 21 (the design): the window's own words only, English the key
+- [x] **N43** Localisation (R-ACCESS-2). Round 21 (the design): the window's own words only, English the key
       (`tr` / `trc` / `trn`, `{1}` placeholders), `lang/<code>.strings` compiled in; English, Vietnamese and the
       pseudo-language `en-XA`; `settings set language=auto|en|vi|en-XA`; a switch dissolves the window; proved by the
       strings drawn in `en-XA` and a scan of the code's keys. Parts: (1) the table and the setting; (2) the shell;
@@ -694,6 +694,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       lanes (Snap and its step's name as words, takes, badges, groups' bands, empty hints, new names in the user's
       words), the ruler, markers, tempo, the session grid, every menu they open; `vi.strings` 356 lines; the en-XA test
       for this side; shots lanes-vi, lanes-pseudo.
+      Part 3b: the dock and the windows — the dock's cards, counted lines, menus, tabs, labelOf's words, accessible
+      names; ParamMenu; window titles kept as words; the roll's toolbar and lanes; the automation window's rows and Loop
+      choices (re-shown in its advance); a device window's buttons and lines; the face's "Main"; the loudness and video
+      windows; vi.strings 499 lines — the window's every word; the en-XA test for this side; shots dock-vi, dock-pseudo.
+      N43 DONE.
 - [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).
 
 ### T — tasks found on the way

@@ -18,7 +18,7 @@ namespace solaris_ui
         constexpr double kSpecFloor = -72.0, kSpecTop = 0.0; // the spectrum's scale, dB
         constexpr double kAttackMs = 40.0;     // a band rises as a meter does (MixerDock's kMeterAttackMs)
         constexpr double kDbW = 22.75;         // space::u(7): the spectrum's dB labels
-        const char *kLabels[] = {"MOMENTARY", "SHORT-TERM", "INTEGRATED", "TRUE PEAK", "CORRELATION"};
+        const char *kLabels[] = {N_("Momentary"), N_("Short-term"), N_("Integrated"), N_("True peak"), N_("Correlation")}; // in capitals where drawn
         const char *kUnits[] = {"LUFS", "LUFS", "LUFS", "dBTP", ""};
         Color fade(Color c, double a) { c.a *= a; return c; }
         std::string number(double v, int decimals)
@@ -124,11 +124,12 @@ namespace solaris_ui
         // the header: what is measured, and Reset
         t.setFill(palette::mutedForeground());
         const Rect rs = resetRect();
-        t.drawText(textfit::ellipsize(t, "ITU-R BS.1770-4 \xC2\xB7 the master", std::max(0.0, rs.x - 2.0 * pad), 10.0, font::mono()), pad,
+        t.drawText(textfit::ellipsize(t, "ITU-R BS.1770-4 \xC2\xB7 " + tr("the master"), std::max(0.0, rs.x - 2.0 * pad), 10.0, font::mono()), pad,
                    textfit::baseline(rs.y + rs.h * 0.5, 10.0), 10.0, font::mono());
         drawRoundedRect(t, rs, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), mHover.amount(0))));
         t.setFill(palette::secondaryForeground());
-        t.drawText("Reset", rs.x + (rs.w - t.measureText("Reset", 10.0, font::sans())) * 0.5, textfit::baseline(rs.y + rs.h * 0.5, 10.0), 10.0, font::sans());
+        const std::string reset = textfit::ellipsize(t, tr("Reset"), rs.w - 4.0, 10.0, font::sans());
+        t.drawText(reset, rs.x + (rs.w - t.measureText(reset, 10.0, font::sans())) * 0.5, textfit::baseline(rs.y + rs.h * 0.5, 10.0), 10.0, font::sans());
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, kHeaderH - 0.5); t.lineTo(W, kHeaderH - 0.5); t.strokePath();
 
@@ -138,7 +139,7 @@ namespace solaris_ui
         {
             const double x = pad + (r % 3) * cw, y = y0 + (r / 3) * kCellH;
             t.setFill(palette::mutedForeground());
-            t.drawText(textfit::ellipsize(t, kLabels[r], cw - 6.5, 9.0, font::sansSemiBold()), x, textfit::baseline(y + 9.75, 9.0), 9.0,
+            t.drawText(textfit::ellipsize(t, solaris_strings::upper(tr(kLabels[r])), cw - 6.5, 9.0, font::sansSemiBold()), x, textfit::baseline(y + 9.75, 9.0), 9.0,
                        font::sansSemiBold(), 0.13 * 9.0);
             const double vy = textfit::baseline(y + 27.0, 13.0), on = mOn[(size_t)r].value();
             const std::string num = number(mLive[(size_t)r].value(), r == Correlation ? 2 : 1);

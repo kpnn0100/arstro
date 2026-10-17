@@ -75,6 +75,8 @@ namespace solaris_ui
         solaris::AutomationModel mModel;
         std::shared_ptr<class SettingCombo> mLoop;
         std::vector<double> mLoopBeats;        // the combo's options, in beats (0 = Off)
+        std::vector<std::string> mLoopWords;   // … and their words (R-ACCESS-2), shown again when the language changes
+        std::string mLoopLang;
         bool mPresent = false, mPlaying = false;
         double mPosition = 0.0;
         interstellar_v1::AnimatedRows<Row> mRows;

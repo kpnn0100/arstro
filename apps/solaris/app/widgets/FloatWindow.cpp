@@ -180,7 +180,7 @@ namespace solaris_ui
         t.beginPath(); t.moveTo(0, kTitleH - 0.5); t.lineTo(W, kTitleH - 0.5); t.strokePath();
         const Rect c = closeRect();
         t.setFill(palette::foreground());
-        t.drawText(textfit::ellipsize(t, mTitle, std::max(0.0, c.x - 2.0 * space::padX()), 11.0, font::sansMedium()), space::padX(),
+        t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(mTitle), std::max(0.0, c.x - 2.0 * space::padX()), 11.0, font::sansMedium()), space::padX(),
                    textfit::baseline(kTitleH * 0.5, 11.0), 11.0, font::sansMedium());
         const double hv = mHover.amount(0);
         if (hv > 0.001) drawRoundedRect(t, c, radius::control(), Paint::filled(palette::hoverWash(hv)));
@@ -281,7 +281,7 @@ namespace solaris_ui
             panel->onCommand = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
             panel->bind(mModel);
             w = &place(std::make_shared<FloatWindow>("loudness", panel), 390.0, 357.5);
-            w->setTitle("Loudness \xE2\x80\x94 Master");
+            w->setTitle(say("Loudness \xE2\x80\x94 Master"));
         }
         w->open();
         bind(mModel, mInteracting);
@@ -395,7 +395,7 @@ namespace solaris_ui
         {
             auto *w = dynamic_cast<FloatWindow *>(ch.get());
             if (!w || !w->isOpen()) continue;
-            out.push_back(a11yNode("window." + w->key() + ".close", "button", "Close " + w->title(), worldRect(*w, w->closeRect())));
+            out.push_back(a11yNode("window." + w->key() + ".close", "button", fillIn(tr("Close {1}"), w->title()), worldRect(*w, w->closeRect())));
             if (w->key().rfind("dev:", 0) == 0) static_cast<DevicePanel &>(w->content()).accessibles(out);
         }
     }
@@ -428,7 +428,7 @@ namespace solaris_ui
                     for (const auto &d : s.devices)
                         if (d.id == panel.device()) title = d.label + " \xE2\x80\x94 " + s.name;
                 for (const auto &d : m.masterDevices)
-                    if (d.id == panel.device()) title = d.label + " \xE2\x80\x94 Master";
+                    if (d.id == panel.device()) title = d.label + " \xE2\x80\x94 " + say("Master");
                 w.setTitle(title);
                 if (!panel.present() && w.isOpen()) w.close();
             }
@@ -451,7 +451,7 @@ namespace solaris_ui
             {
                 static_cast<VideoPanel &>(w.content()).bind(m);
                 const size_t slash = m.video.src.find_last_of('/');
-                w.setTitle(m.video.id.empty() ? std::string("Video") : "Video \xE2\x80\x94 " + (slash == std::string::npos ? m.video.src : m.video.src.substr(slash + 1)));
+                w.setTitle(m.video.id.empty() ? say("Video") : say("Video \xE2\x80\x94 {1}", slash == std::string::npos ? m.video.src : m.video.src.substr(slash + 1)));
             }
         }
     }

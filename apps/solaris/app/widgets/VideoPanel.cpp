@@ -67,9 +67,10 @@ namespace solaris_ui
     {
         // what is said when no picture shows: none, unreadable, or where the song is against its span
         std::string words = mWords;
-        if (mVideo.id.empty()) words = "No picture in this song";
-        else if (mVideo.offline) words = "Cannot read " + fileName(mVideo.src);
-        else if (mVideo.time < 0) words = mPosition < mVideo.at ? "Before the picture" : "After the picture";
+        // words (Words.h): they cross-fade as they change; the window dissolves them as the language does
+        if (mVideo.id.empty()) words = ::arstro::solaris_ui::say("No picture in this song");
+        else if (mVideo.offline) words = ::arstro::solaris_ui::say("Cannot read {1}", fileName(mVideo.src));
+        else if (mVideo.time < 0) words = mPosition < mVideo.at ? ::arstro::solaris_ui::say("Before the picture") : ::arstro::solaris_ui::say("After the picture");
         if (words != mWords)
         {
             if (mWords.empty()) mWordsMix.set(1.0); // the first words: placed, nowhere to travel from
@@ -193,9 +194,9 @@ namespace solaris_ui
         if (wa > 0.001)
         {
             const double cy = box.y + box.h * 0.5;
-            auto say = [&](const std::string &s, double a) {
-                if (a <= 0.001 || s.empty()) return;
-                const std::string fitS = textfit::ellipsize(t, s, box.w - 2 * space::padX(), 12.0, font::sans());
+            auto say = [&](const std::string &words, double a) {
+                if (a <= 0.001 || words.empty()) return;
+                const std::string fitS = textfit::ellipsize(t, ::arstro::solaris_ui::shown(words), box.w - 2 * space::padX(), 12.0, font::sans());
                 const double tw = t.measureText(fitS, 12.0, font::sans());
                 t.setFill(fade(palette::mutedForeground(), a));
                 t.drawText(fitS, (box.w - tw) * 0.5, cy + 12.0 * 0.35, 12.0, font::sans());

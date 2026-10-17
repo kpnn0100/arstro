@@ -86,9 +86,18 @@ namespace solaris_ui
             std::snprintf(b, sizeof b, "%.1f LUFS", v);
             return b;
         }
-        /** "→ text": the arrow DRAWN — the embedded Roboto has no U+2192 (app/NOTES.md). */
-        void arrowText(IRenderTarget &t, const std::string &text, double x, double cy, double maxW, double px, const char *fam, const Color &c)
+        /** A strip's kind as words (the model's word is the grammar's): "instrument", "audio", "bus" — R-ACCESS-2. */
+        std::string kindWord(const std::string &k)
         {
+            if (k == "instrument") return tr("instrument");
+            if (k == "audio") return tr("audio");
+            if (k == "bus") return tr("bus");
+            return k;
+        }
+        /** "→ text": the arrow DRAWN — the embedded Roboto has no U+2192 (app/NOTES.md); `text` words or data (shown). */
+        void arrowText(IRenderTarget &t, const std::string &words, double x, double cy, double maxW, double px, const char *fam, const Color &c)
+        {
+            const std::string text = ::arstro::solaris_ui::shown(words);
             const double ay = std::round(cy) + 0.5;
             glyph::line(t, x, ay, x + 7.0, ay, c, 1.1);
             glyph::line(t, x + 4.5, ay - 2.5, x + 7.0, ay, c, 1.1);
@@ -126,7 +135,7 @@ namespace solaris_ui
         for (int t = 0; t < tabCount(); ++t)
         {
             const bool mixer = t < (int)mMixers.size();
-            A11yNode n = a11yNode("dock.tab." + (mixer ? mMixers[(size_t)t].id : std::string("matrix")), "tab", mixer ? mMixers[(size_t)t].name : std::string("Matrix"),
+            A11yNode n = a11yNode("dock.tab." + (mixer ? mMixers[(size_t)t].id : std::string("matrix")), "tab", mixer ? mMixers[(size_t)t].name : tr("Matrix"),
                                   worldRect(*this, tabRect(t)));
             n.checked = t == mTab;
             out.push_back(n);
@@ -144,9 +153,9 @@ namespace solaris_ui
             if (!master && !s) continue;
             const Rect fr = faderRect(id);
             if (fr.w <= 1.0 || fr.x + fr.w < 0.0 || fr.x > width.value()) continue; // scrolled out of the page
-            const std::string name = master ? std::string("Master") : s->name;
+            const std::string name = master ? tr("Master") : s->name;
             const double gain = master ? mModel.masterGain : s->gain;
-            A11yNode f = a11yNode("dock." + id + ".fader", "slider", name + " fader", worldRect(*this, fr), dbText(gain) + " dB");
+            A11yNode f = a11yNode("dock." + id + ".fader", "slider", fillIn(tr("{1} fader"), name), worldRect(*this, fr), dbText(gain) + " dB");
             f.step = [this, id, gain, master](int dir, bool fine) {
                 const double v = std::clamp(rnd(gain + dir * (fine ? 0.1 : 0.5), 0.1), -120.0, 12.0);
                 send(master ? "set project.masterGain=" + num(v, 1) : "set " + id + ".gain=" + num(v, 1));
@@ -154,25 +163,25 @@ namespace solaris_ui
             out.push_back(f);
             if (master)
             {
-                A11yNode mono = a11yNode("dock.master.mono", "toggle", "Mono", worldRect(*this, monoRect()), mModel.transport.mono ? "on" : "off");
+                A11yNode mono = a11yNode("dock.master.mono", "toggle", tr("Mono"), worldRect(*this, monoRect()), mModel.transport.mono ? tr("on") : tr("off"));
                 mono.checked = mModel.transport.mono;
                 out.push_back(mono);
                 continue;
             }
             const double pan = s->pan;
-            A11yNode p = a11yNode("dock." + id + ".pan", "slider", name + " pan", worldRect(*this, panRect(id)),
-                                  pan == 0.0 ? std::string("centre") : num(std::fabs(pan) * 100.0, 0) + (pan < 0 ? " % left" : " % right"));
+            A11yNode p = a11yNode("dock." + id + ".pan", "slider", fillIn(tr("{1} pan"), name), worldRect(*this, panRect(id)),
+                                  pan == 0.0 ? tr("centre") : fillIn(pan < 0 ? tr("{1} % left") : tr("{1} % right"), num(std::fabs(pan) * 100.0, 0)));
             p.step = [this, id, pan](int dir, bool fine) { send("set " + id + ".pan=" + num(std::clamp(rnd(pan + dir * (fine ? 0.01 : 0.05), 0.01), -1.0, 1.0), 2)); };
             out.push_back(p);
-            for (const auto &[part, label, on] : {std::make_tuple(std::string("mute"), std::string("mute"), s->mute), std::make_tuple(std::string("solo"), std::string("solo"), s->solo)})
+            for (const auto &[part, label, on] : {std::make_tuple(std::string("mute"), tr("{1} mute"), s->mute), std::make_tuple(std::string("solo"), tr("{1} solo"), s->solo)})
             {
-                A11yNode t = a11yNode("dock." + id + "." + part, "toggle", name + " " + label, worldRect(*this, part == "mute" ? muteRect(id) : soloRect(id)), on ? "on" : "off");
+                A11yNode t = a11yNode("dock." + id + "." + part, "toggle", fillIn(label, name), worldRect(*this, part == "mute" ? muteRect(id) : soloRect(id)), on ? tr("on") : tr("off"));
                 t.checked = on;
                 out.push_back(t);
             }
             if (const Rect ar = armRect(id); ar.w > 0)
             {
-                A11yNode a = a11yNode("dock." + id + ".arm", "toggle", name + " record arm", worldRect(*this, ar), mModel.armed == id ? "on" : "off");
+                A11yNode a = a11yNode("dock." + id + ".arm", "toggle", fillIn(tr("{1} record arm"), name), worldRect(*this, ar), mModel.armed == id ? tr("on") : tr("off"));
                 a.checked = mModel.armed == id;
                 out.push_back(a);
             }
@@ -229,10 +238,11 @@ namespace solaris_ui
 
     std::string MixerDock::labelOf(const std::string &target) const
     {
-        if (target == "master" || target.empty()) return "Master";
+        // words (Words.h): a menu keeps them, a drawn arrow shows them
+        if (target == "master" || target.empty()) return say("Master");
         if (const auto *s = strip(target)) return s->name;
         for (const auto &p : mModel.ports)
-            if (p.id == target) return p.name + " port";
+            if (p.id == target) return say("{1} port", p.name);
         return target;
     }
 
@@ -356,7 +366,7 @@ namespace solaris_ui
         std::vector<std::pair<std::string, std::string>> want;
         for (const auto &mx : mMixers) want.emplace_back(mx.id, mx.name);
         want.emplace_back("+", "+");
-        want.emplace_back("", "Matrix");
+        want.emplace_back("", say("Matrix")); // words: shown where drawn
         for (auto &t : mTabs) t.gone = true;
         for (const auto &w : want)
         {
@@ -1049,7 +1059,7 @@ namespace solaris_ui
         std::vector<cosmo_v2::ContextMenu::Item> items;
         const std::string cur = s->out.empty() ? std::string("master") : s->out;
         for (const auto &t : s->targets) // exactly what the service says it may feed (R-MIX-4)
-            items.push_back({labelOf(t) + (t == cur ? "  \xC2\xB7 now" : ""), [this, id, t] { send("route " + id + " --to " + t); }});
+            items.push_back({labelOf(t) + (t == cur ? "  \xC2\xB7 " + say("now") : std::string()), [this, id, t] { send("route " + id + " --to " + t); }});
         onMenu(items, world);
     }
 
@@ -1059,9 +1069,9 @@ namespace solaris_ui
         if (!onMenu || mTab >= (int)mMixers.size()) return;
         const std::string mx = mMixers[(size_t)mTab].id;
         std::vector<cosmo_v2::ContextMenu::Item> items = {
-            {"Audio line", [this, mx] { send("strip add --kind audio --mixer " + mx); }},
-            {"Bus", [this, mx] { send("strip add --kind bus --mixer " + mx); }},
-            {"VCA", [this, mx] { send("strip add --kind vca --mixer " + mx); }}}; // R-MIX-19: a fader for others
+            {say("Audio line"), [this, mx] { send("strip add --kind audio --mixer " + mx); }},
+            {say("Bus"), [this, mx] { send("strip add --kind bus --mixer " + mx); }},
+            {say("VCA"), [this, mx] { send("strip add --kind vca --mixer " + mx); }}}; // R-MIX-19: a fader for others
         for (const auto &t : mModel.deviceTypes)
             if (t.kind == "instrument")
             {
@@ -1087,11 +1097,11 @@ namespace solaris_ui
         std::vector<cosmo_v2::ContextMenu::Item> items;
         const std::string id = sd.id, to = sd.to;
         const bool pre = sd.pre;
-        items.push_back({pre ? "Post-fader" : "Pre-fader", [this, id, pre] { send("set " + id + ".pre=" + (pre ? "false" : "true")); }});
-        items.push_back({"Make it the main output", [this, from, to, id] {
+        items.push_back({pre ? say("Post-fader") : say("Pre-fader"), [this, id, pre] { send("set " + id + ".pre=" + (pre ? "false" : "true")); }});
+        items.push_back({say("Make it the main output"), [this, from, to, id] {
                              if (send("route " + from + " --to " + to)) send("send delete " + id);
                          }});
-        items.push_back({"Remove send", [this, id] { send("send delete " + id); }});
+        items.push_back({say("Remove send"), [this, id] { send("send delete " + id); }});
         onMenu(items, world);
     }
 
@@ -1251,7 +1261,7 @@ namespace solaris_ui
                         const std::string id = h.id;
                         for (const auto &po : mModel.ports)
                             if (po.dir == "in") ins.push_back({"Arm with " + po.name, [this, id, pid = po.id] { send("strip arm " + id + " --input " + pid); }});
-                        if (ins.empty()) ins.push_back({"Add an input port (In)", [this] { send("port add In --dir in"); }});
+                        if (ins.empty()) ins.push_back({say("Add an input port (In)"), [this] { send("port add In --dir in"); }});
                         onMenu(std::move(ins), world);
                     }
                     else send("strip arm " + h.id);
@@ -1334,11 +1344,11 @@ namespace solaris_ui
             {
                 const std::string id = mMixers[(size_t)h.index].id, name = mMixers[(size_t)h.index].name;
                 const Point world = g.pos;
-                onMenu({{"Rename\xE2\x80\xA6", [this, id, name, world] {
+                onMenu({{say("Rename\xE2\x80\xA6"), [this, id, name, world] {
                              if (onRename) onRename(name, world, [this, id](const std::string &n) { send("set " + id + ".name=" + q(n)); });
                          }},
-                        {"Copy ID", [this, id] { if (onCopy) onCopy(id); }},
-                        {"Delete mixer", [this, id] { send("mixer delete " + id); }}},
+                        {say("Copy ID"), [this, id] { if (onCopy) onCopy(id); }},
+                        {say("Delete mixer"), [this, id] { send("mixer delete " + id); }}},
                        world);
             }
             else if (h.part != Part::None && h.part != Part::Fold && h.id != "master" && strip(h.id) && onMenu)
@@ -1347,10 +1357,10 @@ namespace solaris_ui
                 const std::string id = s.id, name = s.name;
                 const Point world = g.pos;
                 std::vector<cosmo_v2::ContextMenu::Item> items = {
-                    {"Rename\xE2\x80\xA6", [this, id, name, world] {
+                    {say("Rename\xE2\x80\xA6"), [this, id, name, world] {
                          if (onRename) onRename(name, world, [this, id](const std::string &n) { send("set " + id + ".name=" + q(n)); });
                      }},
-                    {"Copy ID", [this, id] { if (onCopy) onCopy(id); }}}; // R-UI-11
+                    {say("Copy ID"), [this, id] { if (onCopy) onCopy(id); }}}; // R-UI-11
                 // its clips re-linked to another line of its kind, all in one (R-MIX-14)
                 std::vector<cosmo_v2::ContextMenu::Item> to;
                 if (s.clipCount > 0)
@@ -1361,14 +1371,14 @@ namespace solaris_ui
                             to.push_back({o.name, [this, id, oid] { send("strip relink " + id + " --to " + oid); }});
                         }
                 if (!to.empty())
-                    items.push_back({"Move its clips to \xE2\x96\xB8", [this, to, world] { if (onMenu) onMenu(to, world); }});
+                    items.push_back({say("Move its clips to \xE2\x96\xB8"), [this, to, world] { if (onMenu) onMenu(to, world); }});
                 // a key for a later strip's compressor — exactly the service's keyTargets (R-MIX-15)
                 std::vector<cosmo_v2::ContextMenu::Item> keys;
                 for (const auto &k : s.keyTargets)
                     if (const auto *ks = strip(k))
                         keys.push_back({ks->name, [this, id, k] { send("send add " + id + " --to " + k + " --sidechain"); }});
                 if (!keys.empty())
-                    items.push_back({"Sidechain to \xE2\x96\xB8", [this, keys, world] { if (onMenu) onMenu(keys, world); }});
+                    items.push_back({say("Sidechain to \xE2\x96\xB8"), [this, keys, world] { if (onMenu) onMenu(keys, world); }});
                 // R-MIX-18: ducked under an earlier strip — every strip whose keys may reach this one, one line each
                 std::vector<cosmo_v2::ContextMenu::Item> under;
                 for (const auto &o : mModel.strips)
@@ -1378,23 +1388,23 @@ namespace solaris_ui
                         under.push_back({o.name, [this, id, oid] { send("strip duck " + id + " --under " + oid); }});
                     }
                 if (!under.empty())
-                    items.push_back({"Duck Under \xE2\x96\xB8", [this, under, world] { if (onMenu) onMenu(under, world); }});
+                    items.push_back({say("Duck Under \xE2\x96\xB8"), [this, under, world] { if (onMenu) onMenu(under, world); }});
                 if (s.kind == "audio") // R-REC-1: what it records, and when its input is heard through it
                 {
                     std::vector<cosmo_v2::ContextMenu::Item> ins, mon;
                     for (const auto &po : mModel.ports)
                         if (po.dir == "in")
-                            ins.push_back({po.name + (po.id == s.input ? "  \xC2\xB7 now" : ""), [this, id, pid = po.id] { send("set " + id + ".input=" + pid); }});
-                    if (!s.input.empty()) ins.push_back({"No input", [this, id] { send("set " + id + ".input=none"); }});
-                    ins.push_back({"Add an input port\xE2\x80\xA6", [this, world] {
+                            ins.push_back({po.name + (po.id == s.input ? "  \xC2\xB7 " + say("now") : std::string()), [this, id, pid = po.id] { send("set " + id + ".input=" + pid); }});
+                    if (!s.input.empty()) ins.push_back({say("No input"), [this, id] { send("set " + id + ".input=none"); }});
+                    ins.push_back({say("Add an input port\xE2\x80\xA6"), [this, world] {
                                        if (onRename) onRename("In", world, [this](const std::string &n) { if (!n.empty()) send("port add " + q(n) + " --dir in"); });
                                    }});
-                    items.push_back({"Input\xE2\x80\xA6", [this, ins, world] { if (onMenu) onMenu(ins, world); }});
+                    items.push_back({say("Input\xE2\x80\xA6"), [this, ins, world] { if (onMenu) onMenu(ins, world); }});
                     for (const char *m : {"auto", "on", "off"})
-                        mon.push_back({std::string(m == std::string("auto") ? "Auto (stopped or recording)" : m == std::string("on") ? "On" : "Off") +
-                                           (s.monitor == m ? "  \xC2\xB7 now" : ""),
+                        mon.push_back({(m == std::string("auto") ? say("Auto (stopped or recording)") : m == std::string("on") ? say("On") : say("Off")) +
+                                           (s.monitor == m ? "  \xC2\xB7 " + say("now") : std::string()),
                                        [this, id, m] { send("set " + id + ".monitor=" + m); }});
-                    items.push_back({"Monitor\xE2\x80\xA6", [this, mon, world] { if (onMenu) onMenu(mon, world); }});
+                    items.push_back({say("Monitor\xE2\x80\xA6"), [this, mon, world] { if (onMenu) onMenu(mon, world); }});
                 }
                 // R-PERF-3: its own sound frozen into it, or bounced onto a new strip — only a strip nothing feeds (the
                 // service's fromStrips: outputs, sends and keys); a frozen one can always be unfrozen
@@ -1406,29 +1416,29 @@ namespace solaris_ui
                         if (o.kind == "vca")
                         {
                             const std::string oid = o.id;
-                            vcas.push_back({o.name + (s.vca == oid ? "  \xC2\xB7 now" : ""), [this, id, oid] { send("set " + id + ".vca=" + oid); }});
+                            vcas.push_back({o.name + (s.vca == oid ? "  \xC2\xB7 " + say("now") : std::string()), [this, id, oid] { send("set " + id + ".vca=" + oid); }});
                         }
-                    if (!s.vca.empty()) vcas.push_back({"None", [this, id] { send("set " + id + ".vca=none"); }});
-                    if (!vcas.empty()) items.push_back({"VCA \xE2\x96\xB8", [this, vcas, world] { if (onMenu) onMenu(vcas, world); }});
+                    if (!s.vca.empty()) vcas.push_back({say("None"), [this, id] { send("set " + id + ".vca=none"); }});
+                    if (!vcas.empty()) items.push_back({say("VCA \xE2\x96\xB8"), [this, vcas, world] { if (onMenu) onMenu(vcas, world); }});
                 }
                 if (s.kind != "vca") // R-MIX-20: its polarity, its width; a bus's solo-safe — one line each
                 {
-                    items.push_back({std::string("Invert Phase") + (s.phase ? "  \xC2\xB7 on" : ""), [this, id, on = s.phase] { send("set " + id + ".phase=" + (on ? "off" : "on")); }});
+                    items.push_back({say("Invert Phase") + (s.phase ? "  \xC2\xB7 " + say("on") : std::string()), [this, id, on = s.phase] { send("set " + id + ".phase=" + (on ? "off" : "on")); }});
                     std::vector<cosmo_v2::ContextMenu::Item> widths;
                     for (int pct : {0, 50, 100, 150, 200})
-                        widths.push_back({std::to_string(pct) + " %" + (pct == 0 ? " (mono)" : "") + (std::fabs(s.width - pct) < 1e-9 ? "  \xC2\xB7 now" : ""),
+                        widths.push_back({std::to_string(pct) + " %" + (pct == 0 ? " " + say("(mono)") : std::string()) + (std::fabs(s.width - pct) < 1e-9 ? "  \xC2\xB7 " + say("now") : std::string()),
                                           [this, id, pct] { send("set " + id + ".width=" + std::to_string(pct)); }});
-                    items.push_back({"Width \xE2\x96\xB8", [this, widths, world] { if (onMenu) onMenu(widths, world); }});
+                    items.push_back({say("Width \xE2\x96\xB8"), [this, widths, world] { if (onMenu) onMenu(widths, world); }});
                     if (s.kind == "bus")
                         items.push_back({std::string("Solo-safe") + (s.soloSafe ? "  \xC2\xB7 on" : ""), [this, id, on = s.soloSafe] { send("set " + id + ".soloSafe=" + (on ? "false" : "true")); }});
                 }
                 if (s.kind != "vca") // a VCA carries no sound: nothing to freeze or bounce
                 {
-                    if (!s.frozen.empty()) items.push_back({"Unfreeze", [this, id] { send("strip unfreeze " + id); }});
-                    else if (s.fromStrips.empty()) items.push_back({"Freeze", [this, id] { send("strip freeze " + id); }});
-                    if (s.fromStrips.empty()) items.push_back({"Bounce to a new strip", [this, id] { send("strip bounce " + id); }});
+                    if (!s.frozen.empty()) items.push_back({say("Unfreeze"), [this, id] { send("strip unfreeze " + id); }});
+                    else if (s.fromStrips.empty()) items.push_back({say("Freeze"), [this, id] { send("strip freeze " + id); }});
+                    if (s.fromStrips.empty()) items.push_back({say("Bounce to a new strip"), [this, id] { send("strip bounce " + id); }});
                 }
-                items.push_back({"Delete strip", [this, id] { send("strip delete " + id); }});
+                items.push_back({say("Delete strip"), [this, id] { send("strip delete " + id); }});
                 onMenu(std::move(items), world);
             }
             return true;
@@ -1530,11 +1540,11 @@ namespace solaris_ui
         drawRoundedRect(t, Rect{x + 6.5, by + 5.0, w - 13.0, 3.0}, radius::pill(), Paint::filled(fade(col, ca)));
         const double ids = idsShown(); // R-UI-11: View › Show IDs, eased
         drawNameWithId(t, s->name, id, x + 6.5, by + 21.0, w - 13.0, 11.0, font::sansMedium(), palette::foreground(), ids, ca);
-        std::string sub = s->kind;
+        std::string sub = kindWord(s->kind);
         const bool isVca = s->kind == "vca"; // R-MIX-19: a fader for others — no sound, so no rack, pan, meter or route
-        if (s->kind == "audio" || s->kind == "instrument") sub += " \xC2\xB7 " + std::to_string(s->clipCount) + (s->clipCount == 1 ? " clip" : " clips");
-        else if (isVca) sub = "VCA \xC2\xB7 moves " + std::to_string(s->members.size());
-        else sub += " \xC2\xB7 fed by " + std::to_string(s->fromStrips.size());
+        if (s->kind == "audio" || s->kind == "instrument") sub += " \xC2\xB7 " + fillIn(trn(s->clipCount, "{1} clip", "{1} clips"), std::to_string(s->clipCount));
+        else if (isVca) sub = fillIn(tr("VCA \xC2\xB7 moves {1}"), std::to_string(s->members.size()));
+        else sub += " \xC2\xB7 " + fillIn(tr("fed by {1}"), std::to_string(s->fromStrips.size()));
         // R-MIX-20: "Ø" and its width at the sub line's right, faded in; the sub gives them room as they come
         const std::string ws = num(l->widthShown, 0) + "%";
         const double pa = l->phase.value(), wa = l->widthOn.value();
@@ -1566,7 +1576,7 @@ namespace solaris_ui
                 const Rect r = g.chips[k];
                 const bool more = k == kSlots - 1 && (int)s->members.size() > kSlots;
                 const solaris::StripModel *ms = strip(s->members[(size_t)k]);
-                const std::string label = more ? "+" + std::to_string(s->members.size() - (kSlots - 1)) + " more" : ms ? ms->name : s->members[(size_t)k];
+                const std::string label = more ? fillIn(tr("+{1} more"), std::to_string(s->members.size() - (kSlots - 1))) : ms ? ms->name : s->members[(size_t)k];
                 t.setFill(fade(palette::secondaryForeground(), ca));
                 t.drawText(textfit::ellipsize(t, label, r.w - 10.0, 10.0, font::sans()), r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
             }
@@ -1584,8 +1594,8 @@ namespace solaris_ui
             const double hv = mHover.amount(hoverId((int)Part::Chip, id + ">", k));
             std::string label, dv;
             bool add = k == slots - 1, more = n + 1 > kSlots && k == slots - 2, bypass = false, open = false;
-            if (add) label = "+ Effect";
-            else if (more) label = "+" + std::to_string(n - (kSlots - 2)) + " more";
+            if (add) label = tr("+ Effect");
+            else if (more) label = fillIn(tr("+{1} more"), std::to_string(n - (kSlots - 2)));
             else
             {
                 const auto &d = s->devices[(size_t)k];
@@ -1607,7 +1617,7 @@ namespace solaris_ui
             const Rect &top = g.chips[0], &last = g.chips[slots - 1];
             const double cy = (top.y + last.y + last.h) * 0.5, px = 9.0, tr = 0.13 * px;
             const double pw = top.w, ph = kChipH; // a chip's size, over the rack's middle: nothing of a device peeks past it
-            const std::string word = textfit::ellipsize(t, "FROZEN", pw - 6.5, px, font::sansSemiBold(), tr); // a narrow card: it fits or says less
+            const std::string word = textfit::ellipsize(t, solaris_strings::upper(::arstro::solaris_ui::tr("Frozen")), pw - 6.5, px, font::sansSemiBold(), tr); // a narrow card: it fits or says less
             const double tw = textfit::width(t, word, px, font::sansSemiBold(), tr);
             const Rect pill{top.x + (top.w - pw) * 0.5, cy - ph * 0.5, pw, ph};
             drawRoundedRect(t, pill, radius::pill(), Paint::filledStroked(fade(palette::popover(), fz * ca), fade(palette::primary(), fz * ca), 1.0));
@@ -1624,7 +1634,8 @@ namespace solaris_ui
             if (k == 1 && ns > 2)
             {
                 t.setFill(fade(palette::mutedForeground(), ca));
-                t.drawText("+" + std::to_string(ns - 1) + " in the matrix", r.x + 3.0, textfit::baseline(r.y + r.h * 0.5, 9.0), 9.0, font::sans());
+                t.drawText(textfit::ellipsize(t, fillIn(tr("+{1} in the matrix"), std::to_string(ns - 1)), r.w - 6.0, 9.0, font::sans()), r.x + 3.0, textfit::baseline(r.y + r.h * 0.5, 9.0), 9.0,
+                           font::sans());
                 continue;
             }
             const auto &sd = s->sends[(size_t)k];
@@ -1634,7 +1645,7 @@ namespace solaris_ui
             const double gw = t.measureText(gain, 9.0, font::mono()) + fw * ta, cyS = r.y + r.h * 0.5;
             // a sidechain key says so, in the solo amber: it is heard by a detector, not in the mix (R-MIX-15);
             // with Show IDs the send's own id takes the label's place (cross-faded)
-            arrowText(t, (sd.sidechain ? "key " : "") + labelOf(sd.to), r.x + 3.0, cyS, r.w - gw - 10.0, 9.0, font::sans(),
+            arrowText(t, sd.sidechain ? say("key {1}", ::arstro::solaris_ui::shown(labelOf(sd.to))) : labelOf(sd.to), r.x + 3.0, cyS, r.w - gw - 10.0, 9.0, font::sans(),
                       fade(sd.sidechain ? surface::solo() : palette::secondaryForeground(), ca * (1.0 - ids)));
             if (ids > 0.001)
             {
@@ -1680,7 +1691,7 @@ namespace solaris_ui
         if (const double va = l->vca.value(); va > 0.001)
         {
             const double bound = tagAmount(id + ".gain"), room = (w - 13.0) * (1.0 - 0.5 * bound);
-            const std::string vt = "VCA " + l->vcaName + " " + dbText(l->vcaDb.value());
+            const std::string vt = fillIn(tr("VCA {1} {2}"), l->vcaName, dbText(l->vcaDb.value()));
             const std::string fit = textfit::ellipsize(t, vt, room, 9.0, font::sans());
             const double left = x + 6.5, right = x + w - 6.5 - t.measureText(fit, 9.0, font::sans());
             t.setFill(fade(palette::secondaryForeground(), va * ca));
@@ -1736,7 +1747,7 @@ namespace solaris_ui
             const double tx = x + kFoldW - 4.0, tw = std::max(0.0, w - kFoldW - 2.0);
             arrowText(t, b ? b->name : bus, tx, by + 22.0, tw, 11.0, font::sansMedium(), fade(palette::foreground(), a * f));
             t.setFill(fade(palette::mutedForeground(), a * f));
-            t.drawText(textfit::ellipsize(t, std::to_string(n) + " strips", tw, 9.0, font::sans()), tx, by + 39.0, 9.0, font::sans());
+            t.drawText(textfit::ellipsize(t, fillIn(trn(n, "{1} strip", "{1} strips"), std::to_string(n)), tw, 9.0, font::sans()), tx, by + 39.0, 9.0, font::sans());
         }
         t.restore();
     }
@@ -1753,17 +1764,18 @@ namespace solaris_ui
         t.setStroke(fade(palette::border(), a), 1.0);
         t.beginPath(); t.moveTo(x + 0.5, by); t.lineTo(x + 0.5, by + bh); t.strokePath();
         const double ids = idsShown();
-        drawNameWithId(t, "Master", "master", x + 6.5, by + 21.0, w - 13.0, 11.0, font::sansMedium(), palette::foreground(), ids, a);
+        drawNameWithId(t, tr("Master"), "master", x + 6.5, by + 21.0, w - 13.0, 11.0, font::sansMedium(), palette::foreground(), ids, a);
         t.setFill(fade(palette::mutedForeground(), a));
         const size_t nd = mModel.masterDevices.size();
-        t.drawText(nd ? std::to_string(nd) + (nd == 1 ? " device" : " devices") : std::string("the mix"), x + 6.5, by + 33.0, 9.0, font::sans());
+        t.drawText(textfit::ellipsize(t, nd ? fillIn(trn((long)nd, "{1} device", "{1} devices"), std::to_string(nd)) : tr("the mix"), w - 13.0, 9.0, font::sans()), x + 6.5, by + 33.0, 9.0,
+                   font::sans());
         const int n = (int)mModel.masterDevices.size(), slots = chipSlots("master");
         for (int k = 0; k < slots; ++k)
         {
             const Rect r = g.chips[k];
             const double hv = mHover.amount(hoverId((int)Part::Chip, "master>", k));
             const bool add = k == slots - 1, more = n + 1 > kSlots && k == slots - 2;
-            const std::string label = add ? "+ Effect" : more ? "+" + std::to_string(n - (kSlots - 2)) + " more" : mModel.masterDevices[(size_t)k].label;
+            const std::string label = add ? tr("+ Effect") : more ? fillIn(tr("+{1} more"), std::to_string(n - (kSlots - 2))) : mModel.masterDevices[(size_t)k].label;
             const std::string dv = add || more ? std::string() : mModel.masterDevices[(size_t)k].id;
             if (add) drawRoundedRect(t, r, radius::control(), Paint::stroked(fade(palette::whiteAlpha(0.14 + 0.2 * hv), a), 1.0));
             else drawRoundedRect(t, r, radius::control(), Paint::filled(fade(lerpColor(palette::secondary(), palette::card(), hv), a)));
@@ -1776,7 +1788,8 @@ namespace solaris_ui
             const double on = mMono.value(), hv = mHover.amount(hoverId((int)Part::Mono, "master>", -1));
             drawRoundedRect(t, mr, radius::control(), Paint::filled(fade(lerpColor(lerpColor(palette::secondary(), palette::card(), hv), palette::primary(), on), a)));
             t.setFill(fade(lerpColor(palette::secondaryForeground(), palette::primaryForeground(), on), a));
-            t.drawText("Mono", mr.x + (mr.w - t.measureText("Mono", 9.0, font::sansMedium())) * 0.5, textfit::baseline(mr.y + mr.h * 0.5, 9.0), 9.0, font::sansMedium());
+            const std::string mono = textfit::ellipsize(t, tr("Mono"), mr.w - 4.0, 9.0, font::sansMedium());
+            t.drawText(mono, mr.x + (mr.w - t.measureText(mono, 9.0, font::sansMedium())) * 0.5, textfit::baseline(mr.y + mr.h * 0.5, 9.0), 9.0, font::sansMedium());
         }
         paintFader(t, g.zone, *l, a);
         paintTag(t, "project.masterGain", Rect{x + 6.5, g.pan.bottom() + 2.0, w - 13.0, 12.0}, a);
@@ -1800,8 +1813,8 @@ namespace solaris_ui
             centred("\xE2\x80\x94 LUFS", 1.0 - on, palette::mutedForeground()); // nothing measured yet
         }
         std::string outs;
-        for (const auto &o : mModel.masterOut) outs += (outs.empty() ? "" : ", ") + labelOf(o);
-        arrowText(t, outs.empty() ? std::string("no port") : outs, x + 6.5, g.out.y + g.out.h * 0.5, w - 13.0, 10.0, font::sans(), fade(palette::mutedForeground(), a));
+        for (const auto &o : mModel.masterOut) outs += (outs.empty() ? "" : ", ") + ::arstro::solaris_ui::shown(labelOf(o));
+        arrowText(t, outs.empty() ? tr("no port") : outs, x + 6.5, g.out.y + g.out.h * 0.5, w - 13.0, 10.0, font::sans(), fade(palette::mutedForeground(), a));
         t.restore();
     }
 
@@ -1831,16 +1844,16 @@ namespace solaris_ui
             const double hv = shown ? mHover.amount(hoverId((int)Part::AddLine, ">", -1)) : 0.0;
             drawRoundedRect(t, add, radius::control(), Paint::stroked(fade(palette::whiteAlpha(0.14 + 0.2 * hv), alpha), 1.0));
             t.setFill(fade(lerpColor(palette::secondaryForeground(), palette::foreground(), hv), alpha));
-            t.drawText("+ Line", add.x + (add.w - t.measureText("+ Line", 10.0, font::sans())) * 0.5, textfit::baseline(add.y + add.h * 0.5, 10.0), 10.0,
-                       font::sans());
+            const std::string line = textfit::ellipsize(t, tr("+ Line"), add.w - 6.0, 10.0, font::sans());
+            t.drawText(line, add.x + (add.w - t.measureText(line, 10.0, font::sans())) * 0.5, textfit::baseline(add.y + add.h * 0.5, 10.0), 10.0, font::sans());
         }
         if (pg.cards.empty() && alpha > 0.001)
         {
             const double tx = add.right() + space::padX() * 2.0;
             t.setFill(fade(palette::mutedForeground(), alpha));
-            t.drawText("No strips on this mixer.", tx, kTabsH + 34.0, 11.0, font::sans());
+            t.drawText(textfit::ellipsize(t, tr("No strips on this mixer."), std::max(0.0, stripsRight() - tx - 13.0), 11.0, font::sans()), tx, kTabsH + 34.0, 11.0, font::sans());
             t.setFill(fade(palette::mutedForeground(), 0.75 * alpha));
-            t.drawText(textfit::ellipsize(t, "\"+ Line\" adds one here; a strip moved to this mixer shows up too.", std::max(0.0, stripsRight() - tx - 13.0), 10.0,
+            t.drawText(textfit::ellipsize(t, tr("\"+ Line\" adds one here; a strip moved to this mixer shows up too."), std::max(0.0, stripsRight() - tx - 13.0), 10.0,
                                           font::sans()),
                        tx, kTabsH + 52.0, 10.0, font::sans());
         }
@@ -1940,7 +1953,7 @@ namespace solaris_ui
         {
             const double x = x0 + c * kCellW;
             if (x + kCellW < kRowHeadW || x > W) continue;
-            const std::string label = labelOf(cols[c]);
+            const std::string label = ::arstro::solaris_ui::shown(labelOf(cols[c]));
             t.setFill(fade(cols[c] == "master" ? palette::foreground() : palette::secondaryForeground(), a));
             t.drawText(textfit::ellipsize(t, label, kCellW - 8.0, 10.0, font::sans()), x + 4.0, kTabsH + kColHeadH - 10.0, 10.0, font::sans());
         }
@@ -2001,13 +2014,13 @@ namespace solaris_ui
             const bool cur = !tb.gone && tb.key == (onMatrix() ? std::string() : pageKey(mTab));
             // measured in the WIDER weight whichever is shown: a tab's place must not depend on which tab is
             // chosen, or choosing one moves its neighbours and retargets the highlight mid-slide
-            mTabTextW[tb.label] = t.measureText(tb.label, 10.0, font::sansMedium());
+            mTabTextW[tb.label] = t.measureText(::arstro::solaris_ui::shown(tb.label), 10.0, font::sansMedium()); // the words in the language drawn: the last pass's
             int ti = -1;
             for (int k = 0; k < tabCount(); ++k)
                 if ((k == (int)mMixers.size() ? std::string() : pageKey(k)) == tb.key) ti = k;
             const double hv = ti >= 0 ? mHover.amount(hoverId((int)Part::Tab, "", ti)) : 0.0;
             t.setFill(fade(cur ? palette::foreground() : lerpColor(palette::mutedForeground(), palette::foreground(), 0.5 * hv), ia));
-            t.drawText(tb.label, x + space::padX(), textfit::baseline(kTabsH * 0.5, 10.0), 10.0, cur ? font::sansMedium() : font::sans());
+            t.drawText(::arstro::solaris_ui::shown(tb.label), x + space::padX(), textfit::baseline(kTabsH * 0.5, 10.0), 10.0, cur ? font::sansMedium() : font::sans());
         }
         // the chevron: fold the dock away / bring it back
         {

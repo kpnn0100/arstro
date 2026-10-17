@@ -58,7 +58,7 @@ namespace solaris_ui
         return Rect{rn.x - 6.5 - mLoop->width.value(), rn.y + (rn.h - mLoop->height.value()) * 0.5, mLoop->width.value(), mLoop->height.value()};
     }
 
-    std::string AutomationPanel::title() const { return "Automation \xE2\x80\x94 " + (mModel.name.empty() ? mAu : mModel.name); }
+    std::string AutomationPanel::title() const { return say("Automation \xE2\x80\x94 {1}", mModel.name.empty() ? mAu : mModel.name); } // words: the window shows them
 
     std::string AutomationPanel::format(double v) const
     {
@@ -90,48 +90,53 @@ namespace solaris_ui
             r.extra = extra;
             rows.emplace_back(key, r);
         };
-        add("name:" + mModel.name, Row::Info, "Name", mModel.name, "");
-        add("id", Row::Info, "Id", mModel.id, "what a formula names");
+        // a row's words kept as words (Words.h); the model's as they are
+        add("name:" + mModel.name, Row::Info, say("Name"), mModel.name, "");
+        add("id", Row::Info, say("Id"), mModel.id, say("what a formula names"));
         const std::string range = format(mModel.min) + " \xE2\x80\xA6 " + format(mModel.max);
-        add("range:" + range, Row::Info, "Range", range, "");
-        add("from:" + mModel.from, Row::Info, "Made from", mModel.from.empty() ? std::string("\xE2\x80\x94") : mModel.from,
-            mModel.from.empty() ? "made from nothing" : "");
+        add("range:" + range, Row::Info, say("Range"), range, "");
+        add("from:" + mModel.from, Row::Info, say("Made from"), mModel.from.empty() ? std::string("\xE2\x80\x94") : mModel.from,
+            mModel.from.empty() ? say("made from nothing") : std::string());
         {
             // R-AUTO-12: the loop, said — its cycle and where it repeats
-            std::string loop = "off", where = "the curve as drawn";
+            std::string loop = say("off"), where = say("the curve as drawn");
             if (mModel.loop > 0)
             {
-                loop = "every " + beatText(mModel.loop) + (mModel.loop == 1.0 ? " beat" : " beats");
-                where = "from beat " + beatText(mModel.at) + (mModel.length > 0 ? " for " + beatText(mModel.length) + " beats" : " to the end");
+                loop = mModel.loop == 1.0 ? say("every {1} beat", beatText(mModel.loop)) : say("every {1} beats", beatText(mModel.loop));
+                where = mModel.length > 0 ? say("from beat {1} for {2} beats", beatText(mModel.at), beatText(mModel.length)) : say("from beat {1} to the end", beatText(mModel.at));
             }
-            add("loop:" + loop + "|" + where, Row::Info, "Loop", loop, where);
+            add("loop:" + loop + "|" + where, Row::Info, say("Loop"), loop, where);
         }
         {
             // the Loop combo's options: Off, 1/4, 1/2, 1, 2 beats, 1, 2, 4 bars — and a value set elsewhere, kept visible
             const int bpb = std::max(1, std::atoi(m.sig.c_str()));
-            std::vector<std::pair<std::string, double>> opts = {{"Off", 0.0}, {"1/4 beat", 0.25}, {"1/2 beat", 0.5}, {"1 beat", 1.0}, {"2 beats", 2.0},
-                                                                 {"1 bar", (double)bpb}, {"2 bars", 2.0 * bpb}, {"4 bars", 4.0 * bpb}};
+            std::vector<std::pair<std::string, double>> opts = {{say("Off"), 0.0}, {say("1/4 beat"), 0.25}, {say("1/2 beat"), 0.5}, {sayn(1, "{1} beat", "{1} beats", 1), 1.0},
+                                                                 {sayn(2, "{1} beat", "{1} beats", 2), 2.0}, {sayn(1, "{1} bar", "{1} bars", 1), (double)bpb},
+                                                                 {sayn(2, "{1} bar", "{1} bars", 2), 2.0 * bpb}, {sayn(4, "{1} bar", "{1} bars", 4), 4.0 * bpb}};
             int sel = -1;
             for (size_t i = 0; i < opts.size(); ++i)
                 if (std::fabs(opts[i].second - mModel.loop) < 1e-9) sel = (int)i;
-            if (sel < 0) { opts.emplace_back(beatText(mModel.loop) + " beats", mModel.loop); sel = (int)opts.size() - 1; }
+            if (sel < 0) { opts.emplace_back(say("{1} beats", beatText(mModel.loop)), mModel.loop); sel = (int)opts.size() - 1; }
             std::vector<std::string> labels;
             mLoopBeats.clear();
-            for (const auto &o : opts) { labels.push_back(o.first); mLoopBeats.push_back(o.second); }
+            mLoopWords.clear();
+            for (const auto &o : opts) { labels.push_back(::arstro::solaris_ui::shown(o.first)); mLoopWords.push_back(o.first); mLoopBeats.push_back(o.second); }
+            mLoopLang = solaris_strings::language();
             if (labels != mLoop->options()) mLoop->setOptions(labels);
             mLoop->setSelectedIndex(sel);
         }
-        add("now", Row::Now, "At the playhead", "", "");
-        add("sec:points:" + std::to_string(mModel.points.size()), Row::Section, "POINTS \xC2\xB7 " + std::to_string(mModel.points.size()), "", "");
+        add("now", Row::Now, say("At the playhead"), "", "");
+        add("sec:points:" + std::to_string(mModel.points.size()), Row::Section, say("Points \xC2\xB7 {1}", (long)mModel.points.size()), "", "");
         for (const auto &p : mModel.points)
         {
-            std::string shape = p.shape;
+            // a point's shape by its name (the grammar's word is the model's): a bezier's handles after it
+            std::string shape = p.shape == "linear" ? say("linear") : p.shape == "hold" ? say("hold") : p.shape == "smooth" ? say("smooth") : p.shape;
             if (p.shape == "bezier")
-                shape += "  in " + shortNum(p.speedIn) + "/b " + shortNum(p.inflIn) + "%  out " + shortNum(p.speedOut) + "/b " + shortNum(p.inflOut) + "%";
-            add("pt:" + beatText(p.at) + "|" + format(p.value) + "|" + shape, Row::Point, "beat " + beatText(p.at), format(p.value), shape);
+                shape = say("bezier  in {1}/b {2}%  out {3}/b {4}%", shortNum(p.speedIn), shortNum(p.inflIn), shortNum(p.speedOut), shortNum(p.inflOut));
+            add("pt:" + beatText(p.at) + "|" + format(p.value) + "|" + shape, Row::Point, say("beat {1}", beatText(p.at)), format(p.value), shape);
         }
-        add("sec:read", Row::Section, "READ BY", "", "");
-        if (mModel.usedBy.empty()) add("rd:", Row::Reader, "nothing reads it", "", "it moves nothing until a formula names " + mModel.id);
+        add("sec:read", Row::Section, say("Read by"), "", "");
+        if (mModel.usedBy.empty()) add("rd:", Row::Reader, say("nothing reads it"), "", say("it moves nothing until a formula names {1}", mModel.id));
         for (const auto &address : mModel.usedBy)
         {
             std::string formula;
@@ -153,6 +158,13 @@ namespace solaris_ui
 
     void AutomationPanel::advance(double nowMs)
     {
+        if (mLoopLang != solaris_strings::language() && !mLoopWords.empty()) // R-ACCESS-2: its choices in the language now — the combo cross-fades
+        {
+            std::vector<std::string> labels;
+            for (const auto &w : mLoopWords) labels.push_back(::arstro::solaris_ui::shown(w));
+            mLoop->setOptions(labels);
+            mLoopLang = solaris_strings::language();
+        }
         // the value at the playhead: continuous while playing (the transport is the animation), eased to a jump
         if (!mNowInit)
         {
@@ -188,7 +200,9 @@ namespace solaris_ui
         {
             if (r.gone) continue;
             const Row &d = r.data;
-            out += d.label + "  " + (d.kind == Row::Now ? format(mNow.value()) : d.value) + "  " + d.extra + "\n";
+            const std::string label = ::arstro::solaris_ui::shown(d.label); // as drawn: a section's in capitals
+            out += (d.kind == Row::Section ? solaris_strings::upper(label) : label) + "  " + (d.kind == Row::Now ? format(mNow.value()) : ::arstro::solaris_ui::shown(d.value)) + "  " +
+                   ::arstro::solaris_ui::shown(d.extra) + "\n";
         }
         return out;
     }
@@ -250,13 +264,14 @@ namespace solaris_ui
         const Rect rn = renameRect();
         t.setFill(palette::mutedForeground());
         const std::string head = mModel.id + (mModel.unit.empty() ? std::string() : " \xC2\xB7 " + mModel.unit) + " \xC2\xB7 " +
-                                 std::to_string(mModel.points.size()) + (mModel.points.size() == 1 ? " point" : " points");
+                                 fillIn(trn((long)mModel.points.size(), "{1} point", "{1} points"), std::to_string(mModel.points.size()));
         t.drawText(textfit::ellipsize(t, head, std::max(0.0, loopRect().x - 2.0 * pad), 10.0, font::mono()), pad, textfit::baseline(rn.y + rn.h * 0.5, 10.0), 10.0,
                    font::mono());
         const double hv = mHover.amount(0);
         drawRoundedRect(t, rn, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), hv)));
         t.setFill(palette::secondaryForeground());
-        t.drawText("Rename", rn.x + (rn.w - t.measureText("Rename", 10.0, font::sans())) * 0.5, textfit::baseline(rn.y + rn.h * 0.5, 10.0), 10.0, font::sans());
+        const std::string rename = textfit::ellipsize(t, tr("Rename"), rn.w - 6.0, 10.0, font::sans());
+        t.drawText(rename, rn.x + (rn.w - t.measureText(rename, 10.0, font::sans())) * 0.5, textfit::baseline(rn.y + rn.h * 0.5, 10.0), 10.0, font::sans());
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, kHeaderH - 0.5); t.lineTo(W, kHeaderH - 0.5); t.strokePath();
 
@@ -274,24 +289,24 @@ namespace solaris_ui
             {
             case Row::Section:
                 t.setFill(fade(palette::mutedForeground(), a));
-                t.drawText(d.label, pad, textfit::baseline(y + kRowH * 0.62, 9.0), 9.0, font::sansSemiBold(), 0.13 * 9.0);
+                t.drawText(solaris_strings::upper(::arstro::solaris_ui::shown(d.label)), pad, textfit::baseline(y + kRowH * 0.62, 9.0), 9.0, font::sansSemiBold(), 0.13 * 9.0);
                 break;
             case Row::Info:
             case Row::Now:
             {
                 t.setFill(fade(palette::mutedForeground(), a));
-                t.drawText(d.label, pad, base, 10.0, font::sans());
+                t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(d.label), kLabelW - 4.0, 10.0, font::sans()), pad, base, 10.0, font::sans());
                 const bool now = d.kind == Row::Now;
-                const std::string v = now ? format(mNow.value()) : d.value;
-                const std::string extra = now ? "at beat " + number(mPos.value(), 2) : d.extra;
+                const std::string v = now ? format(mNow.value()) : ::arstro::solaris_ui::shown(d.value);
+                const std::string extra = now ? fillIn(tr("at beat {1}"), number(mPos.value(), 2)) : ::arstro::solaris_ui::shown(d.extra);
                 const double vx = pad + kLabelW, room = std::max(0.0, W - vx - pad);
-                const bool mono = d.label != "Name";
+                const bool mono = english(d.label) != "Name";
                 t.setFill(fade(now ? palette::primary() : palette::foreground(), a));
-                const std::string shown = textfit::ellipsize(t, v, room, mono ? 10.0 : 11.0, mono ? font::mono() : font::sans());
-                t.drawText(shown, vx, base, mono ? 10.0 : 11.0, mono ? font::mono() : font::sans());
+                const std::string fit = textfit::ellipsize(t, v, room, mono ? 10.0 : 11.0, mono ? font::mono() : font::sans());
+                t.drawText(fit, vx, base, mono ? 10.0 : 11.0, mono ? font::mono() : font::sans());
                 if (!extra.empty())
                 {
-                    const double ex = vx + t.measureText(shown, mono ? 10.0 : 11.0, mono ? font::mono() : font::sans()) + space::gap();
+                    const double ex = vx + t.measureText(fit, mono ? 10.0 : 11.0, mono ? font::mono() : font::sans()) + space::gap();
                     t.setFill(fade(palette::mutedForeground(), a));
                     t.drawText(textfit::ellipsize(t, extra, std::max(0.0, W - pad - ex), 9.0, font::sans()), ex, textfit::baseline(y + kRowH * 0.5, 9.0), 9.0,
                                font::sans());
@@ -301,21 +316,21 @@ namespace solaris_ui
             case Row::Point:
             {
                 t.setFill(fade(palette::mutedForeground(), a));
-                t.drawText(d.label, pad, base, 10.0, font::mono());
+                t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(d.label), 61.0, 10.0, font::mono()), pad, base, 10.0, font::mono());
                 t.setFill(fade(palette::foreground(), a));
                 t.drawText(d.value, pad + 65.0, base, 10.0, font::mono());
-                t.setFill(fade(d.extra.rfind("bezier", 0) == 0 ? palette::primary() : palette::secondaryForeground(), a));
-                t.drawText(textfit::ellipsize(t, d.extra, std::max(0.0, W - pad - (pad + 149.5)), 9.0, font::mono()), pad + 149.5,
+                t.setFill(fade(english(d.extra).rfind("bezier", 0) == 0 ? palette::primary() : palette::secondaryForeground(), a));
+                t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(d.extra), std::max(0.0, W - pad - (pad + 149.5)), 9.0, font::mono()), pad + 149.5,
                            textfit::baseline(y + kRowH * 0.5, 9.0), 9.0, font::mono());
                 break;
             }
             case Row::Reader:
             {
-                const bool none = d.value.empty() && d.label == "nothing reads it";
+                const bool none = d.value.empty() && english(d.label) == "nothing reads it";
                 t.setFill(fade(none ? palette::mutedForeground() : palette::foreground(), a));
-                const std::string addr = textfit::ellipsize(t, d.label, 136.5, 10.0, none ? font::sans() : font::mono());
+                const std::string addr = textfit::ellipsize(t, ::arstro::solaris_ui::shown(d.label), 136.5, 10.0, none ? font::sans() : font::mono());
                 t.drawText(addr, pad, base, 10.0, none ? font::sans() : font::mono());
-                const std::string right = none ? d.extra : d.value;
+                const std::string right = none ? ::arstro::solaris_ui::shown(d.extra) : d.value;
                 t.setFill(fade(palette::secondaryForeground(), a));
                 t.drawText(textfit::ellipsize(t, right, std::max(0.0, W - pad - (pad + 143.0)), 10.0, font::mono()), pad + 143.0, base, 10.0,
                            font::mono());

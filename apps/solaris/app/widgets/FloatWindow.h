@@ -52,8 +52,9 @@ namespace solaris_ui
 
         FloatWindow(std::string key, std::shared_ptr<artboard::Segment> content);
         const std::string &key() const { return mKey; }
+        /** Its title — words (Words.h) or data, shown in the language drawn (R-ACCESS-2). */
         void setTitle(const std::string &t) { mTitle = t; }
-        const std::string &title() const { return mTitle; }
+        std::string title() const { return ::arstro::solaris_ui::shown(mTitle); }
         artboard::Segment &content() { return *mContent; }
 
         void open();

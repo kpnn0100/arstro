@@ -263,7 +263,7 @@ namespace solaris_ui
         for (const auto &s : m.strips)
             for (const auto &x : s.devices)
                 if (x.id == mDevice) { mOwner = s.name; mStrip = s.id; }
-        if (mOwner.empty()) mOwner = "Master";
+        if (mOwner.empty()) mOwner = say("Master"); // words: shown where drawn
         if (mRollPending)
             for (const auto &p : m.patterns)
                 if (p.strip == mStrip && !mStrip.empty())
@@ -554,7 +554,7 @@ namespace solaris_ui
         const auto *hz = readingOf(d, "frequency");
         std::string s;
         auto add = [&](const std::string &part) { s += (s.empty() ? "" : " \xC2\xB7 ") + part; };
-        if (hz && hz->value <= 0.0) add("no pitch");
+        if (hz && hz->value <= 0.0) add(tr("no pitch"));
         for (const auto &r : d->readings)
         {
             if (r.name == "note") continue;                                   // the large text says it
@@ -581,9 +581,9 @@ namespace solaris_ui
     {
         const solaris::DeviceModel *d = model();
         if (!d || !d->takesSample) return std::string();
-        if (d->sample.empty()) return d->takesDefinition ? "no instrument \xE2\x80\x94 drop an .sfz here" : "no sample \xE2\x80\x94 drop one here";
+        if (d->sample.empty()) return d->takesDefinition ? tr("no instrument \xE2\x80\x94 drop an .sfz here") : tr("no sample \xE2\x80\x94 drop one here");
         const auto slash = d->sample.find_last_of('/');
-        return std::string(d->takesDefinition ? "instrument " : "sample ") + (slash == std::string::npos ? d->sample : d->sample.substr(slash + 1));
+        return fillIn(d->takesDefinition ? tr("instrument {1}") : tr("sample {1}"), slash == std::string::npos ? d->sample : d->sample.substr(slash + 1));
     }
 
     Rect DevicePanel::rollRect() const { return Rect{width.value() - space::padX() - 71.5, 8.125, 71.5, 19.5}; } // u(22): "Piano Roll" fits
@@ -707,7 +707,7 @@ namespace solaris_ui
                         items.push_back({name + (x.factory ? "  \xC2\xB7 factory" : ""), [this, dv, name] { if (onCommand) onCommand("preset load " + dv + " \"" + name + "\""); }});
                     }
                 const Point world = g.pos;
-                items.push_back({"Save as preset\xE2\x80\xA6", [this, dv, world] {
+                items.push_back({say("Save as preset\xE2\x80\xA6"), [this, dv, world] {
                                      if (onRename) onRename("", world, [this, dv](const std::string &n) { if (onCommand && !n.empty()) onCommand("preset save " + dv + " \"" + n + "\""); });
                                  }});
                 onMenu(std::move(items), g.pos);
@@ -767,7 +767,7 @@ namespace solaris_ui
         t.setFill(palette::mutedForeground());
         // a sampler names its sound where the others name their type (R-EDM-8); a plugin, itself (R-VST-6)
         const std::string what = d->takesSample ? sampleText() : d->id + " \xC2\xB7 " + (plugin ? d->label : d->type);
-        t.drawText(textfit::ellipsize(t, mOwner + " \xC2\xB7 " + what, std::max(0.0, pr.x - 2.0 * space::padX()), 10.0, font::mono()),
+        t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(mOwner) + " \xC2\xB7 " + what, std::max(0.0, pr.x - 2.0 * space::padX()), 10.0, font::mono()),
                    space::padX(), textfit::baseline(by.y + by.h * 0.5, 10.0), 10.0, font::mono());
         if (plugin)
         {
@@ -776,19 +776,21 @@ namespace solaris_ui
             drawRoundedRect(t, pr, radius::control(),
                             Paint::filled(lerpColor(lerpColor(palette::secondary(), palette::popover(), mHover.amount(4)), palette::primary(), e)));
             t.setFill(lerpColor(palette::secondaryForeground(), palette::primaryForeground(), e));
-            t.drawText("Editor", pr.x + (pr.w - t.measureText("Editor", 10.0, font::sans())) * 0.5, textfit::baseline(pr.y + pr.h * 0.5, 10.0), 10.0, font::sans());
+            const std::string ed = textfit::ellipsize(t, tr("Editor"), pr.w - 4.0, 10.0, font::sans());
+            t.drawText(ed, pr.x + (pr.w - t.measureText(ed, 10.0, font::sans())) * 0.5, textfit::baseline(pr.y + pr.h * 0.5, 10.0), 10.0, font::sans());
         }
         else
         {
             // R-PRESET-1: Presets — a menu of its type's, and Save as…
             drawRoundedRect(t, pr, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), mHover.amount(4))));
             t.setFill(palette::secondaryForeground());
-            t.drawText("Presets", pr.x + (pr.w - t.measureText("Presets", 10.0, font::sans())) * 0.5, textfit::baseline(pr.y + pr.h * 0.5, 10.0), 10.0, font::sans());
+            const std::string ps = textfit::ellipsize(t, tr("Presets"), pr.w - 4.0, 10.0, font::sans());
+            t.drawText(ps, pr.x + (pr.w - t.measureText(ps, 10.0, font::sans())) * 0.5, textfit::baseline(pr.y + pr.h * 0.5, 10.0), 10.0, font::sans());
         }
         // On / Bypassed: the fill eases whoever changed it
         const double b = mBypass.value();
         drawRoundedRect(t, by, radius::control(), Paint::filled(lerpColor(palette::primary(), palette::secondary(), b)));
-        const std::string bl = b > 0.5 ? "Bypassed" : "On";
+        const std::string bl = textfit::ellipsize(t, b > 0.5 ? tr("Bypassed") : tr("On"), by.w - 4.0, 10.0, font::sans());
         t.setFill(lerpColor(palette::primaryForeground(), palette::secondaryForeground(), b));
         t.drawText(bl, by.x + (by.w - t.measureText(bl, 10.0, font::sans())) * 0.5, textfit::baseline(by.y + by.h * 0.5, 10.0), 10.0, font::sans());
         if (d->instrument)
@@ -796,15 +798,16 @@ namespace solaris_ui
             const Rect rr = rollRect();
             drawRoundedRect(t, rr, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), mHover.amount(3))));
             t.setFill(palette::secondaryForeground());
-            t.drawText("Piano Roll", rr.x + (rr.w - t.measureText("Piano Roll", 10.0, font::sans())) * 0.5, textfit::baseline(rr.y + rr.h * 0.5, 10.0), 10.0,
-                       font::sans());
+            const std::string roll = textfit::ellipsize(t, tr("Piano Roll"), rr.w - 4.0, 10.0, font::sans());
+            t.drawText(roll, rr.x + (rr.w - t.measureText(roll, 10.0, font::sans())) * 0.5, textfit::baseline(rr.y + rr.h * 0.5, 10.0), 10.0, font::sans());
         }
         else
         {
             const Rect rm = removeRect();
             drawRoundedRect(t, rm, radius::control(), Paint::filled(palette::hoverWash(0.6 + mHover.amount(1))));
             t.setFill(lerpColor(palette::secondaryForeground(), palette::destructive(), mHover.amount(1)));
-            t.drawText("Remove", rm.x + (rm.w - t.measureText("Remove", 10.0, font::sans())) * 0.5, textfit::baseline(rm.y + rm.h * 0.5, 10.0), 10.0, font::sans());
+            const std::string rem = textfit::ellipsize(t, tr("Remove"), rm.w - 4.0, 10.0, font::sans());
+            t.drawText(rem, rm.x + (rm.w - t.measureText(rem, 10.0, font::sans())) * 0.5, textfit::baseline(rm.y + rm.h * 0.5, 10.0), 10.0, font::sans());
         }
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, kHeaderH - 0.5); t.lineTo(W, kHeaderH - 0.5); t.strokePath();
@@ -822,9 +825,10 @@ namespace solaris_ui
             drawRoundedRect(t, Rect{rl.x, rl.y + shift, rl.w, rl.h}, radius::control(),
                             Paint::filled(lerpColor(palette::secondary(), palette::popover(), mHover.amount(5))));
             t.setFill(palette::secondaryForeground());
-            t.drawText("Reload", rl.x + (rl.w - t.measureText("Reload", 10.0, font::sans())) * 0.5, textfit::baseline(cy, 10.0), 10.0, font::sans());
+            const std::string rl2 = textfit::ellipsize(t, tr("Reload"), rl.w - 4.0, 10.0, font::sans());
+            t.drawText(rl2, rl.x + (rl.w - t.measureText(rl2, 10.0, font::sans())) * 0.5, textfit::baseline(cy, 10.0), 10.0, font::sans());
             t.setFill(palette::destructive());
-            const std::string why = "Offline \xE2\x80\x94 " + (d->why.empty() ? std::string("not playing") : d->why);
+            const std::string why = fillIn(tr("Offline \xE2\x80\x94 {1}"), d->why.empty() ? tr("not playing") : d->why); // the service's reason, as it is
             t.drawText(textfit::ellipsize(t, why, std::max(0.0, rl.x - 2.0 * space::padX()), 10.0, font::sans()), space::padX(),
                        textfit::baseline(cy, 10.0), 10.0, font::sans());
             t.restore();

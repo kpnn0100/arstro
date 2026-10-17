@@ -137,7 +137,7 @@ namespace solaris_ui
         {
             Section s;
             s.prefix = prefix;
-            s.title = prefix.empty() ? std::string("Main") : upper(prefix);
+            s.title = prefix.empty() ? say("Main") : upper(prefix); // words, or the registry's prefix (data)
             for (const auto &g : d.groups)
                 if (g.prefix == prefix) s.title = g.label; // the registry's title (REQ-device-10)
             for (const auto &p : d.params)
@@ -719,7 +719,7 @@ namespace solaris_ui
             if (box.bottom() < 0.0 || box.y > H) continue;
             drawRoundedRect(t, box, radius::control(), Paint::filledStroked(surface::moduleBg(), palette::border(), 1.0));
             // the module's title, a faceplate's: tracked capitals, a rule running on from it
-            const std::string title = textfit::ellipsize(t, upper(s.title), box.w - 2.0 * kPad, 9.0, font::sansSemiBold());
+            const std::string title = textfit::ellipsize(t, solaris_strings::upper(::arstro::solaris_ui::shown(s.title)), box.w - 2.0 * kPad, 9.0, font::sansSemiBold());
             const double ty = box.y + kTitleH * 0.5;
             t.setFill(palette::mutedForeground());
             t.drawText(title, box.x + kPad, textfit::baseline(ty, 9.0), 9.0, font::sansSemiBold(), 0.13 * 9.0);

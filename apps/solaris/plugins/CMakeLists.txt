@@ -24,7 +24,7 @@ add_library(solaris_instrument_editor STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../core/service/RegistryModel.cpp)
 target_include_directories(solaris_instrument_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../core/service)
 target_link_libraries(solaris_instrument_editor PUBLIC solaris_app arstro_dsp)
-set_target_properties(solaris_instrument_editor solaris_app artboard_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(solaris_instrument_editor solaris_app artboard_core solaris_strings PROPERTIES POSITION_INDEPENDENT_CODE ON) # solaris_strings: the panel's words (R-ACCESS-2; the plugin draws in English — no setting reaches it)
 
 foreach(plugin arstro_vst3_synth arstro_vst3_drums)
   target_sources(${plugin} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/X11View.cpp)

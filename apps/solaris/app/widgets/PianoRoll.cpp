@@ -15,7 +15,7 @@ namespace solaris_ui
     namespace
     {
         constexpr double kSnaps[5] = {1.0, 0.5, 0.25, 0.125, 0.0};  // 1/4 · 1/8 · 1/16 · 1/32 · off
-        const char *kSnapLabels[5] = {"1/4", "1/8", "1/16", "1/32", "Off"};
+        const char *kSnapLabels[5] = {"1/4", "1/8", "1/16", "1/32", N_("Off")}; // drawn through tr: note values are no language's
         constexpr double kChipW = 35.75;  // space::u(11)
         constexpr double kModeW = 52.0;   // space::u(16)
         constexpr double kQuantW = 71.5;  // space::u(22)
@@ -60,7 +60,7 @@ namespace solaris_ui
     std::string PianoRoll::title() const
     {
         const std::string name = mModel.name.empty() ? mPattern : mModel.name;
-        return "Piano Roll \xE2\x80\x94 " + name + (mStripName.empty() || mStripName == name ? "" : " \xC2\xB7 " + mStripName);
+        return say("Piano Roll \xE2\x80\x94 {1}", name) + (mStripName.empty() || mStripName == name ? std::string() : " \xC2\xB7 " + mStripName); // words: the window shows them
     }
 
     std::string PianoRoll::noteName(int pitch) const
@@ -402,7 +402,7 @@ namespace solaris_ui
         const struct { double beats; const char *name; } kNames[] = {{0.125, "1/32"}, {0.25, "1/16"}, {0.5, "1/8"}, {1.0, "1/4"}, {2.0, "1/2"}, {4.0, "1/1"}};
         for (const auto &n : kNames)
             if (std::fabs(b - n.beats) < kTol) return n.name;
-        return beats(b) + " beats";
+        return fillIn(tr("{1} beats"), beats(b));
     }
     Rect PianoRoll::endRect() const
     {
@@ -863,7 +863,7 @@ namespace solaris_ui
                 // R-ROLL-10: the length a click makes — the last one (the default), or a note value
                 if (!onMenu) return true;
                 std::vector<cosmo_v2::ContextMenu::Item> items;
-                items.push_back({"Last used (" + lengthName(mLastLength) + ")", [this] { mLengthChoice = 0.0; }});
+                items.push_back({say("Last used ({1})", lengthName(mLastLength)), [this] { mLengthChoice = 0.0; }});
                 for (double b : {0.125, 0.25, 0.5, 1.0, 2.0, 4.0})
                     items.push_back({lengthName(b), [this, b] { mLengthChoice = b; }});
                 onMenu(std::move(items), g.pos);
@@ -874,9 +874,9 @@ namespace solaris_ui
                 if (!onMenu) return true;
                 const std::string grid = beats(mSnap > 0 ? mSnap : 0.25), id = mPattern, scope = notesFlag(); // R-ROLL-11: the selection, else all
                 std::vector<cosmo_v2::ContextMenu::Item> items = {
-                    {"Quantize (straight)", [this, id, grid, scope] { send("pattern quantize " + id + " --grid " + grid + scope); }},
-                    {"Quantize, swing 25%", [this, id, grid, scope] { send("pattern quantize " + id + " --grid " + grid + " --swing 0.25" + scope); }},
-                    {"Quantize, swing 50%", [this, id, grid, scope] { send("pattern quantize " + id + " --grid " + grid + " --swing 0.5" + scope); }}};
+                    {say("Quantize (straight)"), [this, id, grid, scope] { send("pattern quantize " + id + " --grid " + grid + scope); }},
+                    {say("Quantize, swing 25%"), [this, id, grid, scope] { send("pattern quantize " + id + " --grid " + grid + " --swing 0.25" + scope); }},
+                    {say("Quantize, swing 50%"), [this, id, grid, scope] { send("pattern quantize " + id + " --grid " + grid + " --swing 0.5" + scope); }}};
                 for (const auto &gr : mGrooves) // R-ROLL-11: the grooves the service has
                     items.push_back({"Groove: " + gr.name, [this, id, scope, n = gr.name] { send("pattern quantize " + id + " --groove " + n + scope); }});
                 onMenu(std::move(items), g.pos);
@@ -890,11 +890,11 @@ namespace solaris_ui
                 const std::string key = cur.empty() ? std::string("C") : cur.substr(0, cur.find(' '));
                 const std::string kind = cur.empty() ? std::string("major") : cur.substr(cur.find(' ') + 1);
                 std::vector<cosmo_v2::ContextMenu::Item> items;
-                items.push_back({"No scale", [this, id] { send("pattern scale " + id + " off"); }});
+                items.push_back({say("No scale"), [this, id] { send("pattern scale " + id + " off"); }});
                 for (const auto &s : mScales)
                     items.push_back({key + " " + s.name, [this, id, key, n = s.name] { send("pattern scale " + id + " " + key + " " + n); }});
                 const Point at = g.pos;
-                items.push_back({"Change key\xE2\x80\xA6", [this, id, kind, at] {
+                items.push_back({say("Change key\xE2\x80\xA6"), [this, id, kind, at] {
                                      std::vector<cosmo_v2::ContextMenu::Item> keys;
                                      for (const char *k : kKeyNames)
                                          keys.push_back({std::string(k) + " " + kind, [this, id, kind, k] { send("pattern scale " + id + " " + k + " " + kind); }});
@@ -908,7 +908,7 @@ namespace solaris_ui
                 // R-ROLL-11: what a click on the grid makes — a note, or this chord on the row clicked (the view's)
                 if (!onMenu) return true;
                 std::vector<cosmo_v2::ContextMenu::Item> items;
-                items.push_back({"Single notes", [this] { mChordOn = false; }});
+                items.push_back({say("Single notes"), [this] { mChordOn = false; }});
                 for (const auto &q : mChords)
                     items.push_back({(q.name.empty() ? std::string("maj") : q.name) + " \xC2\xB7 " + q.label, [this, n = q.name] { mChordOn = true; mChord = n; }});
                 onMenu(std::move(items), g.pos);
@@ -923,12 +923,12 @@ namespace solaris_ui
                 if (sel.empty()) sel = mModel.notes;
                 const std::string named = sel.empty() ? std::string() : tokens(sel);
                 std::vector<cosmo_v2::ContextMenu::Item> items = {
-                    {"Humanise", [this, id, scope] { send("pattern humanise " + id + scope); }},
-                    {"Legato", [this, id, scope] { send("pattern legato " + id + scope); }},
-                    {"Arpeggiate up", [this, id, scope, rate] { send("pattern arpeggiate " + id + rate + " --mode up" + scope); }},
-                    {"Arpeggiate down", [this, id, scope, rate] { send("pattern arpeggiate " + id + rate + " --mode down" + scope); }},
-                    {"Arpeggiate up-down", [this, id, scope, rate] { send("pattern arpeggiate " + id + rate + " --mode updown" + scope); }},
-                    {"Arpeggiate random", [this, id, scope, rate] { send("pattern arpeggiate " + id + rate + " --mode random" + scope); }}};
+                    {say("Humanise"), [this, id, scope] { send("pattern humanise " + id + scope); }},
+                    {say("Legato"), [this, id, scope] { send("pattern legato " + id + scope); }},
+                    {say("Arpeggiate up"), [this, id, scope, rate] { send("pattern arpeggiate " + id + rate + " --mode up" + scope); }},
+                    {say("Arpeggiate down"), [this, id, scope, rate] { send("pattern arpeggiate " + id + rate + " --mode down" + scope); }},
+                    {say("Arpeggiate up-down"), [this, id, scope, rate] { send("pattern arpeggiate " + id + rate + " --mode updown" + scope); }},
+                    {say("Arpeggiate random"), [this, id, scope, rate] { send("pattern arpeggiate " + id + rate + " --mode random" + scope); }}};
                 if (!named.empty())
                     for (const char *odds : {"0.5", "1"})
                         items.push_back({std::string("Chance ") + (odds[0] == '1' ? "100%" : "50%"), [this, id, named, odds] { send("notes set " + id + " " + named + " --chance " + odds); }});
@@ -1146,14 +1146,15 @@ namespace solaris_ui
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, vel.y + 0.5); t.lineTo(W, vel.y + 0.5); t.strokePath();
         {
-            const char *tabs[] = {"Vel", "Bend", "Mod", "Chance"};
+            const char *tabs[] = {N_("Vel"), N_("Bend"), N_("Mod"), N_("Chance")};
             for (int l = 0; l < kLanes; ++l)
             {
                 const Rect r = laneTabRect(l);
                 const double on = mLaneAmt[l].value();
                 drawRoundedRect(t, r, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::primary(), on)));
                 t.setFill(lerpColor(palette::secondaryForeground(), palette::primaryForeground(), on));
-                t.drawText(tabs[l], r.x + (r.w - t.measureText(tabs[l], 9.0, font::sans())) * 0.5, textfit::baseline(r.y + r.h * 0.5, 9.0), 9.0, font::sans());
+                const std::string tab = textfit::ellipsize(t, tr(tabs[l]), r.w - 4.0, 9.0, font::sans());
+                t.drawText(tab, r.x + (r.w - t.measureText(tab, 9.0, font::sans())) * 0.5, textfit::baseline(r.y + r.h * 0.5, 9.0), 9.0, font::sans());
             }
         }
         t.save();
@@ -1245,20 +1246,21 @@ namespace solaris_ui
             t.closePath();
             t.fillPath();
         }
-        t.drawText("SNAP", playRect().right() + 13.0, textfit::baseline(kToolH * 0.5, 8.0), 8.0, font::sansSemiBold(), 0.13 * 8.0);
-        auto chip = [&](const Rect &r, const char *label, bool on, int hoverId) {
+        t.drawText(solaris_strings::upper(tr("Snap")), playRect().right() + 13.0, textfit::baseline(kToolH * 0.5, 8.0), 8.0, font::sansSemiBold(), 0.13 * 8.0);
+        auto chip = [&](const Rect &r, const std::string &words, bool on, int hoverId) {
+            const std::string label = textfit::ellipsize(t, words, r.w - 4.0, 10.0, font::sans()); // a longer language fits its chip
             const double hv = mHover.amount(hoverId);
             drawRoundedRect(t, r, radius::control(), Paint::filled(on ? palette::primary() : lerpColor(palette::secondary(), palette::popover(), hv)));
             t.setFill(on ? palette::primaryForeground() : palette::secondaryForeground());
             t.drawText(label, r.x + (r.w - t.measureText(label, 10.0, font::sans())) * 0.5, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
         };
-        for (int i = 0; i < 5; ++i) chip(snapRect(i), kSnapLabels[i], mSnap == kSnaps[i], i);
-        chip(modeRect(0), "Notes", mMode == Notes, 10);
-        chip(modeRect(1), "Steps", mMode == Steps, 11);
-        chip(quantizeRect(), "Quantize\xE2\x80\xA6", false, 20);
+        for (int i = 0; i < 5; ++i) chip(snapRect(i), i == 4 ? tr(kSnapLabels[i]) : std::string(kSnapLabels[i]), mSnap == kSnaps[i], i);
+        chip(modeRect(0), tr("Notes"), mMode == Notes, 10);
+        chip(modeRect(1), tr("Steps"), mMode == Steps, 11);
+        chip(quantizeRect(), tr("Quantize\xE2\x80\xA6"), false, 20);
         {
             // R-ROLL-10: the length a click makes, named; a caret says it is a menu
-            const std::string lbl = "Length " + lengthName(clickLength()) + (mLengthChoice > 0 ? "" : "*");
+            const std::string lbl = fillIn(tr("Length {1}"), lengthName(clickLength())) + (mLengthChoice > 0 ? "" : "*");
             const Rect lr = lengthRect();
             const double hv = mHover.amount(21);
             drawRoundedRect(t, lr, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), hv)));
@@ -1275,11 +1277,11 @@ namespace solaris_ui
                 t.drawText(textfit::ellipsize(t, label, r.w - 22.0, 10.0, font::sans()), r.x + 6.0, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
                 caret(t, r);
             };
-            menuChip(scaleRect(), mModel.scale.empty() ? std::string("Scale") : mModel.scale, 22);
-            menuChip(chordRect(), std::string("Chord") + (mChordOn ? " " + (mChord.empty() ? std::string("maj") : mChord) : std::string()), 23);
-            menuChip(toolsRect(), "Tools", 24);
+            menuChip(scaleRect(), mModel.scale.empty() ? tr("Scale") : mModel.scale, 22);
+            menuChip(chordRect(), mChordOn ? fillIn(tr("Chord {1}"), mChord.empty() ? std::string("maj") : mChord) : tr("Chord"), 23);
+            menuChip(toolsRect(), tr("Tools"), 24);
         }
-        const std::string len = beats(mModel.length) + " beats";
+        const std::string len = fillIn(tr("{1} beats"), beats(mModel.length));
         t.setFill(palette::mutedForeground());
         const double lx = std::max(toolsRect().right() + 13.0, W - space::padX() - t.measureText(len, 10.0, font::mono()));
         t.drawText(len, lx, textfit::baseline(kToolH * 1.5, 10.0), 10.0, font::mono());

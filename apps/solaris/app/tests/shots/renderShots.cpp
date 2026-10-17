@@ -680,6 +680,28 @@ namespace
                  r.app->project().browser().setTab(2);
                  r.settle();
              }},
+            {"dock-vi", // R-ACCESS-2: the mixer in Vietnamese — its cards, a send, the master — and a synth's face and the
+                        // roll open over it; the registry's words (a parameter's, a module's) and the song's names as they are
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("settings set language=vi");
+                 r.settle();
+                 const auto &m = r.svc->model();
+                 for (const auto &st : m.strips)
+                     if (st.kind == "instrument" && !st.devices.empty()) { r.app->project().windows().openDevice(st.devices[0].id); break; }
+                 if (!m.patterns.empty()) r.app->project().windows().openRoll(m.patterns[0].id);
+                 r.settle();
+             }},
+            {"dock-pseudo", // R-ACCESS-2: the same in the pseudo-language — the dock's and the windows' words a third longer, fitting
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("settings set language=en-XA");
+                 r.settle();
+                 const auto &m = r.svc->model();
+                 if (!m.patterns.empty()) r.app->project().windows().openRoll(m.patterns[0].id);
+                 r.app->project().windows().openLoudness();
+                 r.settle();
+             }},
             {"language-dissolve-mid", // R-ACCESS-2: English giving way to Vietnamese — the whole window dissolving, caught a third of the way
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");
