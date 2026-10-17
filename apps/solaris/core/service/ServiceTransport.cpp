@@ -137,6 +137,7 @@ namespace solaris
     {
         // R-SAFE-1: an unsaved song is written beside itself on the clock, whatever else is happening
         if (mOpen && mModel.dirty && mSettings.autosave > 0 && steadySeconds() - mLastAutosave >= mSettings.autosave) autosave();
+        watchFile(); // R-COLLAB-1: the song's file, looked at once a second — changed by someone else, synced
         if (mPreview) mPreview->collect(); // R-ROLL-7: what its thread is done with, freed here
         mModel.midiMessages = mMidiCount->load(std::memory_order_relaxed); // R-MIDI-2: the keyboard's activity
         if (mMonitor) mMonitor->collect();

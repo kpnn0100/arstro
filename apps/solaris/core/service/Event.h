@@ -30,6 +30,7 @@ namespace solaris
             ScreenChanged,    // screen
             ProjectOpened,    // path, strips, clips
             ProjectSaved,     // path
+            ProjectSynced,    // how, theirs, mine, conflicts, renamed — R-COLLAB-1
             ProjectClosed,
             ProjectChanged,   // what, node — a node was added, removed, moved or re-routed
             ParamsChanged,    // address, value

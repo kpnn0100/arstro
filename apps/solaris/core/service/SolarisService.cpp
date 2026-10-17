@@ -142,6 +142,7 @@ namespace solaris
             case K::MapAdd: case K::MapRemove: case K::MapList: case K::MapLearn:                 // R-CTRL-1: … and its MIDI mappings
             case K::VersionList: case K::VersionDiff: case K::ProjectFiles:                       // R-VER, R-COLLECT-1: reading back
             case K::Launch: case K::LaunchStop: case K::LaunchBack:                               // R-LAUNCH-1: live, as the keyboard is
+            case K::ProjectSync: // R-COLLAB-1: an edit only when it changes the song (`syncEdits`)
                 return false;
             default:
                 return true;
@@ -161,7 +162,8 @@ namespace solaris
         mOutput.clear();
         // a --dry-run changes nothing, whatever the verb: no edit, no history step, not unsaved (D-23)
         const bool editing = (mutates(c.kind) && !c.has("dry-run")) || (c.kind == K::TransportStop && mRecording) // R-MIDI-2: the take is an edit
-                             || (c.kind == K::StripArm && c.has("input"));                  // R-REC-1: an input set is one
+                             || (c.kind == K::StripArm && c.has("input"))                   // R-REC-1: an input set is one
+                             || (c.kind == K::ProjectSync && syncEdits(c));                 // R-COLLAB-1: the file's changes landing
         if (editing && !requireOpen(err)) return false;
         if ((editing || c.kind == K::TransportRecord) && mOpen && !mProject.version.empty() && !versionOnly(c, mProject))
             if (const Version *v = mProject.versionOf(mProject.version); v && v->frozen)
@@ -182,6 +184,9 @@ namespace solaris
         {
         case K::ProjectNew: case K::ProjectOpen: case K::ProjectSave: case K::ProjectClose: case K::ProjectRecover: case K::ProjectDiscardRecovery:
             ok = projectCommand(c, err);
+            break;
+        case K::ProjectSync:
+            ok = syncCommand(c, err);
             break;
         case K::Set:
         {
@@ -427,6 +432,7 @@ namespace solaris
             if (removal || steadySeconds() - mLastAutosave >= mSettings.autosave) autosave();
         }
         if ((editing && c.kind != K::VersionOpen) || history) mModel.dirty = true; // R-VER: which version is open is not the file's
+        if (editing && c.kind == K::ProjectSync && mSyncedClean) mModel.dirty = false; // R-COLLAB-1: reloaded — the song IS the file
         if (editing && c.kind == K::ProjectCollect && c.has("save")) // R-COLLECT-1: "Collect and Save" — ONE line
         {
             Command save;
@@ -714,6 +720,16 @@ namespace solaris
         if (song == mRecovery) { mRecovery.clear(); mRecoveryAge = -1.0; }
     }
 
+    bool SolarisService::songOf(const std::string &raw, Project &p, std::string &err, std::vector<std::string> *notes) const
+    {
+        ParseReport rep;
+        if (!parseProject(raw, p, err, &rep)) return false;
+        adoptTracks(p, rep.notes);
+        if (gatherLaneGroups(p)) rep.notes.push_back("lane groups gathered: each group's lanes side by side (R-ARR-3)");
+        if (notes) *notes = rep.notes;
+        return true;
+    }
+
     bool SolarisService::projectCommand(const Command &c, std::string &err)
     {
         auto open = [&](Project p, const std::string &path) {
@@ -732,6 +748,11 @@ namespace solaris
             mLastAutosave = steadySeconds(); // R-SAFE-1: the clock starts with the song
             mRecovery.clear();
             mRecoveryAge = -1.0;
+            mConflicts.clear(); // R-COLLAB-1: another song — nothing asked, its file looked at from now
+            mSyncWaiting = false;
+            mUnreadable = 0;
+            mSyncSaid.clear();
+            mSyncChecked = steadySeconds();
             refreshModel();
             mModel.dirty = false;
             touchRecent(path);
@@ -739,12 +760,23 @@ namespace solaris
             emit(Event(Event::Kind::ProjectOpened).with("path", path)
                      .with("strips", (long long)mProject.strips.size()).with("clips", (long long)mProject.clips.size()));
         };
+        std::string written;
         auto write = [&](const std::string &path) {
-            std::ofstream f(path, std::ios::binary);
-            if (!f) { err = "cannot write " + path; return false; }
             capturePluginStates(); // R-VST-6: each plugin's state, as the plugin gives it
-            f << serializeProject(mProject);
-            return (bool)f;
+            written = serializeProject(mProject);
+            // R-COLLAB-1: written beside and renamed over — whoever reads the file (a collaborator's window, a sync) never
+            // reads half a song
+            const std::string tmp = path + ".saving";
+            {
+                std::ofstream f(tmp, std::ios::binary);
+                if (!f) { err = "cannot write " + path; return false; }
+                f << written;
+                if (!f) { err = "cannot write " + path; return false; }
+            }
+            std::error_code ec;
+            fs::rename(tmp, path, ec);
+            if (ec) { fs::remove(tmp, ec); err = "cannot write " + path; return false; }
+            return true;
         };
 
         switch (c.kind)
@@ -780,6 +812,7 @@ namespace solaris
             const Project keep = mProject;
             mProject = p;
             if (!write(path)) { mProject = keep; return false; }
+            noteDisk(written, written); // R-COLLAB-1: the merge's base
             open(p, path);
             mOutput = path + "\n";
             return true;
@@ -792,11 +825,12 @@ namespace solaris
             std::stringstream ss;
             ss << f.rdbuf();
             Project p;
-            ParseReport rep;
-            if (!parseProject(ss.str(), p, err, &rep)) { err = path + ": " + err; return false; }
-            adoptTracks(p, rep.notes);
-            if (gatherLaneGroups(p)) rep.notes.push_back("lane groups gathered: each group's lanes side by side (R-ARR-3)");
+            std::vector<std::string> notes;
+            if (!songOf(ss.str(), p, err, &notes)) { err = path + ": " + err; return false; }
+            noteDisk(ss.str(), serializeProject(p)); // R-COLLAB-1: the merge's base — the song as it read
             open(std::move(p), path);
+            ParseReport rep;
+            rep.notes = notes;
             for (const auto &n : rep.notes) emit(Event(Event::Kind::Info).with("text", n));
             double age = 0;
             if (recoveryOf(path, age))
@@ -824,6 +858,16 @@ namespace solaris
             if (!parseProject(ss.str(), p, err, &rep)) { err = from + ": " + err; return false; }
             adoptTracks(p, rep.notes);
             gatherLaneGroups(p);
+            {
+                // R-COLLAB-1: the merge's base is the file the autosave was beside — what this window last read of it
+                std::ifstream saved(path, std::ios::binary);
+                std::stringstream sv;
+                sv << saved.rdbuf();
+                Project base;
+                std::string why;
+                if (saved && songOf(sv.str(), base, why)) noteDisk(sv.str(), serializeProject(base));
+                else noteDisk(std::string(), std::string());
+            }
             open(std::move(p), path); // the song is <path>: `project save` writes it there and drops the autosave
             mModel.dirty = true;      // what was recovered is not saved yet
             mOutput = "recovered " + path + " from " + from + "\n";
@@ -841,7 +885,30 @@ namespace solaris
         {
             if (!requireOpen(err)) return false;
             const std::string path = c.arg(0, mPath);
+            if (path == mPath) // R-COLLAB-1: never over someone else's changes unseen
+            {
+                if (!mConflicts.empty())
+                {
+                    err = std::to_string(mConflicts.size()) + (mConflicts.size() == 1 ? " conflict" : " conflicts") +
+                          " from the file still asked — `project sync --take theirs|mine [<node>]` answers them";
+                    return false;
+                }
+                std::string raw;
+                if (readDisk(raw) && raw != mDiskRaw)
+                {
+                    Project probe;
+                    std::string why;
+                    if (songOf(raw, probe, why))
+                    {
+                        err = path + " changed on disk since this window read it — `project sync` merges it first";
+                        return false;
+                    }
+                    // nothing in it can be merged (Git's markers, a broken copy): written whole, and said
+                    mOutput += path + " did not read as a song (" + why + ") — written whole\n";
+                }
+            }
             if (!write(path)) return false;
+            noteDisk(written, written); // R-COLLAB-1: the merge's base — and the file this window watches
             dropAutosave(mPath); // R-SAFE-1: saved — nothing left to recover (its old place too, when saved elsewhere)
             dropAutosave(path);
             mRecentsStale = true; // its card shows the saved name and length
@@ -861,6 +928,9 @@ namespace solaris
             mOpen = false;
             mProject = Project();
             mPath.clear();
+            mConflicts.clear(); // R-COLLAB-1
+            mSyncWaiting = false;
+            noteDisk(std::string(), std::string());
             mPcm.clear();
             mOffline.clear();
             emit(Event(Event::Kind::ProjectClosed));

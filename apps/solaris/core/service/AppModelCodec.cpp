@@ -173,6 +173,17 @@ namespace solaris
             {"video.path", "string", "the file as the host opens it — resolved against the song's folder"},
             {"video.at", "number", "the beat its first frame shows on (through the tempo map; negative: before the song)"},
             {"video.end", "number", "the beat it ends on (its length after `at`, through the tempo map)"},
+            {"sync", "object", "R-COLLAB-1: the song's file, watched — what the last sync did, and the conflicts it asked"},
+            {"sync.count", "int", "times the song followed its file (a front end says each)"},
+            {"sync.said", "string", "what the last sync did, as a sentence"},
+            {"sync.conflicts", "object[]", "the nodes two people changed, asked — `project sync --take theirs|mine <node>`"},
+            {"sync.conflicts[].node", "string", "an id, rack:<track>, bind:<address>, or project:<field> (a header field)"},
+            {"sync.conflicts[].what", "string", "what it is, said (\"strip Bass\", \"the song's sig\")"},
+            {"sync.conflicts[].how", "string", "both changed | changed here, removed there | removed here, changed there | both added"},
+            {"sync.conflicts[].mine", "string", "its lines here (\"\" where it is not)"},
+            {"sync.conflicts[].theirs", "string", "its lines in the file (\"\" where it is not)"},
+            {"sync.waiting", "bool", "the file changed again while conflicts are asked: merged once they are answered"},
+            {"sync.unreadable", "bool", "the file is there but does not read as a song (a copy still arriving, Git's markers)"},
             {"video.thumbs", "object[]", "a point every second of the picture (every length/240 s for a long one) — where the lane draws a thumbnail"},
             {"video.thumbs[].beat", "number", "the song's beat (through the tempo map)"},
             {"video.thumbs[].time", "number", "the picture's seconds there"},
@@ -724,6 +735,11 @@ namespace solaris
             slots.push(Json::object().set("id", x.id).set("name", x.name).set("scene", x.scene).set("strip", x.strip).set("pattern", x.pattern)
                            .set("src", x.src).set("length", x.length).set("gain", x.gain));
         j.set("scenes", scenes).set("slots", slots).set("launchQuantize", m.launchQuantize);
+        Json conflicts = Json::array(); // R-COLLAB-1
+        for (const auto &k : m.sync.conflicts)
+            conflicts.push(Json::object().set("node", k.node).set("what", k.what).set("how", k.how).set("mine", k.mine).set("theirs", k.theirs));
+        j.set("sync", Json::object().set("count", (long long)m.sync.count).set("said", m.sync.said).set("conflicts", conflicts)
+                          .set("waiting", m.sync.waiting).set("unreadable", m.sync.unreadable));
         Json thumbs = Json::array();
         for (const auto &th : m.video.thumbs) thumbs.push(Json::object().set("beat", th.beat).set("time", th.time));
         j.set("video", Json::object().set("id", m.video.id).set("src", m.video.src).set("offset", m.video.offset).set("duration", m.video.duration)

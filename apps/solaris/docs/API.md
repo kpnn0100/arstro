@@ -12,6 +12,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `project open <path.slp>` | Open a song. If it has an autosave newer than it (unsaved edits from a session that never saved), says `recovery: …` and the model's `recovery` names it (R-SAFE-2). | R-HOME-1 |
 | `project save [path.slp]` | Write the .slp (a path saves it there). | R-FMT-2 |
 | `project close` | Close the song and return Home (its autosave is dropped: closing is choosing). | R-UI-1 |
+| `project sync [<node>] [--take <theirs\|mine>]` | The song's file, looked at now (the window looks once a second — R-COLLAB-1): changed by someone else, and nothing unsaved here, the song becomes the file's; with edits here, the two are merged node by node — one side's change taken, the same new id on both renumbered here with its references — as ONE edit, and a node changed on both, or changed on one and removed on the other, is a CONFLICT, kept as here and listed (`sync.conflicts`). --take theirs\|mine answers one (<node>) or all; until every one is answered a save is refused, and a further change to the file waits. A save is also refused while the file has changed since this window read or wrote it. | R-COLLAB-1 |
 | `project recover <path.slp>` | Open the song from its autosave (`<path>.autosave`, written while it had unsaved edits — R-SAFE-1): the song as it was, unsaved, saved to <path> by `project save`. | R-SAFE-2 |
 | `project discard-recovery <path.slp>` | Delete a song's autosave — the saved song is the one kept. | R-SAFE-2 |
 | `set <address>=<value> …` | Write addresses: project.bpm, <strip>.gain, <clip>.at, <device>.<param> (any DSP registry parameter, in its unit), … — `api` lists every one. An unknown address or parameter is refused. A value starting with `=` is a FORMULA that drives a number (R-AUTO); a plain number clears it. | R-SVC-3 |
@@ -292,6 +293,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `screen.changed` | screen | home \| project. |
 | `project.opened` | path, strips, clips | A song is open. |
 | `project.saved` | path | The .slp was written. |
+| `project.synced` | how, theirs, mine, conflicts, renamed | The song's file changed under it and the song followed (R-COLLAB-1): how = reloaded (nothing unsaved here) \| merged; theirs and mine = the changes each side brought; conflicts = the nodes asked about; renamed = new ids of mine renumbered. |
 | `project.closed` |  | Back to Home. |
 | `project.changed` | what, node | A node was added, removed, moved or re-routed. what = e.g. strip.added, clip.moved, route.set. Every node a command makes is announced, one event each (R-SVC-8). |
 | `params.changed` | address, value | An address was written; value is what was STORED, canonical (a value out of range is refused, never clamped — R-SVC-8). |
@@ -485,6 +487,17 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `video.path` | string | the file as the host opens it — resolved against the song's folder |
 | `video.at` | number | the beat its first frame shows on (through the tempo map; negative: before the song) |
 | `video.end` | number | the beat it ends on (its length after `at`, through the tempo map) |
+| `sync` | object | R-COLLAB-1: the song's file, watched — what the last sync did, and the conflicts it asked |
+| `sync.count` | int | times the song followed its file (a front end says each) |
+| `sync.said` | string | what the last sync did, as a sentence |
+| `sync.conflicts` | object[] | the nodes two people changed, asked — `project sync --take theirs\|mine <node>` |
+| `sync.conflicts[].node` | string | an id, rack:<track>, bind:<address>, or project:<field> (a header field) |
+| `sync.conflicts[].what` | string | what it is, said ("strip Bass", "the song's sig") |
+| `sync.conflicts[].how` | string | both changed \| changed here, removed there \| removed here, changed there \| both added |
+| `sync.conflicts[].mine` | string | its lines here ("" where it is not) |
+| `sync.conflicts[].theirs` | string | its lines in the file ("" where it is not) |
+| `sync.waiting` | bool | the file changed again while conflicts are asked: merged once they are answered |
+| `sync.unreadable` | bool | the file is there but does not read as a song (a copy still arriving, Git's markers) |
 | `video.thumbs` | object[] | a point every second of the picture (every length/240 s for a long one) — where the lane draws a thumbnail |
 | `video.thumbs[].beat` | number | the song's beat (through the tempo map) |
 | `video.thumbs[].time` | number | the picture's seconds there |

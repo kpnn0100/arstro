@@ -56,6 +56,7 @@ namespace solaris
             MapAdd, MapRemove, MapList, MapLearn,            // R-CTRL-1
             VersionNew, VersionList, VersionOpen, VersionDiff, VersionFreeze, VersionThaw, VersionRebase, VersionDelete, Revert, // R-VER
             ProjectFiles, ProjectCollect, ProjectRelink, ClipRelink, // R-COLLECT-1
+            ProjectSync, // R-COLLAB-1
             SceneAdd, SceneDelete, SceneMove, SlotAdd, SlotDelete, Launch, LaunchStop, LaunchBack, // R-LAUNCH-1
             VideoSet, VideoRemove, // R-VIDEO-1
             Ls, Show, PatternPrint,                                                                   // R-SVC-8: read back

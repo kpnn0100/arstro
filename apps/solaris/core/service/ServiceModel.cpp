@@ -106,6 +106,12 @@ namespace solaris
         if (!mModel.transport.playing) mModel.transport.position = mPosition;
         tempoAt(mModel.transport.position, mModel.transport.tempo, mModel.transport.tempoId); // R-TEMPO-1
         if (mOpen) fillVideo(mModel.transport.position); // R-VIDEO-1: where the picture is — at the time bar when stopped
+        // R-COLLAB-1: the song's file, watched
+        mModel.sync.count = mSyncCount;
+        mModel.sync.said = mSyncSaid;
+        mModel.sync.waiting = mSyncWaiting;
+        mModel.sync.unreadable = mUnreadable >= 3;
+        for (const auto &k : mConflicts) mModel.sync.conflicts.push_back(SyncConflictModel{k.node, k.what, k.how, k.mine, k.theirs});
         if (!mPresetsScanned) scanPresets(); // R-PRESET-1: the machine's — on Home too
         mModel.presets = mPresets;
         if (!mTemplatesScanned) scanTemplates(); // R-PRESET-2

@@ -29,8 +29,10 @@
 #include "PluginHost.h"
 #include "Auditioner.h"
 #include "NotePreview.h"
+#include "Merge.h"
 #include "Project.h"
 #include "Settings.h"
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <memory>
@@ -164,6 +166,23 @@ namespace solaris
         bool filesCommand(const Command &c, std::string &err);
         bool sessionCommand(const Command &c, std::string &err); // R-LAUNCH-1 (ServiceSession.cpp): scenes, slots, launching
         bool videoCommand(const Command &c, std::string &err);   // R-VIDEO-1 (ServiceVideo.cpp): the song's picture
+        // R-COLLAB-1 (ServiceSync.cpp): the song's file, watched; two people's edits merged node by node
+        bool syncCommand(const Command &c, std::string &err);
+        bool syncEdits(const Command &c);                         // whether `project sync` changes the song (an edit, a step)
+        void noteDisk(const std::string &raw, const std::string &song); // what this window last read or wrote: the merge's base
+        void watchFile();                                         // pump: the file looked at once a second — changed, synced
+        bool readDisk(std::string &raw) const;
+        /** Text as a song, as opening one reads it (old songs' tracks adopted, lane groups gathered). */
+        bool songOf(const std::string &raw, Project &p, std::string &err, std::vector<std::string> *notes = nullptr) const;
+        std::string mDiskRaw, mDiskBase, mTheirs;                 // the file as last read/written; its song (canonical); theirs at a merge
+        long long mDiskSize = -1;
+        std::filesystem::file_time_type mDiskTime{};
+        double mSyncChecked = 0;
+        std::vector<MergeConflict> mConflicts;                    // asked, until answered
+        int mSyncCount = 0, mUnreadable = 0;
+        std::string mSyncSaid;
+        bool mSyncWaiting = false, mSyncedClean = false;
+        static constexpr double kSyncEveryS = 1.0;                // how often the file is looked at
         std::map<std::string, std::pair<bool, VideoInfo>> mVideoInfo; // R-VIDEO-1: a picture's probe, by resolved path
         const VideoInfo *videoInfo(const std::string &src);           // … probed once (null: it cannot be read)
         double videoTime(double beat);                                // the picture's seconds at a song beat; −1 outside it

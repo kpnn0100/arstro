@@ -36,6 +36,14 @@ namespace solaris
              "`recovery: …` and the model's `recovery` names it (R-SAFE-2).", "R-HOME-1"},
             {K::ProjectSave, "project save", "[path.slp]", 0, 1, {}, "Write the .slp (a path saves it there).", "R-FMT-2"},
             {K::ProjectClose, "project close", "", 0, 0, {}, "Close the song and return Home (its autosave is dropped: closing is choosing).", "R-UI-1"},
+            {K::ProjectSync, "project sync", "[<node>]", 0, 1, {"take=<theirs|mine>"},
+             "The song's file, looked at now (the window looks once a second — R-COLLAB-1): changed by someone else, and nothing "
+             "unsaved here, the song becomes the file's; with edits here, the two are merged node by node — one side's change "
+             "taken, the same new id on both renumbered here with its references — as ONE edit, and a node changed on both, or "
+             "changed on one and removed on the other, is a CONFLICT, kept as here and listed (`sync.conflicts`). --take "
+             "theirs|mine answers one (<node>) or all; until every one is answered a save is refused, and a further change to the "
+             "file waits. A save is also refused while the file has changed since this window read or wrote it.",
+             "R-COLLAB-1"},
             {K::ProjectRecover, "project recover", "<path.slp>", 1, 1, {},
              "Open the song from its autosave (`<path>.autosave`, written while it had unsaved edits — R-SAFE-1): the "
              "song as it was, unsaved, saved to <path> by `project save`.", "R-SAFE-2"},

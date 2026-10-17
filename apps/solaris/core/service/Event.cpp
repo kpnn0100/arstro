@@ -33,6 +33,9 @@ namespace solaris
             {EK::ScreenChanged, "screen.changed", {"screen"}, "home | project."},
             {EK::ProjectOpened, "project.opened", {"path", "strips", "clips"}, "A song is open."},
             {EK::ProjectSaved, "project.saved", {"path"}, "The .slp was written."},
+            {EK::ProjectSynced, "project.synced", {"how", "theirs", "mine", "conflicts", "renamed"},
+             "The song's file changed under it and the song followed (R-COLLAB-1): how = reloaded (nothing unsaved here) | merged; "
+             "theirs and mine = the changes each side brought; conflicts = the nodes asked about; renamed = new ids of mine renumbered."},
             {EK::ProjectClosed, "project.closed", {}, "Back to Home."},
             {EK::ProjectChanged, "project.changed", {"what", "node"},
              "A node was added, removed, moved or re-routed. what = e.g. strip.added, clip.moved, route.set. Every node a command makes is announced, one event each (R-SVC-8)."},

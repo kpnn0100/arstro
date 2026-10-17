@@ -4421,6 +4421,131 @@ static void test_a_video_lane()
     pass("a video lane: one picture a song, probed by the host, its offset an address; the model says where it is through the tempo map, moving while playing; render --video muxes the mix beside it at its offset (R-VIDEO-1)");
 }
 
+static void test_a_song_shared_through_a_folder()
+{
+    // R-COLLAB-1 (Round 19, part 2): two windows on one file. Nothing unsaved here: the other's save reloads it (not
+    // unsaved, undoable); nothing changed: nothing happens; edits on both: merged as ONE edit; a save over a file changed
+    // since read refused; a node changed both ways asked — the save refused, a newer change waiting, answered by --take;
+    // the same new id on both sides renumbered here; the file looked at once a second by `pump`; a file that does not
+    // read yet waited for and said; the save atomic
+    const std::string song = freshSong("shared");
+    Run a;
+    a.ok("project new " + song + " --bpm 120");
+    a.ok("clip add --instrument synth --at 0 --length 4"); // ch_2
+    a.ok("project save");
+    Run b;
+    b.ok("project open " + song);
+    // 1. nothing unsaved here: the other's save — the song becomes the file's, said, not unsaved, one undo away
+    b.ok("set ch_2.gain=-6");
+    b.ok("project save");
+    a.events.clear();
+    std::string out = a.ok("project sync");
+    std::printf("    a: %s", out.c_str());
+    assert(contains(out, "Reloaded — shared.slp changed on disk") && a.strip("ch_2")->gain == -6.0 && !a.svc.model().dirty);
+    assert(a.svc.model().sync.count == 1 && contains(a.svc.model().sync.said, "Reloaded"));
+    bool said = false;
+    for (const auto &e : a.events) said = said || contains(e, "[evt] project.synced how=reloaded theirs=0 mine=0 conflicts=0 renamed=0");
+    assert(said);
+    a.ok("undo"); // one step away: the song before it, unsaved
+    assert(a.strip("ch_2")->gain == 0.0 && a.svc.model().dirty);
+    a.ok("redo");
+    // 2. nothing changed: nothing happens — no step, no count
+    const std::string hist = a.ok("history");
+    assert(contains(a.ok("project sync"), "the file is as this window last read or wrote it") && a.ok("history") == hist && a.svc.model().sync.count == 1);
+    // 3. edits on both sides: merged, ONE edit — mine kept, theirs arrived; undone, mine alone again
+    a.ok("set ch_2.pan=0.5");
+    b.ok("set project.bpm=132");
+    b.ok("strip add --kind bus --name Verb"); // theirs: ch_3
+    b.ok("project save");
+    out = a.ok("project sync");
+    std::printf("    a: %s", out.c_str());
+    assert(contains(out, "Merged the changes to shared.slp") && a.svc.model().sync.conflicts.empty() && a.svc.model().dirty);
+    assert(a.strip("ch_2")->pan == 0.5 && a.strip("ch_2")->gain == -6.0 && a.strip("ch_3") && a.strip("ch_3")->name == "Verb");
+    assert(a.svc.project()->header.bpm == 132.0);
+    a.ok("undo");
+    assert(!a.strip("ch_3") && a.strip("ch_2")->pan == 0.5);
+    a.ok("redo");
+    // 4. a save over a file changed since read: refused; synced first, then saved — and the other follows
+    b.ok("set ch_3.gain=-2");
+    b.ok("project save");
+    assert(contains(a.no("project save"), "changed on disk since this window read it — `project sync` merges it first"));
+    a.ok("project sync");
+    a.ok("project save");
+    assert(!fs::exists(song + ".saving")); // written beside, renamed over
+    assert(contains(b.ok("project sync"), "Reloaded") && b.strip("ch_2")->pan == 0.5 && b.strip("ch_3")->gain == -2.0);
+    // 5. a node changed both ways: kept as mine, asked; the save refused; a newer change waits; answered
+    a.ok("set ch_2.gain=-3");
+    b.ok("set ch_2.gain=-9");
+    b.ok("project save");
+    out = a.ok("project sync");
+    std::printf("    a: %s", out.c_str());
+    assert(contains(out, "1 to answer") && contains(out, "asked ch_2: strip Basic Synth — both changed") && a.strip("ch_2")->gain == -3.0);
+    {
+        const auto &k = a.svc.model().sync.conflicts;
+        assert(k.size() == 1 && k[0].node == "ch_2" && k[0].how == "both changed" && contains(k[0].mine, "gain=-3.0") && contains(k[0].theirs, "gain=-9.0"));
+    }
+    assert(contains(a.no("project save"), "1 conflict from the file still asked"));
+    b.ok("set ch_3.pan=-0.25");
+    b.ok("project save");
+    std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+    a.svc.pump(); // the window's look: it waits, and says so
+    assert(a.svc.model().sync.waiting && a.strip("ch_3")->pan != -0.25);
+    assert(contains(a.no("project sync"), "answer the 1 asked first (ch_2)") && a.svc.model().sync.waiting);
+    assert(contains(a.no("project sync --take banana"), "--take is theirs or mine"));
+    assert(contains(a.no("project sync --take theirs ch_9"), "`ch_9` is not asked (asked: ch_2)"));
+    assert(contains(a.no("project sync ch_2"), "name a node with --take"));
+    a.ok("project sync --take theirs ch_2");
+    assert(a.strip("ch_2")->gain == -9.0 && a.svc.model().sync.conflicts.empty());
+    assert(contains(a.no("project sync --take mine"), "nothing to answer"));
+    a.ok("project sync"); // the change that waited
+    assert(a.strip("ch_3")->pan == -0.25 && !a.svc.model().sync.waiting);
+    a.ok("project save");
+    b.ok("project sync");
+    // 6. the same new id on both sides: theirs keeps it, mine is renumbered — with what names it
+    a.ok("strip add --kind bus --name Delay");  // ch_4 here
+    a.ok("send add ch_2 --to ch_4");             // naming it
+    b.ok("strip add --kind bus --name Chorus"); // ch_4 there
+    b.ok("project save");
+    out = a.ok("project sync");
+    std::printf("    a: %s", out.c_str());
+    assert(contains(out, "renumbered ch_4 → ch_5 (both sides added ch_4)") && a.strip("ch_4")->name == "Chorus" && a.strip("ch_5")->name == "Delay");
+    assert(contains(serializeProject(*a.svc.project()), "to=ch_5"));
+    a.ok("project save");
+    b.ok("project sync");
+    // 7. the window's way: the file looked at once a second by pump — no command
+    b.ok("set ch_2.pan=-0.5");
+    b.ok("project save");
+    const int count = a.svc.model().sync.count;
+    a.svc.pump(); // looked at less than a second ago: not yet
+    assert(a.svc.model().sync.count == count);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+    a.svc.pump();
+    assert(a.svc.model().sync.count == count + 1 && a.strip("ch_2")->pan == -0.5 && !a.svc.model().dirty);
+    // 8. a file that does not read as a song yet: waited for (looked at three times), said once, then followed
+    {
+        std::ofstream(song) << "arstro-project = 1\n<<<<<<< HEAD\n";
+    }
+    assert(contains(a.no("project sync"), "does not read as a song yet"));
+    for (int i = 0; i < 3; ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+        a.svc.pump();
+    }
+    assert(a.svc.model().sync.unreadable && a.strip("ch_2")->pan == -0.5);
+    assert(contains(b.ok("project save"), "did not read as a song")); // nothing in it to merge: written whole
+    a.ok("project sync");
+    assert(!a.svc.model().sync.unreadable);
+    // the version open here stays open through a sync
+    a.ok("version new Alt --open");
+    a.ok("project save");
+    b.ok("project sync");
+    b.ok("set ch_2.gain=-1");
+    b.ok("project save");
+    a.ok("project sync");
+    assert(a.svc.model().version != "main" && !a.svc.model().version.empty());
+    pass("a song shared through a folder (R-COLLAB-1): the other's save reloads it (not unsaved, undoable); nothing changed, nothing done; edits on both merged as ONE edit; a save over a changed file refused; a node changed both ways asked — the save refused, a newer change waiting, --take answering; the same new id renumbered here with its sends; pump looks once a second; a file not yet a song waited for; the save atomic");
+}
+
 static void test_a_follower_alone()
 {
     // R-DEV-2/4, Follower in SIMULATED time (its clock injected, its device a plain list): a clock 200 ppm slow and a
@@ -7240,6 +7365,7 @@ int main()
     test_launching_is_heard();
     test_launches_are_recorded_into_the_arrangement();
     test_a_video_lane();
+    test_a_song_shared_through_a_folder();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

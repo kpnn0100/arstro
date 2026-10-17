@@ -329,6 +329,24 @@ namespace solaris
         double gain = 0;                         // dB
     };
 
+    /** R-COLLAB-1: a node two people changed, asked — `project sync --take theirs|mine <node>` answers it. */
+    struct SyncConflictModel
+    {
+        std::string node;                        // an id, `rack:<track>`, `bind:<address>`, or `project:<field>`
+        std::string what, how;                   // "strip Bass"; "both changed" | "changed here, removed there" | …
+        std::string mine, theirs;                // its lines on each side ("" where it is not)
+    };
+
+    /** R-COLLAB-1: the song's file, watched. */
+    struct SyncModel
+    {
+        int count = 0;                           // times the song followed its file (a front end says each one)
+        std::string said;                        // what the last did, as a sentence
+        std::vector<SyncConflictModel> conflicts;
+        bool waiting = false;                    // the file changed again while conflicts are asked: merged once answered
+        bool unreadable = false;                 // the file is there but does not read as a song (still arriving; Git's markers)
+    };
+
     /** R-VIDEO-1: a point of the picture on the song's beats — where the lane draws a thumbnail. */
     struct VideoThumbModel
     {
@@ -550,6 +568,7 @@ namespace solaris
         std::vector<SlotModel> slots;            // … its cells, by scene order then processing order
         std::string launchQuantize = "bar";      // R-LAUNCH-1: where a launch lands — bar | beat | none
         VideoModel video;                        // R-VIDEO-1: the song's picture ("" id: none)
+        SyncModel sync;                          // R-COLLAB-1: its file, watched
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };
 }

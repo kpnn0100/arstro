@@ -41,6 +41,16 @@
       "requirement": "R-UI-1"
     },
     {
+      "verb": "project sync",
+      "usage": "project sync [<node>] [--take <theirs|mine>]",
+      "args": "[<node>]",
+      "flags": [
+        "take=<theirs|mine>"
+      ],
+      "summary": "The song's file, looked at now (the window looks once a second — R-COLLAB-1): changed by someone else, and nothing unsaved here, the song becomes the file's; with edits here, the two are merged node by node — one side's change taken, the same new id on both renumbered here with its references — as ONE edit, and a node changed on both, or changed on one and removed on the other, is a CONFLICT, kept as here and listed (`sync.conflicts`). --take theirs|mine answers one (<node>) or all; until every one is answered a save is refused, and a further change to the file waits. A save is also refused while the file has changed since this window read or wrote it.",
+      "requirement": "R-COLLAB-1"
+    },
+    {
       "verb": "project recover",
       "usage": "project recover <path.slp>",
       "args": "<path.slp>",
@@ -1607,6 +1617,17 @@
       "summary": "The .slp was written."
     },
     {
+      "name": "project.synced",
+      "fields": [
+        "how",
+        "theirs",
+        "mine",
+        "conflicts",
+        "renamed"
+      ],
+      "summary": "The song's file changed under it and the song followed (R-COLLAB-1): how = reloaded (nothing unsaved here) | merged; theirs and mine = the changes each side brought; conflicts = the nodes asked about; renamed = new ids of mine renumbered."
+    },
+    {
       "name": "project.closed",
       "fields": [],
       "summary": "Back to Home."
@@ -2775,6 +2796,72 @@
       "path": "video.end",
       "type": "number",
       "summary": "the beat it ends on (its length after `at`, through the tempo map)",
+      "stable": true
+    },
+    {
+      "path": "sync",
+      "type": "object",
+      "summary": "R-COLLAB-1: the song's file, watched — what the last sync did, and the conflicts it asked",
+      "stable": true
+    },
+    {
+      "path": "sync.count",
+      "type": "int",
+      "summary": "times the song followed its file (a front end says each)",
+      "stable": true
+    },
+    {
+      "path": "sync.said",
+      "type": "string",
+      "summary": "what the last sync did, as a sentence",
+      "stable": true
+    },
+    {
+      "path": "sync.conflicts",
+      "type": "object[]",
+      "summary": "the nodes two people changed, asked — `project sync --take theirs|mine <node>`",
+      "stable": true
+    },
+    {
+      "path": "sync.conflicts[].node",
+      "type": "string",
+      "summary": "an id, rack:<track>, bind:<address>, or project:<field> (a header field)",
+      "stable": true
+    },
+    {
+      "path": "sync.conflicts[].what",
+      "type": "string",
+      "summary": "what it is, said (\"strip Bass\", \"the song's sig\")",
+      "stable": true
+    },
+    {
+      "path": "sync.conflicts[].how",
+      "type": "string",
+      "summary": "both changed | changed here, removed there | removed here, changed there | both added",
+      "stable": true
+    },
+    {
+      "path": "sync.conflicts[].mine",
+      "type": "string",
+      "summary": "its lines here (\"\" where it is not)",
+      "stable": true
+    },
+    {
+      "path": "sync.conflicts[].theirs",
+      "type": "string",
+      "summary": "its lines in the file (\"\" where it is not)",
+      "stable": true
+    },
+    {
+      "path": "sync.waiting",
+      "type": "bool",
+      "summary": "the file changed again while conflicts are asked: merged once they are answered",
+      "stable": true
+    },
+    {
+      "path": "sync.unreadable",
+      "type": "bool",
+      "summary": "the file is there but does not read as a song (a copy still arriving, Git's markers)",
       "stable": true
     },
     {

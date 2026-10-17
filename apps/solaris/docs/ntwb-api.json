@@ -49,6 +49,10 @@
       "doc": "The .slp was written.",
       "data": "{line, fields: {path}}"
     },
+    "project.synced": {
+      "doc": "The song's file changed under it and the song followed (R-COLLAB-1): how = reloaded (nothing unsaved here) | merged; theirs and mine = the changes each side brought; conflicts = the nodes asked about; renamed = new ids of mine renumbered.",
+      "data": "{line, fields: {how, theirs, mine, conflicts, renamed}}"
+    },
     "project.closed": {
       "doc": "Back to Home.",
       "data": "{line, fields: {}}"
