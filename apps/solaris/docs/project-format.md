@@ -277,11 +277,48 @@ Interstellar's `#marker` (`id`, `name`, `at`, `note`) in beats, with `length` ad
 section; without one it is a point whose section runs to the next marker (or the song's end). `length` and `note`
 are written only when set; `name` is required. `transport seek <mk>` / `transport loop <mk>` use them.
 
+## 9b. Versions — `#aversion` (R-VER; docs/discussion.md Round 15)
+
+```
+#aversion id=vr_1 name=Instrumental
+  #vset node=ch_4 mute=true
+#aversion id=vr_2 name=Extended base=vr_1 frozen=true
+  #vset node=ac_1 at=16.0
+  #vunset node=ch_2 phase
+  #vdrop node=ac_7
+  #vbody node=pt_1
+    #note pitch=36 at=0.0 length=0.25 vel=110
+  #vorder node=rack:ch_2 children=dv_1,dv_9
+  #aclip id=ac_12 track=ch_2 lane=ln_2 pattern=pt_1 at=0.0 length=8.0
+  #vsnapshot
+    …the whole song as this version resolved when it was frozen, its header and nodes indented four
+```
+
+Everything above this section is **main**, the song itself. A version is *its base resolved, with its deltas on
+top*; `base` names an earlier version, absent = main. The nodes a version can change are the song's: the header
+(`project`), every node with an `id`, a rack (`rack:<track>`) and a formula (`bind:<address>`).
+
+| delta | means |
+|---|---|
+| `#vset node=<n> k=v …` | these fields of the base's node are overridden; the rest still inherit |
+| `#vunset node=<n> k …` | these fields the base's node has are absent here (back to their defaults) |
+| `#vdrop node=<n>` | the base's node is not in this version (its child nodes with it) |
+| `#vbody node=<n>` + lines | the node's id-less lines — a pattern's notes and expression, an automation's points, a clip's takes and comp — replaced as one |
+| `#vorder node=<n> children=a,b` | which child nodes (a rack's devices) and in what order |
+| a node, indented two | a node only this version has (its own lines indented four) |
+| `#vsnapshot` + lines | frozen (`frozen=true`): the resolution kept, read instead of the base |
+
+A delta naming a node its base's resolution does not have is **dangling** — ignored, counted, kept until `version
+rebase` prunes it. Deltas are written in the order the base's nodes come, then the version's own nodes; the nested
+lines are canonical text indented. A version's deltas are worked out from the song it now is (R-VER), so the same
+song is always written the same way. An older build reads `#aversion` as an unknown node — kept verbatim, the song
+opening as main.
+
 ## 10. Canonical serialization
 
 Header keys in §1's order, then unknown header keys in read order. Nodes grouped by type in this
 document's order (`#aport`, `#amixer`, `#atrack`, `#asend`, `#arack`, `#alane`, `#apattern`,
-`#aclip`, `#aauto`, `#abind`, then unknown nodes in read order), each type in creation order; children indented two
+`#aclip`, `#aauto`, `#abind`, then unknown nodes in read order, then `#aversion` in creation order — §9b), each type in creation order; children indented two
 spaces. Fields in the order the tables give, then unknown keys in read order. Booleans
 `true`/`false`. Numbers: always a decimal point (`0.0`); **times are rounded to the tick (1/960
 beat) and printed with the fewest decimals that read back to the same tick**; seconds to the

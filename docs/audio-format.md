@@ -208,6 +208,19 @@ channels. The header's `masterOut` names the port(s) the master feeds.
 Interstellar's timeline marker (`id`, `name`, `at`, `note`), in the project's timebase, with `length` added: a marker
 with a length is a section. A point marker's section runs to the next marker. Interstellar preserves it, unknown to it.
 
+### 2.11 `#aversion` — a version of the song (Solaris R-VER; Interstellar's `#timeline base=`)
+
+```
+#aversion id=vr_1 name=Instrumental
+  #vset node=ch_4 mute=true
+```
+
+Interstellar's version model — a base resolved live, deltas on top, freeze to stop, rebase to reconcile — over a
+whole song: the deltas nest in the version's node (`#vset`, `#vunset`, `#vdrop`, `#vbody`, `#vorder`, nodes of its
+own, `#vsnapshot`), because a Solaris version may change any node, where Interstellar's varies only a timeline's clips
+and carries `timeline=` on flat lines. The full table is Solaris's project-format §9b. Interstellar preserves it,
+unknown to it; an older Solaris does too, and opens the song as main.
+
 ---
 
 ## 3. The master

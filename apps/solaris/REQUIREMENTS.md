@@ -448,7 +448,7 @@ suite (law 16): the same model, the same view.
   song that would be up to 200 copies of it, and the user chose not to. This is a deliberate difference from
   cosmo, not a gap.
 
-## R-VER — versions of a song — 📋 SPECIFIED
+## R-VER — versions of a song — 🚧 IN PROGRESS (N37; docs/discussion.md Round 15)
 
 The user (2026-10-08): *"should have branching too for multi version of a song."* Interstellar's
 R-VER, applied to an arrangement:
@@ -464,6 +464,17 @@ R-VER, applied to an arrangement:
 - **R-VER-4 Every version renders by name.** (**Replaces SR-VCS-1..3**, the project-level Nebula
   branching with its own commit store, for Interstellar's reason: it puts the version boundary
   around the thing versions share. Merging two songs — SR-MERGE-2 — survives as an import, R-VER-5.)
+- **Detailed before building (N37 — 2026-10-17, docs/discussion.md Round 15):** a version's deltas nest in its
+  `#aversion` node — `#vset`/`#vunset` (fields), `#vdrop`, `#vbody` (a node's id-less lines, as one field), `#vorder` (a
+  rack's devices), nodes of its own; no `base` = main; a base is main or an EARLIER version. The deltas are worked out
+  again after every edit that lands while a version is open, so every command is version-aware with no code of its own,
+  and an inherited node edited stores a `#vset`, never a copy. A delta whose node the base dropped is dangling (counted,
+  ignored, pruned by `version rebase`); a version the base broke is reported and cannot be opened or rendered. **Freeze is
+  ONE lever** (Interstellar has two — a pinned colour and a frozen cut — because its colour lives in another file): a
+  frozen version keeps a snapshot (`#vsnapshot`), stops inheriting and refuses edits; thaw makes its deltas live again;
+  rebase advances its snapshot. Grammar: `version new <name> [--base] [--open]`, `version list|open|diff|freeze|thaw|
+  rebase [--dry-run]|delete`, `revert <address|node>`, `set <vr>.name=`, `render --version`. Opening a version is a
+  history step, not an unsaved change: a song always opens on main.
 - **R-VER-5 Reserved:** import another song (concatenate or overlay), embed a song in a song or in
   Interstellar (was SR-MERGE-2, SR-EMBED-1..4).
 
@@ -709,7 +720,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 ✅ DR-REC-1 — loop takes are R-REC-2's; R-REC-2 ✅ DR-REC-2; R-EDIT-1 ✅ DR-EDIT-1; R-WARP-1 ✅ DR-WARP-1; R-TEMPO-1 ✅ DR-TEMPO-1; R-PRESET-1 ✅ DR-PRESET-1; R-PRESET-2 ✅ DR-PRESET-2; R-PRESET-3 ✅ DR-PRESET-3; R-VST-6 ✅ DR-VST-6 — the wheels to a plugin wait; R-CTRL-1 ✅ DR-CTRL-1; R-CTRL-2 ✅ DR-CTRL-2 — not yet against a real surface; R-PERF-1 ✅ DR-PERF-1; R-PERF-2 ✅ DR-PERF-2; R-PERF-3 ✅ DR-PERF-3; R-DEV-1/2/4 ✅ DR-DEV-1, DR-DEV-1a, DR-DEV-5 — not yet against a second real card; R-INST-7 ✅ DR-INST-7; R-INST-8 ✅ DR-INST-8; R-INST-9 ✅ DR-INST-9; R-INST-10 ✅ DR-INST-10; R-INST-11 ✅ DR-INST-11; R-FX-6 ✅ DR-FX-6; R-FX-7 ✅ DR-FX-6; R-FX-8 ✅ DR-FX-6; R-FX-9 ✅ DR-FX-6; R-FX-10 ✅ DR-FX-6; R-FX-11 ✅ DR-FX-6; R-FX-12 ✅ DR-FX-6; R-FX-13 ✅ DR-FX-6; R-FX-14 ✅ DR-FX-6; R-FX-15 ✅ DR-FX-6; R-FX-16 ✅ DR-FX-6; R-FX-17 ✅ DR-FX-6, DR-FX-17; R-MIX-19 ✅ DR-MIX-19; R-MIX-20 ✅ DR-MIX-20)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 ✅ DR-REC-1 — loop takes are R-REC-2's; R-REC-2 ✅ DR-REC-2; R-EDIT-1 ✅ DR-EDIT-1; R-WARP-1 ✅ DR-WARP-1; R-TEMPO-1 ✅ DR-TEMPO-1; R-PRESET-1 ✅ DR-PRESET-1; R-PRESET-2 ✅ DR-PRESET-2; R-PRESET-3 ✅ DR-PRESET-3; R-VST-6 ✅ DR-VST-6 — the wheels to a plugin wait; R-CTRL-1 ✅ DR-CTRL-1; R-CTRL-2 ✅ DR-CTRL-2 — not yet against a real surface; R-PERF-1 ✅ DR-PERF-1; R-PERF-2 ✅ DR-PERF-2; R-PERF-3 ✅ DR-PERF-3; R-DEV-1/2/4 ✅ DR-DEV-1, DR-DEV-1a, DR-DEV-5 — not yet against a second real card; R-INST-7 ✅ DR-INST-7; R-INST-8 ✅ DR-INST-8; R-INST-9 ✅ DR-INST-9; R-INST-10 ✅ DR-INST-10; R-INST-11 ✅ DR-INST-11; R-FX-6 ✅ DR-FX-6; R-FX-7 ✅ DR-FX-6; R-FX-8 ✅ DR-FX-6; R-FX-9 ✅ DR-FX-6; R-FX-10 ✅ DR-FX-6; R-FX-11 ✅ DR-FX-6; R-FX-12 ✅ DR-FX-6; R-FX-13 ✅ DR-FX-6; R-FX-14 ✅ DR-FX-6; R-FX-15 ✅ DR-FX-6; R-FX-16 ✅ DR-FX-6; R-FX-17 ✅ DR-FX-6, DR-FX-17; R-MIX-19 ✅ DR-MIX-19; R-MIX-20 ✅ DR-MIX-20; R-VER 🚧 N37 — Round 15, the design)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable

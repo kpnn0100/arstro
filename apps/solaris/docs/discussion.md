@@ -568,3 +568,69 @@ to change):
 - **Parts** (a commit each): (1) the model, the compile, the engine and the grammar — phase, width, solo-safe — and
   the mono check; (2) live (no rebuild) and the model's fields and the API; (3) the dock.
 - **Not yet:** a width automated or bound to a formula (refused, said); polarity per channel.
+
+### Round 15 — 2026-10-17 — versions of a song (R-VER-1…4, N37): the design, before code
+
+R-VER asks for Interstellar's model applied to a song: a version is *its base, resolved live, with its deltas on top*;
+inherit live, override to diverge, freeze to stop, rebase to reconcile; every version renders by name. Decided (each a
+line to change):
+
+- **What a version can change: any field of any node, and which nodes there are.** The song's nodes are the `.slp`'s
+  own — the header (as the node `project`: bpm, masterGain, …), every `#a…` line with an `id`, a rack (`#arack
+  track=<ch>`, the node `rack:<ch>`) and a formula (`#abind`, the node `bind:<address>`). A version's deltas, nested in
+  its node at the end of the file:
+
+  ```
+  #aversion id=vr_1 name=Instrumental
+    #vset node=ch_4 mute=true                 ; a field overridden — the rest of ch_4 still inherits
+  #aversion id=vr_2 name=Extended base=vr_1
+    #vset node=ac_1 at=16.0
+    #vunset node=ch_2 phase                   ; a field the base has, back to its default here
+    #vdrop node=ac_7                          ; the base's node is not in this version
+    #vbody node=pt_1                          ; a node's id-less lines — a pattern's notes — are ONE field
+      #note pitch=36 at=0.0 length=0.25 vel=110
+    #vorder node=rack:ch_2 children=dv_1,dv_9 ; which devices, in what order
+    #aclip id=ac_12 track=ch_2 lane=ln_2 pattern=pt_1 at=0.0 length=8.0   ; a node only this version has
+  ```
+
+  No `base` = main (the song itself, the root; `main` is not a node and cannot be renamed, frozen or deleted). A
+  version's base is main or an EARLIER version, so no chain can loop (the forward-only rule again). Interstellar's
+  versions nest nothing — its deltas are flat lines carrying `timeline=` — because only a timeline's clips vary there; a
+  Solaris version spans every kind of node, so its deltas live INSIDE its node, where an older build keeps them verbatim
+  as an unknown node and opens the song as main, losing nothing. Same verbs, same meanings; the spelling differs for that
+  reason (law 16).
+- **Edits are recorded, never copied — for every command at once.** While a version is open the song on screen IS its
+  resolution; a command edits it as it edits any song, and when the command lands its deltas are worked out again:
+  everything the version now differs from its base's resolution in, field by field (`#vset`/`#vunset`), node by node
+  (`#vdrop`, a node of its own), a pattern's notes or an automation's points as one (`#vbody`), a rack's order
+  (`#vorder`). So no command needs version code, a field edited back to the base's value inherits again, and editing an
+  inherited clip stores ONE `#vset`, not a copy (a copy-on-edit mutant must fail). Ids are never reused across the
+  document: a node a version adds can never collide with one the base adds later.
+- **Inherit live.** A base edit reaches every version that does not override that field, the moment it lands. A delta
+  whose node the base no longer has is **dangling**: ignored, counted (`versions[].dangling`), never silently deleted —
+  `version rebase` names and prunes them. A version the base has broken (a clip of its own on a strip the base deleted)
+  is reported with the reason (`versions[].problem`) and cannot be opened or rendered until fixed (Not yet: a repair).
+- **Freeze to stop — one lever.** `version freeze <vr>`: the version keeps a snapshot of its resolution (in its node,
+  `#vsnapshot`, the whole song) and stops inheriting; it is read-only — an edit while it is open is refused, naming it.
+  `version thaw` drops the snapshot: its deltas are live again and the base's work since arrives. `version rebase` on a
+  frozen version advances its snapshot to the base's present state with its deltas on top. Interstellar has two levers
+  (a pinned colour, a frozen cut) because its colour lives in another file, the rack; a Solaris song is one document, so
+  one lever stops it all (Not yet: freezing the sound alone).
+- **The grammar, Interstellar's verbs:** `version new <name> [--base <vr>] [--open]` (the UI's "New version…" is ONE
+  line), `version list` (the tree), `version open <vr|main>`, `version diff <vr>`, `version freeze|thaw <vr>`,
+  `version rebase <vr> [--dry-run]`, `version delete <vr>` (refused while another is based on it; deleting the open one
+  opens its base), `revert <address|node>` (drops the open version's override there: it inherits again; refused on main
+  or where there is none), `set <vr>.name="…"`, and `render --version <vr|name>` (every version renders by name; a
+  plain render is the open one). A version is named by id or name.
+- **What open is.** `version open` is a step of the history (undo goes back to the version you came from) but does not
+  mark the song unsaved: the file does not say which version is open — a song always opens on main.
+- **Seen** (part 3): the song bar's version chip beside the song's name — "main", or the version's name, with ▾; its
+  menu lists the versions as a tree (the open one ticked; frozen ones with a snowflake, broken ones dimmed with why),
+  then New Version…, Freeze / Thaw, Rebase, Rename…, Delete. Opening a version changes the song on screen through the
+  same eased values as any edit — clips that differ slide or fade, a muted strip's fill fades.
+- **Parts** (a commit each): (1) the model — the format, resolution, the deltas worked out from an edit, freeze, rebase,
+  dangling, broken, ids never reused; (2) the service — the grammar, the edit hook, a frozen version refusing edits,
+  render by name, history, the model's fields, the API; (3) the song bar.
+- **Not yet:** a version's own tempo map or markers edited separately from the song's (they are nodes like any other,
+  so they version already — the "not yet" is a UI for comparing two versions); per-note inheritance inside one pattern;
+  merging two versions; a repair for a broken version.
