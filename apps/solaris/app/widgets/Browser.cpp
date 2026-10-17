@@ -20,7 +20,7 @@ namespace solaris_ui
 
     namespace
     {
-        const char *kTabNames[Browser::kTabs] = {"Samples", "Instruments", "Song", "Presets"};
+        const char *kTabNames[Browser::kTabs] = {N_("Samples"), N_("Instruments"), N_("Song"), N_("Presets")};
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
         std::string baseName(const std::string &p)
         {
@@ -37,14 +37,13 @@ namespace solaris_ui
         }
         std::string lengthText(double beats, int perBar)
         {
-            // a pattern's length as a musician says it: bars when it is whole bars, else beats
-            char buf[32];
+            // a pattern's length as a musician says it: bars when it is whole bars, else beats — as words (Words.h)
             const double bars = beats / std::max(1, perBar);
-            if (std::fabs(bars - std::round(bars)) < 1e-9 && bars >= 1)
-                std::snprintf(buf, sizeof buf, "%d bar%s", (int)std::round(bars), std::round(bars) == 1 ? "" : "s");
-            else
-                std::snprintf(buf, sizeof buf, "%g beat%s", beats, beats == 1 ? "" : "s");
-            return buf;
+            if (std::fabs(bars - std::round(bars)) < 1e-9 && bars >= 1) return sayn(std::lround(bars), "{1} bar", "{1} bars", std::lround(bars));
+            if (std::fabs(beats - std::round(beats)) < 1e-9) return sayn(std::lround(beats), "{1} beat", "{1} beats", std::lround(beats));
+            char buf[32];
+            std::snprintf(buf, sizeof buf, "%g", beats);
+            return say("{1} beats", buf);
         }
         /** R-PRESET-3: a five-pointed star in `b` — outlined, its fill `lit` (0 … 1) of the colour. */
         void starGlyph(IRenderTarget &t, const Rect &b, const Color &c, double lit)
@@ -114,8 +113,8 @@ namespace solaris_ui
             std::string who;
             for (const auto &s : pt.strips) who += (who.empty() ? "" : ", ") + (stripName.count(s) ? stripName[s] : s);
             Item it{"pattern", pt.name, pt.id, ""};
-            it.note = lengthText(pt.length, perBar) + " \xC2\xB7 " + std::to_string(pt.notes.size()) + (pt.notes.size() == 1 ? " note" : " notes") +
-                      " \xC2\xB7 " + (who.empty() ? std::string("unplayed") : who);
+            it.note = lengthText(pt.length, perBar) + " \xC2\xB7 " + sayn((long)pt.notes.size(), "{1} note", "{1} notes", (long)pt.notes.size()) +
+                      " \xC2\xB7 " + (who.empty() ? say("unplayed") : who);
             it.strip = pt.lastStrip;
             mSongMidi.push_back(it);
         }
@@ -132,7 +131,7 @@ namespace solaris_ui
         if (mTab == kSamples && !mSearch.empty())
         {
             // R-PRESET-3: what a search found — its row back to the folders first
-            mRows.push_back(Item{"clearsearch", mSearch == "favourites" ? std::string("Favourites") : "Search \xC2\xB7 " + mSearch, "", ""});
+            mRows.push_back(Item{"clearsearch", mSearch == "favourites" ? say("Favourites") : say("Search \xC2\xB7 {1}", mSearch), "", ""});
             for (const auto &e : mEntries)
                 if (e.kind == "audio") mRows.push_back(Item{"audio", e.name, e.path, ""});
         }
@@ -143,8 +142,8 @@ namespace solaris_ui
                 for (const auto &f : mFolders) mRows.push_back(Item{"folder", baseName(f), f, f});
                 if (!mFolders.empty() || !mLib.empty()) // R-PRESET-3: a search and the favourites, under the folders
                 {
-                    mRows.push_back(Item{"search", "Search samples\xE2\x80\xA6", "", ""});
-                    mRows.push_back(Item{"favourites", "Favourites", "", ""});
+                    mRows.push_back(Item{"search", say("Search samples\xE2\x80\xA6"), "", ""});
+                    mRows.push_back(Item{"favourites", say("Favourites"), "", ""});
                 }
             }
             else
@@ -159,7 +158,7 @@ namespace solaris_ui
         {
             for (const char *kind : {"instrument", "effect"})
             {
-                mRows.push_back(Item{"header", std::string(kind) == "instrument" ? "INSTRUMENTS" : "EFFECTS", "", ""});
+                mRows.push_back(Item{"header", std::string(kind) == "instrument" ? say("Instruments") : say("Effects"), "", ""}); // uppercased where drawn
                 for (const auto &t : mTypes)
                     if (t.kind == kind) mRows.push_back(Item{kind, t.label, t.name, t.name});
             }
@@ -176,12 +175,10 @@ namespace solaris_ui
                     {
                         if (!any)
                         {
-                            std::string h = t.label;
-                            for (auto &ch : h) ch = (char)std::toupper((unsigned char)ch); // headers in capitals, as the other tabs'
-                            mRows.push_back(Item{"header", h, "", ""});
+                            mRows.push_back(Item{"header", t.label, "", ""}); // the registry's word; in capitals where drawn, as the other tabs'
                         }
                         any = true;
-                        Item it{"preset", x.name, x.type, x.factory ? "factory" : ""};
+                        Item it{"preset", x.name, x.type, x.factory ? say("factory") : std::string()};
                         it.role = t.kind;
                         mRows.push_back(it);
                     }
@@ -190,10 +187,10 @@ namespace solaris_ui
         else
         {
             // R-BROWSE-4: the song's MIDI first (a new one always to hand), then its samples
-            mRows.push_back(Item{"header", "MIDI", "", ""});
-            mRows.push_back(Item{"newmidi", "New MIDI", "", ""});
+            mRows.push_back(Item{"header", say("MIDI"), "", ""});
+            mRows.push_back(Item{"newmidi", say("New MIDI"), "", ""});
             for (const auto &it : mSongMidi) mRows.push_back(it);
-            if (!mSongSounds.empty()) mRows.push_back(Item{"header", "SAMPLES", "", ""});
+            if (!mSongSounds.empty()) mRows.push_back(Item{"header", say("Samples"), "", ""});
             for (const auto &s : mSongSounds) mRows.push_back(Item{"audio", s.first, s.second, ""});
         }
 
@@ -210,10 +207,10 @@ namespace solaris_ui
         if (mRows.empty())
         {
             Item e{"empty", "", "", ""};
-            if (mTab == kSamples && mPath.empty()) { e.label = "No sample folders yet."; e.note = "Add yours in Settings \xE2\x80\x94 click here."; }
-            else if (mTab == kSamples) { e.label = "Nothing to play here."; e.note = "Audio files and folders show up in this list."; }
-            else if (mTab == kSong) { e.label = "This song plays no samples yet."; e.note = "Drag one in from Samples."; }
-            else if (mTab == kPresets) { e.label = "No presets yet."; e.note = "Save one from a device's window \xE2\x80\x94 Presets."; }
+            if (mTab == kSamples && mPath.empty()) { e.label = say("No sample folders yet."); e.note = say("Add yours in Settings \xE2\x80\x94 click here."); }
+            else if (mTab == kSamples) { e.label = say("Nothing to play here."); e.note = say("Audio files and folders show up in this list."); }
+            else if (mTab == kSong) { e.label = say("This song plays no samples yet."); e.note = say("Drag one in from Samples."); }
+            else if (mTab == kPresets) { e.label = say("No presets yet."); e.note = say("Save one from a device's window \xE2\x80\x94 Presets."); }
             keyed.emplace_back(gen + "empty|" + e.label, e);
         }
         mMotion.sync(keyed, space::rowH());
@@ -284,7 +281,7 @@ namespace solaris_ui
     {
         for (int t = 0; t < kTabs; ++t)
         {
-            A11yNode n = a11yNode("browser.tab." + std::to_string(t), "tab", kTabNames[t], worldRect(*this, tabRect(t)));
+            A11yNode n = a11yNode("browser.tab." + std::to_string(t), "tab", tr(kTabNames[t]), worldRect(*this, tabRect(t)));
             n.checked = t == mTab;
             out.push_back(n);
         }
@@ -293,8 +290,8 @@ namespace solaris_ui
             const Rect r = rowRect(i);
             const auto &it = mRows[(size_t)i];
             if (r.bottom() <= listTop() || r.y >= height.value() || it.kind == "header" || it.kind == "empty") continue; // out of view; words
-            out.push_back(a11yNode("browser.row." + it.kind + "." + (it.value.empty() ? it.label : it.value), "listitem", it.label,
-                                   worldRect(*this, r), it.note.empty() ? it.kind : it.note));
+            out.push_back(a11yNode("browser.row." + it.kind + "." + (it.value.empty() ? english(it.label) : it.value), "listitem", ::arstro::solaris_ui::shown(it.label),
+                                   worldRect(*this, r), ::arstro::solaris_ui::shown(it.note)));
         }
     }
 
@@ -480,27 +477,27 @@ namespace solaris_ui
                 const bool fav = lib != mLib.end() && lib->second.favourite;
                 const Point world = g.pos;
                 std::vector<cosmo_v2::ContextMenu::Item> items;
-                items.push_back({"Tag\xE2\x80\xA6", [this, file, world] {
+                items.push_back({say("Tag\xE2\x80\xA6"), [this, file, world] {
                                      if (onRename) onRename("", world, [this, file](const std::string &tag) { if (onCommand && !tag.empty()) onCommand("sample tag " + q(file) + " " + q(tag)); });
                                  }});
                 if (lib != mLib.end())
                     for (const auto &tag : lib->second.tags)
-                        items.push_back({"Remove tag \xC2\xB7 " + tag, [this, file, tag] { if (onCommand) onCommand("sample untag " + q(file) + " " + tag); }});
-                items.push_back({fav ? "Not a favourite" : "Favourite", [this, file, fav] { if (onCommand) onCommand("sample favourite " + q(file) + (fav ? " off" : " on")); }});
+                        items.push_back({say("Remove tag \xC2\xB7 {1}", tag), [this, file, tag] { if (onCommand) onCommand("sample untag " + q(file) + " " + tag); }});
+                items.push_back({fav ? say("Not a favourite") : say("Favourite"), [this, file, fav] { if (onCommand) onCommand("sample favourite " + q(file) + (fav ? " off" : " on")); }});
                 onMenu(std::move(items), world);
                 return true;
             }
             // a pattern's menu (R-BROWSE-4): each one line
             if (r < 0 || mRows[(size_t)r].kind != "pattern" || !onMenu) return true;
-            const std::string id = mRows[(size_t)r].value, name = mRows[(size_t)r].label;
+            const std::string id = mRows[(size_t)r].value, name = mRows[(size_t)r].label; // a pattern's name: data
             const Point world = g.pos;
-            onMenu({{"Rename\xE2\x80\xA6", [this, id, name, world] {
+            onMenu({{say("Rename\xE2\x80\xA6"), [this, id, name, world] {
                          if (onRename) onRename(name, world, [this, id](const std::string &n) { if (onCommand) onCommand("set " + id + ".name=" + q(n)); });
                      }},
-                    {"Piano Roll", [this, id] { if (onOpenPattern) onOpenPattern(id); }},
-                    {"Duplicate", [this, id] { if (onCommand) onCommand("pattern duplicate " + id); }},
-                    {"Copy ID", [this, id] { if (onCopy) onCopy(id); }},
-                    {"Delete", [this, id] { if (onCommand) onCommand("pattern delete " + id); }}},
+                    {say("Piano Roll"), [this, id] { if (onOpenPattern) onOpenPattern(id); }},
+                    {say("Duplicate"), [this, id] { if (onCommand) onCommand("pattern duplicate " + id); }},
+                    {say("Copy ID"), [this, id] { if (onCopy) onCopy(id); }},
+                    {say("Delete"), [this, id] { if (onCommand) onCommand("pattern delete " + id); }}},
                    world);
             return true;
         }
@@ -526,8 +523,9 @@ namespace solaris_ui
             const Rect r = tabRect(k);
             const double hv = mHover.amount(100 + k);
             t.setFill(k == mTab ? palette::foreground() : lerpColor(palette::mutedForeground(), palette::foreground(), 0.5 * hv));
-            t.drawText(kTabNames[k], r.x + (r.w - t.measureText(kTabNames[k], 10.0, font::sans())) * 0.5, interstellar_v1::textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0,
-                       k == mTab ? font::sansMedium() : font::sans());
+            const char *fam = k == mTab ? font::sansMedium() : font::sans();
+            const std::string name = textfit::ellipsize(t, tr(kTabNames[k]), r.w - 4.0, 10.0, fam); // a longer language fits its tab
+            t.drawText(name, r.x + (r.w - t.measureText(name, 10.0, font::sans())) * 0.5, interstellar_v1::textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, fam);
         }
 
         const double top = listTop();
@@ -546,15 +544,16 @@ namespace solaris_ui
             if (it.kind == "empty")
             {
                 t.setFill(fade(palette::mutedForeground(), a));
-                t.drawText(textfit::ellipsize(t, it.label, W - 2 * space::padX(), 11.0, font::sans()), space::padX(), r.y + 28.0, 11.0, font::sans());
+                t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(it.label), W - 2 * space::padX(), 11.0, font::sans()), space::padX(), r.y + 28.0, 11.0, font::sans());
                 t.setFill(fade(palette::mutedForeground(), 0.75 * a));
-                t.drawText(textfit::ellipsize(t, it.note, W - 2 * space::padX(), 10.0, font::sans()), space::padX(), r.y + 44.0, 10.0, font::sans());
+                t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(it.note), W - 2 * space::padX(), 10.0, font::sans()), space::padX(), r.y + 44.0, 10.0, font::sans());
                 continue;
             }
             if (it.kind == "header")
             {
                 t.setFill(fade(palette::mutedForeground(), a));
-                t.drawText(it.label, space::padX(), textfit::baseline(cy + 3.0, 9.0), 9.0, font::sansSemiBold(), 0.13 * 9.0);
+                t.drawText(textfit::ellipsize(t, solaris_strings::upper(::arstro::solaris_ui::shown(it.label)), W - 2 * space::padX(), 9.0, font::sansSemiBold()), space::padX(),
+                           textfit::baseline(cy + 3.0, 9.0), 9.0, font::sansSemiBold(), 0.13 * 9.0);
                 continue;
             }
             if (it.kind == "audio")
@@ -613,7 +612,7 @@ namespace solaris_ui
             if ((it.kind == "pattern" || it.kind == "preset") && !it.note.empty())
             {
                 // its length, notes and who plays it, at the right — mono (numbers), muted; the name gets the rest
-                const std::string meta = textfit::ellipsize(t, it.note, W * 0.62, 9.0, font::mono());
+                const std::string meta = textfit::ellipsize(t, ::arstro::solaris_ui::shown(it.note), W * 0.62, 9.0, font::mono());
                 const double mw = t.measureText(meta, 9.0, font::mono());
                 t.setFill(fade(palette::mutedForeground(), a));
                 t.drawText(meta, W - space::padX() - mw, textfit::baseline(cy, 9.0), 9.0, font::mono());
@@ -621,7 +620,7 @@ namespace solaris_ui
             }
             t.setFill(fade(it.kind == "up" || it.kind == "newmidi" ? lerpColor(palette::mutedForeground(), palette::foreground(), it.kind == "newmidi" ? hv : 0.0)
                                                                    : palette::foreground(), a));
-            t.drawText(textfit::ellipsize(t, it.label, labelW, px, fam), ib.right() + 8.0, textfit::baseline(cy, px), px, fam);
+            t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(it.label), labelW, px, fam), ib.right() + 8.0, textfit::baseline(cy, px), px, fam);
         }
         t.restore();
         mScroll.drawBar(t, W - 5.0);

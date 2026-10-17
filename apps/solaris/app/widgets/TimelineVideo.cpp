@@ -162,7 +162,7 @@ namespace solaris_ui
         drawRoundedRect(t, Rect{kHeaderW, y0, W - kHeaderW, h}, 0.0, Paint::filled(surface::laneBg()));
         drawRoundedRect(t, Rect{0, y0, kHeaderW, h}, 0.0, Paint::filled(surface::headerBg()));
         t.setFill(palette::foreground());
-        t.drawText("Video", space::padX(), y0 + 15.0, 11.0, font::sans());
+        t.drawText(tr("Video"), space::padX(), y0 + 15.0, 11.0, font::sans());
         t.setFill(palette::mutedForeground());
         t.drawText(textfit::ellipsize(t, fileName(mVideo.src), kHeaderW - 2.0 * space::padX(), 10.0, font::sans()), space::padX(), y0 + 29.0, 10.0,
                    font::sans());
@@ -188,7 +188,7 @@ namespace solaris_ui
         }
         t.restore();
         drawRoundedRect(t, sr, radius::control(), Paint::stroked(mVideoDragging ? palette::primary() : palette::border(), 1.0));
-        const std::string name = textfit::ellipsize(t, fileName(mVideo.src) + (mVideo.offline ? "  \xC2\xB7  cannot be read" : ""), std::max(0.0, sr.w - 12.0), 9.0,
+        const std::string name = textfit::ellipsize(t, fileName(mVideo.src) + (mVideo.offline ? "  \xC2\xB7  " + tr("cannot be read") : std::string()), std::max(0.0, sr.w - 12.0), 9.0,
                                                     font::sans());
         if (!name.empty())
         {

@@ -110,7 +110,7 @@ int main()
         assert(tr("Nothing like this is in the table") == "Nothing like this is in the table"); // a string it lacks: English
         const std::string one = trn(1, "{1} bar", "{1} bars"), many = trn(7, "{1} bar", "{1} bars");
         assert(one == many && fillIn(many, "7") == "7 \xC3\xB4 nh\xE1\xBB\x8Bp");              // one form for every count: 7 ô nhịp
-        assert(trn(1, "{1} take", "{1} takes") == "{1} take" && trn(2, "{1} take", "{1} takes") == "{1} takes"); // a plural it lacks: English's
+        assert(trn(1, "{1} widget", "{1} widgets") == "{1} widget" && trn(2, "{1} widget", "{1} widgets") == "{1} widgets"); // a plural it lacks: English's
         const std::string *p = &tr("Settings");
         for (int i = 0; i < 1000; ++i) tr("x" + std::to_string(i));
         assert(&tr("Settings") == p && *p == "C\xC3\xA0i \xC4\x91\xE1\xBA\xB7t");

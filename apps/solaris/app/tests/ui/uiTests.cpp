@@ -5712,6 +5712,17 @@ namespace
         for (const auto &x : m.templates) v.push_back(x.name);
         for (const auto &x : m.recents) { v.push_back(x.name); v.push_back(x.path); }
         for (const auto &f : m.settings.folders) v.push_back(f);
+        for (const auto &x : m.clips) { v.push_back(x.name); v.push_back(x.id); }
+        for (const auto &x : m.patterns) { v.push_back(x.name); v.push_back(x.id); }
+        for (const auto &x : m.markers) { v.push_back(x.name); v.push_back(x.id); }
+        for (const auto &x : m.automations) { v.push_back(x.name); v.push_back(x.id); for (const auto &u : x.usedBy) v.push_back(u); }
+        for (const auto &x : m.groups) { v.push_back(x.name); v.push_back(x.id); }
+        for (const auto &x : m.scenes) { v.push_back(x.name); v.push_back(x.id); }
+        for (const auto &x : m.tempos) v.push_back(x.id);
+        for (const auto &x : m.lanes) v.push_back(x.id);
+        for (const auto &x : m.strips) v.push_back(x.id);
+        for (const auto &x : m.deviceTypes) v.push_back(x.label); // the registry's words
+        for (const auto &x : m.presets) v.push_back(x.name);
         return v;
     }
 
@@ -5732,6 +5743,15 @@ namespace
         int bad = 0;
         for (const auto &d : drawn)
         {
+            // data ellipsized to its room ("Basic…" of "Basic Synth") is still the data
+            const std::string kEllipsis = "\xE2\x80\xA6";
+            if (d.text.size() > kEllipsis.size() && d.text.compare(d.text.size() - kEllipsis.size(), kEllipsis.size(), kEllipsis) == 0)
+            {
+                const std::string head = d.text.substr(0, d.text.size() - kEllipsis.size());
+                bool cut = false;
+                for (const auto &w : data) cut |= !head.empty() && w.compare(0, head.size(), head) == 0;
+                if (cut) continue;
+            }
             std::string rest;
             for (size_t i = 0; i < d.text.size(); ++i)
             {
@@ -5816,7 +5836,10 @@ static void test_every_word_the_shell_draws_is_from_the_table()
         r.settle();
         bad += untranslated(r.wordsOf(st), modelWords(r.svc->model()), arstro::solaris_ui::SettingsSheet::sectionTitle(sec));
         for (const auto &n : r.app->accessibles())
-            bad += untranslated({sltest::Drawn{n.name, 0, 0, 1}, sltest::Drawn{n.value, 0, 0, 1}}, modelWords(r.svc->model()), "Settings' names");
+        {
+            bad += untranslated({sltest::Drawn{n.name, 0, 0, 1}}, modelWords(r.svc->model()), "Settings' names");
+            if (!n.value.empty()) bad += untranslated({sltest::Drawn{n.value, 0, 0, 1}}, modelWords(r.svc->model()), "Settings' values");
+        }
     }
     st.showSection(arstro::solaris_ui::SettingsSheet::kAudio);
     r.settle();
@@ -5851,6 +5874,65 @@ static void test_every_word_the_shell_draws_is_from_the_table()
     bad += untranslated(r.wordsOf(r.app->confirm()), modelWords(r.svc->model()), "a confirm dialog");
     assert(bad == 0);
     pass("in en-XA every word the shell draws is the table's — Home, the song bar and its menus, the version menu, every Settings page and a combo's list, Export, Relink, Conflicts, the history, a dialog, a toast, the accessible names — the model's data and the names no language has kept as they are");
+}
+
+static void test_every_word_the_lanes_draw_is_from_the_table()
+{
+    // R-ACCESS-2 (Round 21, part 3): in the pseudo-language every string the lanes' side draws is the table's — the
+    // browser's four tabs, the lanes (an instrument's track, a sample's lane, a group, an automation, a take), the ruler
+    // and its markers and tempo, the session grid — and every menu they open (a lane's, a clip's, the ruler's, a
+    // marker's, a tempo's, an empty track's); the model's data kept as it is; their accessible names likewise
+    sltest::Rig r("ui-pseudo-lanes", 1440, 900);
+    r.cmd("settings set language=en-XA");
+    r.cmd("project new " + r.song("Lanes") + ".slp");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    r.cmd("clip add --src tone.wav --at 4 --length 4");
+    r.cmd("marker add Intro --at 0 --length 4");
+    r.cmd("tempo add --at 8 --bpm 140");
+    std::string inst;
+    for (const auto &st : r.svc->model().strips)
+        if (st.kind == "instrument") inst = st.id;
+    r.cmd("auto create " + inst + ".gain");
+    r.cmd("scene add Verse");
+    r.settle();
+    auto &ps = r.app->project();
+    auto &tl = ps.timeline();
+    auto words = [&] { return modelWords(r.svc->model()); };
+    int bad = 0;
+    for (int tab = 0; tab < 4; ++tab)
+    {
+        ps.browser().setTab(tab);
+        r.settle();
+        bad += untranslated(r.wordsOf(ps.browser()), words(), "the browser");
+    }
+    bad += untranslated(r.wordsOf(tl), words(), "the lanes");
+    for (const auto &n : r.app->accessibles())
+        if (n.key.rfind("lanes.", 0) == 0 || n.key.rfind("browser.", 0) == 0)
+        {
+            bad += untranslated({sltest::Drawn{n.name, 0, 0, 1}}, words(), "a lane's or a row's name");
+            if (!n.value.empty()) bad += untranslated({sltest::Drawn{n.value, 0, 0, 1}}, words(), "a lane's or a row's value");
+        }
+    // the menus the lanes open, each by a right-click where it is
+    auto menuAt = [&](const artboard::Rect &at, const char *where) {
+        r.click(at.x + 4.0, at.y + at.h * 0.5, 2);
+        r.settle();
+        if (!r.app->menu().isOpen()) { std::printf("    %s: no menu\n", where); ++bad; return; }
+        bad += untranslated(r.wordsOf(r.app->menu()), words(), where);
+        r.app->menu().close();
+        r.settle();
+    };
+    menuAt(world(tl, artboard::Rect{2.0, tl.rowRect(0).y, Timeline::kHeaderW - 40.0, tl.rowRect(0).h}), "a lane's menu");
+    for (const auto &c : r.svc->model().clips) menuAt(world(tl, tl.clipRect(c.id)), "a clip's menu");
+    menuAt(world(tl, tl.markerRect(r.svc->model().markers[0].id)), "a marker's menu");
+    menuAt(world(tl, tl.tempoRect(r.svc->model().tempos[0].id)), "a tempo's menu");
+    const artboard::Rect ruler = world(tl, tl.rulerRect());
+    menuAt(artboard::Rect{ruler.x + Timeline::kHeaderW + 300.0, ruler.bottom() - 8.0, 4.0, 4.0}, "the ruler's menu");
+    // a take, shown: its row's words (R-REC-2 makes takes; the session grid next)
+    ps.setSessionOpen(true);
+    r.settle();
+    bad += untranslated(r.wordsOf(ps.session()), words(), "the session grid");
+    assert(bad == 0);
+    pass("in en-XA every word the lanes' side draws is the table's — the browser's tabs, the lanes, the ruler, its markers and tempo, the session grid, the menus they open, their accessible names — the model's data kept as it is");
 }
 
 static void test_the_table_has_every_word_the_window_says()
@@ -5977,6 +6059,7 @@ int main()
     test_the_grid_follows_the_zoom();
     test_the_window_speaks_the_language();             // R-ACCESS-2
     test_every_word_the_shell_draws_is_from_the_table();
+    test_every_word_the_lanes_draw_is_from_the_table();
     test_the_table_has_every_word_the_window_says();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;

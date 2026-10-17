@@ -214,11 +214,11 @@ namespace solaris_ui
                 {
                     const auto sc = mScenes[(size_t)r];
                     std::vector<cosmo_v2::ContextMenu::Item> items;
-                    items.push_back({"Launch Scene", [this, sc] { send("launch " + sc.id); }});
-                    items.push_back({"Rename\xE2\x80\xA6", [this, sc, at = g.pos] {
+                    items.push_back({say("Launch Scene"), [this, sc] { send("launch " + sc.id); }});
+                    items.push_back({say("Rename\xE2\x80\xA6"), [this, sc, at = g.pos] {
                                          if (onRename) onRename(sc.name, at, [this, id = sc.id](const std::string &n) { if (!n.empty()) send("set " + id + ".name=" + quoted(n)); });
                                      }});
-                    items.push_back({"Delete Scene", [this, sc] { send("scene delete " + sc.id); }});
+                    items.push_back({say("Delete Scene"), [this, sc] { send("scene delete " + sc.id); }});
                     if (onMenu) onMenu(std::move(items), g.pos);
                 }
                 return true;
@@ -233,11 +233,11 @@ namespace solaris_ui
                 if (!right) { send("launch " + sl->id); return true; }
                 const solaris::SlotModel s = *sl;
                 std::vector<cosmo_v2::ContextMenu::Item> items;
-                items.push_back({"Launch", [this, s] { send("launch " + s.id); }});
-                items.push_back({"Rename\xE2\x80\xA6", [this, s, at = g.pos] {
+                items.push_back({say("Launch"), [this, s] { send("launch " + s.id); }});
+                items.push_back({say("Rename\xE2\x80\xA6"), [this, s, at = g.pos] {
                                      if (onRename) onRename(s.name, at, [this, id = s.id](const std::string &n) { if (!n.empty()) send("set " + id + ".name=" + quoted(n)); });
                                  }});
-                items.push_back({"Delete Slot", [this, s] { send("slot delete " + s.id); }});
+                items.push_back({say("Delete Slot"), [this, s] { send("slot delete " + s.id); }});
                 if (onMenu) onMenu(std::move(items), g.pos);
                 return true;
             }
@@ -352,18 +352,18 @@ namespace solaris_ui
         const double ah = mHover.amount(kAddScene);
         if (ah > 0.001) drawRoundedRect(t, ar, radius::control(), Paint::filled(palette::hoverWash(ah)));
         t.setFill(lerpColor(palette::mutedForeground(), palette::foreground(), ah));
-        t.drawText("+ Scene", ar.x + 6.0, textfit::baseline(ar.y + ar.h * 0.5, 11.0), 11.0, font::sans());
+        t.drawText(textfit::ellipsize(t, tr("+ Scene"), ar.w - 8.0, 11.0, font::sans()), ar.x + 6.0, textfit::baseline(ar.y + ar.h * 0.5, 11.0), 11.0, font::sans());
         t.restore();
         const Rect br = backRect();
         const double bh = mHover.amount(kBack);
         drawRoundedRect(t, br, radius::control(), Paint::filledStroked(lerpColor(palette::secondary(), palette::card(), bh), palette::border(), 1.0));
         t.setFill(lerpColor(palette::secondaryForeground(), palette::foreground(), bh));
-        const char *back = "Back to Arrangement";
+        const std::string back = tr("Back to Arrangement");
         t.drawText(textfit::ellipsize(t, back, br.w - 12.0, 10.0, font::sans()), br.x + 6.0, textfit::baseline(br.y + br.h * 0.5, 10.0), 10.0, font::sans());
         if (mScenes.empty())
         {
             t.setFill(palette::mutedForeground());
-            const char *hint = "No scenes yet \xE2\x80\x94 \"+ Scene\" adds one; a cell takes a pattern or a clip.";
+            const std::string hint = tr("No scenes yet \xE2\x80\x94 \"+ Scene\" adds one; a cell takes a pattern or a clip.");
             t.drawText(textfit::ellipsize(t, hint, std::max(0.0, W - kSceneW - 24.0), 11.0, font::sans()), kSceneW + 12.0, kHeadH + 24.0, 11.0, font::sans());
         }
         // the bars, only when there is more to see (R6)

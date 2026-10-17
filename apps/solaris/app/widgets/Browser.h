@@ -64,7 +64,14 @@ namespace solaris_ui
         /** R-ACCESS-1: its tabs, and each row in view — a folder, a sound, an instrument, a pattern, a preset. */
         void accessibles(std::vector<A11yNode> &out);
         int rowCount() const { return (int)mRows.size(); }
-        const Item &row(int i) const { return mRows[(size_t)i]; }
+        /** A row as drawn — its words in the language drawn now (R-ACCESS-2: they are kept as words, Words.h). */
+        Item row(int i) const
+        {
+            Item it = mRows[(size_t)i];
+            it.label = ::arstro::solaris_ui::shown(it.label);
+            it.note = ::arstro::solaris_ui::shown(it.note);
+            return it;
+        }
         double tabHighlightX() const { return mTabX.value(); } // LIVE, for the slide test
         double tabHighlightW() const { return mTabW.value(); } // LIVE: tabs are as wide as their names — it eases too
         /** R-EDM-9: how much a file's audition fill shows (LIVE, eased) — 0 when it is not being heard. */

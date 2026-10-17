@@ -87,14 +87,14 @@ namespace solaris_ui
 
     std::string Timeline::stepName(double step, int beatsPerBar)
     {
-        if (step <= 0.0) return "Off";
-        if (beatsPerBar > 1 && step >= beatsPerBar - 1e-9) return "Bar";
+        if (step <= 0.0) return say("Off"); // words: the ruler's name cross-fades a step, the window a language
+        if (beatsPerBar > 1 && step >= beatsPerBar - 1e-9) return say("Bar");
         char buf[16];
         std::snprintf(buf, sizeof buf, "1/%lld", (long long)std::llround(4.0 / step)); // the piano roll's note values: a beat = 1/4
         return buf;
     }
 
-    std::string Timeline::snapLabel() const { return stepName(snapStep(), mBeatsPerBar); }
+    std::string Timeline::snapLabel() const { return ::arstro::solaris_ui::shown(stepName(snapStep(), mBeatsPerBar)); } // as drawn
 
     Timeline::Timeline() { clipToBounds = true; }
 
@@ -182,7 +182,7 @@ namespace solaris_ui
                 if (c.lane == l.id && !c.takes.empty() && mTakesOpen.count(c.id))
                     for (int k = 1; k <= (int)c.takes.size(); ++k)
                     {
-                        Row tr{"take:" + c.id + ":" + std::to_string(k), "", "Take " + std::to_string(k), r.colour};
+                        Row tr{"take:" + c.id + ":" + std::to_string(k), "", say("Take {1}", k), r.colour};
                         tr.takeClip = c.id;
                         tr.take = k;
                         tr.strip = "";
@@ -332,12 +332,12 @@ namespace solaris_ui
             if (r.bottom() <= top() || r.y >= height.value()) continue; // scrolled out
             const auto &row = mRows[(size_t)i];
             if (!row.automation.empty() || !row.takeClip.empty()) continue; // an automation's row, a take's: Not yet
-            out.push_back(a11yNode("lanes." + row.key, "listitem", row.label.empty() ? "Lane" : row.label, worldRect(*this, Rect{r.x, r.y, kHeaderW, r.h}),
-                                   row.strip.empty() ? std::string() : "track of " + row.strip));
+            out.push_back(a11yNode("lanes." + row.key, "listitem", row.label.empty() ? tr("Lane") : row.label, worldRect(*this, Rect{r.x, r.y, kHeaderW, r.h}),
+                                   row.strip.empty() ? std::string() : fillIn(tr("track of {1}"), row.strip)));
             if (const Rect a = armRect(i); a.w > 0)
             {
-                A11yNode arm = a11yNode("lanes." + row.key + ".arm", "toggle", (row.label.empty() ? std::string("Lane") : row.label) + " record arm",
-                                        worldRect(*this, a), mArmed == row.strip ? "on" : "off");
+                A11yNode arm = a11yNode("lanes." + row.key + ".arm", "toggle", fillIn(tr("{1} record arm"), row.label.empty() ? tr("Lane") : row.label),
+                                        worldRect(*this, a), mArmed == row.strip ? tr("on") : tr("off"));
                 arm.checked = mArmed == row.strip;
                 out.push_back(arm);
             }
@@ -547,7 +547,7 @@ namespace solaris_ui
         mCueAmt.update(nowMs);
         mPpb.update(nowMs);
         // the snap step follows the EASED zoom; its name on the ruler cross-fades when it changes (§1)
-        if (const std::string name = snapLabel(); mStepNames.empty() || mStepNames.back().text != name)
+        if (const std::string name = stepName(snapStep(), mBeatsPerBar); mStepNames.empty() || mStepNames.back().text != name)
         {
             const bool first = mStepNames.empty(); // nowhere to travel from: placed
             for (auto &n : mStepNames)
@@ -1129,12 +1129,12 @@ namespace solaris_ui
                     // R-ARR-3: a folded group's row — open it, rename it, ungroup it
                     const std::string lg = mRows[(size_t)ri].group, name = mRows[(size_t)ri].groupName;
                     const Point world = g.pos;
-                    onMenu({{"Open group", [this, lg] { if (onCommand) onCommand("set " + lg + ".folded=off"); }},
-                            {"Rename group\xE2\x80\xA6", [this, lg, name, world] {
+                    onMenu({{say("Open group"), [this, lg] { if (onCommand) onCommand("set " + lg + ".folded=off"); }},
+                            {say("Rename group\xE2\x80\xA6"), [this, lg, name, world] {
                                  if (onRename) onRename(name, world, [this, lg](const std::string &n) { if (onCommand && !n.empty()) onCommand("set " + lg + ".name=" + q(n)); });
                              }},
-                            {"Ungroup", [this, lg] { if (onCommand) onCommand("lane ungroup " + lg); }},
-                            {"Copy ID", [this, lg] { if (onCopy) onCopy(lg); }}},
+                            {say("Ungroup"), [this, lg] { if (onCommand) onCommand("lane ungroup " + lg); }},
+                            {say("Copy ID"), [this, lg] { if (onCopy) onCopy(lg); }}},
                            world);
                     return true;
                 }
@@ -1145,12 +1145,12 @@ namespace solaris_ui
                     if (s.kind == "instrument")
                     {
                         const std::string sid = s.id;
-                        owners.push_back({s.name + (sid == owner ? "  \xC2\xB7 now" : ""),
+                        owners.push_back({s.name + (sid == owner ? "  \xC2\xB7 " + say("now") : std::string()),
                                           [this, ln, sid] { if (onCommand) onCommand("set " + ln + ".strip=" + sid); }});
                     }
                 const Point world = g.pos;
-                if (!owners.empty()) items.push_back({"Track of \xE2\x96\xB8", [this, owners, world] { if (onMenu) onMenu(owners, world); }});
-                if (!owner.empty()) items.push_back({"Plain Lane", [this, ln] { if (onCommand) onCommand("set " + ln + ".strip=none"); }});
+                if (!owners.empty()) items.push_back({say("Track of \xE2\x96\xB8"), [this, owners, world] { if (onMenu) onMenu(owners, world); }});
+                if (!owner.empty()) items.push_back({say("Plain Lane"), [this, ln] { if (onCommand) onCommand("set " + ln + ".strip=none"); }});
                 {
                     // R-ARR-3: its group — a new one, into another, out of its own, folded, ungrouped
                     const std::string lg = mRows[(size_t)ri].group;
@@ -1161,18 +1161,18 @@ namespace solaris_ui
                             into.push_back({r.groupName, [this, ln, gid = r.group] { if (onCommand) onCommand("set " + ln + ".group=" + gid); }});
                     if (lg.empty())
                     {
-                        const std::string name = "Group " + std::to_string(seen.size() + 1);
-                        items.push_back({"New group", [this, ln, name] { if (onCommand) onCommand("lane group " + ln + " --name " + q(name)); }});
+                        const std::string name = fillIn(tr("Group {1}"), std::to_string(seen.size() + 1)); // a new group's name — the user's, in their words
+                        items.push_back({say("New group"), [this, ln, name] { if (onCommand) onCommand("lane group " + ln + " --name " + q(name)); }});
                     }
-                    if (!into.empty()) items.push_back({"Into group\xE2\x80\xA6", [this, into, world] { if (onMenu) onMenu(into, world); }});
+                    if (!into.empty()) items.push_back({say("Into group\xE2\x80\xA6"), [this, into, world] { if (onMenu) onMenu(into, world); }});
                     if (!lg.empty())
                     {
-                        items.push_back({"Leave group", [this, ln] { if (onCommand) onCommand("set " + ln + ".group=none"); }});
-                        items.push_back({"Fold group", [this, lg] { if (onCommand) onCommand("set " + lg + ".folded=on"); }});
-                        items.push_back({"Ungroup", [this, lg] { if (onCommand) onCommand("lane ungroup " + lg); }});
+                        items.push_back({say("Leave group"), [this, ln] { if (onCommand) onCommand("set " + ln + ".group=none"); }});
+                        items.push_back({say("Fold group"), [this, lg] { if (onCommand) onCommand("set " + lg + ".folded=on"); }});
+                        items.push_back({say("Ungroup"), [this, lg] { if (onCommand) onCommand("lane ungroup " + lg); }});
                     }
                 }
-                items.push_back({"Copy ID", [this, ln] { if (onCopy) onCopy(ln); }}); // R-UI-11
+                items.push_back({say("Copy ID"), [this, ln] { if (onCopy) onCopy(ln); }}); // R-UI-11
                 onMenu(std::move(items), world);
                 return true;
             }
@@ -1185,7 +1185,7 @@ namespace solaris_ui
                 if (ri >= 0 && ri < (int)mRows.size() && !mRows[(size_t)ri].strip.empty())
                 {
                     const Point here = local, world = g.pos;
-                    onMenu({{"New MIDI Clip", [this, here] { newClipOn(here); }}}, world);
+                    onMenu({{say("New MIDI Clip"), [this, here] { newClipOn(here); }}}, world);
                 }
                 return true;
             }
@@ -1201,25 +1201,25 @@ namespace solaris_ui
                 if (s.kind == want)
                 {
                     const std::string sid = s.id;
-                    through.push_back({s.name + (sid == c.track ? "  \xC2\xB7 now" : ""),
+                    through.push_back({s.name + (sid == c.track ? "  \xC2\xB7 " + say("now") : std::string()),
                                        [this, id, sid] { if (onCommand) onCommand("clip move " + id + " --strip " + sid); }});
                 }
             const Point world = g.pos;
-            items.push_back({"Play through \xE2\x96\xB8", [this, through, world] { if (onMenu) onMenu(through, world); }});
+            items.push_back({say("Play through \xE2\x96\xB8"), [this, through, world] { if (onMenu) onMenu(through, world); }});
             if (c.kind == "note")
             {
                 const std::string pt = c.pattern;
-                items.push_back({"Piano Roll", [this, pt, id] { if (onOpenPattern) onOpenPattern(pt, id); }});
+                items.push_back({say("Piano Roll"), [this, pt, id] { if (onOpenPattern) onOpenPattern(pt, id); }});
             }
             if (!c.takes.empty()) // R-REC-2: its takes under it — the view's
             {
                 const bool shown = mTakesOpen.count(id) > 0;
-                items.push_back({shown ? "Hide takes" : "Show takes", [this, id, shown] { showTakes(id, !shown); }});
+                items.push_back({shown ? say("Hide takes") : say("Show takes"), [this, id, shown] { showTakes(id, !shown); }});
             }
             clipEditItems(c, items, world); // R-EDIT-1: split, reverse, consolidate, slice
-            items.push_back({"Duplicate", [this, id] { if (onCommand) onCommand("clip duplicate " + id); }});
-            items.push_back({"Copy ID", [this, id] { if (onCopy) onCopy(id); }}); // R-UI-11
-            items.push_back({"Delete", [this, id] { if (onCommand) onCommand("clip delete " + id); }});
+            items.push_back({say("Duplicate"), [this, id] { if (onCommand) onCommand("clip duplicate " + id); }});
+            items.push_back({say("Copy ID"), [this, id] { if (onCopy) onCopy(id); }}); // R-UI-11
+            items.push_back({say("Delete"), [this, id] { if (onCommand) onCommand("clip delete " + id); }});
             onMenu(std::move(items), world);
             return true;
         }
@@ -1252,7 +1252,7 @@ namespace solaris_ui
         t.clipRect(r.x, r.y, r.w, r.h);
         if (!v.c.takes.empty()) // R-REC-2: how many takes it has, at its top right — where there is room beside its name (R5)
         {
-            const std::string n = std::to_string(v.c.takes.size()) + " takes";
+            const std::string n = fillIn(trn((long)v.c.takes.size(), "{1} take", "{1} takes"), std::to_string(v.c.takes.size()));
             const std::string name = v.c.name.empty() ? v.c.id : v.c.name;
             const double nw = t.measureText(n, 9.0, font::sans());
             if (r.w > nw + t.measureText(name, 11.0, font::sans()) + 24.0)
@@ -1292,7 +1292,7 @@ namespace solaris_ui
             }
             if (v.c.linked > 1)
             {
-                const std::string s = "linked \xC3\x97" + std::to_string(v.c.linked);
+                const std::string s = fillIn(tr("linked \xC3\x97{1}"), std::to_string(v.c.linked));
                 const double sw = t.measureText(s, 9.0, font::sans());
                 if (r.w > sw + 60.0)
                 {
@@ -1308,7 +1308,7 @@ namespace solaris_ui
             if (v.c.offline)
             {
                 t.setFill(fade(palette::destructive(), a));
-                t.drawText("offline", r.x + 5.0, r.bottom() - 5.0, 9.0, font::sans());
+                t.drawText(textfit::ellipsize(t, tr("offline"), std::max(0.0, r.w - 10.0), 9.0, font::sans()), r.x + 5.0, r.bottom() - 5.0, 9.0, font::sans());
             }
         }
         t.restore();
@@ -1342,14 +1342,15 @@ namespace solaris_ui
         const double W = width.value(), ppb = mPpb.value(), barPx = ppb * mBeatsPerBar;
         drawRoundedRect(t, Rect{0, 0, W, kRulerH}, 0.0, Paint::filled(surface::rulerBg()));
         // the corner over the lane headers names the snap step (R-UI-10), cross-faded as it changes
-        const double nameX = 12.0 + t.measureText("Snap", 9.0, font::sans()) + 6.0;
+        const std::string snap = tr("Snap");
+        const double nameX = 12.0 + t.measureText(snap, 9.0, font::sans()) + 6.0;
         t.setFill(palette::mutedForeground());
-        t.drawText("Snap", 12.0, kMarkH + 13.0, 9.0, font::sans());
+        t.drawText(snap, 12.0, kMarkH + 13.0, 9.0, font::sans());
         for (const auto &n : mStepNames)
             if (n.a.value() > 0.001)
             {
                 t.setFill(fade(palette::foreground(), 0.8 * n.a.value()));
-                t.drawText(textfit::ellipsize(t, n.text, kHeaderW - 8.0 - nameX, 9.0, font::mono()), nameX, kMarkH + 13.0, 9.0, font::mono());
+                t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(n.text), std::max(0.0, kHeaderW - 8.0 - nameX), 9.0, font::mono()), nameX, kMarkH + 13.0, 9.0, font::mono());
             }
         t.save();
         t.clipRect(kHeaderW, 0, W - kHeaderW, kRulerH);
@@ -1481,11 +1482,12 @@ namespace solaris_ui
         {
             const Rect rr = rowRect(mDropRow);
             const double x = beatToX(mDropBeat);
-            const double w = std::max(4.0 * ppb, t.measureText(mDropLabel, 10.0, font::sans()) + 16.0);
+            const std::string label = ::arstro::solaris_ui::shown(mDropLabel);
+            const double w = std::max(4.0 * ppb, t.measureText(label, 10.0, font::sans()) + 16.0);
             const Rect r{x, rr.y + 3.0, w, rr.h - 6.0};
             drawRoundedRect(t, r, radius::control(), Paint::filledStroked(palette::primaryAlpha(0.12 * mDropAmt.value()), palette::primaryAlpha(mDropAmt.value()), 1.5));
             t.setFill(fade(palette::foreground(), mDropAmt.value()));
-            t.drawText(textfit::ellipsize(t, mDropLabel, r.w - 10.0, 10.0, font::sans()), r.x + 5.0, r.y + 13.0, 10.0, font::sans());
+            t.drawText(textfit::ellipsize(t, label, r.w - 10.0, 10.0, font::sans()), r.x + 5.0, r.y + 13.0, 10.0, font::sans());
         }
         t.restore();
 
@@ -1508,7 +1510,7 @@ namespace solaris_ui
             {
                 // R-REC-2: a take's row — its number, indented under its clip's lane
                 t.setFill(fade(palette::mutedForeground(), a));
-                t.drawText(d.label, 22.0, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
+                t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(d.label), kHeaderW - 30.0, 10.0, font::sans()), 22.0, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans()); // a take's words
                 t.setStroke(fade(palette::border(), a), 1.0);
                 t.beginPath(); t.moveTo(0, r.bottom() - 0.5); t.lineTo(W, r.bottom() - 0.5); t.strokePath();
                 continue;
@@ -1520,7 +1522,7 @@ namespace solaris_ui
                 drawNameWithId(t, d.label, d.automation, 12.0, textfit::baseline(r.y + 16.0, 11.0), kHeaderW - 20.0, 11.0, font::sans(), palette::foreground(),
                                idsAmount ? idsAmount() : 0.0, a);
                 const auto al = mAutos.find(d.automation);
-                const std::string sub = al != mAutos.end() && !al->second.model.usedBy.empty() ? al->second.model.usedBy[0] : "moves nothing yet";
+                const std::string sub = al != mAutos.end() && !al->second.model.usedBy.empty() ? al->second.model.usedBy[0] : tr("moves nothing yet");
                 t.setFill(fade(palette::mutedForeground(), a));
                 t.drawText(textfit::ellipsize(t, sub, kHeaderW - 20.0, 9.0, font::mono()), 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::mono());
                 t.setStroke(fade(palette::border(), a), 1.0);
@@ -1539,9 +1541,8 @@ namespace solaris_ui
                 const Point p0 = pt(-3.5, -1.75), p1 = pt(3.5, -1.75), p2 = pt(0.0, 2.25);
                 t.setFill(fade(palette::secondaryForeground(), a));
                 t.beginPath(); t.moveTo(p0.x, p0.y); t.lineTo(p1.x, p1.y); t.lineTo(p2.x, p2.y); t.closePath(); t.fillPath();
-                std::string band = d.folded ? std::to_string(d.groupLanes) + (d.groupLanes == 1 ? " LANE" : " LANES") : d.groupName;
-                if (!d.folded)
-                    for (auto &ch : band) ch = (char)std::toupper((unsigned char)ch);
+                std::string band = d.folded ? fillIn(trn(d.groupLanes, "{1} lane", "{1} lanes"), std::to_string(d.groupLanes)) : d.groupName;
+                band = solaris_strings::upper(band); // a micro-label: in capitals, in any language
                 t.setFill(fade(palette::mutedForeground(), a));
                 t.drawText(textfit::ellipsize(t, band, kHeaderW - 34.0, 8.0, font::sansSemiBold()), 23.0, textfit::baseline(cy, 8.0), 8.0, font::sansSemiBold(), 0.13 * 8.0);
             }
@@ -1556,12 +1557,12 @@ namespace solaris_ui
             if (own)
             {
                 t.setFill(fade(palette::mutedForeground(), a));
-                t.drawText("its strip's row", 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::sans());
+                t.drawText(textfit::ellipsize(t, tr("its strip's row"), kHeaderW - 20.0, 9.0, font::sans()), 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::sans());
             }
             else if (d.folded)
             {
                 t.setFill(fade(palette::mutedForeground(), a));
-                t.drawText("a group, folded", 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::sans());
+                t.drawText(textfit::ellipsize(t, tr("a group, folded"), kHeaderW - 20.0, 9.0, font::sans()), 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::sans());
             }
             else if (const auto tk = mTracks.find(d.lane); tk != mTracks.end() && tk->second.amt.value() > 0.001 && !tk->second.sub.empty())
             {
@@ -1651,8 +1652,8 @@ namespace solaris_ui
         if (mEmptyAmt.value() > 0.001)
         {
             const double ea = mEmptyAmt.value();
-            const std::string a = "Drag a sample or an instrument here from the browser.";
-            const std::string b = "Every sample gets its own strip in the mixer; lanes only arrange.";
+            const std::string a = tr("Drag a sample or an instrument here from the browser.");
+            const std::string b = tr("Every sample gets its own strip in the mixer; lanes only arrange.");
             const double cx = kHeaderW + (W - kHeaderW) * 0.5;
             t.setFill(fade(palette::mutedForeground(), ea));
             const std::string ae = textfit::ellipsize(t, a, W - kHeaderW - 32.0, 13.0, font::sans());

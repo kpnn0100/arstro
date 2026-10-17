@@ -305,7 +305,7 @@ namespace solaris_ui
         double rightUsed = 0.0;
         if (rev > 0.001)
         {
-            const std::string s = "reversed";
+            const std::string s = tr("reversed");
             const double w = t.measureText(s, 9.0, font::sans());
             if (r.w > w + 60.0)
             {
@@ -335,9 +335,9 @@ namespace solaris_ui
         const std::string id = c.id;
         const double pos = mPosition;
         if (pos > c.at + 1e-9 && pos < c.at + c.length - 1e-9) // R-EDIT-1: where the time bar is
-            items.push_back({"Split at the time bar", [this, id, pos] { if (onCommand) onCommand("clip split " + id + " --at " + beatText(toTick(pos))); }});
+            items.push_back({say("Split at the time bar"), [this, id, pos] { if (onCommand) onCommand("clip split " + id + " --at " + beatText(toTick(pos))); }});
         const bool rev = c.reverse;
-        items.push_back({rev ? "Play forwards" : "Reverse", [this, id, rev] { if (onCommand) onCommand("set " + id + ".reverse=" + (rev ? "false" : "true")); }});
+        items.push_back({rev ? say("Play forwards") : say("Reverse"), [this, id, rev] { if (onCommand) onCommand("set " + id + ".reverse=" + (rev ? "false" : "true")); }});
         // consolidate: the clips it runs into on its lane through its strip — touching or overlapping, one after another
         std::vector<const ClipView *> run;
         for (const auto &v : mClips)
@@ -356,37 +356,37 @@ namespace solaris_ui
         std::sort(run.begin(), run.end(), [](const ClipView *x, const ClipView *y) { return x->c.at < y->c.at || (x->c.at == y->c.at && x->c.id < y->c.id); });
         std::string ids;
         for (const ClipView *x : run) ids += " " + x->c.id;
-        items.push_back({run.size() > 1 ? "Consolidate " + std::to_string(run.size()) + " clips" : std::string("Consolidate"),
+        items.push_back({run.size() > 1 ? say("Consolidate {1} clips", (long)run.size()) : say("Consolidate"),
                          [this, ids] { if (onCommand) onCommand("clip consolidate" + ids); }});
         // R-WARP-1: the song's tempo, its own typed, its pitch
         const bool warped = c.warp;
-        items.push_back({warped ? "Unwarp" : "Warp to the song's tempo", [this, id, warped] { if (onCommand) onCommand("set " + id + ".warp=" + (warped ? "false" : "true")); }});
+        items.push_back({warped ? say("Unwarp") : say("Warp to the song's tempo"), [this, id, warped] { if (onCommand) onCommand("set " + id + ".warp=" + (warped ? "false" : "true")); }});
         if (onRename)
         {
             char b[32];
             std::snprintf(b, sizeof b, "%.6g", c.bpm);
             const std::string now = c.bpm > 0 ? std::string(b) : std::string();
-            items.push_back({"Tempo\xE2\x80\xA6", [this, id, now, world] {
+            items.push_back({say("Tempo\xE2\x80\xA6"), [this, id, now, world] {
                                  onRename(now, world, [this, id](const std::string &n) { if (onCommand && !n.empty()) onCommand("set " + id + ".bpm=" + n); });
                              }});
         }
         std::vector<cosmo_v2::ContextMenu::Item> pitch;
         for (int st : {12, 7, 5, 1, 0, -1, -5, -7, -12})
         {
-            const std::string label = (st > 0 ? "+" : st < 0 ? "\xE2\x88\x92" : "") + std::to_string(std::abs(st)) + (st == 0 ? " (as recorded)" : " st") +
-                                      (std::fabs(c.pitch - st) < 1e-9 ? "  \xC2\xB7 now" : "");
+            const std::string label = (st > 0 ? "+" : st < 0 ? "\xE2\x88\x92" : "") + std::to_string(std::abs(st)) + (st == 0 ? " " + say("(as recorded)") : std::string(" st")) +
+                                      (std::fabs(c.pitch - st) < 1e-9 ? "  \xC2\xB7 " + say("now") : std::string());
             pitch.push_back({label, [this, id, st] { if (onCommand) onCommand("set " + id + ".pitch=" + std::to_string(st)); }});
         }
-        items.push_back({"Pitch \xE2\x96\xB8", [this, pitch, world] { if (onMenu) onMenu(pitch, world); }});
+        items.push_back({say("Pitch \xE2\x96\xB8"), [this, pitch, world] { if (onMenu) onMenu(pitch, world); }});
         if (c.loop) return; // a looping clip is not sliced (unloop it first)
         std::vector<cosmo_v2::ContextMenu::Item> slice;
         auto every = [this, id](double b) { return [this, id, b] { if (onCommand) onCommand("clip slice " + id + " --every " + beatText(b)); }; };
-        slice.push_back({"Every bar", every(mBeatsPerBar)});
-        slice.push_back({"Every beat", every(1.0)});
-        slice.push_back({"Every half beat", every(0.5)});
-        if (c.takes.empty()) slice.push_back({"At its hits", [this, id] { if (onCommand) onCommand("clip slice " + id + " --transients"); }});
-        slice.push_back({"To a kit, a slice a beat", [this, id] { if (onCommand) onCommand("clip slice " + id + " --every 1 --kit"); }});
-        items.push_back({"Slice \xE2\x96\xB8", [this, slice, world] { if (onMenu) onMenu(slice, world); }});
+        slice.push_back({say("Every bar"), every(mBeatsPerBar)});
+        slice.push_back({say("Every beat"), every(1.0)});
+        slice.push_back({say("Every half beat"), every(0.5)});
+        if (c.takes.empty()) slice.push_back({say("At its hits"), [this, id] { if (onCommand) onCommand("clip slice " + id + " --transients"); }});
+        slice.push_back({say("To a kit, a slice a beat"), [this, id] { if (onCommand) onCommand("clip slice " + id + " --every 1 --kit"); }});
+        items.push_back({say("Slice \xE2\x96\xB8"), [this, slice, world] { if (onMenu) onMenu(slice, world); }});
     }
 }
 }

@@ -429,7 +429,7 @@ places everything where it is. Empty, it says what to do in words.
 ### DR-BROWSE-2 The browser and drag and drop (R-BROWSE-1 amended, R-BROWSE-3)
 `Browser` (`app/widgets/Browser.cpp`): tabs **Samples · Instruments · Song** under a highlight that
 slides 220 ms. Samples lists the folders from Settings; a folder clicked is `browse "<path>"`
-(`:216`) and shows its sub-folders and audio files (mono, the filename rule) under a row back up;
+(`:451`) and shows its sub-folders and audio files (mono, the filename rule) under a row back up;
 with no folders it says so and a click opens Settings. Instruments lists `AppModel::deviceTypes`
 (the DSP registry, `core/service/ServiceModel.cpp:142`) — instruments, then effects. Song lists the
 files the song plays. The list is `AnimatedRows` keyed by generation and content (`rebuild`, `:59`):
@@ -1012,8 +1012,8 @@ stops itself; it never allocates on its thread and is never in a render (a rende
 service's `pump` (`:87`) carries its progress into `audition.{file, playing, progress}` and announces its
 end (`audition.changed … playing=0`); the model keeps it across refreshes, and the App re-binds while it
 plays and once when it ends (`app/App.cpp:446`). In the browser a click on a sample hears it, a click on
-the one being heard stops it (`app/widgets/Browser.cpp:458`); its row fills as it plays with an accent
-bar along its foot, keyed by the file and eased in and out (`:260`, `:501`) — a double-click still places
+the one being heard stops it (`app/widgets/Browser.cpp:455`); its row fills as it plays with an accent
+bar along its foot, keyed by the file and eased in and out (`:351`, `:560`) — a double-click still places
 it. Settings › Playback has PREVIEW LEVEL. Measured (L2): the live stream carries the decoded file at
 the audition level, sample for sample; it ends itself, said.
 
@@ -1120,7 +1120,7 @@ View menu does (View › Show IDs / Hide IDs, `app/App.cpp:218`).
 200 ms; `idsAmount()` is the live value) and hands it to every widget that draws ids; `drawNameWithId`
 (`app/widgets/ParamMenu.cpp:98`) draws a name with its id right-aligned in the accent's mono, the name giving
 way by the EASED amount. Where: lane headers (the lane's id; a strip's own row, the strip's) and automation
-rows (`au_n`) (`app/widgets/Timeline.cpp:1406`, `:915`); clips (`ac_n`, and a note clip's pattern `pt_n`;
+rows (`au_n`) (`app/widgets/Timeline.cpp:1407`, `:915`); clips (`ac_n`, and a note clip's pattern `pt_n`;
 `:758` — "linked ×N" fades out for them); in the dock each strip card (`ch_n`), the master (`master`), each
 rack chip (`dv_n`) and each send (`sd_n`, cross-fading with "→ name") (`paintCard`,
 `app/widgets/MixerDock.cpp:1514`); a device window's rows show their FULL address (`dv_1.filter.cutoff`) in a
@@ -1527,7 +1527,7 @@ pointer's frame after frame and the song plays on from there; the brace moved 4�
 until release, then one line; resized by its right end, clamped at its left; a click still seeks. Mutants
 seen red, then restored: the playhead following the audio while scrubbing, a seek only on release, a body
 drag keeping the brace's end. Shots `ruler-scrubbing` and `loop-brace-moving`
-(`app/tests/shots/renderShots.cpp:840`, `:783`), both sizes, looked at.
+(`app/tests/shots/renderShots.cpp:857`, `:800`), both sizes, looked at.
 
 ### DR-TIME-7 Stop takes the time bar back to where it was put — or leaves it (R-TIME-7, R-TIME-8)
 The service keeps a CUE (`mCue`): where the user PUT the time bar. A `transport seek` puts it where the time bar went
@@ -1540,7 +1540,7 @@ starts it at 0. Published as `transport.cue`. In the window: the play/stop key (
 stop --return`, the stop-here key (Ctrl+Space) is `transport stop`, either one while stopped plays (`App::songAction`,
 `app/App.cpp:571`, the keys being the keymap's — DR-SET-4); the song bar's Stop and a roll's ■ return too (`:55`).
 On the ruler an outlined mark stands at the cue while playing — where Stop takes the time bar back — fading in
-with the play and out with it (`Timeline`, `app/widgets/Timeline.cpp:1471`, eased at `:474`), beside the
+with the play and out with it (`Timeline`, `app/widgets/Timeline.cpp:1472`, eased at `:474`), beside the
 playhead's filled one. L2 `test_stop_returns_to_the_cue_or_stays`; UI `test_space_returns_and_ctrl_space_stays`
 (Ctrl+Space, then Space plays on from there, then Space's stop is back at the cue); shot `ruler-cue`. Mutants: a
 stop that ignores `--return`, a mark that snaps, every play moving the cue — all seen red.
@@ -1606,7 +1606,7 @@ double-click on the Bass track → the exact line and a clip of a new pattern th
 track's menu; the end dragged → the snapped length while held with nothing sent, one line on release,
 no ease back; a shell's `set ac_1.length=6` caught mid-ease; a clip dragged onto the drums' track plays
 through the drums. Mutants seen red, then restored: a length that snaps, an edge never taken. Shot
-`clip-end-dragging` (`app/tests/shots/renderShots.cpp:871`), both sizes, looked at.
+`clip-end-dragging` (`app/tests/shots/renderShots.cpp:888`), both sizes, looked at.
 
 ### DR-CLIP-9 A clip copied: Shift-drag, Ctrl+C / Ctrl+V (R-CLIP-9, R-CLIP-10)
 `clip duplicate <ac> [--at <b>] [--count <n>] [--lane <ln>]` (`core/service/ServiceEdit.cpp:826`): with `--lane` the
@@ -1616,7 +1616,7 @@ lane (or `none`) keeps its strip. In the window, the lanes' clip drag reads Shif
 (`Timeline`, `app/widgets/Timeline.cpp:970`) and as it is let go: held, the drop is ONE `clip duplicate <ac> --at <b>
 [--lane <ln>]` and the original stays where it is (`:1016`); not held, it is the `clip move` it always was. While held
 `mCopyAmt` eases in (120 ms): the original, dimmed during a move, comes back to full strength, and a "+" in the accent
-fades onto the copy in hand (`:1429`) — pressed or let go mid-drag, it eases back. `expectCopy` (`:455`) makes the next
+fades onto the copy in hand (`:1430`) — pressed or let go mid-drag, it eases back. `expectCopy` (`:455`) makes the next
 clip the model brings the selection (`bind`, `:221`) and — after a drop — places it at full strength where the
 pointer left it, never fading in what was already shown; a refused copy brings none and the expectation lapses.
 Ctrl+C and Ctrl+V are the keymap's `lanes.copy` / `lanes.paste` (DR-SET-4) and the Edit menu's Copy Clip / Paste Clip:
@@ -1632,9 +1632,9 @@ pastes all at the time bar, the dropped copy fading in — all seen red.
 
 ### DR-BROWSE-4 The song's MIDI list (R-BROWSE-4)
 The Song tab lists a MIDI header, **New MIDI**, then every pattern, then the samples under SAMPLES
-(`Browser::rebuild`, `app/widgets/Browser.cpp:192`) — keyed rows that grow in and fade out. A pattern's row
+(`Browser::rebuild`, `app/widgets/Browser.cpp:189`) — keyed rows that grow in and fade out. A pattern's row
 reads its name and, in mono at the right, its length (bars when whole bars), its note count and the
-strips that play it, or "unplayed" (`bind`, `:94`, from the model's `patterns[].strips`, published with
+strips that play it, or "unplayed" (`bind`, `:93`, from the model's `patterns[].strips`, published with
 `patterns[].lastStrip` — the strip its newest clip plays through — by `core/service/ServiceModel.cpp:375`).
 New MIDI sends `pattern new --name "MIDI <n>"` (`:390`); a double-click opens the pattern's piano roll
 (`:421`); its menu (`:427`): Rename… (`set <pt>.name=`), Piano Roll, Duplicate, Copy ID, Delete (the
@@ -2123,7 +2123,7 @@ kick.wav", ONE line sent, the row fading out, the hat sliding up and the card sh
 rest; Search a Folder…: ONE line, nothing missing; Done closes; Collect and Save: ONE line, said, saved. Mutants seen
 red (9): a found row, the next row's slide, the rows on open and the card each set at once; Locate and Search sending
 nothing; no toast on open; Collect and Save not saving; Relink… opening nothing. Shots `relink-window` (three moved, a
-version's clip among them) and `relink-found-mid`, both sizes (`app/tests/shots/renderShots.cpp:688`).
+version's clip among them) and `relink-found-mid`, both sizes (`app/tests/shots/renderShots.cpp:705`).
 ### DR-LAUNCH-1 A clip launcher (R-LAUNCH-1; docs/discussion.md Round 17) — part 1: the grid; part 2: launching, heard; part 3: recorded; part 4: the session view
 A scene is a row of the session grid and a slot a cell — what a strip plays when it is launched in that scene
 (`Scene`, `Slot`, `model/Project.h:285`, `:292`): a pattern (an instrument strip's, shared as a clip's is) or a file (an
@@ -2328,7 +2328,7 @@ asked again; thumbnails at the picture's size; thumbnails popping in; every thum
 to the pointer; stems still applying with the video; the line keeping --format; off, not the format it was left at; the
 toggle without a picture; `at` taken as seconds; the points at seconds, not beats. Shots `video-lane` (the row's
 tiles, each band's edge its own time), `video-lane-dragging` (the span held two beats on, ringed), `export-with-video`
-(MKV, the greyed rows), both sizes (`app/tests/shots/renderShots.cpp:532`, `:1413`).
+(MKV, the greyed rows), both sizes (`app/tests/shots/renderShots.cpp:532`, `:1430`).
 
 ### DR-COLLAB-1 Sharing a song through a folder (R-COLLAB-1; docs/discussion.md Round 19) — part 1: the merge in the model; part 2: the service; part 3: the window
 Two people's edits to one song are merged node by node, in the model, pure — text in, text out (`mergeSongs`,
@@ -2450,7 +2450,7 @@ Part 2 — the accessible list and the keyboard. Every covered widget lists its 
 `app/A11y.h:22`: a stable key, a role, a name, a value, its bounds in the window, enabled, checked, and what it does): the
 song bar — Home, Settings, the version, Record, Play / Stop, the tempo (a slider: ±1 bpm, Shift 0.1, the drag's own line),
 Save (`app/widgets/SongBar.cpp:83`); Home — its three actions, Settings, each recent song in view
-(`app/widgets/HomeScreen.cpp:72`); the browser — its tabs, each row in view (`app/widgets/Browser.cpp:283`); the lanes'
+(`app/widgets/HomeScreen.cpp:72`); the browser — its tabs, each row in view (`app/widgets/Browser.cpp:280`); the lanes'
 headers and an instrument track's arm (`app/widgets/Timeline.cpp:327`); the dock — its pages' tabs, each strip's fader
 (±0.5 dB, Shift 0.1) and pan (±5 %, Shift 1 %) as sliders, its mute, solo and arm, the master's fader and Mono
 (`app/widgets/MixerDock.cpp:124`); the open windows' close buttons and a device window's parameters, each stepped by its
@@ -2514,7 +2514,7 @@ screen's Settings at its centre (the desktop was locked, so no frame ran to open
 desktop.
 
 
-### DR-ACCESS-2 Localisation (R-ACCESS-2; docs/discussion.md Round 21) — part 1: the table and the setting; part 2: the shell
+### DR-ACCESS-2 Localisation (R-ACCESS-2; docs/discussion.md Round 21) — part 1: the table and the setting; part 2: the shell; part 3a: the lanes' side
 `solaris_strings` (`strings/Strings.h`; no dependencies — the service links it to validate and list the languages, the
 window will draw through it): English is the key. `tr(en)` is the words for an English string in the language drawn
 now, `trc(context, en)` the same under a context (the key `context|en`), `trn(n, one, other)` a count's form by the
@@ -2581,11 +2581,11 @@ alpha AND "Cài đặt" under a layer at exactly the live amount (a spy target, 
 layer alpha); the menus' rectangles already the Vietnamese titles'; at rest no English; a combo's choices Vietnamese with
 nothing in the model changed since; the node "menu.File" named "Menu Tệp"; back to English from a shell's line the other way;
 a switch back mid-way the same mixture that frame and on at the same rate. `test_every_word_the_shell_draws_is_from_the_table`
-(`app/tests/ui/uiTests.cpp:5759`): in `en-XA`, each covered widget painted alone through the spy — Home, the song bar and each menu open, the version
+(`app/tests/ui/uiTests.cpp:5779`): in `en-XA`, each covered widget painted alone through the spy — Home, the song bar and each menu open, the version
 menu, all seven Settings pages and a combo's list, Export, Relink, Conflicts, the history's card, a confirm dialog — every
 string with a letter is bracketed (the table's), the model's data (uppercased too), or a name no language translates (units,
 PulseAudio, Mackie Control, file kinds, a key's name); each widget drew the table's words at all; a composed toast and every
-accessible name likewise. `test_the_table_has_every_word_the_window_says` (`:5856`): the window's source scanned
+accessible name likewise. `test_the_table_has_every_word_the_window_says` (`:5938`): the window's source scanned
 (`app/tests/ui/WordsScan.h:97`: comments skipped, literals joined, escapes decoded) — `vi.strings` has every key the code hands
 the table and none it does not. Mutants seen red (11): the old language never painted; the new one not in a layer; the old one
 painted last; a switch snapping; a switch back jumping; the menus not relabeled; a menu's key in the language drawn; the
@@ -2595,6 +2595,29 @@ the 216 deterministic shots byte-identical before and after (the 16 playing ones
 binary). Shots `home-vi`, `menus-vi`, `settings-vi` (the Language list open), `home-pseudo`, `settings-pseudo`,
 `language-dissolve-mid`, both sizes (`app/tests/shots/renderShots.cpp:623`). Found: D-24 (the pseudo-language's song bar at
 1024 px).
+Part 3a — the lanes' side (part 3 in two commits; the dock and the windows are 3b). The browser: its tabs (`N_`, drawn
+through `tr`, fitted to their tabs), its rows' words kept as words — headers ("Instruments", "Effects", "MIDI", "Samples";
+a preset type's header the registry's word), the empty rows, Search · …, Favourites, New MIDI — and a pattern's note
+counted (`lengthText`, `app/widgets/Browser.cpp:38`: "{1} bar", "{1} beat", "{1} beats" for a fraction; "{1} note", the
+strips data); headers drawn in capitals in any language (`:555`); a row's accessible key by its English (`:293`) and
+`row(i)` returning the row as shown (`app/widgets/Browser.h:68`). The lanes: the ruler's Snap and its step's name kept as
+words so the step cross-fades and the window dissolves apart (`Timeline::stepName`, `app/widgets/Timeline.cpp:88`;
+`snapLabel` returns it shown, `:97`), a take's row, the badges (takes counted, linked ×N, offline), a folded group's band in
+capitals (`:1545`), the empty hints, a new group's and a new marker's name in the user's words (`:1164`;
+`app/widgets/TimelineMarkers.cpp:195` — a name, the user's data once made; never a command word), the markers' header, the
+video row; every menu the lanes, the ruler, a marker, a tempo, a clip's edits and the session grid open said as words
+(the automation shapes' names said, their grammar words sent, `app/widgets/TimelineAuto.cpp:715`); the drop hint's "new
+lane" (`app/widgets/ProjectScreen.cpp:108`); the session grid's + Scene, Back to Arrangement and hint
+(`app/widgets/SessionView.cpp:361`); the lanes' accessible names. `lang/vi.strings`: 356 lines. Tests: UI
+`test_every_word_the_lanes_draw_is_from_the_table` (`app/tests/ui/uiTests.cpp:5879`): in en-XA, a song with an instrument's
+track, a sample's lane, a section marker, a tempo change, an automation and a scene — the browser's four tabs, the lanes,
+every lane's and clip's accessible name and value, the menus of a lane, each clip, the marker, the tempo, the ruler, and the
+session grid — each painted alone, every string the table's, the model's data (now the clips', patterns', markers',
+automations', groups', scenes', tempos', the registry's words and the ids too) or data ellipsized to its room; the source
+scan holds. Mutants seen red (5): a browser header drawn as stored; the ruler's Snap untranslated; a clip's menu item, a
+marker's, the session's + Scene left English. English pixels: the 216 deterministic shots byte-identical to part 2's (a
+first try moved the shown tab's label a sub-pixel — it was centred by the regular face's width and drawn in the medium —
+kept as it was). Shots `lanes-vi`, `lanes-pseudo`, both sizes (`app/tests/shots/renderShots.cpp:666`).
 
 ### DR-DEV-9 A PipeWire driver; xruns counted (R-DEV-9, R-DEV-5)
 `settings set driver=pulse|pipewire` (default pulse; saved with the machine's settings; Settings › Audio › Driver).
@@ -2970,7 +2993,7 @@ selection. The model: `lanes[].group`, `groups[]` (id, name, folded, its lanes �
 emptied group kept — each red (the last only once the test read the song itself: the model lists no empty group).
 A lane's `.group` (`core/service/SolarisService.cpp:1269`): `set <ln>.group=<lg>` joins it (gathered with it),
 `=none` leaves its group, placed right after the run it left. **The timeline.** An open group's lanes carry a bar down
-their headers' edge (`app/widgets/Timeline.cpp:1576`, from where the rows ARE) and, on the first, a chevron and the
+their headers' edge (`app/widgets/Timeline.cpp:1577`, from where the rows ARE) and, on the first, a chevron and the
 group's name in the header's bottom band. Folded, the group is ONE row (`:146`): its lanes fade out, the rows below
 ease up, its clips travel into it — each lane's clips in their own band of the row (`clipBox`, `:394`; band and height
 eased), so they never lie on one another — and its header says the group's name, "a group, folded", "▸ N LANES". The
@@ -3218,9 +3241,9 @@ lists nothing real). L2 `test_presets_are_saved_loaded_and_dropped`, `test_the_s
 onto a device of its type). Mutants: a load keeping the values it does not name, a bad value skipped and the rest
 loaded, a save an edit of the song, the factory's before the user's, a drop's preset ignored — each red. `preset list`
 reads the folders afresh (`core/service/ServicePresets.cpp:137`), so presets written since show. **The window** (N22
-part 2, 2026-10-17): the browser's fourth tab, Presets (`app/widgets/Browser.cpp:167`) — each type that has presets, its
+part 2, 2026-10-17): the browser's fourth tab, Presets (`app/widgets/Browser.cpp:166`) — each type that has presets, its
 label in capitals as a header, then its presets, the factory's marked "factory" at the right; keyed rows, so a saved one
-grows in. The four tabs are as wide as their names need (`tabRect`, `:263`) and the highlight eases its width with its
+grows in. The four tabs are as wide as their names need (`tabRect`, `:260`) and the highlight eases its width with its
 place. A preset row drags like an instrument: an instrument's dropped on the lanes is ONE `clip add --instrument <t>
 --preset <name> --at … --length 4 [--lane …]` (`app/widgets/ProjectScreen.cpp:159`); an effect's says it loads onto its
 device. A device window's header has Presets (`app/widgets/DevicePanel.cpp:698`): its type's presets (the factory's

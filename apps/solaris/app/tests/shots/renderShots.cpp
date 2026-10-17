@@ -663,6 +663,23 @@ namespace
                  r.app->openSettings();
                  r.settle();
              }},
+            {"lanes-vi", // R-ACCESS-2: the song in Vietnamese — the browser's tabs and rows, the lanes, the ruler's Snap and markers;
+                         // the song's own names, the registry's and the mixer's (part 3b) as they are
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("marker add Intro --at 0 --length 4");
+                 r.cmd("settings set language=vi");
+                 r.app->project().browser().setTab(1);
+                 r.settle();
+             }},
+            {"lanes-pseudo", // R-ACCESS-2: the same in the pseudo-language — the lanes' side's words a third longer, fitting
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("marker add Intro --at 0 --length 4");
+                 r.cmd("settings set language=en-XA");
+                 r.app->project().browser().setTab(2);
+                 r.settle();
+             }},
             {"language-dissolve-mid", // R-ACCESS-2: English giving way to Vietnamese — the whole window dissolving, caught a third of the way
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

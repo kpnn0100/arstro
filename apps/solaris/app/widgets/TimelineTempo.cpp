@@ -161,12 +161,12 @@ namespace solaris_ui
             const bool ramp = l->t.ramp;
             const std::string now = bpmText(l->t.bpm);
             std::vector<cosmo_v2::ContextMenu::Item> items;
-            items.push_back({"Tempo\xE2\x80\xA6", [this, send, tp, now, world] {
+            items.push_back({say("Tempo\xE2\x80\xA6"), [this, send, tp, now, world] {
                                  if (onRename) onRename(now, world, [send, tp](const std::string &v) { if (!v.empty()) send("tempo move " + tp + " --bpm " + v); });
                              }});
-            items.push_back({ramp ? "Step to it" : "Glide into it", [send, tp, ramp] { send("tempo move " + tp + " --ramp " + (ramp ? "false" : "true")); }});
-            items.push_back({"Delete tempo change", [send, tp] { send("tempo delete " + tp); }});
-            items.push_back({"Copy ID", [this, tp] { if (onCopy) onCopy(tp); }}); // R-UI-11
+            items.push_back({ramp ? say("Step to it") : say("Glide into it"), [send, tp, ramp] { send("tempo move " + tp + " --ramp " + (ramp ? "false" : "true")); }});
+            items.push_back({say("Delete tempo change"), [send, tp] { send("tempo delete " + tp); }});
+            items.push_back({say("Copy ID"), [this, tp] { if (onCopy) onCopy(tp); }}); // R-UI-11
             onMenu(std::move(items), world);
             return true;
         }

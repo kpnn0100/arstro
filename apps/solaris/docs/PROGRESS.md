@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N43 part 3 — the song view through the table** (R-ACCESS-2; Round 21: the browser, the lanes and the ruler, the dock, the windows — device, roll, automation, loudness, video, tuner, session — their menus and accessible names; the same recorded-strings test and scan extended; shots), then N44, in order (the user: *"implement all"*). Owed live checks: N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N43 part 3b — the dock and the windows through the table** (R-ACCESS-2: the mixer dock, the device panels and faces, the piano roll, the automation, loudness, video and tuner windows, the parameter menu; the recorded-strings test and the scan extended; shots), then N44, in order (the user: *"implement all"*). Owed live checks: N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -690,6 +690,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       dialogs, the toasts, their accessible names; `vi.strings` 248 lines; UI tests: the dissolve caught, en-XA's every
       string the table's, the source scan; shots home-vi, menus-vi, settings-vi, home-pseudo, settings-pseudo,
       language-dissolve-mid. D-24 filed (en-XA's song bar at 1024 px).
+      Part 3a (part 3 in two commits): the lanes' side — the browser (tabs, rows' words, a pattern's counted note), the
+      lanes (Snap and its step's name as words, takes, badges, groups' bands, empty hints, new names in the user's
+      words), the ruler, markers, tempo, the session grid, every menu they open; `vi.strings` 356 lines; the en-XA test
+      for this side; shots lanes-vi, lanes-pseudo.
 - [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).
 
 ### T — tasks found on the way

@@ -181,34 +181,34 @@ namespace solaris_ui
             if (const MarkerLive *l = mk.empty() ? nullptr : markerLive(mk))
             {
                 const std::string name = l->m.name;
-                items.push_back({"Loop its section", [send, mk] { send("transport loop " + mk); }});
-                items.push_back({"Rename\xE2\x80\xA6", [this, send, mk, name, world] {
+                items.push_back({say("Loop its section"), [send, mk] { send("transport loop " + mk); }});
+                items.push_back({say("Rename\xE2\x80\xA6"), [this, send, mk, name, world] {
                                      if (onRename) onRename(name, world, [send, mk](const std::string &to) { if (!to.empty()) send("marker rename " + mk + " " + quoted(to)); });
                                  }});
-                items.push_back({"Delete marker", [send, mk] { send("marker delete " + mk); }});
-                items.push_back({"Copy ID", [this, mk] { if (onCopy) onCopy(mk); }}); // R-UI-11
+                items.push_back({say("Delete marker"), [send, mk] { send("marker delete " + mk); }});
+                items.push_back({say("Copy ID"), [this, mk] { if (onCopy) onCopy(mk); }}); // R-UI-11
             }
             else
             {
                 // a marker here, on the grid you see, named by its place in the song
                 const double at = snap(xToBeat(local.x));
-                const std::string name = "Marker " + std::to_string(mMarkers.size() + 1);
-                items.push_back({"Add marker here", [send, at, name] { send("marker add " + quoted(name) + " --at " + beatText(at)); }});
+                const std::string name = fillIn(tr("Marker {1}"), std::to_string(mMarkers.size() + 1)); // a new marker's name — the user's, in their words
+                items.push_back({say("Add marker here"), [send, at, name] { send("marker add " + quoted(name) + " --at " + beatText(at)); }});
                 if (at > 0.0 && onRename) // R-TEMPO-1: the tempo from here, typed
-                    items.push_back({"Tempo change here\xE2\x80\xA6", [this, send, at, world] {
+                    items.push_back({say("Tempo change here\xE2\x80\xA6"), [this, send, at, world] {
                                          onRename("", world, [send, at](const std::string &v) { if (!v.empty()) send("tempo add --at " + beatText(at) + " --bpm " + v); });
                                      }});
                 // R-ARR-2: time across the whole song — the bar under the pointer, or the loop's span
                 const double bar = std::floor(std::max(0.0, xToBeat(local.x)) / mBeatsPerBar) * mBeatsPerBar, len = (double)mBeatsPerBar;
-                items.push_back({"Insert a bar here", [send, bar, len] { send("time insert --at " + beatText(bar) + " --length " + beatText(len)); }});
-                items.push_back({"Delete this bar", [send, bar, len] { send("time delete --from " + beatText(bar) + " --to " + beatText(bar + len)); }});
+                items.push_back({say("Insert a bar here"), [send, bar, len] { send("time insert --at " + beatText(bar) + " --length " + beatText(len)); }});
+                items.push_back({say("Delete this bar"), [send, bar, len] { send("time delete --from " + beatText(bar) + " --to " + beatText(bar + len)); }});
                 if (mLoopTo > mLoopFrom)
                 {
                     const double f = mLoopFrom, t = mLoopTo;
-                    items.push_back({"Delete the loop's time", [send, f, t] { send("time delete --from " + beatText(f) + " --to " + beatText(t)); }});
-                    items.push_back({"Punch the loop's span", [send, f, t] { send("transport punch " + beatText(f) + " " + beatText(t)); }}); // R-REC-1
+                    items.push_back({say("Delete the loop's time"), [send, f, t] { send("time delete --from " + beatText(f) + " --to " + beatText(t)); }});
+                    items.push_back({say("Punch the loop's span"), [send, f, t] { send("transport punch " + beatText(f) + " " + beatText(t)); }}); // R-REC-1
                 }
-                if (mPunchTo > mPunchFrom) items.push_back({"Punch off", [send] { send("transport punch off"); }});
+                if (mPunchTo > mPunchFrom) items.push_back({say("Punch off"), [send] { send("transport punch off"); }});
             }
             onMenu(std::move(items), world);
             return true;
@@ -224,7 +224,8 @@ namespace solaris_ui
         t.save();
         t.clipRect(0, 0, W, kMarkH);
         t.setFill(palette::mutedForeground());
-        t.drawText("MARKERS", 12.0, textfit::baseline(kMarkH * 0.5, 8.0), 8.0, font::sansSemiBold(), 0.13 * 8.0);
+        t.drawText(textfit::ellipsize(t, solaris_strings::upper(tr("Markers")), kHeaderW - 20.0, 8.0, font::sansSemiBold()), 12.0, textfit::baseline(kMarkH * 0.5, 8.0), 8.0,
+                   font::sansSemiBold(), 0.13 * 8.0);
         t.clipRect(kHeaderW, 0, W - kHeaderW, kMarkH);
         // sections first (under every flag), then the flags in time order — a later one over an earlier
         for (const auto &l : mMarkers)

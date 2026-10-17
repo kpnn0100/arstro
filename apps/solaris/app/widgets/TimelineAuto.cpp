@@ -712,18 +712,19 @@ namespace solaris_ui
             if (i >= 0 && it != mAutos.end() && i < (int)it->second.to.size())
             {
                 const std::string at = beats(it->second.to[(size_t)i].at), now = it->second.to[(size_t)i].shape;
-                for (const char *s : {"linear", "hold", "smooth", "bezier"})
+                static const char *kShapes[][2] = {{"linear", N_("Linear")}, {"hold", N_("Hold")}, {"smooth", N_("Smooth")}, {"bezier", N_("Bezier")}};
+                for (const auto &shape : kShapes)
                 {
-                    std::string label = std::string(s);
-                    label[0] = (char)std::toupper((unsigned char)label[0]);
-                    if (now == s) label += "  \xC2\xB7 now";
+                    const char *s = shape[0]; // the grammar's word, sent; its name, said
+                    std::string label = say(shape[1]);
+                    if (now == s) label += "  \xC2\xB7 " + say("now");
                     items.push_back({label, [this, au, at, s] { if (onCommand) onCommand("auto point shape " + au + " --at " + at + " --shape " + s); }});
                 }
-                items.push_back({"Delete Point", [this, au, at] { if (onCommand) onCommand("auto point delete " + au + " --at " + at); }});
+                items.push_back({say("Delete Point"), [this, au, at] { if (onCommand) onCommand("auto point delete " + au + " --at " + at); }});
             }
-            items.push_back({"Copy ID", [this, au] { if (onCopy) onCopy(au); }});                 // R-UI-11
-            items.push_back({"Copy as Formula", [this, au] { if (onCopy) onCopy("=" + au); }});   // what a formula reads it by
-            items.push_back({"Delete Automation", [this, au] { if (onCommand) onCommand("auto delete " + au + " --unbind"); }});
+            items.push_back({say("Copy ID"), [this, au] { if (onCopy) onCopy(au); }});                 // R-UI-11
+            items.push_back({say("Copy as Formula"), [this, au] { if (onCopy) onCopy("=" + au); }});   // what a formula reads it by
+            items.push_back({say("Delete Automation"), [this, au] { if (onCommand) onCommand("auto delete " + au + " --unbind"); }});
             onMenu(items, g.pos);
             return true;
         }

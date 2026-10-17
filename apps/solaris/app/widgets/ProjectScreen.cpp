@@ -105,7 +105,7 @@ namespace solaris_ui
             mWindows->setSampleHint(sampler);
             const bool over = sampler.empty() && overLanes(world, beat, row);
             const bool newLane = row >= mTimeline->rowCount();
-            mTimeline->setDropHint(over && it.kind != "effect" && !(it.kind == "preset" && it.role != "instrument"), beat, row, it.label + (newLane ? "  \xC2\xB7  new lane" : ""));
+            mTimeline->setDropHint(over && it.kind != "effect" && !(it.kind == "preset" && it.role != "instrument"), beat, row, it.label + (newLane ? "  \xC2\xB7  " + say("new lane") : std::string())); // words: shown where drawn
             mGhostWanted = true;
             mGhostAt = toLocal(world);
             mGhostLabel = it.label;
@@ -151,7 +151,7 @@ namespace solaris_ui
             if (track) return onCommand("clip add --pattern " + it.value + " --lane " + q(lane) + " --at " + beats(beat));
             if (it.strip.empty())
             {
-                if (onNotice) onNotice("Drop " + it.label + " on an instrument's track \xE2\x80\x94 nothing plays it yet.");
+                if (onNotice) onNotice(say("Drop {1} on an instrument's track \xE2\x80\x94 nothing plays it yet.", ::arstro::solaris_ui::shown(it.label)));
                 return false;
             }
             return onCommand("clip add --pattern " + it.value + " --strip " + it.strip + " --at " + beats(beat) + (lane.empty() ? std::string(" --lane new") : " --lane " + q(lane)));
@@ -256,7 +256,7 @@ namespace solaris_ui
         // the dragged item, over everything: it follows the pointer exactly (direct manipulation)
         const double a = mGhost.value();
         if (a <= 0.001 || mGhostLabel.empty()) return;
-        const std::string s = textfit::ellipsize(t, mGhostLabel, 220.0, 11.0, font::sans());
+        const std::string s = textfit::ellipsize(t, ::arstro::solaris_ui::shown(mGhostLabel), 220.0, 11.0, font::sans());
         const double w = t.measureText(s, 11.0, font::sans()) + 20.0;
         const Rect r{mGhostAt.x + 12.0, mGhostAt.y + 10.0, w, 24.0};
         Color bg = palette::popover(), bd = palette::primary(), fg = palette::foreground();
