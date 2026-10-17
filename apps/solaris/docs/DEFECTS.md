@@ -71,6 +71,21 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-20 The frozen-plugin test could fail with its helper left stopped — and ctest waited on it for 20 minutes — closed in N34 (the pitch shifter's bump)
+- **Found:** 2026-10-17, the ctest run after the pitch shifter's bump (`-j6`): `solaris_plugins` failed and the run
+  hung. One `solaris-plughost --serve ArstroBasicSynth.vst3` was left in state T (stopped), re-parented to the user's
+  systemd, its stderr still ctest's pipe for that test — so ctest waited for an end that never came. Killed by hand
+  (our own test's helper), the run ended at 95%. Three runs of the test alone: green. (Its output was lost: a `ctest -N`
+  run beside the hung one rewrote the log — don't.)
+- **Cause:** `pluginsTests.cpp`'s frozen block sent SIGSTOP and timed a block at once — but a stop lands when the
+  helper's threads next run, which on a busy machine can be after the block; the block then played, `assert(!late …)`
+  aborted the test, and an abort runs no cleanup: nothing sent the SIGCONT or the instance's SIGKILL, and the helper
+  stayed frozen with the pipe open. (The product's own path — overrun → offline → SIGKILL, PluginInstance.cpp — is
+  sound: a frozen helper it times out is killed.)
+- **Fix:** the block is timed only once /proc says the helper IS stopped (state T, up to 2 s); its result is read and
+  the helper continued BEFORE any assert, so a failing test leaves nothing frozen. A deliberately failing assert there
+  now ends the test in 1 s with no helper alive (checked). Test-only.
+
 ### D-18 The library's delay line extrapolated between samples — a swept chorus or echo gained treble — closed in N34, DSP `2148541`
 - **Found:** 2026-10-17, reading `Delay::read` (core/DigitalSignalProcessing/src/simpleProcessor/Delay.cpp) to build
   N34's flanger on it. For a delay of D + f samples (0 < f < 1) it returns `s[D]·(1 + f) − s[D − 1]·f`: the line

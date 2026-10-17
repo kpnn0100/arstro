@@ -51,6 +51,16 @@ namespace
         return found;
     }
 
+    /** `pid`'s state letter from /proc (R running, S sleeping, T stopped …; 0: gone). */
+    char stateOf(pid_t pid)
+    {
+        std::ifstream st("/proc/" + std::to_string(pid) + "/stat");
+        std::string line;
+        std::getline(st, line);
+        const auto close = line.rfind(')');
+        return close == std::string::npos || close + 2 >= line.size() ? 0 : line[close + 2];
+    }
+
     /** `blocks` blocks of 256 frames, a note held from the first — its RMS. */
     double play(solaris::IPluginInstance &p, int blocks, bool &ok, int pitch = 69)
     {
@@ -154,13 +164,20 @@ int main()
         play(*p, 2, ok);
         assert(ok);
         const pid_t pid = helperPid();
+        assert(pid > 0);
         kill(pid, SIGSTOP);
+        // D-20: a stop is delivered when the helper's threads next run — on a busy machine, later than this line; the
+        // block is timed only once it HAS stopped (else it may play it, and the test fail with its helper left frozen)
+        for (int i = 0; i < 200 && stateOf(pid) != 't' && stateOf(pid) != 'T'; ++i) usleep(10000);
+        const bool stopped = stateOf(pid) == 'T' || stateOf(pid) == 't';
         float l[256], r[256];
         float *out[2] = {l, r};
         const bool late = p->process(nullptr, out, 256, false, nullptr, 0, nullptr, 0, 0.05);
-        assert(!late && p->offline() && p->why() == "it overran its budget");
-        std::printf("    frozen: offline, \"%s\"\n", p->why().c_str());
-        kill(pid, SIGCONT);
+        const bool off = p->offline();
+        const std::string why = p->why();
+        kill(pid, SIGCONT); // before any assert: a test that fails must not leave a frozen helper behind (D-20)
+        assert(stopped && !late && off && why == "it overran its budget");
+        std::printf("    frozen: offline, \"%s\"\n", why.c_str());
     } // and its end kills what does not leave
     assert(helperPid() == 0);
     err.clear();
