@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N41 part 1 — the merge in the model** (R-COLLAB-1; Round 19 is the design), then N42… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N41 part 2 — the service: the base, an atomic save, watching, `project sync`** (R-COLLAB-1; part 1 — the merge in the model — is built), then N42… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -651,7 +651,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
 - [~] **N41** Sharing through a folder: merge by node (R-COLLAB-1). Round 19 (the design): the base is what this window
       last read or wrote; an atomic save; the file looked at once a second; nothing unsaved → reload, else a three-way
       merge node by node (the versions' node table), the same new id renumbered on mine, conflicts asked (`project sync
-      --take`), a save refused while one is pending. Next: part 1 — the merge in the model.
+      --take`), a save refused while one is pending. Part 1: the merge in the model — the versions' node table moved to
+      `model/NodeTable` and shared; `mergeSongs` (three ways, node by node; conflicts kept as mine and listed; the same
+      new id on both sides renumbered on mine with every reference; orders follow the side that changed them),
+      `takeTheirs`, `tidyOrders`. Next: part 2 — the service (the base, an atomic save, watching, `project sync`, the
+      model's `sync`, save's guard; L2 with two services on one file).
 - [ ] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1).
 - [ ] **N43** Localisation (R-ACCESS-2).
 - [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).

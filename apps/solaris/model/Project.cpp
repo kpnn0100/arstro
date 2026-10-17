@@ -1472,6 +1472,39 @@ namespace solaris
         return pitch;
     }
 
+    namespace
+    {
+        // a group of places with an `order` each: renumbered, stable, only when two share one
+        template <class T, class Key> bool tidyGroup(std::vector<T> &v, Key key)
+        {
+            bool moved = false;
+            std::map<std::string, std::vector<T *>> groups;
+            for (auto &x : v) groups[key(x)].push_back(&x);
+            for (auto &g : groups)
+            {
+                std::set<int> seen;
+                bool twice = false;
+                for (const T *x : g.second) twice = !seen.insert(x->order).second || twice;
+                if (!twice) continue;
+                std::stable_sort(g.second.begin(), g.second.end(), [](const T *a, const T *b) { return a->order < b->order; });
+                for (size_t i = 0; i < g.second.size(); ++i)
+                    if (g.second[i]->order != (int)i) { g.second[i]->order = (int)i; moved = true; }
+            }
+            return moved;
+        }
+    }
+
+    bool tidyOrders(Project &p)
+    {
+        auto all = [](const auto &) { return std::string(); };
+        bool moved = tidyGroup(p.ports, all);
+        moved = tidyGroup(p.mixers, all) || moved;
+        moved = tidyGroup(p.strips, [](const Strip &s) { return s.mixer; }) || moved;
+        moved = tidyGroup(p.lanes, all) || moved;
+        moved = tidyGroup(p.scenes, all) || moved;
+        return moved;
+    }
+
     bool gatherLaneGroups(Project &p)
     {
         std::vector<Lane *> order;

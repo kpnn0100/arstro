@@ -866,7 +866,7 @@ makes a major chord stamped on any degree that degree's own triad; a note MOVED 
 on one refused whole. A move in time, an import, a step row, a recording and `pattern transpose` keep their pitches.
 **Chance** — `Note::chance` 0 … 1 (`#note … chance=0.5`, written below 1; the note token's fifth field
 `C4@0:0.25:100:0.5`; `note add|move --chance`, `notes set <pt> "<sel>" --vel --chance --length`, `:344`): the compile
-rolls it per clip and per pass of the pattern (C4, `core/Compile.cpp:442`) by `noteSounds` (`model/Project.cpp:1502`
+rolls it per clip and per pass of the pattern (C4, `core/Compile.cpp:442`) by `noteSounds` (`model/Project.cpp:1535`
 — FNV-1a over the clip id, splitmix64's finaliser over the pass, the pitch and the tick, 53 bits against the chance):
 no clock, so a render is pure and two clips of one pattern vary apart; `project export-midi` rolls the same
 (`core/service/ServiceMidi.cpp:237`), so the file is what the render plays. **Grooves** — `pattern quantize --groove
@@ -1150,7 +1150,7 @@ header-only evaluator (`apps/interstellar/model/Anim.h` — After Effects' key, 
 hold with a speed and an influence) is INCLUDED in place by the engine (`engine/Expr.h:23`), not ported:
 it allocates nothing (a fixed 48-step bisection on the Bézier's time component, doubles only), so the
 audio thread runs it every 64 samples as it runs the formulas. A `#point` (`AutoPoint`,
-`model/Project.h:241`) keeps `shape=` and gains Interstellar's spelling for a bezier point's handles —
+`model/Project.h:244`) keeps `shape=` and gains Interstellar's spelling for a bezier point's handles —
 `speedIn inflIn speedOut inflOut`, speeds in the automation's unit PER BEAT (the `.slp`'s timebase),
 influences in % (0 < x ≤ 100), read always (`model/Project.cpp:492`), written only for a bezier point
 (`:986`), so a file of linear / hold / smooth points reads and writes byte for byte as before.
@@ -1579,7 +1579,7 @@ of ▸ (the instrument strips) → `set <ln>.strip=<ch>`, Plain Lane → `…=no
 instrument dropped from the browser onto a track asks for a lane of its own (`--lane new`,
 `app/widgets/ProjectScreen.cpp:129`) — it could not play through another's instrument.
 
-Guarded by `solaris_model` (`model/tests/modelTests.cpp:371`: the four refusals; `tracks` read, refused
+Guarded by `solaris_model` (`model/tests/modelTests.cpp:372`: the four refusals; `tracks` read, refused
 other than `on`, written in the canonical text), `solaris_service` (`test_instrument_tracks`,
 `core/tests/serviceTests.cpp:2094`; `test_a_song_from_before_tracks_adopts_them`, `:3238`) and
 `solaris_app_ui` (`test_a_lane_is_an_instruments_track`, `app/tests/ui/uiTests.cpp:237`: a rename
@@ -1999,7 +1999,7 @@ assertions fail), Solo-safe offered on any line, Mono's click sending nothing. S
 (`app/tests/shots/renderShots.cpp:434`) at both sizes.
 
 ### DR-VER-1 Versions of a song (R-VER-1…4; docs/discussion.md Round 15) — part 1: the model; part 2: the service; part 3: the song bar
-A version is a `Version` (`model/Project.h:333`): an id, a name, a base (an earlier version's id; none = main) and its
+A version is a `Version` (`model/Project.h:336`): an id, a name, a base (an earlier version's id; none = main) and its
 lines — its deltas, its own nodes, and when frozen `#vsnapshot` and the song — kept as text in its `#aversion` node
 (read with the song, `model/Project.cpp:567`; written after it, `:858`, main's own text first — `songText`, `:872`, is
 the song's nodes alone). The open version is `Project::version`; while one is open the nodes ARE its resolution and
@@ -2008,30 +2008,31 @@ a base is main or an EARLIER version, so no chain loops; a frozen version holds 
 reads main's text and every version's lines, so an id a version holds is never given again — not even one only main
 still has after the open version dropped it.
 
-`model/Versions.cpp` reads a song's canonical text as nodes (`readTable`, `model/Versions.cpp:117`; `keyOf`, `:86`):
+`model/Versions.cpp` reads a song's canonical text as nodes — the table it shares with the merge (`readTable`,
+`model/NodeTable.cpp:93`; `keyOf`, `:62`):
 the header (`project`), every node with an id, a rack (`rack:<track>`), a formula (`bind:<address>`); values kept as
 written; a node's id-less lines are its body, a rack's devices its children; comments kept, never versioned. A
-resolution (`resolveText`, `:430`) is the base's, recursively, with the deltas applied (`applyVersion`, `:294`): drops,
+resolution (`resolveText`, `model/Versions.cpp:241`) is the base's, recursively, with the deltas applied (`applyVersion`, `:105`): drops,
 field sets and unsets, bodies, then its own nodes, then the orders — a base child no order lists is not in it; a frozen
 version reads its snapshot. A delta whose node the base lacks is dangling: ignored and listed. **The deltas are worked
-out, never written by a command:** `recordVersion` (`:554`) compares the song now with the base's resolution
-(`diffTables`, `:374`) — each node in the base's order: gone (`#vdrop`), fields changed or added (`#vset`), fields gone
+out, never written by a command:** `recordVersion` (`:365`) compares the song now with the base's resolution
+(`diffTables`, `:185`) — each node in the base's order: gone (`#vdrop`), fields changed or added (`#vset`), fields gone
 (`#vunset`), body (`#vbody`), children (`#vorder`); then the nodes of its own in full — and keeps the dangling ones. So
 an inherited node edited stores one `#vset`, never a copy, and a field set back to the base's value inherits again.
-`openVersion` (`:521`) parses a resolution — one that does not stand as a song (the base broke it) is refused, naming
-why; `versionFacts` (`:504`) counts deltas, own nodes and dangling ones and says why one does not stand. `newVersion`
-(`:570`); `freezeVersion` (`:592`) keeps the resolution as a snapshot; `thawVersion` (`:606`) drops it; `rebaseVersion`
-(`:616`) names the dangling deltas and prunes them, or advances a frozen version's snapshot to its base now with its
-deltas on top; `deleteVersion` (`:650`) is refused while another is based on it; `revertVersion` (`:664`) drops the
+`openVersion` (`:332`) parses a resolution — one that does not stand as a song (the base broke it) is refused, naming
+why; `versionFacts` (`:315`) counts deltas, own nodes and dangling ones and says why one does not stand. `newVersion`
+(`:381`); `freezeVersion` (`:403`) keeps the resolution as a snapshot; `thawVersion` (`:417`) drops it; `rebaseVersion`
+(`:427`) names the dangling deltas and prunes them, or advances a frozen version's snapshot to its base now with its
+deltas on top; `deleteVersion` (`:461`) is refused while another is based on it; `revertVersion` (`:475`) drops the
 open version's deltas on a node or a field, refused on main, a frozen version, a node of its own and where there are none.
 
-Tests (`solaris_model`): `test_a_version_stores_what_it_changes_and_inherits_the_rest` (`model/tests/modelTests.cpp:645`):
+Tests (`solaris_model`): `test_a_version_stores_what_it_changes_and_inherits_the_rest` (`model/tests/modelTests.cpp:646`):
 a mute and a gain stored as ONE `#vset`; main's text untouched and first; the file a fixed point; main's later pan
 arrives, its gain does not; a field edited back inherits again. `test_every_kind_of_change_resolves_to_the_song_it_was`
-(`:680`): a drop, a field back to its default, a pattern's notes, a rack's order, its own device and clip, the header —
+(`:681`): a drop, a field back to its default, a pattern's notes, a rack's order, its own device and clip, the header —
 resolved, in memory and through the file, to exactly the song it was; untouched nodes store nothing.
-`test_inherit_live_override_wins_dangling_kept_until_rebase` (`:723`), `test_freeze_thaw_and_rebase_a_frozen_version`
-(`:758`), `test_versions_chain_are_checked_and_never_reuse_an_id` (`:786`): a version of a version, the refusals, an id
+`test_inherit_live_override_wins_dangling_kept_until_rebase` (`:724`), `test_freeze_thaw_and_rebase_a_frozen_version`
+(`:759`), `test_versions_chain_are_checked_and_never_reuse_an_id` (`:787`): a version of a version, the refusals, an id
 never reused, revert, a version its base broke named and not opened. Mutants seen red (9): copy-on-edit (every field
 stored); a set replacing the node's fields; dangling deltas dropped by an edit; frozen ignored; ids reused across
 versions (a new clip took the dropped clip's id); a field back to its default, a rack's order, not recorded; a base after
@@ -2125,7 +2126,7 @@ nothing; no toast on open; Collect and Save not saving; Relink… opening nothin
 version's clip among them) and `relink-found-mid`, both sizes (`app/tests/shots/renderShots.cpp:566`).
 ### DR-LAUNCH-1 A clip launcher (R-LAUNCH-1; docs/discussion.md Round 17) — part 1: the grid; part 2: launching, heard; part 3: recorded; part 4: the session view
 A scene is a row of the session grid and a slot a cell — what a strip plays when it is launched in that scene
-(`Scene`, `Slot`, `model/Project.h:282`, `:292`): a pattern (an instrument strip's, shared as a clip's is) or a file (an
+(`Scene`, `Slot`, `model/Project.h:285`, `:292`): a pattern (an instrument strip's, shared as a clip's is) or a file (an
 audio strip's, `in`/`out` as a clip's), with the beats a loop lasts (`length`; absent, the pattern's or the file
 span's), a `name` and a `gain`. Both are the song's nodes, written after the arrangement (`#ascene`, `#aslot`,
 `model/Project.cpp:662`, `:1023`); the header's `launchQuantize` (bar, beat or none; written only when not a bar,
@@ -2141,7 +2142,7 @@ strip's slots count as its clips: `strip delete` is refused while they play thro
 (`core/service/ServiceEdit.cpp:272`); a pattern a slot plays is not deleted (`core/service/ServiceCompose.cpp:631`).
 The model: `scenes[]` by order, `slots[]` row by row in processing order with each loop's length resolved, and
 `launchQuantize` (`core/service/ServiceModel.cpp:397`; `SceneModel`, `SlotModel`, `core/service/AppModel.h:317`).
-Tests: `solaris_model` `test_scenes_and_slots_round_trip_and_are_checked` (`model/tests/modelTests.cpp:848`): a fixed
+Tests: `solaris_model` `test_scenes_and_slots_round_trip_and_are_checked` (`model/tests/modelTests.cpp:849`): a fixed
 point, launchQuantize only when not a bar, the seven refusals; L2 `test_the_session_grid`
 (`core/tests/serviceTests.cpp:5581`): scenes placed and moved, slots of a pattern, a clip and a file, their lengths
 resolved, the refusals, names and lengths set, a strip's slots refused then deleted with it, a played pattern held, one
@@ -2192,7 +2193,7 @@ one across its end starts there, a note clip into its pattern by what it skipped
 lane (an instrument's track, else where its clips are, a new lane when there is none) as clips (`:176`): ONE when the
 slot's loop is its pattern's, else one a loop (a slot plays the start of a longer pattern, or a shorter one repeated);
 an audio slot's file as a clip a loop, none over the silence after a short file. **A note clip may start into its
-pattern**: `offset=` beats (`model/Project.h:220`; written only when set; refused on an audio clip, `model/Project.cpp:1264`;
+pattern**: `offset=` beats (`model/Project.h:223`; written only when set; refused on an audio clip, `model/Project.cpp:1264`;
 `set <ac>.offset=`, `core/service/SolarisService.cpp:1175`) — the compile reads its notes and wheels in pattern time and
 moves them back (`core/Compile.cpp:477`); the timeline draws its repetitions shifted (`app/widgets/Timeline.cpp:1256`).
 Tests: L2 `test_launches_are_recorded_into_the_arrangement` (`core/tests/serviceTests.cpp:5736`): refused with nothing
@@ -2222,7 +2223,7 @@ offering nothing; a slot's click and a column's ■ sending nothing; a queued sl
 (Verse playing, the bass's Drop queued), `session-view-mid`, `launch-recorded` (a recorded launch's arrangement: the
 tail clip starting into its pattern), both sizes (`app/tests/shots/renderShots.cpp:465`).
 ### DR-VIDEO-1 A video lane (R-VIDEO-1; docs/discussion.md Round 18) — part 1: the service and the host; part 2: the window; part 3: the lane and the export
-One picture a song (`Video`, `model/Project.h:306`): a file and an `offset` — seconds on the song's clock (the tempo
+One picture a song (`Video`, `model/Project.h:309`): a file and an `offset` — seconds on the song's clock (the tempo
 map's) at which its first frame shows; negative, it began before the song. It is a node like any (`#avideo`, read at
 `model/Project.cpp:664`, written after the session grid at `:1045`), so versions and collect see it as one; the
 validator (`:1266`) refuses a second picture ("one picture a song") and one naming no file.
@@ -2254,7 +2255,7 @@ the picture's `startAt` is its offset less where the render starts (`:314`), fro
 Refused without a picture, for an audio extension, and with --format, --stems, --ports, --bits or --kbps. The CLI, the
 window and the web face's host give the service the probe and the mux (`cli/main.cpp:125`, `linux_main.cpp:60`,
 `cli/NtwbMain.cpp:159`).
-Tests: model `test_the_picture_round_trips_and_is_checked` (`model/tests/modelTests.cpp:895`): a fixed point (a quoted
+Tests: model `test_the_picture_round_trips_and_is_checked` (`model/tests/modelTests.cpp:896`): a fixed point (a quoted
 file, a negative offset, an unknown key kept), its id counted, a second or one naming no file refused. L2
 `test_a_video_lane` (`core/tests/serviceTests.cpp:4316`; a fake host's probe and mux, `:464`): set (a sound refused, an
 offset out of range refused), the .slp, the event; `video.time` −1 before it, 2 s at beat 8, 4 s through a 60-bpm
@@ -2328,6 +2329,42 @@ to the pointer; stems still applying with the video; the line keeping --format; 
 toggle without a picture; `at` taken as seconds; the points at seconds, not beats. Shots `video-lane` (the row's
 tiles, each band's edge its own time), `video-lane-dragging` (the span held two beats on, ringed), `export-with-video`
 (MKV, the greyed rows), both sizes (`app/tests/shots/renderShots.cpp:532`, `:1291`).
+
+### DR-COLLAB-1 Sharing a song through a folder (R-COLLAB-1; docs/discussion.md Round 19) — part 1: the merge in the model
+Two people's edits to one song are merged node by node, in the model, pure — text in, text out (`mergeSongs`,
+`model/Merge.cpp:229`; `model/Merge.h:38`). The three songs — the BASE (what this window last read or wrote), MINE and
+THEIRS — are read as the versions read a song: one table, shared (`model/NodeTable.h:18`): the header field by field
+(`model/Merge.cpp:253`), every node by its id, a rack by its strip, a formula by its address, a node's id-less lines
+(a pattern's notes, a clip's takes) its body — one unit — a rack's devices its children. Each node, and each header
+field, is decided three ways (`decide`, `:168`): changed on one side only → that side; the same on both → once; changed
+on both differently → a CONFLICT ("both changed"); changed on one and removed on the other → a conflict ("changed here,
+removed there" / "removed here, changed there"); removed on one and untouched on the other → removed. A conflict keeps
+mine in the text and is listed (`MergeConflict`, `model/Merge.h:22`): its key (`project:<field>` for the header), what
+it is, said ("strip Bass", "pattern Line", "rack of ch_1", "the song's sig"), how, and both sides' lines. A part kept
+whose whole is gone — a device turned here, its strip and rack deleted there — keeps its whole too, and the whole is
+asked (`model/Merge.cpp:313`). The same id added on both sides as different nodes is no conflict (`:234`): mine is
+given the next free id past every side's (`nextFree`, `:148`) and every reference to it among my nodes is rewritten —
+its own key and a rack's or a formula's that carry it, a value, a list, an address in a formula, whole ids only (`ch_30`
+is not `ch_3`, `renameIn`, `:81`), never a file's name or a name (`:97`; `renameNode`, `:118`). An order — the song's
+nodes, a rack's devices — follows the side that changed it (theirs when both did), the other side's own after their
+neighbours there (`mergeOrder`, `:204`). Two sides' new places at one `order` (two strips of one mixer, two lanes,
+scenes, mixers or ports) are made 0…n−1 again, the earlier in the file first, only where two share one (`tidyOrders`,
+`model/Project.cpp:1497`). A conflict answered "theirs" puts theirs' node — its children with it — where mine had it,
+else after its neighbour in theirs, or takes it away where theirs has none; a header field likewise
+(`takeTheirs`, `model/Merge.cpp:347`). The versions read the song through the same table (`model/Versions.cpp`, which
+keeps its deltas, resolution and recording). Tests: model `test_two_peoples_edits_merge_node_by_node`
+(`model/tests/modelTests.cpp:918`): a base of Drums and Bass; mine — the drums down and their synth turned, a Pad with a
+rack, lane, clip and two formulas (one reading `ch_30`), the bass's eq swapped for a compressor, the line's notes, 128
+bpm, 3/4; theirs — the drums deleted, the bass down, its eq turned and a gate after it, a Lead under the same new ids,
+the line's pattern and clip deleted, 128, 6/8: merged, one side's changes taken and 128 once; four of mine renamed
+(`ac_3`, `ch_3`, `dv_4` → `dv_10` past their `dv_9`, `ln_3`) with the clip's strip and lane, the rack's key, both formulas
+— `ch_30` and the name "ch_3 pad" untouched; the compressor after its neighbour beside their gate; six conflicts — the
+meter, the line's pattern, the drums' strip, their synth and their rack (kept whole), the eq — each said; the two new
+strips' orders tidied to 2 and 3, and again a no-op; answered theirs, the pattern goes, the meter is 6/8, the eq comes
+back after its neighbour; nothing changed on one side gives the other exactly. Mutants seen red (12): both changed taken
+as theirs; changed against removed — removed; removed against changed — removed; no renaming; part of an id renamed; a
+name renamed; my additions at the end; a kept part's whole let go; a node answered "theirs" put at the end; a rack's key
+not renamed; orders not tidied; the next free id not past theirs.
 
 ### DR-DEV-9 A PipeWire driver; xruns counted (R-DEV-9, R-DEV-5)
 `settings set driver=pulse|pipewire` (default pulse; saved with the machine's settings; Settings › Audio › Driver).

@@ -9,6 +9,7 @@
 #include "../Format.h"
 #include "../Project.h"
 #include "../Versions.h"
+#include "../Merge.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
@@ -914,6 +915,106 @@ static void test_the_picture_round_trips_and_is_checked()
     pass("the picture in the .slp (R-VIDEO-1): #avideo, a fixed point — a quoted file, a negative offset, an unknown key kept; its id counted; a second, or one naming no file, refused");
 }
 
+static void test_two_peoples_edits_merge_node_by_node()
+{
+    // R-COLLAB-1 (Round 19, part 1): base, mine and theirs merged node by node — one side's change taken, the same change
+    // once, both sides' differently a conflict kept as mine, removed against changed a conflict, the same new ids on both
+    // sides renumbered on mine with every reference; the result a song; a conflict answered "theirs"
+    const std::string head = "arstro-project = 1\napp        = solaris\nid         = prj_m\nname       = m\nbpm        = 120.0\nsig        = 4/4\n"
+                             "masterOut  = prt_1\n\n#aport id=prt_1 name=Main dir=out channels=2 order=0\n\n#amixer id=mx_1 name=Sources order=0\n\n";
+    auto song = [&](const std::string &hdrBpm, const std::string &sig, const std::string &body) {
+        std::string h = head;
+        h.replace(h.find("bpm        = 120.0"), 18, "bpm        = " + hdrBpm);
+        h.replace(h.find("sig        = 4/4"), 16, "sig        = " + sig);
+        return h + body;
+    };
+    const std::string strips = "#atrack id=ch_1 name=Drums kind=instrument mixer=mx_1 order=0 gain=0.0 pan=0.0\n"
+                               "#atrack id=ch_2 name=Bass kind=instrument mixer=mx_1 order=1 gain=0.0 pan=0.0\n";
+    const std::string racks = "#arack track=ch_1\n  #aeffect id=dv_1 type=synth\n#arack track=ch_2\n  #aeffect id=dv_2 type=synth\n  #aeffect id=dv_3 type=eq\n";
+    const std::string lanes = "#alane id=ln_1 name=\"\" track=ch_1 order=0\n#alane id=ln_2 name=\"\" track=ch_2 order=1\n";
+    const std::string pt1 = "#apattern id=pt_1 name=Beat length=4.0\n  #note pitch=36 at=0.0 length=0.25 vel=100\n";
+    const std::string pt2 = "#apattern id=pt_2 name=Line length=4.0\n  #note pitch=40 at=0.0 length=1.0 vel=100\n";
+    const std::string clips = "#aclip id=ac_1 name=Beat track=ch_1 lane=ln_1 pattern=pt_1 at=0.0 length=4.0\n"
+                              "#aclip id=ac_2 name=Line track=ch_2 lane=ln_2 pattern=pt_2 at=0.0 length=4.0\n";
+    const std::string base = song("120.0", "4/4", strips + "\n" + racks + "\n" + lanes + "\n" + pt1 + pt2 + "\n" + clips);
+    Project p;
+    std::string err;
+    assert(parseProject(base, p, err));
+    // mine: the drums down and their synth turned, a Pad (ch_3 … of its own, named "ch_3 pad"), the bass's eq swapped for
+    // a compressor, the line's notes, formulas naming the Pad (and ch_30, another strip), 128 bpm, 3/4
+    std::string mine = song("128.0", "3/4",
+        "#atrack id=ch_1 name=Drums kind=instrument mixer=mx_1 order=0 gain=-3.0 pan=0.0\n"
+        "#atrack id=ch_2 name=Bass kind=instrument mixer=mx_1 order=1 gain=0.0 pan=0.0\n"
+        "#atrack id=ch_3 name=\"ch_3 pad\" kind=instrument mixer=mx_1 order=2 gain=0.0 pan=0.0\n\n"
+        "#arack track=ch_1\n  #aeffect id=dv_1 type=synth cutoff=800.0\n#arack track=ch_2\n  #aeffect id=dv_2 type=synth\n  #aeffect id=dv_4 type=compressor\n"
+        "#arack track=ch_3\n  #aeffect id=dv_5 type=synth\n\n" + lanes + "#alane id=ln_3 name=\"\" track=ch_3 order=2\n\n" + pt1 +
+        "#apattern id=pt_2 name=Line length=4.0\n  #note pitch=40 at=0.0 length=1.0 vel=100\n  #note pitch=43 at=1.0 length=1.0 vel=100\n\n" + clips +
+        "#aclip id=ac_3 name=Pad track=ch_3 lane=ln_3 pattern=pt_1 at=4.0 length=4.0\n"
+        "#abind address=ch_3.gain formula=\"=ch_1.gain - 6\"\n#abind address=ch_1.pan formula=\"=ch_3.pan + ch_30.pan\"\n");
+    // theirs: the drums gone (strip, rack, lane, clip), the bass down, its eq turned, a gate after it, a Lead (the same
+    // new ids), the line's pattern and clip gone, 128, 6/8
+    std::string theirs = song("128.0", "6/8",
+        "#atrack id=ch_2 name=Bass kind=instrument mixer=mx_1 order=1 gain=-6.0 pan=0.0\n"
+        "#atrack id=ch_3 name=Lead kind=instrument mixer=mx_1 order=2 gain=0.0 pan=0.0\n\n"
+        "#arack track=ch_2\n  #aeffect id=dv_2 type=synth\n  #aeffect id=dv_3 type=eq low=2.0\n  #aeffect id=dv_9 type=gate\n"
+        "#arack track=ch_3\n  #aeffect id=dv_4 type=synth\n\n#alane id=ln_2 name=\"\" track=ch_2 order=1\n#alane id=ln_3 name=Lead track=ch_3 order=2\n\n" + pt1 + "\n" +
+        "#aclip id=ac_3 name=Lead track=ch_3 lane=ln_3 pattern=pt_1 at=8.0 length=4.0\n");
+    assert(parseProject(mine, p, err) && parseProject(theirs, p, err));
+    const MergeResult r = mergeSongs(base, mine, theirs);
+    std::printf("    merged (%d of theirs, %d of mine; %zu renamed, %zu conflicts):\n%s", r.fromTheirs, r.fromMine, r.renamed.size(), r.conflicts.size(), r.text.c_str());
+    Project q;
+    assert(parseProject(r.text, q, err));
+    // one side's change taken; the same once
+    assert(q.strip("ch_1")->gain == -3.0 && q.strip("ch_2")->gain == -6.0 && q.header.bpm == 128.0);
+    // the same new ids on both sides: theirs keep them, mine renumbered — references with them
+    assert(r.renamed.size() == 4); // ac_3, ch_3, dv_4 (my compressor: their Lead's synth has it — next free past their dv_9), ln_3
+    assert(q.strip("ch_3")->name == "Lead" && q.strip("ch_4")->name == "ch_3 pad" && q.clip("ac_3")->track == "ch_3" && q.clip("ac_4")->track == "ch_4"); // a name is no reference
+    assert(q.clip("ac_4")->lane == "ln_4" && contains(r.text, "#arack track=ch_4\n  #aeffect id=dv_5 type=synth\n"));
+    // a formula's address and what it reads, renamed with it — the drums', not
+    assert(contains(r.text, "#abind address=ch_4.gain formula=\"=ch_1.gain - 6\"\n") && contains(r.text, "#abind address=ch_1.pan formula=\"=ch_4.pan + ch_30.pan\"\n")); // ch_30 is not ch_3
+    // both changed the bass's rack: their gate kept, my compressor after its neighbour (renamed: their Lead's has dv_4);
+    // the eq I took out and they turned — asked, out until answered
+    assert(contains(r.text, "#arack track=ch_2\n  #aeffect id=dv_2 type=synth\n  #aeffect id=dv_10 type=compressor\n  #aeffect id=dv_9 type=gate\n"));
+    // both new strips took the mixer's next place: made 0…n−1 again, the earlier in the file first
+    assert(q.strip("ch_4")->order == 2 && q.strip("ch_3")->order == 2 && tidyOrders(q) && q.strip("ch_4")->order == 2 && q.strip("ch_3")->order == 3);
+    assert(!tidyOrders(q));
+    // removed there, untouched here: gone; changed here, removed there: kept, asked; both changed differently: mine, asked
+    assert(!q.clip("ac_1") && !q.clip("ac_2") && !q.lane("ln_1") && q.pattern("pt_2") && q.pattern("pt_2")->notes.size() == 2 && q.header.sig == "3/4");
+    // the drums: removed there, changed here — the strip and its synth kept and asked; their rack, untouched here, stays
+    // with its synth and is asked too
+    assert(q.strip("ch_1") && contains(r.text, "#arack track=ch_1\n  #aeffect id=dv_1 type=synth cutoff=800.0\n"));
+    assert(r.conflicts.size() == 6);
+    const MergeConflict *sig = nullptr, *line = nullptr, *rack = nullptr, *eq = nullptr;
+    for (const auto &c : r.conflicts)
+    {
+        if (c.node == "project:sig") sig = &c;
+        if (c.node == "pt_2") line = &c;
+        if (c.node == "rack:ch_1") rack = &c;
+        if (c.node == "dv_3") eq = &c;
+    }
+    assert(eq && eq->how == "removed here, changed there" && eq->mine.empty() && contains(eq->theirs, "low=2.0"));
+    assert(rack && rack->how == "changed here, removed there" && rack->what == "rack of ch_1");
+    assert(sig && sig->how == "both changed" && sig->what == "the song's sig" && sig->mine == "sig = 3/4" && sig->theirs == "sig = 6/8");
+    assert(line && line->how == "changed here, removed there" && line->what == "pattern Line" && contains(line->mine, "pitch=43") && line->theirs.empty());
+    // answered "theirs": the pattern goes, the meter is theirs
+    std::string answered = r.text;
+    assert(takeTheirs(answered, theirs, "pt_2", err) && takeTheirs(answered, theirs, "project:sig", err) && takeTheirs(answered, theirs, "dv_3", err));
+    Project a;
+    assert(parseProject(answered, a, err) && !a.pattern("pt_2") && a.header.sig == "6/8");
+    assert(contains(answered, "#arack track=ch_2\n  #aeffect id=dv_2 type=synth\n  #aeffect id=dv_3 type=eq low=2.0\n  #aeffect id=dv_10 type=compressor\n")); // back after its neighbour
+    // nothing changed here: theirs exactly; nothing there: mine exactly (as songs — the table writes no blank lines)
+    auto canon = [](const std::string &text) {
+        Project c;
+        std::string e;
+        const bool ok = parseProject(text, c, e);
+        assert(ok);
+        return serializeProject(c);
+    };
+    assert(canon(mergeSongs(base, base, theirs).text) == canon(theirs) && mergeSongs(base, base, theirs).conflicts.empty());
+    assert(canon(mergeSongs(base, mine, base).text) == canon(mine) && mergeSongs(base, mine, base).renamed.empty());
+    pass("two people's edits merge node by node (R-COLLAB-1): one side's change taken, the same once; the same new ids renumbered on mine with every reference; removed against untouched gone; changed against removed, and changed both ways, kept as mine and asked; answered theirs; nothing on one side is the other exactly");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -940,6 +1041,7 @@ int main()
     test_versions_chain_are_checked_and_never_reuse_an_id();
     test_scenes_and_slots_round_trip_and_are_checked();
     test_the_picture_round_trips_and_is_checked();
+    test_two_peoples_edits_merge_node_by_node();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }
