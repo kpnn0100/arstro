@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N43 — Localisation** (R-ACCESS-2): a design round first (Round 21 in docs/discussion.md), then N44, in order (the user: *"implement all"*). Owed live checks: N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N43 part 1 — the table and the setting** (R-ACCESS-2; Round 21 is the design: `solaris_strings`, `lang/vi.strings`, `settings set language=`, the model's fields), then parts 2–3, then N44, in order (the user: *"implement all"*). Owed live checks: N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -675,7 +675,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       value, extents at the drawn scale, states, click / increment / decrement back to the App), kept by key, the focus
       said; the window's drawing area hangs it under its accessible, read when a screen reader asks and every 200 ms.
       Read live once through libatspi on a private bus. N42 DONE.
-- [ ] **N43** Localisation (R-ACCESS-2).
+- [~] **N43** Localisation (R-ACCESS-2). Round 21 (the design): the window's own words only, English the key
+      (`tr` / `trc` / `trn`, `{1}` placeholders), `lang/<code>.strings` compiled in; English, Vietnamese and the
+      pseudo-language `en-XA`; `settings set language=auto|en|vi|en-XA`; a switch dissolves the window; proved by the
+      strings drawn in `en-XA` and a scan of the code's keys. Parts: (1) the table and the setting; (2) the shell;
+      (3) the song view.
 - [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).
 
 ### T — tasks found on the way

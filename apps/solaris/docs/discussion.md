@@ -815,3 +815,57 @@ technology (AT-SPI through the host), all of it reachable from the keyboard. Dec
 - **Not yet:** the lanes' clips and the piano roll's notes as nodes; a screen reader's own announcements of a value as
   it plays (meters); right-to-left.
 
+
+### Round 21 — 2026-10-17 — localisation (R-ACCESS-2, N43): the design, before code
+
+R-ACCESS-2: every UI string from a table; a language setting. Nothing in the suite translates yet (cosmo, Interstellar
+and the rest draw English literals), so this round decides the shape for Solaris and keeps it small enough to lift into
+the suite later. Decided (each a line to change):
+
+- **What is translated: the window's own words — nothing an agent reads.** The App's labels, menus, sheets, toasts it
+  composes, empty states, tooltips and the accessible names a screen reader speaks. NOT translated: the command
+  grammar, the event lines, the model, the API document, `solaris-cc`'s output (an agent parses them — law 13 and
+  R-API-1); the service's own words shown in the window (a refusal's text, a history entry's label, an Info line —
+  they are the API's lines); the DSP registry's words (a parameter's label, its unit, its choices, a module's title —
+  the names an address and the manuals use); and the user's data (songs, strips, lanes, markers, files). A command is
+  never built from a translated label: a widget sends ids and values, and draws `tr(...)` of its English beside them.
+- **The table: English is the key** (gettext's way, so the code reads as it does today and a missing translation falls
+  back to the English): `tr("Settings")`; a context where one English word means two things, `trc("menu", "Open")`
+  (the key `menu|Open`); a count, `trn(n, "{1} clip", "{1} clips")`; numbers and names into a sentence by position,
+  `{1}` `{2}` (`fill(tr("{1} of {2}"), a, b)`), so a language may reorder them. One file per language,
+  `lang/<code>.strings`, a line per string — `"Settings" = "Cài đặt";`, a plural's keys side by side and as many
+  forms as the language's rule has — under a header (`@language vi`, `@name Tiếng Việt`, `@plural other`). Compiled
+  INTO the binary (as the fonts are — the app's own words are not a thing that may differ between machines), parsed
+  by a small library both the service and the window link (`solaris_strings`: no dependencies). A file that drops or
+  adds a placeholder, repeats a key or has the wrong number of plural forms fails its test, not the window.
+- **The languages: English, Vietnamese, and a pseudo-language.** English is the keys themselves. Vietnamese (`vi`)
+  ships whole — Roboto and JetBrains Mono, embedded, already carry every Vietnamese letter (checked against the
+  TTFs' character sets: none missing). `en-XA` (Android's pseudo-locale code) is generated, not written: every letter
+  accented and the string lengthened by a third in brackets — `[Šéţţîñĝš ·······]` — so a string NOT from the table
+  stands out and one that will not fit a longer language is seen in English's place.
+- **The setting:** `settings set language=auto|en|vi|en-XA` (the machine's; default `auto` — the OS's language when
+  Solaris has it, else English, as Reduced motion reads the OS's: the host tells the App, `setOsLanguage`); an unknown
+  code refused naming the nearest. The model publishes `settings.language` and `settings.languages[]` (code and the
+  language's own name), so any face offers the same list. Settings › Interface › Language: a combo of those names,
+  ONE line.
+- **Nothing snaps: a switch dissolves.** The whole window cross-fades from the old language to the new over 180 ms
+  (cosmo's cross-fade): while it runs the App paints the tree in the old language, then the tree again in the new one
+  inside a layer at the eased amount (Artboard's `pushLayer`) — the new language last, so every widget's hit-test
+  rectangles are the new ones. Text that moves because its words grew is part of the dissolve.
+- **Text fits** (design rule R5): a longer language is a width test. The pseudo-language's third more is drawn in the
+  shots at both sizes; a label that does not fit ellipsizes against the room it has (the widgets' own text fitting).
+- **Proved, not promised — "every UI string from a table":** a UI test paints each covered screen in `en-XA` through a
+  render target that records every string drawn, and fails on any string with a letter that is neither bracketed (from
+  the table) nor one the model published (the user's data, the registry's words, the service's lines) nor a number or
+  unit. A source scan test lists every `tr` / `trc` / `trn` key in the window's code and fails when `vi.strings` lacks
+  one or keeps one no code uses — the table cannot drift from the code, as the API document cannot.
+- **Parts** (a commit each): (1) the table and the setting — `solaris_strings` (parse, look up, plural rules, the
+  pseudo-language), `lang/vi.strings` embedded, `settings set language=`, the model's fields, L0 and L2 tests, the API;
+  (2) the shell through the table — Home, the song bar and its menus, Settings, Export, Relink, Conflicts, the
+  confirm dialogs, the toasts, the accessible names of all of them; Settings › Interface › Language; the dissolve; the
+  recorded-strings test and the source scan for those files; shots in Vietnamese and `en-XA`; (3) the song view through
+  the table — the browser, the lanes and the ruler, the dock, the windows (device, roll, automation, loudness, video,
+  tuner, session), extended to the same tests and shots.
+- **Not yet:** the registry's words and the service's lines translated; right-to-left languages; plural rules beyond
+  English's one / other and a language with one form; the web face's own text; a translator's tooling beyond the scan's
+  list of missing keys.
