@@ -240,7 +240,7 @@ namespace cosmo_v2
 
         // header: title + hint + close button
         t.setFill(fa(palette::foreground()));
-        t.drawText("HISTORY", c.x + kMargin, c.y + 24.0, 12.0, font::sansSemiBold(), 0.12 * 12.0);
+        t.drawText(title, c.x + kMargin, c.y + 24.0, 12.0, font::sansSemiBold(), 0.12 * 12.0);
         t.setFill(fa(palette::mutedForeground()));
         t.drawText(hint, c.x + kMargin, c.y + 40.0, 10.0, font::sans());
 

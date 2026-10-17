@@ -29,23 +29,23 @@ namespace solaris_ui
         constexpr double kKeyRowGap = 4.0;   // R-SET-4: the keymap's rows sit close — one action a line
         constexpr double kRowLabelGap = 13.0;
         constexpr double kAreaGap = 22.0;
-        const char *const kListening = "Press a key\xE2\x80\xA6";
+        const char *const kListening = N_("Press a key\xE2\x80\xA6"); // R-ACCESS-2: the English of these is drawn through tr
         Color fade(Color c, double a) { c.a *= a; return c; }
         std::string q(const std::string &s) { return s.find_first_of(" \t\"") == std::string::npos && !s.empty() ? s : "\"" + s + "\""; }
-        const char *kLabels[SettingsSheet::kRows] = {"Output", "Input", "Sample rate", "Buffer", "Metronome", "Click level",
-                                                     "Preview level", "Tempo", "Meter", "Reduced motion", "Autosave", "Driver", "MIDI input", "Record quantize", "Count-in",
-                                                     "Control surface", "Surface port", "UI scale", "High contrast"};
+        const char *kLabels[SettingsSheet::kRows] = {N_("Output"), N_("Input"), N_("Sample rate"), N_("Buffer"), N_("Metronome"), N_("Click level"),
+                                                     N_("Preview level"), N_("Tempo"), N_("Meter"), N_("Reduced motion"), N_("Autosave"), N_("Driver"), N_("MIDI input"), N_("Record quantize"), N_("Count-in"),
+                                                     N_("Control surface"), N_("Surface port"), N_("UI scale"), N_("High contrast"), N_("Language")};
         const char *kKeys[SettingsSheet::kRows] = {"output", "input", "sampleRate", "bufferSize", "metronome", "metronomeLevel",
                                                    "auditionLevel", "newBpm", "newSig", "reducedMotion", "autosave", "driver", "midiInputs", "recordQuantize", "countIn",
-                                                   "surface", "surfacePort", "uiScale", "highContrast"};
+                                                   "surface", "surfacePort", "uiScale", "highContrast", "language"};
         // the sections (R-SET-3, R-SET-5) and the rows each page holds
-        const char *kTitles[SettingsSheet::kSections] = {"Audio", "Playback", "New songs", "Sample folders", "Interface", "Keyboard", "MIDI"};
+        const char *kTitles[SettingsSheet::kSections] = {N_("Audio"), N_("Playback"), N_("New songs"), N_("Sample folders"), N_("Interface"), N_("Keyboard"), N_("MIDI")};
         const std::vector<int> kPageRows[SettingsSheet::kSections] = {
             {SettingsSheet::kOutput, SettingsSheet::kInput, SettingsSheet::kRate, SettingsSheet::kBuffer, SettingsSheet::kDriver, SettingsSheet::kMidiIn},
             {SettingsSheet::kMetronome, SettingsSheet::kClickLevel, SettingsSheet::kPreviewLevel, SettingsSheet::kRecQuant, SettingsSheet::kCountIn},
             {SettingsSheet::kNewBpm, SettingsSheet::kNewSig},
             {},
-            {SettingsSheet::kUiScale, SettingsSheet::kContrast, SettingsSheet::kMotion, SettingsSheet::kAutosave}, // R-ACCESS-1 first
+            {SettingsSheet::kLanguage, SettingsSheet::kUiScale, SettingsSheet::kContrast, SettingsSheet::kMotion, SettingsSheet::kAutosave}, // R-ACCESS-2, R-ACCESS-1 first
             {},
             {SettingsSheet::kSurface, SettingsSheet::kSurfacePort}, // R-CTRL-2; then R-CTRL-1's mapped controls (paintMidi)
         };
@@ -56,10 +56,13 @@ namespace solaris_ui
             std::snprintf(b, sizeof b, "%g", v);
             return b;
         }
-        std::string upper(std::string s)
+        std::string upper(const std::string &s) { return solaris_strings::upper(s); } // R-ACCESS-2: any language's letters
+        /** A tracked micro-label's width: measured, plus its tracking once a character (R-ACCESS-2: in any language). */
+        double trackedW(const IRenderTarget &t, const std::string &s, double px, const char *fam)
         {
-            for (auto &ch : s) ch = (char)std::toupper((unsigned char)ch);
-            return s;
+            size_t n = 0;
+            for (char c : s) n += (c & 0xC0) != 0x80;
+            return t.measureText(s, px, fam) + 0.13 * px * (double)n;
         }
         const int kRates[] = {44100, 48000, 88200, 96000};
         const int kBuffers[] = {64, 128, 256, 512, 1024, 2048};
@@ -210,20 +213,22 @@ namespace solaris_ui
             std::snprintf(b, sizeof b, "%g kHz", r / 1000.0);
             mChips[kRate].push_back(Chip{b, std::to_string(r)});
         }
-        for (int b : kBuffers) mChips[kBuffer].push_back(Chip{std::to_string(b) + " samples", std::to_string(b)});
+        for (int b : kBuffers) mChips[kBuffer].push_back(Chip{say("{1} samples", b), std::to_string(b)});
         for (int d : {-18, -12, -6, 0}) mChips[kClickLevel].push_back(Chip{std::to_string(d) + " dB", std::to_string(d)});
         for (int d : {-18, -12, -6, 0}) mChips[kPreviewLevel].push_back(Chip{std::to_string(d) + " dB", std::to_string(d)});
         for (int b : {100, 120, 124, 126, 128, 140, 150, 174}) mChips[kNewBpm].push_back(Chip{std::to_string(b) + " bpm", std::to_string(b)});
         for (const char *m : {"4/4", "3/4", "6/8", "7/8"}) mChips[kNewSig].push_back(Chip{m, m});
-        mChips[kDriver] = {Chip{"PulseAudio", "pulse"}, Chip{"PipeWire \xE2\x80\x94 low latency", "pipewire"}}; // R-DEV-9
-        mChips[kMidiIn] = {Chip{"Every MIDI input", "all"}, Chip{"None", "none"}};                         // R-MIDI-2
-        mChips[kSurface] = {Chip{"None", "none"}, Chip{"Mackie Control", "mcu"}, Chip{"HUI", "hui"}};       // R-CTRL-2
-        mChips[kSurfacePort] = {Chip{"None", ""}};
-        mChips[kRecQuant] = {Chip{"Off", "off"}, Chip{"1/4", "1/4"}, Chip{"1/8", "1/8"}, Chip{"1/16", "1/16"}, Chip{"1/32", "1/32"}};
-        mChips[kCountIn] = {Chip{"None", "0"}, Chip{"1 bar", "1"}, Chip{"2 bars", "2"}, Chip{"4 bars", "4"}};
+        mChips[kDriver] = {Chip{"PulseAudio", "pulse"}, Chip{"PipeWire \xE2\x80\x94 " + say("low latency"), "pipewire"}}; // R-DEV-9
+        mChips[kMidiIn] = {Chip{say("Every MIDI input"), "all"}, Chip{say("None"), "none"}};                         // R-MIDI-2
+        mChips[kSurface] = {Chip{say("None"), "none"}, Chip{"Mackie Control", "mcu"}, Chip{"HUI", "hui"}};       // R-CTRL-2
+        mChips[kSurfacePort] = {Chip{say("None"), ""}};
+        mChips[kRecQuant] = {Chip{say("Off"), "off"}, Chip{"1/4", "1/4"}, Chip{"1/8", "1/8"}, Chip{"1/16", "1/16"}, Chip{"1/32", "1/32"}};
+        mChips[kCountIn] = {Chip{say("None"), "0"}};
+        for (int b : {1, 2, 4}) mChips[kCountIn].push_back(Chip{sayn(b, "{1} bar", "{1} bars", b), std::to_string(b)});
         for (int u : {75, 90, 100, 125, 150, 175, 200}) mChips[kUiScale].push_back(Chip{std::to_string(u) + " %", std::to_string(u)}); // R-ACCESS-1: cosmo's steps
-        mChips[kAutosave] = {Chip{"Off", "off"}, Chip{"Every 30 s", "30"}, Chip{"Every minute", "60"}, Chip{"Every 2 minutes", "120"}, Chip{"Every 5 minutes", "300"}};
-        mChips[kOutput] = mChips[kInput] = {Chip{"System default", ""}};
+        mChips[kAutosave] = {Chip{say("Off"), "off"}, Chip{say("Every 30 s"), "30"}, Chip{say("Every minute"), "60"}, Chip{say("Every 2 minutes"), "120"}, Chip{say("Every 5 minutes"), "300"}};
+        mChips[kOutput] = mChips[kInput] = {Chip{say("System default"), ""}};
+        mChips[kLanguage] = {Chip{say("Automatic"), "auto"}}; // R-ACCESS-2: the model's languages join it
         for (int s = 0; s < kSections; ++s)
         {
             auto page = std::make_shared<Page>(*this, s);
@@ -246,7 +251,7 @@ namespace solaris_ui
                 cb->width.set(kComboW);
                 cb->height.set(kControlH);
                 std::vector<std::string> labels;
-                for (const auto &c : mChips[r]) labels.push_back(c.label);
+                for (const auto &c : mChips[r]) labels.push_back(::arstro::solaris_ui::shown(c.label));
                 cb->setOptions(labels);
                 cb->onChange = [this, r](int i) {
                     if (i >= 0 && i < (int)mChips[r].size() && onCommand)
@@ -292,7 +297,7 @@ namespace solaris_ui
         auto deviceName = [&](const std::string &id) {
             for (const auto &d : m.devices)
                 if (d.id == id) return d.name;
-            return id + " (not connected)";
+            return id + " " + say("(not connected)");
         };
         auto ms = [](double v) { char b[32]; std::snprintf(b, sizeof b, "%.1f ms", v); return std::string(b); };
         for (auto &r : mPortRows) r.leaving = true;
@@ -319,7 +324,7 @@ namespace solaris_ui
                 row->channel = colon == std::string::npos ? 0 : std::atoi(v.c_str() + colon + 1);
             }
             const bool out = pm.dir != "in";
-            row->label = row->device.empty() ? std::string(out ? "Clock device" : "Default input") : deviceName(row->device);
+            row->label = row->device.empty() ? (out ? say("Clock device") : say("Default input")) : deviceName(row->device);
             // its line: where it plays — and, playing, how its device is
             const bool own = out ? (row->device.empty() || row->device == s.output) : (row->device.empty() || row->device == s.input);
             std::string note;
@@ -328,19 +333,21 @@ namespace solaris_ui
                 const solaris::AudioDeviceModel *d = nullptr;
                 for (const auto &x : m.transport.devices)
                     if ((own && out && x.role == "clock") || (!own && x.id == row->device)) d = &x;
-                if (d && !d->problem.empty()) note = "silent \xE2\x80\x94 " + d->problem;
+                if (d && !d->problem.empty()) note = say("silent \xE2\x80\x94 {1}", d->problem); // the service's reason, as it is
                 else if (d)
                 {
                     char drift[32];
                     std::snprintf(drift, sizeof drift, "%+.2f ppm", d->driftPpm);
-                    note = d->role == "clock" ? "the clock \xC2\xB7 " + ms(d->latencyMs) : "held to the clock \xC2\xB7 " + ms(d->latencyMs) + " \xC2\xB7 " + drift;
-                    if (d->xruns >= 0) note += " \xC2\xB7 " + std::to_string(d->xruns) + (d->xruns == 1 ? " xrun" : " xruns");
+                    note = d->role == "clock" ? say("the clock") + " \xC2\xB7 " + ms(d->latencyMs) : say("held to the clock") + " \xC2\xB7 " + ms(d->latencyMs) + " \xC2\xB7 " + drift;
+                    if (d->xruns >= 0) note += " \xC2\xB7 " + sayn(d->xruns, "{1} xrun", "{1} xruns", d->xruns);
                 }
             }
             if (note.empty())
             {
-                if (out) note = own ? "plays on the clock device" : "plays on " + row->label + " from channel " + std::to_string(row->channel + 1) + ", held to the clock";
-                else note = own ? "records beside the clock" : "records from " + row->label + ", held to the clock";
+                // a device's name inside a sentence: a device that is gone says so in its own words, after the sentence
+                const std::string dev = row->device.empty() ? std::string() : row->label;
+                if (out) note = own ? say("plays on the clock device") : say("plays on {1} from channel {2}, held to the clock", english(dev), row->channel + 1);
+                else note = own ? say("records beside the clock") : say("records from {1}, held to the clock", english(dev));
             }
             row->noteWant = note;
         }
@@ -356,7 +363,7 @@ namespace solaris_ui
             std::vector<Chip> chips;
             if (r == kOutput || r == kInput)
             {
-                chips.push_back(Chip{"System default", ""});
+                chips.push_back(Chip{say("System default"), ""});
                 const std::string dir = r == kOutput ? "out" : "in";
                 for (const auto &d : m.devices)
                     if (d.dir == dir) chips.push_back(Chip{d.name, d.id});
@@ -364,18 +371,24 @@ namespace solaris_ui
             else if (r == kSurfacePort)
             {
                 // R-CTRL-2: the surface's own port — any the machine lists
-                chips = {Chip{"None", ""}};
+                chips = {Chip{say("None"), ""}};
                 for (const auto &d : m.midiDevices) chips.push_back(Chip{d.name, d.id});
             }
             else if (r == kMidiIn)
             {
                 // R-MIDI-2: every input, none, or one keyboard — the ports as the machine lists them
-                chips = {Chip{"Every MIDI input", "all"}, Chip{"None", "none"}};
+                chips = {Chip{say("Every MIDI input"), "all"}, Chip{say("None"), "none"}};
                 for (const auto &d : m.midiDevices) chips.push_back(Chip{d.name, d.id});
+            }
+            else if (r == kLanguage)
+            {
+                // R-ACCESS-2: automatic (the system's), then each language by its own name — the same in every language
+                chips = {Chip{say("Automatic"), "auto"}};
+                for (const auto &l : s.languages) chips.push_back(Chip{l.name, l.code});
             }
             else
                 for (const auto &c : mChips[r])
-                    if (c.label.find(" (set elsewhere)") == std::string::npos) chips.push_back(c); // the fixed list, without an old extra
+                    if (english(c.label).find("(set elsewhere)") == std::string::npos) chips.push_back(c); // the fixed list, without an old extra
             const std::string cur = current(r);
             int sel = -1;
             for (size_t i = 0; i < chips.size(); ++i)
@@ -383,19 +396,20 @@ namespace solaris_ui
             if (sel < 0)
             {
                 std::string label = cur;
-                if (r == kOutput || r == kInput) label += " (not connected)";
-                else if (r == kNewBpm) label += " bpm (set elsewhere)";
-                else if (r == kClickLevel || r == kPreviewLevel) label += " dB (set elsewhere)";
-                else label += " (set elsewhere)";
+                if (r == kOutput || r == kInput) label += " " + say("(not connected)");
+                else if (r == kNewBpm) label += " bpm " + say("(set elsewhere)");
+                else if (r == kClickLevel || r == kPreviewLevel) label += " dB " + say("(set elsewhere)");
+                else label += " " + say("(set elsewhere)");
                 chips.push_back(Chip{label, cur});
                 sel = (int)chips.size() - 1;
             }
             mChips[r] = chips;
             std::vector<std::string> labels;
-            for (const auto &c : chips) labels.push_back(c.label);
+            for (const auto &c : chips) labels.push_back(::arstro::solaris_ui::shown(c.label));
             if (labels != mCombos[r]->options()) mCombos[r]->setOptions(labels);
             mCombos[r]->setSelectedIndex(sel);
         }
+        mLabelsLang = solaris_strings::language(); // the choices are shown in it now
         // R-SET-4: the keymap's chips, keyed by combo — a key that arrives grows in, one that leaves shrinks where it was
         bool same = mKeyRows.size() == s.keys.size();
         for (size_t a = 0; same && a < s.keys.size(); ++a) same = mKeyRows[a].id == s.keys[a].id;
@@ -427,11 +441,26 @@ namespace solaris_ui
         }
     }
 
+    void SettingsSheet::relabel()
+    {
+        // R-ACCESS-2: each combo's choices in the language drawn now — a change of language only (bind keeps them otherwise)
+        const std::string &lang = solaris_strings::language();
+        if (lang == mLabelsLang) return;
+        mLabelsLang = lang;
+        for (int r = 0; r < kRows; ++r)
+        {
+            if (!mCombos[r]) continue;
+            std::vector<std::string> labels;
+            for (const auto &c : mChips[r]) labels.push_back(::arstro::solaris_ui::shown(c.label));
+            if (labels != mCombos[r]->options()) mCombos[r]->setOptions(labels);
+        }
+    }
+
     void SettingsSheet::accessibles(std::vector<A11yNode> &out)
     {
         for (int sec = 0; sec < kSections; ++sec)
         {
-            A11yNode n = a11yNode("settings.section." + std::to_string(sec), "tab", kTitles[sec], railRect(sec));
+            A11yNode n = a11yNode("settings.section." + std::to_string(sec), "tab", tr(kTitles[sec]), railRect(sec));
             n.checked = sec == mSection;
             out.push_back(n);
         }
@@ -442,15 +471,15 @@ namespace solaris_ui
             const std::string now = current(r);
             if (isToggle(r))
             {
-                A11yNode t = a11yNode(std::string("settings.") + kKeys[r], "toggle", kLabels[r], c, now);
+                A11yNode t = a11yNode(std::string("settings.") + kKeys[r], "toggle", tr(kLabels[r]), c, now == "on" ? tr("on") : tr("off"));
                 t.checked = now == "on";
                 out.push_back(t);
                 continue;
             }
-            std::string shown = now;
+            std::string said = now;
             for (const auto &chip : mChips[r])
-                if (chip.value == now) shown = chip.label;
-            A11yNode n = a11yNode(std::string("settings.") + kKeys[r], "combo", kLabels[r], c, shown);
+                if (chip.value == now) said = ::arstro::solaris_ui::shown(chip.label);
+            A11yNode n = a11yNode(std::string("settings.") + kKeys[r], "combo", tr(kLabels[r]), c, said);
             n.step = [this, r, now](int dir, bool) { // the next choice: the line picking it sends
                 const auto &chips = mChips[r];
                 if (chips.empty() || !onCommand) return;
@@ -463,7 +492,7 @@ namespace solaris_ui
             n.activate = [step = n.step]() { step(+1, false); };
             out.push_back(n);
         }
-        out.push_back(a11yNode("settings.done", "button", "Done", doneRect()));
+        out.push_back(a11yNode("settings.done", "button", tr("Done"), doneRect()));
     }
 
     std::string SettingsSheet::current(int row) const
@@ -489,6 +518,7 @@ namespace solaris_ui
         case kCountIn: return std::to_string(mSettings.countIn);
         case kSurface: return mSettings.surface;
         case kSurfacePort: return mSettings.surfacePort;
+        case kLanguage: return mSettings.language; // R-ACCESS-2
         default: return std::string();
         }
     }
@@ -735,7 +765,7 @@ namespace solaris_ui
         mHover.advance(nowMs);
         // R-CTRL-2: the surface's note — connected, or why not — cross-fades to its new text
         {
-            const std::string n = rowNote(kSurface);
+            const std::string n = rowWords(kSurface); // words: a language switch is the window's dissolve, not this one
             if (n != mSurfNote)
             {
                 if (mSurfNotePlaced)
@@ -808,13 +838,13 @@ namespace solaris_ui
     std::string SettingsSheet::portDeviceLabel(const std::string &port) const
     {
         for (const auto &r : mPortRows)
-            if (r.p.name == port) return r.label;
+            if (r.p.name == port) return ::arstro::solaris_ui::shown(r.label); // in the language drawn
         return "";
     }
     std::string SettingsSheet::portNote(const std::string &port) const
     {
         for (const auto &r : mPortRows)
-            if (r.p.name == port) return r.note;
+            if (r.p.name == port) return ::arstro::solaris_ui::shown(r.note);
         return "";
     }
     double SettingsSheet::portNoteAmount(const std::string &port) const
@@ -834,12 +864,12 @@ namespace solaris_ui
             if (onCommand) onCommand("settings set " + q("port." + name + "=" + v));
         };
         std::vector<cosmo_v2::ContextMenu::Item> items;
-        items.push_back({std::string(out ? "Clock device" : "Default input") + (r.device.empty() ? "  \xC2\xB7 now" : ""), [line] { line(""); }});
+        items.push_back({(out ? say("Clock device") : say("Default input")) + (r.device.empty() ? "  \xC2\xB7 " + say("now") : std::string()), [line] { line(""); }});
         for (const auto &d : mDevices)
             if (d.dir == (out ? "out" : "in"))
             {
                 const std::string id = d.id;
-                items.push_back({d.name + (d.id == r.device ? "  \xC2\xB7 now" : ""), [line, id, ch] { line(id + ":" + ch); }});
+                items.push_back({d.name + (d.id == r.device ? "  \xC2\xB7 " + say("now") : std::string()), [line, id, ch] { line(id + ":" + ch); }});
             }
         onMenu(std::move(items), world);
     }
@@ -999,9 +1029,10 @@ namespace solaris_ui
         const Rect c = cardRect();
         drawRoundedRect(t, c, radius::control(), Paint::filledStroked(palette::popover(), palette::border(), 1.0));
         t.setFill(palette::foreground());
-        t.drawText("Settings", c.x + kPad, c.y + 34.0, 14.0, font::sansSemiBold());
+        const std::string title = tr("Settings");
+        t.drawText(title, c.x + kPad, c.y + 34.0, 14.0, font::sansSemiBold());
         t.setFill(palette::mutedForeground());
-        t.drawText("this machine \xC2\xB7 never a song's", c.x + kPad + t.measureText("Settings", 14.0, font::sansSemiBold()) + 10.0, c.y + 34.0, 10.0, font::sans());
+        t.drawText(tr("this machine \xC2\xB7 never a song's"), c.x + kPad + t.measureText(title, 14.0, font::sansSemiBold()) + 10.0, c.y + 34.0, 10.0, font::sans());
 
         // the rail: a highlight that slides to the chosen section, each name easing to the foreground with it
         const Rect r0 = railRect(0);
@@ -1014,7 +1045,7 @@ namespace solaris_ui
             if (hv > 0.001) drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv)));
             const double lit = std::clamp(1.0 - std::fabs(mRailY.value() - r.y) / kRailItemH, 0.0, 1.0); // follows the highlight
             t.setFill(lerpColor(palette::mutedForeground(), palette::foreground(), std::max(lit, 0.5 * hv)));
-            t.drawText(kTitles[s], r.x + 14.0, textfit::baseline(r.y + r.h * 0.5, 12.0), 12.0, font::sans());
+            t.drawText(textfit::ellipsize(t, tr(kTitles[s]), r.w - 20.0, 12.0, font::sans()), r.x + 14.0, textfit::baseline(r.y + r.h * 0.5, 12.0), 12.0, font::sans());
         }
         const double sx = c.x + 12.0 + kRailW + 12.0;
         t.setStroke(palette::border(), 1.0);
@@ -1027,7 +1058,8 @@ namespace solaris_ui
         const double dhv = mHover.amount(kDoneId);
         if (dhv > 0.001) drawRoundedRect(t, mDone, radius::control(), Paint::filled(palette::hoverWash(dhv)));
         t.setFill(palette::primaryForeground());
-        t.drawText("Done", mDone.x + (mDone.w - t.measureText("Done", 12.0, font::sansMedium())) * 0.5, textfit::baseline(mDone.y + mDone.h * 0.5, 12.0), 12.0,
+        const std::string done = textfit::ellipsize(t, tr("Done"), mDone.w - 12.0, 12.0, font::sansMedium());
+        t.drawText(done, mDone.x + (mDone.w - t.measureText(done, 12.0, font::sansMedium())) * 0.5, textfit::baseline(mDone.y + mDone.h * 0.5, 12.0), 12.0,
                    font::sansMedium());
     }
 
@@ -1038,7 +1070,7 @@ namespace solaris_ui
         t.save();
         t.clipRect(0.0, 0.0, page.width.value(), page.height.value()); // clipToBounds clips the CHILDREN, not this paint
         t.setFill(palette::foreground());
-        t.drawText(kTitles[s], 0.0, oy + 16.0, 14.0, font::sansSemiBold());
+        t.drawText(tr(kTitles[s]), 0.0, oy + 16.0, 14.0, font::sansSemiBold());
         if (s == kFolders) paintFolders(t, w, oy, px, py);
         else if (s == kKeyboard) paintKeyboard(t, w, oy, px, py);
         else if (s == kMidi)
@@ -1056,37 +1088,39 @@ namespace solaris_ui
         t.restore();
     }
 
-    std::string SettingsSheet::rowNote(int r) const
+    std::string SettingsSheet::rowNote(int r) const { return ::arstro::solaris_ui::shown(rowWords(r)); }
+
+    std::string SettingsSheet::rowWords(int r) const
     {
         std::string note;
-        if (r == kOutput) note = "the clock \xE2\x80\x94 every other device follows it";
-        if (r == kInput) note = "where a recording comes from";
-        if (r == kRate) note = "new songs start here";
-        if (r == kMetronome) note = "clicks while playing \xE2\x80\x94 never in a render";
-        if (r == kClickLevel) note = "how loud the click is";
-        if (r == kPreviewLevel) note = "a sample heard from the browser";
-        if (r == kNewBpm) note = "a new song starts at this tempo";
-        if (r == kNewSig) note = "\xE2\x80\xA6 and in this meter";
-        if (r == kMotion) note = "every tween collapses \xE2\x80\x94 the system's own setting counts too";
-        if (r == kAutosave) note = "an unsaved song is kept beside it \xE2\x80\x94 recovered if Solaris stops";
-        if (r == kUiScale) note = "the whole window, drawn larger or smaller \xE2\x80\x94 it zooms there";
-        if (r == kContrast) note = "white on black, solid borders, brighter quiet text";
-        if (r == kDriver) note = "PipeWire for small buffers and counted xruns \xE2\x80\x94 PulseAudio if it will not open";
-        if (r == kMidiIn) note = "the keyboard an armed strip plays";
-        if (r == kRecQuant) note = "where a recorded note's start lands";
-        if (r == kCountIn) note = "the click before a recording, the song waiting";
-        if (r == kSurface) // R-CTRL-2: as it is now
-            note = mSurface.protocol == "none" ? "faders, pans, buttons and the transport on a Mackie Control or HUI surface"
-                   : mSurface.connected       ? "connected \xC2\xB7 strips " + std::to_string(mSurface.bank + 1) + "\xE2\x80\x93" + std::to_string(mSurface.bank + 8)
-                                              : "not connected \xE2\x80\x94 " + mSurface.why;
-        if (r == kSurfacePort) note = "its own port, in and out \xE2\x80\x94 the keyboard does not listen there";
+        if (r == kOutput) note = N_("the clock \xE2\x80\x94 every other device follows it");
+        if (r == kInput) note = N_("where a recording comes from");
+        if (r == kRate) note = N_("new songs start here");
+        if (r == kMetronome) note = N_("clicks while playing \xE2\x80\x94 never in a render");
+        if (r == kClickLevel) note = N_("how loud the click is");
+        if (r == kPreviewLevel) note = N_("a sample heard from the browser");
+        if (r == kNewBpm) note = N_("a new song starts at this tempo");
+        if (r == kNewSig) note = N_("\xE2\x80\xA6 and in this meter");
+        if (r == kMotion) note = N_("every tween collapses \xE2\x80\x94 the system's own setting counts too");
+        if (r == kAutosave) note = N_("an unsaved song is kept beside it \xE2\x80\x94 recovered if Solaris stops");
+        if (r == kUiScale) note = N_("the whole window, drawn larger or smaller \xE2\x80\x94 it zooms there");
+        if (r == kContrast) note = N_("white on black, solid borders, brighter quiet text");
+        if (r == kDriver) note = N_("PipeWire for small buffers and counted xruns \xE2\x80\x94 PulseAudio if it will not open");
+        if (r == kMidiIn) note = N_("the keyboard an armed strip plays");
+        if (r == kRecQuant) note = N_("where a recorded note's start lands");
+        if (r == kCountIn) note = N_("the click before a recording, the song waiting");
+        if (r == kSurface) note = N_("faders, pans, buttons and the transport on a Mackie Control or HUI surface"); // R-CTRL-2: as it is now (below)
+        if (r == kSurfacePort) note = N_("its own port, in and out \xE2\x80\x94 the keyboard does not listen there");
+        if (r == kLanguage) note = N_("the window's words \xE2\x80\x94 Automatic is the system's, when Solaris has it"); // R-ACCESS-2
         if (r == kBuffer)
         {
             char b[64];
-            std::snprintf(b, sizeof b, "%.1f ms of latency", mLatencyMs);
-            note = b;
+            std::snprintf(b, sizeof b, "%.1f", mLatencyMs);
+            return say("{1} ms of latency", b);
         }
-        return note;
+        if (r == kSurface && mSurface.protocol != "none") // the bank and the service's reason are data inside the words
+            return mSurface.connected ? say("connected \xC2\xB7 strips {1}\xE2\x80\x93{2}", mSurface.bank + 1, mSurface.bank + 8) : say("not connected \xE2\x80\x94 {1}", mSurface.why);
+        return note.empty() ? note : say(note.c_str());
     }
 
     void SettingsSheet::paintRows(IRenderTarget &t, int s, double w, double oy) const
@@ -1100,13 +1134,13 @@ namespace solaris_ui
             const std::string note = rowNote(r);
             const double room = w - (isToggle(r) ? 40.0 : kComboW) - 20.0;
             t.setFill(palette::foreground());
-            t.drawText(textfit::ellipsize(t, kLabels[r], room, 12.0, font::sans()), 0.0, top + 23.0, 12.0, font::sans());
+            t.drawText(textfit::ellipsize(t, tr(kLabels[r]), room, 12.0, font::sans()), 0.0, top + 23.0, 12.0, font::sans());
             if (r == kSurface && mSurfNoteFade.value() < 1.0)
             {
                 // R-CTRL-2: the old line out, the new in
                 const double a = mSurfNoteFade.value();
                 t.setFill(fade(palette::mutedForeground(), 1.0 - a));
-                t.drawText(textfit::ellipsize(t, mSurfNoteOld, room, 10.0, font::sans()), 0.0, top + 39.0, 10.0, font::sans());
+                t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(mSurfNoteOld), room, 10.0, font::sans()), 0.0, top + 39.0, 10.0, font::sans());
                 t.setFill(fade(palette::mutedForeground(), a));
             }
             else t.setFill(palette::mutedForeground());
@@ -1126,15 +1160,16 @@ namespace solaris_ui
         // under the surface's rows: the mapped controls, titled as a section (R-SET-5's micro-label)
         double fy = oy + kPageTop + (double)kPageRows[kMidi].size() * kRowH + 14.0;
         t.setFill(palette::mutedForeground());
-        t.drawText("MAPPED CONTROLS", 0.0, fy, 9.0, font::sansSemiBold(), 0.13 * 9.0);
-        t.drawText("controls and what they move", t.measureText("MAPPED CONTROLS", 9.0, font::sansSemiBold()) + 0.13 * 9.0 * 15 + 10.0, fy, 10.0, font::sans());
+        const std::string head = upper(tr("Mapped controls"));
+        t.drawText(head, 0.0, fy, 9.0, font::sansSemiBold(), 0.13 * 9.0);
+        t.drawText(tr("controls and what they move"), trackedW(t, head, 9.0, font::sansSemiBold()) + 10.0, fy, 10.0, font::sans());
         fy += 8.0;
         mMapRemove.clear();
         mMapRemoveCc.clear();
         if (mMapRows.empty())
         {
             t.setFill(fade(palette::mutedForeground(), 0.8));
-            t.drawText(textfit::ellipsize(t, "None yet \xE2\x80\x94 right-click a number \xE2\x80\xBA Learn MIDI CC, and move a control.", w, kFontPx, font::sans()), 0.0,
+            t.drawText(textfit::ellipsize(t, tr("None yet \xE2\x80\x94 right-click a number \xE2\x80\xBA Learn MIDI CC, and move a control."), w, kFontPx, font::sans()), 0.0,
                        textfit::baseline(fy + kFolderRowH * 0.5, kFontPx), kFontPx, font::sans());
             fy += kFolderRowH;
         }
@@ -1163,7 +1198,7 @@ namespace solaris_ui
             t.drawText("CC " + mr.m.cc, row.x, base, 10.0, font::mono());
             const double ax = row.x + 72.0; // u(22): "CC 16/127" fits
             t.setFill(fade(mr.m.inert ? palette::mutedForeground() : palette::foreground(), a));
-            const std::string what = mr.m.address + (mr.m.inert ? "  \xC2\xB7 not in this song" : "");
+            const std::string what = mr.m.address + (mr.m.inert ? "  \xC2\xB7 " + tr("not in this song") : std::string());
             t.drawText(textfit::ellipsize(t, what, std::max(0.0, rm.x - 8.0 - ax), 10.0, font::mono()), ax, base, 10.0, font::mono());
             if (hv > 0.001) drawRoundedRect(t, rm, radius::control(), Paint::filled(palette::hoverWash(hv)));
             const Color xc = fade(lerpColor(palette::mutedForeground(), palette::destructive(), hv), a);
@@ -1180,14 +1215,15 @@ namespace solaris_ui
         // R-DEV-1/5: under the devices, the open song's ports — each on its device, and how that device is
         double fy = oy + kPageTop + (double)kPageRows[kAudio].size() * kRowH + 14.0;
         t.setFill(palette::mutedForeground());
-        t.drawText("PORTS", 0.0, fy, 9.0, font::sansSemiBold(), 0.13 * 9.0);
-        t.drawText("where this song's ports play on this machine", t.measureText("PORTS", 9.0, font::sansSemiBold()) + 0.13 * 9.0 * 5 + 10.0, fy, 10.0, font::sans());
+        const std::string head = upper(tr("Ports"));
+        t.drawText(head, 0.0, fy, 9.0, font::sansSemiBold(), 0.13 * 9.0);
+        t.drawText(tr("where this song's ports play on this machine"), trackedW(t, head, 9.0, font::sansSemiBold()) + 10.0, fy, 10.0, font::sans());
         fy += 8.0;
         mPortFields.clear();
         if (mPortRows.empty())
         {
             t.setFill(fade(palette::mutedForeground(), 0.8));
-            t.drawText(textfit::ellipsize(t, "No song open \xE2\x80\x94 its ports are listed here.", w, kFontPx, font::sans()), 0.0,
+            t.drawText(textfit::ellipsize(t, tr("No song open \xE2\x80\x94 its ports are listed here."), w, kFontPx, font::sans()), 0.0,
                        textfit::baseline(fy + kFolderRowH * 0.5, kFontPx), kFontPx, font::sans());
             fy += kFolderRowH;
         }
@@ -1206,20 +1242,20 @@ namespace solaris_ui
             const std::string name = textfit::ellipsize(t, r.p.name, room * 0.6, 12.0, font::sans());
             t.drawText(name, 0.0, fy + 23.0, 12.0, font::sans());
             t.setFill(fade(palette::mutedForeground(), a));
-            t.drawText(r.p.dir == "in" ? "in" : "out", t.measureText(name, 12.0, font::sans()) + 8.0, fy + 23.0, 10.0, font::sans());
+            t.drawText(r.p.dir == "in" ? trc("port", "in") : trc("port", "out"), t.measureText(name, 12.0, font::sans()) + 8.0, fy + 23.0, 10.0, font::sans());
             const double nf = r.noteFade.value();
             if (nf < 1.0 && !r.noteOld.empty())
             {
                 t.setFill(fade(palette::mutedForeground(), a * (1.0 - nf))); // the old line out, the new in
-                t.drawText(textfit::ellipsize(t, r.noteOld, room, 10.0, font::sans()), 0.0, fy + 39.0, 10.0, font::sans());
+                t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(r.noteOld), room, 10.0, font::sans()), 0.0, fy + 39.0, 10.0, font::sans());
             }
             t.setFill(fade(palette::mutedForeground(), a * nf));
-            t.drawText(textfit::ellipsize(t, r.note, room, 10.0, font::sans()), 0.0, fy + 39.0, 10.0, font::sans());
+            t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(r.note), room, 10.0, font::sans()), 0.0, fy + 39.0, 10.0, font::sans());
             // the field: as a combo's (SettingCombo), its device named
             drawRoundedRect(t, field, radius::control(),
                             Paint::filledStroked(fade(palette::input(), a), fade(lerpColor(palette::border(), palette::primary(), 0.6 * hv), a), 1.0));
             t.setFill(fade(palette::foreground(), a));
-            t.drawText(textfit::ellipsize(t, r.label, field.w - 36.0, kFontPx, font::sans()), field.x + 10.0, textfit::baseline(field.y + field.h * 0.5, kFontPx), kFontPx,
+            t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(r.label), field.w - 36.0, kFontPx, font::sans()), field.x + 10.0, textfit::baseline(field.y + field.h * 0.5, kFontPx), kFontPx,
                        font::sans());
             glyph::caretDown(t, Rect{field.right() - 22.0, field.y + (field.h - 10.0) * 0.5, 12.0, 10.0},
                              fade(lerpColor(palette::mutedForeground(), palette::foreground(), hv), a), 1.3);
@@ -1237,13 +1273,13 @@ namespace solaris_ui
     void SettingsSheet::paintFolders(IRenderTarget &t, double w, double oy, double px, double py) const
     {
         t.setFill(palette::mutedForeground());
-        t.drawText("the browser lists these first", t.measureText(kTitles[kFolders], 14.0, font::sansSemiBold()) + 10.0, oy + 16.0, 10.0, font::sans());
+        t.drawText(tr("the browser lists these first"), t.measureText(tr(kTitles[kFolders]), 14.0, font::sansSemiBold()) + 10.0, oy + 16.0, 10.0, font::sans());
         mRemove.clear();
         double fy = oy + kPageTop;
         if (mFolders.empty())
         {
             t.setFill(fade(palette::mutedForeground(), 0.8));
-            t.drawText("None yet \xE2\x80\x94 add the folders you keep samples in.", 0.0, textfit::baseline(fy + kFolderRowH * 0.5, kFontPx), kFontPx, font::sans());
+            t.drawText(textfit::ellipsize(t, tr("None yet \xE2\x80\x94 add the folders you keep samples in."), w, kFontPx, font::sans()), 0.0, textfit::baseline(fy + kFolderRowH * 0.5, kFontPx), kFontPx, font::sans());
             fy += kFolderRowH;
         }
         for (size_t i = 0; i < mFolders.size(); ++i)
@@ -1265,7 +1301,7 @@ namespace solaris_ui
             glyph::line(t, rm.right() - 5.5, rm.y + 5.5, rm.x + 5.5, rm.bottom() - 5.5, xc, 1.3);
             fy += kFolderRowH;
         }
-        const std::string lbl = "Add folder\xE2\x80\xA6";
+        const std::string lbl = tr("Add folder\xE2\x80\xA6");
         const double bw = t.measureText(lbl, kFontPx, font::sans()) + 40.0;
         const Rect add{0.0, fy + 8.0, bw, kChipH};
         mAddFolder = Rect{add.x + px, add.y + py, add.w, add.h};
@@ -1284,7 +1320,7 @@ namespace solaris_ui
         mKeyChipRects.clear();
         mKeyAddRects.clear();
         {
-            const std::string lbl = "Reset to defaults";
+            const std::string lbl = tr("Reset to defaults");
             const double bw = t.measureText(lbl, kFontPx, font::sans()) + 22.0, rl = mResetLive.p.value();
             const Rect reset{w - bw, oy + 1.0, bw, 22.0};
             mKeyReset = Rect{reset.x + px, reset.y + py, reset.w, reset.h};
@@ -1294,12 +1330,13 @@ namespace solaris_ui
             if (hv > 0.001) drawRoundedRect(t, reset, radius::control(), Paint::filled(palette::hoverWash(hv)));
             t.setFill(fade(palette::foreground(), ra));
             t.drawText(lbl, reset.x + 11.0, textfit::baseline(reset.y + reset.h * 0.5, kFontPx), kFontPx, font::sans());
-            const double nx = t.measureText(kTitles[kKeyboard], 14.0, font::sansSemiBold()) + 10.0;
+            const double nx = t.measureText(tr(kTitles[kKeyboard]), 14.0, font::sansSemiBold()) + 10.0;
             t.setFill(fade(palette::mutedForeground(), 0.8));
-            t.drawText(textfit::ellipsize(t, "click a key and press the new one \xC2\xB7 Backspace removes it", std::max(0.0, reset.x - nx - 10.0), 10.0, font::sans()),
+            t.drawText(textfit::ellipsize(t, tr("click a key and press the new one \xC2\xB7 Backspace removes it"), std::max(0.0, reset.x - nx - 10.0), 10.0, font::sans()),
                        nx, oy + 16.0, 10.0, font::sans());
         }
-        const double wListen = t.measureText(kListening, kFontPx, font::sans()) + 18.0;
+        const std::string listening = tr(kListening);
+        const double wListen = t.measureText(listening, kFontPx, font::sans()) + 18.0;
         // a key chip: its combo, or — listening — "Press a key…", cross-faded; its width follows both
         auto keyChip = [&](const Rect &b, const std::string &combo, double L, double amt, double hv) {
             drawRoundedRect(t, b, radius::control(), Paint::filledStroked(fade(palette::secondary(), amt), fade(lerpColor(palette::border(), palette::primary(), L), amt), 1.0));
@@ -1316,7 +1353,7 @@ namespace solaris_ui
             if (L > 0.001)
             {
                 t.setFill(fade(palette::foreground(), amt * L));
-                t.drawText(kListening, b.x + (b.w - (wListen - 18.0)) * 0.5, by, kFontPx, font::sans());
+                t.drawText(listening, b.x + (b.w - (wListen - 18.0)) * 0.5, by, kFontPx, font::sans());
             }
             t.restore();
         };

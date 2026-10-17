@@ -30,6 +30,14 @@ namespace cosmo_v2
         explicit ConfirmDialog(const artboard::Color &accent);
 
         void show(const std::string &title, const std::string &message, std::vector<Button> buttons);
+        /** The dialog in other words, its fade untouched (opt-in: Solaris, R-ACCESS-2; cosmo never calls it). */
+        void relabel(const std::string &title, const std::string &message, const std::vector<std::string> &labels)
+        {
+            if (labels.size() != mButtons.size()) return;
+            mTitle = title;
+            mMessage = message;
+            for (size_t i = 0; i < labels.size(); ++i) mButtons[i].label = labels[i];
+        }
         bool isOpen() const { return mOpen && !mClosing; }
         /** Snap shut immediately (used when leaving the editor mid-prompt). */
         void close() { mOpen = false; mClosing = false; mAppear.set(0.0); }

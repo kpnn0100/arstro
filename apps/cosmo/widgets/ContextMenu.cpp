@@ -226,7 +226,7 @@ namespace cosmo_v2
             {
                 Color fg = palette::mutedForeground(); fg.a *= headerA;
                 t.setFill(fg);
-                t.drawText("Rename", r.x + kPadX, r.y + kPadY + kHeaderH * 0.5 + kFontPx * 0.35, kFontPx, font::sans());
+                t.drawText(renameTitle, r.x + kPadX, r.y + kPadY + kHeaderH * 0.5 + kFontPx * 0.35, kFontPx, font::sans());
             }
 
             // The elegant light field grows in below the header.

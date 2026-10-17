@@ -409,7 +409,10 @@ int main(int argc, char **argv)
         if (a->a11yAsked) readAccessibles(a);
     };
 #endif
-    a->app->setOsReducedMotion(!animations); // the OS's "reduce motion" (design rule §2.6); the app's own setting ORs in
+    a->app->setOsReducedMotion(!animations);
+    // R-ACCESS-2: the OS's language (LANGUAGE, LC_ALL, LC_MESSAGES, LANG — GLib's order) — `language=auto` draws in it
+    const gchar *const *langs = g_get_language_names();
+    a->app->setOsLanguage(langs && langs[0] ? langs[0] : ""); // the OS's "reduce motion" (design rule §2.6); the app's own setting ORs in
     // R-VIDEO-1: a frame of the song's picture — one decoder for the window, one for the lane's thumbnails
     auto frameFrom = [](solaris_host::VideoReader &reader, std::string &opened, const std::string &file, double t, int bw, int bh,
                         arstro::solaris_ui::VideoImage &out) {

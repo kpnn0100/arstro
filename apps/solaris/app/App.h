@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "AppHooks.h"
+#include "Words.h"
 #include "A11y.h"
 #include "Theme.h"
 #include "widgets/HomeScreen.h"
@@ -102,6 +103,15 @@ namespace solaris_ui
         /** … and the lane's thumbnails: a decoder of their own, so their seeks never cost the window's playing frames
          *  (without it, `onVideoFrame`'s). */
         VideoFrameSource onVideoThumb;
+        /** R-ACCESS-2: the OS's language ("vi_VN.UTF-8"; the host reads it once) — what `language=auto` draws in when
+         *  Solaris has it. */
+        void setOsLanguage(const std::string &os) { mOsLanguage = os; }
+        /** R-ACCESS-2: a switch of language dissolves the whole window — the old language painted, the new one over it at
+         *  this amount (180 ms, linear: a dissolve is a linear alpha ramp). */
+        static constexpr double kLanguageDissolveMs = 180.0;
+        const std::string &drawnLanguage() const { return mLangTo; }   // the language being drawn (the new one, mid-way)
+        const std::string &fadingLanguage() const { return mLangFrom; } // … and the one it dissolves from
+        double languageAmount() const { return mLangFade.value(); }    // LIVE: 0 the old language … 1 the new alone
         /** The OS's own "reduce motion" (the host reads it once); the app ORs it with its setting (R-SET-3). */
         void setOsReducedMotion(bool on) { mOsReducedMotion = on; artboard::setReducedMotion(on || mAppReducedMotion); }
         void openSongPicked(const std::string &path);
@@ -118,7 +128,7 @@ namespace solaris_ui
         // presentation, for the host and the tests
         const std::string &screen() const { return mScreen; }
         double screenOpacity(const std::string &screen) const;
-        const std::string &toastText() const { return mToastText; }
+        std::string toastText() const { return shown(mToastText); } // in the language drawn now
         bool toastIsRefusal() const { return mToastRefusal; }
         double toastAmount() const { return mToast.value(); }
         static double minWidth() { return 960.0; }
@@ -140,7 +150,19 @@ namespace solaris_ui
         void refreshMenus(const solaris::AppModel &m);
         std::string selectedClip() const;
         void layoutAll();
+        /** Words to say (`say` — Words.h — or the service's line, as data). */
         void showToast(const std::string &text, bool refusal = true);
+        /** A menu at `world` — its labels kept as words, shown in each pass's language (R-ACCESS-2). */
+        void openMenu(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world);
+        /** cosmo's dialog, its words kept: the title and the message composed for the language drawn, each pass. */
+        void showConfirm(std::function<std::string()> title, std::function<std::string()> message, std::vector<cosmo_v2::ConfirmDialog::Button> buttons);
+        /** A song-bar menu's words (title, labels as `say` words or data): kept, and shown in the language drawn. */
+        void setMenuWords(int menu, const std::string &title, std::vector<cosmo_v2::MenuStrip::Item> items);
+        /** R-ACCESS-2: every stored word shown in the language drawn now — once a pass, when the language or the words changed. */
+        void relabel();
+        /** One paint of the whole window in a language (twice a frame while a switch dissolves). */
+        void paintPass(artboard::IRenderTarget &target, const artboard::Transform &root, const std::string &language);
+        void advanceLanguage(const solaris::AppModel &m, double nowMs);
         void copy(const std::string &text);
         static std::string quote(const std::string &s);
         static const solaris::AppModel &emptyModel();
@@ -202,6 +224,16 @@ namespace solaris_ui
         double mToastShownAt = -1e9;
         bool mOsReducedMotion = false, mAppReducedMotion = false;
         std::string mMenuKey;                // what the dynamic menu labels were built from
+        // R-ACCESS-2: the language drawn, and the words stored in cosmo's widgets kept as words
+        std::string mOsLanguage, mLangFrom, mLangTo;
+        artboard::AnimatedProperty mLangFade{1.0};
+        std::vector<std::pair<std::string, std::vector<std::string>>> mMenuWords; // each song-bar menu: its title, its labels
+        std::vector<std::string> mContextWords;                                  // the open menu's labels
+        std::function<std::string()> mConfirmTitle, mConfirmMessage;
+        std::vector<std::string> mConfirmWords;                                  // its buttons' labels
+        std::string mHistoryHint;                                                // the history view's line
+        long mWordsGen = 0, mRelabelGen = -1;
+        std::string mRelabelLang;
         std::string mRecoveryAsked;          // R-SAFE-2: the song whose autosave the window has asked about
     };
 }

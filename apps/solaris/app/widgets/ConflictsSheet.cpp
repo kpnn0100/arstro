@@ -79,8 +79,8 @@ namespace solaris_ui
                         if (std::find(tb.begin(), tb.end(), t) == tb.end()) da += (da.empty() ? "" : " ") + t;
                     for (const auto &t : tb)
                         if (std::find(ta.begin(), ta.end(), t) == ta.end()) db += (db.empty() ? "" : " ") + t;
-                    outA.push_back(da.empty() ? "(its line the same)" : da);
-                    outB.push_back(db.empty() ? "(its line the same)" : db);
+                    outA.push_back(da.empty() ? say("(its line the same)") : da); // words (the rest the file's own text)
+                    outB.push_back(db.empty() ? say("(its line the same)") : db);
                 }
             }
             size_t i = 1;
@@ -88,7 +88,7 @@ namespace solaris_ui
             if (i < a.size() || i < b.size())
             {
                 auto under = [i](const std::vector<std::string> &v) {
-                    if (i >= v.size()) return std::string("(nothing more under it)");
+                    if (i >= v.size()) return say("(nothing more under it)");
                     const size_t more = v.size() - i - 1;
                     return trimmed(v[i]) + (more ? "  (+" + std::to_string(more) + ")" : std::string());
                 };
@@ -97,13 +97,14 @@ namespace solaris_ui
             }
         }
 
-        void button(IRenderTarget &t, const Rect &r, const char *label, double hover, double a, bool primary)
+        void button(IRenderTarget &t, const Rect &r, const std::string &words, double hover, double a, bool primary)
         {
             drawRoundedRect(t, r, radius::control(), Paint::filled(fade(primary ? palette::primary() : lerpColor(palette::secondary(), palette::card(), hover), a)));
             if (primary && hover > 0.001) drawRoundedRect(t, r, radius::control(), Paint::filled(fade(palette::hoverWash(hover), a)));
             t.setFill(fade(primary ? palette::primaryForeground() : palette::secondaryForeground(), a));
             const char *family = primary ? font::sansMedium() : font::sans();
             const double px = primary ? 12.0 : 11.0;
+            const std::string label = textfit::ellipsize(t, words, r.w - 10.0, px, family); // a longer language fits the button
             t.drawText(label, r.x + (r.w - t.measureText(label, px, family)) * 0.5, textfit::baseline(r.y + r.h * 0.5, px), px, family);
         }
     }
@@ -150,7 +151,12 @@ namespace solaris_ui
     std::vector<std::string> ConflictsSheet::shown(const std::string &node, bool mine) const
     {
         for (const auto &r : mRows)
-            if (r.node == node) return mine ? r.mine : r.theirs;
+            if (r.node == node)
+            {
+                std::vector<std::string> out; // in the language drawn
+                for (const auto &l : mine ? r.mine : r.theirs) out.push_back(::arstro::solaris_ui::shown(l));
+                return out;
+            }
         return {};
     }
 
@@ -172,23 +178,23 @@ namespace solaris_ui
     {
         auto joined = [](const std::vector<std::string> &v) {
             std::string s;
-            for (const auto &x : v) s += (s.empty() ? "" : "; ") + x;
+            for (const auto &x : v) s += (s.empty() ? "" : "; ") + ::arstro::solaris_ui::shown(x);
             return s;
         };
         for (const auto &m : mMine) // as the last paint placed them: the rows in view, none leaving
             for (const auto &r : mRows)
                 if (r.node == m.first)
                 {
-                    out.push_back(a11yNode("conflicts." + r.node + ".mine", "button", "Keep mine \xE2\x80\x94 " + r.what, m.second, joined(r.mine)));
-                    out.push_back(a11yNode("conflicts." + r.node + ".theirs", "button", "Take theirs \xE2\x80\x94 " + r.what, theirsRect(r.node), joined(r.theirs)));
+                    out.push_back(a11yNode("conflicts." + r.node + ".mine", "button", fillIn(tr("Keep mine \xE2\x80\x94 {1}"), r.what), m.second, joined(r.mine)));
+                    out.push_back(a11yNode("conflicts." + r.node + ".theirs", "button", fillIn(tr("Take theirs \xE2\x80\x94 {1}"), r.what), theirsRect(r.node), joined(r.theirs)));
                 }
-        A11yNode all = a11yNode("conflicts.allMine", "button", "Keep All Mine", mAllMine);
+        A11yNode all = a11yNode("conflicts.allMine", "button", tr("Keep All Mine"), mAllMine);
         all.enabled = !mWanted.empty();
         out.push_back(all);
-        all = a11yNode("conflicts.allTheirs", "button", "Take All Theirs", mAllTheirs);
+        all = a11yNode("conflicts.allTheirs", "button", tr("Take All Theirs"), mAllTheirs);
         all.enabled = !mWanted.empty();
         out.push_back(all);
-        out.push_back(a11yNode("conflicts.done", "button", "Done", mDone));
+        out.push_back(a11yNode("conflicts.done", "button", tr("Done"), mDone));
     }
 
     Rect ConflictsSheet::cardRect() const
@@ -334,12 +340,13 @@ namespace solaris_ui
         const Rect c = cardRect();
         drawRoundedRect(t, c, radius::control(), Paint::filledStroked(palette::popover(), palette::border(), 1.0));
         t.setFill(palette::foreground());
-        t.drawText("Conflicts", c.x + kPad, c.y + 34.0, 14.0, font::sansSemiBold());
+        const std::string title = tr("Conflicts");
+        t.drawText(title, c.x + kPad, c.y + 34.0, 14.0, font::sansSemiBold());
         const size_t n = mWanted.size();
-        std::string sub = n == 0 ? "every change is answered" : std::to_string(n) + " asked \xE2\x80\x94 the song keeps yours until you answer";
-        if (mWaiting) sub += "  \xC2\xB7  the file changed again: merged once these are answered";
+        std::string sub = n == 0 ? tr("every change is answered") : fillIn(tr("{1} asked \xE2\x80\x94 the song keeps yours until you answer"), std::to_string(n));
+        if (mWaiting) sub += "  \xC2\xB7  " + tr("the file changed again: merged once these are answered");
         t.setFill(palette::mutedForeground());
-        const double tx = c.x + kPad + t.measureText("Conflicts", 14.0, font::sansSemiBold()) + 10.0;
+        const double tx = c.x + kPad + t.measureText(title, 14.0, font::sansSemiBold()) + 10.0;
         t.drawText(textfit::ellipsize(t, sub, std::max(0.0, c.right() - kPad - tx), 11.0, font::sans()), tx, c.y + 34.0, 11.0, font::sans());
 
         // the rows, clipped to the list and scrolled; each at its eased place, at its eased fade
@@ -353,7 +360,7 @@ namespace solaris_ui
         if (n == 0 && rowsA < 0.999)
         {
             t.setFill(fade(palette::mutedForeground(), 1.0 - rowsA));
-            const char *msg = "Nothing is asked.";
+            const std::string msg = tr("Nothing is asked.");
             t.drawText(msg, c.x + (c.w - t.measureText(msg, 12.0, font::sans())) * 0.5, textfit::baseline(l.y + kRowH * 0.5, 12.0), 12.0, font::sans());
         }
         const double bx = c.right() - kPad - kButtonW, x0 = c.x + kPad;
@@ -370,9 +377,9 @@ namespace solaris_ui
             t.setFill(fade(palette::mutedForeground(), a));
             t.drawText(textfit::ellipsize(t, "  \xC2\xB7  " + r.how, std::max(0.0, bx - 16.0 - x0 - ww), 10.0, font::sans()), x0 + ww, top + 20.0, 10.0, font::sans());
             // its lines here and in the file, side by side
-            auto column = [&](double x, const char *label, const std::vector<std::string> &lines, const char *none) {
+            auto column = [&](double x, const std::string &label, const std::vector<std::string> &lines, const std::string &none) {
                 t.setFill(fade(palette::mutedForeground(), a));
-                t.drawText(label, x, top + 40.0, 9.0, font::sansSemiBold(), 9.0 * 0.13);
+                t.drawText(textfit::ellipsize(t, label, colW, 9.0, font::sansSemiBold()), x, top + 40.0, 9.0, font::sansSemiBold(), 9.0 * 0.13);
                 if (lines.empty())
                 {
                     t.drawText(none, x, top + 56.0, 10.0, font::sans());
@@ -380,10 +387,10 @@ namespace solaris_ui
                 }
                 t.setFill(fade(palette::foreground(), a));
                 for (size_t i = 0; i < lines.size() && i < 2; ++i)
-                    t.drawText(textfit::ellipsize(t, lines[i], colW, 10.0, font::mono()), x, top + 56.0 + 14.0 * (double)i, 10.0, font::mono());
+                    t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(lines[i]), colW, 10.0, font::mono()), x, top + 56.0 + 14.0 * (double)i, 10.0, font::mono());
             };
-            column(x0, "HERE", r.mine, "(not here)");
-            column(x0 + colW + 12.0, "IN THE FILE", r.theirs, "(not in the file)");
+            column(x0, solaris_strings::upper(tr("Here")), r.mine, tr("(not here)"));
+            column(x0 + colW + 12.0, solaris_strings::upper(tr("In the file")), r.theirs, tr("(not in the file)"));
             // Keep Mine · Take Theirs
             const Rect mine{bx, top + 14.0, kButtonW, kButtonH}, theirs{bx, top + 14.0 + kButtonH + 8.0, kButtonW, kButtonH};
             if (!r.leaving)
@@ -391,8 +398,8 @@ namespace solaris_ui
                 mMine.emplace_back(r.node, mine);
                 mTheirs.emplace_back(r.node, theirs);
             }
-            button(t, mine, "Keep Mine", mHover.amount(mineId(r.node)), a, false);
-            button(t, theirs, "Take Theirs", mHover.amount(theirsId(r.node)), a, false);
+            button(t, mine, tr("Keep Mine"), mHover.amount(mineId(r.node)), a, false);
+            button(t, theirs, tr("Take Theirs"), mHover.amount(theirsId(r.node)), a, false);
             if (&r != &mRows.back())
             {
                 t.setStroke(fade(palette::border(), a), 1.0);
@@ -413,9 +420,9 @@ namespace solaris_ui
         mDone = Rect{c.right() - kPad - 88.0, c.bottom() - kFooterH + (kFooterH - 30.0) * 0.5, 88.0, 30.0};
         mAllMine = Rect{c.x + kPad, mDone.y, 128.0, 30.0};
         mAllTheirs = Rect{mAllMine.right() + 8.0, mDone.y, 136.0, 30.0};
-        button(t, mAllMine, "Keep All Mine", mHover.amount(kAllMineId), mAllOn.value(), false);
-        button(t, mAllTheirs, "Take All Theirs", mHover.amount(kAllTheirsId), mAllOn.value(), false);
-        button(t, mDone, "Done", mHover.amount(kDoneId), 1.0, true);
+        button(t, mAllMine, tr("Keep All Mine"), mHover.amount(kAllMineId), mAllOn.value(), false);
+        button(t, mAllTheirs, tr("Take All Theirs"), mHover.amount(kAllTheirsId), mAllOn.value(), false);
+        button(t, mDone, tr("Done"), mHover.amount(kDoneId), 1.0, true);
     }
 }
 }

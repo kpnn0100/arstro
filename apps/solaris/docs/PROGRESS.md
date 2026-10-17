@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N43 part 2 — the shell through the table** (R-ACCESS-2; Round 21: Home, the song bar and its menus, Settings, Export, Relink, Conflicts, the confirm dialogs, the toasts, their accessible names; Settings › Interface › Language; the dissolve; the recorded-strings test and the source scan; shots in vi and en-XA), then part 3, then N44, in order (the user: *"implement all"*). Owed live checks: N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N43 part 3 — the song view through the table** (R-ACCESS-2; Round 21: the browser, the lanes and the ruler, the dock, the windows — device, roll, automation, loudness, video, tuner, session — their menus and accessible names; the same recorded-strings test and scan extended; shots), then N44, in order (the user: *"implement all"*). Owed live checks: N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -682,6 +682,14 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       (3) the song view. Part 1: `solaris_strings` (strings/ — tr / trc / trn / fill, plural rules, the pseudo-language,
       `auto` from the OS; tables parsed with refusals by line and compiled in by embed_strings.cmake), `lang/vi.strings`
       begun, `settings set language=` (refused naming the nearest), `settings.language` / `settings.languages[]`.
+      Part 2: the shell — `app/Words.h` (tr at paint; `say` / `sayn` for words a widget stores, `shown` each pass, data
+      never translated; `N_`); the App resolves the language (the OS's for auto) and DISSOLVES a switch (the old language
+      painted, the new over it in a layer, 180 ms linear, a switch back turning round); each pass relabels what cosmo's
+      widgets store (opt-in `relabel` setters on MenuStrip, ContextMenu, ConfirmDialog; HistoryView `title`, ContextMenu
+      `renameTitle`); Home, the song bar and its menus, Settings (Interface › Language), Export, Relink, Conflicts, the
+      dialogs, the toasts, their accessible names; `vi.strings` 248 lines; UI tests: the dissolve caught, en-XA's every
+      string the table's, the source scan; shots home-vi, menus-vi, settings-vi, home-pseudo, settings-pseudo,
+      language-dissolve-mid. D-24 filed (en-XA's song bar at 1024 px).
 - [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).
 
 ### T — tasks found on the way

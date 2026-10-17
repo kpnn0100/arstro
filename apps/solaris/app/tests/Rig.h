@@ -201,6 +201,64 @@ namespace sltest
         return h;
     }
 
+    /** R-ACCESS-2: a target that paints through another and keeps every string drawn — where (window pixels, after the
+     *  transform), and under what layers (their alphas multiplied) — what a test reads to see which words a frame said. */
+    struct Drawn
+    {
+        std::string text;
+        double x, y, alpha;
+    };
+    class SpyTarget : public artboard::IRenderTarget
+    {
+    public:
+        artboard::IRenderTarget *to = nullptr;
+        std::vector<Drawn> drawn;
+        void save() override { mStack.push_back(mT); to->save(); }
+        void restore() override
+        {
+            if (!mStack.empty()) { mT = mStack.back(); mStack.pop_back(); }
+            to->restore();
+        }
+        void setTransform(const artboard::Transform &t) override { mT = t; to->setTransform(t); }
+        void clipRect(double x, double y, double w, double h) override { to->clipRect(x, y, w, h); }
+        void clipPath() override { to->clipPath(); }
+        void pushLayer(double a) override { mAlpha.push_back(alpha() * a); to->pushLayer(a); }
+        void popLayer() override
+        {
+            if (!mAlpha.empty()) mAlpha.pop_back();
+            to->popLayer();
+        }
+        void setFill(const artboard::Color &c) override { to->setFill(c); }
+        void setRadialFill(double cx, double cy, double r, const artboard::Color &i, const artboard::Color &o) override { to->setRadialFill(cx, cy, r, i, o); }
+        void setLinearFill(double x0, double y0, double x1, double y1, const artboard::Color &a, const artboard::Color &b) override { to->setLinearFill(x0, y0, x1, y1, a, b); }
+        void setStroke(const artboard::Color &c, double w) override { to->setStroke(c, w); }
+        void beginPath() override { to->beginPath(); }
+        void moveTo(double x, double y) override { to->moveTo(x, y); }
+        void lineTo(double x, double y) override { to->lineTo(x, y); }
+        void quadTo(double cx, double cy, double x, double y) override { to->quadTo(cx, cy, x, y); }
+        void cubicTo(double a, double b, double c, double d, double x, double y) override { to->cubicTo(a, b, c, d, x, y); }
+        void closePath() override { to->closePath(); }
+        void fillPath() override { to->fillPath(); }
+        void strokePath() override { to->strokePath(); }
+        void drawText(const std::string &text, double x, double y, double px, const std::string &fam = "", double sp = 0.0) override
+        {
+            const artboard::Point p = mT.apply(artboard::Point{x, y});
+            drawn.push_back(Drawn{text, p.x, p.y, alpha()});
+            to->drawText(text, x, y, px, fam, sp);
+        }
+        double measureText(const std::string &text, double px, const std::string &fam = "", double sp = 0.0) const override { return to->measureText(text, px, fam, sp); }
+        int registerImage(const uint8_t *rgba, int w, int h) override { return to->registerImage(rgba, w, h); }
+        void updateImage(int id, const uint8_t *rgba, int w, int h) override { to->updateImage(id, rgba, w, h); }
+        void drawImage(int id, const artboard::Rect &dst) override { to->drawImage(id, dst); }
+        void releaseImage(int id) override { to->releaseImage(id); }
+
+    private:
+        double alpha() const { return mAlpha.empty() ? 1.0 : mAlpha.back(); }
+        artboard::Transform mT;
+        std::vector<artboard::Transform> mStack;
+        std::vector<double> mAlpha;
+    };
+
     class Rig
     {
     public:
@@ -216,6 +274,8 @@ namespace sltest
         struct VideoAsk { std::string file; double t; int w, h; };
         std::vector<VideoAsk> videoAsks; // R-VIDEO-1: every frame the Video window asked the host for
         std::vector<VideoAsk> thumbAsks; // … and every thumbnail the lane asked for (a decoder of its own, as the host's)
+        bool spying = false;             // R-ACCESS-2: frames painted through `spy`, every string they draw kept
+        SpyTarget spy;
 
         /** `name` picks a scratch folder, emptied: no songs, settings or recents from a previous run. */
         /** `audio` = false: a machine with no output device (a refusal to test). */
@@ -292,7 +352,13 @@ namespace sltest
             cairo_paint(mCr);
             cairo_restore(mCr);
             target.setContext(mCr);
-            app->render(target, now);
+            if (spying)
+            {
+                spy.to = &target;
+                spy.drawn.clear();
+                app->render(spy, now);
+            }
+            else app->render(target, now);
             cairo_surface_flush(mSurf);
             now += kFrameMs;
         }
@@ -329,6 +395,17 @@ namespace sltest
             app->key(e);
         }
         bool write(const std::string &path) { return cairo_surface_write_to_png(mSurf, path.c_str()) == CAIRO_STATUS_SUCCESS; }
+        /** R-ACCESS-2: one widget painted again as the last frame laid it out — every string it (and its overlay) draws. */
+        std::vector<Drawn> wordsOf(artboard::Segment &s)
+        {
+            SpyTarget t;
+            t.to = &target;
+            target.setContext(mCr);
+            const artboard::Transform root = artboard::Transform::scaling(app->drawnUiScale(), app->drawnUiScale());
+            s.render(t, root);
+            s.renderOverlay(t, root);
+            return t.drawn;
+        }
         uint32_t pixel(int x, int y) const
         {
             const unsigned char *d = cairo_image_surface_get_data(mSurf);

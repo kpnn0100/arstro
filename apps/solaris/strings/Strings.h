@@ -4,7 +4,7 @@
  *  English is the key: `tr("Settings")` draws "Settings" in English and the table's line for it in another language —
  *  a string with no line falls back to its English. `trc("menu", "Open")` when one English word means two things (the
  *  key "menu|Open"); `trn(n, "{1} clip", "{1} clips")` when a count picks the form (the language's plural rule);
- *  `fill(tr("{1} of {2}"), a, b)` puts numbers and names in by position, so a language may reorder them.
+ *  `fillIn(tr("{1} of {2}"), a, b)` puts numbers and names in by position, so a language may reorder them.
  *
  *  A table is a text file per language (`lang/<code>.strings`), compiled INTO the binary — the app's words, like its
  *  fonts, are not a thing that may differ between machines:
@@ -71,10 +71,14 @@ namespace solaris_strings
     const std::string &trc(std::string_view context, std::string_view en);
     const std::string &trn(long n, std::string_view one, std::string_view other);
     /** {1} … {9} replaced by the arguments, in any order the template has them. */
-    std::string fill(const std::string &tpl, std::initializer_list<std::string> args);
-    template <typename... A> std::string fill(const std::string &tpl, const A &...args) { return fill(tpl, {std::string(args)...}); }
+    std::string fillIn(const std::string &tpl, std::initializer_list<std::string> args);
+    template <typename... A> std::string fillIn(const std::string &tpl, const A &...args) { return fillIn(tpl, {std::string(args)...}); }
 
     /** The pseudo-language's form of an English string: "[Šéţţîñĝš ···]" — placeholders kept. */
     std::string pseudo(std::string_view en);
+
+    /** Upper case for the letters the languages use — ASCII, Latin-1, Latin Extended-A, ơ ư, and Latin Extended
+     *  Additional (Vietnamese's ạ … ỹ): an uppercase section header in any of them ("Thiết bị" → "THIẾT BỊ"). */
+    std::string upper(std::string_view s);
 }
 }

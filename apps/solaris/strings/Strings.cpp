@@ -269,7 +269,7 @@ namespace solaris_strings
         return lookUp(s.key, english == 0 ? one : other, -1);
     }
 
-    std::string fill(const std::string &tpl, std::initializer_list<std::string> args)
+    std::string fillIn(const std::string &tpl, std::initializer_list<std::string> args)
     {
         std::string out;
         out.reserve(tpl.size() + 16);
@@ -282,6 +282,36 @@ namespace solaris_strings
                 i += 2;
             }
             else out += tpl[i];
+        }
+        return out;
+    }
+
+    std::string upper(std::string_view s)
+    {
+        std::string out;
+        out.reserve(s.size());
+        for (size_t i = 0; i < s.size();)
+        {
+            // one character: its code point, and how many bytes it took
+            const unsigned char c = (unsigned char)s[i];
+            unsigned cp = c;
+            size_t n = 1;
+            if (c >= 0xF0 && i + 3 < s.size()) { cp = ((c & 0x07u) << 18) | (((unsigned char)s[i + 1] & 0x3Fu) << 12) | (((unsigned char)s[i + 2] & 0x3Fu) << 6) | ((unsigned char)s[i + 3] & 0x3Fu); n = 4; }
+            else if (c >= 0xE0 && i + 2 < s.size()) { cp = ((c & 0x0Fu) << 12) | (((unsigned char)s[i + 1] & 0x3Fu) << 6) | ((unsigned char)s[i + 2] & 0x3Fu); n = 3; }
+            else if (c >= 0xC0 && i + 1 < s.size()) { cp = ((c & 0x1Fu) << 6) | ((unsigned char)s[i + 1] & 0x3Fu); n = 2; }
+            unsigned up = cp;
+            if (cp >= 'a' && cp <= 'z') up = cp - 32;
+            else if (cp >= 0xE0 && cp <= 0xFE && cp != 0xF7) up = cp - 0x20;                          // à … þ
+            else if (cp == 0xFF) up = 0x178;                                                         // ÿ
+            else if ((cp >= 0x101 && cp <= 0x137 && (cp & 1)) || (cp >= 0x14B && cp <= 0x177 && (cp & 1))) up = cp - 1; // ā … ķ, ŋ … ŷ
+            else if ((cp >= 0x13A && cp <= 0x148 && !(cp & 1)) || (cp >= 0x17A && cp <= 0x17E && !(cp & 1))) up = cp - 1; // ĺ … ň, ź … ž
+            else if (cp == 0x1A1 || cp == 0x1B0) up = cp - 1;                                        // ơ ư
+            else if (((cp >= 0x1E01 && cp <= 0x1E95) || (cp >= 0x1EA1 && cp <= 0x1EFF)) && (cp & 1)) up = cp - 1; // ḁ …, ạ … ỹ
+            if (up == cp) out.append(s.substr(i, n));
+            else if (up < 0x80) out += (char)up;
+            else if (up < 0x800) { out += (char)(0xC0 | (up >> 6)); out += (char)(0x80 | (up & 0x3F)); }
+            else { out += (char)(0xE0 | (up >> 12)); out += (char)(0x80 | ((up >> 6) & 0x3F)); out += (char)(0x80 | (up & 0x3F)); }
+            i += n;
         }
         return out;
     }

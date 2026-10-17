@@ -832,7 +832,7 @@ the suite later. Decided (each a line to change):
 - **The table: English is the key** (gettext's way, so the code reads as it does today and a missing translation falls
   back to the English): `tr("Settings")`; a context where one English word means two things, `trc("menu", "Open")`
   (the key `menu|Open`); a count, `trn(n, "{1} clip", "{1} clips")`; numbers and names into a sentence by position,
-  `{1}` `{2}` (`fill(tr("{1} of {2}"), a, b)`), so a language may reorder them. One file per language,
+  `{1}` `{2}` (`fillIn(tr("{1} of {2}"), a, b)` — `fill` would meet `std::fill`), so a language may reorder them. One file per language,
   `lang/<code>.strings`, a line per string — `"Settings" = "Cài đặt";`, a plural's keys side by side and as many
   forms as the language's rule has — under a header (`@language vi`, `@name Tiếng Việt`, `@plural other`). Compiled
   INTO the binary (as the fonts are — the app's own words are not a thing that may differ between machines), parsed

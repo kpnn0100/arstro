@@ -44,7 +44,7 @@ if(TARGET artboard_core)
   add_executable(solaris_web_tokens webTokens.cpp)
   target_include_directories(solaris_web_tokens PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../app ${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo
                              ${CMAKE_CURRENT_SOURCE_DIR}/../../../core/Artboard/src ${CMAKE_CURRENT_SOURCE_DIR}/../../../core/Artboard/include)
-  target_link_libraries(solaris_web_tokens PRIVATE artboard_core)
+  target_link_libraries(solaris_web_tokens PRIVATE artboard_core solaris_strings) # the app's Theme.h names its words (R-ACCESS-2)
   add_test(NAME solaris_web_tokens_current
     COMMAND sh -c "\"$<TARGET_FILE:solaris_web_tokens>\" | diff -u \"${CMAKE_CURRENT_SOURCE_DIR}/../web/css/tokens.css\" -")
 endif()

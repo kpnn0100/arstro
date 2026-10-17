@@ -24,6 +24,7 @@
 #include "../../../cosmo/widgets/ContextMenu.h"
 #include "../Theme.h"
 #include "../A11y.h"
+#include "../Words.h"
 #include "AppModel.h"
 #include "../../../interstellar/app/widgets/EasedScroll.h"
 #include "../../../cosmo/widgets/HoverFade.h"
@@ -83,7 +84,7 @@ namespace solaris_ui
     {
     public:
         enum Row { kOutput = 0, kInput, kRate, kBuffer, kMetronome, kClickLevel, kPreviewLevel, kNewBpm, kNewSig, kMotion, kAutosave, kDriver, kMidiIn, kRecQuant, kCountIn,
-                   kSurface, kSurfacePort, kUiScale, kContrast, kRows }; // kSurface…: R-CTRL-2, the MIDI page; kUiScale, kContrast: R-ACCESS-1
+                   kSurface, kSurfacePort, kUiScale, kContrast, kLanguage, kRows }; // kSurface…: R-CTRL-2, the MIDI page; kUiScale, kContrast: R-ACCESS-1; kLanguage: R-ACCESS-2
         enum Section { kAudio = 0, kPlayback, kNewSongs, kFolders, kInterface, kKeyboard, kMidi, kSections }; // kMidi: R-CTRL-1
         static constexpr double kCardW = 720.0, kCardH = 520.0;
         static constexpr double kRailW = 164.0;   // the sections' column
@@ -126,7 +127,9 @@ namespace solaris_ui
         double labelAmount(int row) const;         // LIVE: a combo's label cross-fade (1 = settled)
         std::string shownValue(int row) const;     // the label a combo shows now
         double toggleAmount(int row) const;        // LIVE: a toggle's knob
-        std::string rowNote(int row) const;        // the line under a setting's name (R-CTRL-2: a surface's, connected or why)
+        std::string rowNote(int row) const;        // the line under a setting's name (R-CTRL-2: a surface's, connected or why), in the language drawn
+        /** R-ACCESS-2: the combos' choices in the language drawn now (their words kept; the App calls it each paint pass). */
+        void relabel();
         double surfaceNoteAmount() const { return mSurfNoteFade.value(); } // LIVE: the surface's note cross-fading to its new text
 
         // geometry, from the last paint (a test renders a frame first)
@@ -171,7 +174,7 @@ namespace solaris_ui
         friend class Page;
         struct Chip
         {
-            std::string label, value;
+            std::string label, value; // label: words (`say`) or data (a device's name) — shown in the language drawn
         };
         struct KeyChipLive
         {
@@ -203,6 +206,7 @@ namespace solaris_ui
         void paintKeyboard(artboard::IRenderTarget &t, double w, double oy, double px, double py) const;
         void paintMidi(artboard::IRenderTarget &t, double w, double oy, double px, double py) const;
         std::string current(int row) const; // the row's setting, as its options' values spell it
+        std::string rowWords(int row) const; // the line under a setting's name, as words (Words.h)
         void closeCombos();
         bool anyComboOpen() const;
         int hoverId(const artboard::Point &p) const;
@@ -216,6 +220,7 @@ namespace solaris_ui
         std::shared_ptr<SettingToggle> mToggles[kRows];
         std::vector<std::shared_ptr<Page>> mPages;
         bool mBound = false;
+        std::string mLabelsLang;                // R-ACCESS-2: the language the combos' choices were last shown in
         std::vector<std::string> mFolders;
         std::string mOutput, mInput;
         int mRate = 48000, mBuffer = 256;

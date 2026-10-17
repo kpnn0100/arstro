@@ -6,6 +6,18 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Open
 
+### D-24 In the pseudo-language the song bar's transport runs into the CPU readout at 1024 px
+- **Found:** 2026-10-17, N43 part 2, by the shot `settings-pseudo-1024x640` (en-XA, a third longer than English): the menu
+  titles and the version chip push `SongBar::transportX` (`app/widgets/SongBar.cpp:51`) right until Record, Play, the
+  position and the tempo sit under "CPU 0%"; English and Vietnamese fit at both sizes (`menus-vi`). Nothing bounds the
+  transport on the right: it is centred, or placed after the menus, the chip and a minimum name — and the CPU readout and
+  the meter are placed from the right edge. cosmo's MenuStrip sizes a title by its BYTES (`estimateTextWidth`), so a
+  title with diacritics ("Bài hát") is boxed wider than it draws, which pushes the same way.
+- **Recommended fix:** design rule R4 — a column gives way before the content does: when the transport's right end would
+  cross the CPU readout, fold the readout (eased, the same property a setting would drive), then the version chip's
+  width; and give MenuStrip a measured title width (genesis's `textWidth()` pattern) so a title is as wide as it draws.
+  Guard: a shot or UI test asserting `hitRect(kBpm).right() < cpuRect().x` in en-XA at 1024 × 640.
+
 ### D-22 Bare `:N` anchors bound to the wrong file in eight DR sections (as-built docs drift)
 - **Found:** 2026-10-17, N37 part 2's anchor pass: `follow2.py` could not follow six anchors (each past the end of the
   file the any-path convention binds it to), and a scan printing every anchor's target line (scratch `showanchors.py`)

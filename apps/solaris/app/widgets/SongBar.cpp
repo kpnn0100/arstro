@@ -58,7 +58,7 @@ namespace solaris_ui
 
     void SongBar::bind(const solaris::AppModel &m)
     {
-        mName = m.projectName.empty() ? "Untitled" : m.projectName;
+        mName = m.projectName.empty() ? say("Untitled") : m.projectName; // words: shown in the language drawn
         mDirty = m.dirty;
         mPlayingWanted = m.transport.playing;
         mRecordingWanted = m.transport.recording; // R-MIDI-2
@@ -77,22 +77,22 @@ namespace solaris_ui
         mVersion = m.version;
         mChipWanted = "main";
         for (const auto &v : mVersions)
-            if (v.id == mVersion) mChipWanted = v.name + (v.frozen ? " \xC2\xB7 frozen" : "");
+            if (v.id == mVersion) mChipWanted = v.name + (v.frozen ? " \xC2\xB7 " + say("frozen") : std::string()); // words: the chip cross-fades a change, the window a language
     }
 
     void SongBar::accessibles(std::vector<A11yNode> &out)
     {
         auto at = [this](int which) { return worldRect(*this, hitRect(which)); };
-        out.push_back(a11yNode("bar.home", "button", "Home", at(kHome)));
-        out.push_back(a11yNode("bar.settings", "button", "Settings", at(kSettings)));
-        if (mChipW.value() > 1.0) out.push_back(a11yNode("bar.version", "button", "Version", at(kVersion), mChipTo));
-        A11yNode rec = a11yNode("bar.record", "toggle", "Record", at(kRecord), mRecordingWanted ? "on" : "off");
+        out.push_back(a11yNode("bar.home", "button", tr("Home"), at(kHome)));
+        out.push_back(a11yNode("bar.settings", "button", tr("Settings"), at(kSettings)));
+        if (mChipW.value() > 1.0) out.push_back(a11yNode("bar.version", "button", tr("Version"), at(kVersion), ::arstro::solaris_ui::shown(mChipTo)));
+        A11yNode rec = a11yNode("bar.record", "toggle", tr("Record"), at(kRecord), mRecordingWanted ? tr("on") : tr("off"));
         rec.checked = mRecordingWanted;
         out.push_back(rec);
-        out.push_back(a11yNode("bar.play", "button", mPlayingWanted ? "Stop" : "Play", at(kPlay)));
+        out.push_back(a11yNode("bar.play", "button", mPlayingWanted ? tr("Stop") : tr("Play"), at(kPlay)));
         char b[32];
         std::snprintf(b, sizeof b, "%g bpm", std::round(mBpm * 10.0) / 10.0);
-        A11yNode bpm = a11yNode("bar.tempo", "slider", "Tempo", at(kBpm), b);
+        A11yNode bpm = a11yNode("bar.tempo", "slider", tr("Tempo"), at(kBpm), b);
         bpm.step = [this](int dir, bool fine) { // the drag's step, ONE line
             const double step = fine ? 0.1 : 1.0, v = std::clamp(std::round((mBpm + dir * step) / step) * step, 20.0, 999.0);
             char t[32];
@@ -100,7 +100,7 @@ namespace solaris_ui
             if (onCommand) onCommand(tempoLine(t));
         };
         out.push_back(bpm);
-        out.push_back(a11yNode("bar.save", "button", "Save", at(kSave), mDirty ? "unsaved" : ""));
+        out.push_back(a11yNode("bar.save", "button", tr("Save"), at(kSave), mDirty ? tr("unsaved") : std::string()));
     }
 
     Rect SongBar::hitRect(int which) const
@@ -304,22 +304,22 @@ namespace solaris_ui
         std::vector<cosmo_v2::ContextMenu::Item> items;
         auto send = [this](const std::string &line) { if (onCommand) onCommand(line); };
         const bool onMain = mVersion.empty() || mVersion == "main";
-        items.push_back({std::string("main") + (onMain ? "  \xC2\xB7 open" : ""), [send] { send("version open main"); }});
+        items.push_back({std::string("main") + (onMain ? "  \xC2\xB7 " + say("open") : std::string()), [send] { send("version open main"); }});
         std::function<void(const std::string &, const std::string &)> under = [&](const std::string &base, const std::string &indent) {
             for (const auto &v : mVersions)
             {
                 if (v.base != base) continue;
                 std::string label = indent + v.name;
-                if (v.frozen) label += "  \xC2\xB7 frozen";
-                if (!v.problem.empty()) label += "  \xC2\xB7 does not stand";
-                if (v.id == mVersion) label += "  \xC2\xB7 open";
+                if (v.frozen) label += "  \xC2\xB7 " + say("frozen");
+                if (!v.problem.empty()) label += "  \xC2\xB7 " + say("does not stand");
+                if (v.id == mVersion) label += "  \xC2\xB7 " + say("open");
                 items.push_back({label, [send, id = v.id] { send("version open " + id); }});
                 under(v.id, indent + "    ");
             }
         };
         under("main", "    ");
         const std::string base = onMain ? std::string() : " --base " + mVersion;
-        items.push_back({"New Version\xE2\x80\xA6", [this, world, base] {
+        items.push_back({say("New Version\xE2\x80\xA6"), [this, world, base] {
                              if (onEditText)
                                  onEditText("", world, [this, base](const std::string &n) {
                                      if (!n.empty() && onCommand) onCommand("version new " + quoted(n) + base + " --open");
@@ -331,15 +331,15 @@ namespace solaris_ui
             if (v.id == mVersion) cur = &v;
         if (!cur) return items;
         const std::string id = cur->id, name = cur->name;
-        items.push_back({cur->frozen ? "Thaw" : "Freeze", [send, id, frozen = cur->frozen] { send((frozen ? "version thaw " : "version freeze ") + id); }});
-        items.push_back({"Rebase", [send, id] { send("version rebase " + id); }});
-        items.push_back({"Rename\xE2\x80\xA6", [this, world, id, name] {
+        items.push_back({cur->frozen ? say("Thaw") : say("Freeze"), [send, id, frozen = cur->frozen] { send((frozen ? "version thaw " : "version freeze ") + id); }});
+        items.push_back({say("Rebase"), [send, id] { send("version rebase " + id); }});
+        items.push_back({say("Rename\xE2\x80\xA6"), [this, world, id, name] {
                              if (onEditText)
                                  onEditText(name, world, [this, id](const std::string &n) {
                                      if (!n.empty() && onCommand) onCommand("set " + id + ".name=" + quoted(n));
                                  });
                          }});
-        items.push_back({"Delete Version", [send, id] { send("version delete " + id); }});
+        items.push_back({say("Delete Version"), [send, id] { send("version delete " + id); }});
         return items;
     }
 
@@ -368,15 +368,16 @@ namespace solaris_ui
             if (!label.empty())
             {
                 t.setFill(primary ? palette::primaryForeground() : lerpColor(palette::mutedForeground(), palette::foreground(), 0.5 + 0.5 * hv));
-                t.drawText(label, r.x + (r.w - t.measureText(label, 11.0, font::sans())) * 0.5, textfit::baseline(r.y + r.h * 0.5, 11.0), 11.0, font::sans());
+                const std::string fit = textfit::ellipsize(t, label, r.w - 8.0, 11.0, font::sans()); // a longer language fits its button
+                t.drawText(fit, r.x + (r.w - t.measureText(fit, 11.0, font::sans())) * 0.5, textfit::baseline(r.y + r.h * 0.5, 11.0), 11.0, font::sans());
             }
             return r;
         };
-        button(kSettings, "Settings", false);
+        button(kSettings, tr("Settings"), false);
 
         // R-VER: the version chip — the label cross-faded, the width eased (measured here, for the next frame's ease)
         {
-            mChipTextW = t.measureText(mChipTo, 10.0, font::sans());
+            mChipTextW = t.measureText(::arstro::solaris_ui::shown(mChipTo), 10.0, font::sans());
             Rect r = hitRect(kVersion);
             if (r.w <= 0.0) r.w = kChipPad + mChipTextW + kChevron + kChipPad; // the first frame: not yet placed
             const double hv = mHover.amount(kVersion), ring = mOnVersion.value(), tt = mChipT.value();
@@ -388,10 +389,10 @@ namespace solaris_ui
             if (tt < 0.999 && !mChipFrom.empty())
             {
                 t.setFill(fade(ink, 1.0 - tt));
-                t.drawText(textfit::ellipsize(t, mChipFrom, room, 10.0, font::sans()), r.x + kChipPad, textfit::baseline(cy, 10.0), 10.0, font::sans());
+                t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(mChipFrom), room, 10.0, font::sans()), r.x + kChipPad, textfit::baseline(cy, 10.0), 10.0, font::sans());
             }
             t.setFill(fade(ink, tt));
-            t.drawText(textfit::ellipsize(t, mChipTo, room, 10.0, font::sans()), r.x + kChipPad, textfit::baseline(cy, 10.0), 10.0, font::sans());
+            t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(mChipTo), room, 10.0, font::sans()), r.x + kChipPad, textfit::baseline(cy, 10.0), 10.0, font::sans());
             const double vx = r.right() - kChipPad - 5.0; // the ▾
             t.setStroke(ink, 1.25);
             t.beginPath(); t.moveTo(vx - 3.0, cy - 1.5); t.lineTo(vx, cy + 1.5); t.lineTo(vx + 3.0, cy - 1.5); t.strokePath();
@@ -399,7 +400,7 @@ namespace solaris_ui
 
         // the song's name, ellipsized against the space left before the transport; the unsaved dot after it
         const double nameX = chipX() + std::max(mChipW.value(), 0.0) + 10.0, nameMax = std::max(0.0, hitRect(kRecord).x - 24.0 - nameX);
-        const std::string nm = textfit::ellipsize(t, mName, nameMax, 12.0, font::sansMedium());
+        const std::string nm = textfit::ellipsize(t, ::arstro::solaris_ui::shown(mName), nameMax, 12.0, font::sansMedium());
         t.setFill(palette::foreground());
         t.drawText(nm, nameX, textfit::baseline(cy, 12.0), 12.0, font::sansMedium());
         if (mDirtyDot.value() > 0.001)
@@ -449,7 +450,7 @@ namespace solaris_ui
             Color c = palette::foreground();
             c.a *= a;
             t.setFill(c);
-            t.drawText(textfit::ellipsize(t, "MIDI learn \xC2\xB7 " + mLearnShown + " \xE2\x80\x94 move a control", std::max(0.0, r.w - 16.0), 10.0, font::sans()),
+            t.drawText(textfit::ellipsize(t, fillIn(tr("MIDI learn \xC2\xB7 {1} \xE2\x80\x94 move a control"), mLearnShown), std::max(0.0, r.w - 16.0), 10.0, font::sans()),
                        r.x + 8.0, textfit::baseline(cy, 10.0), 10.0, font::sans());
         }
         // R-PERF-1: the audio thread's load — muted, the destructive colour from 80 %
@@ -457,10 +458,12 @@ namespace solaris_ui
             const Rect r = cpuRect();
             const double v = std::max(0.0, mCpuShown.value());
             const Color c = lerpColor(palette::mutedForeground(), palette::destructive(), std::clamp((v - 0.7) / 0.1, 0.0, 1.0));
-            t.setFill(palette::mutedForeground());
-            t.drawText("CPU", r.x, r.y + 10.0, 9.0, font::sansSemiBold(), 0.13 * 9.0);
             char pct[16];
             std::snprintf(pct, sizeof pct, "%d%%", (int)std::lround(v * 100.0));
+            t.setFill(palette::mutedForeground());
+            // the label has the room the readout leaves (a longer language's word ellipsized, never over the number)
+            t.drawText(textfit::ellipsize(t, tr("CPU"), std::max(0.0, r.w - t.measureText(pct, 10.0, font::mono()) - 6.0), 9.0, font::sansSemiBold()), r.x, r.y + 10.0, 9.0,
+                       font::sansSemiBold(), 0.13 * 9.0);
             t.setFill(c);
             t.drawText(pct, r.right() - t.measureText(pct, 10.0, font::mono()), r.y + 10.0, 10.0, font::mono());
             const Rect track{r.x, r.bottom() - 3.0, r.w, 2.0};
@@ -483,7 +486,7 @@ namespace solaris_ui
                 }
             }
         }
-        button(kSave, "Save", false);
+        button(kSave, tr("Save"), false);
     }
 }
 }

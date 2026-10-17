@@ -68,9 +68,9 @@ namespace solaris_ui
         for (const auto &l : mLocate) // as the last paint placed them: the rows in view, none leaving
             for (const auto &r : mRows)
                 if (r.path == l.first)
-                    out.push_back(a11yNode("relink." + r.path, "button", "Locate " + r.name, l.second, r.folder.empty() ? r.users : r.folder + " \xC2\xB7 " + r.users));
-        out.push_back(a11yNode("relink.search", "button", "Search a Folder\xE2\x80\xA6", mSearch));
-        out.push_back(a11yNode("relink.done", "button", "Done", mDone));
+                    out.push_back(a11yNode("relink." + r.path, "button", fillIn(tr("Locate {1}"), r.name), l.second, r.folder.empty() ? r.users : r.folder + " \xC2\xB7 " + r.users));
+        out.push_back(a11yNode("relink.search", "button", tr("Search a Folder\xE2\x80\xA6"), mSearch));
+        out.push_back(a11yNode("relink.done", "button", tr("Done"), mDone));
     }
 
     Rect RelinkSheet::cardRect() const
@@ -204,11 +204,12 @@ namespace solaris_ui
         const Rect c = cardRect();
         drawRoundedRect(t, c, radius::control(), Paint::filledStroked(palette::popover(), palette::border(), 1.0));
         t.setFill(palette::foreground());
-        t.drawText("Relink", c.x + kPad, c.y + 34.0, 14.0, font::sansSemiBold());
+        const std::string title = tr("Relink");
+        t.drawText(title, c.x + kPad, c.y + 34.0, 14.0, font::sansSemiBold());
         const size_t n = mWanted.size();
-        const std::string sub = n == 0 ? "every file the song names is found" : std::to_string(n) + (n == 1 ? " file is missing" : " files are missing");
+        const std::string sub = n == 0 ? tr("every file the song names is found") : fillIn(trn((long)n, "{1} file is missing", "{1} files are missing"), std::to_string(n));
         t.setFill(palette::mutedForeground());
-        const double tx = c.x + kPad + t.measureText("Relink", 14.0, font::sansSemiBold()) + 10.0;
+        const double tx = c.x + kPad + t.measureText(title, 14.0, font::sansSemiBold()) + 10.0;
         t.drawText(textfit::ellipsize(t, sub, std::max(0.0, c.right() - kPad - tx), 11.0, font::sans()), tx, c.y + 34.0, 11.0, font::sans());
 
         // the rows, clipped to the list and scrolled; each at its eased place, at its eased fade
@@ -219,7 +220,7 @@ namespace solaris_ui
         if (n == 0 && mRows.empty())
         {
             t.setFill(palette::mutedForeground());
-            const char *msg = "Nothing is missing.";
+            const std::string msg = tr("Nothing is missing.");
             t.drawText(msg, c.x + (c.w - t.measureText(msg, 12.0, font::sans())) * 0.5, textfit::baseline(l.y + kRowH * 0.5, 12.0), 12.0, font::sans());
         }
         for (const auto &r : mRows)
@@ -237,7 +238,7 @@ namespace solaris_ui
             const double hv = mHover.amount(locateId(r.path));
             drawRoundedRect(t, loc, radius::control(), Paint::filled(fade(lerpColor(palette::secondary(), palette::card(), hv), a)));
             t.setFill(fade(palette::secondaryForeground(), a));
-            const char *lbl = "Locate\xE2\x80\xA6";
+            const std::string lbl = textfit::ellipsize(t, tr("Locate\xE2\x80\xA6"), loc.w - 8.0, 11.0, font::sans());
             t.drawText(lbl, loc.x + (loc.w - t.measureText(lbl, 11.0, font::sans())) * 0.5, textfit::baseline(loc.y + loc.h * 0.5, 11.0), 11.0, font::sans());
         }
         t.restore();
@@ -255,13 +256,14 @@ namespace solaris_ui
         mSearch = Rect{c.x + kPad, mDone.y, 150.0, 30.0};
         drawRoundedRect(t, mSearch, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::card(), mHover.amount(kSearchId))));
         t.setFill(palette::secondaryForeground());
-        const char *s = "Search a Folder\xE2\x80\xA6";
+        const std::string s = textfit::ellipsize(t, tr("Search a Folder\xE2\x80\xA6"), mSearch.w - 12.0, 12.0, font::sans());
         t.drawText(s, mSearch.x + (mSearch.w - t.measureText(s, 12.0, font::sans())) * 0.5, textfit::baseline(mSearch.y + mSearch.h * 0.5, 12.0), 12.0, font::sans());
         drawRoundedRect(t, mDone, radius::control(), Paint::filled(palette::primary()));
         const double hv = mHover.amount(kDoneId);
         if (hv > 0.001) drawRoundedRect(t, mDone, radius::control(), Paint::filled(palette::hoverWash(hv)));
         t.setFill(palette::primaryForeground());
-        t.drawText("Done", mDone.x + (mDone.w - t.measureText("Done", 12.0, font::sansMedium())) * 0.5, textfit::baseline(mDone.y + mDone.h * 0.5, 12.0), 12.0,
+        const std::string done = textfit::ellipsize(t, tr("Done"), mDone.w - 12.0, 12.0, font::sansMedium());
+        t.drawText(done, mDone.x + (mDone.w - t.measureText(done, 12.0, font::sansMedium())) * 0.5, textfit::baseline(mDone.y + mDone.h * 0.5, 12.0), 12.0,
                    font::sansMedium());
     }
 }

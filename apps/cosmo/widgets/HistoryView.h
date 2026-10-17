@@ -40,6 +40,7 @@ namespace cosmo_v2
         bool easeCurrent = false;
         /** The line under the title. A host whose keys are settings says its own (Solaris R-SET-4). */
         std::string hint = "click a node to jump  .  Ctrl+Z undo  .  Ctrl+Y redo";
+        std::string title = "HISTORY"; // the card's header (opt-in: Solaris draws it in its language, R-ACCESS-2)
         // read-only, for a host's tests: the LIVE open amount, a node's centre (this segment's space) and how lit it is
         double appearAmount() const { return mAppear.value(); }
         int nodeCount() const { return (int)mNodes.size(); }

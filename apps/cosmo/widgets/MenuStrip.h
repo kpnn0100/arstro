@@ -41,6 +41,14 @@ namespace cosmo_v2
          *  menu lists the library). Closes the strip if that menu is the open one, so a dropdown
          *  never shows rows that changed under the pointer. */
         void setItems(int menu, std::vector<Item> items);
+        /** The same menu in other words — its title and its items' labels, nothing closed or moved (opt-in: Solaris
+         *  draws each paint pass in its language, R-ACCESS-2; cosmo never calls it). A count that differs is ignored. */
+        void relabel(int menu, const std::string &title, const std::vector<std::string> &labels)
+        {
+            if (menu < 0 || menu >= (int)mMenus.size() || labels.size() != mMenus[(size_t)menu].items.size()) return;
+            mMenus[(size_t)menu].title = title;
+            for (size_t i = 0; i < labels.size(); ++i) mMenus[(size_t)menu].items[i].label = labels[i];
+        }
 
         int openIndex() const { return mOpen; }
         void close();

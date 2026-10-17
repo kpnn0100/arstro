@@ -66,7 +66,7 @@ namespace solaris_ui
         artboard::Rect cpuRect() const;
         /** R-VER: the chip's label as wanted, and the LIVE eased values a test catches mid-way — the cross-fade to the
          *  label (0 = the old one, 1 = this one), the ring's amount (a version, not main, open) and the chip's width. */
-        const std::string &versionLabel() const { return mChipTo; }
+        std::string versionLabel() const { return ::arstro::solaris_ui::shown(mChipTo); } // in the language drawn
         double versionFade() const { return mChipT.value(); }
         double versionRing() const { return mOnVersion.value(); }
         double versionWidth() const { return mChipW.value(); }

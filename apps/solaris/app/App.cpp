@@ -76,7 +76,7 @@ namespace solaris_ui
         bar.onSave = [this] { dispatch("project save"); };
         bar.onSettings = [this] { openSettings(); };
         bar.onCommand = [this](const std::string &line) { return dispatch(line); }; // the tempo (R-UI-13)
-        bar.onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { mMenu->open(std::move(items), world.x, world.y); }; // R-VER
+        bar.onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { openMenu(std::move(items), world); }; // R-VER
         bar.onEditText = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
             mMenu->onRename = std::move(done);
             mMenu->openRename(cur, world.x, world.y);
@@ -91,28 +91,28 @@ namespace solaris_ui
             return onVideoThumb ? onVideoThumb(file, t, bw, bh, out) : onVideoFrame && onVideoFrame(file, t, bw, bh, out);
         };
         mProject->browser().onOpenSettings = [this] { openSettings(); };
-        mProject->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { mMenu->open(std::move(items), world.x, world.y); };
+        mProject->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { openMenu(std::move(items), world); };
         mProject->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
             mMenu->onRename = std::move(done);
             mMenu->openRename(cur, world.x, world.y);
         };
 
         mSettings->onCommand = [this](const std::string &line) { dispatch(line); };
-        mSettings->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { mMenu->open(std::move(items), world.x, world.y); }; // R-DEV-1
+        mSettings->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { openMenu(std::move(items), world); }; // R-DEV-1
         // R-EXPORT-1: the sheet's choices, then the host names the file — ONE render line
         // R-COLLECT-1: Relink's rows and its search — the host names the file or the folder, then ONE line
         mRelink->onLocate = [this](const std::string &path) {
             const auto slash = path.find_last_of('/');
             if (onPickFile)
-                onPickFile("Locate " + (slash == std::string::npos ? path : path.substr(slash + 1)),
+                onPickFile(fillIn(tr("Locate {1}"), slash == std::string::npos ? path : path.substr(slash + 1)),
                            [this, path](const std::string &p) { dispatch("project relink " + quote(path) + " --to " + quote(p)); });
         };
         mRelink->onSearchFolder = [this] {
-            if (onPickDirectory) onPickDirectory("Search a folder for the missing files", [this](const std::string &d) { dispatch("project relink --folder " + quote(d)); });
+            if (onPickDirectory) onPickDirectory(tr("Search a folder for the missing files"), [this](const std::string &d) { dispatch("project relink --folder " + quote(d)); });
         };
         mConflicts->onCommand = [this](const std::string &line) { return dispatch(line); }; // R-COLLAB-1: Keep Mine, Take Theirs
         mExport->onExport = [this](const std::string &flags, const std::string &suggested) {
-            if (onPickSave) onPickSave("Export the mix", suggested, [this, flags](const std::string &p) { dispatch("render --out " + quote(p) + " " + flags); });
+            if (onPickSave) onPickSave(tr("Export the mix"), suggested, [this, flags](const std::string &p) { dispatch("render --out " + quote(p) + " " + flags); });
         };
         mSettings->onAddFolder = [this] {
             if (onPickFolder) onPickFolder([this](const std::string &path) { dispatch("folder add " + quote(path)); });
@@ -155,57 +155,57 @@ namespace solaris_ui
 
     void App::buildMenus()
     {
-        auto &ms = mProject->bar().menus();
-        ms.addMenu({"File", {
-            {"New Song\xE2\x80\xA6", [this] { mNewTemplate.clear(); if (onPickSongToCreate) onPickSongToCreate(); }},
-            {"Open\xE2\x80\xA6", [this] { if (onPickSongToOpen) onPickSongToOpen(); }},
-            {"Save            (Ctrl+S)", [this] { dispatch("project save"); }},
-            {"Save As\xE2\x80\xA6", [this] {
+        setMenuWords(0, say("File"), {
+            {say("New Song\xE2\x80\xA6"), [this] { mNewTemplate.clear(); if (onPickSongToCreate) onPickSongToCreate(); }},
+            {say("Open\xE2\x80\xA6"), [this] { if (onPickSongToOpen) onPickSongToOpen(); }},
+            {say("Save") + "            (Ctrl+S)", [this] { dispatch("project save"); }},
+            {say("Save As\xE2\x80\xA6"), [this] {
                  const auto &m = mHooks.model ? mHooks.model() : emptyModel();
-                 if (onPickSave) onPickSave("Save the song as", m.projectName + ".slp", [this](const std::string &p) { dispatch("project save " + quote(p)); });
+                 if (onPickSave) onPickSave(tr("Save the song as"), m.projectName + ".slp", [this](const std::string &p) { dispatch("project save " + quote(p)); });
              }},
-            {"Render\xE2\x80\xA6", [this] {
+            {say("Render\xE2\x80\xA6"), [this] {
                  const auto &m = mHooks.model ? mHooks.model() : emptyModel();
-                 if (onPickSave) onPickSave("Render the mix", m.projectName + ".wav", [this](const std::string &p) { dispatch("render --out " + quote(p)); });
+                 if (onPickSave) onPickSave(tr("Render the mix"), m.projectName + ".wav", [this](const std::string &p) { dispatch("render --out " + quote(p)); });
              }},
-            {"Export\xE2\x80\xA6", [this] { mExport->show(mHooks.model ? mHooks.model() : emptyModel()); }}, // R-EXPORT-1
+            {say("Export\xE2\x80\xA6"), [this] { mExport->show(mHooks.model ? mHooks.model() : emptyModel()); }}, // R-EXPORT-1
             // R-COLLECT-1: every file the song names gathered into its folder and saved — ONE line; what is missing, a window
-            {"Collect and Save", [this] {
+            {say("Collect and Save"), [this] {
                  if (!dispatch("project collect --save")) return;
                  const auto &m = mHooks.model ? mHooks.model() : emptyModel();
                  const size_t n = m.missing.size();
-                 showToast(n == 0 ? std::string("Collected into the song's folder, and saved")
-                                  : "Collected and saved \xE2\x80\x94 " + std::to_string(n) + (n == 1 ? " file is" : " files are") + " still missing (File \xE2\x80\xBA Relink\xE2\x80\xA6)");
+                 showToast(n == 0 ? say("Collected into the song's folder, and saved")
+                                  : sayn((long)n, "Collected and saved \xE2\x80\x94 {1} file is still missing (File \xE2\x80\xBA Relink\xE2\x80\xA6)",
+                                         "Collected and saved \xE2\x80\x94 {1} files are still missing (File \xE2\x80\xBA Relink\xE2\x80\xA6)", (long)n));
              }},
-            {"Relink\xE2\x80\xA6", [this] {
+            {say("Relink\xE2\x80\xA6"), [this] {
                  dispatch("project files --missing"); // a file may have gone since the last command: ask, then show the answer
                  mRelink->show(mHooks.model ? mHooks.model() : emptyModel());
              }},
-            {"Render Stems\xE2\x80\xA6", [this] {
+            {say("Render Stems\xE2\x80\xA6"), [this] {
                  const auto &m = mHooks.model ? mHooks.model() : emptyModel();
                  std::string ids;
                  for (const auto &s : m.strips) ids += (ids.empty() ? "" : ",") + s.id;
                  if (onPickSave && !ids.empty())
-                     onPickSave("Render the mix and a stem per strip", m.projectName + ".wav",
+                     onPickSave(tr("Render the mix and a stem per strip"), m.projectName + ".wav",
                                 [this, ids](const std::string &p) { dispatch("render --out " + quote(p) + " --stems " + ids); });
              }},
-            {"Home", [this] { requestHome(); }},
+            {say("Home"), [this] { requestHome(); }},
             // R-PRESET-2: a song started from a template; the open song kept as one
-            {"New from Template\xE2\x80\xA6", [this] { pickTemplate(Point{60.0, 30.0}); }},
-            {"Save as Template\xE2\x80\xA6", [this] {
+            {say("New from Template\xE2\x80\xA6"), [this] { pickTemplate(Point{60.0, 30.0}); }},
+            {say("Save as Template\xE2\x80\xA6"), [this] {
                  mMenu->onRename = [this](const std::string &n) { if (!n.empty()) dispatch("template save " + quote(n)); };
                  mMenu->openRename("", 60.0, 30.0);
              }},
             // R-COLLAB-1: what a sync with the song's file asked — answered here, ONE line each
-            {"Conflicts\xE2\x80\xA6", [this] { mConflicts->show(mHooks.model ? mHooks.model() : emptyModel()); }},
-        }});
-        ms.addMenu({"Edit", {}});   // filled by refreshMenus: its labels name what undo would take back
-        ms.addMenu({"Song", {
-            {"Add Mixer", [this] { dispatch("mixer add"); }},
-            {"Add Bus", [this] { dispatch("strip add --kind bus"); }},
-            {"Add Audio Line", [this] { dispatch("strip add --kind audio"); }},
-            {"Add Lane", [this] { dispatch("lane add"); }},
-            {"Quantize Clip", [this] {
+            {say("Conflicts\xE2\x80\xA6"), [this] { mConflicts->show(mHooks.model ? mHooks.model() : emptyModel()); }},
+        });
+        setMenuWords(1, say("Edit"), {});   // filled by refreshMenus: its labels name what undo would take back
+        setMenuWords(2, say("Song"), {
+            {say("Add Mixer"), [this] { dispatch("mixer add"); }},
+            {say("Add Bus"), [this] { dispatch("strip add --kind bus"); }},
+            {say("Add Audio Line"), [this] { dispatch("strip add --kind audio"); }},
+            {say("Add Lane"), [this] { dispatch("lane add"); }},
+            {say("Quantize Clip"), [this] {
                  // the selected note clip's pattern at the lanes' snap step (R-UI-3) — 1/32 of a beat when nothing snaps
                  const auto &m = mHooks.model ? mHooks.model() : emptyModel();
                  const std::string sel = selectedClip();
@@ -218,8 +218,8 @@ namespace solaris_ui
                          dispatch("pattern quantize " + c.pattern + " --grid " + grid);
                      }
              }},
-        }});
-        ms.addMenu({"View", {}});   // filled by refreshMenus: Show / Hide follows the state
+        });
+        setMenuWords(3, say("View"), {});   // filled by refreshMenus: Show / Hide follows the state
         refreshMenus(mHooks.model ? mHooks.model() : emptyModel());
     }
 
@@ -230,32 +230,32 @@ namespace solaris_ui
                                 keyHint(m, "lanes.duplicate") + keyHint(m, "lanes.delete") + keyHint(m, "lanes.copy") + keyHint(m, "lanes.paste") + keyHint(m, "lanes.split");
         if (key == mMenuKey) return; // labels change only when what they name does — a re-keyed action too
         mMenuKey = key;
-        auto &ms = mProject->bar().menus();
-        const std::string undo = m.undoLabel.empty() ? "Undo" : "Undo " + m.undoLabel, redo = m.redoLabel.empty() ? "Redo" : "Redo " + m.redoLabel;
-        ms.setItems(1, {
+        // what undo would take back is the service's words (its history's label) — shown as they are
+        const std::string undo = m.undoLabel.empty() ? say("Undo") : say("Undo {1}", m.undoLabel), redo = m.redoLabel.empty() ? say("Redo") : say("Redo {1}", m.redoLabel);
+        setMenuWords(1, say("Edit"), {
             {undo + keyHint(m, "song.undo"), [this] { dispatch("undo"); }},
             {redo + keyHint(m, "song.redo"), [this] { dispatch("redo"); }},
-            {"Show History Tree\xE2\x80\xA6", [this] { openHistory(); }}, // R-HIST-3, as cosmo's History menu has it
-            {"Duplicate Clip" + keyHint(m, "lanes.duplicate"), [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip duplicate " + c); }},
-            {"Copy Clip" + keyHint(m, "lanes.copy"), [this] { songAction(mHooks.model ? mHooks.model() : emptyModel(), "lanes.copy"); }},
-            {"Paste Clip" + keyHint(m, "lanes.paste"), [this] { pasteClip(mHooks.model ? mHooks.model() : emptyModel()); }},
-            {"Delete Clip" + keyHint(m, "lanes.delete"), [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip delete " + c); }},
-            {"Split Clip at the Time Bar" + keyHint(m, "lanes.split"), [this] { songAction(mHooks.model ? mHooks.model() : emptyModel(), "lanes.split"); }},
+            {say("Show History Tree\xE2\x80\xA6"), [this] { openHistory(); }}, // R-HIST-3, as cosmo's History menu has it
+            {say("Duplicate Clip") + keyHint(m, "lanes.duplicate"), [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip duplicate " + c); }},
+            {say("Copy Clip") + keyHint(m, "lanes.copy"), [this] { songAction(mHooks.model ? mHooks.model() : emptyModel(), "lanes.copy"); }},
+            {say("Paste Clip") + keyHint(m, "lanes.paste"), [this] { pasteClip(mHooks.model ? mHooks.model() : emptyModel()); }},
+            {say("Delete Clip") + keyHint(m, "lanes.delete"), [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip delete " + c); }},
+            {say("Split Clip at the Time Bar") + keyHint(m, "lanes.split"), [this] { songAction(mHooks.model ? mHooks.model() : emptyModel(), "lanes.split"); }},
         });
-        ms.setItems(3, {
-            {mProject->dockOpen() ? "Hide Mixer" : "Show Mixer", [this] { mProject->setDockOpen(!mProject->dockOpen()); mMenuKey.clear(); refreshMenus(mHooks.model ? mHooks.model() : emptyModel()); }},
-            {mProject->browserOpen() ? "Hide Browser" : "Show Browser", [this] { mProject->setBrowserOpen(!mProject->browserOpen()); mMenuKey.clear(); refreshMenus(mHooks.model ? mHooks.model() : emptyModel()); }},
-            {m.settings.metronome ? "Metronome: On" : "Metronome: Off", [this] {
+        setMenuWords(3, say("View"), {
+            {mProject->dockOpen() ? say("Hide Mixer") : say("Show Mixer"), [this] { mProject->setDockOpen(!mProject->dockOpen()); mMenuKey.clear(); refreshMenus(mHooks.model ? mHooks.model() : emptyModel()); }},
+            {mProject->browserOpen() ? say("Hide Browser") : say("Show Browser"), [this] { mProject->setBrowserOpen(!mProject->browserOpen()); mMenuKey.clear(); refreshMenus(mHooks.model ? mHooks.model() : emptyModel()); }},
+            {m.settings.metronome ? say("Metronome: On") : say("Metronome: Off"), [this] {
                  const auto &mm = mHooks.model ? mHooks.model() : emptyModel();
                  dispatch(std::string("settings set metronome=") + (mm.settings.metronome ? "off" : "on"));
              }},
-            {m.settings.showIds ? "Hide IDs" : "Show IDs", [this] { // R-UI-11: a machine setting, so a script can turn it on too
+            {m.settings.showIds ? say("Hide IDs") : say("Show IDs"), [this] { // R-UI-11: a machine setting, so a script can turn it on too
                  const auto &mm = mHooks.model ? mHooks.model() : emptyModel();
                  dispatch(std::string("settings set showIds=") + (mm.settings.showIds ? "off" : "on"));
              }},
-            {"Settings\xE2\x80\xA6   (Ctrl+,)", [this] { openSettings(); }},
-            {mProject->sessionOpen() ? "Show Arrangement" : "Show Session", [this] { mProject->setSessionOpen(!mProject->sessionOpen()); mMenuKey.clear(); refreshMenus(mHooks.model ? mHooks.model() : emptyModel()); }}, // R-LAUNCH-1
-            {mProject->windows().isOpen("video") ? "Hide Video" : "Show Video", [this] { // R-VIDEO-1: the song's picture, in a window
+            {say("Settings\xE2\x80\xA6") + "   (Ctrl+,)", [this] { openSettings(); }},
+            {mProject->sessionOpen() ? say("Show Arrangement") : say("Show Session"), [this] { mProject->setSessionOpen(!mProject->sessionOpen()); mMenuKey.clear(); refreshMenus(mHooks.model ? mHooks.model() : emptyModel()); }}, // R-LAUNCH-1
+            {mProject->windows().isOpen("video") ? say("Hide Video") : say("Show Video"), [this] { // R-VIDEO-1: the song's picture, in a window
                  if (mProject->windows().isOpen("video")) mProject->windows().close("video");
                  else
                      mProject->windows().openVideo().onClosed = [this] { // closed by its ×: the menu says Show again
@@ -306,18 +306,131 @@ namespace solaris_ui
 
     void App::showToast(const std::string &text, bool refusal)
     {
-        mToastText = text;
+        mToastText = text; // words (`say`) or the service's line — shown in the language of each pass
         mToastRefusal = refusal;
         mToastWanted = true;
+    }
+
+    // ── R-ACCESS-2: the words stored in cosmo's widgets, kept as words ─────────────────────────────
+
+    void App::openMenu(std::vector<cosmo_v2::ContextMenu::Item> items, Point world)
+    {
+        mContextWords.clear();
+        for (auto &it : items)
+        {
+            mContextWords.push_back(it.label);
+            it.label = shown(it.label);
+        }
+        ++mWordsGen;
+        mMenu->open(std::move(items), world.x, world.y);
+    }
+
+    void App::showConfirm(std::function<std::string()> title, std::function<std::string()> message, std::vector<cosmo_v2::ConfirmDialog::Button> buttons)
+    {
+        mConfirmTitle = std::move(title);
+        mConfirmMessage = std::move(message);
+        mConfirmWords.clear();
+        for (auto &b : buttons)
+        {
+            mConfirmWords.push_back(b.label);
+            b.label = shown(b.label);
+        }
+        ++mWordsGen;
+        mConfirm->show(mConfirmTitle(), mConfirmMessage(), std::move(buttons));
+    }
+
+    void App::setMenuWords(int menu, const std::string &title, std::vector<cosmo_v2::MenuStrip::Item> items)
+    {
+        auto &ms = mProject->bar().menus();
+        if ((int)mMenuWords.size() <= menu) mMenuWords.resize((size_t)menu + 1);
+        auto &w = mMenuWords[(size_t)menu];
+        w.first = title;
+        w.second.clear();
+        std::vector<std::string> labels;
+        for (auto &it : items)
+        {
+            w.second.push_back(it.label);
+            it.label = shown(it.label);
+            labels.push_back(it.label);
+        }
+        if (menu >= ms.menuCount()) ms.addMenu({shown(title), std::move(items)});
+        else
+        {
+            ms.setItems(menu, std::move(items));
+            ms.relabel(menu, shown(title), labels);
+        }
+        ++mWordsGen;
+    }
+
+    void App::relabel()
+    {
+        mSettings->relabel(); // the sheets keep their own words (their combos' choices) and know when they changed
+        mExport->relabel();
+        const std::string &lang = solaris_strings::language();
+        if (lang == mRelabelLang && mWordsGen == mRelabelGen) return;
+        mRelabelLang = lang;
+        mRelabelGen = mWordsGen;
+        auto &ms = mProject->bar().menus();
+        for (size_t i = 0; i < mMenuWords.size() && (int)i < ms.menuCount(); ++i)
+        {
+            std::vector<std::string> labels;
+            for (const auto &l : mMenuWords[i].second) labels.push_back(shown(l));
+            ms.relabel((int)i, shown(mMenuWords[i].first), labels);
+        }
+        if (mMenu->isOpen() && (int)mContextWords.size() == mMenu->itemCount())
+        {
+            std::vector<std::string> labels;
+            for (const auto &l : mContextWords) labels.push_back(shown(l));
+            mMenu->relabel(labels);
+        }
+        mMenu->renameTitle = tr("Rename");
+        if (mConfirmTitle && mConfirmMessage)
+        {
+            std::vector<std::string> labels;
+            for (const auto &l : mConfirmWords) labels.push_back(shown(l));
+            mConfirm->relabel(mConfirmTitle(), mConfirmMessage(), labels);
+        }
+        mHistory->title = solaris_strings::upper(tr("History"));
+        if (!mHistoryHint.empty()) mHistory->hint = shown(mHistoryHint);
+    }
+
+    void App::advanceLanguage(const solaris::AppModel &m, double nowMs)
+    {
+        // R-ACCESS-2: the model's setting (auto: the OS's) — a switch dissolves the window, never a cut
+        const std::string want = solaris_strings::resolve(m.settings.language, mOsLanguage);
+        if (mLangTo.empty())
+        {
+            mLangFrom = mLangTo = want; // the first frame: placed, nowhere to dissolve from
+            mLangFade.set(1.0);
+        }
+        else if (want != mLangTo)
+        {
+            if (want == mLangFrom && mLangFade.isAnimating()) // back the way it came: the dissolve turns round where it is
+            {
+                const double v = mLangFade.value();
+                std::swap(mLangFrom, mLangTo);
+                mLangFade.set(1.0 - v);
+                mLangFade.animateTo(1.0, kLanguageDissolveMs * v, Easing::Linear, nowMs);
+            }
+            else
+            {
+                mLangFrom = mLangFade.value() >= 0.5 ? mLangTo : mLangFrom; // from what shows most
+                mLangTo = want;
+                mLangFade.set(0.0);
+                mLangFade.animateTo(1.0, kLanguageDissolveMs, Easing::Linear, nowMs); // a dissolve is a linear alpha ramp
+            }
+        }
+        mLangFade.update(nowMs);
+        solaris_strings::setLanguage(mLangTo); // what lays out, and what answers between frames (the keyboard, AT-SPI)
     }
 
     void App::copy(const std::string &text)
     {
         // R-UI-11: the host's clipboard; a copy says so
         mLastActivityMs = mNowMs;
-        if (!onCopy) { showToast("This window has no clipboard"); return; }
+        if (!onCopy) { showToast(say("This window has no clipboard")); return; }
         onCopy(text);
-        showToast("Copied " + text, false);
+        showToast(say("Copied {1}", text), false);
     }
 
     bool App::dispatch(const std::string &line)
@@ -326,7 +439,7 @@ namespace solaris_ui
         if (!mHooks.dispatch) return false;
         std::string err;
         if (mHooks.dispatch(line, err)) return true;
-        showToast(err.empty() ? "refused: " + line : err);
+        showToast(err.empty() ? say("refused: {1}", line) : err); // the service's own words, as they are
         return false;
     }
 
@@ -346,17 +459,17 @@ namespace solaris_ui
     {
         // R-PRESET-2: the templates, yours and the factory's; one picked, the host asks where the new song goes
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
-        if (m.templates.empty()) { showToast("No templates yet \xE2\x80\x94 File \xE2\x80\xBA Save as Template\xE2\x80\xA6 keeps a song as one"); return; }
+        if (m.templates.empty()) { showToast(say("No templates yet \xE2\x80\x94 File \xE2\x80\xBA Save as Template\xE2\x80\xA6 keeps a song as one")); return; }
         std::vector<cosmo_v2::ContextMenu::Item> items;
         for (const auto &t : m.templates)
         {
             const std::string name = t.name;
-            items.push_back({name + (t.factory ? "  \xC2\xB7 factory" : ""), [this, name] {
+            items.push_back({name + (t.factory ? "  \xC2\xB7 " + say("factory") : std::string()), [this, name] {
                                  mNewTemplate = name;
                                  if (onPickSongToCreate) onPickSongToCreate();
                              }});
         }
-        mMenu->open(std::move(items), world.x, world.y);
+        openMenu(std::move(items), world);
     }
 
     void App::openHistory()
@@ -382,10 +495,12 @@ namespace solaris_ui
             const std::string h = keyHint(m, id);
             return h.empty() ? std::string() : h.substr(4, h.size() - 5); // "   (Ctrl+Z)" → "Ctrl+Z"
         };
-        std::string hint = "click a node to jump";
-        if (!first("song.undo").empty()) hint += "  \xC2\xB7  " + first("song.undo") + " undo";
-        if (!first("song.redo").empty()) hint += "  \xC2\xB7  " + first("song.redo") + " redo";
-        mHistory->hint = hint;
+        std::string hint = say("click a node to jump");
+        if (!first("song.undo").empty()) hint += "  \xC2\xB7  " + say("{1} undo", first("song.undo"));
+        if (!first("song.redo").empty()) hint += "  \xC2\xB7  " + say("{1} redo", first("song.redo"));
+        mHistoryHint = hint;
+        ++mWordsGen;
+        mHistory->hint = shown(hint);
         mHistory->show(std::move(nodes), cur);
     }
 
@@ -406,19 +521,21 @@ namespace solaris_ui
         // R-SAFE-2: a song opened with an autosave newer than it — the saved one is open until this is answered
         const std::string path = m.recovery;
         cosmo_v2::ConfirmDialog::Button saved, recover;
-        saved.label = "Open the Saved One";
+        saved.label = say("Open the Saved One");
         saved.onClick = [this, path] { dispatch("project discard-recovery " + quote(path)); };
-        recover.label = "Recover";
+        recover.label = say("Recover");
         recover.primary = true;
         recover.onClick = [this, path] { dispatch("project recover " + quote(path)); };
-        char age[64];
         const double s = m.recoveryAge;
-        if (s < 90) std::snprintf(age, sizeof age, "%.0f seconds", s);
-        else if (s < 5400) std::snprintf(age, sizeof age, "%.0f minutes", s / 60.0);
-        else std::snprintf(age, sizeof age, "%.0f hours", s / 3600.0);
-        mConfirm->show("Recover unsaved changes?",
-                       "Solaris kept changes to \"" + m.projectName + "\" that were never saved (" + age + " ago). Recover them, or open the song as it was last saved?",
-                       {saved, recover});
+        const std::string name = m.projectName;
+        showConfirm([] { return tr("Recover unsaved changes?"); },
+                    [s, name] {
+                        const long n = std::lround(s < 90 ? s : s < 5400 ? s / 60.0 : s / 3600.0);
+                        const std::string age = fillIn(s < 90 ? trn(n, "{1} second", "{1} seconds") : s < 5400 ? trn(n, "{1} minute", "{1} minutes") : trn(n, "{1} hour", "{1} hours"),
+                                                     std::to_string(n));
+                        return fillIn(tr("Solaris kept changes to \"{1}\" that were never saved ({2} ago). Recover them, or open the song as it was last saved?"), name, age);
+                    },
+                    {saved, recover});
     }
 
     void App::openSettings()
@@ -432,14 +549,15 @@ namespace solaris_ui
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         if (!m.dirty) { dispatch("project close"); return; }
         cosmo_v2::ConfirmDialog::Button save, discard, cancel;
-        save.label = "Save";
+        save.label = say("Save");
         save.primary = true;
         save.onClick = [this] { if (dispatch("project save")) dispatch("project close"); };
-        discard.label = "Discard";
+        discard.label = say("Discard");
         discard.destructive = true;
         discard.onClick = [this] { dispatch("project close"); };
-        cancel.label = "Cancel";
-        mConfirm->show("Unsaved changes", "Save \"" + m.projectName + "\" before going Home?", {cancel, discard, save});
+        cancel.label = say("Cancel");
+        const std::string name = m.projectName;
+        showConfirm([] { return tr("Unsaved changes"); }, [name] { return fillIn(tr("Save \"{1}\" before going Home?"), name); }, {cancel, discard, save});
     }
 
     void App::bindIfStale()
@@ -464,7 +582,7 @@ namespace solaris_ui
         {
             mMissingSaidFor = m.projectPath;
             const size_t n = m.missing.size();
-            if (n > 0) showToast(std::to_string(n) + (n == 1 ? " file is" : " files are") + " missing \xE2\x80\x94 File \xE2\x80\xBA Relink\xE2\x80\xA6");
+            if (n > 0) showToast(sayn((long)n, "{1} file is missing \xE2\x80\x94 File \xE2\x80\xBA Relink\xE2\x80\xA6", "{1} files are missing \xE2\x80\x94 File \xE2\x80\xBA Relink\xE2\x80\xA6", (long)n));
         }
         syncHistory(m);
         if (m.recovery.empty()) mRecoveryAsked.clear();
@@ -484,6 +602,7 @@ namespace solaris_ui
         if (mHome->opacity.isAnimating() || mProject->opacity.isAnimating() || mToast.isAnimating() || mToast.value() > 0.0) return true;
         if (mScale.isAnimating() || mContrast.isAnimating() || mFocusOn || mRingA.value() > 0.0) return true; // R-ACCESS-1: a zoom, a fade, the ring
         if (m.settings.uiScale != mScaleWant || (m.settings.highContrast ? 1 : 0) != mContrastWant) return true;
+        if (mLangFade.isAnimating() || solaris_strings::resolve(m.settings.language, mOsLanguage) != mLangTo) return true; // R-ACCESS-2: a dissolve
         if (mSettings->appearAmount() > 0.0 || mExport->appearAmount() > 0.0 || mRelink->appearAmount() > 0.0 || mConflicts->appearAmount() > 0.0 || mMenu->isOpen() || mHistory->appearAmount() > 0.0) return true;
         return nowMs - mLastActivityMs < kActiveWindowMs;
     }
@@ -560,7 +679,7 @@ namespace solaris_ui
         {
             const int open = ms.openIndex();
             for (int i = 0; i < (int)ms.menu(open).items.size(); ++i)
-                out.push_back(a11yNode("menu." + ms.menu(open).title + "." + std::to_string(i), "menuitem", ms.menu(open).items[(size_t)i].label,
+                out.push_back(a11yNode("menu." + english(mMenuWords[(size_t)open].first) + "." + std::to_string(i), "menuitem", ms.menu(open).items[(size_t)i].label,
                                        worldRect(ms, ms.itemRect(open, i))));
             return out;
         }
@@ -572,7 +691,7 @@ namespace solaris_ui
             out.push_back(n);
             if (n.key == "bar.settings") // the menus' titles, where they sit: after Settings
                 for (int i = 0; i < ms.menuCount(); ++i)
-                    out.push_back(a11yNode("menu." + ms.menu(i).title, "menu", ms.menu(i).title + " menu", worldRect(ms, ms.titleRect(i))));
+                    out.push_back(a11yNode("menu." + english(mMenuWords[(size_t)i].first), "menu", fillIn(tr("{1} menu"), ms.menu(i).title), worldRect(ms, ms.titleRect(i))));
         }
         if (mProject->browserOpen()) mProject->browser().accessibles(out);
         if (!mProject->sessionOpen()) mProject->timeline().accessibles(out); // the session grid: Not yet
@@ -736,7 +855,7 @@ namespace solaris_ui
         const solaris::ClipModel *src = nullptr;
         for (const auto &c : m.clips)
             if (c.id == mClipClipboard) src = &c;
-        if (!src) { showToast(mClipClipboard + " is gone \xE2\x80\x94 copy a clip again"); mClipClipboard.clear(); return true; }
+        if (!src) { showToast(say("{1} is gone \xE2\x80\x94 copy a clip again", mClipClipboard)); mClipClipboard.clear(); return true; }
         const double pos = m.transport.position;
         const double at = mPasteAt >= 0.0 && std::fabs(pos - mPasteAt) < 1e-9 ? mPasteNext : pos;
         const double length = src->length;
@@ -793,8 +912,9 @@ namespace solaris_ui
             // R-CLIP-10: nothing is sent — the window keeps which clip; Ctrl+V makes the copy
             mClipClipboard = sel;
             mPasteAt = -1.0;
-            showToast("Clip copied \xE2\x80\x94 " + std::string(keyHint(m, "lanes.paste").empty() ? "Paste" : keyHint(m, "lanes.paste").substr(4, keyHint(m, "lanes.paste").size() - 5)) +
-                          " puts it at the time bar",
+            const std::string paste = keyHint(m, "lanes.paste");
+            showToast(paste.empty() ? say("Clip copied \xE2\x80\x94 Paste puts it at the time bar")
+                                    : say("Clip copied \xE2\x80\x94 {1} puts it at the time bar", paste.substr(4, paste.size() - 5)),
                       false);
             return true;
         }
@@ -848,9 +968,10 @@ namespace solaris_ui
             mContrast.update(nowMs);
             palette::setContrast(mContrast.value()); // every token read from here on is blended by it
         }
+        advanceLanguage(m, nowMs); // R-ACCESS-2
         const Transform root = rootTransform();
 
-        drawRoundedRect(target, Rect{0, 0, mPhysW, mPhysH}, 0.0, Paint::filled(palette::background()));
+        // everything advances ONCE a frame …
         for (Segment *s : {(Segment *)mHome.get(), (Segment *)mProject.get()})
         {
             const bool wanted = (s == mHome.get()) == (mScreen == "home");
@@ -859,27 +980,45 @@ namespace solaris_ui
             else mProject->layout();
             s->advance(nowMs);
         }
+        // the modals float over whichever screen opened them; advanced always, so a close can finish
+        mSettings->advance(nowMs);
+        mExport->advance(nowMs);   // R-EXPORT-1
+        mRelink->advance(nowMs);   // R-COLLECT-1
+        mConflicts->advance(nowMs); // R-COLLAB-1
+        mModalRoot->advance(nowMs);
+        advanceFocus(nowMs);       // R-ACCESS-1
+        // … and paints once — or, while a language switch dissolves, twice: the old language, then the new one over it at
+        // the dissolve's amount (the new one last, so every widget's hit rectangles are the new language's — R-ACCESS-2)
+        if (mLangFrom != mLangTo && mLangFade.value() < 1.0)
+        {
+            paintPass(target, root, mLangFrom);
+            target.pushLayer(mLangFade.value());
+            paintPass(target, root, mLangTo);
+            target.popLayer();
+        }
+        else paintPass(target, root, mLangTo);
+    }
+
+    void App::paintPass(IRenderTarget &target, const Transform &root, const std::string &language)
+    {
+        solaris_strings::setLanguage(language);
+        relabel();
+        drawRoundedRect(target, Rect{0, 0, mPhysW, mPhysH}, 0.0, Paint::filled(palette::background()));
         for (Segment *s : {(Segment *)mHome.get(), (Segment *)mProject.get()})
         {
             if (s->opacity.value() <= Segment::kOpacityEpsilon) continue;
             s->render(target, root);
             s->renderOverlay(target, root);
         }
-        // the modals float over whichever screen opened them; advanced always, so a close can finish
-        mSettings->advance(nowMs);
         mSettings->render(target, root);        // its card, its pages and their controls (R-SET-5/6) …
         mSettings->renderOverlay(target, root); // … and an open combo's list, over everything
-        mExport->advance(nowMs);                // R-EXPORT-1: the same, for File › Export…
         mExport->render(target, root);
         mExport->renderOverlay(target, root);
-        mRelink->advance(nowMs);                // R-COLLECT-1: File › Relink…
         mRelink->render(target, root);
-        mConflicts->advance(nowMs);             // R-COLLAB-1: what a sync asked
         mConflicts->render(target, root);
-        mModalRoot->advance(nowMs);
         mModalRoot->renderOverlay(target, root);
 
-        advanceFocus(nowMs); // R-ACCESS-1: the keyboard's focus ring, over everything but the toast
+        // R-ACCESS-1: the keyboard's focus ring, over everything but the toast
         if (const double fa = mRingA.value(); fa > 0.001)
         {
             const Rect fr = focusRing();
@@ -896,7 +1035,7 @@ namespace solaris_ui
             target.save();
             target.setTransform(root); // R-ACCESS-1: drawn in logical units, as everything else
             const double px = 12.0;
-            const std::string s = textfit::ellipsize(target, mToastText, std::min(640.0, mW - 64.0), px, font::sans());
+            const std::string s = textfit::ellipsize(target, shown(mToastText), std::min(640.0, mW - 64.0), px, font::sans());
             const double w = target.measureText(s, px, font::sans()) + 32.0, h = 34.0;
             const Rect r{(mW - w) * 0.5, mH - 24.0 - h + (1.0 - ta) * 12.0, w, h};
             Color bg = palette::popover(), bd = mToastRefusal ? palette::destructive() : palette::primary(), fg = palette::foreground();

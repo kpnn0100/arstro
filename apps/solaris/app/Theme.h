@@ -18,6 +18,7 @@
  *  meaning-only; solo is amber and record red, never the accent (why the accent is teal).
  */
 #pragma once
+#include "Words.h" // R-ACCESS-2: every widget draws its words through the table
 #include "../../cosmo/Theme.h"
 
 namespace arstro

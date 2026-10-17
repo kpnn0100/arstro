@@ -93,10 +93,10 @@ int main()
     // ── English is the keys ──────────────────────────────────────────────────────────────────────────────────────────
     {
         setLanguage("en");
-        assert(language() == "en" && tr("Settings") == "Settings" && trc("menu", "Open\xE2\x80\xA6") == "Open\xE2\x80\xA6");
-        assert(trn(1, "{1} conflict", "{1} conflicts") == "{1} conflict" && trn(0, "{1} conflict", "{1} conflicts") == "{1} conflicts");
-        assert(fill(trn(3, "{1} conflict", "{1} conflicts"), "3") == "3 conflicts");
-        assert(fill("{2} of {1}", std::string("a"), std::string("b")) == "b of a" && fill("{1} and {3}", "x") == "x and {3}");
+        assert(language() == "en" && tr("Settings") == "Settings" && trc("port", "in") == "in");
+        assert(trn(1, "{1} bar", "{1} bars") == "{1} bar" && trn(0, "{1} bar", "{1} bars") == "{1} bars");
+        assert(fillIn(trn(3, "{1} bar", "{1} bars"), "3") == "3 bars");
+        assert(fillIn("{2} of {1}", std::string("a"), std::string("b")) == "b of a" && fillIn("{1} and {3}", "x") == "x and {3}");
         pass("English is the keys: a context and a count pick the English; {1} {2} in any order");
     }
 
@@ -105,11 +105,11 @@ int main()
         setLanguage("vi");
         assert(language() == "vi");
         assert(tr("Settings") == "C\xC3\xA0i \xC4\x91\xE1\xBA\xB7t");                         // Cài đặt
-        assert(trc("menu", "Open\xE2\x80\xA6") == "M\xE1\xBB\x9F\xE2\x80\xA6");               // Mở…
-        assert(tr("Open\xE2\x80\xA6") == "Open\xE2\x80\xA6");                                 // another key: its context is part of it
+        assert(trc("port", "in") == "v\xC3\xA0o");                                               // vào
+        assert(tr("in") == "in");                                                               // another key: its context is part of it
         assert(tr("Nothing like this is in the table") == "Nothing like this is in the table"); // a string it lacks: English
-        const std::string one = trn(1, "{1} conflict", "{1} conflicts"), many = trn(7, "{1} conflict", "{1} conflicts");
-        assert(one == many && fill(many, "7") == "7 xung \xC4\x91\xE1\xBB\x99t");            // one form for every count
+        const std::string one = trn(1, "{1} bar", "{1} bars"), many = trn(7, "{1} bar", "{1} bars");
+        assert(one == many && fillIn(many, "7") == "7 \xC3\xB4 nh\xE1\xBB\x8Bp");              // one form for every count: 7 ô nhịp
         assert(trn(1, "{1} take", "{1} takes") == "{1} take" && trn(2, "{1} take", "{1} takes") == "{1} takes"); // a plural it lacks: English's
         const std::string *p = &tr("Settings");
         for (int i = 0; i < 1000; ++i) tr("x" + std::to_string(i));
@@ -126,7 +126,7 @@ int main()
         const std::string longer = "Choose the folder your samples are in, and Solaris lists every sound it finds there";
         assert(points(pseudo(longer)) * 3 >= points(longer) * 4); // a third longer, not just its brackets
         const std::string f = tr("{1} of {2}");
-        assert(contains(f, "{1}") && contains(f, "{2}") && fill(f, "3", "9").find("3") != std::string::npos);
+        assert(contains(f, "{1}") && contains(f, "{2}") && fillIn(f, "3", "9").find("3") != std::string::npos);
         assert(trn(1, "{1} clip", "{1} clips") != trn(2, "{1} clip", "{1} clips") && trn(2, "{1} clip", "{1} clips").front() == '[');
         assert(trc("menu", "Open") == pseudo("Open"));
         assert(pseudo("") == "[ \xC2\xB7]");
@@ -142,6 +142,16 @@ int main()
         setLanguage("fr");
         assert(language() == "en" && tr("Settings") == "Settings");
         pass("auto is the OS's language when Solaris has it, else English; an unknown language is English");
+    }
+
+    // ── upper case, for a section header in any of them ─────────────────────────────────────────────────────────────
+    {
+        // "Thiết bị âm thanh đầu ra · ơ ư" → "THIẾT BỊ ÂM THANH ĐẦU RA · Ơ Ư"
+        assert(upper("Thi\xE1\xBA\xBFt b\xE1\xBB\x8B \xC3\xA2m thanh \xC4\x91\xE1\xBA\xA7u ra \xC2\xB7 \xC6\xA1 \xC6\xB0") ==
+               "THI\xE1\xBA\xBET B\xE1\xBB\x8A \xC3\x82M THANH \xC4\x90\xE1\xBA\xA6U RA \xC2\xB7 \xC6\xA0 \xC6\xAF");
+        assert(upper(pseudo("Settings")) == "[\xC5\xA0\xC3\x89\xC5\xA2\xC5\xA2\xC3\x8E\xC3\x91\xC4\x9C\xC5\xA0 \xC2\xB7\xC2\xB7\xC2\xB7]"); // ŠÉŢŢÎÑĜŠ
+        assert(upper("Audio 48 kHz") == "AUDIO 48 KHZ" && upper("") == "" && upper("\xE2\x80\xA6 \xC3\xB7") == "\xE2\x80\xA6 \xC3\xB7"); // … ÷ kept
+        pass("upper case for the letters the languages use: Vietnamese's, the pseudo-language's, ASCII; the rest kept");
     }
 
     std::printf("solaris_strings_tests: %d passed, 0 failed\n", passed);

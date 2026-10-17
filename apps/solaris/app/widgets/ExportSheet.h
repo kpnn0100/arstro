@@ -58,6 +58,8 @@ namespace solaris_ui
         artboard::Rect exportRect() const { return mExport; }
         artboard::Rect cancelRect() const { return mCancel; }
 
+        /** R-ACCESS-2: the combos' choices in the language drawn now (their words kept; the App calls it each paint pass). */
+        void relabel();
         void advance(double nowMs) override;
         bool handleKey(const artboard::KeyEvent &e) override;
 
@@ -69,7 +71,7 @@ namespace solaris_ui
     private:
         struct Opt
         {
-            std::string label, value;
+            std::string label, value; // label: words (`say`) or data — shown in the language drawn
         };
         artboard::Rect cardRect() const;
         void setOptions(int row, std::vector<Opt> opts, const std::string &select);
@@ -90,7 +92,8 @@ namespace solaris_ui
         artboard::AnimatedProperty mRowOn[kRows];
         double mRowLast[kRows];
         bool mRowsPlaced = false;
-        std::string mName = "Untitled";
+        std::string mName;                          // the song's name ("" : Untitled, in the language drawn)
+        std::string mLabelsLang;                    // R-ACCESS-2: the language the choices were last shown in
         int mSongRate = 48000;
         bool mOpen = false, mClosing = false, mShowWanted = false, mCloseWanted = false;
         artboard::AnimatedProperty mAppear{0.0};

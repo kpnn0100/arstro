@@ -16,6 +16,10 @@
 #include "../../widgets/ParamMenu.h"
 #include "../../widgets/PianoRoll.h"
 #include "../../../../cosmo/widgets/SliderRow.h"
+#include "WordsScan.h"
+#include "Strings.h"
+#include <set>
+#include <sstream>
 using arstro::solaris_ui::Timeline;
 #include <algorithm>
 #include <cassert>
@@ -5599,6 +5603,293 @@ static void test_the_cpu_in_the_song_bar()
     pass("the CPU in the song bar (R-PERF-1): playing, the readout catches up with the load (caught on its way); stopped, it eases back to 0");
 }
 
+namespace
+{
+    /** The strings a spied frame drew that equal `text`, and the layer alpha each was drawn under. */
+    std::vector<double> drawnAt(const sltest::Rig &r, const std::string &text)
+    {
+        std::vector<double> out;
+        for (const auto &d : r.spy.drawn)
+            if (d.text == text) out.push_back(d.alpha);
+        return out;
+    }
+}
+
+static void test_the_window_speaks_the_language()
+{
+    // R-ACCESS-2 (Round 21, part 2): Settings › Interface › Language — ONE line; the window DISSOLVES to it (the old
+    // language painted, the new one over it in a layer at the eased amount, linear over 180 ms) — caught mid-way; at rest
+    // only the new words, the menus' and the dialogs' too; a node's key the same in any language, its name translated;
+    // back from a shell's line the other way, and a switch back mid-way turns round where it is
+    using arstro::solaris_ui::SettingsSheet;
+    sltest::Rig r("ui-language", 1280, 800);
+    r.cmd("project new " + r.song("Words") + ".slp");
+    r.settle();
+    auto &ms = r.app->project().bar().menus();
+    const artboard::Rect editEn = ms.titleRect(1);
+    assert(ms.menu(0).title == "File" && r.app->drawnLanguage() == "en");
+    r.app->openSettings();
+    r.settle();
+    auto &st = r.app->settings();
+    r.click(st.railRect(SettingsSheet::kInterface));
+    r.settle();
+    assert(st.optionCount(SettingsSheet::kLanguage) == 4 && st.optionLabel(SettingsSheet::kLanguage, 0) == "Automatic" &&
+           st.optionLabel(SettingsSheet::kLanguage, 1) == "English" && st.optionLabel(SettingsSheet::kLanguage, 2) == "Ti\xE1\xBA\xBFng Vi\xE1\xBB\x87t" &&
+           st.shownValue(SettingsSheet::kLanguage) == "Automatic");
+    r.click(st.controlRect(SettingsSheet::kLanguage));
+    r.settle();
+    r.click(st.optionRect(SettingsSheet::kLanguage, 2));
+    assert(sentLine(r, "settings set language=vi") && r.svc->model().settings.language == "vi");
+    // the dissolve, a frame at a time: English painted whole, Vietnamese over it at the live amount
+    r.spying = true;
+    double mid = 0.0;
+    for (int i = 0; i < 6 && mid <= 0.0; ++i)
+    {
+        r.frame();
+        mid = r.app->languageAmount();
+    }
+    assert(mid > 0.0 && mid < 0.5 && r.app->fadingLanguage() == "en" && r.app->drawnLanguage() == "vi");
+    const auto en = drawnAt(r, "Settings"), vi = drawnAt(r, "C\xC3\xA0i \xC4\x91\xE1\xBA\xB7t");
+    assert(!en.empty() && !vi.empty() && en[0] == 1.0 && std::fabs(vi[0] - mid) < 1e-9);
+    // … the menus already the new language's: their hit rectangles are the last pass's (Vietnamese)
+    assert(ms.menu(0).title == "T\xE1\xBB\x87p" && ms.titleRect(1).x != editEn.x);
+    const double xMid = ms.titleRect(1).x;
+    r.settle();
+    assert(r.app->languageAmount() == 1.0 && drawnAt(r, "Settings").empty() && drawnAt(r, "C\xC3\xA0i \xC4\x91\xE1\xBA\xB7t").size() >= 1);
+    assert(ms.titleRect(1).x == xMid && st.shownValue(SettingsSheet::kLanguage) == "Ti\xE1\xBA\xBFng Vi\xE1\xBB\x87t");
+    // a combo's choices are words too: Automatic, in Vietnamese, with nothing in the model changed since the switch
+    assert(st.optionLabel(SettingsSheet::kLanguage, 0) == "T\xE1\xBB\xB1 \xC4\x91\xE1\xBB\x99ng"); // Tự động
+    // a node's key is its identity; its name is said in the language
+    bool found = false;
+    st.close();
+    r.settle();
+    for (const auto &n : r.app->accessibles())
+        if (n.key == "menu.File") found = n.name == "Menu " "T\xE1\xBB\x87p";
+    assert(found);
+    pass("Settings › Interface › Language: ONE line; the window dissolves (English whole, Vietnamese over it at the live amount — caught), the menus' rectangles already the new words'; a node's key the same, its name Vietnamese");
+    // back from a shell — the other way; and turned round mid-way, from where it is
+    r.cmd("settings set language=en");
+    double back = 0.0;
+    for (int i = 0; i < 6 && back <= 0.0; ++i)
+    {
+        r.frame();
+        back = r.app->languageAmount();
+    }
+    assert(back > 0.0 && back < 1.0 && r.app->fadingLanguage() == "vi" && r.app->drawnLanguage() == "en");
+    r.frame();
+    const double before = r.app->languageAmount();
+    r.cmd("settings set language=vi");
+    r.frame();
+    assert(r.app->drawnLanguage() == "vi" && r.app->fadingLanguage() == "en");
+    assert(std::fabs(r.app->languageAmount() - (1.0 - before)) < 1e-9); // the same mixture of the two: no jump
+    r.frame();
+    assert(std::fabs(r.app->languageAmount() - (1.0 - before) - sltest::Rig::kFrameMs / arstro::solaris_ui::App::kLanguageDissolveMs) < 1e-6); // … and on at the same rate
+    r.settle();
+    assert(r.app->languageAmount() == 1.0 && drawnAt(r, "Settings").empty());
+    pass("… back to English from a shell's line, dissolving the other way; a switch back mid-way turns round where it is");
+}
+
+namespace
+{
+    /** What the model publishes — the user's data, the service's and the registry's words — shown as it is. */
+    std::vector<std::string> modelWords(const arstro::solaris::AppModel &m)
+    {
+        std::vector<std::string> v = {m.projectName, "main"};
+        for (const auto &d : m.devices) v.push_back(d.name);
+        for (const auto &d : m.midiDevices) v.push_back(d.name);
+        for (const auto &l : m.settings.languages) v.push_back(l.name);
+        for (const auto &k : m.settings.keys)
+        {
+            v.push_back(k.label);
+            v.push_back(k.area);
+            for (const auto &c : k.keys) v.push_back(c);
+        }
+        for (const auto &x : m.versions) v.push_back(x.name);
+        for (const auto &x : m.strips) v.push_back(x.name);
+        for (const auto &x : m.lanes) v.push_back(x.name);
+        for (const auto &x : m.ports) v.push_back(x.name);
+        for (const auto &x : m.history) v.push_back(x.label);
+        for (const auto &x : m.templates) v.push_back(x.name);
+        for (const auto &x : m.recents) { v.push_back(x.name); v.push_back(x.path); }
+        for (const auto &f : m.settings.folders) v.push_back(f);
+        return v;
+    }
+
+    /** The strings drawn that are neither the table's (bracketed in en-XA — to the end when ellipsized) nor data nor a
+     *  name no language translates; each said, and counted. */
+    int untranslated(const std::vector<sltest::Drawn> &drawn, std::vector<std::string> data, const char *where)
+    {
+        // a widget painted shows the table's words — none would pass any check vacuously
+        bool table = drawn.size() == 1; // a single name may be data alone
+        for (const auto &d : drawn) table |= d.text.find('[') != std::string::npos;
+        if (!table) { std::printf("    %s: drew nothing from the table\n", where); return 1; }
+        static const char *kNames[] = {"solaris", "v0.1.0", "bpm", "kHz", "dBTP", "dB", "ms", "LUFS", "kbps", "ppm", "PulseAudio", "PipeWire",
+                                       "Mackie Control", "HUI", "WAV", "FLAC", "MP3", "Ogg Vorbis", "Opus", "MP4", "MKV", "Ctrl", "Shift", "Alt",
+                                       ".wav", ".flac", ".mp3", ".ogg", ".opus", ".mp4", ".mkv"};
+        for (size_t i = 0, n = data.size(); i < n; ++i) data.push_back(arstro::solaris_strings::upper(data[i])); // a micro-label's data, uppercased
+        for (const char *n : kNames) data.push_back(n);
+        std::sort(data.begin(), data.end(), [](const std::string &a, const std::string &b) { return a.size() > b.size(); }); // the longest first
+        int bad = 0;
+        for (const auto &d : drawn)
+        {
+            std::string rest;
+            for (size_t i = 0; i < d.text.size(); ++i)
+            {
+                if (d.text[i] != '[') { rest += d.text[i]; continue; }
+                const size_t close = d.text.find(']', i);
+                if (close == std::string::npos) break; // ellipsized: the table's to its end
+                i = close;
+            }
+            for (const auto &w : data)
+                for (size_t at; !w.empty() && (at = rest.find(w)) != std::string::npos;) rest.erase(at, w.size());
+            bool letter = false;
+            for (size_t i = 0; i < rest.size(); ++i)
+                if (std::isalpha((unsigned char)rest[i]) && !(rest.size() == 1 || (i + 1 < rest.size() && rest[i + 1] == ')') || (i > 0 && rest[i - 1] == '+')))
+                    letter = true; // a key's single letter ("Ctrl+S") is a key, not a word
+            if (letter)
+            {
+                std::printf("    %s: not from the table: \"%s\"\n", where, d.text.c_str());
+                ++bad;
+            }
+        }
+        return bad;
+    }
+}
+
+static void test_every_word_the_shell_draws_is_from_the_table()
+{
+    // R-ACCESS-2 (Round 21, part 2): in the pseudo-language every string the shell draws is the table's — Home, the song
+    // bar and each of its menus, the version menu, Settings (every page, a combo's list open), Export, Relink,
+    // Conflicts, a confirm dialog, the history's card — but the data the model publishes and the names no language
+    // translates; the toasts the window composes and the accessible names likewise
+    sltest::Rig r("ui-pseudo", 1440, 900);
+    r.cmd("settings set language=en-XA");
+    r.cmd("project new " + r.song("Words") + ".slp");
+    r.cmd("strip add --kind bus");
+    r.cmd("project save");
+    r.cmd("project close");
+    r.settle();
+    assert(r.app->drawnLanguage() == "en-XA");
+    int bad = untranslated(r.wordsOf(r.app->home()), modelWords(r.svc->model()), "home");
+    for (const auto &n : r.app->accessibles())
+        bad += untranslated({sltest::Drawn{n.name, 0, 0, 1}}, modelWords(r.svc->model()), "home's names");
+    r.cmd("project open " + r.song("Words") + ".slp");
+    r.settle();
+    auto &bar = r.app->project().bar();
+    auto &ms = bar.menus();
+    bad += untranslated(r.wordsOf(bar), modelWords(r.svc->model()), "the song bar");
+    for (int i = 0; i < ms.menuCount(); ++i)
+    {
+        r.click(world(ms, ms.titleRect(i)));
+        r.settle();
+        if (ms.openIndex() != i) std::printf("    menu %d did not open (open: %d)\n", i, ms.openIndex());
+        assert(ms.openIndex() == i);
+        bad += untranslated(r.wordsOf(bar), modelWords(r.svc->model()), "a menu");
+        for (const auto &n : r.app->accessibles())
+            bad += untranslated({sltest::Drawn{n.name, 0, 0, 1}}, modelWords(r.svc->model()), "a menu's names");
+        if (i == 0) // a toast the window composes: File › Collect and Save
+        {
+            assert(r.app->activateNode("menu.File.6"));
+            r.settle();
+            const std::string toast = r.app->toastText();
+            assert(sentLine(r, "project collect --save") && toast.front() == '[' && toast.back() == ']');
+            continue;
+        }
+        ms.close();
+        r.settle();
+    }
+    r.cmd("version new \"Radio edit\" --open");
+    r.settle();
+    for (const auto &n : r.app->accessibles())
+        if (n.key == "bar.version") r.click(n.bounds);
+    r.settle();
+    assert(r.app->menu().isOpen());
+    bad += untranslated(r.wordsOf(r.app->menu()), modelWords(r.svc->model()), "the version menu");
+    r.app->menu().close();
+    r.settle();
+    auto &st = r.app->settings();
+    r.app->openSettings();
+    r.settle();
+    for (int sec = 0; sec < arstro::solaris_ui::SettingsSheet::kSections; ++sec)
+    {
+        st.showSection(sec);
+        r.settle();
+        bad += untranslated(r.wordsOf(st), modelWords(r.svc->model()), arstro::solaris_ui::SettingsSheet::sectionTitle(sec));
+        for (const auto &n : r.app->accessibles())
+            bad += untranslated({sltest::Drawn{n.name, 0, 0, 1}, sltest::Drawn{n.value, 0, 0, 1}}, modelWords(r.svc->model()), "Settings' names");
+    }
+    st.showSection(arstro::solaris_ui::SettingsSheet::kAudio);
+    r.settle();
+    r.click(st.controlRect(arstro::solaris_ui::SettingsSheet::kOutput));
+    r.settle();
+    assert(st.comboOpen(arstro::solaris_ui::SettingsSheet::kOutput));
+    bad += untranslated(r.wordsOf(st), modelWords(r.svc->model()), "a combo's list");
+    st.close();
+    r.settle();
+    r.app->exportSheet().show(r.svc->model());
+    r.settle();
+    bad += untranslated(r.wordsOf(r.app->exportSheet()), modelWords(r.svc->model()), "Export");
+    r.app->exportSheet().close();
+    r.app->relinkSheet().show(r.svc->model());
+    r.settle();
+    bad += untranslated(r.wordsOf(r.app->relinkSheet()), modelWords(r.svc->model()), "Relink");
+    r.app->relinkSheet().close();
+    r.app->conflictsSheet().show(r.svc->model());
+    r.settle();
+    bad += untranslated(r.wordsOf(r.app->conflictsSheet()), modelWords(r.svc->model()), "Conflicts");
+    r.app->conflictsSheet().close();
+    r.settle();
+    r.app->openHistory();
+    r.settle();
+    bad += untranslated(r.wordsOf(r.app->historyView()), modelWords(r.svc->model()), "the history");
+    r.app->historyView().hide();
+    r.cmd("strip add --kind bus"); // unsaved: Home asks
+    r.settle();
+    r.app->requestHome();
+    r.settle();
+    assert(r.app->confirm().isOpen());
+    bad += untranslated(r.wordsOf(r.app->confirm()), modelWords(r.svc->model()), "a confirm dialog");
+    assert(bad == 0);
+    pass("in en-XA every word the shell draws is the table's — Home, the song bar and its menus, the version menu, every Settings page and a combo's list, Export, Relink, Conflicts, the history, a dialog, a toast, the accessible names — the model's data and the names no language has kept as they are");
+}
+
+static void test_the_table_has_every_word_the_window_says()
+{
+    // R-ACCESS-2 (Round 21, part 2): every English string the window's code hands the table — tr, trc, trn, say, sayn,
+    // N_ — is a line of lang/vi.strings, and every line of it is one the code still says; the table and the code
+    // cannot drift apart (as the API document cannot)
+    std::set<std::string> code;
+    for (const char *sub : {"", "widgets"})
+        for (const auto &e : std::filesystem::directory_iterator(std::filesystem::path(SOLARIS_APP_SOURCE_DIR) / sub))
+        {
+            const std::string ext = e.path().extension().string();
+            if (ext != ".h" && ext != ".cpp") continue;
+            std::ifstream in(e.path());
+            std::stringstream ss;
+            ss << in.rdbuf();
+            words_scan::keysIn(ss.str(), code);
+        }
+    std::ifstream in(std::string(SOLARIS_LANG_DIR) + "/vi.strings");
+    std::stringstream ss;
+    ss << in.rdbuf();
+    arstro::solaris_strings::Table vi;
+    std::string err;
+    if (!arstro::solaris_strings::parseTable(ss.str(), vi, err)) std::printf("    vi.strings: %s\n", err.c_str());
+    assert(err.empty());
+    auto said = [](std::string k) {
+        for (auto &c : k)
+            if (c == '\x1F') c = '/';
+        return k;
+    };
+    size_t missing = 0, unused = 0;
+    for (const auto &k : code)
+        if (!vi.entries.count(k)) { std::printf("    not in vi.strings: \"%s\"\n", said(k).c_str()); ++missing; }
+    for (const auto &kv : vi.entries)
+        if (!code.count(kv.first)) { std::printf("    no code says: \"%s\"\n", said(kv.first).c_str()); ++unused; }
+    assert(missing == 0 && unused == 0 && code.size() > 150);
+    pass("the table has every word the window says, and no word it does not (R-ACCESS-2: vi.strings == the code's keys)");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -5684,6 +5975,9 @@ int main()
     test_a_strip_freezes_from_its_menu();
     test_a_sample_is_heard_from_the_browser();
     test_the_grid_follows_the_zoom();
+    test_the_window_speaks_the_language();             // R-ACCESS-2
+    test_every_word_the_shell_draws_is_from_the_table();
+    test_the_table_has_every_word_the_window_says();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

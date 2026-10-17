@@ -24,6 +24,12 @@ namespace cosmo_v2
         ContextMenu() { focusable = true; }  // rename mode takes keyboard focus (DR-TREE-5)
 
         void open(std::vector<Item> items, double x, double y);
+        /** The open items in other words, nothing closed or moved (opt-in: Solaris, R-ACCESS-2; cosmo never calls it). */
+        void relabel(const std::vector<std::string> &labels)
+        {
+            if (labels.size() != mItems.size()) return;
+            for (size_t i = 0; i < labels.size(); ++i) mItems[i].label = labels[i];
+        }
         void close() { mOpen = false; mRenaming = false; }
         bool isOpen() const { return mOpen; }
         /** Read-only contents and geometry (local coordinates) — what a test aims a click at. */
@@ -38,6 +44,7 @@ namespace cosmo_v2
         void openRename(const std::string &currentName, double x, double y);
         bool isRenaming() const { return mOpen && mRenaming; }
         std::function<void(const std::string &)> onRename;
+        std::string renameTitle = "Rename"; // the rename header (opt-in: Solaris draws it in its language, R-ACCESS-2)
 
         void advance(double nowMs) override;  // drives the open/close + hover + rename morph
 

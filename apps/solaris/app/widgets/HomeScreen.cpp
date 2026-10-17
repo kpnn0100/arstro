@@ -71,9 +71,9 @@ namespace solaris_ui
     Rect HomeScreen::toScreen(const Rect &c) const { return Rect{gridLeft() + c.x, gridTop() + c.y - mScroll.value(), c.w, c.h}; }
     void HomeScreen::accessibles(std::vector<A11yNode> &out)
     {
-        static const char *kActions[] = {"New song", "Open song\xE2\x80\xA6", "From template\xE2\x80\xA6"};
-        for (int i = 0; i < 3; ++i) out.push_back(a11yNode("home.action." + std::to_string(i), "button", kActions[i], worldRect(*this, actionRect(i))));
-        out.push_back(a11yNode("home.settings", "button", "Settings", worldRect(*this, settingsRect())));
+        static const char *kActions[] = {N_("New song"), N_("Open song\xE2\x80\xA6"), N_("From template\xE2\x80\xA6")};
+        for (int i = 0; i < 3; ++i) out.push_back(a11yNode("home.action." + std::to_string(i), "button", tr(kActions[i]), worldRect(*this, actionRect(i))));
+        out.push_back(a11yNode("home.settings", "button", tr("Settings"), worldRect(*this, settingsRect())));
         const Rect vp = gridViewport();
         for (int i = 0; i < (int)mCards.size(); ++i)
         {
@@ -81,7 +81,7 @@ namespace solaris_ui
             if (r.w <= 0 || r.bottom() < vp.y || r.y > vp.bottom()) continue; // scrolled out: not reachable until in view
             const auto &c = mCards[(size_t)i].info;
             out.push_back(a11yNode("home.recent." + c.path, "listitem", c.name.empty() ? c.path : c.name, worldRect(*this, r),
-                                   c.missing ? "missing" : c.recovery ? "unsaved edits to recover" : std::string()));
+                                   c.missing ? tr("missing") : c.recovery ? tr("unsaved edits to recover") : std::string()));
         }
     }
 
@@ -222,18 +222,18 @@ namespace solaris_ui
             const auto slash = c.info.path.find_last_of('/');
             name = slash == std::string::npos ? c.info.path : c.info.path.substr(slash + 1);
             if (name.size() > 4 && name.compare(name.size() - 4, 4, ".slp") == 0) name.resize(name.size() - 4);
-            if (name.empty()) name = "Untitled";
+            if (name.empty()) name = tr("Untitled");
         }
         t.drawText(textfit::ellipsize(t, name, s.w - 24.0, 11.0, font::sansMedium()), mx, s.y + th + 18.0, 11.0, font::sansMedium());
         std::string meta;
-        if (c.info.missing) meta = "missing \xE2\x80\x94 moved or deleted";
-        else if (c.info.recovery) meta = "unsaved changes kept \xE2\x80\x94 open it to recover them"; // R-SAFE-2
+        if (c.info.missing) meta = tr("missing \xE2\x80\x94 moved or deleted");
+        else if (c.info.recovery) meta = tr("unsaved changes kept \xE2\x80\x94 open it to recover them"); // R-SAFE-2
         else
         {
             char bpm[32];
             std::snprintf(bpm, sizeof bpm, "%g bpm", c.info.bpm);
             meta = std::string(bpm) + "  \xC2\xB7  " + lengthLabel(c.info.lengthBeats, c.info.bpm) + "  \xC2\xB7  " +
-                   std::to_string(c.info.strips) + (c.info.strips == 1 ? " strip" : " strips");
+                   fillIn(trn(c.info.strips, "{1} strip", "{1} strips"), std::to_string(c.info.strips));
         }
         t.setFill(fade(c.info.missing ? palette::destructive() : c.info.recovery ? palette::primary() : palette::mutedForeground(), a));
         t.drawText(textfit::ellipsize(t, meta, s.w - 24.0, 10.0, font::sans()), mx, s.y + th + 33.0, 10.0, font::sans());
@@ -257,8 +257,9 @@ namespace solaris_ui
         t.setFill(palette::primary());
         t.drawText(".", kPad + t.measureText(kWord, px, font::sansSemiBold(), sp), kWordBaseline, px, font::sansSemiBold(), sp);
         t.setFill(palette::mutedForeground());
-        t.drawText("Arrange, mix and play a song", kPad, 118.0, 11.0, font::sans());
-        t.drawText("on every audio device you have.", kPad, 133.0, 11.0, font::sans());
+        const double tagW = kSidebarW - 2.0 * kPad;
+        t.drawText(textfit::ellipsize(t, tr("Arrange, mix and play a song"), tagW, 11.0, font::sans()), kPad, 118.0, 11.0, font::sans());
+        t.drawText(textfit::ellipsize(t, tr("on every audio device you have."), tagW, 11.0, font::sans()), kPad, 133.0, 11.0, font::sans());
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(kPad, kLogoDividerY); t.lineTo(kSidebarW - kPad, kLogoDividerY); t.strokePath();
 
@@ -282,8 +283,9 @@ namespace solaris_ui
                 drawRoundedRect(t, Rect{ib.x, ib.y + 3.0, ib.w - 3.0, ib.h - 3.0}, radius::hairline(), Paint::filledStroked(palette::background(), fg, 1.1));
             }
             t.setFill(fg);
-            t.drawText(primary ? "New song" : i == 1 ? "Open song\xE2\x80\xA6" : "From template\xE2\x80\xA6", r.x + 36.0, textfit::baseline(r.y + r.h * 0.5, 12.0), 12.0,
-                       primary ? font::sansSemiBold() : font::sans());
+            const char *fam = primary ? font::sansSemiBold() : font::sans();
+            t.drawText(textfit::ellipsize(t, primary ? tr("New song") : i == 1 ? tr("Open song\xE2\x80\xA6") : tr("From template\xE2\x80\xA6"), r.w - 44.0, 12.0, fam),
+                       r.x + 36.0, textfit::baseline(r.y + r.h * 0.5, 12.0), 12.0, fam);
         }
 
         const double blockTop = H - kBottomBlockH;
@@ -297,14 +299,14 @@ namespace solaris_ui
             drawCircle(t, r.x + 5.5, r.y + 9.0, 2.4, Paint::stroked(lc, 1.1));
             drawCircle(t, r.x + 5.5, r.y + 9.0, 4.6, Paint::stroked(lc, 1.1));
             t.setFill(lc);
-            t.drawText("Settings", r.x + 18.0, textfit::baseline(r.y + r.h * 0.5, 11.0), 11.0, font::sans());
+            t.drawText(textfit::ellipsize(t, tr("Settings"), r.w - 18.0, 11.0, font::sans()), r.x + 18.0, textfit::baseline(r.y + r.h * 0.5, 11.0), 11.0, font::sans());
         }
         t.setFill(fade(palette::mutedForeground(), 0.4));
         t.drawText("solaris v0.1.0", kPad, blockTop + 60.0, 10.0, font::mono());
 
         // ── header ──
         const double hx = gridLeft();
-        const std::string title = "Recent Songs";
+        const std::string title = tr("Recent Songs");
         glyph::speaker(t, Rect{hx, kHeaderH * 0.5 - 6.5, 13.0, 13.0}, palette::mutedForeground(), 1.1);
         t.setFill(palette::foreground());
         t.drawText(title, hx + 20.0, textfit::baseline(kHeaderH * 0.5, 13.0), 13.0, font::sansSemiBold());
@@ -318,7 +320,7 @@ namespace solaris_ui
         t.clipRect(vp.x, vp.y, vp.w, vp.h);
         if (mCards.empty() && mHasModel)
         {
-            const std::string s = textfit::ellipsize(t, "No songs yet \xE2\x80\x94 start one.", vp.w - 16.0, 13.0, font::sans());
+            const std::string s = textfit::ellipsize(t, tr("No songs yet \xE2\x80\x94 start one."), vp.w - 16.0, 13.0, font::sans());
             t.setFill(palette::mutedForeground());
             t.drawText(s, vp.x + (vp.w - t.measureText(s, 13.0, font::sans())) * 0.5, vp.y + 72.0, 13.0, font::sans());
             const Rect b = emptyButtonRect();
@@ -326,7 +328,8 @@ namespace solaris_ui
             drawRoundedRect(t, b, radius::control(), Paint::filledStroked(palette::primaryAlpha(0.10 + 0.08 * hv),
                                                                            lerpColor(palette::border(), palette::primary(), 0.6 + 0.4 * hv), 1.0));
             t.setFill(palette::foreground());
-            t.drawText("New song", b.x + (b.w - t.measureText("New song", 12.0, font::sans())) * 0.5, textfit::baseline(b.y + b.h * 0.5, 12.0), 12.0, font::sans());
+            const std::string ns = textfit::ellipsize(t, tr("New song"), b.w - 12.0, 12.0, font::sans());
+            t.drawText(ns, b.x + (b.w - t.measureText(ns, 12.0, font::sans())) * 0.5, textfit::baseline(b.y + b.h * 0.5, 12.0), 12.0, font::sans());
         }
         for (int i = 0; i < (int)mCards.size(); ++i)
         {

@@ -549,7 +549,9 @@ The File/Settings/Develop/History/Preset bar. `struct Item{label,action}`, `stru
 items}`; `addMenu`, `openIndex`, `close`, `pointInActiveArea`, `contentWidth`; `onOpenChanged(int)`.
 At most one dropdown open, drawn in `onOverlay`. Animated highlight (`mHiCenter/mHiW`, 190 ms) and
 dropdown reveal (`mDropReveal`, 160 ms); `HoverFade` for titles + items. `dropdownRect` min-width
-152, positioned below the title.
+152, positioned below the title. OPT-IN for a host that draws in its language (Solaris R-ACCESS-2, 2026-10-17):
+`relabel(menu, title, labels)` replaces the words and nothing else (no close, no animation; a count that differs is
+ignored). Cosmo never calls it.
 
 ### 4.3 LeftRail
 The collapsible 196 px preset dock (`kOpenWidth=196`, `kHeaderH=24.7`). A "PRESETS" header over a
@@ -798,7 +800,9 @@ menu) or `openRename(name,x,y)` (top-bar name click — opens straight to it). O
 header (`renameContentH`), the second grows the light textbox (`fieldRect`, `palette::inputLight` /
 `inputLightText`, accent caret + select-all wash). `focusable`; `handleKey` does type/replace-on-
 select-all/Backspace/Enter=commit(`onRename`)/Escape=cancel; click-away cancels. `isRenaming()`
-drives `App::isTextEditing()` (host suppresses single-key shortcuts).
+drives `App::isTextEditing()` (host suppresses single-key shortcuts). OPT-IN for a host that draws in its language
+(Solaris R-ACCESS-2): `relabel(labels)` replaces the open items' words, nothing closed or moved; `renameTitle` (default
+"Rename") is the rename header's word. Cosmo leaves both alone.
 
 ### 7.4 PresetDialog
 The category-picker modal (R-PRESETPICK). `PresetDialog(accent)`; `struct Row{key,label,bool
@@ -843,7 +847,8 @@ false during the closing fade, so gating on it would freeze the close mid-fade.
 ### 7.6 ConfirmDialog
 A confirm/choose prompt (save-or-discard on leaving an edited project). `ConfirmDialog(accent)`;
 `struct Button{label,bool destructive,bool primary,onClick}`; `show(title,message,buttons)`;
-`close()` (snap shut). Right-aligned button row; destructive=red, primary=accent, else outline.
+`close()` (snap shut). Right-aligned button row; destructive=red, primary=accent, else outline. OPT-IN (Solaris
+R-ACCESS-2): `relabel(title, message, labels)` replaces the words, its fade untouched; cosmo never calls it.
 
 ### 7.6b InfoDialog (R-INFO)
 The image-information modal. `show(title, rows)` where `rows` is `vector<pair<label,value>>` exactly

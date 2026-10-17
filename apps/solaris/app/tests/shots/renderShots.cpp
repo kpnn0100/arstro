@@ -620,6 +620,56 @@ namespace
                  r.key(9);
                  r.pump(4 * sltest::Rig::kFrameMs);
              }},
+            {"home-vi", // R-ACCESS-2: Home in Vietnamese — its words from lang/vi.strings, a recent song's name its own
+             [](sltest::Rig &r) {
+                 r.cmd("settings set language=vi");
+                 r.cmd("project new " + r.song("Night Drive") + ".slp");
+                 r.cmd("strip add --kind bus");
+                 r.cmd("project save");
+                 r.cmd("project close");
+                 r.settle();
+             }},
+            {"menus-vi", // R-ACCESS-2: the song in Vietnamese, the File menu open — Tệp, its items; the song's names its own
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("settings set language=vi");
+                 r.settle();
+                 auto &ms = r.app->project().bar().menus();
+                 r.click(sltest::world(ms, ms.titleRect(0)));
+                 r.settle();
+             }},
+            {"settings-vi", // R-ACCESS-2: Settings › Interface in Vietnamese — the Language row first, its list open
+             [](sltest::Rig &r) {
+                 r.cmd("settings set language=vi");
+                 r.settle();
+                 r.app->openSettings();
+                 r.settle();
+                 auto &st = r.app->settings();
+                 st.showSection(arstro::solaris_ui::SettingsSheet::kInterface);
+                 r.settle();
+                 r.click(st.controlRect(arstro::solaris_ui::SettingsSheet::kLanguage));
+                 r.settle();
+             }},
+            {"home-pseudo", // R-ACCESS-2: Home in the pseudo-language — every word the table's, a third longer, in brackets
+             [](sltest::Rig &r) {
+                 r.cmd("settings set language=en-XA");
+                 r.settle();
+             }},
+            {"settings-pseudo", // R-ACCESS-2: Settings › Audio in the pseudo-language — the longest words, each fitting its room
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("settings set language=en-XA");
+                 r.settle();
+                 r.app->openSettings();
+                 r.settle();
+             }},
+            {"language-dissolve-mid", // R-ACCESS-2: English giving way to Vietnamese — the whole window dissolving, caught a third of the way
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 r.cmd("settings set language=vi");
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
             {"launch-recorded", // R-LAUNCH-1: what a recorded launch leaves — the bass cut at bar 2 and again at bar 3, its tail starting
                                 // into its pattern (offset), the session's riff between on its lane
              [](sltest::Rig &r) {

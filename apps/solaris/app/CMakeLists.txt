@@ -59,7 +59,7 @@ target_include_directories(solaris_app PUBLIC
   ${SL_APP_DIR}/../engine
   ${SL_REPO_DIR}/core/Artboard/src
   ${SL_REPO_DIR}/core/Artboard/include)
-target_link_libraries(solaris_app PUBLIC artboard_core PkgConfig::SL_CAIRO PkgConfig::SL_FREETYPE)
+target_link_libraries(solaris_app PUBLIC artboard_core solaris_strings PkgConfig::SL_CAIRO PkgConfig::SL_FREETYPE) # R-ACCESS-2: the window's words
 target_compile_definitions(solaris_app PUBLIC ARTBOARD_CAIRO_FT)
 
 # the shots and the UI tests run the REAL service behind the hooks (tests/Rig.h)
@@ -81,4 +81,6 @@ set_tests_properties(prelude_made_in_the_window PROPERTIES TIMEOUT 1800 LABELS "
 
 add_executable(solaris_app_ui_tests tests/ui/uiTests.cpp)
 target_link_libraries(solaris_app_ui_tests PRIVATE solaris_app solaris_core)
+# R-ACCESS-2: the source scan reads the window's code and the languages' tables where they are
+target_compile_definitions(solaris_app_ui_tests PRIVATE SOLARIS_APP_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" SOLARIS_LANG_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../lang")
 add_test(NAME solaris_app_ui COMMAND solaris_app_ui_tests)
