@@ -34,6 +34,9 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
   symbol (`Timeline.cpp:246`, `TimelineAuto.cpp:491`, `:347`); DR-CLIP-6's looped-clip paragraph (six anchors) and
   DR-UI-10's step and zoom paragraphs (four) were on unrelated lines already at HEAD — re-pointed by symbol. Still open:
   the rest of the scan.
+- **Progress (2026-10-17, N42 part 3):** editing `linux_main.cpp`, its eight anchors were checked by symbol: five were on
+  unrelated lines already at HEAD — DR-SET-4's keysym (`:196`), the host's copy (`:245`), DR-SVC-5's `--control` and its
+  timeout (`:274`, `:175`, `:294`) — re-pointed by symbol with the other three. Still open: the rest of the scan.
 
 ### D-21 The keyboard-recording test's held note once fell outside 0.25 … 1.0 beats again (D-11's widened window)
 - **Found:** 2026-10-17, N35 part 3: one run of `solaris_service` alone (load ~2.5–3) failed

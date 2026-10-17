@@ -654,7 +654,7 @@ document's Keyboard section is generated from the same table. In the window `App
 press (`comboText`) and looks it up there: while a roll has the keys (R-ROLL-8) its keyboard first — `PianoRoll::action`
 (`app/widgets/PianoRoll.cpp:318`), which declines a selection's action with no selection — then the song's
 (`songAction`, `:441`), so the roll's keys shadow the song's only while it uses them. The host names the KEY, not the
-character: GTK's keysym with no modifier (`linux_main.cpp:196`, `keyCodeOfKeysym` in `app/KeyInput.h`), so Shift+1 is
+character: GTK's keysym with no modifier (`linux_main.cpp:274`, `keyCodeOfKeysym` in `app/KeyInput.h`), so Shift+1 is
 "Shift+1"; what the press types follows as a Text event (D-9). L2 `test_keys_are_settings`; UI
 `test_the_keys_are_the_machines` (re-keyed by a script, the window follows; the roll's keys shadow the song's; the
 host's mapping). Mutants: no conflict refusal, the window reading the defaults instead of the model — both seen red.
@@ -1130,7 +1130,7 @@ pill over the label (`ParamIds`, `app/widgets/DevicePanel.cpp:146`); its header 
 dock's faders, pans, sends and master (DR-MIX-16; a choice row has no "as Formula" — no formula reads a
 choice); Copy ID on a clip (`app/widgets/Timeline.cpp:1086`), a strip's and a mixer tab's menu in the dock; Copy ID
 and Copy as Formula (`=au_1`) on an automation row (`app/widgets/TimelineAuto.cpp:560`). The clipboard is the
-HOST's (the core has none, R-SVC-4): `App::onCopy`, which `linux_main.cpp:245` gives GTK's CLIPBOARD and
+HOST's (the core has none, R-SVC-4): `App::onCopy`, which `linux_main.cpp:391` gives GTK's CLIPBOARD and
 PRIMARY selections and the test rig records (`Rig::copied`). A copy says so: `App::copy` (`app/App.cpp:272`)
 toasts "Copied dv_1.filter.cutoff", outlined in the accent (a refusal's toast stays red). When hosting lands,
 a third-party VST3's parameter list (R-VST-6) builds a `ParamTarget` per row and offers this same menu.
@@ -1350,9 +1350,9 @@ the chords pumping 10.3 dB on the kick; the kick on all 128 drop beats within 0.
 A minor; the sub to the air. ctest `edm_track_measured` (label `long`, ~1 min).
 
 ### DR-SVC-5 The control channel and attach (R-SVC-5, R-SVC-6)
-**The window.** `solaris --control <socket> [song.slp]` (`linux_main.cpp:274`) builds a `ControlServer`
+**The window.** `solaris --control <socket> [song.slp]` (`linux_main.cpp:477`) builds a `ControlServer`
 on the window's own service after any song opened and polls it from its own 16 ms GLib timeout
-(`onControl`, `:175`; `:294`) — not the frame clock, so a minimised window is still drivable. The
+(`onControl`, `:255`; `:492`) — not the frame clock, so a minimised window is still drivable. The
 wire is cosmo's `ControlChannel` **compiled in place** (`apps/cosmo/ControlChannel.cpp:382` `poll`,
 `:402` `broadcast`; target `solaris_control`, `host/CMakeLists.txt:29`): a non-blocking Unix line
 socket that moves lines and never parses them, replaces a stale socket node, refuses any other file
@@ -1781,7 +1781,7 @@ cursorAt` (`app/widgets/ProjectScreen.cpp:20`) asks every drag in hand first, th
 `App::cursor` (`app/App.cpp:505`) gives the arrow while a modal is open (a menu, a dialog, the settings, the history
 tree) or off the song, else the screen's answer at the last pointer position (`App::pointer` keeps it). The GTK host
 asks after every pointer event and, when it changed, sets the window's cursor by name (`showCursor`,
-`linux_main.cpp:103`) — the OS's own cursors, which do not ease. UI `test_the_pointer_says_a_drag_resizes` (every grip;
+`linux_main.cpp:117`) — the OS's own cursors, which do not ease. UI `test_the_pointer_says_a_drag_resizes` (every grip;
 a clip's end held off the edge; a window over the lanes; a modal). Mutants: no clip-end zone, a resize in hand
 forgetting its cursor, a modal not the arrow — all seen red. The GTK half is compiled and read, not driven live (D-5).
 
@@ -2112,7 +2112,7 @@ the last command, and the model's `missing[]` is worked out when a command runs 
 (`RelinkSheet`, `app/widgets/RelinkSheet.cpp:26`): Cosmo's modal look, a row per missing file — its name, the folder it
 was in and what uses it, a version's ids prefixed `vr_n:` — and Locate…, the host's file picker then ONE `project relink
 <file> --to <picked>`; Search a Folder…, the host's folder picker then ONE `project relink --folder <dir>`
-(`app/App.cpp:103`; the host's dialogs, `onPickFile`/`onPickDirectory`, `linux_main.cpp:299`). The window draws the
+(`app/App.cpp:103`; the host's dialogs, `onPickFile`/`onPickDirectory`, `linux_main.cpp:437`). The window draws the
 model: rows keyed by path (`app/widgets/RelinkSheet.cpp:108`) — one found fades out where it is, the rest slide up, one
 newly missing fades in, the rows present when it opens placed with it; the card grows and shrinks with them, eased
 (`:140`); the list clips and scrolls with the wheel, its bar shown only when there is more (`:234`); with nothing
@@ -2253,7 +2253,7 @@ reference stays; the mix encoded beside it (AAC in .mp4 / .mov, FLAC in .mkv), i
 `render --out <f.mp4|.mov|.mkv> --video` (`core/service/ServiceRender.cpp:79`): the mix rendered as any (undithered);
 the picture's `startAt` is its offset less where the render starts (`:314`), from the version rendered (`:159`).
 Refused without a picture, for an audio extension, and with --format, --stems, --ports, --bits or --kbps. The CLI, the
-window and the web face's host give the service the probe and the mux (`cli/main.cpp:125`, `linux_main.cpp:60`,
+window and the web face's host give the service the probe and the mux (`cli/main.cpp:125`, `linux_main.cpp:70`,
 `cli/NtwbMain.cpp:159`).
 Tests: model `test_the_picture_round_trips_and_is_checked` (`model/tests/modelTests.cpp:896`): a fixed point (a quoted
 file, a negative offset, an unknown key kept), its id counted, a second or one naming no file refused. L2
@@ -2280,7 +2280,7 @@ interleave; an open GOP's lead-in kept.
 Part 2 — the window. View › Show Video / Hide Video (`app/App.cpp:258`; the window's × relabels it) opens the Video
 window (`app/widgets/FloatWindow.cpp:291`, titled by its file, `:450`): `VideoPanel` (`app/widgets/VideoPanel.h:39`)
 draws the frame at the model's `video.time`, letterboxed on black, from the HOST's decoder — `App::onVideoFrame`
-(`app/App.h:101`; the GTK host's `VideoReader` on the song's file, `linux_main.cpp:276`) — asked only when the time, the
+(`app/App.h:101`; the GTK host's `VideoReader` on the song's file, `linux_main.cpp:414`) — asked only when the time, the
 file or its box changed, at the box's size (`app/widgets/VideoPanel.cpp:66`). Outside the picture's span it says where
 the song is ("Before the picture" / "After the picture", from `at`), or "No picture in this song", or that the file
 cannot be read. Nothing snaps: the picture fades in and out over the words (`:118`); a jump — more than half a second,
@@ -2308,7 +2308,7 @@ the ruler is (`app/widgets/TimelineVideo.cpp:74`): it grows in when the song gai
 (`app/widgets/Timeline.h:254`). Its span is the model's `at` … `end`, eased there when moved elsewhere (`app/widgets/TimelineVideo.cpp:96`); its
 thumbnails are tiles at the model's points, each at least a tile past the last chosen from the span's start (the same
 tiles wherever it scrolls, `TimelineVideo.cpp:51`), decoded by the host at the row's height a few a frame (`TimelineVideo.cpp:128`) — a decoder of their
-own, `App::onVideoThumb` (`app/App.cpp:90`; the GTK host's second `VideoReader`, `linux_main.cpp:296`) — kept, each
+own, `App::onVideoThumb` (`app/App.cpp:90`; the GTK host's second `VideoReader`, `linux_main.cpp:434`) — kept, each
 fading in as it arrives; the file's name pinned at the span's left (`paintVideo`, `app/widgets/TimelineVideo.cpp:145`). Dragged, the span is the
 pointer's on the grid you see, before the song too, and nothing is sent; let go, it stays where it was let go
 (`TimelineVideo.cpp:240`) and ONE `set <vd>.at=<beat>` goes (`videoGesture`, `TimelineVideo.cpp:207`). File › Export… gains "With the video"
@@ -2421,7 +2421,7 @@ asked; the toast), `conflicts-answered-mid` (the tempo answered: its row fading,
 (`app/tests/shots/renderShots.cpp:551`).
 
 
-### DR-ACCESS-1 Accessibility (R-ACCESS-1; docs/discussion.md Round 20) — part 1: the UI scale and high contrast; part 2: the accessible list and the keyboard
+### DR-ACCESS-1 Accessibility (R-ACCESS-1; docs/discussion.md Round 20) — part 1: the UI scale and high contrast; part 2: the accessible list and the keyboard; part 3: the list to AT-SPI
 Two machine settings (`core/Settings.h:33`): `uiScale` — 75, 90, 100, 125, 150, 175 or 200 (cosmo's steps; another
 number is refused, never rounded quietly, `core/service/ServiceMachine.cpp:113`) — and `highContrast` on | off; kept in
 the settings file (`core/Settings.cpp:24`), in the model (`core/service/AppModel.h:283`), on Settings › Interface first:
@@ -2480,6 +2480,38 @@ while not held; a modal's controls not alone; a fader's step a whole dB; a combo
 clicks pairing as a double. Shots `keyboard-focus` (the ring on the Bass fader), `keyboard-focus-mid` (travelling to
 its pan), both sizes (`app/tests/shots/renderShots.cpp:605`). Not yet: the lanes' clips, the piano roll's notes, the
 session grid, the history, the matrix's cells, the other windows' contents.
+Part 3 — the list to AT-SPI. The host's bridge (`host/Accessibility.h`; plain ATK, no GTK, built where `atk` is found,
+`host/CMakeLists.txt:52`) turns a list of items — the App's nodes as plain data — into ATK objects: a root (a filler named
+Solaris) whose children are the controls in the list's order, each with its role (button → push button, toggle → toggle
+button, slider, combo → combo box, tab → page tab, menu, menu item, list item; `host/Accessibility.cpp:68`), its name,
+its value as its description, its states — visible, showing, focusable; enabled and sensitive unless it is not; a
+toggle checkable and checked when on; a tab SELECTED when shown; focused (`:94`) — where it is (AtkComponent: the
+logical bounds times the drawn UI scale in the window, and through the window's origin on the screen, `:144`) and its
+actions (AtkAction: "click"; a value's "increment" and "decrement" too), which come back to the App through
+`onActivate` / `onStep` by key (`:179`). Only a value — a slider, or a node that steps — is an object that answers
+AtkValue (`:82`): its words, and the number they begin with, the minus the UI draws (U+2212) read as one (`:207`).
+`update` (`:292`) keeps a control that stays as the SAME object (by key; its name, value and states follow, a checked or
+enabled change said as a state change); one gone is said gone where it was — the new list in place first, the last
+place first, so the places mean what they say — and is defunct to whoever still holds it (its click does nothing); one
+new is said added (and, when the focus moved onto it before it was listed, said focused, `:347`). `focus` (`:355`): the
+FOCUSED state and a focus event when the keyboard's focus moves, nothing when it does not. The bridge gone, every held
+control is defunct (`:264`). The window (`linux_main.cpp`): its drawing area is a subclass whose accessible (a panel
+named Solaris) has the bridge's root as its one child (`:340`, the type set `:358`, made `:455`); when a screen reader
+first asks for it, the list is read (`readAccessibles`, `:157`: the App's nodes, the drawn scale, the window's origin,
+the focus when held) and then every 200 ms (`onA11y`, `:186`) and when the keyboard's focus moves (`:408`) — nothing is
+listed for a window no screen reader reads; a screen reader's click is `App::activateNode`, its steps
+`App::stepNode` (`:398`) — the keyboard's, which are the pointer's. Tests: `solaris_a11y_tests`
+(`tests/faces/a11yTests.cpp:105`), the bridge read back only through ATK's own calls with no display: the children in
+order with names, roles and values; extents at scale 1.5 and 2 and on the screen; a slider's value −4.5 from "−4.5 dB", a
+button no value; the states; the actions coming back by key (the App's refusal a failed action); identity across lists,
+removals said last first and defunct, an addition said; the focus said once when it moves and for a control listed
+after it; a tab SELECTED, a toggle's CHECKED said; held past the bridge, defunct. Mutants seen red (9): a fresh object
+every list; removals said first to last; extents not scaled; focus said when it did not move; a defunct control still
+acting (a crash); the UI's minus not read; a control listed already focused not said; every control a value; a tab's
+shown state as CHECKED. Live (L5, once): the real window on a private D-Bus session read by libatspi — Solaris → panel →
+filler → the home screen's four buttons with their extents and `click`; AT-SPI's click on Settings reached the home
+screen's Settings at its centre (the desktop was locked, so no frame ran to open the sheet). Owed: Orca on an unlocked
+desktop.
 
 
 ### DR-DEV-9 A PipeWire driver; xruns counted (R-DEV-9, R-DEV-5)

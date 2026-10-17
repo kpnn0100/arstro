@@ -14,6 +14,10 @@
  *
  *  `--control` opens the window to an agent (R-SVC-5): `solaris-cc attach <socket>` sends it command
  *  lines and reads its events (host/ControlServer.h) — the user watches the song being made.
+ *
+ *  R-ACCESS-1: the drawing area's accessible has one child, the host's ATK bridge (host/Accessibility.h), whose
+ *  children are the App's accessible nodes — listed once a screen reader asks for the window, then re-read every
+ *  200 ms and when the keyboard's focus moves; a screen reader's click and steps come back as the keyboard's.
  */
 #include "App.h"
 #include "AudioFiles.h"
@@ -36,8 +40,14 @@
 #include "MidiInAlsa.h"
 #endif
 #endif
+#ifdef SOLARIS_HAVE_ATK
+#include "Accessibility.h"
+#endif
 #include "../../core/Artboard/src/adapter/native/CairoTarget.h"
 #include <gtk/gtk.h>
+#ifdef SOLARIS_HAVE_ATK
+#include <gtk/gtk-a11y.h>
+#endif
 #include <cmath>
 #include <functional>
 #include <memory>
@@ -97,6 +107,10 @@ namespace
         int cursor = -1;                                       // the cursor shown (R-UI-14)
         solaris_host::VideoReader video, thumbs;               // R-VIDEO-1: the Video window's decoder, and the lane's
         std::string videoFile, thumbFile;
+#ifdef SOLARIS_HAVE_ATK
+        solaris_host::AtkBridge a11y;                          // R-ACCESS-1: read only once a screen reader asks
+        bool a11yAsked = false;
+#endif
     };
 
     // R-UI-14: the App says what the pointer looks like; the window shows the OS's own cursor for it, when it changes
@@ -137,6 +151,44 @@ namespace
         gtk_widget_queue_draw(a->area);
         return out;
     }
+
+#ifdef SOLARIS_HAVE_ATK
+    // R-ACCESS-1: the App's list as the bridge's — and where the window is, and the keyboard's focus
+    void readAccessibles(Host *a)
+    {
+        std::vector<solaris_host::A11yItem> items;
+        for (const auto &n : a->app->accessibles())
+        {
+            solaris_host::A11yItem it;
+            it.key = n.key;
+            it.role = n.role;
+            it.name = n.name;
+            it.value = n.value;
+            it.x = n.bounds.x;
+            it.y = n.bounds.y;
+            it.w = n.bounds.w;
+            it.h = n.bounds.h;
+            it.enabled = n.enabled;
+            it.checked = n.checked;
+            it.steps = (bool)n.step;
+            items.push_back(std::move(it));
+        }
+        a->a11y.update(items, a->app->drawnUiScale());
+        if (GdkWindow *w = gtk_widget_get_window(a->area))
+        {
+            gint x = 0, y = 0;
+            gdk_window_get_origin(w, &x, &y);
+            a->a11y.setOrigin(x, y);
+        }
+        a->a11y.focus(a->app->focusHeld() ? a->app->focusKey() : std::string());
+    }
+
+    gboolean onA11y(gpointer user)
+    {
+        readAccessibles(static_cast<Host *>(user));
+        return G_SOURCE_CONTINUE;
+    }
+#endif
 
     gboolean onDraw(GtkWidget *, cairo_t *cr, gpointer user)
     {
@@ -239,6 +291,76 @@ namespace
     }
 }
 
+#ifdef SOLARIS_HAVE_ATK
+// R-ACCESS-1: the drawing area, whose accessible's one child is the bridge's root — made when a screen reader asks
+extern "C" {
+typedef struct
+{
+    GtkDrawingArea parent;
+} SolarisArea;
+typedef struct
+{
+    GtkDrawingAreaClass parent_class;
+} SolarisAreaClass;
+typedef struct
+{
+    GtkWidgetAccessible parent;
+} SolarisAreaAccessible;
+typedef struct
+{
+    GtkWidgetAccessibleClass parent_class;
+} SolarisAreaAccessibleClass;
+}
+
+G_DEFINE_TYPE(SolarisAreaAccessible, solaris_area_accessible, GTK_TYPE_WIDGET_ACCESSIBLE)
+G_DEFINE_TYPE(SolarisArea, solaris_area, GTK_TYPE_DRAWING_AREA)
+
+static Host *hostOf(AtkObject *o)
+{
+    GtkWidget *w = gtk_accessible_get_widget(GTK_ACCESSIBLE(o));
+    return w ? static_cast<Host *>(g_object_get_data(G_OBJECT(w), "solaris-host")) : nullptr;
+}
+
+static void area_accessible_initialize(AtkObject *o, gpointer data)
+{
+    ATK_OBJECT_CLASS(solaris_area_accessible_parent_class)->initialize(o, data);
+    atk_object_set_role(o, ATK_ROLE_PANEL);
+    atk_object_set_name(o, "Solaris");
+    if (Host *a = hostOf(o); a && !a->a11yAsked)
+    {
+        a->a11yAsked = true; // asked: the list kept current from now on
+        atk_object_set_parent(a->a11y.root(), o);
+        readAccessibles(a);
+        g_timeout_add(200, onA11y, a);
+    }
+}
+
+static gint area_accessible_n_children(AtkObject *o) { return hostOf(o) ? 1 : 0; }
+
+static AtkObject *area_accessible_ref_child(AtkObject *o, gint i)
+{
+    Host *a = hostOf(o);
+    return a && i == 0 ? (AtkObject *)g_object_ref(a->a11y.root()) : nullptr;
+}
+
+static void solaris_area_accessible_class_init(SolarisAreaAccessibleClass *k)
+{
+    AtkObjectClass *c = ATK_OBJECT_CLASS(k);
+    c->initialize = area_accessible_initialize;
+    c->get_n_children = area_accessible_n_children;
+    c->ref_child = area_accessible_ref_child;
+}
+
+static void solaris_area_accessible_init(SolarisAreaAccessible *) {}
+
+static void solaris_area_class_init(SolarisAreaClass *k)
+{
+    gtk_widget_class_set_accessible_type(GTK_WIDGET_CLASS(k), solaris_area_accessible_get_type());
+}
+
+static void solaris_area_init(SolarisArea *) {}
+#endif
+
 int main(int argc, char **argv)
 {
     gtk_init(&argc, &argv);
@@ -271,6 +393,22 @@ int main(int argc, char **argv)
         gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD), text.c_str(), (gint)text.size());
         gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), text.c_str(), (gint)text.size());
     };
+#ifdef SOLARIS_HAVE_ATK
+    // R-ACCESS-1: a screen reader's click and steps are the keyboard's; the focus said as it moves
+    a->a11y.onActivate = [a](const std::string &key) {
+        const bool ok = a->app->activateNode(key);
+        gtk_widget_queue_draw(a->area);
+        return ok;
+    };
+    a->a11y.onStep = [a](const std::string &key, int dir) {
+        const bool ok = a->app->stepNode(key, dir, false);
+        gtk_widget_queue_draw(a->area);
+        return ok;
+    };
+    a->app->onFocusMoved = [a](const std::string &) {
+        if (a->a11yAsked) readAccessibles(a);
+    };
+#endif
     a->app->setOsReducedMotion(!animations); // the OS's "reduce motion" (design rule §2.6); the app's own setting ORs in
     // R-VIDEO-1: a frame of the song's picture — one decoder for the window, one for the lane's thumbnails
     auto frameFrom = [](solaris_host::VideoReader &reader, std::string &opened, const std::string &file, double t, int bw, int bh,
@@ -313,7 +451,12 @@ int main(int argc, char **argv)
     gtk_window_set_title(GTK_WINDOW(a->window), "Solaris");
     gtk_window_set_default_size(GTK_WINDOW(a->window), kW, kH);
     g_signal_connect(a->window, "destroy", G_CALLBACK(gtk_main_quit), nullptr);
+#ifdef SOLARIS_HAVE_ATK
+    a->area = GTK_WIDGET(g_object_new(solaris_area_get_type(), nullptr));
+    g_object_set_data(G_OBJECT(a->area), "solaris-host", a); // before anything asks for its accessible
+#else
     a->area = gtk_drawing_area_new();
+#endif
     gtk_widget_set_size_request(a->area, (int)App::minWidth(), (int)App::minHeight());
     gtk_widget_set_can_focus(a->area, TRUE);
     gtk_widget_add_events(a->area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK | GDK_KEY_PRESS_MASK |

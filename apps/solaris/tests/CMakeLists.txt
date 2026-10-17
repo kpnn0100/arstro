@@ -75,3 +75,11 @@ if(SOLARIS_TEST_AV_FOUND AND SOLARIS_FFMPEG AND SOLARIS_FFPROBE AND TARGET solar
   add_test(NAME solaris_video COMMAND solaris_video_tests)
   set_tests_properties(solaris_video PROPERTIES TIMEOUT 120)
 endif()
+
+# R-ACCESS-1: the window's controls as AT-SPI reads them — the host's ATK bridge read back through ATK's own calls, no
+# display (registered where the host built it)
+if(TARGET solaris_host AND TARGET PkgConfig::SOLARIS_ATK)
+  add_executable(solaris_a11y_tests faces/a11yTests.cpp)
+  target_link_libraries(solaris_a11y_tests PRIVATE solaris_host)
+  add_test(NAME solaris_a11y COMMAND solaris_a11y_tests)
+endif()

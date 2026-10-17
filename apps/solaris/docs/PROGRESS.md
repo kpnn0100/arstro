@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N42 part 3 — the ATK bridge: the accessible list to AT-SPI** (R-ACCESS-1; parts 1–2 are built), then N43… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N43 — Localisation** (R-ACCESS-2): a design round first (Round 21 in docs/discussion.md), then N44, in order (the user: *"implement all"*). Owed live checks: N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -661,7 +661,7 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       file; the Conflicts sheet (opened on its own when a sync asks, and from File › Conflicts…): rows keyed by node,
       what tells the sides apart (the fields that differ), Keep Mine / Take Theirs and both for all, ONE line each; shots
       conflicts-sheet(-answered-mid). N41 DONE.
-- [~] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1). Round 20 (the
+- [x] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1). Round 20 (the
       design): cosmo's eased UI scale; high contrast as one eased amount on cosmo's tokens; the accessible list
       (every widget's controls: role, name, value, bounds, actions) walked by Tab / Enter / the arrows, and given to
       AT-SPI by the host through ATK. Part 1: `settings set uiScale=` (cosmo's steps; another refused) and
@@ -670,7 +670,11 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       byte-identical). Part 2: `A11yNode` (app/A11y.h) — the song bar, Home, the browser, the lanes' headers, the
       dock, device windows and the modals list their controls; `App::accessibles` in reading order, a modal's alone;
       activation the click a node stands for (a second recogniser on its own clock); Tab / Shift+Tab, Enter / Space,
-      arrows (Shift a tenth), Escape; the ring travelling and fading. Next: part 3 — the ATK bridge in the host.
+      arrows (Shift a tenth), Escape; the ring travelling and fading. Part 3: the host's ATK bridge
+      (host/Accessibility.h — plain ATK, read back with no display): the list's controls as AT-SPI objects (role, name,
+      value, extents at the drawn scale, states, click / increment / decrement back to the App), kept by key, the focus
+      said; the window's drawing area hangs it under its accessible, read when a screen reader asks and every 200 ms.
+      Read live once through libatspi on a private bus. N42 DONE.
 - [ ] **N43** Localisation (R-ACCESS-2).
 - [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).
 

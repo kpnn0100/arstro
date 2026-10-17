@@ -47,6 +47,15 @@ if(SOLARIS_ALSA_FOUND)
   target_compile_definitions(solaris_host PUBLIC SOLARIS_HAVE_ALSA=1)
 endif()
 
+# R-ACCESS-1: the window's controls for assistive technology — plain ATK (no GTK), so a test reads the tree
+# with no display; the window hangs its root under the drawing area's accessible
+pkg_check_modules(SOLARIS_ATK IMPORTED_TARGET GLOBAL atk)
+if(SOLARIS_ATK_FOUND)
+  target_sources(solaris_host PRIVATE Accessibility.cpp)
+  target_link_libraries(solaris_host PUBLIC PkgConfig::SOLARIS_ATK)
+  target_compile_definitions(solaris_host PUBLIC SOLARIS_HAVE_ATK=1)
+endif()
+
 # R-SVC-5: the window's control channel. cosmo's ControlChannel is COMPILED IN PLACE (a non-blocking
 # Unix line socket that moves lines and never parses them — linked, not copied, as R-UI-4 reuses
 # cosmo's widgets); ControlLog.cpp gives it the one log symbol it needs from cosmo's host, and
