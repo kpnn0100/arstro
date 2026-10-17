@@ -6563,6 +6563,74 @@
       ]
     },
     {
+      "type": "flanger",
+      "label": "Flanger",
+      "kind": "effect",
+      "summary": "A short delay swept by an LFO and fed back: a comb whose teeth sweep.",
+      "params": [
+        {
+          "name": "delay",
+          "label": "Delay",
+          "unit": "ms",
+          "min": 0.05,
+          "max": 10.0,
+          "default": 1.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "depth",
+          "label": "Depth",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10.0,
+          "default": 3.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "rate",
+          "label": "Rate",
+          "unit": "Hz",
+          "min": 0.01,
+          "max": 10.0,
+          "default": 0.25,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "feedback",
+          "label": "Feedback",
+          "unit": "",
+          "min": -0.95,
+          "max": 0.95,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "stereo",
+          "label": "Stereo",
+          "unit": "deg",
+          "min": 0.0,
+          "max": 180.0,
+          "default": 90.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mix",
+          "label": "Mix",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "phaser",
       "label": "Phaser",
       "kind": "effect",

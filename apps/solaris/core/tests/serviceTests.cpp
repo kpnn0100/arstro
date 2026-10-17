@@ -1435,7 +1435,7 @@ static void test_set_and_get_through_the_registry()
     assert(seen);
     assert(contains(r.no("device add ch_2 --type drums"), "ONE instrument"));
     assert(contains(r.no("device remove dv_1"), "keeps its instrument"));
-    assert(contains(r.no("device add ch_2 --type flanger"), "no device type `flanger`"));
+    assert(contains(r.no("device add ch_2 --type no-such-device"), "no device type `no-such-device`")); // was "flanger", until N34 made one
     r.ok("device add master --type compressor");
     assert(r.svc.model().masterDevices.size() == 1);
     pass("set/get read every device parameter from the DSP registry: out of range refused, choices by name, typos refused, lines atomic (R-DSP-2/3, R-SVC-3)");
@@ -4821,7 +4821,7 @@ static void test_every_effect_drops_as_one_line_and_passes_sound()
         assert(finite && (peak > 0.001f || t.takesKey));
         ++added;
     }
-    assert(added >= 15); // the eight before N34; the multiband, gate, transient shaper, de-esser, saturator, bitcrusher, phaser
+    assert(added >= 16); // the eight before N34; multiband, gate, transient, de-esser, saturator, bitcrusher, phaser, flanger
     pass("every effect (R-FX-6…17, law 1): each the DSP library's registry describes drops onto a strip as one line and passes sound, with no code here");
 }
 

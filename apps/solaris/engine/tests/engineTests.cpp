@@ -240,8 +240,8 @@ static void test_a_backward_graph_and_unknown_devices_are_refused()
     g.masterPorts = {3};
     assert(!e.build(g, err) && contains(err, "master feeds port index 3"));
     g = basic();
-    g.strips[0].rack = {DeviceDesc{"dv_1", "flanger", {}, false}};
-    assert(!e.build(g, err) && contains(err, "unknown device type `flanger`"));
+    g.strips[0].rack = {DeviceDesc{"dv_1", "no-such-device", {}, false}}; // never a type ("flanger" was, until N34)
+    assert(!e.build(g, err) && contains(err, "unknown device type `no-such-device`"));
     g.strips[0].rack = {DeviceDesc{"dv_1", "eq", {{"peak9.gain", 3.0}}, false}};
     assert(!e.build(g, err) && contains(err, "no parameter `peak9.gain`"));
     g = basic();

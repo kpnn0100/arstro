@@ -1005,6 +1005,19 @@ A gate and a downward expander: below its threshold turned down by the ratio, he
 | `release` | 1.0 … 5000.0 ms | 100.0 ms |
 | `sidechain` | off · on | off |
 
+### `flanger` — Flanger (effect)
+
+A short delay swept by an LFO and fed back: a comb whose teeth sweep.
+
+| parameter | range | default |
+|---|---|---|
+| `delay` | 0.05 … 10.0 ms | 1.0 ms |
+| `depth` | 0.0 … 10.0 ms | 3.0 ms |
+| `rate` | 0.01 … 10.0 Hz | 0.25 Hz |
+| `feedback` | -0.95 … 0.95 | 0.5 |
+| `stereo` | 0.0 … 180.0 deg | 90.0 deg |
+| `mix` | 0.0 … 1.0 | 0.5 |
+
 ### `phaser` — Phaser (effect)
 
 Notches swept by an LFO: first-order all-passes fed back, mixed with the dry sound.
