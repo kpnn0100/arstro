@@ -108,6 +108,7 @@ namespace solaris
             switch (c.kind)
             {
             case K::VersionNew: case K::VersionOpen: case K::VersionFreeze: case K::VersionThaw: case K::VersionRebase: case K::VersionDelete:
+            case K::ProjectCollect: case K::ProjectRelink: // R-COLLECT-1: the whole document's files, every version's
                 return true;
             case K::Set:
                 for (const auto &f : c.fields)
@@ -139,7 +140,7 @@ namespace solaris
             case K::SampleTag: case K::SampleUntag: case K::SampleFavourite:    // R-PRESET-3: … and its library
             case K::PluginsScan: case K::PluginsList: case K::DeviceReload: case K::DeviceEditor: // R-VST-6: … and its plugins
             case K::MapAdd: case K::MapRemove: case K::MapList: case K::MapLearn:                 // R-CTRL-1: … and its MIDI mappings
-            case K::VersionList: case K::VersionDiff:                                             // R-VER: reading back
+            case K::VersionList: case K::VersionDiff: case K::ProjectFiles:                       // R-VER, R-COLLECT-1: reading back
                 return false;
             default:
                 return true;
@@ -157,7 +158,8 @@ namespace solaris
         } depth(mDepth); // a command is running: what `pump` gathers waits for it to end
         err.clear();
         mOutput.clear();
-        const bool editing = mutates(c.kind) || (c.kind == K::TransportStop && mRecording) // R-MIDI-2: the take is an edit
+        // a --dry-run changes nothing, whatever the verb: no edit, no history step, not unsaved (D-23)
+        const bool editing = (mutates(c.kind) && !c.has("dry-run")) || (c.kind == K::TransportStop && mRecording) // R-MIDI-2: the take is an edit
                              || (c.kind == K::StripArm && c.has("input"));                  // R-REC-1: an input set is one
         if (editing && !requireOpen(err)) return false;
         if ((editing || c.kind == K::TransportRecord) && mOpen && !mProject.version.empty() && !versionOnly(c, mProject))
@@ -259,6 +261,9 @@ namespace solaris
         case K::VersionNew: case K::VersionList: case K::VersionOpen: case K::VersionDiff: case K::VersionFreeze:
         case K::VersionThaw: case K::VersionRebase: case K::VersionDelete: case K::Revert:
             ok = versionCommand(c, err);
+            break;
+        case K::ProjectFiles: case K::ProjectCollect: case K::ProjectRelink: case K::ClipRelink:
+            ok = filesCommand(c, err);
             break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:
@@ -414,6 +419,13 @@ namespace solaris
             if (removal || steadySeconds() - mLastAutosave >= mSettings.autosave) autosave();
         }
         if ((editing && c.kind != K::VersionOpen) || history) mModel.dirty = true; // R-VER: which version is open is not the file's
+        if (editing && c.kind == K::ProjectCollect && c.has("save")) // R-COLLECT-1: "Collect and Save" — ONE line
+        {
+            Command save;
+            save.kind = K::ProjectSave;
+            std::string why;
+            if (!projectCommand(save, why)) emit(Event(Event::Kind::Info).with("text", "collected, but not saved: " + why));
+        }
         if (editing || history) followClipLoop(); // R-ROLL-6: the looped clip, as edited
         refreshModel();
         std::vector<Event> landed;

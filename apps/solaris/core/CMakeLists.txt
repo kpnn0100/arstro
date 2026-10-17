@@ -28,6 +28,7 @@ add_library(solaris_core STATIC
   service/ServiceCompose.cpp
   service/ServiceArrange.cpp
   service/ServiceVersions.cpp
+  service/ServiceFiles.cpp
   service/ServiceAudioEdit.cpp
   service/ServicePresets.cpp
   service/ServiceLibrary.cpp

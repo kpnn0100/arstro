@@ -136,6 +136,9 @@ namespace solaris
             {"versions[].dangling", "number", "changes whose node its base no longer has — ignored until `version rebase` prunes them"},
             {"versions[].problem", "string", "why it does not stand as a song (its base broke it); \"\" when it does"},
             {"version", "string", "R-VER: the open version's id, or `main` — the song on screen and heard is its resolution"},
+            {"missing", "object[]", "R-COLLECT-1: each file the song names (main or any version) that cannot be read — `project relink` finds it"},
+            {"missing[].path", "string", "as the song names it (relative to its folder, or absolute)"},
+            {"missing[].users", "string[]", "what names it — ids; a version's prefixed `vr_n:`"},
             {"clips", "object[]", "every clip"},
             {"clips[].id", "string", ""},
             {"clips[].name", "string", ""},
@@ -534,6 +537,12 @@ namespace solaris
                 j.set("versions", vs);
                 j.set("version", m.version);
             }
+            if (!m.missing.empty()) // R-COLLECT-1: what the song cannot find
+            {
+                Json ms = Json::array();
+                for (const auto &x : m.missing) ms.push(Json::string(x.path));
+                j.set("missing", ms);
+            }
             Json clips = Json::array();
             for (const auto &c : m.clips)
             {
@@ -661,6 +670,9 @@ namespace solaris
                               .set("problem", v.problem));
         j.set("versions", versions);
         j.set("version", m.version);
+        Json missing = Json::array(); // R-COLLECT-1
+        for (const auto &x : m.missing) missing.push(Json::object().set("path", x.path).set("users", strings(x.users)));
+        j.set("missing", missing);
         Json clips = Json::array();
         for (const auto &c : m.clips)
         {

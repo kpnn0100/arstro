@@ -5352,6 +5352,106 @@ static void test_versions_of_a_song()
     pass("versions through the service (R-VER-1…4): made and opened in one line, an edit stored as ONE change; each renders by name whichever is open; opened while playing, heard; opening a history step, not an unsaved change; the file opens on main; frozen refuses; thaw, revert, rebase, delete; names checked");
 }
 
+static void test_collect_and_relink()
+{
+    // R-COLLECT-1 (Round 16, part 1): what the song names — main and every version, an .sfz's sounds too — listed;
+    // collected into Samples/ as ONE edit (two files of one name kept apart, an .sfz with its sounds, a version's own
+    // clip, a missing file named and left); a dry run changes nothing and leaves the song saved (D-23); relinked by a
+    // folder search, by a file, one clip; missing[] says what is gone; Collect and Save is one line
+    const std::string root = scratch() + "/collect";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    for (const char *d : {"/song", "/lib/a", "/lib/b", "/lib/Keys/samples", "/found/deep"}) fs::create_directories(root + d);
+    auto put = [](const std::string &path, const std::string &bytes) { std::ofstream(path, std::ios::binary) << bytes; };
+    auto slurp = [](const std::string &path) {
+        std::ifstream f(path, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    };
+    put(root + "/lib/a/kick.wav", "KICK-A");
+    put(root + "/lib/b/kick.wav", "KICK-B");
+    put(root + "/lib/snare.wav", "SNARE");
+    put(root + "/lib/hat.wav", "HAT");
+    put(root + "/lib/Keys/keys.sfz", "<region> sample=samples/c4.wav key=60\n<region> sample=samples/e4.wav key=64\n<region> sample=samples/gone.wav key=67\n");
+    put(root + "/lib/Keys/samples/c4.wav", "C4");
+    put(root + "/lib/Keys/samples/e4.wav", "E4");
+    put(root + "/found/deep/hat.wav", "HAT, FOUND");
+    fs::create_directories(root + "/song/Samples");
+    put(root + "/song/Samples/kick.wav", "SOMEONE ELSE'S KICK");            // in the way: never written over
+    const std::string song = root + "/song/Collect.slp";
+    Run r;
+    r.ok("project new " + song + " --bpm 120");
+    r.ok("clip add --instrument multisample --at 0 --length 4");            // ch_2, dv_1
+    r.ok("set dv_1.sample=" + root + "/lib/Keys/keys.sfz");
+    r.ok("clip add --src " + root + "/lib/a/kick.wav --at 0");              // ac_2
+    r.ok("clip add --src " + root + "/lib/b/kick.wav --at 4");              // ac_3: another file of that name
+    r.ok("version new Alt --open");
+    r.ok("clip add --src " + root + "/lib/snare.wav --at 8");               // Alt's own: ac_4
+    r.ok("version open main");
+    r.ok("clip add --src " + root + "/lib/hat.wav --at 12");                // ac_5 — then the file goes
+    fs::remove(root + "/lib/hat.wav");
+    r.ok("project save");
+    const std::string files = r.ok("project files");
+    std::printf("%s", files.c_str());
+    assert(contains(files, root + "/lib/a/kick.wav  \xC2\xB7 outside  \xC2\xB7 ac_2") && contains(files, "keys.sfz  \xC2\xB7 outside  \xC2\xB7 dv_1"));
+    assert(contains(files, "snare.wav  \xC2\xB7 outside  \xC2\xB7 vr_1:ac_4") && contains(files, "hat.wav  \xC2\xB7 missing  \xC2\xB7 ac_5"));
+    assert(r.ok("project files --missing") == root + "/lib/hat.wav  \xC2\xB7 missing  \xC2\xB7 ac_5\n");
+    const auto &missing = r.svc.model().missing;
+    assert(missing.size() == 1 && missing[0].path == root + "/lib/hat.wav" && missing[0].users == std::vector<std::string>{"ac_5"});
+
+    // a dry run: says it, copies nothing, changes nothing — the song stays saved; a rebase's dry run too (D-23)
+    const std::string dry = r.ok("project collect --dry-run");
+    assert(contains(dry, "would collect 4 files into Samples/:") && !fs::exists(root + "/song/Samples/kick 2.wav") && !r.svc.model().dirty);
+    r.ok("version rebase Alt --dry-run");
+    assert(!r.svc.model().dirty && r.ok("history").find("rebase") == std::string::npos);
+
+    const std::string out = r.ok("project collect");
+    std::printf("%s", out.c_str());
+    assert(contains(out, "collected 4 files into Samples/:") && contains(out, "\xE2\x86\x92 Samples/kick 2.wav") && contains(out, "\xE2\x86\x92 Samples/kick 3.wav"));
+    assert(contains(out, "\xE2\x86\x92 Samples/keys/keys.sfz (and 2 sounds)") && contains(out, "its sound samples/gone.wav is missing"));
+    assert(contains(out, "missing \xE2\x80\x94 relink them") && contains(out, "hat.wav \xE2\x80\x94 ac_5"));
+    assert(slurp(root + "/song/Samples/kick.wav") == "SOMEONE ELSE'S KICK");
+    assert(slurp(root + "/song/Samples/kick 2.wav") == "KICK-A" && slurp(root + "/song/Samples/kick 3.wav") == "KICK-B");
+    assert(slurp(root + "/song/Samples/keys/samples/e4.wav") == "E4" && slurp(root + "/song/Samples/snare.wav") == "SNARE");
+    const Project *p = r.svc.project();
+    assert(p->clip("ac_2")->src == "Samples/kick 2.wav" && p->clip("ac_3")->src == "Samples/kick 3.wav" && p->rack("ch_2")->devices[0].sample == "Samples/keys/keys.sfz");
+    r.ok("version open Alt");
+    assert(r.svc.project()->clip("ac_4")->src == "Samples/snare.wav" && r.svc.project()->clip("ac_2")->src == "Samples/kick 2.wav");
+    r.ok("version open main");
+    assert(contains(r.ok("project collect"), "nothing to collect")); // again: all in the folder
+    r.ok("undo");                                                     // the empty collect
+    r.ok("undo");                                                     // opening main
+    r.ok("undo");                                                     // opening Alt
+    r.ok("undo");                                                     // the collect: one step, the copies stay
+    assert(r.svc.project()->clip("ac_2")->src == root + "/lib/a/kick.wav" && fs::exists(root + "/song/Samples/kick 2.wav"));
+    r.ok("redo");
+    assert(r.svc.project()->clip("ac_2")->src == "Samples/kick 2.wav");
+
+    // relink: a folder searched for what is missing; a file pointed elsewhere, across versions; one clip
+    const std::string found = r.ok("project relink --folder " + root + "/found");
+    assert(contains(found, "relinked 1 of 1 missing file:") && r.svc.model().missing.empty());
+    assert(r.svc.project()->clip("ac_5")->src == root + "/found/deep/hat.wav"); // outside the folder: absolute, as ever
+    r.ok("project relink Samples/snare.wav --to " + root + "/lib/snare.wav");
+    r.ok("version open Alt");
+    assert(r.svc.project()->clip("ac_4")->src == root + "/lib/snare.wav");
+    r.ok("clip relink ac_2 " + root + "/lib/b/kick.wav");                // the open version's change
+    assert(contains(r.ok("version diff Alt"), "#vset node=ac_2 src=" + root + "/lib/b/kick.wav"));
+    r.ok("version open main");
+    assert(r.svc.project()->clip("ac_2")->src == "Samples/kick 2.wav");
+    assert(contains(r.no("project relink nothing.wav --to " + root + "/lib/snare.wav"), "names no file nothing.wav"));
+    assert(contains(r.no("project relink \"Samples/kick 2.wav\" --to " + root + "/nowhere.wav"), "cannot read"));
+    assert(contains(r.no("clip relink ac_2 " + root + "/nowhere.wav"), "cannot read"));
+    assert(contains(r.no("clip relink ac_2 " + root + "/lib/snare.wav --take 1"), "has 0 takes"));
+    assert(contains(r.no("clip relink ac_1 " + root + "/lib/snare.wav"), "plays notes"));
+    assert(contains(r.no("project relink"), "--folder <dir>"));
+
+    // Collect and Save: ONE line — collected, and saved
+    r.ok("clip add --src " + root + "/lib/snare.wav --at 16");
+    assert(r.svc.model().dirty);
+    assert(contains(r.ok("project collect --save"), "Samples/snare.wav \xE2\x80\x94 already there")); // the same bytes: reused
+    assert(!r.svc.model().dirty && contains(slurp(song), "src=Samples/snare.wav"));
+    pass("collect and relink (R-COLLECT-1): every file named, every version's too, listed; collected into Samples/ as ONE edit — two kick.wav kept apart and a stranger's left alone, the same bytes reused, an .sfz with its sounds, a version's own clip, the missing named; a dry run changes nothing (D-23); relinked by a folder, a file, a clip; missing[]; Collect and Save one line");
+}
+
 static void test_per_strip_tools_live()
 {
     // R-MIX-20 (Round 14, part 2): while playing, a strip's width and phase move with no engine rebuilt — the width
@@ -6782,6 +6882,7 @@ int main()
     test_solo_safe_keeps_a_tail();
     test_per_strip_tools_live();
     test_versions_of_a_song();
+    test_collect_and_relink();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

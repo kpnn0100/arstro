@@ -139,6 +139,15 @@ namespace solaris
         bool groupCommand(const Command &c, std::string &err);   // R-ARR-3: lane groups, a group moved, clips moved together
         bool tempoCommand(const Command &c, std::string &err);   // R-TEMPO-1 (ServiceArrange.cpp): the tempo map's points
         bool versionCommand(const Command &c, std::string &err); // R-VER (ServiceVersions.cpp): versions of the song
+        // R-COLLECT-1 (ServiceFiles.cpp): every file the song names — main and every version — by where it resolves
+        struct FileRef
+        {
+            std::string named, resolved;     // as the song names it (the first time); where that is
+            std::vector<std::string> users;  // ids; a version's prefixed "vr_n:"
+        };
+        std::vector<FileRef> fileRefs() const;
+        bool rewriteFiles(const std::map<std::string, std::string> &to, std::string &err); // the whole document, read back
+        bool filesCommand(const Command &c, std::string &err);
         // R-PRESET-1 (ServicePresets.cpp): the presets of each device type, the user's and the factory's
         bool presetCommand(const Command &c, std::string &err);
         bool applyPreset(const std::string &dv, const std::string &name, std::string &err);

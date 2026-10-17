@@ -82,6 +82,10 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `version rebase <version> [--dry-run]` | Reconcile (R-VER-3): name and prune the changes whose node its base no longer has; a frozen version's snapshot advanced to its base now, its changes on top. --dry-run names them and changes nothing. | R-VER-3 |
 | `version delete <version>` | Delete a version — refused while another is based on it; the open one gives way to its base. | R-VER-1 |
 | `revert <address\|node>` | Drop the open version's change at an address (`ch_2.mute`, `dv_1.filter.cutoff`, `project.bpm`) or every change to a node, so it inherits from its base again. Refused on main and where there is none. | R-VER-2 |
+| `project files [--missing]` | Every file the song names — clips and their takes, a device's sample or .sfz, a frozen strip's render — in main and every version: as named, in the song's folder / outside / missing, and what uses it (a version's ids prefixed `vr_n:`). --missing: only those that cannot be read. | R-COLLECT-1 |
+| `project collect [--dry-run] [--save]` | Copy every file the song names from outside its folder into <folder>/Samples/ — an .sfz with its sounds into Samples/<its name>/, their layout kept; never over a different file (" 2", " 3"…), the same bytes reused — and point every reference at the copy, in main and every version, as ONE edit (one undo; the copies stay). A missing file is named and left. --dry-run says what it would do; --save saves after. | R-COLLECT-1 |
+| `project relink [<file>] [--to <file>] [--folder <dir>] [--dry-run]` | Point every reference to <file> at --to <file>, in main and every version, ONE edit; or with --folder, look for every MISSING file by its name under <dir> (the first by path order; several found, said) and relink each the same way. --dry-run says what it would do. | R-COLLECT-1 |
+| `clip relink <ac> <file> [--take <n>]` | Point one audio clip's file (or its --take n's) at another — an edit of the song as open (on a version, that version's change). | R-COLLECT-1 |
 | `preset save <dv> <name> [--replace]` | Save a device's set values (and a sampler's sound) as a preset of its type in your presets folder (R-PRESET-1) — a name you have is refused without --replace. The machine's, not the song's: no undo. | R-PRESET-1 |
 | `preset load <dv> <name>` | Set a device to a preset of its type — every value back to its default, then the preset's, ONE edit; yours of a name before the factory's (R-PRESET-1). `device add --preset` and `clip add --instrument --preset` drop one in. | R-PRESET-1 |
 | `preset list [type]` | The presets, yours and the factory's, by type (R-PRESET-1). | R-PRESET-1 |
@@ -431,6 +435,9 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `versions[].dangling` | number | changes whose node its base no longer has — ignored until `version rebase` prunes them |
 | `versions[].problem` | string | why it does not stand as a song (its base broke it); "" when it does |
 | `version` | string | R-VER: the open version's id, or `main` — the song on screen and heard is its resolution |
+| `missing` | object[] | R-COLLECT-1: each file the song names (main or any version) that cannot be read — `project relink` finds it |
+| `missing[].path` | string | as the song names it (relative to its folder, or absolute) |
+| `missing[].users` | string[] | what names it — ids; a version's prefixed `vr_n:` |
 | `clips` | object[] | every clip |
 | `clips[].id` | string |  |
 | `clips[].name` | string |  |

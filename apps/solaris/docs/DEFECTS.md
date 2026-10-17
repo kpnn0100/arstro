@@ -97,6 +97,15 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-23 `version rebase --dry-run` was an edit: the song marked unsaved, a history step added — closed in N38 part 1
+- **Found:** 2026-10-17, designing N38's `--dry-run` flags: `dispatch` decides "an edit" by the verb alone, and
+  `version rebase` (N37) is an edit verb — so its dry run, which changes nothing, still snapshotted, added a history
+  node ("version rebase vr_1 --dry-run") and set the song unsaved.
+- **Fix:** a `--dry-run` is never an edit, whatever the verb (`core/service/SolarisService.cpp`, `dispatch`'s
+  `editing`): no snapshot, no history step, not unsaved — for `version rebase`, `project collect` and `project relink`.
+- **Guard:** `test_collect_and_relink` — after `project save`, `project collect --dry-run` and `version rebase Alt
+  --dry-run` leave the song saved and the history without a rebase (mutant: the verb alone decides — seen red).
+
 ### D-20 The frozen-plugin test could fail with its helper left stopped — and ctest waited on it for 20 minutes — closed in N34 (the pitch shifter's bump)
 - **Found:** 2026-10-17, the ctest run after the pitch shifter's bump (`-j6`): `solaris_plugins` failed and the run
   hung. One `solaris-plughost --serve ArstroBasicSynth.vst3` was left in state T (stopped), re-parented to the user's

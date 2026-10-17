@@ -363,6 +363,8 @@ port add <name> [--dir in|out] [--channels 1|2] | strip arm <ch> [--input <port>
 clip comp <ac> --take n [--from b --to b]   ; R-REC-2
 version new <name> [--base vr] [--open] | version open <vr|main> | version list | version diff <vr>   ; R-VER (§9b)
 version freeze|thaw <vr> | version rebase <vr> [--dry-run] | version delete <vr> | revert <address|node>
+project files [--missing] | project collect [--dry-run] [--save] | project relink <file> --to <new> | project relink --folder <dir>   ; R-COLLECT-1
+clip relink <ac> <file> [--take n]
 transport play | transport stop | transport seek <b|mk> | transport loop <a> <b> | transport loop <mk> | transport loop off
 render --out <f.wav> [--from b] [--to b] [--stems ch,…] [--ports] [--bits 24|32f] [--version vr|main]
 matrix print [--json] | audit | state print [--json] [--stable] | registry [--json] | api [--json|--md]

@@ -312,6 +312,13 @@ namespace solaris
         std::string problem;                     // why it does not stand as a song ("" when it does)
     };
 
+    /** R-COLLECT-1: a file the song names that cannot be read — and what uses it. */
+    struct MissingModel
+    {
+        std::string path;                        // as the song names it
+        std::vector<std::string> users;          // ids; a version's prefixed "vr_n:"
+    };
+
     /** R-TEMPO-1: a change of the song's tempo — and where it falls in time (computed through the map). */
     struct TempoModel
     {
@@ -489,6 +496,7 @@ namespace solaris
         std::vector<LaneGroupModel> groups;      // R-ARR-3: in the order of their first lanes
         std::vector<VersionModel> versions;      // R-VER: in creation order, each after its base
         std::string version;                     // R-VER: the open one's id, or "main" ("" with no song)
+        std::vector<MissingModel> missing;       // R-COLLECT-1: files the song names that cannot be read (every version's)
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };
 }

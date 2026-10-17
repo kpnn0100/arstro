@@ -268,6 +268,22 @@ namespace solaris
             {K::Revert, "revert", "<address|node>", 1, 1, {},
              "Drop the open version's change at an address (`ch_2.mute`, `dv_1.filter.cutoff`, `project.bpm`) or every "
              "change to a node, so it inherits from its base again. Refused on main and where there is none.", "R-VER-2"},
+            {K::ProjectFiles, "project files", "", 0, 0, {"missing"},
+             "Every file the song names — clips and their takes, a device's sample or .sfz, a frozen strip's render — in "
+             "main and every version: as named, in the song's folder / outside / missing, and what uses it (a version's "
+             "ids prefixed `vr_n:`). --missing: only those that cannot be read.", "R-COLLECT-1"},
+            {K::ProjectCollect, "project collect", "", 0, 0, {"dry-run", "save"},
+             "Copy every file the song names from outside its folder into <folder>/Samples/ — an .sfz with its sounds "
+             "into Samples/<its name>/, their layout kept; never over a different file (\" 2\", \" 3\"…), the same bytes "
+             "reused — and point every reference at the copy, in main and every version, as ONE edit (one undo; the "
+             "copies stay). A missing file is named and left. --dry-run says what it would do; --save saves after.", "R-COLLECT-1"},
+            {K::ProjectRelink, "project relink", "[<file>]", 0, 1, {"to=<file>", "folder=<dir>", "dry-run"},
+             "Point every reference to <file> at --to <file>, in main and every version, ONE edit; or with --folder, look "
+             "for every MISSING file by its name under <dir> (the first by path order; several found, said) and relink "
+             "each the same way. --dry-run says what it would do.", "R-COLLECT-1"},
+            {K::ClipRelink, "clip relink", "<ac> <file>", 2, 2, {"take=<n>"},
+             "Point one audio clip's file (or its --take n's) at another — an edit of the song as open (on a version, "
+             "that version's change).", "R-COLLECT-1"},
             {K::PresetSave, "preset save", "<dv> <name>", 2, 2, {"replace"},
              "Save a device's set values (and a sampler's sound) as a preset of its type in your presets folder "
              "(R-PRESET-1) — a name you have is refused without --replace. The machine's, not the song's: no undo.", "R-PRESET-1"},

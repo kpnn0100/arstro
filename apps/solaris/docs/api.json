@@ -754,6 +754,49 @@
       "requirement": "R-VER-2"
     },
     {
+      "verb": "project files",
+      "usage": "project files [--missing]",
+      "args": "",
+      "flags": [
+        "missing"
+      ],
+      "summary": "Every file the song names — clips and their takes, a device's sample or .sfz, a frozen strip's render — in main and every version: as named, in the song's folder / outside / missing, and what uses it (a version's ids prefixed `vr_n:`). --missing: only those that cannot be read.",
+      "requirement": "R-COLLECT-1"
+    },
+    {
+      "verb": "project collect",
+      "usage": "project collect [--dry-run] [--save]",
+      "args": "",
+      "flags": [
+        "dry-run",
+        "save"
+      ],
+      "summary": "Copy every file the song names from outside its folder into <folder>/Samples/ — an .sfz with its sounds into Samples/<its name>/, their layout kept; never over a different file (\" 2\", \" 3\"…), the same bytes reused — and point every reference at the copy, in main and every version, as ONE edit (one undo; the copies stay). A missing file is named and left. --dry-run says what it would do; --save saves after.",
+      "requirement": "R-COLLECT-1"
+    },
+    {
+      "verb": "project relink",
+      "usage": "project relink [<file>] [--to <file>] [--folder <dir>] [--dry-run]",
+      "args": "[<file>]",
+      "flags": [
+        "to=<file>",
+        "folder=<dir>",
+        "dry-run"
+      ],
+      "summary": "Point every reference to <file> at --to <file>, in main and every version, ONE edit; or with --folder, look for every MISSING file by its name under <dir> (the first by path order; several found, said) and relink each the same way. --dry-run says what it would do.",
+      "requirement": "R-COLLECT-1"
+    },
+    {
+      "verb": "clip relink",
+      "usage": "clip relink <ac> <file> [--take <n>]",
+      "args": "<ac> <file>",
+      "flags": [
+        "take=<n>"
+      ],
+      "summary": "Point one audio clip's file (or its --take n's) at another — an edit of the song as open (on a version, that version's change).",
+      "requirement": "R-COLLECT-1"
+    },
+    {
       "verb": "preset save",
       "usage": "preset save <dv> <name> [--replace]",
       "args": "<dv> <name>",
@@ -2418,6 +2461,24 @@
       "path": "version",
       "type": "string",
       "summary": "R-VER: the open version's id, or `main` — the song on screen and heard is its resolution",
+      "stable": true
+    },
+    {
+      "path": "missing",
+      "type": "object[]",
+      "summary": "R-COLLECT-1: each file the song names (main or any version) that cannot be read — `project relink` finds it",
+      "stable": true
+    },
+    {
+      "path": "missing[].path",
+      "type": "string",
+      "summary": "as the song names it (relative to its folder, or absolute)",
+      "stable": true
+    },
+    {
+      "path": "missing[].users",
+      "type": "string[]",
+      "summary": "what names it — ids; a version's prefixed `vr_n:`",
       "stable": true
     },
     {

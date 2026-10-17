@@ -14,6 +14,7 @@
 #include "device/Device.h"
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
 #include <cmath>
 #include <fstream>
 #include <functional>
@@ -389,6 +390,11 @@ namespace solaris
             {
                 const VersionFacts f = versionFacts(p, v.id);
                 mModel.versions.push_back(VersionModel{v.id, v.name, v.base.empty() ? "main" : v.base, v.frozen, f.deltas, f.own, f.dangling, f.problem});
+            }
+            for (const auto &f : fileRefs()) // R-COLLECT-1: what the song names and cannot read — every version's
+            {
+                std::error_code ec;
+                if (!std::filesystem::exists(f.resolved, ec) || std::filesystem::is_directory(f.resolved, ec)) mModel.missing.push_back(MissingModel{f.named, f.users});
             }
         }
         if (!p.tempos.empty()) // R-TEMPO-1: each change, and where it is heard
