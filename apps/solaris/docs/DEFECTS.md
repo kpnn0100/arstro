@@ -6,6 +6,20 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Open
 
+### D-18 The library's delay line extrapolated between samples — a swept chorus or echo gained treble
+- **Found:** 2026-10-17, reading `Delay::read` (core/DigitalSignalProcessing/src/simpleProcessor/Delay.cpp) to build
+  N34's flanger on it. For a delay of D + f samples (0 < f < 1) it returns `s[D]·(1 + f) − s[D − 1]·f`: the line
+  through the two samples NEARER than the delay, carried past the newer one — linear extrapolation, not
+  interpolation. Its gain at a frequency ω is |(1 + f) − f·e^(jω)|, up to 1 + 2f toward Nyquist (f = ½: +5.8 dB at
+  20 kHz where interpolation gives −11.7 dB). Whole-sample delays read correctly, so a still delay hid it.
+- **Effect:** the "chorus" (its delay swept every sample) and the "delay" (echo times in ms are rarely whole samples)
+  add treble that moves with the fraction — a chorus's top end flutters; an echo fed back brightens at every repeat
+  instead of darkening as its own filter intends. A flanger built on it with feedback 0.9 would run away (a loop
+  gain of 0.9·(1 + 2f) > 1 toward Nyquist).
+- **Recommended fix:** read between `s[⌊D⌋]` and `s[⌊D⌋ + 1]` with weights 1 − f and f — the same value at a whole
+  sample (nothing that reads whole samples moves), the treble never above unity; a test that a fractional delay
+  passes a sine at |cos(ω/2)| (f = ½) and never above 1 at any fraction.
+
 ### D-17 The service tests' fakes race their own threads (ThreadSanitizer; the product is clean)
 - **Found:** 2026-10-17, the TSan run of the service tests made to check N32's followers (the follower's own race —
   its target read off its thread — was fixed there). Five reports remain, all inside test fakes: (1, 2) the keyboard

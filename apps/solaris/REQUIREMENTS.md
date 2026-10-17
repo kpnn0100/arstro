@@ -709,7 +709,7 @@ spectrum analyser and a LUFS meter on the master · R-EDM-16 export MP3 / FLAC b
 hosting other makers' VST3 (R-VST-6) · R-EDM-18 bounce / freeze a strip to audio · R-EDM-19 several
 audio devices (R-DEV, P2) · R-EDM-20 song templates and device presets.
 
-## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 ✅ DR-REC-1 — loop takes are R-REC-2's; R-REC-2 ✅ DR-REC-2; R-EDIT-1 ✅ DR-EDIT-1; R-WARP-1 ✅ DR-WARP-1; R-TEMPO-1 ✅ DR-TEMPO-1; R-PRESET-1 ✅ DR-PRESET-1; R-PRESET-2 ✅ DR-PRESET-2; R-PRESET-3 ✅ DR-PRESET-3; R-VST-6 ✅ DR-VST-6 — the wheels to a plugin wait; R-CTRL-1 ✅ DR-CTRL-1; R-CTRL-2 ✅ DR-CTRL-2 — not yet against a real surface; R-PERF-1 ✅ DR-PERF-1; R-PERF-2 ✅ DR-PERF-2; R-PERF-3 ✅ DR-PERF-3; R-DEV-1/2/4 ✅ DR-DEV-1, DR-DEV-1a, DR-DEV-5 — not yet against a second real card; R-INST-7 ✅ DR-INST-7; R-INST-8 ✅ DR-INST-8; R-INST-9 ✅ DR-INST-9; R-INST-10 ✅ DR-INST-10; R-INST-11 ✅ DR-INST-11; R-FX-6 ✅ DR-FX-6; R-FX-7 ✅ DR-FX-6; R-FX-8 ✅ DR-FX-6; R-FX-9 ✅ DR-FX-6; R-FX-10 ✅ DR-FX-6)
+## R-PRO — a professional DAW (user request, 2026-10-16: *"implement all"* of `docs/pro-daw-analysis.md`) — 🚧 IN PROGRESS (R-SAFE ✅ DR-SAFE-1; R-MIDI-1 ✅ DR-MIDI-1; R-METER ✅ DR-METER-1/2; R-EDM-4a ✅ DR-EDM-4a; R-EXPORT-1 ✅ DR-EXPORT-1; R-MIX-18 ✅ DR-MIX-18; R-DEV-9 output ✅ DR-DEV-9; R-MIDI-2 ✅ DR-MIDI-2; R-INST-6 ✅ DR-INST-6; R-MIDI-3 ✅ DR-MIDI-3; R-ROLL-11 ✅ DR-ROLL-11; R-ARR-1 ✅ DR-ARR-1; R-ARR-2 ✅ DR-ARR-2; R-ARR-3 ✅ DR-ARR-3; R-REC-1 ✅ DR-REC-1 — loop takes are R-REC-2's; R-REC-2 ✅ DR-REC-2; R-EDIT-1 ✅ DR-EDIT-1; R-WARP-1 ✅ DR-WARP-1; R-TEMPO-1 ✅ DR-TEMPO-1; R-PRESET-1 ✅ DR-PRESET-1; R-PRESET-2 ✅ DR-PRESET-2; R-PRESET-3 ✅ DR-PRESET-3; R-VST-6 ✅ DR-VST-6 — the wheels to a plugin wait; R-CTRL-1 ✅ DR-CTRL-1; R-CTRL-2 ✅ DR-CTRL-2 — not yet against a real surface; R-PERF-1 ✅ DR-PERF-1; R-PERF-2 ✅ DR-PERF-2; R-PERF-3 ✅ DR-PERF-3; R-DEV-1/2/4 ✅ DR-DEV-1, DR-DEV-1a, DR-DEV-5 — not yet against a second real card; R-INST-7 ✅ DR-INST-7; R-INST-8 ✅ DR-INST-8; R-INST-9 ✅ DR-INST-9; R-INST-10 ✅ DR-INST-10; R-INST-11 ✅ DR-INST-11; R-FX-6 ✅ DR-FX-6; R-FX-7 ✅ DR-FX-6; R-FX-8 ✅ DR-FX-6; R-FX-9 ✅ DR-FX-6; R-FX-10 ✅ DR-FX-6; R-FX-11 ✅ DR-FX-6)
 
 Each line is one ledger task (or two, a DSP half first); built in the analysis's phase order. Lines that an earlier
 area already reserved keep that id and are detailed here. Every feature is a command line first (law 8), observable
@@ -1106,7 +1106,9 @@ a process is the host's (law 12).
   a range — the band alone turned down (split) or the whole sound (wide); untouched while nothing is over
   (REQ-fx-deesser-1). R-FX-10: two devices — a saturator (soft, hard, tube or fold, driven; oversampled, so what it
   adds does not fold back into the band; its latency compensated as the limiter's is, R-MIX-17) and a bitcrusher
-  (bits and a lower rate, its steps and images left in on purpose) (REQ-fx-saturator-1, REQ-fx-bitcrusher-1).)
+  (bits and a lower rate, its steps and images left in on purpose) (REQ-fx-saturator-1, REQ-fx-bitcrusher-1).
+  R-FX-11: notches swept by an LFO — its stages, centre, depth, rate, feedback, the right channel ahead of the left,
+  a mix (REQ-fx-phaser-1).)
 - **R-MIX-19 Group / VCA faders**: a VCA moves the gain of the strips assigned to it, adding its dB.
 - **R-MIX-20 Per-strip tools**: phase invert, width, mono check on the master; solo-safe on buses.
 - **R-VER build** (R-VER-1…4, specified): versions of a song.

@@ -1005,6 +1005,20 @@ A gate and a downward expander: below its threshold turned down by the ratio, he
 | `release` | 1.0 … 5000.0 ms | 100.0 ms |
 | `sidechain` | off · on | off |
 
+### `phaser` — Phaser (effect)
+
+Notches swept by an LFO: first-order all-passes fed back, mixed with the dry sound.
+
+| parameter | range | default |
+|---|---|---|
+| `rate` | 0.01 … 10.0 Hz | 0.5 Hz |
+| `center` | 100.0 … 8000.0 Hz | 800.0 Hz |
+| `depth` | 0.0 … 4.0 oct | 2.0 oct |
+| `stages` | 2.0 … 12.0 | 4.0 |
+| `feedback` | -0.9 … 0.9 | 0.3 |
+| `stereo` | 0.0 … 180.0 deg | 90.0 deg |
+| `mix` | 0.0 … 1.0 | 0.5 |
+
 ### `saturator` — Saturator (effect)
 
 A curve driven — soft, hard, tube or fold — four times oversampled, its latency reported.
