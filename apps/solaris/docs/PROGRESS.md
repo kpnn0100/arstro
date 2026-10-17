@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N41 part 3 — the window: a toast and the Conflicts sheet** (R-COLLAB-1; parts 1–2 — the merge and the service — are built), then N42… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N42 — Accessibility** (R-ACCESS-1; a design round first — N41, sharing through a folder, is built), then N43… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -648,7 +648,7 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       the Export sheet's "With the video" (MP4 / MKV, `--video`); shots video-lane(-dragging), export-with-video. Found
       on the way: stale anchors in DR-AUTO-5, DR-CLIP-6 and DR-UI-10's step/zoom paragraphs re-pointed by symbol (D-22).
       N40 DONE (a live look at the GTK window's decoder owed).
-- [~] **N41** Sharing through a folder: merge by node (R-COLLAB-1). Round 19 (the design): the base is what this window
+- [x] **N41** Sharing through a folder: merge by node (R-COLLAB-1). Round 19 (the design): the base is what this window
       last read or wrote; an atomic save; the file looked at once a second; nothing unsaved → reload, else a three-way
       merge node by node (the versions' node table), the same new id renumbered on mine, conflicts asked (`project sync
       --take`), a save refused while one is pending. Part 1: the merge in the model — the versions' node table moved to
@@ -657,7 +657,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       `takeTheirs`, `tidyOrders`. Part 2: the service — the base (the text last read/written, its canonical song), the
       atomic save, `pump` looking once a second, `project sync [--take theirs|mine [<node>]]` (an edit only when it
       changes the song; reload when nothing is unsaved), the model's `sync`, the save guard (a file that is not a song
-      written whole); L2 with two services on one file. Next: part 3 — the window: a toast, the Conflicts sheet.
+      written whole); L2 with two services on one file. Part 3: the window — a toast each time the song follows its
+      file; the Conflicts sheet (opened on its own when a sync asks, and from File › Conflicts…): rows keyed by node,
+      what tells the sides apart (the fields that differ), Keep Mine / Take Theirs and both for all, ONE line each; shots
+      conflicts-sheet(-answered-mid). N41 DONE.
 - [ ] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1).
 - [ ] **N43** Localisation (R-ACCESS-2).
 - [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).

@@ -4850,6 +4850,105 @@ static void test_export_with_the_video()
     pass("Export with the video (R-VIDEO-1): greyed and inert with no picture; on, MP4 or MKV, the bit depth, quality and stems greyed (eased), ONE `render … --video`; off, the audio format it was left at");
 }
 
+static void test_conflicts_are_asked_in_a_sheet()
+{
+    // R-COLLAB-1 (Round 19, part 3): the song's file changed by another window — reloaded, said in a toast; two nodes
+    // changed both ways — merged, the Conflicts sheet opening on its own (faded in); Keep Mine and Take Theirs ONE line
+    // each, the answered row fading out where it is and the next sliding up; the "all" buttons dimming, eased, with
+    // nothing asked; Done; File › Conflicts… reopens it; Keep All Mine ONE line
+    sltest::Rig r("ui-sync", 1280, 800);
+    const std::string song = r.song("Shared") + ".slp";
+    r.cmd("project new " + song + " --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4"); // ch_2
+    r.cmd("project save");
+    r.settle();
+    arstro::solaris::SolarisService b(sltest::fakeHost(r.dir)); // the other window, on the same file
+    auto other = [&b](const std::string &line) {
+        std::string err;
+        const bool ok = b.dispatchText(line, err);
+        if (!ok) std::printf("    the other window refused `%s`: %s\n", line.c_str(), err.c_str());
+        assert(ok);
+    };
+    auto gain = [&r]() {
+        for (const auto &st : r.svc->model().strips)
+            if (st.id == "ch_2") return st.gain;
+        return 99.0;
+    };
+    other("project open " + song);
+    // nothing unsaved here: reloaded, said
+    other("set ch_2.gain=-6");
+    other("project save");
+    r.cmd("project sync");
+    r.frame();
+    assert(contains(r.app->toastText(), "Reloaded") && gain() == -6.0);
+    r.settle();
+    // the tempo and the strip changed both ways: merged, the sheet opening on its own
+    r.cmd("set ch_2.gain=-3");
+    r.cmd("set project.bpm=128");
+    other("set ch_2.gain=-9");
+    other("set project.bpm=140");
+    other("project save");
+    r.cmd("project sync");
+    auto &cs = r.app->conflictsSheet();
+    r.frame();
+    r.frame();
+    assert(cs.isOpen() && cs.appearAmount() > 0.0 && cs.appearAmount() < 1.0 && contains(r.app->toastText(), "2 to answer"));
+    r.settle();
+    assert(cs.rowCount() == 2 && cs.rowAmount("project:bpm") == 1.0 && cs.rowAmount("ch_2") == 1.0 && cs.allAmount() == 1.0);
+    const double second = cs.rowY("ch_2");
+    assert(cs.rowY("project:bpm") == 0.0 && second == arstro::solaris_ui::ConflictsSheet::kRowH);
+    // what tells them apart: a header field whole; a strip's line, only the fields that differ
+    assert(cs.shown("project:bpm", true) == std::vector<std::string>{"bpm = 128.0"} && cs.shown("project:bpm", false) == std::vector<std::string>{"bpm = 140.0"});
+    assert(cs.shown("ch_2", true) == std::vector<std::string>{"gain=-3.0"} && cs.shown("ch_2", false) == std::vector<std::string>{"gain=-9.0"});
+    // Keep Mine on the tempo: ONE line; its row fades out where it is, the strip's slides up into its place
+    r.click(cs.mineRect("project:bpm"));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "project sync --take mine project:bpm") && r.svc->project()->header.bpm == 128.0);
+    assert(cs.rowAmount("project:bpm") > 0.0 && cs.rowAmount("project:bpm") < 1.0 && cs.rowY("ch_2") > 0.0 && cs.rowY("ch_2") < second);
+    r.settle();
+    assert(cs.rowAmount("project:bpm") == -1.0 && cs.rowY("ch_2") == 0.0);
+    // Take Theirs on the strip: ONE line, the gain theirs; nothing asked — the "all" buttons dim, eased
+    r.click(cs.theirsRect("ch_2"));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "project sync --take theirs ch_2") && gain() == -9.0);
+    assert(cs.allAmount() < 1.0 && cs.allAmount() > 0.35);
+    r.settle();
+    assert(cs.rowCount() == 0 && cs.allAmount() == 0.35 && r.svc->model().sync.conflicts.empty());
+    r.click(cs.allMineRect()); // with nothing asked, they send nothing
+    r.settle();
+    assert(r.sent.back() == "project sync --take theirs ch_2");
+    r.click(cs.doneRect());
+    r.settle();
+    assert(!cs.isOpen());
+    // another round: File › Conflicts… reopens it; Keep All Mine — ONE line
+    r.cmd("set ch_2.gain=-1");
+    other("project sync");
+    other("set ch_2.gain=-12");
+    other("project save");
+    r.cmd("project sync");
+    r.settle();
+    r.click(cs.doneRect());
+    r.settle();
+    assert(!cs.isOpen() && r.svc->model().sync.conflicts.size() == 1);
+    auto &ms = r.app->project().bar().menus();
+    r.click(world(ms, ms.titleRect(0)));
+    r.settle();
+    const int item = (int)ms.menu(0).items.size() - 1;
+    assert(ms.menu(0).items[(size_t)item].label == "Conflicts\xE2\x80\xA6");
+    r.click(world(ms, ms.itemRect(0, item)));
+    r.settle();
+    assert(cs.isOpen() && cs.rowCount() == 1);
+    r.click(cs.allMineRect());
+    r.settle();
+    assert(sentLine(r, "project sync --take mine") && gain() == -1.0 && cs.rowCount() == 0);
+    r.key(27);
+    r.settle();
+    assert(!cs.isOpen());
+    pass("conflicts asked in a sheet (R-COLLAB-1): a reload said; a merge that asks opens the sheet, faded in; Keep Mine / Take Theirs ONE line each, the answered row fading where it is and the next sliding up; the \"all\" buttons dimming, eased, inert with nothing asked; File › Conflicts… reopens it; Keep All Mine ONE line");
+}
+
 static void test_the_session_view()
 {
     // R-LAUNCH-1 (Round 17, part 4): View › Show Session cross-fades the grid into the lanes' place; every gesture is ONE
@@ -5396,6 +5495,7 @@ int main()
     test_the_video_window();
     test_the_video_lane();
     test_export_with_the_video();
+    test_conflicts_are_asked_in_a_sheet();
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();

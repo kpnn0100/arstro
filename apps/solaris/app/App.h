@@ -26,6 +26,7 @@
 #include "widgets/SettingsSheet.h"
 #include "widgets/ExportSheet.h"
 #include "widgets/RelinkSheet.h"
+#include "widgets/ConflictsSheet.h"
 #include "widgets/VideoPanel.h"
 #include "../../cosmo/widgets/ConfirmDialog.h"
 #include "../../cosmo/widgets/ContextMenu.h"
@@ -100,6 +101,7 @@ namespace solaris_ui
         SettingsSheet &settings() { return *mSettings; }
         ExportSheet &exportSheet() { return *mExport; } // R-EXPORT-1: File › Export…
         RelinkSheet &relinkSheet() { return *mRelink; } // R-COLLECT-1: File › Relink…
+        ConflictsSheet &conflictsSheet() { return *mConflicts; } // R-COLLAB-1: what a sync asked
         cosmo_v2::ConfirmDialog &confirm() { return *mConfirm; }
         cosmo_v2::ContextMenu &menu() { return *mMenu; }
         artboard::Segment *activeRoot();
@@ -131,6 +133,8 @@ namespace solaris_ui
         std::shared_ptr<ExportSheet> mExport;
         std::shared_ptr<RelinkSheet> mRelink;
         std::string mMissingSaidFor; // R-COLLECT-1: the song whose missing files a toast has said
+        std::shared_ptr<ConflictsSheet> mConflicts; // R-COLLAB-1
+        int mSyncSeen = 0;                          // the syncs a toast has said
         std::shared_ptr<cosmo_v2::ConfirmDialog> mConfirm;
         std::shared_ptr<cosmo_v2::ContextMenu> mMenu;  // cosmo's: a route, an effect, rename — modal while open
         std::shared_ptr<artboard::Segment> mModalRoot; // hosts cosmo's dialog: its advance is the tree's

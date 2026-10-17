@@ -548,6 +548,41 @@ namespace
                  const double y = sr.y + sr.h * 0.5, x = sr.x + 40.0;
                  r.drag(x, y, x + 2.0 * tl.pxPerBeat(), y, 8, false);
              }},
+            {"conflicts-sheet", // R-COLLAB-1: another window changed the song's file — the bass and the tempo changed both ways: the
+                                // sheet asks, each row its lines here and in the file, Keep Mine / Take Theirs
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("project save");
+                 arstro::solaris::SolarisService other(sltest::fakeHost(r.dir));
+                 std::string err;
+                 const std::string song = r.svc->model().projectPath;
+                 other.dispatchText("project open \"" + song + "\"", err);
+                 other.dispatchText("set ch_3.gain=-9", err);
+                 other.dispatchText("set project.bpm=124", err);
+                 other.dispatchText("strip add --kind bus --name Chorus", err);
+                 other.dispatchText("project save", err);
+                 r.cmd("set ch_3.gain=-2");
+                 r.cmd("set project.bpm=132");
+                 r.cmd("project sync");
+                 r.settle();
+             }},
+            {"conflicts-answered-mid", // R-COLLAB-1: the tempo answered "mine" — its row fading out where it is, the bass's sliding up
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("project save");
+                 arstro::solaris::SolarisService other(sltest::fakeHost(r.dir));
+                 std::string err;
+                 other.dispatchText("project open \"" + r.svc->model().projectPath + "\"", err);
+                 other.dispatchText("set ch_3.gain=-9", err);
+                 other.dispatchText("set project.bpm=124", err);
+                 other.dispatchText("project save", err);
+                 r.cmd("set ch_3.gain=-2");
+                 r.cmd("set project.bpm=132");
+                 r.cmd("project sync");
+                 r.settle();
+                 r.click(r.app->conflictsSheet().mineRect("project:bpm"));
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
             {"launch-recorded", // R-LAUNCH-1: what a recorded launch leaves — the bass cut at bar 2 and again at bar 3, its tail starting
                                 // into its pattern (offset), the session's riff between on its lane
              [](sltest::Rig &r) {
