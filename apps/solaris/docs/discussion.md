@@ -711,3 +711,33 @@ clips recorded into the arrangement. Decided (each a line to change):
   session view.
 - **Not yet:** follow actions; launching from a MIDI controller (the map grammar will reach it: `launch` is a line);
   recording INTO a slot.
+
+### Round 18 — 2026-10-17 — a video lane (R-VIDEO-1, N40): the design, before code
+
+R-VIDEO-1: a video file shown in a window, synced to the transport (decoded by the host's FFmpeg), with an offset; a
+render can carry it into the export. Decided (each a line to change):
+
+- **One picture a song** (`#avideo id=vd_1 src="picture.mp4" offset=4.0`): `offset` is seconds on the song's clock (the
+  tempo map's) at which the picture's first frame shows; negative, the picture began before the song. A second video is
+  refused (scoring to one picture; Not yet: several). It is a node like any: a version may move it, collect gathers its
+  file (`src=`, R-COLLECT-1).
+- **The grammar:** `video set <file> [--offset <s>]` — adds it or puts another in its place; the host probes it (its
+  length, size, frame rate) and a file that is no video is refused; `set vd_1.offset=<s>`; `video remove`.
+- **The model says where the picture is** (law 13 — a front end never re-derives the tempo map): `video` — its file,
+  offset, length, size, frame rate, whether it can be read, and `time`: the picture's seconds at the heard position (−1
+  before it starts or after it ends), moving while playing like the playhead, held at the time bar when stopped.
+- **The host decodes** (R-SVC-4 — the core carries no codec): a probe (`probeVideo`), a frame at a time scaled to fit a
+  box (`videoFrame`, RGBA), and the export's mux (`muxVideo`). FFmpeg, as the audio's.
+- **Into the export:** `render --out <f.mp4|.mov|.mkv> --video` — the picture's own stream copied, not re-encoded,
+  shifted by the offset into the render's range; the mix beside it (AAC in MP4/MOV, FLAC in MKV). Refused without a
+  video, and for an audio-only extension. The L3 check: a clip FFmpeg makes, carried through `solaris-cc`, read back by
+  `ffprobe` — both streams, the picture's length and start where the offset put them.
+- **Seen** (part 2): View › Show Video — a window (a device window's kind) with the frame at `video.time`, letterboxed,
+  "before the picture" / "after the picture" said outside its span; the lanes gain a video row above the first lane: the
+  picture's span with a thumbnail every so often (decoded lazily by the host, kept), its name; dragged sideways it sets
+  the offset (ONE line on release, the pointer's while held). The Export sheet's "With the video" (shown when the song
+  has one) — MP4 or MKV then.
+- **Parts** (a commit each): (1) the service and the host — the node, the grammar, the probe, `video` in the model, the
+  frame decoder, `render --video` and its mux, L2 with a fake host and the L3 FFmpeg round trip; (2) the window, the
+  lane, the export sheet's toggle, shots.
+- **Not yet:** several videos; the picture's own sound as a clip; timecode (SMPTE) display.

@@ -634,7 +634,8 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       session (with nothing armed, only it); spans land as clips, the arrangement under them cut, a note clip's `offset=`;
       the song renders exactly what was heard. Part 4: View › Session — the grid in the lanes' place, every gesture
       one line, fills and pulses eased; shots session-view(-mid), launch-recorded. N39 DONE.
-- [ ] **N40** A video lane (R-VIDEO-1).
+- [~] **N40** A video lane (R-VIDEO-1). Round 18 (the design): one picture a song with an offset; the host probes,
+      decodes, muxes; `video.time` in the model; `render --video` copies the stream beside the mix. Next: part 1.
 - [ ] **N41** Sharing through a folder: merge by node (R-COLLAB-1).
 - [ ] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1).
 - [ ] **N43** Localisation (R-ACCESS-2).
