@@ -883,6 +883,25 @@ Pads — a pitch by name: `kick` 36 · `rim` 37 · `snare` 38 · `clap` 39 · `l
 | `ride.pan` | -1.0 … 1.0 | 0.0 |
 | `volume` | -60.0 … 6.0 dB | -6.0 dB |
 
+### `808` — 808 (instrument)
+
+A tuned bass drum: the note's pitch punched down to at each attack, gliding between held notes; a long decay, a click, drive and a tone; one voice.
+
+| parameter | range | default |
+|---|---|---|
+| `punch` | 0.0 … 36.0 st | 12.0 st |
+| `punch.time` | 1.0 … 200.0 ms | 40.0 ms |
+| `glide` | 0.0 … 1000.0 ms | 60.0 ms |
+| `amp.attack` | 0.0 … 50.0 ms | 1.0 ms |
+| `amp.decay` | 20.0 … 8000.0 ms | 900.0 ms |
+| `amp.release` | 1.0 … 2000.0 ms | 60.0 ms |
+| `click` | 0.0 … 1.0 | 0.2 |
+| `drive` | 0.0 … 1.0 | 0.25 |
+| `tone` | 200.0 … 20000.0 Hz | 4000.0 Hz |
+| `volume` | -60.0 … 12.0 dB | -6.0 dB |
+| `velocity` | 0.0 … 1.0 | 0.4 |
+| `voice.bend` | 0.0 … 24.0 st | 2.0 st |
+
 ### `granular` — Granular (instrument)
 
 A recorded sound as a cloud of short grains — their size, density and place (scanned, sprayed), pitched by the note, sprayed in pitch and pan; an envelope; 16 voices.

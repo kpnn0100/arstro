@@ -5776,6 +5776,134 @@
       ]
     },
     {
+      "type": "808",
+      "label": "808",
+      "kind": "instrument",
+      "summary": "A tuned bass drum: the note's pitch punched down to at each attack, gliding between held notes; a long decay, a click, drive and a tone; one voice.",
+      "params": [
+        {
+          "name": "punch",
+          "label": "Punch",
+          "unit": "st",
+          "min": 0.0,
+          "max": 36.0,
+          "default": 12.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "punch.time",
+          "label": "Punch Time",
+          "unit": "ms",
+          "min": 1.0,
+          "max": 200.0,
+          "default": 40.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "glide",
+          "label": "Glide",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 1000.0,
+          "default": 60.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "amp.attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 50.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "amp.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 20.0,
+          "max": 8000.0,
+          "default": 900.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "amp.release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 1.0,
+          "max": 2000.0,
+          "default": 60.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "click",
+          "label": "Click",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.2,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "drive",
+          "label": "Drive",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.25,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "tone",
+          "label": "Tone",
+          "unit": "Hz",
+          "min": 200.0,
+          "max": 20000.0,
+          "default": 4000.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "volume",
+          "label": "Volume",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 12.0,
+          "default": -6.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "velocity",
+          "label": "Velocity",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.4,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "voice.bend",
+          "label": "Bend Range",
+          "unit": "st",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 2.0,
+          "integer": true,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "granular",
       "label": "Granular",
       "kind": "instrument",

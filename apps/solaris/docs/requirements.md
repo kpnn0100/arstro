@@ -2120,6 +2120,13 @@ Hann-windowed, panned, the cloud divided by its overlap. **Here** it is the regi
 (`<dv>.grain.size`, `.grain.position`, …). Test: L2 `test_every_instrument_drops_as_one_line_and_sounds`
 (`core/tests/serviceTests.cpp:4704`: the granular given a sound, a note, a render that sounds).
 
+### DR-INST-11 The 808 (R-INST-11)
+**The sound** is the DSP library's (REQ-808-1/2, its commit 190ce5f): one voice, a sine whose pitch is punched down to
+the note at each attack and glides between held notes, a damped decay, a seeded click, a normalised drive, a tone.
+**Here** it is the registry's "808" and nothing more: dropped as one line, its parameters addresses (`<dv>.punch`,
+`.glide`, `.amp.decay`, …). Test: L2 `test_every_instrument_drops_as_one_line_and_sounds`
+(`core/tests/serviceTests.cpp:4704`: the 808 on a note, a render that sounds).
+
 ### DR-MIDI-3 Expression lanes (R-MIDI-3)
 A pattern carries expression lanes beside its notes (`model/Project.h` `ExprPoint`; `#expr lane= at= value=` in the
 `.slp`, docs/project-format.md §8): `bend` −1 … +1, `cc0` … `cc127` 0 … 1 (`mod` is `cc1`), linear between points,
