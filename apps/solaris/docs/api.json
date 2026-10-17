@@ -268,15 +268,16 @@
     },
     {
       "verb": "device add",
-      "usage": "device add <ch|master> [--type <registry type>] [--plugin <id|name>] [--at <index>] [--preset <name>]",
+      "usage": "device add <ch|master> [--type <registry type>] [--plugin <id|name>] [--at <index>] [--preset <name>] [--sample <file>]",
       "args": "<ch|master>",
       "flags": [
         "type=<registry type>",
         "plugin=<id|name>",
         "at=<index>",
-        "preset=<name>"
+        "preset=<name>",
+        "sample=<file>"
       ],
-      "summary": "Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an instrument strip. --plugin <id|name> (instead of --type) inserts another maker's effect plugin, from `plugins list`: it plays in a process of its own, its parameters are p<id>, numbers 0 … 1 (R-VST-6).",
+      "summary": "Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an instrument strip. --plugin <id|name> (instead of --type) inserts another maker's effect plugin, from `plugins list`: it plays in a process of its own, its parameters are p<id>, numbers 0 … 1 (R-VST-6). --sample <file> gives a device that plays a recording its file in the same line — a convolution reverb's impulse response (R-FX-14); `<dv>.sample` changes it after.",
       "requirement": "R-FX-5"
     },
     {
@@ -6559,6 +6560,34 @@
             "on"
           ],
           "default": "off"
+        }
+      ]
+    },
+    {
+      "type": "convolution",
+      "label": "Convolution Reverb",
+      "kind": "effect",
+      "summary": "A recorded room: an impulse response (a sample) convolved with the sound, its latency reported.",
+      "params": [
+        {
+          "name": "mix",
+          "label": "Mix",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.3,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "level",
+          "label": "Level",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
         }
       ]
     },

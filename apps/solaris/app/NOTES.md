@@ -115,7 +115,7 @@ helpers it borrows.
 | Instrument window › a switch's key | `set <dv>.<param>=<choice>` — its light slides there; a screen morphs through the shapes between |
 | Device window › a row, right-click › Create Automation · Formula… · Clear Binding · Reset to Default · Copy Address · Copy Value · Copy as Formula | `auto create <dv>.<param>` · cosmo's field → `set <dv>.<param>="=<typed>"` · `bind clear <dv>.<param>` · `set <dv>.<param>=<default>` · the host's clipboard (`dv_1.filter.cutoff` · `900 Hz` · `=dv_1.filter.cutoff`; a choice: no binding items, no "as Formula") — the SAME menu as the dock's numbers (`ParamMenu`) |
 | Device window › On/Bypassed · Remove | `set <dv>.bypass=…` · `device remove <dv>` |
-| Device window (a sampler) › a browser sample dropped on it | `set <dv>.sample="<file>"` — ONE line; the window lights while it hovers |
+| Device window (a sampler, a convolution reverb) › a browser sample dropped on it | `set <dv>.sample="<file>"` — ONE line; the window lights while it hovers (any type that takes a sample: its response, for the reverb) |
 | Device window (an instrument) › Piano Roll | its strip's pattern's roll (a menu when several); none yet → `clip add --strip <ch>`, then its roll |
 | Browser › a click on a sample · on the one being heard | `audition "<file>"` · `audition stop` (a double-click still places it) |
 | Settings › Playback › Preview level | `settings set auditionLevel=<dB>` |

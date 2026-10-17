@@ -119,10 +119,12 @@ namespace solaris
              "to a strip (R-MIX-15).", "R-MIX-5"},
             {K::SendDelete, "send delete", "<sd>", 1, 1, {}, "Remove a send.", "R-MIX-5"},
 
-            {K::DeviceAdd, "device add", "<ch|master>", 1, 1, {"type=<registry type>", "plugin=<id|name>", "at=<index>", "preset=<name>"},
+            {K::DeviceAdd, "device add", "<ch|master>", 1, 1, {"type=<registry type>", "plugin=<id|name>", "at=<index>", "preset=<name>", "sample=<file>"},
              "Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an "
              "instrument strip. --plugin <id|name> (instead of --type) inserts another maker's effect plugin, from "
-             "`plugins list`: it plays in a process of its own, its parameters are p<id>, numbers 0 … 1 (R-VST-6).", "R-FX-5"},
+             "`plugins list`: it plays in a process of its own, its parameters are p<id>, numbers 0 … 1 (R-VST-6). "
+             "--sample <file> gives a device that plays a recording its file in the same line — a convolution "
+             "reverb's impulse response (R-FX-14); `<dv>.sample` changes it after.", "R-FX-5"},
             {K::DeviceRemove, "device remove", "<dv>", 1, 1, {}, "Remove a device from its rack. An instrument strip keeps its instrument.", "R-FX-5"},
             {K::DeviceMove, "device move", "<dv>", 1, 1, {"to=<index>"}, "Move a device within its rack.", "R-FX-5"},
 

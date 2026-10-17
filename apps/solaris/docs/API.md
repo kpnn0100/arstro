@@ -36,7 +36,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `route <ch> [--to <ch\|master\|port>]` | Set a strip's main output: a strip LATER in processing order (a later mixer, or after it on its own), master, or an output port. | R-MIX-4 |
 | `send add <ch> [--to <ch\|master\|port>] [--gain <dB>] [--pre] [--sidechain]` | Add a send (post-fader unless --pre). Same forward-only rule as `route`. With --sidechain it is a KEY: it feeds the target's compressors' detectors (their Sidechain switch), not its input, and goes to a strip (R-MIX-15). | R-MIX-5 |
 | `send delete <sd>` | Remove a send. | R-MIX-5 |
-| `device add <ch\|master> [--type <registry type>] [--plugin <id\|name>] [--at <index>] [--preset <name>]` | Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an instrument strip. --plugin <id\|name> (instead of --type) inserts another maker's effect plugin, from `plugins list`: it plays in a process of its own, its parameters are p<id>, numbers 0 … 1 (R-VST-6). | R-FX-5 |
+| `device add <ch\|master> [--type <registry type>] [--plugin <id\|name>] [--at <index>] [--preset <name>] [--sample <file>]` | Insert a DSP registry device into a rack (default: at the end). An instrument goes only first on an instrument strip. --plugin <id\|name> (instead of --type) inserts another maker's effect plugin, from `plugins list`: it plays in a process of its own, its parameters are p<id>, numbers 0 … 1 (R-VST-6). --sample <file> gives a device that plays a recording its file in the same line — a convolution reverb's impulse response (R-FX-14); `<dv>.sample` changes it after. | R-FX-5 |
 | `device remove <dv>` | Remove a device from its rack. An instrument strip keeps its instrument. | R-FX-5 |
 | `device move <dv> [--to <index>]` | Move a device within its rack. | R-FX-5 |
 | `lane add [name] [--strip <ch>]` | Add a timeline lane at the bottom. With --strip <instrument>: that instrument's TRACK — what is put on it plays through it, and it shows the strip's name until given its own (R-LANE-3). | R-LANE-1 |
@@ -1004,6 +1004,15 @@ A gate and a downward expander: below its threshold turned down by the ratio, he
 | `hold` | 0.0 … 2000.0 ms | 20.0 ms |
 | `release` | 1.0 … 5000.0 ms | 100.0 ms |
 | `sidechain` | off · on | off |
+
+### `convolution` — Convolution Reverb (effect)
+
+A recorded room: an impulse response (a sample) convolved with the sound, its latency reported.
+
+| parameter | range | default |
+|---|---|---|
+| `mix` | 0.0 … 1.0 | 0.3 |
+| `level` | -24.0 … 12.0 dB | 0.0 dB |
 
 ### `imager` — Imager (effect)
 

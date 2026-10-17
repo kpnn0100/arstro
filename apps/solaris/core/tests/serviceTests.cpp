@@ -4821,8 +4821,44 @@ static void test_every_effect_drops_as_one_line_and_passes_sound()
         assert(finite && (peak > 0.001f || t.takesKey));
         ++added;
     }
-    assert(added >= 17); // the eight before N34; multiband, gate, transient, de-esser, saturator, bitcrusher, phaser, flanger, imager
+    assert(added >= 18); // the eight before N34; multiband, gate, transient, de-esser, saturator, bitcrusher, phaser, flanger, imager, convolution
     pass("every effect (R-FX-6…17, law 1): each the DSP library's registry describes drops onto a strip as one line and passes sound, with no code here");
+}
+
+static void test_a_convolution_reverb_takes_its_response()
+{
+    // R-FX-14: the DSP library's "convolution" dropped with its impulse response in ONE line (`device add --sample`);
+    // a response of one impulse leaves the song as it sounded, to float precision, at any mix — the device's 256
+    // samples of latency compensated (R-MIX-17) with no code here; its file the song's (`<dv>.sample`); refusals
+    const std::string dir = scratch();
+    Run r;
+    r.ok("project new " + freshSong("conv") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");
+    r.ok("notes add pt_1 \"C4@0:1 E4@1:1 G4@2:2\"");
+    const std::string dryOut = dir + "/conv-dry.wav", wetOut = dir + "/conv-wet.wav", ir = dir + "/ir.wav";
+    r.ok("render --out " + dryOut + " --to 4 --bits 32f");
+    std::vector<float> one(64, 0.0f);
+    one[0] = 1.0f;
+    r.fake.written[ir] = {one, one}; // the fake host decodes a file it wrote as what it wrote: an impulse
+    assert(r.ok("device add ch_2 --type convolution --sample " + ir) == "dv_2\n");
+    r.ok("set dv_2.mix=0.6");
+    assert(contains(r.ok("get dv_2.sample"), "ir.wav"));
+    r.ok("render --out " + wetOut + " --to 4 --bits 32f");
+    const auto &A = r.fake.written[dryOut], &B = r.fake.written[wetOut];
+    assert(A.size() == B.size() && A[0].size() == B[0].size());
+    double worst = 0, peak = 0;
+    for (size_t c = 0; c < A.size(); ++c)
+        for (size_t i = 0; i < A[c].size(); ++i)
+        {
+            worst = std::max(worst, (double)std::fabs(A[c][i] - B[c][i]));
+            peak = std::max(peak, (double)std::fabs(A[c][i]));
+        }
+    std::printf("    an impulse response: the song %.2g from itself (its peak %.3f)\n", worst, peak);
+    assert(peak > 0.05 && worst < 1e-6);
+    // refusals: a type that plays no sample; a file that is not audio
+    assert(contains(r.no("device add ch_2 --type reverb --sample " + ir), "`reverb` plays no sample"));
+    assert(contains(r.no("device add ch_2 --type convolution --sample " + dir + "/missing.wav"), "cannot read"));
+    pass("a convolution reverb (R-FX-14): dropped with its impulse response in one line; an impulse leaves the song as it was — its latency compensated with no code here; its file the song's; refusals");
 }
 
 static void test_freeze_and_bounce()
@@ -6198,6 +6234,7 @@ int main()
     test_every_instrument_drops_as_one_line_and_sounds();
     test_a_multisample_reads_its_sfz();
     test_every_effect_drops_as_one_line_and_passes_sound();
+    test_a_convolution_reverb_takes_its_response();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

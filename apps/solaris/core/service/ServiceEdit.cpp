@@ -476,6 +476,13 @@ namespace solaris
             const std::string id = p.nextId("dv");
             if (!c.has("plugin")) made = DeviceNode{id, type, false, {}, {}};
             made.id = id;
+            if (c.has("sample"))
+            {
+                // R-FX-14: a device that plays a recording, dropped with its file in one line (an impulse response)
+                if (!t) { err = "--sample is for a registry device that plays one (convolution), not a plugin"; return false; }
+                if (!t->takesSample) { err = "`" + type + "` plays no sample — --sample is for one that does (convolution)"; return false; }
+                if (!resolveSample(c.flag("sample"), made.sample, err, t->takesDefinition)) return false;
+            }
             r->devices.insert(r->devices.begin() + at, made);
             changed("device.added", id);
             if (c.has("preset") && !applyPreset(id, c.flag("preset"), err)) return false; // R-PRESET-1: dropped with its preset
