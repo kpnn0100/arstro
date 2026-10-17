@@ -432,6 +432,7 @@ namespace solaris
             return true;
         }
         if (c.kind == K::StripFreeze && !s->frozen.empty()) { err = id + " is frozen already — `strip unfreeze " + id + "` first"; return false; }
+        if (s->kind == "vca") { err = id + " is a VCA — it carries no sound: nothing to freeze or bounce (R-MIX-19)"; return false; }
         // its sound must be its own: nothing routed, sent or keyed into it
         for (const auto &o : p.strips)
             if (o.out == id) { err = id + " is fed by " + o.id + " (" + o.name + ") — only a strip nothing feeds has a sound of its own to render"; return false; }

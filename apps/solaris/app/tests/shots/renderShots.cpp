@@ -421,6 +421,15 @@ namespace
                  r.app->project().windows().openDevice(dv);
                  r.settle();
              }},
+            {"mixer-vca", // R-MIX-19: a VCA "Synths" at −6 dB moving two synth lines — its card names them, no meter; theirs say "VCA Synths −6.0"
+             [](sltest::Rig &r) {
+                 r.cmd("project new " + r.song("Groups") + ".slp --bpm 120");
+                 r.cmd("clip add --instrument synth --at 0 --length 4");
+                 r.cmd("clip add --instrument synth --at 0 --length 4");
+                 r.cmd("strip add --kind vca --name Synths");
+                 r.cmd("set ch_2.vca=Synths ch_3.vca=Synths ch_4.gain=-6");
+                 r.settle();
+             }},
             {"tuner-window", // R-FX-17: a tuner's window while a synth holds A4 — the note large, the needle in tune, the rest small
              [](sltest::Rig &r) {
                  r.cmd("project new " + r.song("Tune") + ".slp --bpm 120");

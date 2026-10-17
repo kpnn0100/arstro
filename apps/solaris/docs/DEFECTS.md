@@ -6,6 +6,17 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Open
 
+### D-21 The keyboard-recording test's held note once fell outside 0.25 … 1.0 beats again (D-11's widened window)
+- **Found:** 2026-10-17, N35 part 3: one run of `solaris_service` alone (load ~2.5–3) failed
+  `test_record_the_keyboard_into_a_clip` at `pt->notes[0].length > 0.25 && pt->notes[0].length < 1.0`
+  (core/tests/serviceTests.cpp:2399); three runs straight after, green. Nothing in N35 touches recording.
+- **Suspected cause:** as D-11 — a key is stamped where the AUDIO thread drains it, and the test thread's sleeps between
+  the press and the release are wall-clock; a descheduled test thread (or audio thread) stretches or squeezes the
+  held length past the window D-11 widened it to. The value was not printed, so which side it fell is not known.
+- **Recommended fix:** stamp the press and the release on the device's own clock (wait for frames between them —
+  `waitFrames` — instead of sleeping), so the held length is counted in audio, not in scheduling; print the length
+  on failure.
+
 ### D-17 The service tests' fakes race their own threads (ThreadSanitizer; the product is clean)
 - **Found:** 2026-10-17, the TSan run of the service tests made to check N32's followers (the follower's own race —
   its target read off its thread — was fixed there). Five reports remain, all inside test fakes: (1, 2) the keyboard

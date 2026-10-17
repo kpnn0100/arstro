@@ -4295,6 +4295,69 @@ static void test_the_sample_library_in_the_browser()
     pass("the sample library in the browser (R-PRESET-3): a star one `sample favourite`, lit eased; Tag… typed one `sample tag`; Search samples… typed one `browse --search`, the list crossing to what it found, back by its first row; Favourites one `browse --favourites`; Remove tag one `sample untag`");
 }
 
+static void test_a_vca_in_the_dock()
+{
+    // R-MIX-19 (Round 13, part 3): "+ Line" offers a VCA (one line); a strip's menu "VCA ▸" — the song's VCAs — is one
+    // `set <ch>.vca=`; the member's tag fades in, its dB easing as the VCA moves (caught mid-tween); a VCA's card has no
+    // pan or route to press, and names whom it moves
+    sltest::Rig r("ui-vca", 1280, 800);
+    r.cmd("project new " + r.song("Vca") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");                // ch_2
+    r.settle();
+    auto &d = r.app->project().dock();
+    auto &menu = r.app->menu();
+    const std::string mx = r.svc->model().mixers[0].id;
+    r.click(world(d, d.addLineRect()));
+    r.settle();
+    int vca = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label == "VCA") vca = i;
+    assert(menu.isOpen() && vca == 2);
+    r.click(menu.itemRect(vca));
+    r.settle();
+    assert(sentLine(r, "strip add --kind vca --mixer " + mx));
+    std::string v;
+    for (const auto &st : r.svc->model().strips)
+        if (st.kind == "vca") v = st.id;
+    assert(!v.empty());
+    // ch_2's menu: VCA ▸ → the VCA, one line
+    const artboard::Rect card = world(d, d.cardRect("ch_2"));
+    r.click(card.x + 20.0, card.y + 16.0, 2);
+    r.settle();
+    int sub = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label.rfind("VCA", 0) == 0) sub = i;
+    assert(menu.isOpen() && sub >= 0);
+    r.click(menu.itemRect(sub));
+    r.settle();
+    assert(menu.isOpen() && menu.item(0).label == "VCA");
+    r.click(menu.itemRect(0));
+    r.frame();
+    r.frame();
+    assert(sentLine(r, "set ch_2.vca=" + v));
+    assert(d.vcaAmount("ch_2") > 0.0 && d.vcaAmount("ch_2") < 1.0); // the tag fading in
+    r.settle();
+    assert(d.vcaAmount("ch_2") == 1.0 && d.vcaDbShown("ch_2") == 0.0);
+    // the VCA moved from a shell: the member's tag eases to its dB
+    r.cmd("set " + v + ".gain=-6");
+    r.frame();
+    r.frame();
+    const double mid = d.vcaDbShown("ch_2");
+    assert(mid < 0.0 && mid > -6.0);
+    r.settle();
+    assert(d.vcaDbShown("ch_2") == -6.0);
+    // the VCA's card: no pan to drag, no route to press — nothing sent
+    const size_t before = r.sent.size();
+    const artboard::Rect vc = world(d, d.cardRect(v));
+    r.drag(vc.x + vc.w * 0.5, vc.y + 176.5, vc.x + vc.w * 0.8, vc.y + 176.5, 6); // where a pan would be (170 … 183 under the card top)
+    r.settle();
+    assert(r.sent.size() == before);
+    for (const auto &st : r.svc->model().strips)
+        if (st.id == v) assert(st.members == std::vector<std::string>{"ch_2"});
+    std::printf("    the member's VCA tag mid-ease at %.2f dB (to −6)\n", mid);
+    pass("a VCA in the dock (R-MIX-19): + Line › VCA one line; a strip's VCA ▸ one `set .vca=`; the member's tag fades in and its dB eases (mid-tween); the VCA's card has no pan or route to press");
+}
+
 static void test_a_tuners_window()
 {
     // R-FX-17 (Round 12, part 3): a tuner's window — a band under its header: the note large, a needle for the cents
@@ -4740,6 +4803,7 @@ int main()
     test_a_sample_dropped_on_a_sampler_loads_it();
     test_a_plugins_device_window();
     test_a_tuners_window();
+    test_a_vca_in_the_dock();
     test_midi_learn_in_the_window();
     test_a_surface_chosen_in_settings();
     test_the_cpu_in_the_song_bar();

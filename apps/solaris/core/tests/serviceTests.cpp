@@ -5016,6 +5016,7 @@ static void test_a_vca_moves_its_members()
     assert(contains(r.no("set ch_4.vca=ch_4"), "a VCA follows no VCA"));
     assert(contains(r.no("set ch_4.gain=\"=-3\""), "a VCA's gain is a value for now"));
     assert(contains(r.no("auto create ch_4.gain"), "a VCA's gain is not automated yet"));
+    assert(contains(r.no("strip freeze ch_4"), "nothing to freeze or bounce") && contains(r.no("strip bounce ch_4"), "nothing to freeze or bounce"));
     assert(contains(r.no("clip add --strip ch_4 --at 0 --length 1"), "ch_4"));
     // live: a member's OWN fader moved while playing carries its VCA's dB too (it once sent its own gain alone) —
     // heard as loud as the same settings rendered

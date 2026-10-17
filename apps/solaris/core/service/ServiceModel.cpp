@@ -242,7 +242,7 @@ namespace solaris
             sm.pan = s->pan;
             sm.mute = s->mute;
             sm.solo = s->solo;
-            sm.audible = !silent.count(s->id);
+            sm.audible = s->kind == "vca" ? !s->mute : !silent.count(s->id); // R-MIX-19: a VCA dims only for its own mute
             sm.clip = mClipLatch.count(s->id) > 0; // R-METER-2: a latch outlives a stop and an edit
             for (const auto &sd : p.sends)
                 if (sd.from == s->id)

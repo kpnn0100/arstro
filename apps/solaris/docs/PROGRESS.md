@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N35 — Group / VCA faders** (R-MIX-19: a VCA moves the gain of the strips assigned to it, adding its dB; N34 — twelve DSP effects, the tuner's readings carried to the model and its window — is built), then N36… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N36 — Phase invert, width, mono check, solo-safe** (R-MIX-20: per-strip tools; N35 — group / VCA faders — is built), then N37… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -599,11 +599,12 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       DSP 6c07198: YIN and a device's readings). Part 2: the readings carried up — engine, Player ring, model, `get`
       (DR-FX-17). Part 3: its window — the note, an eased needle, shots. N34 DONE (twelve effects; D-18, D-19, D-20 on
       the way).
-- [~] **N35** Group / VCA faders (R-MIX-19). Round 13 (e580437).
+- [x] **N35** Group / VCA faders (R-MIX-19). Round 13 (e580437).
       Part 1: a strip of kind vca; membership; the compile (its dB added, its mute and solo its members', a bound
       member's offset); the grammar and the refusals; a member's live fader now carries its VCA's dB (DR-MIX-19).
       Part 2: a VCA's fader, mute and solo live with no rebuild (a formula member: one); a VCA-muted member keys
-      nothing; strips[].vca / vcaGain / members; transport.swaps. Next: part 3 — the dock.
+      nothing; strips[].vca / vcaGain / members; transport.swaps. Part 3: the dock — a VCA's card, a member's eased
+      tag, "+ Line" › VCA, a strip's VCA ▸, shot mixer-vca. N35 DONE.
 - [ ] **N36** Phase invert, width, mono check, solo-safe (R-MIX-20).
 - [ ] **N37** Versions of a song (R-VER-1…4).
 - [ ] **N38** Collect and save; relink (R-COLLECT-1).

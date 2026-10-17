@@ -10,6 +10,8 @@
  *  solo silences dims. Strips feeding the same bus are grouped under a header naming it, and a
  *  click FOLDS the group into that header (R-MIX-12) — thirty one-shots become one column.
  *
+ *  A VCA (R-MIX-19) is a card with a fader, M and S and no sound — its members named where a rack would be, no
+ *  meter, pan, sends or route; a member says "VCA <name> <dB>" over its fader, eased as the VCA moves.
  *  The Matrix (R-MIX-9): a row per strip, grouped by mixer; the columns are the service's
  *  (`matrix.columns`, the same `matrix print` prints): every strip some strip may or does reach, the
  *  master and every output port — so a route or a key to an instrument or a same-mixer strip has its
@@ -98,6 +100,8 @@ namespace solaris_ui
         double armAmount(const std::string &id) const;
         /** R-PERF-3: how frozen a strip is DRAWN (eased 0 … 1): its rack receding under the "FROZEN" pill. */
         double frozenAmount(const std::string &id) const;
+        double vcaAmount(const std::string &id) const;   // R-MIX-19: a member's VCA tag, LIVE (0 none … 1 shown)
+        double vcaDbShown(const std::string &id) const;  // … the dB it shows, LIVE (eased as the VCA moves)
         double muteAmount(const std::string &id) const;
         artboard::Rect outRect(const std::string &id) const;
         artboard::Rect chipRect(const std::string &id, int slot) const; // the slot's chip (a device, "+N", "+ Effect")
@@ -154,6 +158,10 @@ namespace solaris_ui
         {
             artboard::AnimatedProperty fader{0.0}, pan{0.0}, mute{0.0}, solo{0.0}, dim{0.0}, colT{1.0}, arm{0.0}; // arm: R-REC-1
             artboard::AnimatedProperty frozen{0.0}; // R-PERF-3
+            artboard::AnimatedProperty vca{0.0}, vcaDb{0.0}; // R-MIX-19: a member's tag — there, and the dB its VCA adds
+            std::string vcaName;
+            bool vcaLast = false, vcaInit = false;
+            double vcaDbLast = 0.0;
             artboard::AnimatedProperty meter[2] = {artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
             artboard::AnimatedProperty rms[2] = {artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};  // R-METER-2
             artboard::AnimatedProperty hold[2] = {artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
@@ -240,7 +248,7 @@ namespace solaris_ui
         void paintHeader(artboard::IRenderTarget &t, const std::string &bus, const std::string &mixer, double x, double w, double alpha) const;
         void paintMaster(artboard::IRenderTarget &t, double alpha) const;
         void paintMatrix(artboard::IRenderTarget &t, double alpha) const;
-        void paintFader(artboard::IRenderTarget &t, const artboard::Rect &zone, const Live &l, double alpha) const;
+        void paintFader(artboard::IRenderTarget &t, const artboard::Rect &zone, const Live &l, double alpha, bool meters = true) const;
 
         solaris::AppModel mModel;
         std::vector<solaris::MixerModel> mMixers;

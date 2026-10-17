@@ -416,6 +416,18 @@ namespace solaris_ui
         const Live *l = liveOf(id);
         return l ? l->arm.value() : 0.0;
     }
+    double MixerDock::vcaAmount(const std::string &id) const
+    {
+        const Live *l = liveOf(id);
+        return l ? l->vca.value() : 0.0;
+    }
+
+    double MixerDock::vcaDbShown(const std::string &id) const
+    {
+        const Live *l = liveOf(id);
+        return l ? l->vcaDb.value() : 0.0;
+    }
+
     double MixerDock::frozenAmount(const std::string &id) const
     {
         const Live *l = liveOf(id);
@@ -648,6 +660,16 @@ namespace solaris_ui
                 l.arm.animateTo(arm ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs);
                 l.armLast = arm;
             }
+            // R-MIX-19: a member's VCA — its tag fades in and out, the dB it adds eases as the VCA moves
+            {
+                const solaris::StripModel *vs = sm && !sm->vca.empty() ? strip(sm->vca) : nullptr;
+                const bool member = vs != nullptr;
+                const double vdb = member ? sm->vcaGain : l.vcaDbLast;
+                if (member) l.vcaName = vs->name;
+                if (!l.vcaInit) { l.vca.set(member ? 1.0 : 0.0); l.vcaDb.set(vdb); l.vcaLast = member; l.vcaDbLast = vdb; l.vcaInit = true; }
+                if (member != l.vcaLast) { l.vca.animateTo(member ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.vcaLast = member; }
+                if (vdb != l.vcaDbLast) { l.vcaDb.animateTo(vdb, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs); l.vcaDbLast = vdb; }
+            }
             if (frozen != l.frozenLast) // R-PERF-3
             {
                 l.frozen.animateTo(frozen ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
@@ -698,6 +720,8 @@ namespace solaris_ui
             l.solo.update(nowMs);
             l.arm.update(nowMs);
             l.frozen.update(nowMs);
+            l.vca.update(nowMs);
+            l.vcaDb.update(nowMs);
             l.dim.update(nowMs);
             l.colT.update(nowMs);
         };
@@ -898,17 +922,19 @@ namespace solaris_ui
                 Geo g = geoOf(cx, cw, bodyTop(), bodyH());
                 if (armable(strip(c.id))) armRow(g); // R-REC-1: M | S | R
                 h.part = Part::Header;
-                for (int k = 0; k < chipSlots(c.id); ++k)
+                const solaris::StripModel *cs = strip(c.id);
+                const bool vca = cs && cs->kind == "vca"; // R-MIX-19: no rack, sends, pan or route to press
+                for (int k = 0; k < chipSlots(c.id) && !vca; ++k)
                     if (g.chips[k].contains(p)) { h.part = Part::Chip; h.index = k; }
-                for (int k = 0; k < 2; ++k)
+                for (int k = 0; k < 2 && !vca; ++k)
                     if (g.sends[k].contains(p)) { h.part = Part::Send; h.index = k; }
-                if (g.pan.contains(p)) h.part = Part::Pan;
+                if (g.pan.contains(p) && !vca) h.part = Part::Pan;
                 if (g.zone.contains(p)) h.part = Part::Fader;
                 if (clipHit(g.clip).contains(p)) h.part = Part::Clip;
                 if (g.mute.contains(p)) h.part = Part::Mute;
                 if (g.solo.contains(p)) h.part = Part::Solo;
                 if (g.arm.contains(p)) h.part = Part::Arm;
-                if (g.out.contains(p)) h.part = Part::Out;
+                if (g.out.contains(p) && !vca) h.part = Part::Out;
                 return h;
             }
             cx += cw;
@@ -935,7 +961,8 @@ namespace solaris_ui
         const std::string mx = mMixers[(size_t)mTab].id;
         std::vector<cosmo_v2::ContextMenu::Item> items = {
             {"Audio line", [this, mx] { send("strip add --kind audio --mixer " + mx); }},
-            {"Bus", [this, mx] { send("strip add --kind bus --mixer " + mx); }}};
+            {"Bus", [this, mx] { send("strip add --kind bus --mixer " + mx); }},
+            {"VCA", [this, mx] { send("strip add --kind vca --mixer " + mx); }}}; // R-MIX-19: a fader for others
         for (const auto &t : mModel.deviceTypes)
             if (t.kind == "instrument")
             {
@@ -1271,9 +1298,25 @@ namespace solaris_ui
                 }
                 // R-PERF-3: its own sound frozen into it, or bounced onto a new strip — only a strip nothing feeds (the
                 // service's fromStrips: outputs, sends and keys); a frozen one can always be unfrozen
-                if (!s.frozen.empty()) items.push_back({"Unfreeze", [this, id] { send("strip unfreeze " + id); }});
-                else if (s.fromStrips.empty()) items.push_back({"Freeze", [this, id] { send("strip freeze " + id); }});
-                if (s.fromStrips.empty()) items.push_back({"Bounce to a new strip", [this, id] { send("strip bounce " + id); }});
+                // R-MIX-19: the VCA it follows — None, or any VCA of the song (one line); a VCA follows none
+                if (s.kind != "vca")
+                {
+                    std::vector<cosmo_v2::ContextMenu::Item> vcas;
+                    for (const auto &o : mModel.strips)
+                        if (o.kind == "vca")
+                        {
+                            const std::string oid = o.id;
+                            vcas.push_back({o.name + (s.vca == oid ? "  \xC2\xB7 now" : ""), [this, id, oid] { send("set " + id + ".vca=" + oid); }});
+                        }
+                    if (!s.vca.empty()) vcas.push_back({"None", [this, id] { send("set " + id + ".vca=none"); }});
+                    if (!vcas.empty()) items.push_back({"VCA \xE2\x96\xB8", [this, vcas, world] { if (onMenu) onMenu(vcas, world); }});
+                }
+                if (s.kind != "vca") // a VCA carries no sound: nothing to freeze or bounce
+                {
+                    if (!s.frozen.empty()) items.push_back({"Unfreeze", [this, id] { send("strip unfreeze " + id); }});
+                    else if (s.fromStrips.empty()) items.push_back({"Freeze", [this, id] { send("strip freeze " + id); }});
+                    if (s.fromStrips.empty()) items.push_back({"Bounce to a new strip", [this, id] { send("strip bounce " + id); }});
+                }
                 items.push_back({"Delete strip", [this, id] { send("strip delete " + id); }});
                 onMenu(std::move(items), world);
             }
@@ -1310,7 +1353,7 @@ namespace solaris_ui
         text(tg.to, k);
     }
 
-    void MixerDock::paintFader(IRenderTarget &t, const Rect &z, const Live &l, double a) const
+    void MixerDock::paintFader(IRenderTarget &t, const Rect &z, const Live &l, double a, bool meters) const
     {
         const double trackX = z.x + z.w * 0.36, top = z.y + 6.0, bottom = z.bottom() - 6.0, span = bottom - top;
         // the scale: 0 dB a little brighter
@@ -1325,7 +1368,7 @@ namespace solaris_ui
         // the held peak a line (R-METER-2)
         const double y12 = (48.0 / 66.0), y3 = (57.0 / 66.0);
         auto zoneColour = [&](double v) { return v >= y3 ? surface::meterHigh() : v >= y12 ? surface::meterMid() : surface::meterLow(); };
-        for (int c = 0; c < 2; ++c)
+        for (int c = 0; c < 2 && meters; ++c) // a VCA carries no sound: no meter (R-MIX-19)
         {
             const double mx = z.x + z.w * 0.62 + c * 5.0;
             drawRoundedRect(t, Rect{mx, top, 3.0, span}, radius::hairline(), Paint::filled(fade(palette::whiteAlpha(0.05), a)));
@@ -1349,7 +1392,7 @@ namespace solaris_ui
         // the clip light: a latch, lit red; a click puts every one out (`meters clear`)
         const double lit = l.clip.value();
         const Rect cl{z.x + z.w * 0.62, z.y + 0.5, 8.0, 3.25};
-        drawRoundedRect(t, cl, radius::hairline(), Paint::filled(fade(lerpColor(palette::whiteAlpha(0.08), surface::meterHigh(), lit), a)));
+        if (meters) drawRoundedRect(t, cl, radius::hairline(), Paint::filled(fade(lerpColor(palette::whiteAlpha(0.08), surface::meterHigh(), lit), a)));
         // the thumb
         const double ty = bottom - l.fader.value() * span;
         drawRoundedRect(t, Rect{trackX - 10.0, ty - 4.5, 20.0, 9.0}, radius::control(), Paint::filledStroked(fade(palette::secondary(), a), fade(palette::foreground(), 0.8 * a), 1.0));
@@ -1377,13 +1420,32 @@ namespace solaris_ui
         const double ids = idsShown(); // R-UI-11: View › Show IDs, eased
         drawNameWithId(t, s->name, id, x + 6.5, by + 21.0, w - 13.0, 11.0, font::sansMedium(), palette::foreground(), ids, ca);
         std::string sub = s->kind;
+        const bool isVca = s->kind == "vca"; // R-MIX-19: a fader for others — no sound, so no rack, pan, meter or route
         if (s->kind == "audio" || s->kind == "instrument") sub += " \xC2\xB7 " + std::to_string(s->clipCount) + (s->clipCount == 1 ? " clip" : " clips");
+        else if (isVca) sub = "VCA \xC2\xB7 moves " + std::to_string(s->members.size());
         else sub += " \xC2\xB7 fed by " + std::to_string(s->fromStrips.size());
         t.setFill(fade(palette::mutedForeground(), ca));
         t.drawText(textfit::ellipsize(t, sub, w - 13.0, 9.0, font::sans()), x + 6.5, by + 33.0, 9.0, font::sans());
 
+        if (isVca)
+        {
+            // where a rack would be: whom it moves, a line each (the last says how many more)
+            for (int k = 0; k < kSlots && k < (int)s->members.size(); ++k)
+            {
+                const Rect r = g.chips[k];
+                const bool more = k == kSlots - 1 && (int)s->members.size() > kSlots;
+                const solaris::StripModel *ms = strip(s->members[(size_t)k]);
+                const std::string label = more ? "+" + std::to_string(s->members.size() - (kSlots - 1)) + " more" : ms ? ms->name : s->members[(size_t)k];
+                t.setFill(fade(palette::secondaryForeground(), ca));
+                t.drawText(textfit::ellipsize(t, label, r.w - 10.0, 10.0, font::sans()), r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
+            }
+            paintFader(t, g.zone, *l, ca, false);
+            const std::string rv = dbText(faderDb(l->fader.value()));
+            t.setFill(fade(palette::secondaryForeground(), ca));
+            t.drawText(rv, x + (w - t.measureText(rv, 10.0, font::mono())) * 0.5, g.readoutY, 10.0, font::mono());
+        }
         // the rack — frozen, it recedes (its devices idle) under a pill (R-PERF-3)
-        const int n = (int)s->devices.size(), slots = chipSlots(id);
+        const int n = isVca ? 0 : (int)s->devices.size(), slots = isVca ? 0 : chipSlots(id);
         const double fz = l->frozen.value(), ra = ca * (1.0 - 0.65 * fz); // its devices idle: they recede
         for (int k = 0; k < slots; ++k)
         {
@@ -1458,6 +1520,7 @@ namespace solaris_ui
             }
         }
         // pan: from the centre
+        if (!isVca)
         {
             const Rect r = g.pan;
             const double cy = r.y + r.h * 0.5, cx = r.x + r.w * 0.5, px = cx + l->pan.value() * r.w * 0.5;
@@ -1473,11 +1536,25 @@ namespace solaris_ui
                 t.drawText("\xC6\x92", r.right() + 2.0, textfit::baseline(cy, 9.0), 9.0, font::mono());
             }
         }
-        paintFader(t, g.zone, *l, ca);
-        paintTag(t, id + ".gain", Rect{x + 6.5, g.pan.bottom() + 2.0, w - 13.0, 12.0}, ca);
-        const std::string rd = dbText(faderDb(l->fader.value()));
-        t.setFill(fade(lerpColor(palette::secondaryForeground(), palette::primary(), tagAmount(id + ".gain")), ca));
-        t.drawText(rd, x + (w - t.measureText(rd, 10.0, font::mono())) * 0.5, g.readoutY, 10.0, font::mono());
+        if (!isVca)
+        {
+            paintFader(t, g.zone, *l, ca);
+            paintTag(t, id + ".gain", Rect{x + 6.5, g.pan.bottom() + 2.0, w - 13.0, 12.0}, ca);
+            const std::string rd = dbText(faderDb(l->fader.value()));
+            t.setFill(fade(lerpColor(palette::secondaryForeground(), palette::primary(), tagAmount(id + ".gain")), ca));
+            t.drawText(rd, x + (w - t.measureText(rd, 10.0, font::mono())) * 0.5, g.readoutY, 10.0, font::mono());
+        }
+        // R-MIX-19: a member says whose fader also moves it, and what that adds — eased as the VCA moves; beside a bound
+        // gain's tag it takes the right half
+        if (const double va = l->vca.value(); va > 0.001)
+        {
+            const double bound = tagAmount(id + ".gain"), room = (w - 13.0) * (1.0 - 0.5 * bound);
+            const std::string vt = "VCA " + l->vcaName + " " + dbText(l->vcaDb.value());
+            const std::string fit = textfit::ellipsize(t, vt, room, 9.0, font::sans());
+            const double left = x + 6.5, right = x + w - 6.5 - t.measureText(fit, 9.0, font::sans());
+            t.setFill(fade(palette::secondaryForeground(), va * ca));
+            t.drawText(fit, left + (right - left) * bound, textfit::baseline(g.pan.bottom() + 8.0, 9.0), 9.0, font::sans()); // slides as the tag eases in
+        }
         // mute and solo: the fill eases whoever changed them; solo is amber, never the accent
         auto toggle = [&](const Rect &r, const char *label, double on, const Color &onCol, int part) {
             const double hv = mHover.amount(hoverId(part, id + ">", -1));
@@ -1489,6 +1566,7 @@ namespace solaris_ui
         toggle(g.solo, "S", l->solo.value(), surface::solo(), (int)Part::Solo);
         if (g.arm.w > 0) toggle(g.arm, "R", l->arm.value(), palette::destructive(), (int)Part::Arm); // R-REC-1: armed, red
         // where it goes
+        if (!isVca)
         {
             const Rect r = g.out;
             const double hv = mHover.amount(hoverId((int)Part::Out, id + ">", -1));
