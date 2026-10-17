@@ -602,7 +602,8 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
 - [~] **N35** Group / VCA faders (R-MIX-19). Round 13 (e580437).
       Part 1: a strip of kind vca; membership; the compile (its dB added, its mute and solo its members', a bound
       member's offset); the grammar and the refusals; a member's live fader now carries its VCA's dB (DR-MIX-19).
-      Next: part 2 — a VCA's fader live without a swap, the model's fields, the API.
+      Part 2: a VCA's fader, mute and solo live with no rebuild (a formula member: one); a VCA-muted member keys
+      nothing; strips[].vca / vcaGain / members; transport.swaps. Next: part 3 — the dock.
 - [ ] **N36** Phase invert, width, mono check, solo-safe (R-MIX-20).
 - [ ] **N37** Versions of a song (R-VER-1…4).
 - [ ] **N38** Collect and save; relink (R-COLLECT-1).

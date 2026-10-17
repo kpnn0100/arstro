@@ -5042,6 +5042,93 @@ static void test_a_vca_moves_its_members()
     pass("a VCA (R-MIX-19): its dB added to its members (as set on the member, sample-exact — a formula member too), its mute and solo theirs; the .slp; refusals for what it has not; deleted, its members their own (one undo)");
 }
 
+static void test_a_vca_muted_member_keys_nothing()
+{
+    // R-MIX-19 with R-MIX-15: a muted strip keys nothing — nor does one whose VCA is muted: a ghost kick keying a bass's
+    // compressor, under a muted VCA, renders sample-exact as the kick muted itself
+    const std::string dir = scratch();
+    Run r;
+    r.ok("project new " + freshSong("vca-key") + " --bpm 120");
+    r.ok("clip add --instrument drums --at 0 --length 4");                 // ch_2: the kick
+    for (int b = 0; b < 4; ++b) r.ok("note add pt_1 --pitch 36 --at " + std::to_string(b));
+    r.ok("clip add --src tone.wav --at 0 --length 4");                     // ch_3: the "bass"
+    r.ok("set ch_2.gain=-120");                                             // heard by the key only
+    r.ok("device add ch_3 --type compressor");
+    r.ok("set dv_2.threshold=-30 dv_2.ratio=4 dv_2.attack=1 dv_2.release=80 dv_2.sidechain=on");
+    r.ok("send add ch_2 --to ch_3 --sidechain --pre");
+    r.ok("strip add --kind vca");                                           // ch_4
+    r.ok("set ch_2.vca=ch_4 ch_4.mute=true");
+    int k = 0;
+    auto render = [&]() {
+        const std::string out = dir + "/vca-key-" + std::to_string(k++) + ".wav";
+        r.ok("render --out " + out + " --to 4 --bits 32f");
+        return r.fake.written[out];
+    };
+    const auto viaVca = render();
+    r.ok("set ch_4.mute=false ch_2.mute=true");
+    const auto own = render();
+    r.ok("set ch_2.mute=false");
+    const auto keyed = render();
+    double worst = 0, ducked = 0;
+    for (size_t i = 0; i < own[0].size(); ++i)
+    {
+        worst = std::max(worst, (double)std::fabs(viaVca[0][i] - own[0][i]));
+        ducked = std::max(ducked, (double)std::fabs(keyed[0][i] - own[0][i]));
+    }
+    assert(worst < 1e-6 && ducked > 0.01); // as muted itself — and the key, when it is not, does duck
+    pass("a VCA-muted member keys nothing (R-MIX-19, R-MIX-15): as the member muted itself, sample-exact");
+}
+
+static void test_a_vca_moves_its_members_live()
+{
+    // R-MIX-19 (Round 13, part 2): while playing, the VCA's fader moves its members at once — no engine rebuilt
+    // (transport.swaps stays); its mute too; a member whose gain is a formula has its offset in the engine's bind, so
+    // then the move rebuilds (swaps counts it). The model: whom a strip follows, the dB that adds, whom a VCA moves
+    const std::string dir = scratch();
+    Run r;
+    r.ok("project new " + freshSong("vca-live") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 8");                 // ch_2: a held note
+    r.ok("notes add pt_1 \"C3@0:8\"");
+    r.ok("clip add --instrument synth --at 0 --length 8");                 // ch_3, muted throughout
+    r.ok("notes add pt_2 \"G3@0:8\"");
+    r.ok("strip add --kind vca --name Synths");                            // ch_4
+    r.ok("set ch_2.vca=ch_4 ch_4.gain=-20 ch_3.mute=true");
+    for (const auto &st : r.svc.model().strips)
+    {
+        if (st.id == "ch_2") assert(st.vca == "ch_4" && st.vcaGain == -20.0);
+        if (st.id == "ch_3") assert(st.vca.empty() && st.vcaGain == 0.0);
+        if (st.id == "ch_4") assert(st.kind == "vca" && st.members == std::vector<std::string>{"ch_2"});
+    }
+    auto swaps = [&] { r.ok("wait 0.02"); return r.svc.model().transport.swaps; };
+    r.fake.capture->frames = 0;
+    r.ok("transport play --from 0");
+    waitFrames(r, 24000);
+    assert(swaps() == 0);
+    r.ok("set ch_4.gain=0");                                               // the VCA's fader: its member moves
+    long long mark = r.fake.capture->frames.load();
+    waitFrames(r, mark + 24000);
+    const float heard = peakOf(r.fake.capture->sink, 2 * (size_t)(mark + 4800), 2 * (size_t)(mark + 24000));
+    assert(swaps() == 0);                                                  // carried live: no engine rebuilt
+    r.ok("set ch_4.mute=true");                                            // its mute: its member silent, live
+    mark = r.fake.capture->frames.load();
+    waitFrames(r, mark + 12000);
+    const float muted = peakOf(r.fake.capture->sink, 2 * (size_t)(mark + 4800), 2 * (size_t)(mark + 12000));
+    assert(swaps() == 0);
+    r.ok("set ch_4.mute=false");
+    r.ok("set ch_2.gain=\"=-3\"");                                         // a formula: compiled (a rebuild)
+    const int before = swaps();
+    r.ok("set ch_4.gain=-6");                                              // its offset is the engine's bind: rebuilt
+    const int after = swaps();
+    r.ok("transport stop");
+    r.ok("set ch_2.gain=0 ch_4.gain=0 ch_4.mute=false");
+    const std::string out = dir + "/vca-live.wav";
+    r.ok("render --out " + out + " --to 2 --bits 32f");
+    const float should = peakOf(r.fake.written[out][0], 24000 + 4800, 48000);
+    std::printf("    the VCA to 0 dB live: heard %.4f (rendered %.4f), no rebuild; muted %.2g; a bound member: %d → %d rebuilds\n", heard, should, muted, before, after);
+    assert(should > 0.001f && std::fabs(20.0 * std::log10(heard / should)) < 1.5 && muted < 1e-4f && after == before + 1);
+    pass("a VCA live (R-MIX-19): its fader moves its member at once with no engine rebuilt (transport.swaps), its mute too; a bound member's offset rebuilds; the model says whom a strip follows, the dB it adds, whom a VCA moves");
+}
+
 static void test_freeze_and_bounce()
 {
     // R-PERF-3: a strip's own sound frozen beside the song and played instead — the song sounds as it did (to float
@@ -6419,6 +6506,8 @@ int main()
     test_a_vocoder_speaks_through_its_key();
     test_a_tuner_reads_while_playing();
     test_a_vca_moves_its_members();
+    test_a_vca_moves_its_members_live();
+    test_a_vca_muted_member_keys_nothing();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

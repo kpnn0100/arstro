@@ -384,6 +384,9 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].clip` | bool | reached full scale since `meters clear` — a latch *(not in `--stable`)* |
 | `strips[].cpu` | number | R-PERF-1: its share of the audio thread's time, of a block (0 stopped) *(not in `--stable`)* |
 | `strips[].frozen` | string | R-PERF-3: the file it plays instead of its own work ('' not frozen) — `strip freeze\|unfreeze` |
+| `strips[].vca` | string | R-MIX-19: the VCA (a strip of kind vca) it follows — `set <ch>.vca=…`; "" none |
+| `strips[].vcaGain` | number | R-MIX-19: the dB its VCA adds to its own gain (0 for none) |
+| `strips[].members` | string[] | R-MIX-19: on a VCA, the strips that follow it, in processing order |
 | `strips[].clipCount` | int | fed by: clips playing through it (R-MIX-8) |
 | `strips[].fromLanes` | string[] | fed by: the lanes those clips are drawn on |
 | `strips[].fromStrips` | string[] | fed by: strips whose output or a send lands here |
@@ -596,6 +599,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.recorded` | int | notes struck that will land (a count-in's are not) *(not in `--stable`)* |
 | `transport.xruns` | int | underruns since play (−1: this driver cannot count them) — R-DEV-5 *(not in `--stable`)* |
 | `transport.cpu` | number | R-PERF-1: the audio thread's load — a block's work over its duration, smoothed (0 stopped) *(not in `--stable`)* |
+| `transport.swaps` | number | engines built and swapped in since play — an edit the live path could not carry (a fader, a mute, a device value move with none) *(not in `--stable`)* |
 | `transport.cpuPeak` | number | … its worst single block in the last second, unsmoothed (over 1: a block that missed its deadline) *(not in `--stable`)* |
 | `transport.devices` | object[] | R-DEV-5: while playing, every device the song plays through — the clock first, then each FOLLOWER (a device a port is mapped to, held to the clock, R-DEV-1/2), and an armed input on another device; none stopped *(not in `--stable`)* |
 | `transport.devices[].id` | string | the device as the settings name it ('' = the system default) *(not in `--stable`)* |

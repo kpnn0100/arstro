@@ -270,6 +270,12 @@ namespace solaris
             sm.keyTargets = keyTargetsOf(p, *s);
             sm.input = s->input; // R-REC-1
             sm.frozen = s->frozen; // R-PERF-3
+            // R-MIX-19: whom it follows and what that adds; a VCA, whom it moves
+            if (const Strip *v = s->vca.empty() ? nullptr : p.strip(s->vca))
+                if (v->kind == "vca") { sm.vca = v->id; sm.vcaGain = v->gain; }
+            if (s->kind == "vca")
+                for (const Strip *o : p.stripsInOrder())
+                    if (o->vca == s->id) sm.members.push_back(o->id);
             sm.monitor = s->monitor;
             mModel.strips.push_back(sm);
         }

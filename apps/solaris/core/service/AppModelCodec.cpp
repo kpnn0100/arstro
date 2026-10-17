@@ -101,6 +101,9 @@ namespace solaris
             {"strips[].clip", "bool", "reached full scale since `meters clear` — a latch", false},
             {"strips[].cpu", "number", "R-PERF-1: its share of the audio thread's time, of a block (0 stopped)", false},
             {"strips[].frozen", "string", "R-PERF-3: the file it plays instead of its own work ('' not frozen) — `strip freeze|unfreeze`"},
+            {"strips[].vca", "string", "R-MIX-19: the VCA (a strip of kind vca) it follows — `set <ch>.vca=…`; \"\" none"},
+            {"strips[].vcaGain", "number", "R-MIX-19: the dB its VCA adds to its own gain (0 for none)"},
+            {"strips[].members", "string[]", "R-MIX-19: on a VCA, the strips that follow it, in processing order"},
             {"strips[].clipCount", "int", "fed by: clips playing through it (R-MIX-8)"},
             {"strips[].fromLanes", "string[]", "fed by: the lanes those clips are drawn on"},
             {"strips[].fromStrips", "string[]", "fed by: strips whose output or a send lands here"},
@@ -314,6 +317,7 @@ namespace solaris
             {"transport.recorded", "int", "notes struck that will land (a count-in's are not)", false},
             {"transport.xruns", "int", "underruns since play (−1: this driver cannot count them) — R-DEV-5", false},
             {"transport.cpu", "number", "R-PERF-1: the audio thread's load — a block's work over its duration, smoothed (0 stopped)", false},
+            {"transport.swaps", "number", "engines built and swapped in since play — an edit the live path could not carry (a fader, a mute, a device value move with none)", false},
             {"transport.cpuPeak", "number", "… its worst single block in the last second, unsmoothed (over 1: a block that missed its deadline)", false},
             {"transport.devices", "object[]", "R-DEV-5: while playing, every device the song plays through — the clock first, then each FOLLOWER (a device a port is mapped to, held to the clock, R-DEV-1/2), and an armed input on another device; none stopped", false},
             {"transport.devices[].id", "string", "the device as the settings name it ('' = the system default)", false},
@@ -614,7 +618,8 @@ namespace solaris
                     .set("hold", Json::array().push(Json::number(s.hold[0])).push(Json::number(s.hold[1])))
                     .set("clip", s.clip).set("cpu", s.cpu);
             st.set("clipCount", s.clipCount).set("fromLanes", strings(s.fromLanes)).set("fromStrips", strings(s.fromStrips))
-                .set("targets", strings(s.targets)).set("keyTargets", strings(s.keyTargets)).set("frozen", s.frozen);
+                .set("targets", strings(s.targets)).set("keyTargets", strings(s.keyTargets)).set("frozen", s.frozen)
+                    .set("vca", s.vca).set("vcaGain", s.vcaGain).set("members", strings(s.members));
             strips.push(st);
         }
         j.set("strips", strips);
@@ -737,7 +742,7 @@ namespace solaris
                 .set("masterHold", Json::array().push(Json::number(m.transport.masterHold[0])).push(Json::number(m.transport.masterHold[1])))
                 .set("masterClip", m.transport.masterClip).set("driver", m.transport.driver).set("xruns", (int)m.transport.xruns)
                 .set("countingIn", m.transport.countingIn).set("recorded", m.transport.recorded)
-                .set("cpu", m.transport.cpu).set("cpuPeak", m.transport.cpuPeak);
+                .set("cpu", m.transport.cpu).set("cpuPeak", m.transport.cpuPeak).set("swaps", m.transport.swaps);
         if (!stable)
         {
             Json devs = Json::array(); // R-DEV-5

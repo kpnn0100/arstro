@@ -334,7 +334,8 @@ namespace solaris
             es.gain = engine::dbToLinear(stripGainDb(p, *s)); // R-MIX-19: its own plus its VCA's
             es.pan = s->pan;
             es.silent = silent.count(s->id) > 0;
-            es.keyLive = !s->mute; // solo-silenced, it still keys (a soloed bass keeps its pump)
+            const Strip *vs = s->vca.empty() ? nullptr : p.strip(s->vca);
+            es.keyLive = !s->mute && !(vs && vs->kind == "vca" && vs->mute); // solo-silenced, it still keys; muted (or its VCA), not
             es.out = target(s->out, stripIndex, portIndex);
             for (const auto &sd : p.sends)
                 if (sd.from == s->id)

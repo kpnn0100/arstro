@@ -2125,6 +2125,24 @@
       "stable": true
     },
     {
+      "path": "strips[].vca",
+      "type": "string",
+      "summary": "R-MIX-19: the VCA (a strip of kind vca) it follows — `set <ch>.vca=…`; \"\" none",
+      "stable": true
+    },
+    {
+      "path": "strips[].vcaGain",
+      "type": "number",
+      "summary": "R-MIX-19: the dB its VCA adds to its own gain (0 for none)",
+      "stable": true
+    },
+    {
+      "path": "strips[].members",
+      "type": "string[]",
+      "summary": "R-MIX-19: on a VCA, the strips that follow it, in processing order",
+      "stable": true
+    },
+    {
       "path": "strips[].clipCount",
       "type": "int",
       "summary": "fed by: clips playing through it (R-MIX-8)",
@@ -3394,6 +3412,12 @@
       "path": "transport.cpu",
       "type": "number",
       "summary": "R-PERF-1: the audio thread's load — a block's work over its duration, smoothed (0 stopped)",
+      "stable": false
+    },
+    {
+      "path": "transport.swaps",
+      "type": "number",
+      "summary": "engines built and swapped in since play — an edit the live path could not carry (a fader, a mute, a device value move with none)",
       "stable": false
     },
     {

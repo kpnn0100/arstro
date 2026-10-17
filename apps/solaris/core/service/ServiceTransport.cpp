@@ -172,6 +172,7 @@ namespace solaris
         t.position = beatOfSample((double)mPlayer->heard()); // R-TEMPO-1: through the map
         tempoAt(t.position, t.tempo, t.tempoId);
         t.latencyMs = std::round(mPlayer->latency() * 10000.0) / 10.0;
+        t.swaps = mLiveGen - mPlayGen;
         // R-METER-2: while a `meters clear` is on its way to the audio thread, its holds, latches and loudness are
         // from before it — the model keeps what the clear set
         const bool fresh = !mPlayer->clearing();
@@ -597,6 +598,7 @@ namespace solaris
             mModel.transport.device = mSettings.output;
             mPlayer->setTempo(spb, std::max(1, std::atoi(mProject.header.sig.c_str())));
             mPlayer->setClick(mSettings.metronome, engine::dbToLinear(mSettings.metronomeLevel));
+            mPlayGen = mLiveGen; // transport.swaps counts from here
             mPlayer->start(std::move(out), std::move(eng), routes, 2, mSettings.bufferSize, (long long)std::llround(sampleOfBeat(mPosition)), mLiveGen);
             announce();
             return true;
@@ -795,6 +797,29 @@ namespace solaris
             }
             else if (strip >= 0 && field == "mute" && keys) { structural = true; break; } // a muted strip stops keying: compile it (R-MIX-15)
             else if (strip >= 0 && (field == "mute" || field == "solo")) { silences = true; continue; }
+            else if (const Strip *vca = mProject.strip(id); vca && vca->kind == "vca" && field == "gain")
+            {
+                // R-MIX-19: its members move with it — each its own plus the VCA's, as live messages; a member whose
+                // gain is a formula has its offset in the engine's bind: compile it
+                for (const Strip *o : mProject.stripsInOrder())
+                {
+                    if (o->vca != id) continue;
+                    if (mProject.binding(o->id + ".gain")) { structural = true; break; }
+                    for (size_t i = 0; i < mLiveStrips.size(); ++i)
+                        if (mLiveStrips[i] == o->id)
+                        {
+                            Player::Live mm;
+                            mm.kind = Player::Live::StripGain;
+                            mm.strip = (int)i;
+                            mm.value = engine::dbToLinear(stripGainDb(mProject, *o));
+                            msgs.push_back(mm);
+                        }
+                }
+                if (structural) break;
+                continue;
+            }
+            else if (const Strip *vca = mProject.strip(id); vca && vca->kind == "vca" && field == "mute" && keys) { structural = true; break; }
+            else if (const Strip *vca = mProject.strip(id); vca && vca->kind == "vca" && (field == "mute" || field == "solo")) { silences = true; continue; }
             else if (mLiveDevices.count(id))
             {
                 const auto where = mLiveDevices[id];

@@ -114,6 +114,9 @@ namespace solaris
         bool clip = false;                      // reached full scale since `meters clear` (a latch)
         float cpu = 0;                          // R-PERF-1: its share of the audio thread's time (0 … 1 of a block), while playing
         std::string frozen;                     // R-PERF-3: the file it plays instead of its own work ("" not frozen)
+        std::string vca;                        // R-MIX-19: the VCA it follows ("" none)
+        double vcaGain = 0;                     // … the dB that VCA adds to it (0 for none)
+        std::vector<std::string> members;       // … on a VCA: the strips that follow it, in processing order
         int clipCount = 0;
         std::vector<std::string> fromLanes;     // lanes its clips are drawn on
         std::vector<std::string> fromStrips;    // strips whose output or a send lands here
@@ -386,6 +389,7 @@ namespace solaris
         float masterHold[2] = {0, 0};
         bool masterClip = false;
         std::string driver;                      // R-DEV-9: what the clock device plays through now ("" stopped)
+        int swaps = 0;                           // engines built and swapped in since play — an edit the live path could not carry
         long long xruns = -1;                    // R-DEV-5: underruns since play; −1 = this driver cannot count them
         float cpu = 0, cpuPeak = 0;              // R-PERF-1: the audio thread's load (a block's work over its duration),
                                                  //   smoothed; its worst block in the last second (over 1: a missed deadline)
