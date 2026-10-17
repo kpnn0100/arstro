@@ -741,3 +741,40 @@ render can carry it into the export. Decided (each a line to change):
   frame decoder, `render --video` and its mux, L2 with a fake host and the L3 FFmpeg round trip; (2) the window, the
   lane, the export sheet's toggle, shots.
 - **Not yet:** several videos; the picture's own sound as a clip; timecode (SMPTE) display.
+
+### Round 19 — 2026-10-17 — sharing a song through a folder (R-COLLAB-1, N41): the design, before code
+
+R-COLLAB-1: no server — a song saved into a shared folder (a synced drive, or a Git checkout); when the file changes
+under an open song, its edits and the other's are merged node by node (by id), a conflict on one node asked about.
+Decided (each a line to change):
+
+- **The base is what this window last read or wrote.** The service keeps the song's text as it was last read from the
+  file or written to it — the merge's common ancestor. The file's own save becomes atomic (written beside, renamed
+  over), so a collaborator's Solaris never reads half a song.
+- **Noticed on the clock.** `pump` looks at the file (its size and time) at most once a second while a song is open;
+  `project sync` looks now. A file that reads back as the base — this window's own save — is nothing; one that does not
+  parse yet (a sync still copying it, Git's conflict markers) is waited for and, after a few tries, said, never merged.
+- **Nothing of mine to keep: reload.** With no unsaved edits the song simply becomes the file's (the time bar, the
+  view, the selection where they were); said once (`project.synced`, "reloaded").
+- **Edits of mine: a three-way merge, node by node** (`mergeSongs(base, mine, theirs)` in the model, pure): the nodes
+  are the versions' own (the header field by field, every node with an id, a rack, a binding; a node's id-less lines —
+  a pattern's notes, a clip's takes — its body, ONE unit). Changed on one side only → that side; on both, the same →
+  either; on both differently, or changed on one and removed on the other → a CONFLICT. The same id added on both sides
+  with different nodes is not a conflict: mine is given the next free id and every reference to it among my nodes is
+  rewritten (a `key=value` value, an address in a formula). Order follows theirs, my additions after their neighbours.
+  The merged song lands as ONE edit (undo is mine again) and the base becomes theirs.
+- **A conflict is asked, never guessed:** until answered, the node is mine; the model lists each — its id, what it is
+  ("strip Bass", "pattern Lead"), how (both changed / I removed / they removed) and both sides' lines. `project sync
+  --take theirs|mine <id>` answers one (`theirs` is an edit), `--take theirs|mine` all. A save with conflicts pending is
+  refused (it would overwrite theirs unseen); a save when the file changed since the base merges first.
+- **Versions** (`#aversion`) are nodes as any: two people's edits to one version are one node's — a conflict when both
+  changed it.
+- **Seen** (part 3): a toast when the song is reloaded or merged ("Merged the changes on disk — 2 to answer"); a
+  Conflicts sheet (the Relink sheet's look): a row per conflict — what it is, mine and theirs side by side — Keep Mine /
+  Take Theirs (ONE line each), and both for all; rows leaving as answered, eased.
+- **Parts** (a commit each): (1) the merge in the model — the node table shared with the versions, `mergeSongs`, the
+  id renumbering — with model tests; (2) the service — the base, the atomic save, watching, `project sync`, the model's
+  `sync`, save's guard — L2 with two services on one file; (3) the window — the toast, the Conflicts sheet, shots.
+- **Not yet:** live co-editing (two windows editing the same moment), comments on the timeline, merging inside a
+  pattern's notes or a clip's takes (one node each), a server.
+

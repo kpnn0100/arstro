@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N41 — Sharing a song through a folder** (R-COLLAB-1; a design round first — N40, the video lane, is built), then N42… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N41 part 1 — the merge in the model** (R-COLLAB-1; Round 19 is the design), then N42… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -648,7 +648,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       the Export sheet's "With the video" (MP4 / MKV, `--video`); shots video-lane(-dragging), export-with-video. Found
       on the way: stale anchors in DR-AUTO-5, DR-CLIP-6 and DR-UI-10's step/zoom paragraphs re-pointed by symbol (D-22).
       N40 DONE (a live look at the GTK window's decoder owed).
-- [ ] **N41** Sharing through a folder: merge by node (R-COLLAB-1).
+- [~] **N41** Sharing through a folder: merge by node (R-COLLAB-1). Round 19 (the design): the base is what this window
+      last read or wrote; an atomic save; the file looked at once a second; nothing unsaved → reload, else a three-way
+      merge node by node (the versions' node table), the same new id renumbered on mine, conflicts asked (`project sync
+      --take`), a save refused while one is pending. Next: part 1 — the merge in the model.
 - [ ] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1).
 - [ ] **N43** Localisation (R-ACCESS-2).
 - [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).
