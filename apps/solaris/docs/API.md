@@ -1005,6 +1005,28 @@ A gate and a downward expander: below its threshold turned down by the ratio, he
 | `release` | 1.0 … 5000.0 ms | 100.0 ms |
 | `sidechain` | off · on | off |
 
+### `saturator` — Saturator (effect)
+
+A curve driven — soft, hard, tube or fold — four times oversampled, its latency reported.
+
+| parameter | range | default |
+|---|---|---|
+| `drive` | 0.0 … 36.0 dB | 6.0 dB |
+| `curve` | soft · hard · tube · fold | soft |
+| `mix` | 0.0 … 1.0 | 1.0 |
+| `output` | -24.0 … 12.0 dB | 0.0 dB |
+
+### `bitcrusher` — Bitcrusher (effect)
+
+Fewer bits and a lower rate: each sample rounded to a coarser grid, held for longer.
+
+| parameter | range | default |
+|---|---|---|
+| `bits` | 1.0 … 24.0 | 8.0 |
+| `rate` | 100.0 … 96000.0 Hz | 96000.0 Hz |
+| `mix` | 0.0 … 1.0 | 1.0 |
+| `output` | -24.0 … 12.0 dB | 0.0 dB |
+
 ### `deesser` — De-esser (effect)
 
 Sibilance held down: a high-pass hears it, its level held at the threshold — the band alone turned down (split) or the whole sound (wide).
