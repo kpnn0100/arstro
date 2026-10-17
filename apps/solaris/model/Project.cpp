@@ -69,11 +69,13 @@ namespace solaris
         return (int)takes.size();
     }
     Marker *Project::marker(const std::string &id) { return findId(markers, id); }
+    Chord *Project::chord(const std::string &id) { return findId(chords, id); }
     TempoPoint *Project::tempo(const std::string &id) { return findId(tempos, id); }
     const TempoPoint *Project::tempo(const std::string &id) const { return findId(tempos, id); }
     LaneGroup *Project::group(const std::string &id) { return findId(groups, id); }
     const LaneGroup *Project::group(const std::string &id) const { return findId(groups, id); }
     const Marker *Project::marker(const std::string &id) const { return findId(markers, id); }
+    const Chord *Project::chord(const std::string &id) const { return findId(chords, id); }
     Scene *Project::scene(const std::string &id) { return findId(scenes, id); }
     const Scene *Project::scene(const std::string &id) const { return findId(scenes, id); }
     Slot *Project::slot(const std::string &id) { return findId(slots, id); }
@@ -172,6 +174,7 @@ namespace solaris
         for (const auto &x : clips) ids.push_back(x.id);
         for (const auto &x : automations) ids.push_back(x.id);
         for (const auto &x : markers) ids.push_back(x.id);
+        for (const auto &x : chords) ids.push_back(x.id); // R-ASSIST-1
         for (const auto &x : scenes) ids.push_back(x.id); // R-LAUNCH-1
         for (const auto &x : slots) ids.push_back(x.id);
         for (const auto &x : videos) ids.push_back(x.id); // R-VIDEO-1
@@ -444,6 +447,14 @@ namespace solaris
             else if (k == "length") n.length = toTick(r.num(k, v, 0.0));
             else n.unknown.emplace_back(k, v);
         }
+        void apply(Reader &r, Chord &n, const std::string &k, const std::string &v)
+        {
+            if (k == "id") n.id = v;
+            else if (k == "name") n.name = v;
+            else if (k == "at") n.at = toTick(r.num(k, v, 0.0));
+            else if (k == "length") n.length = toTick(r.num(k, v, 0.0));
+            else n.unknown.emplace_back(k, v);
+        }
         void apply(Reader &r, ExprPoint &n, const std::string &k, const std::string &v)
         {
             if (k == "lane") n.lane = v;
@@ -522,7 +533,7 @@ namespace solaris
         Reader r{report ? report : &localReport, {}};
 
         // What a continuation line or a comment attaches to.
-        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Group, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Tempo, Raw, Version, Scene, Slot, Video };
+        enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Group, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Tempo, Raw, Version, Scene, Slot, Video, Chord };
         Cur cur = Cur::None;
         bool seenNode = false, sawMagic = false, sawTracks = false;
         std::map<std::string, std::vector<Note>> inlineNotes; // note clips written the suite's inline way
@@ -545,6 +556,7 @@ namespace solaris
             case Cur::Point: return &p.automations.back().remarks;
             case Cur::Bind: return &p.bindings.back().remarks;
             case Cur::Marker: return &p.markers.back().remarks;
+            case Cur::Chord: return &p.chords.back().remarks;
             case Cur::Scene: return &p.scenes.back().remarks;
             case Cur::Slot: return &p.slots.back().remarks;
             case Cur::Video: return &p.videos.back().remarks;
@@ -657,6 +669,7 @@ namespace solaris
                 }
                 else if (tok.type == "abind") { p.bindings.emplace_back(); fill(p.bindings.back()); cur = Cur::Bind; }
                 else if (tok.type == "amarker") { p.markers.emplace_back(); fill(p.markers.back()); cur = Cur::Marker; } // R-ARR-1
+                else if (tok.type == "achord") { p.chords.emplace_back(); fill(p.chords.back()); cur = Cur::Chord; }    // R-ASSIST-1
                 else if (tok.type == "atempo") { p.tempos.emplace_back(); fill(p.tempos.back()); cur = Cur::Tempo; }    // R-TEMPO-1
                 else if (tok.type == "aversion") { p.versions.emplace_back(); fill(p.versions.back()); cur = Cur::Version; } // R-VER
                 else if (tok.type == "ascene") { p.scenes.emplace_back(); fill(p.scenes.back()); cur = Cur::Scene; } // R-LAUNCH-1
@@ -1026,6 +1039,9 @@ namespace solaris
         for (const auto &n : p.markers)
             emit(out, "", Line("amarker").kv("id", n.id).str("name", n.name).kv("at", canonicalBeats(n.at)).kvIf(n.length > 0, "length", canonicalBeats(n.length))
                               .strIf("note", n.note).unknown(n.unknown), n.remarks);
+        group(!p.chords.empty()); // R-ASSIST-1
+        for (const auto &n : p.chords)
+            emit(out, "", Line("achord").kv("id", n.id).str("name", n.name).kv("at", canonicalBeats(n.at)).kv("length", canonicalBeats(n.length)).unknown(n.unknown), n.remarks);
         group(!p.tempos.empty()); // R-TEMPO-1
         for (const auto &n : p.tempos)
             emit(out, "", Line("atempo").kv("id", n.id).kv("at", canonicalBeats(n.at)).kv("bpm", canonicalNumber(n.bpm)).kvIf(n.ramp, "ramp", "true").unknown(n.unknown),
@@ -1282,6 +1298,16 @@ namespace solaris
             for (const auto &o : p.slots)
                 if (&o != &sl && o.scene == sl.scene && o.strip == sl.strip && &o < &sl)
                     e.push_back("slots " + o.id + " and " + sl.id + " are both " + sl.strip + "'s in scene " + sl.scene + " — a cell holds one");
+        }
+        for (size_t i = 0; i < p.chords.size(); ++i) // R-ASSIST-1: a span, named, after the one before
+        {
+            const Chord &c = p.chords[i];
+            if (c.name.empty()) e.push_back("chord " + c.id + " has no name");
+            if (c.at < 0 || c.length <= 0) e.push_back("chord " + c.id + " is before the song's start or lasts nothing");
+            if (i == 0) continue;
+            const Chord &b = p.chords[i - 1];
+            if (c.at < b.at) e.push_back("chord " + c.id + " is written after " + b.id + " but begins before it — chords are kept in time order");
+            else if (c.at < b.at + b.length - 0.5 / kPpq) e.push_back("chord " + c.id + " overlaps " + b.id);
         }
         for (const auto &m : p.markers) // R-ARR-1: a place in the song, named
         {

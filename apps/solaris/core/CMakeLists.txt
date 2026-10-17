@@ -33,6 +33,7 @@ add_library(solaris_core STATIC
   service/ServiceVideo.cpp
   service/ServiceSync.cpp
   service/ServiceAudioEdit.cpp
+  service/ServiceAnalysis.cpp
   service/ServicePresets.cpp
   service/ServiceLibrary.cpp
   service/ServicePlugins.cpp

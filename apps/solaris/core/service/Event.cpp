@@ -66,6 +66,8 @@ namespace solaris
              "A recording landed: its notes in this clip ('' — nothing was played) (R-MIDI-2); an audio take, how long it is (R-REC-1); "
              "how many takes a looped recording made (R-REC-2)."},
             {EK::StripArmed, "strip.armed", {"strip"}, "The MIDI keyboard plays this strip now ('' — none); the session's, not the song's (R-MIDI-2)."},
+            {EK::ChordsDetected, "chords.detected", {"n", "from", "to"},
+             "R-ASSIST-1: `chords detect` found n chords between beats from and to, replacing what was there (an edit's: said once it lands, after its chord.added lines)."},
             {EK::MetersCleared, "meters.cleared", {}, "The clip lights and held peaks are out; the master's true peak and integrated loudness start again (R-METER-2)."},
         };
         return specs;

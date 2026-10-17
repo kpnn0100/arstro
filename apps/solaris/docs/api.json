@@ -1517,6 +1517,40 @@
       "requirement": "R-EDIT-1"
     },
     {
+      "verb": "clip separate",
+      "usage": "clip separate <ac>",
+      "args": "<ac>",
+      "flags": [],
+      "summary": "Split an audio clip's sound into what sustains and what strikes (R-ASSIST-1): what it plays, raw (as `clip consolidate` renders it — before its strip's devices, fader and pan), separated by the DSP library (REQ-analysis-2: median filtering, soft masks — the two sum back to the clip), written beside the song as Separated/<name> harmonic <n>.wav and … percussive <n>.wav (32-bit float); the clip replaced by two clips at its place, on two new lanes under its own, each on a new strip of its own (R-MIX-2) — ONE edit, the harmonic clip printed. A note clip is refused.",
+      "requirement": "R-ASSIST-1"
+    },
+    {
+      "verb": "clip to-midi",
+      "usage": "clip to-midi <ac> [--instrument <type>]",
+      "args": "<ac>",
+      "flags": [
+        "instrument=<type>"
+      ],
+      "summary": "An audio clip's melody as notes (R-ASSIST-1): what it plays, raw, transcribed by the DSP library (REQ-analysis-3: one note at a time — YIN's pitch, a note where one lasts 60 ms or more, split where a new attack is heard, its velocity from its loudest moment) into a pattern \"<name> notes\" on a new instrument track (--instrument <type>, the synth unless named) at the clip's place, on a new lane under its own; the notes in beats through the song's tempo map — ONE edit, the new clip printed. Refused when no note is heard (chords, noise, silence).",
+      "requirement": "R-ASSIST-1"
+    },
+    {
+      "verb": "chords detect",
+      "usage": "chords detect [<ac>]",
+      "args": "[<ac>]",
+      "flags": [],
+      "summary": "The song's chords, found (R-ASSIST-1): from an audio clip's sound (raw), or with no clip from the whole song's mix (rendered as `render` does, to the song's end) — the DSP library's chroma, beat by beat of the tempo map (REQ-analysis-4: the 24 major and minor triads; a chord changes only where the change holds) — replacing the chords that were in that span (one across its edge keeps what lies outside it); where no chord is heard, none. ONE edit; prints how many and their names, `chords.detected` says it. Refused when nothing is heard and nothing was there.",
+      "requirement": "R-ASSIST-1"
+    },
+    {
+      "verb": "chords clear",
+      "usage": "chords clear",
+      "args": "",
+      "flags": [],
+      "summary": "Take every chord out of the song (R-ASSIST-1) — ONE edit; refused when it has none.",
+      "requirement": "R-ASSIST-1"
+    },
+    {
       "verb": "clip slice",
       "usage": "clip slice <ac> [--every <beats>] [--transients] [--sensitivity <0-1>] [--kit]",
       "args": "<ac>",
@@ -1806,6 +1840,15 @@
         "strip"
       ],
       "summary": "The MIDI keyboard plays this strip now ('' — none); the session's, not the song's (R-MIDI-2)."
+    },
+    {
+      "name": "chords.detected",
+      "fields": [
+        "n",
+        "from",
+        "to"
+      ],
+      "summary": "R-ASSIST-1: `chords detect` found n chords between beats from and to, replacing what was there (an edit's: said once it lands, after its chord.added lines)."
     },
     {
       "name": "meters.cleared",
@@ -3252,6 +3295,36 @@
       "path": "markers[].end",
       "type": "number",
       "summary": "where its section ends: at + length, else the next marker, else the song's end",
+      "stable": true
+    },
+    {
+      "path": "songChords",
+      "type": "object[]",
+      "summary": "R-ASSIST-1: the song's chords, by time — what `chords detect` heard (`chords` is `--chord`'s vocabulary)",
+      "stable": true
+    },
+    {
+      "path": "songChords[].id",
+      "type": "string",
+      "summary": "cd_n",
+      "stable": true
+    },
+    {
+      "path": "songChords[].name",
+      "type": "string",
+      "summary": "C, Am, F#, Bbm — a major or minor triad",
+      "stable": true
+    },
+    {
+      "path": "songChords[].at",
+      "type": "number",
+      "summary": "beats",
+      "stable": true
+    },
+    {
+      "path": "songChords[].length",
+      "type": "number",
+      "summary": "beats",
       "stable": true
     },
     {

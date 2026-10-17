@@ -545,6 +545,31 @@ static void test_markers_round_trip_and_name_their_sections()
     pass("markers in the .slp (R-ARR-1): #amarker read and written back in place, a fixed point; mk_ ids; a section's end — its length, else the next marker, else the song's end; nameless or doubled refused");
 }
 
+static void test_chords_round_trip_and_are_checked()
+{
+    // R-ASSIST-1: #achord — a span of beats, named as a musician writes it (a sharp read bare, written quoted);
+    // written back after the markers, a fixed point; cd_ ids in the id space; nameless, empty, overlapping or out of
+    // order refused
+    const std::string head = "arstro-project = 1\napp = solaris\nid = prj\n#amixer id=mx_1 name=Sources order=0\n";
+    Project p;
+    std::string err;
+    assert(parseProject(head + "#achord id=cd_1 name=F# at=0.0 length=4.0\n#achord id=cd_2 name=Bbm at=4.0 length=2.5\n#amarker id=mk_1 name=Intro at=0.0\n", p, err));
+    assert(p.chords.size() == 2 && p.chords[0].name == "F#" && p.chords[1].name == "Bbm" && p.chords[1].length == 2.5);
+    const std::string text = serializeProject(p);
+    assert(contains(text, "#achord id=cd_1 name=\"F#\" at=0.0 length=4.0\n#achord id=cd_2 name=Bbm at=4.0 length=2.5\n"));
+    assert(text.find("#amarker") < text.find("#achord"));
+    Project q;
+    assert(parseProject(text, q, err) && serializeProject(q) == text);
+    assert(p.nextId("cd") == "cd_3" && p.chord("cd_2") && !p.chord("cd_9"));
+    Project bad;
+    assert(!parseProject(head + "#achord id=cd_1 at=0.0 length=4.0\n", bad, err) && contains(err, "chord cd_1 has no name"));
+    assert(!parseProject(head + "#achord id=cd_1 name=C at=0.0 length=0.0\n", bad, err) && contains(err, "lasts nothing"));
+    assert(!parseProject(head + "#achord id=cd_1 name=C at=0.0 length=4.0\n#achord id=cd_2 name=G at=3.0 length=4.0\n", bad, err) && contains(err, "cd_2 overlaps cd_1"));
+    assert(!parseProject(head + "#achord id=cd_1 name=C at=8.0 length=4.0\n#achord id=cd_2 name=G at=0.0 length=4.0\n", bad, err) && contains(err, "kept in time order"));
+    assert(!parseProject(head + "#achord id=cd_1 name=C at=0.0 length=4.0\n#amarker id=cd_1 name=A at=8.0\n", bad, err) && contains(err, "share the id `cd_1`"));
+    pass("chords in the .slp (R-ASSIST-1): #achord read and written back after the markers, a fixed point, F# kept (quoted); cd_ ids; nameless, empty, overlapping, out of order or doubled refused");
+}
+
 static void test_tempo_changes_round_trip_and_are_checked()
 {
     // R-TEMPO-1: #atempo — a change from a beat on, `ramp` written only when on; written back in place, tp_ ids; at beat
@@ -1031,6 +1056,7 @@ int main()
     test_expression_lanes_round_trip_and_are_checked();
     test_note_chance_and_scales_round_trip_and_are_checked();
     test_markers_round_trip_and_name_their_sections();
+    test_chords_round_trip_and_are_checked();
     test_tempo_changes_round_trip_and_are_checked();
     test_lane_groups_round_trip_and_are_checked();
     test_takes_and_their_comp_round_trip();

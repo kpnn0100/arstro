@@ -907,7 +907,8 @@ Decided (each a line to change):
   `chords detect [<ac>]` — the song's chords from that clip, or from the whole song's mix (rendered as a render is):
   they replace the song's chords; `chords clear`. Saved in the song (`#achord at= length= name=` — Interstellar has no
   such node, so it is Solaris's alone), in the model (`chords[]`: id, at, length, name), an event each
-  (`chords.detected n=`).
+  (`chords.detected n=`). **Amended in part 2:** the model's `chords[]` was already `--chord`'s vocabulary
+  (R-ROLL-11) and a model field is never renamed — the song's chords are `songChords[]`.
 - **The window:** a clip's menu gains "Separate Harmonic / Percussive", "To MIDI" and "Detect Chords"; the ruler's menu
   "Detect Chords" (the song) and "Clear Chords". The chords on the ruler: a band of their own under the markers', there
   only while the song has chords — the ruler grows into it and the lanes ease down (`Timeline::top()`, eased); each

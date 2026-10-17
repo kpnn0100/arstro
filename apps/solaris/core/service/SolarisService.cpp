@@ -240,6 +240,9 @@ namespace solaris
         case K::ClipSplit: case K::ClipConsolidate: case K::ClipSlice:
             ok = audioEditCommand(c, err);
             break;
+        case K::ClipSeparate: case K::ClipToMidi: case K::ChordsDetect: case K::ChordsClear:
+            ok = analysisCommand(c, err);
+            break;
         case K::TempoAdd: case K::TempoMove: case K::TempoDelete:
             ok = tempoCommand(c, err);
             break;
@@ -375,7 +378,7 @@ namespace solaris
             // it); `made:` names the rest by kind, so an agent never has to predict an id
             static const std::vector<std::pair<std::string, std::string>> kinds = {
                 {"ch_", "strip"}, {"dv_", "device"}, {"pt_", "pattern"}, {"ln_", "lane"}, {"ac_", "clip"},
-                {"au_", "automation"}, {"sd_", "send"}, {"mx_", "mixer"}, {"prt_", "port"}, {"lg_", "group"}, {"mk_", "marker"},
+                {"au_", "automation"}, {"sd_", "send"}, {"mx_", "mixer"}, {"prt_", "port"}, {"lg_", "group"}, {"mk_", "marker"}, {"cd_", "chord"},
                 {"vr_", "version"}, {"sc_", "scene"}, {"sl_", "slot"}, {"vd_", "video"}};
             const std::string primary = mOutput.substr(0, mOutput.find('\n'));
             std::vector<std::string> fresh;

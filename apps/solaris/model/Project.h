@@ -281,6 +281,15 @@ namespace solaris
         Remarks remarks;
     };
 
+    /** R-ASSIST-1: a chord the song plays, as an analysis found it (`chords detect`) — a span of beats and its name. */
+    struct Chord
+    {
+        std::string id, name;           // "C", "Am", "F#", "Bbm"
+        double at = 0.0, length = 0.0;  // beats
+        Fields unknown;
+        Remarks remarks;
+    };
+
     /** R-LAUNCH-1: a row of the session grid — slots launched together. */
     struct Scene
     {
@@ -359,6 +368,7 @@ namespace solaris
         std::vector<Automation> automations;
         std::vector<Binding> bindings;
         std::vector<Marker> markers;    // R-ARR-1: sorted by (at, id)
+        std::vector<Chord> chords;      // R-ASSIST-1: sorted by at, none overlapping
         std::vector<TempoPoint> tempos; // R-TEMPO-1: sorted by at, each at a beat of its own after 0
         std::vector<RawNode> raw;
         std::vector<Scene> scenes;      // R-LAUNCH-1: the session grid's rows, in creation order (`order` places them)
@@ -383,6 +393,7 @@ namespace solaris
         Clip *clip(const std::string &id);
         Automation *automation(const std::string &id);
         Marker *marker(const std::string &id);
+        Chord *chord(const std::string &id);
         TempoPoint *tempo(const std::string &id);  // R-TEMPO-1
         const TempoPoint *tempo(const std::string &id) const;
         Scene *scene(const std::string &id);   // R-LAUNCH-1
@@ -394,6 +405,7 @@ namespace solaris
         LaneGroup *group(const std::string &id);
         const LaneGroup *group(const std::string &id) const;
         const Marker *marker(const std::string &id) const;
+        const Chord *chord(const std::string &id) const;
         /** R-ARR-1: where a marker's section ends — at + length, or (a point) the next marker after it, else the song's
          *  end (`songEnd`, beats); never before its own start. */
         double sectionEnd(const Marker &m, double songEnd) const;

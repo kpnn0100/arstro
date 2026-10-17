@@ -305,6 +305,18 @@ else absolutely — collect gathers it); `offset` is seconds on the song's clock
 shows — negative, it began before the song. Written after the session grid. A second `#avideo`, or one naming no file,
 is refused. A file the host cannot read leaves the song open and the picture offline.
 
+## 9a‴. Chords — `#achord` (R-ASSIST-1; docs/discussion.md Round 22)
+
+```
+#achord id=cd_1 name=C at=4.0 length=2.0
+#achord id=cd_2 name="F#" at=6.0 length=2.0
+```
+
+A chord the song plays, as `chords detect` heard it: a span of beats (`at`, `length` > 0) and its name — a major or
+minor triad as a musician writes it (C, Am, F#, Bbm; a sharp is written quoted). Written after the markers, in time
+order, none overlapping; all three fields required. Interstellar has no such node: Solaris's alone (it reads an
+unknown node back as it found it).
+
 ## 9b. Versions — `#aversion` (R-VER; docs/discussion.md Round 15)
 
 ```
@@ -346,7 +358,7 @@ opening as main.
 
 Header keys in §1's order, then unknown header keys in read order. Nodes grouped by type in this
 document's order (`#aport`, `#amixer`, `#atrack`, `#asend`, `#arack`, `#alane`, `#apattern`,
-`#aclip`, `#aauto`, `#abind`, `#amarker`, `#atempo`, `#ascene`, `#aslot`, then unknown nodes in read order, then `#aversion` in creation order — §9b), each type in creation order; children indented two
+`#aclip`, `#aauto`, `#abind`, `#amarker`, `#achord`, `#atempo`, `#ascene`, `#aslot`, then unknown nodes in read order, then `#aversion` in creation order — §9b), each type in creation order; children indented two
 spaces. Fields in the order the tables give, then unknown keys in read order. Booleans
 `true`/`false`. Numbers: always a decimal point (`0.0`); **times are rounded to the tick (1/960
 beat) and printed with the fewest decimals that read back to the same tick**; seconds to the

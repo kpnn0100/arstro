@@ -145,6 +145,10 @@
       "doc": "The MIDI keyboard plays this strip now ('' — none); the session's, not the song's (R-MIDI-2).",
       "data": "{line, fields: {strip}}"
     },
+    "chords.detected": {
+      "doc": "R-ASSIST-1: `chords detect` found n chords between beats from and to, replacing what was there (an edit's: said once it lands, after its chord.added lines).",
+      "data": "{line, fields: {n, from, to}}"
+    },
     "meters.cleared": {
       "doc": "The clip lights and held peaks are out; the master's true peak and integrated loudness start again (R-METER-2).",
       "data": "{line, fields: {}}"

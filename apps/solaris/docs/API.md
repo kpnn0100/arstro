@@ -160,6 +160,10 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `clip comp <ac> --take <n> [--from <beats>] [--to <beats>]` | Choose which take plays where (R-REC-2): take <n> (1-based) from --from to --to (song beats; the whole clip without them) — ONE edit, the range overwriting what it covers. Where no range says, the last take plays; the seams are crossfaded 5 ms. A loop recording makes the takes. | R-REC-2 |
 | `clip split <ac> --at <beats>` | Cut an audio clip in two at --at (song beats, inside it) — ONE edit (R-EDIT-1): the first half keeps the id and the fade in, the second (printed) begins at --at with the fade out; together they play what the one did. A reversed clip's first half is its span's end; a clip with takes keeps them all, its comp divided. A looping clip is cut only where a repetition begins; a note clip not at all (its notes are its pattern's). | R-EDIT-1 |
 | `clip consolidate <ac> [<ac> …]` | Join audio clips of one strip into ONE (R-EDIT-1): what they play — gain, fades, crossfades, reverse, comps — rendered raw (before the strip's devices, fader and pan) from the first's start to the last's end, written beside the song as Bounces/<strip> <n>.wav (32-bit float) and put in their place on the first's lane; one edit, the new clip printed. A note clip is refused (a strip's bounce is R-PERF-3). | R-EDIT-1 |
+| `clip separate <ac>` | Split an audio clip's sound into what sustains and what strikes (R-ASSIST-1): what it plays, raw (as `clip consolidate` renders it — before its strip's devices, fader and pan), separated by the DSP library (REQ-analysis-2: median filtering, soft masks — the two sum back to the clip), written beside the song as Separated/<name> harmonic <n>.wav and … percussive <n>.wav (32-bit float); the clip replaced by two clips at its place, on two new lanes under its own, each on a new strip of its own (R-MIX-2) — ONE edit, the harmonic clip printed. A note clip is refused. | R-ASSIST-1 |
+| `clip to-midi <ac> [--instrument <type>]` | An audio clip's melody as notes (R-ASSIST-1): what it plays, raw, transcribed by the DSP library (REQ-analysis-3: one note at a time — YIN's pitch, a note where one lasts 60 ms or more, split where a new attack is heard, its velocity from its loudest moment) into a pattern "<name> notes" on a new instrument track (--instrument <type>, the synth unless named) at the clip's place, on a new lane under its own; the notes in beats through the song's tempo map — ONE edit, the new clip printed. Refused when no note is heard (chords, noise, silence). | R-ASSIST-1 |
+| `chords detect [<ac>]` | The song's chords, found (R-ASSIST-1): from an audio clip's sound (raw), or with no clip from the whole song's mix (rendered as `render` does, to the song's end) — the DSP library's chroma, beat by beat of the tempo map (REQ-analysis-4: the 24 major and minor triads; a chord changes only where the change holds) — replacing the chords that were in that span (one across its edge keeps what lies outside it); where no chord is heard, none. ONE edit; prints how many and their names, `chords.detected` says it. Refused when nothing is heard and nothing was there. | R-ASSIST-1 |
+| `chords clear` | Take every chord out of the song (R-ASSIST-1) — ONE edit; refused when it has none. | R-ASSIST-1 |
 | `clip slice <ac> [--every <beats>] [--transients] [--sensitivity <0-1>] [--kit]` | Cut an audio clip into clips (R-EDIT-1): --every <beats> from its start, or --transients where a sound begins (the DSP library's onset detector, REQ-onset-1; --sensitivity 0 … 1, 0.5) — ONE edit, the clips printed. --every with --kit makes a new instrument track instead: a Sampler of the clip's file in N equal slices (mode=slices) and a note clip in the clip's place playing them in order (root + k for slice k), so it plays what the clip did; the clip stays. A looping clip is not sliced. | R-EDIT-1 |
 | `transport punch <from\|off> [to]` | Punch in and out (R-REC-1): a recording keeps only what the song plays from <from> to <to> beats, and its clip starts at <from>; `off` keeps it all. The session's, as the loop. | R-REC-1 |
 | `transport loop <from\|off\|mk> [to]` | Loop between two beats while playing — or a marker's section (R-ARR-1: its length, else to the next marker); `off` ends it. | R-TIME-4 |
@@ -317,6 +321,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `project.recovery` | path, age | The song just opened has an autosave newer than it (age in seconds) — `project recover` restores it, `project discard-recovery` drops it (R-SAFE-2). |
 | `record.finished` | clip, notes, seconds, takes | A recording landed: its notes in this clip ('' — nothing was played) (R-MIDI-2); an audio take, how long it is (R-REC-1); how many takes a looped recording made (R-REC-2). |
 | `strip.armed` | strip | The MIDI keyboard plays this strip now ('' — none); the session's, not the song's (R-MIDI-2). |
+| `chords.detected` | n, from, to | R-ASSIST-1: `chords detect` found n chords between beats from and to, replacing what was there (an edit's: said once it lands, after its chord.added lines). |
 | `meters.cleared` |  | The clip lights and held peaks are out; the master's true peak and integrated loudness start again (R-METER-2). |
 
 ## Model (`state print --json`)
@@ -563,6 +568,11 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `markers[].at` | number | beats |
 | `markers[].length` | number | beats — a section; 0 a point |
 | `markers[].end` | number | where its section ends: at + length, else the next marker, else the song's end |
+| `songChords` | object[] | R-ASSIST-1: the song's chords, by time — what `chords detect` heard (`chords` is `--chord`'s vocabulary) |
+| `songChords[].id` | string | cd_n |
+| `songChords[].name` | string | C, Am, F#, Bbm — a major or minor triad |
+| `songChords[].at` | number | beats |
+| `songChords[].length` | number | beats |
 | `tempos` | object[] | R-TEMPO-1: the tempo map's changes, by time — before the first, `bpm` |
 | `tempos[].id` | string | tp_n |
 | `tempos[].at` | number | beats |

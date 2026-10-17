@@ -3203,6 +3203,240 @@ static void test_consolidate_renders_clips_into_one()
     pass("consolidate (R-EDIT-1): clips of one strip into ONE clip of a 32-bit file beside the song — what they played, raw (gain, fade, reverse in it; the strip's fader, pan, filter not), the gap silent; the song sounds as it did; one edit; a note clip, two strips refused");
 }
 
+// ── R-ASSIST-1: the analysis tools ──────────────────────────────────────────────────────────────
+
+namespace
+{
+    // a tone of `midi` from `t0` to `t1` seconds into `x` (48 kHz), a 5 ms attack, decaying by `decay` seconds
+    void addTone(std::vector<float> &x, int midi, double t0, double t1, double amp, double decay = 1e9)
+    {
+        const double f = 440.0 * std::pow(2.0, (midi - 69) / 12.0);
+        for (long long i = (long long)(t0 * 48000); i < (long long)(t1 * 48000) && i < (long long)x.size(); ++i)
+        {
+            const double t = (i - t0 * 48000) / 48000;
+            x[(size_t)i] += (float)(amp * std::min(1.0, t / 0.005) * std::exp(-t / decay) * std::sin(2 * M_PI * f * t));
+        }
+    }
+    std::string monoFile(Run &r, const std::string &name, const std::vector<float> &x)
+    {
+        const std::string path = scratch() + "/" + name + ".wav";
+        r.fake.written[path] = std::vector<std::vector<float>>(2, x);
+        return path;
+    }
+    std::vector<const LaneModel *> lanesInOrder(const Run &r)
+    {
+        std::vector<const LaneModel *> out;
+        for (const auto &l : r.svc.model().lanes) out.push_back(&l);
+        std::stable_sort(out.begin(), out.end(), [](const LaneModel *a, const LaneModel *b) { return a->order < b->order; });
+        return out;
+    }
+    std::string madeOf(const std::string &said, const std::string &kind)
+    {
+        const auto at = said.find(" " + kind + "=");
+        if (at == std::string::npos) return "";
+        const auto from = at + kind.size() + 2;
+        return said.substr(from, said.find_first_of(" \n", from) - from);
+    }
+}
+
+static void test_separate_splits_a_clip_in_two()
+{
+    // R-ASSIST-1: a held tone with a click every quarter second — separated into two clips at its place, on two new
+    // lanes right under its own, each on a strip of its own named after it; the files beside the song (32-bit), the
+    // tone in the harmonic, the clicks in the percussive, the two summing back to what the clip played; the song sounds
+    // as it did; ONE edit; refusals
+    Run r;
+    const std::string song = freshSong("separate");
+    r.ok("project new " + song + " --bpm 120");
+    const long long n = 2 * 48000;
+    std::vector<float> held((size_t)n, 0.0f), hits((size_t)n, 0.0f);
+    for (long long i = 0; i < n; ++i) held[(size_t)i] = (float)(0.3 * std::sin(2 * M_PI * 440.0 * i / 48000));
+    for (long long at = 6000; at < n; at += 12000)
+        for (int j = 0; j < 96; ++j) hits[(size_t)(at + j)] += (float)(0.8 * std::exp(-j / 12.0) * (j % 2 ? -1.0 : 1.0));
+    std::vector<float> both((size_t)n);
+    for (long long i = 0; i < n; ++i) both[(size_t)i] = held[(size_t)i] + hits[(size_t)i];
+    const std::string a = firstLine(r.ok("clip add --src " + monoFile(r, "groove", both) + " --at 2"));
+    const std::string other = firstLine(r.ok("clip add --src " + toneFile(r, "separate-other", 48000) + " --at 0"));
+    const std::string own = r.clip(a)->lane, otherLane = r.clip(other)->lane, ownStrip = r.clip(a)->track;
+    assert(own != otherLane);
+    const auto before = heardL(r, "separate-before", 0, 6);
+    const int depth = r.svc.model().undoDepth;
+    const std::string said = r.ok("clip separate " + a);
+    assert(r.svc.model().undoDepth == depth + 1);
+    const std::string h = firstLine(said), p = madeOf(said, "clip");
+    assert(!p.empty() && contains(said, " strip=") && contains(said, " lane="));
+    const std::string dir = song.substr(0, song.find_last_of('/')) + "/Separated/";
+    const std::string hf = dir + "groove harmonic 1.wav", pf = dir + "groove percussive 1.wav";
+    assert(r.fake.written.count(hf) && r.fake.written.count(pf) && r.fake.bits[hf] == 32 && r.fake.bits[pf] == 32);
+    const auto &H = r.fake.written[hf], &P = r.fake.written[pf];
+    assert(H.size() == 2 && H[0].size() == (size_t)n && P[0].size() == (size_t)n);
+    double sumErr = 0, hErr = 0, pErr = 0, eh = 0, ep = 0;
+    for (long long i = 0; i < n; ++i)
+    {
+        sumErr = std::max(sumErr, (double)std::fabs(H[0][(size_t)i] + P[0][(size_t)i] - both[(size_t)i]));
+        hErr += std::pow((double)H[0][(size_t)i] - held[(size_t)i], 2.0);
+        pErr += std::pow((double)P[0][(size_t)i] - hits[(size_t)i], 2.0);
+        eh += (double)held[(size_t)i] * held[(size_t)i];
+        ep += (double)hits[(size_t)i] * hits[(size_t)i];
+    }
+    std::printf("    separated: the halves sum back to %.1e; harmonic off by %.1f dB, percussive by %.1f dB\n", sumErr, 10 * std::log10(hErr / eh), 10 * std::log10(pErr / ep));
+    assert(sumErr < 1e-4 && hErr / eh < 0.05 && pErr / ep < 0.25);
+    // the song: the clip gone, two at its place on new lanes right under its own, each on its own strip
+    assert(!r.clip(a) && r.clip(h) && r.clip(p) && r.svc.model().clips.size() == 3);
+    const ClipModel *hc = r.clip(h), *pc = r.clip(p);
+    assert(hc->at == 2 && pc->at == 2 && hc->length == 4 && pc->length == 4);
+    assert(hc->src == "Separated/groove harmonic 1.wav" && pc->src == "Separated/groove percussive 1.wav");
+    assert(hc->track != pc->track && hc->track != ownStrip && pc->track != ownStrip);
+    assert(r.strip(hc->track)->name == "groove harmonic" && r.strip(pc->track)->name == "groove percussive");
+    const auto lanes = lanesInOrder(r);
+    std::vector<std::string> ids;
+    for (const auto *l : lanes) ids.push_back(l->id);
+    const auto at = std::find(ids.begin(), ids.end(), own);
+    assert(at != ids.end() && at + 3 < ids.end() + 1 && *(at + 1) == hc->lane && *(at + 2) == pc->lane && *(at + 3) == otherLane);
+    assert(lanes[(size_t)(at - ids.begin()) + 1]->name == "groove harmonic");
+    const double diff = worstDiff(heardL(r, "separate-after", 0, 6), before);
+    std::printf("    the song after: worst difference %.2e\n", diff);
+    assert(diff < 1e-4);
+    r.ok("undo");
+    assert(r.clip(a) && !r.clip(h) && !r.clip(p) && r.svc.model().clips.size() == 2);
+    // refusals
+    const std::string notes = firstLine(r.ok("clip add --instrument synth --at 0 --length 4"));
+    assert(contains(r.no("clip separate " + notes), "is a note clip"));
+    assert(contains(r.no("clip separate ac_99"), "no clip"));
+    assert(contains(r.no("clip separate"), "clip separate"));
+    pass("separate (R-ASSIST-1): a clip's sound split by the DSP library — the tone harmonic, the clicks percussive, summing back to the clip; two 32-bit files in Separated/, two clips at its place on new lanes under its own, each its own strip named after it; the song sounds as it did; one edit, undone whole; a note clip refused");
+}
+
+static void test_to_midi_transcribes_a_melody()
+{
+    // R-ASSIST-1: a melody (A4, C5 struck twice, E5 softer) at beat 4, the tempo halving at beat 5 — a new instrument
+    // track right under its lane with a pattern "<name> notes" of its four notes, in beats THROUGH THE MAP; --instrument;
+    // ONE edit; silence and a note clip refused
+    Run r;
+    r.ok("project new " + freshSong("tomidi") + " --bpm 120");
+    std::vector<float> x((size_t)(2.4 * 48000), 0.0f);
+    addTone(x, 69, 0.10, 0.55, 0.5, 0.4);
+    addTone(x, 72, 0.60, 1.10, 0.5, 0.15);
+    addTone(x, 72, 1.10, 1.55, 0.5, 0.15);
+    addTone(x, 76, 1.60, 2.10, 0.15, 0.4);
+    const std::string a = firstLine(r.ok("clip add --src " + monoFile(r, "tune", x) + " --at 4"));
+    r.ok("tempo add --at 5 --bpm 60");
+    const std::string own = r.clip(a)->lane;
+    const int depth = r.svc.model().undoDepth;
+    const std::string said = r.ok("clip to-midi " + a);
+    assert(r.svc.model().undoDepth == depth + 1 && r.clip(a)); // the audio stays
+    const ClipModel *m = r.clip(firstLine(said));
+    assert(m && m->at == 4 && !m->pattern.empty());
+    const StripModel *s = r.strip(m->track);
+    assert(s && s->kind == "instrument");
+    auto patternOf = [&](const ClipModel *cm) -> const PatternModel * {
+        for (const auto &q : r.svc.model().patterns)
+            if (q.id == cm->pattern) return &q;
+        return nullptr;
+    };
+    const PatternModel *pt = patternOf(m);
+    assert(pt && pt->name == "tune notes" && pt->notes.size() == 4 && pt->instrument == "synth");
+    // seconds in the clip → beats: 120 bpm to beat 5 (half a second), then 60 — a beat a second
+    auto beatOf = [](double sec) { return sec < 0.5 ? sec * 2 : 1 + (sec - 0.5); };
+    const int want[4] = {69, 72, 72, 76};
+    const double starts[4] = {0.10, 0.60, 1.10, 1.60};
+    for (int i = 0; i < 4; ++i)
+    {
+        const auto &nt = pt->notes[(size_t)i];
+        std::printf("    note %d at %.4f beats (want %.4f) length %.4f velocity %d\n", nt.pitch, nt.at, beatOf(starts[i]), nt.length, nt.vel);
+        assert(nt.pitch == want[i] && std::fabs(nt.at - beatOf(starts[i])) < 0.011);
+    }
+    assert(pt->notes[3].vel < pt->notes[0].vel && pt->notes[0].length > 0.5 && pt->notes[0].length < 0.95);
+    const auto lanes = lanesInOrder(r);
+    for (size_t i = 0; i + 1 < lanes.size(); ++i)
+        if (lanes[i]->id == own) assert(lanes[i + 1]->id == m->lane && lanes[i + 1]->strip == m->track);
+    r.ok("undo");
+    assert(r.svc.model().clips.size() == 1 && r.svc.model().patterns.empty());
+    // another instrument; an unknown one refused by name
+    const ClipModel *k = r.clip(firstLine(r.ok("clip to-midi " + a + " --instrument sampler")));
+    assert(k && patternOf(k)->instrument == "sampler");
+    r.ok("undo");
+    assert(contains(r.no("clip to-midi " + a + " --instrument synht"), "synth"));
+    // nothing to hear; a note clip
+    const std::string quiet = firstLine(r.ok("clip add --src " + monoFile(r, "quiet", std::vector<float>(48000, 0.0f)) + " --at 0 --lane new"));
+    assert(contains(r.no("clip to-midi " + quiet), "no note heard"));
+    const std::string notes = firstLine(r.ok("clip add --instrument synth --at 0 --length 4"));
+    assert(contains(r.no("clip to-midi " + notes), "is a note clip"));
+    pass("to-midi (R-ASSIST-1): a melody into a pattern \"<name> notes\" on a new instrument track under its lane — four notes, their pitches, their starts in beats through the tempo map, the softer one softer; --instrument; one edit; silence and a note clip refused");
+}
+
+static void test_chords_detect_and_clear()
+{
+    // R-ASSIST-1: C Am F G a second each at beat 4 (120 bpm: two beats each), a held G after — the song's chords from
+    // the whole mix; from one clip, replacing what was in its span and cutting what crosses its edges; in the song file
+    // and the model; time edits move them; clear; refusals
+    Run r;
+    const std::string song = freshSong("chords");
+    r.ok("project new " + song + " --bpm 120");
+    std::vector<float> prog((size_t)(4 * 48000), 0.0f), held((size_t)(2 * 48000), 0.0f), cee((size_t)(0.5 * 48000), 0.0f);
+    const int triads[4][3] = {{60, 64, 67}, {57, 60, 64}, {53, 57, 60}, {55, 59, 62}};
+    for (int k = 0; k < 4; ++k)
+        for (int m : triads[k]) addTone(prog, m, k, k + 1.0, 0.2);
+    for (int m : triads[3]) addTone(held, m, 0, 2.0, 0.2);
+    for (int m : triads[0]) addTone(cee, m, 0, 0.5, 0.2);
+    const std::string a = firstLine(r.ok("clip add --src " + monoFile(r, "prog", prog) + " --at 4"));
+    const std::string g = firstLine(r.ok("clip add --src " + monoFile(r, "heldg", held) + " --at 12"));
+    auto chords = [&] {
+        std::string s;
+        for (const auto &c : r.svc.model().songChords)
+        {
+            char b[96];
+            std::snprintf(b, sizeof b, "%s%s@%g+%g", s.empty() ? "" : " ", c.name.c_str(), c.at, c.length);
+            s += b;
+        }
+        return s;
+    };
+    // the whole song
+    const int depth = r.svc.model().undoDepth;
+    r.events.clear();
+    const std::string said = r.ok("chords detect");
+    std::printf("    the song: %s\n", chords().c_str());
+    assert(chords() == "C@4+2 Am@6+2 F@8+2 G@10+6");
+    assert(r.svc.model().undoDepth == depth + 1);
+    assert(contains(said, "4 chords in the song, beats 0.0 … 16.0: C Am F G") && contains(said, "made: chord="));
+    assert(std::count_if(r.events.begin(), r.events.end(), [](const std::string &e) { return contains(e, "what=chord.added"); }) == 4);
+    assert(contains(r.events.back(), "chords.detected n=4 from=0.0 to=16.0"));
+    assert(contains(r.text(), "#achord id=cd_1 name=C at=4.0 length=2.0"));
+    const std::string gId = r.svc.model().songChords[3].id;
+    // one clip: its span replaced; a chord across its edges keeps what lies outside — before it its own, after a new one
+    const std::string c = firstLine(r.ok("clip add --src " + monoFile(r, "cee", cee) + " --at 13 --lane new"));
+    r.ok("chords detect " + c);
+    std::printf("    after %s: %s\n", c.c_str(), chords().c_str());
+    assert(chords() == "C@4+2 Am@6+2 F@8+2 G@10+3 C@13+1 G@14+2");
+    assert(r.svc.model().songChords[3].id == gId && r.svc.model().songChords[5].id != gId);
+    // saved and read back
+    r.ok("project save");
+    Run back;
+    back.ok("project open " + song);
+    assert(back.svc.model().songChords.size() == 6 && back.svc.model().songChords[4].name == "C");
+    // the time edits move them as sections: one across an insert grows; a delete moves what follows, takes out what it
+    // holds, cuts what crosses it
+    r.ok("time insert --at 11 --length 2");
+    assert(chords() == "C@4+2 Am@6+2 F@8+2 G@10+5 C@15+1 G@16+2");
+    r.ok("undo");
+    for (const auto &id : {a, g, c}) r.ok("clip delete " + id); // (a clip across a delete's edge refuses it)
+    r.ok("time delete --from 9 --to 13.5");
+    assert(chords() == "C@4+2 Am@6+2 F@8+1 C@9+0.5 G@9.5+2");
+    for (int i = 0; i < 4; ++i) r.ok("undo");
+    assert(chords() == "C@4+2 Am@6+2 F@8+2 G@10+3 C@13+1 G@14+2" && r.svc.model().clips.size() == 3);
+    // clear
+    r.ok("chords clear");
+    assert(r.svc.model().songChords.empty() && !contains(r.text(), "#achord"));
+    assert(contains(r.no("chords clear"), "no chords"));
+    // refusals: nothing heard where nothing was; a note clip; no clip
+    const std::string quiet = firstLine(r.ok("clip add --src " + monoFile(r, "silent", std::vector<float>(48000, 0.0f)) + " --at 20 --lane new"));
+    assert(contains(r.no("chords detect " + quiet), "no chord heard"));
+    const std::string notes = firstLine(r.ok("clip add --instrument synth --at 0 --length 4"));
+    assert(contains(r.no("chords detect " + notes), "is a note clip"));
+    assert(contains(r.no("chords detect ac_99"), "no clip"));
+    pass("chords (R-ASSIST-1): the song's chords from its mix, beat by beat — C Am F G, a held G merged; from one clip, its span replaced and a chord across its edges cut, a new id after; chord.added each, then chords.detected; #achord in the song, read back; time insert/delete move them; clear; refusals");
+}
+
 static void test_slice_cuts_a_clip_or_makes_a_kit()
 {
     // R-EDIT-1: a drum loop — hits at beats 0, 1, 2, 2.5, 3 of 4 — sliced every beat (clips playing what it did),
@@ -7385,6 +7619,9 @@ int main()
     test_a_clip_is_split_and_plays_the_same();
     test_overlapping_clips_on_a_lane_crossfade();
     test_consolidate_renders_clips_into_one();
+    test_separate_splits_a_clip_in_two();
+    test_to_midi_transcribes_a_melody();
+    test_chords_detect_and_clear();
     test_slice_cuts_a_clip_or_makes_a_kit();
     test_a_warped_clip_follows_the_tempo();
     test_a_tempo_map_moves_time();

@@ -313,6 +313,13 @@ namespace solaris
         double at = 0, length = 0, end = 0;      // beats; length 0 = a point
     };
 
+    /** R-ASSIST-1: a chord the song plays, as `chords detect` found it — a span of beats, named. */
+    struct ChordModel
+    {
+        std::string id, name;                    // "C", "Am", "F#", "Bbm"
+        double at = 0, length = 0;               // beats
+    };
+
     /** R-VER: a version of the song — its base resolved, its changes on top (docs/project-format.md §9b). */
     struct VersionModel
     {
@@ -579,6 +586,7 @@ namespace solaris
         std::string launchQuantize = "bar";      // R-LAUNCH-1: where a launch lands — bar | beat | none
         VideoModel video;                        // R-VIDEO-1: the song's picture ("" id: none)
         SyncModel sync;                          // R-COLLAB-1: its file, watched
+        std::vector<ChordModel> songChords;      // R-ASSIST-1: the song's chords, by time (`chords` is `--chord`'s vocabulary)
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };
 }

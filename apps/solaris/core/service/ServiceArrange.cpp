@@ -55,7 +55,7 @@ namespace solaris
         if (insert ? (!num("at", a) || !num("length", b)) : (!num("from", a) || !num("to", b))) return false;
         if (insert ? !(b > 0) : !(b > a)) { err = insert ? "--length must be more than 0 beats" : "--to must be after --from"; return false; }
         const double span = insert ? b : b - a;
-        size_t clips = 0, gone = 0, autos = 0, marks = 0;
+        size_t clips = 0, gone = 0, autos = 0, marks = 0, chords = 0;
         std::string notes;
         // what crosses an edge and what lies inside: decided before anything moves
         std::vector<std::string> crossing, shortened, inside;
@@ -144,6 +144,26 @@ namespace solaris
                 else if (m.length > 0 && e > a + eps) { m.length = toTick(m.length - (std::min(e, b) - a)); ++marks; }
             }
         }
+        // R-ASSIST-1: chords as sections are — after the edit they move, inside a deleted span they go, across it they
+        // grow or shrink
+        {
+            const size_t n = p.chords.size();
+            if (!insert)
+                p.chords.erase(std::remove_if(p.chords.begin(), p.chords.end(), [&](const Chord &x) { return x.at >= a - eps && x.at + x.length <= b + eps; }), p.chords.end());
+            chords += n - p.chords.size();
+            for (auto &x : p.chords)
+            {
+                const double e = x.at + x.length;
+                if (insert)
+                {
+                    if (x.at >= a - eps) { x.at = toTick(x.at + span); ++chords; }
+                    else if (e > a + eps) { x.length = toTick(x.length + span); ++chords; }
+                }
+                else if (x.at >= b - eps) { x.at = toTick(x.at - span); ++chords; }
+                else if (x.at >= a - eps) { x.at = a; x.length = toTick(e - b); ++chords; } // its head in the span
+                else if (e > a + eps) { x.length = toTick(x.length - (std::min(e, b) - a)); ++chords; }
+            }
+        }
         // R-TEMPO-1: a tempo change after the edit moves with what it changes; one inside a deleted span goes (the tempo
         // there is the one before it)
         if (!insert)
@@ -169,7 +189,8 @@ namespace solaris
         auto count = [](size_t k, const char *one, const char *many) { return std::to_string(k) + " " + (k == 1 ? one : many); };
         mOutput = std::string(insert ? "opened " : "took out ") + canonicalBeats(span) + " beats at " + canonicalBeats(a) + ": " + count(clips, "clip", "clips") +
                   (insert ? " moved" : " moved or shortened") + (gone ? ", " + count(gone, "clip", "clips") + " gone" : std::string()) + ", " +
-                  count(autos, "automation", "automations") + ", " + count(marks, "marker", "markers") + "\n";
+                  count(autos, "automation", "automations") + ", " + count(marks, "marker", "markers") +
+                  (chords ? ", " + count(chords, "chord", "chords") : std::string()) + "\n";
         for (const auto &id : crossing) mOutput += id + " crosses beat " + canonicalBeats(a) + " — it stays (split it to open the gap through it, R-EDIT-1)\n";
         return true;
     }

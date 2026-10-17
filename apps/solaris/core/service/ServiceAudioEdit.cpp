@@ -299,7 +299,27 @@ namespace solaris
             from = std::min(from, cl->at);
             to = std::max(to, e);
         }
+        std::vector<std::vector<float>> ch;
+        if (!renderClipsRaw(ids, track, from, to, ch, err)) return false;
+
+        const Strip *s = p.strip(track);
+        const std::string file = writeBounce(s ? s->name : track, ch, err);
+        if (file.empty()) return false;
+
+        p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [&](const Clip &x) { return std::find(ids.begin(), ids.end(), x.id) != ids.end(); }), p.clips.end());
+        for (const auto &x : ids) changed("clip.deleted", x);
+        Command add;
+        add.kind = K::ClipAdd;
+        add.flags = {{"src", file}, {"strip", track}, {"at", canonicalBeats(from)}}; // `clip add` keeps it relative to the song
+        if (!lane.empty()) add.flags.emplace_back("lane", lane);
+        return clipCommand(add, err); // prints the new clip
+    }
+
+    bool SolarisService::renderClipsRaw(const std::vector<std::string> &ids, const std::string &track, double from, double to,
+                                        std::vector<std::vector<float>> &ch, std::string &err)
+    {
         // the clips alone, raw: their strip with no devices, at unity, centred, to the master at unity — nothing else
+        const Project &p = mProject;
         Project q = p;
         q.clips.erase(std::remove_if(q.clips.begin(), q.clips.end(), [&](const Clip &x) { return std::find(ids.begin(), ids.end(), x.id) == ids.end(); }), q.clips.end());
         q.strips.erase(std::remove_if(q.strips.begin(), q.strips.end(), [&](const Strip &s) { return s.id != track; }), q.strips.end());
@@ -321,7 +341,7 @@ namespace solaris
         eng.seek(start);
         eng.captureMaster(true);
         const long long lag = eng.outputLatency();
-        std::vector<std::vector<float>> ch(2);
+        ch.assign(2, {});
         engine::PortBuffers pb;
         for (long long pos = start; pos < end + lag;)
         {
@@ -332,24 +352,13 @@ namespace solaris
             pos += n;
         }
         for (auto &x : ch) x.erase(x.begin(), x.begin() + (long)lag);
-
-        const Strip *s = p.strip(track);
-        const std::string file = writeBounce(s ? s->name : track, ch, err);
-        if (file.empty()) return false;
-
-        p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [&](const Clip &x) { return std::find(ids.begin(), ids.end(), x.id) != ids.end(); }), p.clips.end());
-        for (const auto &x : ids) changed("clip.deleted", x);
-        Command add;
-        add.kind = K::ClipAdd;
-        add.flags = {{"src", file}, {"strip", track}, {"at", canonicalBeats(from)}}; // `clip add` keeps it relative to the song
-        if (!lane.empty()) add.flags.emplace_back("lane", lane);
-        return clipCommand(add, err); // prints the new clip
+        return true;
     }
 
-    std::string SolarisService::writeBounce(const std::string &stem, const std::vector<std::vector<float>> &ch, std::string &err)
+    std::string SolarisService::writeBounce(const std::string &stem, const std::vector<std::vector<float>> &ch, std::string &err, const std::string &folder)
     {
         const auto slash = mPath.find_last_of('/');
-        const std::string dir = (slash == std::string::npos ? std::string(".") : mPath.substr(0, slash)) + "/Bounces";
+        const std::string dir = (slash == std::string::npos ? std::string(".") : mPath.substr(0, slash)) + "/" + folder;
         std::set<std::string> there;
         std::vector<BrowserEntry> entries;
         std::string listErr;

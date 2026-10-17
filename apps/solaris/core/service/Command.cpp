@@ -524,6 +524,27 @@ namespace solaris
              "rendered raw (before the strip's devices, fader and pan) from the first's start to the last's end, written "
              "beside the song as Bounces/<strip> <n>.wav (32-bit float) and put in their place on the first's lane; one "
              "edit, the new clip printed. A note clip is refused (a strip's bounce is R-PERF-3).", "R-EDIT-1"},
+            {K::ClipSeparate, "clip separate", "<ac>", 1, 1, {},
+             "Split an audio clip's sound into what sustains and what strikes (R-ASSIST-1): what it plays, raw (as `clip "
+             "consolidate` renders it — before its strip's devices, fader and pan), separated by the DSP library (REQ-analysis-2: "
+             "median filtering, soft masks — the two sum back to the clip), written beside the song as Separated/<name> harmonic "
+             "<n>.wav and … percussive <n>.wav (32-bit float); the clip replaced by two clips at its place, on two new lanes under "
+             "its own, each on a new strip of its own (R-MIX-2) — ONE edit, the harmonic clip printed. A note clip is refused.",
+             "R-ASSIST-1"},
+            {K::ClipToMidi, "clip to-midi", "<ac>", 1, 1, {"instrument=<type>"},
+             "An audio clip's melody as notes (R-ASSIST-1): what it plays, raw, transcribed by the DSP library (REQ-analysis-3: "
+             "one note at a time — YIN's pitch, a note where one lasts 60 ms or more, split where a new attack is heard, its "
+             "velocity from its loudest moment) into a pattern \"<name> notes\" on a new instrument track (--instrument <type>, "
+             "the synth unless named) at the clip's place, on a new lane under its own; the notes in beats through the song's "
+             "tempo map — ONE edit, the new clip printed. Refused when no note is heard (chords, noise, silence).", "R-ASSIST-1"},
+            {K::ChordsDetect, "chords detect", "[<ac>]", 0, 1, {},
+             "The song's chords, found (R-ASSIST-1): from an audio clip's sound (raw), or with no clip from the whole song's mix "
+             "(rendered as `render` does, to the song's end) — the DSP library's chroma, beat by beat of the tempo map "
+             "(REQ-analysis-4: the 24 major and minor triads; a chord changes only where the change holds) — replacing the chords "
+             "that were in that span (one across its edge keeps what lies outside it); where no chord is heard, none. ONE edit; "
+             "prints how many and their names, `chords.detected` says it. Refused when nothing is heard and nothing was there.",
+             "R-ASSIST-1"},
+            {K::ChordsClear, "chords clear", "", 0, 0, {}, "Take every chord out of the song (R-ASSIST-1) — ONE edit; refused when it has none.", "R-ASSIST-1"},
             {K::ClipSlice, "clip slice", "<ac>", 1, 1, {"every=<beats>", "transients", "sensitivity=<0-1>", "kit"},
              "Cut an audio clip into clips (R-EDIT-1): --every <beats> from its start, or --transients where a sound "
              "begins (the DSP library's onset detector, REQ-onset-1; --sensitivity 0 … 1, 0.5) — ONE edit, the clips "

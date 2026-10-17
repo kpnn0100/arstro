@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N44 part 2 — the service** (R-ASSIST-1; Round 22: `clip separate`, `clip to-midi`, `chords detect` / `chords clear`, `#achord`, the model's `chords[]`, L2 tests over sounds the fake host plays back), then the window (the user: *"implement all"*). Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N44 part 3 — the window** (R-ASSIST-1; Round 22: a clip's menu — Separate Harmonic / Percussive, To MIDI, Detect Chords; the ruler's menu — Detect Chords, Clear Chords; a chord band under the markers' that the ruler grows into, the lanes easing down; each chord keyed, fading and sliding; its accessible name; shots; the new words in `vi.strings`) — the last of the ledger (the user: *"implement all"*). Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -706,6 +706,12 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       Part 1 (DSP f0d6fc1): `src/analysis/` — Stft (exact inverse), Separate (median filters, Wiener masks), Transcribe
       (the tuner's YIN lifted into `meter/Yin`, onsets), Chords (chroma, 24 triads, Viterbi); REQ-analysis-1…4; 294 unit
       tests, 63 integration checks through the Basic Synth; the pointer bumped.
+      Part 2 (the service, `ServiceAnalysis.cpp`): `clip separate` (two files in Separated/, two clips on new lanes
+      under its own, each its own strip), `clip to-midi [--instrument]` (a pattern "<name> notes" on a new track, its
+      notes in beats through the tempo map), `chords detect [<ac>]` (a clip's raw render or the song's mix; the span's
+      chords replaced, one across an edge cut) and `chords clear`; consolidate's raw render lifted out as
+      `renderClipsRaw`; `#achord`; the model's `songChords[]` (`chords` was taken by `--chord`'s vocabulary — Round 22
+      amended); `chords.detected`; the time edits move chords as sections. L2 three tests, model one; six mutants red.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

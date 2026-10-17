@@ -269,9 +269,16 @@ namespace solaris
         // R-PERF-3: a strip's own sound rendered — frozen into it, or bounced onto a new strip
         bool freezeCommand(const Command &c, std::string &err);
         bool renderOwnSound(const Project &p, const std::string &strip, std::vector<std::vector<float>> &out, std::string &err);
-        /** Beside the song: Bounces/<stem> <n>.wav, the next number no file there (and no clip) has, 32-bit float —
-         *  the path written ("" refused: err says why). `clip consolidate` and `strip bounce` share it. */
-        std::string writeBounce(const std::string &stem, const std::vector<std::vector<float>> &ch, std::string &err);
+        /** Beside the song: <folder>/<stem> <n>.wav, the next number no file there (and no clip) has, 32-bit float —
+         *  the path written ("" refused: err says why). `clip consolidate` and `strip bounce` share it (Bounces/);
+         *  `clip separate` writes Separated/ (R-ASSIST-1). */
+        std::string writeBounce(const std::string &stem, const std::vector<std::vector<float>> &ch, std::string &err, const std::string &folder = "Bounces");
+        /** What audio clips of one strip play, raw — the clips alone: their strip with no devices, at unity, centred, to
+         *  the master at unity — from beat `from` to `to`, two channels (`clip consolidate`, the analysis tools). */
+        bool renderClipsRaw(const std::vector<std::string> &ids, const std::string &track, double from, double to, std::vector<std::vector<float>> &ch, std::string &err);
+        // R-ASSIST-1 (ServiceAnalysis.cpp): a clip separated, transcribed; the song's chords found or cleared
+        bool analysisCommand(const Command &c, std::string &err);
+        bool renderSongMix(std::vector<std::vector<float>> &ch, std::string &err);
         bool splitClip(const std::string &id, double at, std::string &made, std::string &err);
         bool sliceToKit(const Clip &clip, double step, std::string &err);
         /** R-WARP-1: a stretch key's sound — its file's span (from `base`) stretched at `rate` by the DSP library. */

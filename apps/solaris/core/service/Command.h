@@ -48,6 +48,7 @@ namespace solaris
             PortAdd, TransportPunch,                         // R-REC-1
             ClipComp,                                        // R-REC-2
             ClipSplit, ClipConsolidate, ClipSlice,           // R-EDIT-1
+            ClipSeparate, ClipToMidi, ChordsDetect, ChordsClear, // R-ASSIST-1
             TempoAdd, TempoMove, TempoDelete,                // R-TEMPO-1
             PresetSave, PresetLoad, PresetList, PresetDelete, // R-PRESET-1
             TemplateSave, TemplateList, TemplateDelete,       // R-PRESET-2
