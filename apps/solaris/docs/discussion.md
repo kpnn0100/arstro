@@ -634,3 +634,38 @@ line to change):
 - **Not yet:** a version's own tempo map or markers edited separately from the song's (they are nodes like any other,
   so they version already — the "not yet" is a UI for comparing two versions); per-note inheritance inside one pattern;
   merging two versions; a repair for a broken version.
+
+### Round 16 — 2026-10-17 — collect and save; relink (R-COLLECT-1, N38): the design, before code
+
+R-COLLECT-1: `project collect` copies every file the song uses into its folder and rewrites the paths; a relink window
+for missing files (`clip relink <ac> <file>`, or a folder searched). Decided (each a line to change):
+
+- **What a song uses** — every audio clip's file and its takes', a device's sample (a sampler's sound, a convolution's
+  response), an instrument's definition (an `.sfz`) AND every sound it names (beside it, as the compile reads them), a
+  frozen strip's render — in main and in EVERY version (their own nodes, their overrides, their snapshots): a version
+  you will render later must find its files too. `project files [--missing]` lists them, one line each: the path as the
+  song names it, whether it is in the song's folder, outside it, or missing, and what uses it (ids; a version's
+  prefixed by its id). Read-only.
+- **Collect** — `project collect [--dry-run] [--save]`: every file outside the song's folder copied into
+  `<folder>/Samples/` — an `.sfz` with its sounds into `Samples/<its name>/`, their layout kept (a sound named outside
+  its `.sfz`'s folder is not collected, said) — never over a different file (a name taken gets " 2", " 3"…; the same
+  bytes already there are reused); then every reference to it rewritten, in main and every version, as ONE edit (one
+  undo — the copies stay; they are only files). Files already in the folder (Recordings, Frozen, Samples, anything
+  under it) are left; a missing file is named and stays missing (relink it first). `--save` saves after — the UI's
+  "Collect and Save" is ONE line. `--dry-run` says what it would copy and changes nothing. The service copies the
+  files itself, as it writes the song.
+- **Relink** — `project relink <file> --to <new>`: every reference to that file, in main and every version, pointed at
+  the new one, ONE edit; `project relink --folder <dir> [--dry-run]`: every MISSING file looked for by its name under
+  `<dir>` (searched down; the first by path order, several matches said) and relinked the same way, ONE edit;
+  `clip relink <ac> <file> [--take <n>]`: one clip's file (or one take's) — an edit of the open song, so on a version
+  it is that version's change. A device's sample already has its line (`set <dv>.sample=<file>`, R-EDM-8).
+- **Missing, published** — `missing[]` in the model: each file the song names that cannot be read — the path as
+  named, and what uses it — so a front end draws the relink window from the model, and an agent sees it in `state`.
+- **Seen** (part 2): File › Collect and Save (ONE `project collect --save`; what it did said in a toast); File ›
+  Relink… — a window listing each missing file (its name, the folder it was in, what uses it), each row's Locate… (the
+  host's file picker, then ONE `project relink <file> --to <picked>`), and Search a Folder… (the host's folder picker,
+  then ONE `project relink --folder <dir>`); a found row fades out, the rest slide up. A song opened with files missing
+  says so in a toast that names File › Relink….
+- **Parts** (a commit each): (1) the service — files listed, collect, the relinks, `missing[]`, the API; (2) the File
+  menu, the Relink window, the toast on open, shots.
+- **Not yet:** collecting a plugin's bundle (not media); finding a missing file by its content when its name changed.

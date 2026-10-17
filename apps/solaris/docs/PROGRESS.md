@@ -621,7 +621,8 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       Part 3: the song bar — the version chip after the menus (the name follows it), its menu the tree, New Version…
       (ONE line, opened), Freeze/Thaw, Rebase, Rename…, Delete; label, ring and width eased; shots song-versions(-mid).
       N37 DONE. (On the way: DR-UI-1/9/13's App and SongBar anchors re-pointed by symbol.)
-- [ ] **N38** Collect and save; relink (R-COLLECT-1).
+- [~] **N38** Collect and save; relink (R-COLLECT-1). Round 16 (the design): what a song uses — in every version, an
+      `.sfz`'s sounds too; collect into `Samples/` as ONE edit; relink a file or a folder across the song. Next: part 1.
 - [ ] **N39** A clip launcher (R-LAUNCH-1).
 - [ ] **N40** A video lane (R-VIDEO-1).
 - [ ] **N41** Sharing through a folder: merge by node (R-COLLAB-1).
