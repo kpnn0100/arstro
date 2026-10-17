@@ -25,6 +25,8 @@ namespace engine
         // bound gain / pan / sends ramp from A to B across one control period starting at `ramp`
         bool gainBound = false, panBound = false;
         double gainA = 1, gainB = 1, panA = 0, panB = 0;
+        double widthWas = 1.0;              // R-MIX-20: the width the last block ended at (a change ramps across a block)
+        std::vector<double> wL, wR;         // … its width and polarity applied
         long long ramp = 0;
         std::vector<char> sendBound;
         std::vector<double> sendA, sendB, tmpL, tmpR;
@@ -153,6 +155,8 @@ namespace engine
             st->outL.assign(kBlock, 0.0); st->outR.assign(kBlock, 0.0);
             st->tmpL.assign(kBlock, 0.0); st->tmpR.assign(kBlock, 0.0);
             st->keyL.assign(kBlock, 0.0); st->keyR.assign(kBlock, 0.0);
+            st->wL.assign(kBlock, 0.0); st->wR.assign(kBlock, 0.0); // R-MIX-20
+            st->widthWas = s.width;
             st->gainA = st->gainB = s.gain;
             st->panA = st->panB = s.pan;
             st->sendBound.assign(s.sends.size(), 0);
@@ -733,6 +737,22 @@ namespace engine
                 }
                 deliver(st.tmpL.data(), st.tmpR.data(), 1.0);
             };
+            // R-MIX-20: its width (mid and side; a change ramps across the block) and its polarity — after its rack,
+            // before its pre sends and fader; at their defaults nothing is touched
+            if (d.invert || d.width != 1.0 || st.widthWas != 1.0)
+            {
+                const double sign = d.invert ? -1.0 : 1.0, w0 = st.widthWas, w1 = d.width;
+                for (int i = 0; i < n; ++i)
+                {
+                    const double w = w0 + (w1 - w0) * (double)(i + 1) / n;
+                    const double m = 0.5 * (L[i] + R[i]), s = 0.5 * (L[i] - R[i]) * w;
+                    st.wL[i] = sign * (m + s);
+                    st.wR[i] = sign * (m - s);
+                }
+                st.widthWas = w1;
+                L = st.wL.data();
+                R = st.wR.data();
+            }
             for (size_t k = 0; k < d.sends.size(); ++k)
                 if (d.sends[k].pre)
                 {

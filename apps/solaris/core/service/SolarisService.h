@@ -362,6 +362,7 @@ namespace solaris
         std::vector<double> mLiveReadingValues;
         int mLiveGen = 0;                                             // bumps with every engine built to play
         int mPlayGen = 0;                                             // … the one a play started with (transport.swaps)
+        bool mMono = false;                                           // R-MIX-20: the mono check — the listener's
         std::vector<double> mLiveValues;                              // the player's, read in `pump`
         std::map<std::string, int> mLiveLatency;                      // device id → its latency in the playing engine (R-MIX-17)
         std::map<std::string, std::shared_ptr<Device>> mLatencyProbes; // per type: what its stored values make its latency

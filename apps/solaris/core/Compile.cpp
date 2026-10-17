@@ -187,7 +187,7 @@ namespace solaris
             walk(s, up);   // what feeds the solo
         }
         for (const auto &s : p.strips)
-            if (!audible.count(s.id)) silent.insert(s.id);
+            if (!audible.count(s.id) && !s.soloSafe) silent.insert(s.id); // R-MIX-20: a solo-safe bus no solo silences
         return silent;
     }
 
@@ -332,6 +332,8 @@ namespace solaris
             es.id = s->id;
             es.kind = s->kind == "instrument" ? engine::Strip::Instrument : s->kind == "bus" ? engine::Strip::Bus : engine::Strip::Audio;
             es.gain = engine::dbToLinear(stripGainDb(p, *s)); // R-MIX-19: its own plus its VCA's
+            es.invert = s->phase;                            // R-MIX-20
+            es.width = s->width / 100.0;
             es.pan = s->pan;
             es.silent = silent.count(s->id) > 0;
             const Strip *vs = s->vca.empty() ? nullptr : p.strip(s->vca);

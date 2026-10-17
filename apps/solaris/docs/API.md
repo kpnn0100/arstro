@@ -139,6 +139,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `clip slice <ac> [--every <beats>] [--transients] [--sensitivity <0-1>] [--kit]` | Cut an audio clip into clips (R-EDIT-1): --every <beats> from its start, or --transients where a sound begins (the DSP library's onset detector, REQ-onset-1; --sensitivity 0 … 1, 0.5) — ONE edit, the clips printed. --every with --kit makes a new instrument track instead: a Sampler of the clip's file in N equal slices (mode=slices) and a note clip in the clip's place playing them in order (root + k for slice k), so it plays what the clip did; the clip stays. A looping clip is not sliced. | R-EDIT-1 |
 | `transport punch <from\|off> [to]` | Punch in and out (R-REC-1): a recording keeps only what the song plays from <from> to <to> beats, and its clip starts at <from>; `off` keeps it all. The session's, as the loop. | R-REC-1 |
 | `transport loop <from\|off\|mk> [to]` | Loop between two beats while playing — or a marker's section (R-ARR-1: its length, else to the next marker); `off` ends it. | R-TIME-4 |
+| `transport mono <on\|off>` | The mono check: what the speakers get folded to mono (each output pair's L = R = their mean) while on — the listener's, never a render or an export, not kept in the song; `transport.mono` says it. | R-MIX-20 |
 | `audition <file\|stop>` | Hear a sample now, outside the song (the browser's preview): through the output device at the audition level, to its end; `stop` ends it. Not an edit, never in a render. | R-EDM-9 |
 | `wait <seconds>` | Let time pass (playback goes on, the model's transport and meters update) — for scripts that listen. | R-PLAY-3 |
 
@@ -148,6 +149,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 |---|---|
 | `project.name` · `project.bpm` · `project.sig` · `project.masterGain` · `project.sampleRate` | text · 20…999 · n/d · dB · Hz |
 | `<strip>.name` · `.gain` · `.pan` · `.mute` · `.solo` · `.colour` | text · dB (−120…12) · −1…1 · bool · bool · −1…15 |
+| `<strip>.phase` · `.width` · `.soloSafe` (R-MIX-20) | on/off (its polarity, after its rack) · % 0 … 200 (0 one channel, 200 the side doubled) · bool, a bus's only (a solo never silences it) |
 | `<strip>.vca` (R-MIX-19) | the VCA it follows — a strip of kind vca, by id or name — or `none`; a VCA's own gain adds to its members', its mute and solo are theirs; a VCA has no `.pan` and follows no VCA |
 | `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` · `.reverse` · `.warp` · `.bpm` · `.pitch` | text · beats · beats · beats · beats · dB · bool · s · s · bool (audio, R-EDIT-1) · bool · bpm 20 … 999 · semitones −24 … +24 (audio, R-WARP-1) |
 | `<lane>.name` · `.colour` · `.strip` (`<ch>` an instrument: the lane is its track; `none`: plain — R-LANE-3) · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
@@ -599,6 +601,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.recorded` | int | notes struck that will land (a count-in's are not) *(not in `--stable`)* |
 | `transport.xruns` | int | underruns since play (−1: this driver cannot count them) — R-DEV-5 *(not in `--stable`)* |
 | `transport.cpu` | number | R-PERF-1: the audio thread's load — a block's work over its duration, smoothed (0 stopped) *(not in `--stable`)* |
+| `transport.mono` | bool | R-MIX-20: the mono check — what the speakers get folded to mono (`transport mono on\|off`); never a render |
 | `transport.swaps` | number | engines built and swapped in since play — an edit the live path could not carry (a fader, a mute, a device value move with none) *(not in `--stable`)* |
 | `transport.cpuPeak` | number | … its worst single block in the last second, unsmoothed (over 1: a block that missed its deadline) *(not in `--stable`)* |
 | `transport.devices` | object[] | R-DEV-5: while playing, every device the song plays through — the clock first, then each FOLLOWER (a device a port is mapped to, held to the clock, R-DEV-1/2), and an armed input on another device; none stopped *(not in `--stable`)* |

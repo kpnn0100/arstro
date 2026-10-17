@@ -5130,6 +5130,118 @@ static void test_a_vca_moves_its_members_live()
     pass("a VCA live (R-MIX-19): its fader moves its member at once with no engine rebuilt (transport.swaps), its mute too; a bound member's offset rebuilds; the model says whom a strip follows, the dB it adds, whom a VCA moves");
 }
 
+static void test_per_strip_tools()
+{
+    // R-MIX-20 (Round 14, part 1): a strip's phase and width — after its rack, before its fader — each against its
+    // formula, sample-exact; solo-safe on a bus; the mono check the listener's, never the render's
+    const std::string dir = scratch();
+    Run r;
+    r.ok("project new " + freshSong("tools") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");                 // ch_2
+    r.ok("notes add pt_1 \"C4@0:2 E4@2:2\"");
+    r.ok("device add ch_2 --type reverb");                                  // a stereo sound: L and R apart
+    int k = 0;
+    auto render = [&]() {
+        const std::string out = dir + "/tools-" + std::to_string(k++) + ".wav";
+        r.ok("render --out " + out + " --to 4 --bits 32f");
+        return r.fake.written[out];
+    };
+    const auto plain = render();
+    // phase: the same sound, negated
+    r.ok("set ch_2.phase=on");
+    assert(r.ok("get ch_2.phase") == "on\n");
+    const auto inverted = render();
+    r.ok("set ch_2.phase=off");
+    // width 0: one channel; 200: the side doubled, the mid kept
+    r.ok("set ch_2.width=0");
+    const auto mono = render();
+    r.ok("set ch_2.width=200");
+    const auto wide = render();
+    r.ok("set ch_2.width=100");
+    assert(plain == render());                                              // back at its defaults: untouched, to the bit
+    double neg = 0, lr = 0, side = 0, mid = 0, apart = 0;
+    for (size_t i = 0; i < plain[0].size(); ++i)
+    {
+        const double L = plain[0][i], R = plain[1][i];
+        neg = std::max(neg, std::fabs(inverted[0][i] + L) + std::fabs(inverted[1][i] + R));
+        lr = std::max(lr, (double)std::fabs(mono[0][i] - mono[1][i]));
+        side = std::max(side, std::fabs((wide[0][i] - wide[1][i]) - 2.0 * (L - R)));
+        mid = std::max(mid, std::fabs((wide[0][i] + wide[1][i]) - (L + R)));
+        apart = std::max(apart, std::fabs(L - R));
+    }
+    std::printf("    phase off by %.2g; width 0: L − R %.2g; width 200: side off by %.2g, mid by %.2g (L and R %.3f apart)\n", neg, lr, side, mid, apart);
+    assert(apart > 0.01 && neg < 1e-6 && lr < 1e-6 && side < 1e-6 && mid < 1e-6);
+    // solo-safe: a bus's own; a solo leaves it audible; refused on a line that is not a bus
+    r.ok("strip add --kind bus --name Verb");                               // ch_3
+    r.ok("strip add --kind audio --name Empty");                            // ch_4
+    r.ok("set ch_4.solo=true");
+    auto audible = [&](const std::string &id) {
+        for (const auto &st : r.svc.model().strips)
+            if (st.id == id) return st.audible;
+        return false;
+    };
+    assert(!audible("ch_3"));
+    r.ok("set ch_3.soloSafe=true");
+    assert(audible("ch_3") && r.ok("get ch_3.soloSafe") == "true\n");
+    r.ok("set ch_4.solo=false");
+    assert(contains(r.no("set ch_2.soloSafe=true"), "solo-safe is a bus's"));
+    assert(contains(r.no("set ch_2.width=250"), "width (%)"));
+    assert(contains(r.no("set ch_2.phase=maybe"), "phase is on or off"));
+    // the mono check: the speakers folded; the render never
+    r.ok("set ch_2.pan=-1 ch_2.width=100");
+    r.ok("transport mono on");
+    assert(r.svc.model().transport.mono);
+    r.fake.capture->frames = 0;
+    r.ok("transport play --from 0");
+    waitFrames(r, 48000);
+    r.ok("transport stop");
+    const auto &sink = r.fake.capture->sink;
+    double foldOff = 0, heard = 0;
+    for (size_t i = 0; i + 1 < sink.size(); i += 2)
+    {
+        foldOff = std::max(foldOff, (double)std::fabs(sink[i] - sink[i + 1]));
+        heard = std::max(heard, (double)std::fabs(sink[i]));
+    }
+    const auto rendered = render();
+    double rightInRender = 0;
+    for (float v : rendered[1]) rightInRender = std::max(rightInRender, (double)std::fabs(v));
+    assert(r.svc.model().transport.mono);                                   // a stop keeps the listener's choice
+    r.ok("transport mono off");
+    std::printf("    mono check: the speakers' L − R %.2g (heard %.3f); the render's right, hard left: %.2g\n", foldOff, heard, rightInRender);
+    assert(heard > 0.01 && foldOff == 0.0 && rightInRender < 1e-6);
+    pass("per-strip tools (R-MIX-20): phase the sound negated, width 0 one channel, 200 the side doubled — sample-exact, untouched at their defaults; solo-safe a bus's; the mono check the speakers', never the render's");
+}
+
+static void test_solo_safe_keeps_a_tail()
+{
+    // R-MIX-20: a solo begun while playing silences what it does not feed — a bus's echoes cut off at once; a
+    // solo-safe bus keeps running: its echoes go on (its source silenced all the same)
+    auto run = [&](bool safe) {
+        Run r;
+        r.ok("project new " + freshSong(safe ? "safe" : "unsafe") + " --bpm 120");
+        r.ok("strip add --kind audio --name Empty");                        // ch_2: soloed later — it plays nothing
+        r.ok("clip add --instrument synth --at 0 --length 1");             // ch_3: a short note
+        r.ok("notes add pt_1 \"C4@0:0.25\"");
+        r.ok("strip add --kind bus --name Echo");                           // ch_4
+        r.ok("route ch_3 --to ch_4");
+        r.ok("device add ch_4 --type delay");                               // dv_2
+        r.ok("set dv_2.time=200 dv_2.feedback=0.9 dv_2.mix=1");
+        if (safe) r.ok("set ch_4.soloSafe=true");
+        r.fake.capture->frames = 0;
+        r.ok("transport play --from 0");
+        waitFrames(r, 24000);                                               // the note sounded; its echoes going
+        r.ok("set ch_2.solo=true");
+        const long long mark = r.fake.capture->frames.load();
+        waitFrames(r, mark + 24000);
+        r.ok("transport stop");
+        return peakOf(r.fake.capture->sink, 2 * (size_t)(mark + 4800), 2 * (size_t)(mark + 24000));
+    };
+    const float cut = run(false), kept = run(true);
+    std::printf("    after a solo begins: a bus's echoes %.2g; a solo-safe bus's %.4f\n", cut, kept);
+    assert(cut == 0.0f && kept > 0.001f);
+    pass("solo-safe (R-MIX-20): a solo begun while playing cuts a bus's echoes at once — a solo-safe bus's go on");
+}
+
 static void test_freeze_and_bounce()
 {
     // R-PERF-3: a strip's own sound frozen beside the song and played instead — the song sounds as it did (to float
@@ -6509,6 +6621,8 @@ int main()
     test_a_vca_moves_its_members();
     test_a_vca_moves_its_members_live();
     test_a_vca_muted_member_keys_nothing();
+    test_per_strip_tools();
+    test_solo_safe_keeps_a_tail();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

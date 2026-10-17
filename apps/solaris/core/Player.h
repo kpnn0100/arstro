@@ -82,6 +82,8 @@ namespace solaris
         bool send(const Live &m) { return mIn.push(m); }
         /** The metronome: on or off, its gain (linear); and where the beats are (samples a beat, beats a bar). */
         void setClick(bool on, double gain) { mClickOn.store(on); mClickGain.store(gain); }
+        /** R-MIX-20: the mono check — each output pair folded to its mean while on (the listener's; a render never). */
+        void setMono(bool on) { mMono.store(on); }
         void setTempo(double samplesPerBeat, int beatsPerBar) { mSpb.store(samplesPerBeat); mBpb.store(beatsPerBar < 1 ? 1 : beatsPerBar); }
         static constexpr int kClickBeat = 37, kClickBar = 56; // the Drum Machine's rim and cowbell
         void setLoop(long long from, long long to) { mLoopA.store(from); mLoopB.store(to); }
@@ -199,6 +201,7 @@ namespace solaris
         void apply(const Live &m);
         void click(long long pos, int n);
         void keepLive(long long out); // the audio thread: this block's binding values into the ring
+        static void foldMono(float *interleaved, int frames, int channels); // R-MIX-20
         void measure(int n);          // the audio thread: this block into the meters (R-METER-1, R-METER-2)
         void midi();                  // the audio thread: the keyboard's messages since the last block (R-MIDI-2)
         void ballistics(int k, float peak, double meanSquare, int n); // one meter's RMS and held peak
@@ -266,6 +269,7 @@ namespace solaris
         std::unique_ptr<Device> mClick;
         std::vector<Sample> mClickL, mClickR;
         std::atomic<bool> mClickOn{false};
+        std::atomic<bool> mMono{false}; // R-MIX-20
         std::atomic<double> mClickGain{0.5}, mSpb{24000.0};
         std::atomic<int> mBpb{4};
         bool mClickWas = false;

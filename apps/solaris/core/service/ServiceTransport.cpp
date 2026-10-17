@@ -599,6 +599,7 @@ namespace solaris
             mPlayer->setTempo(spb, std::max(1, std::atoi(mProject.header.sig.c_str())));
             mPlayer->setClick(mSettings.metronome, engine::dbToLinear(mSettings.metronomeLevel));
             mPlayGen = mLiveGen; // transport.swaps counts from here
+            mPlayer->setMono(mMono); // R-MIX-20: the listener's mono check, kept across plays
             mPlayer->start(std::move(out), std::move(eng), routes, 2, mSettings.bufferSize, (long long)std::llround(sampleOfBeat(mPosition)), mLiveGen);
             announce();
             return true;
@@ -646,6 +647,7 @@ namespace solaris
             for (auto &s : mModel.strips) // R-METER-2: a stopped strip reads nothing — but its clip light stays lit
                 for (int ch = 0; ch < 2; ++ch) s.peak[ch] = s.rms[ch] = s.hold[ch] = 0;
             mModel.transport = TransportModel();
+            mModel.transport.mono = mMono; // R-MIX-20: the listener's — a stop keeps it
             mModel.transport.masterClip = mMasterClip;
             mModel.transport.position = mPosition;
             mModel.transport.cue = mCue;
@@ -691,6 +693,17 @@ namespace solaris
             mModel.transport.punchFrom = mPunchFrom;
             mModel.transport.punchTo = mPunchTo;
             announce();
+            return true;
+        }
+        case K::TransportMono:
+        {
+            // R-MIX-20: the listener's — folded at the Player's output; a render never hears it
+            const std::string v = c.arg(0);
+            if (v != "on" && v != "off") { err = "transport mono is on or off, got `" + v + "`"; return false; }
+            mMono = v == "on";
+            if (mPlayer) mPlayer->setMono(mMono);
+            mModel.transport.mono = mMono;
+            mOutput = std::string("mono ") + (mMono ? "on" : "off") + "\n";
             return true;
         }
         case K::TransportLoop:

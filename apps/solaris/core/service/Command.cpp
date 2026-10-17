@@ -458,6 +458,9 @@ namespace solaris
              "clip starts at <from>; `off` keeps it all. The session's, as the loop.", "R-REC-1"},
             {K::TransportLoop, "transport loop", "<from|off|mk> [to]", 1, 2, {},
              "Loop between two beats while playing — or a marker's section (R-ARR-1: its length, else to the next marker); `off` ends it.", "R-TIME-4"},
+            {K::TransportMono, "transport mono", "<on|off>", 1, 1, {},
+             "The mono check: what the speakers get folded to mono (each output pair's L = R = their mean) while on — "
+             "the listener's, never a render or an export, not kept in the song; `transport.mono` says it.", "R-MIX-20"},
             {K::Audition, "audition", "<file|stop>", 1, 1, {},
              "Hear a sample now, outside the song (the browser's preview): through the output device at the "
              "audition level, to its end; `stop` ends it. Not an edit, never in a render.", "R-EDM-9"},

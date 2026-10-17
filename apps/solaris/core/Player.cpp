@@ -194,6 +194,7 @@ namespace solaris
                         for (int i = 0; i < n; ++i) fd.buf[(size_t)i * C + dst] += ch[c][(size_t)i];
                     }
                 }
+            if (mMono.load(std::memory_order_relaxed)) foldMono(fd.buf.data(), n, C); // R-MIX-20: a follower's speakers too
             fd.f->push(fd.buf.data(), n);
         }
     }
@@ -275,6 +276,17 @@ namespace solaris
             break;
         }
         }
+    }
+
+    void Player::foldMono(float *interleaved, int frames, int channels)
+    {
+        // R-MIX-20: each pair (0, 1), (2, 3) … to its mean; a lone last channel as it is — stores only
+        for (int i = 0; i < frames; ++i)
+            for (int c = 0; c + 1 < channels; c += 2)
+            {
+                float &l = interleaved[(size_t)i * channels + c], &r = interleaved[(size_t)i * channels + c + 1];
+                l = r = 0.5f * (l + r);
+            }
     }
 
     void Player::keepLive(long long out)
@@ -581,6 +593,7 @@ namespace solaris
                     for (int i = 0; i < n; ++i) mInterleaved[(size_t)i * mChannels + dst] += ch[c][(size_t)i];
                 }
             }
+            if (mMono.load(std::memory_order_relaxed)) foldMono(mInterleaved.data(), n, mChannels); // R-MIX-20: the listener's
             const auto &meters = mEng->stripMeters();
             for (size_t s = 0; s < meters.size() && s < (size_t)kMaxStrips; ++s)
             {

@@ -268,6 +268,9 @@ namespace solaris
             else if (k == "monitor") n.monitor = v;
             else if (k == "frozen") n.frozen = v; // R-PERF-3
             else if (k == "vca") n.vca = v;       // R-MIX-19
+            else if (k == "phase") n.phase = v == "invert" || v == "true" || v == "on"; // R-MIX-20
+            else if (k == "width") n.width = r.num(k, v, 100.0);
+            else if (k == "soloSafe") n.soloSafe = r.boolean(k, v, false);
             else n.unknown.emplace_back(k, v);
         }
         void apply(Reader &r, Send &n, const std::string &k, const std::string &v)
@@ -797,6 +800,9 @@ namespace solaris
             l.strIf("input", n.input).kvIf(n.monitor != "auto", "monitor", n.monitor); // R-REC-1: only when set
             l.strIf("frozen", n.frozen);                                              // R-PERF-3
             l.strIf("vca", n.vca);                                                    // R-MIX-19
+            l.kvIf(n.phase, "phase", "invert");                                       // R-MIX-20: only when set
+            if (n.width != 100.0) l.kv("width", canonicalNumber(n.width));
+            l.kvIf(n.soloSafe, "soloSafe", "true");
             emit(out, "", l.unknown(n.unknown), n.remarks);
         }
         group(!p.sends.empty());
@@ -1011,6 +1017,9 @@ namespace solaris
             if (s.kind != "audio" && s.kind != "instrument" && s.kind != "bus" && s.kind != "vca")
                 e.push_back(s.id + " has kind `" + s.kind + "` (audio | instrument | bus | vca)");
             if (!s.mixer.empty() && !p.mixer(s.mixer)) e.push_back(s.id + " lives on mixer `" + s.mixer + "`, which does not exist");
+            if (s.width < 0.0 || s.width > 200.0) e.push_back(s.id + " has width " + canonicalNumber(s.width) + " % (0 … 200, R-MIX-20)");
+            if (s.soloSafe && s.kind != "bus") e.push_back(s.id + " is solo-safe but a " + s.kind + " strip — solo-safe is a bus's (R-MIX-20)");
+            if (s.kind == "vca" && (s.phase || s.width != 100.0)) e.push_back(s.id + " is a VCA — it carries no sound: no phase or width (R-MIX-20)");
             if (s.kind == "vca")
             {
                 // R-MIX-19: a VCA carries no sound — no output of its own; it follows no VCA (not yet)

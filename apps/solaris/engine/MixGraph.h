@@ -107,6 +107,8 @@ namespace engine
         double pan = 0.0;                 // −1 … +1, balance law
         bool silent = false;              // muted, or silenced by another strip's solo (the core decides)
         bool keyLive = true;              // its sidechain keys still run while silent — false only when muted
+        bool invert = false;              // R-MIX-20: its polarity inverted, after its rack
+        double width = 1.0;               // … its width (0 mono, 1 as it is, 2 the side doubled), after its rack
         std::vector<DeviceDesc> rack;     // an instrument strip's rack[0] is its instrument
         std::vector<Region> regions;      // audio strips
         std::vector<NoteEvent> notes;     // instrument strips; sorted by `at`, offs before ons

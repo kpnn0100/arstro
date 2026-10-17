@@ -87,6 +87,7 @@ namespace solaris
         mModel = AppModel();
         prunePlugins(); // R-VST-6: a removed plugin's process ends (once no engine plays it)
         mModel.transport = transport;
+        mModel.transport.mono = mMono; // R-MIX-20
         mModel.audition = audition;
         mModel.loudness = loudness;
         mModel.armed = mArmed;            // R-MIDI-2: the session's

@@ -151,6 +151,7 @@ namespace solaris
         o += "| address | value |\n|---|---|\n";
         o += "| `project.name` · `project.bpm` · `project.sig` · `project.masterGain` · `project.sampleRate` | text · 20…999 · n/d · dB · Hz |\n";
         o += "| `<strip>.name` · `.gain` · `.pan` · `.mute` · `.solo` · `.colour` | text · dB (−120…12) · −1…1 · bool · bool · −1…15 |\n";
+        o += "| `<strip>.phase` · `.width` · `.soloSafe` (R-MIX-20) | on/off (its polarity, after its rack) · % 0 … 200 (0 one channel, 200 the side doubled) · bool, a bus's only (a solo never silences it) |\n";
         o += "| `<strip>.vca` (R-MIX-19) | the VCA it follows — a strip of kind vca, by id or name — or `none`; a VCA's own gain adds to its members', its mute and solo are theirs; a VCA has no `.pan` and follows no VCA |\n";
         o += "| `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` · `.reverse` · `.warp` · `.bpm` · `.pitch` | text · beats · beats · beats · beats · dB · bool · s · s · bool (audio, R-EDIT-1) · bool · bpm 20 … 999 · semitones −24 … +24 (audio, R-WARP-1) |\n";
         o += "| `<lane>.name` · `.colour` · `.strip` (`<ch>` an instrument: the lane is its track; `none`: plain — R-LANE-3) · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |\n";

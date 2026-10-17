@@ -317,6 +317,7 @@ namespace solaris
             {"transport.recorded", "int", "notes struck that will land (a count-in's are not)", false},
             {"transport.xruns", "int", "underruns since play (−1: this driver cannot count them) — R-DEV-5", false},
             {"transport.cpu", "number", "R-PERF-1: the audio thread's load — a block's work over its duration, smoothed (0 stopped)", false},
+            {"transport.mono", "bool", "R-MIX-20: the mono check — what the speakers get folded to mono (`transport mono on|off`); never a render"},
             {"transport.swaps", "number", "engines built and swapped in since play — an edit the live path could not carry (a fader, a mute, a device value move with none)", false},
             {"transport.cpuPeak", "number", "… its worst single block in the last second, unsmoothed (over 1: a block that missed its deadline)", false},
             {"transport.devices", "object[]", "R-DEV-5: while playing, every device the song plays through — the clock first, then each FOLLOWER (a device a port is mapped to, held to the clock, R-DEV-1/2), and an armed input on another device; none stopped", false},
@@ -735,7 +736,7 @@ namespace solaris
         tr.set("loopFrom", m.transport.loopFrom).set("loopTo", m.transport.loopTo).set("loopClip", m.transport.loopClip).set("cue", m.transport.cue)
             .set("punchFrom", m.transport.punchFrom).set("punchTo", m.transport.punchTo);
         if (!stable) tr.set("latencyMs", m.transport.latencyMs);
-        tr.set("device", m.transport.device);
+        tr.set("device", m.transport.device).set("mono", m.transport.mono);
         if (!stable)
             tr.set("masterPeak", Json::array().push(Json::number(m.transport.masterPeak[0])).push(Json::number(m.transport.masterPeak[1])))
                 .set("masterRms", Json::array().push(Json::number(m.transport.masterRms[0])).push(Json::number(m.transport.masterRms[1])))

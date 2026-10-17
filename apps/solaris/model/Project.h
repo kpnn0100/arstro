@@ -76,6 +76,9 @@ namespace solaris
         std::string monitor = "auto";   // R-REC-1: auto | on | off — when its input is heard through it
         std::string frozen;             // R-PERF-3: the file it plays instead of its own work ("" not frozen), as a clip's src
         std::string vca;                // R-MIX-19: the VCA strip (kind vca) whose dB it adds ("" none)
+        bool phase = false;             // R-MIX-20: its polarity inverted (both channels)
+        double width = 100.0;           // … its stereo width, % (0 mono … 200 the side doubled)
+        bool soloSafe = false;          // … a bus no solo silences
         Fields unknown;
         Remarks remarks;
     };

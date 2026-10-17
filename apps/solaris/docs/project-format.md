@@ -86,6 +86,10 @@ gain=-6.0` — with no output, no rack, no clips and no sends (each refused when
 it says so: `#atrack id=ch_2 name=Lead kind=instrument … vca=ch_4` (written only when set). A member plays at its own
 gain plus its VCA's; the VCA's mute and solo are its members'. A VCA follows no VCA.
 
+**Per-strip tools (R-MIX-20).** `phase=invert` (its polarity inverted, after its rack), `width=150` (its stereo width in %,
+0 … 200 — 100, the default, is not written) and, on a bus, `soloSafe=true` (a solo never silences it) — each on the
+strip's `#atrack` line, only when set. The mono check is the listener's and never in the file.
+
 ## 5. Sends — `#asend`
 
 ```

@@ -605,7 +605,9 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       Part 2: a VCA's fader, mute and solo live with no rebuild (a formula member: one); a VCA-muted member keys
       nothing; strips[].vca / vcaGain / members; transport.swaps. Part 3: the dock — a VCA's card, a member's eased
       tag, "+ Line" › VCA, a strip's VCA ▸, shot mixer-vca. N35 DONE.
-- [ ] **N36** Phase invert, width, mono check, solo-safe (R-MIX-20).
+- [~] **N36** Phase invert, width, mono check, solo-safe (R-MIX-20). Round 14 (139db7d).
+      Part 1: a strip's phase and width in the engine (after its rack, before its fader; untouched at defaults);
+      solo-safe buses; the mono check at the Player (DR-MIX-20). Next: part 2 — phase and width live, the model, the API.
 - [ ] **N37** Versions of a song (R-VER-1…4).
 - [ ] **N38** Collect and save; relink (R-COLLECT-1).
 - [ ] **N39** A clip launcher (R-LAUNCH-1).

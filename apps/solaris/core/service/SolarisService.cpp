@@ -109,7 +109,7 @@ namespace solaris
             case K::Get: case K::Eval: case K::Undo: case K::Redo: case K::HistoryPrint: case K::HistoryJump: case K::Render: case K::MatrixPrint: case K::Audit: case K::StatePrint: case K::Api:
             case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
             case K::DevicesList: case K::Browse: case K::RecentsRemove:
-            case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::TransportRecord: case K::Wait:
+            case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::TransportRecord: case K::TransportMono: case K::Wait:
             case K::Audition: case K::NotePreview: case K::MetersClear: case K::MidiDevices: case K::StripArm: case K::TransportPunch: case K::None:
             case K::Ls: case K::Show: case K::PatternPrint: // R-SVC-8: reading back
             case K::PatternExport: case K::ProjectExportMidi: // R-MIDI-1: writing a file, not the song
@@ -281,7 +281,7 @@ namespace solaris
         case K::MidiDevices: case K::StripArm: case K::PortAdd:
             ok = inputCommand(c, err);
             break;
-        case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::TransportPunch: case K::TransportRecord: case K::Wait: case K::Audition: case K::MetersClear:
+        case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::TransportPunch: case K::TransportRecord: case K::TransportMono: case K::Wait: case K::Audition: case K::MetersClear:
         case K::NotePreview:
             ok = transportCommand(c, err);
             break;
@@ -934,7 +934,7 @@ namespace solaris
         }
         if (Strip *s = p.strip(id))
         {
-            static const std::vector<std::string> fields = {"name", "gain", "pan", "mute", "solo", "colour", "input", "monitor", "vca"};
+            static const std::vector<std::string> fields = {"name", "gain", "pan", "mute", "solo", "colour", "input", "monitor", "vca", "phase", "width", "soloSafe"};
             if (f == "name") { s->name = value; stored = value; return true; }
             if (f == "vca") // R-MIX-19: the VCA it follows — a strip of kind vca, by id or name — or none
             {
@@ -959,8 +959,25 @@ namespace solaris
                 stored = v->id;
                 return true;
             }
-            if (s->kind == "vca" && (f == "pan" || f == "input" || f == "monitor"))
+            if (s->kind == "vca" && (f == "pan" || f == "input" || f == "monitor" || f == "phase" || f == "width"))
             { err = id + " is a VCA — it carries no sound: it has a gain, a mute and a solo (R-MIX-19)"; return false; }
+            // R-MIX-20: its polarity, its width, and — a bus's — solo-safe
+            if (f == "phase")
+            {
+                if (value != "on" && value != "off" && value != "invert" && value != "normal") { err = id + ".phase is on or off, got `" + value + "`"; return false; }
+                s->phase = value == "on" || value == "invert";
+                stored = s->phase ? "on" : "off";
+                return true;
+            }
+            if (f == "width") { if (!number(value, x, err) || !inRange(x, 0, 200, "width (%)", err)) return false; s->width = x; stored = canonicalNumber(x); return true; }
+            if (f == "soloSafe")
+            {
+                if (!boolean(value, b, err)) return false;
+                if (b && s->kind != "bus") { err = id + " is a" + std::string(s->kind == "audio" ? "n audio" : s->kind == "instrument" ? "n instrument" : " " + s->kind) + " strip — solo-safe is a bus's (R-MIX-20)"; return false; }
+                s->soloSafe = b;
+                stored = boolText(b);
+                return true;
+            }
             if (f == "input") // R-REC-1: an input port of the song — by id or name — or none
             {
                 if (value == "none") { s->input.clear(); stored = "none"; return true; }
@@ -1257,6 +1274,9 @@ namespace solaris
             put("input", s->input.empty() ? "none" : s->input); // R-REC-1
             put("monitor", s->monitor);
             put("vca", s->vca.empty() ? "none" : s->vca); // R-MIX-19
+            put("phase", s->phase ? "on" : "off");          // R-MIX-20
+            put("width", canonicalNumber(s->width));
+            put("soloSafe", boolText(s->soloSafe));
         }
         else if (const Clip *c = p.clip(id))
         {

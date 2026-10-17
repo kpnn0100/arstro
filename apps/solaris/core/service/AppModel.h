@@ -389,6 +389,7 @@ namespace solaris
         float masterHold[2] = {0, 0};
         bool masterClip = false;
         std::string driver;                      // R-DEV-9: what the clock device plays through now ("" stopped)
+        bool mono = false;                       // R-MIX-20: the mono check — the speakers get mono (the listener's, never a render)
         int swaps = 0;                           // engines built and swapped in since play — an edit the live path could not carry
         long long xruns = -1;                    // R-DEV-5: underruns since play; −1 = this driver cannot count them
         float cpu = 0, cpuPeak = 0;              // R-PERF-1: the audio thread's load (a block's work over its duration),

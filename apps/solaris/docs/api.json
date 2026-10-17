@@ -1323,6 +1323,14 @@
       "requirement": "R-TIME-4"
     },
     {
+      "verb": "transport mono",
+      "usage": "transport mono <on|off>",
+      "args": "<on|off>",
+      "flags": [],
+      "summary": "The mono check: what the speakers get folded to mono (each output pair's L = R = their mean) while on — the listener's, never a render or an export, not kept in the song; `transport.mono` says it.",
+      "requirement": "R-MIX-20"
+    },
+    {
       "verb": "audition",
       "usage": "audition <file|stop>",
       "args": "<file|stop>",
@@ -3413,6 +3421,12 @@
       "type": "number",
       "summary": "R-PERF-1: the audio thread's load — a block's work over its duration, smoothed (0 stopped)",
       "stable": false
+    },
+    {
+      "path": "transport.mono",
+      "type": "bool",
+      "summary": "R-MIX-20: the mono check — what the speakers get folded to mono (`transport mono on|off`); never a render",
+      "stable": true
     },
     {
       "path": "transport.swaps",
