@@ -54,6 +54,7 @@ namespace solaris
         mLiveStrips.clear();
         mLiveDevices.clear();
         mLiveBinds.clear();
+        mLiveReadings.clear();
     }
 
     bool SolarisService::buildLive(std::unique_ptr<engine::Engine> &out, std::string &err)
@@ -65,6 +66,15 @@ namespace solaris
         mLiveStrips = cr.stripIds;
         mLiveDevices = cr.devices;
         mLiveBinds = cr.bindAddresses;
+        // R-FX-17: which device each reading slot is — the engine's own order (strips in order, each rack, the master)
+        mLiveReadings.clear();
+        auto measures = [&](const engine::DeviceDesc &d) {
+            const DeviceType *t = d.make ? nullptr : DeviceRegistry::find(d.type);
+            if (t && !t->readings.empty()) mLiveReadings.emplace_back(d.id, (int)t->readings.size());
+        };
+        for (const auto &s : cr.graph.strips)
+            for (const auto &d : s.rack) measures(d);
+        for (const auto &d : cr.graph.masterRack) measures(d);
         mLiveLatency.clear();
         for (const auto &d : cr.devices) mLiveLatency[d.first] = eng->deviceLatency(d.second.first, d.second.second);
         ++mLiveGen; // its live values are told apart from the engine it replaces
@@ -265,6 +275,24 @@ namespace solaris
             lm.truePeak = l.truePeak;
             lm.correlation = l.correlation;
             lm.spectrum.assign(l.spectrum.begin(), l.spectrum.end());
+        }
+        // R-FX-17: what each device measured, heard now, by the engine that played it
+        if (!mLiveReadings.empty() && mPlayer->liveReadings(mLiveGen, mLiveReadingValues))
+        {
+            std::map<std::string, size_t> at;
+            size_t k = 0;
+            for (const auto &d : mLiveReadings) { at[d.first] = k; k += (size_t)d.second; }
+            auto fill = [&](std::vector<DeviceModel> &ds) {
+                for (auto &dm : ds)
+                {
+                    const auto it = at.find(dm.id);
+                    if (it == at.end()) continue;
+                    for (size_t r = 0; r < dm.readings.size() && it->second + r < mLiveReadingValues.size(); ++r)
+                        dm.readings[r].value = mLiveReadingValues[it->second + r];
+                }
+            };
+            for (auto &s : mModel.strips) fill(s.devices);
+            fill(mModel.masterDevices);
         }
         // R-MIX-16: what each formula evaluated to for the block heard now, by the engine that played it
         if (!mLiveBinds.empty() && mPlayer->liveValues(mLiveGen, mLiveValues))

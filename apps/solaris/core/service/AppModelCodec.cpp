@@ -74,6 +74,11 @@ namespace solaris
             {"strips[].devices[].offline", "bool", "R-VST-6: the plugin is not playing (never started, crashed, overran) — an effect passes dry, an instrument is silent"},
             {"strips[].devices[].why", "string", "R-VST-6: why it is offline (`device reload <dv>` starts it again)"},
             {"strips[].devices[].editor", "bool", "R-VST-6: the plugin's own editor window is open (`device editor <dv>`)"},
+            {"strips[].devices[].readings", "object[]", "R-FX-17: what it measures (a tuner's pitch) — the registry's readings; absent for a device that measures nothing"},
+            {"strips[].devices[].readings[].name", "string", "the key `get <dv>.<name>` reads it by"},
+            {"strips[].devices[].readings[].label", "string", "for a person"},
+            {"strips[].devices[].readings[].unit", "string", "\"Hz\", \"dB\", \"ct\", \"\" (a number: a tuner's note is a MIDI number)"},
+            {"strips[].devices[].readings[].value", "number", "as heard now, while playing; 0 stopped", false},
             {"strips[].devices[].groups", "object[]", "R-UI-12: its parameter groups' titles, the registry's — `prefix` (before a parameter's dot, \"\" for none) and `label`"},
             {"strips[].devices[].groups[].prefix", "string", "the prefix before a parameter's dot; \"\" = the parameters with none"},
             {"strips[].devices[].groups[].label", "string", "its title, for a person"},
@@ -384,7 +389,7 @@ namespace solaris
             for (const auto &g : gs) a.push(Json::object().set("prefix", g.prefix).set("label", g.label));
             return a;
         }
-        Json devices(const std::vector<DeviceModel> &ds)
+        Json devices(const std::vector<DeviceModel> &ds, bool stable)
         {
             Json a = Json::array();
             for (const auto &d : ds)
@@ -396,12 +401,24 @@ namespace solaris
                                     .set("value", p.value).set("min", p.min).set("max", p.max).set("def", p.def)
                                     .set("choices", strings(p.choices)).set("logScale", p.logScale).set("integer", p.integer)
                                     .set("formula", p.formula));
-                a.push(Json::object().set("id", d.id).set("type", d.type).set("label", d.label)
-                           .set("instrument", d.instrument).set("bypass", d.bypass).set("known", d.known).set("lastChanged", d.lastChanged)
-                           .set("takesSample", d.takesSample).set("takesDefinition", d.takesDefinition).set("sample", d.sample)
-                           .set("plugin", d.plugin).set("offline", d.offline).set("why", d.why).set("editor", d.editor)
-                           .set("groups", groupsOf(d.groups))
-                           .set("params", params));
+                Json dj = Json::object().set("id", d.id).set("type", d.type).set("label", d.label)
+                              .set("instrument", d.instrument).set("bypass", d.bypass).set("known", d.known).set("lastChanged", d.lastChanged)
+                              .set("takesSample", d.takesSample).set("takesDefinition", d.takesDefinition).set("sample", d.sample)
+                              .set("plugin", d.plugin).set("offline", d.offline).set("why", d.why).set("editor", d.editor)
+                              .set("groups", groupsOf(d.groups))
+                              .set("params", params);
+                if (!d.readings.empty()) // R-FX-17: what it measures — the value a measurement, not the song's state
+                {
+                    Json rs = Json::array();
+                    for (const auto &rd : d.readings)
+                    {
+                        Json o = Json::object().set("name", rd.name).set("label", rd.label).set("unit", rd.unit);
+                        if (!stable) o.set("value", rd.value);
+                        rs.push(o);
+                    }
+                    dj.set("readings", rs);
+                }
+                a.push(dj);
             }
             return a;
         }
@@ -590,7 +607,7 @@ namespace solaris
             st.set("id", s.id).set("name", s.name).set("kind", s.kind).set("mixer", s.mixer).set("order", s.order)
                             .set("out", s.out).set("gain", s.gain).set("pan", s.pan).set("gainFormula", s.gainFormula)
                             .set("panFormula", s.panFormula).set("mute", s.mute).set("solo", s.solo).set("input", s.input).set("monitor", s.monitor)
-                            .set("audible", s.audible).set("colour", s.colour).set("sends", sends).set("devices", devices(s.devices));
+                            .set("audible", s.audible).set("colour", s.colour).set("sends", sends).set("devices", devices(s.devices, stable));
             if (!stable)
                 st.set("peak", Json::array().push(Json::number(s.peak[0])).push(Json::number(s.peak[1])))
                     .set("rms", Json::array().push(Json::number(s.rms[0])).push(Json::number(s.rms[1])))
@@ -601,7 +618,7 @@ namespace solaris
             strips.push(st);
         }
         j.set("strips", strips);
-        j.set("masterDevices", devices(m.masterDevices));
+        j.set("masterDevices", devices(m.masterDevices, stable));
         Json lanes = Json::array();
         for (const auto &l : m.lanes)
             lanes.push(Json::object().set("id", l.id).set("name", l.name).set("order", l.order).set("colour", l.colour).set("strip", l.strip).set("ownName", l.ownName)

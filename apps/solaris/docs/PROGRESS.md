@@ -596,7 +596,8 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       line extrapolates — the flanger needs it right); D-18 closed (DSP 2148541). The flanger (DSP 0b08063).
       The imager (DSP 04ddda6). The convolution reverb (DSP ac7aa74; `device add --sample`). The pitch shifter
       (DSP 8ceaa31). The vocoder (DSP 051007a; the audit hears a switchless key). The tuner, part 1 (Round 12;
-      DSP 6c07198: YIN and a device's readings). Next: its readings carried up — engine, Player, model, `get` (part 2).
+      DSP 6c07198: YIN and a device's readings). Part 2: the readings carried up — engine, Player ring, model, `get`
+      (DR-FX-17). Next: part 3, the window — the note and an eased needle.
 - [ ] **N35** Group / VCA faders (R-MIX-19).
 - [ ] **N36** Phase invert, width, mono check, solo-safe (R-MIX-20).
 - [ ] **N37** Versions of a song (R-VER-1…4).

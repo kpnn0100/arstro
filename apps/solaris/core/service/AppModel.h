@@ -35,6 +35,13 @@ namespace solaris
         std::string prefix, label;
     };
 
+    /** R-FX-17 (Round 12): what a device measures — its registry's description and its value while playing. */
+    struct ReadingModel
+    {
+        std::string name, label, unit;          // the registry's: "frequency", "Frequency", "Hz"
+        double value = 0;                       // as heard now, while playing; 0 stopped
+    };
+
     struct DeviceModel
     {
         std::string id, type, label;
@@ -49,6 +56,7 @@ namespace solaris
         bool offline = false;                   // … not playing: never started, crashed, overran — an effect passes dry,
         std::string why;                        //    an instrument is silent; and why (`device reload` starts it again)
         bool editor = false;                    // … its own editor window is open (`device editor`, N26)
+        std::vector<ReadingModel> readings;     // R-FX-17: what it measures (a tuner's pitch); empty for most
     };
 
     struct AutoPointModel

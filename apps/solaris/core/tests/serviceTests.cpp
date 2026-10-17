@@ -4892,6 +4892,58 @@ static void test_a_vocoder_speaks_through_its_key()
     pass("a vocoder (R-FX-16): a voice's strip speaks through a synth on another strip — its carrier a sidechain key, routed as the compressor's, heard by the audit; no key, silence");
 }
 
+static void test_a_tuner_reads_while_playing()
+{
+    // R-FX-17 (Round 12, part 2): the DSP library's "tuner" after a synth holding A4 — what it measures reaches the
+    // model and `get` while playing, from the engine that plays (its slots in the Player's ring, by generation);
+    // stopped, 0; a reading is never set. The synth's default patch has a square an octave down (osc2.octave −1):
+    // its PERIOD is A3's, and the tuner says so — with that oscillator off, A4
+    Run r;
+    r.ok("project new " + freshSong("tuner") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 8");                 // ch_2: dv_1 the synth
+    r.ok("note add pt_1 --pitch 69 --at 0 --length 8");                    // A4 throughout
+    assert(r.ok("device add ch_2 --type tuner") == "dv_2\n");
+    assert(std::stod(r.ok("get dv_2.frequency")) == 0.0);                 // stopped: nothing measured
+    assert(contains(r.no("set dv_2.frequency=440"), "dv_2.frequency is what the Tuner measures — `get` it; it cannot be set"));
+    const DeviceModel *dm = nullptr;
+    for (const auto &st : r.svc.model().strips)
+        for (const auto &d : st.devices)
+            if (d.id == "dv_2") dm = &d;
+    assert(dm && dm->readings.size() == 4 && dm->readings[0].name == "frequency" && dm->readings[0].unit == "Hz");
+    std::string stableWhilePlaying, fullWhilePlaying;
+    auto heard = [&](double &hz, double &note, double &inModel) {
+        r.fake.capture->frames = 0;
+        r.ok("transport play --from 0");
+        waitFrames(r, 48000);                                               // a second: 2048 samples heard many times over
+        r.ok("wait 0.05");
+        stableWhilePlaying = r.ok("state print --json --stable");
+        fullWhilePlaying = r.ok("state print --json");
+        hz = std::stod(r.ok("get dv_2.frequency"));
+        note = std::stod(r.ok("get dv_2.note"));
+        for (const auto &st : r.svc.model().strips)
+            for (const auto &d : st.devices)
+                if (d.id == "dv_2") inModel = d.readings[0].value;
+        r.ok("transport stop");
+    };
+    double hz = 0, note = 0, inModel = 0;
+    heard(hz, note, inModel);
+    std::printf("    the default patch's A4 (a square an octave down in it): %.3f Hz, note %.0f; the model %.3f Hz\n", hz, note, inModel);
+    assert(note == 57.0 && std::fabs(1200.0 * std::log2(hz / 220.0)) < 10.0 && std::fabs(inModel - hz) < 5.0);
+    r.ok("set dv_1.osc2.level=0");                                          // the sub off: one saw at A4
+    heard(hz, note, inModel);
+    const double cents = 1200.0 * std::log2(hz / 440.0);
+    std::printf("    its sub off: %.3f Hz (%+.2f cents), note %.0f\n", hz, cents, note);
+    assert(note == 69.0 && std::fabs(cents) < 10.0);
+    // a measurement is no part of the song's state: the readings named in the stable dump, their values not
+    auto bare = [](std::string t) { t.erase(std::remove_if(t.begin(), t.end(), [](char c) { return c == ' ' || c == '\n'; }), t.end()); return t; };
+    const std::string st = bare(stableWhilePlaying), full = bare(fullWhilePlaying);
+    assert(contains(st, "\"readings\":[{\"name\":\"frequency\",\"label\":\"Frequency\",\"unit\":\"Hz\"}"));
+    assert(contains(full, "\"name\":\"frequency\",\"label\":\"Frequency\",\"unit\":\"Hz\",\"value\":"));
+    assert(!contains(st, "\"unit\":\"Hz\",\"value\":"));
+    assert(std::stod(r.ok("get dv_2.frequency")) == 0.0);                 // stopped again: nothing
+    pass("a tuner (R-FX-17): what it measures reaches the model and `get` while playing — the default synth's A4 read as A3 (its sub-octave square sets the period), one saw as A4; stopped, 0; never set; the values not in the stable dump");
+}
+
 static void test_freeze_and_bounce()
 {
     // R-PERF-3: a strip's own sound frozen beside the song and played instead — the song sounds as it did (to float
@@ -6267,6 +6319,7 @@ int main()
     test_every_effect_drops_as_one_line_and_passes_sound();
     test_a_convolution_reverb_takes_its_response();
     test_a_vocoder_speaks_through_its_key();
+    test_a_tuner_reads_while_playing();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

@@ -76,6 +76,12 @@ namespace solaris
             Json dev = Json::object();
             dev.set("type", t.name).set("label", t.label).set("kind", t.kind == DeviceKind::Instrument ? "instrument" : "effect")
                 .set("summary", t.summary).set("params", params);
+            if (!t.readings.empty())
+            {
+                Json rs = Json::array(); // R-FX-17: what it measures — `get <dv>.<name>`, never set
+                for (const auto &r : t.readings) rs.push(Json::object().set("name", r.name).set("label", r.label).set("unit", r.unit));
+                dev.set("readings", rs);
+            }
             if (!t.noteNames.empty())
             {
                 Json pads = Json::array(); // a pitch can be written by these names (R-SVC-8)
@@ -149,6 +155,7 @@ namespace solaris
         o += "| `<lane>.name` · `.colour` · `.strip` (`<ch>` an instrument: the lane is its track; `none`: plain — R-LANE-3) · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |\n";
         o += "| `<lane group>.name` · `.folded` · `<lane>.group` (R-ARR-3) | text · `on` (one row) / `off` · `<lg>` joins it (gathered with it) / `none` leaves it (placed after it) |\n";
         o += "| `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |\n";
+        o += "| `<device>.<reading>` (read only, R-FX-17) | what a device that measures reads now while playing — a tuner's `frequency`, `note`, `cents`, `level`; 0 stopped; a `set` is refused |\n";
         o += "| `<plugin device>.p<id>` (type `vst3`, R-VST-6) | 0 … 1 — another maker's plugin's parameter by its id (its title is `devices[].params[].label`); read: also `.plugin` (its class id) |\n";
         o += "| `<automation>.name` · `.unit` · `.min` · `.max` · `.loop` · `.at` · `.length` (read: also `.from` · `.points`) | text · text · number · number · beats (0: no loop) · beats · beats (0: to the end) — R-AUTO-12 |\n";
         o += "| any NUMBER above (a strip's gain/pan, a send's gain, `project.masterGain`, a numeric device parameter) `=<formula>` | "
@@ -225,6 +232,12 @@ namespace solaris
             o += "| parameter | range | default |\n|---|---|---|\n";
             for (const auto &p : t.params)
                 o += "| `" + p.name + "` | " + md(range(p)) + " | " + defText(p) + (p.unit.empty() || p.isChoice() ? "" : " " + p.unit) + " |\n";
+            if (!t.readings.empty())
+            {
+                o += "\nReadings — what it measures, `get <dv>.<name>` while playing (0 stopped), never set (R-FX-17):";
+                for (const auto &r : t.readings) o += " `" + r.name + "`" + (r.unit.empty() ? "" : " (" + r.unit + ")") + (&r == &t.readings.back() ? "" : " ·");
+                o += "\n";
+            }
         }
         return o;
     }

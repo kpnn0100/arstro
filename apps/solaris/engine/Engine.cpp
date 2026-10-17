@@ -185,6 +185,15 @@ namespace engine
         mGraph = graph;
         mStrips = std::move(strips);
         mMasterRack = std::move(master);
+        // R-FX-17 (Round 12): the devices that measure, strips in order then the master — their readings' slots
+        mReadingDevices.clear();
+        size_t readings = 0;
+        for (const auto &st : mStrips)
+            for (const auto &d : st->rack)
+                if (!d->type().readings.empty()) { mReadingDevices.push_back(d.get()); readings += d->type().readings.size(); }
+        for (const auto &d : mMasterRack)
+            if (!d->type().readings.empty()) { mReadingDevices.push_back(d.get()); readings += d->type().readings.size(); }
+        mReadingValues.assign(readings, 0.0);
         mStripNs.assign(mStrips.size(), 0); // R-PERF-1
         // R-PERF-2: the strips nothing feeds — no route, send or key into them
         {
@@ -901,6 +910,10 @@ namespace engine
                 for (int c = 0; c < 2; ++c)
                     mStripMeters[i].rms[c] = (float)std::sqrt(mStrips[i]->sumSq[c] / mStrips[i]->counted);
         for (auto &st : mStrips) st->liveInFrames = 0; // R-REC-1: an input is for one render
+        // R-FX-17: what the devices measured, read once a render (stores into a vector sized at build)
+        size_t k = 0;
+        for (const Device *d : mReadingDevices)
+            for (size_t r = 0; r < d->type().readings.size(); ++r) mReadingValues[k++] = d->reading((int)r);
     }
 }
 }

@@ -69,6 +69,7 @@ namespace solaris
 
         static constexpr int kMaxStrips = 256; // meters beyond this are not reported
         static constexpr int kMaxBinds = 256;  // bindings beyond this report no live value
+        static constexpr int kMaxReadings = 64; // R-FX-17: device readings beyond this are not reported
         static constexpr int kLiveSlots = 64;  // blocks of binding values kept: more than a device holds
 
         Player();
@@ -177,6 +178,9 @@ namespace solaris
          *  hears now — or the oldest kept, while the device still holds more than the ring. Only values of
          *  the engine of `generation`; false when there are none yet (call on the service's thread). */
         bool liveValues(int generation, std::vector<double> &out) const;
+        /** R-FX-17 (Round 12): every device reading of that engine (its `readingValues()` order) as heard now — the
+         *  same slot as `liveValues`. False: none yet, or another engine's. */
+        bool liveReadings(int generation, std::vector<double> &out) const;
 
     private:
         /** One block's binding values: written by the audio thread, read by the service (a seqlock). */
@@ -186,7 +190,11 @@ namespace solaris
             std::atomic<long long> out{0};          // frames handed to the device once its block was
             std::atomic<int> generation{-1}, count{0};
             std::atomic<double> value[kMaxBinds];
+            std::atomic<int> readCount{0};          // R-FX-17: the engine's device readings, the same block
+            std::atomic<double> reading[kMaxReadings];
         };
+        /** The slot of `generation` the listener hears now (else that engine's oldest kept); −1 none. */
+        long long pickSlot(int generation) const;
         void run();
         void apply(const Live &m);
         void click(long long pos, int n);

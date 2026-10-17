@@ -1140,6 +1140,8 @@ namespace solaris
                 return true;
             }
             if (f == "sample") { err = id + " is a " + t->label + ", which plays no sample (a sampler does)"; return false; }
+            if (t->readingIndex(f) >= 0) // R-FX-17: what it measures is read, never written
+            { err = id + "." + f + " is what the " + t->label + " measures — `get` it; it cannot be set"; return false; }
             const int i = t->paramIndex(f);
             if (i < 0)
             {
@@ -1264,6 +1266,20 @@ namespace solaris
                             {
                                 const int i = t->paramIndex(f);
                                 if (i >= 0) put(f.c_str(), paramText(t->params[i], t->params[i].def)); // not stored = the default
+                                else if (t->readingIndex(f) >= 0)
+                                {
+                                    // R-FX-17: a reading — as heard now while playing (the model's), 0 stopped
+                                    double v = 0.0;
+                                    auto find = [&](const std::vector<DeviceModel> &ds) {
+                                        for (const auto &dm : ds)
+                                            if (dm.id == id)
+                                                for (const auto &rd : dm.readings)
+                                                    if (rd.name == f) v = rd.value;
+                                    };
+                                    for (const auto &s : mModel.strips) find(s.devices);
+                                    find(mModel.masterDevices);
+                                    put(f.c_str(), canonicalNumber(v));
+                                }
                             }
                     }
         }

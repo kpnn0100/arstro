@@ -152,6 +152,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `<lane>.name` · `.colour` · `.strip` (`<ch>` an instrument: the lane is its track; `none`: plain — R-LANE-3) · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
 | `<lane group>.name` · `.folded` · `<lane>.group` (R-ARR-3) | text · `on` (one row) / `off` · `<lg>` joins it (gathered with it) / `none` leaves it (placed after it) |
 | `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |
+| `<device>.<reading>` (read only, R-FX-17) | what a device that measures reads now while playing — a tuner's `frequency`, `note`, `cents`, `level`; 0 stopped; a `set` is refused |
 | `<plugin device>.p<id>` (type `vst3`, R-VST-6) | 0 … 1 — another maker's plugin's parameter by its id (its title is `devices[].params[].label`); read: also `.plugin` (its class id) |
 | `<automation>.name` · `.unit` · `.min` · `.max` · `.loop` · `.at` · `.length` (read: also `.from` · `.points`) | text · text · number · number · beats (0: no loop) · beats · beats (0: to the end) — R-AUTO-12 |
 | any NUMBER above (a strip's gain/pan, a send's gain, `project.masterGain`, a numeric device parameter) `=<formula>` | binds it (R-AUTO-1): numbers, `+ - * / ^ ( )`, `sin cos tan abs sign min max clamp lerp pow exp log sqrt floor ceil round frac`, `pi`, `beat bar bpm t`, an automation id (`au_1`), another numeric address (a link). `get` prints the formula; a plain number clears it |
@@ -355,6 +356,11 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].devices[].offline` | bool | R-VST-6: the plugin is not playing (never started, crashed, overran) — an effect passes dry, an instrument is silent |
 | `strips[].devices[].why` | string | R-VST-6: why it is offline (`device reload <dv>` starts it again) |
 | `strips[].devices[].editor` | bool | R-VST-6: the plugin's own editor window is open (`device editor <dv>`) |
+| `strips[].devices[].readings` | object[] | R-FX-17: what it measures (a tuner's pitch) — the registry's readings; absent for a device that measures nothing |
+| `strips[].devices[].readings[].name` | string | the key `get <dv>.<name>` reads it by |
+| `strips[].devices[].readings[].label` | string | for a person |
+| `strips[].devices[].readings[].unit` | string | "Hz", "dB", "ct", "" (a number: a tuner's note is a MIDI number) |
+| `strips[].devices[].readings[].value` | number | as heard now, while playing; 0 stopped *(not in `--stable`)* |
 | `strips[].devices[].groups` | object[] | R-UI-12: its parameter groups' titles, the registry's — `prefix` (before a parameter's dot, "" for none) and `label` |
 | `strips[].devices[].groups[].prefix` | string | the prefix before a parameter's dot; "" = the parameters with none |
 | `strips[].devices[].groups[].label` | string | its title, for a person |
@@ -1021,6 +1027,8 @@ The pitch of what passes through, untouched: its frequency, the nearest note and
 | parameter | range | default |
 |---|---|---|
 | `reference` | 415.0 … 466.0 Hz | 440.0 Hz |
+
+Readings — what it measures, `get <dv>.<name>` while playing (0 stopped), never set (R-FX-17): `frequency` (Hz) · `note` · `cents` (ct) · `level` (dB)
 
 ### `vocoder` — Vocoder (effect)
 

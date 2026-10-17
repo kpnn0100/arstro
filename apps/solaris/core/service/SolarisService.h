@@ -357,6 +357,9 @@ namespace solaris
         std::vector<std::string> mLiveStrips;                         // engine strip index → strip id
         std::map<std::string, std::pair<int, int>> mLiveDevices;      // device id → (strip index, rack index)
         std::vector<std::string> mLiveBinds;                          // engine bind index → the address it drives
+        std::vector<std::pair<std::string, int>> mLiveReadings;       // R-FX-17: the engine's devices that measure, in its
+                                                                      // readingValues order — id and how many readings
+        std::vector<double> mLiveReadingValues;
         int mLiveGen = 0;                                             // bumps with every engine built to play
         std::vector<double> mLiveValues;                              // the player's, read in `pump`
         std::map<std::string, int> mLiveLatency;                      // device id → its latency in the playing engine (R-MIX-17)

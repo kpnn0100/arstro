@@ -169,6 +169,9 @@ namespace engine
         void liveControl(int strip, int kind, double value);
         /** Every binding's value as last evaluated (R-AUTO-7), in the graph's bind order. */
         const std::vector<double> &bindValues() const { return mBindValues; }
+        /** R-FX-17 (Round 12): every reading of every device that measures (its type's `readings`), after the last
+         *  render — strips in processing order, each rack in order, then the master's rack. Sized at build. */
+        const std::vector<double> &readingValues() const { return mReadingValues; }
 
         Engine();
         ~Engine();
@@ -200,6 +203,8 @@ namespace engine
         std::vector<std::unique_ptr<Device>> mMasterRack;
         std::vector<double> mMasterL, mMasterR;
         std::vector<Meter> mStripMeters;
+        std::vector<const Device *> mReadingDevices; // R-FX-17: the devices that measure, in readingValues' order
+        std::vector<double> mReadingValues;
         Meter mMasterMeter;
         std::vector<int> mCapture;
         std::vector<std::vector<std::vector<float>>> mCaptured;

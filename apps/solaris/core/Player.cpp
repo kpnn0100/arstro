@@ -289,16 +289,20 @@ namespace solaris
         std::atomic_thread_fence(std::memory_order_release);
         for (int i = 0; i < n; ++i) s.value[i].store(v[(size_t)i], std::memory_order_relaxed);
         s.count.store(n, std::memory_order_relaxed);
+        const auto &rv = mEng->readingValues(); // R-FX-17: what the devices measured in this block
+        const int nr = (int)std::min(rv.size(), (size_t)kMaxReadings);
+        for (int i = 0; i < nr; ++i) s.reading[i].store(rv[(size_t)i], std::memory_order_relaxed);
+        s.readCount.store(nr, std::memory_order_relaxed);
         s.generation.store(mGeneration, std::memory_order_relaxed);
         s.out.store(out, std::memory_order_relaxed);
         s.seq.store(q + 2, std::memory_order_release);
         mSlotsWritten.store(k + 1, std::memory_order_release);
     }
 
-    bool Player::liveValues(int generation, std::vector<double> &out) const
+    long long Player::pickSlot(int generation) const
     {
         const long long n = mSlotsWritten.load(std::memory_order_acquire);
-        if (n <= 0) return false;
+        if (n <= 0) return -1;
         const long long lag = (long long)std::llround(mLatency.load(std::memory_order_relaxed) * mRate) +
                               mGraphLatency.load(std::memory_order_relaxed); // R-MIX-17: the engine's own lag too
         // newest first: the first slot of this engine at or before what is heard; else the oldest kept of it.
@@ -318,6 +322,12 @@ namespace solaris
             pick = k;
             if (at <= target) break;
         }
+        return pick;
+    }
+
+    bool Player::liveValues(int generation, std::vector<double> &out) const
+    {
+        const long long pick = pickSlot(generation);
         if (pick < 0) return false;
         const LiveSlot &s = mSlots[(size_t)(pick % kLiveSlots)];
         const unsigned q = s.seq.load(std::memory_order_acquire);
@@ -327,6 +337,22 @@ namespace solaris
         for (int i = 0; i < count; ++i) v[(size_t)i] = s.value[i].load(std::memory_order_relaxed);
         std::atomic_thread_fence(std::memory_order_acquire);
         if ((q & 1u) || s.seq.load(std::memory_order_relaxed) != q) return false; // overwritten while read: keep the last
+        out.swap(v);
+        return true;
+    }
+
+    bool Player::liveReadings(int generation, std::vector<double> &out) const
+    {
+        const long long pick = pickSlot(generation);
+        if (pick < 0) return false;
+        const LiveSlot &s = mSlots[(size_t)(pick % kLiveSlots)];
+        const unsigned q = s.seq.load(std::memory_order_acquire);
+        const int count = s.readCount.load(std::memory_order_relaxed), gen = s.generation.load(std::memory_order_relaxed);
+        if (gen != generation) return false;
+        std::vector<double> v((size_t)std::max(0, count));
+        for (int i = 0; i < count; ++i) v[(size_t)i] = s.reading[i].load(std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_acquire);
+        if ((q & 1u) || s.seq.load(std::memory_order_relaxed) != q) return false;
         out.swap(v);
         return true;
     }
