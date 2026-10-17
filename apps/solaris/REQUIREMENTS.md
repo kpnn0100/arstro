@@ -1118,7 +1118,10 @@ a process is the host's (law 12).
   window that trades smoothness for latency, the latency compensated; untouched (only late) at no shift
   (REQ-fx-pitch-1). R-FX-16: a channel vocoder on the strip that speaks (the modulator), its carrier another strip
   through a sidechain send exactly as a compressor's key (R-MIX-15) — it has no Sidechain switch: its key is always
-  its carrier, and the audit counts it as heard; no key, silence (REQ-fx-vocoder-1).)
+  its carrier, and the audit counts it as heard; no key, silence (REQ-fx-vocoder-1). R-FX-17 (docs/discussion.md
+  Round 12): a tuner — the pitch of what passes through it (untouched), as a frequency, the nearest note and its
+  cents, against a reference A4; read while playing in its window (a needle that eases), in the model and by
+  `get <dv>.<reading>` (never `set`); a device's READINGS described by the registry as its parameters are.)
 - **R-MIX-19 Group / VCA faders**: a VCA moves the gain of the strips assigned to it, adding its dB.
 - **R-MIX-20 Per-strip tools**: phase invert, width, mono check on the master; solo-safe on buses.
 - **R-VER build** (R-VER-1…4, specified): versions of a song.

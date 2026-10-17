@@ -474,3 +474,38 @@ skipped. R-DEV asked for every device at once, the others held to the clock. Dec
 - **Not yet:** a device's own sample rate unlike the song's (the clock opens at the song's, R-DEV-7; a follower at
   another rate would be the same resampler at a far ratio — later); a follower re-aligned when its latency drifts
   after play; Windows.
+
+
+### Round 12 — 2026-10-17 — a device that measures (R-FX-17, the tuner): the design, before code
+
+Every device so far makes or changes sound; the tuner makes a NUMBER ("a meter, not a sound"). Nothing carries a
+device's number up today — the meters are the strips' and the master's, measured by the Player. Decided here (each a
+line to change):
+
+- **A reading is the DSP library's, described by the registry** (law 2, as parameters are). A `DeviceType` gains
+  `readings`: name, label, unit — outputs, never set. `Device::reading(i)` is its value now. The device writes it on
+  the audio thread into atomics of its own, so any thread may read it without a lock or a torn value. The API
+  document lists each type's readings beside its parameters.
+- **The tuner's pitch: YIN** (de Cheveigné & Kawahara, 2002) — the difference function over a window, normalised by
+  its running mean, the first dip under a threshold, refined by a parabola: a fundamental, not its loudest harmonic.
+  A 2048-sample window every 512 (≈ 47 Hz … 2 kHz at 48 kHz). Its readings: `frequency` (Hz; 0 = no pitch), `note`
+  (the nearest, a MIDI number), `cents` (−50 … +50 from it), `level` (dBFS). A `reference` parameter: A4 at 415 …
+  466 Hz, 440 by default. The audio passes through untouched (a meter).
+- **Up to the model with the audio thread's rules kept.** After each block the engine copies every reading of every
+  device that has any into a fixed array of atomics the Player owns — sized at build, in compile order; no lock, no
+  allocation. The service knows, from the compile, which slot is which device; `refreshModel` fills
+  `devices[].readings` (name, unit, value) while playing. Stopped, there is nothing to read: none are published.
+- **Read by a script:** `get <dv>.<reading>` answers it (0 when stopped); `set` on one is refused, naming it a
+  reading. No event — a tuner's number changes forty times a second; a script reads it when it wants it.
+- **Seen:** the device window shows a type's readings. The tuner's: the note's name large, and the cents as a needle
+  across −50 … +50, easing to each new reading (nothing snaps — a needle that jumped forty times a second would
+  flicker); the frequency small beneath. With no pitch, the note is a dash and the needle rests at the centre, faded.
+- **Parts** (a commit each): (1) the DSP library — the tuner and the readings (`DeviceType::readings`,
+  `Device::reading`); Solaris has the device, its readings not yet carried up. (2) The engine, the Player, the
+  service: the slots, `devices[].readings`, `get`, the API. (3) The window: the readings drawn, the tuner's needle,
+  shots.
+- **Tests.** The DSP by sines and a sawtooth: to ±1 cent from 55 Hz to 1760 Hz; a sawtooth at its fundamental (no
+  octave error); silence and noise: no pitch. L2: a tuner on a synth playing A4 reads 440 Hz, note 69, 0 cents while
+  playing — through `get` and the model; nothing stopped; a `set` refused. UI: the needle caught mid-tween; shots at
+  both sizes.
+- **Not yet:** readings in the mixer dock or on a control surface; a tuner that hears more than one note at once.
