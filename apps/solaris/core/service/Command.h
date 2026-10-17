@@ -54,6 +54,7 @@ namespace solaris
             SampleTag, SampleUntag, SampleFavourite,          // R-PRESET-3
             PluginsScan, PluginsList, DeviceReload, DeviceEditor, // R-VST-6
             MapAdd, MapRemove, MapList, MapLearn,            // R-CTRL-1
+            VersionNew, VersionList, VersionOpen, VersionDiff, VersionFreeze, VersionThaw, VersionRebase, VersionDelete, Revert, // R-VER
             Ls, Show, PatternPrint,                                                                   // R-SVC-8: read back
             Undo, Redo, HistoryPrint, HistoryJump,
             AutoAdd, AutoCreate, AutoDelete, AutoPointAdd, AutoPointMove, AutoPointDelete, AutoPointShape, BindClear, Eval,

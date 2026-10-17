@@ -126,6 +126,16 @@ namespace solaris
             {"groups[].name", "string", ""},
             {"groups[].folded", "bool", "folded: its lanes are ONE row on the timeline"},
             {"groups[].lanes", "string[]", "its lanes, in order"},
+            {"versions", "object[]", "R-VER: versions of the song, in creation order — each its base resolved live with its changes on top"},
+            {"versions[].id", "string", "vr_n"},
+            {"versions[].name", "string", "never `main` (the song itself)"},
+            {"versions[].base", "string", "an earlier version's id, or `main`"},
+            {"versions[].frozen", "bool", "R-VER-3: it reads its snapshot; an edit while it is open is refused"},
+            {"versions[].changes", "number", "its deltas: fields set or unset, nodes dropped, bodies, orders"},
+            {"versions[].own", "number", "nodes only it has"},
+            {"versions[].dangling", "number", "changes whose node its base no longer has — ignored until `version rebase` prunes them"},
+            {"versions[].problem", "string", "why it does not stand as a song (its base broke it); \"\" when it does"},
+            {"version", "string", "R-VER: the open version's id, or `main` — the song on screen and heard is its resolution"},
             {"clips", "object[]", "every clip"},
             {"clips[].id", "string", ""},
             {"clips[].name", "string", ""},
@@ -517,6 +527,13 @@ namespace solaris
                 for (const auto &g : m.groups) gs.push(Json::string(g.id + " " + g.name + (g.folded ? " folded" : "")));
                 j.set("groups", gs);
             }
+            if (!m.versions.empty()) // R-VER: the song an agent reads is the open version's — say which, and what else there is
+            {
+                Json vs = Json::array();
+                for (const auto &v : m.versions) vs.push(Json::string(v.id + " " + v.name + " on " + v.base + (v.frozen ? " frozen" : "")));
+                j.set("versions", vs);
+                j.set("version", m.version);
+            }
             Json clips = Json::array();
             for (const auto &c : m.clips)
             {
@@ -637,6 +654,13 @@ namespace solaris
         Json groups = Json::array(); // R-ARR-3
         for (const auto &g : m.groups) groups.push(Json::object().set("id", g.id).set("name", g.name).set("folded", g.folded).set("lanes", strings(g.lanes)));
         j.set("groups", groups);
+        Json versions = Json::array(); // R-VER
+        for (const auto &v : m.versions)
+            versions.push(Json::object().set("id", v.id).set("name", v.name).set("base", v.base).set("frozen", v.frozen)
+                              .set("changes", (long long)v.changes).set("own", (long long)v.own).set("dangling", (long long)v.dangling)
+                              .set("problem", v.problem));
+        j.set("versions", versions);
+        j.set("version", m.version);
         Json clips = Json::array();
         for (const auto &c : m.clips)
         {

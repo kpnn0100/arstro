@@ -361,8 +361,10 @@ time insert --at b --length b | time delete --from b --to b      ; the whole son
 lane group <ln> … [--name n] | lane ungroup <lg> | lane move <lg> --to i | clips move "<ac> …" --by b   ; R-ARR-3
 port add <name> [--dir in|out] [--channels 1|2] | strip arm <ch> [--input <port>] | transport record | transport punch <a> <b>|off   ; R-REC-1
 clip comp <ac> --take n [--from b --to b]   ; R-REC-2
+version new <name> [--base vr] [--open] | version open <vr|main> | version list | version diff <vr>   ; R-VER (§9b)
+version freeze|thaw <vr> | version rebase <vr> [--dry-run] | version delete <vr> | revert <address|node>
 transport play | transport stop | transport seek <b|mk> | transport loop <a> <b> | transport loop <mk> | transport loop off
-render --out <f.wav> [--from b] [--to b] [--stems ch,…] [--ports] [--bits 24|32f]
+render --out <f.wav> [--from b] [--to b] [--stems ch,…] [--ports] [--bits 24|32f] [--version vr|main]
 matrix print [--json] | audit | state print [--json] [--stable] | registry [--json] | api [--json|--md]
 settings set <key>=<value> … | settings print | devices list | browse <folder>
 ```

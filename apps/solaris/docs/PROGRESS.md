@@ -615,7 +615,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       every edit on an open version; one freeze lever; Interstellar's verbs. Part 1: the model — `#aversion` read and
       written after the song, a resolution (drops, sets, unsets, bodies, orders, its own nodes), the deltas worked out
       from the song an edit left, dangling kept until rebase, freeze/thaw/rebase/revert, ids never reused (DR-VER-1).
-      Next: part 2 — the service.
+      Part 2: the service — Interstellar's verbs (`version new|list|open|diff|freeze|thaw|rebase|delete`, `revert`,
+      `render --version`), one hook in `dispatch` recording an edit on an open version, a frozen one refusing edits,
+      opening a history step but not unsaved, `versions[]`/`version`. D-22 filed (bare anchors on the wrong file).
+      Next: part 3 — the song bar.
 - [ ] **N38** Collect and save; relink (R-COLLECT-1).
 - [ ] **N39** A clip launcher (R-LAUNCH-1).
 - [ ] **N40** A video lane (R-VIDEO-1).

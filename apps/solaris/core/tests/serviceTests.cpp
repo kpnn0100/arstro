@@ -5242,6 +5242,116 @@ static void test_solo_safe_keeps_a_tail()
     pass("solo-safe (R-MIX-20): a solo begun while playing cuts a bus's echoes at once — a solo-safe bus's go on");
 }
 
+static void test_versions_of_a_song()
+{
+    // R-VER-1…4 (Round 15, part 2): a version made and opened in one line; an edit on it stored as what it changes, main
+    // untouched; every version renders by name, whichever is open; opened while playing, it is heard; opening is a step
+    // of the history, not an unsaved change; the file opens on main; freeze refuses an edit; thaw, revert, rebase,
+    // delete; the names checked; the model says it all
+    const std::string dir = scratch(), song = freshSong("versions");
+    Run r;
+    r.ok("project new " + song + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 8");                 // ch_2, ac_1
+    r.ok("notes add pt_1 \"C3@0:8 G3@0:8\"");
+    r.ok("project save");
+    int k = 0;
+    auto render = [&](const std::string &extra) {
+        const std::string out = dir + "/versions-" + std::to_string(k++) + ".wav";
+        r.ok("render --out " + out + " --to 4 --bits 32f" + extra);
+        return r.fake.written[out];
+    };
+    auto peak = [](const std::vector<std::vector<float>> &x) { return peakOf(x[0], 0, x[0].size()); };
+    const auto mainSound = render("");
+    assert(r.ok("version new Instrumental --open") == "vr_1\n");
+    assert(r.svc.model().version == "vr_1" && r.svc.model().versions.size() == 1 && r.svc.model().versions[0].base == "main");
+    r.ok("set ch_2.mute=true");
+    assert(r.ok("version diff Instrumental") == "#vset node=ch_2 mute=true\n" && r.svc.model().versions[0].changes == 1);
+    const auto instrumental = render("");                                   // the open one
+    const auto mainByName = render(" --version main");
+    r.ok("version open main");
+    assert(r.svc.model().version == "main" && !r.strip("ch_2")->mute);
+    assert(render(" --version Instrumental") == instrumental && mainByName == mainSound);
+    std::printf("    main's peak %.3f; Instrumental's %.3f\n", peak(mainSound), peak(instrumental));
+    assert(peak(mainSound) > 0.01 && peak(instrumental) == 0.0);
+
+    // main moves on: the version inherits the gain live and keeps its own mute
+    r.ok("set ch_2.gain=-6");
+    r.ok("version open vr_1");
+    assert(r.strip("ch_2")->mute && r.strip("ch_2")->gain == -6.0);
+    // opening is a step of the history — undo goes back to main — and not an unsaved change
+    r.ok("undo");
+    assert(r.svc.model().version == "main");
+    r.ok("redo");
+    assert(r.svc.model().version == "vr_1");
+    r.ok("project save");
+    r.ok("version open main");
+    assert(!r.svc.model().dirty);
+    {
+        Run q; // the file: main first, as it was; the song opens on main
+        q.ok("project open " + song);
+        assert(q.svc.model().version == "main" && !q.strip("ch_2")->mute && q.strip("ch_2")->gain == -6.0);
+        assert(q.svc.model().versions.size() == 1 && q.svc.model().versions[0].name == "Instrumental");
+    }
+
+    // opened while playing: heard — the engine rebuilt to the version, silent a block on
+    r.fake.capture->frames = 0;
+    r.ok("transport play --from 0");
+    waitFrames(r, 24000);
+    const auto &sink = r.fake.capture->sink;
+    assert(peakOf(sink, 2 * 12000, 2 * 24000) > 0.01);
+    r.ok("version open Instrumental");
+    const long long mark = r.fake.capture->frames.load();
+    waitFrames(r, mark + 24000);
+    const float after = peakOf(sink, 2 * (size_t)(mark + 12000), 2 * (size_t)(mark + 24000));
+    r.ok("transport stop");
+    std::printf("    opened while playing: %.3g a quarter-second on\n", after);
+    assert(after == 0.0f);
+
+    // frozen: read-only, and main's later work does not reach it; thawed, it does; revert drops the mute
+    r.ok("version freeze Instrumental");
+    r.ok("version open main");
+    r.ok("set ch_2.gain=-12");
+    r.ok("version open Instrumental");
+    assert(r.strip("ch_2")->gain == -6.0 && r.svc.model().versions[0].frozen);
+    const std::string why = r.no("set ch_2.pan=0.5");
+    assert(contains(why, "version Instrumental is frozen") && contains(why, "version thaw vr_1"));
+    assert(contains(r.no("transport record"), "is frozen"));
+    r.ok("set vr_1.name=Instr");                                            // the version itself: not a change of it
+    r.ok("set vr_1.name=Instrumental");
+    r.ok("version thaw Instrumental");
+    assert(r.strip("ch_2")->gain == -12.0 && r.strip("ch_2")->mute);
+    r.ok("revert ch_2.mute");
+    assert(!r.strip("ch_2")->mute && r.ok("version diff vr_1") == "no changes — Instrumental is its base as it is\n");
+    assert(contains(r.no("revert ch_2.mute"), "no override on `ch_2.mute`"));
+
+    // dangling: the version moves a clip main then deletes — named, kept, pruned by rebase
+    r.ok("set ac_1.at=2");
+    r.ok("version open main");
+    r.ok("clip delete ac_1");
+    assert(r.svc.model().versions[0].dangling == 1 && contains(r.ok("version list"), "1 dangling"));
+    assert(r.ok("version rebase vr_1 --dry-run") == "dangling: #vset node=ac_1 at=2.0\n" && r.svc.model().versions[0].dangling == 1);
+    r.ok("version rebase vr_1");
+    assert(r.svc.model().versions[0].dangling == 0);
+
+    // a version of a version; the tree; names; delete refused while one is based on it
+    assert(r.ok("version new Radio --base Instrumental") == "vr_2\n" && r.svc.model().version == "main");
+    const std::string tree = r.ok("version list");
+    assert(contains(tree, "main  ← open\n") && contains(tree, "\n  vr_1 Instrumental · ") && contains(tree, "\n    vr_2 Radio · 0 changes"));
+    assert(contains(r.no("version delete Instrumental"), "the base of Radio"));
+    assert(contains(r.no("version new Radio"), "already a version `Radio`"));
+    assert(contains(r.no("version new main"), "`main` is the song itself"));
+    assert(contains(r.no("set vr_2.name=Instrumental"), "two versions are called `Instrumental`"));
+    assert(contains(r.no("set vr_2.colour=3"), "its field is `name`"));
+    r.ok("set vr_2.name=\"Radio edit\"");
+    assert(r.svc.model().versions[1].name == "Radio edit");
+    assert(contains(r.no("version open Nope"), "no version `Nope`") && contains(r.no("revert ch_2.mute"), "main is the song itself"));
+    assert(contains(r.no("render --out " + dir + "/x.wav --version Nope"), "no version `Nope`"));
+    r.ok("version delete vr_2");
+    r.ok("version delete Instrumental");
+    assert(r.svc.model().versions.empty());
+    pass("versions through the service (R-VER-1…4): made and opened in one line, an edit stored as ONE change; each renders by name whichever is open; opened while playing, heard; opening a history step, not an unsaved change; the file opens on main; frozen refuses; thaw, revert, rebase, delete; names checked");
+}
+
 static void test_per_strip_tools_live()
 {
     // R-MIX-20 (Round 14, part 2): while playing, a strip's width and phase move with no engine rebuilt — the width
@@ -6671,6 +6781,7 @@ int main()
     test_per_strip_tools();
     test_solo_safe_keeps_a_tail();
     test_per_strip_tools_live();
+    test_versions_of_a_song();
     test_a_follower_alone();
     test_a_port_on_another_device_follows_the_clock();
     test_an_input_held_alone();

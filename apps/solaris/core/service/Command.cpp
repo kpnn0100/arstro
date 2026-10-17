@@ -243,6 +243,31 @@ namespace solaris
             {K::TempoMove, "tempo move", "<tp>", 1, 1, {"at=<beats>", "bpm=<20-999>", "ramp=<true|false>"},
              "Move a tempo change (--at), change its --bpm, or whether it is reached gliding (--ramp true|false).", "R-TEMPO-1"},
             {K::TempoDelete, "tempo delete", "<tp>", 1, 1, {}, "Delete a tempo change: the tempo before it holds on.", "R-TEMPO-1"},
+            {K::VersionNew, "version new", "<name>", 1, 1, {"base=<version>", "open"},
+             "Make a version of the song (R-VER-1): its base resolved live with its changes on top — of main, or of --base "
+             "(an earlier version, by id or name). It stores only what it changes; with --open it is opened at once (the "
+             "UI's New Version is this one line). Prints its id.", "R-VER-1"},
+            {K::VersionList, "version list", "", 0, 0, {},
+             "The versions as a tree under main: each one's changes, frozen, dangling changes, and why one does not stand.", "R-VER-1"},
+            {K::VersionOpen, "version open", "<version|main>", 1, 1, {},
+             "Open a version (or main): the song on screen and in your ears becomes it; an edit then changes only it — "
+             "worked out as what it changes from its base (R-VER-2). A step of the history, not an unsaved change: a song "
+             "always opens on main. One its base broke is refused, naming why.", "R-VER-1"},
+            {K::VersionDiff, "version diff", "<version>", 1, 1, {},
+             "What a version changes from its base, one line each — #vset/#vunset (fields), #vdrop, #vbody (a node's "
+             "notes, points or takes as one), #vorder (a rack's devices), then the nodes only it has.", "R-VER-2"},
+            {K::VersionFreeze, "version freeze", "<version>", 1, 1, {},
+             "Stop a version inheriting (R-VER-3): it keeps its resolution as a snapshot; while open, an edit is refused.", "R-VER-3"},
+            {K::VersionThaw, "version thaw", "<version>", 1, 1, {},
+             "Inherit live again: its changes on its base as it is now.", "R-VER-3"},
+            {K::VersionRebase, "version rebase", "<version>", 1, 1, {"dry-run"},
+             "Reconcile (R-VER-3): name and prune the changes whose node its base no longer has; a frozen version's "
+             "snapshot advanced to its base now, its changes on top. --dry-run names them and changes nothing.", "R-VER-3"},
+            {K::VersionDelete, "version delete", "<version>", 1, 1, {},
+             "Delete a version — refused while another is based on it; the open one gives way to its base.", "R-VER-1"},
+            {K::Revert, "revert", "<address|node>", 1, 1, {},
+             "Drop the open version's change at an address (`ch_2.mute`, `dv_1.filter.cutoff`, `project.bpm`) or every "
+             "change to a node, so it inherits from its base again. Refused on main and where there is none.", "R-VER-2"},
             {K::PresetSave, "preset save", "<dv> <name>", 2, 2, {"replace"},
              "Save a device's set values (and a sampler's sound) as a preset of its type in your presets folder "
              "(R-PRESET-1) — a name you have is refused without --replace. The machine's, not the song's: no undo.", "R-PRESET-1"},
@@ -339,7 +364,7 @@ namespace solaris
 
             {K::Render, "render", "", 0, 0,
              {"out=<file>", "format=<wav|flac|mp3|ogg|opus>", "rate=<Hz>", "bits=<16|24|32f>", "kbps=<n>", "normalize=<LUFS>",
-              "ceiling=<dBTP>", "from=<beats>", "to=<beats>", "stems=<ch,…|all>", "ports", "measure"},
+              "ceiling=<dBTP>", "from=<beats>", "to=<beats>", "stems=<ch,…|all>", "ports", "measure", "version=<version|main>"},
              "Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader "
              "output to <out>.<ch>.<ext>; with --ports, each output port to <out>.<port>.<ext>. The tail runs until "
              "−90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) "
@@ -349,7 +374,8 @@ namespace solaris
              "ones (MP3 32…320, default 320; Ogg 45…500, 256; Opus 6…510, 192). --normalize gains every file alike to that "
              "integrated loudness, held so the master's true peak stays under --ceiling (dBTP, default −1) — said on a "
              "`normalize` line. --measure prints the written master's integrated loudness, the most of its momentary and "
-             "short-term, its true peak and its lowest correlation (R-METER-1).", "R-RENDER-2", false, {"out"}},
+             "short-term, its true peak and its lowest correlation (R-METER-1). --version renders that version (or main) "
+             "whichever is open — every version renders by name (R-VER-4).", "R-RENDER-2", false, {"out"}},
 
             {K::MatrixPrint, "matrix print", "", 0, 0, {"json"}, "Every route and send at once: rows = strips, columns = destinations.", "R-MIX-9"},
             {K::Audit, "audit", "", 0, 0, {}, "The mix report: unused strips, clips on muted strips, unreachable strips, single-input buses, offline media, unknown devices, clipping.", "R-MIX-10"},

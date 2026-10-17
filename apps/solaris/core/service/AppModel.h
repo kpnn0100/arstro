@@ -302,6 +302,16 @@ namespace solaris
         double at = 0, length = 0, end = 0;      // beats; length 0 = a point
     };
 
+    /** R-VER: a version of the song — its base resolved, its changes on top (docs/project-format.md §9b). */
+    struct VersionModel
+    {
+        std::string id, name;
+        std::string base = "main";               // an earlier version's id, or "main"
+        bool frozen = false;                     // R-VER-3: reads its snapshot; an edit while open is refused
+        int changes = 0, own = 0, dangling = 0;  // its deltas; nodes only it has; deltas whose node its base dropped
+        std::string problem;                     // why it does not stand as a song ("" when it does)
+    };
+
     /** R-TEMPO-1: a change of the song's tempo — and where it falls in time (computed through the map). */
     struct TempoModel
     {
@@ -477,6 +487,8 @@ namespace solaris
         std::vector<LibraryEntry> library;       // R-PRESET-3: every tagged sound, by path (the machine's — any screen)
         std::vector<PluginModel> plugins;        // R-VST-6: the VST3 plugins the last scan found (the machine's)
         std::vector<LaneGroupModel> groups;      // R-ARR-3: in the order of their first lanes
+        std::vector<VersionModel> versions;      // R-VER: in creation order, each after its base
+        std::string version;                     // R-VER: the open one's id, or "main" ("" with no song)
         long long revision = 0;                  // bumps on every change — NOT in the stable dump
     };
 }

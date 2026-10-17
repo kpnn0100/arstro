@@ -6,6 +6,21 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Open
 
+### D-22 Bare `:N` anchors bound to the wrong file in eight DR sections (as-built docs drift)
+- **Found:** 2026-10-17, N37 part 2's anchor pass: `follow2.py` could not follow six anchors (each past the end of the
+  file the any-path convention binds it to), and a scan printing every anchor's target line (scratch `showanchors.py`)
+  finds more of the same — a bare `` `:N` `` after a path, meant for ANOTHER file the paragraph names in words:
+  DR-UI-8 (ten, `ProjectScreen.cpp` — the dock's lines), DR-UI-5 (three, `ParamMenu.cpp`), DR-UI-12 (thirteen,
+  `ParamFormat.h`/`Theme.h` — the face's), DR-SVC-5 (three, `ControlServer.h`), DR-MIX-17 (nine, `Engine.h` —
+  `Engine.cpp`'s), DR-VST-7 (four, `DevicePanel.h`/`PluginAccess.h`), DR-BROWSE-4 (one), DR-PERF-2 (one).
+  DR-ROLL-11's four (`ServiceCompose.cpp` read as `Notation.cpp`'s) were fixed in N37 part 1.
+- **Effect:** the as-built tier points at lines that are not the code it describes (D-1's class: a doc describing what
+  the code no longer is). `anchorcheck_strict` does not see it — it checks an anchor against HEAD's line, which was
+  already wrong.
+- **Recommended fix:** in each section, write the file before every anchor whose file differs from the last one named
+  (`app/widgets/MixerDock.cpp:N`, not `` `:N` ``), at the line the paragraph means; then the scan prints no line past
+  its file's end and no `{`, `}` or blank target.
+
 ### D-21 The keyboard-recording test's held note once fell outside 0.25 … 1.0 beats again (D-11's widened window)
 - **Found:** 2026-10-17, N35 part 3: one run of `solaris_service` alone (load ~2.5–3) failed
   `test_record_the_keyboard_into_a_clip` at `pt->notes[0].length > 0.25 && pt->notes[0].length < 1.0`

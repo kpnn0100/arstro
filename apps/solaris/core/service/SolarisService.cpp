@@ -1,4 +1,5 @@
 #include "SolarisService.h"
+#include "Versions.h"
 #include "Bindings.h"
 #include "ApiDoc.h"
 #include "AppModelCodec.h"
@@ -101,6 +102,26 @@ namespace solaris
             }
         }
 
+        // R-VER: what works on a version itself — allowed while a frozen one is open, and never recorded as its change
+        bool versionOnly(const Command &c, const Project &p)
+        {
+            switch (c.kind)
+            {
+            case K::VersionNew: case K::VersionOpen: case K::VersionFreeze: case K::VersionThaw: case K::VersionRebase: case K::VersionDelete:
+                return true;
+            case K::Set:
+                for (const auto &f : c.fields)
+                {
+                    const std::string id = f.first.substr(0, f.first.find('.'));
+                    const Version *v = p.versionOf(id);
+                    if (!v || v->id != id) return false;
+                }
+                return !c.fields.empty();
+            default:
+                return false;
+            }
+        }
+
         bool mutates(K k)
         {
             switch (k)
@@ -118,6 +139,7 @@ namespace solaris
             case K::SampleTag: case K::SampleUntag: case K::SampleFavourite:    // R-PRESET-3: … and its library
             case K::PluginsScan: case K::PluginsList: case K::DeviceReload: case K::DeviceEditor: // R-VST-6: … and its plugins
             case K::MapAdd: case K::MapRemove: case K::MapList: case K::MapLearn:                 // R-CTRL-1: … and its MIDI mappings
+            case K::VersionList: case K::VersionDiff:                                             // R-VER: reading back
                 return false;
             default:
                 return true;
@@ -138,6 +160,14 @@ namespace solaris
         const bool editing = mutates(c.kind) || (c.kind == K::TransportStop && mRecording) // R-MIDI-2: the take is an edit
                              || (c.kind == K::StripArm && c.has("input"));                  // R-REC-1: an input set is one
         if (editing && !requireOpen(err)) return false;
+        if ((editing || c.kind == K::TransportRecord) && mOpen && !mProject.version.empty() && !versionOnly(c, mProject))
+            if (const Version *v = mProject.versionOf(mProject.version); v && v->frozen)
+            {
+                // R-VER-3: a frozen version is read-only — a freeze that yields is not a freeze
+                err = "version " + v->name + " is frozen — `version thaw " + v->id + "` to change it, or `version new <name> --base " +
+                      v->id + " --open` to work on a version of it";
+                return false;
+            }
         const Project before = editing ? mProject : Project();
         mPending.clear();
         std::set<std::string> idsBefore; // R-SVC-8: what an edit made is said, by the ids it added
@@ -226,6 +256,10 @@ namespace solaris
         case K::MapAdd: case K::MapRemove: case K::MapList: case K::MapLearn:
             ok = mapCommand(c, err);
             break;
+        case K::VersionNew: case K::VersionList: case K::VersionOpen: case K::VersionDiff: case K::VersionFreeze:
+        case K::VersionThaw: case K::VersionRebase: case K::VersionDelete: case K::Revert:
+            ok = versionCommand(c, err);
+            break;
         case K::NotesAdd: case K::NotesMove: case K::NotesDelete: case K::PatternSteps: case K::PatternDuplicate: case K::PatternClear: case K::PatternDelete:
         case K::PatternTranspose: case K::PatternQuantize: case K::PatternScale: case K::NotesSet: case K::PatternHumanise: case K::PatternLegato:
         case K::PatternArpeggiate:
@@ -313,6 +347,9 @@ namespace solaris
             refreshModel();
             return false;
         }
+        // R-VER-2: an edit that landed on an open version is recorded as what it changes from its base — for every
+        // command at once, so none of them knows versions exist
+        if (editing && !mProject.version.empty() && !versionOnly(c, mProject)) recordVersion(mProject);
         const bool history = c.kind == K::Undo || c.kind == K::Redo || c.kind == K::HistoryJump;
         if (editing)
         {
@@ -320,7 +357,8 @@ namespace solaris
             // it); `made:` names the rest by kind, so an agent never has to predict an id
             static const std::vector<std::pair<std::string, std::string>> kinds = {
                 {"ch_", "strip"}, {"dv_", "device"}, {"pt_", "pattern"}, {"ln_", "lane"}, {"ac_", "clip"},
-                {"au_", "automation"}, {"sd_", "send"}, {"mx_", "mixer"}, {"prt_", "port"}, {"lg_", "group"}, {"mk_", "marker"}};
+                {"au_", "automation"}, {"sd_", "send"}, {"mx_", "mixer"}, {"prt_", "port"}, {"lg_", "group"}, {"mk_", "marker"},
+                {"vr_", "version"}};
             const std::string primary = mOutput.substr(0, mOutput.find('\n'));
             std::vector<std::string> fresh;
             for (const auto &id : mProject.allIds())
@@ -375,7 +413,7 @@ namespace solaris
             const bool removal = verb.find("delete") != std::string::npos || verb.find("remove") != std::string::npos;
             if (removal || steadySeconds() - mLastAutosave >= mSettings.autosave) autosave();
         }
-        if (editing || history) mModel.dirty = true;
+        if ((editing && c.kind != K::VersionOpen) || history) mModel.dirty = true; // R-VER: which version is open is not the file's
         if (editing || history) followClipLoop(); // R-ROLL-6: the looped clip, as edited
         refreshModel();
         std::vector<Event> landed;
@@ -883,6 +921,14 @@ namespace solaris
             p.bindings.erase(std::remove_if(p.bindings.begin(), p.bindings.end(), [&](const Binding &bd) { return bd.address == address; }),
                              p.bindings.end());
             mBindingsTouched = true;
+        }
+        if (Version *v = p.versionOf(id); v && v->id == id) // R-VER: a version has a name, its only field here
+        {
+            if (f != "name") { err = id + " is a version: its field is `name` (`version` verbs do the rest)"; return false; }
+            if (value.empty()) { err = "a version needs a name"; return false; }
+            v->name = value;
+            stored = value;
+            return true;
         }
         if (Automation *a = p.automation(id))
         {

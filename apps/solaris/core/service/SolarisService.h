@@ -138,6 +138,7 @@ namespace solaris
         bool timeCommand(const Command &c, std::string &err);    // R-ARR-2
         bool groupCommand(const Command &c, std::string &err);   // R-ARR-3: lane groups, a group moved, clips moved together
         bool tempoCommand(const Command &c, std::string &err);   // R-TEMPO-1 (ServiceArrange.cpp): the tempo map's points
+        bool versionCommand(const Command &c, std::string &err); // R-VER (ServiceVersions.cpp): versions of the song
         // R-PRESET-1 (ServicePresets.cpp): the presets of each device type, the user's and the factory's
         bool presetCommand(const Command &c, std::string &err);
         bool applyPreset(const std::string &dv, const std::string &name, std::string &err);

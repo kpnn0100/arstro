@@ -13,6 +13,7 @@
 #include "Engine.h"
 #include "Format.h"
 #include "SolarisService.h"
+#include "Versions.h"
 #include "WorkerPool.h"
 #include "meter/Meters.h"
 #include "output/Dither.h"
@@ -134,6 +135,14 @@ namespace solaris
         if (format == "wav" ? !mHost.writeWav : !mHost.writeAudio) { err = "this build has no " + format + " writer"; return false; }
 
         Project rated = mProject;
+        if (c.has("version")) // R-VER-4: every version renders by name — its resolution, whichever one is open
+        {
+            std::string text;
+            if (!resolveVersion(mProject, c.flag("version"), text, err)) return false;
+            Project q;
+            if (!parseProject(text, q, err)) { err = c.flag("version") + " does not stand as a song: " + err; return false; }
+            rated = std::move(q);
+        }
         rated.header.sampleRate = rate;
         std::map<std::string, std::shared_ptr<const engine::Pcm>> decoded; // at the render's rate, when not the song's
         std::function<std::shared_ptr<const engine::Pcm>(const std::string &)> pcmAt = [&](const std::string &src) -> std::shared_ptr<const engine::Pcm> {

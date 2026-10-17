@@ -10,6 +10,7 @@
 #include "Notation.h"
 #include "RegistryModel.h"
 #include "SolarisService.h"
+#include "Versions.h"
 #include "device/Device.h"
 #include <algorithm>
 #include <cstdlib>
@@ -383,6 +384,12 @@ namespace solaris
             const double end = songEndBeats(); // R-ARR-1: by time, each with its section's end
             for (const auto &mk : p.markers) mModel.markers.push_back(MarkerModel{mk.id, mk.name, mk.note, mk.at, mk.length, p.sectionEnd(mk, end)});
             std::stable_sort(mModel.markers.begin(), mModel.markers.end(), [](const MarkerModel &a, const MarkerModel &b) { return a.at < b.at; });
+            mModel.version = p.version.empty() ? "main" : p.version; // R-VER
+            for (const auto &v : p.versions)
+            {
+                const VersionFacts f = versionFacts(p, v.id);
+                mModel.versions.push_back(VersionModel{v.id, v.name, v.base.empty() ? "main" : v.base, v.frozen, f.deltas, f.own, f.dangling, f.problem});
+            }
         }
         if (!p.tempos.empty()) // R-TEMPO-1: each change, and where it is heard
         {

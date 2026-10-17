@@ -677,6 +677,83 @@
       "requirement": "R-TEMPO-1"
     },
     {
+      "verb": "version new",
+      "usage": "version new <name> [--base <version>] [--open]",
+      "args": "<name>",
+      "flags": [
+        "base=<version>",
+        "open"
+      ],
+      "summary": "Make a version of the song (R-VER-1): its base resolved live with its changes on top — of main, or of --base (an earlier version, by id or name). It stores only what it changes; with --open it is opened at once (the UI's New Version is this one line). Prints its id.",
+      "requirement": "R-VER-1"
+    },
+    {
+      "verb": "version list",
+      "usage": "version list",
+      "args": "",
+      "flags": [],
+      "summary": "The versions as a tree under main: each one's changes, frozen, dangling changes, and why one does not stand.",
+      "requirement": "R-VER-1"
+    },
+    {
+      "verb": "version open",
+      "usage": "version open <version|main>",
+      "args": "<version|main>",
+      "flags": [],
+      "summary": "Open a version (or main): the song on screen and in your ears becomes it; an edit then changes only it — worked out as what it changes from its base (R-VER-2). A step of the history, not an unsaved change: a song always opens on main. One its base broke is refused, naming why.",
+      "requirement": "R-VER-1"
+    },
+    {
+      "verb": "version diff",
+      "usage": "version diff <version>",
+      "args": "<version>",
+      "flags": [],
+      "summary": "What a version changes from its base, one line each — #vset/#vunset (fields), #vdrop, #vbody (a node's notes, points or takes as one), #vorder (a rack's devices), then the nodes only it has.",
+      "requirement": "R-VER-2"
+    },
+    {
+      "verb": "version freeze",
+      "usage": "version freeze <version>",
+      "args": "<version>",
+      "flags": [],
+      "summary": "Stop a version inheriting (R-VER-3): it keeps its resolution as a snapshot; while open, an edit is refused.",
+      "requirement": "R-VER-3"
+    },
+    {
+      "verb": "version thaw",
+      "usage": "version thaw <version>",
+      "args": "<version>",
+      "flags": [],
+      "summary": "Inherit live again: its changes on its base as it is now.",
+      "requirement": "R-VER-3"
+    },
+    {
+      "verb": "version rebase",
+      "usage": "version rebase <version> [--dry-run]",
+      "args": "<version>",
+      "flags": [
+        "dry-run"
+      ],
+      "summary": "Reconcile (R-VER-3): name and prune the changes whose node its base no longer has; a frozen version's snapshot advanced to its base now, its changes on top. --dry-run names them and changes nothing.",
+      "requirement": "R-VER-3"
+    },
+    {
+      "verb": "version delete",
+      "usage": "version delete <version>",
+      "args": "<version>",
+      "flags": [],
+      "summary": "Delete a version — refused while another is based on it; the open one gives way to its base.",
+      "requirement": "R-VER-1"
+    },
+    {
+      "verb": "revert",
+      "usage": "revert <address|node>",
+      "args": "<address|node>",
+      "flags": [],
+      "summary": "Drop the open version's change at an address (`ch_2.mute`, `dv_1.filter.cutoff`, `project.bpm`) or every change to a node, so it inherits from its base again. Refused on main and where there is none.",
+      "requirement": "R-VER-2"
+    },
+    {
       "verb": "preset save",
       "usage": "preset save <dv> <name> [--replace]",
       "args": "<dv> <name>",
@@ -967,7 +1044,7 @@
     },
     {
       "verb": "render",
-      "usage": "render --out <file> [--format <wav|flac|mp3|ogg|opus>] [--rate <Hz>] [--bits <16|24|32f>] [--kbps <n>] [--normalize <LUFS>] [--ceiling <dBTP>] [--from <beats>] [--to <beats>] [--stems <ch,…|all>] [--ports] [--measure]",
+      "usage": "render --out <file> [--format <wav|flac|mp3|ogg|opus>] [--rate <Hz>] [--bits <16|24|32f>] [--kbps <n>] [--normalize <LUFS>] [--ceiling <dBTP>] [--from <beats>] [--to <beats>] [--stems <ch,…|all>] [--ports] [--measure] [--version <version|main>]",
       "args": "",
       "flags": [
         "out=<file>",
@@ -981,9 +1058,10 @@
         "to=<beats>",
         "stems=<ch,…|all>",
         "ports",
-        "measure"
+        "measure",
+        "version=<version|main>"
       ],
-      "summary": "Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader output to <out>.<ch>.<ext>; with --ports, each output port to <out>.<port>.<ext>. The tail runs until −90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) is compensated and trimmed (R-MIX-17). The format is the extension — .wav, .flac, .mp3, .ogg (Vorbis), .opus — or --format (R-EXPORT-1). --rate renders the song AT that rate (Opus: 48000, its default; MP3 to 48000); --bits 16 | 24 (WAV and FLAC; default 24) | 32f (WAV) — 16 and 24 TPDF-dithered; --kbps for the lossy ones (MP3 32…320, default 320; Ogg 45…500, 256; Opus 6…510, 192). --normalize gains every file alike to that integrated loudness, held so the master's true peak stays under --ceiling (dBTP, default −1) — said on a `normalize` line. --measure prints the written master's integrated loudness, the most of its momentary and short-term, its true peak and its lowest correlation (R-METER-1).",
+      "summary": "Render offline: the master to --out; with --stems, each named strip's (`all`: every strip's) post-fader output to <out>.<ch>.<ext>; with --ports, each output port to <out>.<port>.<ext>. The tail runs until −90 dBFS or 10 s. Every file starts at --from exactly: the latency of a lookahead device (a limiter) is compensated and trimmed (R-MIX-17). The format is the extension — .wav, .flac, .mp3, .ogg (Vorbis), .opus — or --format (R-EXPORT-1). --rate renders the song AT that rate (Opus: 48000, its default; MP3 to 48000); --bits 16 | 24 (WAV and FLAC; default 24) | 32f (WAV) — 16 and 24 TPDF-dithered; --kbps for the lossy ones (MP3 32…320, default 320; Ogg 45…500, 256; Opus 6…510, 192). --normalize gains every file alike to that integrated loudness, held so the master's true peak stays under --ceiling (dBTP, default −1) — said on a `normalize` line. --measure prints the written master's integrated loudness, the most of its momentary and short-term, its true peak and its lowest correlation (R-METER-1). --version renders that version (or main) whichever is open — every version renders by name (R-VER-4).",
       "requirement": "R-RENDER-2"
     },
     {
@@ -2280,6 +2358,66 @@
       "path": "groups[].lanes",
       "type": "string[]",
       "summary": "its lanes, in order",
+      "stable": true
+    },
+    {
+      "path": "versions",
+      "type": "object[]",
+      "summary": "R-VER: versions of the song, in creation order — each its base resolved live with its changes on top",
+      "stable": true
+    },
+    {
+      "path": "versions[].id",
+      "type": "string",
+      "summary": "vr_n",
+      "stable": true
+    },
+    {
+      "path": "versions[].name",
+      "type": "string",
+      "summary": "never `main` (the song itself)",
+      "stable": true
+    },
+    {
+      "path": "versions[].base",
+      "type": "string",
+      "summary": "an earlier version's id, or `main`",
+      "stable": true
+    },
+    {
+      "path": "versions[].frozen",
+      "type": "bool",
+      "summary": "R-VER-3: it reads its snapshot; an edit while it is open is refused",
+      "stable": true
+    },
+    {
+      "path": "versions[].changes",
+      "type": "number",
+      "summary": "its deltas: fields set or unset, nodes dropped, bodies, orders",
+      "stable": true
+    },
+    {
+      "path": "versions[].own",
+      "type": "number",
+      "summary": "nodes only it has",
+      "stable": true
+    },
+    {
+      "path": "versions[].dangling",
+      "type": "number",
+      "summary": "changes whose node its base no longer has — ignored until `version rebase` prunes them",
+      "stable": true
+    },
+    {
+      "path": "versions[].problem",
+      "type": "string",
+      "summary": "why it does not stand as a song (its base broke it); \"\" when it does",
+      "stable": true
+    },
+    {
+      "path": "version",
+      "type": "string",
+      "summary": "R-VER: the open version's id, or `main` — the song on screen and heard is its resolution",
       "stable": true
     },
     {
