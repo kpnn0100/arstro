@@ -1005,6 +1005,16 @@ A gate and a downward expander: below its threshold turned down by the ratio, he
 | `release` | 1.0 … 5000.0 ms | 100.0 ms |
 | `sidechain` | off · on | off |
 
+### `imager` — Imager (effect)
+
+Wider or narrower, and mono below a frequency: mid and side, the side scaled, its lows taken away.
+
+| parameter | range | default |
+|---|---|---|
+| `width` | 0.0 … 200.0 % | 100.0 % |
+| `mono` | off · on | off |
+| `frequency` | 40.0 … 500.0 Hz | 120.0 Hz |
+
 ### `flanger` — Flanger (effect)
 
 A short delay swept by an LFO and fed back: a comb whose teeth sweep.

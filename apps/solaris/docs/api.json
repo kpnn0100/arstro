@@ -6563,6 +6563,44 @@
       ]
     },
     {
+      "type": "imager",
+      "label": "Imager",
+      "kind": "effect",
+      "summary": "Wider or narrower, and mono below a frequency: mid and side, the side scaled, its lows taken away.",
+      "params": [
+        {
+          "name": "width",
+          "label": "Width",
+          "unit": "%",
+          "min": 0.0,
+          "max": 200.0,
+          "default": 100.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mono",
+          "label": "Mono Bass",
+          "unit": "",
+          "choices": [
+            "off",
+            "on"
+          ],
+          "default": "off"
+        },
+        {
+          "name": "frequency",
+          "label": "Mono Below",
+          "unit": "Hz",
+          "min": 40.0,
+          "max": 500.0,
+          "default": 120.0,
+          "integer": false,
+          "log": true
+        }
+      ]
+    },
+    {
       "type": "flanger",
       "label": "Flanger",
       "kind": "effect",

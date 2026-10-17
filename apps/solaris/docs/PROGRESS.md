@@ -594,7 +594,7 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       The transient shaper (DSP bb091f1). The de-esser (DSP ed63bbd).
       The saturator and the bitcrusher (DSP cfe7808). The phaser (DSP 3569086); D-18 filed (the library's delay
       line extrapolates — the flanger needs it right); D-18 closed (DSP 2148541). The flanger (DSP 0b08063).
-      Next: stereo imager (R-FX-13).
+      The imager (DSP 04ddda6). Next: convolution reverb (R-FX-14).
 - [ ] **N35** Group / VCA faders (R-MIX-19).
 - [ ] **N36** Phase invert, width, mono check, solo-safe (R-MIX-20).
 - [ ] **N37** Versions of a song (R-VER-1…4).

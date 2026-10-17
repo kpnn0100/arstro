@@ -2141,7 +2141,8 @@ held at the threshold within a range, a dynamic high shelf (split) or the whole 
 "saturator" and "bitcrusher" (R-FX-10; REQ-fx-saturator-1 / -bitcrusher-1, DSP cfe7808) — four curves 4× oversampled,
 15 samples late (its `latency()`, compensated by DR-MIX-17 with no code here); bits and a sample-and-hold rate;
 "phaser" (R-FX-11; REQ-fx-phaser-1, DSP 3569086) — first-order all-passes swept in log frequency, fed back;
-"flanger" (R-FX-12; REQ-fx-flanger-1, DSP 0b08063) — a library delay line swept and fed back (built on D-18's fix).
+"flanger" (R-FX-12; REQ-fx-flanger-1, DSP 0b08063) — a library delay line swept and fed back (built on D-18's fix);
+"imager" (R-FX-13; REQ-fx-imager-1, DSP 04ddda6) — mid/side width, mono below a frequency through a Linkwitz-Riley split.
 
 ### DR-MIDI-3 Expression lanes (R-MIDI-3)
 A pattern carries expression lanes beside its notes (`model/Project.h` `ExprPoint`; `#expr lane= at= value=` in the
