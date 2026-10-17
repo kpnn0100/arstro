@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► N42 — Accessibility** (R-ACCESS-1; a design round first — N41, sharing through a folder, is built), then N43… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► N42 part 1 — the UI scale and high contrast** (R-ACCESS-1; Round 20 is the design), then N43… in order (the user: *"implement all"*). Owed live checks: D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -661,7 +661,10 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       file; the Conflicts sheet (opened on its own when a sync asks, and from File › Conflicts…): rows keyed by node,
       what tells the sides apart (the fields that differ), Keep Mine / Take Theirs and both for all, ONE line each; shots
       conflicts-sheet(-answered-mid). N41 DONE.
-- [ ] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1).
+- [~] **N42** Accessibility: UI scale, high contrast, AT-SPI names, keyboard reach (R-ACCESS-1). Round 20 (the
+      design): cosmo's eased UI scale; high contrast as one eased amount on cosmo's tokens; the accessible list
+      (every widget's controls: role, name, value, bounds, actions) walked by Tab / Enter / the arrows, and given to
+      AT-SPI by the host through ATK. Next: part 1 — the scale and the contrast.
 - [ ] **N43** Localisation (R-ACCESS-2).
 - [ ] **N44** Analysis tools: separation, audio-to-MIDI, chords (R-ASSIST-1).
 

@@ -778,3 +778,40 @@ Decided (each a line to change):
 - **Not yet:** live co-editing (two windows editing the same moment), comments on the timeline, merging inside a
   pattern's notes or a clip's takes (one node each), a server.
 
+### Round 20 — 2026-10-17 — accessibility (R-ACCESS-1, N42): the design, before code
+
+R-ACCESS-1: a UI scale setting (eased), a high-contrast theme, every control's name and value published for assistive
+technology (AT-SPI through the host), all of it reachable from the keyboard. Decided (each a line to change):
+
+- **The UI scale is cosmo's** (one suite, law 16 — cosmo R-SCALE): `settings set uiScale=<percent>`, snapped to
+  cosmo's steps (75 · 90 · 100 · 125 · 150 · 175 · 200), the machine's, on Settings › Interface. The window is drawn
+  at the EASED scale (260 ms, cosmo's `kScaleAnimMs`): every frame the logical size is the window's divided by the
+  drawn scale and every pointer position is divided by it, so the whole shell zooms — never a cut, then a reflow.
+- **High contrast is one eased amount on cosmo's tokens** (the accent's runtime slot, cosmo R-G-5, is the precedent):
+  `settings set contrast=normal|high`; cosmo's palette gains `setContrast(0…1)`, which cosmo itself never calls, so its
+  pixels do not move. Each neutral token blends from its value toward a high-contrast one — the background black, text
+  white, muted text light grey, borders a solid 45 % white, the cards darker, the accent kept — by the amount the App
+  eases over 260 ms. So a switch fades the whole UI; a token is still the only place a colour is named.
+- **Every control published: the accessible list.** Each Solaris widget lists its controls (`A11yNode`: a stable
+  key, a role — button, toggle, slider, combo, tab, menu item, list item, text — a name, a value, its bounds in the
+  window, enabled, and what it does: activate; a value's step up and down). The App gathers them in reading order —
+  the song bar, the browser, the lanes' headers, the dock, the open windows, a modal's controls ONLY while it is open
+  — as `App::accessibles()`. Activating a node is the click it stands for (the same ONE command line); a value's step
+  is its keyboard step (a fader ±0.5 dB, a pan ±5 %, a parameter by its registry step). Coverage first: Home, the song
+  bar and its menus, the browser's tabs and rows, the dock's strips (name, fader, pan, mute, solo, arm, record), the
+  modal sheets' controls, a device window's parameters; the lanes' clips and the piano roll's notes are "Not yet".
+- **Reachable from the keyboard — the same list.** Tab / Shift+Tab move a focus through the focusable nodes in that
+  order (when nothing else takes Tab); Enter or Space activates; the arrows step a value (Shift: a tenth); Escape lets
+  go. The focus ring is drawn by the App over the node's bounds, travelling between controls (220 ms) and fading in and
+  out — and the focused node's name is said in the model-free way a screen reader hears it (below).
+- **AT-SPI through the host** (R-SVC-4 — the core and the App carry no OS API): the GTK host gives the window an ATK
+  object whose children are the list's nodes — a role, a name, a value (AtkValue for a slider), extents (AtkComponent),
+  actions (AtkAction: activate; increment / decrement) — re-read when the App says the list changed, and a focus event
+  when the keyboard's focus moves. The bridge is plain ATK (no GTK), so a host test builds it from a list and reads it
+  back through ATK's own calls with no display.
+- **Parts** (a commit each): (1) the scale and the contrast — settings, Settings › Interface, the eased transform and
+  token blend, shots; (2) the accessible list and the keyboard's focus — the widgets' nodes, Tab / Enter / arrows, the
+  ring; (3) the ATK bridge in the host, its test; the live screen reader is owed (the user's desktop).
+- **Not yet:** the lanes' clips and the piano roll's notes as nodes; a screen reader's own announcements of a value as
+  it plays (meters); right-to-left.
+
