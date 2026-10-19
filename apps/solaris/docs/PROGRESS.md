@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► O2 — automation clips in the window** (R-AUTO-14, Round 23): automation tracks among the lanes, the AUTOMATION section gone; clips drawing their curve and its repeats; points edited in a clip; moved, copied and resized by the clip; its menu (Make unique, Length ▸, Open automation, Copy ID, Delete); shots. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► Automation clips are built (R-AUTO-14, O1–O2).** What comes next is the user's call. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -736,9 +736,13 @@ setting replaced by clips that repeat, old songs converted.
       equivalent (the overlap cut — the engine reads the span that began last) deleted as dead code. The EDM and canon
       demos pass unchanged. Found: a stale object after a header change made a test fail twice — a clean rebuild of the
       touched targets cleared it (noted for the gotchas).
-- [ ] **O2** The window: automation tracks among the lanes, the AUTOMATION section gone; clips drawing their curve and
+- [x] **O2** The window: automation tracks among the lanes, the AUTOMATION section gone; clips drawing their curve and
       its repeats; points edited in a clip; moved, copied (Shift-drag, Ctrl+C/V) and resized by the clip; the clip's
       menu (Make unique, Length ▸, Open automation, Copy ID, Delete); the window's Length combo, rest and clips; shots.
+      — DR-AUTO-9 part O2 (DR-AUTO-5 rewritten). UI two tests new (the clip: edits, repeats, menus, its track; copies by
+      Shift-drag and Ctrl+V, its end, two clips easing together), bezier/IDs/en-XA aimed at the clip; shots
+      automation-clips, automation-clips-easing; 6 mutants red (one survivor made `autoPointAt` report what is drawn).
+      R-AUTO-14 DONE.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

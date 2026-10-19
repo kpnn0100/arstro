@@ -46,6 +46,21 @@ namespace
             if (l == line) return true;
         return false;
     }
+    // R-AUTO-14: an automation's first clip, and its track's row (the lanes in their order — no folded group here)
+    std::string autoClipOf(const sltest::Rig &r, const std::string &au)
+    {
+        for (const auto &c : r.svc->model().clips)
+            if (c.automation == au) return c.id;
+        return std::string();
+    }
+    int autoTrackRow(const sltest::Rig &r, const std::string &au)
+    {
+        std::vector<arstro::solaris::LaneModel> ls = r.svc->model().lanes;
+        std::stable_sort(ls.begin(), ls.end(), [](const auto &a, const auto &b) { return a.order < b.order; });
+        for (size_t i = 0; i < ls.size(); ++i)
+            if (ls[i].automation == au) return (int)i;
+        return -1;
+    }
 }
 
 static void test_new_song_cross_fades_from_home()
@@ -1424,11 +1439,11 @@ static void test_an_automation_is_made_with_its_clip_and_sized_in_its_window()
     // its window: a double-click on its row's header
     auto &tl = r.app->project().timeline();
     const artboard::Rect lanes = world(tl, tl.rowRect(0));
-    r.app->wheel(lanes.x + 400.0, lanes.y + 10.0, -4.0); // bring the automation row into view
+    r.app->wheel(lanes.x + 400.0, lanes.y + 10.0, -4.0); // bring its track into view
     r.settle();
-    const artboard::Rect row = world(tl, tl.autoRowRect("au_1"));
-    r.click(row.x + 30.0, row.y + row.h * 0.5);
-    r.click(row.x + 30.0, row.y + row.h * 0.5);
+    const artboard::Rect head = world(tl, tl.rowRect(autoTrackRow(r, "au_1")));
+    r.click(head.x + 30.0, cy(head));                     // a double-click on its track's header: its window
+    r.click(head.x + 30.0, cy(head));
     r.settle();
     auto *ap = r.app->project().windows().automationPanel("au_1");
     assert(ap);
@@ -1839,43 +1854,57 @@ static void test_device_window_lists_parameters_and_binds_them()
     pass("Device window: an instrument's name opens it; dragged by its title exactly; the last change lit and moving (eased); Create Automation / Formula / Clear Binding are lines and the row says what decides it; × fades it out");
 }
 
-static void test_automation_rows_draw_and_edit_curves()
+static void test_automation_clips_draw_and_edit_curves()
 {
+    // R-AUTO-14 (with R-AUTO-6): an automation made from a shell grows in as a TRACK under its strip's and a clip on it;
+    // in the clip a click adds a point, a drag follows exactly and is one move, a shell's edit eases every clip of it, a
+    // point's menu shapes it, a double-click deletes it; a click in a REPEAT adds the point at its place in the cycle;
+    // the clip's menu — Duplicate (linked), Make unique, Length ▸ — each one line; its track's menu deletes it
     sltest::Rig r("ui-auto", 1280, 800);
     r.cmd("project new " + r.song("Auto") + ".slp --bpm 120");
-    r.cmd("clip add --instrument synth --at 0 --length 8");   // ch_2, dv_1
+    r.cmd("clip add --instrument synth --at 0 --length 8");   // ch_2, dv_1, its track ln_1
     r.settle();
     auto &tl = r.app->project().timeline();
-    // an automation made from a shell appears as a row under the lanes, growing in
+    auto &menu = r.app->menu();
+    auto clipOf = [&](const std::string &id) -> arstro::solaris::ClipModel {
+        for (const auto &c : r.svc->model().clips)
+            if (c.id == id) return c;
+        return arstro::solaris::ClipModel{};
+    };
     r.cmd("auto create ch_2.gain");
-    r.frame();
-    r.frame();
-    assert(tl.autoCount() == 1 && tl.autoRowRect("au_1").h > 0.0);
+    const std::string ac = autoClipOf(r, "au_1");
+    double grow = -1;
+    for (int k = 0; k < 20 && grow < 0; ++k)
+    {
+        r.frame();
+        const double a = tl.clipAlpha(ac);
+        if (a > 0.0 && a < 1.0) grow = a;
+    }
     r.settle();
-    const artboard::Rect row = world(tl, tl.autoRowRect("au_1"));
-    assert(row.y > world(tl, tl.rowRect(0)).bottom() - 1.0);          // after the lanes
-    // a click in its row adds a point at the snapped beat and the value under the pointer
-    const double x2 = world(tl, artboard::Rect{tl.beatToX(2.0), 0, 0, 0}).x;
-    const double yq = row.y + row.h * 0.25;
-    r.click(x2 + 1.0, yq);
+    assert(grow > 0.0 && tl.autoCount() == 1 && tl.autoClipRect(ac).h > 0.0 && autoTrackRow(r, "au_1") == 1); // under the synth's track
+    const artboard::Rect area = world(tl, tl.autoClipRect(ac));
+    assert(area.y > world(tl, tl.rowRect(1)).y && area.bottom() < world(tl, tl.rowRect(1)).bottom());
+    // a click in its curve adds a point at the snapped beat and the value under the pointer
+    const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
+    r.click(tw.x + tl.beatToX(2.0) + 1.0, area.y + area.h * 0.25);
     r.settle();
     bool added = false;
     for (const auto &l : r.sent) added |= l.rfind("auto point add au_1 --at 2 --value ", 0) == 0;
     assert(added && r.svc->model().automations[0].points.size() == 3);
     // a point dragged follows the pointer EXACTLY; let go it is ONE `auto point move`, and stays
-    const artboard::Point p1 = tl.autoPointAt("au_1", 1);
+    const artboard::Point p1 = tl.autoPointAt(ac, 1);
     const double x3 = tl.beatToX(3.0);
-    const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
-    r.drag(tw.x + p1.x, tw.y + p1.y, tw.x + x3, tw.y + p1.y - 6.0, 6, false);
-    // while held the handle is drawn under the pointer (its beat on the grid's step, R-UI-10), not easing after it
+    r.drag(tw.x + p1.x, tw.y + p1.y, tw.x + x3, tw.y + p1.y + 6.0, 6, false); // down: within the clip's range
     const artboard::Point held = tl.autoDragPoint();
-    assert(std::fabs(held.x - x3) < 0.5 && std::fabs(held.y - (p1.y - 6.0)) < 0.5);
-    r.app->pointer(2, tw.x + x3, tw.y + p1.y - 6.0, 0, r.now);
+    if (std::fabs(held.x - x3) >= 0.5 || std::fabs(held.y - (p1.y + 6.0)) >= 0.5) std::printf("    held %.2f,%.2f want %.2f,%.2f\n", held.x, held.y, x3, p1.y + 6.0);
+    assert(std::fabs(held.x - x3) < 0.5 && std::fabs(held.y - (p1.y + 6.0)) < 0.5);
+    assert(std::fabs(tl.autoPointAt(ac, 1).x - x3) < 0.5 && std::fabs(tl.autoPointAt(ac, 1).y - (p1.y + 6.0)) < 0.5); // drawn there, not easing after it
+    r.app->pointer(2, tw.x + x3, tw.y + p1.y + 6.0, 0, r.now);
     r.settle();
     bool moved = false;
     for (const auto &l : r.sent) moved |= l.rfind("auto point move au_1 --at 2 --to 3 --value ", 0) == 0;
     assert(moved && r.svc->model().automations[0].points[1].at == 3.0);
-    assert(std::fabs(tl.autoPointAt("au_1", 1).x - x3) < 0.5);       // where it was let go: nothing jumps
+    assert(std::fabs(tl.autoPointAt(ac, 1).x - x3) < 0.5);           // where it was let go: nothing jumps
     // a curve changed from a shell EASES there
     r.cmd("auto point move au_1 --at 3 --value -40");
     r.frame();
@@ -1884,10 +1913,9 @@ static void test_automation_rows_draw_and_edit_curves()
     r.settle();
     assert(tl.autoEase("au_1") == 1.0);
     // right-click a point: its shapes; Hold is one line
-    const artboard::Point p0 = tl.autoPointAt("au_1", 0);
-    r.click(tw.x + p0.x, tw.y + p0.y, 2);
+    const artboard::Point p0 = tl.autoPointAt(ac, 0);
+    r.click(tw.x + p0.x + 1.0, tw.y + p0.y, 2);
     r.settle();
-    auto &menu = r.app->menu();
     int hold = -1;
     for (int i = 0; i < menu.itemCount(); ++i)
         if (menu.item(i).label.rfind("Hold", 0) == 0) hold = i;
@@ -1896,18 +1924,121 @@ static void test_automation_rows_draw_and_edit_curves()
     r.settle();
     assert(sentLine(r, "auto point shape au_1 --at 0 --shape hold") && r.svc->model().automations[0].points[0].shape == "hold");
     // a double-click on a point deletes it
-    const artboard::Point pm = tl.autoPointAt("au_1", 1);
+    const artboard::Point pm = tl.autoPointAt(ac, 1);
     r.click(tw.x + pm.x, tw.y + pm.y);
     r.click(tw.x + pm.x, tw.y + pm.y);
     r.settle();
     assert(sentLine(r, "auto point delete au_1 --at 3") && r.svc->model().automations[0].points.size() == 2);
-    // right-click the row: Delete Automation (and the formulas that read it)
-    r.click(tw.x + tl.beatToX(6.0), cy(world(tl, tl.autoRowRect("au_1"))) + 18.0, 2);
+    // the clip's menu, away from a point: Length ▸ 1 bar — ONE line; the clip now repeats it
+    auto clipMenu = [&](const std::string &id, const std::string &label) {
+        const artboard::Rect cr = world(tl, tl.autoClipRect(id));
+        r.click(cr.x + cr.w * 0.6, cr.y + cr.h * 0.5, 2);
+        r.settle();
+        int k = -1;
+        for (int i = 0; i < menu.itemCount(); ++i)
+            if (menu.item(i).label.rfind(label, 0) == 0) k = i;
+        if (k < 0) for (int i = 0; i < menu.itemCount(); ++i) std::printf("    menu: %s\n", menu.item(i).label.c_str());
+        assert(menu.isOpen() && k >= 0);
+        r.click(menu.itemRect(k));
+        r.settle();
+    };
+    assert(r.svc->model().automations[0].length == 16.0);
+    clipMenu(ac, "Length");
+    int bar = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label == "1 bar") bar = i;
+    assert(menu.isOpen() && bar >= 0);
+    r.click(menu.itemRect(bar));
     r.settle();
-    r.click(menu.itemRect(menu.itemCount() - 1));
+    assert(sentLine(r, "set au_1.length=4") && r.svc->model().automations[0].length == 4.0 && clipOf(ac).length == 4.0); // its length 0: it follows
+    r.cmd("set " + ac + ".length=12");                                // longer: it repeats it (as a resize would, R-CLIP-7)
     r.settle();
-    assert(sentLine(r, "auto delete au_1 --unbind") && r.svc->model().automations.empty() && r.svc->model().bindings.empty());
-    pass("Automation rows: a row per automation under the lanes; click adds, a drag follows exactly and is one move, a shell's edit eases, shapes and deletes from the menu (R-AUTO-6)");
+    // a click in its third pass adds the point at its place in the cycle — never past the first pass
+    const artboard::Rect cr = world(tl, tl.autoClipRect(ac));
+    r.click(tw.x + tl.beatToX(9.0) + 1.0, cr.y + cr.h * 0.5);
+    r.settle();
+    bool inCycle = false;
+    for (const auto &l : r.sent) inCycle |= l.rfind("auto point add au_1 --at 1 --value ", 0) == 0;
+    assert(inCycle);
+    // Duplicate: a linked copy right after it; Make unique: its own curve, still driving ch_2.gain
+    clipMenu(ac, "Duplicate");
+    assert(sentLine(r, "clip duplicate " + ac) && r.svc->model().automations[0].clips == 2);
+    std::string copy;
+    for (const auto &c : r.svc->model().clips)
+        if (c.automation == "au_1" && c.id != ac) copy = c.id;
+    assert(!copy.empty() && clipOf(copy).linked == 2);
+    clipMenu(copy, "Make unique");
+    assert(sentLine(r, "clip unique " + copy) && clipOf(copy).automation == "au_2" && r.svc->model().automations.size() == 2);
+    // its track's menu: Delete Automation — the formulas that read it, its copy, its clips and its track go with it
+    const artboard::Rect head = world(tl, tl.rowRect(autoTrackRow(r, "au_1")));
+    r.click(head.x + 30.0, cy(head), 2);
+    r.settle();
+    int del = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label == "Delete Automation") del = i;
+    assert(menu.isOpen() && del >= 0);
+    r.click(menu.itemRect(del));
+    r.settle();
+    assert(sentLine(r, "auto delete au_1 --unbind") && r.svc->model().automations.empty() && r.svc->model().bindings.empty() && autoTrackRow(r, "au_1") < 0);
+    pass("Automation clips (R-AUTO-14, R-AUTO-6): made from a shell, a track under its strip's and a clip that grows in; in the clip a click adds, a drag follows exactly and is one move, a shell's edit eases, a point's menu shapes, a double-click deletes; a click in a repeat lands in the cycle; Length ▸, Duplicate (linked), Make unique each one line; its track's menu deletes it all");
+}
+
+static void test_automation_clips_copy_like_midi_clips()
+{
+    // R-AUTO-14 (R-CLIP-7/9/10): an automation clip is copied as a MIDI clip is — Shift-drag by its name is ONE `clip
+    // duplicate --at`, linked; Ctrl+C / Ctrl+V pastes it at the time bar; its end dragged is the pointer's while held and
+    // ONE `set <ac>.length=` (it repeats its automation further); a shell's edit eases EVERY clip of it at once
+    sltest::Rig r("ui-autocopy", 1280, 800);
+    r.cmd("project new " + r.song("AutoCopy") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 16");
+    r.cmd("auto create ch_2.gain");
+    r.cmd("set au_1.length=1");
+    r.cmd("auto point move au_1 --at 0 --value -24");
+    r.cmd("auto point add au_1 --at 0.5 --value 0");
+    const std::string ac = autoClipOf(r, "au_1");
+    r.cmd("set " + ac + ".length=4");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto clipsOf = [&] {
+        std::vector<arstro::solaris::ClipModel> v;
+        for (const auto &c : r.svc->model().clips)
+            if (c.automation == "au_1") v.push_back(c);
+        return v;
+    };
+    // Shift-drag by its name to beat 8: ONE duplicate there, linked
+    const artboard::Rect c1 = world(tl, tl.clipRect(ac));
+    const double x8 = world(tl, artboard::Rect{tl.beatToX(8.0), 0, 0, 0}).x;
+    r.drag(c1.x + 12.0, c1.y + 6.0, x8 + 12.0, c1.y + 6.0, 8, true, true);
+    r.settle();
+    assert(sentLine(r, "clip duplicate " + ac + " --at 8") && clipsOf().size() == 2 && clipsOf()[1].linked == 2);
+    const std::string copy = clipsOf()[1].id;
+    // Ctrl+C on it, the time bar at 12, Ctrl+V: ONE duplicate there
+    r.click(c1.x + 12.0, c1.y + 6.0);
+    r.settle();
+    r.key('C', true);
+    r.cmd("transport seek 12");
+    r.settle();
+    r.key('V', true);
+    r.settle();
+    assert(sentLine(r, "clip duplicate " + ac + " --at 12") && clipsOf().size() == 3);
+    // its end dragged two beats on: the pointer's while held, then ONE line
+    const artboard::Rect c2 = world(tl, tl.clipRect(ac));
+    const double twoBeats = tl.beatToX(2.0) - tl.beatToX(0.0);
+    r.drag(c2.right() - 2.0, cy(c2), c2.right() - 2.0 + twoBeats, cy(c2), 8, false);
+    assert(std::fabs(world(tl, tl.clipRect(ac)).right() - (c2.right() + twoBeats)) < 1.0);
+    r.app->pointer(2, c2.right() - 2.0 + twoBeats, cy(c2), 0, r.now);
+    r.settle();
+    assert(sentLine(r, "set " + ac + ".length=6"));
+    // a shell's edit to its automation: every clip of it eases there together, caught mid-way
+    const double y0 = tl.autoPointAt(ac, 0).y, y1 = tl.autoPointAt(copy, 0).y;
+    r.cmd("auto point move au_1 --at 0 --value -6");
+    r.frame();
+    r.frame();
+    const double m0 = tl.autoPointAt(ac, 0).y, m1 = tl.autoPointAt(copy, 0).y;
+    r.settle();
+    const double e0 = tl.autoPointAt(ac, 0).y;
+    assert(m0 != y0 && m0 != e0 && std::fabs((m0 - y0) - (m1 - y1)) < 1e-9);
+    pass("Automation clips are copied as MIDI clips (R-AUTO-14, R-CLIP-7/9/10): Shift-drag by its name is ONE `clip duplicate --at`, linked; Ctrl+C / Ctrl+V at the time bar; its end the pointer's, then ONE `set .length=`; a shell's edit eases every clip of it together");
 }
 
 static void test_bezier_handles_and_the_automation_window()
@@ -1921,6 +2052,7 @@ static void test_bezier_handles_and_the_automation_window()
     r.settle();
     auto &tl = r.app->project().timeline();
     const artboard::Rect tw = world(tl, artboard::Rect{0, 0, 0, 0});
+    const std::string ac = autoClipOf(r, "au_1"); // R-AUTO-14: its clip, where its curve is drawn and edited
     auto lines = [&](const std::string &prefix) {
         int n = 0;
         for (const auto &l : r.sent) n += l.rfind(prefix, 0) == 0;
@@ -1928,8 +2060,8 @@ static void test_bezier_handles_and_the_automation_window()
     };
     auto near = [](artboard::Point a, double x, double y) { return std::fabs(a.x - x) < 0.5 && std::fabs(a.y - y) < 0.5; };
     // ── Alt-drag a point pulls out SYMMETRIC handles; the one under the pointer follows it exactly ──
-    const artboard::Point p1 = tl.autoPointAt("au_1", 1);
-    const double hx = p1.x + 40.0, hy = p1.y - 5.0; // inside the row's range (a pan's −1 … 1 spans ~36 px)
+    const artboard::Point p1 = tl.autoPointAt(ac, 1);
+    const double hx = p1.x + 40.0, hy = p1.y - 5.0; // inside the clip's range (a pan's −1 … 1 spans ~20 px)
     const size_t before = r.sent.size();
     r.app->pointer(1, tw.x + p1.x, tw.y + p1.y, 0, r.now, true);
     r.app->pointer(0, tw.x + p1.x, tw.y + p1.y, 0, r.now, true);
@@ -1939,16 +2071,16 @@ static void test_bezier_handles_and_the_automation_window()
         r.app->pointer(1, tw.x + p1.x + (hx - p1.x) * k / 6.0, tw.y + p1.y + (hy - p1.y) * k / 6.0, 0, r.now, true);
         r.frame();
     }
-    assert(near(tl.autoHandleAt("au_1", 1, 2), hx, hy));                 // under the pointer, not easing after it
-    assert(near(tl.autoHandleAt("au_1", 1, 1), 2.0 * p1.x - hx, 2.0 * p1.y - hy)); // the in-handle its mirror
-    assert(near(tl.autoPointAt("au_1", 1), p1.x, p1.y));                 // the point itself stays
+    assert(near(tl.autoHandleAt(ac, 1, 2), hx, hy));                 // under the pointer, not easing after it
+    assert(near(tl.autoHandleAt(ac, 1, 1), 2.0 * p1.x - hx, 2.0 * p1.y - hy)); // the in-handle its mirror
+    assert(near(tl.autoPointAt(ac, 1), p1.x, p1.y));                 // the point itself stays
     assert(r.sent.size() == before);                                      // nothing sent while held
     r.app->pointer(2, tw.x + hx, tw.y + hy, 0, r.now, true);
     r.frame();
     assert(r.sent.size() == before + 1 && lines("auto point shape au_1 --at 4 --shape bezier --speed-in ") == 1); // ONE line
-    assert(near(tl.autoHandleAt("au_1", 1, 2), hx, hy) && tl.autoEase("au_1") == 1.0); // where it was let go: nothing jumps
+    assert(near(tl.autoHandleAt(ac, 1, 2), hx, hy) && tl.autoEase("au_1") == 1.0); // where it was let go: nothing jumps
     r.settle();
-    assert(near(tl.autoHandleAt("au_1", 1, 2), hx, hy) && tl.autoEase("au_1") == 1.0);
+    assert(near(tl.autoHandleAt(ac, 1, 2), hx, hy) && tl.autoEase("au_1") == 1.0);
     {
         const auto &pt = r.svc->model().automations[0].points[1];
         assert(pt.shape == "bezier" && pt.speedIn == pt.speedOut && pt.speedOut > 0.0); // pulled up and right: rising through the point
@@ -1956,12 +2088,12 @@ static void test_bezier_handles_and_the_automation_window()
     // ── a handle dragged: the opposite one MIRRORS ──
     const double h2x = hx + 14.0, h2y = hy + 10.0;
     r.drag(tw.x + hx, tw.y + hy, tw.x + h2x, tw.y + h2y, 6, false);
-    assert(near(tl.autoHandleAt("au_1", 1, 2), h2x, h2y) && near(tl.autoHandleAt("au_1", 1, 1), 2.0 * p1.x - h2x, 2.0 * p1.y - h2y));
+    assert(near(tl.autoHandleAt(ac, 1, 2), h2x, h2y) && near(tl.autoHandleAt(ac, 1, 1), 2.0 * p1.x - h2x, 2.0 * p1.y - h2y));
     r.app->pointer(2, tw.x + h2x, tw.y + h2y, 0, r.now);
     r.settle();
-    assert(lines("auto point shape au_1 --at 4 --shape bezier") == 2 && near(tl.autoHandleAt("au_1", 1, 2), h2x, h2y));
+    assert(lines("auto point shape au_1 --at 4 --shape bezier") == 2 && near(tl.autoHandleAt(ac, 1, 2), h2x, h2y));
     // ── Alt on a handle BREAKS the symmetry: only the in-handle moves ──
-    const artboard::Point in0 = tl.autoHandleAt("au_1", 1, 1);
+    const artboard::Point in0 = tl.autoHandleAt(ac, 1, 1);
     const double i2x = in0.x - 10.0, i2y = in0.y + 12.0;
     r.app->pointer(1, tw.x + in0.x, tw.y + in0.y, 0, r.now, true);
     r.app->pointer(0, tw.x + in0.x, tw.y + in0.y, 0, r.now, true);
@@ -1971,28 +2103,28 @@ static void test_bezier_handles_and_the_automation_window()
         r.app->pointer(1, tw.x + in0.x + (i2x - in0.x) * k / 6.0, tw.y + in0.y + (i2y - in0.y) * k / 6.0, 0, r.now, true);
         r.frame();
     }
-    assert(near(tl.autoHandleAt("au_1", 1, 1), i2x, i2y) && near(tl.autoHandleAt("au_1", 1, 2), h2x, h2y));
+    assert(near(tl.autoHandleAt(ac, 1, 1), i2x, i2y) && near(tl.autoHandleAt(ac, 1, 2), h2x, h2y));
     r.app->pointer(2, tw.x + i2x, tw.y + i2y, 0, r.now, true);
     r.settle();
     {
         const auto &pt = r.svc->model().automations[0].points[1];
         assert(lines("auto point shape au_1 --at 4 --shape bezier") == 3 && pt.speedIn != pt.speedOut); // a cusp
     }
-    assert(near(tl.autoHandleAt("au_1", 1, 1), i2x, i2y));
+    assert(near(tl.autoHandleAt(ac, 1, 1), i2x, i2y));
     // ── a handle a shell moves EASES there ──
-    const artboard::Point o0 = tl.autoHandleAt("au_1", 1, 2);
+    const artboard::Point o0 = tl.autoHandleAt(ac, 1, 2);
     r.cmd("auto point shape au_1 --at 4 --speed-out 0 --influence-out 80");
     r.frame();
     r.frame();
-    const artboard::Point oMid = tl.autoHandleAt("au_1", 1, 2);
+    const artboard::Point oMid = tl.autoHandleAt(ac, 1, 2);
     assert(tl.autoEase("au_1") > 0.0 && tl.autoEase("au_1") < 1.0 && std::fabs(oMid.x - o0.x) > 0.5);
     r.settle();
-    const artboard::Point o1 = tl.autoHandleAt("au_1", 1, 2);
+    const artboard::Point o1 = tl.autoHandleAt(ac, 1, 2);
     assert(std::fabs(o1.y - p1.y) < 0.5 && std::fabs(o1.x - (p1.x + 0.8 * 4.0 * tl.pxPerBeat())) < 0.5 && std::fabs(oMid.x - o1.x) > 0.5);
 
-    // ── double-click the row's HEADER: the automation's window, fading in ──
+    // ── double-click its TRACK's header: the automation's window, fading in ──
     auto &wl = r.app->project().windows();
-    const artboard::Rect row = world(tl, tl.autoRowRect("au_1"));
+    const artboard::Rect row = world(tl, tl.rowRect(autoTrackRow(r, "au_1")));
     r.click(row.x + 30.0, cy(row));
     r.click(row.x + 30.0, cy(row));
     r.frame();
@@ -2045,7 +2177,7 @@ static void test_bezier_handles_and_the_automation_window()
     r.settle();
     assert(!wl.isOpen("auto:au_1"));
     const int adds = lines("auto point add");
-    const double bx = tw.x + tl.beatToX(10.0), by = tw.y + tl.autoRowRect("au_1").y + 8.0;
+    const double bx = tw.x + tl.beatToX(10.0), by = tw.y + tl.autoClipRect(ac).y + 4.0;
     r.click(bx, by);
     r.frame();
     assert(tl.autoPendingAmount() > 0.0 && lines("auto point add") == adds);   // a ghost at once; the line waits
@@ -2062,13 +2194,13 @@ static void test_bezier_handles_and_the_automation_window()
     r.settle();
     assert(lines("auto point add au_1 --at 10 --value ") == 1 && r.svc->model().automations[0].points.size() == 6);
     // a double-click ON a point still deletes it
-    const artboard::Point p3 = tl.autoPointAt("au_1", 3);
+    const artboard::Point p3 = tl.autoPointAt(ac, 3);
     r.click(tw.x + p3.x, tw.y + p3.y);
     r.click(tw.x + p3.x, tw.y + p3.y);
     r.settle();
     assert(sentLine(r, "auto point delete au_1 --at 10") && r.svc->model().automations[0].points.size() == 5 && !wl.isOpen("auto:au_1"));
     pass("Bezier and the automation's window: Alt-drag pulls symmetric handles, a handle mirrors, Alt breaks it — under the pointer while held, ONE line, "
-         "nothing jumps; a shell's handle eases; header double-click opens the window (fading) with the model's facts, now eased, rows eased, Rename one line; "
+         "nothing jumps; a shell's handle eases; its track's header double-clicked opens the window (fading) with the model's facts, now eased, rows eased, Rename one line; "
          "a curve double-click opens it and adds nothing; a point double-click still deletes (R-AUTO-10, R-AUTO-11)");
 }
 
@@ -3342,15 +3474,14 @@ static void test_ids_shown_and_copied()
     menuPick(r, world(tl, tl.clipRect("ac_1")), "Copy ID");
     r.settle();
     assert(r.copied.back() == "ac_1");
-    // an automation's row: Copy ID, Copy as Formula
+    // an automation's track (R-AUTO-14): its header's Copy ID, Copy as Formula
     r.cmd("auto create dv_1.filter.cutoff");
     r.settle();
-    const artboard::Rect ar = world(tl, tl.autoRowRect("au_1"));
-    const double ax = world(tl, artboard::Rect{tl.beatToX(3.0), 0, 0, 0}).x;
-    menuPick(r, artboard::Rect{ax, ar.y + ar.h * 0.5 - 2.0, 4.0, 4.0}, "Copy as Formula");
+    const artboard::Rect ar = world(tl, tl.rowRect(autoTrackRow(r, "au_1")));
+    menuPick(r, artboard::Rect{ar.x + 20.0, ar.y + ar.h * 0.5 - 2.0, 4.0, 4.0}, "Copy as Formula");
     r.settle();
     assert(r.copied.back() == "=au_1");
-    menuPick(r, artboard::Rect{ax, ar.y + ar.h * 0.5 - 2.0, 4.0, 4.0}, "Copy ID");
+    menuPick(r, artboard::Rect{ar.x + 20.0, ar.y + ar.h * 0.5 - 2.0, 4.0, 4.0}, "Copy ID");
     r.settle();
     assert(r.copied.back() == "au_1");
     pass("IDs (R-UI-11): View › Show IDs is `settings set showIds=…` and the ids fade in and out together (caught mid-tween); a parameter row copies its address, value and formula; a choice no formula; a clip and an automation their ids — to the host's clipboard");
@@ -6236,7 +6367,8 @@ int main()
     test_mixer_matrix_effects_and_device_panel();
     test_song_bar_menus_and_settings_sections();
     test_device_window_lists_parameters_and_binds_them();
-    test_automation_rows_draw_and_edit_curves();
+    test_automation_clips_draw_and_edit_curves();
+    test_automation_clips_copy_like_midi_clips();
     test_bezier_handles_and_the_automation_window();
     test_piano_roll_edits_the_pattern();
     test_the_rolls_lane_draws_the_wheels();

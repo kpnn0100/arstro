@@ -168,6 +168,7 @@ namespace solaris_ui
                 r.groupHead = !g->lanes.empty() && g->lanes.front() == l.id;
                 r.groupLanes = (int)g->lanes.size();
             }
+            r.automation = l.automation; // R-AUTO-14: an automation's track — its header says what reads it
             if (!l.strip.empty())
             {
                 // R-LANE-3: an instrument's track — its stripe the strip's colour (unless it has its own), its
@@ -213,7 +214,7 @@ namespace solaris_ui
                 v.bandOff = (double)k / (double)ls.size();
                 v.bandFrac = 1.0 / (double)ls.size();
             }
-            v.colour = colourOf.count(c.track) ? colourOf[c.track] : 0;
+            v.colour = c.kind == "automation" ? kAutoHue : colourOf.count(c.track) ? colourOf[c.track] : 0; // R-AUTO-14: the accent
             for (const auto &p : m.patterns)
                 if (p.id == c.pattern) { v.notes = p.notes; v.patternLength = p.length; }
             mClips.push_back(v);
@@ -243,16 +244,11 @@ namespace solaris_ui
             keyed.emplace_back(r.key, r);
             mStripes[r.key].want = r.colour;
         }
-        // the automation rows, after the lanes, in the same eased list (a lane added slides them down)
-        mAutoIds.clear();
+        // R-AUTO-14: each automation's curve, eased from what was shown to what the model says — one for every clip of it
+        std::set<std::string> autos;
         for (const auto &a : m.automations)
         {
-            Row ar;
-            ar.key = "auto:" + a.id;
-            ar.label = a.name;
-            ar.automation = a.id;
-            keyed.emplace_back(ar.key, ar);
-            mAutoIds.push_back(a.id);
+            autos.insert(a.id);
             AutoLive &l = mAutos[a.id];
             l.model = a;
             bool same = l.to.size() == a.points.size();
@@ -268,7 +264,7 @@ namespace solaris_ui
             }
         }
         for (auto it = mAutos.begin(); it != mAutos.end();)
-            it = std::find(mAutoIds.begin(), mAutoIds.end(), it->first) == mAutoIds.end() ? mAutos.erase(it) : std::next(it);
+            it = autos.count(it->first) ? std::next(it) : mAutos.erase(it);
         mRowMotion.sync(keyed, kRowH);
         for (auto &l : mLive) l.gone = true;
         for (const auto &v : mClips)
@@ -333,9 +329,11 @@ namespace solaris_ui
             const Rect r = rowRect(i);
             if (r.bottom() <= top() || r.y >= height.value()) continue; // scrolled out
             const auto &row = mRows[(size_t)i];
-            if (!row.automation.empty() || !row.takeClip.empty()) continue; // an automation's row, a take's: Not yet
+            if (!row.takeClip.empty()) continue; // a take's row: Not yet
             out.push_back(a11yNode("lanes." + row.key, "listitem", row.label.empty() ? tr("Lane") : row.label, worldRect(*this, Rect{r.x, r.y, kHeaderW, r.h}),
-                                   row.strip.empty() ? std::string() : fillIn(tr("track of {1}"), row.strip)));
+                                   !row.automation.empty() ? fillIn(tr("automation {1}"), row.automation) // R-AUTO-14: an automation's track
+                                   : row.strip.empty()     ? std::string()
+                                                           : fillIn(tr("track of {1}"), row.strip)));
             if (const Rect a = armRect(i); a.w > 0)
             {
                 A11yNode arm = a11yNode("lanes." + row.key + ".arm", "toggle", fillIn(tr("{1} record arm"), row.label.empty() ? tr("Lane") : row.label),
@@ -465,7 +463,7 @@ namespace solaris_ui
 
     Cursor Timeline::dragCursor() const
     {
-        if (mResizing || !mSpanAu.empty()) return Cursor::ResizeH; // a clip's end, an automation span's grip (R-AUTO-12)
+        if (mResizing) return Cursor::ResizeH; // a clip's end
         if (mEditZone == 1 || mEditZone == 2) return Cursor::ResizeH; // a fade handle held (R-EDIT-1)
         if (mEditZone == 3) return Cursor::ResizeV;                   // the gain line held
         const RulerDrag held = mRuler == RulerDrag::Pending ? mRulerZone : mRuler; // pressed on an end, not yet moved
@@ -481,9 +479,6 @@ namespace solaris_ui
         if (rulerRect().contains(local) && br.w > 0 && mLoopTo > mLoopFrom && local.y >= kMarkH + (kRulerH - kMarkH) * 0.5 &&
             (std::fabs(local.x - br.x) <= kBraceGrip || std::fabs(local.x - br.right()) <= kBraceGrip))
             return Cursor::ResizeH;
-        // an automation span's grip (R-AUTO-12) — as the press reads it
-        if (local.x >= kHeaderW && local.y >= top())
-            if (const std::string au = autoAt(local.y); !au.empty() && spanGripAt(au, local) >= 0) return Cursor::ResizeH;
         // an audio clip's fade handles and gain line (R-EDIT-1) — as the press reads them
         {
             std::string eid;
@@ -537,7 +532,7 @@ namespace solaris_ui
     {
         const double viewW = std::max(0.0, width.value() - kHeaderW);
         mScrollX.setExtent(kHeaderW, viewW, std::max(viewW, (mLength + 4.0 * mBeatsPerBar) * mPpbTarget));
-        mScrollY.setExtent(top(), std::max(0.0, height.value() - top()), (mRows.size() + mAutoIds.size() + 1) * kRowH);
+        mScrollY.setExtent(top(), std::max(0.0, height.value() - top()), (mRows.size() + 1) * kRowH);
     }
 
     void Timeline::advance(double nowMs)
@@ -728,14 +723,14 @@ namespace solaris_ui
                 l.alpha.set(fadeIn && !instant ? 0.0 : 1.0);
                 l.aLast = l.alpha.value();
                 if (instant) mInstantClip.clear();
-                l.hueFrom = l.hueTo = surface::track(l.v.colour);
+                l.hueFrom = l.hueTo = l.v.colour == kAutoHue ? palette::primary() : surface::track(l.v.colour);
                 l.hueLast = l.v.colour;
                 l.placed = true;
             }
             if (l.v.colour != l.hueLast)
             {
                 l.hueFrom = lerpColor(l.hueFrom, l.hueTo, l.hueT.value());
-                l.hueTo = surface::track(l.v.colour);
+                l.hueTo = l.v.colour == kAutoHue ? palette::primary() : surface::track(l.v.colour);
                 l.hueT.set(0.0);
                 l.hueT.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
                 l.hueLast = l.v.colour;
@@ -1128,7 +1123,10 @@ namespace solaris_ui
         case Gesture::Type::DoubleClick:
             if (clipAt(local).empty() && newClipOn(local)) return true; // R-CLIP-6: on an instrument's track, a MIDI clip there
             for (const auto &v : mClips)
+            {
                 if (v.c.id == clipAt(local) && v.c.kind == "note" && onOpenPattern) onOpenPattern(v.c.pattern, v.c.id);
+                if (v.c.id == clipAt(local) && v.c.kind == "automation" && onOpenAutomation) onOpenAutomation(v.c.automation); // R-AUTO-14
+            }
             return true;
         case Gesture::Type::RightClick:
         {
@@ -1151,8 +1149,14 @@ namespace solaris_ui
                     return true;
                 }
                 if (ri < 0 || ri >= (int)mRows.size() || mRows[(size_t)ri].lane.empty() || !onMenu) return true;
-                const std::string ln = mRows[(size_t)ri].lane, owner = mRows[(size_t)ri].strip;
+                const std::string ln = mRows[(size_t)ri].lane, owner = mRows[(size_t)ri].strip, au = mRows[(size_t)ri].automation;
                 std::vector<cosmo_v2::ContextMenu::Item> owners, items;
+                if (!au.empty()) // R-AUTO-14: an automation's track — the automation, not an instrument
+                {
+                    items.push_back({say("Open automation"), [this, au] { if (onOpenAutomation) onOpenAutomation(au); }});
+                    items.push_back({say("Copy as Formula"), [this, au] { if (onCopy) onCopy("=" + au); }});
+                    items.push_back({say("Delete Automation"), [this, au] { if (onCommand) onCommand("auto delete " + au + " --unbind"); }});
+                }
                 for (const auto &s : mStrips)
                     if (s.kind == "instrument")
                     {
@@ -1161,7 +1165,7 @@ namespace solaris_ui
                                           [this, ln, sid] { if (onCommand) onCommand("set " + ln + ".strip=" + sid); }});
                     }
                 const Point world = g.pos;
-                if (!owners.empty()) items.push_back({say("Track of \xE2\x96\xB8"), [this, owners, world] { if (onMenu) onMenu(owners, world); }});
+                if (!owners.empty() && au.empty()) items.push_back({say("Track of \xE2\x96\xB8"), [this, owners, world] { if (onMenu) onMenu(owners, world); }});
                 if (!owner.empty()) items.push_back({say("Plain Lane"), [this, ln] { if (onCommand) onCommand("set " + ln + ".strip=none"); }});
                 {
                     // R-ARR-3: its group — a new one, into another, out of its own, folded, ungrouped
@@ -1184,7 +1188,7 @@ namespace solaris_ui
                         items.push_back({say("Ungroup"), [this, lg] { if (onCommand) onCommand("lane ungroup " + lg); }});
                     }
                 }
-                items.push_back({say("Copy ID"), [this, ln] { if (onCopy) onCopy(ln); }}); // R-UI-11
+                items.push_back({say("Copy ID"), [this, ln, au] { if (onCopy) onCopy(au.empty() ? ln : au); }}); // R-UI-11: the id its header shows
                 onMenu(std::move(items), world);
                 return true;
             }
@@ -1207,6 +1211,33 @@ namespace solaris_ui
             if (!v || !onMenu) return true;
             selectClip(id);
             const solaris::ClipModel c = v->c;
+            if (c.kind == "automation")
+            {
+                // R-AUTO-14: its own curve, its automation's length (a clip longer repeats it), its window — each one line
+                const std::string au = c.automation;
+                const auto am = mAutos.find(au);
+                const double now = am != mAutos.end() ? am->second.model.length : 0.0;
+                const Point world = g.pos;
+                std::vector<cosmo_v2::ContextMenu::Item> lengths, items;
+                const double bar = (double)mBeatsPerBar;
+                const std::vector<std::pair<std::string, double>> opts = {{say("1/4 beat"), 0.25}, {say("1/2 beat"), 0.5}, {sayn(1, "{1} beat", "{1} beats", 1), 1.0},
+                                                                          {sayn(2, "{1} beat", "{1} beats", 2), 2.0}, {sayn(1, "{1} bar", "{1} bars", 1), bar},
+                                                                          {sayn(2, "{1} bar", "{1} bars", 2), 2.0 * bar}, {sayn(4, "{1} bar", "{1} bars", 4), 4.0 * bar}};
+                for (const auto &o : opts)
+                {
+                    const double b = o.second;
+                    lengths.push_back({o.first + (std::fabs(b - now) < 1e-9 ? "  \xC2\xB7 " + say("now") : std::string()),
+                                       [this, au, b] { if (onCommand) onCommand("set " + au + ".length=" + beats(b)); }});
+                }
+                if (c.linked > 1) items.push_back({say("Make unique"), [this, id] { if (onCommand) onCommand("clip unique " + id); }});
+                items.push_back({say("Length \xE2\x96\xB8"), [this, lengths, world] { if (onMenu) onMenu(lengths, world); }});
+                items.push_back({say("Open automation"), [this, au] { if (onOpenAutomation) onOpenAutomation(au); }});
+                items.push_back({say("Duplicate"), [this, id] { if (onCommand) onCommand("clip duplicate " + id); }});
+                items.push_back({say("Copy ID"), [this, id] { if (onCopy) onCopy(id); }}); // R-UI-11
+                items.push_back({say("Delete"), [this, id] { if (onCommand) onCommand("clip delete " + id); }});
+                onMenu(std::move(items), world);
+                return true;
+            }
             const std::string want = c.kind == "note" ? "instrument" : "audio";
             std::vector<cosmo_v2::ContextMenu::Item> through, items;
             for (const auto &s : mStrips)
@@ -1276,8 +1307,26 @@ namespace solaris_ui
         const double px = 10.0;
         const double lx = std::max(r.x, kHeaderW) + 5.0; // a clip begun off-screen keeps its name at the visible edge
         const double ids = idsAmount ? idsAmount() : 0.0; // R-UI-11: its id (and its pattern's) beside its name
-        drawNameWithId(t, v.c.name.empty() ? v.c.id : v.c.name, v.c.kind == "note" ? v.c.id + " " + v.c.pattern : v.c.id, lx, r.y + 12.0,
-                       std::max(0.0, r.right() - lx - 5.0), px, font::sansMedium(), palette::foreground(), ids, a);
+        std::string name = v.c.name.empty() ? v.c.id : v.c.name;
+        double linkedW = 0.0; // R-AUTO-14: an automation clip's "linked ×N" keeps its room beside its name (R5)
+        if (v.c.kind == "automation")
+        {
+            if (const auto au = mAutos.find(v.c.automation); au != mAutos.end()) name = au->second.model.name; // a copy's its own
+            if (v.c.linked > 1)
+            {
+                const std::string s = fillIn(tr("linked \xC3\x97{1}"), std::to_string(v.c.linked));
+                const double sw = t.measureText(s, 9.0, font::sans());
+                if (r.w > sw + 60.0)
+                {
+                    t.setFill(fade(palette::mutedForeground(), a * (1.0 - ids)));
+                    t.drawText(s, r.right() - sw - 6.0, r.y + 12.0, 9.0, font::sans());
+                    linkedW = sw + 10.0;
+                }
+            }
+        }
+        drawNameWithId(t, name, v.c.kind == "note" ? v.c.id + " " + v.c.pattern : v.c.kind == "automation" ? v.c.id + " " + v.c.automation : v.c.id, lx,
+                       r.y + 12.0, std::max(0.0, r.right() - lx - 5.0 - linkedW), px, font::sansMedium(), palette::foreground(), ids, a);
+        if (v.c.kind == "automation") paintAutoClip(t, v, r, a, len); // R-AUTO-14: its automation's curve, pass after pass
         if (v.c.kind == "note" && v.patternLength > 0)
         {
             // the pattern's notes, repeated where the clip loops it; its seams marked
@@ -1487,7 +1536,6 @@ namespace solaris_ui
                     t.strokePath();
                 }
             }
-        paintAutomation(t); // the curves, in the clips' clip
         paintTakes(t);      // R-REC-2: a clip's takes, under its lane
         // the browser's drop hint: where it would land
         if (mDropAmt.value() > 0.001 && mDropRow >= 0)

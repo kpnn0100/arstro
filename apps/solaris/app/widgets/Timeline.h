@@ -107,6 +107,7 @@ namespace solaris_ui
         static constexpr double kSnapPx = 11.0;     // the snap step: the finest level at least this far apart (half drawn)
         static constexpr double kBraceGrip = 6.5;   // space::u(2): the loop brace's end is taken within this (R-TIME-6)
         static constexpr double kEdgeGrip = 6.5;    // space::u(2): a clip's right edge is taken within this (R-CLIP-7)
+        static constexpr int kAutoHue = -2;         // R-AUTO-14: an automation clip wears the accent, not a strip's colour
         static constexpr double kZoomPpb = 28.0;    // the zoom a song opens at, px a beat
         static constexpr int kZoomOutSteps = 8, kZoomInSteps = 14; // Ctrl+wheel: ×1.25 a step — 4.7 … 637 px a beat
 
@@ -228,18 +229,18 @@ namespace solaris_ui
         bool scrubbing() const { return mRuler == RulerDrag::Scrub; }
         bool braceDragging() const { return mRuler == RulerDrag::LoopBody || mRuler == RulerDrag::LoopFrom || mRuler == RulerDrag::LoopTo; }
 
-        // automation rows (R-AUTO-6), local geometry as DRAWN
-        int autoCount() const { return (int)mAutoIds.size(); }
-        artboard::Rect autoRowRect(const std::string &au) const;
-        artboard::Point autoPointAt(const std::string &au, int i) const;
-        double autoValueAt(const std::string &au, double y) const;  // the value a y in its row means
-        double autoEase(const std::string &au) const;               // 1 = its curve at rest (LIVE)
-        /** R-AUTO-12: a looping automation's span — the brace along its row's top (local), its ends the grips; LIVE. */
-        artboard::Rect autoSpanRect(const std::string &au) const;
+        // automation clips (R-AUTO-14; the point gestures of R-AUTO-6/10), local geometry as DRAWN — keyed by the CLIP: its
+        // automation's curve drawn in it, the first pass and each repeat (a clip longer than its automation repeats it)
+        int autoCount() const { return (int)mAutos.size(); }        // the automations the song has
+        artboard::Rect autoClipRect(const std::string &ac) const;   // its curve's area: the clip under its name (empty: none)
+        artboard::Point autoPointAt(const std::string &ac, int i) const; // point i, in the clip's first pass
+        double autoValueAt(const std::string &ac, double y) const;  // the value a y in its curve's area means
+        double autoEase(const std::string &au) const;               // 1 = its curve at rest (LIVE) — every clip of it alike
         /** The point being dragged, as DRAWN (local); (−1, −1) when none. */
         artboard::Point autoDragPoint() const;
-        /** A bezier point's handle end as DRAWN (local; side 1 = in, 2 = out) — the pointer's while held; (−1, −1) when none. */
-        artboard::Point autoHandleAt(const std::string &au, int i, int side) const;
+        /** A bezier point's handle end as DRAWN in the clip's first pass (local; side 1 = in, 2 = out) — the pointer's while
+         *  held; (−1, −1) when none. */
+        artboard::Point autoHandleAt(const std::string &ac, int i, int side) const;
         /** A click's point waiting out the double-click: its ghost's LIVE opacity (0 = none). */
         double autoPendingAmount() const { return mPendAmt.value(); }
 
@@ -302,10 +303,6 @@ namespace solaris_ui
             std::vector<solaris::AutoPointModel> from, to, shownBefore;
             artboard::AnimatedProperty t{1.0};
             bool placed = false, changed = false;
-            // R-AUTO-12: where its loop repeats, eased (beats): its start, its end (the song's end when it has no length)
-            artboard::AnimatedProperty spanA{0.0}, spanB{0.0};
-            double spanALast = -1.0, spanBLast = -1.0;
-            bool spanPlaced = false;
         };
         struct ClipView
         {
@@ -345,17 +342,26 @@ namespace solaris_ui
         std::vector<solaris::AutoPointModel> shownPoints(const AutoLive &l) const;
         double valueToY(const AutoLive &l, double v, const artboard::Rect &row) const;
         double yToValue(const AutoLive &l, double y, const artboard::Rect &row) const;
-        void paintAutomation(artboard::IRenderTarget &t) const;
-        void paintCurve(artboard::IRenderTarget &t, const AutoLive &l, const std::vector<solaris::AutoPointModel> &pts, const artboard::Rect &row,
-                        double alpha, bool handles) const;
+        /** R-AUTO-14: an automation clip's curve, inside its box `r` (the dragged copy's too), `len` beats long. */
+        void paintAutoClip(artboard::IRenderTarget &t, const ClipView &v, const artboard::Rect &r, double alpha, double len) const;
+        /** One pass of a curve in an automation clip: from `origin` (beats) for `len` (its automation's length, cut at
+         *  the clip's end, `until`) — points and handles when `marks`. */
+        void paintCurve(artboard::IRenderTarget &t, const AutoLive &l, const std::vector<solaris::AutoPointModel> &pts, const artboard::Rect &area,
+                        double alpha, bool marks, double origin, double until) const;
         bool autoGesture(const artboard::Gesture &g, const artboard::Point &local);
-        // R-AUTO-12: a looping automation's first cycle is drawn at its span's start — every beat↔x of its points goes
-        // through this; the span shown (the pointer's end while a grip is held); a grip under a point (0 start, 1 end)
-        double autoOffset(const AutoLive &l) const;
-        void spanOf(const AutoLive &l, double &a, double &b) const;
-        int spanGripAt(const std::string &au, const artboard::Point &local) const;
-        void paintLoop(artboard::IRenderTarget &t, const AutoLive &l, const std::vector<solaris::AutoPointModel> &pts, const artboard::Rect &row,
-                       double a) const;
+        // R-AUTO-14: an automation clip's frame — its live clip, its automation's live curve, its beats as drawn
+        struct AutoFrame
+        {
+            const ClipLive *clip = nullptr;
+            const AutoLive *autom = nullptr;
+            artboard::Rect area;           // the curve's area, local
+            double at = 0.0, end = 0.0;    // its beats as DRAWN (start, end)
+            double cycle = 0.0;            // its automation's length: a pass
+        };
+        bool autoFrame(const std::string &ac, AutoFrame &f) const;
+        /** The beat where the pass under `x` begins in that clip (the first, before it; the last, after it). */
+        double passAt(const AutoFrame &f, double x) const;
+        std::string autoClipAt(const artboard::Point &local) const; // an automation clip's curve area under the pointer
         void advanceAuto(double nowMs);
         // R-VIDEO-1: the picture's row (TimelineVideo.cpp)
         struct Thumb
@@ -399,12 +405,11 @@ namespace solaris_ui
         double thumbW() const;                                     // a tile's width at the row's height
         std::vector<std::pair<double, const solaris::VideoThumbModel *>> thumbTiles() const; // (x, point), a tile apart
         std::vector<solaris::AutoPointModel> drawnPoints(const AutoLive &l) const; // shown, with a held point or handle the pointer's
-        int handleNear(const std::string &au, const artboard::Point &local, int &side) const;
+        int handleNear(const std::string &ac, const artboard::Point &local, int &side) const;
         void dragHandle(const artboard::Point &local, bool alt);
         bool loopGesture(const artboard::Gesture &g, const artboard::Point &local);
         void loopSpan(double &a, double &b) const; // the brace's beats as drawn (the pointer's while dragged)
-        std::string autoAt(double y) const;
-        int pointNear(const std::string &au, const artboard::Point &local) const;
+        int pointNear(const std::string &ac, const artboard::Point &local) const;
         const ClipLive *live(const std::string &id) const;
         double rowY(int i) const; // row i's LIVE top, before scrolling
         artboard::Rect clipBox(const ClipView &v, double at, double y, double len, double off = 0.0, double frac = 1.0) const;
@@ -416,20 +421,18 @@ namespace solaris_ui
         static std::string stepName(double step, int beatsPerBar);
 
         std::vector<Row> mRows;                       // the model's LANES, in order: hit-testing
-        std::vector<std::string> mAutoIds;            // automation rows, after the lanes
-        std::map<std::string, AutoLive> mAutos;
-        std::string mSpanAu;                          // R-AUTO-12: a span's grip pressed …
-        int mSpanEnd = -1;                            // … 0 its start, 1 its end
-        double mSpanLive = 0.0;                       // … where the pointer has it (beats)
-        bool mSpanDragging = false;
-        std::string mAutoPress;                       // a point pressed / dragged
+        std::map<std::string, AutoLive> mAutos;       // by automation: one curve, every clip of it (R-AUTO-14)
+        std::string mAutoClip;                        // the automation clip pressed …
+        double mAutoPass = 0.0;                       // … the beat where the pass pressed begins
+        std::string mAutoPress;                       // its automation: a point pressed / dragged
         int mAutoPoint = -1;
         bool mAutoDragging = false;
         double mAutoAt = 0, mAutoValue = 0;
         int mAutoHandle = 0;                          // 0 the point; 1 its in-handle, 2 its out-handle; 3 an Alt-pull (R-AUTO-10)
         solaris::AutoPointModel mAutoHeld;            // the pressed point's handles while one is held
         // a click on a row's curve waits out the double-click (which opens the window) before adding
-        std::string mPendAu;
+        std::string mPendAu, mPendClip;
+        double mPendPass = 0.0;
         double mPendAt = 0, mPendValue = 0, mPendMs = 0;
         bool mPendWaiting = false;
         artboard::AnimatedProperty mPendAmt{0.0};

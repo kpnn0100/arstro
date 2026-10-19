@@ -58,6 +58,32 @@ namespace
     }
     using sltest::world;
 
+    // R-AUTO-14: an automation's first clip
+    std::string autoClipOf(sltest::Rig &r, const std::string &au)
+    {
+        for (const auto &c : r.svc->model().clips)
+            if (c.automation == au) return c.id;
+        return std::string();
+    }
+    // a song with a filter sweep under the bass and a one-beat pump on the vocal, repeated four beats, copied at bar 3
+    void automationSong(sltest::Rig &r)
+    {
+        mixedSong(r, "Night Drive");
+        r.cmd("auto create dv_2.filter.cutoff");
+        r.cmd("auto point move au_1 --at 0 --value 300");
+        r.cmd("auto point add au_1 --at 4 --value 4000 --shape smooth");
+        r.cmd("auto point add au_1 --at 8 --value 900 --shape hold");
+        r.cmd("auto point add au_1 --at 12 --value 600");
+        r.cmd("auto create ch_4.gain");
+        r.cmd("set au_2.length=1");
+        r.cmd("auto point move au_2 --at 0 --value -24");
+        r.cmd("auto point shape au_2 --at 0 --shape smooth");
+        r.cmd("auto point add au_2 --at 0.5 --value 0");
+        const std::string pump = autoClipOf(r, "au_2");
+        r.cmd("set " + pump + ".length=4");
+        r.cmd("clip duplicate " + pump + " --at 8");
+    }
+
     // R-ASSIST-1: a song the analysis hears chords in — Night Drive with a pad playing C Am F G from bar 2, two beats
     // each, detected (the rig plays back the sound made here)
     void chordSong(sltest::Rig &r)
@@ -838,18 +864,18 @@ namespace
                  r.app->project().windows().window("dev:dv_2")->open(); // back to the front
                  r.settle();
              }},
-            {"automation-rows",
+            {"automation-clips",   // R-AUTO-14: the sweep's clip on its track under the bass; the pump's, a beat repeated four times
+                                    // (the first pass bright, the repeats fainter, a seam at each), copied at bar 3 — linked ×2
              [](sltest::Rig &r) {
-                 mixedSong(r, "Night Drive");
-                 r.cmd("auto create dv_2.filter.cutoff");
-                 r.cmd("auto point move au_1 --at 0 --value 300");
-                 r.cmd("auto point add au_1 --at 4 --value 4000 --shape smooth");
-                 r.cmd("auto point add au_1 --at 8 --value 900 --shape hold");
-                 r.cmd("auto point add au_1 --at 12 --value 600");
-                 r.cmd("auto create ch_4.gain");
-                 r.cmd("auto point move au_2 --at 0 --value -24");
-                 r.cmd("auto point add au_2 --at 6 --value 0");
+                 automationSong(r);
                  r.settle();
+             }},
+            {"automation-clips-easing", // R-AUTO-14: the pump's dip moved from a shell — both its clips' curves easing there at once
+             [](sltest::Rig &r) {
+                 automationSong(r);
+                 r.settle();
+                 r.cmd("auto point move au_2 --at 0 --value -6");
+                 r.pump(5 * sltest::Rig::kFrameMs);
              }},
             {"mixer-bound",   // R-MIX-16: faders, a pan, a send and the master driven by formulas, each saying what drives it
              [](sltest::Rig &r) {
@@ -928,12 +954,12 @@ namespace
                  const artboard::Rect lanes = world(tl, tl.rowRect(0));
                  r.app->wheel(lanes.x + 400.0, lanes.y + 10.0, -4.0); // the small window: its row is under the dock until scrolled to
                  r.settle();
-                 const artboard::Rect row = world(tl, tl.autoRowRect("au_1"));
-                 r.click(row.x + 30.0, row.y + row.h * 0.5);
-                 r.click(row.x + 30.0, row.y + row.h * 0.5);             // its window
+                 const artboard::Rect clip = world(tl, tl.clipRect(autoClipOf(r, "au_1")));
+                 r.click(clip.x + 30.0, clip.y + 6.0);
+                 r.click(clip.x + 30.0, clip.y + 6.0);                   // its window: a double-click on its clip's name
                  r.settle();
              }},
-            {"automation-window",   // R-AUTO-11: a double-click on the row's header — its facts, all the model's
+            {"automation-window",   // R-AUTO-11: a double-click on its clip — its facts, all the model's
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");
                  r.cmd("auto create dv_2.filter.cutoff");
@@ -948,9 +974,9 @@ namespace
                  const artboard::Rect lanes = world(tl, tl.rowRect(0));
                  r.app->wheel(lanes.x + 400.0, lanes.y + 10.0, -4.0); // the small window: its row is under the dock until scrolled to
                  r.settle();
-                 const artboard::Rect row = world(tl, tl.autoRowRect("au_1"));
-                 r.click(row.x + 30.0, row.y + row.h * 0.5);
-                 r.click(row.x + 30.0, row.y + row.h * 0.5);
+                 const artboard::Rect clip = world(tl, tl.clipRect(autoClipOf(r, "au_1")));
+                 r.click(clip.x + 30.0, clip.y + 6.0);
+                 r.click(clip.x + 30.0, clip.y + 6.0);                   // its window: a double-click on its clip's name
                  r.settle();
              }},
             {"piano-roll",

@@ -365,6 +365,10 @@
 "Delete Point" = "Xóa điểm";
 "Copy as Formula" = "Sao chép thành công thức";
 "Delete Automation" = "Xóa tự động hóa";
+"Open automation" = "Mở tự động hóa";
+"Make unique" = "Tách riêng";
+"Length ▸" = "Độ dài ▸";
+"automation {1}" = "tự động hóa {1}";
 "Loop its section" = "Lặp đoạn của nó";
 "Delete marker" = "Xóa mốc";
 "Marker {1}" = "Mốc {1}";
