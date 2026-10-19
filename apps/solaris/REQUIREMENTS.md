@@ -207,7 +207,7 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   only faders a new song has would hide behind a click. The fold is the view's, not the song's: a
   fold is not saved and no command sets it, like zoom.)
 
-## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅: DR-CLIP-2/3 headless, DR-UI-3 drawn and dragged, DR-LANE-1 `lane move`; R-LANE-2's view with U4) — R-LANE-3 ✅ (instrument tracks, DR-LANE-3) — R-CLIP-6…8 ✅ (MIDI clips made, looped and moved, DR-CLIP-6) — R-CLIP-9, 10 ✅ (copy by Shift-drag and Ctrl+C/V, DR-CLIP-9)
+## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅: DR-CLIP-2/3 headless, DR-UI-3 drawn and dragged, DR-LANE-1 `lane move`; R-LANE-2's view with U4) — R-LANE-3 ✅ (instrument tracks, DR-LANE-3) — R-CLIP-6…8 ✅ (MIDI clips made, looped and moved, DR-CLIP-6) — R-CLIP-9, 10 ✅ (copy by Shift-drag and Ctrl+C/V, DR-CLIP-9) — R-CLIP-11 ✅ (several clips selected by a box and handled together, DR-CLIP-11)
 
 - **R-LANE-1 A lane is a timeline row for organisation only** (FL Studio's playlist): it holds any
   clips, from any strips. Lanes are added, named, coloured, reordered and deleted (deleting a lane
@@ -270,6 +270,24 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   TIME BAR — ONE `clip duplicate <ac> --at <b>` — and selects it; Ctrl+V again, the time bar not moved, lands right
   after the last copy, so pastes run end to end. Both are keymap actions (`lanes.copy`, `lanes.paste`, R-SET-4) and
   Edit menu items; while a piano roll has the keys its own Ctrl+C / Ctrl+V are the notes' (R-ROLL-8).
+- **R-CLIP-11 Several clips are selected by dragging a box** (user request, 2026-10-19: *"user should be able to drag
+  and drop to select multiple object"*). (**Added 2026-10-19. EXTENDS R-CLIP-9, R-CLIP-10 and R-ARR-3's `clips move`
+  from one clip to a selection of several.**) On the lanes, a drag that starts on empty space draws a box; every clip
+  it touches — audio, MIDI or automation (R-AUTO-14) — is selected, each lit as the box reaches it and unlit as it
+  leaves (eased); let go, the box fades. With Shift held the box adds to the selection; Ctrl+drag draws the box from
+  anywhere on the lanes, on a clip too (as the piano roll's, R-ROLL-8). Shift+click or Ctrl+click on a clip adds it
+  or takes it out; a click on a clip selects it alone, on empty space selects none. What is done to a selected clip
+  is done to the selection, each as ONE line and one undo step:
+  - dragged, every selected clip moves by the same time — `clips move "<ac> …" --by <b>` (R-ARR-3); none goes before
+    beat 0. A selection of several keeps its lanes (one clip still moves to another lane, R-CLIP-8);
+  - with Shift held when let go, they are copied there and the originals stay — `clips duplicate "<ac> …" --by <b>`
+    (R-CLIP-9);
+  - Delete removes them — `clips delete "<ac> …"`; Duplicate puts copies right after the selection —
+    `clips duplicate "<ac> …"`;
+  - Ctrl+C copies the selection (the window's clipboard), Ctrl+V pastes copies AT THE TIME BAR, the earliest there and
+    the rest keeping their spacing and lanes, end to end when pasted again (R-CLIP-10).
+  The copies are selected. Split at the time bar and Quantize act on the clip clicked last. The selection is the
+  window's (as the roll's notes are, R-ROLL-8), not the song's; a clip deleted leaves it.
 
 ## R-TIME — transport and time — ✅ BUILT (1–4: DR-PLAY-1, the metronome DR-EDM-2, the loop region on the ruler DR-EDM-7) — 5 ✅ (the ruler on the grid, DR-UI-10) — 6 ✅ (the ruler dragged, DR-TIME-6) — 7, 8 ✅ (stop back to the cue, or here: DR-TIME-7)
 
@@ -374,7 +392,8 @@ audio devices so the user can take advantage of their devices."*
   card, fade, Done — the controls are combo boxes and toggles.)
 - **R-SET-4 Hotkeys are settings** (user request, 2026-10-16: *"need to have setting for hot key"*). Every
   keyboard shortcut is an ACTION with its keys — in areas: Transport (play/stop back to the cue, stop here,
-  to the start), Song (save, undo, redo, settings), Lanes (delete, duplicate and copy the selected clip, paste it — R-CLIP-10), Piano roll
+  to the start), Song (save, undo, redo, settings), Lanes (delete, duplicate and copy the selected clip, paste it — R-CLIP-10; **AMENDED (R-CLIP-11), 2026-10-19:** the
+  selection, one clip or several), Piano roll
   (select all, deselect, delete, duplicate, copy, paste, up, down, octave up and down, left, right). The
   sheet's **Keyboard** section lists them, each with its keys: a key clicked listens for the next ("Press a
   key…" — Escape cancels, Backspace removes it), "+" adds one, Reset gives the defaults back. Each change is

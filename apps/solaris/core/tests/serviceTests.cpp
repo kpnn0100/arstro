@@ -7140,6 +7140,64 @@ static void test_a_clip_copied_onto_another_lane()
     pass("clip duplicate --lane (R-CLIP-9): a MIDI copy onto another track plays through it, linked; a plain lane keeps its instrument; audio onto a track refused; one edit");
 }
 
+// R-CLIP-11: a selection of clips — MIDI, audio, automation — copied and removed in ONE line, one undo step; the copies
+// linked and following the clips (or --by beats), each on its own lane; refused whole, naming the first
+static void test_a_selection_of_clips_is_copied_and_deleted_in_one_edit()
+{
+    Run r;
+    r.ok("project new " + freshSong("selection"));
+    const std::string m = firstLine(r.ok("clip add --instrument synth --at 0 --length 4"));      // on ch_2's track
+    const std::string ln = firstLine(r.ok("lane add Extra"));
+    const std::string a = firstLine(r.ok("clip add --src kick.wav --at 2 --length 2 --lane " + ln)); // audio on a plain lane
+    r.ok("auto create ch_2.gain");
+    std::string u;
+    for (const auto &c : r.svc.model().clips)
+        if (c.kind == "automation") u = c.id;
+    assert(!u.empty() && m != a && a != u);
+    r.ok("set " + u + ".length=6");
+    r.ok("clip move " + u + " --at 1");
+    auto count = [&](const std::string &what) {
+        int n = 0;
+        for (const auto &e : r.events) n += contains(e, "project.changed") && contains(e, "what=" + what);
+        return n;
+    };
+    // copied: after the clips (their span: 0 … 7), each on its own lane, linked; ONE edit
+    const size_t clips = r.svc.model().clips.size();
+    const int depth = r.svc.model().undoDepth;
+    r.events.clear();
+    const std::string out = r.ok("clips duplicate \"" + m + " " + a + " " + u + "\"");
+    std::vector<std::string> copies;
+    for (const auto &w : tokenize(firstLine(out))) copies.push_back(w);
+    assert(copies.size() == 3 && r.svc.model().clips.size() == clips + 3 && r.svc.model().undoDepth == depth + 1 && count("clip.added") == 3);
+    const ClipModel *cm = r.clip(copies[0]), *ca = r.clip(copies[1]), *cu = r.clip(copies[2]);
+    assert(cm && ca && cu);
+    assert(cm->at == 7.0 && cm->pattern == r.clip(m)->pattern && cm->lane == r.clip(m)->lane && cm->track == r.clip(m)->track && r.clip(m)->linked == 2);
+    assert(ca->at == 9.0 && ca->src == r.clip(a)->src && ca->lane == ln && ca->length == 2.0);
+    assert(cu->at == 8.0 && cu->automation == r.clip(u)->automation && cu->lane == r.clip(u)->lane && cu->length == 6.0 && r.clip(u)->linked == 2);
+    assert(r.ok("undo") == "clips duplicate " + m + " " + a + " " + u + "\n" && !r.clip(copies[0]) && !r.clip(copies[2]) &&
+           r.svc.model().clips.size() == clips);
+    // --by: where they go (Shift-drag, Ctrl+V); a clip named twice is one clip
+    const std::string two = firstLine(r.ok("clips duplicate \"" + a + " " + m + " " + a + "\" --by 8"));
+    assert(tokenize(two).size() == 2 && r.clip(tokenize(two)[0])->at == 10.0 && r.clip(tokenize(two)[1])->at == 8.0);
+    // refused whole, naming the first: a clip not the song's, a copy before beat 0, a --by that is not beats
+    r.events.clear();
+    const size_t before = r.svc.model().clips.size();
+    assert(contains(r.no("clips duplicate \"" + m + " ac_99\""), "no clip `ac_99` — nothing copied"));
+    assert(contains(r.no("clips duplicate \"" + a + " " + m + "\" --by -1"), m + "'s copy would start before beat 0"));
+    assert(contains(r.no("clips duplicate \"" + m + "\" --by soon"), "--by is a number of beats"));
+    assert(r.svc.model().clips.size() == before && count("clip.added") == 0);
+    // deleted: every one, ONE edit; refused whole when one is not the song's
+    assert(contains(r.no("clips delete \"" + m + " " + a + " ac_99\""), "no clip `ac_99` — nothing deleted") && r.clip(m) && r.clip(a));
+    const int d2 = r.svc.model().undoDepth;
+    r.events.clear();
+    assert(r.ok("clips delete \"" + m + " " + a + " " + u + " " + m + "\"") == "3 clips deleted\n");
+    assert(!r.clip(m) && !r.clip(a) && !r.clip(u) && r.svc.model().undoDepth == d2 + 1 && count("clip.deleted") == 3);
+    assert(r.svc.model().automations.size() == 1); // its automation stays — its other clips still play it
+    r.ok("undo");
+    assert(r.clip(m) && r.clip(a) && r.clip(u) && r.clip(u)->at == 1.0);
+    pass("clips duplicate / clips delete (R-CLIP-11): a selection of MIDI, audio and automation clips copied after itself or --by, linked, on their lanes, and removed — each ONE edit; refused whole, naming the first");
+}
+
 // R-MIDI-1: Standard MIDI Files — a pattern exported and imported back is the same notes to the tick; a file made
 // elsewhere (running status, note-on velocity 0, 96 ticks a beat, named tracks; SMPTE time through its tempo) reads
 // as its beats; a dropped .mid is one line — a clip on a track or a new instrument; the song exports as it plays
@@ -7775,6 +7833,7 @@ int main()
     test_reading_a_song_back();
     test_an_instruments_groups_are_titled();
     test_a_clip_copied_onto_another_lane();
+    test_a_selection_of_clips_is_copied_and_deleted_in_one_edit();
     test_midi_files();
     test_instrument_tracks();
     test_a_song_from_before_tracks_adopts_them();

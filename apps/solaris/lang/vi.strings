@@ -109,6 +109,8 @@
 "Clip copied — Paste puts it at the time bar" = "Đã sao chép đoạn — Dán sẽ đặt nó tại vạch thời gian";
 "Clip copied — {1} puts it at the time bar" = "Đã sao chép đoạn — {1} sẽ đặt nó tại vạch thời gian";
 "{1} is gone — copy a clip again" = "{1} không còn nữa — hãy sao chép lại một đoạn";
+"{1} clips copied — Paste puts them at the time bar" = "Đã sao chép {1} đoạn — Dán sẽ đặt chúng tại vạch thời gian";
+"{1} clips copied — {2} puts them at the time bar" = "Đã sao chép {1} đoạn — {2} sẽ đặt chúng tại vạch thời gian";
 "Unsaved changes" = "Thay đổi chưa lưu";
 "Save \"{1}\" before going Home?" = "Lưu \"{1}\" trước khi về Trang chủ?";
 "Discard" = "Bỏ";

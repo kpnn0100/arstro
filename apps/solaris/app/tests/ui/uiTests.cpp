@@ -46,6 +46,12 @@ namespace
             if (l == line) return true;
         return false;
     }
+    const arstro::solaris::ClipModel *clipModel(const sltest::Rig &r, const std::string &id)
+    {
+        for (const auto &c : r.svc->model().clips)
+            if (c.id == id) return &c;
+        return nullptr;
+    }
     // R-AUTO-14: an automation's first clip, and its track's row (the lanes in their order — no folded group here)
     std::string autoClipOf(const sltest::Rig &r, const std::string &au)
     {
@@ -1263,6 +1269,156 @@ static void test_the_history_tree()
     r.settle();
     assert(hv.appearAmount() == 0.0);
     pass("The history tree (R-HIST-3): Edit ▸ Show History Tree… opens cosmo's view over the model's tree, eased; a node clicked is ONE `history jump` and the highlight travels; the undo key walks it; a script's edit shows; Escape closes it");
+}
+
+static void test_clips_are_selected_by_a_box_and_handled_together()
+{
+    // R-CLIP-11: a drag on empty space draws a box — every clip it touches (MIDI, audio, automation) selected, each lit
+    // eased as the box reaches it and unlit as it leaves, the box fading once let go, nothing sent; Shift/Ctrl+click adds
+    // or takes out; a selected clip dragged carries the selection — ONE `clips move --by`, with Shift ONE `clips duplicate
+    // --by` (the copies selected, where the pointer left them); Delete is ONE `clips delete`; Ctrl+drag draws the box from
+    // on a clip; Ctrl+C / Ctrl+V paste the selection at the time bar keeping its spacing, end to end; Ctrl+D after it
+    sltest::Rig r("ui-boxselect", 1280, 800);
+    r.cmd("project new " + r.song("Box") + ".slp --bpm 120");
+    r.cmd("clip add --instrument drums --at 0 --length 4");         // ac_1: MIDI on the drums' track
+    r.cmd("lane add Extra");                                        // ln_2: a plain lane
+    r.cmd("clip add --src vox.wav --at 2 --length 2 --lane ln_2");  // ac_2: audio
+    r.cmd("auto create ch_2.gain");                                 // au_1: its track and its clip
+    r.cmd("set au_1.length=2");
+    const std::string ac = autoClipOf(r, "au_1");
+    r.cmd("set " + ac + ".length=2");
+    r.cmd("clip move " + ac + " --at 1");
+    r.cmd("clip duplicate ac_1 --at 12");
+    const std::string far = r.svc->model().clips.back().id;          // no box below reaches it
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto sel = [&] { const auto v = tl.selectedClips(); return std::set<std::string>(v.begin(), v.end()); };
+    auto join = [&] { std::string s; for (const auto &id : tl.selectedClips()) s += (s.empty() ? "" : " ") + id; return s; };
+    const std::set<std::string> three{"ac_1", "ac_2", ac};
+    const artboard::Rect origin = world(tl, artboard::Rect{0, 0, 0, 0});
+    auto bx = [&](double beat) { return origin.x + tl.beatToX(beat); };
+    const double ppb = tl.beatToX(1.0) - tl.beatToX(0.0);
+    artboard::Rect c1 = world(tl, tl.clipRect("ac_1"));
+    const artboard::Rect c2 = world(tl, tl.clipRect("ac_2")), c3 = world(tl, tl.clipRect(ac));
+    const double yTop = cy(c1), yBot = std::max({c1.bottom(), c2.bottom(), c3.bottom()}) - 2.0;
+    const size_t mark = r.sent.size();
+    // the box from empty space (beat 6 on the drums' track): the clips it reaches lit, eased
+    r.app->pointer(1, bx(6.0), yTop, 0, r.now);
+    r.app->pointer(0, bx(6.0), yTop, 0, r.now);
+    r.frame();
+    r.app->pointer(1, bx(3.5), yBot, 0, r.now);
+    r.frame();
+    assert(tl.boxing() && tl.selectBoxRect().w > 2.0 * ppb && tl.selectBoxAmount() == 1.0);
+    assert((sel() == std::set<std::string>{"ac_1", "ac_2"}));
+    double lit = 0.0;
+    for (int k = 0; k < 10 && lit == 0.0; ++k) { r.frame(); lit = tl.clipSelectAmount("ac_1"); }
+    assert(lit > 0.0 && lit < 1.0);                                // eased in, never snapped
+    r.app->pointer(1, bx(1.5), yBot, 0, r.now);
+    r.frame();
+    assert(sel() == three);
+    r.pump(400.0);
+    assert(tl.clipSelectAmount(ac) == 1.0);
+    r.app->pointer(1, bx(3.5), yBot, 0, r.now);                    // back: the automation clip leaves, unlit eased
+    r.frame();
+    r.frame();
+    assert(!tl.clipSelected(ac) && tl.clipSelectAmount(ac) > 0.0 && tl.clipSelectAmount(ac) < 1.0);
+    r.app->pointer(1, bx(1.5), yBot, 0, r.now);
+    r.frame();
+    r.app->pointer(2, bx(1.5), yBot, 0, r.now);
+    r.frame();
+    assert(!tl.boxing() && tl.selectBoxAmount() > 0.0 && tl.selectBoxAmount() < 1.0); // let go: the box fades
+    r.settle();
+    assert(tl.selectBoxAmount() == 0.0 && tl.selectBoxRect().w == 0.0 && sel() == three && r.sent.size() == mark); // the window's
+    assert(tl.clipSelectAmount("ac_1") == 1.0 && tl.clipSelectAmount(far) == 0.0);
+    // Shift+click adds a clip, again takes it out; Ctrl+click the same
+    const artboard::Rect c4 = world(tl, tl.clipRect(far));
+    auto modClick = [&](double x, double y, bool shift, bool ctrl) {
+        r.app->pointer(0, x, y, 0, r.now, false, shift, ctrl);
+        r.app->pointer(2, x, y, 0, r.now + 40.0, false, shift, ctrl);
+        r.pump(500.0); // never a double-click
+    };
+    modClick(c4.x + 12.0, cy(c4), true, false);
+    assert(sel().size() == 4 && tl.selectedClip() == far);
+    modClick(c4.x + 12.0, cy(c4), true, false);
+    assert(sel() == three && tl.clipSelectAmount(far) == 0.0);
+    modClick(c4.x + 12.0, cy(c4), false, true);
+    assert(sel().size() == 4);
+    modClick(c4.x + 12.0, cy(c4), false, true);
+    assert(sel() == three && r.sent.size() == mark);
+    // a click selects one alone; a box with Shift held adds to it
+    r.click(c4.x + 12.0, cy(c4));
+    r.pump(500.0);
+    assert((sel() == std::set<std::string>{far}));
+    r.drag(bx(6.0), yTop, bx(1.5), yBot, 6, true, true);
+    assert(sel().size() == 4 && r.sent.size() == mark);
+    r.settle();
+    modClick(c4.x + 12.0, cy(c4), true, false);
+    assert(sel() == three);
+    // a selected clip dragged carries the selection — the pointer's while held — then ONE line
+    r.drag(c1.x + 12.0, cy(c1), c1.x + 12.0 + 4.0 * ppb, cy(c1), 8, false);
+    assert(std::fabs(world(tl, tl.clipRect("ac_2")).x - (c2.x + 4.0 * ppb)) < 0.5 && std::fabs(world(tl, tl.clipRect(ac)).x - (c3.x + 4.0 * ppb)) < 0.5);
+    r.app->pointer(2, c1.x + 12.0 + 4.0 * ppb, cy(c1), 0, r.now);
+    r.frame();
+    assert(r.sent.back() == "clips move \"" + join() + "\" --by 4" && sel() == three);
+    assert(clipModel(r, "ac_1")->at == 4.0 && clipModel(r, "ac_2")->at == 6.0 && clipModel(r, ac)->at == 5.0 && clipModel(r, far)->at == 12.0);
+    r.settle();
+    // with Shift: copies where it was let go, the originals staying; the copies selected, at full strength at once
+    c1 = world(tl, tl.clipRect("ac_1"));
+    const size_t before = r.svc->model().clips.size();
+    const std::string moved = join();
+    r.drag(c1.x + 12.0, cy(c1), c1.x + 12.0 + 8.0 * ppb, cy(c1), 2, false, true);
+    assert(tl.copyAmount() > 0.0 && tl.copyAmount() < 1.0);
+    r.settle();
+    r.app->pointer(2, c1.x + 12.0 + 8.0 * ppb, cy(c1), 0, r.now, false, true);
+    r.frame();
+    assert(r.sent.back() == "clips duplicate \"" + moved + "\" --by 8" && r.svc->model().clips.size() == before + 3);
+    assert(clipModel(r, "ac_1")->at == 4.0 && sel().size() == 3 && !sel().count("ac_1"));
+    for (const auto &id : sel()) assert(tl.clipAlpha(id) == 1.0 && clipModel(r, id)->at >= 12.0);
+    r.settle();
+    // Delete: ONE line for them all
+    const std::string copies = join();
+    r.key(46);
+    assert(r.sent.back() == "clips delete \"" + copies + "\"" && r.svc->model().clips.size() == before);
+    r.settle();
+    assert(sel().empty());
+    // Ctrl+drag draws the box from ON a clip — nothing moves
+    c1 = world(tl, tl.clipRect("ac_1"));
+    const artboard::Rect c3b = world(tl, tl.clipRect(ac));
+    const size_t mark2 = r.sent.size();
+    r.app->pointer(1, c1.x + 12.0, cy(c1), 0, r.now, false, false, true);
+    r.app->pointer(0, c1.x + 12.0, cy(c1), 0, r.now, false, false, true);
+    r.frame();
+    for (int k = 1; k <= 4; ++k)
+    {
+        r.app->pointer(1, c1.x + 12.0 + k * 0.5 * ppb, yBot, 0, r.now, false, false, true);
+        r.frame();
+    }
+    assert(tl.boxing());
+    r.app->pointer(2, c1.x + 12.0 + 2.0 * ppb, std::max(yBot, c3b.bottom() - 2.0), 0, r.now, false, false, true);
+    r.settle();
+    assert(sel() == three && r.sent.size() == mark2 && clipModel(r, "ac_1")->at == 4.0);
+    // Ctrl+C the selection (nothing sent), Ctrl+V at the time bar keeping their spacing; again, end to end
+    r.key('C', true);
+    assert(r.sent.size() == mark2 && contains(r.app->toastText(), "3 clips copied"));
+    r.cmd("transport seek 16");
+    r.settle();
+    const std::string copied = join();
+    r.key('V', true);
+    assert(r.sent.back() == "clips duplicate \"" + copied + "\" --by 12" && r.svc->model().clips.size() == before + 3);
+    r.settle();
+    assert(sel().size() == 3 && !sel().count("ac_1"));
+    r.key('V', true);
+    assert(r.sent.back() == "clips duplicate \"" + copied + "\" --by 16");
+    r.settle();
+    // Ctrl+D: copies of the selection after it; a click on empty space selects none
+    const std::string last = join();
+    r.key('D', true);
+    assert(r.sent.back() == "clips duplicate \"" + last + "\"" && r.svc->model().clips.size() == before + 9);
+    r.settle();
+    r.click(bx(10.0), yTop);                                        // between ac_1 and the far copy
+    r.settle();
+    assert(sel().empty() && tl.selectedClip().empty());
+    pass("Clips selected by a box (R-CLIP-11): a drag on empty space lights every clip it touches, eased, the box fading once let go; Shift/Ctrl+click adds or takes out; the selection dragged is ONE `clips move`, Shift-dropped ONE `clips duplicate`, deleted ONE `clips delete`; Ctrl+drag from a clip; Ctrl+C / Ctrl+V and Ctrl+D on the selection");
 }
 
 static void test_clips_are_copied_by_shift_drag_and_ctrl_c_v()
@@ -3507,8 +3663,10 @@ static void test_ruler_seek_keys_and_selection()
     assert(tl.selectedClip() == "ac_1");
     r.key('D', true);                                                   // Ctrl+D: a linked copy after it
     assert(sentLine(r, "clip duplicate ac_1") && r.svc->model().clips.size() == 2 && r.svc->model().clips[1].linked == 2);
-    r.key(46);                                                          // Delete
-    assert(sentLine(r, "clip delete ac_1") && r.svc->model().clips.size() == 1);
+    r.frame();                                                          // the model it brought: the copy selected (R-CLIP-11)
+    assert(tl.selectedClip() == "ac_2");
+    r.key(46);                                                          // Delete: the copy
+    assert(sentLine(r, "clip delete ac_2") && r.svc->model().clips.size() == 1);
     r.settle();
     assert(tl.selectedClip().empty());                                  // the selection went with the clip
     pass("Ruler click seeks (the playhead eases); a clip selects; Ctrl+D duplicates linked, Delete removes it");
@@ -6346,6 +6504,7 @@ int main()
     test_the_keyboard_section();
     test_the_history_tree();
     test_clips_are_copied_by_shift_drag_and_ctrl_c_v();
+    test_clips_are_selected_by_a_box_and_handled_together();
     test_the_pointer_says_a_drag_resizes();
     test_an_automation_is_made_with_its_clip_and_sized_in_its_window();
     test_a_recovered_song_is_offered();

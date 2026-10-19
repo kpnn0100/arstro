@@ -45,6 +45,7 @@ namespace solaris
             MarkerAdd, MarkerRename, MarkerMove, MarkerDelete, // R-ARR-1
             TimeInsert, TimeDelete,                          // R-ARR-2
             LaneGroup, LaneUngroup, ClipsMove,               // R-ARR-3
+            ClipsDuplicate, ClipsDelete,                     // R-CLIP-11
             PortAdd, TransportPunch,                         // R-REC-1
             ClipComp,                                        // R-REC-2
             ClipSplit, ClipConsolidate, ClipSlice,           // R-EDIT-1

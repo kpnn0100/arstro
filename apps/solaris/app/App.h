@@ -205,9 +205,9 @@ namespace solaris_ui
         std::shared_ptr<cosmo_v2::HistoryView> mHistory; // R-HIST-3: cosmo's history tree, modal while open
         std::vector<int> mHistoryIds;                    // the view's node i is the model's history id mHistoryIds[i]
         std::vector<std::string> mHistoryLabels;
-        // R-CLIP-10: the clip Ctrl+C copied (the window's clipboard), and where the last paste went — a paste with the
+        // R-CLIP-10/11: the clips Ctrl+C copied (the window's clipboard), and where the last paste went — a paste with the
         // time bar unmoved lands right after it, so pastes run end to end
-        std::string mClipClipboard;
+        std::vector<std::string> mClipClipboard;
         std::string mNewTemplate; // R-PRESET-2: the template the next new song starts from ('' none)
         double mPasteAt = -1.0, mPasteNext = 0.0;
         artboard::GestureRecognizer mRecognizer;

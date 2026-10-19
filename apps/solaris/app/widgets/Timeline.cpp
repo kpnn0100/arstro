@@ -221,14 +221,16 @@ namespace solaris_ui
         }
         if (mAdoptNew)
         {
-            // R-CLIP-9/10: the copy just made is the clip that was not there — it is selected; a refusal brings none
+            // R-CLIP-9/10/11: the copies just made are the clips that were not there — they are the selection; a refusal
+            // brings none
+            std::set<std::string> fresh;
             for (const auto &v : mClips)
                 if (!mKnownClips.count(v.c.id))
                 {
-                    if (mAdoptInstant) mInstantClip = v.c.id;
-                    selectClip(v.c.id);
-                    break;
+                    if (mAdoptInstant) mInstantClips.insert(v.c.id);
+                    fresh.insert(v.c.id);
                 }
+            if (!fresh.empty()) setSelection(fresh);
             mAdoptNew = false;
         }
         // a lane with no colour of its own wears its first clip's strip's, so its stripe says something
@@ -280,7 +282,10 @@ namespace solaris_ui
             l->gone = false;
         }
         mBound = true;
-        if (!mSelected.empty() && clipRect(mSelected).w <= 0) selectClip(""); // the selected clip went away
+        std::set<std::string> kept; // a clip that went away leaves the selection
+        for (const auto &id : mSelection)
+            if (clipRect(id).w > 0) kept.insert(id);
+        if (kept != mSelection) setSelection(kept);
     }
 
     const Timeline::ClipLive *Timeline::live(const std::string &id) const
@@ -432,7 +437,7 @@ namespace solaris_ui
     }
     double Timeline::groupDelta() const
     {
-        if (mDragGroup.empty() || !mDragging) return 0.0;
+        if (mDragGroupClips.empty() || !mDragging) return 0.0;
         double d = 0.0, first = 1e300;
         for (const auto &v : mClips)
         {
@@ -447,8 +452,8 @@ namespace solaris_ui
         const ClipLive *l = live(id);
         if (!l) return Rect{};
         if (mDragging && id == mPressClip) return clipBox(l->v, mDragBeat, rowY(mDragRow), liveLength(*l), l->off.value(), l->frac.value());
-        if (!mDragGroup.empty() && mDragging && std::find(mDragGroupClips.begin(), mDragGroupClips.end(), id) != mDragGroupClips.end())
-            return clipBox(l->v, l->v.c.at + groupDelta(), l->row.value() * kRowH, liveLength(*l), l->off.value(), l->frac.value()); // carried with the group
+        if (mDragging && std::find(mDragGroupClips.begin(), mDragGroupClips.end(), id) != mDragGroupClips.end())
+            return clipBox(l->v, l->v.c.at + groupDelta(), l->row.value() * kRowH, liveLength(*l), l->off.value(), l->frac.value()); // carried with the group (or the selection)
         return l->placed ? clipBox(l->v, l->at.value(), l->row.value() * kRowH, liveLength(*l), l->off.value(), l->frac.value())
                          : clipBox(l->v, l->atTarget, l->rowTarget * kRowH, liveLength(*l), l->v.bandOff, l->v.bandFrac);
     }
@@ -506,14 +511,104 @@ namespace solaris_ui
 
     void Timeline::selectClip(const std::string &id)
     {
-        if (id == mSelected) return;
-        mPrevSelected = mSelected;
+        std::set<std::string> one;
+        if (!id.empty()) one.insert(id);
         mSelected = id;
-        mSelOut.set(mSelIn.value());   // the old ring fades out from where the new one starts
-        mSelIn.set(0.0);
-        if (!mPrevSelected.empty()) mSelOut.animateTo(0.0, motion::kSelectMs, Easing::EaseOutCubic, mNowMs);
-        if (!mSelected.empty()) mSelIn.animateTo(1.0, motion::kSelectMs, Easing::EaseOutCubic, mNowMs);
-        if (onSelect) onSelect(id);
+        setSelection(one);
+    }
+
+    void Timeline::setSelection(const std::set<std::string> &ids)
+    {
+        // R-CLIP-11: each clip's ring eases in or out in advance(); the clip clicked last stays it while it is selected,
+        // else the selection's first in the song's order
+        mSelection = ids;
+        const std::string was = mSelected;
+        if (!mSelection.count(mSelected))
+        {
+            mSelected.clear();
+            for (const auto &v : mClips)
+                if (mSelection.count(v.c.id)) { mSelected = v.c.id; break; }
+            if (mSelected.empty() && !mSelection.empty()) mSelected = *mSelection.begin();
+        }
+        if (mSelected != was && onSelect) onSelect(mSelected);
+    }
+
+    std::vector<std::string> Timeline::selectedClips() const
+    {
+        std::vector<std::string> v;
+        for (const auto &c : mClips)
+            if (mSelection.count(c.c.id)) v.push_back(c.c.id);
+        return v;
+    }
+
+    double Timeline::clipSelectAmount(const std::string &id) const
+    {
+        for (const auto &l : mLive)
+            if (l.v.c.id == id) return l.sel.value();
+        return 0.0;
+    }
+
+    Rect Timeline::selectBoxRect() const
+    {
+        if (mBox != Box::Drawing && mBoxAmt.value() <= 0.001) return Rect{};
+        const double x0 = beatToX(mBoxA), x1 = beatToX(mBoxB), y0 = top() + mBoxAY - mScrollY.value(), y1 = top() + mBoxBY - mScrollY.value();
+        return Rect{std::min(x0, x1), std::min(y0, y1), std::fabs(x1 - x0), std::fabs(y1 - y0)};
+    }
+
+    void Timeline::boxTo(const Point &local)
+    {
+        // the pointer's corner, kept on the lanes; every clip the box touches is selected now — lit as it is reached
+        const double x = std::clamp(local.x, kHeaderW, std::max(kHeaderW, width.value())), y = std::clamp(local.y, top(), std::max(top(), height.value()));
+        mBoxB = xToBeat(x);
+        mBoxBY = y - top() + mScrollY.value();
+        const Rect b = selectBoxRect();
+        std::set<std::string> next = mBoxAdd ? mBoxBase : std::set<std::string>{};
+        for (const auto &l : mLive)
+        {
+            if (l.gone) continue;
+            const Rect r = clipRect(l.v.c.id);
+            if (r.x < b.right() && r.right() > b.x && r.y < b.bottom() && r.bottom() > b.y) next.insert(l.v.c.id);
+        }
+        if (next != mSelection) setSelection(next);
+    }
+
+    bool Timeline::boxGesture(const Gesture &g, const Point &local)
+    {
+        // R-CLIP-11: Ctrl+drag draws the box from anywhere on the lanes (a drag on empty space starts one in Down)
+        if (mBox == Box::None)
+        {
+            if (g.type != Gesture::Type::Down || !g.ctrl || local.x < kHeaderW || local.y < top()) return false;
+            mBox = Box::Pending;
+            mBoxA = mBoxB = xToBeat(local.x);
+            mBoxAY = mBoxBY = local.y - top() + mScrollY.value();
+            mBoxAdd = g.shift;
+            return true;
+        }
+        switch (g.type)
+        {
+        case Gesture::Type::DragStart:
+            mBox = Box::Drawing;
+            mBoxBase = mSelection;
+            mBoxAmt.set(1.0); // it grows from the press with the pointer: the pointer is the animation
+            [[fallthrough]];
+        case Gesture::Type::Drag:
+            if (mBox == Box::Drawing) boxTo(local);
+            return true;
+        case Gesture::Type::Up:
+        case Gesture::Type::Drop:
+            if (mBox == Box::Pending) { mBox = Box::None; return false; } // a click: what it does is the click's
+            boxTo(local);
+            mBox = Box::None;
+            mBoxAmt.animateTo(0.0, motion::kHoverMs, Easing::EaseOutCubic, mNowMs); // let go: the box fades, the selection stays lit
+            return true;
+        case Gesture::Type::Click:
+        case Gesture::Type::DoubleClick:
+        case Gesture::Type::RightClick:
+            mBox = Box::None;
+            return false;
+        default:
+            return false; // a hover before the drag starts, the wheel while it is drawn: the box stays
+        }
     }
 
     void Timeline::setDropHint(bool on, double beat, int row, const std::string &label)
@@ -598,8 +693,7 @@ namespace solaris_ui
             if (mArmLast[row.strip] != want) { it->second.animateTo(want, motion::kSelectMs, Easing::EaseOutCubic, nowMs); mArmLast[row.strip] = want; }
             it->second.update(nowMs);
         }
-        mSelIn.update(nowMs);
-        mSelOut.update(nowMs);
+        mBoxAmt.update(nowMs);
         mDropAmt.update(nowMs);
         // the loop region: appears and goes with a fade; moved by anyone it eases there (§1)
         {
@@ -719,10 +813,9 @@ namespace solaris_ui
                 l.offLast = l.v.bandOff;
                 l.fracLast = l.v.bandFrac;
                 placeClipEdit(l);
-                const bool instant = l.v.c.id == mInstantClip; // a Shift-drop: the pointer already showed it there
+                const bool instant = mInstantClips.erase(l.v.c.id) > 0; // a Shift-drop: the pointer already showed it there
                 l.alpha.set(fadeIn && !instant ? 0.0 : 1.0);
                 l.aLast = l.alpha.value();
-                if (instant) mInstantClip.clear();
                 l.hueFrom = l.hueTo = l.v.colour == kAutoHue ? palette::primary() : surface::track(l.v.colour);
                 l.hueLast = l.v.colour;
                 l.placed = true;
@@ -747,6 +840,10 @@ namespace solaris_ui
             l.frac.update(nowMs);
             advanceClipEdit(l, nowMs); // R-EDIT-1: fades, gain, reversed — eased
             if (aWant != l.aLast) { l.alpha.animateTo(aWant, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); l.aLast = aWant; }
+            // R-CLIP-11: its ring, eased in as it joins the selection and out as it leaves (or goes)
+            const double sw = !l.gone && mSelection.count(l.v.c.id) ? 1.0 : 0.0;
+            if (sw != l.selLast) { l.sel.animateTo(sw, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.selLast = sw; }
+            l.sel.update(nowMs);
             l.at.update(nowMs);
             l.row.update(nowMs);
             l.alpha.update(nowMs);
@@ -950,6 +1047,7 @@ namespace solaris_ui
 
     bool Timeline::handleGesture(const Gesture &g, const Point &local)
     {
+        if (boxGesture(g, local)) return true;   // a box drawn to select clips (R-CLIP-11)
         if (videoGesture(g, local)) return true; // the picture's span, dragged (R-VIDEO-1)
         if (autoGesture(g, local)) return true; // an automation row's curve and points (R-AUTO-6)
         if (takeGesture(g, local)) return true; // a take's row: a range of it into the comp (R-REC-2)
@@ -988,6 +1086,17 @@ namespace solaris_ui
                     for (const auto &o : mClips)
                         if (o.row == v.row) mDragGroupClips.push_back(o.c.id);
                 }
+            // R-CLIP-11: a clip of a selection of several carries the selection; a press on empty space may draw a box
+            if (mDragGroupClips.empty() && !mPressClip.empty() && mSelection.size() > 1 && mSelection.count(mPressClip))
+                for (const auto &v : mClips)
+                    if (mSelection.count(v.c.id)) mDragGroupClips.push_back(v.c.id);
+            if (mPressClip.empty() && mEdgeClip.empty() && local.x >= kHeaderW && local.y >= top())
+            {
+                mBox = Box::Pending;
+                mBoxA = mBoxB = xToBeat(local.x);
+                mBoxAY = mBoxBY = local.y - top() + mScrollY.value();
+                mBoxAdd = g.shift;
+            }
             return true;
         case Gesture::Type::DragStart:
             if (!mEdgeClip.empty())
@@ -999,7 +1108,7 @@ namespace solaris_ui
             if (!mPressClip.empty())
             {
                 mDragging = true;
-                selectClip(mPressClip);
+                if (!mDragGroup.empty() || mDragGroupClips.empty()) selectClip(mPressClip); // a selection carried stays the selection
             }
             [[fallthrough]];
         case Gesture::Type::Drag:
@@ -1016,8 +1125,10 @@ namespace solaris_ui
                 mDragBeat = std::max(0.0, snap(xToBeat(local.x) - mGrab));
                 int row = rowAt(local.y);
                 for (const auto &v : mClips)
-                    if (v.c.id == mPressClip && (row < 0 || row >= (int)mRows.size() || mRows[(size_t)row].lane.empty())) row = v.row;
-                mDragRow = row; // a clip moves between LANES; a strip's own row is not a lane
+                    if (v.c.id == mPressClip && (!mDragGroupClips.empty() || row < 0 || row >= (int)mRows.size() || mRows[(size_t)row].lane.empty())) row = v.row;
+                mDragRow = row; // a clip moves between LANES; a strip's own row is not a lane; clips carried together keep theirs
+                for (const auto &v : mClips) // carried together: the one in hand where the rest are — none before beat 0
+                    if (!mDragGroupClips.empty() && v.c.id == mPressClip) mDragBeat = v.c.at + groupDelta();
             }
             return true;
         case Gesture::Type::Drop:
@@ -1040,23 +1151,26 @@ namespace solaris_ui
                 return true;
             }
             mEdgeClip.clear();
-            if (mDragging && !mDragGroup.empty())
+            if (mDragging && !mDragGroupClips.empty())
             {
-                // R-ARR-3: the group's clips where they were let go — the pointer was the animation — then ONE line
+                // R-ARR-3, R-CLIP-11: the group's (or the selection's) clips where they were let go — the pointer was the
+                // animation — then ONE line; a selection let go with Shift held is copied there, the originals staying
                 const double d = groupDelta();
+                const bool copy = g.shift && mDragGroup.empty();
                 mDragging = false;
                 std::string ids;
+                for (const auto &id : mDragGroupClips) ids += (ids.empty() ? "" : " ") + id;
                 for (auto &l : mLive)
-                    if (!l.gone && std::find(mDragGroupClips.begin(), mDragGroupClips.end(), l.v.c.id) != mDragGroupClips.end())
+                    if (!copy && !l.gone && std::find(mDragGroupClips.begin(), mDragGroupClips.end(), l.v.c.id) != mDragGroupClips.end())
                     {
                         l.at.set(l.v.c.at + d);
                         l.atTarget = l.atLast = l.v.c.at + d;
-                        ids += (ids.empty() ? "" : " ") + l.v.c.id;
                     }
                 mDragGroup.clear();
                 mDragGroupClips.clear();
                 mPressClip.clear();
-                if (std::fabs(d) > 1e-9 && onCommand) onCommand("clips move \"" + ids + "\" --by " + beats(d));
+                if (copy) expectCopy(true); // the copies appear where the pointer left them, selected
+                if ((copy || std::fabs(d) > 1e-9) && onCommand) onCommand(std::string(copy ? "clips duplicate \"" : "clips move \"") + ids + "\" --by " + beats(d));
                 return true;
             }
             if (mDragging)
@@ -1116,6 +1230,18 @@ namespace solaris_ui
                 if (ar.w <= 0.0 || !Rect{ar.x - 3.0, ar.y - 3.0, ar.w + 6.0, ar.h + 6.0}.contains(local)) continue;
                 const std::string s = mRows[(size_t)i].strip;
                 if (onCommand) onCommand(s == mArmed ? std::string("strip arm none") : "strip arm " + s);
+                return true;
+            }
+            if (g.shift || g.ctrl)
+            {
+                // R-CLIP-11: Shift/Ctrl+click adds a clip to the selection, or takes it out; on empty space it keeps it
+                const std::string id = clipAt(local);
+                if (id.empty()) return true;
+                std::set<std::string> next = mSelection;
+                const bool added = !next.erase(id);
+                if (added) next.insert(id);
+                setSelection(next);
+                if (added && mSelected != id) { mSelected = id; if (onSelect) onSelect(id); } // the clip clicked last
                 return true;
             }
             selectClip(clipAt(local));
@@ -1497,12 +1623,12 @@ namespace solaris_ui
             const ClipView &v = l.v;
             const double a = l.placed ? l.alpha.value() : 0.0;
             if (a <= 0.001) continue;
-            const bool carried = !l.gone && mDragging && !mDragGroup.empty() &&
-                                 std::find(mDragGroupClips.begin(), mDragGroupClips.end(), v.c.id) != mDragGroupClips.end(); // R-ARR-3
+            const bool carried = !l.gone && mDragging &&
+                                 std::find(mDragGroupClips.begin(), mDragGroupClips.end(), v.c.id) != mDragGroupClips.end(); // R-ARR-3, R-CLIP-11
             const bool dragged = !l.gone && mDragging && (v.c.id == mPressClip || carried);
             const Rect r = clipBox(v, l.at.value(), l.row.value() * kRowH, liveLength(l), l.off.value(), l.frac.value());
             if (r.right() < kHeaderW || r.x > W || r.bottom() < top() || r.y > H) continue;
-            const double ring = l.gone ? 0.0 : (v.c.id == mSelected ? mSelIn.value() : (v.c.id == mPrevSelected ? mSelOut.value() : 0.0));
+            const double ring = l.sel.value(); // R-CLIP-11: eased as it joins the selection or leaves it
             // dragged: the original dims where it was — unless Shift makes it a copy, when it stays at full strength
             paintClip(t, v, r, (dragged ? 0.35 + 0.65 * mCopyAmt.value() : 1.0) * a, dragged ? 0.0 : ring, lerpColor(l.hueFrom, l.hueTo, l.hueT.value()), liveLength(l));
             int hi = -1;
@@ -1511,8 +1637,8 @@ namespace solaris_ui
             const double hv = hi >= 0 ? mHover.amount(hi) : 0.0;
             if (hv > 0.001 && !dragged) drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv * a)));
         }
-        if (mDragging && !mDragGroup.empty())
-            for (const auto &id : mDragGroupClips) // R-ARR-3: the group's clips carried with the one in hand
+        if (mDragging)
+            for (const auto &id : mDragGroupClips) // R-ARR-3, R-CLIP-11: the group's (or the selection's) clips carried with the one in hand
                 if (const ClipLive *l = live(id); l && id != mPressClip)
                     paintClip(t, l->v, clipRect(id), 1.0, 0.0, lerpColor(l->hueFrom, l->hueTo, l->hueT.value()), liveLength(*l));
         if (mDragging)
@@ -1549,6 +1675,9 @@ namespace solaris_ui
             t.setFill(fade(palette::foreground(), mDropAmt.value()));
             t.drawText(textfit::ellipsize(t, label, r.w - 10.0, 10.0, font::sans()), r.x + 5.0, r.y + 13.0, 10.0, font::sans());
         }
+        // R-CLIP-11: the box drawn to select (the pointer's), fading once let go
+        if (const double ba = mBoxAmt.value(); ba > 0.001)
+            drawRoundedRect(t, selectBoxRect(), radius::control(), Paint::filledStroked(palette::primaryAlpha(0.12 * ba), palette::primaryAlpha(0.7 * ba), 1.0));
         t.restore();
 
         // lane headers

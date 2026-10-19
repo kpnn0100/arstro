@@ -160,8 +160,20 @@ namespace solaris_ui
 
         /** The browser's drag: where it would land (a row; beat), and what it is. */
         void setDropHint(bool on, double beat = 0.0, int row = -1, const std::string &label = std::string());
+        /** The clip clicked last (Split at the time bar, Quantize act on it); one of the selection, '' when none. */
         const std::string &selectedClip() const { return mSelected; }
+        /** R-CLIP-11: the selection — every clip in it, in the song's order (the window's, not the song's). */
+        std::vector<std::string> selectedClips() const;
+        bool clipSelected(const std::string &id) const { return mSelection.count(id) > 0; }
+        /** A clip alone selected ('' = none). */
         void selectClip(const std::string &id);
+        /** R-CLIP-11: a clip's selection light, LIVE (eased in as it joins the selection, out as it leaves). */
+        double clipSelectAmount(const std::string &id) const;
+        /** R-CLIP-11: the box a drag on empty space (or a Ctrl+drag) draws — local, as DRAWN (empty when none); how much
+         *  of it is drawn, LIVE (1 while it is drawn, fading once let go). */
+        artboard::Rect selectBoxRect() const;
+        double selectBoxAmount() const { return mBoxAmt.value(); }
+        bool boxing() const { return mBox == Box::Drawing; }
         /** R-CLIP-9/10: the next clip the model brings is a copy just made — select it; `instant`: the pointer already
          *  showed it there (a Shift-drop), so it is placed at full strength, not faded in. Lapses at the next bind. */
         void expectCopy(bool instant);
@@ -328,6 +340,8 @@ namespace solaris_ui
             artboard::AnimatedProperty tagT{1.0};
             artboard::Color hueFrom, hueTo; // its strip's colour, cross-faded when the strip's changes
             int hueLast = 0;
+            artboard::AnimatedProperty sel{0.0}; // R-CLIP-11: its selection ring, eased as it joins or leaves
+            double selLast = 0.0;
             bool placed = false, gone = false;
         };
         /** A lane stripe's colour, cross-faded when it changes (an empty lane takes its first clip's). */
@@ -471,9 +485,20 @@ namespace solaris_ui
         std::vector<StepName> mStepNames;
         interstellar_v1::EasedScroll mScrollX, mScrollY;
         cosmo_v2::HoverFade mHover;
-        // selection ring: fades out from the old clip while it fades in on the new one
-        std::string mSelected, mPrevSelected;
-        artboard::AnimatedProperty mSelIn{0.0}, mSelOut{0.0};
+        // R-CLIP-11: the selection (each clip's ring eased in its ClipLive) and the clip clicked last
+        std::set<std::string> mSelection;
+        std::string mSelected;
+        void setSelection(const std::set<std::string> &ids);
+        // … a box drawn to select: from where it was pressed to the pointer, both in the lanes' content (beats; y from the
+        // first row) so it stays put while they scroll; it fades once let go
+        enum class Box { None, Pending, Drawing };
+        Box mBox = Box::None;
+        double mBoxA = 0, mBoxAY = 0, mBoxB = 0, mBoxBY = 0;
+        bool mBoxAdd = false;
+        std::set<std::string> mBoxBase;                 // the selection the box adds to (Shift)
+        artboard::AnimatedProperty mBoxAmt{0.0};
+        bool boxGesture(const artboard::Gesture &g, const artboard::Point &local);
+        void boxTo(const artboard::Point &local);
         // a clip's right edge held (R-CLIP-7): its length is the pointer's, one `set <ac>.length` on release
         std::string mEdgeClip;
         bool mResizing = false;
@@ -487,7 +512,7 @@ namespace solaris_ui
         double mCopyLast = 0.0;
         std::set<std::string> mKnownClips;             // expectCopy: the clips there before the copy
         bool mAdoptNew = false, mAdoptInstant = false;
-        std::string mInstantClip;                      // placed at full strength at its first frame
+        std::set<std::string> mInstantClips;           // placed at full strength at their first frame
         double mDragBeat = 0.0;
         int mDragRow = 0;
         // the browser's drop hint
@@ -576,8 +601,8 @@ namespace solaris_ui
         std::map<std::string, artboard::AnimatedProperty> mGroupTurn;
         std::map<std::string, double> mGroupTurnLast;
         std::string mDragGroup;
-        std::vector<std::string> mDragGroupClips;
-        double groupDelta() const;                     // beats the group's clips are carried while dragged
+        std::vector<std::string> mDragGroupClips;      // … or a selection's (R-CLIP-11): every clip carried, the one in hand too
+        double groupDelta() const;                     // beats the group's (or the selection's) clips are carried while dragged
         mutable std::map<std::string, double> mMarkW;  // a flag's width as last MEASURED (R5) — what a press hits
         std::string mMarkPress;
         bool mMarkDragging = false;

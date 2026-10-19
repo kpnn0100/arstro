@@ -210,6 +210,14 @@ namespace solaris
              "Move several clips in time as ONE edit (R-ARR-3 — a folded group's clips dragged together; any selection): each "
              "--by beats (negative = earlier). Refused whole, naming the first, when a clip is not the song's or would start "
              "before beat 0.", "R-ARR-3", false, {"by"}},
+            {K::ClipsDuplicate, "clips duplicate", "\"<ac> …\"", 1, -1, {"by=<beats>"},
+             "Copies of several clips as ONE edit (R-CLIP-11 — a selection Shift-dragged, duplicated, pasted): each on its own "
+             "lane, --by beats later (default: the clips' span, so the copies follow them). Linked as `clip duplicate`'s copies "
+             "are. Prints the copies, in the order named. Refused whole, naming the first, when a clip is not the song's or a "
+             "copy would start before beat 0.", "R-CLIP-11"},
+            {K::ClipsDelete, "clips delete", "\"<ac> …\"", 1, -1, {},
+             "Remove several clips as ONE edit (R-CLIP-11 — a selection deleted). Refused whole, naming the first, when a clip "
+             "is not the song's.", "R-CLIP-11"},
             {K::NotesAdd, "notes add", "<pt> \"<note> …\"", 2, -1, {"length=<beats>", "vel=<1-127>"},
              "Many notes in ONE edit (one undo step): each <note> is <pitch>@<beat>[:<length>[:<vel>[:<chance>]]] — "
              "C4@0:0.5:90, kick@1, E4@2::70, hat@1.5:::0.5. --length / --vel are the defaults (0.25, 100). A bad token is "

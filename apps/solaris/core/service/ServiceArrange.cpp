@@ -258,6 +258,52 @@ namespace solaris
             mOutput = std::to_string(which.size()) + (which.size() == 1 ? " clip" : " clips") + " moved\n";
             return true;
         }
+        case K::ClipsDuplicate:
+        case K::ClipsDelete:
+        {
+            // R-CLIP-11: a selection copied or removed — every clip named, or none of them
+            std::vector<std::string> which;
+            double first = 1e300, last = -1e300;
+            for (const auto &a : c.args)
+                for (const auto &w : tokenize(a))
+                {
+                    const Clip *cl = p.clip(w);
+                    if (!cl) { err = "no clip `" + w + "` — " + (c.kind == K::ClipsDelete ? "nothing deleted" : "nothing copied"); return false; }
+                    if (std::find(which.begin(), which.end(), w) != which.end()) continue;
+                    which.push_back(w);
+                    first = std::min(first, cl->at);
+                    last = std::max(last, cl->at + clipLengthBeats(p, *cl));
+                }
+            if (c.kind == K::ClipsDelete)
+            {
+                p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [&](const Clip &x) { return std::find(which.begin(), which.end(), x.id) != which.end(); }),
+                              p.clips.end());
+                for (const auto &w : which) changed("clip.deleted", w);
+                mOutput = std::to_string(which.size()) + (which.size() == 1 ? " clip" : " clips") + " deleted\n";
+                return true;
+            }
+            double by = last - first; // the copies follow the clips
+            if (c.has("by") && (!parseNumber(c.flag("by"), by) || !std::isfinite(by) || std::fabs(by) > 1e6))
+            {
+                err = "--by is a number of beats (negative = earlier), got `" + c.flag("by") + "`";
+                return false;
+            }
+            for (const auto &w : which)
+                if (p.clip(w)->at + by < -0.5 / kPpq) { err = w + "'s copy would start before beat 0 — nothing copied"; return false; }
+            std::string out;
+            for (const auto &w : which)
+            {
+                Clip copy = *p.clip(w); // the same pattern, the same automation: linked (R-CLIP-3, R-AUTO-14)
+                copy.remarks = Remarks();
+                copy.id = p.nextId("ac");
+                copy.at = toTick(std::max(0.0, copy.at + by));
+                p.clips.push_back(copy);
+                changed("clip.added", copy.id);
+                out += (out.empty() ? "" : " ") + copy.id;
+            }
+            mOutput = out + "\n";
+            return true;
+        }
         default:
             return false;
         }
@@ -331,7 +377,9 @@ namespace solaris
     {
         Project &p = mProject;
         if (c.kind == K::TimeInsert || c.kind == K::TimeDelete) return timeCommand(c, err);
-        if (c.kind == K::LaneGroup || c.kind == K::LaneUngroup || c.kind == K::ClipsMove || c.kind == K::LaneMove) return groupCommand(c, err);
+        if (c.kind == K::LaneGroup || c.kind == K::LaneUngroup || c.kind == K::ClipsMove || c.kind == K::ClipsDuplicate || c.kind == K::ClipsDelete ||
+            c.kind == K::LaneMove)
+            return groupCommand(c, err);
         if (c.kind == K::ClipComp)
         {
             // R-REC-2: a take over a range of the clip — what it covers overwritten; the ranges kept apart and in order

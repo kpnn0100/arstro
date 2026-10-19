@@ -870,6 +870,32 @@ namespace
                  automationSong(r);
                  r.settle();
              }},
+            {"clips-box-select",   // R-CLIP-11: a box drawn from the empty space after the song, back over every lane — the clips it
+                                    // touches (MIDI, audio, automation) lit, the last reached still easing in
+             [](sltest::Rig &r) {
+                 automationSong(r);
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect origin = world(tl, artboard::Rect{0, 0, 0, 0});
+                 const artboard::Rect top = world(tl, tl.rowRect(0)), bottom = world(tl, tl.rowRect(tl.rowCount() - 1));
+                 const double x0 = origin.x + tl.beatToX(19.0), x1 = origin.x + tl.beatToX(9.5);
+                 r.drag(x0, top.y + 8.0, x1, bottom.bottom() - 8.0, 8, false);
+                 r.pump(3 * sltest::Rig::kFrameMs);
+             }},
+            {"clips-selection-dragging", // R-CLIP-11: the selection in hand — every selected clip carried with the one held, the
+                                         // originals dimmed where they were
+             [](sltest::Rig &r) {
+                 automationSong(r);
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect origin = world(tl, artboard::Rect{0, 0, 0, 0});
+                 const artboard::Rect top = world(tl, tl.rowRect(0)), bottom = world(tl, tl.rowRect(tl.rowCount() - 1));
+                 r.drag(origin.x + tl.beatToX(19.0), top.y + 8.0, origin.x + tl.beatToX(9.5), bottom.bottom() - 8.0, 8, true);
+                 r.settle();
+                 const artboard::Rect c = world(tl, tl.clipRect("ac_1")); // the drums, on the first row at both sizes
+                 r.drag(c.x + 12.0, sltest::cy(c), c.x + 12.0 + (tl.beatToX(4.0) - tl.beatToX(0.0)), sltest::cy(c), 8, false);
+                 r.settle();
+             }},
             {"automation-clips-easing", // R-AUTO-14: the pump's dip moved from a shell — both its clips' curves easing there at once
              [](sltest::Rig &r) {
                  automationSong(r);

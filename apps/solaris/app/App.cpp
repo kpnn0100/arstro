@@ -236,10 +236,10 @@ namespace solaris_ui
             {undo + keyHint(m, "song.undo"), [this] { dispatch("undo"); }},
             {redo + keyHint(m, "song.redo"), [this] { dispatch("redo"); }},
             {say("Show History Tree\xE2\x80\xA6"), [this] { openHistory(); }}, // R-HIST-3, as cosmo's History menu has it
-            {say("Duplicate Clip") + keyHint(m, "lanes.duplicate"), [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip duplicate " + c); }},
+            {say("Duplicate Clip") + keyHint(m, "lanes.duplicate"), [this] { songAction(mHooks.model ? mHooks.model() : emptyModel(), "lanes.duplicate"); }},
             {say("Copy Clip") + keyHint(m, "lanes.copy"), [this] { songAction(mHooks.model ? mHooks.model() : emptyModel(), "lanes.copy"); }},
             {say("Paste Clip") + keyHint(m, "lanes.paste"), [this] { pasteClip(mHooks.model ? mHooks.model() : emptyModel()); }},
-            {say("Delete Clip") + keyHint(m, "lanes.delete"), [this] { const auto c = selectedClip(); if (!c.empty()) dispatch("clip delete " + c); }},
+            {say("Delete Clip") + keyHint(m, "lanes.delete"), [this] { songAction(mHooks.model ? mHooks.model() : emptyModel(), "lanes.delete"); }},
             {say("Split Clip at the Time Bar") + keyHint(m, "lanes.split"), [this] { songAction(mHooks.model ? mHooks.model() : emptyModel(), "lanes.split"); }},
         });
         setMenuWords(3, say("View"), {
@@ -850,22 +850,35 @@ namespace solaris_ui
     bool App::pasteClip(const solaris::AppModel &m)
     {
         // R-CLIP-10: a duplicate of the copied clip on its own lane, AT THE TIME BAR — ONE line; again, the time bar
-        // unmoved, right after the last copy
+        // unmoved, right after the last copy. R-CLIP-11: copied clips, the earliest at the time bar and the rest keeping
+        // their spacing and lanes — ONE line too
         if (mClipClipboard.empty()) return false;
-        const solaris::ClipModel *src = nullptr;
-        for (const auto &c : m.clips)
-            if (c.id == mClipClipboard) src = &c;
-        if (!src) { showToast(say("{1} is gone \xE2\x80\x94 copy a clip again", mClipClipboard)); mClipClipboard.clear(); return true; }
+        double first = 1e300, last = -1e300;
+        for (const auto &id : mClipClipboard)
+        {
+            const solaris::ClipModel *src = nullptr;
+            for (const auto &c : m.clips)
+                if (c.id == id) src = &c;
+            if (!src) { showToast(say("{1} is gone \xE2\x80\x94 copy a clip again", id)); mClipClipboard.clear(); return true; }
+            first = std::min(first, src->at);
+            last = std::max(last, src->at + src->length);
+        }
         const double pos = m.transport.position;
         const double at = mPasteAt >= 0.0 && std::fabs(pos - mPasteAt) < 1e-9 ? mPasteNext : pos;
-        const double length = src->length;
-        mProject->timeline().expectCopy(false); // the copy is selected (it fades in: nothing showed it yet)
-        char b[32];
-        std::snprintf(b, sizeof b, "%.6g", std::round(at * 960.0) / 960.0); // on the tick
-        if (dispatch("clip duplicate " + mClipClipboard + " --at " + b))
+        mProject->timeline().expectCopy(false); // the copies are selected (they fade in: nothing showed them yet)
+        bool ok = false;
+        if (mClipClipboard.size() == 1)
+            ok = dispatch("clip duplicate " + mClipClipboard[0] + " --at " + Timeline::beatText(std::round(at * 960.0) / 960.0)); // on the tick
+        else
+        {
+            std::string ids;
+            for (const auto &id : mClipClipboard) ids += (ids.empty() ? "" : " ") + id;
+            ok = dispatch("clips duplicate \"" + ids + "\" --by " + Timeline::beatText(std::round((at - first) * 960.0) / 960.0));
+        }
+        if (ok)
         {
             mPasteAt = pos;
-            mPasteNext = at + length;
+            mPasteNext = at + (last - first);
         }
         return true;
     }
@@ -902,20 +915,34 @@ namespace solaris_ui
         if (id == "song.undo") return dispatch("undo");
         if (id == "song.redo") return dispatch("redo"); // R-EDM-1
         if (id == "lanes.paste") return pasteClip(m);
-        const std::string sel = mProject->timeline().selectedClip();
+        // R-CLIP-11: what is done to the selected clip is done to the selection — ONE line however many
+        const std::vector<std::string> sel = mProject->timeline().selectedClips();
         if (sel.empty()) return false;
-        if (id == "lanes.delete") return dispatch("clip delete " + sel);
-        if (id == "lanes.duplicate") return dispatch("clip duplicate " + sel); // a linked copy after it
-        if (id == "lanes.split") return dispatch("clip split " + sel + " --at " + Timeline::beatText(std::round(m.transport.position * 960.0) / 960.0)); // R-EDIT-1
+        std::string ids;
+        for (const auto &c : sel) ids += (ids.empty() ? "" : " ") + c;
+        if (id == "lanes.delete") return dispatch(sel.size() == 1 ? "clip delete " + ids : "clips delete \"" + ids + "\"");
+        if (id == "lanes.duplicate")
+        {
+            mProject->timeline().expectCopy(false); // the copies are selected, so Duplicate again runs on after them
+            return dispatch(sel.size() == 1 ? "clip duplicate " + ids : "clips duplicate \"" + ids + "\""); // linked copies after them
+        }
+        if (id == "lanes.split") // R-EDIT-1: the clip clicked last
+            return dispatch("clip split " + mProject->timeline().selectedClip() + " --at " + Timeline::beatText(std::round(m.transport.position * 960.0) / 960.0));
         if (id == "lanes.copy")
         {
-            // R-CLIP-10: nothing is sent — the window keeps which clip; Ctrl+V makes the copy
+            // R-CLIP-10: nothing is sent — the window keeps which clips; Ctrl+V makes the copies
             mClipClipboard = sel;
             mPasteAt = -1.0;
             const std::string paste = keyHint(m, "lanes.paste");
-            showToast(paste.empty() ? say("Clip copied \xE2\x80\x94 Paste puts it at the time bar")
-                                    : say("Clip copied \xE2\x80\x94 {1} puts it at the time bar", paste.substr(4, paste.size() - 5)),
-                      false);
+            const std::string n = std::to_string(sel.size());
+            if (sel.size() == 1)
+                showToast(paste.empty() ? say("Clip copied \xE2\x80\x94 Paste puts it at the time bar")
+                                        : say("Clip copied \xE2\x80\x94 {1} puts it at the time bar", paste.substr(4, paste.size() - 5)),
+                          false);
+            else
+                showToast(paste.empty() ? say("{1} clips copied \xE2\x80\x94 Paste puts them at the time bar", n)
+                                        : say("{1} clips copied \xE2\x80\x94 {2} puts them at the time bar", n, paste.substr(4, paste.size() - 5)),
+                          false);
             return true;
         }
         return false;

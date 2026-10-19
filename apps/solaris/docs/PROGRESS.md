@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-17 — N44: the analysis tools; the R-PRO ledger (N1…N44) built.*
+*Last updated: 2026-10-19 — P1: several clips selected by a box and handled together (R-CLIP-11).*
 
 ---
 
 ## NEXT
 
-**► Automation clips are built (R-AUTO-14, O1–O2).** What comes next is the user's call. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► Several clips are selected by a box and handled together (R-CLIP-11, P1).** What comes next is the user's call. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -744,6 +744,16 @@ setting replaced by clips that repeat, old songs converted.
       automation-clips, automation-clips-easing; 6 mutants red (one survivor made `autoPointAt` report what is drawn).
       R-AUTO-14 DONE.
 
+### P — selecting several clips (user request, 2026-10-19)
+*"user should be able to drag and drop to select multiple object"*. R-CLIP-11.
+- [x] **P1** `clips duplicate` / `clips delete` beside `clips move`; the timeline's selection a set, each clip's ring eased;
+      the box (a drag from empty space, Ctrl+drag anywhere; Shift adds), Shift/Ctrl+click; a selected clip dragged carries
+      the selection (`clips move --by`, Shift: `clips duplicate --by`, the copies selected); Delete, Ctrl+D, Ctrl+C / Ctrl+V
+      on the selection; Duplicate selects its copies (one clip too).
+      — DR-CLIP-11. L2 one, UI one (and the ruler test's Ctrl+D then Delete now takes the selected copy); shots
+      clips-box-select, clips-selection-dragging; 16 mutants red. Found on the way: DR-CLIP-9's anchors were stale
+      before this (re-pointed), and DR-PERF-2's `ownWorkOf` pointed into the wrong file.
+
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
       `implement_artboard`); both apps include them from there.
@@ -759,6 +769,13 @@ setting replaced by clips that repeat, old songs converted.
 ---
 
 ## Decisions log (newest first)
+
+- **2026-10-19 — selecting several clips (R-CLIP-11), decided without a round (the request was one gesture):** the
+  objects are the lanes' clips of every kind (audio, MIDI, automation); the box starts on empty space (Ctrl: anywhere,
+  as the piano roll's), Shift adds; a selection of several moves in time only — one clip still changes lanes; a
+  Shift-drop copies the selection; Delete, Duplicate, Copy and Paste take the selection, each ONE line (`clips
+  duplicate` and `clips delete` are new, beside R-ARR-3's `clips move`); copies are selected, Duplicate's too; Split
+  and Quantize act on the clip clicked last.
 
 - **2026-10-19 — automation clips (Round 23), asked and answered:** Create Pump removed; automation clips live on lanes
   like MIDI clips, each automation its own track, the AUTOMATION section gone; a copy is linked (Make unique forks); the
