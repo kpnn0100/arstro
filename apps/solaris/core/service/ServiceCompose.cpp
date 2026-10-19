@@ -748,6 +748,7 @@ namespace solaris
         auto clipLine = [&](const Clip &c) {
             o << "  " << c.id << " @" << beatText(c.at) << " len " << beatText(clipLengthBeats(p, c)) << " ";
             if (c.isAudio()) o << q(c.src);
+            else if (c.isAuto()) { o << "automation " << c.automation << "\n"; return; } // R-AUTO-14: it plays through nothing
             else o << c.pattern;
             o << " via " << c.track << "\n";
         };
@@ -758,6 +759,7 @@ namespace solaris
                 if (const LaneGroup *g = p.group(l->group)) o << "group " << g->id << " " << q(g->name) << (g->folded ? " · folded" : "") << "\n";
             lastGroup = l->group;
             o << "lane " << l->id << " " << q(laneTitle(p, *l)) << (l->track.empty() ? std::string() : " · track of " + l->track)
+              << (l->automation.empty() ? std::string() : " · track of " + l->automation)
               << (l->group.empty() ? std::string() : " · in " + l->group) << "\n";
             for (const auto &c : p.clips)
                 if (c.lane == l->id) clipLine(c);
@@ -791,9 +793,12 @@ namespace solaris
         for (const auto &a : p.automations)
         {
             std::string drives;
-            for (const auto &address : readersOf(a.id)) drives += (drives.empty() ? "" : ", ") + address;
-            o << "automation " << a.id << " " << q(a.name) << " " << countOf(a.points.size(), "point", "points")
-              << (drives.empty() ? " · drives nothing" : " → " + drives) << "\n";
+            size_t clips = 0;
+            for (const auto &c : p.clips) clips += c.automation == a.id ? 1 : 0;
+            if (!a.of.empty()) drives = "as " + a.of; // R-AUTO-14: a copy drives what its first drives
+            else for (const auto &address : readersOf(a.id)) drives += (drives.empty() ? "" : ", ") + address;
+            o << "automation " << a.id << " " << q(a.name) << " " << beatText(a.length) << " beats · " << countOf(a.points.size(), "point", "points")
+              << " · " << countOf(clips, "clip", "clips") << (drives.empty() ? " · drives nothing" : " → " + drives) << "\n";
         }
         return o.str();
     }
@@ -839,12 +844,14 @@ namespace solaris
         }
         else if (const Clip *c = p.clip(id))
         {
-            o << c->id << " " << (c->isAudio() ? "audio" : "note") << " clip " << q(c->name) << "\n";
+            o << c->id << " " << (c->isAudio() ? "audio" : c->isAuto() ? "automation" : "note") << " clip " << q(c->name) << "\n";
             field("at", beatText(c->at));
-            field("length", beatText(clipLengthBeats(p, *c)) + (c->length > 0 ? "" : " (its " + std::string(c->isAudio() ? "file's" : "pattern's") + ")"));
+            field("length", beatText(clipLengthBeats(p, *c)) +
+                                (c->length > 0 ? "" : " (its " + std::string(c->isAudio() ? "file's" : c->isAuto() ? "automation's" : "pattern's") + ")"));
             if (c->isAudio()) { field("src", c->src); field("in", canonicalSeconds(c->in) + " s"); field("out", canonicalSeconds(c->out) + " s"); }
+            else if (c->isAuto()) field("automation", c->automation); // R-AUTO-14
             else field("pattern", c->pattern);
-            field("strip", c->track);
+            if (!c->isAuto()) field("strip", c->track);
             field("lane", c->lane.empty() ? "(none)" : c->lane);
             if (c->gain != 0) field("gain", canonicalNumber(c->gain) + " dB");
             if (c->fadeIn != 0) field("fadeIn", beatText(c->fadeIn));
@@ -887,6 +894,13 @@ namespace solaris
             o << a->id << " automation " << q(a->name) << "\n";
             field("range", canonicalNumber(a->min) + " … " + canonicalNumber(a->max) + (a->unit.empty() ? "" : " " + a->unit));
             if (!a->from.empty()) field("from", a->from);
+            field("length", beatText(a->length) + " beats (its own time; a clip longer repeats it)"); // R-AUTO-14
+            field("rest", canonicalNumber(a->rest) + " (before its first clip)");
+            if (!a->of.empty()) field("copy of", a->of + " — it drives what that one drives");
+            std::string clips;
+            for (const auto &c : p.clips)
+                if (c.automation == a->id) clips += (clips.empty() ? "" : ", ") + c.id + " @" + beatText(c.at);
+            field("clips", clips.empty() ? "(none — `clip add --auto " + a->id + "`)" : clips);
             for (const auto &pt : a->points) field("point", "@" + beatText(pt.at) + " " + canonicalNumber(pt.value) + " " + pt.shape);
         }
         else if (const Port *po = p.port(id))

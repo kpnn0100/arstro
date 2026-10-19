@@ -122,7 +122,18 @@ namespace solaris
             bool ok = true;
             for (const auto &name : ob.formula.names)
             {
-                if (p.automation(name)) { ob.reads.push_back(name); continue; }
+                if (const Automation *a = p.automation(name))
+                {
+                    if (!a->of.empty()) // R-AUTO-14: a clip's own curve drives the automation it is a copy of
+                    {
+                        problems.push_back(b.address + ": formula `" + b.formula + "` reads " + name + ", a copy of " + a->of + "'s curve — read " + a->of +
+                                           " (its clips, copies included, are what it plays)");
+                        ok = false;
+                        break;
+                    }
+                    ob.reads.push_back(name);
+                    continue;
+                }
                 AddressSpec other;
                 std::string why;
                 if (describeAddress(p, name, other, why)) { ob.reads.push_back(name); continue; }

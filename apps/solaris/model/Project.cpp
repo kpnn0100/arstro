@@ -48,7 +48,13 @@ namespace solaris
     Lane *Project::lane(const std::string &id) { return findId(lanes, id); }
     std::string laneTitle(const Project &p, const Lane &l)
     {
-        if (!l.name.empty() || l.track.empty()) return l.name;
+        if (!l.name.empty()) return l.name;
+        if (!l.automation.empty()) // R-AUTO-14: an automation's track shows its name
+        {
+            const Automation *a = p.automation(l.automation);
+            return a ? a->name : l.name;
+        }
+        if (l.track.empty()) return l.name;
         const Strip *s = p.strip(l.track);
         return s ? s->name : l.name;
     }
@@ -353,6 +359,7 @@ namespace solaris
             if (k == "id") n.id = v;
             else if (k == "name") n.name = v;
             else if (k == "track") n.track = v;
+            else if (k == "auto") n.automation = v; // R-AUTO-14
             else if (k == "group") n.group = v; // R-ARR-3
             else if (k == "order") n.order = r.integer(k, v, 0);
             else if (k == "colour") n.colour = r.integer(k, v, -1);
@@ -470,6 +477,7 @@ namespace solaris
             else if (k == "lane") n.lane = v;
             else if (k == "src") n.src = v;
             else if (k == "pattern") n.pattern = v;
+            else if (k == "auto") n.automation = v; // R-AUTO-14
             else if (k == "at") n.at = toTick(r.num(k, v, 0.0));
             else if (k == "in") n.in = r.num(k, v, 0.0);
             else if (k == "out") n.out = r.num(k, v, 0.0);
@@ -494,9 +502,11 @@ namespace solaris
             else if (k == "from") n.from = v;
             else if (k == "min") n.min = r.num(k, v, 0.0);
             else if (k == "max") n.max = r.num(k, v, 1.0);
-            else if (k == "loop") n.loop = toTick(r.num(k, v, 0.0)); // R-AUTO-12
+            else if (k == "of") n.of = v;                                 // R-AUTO-14
+            else if (k == "rest") n.rest = r.num(k, v, 0.0);
+            else if (k == "length") n.length = toTick(r.num(k, v, 0.0)); // R-AUTO-14 (an older song's: R-AUTO-12's span)
+            else if (k == "loop") n.loop = toTick(r.num(k, v, 0.0));     // R-AUTO-12, withdrawn: an older song's, adopted
             else if (k == "at") n.at = toTick(r.num(k, v, 0.0));
-            else if (k == "length") n.length = toTick(r.num(k, v, 0.0));
             else n.unknown.emplace_back(k, v);
         }
         void apply(Reader &r, AutoPoint &n, const std::string &k, const std::string &v)
@@ -525,6 +535,89 @@ namespace solaris
         }
     }
 
+    namespace
+    {
+        int beatsPerBarOf(const Project &p) { return std::max(1, std::atoi(p.header.sig.c_str())); }
+        double wholeBars(const Project &p, double beats)
+        {
+            const double bar = beatsPerBarOf(p);
+            return std::max(bar, std::ceil(beats / bar - 1e-9) * bar);
+        }
+        /** Where the song ends, as the model alone can tell (no file's duration but its seconds at the song's tempo). */
+        double roughSongEnd(const Project &p)
+        {
+            double end = 0.0;
+            for (const auto &c : p.clips)
+            {
+                double len = c.length;
+                if (len <= 0 && c.isAudio()) len = (c.out - c.in) * p.header.bpm / 60.0;
+                if (len <= 0 && !c.pattern.empty())
+                    if (const Pattern *pt = p.pattern(c.pattern)) len = pt->length;
+                end = std::max(end, c.at + len);
+            }
+            for (const auto &m : p.markers) end = std::max(end, m.at + m.length);
+            for (const auto &a : p.automations)
+                for (const auto &pt : a.points) end = std::max(end, pt.at);
+            return end;
+        }
+        /** An older song's curve at beat `t` — between two points a line (a hold holds); the shapes beyond linear are
+         *  the engine's, so a smooth or bezier segment is read as its chord: close enough for where a cycle ends. */
+        double legacyValueAt(const Automation &a, double t)
+        {
+            if (a.points.empty()) return a.min;
+            if (t <= a.points.front().at) return a.points.front().value;
+            for (size_t i = 0; i + 1 < a.points.size(); ++i)
+            {
+                const AutoPoint &x = a.points[i], &y = a.points[i + 1];
+                if (t < y.at)
+                {
+                    if (x.shape == "hold" || !(y.at > x.at)) return x.value;
+                    return x.value + (y.value - x.value) * (t - x.at) / (y.at - x.at);
+                }
+            }
+            return a.points.back().value;
+        }
+    }
+
+    // R-AUTO-14: a song saved before automation clips had its automations' points in the SONG's beats. Each becomes an
+    // automation with a track and ONE clip that plays exactly what it played: a clip at 0 as long as its points reach,
+    // in whole bars, resting at its first value; an R-AUTO-12 loop, an automation as long as its cycle and a clip over its
+    // span, resting where a cycle ends (a span that ended mid-cycle now holds where it stops — the one difference)
+    void adoptAutomationClips(Project &p, std::vector<std::string> &notes)
+    {
+        int order = 0;
+        for (const auto &l : p.lanes) order = std::max(order, l.order + 1);
+        for (auto &a : p.automations)
+        {
+            Clip c;
+            if (a.loop > 0)
+            {
+                c.at = a.at;
+                c.length = a.length > 0 ? a.length : std::max(a.loop, toTick(wholeBars(p, roughSongEnd(p)) - a.at));
+                a.rest = std::min(std::max(legacyValueAt(a, a.loop), a.min), a.max);
+                a.length = a.loop;
+                notes.push_back(a.id + " looped every " + canonicalBeats(a.loop) + " beats: it is a clip of it from beat " + canonicalBeats(c.at) +
+                                " for " + canonicalBeats(c.length) + " now (R-AUTO-14)");
+            }
+            else
+            {
+                a.length = toTick(wholeBars(p, a.points.empty() ? 0.0 : a.points.back().at));
+                a.rest = a.points.empty() ? a.min : std::min(std::max(a.points.front().value, a.min), a.max);
+                notes.push_back(a.id + " is a clip on its own track now, from beat 0 (R-AUTO-14)");
+            }
+            a.loop = a.at = 0.0;
+            Lane l;
+            l.id = p.nextId("ln");
+            l.automation = a.id;
+            l.order = order++;
+            p.lanes.push_back(l);
+            c.id = p.nextId("ac");
+            c.automation = a.id;
+            c.lane = l.id;
+            p.clips.push_back(c);
+        }
+    }
+
     bool parseProject(const std::string &text, Project &out, std::string &err, ParseReport *report)
     {
         Project p;
@@ -535,7 +628,7 @@ namespace solaris
         // What a continuation line or a comment attaches to.
         enum class Cur { None, Port, Mixer, Strip, Send, Rack, Device, Lane, Group, Pattern, Note, Expr, Clip, Auto, Point, Bind, Marker, Tempo, Raw, Version, Scene, Slot, Video, Chord };
         Cur cur = Cur::None;
-        bool seenNode = false, sawMagic = false, sawTracks = false;
+        bool seenNode = false, sawMagic = false, sawTracks = false, sawAutoClips = false;
         std::map<std::string, std::vector<Note>> inlineNotes; // note clips written the suite's inline way
 
         auto remarksOfCurrent = [&]() -> Remarks * {
@@ -723,6 +816,11 @@ namespace solaris
                     if (value != "on") { err = "tracks `" + value + "`: the only value is `on` (R-LANE-3)"; return false; }
                     sawTracks = true;
                 }
+                else if (key == "autoclips")
+                {
+                    if (value != "on") { err = "autoclips `" + value + "`: the only value is `on` (R-AUTO-14)"; return false; }
+                    sawAutoClips = true;
+                }
                 else p.header.unknown.emplace_back(key, value);
                 continue;
             }
@@ -818,6 +916,7 @@ namespace solaris
             }
             std::stable_sort(a.points.begin(), a.points.end(), [](const AutoPoint &x, const AutoPoint &y) { return x.at < y.at; });
         }
+        if (!sawAutoClips) adoptAutomationClips(p, r.report->notes); // R-AUTO-14: a song from before automation clips
 
         const auto errors = validateProject(p);
         if (!errors.empty())
@@ -903,6 +1002,7 @@ namespace solaris
             out += headerLine("masterOut", v);
         }
         out += headerLine("tracks", "on"); // R-LANE-3: lanes may be tracks — a file without the line predates them
+        out += headerLine("autoclips", "on"); // R-AUTO-14: automations are placed by clips — a file without it predates them
         if (h.launchQuantize != "bar") out += headerLine("launchQuantize", h.launchQuantize); // R-LAUNCH-1: only when not a bar
         for (const auto &u : h.unknown) out += headerLine(u.first, quoteIfNeeded(u.second));
         for (const auto &c : h.comments) out += c + "\n";
@@ -961,7 +1061,8 @@ namespace solaris
         for (const auto &n : p.lanes)
         {
             Line l("alane");
-            l.kv("id", n.id).str("name", n.name).kvIf(!n.track.empty(), "track", n.track).kvIf(!n.group.empty(), "group", n.group).kv("order", std::to_string(n.order));
+            l.kv("id", n.id).str("name", n.name).kvIf(!n.track.empty(), "track", n.track).kvIf(!n.automation.empty(), "auto", n.automation)
+                .kvIf(!n.group.empty(), "group", n.group).kv("order", std::to_string(n.order));
             if (n.colour >= 0) l.kv("colour", std::to_string(n.colour));
             emit(out, "", l.unknown(n.unknown), n.remarks);
         }
@@ -981,6 +1082,13 @@ namespace solaris
         for (const auto &n : p.clips)
         {
             Line l("aclip");
+            if (n.isAuto()) // R-AUTO-14: an automation clip sounds through nothing — its automation, its place, its length
+            {
+                l.kv("id", n.id).strIf("name", n.name).kv("auto", n.automation).strIf("lane", n.lane).kv("at", canonicalBeats(n.at));
+                if (n.length > 0) l.kv("length", canonicalBeats(n.length));
+                emit(out, "", l.unknown(n.unknown), n.remarks);
+                continue;
+            }
             l.kv("id", n.id).strIf("name", n.name).kv("track", n.track).strIf("lane", n.lane);
             if (n.isAudio())
             {
@@ -1013,13 +1121,7 @@ namespace solaris
         {
             Line l("aauto");
             l.kv("id", n.id).str("name", n.name).strIf("unit", n.unit).kv("min", canonicalNumber(n.min)).kv("max", canonicalNumber(n.max))
-                .strIf("from", n.from);
-            if (n.loop > 0) // R-AUTO-12: written only when it loops — a song that never loops reads as it always did
-            {
-                l.kv("loop", canonicalBeats(n.loop));
-                if (n.at > 0) l.kv("at", canonicalBeats(n.at));
-                if (n.length > 0) l.kv("length", canonicalBeats(n.length));
-            }
+                .strIf("from", n.from).strIf("of", n.of).kv("length", canonicalBeats(n.length)).kv("rest", canonicalNumber(n.rest)); // R-AUTO-14
             emit(out, "", l.unknown(n.unknown), n.remarks);
             for (const auto &x : n.points)
             {
@@ -1316,6 +1418,13 @@ namespace solaris
         }
         for (const auto &l : p.lanes)
         {
+            if (!l.automation.empty()) // R-AUTO-14: an automation's track — the first's, never with an instrument's
+            {
+                const Automation *a = p.automation(l.automation);
+                if (!l.track.empty()) e.push_back("lane " + l.id + " is the track of " + l.track + " and of " + l.automation + " — one or the other");
+                if (!a) e.push_back("lane " + l.id + " is the track of `" + l.automation + "`, which is no automation");
+                else if (!a->of.empty()) e.push_back("lane " + l.id + " is the track of " + a->id + ", a copy — a track is the first's (" + a->of + ")");
+            }
             // R-LANE-3: a track belongs to an instrument
             if (l.track.empty()) continue;
             const Strip *s = p.strip(l.track);
@@ -1324,6 +1433,24 @@ namespace solaris
         }
         for (const auto &c : p.clips)
         {
+            const Lane *onLane = c.lane.empty() ? nullptr : p.lane(c.lane);
+            if (c.isAuto()) // R-AUTO-14: an automation clip — on a plain lane or its automation's track; it sounds through nothing
+            {
+                if (!c.src.empty() || !c.pattern.empty()) e.push_back("clip " + c.id + " plays an automation and a " + (c.src.empty() ? "pattern" : "file") + " — one of them");
+                if (!c.track.empty()) e.push_back("automation clip " + c.id + " plays through no strip, not `" + c.track + "`");
+                if (!p.automation(c.automation)) { e.push_back("clip " + c.id + " plays `" + c.automation + "`, which is no automation"); continue; }
+                if (!c.lane.empty() && !onLane) e.push_back("clip " + c.id + " is on lane `" + c.lane + "`, which does not exist");
+                if (onLane && !onLane->track.empty())
+                    e.push_back("automation clip " + c.id + " is on " + onLane->id + ", the track of " + onLane->track + " — an instrument's track holds notes (R-AUTO-14)");
+                if (onLane && !onLane->automation.empty() && onLane->automation != automationRoot(p, c.automation))
+                    e.push_back("automation clip " + c.id + " is on " + onLane->id + ", the track of " + onLane->automation + " — another automation's (R-AUTO-14)");
+                if (c.at < 0 || c.length < 0) e.push_back("clip " + c.id + " starts before the song or lasts less than nothing");
+                if (c.offset != 0) e.push_back("clip " + c.id + ": an automation clip has no offset (Not yet)");
+                continue;
+            }
+            if (onLane && !onLane->automation.empty())
+                e.push_back((c.isAudio() ? "audio clip " : "note clip ") + c.id + " is on " + onLane->id + ", the track of " + onLane->automation +
+                            " — an automation's track holds its clips (R-AUTO-14)");
             const Strip *s = p.strip(c.track);
             if (!s) { e.push_back("clip " + c.id + " plays through `" + c.track + "`, which is no strip"); continue; }
             if (!c.lane.empty() && !p.lane(c.lane)) e.push_back("clip " + c.id + " is on lane `" + c.lane + "`, which does not exist");
@@ -1375,8 +1502,16 @@ namespace solaris
             for (const auto &a : p.automations)
             {
                 if (!(a.min < a.max)) e.push_back(a.id + "'s range " + canonicalNumber(a.min) + "…" + canonicalNumber(a.max) + " is empty");
-                if (!(a.loop >= 0 && a.at >= 0 && a.length >= 0 && std::isfinite(a.loop + a.at + a.length)))
-                    e.push_back(a.id + "'s loop, at and length are beats ≥ 0");
+                if (!(a.length > 0 && std::isfinite(a.length))) e.push_back(a.id + "'s length is beats > 0, not " + canonicalNumber(a.length) + " (R-AUTO-14)");
+                const double slack = 1e-6 * std::max(1.0, std::fabs(a.max - a.min));
+                if (!(a.rest >= a.min - slack && a.rest <= a.max + slack))
+                    e.push_back(a.id + " rests at " + canonicalNumber(a.rest) + ", outside its range " + canonicalNumber(a.min) + "…" + canonicalNumber(a.max));
+                if (!a.of.empty())
+                {
+                    const Automation *f = p.automation(a.of);
+                    if (!f || f == &a) e.push_back(a.id + " is a copy of `" + a.of + "`, which is no other automation");
+                    else if (!f->of.empty()) e.push_back(a.id + " is a copy of " + f->id + ", itself a copy — a copy is of the first (" + f->of + ")");
+                }
                 for (const auto &pt : a.points)
                 {
                     if (pt.shape != "linear" && pt.shape != "hold" && pt.shape != "smooth" && pt.shape != "bezier")
@@ -1578,6 +1713,35 @@ namespace solaris
         mix((unsigned long long)n.pitch);
         mix((unsigned long long)std::llround(n.at * kPpq));
         return (double)(h >> 11) / 9007199254740992.0 < n.chance;
+    }
+}
+}
+
+namespace arstro
+{
+namespace solaris
+{
+    void placeLanesUnder(Project &p, const std::string &under, const std::vector<std::string> &made)
+    {
+        const Lane *u = p.lane(under);
+        if (!u) return;
+        const std::string group = u->group;
+        std::vector<const Lane *> order;
+        for (const auto &l : p.lanes) order.push_back(&l);
+        std::stable_sort(order.begin(), order.end(), [](const Lane *a, const Lane *b) { return a->order < b->order; });
+        std::vector<std::string> ids;
+        for (const Lane *l : order)
+            if (std::find(made.begin(), made.end(), l->id) == made.end()) ids.push_back(l->id);
+        ids.insert(std::find(ids.begin(), ids.end(), under) + 1, made.begin(), made.end());
+        for (size_t i = 0; i < ids.size(); ++i) p.lane(ids[i])->order = (int)i;
+        for (const auto &m : made) p.lane(m)->group = group;
+        gatherLaneGroups(p);
+    }
+
+    std::string automationRoot(const Project &p, const std::string &id)
+    {
+        const Automation *a = p.automation(id);
+        return a && !a->of.empty() ? a->of : id;
     }
 }
 }

@@ -42,7 +42,7 @@ namespace solaris
 
     bool SolarisService::timeCommand(const Command &c, std::string &err)
     {
-        // R-ARR-2: the whole song at once — clips, automation points (a looping automation's span), markers, the loop
+        // R-ARR-2: the whole song at once — clips (an automation's among them, R-AUTO-14), markers, chords, the loop
         Project &p = mProject;
         const double eps = 0.5 / kPpq;
         auto num = [&](const char *name, double &out) {
@@ -55,7 +55,7 @@ namespace solaris
         if (insert ? (!num("at", a) || !num("length", b)) : (!num("from", a) || !num("to", b))) return false;
         if (insert ? !(b > 0) : !(b > a)) { err = insert ? "--length must be more than 0 beats" : "--to must be after --from"; return false; }
         const double span = insert ? b : b - a;
-        size_t clips = 0, gone = 0, autos = 0, marks = 0, chords = 0;
+        size_t clips = 0, gone = 0, marks = 0, chords = 0;
         std::string notes;
         // what crosses an edge and what lies inside: decided before anything moves
         std::vector<std::string> crossing, shortened, inside;
@@ -97,33 +97,7 @@ namespace solaris
                           p.clips.end());
             gone = before - p.clips.size();
         }
-        // automations: a curve's points in song beats; a looping one's span (its points are its cycle's)
-        for (auto &au : p.automations)
-        {
-            bool moved = false;
-            if (au.loop > 0)
-            {
-                const double s = au.at, e = au.length > 0 ? au.at + au.length : 1e300;
-                if (insert)
-                {
-                    if (s >= a - eps) { au.at = toTick(s + span); moved = true; }
-                    else if (au.length > 0 && e > a + eps) { au.length = toTick(au.length + span); moved = true; }
-                }
-                else if (s >= b - eps) { au.at = toTick(s - span); moved = true; }
-                else if (s >= a - eps) { au.at = a; if (au.length > 0) au.length = toTick(std::max(1.0 / kPpq, e - b)); moved = true; }
-                else if (au.length > 0 && e > a + eps) { au.length = toTick(au.length - (std::min(e, b) - a)); moved = true; }
-            }
-            else
-            {
-                const size_t n = au.points.size();
-                if (!insert)
-                    au.points.erase(std::remove_if(au.points.begin(), au.points.end(), [&](const AutoPoint &x) { return x.at >= a - eps && x.at < b - eps; }), au.points.end());
-                moved |= n != au.points.size();
-                for (auto &x : au.points)
-                    if (x.at >= (insert ? a : b) - eps) { x.at = toTick(x.at + (insert ? span : -span)); moved = true; }
-            }
-            autos += moved ? 1 : 0;
-        }
+        // R-AUTO-14: an automation's points are its own beats — they never move; its clips moved above, as clips
         // markers: a place after moves; one inside a deleted span goes; a section across the edit grows or shrinks
         {
             const size_t n = p.markers.size();
@@ -189,7 +163,7 @@ namespace solaris
         auto count = [](size_t k, const char *one, const char *many) { return std::to_string(k) + " " + (k == 1 ? one : many); };
         mOutput = std::string(insert ? "opened " : "took out ") + canonicalBeats(span) + " beats at " + canonicalBeats(a) + ": " + count(clips, "clip", "clips") +
                   (insert ? " moved" : " moved or shortened") + (gone ? ", " + count(gone, "clip", "clips") + " gone" : std::string()) + ", " +
-                  count(autos, "automation", "automations") + ", " + count(marks, "marker", "markers") +
+                  count(marks, "marker", "markers") +
                   (chords ? ", " + count(chords, "chord", "chords") : std::string()) + "\n";
         for (const auto &id : crossing) mOutput += id + " crosses beat " + canonicalBeats(a) + " — it stays (split it to open the gap through it, R-EDIT-1)\n";
         return true;

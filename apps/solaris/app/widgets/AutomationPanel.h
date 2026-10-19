@@ -52,8 +52,8 @@ namespace solaris_ui
         double nowTarget() const { return mNowTarget; }
         artboard::Rect renameRect() const;
         /** R-AUTO-12: the Loop combo box in the header (Off, 1/4 … 4 bars) — one `set <au>.loop=` line. */
-        artboard::Rect loopRect() const;
-        class SettingCombo &loopCombo() { return *mLoop; }
+        artboard::Rect lengthRect() const;
+        class SettingCombo &lengthCombo() { return *mLength; }
 
         std::function<bool(const std::string &line)> onCommand;
         std::function<void(const std::string &current, artboard::Point world, std::function<void(const std::string &)> done)> onRename;
@@ -73,10 +73,10 @@ namespace solaris_ui
 
         std::string mAu;
         solaris::AutomationModel mModel;
-        std::shared_ptr<class SettingCombo> mLoop;
-        std::vector<double> mLoopBeats;        // the combo's options, in beats (0 = Off)
-        std::vector<std::string> mLoopWords;   // … and their words (R-ACCESS-2), shown again when the language changes
-        std::string mLoopLang;
+        std::shared_ptr<class SettingCombo> mLength;
+        std::vector<double> mLengthBeats;        // the combo's options, in beats
+        std::vector<std::string> mLengthWords;   // … and their words (R-ACCESS-2), shown again when the language changes
+        std::string mLengthLang;
         bool mPresent = false, mPlaying = false;
         double mPosition = 0.0;
         interstellar_v1::AnimatedRows<Row> mRows;

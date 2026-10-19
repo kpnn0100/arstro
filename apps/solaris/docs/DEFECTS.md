@@ -53,7 +53,7 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 ### D-21 The keyboard-recording test's held note once fell outside 0.25 … 1.0 beats again (D-11's widened window)
 - **Found:** 2026-10-17, N35 part 3: one run of `solaris_service` alone (load ~2.5–3) failed
   `test_record_the_keyboard_into_a_clip` at `pt->notes[0].length > 0.25 && pt->notes[0].length < 1.0`
-  (core/tests/serviceTests.cpp:2417); three runs straight after, green. Nothing in N35 touches recording.
+  (core/tests/serviceTests.cpp:2523); three runs straight after, green. Nothing in N35 touches recording.
 - **Suspected cause:** as D-11 — a key is stamped where the AUDIO thread drains it, and the test thread's sleeps between
   the press and the release are wall-clock; a descheduled test thread (or audio thread) stretches or squeezes the
   held length past the window D-11 widened it to. The value was not printed, so which side it fell is not known.

@@ -305,7 +305,9 @@ namespace solaris
         std::vector<const Lane *> lanes;
         for (const auto &l : p.lanes) lanes.push_back(&l);
         std::stable_sort(lanes.begin(), lanes.end(), [](const Lane *a, const Lane *b) { return a->order < b->order; });
-        for (const Lane *l : lanes) mModel.lanes.push_back(LaneModel{l->id, laneTitle(p, *l), l->order, l->colour, l->track, !l->name.empty() || l->track.empty(), l->group});
+        for (const Lane *l : lanes)
+            mModel.lanes.push_back(LaneModel{l->id, laneTitle(p, *l), l->order, l->colour, l->track, !l->name.empty() || (l->track.empty() && l->automation.empty()), l->group,
+                                             l->automation});
         for (const Lane *l : lanes) // R-ARR-3: in the order of their first lanes
         {
             const LaneGroup *g = l->group.empty() ? nullptr : p.group(l->group);
@@ -317,7 +319,7 @@ namespace solaris
 
         std::map<std::string, int> uses;
         for (const auto &c : p.clips)
-            if (!c.isAudio()) ++uses[c.pattern];
+            if (!c.isAudio()) ++uses[c.isAuto() ? c.automation : c.pattern]; // R-AUTO-14: an automation clip's are its automation's
         for (const auto &c : p.clips)
         {
             ClipModel cm;
@@ -325,7 +327,8 @@ namespace solaris
             cm.name = c.name;
             cm.track = c.track;
             cm.lane = c.lane;
-            cm.kind = c.isAudio() ? "audio" : "note";
+            cm.kind = c.isAudio() ? "audio" : c.isAuto() ? "automation" : "note";
+            cm.automation = c.automation; // R-AUTO-14
             cm.src = c.src;
             cm.pattern = c.pattern;
             cm.at = c.at;
@@ -347,7 +350,7 @@ namespace solaris
                 const std::string path = resolvePath(c.src);
                 cm.offline = mOffline.count(path) || (!mPcm.count(path) && !std::ifstream(path).good());
             }
-            else cm.linked = uses[c.pattern];
+            else cm.linked = uses[c.isAuto() ? c.automation : c.pattern];
             for (const auto &t : c.takes) cm.takes.push_back(t.src); // R-REC-2
             for (const auto &x : c.comp) cm.comp.push_back(ClipModel::CompModel{x.take, x.from, x.to});
             if (!c.takes.empty()) // R-REC-2: the runs the compile plays — computed here once, so a front end only draws them
@@ -502,14 +505,17 @@ namespace solaris
             am.from = a.from;
             am.min = a.min;
             am.max = a.max;
-            am.loop = a.loop;
-            am.at = a.at;
+            am.loop = a.length; // R-AUTO-14: the cycle its clips repeat; R-AUTO-12's `at` retired (0)
             am.length = a.length;
+            am.rest = a.rest;
+            am.of = a.of;
+            for (const auto &c : p.clips) am.clips += c.automation == a.id;
             for (const auto &pt : a.points)
                 am.points.push_back(AutoPointModel{pt.at, pt.value, pt.shape, pt.speedIn, pt.inflIn, pt.speedOut, pt.inflOut});
             for (const auto &bm : mModel.bindings)
-                if (std::find(bm.reads.begin(), bm.reads.end(), a.id) != bm.reads.end()) am.usedBy.push_back(bm.address);
-            mNowCurves.push_back(compileCurve(a, mNowSpb)); // the engine's curve: `now` is what the audio plays there
+                if (std::find(bm.reads.begin(), bm.reads.end(), automationRoot(p, a.id)) != bm.reads.end()) am.usedBy.push_back(bm.address); // a copy drives its first's
+            const Automation *root = p.automation(automationRoot(p, a.id)); // R-AUTO-14: a copy plays as its first
+            mNowCurves.push_back(compileCurve(p, root ? *root : a, mNowSpb)); // the engine's curve: `now` is what the audio plays there
             mModel.automations.push_back(am);
         }
         // R-MIX-16: what each formula evaluates to where the transport is. While playing, the values the

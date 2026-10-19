@@ -1393,89 +1393,63 @@ static void test_the_pointer_says_a_drag_resizes()
     pass("The pointer says a drag resizes (R-UI-14): ↔ a clip's end, the brace's ends, a note's end and the pattern's end; ↕ the dock's top edge and a velocity bar; ⤡ a window's corner — where a press takes them, kept while in hand; a window covers the lanes; a modal is the arrow");
 }
 
-static void test_a_looping_automation_is_seen_and_made()
+static void test_an_automation_is_made_with_its_clip_and_sized_in_its_window()
 {
-    // R-AUTO-12/13 in the window: Create Pump from a fader's menu; the row's span drawn and its grips dragged (one line
-    // each); a span set elsewhere eases; a click in a repeat adds the point in the cycle; the window's Loop combo
-    using arstro::solaris_ui::Cursor;
-    sltest::Rig r("ui-autoloop", 1280, 800);
-    r.cmd("project new " + r.song("Loop") + ".slp --bpm 120");
+    // R-AUTO-14 (O1) in the window: a fader's menu offers Create Automation — and no Create Pump (R-AUTO-13 withdrawn); the
+    // one line makes the automation with its track and its clip; its window says its length, rest and clips, and the
+    // Length combo (R-AUTO-12's Loop combo replaced) is ONE line, its label cross-fading
+    sltest::Rig r("ui-autolength", 1280, 800);
+    r.cmd("project new " + r.song("Length") + ".slp --bpm 120");
     r.cmd("clip add --src " + r.dir + "/kick.wav --at 0 --length 16");
     r.settle();
-    // a fader's menu: Create Pump is ONE line
     auto &dock = r.app->project().dock();
     const std::string ch = r.svc->model().clips[0].track;
     const artboard::Rect fader = world(dock, dock.faderRect(ch));
     r.click(cx(fader), cy(fader), 2);
     r.settle();
-    auto &menu = r.app->menu();
-    int pump = -1;
-    for (int k = 0; k < menu.itemCount(); ++k)
-        if (menu.item(k).label == "Create Pump") pump = k;
-    assert(menu.isOpen() && pump >= 0);
-    r.click(menu.itemRect(pump));
+    auto item = [&](const std::string &label) {
+        for (int k = 0; k < r.app->menu().itemCount(); ++k)
+            if (r.app->menu().item(k).label == label) return k;
+        return -1;
+    };
+    assert(r.app->menu().isOpen() && item("Create Automation") >= 0 && item("Create Pump") < 0);
+    r.click(r.app->menu().itemRect(item("Create Automation")));
     r.settle();
-    assert(sentLine(r, "auto create " + ch + ".gain --pump") && r.svc->model().automations.size() == 1 && r.svc->model().automations[0].loop == 1.0);
-    r.cmd("set au_1.at=4 au_1.length=8");
-    r.settle();
+    const auto &m = r.svc->model();
+    assert(sentLine(r, "auto create " + ch + ".gain") && m.automations.size() == 1 && m.automations[0].length == 16.0 && m.automations[0].clips == 1);
+    bool track = false, clip = false;
+    for (const auto &l : r.svc->model().lanes) track = track || (l.automation == "au_1" && l.name == r.svc->model().automations[0].name);
+    for (const auto &c : r.svc->model().clips) clip = clip || (c.kind == "automation" && c.automation == "au_1" && c.at == 0.0 && c.length == 16.0);
+    assert(track && clip);
+    // its window: a double-click on its row's header
     auto &tl = r.app->project().timeline();
     const artboard::Rect lanes = world(tl, tl.rowRect(0));
     r.app->wheel(lanes.x + 400.0, lanes.y + 10.0, -4.0); // bring the automation row into view
     r.settle();
-    artboard::Rect span = world(tl, tl.autoSpanRect("au_1"));
-    const artboard::Rect origin = world(tl, artboard::Rect{0, 0, 0, 0});
-    assert(span.w > 0.0 && std::fabs(span.x - (origin.x + tl.beatToX(4.0))) < 0.5 && std::fabs(span.right() - (origin.x + tl.beatToX(12.0))) < 0.5);
-    // its grips: the resize cursor; the end dragged two beats on is ONE line
-    r.app->pointer(1, span.right(), span.y + 4.0, 0, r.now);
-    r.frame();
-    assert(r.app->cursor() == Cursor::ResizeH);
-    const double twoBeats = tl.beatToX(2.0) - tl.beatToX(0.0);
-    r.drag(span.right(), span.y + 4.0, span.right() + twoBeats, span.y + 4.0, 8);
-    assert(r.sent.back() == "set au_1.length=10" && r.svc->model().automations[0].length == 10.0);
-    r.settle();
-    // the start dragged a beat on: ONE line, the end kept
-    span = world(tl, tl.autoSpanRect("au_1"));
-    r.drag(span.x, span.y + 4.0, span.x + twoBeats * 0.5, span.y + 4.0, 8);
-    assert(r.sent.back() == "set au_1.at=5 au_1.length=9" && r.svc->model().automations[0].at == 5.0);
-    r.settle();
-    // set from a shell: the span eases there
-    span = world(tl, tl.autoSpanRect("au_1"));
-    r.cmd("set au_1.at=8 au_1.length=4");
-    double x = span.x;
-    for (int k = 0; k < 20 && x == span.x; ++k) { r.frame(); x = world(tl, tl.autoSpanRect("au_1")).x; }
-    assert(x > span.x && x < origin.x + tl.beatToX(8.0) - 0.5);
-    r.settle();
-    // a click in a REPEAT adds its point in the cycle (beat 10.25, snapped, is a place in the third repeat)
     const artboard::Rect row = world(tl, tl.autoRowRect("au_1"));
-    r.click(origin.x + tl.beatToX(10.25), row.y + row.h * 0.5);
-    for (int k = 0; k < 40; ++k) r.frame(); // a click waits out a double-click
-    {
-        // on the grid you see, then folded into the cycle: never a beat past the first one
-        const double want = std::fmod(tl.snap(10.25) - 8.0, 1.0);
-        assert(r.sent.back().rfind("auto point add au_1 --at " + arstro::solaris_ui::Timeline::beatText(want) + " --value ", 0) == 0);
-    }
-    r.settle();
-    // its window: the Loop combo — a row picked is ONE line
     r.click(row.x + 30.0, row.y + row.h * 0.5);
     r.click(row.x + 30.0, row.y + row.h * 0.5);
     r.settle();
     auto *ap = r.app->project().windows().automationPanel("au_1");
     assert(ap);
-    auto &combo = ap->loopCombo();
-    assert(combo.shown() == "1 beat");
-    const artboard::Rect field = world(*ap, ap->loopRect());
+    std::vector<std::string> said;
+    for (const auto &d : r.wordsOf(*ap)) said.push_back(d.text);
+    for (const char *w : {"Length", "Rest", "Clips", "a clip longer repeats it", "before its first clip"}) assert(std::find(said.begin(), said.end(), std::string(w)) != said.end());
+    auto &combo = ap->lengthCombo();
+    assert(combo.shown() == "4 bars");
+    const artboard::Rect field = world(*ap, ap->lengthRect());
     r.click(cx(field), cy(field));
     r.settle();
     assert(combo.isOpen());
     const auto pop = combo.popup();
-    r.click(cx(field), field.y + pop.top + 4 * combo.rowHeight - combo.popupScroll() + combo.rowHeight * 0.5); // "2 beats"
-    assert(r.sent.back() == "set au_1.loop=2" && r.svc->model().automations[0].loop == 2.0);
+    r.click(cx(field), field.y + pop.top + 2 * combo.rowHeight - combo.popupScroll() + combo.rowHeight * 0.5); // "1 beat"
+    assert(r.sent.back() == "set au_1.length=1" && r.svc->model().automations[0].length == 1.0);
     double lab = 0.0;
     for (int k = 0; k < 20 && lab == 0.0; ++k) { r.frame(); lab = combo.labelAmount(); }
     assert(lab > 0.0 && lab < 1.0);
     r.settle();
-    assert(combo.shown() == "2 beats");
-    pass("A looping automation, in the window (R-AUTO-12/13): Create Pump from a fader's menu is one line; the row's span drawn, its grips the resize cursor and one line each (the start keeping the end); a span set elsewhere eases; a click in a repeat adds the point in the cycle; the window's Loop combo is one line, its label cross-fading");
+    assert(combo.shown() == "1 beat");
+    pass("An automation made with its clip (R-AUTO-14): a fader's menu offers Create Automation and no Create Pump; one line makes the automation, its track and its clip; its window says its length, rest and clips; the Length combo is one line, its label cross-fading");
 }
 
 static void test_a_recovered_song_is_offered()
@@ -6242,7 +6216,7 @@ int main()
     test_the_history_tree();
     test_clips_are_copied_by_shift_drag_and_ctrl_c_v();
     test_the_pointer_says_a_drag_resizes();
-    test_a_looping_automation_is_seen_and_made();
+    test_an_automation_is_made_with_its_clip_and_sized_in_its_window();
     test_a_recovered_song_is_offered();
     test_a_midi_file_dropped_on_a_track();
     test_home_unsaved_confirm_and_recents();

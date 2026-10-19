@@ -24,6 +24,7 @@ sampleRate = 48000
 masterGain = 0.0            ; dB
 masterOut  = prt_1          ; the output port(s) the master feeds, comma-separated
 tracks     = on             ; R-LANE-3: lanes may be instruments' tracks (absent = a song from before them)
+autoclips  = on             ; R-AUTO-14: automations are placed by clips (absent = a song from before them, §8a)
 launchQuantize = bar        ; R-LAUNCH-1: where a launch lands — bar | beat | none (written only when not bar)
 ```
 
@@ -193,7 +194,7 @@ pattern named after the clip, and written back as one — the only normalisation
 ## 8a. Automation — `#aauto` / `#point`, and formulas — `#abind` (R-AUTO)
 
 ```
-#aauto id=au_1 name="Bass · Cutoff" unit=Hz min=20.0 max=20000.0 from=dv_2.filter.cutoff
+#aauto id=au_1 name="Bass · Cutoff" unit=Hz min=20.0 max=20000.0 from=dv_2.filter.cutoff length=16.0 rest=600.0
   #point at=0.0 value=600.0
   #point at=8.0 value=2400.0 shape=smooth
   #point at=12.0 value=900.0 shape=bezier speedIn=-150.0 inflIn=40.0 speedOut=0.0 inflOut=33.333
@@ -213,11 +214,16 @@ file of linear / hold / smooth points is byte-identical to one written before be
 shape they are ignored. `smooth` is After Effects' Ease on the segment after the point (speed 0,
 influence ⅓ at both ends — the smoothstep it always was); a bezier next point's own handle wins on its
 side. The curve never leaves `min … max` (a handle's overshoot stops there).
-`from` is the address it was made from — a hint, never a link. **A loop** (R-AUTO-12): `loop=<beats>` makes the
-curve's first `loop` beats a cycle, repeated from `at=<beats>` (0 when absent) for `length=<beats>` (to the song's
-end when absent); outside that span the value is where a cycle ends. The three are written only when it loops
-(`loop` > 0), so a file that never loops is byte-identical to one written before loops existed:
-`#aauto id=au_2 name="Bass · Gain (pump)" unit=dB min=-120.0 max=12.0 from=ch_3.gain loop=1.0 at=32.0 length=64.0`.
+`from` is the address it was made from — a hint, never a link. **Clips** (R-AUTO-14; the header line
+`autoclips = on`): the points are in the automation's OWN beats, 0 … `length` (beats > 0; a point past it is kept and
+silent), and clips place it — `#aclip id=ac_9 auto=au_1 lane=ln_4 at=32.0 [length=8.0]` (no `track`: it sounds through
+nothing; `length` absent follows the automation's, longer repeats it, as a note clip repeats its pattern), on a plain
+lane or the automation's track, `#alane id=ln_4 name="" auto=au_1 order=3`. Its value at a beat is the clip of it that
+began last there; after a clip, where it stopped; before its first clip (and with none), `rest=`. `of=au_1` marks a
+clip's own curve (Make unique): a copy of au_1's that drives what au_1 drives; a formula reads au_1. A file without
+`autoclips` predates clips (its points were the SONG's beats, and R-AUTO-12 wrote `loop=`, `at=`, `length=` as one
+span); it is adopted when read — a track and one clip at 0 per automation, a loop a clip over its span — and plays as
+it did.
 A binding (R-AUTO-1) decides one
 address's value: `formula` as typed, with its `=`. One per address; the stored value under it (the
 strip's `gain=`, the device's parameter) stays, and plays again when the binding is cleared. An

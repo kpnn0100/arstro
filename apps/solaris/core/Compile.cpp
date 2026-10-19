@@ -111,6 +111,11 @@ namespace solaris
             return tm.beatAt(tm.sampleAt(c.at) + (c.out - c.in) * p.header.sampleRate) - c.at;
         }
         if (c.length > 0) return c.length;
+        if (c.isAuto()) // R-AUTO-14: 0 follows its automation's length, as a note clip's follows its pattern's
+        {
+            const Automation *a = p.automation(c.automation);
+            return a ? a->length : 0.0;
+        }
         const Pattern *pt = p.pattern(c.pattern);
         return pt ? pt->length : 0.0;
     }
@@ -594,9 +599,10 @@ namespace solaris
         std::map<std::string, int> curveOf;
         for (const auto &a : p.automations)
         {
+            if (!a.of.empty()) continue; // R-AUTO-14: a copy is heard through the automation it is a copy of
             curveOf[a.id] = (int)g.curves.size();
             r.curveIds.push_back(a.id);
-            g.curves.push_back(compileCurve(a, spb));
+            g.curves.push_back(compileCurve(p, a, spb));
         }
         std::vector<std::string> problems;
         const auto ordered = orderBindings(p, problems);
@@ -674,29 +680,59 @@ namespace solaris
         return r;
     }
 
-    engine::Curve compileCurve(const Automation &a, double spb)
+    namespace
     {
-        std::vector<engine::CurvePoint> pts;
-        pts.reserve(a.points.size());
-        for (const auto &pt : a.points)
+        /** An automation's own shape: its points up to its length (a point past it is silent), in samples at `spb`. */
+        std::vector<interstellar::anim::Key> shapeKeys(const Automation &a, double spb)
         {
-            engine::CurvePoint c;
-            c.t = (double)std::llround(pt.at * spb);
-            c.v = pt.value;
-            if (!engine::shapeNamed(pt.shape, c.shape)) c.shape = engine::CurvePoint::Linear; // validate refuses it first
-            c.speedIn = pt.speedIn / spb; // the .slp's are per BEAT
-            c.inflIn = pt.inflIn;
-            c.speedOut = pt.speedOut / spb;
-            c.inflOut = pt.inflOut;
-            pts.push_back(c);
+            std::vector<engine::CurvePoint> pts;
+            pts.reserve(a.points.size());
+            for (const auto &pt : a.points)
+            {
+                if (a.length > 0 && pt.at > a.length + 1e-9) break; // sorted: the rest is past it too
+                engine::CurvePoint c;
+                c.t = (double)std::llround(pt.at * spb);
+                c.v = pt.value;
+                if (!engine::shapeNamed(pt.shape, c.shape)) c.shape = engine::CurvePoint::Linear; // validate refuses it first
+                c.speedIn = pt.speedIn / spb; // the .slp's are per BEAT
+                c.inflIn = pt.inflIn;
+                c.speedOut = pt.speedOut / spb;
+                c.inflOut = pt.inflOut;
+                pts.push_back(c);
+            }
+            return engine::curveKeys(pts);
         }
+    }
+
+    engine::Curve compileCurve(const Project &p, const Automation &a, double spb)
+    {
+        // R-AUTO-14: the automation and its copies' shapes, placed by every clip of them, by where each begins — the engine
+        // reads the one that began last, so where two overlap the later plays and the earlier is cut there
         engine::Curve curve;
-        curve.keys = engine::curveKeys(pts);
+        curve.keys = shapeKeys(a, spb);
         curve.lo = a.min;
         curve.hi = a.max;
-        curve.loop = a.loop > 0 ? std::llround(a.loop * spb) : 0; // R-AUTO-12
-        curve.from = std::llround(a.at * spb);
-        curve.span = std::llround(a.length * spb);
+        curve.placed = true;
+        curve.rest = a.rest;
+        std::map<std::string, int> shapeOf{{a.id, 0}};
+        for (const auto &o : p.automations)
+            if (o.of == a.id)
+            {
+                curve.copies.push_back(shapeKeys(o, spb));
+                shapeOf[o.id] = (int)curve.copies.size();
+            }
+        for (const auto &c : p.clips)
+        {
+            const auto it = c.isAuto() ? shapeOf.find(c.automation) : shapeOf.end();
+            if (it == shapeOf.end()) continue;
+            engine::CurveSpan sp;
+            sp.from = std::llround(c.at * spb);
+            sp.to = std::llround((c.at + clipLengthBeats(p, c)) * spb);
+            sp.cycle = std::llround(p.automation(c.automation)->length * spb);
+            sp.shape = it->second;
+            if (sp.to > sp.from) curve.spans.push_back(sp);
+        }
+        std::stable_sort(curve.spans.begin(), curve.spans.end(), [](const engine::CurveSpan &x, const engine::CurveSpan &y) { return x.from < y.from; });
         return curve;
     }
 }

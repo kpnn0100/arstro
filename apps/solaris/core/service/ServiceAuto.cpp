@@ -78,6 +78,13 @@ namespace solaris
                   (a.unit.empty() ? std::string() : " " + a.unit) + ", got " + canonicalNumber(v);
             return false;
         }
+        // R-AUTO-14: a point past an automation's end grows it to the next whole beat after the point — so a script that
+        // adds points in song beats to an automation made by `auto create` (its clip at 0 following its length) lands them
+        // where it always did
+        void lengthenToHold(Automation &a, double at)
+        {
+            if (at > a.length + 1e-9) a.length = toTick(std::floor(at + 1e-9) + 1.0);
+        }
         void sortPoints(Automation &a)
         {
             std::stable_sort(a.points.begin(), a.points.end(), [](const AutoPoint &x, const AutoPoint &y) { return x.at < y.at; });
@@ -136,22 +143,39 @@ namespace solaris
             a.min = spec.lo;
             a.max = spec.hi;
             a.from = address;
-            if (c.has("pump"))
-            {
-                // R-AUTO-13: a cycle of one beat, repeated through the song — down on the beat, eased back to the
-                // property's value by its middle, held there (where a cycle ends, so where it rests outside its span)
-                const double low = spec.unit == "dB" ? std::max(spec.lo, spec.value - 18.0) : spec.lo + 0.2 * (spec.value - spec.lo);
-                a.points.push_back(AutoPoint{0.0, low, "smooth", {}});
-                a.points.push_back(AutoPoint{0.5, spec.value, "linear", {}});
-                a.loop = 1.0;
-                a.name += " (pump)";
-            }
-            else
-            {
-                a.points.push_back(AutoPoint{0.0, spec.value, "linear", {}});
-                a.points.push_back(AutoPoint{toTick(songEndBeats()), spec.value, "linear", {}});
-            }
+            // R-AUTO-14: as long as the song, in whole bars, holding the property's value — and resting at it before its clip
+            const double bar = std::max(1, std::atoi(p.header.sig.c_str()));
+            a.length = toTick(std::max(bar, std::ceil(songEndBeats() / bar - 1e-9) * bar));
+            a.rest = spec.value;
+            a.points.push_back(AutoPoint{0.0, spec.value, "linear", {}});
+            a.points.push_back(AutoPoint{a.length, spec.value, "linear", {}});
             p.automations.push_back(a);
+            // its track — under its property's strip's track when it has one — and ONE clip from beat 0 following its length
+            std::string strip = p.strip(spec.node) ? spec.node : std::string();
+            for (const auto &rk : p.racks)
+                for (const auto &d : rk.devices)
+                    if (d.id == spec.node) strip = rk.track;
+            int order = 0;
+            const Lane *under = nullptr;
+            for (const auto &l : p.lanes)
+            {
+                order = std::max(order, l.order + 1);
+                if (!strip.empty() && l.track == strip && (!under || l.order > under->order)) under = &l;
+            }
+            const std::string below = under ? under->id : std::string();
+            Lane ln;
+            ln.id = p.nextId("ln");
+            ln.automation = a.id;
+            ln.order = order;
+            p.lanes.push_back(ln);
+            placeLanesUnder(p, below, {ln.id});
+            changed("lane.added", ln.id);
+            Clip cl;
+            cl.id = p.nextId("ac");
+            cl.automation = a.id;
+            cl.lane = ln.id;
+            p.clips.push_back(cl);
+            changed("clip.added", cl.id);
             const std::string formula = "=" + a.id;
             if (Binding *b = p.binding(address)) b->formula = formula; // automating replaces a formula (undoable)
             else p.bindings.push_back(Binding{address, formula, {}, {}});
@@ -171,6 +195,20 @@ namespace solaris
             if (c.has("min") && !numberFlag(c, "min", a.min, err)) return false;
             if (c.has("max") && !numberFlag(c, "max", a.max, err)) return false;
             if (!(a.min < a.max)) { err = "--min must be below --max"; return false; }
+            // R-AUTO-14: a bar long unless told, resting at its bottom unless told; no clip — `clip add --auto` places it
+            a.length = std::max(1, std::atoi(p.header.sig.c_str()));
+            if (c.has("length"))
+            {
+                if (!numberFlag(c, "length", a.length, err)) return false;
+                a.length = toTick(a.length);
+                if (!(a.length > 0)) { err = "--length is beats > 0"; return false; }
+            }
+            a.rest = a.min;
+            if (c.has("rest") && (!numberFlag(c, "rest", a.rest, err) || !inAutoRange(a, a.rest, err)))
+            {
+                if (err.rfind("--value", 0) == 0) err = "--rest" + err.substr(7);
+                return false;
+            }
             p.automations.push_back(a);
             mBindingsTouched = true;
             changed("auto.added", a.id);
@@ -191,7 +229,20 @@ namespace solaris
             }
             for (const auto &r : readers)
                 p.bindings.erase(std::remove_if(p.bindings.begin(), p.bindings.end(), [&](const Binding &b) { return b.address == r; }), p.bindings.end());
-            p.automations.erase(std::remove_if(p.automations.begin(), p.automations.end(), [&](const Automation &a) { return a.id == id; }),
+            // R-AUTO-14: its copies, every clip of them and its tracks go with it (the lanes' other clips stay where they are)
+            std::set<std::string> gone{id};
+            for (const auto &a : p.automations)
+                if (a.of == id) gone.insert(a.id);
+            for (const auto &cl : p.clips)
+                if (gone.count(cl.automation)) changed("clip.deleted", cl.id);
+            p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [&](const Clip &cl) { return gone.count(cl.automation) > 0; }), p.clips.end());
+            for (const auto &l : p.lanes)
+                if (gone.count(l.automation)) changed("lane.deleted", l.id);
+            p.lanes.erase(std::remove_if(p.lanes.begin(), p.lanes.end(), [&](const Lane &l) { return gone.count(l.automation) > 0; }), p.lanes.end());
+            gatherLaneGroups(p);
+            for (const auto &x : gone)
+                if (x != id) changed("auto.deleted", x);
+            p.automations.erase(std::remove_if(p.automations.begin(), p.automations.end(), [&](const Automation &a) { return gone.count(a.id) > 0; }),
                                 p.automations.end());
             mBindingsTouched = true;
             changed("auto.deleted", id);
@@ -218,6 +269,7 @@ namespace solaris
                 if (!shapeOk(pt.shape, err)) return false;
                 if (AutoPoint *same = pointAt(*a, at)) *same = pt;
                 else a->points.push_back(pt);
+                lengthenToHold(*a, pt.at); // R-AUTO-14
             }
             else
             {
@@ -262,6 +314,7 @@ namespace solaris
                     if (other && other != pt) { err = a->id + " already has a point at beat " + canonicalBeats(toTick(to)); return false; }
                     pt->at = toTick(to);
                     pt->value = std::min(std::max(v, a->min), a->max);
+                    lengthenToHold(*a, pt->at); // R-AUTO-14
                 }
             }
             sortPoints(*a);

@@ -916,11 +916,13 @@ namespace
                  r.app->wheel(lanes.x + 400.0, lanes.y + 10.0, -4.0); // the small window: the rows are under the dock until scrolled to
                  r.settle();
              }},
-            {"automation-pump",     // R-AUTO-12/13: a pump looping from bar 2 for 2 bars — its first cycle bright, the repeats faint
+            {"automation-length",   // R-AUTO-14: an automation a beat long — its window's Length combo open on "1 beat"; its rest, its clips
              [](sltest::Rig &r) {
                  mixedSong(r, "Pump");
-                 r.cmd("auto create ch_3.gain --pump");
-                 r.cmd("set au_1.at=4 au_1.length=8");
+                 r.cmd("auto create ch_3.gain");
+                 r.cmd("set au_1.length=1");
+                 r.cmd("auto point move au_1 --at 0 --value -18");
+                 r.cmd("auto point add au_1 --at 0.5 --value 0");
                  r.settle();
                  auto &tl = r.app->project().timeline();
                  const artboard::Rect lanes = world(tl, tl.rowRect(0));
@@ -928,7 +930,7 @@ namespace
                  r.settle();
                  const artboard::Rect row = world(tl, tl.autoRowRect("au_1"));
                  r.click(row.x + 30.0, row.y + row.h * 0.5);
-                 r.click(row.x + 30.0, row.y + row.h * 0.5);             // its window: the Loop combo
+                 r.click(row.x + 30.0, row.y + row.h * 0.5);             // its window
                  r.settle();
              }},
             {"automation-window",   // R-AUTO-11: a double-click on the row's header — its facts, all the model's

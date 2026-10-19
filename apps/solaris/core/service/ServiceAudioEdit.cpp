@@ -41,6 +41,7 @@ namespace solaris
         {
             cl = p.clip(id);
             if (!cl) { err = "no clip `" + id + "`"; return false; }
+            if (cl->isAuto()) { err = id + " is an automation clip — its curve is its automation's (R-AUTO-14); " + verb + " takes audio clips"; return false; }
             if (!cl->isAudio())
             {
                 err = id + " is a note clip — its notes are its pattern's, shared by every clip of it (R-CLIP-3); " + verb + " takes audio clips";
@@ -288,6 +289,7 @@ namespace solaris
         {
             const Clip *cl = p.clip(ids[i]);
             if (!cl) { err = "no clip `" + ids[i] + "`"; return false; }
+            if (cl->isAuto()) { err = ids[i] + " is an automation clip — `clip consolidate` joins audio clips (R-AUTO-14)"; return false; }
             if (!cl->isAudio())
             {
                 err = ids[i] + " is a note clip — its sound is its instrument's; `clip consolidate` joins audio clips (a strip's bounce is R-PERF-3)";

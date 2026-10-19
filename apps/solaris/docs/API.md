@@ -45,10 +45,10 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `lane move <ln\|lg> [--to <index>]` | Move a lane to row <index> (0 = the top); the lanes renumber in their new order. A lane moved out of its group's run leaves it, one moved into another group's run joins it; a group (lg_n) moves whole, its first lane to <index> (R-ARR-3). | R-LANE-1 |
 | `lane group <ln> … [--name <text>]` | Gather lanes into a NEW named group (R-ARR-3): side by side at the first one's place, in their order; a lane already in another group leaves it. Folded (`set <lg>.folded=on`) the group is one row showing all its clips. Prints its id. | R-ARR-3 |
 | `lane ungroup <lg>` | Let a group's lanes go; the group is gone, the lanes stay where they are. | R-ARR-3 |
-| `clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--plugin <id\|name>] [--sample <file>] [--pattern <pt>] [--lane <ln\|new>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>] [--warp] [--preset <name>]` | Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of --pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3); --plugin <id\|name> the same with another maker's instrument plugin (R-VST-6). With no --lane it goes on the lane its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for a new one (R-SVC-8). On an instrument's TRACK (--lane <ln>) a note clip plays through that instrument — --strip may be left out, --pattern places that pattern; audio and --instrument are refused there (R-LANE-3). --warp (with --src): it follows the song's tempo, its own detected now (R-WARP-1; refused when none is heard). Prints the clip, then `made:` and whatever else it made. | R-MIX-2 |
+| `clip add [--src <file>] [--strip <ch>] [--instrument <type>] [--plugin <id\|name>] [--sample <file>] [--pattern <pt>] [--lane <ln\|new>] [--at <beats>] [--length <beats>] [--in <s>] [--out <s>] [--warp] [--preset <name>] [--auto <au>]` | Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of --pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument strip of that type — what dropping an instrument does (R-BROWSE-3); --plugin <id\|name> the same with another maker's instrument plugin (R-VST-6). With no --lane it goes on the lane its strip's clips are on (the newest one's), a new lane only for a strip with none; --lane new asks for a new one (R-SVC-8). On an instrument's TRACK (--lane <ln>) a note clip plays through that instrument — --strip may be left out, --pattern places that pattern; audio and --instrument are refused there (R-LANE-3). --warp (with --src): it follows the song's tempo, its own detected now (R-WARP-1; refused when none is heard). --auto <au>: a clip of that automation (R-AUTO-14) — on its track (made if it has none), or --lane <a plain lane \| new>; --length 0 follows the automation's, longer repeats it. Prints the clip, then `made:` and whatever else it made. | R-MIX-2 |
 | `clip move <ac> [--at <beats>] [--lane <ln>] [--strip <ch>]` | Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). Onto an instrument's TRACK a note clip is re-routed to that instrument (and says so); a clip on a track told --strip <another> goes to that one's track; audio is refused on a track (R-LANE-3). | R-LANE-2 |
 | `clip duplicate <ac> [--at <beats>] [--count <n>] [--lane <ln>]` | A copy right after it (or at --at); --count N makes N copies end to end; --lane puts them on another lane (onto an instrument's TRACK a note clip's copy plays through that instrument; audio is refused there, as a move is — R-CLIP-8). A note clip's copy plays the SAME pattern — linked. Prints the first copy, then `made:` the rest. Shift-drag and Ctrl+V in the window are this line (R-CLIP-9/10). | R-CLIP-3 |
-| `clip unique <ac>` | Give a note clip its own copy of its pattern. | R-CLIP-3 |
+| `clip unique <ac>` | Give a note clip its own copy of its pattern — or an automation clip its own curve: a new automation `of` its automation ("<name> 2", a copy of its points), still driving what that one drives (R-AUTO-14). Prints the new pattern or automation. | R-CLIP-3 |
 | `clip delete <ac>` | Remove a clip. | R-LANE-1 |
 | `pattern new [--name <text>] [--length <beats>]` | Create an empty pattern. | R-CLIP-2 |
 | `note add <pt> [--pitch <pitch>] [--at <beats>] [--length <beats>] [--vel <1-127>] [--chance <0-1>] [--chord <name>] [--inversion <n>] [--octave <n>]` | Add a note to a pattern — every clip of it changes. A pitch is a number, a name (C4 = 60, F#3, Bb2) or a kit's pad (kick). --chord <Cm7> adds a chord instead (its root in --octave, default 4; --inversion n raises its n lowest notes an octave) as ONE edit — the qualities are under Notation. --chance: the odds it sounds in a pass (1). A pattern locked to a scale (`pattern scale`) puts each note on the scale's nearest pitch, a tie down — a major chord on any degree becomes that degree's own triad. | R-CLIP-2 |
@@ -116,10 +116,10 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `project export-midi <file.mid>` | Write the song's notes as a MIDI file: a track per instrument strip, every note clip's pattern where the clip plays it (repeated to fill it), the song's tempo and meter. | R-MIDI-1 |
 | `pattern transpose <pt> [--semi <n>]` | Move every note by --semi semitones (negative = down). Refused if a note would leave 0–127. | R-SVC-8 |
 | `pattern print <pt>` | Its notes, one per line in the `notes add` notation (pitch as a name or pad), the number after `#`. | R-SVC-8 |
-| `auto create <address> [--pump]` | Automate a number: a new automation named "<owner> · <parameter>", ranged as it, holding its value from beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id. --pump: already LOOPING every beat (R-AUTO-13) — down on the beat (18 dB for a level, else to 20 % of its range), back to its value by the middle of the beat: the side-chain feel. Loop any automation with `set <au>.loop=<beats>` (`.at`, `.length`: where it repeats, R-AUTO-12). | R-AUTO-5 |
-| `auto add [--name <text>] [--min <v>] [--max <v>] [--unit <text>]` | An automation from nothing (default range 0…1). It moves nothing until a formula reads it. Prints the id. | R-AUTO-4 |
-| `auto delete <au> [--unbind]` | Delete an automation. Refused while a formula reads it, unless --unbind (those bindings are cleared). | R-AUTO-4 |
-| `auto point add <au> [--at <beats>] [--value <v>] [--shape <linear\|hold\|smooth\|bezier>]` | Add a point (one at the same beat is replaced). Its shape governs the segment after it (a bezier point's handles start flat: speed 0, influence 33.333 %). | R-AUTO-6 |
+| `auto create <address>` | Automate a number: a new automation named "<owner> · <parameter>", ranged as it, as long as the song in whole bars and holding its value, resting at it before its clips (`.rest`) — its TRACK (a lane under its property's strip's track, else last) and ONE clip of it from beat 0 that follows its length — and the address bound to `=au_n`. Prints the id, `made:` the lane and the clip. Copy the clip as any clip (`clip duplicate`, Shift-drag, Ctrl+C/V): the copies are linked (R-AUTO-14). | R-AUTO-5 |
+| `auto add [--name <text>] [--min <v>] [--max <v>] [--unit <text>] [--length <beats>] [--rest <v>]` | An automation from nothing (default range 0…1, a bar long, resting at its bottom) and no clip — `clip add --auto` places it. It moves nothing until a formula reads it. Prints the id. | R-AUTO-4 |
+| `auto delete <au> [--unbind]` | Delete an automation — its copies, its clips and its tracks with it. Refused while a formula reads it, unless --unbind (those bindings are cleared). | R-AUTO-4 |
+| `auto point add <au> [--at <beats>] [--value <v>] [--shape <linear\|hold\|smooth\|bezier>]` | Add a point at --at beats of the automation's OWN time (one at the same beat is replaced); one past its end grows it to the next whole beat (R-AUTO-14). Its shape governs the segment after it (a bezier point's handles start flat: speed 0, influence 33.333 %). | R-AUTO-6 |
 | `auto point move <au> [--at <beats>] [--to <beats>] [--value <v>]` | Move the point at --at to another beat and/or value. | R-AUTO-6 |
 | `auto point delete <au> [--at <beats>]` | Remove the point at --at. | R-AUTO-6 |
 | `auto point shape <au> [--at <beats>] [--shape <linear\|hold\|smooth\|bezier>] [--speed-in <v/beat>] [--influence-in <%>] [--speed-out <v/beat>] [--influence-out <%>]` | Set how the curve leaves the point at --at. A BEZIER point is Interstellar's key (R-ANIM-2): on each side a speed — the slope there, in the automation's unit per beat — and an influence, how far into the neighbouring segment it pulls (0 < x ≤ 100 %); flags not given are kept. One line per handle gesture. | R-AUTO-10 |
@@ -180,7 +180,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `<strip>.name` · `.gain` · `.pan` · `.mute` · `.solo` · `.colour` | text · dB (−120…12) · −1…1 · bool · bool · −1…15 |
 | `<strip>.phase` · `.width` · `.soloSafe` (R-MIX-20) | on/off (its polarity, after its rack) · % 0 … 200 (0 one channel, 200 the side doubled) · bool, a bus's only (a solo never silences it) |
 | `<strip>.vca` (R-MIX-19) | the VCA it follows — a strip of kind vca, by id or name — or `none`; a VCA's own gain adds to its members', its mute and solo are theirs; a VCA has no `.pan` and follows no VCA |
-| `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` · `.reverse` · `.warp` · `.bpm` · `.pitch` · `.offset` | text · beats · beats · beats · beats · dB · bool · s · s · bool (audio, R-EDIT-1) · bool · bpm 20 … 999 · semitones −24 … +24 (audio, R-WARP-1) · beats into its pattern (a note clip's, R-LAUNCH-1) |
+| `<clip>.name` · `.at` · `.length` · `.fadeIn` · `.fadeOut` · `.gain` · `.loop` · `.in` · `.out` · `.reverse` · `.warp` · `.bpm` · `.pitch` · `.offset` | text · beats · beats · beats · beats · dB · bool · s · s · bool (audio, R-EDIT-1) · bool · bpm 20 … 999 · semitones −24 … +24 (audio, R-WARP-1) · beats into its pattern (a note clip's, R-LAUNCH-1); an automation clip has `.name` · `.at` · `.length` only (R-AUTO-14) |
 | `<lane>.name` · `.colour` · `.strip` (`<ch>` an instrument: the lane is its track; `none`: plain — R-LANE-3) · `<mixer>.name` · `<send>.gain` · `.pre` · `.sidechain` (a key, R-MIX-15) · `<sampler>.sample` (its sound, a file; R-EDM-8) · `<pattern>.name` · `.length` · `<port>.name` · `.channels` | |
 | `<video>.offset` (R-VIDEO-1) | seconds on the song's clock (the tempo map's) its first frame shows, −36000 … 36000 — negative: it began before the song |
 | `<video>.at` (R-VIDEO-1) | the beat its first frame shows on — set, it moves the offset through the tempo map (before beat 0, at beat 0's tempo); the lane's drag |
@@ -189,7 +189,7 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `<device>.bypass` · `<device>.<param>` | bool · any parameter of its type below, in its unit; a choice by name |
 | `<device>.<reading>` (read only, R-FX-17) | what a device that measures reads now while playing — a tuner's `frequency`, `note`, `cents`, `level`; 0 stopped; a `set` is refused |
 | `<plugin device>.p<id>` (type `vst3`, R-VST-6) | 0 … 1 — another maker's plugin's parameter by its id (its title is `devices[].params[].label`); read: also `.plugin` (its class id) |
-| `<automation>.name` · `.unit` · `.min` · `.max` · `.loop` · `.at` · `.length` (read: also `.from` · `.points`) | text · text · number · number · beats (0: no loop) · beats · beats (0: to the end) — R-AUTO-12 |
+| `<automation>.name` · `.unit` · `.min` · `.max` · `.length` · `.rest` (read: also `.from` · `.points` · `.of`) | text · text · number · number · beats > 0 (its own time; a clip longer repeats it) · in its range (before its first clip) — R-AUTO-14; `.loop`/`.at` refused (R-AUTO-12 withdrawn) |
 | any NUMBER above (a strip's gain/pan, a send's gain, `project.masterGain`, a numeric device parameter) `=<formula>` | binds it (R-AUTO-1): numbers, `+ - * / ^ ( )`, `sin cos tan abs sign min max clamp lerp pow exp log sqrt floor ceil round frac`, `pi`, `beat bar bpm t`, an automation id (`au_1`), another numeric address (a link). `get` prints the formula; a plain number clears it |
 
 ## Notation (R-SVC-8)
@@ -440,6 +440,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `lanes[].strip` | string | R-LANE-3: the instrument strip it is the track of — what is on it plays through it; empty = a plain lane |
 | `lanes[].ownName` | bool | false: a track showing its instrument strip's name (renaming the strip renames it) |
 | `lanes[].group` | string | R-ARR-3: the lane group it is in; empty = none |
+| `lanes[].automation` | string | R-AUTO-14: the automation it is the track of — its clips go there; empty = none |
 | `groups` | object[] | R-ARR-3: lane groups, in the order of their first lanes — each group's lanes side by side |
 | `groups[].id` | string | lg_n |
 | `groups[].name` | string |  |
@@ -511,7 +512,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `clips[].name` | string |  |
 | `clips[].track` | string | the strip it sounds through |
 | `clips[].lane` | string | the lane it is drawn on ("" = its strip's own row) |
-| `clips[].kind` | string | audio \| note |
+| `clips[].kind` | string | audio \| note \| automation (R-AUTO-14) |
 | `clips[].src` | string | audio: the file |
 | `clips[].pattern` | string | note: the pattern it plays |
 | `clips[].at` | number | beats |
@@ -524,7 +525,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `clips[].fadeOut` | number | beats |
 | `clips[].loop` | bool |  |
 | `clips[].offline` | bool | the file could not be read |
-| `clips[].linked` | int | clips playing the same pattern, this one included (R-CLIP-3) |
+| `clips[].linked` | int | clips playing the same pattern — or, an automation clip, the same automation — this one included (R-CLIP-3, R-AUTO-14) |
 | `clips[].takes` | string[] | R-REC-2: a loop recording's passes, the files, in the order played (1-based in the comp) |
 | `clips[].comp` | object[] | R-REC-2: which take plays where — song beats [from, to); elsewhere the last take |
 | `clips[].comp[].take` | int | 1-based |
@@ -540,6 +541,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `clips[].warp` | bool | R-WARP-1: it follows the song's tempo — it lasts its span's own beats, stretched |
 | `clips[].bpm` | number | R-WARP-1: its own tempo (0: not known) |
 | `clips[].pitch` | number | semitones — R-WARP-1: its span moved, its length kept |
+| `clips[].automation` | string | R-AUTO-14: an automation clip's automation (it plays through no strip) |
 | `patterns` | object[] | every pattern |
 | `patterns[].id` | string |  |
 | `patterns[].name` | string |  |
@@ -593,11 +595,14 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `automations[].from` | string | the address it was made from (a hint, not a link) |
 | `automations[].min` | number |  |
 | `automations[].max` | number |  |
-| `automations[].loop` | number | beats (R-AUTO-12): its first `loop` beats repeat — 0: it does not loop |
-| `automations[].at` | number | beats: where the repeating starts |
-| `automations[].length` | number | beats it repeats for — 0: to the song's end; outside, where a cycle ends |
+| `automations[].loop` | number | beats — the cycle its clips repeat: its `length` (R-AUTO-14; R-AUTO-12's own loop withdrawn) |
+| `automations[].at` | number | always 0 — R-AUTO-12's span, withdrawn (R-AUTO-14: clips place it) |
+| `automations[].length` | number | beats — its own time, 0 … length; a clip longer repeats it (R-AUTO-14) |
+| `automations[].rest` | number | R-AUTO-14: its value before its first clip, and with none |
+| `automations[].of` | string | R-AUTO-14: a clip's own curve (Make unique) — the automation it is a copy of, which it drives; empty = none |
+| `automations[].clips` | int | R-AUTO-14: clips playing it |
 | `automations[].points` | object[] | sorted by at |
-| `automations[].points[].at` | number | beats |
+| `automations[].points[].at` | number | beats — its own (R-AUTO-14) |
 | `automations[].points[].value` | number | in the automation's unit |
 | `automations[].points[].shape` | string | linear \| hold \| smooth \| bezier — the segment after it (bezier: both its sides) |
 | `automations[].points[].speedIn` | number | bezier (R-AUTO-10): the slope arriving, in the automation's unit per beat |

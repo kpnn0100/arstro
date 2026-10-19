@@ -1034,21 +1034,45 @@ namespace solaris
                 if (!(lo < hi)) { err = a->id + "'s range would be empty (" + canonicalNumber(lo) + "…" + canonicalNumber(hi) + ")"; return false; }
                 (f == "min" ? a->min : a->max) = x;
                 for (auto &pt : a->points) pt.value = std::min(std::max(pt.value, a->min), a->max);
+                a->rest = std::min(std::max(a->rest, a->min), a->max);
                 stored = canonicalNumber(x);
                 mBindingsTouched = true;
                 return true;
             }
-            if (f == "loop" || f == "at" || f == "length")
+            if (f == "length") // R-AUTO-14: its own beats — a clip longer repeats it; a point past it is kept, silent
             {
-                // R-AUTO-12: beats ≥ 0 (loop 0 = it does not loop; length 0 = to the song's end)
                 if (!number(value, x, err)) return false;
-                if (!(x >= 0) || x > 100000) { err = id + "." + f + " is beats from 0" + (f == "loop" ? " (0: no loop)" : f == "length" ? " (0: to the song's end)" : ""); return false; }
-                (f == "loop" ? a->loop : f == "at" ? a->at : a->length) = toTick(x);
-                stored = canonicalBeats(toTick(x));
+                const double t = toTick(x);
+                if (!(t > 0) || t > 100000) { err = id + ".length is beats > 0 — a clip longer than it repeats it (R-AUTO-14)"; return false; }
+                a->length = t;
+                std::string past;
+                for (const auto &pt : a->points)
+                    if (pt.at > t + 1e-9) past += (past.empty() ? "" : ", ") + canonicalBeats(pt.at);
+                if (!past.empty()) mOutput += "warning: " + id + "'s points at " + past + " are past its length — kept, silent\n";
+                stored = canonicalBeats(t);
                 mBindingsTouched = true;
                 return true;
             }
-            err = unknownField(id, "an automation", f, {"name", "unit", "min", "max", "loop", "at", "length"}) + " — points are `auto point …`";
+            if (f == "rest") // R-AUTO-14: what it reads before its first clip
+            {
+                if (!number(value, x, err)) return false;
+                if (x < a->min || x > a->max)
+                {
+                    err = id + ".rest is in its range, " + canonicalNumber(a->min) + " … " + canonicalNumber(a->max) + (a->unit.empty() ? "" : " " + a->unit);
+                    return false;
+                }
+                a->rest = x;
+                stored = canonicalNumber(x);
+                mBindingsTouched = true;
+                return true;
+            }
+            if (f == "loop" || f == "at")
+            {
+                err = id + "." + f + " is gone (R-AUTO-12 withdrawn): an automation's CLIPS place and repeat it — `clip add --auto " + id +
+                      " --at <beats> --length <beats>`, `set " + id + ".length=<beats>` (R-AUTO-14)";
+                return false;
+            }
+            err = unknownField(id, "an automation", f, {"name", "unit", "min", "max", "length", "rest"}) + " — points are `auto point …`";
             return false;
         }
 
@@ -1197,6 +1221,12 @@ namespace solaris
         {
             static const std::vector<std::string> fields = {"name", "at", "in", "out", "length", "gain", "fadeIn", "fadeOut", "loop", "reverse", "warp", "bpm", "pitch", "offset"};
             if (f == "name") { c->name = value; stored = value; return true; }
+            if (c->isAuto() && f != "at" && f != "length") // R-AUTO-14: an automation clip is its place and its length
+            {
+                err = std::find(fields.begin(), fields.end(), f) == fields.end() ? unknownField(id, "an automation clip", f, {"name", "at", "length"})
+                                                                                 : id + " is an automation clip — its fields are name, at and length (R-AUTO-14)";
+                return false;
+            }
             if (f == "loop") { if (!boolean(value, b, err)) return false; c->loop = b; stored = boolText(b); return true; }
             if (f == "warp" || f == "bpm" || f == "pitch") // R-WARP-1
             {
@@ -1259,6 +1289,7 @@ namespace solaris
             if (f == "colour") { if (!number(value, x, err) || !inRange(x, -1, 15, "colour", err)) return false; l->colour = (int)x; stored = std::to_string((int)x); return true; }
             if (f == "strip")
             {
+                if (!l->automation.empty()) { err = id + " is the track of " + l->automation + " — an automation's track holds its clips (R-AUTO-14)"; return false; }
                 // R-LANE-3: a lane becomes an instrument's track — or plain again, keeping the name it showed
                 if (value == "none")
                 {
@@ -1438,7 +1469,7 @@ namespace solaris
         {
             put("name", a->name); put("unit", a->unit); put("min", canonicalNumber(a->min)); put("max", canonicalNumber(a->max));
             put("from", a->from); put("points", std::to_string(a->points.size()));
-            put("loop", canonicalBeats(a->loop)); put("at", canonicalBeats(a->at)); put("length", canonicalBeats(a->length)); // R-AUTO-12
+            put("length", canonicalBeats(a->length)); put("rest", canonicalNumber(a->rest)); put("of", a->of); // R-AUTO-14
         }
         else if (id == "project")
         {

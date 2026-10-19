@@ -174,25 +174,55 @@ namespace engine
         return keys;
     }
 
+    /** R-AUTO-14: where a clip plays a curve — from `from` to `to` (samples at the curve's `samplesPerBeat`, i.e. beats),
+     *  repeating every `cycle` (0: once), reading shape `shape` (0: the automation's own, k: its k-th copy's). */
+    struct CurveSpan
+    {
+        long long from = 0, to = 0, cycle = 0;
+        int shape = 0;
+    };
+
     struct Curve
     {
-        std::vector<anim::Key> keys;              // t in samples, ascending; speeds per sample
+        std::vector<anim::Key> keys;              // t in samples, ascending; speeds per sample — the automation's own shape
+        std::vector<std::vector<anim::Key>> copies; // R-AUTO-14: its copies' shapes (Make unique), shape 1 …
         double lo = -HUGE_VAL, hi = HUGE_VAL;     // the automation's range
-        // Solaris R-AUTO-12: a loop — the first `loop` samples are a cycle, repeated from `from` for `span` samples
-        // (0: for ever); outside the span the value a cycle ends on. loop 0: the curve as drawn
-        long long loop = 0, from = 0, span = 0;
+        // R-AUTO-14: compiled from a song, a curve is PLACED by its clips' spans — sorted by `from`; at a position the span
+        // that began last plays (so where two overlap the later cuts the earlier); before the first (and with none) it
+        // reads `rest`, after a span ends where it stopped.
+        // Not placed (a curve built by hand): its keys as drawn, read at the position itself
+        bool placed = false;
+        std::vector<CurveSpan> spans;
+        double rest = 0.0;
 
-        /** Where in the drawn curve sample `s` reads: itself, or its place in the cycle. */
-        long long cyclePos(long long s) const
-        {
-            if (loop <= 0) return s;
-            if (s < from || (span > 0 && s >= from + span)) return loop; // resting: where a cycle ends
-            return (s - from) % loop;
-        }
         double valueAt(long long s) const
         {
-            if (keys.empty()) return 0.0;
-            return std::min(std::max(anim::eval(keys, (double)cyclePos(s)), lo), hi); // Interstellar's evaluator: no allocation
+            const std::vector<anim::Key> *k = &keys;
+            double t = (double)s;
+            if (placed)
+            {
+                size_t a = 0, b = spans.size(); // the last span starting at or before s: no allocation, log n
+                while (a < b)
+                {
+                    const size_t m = (a + b) / 2;
+                    if (spans[m].from <= s) a = m + 1;
+                    else b = m;
+                }
+                if (a == 0) return std::min(std::max(rest, lo), hi);
+                const CurveSpan &sp = spans[a - 1];
+                if (sp.shape > 0 && (size_t)sp.shape <= copies.size()) k = &copies[(size_t)sp.shape - 1];
+                const bool past = s >= sp.to; // after it: where it stopped
+                long long d = (past ? sp.to : s) - sp.from;
+                if (sp.cycle > 0)
+                {
+                    const long long r = d % sp.cycle;
+                    d = past && r == 0 && d > 0 ? sp.cycle : r; // a whole number of cycles ends at the cycle's end
+                }
+                t = (double)d;
+                if (k->empty()) return std::min(std::max(rest, lo), hi);
+            }
+            if (k->empty()) return 0.0;
+            return std::min(std::max(anim::eval(*k, t), lo), hi); // Interstellar's evaluator: no allocation
         }
     };
 

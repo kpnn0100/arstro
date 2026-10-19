@@ -1227,33 +1227,48 @@ static void test_an_automated_gain_renders_its_curve()
     pass("an automated gain renders its curve: −5 dB at beat 2, −15 dB at beat 6 of a 0 → −20 dB ramp, within 0.1 dB; saved as #aauto/#abind; an unreadable formula is inert and audited");
 }
 
-// R-AUTO-12/13: a pump — a one-beat cycle repeated through the song — MEASURED: eval repeats every beat, the render
-// follows eval, the span limits where it repeats (outside: where a cycle ends), loop 0 is the curve as drawn, the .slp
-// keeps it
-static void test_an_automation_loops_and_a_pump_is_one_line()
+// R-AUTO-14: automation CLIPS — an automation is to its clips what a pattern is to its note clips. MEASURED: a clip
+// longer than its automation repeats it (eval every beat, the render what eval says, the dip heard); a copy plays the
+// same curve, linked; between clips the value the one before ended on, before the first its rest; a later clip cuts an
+// earlier; Make unique gives a clip its own curve that still drives what the first drives
+static void test_automation_clips_place_and_repeat_an_automation()
 {
     Run r;
-    const std::string dir = scratch(), song = freshSong("pump");
+    const std::string dir = scratch(), song = freshSong("autoclips");
     r.ok("project new " + song + " --bpm 120");
     r.ok("clip add --src tone.wav --at 0 --length 16");                 // ch_2: a 1 kHz sine at 0.5, looped
-    assert(r.ok("auto create ch_2.gain --pump") == "au_1\n");
+    const std::string made = r.ok("auto create ch_2.gain");
+    assert(firstLine(made) == "au_1" && contains(made, "made: lane=") && contains(made, " clip="));
+    std::string clip, lane;
+    for (const auto &c : r.svc.model().clips)
+        if (c.kind == "automation") { clip = c.id; lane = c.lane; }
     {
         const auto &a = r.svc.model().automations[0];
-        assert(a.loop == 1.0 && a.at == 0.0 && a.length == 0.0 && contains(a.name, "(pump)"));
-        assert(a.points.size() == 2 && a.points[0].value == -18.0 && a.points[0].shape == "smooth" && a.points[1].at == 0.5 && a.points[1].value == 0.0);
-        assert(r.svc.model().bindings[0].formula == "=au_1");
+        assert(a.length == 16.0 && a.rest == 0.0 && a.clips == 1 && a.loop == 16.0 && a.at == 0.0);
+        const ClipModel *c = r.clip(clip);
+        assert(c && c->automation == "au_1" && c->at == 0.0 && c->length == 16.0 && c->track.empty() && c->linked == 1);
+        bool track = false;
+        for (const auto &l : r.svc.model().lanes) track = track || (l.id == lane && l.automation == "au_1" && !l.ownName);
+        assert(track);
     }
     auto ev = [&](double beat) {
         const std::string e = r.ok("eval ch_2.gain --at " + canonicalNumber(beat));
         return std::atof(e.substr(e.find(" = ") + 3).c_str());
     };
-    assert(ev(0) == -18.0 && ev(0.5) == 0.0 && ev(0.75) == 0.0);
-    assert(ev(0.25) < -1.0 && ev(0.25) > -17.0);                       // on its way back up
+    // a one-beat dip: the automation a beat long — the point at its old end kept, silent, and said
+    assert(contains(r.ok("set au_1.length=1"), "warning: au_1's points at 16.0 are past its length — kept, silent"));
+    r.ok("auto point move au_1 --at 0 --value -18");
+    r.ok("auto point shape au_1 --at 0 --shape smooth");
+    r.ok("auto point add au_1 --at 0.5 --value 0");
+    assert(r.clip(clip)->length == 1.0);                                // its length 0: it follows the automation's
+    r.ok("set " + clip + ".length=8");                                  // longer: it repeats it (R-CLIP-7)
+    assert(ev(0) == -18.0 && ev(0.5) == 0.0 && ev(0.75) == 0.0 && ev(0.25) < -1.0 && ev(0.25) > -17.0);
     for (double b : {0.05, 0.25, 0.4})
-        for (int k : {1, 3, 7, 12}) assert(std::fabs(ev(b + k) - ev(b)) < 1e-9); // every beat the same
-    // rendered: the dip on every beat is what eval says
-    const std::string out = dir + "/pump.wav";
-    r.ok("render --out " + out + " --to 8");
+        for (int k : {1, 3, 7}) assert(std::fabs(ev(b + k) - ev(b)) < 1e-9); // every beat the same
+    assert(ev(8.05) == 0.0 && ev(15.05) == 0.0);                        // after it: where it ended (a whole cycle: its end)
+    // rendered: what eval says, the dip heard on every beat of the clip
+    const std::string out = dir + "/autoclips.wav";
+    r.ok("render --out " + out + " --to 16");
     const auto &L = r.fake.written[out][0];
     auto dbAround = [&](double beat) {
         const long long s = std::llround(beat * 24000);
@@ -1261,36 +1276,127 @@ static void test_an_automation_loops_and_a_pump_is_one_line()
         for (long long i = s - 240; i < s + 240; ++i) sum += (double)L[(size_t)i] * L[(size_t)i]; // ten periods of 1 kHz
         return 20.0 * std::log10(std::sqrt(sum / 480.0) / (0.5 / std::sqrt(2.0)));
     };
-    for (double b : {1.05, 2.25, 3.4, 4.75, 6.05, 7.25})
+    for (double b : {1.05, 2.25, 3.4, 4.75, 6.05, 7.25, 9.05, 12.25})
     {
         if (std::fabs(dbAround(b) - ev(b)) >= 0.15) std::printf("    beat %.2f: rendered %.3f dB, eval %.3f dB\n", b, dbAround(b), ev(b));
         assert(std::fabs(dbAround(b) - ev(b)) < 0.15);
     }
-    assert(dbAround(6.05) < dbAround(6.75) - 15.0);                     // the pump, heard: down on the beat
-    // its span — from beat 4 for 8 beats; outside it rests where a cycle ends (0 dB here)
-    const double dip = ev(0.05);
-    r.ok("set au_1.at=4 au_1.length=8");
-    assert(ev(0.05) == 0.0 && ev(2.05) == 0.0 && ev(4.05) == dip && ev(11.05) == dip && ev(12.05) == 0.0);
-    assert(r.ok("get au_1.loop") == "1.0\n" && r.ok("get au_1.at") == "4.0\n" && r.ok("get au_1.length") == "8.0\n");
-    // off: the curve as drawn — after its point at 0.5 it holds 0 dB
-    r.ok("set au_1.loop=0");
-    assert(ev(4.05) == 0.0 && ev(0.05) == dip);
-    r.ok("undo");
-    assert(r.svc.model().automations[0].loop == 1.0);
-    // refused, naming why
-    assert(contains(r.no("set au_1.loop=-1"), "beats from 0"));
-    assert(contains(r.no("set au_1.lop=1"), "loop"));
-    // the .slp keeps it, and reads it back
-    r.ok("project save");
-    std::ifstream f(song);
-    const std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    assert(contains(text, "loop=1") && contains(text, "at=4") && contains(text, "length=8"));
-    r.ok("project open " + song);
+    assert(dbAround(6.05) < dbAround(6.75) - 15.0 && std::fabs(dbAround(9.05)) < 0.15); // the pump, heard; after the clip, not
+    // a copy, where it is put — linked: one curve
+    r.ok("set " + clip + ".length=4");
+    const std::string copy = firstLine(r.ok("clip duplicate " + clip + " --at 8"));
+    assert(r.clip(copy)->automation == "au_1" && r.clip(copy)->lane == lane && r.clip(copy)->linked == 2 && r.svc.model().automations[0].clips == 2);
+    assert(ev(8.05) == ev(0.05) && ev(10.25) == ev(0.25) && ev(5.05) == 0.0 && ev(12.05) == 0.0);
+    r.ok("auto point move au_1 --at 0 --value -12");
+    assert(ev(0) == -12.0 && ev(8.0) == -12.0 && ev(11.0) == -12.0); // edit one curve: every clip of it
+    // before its first clip, its rest — the property's value when it was made; set, it rests there
+    r.ok("clip move " + clip + " --at 2");
+    assert(ev(0.05) == 0.0 && ev(1.5) == 0.0 && ev(2.0) == -12.0);
+    r.ok("set au_1.rest=-6");
+    assert(ev(0.05) == -6.0 && r.ok("get au_1.rest") == "-6.0\n");
+    assert(contains(r.no("set au_1.rest=50"), "au_1.rest is in its range"));
+    // a later clip cuts an earlier one — and Make unique gives one its own curve, still driving ch_2.gain
+    const std::string over = firstLine(r.ok("clip duplicate " + clip + " --at 3.5"));
+    assert(r.ok("clip unique " + over) == "au_2\n");
     {
-        const auto &a = r.svc.model().automations[0];
-        assert(a.loop == 1.0 && a.at == 4.0 && a.length == 8.0);
+        const auto &m = r.svc.model();
+        const AutomationModel *u = nullptr;
+        for (const auto &a : m.automations)
+            if (a.id == "au_2") u = &a;
+        assert(u && u->of == "au_1" && u->name == m.automations[0].name + " 2" && u->length == 1.0 && u->usedBy.size() == 1 && r.clip(over)->automation == "au_2");
     }
-    pass("An automation loops (R-AUTO-12/13): `auto create --pump` is a one-beat dip repeated through the song — eval repeats every beat and the render is what eval says (the dip heard, > 15 dB); .at / .length bound where it repeats, resting where a cycle ends; loop 0 is the curve as drawn; the .slp keeps it");
+    r.ok("auto point move au_2 --at 0 --value -30");
+    assert(ev(2.05) == ev(10.05) && ev(3.0) == -12.0);                 // the first: before the copy starts
+    assert(ev(3.5) == -30.0 && ev(4.5) == -30.0 && ev(6.5) == -30.0);   // the copy from where it begins (to 7.5)
+    assert(ev(7.6) == 0.0);                                             // after it: where it ended
+    assert(contains(r.no("set ch_2.pan==au_2"), "au_2, a copy of au_1's curve — read au_1"));
+    // its curve's place in the song: time edits move its clips as clips; its points never move
+    r.ok("time insert --at 0 --length 4");
+    assert(r.clip(clip)->at == 6.0 && r.clip(copy)->at == 12.0 && r.svc.model().automations[0].points[0].at == 0.0);
+    r.ok("undo");
+    // refused, naming why
+    assert(contains(r.no("auto create ch_2.gain --pump"), "--pump"));
+    assert(contains(r.no("set au_1.loop=1"), "au_1.loop is gone (R-AUTO-12 withdrawn)"));
+    assert(contains(r.no("set au_1.at=4"), "clip add --auto au_1"));
+    assert(contains(r.no("set au_1.length=0"), "beats > 0"));
+    assert(contains(r.no("set " + clip + ".gain=-3"), "an automation clip — its fields are name, at and length"));
+    assert(contains(r.no("clip move " + clip + " --strip ch_2"), "plays through no strip"));
+    assert(contains(r.no("clip split " + clip + " --at 3"), "is an automation clip"));
+    assert(contains(r.no("clip add --auto au_9 --at 0"), "no automation `au_9`"));
+    assert(contains(r.no("clip add --auto au_1 --src tone.wav"), "not with --src"));
+    const std::string inst = firstLine(r.ok("clip add --instrument synth --at 0 --length 4"));
+    const std::string instLane = r.clip(inst)->lane;
+    assert(contains(r.no("clip move " + clip + " --lane " + instLane), "an instrument: its notes go there"));
+    assert(contains(r.no("clip move " + inst + " --lane " + lane), "an automation: its clips go there"));
+    assert(contains(r.no("clip duplicate " + clip + " --lane " + instLane), "an instrument"));
+    // on a plain lane any automation's clip may sit (lanes are organisation, law 5)
+    const std::string plain = firstLine(r.ok("lane add Plain"));
+    r.ok("clip move " + copy + " --lane " + plain);
+    assert(r.clip(copy)->lane == plain && ev(8.05) == ev(2.05));
+    // `clip add --auto` places one on its track; the .slp keeps it all, and reads it back
+    const std::string third = firstLine(r.ok("clip add --auto au_1 --at 20 --length 2"));
+    assert(r.clip(third)->lane == lane && r.clip(third)->length == 2.0);
+    r.ok("project save");
+    std::string text;
+    {
+        std::ifstream f(song);
+        text.assign((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    }
+    assert(contains(text, "\nautoclips  = on\n") && contains(text, "#aclip id=" + third + " auto=au_1 lane=" + lane + " at=20.0 length=2.0") &&
+           contains(text, "auto=au_1 order=") && contains(text, "of=au_1 length=1.0") && contains(text, "length=1.0 rest=-6.0"));
+    const std::string before = r.text();
+    r.ok("project open " + song);
+    assert(r.text() == before); // a fixed point: read back as written
+    // deleting it takes its copy, its clips and its track
+    r.ok("auto delete au_1 --unbind");
+    assert(r.svc.model().automations.empty());
+    for (const auto &c : r.svc.model().clips) assert(c.kind != "automation");
+    for (const auto &l : r.svc.model().lanes) assert(l.automation.empty());
+    pass("automation clips (R-AUTO-14): `auto create` makes the automation, its track and a clip following its length; a clip longer repeats it — eval every beat, the render what eval says (the dip heard, > 15 dB); a copy is linked; between clips where the one before ended, before the first its rest; a later clip cuts an earlier; Make unique a curve of its own that still drives the first's property; time edits move clips, never points; refusals; the .slp keeps it all; delete takes copies, clips and track");
+}
+
+// R-AUTO-14: a song saved before automation clips plays as it did — its automations become clips at 0 (as long as their
+// points reach, in whole bars), an R-AUTO-12 loop a clip over its span of an automation as long as its cycle, resting
+// where a cycle ends
+static void test_a_song_from_before_automation_clips_plays_as_it_did()
+{
+    Run r;
+    const std::string song = freshSong("autoold");
+    r.ok("project new " + song + " --bpm 120");
+    r.ok("clip add --src tone.wav --at 0 --length 16");
+    r.ok("project save");
+    std::string text;
+    {
+        std::ifstream f(song);
+        text.assign((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    }
+    text.erase(text.find("autoclips  = on\n"), std::string("autoclips  = on\n").size());
+    text += "\n#aauto id=au_1 name=Pump unit=dB min=-120.0 max=12.0 from=ch_2.gain loop=1.0 at=4.0 length=8.0\n"
+            "  #point at=0.0 value=-18.0 shape=smooth\n  #point at=0.5 value=0.0\n"
+            "#aauto id=au_2 name=Sweep unit=dB min=-120.0 max=12.0 from=ch_2.pan\n"
+            "  #point at=0.0 value=0.0\n  #point at=10.0 value=-10.0\n"
+            "#abind address=ch_2.gain formula=\"=au_1\"\n";
+    { std::ofstream(song) << text; }
+    const std::string opened = r.ok("project open " + song);
+    const auto &m = r.svc.model();
+    assert(m.automations.size() == 2 && m.automations[0].length == 1.0 && m.automations[0].rest == 0.0);
+    assert(m.automations[1].length == 12.0 && m.automations[1].rest == 0.0); // its points reach 10: three bars
+    std::string loopClip;
+    for (const auto &c : m.clips)
+        if (c.automation == "au_1") loopClip = c.id;
+    assert(!loopClip.empty() && r.clip(loopClip)->at == 4.0 && r.clip(loopClip)->length == 8.0);
+    auto ev = [&](double beat) {
+        const std::string e = r.ok("eval ch_2.gain --at " + canonicalNumber(beat));
+        return std::atof(e.substr(e.find(" = ") + 3).c_str());
+    };
+    // as R-AUTO-12 played it: before the span and after it where a cycle ends (0 dB); in it, the dip every beat
+    assert(ev(0.05) == 0.0 && ev(3.05) == 0.0 && ev(4.0) == -18.0 && ev(11.0) == -18.0 && ev(12.05) == 0.0);
+    assert(std::fabs(ev(4.25) - ev(9.25)) < 1e-9);
+    r.ok("set ch_2.pan==au_2/10");
+    const std::string e = r.ok("eval ch_2.pan --at 5");
+    assert(contains(e, "ch_2.pan = -0.5"));                             // the sweep, as drawn in the song's beats
+    (void)opened;
+    pass("a song from before automation clips (R-AUTO-14): a loop becomes an automation as long as its cycle and a clip over its span, resting where a cycle ends — eval as before; a curve a clip at 0 as long as its points reach, in whole bars");
 }
 
 static void test_a_bezier_gain_renders_what_eval_says_and_the_formula_says()
@@ -2685,13 +2791,14 @@ static void test_time_insert_and_delete_move_the_whole_song()
     r.ok("clip add --instrument synth --at 0 --length 4");          // ac_1 0 … 4 (ch_2, pt_1)
     r.ok("clip add --strip ch_2 --pattern pt_1 --at 8 --length 4");  // ac_2 8 … 12
     r.ok("clip add --strip ch_2 --pattern pt_1 --at 2 --length 8");  // ac_3 2 … 10: across 4 and 8
-    r.ok("auto create ch_2.gain");                                   // au_1
+    r.ok("auto create ch_2.gain");                                   // au_1, its clip ac_4 at 0 (R-AUTO-14)
     for (const char *pt : {"0 --value -6", "6 --value 0", "12 --value -3"}) r.ok(std::string("auto point add au_1 --at ") + pt);
     r.ok("marker add A --at 0");
     r.ok("marker add B --at 6 --length 4");
     r.ok("marker add C --at 12");
     r.ok("transport loop 5 9");
     auto clip = [&](const std::string &id) { return r.clip(id); };
+    assert(clip("ac_4") && clip("ac_4")->kind == "automation" && clip("ac_4")->at == 0.0 && clip("ac_4")->length == 16.0); // four bars at least
     auto points = [&] {
         std::vector<double> v;
         for (const auto &x : r.svc.model().automations[0].points) v.push_back(x.at);
@@ -2704,21 +2811,12 @@ static void test_time_insert_and_delete_move_the_whole_song()
         return r.svc.model().markers[0];
     };
     const std::string before = r.text();
-    const std::vector<double> was = points(); // `auto create` seeds its own points too
-    auto shifted = [&](double from, double by, double cutTo) { // what a time edit should make of them
-        std::vector<double> v;
-        for (double x : was)
-        {
-            if (x >= from && x < cutTo) continue;
-            v.push_back(x >= from ? x + by : x);
-        }
-        return v;
-    };
+    const std::vector<double> was = points(); // R-AUTO-14: an automation's points are its own beats — they never move
     // insert a bar at 4: what is at or after it moves; a section, the loop that holds it grows; ac_3 crosses it — said
     const std::string opened = r.ok("time insert --at 4 --length 4");
-    assert(contains(opened, "opened 4.0 beats at 4.0") && contains(opened, "ac_3 crosses beat 4.0 — it stays"));
+    assert(contains(opened, "opened 4.0 beats at 4.0") && contains(opened, "ac_3 crosses beat 4.0 — it stays") && contains(opened, "ac_4 crosses beat 4.0"));
     assert(clip("ac_1")->at == 0.0 && clip("ac_2")->at == 12.0 && clip("ac_3")->at == 2.0 && clip("ac_3")->length == 8.0);
-    assert(points() == shifted(4.0, 4.0, 4.0) && points()[1] == 10.0 && points()[2] == 16.0);
+    assert(points() == was && clip("ac_4")->at == 0.0);                 // its clip crossed the point: it stays, as a clip does
     assert(marker("mk_1").at == 0.0 && marker("mk_2").at == 10.0 && marker("mk_2").length == 4.0 && marker("mk_3").at == 16.0);
     assert(r.svc.model().transport.loopFrom == 9.0 && r.svc.model().transport.loopTo == 13.0);
     r.ok("undo");                                                    // ONE step back — the loop is the session's and stays
@@ -2734,21 +2832,14 @@ static void test_time_insert_and_delete_move_the_whole_song()
     assert(contains(took, "took out 4.0 beats at 4.0") && contains(took, "1 clip gone"));
     assert(!clip(inside) && clip("ac_1")->at == 0.0 && clip("ac_2")->at == 4.0);
     assert(clip("ac_3")->at == 2.0 && clip("ac_3")->length == 4.0);  // a note clip across --from: shortened by the overlap
-    const std::vector<double> after = points(), want = [&] { // the point inside went; the ones after moved
-        std::vector<double> v;
-        for (double x : was)
-            if (x < 4.0) v.push_back(x);
-            else if (x >= 8.0) v.push_back(x - 4.0);
-        return v;
-    }();
-    assert(after == want && std::find(after.begin(), after.end(), 6.0) == after.end() && std::find(after.begin(), after.end(), 8.0) != after.end());
+    assert(clip("ac_4")->at == 0.0 && clip("ac_4")->length == 12.0 && points() == was); // an automation clip the same; its points stay
     assert(marker("mk_2").at == 4.0 && marker("mk_2").length == 2.0 && marker("mk_3").at == 8.0); // B's head was in the span
     assert(r.svc.model().transport.loopFrom == 4.0 && r.svc.model().transport.loopTo == 5.0);
     // refusals name the way
     assert(contains(r.no("time insert --at 4"), "--length"));
     assert(contains(r.no("time insert --at 4 --length 0"), "more than 0"));
     assert(contains(r.no("time delete --from 8 --to 4"), "--to must be after --from"));
-    pass("time edits (R-ARR-2): insert moves what is after and grows what holds it, a crossing clip said; delete takes out what is inside and moves what follows, a looping clip shortened, a plain one across an edge refused before anything moves; ONE undo; the loop the session's");
+    pass("time edits (R-ARR-2): insert moves what is after and grows what holds it, a crossing clip said; delete takes out what is inside and moves what follows, a looping clip shortened (an automation clip too — its points never move, R-AUTO-14), a plain one across an edge refused before anything moves; ONE undo; the loop the session's");
 }
 
 static void test_lane_groups_gather_fold_and_move_together()
@@ -6850,7 +6941,7 @@ static void test_everything_made_is_said()
     check("clip duplicate ac_5 --count 3", "ac_6\nmade: clip=ac_7,ac_8\n");
     check("pattern duplicate pt_1", "pt_3\n");
     check("lane add Spare", "ln_4\n");
-    check("auto create dv_1.filter.cutoff", "au_1\n");
+    check("auto create dv_1.filter.cutoff", "au_1\nmade: lane=ln_5 clip=ac_9\n"); // R-AUTO-14: its track and its clip
     check("send add ch_2 --to ch_1", "sd_1\n");
     check("device add ch_2 --type reverb", "dv_3\n");
     pass("everything made is said: the id first (as before), then `made: strip=… device=… pattern=… lane=…`; each one announced by its own event (R-SVC-8)");
@@ -7582,7 +7673,8 @@ int main()
     test_formulas_bind_numbers_and_refuse_what_cannot_be_read();
     test_an_automated_gain_renders_its_curve();
     test_a_bezier_gain_renders_what_eval_says_and_the_formula_says();
-    test_an_automation_loops_and_a_pump_is_one_line();
+    test_automation_clips_place_and_repeat_an_automation();
+    test_a_song_from_before_automation_clips_plays_as_it_did();
     test_a_sidechain_key_ducks_the_bass();
     test_strip_duck_is_one_line();
     test_a_sampler_plays_its_sound_by_the_key();

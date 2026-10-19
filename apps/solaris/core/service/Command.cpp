@@ -154,7 +154,7 @@ namespace solaris
             {K::LaneUngroup, "lane ungroup", "<lg>", 1, 1, {}, "Let a group's lanes go; the group is gone, the lanes stay where they are.", "R-ARR-3"},
 
             {K::ClipAdd, "clip add", "", 0, 0,
-             {"src=<file>", "strip=<ch>", "instrument=<type>", "plugin=<id|name>", "sample=<file>", "pattern=<pt>", "lane=<ln|new>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>", "warp", "preset=<name>"},
+             {"src=<file>", "strip=<ch>", "instrument=<type>", "plugin=<id|name>", "sample=<file>", "pattern=<pt>", "lane=<ln|new>", "at=<beats>", "length=<beats>", "in=<s>", "out=<s>", "warp", "preset=<name>", "auto=<au>"},
              "Place a clip. With --src: an audio clip; a file the song has not used gets its own new strip on the "
              "first mixer (R-MIX-2), a used one reuses its strip. With --strip <instrument>: a note clip of "
              "--pattern (a new empty 4-beat pattern if none). With --instrument <type>: the same on a NEW instrument "
@@ -164,6 +164,8 @@ namespace solaris
              "a new one (R-SVC-8). On an instrument's TRACK (--lane <ln>) a note clip plays through that instrument — "
              "--strip may be left out, --pattern places that pattern; audio and --instrument are refused there (R-LANE-3). "
              "--warp (with --src): it follows the song's tempo, its own detected now (R-WARP-1; refused when none is heard). "
+             "--auto <au>: a clip of that automation (R-AUTO-14) — on its track (made if it has none), or --lane <a plain "
+             "lane | new>; --length 0 follows the automation's, longer repeats it. "
              "Prints the clip, then `made:` and whatever else it made.", "R-MIX-2"},
             {K::ClipMove, "clip move", "<ac>", 1, 1, {"at=<beats>", "lane=<ln>", "strip=<ch>"},
              "Move a clip in time, to another lane (where it is drawn), and/or another strip (what it sounds through). "
@@ -174,7 +176,10 @@ namespace solaris
              "(onto an instrument's TRACK a note clip's copy plays through that instrument; audio is refused there, as a "
              "move is — R-CLIP-8). A note clip's copy plays the SAME pattern — linked. Prints the first copy, then "
              "`made:` the rest. Shift-drag and Ctrl+V in the window are this line (R-CLIP-9/10).", "R-CLIP-3"},
-            {K::ClipUnique, "clip unique", "<ac>", 1, 1, {}, "Give a note clip its own copy of its pattern.", "R-CLIP-3"},
+            {K::ClipUnique, "clip unique", "<ac>", 1, 1, {},
+             "Give a note clip its own copy of its pattern — or an automation clip its own curve: a new automation `of` its "
+             "automation (\"<name> 2\", a copy of its points), still driving what that one drives (R-AUTO-14). Prints the new pattern "
+             "or automation.", "R-CLIP-3"},
             {K::ClipDelete, "clip delete", "<ac>", 1, 1, {}, "Remove a clip.", "R-LANE-1"},
 
             {K::PatternNew, "pattern new", "", 0, 0, {"name=<text>", "length=<beats>"}, "Create an empty pattern.", "R-CLIP-2"},
@@ -383,19 +388,22 @@ namespace solaris
             {K::PatternPrint, "pattern print", "<pt>", 1, 1, {},
              "Its notes, one per line in the `notes add` notation (pitch as a name or pad), the number after `#`.", "R-SVC-8"},
 
-            {K::AutoCreate, "auto create", "<address>", 1, 1, {"pump"},
-             "Automate a number: a new automation named \"<owner> · <parameter>\", ranged as it, holding its value from "
-             "beat 0 to the song's end, shown on the timeline — and the address bound to `=au_n`. Prints the id. --pump: "
-             "already LOOPING every beat (R-AUTO-13) — down on the beat (18 dB for a level, else to 20 % of its range), back "
-             "to its value by the middle of the beat: the side-chain feel. Loop any automation with `set <au>.loop=<beats>` "
-             "(`.at`, `.length`: where it repeats, R-AUTO-12).", "R-AUTO-5"},
-            {K::AutoAdd, "auto add", "", 0, 0, {"name=<text>", "min=<v>", "max=<v>", "unit=<text>"},
-             "An automation from nothing (default range 0…1). It moves nothing until a formula reads it. Prints the id.", "R-AUTO-4"},
+            {K::AutoCreate, "auto create", "<address>", 1, 1, {},
+             "Automate a number: a new automation named \"<owner> · <parameter>\", ranged as it, as long as the song in whole "
+             "bars and holding its value, resting at it before its clips (`.rest`) — its TRACK (a lane under its property's "
+             "strip's track, else last) and ONE clip of it from beat 0 that follows its length — and the address bound to "
+             "`=au_n`. Prints the id, `made:` the lane and the clip. Copy the clip as any clip (`clip duplicate`, Shift-drag, "
+             "Ctrl+C/V): the copies are linked (R-AUTO-14).", "R-AUTO-5"},
+            {K::AutoAdd, "auto add", "", 0, 0, {"name=<text>", "min=<v>", "max=<v>", "unit=<text>", "length=<beats>", "rest=<v>"},
+             "An automation from nothing (default range 0…1, a bar long, resting at its bottom) and no clip — `clip add --auto` "
+             "places it. It moves nothing until a formula reads it. Prints the id.", "R-AUTO-4"},
             {K::AutoDelete, "auto delete", "<au>", 1, 1, {"unbind"},
-             "Delete an automation. Refused while a formula reads it, unless --unbind (those bindings are cleared).", "R-AUTO-4"},
+             "Delete an automation — its copies, its clips and its tracks with it. Refused while a formula reads it, unless "
+             "--unbind (those bindings are cleared).", "R-AUTO-4"},
             {K::AutoPointAdd, "auto point add", "<au>", 1, 1, {"at=<beats>", "value=<v>", "shape=<linear|hold|smooth|bezier>"},
-             "Add a point (one at the same beat is replaced). Its shape governs the segment after it (a bezier point's "
-             "handles start flat: speed 0, influence 33.333 %).", "R-AUTO-6"},
+             "Add a point at --at beats of the automation's OWN time (one at the same beat is replaced); one past its end grows "
+             "it to the next whole beat (R-AUTO-14). Its shape governs the segment after it (a bezier point's handles start "
+             "flat: speed 0, influence 33.333 %).", "R-AUTO-6"},
             {K::AutoPointMove, "auto point move", "<au>", 1, 1, {"at=<beats>", "to=<beats>", "value=<v>"},
              "Move the point at --at to another beat and/or value.", "R-AUTO-6"},
             {K::AutoPointDelete, "auto point delete", "<au>", 1, 1, {"at=<beats>"}, "Remove the point at --at.", "R-AUTO-6"},

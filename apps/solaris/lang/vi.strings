@@ -449,7 +449,6 @@
 "Delete strip" = "Xóa kênh";
 # a number's menu (every fader, pan, send, parameter)
 "Create Automation" = "Tạo tự động hóa";
-"Create Pump" = "Tạo nhịp nén";
 "Formula…" = "Công thức…";
 "Clear Binding" = "Bỏ liên kết";
 "Reset to Default" = "Đặt lại mặc định";
@@ -509,12 +508,13 @@
 "Range" = "Khoảng";
 "Made from" = "Tạo từ";
 "made from nothing" = "không tạo từ gì";
-"Loop" = "Lặp";
-"the curve as drawn" = "đường cong như đã vẽ";
-"every {1} beat" = "mỗi {1} phách";
-"every {1} beats" = "mỗi {1} phách";
-"from beat {1} for {2} beats" = "từ phách {1} trong {2} phách";
-"from beat {1} to the end" = "từ phách {1} tới hết";
+"Length" = "Độ dài";
+"a clip longer repeats it" = "đoạn dài hơn sẽ lặp lại nó";
+"Rest" = "Giá trị nghỉ";
+"before its first clip" = "trước đoạn đầu tiên";
+"Clips" = "Đoạn";
+"linked: one curve, every clip" = "liên kết: một đường cong cho mọi đoạn";
+"its own curve — a copy of {1}" = "đường cong riêng — bản sao của {1}";
 "1/4 beat" = "1/4 phách";
 "1/2 beat" = "1/2 phách";
 "At the playhead" = "Tại đầu phát";

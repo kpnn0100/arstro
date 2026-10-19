@@ -70,10 +70,14 @@ namespace solaris
     {
         std::string id, name, unit, from;
         double min = 0, max = 1;
-        double loop = 0, at = 0, length = 0;    // R-AUTO-12: beats — its first `loop` repeat from `at` for `length` (0: on)
+        double loop = 0, at = 0, length = 0;    // R-AUTO-14: `length` its own beats (a clip longer repeats it), `loop` the same — the
+                                                // cycle; `at` always 0 (R-AUTO-12's span, withdrawn)
         std::vector<AutoPointModel> points;
         std::vector<std::string> usedBy;        // addresses whose formula reads it
         double now = 0;                         // its value at the playhead, by the engine's evaluator (R-AUTO-11)
+        double rest = 0;                        // R-AUTO-14: its value before its first clip
+        std::string of;                         // R-AUTO-14: a clip's own curve — the automation it is a copy of ("" none)
+        int clips = 0;                          // R-AUTO-14: clips playing it
     };
 
     struct BindingModel
@@ -147,6 +151,7 @@ namespace solaris
         std::string strip;                       // R-LANE-3: the instrument strip it is the track of; empty = plain
         bool ownName = true;                     // false: a track showing its strip's name
         std::string group;                       // R-ARR-3: the lane group it is in ("" none)
+        std::string automation;                  // R-AUTO-14: the automation it is the track of ("" none)
     };
 
     /** R-ARR-3: a named group of lanes, side by side; folded, one row on the timeline. */
@@ -159,7 +164,7 @@ namespace solaris
 
     struct ClipModel
     {
-        std::string id, name, track, lane, kind; // kind = audio | note
+        std::string id, name, track, lane, kind; // kind = audio | note | automation (R-AUTO-14)
         std::string src, pattern;
         double at = 0, length = 0;               // beats; length RESOLVED (file span at the tempo, or the pattern's)
         double offset = 0;                       // R-LAUNCH-1: a note clip's start, beats into its pattern
@@ -176,6 +181,7 @@ namespace solaris
         double fadeInHeard = 0, fadeOutHeard = 0; // R-EDIT-1: its fades grown over an overlap on its lane (beats)
         bool warp = false;                       // R-WARP-1: it follows the song's tempo
         double bpm = 0, pitch = 0;               // R-WARP-1: its own tempo (0 unknown); semitones it is moved
+        std::string automation;                  // R-AUTO-14: an automation clip's automation ("" otherwise)
     };
 
     struct NoteModel

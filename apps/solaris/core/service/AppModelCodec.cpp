@@ -121,6 +121,7 @@ namespace solaris
             {"lanes[].strip", "string", "R-LANE-3: the instrument strip it is the track of — what is on it plays through it; empty = a plain lane"},
             {"lanes[].ownName", "bool", "false: a track showing its instrument strip's name (renaming the strip renames it)"},
             {"lanes[].group", "string", "R-ARR-3: the lane group it is in; empty = none"},
+            {"lanes[].automation", "string", "R-AUTO-14: the automation it is the track of — its clips go there; empty = none"},
             {"groups", "object[]", "R-ARR-3: lane groups, in the order of their first lanes — each group's lanes side by side"},
             {"groups[].id", "string", "lg_n"},
             {"groups[].name", "string", ""},
@@ -192,7 +193,7 @@ namespace solaris
             {"clips[].name", "string", ""},
             {"clips[].track", "string", "the strip it sounds through"},
             {"clips[].lane", "string", "the lane it is drawn on (\"\" = its strip's own row)"},
-            {"clips[].kind", "string", "audio | note"},
+            {"clips[].kind", "string", "audio | note | automation (R-AUTO-14)"},
             {"clips[].src", "string", "audio: the file"},
             {"clips[].pattern", "string", "note: the pattern it plays"},
             {"clips[].at", "number", "beats"},
@@ -205,7 +206,7 @@ namespace solaris
             {"clips[].fadeOut", "number", "beats"},
             {"clips[].loop", "bool", ""},
             {"clips[].offline", "bool", "the file could not be read"},
-            {"clips[].linked", "int", "clips playing the same pattern, this one included (R-CLIP-3)"},
+            {"clips[].linked", "int", "clips playing the same pattern — or, an automation clip, the same automation — this one included (R-CLIP-3, R-AUTO-14)"},
             {"clips[].takes", "string[]", "R-REC-2: a loop recording's passes, the files, in the order played (1-based in the comp)"},
             {"clips[].comp", "object[]", "R-REC-2: which take plays where — song beats [from, to); elsewhere the last take"},
             {"clips[].comp[].take", "int", "1-based"},
@@ -221,6 +222,7 @@ namespace solaris
             {"clips[].warp", "bool", "R-WARP-1: it follows the song's tempo — it lasts its span's own beats, stretched"},
             {"clips[].bpm", "number", "R-WARP-1: its own tempo (0: not known)"},
             {"clips[].pitch", "number", "semitones — R-WARP-1: its span moved, its length kept"},
+            {"clips[].automation", "string", "R-AUTO-14: an automation clip's automation (it plays through no strip)"},
             {"patterns", "object[]", "every pattern"},
             {"patterns[].id", "string", ""},
             {"patterns[].name", "string", ""},
@@ -274,11 +276,14 @@ namespace solaris
             {"automations[].from", "string", "the address it was made from (a hint, not a link)"},
             {"automations[].min", "number", ""},
             {"automations[].max", "number", ""},
-            {"automations[].loop", "number", "beats (R-AUTO-12): its first `loop` beats repeat — 0: it does not loop"},
-            {"automations[].at", "number", "beats: where the repeating starts"},
-            {"automations[].length", "number", "beats it repeats for — 0: to the song's end; outside, where a cycle ends"},
+            {"automations[].loop", "number", "beats — the cycle its clips repeat: its `length` (R-AUTO-14; R-AUTO-12's own loop withdrawn)"},
+            {"automations[].at", "number", "always 0 — R-AUTO-12's span, withdrawn (R-AUTO-14: clips place it)"},
+            {"automations[].length", "number", "beats — its own time, 0 … length; a clip longer repeats it (R-AUTO-14)"},
+            {"automations[].rest", "number", "R-AUTO-14: its value before its first clip, and with none"},
+            {"automations[].of", "string", "R-AUTO-14: a clip's own curve (Make unique) — the automation it is a copy of, which it drives; empty = none"},
+            {"automations[].clips", "int", "R-AUTO-14: clips playing it"},
             {"automations[].points", "object[]", "sorted by at"},
-            {"automations[].points[].at", "number", "beats"},
+            {"automations[].points[].at", "number", "beats — its own (R-AUTO-14)"},
             {"automations[].points[].value", "number", "in the automation's unit"},
             {"automations[].points[].shape", "string", "linear | hold | smooth | bezier — the segment after it (bezier: both its sides)"},
             {"automations[].points[].speedIn", "number", "bezier (R-AUTO-10): the slope arriving, in the automation's unit per beat"},
@@ -581,6 +586,7 @@ namespace solaris
                 Json x = Json::object().set("id", l.id).set("name", l.name);
                 if (!l.strip.empty()) x.set("track", l.strip);
                 if (!l.group.empty()) x.set("group", l.group); // R-ARR-3
+                if (!l.automation.empty()) x.set("automation", l.automation); // R-AUTO-14
                 lanes.push(x);
             }
             j.set("lanes", lanes);
@@ -616,6 +622,7 @@ namespace solaris
                 Json x = Json::object();
                 x.set("id", c.id).set("track", c.track).set("lane", c.lane).set("at", c.at).set("length", c.length);
                 if (c.kind == "audio") x.set("src", c.src);
+                else if (c.kind == "automation") x.set("automation", c.automation); // R-AUTO-14
                 else x.set("pattern", c.pattern);
                 if (c.gain != 0) x.set("gain", c.gain);
                 if (c.fadeIn != 0) x.set("fadeIn", c.fadeIn);
@@ -663,7 +670,8 @@ namespace solaris
                     for (const auto &pt : a.points) pts.push(Json::string(beatText(pt.at) + "=" + canonicalNumber(pt.value) + (pt.shape == "linear" ? "" : " " + pt.shape)));
                     Json ao = Json::object().set("id", a.id).set("name", a.name).set("min", a.min).set("max", a.max).set("points", pts)
                                   .set("usedBy", strings(a.usedBy));
-                    if (a.loop > 0) ao.set("loop", a.loop).set("at", a.at).set("length", a.length); // R-AUTO-12
+                    ao.set("length", a.length).set("rest", a.rest).set("clips", a.clips); // R-AUTO-14
+                    if (!a.of.empty()) ao.set("of", a.of);
                     autos.push(ao);
                 }
                 j.set("automations", autos);
@@ -731,7 +739,7 @@ namespace solaris
         Json lanes = Json::array();
         for (const auto &l : m.lanes)
             lanes.push(Json::object().set("id", l.id).set("name", l.name).set("order", l.order).set("colour", l.colour).set("strip", l.strip).set("ownName", l.ownName)
-                           .set("group", l.group));
+                           .set("group", l.group).set("automation", l.automation));
         j.set("lanes", lanes);
         Json groups = Json::array(); // R-ARR-3
         for (const auto &g : m.groups) groups.push(Json::object().set("id", g.id).set("name", g.name).set("folded", g.folded).set("lanes", strings(g.lanes)));
@@ -776,7 +784,7 @@ namespace solaris
                            .set("out", c.out).set("gain", c.gain).set("fadeIn", c.fadeIn).set("fadeOut", c.fadeOut)
                            .set("loop", c.loop).set("offline", c.offline).set("linked", c.linked).set("takes", strings(c.takes)).set("comp", comp)
                            .set("plays", plays).set("reverse", c.reverse).set("fadeInHeard", c.fadeInHeard).set("fadeOutHeard", c.fadeOutHeard)
-                           .set("warp", c.warp).set("bpm", c.bpm).set("pitch", c.pitch));
+                           .set("warp", c.warp).set("bpm", c.bpm).set("pitch", c.pitch).set("automation", c.automation));
         }
         j.set("clips", clips);
         Json patterns = Json::array();
@@ -817,7 +825,7 @@ namespace solaris
                              .set("inflIn", pt.inflIn).set("speedOut", pt.speedOut).set("inflOut", pt.inflOut));
             Json ao = Json::object().set("id", a.id).set("name", a.name).set("unit", a.unit).set("from", a.from).set("min", a.min)
                           .set("max", a.max).set("loop", a.loop).set("at", a.at).set("length", a.length).set("points", pts)
-                          .set("usedBy", strings(a.usedBy));
+                          .set("usedBy", strings(a.usedBy)).set("rest", a.rest).set("of", a.of).set("clips", a.clips);
             if (!stable) ao.set("now", a.now);
             autos.push(ao);
         }

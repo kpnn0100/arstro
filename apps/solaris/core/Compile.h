@@ -50,7 +50,8 @@ namespace solaris
     /** An automation as the engine evaluates it (R-AUTO-7, R-AUTO-10): its points at `samplesPerBeat`,
      *  speeds per sample, ranged as it. The one compiler of a curve — the graph, `eval` and the model's
      *  `automations[].now` all read it. */
-    engine::Curve compileCurve(const Automation &a, double samplesPerBeat);
+    /** R-AUTO-14: an automation (not a copy) as the engine reads it — its shape and its copies', placed by their clips. */
+    engine::Curve compileCurve(const Project &p, const Automation &a, double samplesPerBeat);
 
     long long beatsToSamples(const Project &p, double beats);
     double secondsToBeats(const Project &p, double seconds);

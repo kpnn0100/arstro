@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► O1 — automation clips: the model, the engine, the service** (R-AUTO-14, Round 23; the user: *"it should be create a clip for automation and user can copy just like a midi track"*), then O2 the window. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► O2 — automation clips in the window** (R-AUTO-14, Round 23): automation tracks among the lanes, the AUTOMATION section gone; clips drawing their curve and its repeats; points edited in a clip; moved, copied and resized by the clip; its menu (Make unique, Length ▸, Open automation, Copy ID, Delete); shots. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -725,12 +725,17 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
 *"it is not create pump — it should be create a clip for automation and user can copy just like a midi track"*. The
 user chose: Create Pump removed; automation clips on lanes like MIDI clips; copies linked (Make unique forks); the loop
 setting replaced by clips that repeat, old songs converted.
-- [ ] **O1** The model, the engine, the service: an automation's points in its own beats with a `length` and a `rest`;
+- [x] **O1** The model, the engine, the service: an automation's points in its own beats with a `length` and a `rest`;
       `#aclip auto=`, `#alane auto=`, `#aauto of=` (Make unique); `autoclips = on` and the adoption of older songs; the
       engine's spans; `auto create` makes the track and a clip, `auto add --length --rest`, `clip add --auto`, `set
       <au>.length|rest`, the clip verbs on automation clips, `--pump` and `<au>.loop|at` gone; time edits; the model's
       fields; L2 + model + engine tests measured; the API. The window's span grips, Loop combo and Create Pump go with
       their tests (the AUTOMATION rows stay until O2).
+      — DR-AUTO-9 (DR-AUTO-8 withdrawn). L2 two tests (measured: eval every beat, a render within 0.15 dB, the dip >
+      15 dB; an older song plays as before), model one, engine one, UI one; shot automation-length; 10 mutants red, one
+      equivalent (the overlap cut — the engine reads the span that began last) deleted as dead code. The EDM and canon
+      demos pass unchanged. Found: a stale object after a header change made a test fail twice — a clean rebuild of the
+      touched targets cleared it (noted for the gotchas).
 - [ ] **O2** The window: automation tracks among the lanes, the AUTOMATION section gone; clips drawing their curve and
       its repeats; points edited in a clip; moved, copied (Shift-drag, Ctrl+C/V) and resized by the clip; the clip's
       menu (Make unique, Length ▸, Open automation, Copy ID, Delete); the window's Length combo, rest and clips; shots.

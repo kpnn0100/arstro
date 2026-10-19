@@ -24,25 +24,6 @@ namespace solaris
     {
         constexpr double kEps = 0.5 / kPpq;
 
-        /** The lanes `made`, in that order, right under `under` — renumbered as `lane move` does, and in its group
-         *  when it has one (R-ARR-3). Nothing moves when `under` is no lane (a clip on none: they stay last). */
-        void placeUnder(Project &p, const std::string &under, const std::vector<std::string> &made)
-        {
-            const Lane *u = p.lane(under);
-            if (!u) return;
-            const std::string group = u->group;
-            std::vector<const Lane *> order;
-            for (const auto &l : p.lanes) order.push_back(&l);
-            std::stable_sort(order.begin(), order.end(), [](const Lane *a, const Lane *b) { return a->order < b->order; });
-            std::vector<std::string> ids;
-            for (const Lane *l : order)
-                if (std::find(made.begin(), made.end(), l->id) == made.end()) ids.push_back(l->id);
-            ids.insert(std::find(ids.begin(), ids.end(), under) + 1, made.begin(), made.end());
-            for (size_t i = 0; i < ids.size(); ++i) p.lane(ids[i])->order = (int)i;
-            for (const auto &m : made) p.lane(m)->group = group;
-            gatherLaneGroups(p);
-        }
-
         std::vector<float> monoOf(const std::vector<std::vector<float>> &ch)
         {
             std::vector<float> m(ch.empty() ? 0 : ch[0].size());
@@ -86,6 +67,7 @@ namespace solaris
         auto clipSound = [&](const std::string &id, const std::string &verb, const Clip *&cl, std::vector<std::vector<float>> &ch) {
             cl = p.clip(id);
             if (!cl) { err = "no clip `" + id + "`"; return false; }
+            if (cl->isAuto()) { err = id + " is an automation clip — `" + verb + "` listens to an audio clip"; return false; }
             if (!cl->isAudio()) { err = id + " is a note clip — its notes are its pattern's; `" + verb + "` listens to an audio clip"; return false; }
             if (!pcmFor(cl->src)) { err = id + "'s file (" + cl->src + ") is offline — nothing to listen to"; return false; }
             return renderClipsRaw({cl->id}, cl->track, cl->at, cl->at + clipLengthBeats(p, *cl), ch, err);
@@ -117,7 +99,7 @@ namespace solaris
                 made.push_back(nc.id);
                 lanes.push_back(nc.lane);
             }
-            placeUnder(p, orig.lane, lanes);
+            placeLanesUnder(p, orig.lane, lanes);
             p.clips.erase(std::remove_if(p.clips.begin(), p.clips.end(), [&](const Clip &x) { return x.id == orig.id; }), p.clips.end());
             changed("clip.deleted", orig.id);
             mOutput = made[0] + "\n"; // the harmonic clip; `made:` names the percussive one and the strips and lanes
@@ -157,7 +139,7 @@ namespace solaris
                 n.vel = tn.velocity;
                 if (n.at < pt->length - kEps) pt->notes.push_back(n);
             }
-            placeUnder(p, orig.lane, {nc.lane});
+            placeLanesUnder(p, orig.lane, {nc.lane});
             changed("pattern.changed", pt->id);
             mOutput = nc.id + "\n";
             return true;

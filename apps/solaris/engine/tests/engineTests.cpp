@@ -520,6 +520,45 @@ static void test_bindings_drive_gain_and_parameters_at_control_rate()
     pass("bindings: a curve drives a gain and a formula a device parameter, every 64 samples, ramped, byte-identical however chopped (R-AUTO-7)");
 }
 
+static void test_a_curve_is_placed_by_its_clips()
+{
+    // R-AUTO-14: a compiled curve is PLACED by its clips' spans — before the first its rest, inside one its shape at
+    // the place in its cycle, after one where it stopped (a whole number of cycles: the cycle's end), a copy's shape where
+    // its clip plays; found by binary search, allocating nothing
+    auto key = [](double t, double v) {
+        CurvePoint p;
+        p.t = t;
+        p.v = v;
+        return p;
+    };
+    Curve c;
+    c.keys = curveKeys({key(0, 0), key(100, 10)});    // a ramp 0 → 10 over its cycle of 100
+    c.copies = {curveKeys({key(0, 50)})};               // a copy: 50 throughout
+    c.placed = true;
+    c.rest = -1.0;
+    c.spans = {CurveSpan{1000, 1350, 100, 0}, CurveSpan{2000, 2100, 0, 1}};
+    assert(c.valueAt(0) == -1.0 && c.valueAt(999) == -1.0);                    // its rest, before the first
+    assert(c.valueAt(1000) == 0.0 && c.valueAt(1050) == 5.0 && c.valueAt(1150) == 5.0 && c.valueAt(1249) == 4.9);
+    assert(c.valueAt(1350) == 5.0 && c.valueAt(1999) == 5.0);                  // after it: where it stopped (350 = 3½ cycles)
+    assert(c.valueAt(2000) == 50.0 && c.valueAt(2099) == 50.0 && c.valueAt(9000) == 50.0); // the copy's shape, then held
+    Curve whole = c;
+    whole.spans = {CurveSpan{0, 200, 100, 0}};
+    assert(whole.valueAt(150) == 5.0 && whole.valueAt(200) == 10.0 && whole.valueAt(500) == 10.0); // two cycles: the end
+    Curve none = c;
+    none.spans.clear();
+    assert(none.valueAt(0) == -1.0 && none.valueAt(5000) == -1.0);            // no clip at all: its rest
+    Curve clamped = c;
+    clamped.lo = 0.0;
+    assert(clamped.valueAt(0) == 0.0);                                          // a rest is clamped as a value is
+    gAllocs = 0;
+    gCounting = true;
+    double sum = 0;
+    for (long long s = 0; s < 3000; ++s) sum += c.valueAt(s);
+    gCounting = false;
+    assert(gAllocs.load() == 0 && std::isfinite(sum));
+    pass("a curve placed by its clips (R-AUTO-14): its rest before the first, its cycle inside one, where it stopped after (a whole number of cycles: the end), a copy's shape, no clip its rest, clamped — allocating nothing");
+}
+
 static void test_curves_are_interstellars_keyframes()
 {
     // R-AUTO-10 (law 16): a curve IS Interstellar's keyframe model, evaluated by its Anim.h. Linear and
@@ -1001,6 +1040,7 @@ int main()
     test_live_render_allocates_nothing_and_takes_live_edits();
     test_bindings_drive_gain_and_parameters_at_control_rate();
     test_curves_are_interstellars_keyframes();
+    test_a_curve_is_placed_by_its_clips();
     test_latency_is_compensated_everywhere_signals_meet();
     test_live_input_is_heard_through_its_strip();
     test_the_strips_nothing_feeds_render_in_any_order();

@@ -42,20 +42,20 @@ namespace solaris_ui
     AutomationPanel::AutomationPanel(std::string au) : mAu(std::move(au))
     {
         clipToBounds = true;
-        // R-AUTO-12: how often it repeats — Artboard's combo in cosmo's tokens, its label cross-fading (SettingCombo)
-        mLoop = std::make_shared<SettingCombo>();
-        mLoop->width.set(112.0);
-        mLoop->height.set(22.75);
-        mLoop->onChange = [this](int i) {
-            if (i >= 0 && i < (int)mLoopBeats.size() && onCommand) onCommand("set " + mAu + ".loop=" + beatText(mLoopBeats[(size_t)i]));
+        // R-AUTO-14: how long it is — a clip longer repeats it; Artboard's combo in cosmo's tokens, its label cross-fading (SettingCombo)
+        mLength = std::make_shared<SettingCombo>();
+        mLength->width.set(112.0);
+        mLength->height.set(22.75);
+        mLength->onChange = [this](int i) {
+            if (i >= 0 && i < (int)mLengthBeats.size() && onCommand) onCommand("set " + mAu + ".length=" + beatText(mLengthBeats[(size_t)i]));
         };
-        addChild(mLoop);
+        addChild(mLength);
     }
 
-    Rect AutomationPanel::loopRect() const
+    Rect AutomationPanel::lengthRect() const
     {
         const Rect rn = renameRect();
-        return Rect{rn.x - 6.5 - mLoop->width.value(), rn.y + (rn.h - mLoop->height.value()) * 0.5, mLoop->width.value(), mLoop->height.value()};
+        return Rect{rn.x - 6.5 - mLength->width.value(), rn.y + (rn.h - mLength->height.value()) * 0.5, mLength->width.value(), mLength->height.value()};
     }
 
     std::string AutomationPanel::title() const { return say("Automation \xE2\x80\x94 {1}", mModel.name.empty() ? mAu : mModel.name); } // words: the window shows them
@@ -98,32 +98,32 @@ namespace solaris_ui
         add("from:" + mModel.from, Row::Info, say("Made from"), mModel.from.empty() ? std::string("\xE2\x80\x94") : mModel.from,
             mModel.from.empty() ? say("made from nothing") : std::string());
         {
-            // R-AUTO-12: the loop, said — its cycle and where it repeats
-            std::string loop = say("off"), where = say("the curve as drawn");
-            if (mModel.loop > 0)
-            {
-                loop = mModel.loop == 1.0 ? say("every {1} beat", beatText(mModel.loop)) : say("every {1} beats", beatText(mModel.loop));
-                where = mModel.length > 0 ? say("from beat {1} for {2} beats", beatText(mModel.at), beatText(mModel.length)) : say("from beat {1} to the end", beatText(mModel.at));
-            }
-            add("loop:" + loop + "|" + where, Row::Info, say("Loop"), loop, where);
+            // R-AUTO-14: its length (a clip longer repeats it), where it rests, the clips that play it
+            const std::string len = mModel.length == 1.0 ? sayn(1, "{1} beat", "{1} beats", 1) : say("{1} beats", beatText(mModel.length));
+            add("length:" + len, Row::Info, say("Length"), len, say("a clip longer repeats it"));
+            const std::string rest = format(mModel.rest);
+            add("rest:" + rest, Row::Info, say("Rest"), rest, say("before its first clip"));
+            const std::string clips = std::to_string(mModel.clips);
+            add("clips:" + clips + "|" + mModel.of, Row::Info, say("Clips"), clips,
+                mModel.of.empty() ? say("linked: one curve, every clip") : say("its own curve — a copy of {1}", mModel.of));
         }
         {
-            // the Loop combo's options: Off, 1/4, 1/2, 1, 2 beats, 1, 2, 4 bars — and a value set elsewhere, kept visible
+            // the Length combo's options: 1/4, 1/2, 1, 2 beats, 1, 2, 4 bars — and a value set elsewhere, kept visible
             const int bpb = std::max(1, std::atoi(m.sig.c_str()));
-            std::vector<std::pair<std::string, double>> opts = {{say("Off"), 0.0}, {say("1/4 beat"), 0.25}, {say("1/2 beat"), 0.5}, {sayn(1, "{1} beat", "{1} beats", 1), 1.0},
+            std::vector<std::pair<std::string, double>> opts = {{say("1/4 beat"), 0.25}, {say("1/2 beat"), 0.5}, {sayn(1, "{1} beat", "{1} beats", 1), 1.0},
                                                                  {sayn(2, "{1} beat", "{1} beats", 2), 2.0}, {sayn(1, "{1} bar", "{1} bars", 1), (double)bpb},
                                                                  {sayn(2, "{1} bar", "{1} bars", 2), 2.0 * bpb}, {sayn(4, "{1} bar", "{1} bars", 4), 4.0 * bpb}};
             int sel = -1;
             for (size_t i = 0; i < opts.size(); ++i)
-                if (std::fabs(opts[i].second - mModel.loop) < 1e-9) sel = (int)i;
-            if (sel < 0) { opts.emplace_back(say("{1} beats", beatText(mModel.loop)), mModel.loop); sel = (int)opts.size() - 1; }
+                if (std::fabs(opts[i].second - mModel.length) < 1e-9) sel = (int)i;
+            if (sel < 0) { opts.emplace_back(say("{1} beats", beatText(mModel.length)), mModel.length); sel = (int)opts.size() - 1; }
             std::vector<std::string> labels;
-            mLoopBeats.clear();
-            mLoopWords.clear();
-            for (const auto &o : opts) { labels.push_back(::arstro::solaris_ui::shown(o.first)); mLoopWords.push_back(o.first); mLoopBeats.push_back(o.second); }
-            mLoopLang = solaris_strings::language();
-            if (labels != mLoop->options()) mLoop->setOptions(labels);
-            mLoop->setSelectedIndex(sel);
+            mLengthBeats.clear();
+            mLengthWords.clear();
+            for (const auto &o : opts) { labels.push_back(::arstro::solaris_ui::shown(o.first)); mLengthWords.push_back(o.first); mLengthBeats.push_back(o.second); }
+            mLengthLang = solaris_strings::language();
+            if (labels != mLength->options()) mLength->setOptions(labels);
+            mLength->setSelectedIndex(sel);
         }
         add("now", Row::Now, say("At the playhead"), "", "");
         add("sec:points:" + std::to_string(mModel.points.size()), Row::Section, say("Points \xC2\xB7 {1}", (long)mModel.points.size()), "", "");
@@ -151,19 +151,19 @@ namespace solaris_ui
     void AutomationPanel::layout()
     {
         mScroll.setExtent(kHeaderH, std::max(0.0, height.value() - kHeaderH), mContentH);
-        const Rect lr = loopRect();
-        mLoop->x.set(lr.x);
-        mLoop->y.set(lr.y);
+        const Rect lr = lengthRect();
+        mLength->x.set(lr.x);
+        mLength->y.set(lr.y);
     }
 
     void AutomationPanel::advance(double nowMs)
     {
-        if (mLoopLang != solaris_strings::language() && !mLoopWords.empty()) // R-ACCESS-2: its choices in the language now — the combo cross-fades
+        if (mLengthLang != solaris_strings::language() && !mLengthWords.empty()) // R-ACCESS-2: its choices in the language now — the combo cross-fades
         {
             std::vector<std::string> labels;
-            for (const auto &w : mLoopWords) labels.push_back(::arstro::solaris_ui::shown(w));
-            mLoop->setOptions(labels);
-            mLoopLang = solaris_strings::language();
+            for (const auto &w : mLengthWords) labels.push_back(::arstro::solaris_ui::shown(w));
+            mLength->setOptions(labels);
+            mLengthLang = solaris_strings::language();
         }
         // the value at the playhead: continuous while playing (the transport is the animation), eased to a jump
         if (!mNowInit)
@@ -265,7 +265,7 @@ namespace solaris_ui
         t.setFill(palette::mutedForeground());
         const std::string head = mModel.id + (mModel.unit.empty() ? std::string() : " \xC2\xB7 " + mModel.unit) + " \xC2\xB7 " +
                                  fillIn(trn((long)mModel.points.size(), "{1} point", "{1} points"), std::to_string(mModel.points.size()));
-        t.drawText(textfit::ellipsize(t, head, std::max(0.0, loopRect().x - 2.0 * pad), 10.0, font::mono()), pad, textfit::baseline(rn.y + rn.h * 0.5, 10.0), 10.0,
+        t.drawText(textfit::ellipsize(t, head, std::max(0.0, lengthRect().x - 2.0 * pad), 10.0, font::mono()), pad, textfit::baseline(rn.y + rn.h * 0.5, 10.0), 10.0,
                    font::mono());
         const double hv = mHover.amount(0);
         drawRoundedRect(t, rn, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::popover(), hv)));

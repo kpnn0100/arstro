@@ -42,6 +42,7 @@ namespace
         "masterGain = -1.5\n"
         "masterOut  = prt_1,prt_2\n"
         "tracks     = on\n"
+        "autoclips  = on\n"
         "futureKey  = kept\n"
         "; a note to myself\n"
         "\n"
@@ -68,6 +69,7 @@ namespace
         "\n"
         "#alane id=ln_1 name=Drums order=0 colour=3\n"
         "#alane id=ln_2 name=\"Lead line\" track=ch_3 order=1\n"
+
         "\n"
         "#apattern id=pt_1 name=hook length=4.0\n"
         "  #note pitch=60 at=0.0 length=0.5 vel=100\n"
@@ -77,8 +79,9 @@ namespace
         "#aclip id=ac_1 name=kick track=ch_2 lane=ln_1 src=\"samples/kick 01.wav\" at=0.0 in=0.0 out=0.512 gain=-2.0 fadeOut=0.125\n"
         "#aclip id=ac_2 name=hook track=ch_3 lane=ln_2 pattern=pt_1 at=4.0 length=16.0\n"
         "#aclip id=ac_3 track=ch_3 pattern=pt_1 at=20.0\n"
+
         "\n"
-        "#aauto id=au_1 name=\"Lead · Cutoff\" unit=Hz min=20.0 max=20000.0 from=dv_1.filter.cutoff\n"
+        "#aauto id=au_1 name=\"Lead · Cutoff\" unit=Hz min=20.0 max=20000.0 from=dv_1.filter.cutoff length=4.0 rest=400.0\n"
         "  #point at=0.0 value=400.0\n"
         "  #point at=4.0 value=1600.0 shape=smooth\n"
         "\n"
@@ -164,7 +167,7 @@ static void test_automation_sketch_and_binding_refusals()
     assert(parseProject(sketch, p, err, &rep));
     const Automation *a = p.automation("au_1");
     assert(a && a->from == "dv_1.filter.cutoff" && a->points.size() == 2 && a->points[1].value == 1600.0 && a->points[0].shape == "hold");
-    assert(a->unknown.empty() && rep.notes.size() == 1);
+    assert(a->unknown.empty() && rep.notes.size() == 2); // the sketch normalised, and (R-AUTO-14) adopted as a clip
     Project q;
     assert(parseProject(serializeProject(p), q, err) && serializeProject(q) == serializeProject(p)); // normalised once
     // one binding per address, a formula starts with `=`, and it drives something that exists
@@ -185,6 +188,90 @@ static void test_automation_sketch_and_binding_refusals()
     pass("#aauto + #point and #abind: the schema sketch normalises once; one binding per address, on something real (R-AUTO-1/4)");
 }
 
+static void test_automation_clips_in_the_slp()
+{
+    // R-AUTO-14: `#aclip auto=` places an automation, `#alane auto=` is its track, `#aauto of=` a clip's own curve — a
+    // fixed point; refused: a clip on an instrument's track or another automation's, audio on an automation's track, a
+    // copy of a copy, a track that is a copy's, a length of nothing, a rest outside the range; a song from before is
+    // adopted: each automation a track and a clip at 0 (as long as its points reach, whole bars), a loop a clip over its span
+    const std::string head =
+        "arstro-project = 1\napp        = solaris\nid         = prj_8\ntimebase   = beats\nbpm        = 120.0\nsig        = 4/4\n"
+        "ppq        = 960\nsampleRate = 48000\nmasterGain = 0.0\ntracks     = on\nautoclips  = on\n\n"
+        "#amixer id=mx_1 name=Sources order=0\n\n"
+        "#atrack id=ch_1 name=Main kind=bus mixer=mx_1 order=0 gain=0.0 pan=0.0\n"
+        "#atrack id=ch_2 name=Lead kind=instrument mixer=mx_1 order=1 gain=0.0 pan=0.0\n\n";
+    const std::string text = head +
+        "#alane id=ln_1 name=\"\" track=ch_2 order=0\n"
+        "#alane id=ln_2 name=\"\" auto=au_1 order=1\n"
+        "#alane id=ln_3 name=Plain order=2\n\n"
+        "#aclip id=ac_1 auto=au_1 lane=ln_2 at=0.0\n"
+        "#aclip id=ac_2 auto=au_2 lane=ln_2 at=8.0 length=2.0\n"
+        "#aclip id=ac_3 auto=au_1 lane=ln_3 at=12.0 length=4.0\n\n"
+        "#aauto id=au_1 name=Pump unit=dB min=-60.0 max=6.0 from=ch_1.gain length=1.0 rest=0.0\n"
+        "  #point at=0.0 value=-18.0 shape=smooth\n"
+        "  #point at=0.5 value=0.0\n"
+        "#aauto id=au_2 name=\"Pump 2\" unit=dB min=-60.0 max=6.0 from=ch_1.gain of=au_1 length=1.0 rest=0.0\n"
+        "  #point at=0.0 value=-30.0\n";
+    Project p;
+    std::string err;
+    ParseReport rep;
+    if (!parseProject(text, p, err, &rep)) std::printf("    %s\n", err.c_str());
+    assert(parseProject(text, p, err, &rep) && rep.repaired == 0 && rep.notes.empty());
+    if (serializeProject(p) != text) std::printf("--- got:\n%s\n--- want:\n%s\n", serializeProject(p).c_str(), text.c_str());
+    assert(serializeProject(p) == text);
+    assert(p.clip("ac_2")->isAuto() && !p.clip("ac_2")->isNotes() && p.lane("ln_2")->automation == "au_1" && automationRoot(p, "au_2") == "au_1");
+    assert(laneTitle(p, *p.lane("ln_2")) == "Pump");
+    auto refused = [&](std::function<void(Project &)> edit, const std::string &why) {
+        Project q = p;
+        edit(q);
+        bool found = false;
+        for (const auto &x : validateProject(q)) found |= contains(x, why);
+        if (!found) for (const auto &x : validateProject(q)) std::printf("    %s\n", x.c_str());
+        assert(found);
+    };
+    refused([](Project &q) { q.clip("ac_3")->lane = "ln_1"; }, "an instrument's track holds notes");
+    refused([](Project &q) { q.lanes.push_back(Lane{"ln_4", "", "", "au_2", "", 3, -1, {}, {}}); }, "a copy — a track is the first's (au_1)");
+    refused([](Project &q) { Automation c = *q.automation("au_2"); c.id = "au_3"; c.of = "au_2"; q.automations.push_back(c); }, "itself a copy");
+    refused([](Project &q) { q.automation("au_1")->length = 0.0; }, "length is beats > 0");
+    refused([](Project &q) { q.automation("au_1")->rest = 99.0; }, "outside its range");
+    refused([](Project &q) { q.clip("ac_1")->track = "ch_2"; }, "plays through no strip");
+    refused([](Project &q) { q.lane("ln_1")->automation = "au_1"; }, "one or the other");
+    {
+        Project q = p;
+        Clip c;
+        c.id = "ac_9";
+        c.track = "ch_2";
+        c.pattern = "pt_9";
+        c.lane = "ln_2";
+        q.clips.push_back(c);
+        bool found = false;
+        for (const auto &x : validateProject(q)) found |= contains(x, "an automation's track holds its clips");
+        assert(found);
+    }
+    // a song from before automation clips: adopted when read
+    const std::string old =
+        "arstro-project = 1\napp = solaris\nid = prj_7\nsig = 4/4\ntracks = on\n"
+        "#amixer id=mx_1 name=Sources order=0\n#atrack id=ch_1 name=Main kind=bus mixer=mx_1 order=0\n"
+        "#alane id=ln_1 name=A order=0\n"
+        "#aauto id=au_1 name=Sweep unit=dB min=-60.0 max=6.0 from=ch_1.gain\n  #point at=0.0 value=-60.0\n  #point at=9.0 value=0.0\n"
+        "#aauto id=au_2 name=Pump unit=dB min=-60.0 max=6.0 from=ch_1.gain loop=1.0 at=4.0 length=8.0\n  #point at=0.0 value=-18.0\n  #point at=0.5 value=0.0\n";
+    Project o;
+    ParseReport orep;
+    assert(parseProject(old, o, err, &orep) && orep.notes.size() == 2);
+    const Automation *sweep = o.automation("au_1"), *pump = o.automation("au_2");
+    assert(sweep->length == 12.0 && sweep->rest == -60.0 && pump->length == 1.0 && pump->rest == 0.0 && pump->loop == 0.0 && pump->at == 0.0);
+    int adopted = 0;
+    for (const auto &c : o.clips)
+    {
+        if (c.automation == "au_1") { assert(c.at == 0.0 && c.length == 0.0 && o.lane(c.lane)->automation == "au_1"); ++adopted; }
+        if (c.automation == "au_2") { assert(c.at == 4.0 && c.length == 8.0 && o.lane(c.lane)->automation == "au_2"); ++adopted; }
+    }
+    assert(adopted == 2 && contains(serializeProject(o), "autoclips"));
+    Project oo;
+    assert(parseProject(serializeProject(o), oo, err) && serializeProject(oo) == serializeProject(o)); // adopted once
+    pass("automation clips in the .slp (R-AUTO-14): #aclip auto=, #alane auto=, #aauto of= length= rest= a fixed point; misplaced clips, a copy's track, a copy of a copy, no length, a rest out of range, a track of both kinds refused; an older song adopted once — a curve a clip at 0 in whole bars, a loop a clip over its span");
+}
+
 static void test_bezier_points_round_trip_and_old_shapes_stay_byte_identical()
 {
     // R-AUTO-10: a bezier point carries Interstellar's handles (speed per beat, influence %), written
@@ -192,11 +279,11 @@ static void test_bezier_points_round_trip_and_old_shapes_stay_byte_identical()
     // as it did before bezier existed.
     const std::string head =
         "arstro-project = 1\napp        = solaris\nid         = prj_9\ntimebase   = beats\nbpm        = 120.0\nsig        = 4/4\n"
-        "ppq        = 960\nsampleRate = 48000\nmasterGain = 0.0\ntracks     = on\n\n"
+        "ppq        = 960\nsampleRate = 48000\nmasterGain = 0.0\ntracks     = on\nautoclips  = on\n\n"
         "#amixer id=mx_1 name=Sources order=0\n\n"
         "#atrack id=ch_1 name=Main kind=bus mixer=mx_1 order=0 gain=0.0 pan=0.0\n\n";
     const std::string old = head +
-        "#aauto id=au_1 name=Sweep unit=dB min=-60.0 max=6.0 from=ch_1.gain\n"
+        "#aauto id=au_1 name=Sweep unit=dB min=-60.0 max=6.0 from=ch_1.gain length=8.0 rest=-60.0\n"
         "  #point at=0.0 value=-60.0\n"
         "  #point at=2.0 value=-12.0 shape=hold\n"
         "  #point at=4.0 value=0.0 shape=smooth\n"
@@ -208,7 +295,7 @@ static void test_bezier_points_round_trip_and_old_shapes_stay_byte_identical()
     if (serializeProject(p) != old) std::printf("--- got:\n%s\n--- want:\n%s\n", serializeProject(p).c_str(), old.c_str());
     assert(serializeProject(p) == old);                                    // the old shapes: byte for byte
     const std::string bez = head +
-        "#aauto id=au_1 name=Sweep unit=dB min=-60.0 max=6.0 from=ch_1.gain\n"
+        "#aauto id=au_1 name=Sweep unit=dB min=-60.0 max=6.0 from=ch_1.gain length=8.0 rest=-60.0\n"
         "  #point at=0.0 value=-60.0\n"
         "  #point at=2.0 value=-12.0 shape=bezier speedIn=-4.5 inflIn=62.5 speedOut=12.0 inflOut=20.0\n"
         "  #point at=4.0 value=0.0 shape=bezier speedIn=0.0 inflIn=33.333 speedOut=0.0 inflOut=33.333 future=kept\n"
@@ -736,7 +823,7 @@ static void test_every_kind_of_change_resolves_to_the_song_it_was()
     assert(hasLine(lines, "#vdrop node=ac_3") && hasLine(lines, "#vunset node=ch_3 mute") && hasLine(lines, "#vset node=project bpm=132.0"));
     assert(hasLine(lines, "#vbody node=pt_1") && hasLine(lines, "  #note pitch=72 at=2.0 length=0.5 vel=80"));
     assert(hasLine(lines, "#vorder node=rack:ch_3 children=dv_2,dv_1,dv_4") && hasLine(lines, "#aeffect id=dv_4 type=delay"));
-    assert(std::any_of(lines.begin(), lines.end(), [](const std::string &l) { return l.rfind("#aclip id=ac_4 ", 0) == 0; }));
+    assert(std::any_of(lines.begin(), lines.end(), [&](const std::string &l) { return l.rfind("#aclip id=" + c.id + " ", 0) == 0; }));
     for (const auto &l : lines) assert(!contains(l, "ch_4") && !contains(l, "sd_1") && !contains(l, "au_1")); // untouched: nothing stored
     assert(songText(resolved(p, "Extended")) == edited);
     Project q;
@@ -1046,6 +1133,7 @@ int main()
     test_canonical_numbers_times_and_strings();
     test_canonical_text_is_a_fixed_point();
     test_automation_sketch_and_binding_refusals();
+    test_automation_clips_in_the_slp();
     test_bezier_points_round_trip_and_old_shapes_stay_byte_identical();
     test_a_new_project_has_the_default_mixers();
     test_hand_written_text_normalises_once();

@@ -119,6 +119,7 @@ namespace solaris
     {
         std::string id, name;
         std::string track;              // R-LANE-3: the instrument strip this lane is the TRACK of; empty = organisation only
+        std::string automation;         // R-AUTO-14: … or the automation it is the track of (`auto=`), never both
         std::string group;              // R-ARR-3: the lane group it is in (lg_n); empty = none
         int order = 0, colour = -1;
         Fields unknown;
@@ -190,6 +191,11 @@ namespace solaris
     /** R-ARR-3: each group's lanes side by side — at its first lane's place, in their order — a group with no lane
      *  gone, the lanes renumbered 0…n−1. True when anything changed (a hand-written song, or after a lane edit). */
     bool gatherLaneGroups(Project &p);
+    /** The lanes `made`, in that order, right under `under` — renumbered as `lane move` does, in its group when it has one
+     *  (R-ARR-3). Nothing moves when `under` is no lane. */
+    void placeLanesUnder(Project &p, const std::string &under, const std::vector<std::string> &made);
+    /** R-AUTO-14: the automation a clip of `id` drives — itself, or the one it is a copy `of`. */
+    std::string automationRoot(const Project &p, const std::string &id);
     /** R-COLLAB-1: where a merge took two sides' places at one `order` — two strips of one mixer, two lanes, scenes,
      *  mixers or ports — that group made 0…n−1 again, the earlier in the file first. True when anything moved. */
     bool tidyOrders(Project &p);
@@ -217,6 +223,7 @@ namespace solaris
     struct Clip
     {
         std::string id, name, track, lane, src, pattern; // src: audio clip; pattern: note clip
+        std::string automation;         // R-AUTO-14: an automation clip — the automation it plays (`auto=`); no track
         double at = 0.0;                // beats
         double in = 0.0, out = 0.0;     // seconds into the file (audio)
         double length = 0.0;            // beats; 0 = unset (audio: the file span; note: the pattern's)
@@ -234,6 +241,8 @@ namespace solaris
         Remarks remarks;
 
         bool isAudio() const { return !src.empty(); }
+        bool isAuto() const { return !automation.empty(); }   // R-AUTO-14
+        bool isNotes() const { return src.empty() && automation.empty(); }
         /** R-REC-2: the take that plays at `beat` (1-based) — the comp's, else the last; 0 when it has no takes. */
         int takeAt(double beat) const;
     };
@@ -250,15 +259,17 @@ namespace solaris
         double speedIn = 0.0, inflIn = 33.333, speedOut = 0.0, inflOut = 33.333; // bezier: per beat; %
     };
 
-    /** An automation — FL Studio's automation clip (R-AUTO-4). It moves nothing until a formula reads it. */
+    /** An automation — FL Studio's automation clip (R-AUTO-4). It moves nothing until a formula reads it. R-AUTO-14: its
+     *  points are in its OWN beats, 0 … `length`; clips place it in the song as note clips place a pattern. */
     struct Automation
     {
         std::string id, name, unit, from; // `from`: the address it was made from (a hint, never a link)
+        std::string of;                   // R-AUTO-14: a clip's own curve (Make unique) — a copy of this one, which it drives
         double min = 0.0, max = 1.0;
-        // R-AUTO-12: its first `loop` beats are a CYCLE, repeated from `at` for `length` beats (0: to the song's end);
-        // outside that span it rests where a cycle ends. loop 0: the curve as drawn
-        double loop = 0.0, at = 0.0, length = 0.0;
-        std::vector<AutoPoint> points;    // sorted by `at`
+        double length = 0.0;              // R-AUTO-14: beats > 0 — a clip longer than it repeats it
+        double rest = 0.0;                // R-AUTO-14: its value before its first clip (and with none)
+        double loop = 0.0, at = 0.0;      // R-AUTO-12 (withdrawn): read from a song saved before clips, adopted, never written
+        std::vector<AutoPoint> points;    // sorted by `at`, its own beats
         Fields unknown;
         Remarks remarks;
     };

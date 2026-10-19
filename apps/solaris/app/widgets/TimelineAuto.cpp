@@ -27,6 +27,9 @@ namespace solaris_ui
             return b;
         }
         std::string beats(double b) { return Timeline::beatText(b); } // to the tick
+        // R-AUTO-14 (O1): R-AUTO-12's span is gone — a row draws its automation from beat 0, where `auto create` puts its
+        // clip, until O2 draws the clips themselves
+        constexpr bool spans() { return false; }
         bool logShown(const solaris::AutomationModel &m) { return (m.unit == "Hz" || m.unit == "ms") && m.min > 0 && m.max > m.min; }
         constexpr double kHandleDot = 3.0;      // a bezier handle's end as drawn
         constexpr double kDoubleClickMs = 300.0; // Artboard's recognizer: a click waits this out (+ a frame or three)
@@ -262,7 +265,7 @@ namespace solaris_ui
 
     double Timeline::autoOffset(const AutoLive &l) const
     {
-        if (l.model.loop <= 0) return 0.0;
+        if (!spans()) return 0.0;
         double a = 0, b = 0;
         spanOf(l, a, b);
         return a;
@@ -279,7 +282,7 @@ namespace solaris_ui
     int Timeline::spanGripAt(const std::string &au, const Point &local) const
     {
         const auto it = mAutos.find(au);
-        if (it == mAutos.end() || it->second.model.loop <= 0) return -1;
+        if (it == mAutos.end() || !spans()) return -1;
         const Rect row = autoRowRect(au);
         if (local.y < row.y || local.y > row.y + 9.75) return -1; // the brace's band along the row's top: space::u(3)
         double a = 0, b = 0;
@@ -292,7 +295,7 @@ namespace solaris_ui
     Rect Timeline::autoSpanRect(const std::string &au) const
     {
         const auto it = mAutos.find(au);
-        if (it == mAutos.end() || it->second.model.loop <= 0) return Rect{};
+        if (it == mAutos.end() || !spans()) return Rect{};
         double a = 0, b = 0;
         spanOf(it->second, a, b);
         const Rect row = autoRowRect(au);
@@ -460,7 +463,7 @@ namespace solaris_ui
             const std::vector<solaris::AutoPointModel> pts = drawnPoints(l); // a held point or handle: the pointer's
             const bool held = mAutoDragging && mAutoPress == l.model.id;
             const double f = l.t.value();
-            const bool loops = l.model.loop > 0;
+            const bool loops = spans();
             if (loops)
             {
                 // R-AUTO-12: the whole of it faint (its repeats, and where it rests outside its span), its span's brace;
@@ -554,7 +557,7 @@ namespace solaris_ui
             const auto it = mAutos.find(mAutoPress);
             if (it == mAutos.end()) return true;
             mAutoAt = snap(xToBeat(local.x)) - autoOffset(it->second); // the grid you see (R-UI-10), in the curve's own beats
-            if (it->second.model.loop > 0) mAutoAt = std::clamp(mAutoAt, 0.0, it->second.model.loop); // a loop's points stay in its cycle
+            if (spans()) mAutoAt = std::clamp(mAutoAt, 0.0, it->second.model.loop); // a loop's points stay in its cycle
             mAutoValue = yToValue(it->second, local.y, autoRowRect(mAutoPress));
             return true;
         }
@@ -657,7 +660,7 @@ namespace solaris_ui
             const auto it = mAutos.find(au);
             if (spanGripAt(au, local) >= 0) return true; // a click on a span's grip adds nothing (R-AUTO-12)
             double at = snap(xToBeat(local.x)) - autoOffset(it->second); // the grid you see (R-UI-10), in the curve's own beats
-            if (it->second.model.loop > 0 && at >= it->second.model.loop) at = std::fmod(at, it->second.model.loop); // a repeat: its cycle
+            if (spans() && at >= it->second.model.loop) at = std::fmod(at, it->second.model.loop); // a repeat: its cycle
             const double v = yToValue(it->second, local.y, autoRowRect(au));
             // a double-click here opens the window (R-AUTO-11): the point waits it out, drawn at once (R2), sent by advanceAuto
             mPendAu = au;

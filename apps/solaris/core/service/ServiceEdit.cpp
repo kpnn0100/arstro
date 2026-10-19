@@ -643,12 +643,75 @@ namespace solaris
                 if (it->track == track && !it->lane.empty() && p.lane(it->lane)) return it->lane;
             return newLane(name, track);
         };
+        // R-AUTO-14: an automation clip goes on a plain lane or its automation's track; nothing else goes on that track
+        auto laneTakes = [&](const Clip &cl, const std::string &lane) {
+            const Lane *l = lane.empty() ? nullptr : p.lane(lane);
+            if (!lane.empty() && !l) { err = "no lane `" + lane + "`"; return false; }
+            if (!l) return true;
+            if (cl.isAuto())
+            {
+                if (!l->track.empty())
+                {
+                    err = cl.id + " is an automation clip — " + lane + " is the track of " + l->track + ", an instrument: its notes go there (R-AUTO-14)";
+                    return false;
+                }
+                if (!l->automation.empty() && l->automation != automationRoot(p, cl.automation))
+                {
+                    err = cl.id + " plays " + cl.automation + " — " + lane + " is the track of " + l->automation + ", another automation (R-AUTO-14)";
+                    return false;
+                }
+            }
+            else if (!l->automation.empty())
+            {
+                err = cl.id + " is " + (cl.isAudio() ? "audio" : "a note clip") + " — " + lane + " is the track of " + l->automation +
+                      ", an automation: its clips go there (R-AUTO-14)";
+                return false;
+            }
+            return true;
+        };
         switch (c.kind)
         {
         case K::ClipAdd:
         {
             Clip cl;
             if (!beatsFlag(c, "at", 0.0, cl.at, err)) return false;
+            if (c.has("auto")) // R-AUTO-14: a clip of an automation — on its track (made if it has none), or the lane given
+            {
+                for (const char *f : {"src", "strip", "instrument", "plugin", "sample", "pattern", "in", "out", "warp", "preset"})
+                    if (c.has(f)) { err = std::string("--auto places an automation — not with --") + f; return false; }
+                const Automation *a = p.automation(c.flag("auto"));
+                if (!a) { err = "no automation `" + c.flag("auto") + "`"; return false; }
+                cl.automation = a->id; // its name is its automation's, shown — never stored
+                if (!beatsFlag(c, "length", 0, cl.length, err)) return false;
+                const std::string root = automationRoot(p, a->id);
+                if (c.flag("lane") == "new" || !c.has("lane"))
+                {
+                    std::string track;
+                    if (!c.has("lane"))
+                        for (const auto &l : p.lanes)
+                            if (l.automation == root) track = l.id; // its newest track
+                    if (track.empty())
+                    {
+                        std::vector<int> orders;
+                        for (const auto &l : p.lanes) orders.push_back(l.order);
+                        Lane l;
+                        l.id = p.nextId("ln");
+                        l.automation = root;
+                        l.order = nextOrder(orders);
+                        p.lanes.push_back(l);
+                        changed("lane.added", l.id);
+                        track = l.id;
+                    }
+                    cl.lane = track;
+                }
+                else cl.lane = c.flag("lane");
+                cl.id = p.nextId("ac");
+                if (!laneTakes(cl, cl.lane)) return false;
+                p.clips.push_back(cl);
+                changed("clip.added", cl.id);
+                mOutput = cl.id + "\n";
+                return true;
+            }
             if (c.has("lane") && c.flag("lane") != "new" && !p.lane(c.flag("lane"))) { err = "no lane `" + c.flag("lane") + "` (or `new`)"; return false; }
             // R-LANE-3: a clip put on an instrument's track plays through it
             std::string owner;
@@ -785,8 +848,21 @@ namespace solaris
             Clip *cl = p.clip(c.arg(0));
             if (!cl) { err = "no clip `" + c.arg(0) + "`"; return false; }
             if (!c.has("at") && !c.has("lane") && !c.has("strip")) { err = "clip move needs --at, --lane and/or --strip"; return false; }
+            if (cl->isAuto()) // R-AUTO-14: in time and onto a plain lane or its automation's track; it plays through nothing
+            {
+                if (c.has("strip")) { err = cl->id + " is an automation clip — it plays through no strip (R-AUTO-14)"; return false; }
+                double at = cl->at;
+                if (!beatsFlag(c, "at", cl->at, at, err)) return false;
+                const std::string lane = !c.has("lane") ? cl->lane : c.flag("lane") == "none" ? std::string() : c.flag("lane");
+                if (!laneTakes(*cl, lane)) return false;
+                cl->at = at;
+                cl->lane = lane;
+                changed("clip.moved", cl->id);
+                return true;
+            }
             if (!beatsFlag(c, "at", cl->at, cl->at, err)) return false;
             std::string lane = !c.has("lane") ? cl->lane : c.flag("lane") == "none" ? std::string() : c.flag("lane");
+            if (c.has("lane") && !laneTakes(*cl, lane)) return false;
             std::string strip = c.has("strip") ? c.flag("strip") : cl->track;
             if (c.has("strip") && !p.strip(strip)) { err = "no strip `" + strip + "`"; return false; }
             const std::string owner = lane.empty() || !p.lane(lane) ? std::string() : p.lane(lane)->track;
@@ -826,6 +902,7 @@ namespace solaris
                 // R-CLIP-9: the copy on another lane — the same rule as a move's (R-CLIP-8, R-LANE-3)
                 const std::string lane = c.flag("lane") == "none" ? std::string() : c.flag("lane");
                 if (!lane.empty() && !p.lane(lane)) { err = "no lane `" + lane + "`"; return false; }
+                if (!laneTakes(*src, lane)) return false;
                 const std::string owner = lane.empty() ? std::string() : p.lane(lane)->track;
                 if (!owner.empty())
                 {
@@ -861,6 +938,27 @@ namespace solaris
             Clip *cl = p.clip(c.arg(0));
             if (!cl) { err = "no clip `" + c.arg(0) + "`"; return false; }
             if (cl->isAudio()) { err = cl->id + " is an audio clip — only a note clip shares a pattern"; return false; }
+            if (cl->isAuto())
+            {
+                // R-AUTO-14: its own curve — a copy `of` the automation it plays, still driving what that one drives
+                const Automation *from = p.automation(cl->automation);
+                const std::string root = automationRoot(p, cl->automation);
+                Automation copy = *from;
+                copy.id = p.nextId("au");
+                copy.of = root;
+                int n = 2;
+                for (const auto &a : p.automations) n += a.of == root;
+                copy.name = p.automation(root)->name + " " + std::to_string(n);
+                copy.remarks = Remarks();
+                p.automations.push_back(copy);
+                cl = p.clip(c.arg(0));
+                cl->automation = copy.id;
+                mBindingsTouched = true;
+                changed("auto.added", copy.id);
+                changed("clip.unique", cl->id);
+                mOutput = copy.id + "\n";
+                return true;
+            }
             Pattern copy = *p.pattern(cl->pattern);
             copy.id = p.nextId("pt");
             copy.name += " copy";
