@@ -920,3 +920,73 @@ Decided (each a line to change):
   progression); (3) the window — the menus, the ruler's chord band, shots.
 - **Not yet:** polyphonic transcription, pitch bend in the notes, chord qualities beyond major and minor (sevenths,
   suspensions), key detection, more than two stems (drums, bass, vocals need a model — R-ASSIST-1 says no AI model).
+
+### Round 23 — 2026-10-19 — automation clips (R-AUTO-14, O1–O2): the design, before code
+
+The user, after M2 (a looping automation, `auto create --pump`, "Create Pump"): *"it is not create pump — it should be
+create a clip for automation and user can copy just like a midi track"*. Asked four questions, the user chose:
+**Create Pump removed**; automation clips **on lanes, like MIDI clips** (each automation its own track, the AUTOMATION
+section gone); a copy **linked** like a MIDI clip's (edit one, all change; Make unique forks); the loop setting
+**replaced by clips that repeat**, old songs converted. R-AUTO-12 and R-AUTO-13 are withdrawn; R-AUTO-14 replaces them.
+Decided (each a line to change):
+
+- **An automation is to its clips what a pattern is to its note clips** (R-CLIP-3, law 6). Its points are in its OWN
+  beats, 0 … its `length`; a CLIP places it in the song (`#aclip auto=au_1 at= [length=]`); a clip longer than the
+  automation repeats it, as a note clip repeats its pattern (R-CLIP-7); a copy (`clip duplicate`, Shift-drag, Ctrl+C /
+  Ctrl+V — R-CLIP-9/10, unchanged) is a second clip of the same automation — linked. A clip's `length` 0 follows the
+  automation's, as a note clip's follows its pattern's.
+- **What a formula reads is still the automation** (`=au_1`, R-AUTO-1 unchanged). Its value at a beat: the clip of it
+  playing there — its curve at `(beat − clip.at) mod length`; where two of its clips overlap the one that began later
+  plays (the earlier is cut there); between its clips and after the last, the value the clip before ended on (FL Studio
+  holds it); before its first clip — and with no clip at all — its REST value, `rest` (`#aauto rest=`). `auto create`
+  sets `rest` to the property's own value, so a pump copied in from bar 9 leaves the property alone before it (the
+  first clip's start would be the dip). Pure (R-RENDER-1): every value is a function of the beat, never of what played.
+- **Make unique** (`clip unique <ac>` — the note clip's verb, R-CLIP-3) gives an automation clip its own curve: a new
+  automation `of` the first (`#aauto id=au_2 of=au_1`, named "<name> 2", a copy of its points, length, rest, unit and
+  range), the clip now plays it — and it still drives what the first drives: a formula reads the FIRST, whose value is
+  whichever clip of the family plays (formulas naming a copy are refused, naming its first). A copy of a copy is a copy
+  of the first (no chains). `auto delete` of the first takes its copies, clips and track with it.
+- **An automation's track** is a lane (R-LANE-3's idea, its own key so an instrument's track keeps one meaning:
+  `#alane auto=au_1`, showing the automation's name), made by
+  `auto create` right under the property's strip's track when it has one, else last. Its clips go there by default; any
+  plain lane may hold automation clips (lanes are organisation, law 5). Refused: an automation clip on an instrument's
+  track or on another automation's track; an audio or note clip on an automation's track; `--strip` on an automation
+  clip (it sounds through nothing).
+- **The grammar:** `auto create <address>` — the automation, its track, ONE clip from beat 0 following its length (the
+  song's end in whole bars), bound — prints the automation, `made:` the lane and the clip; `--pump` is gone (refused as
+  any unknown flag). `auto add [--length <beats>] [--rest <v>]` — an automation and no clip (a bar long). `clip add
+  --auto <au> [--at] [--length] [--lane <ln|new>]` — a clip of it. `set <au>.length=<beats>` (> 0; a point past it is
+  kept, silent, and said) and `set <au>.rest=<v>` (in range). `set <au>.loop|.at` are refused, saying what replaced
+  them. `auto point add|move|delete|shape <au> --at <b>` — `b` in the automation's own beats; a point at or past the
+  end grows the length to the next whole beat (so a script that adds points in song beats to an automation made by
+  `auto create` still lands them where it did — the EDM and canon demos). Splitting, slicing, consolidating an automation
+  clip: refused (Not yet).
+- **The model:** `clips[].kind` gains `automation`, `clips[].automation` its id; `lanes[].automation` the automation a
+  track belongs to; `automations[]` gains `rest`, `of` (the first, for a copy) and `clips` (how many play it);
+  `automations[].length` is the curve's length (**amended** — it was R-AUTO-12's span), `loop` the same number (the
+  cycle a clip repeats — R-AUTO-12's meaning kept), `at` always 0 (retired). Nothing is renamed or removed.
+- **Old songs:** a file without the header line `autoclips = on` predates clips; reading it adopts each automation —
+  its points were in the song's beats, so it gets a track and ONE clip at beat 0, its length the last point's beat
+  rounded up to whole bars (at least the song's end), `rest` its first value: it plays exactly as before. An R-AUTO-12
+  loop becomes length = its cycle and a clip over its span (`at`, `length`; 0 = to the song's end), `rest` the value a
+  cycle ends on — before the span it rests as it did; a span that ended mid-cycle now holds where it stopped instead of
+  jumping to the cycle's end (the one difference, said in the note). Done in the model's read, so every reader — the
+  window, a render of a version, a merge — sees one meaning (the `tracks = on` adoption is the precedent, R-LANE-3).
+- **The engine** (law 11): a compiled curve is a set of shapes (the automation's and its copies', keys in beats ×
+  samples-per-beat, as now) and its clips' spans (from, to, cycle length, shape), sorted, cut where a later one begins;
+  `valueAt` finds the span by binary search — no allocation, as now. `eval`, playback and a render agree, measured.
+- **Time edits** (R-ARR-2) move automation clips as clips (a clip crossing a deleted span is shortened, as a note
+  clip is); an automation's own points never move.
+- **The window:** the AUTOMATION section is gone; an automation's track is a row among the lanes (its name, what reads
+  it, the accent stripe); its clips draw the curve — the first pass as drawn, each repeat dimmer with a seam (R-CLIP-7's
+  look). In a clip: a drag on its name strip moves it (Shift: a copy), its end resizes it (repeats), a click in the curve
+  adds a point, a drag moves one, Alt-drag shapes a bezier (R-AUTO-10), a double-click on a point removes it and
+  elsewhere opens the automation's window, a right-click on a point sets its shape, elsewhere opens the clip's menu —
+  Make unique, Length ▸ (1/4, 1/2, 1, 2 beats, 1, 2, 4 bars), Open automation, Copy ID, Delete. Editing in any repeat
+  edits the shared curve (every linked clip moves with it, eased). The window's Loop combo becomes Length; it shows the
+  rest value and how many clips play it. ParamMenu loses Create Pump; Create Automation is the same one line.
+- **Parts** (a commit each): O1 the model, the engine, the service, the adoption, L2 and model tests, the API — the
+  window's span grips, Loop combo and Create Pump removed with their tests; O2 the window — tracks among the lanes, the
+  clips drawn and edited, the menus, shots.
+- **Not yet:** an automation clip's own offset (a left-edge trim), splitting one, an automation clip in the session
+  grid (R-LAUNCH-1), recording automation by moving a control while playing.

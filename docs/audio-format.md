@@ -156,6 +156,13 @@ beat and in % — R-AUTO-10, Solaris `docs/project-format.md` §8a) — the same
 decides what it drives (an automation alone moves nothing). Solaris still READS the sketch and writes it
 back in the new form; Interstellar keeps its own `#anim`/`#key` (its R-ANIM).)
 
+(**AMENDED (Solaris R-AUTO-14, 2026-10-19):** a Solaris song with the header line `autoclips = on` keeps an
+automation's points in the automation's OWN beats (0 … its `length=`), with a `rest=` value, and places it with clips
+— `#aclip id=ac_n auto=au_1 at=… [length=…]` on a lane, an automation's track being `#alane auto=au_1`; a copy made
+unique is `#aauto … of=au_1`. Without the line the points are the song's beats, as above, and Solaris adopts them when
+it reads the song. Interstellar keeps `#aauto` raw as before, and an `#aclip` with no `src` is already raw to it —
+nothing changes there.)
+
 ### 2.6 `#asend` — routing
 
 ```

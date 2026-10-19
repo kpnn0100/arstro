@@ -228,7 +228,8 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   an instrument (`clip add --instrument`, an instrument's first clip, `lane add --strip <ch>`) is its
   track; one instrument may have several. A track's header names its instrument and, while the lane
   has no name of its own, shows the strip's name — renaming the instrument renames it (D-2's lane
-  half). `set <ln>.strip=<ch>` makes a lane a track (refused while it holds a clip of another strip,
+  half). (**AMENDED (R-AUTO-14, 2026-10-19):** a lane may instead be an AUTOMATION's track — `#alane auto=au_n` —
+  holding that automation's clips; never both.) `set <ln>.strip=<ch>` makes a lane a track (refused while it holds a clip of another strip,
   naming it); `set <ln>.strip=none` makes it plain. Deleting the instrument leaves its tracks plain
   lanes. A song saved before tracks existed (no `tracks` line in its header) opens with every lane
   whose clips all play through one instrument strip made that strip's track — the lanes R-SVC-8's lane
@@ -252,7 +253,8 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 - **R-CLIP-7 A clip's end is dragged** (*"so they can loop that midi in the track"*): its right edge sets
   its length on the snap step — one `set <ac>.length=<beats>` on release, the edge the pointer's while
   held. A note clip longer than its pattern repeats it (R-CLIP-2), and every repeat's start is marked on
-  the clip so the loop can be seen.
+  the clip so the loop can be seen. (**AMENDED (R-AUTO-14, 2026-10-19):** an automation clip the same — longer than its
+  automation, it repeats it.)
 - **R-CLIP-8 A clip dragged onto another track plays through that track's instrument** (R-LANE-3): one
   `clip move <ac> --lane <ln> [--at <b>]`; an audio clip dragged onto an instrument's track is refused
   (it eases home), a note clip onto a plain lane keeps its instrument (organisation, R-LANE-1).
@@ -496,7 +498,7 @@ R-VER, applied to an arrangement:
 - **R-PLAY-3 Meters** on every strip and the master: peak and RMS per channel, a held peak, a clip
   latch — the numbers in the model, not only drawn.
 
-## R-AUTO — automation and parameter formulas — ✅ IMPLEMENTED (user request, 2026-10-09; DR-AUTO-1…5, made from a window: DR-UI-5) — 10 ✅ (bezier, DR-AUTO-6), 11 ✅ (its window, DR-AUTO-7) — 12, 13 ✅ (a looping automation, a pump: DR-AUTO-8)
+## R-AUTO — automation and parameter formulas — ✅ IMPLEMENTED (user request, 2026-10-09; DR-AUTO-1…5, made from a window: DR-UI-5) — 10 ✅ (bezier, DR-AUTO-6), 11 ✅ (its window, DR-AUTO-7) — 12, 13 ❌ WITHDRAWN (2026-10-19, replaced by 14) — 14 🚧 automation clips (Round 23, O1–O2)
 
 The user: *"all number param can be link, apply formula, create automation, apply formula with
 automation like FL Studio. Automation is created separately, make the formula core of the binding.
@@ -518,20 +520,26 @@ the object it belongs to, shows it on the timeline, and that property will use a
   or through links, is refused naming the loop.
 - **R-AUTO-4 An automation is its own object** (FL Studio's automation clip): an id (`au_n`), a name, a
   unit and range, and points — beat, value, shape `linear | hold | smooth`. It moves nothing until a
-  formula reads it. (**AMENDED (R-AUTO-10, 2026-10-09):** and `bezier`, shaped by handles.) Stored as `#aauto` with `#point` children (amends the suite schema's sketch,
+  formula reads it. (**AMENDED (R-AUTO-10, 2026-10-09):** and `bezier`, shaped by handles.) (**AMENDED (R-AUTO-14,
+  2026-10-19):** its points are in its OWN beats, 0 … its `length`, and CLIPS place it in the song, as note clips
+  place a pattern; it also has a `rest` value, what it reads before its first clip.) Stored as `#aauto` with `#point` children (amends the suite schema's sketch,
   `docs/audio-format.md` §2.5, which nothing wrote yet).
 - **R-AUTO-5 Automation is created from a property in ONE command** (`auto create <address>`): a new
   `au_n` named *"<owner> · <parameter label>"* (*"Bass · Cutoff"*), ranged as the property, with points
   at beat 0 and at the song's end holding the property's current value; it shows on the timeline; and
   the property is bound to `=au_n`. (The user wrote `=automation1`; ids follow the suite's scheme.)
-  `auto add --name … [--min --max --unit]` makes one from nothing.
+  `auto add --name … [--min --max --unit]` makes one from nothing. (**AMENDED (R-AUTO-14, 2026-10-19):** it also
+  makes the automation's TRACK and one clip of it from beat 0, the automation as long as the song in whole bars, its
+  rest the property's value; `auto add` makes no clip.)
 - **R-AUTO-6 Automations are drawn on the timeline** — an AUTOMATION section under the lanes, a row per
   automation showing its name and curve. A click adds a point, a drag moves it (time snapped to a
   sixteenth), a double-click removes it, a right-click sets its shape or deletes the automation; each
   gesture is one command (`auto point add|move|delete|shape`, `auto delete`). (**AMENDED (R-UI-10,
   R-AUTO-11, 2026-10-09):** a point's time snaps to the zoom's grid, not a fixed sixteenth; a double-click
   ON A POINT still removes it, a double-click on the row's header or on the curve away from a point
-  opens the automation's window.)
+  opens the automation's window.) (**AMENDED (R-AUTO-14, 2026-10-19):** there is no AUTOMATION section — an
+  automation's TRACK is a row among the lanes and its curve is drawn in its CLIPS; the point gestures are the same,
+  made inside a clip, in the automation's own beats.)
 - **R-AUTO-7 Evaluated by the engine, at control rate.** The service compiles the bindings and the
   curves into the graph; the engine evaluates every binding every 64 samples at ABSOLUTE positions,
   so playback and render agree whatever the chunking (R-RENDER-1); gain and pan ramp across each
@@ -554,24 +562,60 @@ the object it belongs to, shows it on the timeline, and that property will use a
 - **R-AUTO-11 Double-click an automation to see it** (user request, 2026-10-09: *"double click to see
   information of automation"*): its window (R-WIN) shows its name (renamable), id, unit and range,
   the address it was made from, its points (beat, value, shape), every formula that reads it (address
-  and formula), and its value at the playhead — all from the model, nothing re-derived.
-- **R-AUTO-12 An automation LOOPS, like FL Studio's automation clip** (user request, 2026-10-16: *"there should be
-  option to loop the automation clip like FL studio, so that we can manipulate property in a loop"*). An
-  automation has a loop length (`<au>.loop`, beats; 0 = off, the curve as drawn): its first `loop` beats are one
-  CYCLE, repeated through its SPAN — from `<au>.at` for `<au>.length` beats (0 = to the end of the song); outside
-  the span it rests at the value a cycle ends on. One `set` line each; stored on `#aauto`. Evaluated by the engine
-  from compiled data as every curve is (R-AUTO-7), so `eval`, playback and a render agree, measured. On the
-  timeline the automation's row shows the span — the first cycle as drawn (edited as ever), each repeat after it
-  drawn dimmer with a seam at its start — and the span's two ends are grips (the resize cursor, R-UI-14): dragged,
-  ONE `set <au>.at=` / `set <au>.length=` line. Its window offers the loop as a combo box (Off, 1/4, 1/2, 1, 2
-  beats, 1, 2, 4 bars) — one line.
-- **R-AUTO-13 A pump in one gesture** (the same request: *"right now setup a side chain is hard"*): the side-chain
-  FEEL without a side-chain — `auto create <address> --pump` makes the property's automation already looping every
-  beat: down on the beat, back to the property's value by the middle of the beat (smooth), then held — and binds
-  it, as `auto create` does. The dip is 18 dB for a level in dB, otherwise most of the way to the bottom of the
-  range (to 20 % of the way up from it). Right-click a number (a fader, a knob, a parameter row — ParamMenu) offers
-  "Create Pump" — the same one line. (A real side-chain — a compressor keyed by the kick, R-MIX-15 — stays; making
-  it one gesture is in the analysis, M3.)
+  and formula), and its value at the playhead — all from the model, nothing re-derived. (**AMENDED (R-AUTO-14,
+  2026-10-19):** and its length — a combo, in place of R-AUTO-12's Loop — its rest value and how many clips play it.)
+- **R-AUTO-12, R-AUTO-13 — ❌ WITHDRAWN (2026-10-19).** The trigger, the user after M2: *"it is not create pump — it
+  should be create a clip for automation and user can copy just like a midi track"*; asked, the user chose to remove
+  Create Pump and to replace the loop setting by clips that repeat (docs/discussion.md Round 23). **What was tried, so
+  nobody tries it again:** a loop as a SETTING of the automation (`<au>.loop/.at/.length` — one cycle repeated over one
+  span, the span's ends dragged on the automation's row, a Loop combo in its window) and a one-gesture pump preset
+  (`auto create --pump`, ParamMenu › Create Pump). Both answered the request's words ("loop the automation clip", "side
+  chain is hard") and missed its intent: the user thinks of automation as CLIPS they draw once and copy around the song
+  as they copy MIDI clips — a setting gives one span per automation and no copies, and a preset draws the shape for
+  them. **What the withdrawal must not break:** every song saved with a loop plays as it did (read, it becomes an
+  automation as long as its cycle and a clip over its span, resting where a cycle ends — Round 23's one stated
+  difference: a span ending mid-cycle now holds where it stopped); `=au_n` formulas, bezier points (R-AUTO-10) and the
+  automation's window (R-AUTO-11) are untouched; a pump is still one drawing and a copy (R-AUTO-14), and a real
+  side-chain stays (R-MIX-15).
+
+  <details><summary>The withdrawn requirements</summary>
+
+  - **R-AUTO-12 An automation LOOPS, like FL Studio's automation clip** (user request, 2026-10-16: *"there should be
+    option to loop the automation clip like FL studio, so that we can manipulate property in a loop"*). An
+    automation has a loop length (`<au>.loop`, beats; 0 = off, the curve as drawn): its first `loop` beats are one
+    CYCLE, repeated through its SPAN — from `<au>.at` for `<au>.length` beats (0 = to the end of the song); outside
+    the span it rests at the value a cycle ends on. One `set` line each; stored on `#aauto`. Evaluated by the engine
+    from compiled data as every curve is (R-AUTO-7), so `eval`, playback and a render agree, measured. On the
+    timeline the automation's row shows the span — the first cycle as drawn (edited as ever), each repeat after it
+    drawn dimmer with a seam at its start — and the span's two ends are grips (the resize cursor, R-UI-14): dragged,
+    ONE `set <au>.at=` / `set <au>.length=` line. Its window offers the loop as a combo box (Off, 1/4, 1/2, 1, 2
+    beats, 1, 2, 4 bars) — one line.
+  - **R-AUTO-13 A pump in one gesture** (the same request: *"right now setup a side chain is hard"*): the side-chain
+    FEEL without a side-chain — `auto create <address> --pump` makes the property's automation already looping every
+    beat: down on the beat, back to the property's value by the middle of the beat (smooth), then held — and binds
+    it, as `auto create` does. The dip is 18 dB for a level in dB, otherwise most of the way to the bottom of the
+    range (to 20 % of the way up from it). Right-click a number (a fader, a knob, a parameter row — ParamMenu) offers
+    "Create Pump" — the same one line. (A real side-chain — a compressor keyed by the kick, R-MIX-15 — stays; making
+    it one gesture is in the analysis, M3.)
+
+  None of them is in force.
+  </details>
+
+- **R-AUTO-14 Automation CLIPS, copied like MIDI clips** (user request, 2026-10-19: *"it should be create a clip for
+  automation and user can copy just like a midi track"*; detailed in docs/discussion.md Round 23). An automation is to
+  its clips what a pattern is to its note clips (R-CLIP-3): its points are in its own beats, 0 … its `length`; a clip
+  (`#aclip auto=au_n at= [length=]`) places it; a clip longer than it repeats it (R-CLIP-7); a copy — `clip
+  duplicate`, Shift-drag, Ctrl+C / Ctrl+V (R-CLIP-9/10) — plays the same automation, linked; `clip unique` gives a clip
+  its own curve, a copy `of` the first, still driving what the first drives. Its value at a beat is the clip playing
+  there (a later-starting one cuts an earlier); between its clips and after the last, where the one before ended;
+  before the first, and with none, its `rest`. Clips live on lanes: an automation has a TRACK (`#alane auto=au_n`),
+  made by `auto create` under its property's strip's track; any plain lane may hold one; an instrument's track or
+  another automation's may not. Commands: `auto create` (with its track and one clip), `auto add [--length --rest]`,
+  `clip add --auto <au>`, `set <au>.length=`, `set <au>.rest=`, the clip verbs. Evaluated by the engine from compiled
+  data, pure (R-RENDER-1), measured: `eval` = a render at known beats, a copy heard where it is put, the rest before
+  the first clip. Drawn on its track and its clips; edited in a clip (the point gestures of R-AUTO-6/10), moved and
+  copied by its name strip, resized by its end; its menu: Make unique, Length ▸, Open automation, Copy ID, Delete.
+  Songs saved before (no `autoclips = on`) are adopted when read and play exactly as before.
 
 ## R-WIN — windows inside the song view — ✅ IMPLEMENTED (user request, 2026-10-09; DR-WIN-1, DR-UI-5) — 5 ✅ (resized by the corner, DR-WIN-5)
 
@@ -821,7 +865,9 @@ a process is the host's (law 12).
   starts before the span is shortened by the overlap, since what repeats keeps repeating; any other clip across an
   edge is REFUSED, naming it, and nothing changes. The loop is the session's, not the song's: a time edit moves it,
   and undo leaves it where it is. The ruler's right-click offers a bar opened or taken out there, and the loop's span
-  taken out.)
+  taken out.) (**AMENDED (R-AUTO-14, 2026-10-19):** an automation's points are its own beats and never move; its
+  CLIPS move as clips — one crossing a deleted span is shortened, as a note clip is, since what repeats keeps
+  repeating.)
 - **R-ARR-3 Lane groups**: lanes folded into a named group (`lane group <ln>… --name`), the group collapsed or
   opened (eased); its clips moved together. (**Detailed while building it, N15 — 2026-10-16.** A group is organisation
   only, as a lane is (R-LANE-1): `#alanegroup id=lg_1 name=Drums [folded=on]`, each of its lanes naming it

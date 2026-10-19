@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► The R-PRO ledger is built — N1…N44** (the user: *"implement all"* of `docs/pro-daw-analysis.md`). What comes next is the user's call. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► O1 — automation clips: the model, the engine, the service** (R-AUTO-14, Round 23; the user: *"it should be create a clip for automation and user can copy just like a midi track"*), then O2 the window. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -383,6 +383,8 @@ history like cosmo".* Requirements: R-SET-5, R-SET-6 (R-SET-1, R-SET-3 amended);
 - [x] **M2b** Seen and made in the window: the row's span (cycles, seams, ends dragged), the window's Loop combo,
       ParamMenu › Create Pump (R-AUTO-12, R-AUTO-13).
       — DR-AUTO-8 (in the window). UI test, shot; 2 mutants seen red.
+      **M2a and M2b are WITHDRAWN (2026-10-19)** — the user wanted automation clips copied like MIDI clips, not a loop
+      setting and a pump preset: replaced by O (R-AUTO-14, Round 23).
 - [x] **M3** A full analysis — what a professional DAW needs that Solaris lacks — in `docs/pro-daw-analysis.md`.
       — P0 blockers (autosave, a MIDI keyboard, recording, low-latency audio, other makers' plugins, warp and tempo,
       MIDI files, mastering meters + a true-peak limiter, export formats), P1, P2, and a five-phase order.
@@ -719,6 +721,20 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
       the rig plays back sounds a test made; UI `test_the_chords_band`, en-XA covers the band; shots chords-band,
       chords-band-growing, chords-menu; vi.strings; nine mutants red. DR-UI-10's stale anchors re-pointed. N44 DONE.
 
+### O — automation clips (user request, 2026-10-19; discussion round 23; R-AUTO-14)
+*"it is not create pump — it should be create a clip for automation and user can copy just like a midi track"*. The
+user chose: Create Pump removed; automation clips on lanes like MIDI clips; copies linked (Make unique forks); the loop
+setting replaced by clips that repeat, old songs converted.
+- [ ] **O1** The model, the engine, the service: an automation's points in its own beats with a `length` and a `rest`;
+      `#aclip auto=`, `#alane auto=`, `#aauto of=` (Make unique); `autoclips = on` and the adoption of older songs; the
+      engine's spans; `auto create` makes the track and a clip, `auto add --length --rest`, `clip add --auto`, `set
+      <au>.length|rest`, the clip verbs on automation clips, `--pump` and `<au>.loop|at` gone; time edits; the model's
+      fields; L2 + model + engine tests measured; the API. The window's span grips, Loop combo and Create Pump go with
+      their tests (the AUTOMATION rows stay until O2).
+- [ ] **O2** The window: automation tracks among the lanes, the AUTOMATION section gone; clips drawing their curve and
+      its repeats; points edited in a clip; moved, copied (Shift-drag, Ctrl+C/V) and resized by the clip; the clip's
+      menu (Make unique, Length ▸, Open automation, Copy ID, Delete); the window's Length combo, rest and clips; shots.
+
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
       `implement_artboard`); both apps include them from there.
@@ -734,6 +750,13 @@ One task a commit, in this order. A DSP half is its own commit in the submodule 
 ---
 
 ## Decisions log (newest first)
+
+- **2026-10-19 — automation clips (Round 23), asked and answered:** Create Pump removed; automation clips live on lanes
+  like MIDI clips, each automation its own track, the AUTOMATION section gone; a copy is linked (Make unique forks); the
+  loop setting is replaced by clips that repeat, old songs converted on read. Decided with them: a unique copy is an
+  automation `of` the first (formulas still read the first); before an automation's first clip it reads its `rest`
+  (the property's value when made), between clips the value the one before ended on; an automation's track is
+  `#alane auto=` (not `track=`, which stays an instrument's).
 
 - **2026-10-09 — the second brief, decided without a round (the user asked to build):**
   - bezier automation stores Interstellar's keyframe model (speed + influence per side) — one curve
