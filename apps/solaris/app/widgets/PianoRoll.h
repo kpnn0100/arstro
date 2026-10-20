@@ -142,6 +142,11 @@ namespace solaris_ui
         artboard::Rect quantizeRect() const;
         artboard::Rect lengthRect() const;               // R-ROLL-10: the length a click makes, and its menu
         double clickLength() const { return mLengthChoice > 0 ? mLengthChoice : mLastLength; }
+        /** R-ROLL-14: what a click makes besides its length — the last selected note's velocity and chance. */
+        int clickVel() const { return mModelVel; }
+        double clickChance() const { return mModelChance; }
+        /** R-ROLL-12: LIVE — how much the note (or selection) in hand is a COPY (Shift held): the originals shown, a "+". */
+        double copyAmount() const { return mCopyAmt.value(); }
         void setLengthChoice(double beats) { mLengthChoice = beats; } // 0 = the last length (the default)
         static std::string lengthName(double beats);     // 1/16, 1/4, 1/1 … or "1.75 beats"
         // R-ROLL-11: the note tools — the pattern's scale (rows off it dimmed, eased), a chord a click stamps, the tools
@@ -249,6 +254,17 @@ namespace solaris_ui
         // a gesture in flight
         Drag mDrag = Drag::None;
         std::string mPressKey;
+        // R-ROLL-12: Shift held while a note or the selection is dragged — let go, it is copied there
+        bool mCopyHeld = false;
+        artboard::AnimatedProperty mCopyAmt{0.0};
+        double mCopyLast = 0.0;
+        void copyNotes(const std::vector<solaris::NoteModel> &ns, double by, int semi); // ONE `notes add`; the copies selected
+        // R-ROLL-14: the model note — the one last pressed (its key while it lasts); its values, kept when it goes
+        std::string mModelKey;
+        int mModelVel = 100;
+        double mModelChance = 1.0;
+        void takeModel(const std::string &k);
+        std::string clickAttrs() const;             // " --length <l>[ --vel <v>][ --chance <c>]" for a note a click makes
         solaris::NoteModel mPressNote;
         double mGrabBeat = 0, mGrabPitch = 0;
         solaris::NoteModel mLive;                   // the dragged note, as the pointer has it

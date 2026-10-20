@@ -1017,6 +1017,28 @@ namespace
                  r.app->project().windows().openRoll("pt_2");
                  r.settle();
              }},
+            {"piano-roll-copy-dragging",   // R-ROLL-12: two notes selected, Shift-dragged a bar on — the originals where they are, a
+                                           // "+" beside the note in hand
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 const int line[8][2] = {{45, 110}, {45, 70}, {52, 100}, {45, 72}, {48, 112}, {48, 68}, {55, 96}, {50, 80}};
+                 for (int i = 0; i < 8; ++i)
+                     r.cmd("note add pt_2 --pitch " + std::to_string(line[i][0]) + " --at " + std::to_string(i * 0.5) + " --length " +
+                           (i % 2 ? "0.25" : "0.5") + " --vel " + std::to_string(line[i][1]));
+                 r.settle();
+                 r.app->project().windows().openRoll("pt_2");
+                 r.settle();
+                 auto &roll = *r.app->project().windows().roll("pt_2");
+                 const artboard::Rect a = world(roll, roll.noteRect(52, 1.0)), b = world(roll, roll.noteRect(48, 2.0));
+                 r.click(a.x + 4.0, sltest::cy(a));
+                 r.pump(500.0);
+                 r.app->pointer(0, b.x + 4.0, sltest::cy(b), 0, r.now, false, true);
+                 r.app->pointer(2, b.x + 4.0, sltest::cy(b), 0, r.now, false, true);
+                 r.pump(500.0);
+                 const double bar = roll.beatToX(4.0) - roll.beatToX(0.0);
+                 r.drag(a.x + 4.0, sltest::cy(a), a.x + 4.0 + bar, sltest::cy(a), 8, false, true);
+                 r.settle();
+             }},
             {"piano-roll-bend",   // R-MIDI-3: the lane below on Bend — a dip and a rise through its points
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

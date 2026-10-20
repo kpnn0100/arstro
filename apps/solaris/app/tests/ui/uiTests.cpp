@@ -2758,6 +2758,118 @@ static void test_the_roll_sounds_what_is_made()
     pass("The roll sounds what is made (R-ROLL-7): a note added, a note pressed, each row a drag enters and each key pressed or swept is a `note preview` through the clip's track, never in undo; the key is lit while held, eased; a pattern on no track is made, not heard");
 }
 
+static void test_the_roll_copies_by_shift_drag_and_makes_notes_like_the_last()
+{
+    // R-ROLL-12: a note — or the selection — dragged with Shift held when let go is ONE `notes add` of copies keeping their
+    // length, velocity and chance, the copy look eased in and out with Shift, the copies selected where the pointer left
+    // them; without Shift it still moves. R-ROLL-14: a click makes a note like the note last pressed — its length,
+    // velocity and chance — following a shell's edit of it, kept once it is gone
+    sltest::Rig r("ui-rollcopy", 1280, 800);
+    r.cmd("project new " + r.song("RollCopy") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 8");
+    const std::string ac = r.svc->model().clips[0].id, pt = r.svc->model().clips[0].pattern;
+    r.cmd("set " + pt + ".length=8");
+    r.cmd("notes add " + pt + " \"C4@0:2:90 E4@1:0.5:60:0.5 G4@2:1:110\"");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    const artboard::Rect clip = world(tl, tl.clipRect(ac));
+    r.click(clip.x + 12.0, cy(clip));
+    r.click(clip.x + 12.0, cy(clip));
+    r.settle();
+    auto &roll = *r.app->project().windows().roll(pt);
+    const artboard::Rect rw = world(roll, artboard::Rect{0, 0, 0, 0});
+    auto noteAt = [&](int pitch, double at) { return world(roll, roll.noteRect(pitch, at)); };
+    auto cell = [&](int pitch, double at) { return artboard::Point{rw.x + roll.beatToX(at) + 3.0, rw.y + roll.pitchToY(pitch) + 6.0}; };
+    auto press = [&](double x, double y, bool shift) {
+        r.app->pointer(0, x, y, 0, r.now, false, shift);
+        r.app->pointer(2, x, y, 0, r.now, false, shift);
+        r.pump(500.0); // never a double-click
+    };
+    auto lastEdit = [&]() {
+        for (auto it = r.sent.rbegin(); it != r.sent.rend(); ++it)
+            if (it->rfind("note preview ", 0) != 0) return *it;
+        return std::string();
+    };
+    auto note = [&](int pitch, double at) -> const arstro::solaris::NoteModel * {
+        for (const auto &x : r.svc->model().patterns)
+            if (x.id == pt)
+                for (const auto &n : x.notes)
+                    if (n.pitch == pitch && std::fabs(n.at - at) < 1e-9) return &n;
+        return nullptr;
+    };
+    // nothing pressed yet: a click makes the defaults — the line as it always was
+    artboard::Point p = cell(62, 4.0);
+    press(p.x, p.y, false);
+    assert(lastEdit() == "note add " + pt + " --pitch 62 --at 4 --length 0.25");
+    // E4 pressed: the next click's note is like it — length, velocity, chance — and heard at its velocity
+    artboard::Rect e4 = noteAt(64, 1.0);
+    press(cx(e4), cy(e4), false);
+    assert(roll.clickVel() == 60 && roll.clickChance() == 0.5 && roll.clickLength() == 0.5);
+    p = cell(65, 5.0);
+    press(p.x, p.y, false);
+    assert(lastEdit() == "note add " + pt + " --pitch 65 --at 5 --length 0.5 --vel 60 --chance 0.5");
+    assert(note(65, 5.0) && note(65, 5.0)->vel == 60 && note(65, 5.0)->chance == 0.5 && note(65, 5.0)->length == 0.5);
+    assert(contains(r.sent.back(), "note preview ") && contains(r.sent.back(), " 65 --vel 60 "));
+    // a shell's edit of it is followed; once it is gone its last values stay
+    r.cmd("note move " + pt + " --pitch 64 --at 1 --vel 30 --length 1");
+    r.settle();
+    assert(roll.clickVel() == 30 && roll.clickLength() == 1.0);
+    r.cmd("note delete " + pt + " --pitch 64 --at 1");
+    r.settle();
+    assert(roll.clickVel() == 30 && roll.clickChance() == 0.5 && roll.clickLength() == 1.0);
+    // Shift-drag G4 two beats on: the copy look eases in, then ONE `notes add` — the original stays, the copy selected
+    artboard::Rect g4 = noteAt(67, 2.0);
+    const double dx2 = roll.beatToX(4.0) - roll.beatToX(2.0);
+    r.drag(cx(g4), cy(g4), cx(g4) + dx2, cy(g4), 2, false, true);
+    assert(roll.copyAmount() > 0.0 && roll.copyAmount() < 1.0);
+    r.settle();
+    assert(roll.copyAmount() == 1.0 && roll.clickVel() == 110); // pressed: the model now
+    r.app->pointer(2, cx(g4) + dx2, cy(g4), 0, r.now, false, true);
+    r.frame();
+    assert(lastEdit() == "notes add " + pt + " \"67@4:1:110\"");
+    assert(note(67, 2.0) && note(67, 4.0) && note(67, 4.0)->vel == 110 && roll.selected(67, 4.0) && roll.selectionCount() == 1);
+    assert(roll.noteAlpha(67, 4.0) == 1.0); // where the pointer left it — not faded in
+    r.settle();
+    assert(roll.copyAmount() == 0.0);
+    // Shift let go before the drop: it eases back, and the drop moves
+    g4 = noteAt(67, 4.0);
+    const double dx1 = roll.beatToX(5.0) - roll.beatToX(4.0);
+    r.drag(cx(g4), cy(g4), cx(g4) + dx1, cy(g4), 2, false, true);
+    r.settle();
+    r.app->pointer(1, cx(g4) + dx1, cy(g4), 0, r.now, false, false);
+    r.frame();
+    r.frame();
+    assert(roll.copyAmount() > 0.0 && roll.copyAmount() < 1.0);
+    r.app->pointer(2, cx(g4) + dx1, cy(g4), 0, r.now, false, false);
+    r.frame();
+    assert(lastEdit() == "note move " + pt + " --pitch 67 --at 4 --to-pitch 67 --to-at 5" && !note(67, 4.0) && note(67, 5.0));
+    r.settle();
+    r.cmd("note move " + pt + " --pitch 67 --at 5 --vel 70"); // the model went with the note moved
+    r.settle();
+    assert(roll.clickVel() == 70);
+    // the selection Shift-dragged: copies of all of it, ONE line, the copies the selection
+    artboard::Rect c4 = noteAt(60, 0.0);
+    press(cx(c4), cy(c4), false);
+    g4 = noteAt(67, 2.0);
+    press(cx(g4), cy(g4), true);
+    assert(roll.selectionCount() == 2);
+    c4 = noteAt(60, 0.0);
+    const double dx4 = roll.beatToX(4.0) - roll.beatToX(0.0), dy = roll.pitchToY(62) - roll.pitchToY(60);
+    r.drag(c4.x + 6.0, cy(c4), c4.x + 6.0 + dx4, cy(c4) + dy, 4, true, true);
+    assert(lastEdit() == "notes add " + pt + " \"62@4:2:90 69@6:1:110\"");
+    assert(note(60, 0.0) && note(67, 2.0) && note(62, 4.0) && note(69, 6.0) && roll.selected(62, 4.0) && roll.selected(69, 6.0) && roll.selectionCount() == 2);
+    r.settle();
+    // the selection dragged (no Shift) moves — and the note in hand stays the model where it went
+    const artboard::Rect d4 = noteAt(62, 4.0);
+    const double dx1b = roll.beatToX(5.0) - roll.beatToX(4.0);
+    r.drag(d4.x + 6.0, cy(d4), d4.x + 6.0 + dx1b, cy(d4), 4, true, false);
+    assert(lastEdit() == "notes move " + pt + " \"62@4 69@6\" --by 1 --semi 0");
+    r.cmd("note move " + pt + " --pitch 62 --at 5 --vel 45");
+    r.settle();
+    assert(roll.clickVel() == 45);
+    pass("The roll copies by Shift-drag (R-ROLL-12): a note or the selection, ONE `notes add` keeping each copy's length, velocity and chance, the copy look eased with Shift, the copies selected; without Shift it moves. A click makes a note like the note last pressed (R-ROLL-14), following a shell's edit of it, kept once it is gone");
+}
+
 static void test_the_rolls_selection_and_what_is_done_to_it()
 {
     sltest::Rig r("ui-rollsel", 1280, 800);
@@ -6546,6 +6658,7 @@ int main()
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();
+    test_the_roll_copies_by_shift_drag_and_makes_notes_like_the_last();
     test_the_length_a_click_makes_and_a_window_resized();
     test_the_wheel_scrolls_sideways_with_shift();
     test_a_short_drag_lands_where_it_was_let_go();

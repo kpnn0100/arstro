@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-19 — P1: several clips selected by a box and handled together (R-CLIP-11).*
+*Last updated: 2026-10-20 — Q1: Shift-drag copies notes; a new note like the last selected (R-ROLL-12, 14).*
 
 ---
 
 ## NEXT
 
-**► Several clips are selected by a box and handled together (R-CLIP-11, P1).** What comes next is the user's call. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► Q2** — Alt+wheel raises or lowers the lane shown for the selection (R-ROLL-13): `notes set --vel-by | --chance-by`, `expr set`. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -754,6 +754,17 @@ setting replaced by clips that repeat, old songs converted.
       clips-box-select, clips-selection-dragging; 16 mutants red. Found on the way: DR-CLIP-9's anchors were stale
       before this (re-pointed), and DR-PERF-2's `ownWorkOf` pointed into the wrong file.
 
+### Q — the piano roll: copy by Shift-drag, Alt+wheel, a new note like the last (user request, 2026-10-20)
+*"piano roll note should be able to copy too — when you shift, copy note too — when alt scroll, lower the selected param
+of note (vel, bend, mod, ..) — when create new note, use the same atribute as last selected note"*. R-ROLL-12…14; the
+copy by Ctrl+C / Ctrl+V was already R-ROLL-8's.
+- [x] **Q1** Shift-drag copies a note or the selection (ONE `notes add`, the copy look eased, the copies selected); the
+      roll's model note — a click makes a note of the last selected note's length, velocity and chance (R-ROLL-12, 14).
+      — DR-ROLL-12, DR-ROLL-14. UI one; shot piano-roll-copy-dragging; 11 mutants red (one survivor — a moved note
+      losing the model — made the test follow a moved note and a moved selection). No new grammar.
+- [ ] **Q2** Alt+wheel raises or lowers the lane shown for the selection: `notes set --vel-by | --chance-by`, `expr set`
+      (R-ROLL-13).
+
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
       `implement_artboard`); both apps include them from there.
@@ -769,6 +780,12 @@ setting replaced by clips that repeat, old songs converted.
 ---
 
 ## Decisions log (newest first)
+
+- **2026-10-20 — the roll's copy, wheel and model note (R-ROLL-12…14), decided without a round:** Ctrl+C / Ctrl+V on
+  notes already existed (R-ROLL-8), so "copy" is built as Shift-drag (as clips have it); the model note is the note
+  last PRESSED (a click, a drag, a resize, its stem), its velocity, chance and length; Alt+wheel works on the selection
+  or else the note under the pointer, in the lane shown — on Bend and Mod the points under the notes, a note with
+  none getting one at its start (a point holds until the next, as R-MIDI-3's lanes play).
 
 - **2026-10-19 — selecting several clips (R-CLIP-11), decided without a round (the request was one gesture):** the
   objects are the lanes' clips of every kind (audio, MIDI, automation); the box starts on empty space (Ctrl: anywhere,

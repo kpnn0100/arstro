@@ -657,7 +657,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
   out of the layer — and its content lays itself out at the new size (a roll shows more rows, a face
   reflows its modules). The view's, like its place (R-WIN-4): not saved, not a command.
 
-## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6 ✅ (play from the roll, DR-ROLL-6) — 7 ✅ (a note heard when made, DR-ROLL-7) — 8 ✅ (the selection, DR-ROLL-8) — 9 ✅ (the pattern grows, DR-ROLL-9) — 10 ✅ (the length chosen, DR-ROLL-10) — 11 ✅ (the note tools, DR-ROLL-11)
+## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6 ✅ (play from the roll, DR-ROLL-6) — 7 ✅ (a note heard when made, DR-ROLL-7) — 8 ✅ (the selection, DR-ROLL-8) — 9 ✅ (the pattern grows, DR-ROLL-9) — 10 ✅ (the length chosen, DR-ROLL-10) — 11 ✅ (the note tools, DR-ROLL-11) — 12 ✅ (Shift-drag copies notes, DR-ROLL-12) — 14 ✅ (a new note takes the last selected one's attributes, DR-ROLL-14) — 13 🚧 (Alt+wheel, Q2)
 
 - **R-ROLL-1 A piano-roll WINDOW per pattern** (R-WIN's frame), opened by double-clicking a note clip
   or from its instrument's window: keys on the left (C named with its octave; a drum machine's keys
@@ -710,7 +710,37 @@ the object it belongs to, shows it on the timeline, and that property will use a
   audit's warning stays for a song saved before.)
 - **R-ROLL-10 The length a click makes is shown and chosen** (U-4, R-SVC-11): the toolbar names it ("Length ¼"
   — the last length, as now), and its menu sets it — the snap values, ½, 1, 2 and 4 beats, or "Last" (the
-  length of the note last made or resized, the default). The view's, not a command.
+  length of the note last made or resized, the default). The view's, not a command. (**AMENDED (R-ROLL-14),
+  2026-10-20:** "Last" is the length of the note last selected, made or resized.)
+- **R-ROLL-12 Shift-drag copies notes** (user request, 2026-10-20: *"piano roll note should be able to copy too — when
+  you shift, copy note too"*; as R-CLIP-9 copies clips). A note — or, pressed on a note of the selection, the whole
+  selection — dragged with Shift held when it is let go is COPIED where it is dropped, the originals staying: ONE
+  `notes add <pt> "<pitch@beat:length:vel[:chance]> …"`, each copy keeping its length, velocity and chance (a copy
+  landing on a note replaces it, as a paste does). While Shift is held the originals show at their places at full
+  strength and a "+" rides on the note in hand, eased in and out as Shift is pressed and let go; without it the drag
+  still moves (R-ROLL-2, R-ROLL-8). The copies are the selection, where the pointer left them. Ctrl+C / Ctrl+V copy
+  and paste as before (R-ROLL-8).
+- **R-ROLL-13 Alt+wheel changes the selection's value in the lane shown** (user request, 2026-10-20: *"when alt
+  scroll, lower the selected param of note (vel, bend, mod, ..)"*). With notes selected — or, with none, the note
+  under the pointer — Alt+wheel over the roll raises (up) or lowers (down) what the lane below shows, for those
+  notes: **Velocity**, each note's own by 4 a notch, kept within 1–127; **Chance**, each note's own by 0.05, within
+  0–1; **Bend**, **Mod** (an expression lane, R-MIDI-3), the lane's points under the notes (a note's start to its end)
+  by 0.05 a notch within the lane's range — a note with no point under it gets one at its start, from the lane's
+  value there (a point holds until the next, so the notes after it keep that value until a point of their own; when
+  it is the lane's first point, a point at beat 0 keeps what played before). Each value moves with the wheel at
+  once, eased; the wheel's turn is ONE edit, sent once it rests (a pause, or another gesture): `notes set <pt>
+  "<pitch@beat> …" --vel-by <n> | --chance-by <x>` (each note moved by, within range) or `expr set <pt> --lane <l>
+  "<beat>:<value> …"` (many points of a lane at once). Nothing selected and nothing under the pointer, the wheel
+  scrolls as it does without Alt.
+- **R-ROLL-14 A new note takes the last selected note's attributes** (user request, 2026-10-20: *"when create new
+  note, use the same attribute as last selected note"*). (**AMENDS R-ROLL-2's "of the last-used length" and R-ROLL-10's
+  "Last".**) The note last selected — clicked, Shift+clicked into the selection, or dragged — is the roll's model:
+  a click on empty grid makes a note of its length, velocity and chance (`note add <pt> --pitch --at --length --vel
+  [--chance]`), as a chord stamp's notes are, and a step's in Step mode (which keeps the step's length); the note
+  made is heard at that velocity (R-ROLL-7). The model follows that note's edits (resized, its velocity or chance
+  changed — by the roll or a shell; moved by the roll) and keeps its last values once the selection is cleared or the
+  note is deleted. A note value chosen in the Length menu (R-ROLL-10) still sets the length. Until a note is selected: the
+  last length, velocity 100, chance 1. The view's, not a command.
 
 ## R-VST — VST3 — ✅ BUILT 1–5 (user request, 2026-10-09; replaces R-INST-4's VST3 half; DR-VST-1; 6 reserved) — 7, 8 ✅ (the plugins' own editor — the shared panel, Drum Machine's pads — DR-VST-7)
 

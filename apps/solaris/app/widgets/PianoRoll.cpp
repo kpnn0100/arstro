@@ -86,6 +86,7 @@ namespace solaris_ui
         mPresent = pt != nullptr;
         if (!pt) return;
         mModel = *pt;
+        takeModel(mModelKey); // R-ROLL-14: the model note's values as they are now (kept when it is gone)
         mStripName.clear();
         for (size_t i = 0; i < m.strips.size(); ++i)
             if (m.strips[i].id == pt->strip) { mColour = m.strips[i].colour; mStripName = m.strips[i].name; }
@@ -307,6 +308,48 @@ namespace solaris_ui
         mSel = next;
     }
 
+    void PianoRoll::copyNotes(const std::vector<solaris::NoteModel> &ns, double by, int semi)
+    {
+        // R-ROLL-12: copies where the pointer left them, each keeping its length, velocity and chance — ONE line; they are
+        // there at once (the pointer showed them) and they are the selection
+        if (ns.empty() || (std::fabs(by) < kTol && semi == 0)) return;
+        if (!sendOk("notes add " + mPattern + " " + tokens(ns, by, semi, true))) return;
+        std::set<std::string> next;
+        for (const auto &n : ns)
+        {
+            NoteLive nl;
+            nl.n = n;
+            nl.n.at = std::max(0.0, n.at + by);
+            nl.n.pitch = n.pitch + semi;
+            nl.instant = true;
+            nl.sel.set(1.0);
+            nl.selLast = true;
+            mNotes.push_back(nl);
+            next.insert(key(nl.n.pitch, nl.n.at));
+        }
+        mSel = next;
+    }
+
+    void PianoRoll::takeModel(const std::string &k)
+    {
+        // R-ROLL-14: a note a click makes is like this one — its length (R-ROLL-10's "Last"), velocity and chance
+        mModelKey = k;
+        for (const auto &n : mModel.notes)
+            if (!k.empty() && key(n.pitch, n.at) == k)
+            {
+                mModelVel = n.vel;
+                mModelChance = n.chance;
+                mLastLength = n.length;
+            }
+    }
+
+    std::string PianoRoll::clickAttrs() const
+    {
+        // the defaults `note add` has (100, 1) are left out, so a plain click's line is as it always was
+        return " --length " + beats(clickLength()) + (mModelVel != 100 ? " --vel " + std::to_string(mModelVel) : std::string()) +
+               (mModelChance < 1.0 ? " --chance " + beats(mModelChance) : std::string());
+    }
+
     void PianoRoll::addSelected(const std::vector<solaris::NoteModel> &ns)
     {
         if (ns.empty()) return;
@@ -437,6 +480,12 @@ namespace solaris_ui
     void PianoRoll::advance(double nowMs)
     {
         mNowMs = nowMs;
+        {
+            // R-ROLL-12: Shift pressed or let go mid-drag eases between a move and a copy
+            const double cw = mCopyHeld && (mDrag == Drag::Move || mDrag == Drag::MoveSel) ? 1.0 : 0.0;
+            if (cw != mCopyLast) { mCopyAmt.animateTo(cw, motion::kHoverMs, Easing::EaseOutCubic, nowMs); mCopyLast = cw; }
+            mCopyAmt.update(nowMs);
+        }
         const bool fadeIn = mEver && !reducedMotion();
         for (auto &l : mNotes)
         {
@@ -721,6 +770,7 @@ namespace solaris_ui
                     mGrabBeat = xToBeat(local.x) - n->n.at;
                     mGrabPitch = yToPitch(local.y) - n->n.pitch;
                     mHeardPitch = n->n.pitch;
+                    takeModel(mPressKey); // R-ROLL-14: the note pressed is what a click makes next
                     preview(n->n.pitch, n->n.vel, n->n.length); // a note pressed is heard, as in every roll
                 }
                 return true;
@@ -752,12 +802,14 @@ namespace solaris_ui
                         mPressNote = it->n;
                         mLive = it->n;
                         mPressKey = key(it->n.pitch, it->n.at);
+                        takeModel(mPressKey); // R-ROLL-14
                         break;
                     }
             return true;
         }
         case Gesture::Type::DragStart:
         case Gesture::Type::Drag:
+            mCopyHeld = g.shift && (mDrag == Drag::Move || mDrag == Drag::MoveSel); // R-ROLL-12: read at every step
             track(local);
             return true;
         case Gesture::Type::Up:
@@ -772,12 +824,24 @@ namespace solaris_ui
             }
             const Drag d = mDrag;
             mDrag = Drag::None;
+            mCopyHeld = false;
+            const bool copy = g.shift && (d == Drag::Move || d == Drag::MoveSel); // R-ROLL-12: as it is when let go
             const std::string id = mPattern, from = " --pitch " + std::to_string(mPressNote.pitch) + " --at " + beats(mPressNote.at);
             if (d == Drag::MoveSel)
             {
-                moveSelection(mSelDBeat, mSelDSemi);
+                if (copy) copyNotes(selectedNotes(), mSelDBeat, mSelDSemi);
+                else
+                {
+                    moveSelection(mSelDBeat, mSelDSemi);
+                    takeModel(key(mPressNote.pitch + mSelDSemi, mPressNote.at + mSelDBeat)); // the model went with it
+                }
                 mSelDBeat = 0.0;
                 mSelDSemi = 0;
+                return true;
+            }
+            if (d == Drag::Move && copy)
+            {
+                copyNotes({mPressNote}, mLive.at - mPressNote.at, mLive.pitch - mPressNote.pitch);
                 return true;
             }
             if (d == Drag::Box)
@@ -801,7 +865,10 @@ namespace solaris_ui
                 nl.instant = true;
                 mNotes.push_back(nl);
                 if (sendOk("note move " + id + from + " --to-pitch " + std::to_string(mLive.pitch) + " --to-at " + beats(mLive.at)))
+                {
                     mSel = {key(mLive.pitch, mLive.at)}; // the note moved is what is selected
+                    takeModel(key(mLive.pitch, mLive.at)); // … and still the model (R-ROLL-14)
+                }
             }
             else if (d == Drag::Resize && mLive.length != mPressNote.length)
             {
@@ -945,8 +1012,9 @@ namespace solaris_ui
                             bool on = false;
                             for (const auto &n : mModel.notes) on |= n.pitch == pitch && std::fabs(n.at - s * 0.25) < kTol;
                             send(std::string(on ? "note delete " : "note add ") + mPattern + " --pitch " + std::to_string(pitch) + " --at " + beats(s * 0.25) +
-                                 (on ? "" : " --length 0.25"));
-                            if (!on) preview(pitch, 100, 0.25);
+                                 (on ? std::string() : " --length 0.25" + (mModelVel != 100 ? " --vel " + std::to_string(mModelVel) : std::string()) +
+                                                           (mModelChance < 1.0 ? " --chance " + beats(mModelChance) : std::string()))); // R-ROLL-14: the step's length
+                            if (!on) preview(pitch, mModelVel, 0.25);
                             return true;
                         }
                 return true;
@@ -968,9 +1036,9 @@ namespace solaris_ui
                 const int pitch = yToPitch(local.y);
                 if (mChordOn) // R-ROLL-11: a chord stamped, its root the row clicked — ONE line (a scale-locked pattern makes it the key's)
                     send("note add " + mPattern + " --chord " + kKeyNames[pitch % 12] + mChord + " --octave " + std::to_string(pitch / 12 - 1) + " --at " + beats(at) +
-                         " --length " + beats(clickLength()));
-                else send("note add " + mPattern + " --pitch " + std::to_string(pitch) + " --at " + beats(at) + " --length " + beats(clickLength()));
-                preview(pitch, 100, clickLength()); // R-ROLL-7: the note made is heard
+                         clickAttrs());
+                else send("note add " + mPattern + " --pitch " + std::to_string(pitch) + " --at " + beats(at) + clickAttrs()); // R-ROLL-14: like the last selected
+                preview(pitch, mModelVel, clickLength()); // R-ROLL-7: the note made is heard, as loud as it is made
             }
             return true;
         }
@@ -1057,12 +1125,37 @@ namespace solaris_ui
             if (carried) { n.at += mSelDBeat; n.pitch += mSelDSemi; } // the selection is the pointer's
             const Rect r{beatToX(n.at), pitchToY(n.pitch) + 1.0, std::max(3.0, n.length * mPpb.value() - 1.0), kNoteH - 2.0};
             if (r.right() < grid.x || r.x > grid.right() || r.bottom() < grid.y || r.y > grid.bottom()) continue;
+            if (const double k = mCopyAmt.value(); k > 0.001 && ((dragged && mDrag == Drag::Move) || carried))
+            {
+                // R-ROLL-12: a copy in hand — the original shows where it is, at full strength once Shift is fully held
+                const Rect o{beatToX(l.n.at), pitchToY(l.n.pitch) + 1.0, std::max(3.0, l.n.length * mPpb.value() - 1.0), kNoteH - 2.0};
+                const Color oc = lerpColor(base, palette::white(), 0.12 + 0.28 * (l.n.vel / 127.0));
+                drawRoundedRect(t, o, radius::control(), Paint::filledStroked(fade(oc, na * k * 0.9 * (0.35 + 0.65 * l.n.chance)), fade(palette::whiteAlpha(0.35), na * k), 1.0));
+            }
             const double sel = l.sel.value();
             // R-ROLL-11: brighter the louder, fainter the less it sounds — both eased (a humanise, a `notes set` travels)
             const double v = dragged || l.velLast < 0 ? n.vel : l.vel.value(), ch = dragged || l.velLast < 0 ? n.chance : l.chance.value();
             const Color c = lerpColor(base, palette::white(), 0.12 + 0.28 * (v / 127.0) + 0.25 * sel);
             drawRoundedRect(t, r, radius::control(),
                             Paint::filledStroked(fade(c, na * (dragged || carried ? 1.0 : 0.9) * (0.35 + 0.65 * ch)), fade(lerpColor(palette::whiteAlpha(0.35), palette::primary(), sel), na), 1.0 + 0.5 * sel));
+        }
+        if (const double k = mCopyAmt.value(); k > 0.001 && (mDrag == Drag::Move || mDrag == Drag::MoveSel))
+        {
+            // R-ROLL-12: a "+" beside the note in hand (a short note keeps its face)
+            solaris::NoteModel h = mDrag == Drag::Move ? mLive : mPressNote;
+            if (mDrag == Drag::MoveSel) { h.at += mSelDBeat; h.pitch += mSelDSemi; }
+            const Rect r{beatToX(h.at), pitchToY(h.pitch) + 1.0, std::max(3.0, h.length * mPpb.value() - 1.0), kNoteH - 2.0};
+            const double sz = kNoteH - 2.0;
+            const Rect b{r.right() + 2.0, r.y + (r.h - sz) * 0.5, sz, sz};
+            Color bg = palette::primary(), fg = palette::primaryForeground();
+            bg.a *= k * a;
+            fg.a *= k * a;
+            drawRoundedRect(t, b, radius::pill(), Paint::filled(bg));
+            t.setStroke(fg, 1.2);
+            t.beginPath();
+            t.moveTo(b.x + 3.0, b.y + b.h * 0.5); t.lineTo(b.right() - 3.0, b.y + b.h * 0.5);
+            t.moveTo(b.x + b.w * 0.5, b.y + 3.0); t.lineTo(b.x + b.w * 0.5, b.bottom() - 3.0);
+            t.strokePath();
         }
         if (mDrag == Drag::Box)
         {
