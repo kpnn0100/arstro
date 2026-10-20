@@ -1039,6 +1039,28 @@ namespace
                  r.drag(a.x + 4.0, sltest::cy(a), a.x + 4.0 + bar, sltest::cy(a), 8, false, true);
                  r.settle();
              }},
+            {"piano-roll-alt-wheel",   // R-ROLL-13: two notes selected, the Bend lane turned four notches up by Alt+wheel — the lane
+                                       // raised under them only, the points still easing up, nothing sent yet
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("note add pt_2 --pitch 45 --at 0 --length 1");
+                 r.cmd("note add pt_2 --pitch 48 --at 1 --length 1");
+                 r.cmd("note add pt_2 --pitch 52 --at 2.5 --length 1.5");
+                 r.cmd("expr set pt_2 \"0:0 3:-0.4\" --lane bend");
+                 r.settle();
+                 r.app->project().windows().openRoll("pt_2");
+                 auto &roll = *r.app->project().windows().roll("pt_2");
+                 roll.setLane(arstro::solaris_ui::PianoRoll::LaneBend);
+                 r.settle();
+                 const artboard::Rect a = world(roll, roll.noteRect(45, 0.0)), b = world(roll, roll.noteRect(48, 1.0));
+                 r.click(a.x + 4.0, sltest::cy(a));
+                 r.pump(500.0);
+                 r.app->pointer(0, b.x + 4.0, sltest::cy(b), 0, r.now, false, true);
+                 r.app->pointer(2, b.x + 4.0, sltest::cy(b), 0, r.now, false, true);
+                 r.pump(500.0);
+                 for (int k = 0; k < 4; ++k) { r.app->wheel(a.x + 4.0, sltest::cy(a), 1.0, false, false, true); r.frame(); }
+                 r.pump(3 * sltest::Rig::kFrameMs);
+             }},
             {"piano-roll-bend",   // R-MIDI-3: the lane below on Bend — a dip and a rise through its points
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

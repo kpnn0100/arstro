@@ -248,6 +248,11 @@ namespace solaris
              "lane goes out in a MIDI file.", "R-MIDI-3", false, {"lane", "at", "value"}},
             {K::ExprDelete, "expr delete", "<pt>", 1, 1, {"lane=<lane>", "at=<beats>"}, "Remove the lane's point at --at.", "R-MIDI-3", false, {"lane", "at"}},
             {K::ExprClear, "expr clear", "<pt>", 1, 1, {"lane=<lane>"}, "Remove a lane's points (--lane), or every lane's.", "R-MIDI-3"},
+            {K::ExprSet, "expr set", "<pt> \"<beat>:<value> …\"", 2, -1, {"lane=<bend|mod|cc<N>>"},
+             "Many points of one expression lane in ONE edit (R-ROLL-13 — the roll's Alt+wheel on Bend or Mod): each "
+             "<beat>:<value> added, or a point already at that beat moved to the value, as `expr add` does. Refused whole, "
+             "naming the first, when a token is not <beat>:<value>, a beat is below 0 or named twice, or a value is outside "
+             "the lane's range. A point past the pattern's end grows it (R-ROLL-9). Prints how many.", "R-ROLL-13", false, {"lane"}},
             {K::MarkerAdd, "marker add", "<name>", 1, 1, {"at=<beats>", "length=<beats>", "note=<text>"},
              "A named place in the song (R-ARR-1 — Interstellar's marker, in beats): with --length a SECTION, else a point whose "
              "section runs to the next marker (or the song's end). On the ruler; `transport seek <mk>` goes there, `transport "
@@ -362,9 +367,10 @@ namespace solaris
              "scale's next pitch the way it moved. A move in time, an import, a step row, a recording and `pattern "
              "transpose` keep their pitches; notes already written stay. `off` unlocks it. The scales are under Notation. "
              "Prints its notes.", "R-ROLL-11"},
-            {K::NotesSet, "notes set", "<pt> \"<pitch@beat> …\"", 2, -1, {"vel=<1-127>", "chance=<0-1>", "length=<beats>"},
-             "Set several notes' --vel, --chance and/or --length as ONE edit — the piano roll's selection. Refused whole, "
-             "naming the first, when a name matches no note.", "R-ROLL-11"},
+            {K::NotesSet, "notes set", "<pt> \"<pitch@beat> …\"", 2, -1, {"vel=<1-127>", "chance=<0-1>", "length=<beats>", "vel-by=<±n>", "chance-by=<±x>"},
+             "Set several notes' --vel, --chance and/or --length as ONE edit — the piano roll's selection. --vel-by / --chance-by "
+             "move each note's own velocity / chance by that much instead, kept within 1–127 / 0–1 (R-ROLL-13: the roll's "
+             "Alt+wheel). Refused whole, naming the first, when a name matches no note.", "R-ROLL-11"},
             {K::PatternHumanise, "pattern humanise", "<pt>", 1, 1, {"timing=<beats>", "vel=<0-127>", "seed=<n>", "notes=<\"pitch@beat …\">"},
              "Loosen the notes (R-ROLL-11): each start moved within ± --timing beats and each velocity within ± --vel (with "
              "neither: 0.02 and 8), a triangular spread from a seed — the same --seed on the same notes writes the same notes "

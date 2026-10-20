@@ -41,6 +41,7 @@ namespace solaris
             NotesAdd, NotesMove, NotesDelete, PatternSteps, PatternDuplicate, PatternClear, PatternDelete, PatternTranspose, // R-SVC-8
             PatternImport, PatternExport, ProjectExportMidi, // R-MIDI-1
             ExprAdd, ExprDelete, ExprClear,                  // R-MIDI-3
+            ExprSet,                                         // R-ROLL-13
             PatternScale, NotesSet, PatternHumanise, PatternLegato, PatternArpeggiate, // R-ROLL-11
             MarkerAdd, MarkerRename, MarkerMove, MarkerDelete, // R-ARR-1
             TimeInsert, TimeDelete,                          // R-ARR-2

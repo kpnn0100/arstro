@@ -227,7 +227,7 @@ namespace solaris
         case K::PatternNew: case K::NoteAdd: case K::NoteDelete: case K::NoteMove:
             ok = clipCommand(c, err);
             break;
-        case K::PatternImport: case K::PatternExport: case K::ProjectExportMidi: case K::ExprAdd: case K::ExprDelete: case K::ExprClear:
+        case K::PatternImport: case K::PatternExport: case K::ProjectExportMidi: case K::ExprAdd: case K::ExprDelete: case K::ExprClear: case K::ExprSet:
             ok = midiCommand(c, err);
             break;
         case K::MarkerAdd: case K::MarkerRename: case K::MarkerMove: case K::MarkerDelete: case K::TimeInsert: case K::TimeDelete:

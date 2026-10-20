@@ -633,6 +633,16 @@
       "requirement": "R-MIDI-3"
     },
     {
+      "verb": "expr set",
+      "usage": "expr set <pt> \"<beat>:<value> …\" --lane <bend|mod|cc<N>>",
+      "args": "<pt> \"<beat>:<value> …\"",
+      "flags": [
+        "lane=<bend|mod|cc<N>>"
+      ],
+      "summary": "Many points of one expression lane in ONE edit (R-ROLL-13 — the roll's Alt+wheel on Bend or Mod): each <beat>:<value> added, or a point already at that beat moved to the value, as `expr add` does. Refused whole, naming the first, when a token is not <beat>:<value>, a beat is below 0 or named twice, or a value is outside the lane's range. A point past the pattern's end grows it (R-ROLL-9). Prints how many.",
+      "requirement": "R-ROLL-13"
+    },
+    {
       "verb": "marker add",
       "usage": "marker add <name> --at <beats> [--length <beats>] [--note <text>]",
       "args": "<name>",
@@ -1008,14 +1018,16 @@
     },
     {
       "verb": "notes set",
-      "usage": "notes set <pt> \"<pitch@beat> …\" [--vel <1-127>] [--chance <0-1>] [--length <beats>]",
+      "usage": "notes set <pt> \"<pitch@beat> …\" [--vel <1-127>] [--chance <0-1>] [--length <beats>] [--vel-by <±n>] [--chance-by <±x>]",
       "args": "<pt> \"<pitch@beat> …\"",
       "flags": [
         "vel=<1-127>",
         "chance=<0-1>",
-        "length=<beats>"
+        "length=<beats>",
+        "vel-by=<±n>",
+        "chance-by=<±x>"
       ],
-      "summary": "Set several notes' --vel, --chance and/or --length as ONE edit — the piano roll's selection. Refused whole, naming the first, when a name matches no note.",
+      "summary": "Set several notes' --vel, --chance and/or --length as ONE edit — the piano roll's selection. --vel-by / --chance-by move each note's own velocity / chance by that much instead, kept within 1–127 / 0–1 (R-ROLL-13: the roll's Alt+wheel). Refused whole, naming the first, when a name matches no note.",
       "requirement": "R-ROLL-11"
     },
     {

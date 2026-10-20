@@ -80,7 +80,7 @@ namespace solaris_ui
         void pointer(int kind, double x, double y, int button, double timeMs, bool alt = false, bool shift = false, bool ctrl = false);
         /** The wheel: `notches` up (+) or down (−); Shift scrolls sideways — and a sideways scroll (a tilted wheel,
          *  a touchpad) arrives as Shift (D-5). */
-        void wheel(double x, double y, double notches, bool ctrl = false, bool shift = false);
+        void wheel(double x, double y, double notches, bool ctrl = false, bool shift = false, bool alt = false);
         bool key(const artboard::KeyEvent &e);
         /** R-UI-14: what the pointer should look like where it is now — the host shows it after every pointer event. */
         Cursor cursor() const;

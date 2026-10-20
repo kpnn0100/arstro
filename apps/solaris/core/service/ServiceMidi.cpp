@@ -65,6 +65,50 @@ namespace solaris
         Project &p = mProject;
         switch (c.kind)
         {
+        case K::ExprSet:
+        {
+            // R-ROLL-13: many points of one lane, ONE edit — refused whole, naming the first
+            Pattern *pt = nullptr;
+            for (auto &x : p.patterns)
+                if (x.id == c.arg(0)) pt = &x;
+            if (!pt) { err = "no pattern `" + c.arg(0) + "`"; return false; }
+            std::string lane;
+            if (!exprLane(c.flag("lane"), lane)) { err = "--lane is bend, mod or cc0 … cc127, not `" + c.flag("lane") + "`"; return false; }
+            double lo = 0, hi = 1;
+            exprRange(lane, lo, hi);
+            std::vector<std::pair<double, double>> set;
+            for (size_t i = 1; i < c.args.size(); ++i)
+                for (const auto &w : tokenize(c.args[i]))
+                {
+                    const size_t colon = w.find(':');
+                    double at = 0, value = 0;
+                    if (colon == std::string::npos || !parseNumber(w.substr(0, colon), at) || !parseNumber(w.substr(colon + 1), value))
+                    { err = "`" + w + "` is not <beat>:<value> — nothing changed"; return false; }
+                    if (!(at >= 0)) { err = "`" + w + "`: a beat is ≥ 0 — nothing changed"; return false; }
+                    if (!(value >= lo && value <= hi)) { err = "`" + w + "`: " + lane + " is " + canonicalNumber(lo) + " … " + canonicalNumber(hi) + " — nothing changed"; return false; }
+                    at = toTick(at);
+                    for (const auto &s : set)
+                        if (std::fabs(s.first - at) < 0.5 / kPpq) { err = "`" + w + "`: beat " + canonicalBeats(at) + " is named twice — nothing changed"; return false; }
+                    set.push_back({at, value});
+                }
+            if (set.empty()) { err = "expr set needs points: <beat>:<value> …"; return false; }
+            for (const auto &s : set)
+            {
+                bool moved = false;
+                for (auto &x : pt->expr)
+                    if (x.lane == lane && std::fabs(x.at - s.first) < 0.5 / kPpq) { x.value = s.second; moved = true; }
+                if (!moved) pt->expr.push_back(ExprPoint{lane, s.first, s.second, {}});
+                if (s.first >= pt->length) // R-ROLL-9
+                {
+                    const double bar = beatsPerBar(p);
+                    pt->length = std::ceil((s.first + 1e-9) / bar) * bar;
+                }
+            }
+            std::stable_sort(pt->expr.begin(), pt->expr.end(), [](const ExprPoint &a, const ExprPoint &b) { return a.lane < b.lane || (a.lane == b.lane && a.at < b.at); });
+            changed("expr.changed", pt->id);
+            mOutput = std::to_string(set.size()) + (set.size() == 1 ? " point" : " points") + "\n";
+            return true;
+        }
         case K::ExprAdd:
         case K::ExprDelete:
         case K::ExprClear:

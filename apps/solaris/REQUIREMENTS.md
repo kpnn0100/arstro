@@ -657,7 +657,7 @@ the object it belongs to, shows it on the timeline, and that property will use a
   out of the layer — and its content lays itself out at the new size (a roll shows more rows, a face
   reflows its modules). The view's, like its place (R-WIN-4): not saved, not a command.
 
-## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6 ✅ (play from the roll, DR-ROLL-6) — 7 ✅ (a note heard when made, DR-ROLL-7) — 8 ✅ (the selection, DR-ROLL-8) — 9 ✅ (the pattern grows, DR-ROLL-9) — 10 ✅ (the length chosen, DR-ROLL-10) — 11 ✅ (the note tools, DR-ROLL-11) — 12 ✅ (Shift-drag copies notes, DR-ROLL-12) — 14 ✅ (a new note takes the last selected one's attributes, DR-ROLL-14) — 13 🚧 (Alt+wheel, Q2)
+## R-ROLL — the piano roll — ✅ BUILT (user request, 2026-10-09; DR-ROLL-1) — 6 ✅ (play from the roll, DR-ROLL-6) — 7 ✅ (a note heard when made, DR-ROLL-7) — 8 ✅ (the selection, DR-ROLL-8) — 9 ✅ (the pattern grows, DR-ROLL-9) — 10 ✅ (the length chosen, DR-ROLL-10) — 11 ✅ (the note tools, DR-ROLL-11) — 12 ✅ (Shift-drag copies notes, DR-ROLL-12) — 14 ✅ (a new note takes the last selected one's attributes, DR-ROLL-14) — 13 ✅ (Alt+wheel, DR-ROLL-13)
 
 - **R-ROLL-1 A piano-roll WINDOW per pattern** (R-WIN's frame), opened by double-clicking a note clip
   or from its instrument's window: keys on the left (C named with its octave; a drum machine's keys
@@ -724,11 +724,13 @@ the object it belongs to, shows it on the timeline, and that property will use a
   scroll, lower the selected param of note (vel, bend, mod, ..)"*). With notes selected — or, with none, the note
   under the pointer — Alt+wheel over the roll raises (up) or lowers (down) what the lane below shows, for those
   notes: **Velocity**, each note's own by 4 a notch, kept within 1–127; **Chance**, each note's own by 0.05, within
-  0–1; **Bend**, **Mod** (an expression lane, R-MIDI-3), the lane's points under the notes (a note's start to its end)
-  by 0.05 a notch within the lane's range — a note with no point under it gets one at its start, from the lane's
-  value there (a point holds until the next, so the notes after it keep that value until a point of their own; when
-  it is the lane's first point, a point at beat 0 keeps what played before). Each value moves with the wheel at
-  once, eased; the wheel's turn is ONE edit, sent once it rests (a pause, or another gesture): `notes set <pt>
+  0–1; **Bend**, **Mod** (an expression lane, R-MIDI-3), the lane under the notes by 0.05 a notch within the lane's
+  range, and only there. (**Detailed while building it, Q2 — 2026-10-20:** a lane is points joined by lines, held
+  before the first and after the last, so a note's value is the lane over its span: every point under a note — its
+  start to its end — moves; its start and its last tick carry the lane's value there, moved, as points; and one tick
+  before its start and at its end, unless another of the notes is there, a point keeps the value the lane had — so
+  what plays outside the notes is as it was.) Each value moves with the wheel at once, eased; the wheel's turn is
+  ONE edit, sent once it rests (a pause, or another gesture): `notes set <pt>
   "<pitch@beat> …" --vel-by <n> | --chance-by <x>` (each note moved by, within range) or `expr set <pt> --lane <l>
   "<beat>:<value> …"` (many points of a lane at once). Nothing selected and nothing under the pointer, the wheel
   scrolls as it does without Alt.

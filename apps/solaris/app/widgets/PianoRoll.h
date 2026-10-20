@@ -147,6 +147,9 @@ namespace solaris_ui
         double clickChance() const { return mModelChance; }
         /** R-ROLL-12: LIVE — how much the note (or selection) in hand is a COPY (Shift held): the originals shown, a "+". */
         double copyAmount() const { return mCopyAmt.value(); }
+        /** R-ROLL-13: an Alt+wheel turn in hand — not yet sent (it is, once the wheel rests or another gesture comes). */
+        bool wheelPending() const { return mWheelLastMs >= 0.0; }
+        static constexpr double kWheelRestMs = 400.0;
         void setLengthChoice(double beats) { mLengthChoice = beats; } // 0 = the last length (the default)
         static std::string lengthName(double beats);     // 1/16, 1/4, 1/1 … or "1.75 beats"
         // R-ROLL-11: the note tools — the pattern's scale (rows off it dimmed, eased), a chord a click stamps, the tools
@@ -265,6 +268,17 @@ namespace solaris_ui
         double mModelChance = 1.0;
         void takeModel(const std::string &k);
         std::string clickAttrs() const;             // " --length <l>[ --vel <v>][ --chance <c>]" for a note a click makes
+        // R-ROLL-13: an Alt+wheel turn — the notes it works on (keys), its lane ("vel", "chance", or an expression
+        // lane), how far it has turned (notches, a touchpad's fractions summed); ONE line once it rests
+        std::vector<std::string> mWheelKeys;
+        std::string mWheelLane;
+        double mWheelTurn = 0.0;
+        double mWheelLastMs = -1.0;                 // the last notch (−1: no turn in hand)
+        int wheelNotches() const;                   // whole notches turned (up +)
+        bool wheelTurn(const artboard::Gesture &g, const artboard::Point &local);
+        void showWheel();                           // the turn's values on the notes and points drawn (eased by advance)
+        void commitWheel();
+        std::vector<std::pair<double, double>> wheelPoints() const; // an expression lane's points the turn sets (beat, value)
         solaris::NoteModel mPressNote;
         double mGrabBeat = 0, mGrabPitch = 0;
         solaris::NoteModel mLive;                   // the dragged note, as the pointer has it

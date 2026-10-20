@@ -2641,6 +2641,67 @@ static void test_expression_lanes_play_the_wheels()
          "last point, the next clip at rest, a seek landing bent; `mod` is cc1; any controller kept; in the .slp; refusals; undoable");
 }
 
+// R-ROLL-13: the roll's Alt+wheel as lines — `notes set --vel-by / --chance-by` move each note's own value, kept in
+// range; `expr set` places many points of one lane at once — each ONE edit, refused whole naming the first
+static void test_notes_and_lane_points_moved_by_the_wheel()
+{
+    Run r;
+    r.ok("project new " + freshSong("wheel") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 4");          // pt_1
+    r.ok("notes add pt_1 \"C4@0:1:120 E4@1:1:60:0.5 G4@2:1:3:0.98\"");
+    auto note = [&](int pitch, double at) -> NoteModel {
+        for (const auto &p : r.svc.model().patterns)
+            if (p.id == "pt_1")
+                for (const auto &n : p.notes)
+                    if (n.pitch == pitch && std::fabs(n.at - at) < 1e-9) return n;
+        return NoteModel{-1};
+    };
+    auto points = [&](const std::string &lane) {
+        std::vector<std::pair<double, double>> v;
+        for (const auto &p : r.svc.model().patterns)
+            if (p.id == "pt_1")
+                for (const auto &x : p.expr)
+                    if (x.lane == lane) v.push_back({x.at, x.value});
+        return v;
+    };
+    const int depth = r.svc.model().undoDepth;
+    // each its own, moved — and kept within range (120 + 12 → 127; 3 − 12 → 1)
+    assert(r.ok("notes set pt_1 \"60@0 64@1\" --vel-by 12") == "2 notes set\n");
+    assert(note(60, 0).vel == 127 && note(64, 1).vel == 72 && note(67, 2).vel == 3 && r.svc.model().undoDepth == depth + 1);
+    r.ok("notes set pt_1 \"67@2\" --vel-by -12");
+    assert(note(67, 2).vel == 1);
+    r.ok("notes set pt_1 \"64@1 67@2\" --chance-by 0.05");
+    assert(note(64, 1).chance == 0.55 && note(67, 2).chance == 1.0 && note(60, 0).chance == 1.0);
+    r.ok("notes set pt_1 \"64@1\" --chance-by -1");
+    assert(note(64, 1).chance == 0.0);
+    assert(contains(r.no("notes set pt_1 \"60@0\" --vel 90 --vel-by 3"), "give one of them"));
+    assert(contains(r.no("notes set pt_1 \"60@0\" --chance 0.5 --chance-by 0.1"), "give one of them"));
+    assert(contains(r.no("notes set pt_1 \"60@0\" --vel-by 2.5"), "--vel-by is a whole number"));
+    assert(contains(r.no("notes set pt_1 \"60@0\" --chance-by 2"), "--chance-by is −1 … 1"));
+    assert(contains(r.no("notes set pt_1 \"60@0 61@9\" --vel-by 1"), "61@9") && note(60, 0).vel == 127);
+    // many points of a lane, ONE edit: added, or moved where one is
+    r.ok("expr add pt_1 --lane bend --at 1 --value 0.2");
+    const int d2 = r.svc.model().undoDepth;
+    assert(r.ok("expr set pt_1 \"0:0 1:0.4 2.5:-0.3\" --lane bend") == "3 points\n" && r.svc.model().undoDepth == d2 + 1);
+    assert((points("bend") == std::vector<std::pair<double, double>>{{0, 0}, {1, 0.4}, {2.5, -0.3}}));
+    r.ok("expr set pt_1 \"3:0.6\" --lane mod");
+    assert((points("cc1") == std::vector<std::pair<double, double>>{{3, 0.6}}));
+    // a point past the end grows the pattern to that bar's end (R-ROLL-9)
+    r.ok("expr set pt_1 \"5:0.5\" --lane mod");
+    for (const auto &p : r.svc.model().patterns)
+        if (p.id == "pt_1") assert(p.length == 8.0);
+    // refused whole, naming the first
+    assert(contains(r.no("expr set pt_1 \"0:0.1 1.5\" --lane bend"), "`1.5` is not <beat>:<value>"));
+    assert(contains(r.no("expr set pt_1 \"0:0.1 1:-2\" --lane bend"), "`1:-2`: bend is -1.0 … 1.0"));
+    assert(contains(r.no("expr set pt_1 \"0:0.1 0:0.2\" --lane bend"), "is named twice"));
+    assert(contains(r.no("expr set pt_1 \"-1:0\" --lane bend"), "a beat is ≥ 0"));
+    assert(contains(r.no("expr set pt_1 \"0:0.5\" --lane wobble"), "--lane is bend, mod or cc0"));
+    assert(contains(r.no("expr set pt_1 \"0:0.5\""), "lane"));
+    assert(points("bend")[0].second == 0.0); // nothing landed
+    assert(r.ok("undo") == "expr set pt_1 5:0.5\n");
+    pass("the wheel's lines (R-ROLL-13): notes set --vel-by / --chance-by move each note's own, kept in range; expr set places a lane's points at once, growing the pattern; each ONE edit; refused whole, naming the first");
+}
+
 static void test_expression_lanes_go_through_midi_files()
 {
     // R-MIDI-3: exported as pitch-bend and controller messages (a ramp stepped every 1/32 beat), read back as lanes
@@ -7758,6 +7819,7 @@ int main()
     test_record_the_keyboard_into_a_clip();
     test_expression_lanes_play_the_wheels();
     test_expression_lanes_go_through_midi_files();
+    test_notes_and_lane_points_moved_by_the_wheel();
     test_the_keyboards_wheels_play_and_record();
     test_markers_name_places_and_sections();
     test_time_insert_and_delete_move_the_whole_song();

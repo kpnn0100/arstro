@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <map>
 #include <set>
 
 namespace arstro
@@ -39,6 +40,12 @@ namespace solaris_ui
         {
             char buf[32];
             std::snprintf(buf, sizeof buf, "%g", std::round(b * 960.0) / 960.0);
+            return buf;
+        }
+        std::string value6(double v) // a lane's value or a step of one, to the millionth (R-ROLL-13)
+        {
+            char buf[32];
+            std::snprintf(buf, sizeof buf, "%.6g", std::round(v * 1e6) / 1e6);
             return buf;
         }
         bool black(int p)
@@ -155,6 +162,7 @@ namespace solaris_ui
             for (const auto &n : pt->notes) ps.insert(n.pitch);
             mStepPitches.assign(ps.rbegin(), ps.rend()); // high at the top, as the keys are
         }
+        showWheel(); // R-ROLL-13: a turn in hand stays drawn where it has the values
     }
 
     // ── geometry ────────────────────────────────────────────────────────────────────────────
@@ -330,6 +338,139 @@ namespace solaris_ui
         mSel = next;
     }
 
+    int PianoRoll::wheelNotches() const { return (int)std::trunc(mWheelTurn + (mWheelTurn > 0 ? 1e-9 : -1e-9)); }
+
+    bool PianoRoll::wheelTurn(const Gesture &g, const Point &local)
+    {
+        // R-ROLL-13: the selection — or, with none, the note (or the stem) under the pointer
+        const Rect grid = gridRect(), vel = velRect();
+        if (mMode != Notes || g.delta.y == 0.0 || !(grid.contains(local) || vel.contains(local))) return false;
+        std::vector<std::string> keys;
+        for (const auto &n : mModel.notes)
+            if (mSel.count(key(n.pitch, n.at))) keys.push_back(key(n.pitch, n.at));
+        if (keys.empty() && grid.contains(local))
+        {
+            bool edge = false;
+            if (const NoteLive *n = noteAt(local, edge)) keys.push_back(key(n->n.pitch, n->n.at));
+        }
+        if (keys.empty() && vel.contains(local))
+            for (auto it = mNotes.rbegin(); it != mNotes.rend(); ++it)
+                if (!it->gone && std::fabs(beatToX(it->n.at) + 1.5 - local.x) <= 5.0) { keys.push_back(key(it->n.pitch, it->n.at)); break; }
+        if (keys.empty()) return false;
+        const std::string lane = mLane == LaneVelocity ? std::string("vel") : mLane == LaneChance ? std::string("chance") : std::string(laneName());
+        if (mWheelLastMs >= 0.0 && (keys != mWheelKeys || lane != mWheelLane)) commitWheel(); // other notes, another lane: a new turn
+        mWheelKeys = keys;
+        mWheelLane = lane;
+        mWheelTurn += -g.delta.y / 40.0; // a notch is 40 (App::wheel); up raises
+        mWheelLastMs = mNowMs;
+        showWheel();
+        return true;
+    }
+
+    std::vector<std::pair<double, double>> PianoRoll::wheelPoints() const
+    {
+        // R-ROLL-13: the lane under the notes moved, and only there — every point under a note, its start and its last
+        // tick moved from the lane's value there; one tick before its start and at its end (unless another of the notes
+        // is there) the value the lane had, so what plays outside the notes is as it was
+        const double lo = mWheelLane == "bend" ? -1.0 : 0.0, hi = 1.0, d = 0.05 * wheelNotches(), tick = 1.0 / 960.0;
+        std::vector<std::pair<double, double>> pts;
+        for (const auto &e : mModel.expr)
+            if (e.lane == mWheelLane) pts.push_back({e.at, e.value});
+        auto was = [&](double b) {
+            if (pts.empty()) return 0.0; // no point: at rest
+            if (b <= pts.front().first) return pts.front().second;
+            for (size_t i = 1; i < pts.size(); ++i)
+                if (b <= pts[i].first)
+                {
+                    const double t = (b - pts[i - 1].first) / std::max(1e-12, pts[i].first - pts[i - 1].first);
+                    return pts[i - 1].second + (pts[i].second - pts[i - 1].second) * t;
+                }
+            return pts.back().second;
+        };
+        std::vector<std::pair<double, double>> spans;
+        for (const auto &n : mModel.notes)
+            if (std::find(mWheelKeys.begin(), mWheelKeys.end(), key(n.pitch, n.at)) != mWheelKeys.end()) spans.push_back({n.at, n.at + n.length});
+        auto under = [&](double b) {
+            for (const auto &s : spans)
+                if (b >= s.first - 1e-9 && b < s.second - 1e-9) return true;
+            return false;
+        };
+        std::map<long long, std::pair<double, double>> out; // by tick
+        auto put = [&](double b, double v) { out[std::llround(b * 960.0)] = {std::round(b * 960.0) / 960.0, std::clamp(std::round(v * 1e6) / 1e6, lo, hi)}; };
+        for (const auto &p : pts)
+            if (under(p.first)) put(p.first, p.second + d);
+        for (const auto &s : spans)
+        {
+            put(s.first, was(s.first) + d);
+            const double last = std::max(s.first, s.second - tick);
+            put(last, was(last) + d);
+        }
+        for (const auto &s : spans)
+        {
+            // the edges keep the lane as it was, where no note of the turn goes on
+            const double before = s.first - tick;
+            if (before >= -1e-9 && !under(before) && !out.count(std::llround(before * 960.0))) put(before, was(before));
+            if (!under(s.second) && !out.count(std::llround(s.second * 960.0))) put(s.second, was(s.second));
+        }
+        std::vector<std::pair<double, double>> v;
+        for (const auto &kv : out) v.push_back(kv.second);
+        return v;
+    }
+
+    void PianoRoll::showWheel()
+    {
+        // R-ROLL-13: the turn's values where they are drawn — advance eases each there
+        if (mWheelLastMs < 0.0) return;
+        const int n = wheelNotches();
+        if (mWheelLane == "vel" || mWheelLane == "chance")
+        {
+            for (auto &l : mNotes)
+            {
+                if (l.gone || std::find(mWheelKeys.begin(), mWheelKeys.end(), key(l.n.pitch, l.n.at)) == mWheelKeys.end()) continue;
+                for (const auto &m : mModel.notes)
+                    if (m.pitch == l.n.pitch && key(m.pitch, m.at) == key(l.n.pitch, l.n.at))
+                    {
+                        if (mWheelLane == "vel") l.n.vel = std::clamp(m.vel + 4 * n, 1, 127);
+                        else l.n.chance = std::clamp(std::round((m.chance + 0.05 * n) * 1e6) / 1e6, 0.0, 1.0);
+                    }
+            }
+            return;
+        }
+        for (const auto &p : wheelPoints())
+        {
+            ExprLive *x = nullptr;
+            for (auto &e : mExpr)
+                if (e.lane == mWheelLane && std::fabs(e.at - p.first) < kTol) x = &e;
+            if (!x) { mExpr.emplace_back(); x = &mExpr.back(); x->lane = mWheelLane; x->at = p.first; }
+            x->value = p.second;
+            x->gone = false;
+        }
+    }
+
+    void PianoRoll::commitWheel()
+    {
+        // R-ROLL-13: the turn, ONE line — or nothing, turned back to where it began
+        if (mWheelLastMs < 0.0) return;
+        const int n = wheelNotches();
+        const std::vector<std::pair<double, double>> pts = mWheelLane == "vel" || mWheelLane == "chance" ? std::vector<std::pair<double, double>>{} : wheelPoints();
+        std::vector<solaris::NoteModel> ns;
+        for (const auto &m : mModel.notes)
+            if (std::find(mWheelKeys.begin(), mWheelKeys.end(), key(m.pitch, m.at)) != mWheelKeys.end()) ns.push_back(m);
+        const std::string lane = mWheelLane;
+        mWheelLastMs = -1.0;
+        mWheelTurn = 0.0;
+        mWheelKeys.clear();
+        if (n == 0 || ns.empty()) return;
+        if (lane == "vel") send("notes set " + mPattern + " " + tokens(ns) + " --vel-by " + std::to_string(4 * n));
+        else if (lane == "chance") send("notes set " + mPattern + " " + tokens(ns) + " --chance-by " + value6(0.05 * n));
+        else
+        {
+            std::string s;
+            for (const auto &p : pts) s += (s.empty() ? "" : " ") + beats(p.first) + ":" + value6(p.second);
+            if (!s.empty()) send("expr set " + mPattern + " \"" + s + "\" --lane " + (lane == "cc1" ? std::string("mod") : lane));
+        }
+    }
+
     void PianoRoll::takeModel(const std::string &k)
     {
         // R-ROLL-14: a note a click makes is like this one — its length (R-ROLL-10's "Last"), velocity and chance
@@ -360,6 +501,7 @@ namespace solaris_ui
 
     bool PianoRoll::action(const std::string &id)
     {
+        commitWheel(); // R-ROLL-13: a turn in hand lands before a key acts
         if (mMode != Notes) return false;
         if (id == "roll.selectAll")
         {
@@ -480,6 +622,7 @@ namespace solaris_ui
     void PianoRoll::advance(double nowMs)
     {
         mNowMs = nowMs;
+        if (mWheelLastMs >= 0.0 && nowMs - mWheelLastMs >= kWheelRestMs) commitWheel(); // R-ROLL-13: the wheel rests
         {
             // R-ROLL-12: Shift pressed or let go mid-drag eases between a move and a copy
             const double cw = mCopyHeld && (mDrag == Drag::Move || mDrag == Drag::MoveSel) ? 1.0 : 0.0;
@@ -722,6 +865,7 @@ namespace solaris_ui
     bool PianoRoll::handleGesture(const Gesture &g, const Point &local)
     {
         const Rect grid = gridRect(), vel = velRect();
+        if (g.type != Gesture::Type::Move && g.type != Gesture::Type::Scroll) commitWheel(); // R-ROLL-13: another gesture: the turn lands
         switch (g.type)
         {
         case Gesture::Type::Move:
@@ -1059,6 +1203,8 @@ namespace solaris_ui
             return true;
         }
         case Gesture::Type::Scroll:
+            if (g.alt && wheelTurn(g, local)) return true; // R-ROLL-13: the lane shown, for the selection
+            commitWheel();
             if (g.ctrl && mMode == Steps) return true; // Steps' zoom is the fit
             if (g.ctrl)
             {

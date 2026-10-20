@@ -338,10 +338,18 @@ namespace solaris
         case K::NotesSet:
         {
             // R-ROLL-11: a selection's velocity, chance and/or length, ONE edit
-            if (!c.has("vel") && !c.has("chance") && !c.has("length")) { err = "notes set needs --vel, --chance and/or --length"; return false; }
+            if (!c.has("vel") && !c.has("chance") && !c.has("length") && !c.has("vel-by") && !c.has("chance-by"))
+            { err = "notes set needs --vel, --chance and/or --length (or --vel-by / --chance-by)"; return false; }
+            if (c.has("vel") && c.has("vel-by")) { err = "--vel sets each velocity, --vel-by moves each one — give one of them"; return false; }
+            if (c.has("chance") && c.has("chance-by")) { err = "--chance sets each chance, --chance-by moves each one — give one of them"; return false; }
             int vel = 0;
-            double chance = 1, length = 0;
+            double chance = 1, length = 0, velBy = 0, chanceBy = 0;
             if (!velOf(c, 100, vel, err) || !chanceOf(c, chance, err) || !beatsOf(c, "length", 0.25, length, err)) return false;
+            // R-ROLL-13: each note's own moved by — the roll's Alt+wheel
+            if (c.has("vel-by") && (!parseNumber(c.flag("vel-by"), velBy) || velBy != std::floor(velBy) || std::fabs(velBy) > 126))
+            { err = "--vel-by is a whole number, −126 … 126, got `" + c.flag("vel-by") + "`"; return false; }
+            if (c.has("chance-by") && (!parseNumber(c.flag("chance-by"), chanceBy) || !(std::fabs(chanceBy) <= 1)))
+            { err = "--chance-by is −1 … 1, got `" + c.flag("chance-by") + "`"; return false; }
             if (c.has("length") && !(length > 0)) { err = "--length must be more than 0 beats"; return false; }
             const auto words = wordsAfterFirst(c);
             if (words.empty()) { err = "notes set needs notes: <pitch>@<beat> …"; return false; }
@@ -353,6 +361,8 @@ namespace solaris
                 if (c.has("vel")) n.vel = vel;
                 if (c.has("chance")) n.chance = chance;
                 if (c.has("length")) n.length = length;
+                if (c.has("vel-by")) n.vel = std::clamp(n.vel + (int)velBy, 1, 127);
+                if (c.has("chance-by")) n.chance = std::clamp(std::round((n.chance + chanceBy) * 1e6) / 1e6, 0.0, 1.0);
             }
             changed("notes.set", pt->id);
             mOutput = countOf(which.size(), "note", "notes") + " set\n" + growToHold(*pt);

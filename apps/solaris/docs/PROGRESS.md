@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-20 — Q1: Shift-drag copies notes; a new note like the last selected (R-ROLL-12, 14).*
+*Last updated: 2026-10-20 — Q2: Alt+wheel changes the lane shown for the selection (R-ROLL-13).*
 
 ---
 
 ## NEXT
 
-**► Q2** — Alt+wheel raises or lowers the lane shown for the selection (R-ROLL-13): `notes set --vel-by | --chance-by`, `expr set`. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► The roll's copy, wheel and model note are built (R-ROLL-12…14, Q1–Q2).** What comes next is the user's call. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -762,8 +762,11 @@ copy by Ctrl+C / Ctrl+V was already R-ROLL-8's.
       roll's model note — a click makes a note of the last selected note's length, velocity and chance (R-ROLL-12, 14).
       — DR-ROLL-12, DR-ROLL-14. UI one; shot piano-roll-copy-dragging; 11 mutants red (one survivor — a moved note
       losing the model — made the test follow a moved note and a moved selection). No new grammar.
-- [ ] **Q2** Alt+wheel raises or lowers the lane shown for the selection: `notes set --vel-by | --chance-by`, `expr set`
+- [x] **Q2** Alt+wheel raises or lowers the lane shown for the selection: `notes set --vel-by | --chance-by`, `expr set`
       (R-ROLL-13).
+      — DR-ROLL-13. L2 one, UI one; shot piano-roll-alt-wheel; 12 mutants red. R-ROLL-13's Bend/Mod rule detailed while
+      building it (points at a note's edges keep the lane outside it as it was). The GTK host passes Alt with the wheel:
+      not yet driven live — owed with the other live checks.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

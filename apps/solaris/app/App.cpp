@@ -630,7 +630,7 @@ namespace solaris_ui
         mRecognizer.feed(rp);
     }
 
-    void App::wheel(double x, double y, double notches, bool ctrl, bool shift)
+    void App::wheel(double x, double y, double notches, bool ctrl, bool shift, bool alt)
     {
         x /= mScale.value(); // R-ACCESS-1
         y /= mScale.value();
@@ -641,6 +641,7 @@ namespace solaris_ui
         rp.timeMs = mNowMs;
         rp.ctrl = ctrl;
         rp.shift = shift; // D-5: the roll's and the lanes' sideways scroll
+        rp.alt = alt;     // R-ROLL-13: the roll's Alt+wheel
         rp.scroll = Point{0.0, -notches * 40.0}; // + notches = wheel up = toward the start (Interstellar's notch)
         mRecognizer.feed(rp);
     }

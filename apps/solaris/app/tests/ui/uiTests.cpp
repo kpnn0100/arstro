@@ -2870,6 +2870,128 @@ static void test_the_roll_copies_by_shift_drag_and_makes_notes_like_the_last()
     pass("The roll copies by Shift-drag (R-ROLL-12): a note or the selection, ONE `notes add` keeping each copy's length, velocity and chance, the copy look eased with Shift, the copies selected; without Shift it moves. A click makes a note like the note last pressed (R-ROLL-14), following a shell's edit of it, kept once it is gone");
 }
 
+static void test_alt_wheel_changes_the_lane_shown()
+{
+    // R-ROLL-13: Alt+wheel raises or lowers what the lane shows for the selection (or the note under the pointer) —
+    // each value moving with the wheel, eased; ONE line once the wheel rests, or at once when another gesture comes; a
+    // turn back to where it began sends nothing. On Bend / Mod the lane moves under the notes only: outside them it is
+    // as it was
+    sltest::Rig r("ui-rollwheel", 1280, 800);
+    r.cmd("project new " + r.song("Wheel") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 8");
+    const std::string ac = r.svc->model().clips[0].id, pt = r.svc->model().clips[0].pattern;
+    r.cmd("set " + pt + ".length=8");
+    r.cmd("notes add " + pt + " \"C4@0:1:100 E4@1:1:60 G4@4:2:90:0.5\"");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    const artboard::Rect clip = world(tl, tl.clipRect(ac));
+    r.click(clip.x + 12.0, cy(clip));
+    r.click(clip.x + 12.0, cy(clip));
+    r.settle();
+    auto &roll = *r.app->project().windows().roll(pt);
+    auto noteAt = [&](int pitch, double at) { return world(roll, roll.noteRect(pitch, at)); };
+    auto press = [&](const artboard::Rect &n, bool shift) {
+        r.app->pointer(0, n.x + 4.0, cy(n), 0, r.now, false, shift);
+        r.app->pointer(2, n.x + 4.0, cy(n), 0, r.now, false, shift);
+        r.pump(500.0);
+    };
+    auto turn = [&](const artboard::Rect &over, double notches) { r.app->wheel(over.x + 4.0, cy(over), notches, false, false, true); r.frame(); };
+    auto lastEdit = [&]() {
+        for (auto it = r.sent.rbegin(); it != r.sent.rend(); ++it)
+            if (it->rfind("note preview ", 0) != 0) return *it;
+        return std::string();
+    };
+    auto note = [&](int pitch, double at) -> arstro::solaris::NoteModel {
+        for (const auto &x : r.svc->model().patterns)
+            if (x.id == pt)
+                for (const auto &n : x.notes)
+                    if (n.pitch == pitch && std::fabs(n.at - at) < 1e-9) return n;
+        return arstro::solaris::NoteModel{-1};
+    };
+    auto lane = [&](const std::string &l) {
+        std::vector<std::pair<double, double>> v;
+        for (const auto &x : r.svc->model().patterns)
+            if (x.id == pt)
+                for (const auto &e : x.expr)
+                    if (e.lane == l) v.push_back({e.at, e.value});
+        return v;
+    };
+    auto valueAt = [](const std::vector<std::pair<double, double>> &v, double b) {
+        if (v.empty()) return 0.0;
+        if (b <= v.front().first) return v.front().second;
+        for (size_t i = 1; i < v.size(); ++i)
+            if (b <= v[i].first) return v[i - 1].second + (v[i].second - v[i - 1].second) * (b - v[i - 1].first) / (v[i].first - v[i - 1].first);
+        return v.back().second;
+    };
+    // Velocity (the lane shown): C4 and E4 selected, three notches up — each its own, eased; nothing sent while it turns
+    press(noteAt(60, 0.0), false);
+    press(noteAt(64, 1.0), true);
+    const size_t mark = r.sent.size();
+    const artboard::Rect c4 = noteAt(60, 0.0);
+    for (int k = 0; k < 3; ++k) turn(c4, 1.0);
+    r.frame();
+    assert(roll.wheelPending() && r.sent.size() == mark);
+    const double v = roll.noteVel(60, 0.0);
+    assert(v > 100.0 && v < 112.0);
+    r.cmd("set ch_2.pan=0.1");                                     // a model arriving mid-turn: what the turn shows stays
+    r.pump(200.0);
+    assert(roll.wheelPending() && roll.noteVel(60, 0.0) > 110.0);
+    r.pump(arstro::solaris_ui::PianoRoll::kWheelRestMs + 50.0); // the wheel rests: ONE line
+    assert(!roll.wheelPending() && lastEdit() == "notes set " + pt + " \"60@0 64@1\" --vel-by 12");
+    assert(note(60, 0.0).vel == 112 && note(64, 1.0).vel == 72 && note(67, 4.0).vel == 90);
+    r.settle();
+    assert(roll.noteVel(60, 0.0) == 112.0);
+    // Chance, nothing selected: the note under the pointer, two notches down
+    roll.action("roll.deselect");
+    r.click(world(roll, roll.laneTabRect(arstro::solaris_ui::PianoRoll::LaneChance)));
+    r.settle();
+    const artboard::Rect g4 = noteAt(67, 4.0);
+    turn(g4, -1.0);
+    turn(g4, -1.0);
+    r.pump(500.0);
+    assert(lastEdit() == "notes set " + pt + " \"67@4\" --chance-by -0.1" && std::fabs(note(67, 4.0).chance - 0.4) < 1e-9);
+    r.settle();
+    // a turn back to where it began sends nothing; one landed by the next gesture at once
+    const size_t mark2 = r.sent.size();
+    turn(g4, 1.0);
+    turn(g4, -1.0);
+    r.pump(500.0);
+    assert(r.sent.size() == mark2);
+    turn(g4, 1.0);
+    r.app->pointer(0, world(roll, roll.laneTabRect(arstro::solaris_ui::PianoRoll::LaneBend)).x + 4.0, world(roll, roll.laneTabRect(arstro::solaris_ui::PianoRoll::LaneBend)).y + 4.0, 0, r.now);
+    assert(lastEdit() == "notes set " + pt + " \"67@4\" --chance-by 0.05");
+    r.app->pointer(2, world(roll, roll.laneTabRect(arstro::solaris_ui::PianoRoll::LaneBend)).x + 4.0, world(roll, roll.laneTabRect(arstro::solaris_ui::PianoRoll::LaneBend)).y + 4.0, 0, r.now + 40.0);
+    r.settle();
+    assert(roll.lane() == arstro::solaris_ui::PianoRoll::LaneBend);
+    // Bend, C4 and E4 selected, an empty lane, two notches up: the lane under them only, eased as it turns
+    press(noteAt(60, 0.0), false);
+    press(noteAt(64, 1.0), true);
+    turn(c4, 1.0);
+    turn(c4, 1.0);
+    r.frame();
+    const double b0 = roll.exprLive("bend", 0.0);
+    assert(b0 > 0.05 && b0 < 0.1);
+    r.pump(500.0);
+    assert(lastEdit() == "expr set " + pt + " \"0:0.1 0.998958:0.1 1:0.1 1.99896:0.1 2:0\" --lane bend");
+    const auto bend = lane("bend");
+    assert(std::fabs(valueAt(bend, 0.5) - 0.1) < 1e-9 && std::fabs(valueAt(bend, 1.5) - 0.1) < 1e-9 && valueAt(bend, 2.0) == 0.0 && valueAt(bend, 5.0) == 0.0);
+    r.settle();
+    // Mod, G4 alone with points of the lane under it and after it: under it +0.05, outside it as it was
+    r.cmd("expr set " + pt + " \"5:0.3 8:0.8\" --lane mod");
+    r.click(world(roll, roll.laneTabRect(arstro::solaris_ui::PianoRoll::LaneMod)));
+    press(noteAt(67, 4.0), false);
+    const auto before = lane("cc1");
+    turn(noteAt(67, 4.0), 1.0);
+    r.pump(500.0);
+    assert(contains(lastEdit(), "expr set " + pt + " \"") && contains(lastEdit(), "--lane mod"));
+    const auto after = lane("cc1");
+    for (double b : {0.0, 2.0, 3.99, 6.0, 7.0, 7.9})
+        assert(std::fabs(valueAt(after, b) - valueAt(before, b)) < 1e-6); // outside the note: as it was
+    for (double b : {4.0, 4.5, 5.0, 5.5, 5.99})
+        assert(std::fabs(valueAt(after, b) - (valueAt(before, b) + 0.05)) < 1e-3); // under it: moved
+    pass("Alt+wheel (R-ROLL-13): the lane shown for the selection or the note under the pointer — velocity and chance each the note's own, eased, ONE `notes set --vel-by | --chance-by` once the wheel rests or the next gesture comes, nothing for a turn undone; Bend / Mod ONE `expr set`, the lane moved under the notes and as it was outside them");
+}
+
 static void test_the_rolls_selection_and_what_is_done_to_it()
 {
     sltest::Rig r("ui-rollsel", 1280, 800);
@@ -6658,6 +6780,7 @@ int main()
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();
+    test_alt_wheel_changes_the_lane_shown();
     test_the_roll_copies_by_shift_drag_and_makes_notes_like_the_last();
     test_the_length_a_click_makes_and_a_window_resized();
     test_the_wheel_scrolls_sideways_with_shift();

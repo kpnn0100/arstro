@@ -244,7 +244,7 @@ namespace
             if (std::fabs(e->delta_x) > std::fabs(e->delta_y)) { dy = -e->delta_x; sideways = true; }
             else dy = -e->delta_y;
         }
-        a->app->wheel(e->x, e->y, dy, (e->state & GDK_CONTROL_MASK) != 0, sideways);
+        a->app->wheel(e->x, e->y, dy, (e->state & GDK_CONTROL_MASK) != 0, sideways, (e->state & GDK_MOD1_MASK) != 0); // Alt: R-ROLL-13
         gtk_widget_queue_draw(a->area);
         return TRUE;
     }
