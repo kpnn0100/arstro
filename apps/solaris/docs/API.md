@@ -1204,6 +1204,19 @@ A short delay swept by an LFO and fed back: a comb whose teeth sweep.
 | `stereo` | 0.0 … 180.0 deg | 90.0 deg |
 | `mix` | 0.0 … 1.0 | 0.5 |
 
+### `shaper` — Shaper (effect)
+
+A volume shaped by the song's beat: a tempo-synced LFO — a sine, triangle, saw, square or pump, a note value long — turning the sound down and up.
+
+| parameter | range | default |
+|---|---|---|
+| `rate` | 1/1 · 1/2 · 1/4 · 1/8 · 1/16 · 1/32 · 1/4T · 1/8T · 1/16T · 1/4D · 1/8D | 1/8 |
+| `shape` | sine · triangle · saw down · saw up · square · pump | pump |
+| `depth` | 0.0 … 1.0 | 0.8 |
+| `phase` | 0.0 … 1.0 | 0.0 |
+| `stereo` | 0.0 … 0.5 | 0.0 |
+| `smooth` | 0.0 … 20.0 ms | 2.0 ms |
+
 ### `phaser` — Phaser (effect)
 
 Notches swept by an LFO: first-order all-passes fed back, mixed with the dry sound.

@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► Afterglow is made, measured and delivered (R-SVC-14, A1).** What comes next is the user's call. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► F2** — a vowel filter (DSP, REQ-fx-vowel-1; R-FX-19); then F3, F4 (the two tracks). Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -807,6 +807,19 @@ amended.
       — DR-SVC-14. *Afterglow*, 3:18, all 29 checks pass; 2 musical mutants red. The first take was flat (the verse within
       a decibel of the drop, the builds starting as loud as they ended): the sub to the drops, a softer verse groove, the
       pluck out of each build's first half, the lead swelling through the builds. Delivered ~/Music/Solaris/afterglow.*.
+
+### F — a Trap Nation–style track and an NCS-style track (user request, 2026-10-21)
+*"make me a song in trap nation style and a song in NCS style, feel free to develope more vst3, instrument, effect to
+complete the goal"*. Both tracks original — the styles' sound, nobody's song. R-FX-18, R-FX-19, R-SVC-15, R-SVC-16.
+- [x] **F1** The shaper (DSP `0176d08`, REQ-fx-shaper-1) and the transport (REQ-device-12): the engine tells every device
+      where the song is before each piece; the pointer bumped; L2 (R-FX-18).
+      — DR-FX-18. DSP: 7 unit tests, 1 integration check, 6 mutants red. Solaris: L2 one (a render from beat 2.25 the
+      same as the start's), the engine's call as a mutant seen red; the effect count updated; API regenerated.
+- [ ] **F2** A vowel filter (DSP, REQ-fx-vowel-1) — vocal-chop-like leads with no recording (R-FX-19).
+- [ ] **F3** An original Trap Nation–style track — future bass chords wobbling on the shaper, vowel chops, 808s, a
+      half-time drop — measured, delivered (R-SVC-15).
+- [ ] **F4** An original NCS-style track — bright electro / future house at 128 bpm, a bouncy FM bass, a hook — measured,
+      delivered (R-SVC-16).
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

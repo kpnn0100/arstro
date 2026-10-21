@@ -61,6 +61,26 @@ namespace engine
 
     namespace
     {
+        /** REQ-device-12 (R-FX-18): where the song is at the piece's first sample, for a device that follows the beat —
+         *  on a steady tempo the beat at sample n is n / samplesPerBeat exactly (whole samples: the same however a render
+         *  is cut); under a tempo map the line through the map's beat there */
+        Device::Transport transportAt(const Clock &ck, long long p0)
+        {
+            Device::Transport t;
+            t.sample = p0;
+            if (ck.map.isConstant())
+            {
+                t.samplesPerBeat = ck.samplesPerBeat;
+                t.beatOffset = 0.0;
+                return t;
+            }
+            const TempoMap::Seg &seg = ck.map.segAtSample((double)p0);
+            const double beat = ck.map.beatAt((double)p0);
+            t.samplesPerBeat = ck.map.samplesPerBeatAt(beat);
+            t.beatOffset = seg.bpm0 == seg.bpm1 ? seg.beat0 - seg.sample0 / t.samplesPerBeat : beat - (double)p0 / t.samplesPerBeat;
+            return t;
+        }
+
         std::unique_ptr<Device> makeDevice(const DeviceDesc &d, std::string &err)
         {
             auto dev = d.make ? d.make() : DeviceRegistry::create(d.type);
@@ -974,6 +994,13 @@ namespace engine
 
     void Engine::renderPiece(long long p0, int n, PortBuffers &out, int off)
     {
+        // R-FX-18 (REQ-device-12): every device told where the song is before the piece — a shaper's wobble on the grid
+        {
+            const Device::Transport tr = transportAt(mGraph.clock, p0);
+            for (auto &st : mStrips)
+                for (auto &dv : st->rack) dv->setTransport(tr);
+            for (auto &dv : mMasterRack) dv->setTransport(tr);
+        }
         for (auto &st : mStrips)
         {
             std::fill(st->inL.begin(), st->inL.begin() + n, 0.0);

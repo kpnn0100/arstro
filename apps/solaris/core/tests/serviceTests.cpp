@@ -5361,6 +5361,43 @@ static void test_an_input_on_another_device_follows_the_clock()
     pass("an input on another device (R-DEV-1/2/4): held to the clock in real time — the monitored tone continuous and at its level, the input published with its latency and drift; the input chosen beside the clock read as it is");
 }
 
+// R-FX-18 (REQ-device-12): a shaper on a strip follows the SONG's beat — rendered from beat 2.25 (half an eighth into
+// one), its square is open at once and closes on the next eighth, as it would rendered from the start; every eighth
+// after on the grid
+static void test_a_shaper_follows_the_songs_beat()
+{
+    Run r;
+    const std::string dir = scratch();
+    r.ok("project new " + freshSong("shaper") + " --bpm 120");
+    r.ok("clip add --src tone.wav --at 0 --length 16");               // ch_2: a 1 kHz sine at 0.5, looped
+    const std::string sh = firstLine(r.ok("device add ch_2 --type shaper"));
+    r.ok("set " + sh + ".rate=1/8 " + sh + ".shape=square " + sh + ".depth=1 " + sh + ".smooth=0");
+    assert(r.ok("get " + sh + ".rate") == "1/8\n" && r.ok("get " + sh + ".shape") == "square\n");
+    const std::string out = dir + "/shaper-mid.wav";
+    r.ok("render --out " + out + " --from 2.25 --to 6 --bits 32f");
+    const auto &x = r.fake.written[out][0];
+    const int eighth = 12000, half = 6000;                            // 120 bpm at 48 kHz: an eighth is 12 000 samples
+    auto rms = [&](int a, int b) { double e = 0; for (int i = a; i < b; ++i) e += (double)x[(size_t)i] * x[(size_t)i]; return std::sqrt(e / std::max(1, b - a)); };
+    // from beat 2.25 the eighth is half done — its second (open) half first, then each eighth closed, then open
+    assert(rms(200, half - 200) > 0.3);
+    double worstClosed = 0, worstOpen = 1;
+    for (int k = 0; half + (k + 1) * eighth <= (int)x.size() - eighth; ++k)
+    {
+        const int a = half + k * eighth;
+        worstClosed = std::max(worstClosed, rms(a + 100, a + half - 100));
+        worstOpen = std::min(worstOpen, rms(a + half + 100, a + eighth - 100));
+    }
+    assert(worstClosed < 1e-6 && worstOpen > 0.3);
+    // the same piece of the song rendered from the start: the same samples there (the grid is the song's, not the render's)
+    const std::string full = dir + "/shaper-full.wav";
+    r.ok("render --out " + full + " --to 6 --bits 32f");
+    const auto &y = r.fake.written[full][0];
+    double apart = 0;
+    for (size_t i = 0; i < x.size() && i + 54000 < y.size(); ++i) apart = std::max(apart, (double)std::fabs(x[i] - y[i + 54000]));
+    assert(apart < 1e-6);
+    pass("a shaper follows the song's beat (R-FX-18, REQ-device-12): rendered from beat 2.25 it is open at once and closed on each eighth after, sample for sample as rendered from the start");
+}
+
 static void test_the_wavetable_plays_with_no_code_of_its_own()
 {
     // R-INST-7: the DSP library's "wavetable" is an instrument here as the registry describes it — dropped as one line,
@@ -5522,7 +5559,7 @@ static void test_every_effect_drops_as_one_line_and_passes_sound()
         assert(finite && (peak > 0.001f || t.takesKey));
         ++added;
     }
-    assert(added >= 21); // the eight before N34; multiband, gate, transient, de-esser, saturator, bitcrusher, phaser, flanger, imager, convolution, pitch, vocoder, tuner
+    assert(added >= 22); // the eight before N34; multiband, gate, transient, de-esser, saturator, bitcrusher, phaser, flanger, imager, convolution, pitch, vocoder, tuner; the shaper (R-FX-18)
     pass("every effect (R-FX-6…17, law 1): each the DSP library's registry describes drops onto a strip as one line and passes sound, with no code here");
 }
 
@@ -7860,6 +7897,7 @@ int main()
     test_the_engine_on_several_threads();
     test_freeze_and_bounce();
     test_the_wavetable_plays_with_no_code_of_its_own();
+    test_a_shaper_follows_the_songs_beat();
     test_every_instrument_drops_as_one_line_and_sounds();
     test_a_multisample_reads_its_sfz();
     test_every_effect_drops_as_one_line_and_passes_sound();

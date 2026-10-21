@@ -7726,6 +7726,87 @@
       ]
     },
     {
+      "type": "shaper",
+      "label": "Shaper",
+      "kind": "effect",
+      "summary": "A volume shaped by the song's beat: a tempo-synced LFO — a sine, triangle, saw, square or pump, a note value long — turning the sound down and up.",
+      "params": [
+        {
+          "name": "rate",
+          "label": "Rate",
+          "unit": "",
+          "choices": [
+            "1/1",
+            "1/2",
+            "1/4",
+            "1/8",
+            "1/16",
+            "1/32",
+            "1/4T",
+            "1/8T",
+            "1/16T",
+            "1/4D",
+            "1/8D"
+          ],
+          "default": "1/8"
+        },
+        {
+          "name": "shape",
+          "label": "Shape",
+          "unit": "",
+          "choices": [
+            "sine",
+            "triangle",
+            "saw down",
+            "saw up",
+            "square",
+            "pump"
+          ],
+          "default": "pump"
+        },
+        {
+          "name": "depth",
+          "label": "Depth",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.8,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "phase",
+          "label": "Phase",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "stereo",
+          "label": "Stereo",
+          "unit": "",
+          "min": 0.0,
+          "max": 0.5,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "smooth",
+          "label": "Smooth",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 20.0,
+          "default": 2.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "phaser",
       "label": "Phaser",
       "kind": "effect",

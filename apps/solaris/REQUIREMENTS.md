@@ -103,7 +103,7 @@ OSC."*
   held bass (an Alberti bass, an arpeggio) keeps its bass. Fast enough for one track with headroom: the
   registry's real-time budget holds for a piano chord.
 
-## R-FX — effects — ✅ IMPLEMENTED (1–4 DR-FX-1; 5 the rack: `device add/remove/move`, DR-SVC-1) — 5b ✅ (the generator apart, DR-FX-5b) — 5a ✅ (an effect dragged to its place, DR-FX-5a)
+## R-FX — effects — ✅ IMPLEMENTED (1–4 DR-FX-1; 5 the rack: `device add/remove/move`, DR-SVC-1) — 5b ✅ (the generator apart, DR-FX-5b) — 5a ✅ (an effect dragged to its place, DR-FX-5a) — 18 ✅ (a shaper on the song's beat, DR-FX-18)
 
 The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Reverb, …"*
 
@@ -133,6 +133,13 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
   instrument (its chip opens its window, as before) or an audio strip's clips; on a bus and on the master the same
   place reads **Input**, the strips that feed it. **Effects**: the rack after it, in order, and "+ Effect". Every card
   has both, so the faders still line up with the master's. A VCA shows its members there instead (R-MIX-19).
+- **R-FX-18 A shaper follows the song's beat** (user request, 2026-10-21: *"make me a song in trap nation style and a
+  song in NCS style, feel free to develope more vst3, instrument, effect to complete the goal"* — both styles' chords
+  wobble and pump on the beat). The DSP library's shaper (REQ-fx-shaper-1) on any strip: a volume turned down and up in a
+  shape (sine, triangle, saw down, saw up, square, pump), a note value long (1/1 … 1/32, triplets, dotted), its phase the
+  SONG's beat — the engine tells every device where the song is before each block (REQ-device-12) — so a render from any
+  beat lands on the grid, and a render stays byte-identical however time is cut. Its parameters are addresses and a
+  generated panel, as every device's (R-DSP-2).
 
 ---
 
