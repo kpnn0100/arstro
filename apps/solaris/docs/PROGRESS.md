@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► G2** — the story track (R-SVC-17): eight scenes, a leitmotif transformed, borrowed chords, a deceptive cadence, a modulation up a major third, a minor plagal ending. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► the user's call** — section G is done (the guitar, Porch Light). Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -845,8 +845,13 @@ R-SVC-17.
       (instrument/README (GT1)–(GT8)); 10 unit tests, 1 integration check, 8 mutants red (a 9th survived and showed a
       bend grid bought nothing — removed). Solaris: the pointer, L2 one (the wheel not forwarded as a mutant, red), the
       instrument list in the refusal test, API regenerated.
-- [ ] **G2** The track: a story in eight scenes, its leitmotif transformed, borrowed chords, a deceptive cadence, a
+- [x] **G2** The track: a story in eight scenes, its leitmotif transformed, borrowed chords, a deceptive cadence, a
       modulation up a major third, a minor plagal ending — measured, delivered (R-SVC-17).
+      — DR-SVC-17. `demo/storytrack`: *Porch Light*, 2:34; all 40 checks pass (ctest `story_track_measured`, label
+      long); 6 musical mutants red. Found: a melody inside chords cannot be read (the photograph's right hand on its own
+      piano); an all-bin chroma hears a detuned unison's skirts (peaks only) and a saw's overtones are not wrong notes; a
+      growl must alternate open and shut to talk; the first balance buried the guitar 17 LU under the chords. Delivered
+      ~/Music/Solaris/porchlight.*.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

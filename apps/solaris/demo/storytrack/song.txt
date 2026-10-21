@@ -1,0 +1,374 @@
+# Porch Light — an original future bass track that tells a story, in the style of San Holo and Illenium,
+# written by make_script.py (R-SVC-17). 150 bpm half time; E♭ major, then G; 96 bars.
+project new porchlight.slp --bpm 150 --name "Porch Light"
+
+# the guitar (R-INST-12): clean, chorused — her chords picked in the intro, HER THEME in the verse, its inversion
+# in the breakdown, the theme in G in the second drop, the outro
+clip add --instrument guitar --at 0 --length 32
+set ch_2.name="Guitar" pt_1.name="Guitar"
+set dv_1.pluck.position=0.16 dv_1.pluck.pick=3600 dv_1.string.sustain=3.5 dv_1.string.brightness=0.45 dv_1.string.stiffness=0.4 dv_1.body=0.12 dv_1.release=60 dv_1.volume=-4 dv_1.velocity=0.5
+set pt_1.length=32
+notes add pt_1 "58@0:1:84 62@0.5:1:66 67@1:1:66 70@1.5:1:66 67@2:1:84 62@2.5:1:66 58@3:1:66 58@3.5:1:66 62@4:1:84 67@4.5:1:66 70@5:1:66 67@5.5:1:66 62@6:1:84 58@6.5:1:66 58@7:1:66 62@7.5:1:66 58@8:1:84 62@8.5:1:66 65@9:1:66 70@9.5:1:66 65@10:1:84 62@10.5:1:66 58@11:1:66 58@11.5:1:66 62@12:1:84 65@12.5:1:66 70@13:1:66 65@13.5:1:66 62@14:1:84 58@14.5:1:66 58@15:1:66 62@15.5:1:66 55@16:1:84 58@16.5:1:66 63@17:1:66 67@17.5:1:66 63@18:1:84 58@18.5:1:66 55@19:1:66 55@19.5:1:66 58@20:1:84 63@20.5:1:66 67@21:1:66 63@21.5:1:66 58@22:1:84 55@22.5:1:66 55@23:1:66 58@23.5:1:66"
+notes add pt_1 "51@24:1:84 55@24.5:1:66 60@25:1:66 63@25.5:1:66 60@26:1:84 55@26.5:1:66 51@27:1:66 51@27.5:1:66 55@28:1:84 60@28.5:1:66 63@29:1:66 60@29.5:1:66 55@30:1:84 51@30.5:1:66 51@31:1:66 55@31.5:1:66"
+pattern new --name "Guitar, her theme" --length 32
+notes add pt_2 "67@0:1.5:100 68@1.5:0.5:88 70@2:1:100 75@3:1:100 74@4:1.5:100 72@5.5:0.5:88 70@6:2:100 75@8:1.5:100 77@9.5:0.5:88 79@10:1:100 72@11:1:100 70@12:1.5:100 72@13.5:0.5:88 75@14:2:100 71@16:2:100 70@18:1:100 68@19:1:100 67@20:1.5:100 68@21.5:0.5:88 70@22:1:100 79@23:1:100 82@24:2:100 78@26:1:100 75@27:1:100 77@28:1.5:100 75@29.5:0.5:88 74@30:2:100"
+clip add --strip ch_2 --pattern pt_2 --at 32 --length 32
+clip add --strip ch_2 --pattern pt_2 --at 64 --length 32
+pattern new --name "Guitar, the theme inverted" --length 32
+notes add pt_3 "74@0:3:96 72@3:1:96 70@4:2:96 65@6:2:96 67@8:3:96 68@11:1:96 70@12:4:96 65@16:3:96 63@19:1:96 62@20:2:96 68@22:2:96 70@24:3:96 68@27:1:96 65@28:4:96"
+clip add --strip ch_2 --pattern pt_3 --at 224 --length 32
+pattern new --name "Guitar, her theme in G" --length 32
+notes add pt_4 "71@0:1.5:104 72@1.5:0.5:92 74@2:1:104 79@3:1:104 78@4:1.5:104 76@5.5:0.5:92 74@6:2:104 79@8:1.5:104 81@9.5:0.5:92 83@10:1:104 76@11:1:104 74@12:1.5:104 76@13.5:0.5:92 79@14:2:104 76@16:2:104 74@18:1:104 72@19:1:104 71@20:1.5:104 72@21.5:0.5:92 74@22:1:104 83@23:1:104 86@24:2:104 83@26:1:104 79@27:1:104 81@28:1.5:104 79@29.5:0.5:92 78@30:2:104"
+clip add --strip ch_2 --pattern pt_4 --at 288 --length 32
+clip add --strip ch_2 --pattern pt_4 --at 320 --length 32
+pattern new --name "Guitar, the outro" --length 32
+notes add pt_5 "71@0:1.5:96 72@1.5:0.5:96 74@2:1:96 79@3:1:96 78@4:1.5:96 76@5.5:0.5:96 74@6:2:96 76@8:4:96 79@12:4:96 75@16:4:96 74@20:4:96 71@24:6:96"
+clip add --strip ch_2 --pattern pt_5 --at 352 --length 32
+device add ch_2 --type chorus
+auto create dv_1.volume
+auto point add au_1 --at 0 --value -6 --shape hold
+auto point add au_1 --at 32 --value 0 --shape hold
+auto point add au_1 --at 192 --value 4 --shape hold
+auto point add au_1 --at 288 --value 6 --shape hold
+auto point add au_1 --at 352 --value 0 --shape hold
+auto create dv_1.pluck.pick
+auto point add au_2 --at 0 --value 3600 --shape hold
+auto point add au_2 --at 288 --value 6500 --shape hold
+auto point add au_2 --at 352 --value 3600 --shape hold
+
+# the piano (R-INST-5): her chords under the verse; the photograph — the theme AUGMENTED, bare — and its chords
+clip add --instrument piano --at 32 --length 64
+set ch_3.name="Piano" pt_6.name="Piano"
+set dv_3.strings.brightness=0.9 dv_3.strings.decay=1.3 dv_3.body.mix=0.55 dv_3.hammer.hardness=0.85 dv_3.volume=-6
+set pt_6.length=32
+notes add pt_6 "39@0:4:62 58@0:4:58 62@0:4:58 67@0:4:58 38@4:4:62 58@4:4:58 62@4:4:58 65@4:4:58 36@8:4:62 55@8:4:58 58@8:4:58 63@8:4:58 32@12:4:62 51@12:4:58 55@12:4:58 60@12:4:58 32@16:4:62 51@16:4:58 53@16:4:58 59@16:4:58 31@20:4:62 51@20:4:58 58@20:4:58 63@20:4:58 35@24:4:62 54@24:4:58 58@24:4:58 63@24:4:58 34@28:2:62 53@28:2:58 58@28:2:58 63@28:2:58 34@30:2:62 53@30:2:58 58@30:2:58 62@30:2:58"
+pattern new --name "Piano, the photograph" --length 64
+notes add pt_7 "39@0:8:60 58@0:8:54 62@0:8:54 67@0:8:54 38@8:8:60 58@8:8:54 62@8:8:54 65@8:8:54 36@16:8:60 55@16:8:54 58@16:8:54 63@16:8:54 32@24:8:60 51@24:8:54 55@24:8:54 60@24:8:54 39@32:8:60 58@32:8:54 62@32:8:54 67@32:8:54 38@40:8:60 58@40:8:54 62@40:8:54 65@40:8:54 36@48:8:60 55@48:8:54 58@48:8:54 63@48:8:54 34@56:8:60 53@56:8:54 56@56:8:54 62@56:8:54"
+clip add --strip ch_3 --pattern pt_7 --at 192 --length 64
+pattern new --name "Piano, the outro" --length 32
+notes add pt_8 "31@0:8:58 50@0:8:52 55@0:8:52 59@0:8:52 36@8:8:58 55@8:8:52 60@8:8:52 64@8:8:52 36@16:8:58 55@16:8:52 60@16:8:52 63@16:8:52 31@24:8:58 50@24:8:52 55@24:8:52 59@24:8:52"
+clip add --strip ch_3 --pattern pt_8 --at 352 --length 32
+# … and its right hand alone, on a piano of its own: the theme AUGMENTED (a melody on its own track can be read)
+clip add --instrument piano --at 192 --length 32
+set ch_4.name="Piano, her theme" pt_9.name="Piano, her theme"
+set dv_4.strings.brightness=1.0 dv_4.strings.decay=1.4 dv_4.body.mix=0.5 dv_4.hammer.hardness=0.95 dv_4.volume=-4
+set pt_9.length=32
+notes add pt_9 "67@0:3:86 68@3:1:86 70@4:2:86 75@6:2:86 74@8:3:86 72@11:1:86 70@12:4:86 75@16:3:86 77@19:1:86 79@20:2:86 72@22:2:86 70@24:3:86 72@27:1:86 75@28:4:86"
+
+# the chords: two five-voice saws, wide — the builds and the drops; in the drops they PUMP on the shaper and SAG
+# two semitones on the pitch wheel at the end of every fourth bar, and spring back (the wonk)
+clip add --instrument synth --at 96 --length 32
+set ch_5.name="Chords" pt_10.name="Chords"
+set dv_5.osc1.wave=saw dv_5.osc1.voices=5 dv_5.osc1.detune=32 dv_5.osc1.width=30 dv_5.osc1.level=0.7 dv_5.osc2.wave=saw dv_5.osc2.octave=0 dv_5.osc2.voices=5 dv_5.osc2.detune=20 dv_5.osc2.width=24 dv_5.osc2.fine=7 dv_5.osc2.level=0.5 dv_5.filter.cutoff=5200 dv_5.filter.res=0.12 dv_5.filter.env=0.5 dv_5.filter.keytrack=0.3 dv_5.fenv.decay=600 dv_5.fenv.sustain=0.6 dv_5.amp.attack=6 dv_5.amp.decay=400 dv_5.amp.sustain=0.9 dv_5.amp.release=160 dv_5.voice.bend=2 dv_5.volume=-10
+set pt_10.length=32
+notes add pt_10 "46@0:8:92 55@0:8:92 58@0:8:92 63@0:8:92 67@0:8:92 46@8:8:92 55@8:8:92 60@8:8:92 63@8:8:92 67@8:8:92 46@16:8:92 56@16:8:92 60@16:8:92 63@16:8:92 68@16:8:92 46@24:7:92 53@24:7:92 58@24:7:92 62@24:7:92 65@24:7:92"
+expr set pt_10 "0:0" --lane bend
+pattern new --name "Chords, grief" --length 32
+notes add pt_11 "51@0:4:100 58@0:4:100 62@0:4:100 67@0:4:100 70@0:4:100 50@4:4:100 58@4:4:100 62@4:4:100 65@4:4:100 70@4:4:100 48@8:4:100 55@8:4:100 58@8:4:100 63@8:4:100 67@8:4:100 44@12:4:100 51@12:4:100 55@12:4:100 60@12:4:100 63@12:4:100 44@16:4:100 51@16:4:100 53@16:4:100 59@16:4:100 63@16:4:100 43@20:4:100 51@20:4:100 58@20:4:100 63@20:4:100 67@20:4:100 47@24:4:100 54@24:4:100 58@24:4:100 63@24:4:100 66@24:4:100 46@28:2:100 53@28:2:100 58@28:2:100 63@28:2:100 65@28:2:100 46@30:2:100 53@30:2:100 58@30:2:100 62@30:2:100 65@30:2:100"
+expr set pt_11 "0:0 14.9:0 15.3:-1 15.6:-1 15.9:0 30.9:0 31.3:-1 31.6:-1 31.9:0" --lane bend
+clip add --strip ch_5 --pattern pt_11 --at 128 --length 32
+clip add --strip ch_5 --pattern pt_11 --at 160 --length 32
+pattern new --name "Chords, the porch light" --length 32
+notes add pt_12 "47@0:8:92 54@0:8:92 58@0:8:92 63@0:8:92 66@0:8:92 52@8:8:92 59@8:8:92 64@8:8:92 67@8:8:92 71@8:8:92 48@16:8:92 55@16:8:92 59@16:8:92 64@16:8:92 67@16:8:92 50@24:7:92 57@24:7:92 62@24:7:92 66@24:7:92 69@24:7:92"
+expr set pt_12 "0:0" --lane bend
+clip add --strip ch_5 --pattern pt_12 --at 256 --length 32
+pattern new --name "Chords, carrying her" --length 32
+notes add pt_13 "55@0:4:100 62@0:4:100 66@0:4:100 71@0:4:100 74@0:4:100 54@4:4:100 62@4:4:100 66@4:4:100 69@4:4:100 74@4:4:100 52@8:4:100 59@8:4:100 62@8:4:100 67@8:4:100 71@8:4:100 48@12:4:100 55@12:4:100 59@12:4:100 64@12:4:100 67@12:4:100 45@16:4:100 52@16:4:100 55@16:4:100 60@16:4:100 64@16:4:100 47@20:4:100 55@20:4:100 62@20:4:100 67@20:4:100 71@20:4:100 48@24:4:100 55@24:4:100 62@24:4:100 64@24:4:100 67@24:4:100 50@28:2:100 57@28:2:100 62@28:2:100 67@28:2:100 69@28:2:100 50@30:2:100 57@30:2:100 62@30:2:100 66@30:2:100 69@30:2:100"
+expr set pt_13 "0:0 14.9:0 15.3:-1 15.6:-1 15.9:0 30.9:0 31.3:-1 31.6:-1 31.9:0" --lane bend
+clip add --strip ch_5 --pattern pt_13 --at 288 --length 32
+clip add --strip ch_5 --pattern pt_13 --at 320 --length 32
+device add ch_5 --type shaper
+set dv_6.rate="1/4" dv_6.shape="pump" dv_6.depth=0 dv_6.smooth=2
+auto create dv_6.depth
+auto point add au_3 --at 0 --value 0 --shape hold
+auto point add au_3 --at 128 --value 0.7 --shape hold
+auto point add au_3 --at 192 --value 0 --shape hold
+auto point add au_3 --at 288 --value 0.7 --shape hold
+auto point add au_3 --at 352 --value 0 --shape hold
+auto create dv_5.volume
+auto point add au_4 --at 0 --value -30
+auto point add au_4 --at 96 --value -30
+auto point add au_4 --at 127 --value -12 --shape hold
+auto point add au_4 --at 128 --value -10 --shape hold
+auto point add au_4 --at 256 --value -30
+auto point add au_4 --at 287 --value -12 --shape hold
+auto point add au_4 --at 288 --value -9 --shape hold
+auto create dv_5.filter.cutoff
+auto point add au_5 --at 0 --value 700
+auto point add au_5 --at 96 --value 700
+auto point add au_5 --at 127 --value 7000 --shape hold
+auto point add au_5 --at 128 --value 4200 --shape hold
+auto point add au_5 --at 256 --value 700
+auto point add au_5 --at 287 --value 9000 --shape hold
+auto point add au_5 --at 288 --value 9000 --shape hold
+
+# the lead: a wide saw, one voice at a time — HER THEME through the grief; the climbing motif of the second build;
+# an octave over the guitar in the second drop's second half
+clip add --instrument synth --at 128 --length 64
+set ch_6.name="Lead" pt_14.name="Lead"
+set dv_7.osc1.wave=saw dv_7.osc1.voices=5 dv_7.osc1.detune=18 dv_7.osc1.width=18 dv_7.osc1.level=0.75 dv_7.osc2.wave=saw dv_7.osc2.octave=1 dv_7.osc2.voices=1 dv_7.osc2.level=0.25 dv_7.filter.cutoff=5000 dv_7.filter.res=0.15 dv_7.filter.env=1.0 dv_7.filter.keytrack=0.3 dv_7.fenv.decay=260 dv_7.fenv.sustain=0.6 dv_7.amp.attack=4 dv_7.amp.decay=220 dv_7.amp.sustain=0.85 dv_7.amp.release=110 dv_7.voice.mode=legato dv_7.voice.glide=0 dv_7.vibrato.depth=0.08 dv_7.vibrato.rate=5.2 dv_7.volume=-8
+set pt_14.length=32
+notes add pt_14 "67@0:1.5:108 68@1.5:0.5:96 70@2:1:108 75@3:1:108 74@4:1.5:108 72@5.5:0.5:96 70@6:2:108 75@8:1.5:108 77@9.5:0.5:96 79@10:1:108 72@11:1:108 70@12:1.5:108 72@13.5:0.5:96 75@14:2:108 71@16:2:108 70@18:1:108 68@19:1:108 67@20:1.5:108 68@21.5:0.5:96 70@22:1:108 79@23:1:108 82@24:2:108 78@26:1:108 75@27:1:108 77@28:1.5:108 75@29.5:0.5:96 74@30:2:108"
+pattern new --name "Lead, the climb" --length 32
+notes add pt_15 "75@0:1.5:100 76@1.5:0.5:100 78@2:1:100 83@3:1:100 67@8:1.5:100 69@9.5:0.5:100 71@10:1:100 76@11:1:100 76@16:1.5:100 78@17.5:0.5:100 79@18:1:100 84@19:1:100 78@24:1.5:100 79@25.5:0.5:100 81@26:1:100 86@27:3:100"
+clip add --strip ch_6 --pattern pt_15 --at 256 --length 31
+pattern new --name "Lead, over the guitar" --length 32
+notes add pt_16 "83@0:1.5:96 84@1.5:0.5:96 86@2:1:96 91@3:1:96 90@4:1.5:96 88@5.5:0.5:96 86@6:2:96 91@8:1.5:96 93@9.5:0.5:96 95@10:1:96 88@11:1:96 86@12:1.5:96 88@13.5:0.5:96 91@14:2:96 88@16:2:96 86@18:1:96 84@19:1:96 83@20:1.5:96 84@21.5:0.5:96 86@22:1:96 95@23:1:96 98@24:2:96 95@26:1:96 91@27:1:96 93@28:1.5:96 91@29.5:0.5:96 90@30:2:96"
+clip add --strip ch_6 --pattern pt_16 --at 320 --length 32
+auto create dv_7.filter.cutoff
+auto point add au_6 --at 0 --value 3800 --shape hold
+auto point add au_6 --at 256 --value 900
+auto point add au_6 --at 287 --value 7000 --shape hold
+auto point add au_6 --at 288 --value 7000 --shape hold
+auto create dv_7.volume
+auto point add au_7 --at 0 --value -8 --shape hold
+auto point add au_7 --at 256 --value -22
+auto point add au_7 --at 287 --value -8 --shape hold
+auto point add au_7 --at 288 --value -8 --shape hold
+
+# her voice — the voicemail: a bright voice through the vowel filter (R-FX-19), calling the motif up the first
+# build, each note its syllable
+clip add --instrument synth --at 96 --length 31
+set ch_7.name="Her Voice" pt_17.name="Her Voice"
+set dv_8.osc1.wave=saw dv_8.osc1.voices=1 dv_8.osc1.level=0.8 dv_8.osc2.wave=square dv_8.osc2.octave=0 dv_8.osc2.level=0.3 dv_8.noise=0.04 dv_8.filter.cutoff=8000 dv_8.filter.res=0.05 dv_8.filter.env=0.2 dv_8.filter.keytrack=0 dv_8.amp.attack=8 dv_8.amp.decay=200 dv_8.amp.sustain=0.85 dv_8.amp.release=200 dv_8.voice.mode=legato dv_8.voice.glide=40 dv_8.vibrato.depth=0.15 dv_8.vibrato.rate=5.4 dv_8.velocity=0.3 dv_8.volume=-6
+set pt_17.length=32
+notes add pt_17 "67@0:1.5:100 68@1.5:0.5:100 70@2:2:100 70@8:1.5:100 72@9.5:0.5:100 74@10:2:100 72@16:1.5:100 74@17.5:0.5:100 75@18:2:100 74@24:1.5:100 75@25.5:0.5:100 77@26:3:100"
+device add ch_7 --type vowel
+set dv_9.resonance=0.6 dv_9.glide=12 dv_9.mix=1 dv_9.output=8
+auto add --name "Her Voice · Vowel" --min 0 --max 4 --length 32 --rest 0
+auto point add au_8 --at 0 --value 0 --shape hold
+auto point add au_8 --at 1.5 --value 3 --shape hold
+auto point add au_8 --at 2 --value 0 --shape hold
+auto point add au_8 --at 8 --value 2 --shape hold
+auto point add au_8 --at 9.5 --value 3 --shape hold
+auto point add au_8 --at 10 --value 0 --shape hold
+auto point add au_8 --at 16 --value 0 --shape hold
+auto point add au_8 --at 17.5 --value 3 --shape hold
+auto point add au_8 --at 18 --value 2 --shape hold
+auto point add au_8 --at 24 --value 3 --shape hold
+auto point add au_8 --at 25.5 --value 0 --shape hold
+auto point add au_8 --at 26 --value 0 --shape hold
+set dv_9.vowel="=au_8"
+clip add --auto au_8 --at 96 --length 32
+
+# the growl: a driven saw and square through the vowel filter, its vowel moved every sixteenth — it TALKS, at the
+# end of every phrase of the grief
+clip add --instrument synth --at 128 --length 64
+set ch_8.name="Growl" pt_18.name="Growl"
+set dv_10.osc1.wave=saw dv_10.osc1.voices=2 dv_10.osc1.detune=12 dv_10.osc1.level=0.8 dv_10.osc2.wave=square dv_10.osc2.octave=-1 dv_10.osc2.level=0.6 dv_10.filter.cutoff=3200 dv_10.filter.res=0.2 dv_10.filter.env=0.4 dv_10.filter.keytrack=0 dv_10.amp.attack=2 dv_10.amp.decay=300 dv_10.amp.sustain=1 dv_10.amp.release=60 dv_10.voice.mode=legato dv_10.voice.glide=25 dv_10.volume=-8
+set pt_18.length=32
+notes add pt_18 "44@12.5:1.5:104 56@14:0.5:100 44@14.5:1.5:104 46@28.5:1.5:104 58@30:0.5:100 46@30.5:1.5:104"
+device add ch_8 --type saturator
+set dv_11.drive=14 dv_11.curve=tube dv_11.mix=0.8 dv_11.output=-6
+device add ch_8 --type vowel
+set dv_12.resonance=1.3 dv_12.glide=30 dv_12.mix=1 dv_12.output=4
+auto add --name "Growl · Vowel" --min 0 --max 4 --length 4 --rest 0
+auto point add au_9 --at 0 --value 0 --shape hold
+auto point add au_9 --at 0.25 --value 2 --shape hold
+auto point add au_9 --at 0.5 --value 3 --shape hold
+auto point add au_9 --at 0.75 --value 2 --shape hold
+auto point add au_9 --at 1 --value 4 --shape hold
+auto point add au_9 --at 1.25 --value 2 --shape hold
+auto point add au_9 --at 1.5 --value 0 --shape hold
+auto point add au_9 --at 1.75 --value 2 --shape hold
+auto point add au_9 --at 2 --value 3 --shape hold
+auto point add au_9 --at 2.25 --value 2 --shape hold
+auto point add au_9 --at 2.5 --value 0 --shape hold
+auto point add au_9 --at 2.75 --value 2 --shape hold
+auto point add au_9 --at 3 --value 4 --shape hold
+auto point add au_9 --at 3.25 --value 2 --shape hold
+auto point add au_9 --at 3.5 --value 3 --shape hold
+auto point add au_9 --at 3.75 --value 2 --shape hold
+set dv_12.vowel="=au_9"
+clip add --auto au_9 --at 140 --length 4
+clip add --auto au_9 --at 156 --length 4
+clip add --auto au_9 --at 172 --length 4
+clip add --auto au_9 --at 188 --length 4
+
+# the 808 (R-INST-11): the roots — soft through the verse, the PEDAL B♭ through the first build, gliding into
+# each bar of the drops; the deceptive C♭ where the second build begins
+clip add --instrument 808 --at 128 --length 64
+set ch_9.name="808" pt_19.name="808"
+set dv_13.punch=10 dv_13.punch.time=30 dv_13.glide=80 dv_13.amp.attack=1 dv_13.amp.decay=2400 dv_13.amp.release=160 dv_13.click=0.2 dv_13.drive=0.35 dv_13.tone=3800 dv_13.volume=-2 dv_13.velocity=0.25
+set pt_19.length=32
+notes add pt_19 "39@0:2.5:116 39@2.5:1.65:108 38@4:2.5:116 38@6.5:1.65:108 36@8:2.5:116 36@10.5:1.65:108 32@12:2.5:116 32@14.5:1.65:108 32@16:2.5:116 32@18.5:1.65:108 31@20:2.5:116 31@22.5:1.65:108 35@24:2.5:116 35@26.5:1.65:108 34@28:2.15:112 34@30:2:112"
+pattern new --name "808, carrying her" --length 32
+notes add pt_20 "31@0:2.5:116 31@2.5:1.65:108 30@4:2.5:116 30@6.5:1.65:108 40@8:2.5:116 40@10.5:1.65:108 36@12:2.5:116 36@14.5:1.65:108 33@16:2.5:116 33@18.5:1.65:108 35@20:2.5:116 35@22.5:1.65:108 36@24:2.5:116 36@26.5:1.65:108 38@28:2.15:112 38@30:2:112"
+clip add --strip ch_9 --pattern pt_20 --at 288 --length 64
+pattern new --name "808, her rooms" --length 32
+notes add pt_21 "39@0:3:84 38@4:3:84 36@8:3:84 32@12:3:84 32@16:3:84 31@20:3:84 35@24:3:84 34@28:3:84"
+clip add --strip ch_9 --pattern pt_21 --at 64 --length 32
+pattern new --name "808, the pedal" --length 32
+notes add pt_22 "34@0:7.5:104 34@8:7.5:104 34@16:7.5:104 34@24:6.5:104"
+clip add --strip ch_9 --pattern pt_22 --at 96 --length 32
+auto create dv_13.volume
+auto point add au_10 --at 0 --value -2 --shape hold
+auto point add au_10 --at 96 --value -10 --shape hold
+auto point add au_10 --at 128 --value -2 --shape hold
+auto point add au_10 --at 256 --value -10 --shape hold
+auto point add au_10 --at 288 --value -2 --shape hold
+pattern new --name "808, the porch light" --length 32
+notes add pt_23 "35@0:7.5:104 40@8:7.5:104 36@16:7.5:104 38@24:7:104"
+clip add --strip ch_9 --pattern pt_23 --at 256 --length 32
+
+# drums: half time — the kick, the snare and clap on the third beat; hats rolling in triplets; the verse lighter;
+# a kick climb and a snare roll through each build, a crash and an impact on each drop
+clip add --instrument drums --at 128 --length 64
+set ch_10.name="Kick" pt_24.name="Kick"
+set dv_14.kick.tune=1 dv_14.kick.decay=280 dv_14.kick.tone=0.6 dv_14.kick.level=3 dv_14.volume=0
+set pt_24.length=16
+notes add pt_24 "36@0:0.25:124 36@1.25:0.25:110 36@2.75:0.25:110 36@4:0.25:124 36@5.5:0.25:110 36@8:0.25:124 36@9.25:0.25:110 36@10.75:0.25:110 36@12:0.25:124 36@13:0.25:110 36@14.5:0.25:110"
+clip add --strip ch_10 --pattern pt_24 --at 288 --length 64
+pattern new --name "Kick, her rooms" --length 8
+notes add pt_25 "36@0:0.25:100 36@2.75:0.25:88 36@4:0.25:100"
+clip add --strip ch_10 --pattern pt_25 --at 64 --length 32
+pattern new --name "Kick, the build" --length 32
+notes add pt_26 "36@0:0.25:84 36@4:0.25:84 36@8:0.25:84 36@12:0.25:84 36@16:0.25:84 36@17:0.25:86 36@18:0.25:88 36@19:0.25:90 36@20:0.25:92 36@21:0.25:94 36@22:0.25:96 36@23:0.25:98 36@24:0.25:100 36@25:0.25:102 36@26:0.25:104 36@27:0.25:106 36@28:0.25:108 36@29:0.25:110 36@30:0.25:112"
+clip add --strip ch_10 --pattern pt_26 --at 96 --length 32
+clip add --strip ch_10 --pattern pt_26 --at 256 --length 32
+clip add --instrument drums --at 128 --length 64
+set ch_11.name="Snare" pt_27.name="Snare"
+set dv_15.snare.tune=3 dv_15.snare.decay=240 dv_15.snare.tone=0.72 dv_15.snare.level=2 dv_15.clap.decay=340 dv_15.clap.tone=0.64 dv_15.clap.level=1 dv_15.volume=1
+set pt_27.length=4
+notes add pt_27 "38@2:0.25:118 39@2:0.25:110"
+clip add --strip ch_11 --pattern pt_27 --at 288 --length 64
+pattern new --name "Snare, her rooms" --length 4
+notes add pt_28 "39@2:0.25:76"
+clip add --strip ch_11 --pattern pt_28 --at 64 --length 32
+clip add --instrument drums --at 128 --length 64
+set ch_12.name="Hats" pt_29.name="Hats"
+set dv_16.chat.tone=0.86 dv_16.chat.decay=34 dv_16.chat.level=0 dv_16.chat.pan=0.2 dv_16.ohat.decay=220 dv_16.ohat.level=-3 dv_16.volume=0
+set pt_29.length=16
+notes add pt_29 "42@0:0.25:78 42@0.5:0.25:54 42@1:0.25:78 42@1.5:0.25:54 42@2:0.25:78 42@2.5:0.25:54 42@3:0.25:78 42@3.5:0.25:54 42@4:0.25:78 42@4.5:0.25:54 42@5:0.25:78 42@5.5:0.25:54 42@6:0.25:78 42@6.5:0.25:54 42@7:0.166667:56 42@7.16667:0.166667:62 42@7.33333:0.166667:69 42@7.5:0.166667:75 46@7.5:0.5:74 42@7.66667:0.166667:82 42@7.83333:0.166667:88 42@8:0.25:78 42@8.5:0.25:54 42@9:0.25:78 42@9.5:0.25:54 42@10:0.25:78 42@10.5:0.25:54 42@11:0.25:78 42@11.5:0.25:54 42@12:0.25:78 42@12.5:0.25:54 42@13:0.25:78 42@13.5:0.25:54 42@14:0.25:78 42@14.5:0.25:54 42@15:0.166667:56 42@15.1667:0.166667:62 42@15.3333:0.166667:69 42@15.5:0.166667:75 46@15.5:0.5:74 42@15.6667:0.166667:82 42@15.8333:0.166667:88"
+pattern new --name "Hats, carrying her" --length 16
+notes add pt_30 "42@0:0.25:108 42@0.25:0.25:70 42@0.5:0.25:88 42@0.75:0.25:70 42@1:0.25:108 42@1.25:0.25:70 42@1.5:0.25:88 46@1.5:0.5:96 42@1.75:0.25:70 42@2:0.25:108 42@2.25:0.25:70 42@2.5:0.25:88 42@2.75:0.25:70 42@3:0.25:108 42@3.25:0.25:70 42@3.5:0.25:88 46@3.5:0.5:96 42@3.75:0.25:70 42@4:0.25:108 42@4.25:0.25:70 42@4.5:0.25:88 42@4.75:0.25:70 42@5:0.25:108 42@5.25:0.25:70 42@5.5:0.25:88 46@5.5:0.5:96 42@5.75:0.25:70 42@6:0.25:108 42@6.25:0.25:70 42@6.5:0.25:88 42@6.75:0.25:70 42@7:0.25:108 42@7.25:0.25:70 42@7.5:0.25:88 46@7.5:0.5:96 42@7.75:0.25:70 42@8:0.25:108 42@8.25:0.25:70 42@8.5:0.25:88 42@8.75:0.25:70 42@9:0.25:108 42@9.25:0.25:70 42@9.5:0.25:88 46@9.5:0.5:96 42@9.75:0.25:70 42@10:0.25:108 42@10.25:0.25:70 42@10.5:0.25:88"
+notes add pt_30 "42@10.75:0.25:70 42@11:0.25:108 42@11.25:0.25:70 42@11.5:0.25:88 46@11.5:0.5:96 42@11.75:0.25:70 42@12:0.25:108 42@12.25:0.25:70 42@12.5:0.25:88 42@12.75:0.25:70 42@13:0.25:108 42@13.25:0.25:70 42@13.5:0.25:88 46@13.5:0.5:96 42@13.75:0.25:70 42@14:0.25:108 42@14.25:0.25:70 42@14.5:0.25:88 42@14.75:0.25:70 42@15:0.25:108 42@15.25:0.25:70 42@15.5:0.25:88 46@15.5:0.5:96 42@15.75:0.25:70"
+clip add --strip ch_12 --pattern pt_30 --at 288 --length 64
+pattern new --name "Hats, light" --length 8
+notes add pt_31 "42@0:0.25:50 42@0.5:0.25:36 42@1:0.25:50 42@1.5:0.25:36 42@2:0.25:50 42@2.5:0.25:36 42@3:0.25:50 42@3.5:0.25:36 42@4:0.25:50 42@4.5:0.25:36 42@5:0.25:50 42@5.5:0.25:36 42@6:0.25:50 42@6.5:0.25:36 42@7:0.25:50 42@7.5:0.25:36"
+clip add --strip ch_12 --pattern pt_31 --at 64 --length 32
+clip add --strip ch_12 --pattern pt_31 --at 112 --length 15
+clip add --strip ch_12 --pattern pt_31 --at 272 --length 15
+clip add --instrument drums --at 128 --length 4
+set ch_13.name="Crash" pt_32.name="Crash"
+set dv_17.crash.level=-1 dv_17.crash.decay=2800 dv_17.crash.tone=0.7 dv_17.volume=-3
+set pt_32.length=4
+notes add pt_32 "49@0:0.25:118"
+clip add --strip ch_13 --pattern pt_32 --at 160 --length 4
+clip add --strip ch_13 --pattern pt_32 --at 288 --length 4
+clip add --strip ch_13 --pattern pt_32 --at 320 --length 4
+clip add --instrument drums --at 96 --length 32
+set ch_14.name="Roll" pt_33.name="Roll"
+set dv_18.snare.tune=5 dv_18.snare.decay=150 dv_18.snare.tone=0.62 dv_18.volume=-8
+set pt_33.length=32
+notes add pt_33 "38@0:0.25:46 38@1:0.25:47 38@2:0.25:49 38@3:0.25:50 38@4:0.25:52 38@5:0.25:53 38@6:0.25:55 38@7:0.25:56 38@8:0.25:56 38@8.5:0.25:57 38@9:0.25:58 38@9.5:0.25:59 38@10:0.25:60 38@10.5:0.25:61 38@11:0.25:62 38@11.5:0.25:63 38@12:0.25:63 38@12.5:0.25:64 38@13:0.25:65 38@13.5:0.25:66 38@14:0.25:67 38@14.5:0.25:68 38@15:0.25:69 38@15.5:0.25:70 38@16:0.25:70 38@16.25:0.25:71 38@16.5:0.25:71 38@16.75:0.25:72 38@17:0.25:73 38@17.25:0.25:73 38@17.5:0.25:74 38@17.75:0.25:75 38@18:0.25:75 38@18.25:0.25:76 38@18.5:0.25:76 38@18.75:0.25:77 38@19:0.25:78 38@19.25:0.25:78 38@19.5:0.25:79 38@19.75:0.25:80 38@20:0.25:80 38@20.25:0.25:81 38@20.5:0.25:82 38@20.75:0.25:82 38@21:0.25:83 38@21.25:0.25:84 38@21.5:0.25:84 38@21.75:0.25:85"
+notes add pt_33 "38@22:0.25:85 38@22.25:0.25:86 38@22.5:0.25:87 38@22.75:0.25:87 38@23:0.25:88 38@23.25:0.25:89 38@23.5:0.25:89 38@23.75:0.25:90 38@24:0.166667:90 38@24.1667:0.166667:91 38@24.3333:0.166667:91 38@24.5:0.166667:92 38@24.6667:0.166667:93 38@24.8333:0.166667:93 38@25:0.166667:94 38@25.1667:0.166667:95 38@25.3333:0.166667:96 38@25.5:0.166667:96 38@25.6667:0.166667:97 38@25.8333:0.166667:98 38@26:0.166667:98 38@26.1667:0.166667:99 38@26.3333:0.166667:100 38@26.5:0.166667:100 38@26.6667:0.166667:101 38@26.8333:0.166667:102 38@27:0.166667:103 38@27.1667:0.166667:103 38@27.3333:0.166667:104 38@27.5:0.166667:105 38@27.6667:0.166667:105 38@27.8333:0.166667:106 38@28:0.125:106 38@28.125:0.125:107 38@28.25:0.125:108 38@28.375:0.125:108 38@28.5:0.125:109 38@28.625:0.125:110 38@28.75:0.125:111 38@28.875:0.125:111 38@29:0.125:112 38@29.125:0.125:113 38@29.25:0.125:114 38@29.375:0.125:115 38@29.5:0.125:115 38@29.625:0.125:116 38@29.75:0.125:117 38@29.875:0.125:118"
+notes add pt_33 "38@30:0.125:119 38@30.125:0.125:119 38@30.25:0.125:120 38@30.375:0.125:121 38@30.5:0.125:122 38@30.625:0.125:122 38@30.75:0.125:123 38@30.875:0.125:124"
+clip add --strip ch_14 --pattern pt_33 --at 256 --length 32
+
+# the pad: warm, under the intro's second half, the verse, the breakdown and the outro — out for each gap
+clip add --instrument synth --at 32 --length 64
+set ch_15.name="Pad" pt_34.name="Pad"
+set dv_19.osc1.wave=saw dv_19.osc1.voices=5 dv_19.osc1.detune=18 dv_19.osc1.width=34 dv_19.osc1.level=0.5 dv_19.osc2.wave=triangle dv_19.osc2.octave=1 dv_19.osc2.level=0.3 dv_19.filter.cutoff=1600 dv_19.filter.res=0.12 dv_19.filter.env=0.2 dv_19.filter.keytrack=0.25 dv_19.amp.attack=1500 dv_19.amp.decay=1500 dv_19.amp.sustain=0.85 dv_19.amp.release=1800 dv_19.volume=-18
+set pt_34.length=32
+notes add pt_34 "58@0:4:80 62@0:4:80 67@0:4:80 58@4:4:80 62@4:4:80 65@4:4:80 55@8:4:80 58@8:4:80 63@8:4:80 51@12:4:80 55@12:4:80 60@12:4:80 51@16:4:80 53@16:4:80 59@16:4:80 51@20:4:80 58@20:4:80 63@20:4:80 54@24:4:80 58@24:4:80 63@24:4:80 53@28:2:80 58@28:2:80 63@28:2:80 53@30:2:80 58@30:2:80 62@30:2:80"
+pattern new --name "Pad, the door" --length 16
+notes add pt_35 "55@0:8:76 58@0:8:76 63@0:8:76 51@8:8:76 55@8:8:76 60@8:8:76"
+clip add --strip ch_15 --pattern pt_35 --at 16 --length 16
+pattern new --name "Pad, the photograph" --length 64
+notes add pt_36 "58@0:8:80 62@0:8:80 67@0:8:80 58@8:8:80 62@8:8:80 65@8:8:80 55@16:8:80 58@16:8:80 63@16:8:80 51@24:8:80 55@24:8:80 60@24:8:80 58@32:8:80 62@32:8:80 67@32:8:80 58@40:8:80 62@40:8:80 65@40:8:80 55@48:8:80 58@48:8:80 63@48:8:80 53@56:8:80 56@56:8:80 62@56:8:80"
+clip add --strip ch_15 --pattern pt_36 --at 192 --length 64
+pattern new --name "Pad, leaving" --length 32
+notes add pt_37 "50@0:8:80 55@0:8:80 59@0:8:80 55@8:8:80 60@8:8:80 64@8:8:80 55@16:8:80 60@16:8:80 63@16:8:80 50@24:8:80 55@24:8:80 59@24:8:80"
+clip add --strip ch_15 --pattern pt_37 --at 352 --length 32
+clip add --instrument synth --at 96 --length 32
+set ch_16.name="Riser" pt_38.name="Riser"
+set dv_20.osc1.wave=saw dv_20.osc1.voices=3 dv_20.osc1.detune=40 dv_20.osc1.width=30 dv_20.osc1.level=0.3 dv_20.osc2.level=0 dv_20.noise=0.85 dv_20.filter.res=0.35 dv_20.filter.env=0 dv_20.filter.keytrack=0 dv_20.amp.attack=1500 dv_20.amp.sustain=1 dv_20.amp.release=40 dv_20.volume=-15
+set pt_38.length=32
+notes add pt_38 "58@0:31:100"
+clip add --strip ch_16 --pattern pt_38 --at 256 --length 32
+auto create dv_20.filter.cutoff
+auto point move au_11 --at 0 --to 96 --value 200
+auto point add au_11 --at 127 --value 9000 --shape hold
+auto point add au_11 --at 128 --value 200 --shape hold
+auto point add au_11 --at 256 --value 200
+auto point add au_11 --at 287 --value 9000 --shape hold
+auto point add au_11 --at 288 --value 200 --shape hold
+auto create dv_20.volume
+auto point move au_12 --at 0 --to 96 --value -40
+auto point add au_12 --at 127 --value -12 --shape hold
+auto point add au_12 --at 128 --value -40 --shape hold
+auto point add au_12 --at 256 --value -40
+auto point add au_12 --at 287 --value -12 --shape hold
+auto point add au_12 --at 288 --value -40 --shape hold
+
+# the sparkle: a glassy wavetable pluck two octaves up, sixteenths through the chord's tones — the second drop
+# only: the light coming in
+clip add --instrument wavetable --at 288 --length 64
+set ch_17.name="Sparkle" pt_39.name="Sparkle"
+set dv_21.osc1.table=harmonics dv_21.osc1.position=0.7 dv_21.osc1.posenv=-0.3 dv_21.osc1.voices=1 dv_21.osc1.level=0.8 dv_21.osc2.level=0 dv_21.filter.cutoff=9000 dv_21.filter.res=0.15 dv_21.filter.env=1.5 dv_21.fenv.decay=180 dv_21.fenv.sustain=0 dv_21.amp.attack=1 dv_21.amp.decay=240 dv_21.amp.sustain=0 dv_21.amp.release=150 dv_21.volume=-8
+set pt_39.length=32
+notes add pt_39 "78@0:0.25:84 86@0.25:0.25:64 83@0.5:0.25:64 90@0.75:0.25:64 86@1:0.25:84 83@1.25:0.25:64 78@1.5:0.25:64 98@1.75:0.25:64 83@2:0.25:84 78@2.25:0.25:64 86@2.5:0.25:64 95@2.75:0.25:64 78@3:0.25:84 86@3.25:0.25:64 83@3.5:0.25:64 90@3.75:0.25:64 78@4:0.25:84 86@4.25:0.25:64 81@4.5:0.25:64 90@4.75:0.25:64 86@5:0.25:84 81@5.25:0.25:64 78@5.5:0.25:64 98@5.75:0.25:64 81@6:0.25:84 78@6.25:0.25:64 86@6.5:0.25:64 93@6.75:0.25:64 78@7:0.25:84 86@7.25:0.25:64 81@7.5:0.25:64 90@7.75:0.25:64 74@8:0.25:84 83@8.25:0.25:64 79@8.5:0.25:64 86@8.75:0.25:64 83@9:0.25:84 79@9.25:0.25:64 74@9.5:0.25:64 95@9.75:0.25:64 79@10:0.25:84 74@10.25:0.25:64 83@10.5:0.25:64 91@10.75:0.25:64 74@11:0.25:84 83@11.25:0.25:64 79@11.5:0.25:64 86@11.75:0.25:64"
+notes add pt_39 "71@12:0.25:84 79@12.25:0.25:64 76@12.5:0.25:64 83@12.75:0.25:64 79@13:0.25:84 76@13.25:0.25:64 71@13.5:0.25:64 91@13.75:0.25:64 76@14:0.25:84 71@14.25:0.25:64 79@14.5:0.25:64 88@14.75:0.25:64 71@15:0.25:84 79@15.25:0.25:64 76@15.5:0.25:64 83@15.75:0.25:64 67@16:0.25:84 76@16.25:0.25:64 72@16.5:0.25:64 79@16.75:0.25:64 76@17:0.25:84 72@17.25:0.25:64 67@17.5:0.25:64 88@17.75:0.25:64 72@18:0.25:84 67@18.25:0.25:64 76@18.5:0.25:64 84@18.75:0.25:64 67@19:0.25:84 76@19.25:0.25:64 72@19.5:0.25:64 79@19.75:0.25:64 74@20:0.25:84 83@20.25:0.25:64 79@20.5:0.25:64 86@20.75:0.25:64 83@21:0.25:84 79@21.25:0.25:64 74@21.5:0.25:64 95@21.75:0.25:64 79@22:0.25:84 74@22.25:0.25:64 83@22.5:0.25:64 91@22.75:0.25:64 74@23:0.25:84 83@23.25:0.25:64 79@23.5:0.25:64 86@23.75:0.25:64"
+notes add pt_39 "74@24:0.25:84 79@24.25:0.25:64 76@24.5:0.25:64 86@24.75:0.25:64 79@25:0.25:84 76@25.25:0.25:64 74@25.5:0.25:64 91@25.75:0.25:64 76@26:0.25:84 74@26.25:0.25:64 79@26.5:0.25:64 88@26.75:0.25:64 74@27:0.25:84 79@27.25:0.25:64 76@27.5:0.25:64 86@27.75:0.25:64 74@28:0.25:84 81@28.25:0.25:64 79@28.5:0.25:64 86@28.75:0.25:64 81@29:0.25:84 79@29.25:0.25:64 74@29.5:0.25:64 93@29.75:0.25:64 74@30:0.25:84 81@30.25:0.25:64 78@30.5:0.25:64 86@30.75:0.25:64 81@31:0.25:84 78@31.25:0.25:64 74@31.5:0.25:64 93@31.75:0.25:64"
+
+# tone: the low end the 808's and the kick's; space: a long reverb and a dotted-eighth delay; the master: a limiter
+device add ch_5 --type eq
+set dv_22.lowcut.on=on dv_22.lowcut.freq=180
+device add ch_6 --type eq
+set dv_23.lowcut.on=on dv_23.lowcut.freq=250
+device add ch_2 --type eq
+set dv_24.lowcut.on=on dv_24.lowcut.freq=140
+device add ch_3 --type eq
+set dv_25.lowcut.on=on dv_25.lowcut.freq=60
+device add ch_4 --type eq
+set dv_26.lowcut.on=on dv_26.lowcut.freq=120
+device add ch_15 --type eq
+set dv_27.lowcut.on=on dv_27.lowcut.freq=120
+device add ch_7 --type eq
+set dv_28.lowcut.on=on dv_28.lowcut.freq=250
+device add ch_8 --type eq
+set dv_29.lowcut.on=on dv_29.lowcut.freq=70
+device add ch_12 --type eq
+set dv_30.lowcut.on=on dv_30.lowcut.freq=400
+device add ch_11 --type eq
+set dv_31.lowcut.on=on dv_31.lowcut.freq=150
+device add ch_13 --type eq
+set dv_32.lowcut.on=on dv_32.lowcut.freq=400
+device add ch_16 --type eq
+set dv_33.lowcut.on=on dv_33.lowcut.freq=180
+device add ch_14 --type eq
+set dv_34.lowcut.on=on dv_34.lowcut.freq=200
+device add ch_17 --type eq
+set dv_35.lowcut.on=on dv_35.lowcut.freq=600
+device add ch_9 --type eq
+set dv_36.lowcut.on=on dv_36.lowcut.freq=28
+strip add --kind bus --name Reverb
+device add ch_18 --type reverb
+set dv_37.decay=4200 dv_37.size=190 dv_37.mix=1 dv_37.lowcut=300 dv_37.highcut=10000 dv_37.width=1
+strip add --kind bus --name Delay
+device add ch_19 --type delay
+set dv_38.time="=60000/bpm*0.75" dv_38.feedback=0.36 dv_38.tone=4200 dv_38.mix=1
+send add ch_2 --to ch_18 --gain -10
+send add ch_2 --to ch_19 --gain -12
+send add ch_3 --to ch_18 --gain -6
+send add ch_4 --to ch_18 --gain -5
+send add ch_6 --to ch_18 --gain -14
+send add ch_6 --to ch_19 --gain -16
+send add ch_5 --to ch_18 --gain -18
+send add ch_7 --to ch_18 --gain -12
+send add ch_7 --to ch_19 --gain -16
+send add ch_15 --to ch_18 --gain -6
+send add ch_11 --to ch_18 --gain -14
+send add ch_13 --to ch_18 --gain -12
+send add ch_16 --to ch_18 --gain -12
+send add ch_17 --to ch_19 --gain -8
+send add ch_17 --to ch_18 --gain -10
+set ch_2.gain=8 ch_3.gain=1 ch_4.gain=6 ch_5.gain=-5 ch_6.gain=0 ch_7.gain=-4 ch_8.gain=4 ch_9.gain=-9 ch_10.gain=-1 ch_11.gain=2 ch_12.gain=-2 ch_13.gain=-9 ch_14.gain=-5 ch_15.gain=-10 ch_16.gain=-6 ch_18.gain=-5 ch_19.gain=-9
+device add master --type limiter
+set dv_39.gain=9 dv_39.ceiling=-1.3 dv_39.release=50 dv_39.truePeak=on
+
+ls
+audit
+project save
+render --out porchlight.wav --stems ch_2,ch_4,ch_5,ch_6,ch_8,ch_9,ch_11

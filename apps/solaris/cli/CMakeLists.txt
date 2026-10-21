@@ -45,6 +45,11 @@ add_test(NAME futurehouse_track_measured
   COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/futurehouse
           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_futurehouse -DPY=${SOLARIS_PYTHON3} -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/demo_futurehouse.cmake)
 set_tests_properties(futurehouse_track_measured PROPERTIES TIMEOUT 1200 LABELS "long")
+# R-SVC-17: the story track — its theme read from every instrument that plays it, its harmony heard: `ctest -L long`
+add_test(NAME story_track_measured
+  COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/storytrack
+          -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_storytrack -DPY=${SOLARIS_PYTHON3} -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/demo_storytrack.cmake)
+set_tests_properties(story_track_measured PROPERTIES TIMEOUT 1200 LABELS "long")
 
 add_test(NAME solaris_demo_canon
   COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/canon

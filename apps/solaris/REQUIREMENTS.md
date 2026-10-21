@@ -1371,7 +1371,7 @@ a process is the host's (law 12).
   if missing (was SR-FMT-3; its content hash is deferred to R-VER-5, where merging needs it).
 - **R-FMT-4 A structural error refuses, a numeric corruption repairs** (Interstellar's rule).
 
-## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1…3, DR-API-1) — rung 5 — 5–9 ✅ (control channel + attach, equivalence, web, composition, the song: DR-SVC-5/7/8/9) — 10, 11 ✅ (the Prelude made in the window, 549 of 549 notes; its UX audit, U-1…U-10: DR-SVC-10/11) — 12 ✅ (Perihelion, an original EDM track measured as a master: DR-SVC-12) — 13–16 ✅ (Magnetar, Afterglow, Halation, Starward — trap, progressive house, Trap Nation–style, NCS-style: DR-SVC-13…16)
+## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1…3, DR-API-1) — rung 5 — 5–9 ✅ (control channel + attach, equivalence, web, composition, the song: DR-SVC-5/7/8/9) — 10, 11 ✅ (the Prelude made in the window, 549 of 549 notes; its UX audit, U-1…U-10: DR-SVC-10/11) — 12 ✅ (Perihelion, an original EDM track measured as a master: DR-SVC-12) — 13–17 ✅ (Magnetar, Afterglow, Halation, Starward, Porch Light — trap, progressive house, Trap Nation–style, NCS-style, a story: DR-SVC-13…17)
 
 - **R-SVC-1** `SolarisService`: `dispatch(Command)` / `pump` / `model()` / an `Event` sink. The GUI,
   `solaris-cc`, a script and an agent send the same text lines (was SR-CLI-1).
@@ -1485,7 +1485,7 @@ a process is the host's (law 12).
   bass on the off-beats — its loudness folded on the beat, quiet where the kick is; the pump on the grid; the hook as
   written (its rhythm in every bar, its motif returning) and as heard (the lead's pitch on its notes); the field; the
   key; the brightness — the air present, as a bright master's is; the range.
-- **R-SVC-17 A future bass track that tells a story, in the style of San Holo and Illenium, original, measured** (user
+- **R-SVC-17 A future bass track that tells a story, in the style of San Holo and Illenium, original, measured** ✅ (DR-SVC-17) (user
   request, 2026-10-21: *"make me another future bass banger, that sound good, apply style from san holo, illenium and use
   advance music theory for better melody, translate a real emotional, story into a music"*). The STYLE, nobody's song:
   as R-SVC-12 — original, made with `solaris-cc` alone, its script committed, every sound the DSP library's — half time
@@ -1499,7 +1499,8 @@ a process is the host's (law 12).
   checked from the score) and as HEARD in each of its forms (its pitch read from the guitar, the lead and the piano);
   the harmony as heard — the borrowed tones sounding in their bars, the deceptive cadence's root, the plagal minor iv
   and the final major third, the second drop a major third above the first; the wonk (the chords' pitch sagging and
-  returning); the growl talking on the sixteenths; the field; the range.
+  returning); the growl talking (**detailed while building it, G2:** a syllable a sixteenth, open and shut in turn — its
+  mouth cycling every eighth); the field; the range.
 
 ## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12) — 13 ✅ (the tempo set in the song bar, DR-UI-13) — 14 ✅ (the resize cursor, DR-UI-14)
 

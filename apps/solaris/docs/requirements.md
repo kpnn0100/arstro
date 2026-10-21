@@ -1573,6 +1573,28 @@ in G major; the air 12 dB under the loudest octave. ctest `futurehouse_track_mea
 `tests/demo_futurehouse.cmake`). Mutants on the music, each seen red: no pump (r < 0, a 0.9 dB swing), the pump half a
 beat off the grid (r −0.37), the bass on the beat (loudest at 0.05), the lead a semitone off (0 of 224).
 
+### DR-SVC-17 A future bass track that tells a story, measured (R-SVC-17)
+`demo/storytrack` (its README): *Porch Light*, written for this repo — a story in eight scenes (a daughter packing up her
+late mother's house; the porch light her mother always left on), each scene told by a device of harmony or melody —
+150 bpm half time, 96 bars, E♭ major then G, made with `solaris-cc` alone from `make_script.py`'s `song.txt` (~370
+lines). The leitmotif is ONE score (`THEME`); its transformations are computed from it — `augment` (onsets and lengths
+×2), `invert` (a diatonic mirror about B♭4: scale steps negated), the transposition +4 with bars 5 and 7 rewritten for
+their diatonic chords — so the measure checks the score the song was made from. The guitar is DR-INST-12 (San Holo's
+clean electric: chorused, plucked); the wonk is the pattern's bend lane (`expr set … --lane bend`, a held −2 st sag at
+each phrase's end); the pump a shaper's (DR-FX-18) switched by its depth; her voice and the growl the vowel filter
+(DR-FX-19) — the growl's syllables a 4-beat `auto add` automation placed by `clip add --auto` at each phrase's end; the
+photograph's right hand a piano strip of its own, so its pitch can be read. `measure.py` judges it, 40 checks: −9.4
+LUFS, −1.22 dBTP; the arc (the drops 4 LU over the breakdown and 3 over the verse; the builds; the gap; the second drop's
+air 1.3 dB over the first's; half time); the theme as written (motif, modified sequence, appoggiatura, ♭6→5 sigh, one
+climax over ♭VI, 4–3 suspension, half cadence, augmentation, inversion, transposition) and as heard (YIN — the guitar 53
+of 54 and 54 of 54, the lead 54 of 54, the piano 14 of 14, the inversion 14 of 14); the harmony as heard (peak-picked
+chroma over 250 Hz: the borrowed C♭ / G♭ 35 % / 53 % of their bars and absent elsewhere; the second drop ≤ 5 % outside G
+major in every bar — its saws' overtones; the keys E♭ and G, a major third apart; the deceptive root C♭ at 61.8 Hz; the
+minor plagal E♭ 31 % under the iv, 0.7 % under the final G); the wonk (−2.00 st at all eight sags, a log-frequency
+spectrum's shift); the growl (its formant balance cycling at 5.03 Hz); the field. ctest `story_track_measured` (label
+`long`, `tests/demo_storytrack.cmake`). Mutants on the music, each seen red: no borrowed chords, no deceptive cadence,
+the wonk flat, the growl not talking, no inversion, the second drop a whole tone up.
+
 ### DR-SVC-5 The control channel and attach (R-SVC-5, R-SVC-6)
 **The window.** `solaris --control <socket> [song.slp]` (`linux_main.cpp:480`) builds a `ControlServer`
 on the window's own service after any song opened and polls it from its own 16 ms GLib timeout
