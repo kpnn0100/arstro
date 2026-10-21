@@ -51,7 +51,7 @@ namespace interstellar
         {
             std::error_code ea, eb;
             const auto ta = fs::last_write_time(a, ea), tb = fs::last_write_time(b, eb);
-            return !ea && (eb || ta > tb);
+            return !ea && (eb || ta >= tb);   // a tie is newer: a save removes the autosave, so one beside the file came after it (D-14)
         }
     }
 

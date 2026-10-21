@@ -487,7 +487,7 @@ then `<stem>.autosave.isp`, the .isp as it is in memory (`:65`), each beside its
 them (`core/service/InterstellarService.cpp:1196`), and so does a deliberate `project close` (`:1209`);
 opening another project does not. Opening a project checks for an autosave newer than its file
 (`checkRecovery`, `ServiceSafety.cpp:90`, `InterstellarService.cpp:1085` — file times compared only with each
-other, the file clock's epoch being the library's) and offers it (`recoveryAvailable`, `recoveryTime`).
+other, the file clock's epoch being the library's; a tie counts as newer, since a save removes the autosave — D-14) and offers it (`recoveryAvailable`, `recoveryTime`).
 `project recover` (`:120`) parses the autosave .isp, reads the grades and restores both as an undo
 restore does — the .isp, and every grade written THROUGH Cosmo — but taking the autosave's own
 proxies, stills and relinked files (`applyState(…, keepMedia=false)`, `:159`); the history clears and the

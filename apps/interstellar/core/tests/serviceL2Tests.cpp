@@ -2216,6 +2216,7 @@ int main()
         // discarded instead
         f.must("set a.basic.exposure=0.9");
         f.must("project autosave");
+        fs::last_write_time(isp, fs::last_write_time(f.path("mv.isp")));   // written in the save's clock tick: still newer (D-14)
         f.svc = f.make();
         f.must("project open \"" + f.path("mv.isp") + "\"");
         assert(f.svc->model().recoveryAvailable);

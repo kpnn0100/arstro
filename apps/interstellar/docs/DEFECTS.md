@@ -66,6 +66,20 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Closed
 
+### D-14 — An autosave written in the same clock tick as its file was not offered
+- **Area:** service · **Status:** Closed (same commit) · **Severity:** S3 (a script that saves, edits and autosaves
+  at once loses the recovery; a person cannot type that fast) · **Found:** 2026-10-21, `interstellar_service_l2`
+  failing 2 runs in 4 alone and most runs under `ctest -j8`, while landing Solaris work.
+- **Reproduce:** `project save`, `set a.basic.exposure=0.9`, `project autosave` with no pause, then a new session's
+  `project open` → `recoveryAvailable` false.
+- **Expected:** R-DLV-6 — an autosave written after the file is offered.
+- **Actual:** the autosave and the file share a modification time (the kernel stamps files from a coarse clock, a
+  tick of milliseconds), and `newer` asked for strictly later.
+- **Cause:** `newer` compared `ta > tb` (`core/service/ServiceSafety.cpp:54`).
+- **Fix:** a tie is newer — a save and a deliberate close remove the autosave (DR-DLV-1), so one beside the file was
+  written after it. Guarded by `interstellar_service_l2` (recovery, discarded): the autosave's time set to the file's,
+  red with `>` on every run.
+
 ### D-13 — Clearing one curve deleted the next curve's keys
 - **Area:** model · **Status:** Closed (same commit) · **Severity:** S1 (silently loses another
   parameter's animation) · **Found:** 2026-10-07, while building R-ANIM-10: a tracked window's
