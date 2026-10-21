@@ -719,7 +719,7 @@ static void test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_ch
 
     const std::string before = r.text();
     r.events.clear();
-    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth wavetable fm piano drums 808 granular multisample sampler)"));
+    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth wavetable fm piano drums 808 guitar granular multisample sampler)"));
     assert(contains(r.no("clip add --instrument synth --strip ch_2"), "without --src or --strip"));
     assert(contains(r.no("clip add --instrument synth --length -1"), "--length"));   // the strip was made, then the clip refused
     assert(r.text() == before && r.events.size() == 3);                                // three rejections, no change
@@ -5430,6 +5430,56 @@ static void test_a_vowel_filter_speaks_on_a_strip()
     pass("a vowel filter speaks on a strip (R-FX-19): its vowel automated A → I, a held saw's 770 Hz over its 2310 Hz by A and the other way by I (each over 10 dB, the saw's own tilt taken out)");
 }
 
+// R-INST-12: the DSP library's guitar is an instrument here as its registry says — one line to drop it, its note
+// plucked at its pitch, its palm mute an address, the pattern's bend lane bending it
+static void test_the_guitar_plays_with_no_code_of_its_own()
+{
+    Run r;
+    const std::string dir = scratch();
+    r.ok("project new " + freshSong("guitar") + " --bpm 120");
+    r.ok("clip add --instrument guitar --at 0 --length 4");                // ch_2 dv_1, pt_1
+    r.ok("set dv_1.body=0");
+    r.ok("notes add pt_1 \"A2@0:2\"");                                    // 110 Hz, a second
+    const DeviceModel *d = nullptr;
+    for (const auto &st : r.svc.model().strips)
+        for (const auto &dv : st.devices)
+            if (dv.type == "guitar") d = &dv;
+    assert(d && d->instrument && d->label == "Guitar");
+    auto render = [&](const std::string &name) {
+        const std::string out = dir + "/" + name + ".wav";
+        r.ok("render --out " + out + " --to 4 --bits 32f");
+        return r.fake.written[out][0];
+    };
+    auto at = [](const std::vector<float> &x, double hz, long a, long n) {
+        double re = 0, im = 0, sw = 0;
+        for (long i = 0; i < n; ++i)
+        {
+            const double w = 0.5 - 0.5 * std::cos(2 * M_PI * (i + 0.5) / n), ph = 2 * M_PI * hz * (double)(a + i) / 48000.0;
+            re += w * x[(size_t)(a + i)] * std::cos(ph);
+            im += w * x[(size_t)(a + i)] * std::sin(ph);
+            sw += w;
+        }
+        return 2 * std::hypot(re, im) / sw;
+    };
+    auto rms = [](const std::vector<float> &x, long a, long n) {
+        double e = 0;
+        for (long i = a; i < a + n; ++i) e += (double)x[(size_t)i] * x[(size_t)i];
+        return std::sqrt(e / (double)n);
+    };
+    const auto open = render("guitar-open");
+    assert(at(open, 110, 4800, 24000) > 10 * std::max(at(open, 100, 4800, 24000), at(open, 120, 4800, 24000)));
+    r.ok("set dv_1.mute=0.6");
+    assert(r.ok("get dv_1.mute") == "0.6\n");
+    const auto muted = render("guitar-muted");
+    assert(20 * std::log10(rms(open, 28800, 9600) / std::max(rms(muted, 28800, 9600), 1e-12)) > 20.0);
+    r.ok("set dv_1.mute=0");
+    r.ok("expr set pt_1 \"0:0 0.99:0 1:1\" --lane bend");                 // +2 semitones from beat 1
+    const auto bent = render("guitar-bent");
+    assert(at(bent, 123.4708, 31200, 14400) > 5 * at(bent, 110, 31200, 14400));
+    assert(contains(r.text(), "type=guitar"));
+    pass("the guitar (R-INST-12): the DSP library's plucked string, here as its registry says — one line to drop, 110 Hz from an A2, its palm mute an address (over 20 dB shorter), the bend lane bending it two semitones");
+}
+
 static void test_the_wavetable_plays_with_no_code_of_its_own()
 {
     // R-INST-7: the DSP library's "wavetable" is an instrument here as the registry describes it — dropped as one line,
@@ -7931,6 +7981,7 @@ int main()
     test_the_wavetable_plays_with_no_code_of_its_own();
     test_a_shaper_follows_the_songs_beat();
     test_a_vowel_filter_speaks_on_a_strip();
+    test_the_guitar_plays_with_no_code_of_its_own();
     test_every_instrument_drops_as_one_line_and_sounds();
     test_a_multisample_reads_its_sfz();
     test_every_effect_drops_as_one_line_and_passes_sound();

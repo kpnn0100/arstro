@@ -66,7 +66,7 @@ dsp."*
 - **R-DSP-5 Splitting at note events is the host's job.** A device renders whole blocks; the engine
   splits a block at every note event so a note starts on its exact sample (was SR-TIME-3).
 
-## R-INST — instruments — ✅ IMPLEMENTED (DR-INST-1, DR-INST-2; played through Solaris's engine, DR-ENG-1) — 5 ✅ (the piano, DR-INST-5) — 1 amended ✅ (stereo unison, DR-INST-1) — 2 amended ✅ (crash and ride, DR-INST-2)
+## R-INST — instruments — ✅ IMPLEMENTED (DR-INST-1, DR-INST-2; played through Solaris's engine, DR-ENG-1) — 5 ✅ (the piano, DR-INST-5) — 1 amended ✅ (stereo unison, DR-INST-1) — 2 amended ✅ (crash and ride, DR-INST-2) — 12 ✅ (the guitar, DR-INST-12)
 
 The user's request (2026-10-08): *"make me some basic instruments: Drum Machine, Basic Synth with 2
 OSC."*
@@ -102,6 +102,14 @@ OSC."*
   registry parameters. A held note is never stolen while a released one is still ringing: a figure over a
   held bass (an Alberti bass, an arpeggio) keeps its bass. Fast enough for one track with headroom: the
   registry's real-time budget holds for a piano chord.
+
+- **R-INST-12 A guitar — a plucked string, the DSP library's** ✅ (DR-INST-12) (user request, 2026-10-21: *"make me another future
+  bass banger, that sound good, apply style from san holo, illenium …"* — that style is built on a clean electric
+  guitar, and Solaris has none). The DSP library's guitar (REQ-guitar-1/2): a string PLUCKED — released from rest at a
+  pluck position, each partial starting at its peak, the pick's release rounding the highs — ringing with the piano's
+  modal string (inharmonic partials, the highs dying first), under an optional body; a palm mute while held, a finger
+  lifting off the fret on release; eight strings at once; the pitch wheel bends it. Solaris has it with no code of its
+  own (R-DSP-2): `clip add --instrument guitar`, its parameters addresses, its window the generated panel.
 
 ## R-FX — effects — ✅ IMPLEMENTED (1–4 DR-FX-1; 5 the rack: `device add/remove/move`, DR-SVC-1) — 5b ✅ (the generator apart, DR-FX-5b) — 5a ✅ (an effect dragged to its place, DR-FX-5a) — 18 ✅ (a shaper on the song's beat, DR-FX-18) — 19 ✅ (a vowel filter, DR-FX-19)
 
@@ -1477,6 +1485,21 @@ a process is the host's (law 12).
   bass on the off-beats — its loudness folded on the beat, quiet where the kick is; the pump on the grid; the hook as
   written (its rhythm in every bar, its motif returning) and as heard (the lead's pitch on its notes); the field; the
   key; the brightness — the air present, as a bright master's is; the range.
+- **R-SVC-17 A future bass track that tells a story, in the style of San Holo and Illenium, original, measured** (user
+  request, 2026-10-21: *"make me another future bass banger, that sound good, apply style from san holo, illenium and use
+  advance music theory for better melody, translate a real emotional, story into a music"*). The STYLE, nobody's song:
+  as R-SVC-12 — original, made with `solaris-cc` alone, its script committed, every sound the DSP library's — half time
+  at 150 bpm; San Holo's clean guitar (R-INST-12) and wonky, pitch-bent chords; Illenium's wide supersaw drops, piano,
+  vocal chops (R-FX-19) and a talking growl; and a STORY written for it, each section a scene, each scene told by a
+  device of harmony and melody chosen for it: a LEITMOTIF (her theme) stated, then sequenced, fragmented, AUGMENTED,
+  INVERTED and transposed; chords BORROWED from the parallel minor (iv, ♭VI) for the loss; appoggiaturas and a ♭6 → 5
+  sigh; a DECEPTIVE cadence where the tonic should be; a modulation up a MAJOR THIRD for the turn; a minor PLAGAL
+  ending. Measured: loudness and true peak; the arc (the drops over the breakdown and the verse, the builds rising and
+  landing, the gap, the second drop brighter than the first); half time; the theme as written (each transformation
+  checked from the score) and as HEARD in each of its forms (its pitch read from the guitar, the lead and the piano);
+  the harmony as heard — the borrowed tones sounding in their bars, the deceptive cadence's root, the plagal minor iv
+  and the final major third, the second drop a major third above the first; the wonk (the chords' pitch sagging and
+  returning); the growl talking on the sixteenths; the field; the range.
 
 ## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12) — 13 ✅ (the tempo set in the song bar, DR-UI-13) — 14 ✅ (the resize cursor, DR-UI-14)
 

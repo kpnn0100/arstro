@@ -1034,6 +1034,24 @@ A tuned bass drum: the note's pitch punched down to at each attack, gliding betw
 | `velocity` | 0.0 … 1.0 | 0.4 |
 | `voice.bend` | 0.0 … 24.0 st | 2.0 st |
 
+### `guitar` — Guitar (instrument)
+
+A plucked string: the piano's modal string released from rest at a pluck position, the pick's release rounding its highs, the highs dying first; a body; a palm mute and a fret release; eight strings.
+
+| parameter | range | default |
+|---|---|---|
+| `pluck.position` | 0.05 … 0.5 | 0.18 |
+| `pluck.pick` | 500.0 … 12000.0 Hz | 4000.0 Hz |
+| `string.sustain` | 0.3 … 20.0 s | 5.0 s |
+| `string.brightness` | 0.03 … 3.0 s | 0.5 s |
+| `string.stiffness` | 0.0 … 3.0 | 0.5 |
+| `body` | 0.0 … 1.0 | 0.3 |
+| `mute` | 0.0 … 1.0 | 0.0 |
+| `release` | 5.0 … 1000.0 ms | 80.0 ms |
+| `volume` | -60.0 … 6.0 dB | -6.0 dB |
+| `velocity` | 0.0 … 1.0 | 0.6 |
+| `voice.bend` | 0.0 … 24.0 st | 2.0 st |
+
 ### `granular` — Granular (instrument)
 
 A recorded sound as a cloud of short grains — their size, density and place (scanned, sprayed), pitched by the note, sprayed in pitch and pan; an envelope; 16 voices.

@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► the user's call** — section F is done (the shaper, the vowel filter, Halation, Starward). Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► G2** — the story track (R-SVC-17): eight scenes, a leitmotif transformed, borrowed chords, a deceptive cadence, a modulation up a major third, a minor plagal ending. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -834,6 +834,19 @@ complete the goal"*. Both tracks original — the styles' sound, nobody's song. 
       beat, the lead a semitone off). The pump is the shaper's alone — no compressor, no key. The first take's builds
       ended louder than their drops and the verse sat within 1.5 LU of the drop; the kick set every peak and the bass sat
       7 LU under the chords — rebalanced per strip, the limiter's release halved. Delivered ~/Music/Solaris/starward.*.
+
+### G — a future bass track that tells a story (user request, 2026-10-21)
+*"make me another future bass banger, that sound good, apply style from san holo, illenium and use advance music theory
+for better melody, translate a real emotional, story into a music"*. Original — the styles, nobody's song. R-INST-12,
+R-SVC-17.
+- [x] **G1** A guitar (DSP, REQ-guitar-1/2): the piano's modal string plucked — released from rest, the pick's release
+      rounding the highs — under a body; a palm mute, a fret release, eight strings, the bend (R-INST-12).
+      — DR-INST-12. DSP 83b0d60: `StringPartialBank::pluck` an initial condition (physical/README §14), `Guitar`
+      (instrument/README (GT1)–(GT8)); 10 unit tests, 1 integration check, 8 mutants red (a 9th survived and showed a
+      bend grid bought nothing — removed). Solaris: the pointer, L2 one (the wheel not forwarded as a mutant, red), the
+      instrument list in the refusal test, API regenerated.
+- [ ] **G2** The track: a story in eight scenes, its leitmotif transformed, borrowed chords, a deceptive cadence, a
+      modulation up a major third, a minor plagal ending — measured, delivered (R-SVC-17).
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

@@ -6767,6 +6767,124 @@
       ]
     },
     {
+      "type": "guitar",
+      "label": "Guitar",
+      "kind": "instrument",
+      "summary": "A plucked string: the piano's modal string released from rest at a pluck position, the pick's release rounding its highs, the highs dying first; a body; a palm mute and a fret release; eight strings.",
+      "params": [
+        {
+          "name": "pluck.position",
+          "label": "Position",
+          "unit": "",
+          "min": 0.05,
+          "max": 0.5,
+          "default": 0.18,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "pluck.pick",
+          "label": "Pick",
+          "unit": "Hz",
+          "min": 500.0,
+          "max": 12000.0,
+          "default": 4000.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "string.sustain",
+          "label": "Sustain",
+          "unit": "s",
+          "min": 0.3,
+          "max": 20.0,
+          "default": 5.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "string.brightness",
+          "label": "Brightness",
+          "unit": "s",
+          "min": 0.03,
+          "max": 3.0,
+          "default": 0.5,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "string.stiffness",
+          "label": "Stiffness",
+          "unit": "",
+          "min": 0.0,
+          "max": 3.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "body",
+          "label": "Body",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.3,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mute",
+          "label": "Palm Mute",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 5.0,
+          "max": 1000.0,
+          "default": 80.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "volume",
+          "label": "Volume",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": -6.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "velocity",
+          "label": "Velocity",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.6,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "voice.bend",
+          "label": "Bend Range",
+          "unit": "st",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 2.0,
+          "integer": true,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "granular",
       "label": "Granular",
       "kind": "instrument",
