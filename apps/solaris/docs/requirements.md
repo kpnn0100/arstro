@@ -1534,6 +1534,28 @@ of their pitched peaks over 250 Hz — below it a bass saw's seventh harmonic re
 `progressive_track_measured` (label `long`, `tests/demo_progressive.cmake`). Mutants on the music, each seen red: no
 lift, the lead a semitone off its melody.
 
+### DR-SVC-15 A melodic trap / future bass track in the Trap Nation style, measured (R-SVC-15)
+`demo/futurebass` (its README): *Halation*, written for this repo — VI–III–VII–i in C♯ minor, a bar a chord, its own
+vocal-chop melody and syllables, 808 line, drums and form — 140 bpm half time, 80 bars, made with `solaris-cc` alone
+from `make_script.py`'s `song.txt` (~410 lines). The chords are chopped on the song's grid by six shapers on their strip
+(DR-FX-18): a `rate` is a choice and a choice is not automatable, so each rate is its own shaper switched on by a held
+`depth` automation — a gate a quarter, an eighth, a sixteenth, a thirty-second through each build, a triplet-eighth
+wobble in the drops, a sixteenth in the second drop's second half. The chops are one legato voice through the vowel
+filter (DR-FX-19), the melody's syllables one 32-beat `auto add` automation bound to `vowel` and placed by `clip add
+--auto` under every clip of the melody. A piece of the first drop is rendered from beat 97.5 as well. `measure.py`
+judges it, 30 checks: −9.6 LUFS integrated, −1.21 dBTP; the drops −7.7 LUFS over the breakdown (−12.4) and the verse
+(−11.2); each build −13.8 → −9.1 LUFS, 12 dB brighter, landing; the gap 18.6 / 19.4 dB; the snare on beat three of all
+32 drop bars within 0.1 ms; the 808 on all 32 roots within 1 cent and through all 28 glides; the hats' triplet and
+thirty-second rolls; THE CHOP — the chords' 2 ms loudness strongest at the shaper's rate in all 12 stretches, and folded
+on the song's grid the shaper's own curve (SH3 through its smoothing SH4) at r ≥ 0.99, the piece from beat 97.5 too
+(r = 1.00 on the song's grid, −0.91 counted from its own first sample); THE VOICE — an "ah" note's 550–1250 Hz band 9.6 dB
+over its 1900–3200 Hz band, an "ee" note's 2.6 under, 104 of 108 drop notes on their written side, and at each pitch sung
+both ways (C♯5 D♯5 F♯5 G♯5) the "ah" 6.3–29 dB over the "ee" in every drop pass; 76 of 78 held notes within 50 cents
+(YIN); the field; the pump (14 dB); 95 % of the drops' pitched peaks over 250 Hz in C♯ minor. ctest
+`futurebass_track_measured` (label `long`, `tests/demo_futurebass.cmake`). Mutants on the music, each seen red: the chop
+half a cycle off the grid (the fold 0 of 12), the vowel filter bypassed (both vowel checks), the drops' wobble an eighth
+instead of a triplet eighth (the rate 9 of 12), the 808 with no glide (16 of 28).
+
 ### DR-SVC-5 The control channel and attach (R-SVC-5, R-SVC-6)
 **The window.** `solaris --control <socket> [song.slp]` (`linux_main.cpp:480`) builds a `ControlServer`
 on the window's own service after any song opened and polls it from its own 16 ms GLib timeout

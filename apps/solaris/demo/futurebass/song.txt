@@ -1,0 +1,421 @@
+# Halation — an original melodic trap / future bass track in the Trap Nation style, written by make_script.py
+# (R-SVC-15). 140 bpm half time, C# minor, 80 bars.
+project new halation.slp --bpm 140 --name "Halation"
+
+# the kick: short and round — the 808 is the low end; the drops' pattern, the verse's, the builds' climb
+clip add --instrument drums --at 96 --length 64
+set ch_2.name="Kick" pt_1.name="Kick"
+set dv_1.kick.tune=2 dv_1.kick.decay=260 dv_1.kick.tone=0.62 dv_1.kick.level=3 dv_1.volume=0
+set pt_1.length=16
+notes add pt_1 "36@0:0.25:124 36@1:0.25:110 36@2.75:0.25:110 36@4:0.25:124 36@5.75:0.25:110 36@8:0.25:124 36@9:0.25:110 36@10.5:0.25:110 36@12:0.25:124 36@13.25:0.25:110 36@14.75:0.25:110"
+clip add --strip ch_2 --pattern pt_1 --at 224 --length 64
+pattern new --name "Kick, the verse" --length 8
+notes add pt_2 "36@0:0.25:104 36@2.75:0.25:92 36@4:0.25:104 36@5.75:0.25:90"
+clip add --strip ch_2 --pattern pt_2 --at 32 --length 32
+auto create dv_1.volume
+auto point add au_1 --at 0 --value 0 --shape hold
+auto point add au_1 --at 32 --value -4 --shape hold
+auto point add au_1 --at 64 --value 0 --shape hold
+pattern new --name "Kick, the build" --length 32
+notes add pt_3 "36@0:0.25:108 36@4:0.25:108 36@8:0.25:108 36@12:0.25:108 36@16:0.25:114 36@17:0.25:114 36@18:0.25:114 36@19:0.25:114 36@20:0.25:114 36@21:0.25:114 36@22:0.25:114 36@23:0.25:114 36@24:0.25:114 36@25:0.25:114 36@26:0.25:114 36@27:0.25:114 36@28:0.25:114 36@29:0.25:114 36@30:0.25:114"
+clip add --strip ch_2 --pattern pt_3 --at 64 --length 32
+clip add --strip ch_2 --pattern pt_3 --at 192 --length 32
+
+# the 808 (R-INST-11): one voice, punched, warm — re-attacking on the kicks, gliding where a note is held into the
+# next; the verse holds the roots; the second drop's last turn dives an octave
+clip add --instrument 808 --at 96 --length 64
+set ch_3.name="808" pt_4.name="808"
+set dv_2.punch=12 dv_2.punch.time=30 dv_2.glide=90 dv_2.amp.attack=1 dv_2.amp.decay=2200 dv_2.amp.release=160 dv_2.click=0.25 dv_2.drive=0.4 dv_2.tone=4200 dv_2.volume=-1 dv_2.velocity=0.25
+set pt_4.length=16
+notes add pt_4 "33@0:1:118 33@1:1.75:118 33@2.75:0.85:118 37@3.5:0.5:118 28@4:1.75:118 28@5.75:1.05:118 35@6.75:1.25:118 35@8:1:118 35@9:1.5:118 35@10.5:1.1:118 40@11.5:0.5:118 37@12:1.25:118 37@13.25:1.5:118 37@14.75:0.6:118 30@15.25:0.75:118"
+pattern new --name "808, second drop" --length 16
+notes add pt_5 "33@0:1:118 33@1:1.75:118 33@2.75:0.85:118 37@3.5:0.5:118 28@4:1.75:118 28@5.75:1.05:118 35@6.75:1.25:118 35@8:1:118 35@9:1.5:118 35@10.5:1.1:118 40@11.5:0.5:118 37@12:1.25:118 37@13.25:1.5:118 37@14.75:0.6:118 37@15.25:0.45:118 25@15.5:0.5:112"
+clip add --strip ch_3 --pattern pt_5 --at 224 --length 64
+pattern new --name "808, the verse" --length 16
+notes add pt_6 "33@0:1.5:64 28@4:1.5:64 35@8:1.5:64 37@12:1.5:64"
+clip add --strip ch_3 --pattern pt_6 --at 32 --length 32
+auto create dv_2.volume
+auto point add au_2 --at 0 --value -1 --shape hold
+auto point add au_2 --at 32 --value -11 --shape hold
+auto point add au_2 --at 64 --value -1 --shape hold
+pattern new --name "808, the last" --length 8
+notes add pt_7 "37@0:6:118"
+clip add --strip ch_3 --pattern pt_7 --at 288 --length 8
+
+# the snare and the clap together on the third beat of every bar — half time; the verse a clap alone; a fill
+# closes the second drop
+clip add --instrument drums --at 96 --length 64
+set ch_4.name="Snare" pt_8.name="Snare"
+set dv_3.snare.tune=3 dv_3.snare.decay=260 dv_3.snare.tone=0.72 dv_3.snare.level=2 dv_3.clap.decay=360 dv_3.clap.tone=0.62 dv_3.clap.level=2 dv_3.clap.pan=0.08 dv_3.volume=2
+set pt_8.length=4
+notes add pt_8 "38@2:0.25:118 39@2:0.25:114"
+pattern new --name "Snare, the fill" --length 64
+notes add pt_9 "38@2:0.25:118 39@2:0.25:114 38@6:0.25:118 39@6:0.25:114 38@10:0.25:118 39@10:0.25:114 38@14:0.25:118 39@14:0.25:114 38@18:0.25:118 39@18:0.25:114 38@22:0.25:118 39@22:0.25:114 38@26:0.25:118 39@26:0.25:114 38@30:0.25:118 39@30:0.25:114 38@34:0.25:118 39@34:0.25:114 38@38:0.25:118 39@38:0.25:114 38@42:0.25:118 39@42:0.25:114 38@46:0.25:118 39@46:0.25:114 38@50:0.25:118 39@50:0.25:114 38@54:0.25:118 39@54:0.25:114 38@58:0.25:118 39@58:0.25:114 38@62:0.25:118 39@62:0.25:114 38@63:0.166667:70 38@63.1667:0.166667:78 38@63.3333:0.166667:87 38@63.5:0.166667:95 38@63.6667:0.166667:104 38@63.8333:0.166667:112"
+clip add --strip ch_4 --pattern pt_9 --at 224 --length 64
+pattern new --name "Clap, the verse" --length 4
+notes add pt_10 "39@2:0.25:84"
+clip add --strip ch_4 --pattern pt_10 --at 32 --length 32
+
+# hats: eighths rolling in triplets and thirty-seconds; the open hat on the turn; a light pattern elsewhere
+clip add --instrument drums --at 96 --length 64
+set ch_5.name="Hats" pt_11.name="Hats"
+set dv_4.chat.tone=0.86 dv_4.chat.decay=36 dv_4.chat.level=2 dv_4.chat.pan=0.2 dv_4.ohat.decay=260 dv_4.ohat.level=-3 dv_4.ohat.pan=-0.18 dv_4.volume=1
+set pt_11.length=16
+notes add pt_11 "42@0:0.25:92 42@0.5:0.25:66 42@1:0.25:92 42@1.5:0.166667:70 42@1.66667:0.166667:80 42@1.83333:0.166667:90 42@2:0.25:92 42@2.5:0.25:66 42@3:0.25:92 42@3.5:0.25:66 42@4:0.25:92 42@4.5:0.25:66 42@5:0.25:92 42@5.5:0.25:66 42@6:0.25:92 42@6.5:0.25:66 42@7:0.25:92 42@7.5:0.166667:64 46@7.5:0.5:78 42@7.66667:0.166667:82 42@7.83333:0.166667:100 42@8:0.25:92 42@8.5:0.25:66 42@9:0.25:92 42@9.5:0.25:66 42@10:0.25:80 42@10.3333:0.25:88 42@10.6667:0.25:96 42@11:0.25:92 42@11.5:0.125:66 42@11.625:0.125:79 42@11.75:0.125:91 42@11.875:0.125:104 42@12:0.25:92 42@12.5:0.25:66 42@13:0.25:92 42@13.5:0.25:66 42@14:0.25:76 42@14.3333:0.25:84 42@14.6667:0.25:92 42@15:0.0833333:64 42@15.0833:0.0833333:68 42@15.1667:0.0833333:73 42@15.25:0.0833333:77 42@15.3333:0.0833333:81 42@15.4167:0.0833333:86 42@15.5:0.0833333:90 42@15.5833:0.0833333:95"
+notes add pt_11 "42@15.6667:0.0833333:99 42@15.75:0.0833333:103 42@15.8333:0.0833333:108 42@15.9167:0.0833333:112"
+pattern new --name "Hats, second drop" --length 16
+notes add pt_12 "42@0:0.25:92 42@0.5:0.25:66 42@1:0.25:92 42@1.5:0.25:66 42@2:0.25:92 42@2.5:0.25:66 42@3:0.25:92 42@3.5:0.166667:64 42@3.66667:0.166667:82 42@3.83333:0.166667:100 42@4:0.25:92 42@4.5:0.25:66 42@5:0.25:92 42@5.5:0.25:66 42@6:0.25:80 42@6.33333:0.25:88 42@6.66667:0.25:96 42@7:0.25:92 42@7.5:0.125:66 46@7.5:0.25:76 42@7.625:0.125:79 42@7.75:0.125:91 42@7.875:0.125:104 42@8:0.25:92 42@8.5:0.25:66 42@9:0.25:92 42@9.5:0.25:66 42@10:0.25:92 42@10.5:0.25:66 42@11:0.25:92 42@11.5:0.166667:64 42@11.6667:0.166667:82 42@11.8333:0.166667:100 42@12:0.25:92 42@12.5:0.25:66 42@13:0.25:92 42@13.5:0.25:66 42@14:0.25:76 42@14.3333:0.25:84 42@14.6667:0.25:92 42@15:0.0833333:64 42@15.0833:0.0833333:68 42@15.1667:0.0833333:73 42@15.25:0.0833333:77 42@15.3333:0.0833333:81 42@15.4167:0.0833333:86 42@15.5:0.0833333:90 42@15.5833:0.0833333:95"
+notes add pt_12 "42@15.6667:0.0833333:99 42@15.75:0.0833333:103 42@15.8333:0.0833333:108 42@15.9167:0.0833333:112"
+clip add --strip ch_5 --pattern pt_12 --at 224 --length 64
+pattern new --name "Hats, light" --length 8
+notes add pt_13 "42@0:0.25:52 42@0.5:0.25:38 42@1:0.25:52 42@1.5:0.25:38 42@2:0.25:52 42@2.5:0.25:38 42@3:0.25:52 42@3.5:0.25:38 42@4:0.25:52 42@4.5:0.25:38 42@5:0.25:52 42@5.5:0.25:38 42@6:0.25:52 42@6.5:0.25:38 42@7:0.25:52 42@7.5:0.25:38"
+clip add --strip ch_5 --pattern pt_13 --at 32 --length 32
+clip add --strip ch_5 --pattern pt_13 --at 64 --length 31
+clip add --strip ch_5 --pattern pt_13 --at 192 --length 31
+clip add --strip ch_5 --pattern pt_13 --at 288 --length 16
+
+# cymbals: a crash on each drop's downbeat and halfway; an impact — a noise burst sweeping down — on each drop
+clip add --instrument drums --at 96 --length 4
+set ch_6.name="Crash" pt_14.name="Crash"
+set dv_5.crash.level=-1 dv_5.crash.decay=2800 dv_5.crash.tone=0.66 dv_5.volume=-2
+set pt_14.length=4
+notes add pt_14 "49@0:0.25:120"
+clip add --strip ch_6 --pattern pt_14 --at 128 --length 4
+clip add --strip ch_6 --pattern pt_14 --at 224 --length 4
+clip add --strip ch_6 --pattern pt_14 --at 256 --length 4
+clip add --strip ch_6 --pattern pt_14 --at 288 --length 4
+clip add --instrument synth --at 96 --length 8
+set ch_7.name="Impact" pt_15.name="Impact"
+set dv_6.osc1.level=0 dv_6.osc2.level=0 dv_6.noise=1 dv_6.filter.cutoff=240 dv_6.filter.res=0.1 dv_6.filter.env=5.4 dv_6.filter.keytrack=0 dv_6.fenv.attack=0 dv_6.fenv.decay=1300 dv_6.fenv.sustain=0 dv_6.amp.attack=0 dv_6.amp.decay=2200 dv_6.amp.sustain=0 dv_6.amp.release=1000 dv_6.volume=-6
+set pt_15.length=8
+notes add pt_15 "37@0:4:127"
+clip add --strip ch_7 --pattern pt_15 --at 224 --length 8
+
+# the build's roll: quarters, eighths, sixteenths, triplets — then a beat of near-silence
+clip add --instrument drums --at 64 --length 32
+set ch_8.name="Roll" pt_16.name="Roll"
+set dv_7.snare.tune=5 dv_7.snare.decay=160 dv_7.snare.tone=0.6 dv_7.volume=-8
+set pt_16.length=32
+notes add pt_16 "38@0:0.25:50 38@1:0.25:51 38@2:0.25:53 38@3:0.25:54 38@4:0.25:56 38@5:0.25:57 38@6:0.25:59 38@7:0.25:60 38@8:0.25:60 38@8.5:0.25:61 38@9:0.25:62 38@9.5:0.25:63 38@10:0.25:64 38@10.5:0.25:65 38@11:0.25:66 38@11.5:0.25:67 38@12:0.25:67 38@12.5:0.25:68 38@13:0.25:69 38@13.5:0.25:70 38@14:0.25:71 38@14.5:0.25:72 38@15:0.25:73 38@15.5:0.25:74 38@16:0.25:74 38@16.25:0.25:75 38@16.5:0.25:75 38@16.75:0.25:76 38@17:0.25:76 38@17.25:0.25:77 38@17.5:0.25:77 38@17.75:0.25:78 38@18:0.25:78 38@18.25:0.25:79 38@18.5:0.25:79 38@18.75:0.25:80 38@19:0.25:80 38@19.25:0.25:81 38@19.5:0.25:81 38@19.75:0.25:82 38@20:0.25:82 38@20.25:0.25:83 38@20.5:0.25:83 38@20.75:0.25:84 38@21:0.25:84 38@21.25:0.25:85 38@21.5:0.25:85 38@21.75:0.25:86"
+notes add pt_16 "38@22:0.25:86 38@22.25:0.25:87 38@22.5:0.25:87 38@22.75:0.25:88 38@23:0.25:88 38@23.25:0.25:89 38@23.5:0.25:89 38@23.75:0.25:90 38@24:0.166667:90 38@24.1667:0.166667:91 38@24.3333:0.166667:91 38@24.5:0.166667:92 38@24.6667:0.166667:93 38@24.8333:0.166667:93 38@25:0.166667:94 38@25.1667:0.166667:95 38@25.3333:0.166667:96 38@25.5:0.166667:96 38@25.6667:0.166667:97 38@25.8333:0.166667:98 38@26:0.166667:98 38@26.1667:0.166667:99 38@26.3333:0.166667:100 38@26.5:0.166667:100 38@26.6667:0.166667:101 38@26.8333:0.166667:102 38@27:0.166667:103 38@27.1667:0.166667:103 38@27.3333:0.166667:104 38@27.5:0.166667:105 38@27.6667:0.166667:105 38@27.8333:0.166667:106 38@28:0.125:106 38@28.125:0.125:107 38@28.25:0.125:108 38@28.375:0.125:108 38@28.5:0.125:109 38@28.625:0.125:110 38@28.75:0.125:111 38@28.875:0.125:111 38@29:0.125:112 38@29.125:0.125:113 38@29.25:0.125:114 38@29.375:0.125:115 38@29.5:0.125:115 38@29.625:0.125:116 38@29.75:0.125:117 38@29.875:0.125:118"
+notes add pt_16 "38@30:0.125:119 38@30.125:0.125:119 38@30.25:0.125:120 38@30.375:0.125:121 38@30.5:0.125:122 38@30.625:0.125:122 38@30.75:0.125:123 38@30.875:0.125:124"
+clip add --strip ch_8 --pattern pt_16 --at 192 --length 32
+
+# the chords: two five-voice saws, wide — held a bar each from the build on; a shaper per rate chops them on the
+# song's grid (R-FX-18): the build's gate speeds up, the drops wobble in triplet eighths; out of the first drop they
+# dive an octave on the pitch wheel
+clip add --instrument synth --at 64 --length 32
+set ch_9.name="Chords" pt_17.name="Chords"
+set dv_8.osc1.wave=saw dv_8.osc1.voices=5 dv_8.osc1.detune=34 dv_8.osc1.width=32 dv_8.osc1.level=0.7 dv_8.osc2.wave=saw dv_8.osc2.octave=0 dv_8.osc2.voices=5 dv_8.osc2.detune=22 dv_8.osc2.width=24 dv_8.osc2.fine=8 dv_8.osc2.level=0.55 dv_8.filter.cutoff=5200 dv_8.filter.res=0.1 dv_8.filter.env=0.5 dv_8.filter.keytrack=0.3 dv_8.fenv.decay=600 dv_8.fenv.sustain=0.6 dv_8.amp.attack=5 dv_8.amp.decay=400 dv_8.amp.sustain=0.9 dv_8.amp.release=150 dv_8.voice.bend=12 dv_8.volume=-14
+set pt_17.length=32
+notes add pt_17 "57@0:4:96 64@0:4:96 68@0:4:96 73@0:4:96 76@0:4:96 56@4:4:96 59@4:4:96 64@4:4:96 66@4:4:96 71@4:4:96 57@8:4:96 63@8:4:96 66@8:4:96 71@8:4:96 73@8:4:96 56@12:4:96 61@12:4:96 64@12:4:96 68@12:4:96 71@12:4:96 57@16:4:96 64@16:4:96 68@16:4:96 73@16:4:96 76@16:4:96 56@20:4:96 59@20:4:96 64@20:4:96 66@20:4:96 71@20:4:96 57@24:4:96 63@24:4:96 66@24:4:96 71@24:4:96 73@24:4:96 56@28:3:96 61@28:3:96 64@28:3:96 68@28:3:96 71@28:3:96"
+expr set pt_17 "0:0" --lane bend
+clip add --strip ch_9 --pattern pt_17 --at 192 --length 32
+pattern new --name "Chords, the drop" --length 16
+notes add pt_18 "57@0:4:100 64@0:4:100 68@0:4:100 73@0:4:100 76@0:4:100 56@4:4:100 59@4:4:100 64@4:4:100 66@4:4:100 71@4:4:100 57@8:4:100 63@8:4:100 66@8:4:100 71@8:4:100 73@8:4:100 56@12:4:100 61@12:4:100 64@12:4:100 68@12:4:100 71@12:4:100"
+expr set pt_18 "0:0" --lane bend
+clip add --strip ch_9 --pattern pt_18 --at 96 --length 48
+clip add --strip ch_9 --pattern pt_18 --at 224 --length 64
+pattern new --name "Chords, the dive" --length 16
+notes add pt_19 "57@0:4:100 64@0:4:100 68@0:4:100 73@0:4:100 76@0:4:100 56@4:4:100 59@4:4:100 64@4:4:100 66@4:4:100 71@4:4:100 57@8:4:100 63@8:4:100 66@8:4:100 71@8:4:100 73@8:4:100 56@12:4:100 61@12:4:100 64@12:4:100 68@12:4:100 71@12:4:100"
+expr set pt_19 "0:0 14.5:0 15.95:-1" --lane bend
+clip add --strip ch_9 --pattern pt_19 --at 144 --length 16
+device add ch_9 --type shaper
+set dv_9.rate="1/4" dv_9.shape="square" dv_9.depth=0 dv_9.smooth=3
+auto create dv_9.depth
+auto point add au_3 --at 0 --value 0 --shape hold
+auto point add au_3 --at 64 --value 0.9 --shape hold
+auto point add au_3 --at 72 --value 0 --shape hold
+auto point add au_3 --at 192 --value 0.9 --shape hold
+auto point add au_3 --at 200 --value 0 --shape hold
+device add ch_9 --type shaper
+set dv_10.rate="1/8" dv_10.shape="square" dv_10.depth=0 dv_10.smooth=3
+auto create dv_10.depth
+auto point add au_4 --at 0 --value 0 --shape hold
+auto point add au_4 --at 72 --value 0.9 --shape hold
+auto point add au_4 --at 80 --value 0 --shape hold
+auto point add au_4 --at 200 --value 0.9 --shape hold
+auto point add au_4 --at 208 --value 0 --shape hold
+device add ch_9 --type shaper
+set dv_11.rate="1/16" dv_11.shape="square" dv_11.depth=0 dv_11.smooth=3
+auto create dv_11.depth
+auto point add au_5 --at 0 --value 0 --shape hold
+auto point add au_5 --at 80 --value 0.9 --shape hold
+auto point add au_5 --at 88 --value 0 --shape hold
+auto point add au_5 --at 208 --value 0.9 --shape hold
+auto point add au_5 --at 216 --value 0 --shape hold
+device add ch_9 --type shaper
+set dv_12.rate="1/32" dv_12.shape="square" dv_12.depth=0 dv_12.smooth=3
+auto create dv_12.depth
+auto point add au_6 --at 0 --value 0 --shape hold
+auto point add au_6 --at 88 --value 0.9 --shape hold
+auto point add au_6 --at 96 --value 0 --shape hold
+auto point add au_6 --at 216 --value 0.9 --shape hold
+auto point add au_6 --at 224 --value 0 --shape hold
+device add ch_9 --type shaper
+set dv_13.rate="1/8T" dv_13.shape="sine" dv_13.depth=0 dv_13.smooth=3
+auto create dv_13.depth
+auto point add au_7 --at 0 --value 0 --shape hold
+auto point add au_7 --at 96 --value 0.85 --shape hold
+auto point add au_7 --at 160 --value 0 --shape hold
+auto point add au_7 --at 224 --value 0.85 --shape hold
+auto point add au_7 --at 256 --value 0 --shape hold
+device add ch_9 --type shaper
+set dv_14.rate="1/16" dv_14.shape="sine" dv_14.depth=0 dv_14.smooth=3
+auto create dv_14.depth
+auto point add au_8 --at 0 --value 0 --shape hold
+auto point add au_8 --at 256 --value 0.85 --shape hold
+auto point add au_8 --at 288 --value 0 --shape hold
+auto create dv_8.filter.cutoff
+auto point move au_9 --at 0 --value 900
+auto point add au_9 --at 64 --value 900
+auto point add au_9 --at 95 --value 6500 --shape smooth
+auto point add au_9 --at 96 --value 5200 --shape hold
+auto point add au_9 --at 192 --value 900
+auto point add au_9 --at 223 --value 6500 --shape smooth
+auto point add au_9 --at 224 --value 5600 --shape hold
+auto create dv_8.volume
+auto point move au_10 --at 0 --value -6
+auto point add au_10 --at 64 --value -22
+auto point add au_10 --at 95 --value -6 --shape smooth
+auto point add au_10 --at 96 --value -6 --shape hold
+auto point add au_10 --at 192 --value -22
+auto point add au_10 --at 223 --value -6 --shape smooth
+auto point add au_10 --at 224 --value -6 --shape hold
+
+# the chops: a bright legato synth through the vowel filter (R-FX-19) — the melody, each note its syllable by a
+# held automation placed under every clip of it; soft in the verse, full in the drops, bare in the breakdown. ONE
+# voice, as a sung chop is: a detuned unison beats its harmonics in and out of the formants
+clip add --instrument synth --at 32 --length 32
+set ch_10.name="Chops" pt_20.name="Chops"
+set dv_15.osc1.wave=saw dv_15.osc1.voices=1 dv_15.osc1.level=0.8 dv_15.osc2.wave=square dv_15.osc2.octave=0 dv_15.osc2.level=0.3 dv_15.osc2.fine=0 dv_15.noise=0.03 dv_15.filter.cutoff=8000 dv_15.filter.res=0.05 dv_15.filter.env=0.3 dv_15.filter.keytrack=0 dv_15.fenv.decay=200 dv_15.amp.attack=3 dv_15.amp.decay=160 dv_15.amp.sustain=0.85 dv_15.amp.release=80 dv_15.voice.mode=legato dv_15.voice.glide=35 dv_15.vibrato.depth=0.12 dv_15.vibrato.rate=5.6 dv_15.velocity=0.3 dv_15.volume=-10
+set pt_20.length=32
+notes add pt_20 "76@0:0.5:104 73@0.5:0.5:92 71@1:0.5:104 73@1.5:1:92 76@2.75:0.25:92 76@3:0.5:104 78@3.5:0.5:92 76@4:0.75:104 71@4.75:0.25:92 71@5:0.5:104 68@5.5:1:92 71@6.75:0.25:92 73@7:0.5:104 71@7.5:0.5:92 75@8:0.5:104 78@8.5:0.5:92 75@9:0.5:104 71@9.5:1:92 78@10.75:0.25:92 78@11:0.25:104 76@11.25:0.25:92 75@11.5:0.5:92 73@12:1.5:104 71@13.5:0.5:92 68@14:0.5:104 73@14.5:1.5:92 76@16:0.5:104 73@16.5:0.5:92 71@17:0.5:104 73@17.5:0.5:92 76@18:0.5:104 80@18.5:1:92 78@19.5:0.5:92 76@20:0.75:104 76@20.75:0.25:92 78@21:0.5:104 80@21.5:1:92 78@22.75:0.25:92 76@23:0.5:104 75@23.5:0.5:92 75@24:0.5:104 78@24.5:0.5:92 78@25:0.25:104 78@25.25:0.25:92 76@25.5:0.5:92 75@26:1:104 71@27.25:0.25:92 75@27.5:0.5:92"
+notes add pt_20 "76@28:0.75:104 75@28.75:0.25:92 73@29:2.5:104"
+clip add --strip ch_10 --pattern pt_20 --at 96 --length 64
+clip add --strip ch_10 --pattern pt_20 --at 160 --length 32
+clip add --strip ch_10 --pattern pt_20 --at 224 --length 64
+clip add --strip ch_10 --pattern pt_20 --at 288 --length 16
+device add ch_10 --type vowel
+set dv_16.resonance=0.6 dv_16.glide=8 dv_16.mix=1 dv_16.output=9
+auto add --name "Chops · Vowel" --min 0 --max 4 --length 32 --rest 0
+auto point add au_11 --at 0 --value 0 --shape hold
+auto point add au_11 --at 0.5 --value 3 --shape hold
+auto point add au_11 --at 1 --value 0 --shape hold
+auto point add au_11 --at 1.5 --value 2 --shape hold
+auto point add au_11 --at 2.75 --value 0 --shape hold
+auto point add au_11 --at 3 --value 0 --shape hold
+auto point add au_11 --at 3.5 --value 3 --shape hold
+auto point add au_11 --at 4 --value 0 --shape hold
+auto point add au_11 --at 4.75 --value 3 --shape hold
+auto point add au_11 --at 5 --value 0 --shape hold
+auto point add au_11 --at 5.5 --value 4 --shape hold
+auto point add au_11 --at 6.75 --value 0 --shape hold
+auto point add au_11 --at 7 --value 2 --shape hold
+auto point add au_11 --at 7.5 --value 3 --shape hold
+auto point add au_11 --at 8 --value 0 --shape hold
+auto point add au_11 --at 8.5 --value 2 --shape hold
+auto point add au_11 --at 9 --value 3 --shape hold
+auto point add au_11 --at 9.5 --value 0 --shape hold
+auto point add au_11 --at 10.75 --value 2 --shape hold
+auto point add au_11 --at 11 --value 2 --shape hold
+auto point add au_11 --at 11.25 --value 0 --shape hold
+auto point add au_11 --at 11.5 --value 3 --shape hold
+auto point add au_11 --at 12 --value 0 --shape hold
+auto point add au_11 --at 13.5 --value 3 --shape hold
+auto point add au_11 --at 14 --value 0 --shape hold
+auto point add au_11 --at 14.5 --value 4 --shape hold
+auto point add au_11 --at 16 --value 0 --shape hold
+auto point add au_11 --at 16.5 --value 3 --shape hold
+auto point add au_11 --at 17 --value 0 --shape hold
+auto point add au_11 --at 17.5 --value 2 --shape hold
+auto point add au_11 --at 18 --value 0 --shape hold
+auto point add au_11 --at 18.5 --value 2 --shape hold
+auto point add au_11 --at 19.5 --value 3 --shape hold
+auto point add au_11 --at 20 --value 0 --shape hold
+auto point add au_11 --at 20.75 --value 0 --shape hold
+auto point add au_11 --at 21 --value 2 --shape hold
+auto point add au_11 --at 21.5 --value 0 --shape hold
+auto point add au_11 --at 22.75 --value 3 --shape hold
+auto point add au_11 --at 23 --value 0 --shape hold
+auto point add au_11 --at 23.5 --value 2 --shape hold
+auto point add au_11 --at 24 --value 3 --shape hold
+auto point add au_11 --at 24.5 --value 0 --shape hold
+auto point add au_11 --at 25 --value 2 --shape hold
+auto point add au_11 --at 25.25 --value 2 --shape hold
+auto point add au_11 --at 25.5 --value 0 --shape hold
+auto point add au_11 --at 26 --value 3 --shape hold
+auto point add au_11 --at 27.25 --value 0 --shape hold
+auto point add au_11 --at 27.5 --value 2 --shape hold
+auto point add au_11 --at 28 --value 0 --shape hold
+auto point add au_11 --at 28.75 --value 3 --shape hold
+auto point add au_11 --at 29 --value 0 --shape hold
+set dv_16.vowel="=au_11"
+clip add --auto au_11 --at 32 --length 32
+clip add --auto au_11 --at 96 --length 64
+clip add --auto au_11 --at 160 --length 32
+clip add --auto au_11 --at 224 --length 64
+clip add --auto au_11 --at 288 --length 16
+auto create dv_15.volume
+auto point add au_12 --at 0 --value -2 --shape hold
+auto point add au_12 --at 32 --value -11 --shape hold
+auto point add au_12 --at 96 --value -2 --shape hold
+auto point add au_12 --at 160 --value -11 --shape hold
+auto point add au_12 --at 224 --value -2 --shape hold
+auto point add au_12 --at 288 --value -10 --shape hold
+
+# the piano (R-INST-5): the chords, a bass and a 3-3-2 right hand — the intro opening through a filter, the verse,
+# the breakdown bare, the outro
+clip add --instrument piano --at 0 --length 64
+set ch_11.name="Piano" pt_21.name="Piano"
+set dv_17.strings.brightness=0.85 dv_17.strings.decay=1.4 dv_17.body.mix=0.55 dv_17.hammer.hardness=0.85 dv_17.volume=-4
+set pt_21.length=16
+notes add pt_21 "33@0:4:70 45@0:4:70 61@0:1.5:78 64@0:1.5:78 68@0:1.5:78 71@0:1.5:78 61@1.5:1.5:66 64@1.5:1.5:66 68@1.5:1.5:66 71@1.5:1.5:66 61@3:1:70 64@3:1:70 68@3:1:70 71@3:1:70 40@4:4:70 47@4:4:70 59@4:1.5:78 64@4:1.5:78 68@4:1.5:78 71@4:1.5:78 59@5.5:1.5:66 64@5.5:1.5:66 68@5.5:1.5:66 71@5.5:1.5:66 59@7:1:70 64@7:1:70 68@7:1:70 71@7:1:70 35@8:4:70 42@8:4:70 59@8:1.5:78 63@8:1.5:78 66@8:1.5:78 69@8:1.5:78 59@9.5:1.5:66 63@9.5:1.5:66 66@9.5:1.5:66 69@9.5:1.5:66 59@11:1:70 63@11:1:70 66@11:1:70 69@11:1:70 37@12:4:70 44@12:4:70 61@12:1.5:78 64@12:1.5:78 68@12:1.5:78 71@12:1.5:78"
+notes add pt_21 "61@13.5:1.5:66 64@13.5:1.5:66 68@13.5:1.5:66 71@13.5:1.5:66 61@15:1:70 64@15:1:70 68@15:1:70 71@15:1:70"
+clip add --strip ch_11 --pattern pt_21 --at 160 --length 32
+clip add --strip ch_11 --pattern pt_21 --at 288 --length 32
+auto create dv_17.volume
+auto point add au_13 --at 0 --value -4 --shape hold
+auto point add au_13 --at 32 --value -10 --shape hold
+auto point add au_13 --at 160 --value -6 --shape hold
+auto point add au_13 --at 288 --value -5 --shape hold
+device add ch_11 --type filter
+set dv_18.mode="lowpass" dv_18.cutoff=600 dv_18.res=0.15
+auto create dv_18.cutoff
+auto point move au_14 --at 0 --value 500
+auto point add au_14 --at 28 --value 9000 --shape smooth
+auto point add au_14 --at 32 --value 20000 --shape hold
+auto point add au_14 --at 296 --value 20000
+auto point add au_14 --at 320 --value 400 --shape smooth
+
+# the pad: warm and slow under the intro, the verse and the breakdown — out for each gap
+clip add --instrument synth --at 0 --length 95
+set ch_12.name="Pad" pt_22.name="Pad"
+set dv_19.osc1.wave=saw dv_19.osc1.voices=5 dv_19.osc1.detune=20 dv_19.osc1.width=34 dv_19.osc1.level=0.55 dv_19.osc2.wave=triangle dv_19.osc2.octave=1 dv_19.osc2.level=0.3 dv_19.filter.cutoff=1400 dv_19.filter.res=0.15 dv_19.filter.env=0.2 dv_19.filter.keytrack=0.25 dv_19.amp.attack=1200 dv_19.amp.decay=1400 dv_19.amp.sustain=0.85 dv_19.amp.release=1800 dv_19.volume=-16
+set pt_22.length=16
+notes add pt_22 "45@0:4:86 52@0:4:86 61@0:4:86 40@4:4:86 47@4:4:86 56@4:4:86 35@8:4:86 42@8:4:86 51@8:4:86 37@12:4:86 44@12:4:86 52@12:4:86"
+clip add --strip ch_12 --pattern pt_22 --at 160 --length 63
+clip add --strip ch_12 --pattern pt_22 --at 288 --length 32
+auto create dv_19.volume
+auto point move au_15 --at 0 --value -16
+auto point add au_15 --at 63.5 --value -16
+auto point add au_15 --at 64 --value -22
+auto point add au_15 --at 94.5 --value -22
+auto point add au_15 --at 95 --value -60
+auto point add au_15 --at 159 --value -60
+auto point add au_15 --at 160 --value -16
+auto point add au_15 --at 192 --value -18
+auto point add au_15 --at 222.5 --value -22
+auto point add au_15 --at 223 --value -60
+auto point add au_15 --at 287 --value -60
+auto point add au_15 --at 288 --value -16
+
+# the pluck: a wavetable's harmonics, short and bright — eighths through the second drop
+clip add --instrument wavetable --at 224 --length 64
+set ch_13.name="Pluck" pt_23.name="Pluck"
+set dv_20.osc1.table=harmonics dv_20.osc1.position=0.6 dv_20.osc1.posenv=-0.3 dv_20.osc1.level=0.8 dv_20.osc2.level=0 dv_20.filter.cutoff=3000 dv_20.filter.res=0.2 dv_20.filter.env=2.0 dv_20.fenv.decay=240 dv_20.fenv.sustain=0 dv_20.amp.attack=1 dv_20.amp.decay=380 dv_20.amp.sustain=0 dv_20.amp.release=240 dv_20.volume=-14
+set pt_23.length=16
+notes add pt_23 "76@0:0.5:84 73@0.5:0.5:70 69@1:0.5:84 73@1.5:0.5:70 76@2:0.5:84 80@2.5:0.5:70 76@3:0.5:84 73@3.5:0.5:70 76@4:0.5:84 71@4.5:0.5:70 68@5:0.5:84 71@5.5:0.5:70 76@6:0.5:84 78@6.5:0.5:70 76@7:0.5:84 71@7.5:0.5:70 78@8:0.5:84 75@8.5:0.5:70 71@9:0.5:84 75@9.5:0.5:70 78@10:0.5:84 81@10.5:0.5:70 78@11:0.5:84 75@11.5:0.5:70 76@12:0.5:84 73@12.5:0.5:70 68@13:0.5:84 73@13.5:0.5:70 76@14:0.5:84 80@14.5:0.5:70 76@15:0.5:84 73@15.5:0.5:70"
+
+# the riser: noise and a saw, its filter opening and its pitch climbing an octave through each build — cut for the gap
+clip add --instrument synth --at 64 --length 32
+set ch_14.name="Riser" pt_24.name="Riser"
+set dv_21.osc1.wave=saw dv_21.osc1.voices=3 dv_21.osc1.detune=40 dv_21.osc1.width=30 dv_21.osc1.level=0.3 dv_21.osc2.level=0 dv_21.noise=0.85 dv_21.filter.res=0.35 dv_21.filter.env=0 dv_21.filter.keytrack=0 dv_21.amp.attack=1500 dv_21.amp.sustain=1 dv_21.amp.release=40 dv_21.volume=-15
+set pt_24.length=32
+notes add pt_24 "49@0:31:100"
+clip add --strip ch_14 --pattern pt_24 --at 192 --length 32
+auto create dv_21.filter.cutoff
+auto point move au_16 --at 0 --to 64 --value 200
+auto point add au_16 --at 95 --value 9000 --shape smooth
+auto point add au_16 --at 96 --value 200 --shape hold
+auto point add au_16 --at 192 --value 200
+auto point add au_16 --at 223 --value 9000 --shape smooth
+auto point add au_16 --at 224 --value 200 --shape hold
+auto create dv_21.osc1.semi
+auto point move au_17 --at 0 --to 64 --value -12
+auto point add au_17 --at 95 --value 12
+auto point add au_17 --at 96 --value -12 --shape hold
+auto point add au_17 --at 192 --value -12
+auto point add au_17 --at 223 --value 12
+auto point add au_17 --at 224 --value -12 --shape hold
+auto create dv_21.volume
+auto point move au_18 --at 0 --to 64 --value -40
+auto point add au_18 --at 95 --value -12 --shape smooth
+auto point add au_18 --at 96 --value -40 --shape hold
+auto point add au_18 --at 192 --value -40
+auto point add au_18 --at 223 --value -12 --shape smooth
+auto point add au_18 --at 224 --value -40 --shape hold
+
+# the pump: the kick keys a compressor on the chords, the pad, the pluck, the chops — and, lightly, the 808
+device add ch_9 --type compressor
+set dv_22.sidechain=on dv_22.threshold=-24 dv_22.ratio=4 dv_22.attack=1 dv_22.release=150
+send add ch_2 --to ch_9 --sidechain
+device add ch_12 --type compressor
+set dv_23.sidechain=on dv_23.threshold=-26 dv_23.ratio=4 dv_23.attack=1 dv_23.release=180
+send add ch_2 --to ch_12 --sidechain
+device add ch_13 --type compressor
+set dv_24.sidechain=on dv_24.threshold=-24 dv_24.ratio=3 dv_24.attack=1 dv_24.release=120
+send add ch_2 --to ch_13 --sidechain
+device add ch_10 --type compressor
+set dv_25.sidechain=on dv_25.threshold=-20 dv_25.ratio=2 dv_25.attack=1 dv_25.release=110
+send add ch_2 --to ch_10 --sidechain
+device add ch_3 --type compressor
+set dv_26.sidechain=on dv_26.threshold=-18 dv_26.ratio=2 dv_26.attack=1 dv_26.release=70
+send add ch_2 --to ch_3 --sidechain
+
+# tone: the 808 warmed and its rumble cut; everything else gives the low end to the kick and the 808
+device add ch_3 --type saturator
+set dv_27.drive=6 dv_27.curve=tube dv_27.mix=0.5 dv_27.output=-2
+device add ch_3 --type eq
+set dv_28.lowcut.on=on dv_28.lowcut.freq=28
+device add ch_9 --type eq
+set dv_29.lowcut.on=on dv_29.lowcut.freq=190
+device add ch_10 --type eq
+set dv_30.lowcut.on=on dv_30.lowcut.freq=280
+device add ch_12 --type eq
+set dv_31.lowcut.on=on dv_31.lowcut.freq=120
+device add ch_13 --type eq
+set dv_32.lowcut.on=on dv_32.lowcut.freq=250
+device add ch_14 --type eq
+set dv_33.lowcut.on=on dv_33.lowcut.freq=180
+device add ch_5 --type eq
+set dv_34.lowcut.on=on dv_34.lowcut.freq=400
+device add ch_4 --type eq
+set dv_35.lowcut.on=on dv_35.lowcut.freq=150
+device add ch_6 --type eq
+set dv_36.lowcut.on=on dv_36.lowcut.freq=400
+device add ch_7 --type eq
+set dv_37.lowcut.on=on dv_37.lowcut.freq=60
+device add ch_11 --type eq
+set dv_38.lowcut.on=on dv_38.lowcut.freq=70
+
+# space: a long, wide reverb and a dotted-eighth delay, each on a bus — the style's wash
+strip add --kind bus --name Reverb
+device add ch_15 --type reverb
+set dv_39.decay=3600 dv_39.size=180 dv_39.mix=1 dv_39.lowcut=300 dv_39.highcut=10000 dv_39.width=1
+strip add --kind bus --name Delay
+device add ch_16 --type delay
+set dv_40.time="=60000/bpm*0.75" dv_40.feedback=0.38 dv_40.tone=4000 dv_40.mix=1
+send add ch_10 --to ch_15 --gain -16
+send add ch_10 --to ch_16 --gain -19
+send add ch_9 --to ch_15 --gain -18
+send add ch_11 --to ch_15 --gain -5
+send add ch_12 --to ch_15 --gain -6
+send add ch_13 --to ch_15 --gain -8
+send add ch_13 --to ch_16 --gain -10
+send add ch_4 --to ch_15 --gain -13
+send add ch_6 --to ch_15 --gain -12
+send add ch_7 --to ch_15 --gain -4
+send add ch_14 --to ch_15 --gain -12
+
+# the mix: faders; the master: a limiter, its ceiling under −1 dBTP
+set ch_2.gain=-1 ch_3.gain=-8 ch_4.gain=2 ch_5.gain=-4 ch_6.gain=-9 ch_7.gain=-5 ch_8.gain=-4 ch_9.gain=-4 ch_10.gain=-3 ch_11.gain=-3 ch_12.gain=-6 ch_13.gain=-9 ch_14.gain=-5 ch_15.gain=-5 ch_16.gain=-9
+device add master --type limiter
+set dv_41.gain=9.5 dv_41.ceiling=-1.3 dv_41.release=60 dv_41.truePeak=on
+
+ls
+audit
+project save
+render --out halation.wav --stems ch_2,ch_3,ch_4,ch_5,ch_9,ch_10
+# a piece of the first drop from half a beat past its second beat: the chop still on the SONG's grid (R-FX-18)
+render --out halation-piece.wav --from 97.5 --to 128 --stems ch_9

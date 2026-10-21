@@ -35,6 +35,11 @@ add_test(NAME progressive_track_measured
   COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/progressive
           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_progressive -DPY=${SOLARIS_PYTHON3} -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/demo_progressive.cmake)
 set_tests_properties(progressive_track_measured PROPERTIES TIMEOUT 1200 LABELS "long")
+# R-SVC-15: the Trap Nation–style track — the chords' chop on the song's grid, the chops' vowels and notes: `ctest -L long`
+add_test(NAME futurebass_track_measured
+  COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/futurebass
+          -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_futurebass -DPY=${SOLARIS_PYTHON3} -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/demo_futurebass.cmake)
+set_tests_properties(futurebass_track_measured PROPERTIES TIMEOUT 1200 LABELS "long")
 
 add_test(NAME solaris_demo_canon
   COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/canon

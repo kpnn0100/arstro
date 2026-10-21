@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► F3** — an original Trap Nation–style track (R-SVC-15): future bass chords on the shaper, vowel chops, 808s, a half-time drop; then F4 (the NCS-style track). Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► F4** — an original NCS-style track (R-SVC-16): bright electro / future house at 128 bpm, a bouncy bass, a hook, a big build. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -819,8 +819,14 @@ complete the goal"*. Both tracks original — the styles' sound, nobody's song. 
       — DR-FX-19. DSP: 6 unit tests, 1 integration check (the formants where the table puts them), 6 mutants red.
       Solaris: the pointer bumped; L2 one (an automated vowel moving a saw's formants A → I), the registry's setter as
       a mutant seen red; the effect count 23; API regenerated.
-- [ ] **F3** An original Trap Nation–style track — future bass chords wobbling on the shaper, vowel chops, 808s, a
+- [x] **F3** An original Trap Nation–style track — future bass chords wobbling on the shaper, vowel chops, 808s, a
       half-time drop — measured, delivered (R-SVC-15).
+      — DR-SVC-15. `demo/futurebass`: *Halation*, 2:17, C♯ minor at 140 half time; all 30 checks pass (ctest
+      `futurebass_track_measured`, label long); 4 musical mutants red (the chop off the grid, the vowel bypassed, the
+      wobble's rate, the 808's glide). Found on the way: a shaper's rate is a choice and not automatable (six shapers,
+      each switched by its depth); a detuned unison beats harmonics through the formants (one voice); the vowel's line
+      A E I O U makes a slow "oh" → "ah" say "ee" (an 8 ms cut); the 808 carried the drop (rebalanced per strip).
+      Delivered ~/Music/Solaris/halation.*.
 - [ ] **F4** An original NCS-style track — bright electro / future house at 128 bpm, a bouncy FM bass, a hook — measured,
       delivered (R-SVC-16).
 
