@@ -2992,6 +2992,75 @@ static void test_alt_wheel_changes_the_lane_shown()
     pass("Alt+wheel (R-ROLL-13): the lane shown for the selection or the note under the pointer — velocity and chance each the note's own, eased, ONE `notes set --vel-by | --chance-by` once the wheel rests or the next gesture comes, nothing for a turn undone; Bend / Mod ONE `expr set`, the lane moved under the notes and as it was outside them");
 }
 
+static void test_notes_copied_from_one_clips_roll_to_anothers()
+{
+    // D-25 (R-ROLL-8): notes copied in one MIDI clip's roll paste into ANOTHER clip's roll with Ctrl+V right after it is
+    // opened from the lanes — no press inside it first, and never a clip; a press on the lanes gives the keys back to
+    // them; a press on a roll's title bar (bringing it forward) gives them to that roll
+    sltest::Rig r("ui-notesacross", 1280, 800);
+    r.cmd("project new " + r.song("Across") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    const std::string a = r.svc->model().clips[0].id, pa = r.svc->model().clips[0].pattern, ch = r.svc->model().clips[0].track;
+    r.cmd("notes add " + pa + " \"C4@0:1 E4@1:1 G4@2:2\"");
+    r.cmd("clip add --strip " + ch + " --at 4.75 --length 0.75");   // left of where the rolls' windows open
+    const std::string b = r.svc->model().clips.back().id, pb = r.svc->model().clips.back().pattern;
+    assert(b != a && pb != pa && !pb.empty());
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &wl = r.app->project().windows();
+    auto lastEdit = [&]() {
+        for (auto it = r.sent.rbegin(); it != r.sent.rend(); ++it)
+            if (it->rfind("note preview ", 0) != 0) return *it;
+        return std::string();
+    };
+    auto notesOf = [&](const std::string &pt) {
+        for (const auto &x : r.svc->model().patterns)
+            if (x.id == pt) return x.notes.size();
+        return (size_t)0;
+    };
+    // a clip copied on the lanes first: a Ctrl+V the lanes take would duplicate it
+    const artboard::Rect ca = world(tl, tl.clipRect(a));
+    r.click(ca.x + 12.0, cy(ca));
+    r.settle();
+    r.key('C', true);
+    // A's roll, opened from its clip: its keys at once — Ctrl+A, Ctrl+C copy its notes
+    r.click(ca.x + 12.0, cy(ca));
+    r.click(ca.x + 12.0, cy(ca));
+    r.settle();
+    auto &rollA = *wl.roll(pa);
+    r.key('A', true);
+    assert(rollA.selectionCount() == 3);
+    r.key('C', true);
+    // B's roll, opened from its clip: Ctrl+V pastes the notes there — not a clip
+    const artboard::Rect cb = world(tl, tl.clipRect(b));
+    const arstro::solaris_ui::FloatWindow *wa = wl.window("roll:" + pa);
+    assert(cb.right() < world(*wa, wa->localBounds()).x - 26.0); // the clip is not under a roll's window
+    r.click(cb.x + 6.0, cy(cb));
+    r.click(cb.x + 6.0, cy(cb));
+    r.settle();
+    auto &rollB = *wl.roll(pb);
+    assert(wl.frontRoll() == &rollB);
+    r.key('V', true);
+    assert(lastEdit() == "notes add " + pb + " \"60@0:1:100 64@1:1:100 67@2:2:100\"" && notesOf(pb) == 3 && rollB.selectionCount() == 3);
+    for (const auto &l : r.sent) assert(l.rfind("clip duplicate", 0) != 0);
+    r.settle();
+    // a press on the lanes' empty space: the keys are theirs — Ctrl+V is the clip copied there
+    const double gap = (cb.x + ca.right()) * 0.5;
+    r.click(gap, cy(ca));
+    r.settle();
+    r.key('V', true);
+    assert(lastEdit().rfind("clip duplicate " + a + " --at ", 0) == 0);
+    r.settle();
+    // a press on A's title bar — behind B, it comes forward — gives A the keys
+    const artboard::Rect ta = world(*wa, wa->titleRect());
+    r.click(ta.right() - 60.0, ta.y + 8.0);
+    r.settle();
+    assert(wl.frontRoll() == &rollA);
+    r.key('V', true);
+    assert(lastEdit() == "notes add " + pa + " \"60@0:1:100 64@1:1:100 67@2:2:100\"");
+    pass("D-25: notes copied in one clip's roll paste into another clip's roll right after it is opened from the lanes (never a clip); a press on the lanes gives them the keys; a press on a roll's title bar gives it the keys");
+}
+
 static void test_the_rolls_selection_and_what_is_done_to_it()
 {
     sltest::Rig r("ui-rollsel", 1280, 800);
@@ -6780,6 +6849,7 @@ int main()
     test_the_roll_plays_its_clip();
     test_the_roll_sounds_what_is_made();
     test_the_rolls_selection_and_what_is_done_to_it();
+    test_notes_copied_from_one_clips_roll_to_anothers();
     test_alt_wheel_changes_the_lane_shown();
     test_the_roll_copies_by_shift_drag_and_makes_notes_like_the_last();
     test_the_length_a_click_makes_and_a_window_resized();

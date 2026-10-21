@@ -84,6 +84,7 @@ namespace solaris_ui
         mProject->onCommand = [this](const std::string &line) { return dispatch(line); };
         mProject->onNotice = [this](const std::string &s) { showToast(s); };
         mProject->onCopy = [this](const std::string &text) { copy(text); };
+        mProject->windows().onRollOpened = [this] { mRollKeys = true; }; // R-ROLL-8 (D-25): a roll opened takes the keys
         mProject->windows().videoFrame = [this](const std::string &file, double t, int bw, int bh, VideoImage &out) { // R-VIDEO-1
             return onVideoFrame && onVideoFrame(file, t, bw, bh, out);
         };
@@ -135,14 +136,11 @@ namespace solaris_ui
             if (mExport->isOpen()) { mExport->onGesture(g); return; }
             if (mRelink->isOpen()) { mRelink->onGesture(g); return; }
             if (mConflicts->isOpen()) { mConflicts->onGesture(g); return; }
-            if (g.type == Gesture::Type::Down && mScreen == "project")
-            {
-                // R-ROLL-8: the keyboard follows the pointer — a press in the front roll gives it the keys
-                PianoRoll *r = mProject->windows().frontRoll();
-                mRollKeys = r && r->localBounds().contains(r->toLocal(g.pos));
-            }
             if (mScreen == "home") mHome->onGesture(g);
             else mProject->onGesture(g);
+            // R-ROLL-8: the keyboard follows the pointer — a press in a roll's window, its title bar too, gives it the keys;
+            // judged once the press is routed, so a roll it brought to the front counts (D-25)
+            if (g.type == Gesture::Type::Down && mScreen == "project") mRollKeys = mProject->windows().inFrontRoll(g.pos);
         };
         mRecognizer.setSink(sink);
         mKeyClicks.setSink(sink); // R-ACCESS-1: a node's activation is the click it stands for — through the same routes

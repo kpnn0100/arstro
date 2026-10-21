@@ -700,7 +700,10 @@ the object it belongs to, shows it on the timeline, and that property will use a
   (`notes delete <pt> "<pitch@beat> …"`); Ctrl+D duplicates it right after itself — by its span, the earliest
   start to the latest end, rounded up to the snap — and the copy becomes the selection (`notes add`, the copy's
   tokens); Ctrl+C copies it to the app's clipboard and Ctrl+V pastes it into this roll or another at the same
-  beats, selected, ready to be dragged. A bulk edit that would land a note on an unselected one, below beat 0 or
+  beats, selected, ready to be dragged. (**AMENDED (D-25, the user, 2026-10-21: *"ctrl c and ctrl v the midi from one
+  to another midi clip"*):** the roll that takes the keys is the one last opened — from its clip, the browser,
+  anywhere — or last pressed, anywhere in its window, its title bar too; so notes copied in one clip's roll paste
+  into another clip's roll with Ctrl+V right after it is opened. A press on the lanes gives the keys back to them.) A bulk edit that would land a note on an unselected one, below beat 0 or
   outside 0–127 is refused whole, naming the first.
 - **R-ROLL-9 The pattern grows to hold what is written in it** (U-3, R-SVC-11): a note added, moved, resized or
   pasted past the pattern's end lengthens the pattern to the end of the bar that holds the note's end — one

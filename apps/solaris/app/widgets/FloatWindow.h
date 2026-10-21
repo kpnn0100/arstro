@@ -103,6 +103,10 @@ namespace solaris_ui
         FloatWindow &openRoll(const std::string &pt, const std::string &ac = std::string());
         /** The piano roll in front of every other window, or null (Space plays it, R-ROLL-6). */
         PianoRoll *frontRoll() const;
+        /** R-ROLL-8 (D-25): whether `world` is in the front window — its frame too — and it is a piano roll. */
+        bool inFrontRoll(const artboard::Point &world) const;
+        /** R-ROLL-8 (D-25): a roll was opened or brought forward (from a clip, the browser, anywhere) — it takes the keys. */
+        std::function<void()> onRollOpened;
         /** R-UI-14: the cursor a drag in hand in any window keeps (Default when none); and, for a point, whether a window
          *  is there — it covers what is beneath — and the cursor it wants (its corner ⤡, a roll's grips). */
         Cursor dragCursor() const;

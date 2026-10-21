@@ -370,16 +370,16 @@ twenty, so it could not compute them — and a second front end must read the sa
 ### DR-UI-1 The window, Home and the song bar (R-UI-1, R-UI-2, R-UI-3, R-HOME-1, R-G-4)
 `solaris_app` (`app/`) is a platform-free Artboard tree that links no service: `App` (`app/App.h`)
 draws from `AppHooks::model()` and sends text lines through `AppHooks::dispatch` (`App::dispatch`,
-`app/App.cpp:436` — a refusal becomes a toast with the service's sentence). `linux_main.cpp` is the
+`app/App.cpp:434` — a refusal becomes a toast with the service's sentence). `linux_main.cpp` is the
 only OS code: GTK3, the frame clock, the pickers, the host functions, the service pumped every tick.
-The screen follows `AppModel::screen` and CROSS-FADES (260 ms, `App::render`, `app/App.cpp:952`).
+The screen follows `AppModel::screen` and CROSS-FADES (260 ms, `App::render`, `app/App.cpp:950`).
 `installSolarisAccent()` moves cosmo's accent slot to teal `#159387` before any widget exists
 (`app/Theme.h`); every neutral, radius, font and spacing token is cosmo's, aliased. `HomeScreen`
 (`app/widgets/HomeScreen.cpp`): the `solaris.` wordmark sized to fit, New/Open, Settings, recent-song
 cards (name, `bpm · length · strips` over a plate of bars from the song's name; a moved song says
 "missing" in red and is named by its file) whose grid geometry eases on reflow (`layout`, `:86`);
 right-click forgets a card. `SongBar` (`app/widgets/SongBar.cpp`): wordmark, Home (asking first with
-cosmo's `ConfirmDialog` when unsaved, `App::requestHome`, `app/App.cpp:547`), the song's name with an eased
+cosmo's `ConfirmDialog` when unsaved, `App::requestHome`, `app/App.cpp:545`), the song's name with an eased
 unsaved dot, Play/Stop whose glyphs cross-fade, the position as bar.beat.tick in mono, the tempo,
 the master meter (40 ms rise, 300 ms fall, `advance`, `app/widgets/SongBar.cpp:150`), Save, Settings. Keys: Space play/stop,
 Ctrl+S save, Enter to the start, Ctrl+, settings. Every control's command line is in `app/NOTES.md`.
@@ -417,7 +417,7 @@ and anchored at the pointer (`:713`); the wheel scrolls, Shift+wheel sideways. T
 zoom and its finest level with room is THE snap step on the lanes (DR-UI-10). A clip dragged follows
 the pointer exactly, on that step, between LANES only, and lands as `clip move <ac> --at <b> [--lane
 <ln>]` (`:651`) where it was let go. A click selects (the teal ring cross-fades 200 ms between
-clips); Delete/Backspace → `clip delete`, Ctrl+D → `clip duplicate` (`app/App.cpp:544`); a ruler
+clips); Delete/Backspace → `clip delete`, Ctrl+D → `clip duplicate` (`app/App.cpp:542`); a ruler
 click → `transport seek <b>` on the grid you see (`Timeline.cpp:883`). A lane moved by `lane move` (DR-LANE-1)
 slides to its new row through the same keyed rows. **The picture travels
 (§1):** the rows are Interstellar's `AnimatedRows` keyed by lane; each clip keeps an eased beat, row
@@ -501,7 +501,7 @@ App offers right-clicks to the windows first because a row's slider would
 swallow them (`app/App.cpp:86`). Every change is one line: `set <dv>.<param>=…`, `auto create`,
 `bind clear`, `set <dv>.bypass=…`, `device remove <dv>` (none for an instrument — it has "Piano Roll"
 instead, DR-ROLL-1). While the pointer is
-down `bind` re-seeds nothing (`:471`); the body scrolls with its own bar (`reveal` eases to a row).
+down `bind` re-seeds nothing (`:469`); the body scrolls with its own bar (`reveal` eases to a row).
 
 ### DR-AUTO-1 Automations and bindings in the `.slp` (R-AUTO-1, R-AUTO-4)
 `Automation` (`model/Project.h`): id `au_n`, name, unit, min/max, `from`, points (beat, value, shape
@@ -589,12 +589,12 @@ the root, a drag one node, the cap, a song opened its own root). Mutants: a new 
 old stack), redo taking the oldest branch, pruning the root before an old branch — all seen red.
 
 ### DR-HIST-2 The tree, seen (R-HIST-3)
-Edit ▸ Show History Tree… (`app/App.cpp:237`, as cosmo's History menu has it) is `App::openHistory` (`:452`): cosmo's
+Edit ▸ Show History Tree… (`app/App.cpp:235`, as cosmo's History menu has it) is `App::openHistory` (`:450`): cosmo's
 own `HistoryView` — compiled from `apps/cosmo/widgets`, never copied — shown over a snapshot of the model's
 `history[]` (a node's parent mapped to its index; the hint under the title names this machine's undo and redo keys,
-R-SET-4). It is modal: the gesture sink gives it every gesture while it is open (`:123`; a wheel notch pans a row),
-Escape closes it, and only the undo and redo keys pass through, walking the tree it shows (`App::key`, `:629`). A
-node clicked is ONE `history jump <id>`; the view stays open, and when the model comes back `syncHistory` (`:504`)
+R-SET-4). It is modal: the gesture sink gives it every gesture while it is open (`:124`; a wheel notch pans a row),
+Escape closes it, and only the undo and redo keys pass through, walking the tree it shows (`App::key`, `:627`). A
+node clicked is ONE `history jump <id>`; the view stays open, and when the model comes back `syncHistory` (`:502`)
 moves its current node there — or, if the tree itself changed (an edit from a script while it is open), shows the
 new snapshot. Solaris opts in to `easeCurrent` (cosmo `widgets/HistoryView.cpp:187`): the highlight EASES from the
 node it leaves to the node it reaches (200 ms) instead of jumping; cosmo leaves it off. Its open and close fade and
@@ -611,17 +611,17 @@ UI `test_song_bar_menus_and_settings_sections`, `test_home_unsaved_confirm_and_r
 `SongBar` (`app/widgets/SongBar.cpp`): wordmark (Home) · Settings · cosmo's `MenuStrip` (laid out by
 `SongBar::layout`, `app/widgets/SongBar.cpp:40`) · the song's name; the transport is centred when there is room and otherwise
 starts right of the menus and `kNameMin` (120 px) of name (`transportX`, `app/widgets/SongBar.cpp:51`), so the bar fits at
-1024; the master meter and Save on the right. `App::buildMenus` (`app/App.cpp:156`): **File** — New
+1024; the master meter and Save on the right. `App::buildMenus` (`app/App.cpp:154`): **File** — New
 Song…, Open…, Save, Save As…, Render…, Render Stems… (the host's save picker, `onPickSave`, then
 `project save "<path>"`, `render --out "<path>" [--stems <every strip>]`), Home; **Edit** — Undo / Redo
 naming what they would take back (from `undoLabel`/`redoLabel`), Duplicate / Delete the selected clips (DR-CLIP-11);
 **Song** — Add Mixer, Add Bus, Add Audio Line, Add Lane, Quantize Clip (the selected note clip's pattern at the
 lanes' snap step, 1/32 of a beat when nothing snaps: ONE line, `pattern quantize <pt> --grid <step>`,
-`app/App.cpp:218`); **View** — Hide/Show Mixer (the dock eases
+`app/App.cpp:216`); **View** — Hide/Show Mixer (the dock eases
 to its tab bar), Hide/Show Browser (its width eases to 0, everything right of it follows the live
 width), Metronome On/Off (`settings set metronome=…`), Show/Hide IDs (`settings set showIds=…`, R-UI-11,
-`app/App.cpp:254`), Settings…. Labels follow the state
-(`refreshMenus`, `:211`). A press outside an open menu closes it first (`:572`), as cosmo's does.
+`app/App.cpp:252`), Settings…. Labels follow the state
+(`refreshMenus`, `:209`). A press outside an open menu closes it first (`:570`), as cosmo's does.
 
 ### DR-SET-3 The settings sheet in sections (R-SET-3)
 `SettingsSheet`: **Audio** (Output, Input, Sample rate, Buffer),
@@ -650,7 +650,7 @@ actions — a combo another action of the same keyboard has (Transport, Song and
 naming that action (`:231`). Only re-keyed actions are written to the machine's file (`key.<id> = <combos>`,
 `core/Settings.cpp`); a hand-edited line that does not read is the defaults (`keysOf`, `Keymap.cpp:46`). The model
 publishes every action with its keys and defaults (`settings.keys`, `core/service/ServiceModel.cpp:143`); the API
-document's Keyboard section is generated from the same table. In the window `App::key` (`app/App.cpp:542`) spells the
+document's Keyboard section is generated from the same table. In the window `App::key` (`app/App.cpp:540`) spells the
 press (`comboText`) and looks it up there: while a roll has the keys (R-ROLL-8) its keyboard first — `PianoRoll::action`
 (`app/widgets/PianoRoll.cpp:502`), which declines a selection's action with no selection — then the song's
 (`songAction`, `:633`), so the roll's keys shadow the song's only while it uses them. The host names the KEY, not the
@@ -693,7 +693,7 @@ eased copy of `on()`, so a value set from the model slides as a click does; a cl
 Controls are laid out each frame (`layoutPages`, `:611`) — name and note left, control right — and a control scrolled
 out of its page is hidden so it takes no input. Escape closes an open list first, then the sheet (`:974`); a click
 anywhere off a list closes it. The App draws the sheet in both passes now — its card, pages and controls, then an open
-list over everything (`app/App.cpp:823`). UI `test_settings_combos_send_lines_and_ease` (a list dropped, a row one
+list over everything (`app/App.cpp:821`). UI `test_settings_combos_send_lines_and_ease` (a list dropped, a row one
 line, the label caught mid cross-fade, a shell's change eased), `test_settings_in_pages` (the cross-fade and the
 highlight caught mid-way; a toggle eased from a shell; a value its list lacks shown; Escape closes the list first; the
 sheet reopens on its page); shots `settings-open`, `settings-folders`, `settings-combo-open`, `settings-page-changing`.
@@ -784,9 +784,9 @@ toolbar starts with ▶ (`PianoRoll::togglePlay`, `:168`): `transport play --cli
 ■ while its clip loops — lit in the accent then, its glyph dimmed with no clip and the click saying nothing.
 Space stops whatever plays; stopped, with a roll the front window (`WindowLayer::frontRoll`,
 `FloatWindow.cpp:198` — the last open window in the stacking order), it is that roll's ▶, else the song's
-play (`App::key`, `app/App.cpp:541`). The playhead is drawn where the clip is heard — the transport's beat
+play (`App::key`, `app/App.cpp:539`). The playhead is drawn where the clip is heard — the transport's beat
 less the clip's start, modulo the pattern's length for a looped clip — fading in and out with the play
-(`:773`), and the grid follows it a page at a time, eased, when it leaves the view (`:304`).
+(`:771`), and the grid follows it a page at a time, eased, when it leaves the view (`:302`).
 ### DR-ROLL-7 A note is heard when it is made (R-ROLL-7)
 **Grammar.** `note preview <ch> <pitch> [--vel <1…127>] [--length <beats>]` (`core/service/ServiceTransport.cpp:335`)
 — not an edit (no undo step, the song stays saved), never in a render; refused naming why for a strip that is not
@@ -812,25 +812,32 @@ held, eased in and out); lengths 1/8 to 1 beat. A pattern on no track is made, n
 
 ### DR-ROLL-8 A selection in the roll, and what is done to it (R-ROLL-8)
 **Grammar.** `notes move <pt> "<pitch@beat> …" [--by <beats>] [--semi <n>]` and `notes delete <pt> "<pitch@beat>
-…"` (`core/service/ServiceCompose.cpp:257`) act on several notes as ONE edit (one undo step); `--by` may be
+…"` (`core/service/ServiceCompose.cpp:280`) act on several notes as ONE edit (one undo step); `--by` may be
 negative. Refused whole, naming the first: a name that matches no note, a note that would land on one not moved
 (a chord moved together may pass over its own places), a pitch outside 0–127, a start before beat 0. A copy is
 `notes add` with full tokens (`pitch@beat:length:vel`), which already replaces a note it lands on.
 **The roll** (`app/widgets/PianoRoll.cpp`). The selection is the view's: a set of note keys, emptied of any note
-the model no longer has. A click on a note selects it, Shift+click adds or removes it (`:846`); a click on empty
+the model no longer has. A click on a note selects it, Shift+click adds or removes it (`:1172`); a click on empty
 grid adds a note (R-ROLL-2) and lets go of the selection; Ctrl draws a box that selects every note it touches
 (Shift keeps what was selected) — wherever the press is, even on a note: Ctrl is selecting and never moves a
 note, and a Ctrl+click on a note selects it (the box of no size touches it) (U-10, R-ROLL-8 amended). Selected notes are lit — brighter, outlined in the
 accent — eased in and out (120 ms). A selected note dragged (with others selected) carries the whole selection
 with the pointer, kept at or after beat 0 and inside 0–127, heard at each row the pressed note enters (R-ROLL-7),
-and lands as ONE `notes move` (`:1086`, `moveSelection` `:292` — the moved notes appear where they were let go
-at once, still selected). Keys (`PianoRoll::key`, `:312`): ↑/↓ a semitone (Shift: an octave), ←/→ a snap step
+and lands as ONE `notes move` (`:979`, `moveSelection` `:295` — the moved notes appear where they were let go
+at once, still selected). Keys (`PianoRoll::action`, `:502`): ↑/↓ a semitone (Shift: an octave), ←/→ a snap step
 (a sixteenth when Off) — `notes move`; Delete/Backspace — `notes delete`; Ctrl+D — the selection again right
 after itself, by its span (earliest start to latest end, up to the snap), `notes add`, the copy selected
-(`addSelected`, `:309`); Ctrl+C — to the clipboard every roll shares (the window layer's); Ctrl+V — pasted into
-the roll at the same beats, selected; Ctrl+A — every note; Escape — none. The keys reach the roll the pointer
-last pressed in: `App` notes on every press whether it fell in the front roll (`app/App.cpp:123`) and offers the
-key to that roll first (`:520`) — a press on the lanes gives the keys back to them.
+(`addSelected`, `:494`); Ctrl+C — to the clipboard every roll shares (the window layer's); Ctrl+V — pasted into
+the roll at the same beats, selected — this roll's or another's, so notes go from one clip's pattern to another's;
+Ctrl+A — every note; Escape — none. **The keys** go to the front roll when the pointer last pressed in its window —
+the title bar too — judged once the press is routed, so a press that brings a roll forward gives it the keys
+(`app/App.cpp:143`, `WindowLayer::inFrontRoll`, `app/widgets/FloatWindow.cpp:375`); and a roll just opened — from
+its clip on the lanes, the browser, anywhere — takes them at once (`openRoll` calls `onRollOpened`, `:253`; the App's
+hook, `app/App.cpp:87`), so Ctrl+V right after opening another clip's roll pastes there. The App offers a key to that
+roll first (`:839`); a press on the lanes gives the keys back to them. (D-25: the keys used to follow a press in the
+notes' area only, judged before the press was routed — a roll opened from its clip, or raised by its title bar, left
+them with the lanes, whose Ctrl+V duplicated the copied CLIP.) UI `test_notes_copied_from_one_clips_roll_to_anothers`
+(`app/tests/ui/uiTests.cpp:2995`).
 
 ### DR-ROLL-9 The pattern grows to hold what is written in it (R-ROLL-9)
 `growToHold` (`core/service/ServiceCompose.cpp:174`) runs inside every edit that writes notes — `note add` (a chord
@@ -908,7 +915,7 @@ with `--vel` / `--chance` it is refused (one or the other). `expr set <pt> "<bea
 (`core/service/Command.cpp:251`, `core/service/ServiceMidi.cpp:68`) places many points of one lane in ONE edit — each
 added, or the point at that beat moved — refused whole, naming the token, for a token that is not `<beat>:<value>`, a
 beat below 0 or named twice, a value outside the lane's range; a point past the end grows the pattern (R-ROLL-9).
-**The roll.** The host passes Alt with the wheel (`linux_main.cpp:247`; `App::wheel`, `app/App.cpp:644`). An Alt+wheel
+**The roll.** The host passes Alt with the wheel (`linux_main.cpp:247`; `App::wheel`, `app/App.cpp:642`). An Alt+wheel
 over the grid or the lane below (`PianoRoll::handleGesture`, `app/widgets/PianoRoll.cpp:1206`) is a TURN (`wheelTurn`,
 `:343`): the selection's notes — or, with none, the note under the pointer, or the stem under it in the lane — on the
 lane shown (Velocity, Chance, Bend, Mod); a notch is 40 of `App::wheel`'s units (a touchpad's fractions add up), up
@@ -1056,7 +1063,7 @@ gives `devices[].takesSample`, `.sample` and `deviceTypes[].takesSample`; the au
 no sound or an unreadable one (`core/service/ServiceModel.cpp:595`). In the UI a sampler's window names
 its sound where others name their type (`DevicePanel::sampleText`, `app/widgets/DevicePanel.cpp:580`),
 and a browser sample dragged over it lights the window (eased) and drops as ONE `set <dv>.sample=`
-(`WindowLayer::samplerAt`, `app/widgets/FloatWindow.cpp:325`; `app/widgets/ProjectScreen.cpp:109`).
+(`WindowLayer::samplerAt`, `app/widgets/FloatWindow.cpp:326`; `app/widgets/ProjectScreen.cpp:109`).
 Measured (L2): at the root the render IS the decoded file sample for sample (a mutant whose engine skips
 `setSample` fails it), an octave up is 2 kHz and over in half the time.
 
@@ -1069,7 +1076,7 @@ stops itself; it never allocates on its thread and is never in a render (a rende
 `auditionCommand` (`core/service/ServiceTransport.cpp:307`) refuses a file it cannot read naming it; the
 service's `pump` (`:87`) carries its progress into `audition.{file, playing, progress}` and announces its
 end (`audition.changed … playing=0`); the model keeps it across refreshes, and the App re-binds while it
-plays and once when it ends (`app/App.cpp:446`). In the browser a click on a sample hears it, a click on
+plays and once when it ends (`app/App.cpp:444`). In the browser a click on a sample hears it, a click on
 the one being heard stops it (`app/widgets/Browser.cpp:455`); its row fills as it plays with an accent
 bar along its foot, keyed by the file and eased in and out (`:351`, `:560`) — a double-click still places
 it. Settings › Playback has PREVIEW LEVEL. Measured (L2): the live stream carries the decoded file at
@@ -1111,7 +1118,7 @@ place (`deepestPpb`, `Timeline.cpp:31`). **Decision:** the deepest zoom rose fro
 a bar below 11.5 px/beat, a beat from 11.5, 1/2 from 22.4 (a song opens at 28: bars, beats and halves
 drawn, the step 1/2), 1/4 from 55, 1/8 from 107, 1/16 from 209, 1/32 from 408, nothing at 637.
 
-**Proof.** `test_the_grid_follows_the_zoom` (`app/tests/ui/uiTests.cpp:3909`) drives the real service:
+**Proof.** `test_the_grid_follows_the_zoom` (`app/tests/ui/uiTests.cpp:3978`) drives the real service:
 at the default zoom a ruler click at beat 3.3 seeks 3.5 (a fixed quarter says 3.25); a level's alpha
 is caught mid-fade during an eased two-notch zoom, between its two ends; at 1/8 a seek, a clip drag
 (on the step while held, then `clip move ac_1 --at 3.125`) and an instrument dropped from the browser
@@ -1172,7 +1179,7 @@ a send and the master on formulas) and `copied-toast`.
 ### DR-UI-11 IDs shown and copied (R-UI-11)
 **The setting.** `showIds = on|off` is a MACHINE setting (`core/Settings.cpp:28`), `settings set showIds=…`
 (`core/service/ServiceMachine.cpp:107`), published as `settings.showIds` — so an agent turns the ids on as the
-View menu does (View › Show IDs / Hide IDs, `app/App.cpp:218`).
+View menu does (View › Show IDs / Hide IDs, `app/App.cpp:216`).
 
 **Drawn, faded.** `ProjectScreen` eases ONE amount from the model's setting (`app/widgets/ProjectScreen.cpp:225`,
 200 ms; `idsAmount()` is the live value) and hands it to every widget that draws ids; `drawNameWithId`
@@ -1189,7 +1196,7 @@ dock's faders, pans, sends and master (DR-MIX-16; a choice row has no "as Formul
 choice); Copy ID on a clip (`app/widgets/Timeline.cpp:1207`), a strip's and a mixer tab's menu in the dock; Copy ID
 and Copy as Formula (`=au_1`) on an automation row (`app/widgets/TimelineAuto.cpp:483`). The clipboard is the
 HOST's (the core has none, R-SVC-4): `App::onCopy`, which `linux_main.cpp:391` gives GTK's CLIPBOARD and
-PRIMARY selections and the test rig records (`Rig::copied`). A copy says so: `App::copy` (`app/App.cpp:272`)
+PRIMARY selections and the test rig records (`Rig::copied`). A copy says so: `App::copy` (`app/App.cpp:270`)
 toasts "Copied dv_1.filter.cutoff", outlined in the accent (a refusal's toast stays red). When hosting lands,
 a third-party VST3's parameter list (R-VST-6) builds a `ParamTarget` per row and offers this same menu.
 
@@ -1245,7 +1252,7 @@ from a point (`:539` — the first click's pending point is dropped, so the gest
 calls `onOpenAutomation` (`app/widgets/ProjectScreen.cpp:66`) → `WindowLayer::openAutomation`
 (`app/widgets/FloatWindow.cpp:174`): an `auto:<au>` FloatWindow (fading in and out as every window does)
 around an `AutomationPanel`, titled "Automation — <name>" and closed when anyone deletes the automation
-(`WindowLayer::bind`, `app/widgets/FloatWindow.cpp:256`). Every line is the model's (`AutomationPanel::bind`,
+(`WindowLayer::bind`, `app/widgets/FloatWindow.cpp:257`). Every line is the model's (`AutomationPanel::bind`,
 `app/widgets/AutomationPanel.cpp:74`): name, id, range in its unit, the address it was made from, its length, its rest and its clips (R-AUTO-14), its
 points (beat, value, shape — a bezier point's speeds and influences), every formula that reads it
 (`usedBy`, each with its binding's formula from `bindings[]`), and its value at the playhead —
@@ -1649,7 +1656,7 @@ plain `transport stop` leaves it where it was heard (R-TIME-4) — a TEMPORARY p
 a stop with the return after it still goes back to the cue (R-TIME-8, amended 2026-10-16). A new or opened song
 starts it at 0. Published as `transport.cue`. In the window: the play/stop key (Space) while playing is `transport
 stop --return`, the stop-here key (Ctrl+Space) is `transport stop`, either one while stopped plays (`App::songAction`,
-`app/App.cpp:571`, the keys being the keymap's — DR-SET-4); the song bar's Stop and a roll's ■ return too (`:55`).
+`app/App.cpp:569`, the keys being the keymap's — DR-SET-4); the song bar's Stop and a roll's ■ return too (`:55`).
 On the ruler an outlined mark stands at the cue while playing — where Stop takes the time bar back — fading in
 with the play and out with it (`Timeline`, `app/widgets/Timeline.cpp:1659`, eased at `:479`), beside the
 playhead's filled one. L2 `test_stop_returns_to_the_cue_or_stays`; UI `test_space_returns_and_ctrl_space_stays`
@@ -1732,10 +1739,10 @@ the model brings next the selection (`bind`, `:224`) and — after a drop — pl
 pointer left it, never fading in what was already shown; a refused copy brings none and the expectation lapses.
 Ctrl+C and Ctrl+V are the keymap's `lanes.copy` / `lanes.paste` (DR-SET-4) and the Edit menu's Copy Clip / Paste Clip:
 copy keeps the selected clip's id in the window (nothing sent; a toast says it, naming the paste key); paste
-(`App::pasteClip`, `app/App.cpp:851`) is ONE `clip duplicate <copied> --at <the time bar>` on its own lane, the copy
+(`App::pasteClip`, `app/App.cpp:849`) is ONE `clip duplicate <copied> --at <the time bar>` on its own lane, the copy
 selected — and with the time bar unmoved since the last paste, right after that copy, so pastes run end to end. A copied
 clip since deleted is said, not pasted. While a piano roll has the keys its Ctrl+C / Ctrl+V are the notes' even with
-nothing to copy (`:846`), never a clip's. L2 `test_a_clip_copied_onto_another_lane`; UI
+nothing to copy (`:844`), never a clip's. L2 `test_a_clip_copied_onto_another_lane`; UI
 `test_clips_are_copied_by_shift_drag_and_ctrl_c_v` (the copy look caught mid-ease; the copy at full strength and
 selected; onto another lane; a plain drag still moves; pastes at the time bar, end to end, then where it moved; a
 roll's Ctrl+V sends nothing); shot `clip-copy-dragging`. Mutants: Shift ignored at the drop, the copy look snapping,
@@ -1765,10 +1772,10 @@ clip of a selection of several carries the selection — R-ARR-3's group drag, g
 selected clip drawn the pointer's beats on (`clipRect`, `:455`; `paint`, `:1641`), the one in hand where the rest are,
 none before beat 0 (`:1130`), on their own rows; let go, ONE `clips move "<ac> …" --by <b>` — or, Shift held, ONE
 `clips duplicate "<ac> …" --by <b>`, the originals staying at full strength and the copies selected where the pointer
-left them (`:1156`). The keymap's lanes actions take the selection (`App::songAction`, `app/App.cpp:919`): Delete is
+left them (`:1156`). The keymap's lanes actions take the selection (`App::songAction`, `app/App.cpp:917`): Delete is
 ONE `clips delete`, Duplicate ONE `clips duplicate` (copies after it, selected — so Duplicate again runs on; one clip
 keeps `clip duplicate`, now also selecting its copy), Copy keeps the selection's ids ("3 clips copied"), Paste
-(`App::pasteClip`, `:851`) ONE `clips duplicate "<ac> …" --by <the time bar − the earliest>`, again end to end.
+(`App::pasteClip`, `:849`) ONE `clips duplicate "<ac> …" --by <the time bar − the earliest>`, again end to end.
 L2 `test_a_selection_of_clips_is_copied_and_deleted_in_one_edit` (`core/tests/serviceTests.cpp:7206`: MIDI, audio and
 automation clips copied after themselves and `--by`, linked, on their lanes, one undo; refusals; deleted and undone);
 UI `test_clips_are_selected_by_a_box_and_handled_together` (a ring caught mid-ease as the box reaches it and as it
@@ -1926,10 +1933,10 @@ pointer is — and `cursorAt(local)`. `Timeline` (`app/widgets/Timeline.cpp:469`
 R-CLIP-7) and the loop brace's ends (`kBraceGrip`, the ruler's lower half), and while either is held (pressed, not yet
 moved, included). `PianoRoll` (`app/widgets/PianoRoll.cpp:770`): ↔ a note's end (the zone `noteAt` gives, D-7) and the
 pattern's end handle, ↕ a velocity bar, and while any is held. `MixerDock` (`app/widgets/MixerDock.cpp:979`): ↕ its top
-edge (`Part::Resize`). `WindowLayer` (`app/widgets/FloatWindow.cpp:326`): ⤡ a window's corner (`FloatWindow::resizing`
+edge (`Part::Resize`). `WindowLayer` (`app/widgets/FloatWindow.cpp:327`): ⤡ a window's corner (`FloatWindow::resizing`
 while it is held); the front-most window under the point decides, so it covers the lanes beneath. `ProjectScreen::
 cursorAt` (`app/widgets/ProjectScreen.cpp:20`) asks every drag in hand first, then the window, the dock, the lanes;
-`App::cursor` (`app/App.cpp:624`) gives the arrow while a modal is open (a menu, a dialog, the settings, the history
+`App::cursor` (`app/App.cpp:622`) gives the arrow while a modal is open (a menu, a dialog, the settings, the history
 tree) or off the song, else the screen's answer at the last pointer position (`App::pointer` keeps it). The GTK host
 asks after every pointer event and, when it changed, sets the window's cursor by name (`showCursor`,
 `linux_main.cpp:117`) — the OS's own cursors, which do not ease. UI `test_the_pointer_says_a_drag_resizes` (every grip;
@@ -1948,7 +1955,7 @@ deletes or removes something (`dispatch`, `core/service/SolarisService.cpp:426`)
 `project open` opens the SAVED song and says `recovery: …` (`:684`), emits `project.recovery path= age=`, and the model's
 `recovery` / `recoveryAge` name it until it is answered: `project recover <path>` (`:690`) opens the autosave as the song
 — at `<path>`, unsaved, its history rooted "Recovered" — and `project discard-recovery <path>` deletes it. The window asks
-once per offer (`App::askRecovery`, `app/App.cpp:519`: Recover · Open the Saved One); Settings › Interface has an
+once per offer (`App::askRecovery`, `app/App.cpp:517`: Recover · Open the Saved One); Settings › Interface has an
 Autosave combo. L2 `test_autosave_and_recovery` (the clock, a removal at once, atomic, save and close drop it, a dead
 session's autosave offered, recovered, discarded, off writes nothing); UI `test_a_recovered_song_is_offered`. Mutants:
 a removal not written at once, the window not asking — both seen red.
@@ -1988,7 +1995,7 @@ correlationMin=` (LUFS, LUFS, LUFS, dBTP, −1…+1; the lowest correlation only
 silence has no phase; `core/service/ServiceRender.cpp:51`). The window: the master's card has a chip with the
 integrated LUFS where a strip has mute and solo (`MixerDock::loudnessRect`; caught up over 220 ms, "— LUFS" cross-faded
 in for none — `app/widgets/MixerDock.cpp:835`); a click opens the Loudness window (`WindowLayer::openLoudness`,
-`app/widgets/FloatWindow.cpp:275`), a `LoudnessPanel` (`app/widgets/LoudnessPanel.cpp`): the five readings (each
+`app/widgets/FloatWindow.cpp:276`), a `LoudnessPanel` (`app/widgets/LoudnessPanel.cpp`): the five readings (each
 catching up over 220 ms; nothing measured cross-fades to "—"), the correlation's needle, the 61 bands on −72…0 dB
 (rising in 40 ms, falling in 300) and Reset — `meters clear`. L2 `test_meters_measure_what_plays` (a −6 dBFS 1 kHz
 sine: −6.02 LUFS momentary, short-term and integrated, −6.02 dBTP, correlation 1, band 34 at −6, two octaves down 20 dB
@@ -2036,7 +2043,7 @@ bytes every time (`:271`); `--measure` reads what was written. The window: File 
 and a Stems toggle; a row the format does not take greys out, eased, and takes no input (`applies`, `:111`); a
 choice the new format cannot take moves (`formatChanged`, `:99`); Export… hands the host's save dialog the
 name with the format's extension and sends ONE `render --out <file> --format …` (`flags`, `:128`; `App`,
-`app/App.cpp:114`). L2 `test_delivery_formats` (each format and its defaults by the extension or --format; 2 s at
+`app/App.cpp:115`). L2 `test_delivery_formats` (each format and its defaults by the extension or --format; 2 s at
 44.1 kHz is 88200 frames and the tone still 1 kHz; 16 bits on the grid, dithered, the same bytes twice; −20 LUFS
 by the meter; held at −2 dBTP; ten refusals); L3: the CLI wrote FLAC 24 / 48 kHz, MP3 44.1 kHz 192 kbps, Vorbis,
 Opus 48 kHz and WAV 16 that ffprobe reads as such, FFmpeg's own ebur128 reading the −14 LUFS FLAC at −14.0 and the
@@ -2101,7 +2108,7 @@ own mute only (`core/service/ServiceModel.cpp:262`). A strip's menu offers "VCA 
 follows one (`MixerDock.cpp:1411`) — one `set <ch>.vca=`. A member says "VCA <name> <dB>" over its fader (`:1689`):
 the tag fades in and out (`kSelectMs`) and its dB eases as the VCA moves (`kCatchUpMs`, `:755`); beside a bound
 gain's tag it slides to the right half, by the bound tag's eased amount. UI test `test_a_vca_in_the_dock`
-(`app/tests/ui/uiTests.cpp:4800`): "+ Line" › VCA one line; the strip's VCA ▸ one line; the tag caught fading in; the
+(`app/tests/ui/uiTests.cpp:4869`): "+ Line" › VCA one line; the strip's VCA ▸ one line; the tag caught fading in; the
 VCA moved from a shell, the member's dB caught at −1.22 on its way to −6; a drag where a VCA's pan would be sends
 nothing. Shot `mixer-vca` at both sizes.
 
@@ -2143,7 +2150,7 @@ solo amber (`:1709`). Each is an eased amount (`:765`; read by `phaseAmount`, `w
 a tag fades in and out, the number it shows kept while it fades. The master has no pan, so its pan row holds the mono
 check: a "Mono" pill (`monoRect`, `:503`; painted at `:1785`) whose click is `transport mono on|off` (`:1247`), lit
 by an amount eased from `transport.mono` (`:846`). Tests: UI `test_per_strip_tools_in_the_dock`
-(`app/tests/ui/uiTests.cpp:4863`): each menu item sends its one line and its mark is caught mid-fade, then at 1; a
+(`app/tests/ui/uiTests.cpp:4932`): each menu item sends its one line and its mark is caught mid-fade, then at 1; a
 line that is not a bus offers no Solo-safe; Mono sends `transport mono on` and lights eased, the model's
 `transport.mono` true. Mutants seen red: the Ø, the width tag, the ring and Mono each set at once (the mid-fade
 assertions fail), Solo-safe offered on any line, Mono's click sending nothing. Shot `mixer-tools`
@@ -2220,7 +2227,7 @@ a row is `version open <id|main>`; New Version… is cosmo's field, then ONE `ve
 (`:184`): the label cross-fades (the old one fading out under the new), the width eases to the new label's (measured in
 the paint, `:378`, eased from the next frame), the song's name and the transport sliding with it, and an accent ring
 eases in while a version, not main, is open — whoever opened it. Tests: UI `test_versions_from_the_song_bar`
-(`app/tests/ui/uiTests.cpp:4929`): the chip says main; its menu is the tree and New Version…, Freeze absent on main;
+(`app/tests/ui/uiTests.cpp:4998`): the chip says main; its menu is the tree and New Version…, Freeze absent on main;
 "Radio edit" typed sends ONE `version new "Radio edit" --open`; the label's cross-fade, the ring and the chip's width
 each caught mid-way, then at rest (wider than "main"); on the version, its menu offers Rebase, Rename…, Delete Version;
 Freeze sends `version freeze vr_1`, said on the chip, mid-fade; main opened from a shell eases the ring out; the tree's
@@ -2258,17 +2265,17 @@ version's change; the refusals; Collect and Save — the same bytes reused, save
 file written over; the same bytes not reused; a version's files not seen; its lines not rewritten; an `.sfz`'s sounds
 not copied; a dry run an edit; `--save` not saving; the folder search finding nothing; `missing` not published.
 Part 2 — the window. File › Collect and Save is ONE `project collect --save`, then a toast says it and what is still
-missing (`app/App.cpp:172`). File › Relink… (`:180`) asks `project files --missing` first — a file may have gone since
+missing (`app/App.cpp:170`). File › Relink… (`:178`) asks `project files --missing` first — a file may have gone since
 the last command, and the model's `missing[]` is worked out when a command runs — then opens the Relink window
 (`RelinkSheet`, `app/widgets/RelinkSheet.cpp:26`): Cosmo's modal look, a row per missing file — its name, the folder it
 was in and what uses it, a version's ids prefixed `vr_n:` — and Locate…, the host's file picker then ONE `project relink
 <file> --to <picked>`; Search a Folder…, the host's folder picker then ONE `project relink --folder <dir>`
-(`app/App.cpp:103`; the host's dialogs, `onPickFile`/`onPickDirectory`, `linux_main.cpp:440`). The window draws the
+(`app/App.cpp:104`; the host's dialogs, `onPickFile`/`onPickDirectory`, `linux_main.cpp:440`). The window draws the
 model: rows keyed by path (`app/widgets/RelinkSheet.cpp:108`) — one found fades out where it is, the rest slide up, one
 newly missing fades in, the rows present when it opens placed with it; the card grows and shrinks with them, eased
 (`:140`); the list clips and scrolls with the wheel, its bar shown only when there is more (`:235`); with nothing
-missing it says so. A song opened with files missing says so in a toast, once (`app/App.cpp:581`). Tests: UI
-`test_relink_and_collect_from_the_file_menu` (`app/tests/ui/uiTests.cpp:4997`): opened with two files gone — the
+missing it says so. A song opened with files missing says so in a toast, once (`app/App.cpp:579`). Tests: UI
+`test_relink_and_collect_from_the_file_menu` (`app/tests/ui/uiTests.cpp:5066`): opened with two files gone — the
 toast; File › Relink… asks first, fades in with its rows already placed; Locate… on the kick: the host asked "Locate
 kick.wav", ONE line sent, the row fading out, the hat sliding up and the card shrinking, each caught mid-way, then at
 rest; Search a Folder…: ONE line, nothing missing; Done closes; Collect and Save: ONE line, said, saved. Mutants seen
@@ -2354,7 +2361,7 @@ song then renders, over the nine beats, exactly what the speakers got (largest d
 whole; a 1-beat slot of a 2-beat pattern lands a clip a loop, each its first beat. Mutants seen red (6): a clip's offset
 not played; the arrangement not cut under a span; a span not closed when the next lands; one clip for a slot shorter
 than its pattern; the tail starting at its pattern's start; nothing recorded with nothing armed.
-Part 4 — the session view. View › Show Session (`app/App.cpp:257`) cross-fades the grid into the lanes' place — never
+Part 4 — the session view. View › Show Session (`app/App.cpp:255`) cross-fades the grid into the lanes' place — never
 a cut (`app/widgets/ProjectScreen.cpp:236`; the one going takes no input, `:199`). `SessionView`
 (`app/widgets/SessionView.cpp:31`) draws only the model: a column per strip that can hold a slot (instrument and audio,
 in processing order — its colour and name), a row per scene (its name and ▶), a slot's name in its cell; it clips and
@@ -2365,7 +2372,7 @@ song's patterns (an instrument's column) or the strip's clips (an audio column) 
 or a scene's right-click: Rename…, Delete. Nothing snaps (`:116`): a slot is keyed by id — playing, it fills with its
 strip's colour, eased in and out, its loop's progress a bar along its foot (the model's, frame by frame, `:306`); queued,
 its outline pulses until it lands (a timing, not a tween), the pulse itself fading in and out (`:287`). Tests: UI
-`test_the_session_view` (`app/tests/ui/uiTests.cpp:5779`): View › Show Session caught mid cross-fade; an empty cell's
+`test_the_session_view` (`app/tests/ui/uiTests.cpp:5848`): View › Show Session caught mid cross-fade; an empty cell's
 "Lead" → `slot add sc_1 ch_2 --pattern pt_2`; "+ Scene"; the slot, stopped → `launch sl_1`, the transport playing, its
 fill caught mid-way; another, launched while playing → queued (its pulse mid-way, not filled), the first still playing;
 ■ → `launch stop ch_2`, the pulse fading out; the scene's ▶, Back to Arrangement, a slot's Delete; Show Arrangement.
@@ -2428,8 +2435,8 @@ frame, not a keyframe; no end cut; an end cut by presentation time (a B-frame's 
 applied; the frame after the time; a seek every frame; stretched, not fitted; a still image taken for a picture; no
 interleave; an open GOP's lead-in kept.
 
-Part 2 — the window. View › Show Video / Hide Video (`app/App.cpp:258`; the window's × relabels it) opens the Video
-window (`app/widgets/FloatWindow.cpp:291`, titled by its file, `:450`): `VideoPanel` (`app/widgets/VideoPanel.h:39`)
+Part 2 — the window. View › Show Video / Hide Video (`app/App.cpp:256`; the window's × relabels it) opens the Video
+window (`app/widgets/FloatWindow.cpp:292`, titled by its file, `:462`): `VideoPanel` (`app/widgets/VideoPanel.h:39`)
 draws the frame at the model's `video.time`, letterboxed on black, from the HOST's decoder — `App::onVideoFrame`
 (`app/App.h:102`; the GTK host's `VideoReader` on the song's file, `linux_main.cpp:417`) — asked only when the time, the
 file or its box changed, at the box's size (`app/widgets/VideoPanel.cpp:66`). Outside the picture's span it says where
@@ -2438,7 +2445,7 @@ cannot be read. Nothing snaps: the picture fades in and out over the words (`:11
 or another file — cross-dissolves from the frame that was, 160 ms linear (`:91`); while playing, frame follows frame
 (the picture's own motion); the words cross-fade (`:74`); a frame of the same size is re-uploaded, not re-registered
 (`:131`). The foot names the file, its size and rate, and the picture's time in mono. Tests: UI `test_the_video_window`
-(`app/tests/ui/uiTests.cpp:5090`; the rig's decoder records every ask, `app/tests/Rig.h:331`): the menu, the window caught
+(`app/tests/ui/uiTests.cpp:5159`; the rig's decoder records every ask, `app/tests/Rig.h:331`): the menu, the window caught
 mid fade-in; before the picture said and nothing asked; at beat 4 one ask, for second 1 at the box's size, the picture
 caught mid fade-in, letterboxed 16:9 and centred; a jump caught mid-dissolve, a step not dissolving; nothing asked when
 nothing changed; playing, asks in order; resized by its corner, an ask at the new size; past the end, the picture
@@ -2459,7 +2466,7 @@ the ruler is (`app/widgets/TimelineVideo.cpp:74`): it grows in when the song gai
 (`app/widgets/Timeline.h:267`). Its span is the model's `at` … `end`, eased there when moved elsewhere (`app/widgets/TimelineVideo.cpp:96`); its
 thumbnails are tiles at the model's points, each at least a tile past the last chosen from the span's start (the same
 tiles wherever it scrolls, `TimelineVideo.cpp:51`), decoded by the host at the row's height a few a frame (`TimelineVideo.cpp:128`) — a decoder of their
-own, `App::onVideoThumb` (`app/App.cpp:90`; the GTK host's second `VideoReader`, `linux_main.cpp:437`) — kept, each
+own, `App::onVideoThumb` (`app/App.cpp:91`; the GTK host's second `VideoReader`, `linux_main.cpp:437`) — kept, each
 fading in as it arrives; the file's name pinned at the span's left (`paintVideo`, `app/widgets/TimelineVideo.cpp:145`). Dragged, the span is the
 pointer's on the grid you see, before the song too, and nothing is sent; let go, it stays where it was let go
 (`TimelineVideo.cpp:240`) and ONE `set <vd>.at=<beat>` goes (`videoGesture`, `TimelineVideo.cpp:207`). File › Export… gains "With the video"
@@ -2467,11 +2474,11 @@ pointer's on the grid you see, before the song too, and nothing is sent; let go,
 the Format is MP4 or MKV, the bit depth, quality and stems grey out, and the line is `render --out <f> --video …`
 (`:153`); off, the audio format it was left at. Tests: L2 grew `set vd_1.at=6` (3 s at 120 bpm; get 6.0; eleven points
 from beat 6 to 26; −2 → −1 s; a beat too far refused) (`core/tests/serviceTests.cpp:4745`). UI
-`test_the_video_lane` (`app/tests/ui/uiTests.cpp:5205`; the rig's thumbnail decoder logs apart, `app/tests/Rig.h:335`):
+`test_the_video_lane` (`app/tests/ui/uiTests.cpp:5274`; the rig's thumbnail decoder logs apart, `app/tests/Rig.h:335`):
 the row caught growing with the first lane at `row0 + a·kVideoH`, a thumbnail caught fading in, at most three asked a
 frame; the span on beats 2 … 22; every ask on a model point, at the row's height, none twice; dragged two beats — the
 pointer's, nothing sent — then ONE `set vd_1.at=4`, offset 2 s, nothing moving after; a shell's offset eased there;
-removed, the row caught closing and the lanes back. UI `test_export_with_the_video` (`app/tests/ui/uiTests.cpp:5436`): greyed and inert with
+removed, the row caught closing and the lanes back. UI `test_export_with_the_video` (`app/tests/ui/uiTests.cpp:5505`): greyed and inert with
 no picture; on, MP4 / MKV, the rows greying caught mid-way, `--video`; MKV and −14 LUFS → `render --out "…/Scored
 out.mkv" --video --normalize -14 --ceiling -1`; off, WAV again. Mutants seen red (16): the row shown at once; the lanes
 not moving down; a drag sending while held; a jump back after the drop; a move made elsewhere snapping; thumbnails
@@ -2549,8 +2556,8 @@ file; a save with conflicts asked; a newer change merged over the asked; theirs 
 looked at every pump; the base not moved to theirs; the open version closed; a merge with nothing unsaved; the waiting
 not said. Not caught by a test: the save's atomicity (by construction — a temp file renamed over).
 Part 3 — the window. Each time the song follows its file the App says so in a toast — the model's sentence — and, when
-the sync asked, opens the Conflicts sheet on its own (`app/App.cpp:575`); File › Conflicts… opens it any time
-(`app/App.cpp:200`). `ConflictsSheet` (`app/widgets/ConflictsSheet.h:29`; the Relink sheet's look) draws only the model:
+the sync asked, opens the Conflicts sheet on its own (`app/App.cpp:573`); File › Conflicts… opens it any time
+(`app/App.cpp:198`). `ConflictsSheet` (`app/widgets/ConflictsSheet.h:29`; the Relink sheet's look) draws only the model:
 a row per node asked, keyed by node — what it is and how it was changed, then what tells the two sides apart, side by
 side under HERE and IN THE FILE: a header field's line whole, a node's own line reduced to the fields that differ
 ("gain=-3.0" against "gain=-9.0"), under it the first line that differs and how many more (`tellApart`,
@@ -2559,7 +2566,7 @@ Keep All Mine / Take All Theirs ONE `project sync --take mine|theirs`, inert wit
 close it (`:290`, `:319`, `:314`). Nothing snaps (`:213`): an answered row fades out where it is while the rest slide up
 into its place, one asked while open fades in (`:232`); the card grows and shrinks with its rows; the "all" buttons dim
 to 0.35, eased, when nothing is asked (`:280`); the list clips and scrolls. Tests: UI `test_conflicts_are_asked_in_a_sheet`
-(`app/tests/ui/uiTests.cpp:5501`; a second service on the same file stands for the other window): its save reloads this
+(`app/tests/ui/uiTests.cpp:5570`; a second service on the same file stands for the other window): its save reloads this
 one, "Reloaded" in a toast; the strip and the tempo changed both ways — merged, "2 to answer" in a toast, the sheet
 caught fading in, its rows the tempo then the strip; what tells them apart — the tempo's lines whole, the strip's
 `gain=-3.0` / `gain=-9.0`; Keep Mine on the tempo — ONE line, the tempo 128, its row caught fading while the strip's
@@ -2578,17 +2585,17 @@ number is refused, never rounded quietly, `core/service/ServiceMachine.cpp:129`)
 the settings file (`core/Settings.cpp:25`), in the model (`core/service/AppModel.h:295`), on Settings › Interface first:
 a UI scale combo and a High contrast toggle, ONE `settings set` line each (`app/widgets/SettingsSheet.h:87`;
 `app/widgets/SettingsSheet.cpp:48`). (Round 20 said `contrast=normal|high`; a toggle beside Reduced motion made it
-`highContrast=on|off`.) The App eases both from the model (`app/App.cpp:985`): the scale over 260 ms (cosmo's
+`highContrast=on|off`.) The App eases both from the model (`app/App.cpp:983`): the scale over 260 ms (cosmo's
 kScaleAnimMs), and every frame of it the logical size is the window's divided by the scale DRAWN (`applyLogicalSize`,
-`:291`), every root drawn through that scaling (`:1038`, the modals `:1041`) and every pointer and wheel divided by it at
-the entry point (`:612`, `:635`) — the shell zooms, never a cut then a reflow. High contrast is one eased amount handed to
-cosmo's tokens each frame (`:997`): `palette::setContrast` (`../cosmo/Theme.h:50`), every neutral reading through
+`:289`), every root drawn through that scaling (`:1036`, the modals `:1039`) and every pointer and wheel divided by it at
+the entry point (`:610`, `:633`) — the shell zooms, never a cut then a reflow. High contrast is one eased amount handed to
+cosmo's tokens each frame (`:995`): `palette::setContrast` (`../cosmo/Theme.h:50`), every neutral reading through
 `neutral(normal, high)` (`../cosmo/Theme.h:58`) — black grounds, white text, quiet text 0xC0C0C0, borders 45 % white, the
 accent and the semantic colours kept — and cosmo's `sharedTheme()` rebuilt when it moves (`../cosmo/Theme.cpp:78`); cosmo
-never sets it (its 41 shots byte-identical, cosmo DR-G-5). A zoom or a fade keeps the window redrawing (`app/App.cpp:603`).
+never sets it (its 41 shots byte-identical, cosmo DR-G-5). A zoom or a fade keeps the window redrawing (`app/App.cpp:601`).
 Tests: L2 `test_the_ui_scale_and_contrast_are_settings` (`core/tests/serviceTests.cpp:4935`): set, in the model,
 printed, read back by another process; 110 refused, a typo named. UI `test_the_ui_scale_and_high_contrast`
-(`app/tests/ui/uiTests.cpp:5600`): Settings › Interface → `settings set uiScale=150`, the drawn scale caught mid-way with
+(`app/tests/ui/uiTests.cpp:5669`): Settings › Interface → `settings set uiScale=150`, the drawn scale caught mid-way with
 the logical width the window over it; at rest 853 × 533; the red playhead DRAWN at 1.5 × its logical place and not at
 it; High contrast → `settings set highContrast=on`, the foreground caught mid-blend; at rest white on black, borders
 solid, the shared theme's tab label light; the File menu's title clicked at its place in the window opens it; back from a
@@ -2605,22 +2612,22 @@ Save (`app/widgets/SongBar.cpp:83`); Home — its three actions, Settings, each 
 headers and an instrument track's arm (`app/widgets/Timeline.cpp:330`); the dock — its pages' tabs, each strip's fader
 (±0.5 dB, Shift 0.1) and pan (±5 %, Shift 1 %) as sliders, its mute, solo and arm, the master's fader and Mono
 (`app/widgets/MixerDock.cpp:133`); the open windows' close buttons and a device window's parameters, each stepped by its
-registry description (`app/widgets/FloatWindow.cpp:392`; `app/widgets/DevicePanel.cpp:392`); and the modals — Settings'
+registry description (`app/widgets/FloatWindow.cpp:404`; `app/widgets/DevicePanel.cpp:392`); and the modals — Settings'
 sections and rows (a combo stepped through its choices, Enter its next; `app/widgets/SettingsSheet.cpp:459`), Export's
 rows (`app/widgets/ExportSheet.cpp:187`), Relink's and Conflicts' buttons (`app/widgets/RelinkSheet.cpp:66`;
 `app/widgets/ConflictsSheet.cpp:177`), a confirm dialog's buttons (cosmo's `ConfirmDialog` gained `buttonLabel` and
 `buttonRect`), a menu's items. The App gathers them in reading order — the song bar with its menus' titles after
 Settings, the browser, the lanes, the dock, the windows — and a modal's ALONE while it is open (`App::accessibles`,
-`app/App.cpp:651`). Activating a node is the click it stands for (`activateNode`, `:704`): a press and a release at its
-centre fed through a recogniser of its own that shares the App's gesture routes (`:148`) and runs on a clock a second a
-click, so two keyboard clicks never pair as a double-click (`clickAt`, `:729`) — unless the node names another action
-(a combo's next choice). The keyboard (`focusKeyPress`, `:745`, first in `App::key`, `:820`): Tab / Shift+Tab put the
+`app/App.cpp:649`). Activating a node is the click it stands for (`activateNode`, `:702`): a press and a release at its
+centre fed through a recogniser of its own that shares the App's gesture routes (`:146`) and runs on a clock a second a
+click, so two keyboard clicks never pair as a double-click (`clickAt`, `:727`) — unless the node names another action
+(a combo's next choice). The keyboard (`focusKeyPress`, `:743`, first in `App::key`, `:818`): Tab / Shift+Tab put the
 focus on the next / previous enabled node (wrapping); while it is held, Enter and Space activate it, the arrows step it
 (Left / Down −, Right / Up +, Shift a tenth) and Escape lets go — when it is not held those keys are the keymap's (Space
-plays). Not while Settings captures a key, nor while a field is typed in. The focus ring (`advanceFocus`, `:774`; drawn
-over everything but the toast, `:1049`) sits over the focused node, travelling between nodes (220 ms) and fading in
+plays). Not while Settings captures a key, nor while a field is typed in. The focus ring (`advanceFocus`, `:772`; drawn
+over everything but the toast, `:1047`) sits over the focused node, travelling between nodes (220 ms) and fading in
 (120 ms) and out; a node gone lets the focus go. Tests: UI `test_the_keyboard_reaches_every_control`
-(`app/tests/ui/uiTests.cpp:5681`): the list's head (Home, Settings, the File menu), the Basic Synth fader "0.0 dB", the
+(`app/tests/ui/uiTests.cpp:5750`): the list's head (Home, Settings, the File menu), the Basic Synth fader "0.0 dB", the
 tempo "120 bpm", the first tab shown, a mute a toggle; Tab — Home, the ring caught fading in, then on its bounds; Tab —
 Settings, the ring caught travelling; Shift+Tab back; to Play — Space ONE line `transport play`, Space again stops it;
 to the fader — Right `set ch_2.gain=0.5`, Shift+Left `set ch_2.gain=0.4` ("+0.4 dB"); Escape — the ring caught fading
@@ -2706,13 +2713,13 @@ translated; `english` (`:121`) is the words in English whatever is drawn (an ide
 (`:48`, gettext's) marks an English literal translated where it is drawn (`tr(kLabels[r])`). The App: the language is the
 model's setting resolved with the OS's (`setOsLanguage`, `app/App.h:108`; the window host reads GLib's language names,
 `linux_main.cpp:414`); a switch DISSOLVES the whole window — 180 ms, linear (`kLanguageDissolveMs`, `app/App.h:111`;
-`advanceLanguage`, `app/App.cpp:397`: placed on the first frame, a switch back mid-way turning round where it is, the
+`advanceLanguage`, `app/App.cpp:395`: placed on the first frame, a switch back mid-way turning round where it is, the
 language that lays out and answers between frames the new one). Render advances everything ONCE, then paints once, or —
-mid-dissolve — twice (`:1020`): the old language whole, then the new one inside a layer at the eased amount, LAST, so every
-widget's hit rectangles are the new language's (`paintPass`, `:1030`); `needsRedraw` while it runs (`:605`). Each pass
-`relabel`s (`:365`) what cosmo's widgets store: the song bar's menus kept as words (`setMenuWords`, `:342` — their titles
-and items, the Edit menu's "Undo {1}" with the service's label as data), the open menu (`openMenu`, `:316` — every widget's
-menu passes through it), the confirm dialog (`showConfirm`, `:328`: its title and message composed for the language drawn,
+mid-dissolve — twice (`:1018`): the old language whole, then the new one inside a layer at the eased amount, LAST, so every
+widget's hit rectangles are the new language's (`paintPass`, `:1028`); `needsRedraw` while it runs (`:603`). Each pass
+`relabel`s (`:363`) what cosmo's widgets store: the song bar's menus kept as words (`setMenuWords`, `:340` — their titles
+and items, the Edit menu's "Undo {1}" with the service's label as data), the open menu (`openMenu`, `:314` — every widget's
+menu passes through it), the confirm dialog (`showConfirm`, `:326`: its title and message composed for the language drawn,
 the recovery's age a count's words), cosmo's "HISTORY" and "Rename", and the sheets' combos (`SettingsSheet::relabel`,
 `app/widgets/SettingsSheet.cpp:444`; `ExportSheet::relabel`, `app/widgets/ExportSheet.cpp:80`) — cosmo gained opt-in setters
 that change words and nothing else (`MenuStrip::relabel`, `../cosmo/widgets/MenuStrip.h:46`; `ContextMenu::relabel`,
@@ -2726,17 +2733,17 @@ composes (the service's refusals and sync lines stay its words), the host picker
 accessible names. Settings › Interface › Language — Automatic, then each language by its own name — ONE `settings set
 language=` line (`app/widgets/SettingsSheet.cpp:383`). Not translated (Round 21): the service's lines, the keymap's action
 names (the service's), the registry's words, the user's data; the song view's own words are part 3. `lang/vi.strings`: 248
-lines, the shell's every word. Tests: UI `test_the_window_speaks_the_language` (`app/tests/ui/uiTests.cpp:6262`): Settings ›
+lines, the shell's every word. Tests: UI `test_the_window_speaks_the_language` (`app/tests/ui/uiTests.cpp:6331`): Settings ›
 Interface › Language → `settings set language=vi`; a frame mid-dissolve (the amount between 0 and ½) painted "Settings" at full
 alpha AND "Cài đặt" under a layer at exactly the live amount (a spy target, `app/tests/Rig.h:226`, records every string and its
 layer alpha); the menus' rectangles already the Vietnamese titles'; at rest no English; a combo's choices Vietnamese with
 nothing in the model changed since; the node "menu.File" named "Menu Tệp"; back to English from a shell's line the other way;
 a switch back mid-way the same mixture that frame and on at the same rate. `test_every_word_the_shell_draws_is_from_the_table`
-(`app/tests/ui/uiTests.cpp:6443`): in `en-XA`, each covered widget painted alone through the spy — Home, the song bar and each menu open, the version
+(`app/tests/ui/uiTests.cpp:6512`): in `en-XA`, each covered widget painted alone through the spy — Home, the song bar and each menu open, the version
 menu, all seven Settings pages and a combo's list, Export, Relink, Conflicts, the history's card, a confirm dialog — every
 string with a letter is bracketed (the table's), the model's data (uppercased too), or a name no language translates (units,
 PulseAudio, Mackie Control, file kinds, a key's name); each widget drew the table's words at all; a composed toast and every
-accessible name likewise. `test_the_table_has_every_word_the_window_says` (`:6535`): the window's source scanned
+accessible name likewise. `test_the_table_has_every_word_the_window_says` (`:6604`): the window's source scanned
 (`app/tests/ui/WordsScan.h:97`: comments skipped, literals joined, escapes decoded) — `vi.strings` has every key the code hands
 the table and none it does not. Mutants seen red (11): the old language never painted; the new one not in a layer; the old one
 painted last; a switch snapping; a switch back jumping; the menus not relabeled; a menu's key in the language drawn; the
@@ -2760,7 +2767,7 @@ video row; every menu the lanes, the ruler, a marker, a tempo, a clip's edits an
 (the automation shapes' names said, their grammar words sent, `app/widgets/TimelineAuto.cpp:610`); the drop hint's "new
 lane" (`app/widgets/ProjectScreen.cpp:108`); the session grid's + Scene, Back to Arrangement and hint
 (`app/widgets/SessionView.cpp:361`); the lanes' accessible names. `lang/vi.strings`: 356 lines. Tests: UI
-`test_every_word_the_lanes_draw_is_from_the_table` (`app/tests/ui/uiTests.cpp:6543`): in en-XA, a song with an instrument's
+`test_every_word_the_lanes_draw_is_from_the_table` (`app/tests/ui/uiTests.cpp:6612`): in en-XA, a song with an instrument's
 track, a sample's lane, a section marker, a tempo change, an automation and a scene — the browser's four tabs, the lanes,
 every lane's and clip's accessible name and value, the menus of a lane, each clip, the marker, the tempo, the ruler, and the
 session grid — each painted alone, every string the table's, the model's data (now the clips', patterns', markers',
@@ -2791,7 +2798,7 @@ others are the registry's titles); the loudness window's labels in capitals (`ap
 window's words, kept as words so they cross-fade as they change (`app/widgets/VideoPanel.cpp:71`). Kept as they are: the
 registry's words (a parameter's label and choices, a module's title, a pad's name), note names, units, the standard's name
 (ITU-R BS.1770-4), the song's names. `lang/vi.strings`: 499 lines — the window's every word. Tests: UI
-`test_every_word_the_dock_and_windows_draw_is_from_the_table` (`app/tests/ui/uiTests.cpp:6608`): in en-XA, a song with an
+`test_every_word_the_dock_and_windows_draw_is_from_the_table` (`app/tests/ui/uiTests.cpp:6677`): in en-XA, a song with an
 instrument, a sample's strip routed to the master, a bus fed by a send, a VCA, the master's compressor and an automation —
 the dock and its accessible names and values, the menus of a strip, its route, a chip, "+ Line", a fader's number, the
 matrix; an instrument's face, an effect's list, the piano roll, the automation, loudness and video windows and their names —
@@ -2868,7 +2875,7 @@ Am", its value "beats 6 to 8" (`app/widgets/Timeline.cpp:350`). **The menus:** a
 (`app/widgets/TimelineClipEdit.cpp:361`); the ruler's — on the band too, which is the ruler's
 (`app/widgets/TimelineMarkers.cpp:177`) — "Detect chords" (`chords detect`, the whole song) and, while it has
 chords, "Clear chords" (`:212`). Sentence case, as the context menus are (Round 22 named them in title case). UI
-`test_the_chords_band` (`app/tests/ui/uiTests.cpp:5319`; the rig now plays back a sound a test made, by its file name —
+`test_the_chords_band` (`app/tests/ui/uiTests.cpp:5388`; the rig now plays back a sound a test made, by its file name —
 `rigSounds`, `app/tests/Rig.h:100`): a clip's Detect chords is ONE line; the band caught mid-grow with the lanes at
 `row0 + amount·kChordH`, a chord mid-fade; C@4 spans beats 4 … 6; the names and "CHORDS" drawn; the accessible; a
 picture's row under the band and the lanes under both; the band's Insert a bar slides the chords (caught between);
@@ -2976,9 +2983,9 @@ the clock; an input beside the clock or held to it); playing (`:330`), its devic
 **Drawn** (`paintPorts`, `:1169`): a "PORTS" micro-label, each row's name and direction, its line, and a field drawn as
 a combo's (SettingCombo) naming the device; the page's content grows by them (it scrolls to them). **A pick**
 (`:922`, `openPortMenu` `:815`): a click on the field opens the app's context menu over the sheet
-(`app/App.cpp:101`) — the clock (or the default input), then every device of the port's direction, the current one
+(`app/App.cpp:102`) — the clock (or the default input), then every device of the port's direction, the current one
 marked — and a pick is ONE line, `settings set port.<name>=<device>:<channel>` (or empty: back on the clock). Test:
-UI `test_settings_puts_a_port_on_a_device` (`app/tests/ui/uiTests.cpp:6159`: Phones' field lists the clock and the
+UI `test_settings_puts_a_port_on_a_device` (`app/tests/ui/uiTests.cpp:6228`: Phones' field lists the clock and the
 rig's three outputs; a pick sends its one line, the field names the device, its line cross-fading — caught
 mid-ease; playing, Main's line says how the clock is; a port added grows in, undone shrinks out — each caught
 mid-ease). Shots: settings-ports, settings-ports-arriving. Mutants (each red): the line snapping; rows snapping in;
@@ -3156,7 +3163,7 @@ purpose), a needle across −50 … +50 cents easing to each reading at `kCatchU
 does not control — and greener the nearer the centre, from the EASED value so the colour never jumps; the pitched
 light (with no pitch a dash, the needle home and faded) eased alike (`:363`); the frequency, the cents (a rounded
 zero is "0", never "−0") and the level small. Drawn from the model only. The rows begin below the band. UI test
-`test_a_tuners_window` (`app/tests/ui/uiTests.cpp:5872`): the band in the window (stopped: no pitch); a panel bound to
+`test_a_tuners_window` (`app/tests/ui/uiTests.cpp:5941`): the band in the window (stopped: no pitch); a panel bound to
 the service's model with A4 +23.45 ct put in — the needle caught at 12.63 ct mid-tween and the light at 0.54, then
 exactly there; the pitch gone — a dash at once, the needle and light caught on their way home; a synth has no band.
 Shot `tuner-window` at both sizes (a synth holding A4: "A4", the needle centred and green, 440.0 Hz · 0 ct).
@@ -3411,7 +3418,7 @@ it) · Reverse / Play forwards · Consolidate — the clips it runs into on its 
 overlapping, "Consolidate N clips" when more than itself · Slice ▸ Every bar / beat / half beat · At its hits (not a
 comped clip) · To a kit, a slice a beat (no Slice on a loop). Ctrl+E — the keymap's `lanes.split`
 (`core/service/Keymap.cpp:23`) — and Edit › Split Clip at the Time Bar split the clip clicked last at the time bar
-(`app/App.cpp:930`). UI `test_a_clips_fades_gain_and_edits`; shots `clip-edit`, `clip-edit-dragging`. Mutants: a dragged
+(`app/App.cpp:928`). UI `test_a_clips_fades_gain_and_edits`; shots `clip-edit`, `clip-edit-dragging`. Mutants: a dragged
 fade drawn from the model, the fades snapping, the line sent while still held, Consolidate only the clip itself, the
 heard fades drawn as the clip's own, Ctrl+E doing nothing — each red.
 
@@ -3528,9 +3535,9 @@ rate unless --bpm, --sig or --rate say; written and opened as any new song. L2 `
 template keeping the song's relative files, a song from a template keeping the template's name, --bpm ignored, the
 factory's first, a save as an edit — each red. **The window**: Home's third action, From template…
 (`app/widgets/HomeScreen.cpp:153`), and File › New from Template… open a menu of the templates, the factory's marked
-(`pickTemplate`, `app/App.cpp:458`); one picked, the host is asked where the song goes and the answer is ONE `project new
-<path> --template <name>` (`newSongPicked`, `:425` — the template forgotten once used, so a plain new song after carries
-none). File › Save as Template… (`:184`; at the menu's end, the others where they were) is the rename field: ONE `template
+(`pickTemplate`, `app/App.cpp:456`); one picked, the host is asked where the song goes and the answer is ONE `project new
+<path> --template <name>` (`newSongPicked`, `:423` — the template forgotten once used, so a plain new song after carries
+none). File › Save as Template… (`:182`; at the menu's end, the others where they were) is the rename field: ONE `template
 save "<name>"`. UI `test_templates_in_the_window`; shot `home-templates`. Mutants: the picked template forgotten, a
 template carried to the next new song, From template… opening the settings, Save as Template saving nothing — each red.
 
@@ -3694,7 +3701,7 @@ lower edge): "Offline — <why>" in the destructive colour, and **Reload** (`rel
 (`:602`); the rows below are pushed down with it, because `bodyTop()` (`DevicePanel.h:104`) includes the eased band.
 Both ease from the model wherever the change came from (`DevicePanel.cpp:347`; the first placement is set, not
 animated). The rig's host plays two in-process plugins (`RigPlugin`, `app/tests/Rig.h:60`; one named by
-`rigPluginCrash()` is offline at once). UI `test_a_plugins_device_window` (`app/tests/ui/uiTests.cpp:5938`): an
+`rigPluginCrash()` is offline at once). UI `test_a_plugins_device_window` (`app/tests/ui/uiTests.cpp:6007`): an
 instrument plugin's list (no face); Editor's line and its light caught mid-tween, again `--close`; a crash — the band
 caught mid-slide, the rows pushed by exactly the band at rest, the model's why; Reload's line, the band caught
 mid-close; an effect plugin's list. Shots: plugin-device, plugin-offline, plugin-offline-mid at both sizes. Mutants
@@ -3743,7 +3750,7 @@ it is `map learn --cancel` (`:285`). Settings has a **MIDI** page (`SettingsShee
 `CC <n>`, the address, dimmed and "not in this song" when inert — with × forgetting it (`map remove`,
 `app/widgets/SettingsSheet.cpp:974`); the rows are keyed by control, a new one growing in and a forgotten one shrinking
 out (`:277`, `:782`; drawn `:1157`), the first placement set. UI `test_midi_learn_in_the_window`
-(`app/tests/ui/uiTests.cpp:5997`): Learn from a fader's menu — the line, the pill caught mid-fade, a click on it
+(`app/tests/ui/uiTests.cpp:6066`): Learn from a fader's menu — the line, the pill caught mid-fade, a click on it
 cancelling (caught mid-fade out); Forget CC 74's line; a knob's menu offering Learn; the MIDI page with one inert row,
 × sending its line and the row caught mid-shrink. Shots: midi-learn (a fader's menu with Learn and Forget, the pill),
 settings-midi (three mappings, one inert) at both sizes. Mutants (each red): the pill snapping, no Learn item, no
@@ -3797,7 +3804,7 @@ port: None and the MIDI ports `devices list` names (`app/widgets/SettingsSheet.c
 set` line; the mapped controls follow under a micro-label (`:1078`). The surface row's note (`rowWords`, `:1093`) says
 what the model says: what a surface does, "connected · strips 1–8" (its bank), or "not connected — <why>"; a change
 cross-fades from the old line (`:766`). The rig's host has a MIDI output that goes nowhere (`QuietOut`,
-`app/tests/Rig.h:184`). UI `test_a_surface_chosen_in_settings` (`app/tests/ui/uiTests.cpp:6062`): Mackie Control
+`app/tests/Rig.h:184`). UI `test_a_surface_chosen_in_settings` (`app/tests/ui/uiTests.cpp:6131`): Mackie Control
 picked — its line, the note caught mid-fade, then "no port"; a port picked — its line (the whole `key=value` quoted, as
 the sheet spells any), "connected · strips 1–8"; None — its line, disconnected. Shot settings-midi now shows a Mackie
 Control surface connected over the mappings. Mutants (each red): the note snapping, the combo sending another key, the
@@ -3822,7 +3829,7 @@ drawn value is a value catching up (`:153`), so a stop eases it down. The learn 
 `test_the_cpu_meter` (`core/tests/serviceTests.cpp:4604`): playing, a load in (0, 10) and a worst block kept; a
 chord's synth costs more than an empty bus, and no strip more than the whole (≈ 2 % of a block against ≈ 0 here);
 stopped, all 0; a render before and after playing, the same bytes. UI `test_the_cpu_in_the_song_bar`
-(`app/tests/ui/uiTests.cpp:6221`): the readout caught on its way up and on its way down. The meters-playing shot shows
+(`app/tests/ui/uiTests.cpp:6290`): the readout caught on its way up and on its way down. The meters-playing shot shows
 it. Mutants (each red): the load not over the block's duration, the strips never timed, a strip's sums never
 restarted, the worst block never kept, the readout snapping. Found while building it: two survived first — "a strip's
 sums never restarted" (the test's bound was loose: a strip's share is now held to the whole load's) and "the worst
@@ -3892,7 +3899,7 @@ became `writeBounce`, one copy for both. **Drawn** (part 2): a strip's menu in t
 (`:1439`) on a strip nothing feeds, read from the model's `fromStrips` (outputs, sends and keys — the service's rule);
 each one line. A frozen strip's eased amount (`:715`, `frozenAmount` `:464`, the cross-fade's time) dims its rack
 (`:1531`) under a chip-sized FROZEN pill in the accent (`:1556`, its word ellipsized on a narrow card). Test: UI
-`test_a_strip_freezes_from_its_menu` (`app/tests/ui/uiTests.cpp:6101`: a fed bus offers neither; Freeze sends its line,
+`test_a_strip_freezes_from_its_menu` (`app/tests/ui/uiTests.cpp:6170`: a fed bus offers neither; Freeze sends its line,
 the amount caught mid-ease both ways; Unfreeze; Bounce makes a strip). Shots: mixer-frozen, mixer-frozen-mid. Mutants
 (each red): the look snapping; never advancing; Freeze, or Bounce, offered on a fed strip; Unfreeze never offered;
 Freeze sending the wrong line. Found while testing it: Escape closes a context menu only while renaming, so the Duck

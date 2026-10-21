@@ -250,6 +250,7 @@ namespace solaris_ui
         if (!ac.empty()) static_cast<PianoRoll &>(w->content()).setClip(ac); // opened from a clip: that clip's roll
         w->open();
         bind(mModel, mInteracting);
+        if (onRollOpened) onRollOpened(); // D-25: the roll just opened is where Ctrl+V goes
         return *w;
     }
 
@@ -369,6 +370,17 @@ namespace solaris_ui
             return w->key().rfind("roll:", 0) == 0 ? static_cast<PianoRoll *>(&w->content()) : nullptr;
         }
         return nullptr;
+    }
+
+    bool WindowLayer::inFrontRoll(const Point &world) const
+    {
+        for (auto it = children().rbegin(); it != children().rend(); ++it)
+        {
+            auto *w = dynamic_cast<FloatWindow *>(it->get());
+            if (!w || !w->isOpen()) continue;
+            return w->key().rfind("roll:", 0) == 0 && w->localBounds().contains(w->toLocal(world)); // its title bar too
+        }
+        return false;
     }
 
     PianoRoll *WindowLayer::roll(const std::string &pt) const

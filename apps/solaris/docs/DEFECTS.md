@@ -126,6 +126,23 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-25 Notes copied in one MIDI clip's roll did not paste into another clip's roll — Ctrl+V went to the lanes — closed in W1
+- **Found:** 2026-10-21, the user: *"should be ctrl c and ctrl v the midi from one to another midi clip not just in 1
+  midi clip"*. R-ROLL-8 promised a paste "into this roll or another", and the roll test proved it only after a
+  Ctrl-press inside the second roll. Reproduced by `test_notes_copied_from_one_clips_roll_to_anothers`: copy notes in
+  clip A's roll, double-click clip B on the lanes, Ctrl+V — the line sent was `clip duplicate` (the clip copied on
+  the lanes earlier), not `notes add`.
+- **Cause:** the App gave the keys to a roll only for a press inside its notes' area (`PianoRoll::localBounds`),
+  judged BEFORE the press was routed. Opening a roll from its clip is a double-click on the lanes, so the keys stayed
+  with the lanes; a press on a roll's title bar is outside its notes' area; and a press that raised a roll from behind
+  was judged against the roll that was in front before it.
+- **Fix:** `WindowLayer::inFrontRoll` (the front window's frame, title bar included) judged after the press is routed
+  (`app/App.cpp`), and `openRoll` calls `onRollOpened`, which gives the keys to the roll just opened.
+- **Guard:** `test_notes_copied_from_one_clips_roll_to_anothers` (Ctrl+A / Ctrl+C right after A's roll opens, Ctrl+V
+  right after B's opens: `notes add` into B's pattern and no `clip duplicate`; a press on the lanes gives them the
+  keys; a press on A's title bar, A behind B, gives A the keys). Mutants, each seen red: an opened roll taking no keys,
+  only the notes' area counting, the press judged before it is routed.
+
 ### D-23 `version rebase --dry-run` was an edit: the song marked unsaved, a history step added — closed in N38 part 1
 - **Found:** 2026-10-17, designing N38's `--dry-run` flags: `dispatch` decides "an edit" by the verb alone, and
   `version rebase` (N37) is an edit verb — so its dry run, which changes nothing, still snapshotted, added a history
