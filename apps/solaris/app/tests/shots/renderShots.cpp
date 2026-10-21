@@ -392,6 +392,17 @@ namespace
                  r.cmd("device move " + rev + " --to 1");
                  r.pump(4 * sltest::Rig::kFrameMs);
              }},
+            {"mixer-effect-dragging",   // R-FX-5a: Bass's EQ in hand, below its reverb — the reverb moved up to make room
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("device add ch_3 --type reverb");
+                 r.settle();
+                 auto &d = r.app->project().dock();
+                 const artboard::Rect e = world(d, d.chipRect("ch_3", 1)); // the EQ
+                 const double step = d.chipRect("ch_3", 2).y - d.chipRect("ch_3", 1).y;
+                 r.drag(e.x + 10.0, sltest::cy(e), e.x + 10.0, sltest::cy(e) + 1.3 * step, 8, false);
+                 r.settle();
+             }},
             {"mixer-buses",
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");

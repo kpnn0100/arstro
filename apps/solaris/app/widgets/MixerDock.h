@@ -129,6 +129,9 @@ namespace solaris_ui
          *  and its presence (fading in and out); −1 when the card shows no such chip. */
         double fxSlotLive(const std::string &id, const std::string &dv) const;
         double fxAlphaLive(const std::string &id, const std::string &dv) const;
+        /** R-FX-5a: an effect's chip in hand — whether one is, and where the pointer has it (local, as drawn). */
+        bool fxDragging() const { return mDragging && !mFxDv.empty(); }
+        artboard::Rect fxDragRect() const;
         artboard::Rect sendRect(const std::string &id, int i) const;
         artboard::Rect foldRect(const std::string &bus) const;
         double foldAmount(const std::string &bus) const;
@@ -247,6 +250,13 @@ namespace solaris_ui
         };
         std::map<std::string, FxChip> mFx;
         std::vector<std::string> inputNames(const std::string &id) const; // R-FX-5b: what feeds a bus, or the master, by name
+        // R-FX-5a: an effect's chip in hand — its card and device, where it was grabbed, where the pointer has it (local y),
+        // and where it would land: an effects slot, or past the effects shown (the end of the rack)
+        std::string mFxCard, mFxDv;
+        double mFxGrabY = 0.0, mFxY = 0.0;
+        int mFxTo = 0;
+        bool mFxEnd = false;
+        const std::vector<solaris::DeviceModel> *devicesOf(const std::string &id) const;
         void syncFx(double nowMs, bool fadeIn);
         void paintRack(artboard::IRenderTarget &t, const std::string &id, const std::vector<solaris::DeviceModel> &devs, double x, double w, double a,
                        double ra, const artboard::Color &col) const;

@@ -654,6 +654,18 @@ namespace solaris_ui
         const auto it = mFx.find(id + ">" + dv);
         return it == mFx.end() || it->second.gone ? -1.0 : it->second.slot.value();
     }
+    const std::vector<solaris::DeviceModel> *MixerDock::devicesOf(const std::string &id) const
+    {
+        return id == "master" ? &mModel.masterDevices : (strip(id) ? &strip(id)->devices : nullptr);
+    }
+    Rect MixerDock::fxDragRect() const
+    {
+        if (!fxDragging()) return Rect{};
+        const Rect c = cardRect(mFxCard);
+        if (c.w <= 0) return Rect{};
+        const Geo g = geoOf(c.x, c.w, c.y, c.h);
+        return Rect{g.fx[0].x, mFxY, g.fx[0].w, kChipH};
+    }
     double MixerDock::fxAlphaLive(const std::string &id, const std::string &dv) const
     {
         const auto it = mFx.find(id + ">" + dv);
@@ -821,9 +833,25 @@ namespace solaris_ui
                 c.gone = false;
             }
         };
+        auto shown = [&](const std::string &card, std::vector<solaris::DeviceModel> d) {
+            // R-FX-5a: a chip in hand — the others shown as if it were where it would land, so they make room
+            if (fxDragging() && card == mFxCard)
+                for (size_t i = 0; i < d.size(); ++i)
+                    if (d[i].id == mFxDv)
+                    {
+                        const solaris::DeviceModel m = d[i];
+                        d.erase(d.begin() + (long)i);
+                        const size_t gen = !d.empty() && d[0].instrument ? 1 : 0;
+                        d.insert(d.begin() + (long)std::min(d.size(), mFxEnd ? d.size() : gen + (size_t)mFxTo), m);
+                        break;
+                    }
+            want(card, d);
+        };
         for (const auto &s : mModel.strips)
-            if (s.kind != "vca") want(s.id, s.devices);
-        want("master", mModel.masterDevices);
+            if (s.kind != "vca") shown(s.id, s.devices);
+        shown("master", mModel.masterDevices);
+        if (fxDragging())
+            if (auto it = mFx.find(mFxCard + ">" + mFxDv); it != mFx.end()) it->second.gone = false; // in hand: never fading
         for (auto it = mFx.begin(); it != mFx.end();)
         {
             FxChip &c = it->second;
@@ -892,12 +920,15 @@ namespace solaris_ui
                 }
             }
         }
-        // the effects, each in its slot — eased, so a rack changed anywhere slides (R-FX-5a)
+        // the effects, each in its slot — eased, so a rack changed anywhere slides (R-FX-5a); the one in hand last, at the
+        // pointer, on top
+        const FxChip *held = nullptr;
         for (const auto &kv : mFx)
         {
             const FxChip &c = kv.second;
             const double ca = c.alpha.value() * ra;
             if (c.card != id || ca <= 0.001) continue;
+            if (fxDragging() && id == mFxCard && c.dv == mFxDv) { held = &c; continue; }
             const Rect r{g.fx[0].x, g.fx[0].y + c.slot.value() * kChipStep, g.fx[0].w, kChipH};
             const double hv = c.gone ? 0.0 : mHover.amount(hoverId((int)Part::Chip, id + ">", (rv.gen ? 1 : 0) + (int)c.slotWant));
             const bool add = c.kind == 2, open = !c.dv.empty() && isDeviceOpen && isDeviceOpen(c.dv);
@@ -909,6 +940,14 @@ namespace solaris_ui
                                                                                fade(open ? palette::primary() : palette::whiteAlpha(0.0), ca), 1.0));
             drawNameWithId(t, label, c.dv, r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), r.w - 10.0, 10.0, font::sans(),
                            add || c.kind == 1 || c.bypass ? palette::mutedForeground() : palette::foreground(), ids, ca);
+        }
+        if (held)
+        {
+            const Rect r{g.fx[0].x, mFxY, g.fx[0].w, kChipH}; // the pointer's — direct manipulation
+            drawRoundedRect(t, Rect{r.x, r.y + 2.0, r.w, r.h}, radius::control(), Paint::filled(fade(surface::scrim(1.0), 0.35 * ra))); // lifted
+            drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(palette::popover(), ra), fade(palette::primary(), ra), 1.0));
+            drawNameWithId(t, held->label, held->dv, r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), r.w - 10.0, 10.0, font::sans(),
+                           held->bypass ? palette::mutedForeground() : palette::foreground(), ids, ra);
         }
     }
 
@@ -1377,6 +1416,24 @@ namespace solaris_ui
             mPress = hitAt(local);
             mDragging = false;
             mLastSent.clear();
+            mFxDv.clear();
+            if (mPress.part == Part::Chip)
+                if (const auto *devs = devicesOf(mPress.id))
+                {
+                    // R-FX-5a: an effect's chip may be dragged to its place — never the generator, "+N more" or "+ Effect"
+                    const RackView rv = rackOf(*devs);
+                    const int di = rv.device(mPress.index);
+                    if (di >= (rv.gen ? 1 : 0))
+                    {
+                        const Rect r = chipRect(mPress.id, mPress.index);
+                        mFxCard = mPress.id;
+                        mFxDv = (*devs)[(size_t)di].id;
+                        mFxGrabY = local.y - r.y;
+                        mFxY = r.y;
+                        mFxTo = mPress.index - (rv.gen ? 1 : 0);
+                        mFxEnd = false;
+                    }
+                }
             if (mPress.part == Part::Fader)
             {
                 const Rect z = faderRect(mPress.id);
@@ -1407,6 +1464,21 @@ namespace solaris_ui
             case Part::Resize:
                 if (onResize) onResize(g.pos.y);
                 break;
+            case Part::Chip:
+            {
+                // R-FX-5a: the chip is the pointer's, up and down its card's effects; where it would land, a slot or past them
+                const auto *devs = devicesOf(mFxCard);
+                const Rect c = cardRect(mFxCard);
+                if (mFxDv.empty() || !devs || c.w <= 0) break;
+                const Geo gg = geoOf(c.x, c.w, c.y, c.h);
+                const RackView rv = rackOf(*devs);
+                const double top = gg.fx[0].y, bottom = gg.fx[std::max(0, rv.shown - 1)].y;
+                mFxY = std::clamp(local.y - mFxGrabY, top, bottom);
+                const int j = (int)std::lround((mFxY - top) / kChipStep), last = rv.more ? 0 : rv.effects - 1; // the last slot a device shows in
+                mFxEnd = j > last;
+                mFxTo = std::clamp(j, 0, std::max(0, last));
+                break;
+            }
             case Part::Fader:
             {
                 const Rect z = faderRect(mPress.id);
@@ -1454,6 +1526,29 @@ namespace solaris_ui
         }
         case Gesture::Type::Drop:
         case Gesture::Type::Up:
+            if (fxDragging())
+                if (const auto *devs = devicesOf(mFxCard))
+                {
+                    // R-FX-5a: where it was let go — the pointer was the animation — then ONE line; a refusal eases it home
+                    const RackView rv = rackOf(*devs);
+                    const int gen = rv.gen ? 1 : 0, n = (int)devs->size();
+                    int from = -1;
+                    for (int i = 0; i < n; ++i)
+                        if ((*devs)[(size_t)i].id == mFxDv) from = i;
+                    const int to = mFxEnd ? n - 1 : gen + mFxTo;
+                    const Rect c = cardRect(mFxCard);
+                    if (c.w > 0)
+                        if (auto it = mFx.find(mFxCard + ">" + mFxDv); it != mFx.end())
+                        {
+                            const double at = (mFxY - geoOf(c.x, c.w, c.y, c.h).fx[0].y) / kChipStep;
+                            it->second.slot.set(at);
+                            it->second.slotLast = at;
+                        }
+                    const std::string dv = mFxDv;
+                    mFxDv.clear();
+                    if (from >= gen && to != from) send("device move " + dv + " --to " + std::to_string(to));
+                }
+            mFxDv.clear();
             mDragging = false;
             mPress = Hit{};
             return true;

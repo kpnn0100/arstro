@@ -1063,6 +1063,73 @@ static void test_the_rack_shows_its_generator_apart_and_slides()
     pass("The rack in two sections (R-FX-5b): GENERATOR — the instrument's chip, opening it; an audio strip's clips — or INPUT on a bus and the master, then EFFECTS; the effect chips keyed (R-FX-5a): a shell's move slides them, eased; one too many fades into \"+2 more\"");
 }
 
+static void test_an_effect_is_dragged_to_its_place()
+{
+    // R-FX-5a: an effect's chip dragged up or down its card follows the pointer while the others make room (eased); let
+    // go, ONE `device move --to`, the chip easing from where it was let go to its slot; a drag that changes nothing sends
+    // nothing; the generator is never taken; dropped past the effects shown ("+2 more"), it goes to the rack's end; a
+    // click still opens the effect's window
+    sltest::Rig r("ui-fxdrag", 1280, 800);
+    r.cmd("project new " + r.song("FxDrag") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    const std::string ch = r.svc->model().strips[0].id;
+    r.cmd("device add " + ch + " --type eq");
+    r.cmd("device add " + ch + " --type reverb");
+    r.settle();
+    auto &d = r.app->project().dock();
+    auto order = [&] {
+        std::vector<std::string> v;
+        for (const auto &st : r.svc->model().strips)
+            if (st.id == ch)
+                for (const auto &dv : st.devices) v.push_back(dv.id);
+        return v;
+    };
+    const auto o0 = order();
+    const std::string inst = o0[0], eq = o0[1], rev = o0[2];
+    const double step = d.chipRect(ch, 2).y - d.chipRect(ch, 1).y;
+    // EQ dragged 1.4 slots down: the reverb makes room as it passes, eased; nothing sent while in hand
+    const size_t mark = r.sent.size();
+    const artboard::Rect e = world(d, d.chipRect(ch, 1));
+    r.drag(e.x + 10.0, cy(e), e.x + 10.0, cy(e) + 1.4 * step, 6, false);
+    assert(d.fxDragging() && std::fabs(world(d, d.fxDragRect()).y - (e.y + 1.4 * step)) < 0.5 && r.sent.size() == mark);
+    double sr = d.fxSlotLive(ch, rev);
+    for (int k = 0; k < 10 && sr == 1.0; ++k) { r.frame(); sr = d.fxSlotLive(ch, rev); }
+    assert(sr > 0.0 && sr < 1.0);
+    r.app->pointer(2, e.x + 10.0, cy(e) + 1.4 * step, 0, r.now);
+    r.frame();
+    assert(r.sent.back() == "device move " + eq + " --to 2" && (order() == std::vector<std::string>{inst, rev, eq}));
+    const double landed = d.fxSlotLive(ch, eq);
+    assert(landed > 1.0 && landed <= 1.4 + 1e-9);                    // from where it was let go, easing to its slot
+    r.settle();
+    assert(d.fxSlotLive(ch, eq) == 1.0 && d.fxSlotLive(ch, rev) == 0.0);
+    // dragged a little and back: the same place — nothing sent
+    const size_t mark2 = r.sent.size();
+    const artboard::Rect rv = world(d, d.chipRect(ch, 1));
+    r.drag(rv.x + 10.0, cy(rv), rv.x + 10.0, cy(rv) - 30.0, 4, true);
+    r.settle();
+    assert(r.sent.size() == mark2 && (order() == std::vector<std::string>{inst, rev, eq}));
+    // the generator is never taken
+    const artboard::Rect gn = world(d, d.generatorRect(ch));
+    r.drag(gn.x + 10.0, cy(gn), gn.x + 10.0, cy(gn) + 2.0 * step, 6, false);
+    assert(!d.fxDragging());                                          // nothing in hand
+    r.app->pointer(2, gn.x + 10.0, cy(gn) + 2.0 * step, 0, r.now);
+    r.settle();
+    assert(r.sent.size() == mark2);
+    // one more than the card shows: the first effect dropped past the "+2 more" goes to the rack's end
+    r.cmd("device add " + ch + " --type compressor");
+    r.settle();
+    const std::string comp = order()[3];
+    const artboard::Rect f = world(d, d.chipRect(ch, 1));
+    r.drag(f.x + 10.0, cy(f), f.x + 10.0, cy(f) + 2.0 * step, 6, true);
+    r.settle();
+    assert(r.sent.back() == "device move " + rev + " --to 3" && (order() == std::vector<std::string>{inst, eq, comp, rev}));
+    // a click still opens its window
+    r.click(world(d, d.chipRect(ch, 1)));
+    r.settle();
+    assert(r.app->project().windows().isOpen("dev:" + eq));
+    pass("An effect dragged to its place (R-FX-5a): the chip follows the pointer, the others making room, eased; ONE `device move --to` when let go, the chip easing home from there; a drag that changes nothing sends nothing; the generator is never taken; past \"+2 more\" it goes to the end; a click still opens it");
+}
+
 static void test_mixer_matrix_effects_and_device_panel()
 {
     sltest::Rig r("ui-matrix", 1280, 800);
@@ -6918,6 +6985,7 @@ int main()
     test_the_export_sheet_is_one_render_line();
     test_an_instrument_track_is_armed_from_its_header();
     test_the_rack_shows_its_generator_apart_and_slides();
+    test_an_effect_is_dragged_to_its_place();
     test_mixer_matrix_effects_and_device_panel();
     test_song_bar_menus_and_settings_sections();
     test_device_window_lists_parameters_and_binds_them();

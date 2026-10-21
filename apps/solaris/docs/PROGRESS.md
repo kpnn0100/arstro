@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-21 — W1: notes paste from one clip's roll into another's (D-25).*
+*Last updated: 2026-10-21 — Y3: an effect dragged to its place in the rack (R-FX-5a).*
 
 ---
 
 ## NEXT
 
-**► Y3** — an effect's chip dragged to its place: ONE `device move --to` (R-FX-5a). Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► The rack's sections, effects dragged to their place, and Space following the keys are built (R-FX-5a/5b, R-ROLL-6 amended; Y1–Y3).** What comes next is the user's call. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -787,7 +787,8 @@ amended.
       rack changed anywhere slides and fades (R-FX-5b). — DR-FX-5b. UI one; shot mixer-rack-sliding (and every mixer
       shot shows the sections); 5 mutants red. Found: a rack changed from a shell used to swap its chips' labels in one
       frame — now they slide.
-- [ ] **Y3** An effect's chip dragged to its place: ONE `device move --to` (R-FX-5a).
+- [x] **Y3** An effect's chip dragged to its place: ONE `device move --to` (R-FX-5a). — DR-FX-5a. UI one; shot
+      mixer-effect-dragging; 6 mutants red (one survivor — the generator taken — made the test check mid-drag).
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
