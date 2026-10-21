@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-21 — Y3: an effect dragged to its place in the rack (R-FX-5a).*
+*Last updated: 2026-10-21 — Z1: Magnetar, a trap / EDM track, its drop measured (R-SVC-13).*
 
 ---
 
 ## NEXT
 
-**► The rack's sections, effects dragged to their place, and Space following the keys are built (R-FX-5a/5b, R-ROLL-6 amended; Y1–Y3).** What comes next is the user's call. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► Magnetar is made, measured and delivered (R-SVC-13, Z1).** What comes next is the user's call. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -789,6 +789,15 @@ amended.
       frame — now they slide.
 - [x] **Y3** An effect's chip dragged to its place: ONE `device move --to` (R-FX-5a). — DR-FX-5a. UI one; shot
       mixer-effect-dragging; 6 mutants red (one survivor — the generator taken — made the test check mid-drag).
+
+### Z — a trap / EDM track (user request, 2026-10-21)
+*"make me a track that is trap/edm with really dope drop"*. R-SVC-13.
+- [x] **Z1** `demo/trap`: an original trap track written by `make_script.py` as a `solaris-cc` script, rendered, and
+      measured by `measure.py` (ctest `trap_track_measured`, label long); delivered to ~/Music/Solaris.
+      — DR-SVC-13. *Magnetar*, 2:08, all 23 checks pass; 2 musical mutants red. Found and fixed: D-26 (the audit called a
+      wavetable silent). The first balance had the 808 carrying the drop (the snare −21 LU, the hats −31 under the mix):
+      measured per stem, rebalanced; the limiter's true-peak mode for the louder transients. Delivered
+      ~/Music/Solaris/magnetar.*.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

@@ -25,6 +25,11 @@ add_test(NAME edm_track_measured
   COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/edm
           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_edm -DPY=${SOLARIS_PYTHON3} -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/demo_edm.cmake)
 set_tests_properties(edm_track_measured PROPERTIES TIMEOUT 1200 LABELS "long")
+# R-SVC-13: the trap / EDM track — its drop measured (the gap, half time, the 808's glides, the hats' rolls): `ctest -L long`
+add_test(NAME trap_track_measured
+  COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/trap
+          -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_trap -DPY=${SOLARIS_PYTHON3} -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/demo_trap.cmake)
+set_tests_properties(trap_track_measured PROPERTIES TIMEOUT 1200 LABELS "long")
 
 add_test(NAME solaris_demo_canon
   COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/canon

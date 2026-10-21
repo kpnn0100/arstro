@@ -1421,6 +1421,15 @@ a process is the host's (law 12).
   and the drops' short-term loudness, true peak under −1 dBTP, the drops louder than the breakdown, the low end
   near-mono and the highs wide, the sidechain's pump in dB, the kick on every beat of the drops, the notes in
   the key, every section's energy where the form puts it. A sound the library lacks for it is made there first.
+- **R-SVC-13 A trap / EDM track with a drop that hits, original, measured** ✅ (DR-SVC-13) (user request, 2026-10-21: *"make me a
+  track that is trap/edm with really dope drop"*). As R-SVC-12 — original, made with `solaris-cc` alone, its script
+  committed, every sound the DSP library's — in trap's language: a half-time groove (the snare on the third beat of
+  every bar of the drops, never on the backbeat), an 808 carrying the bass that GLIDES between held notes and lands on
+  the chords' roots, hi-hats with rolls (thirty-seconds and triplets), brass-like stabs on the hook, and builds that end
+  in a beat of near-silence before the drop lands. Measured: loudness and true peak as a master; the drops over the
+  breakdown; each build rising and brightening; the gap before each drop at least 12 dB under the drop's first bar;
+  the snare's half-time grid; the 808's roots and its glides (the pitch moving through the notes between, not
+  jumping); the hats' rolls; the low end mono, the highs wide; the pump; the key; the range from the sub to the air.
 
 ## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12) — 13 ✅ (the tempo set in the song bar, DR-UI-13) — 14 ✅ (the resize cursor, DR-UI-14)
 

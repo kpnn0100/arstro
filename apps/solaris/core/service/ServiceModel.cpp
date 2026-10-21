@@ -639,10 +639,24 @@ namespace solaris
         for (const auto &m : mSettings.maps)
             if (mapInert(m.second)) out.push_back("inert mapping: MIDI control " + m.first + " moves " + m.second + ", which this song does not have");
         for (const auto &pk : mLastRenderPeaks) out.push_back(pk);
-        // R-EDM-8: a sampler with no sound, or one it cannot read, plays nothing
+        // R-EDM-8: a sampler with no sound, or one it cannot read, plays nothing. D-26: a wavetable plays its built-in
+        // tables without one — it wants a sound only where an oscillator that sounds reads the "sample" table
+        auto wantsSample = [](const DeviceNode &d, const DeviceType &t) {
+            if (d.type != "wavetable") return true;
+            auto value = [&](const std::string &k) -> std::string {
+                for (const auto &f : d.params)
+                    if (f.first == k) return f.second;
+                for (const auto &ps : t.params)
+                    if (ps.name == k) return ps.isChoice() ? ps.choices[(size_t)ps.def] : std::to_string(ps.def);
+                return std::string();
+            };
+            for (const char *o : {"osc1", "osc2"})
+                if (value(std::string(o) + ".table") == "sample" && std::atof(value(std::string(o) + ".level").c_str()) > 0.0) return true;
+            return false;
+        };
         for (const auto &rk : p.racks)
             for (const auto &d : rk.devices)
-                if (const DeviceType *t = DeviceRegistry::find(d.type); t && t->takesSample)
+                if (const DeviceType *t = DeviceRegistry::find(d.type); t && t->takesSample && wantsSample(d, *t))
                 {
                     if (d.sample.empty())
                         out.push_back("silent: " + d.id + " (" + t->label + ") has no " + (t->takesDefinition ? "instrument — give it an .sfz" : "sample — give it one") +

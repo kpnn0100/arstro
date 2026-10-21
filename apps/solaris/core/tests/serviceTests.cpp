@@ -5387,6 +5387,14 @@ static void test_the_wavetable_plays_with_no_code_of_its_own()
     auto peakOf = [](const std::vector<float> &v) { float p = 0; for (float x : v) p = std::max(p, std::fabs(x)); return p; };
     const auto basic = render("wt-basic");
     assert(peakOf(basic) > 0.05f);
+    // D-26: its built-in tables sound with no sample — the audit does not call it silent; an oscillator that sounds on
+    // the "sample" table with none given is
+    assert(!contains(r.ok("audit"), "silent: dv_1"));
+    r.ok("set dv_1.osc1.table=sample");
+    assert(contains(r.ok("audit"), "silent: dv_1 (Wavetable) has no sample"));
+    r.ok("set dv_1.osc1.level=0");
+    assert(!contains(r.ok("audit"), "silent: dv_1"));
+    r.ok("set dv_1.osc1.level=1");
     r.ok("set dv_1.sample=" + cycle + " dv_1.osc1.table=sample");
     const auto fromSound = render("wt-sound");
     double apart = 0;

@@ -127,6 +127,17 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Closed
 
+### D-26 The audit called a wavetable with its built-in tables "silent — has no sample" — closed in Z1
+- **Found:** 2026-10-21, making *Magnetar* (R-SVC-13): `audit` said `silent: dv_9 (Wavetable) has no sample` for the
+  stabs and the pluck, which use the sync and harmonics tables. A wavetable alone rendered at −24.7 dBFS — it was
+  never silent.
+- **Cause:** the audit's R-EDM-8 rule flags every device type that TAKES a sample (`takesSample`) and has none; the
+  wavetable takes one only for its `sample` table.
+- **Fix:** `wantsSample` (`core/service/ServiceModel.cpp`, the audit): a wavetable wants a sound only where an
+  oscillator that sounds (level over 0) reads the `sample` table; every other sampler as before.
+- **Guard:** `test_the_wavetable_plays_with_no_code_of_its_own` — the built-in tables not audited silent; osc1 on the
+  sample table with none given is; at level 0 it is not (mutant: the old rule — seen red).
+
 ### D-25 Notes copied in one MIDI clip's roll did not paste into another clip's roll — Ctrl+V went to the lanes — closed in W1
 - **Found:** 2026-10-21, the user: *"should be ctrl c and ctrl v the midi from one to another midi clip not just in 1
   midi clip"*. R-ROLL-8 promised a paste "into this roll or another", and the roll test proved it only after a
