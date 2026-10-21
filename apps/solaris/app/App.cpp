@@ -905,8 +905,9 @@ namespace solaris_ui
         {
             // play/stop goes back where the time bar was put; stop-here leaves it where it was heard (R-TIME-7/8)
             if (m.transport.playing) return dispatch(id == "transport.play" ? "transport stop --return" : "transport stop");
-            if (PianoRoll *r = mProject->windows().frontRoll()) // a roll in front: its ▶ (R-ROLL-6)
-                if (r->togglePlay()) return true;
+            if (mRollKeys) // R-ROLL-6 (amended): a roll's ▶ while it has the keys — a click on the lanes gives Space to the song
+                if (PianoRoll *r = mProject->windows().frontRoll())
+                    if (r->togglePlay()) return true;
             return dispatch("transport play");
         }
         if (id == "transport.toStart") return dispatch("transport seek 0");

@@ -121,6 +121,18 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
   PRE-DELAY is not built; it stays wanted, a DSP-library task first (R-DSP-1).)
 - **R-FX-5 A strip hosts an ordered rack** of devices: add, remove, reorder, bypass per device
   (was SR-RACK-1). An instrument strip's first device is its instrument.
+- **R-FX-5a An effect is dragged to its place in the rack** (user request, 2026-10-21: *"should be able to drag and
+  drop order of effect"*). In the mixer, an effect's chip dragged up or down its card follows the pointer while the
+  other effects slide (eased) to open the place it would land; let go, ONE `device move <dv> --to <index>`; a click
+  still opens its window. The generator never moves (R-FX-5); dropped past the effects the card shows, an effect goes
+  to the end of the rack. A rack changed by anyone — a shell's `device move`, an effect added or removed — slides and
+  fades its chips the same way (nothing in one frame).
+- **R-FX-5b Where a strip's sound is made stands apart from what shapes it** (user request, 2026-10-21: *"in source,
+  the signal generator should be in seperate section, so that user know that is where the sound is generate, the
+  other section is filter"*). A card in the mixer shows two labelled sections. **Generator**: an instrument strip's
+  instrument (its chip opens its window, as before) or an audio strip's clips; on a bus and on the master the same
+  place reads **Input**, the strips that feed it. **Effects**: the rack after it, in order, and "+ Effect". Every card
+  has both, so the faders still line up with the master's. A VCA shows its members there instead (R-MIX-19).
 
 ---
 
@@ -679,7 +691,10 @@ the object it belongs to, shows it on the timeline, and that property will use a
   was opened from, else the pattern's first clip in time — from its start, LOOPING its span, the whole song
   sounding there, until stopped (■, the same button); the song's own loop region comes back when it stops.
   One command, `transport play --clip <ac>`; the transport publishes which clip it loops so every front end
-  can show it. Space stops whatever plays; stopped, with a roll window in front, it is that ▶ (else the
+  can show it. (**AMENDED (user request, 2026-10-21: *"when selected none (click to nothing on timeline) that mean play
+  section is belong to timeline … not midi clip"*):** Space plays a roll's clip only while that roll has the keys — the
+  roll last opened or pressed in, R-ROLL-8 — so a click on the lanes, on nothing or on a clip, gives Space back to the
+  song.) Space stops whatever plays; stopped, with a roll window in front, it is that ▶ (else the
   song's play). The
   roll draws the playhead where its clip is heard and keeps it in view while playing, eased. A pattern on no
   track has nothing to sound through: its ▶ is dimmed and says so.

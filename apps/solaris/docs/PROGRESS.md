@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► Notes paste from one clip's roll to another's (D-25, W1).** What comes next is the user's call. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► Y2** — the rack in two labelled sections, its chips keyed and eased (R-FX-5b); then Y3. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -774,6 +774,18 @@ promised it; D-25.
 - [x] **W1** A roll just opened (from its clip, anywhere) takes the keys; a press anywhere in a roll's window — its title
       bar too — gives it the keys, judged once the press is routed. — D-25 closed; DR-ROLL-8 (its stale anchors
       re-pointed). UI one; 3 mutants red.
+
+### Y — the rack and the play key (user request, 2026-10-21)
+*"should be able to drag and drop order of effect — in source, the signal generator should be in seperate section, so
+that user know that is where the sound is generate, the other section is filter — when selected none (click to
+nothing on timeline) that mean play section is belong to timeline selected not midi clip"*. R-FX-5a, R-FX-5b, R-ROLL-6
+amended.
+- [x] **Y1** Space plays the front roll's clip only while that roll has the keys; a click on the lanes gives it back to
+      the song (R-ROLL-6 amended). — DR-ROLL-6 (its two stale anchors re-pointed). UI the roll-play test extended; 1
+      mutant red.
+- [ ] **Y2** A card's rack in two labelled sections — Generator (or Input) and Effects — its chips keyed and eased, so a
+      rack changed anywhere slides and fades (R-FX-5b).
+- [ ] **Y3** An effect's chip dragged to its place: ONE `device move --to` (R-FX-5a).
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

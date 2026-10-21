@@ -2670,6 +2670,24 @@ static void test_the_roll_plays_its_clip()
     assert(r.sent.back() == "transport play --clip " + ac2);
     r.key(32);
     assert(r.sent.back() == "transport stop --return");
+    // a click on nothing on the lanes: nothing selected, the keys are the lanes' — Space plays the SONG, the roll still in
+    // front (R-ROLL-6 amended); a press in the roll's window gives its ▶ the key back
+    const artboard::Rect below = world(tl, tl.rowRect(tl.rowCount() - 1));
+    r.click(world(tl, artboard::Rect{tl.beatToX(1.0), 0, 0, 0}).x, below.bottom() + 12.0);
+    r.settle();
+    assert(tl.selectedClip().empty() && wl.frontRoll() == &roll);
+    r.key(32);
+    assert(r.sent.back() == "transport play" && r.svc->model().transport.loopClip.empty());
+    r.key(32);
+    assert(r.sent.back() == "transport stop --return");
+    r.settle();
+    const auto *rw = wl.window("roll:" + pt);
+    r.click(world(*rw, rw->titleRect()).x + 60.0, world(*rw, rw->titleRect()).y + 8.0);
+    r.settle();
+    r.key(32);
+    assert(r.sent.back() == "transport play --clip " + ac2);
+    r.key(32);
+    assert(r.sent.back() == "transport stop --return");
     // a pattern on no track: nothing to sound through — its ▶ says nothing; Space plays the song
     r.cmd("pattern new --name Loose");
     const std::string pt2 = r.svc->model().patterns.back().id;
