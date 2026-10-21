@@ -1430,6 +1430,16 @@ a process is the host's (law 12).
   breakdown; each build rising and brightening; the gap before each drop at least 12 dB under the drop's first bar;
   the snare's half-time grid; the 808's roots and its glides (the pitch moving through the notes between, not
   jumping); the hats' rolls; the low end mono, the highs wide; the pump; the key; the range from the sub to the air.
+- **R-SVC-14 A progressive house track with an emotional melody, original, measured** ✅ (DR-SVC-14) (user request, 2026-10-21:
+  *"make me a progressive house song that have really emotional melody"*). As R-SVC-12 — original, made with
+  `solaris-cc` alone, its script committed, every sound the DSP library's — in progressive house's language: a
+  four-on-the-floor kick, a rolling sixteenth bass and a sub under the pump, a sixteenth pluck arpeggio through a delay
+  opening over the intro, long builds; and a MELODY written to be sung — eight bars over IV–I–V–vi, mostly steps, its
+  climax in the second half of its phrase, each phrase landing on a chord tone — heard first on a bare piano in the
+  breakdown, then on a wide lead in the drop, and lifted a whole tone in the last drop. Measured: loudness and true
+  peak; the drops over the breakdown; the builds; the kick on every drop beat; the pump; the field; the range; and the
+  melody itself — the lead's pitch in each drop following the written notes (in tune within 50 cents for most of them),
+  the piano playing it in the breakdown, the last drop's key a whole tone above the first's.
 
 ## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12) — 13 ✅ (the tempo set in the song bar, DR-UI-13) — 14 ✅ (the resize cursor, DR-UI-14)
 

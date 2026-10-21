@@ -11,13 +11,13 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-21 — Z1: Magnetar, a trap / EDM track, its drop measured (R-SVC-13).*
+*Last updated: 2026-10-21 — A1: Afterglow, a progressive house track, its melody measured (R-SVC-14).*
 
 ---
 
 ## NEXT
 
-**► Magnetar is made, measured and delivered (R-SVC-13, Z1).** What comes next is the user's call. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► Afterglow is made, measured and delivered (R-SVC-14, A1).** What comes next is the user's call. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -798,6 +798,15 @@ amended.
       wavetable silent). The first balance had the 808 carrying the drop (the snare −21 LU, the hats −31 under the mix):
       measured per stem, rebalanced; the limiter's true-peak mode for the louder transients. Delivered
       ~/Music/Solaris/magnetar.*.
+
+### A — a progressive house track (user request, 2026-10-21)
+*"make me a progressive house song that have really emotional melody"*. R-SVC-14.
+- [x] **A1** `demo/progressive`: an original progressive house track written by `make_script.py` as a `solaris-cc` script,
+      rendered, and measured by `measure.py` — the melody's pitch read from the lead and the piano (ctest
+      `progressive_track_measured`, label long); delivered to ~/Music/Solaris.
+      — DR-SVC-14. *Afterglow*, 3:18, all 29 checks pass; 2 musical mutants red. The first take was flat (the verse within
+      a decibel of the drop, the builds starting as loud as they ended): the sub to the drops, a softer verse groove, the
+      pluck out of each build's first half, the lead swelling through the builds. Delivered ~/Music/Solaris/afterglow.*.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

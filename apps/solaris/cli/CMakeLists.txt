@@ -30,6 +30,11 @@ add_test(NAME trap_track_measured
   COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/trap
           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_trap -DPY=${SOLARIS_PYTHON3} -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/demo_trap.cmake)
 set_tests_properties(trap_track_measured PROPERTIES TIMEOUT 1200 LABELS "long")
+# R-SVC-14: the progressive house track — its melody read back from the lead and the piano, note by note: `ctest -L long`
+add_test(NAME progressive_track_measured
+  COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/progressive
+          -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_progressive -DPY=${SOLARIS_PYTHON3} -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/demo_progressive.cmake)
+set_tests_properties(progressive_track_measured PROPERTIES TIMEOUT 1200 LABELS "long")
 
 add_test(NAME solaris_demo_canon
   COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/canon

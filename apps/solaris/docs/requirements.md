@@ -1518,6 +1518,22 @@ loudest, the air −24 dB. ctest `trap_track_measured` (label `long`, `tests/dem
 the generator writes, run to the end, and measure). Mutants on the music, each seen red: no gap, no held notes (no
 glides). Making it found D-26 (the audit called a wavetable silent).
 
+### DR-SVC-14 A progressive house track, its melody measured (R-SVC-14)
+`demo/progressive` (its README): *Afterglow*, written for this repo — IV–I–V–vi in D major, two bars a chord, its own
+melody, bass line, drums and form — 126 bpm, 104 bars, made with `solaris-cc` alone from `make_script.py`'s `song.txt`
+(~300 lines). The melody (sixteen bars; the first phrase asks, the second answers home) is heard first on a bare piano
+in the breakdown (its own track, so its pitch can be read), swells and opens on a legato lead through each build (volume
+and cutoff automated), carries the drop, and returns in the last drop a whole tone up (every pitched part's pattern
+lifted, E major) doubled an octave higher. `measure.py` judges it: −10.7 LUFS integrated, −1.21 dBTP; the drops −8.9 /
+−8.5 LUFS over the breakdown (−15.6) and the verse (−11.2); each build −16 → −10 LUFS and 21 dB brighter, landing; the kick
+on all 128 drop beats within 0.17 ms; the chords pumping 12.9 dB; the field; the melody as written (fifteen semitones,
+64 % steps, its climax A5 in the second half of each phrase, home on D) and as HEARD — a YIN pitch read 0.15 beat into
+each written note: the lead on all 54 of the first drop's within 50 cents (median 3), the piano on all 28 of the
+breakdown's (median 0), the lead on all 54 of the last drop's a whole tone higher; the drops in D major and E major (97 %
+of their pitched peaks over 250 Hz — below it a bass saw's seventh harmonic reads as a C natural). ctest
+`progressive_track_measured` (label `long`, `tests/demo_progressive.cmake`). Mutants on the music, each seen red: no
+lift, the lead a semitone off its melody.
+
 ### DR-SVC-5 The control channel and attach (R-SVC-5, R-SVC-6)
 **The window.** `solaris --control <socket> [song.slp]` (`linux_main.cpp:480`) builds a `ControlServer`
 on the window's own service after any song opened and polls it from its own 16 ms GLib timeout
