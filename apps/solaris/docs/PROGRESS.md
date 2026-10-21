@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► F4** — an original NCS-style track (R-SVC-16): bright electro / future house at 128 bpm, a bouncy bass, a hook, a big build. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► the user's call** — section F is done (the shaper, the vowel filter, Halation, Starward). Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -827,8 +827,13 @@ complete the goal"*. Both tracks original — the styles' sound, nobody's song. 
       each switched by its depth); a detuned unison beats harmonics through the formants (one voice); the vowel's line
       A E I O U makes a slow "oh" → "ah" say "ee" (an 8 ms cut); the 808 carried the drop (rebalanced per strip).
       Delivered ~/Music/Solaris/halation.*.
-- [ ] **F4** An original NCS-style track — bright electro / future house at 128 bpm, a bouncy FM bass, a hook — measured,
+- [x] **F4** An original NCS-style track — bright electro / future house at 128 bpm, a bouncy FM bass, a hook — measured,
       delivered (R-SVC-16).
+      — DR-SVC-16. `demo/futurehouse`: *Starward*, 2:30, G major at 128; all 26 checks pass (ctest
+      `futurehouse_track_measured`, label long); 4 musical mutants red (no pump, the pump off the grid, the bass on the
+      beat, the lead a semitone off). The pump is the shaper's alone — no compressor, no key. The first take's builds
+      ended louder than their drops and the verse sat within 1.5 LU of the drop; the kick set every peak and the bass sat
+      7 LU under the chords — rebalanced per strip, the limiter's release halved. Delivered ~/Music/Solaris/starward.*.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

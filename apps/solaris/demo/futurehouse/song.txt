@@ -1,0 +1,262 @@
+# Starward — an original electro / future house track in the NCS style, written by make_script.py (R-SVC-16).
+# 128 bpm, G major, 80 bars.
+project new starward.slp --bpm 128 --name "Starward"
+
+# the kick: every beat — from the intro's second half, the verse, the drops; in each build quarters, eighths, then
+# a sixteenth roll — and out for the gap
+clip add --instrument drums --at 96 --length 64
+set ch_2.name="Kick" pt_1.name="Kick"
+set dv_1.kick.tune=0 dv_1.kick.decay=330 dv_1.kick.tone=0.7 dv_1.kick.level=3 dv_1.volume=0
+set pt_1.length=4
+notes add pt_1 "36@0:0.25:124 36@1:0.25:116 36@2:0.25:116 36@3:0.25:116"
+clip add --strip ch_2 --pattern pt_1 --at 16 --length 16
+clip add --strip ch_2 --pattern pt_1 --at 32 --length 32
+clip add --strip ch_2 --pattern pt_1 --at 224 --length 64
+clip add --strip ch_2 --pattern pt_1 --at 288 --length 16
+pattern new --name "Kick, the build" --length 32
+notes add pt_2 "36@0:0.25:92 36@1:0.25:92 36@2:0.25:92 36@3:0.25:92 36@4:0.25:92 36@5:0.25:92 36@6:0.25:92 36@7:0.25:92 36@8:0.25:92 36@9:0.25:92 36@10:0.25:92 36@11:0.25:92 36@12:0.25:92 36@13:0.25:92 36@14:0.25:92 36@15:0.25:92 36@16:0.25:92 36@16.5:0.25:93 36@17:0.25:93 36@17.5:0.25:94 36@18:0.25:94 36@18.5:0.25:95 36@19:0.25:95 36@19.5:0.25:96 36@20:0.25:96 36@20.5:0.25:97 36@21:0.25:97 36@21.5:0.25:98 36@22:0.25:98 36@22.5:0.25:99 36@23:0.25:99 36@23.5:0.25:100 36@24:0.25:92 36@24.25:0.25:93 36@24.5:0.25:93 36@24.75:0.25:94 36@25:0.25:95 36@25.25:0.25:95 36@25.5:0.25:96 36@25.75:0.25:97 36@26:0.25:97 36@26.25:0.25:98 36@26.5:0.25:99 36@26.75:0.25:99 36@27:0.25:100 36@27.25:0.25:101 36@27.5:0.25:101 36@27.75:0.25:102"
+notes add pt_2 "36@28:0.125:90 36@28.125:0.125:91 36@28.25:0.125:92 36@28.375:0.125:92 36@28.5:0.125:93 36@28.625:0.125:94 36@28.75:0.125:95 36@28.875:0.125:95 36@29:0.125:96 36@29.125:0.125:97 36@29.25:0.125:98 36@29.375:0.125:99 36@29.5:0.125:99 36@29.625:0.125:100 36@29.75:0.125:101 36@29.875:0.125:102 36@30:0.125:103 36@30.125:0.125:103 36@30.25:0.125:104 36@30.375:0.125:105 36@30.5:0.125:106 36@30.625:0.125:106 36@30.75:0.125:107 36@30.875:0.125:108"
+auto create dv_1.volume
+auto point add au_1 --at 0 --value 0 --shape hold
+auto point add au_1 --at 32 --value -7 --shape hold
+auto point add au_1 --at 64 --value -3 --shape hold
+auto point add au_1 --at 96 --value 0 --shape hold
+auto point add au_1 --at 192 --value -3 --shape hold
+auto point add au_1 --at 224 --value 0 --shape hold
+clip add --strip ch_2 --pattern pt_2 --at 64 --length 32
+clip add --strip ch_2 --pattern pt_2 --at 192 --length 32
+
+# the clap and a snare under it on two and four — the drops, the verse (a clap alone)
+clip add --instrument drums --at 96 --length 64
+set ch_3.name="Clap" pt_3.name="Clap"
+set dv_2.clap.decay=300 dv_2.clap.tone=0.7 dv_2.clap.level=2 dv_2.snare.tune=4 dv_2.snare.decay=180 dv_2.snare.tone=0.8 dv_2.snare.level=-4 dv_2.volume=0
+set pt_3.length=4
+notes add pt_3 "38@1:0.25:100 39@1:0.25:118 38@3:0.25:100 39@3:0.25:118"
+clip add --strip ch_3 --pattern pt_3 --at 224 --length 64
+pattern new --name "Clap, the verse" --length 4
+notes add pt_4 "39@1:0.25:96 39@3:0.25:96"
+clip add --strip ch_3 --pattern pt_4 --at 32 --length 32
+
+# hats: an open hat on every off-beat, closed sixteenths around it — the drops; the verse and the intro lighter
+clip add --instrument drums --at 96 --length 64
+set ch_4.name="Hats" pt_5.name="Hats"
+set dv_3.chat.tone=0.9 dv_3.chat.decay=30 dv_3.chat.level=0 dv_3.chat.pan=0.22 dv_3.ohat.decay=180 dv_3.ohat.tone=0.85 dv_3.ohat.level=1 dv_3.ohat.pan=-0.12 dv_3.volume=0
+set pt_5.length=4
+notes add pt_5 "42@0.25:0.25:72 46@0.5:0.25:110 42@0.75:0.25:58 42@1.25:0.25:72 46@1.5:0.25:110 42@1.75:0.25:58 42@2.25:0.25:72 46@2.5:0.25:110 42@2.75:0.25:58 42@3.25:0.25:72 46@3.5:0.25:110 42@3.75:0.25:58"
+clip add --strip ch_4 --pattern pt_5 --at 224 --length 64
+pattern new --name "Hats, light" --length 4
+notes add pt_6 "46@0.5:0.25:84 46@1.5:0.25:84 46@2.5:0.25:84 46@3.5:0.25:84"
+clip add --strip ch_4 --pattern pt_6 --at 16 --length 16
+clip add --strip ch_4 --pattern pt_6 --at 32 --length 32
+clip add --strip ch_4 --pattern pt_6 --at 288 --length 16
+
+# a crash on each drop's downbeat and halfway; an impact — noise sweeping down — on each drop
+clip add --instrument drums --at 96 --length 4
+set ch_5.name="Crash" pt_7.name="Crash"
+set dv_4.crash.level=0 dv_4.crash.decay=2600 dv_4.crash.tone=0.75 dv_4.volume=-2
+set pt_7.length=4
+notes add pt_7 "49@0:0.25:120"
+clip add --strip ch_5 --pattern pt_7 --at 128 --length 4
+clip add --strip ch_5 --pattern pt_7 --at 224 --length 4
+clip add --strip ch_5 --pattern pt_7 --at 256 --length 4
+clip add --strip ch_5 --pattern pt_7 --at 288 --length 4
+clip add --instrument synth --at 96 --length 8
+set ch_6.name="Impact" pt_8.name="Impact"
+set dv_5.osc1.level=0 dv_5.osc2.level=0 dv_5.noise=1 dv_5.filter.cutoff=300 dv_5.filter.res=0.1 dv_5.filter.env=5.2 dv_5.filter.keytrack=0 dv_5.fenv.attack=0 dv_5.fenv.decay=1000 dv_5.fenv.sustain=0 dv_5.amp.attack=0 dv_5.amp.decay=1600 dv_5.amp.sustain=0 dv_5.amp.release=800 dv_5.volume=-8
+set pt_8.length=8
+notes add pt_8 "43@0:4:127"
+clip add --strip ch_6 --pattern pt_8 --at 224 --length 8
+clip add --instrument drums --at 64 --length 32
+set ch_7.name="Roll" pt_9.name="Roll"
+# the build's snare roll: quarters, eighths, sixteenths, thirty-seconds — then the gap
+set dv_6.snare.tune=6 dv_6.snare.decay=150 dv_6.snare.tone=0.7 dv_6.volume=-6
+set pt_9.length=32
+notes add pt_9 "38@0:0.25:52 38@1:0.25:53 38@2:0.25:55 38@3:0.25:56 38@4:0.25:58 38@5:0.25:59 38@6:0.25:61 38@7:0.25:62 38@8:0.25:62 38@8.5:0.25:63 38@9:0.25:64 38@9.5:0.25:65 38@10:0.25:66 38@10.5:0.25:67 38@11:0.25:68 38@11.5:0.25:69 38@12:0.25:69 38@12.5:0.25:70 38@13:0.25:71 38@13.5:0.25:72 38@14:0.25:73 38@14.5:0.25:74 38@15:0.25:75 38@15.5:0.25:76 38@16:0.25:76 38@16.25:0.25:77 38@16.5:0.25:77 38@16.75:0.25:78 38@17:0.25:78 38@17.25:0.25:79 38@17.5:0.25:79 38@17.75:0.25:80 38@18:0.25:81 38@18.25:0.25:81 38@18.5:0.25:82 38@18.75:0.25:82 38@19:0.25:83 38@19.25:0.25:84 38@19.5:0.25:84 38@19.75:0.25:85 38@20:0.25:85 38@20.25:0.25:86 38@20.5:0.25:86 38@20.75:0.25:87 38@21:0.25:88 38@21.25:0.25:88 38@21.5:0.25:89 38@21.75:0.25:89"
+notes add pt_9 "38@22:0.25:90 38@22.25:0.25:91 38@22.5:0.25:91 38@22.75:0.25:92 38@23:0.25:92 38@23.25:0.25:93 38@23.5:0.25:93 38@23.75:0.25:94 38@24:0.125:94 38@24.125:0.125:95 38@24.25:0.125:95 38@24.375:0.125:96 38@24.5:0.125:96 38@24.625:0.125:97 38@24.75:0.125:97 38@24.875:0.125:98 38@25:0.125:98 38@25.125:0.125:99 38@25.25:0.125:99 38@25.375:0.125:100 38@25.5:0.125:101 38@25.625:0.125:101 38@25.75:0.125:102 38@25.875:0.125:102 38@26:0.125:103 38@26.125:0.125:103 38@26.25:0.125:104 38@26.375:0.125:104 38@26.5:0.125:105 38@26.625:0.125:105 38@26.75:0.125:106 38@26.875:0.125:107 38@27:0.125:107 38@27.125:0.125:108 38@27.25:0.125:108 38@27.375:0.125:109 38@27.5:0.125:109 38@27.625:0.125:110 38@27.75:0.125:110 38@27.875:0.125:111 38@28:0.125:111 38@28.125:0.125:112 38@28.25:0.125:113 38@28.375:0.125:113 38@28.5:0.125:114 38@28.625:0.125:114 38@28.75:0.125:115 38@28.875:0.125:115"
+notes add pt_9 "38@29:0.125:116 38@29.125:0.125:116 38@29.25:0.125:117 38@29.375:0.125:117 38@29.5:0.125:118 38@29.625:0.125:119 38@29.75:0.125:119 38@29.875:0.125:120 38@30:0.125:120 38@30.125:0.125:121 38@30.25:0.125:121 38@30.375:0.125:122 38@30.5:0.125:122 38@30.625:0.125:123 38@30.75:0.125:123 38@30.875:0.125:124"
+clip add --strip ch_7 --pattern pt_9 --at 192 --length 32
+
+# the bass: an FM bass (REQ-fm) — a sine and its octave-down sine, each struck bright by a fast modulator — on
+# the off-beats between the kicks, jumping octaves: the bounce
+clip add --instrument fm --at 96 --length 64
+set ch_8.name="Bass" pt_10.name="Bass"
+set dv_7.algorithm=5 dv_7.feedback=0.12 dv_7.op1.ratio=1 dv_7.op1.level=1 dv_7.op1.attack=1 dv_7.op1.decay=240 dv_7.op1.sustain=0.5 dv_7.op1.release=50 dv_7.op2.ratio=2 dv_7.op2.level=0.5 dv_7.op2.attack=0 dv_7.op2.decay=110 dv_7.op2.sustain=0 dv_7.op2.release=40 dv_7.op3.ratio=0.5 dv_7.op3.level=0.8 dv_7.op3.attack=1 dv_7.op3.decay=300 dv_7.op3.sustain=0.6 dv_7.op3.release=50 dv_7.op4.ratio=1 dv_7.op4.level=0.3 dv_7.op4.attack=0 dv_7.op4.decay=70 dv_7.op4.sustain=0 dv_7.op4.release=40 dv_7.vibrato.depth=0 dv_7.volume=-6
+set pt_10.length=16
+notes add pt_10 "40@0.5:0.25:112 52@1.5:0.25:112 40@1.75:0.25:112 40@2.5:0.25:112 52@3.5:0.25:112 40@3.75:0.25:112 36@4.5:0.25:112 48@5.5:0.25:112 36@5.75:0.25:112 36@6.5:0.25:112 48@7.5:0.25:112 36@7.75:0.25:112 43@8.5:0.25:112 55@9.5:0.25:112 43@9.75:0.25:112 43@10.5:0.25:112 55@11.5:0.25:112 43@11.75:0.25:112 38@12.5:0.25:112 50@13.5:0.25:112 38@13.75:0.25:112 38@14.5:0.25:112 50@15.5:0.25:112 38@15.75:0.25:112"
+pattern new --name "Bass, second drop" --length 16
+notes add pt_11 "40@0.5:0.25:112 52@0.75:0.25:112 52@1.5:0.25:112 40@1.75:0.25:112 40@2.5:0.25:112 52@2.75:0.25:112 52@3.5:0.25:112 40@3.75:0.25:112 36@4.5:0.25:112 48@4.75:0.25:112 48@5.5:0.25:112 36@5.75:0.25:112 36@6.5:0.25:112 48@6.75:0.25:112 48@7.5:0.25:112 36@7.75:0.25:112 43@8.5:0.25:112 55@8.75:0.25:112 55@9.5:0.25:112 43@9.75:0.25:112 43@10.5:0.25:112 55@10.75:0.25:112 55@11.5:0.25:112 43@11.75:0.25:112 38@12.5:0.25:112 50@12.75:0.25:112 50@13.5:0.25:112 38@13.75:0.25:112 38@14.5:0.25:112 50@14.75:0.25:112 50@15.5:0.25:112 38@15.75:0.25:112"
+clip add --strip ch_8 --pattern pt_11 --at 224 --length 64
+pattern new --name "Bass, the verse" --length 16
+notes add pt_12 "40@0.5:0.25:96 40@1.5:0.25:96 40@2.5:0.25:96 40@3.5:0.25:96 36@4.5:0.25:96 36@5.5:0.25:96 36@6.5:0.25:96 36@7.5:0.25:96 43@8.5:0.25:96 43@9.5:0.25:96 43@10.5:0.25:96 43@11.5:0.25:96 38@12.5:0.25:96 38@13.5:0.25:96 38@14.5:0.25:96 38@15.5:0.25:96"
+clip add --strip ch_8 --pattern pt_12 --at 32 --length 32
+auto create dv_7.volume
+auto point add au_2 --at 0 --value -6 --shape hold
+auto point add au_2 --at 32 --value -12 --shape hold
+auto point add au_2 --at 96 --value -6 --shape hold
+
+# the chords: two five-voice saws, wide, a bar each — through the verse, the builds, the drops; the pad under the
+# intro and the breakdown. Both PUMP on the shaper's pump shape a beat long, on the song's grid (R-FX-18): the
+# sidechain sound, with no compressor and no key
+clip add --instrument synth --at 32 --length 32
+set ch_9.name="Chords" pt_13.name="Chords"
+set dv_8.osc1.wave=saw dv_8.osc1.voices=5 dv_8.osc1.detune=30 dv_8.osc1.width=30 dv_8.osc1.level=0.7 dv_8.osc2.wave=saw dv_8.osc2.octave=0 dv_8.osc2.voices=5 dv_8.osc2.detune=20 dv_8.osc2.width=22 dv_8.osc2.fine=7 dv_8.osc2.level=0.5 dv_8.filter.cutoff=4800 dv_8.filter.res=0.12 dv_8.filter.env=0.6 dv_8.filter.keytrack=0.3 dv_8.fenv.decay=500 dv_8.fenv.sustain=0.6 dv_8.amp.attack=4 dv_8.amp.decay=400 dv_8.amp.sustain=0.9 dv_8.amp.release=140 dv_8.volume=-10
+set pt_13.length=16
+notes add pt_13 "52@0:4:96 59@0:4:96 62@0:4:96 67@0:4:96 71@0:4:96 48@4:4:96 55@4:4:96 62@4:4:96 64@4:4:96 67@4:4:96 55@8:4:96 59@8:4:96 62@8:4:96 67@8:4:96 71@8:4:96 50@12:4:96 57@12:4:96 62@12:4:96 66@12:4:96 69@12:4:96"
+pattern new --name "Chords, the build" --length 32
+notes add pt_14 "52@0:4:96 59@0:4:96 62@0:4:96 67@0:4:96 71@0:4:96 48@4:4:96 55@4:4:96 62@4:4:96 64@4:4:96 67@4:4:96 55@8:4:96 59@8:4:96 62@8:4:96 67@8:4:96 71@8:4:96 50@12:4:96 57@12:4:96 62@12:4:96 66@12:4:96 69@12:4:96 52@16:4:96 59@16:4:96 62@16:4:96 67@16:4:96 71@16:4:96 48@20:4:96 55@20:4:96 62@20:4:96 64@20:4:96 67@20:4:96 55@24:4:96 59@24:4:96 62@24:4:96 67@24:4:96 71@24:4:96 50@28:3:96 57@28:3:96 62@28:3:96 66@28:3:96 69@28:3:96"
+clip add --strip ch_9 --pattern pt_14 --at 64 --length 32
+clip add --strip ch_9 --pattern pt_13 --at 96 --length 64
+clip add --strip ch_9 --pattern pt_14 --at 192 --length 32
+clip add --strip ch_9 --pattern pt_13 --at 224 --length 64
+device add ch_9 --type shaper
+set dv_9.rate="1/4" dv_9.shape="pump" dv_9.depth=0.85 dv_9.smooth=2
+auto create dv_8.filter.cutoff
+auto point add au_3 --at 0 --value 3000 --shape hold
+auto point add au_3 --at 64 --value 700
+auto point add au_3 --at 95 --value 7000 --shape smooth
+auto point add au_3 --at 96 --value 4800 --shape hold
+auto point add au_3 --at 192 --value 700
+auto point add au_3 --at 223 --value 7000 --shape smooth
+auto point add au_3 --at 224 --value 4800 --shape hold
+auto create dv_8.volume
+auto point add au_4 --at 0 --value -22 --shape hold
+auto point add au_4 --at 64 --value -26
+auto point add au_4 --at 95 --value -13 --shape hold
+auto point add au_4 --at 96 --value -10 --shape hold
+auto point add au_4 --at 192 --value -26
+auto point add au_4 --at 223 --value -13 --shape hold
+auto point add au_4 --at 224 --value -10 --shape hold
+clip add --instrument synth --at 0 --length 32
+set ch_10.name="Pad" pt_15.name="Pad"
+set dv_10.osc1.wave=saw dv_10.osc1.voices=5 dv_10.osc1.detune=18 dv_10.osc1.width=34 dv_10.osc1.level=0.55 dv_10.osc2.wave=triangle dv_10.osc2.octave=1 dv_10.osc2.level=0.3 dv_10.filter.cutoff=2200 dv_10.filter.res=0.12 dv_10.filter.env=0.2 dv_10.filter.keytrack=0.25 dv_10.amp.attack=600 dv_10.amp.decay=1200 dv_10.amp.sustain=0.85 dv_10.amp.release=900 dv_10.volume=-14
+set pt_15.length=16
+notes add pt_15 "52@0:4:86 59@0:4:86 67@0:4:86 48@4:4:86 55@4:4:86 64@4:4:86 43@8:4:86 50@8:4:86 59@8:4:86 50@12:4:86 57@12:4:86 66@12:4:86"
+clip add --strip ch_10 --pattern pt_15 --at 160 --length 32
+clip add --strip ch_10 --pattern pt_15 --at 288 --length 32
+device add ch_10 --type shaper
+set dv_11.rate="1/4" dv_11.shape="pump" dv_11.depth=0.85 dv_11.smooth=2
+
+# the hook on the lead: a five-voice saw and its octave, bright, one voice at a time — the drops
+clip add --instrument synth --at 96 --length 64
+set ch_11.name="Lead" pt_16.name="Lead"
+set dv_12.osc1.wave=saw dv_12.osc1.voices=5 dv_12.osc1.detune=22 dv_12.osc1.width=20 dv_12.osc1.level=0.75 dv_12.osc2.wave=saw dv_12.osc2.octave=1 dv_12.osc2.voices=1 dv_12.osc2.level=0.3 dv_12.filter.cutoff=5200 dv_12.filter.res=0.15 dv_12.filter.env=1.2 dv_12.filter.keytrack=0.3 dv_12.fenv.decay=220 dv_12.fenv.sustain=0.55 dv_12.amp.attack=2 dv_12.amp.decay=200 dv_12.amp.sustain=0.8 dv_12.amp.release=90 dv_12.voice.mode=legato dv_12.voice.glide=0 dv_12.vibrato.depth=0 dv_12.volume=-8
+set pt_16.length=32
+notes add pt_16 "71@0:0.5:112 71@0.5:0.5:100 74@1:0.5:112 71@1.5:0.5:100 76@2:0.75:112 74@2.75:0.75:100 71@3.5:0.5:100 72@4:0.5:112 72@4.5:0.5:100 76@5:0.5:112 72@5.5:0.5:100 79@6:0.75:112 76@6.75:0.75:100 72@7.5:0.5:100 71@8:0.5:112 71@8.5:0.5:100 74@9:0.5:112 71@9.5:0.5:100 79@10:0.75:112 78@10.75:0.75:100 74@11.5:0.5:100 69@12:0.5:112 69@12.5:0.5:100 74@13:0.5:112 78@13.5:0.5:100 81@14:0.75:112 79@14.75:0.75:100 78@15.5:0.5:100 71@16:0.5:112 71@16.5:0.5:100 74@17:0.5:112 71@17.5:0.5:100 76@18:0.75:112 74@18.75:0.75:100 71@19.5:0.5:100 72@20:0.5:112 72@20.5:0.5:100 76@21:0.5:112 72@21.5:0.5:100 79@22:0.75:112 76@22.75:0.75:100 72@23.5:0.5:100 71@24:0.5:112 71@24.5:0.5:100 74@25:0.5:112 71@25.5:0.5:100 79@26:0.75:112 78@26.75:0.75:100"
+notes add pt_16 "74@27.5:0.5:100 69@28:0.5:112 69@28.5:0.5:100 74@29:0.5:112 78@29.5:0.5:100 76@30:0.75:112 74@30.75:0.75:100 71@31.5:0.5:100"
+clip add --strip ch_11 --pattern pt_16 --at 224 --length 64
+# the pluck: the hook teased — the intro's second half, the breakdown, the second build opening; an octave over
+# the lead in the second drop
+clip add --instrument wavetable --at 16 --length 16
+set ch_12.name="Pluck" pt_17.name="Pluck"
+set dv_13.osc1.table=harmonics dv_13.osc1.position=0.55 dv_13.osc1.posenv=-0.3 dv_13.osc1.voices=1 dv_13.osc1.level=0.8 dv_13.osc2.level=0 dv_13.filter.cutoff=3200 dv_13.filter.res=0.2 dv_13.filter.env=2.0 dv_13.fenv.decay=230 dv_13.fenv.sustain=0 dv_13.amp.attack=1 dv_13.amp.decay=360 dv_13.amp.sustain=0 dv_13.amp.release=200 dv_13.volume=-10
+set pt_17.length=32
+notes add pt_17 "71@0:0.5:100 71@0.5:0.5:100 74@1:0.5:100 71@1.5:0.5:100 76@2:0.75:100 74@2.75:0.75:100 71@3.5:0.5:100 72@4:0.5:100 72@4.5:0.5:100 76@5:0.5:100 72@5.5:0.5:100 79@6:0.75:100 76@6.75:0.75:100 72@7.5:0.5:100 71@8:0.5:100 71@8.5:0.5:100 74@9:0.5:100 71@9.5:0.5:100 79@10:0.75:100 78@10.75:0.75:100 74@11.5:0.5:100 69@12:0.5:100 69@12.5:0.5:100 74@13:0.5:100 78@13.5:0.5:100 81@14:0.75:100 79@14.75:0.75:100 78@15.5:0.5:100 71@16:0.5:100 71@16.5:0.5:100 74@17:0.5:100 71@17.5:0.5:100 76@18:0.75:100 74@18.75:0.75:100 71@19.5:0.5:100 72@20:0.5:100 72@20.5:0.5:100 76@21:0.5:100 72@21.5:0.5:100 79@22:0.75:100 76@22.75:0.75:100 72@23.5:0.5:100 71@24:0.5:100 71@24.5:0.5:100 74@25:0.5:100 71@25.5:0.5:100 79@26:0.75:100 78@26.75:0.75:100"
+notes add pt_17 "74@27.5:0.5:100 69@28:0.5:100 69@28.5:0.5:100 74@29:0.5:100 78@29.5:0.5:100 76@30:0.75:100 74@30.75:0.75:100 71@31.5:0.5:100"
+clip add --strip ch_12 --pattern pt_17 --at 160 --length 32
+clip add --strip ch_12 --pattern pt_17 --at 192 --length 31
+clip add --strip ch_12 --pattern pt_17 --at 224 --length 64
+auto create dv_13.osc1.octave
+auto point add au_5 --at 0 --value 0 --shape hold
+auto point add au_5 --at 224 --value 1 --shape hold
+auto point add au_5 --at 288 --value 0 --shape hold
+auto create dv_13.filter.cutoff
+auto point add au_6 --at 0 --value 600
+auto point add au_6 --at 31 --value 3200 --shape hold
+auto point add au_6 --at 192 --value 1200
+auto point add au_6 --at 223 --value 6000 --shape hold
+auto point add au_6 --at 224 --value 3200 --shape hold
+
+# the piano (R-INST-5): the chords, the verse and the breakdown
+clip add --instrument piano --at 32 --length 32
+set ch_13.name="Piano" pt_18.name="Piano"
+set dv_14.strings.brightness=1.1 dv_14.strings.decay=1.2 dv_14.body.mix=0.5 dv_14.hammer.hardness=1.0 dv_14.volume=-8
+set pt_18.length=16
+notes add pt_18 "40@0:4:72 52@0:4:72 67@0:1.5:80 71@0:1.5:80 76@0:1.5:80 67@1.5:1:68 71@1.5:1:68 76@1.5:1:68 67@2.5:1.5:72 71@2.5:1.5:72 76@2.5:1.5:72 36@4:4:72 48@4:4:72 67@4:1.5:80 72@4:1.5:80 76@4:1.5:80 67@5.5:1:68 72@5.5:1:68 76@5.5:1:68 67@6.5:1.5:72 72@6.5:1.5:72 76@6.5:1.5:72 31@8:4:72 43@8:4:72 67@8:1.5:80 71@8:1.5:80 74@8:1.5:80 67@9.5:1:68 71@9.5:1:68 74@9.5:1:68 67@10.5:1.5:72 71@10.5:1.5:72 74@10.5:1.5:72 38@12:4:72 50@12:4:72 66@12:1.5:80 69@12:1.5:80 74@12:1.5:80 66@13.5:1:68 69@13.5:1:68 74@13.5:1:68 66@14.5:1.5:72 69@14.5:1.5:72 74@14.5:1.5:72"
+clip add --strip ch_13 --pattern pt_18 --at 160 --length 32
+auto create dv_14.volume
+auto point add au_7 --at 0 --value -12 --shape hold
+auto point add au_7 --at 160 --value -8 --shape hold
+
+# the riser: noise and a saw, its filter opening and its pitch climbing an octave through each build — cut for the gap
+clip add --instrument synth --at 64 --length 32
+set ch_14.name="Riser" pt_19.name="Riser"
+set dv_15.osc1.wave=saw dv_15.osc1.voices=3 dv_15.osc1.detune=40 dv_15.osc1.width=30 dv_15.osc1.level=0.3 dv_15.osc2.level=0 dv_15.noise=0.85 dv_15.filter.res=0.35 dv_15.filter.env=0 dv_15.filter.keytrack=0 dv_15.amp.attack=1500 dv_15.amp.sustain=1 dv_15.amp.release=40 dv_15.volume=-15
+set pt_19.length=32
+notes add pt_19 "55@0:31:100"
+clip add --strip ch_14 --pattern pt_19 --at 192 --length 32
+auto create dv_15.filter.cutoff
+auto point move au_8 --at 0 --to 64 --value 200
+auto point add au_8 --at 95 --value 10000 --shape smooth
+auto point add au_8 --at 96 --value 200 --shape hold
+auto point add au_8 --at 192 --value 200
+auto point add au_8 --at 223 --value 10000 --shape smooth
+auto point add au_8 --at 224 --value 200 --shape hold
+auto create dv_15.osc1.semi
+auto point move au_9 --at 0 --to 64 --value -12
+auto point add au_9 --at 95 --value 12
+auto point add au_9 --at 96 --value -12 --shape hold
+auto point add au_9 --at 192 --value -12
+auto point add au_9 --at 223 --value 12
+auto point add au_9 --at 224 --value -12 --shape hold
+auto create dv_15.volume
+auto point move au_10 --at 0 --to 64 --value -40
+auto point add au_10 --at 95 --value -12 --shape smooth
+auto point add au_10 --at 96 --value -40 --shape hold
+auto point add au_10 --at 192 --value -40
+auto point add au_10 --at 223 --value -12 --shape smooth
+auto point add au_10 --at 224 --value -40 --shape hold
+
+# tone: the bass alone under 120 Hz but for the kick; the top bright — a shelf on the lead and the hats
+device add ch_8 --type eq
+set dv_16.lowcut.on=on dv_16.lowcut.freq=30
+device add ch_9 --type eq
+set dv_17.lowcut.on=on dv_17.lowcut.freq=200
+device add ch_10 --type eq
+set dv_18.lowcut.on=on dv_18.lowcut.freq=150
+device add ch_11 --type eq
+set dv_19.lowcut.on=on dv_19.lowcut.freq=250
+device add ch_12 --type eq
+set dv_20.lowcut.on=on dv_20.lowcut.freq=300
+device add ch_14 --type eq
+set dv_21.lowcut.on=on dv_21.lowcut.freq=180
+device add ch_4 --type eq
+set dv_22.lowcut.on=on dv_22.lowcut.freq=500
+device add ch_3 --type eq
+set dv_23.lowcut.on=on dv_23.lowcut.freq=180
+device add ch_5 --type eq
+set dv_24.lowcut.on=on dv_24.lowcut.freq=400
+device add ch_6 --type eq
+set dv_25.lowcut.on=on dv_25.lowcut.freq=60
+device add ch_13 --type eq
+set dv_26.lowcut.on=on dv_26.lowcut.freq=80
+device add ch_7 --type eq
+set dv_27.lowcut.on=on dv_27.lowcut.freq=200
+
+# space: a reverb and a dotted-eighth delay, each on a bus
+strip add --kind bus --name Reverb
+device add ch_15 --type reverb
+set dv_28.decay=2400 dv_28.size=140 dv_28.mix=1 dv_28.lowcut=350 dv_28.highcut=12000 dv_28.width=1
+strip add --kind bus --name Delay
+device add ch_16 --type delay
+set dv_29.time="=60000/bpm*0.75" dv_29.feedback=0.32 dv_29.tone=5000 dv_29.mix=1
+send add ch_11 --to ch_15 --gain -14
+send add ch_11 --to ch_16 --gain -16
+send add ch_9 --to ch_15 --gain -16
+send add ch_12 --to ch_15 --gain -8
+send add ch_12 --to ch_16 --gain -10
+send add ch_10 --to ch_15 --gain -8
+send add ch_13 --to ch_15 --gain -8
+send add ch_3 --to ch_15 --gain -16
+send add ch_5 --to ch_15 --gain -12
+send add ch_6 --to ch_15 --gain -6
+send add ch_14 --to ch_15 --gain -12
+
+# the mix: faders; the master: a limiter, its ceiling under −1 dBTP
+set ch_2.gain=-3 ch_8.gain=1 ch_3.gain=1 ch_4.gain=-4 ch_5.gain=-9 ch_6.gain=-6 ch_7.gain=-5 ch_9.gain=-4.5 ch_10.gain=-5 ch_11.gain=-2 ch_12.gain=-6 ch_13.gain=-4 ch_14.gain=-5 ch_15.gain=-6 ch_16.gain=-10
+device add master --type limiter
+set dv_30.gain=11 dv_30.ceiling=-1.3 dv_30.release=30 dv_30.truePeak=on
+
+ls
+audit
+project save
+render --out starward.wav --stems ch_2,ch_8,ch_3,ch_9,ch_11

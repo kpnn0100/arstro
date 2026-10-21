@@ -40,6 +40,11 @@ add_test(NAME futurebass_track_measured
   COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/futurebass
           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_futurebass -DPY=${SOLARIS_PYTHON3} -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/demo_futurebass.cmake)
 set_tests_properties(futurebass_track_measured PROPERTIES TIMEOUT 1200 LABELS "long")
+# R-SVC-16: the NCS-style track — the floor, the bass's bounce, the pump on the grid, the hook as written and as heard
+add_test(NAME futurehouse_track_measured
+  COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/futurehouse
+          -DWORK=${CMAKE_CURRENT_BINARY_DIR}/demo_futurehouse -DPY=${SOLARIS_PYTHON3} -P ${CMAKE_CURRENT_SOURCE_DIR}/../tests/demo_futurehouse.cmake)
+set_tests_properties(futurehouse_track_measured PROPERTIES TIMEOUT 1200 LABELS "long")
 
 add_test(NAME solaris_demo_canon
   COMMAND ${CMAKE_COMMAND} -DCC=$<TARGET_FILE:solaris-cc> -DDEMO=${CMAKE_CURRENT_SOURCE_DIR}/../demo/canon

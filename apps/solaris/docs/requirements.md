@@ -1556,6 +1556,23 @@ both ways (C♯5 D♯5 F♯5 G♯5) the "ah" 6.3–29 dB over the "ee" in every 
 half a cycle off the grid (the fold 0 of 12), the vowel filter bypassed (both vowel checks), the drops' wobble an eighth
 instead of a triplet eighth (the rate 9 of 12), the 808 with no glide (16 of 28).
 
+### DR-SVC-16 An electro / future house track in the NCS style, measured (R-SVC-16)
+`demo/futurehouse` (its README): *Starward*, written for this repo — vi–IV–I–V in G major, a bar a chord, its own hook,
+bass line, drums and form — 128 bpm, 80 bars, made with `solaris-cc` alone from `make_script.py`'s `song.txt` (~260
+lines). The bass is the FM synth (REQ-fm: algorithm 5, a sine and its octave-down sine each struck by a fast-decaying
+modulator) on the off-beats between the kicks, jumping octaves; the chords and the pad pump on a shaper each (`rate`
+1/4, `shape` pump, DR-FX-18) — no compressor and no sidechain key anywhere in the song; the hook is eight bars in one
+rhythm, on a legato lead in the drops and a pluck elsewhere. `measure.py` judges it, 26 checks: −8.7 LUFS integrated,
+−1.17 dBTP; the drops −7.2 / −7.0 LUFS over the breakdown (−11.2) and the verse (−10.4); each build rising 3.6–5.3 LU,
+17–23 dB brighter, landing; the gap 18.8 / 16.9 dB; the kick on all 128 drop beats within 0.12 ms; the clap on two and
+four of all 32 drop bars and never on one or three; the bass's 2 ms loudness folded on the beat loudest 0.77 of the way
+through and 38.5 dB quieter in the kick's eighth; the chords' folded on the song's beat matching the shaper's pump (SH2,
+SH3 through SH4) at r = 1.00, an 11 dB swing; the hook as written (one rhythm in 8 of 8 bars, its motif returning) and as
+heard (the lead on 224 of 224 drop notes within 50 cents, YIN); the field; 97 % of the drops' pitched peaks over 250 Hz
+in G major; the air 12 dB under the loudest octave. ctest `futurehouse_track_measured` (label `long`,
+`tests/demo_futurehouse.cmake`). Mutants on the music, each seen red: no pump (r < 0, a 0.9 dB swing), the pump half a
+beat off the grid (r −0.37), the bass on the beat (loudest at 0.05), the lead a semitone off (0 of 224).
+
 ### DR-SVC-5 The control channel and attach (R-SVC-5, R-SVC-6)
 **The window.** `solaris --control <socket> [song.slp]` (`linux_main.cpp:480`) builds a `ControlServer`
 on the window's own service after any song opened and polls it from its own 16 ms GLib timeout
