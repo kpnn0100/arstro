@@ -1204,6 +1204,19 @@ A short delay swept by an LFO and fed back: a comb whose teeth sweep.
 | `stereo` | 0.0 … 180.0 deg | 90.0 deg |
 | `mix` | 0.0 … 1.0 | 0.5 |
 
+### `vowel` — Vowel (effect)
+
+A sound shaped like a voice saying a vowel: three formant band-passes morphing through A, E, I, O, U — a bright synth through it reads as a vocal chop.
+
+| parameter | range | default |
+|---|---|---|
+| `vowel` | 0.0 … 4.0 | 0.0 |
+| `shift` | -12.0 … 12.0 st | 0.0 st |
+| `resonance` | 0.5 … 4.0 | 1.0 |
+| `glide` | 0.0 … 200.0 ms | 20.0 ms |
+| `mix` | 0.0 … 1.0 | 1.0 |
+| `output` | -24.0 … 24.0 dB | 6.0 dB |
+
 ### `shaper` — Shaper (effect)
 
 A volume shaped by the song's beat: a tempo-synced LFO — a sine, triangle, saw, square or pump, a note value long — turning the sound down and up.

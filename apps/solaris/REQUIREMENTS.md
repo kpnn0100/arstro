@@ -103,7 +103,7 @@ OSC."*
   held bass (an Alberti bass, an arpeggio) keeps its bass. Fast enough for one track with headroom: the
   registry's real-time budget holds for a piano chord.
 
-## R-FX — effects — ✅ IMPLEMENTED (1–4 DR-FX-1; 5 the rack: `device add/remove/move`, DR-SVC-1) — 5b ✅ (the generator apart, DR-FX-5b) — 5a ✅ (an effect dragged to its place, DR-FX-5a) — 18 ✅ (a shaper on the song's beat, DR-FX-18)
+## R-FX — effects — ✅ IMPLEMENTED (1–4 DR-FX-1; 5 the rack: `device add/remove/move`, DR-SVC-1) — 5b ✅ (the generator apart, DR-FX-5b) — 5a ✅ (an effect dragged to its place, DR-FX-5a) — 18 ✅ (a shaper on the song's beat, DR-FX-18) — 19 ✅ (a vowel filter, DR-FX-19)
 
 The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Reverb, …"*
 
@@ -140,6 +140,11 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
   SONG's beat — the engine tells every device where the song is before each block (REQ-device-12) — so a render from any
   beat lands on the grid, and a render stays byte-identical however time is cut. Its parameters are addresses and a
   generated panel, as every device's (R-DSP-2).
+- **R-FX-19 A vowel filter: a synth that reads as a voice** (the same request: Trap Nation–style tracks lead with
+  pitched vocal chops, and Solaris has no singer). The DSP library's vowel filter (REQ-fx-vowel-1) on any strip: three
+  formant band-passes morphing through A, E, I, O, U as `vowel` moves 0 … 4, `shift`, `resonance`, `glide`, `mix`,
+  `output` — automatable like any parameter (R-AUTO), so a lead can say "ah-oh-ee" on the beat. No Solaris code for the
+  device (R-DSP-2).
 
 ---
 

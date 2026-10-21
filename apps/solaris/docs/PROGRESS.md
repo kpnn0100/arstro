@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► F2** — a vowel filter (DSP, REQ-fx-vowel-1; R-FX-19); then F3, F4 (the two tracks). Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► F3** — an original Trap Nation–style track (R-SVC-15): future bass chords on the shaper, vowel chops, 808s, a half-time drop; then F4 (the NCS-style track). Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -815,7 +815,10 @@ complete the goal"*. Both tracks original — the styles' sound, nobody's song. 
       where the song is before each piece; the pointer bumped; L2 (R-FX-18).
       — DR-FX-18. DSP: 7 unit tests, 1 integration check, 6 mutants red. Solaris: L2 one (a render from beat 2.25 the
       same as the start's), the engine's call as a mutant seen red; the effect count updated; API regenerated.
-- [ ] **F2** A vowel filter (DSP, REQ-fx-vowel-1) — vocal-chop-like leads with no recording (R-FX-19).
+- [x] **F2** A vowel filter (DSP `65fbebf`, REQ-fx-vowel-1) — vocal-chop-like leads with no recording (R-FX-19).
+      — DR-FX-19. DSP: 6 unit tests, 1 integration check (the formants where the table puts them), 6 mutants red.
+      Solaris: the pointer bumped; L2 one (an automated vowel moving a saw's formants A → I), the registry's setter as
+      a mutant seen red; the effect count 23; API regenerated.
 - [ ] **F3** An original Trap Nation–style track — future bass chords wobbling on the shaper, vowel chops, 808s, a
       half-time drop — measured, delivered (R-SVC-15).
 - [ ] **F4** An original NCS-style track — bright electro / future house at 128 bpm, a bouncy FM bass, a hook — measured,

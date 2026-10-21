@@ -5398,6 +5398,38 @@ static void test_a_shaper_follows_the_songs_beat()
     pass("a shaper follows the song's beat (R-FX-18, REQ-device-12): rendered from beat 2.25 it is open at once and closed on each eighth after, sample for sample as rendered from the start");
 }
 
+// R-FX-19: a vowel filter on a synth's strip, its vowel automated A (0) for a bar, then I (2) — a sustained saw's
+// spectrum moves as a voice's does: by A, 770 Hz over 2310 Hz; by I, 2310 Hz over 770 Hz
+static void test_a_vowel_filter_speaks_on_a_strip()
+{
+    Run r;
+    const std::string dir = scratch();
+    r.ok("project new " + freshSong("vowel") + " --bpm 120");
+    r.ok("clip add --instrument synth --at 0 --length 8");              // ch_2 dv_1, pt_1
+    r.ok("set dv_1.osc1.wave=saw dv_1.osc2.level=0 dv_1.filter.cutoff=12000 dv_1.amp.sustain=1");
+    r.ok("note add pt_1 --pitch A2 --at 0 --length 8");                 // 110 Hz, held
+    const std::string vw = firstLine(r.ok("device add ch_2 --type vowel"));
+    r.ok("set " + vw + ".glide=0");
+    const std::string au = firstLine(r.ok("auto create " + vw + ".vowel"));
+    r.ok("auto point add " + au + " --at 0 --value 0 --shape hold");   // A for the first bar, then I: held, no ramp
+    r.ok("auto point add " + au + " --at 4 --value 2 --shape hold");
+    const std::string out = dir + "/vowel.wav";
+    r.ok("render --out " + out + " --to 8 --bits 32f");
+    const auto &x = r.fake.written[out][0];
+    auto at = [&](double hz, long a, long n) {
+        double re = 0, im = 0;
+        for (long i = 0; i < n; ++i) { const double w = 2 * M_PI * hz * (double)i / 48000.0; re += x[(size_t)(a + i)] * std::cos(w); im += x[(size_t)(a + i)] * std::sin(w); }
+        return 20 * std::log10(std::max(2 * std::hypot(re, im) / (double)n, 1e-12));
+    };
+    // a saw's k-th harmonic is 1/k of the first: the 21st starts 9.5 dB under the 7th — the filter's own move is over that
+    const double tilt = 20 * std::log10(21.0 / 7.0);
+    const double a7 = at(770, 24000, 48000), a21 = at(2310, 24000, 48000) + tilt;   // beats 0.5 … 1.5: A
+    const double i7 = at(770, 120000, 48000), i21 = at(2310, 120000, 48000) + tilt; // beats 5 … 6: I
+    assert(a7 - a21 > 10.0 && i21 - i7 > 10.0);
+    assert(contains(r.text(), "type=vowel"));
+    pass("a vowel filter speaks on a strip (R-FX-19): its vowel automated A → I, a held saw's 770 Hz over its 2310 Hz by A and the other way by I (each over 10 dB, the saw's own tilt taken out)");
+}
+
 static void test_the_wavetable_plays_with_no_code_of_its_own()
 {
     // R-INST-7: the DSP library's "wavetable" is an instrument here as the registry describes it — dropped as one line,
@@ -5559,7 +5591,7 @@ static void test_every_effect_drops_as_one_line_and_passes_sound()
         assert(finite && (peak > 0.001f || t.takesKey));
         ++added;
     }
-    assert(added >= 22); // the eight before N34; multiband, gate, transient, de-esser, saturator, bitcrusher, phaser, flanger, imager, convolution, pitch, vocoder, tuner; the shaper (R-FX-18)
+    assert(added >= 23); // the eight before N34; multiband, gate, transient, de-esser, saturator, bitcrusher, phaser, flanger, imager, convolution, pitch, vocoder, tuner; the shaper (R-FX-18), the vowel (R-FX-19)
     pass("every effect (R-FX-6…17, law 1): each the DSP library's registry describes drops onto a strip as one line and passes sound, with no code here");
 }
 
@@ -7898,6 +7930,7 @@ int main()
     test_freeze_and_bounce();
     test_the_wavetable_plays_with_no_code_of_its_own();
     test_a_shaper_follows_the_songs_beat();
+    test_a_vowel_filter_speaks_on_a_strip();
     test_every_instrument_drops_as_one_line_and_sounds();
     test_a_multisample_reads_its_sfz();
     test_every_effect_drops_as_one_line_and_passes_sound();

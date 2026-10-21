@@ -7726,6 +7726,74 @@
       ]
     },
     {
+      "type": "vowel",
+      "label": "Vowel",
+      "kind": "effect",
+      "summary": "A sound shaped like a voice saying a vowel: three formant band-passes morphing through A, E, I, O, U — a bright synth through it reads as a vocal chop.",
+      "params": [
+        {
+          "name": "vowel",
+          "label": "Vowel",
+          "unit": "",
+          "min": 0.0,
+          "max": 4.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "shift",
+          "label": "Shift",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "resonance",
+          "label": "Resonance",
+          "unit": "",
+          "min": 0.5,
+          "max": 4.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "glide",
+          "label": "Glide",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 200.0,
+          "default": 20.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "mix",
+          "label": "Mix",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 1.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "output",
+          "label": "Output",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 6.0,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "shaper",
       "label": "Shaper",
       "kind": "effect",
