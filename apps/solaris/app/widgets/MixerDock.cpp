@@ -19,7 +19,9 @@ namespace solaris_ui
 
     namespace
     {
-        constexpr int kSlots = 4;              // rack chips a card shows
+        constexpr int kSlots = 4;              // a VCA's member rows (R-MIX-19)
+        constexpr int kFxSlots = 3;            // R-FX-5b: the effects a card shows (with "+N more" and "+ Effect")
+        constexpr double kTitleH = 9.75;       // space::u(3): a section's title row
         constexpr double kChipStep = 22.75;    // space::u(7)
         constexpr double kChipH = 19.5;        // space::u(6)
         constexpr double kSendH = 16.25;       // space::u(5)
@@ -48,7 +50,10 @@ namespace solaris_ui
         /** Where everything on a card is, from its left edge, width and the body's top and height. */
         struct Geo
         {
-            Rect chips[kSlots], sends[2], pan, zone, mute, solo, out;
+            Rect chips[kSlots], sends[2], pan, zone, mute, solo, out; // chips: a VCA's members (R-MIX-19)
+            Rect titles[2];        // R-FX-5b: "Generator" (or "Input") and "Effects", over their sections
+            Rect gen;              // … where the sound comes from: an instrument's chip, an audio strip's clips, an input
+            Rect fx[kFxSlots];     // … the effects' slots after it
             Rect arm;              // R-REC-1: an armable strip's R (empty for a bus and the master)
             Rect clip;             // R-METER-2: the clip light, over the meters (its hit area: `clipHit`)
             double readoutY = 0;
@@ -57,9 +62,15 @@ namespace solaris_ui
         {
             Geo g;
             for (int k = 0; k < kSlots; ++k) g.chips[k] = Rect{x + 6.5, by + 38.0 + k * kChipStep, w - 13.0, kChipH};
-            for (int k = 0; k < 2; ++k) g.sends[k] = Rect{x + 6.5, by + 132.0 + k * kSendH, w - 13.0, kSendH};
-            g.pan = Rect{x + 9.75, by + 170.0, w - 19.5, 13.0};
-            g.zone = Rect{x + 6.5, by + 192.0, w - 13.0, std::max(40.0, bh - 192.0 - 78.0)};
+            // R-FX-5b: a title, the generator; a title, the effects — the rest of the card 22 px lower than before, the
+            // fader's zone (the flexible part) giving the room
+            g.titles[0] = Rect{x + 6.5, by + 38.0, w - 13.0, kTitleH};
+            g.gen = Rect{x + 6.5, by + 49.5, w - 13.0, kChipH};
+            g.titles[1] = Rect{x + 6.5, by + 73.0, w - 13.0, kTitleH};
+            for (int k = 0; k < kFxSlots; ++k) g.fx[k] = Rect{x + 6.5, by + 84.5 + k * kChipStep, w - 13.0, kChipH};
+            for (int k = 0; k < 2; ++k) g.sends[k] = Rect{x + 6.5, by + 154.0 + k * kSendH, w - 13.0, kSendH};
+            g.pan = Rect{x + 9.75, by + 192.0, w - 19.5, 13.0};
+            g.zone = Rect{x + 6.5, by + 214.0, w - 13.0, std::max(40.0, bh - 214.0 - 78.0)};
             g.readoutY = g.zone.bottom() + 14.0;
             const double bw = (w - 13.0 - 3.25) * 0.5;
             g.mute = Rect{x + 6.5, g.zone.bottom() + 22.0, bw, 19.5};
@@ -67,6 +78,39 @@ namespace solaris_ui
             g.out = Rect{x + 6.5, g.zone.bottom() + 45.5, w - 13.0, 19.5};
             g.clip = Rect{g.zone.x + g.zone.w * 0.62, g.zone.y + 0.5, 8.0, 3.25}; // above the meters (paintFader's mx)
             return g;
+        }
+        /** R-FX-5b: a rack as a card shows it — its generator (an instrument, first) apart, then the effects' slots: every
+         *  effect and "+ Effect", or the first, "+N more" and "+ Effect". A card's chip slots count the generator first. */
+        struct RackView
+        {
+            bool gen = false;
+            int effects = 0, shown = 0;
+            bool more = false;
+            int slots() const { return (gen ? 1 : 0) + shown; }
+            int device(int slot) const // the device a slot shows; −1 for "+N more" and "+ Effect"
+            {
+                if (gen && slot == 0) return 0;
+                const int j = slot - (gen ? 1 : 0);
+                if (j < 0 || j >= shown - 1 || (more && j == 1)) return -1;
+                return (gen ? 1 : 0) + j;
+            }
+            bool isMore(int slot) const { return more && slot - (gen ? 1 : 0) == 1; }
+            bool isAdd(int slot) const { return slot == slots() - 1; }
+        };
+        RackView rackOf(const std::vector<solaris::DeviceModel> &d)
+        {
+            RackView r;
+            r.gen = !d.empty() && d[0].instrument;
+            r.effects = (int)d.size() - (r.gen ? 1 : 0);
+            r.more = r.effects + 1 > kFxSlots;
+            r.shown = r.more ? kFxSlots : r.effects + 1;
+            return r;
+        }
+        Rect slotRect(const Geo &g, const RackView &r, int slot)
+        {
+            if (r.gen && slot == 0) return g.gen;
+            const int j = slot - (r.gen ? 1 : 0);
+            return j >= 0 && j < r.shown ? g.fx[j] : Rect{};
         }
         /** R-REC-1: an armable strip's M | S | R — the M/S row in three. */
         void armRow(Geo &g)
@@ -546,14 +590,74 @@ namespace solaris_ui
     int MixerDock::chipSlots(const std::string &id) const
     {
         const auto *devs = id == "master" ? &mModel.masterDevices : (strip(id) ? &strip(id)->devices : nullptr);
-        if (!devs) return 0;
-        const int n = (int)devs->size();
-        return n + 1 <= kSlots ? n + 1 : kSlots; // the devices and "+ Effect", or two, "+N", "+ Effect"
+        if (!devs || (id != "master" && strip(id)->kind == "vca")) return 0;
+        return rackOf(*devs).slots(); // R-FX-5b: the generator, then the effects, "+N more", "+ Effect"
     }
     Rect MixerDock::chipRect(const std::string &id, int slot) const
     {
         const Rect c = cardRect(id);
-        return c.w > 0 && slot >= 0 && slot < chipSlots(id) ? geoOf(c.x, c.w, c.y, c.h).chips[slot] : Rect{};
+        const auto *devs = id == "master" ? &mModel.masterDevices : (strip(id) ? &strip(id)->devices : nullptr);
+        if (c.w <= 0 || !devs || slot < 0 || slot >= chipSlots(id)) return Rect{};
+        return slotRect(geoOf(c.x, c.w, c.y, c.h), rackOf(*devs), slot);
+    }
+    Rect MixerDock::sectionRect(const std::string &id, int section) const
+    {
+        const Rect c = cardRect(id);
+        const solaris::StripModel *s = id == "master" ? nullptr : strip(id);
+        if (c.w <= 0 || section < 0 || section > 1 || (s && s->kind == "vca")) return Rect{};
+        return geoOf(c.x, c.w, c.y, c.h).titles[section];
+    }
+    Rect MixerDock::generatorRect(const std::string &id) const
+    {
+        const Rect c = cardRect(id);
+        const solaris::StripModel *s = id == "master" ? nullptr : strip(id);
+        if (c.w <= 0 || (s && s->kind == "vca")) return Rect{};
+        return geoOf(c.x, c.w, c.y, c.h).gen;
+    }
+    std::string MixerDock::sectionTitle(const std::string &id, int section) const
+    {
+        // R-FX-5b: where the sound is made — or, on a bus and the master, what comes in — and what shapes it
+        if (section == 1) return tr("Effects");
+        const solaris::StripModel *s = id == "master" ? nullptr : strip(id);
+        return !s || s->kind == "bus" ? tr("Input") : tr("Generator");
+    }
+    std::vector<std::string> MixerDock::inputNames(const std::string &id) const
+    {
+        std::vector<std::string> v;
+        if (id == "master")
+        {
+            for (const auto &s : mModel.strips)
+                if (s.out == "master") v.push_back(s.name); // what is routed to it
+            return v;
+        }
+        if (const solaris::StripModel *s = strip(id))
+            for (const auto &f : s->fromStrips)
+                if (const solaris::StripModel *o = strip(f)) v.push_back(o->name);
+        return v;
+    }
+    std::string MixerDock::generatorText(const std::string &id) const
+    {
+        const solaris::StripModel *s = id == "master" ? nullptr : strip(id);
+        if (id != "master" && !s) return std::string();
+        if (s && !s->devices.empty() && s->devices[0].instrument) return s->devices[0].label; // the instrument: data
+        if (!s || s->kind == "bus")
+        {
+            const auto names = inputNames(id);
+            std::string joined;
+            for (const auto &n : names) joined += (joined.empty() ? "" : ", ") + n;
+            return !names.empty() ? joined : id == "master" ? tr("the mix") : tr("nothing yet");
+        }
+        return tr("Audio clips");
+    }
+    double MixerDock::fxSlotLive(const std::string &id, const std::string &dv) const
+    {
+        const auto it = mFx.find(id + ">" + dv);
+        return it == mFx.end() || it->second.gone ? -1.0 : it->second.slot.value();
+    }
+    double MixerDock::fxAlphaLive(const std::string &id, const std::string &dv) const
+    {
+        const auto it = mFx.find(id + ">" + dv);
+        return it == mFx.end() ? -1.0 : it->second.alpha.value();
     }
     Rect MixerDock::foldRect(const std::string &bus) const
     {
@@ -690,10 +794,129 @@ namespace solaris_ui
 
     // ── time ─────────────────────────────────────────────────────────────────────────────────
 
+    void MixerDock::syncFx(double nowMs, bool fadeIn)
+    {
+        // R-FX-5a/5b: each card's effect chips, keyed — a rack changed anywhere slides them to their slots, eased; a chip
+        // that comes fades in, one that goes fades out where it was
+        for (auto &kv : mFx) kv.second.gone = true;
+        auto want = [&](const std::string &card, const std::vector<solaris::DeviceModel> &d) {
+            const RackView r = rackOf(d);
+            for (int j = 0; j < r.shown; ++j)
+            {
+                const int slot = (r.gen ? 1 : 0) + j;
+                std::string key;
+                int kind = 0, more = 0;
+                const solaris::DeviceModel *dev = nullptr;
+                if (r.isAdd(slot)) { key = card + ">+add"; kind = 2; }
+                else if (r.isMore(slot)) { key = card + ">+more"; kind = 1; more = r.effects - 1; }
+                else { dev = &d[(size_t)r.device(slot)]; key = card + ">" + dev->id; }
+                FxChip &c = mFx[key];
+                c.card = card;
+                c.kind = kind;
+                c.more = more;
+                c.dv = dev ? dev->id : std::string();
+                c.label = dev ? dev->label : std::string();
+                c.bypass = dev && dev->bypass;
+                c.slotWant = j;
+                c.gone = false;
+            }
+        };
+        for (const auto &s : mModel.strips)
+            if (s.kind != "vca") want(s.id, s.devices);
+        want("master", mModel.masterDevices);
+        for (auto it = mFx.begin(); it != mFx.end();)
+        {
+            FxChip &c = it->second;
+            if (!c.placed)
+            {
+                c.slot.set(c.slotWant);
+                c.slotLast = c.slotWant;
+                c.alpha.set(fadeIn ? 0.0 : 1.0);
+                c.aLast = c.alpha.value();
+                c.placed = true;
+            }
+            if (c.slotWant != c.slotLast) { c.slot.animateTo(c.slotWant, motion::kSelectMs, Easing::EaseOutCubic, nowMs); c.slotLast = c.slotWant; }
+            const double aw = c.gone ? 0.0 : 1.0;
+            if (aw != c.aLast) { c.alpha.animateTo(aw, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); c.aLast = aw; }
+            c.slot.update(nowMs);
+            c.alpha.update(nowMs);
+            if (c.gone && !c.alpha.isAnimating() && c.alpha.value() <= 0.001) it = mFx.erase(it);
+            else ++it;
+        }
+    }
+
+    void MixerDock::paintRack(IRenderTarget &t, const std::string &id, const std::vector<solaris::DeviceModel> &devs, double x, double w, double a, double ra,
+                              const Color &col) const
+    {
+        // R-FX-5b: two labelled sections — where the sound comes from, then what shapes it
+        const Geo g = geoOf(x, w, bodyTop(), bodyH());
+        const RackView rv = rackOf(devs);
+        const double ids = idsShown(), px = 9.0, tracking = 0.13 * px;
+        for (int sct = 0; sct < 2; ++sct)
+        {
+            const Rect tr = g.titles[sct];
+            const std::string word = textfit::ellipsize(t, solaris_strings::upper(sectionTitle(id, sct)), tr.w, px, font::sansSemiBold(), tracking);
+            t.setFill(fade(palette::mutedForeground(), ra)); // frozen, the titles recede with the rack
+            t.drawText(word, tr.x, textfit::baseline(tr.y + tr.h * 0.5, px), px, font::sansSemiBold(), tracking);
+        }
+        {
+            // the generator: an instrument is a chip that opens its window, in the strip's colour at its edge; anything
+            // else (an audio strip's clips, a bus's or the master's input) is said, not pressed
+            const Rect r = g.gen;
+            if (rv.gen)
+            {
+                const auto &d = devs[0];
+                const double hv = mHover.amount(hoverId((int)Part::Chip, id + ">", 0));
+                const bool open = isDeviceOpen && isDeviceOpen(d.id);
+                drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(lerpColor(palette::secondary(), palette::popover(), hv), ra),
+                                                                               fade(open ? palette::primary() : palette::whiteAlpha(0.0), ra), 1.0));
+                drawRoundedRect(t, Rect{r.x, r.y + 3.0, 2.0, r.h - 6.0}, radius::pill(), Paint::filled(fade(col, ra)));
+                drawNameWithId(t, d.label, d.id, r.x + 6.5, textfit::baseline(r.y + r.h * 0.5, 10.0), r.w - 11.5, 10.0, font::sansMedium(),
+                               d.bypass ? palette::mutedForeground() : palette::foreground(), ids, ra);
+            }
+            else
+            {
+                drawRoundedRect(t, r, radius::control(), Paint::stroked(fade(palette::whiteAlpha(0.08), a), 1.0));
+                t.setFill(fade(palette::mutedForeground(), a));
+                const bool input = id == "master" || (strip(id) && strip(id)->kind == "bus");
+                const auto names = input ? inputNames(id) : std::vector<std::string>{};
+                if (names.empty())
+                    t.drawText(textfit::ellipsize(t, generatorText(id), r.w - 10.0, 10.0, font::sans()), r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
+                else
+                {
+                    // the first that feeds it, by name (data), and how many more — a list would be words of its own
+                    const std::string more = names.size() > 1 ? "+" + std::to_string(names.size() - 1) : std::string();
+                    const double mw = more.empty() ? 0.0 : t.measureText(more, 10.0, font::mono()) + 4.0;
+                    t.drawText(textfit::ellipsize(t, names[0], r.w - 10.0 - mw, 10.0, font::sans()), r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
+                    if (!more.empty()) t.drawText(more, r.right() - 5.0 - (mw - 4.0), textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::mono());
+                }
+            }
+        }
+        // the effects, each in its slot — eased, so a rack changed anywhere slides (R-FX-5a)
+        for (const auto &kv : mFx)
+        {
+            const FxChip &c = kv.second;
+            const double ca = c.alpha.value() * ra;
+            if (c.card != id || ca <= 0.001) continue;
+            const Rect r{g.fx[0].x, g.fx[0].y + c.slot.value() * kChipStep, g.fx[0].w, kChipH};
+            const double hv = c.gone ? 0.0 : mHover.amount(hoverId((int)Part::Chip, id + ">", (rv.gen ? 1 : 0) + (int)c.slotWant));
+            const bool add = c.kind == 2, open = !c.dv.empty() && isDeviceOpen && isDeviceOpen(c.dv);
+            const std::string label = add ? tr("+ Effect") : c.kind == 1 ? fillIn(tr("+{1} more"), std::to_string(c.more)) : c.label;
+            if (add)
+                drawRoundedRect(t, r, radius::control(), Paint::stroked(fade(palette::whiteAlpha(0.14 + 0.2 * hv), ca), 1.0));
+            else
+                drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(lerpColor(palette::secondary(), palette::popover(), hv), ca),
+                                                                               fade(open ? palette::primary() : palette::whiteAlpha(0.0), ca), 1.0));
+            drawNameWithId(t, label, c.dv, r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), r.w - 10.0, 10.0, font::sans(),
+                           add || c.kind == 1 || c.bypass ? palette::mutedForeground() : palette::foreground(), ids, ca);
+        }
+    }
+
     void MixerDock::advance(double nowMs)
     {
         mNowMs = nowMs;
         const bool fadeIn = mEver && !reducedMotion();
+        syncFx(nowMs, fadeIn); // R-FX-5a/5b
         // every strip's eased picture, and the master's
         const bool playing = mModel.transport.playing, started = playing && !mWasPlaying;
         mWasPlaying = playing;
@@ -1014,8 +1237,9 @@ namespace solaris_ui
             if (clipHit(g.clip).contains(p)) h.part = Part::Clip;
             if (loudnessRect().contains(p)) h.part = Part::Loudness;
             if (monoRect().contains(p)) h.part = Part::Mono; // R-MIX-20
-            for (int k = 0; k < chipSlots("master"); ++k)
-                if (g.chips[k].contains(p)) { h.part = Part::Chip; h.index = k; }
+            const RackView rv = rackOf(mModel.masterDevices);
+            for (int k = 0; k < rv.slots(); ++k)
+                if (slotRect(g, rv, k).contains(p)) { h.part = Part::Chip; h.index = k; }
             return h;
         }
         const Page *pg = shownPage();
@@ -1033,8 +1257,9 @@ namespace solaris_ui
                 h.part = Part::Header;
                 const solaris::StripModel *cs = strip(c.id);
                 const bool vca = cs && cs->kind == "vca"; // R-MIX-19: no rack, sends, pan or route to press
-                for (int k = 0; k < chipSlots(c.id) && !vca; ++k)
-                    if (g.chips[k].contains(p)) { h.part = Part::Chip; h.index = k; }
+                const RackView rv = cs ? rackOf(cs->devices) : RackView{};
+                for (int k = 0; k < rv.slots() && !vca; ++k)
+                    if (slotRect(g, rv, k).contains(p)) { h.part = Part::Chip; h.index = k; }
                 for (int k = 0; k < 2 && !vca; ++k)
                     if (g.sends[k].contains(p)) { h.part = Part::Send; h.index = k; }
                 if (g.pan.contains(p) && !vca) h.part = Part::Pan;
@@ -1281,9 +1506,9 @@ namespace solaris_ui
             {
                 const auto *devs = h.id == "master" ? &mModel.masterDevices : (strip(h.id) ? &strip(h.id)->devices : nullptr);
                 if (!devs) break;
-                const int n = (int)devs->size(), slots = chipSlots(h.id);
-                if (h.index == slots - 1) { openAddEffect(h.id, world); break; }
-                if (n + 1 > kSlots && h.index == slots - 2 && onMenu) // "+N": the rest of the rack
+                const RackView rv = rackOf(*devs); // R-FX-5b: the generator, then the effects
+                if (rv.isAdd(h.index)) { openAddEffect(h.id, world); break; }
+                if (rv.isMore(h.index) && onMenu) // "+N": the rest of the rack
                 {
                     std::vector<cosmo_v2::ContextMenu::Item> items;
                     for (const auto &d : *devs)
@@ -1294,7 +1519,8 @@ namespace solaris_ui
                     onMenu(items, world);
                     break;
                 }
-                const std::string dv = (*devs)[(size_t)h.index].id;
+                if (rv.device(h.index) < 0) break;
+                const std::string dv = (*devs)[(size_t)rv.device(h.index)].id;
                 if (onOpenDevice) onOpenDevice(dv); // its window (R-WIN-1): opened, or brought forward
                 break;
             }
@@ -1585,36 +1811,13 @@ namespace solaris_ui
             t.setFill(fade(palette::secondaryForeground(), ca));
             t.drawText(rv, x + (w - t.measureText(rv, 10.0, font::mono())) * 0.5, g.readoutY, 10.0, font::mono());
         }
-        // the rack — frozen, it recedes (its devices idle) under a pill (R-PERF-3)
-        const int n = isVca ? 0 : (int)s->devices.size(), slots = isVca ? 0 : chipSlots(id);
+        // the rack in its two sections (R-FX-5b) — frozen, it recedes (its devices idle) under a pill (R-PERF-3)
+        const int slots = isVca ? 0 : chipSlots(id);
         const double fz = l->frozen.value(), ra = ca * (1.0 - 0.65 * fz); // its devices idle: they recede
-        for (int k = 0; k < slots; ++k)
-        {
-            const Rect r = g.chips[k];
-            const double hv = mHover.amount(hoverId((int)Part::Chip, id + ">", k));
-            std::string label, dv;
-            bool add = k == slots - 1, more = n + 1 > kSlots && k == slots - 2, bypass = false, open = false;
-            if (add) label = tr("+ Effect");
-            else if (more) label = fillIn(tr("+{1} more"), std::to_string(n - (kSlots - 2)));
-            else
-            {
-                const auto &d = s->devices[(size_t)k];
-                label = d.label;
-                dv = d.id;
-                bypass = d.bypass;
-                open = isDeviceOpen && isDeviceOpen(d.id);
-            }
-            if (add)
-                drawRoundedRect(t, r, radius::control(), Paint::stroked(fade(palette::whiteAlpha(0.14 + 0.2 * hv), ra), 1.0));
-            else
-                drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(lerpColor(palette::secondary(), palette::popover(), hv), ra),
-                                                                               fade(open ? palette::primary() : palette::whiteAlpha(0.0), ra), 1.0));
-            drawNameWithId(t, label, dv, r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), r.w - 10.0, 10.0, font::sans(),
-                           add || more || bypass ? palette::mutedForeground() : palette::foreground(), ids, ra);
-        }
+        if (!isVca) paintRack(t, id, s->devices, x, w, ca, ra, col);
         if (fz > 0.001 && slots > 0)
         {
-            const Rect &top = g.chips[0], &last = g.chips[slots - 1];
+            const Rect &top = g.gen, last = slotRect(g, rackOf(s->devices), slots - 1);
             const double cy = (top.y + last.y + last.h) * 0.5, px = 9.0, tr = 0.13 * px;
             const double pw = top.w, ph = kChipH; // a chip's size, over the rack's middle: nothing of a device peeks past it
             const std::string word = textfit::ellipsize(t, solaris_strings::upper(::arstro::solaris_ui::tr("Frozen")), pw - 6.5, px, font::sansSemiBold(), tr); // a narrow card: it fits or says less
@@ -1769,19 +1972,7 @@ namespace solaris_ui
         const size_t nd = mModel.masterDevices.size();
         t.drawText(textfit::ellipsize(t, nd ? fillIn(trn((long)nd, "{1} device", "{1} devices"), std::to_string(nd)) : tr("the mix"), w - 13.0, 9.0, font::sans()), x + 6.5, by + 33.0, 9.0,
                    font::sans());
-        const int n = (int)mModel.masterDevices.size(), slots = chipSlots("master");
-        for (int k = 0; k < slots; ++k)
-        {
-            const Rect r = g.chips[k];
-            const double hv = mHover.amount(hoverId((int)Part::Chip, "master>", k));
-            const bool add = k == slots - 1, more = n + 1 > kSlots && k == slots - 2;
-            const std::string label = add ? tr("+ Effect") : more ? fillIn(tr("+{1} more"), std::to_string(n - (kSlots - 2))) : mModel.masterDevices[(size_t)k].label;
-            const std::string dv = add || more ? std::string() : mModel.masterDevices[(size_t)k].id;
-            if (add) drawRoundedRect(t, r, radius::control(), Paint::stroked(fade(palette::whiteAlpha(0.14 + 0.2 * hv), a), 1.0));
-            else drawRoundedRect(t, r, radius::control(), Paint::filled(fade(lerpColor(palette::secondary(), palette::card(), hv), a)));
-            drawNameWithId(t, label, dv, r.x + 5.0, textfit::baseline(r.y + r.h * 0.5, 10.0), r.w - 10.0, 10.0, font::sans(),
-                           add || more ? palette::mutedForeground() : palette::foreground(), ids, a);
-        }
+        paintRack(t, "master", mModel.masterDevices, x, w, a, a, palette::secondaryForeground()); // R-FX-5b: its input, its effects
         // R-MIX-20: the mono check — the listener's; lit while on (a master has no pan: its row is free)
         {
             const Rect mr = monoRect();

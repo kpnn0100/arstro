@@ -103,7 +103,7 @@ OSC."*
   held bass (an Alberti bass, an arpeggio) keeps its bass. Fast enough for one track with headroom: the
   registry's real-time budget holds for a piano chord.
 
-## R-FX — effects — ✅ IMPLEMENTED (1–4 DR-FX-1; 5 the rack: `device add/remove/move`, DR-SVC-1)
+## R-FX — effects — ✅ IMPLEMENTED (1–4 DR-FX-1; 5 the rack: `device add/remove/move`, DR-SVC-1) — 5b ✅ (the generator apart, DR-FX-5b) — 5a 🚧 (Y3)
 
 The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Reverb, …"*
 

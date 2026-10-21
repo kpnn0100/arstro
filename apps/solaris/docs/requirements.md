@@ -143,7 +143,7 @@ forward is taken, backward refused naming both ends; `strip move` that would poi
 default route). The same rule is PUBLISHED: `targetsOf` (`model/Project.cpp:1203`) lists what a strip
 may feed — later strips in processing order, `master`, the output ports — as `strips[].targets`
 (`core/service/ServiceModel.cpp:286`), and `keyTargetsOf` (`model/Project.cpp:1183`) its strips as `strips[].keyTargets`;
-a front end offers exactly that list (the route picker, `MixerDock::openOut`, `app/widgets/MixerDock.cpp:1055`),
+a front end offers exactly that list (the route picker, `MixerDock::openOut`, `app/widgets/MixerDock.cpp:1280`),
 and the test routes to every entry offered.
 
 ### DR-ENG-1 The engine renders a MixGraph through the DSP library's devices (R-MIX-1/5/6, R-DSP-1/5, R-RENDER-1)
@@ -254,11 +254,11 @@ onto a bus ("a bus plays no clips"), across kinds (audio clips need an audio str
 instrument strip), onto itself, and when `<ch>` has no clips. A pattern's `strip` follows its first
 clip. In the dock (`app/widgets/MixerDock.cpp`) every mixer page ends with "+ Line" after its last
 card — placed from the LIVE card widths, so it slides as cards grow in and shrink out
-(`MixerDock::addLineRect`, `MixerDock.cpp:379`; drawn at `:1768`) — whose menu is an audio line, a bus
+(`MixerDock::addLineRect`, `MixerDock.cpp:423`; drawn at `:1971`) — whose menu is an audio line, a bus
 and every instrument of the registry, each ONE `strip add --kind … [--instrument <type>] --mixer
-<mx>` (`MixerDock::openAddLine`, `MixerDock.cpp:997`); the new card grows in. A strip's menu offers
+<mx>` (`MixerDock::openAddLine`, `MixerDock.cpp:1220`); the new card grows in. A strip's menu offers
 "Move its clips to ▸" when it has clips and another strip of its kind exists — a second menu of those
-strips → `strip relink` (`MixerDock.cpp:1305`). On the lanes a clip's menu (`Timeline.cpp:891`) offers
+strips → `strip relink` (`MixerDock.cpp:1531`). On the lanes a clip's menu (`Timeline.cpp:891`) offers
 "Play through ▸" — the strips of its kind, the current one marked "now" → `clip move <ac> --strip
 <ch>` — then Piano Roll (a note clip), Duplicate, Delete.
 
@@ -451,37 +451,55 @@ deleted. Every front end draws it as is.
 
 ### DR-UI-8 The mixer dock (R-UI-3, R-MIX-1/5/6/7/9/12, R-MIX-12 amended)
 `MixerDock` (`app/widgets/MixerDock.cpp`) sits under the lanes (`ProjectScreen::dockTarget`,
-`app/widgets/ProjectScreen.cpp:164`: 429 px wanted; its top edge dragged follows the pointer; the
+`app/widgets/ProjectScreen.cpp:178`: 429 px wanted; its top edge dragged follows the pointer; the
 chevron folds it to its tab bar, eased 220 ms; it gives way before the lanes, which keep 130 px).
 Tabs: a mixer page each, "+" (`mixer add`), Matrix; keyed (`syncTabs`) so a tab added slides the
 others along, measured in one weight so choosing a tab moves nothing; the highlight slides, the
-pages cross-fade as layers. A page (`syncCards`, `:217`) is a card per strip in processing order,
+pages cross-fade as layers. A page (`syncCards`, `app/widgets/MixerDock.cpp:324`) is a card per strip in processing order,
 the strips feeding one bus (two or more) gathered under its header; the master pinned right. A card:
-colour, name, "audio · N clips" / "bus · fed by N"; rack chips (four slots: the devices and "+
-Effect", or two, "+N more", "+ Effect"); two sends (→ name, dB, P = pre; a third says "in the
-matrix"); pan; the fader (`faderPos`, `:104`: gain ∝ position², 0 dB at 0.708, +6 at the top) beside
+colour, name, "audio · N clips" / "bus · fed by N"; the rack in two labelled sections (DR-FX-5b); two sends (→ name, dB, P = pre; a third says "in the
+matrix"); pan; the fader (`faderPos`, `:167`: gain ∝ position², 0 dB at 0.708, +6 at the top) beside
 L/R meters (−60…+6 dBFS, green → amber at −12 → red at −3); M and S (solo amber); "→ <out>".
-Commands (`handleGesture`, `:883`): a fader or pan dragged — `set <ch>.gain|pan=…` (master:
+Commands (`handleGesture`, `:1366`): a fader or pan dragged — `set <ch>.gain|pan=…` (master:
 `set project.masterGain=…`) at each step, double-click → 0; M/S → `set <ch>.mute|solo=…`; "→ out"
 → cosmo's `ContextMenu` of `strips[].targets` → `route`; "+ Effect" → the registry's effects →
-`device add` (`openAddEffect`, `:827`); a send → pre/post, make it the main output, remove; a send
+`device add` (`openAddEffect`, `:1309`); a send → pre/post, make it the main output, remove; a send
 dragged sideways → `set <sd>.gain=…`; right-click → rename (`set <ch|mx>.name=…`) or delete. A
-fold header click folds its group (`:994`, the view's, eased 260 ms: members narrow to nothing, the
-header widens to "→ Main · N strips"). The Matrix (`paintMatrix`, `:1402`): rows by mixer, columns
-= the model's `matrix.columns` (`:1406`; the same `matrix print` prints, DR-MIX-8/9/10 — amended, audit
+fold header click folds its group (`:1496`, the view's, eased 260 ms: members narrow to nothing, the
+header widens to "→ Main · N strips"). The Matrix (`paintMatrix`, `:2054`): rows by mixer, columns
+= the model's `matrix.columns` (`:2058`; the same `matrix print` prints, DR-MIX-8/9/10 — amended, audit
 2026-10-09: it was "strips off the first mixer", so a key to an instrument strip had no cell); ● the main
-output, a send's dB, P pre-fader, K a sidechain key (`:1451`); a cell routing
+output, a send's dB, P pre-fader, K a sidechain key (`:2102`); a cell routing
 refuses is hatched; a click on an open cell → `send add`, on a send → its menu, a double-click →
-`route`, a vertical drag → its level. **Nothing snaps** (`advance`, `:522`): every model value is
+`route`, a vertical drag → its level. **Nothing snaps** (`advance`, `:915`): every model value is
 drawn through an eased copy keyed by strip (fader and pan 220 ms, M/S/dim 200, colour cross-fade
 200 from what is shown, meters 40 up / 300 down); a dragged control follows the pointer exactly;
 cards and tabs are keyed — arriving grows, leaving shrinks, a moved card shrinks where it was and
 grows where it is. A strip a solo silences dims. **AMENDED (R-MIX-16, R-UI-11, 2026-10-09):** a
 right-click on a fader, a pan, a send's level (on a card or its matrix cell) or the master fader opens the
-device parameter's menu instead of the strip's (`openParam`, `:851`; DR-MIX-16); the strip's and a mixer
+device parameter's menu instead of the strip's (`openParam`, `:1333`; DR-MIX-16); the strip's and a mixer
 tab's menus gain Copy ID. A bound fader or pan is drawn at the model's `bindings[].live` — set each frame
-while playing, eased when stopped or onto a new driver (`advance`, `:557`) — under a tag saying what drives
-it (`paintTag`, `:1121`); with View › Show IDs each card, chip and send shows its id (DR-UI-11).
+while playing, eased when stopped or onto a new driver (`advance`, `:930`) — under a tag saying what drives
+it (`paintTag`, `:1683`); with View › Show IDs each card, chip and send shows its id (DR-UI-11).
+
+### DR-FX-5b A card's rack in two sections; its effect chips keyed (R-FX-5b; R-FX-5a's slide)
+A card in the dock (`MixerDock`, `app/widgets/MixerDock.cpp`) shows its rack as two labelled sections, from the card's
+geometry (`geoOf`, `:67`: a title row, the generator, a title row, three effect slots — the sends, pan and fader 22 px
+lower than before, the fader's zone giving the room). `rackOf` (`:100`) reads a rack the way a card shows it: an
+instrument first is the GENERATOR, apart; then every effect and "+ Effect", or the first effect, "+N more" and
+"+ Effect". The titles (`sectionTitle`, `:617`) are GENERATOR — or INPUT on a bus and the master — and EFFECTS, drawn
+uppercase and tracked as section headers, receding with a frozen rack (`paintRack`, `:848`). The generator's chip is the
+instrument (its strip's colour at its edge; a click opens its window, R-WIN-1) or a line that says where the sound
+comes from (`generatorText`, `:638`; a bus's or the master's drawn as the first name and "+N"): "Audio clips", the strips feeding a bus, the strips routed to the master — not
+pressed. `chipSlots` / `chipRect` keep counting a rack's slots from its generator, so a click maps to the device
+(`:1509`). The effect chips are KEYED by device (`FxChip`, `app/widgets/MixerDock.h:239`; "+N more" and "+ Effect" by
+their own keys): `syncFx` (`app/widgets/MixerDock.cpp:797`, every frame from `advance`, `:919`) puts each in its slot,
+eased (200 ms), and fades a chip that comes or goes (180 ms) — a rack reordered, grown or shrunk by anyone slides, never
+jumps. UI `test_the_rack_shows_its_generator_apart_and_slides` (`app/tests/ui/uiTests.cpp:993`: the titles drawn and
+what each section says per kind of strip; stacked in order; the generator opens its instrument; a shell's `device
+move` caught mid-slide; one effect too many fading into "+2 more"; its menu); shots `mixer-sources`, `mixer-buses`,
+`mixer-frozen`, `mixer-rack-sliding` (`app/tests/shots/renderShots.cpp:384`). Mutants, each seen red: the chips snapping,
+popping in, no generator apart, a bus saying Generator, the titles not drawn.
 
 ### DR-UI-5 Device panels, generated (R-UI-5, R-WIN-2/3)
 `DevicePanel` (`app/widgets/DevicePanel.cpp`) is the content of a device's WINDOW (DR-WIN-1). It knows no
@@ -839,7 +857,7 @@ hook, `app/App.cpp:87`), so Ctrl+V right after opening another clip's roll paste
 roll first (`:839`); a press on the lanes gives the keys back to them. (D-25: the keys used to follow a press in the
 notes' area only, judged before the press was routed — a roll opened from its clip, or raised by its title bar, left
 them with the lanes, whose Ctrl+V duplicated the copied CLIP.) UI `test_notes_copied_from_one_clips_roll_to_anothers`
-(`app/tests/ui/uiTests.cpp:3013`).
+(`app/tests/ui/uiTests.cpp:3086`).
 
 ### DR-ROLL-9 The pattern grows to hold what is written in it (R-ROLL-9)
 `growToHold` (`core/service/ServiceCompose.cpp:174`) runs inside every edit that writes notes — `note add` (a chord
@@ -930,11 +948,11 @@ wheel has rested 400 ms (`advance`, `:625`), or at once when another gesture com
 `notes set … --vel-by 4n | --chance-by 0.05n`, or the `expr set`; a turn back to where it began sends nothing.
 `wheelPending()` publishes a turn in hand (`app/widgets/PianoRoll.h:151`). L2 `test_notes_and_lane_points_moved_by_the_wheel`
 (`core/tests/serviceTests.cpp:2646`: each note's own moved and clamped; refusals; many points, moved and added, the
-pattern grown, one undo); UI `test_alt_wheel_changes_the_lane_shown` (`app/tests/ui/uiTests.cpp:2891`: a velocity caught
+pattern grown, one undo); UI `test_alt_wheel_changes_the_lane_shown` (`app/tests/ui/uiTests.cpp:2964`: a velocity caught
 mid-ease and still there after a model mid-turn; nothing sent while it turns; the selection's line once it rests; a
 note's chance under the pointer; a turn undone sends nothing; the next gesture lands it at once; Bend under two notes,
 eased, and the lane after them at rest; Mod under a note between points: moved under it, as it was outside it); shot
-`piano-roll-alt-wheel` (`app/tests/shots/renderShots.cpp:1042`). Mutants, each seen red: a line at each notch, the next
+`piano-roll-alt-wheel` (`app/tests/shots/renderShots.cpp:1053`). Mutants, each seen red: a line at each notch, the next
 gesture waiting, a turn undone still sent, no edge points, nothing under the pointer, a bind dropping the turn, the App
 dropping Alt, the velocity drawn at once; in the service, `--vel-by` unclamped, `--chance-by` ignored, `expr set` never
 moving a point, a point past the end not growing the pattern.
@@ -948,10 +966,10 @@ pointer showed them) and they are the selection. Not held, the drag is the `note
 While held `mCopyAmt` eases in and out (120 ms, `advance`, `:627`): the originals are drawn where they are, at full
 strength once it is in (`paintNotes`, `:1276`), and a "+" in the accent rides beside the note in hand (`:1290`). A drop
 that moved nothing copies nothing (a Shift+click stays a click: it adds a note to the selection or takes it out).
-UI `test_the_roll_copies_by_shift_drag_and_makes_notes_like_the_last` (`app/tests/ui/uiTests.cpp:2779`: the copy look
+UI `test_the_roll_copies_by_shift_drag_and_makes_notes_like_the_last` (`app/tests/ui/uiTests.cpp:2852`: the copy look
 caught mid-ease, in and — Shift let go mid-drag — out; one note and a selection copied, their tokens, the originals
 kept, the copies selected and at full strength; without Shift it moves); shot `piano-roll-copy-dragging`
-(`app/tests/shots/renderShots.cpp:1020`). Mutants: Shift ignored at the drop, the copy look snapping, the copies keeping
+(`app/tests/shots/renderShots.cpp:1031`). Mutants: Shift ignored at the drop, the copy look snapping, the copies keeping
 no length or velocity, the copies not selected, the copies faded in — each seen red.
 
 ### DR-ROLL-14 A new note takes the last selected note's attributes (R-ROLL-14)
@@ -1008,7 +1026,7 @@ kick stays silent; a MUTED strip keys nothing (live, a mute in a song with keys 
 `core/service/ServiceTransport.cpp:530`). The audit names a key that nothing on its strip listens to — no
 compressor or gate with Sidechain on, and no key-taking type without that switch (the vocoder, whose key is its
 carrier, R-FX-16, always listens) (`core/service/ServiceModel.cpp:652`). In the dock a key reads "key <target>" in the solo amber,
-and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:1381`).
+and a strip's menu offers "Sidechain to ▸" = its `keyTargets` (`app/widgets/MixerDock.cpp:1607`).
 Measured (L2): a ghost kick (−120 dB fader, pre-fader key) through −30 dB at 4:1 dips a −6 dBFS bass
 6–22.5 dB 15–35 ms after each kick, back within 1 dB before the next; identical with the bass soloed;
 nothing with the kick muted.
@@ -1120,7 +1138,7 @@ place (`deepestPpb`, `Timeline.cpp:31`). **Decision:** the deepest zoom rose fro
 a bar below 11.5 px/beat, a beat from 11.5, 1/2 from 22.4 (a song opens at 28: bars, beats and halves
 drawn, the step 1/2), 1/4 from 55, 1/8 from 107, 1/16 from 209, 1/32 from 408, nothing at 637.
 
-**Proof.** `test_the_grid_follows_the_zoom` (`app/tests/ui/uiTests.cpp:3996`) drives the real service:
+**Proof.** `test_the_grid_follows_the_zoom` (`app/tests/ui/uiTests.cpp:4069`) drives the real service:
 at the default zoom a ruler click at beat 3.3 seeks 3.5 (a fixed quarter says 3.25); a level's alpha
 is caught mid-fade during an eased two-notch zoom, between its two ends; at 1/8 a seek, a clip drag
 (on the step while held, then `clip move ac_1 --at 3.125`) and an instrument dropped from the browser
@@ -1136,7 +1154,7 @@ unless it already IS one (`auto create <address>`), Formula… (cosmo's rename f
 "=", → `set <address>="=<typed>"`, quoted when it has a space), Clear Binding when bound (`bind clear
 <address>`), Reset to Default (`set <address>=<default>`), and Copy Address / Copy Value / Copy as Formula
 (DR-UI-11). The device window (`DevicePanel::openParamMenu`, `app/widgets/DevicePanel.cpp:623`) and the dock
-(`MixerDock::openParam`, `app/widgets/MixerDock.cpp:1108`, offered first on a right-click, `:1273`) both call
+(`MixerDock::openParam`, `app/widgets/MixerDock.cpp:1333`, offered first on a right-click, `:1498`) both call
 it, so the menus cannot drift; a hosted third-party VST3's parameter list (R-VST-6, not built yet) will call
 it the same way. In the dock: a fader → `<ch>.gain`, a pan → `<ch>.pan`, a send's row on a card or its cell
 in the matrix → `<sd>.gain`, the master fader → `project.masterGain` (the addresses that already bind,
@@ -1156,13 +1174,13 @@ order to addresses. While playing, `refreshModel` keeps the pumped values and ev
 since (`ServiceModel.cpp:84`, `:360`). At most 256 bindings report (`Player::kMaxBinds`). Not in the stable
 dump: it moves with the transport.
 
-**The dock draws it** (`MixerDock::advance`, `app/widgets/MixerDock.cpp:693`): a bound fader or pan takes its
+**The dock draws it** (`MixerDock::advance`, `app/widgets/MixerDock.cpp:915`): a bound fader or pan takes its
 live value; while playing it is SET each frame — it follows the audio like the playhead — and stopped a change
 (a seek, a curve edited) eases 220 ms; a new driver (the formula changed) or play pressed mid-ease is a
-catch-up ease that lands when it ends and then follows (`follow`, `:733`). A bound send shows its live
+catch-up ease that lands when it ends and then follows (`follow`, `:956`). A bound send shows its live
 level. What drives each: a tag over the fader — `auto au_1`, `= ch_3.gain`, `= -2 + 2 * s…` (`paintTag`,
-`:1457`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
-in and out (200 ms) and its text cross-fades when the formula changes (`:874`).
+`:1683`) — "ƒ" after a bound pan and before a bound send's level, the readout in the accent; every tag fades
+in and out (200 ms) and its text cross-fades when the formula changes (`:1097`).
 
 Measured. L2 `test_a_bound_value_is_published_live` (`core/tests/serviceTests.cpp:1830`): stopped, `live` is
 `eval`'s number at the position; playing (a fake clock device), a −2 dB-a-beat ramp is within 0.1 dB of the
@@ -1170,7 +1188,7 @@ curve at the heard position at beats 2…12 and falling, a link (`=ch_2.gain / 2
 formula `1000 + 500 * sin(beat)` within 25 Hz; after a structural edit while playing the new engine's order is
 read; 0 allocations on the audio thread. Mutants: `pump` ignoring the player → stuck at 0 dB at beat 2;
 `bindValues()` copied on the audio thread → 1019 allocations. UI `test_the_mixers_numbers_bind_from_the_dock`
-(`app/tests/ui/uiTests.cpp:2003`): a fader's right-click is the parameter menu, Create Automation is `auto create
+(`app/tests/ui/uiTests.cpp:2076`): a fader's right-click is the parameter menu, Create Automation is `auto create
 ch_2.gain` and the tag fades in (caught mid-tween); Formula… on a pan sends `set ch_3.pan="=0.25 - 0.75"` and
 the knob EASES onto −0.5; a send copies `-8.0 dB` and `=sd_1.gain`; the master copies `project.masterGain`;
 Clear Binding fades the tag out; playing, the fader equals `faderPos(live)` every frame and moves. Mutants:
@@ -1190,7 +1208,7 @@ way by the EASED amount. Where: lane headers (the lane's id; a strip's own row, 
 rows (`au_n`) (`app/widgets/Timeline.cpp:1594`, `:1019`); clips (`ac_n`, and a note clip's pattern `pt_n`;
 `:862` — "linked ×N" fades out for them); in the dock each strip card (`ch_n`), the master (`master`), each
 rack chip (`dv_n`) and each send (`sd_n`, cross-fading with "→ name") (`paintCard`,
-`app/widgets/MixerDock.cpp:1524`); a device window's rows show their FULL address (`dv_1.filter.cutoff`) in a
+`app/widgets/MixerDock.cpp:1750`); a device window's rows show their FULL address (`dv_1.filter.cutoff`) in a
 pill over the label (`ParamIds`, `app/widgets/DevicePanel.cpp:146`); its header already names its id.
 
 **Copied, by the host.** Copy Address / Copy Value / Copy as Formula on a device parameter row and on the
@@ -1204,7 +1222,7 @@ a third-party VST3's parameter list (R-VST-6) builds a `ParamTarget` per row and
 
 Measured. L2 (`test_the_machine_settings_folders_devices_and_recents`): `settings set showIds=on` reaches the
 model and the file and a second process reads it; `showIds=yes` is refused. UI `test_ids_shown_and_copied`
-(`app/tests/ui/uiTests.cpp:2218`): View › Show IDs sends `settings set showIds=on`, the ids' amount caught between 0
+(`app/tests/ui/uiTests.cpp:2291`): View › Show IDs sends `settings set showIds=on`, the ids' amount caught between 0
 and 1, then 1, the item reads Hide IDs; a shell's `showIds=off` fades them out the same way; a parameter row
 copies `dv_1.filter.cutoff`, `900 Hz`, `=dv_1.filter.cutoff` (toasted); a choice row offers no "as Formula";
 a clip copies `ac_1`, an automation `=au_1` and `au_1`. Mutant: the ids SET instead of eased → the mid-tween
@@ -1324,8 +1342,8 @@ it is put, one edit moving both; the rest before the first clip; Make unique's c
 `test_a_song_from_before_automation_clips_plays_as_it_did` (`:1361`); model `test_automation_clips_in_the_slp`
 (`model/tests/modelTests.cpp:191`); engine `test_a_curve_is_placed_by_its_clips` (`engine/tests/engineTests.cpp:523`:
 rest, cycle, where it stopped, a copy's shape, clamped, nothing allocated); UI
-`test_an_automation_is_made_with_its_clip_and_sized_in_its_window` (`app/tests/ui/uiTests.cpp:1567`); shot
-`automation-length` (`app/tests/shots/renderShots.cpp:971`). Mutants: no rest before the first clip, no hold after one,
+`test_an_automation_is_made_with_its_clip_and_sized_in_its_window` (`app/tests/ui/uiTests.cpp:1640`); shot
+`automation-length` (`app/tests/shots/renderShots.cpp:982`). Mutants: no rest before the first clip, no hold after one,
 no repeat, copies unheard, no clip made, a loop adopted at 0, a copy readable by a formula, the rest not the property's,
 Create Pump back, the combo sending `.loop` — each red; the overlap cut at compile survived as an EQUIVALENT mutant (the
 engine already reads the span that began last) and was deleted as dead code.
@@ -1347,13 +1365,13 @@ or on its track's header opens the automation's window. The clip's menu (`app/wi
 automation, Duplicate, Copy ID, Delete; its track's header menu (`:1280`): Open automation, Copy as Formula, Delete
 Automation, the lane's group items, and Copy ID — the automation's, the id its header shows (`:1317`). Its track is an
 accessible list item valued "automation au_n" (`:339`). Ctrl+C / Ctrl+V and Shift-drag are the clips' own (`clip
-duplicate`). UI `test_automation_clips_draw_and_edit_curves` (`app/tests/ui/uiTests.cpp:2013`: grows in, under its
+duplicate`). UI `test_automation_clips_draw_and_edit_curves` (`app/tests/ui/uiTests.cpp:2086`: grows in, under its
 strip's track; a click adds, a drag is drawn under the pointer and is one move, a shell's edit eases, a point's menu,
 a double-click deletes; Length ▸ one line; a click in the third pass lands in the cycle; Duplicate linked, Make unique;
-its track's Delete Automation), `test_automation_clips_copy_like_midi_clips` (`:2142`: Shift-drag by its name one `clip
+its track's Delete Automation), `test_automation_clips_copy_like_midi_clips` (`:2215`: Shift-drag by its name one `clip
 duplicate --at`; Ctrl+C / Ctrl+V at the time bar; its end the pointer's then one line; a shell's edit eases two clips
 together, caught mid-way); the bezier, IDs and en-XA tests aimed at the clip and its track. Shots `automation-clips`,
-`automation-clips-easing` (mid-ease) (`app/tests/shots/renderShots.cpp:867`, `:899`), `automation-bezier`,
+`automation-clips-easing` (mid-ease) (`app/tests/shots/renderShots.cpp:878`, `:910`), `automation-bezier`,
 `automation-window`, `automation-length`, looked at. Mutants: a repeat's click not folded into the cycle, a shell's edit
 snapping, no Delete Automation on its track, a dragged point drawn where it was, the clip's end taken by the curve,
 Copy ID the lane's — each red.
@@ -1641,13 +1659,13 @@ nothing eases back. The brace is the pointer's while held (`loopSpan`, `loopRect
 kept or resized never shorter than one step, and ONE `transport loop <a> <b>` goes on release (`:972`),
 the brace placed where it was let go so the model's echo moves nothing.
 
-Guarded by `test_the_ruler_is_dragged` (`app/tests/ui/uiTests.cpp:1826`): held, the playhead equals the
+Guarded by `test_the_ruler_is_dragged` (`app/tests/ui/uiTests.cpp:1899`): held, the playhead equals the
 snapped pointer beat exactly and four or more seeks were sent; let go, it stays; PLAYING, it stays the
 pointer's frame after frame and the song plays on from there; the brace moved 4–8 → 6–10, nothing sent
 until release, then one line; resized by its right end, clamped at its left; a click still seeks. Mutants
 seen red, then restored: the playhead following the audio while scrubbing, a seek only on release, a body
 drag keeping the brace's end. Shots `ruler-scrubbing` and `loop-brace-moving`
-(`app/tests/shots/renderShots.cpp:1452`, `:1461`), both sizes, looked at.
+(`app/tests/shots/renderShots.cpp:1463`, `:1472`), both sizes, looked at.
 
 ### DR-TIME-7 Stop takes the time bar back to where it was put — or leaves it (R-TIME-7, R-TIME-8)
 The service keeps a CUE (`mCue`): where the user PUT the time bar. A `transport seek` puts it where the time bar went
@@ -1726,7 +1744,7 @@ double-click on the Bass track → the exact line and a clip of a new pattern th
 track's menu; the end dragged → the snapped length while held with nothing sent, one line on release,
 no ease back; a shell's `set ac_1.length=6` caught mid-ease; a clip dragged onto the drums' track plays
 through the drums. Mutants seen red, then restored: a length that snaps, an edge never taken. Shot
-`clip-end-dragging` (`app/tests/shots/renderShots.cpp:1008`), both sizes, looked at.
+`clip-end-dragging` (`app/tests/shots/renderShots.cpp:1019`), both sizes, looked at.
 
 ### DR-CLIP-9 A clip copied: Shift-drag, Ctrl+C / Ctrl+V (R-CLIP-9, R-CLIP-10)
 `clip duplicate <ac> [--at <b>] [--count <n>] [--lane <ln>]` (`core/service/ServiceEdit.cpp:902`): with `--lane` the
@@ -1784,7 +1802,7 @@ UI `test_clips_are_selected_by_a_box_and_handled_together` (a ring caught mid-ea
 leaves; the box fading; nothing sent; Shift/Ctrl+click; a Shift box adding; the selection dragged — the carried clips
 the pointer's — moved, Shift-copied at full strength, deleted; a Ctrl box from on a clip; Ctrl+C / Ctrl+V / Ctrl+D);
 `test_ruler_seek_keys_and_selection` now selects the Ctrl+D copy before Delete. Shots `clips-box-select`,
-`clips-selection-dragging` (`app/tests/shots/renderShots.cpp:873`, `:885`). Mutants, each seen red: the ring snapping,
+`clips-selection-dragging` (`app/tests/shots/renderShots.cpp:884`, `:896`). Mutants, each seen red: the ring snapping,
 the box never fading, clips lit only at release, no selection carried, a Shift-drop moving, Shift+click replacing, no
 Ctrl box, a Shift box replacing, the copies faded in, a deleted clip left selected, a paste `--by` the time bar, Delete
 taking one; and in the service, a delete taking the first only, copies on top of the clips, a copy before beat 0
@@ -1934,7 +1952,7 @@ grip answers twice, from the SAME zone its press takes: `dragCursor()` — the c
 pointer is — and `cursorAt(local)`. `Timeline` (`app/widgets/Timeline.cpp:469`): ↔ over a clip's end (`kEdgeGrip`,
 R-CLIP-7) and the loop brace's ends (`kBraceGrip`, the ruler's lower half), and while either is held (pressed, not yet
 moved, included). `PianoRoll` (`app/widgets/PianoRoll.cpp:770`): ↔ a note's end (the zone `noteAt` gives, D-7) and the
-pattern's end handle, ↕ a velocity bar, and while any is held. `MixerDock` (`app/widgets/MixerDock.cpp:979`): ↕ its top
+pattern's end handle, ↕ a velocity bar, and while any is held. `MixerDock` (`app/widgets/MixerDock.cpp:1202`): ↕ its top
 edge (`Part::Resize`). `WindowLayer` (`app/widgets/FloatWindow.cpp:327`): ⤡ a window's corner (`FloatWindow::resizing`
 while it is held); the front-most window under the point decides, so it covers the lanes beneath. `ProjectScreen::
 cursorAt` (`app/widgets/ProjectScreen.cpp:20`) asks every drag in hand first, then the window, the dock, the lanes;
@@ -1996,7 +2014,7 @@ the same meters 100 ms at a time and prints ONE line, `measure integrated= momen
 correlationMin=` (LUFS, LUFS, LUFS, dBTP, −1…+1; the lowest correlation only where the momentary is above −70 LUFS —
 silence has no phase; `core/service/ServiceRender.cpp:51`). The window: the master's card has a chip with the
 integrated LUFS where a strip has mute and solo (`MixerDock::loudnessRect`; caught up over 220 ms, "— LUFS" cross-faded
-in for none — `app/widgets/MixerDock.cpp:835`); a click opens the Loudness window (`WindowLayer::openLoudness`,
+in for none — `app/widgets/MixerDock.cpp:1058`); a click opens the Loudness window (`WindowLayer::openLoudness`,
 `app/widgets/FloatWindow.cpp:276`), a `LoudnessPanel` (`app/widgets/LoudnessPanel.cpp`): the five readings (each
 catching up over 220 ms; nothing measured cross-fades to "—"), the correlation's needle, the 61 bands on −72…0 dB
 (rising in 40 ms, falling in 300) and Reset — `meters clear`. L2 `test_meters_measure_what_plays` (a −6 dBFS 1 kHz
@@ -2016,9 +2034,9 @@ a stop zeroes peaks, RMS and holds and leaves the lights lit. `meters clear` (`c
 not an edit, `meters.cleared`) puts every light out, zeroes the holds and starts the true peak and integrated loudness
 again: on the audio thread it is a `Live::ClearMeters` MESSAGE (`core/Player.cpp:266`), so it lands in order after a
 gain edit sent before it; until the thread has taken it (`Player::clearing`) `pump` reads no holds, flags or loudness,
-which are from before it. The window (`MixerDock::paintFader`, `app/widgets/MixerDock.cpp:1488`): the peak a lighter bar,
+which are from before it. The window (`MixerDock::paintFader`, `app/widgets/MixerDock.cpp:1714`): the peak a lighter bar,
 the RMS its solid core, the held peak a 1.5 px line in its zone's colour, all eased (40 ms up, 300 ms down); above the
-meters a clip light lit red, eased, whose click is `meters clear` (`:1245`). L2 `test_meters_measure_what_plays` (RMS
+meters a clip light lit red, eased, whose click is `meters clear` (`:1470`). L2 `test_meters_measure_what_plays` (RMS
 0.354 and a held 0.5 for a 0.5 sine; +12 dB lights both latches; a clear while playing allocates nothing on the audio
 thread; latched through a stop and an edit), `test_held_peak_holds_then_falls`; UI `test_meters_and_the_loudness_window`.
 Mutants: no hold (the held line = the peak), a latch lost on refresh, the clip light snapping — each seen red. The
@@ -2062,7 +2080,7 @@ back in processing order is refused by `send add`'s rule (R-MIX-4) and the whole
 ducked is refused naming its send. It prints the compressor, then `made: send=…`. A real kick peaks under full scale
 and cuts less than the amount: the default Drum Machine kick, 12 dB asked, takes the bass 7.3 dB down just after it,
 back within 2 dB before the next beat at 120 bpm. The window: a strip's right-click menu has Duck Under ▸ listing every
-strip whose published `keyTargets` include it — the strips that may key it — each ONE line (`app/widgets/MixerDock.cpp:1382`).
+strip whose published `keyTargets` include it — the strips that may key it — each ONE line (`app/widgets/MixerDock.cpp:1608`).
 L2 `test_strip_duck_is_one_line` (the settings, the key, the duck measured on the bass's stem, one undo, six
 refusals); UI `test_a_strip_ducks_under_another_from_its_menu`. Mutants: Sidechain left off, the send not a key,
 the submenu's strips from the wrong side of `keyTargets` — each seen red.
@@ -2102,15 +2120,15 @@ its mute silences its member, swaps 0; a formula member's VCA move: one rebuild;
 `test_a_vca_muted_member_keys_nothing` (`:5739`): a ghost kick under a muted VCA renders sample-exact as the kick
 muted (the key, unmuted, does duck).
 
-Part 3 — the dock. "+ Line" offers "VCA" (`app/widgets/MixerDock.cpp:1074`, one `strip add --kind vca --mixer`). A VCA's
-card says "VCA · moves N" and names its members where a rack would be (`:1544`): a fader and M and S — no meter
-(`paintFader`'s meters off), no pan, sends or route, none of them pressable (`:1035`); its menu offers no Freeze,
+Part 3 — the dock. "+ Line" offers "VCA" (`app/widgets/MixerDock.cpp:1299`, one `strip add --kind vca --mixer`). A VCA's
+card says "VCA · moves N" and names its members where a rack would be (`:1770`): a fader and M and S — no meter
+(`paintFader`'s meters off), no pan, sends or route, none of them pressable (`:1259`); its menu offers no Freeze,
 Bounce or VCA (the service refuses freezing or bouncing one, `core/service/ServiceAudioEdit.cpp:446`), and it dims for its
 own mute only (`core/service/ServiceModel.cpp:262`). A strip's menu offers "VCA ▸" — the song's VCAs, and None when it
-follows one (`MixerDock.cpp:1411`) — one `set <ch>.vca=`. A member says "VCA <name> <dB>" over its fader (`:1689`):
-the tag fades in and out (`kSelectMs`) and its dB eases as the VCA moves (`kCatchUpMs`, `:755`); beside a bound
+follows one (`MixerDock.cpp:1637`) — one `set <ch>.vca=`. A member says "VCA <name> <dB>" over its fader (`:1892`):
+the tag fades in and out (`kSelectMs`) and its dB eases as the VCA moves (`kCatchUpMs`, `:978`); beside a bound
 gain's tag it slides to the right half, by the bound tag's eased amount. UI test `test_a_vca_in_the_dock`
-(`app/tests/ui/uiTests.cpp:4887`): "+ Line" › VCA one line; the strip's VCA ▸ one line; the tag caught fading in; the
+(`app/tests/ui/uiTests.cpp:4960`): "+ Line" › VCA one line; the strip's VCA ▸ one line; the tag caught fading in; the
 VCA moved from a shell, the member's dB caught at −1.22 on its way to −6; a drag where a VCA's pan would be sends
 nothing. Shot `mixer-vca` at both sizes.
 
@@ -2146,17 +2164,17 @@ the width's the ramp to the mid, then the mid; each to 5e−8.
 
 Part 3 — the dock. A strip's menu (not a VCA's) offers "Invert Phase" (" · on" when on), "Width ▸" (0 % (mono), 50, 100,
 150, 200 — " · now" on the current) and, on a bus, "Solo-safe" — each ONE line, `set <ch>.phase=…`, `.width=…`,
-`.soloSafe=…` (`app/widgets/MixerDock.cpp:1424`). The card shows them: "Ø" in the accent at its sub line's right and,
-off 100, "<w>%" beside it, the sub text ellipsized to leave room (`:1548`); a solo-safe bus's S takes a ring in the
-solo amber (`:1709`). Each is an eased amount (`:765`; read by `phaseAmount`, `widthAmount`, `safeAmount`, `:488`) —
+`.soloSafe=…` (`app/widgets/MixerDock.cpp:1650`). The card shows them: "Ø" in the accent at its sub line's right and,
+off 100, "<w>%" beside it, the sub text ellipsized to leave room (`:1774`); a solo-safe bus's S takes a ring in the
+solo amber (`:1912`). Each is an eased amount (`:988`; read by `phaseAmount`, `widthAmount`, `safeAmount`, `:532`) —
 a tag fades in and out, the number it shows kept while it fades. The master has no pan, so its pan row holds the mono
-check: a "Mono" pill (`monoRect`, `:503`; painted at `:1785`) whose click is `transport mono on|off` (`:1247`), lit
-by an amount eased from `transport.mono` (`:846`). Tests: UI `test_per_strip_tools_in_the_dock`
-(`app/tests/ui/uiTests.cpp:4950`): each menu item sends its one line and its mark is caught mid-fade, then at 1; a
+check: a "Mono" pill (`monoRect`, `:547`; painted at `:1976`) whose click is `transport mono on|off` (`:1472`), lit
+by an amount eased from `transport.mono` (`:1069`). Tests: UI `test_per_strip_tools_in_the_dock`
+(`app/tests/ui/uiTests.cpp:5023`): each menu item sends its one line and its mark is caught mid-fade, then at 1; a
 line that is not a bus offers no Solo-safe; Mono sends `transport mono on` and lights eased, the model's
 `transport.mono` true. Mutants seen red: the Ø, the width tag, the ring and Mono each set at once (the mid-fade
 assertions fail), Solo-safe offered on any line, Mono's click sending nothing. Shot `mixer-tools`
-(`app/tests/shots/renderShots.cpp:479`) at both sizes.
+(`app/tests/shots/renderShots.cpp:490`) at both sizes.
 
 ### DR-VER-1 Versions of a song (R-VER-1…4; docs/discussion.md Round 15) — part 1: the model; part 2: the service; part 3: the song bar
 A version is a `Version` (`model/Project.h:356`): an id, a name, a base (an earlier version's id; none = main) and its
@@ -2229,13 +2247,13 @@ a row is `version open <id|main>`; New Version… is cosmo's field, then ONE `ve
 (`:184`): the label cross-fades (the old one fading out under the new), the width eases to the new label's (measured in
 the paint, `:378`, eased from the next frame), the song's name and the transport sliding with it, and an accent ring
 eases in while a version, not main, is open — whoever opened it. Tests: UI `test_versions_from_the_song_bar`
-(`app/tests/ui/uiTests.cpp:5016`): the chip says main; its menu is the tree and New Version…, Freeze absent on main;
+(`app/tests/ui/uiTests.cpp:5089`): the chip says main; its menu is the tree and New Version…, Freeze absent on main;
 "Radio edit" typed sends ONE `version new "Radio edit" --open`; the label's cross-fade, the ring and the chip's width
 each caught mid-way, then at rest (wider than "main"); on the version, its menu offers Rebase, Rename…, Delete Version;
 Freeze sends `version freeze vr_1`, said on the chip, mid-fade; main opened from a shell eases the ring out; the tree's
 row opens the version. Mutants seen red (6): the label, the ring, the width each set at once; New Version not opened;
 the tree flat; the chip's click doing nothing. Shots `song-versions` (the menu open on a version of a frozen one) and
-`song-versions-mid` (main coming in), both sizes (`app/tests/shots/renderShots.cpp:489`).
+`song-versions-mid` (main coming in), both sizes (`app/tests/shots/renderShots.cpp:500`).
 
 ### DR-COLLECT-1 Collect and save; relink (R-COLLECT-1; docs/discussion.md Round 16) — part 1: the service; part 2: the window
 **What a song uses** is read from the whole document's text (`fileRefs`, `core/service/ServiceFiles.cpp:92`): every
@@ -2277,13 +2295,13 @@ model: rows keyed by path (`app/widgets/RelinkSheet.cpp:108`) — one found fade
 newly missing fades in, the rows present when it opens placed with it; the card grows and shrinks with them, eased
 (`:140`); the list clips and scrolls with the wheel, its bar shown only when there is more (`:235`); with nothing
 missing it says so. A song opened with files missing says so in a toast, once (`app/App.cpp:579`). Tests: UI
-`test_relink_and_collect_from_the_file_menu` (`app/tests/ui/uiTests.cpp:5084`): opened with two files gone — the
+`test_relink_and_collect_from_the_file_menu` (`app/tests/ui/uiTests.cpp:5157`): opened with two files gone — the
 toast; File › Relink… asks first, fades in with its rows already placed; Locate… on the kick: the host asked "Locate
 kick.wav", ONE line sent, the row fading out, the hat sliding up and the card shrinking, each caught mid-way, then at
 rest; Search a Folder…: ONE line, nothing missing; Done closes; Collect and Save: ONE line, said, saved. Mutants seen
 red (9): a found row, the next row's slide, the rows on open and the card each set at once; Locate and Search sending
 nothing; no toast on open; Collect and Save not saving; Relink… opening nothing. Shots `relink-window` (three moved, a
-version's clip among them) and `relink-found-mid`, both sizes (`app/tests/shots/renderShots.cpp:797`).
+version's clip among them) and `relink-found-mid`, both sizes (`app/tests/shots/renderShots.cpp:808`).
 ### DR-LAUNCH-1 A clip launcher (R-LAUNCH-1; docs/discussion.md Round 17) — part 1: the grid; part 2: launching, heard; part 3: recorded; part 4: the session view
 A scene is a row of the session grid and a slot a cell — what a strip plays when it is launched in that scene
 (`Scene`, `Slot`, `model/Project.h:305`, `:292`): a pattern (an instrument strip's, shared as a clip's is) or a file (an
@@ -2374,14 +2392,14 @@ song's patterns (an instrument's column) or the strip's clips (an audio column) 
 or a scene's right-click: Rename…, Delete. Nothing snaps (`:116`): a slot is keyed by id — playing, it fills with its
 strip's colour, eased in and out, its loop's progress a bar along its foot (the model's, frame by frame, `:306`); queued,
 its outline pulses until it lands (a timing, not a tween), the pulse itself fading in and out (`:287`). Tests: UI
-`test_the_session_view` (`app/tests/ui/uiTests.cpp:5866`): View › Show Session caught mid cross-fade; an empty cell's
+`test_the_session_view` (`app/tests/ui/uiTests.cpp:5939`): View › Show Session caught mid cross-fade; an empty cell's
 "Lead" → `slot add sc_1 ch_2 --pattern pt_2`; "+ Scene"; the slot, stopped → `launch sl_1`, the transport playing, its
 fill caught mid-way; another, launched while playing → queued (its pulse mid-way, not filled), the first still playing;
 ■ → `launch stop ch_2`, the pulse fading out; the scene's ▶, Back to Arrangement, a slot's Delete; Show Arrangement.
 Mutants seen red (7): the view cut in; a playing slot's fill and a queued slot's pulse each set at once; an empty cell
 offering nothing; a slot's click and a column's ■ sending nothing; a queued slot drawn as playing. Shots `session-view`
 (Verse playing, the bass's Drop queued), `session-view-mid`, `launch-recorded` (a recorded launch's arrangement: the
-tail clip starting into its pattern), both sizes (`app/tests/shots/renderShots.cpp:510`).
+tail clip starting into its pattern), both sizes (`app/tests/shots/renderShots.cpp:521`).
 ### DR-VIDEO-1 A video lane (R-VIDEO-1; docs/discussion.md Round 18) — part 1: the service and the host; part 2: the window; part 3: the lane and the export
 One picture a song (`Video`, `model/Project.h:329`): a file and an `offset` — seconds on the song's clock (the tempo
 map's) at which its first frame shows; negative, it began before the song. It is a node like any (`#avideo`, read at
@@ -2447,7 +2465,7 @@ cannot be read. Nothing snaps: the picture fades in and out over the words (`:11
 or another file — cross-dissolves from the frame that was, 160 ms linear (`:91`); while playing, frame follows frame
 (the picture's own motion); the words cross-fade (`:74`); a frame of the same size is re-uploaded, not re-registered
 (`:131`). The foot names the file, its size and rate, and the picture's time in mono. Tests: UI `test_the_video_window`
-(`app/tests/ui/uiTests.cpp:5177`; the rig's decoder records every ask, `app/tests/Rig.h:331`): the menu, the window caught
+(`app/tests/ui/uiTests.cpp:5250`; the rig's decoder records every ask, `app/tests/Rig.h:331`): the menu, the window caught
 mid fade-in; before the picture said and nothing asked; at beat 4 one ask, for second 1 at the box's size, the picture
 caught mid fade-in, letterboxed 16:9 and centred; a jump caught mid-dissolve, a step not dissolving; nothing asked when
 nothing changed; playing, asks in order; resized by its corner, an ask at the new size; past the end, the picture
@@ -2456,7 +2474,7 @@ seen red (11): the picture shown at once; no dissolve on a jump; a step dissolvi
 the picture's size, not the box's; before and after swapped; the words snapping; × leaving the menu saying Hide; a
 resize not re-asking; and in the service, a picture begun before the song placed at no tempo, its end without its
 length. Shots `video-window` (the rig's picture at the time bar: a dusk sky whose amber band's edge is the frame's time),
-`video-window-mid` (a jump mid-dissolve: both bands), both sizes (`app/tests/shots/renderShots.cpp:554`). Owed: a live
+`video-window-mid` (a jump mid-dissolve: both bands), both sizes (`app/tests/shots/renderShots.cpp:565`). Owed: a live
 look at the GTK window's decoder on a real file.
 Part 3 — the lane and the export. The model publishes a point of the picture every second of it (every length/240
 for a long one) on the song's beats — `video.thumbs`, through the tempo map built once (`core/service/ServiceVideo.cpp:70`)
@@ -2476,11 +2494,11 @@ pointer's on the grid you see, before the song too, and nothing is sent; let go,
 the Format is MP4 or MKV, the bit depth, quality and stems grey out, and the line is `render --out <f> --video …`
 (`:153`); off, the audio format it was left at. Tests: L2 grew `set vd_1.at=6` (3 s at 120 bpm; get 6.0; eleven points
 from beat 6 to 26; −2 → −1 s; a beat too far refused) (`core/tests/serviceTests.cpp:4745`). UI
-`test_the_video_lane` (`app/tests/ui/uiTests.cpp:5292`; the rig's thumbnail decoder logs apart, `app/tests/Rig.h:335`):
+`test_the_video_lane` (`app/tests/ui/uiTests.cpp:5365`; the rig's thumbnail decoder logs apart, `app/tests/Rig.h:335`):
 the row caught growing with the first lane at `row0 + a·kVideoH`, a thumbnail caught fading in, at most three asked a
 frame; the span on beats 2 … 22; every ask on a model point, at the row's height, none twice; dragged two beats — the
 pointer's, nothing sent — then ONE `set vd_1.at=4`, offset 2 s, nothing moving after; a shell's offset eased there;
-removed, the row caught closing and the lanes back. UI `test_export_with_the_video` (`app/tests/ui/uiTests.cpp:5523`): greyed and inert with
+removed, the row caught closing and the lanes back. UI `test_export_with_the_video` (`app/tests/ui/uiTests.cpp:5596`): greyed and inert with
 no picture; on, MP4 / MKV, the rows greying caught mid-way, `--video`; MKV and −14 LUFS → `render --out "…/Scored
 out.mkv" --video --normalize -14 --ceiling -1`; off, WAV again. Mutants seen red (16): the row shown at once; the lanes
 not moving down; a drag sending while held; a jump back after the drop; a move made elsewhere snapping; thumbnails
@@ -2488,7 +2506,7 @@ asked again; thumbnails at the picture's size; thumbnails popping in; every thum
 to the pointer; stems still applying with the video; the line keeping --format; off, not the format it was left at; the
 toggle without a picture; `at` taken as seconds; the points at seconds, not beats. Shots `video-lane` (the row's
 tiles, each band's edge its own time), `video-lane-dragging` (the span held two beats on, ringed), `export-with-video`
-(MKV, the greyed rows), both sizes (`app/tests/shots/renderShots.cpp:577`, `:1594`).
+(MKV, the greyed rows), both sizes (`app/tests/shots/renderShots.cpp:588`, `:1605`).
 
 ### DR-COLLAB-1 Sharing a song through a folder (R-COLLAB-1; docs/discussion.md Round 19) — part 1: the merge in the model; part 2: the service; part 3: the window
 Two people's edits to one song are merged node by node, in the model, pure — text in, text out (`mergeSongs`,
@@ -2568,7 +2586,7 @@ Keep All Mine / Take All Theirs ONE `project sync --take mine|theirs`, inert wit
 close it (`:290`, `:319`, `:314`). Nothing snaps (`:213`): an answered row fades out where it is while the rest slide up
 into its place, one asked while open fades in (`:232`); the card grows and shrinks with its rows; the "all" buttons dim
 to 0.35, eased, when nothing is asked (`:280`); the list clips and scrolls. Tests: UI `test_conflicts_are_asked_in_a_sheet`
-(`app/tests/ui/uiTests.cpp:5588`; a second service on the same file stands for the other window): its save reloads this
+(`app/tests/ui/uiTests.cpp:5661`; a second service on the same file stands for the other window): its save reloads this
 one, "Reloaded" in a toast; the strip and the tempo changed both ways — merged, "2 to answer" in a toast, the sheet
 caught fading in, its rows the tempo then the strip; what tells them apart — the tempo's lines whole, the strip's
 `gain=-3.0` / `gain=-9.0`; Keep Mine on the tempo — ONE line, the tempo 128, its row caught fading while the strip's
@@ -2578,7 +2596,7 @@ seen red (10): the sheet shown at once; an answered row cut; the next row jumpin
 opened on its own; no toast; the "all" buttons dimming at once; the "all" buttons live with nothing asked; File ›
 Conflicts… opening nothing; the sides shown whole, not told apart. Shots `conflicts-sheet` (the bass and the tempo
 asked; the toast), `conflicts-answered-mid` (the tempo answered: its row fading, the bass's sliding up), both sizes
-(`app/tests/shots/renderShots.cpp:621`).
+(`app/tests/shots/renderShots.cpp:632`).
 
 
 ### DR-ACCESS-1 Accessibility (R-ACCESS-1; docs/discussion.md Round 20) — part 1: the UI scale and high contrast; part 2: the accessible list and the keyboard; part 3: the list to AT-SPI
@@ -2597,7 +2615,7 @@ accent and the semantic colours kept — and cosmo's `sharedTheme()` rebuilt whe
 never sets it (its 41 shots byte-identical, cosmo DR-G-5). A zoom or a fade keeps the window redrawing (`app/App.cpp:601`).
 Tests: L2 `test_the_ui_scale_and_contrast_are_settings` (`core/tests/serviceTests.cpp:4935`): set, in the model,
 printed, read back by another process; 110 refused, a typo named. UI `test_the_ui_scale_and_high_contrast`
-(`app/tests/ui/uiTests.cpp:5687`): Settings › Interface → `settings set uiScale=150`, the drawn scale caught mid-way with
+(`app/tests/ui/uiTests.cpp:5760`): Settings › Interface → `settings set uiScale=150`, the drawn scale caught mid-way with
 the logical width the window over it; at rest 853 × 533; the red playhead DRAWN at 1.5 × its logical place and not at
 it; High contrast → `settings set highContrast=on`, the foreground caught mid-blend; at rest white on black, borders
 solid, the shared theme's tab label light; the File menu's title clicked at its place in the window opens it; back from a
@@ -2605,7 +2623,7 @@ shell's line, eased the other way. Mutants seen red (9): the scale snapping; lai
 the pointer not divided; the contrast snapping; the palette not told; the border not blended; the shared theme not
 rebuilt (red once the test read it before the switch); a scale off the steps accepted; the scale not drawn (red once the
 test read the playhead's pixels). Shots `ui-scale-150`, `ui-scale-mid`, `high-contrast`, both sizes
-(`app/tests/shots/renderShots.cpp:656`).
+(`app/tests/shots/renderShots.cpp:667`).
 Part 2 — the accessible list and the keyboard. Every covered widget lists its controls as nodes (`A11yNode`,
 `app/A11y.h:22`: a stable key, a role, a name, a value, its bounds in the window, enabled, checked, and what it does): the
 song bar — Home, Settings, the version, Record, Play / Stop, the tempo (a slider: ±1 bpm, Shift 0.1, the drag's own line),
@@ -2613,7 +2631,7 @@ Save (`app/widgets/SongBar.cpp:83`); Home — its three actions, Settings, each 
 (`app/widgets/HomeScreen.cpp:72`); the browser — its tabs, each row in view (`app/widgets/Browser.cpp:280`); the lanes'
 headers and an instrument track's arm (`app/widgets/Timeline.cpp:330`); the dock — its pages' tabs, each strip's fader
 (±0.5 dB, Shift 0.1) and pan (±5 %, Shift 1 %) as sliders, its mute, solo and arm, the master's fader and Mono
-(`app/widgets/MixerDock.cpp:133`); the open windows' close buttons and a device window's parameters, each stepped by its
+(`app/widgets/MixerDock.cpp:177`); the open windows' close buttons and a device window's parameters, each stepped by its
 registry description (`app/widgets/FloatWindow.cpp:404`; `app/widgets/DevicePanel.cpp:392`); and the modals — Settings'
 sections and rows (a combo stepped through its choices, Enter its next; `app/widgets/SettingsSheet.cpp:459`), Export's
 rows (`app/widgets/ExportSheet.cpp:187`), Relink's and Conflicts' buttons (`app/widgets/RelinkSheet.cpp:66`;
@@ -2629,7 +2647,7 @@ focus on the next / previous enabled node (wrapping); while it is held, Enter an
 plays). Not while Settings captures a key, nor while a field is typed in. The focus ring (`advanceFocus`, `:772`; drawn
 over everything but the toast, `:1048`) sits over the focused node, travelling between nodes (220 ms) and fading in
 (120 ms) and out; a node gone lets the focus go. Tests: UI `test_the_keyboard_reaches_every_control`
-(`app/tests/ui/uiTests.cpp:5768`): the list's head (Home, Settings, the File menu), the Basic Synth fader "0.0 dB", the
+(`app/tests/ui/uiTests.cpp:5841`): the list's head (Home, Settings, the File menu), the Basic Synth fader "0.0 dB", the
 tempo "120 bpm", the first tab shown, a mute a toggle; Tab — Home, the ring caught fading in, then on its bounds; Tab —
 Settings, the ring caught travelling; Shift+Tab back; to Play — Space ONE line `transport play`, Space again stops it;
 to the fader — Right `set ch_2.gain=0.5`, Shift+Left `set ch_2.gain=0.4` ("+0.4 dB"); Escape — the ring caught fading
@@ -2638,7 +2656,7 @@ out, Space plays again; Settings open — every node the sheet's; Tab into it, E
 jumping; the ring at once; Enter / Space not the click; the arrows no step; Escape keeping the focus; the keys taken
 while not held; a modal's controls not alone; a fader's step a whole dB; a combo's step sending nothing; two keyboard
 clicks pairing as a double. Shots `keyboard-focus` (the ring on the Bass fader), `keyboard-focus-mid` (travelling to
-its pan), both sizes (`app/tests/shots/renderShots.cpp:675`). Not yet: the lanes' clips, the piano roll's notes, the
+its pan), both sizes (`app/tests/shots/renderShots.cpp:686`). Not yet: the lanes' clips, the piano roll's notes, the
 session grid, the history, the matrix's cells, the other windows' contents.
 Part 3 — the list to AT-SPI. The host's bridge (`host/Accessibility.h`; plain ATK, no GTK, built where `atk` is found,
 `host/CMakeLists.txt:52`) turns a list of items — the App's nodes as plain data — into ATK objects: a root (a filler named
@@ -2735,17 +2753,17 @@ composes (the service's refusals and sync lines stay its words), the host picker
 accessible names. Settings › Interface › Language — Automatic, then each language by its own name — ONE `settings set
 language=` line (`app/widgets/SettingsSheet.cpp:383`). Not translated (Round 21): the service's lines, the keymap's action
 names (the service's), the registry's words, the user's data; the song view's own words are part 3. `lang/vi.strings`: 248
-lines, the shell's every word. Tests: UI `test_the_window_speaks_the_language` (`app/tests/ui/uiTests.cpp:6349`): Settings ›
+lines, the shell's every word. Tests: UI `test_the_window_speaks_the_language` (`app/tests/ui/uiTests.cpp:6422`): Settings ›
 Interface › Language → `settings set language=vi`; a frame mid-dissolve (the amount between 0 and ½) painted "Settings" at full
 alpha AND "Cài đặt" under a layer at exactly the live amount (a spy target, `app/tests/Rig.h:226`, records every string and its
 layer alpha); the menus' rectangles already the Vietnamese titles'; at rest no English; a combo's choices Vietnamese with
 nothing in the model changed since; the node "menu.File" named "Menu Tệp"; back to English from a shell's line the other way;
 a switch back mid-way the same mixture that frame and on at the same rate. `test_every_word_the_shell_draws_is_from_the_table`
-(`app/tests/ui/uiTests.cpp:6530`): in `en-XA`, each covered widget painted alone through the spy — Home, the song bar and each menu open, the version
+(`app/tests/ui/uiTests.cpp:6603`): in `en-XA`, each covered widget painted alone through the spy — Home, the song bar and each menu open, the version
 menu, all seven Settings pages and a combo's list, Export, Relink, Conflicts, the history's card, a confirm dialog — every
 string with a letter is bracketed (the table's), the model's data (uppercased too), or a name no language translates (units,
 PulseAudio, Mackie Control, file kinds, a key's name); each widget drew the table's words at all; a composed toast and every
-accessible name likewise. `test_the_table_has_every_word_the_window_says` (`:6622`): the window's source scanned
+accessible name likewise. `test_the_table_has_every_word_the_window_says` (`:6695`): the window's source scanned
 (`app/tests/ui/WordsScan.h:97`: comments skipped, literals joined, escapes decoded) — `vi.strings` has every key the code hands
 the table and none it does not. Mutants seen red (11): the old language never painted; the new one not in a layer; the old one
 painted last; a switch snapping; a switch back jumping; the menus not relabeled; a menu's key in the language drawn; the
@@ -2753,7 +2771,7 @@ combos not relabeled (survived — a later bind repainted them — red once the 
 changed since); a word left out of the table; the scan blind to `N_`; a stored word shown as stored. English pixels unchanged:
 the 216 deterministic shots byte-identical before and after (the 16 playing ones differ between two runs of the same
 binary). Shots `home-vi`, `menus-vi`, `settings-vi` (the Language list open), `home-pseudo`, `settings-pseudo`,
-`language-dissolve-mid`, both sizes (`app/tests/shots/renderShots.cpp:693`). Found: D-24 (the pseudo-language's song bar at
+`language-dissolve-mid`, both sizes (`app/tests/shots/renderShots.cpp:704`). Found: D-24 (the pseudo-language's song bar at
 1024 px).
 Part 3a — the lanes' side (part 3 in two commits; the dock and the windows are 3b). The browser: its tabs (`N_`, drawn
 through `tr`, fitted to their tabs), its rows' words kept as words — headers ("Instruments", "Effects", "MIDI", "Samples";
@@ -2769,7 +2787,7 @@ video row; every menu the lanes, the ruler, a marker, a tempo, a clip's edits an
 (the automation shapes' names said, their grammar words sent, `app/widgets/TimelineAuto.cpp:610`); the drop hint's "new
 lane" (`app/widgets/ProjectScreen.cpp:108`); the session grid's + Scene, Back to Arrangement and hint
 (`app/widgets/SessionView.cpp:361`); the lanes' accessible names. `lang/vi.strings`: 356 lines. Tests: UI
-`test_every_word_the_lanes_draw_is_from_the_table` (`app/tests/ui/uiTests.cpp:6630`): in en-XA, a song with an instrument's
+`test_every_word_the_lanes_draw_is_from_the_table` (`app/tests/ui/uiTests.cpp:6703`): in en-XA, a song with an instrument's
 track, a sample's lane, a section marker, a tempo change, an automation and a scene — the browser's four tabs, the lanes,
 every lane's and clip's accessible name and value, the menus of a lane, each clip, the marker, the tempo, the ruler, and the
 session grid — each painted alone, every string the table's, the model's data (now the clips', patterns', markers',
@@ -2777,14 +2795,14 @@ automations', groups', scenes', tempos', the registry's words and the ids too) o
 scan holds. Mutants seen red (5): a browser header drawn as stored; the ruler's Snap untranslated; a clip's menu item, a
 marker's, the session's + Scene left English. English pixels: the 216 deterministic shots byte-identical to part 2's (a
 first try moved the shown tab's label a sub-pixel — it was centred by the regular face's width and drawn in the medium —
-kept as it was). Shots `lanes-vi`, `lanes-pseudo`, both sizes (`app/tests/shots/renderShots.cpp:736`).
+kept as it was). Shots `lanes-vi`, `lanes-pseudo`, both sizes (`app/tests/shots/renderShots.cpp:747`).
 Part 3b — the dock and the windows. The mixer dock (`app/widgets/MixerDock.cpp`): a strip's kind said through literal
-`tr` calls (`kindWord`, `:90` — "instrument", "audio", "bus" are the model's words, shown as the window's), its card's
+`tr` calls (`kindWord`, `:134` — "instrument", "audio", "bus" are the model's words, shown as the window's), its card's
 counted lines ("{1} clip", "fed by {1}", "VCA · moves {1}"), "+ Effect", "+N more", the FROZEN pill in capitals in any
 language, the master's devices counted, Mono, "+ Line" and the empty page's hint, every menu (a strip's, its route's, a
 chip's, "+ Line"'s, a mixer's), the tabs' "Matrix" kept as words with their widths measured in the language each pass
-draws; `labelOf` (`:239`) returns words — "Master", "{1} port" — and the drawn arrow shows them (`arrowText`, `:100`); the
-accessible names composed by the table ("{1} fader", "{1} pan", "{1} % left", `:158`). A number's menu (ParamMenu): every
+draws; `labelOf` (`:283`) returns words — "Master", "{1} port" — and the drawn arrow shows them (`arrowText`, `:144`); the
+accessible names composed by the table ("{1} fader", "{1} pan", "{1} % left", `:202`). A number's menu (ParamMenu): every
 item said, a binding's tag "auto {1}" (`app/widgets/ParamMenu.cpp:36`). The windows: a window's title kept as words and
 shown where drawn (`FloatWindow::title`, `app/widgets/FloatWindow.h:57`; the roll's, `app/widgets/PianoRoll.cpp:70`; the
 automation's, the loudness window's, the video's; a device's the registry's label and the strip's name), its close button
@@ -2800,7 +2818,7 @@ others are the registry's titles); the loudness window's labels in capitals (`ap
 window's words, kept as words so they cross-fade as they change (`app/widgets/VideoPanel.cpp:71`). Kept as they are: the
 registry's words (a parameter's label and choices, a module's title, a pad's name), note names, units, the standard's name
 (ITU-R BS.1770-4), the song's names. `lang/vi.strings`: 499 lines — the window's every word. Tests: UI
-`test_every_word_the_dock_and_windows_draw_is_from_the_table` (`app/tests/ui/uiTests.cpp:6695`): in en-XA, a song with an
+`test_every_word_the_dock_and_windows_draw_is_from_the_table` (`app/tests/ui/uiTests.cpp:6768`): in en-XA, a song with an
 instrument, a sample's strip routed to the master, a bus fed by a send, a VCA, the master's compressor and an automation —
 the dock and its accessible names and values, the menus of a strip, its route, a chip, "+ Line", a fader's number, the
 matrix; an instrument's face, an effect's list, the piano roll, the automation, loudness and video windows and their names —
@@ -2810,7 +2828,7 @@ mixers'), with nested brackets, a number's unit and a note's name understood. Th
 route arrow drawn as stored (survived — no arrow said "Master" — red once the song routed a strip to the master). English
 pixels: the 216 deterministic shots byte-identical to part 2's (a first try said the loop's "every 1 beat" as "every beat":
 put back). Shots `dock-vi` (the mixer, a drum machine's face and the roll over it), `dock-pseudo` (the roll and the loudness
-window in en-XA), both sizes (`app/tests/shots/renderShots.cpp:753`). Not yet (Round 21): the registry's words and the
+window in en-XA), both sizes (`app/tests/shots/renderShots.cpp:764`). Not yet (Round 21): the registry's words and the
 service's lines translated; right-to-left; plural rules beyond one / other and one form; the web face's text; and D-24.
 
 ### DR-ASSIST-1 Analysis tools (R-ASSIST-1; docs/discussion.md Round 22) — part 1: the DSP library; part 2: the service; part 3: the window
@@ -2877,14 +2895,14 @@ Am", its value "beats 6 to 8" (`app/widgets/Timeline.cpp:350`). **The menus:** a
 (`app/widgets/TimelineClipEdit.cpp:361`); the ruler's — on the band too, which is the ruler's
 (`app/widgets/TimelineMarkers.cpp:177`) — "Detect chords" (`chords detect`, the whole song) and, while it has
 chords, "Clear chords" (`:212`). Sentence case, as the context menus are (Round 22 named them in title case). UI
-`test_the_chords_band` (`app/tests/ui/uiTests.cpp:5406`; the rig now plays back a sound a test made, by its file name —
+`test_the_chords_band` (`app/tests/ui/uiTests.cpp:5479`; the rig now plays back a sound a test made, by its file name —
 `rigSounds`, `app/tests/Rig.h:100`): a clip's Detect chords is ONE line; the band caught mid-grow with the lanes at
 `row0 + amount·kChordH`, a chord mid-fade; C@4 spans beats 4 … 6; the names and "CHORDS" drawn; the accessible; a
 picture's row under the band and the lanes under both; the band's Insert a bar slides the chords (caught between);
 Clear chords fades them and closes the band (caught mid both), the lanes back; the ruler's Detect chords with no Clear
 offered; To MIDI on a melody lands "melody notes", Separate two clips. `test_every_word_the_lanes_draw_is_from_the_table`
 now draws the band, its menu and its accessibles in en-XA. Shots `chords-band`, `chords-band-growing` (mid-grow),
-`chords-menu` (`app/tests/shots/renderShots.cpp:596`). Mutants: the band snapping, the lanes not under it, chords
+`chords-menu` (`app/tests/shots/renderShots.cpp:607`). Mutants: the band snapping, the lanes not under it, chords
 popping in, chords jumping on a time edit, the picture's row under the ruler, the band not the ruler's for a
 right-click, Clear offered with none, a clip's Detect hearing the whole song, a gone chord vanishing — each red.
 
@@ -2987,7 +3005,7 @@ a combo's (SettingCombo) naming the device; the page's content grows by them (it
 (`:922`, `openPortMenu` `:815`): a click on the field opens the app's context menu over the sheet
 (`app/App.cpp:102`) — the clock (or the default input), then every device of the port's direction, the current one
 marked — and a pick is ONE line, `settings set port.<name>=<device>:<channel>` (or empty: back on the clock). Test:
-UI `test_settings_puts_a_port_on_a_device` (`app/tests/ui/uiTests.cpp:6246`: Phones' field lists the clock and the
+UI `test_settings_puts_a_port_on_a_device` (`app/tests/ui/uiTests.cpp:6319`: Phones' field lists the clock and the
 rig's three outputs; a pick sends its one line, the field names the device, its line cross-fading — caught
 mid-ease; playing, Main's line says how the clock is; a port added grows in, undone shrinks out — each caught
 mid-ease). Shots: settings-ports, settings-ports-arriving. Mutants (each red): the line snapping; rows snapping in;
@@ -3165,7 +3183,7 @@ purpose), a needle across −50 … +50 cents easing to each reading at `kCatchU
 does not control — and greener the nearer the centre, from the EASED value so the colour never jumps; the pitched
 light (with no pitch a dash, the needle home and faded) eased alike (`:363`); the frequency, the cents (a rounded
 zero is "0", never "−0") and the level small. Drawn from the model only. The rows begin below the band. UI test
-`test_a_tuners_window` (`app/tests/ui/uiTests.cpp:5959`): the band in the window (stopped: no pitch); a panel bound to
+`test_a_tuners_window` (`app/tests/ui/uiTests.cpp:6032`): the band in the window (stopped: no pitch); a panel bound to
 the service's model with A4 +23.45 ct put in — the needle caught at 12.63 ct mid-tween and the light at 0.54, then
 exactly there; the pitch gone — a dash at once, the needle and light caught on their way home; a synth has no band.
 Shot `tuner-window` at both sizes (a synth holding A4: "A4", the needle centred and green, 440.0 Hz · 0 ct).
@@ -3321,10 +3339,10 @@ is the capture's writer: what fits goes in, the rest dropped and counted. The se
 `AudioRing: a capture's push never waits …`; L2 the fallback said in `test_an_armed_audio_line_is_monitored_as_set`.
 Mutants: the overflow not counted, the driver setting ignored — red. Not run on this machine's real input (the user's
 microphone): a live recording is owed. **The window.** An audio or instrument strip's M | S row is M | S | R in the mixer
-(`armRow`, `app/widgets/MixerDock.cpp:72`; a bus and the master keep M | S), R lit red when the strip is armed, eased.
-R (`:1254`) disarms an armed strip (`strip arm none`); on an audio line with no input it offers the song's input
+(`armRow`, `app/widgets/MixerDock.cpp:116`; a bus and the master keep M | S), R lit red when the strip is armed, eased.
+R (`:1479`) disarms an armed strip (`strip arm none`); on an audio line with no input it offers the song's input
 ports — "Arm with Mic" is ONE `strip arm <ch> --input <port>` — or, with none, "Add an input port (In)" (`port add In
---dir in`); else it arms (`strip arm <ch>`). An audio line's menu (`:1392`): Input… (the input ports, the current one
+--dir in`); else it arms (`strip arm <ch>`). An audio line's menu (`:1618`): Input… (the input ports, the current one
 marked, No input, Add an input port… — a name typed in cosmo's field) and Monitor… (Auto · On · Off — `set
 <ch>.monitor=`). The ruler's menu adds Punch the loop's span (`transport punch <loop>`) and Punch off
 (`app/widgets/TimelineMarkers.cpp:209`); the punch is a red line atop the bars (`Timeline::punchRect`,
@@ -3703,7 +3721,7 @@ lower edge): "Offline — <why>" in the destructive colour, and **Reload** (`rel
 (`:602`); the rows below are pushed down with it, because `bodyTop()` (`DevicePanel.h:104`) includes the eased band.
 Both ease from the model wherever the change came from (`DevicePanel.cpp:347`; the first placement is set, not
 animated). The rig's host plays two in-process plugins (`RigPlugin`, `app/tests/Rig.h:60`; one named by
-`rigPluginCrash()` is offline at once). UI `test_a_plugins_device_window` (`app/tests/ui/uiTests.cpp:6025`): an
+`rigPluginCrash()` is offline at once). UI `test_a_plugins_device_window` (`app/tests/ui/uiTests.cpp:6098`): an
 instrument plugin's list (no face); Editor's line and its light caught mid-tween, again `--close`; a crash — the band
 caught mid-slide, the rows pushed by exactly the band at rest, the model's why; Reload's line, the band caught
 mid-close; an effect plugin's list. Shots: plugin-device, plugin-offline, plugin-offline-mid at both sizes. Mutants
@@ -3724,9 +3742,9 @@ the service's; the input opens when a mapping is added or a learn starts, and on
 first controller moved is bound on ITS channel (`:119` — its value not taken; `map.learned cc address`); otherwise its
 mapping — its channel's first (`:116`), then any channel's — moves the address (`controlValue`, `:55`): a strip's,
 a send's or the master's gain by the fader law (`faderDb`, `core/service/FaderLaw.h:14` — moved out of the dock, which
-now calls it, `app/widgets/MixerDock.cpp:123`), a registry device's parameter by `valueFromNormalized` (its taper, as
+now calls it, `app/widgets/MixerDock.cpp:167`), a registry device's parameter by `valueFromNormalized` (its taper, as
 its knob), a plugin's `p<id>` as its own 0 … 1, anything else linearly; clamped, whole where the number is. A pump's
-moves are ONE `set` line (the last value of each address), and MIDI Machine Control (`:86` — Play / Deferred Play,
+moves are ONE `set` line (the last value of each address), and MIDI Machine Control (`:130` — Play / Deferred Play,
 Stop / Pause, Record Strobe, Fast Forward / Rewind to the next / last bar) `transport` lines; they land as a plugin
 editor's do (`applyPendingEdits`, `ServicePlugins.cpp:287`: when no command runs, else first in the next one) — but
 heard, as any edit (only a plugin's own are kept from echoing back). **The host** (`host/MidiInAlsa.cpp:99`) parses a
@@ -3745,14 +3763,14 @@ and run again.
 **Part 2 — the window.** The shared parameter menu (`app/widgets/ParamMenu.cpp`) offers every number **Learn MIDI CC**
 (`:83` — `map learn <address>`) and, for each control that moves it, **Forget CC <n>** (`map remove <n>`); the
 widget fills `ParamTarget::controls` from `settings.mappings[]` (`controlsFor`, `:43`; the dock,
-`app/widgets/MixerDock.cpp:1132`; a device's rows and knobs, `app/widgets/DevicePanel.cpp:647`). While a learn waits, the
+`app/widgets/MixerDock.cpp:1357`; a device's rows and knobs, `app/widgets/DevicePanel.cpp:647`). While a learn waits, the
 song bar shows a pill after the tempo (`app/widgets/SongBar.cpp:443`; its rect `:124`, up to the meter, 260 at most) —
 "MIDI learn · <address> — move a control" — easing in and out (`:175`; the address kept while it fades), and a click on
 it is `map learn --cancel` (`:285`). Settings has a **MIDI** page (`SettingsSheet::kMidi`): each mapping a row —
 `CC <n>`, the address, dimmed and "not in this song" when inert — with × forgetting it (`map remove`,
 `app/widgets/SettingsSheet.cpp:974`); the rows are keyed by control, a new one growing in and a forgotten one shrinking
 out (`:277`, `:782`; drawn `:1157`), the first placement set. UI `test_midi_learn_in_the_window`
-(`app/tests/ui/uiTests.cpp:6084`): Learn from a fader's menu — the line, the pill caught mid-fade, a click on it
+(`app/tests/ui/uiTests.cpp:6157`): Learn from a fader's menu — the line, the pill caught mid-fade, a click on it
 cancelling (caught mid-fade out); Forget CC 74's line; a knob's menu offering Learn; the MIDI page with one inert row,
 × sending its line and the row caught mid-shrink. Shots: midi-learn (a fader's menu with Learn and Forget, the pill),
 settings-midi (three mappings, one inert) at both sizes. Mutants (each red): the pill snapping, no Learn item, no
@@ -3806,7 +3824,7 @@ port: None and the MIDI ports `devices list` names (`app/widgets/SettingsSheet.c
 set` line; the mapped controls follow under a micro-label (`:1078`). The surface row's note (`rowWords`, `:1093`) says
 what the model says: what a surface does, "connected · strips 1–8" (its bank), or "not connected — <why>"; a change
 cross-fades from the old line (`:766`). The rig's host has a MIDI output that goes nowhere (`QuietOut`,
-`app/tests/Rig.h:184`). UI `test_a_surface_chosen_in_settings` (`app/tests/ui/uiTests.cpp:6149`): Mackie Control
+`app/tests/Rig.h:184`). UI `test_a_surface_chosen_in_settings` (`app/tests/ui/uiTests.cpp:6222`): Mackie Control
 picked — its line, the note caught mid-fade, then "no port"; a port picked — its line (the whole `key=value` quoted, as
 the sheet spells any), "connected · strips 1–8"; None — its line, disconnected. Shot settings-midi now shows a Mackie
 Control surface connected over the mappings. Mutants (each red): the note snapping, the combo sending another key, the
@@ -3831,7 +3849,7 @@ drawn value is a value catching up (`:153`), so a stop eases it down. The learn 
 `test_the_cpu_meter` (`core/tests/serviceTests.cpp:4604`): playing, a load in (0, 10) and a worst block kept; a
 chord's synth costs more than an empty bus, and no strip more than the whole (≈ 2 % of a block against ≈ 0 here);
 stopped, all 0; a render before and after playing, the same bytes. UI `test_the_cpu_in_the_song_bar`
-(`app/tests/ui/uiTests.cpp:6308`): the readout caught on its way up and on its way down. The meters-playing shot shows
+(`app/tests/ui/uiTests.cpp:6381`): the readout caught on its way up and on its way down. The meters-playing shot shows
 it. Mutants (each red): the load not over the block's duration, the strips never timed, a strip's sums never
 restarted, the worst block never kept, the readout snapping. Found while building it: two survived first — "a strip's
 sums never restarted" (the test's bound was loose: a strip's share is now held to the whole load's) and "the worst
@@ -3897,11 +3915,11 @@ trimmed; a refreeze's stale decode kept; the unreadable file unsaid. Found while
 warning bound to the clip loop's `if` (a dangling `else`) — every other strip's clip said "cannot be read"; the
 refusal for an unsaved song could never fire (an open song always has its file) and is gone; consolidate's naming
 became `writeBounce`, one copy for both. **Drawn** (part 2): a strip's menu in the mixer
-(`app/widgets/MixerDock.cpp:1437`) — "Unfreeze" on a frozen strip; "Freeze" (`:1438`) and "Bounce to a new strip"
-(`:1439`) on a strip nothing feeds, read from the model's `fromStrips` (outputs, sends and keys — the service's rule);
-each one line. A frozen strip's eased amount (`:715`, `frozenAmount` `:464`, the cross-fade's time) dims its rack
-(`:1531`) under a chip-sized FROZEN pill in the accent (`:1556`, its word ellipsized on a narrow card). Test: UI
-`test_a_strip_freezes_from_its_menu` (`app/tests/ui/uiTests.cpp:6188`: a fed bus offers neither; Freeze sends its line,
+(`app/widgets/MixerDock.cpp:1663`) — "Unfreeze" on a frozen strip; "Freeze" (`:1664`) and "Bounce to a new strip"
+(`:1665`) on a strip nothing feeds, read from the model's `fromStrips` (outputs, sends and keys — the service's rule);
+each one line. A frozen strip's eased amount (`:938`, `frozenAmount` `:508`, the cross-fade's time) dims its rack
+(`:1757`) under a chip-sized FROZEN pill in the accent (`:1782`, its word ellipsized on a narrow card). Test: UI
+`test_a_strip_freezes_from_its_menu` (`app/tests/ui/uiTests.cpp:6261`: a fed bus offers neither; Freeze sends its line,
 the amount caught mid-ease both ways; Unfreeze; Bounce makes a strip). Shots: mixer-frozen, mixer-frozen-mid. Mutants
 (each red): the look snapping; never advancing; Freeze, or Bounce, offered on a fed strip; Unfreeze never offered;
 Freeze sending the wrong line. Found while testing it: Escape closes a context menu only while renaming, so the Duck

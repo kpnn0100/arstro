@@ -990,6 +990,79 @@ static void test_mixer_dock_strips()
     pass("Mixer dock: a fader follows the pointer and sends `set`; a shell's gain travels; mute eases; the route menu is the service's targets; tabs slide and cross-fade; a fold and the dock ease");
 }
 
+static void test_the_rack_shows_its_generator_apart_and_slides()
+{
+    // R-FX-5b: a card's rack in two labelled sections — GENERATOR (an instrument's chip, an audio strip's clips) or INPUT
+    // (what feeds a bus, the master), then EFFECTS; the generator's chip opens its instrument. R-FX-5a: the effect chips
+    // are keyed — a rack changed from a shell slides them to their slots and fades them in and out, eased
+    sltest::Rig r("ui-rack", 1280, 800);
+    r.cmd("project new " + r.song("Rack") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    const std::string ch = r.svc->model().strips[0].id;
+    r.cmd("device add " + ch + " --type eq");
+    r.cmd("device add " + ch + " --type reverb");
+    r.cmd("clip add --src vox.wav --at 0");
+    r.cmd("strip add --kind bus --name Verb");
+    std::string audio, bus;
+    for (const auto &st : r.svc->model().strips)
+    {
+        if (st.kind == "audio") audio = st.id;
+        if (st.kind == "bus" && st.name == "Verb") bus = st.id;
+    }
+    r.cmd("send add " + ch + " --to " + bus);
+    r.settle();
+    auto &d = r.app->project().dock();
+    auto devs = [&] { for (const auto &st : r.svc->model().strips) if (st.id == ch) return st.devices; return std::vector<arstro::solaris::DeviceModel>{}; };
+    const std::string inst = devs()[0].id, eq = devs()[1].id, rev = devs()[2].id;
+    std::string chName;
+    for (const auto &st : r.svc->model().strips)
+        if (st.id == ch) chName = st.name;
+    // the sections: what each says
+    assert(d.sectionTitle(ch, 0) == "Generator" && d.sectionTitle(ch, 1) == "Effects" && d.sectionTitle(audio, 0) == "Generator");
+    assert(d.sectionTitle(bus, 0) == "Input" && d.sectionTitle("master", 0) == "Input");
+    assert(d.generatorText(ch) == devs()[0].label && d.generatorText(audio) == "Audio clips" && contains(d.generatorText(bus), chName));
+    // stacked: a title, the generator, a title, the effects — the instrument IS the generator's chip
+    const artboard::Rect t0 = d.sectionRect(ch, 0), gen = d.generatorRect(ch), t1 = d.sectionRect(ch, 1), fx0 = d.chipRect(ch, 1);
+    assert(gen.w > 0 && gen.x == d.chipRect(ch, 0).x && gen.y == d.chipRect(ch, 0).y);
+    assert(t0.bottom() <= gen.y && gen.bottom() <= t1.y && t1.bottom() <= fx0.y);
+    r.spying = true;
+    r.frame();
+    r.spying = false;
+    auto drew = [&](const std::string &text) { for (const auto &x : r.spy.drawn) if (x.text == text) return true; return false; };
+    assert(drew("GENERATOR") && drew("EFFECTS") && drew("INPUT") && drew("Audio clips"));
+    // the generator's chip opens its instrument's window
+    auto &wl = r.app->project().windows();
+    r.click(world(d, gen));
+    r.settle();
+    assert(wl.isOpen("dev:" + inst));
+    wl.close("dev:" + inst);
+    r.settle();
+    // a shell reorders the rack: the chips slide past each other, eased
+    assert(d.fxSlotLive(ch, eq) == 0.0 && d.fxSlotLive(ch, rev) == 1.0 && d.fxSlotLive(ch, "+add") == 2.0);
+    r.cmd("device move " + rev + " --to 1");
+    r.frame();
+    r.frame();
+    const double se = d.fxSlotLive(ch, eq), sr = d.fxSlotLive(ch, rev);
+    assert(se > 0.0 && se < 1.0 && sr > 0.0 && sr < 1.0);
+    r.settle();
+    assert(d.fxSlotLive(ch, rev) == 0.0 && d.fxSlotLive(ch, eq) == 1.0);
+    // one more effect than the card shows: "+2 more" fades in, the second effect fades out; "+ Effect" stays
+    r.cmd("device add " + ch + " --type compressor");
+    r.frame();
+    r.frame();
+    const double am = d.fxAlphaLive(ch, "+more"), ae = d.fxAlphaLive(ch, eq);
+    assert(am > 0.0 && am < 1.0 && ae > 0.0 && ae < 1.0 && d.fxSlotLive(ch, "+more") == 1.0);
+    r.settle();
+    assert(d.fxAlphaLive(ch, "+more") == 1.0 && d.fxAlphaLive(ch, eq) == -1.0 && d.fxSlotLive(ch, "+add") == 2.0);
+    // "+2 more" is the rack's menu, every device in it
+    r.click(world(d, d.chipRect(ch, 2)));
+    r.settle();
+    assert(r.app->menu().isOpen() && r.app->menu().itemCount() == 4);
+    r.click(5.0, 790.0);
+    r.settle();
+    pass("The rack in two sections (R-FX-5b): GENERATOR — the instrument's chip, opening it; an audio strip's clips — or INPUT on a bus and the master, then EFFECTS; the effect chips keyed (R-FX-5a): a shell's move slides them, eased; one too many fades into \"+2 more\"");
+}
+
 static void test_mixer_matrix_effects_and_device_panel()
 {
     sltest::Rig r("ui-matrix", 1280, 800);
@@ -6844,6 +6917,7 @@ int main()
     test_meters_and_the_loudness_window();
     test_the_export_sheet_is_one_render_line();
     test_an_instrument_track_is_armed_from_its_header();
+    test_the_rack_shows_its_generator_apart_and_slides();
     test_mixer_matrix_effects_and_device_panel();
     test_song_bar_menus_and_settings_sections();
     test_device_window_lists_parameters_and_binds_them();

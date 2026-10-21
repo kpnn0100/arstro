@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► Y2** — the rack in two labelled sections, its chips keyed and eased (R-FX-5b); then Y3. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► Y3** — an effect's chip dragged to its place: ONE `device move --to` (R-FX-5a). Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -783,8 +783,10 @@ amended.
 - [x] **Y1** Space plays the front roll's clip only while that roll has the keys; a click on the lanes gives it back to
       the song (R-ROLL-6 amended). — DR-ROLL-6 (its two stale anchors re-pointed). UI the roll-play test extended; 1
       mutant red.
-- [ ] **Y2** A card's rack in two labelled sections — Generator (or Input) and Effects — its chips keyed and eased, so a
-      rack changed anywhere slides and fades (R-FX-5b).
+- [x] **Y2** A card's rack in two labelled sections — Generator (or Input) and Effects — its chips keyed and eased, so a
+      rack changed anywhere slides and fades (R-FX-5b). — DR-FX-5b. UI one; shot mixer-rack-sliding (and every mixer
+      shot shows the sections); 5 mutants red. Found: a rack changed from a shell used to swap its chips' labels in one
+      frame — now they slide.
 - [ ] **Y3** An effect's chip dragged to its place: ONE `device move --to` (R-FX-5a).
 
 ### T — tasks found on the way

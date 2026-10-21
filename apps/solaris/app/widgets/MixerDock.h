@@ -118,6 +118,17 @@ namespace solaris_ui
         artboard::Rect outRect(const std::string &id) const;
         artboard::Rect chipRect(const std::string &id, int slot) const; // the slot's chip (a device, "+N", "+ Effect")
         int chipSlots(const std::string &id) const;
+        /** R-FX-5b: a card's two sections — the title over each (0: Generator, or Input on a bus and the master; 1: Effects),
+         *  where the sound comes from (an instrument's chip, an audio strip's clips, what feeds a bus or the master) and
+         *  what that says; the titles as words (translated). */
+        artboard::Rect sectionRect(const std::string &id, int section) const;
+        artboard::Rect generatorRect(const std::string &id) const;
+        std::string generatorText(const std::string &id) const;
+        std::string sectionTitle(const std::string &id, int section) const;
+        /** R-FX-5a/5b: an effect chip's place in its card's Effects, LIVE (a slot, eased — it slides when the rack changes),
+         *  and its presence (fading in and out); −1 when the card shows no such chip. */
+        double fxSlotLive(const std::string &id, const std::string &dv) const;
+        double fxAlphaLive(const std::string &id, const std::string &dv) const;
         artboard::Rect sendRect(const std::string &id, int i) const;
         artboard::Rect foldRect(const std::string &bus) const;
         double foldAmount(const std::string &bus) const;
@@ -223,6 +234,22 @@ namespace solaris_ui
             artboard::AnimatedProperty a{0.0}, t{1.0};
             bool on = false, placed = false;
         };
+        /** R-FX-5a/5b: a card's effect chips, keyed by "<card>><dv>" ("<card>>+more", "<card>>+add" for the two that are not
+         *  devices): each in its slot of the card's Effects, eased; fading in and out — a rack changed anywhere slides. */
+        struct FxChip
+        {
+            std::string card, dv, label;        // label: a device's (data); "+N more" and "+ Effect" are words, drawn at paint
+            int kind = 0, more = 0;             // 0 a device, 1 "+N more" (more = N), 2 "+ Effect"
+            bool bypass = false;
+            artboard::AnimatedProperty slot{0.0}, alpha{0.0};
+            double slotWant = 0.0, slotLast = -1.0, aLast = 0.0;
+            bool placed = false, gone = false;
+        };
+        std::map<std::string, FxChip> mFx;
+        std::vector<std::string> inputNames(const std::string &id) const; // R-FX-5b: what feeds a bus, or the master, by name
+        void syncFx(double nowMs, bool fadeIn);
+        void paintRack(artboard::IRenderTarget &t, const std::string &id, const std::vector<solaris::DeviceModel> &devs, double x, double w, double a,
+                       double ra, const artboard::Color &col) const;
         enum class Part { None, Tab, AddMixer, ToggleDock, Resize, Header, Chip, Send, Pan, Fader, Mute, Solo, Out, Fold, Cell, AddLine, Clip, Loudness, Arm, Mono };
         struct Hit
         {

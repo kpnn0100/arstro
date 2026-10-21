@@ -381,6 +381,17 @@ namespace
                  mixedSong(r, "Night Drive");
                  r.settle();
              }},
+            {"mixer-rack-sliding",   // R-FX-5a/5b: Bass's rack reordered from a shell — its reverb and EQ sliding past each other
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.cmd("device add ch_3 --type reverb");
+                 r.settle();
+                 std::string rev;
+                 for (const auto &st : r.svc->model().strips)
+                     if (st.id == "ch_3" && !st.devices.empty()) rev = st.devices.back().id;
+                 r.cmd("device move " + rev + " --to 1");
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
             {"mixer-buses",
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");
