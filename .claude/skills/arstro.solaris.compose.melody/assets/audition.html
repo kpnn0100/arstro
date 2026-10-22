@@ -25,16 +25,21 @@
   .progress b { color: var(--fg); font-weight: 600; }
   .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
   .legend i { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
-  main { max-width: 1120px; margin: 0 auto; padding: 18px 16px 80px; display: grid; gap: 16px; }
+  main { max-width: 1120px; margin: 0 auto; padding: 18px 16px 80px; display: grid; gap: 16px;
+         grid-template-columns: minmax(0, 1fr); }   /* a long roll scrolls in its card, never widens the page */
   .intro { color: var(--muted); font-size: 13px; max-width: 820px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; transition: border-color .2s; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; transition: border-color .2s;
+          min-width: 0; }
   .card.playing { border-color: var(--accent); }
   .head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
   .num { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
   .title { font-weight: 600; }
   .meta { color: var(--muted); font-size: 12px; }
   .score { margin-left: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .roll-wrap { position: relative; margin: 12px 0 10px; }
+  .roll-wrap { position: relative; margin: 12px 0 10px; overflow-x: auto; border-radius: 6px; }
+  .roll-wrap.long svg.roll { cursor: pointer; }
+  .roll-wrap { scrollbar-color: #444 transparent; scrollbar-width: thin; }
+  .card.song .chip.plain { border-radius: 8px; }            /* a craft note runs to two lines: a box, not a pill */
   svg.roll { width: 100%; height: 170px; display: block; background: #171717; border-radius: 6px; }
   .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .play { width: 42px; height: 42px; border-radius: 50%; border: none; background: var(--accent); color: #fff; cursor: pointer;
@@ -43,7 +48,8 @@
   .play svg { width: 16px; height: 16px; }
   .time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; min-width: 70px; }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chip { background: var(--accent-soft); color: #bfe9e4; border-radius: 999px; padding: 2px 9px; font-size: 12px; }
+  .chip { background: var(--accent-soft); color: #bfe9e4; border-radius: 999px; padding: 2px 9px; font-size: 12px;
+          max-width: 100%; }
   .chip.plain { background: var(--raised); color: var(--muted); }
   .why { color: var(--muted); font-size: 12px; margin-top: 8px; }
   .verdict { margin-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -127,7 +133,7 @@ function noteRole(m, n) {
 
 function roll(m) {
   const beats = span(m), bars = beats / 4;
-  const W = 1000, H = m.song ? 230 : 170, top = m.song ? 40 : 22, bot = 8;
+  const W = rollWidth(m), H = m.song ? 230 : 170, top = m.song ? 40 : 22, bot = 8;
   const ps = m.notes.map(n => n.p), lo = Math.min(...ps) - 2, hi = Math.max(...ps) + 2;
   const y = p => top + (hi - p) / (hi - lo) * (H - top - bot);
   const x = t => t / beats * W;
@@ -135,6 +141,7 @@ function roll(m) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   for (const [k, v] of Object.entries({viewBox: `0 0 ${W} ${H}`, class: "roll", preserveAspectRatio: "none", role: "img",
                                        "aria-label": "piano roll"})) svg.setAttribute(k, v);
+  if (W > 1000) svg.style.width = `${W}px`;              // a whole song: the roll scrolls, the playhead leads it
   let s = "";
   for (let p = lo; p <= hi; p++) {
     const black = [1, 3, 6, 8, 10].includes(p % 12);
@@ -150,6 +157,12 @@ function roll(m) {
     for (let k = 1; k < 4 && b < bars && !m.song; k++) s += `<line x1="${x(4 * b + k)}" x2="${x(4 * b + k)}" y1="${top}" y2="${H}" stroke="rgba(255,255,255,0.03)"/>`;
     if (b < bars) s += `<text x="${x(4 * b) + (m.song ? 3 : 6)}" y="${m.song ? 30 : 14}" fill="#8a8a8a" font-size="${m.song ? 9.5 : 12}" font-family="system-ui">${m.chords[b]}</text>`;
   }
+  for (const n of (m.hook || [])) {                      // the instrumental hook (the intro, the drops): an outline
+    const h = Math.max(6, (H - top - bot) / (hi - lo) - 2);
+    if (n.p < lo || n.p > hi) continue;
+    s += `<rect x="${x(n.t) + 1}" y="${y(n.p) - h / 2}" width="${Math.max(3, x(n.d) - 2)}" height="${h}" rx="2.5"
+           fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1"><title>hook ${n.name}</title></rect>`;
+  }
   const topP = Math.max(...ps);
   const colour = {ct: "#159387", lean: "#e0a050", ctweak: "rgba(21,147,135,0.55)", pass: "#6f6f6f"};
   for (const n of m.notes) {
@@ -164,13 +177,14 @@ function roll(m) {
 }
 
 function span(m) { return m.song ? m.chords.length * 4 : 32; }
+function rollWidth(m) { return m.song && m.chords.length > 24 ? m.chords.length * 44 : 1000; }   // 44 px a bar when long
 
 function why(m) {
   const k = m.metrics, bits = [];
   if (m.song) {
     bits.push(`range ${k.low}–${k.high} (${k.range})`);
     bits.push(`${Math.round(k.stress_on_beat * 100)} % of stressed syllables on the beat`);
-    bits.push(`climax ${k.high} once, in the ${k.climax_in}`);
+    bits.push(k.climax_once_a_chorus !== undefined ? `climax ${k.high} once a chorus` : `climax ${k.high} once, in the ${k.climax_in}`);
     bits.push(k.hook_returns ? "the hook returns" : "the hook varied");
     bits.push(`ends ${k.cadence}, home on the downbeat`);
     bits.push(`${k.surprise_bits} bits a note (real pop 2.94)`);
@@ -189,11 +203,11 @@ function card(m, i) {
   const c = el("section", {class: m.song ? "card song" : "card", id: m.id});
   c.append(el("div", {class: "head"}, m.song
     ? `<span class="num">#${String(i + 1).padStart(2, "0")}</span><span class="title">${m.title}</span>
-       <span class="meta">${m.style_label} · ${m.key} · ${m.bpm} bpm · ${m.sections.filter(sc => sc.name !== "intro").map(sc => `${sc.name} ${sc.bars}`).join(" · ")} bars</span>`
+       <span class="meta">${m.style_label} · ${m.key} · ${m.bpm} bpm · ${m.metrics.seconds ? `${Math.floor(m.metrics.seconds / 60)}:${String(m.metrics.seconds % 60).padStart(2, "0")} · ${m.sections.length} sections` : m.sections.filter(sc => sc.name !== "intro").map(sc => `${sc.name} ${sc.bars}`).join(" · ") + " bars"}</span>`
     : `<span class="num">#${String(i + 1).padStart(2, "0")}</span><span class="title">${m.style_label}</span>
      <span class="meta">${m.key} · ${m.bpm} bpm · ${m.progression.join("–")}</span>
      <span class="score" title="the rubric's score (theory only — your verdict outranks it)">rubric ${m.score.toFixed(3)}</span>`));
-  const wrap = el("div", {class: "roll-wrap"});
+  const wrap = el("div", {class: rollWidth(m) > 1000 ? "roll-wrap long" : "roll-wrap"});
   const svg = roll(m);
   wrap.append(svg);
   c.append(wrap);
@@ -281,13 +295,23 @@ function card(m, i) {
   function nextT(t) { const n = m.notes.find(n => n.t > t && n.syl !== "~"); return n ? n.t : Infinity; }
   function tick() {
     const beat = audio.currentTime * m.bpm / 60 - (m.song ? 0 : INTRO);
-    const xx = Math.max(-10, Math.min(1000, beat / span(m) * 1000));
+    const RW = rollWidth(m), xx = Math.max(-10, Math.min(RW, beat / span(m) * RW));
     if (m.song) sing(beat);
+    if (RW > 1000 && !audio.paused) {                    // keep the playhead in view: the roll eases along, never jumps
+      const px = xx / RW * svg.getBoundingClientRect().width, left = wrap.scrollLeft, w = wrap.clientWidth;
+      if (px < left + 0.15 * w || px > left + 0.7 * w) wrap.scrollTo({left: Math.max(0, px - 0.3 * w), behavior: "smooth"});
+    }
     head.setAttribute("x1", xx); head.setAttribute("x2", xx);
     const s = Math.floor(audio.currentTime);
     time.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
     if (!audio.paused) requestAnimationFrame(tick);
   }
+  if (m.song) svg.addEventListener("click", e => {       // click the roll: play from there
+    const r = svg.getBoundingClientRect(), beat = (e.clientX - r.left) / r.width * span(m);
+    audio.currentTime = Math.max(0, beat * 60 / m.bpm);
+    if (audio.paused) { players.forEach(p => p !== audio && p.pause()); audio.play(); }
+    tick();
+  });
   btn.addEventListener("click", () => {
     if (audio.paused) { players.forEach(p => p !== audio && p.pause()); audio.play(); } else audio.pause();
   });

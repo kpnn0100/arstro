@@ -44,10 +44,27 @@ When a lesson becomes a rule, the code changes too (`melody.py`), and the entry 
    the beats, the verse low and spoken, the pre-chorus climbing to a breath, the chorus higher with the title as its
    hook, lines in mirrored pairs, one money note, V → I home. They are arranged by section and heard sung
    (`scripts/song.py`). *(songs-001)*
+10. *Hint, not yet a lesson:* **the catchiest hook is short, repeated at once, and has one unusual leap.** Run With Me
+   was rated love twice before settling on good: it is the fastest (126 bpm), its title is a one-bar hook sung twice in
+   a row, and its climax is a minor-sixth leap. The earworm study found the same three things (Jakubowski et al. 2017:
+   faster, a common contour, an unusual interval). One song, so a hint.
 6. *Hint, not yet a lesson:* the good ones change direction less (0.32 against 0.45) and use fewer bar rhythms (2.5
    against 2.8) — simpler lines, as the research says. *(the motion and rhythm targets nudged)*
 
 ## Batches
+
+### songs-002 (2026-10-22) — the whole song, and a voice that sings
+
+The same three songs, so the change is heard against songs-001, now:
+- **in the whole form** (references/songwriting.md §7): an intro teasing the hook, verse, pre-chorus, chorus, a drop
+  on the hook (EDM), verse 2 with new words, chorus 2 with a harmony, a bridge that turns the story, the last chorus
+  ending on vi, and a tag that lands home;
+- **with a voice made to sing** (§8): a late vibrato (songs-001 had none — the mod wheel was never moved), a scoop
+  into each phrase, consonants, doubles in every chorus, a harmony from chorus 2.
+
+Measured: every check holds across the whole song — stresses on the beat 93–98 %, the climax once a chorus, no rest
+out of place, home on the downbeat held two bars; the voice 3–7 LU over the loudest other part in every sung section; the vibrato
+pitch-tracked (a held note: ±41 cents at 5.3 Hz after a steady start). *Judging begun: 01 Paper Lanterns good.*
 
 ### songs-001 (2026-10-22) — the breakthrough: three songs, written as songs
 
@@ -67,7 +84,10 @@ Measured before the user heard them:
 - every song ending V(7) → I on the downbeat, held a bar;
 - the sung lead 3–6 LU over the loudest other part in every section, its held notes within 50 cents.
 
-*Awaiting verdicts.* It asks: does a song's craft (words, sections, a title) reach what the 8-bar line could not?
+counts: love 0 · good 3 (03 was rated love twice, then good) · okay 0 · weak 0 · no 0 (mean 4.0 — the 8-bar lines'
+best was 3.31). The user's words: *"it's better now, but need to improve more"*.
+lesson: yes — lesson 9 holds: written as songs, every one was good. Hint 10 from Run With Me. What still lacked, by my
+own reading: the form was one pass (70 s, a demo), and the voice had no vibrato at all → songs-002.
 
 ### batch-004 (2026-10-22) — engine 4: legato, lush chords, real endings — superseded
 

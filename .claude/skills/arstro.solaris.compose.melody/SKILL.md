@@ -103,7 +103,7 @@ Run from the skill folder (`.claude/skills/arstro.solaris.compose.melody/`). Pyt
 | `serve.py [--port 8787]` | **the Melody Lab**: http://127.0.0.1:8787/ — every melody of every batch with a piano roll over its chords, the theory it uses, a playhead, and five verdicts (Love it · Good · Okay · Weak · No) and a note; verdicts go to `data/judgments.jsonl` with the whole melody. Binds 127.0.0.1 only |
 | `corpus.py <POP909>/POP909` | learn from professionals: measures the 909 lead melodies of POP909 (MIT; clone it into a scratch folder) and writes `data/corpus_stats.json` — interval habits, what follows a leap, chord tones on strong beats, density, range, exact returns, where rests fall, the common two-bar rhythms, an interval bigram and its surprise. Aggregates only, never a melody. `melody.py` reads it |
 | `songbook.py [--out <dir>]` | the songs written by hand (references/songwriting.md): each a verse, a pre-chorus and a chorus with an original lyric, every note its syllable (`*` stressed, `~` a held vowel) and vowel; prints each song's craft (`song_metrics`: range, surprise, stresses on the beat, misstresses, rests, each section's register, the climax, the hook's return, the cadence); `--out` writes a lab folder's batch.json (`songs-NNN`) |
-| `song.py <dir> [--measure]` | each song ARRANGED by its sections (the verse thin, the pre-chorus building to a breath, the chorus full and pumping, the last chord held), the lead **sung** (a mono synth through the vowel filter, its vowel automated per syllable) and on a **piano** — two MP3s a song. `--measure` renders the stems and prints every part's loudness per section (the lead must lead) |
+| `song.py <dir> [--measure]` | each song ARRANGED by its sections' kinds (an intro teasing the hook, the verse thin, the pre-chorus building to a breath, the chorus full and pumping, the drop on the hook as chops, the bridge bare then building, the tag quiet), the lead **sung** — a mono synth through the vowel filter, its vowel per syllable, a late vibrato (the mod lane) and a scoop into each phrase (the bend lane), consonants, doubles and a harmony in the choruses — and on a **piano**: two MP3s a song. `--measure` renders the stems and prints every part's loudness per section (the lead must lead) |
 | `taste.py [--dry]` | what the verdicts teach: ratings by style, form, rhythm, motif kind, voice; the metrics where liked and disliked melodies differ; writes `data/weights.json` |
 
 The rubric (`melody.py score`) — each part 0…1, each a point of §1, its target from the corpus where it has one:
@@ -166,6 +166,12 @@ in the lab as `songs-NNN` for the approver. To carry an 8-bar line (`melody.py`)
 - **An exercise, not a song** ("still too far to be a song", after batch-004): 8 bars over a loop, no words, no
   sections, no title, so nothing to say, nothing building, nothing to come home to. Write a song as a song
   (`references/songwriting.md`).
+- **A demo, not a song** (songs-001, "better now, but need to improve more"): one pass of verse, pre-chorus and
+  chorus is 70 seconds of demo. A song has the whole form: an intro, verse 2, a bridge, the last chorus, a tag.
+- **A vibrato that never sounded**: the Basic Synth's vibrato plays only while the mod wheel is up. Setting
+  `vibrato.depth` alone does nothing; draw the `mod` expression lane (`expr set <pt> … --lane mod`).
+- **A voice that rang**: two oscillators a few cents apart into the vowel filter's resonant formants read 5.5 LU louder
+  and clipped. Keep them in tune (`osc2.fine=0`), and measure.
 - **The roll not drawn**: an `<svg>` made with `createElement` is an HTML element, so its `innerHTML` never becomes
   SVG and the lab showed the chord names as plain text. Make it with `createElementNS` and screenshot the page.
 

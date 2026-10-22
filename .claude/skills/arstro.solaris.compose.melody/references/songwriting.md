@@ -88,7 +88,42 @@ Business Worldwide — https://musicbusinessworldwide.com/how-max-martins-songwr
   one or two in a song, not one a bar.
 - Change chords at the bar line and keep the cadence's chords plain: V7 → I.
 
-## 7. The arrangement follows the sections (`song.py`)
+## 7. The whole song, not one pass
+
+songs-001 was one pass: a verse, a pre-chorus and a chorus, 70 seconds long, which is a demo and not a song.
+songs-002 strings the parts into the form a record has:
+
+| section | what it is made of | its job |
+|---|---|---|
+| intro (4) | the chorus's chords, its first four bars played by the hook (chops through an opening filter; lo-fi: keys) | the hook is heard before it is sung |
+| verse 1 · pre · chorus | as written | tell, build, arrive |
+| drop (8, EDM) | the chorus melody as vocal chops over the full band | the instrumental hook; in future bass and progressive house the drop is the song's second chorus |
+| verse 2 | the verse's melody with NEW words (`words=`, the same syllables and stresses) | the story moves on; the ear already knows the tune |
+| pre · chorus 2 | as before; a harmony joins | the return, bigger |
+| bridge (8) | new chords and a new melody: low and bare at first, climbing, hanging on 2 or 5 over V, a breath | the turn of the story (Paper Lanterns: letting go); the contrast that makes the last chorus land |
+| last chorus | the chorus, its last chord changed to vi: a deceptive cadence | the song refuses to end yet |
+| tag (4) | the title line once more, over IV–V–I, held | the real ending, 7 → 1 on the downbeat |
+
+A held note running into the next line is shortened to leave a beat to breathe (`flatten`), because a singer needs one.
+
+## 8. A voice that sings
+
+The voice (a synth through the vowel filter) is not a singer, but each of these moves it closer. Each is measured:
+- **vibrato that arrives late**: the synth's vibrato sounds only while the mod wheel is up (R-MIDI-3, (Y9) of the DSP
+  synth). songs-001 set its depth and never moved the wheel, so it had NO vibrato. Now the wheel is drawn per held note:
+  0 for the first ~0.3 s, then rising to 0.55–0.8 of the full ±0.6 semitone. Pitch-tracked, it is steady at first, then
+  grows to about ±25–35 cents at 5.3 Hz, a pop singer's vibrato;
+- **a scoop into each phrase**: the pitch wheel starts about a semitone low and settles within ~90 ms, on every phrase's
+  first note and every stressed reach upward (measured: −96 → 0 cents in 60 ms);
+- **consonants**: noise through a high-pass that follows the key, a burst just before each s / sh / f / t / k / p / d /
+  b / g / h onset (sibilants ~70 ms and 50 ms early, plosives ~25 ms). It gives the ear the word's edges;
+- **doubles and a harmony**: in every chorus two more voices, a few cents apart, left and right; from chorus 2 on, a
+  harmony under the line (the nearest chord tone a third to a sixth below on strong notes, the diatonic third below on
+  the others) — a backing singer;
+- **in tune with itself**: the voice's two oscillators must be in tune. The synth's default 7-cent detune made the
+  vowel filter's formants ring 5.5 LU louder and clip (measured).
+
+## 9. The arrangement follows the sections (`song.py`)
 
 The section form must also be HEARD:
 - **verse**: thin. Keys and a held bass, a kick and a clap at most, so the words are heard.
@@ -101,7 +136,7 @@ The section form must also be HEARD:
   through the vowel filter, its vowel automated per syllable (AH EH EE OH OO, held). It is not a singer; it is enough to
   hear a line as SUNG, with its words beside it on the page.
 
-## 8. Check, then the ear
+## 10. Check, then the ear
 
 `python3 scripts/songbook.py` prints each song's craft:
 
@@ -124,3 +159,9 @@ like a batch).
 | song-01 | Paper Lanterns | future bass (Illenium / San Holo) | D major, 75 | waiting for someone who isn't coming home; the hook falls 1-7-6-5, the answer climbs to the climax F♯5 "way" |
 | song-02 | Slow Sunday | lo-fi pop | F major, 82 | a morning with nowhere to be; 7ths on the downbeats, the title a lazy rising third, the climax G5 "song" over Am7 |
 | song-03 | Run With Me | progressive house / NCS | A major, 126 | leaving the city at night; a one-bar title hook sequenced at once, a minor-sixth leap to A5 |
+
+Each runs the whole form (§7) since songs-002 — Paper Lanterns 3:50, Slow Sunday 3:07, Run With Me 2:32 — with verse-2
+words, a bridge and a tag of its own:
+- **Paper Lanterns**: the bridge lets the lanterns rise and the person go;
+- **Slow Sunday**: the bridge asks for the day to last ("stay with me, it's getting late");
+- **Run With Me**: the bridge drives into the sunrise ("so run with me and chase the day").
