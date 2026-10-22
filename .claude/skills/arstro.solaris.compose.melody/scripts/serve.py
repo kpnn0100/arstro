@@ -19,7 +19,8 @@ JUDGMENTS = os.path.join(DATA, "judgments.jsonl")
 SAFE = re.compile(r"^[A-Za-z0-9._-]+$")
 VERDICTS = {1: "no", 2: "weak", 3: "okay", 4: "good", 5: "love"}
 KEEP = ("id", "style", "style_label", "bpm", "key", "tonic", "mode", "progression", "chords", "chord_pcs", "chord_roots",
-        "rhythm", "form", "motif_steps", "motif_kind", "notes", "devices", "voice", "metrics", "rubric", "score")
+        "rhythm", "form", "motif_steps", "motif_kind", "notes", "devices", "voice", "metrics", "rubric", "score",
+        "song", "title", "sections", "lyrics")                 # a song (songbook.py) carries its sections and words
 
 
 def batches(lab):

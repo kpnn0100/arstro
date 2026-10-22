@@ -37,17 +37,47 @@ When a lesson becomes a rule, the code changes too (`melody.py`), and the entry 
    loved): its last note leaned G → F onto beat 2 and lasted 1.5 beats over vi, and the audition then played ii. Now
    every answer ends V7 → I, the tonic on bar 8's downbeat held the bar (stepped into from 7 or 2), no leaning note on
    the final note, and the audition's last chord is that I. *(engine 4)*
+9. **A melody must be a SONG, not an exercise.** The approver's words, after batch-004: *"these melody quality are
+   still too far to be a song … need a break through"*. Four batches of 8-bar lines over a loop rose from 2.38 to 3.31,
+   then stopped. A line with no words, no sections and no title has nothing to say, nothing building and nothing to come
+   home to. Songs are now written as songs (`references/songwriting.md`, `scripts/songbook.py`): the lyric's stresses on
+   the beats, the verse low and spoken, the pre-chorus climbing to a breath, the chorus higher with the title as its
+   hook, lines in mirrored pairs, one money note, V → I home. They are arranged by section and heard sung
+   (`scripts/song.py`). *(songs-001)*
 6. *Hint, not yet a lesson:* the good ones change direction less (0.32 against 0.45) and use fewer bar rhythms (2.5
    against 2.8) — simpler lines, as the research says. *(the motion and rhythm targets nudged)*
 
 ## Batches
 
-### batch-004 (2026-10-22) — engine 4: legato, lush chords, real endings
+### songs-001 (2026-10-22) — the breakthrough: three songs, written as songs
+
+After batch-004 the approver asked for a breakthrough rather than more lines. Three original songs were written by
+hand, each 20 bars: an intro bar, an 8-bar verse, a 4-bar pre-chorus and an 8-bar chorus, with words. Each is rendered
+twice — sung (a voice through the vowel filter, its vowel per syllable) and on a piano — over an arrangement that
+builds by section.
+- 01 **Paper Lanterns**: future bass, D major, 75 bpm.
+- 02 **Slow Sunday**: lo-fi pop, F major, 82 bpm.
+- 03 **Run With Me**: progressive house, A major, 126 bpm.
+
+Measured before the user heard them:
+- surprise 2.95 / 2.58 / 3.06 bits a note;
+- 90–97 % of stressed syllables on the beat, nothing misstressed, no rest out of place;
+- each chorus above its verse, its title returning at line 3;
+- the climax once, in the chorus, entered by a leap;
+- every song ending V(7) → I on the downbeat, held a bar;
+- the sung lead 3–6 LU over the loudest other part in every section, its held notes within 50 cents.
+
+*Awaiting verdicts.* It asks: does a song's craft (words, sections, a title) reach what the 8-bar line could not?
+
+### batch-004 (2026-10-22) — engine 4: legato, lush chords, real endings — superseded
+
+Judged only in part: 01 (future bass, period) **good**. Then, in chat: *"these melody quality are still too far to be
+a song"* (→ lesson 9, songs-001). The rest of the batch stays unjudged; its melodies remain in the lab.
 
 16 melodies, 2 each of the 8 styles (11 period, 4 call, 1 climb), lessons 7–8 applied; and surprise made a GATE (a line
 over 3.25 bits is chosen only when nothing in range is left — the first draft of batch-004 chose four at 3.45–3.77,
 winning on other parts). Measured: 2.99 bits (14 of 16 inside real pop's middle half), all 16 ending V7 → I on the
-downbeat, held; 10 exact returns; no rest mid-phrase; the lush styles on maj7 / m7 / add9 chords. *Awaiting verdicts.*
+downbeat, held; 10 exact returns; no rest mid-phrase; the lush styles on maj7 / m7 / add9 chords.
 
 ### batch-003 (2026-10-22) — lessons 4–6 applied
 

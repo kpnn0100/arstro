@@ -49,6 +49,11 @@ def main():
     ap.add_argument("--dry", action="store_true")
     a = ap.parse_args()
     rows = load()
+    songs = [r for r in rows if r["melody"].get("song")]
+    rows = [r for r in rows if not r["melody"].get("song")]   # a song's metrics are not an 8-bar line's: judged apart
+    for r in songs:
+        print(f"song {r['batch']}/{r['id']} {r['melody'].get('title', '')}: {r['verdict']}"
+              + (f" — {r['note']}" if r.get("note") else ""))
     if not rows:
         print("no verdicts yet")
         return

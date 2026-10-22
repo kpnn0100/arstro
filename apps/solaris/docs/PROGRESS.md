@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► H5** — the user judges batch-004 in the Melody Lab (http://127.0.0.1:8787/); fold their verdicts into the melody skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► H7** — the user judges songs-001 (three songs, sung and on piano) in the Melody Lab (http://127.0.0.1:8787/); fold their verdicts into the melody skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -881,7 +881,22 @@ good melody"*. Tooling, not product: the skill lives in `.claude/skills/arstro.s
       (choppy articulation copied from the corpus's MIDI → legato; the lush styles on 7th / maj7 / add9 chords) and
       "the ending is not good" (→ a V7 → I cadence, the tonic on bar 8's downbeat held, no lean into it, the home chord
       after it). Surprise made a gate (3.25 bits). batch-004: 2.99 bits, all 16 ending home on the downbeat.
-- [ ] **H5** The user's verdicts on batch-004 → taste.md.
+- [x] **H5** The user's verdicts on batch-004 → taste.md.
+      — Judged in part (01, future bass, good), then the user's words: "these melody quality are still too far to be a
+      song … need a break through". batch-004 superseded by H6.
+- [x] **H6** The breakthrough: songs written as songs. references/songwriting.md (prosody — the lyric's stresses on
+      the beats; the verse / pre-chorus / chorus jobs; melodic math — lines in mirrored pairs; the title as the hook;
+      the money note; the cadence home; the arrangement by section; sources: Ewer, Conniff, Lost Stories, Hit Songs
+      Deconstructed, top40theory / Max Martin; and a corpus check that did NOT confirm "the chorus is higher" in POP909,
+      said so). scripts/songbook.py: three original songs by hand (verse 8 + pre-chorus 4 + chorus 8 bars, words) —
+      Paper Lanterns (future bass), Slow Sunday (lo-fi), Run With Me (progressive house) — and song_metrics (stresses
+      on the beat, misstress, rests, section register, climax, hook return, cadence). scripts/song.py: each song
+      arranged by section through solaris-cc, the lead sung (mono synth → the vowel filter, the vowel automated per
+      syllable) and on a piano; `--measure` per-section stem loudness (the lead 3–6 LU over the loudest other part)
+      and the sung lead YIN-checked within 50 cents. The lab shows songs (sections, chords, a karaoke line, the lyric,
+      sung / piano). Found: the lab's piano roll never drew (an `<svg>` made with createElement) — fixed.
+      ~/Music/Solaris/melody-lab/songs-001.
+- [ ] **H7** The user's verdicts on songs-001 → taste.md; the next songs lean into what is loved.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

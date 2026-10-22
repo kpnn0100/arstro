@@ -1,6 +1,6 @@
 ---
 name: arstro.solaris.compose.melody
-description: The base of every song made in Solaris — how to write a GOOD melody (a hook, a drop lead, a topline, a vocal-chop line, a piano theme, a riff, a counter-melody) with music theory, and how to learn the user's taste in melody from their verdicts. Use it whenever notes of a melody are about to be written: before the melody of any demo track or song (`apps/solaris/demo/*/make_script.py`), when the user asks for a melody, a hook, "a better / more emotional / catchier melody", melodic ideas, or melodies to listen to and judge, and on `/arstro.solaris.compose.melody` — even when the melody is a small part of a bigger task. It holds the method (a two-bar phrase → form → development → harmony fit → motion as real melodies move → contour → cadence), research on what professionals and 880 professional pop melodies teach (references/research.md, scripts/corpus.py), a generator and analyzer (scripts/melody.py), a renderer through Solaris (scripts/render.py), the Melody Lab audition page on localhost where the user — the approver — rates melodies (scripts/serve.py), and the taste ledger their verdicts build (taste.md, data/).
+description: The base of every song made in Solaris — how to write a GOOD melody (a hook, a drop lead, a topline, a vocal-chop line, a piano theme, a riff, a counter-melody) with music theory, and how to learn the user's taste in melody from their verdicts. Use it whenever notes of a melody are about to be written: before the melody of any demo track or song (`apps/solaris/demo/*/make_script.py`), when the user asks for a melody, a hook, "a better / more emotional / catchier melody", melodic ideas, or melodies to listen to and judge, and on `/arstro.solaris.compose.melody` — even when the melody is a small part of a bigger task. It holds the method (a two-bar phrase → form → development → harmony fit → motion as real melodies move → contour → cadence), research on what professionals and 880 professional pop melodies teach (references/research.md, scripts/corpus.py), a generator and analyzer (scripts/melody.py), a renderer through Solaris (scripts/render.py), the Melody Lab audition page on localhost where the user — the approver — rates melodies (scripts/serve.py), and the taste ledger their verdicts build (taste.md, data/). For a SONG melody — a verse, a pre-chorus and a chorus with words (a topline) — it holds the songwriter's method (references/songwriting.md: prosody, the sections' jobs, melodic math, the title as the hook, the money note), hand-written songs (scripts/songbook.py) and their arrangement through Solaris, sung by a voice through the vowel filter (scripts/song.py).
 ---
 
 # arstro.solaris.compose.melody
@@ -25,6 +25,11 @@ commit). This skill owns the notes of the line itself and the user's taste in th
    theme is slow and bare; a counter-melody moves when the main line holds. §2's table.
 3. **Know the harmony first** — key, mode, the chord of every bar, tempo, half time or not. A melody is written
    AGAINST chords; most of what makes one sound "right" is how it meets them.
+4. **Is it a line or a SONG?** An 8-bar line over a loop (a drop lead, a hook, a theme) is §1's method and
+   `melody.py`. A song (a verse, a pre-chorus and a chorus, a topline with words) is **`references/songwriting.md`**:
+   the words first (prosody), each section doing its job, lines in mirrored pairs, the title as the hook, one money
+   note, a cadence home. The approver's words that forced the split: *"these melody quality are still too far to be a
+   song"* (after batch-004). An 8-bar exercise cannot become a song by being scored better.
 
 ## 1. How a good melody is made — the method
 
@@ -97,6 +102,8 @@ Run from the skill folder (`.claude/skills/arstro.solaris.compose.melody/`). Pyt
 | `render.py <dir>` | each melody through Solaris → `<id>.mp3` and its `<id>.txt` (a re-runnable `solaris-cc` script): one bar of chords, the melody over a pad and a bass, light drums for the style; the melody leads the mix (measured: ~7 LU over the chords for each voice) |
 | `serve.py [--port 8787]` | **the Melody Lab**: http://127.0.0.1:8787/ — every melody of every batch with a piano roll over its chords, the theory it uses, a playhead, and five verdicts (Love it · Good · Okay · Weak · No) and a note; verdicts go to `data/judgments.jsonl` with the whole melody. Binds 127.0.0.1 only |
 | `corpus.py <POP909>/POP909` | learn from professionals: measures the 909 lead melodies of POP909 (MIT; clone it into a scratch folder) and writes `data/corpus_stats.json` — interval habits, what follows a leap, chord tones on strong beats, density, range, exact returns, where rests fall, the common two-bar rhythms, an interval bigram and its surprise. Aggregates only, never a melody. `melody.py` reads it |
+| `songbook.py [--out <dir>]` | the songs written by hand (references/songwriting.md): each a verse, a pre-chorus and a chorus with an original lyric, every note its syllable (`*` stressed, `~` a held vowel) and vowel; prints each song's craft (`song_metrics`: range, surprise, stresses on the beat, misstresses, rests, each section's register, the climax, the hook's return, the cadence); `--out` writes a lab folder's batch.json (`songs-NNN`) |
+| `song.py <dir> [--measure]` | each song ARRANGED by its sections (the verse thin, the pre-chorus building to a breath, the chorus full and pumping, the last chord held), the lead **sung** (a mono synth through the vowel filter, its vowel automated per syllable) and on a **piano** — two MP3s a song. `--measure` renders the stems and prints every part's loudness per section (the lead must lead) |
 | `taste.py [--dry]` | what the verdicts teach: ratings by style, form, rhythm, motif kind, voice; the metrics where liked and disliked melodies differ; writes `data/weights.json` |
 
 The rubric (`melody.py score`) — each part 0…1, each a point of §1, its target from the corpus where it has one:
@@ -127,6 +134,11 @@ leap and left by a step. **It ranks candidates; it does not judge music — the 
 
 ## 5. A melody into a song
 
+**A song's topline is written, not generated** — `references/songwriting.md`, `scripts/songbook.py`. Write it as a
+songwriter does: the lyric's stresses first, then lines in mirrored pairs, the title on the chorus's first beat, the
+climax once in the chorus's second half, the cadence home. Check it (`songbook.py`), arrange it (`song.py`), and put it
+in the lab as `songs-NNN` for the approver. To carry an 8-bar line (`melody.py`) into a song:
+
 - Take the notes from `batch.json` (`t` beats, `d` length, `p` MIDI, `name`) into the song's score — a list of
   (beat, length, note name) as `demo/storytrack/make_script.py` keeps its `THEME`.
 - Put the melody on **its own strip** (a melody inside chords cannot be pitch-read) and make it **lead the mix** —
@@ -151,9 +163,16 @@ leap and left by a step. **It ranks candidates; it does not judge music — the 
 - The climax struck twice — it stops being a climax.
 - A pass/fail rubric: every candidate scored 1.000 and a monotonous line passed. Preferences must be graded.
 - The lead buried under the pad (the piano voice, by 4.5 LU, the first time) — measure, don't assume.
+- **An exercise, not a song** ("still too far to be a song", after batch-004): 8 bars over a loop, no words, no
+  sections, no title, so nothing to say, nothing building, nothing to come home to. Write a song as a song
+  (`references/songwriting.md`).
+- **The roll not drawn**: an `<svg>` made with `createElement` is an HTML element, so its `innerHTML` never becomes
+  SVG and the lab showed the chord names as plain text. Make it with `createElementNS` and screenshot the page.
 
 ## References
 
+- `references/songwriting.md` — a melody into a SONG: prosody, the verse / pre-chorus / chorus jobs, melodic math,
+  the title as the hook, the money note and the ending, the arrangement by section; its sources; the songs written.
 - `references/research.md` — what professionals, research and 880 professional melodies say, with sources, and what
   the engine took from each; read it with theory.md.
 - `references/theory.md` — the theory in full: harmony and the non-chord tones, scale degrees and their pull, motif

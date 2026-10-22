@@ -1,71 +1,71 @@
 {
  "style": {
-  "lofi": 0.0609,
-  "cinematic": 0.0234,
-  "prog-house": 0.0109,
-  "kawaii": 0.0109,
-  "pop-ballad": -0.0141,
-  "future-bass": -0.0266,
-  "melodic-trap": -0.0266,
-  "ncs-hook": -0.0391
+  "lofi": 0.0592,
+  "cinematic": 0.0217,
+  "prog-house": 0.0092,
+  "kawaii": 0.0092,
+  "future-bass": -0.0127,
+  "pop-ballad": -0.0158,
+  "melodic-trap": -0.0283,
+  "ncs-hook": -0.0408
  },
  "form": {
-  "call": 0.0196,
-  "period": 0.0174,
-  "aaba": 0.0049,
-  "climb": -0.0113,
-  "hook": -0.0467,
-  "sentence": -0.0569
+  "period": 0.019,
+  "call": 0.0176,
+  "aaba": 0.0041,
+  "climb": -0.0127,
+  "hook": -0.0484,
+  "sentence": -0.0585
  },
  "rhythm": {
-  "hook8": 0.0288,
-  "corpus": 0.0203,
-  "offbeat": 0.0049,
-  "sparse": 0.0049,
-  "lyrical": -0.0069,
-  "anticip": -0.0113,
-  "dotted": -0.0641,
-  "tresillo": -0.0427
+  "hook8": 0.0273,
+  "corpus": 0.0211,
+  "offbeat": 0.0041,
+  "sparse": 0.0041,
+  "lyrical": -0.0085,
+  "anticip": -0.0127,
+  "dotted": -0.0658,
+  "tresillo": -0.0439
  },
  "motif_kind": {
-  "wave": 0.0234,
-  "arch": 0.0129,
-  "leap": 0.0088,
-  "leap-fall": 0.0117,
-  "fall": -0.0141,
-  "rise": -0.0182,
-  "turn": -0.0467
+  "wave": 0.0317,
+  "arch": 0.0108,
+  "leap": 0.0073,
+  "leap-fall": 0.0098,
+  "fall": -0.0158,
+  "rise": -0.0198,
+  "turn": -0.0484
  },
  "voice": {
-  "piano": 0.0281,
-  "pluck": 0.0109,
-  "lead": -0.025
+  "piano": 0.026,
+  "pluck": 0.0092,
+  "lead": -0.022
  },
  "metric_ranges": {
   "range": [
-   9.35,
-   14.65
+   9.36,
+   14.64
   ],
   "pitches": [
-   6.65,
-   9.35
+   6.631,
+   9.369
   ],
   "repeats": [
-   0.112,
-   0.23
+   0.119,
+   0.229
   ],
   "climax_at": [
-   0.502,
+   0.507,
    0.867
   ],
   "syncopation": [
-   -0.077,
-   0.352
+   -0.074,
+   0.324
   ],
   "turns": [
-   0.292,
-   0.437
+   0.304,
+   0.448
   ]
  },
- "liked_count": 10
+ "liked_count": 11
 }

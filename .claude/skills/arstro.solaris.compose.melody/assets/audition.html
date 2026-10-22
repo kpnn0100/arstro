@@ -58,6 +58,21 @@
   .saved { font-size: 12px; color: var(--accent); opacity: 0; transition: opacity .3s; }
   .saved.show { opacity: 1; }
   .empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  .card.song .title { font-size: 18px; letter-spacing: -0.01em; }
+  .card.song svg.roll { height: 230px; }
+  .seg { display: inline-flex; background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 2px; }
+  .seg button { background: none; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; color: var(--muted);
+                font-size: 12px; transition: background .18s, color .18s; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .karaoke { min-height: 26px; font-size: 16px; color: var(--faint); margin: 2px 0 6px; transition: color .2s; }
+  .karaoke span { transition: color .12s; }
+  .karaoke span.now { color: #fff; }
+  .karaoke span.sung { color: var(--muted); }
+  .karaoke .sec { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--accent); margin-right: 10px; }
+  details.lyrics { margin-top: 8px; color: var(--muted); font-size: 13px; }
+  details.lyrics summary { cursor: pointer; font-size: 12px; }
+  .lyrics .sname { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; margin-top: 8px; }
+  .lyrics .ln { color: var(--fg); }
   @media (max-width: 640px) { svg.roll { height: 140px; } .score { margin-left: 0; } }
 </style>
 </head>
@@ -80,8 +95,9 @@
   </div>
 </header>
 <main id="main">
-  <div class="intro">Each melody is eight bars over its chords: one bar of the chords first, then the melody, then the
-  first chord again. Listen, then judge it — <b>Love it</b>, <b>Good</b>, <b>Okay</b>, <b>Weak</b> or <b>No</b> — and,
+  <div class="intro">A melody is eight bars over its chords (one bar of the chords first, the melody, the last chord held);
+  a SONG is a verse, a pre-chorus and a chorus with its words — sung by a voice through a vowel filter, or on a piano.
+  Listen, then judge it — <b>Love it</b>, <b>Good</b>, <b>Okay</b>, <b>Weak</b> or <b>No</b> — and,
   if you can, say why in a few words ("too busy", "the ending is great", "boring rhythm"). Your verdicts teach the skill.</div>
 </main>
 <script>
@@ -101,7 +117,7 @@ function el(tag, attrs = {}, html = "") {
 }
 
 function noteRole(m, n) {
-  const b = Math.min(Math.floor(n.t / 4), 7), pos = n.t - 4 * b;
+  const b = m.song ? Math.floor(n.t / 4) : Math.min(Math.floor(n.t / 4), 7), pos = n.t - 4 * b;
   const strong = pos === 0 || pos === 2 || n.d >= 1;
   const ct = m.chord_pcs[b].includes(n.p % 12);
   if (strong && ct) return "ct";
@@ -110,21 +126,29 @@ function noteRole(m, n) {
 }
 
 function roll(m) {
-  const W = 1000, H = 170, top = 22, bot = 8;
+  const beats = span(m), bars = beats / 4;
+  const W = 1000, H = m.song ? 230 : 170, top = m.song ? 40 : 22, bot = 8;
   const ps = m.notes.map(n => n.p), lo = Math.min(...ps) - 2, hi = Math.max(...ps) + 2;
   const y = p => top + (hi - p) / (hi - lo) * (H - top - bot);
-  const x = t => t / 32 * W;
-  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, class: "roll", preserveAspectRatio: "none", role: "img",
-                         "aria-label": "piano roll"});
+  const x = t => t / beats * W;
+  // an SVG element must be made in the SVG namespace — made as HTML, its innerHTML parses as HTML and nothing is drawn
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  for (const [k, v] of Object.entries({viewBox: `0 0 ${W} ${H}`, class: "roll", preserveAspectRatio: "none", role: "img",
+                                       "aria-label": "piano roll"})) svg.setAttribute(k, v);
   let s = "";
   for (let p = lo; p <= hi; p++) {
     const black = [1, 3, 6, 8, 10].includes(p % 12);
     if (black) s += `<rect x="0" y="${y(p + 0.5)}" width="${W}" height="${(H - top - bot) / (hi - lo)}" fill="rgba(255,255,255,0.018)"/>`;
   }
-  for (let b = 0; b <= 8; b++) {
-    s += `<line x1="${x(4 * b)}" x2="${x(4 * b)}" y1="${top - 4}" y2="${H}" stroke="${b % 4 === 0 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.07)'}"/>`;
-    for (let k = 1; k < 4 && b < 8; k++) s += `<line x1="${x(4 * b + k)}" x2="${x(4 * b + k)}" y1="${top}" y2="${H}" stroke="rgba(255,255,255,0.03)"/>`;
-    if (b < 8) s += `<text x="${x(4 * b) + 6}" y="14" fill="#8a8a8a" font-size="12" font-family="system-ui">${m.chords[b]}</text>`;
+  for (const [i, sc] of (m.sections || []).entries()) {
+    s += `<rect x="${x(4 * sc.bar)}" y="0" width="${x(4 * sc.bars)}" height="${H}" fill="${i % 2 ? 'rgba(255,255,255,0.025)' : 'none'}"/>`;
+    s += `<text x="${x(4 * sc.bar) + 5}" y="13" fill="#159387" font-size="11" font-family="system-ui" letter-spacing="1.3">${sc.name.toUpperCase()}</text>`;
+  }
+  const major = b => m.song ? (m.sections || []).some(sc => sc.bar === b) : b % 4 === 0;
+  for (let b = 0; b <= bars; b++) {
+    s += `<line x1="${x(4 * b)}" x2="${x(4 * b)}" y1="${top - 4}" y2="${H}" stroke="${major(b) ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.07)'}"/>`;
+    for (let k = 1; k < 4 && b < bars && !m.song; k++) s += `<line x1="${x(4 * b + k)}" x2="${x(4 * b + k)}" y1="${top}" y2="${H}" stroke="rgba(255,255,255,0.03)"/>`;
+    if (b < bars) s += `<text x="${x(4 * b) + (m.song ? 3 : 6)}" y="${m.song ? 30 : 14}" fill="#8a8a8a" font-size="${m.song ? 9.5 : 12}" font-family="system-ui">${m.chords[b]}</text>`;
   }
   const topP = Math.max(...ps);
   const colour = {ct: "#159387", lean: "#e0a050", ctweak: "rgba(21,147,135,0.55)", pass: "#6f6f6f"};
@@ -132,15 +156,26 @@ function roll(m) {
     const r = noteRole(m, n), h = Math.max(6, (H - top - bot) / (hi - lo) - 2);
     const isTop = n.p === topP;
     s += `<rect x="${x(n.t) + 1}" y="${y(n.p) - h / 2}" width="${Math.max(3, x(n.d) - 2)}" height="${h}" rx="2.5"
-           fill="${colour[r]}" ${isTop ? 'stroke="#fff" stroke-width="2"' : ''}><title>${n.name} · beat ${n.t + 1}</title></rect>`;
+           fill="${colour[r]}" ${isTop ? 'stroke="#fff" stroke-width="2"' : ''}><title>${n.name}${n.syl ? ' · “' + n.syl + '”' : ''} · bar ${Math.floor(n.t / 4)} beat ${n.t % 4 + 1}</title></rect>`;
   }
   s += `<line class="head" x1="-10" x2="-10" y1="${top - 4}" y2="${H}" stroke="#fff" stroke-width="2" opacity="0.85"/>`;
   svg.innerHTML = s;
   return svg;
 }
 
+function span(m) { return m.song ? m.chords.length * 4 : 32; }
+
 function why(m) {
   const k = m.metrics, bits = [];
+  if (m.song) {
+    bits.push(`range ${k.low}–${k.high} (${k.range})`);
+    bits.push(`${Math.round(k.stress_on_beat * 100)} % of stressed syllables on the beat`);
+    bits.push(`climax ${k.high} once, in the ${k.climax_in}`);
+    bits.push(k.hook_returns ? "the hook returns" : "the hook varied");
+    bits.push(`ends ${k.cadence}, home on the downbeat`);
+    bits.push(`${k.surprise_bits} bits a note (real pop 2.94)`);
+    return bits.join(" · ");
+  }
   bits.push(`range ${k.range} semitones`);
   bits.push(`${Math.round(k.steps * 100)} % steps`);
   bits.push(`climax in bar ${Math.floor(k.climax_at * 8) + 1}`);
@@ -151,26 +186,55 @@ function why(m) {
 }
 
 function card(m, i) {
-  const c = el("section", {class: "card", id: m.id});
-  c.append(el("div", {class: "head"},
-    `<span class="num">#${String(i + 1).padStart(2, "0")}</span><span class="title">${m.style_label}</span>
+  const c = el("section", {class: m.song ? "card song" : "card", id: m.id});
+  c.append(el("div", {class: "head"}, m.song
+    ? `<span class="num">#${String(i + 1).padStart(2, "0")}</span><span class="title">${m.title}</span>
+       <span class="meta">${m.style_label} · ${m.key} · ${m.bpm} bpm · ${m.sections.filter(sc => sc.name !== "intro").map(sc => `${sc.name} ${sc.bars}`).join(" · ")} bars</span>`
+    : `<span class="num">#${String(i + 1).padStart(2, "0")}</span><span class="title">${m.style_label}</span>
      <span class="meta">${m.key} · ${m.bpm} bpm · ${m.progression.join("–")}</span>
      <span class="score" title="the rubric's score (theory only — your verdict outranks it)">rubric ${m.score.toFixed(3)}</span>`));
   const wrap = el("div", {class: "roll-wrap"});
   const svg = roll(m);
   wrap.append(svg);
   c.append(wrap);
-  const audio = new Audio(`/audio/${batch.batch}/${m.id}.mp3`);
+  const files = m.audio || [{label: "", file: `${m.id}.mp3`}];
+  const audio = new Audio(`/audio/${batch.batch}/${files[0].file}`);
   audio.preload = "none";
+  const karaoke = el("div", {class: "karaoke"});
+  if (m.song) c.append(karaoke);
   const row = el("div", {class: "row"});
   const btn = el("button", {class: "play", "aria-label": "Play"}, PLAY);
   const time = el("span", {class: "time"}, "0:00");
   const chips = el("div", {class: "chips"});
   chips.append(el("span", {class: "chip"}, m.form_label.split(" — ")[0]));
   for (const d of m.devices) chips.append(el("span", {class: "chip plain"}, d));
-  row.append(btn, time, chips);
+  if (files.length > 1) {
+    const seg = el("div", {class: "seg", role: "group", "aria-label": "Version"});
+    files.forEach((f, k) => {
+      const b = el("button", k === 0 ? {class: "on"} : {}, f.label);
+      b.addEventListener("click", () => {
+        const at = audio.currentTime, playing = !audio.paused;
+        seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+        audio.src = `/audio/${batch.batch}/${f.file}`;
+        audio.addEventListener("loadedmetadata", () => { audio.currentTime = at; if (playing) audio.play(); }, {once: true});
+        audio.load();
+      });
+      seg.append(b);
+    });
+    row.append(btn, time, seg, chips);
+  } else row.append(btn, time, chips);
   c.append(row);
   c.append(el("div", {class: "why"}, why(m)));
+  if (m.song) {
+    const d = el("details", {class: "lyrics"});
+    let html = "<summary>the lyric</summary>", last = "";
+    for (const l of m.lyrics) {
+      if (l.section !== last) { html += `<div class="sname">${l.section}</div>`; last = l.section; }
+      html += `<div class="ln">${l.line}</div>`;
+    }
+    d.innerHTML = html;
+    c.append(d);
+  }
   const v = el("div", {class: "verdict"});
   const btns = [];
   for (const r of [5, 4, 3, 2, 1]) {
@@ -199,9 +263,26 @@ function card(m, i) {
   btns.forEach(b => b.addEventListener("click", () => save(+b.dataset.r)));
   note.addEventListener("change", () => { if (current) save(current); });
   const head = svg.querySelector(".head");
+  let kBar = -2;
+  function sing(beat) {                                  // the bar being sung, its syllables lit as they come
+    const bar = Math.floor(beat / 4);
+    if (bar !== kBar) {
+      kBar = bar;
+      const ns = m.notes.filter(n => Math.floor(n.t / 4) === bar);
+      const sc = (m.sections || []).filter(x => x.bar <= bar).pop();
+      karaoke.innerHTML = (sc ? `<span class="sec">${sc.name}</span>` : "") +
+        ns.filter(n => n.syl !== "~").map(n => `<span data-t="${n.t}">${n.stress ? "<b>" + n.syl + "</b>" : n.syl}</span>`).join(" ");
+    }
+    karaoke.querySelectorAll("span[data-t]").forEach(e => {
+      const t = +e.dataset.t;
+      e.className = beat >= t ? (nextT(t) > beat ? "now" : "sung") : "";
+    });
+  }
+  function nextT(t) { const n = m.notes.find(n => n.t > t && n.syl !== "~"); return n ? n.t : Infinity; }
   function tick() {
-    const beat = audio.currentTime * m.bpm / 60 - INTRO;
-    const xx = Math.max(-10, Math.min(1000, beat / 32 * 1000));
+    const beat = audio.currentTime * m.bpm / 60 - (m.song ? 0 : INTRO);
+    const xx = Math.max(-10, Math.min(1000, beat / span(m) * 1000));
+    if (m.song) sing(beat);
     head.setAttribute("x1", xx); head.setAttribute("x2", xx);
     const s = Math.floor(audio.currentTime);
     time.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
