@@ -71,6 +71,10 @@ does not exist, that is a DSP task (`arstro.dsp.implement`) — never a sample h
 
 ## 3. The sections
 
+Each track (since fb-002) is judged as two clips: its verse, and its build-up running into its drop. Write each
+track's melodies with the melody skill's method: phrases, one leap, chord tones on strong beats, under its surprise
+gate (3.25 bits). Give each track a design of its own, so a verdict says which way to go.
+
 - **Verse** — reese bass, airy bell, main synth (the user's list), a soft kick on 1 and a snap on 3, hats from the
   second half. The main synth leads, the reese under it, the bell above both.
 - **Build-up** — in two halves. The first is melodic (the main synth, the bell). The second hypes: the filtered
@@ -85,7 +89,7 @@ does not exist, that is a DSP task (`arstro.dsp.implement`) — never a sample h
 
 | script | what it does |
 |---|---|
-| `futurebass.py --out ~/Music/Solaris/sound-lab/fb-NNN [--only verse,build,drop]` | writes and renders the three sections (Paper Lanterns' material from the melody skill's songbook, D major, 150 bpm half time). Each is a clip plus every element's solo as MP3; each element's loudness and the kick's duck on the sub are measured into `batch.json` |
+| `futurebass.py --out ~/Music/Solaris/sound-lab/fb-NNN [--tracks a,b] [--only verse,drop]` | for every TRACK in `TRACKS` (its own music and its own design), writes and renders a verse and a build-up running into its drop. Each is a clip plus every element's solo as MP3; each element's loudness and the kick's duck on the sub are measured into `batch.json`. A new track is a `TRACKS` entry: key, tempo, chords, melodies in order ('A5:1.5 G5:.5 r:1 …', each line 16 beats), and design overrides |
 | `lab.py [--port 8788]` | **the Sound Lab**: the melody skill's lab server on `~/Music/Solaris/sound-lab` with THIS skill's ledger (`data/judgments.jsonl`). Every section is a card: play the full clip or any element alone, read its recipe and its measurements, judge it (Love it · Good · Okay · Weak · No) and say why |
 
 A new genre becomes a new script beside `futurebass.py`, with its recipes in `references/<genre>.md`.

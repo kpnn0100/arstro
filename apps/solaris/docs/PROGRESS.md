@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► J2** — the user judges fb-001 (future bass: verse, build-up, drop, every element alone) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► J3** — the user judges fb-002 (four future bass tracks: four verses, four build-ups → drops, every element alone) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -932,7 +932,15 @@ between / learn from professional from trap nation first"*. Tooling, not product
       down ~600 ms behind the kick's tail (2.6 dB) — a 70 ms release: 9.4 dB, back within 200 ms. scripts/lab.py: the
       Sound Lab (127.0.0.1:8788) — the melody lab's server with a data folder and a title of its own; the page shows a
       sound section (a timeline, the element solos, the recipes, the levels). The implement skill points here.
-- [ ] **J2** The user's verdicts on fb-001 → taste.md; fb-002 changes what they name.
+- [x] **J2** fb-002: "make me 4 verse, 4 build up + drop all in future bass, i will judge, don't continue on current
+      melody" (fb-001 left unjudged). futurebass.py rebuilt around TRACKS — four original tracks, each its own music
+      (melodies written in order, checked: 79–88 % chord tones on strong notes, 3.10–3.27 bits) and its own design:
+      Afterlight (bright, Illenium), Glass Garden (dreamy, San Holo: a vocal-chop main synth, a glassy bell, scooped
+      chords swaying at 1/8), Embers (dark, Said The Sky: a driven reese, a celesta bell, a folded mid bass, trap
+      percussion), Neon Tide (quirky, Flume: a metallic bell, a square pluck, gated stabs dropping into each note, swung
+      percussion). The build runs into its drop in one clip. Each kick tuned into its key. Levels measured and set;
+      the kick ducks the sub 9.0–11.1 dB.
+- [ ] **J3** The user's verdicts on fb-002 → taste.md; the next batch leans into what they loved.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

@@ -3,8 +3,26 @@
 The patches live in `scripts/futurebass.py` (`REESE`, `BELL`, `PLUCK`, `LEAD`, `SAW`, `SUB`, `MID`, `NOISE` and each
 section's drum kits). This file says what each number does and why. When a verdict changes a number, change both.
 
-Tempo **150 bpm, half time** (the kick on 1, the snare on 3); key **D major**. The material is Paper Lanterns from the
-melody skill's songbook, at twice its 75 bpm: the verse, the pre-chorus as the build, the chorus as the drop.
+Half time throughout: the kick on 1, the snare on 3. Since fb-002 every TRACK (`TRACKS` in futurebass.py) is its own
+music: original melodies (verse lines, the build's, and the drop's call, response and last response), its key and
+tempo, and its DESIGN, a set of overrides on the base recipes below. fb-001 used Paper Lanterns at 150 bpm (D major);
+the user then asked for new material ("don't continue on current melody").
+
+## The four designs (fb-002)
+
+| track | feel | key · bpm | main synth | bell | supersaw (drop) | bass | percussion · kick (bar A / bar B) |
+|---|---|---|---|---|---|---|---|
+| 1 Afterlight | bright, emotional (Illenium) | F major · 150 | pluck (harmonics) + saw lead | FM 3.5 (the base) | low-pass 6.5 kHz, a 1-st rise into each stab (70 ms), 1/16 square tremolo 0.45 | the base; kick F1 43.7 Hz | full · 1, 2½, 3¾ / 1, 1¾, 3½, 4½ |
+| 2 Glass Garden | dreamy, wavy (San Holo) | E major · 150 | a vocal chop: saw through the vowel filter, 'ah' on held notes, 'oo'/'eh' between | glassy: FM ratio 2, a longer echo | softer (4.2 kHz), each stab scooped up 2 st over 150 ms, 1/8 SINE sway 0.6 | a softer mid (900 Hz); kick B1 61.7 Hz | light: 8th hats, more snaps, the shaker forward · 1, 3½ / 1, 2½, 3¾ |
+| 3 Embers | dark, heavy (Said The Sky) | A minor · 150 | pluck + saw lead | celesta: FM ratio 4, a gentle clang | darker (5 kHz), detune 36, driven 10 dB, 1/16 tremolo 0.35 | the reese ±15 ct driven 14 dB; the mid WAVEFOLDED; kick A1 55 Hz | trap: 16th hats throughout, rolls every two bars · 1, 1¾, 2½, 3¾ / 1, 2, 3½, 4¼, 4½ |
+| 4 Neon Tide | quirky, punchy (Flume) | G major · 145 | a square pluck (pulse table) + saw lead | metallic: FM ratio 1.41 with feedback | gated: short stabs, a deep 1/16 square tremolo 0.75, each stab DROPPING 1.5 st into the note | a plucky mid (fast filter); the reese's phaser faster (0.4 Hz); kick G1 49 Hz | swung: off-beat hats 80 ms late, a cowbell, doubled claps, rim on the a's · 1, 2¾, 3½ / 1, 1¾, 3¼, 4½ |
+
+The kick is tuned to the key's root or fifth, whichever lands nearer 52 Hz. Every track's levels are measured and set
+to the same order (the last table).
+
+**The build and the drop are ONE clip** since fb-002, so the landing is judged with the drop: one supersaw strip plays
+the build's quickening filtered stabs and then the drop's melody. Its tremolo is 0 until the drop, and its filter opens
+350 Hz → 7 kHz through the build.
 
 ## The kick and its bass
 
@@ -86,6 +104,13 @@ melody skill's songbook, at twice its 75 bpm: the verse, the pre-chorus as the b
 | snare | on 3, then quarters | eighths, 16ths, 32nds; velocity 70 → 120; tuned up an octave (the `snare.tune` automation) |
 | risers | — | noise 300 Hz → 12 kHz (−40 → −8 dB); a saw bent up 24 st |
 | the end | — | everything stops for a beat and a half; one big clap; the drop's downbeat (boom, crash, kick, the first chord) |
+
+## The measured levels (fb-002, each element alone, integrated LUFS — the build → drop clips over both sections)
+
+| clip | the levels |
+|---|---|
+| verses 1–4 | main synth −14.6 … −15.8 · reese −18.4 … −19.3 · bell −20.8 … −22.8 · kick −21.1 … −22.0 · snap −24.4 · hats −30.5 |
+| build → drops 1–4 | supersaw −13.2 … −14.7 · main synth −13.9 … −14.8 · kick −15.9 … −16.3 · snare + clap −17.7 … −18.5 · sub −19.2 … −20.4 · mid bass −19.3 … −20.7 · percussion −23.4 … −26.6 (light, swung: lower by design) · shaker −28.6 … −31.7 · the kick ducks the sub 9.0 … 11.1 dB |
 
 ## The measured levels (fb-001)
 
