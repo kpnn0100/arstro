@@ -1,0 +1,41 @@
+{
+ "style": {
+  "cinematic": 0.0312,
+  "kawaii": 0.0312,
+  "lofi": 0.0312,
+  "pop-ballad": 0.0063,
+  "prog-house": -0.0188,
+  "ncs-hook": -0.0188,
+  "melodic-trap": -0.0188,
+  "future-bass": -0.0438
+ },
+ "form": {
+  "climb": 0.0208,
+  "call": 0.0175,
+  "hook": 0.0063,
+  "period": 0.0042,
+  "sentence": -0.0425
+ },
+ "rhythm": {
+  "hook8": 0.0312,
+  "offbeat": 0.0208,
+  "sparse": 0.0208,
+  "lyrical": 0.025,
+  "anticip": -0.0125,
+  "tresillo": -0.0188,
+  "dotted": -0.0411
+ },
+ "motif_kind": {
+  "fall": 0.0208,
+  "leap": 0.0375,
+  "arch": -0.0083,
+  "turn": -0.0125,
+  "rise": -0.0225
+ },
+ "voice": {
+  "pluck": 0.0312,
+  "piano": 0.0344,
+  "lead": -0.04
+ },
+ "metric_ranges": {}
+}

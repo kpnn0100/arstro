@@ -78,10 +78,13 @@ def script(mel, out_mp3):
              "dv_3.filter.cutoff=4200 dv_3.filter.env=1.5 dv_3.fenv.decay=220 dv_3.fenv.sustain=0 dv_3.amp.attack=1 "
              "dv_3.amp.decay=420 dv_3.amp.sustain=0.15 dv_3.amp.release=200 dv_3.volume=-3")
     else:
-        line("set dv_3.osc1.wave=saw dv_3.osc1.voices=3 dv_3.osc1.detune=12 dv_3.osc1.width=14 dv_3.osc2.wave=saw "
-             "dv_3.osc2.octave=1 dv_3.osc2.voices=1 dv_3.osc2.level=0.2 dv_3.filter.cutoff=4500 dv_3.filter.res=0.12 "
-             "dv_3.filter.env=0.8 dv_3.fenv.decay=300 dv_3.fenv.sustain=0.6 dv_3.amp.attack=4 dv_3.amp.decay=200 "
-             "dv_3.amp.sustain=0.8 dv_3.amp.release=150 dv_3.voice.mode=legato dv_3.voice.glide=0 dv_3.volume=-5")
+        # batch-001: the bright saw lead rated lowest (1.9 against the piano's 2.8): rounder now — a square under the
+        # saw instead of a saw an octave up, the filter lower, a softer attack, a little vibrato, a longer release
+        line("set dv_3.osc1.wave=saw dv_3.osc1.voices=3 dv_3.osc1.detune=10 dv_3.osc1.width=12 dv_3.osc2.wave=square "
+             "dv_3.osc2.octave=0 dv_3.osc2.voices=1 dv_3.osc2.level=0.3 dv_3.filter.cutoff=3200 dv_3.filter.res=0.1 "
+             "dv_3.filter.env=0.6 dv_3.fenv.decay=320 dv_3.fenv.sustain=0.6 dv_3.amp.attack=10 dv_3.amp.decay=220 "
+             "dv_3.amp.sustain=0.85 dv_3.amp.release=220 dv_3.vibrato.depth=0.08 dv_3.vibrato.rate=5 "
+             "dv_3.voice.mode=legato dv_3.voice.glide=0 dv_3.volume=-4")
     mnotes = [(n["p"], INTRO + n["t"], max(0.1, n["d"] - 0.02), 104 if n["t"] % 1 == 0 else 92) for n in mel["notes"]]
     line(f'notes add pt_3 "{tokens(mnotes)}"')
     nxt_ch, nxt_dv = 5, 4

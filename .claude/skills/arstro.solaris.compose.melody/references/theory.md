@@ -1,8 +1,8 @@
 # Melody — the theory behind arstro.solaris.compose.melody
 
 Contents: 1 harmony and the non-chord tones · 2 scale degrees and their pull · 3 the motif and its development ·
-4 phrase forms · 5 contour · 6 rhythm · 7 cadences · 8 genre notes · 9 the rubric, and why each part · 10 a worked
-example (Porch Light's theme)
+4 phrase forms · 5 contour · 6 rhythm · 7 cadences · 8 genre notes · 9 expectedness · 10 the rubric, and why each part ·
+11 a worked example (Porch Light's theme). The numbers marked "real pop" are measured — see research.md.
 
 Numbers are scale degrees (1 = the tonic). "Strong" means beat 1 or beat 3 of a 4/4 bar, or any note a beat or longer.
 
@@ -24,7 +24,9 @@ like tension that wants to move. That tension is not a mistake — it is the mel
 | anticipation | just before a beat | the next chord's note, early | push, eagerness; everywhere in pop and EDM |
 | escape tone | weak beat | step away, leap back the other way | a flick, a sigh |
 
-Rule of practice: **≥ 80 % of strong notes on chord tones; every strong non-chord tone resolves by step.**
+Rule of practice: **most strong notes on chord tones — real pop: 74 %, the root, 3rd and 5th about equally (880 POP909
+melodies, research.md §3) — and every strong non-chord tone resolves by step.** The root is not "plain" in practice; a
+3rd or 5th on the downbeat is colour, not a law.
 
 ## 2. Scale degrees and their pull
 
@@ -76,12 +78,19 @@ repetition is aimless.
 
 ## 5. Contour
 
-- **One climax**, the highest note, **once**, about **70 %** through the phrase (the "golden" region, 60–80 %). A
-  climax repeated is no longer one. Reach it by a rise over two or three bars.
+- **One climax**, the highest note, **once** (Ableton), on a strong beat, reached by a leap up — Ewer: one or two
+  upward leaps, after the midpoint — and left by steps. In real pop a 4-bar phrase's high point is as often in its
+  first bar as its last; over 8 bars, put it after the middle. A climax repeated is no longer one.
 - **Gap fill**: a leap of a 4th or more is followed by a step back the other way. Two big leaps the same way only when
   outlining a chord (an arpeggio).
-- **Steps ≈ 60 %** (50–75 %): mostly steps is singable; leaps give feeling.
-- **Range**: about an octave for a hook (9–16 semitones); a verse lower and narrower; a final chorus wider.
+- **Steps ≈ 44–50 %, the same note again ≈ 18–24 %, thirds ≈ 18 %, 4ths–5ths ≈ 11 %, larger ≈ 4 %** (real pop). A line
+  DWELLS on a note (Ewer's plateau pitch) before it moves; one that never repeats a note is restless; three of a note
+  in a row stalls.
+- **What follows what** (real pop): after a step the line goes on (43 %) or turns (39 %) or stays (17 %); after a leap
+  of a 4th or more it turns back (59 %) or stays (26 %) — rarely goes on (16 %). Descending steps outnumber ascending
+  1.17 : 1 — lines tend to fall.
+- **Range**: a median 14 semitones over 8 bars (12–16); a verse lower and narrower; a final chorus wider; within about
+  an octave and a half (Ewer).
 - **No tritone leaps**, no leaps over a 10th in a sung line.
 - **Variety**: 7 or more different pitches in 8 bars; no note four times in a row unless it is the rhythm hook.
 - **Arch** is the default shape of a phrase; **descending** endings settle; **rising** endings ask.
@@ -122,33 +131,48 @@ Over a progression that ends on V (vi–IV–I–V), end on V's 3rd or 5th (7 or
 - **Kawaii**: sixteenth plucks through chord tones, maj7 / add9, high register.
 - **Lo-fi**: 7th chords, the melody on 9ths and 7ths, lazy off-beats, space.
 
-## 9. The rubric — each part, and why
+## 9. Expectedness — why "random" is heard as random
+
+Listeners predict the next note (Narmour; Schellenberg: proximity, and reversal after a jump), and those predictions
+are LEARNED from the melodies they have heard (Pearce & Wiggins). So a melody's naturalness can be measured: the mean
+surprise of each interval given the last, by an interval bigram learned from 880 professional pop melodies —
+**2.94 bits** for real pop (middle half 2.70–3.17). batch-001, called "random" by the approver, averaged **3.38**.
+Catchy tunes (Jakubowski et al.) keep a COMMON overall shape with a FEW unusual intervals: aim near the corpus mean,
+and spend the surprise where it means something (the leap into the climax).
+
+## 10. The rubric — each part, and why
 
 `scripts/melody.py score` turns these into numbers so candidates can be ranked (graded preferences, not pass/fail —
 a pass/fail rubric once scored every candidate 1.000, a monotonous line among them):
 
 | part | target | why |
 |---|---|---|
-| chord_fit | strong notes ≈ 100 % chord tones (appoggiaturas count half) | §1 |
+| chord_fit | strong notes ≈ 90 % chord tones (appoggiaturas count half) | §1 |
 | unresolved | no strong non-chord tone without a step resolution | §1 |
-| steps | ≈ 62 % | §5 |
-| repeats | few (a hook may have some) | §5 variety |
+| steps | ≈ 50 % | §5, the corpus |
+| repeats | ≈ 18 % — a line dwells | §5, the corpus |
 | leaps | recovered, none over a 10th, no tritone | §5 |
-| range | ≈ 12 semitones | §5 |
+| range | ≈ 14 semitones | §5, the corpus |
 | variety | ≈ 9 pitches | §5 |
-| colour | ≈ 80 % of downbeats on a 3rd/5th/7th/9th, not the root | §1 |
-| climax | one, at ≈ 72 % | §5 |
+| colour | ≈ 65 % of downbeats on a 3rd/5th/7th/9th — the root is fine | §1, the corpus |
+| climax | one, at ≈ 60 % | §5 |
 | arc | the climax's bars ≈ 5 semitones over the opening's | §5 |
 | tendency | the leading tone resolves | §2 |
 | cadence | the last note ≈ 2.5 beats | §6, §7 |
 | rhythm | ≈ 3 bar rhythms | §6 |
 | syncopation | the style's range | §6 |
 | motion | direction changes ≈ 45 % of the time | a line that only climbs or only zigzags is dull |
+| expected | surprise ≈ 2.94 bits an interval | §9 |
+| return | the idea back exactly where the chords repeat | §3, §4; batch-001 |
+| rhythm_kept | the idea's rhythm in most two-bar units | §6 |
+| rests | none in the middle of a phrase | §6; batch-001 |
+| phrase_ends | every two-bar unit ends on a held note | §6, §7 |
+| climax_gesture | entered by a leap, left by a step | §5 |
 
 The user's taste (`data/weights.json`) is added on top: liked styles, forms, rhythms and motif shapes get a bonus,
 and metrics inside the range of their liked melodies get one too.
 
-## 10. Worked example — Porch Light's theme (demo/storytrack)
+## 11. Worked example — Porch Light's theme (demo/storytrack)
 
 E♭ major, eight bars over E♭ – B♭/D – Cm7 – A♭maj7 – A♭m6 – E♭/G – C♭maj7 – B♭sus4→B♭:
 

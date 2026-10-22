@@ -1,6 +1,6 @@
 ---
 name: arstro.solaris.compose.melody
-description: The base of every song made in Solaris — how to write a GOOD melody (a hook, a drop lead, a topline, a vocal-chop line, a piano theme, a riff, a counter-melody) with music theory, and how to learn the user's taste in melody from their verdicts. Use it whenever notes of a melody are about to be written: before the melody of any demo track or song (`apps/solaris/demo/*/make_script.py`), when the user asks for a melody, a hook, "a better / more emotional / catchier melody", melodic ideas, or melodies to listen to and judge, and on `/arstro.solaris.compose.melody` — even when the melody is a small part of a bigger task. It holds the method (motif → form → development → harmony fit → contour → cadence), a generator and analyzer (scripts/melody.py), a renderer through Solaris (scripts/render.py), the Melody Lab audition page on localhost where the user — the approver — rates melodies (scripts/serve.py), and the taste ledger their verdicts build (taste.md, data/).
+description: The base of every song made in Solaris — how to write a GOOD melody (a hook, a drop lead, a topline, a vocal-chop line, a piano theme, a riff, a counter-melody) with music theory, and how to learn the user's taste in melody from their verdicts. Use it whenever notes of a melody are about to be written: before the melody of any demo track or song (`apps/solaris/demo/*/make_script.py`), when the user asks for a melody, a hook, "a better / more emotional / catchier melody", melodic ideas, or melodies to listen to and judge, and on `/arstro.solaris.compose.melody` — even when the melody is a small part of a bigger task. It holds the method (a two-bar phrase → form → development → harmony fit → motion as real melodies move → contour → cadence), research on what professionals and 880 professional pop melodies teach (references/research.md, scripts/corpus.py), a generator and analyzer (scripts/melody.py), a renderer through Solaris (scripts/render.py), the Melody Lab audition page on localhost where the user — the approver — rates melodies (scripts/serve.py), and the taste ledger their verdicts build (taste.md, data/).
 ---
 
 # arstro.solaris.compose.melody
@@ -31,30 +31,39 @@ commit). This skill owns the notes of the line itself and the user's taste in th
 Each step says why; `references/theory.md` has the full theory, the tables and worked examples. Read it the first
 time you use this skill in a session, and whenever a step below is not enough.
 
-1. **Write a MOTIF — one gesture.** One bar (two for a hook): a rhythm cell and a shape in scale steps — a rise, a
-   fall, an arch, a turn, or a leap filled by steps. Choose the rhythm first: rhythm is what the ear remembers. Say
-   what the motif is ("a rise, 3-4-5-8, dotted"); a line with no nameable motif wanders.
+1. **Write a two-bar IDEA — a phrase, not a cell.** An active bar, then a bar that LANDS on a held note (or holds,
+   then picks up into the next phrase). Choose its rhythm first — rhythm is what the ear remembers — and take it from
+   how real songs phrase (`data/corpus_stats.json` → `top_two_bars`), not from a grid. Give it one contour (an arch, a
+   rise, a fall, a leap then a fall) and say what it is. *batch-001: one-bar motifs, each bar moved on its own, were
+   heard as "random"; people sing in phrases.*
 2. **Choose a FORM for the role** (8 bars): a *period* (a question, then its answer), a *sentence* (idea, idea moved,
    fragments, cadence), *AABA*, a *hook loop* (two bars four times, the last lifted), *call and response*, a
    *climbing sequence*. The form decides where repetition and change fall.
-3. **DEVELOP the motif: repeat it, then change it.** The ear needs to recognise and it needs news. Sequence it (move
-   it by a scale step and BEND it to the new chord — a tonal sequence, never a copy pasted over a chord it clashes
-   with), vary its end, fragment it, invert it, augment it. About two thirds of the bars should come from the motif;
-   the rest contrast or answer.
-4. **FIT it to the harmony.** Chord tones on the strong beats (beat 1, beat 3, any note a beat or longer). Prefer the
-   3rd, 5th, 7th or 9th on a downbeat — the root doubles the bass and sounds plain. Non-chord tones go on weak beats
+3. **DEVELOP the idea: repeat it, then change it.** Bring it back EXACTLY where the chords repeat (bars 5–6 over a
+   four-chord loop played twice — real pop returns a third of its two-bar units exactly). Elsewhere sequence it (move
+   it a step or a third and BEND it to the new chords — a tonal sequence), vary its end, fragment it, invert it. The
+   ear needs to recognise and it needs news.
+4. **FIT it to the harmony.** Chord tones on most strong beats (beat 1, beat 3, any note a beat or longer — real pop:
+   74 %, the root, 3rd and 5th about equally). A 3rd, 5th, 7th or 9th on a downbeat adds colour; the root is fine. Non-chord tones go on weak beats
    (passing and neighbour tones), or on a strong beat ONLY as a leaning note that resolves by step (an appoggiatura or
    a suspension) — that lean is where much of a melody's emotion lives.
-5. **SHAPE the contour.** About 60 % steps; leaps for feeling, each leap of a 4th or more recovered by a step back the
-   other way; ONE climax — the highest note, once — about 70 % of the way through, reached by a rise; a range of about
-   an octave (9–16 semitones) for a hook.
-6. **CADENCE.** Phrases end on a long note. The first phrase asks (ends on 2, 5 or 7: a half cadence); the second
+5. **MOVE like a real melody** (880 professional pop melodies, `references/research.md`). About half the intervals are
+   steps and a fifth are the same note again — a line DWELLS (a plateau pitch, Ewer) before it moves; never three of a
+   note in a row. After a step it goes on or turns about equally; after a leap of a 4th or more it turns back (59 %).
+   Lines tend to fall (descending steps 1.17× ascending). Every note between the strong ones heads for the next strong
+   one. Check the line's **surprise** against real pop (2.94 bits an interval; 2.70–3.17): above it sounds random.
+6. **SHAPE the contour.** ONE climax — the highest note, once — reached by a leap up (one or two upward leaps, after
+   the midpoint) and left by steps down; a range of about 14 semitones in 8 bars (12–16); the second phrase higher than
+   the first.
+7. **CADENCE.** Phrases end on a long note. The first phrase asks (ends on 2, 5 or 7: a half cadence); the second
    answers (ends home — 1, or 3 — when the chord holds it; over a V chord end on its 3rd or 5th, never force the
    tonic). A loop hook may end open so it can repeat.
-7. **RHYTHM for the style.** Syncopation (anticipations, 3-3-2) for EDM, trap and pop; straight and long for ballads
-   and cinematic lines; rests to breathe — a line that never rests is tiring.
-8. **Honour the tendency tones**: 7 → 1, 4 → 3, ♭6 → 5 (the sigh), 2 → 1 or 3. Where you break one, mean it.
-9. **Check, then let the user hear it** — `melody.py analyze` gives the rubric (§3); the ear decides (§4).
+8. **RESTS where a singer breathes** — after a held note, or the last beat of a bar before a pickup (where real songs
+   rest most). A rest in the middle of a phrase is "not in natural place" (the approver's words, batch-001).
+9. **EMOTION is placed, not sprinkled**: long notes at phrase ends and at the climax; a leaning note (appoggiatura) into
+   one or two of them — not every one; the ♭6 → 5 sigh where the harmony is borrowed.
+10. **Honour the tendency tones**: 7 → 1, 4 → 3, ♭6 → 5, 2 → 1 or 3. Where you break one, mean it.
+11. **Check, then let the user hear it** — `melody.py analyze` gives the rubric (§3); the ear decides (§4).
 
 ## 2. By role and style
 
@@ -83,13 +92,15 @@ Run from the skill folder (`.claude/skills/arstro.solaris.compose.melody/`). Pyt
 | `melody.py analyze <melody.json>` / `melody.py styles` | the rubric for one melody; the presets |
 | `render.py <dir>` | each melody through Solaris → `<id>.mp3` and its `<id>.txt` (a re-runnable `solaris-cc` script): one bar of chords, the melody over a pad and a bass, light drums for the style; the melody leads the mix (measured: ~7 LU over the chords for each voice) |
 | `serve.py [--port 8787]` | **the Melody Lab**: http://127.0.0.1:8787/ — every melody of every batch with a piano roll over its chords, the theory it uses, a playhead, and five verdicts (Love it · Good · Okay · Weak · No) and a note; verdicts go to `data/judgments.jsonl` with the whole melody. Binds 127.0.0.1 only |
+| `corpus.py <POP909>/POP909` | learn from professionals: measures the 909 lead melodies of POP909 (MIT; clone it into a scratch folder) and writes `data/corpus_stats.json` — interval habits, what follows a leap, chord tones on strong beats, density, range, exact returns, where rests fall, the common two-bar rhythms, an interval bigram and its surprise. Aggregates only, never a melody. `melody.py` reads it |
 | `taste.py [--dry]` | what the verdicts teach: ratings by style, form, rhythm, motif kind, voice; the metrics where liked and disliked melodies differ; writes `data/weights.json` |
 
-The rubric (`melody.py score`) — each part 0…1, each a theory point from §1: chord fit and unresolved strong
-non-chord tones; steps (~62 %); repeated notes; leaps recovered, none huge, no tritone; range (~12); pitch variety;
-colour on the downbeats; one climax at ~72 %; a rise to it; tendency tones resolved; the cadence's length; rhythmic
-variety (~3 bar rhythms); syncopation for the style; direction changes. **It ranks candidates; it does not judge
-music — the user does.**
+The rubric (`melody.py score`) — each part 0…1, each a point of §1, its target from the corpus where it has one:
+chord fit (~90 %) and unresolved strong non-chord tones; steps (~50 %); repeated notes (~18 %); leaps recovered;
+range (~14); pitch variety; colour on the downbeats; one climax (~60 %) and the rise to it; tendency tones; the
+cadence's length; rhythmic variety; syncopation for the style; direction changes; EXPECTEDNESS (surprise ≈ 2.94 bits);
+and the phrase — the idea's exact return, its rhythm kept, rests in place, phrase ends held, the climax entered by a
+leap and left by a step. **It ranks candidates; it does not judge music — the user does.**
 
 ## 4. The audition loop — the user approves
 
@@ -121,6 +132,10 @@ music — the user does.**
 
 ## 6. Failure modes already met
 
+- **Bar-by-bar building** (batch-001): a one-bar motif, each bar transposed on its own, with no phrase — heard as
+  "random", "no emotion". Build two-bar phrases and repeat them exactly where the harmony repeats.
+- **A line that never dwells**: no repeated notes at all is restless — real melodies repeat a note a quarter of the time.
+- **Rests in the middle of a phrase** ("not in natural place") — rest after a held note, or before a pickup.
 - A melody with no motif — a well-behaved random walk — sounds aimless however well it scores.
 - The motif pasted at one pitch over changing chords: bend it (tonal sequence).
 - The tonic forced as the last note over a V chord.
@@ -131,6 +146,8 @@ music — the user does.**
 
 ## References
 
+- `references/research.md` — what professionals, research and 880 professional melodies say, with sources, and what
+  the engine took from each; read it with theory.md.
 - `references/theory.md` — the theory in full: harmony and the non-chord tones, scale degrees and their pull, motif
   development, phrase forms, contour, rhythm, cadences, genre notes, the rubric's reasons, a worked example.
 - `taste.md` — the approver's verdicts and the lessons; read first.

@@ -38,6 +38,10 @@ class Key:
         self.names = FLAT_NAMES if (tonic, mode) in FLAT_KEYS else SHARP_NAMES
         if (tonic, mode) in FLAT_KEYS and tonic not in ('Gb',):
             self.names = self.names[:11] + ['B']                       # C♭ only where the key has it
+        if mode == "minor":                                      # the leading tone of a minor key is a sharp (C♯ in D minor)
+            lt = (self.tonic + 11) % 12
+            self.names = list(self.names)
+            self.names[lt] = SHARP_NAMES[lt] if (tonic, mode) not in (('F', 'minor'), ('Bb', 'minor'), ('Eb', 'minor')) else self.names[lt]
         self.name = f"{self.names[self.tonic]} {mode}"
 
     def spell(self, midi):
@@ -158,211 +162,376 @@ STYLES = {
                  sync=(0.15, 0.5)),
 }
 
-# ── phrase forms: eight bars of operations on the motif ─────────────────────────────────────────────────────────────
-# M: the motif, its first note `s` scale steps from the anchor; V: varied (its end moved); F: its first half twice;
-# I: inverted; C: a contrasting line to a target; K: a cadence ('half' ends on 2/5/7, 'full' on 1, 'open' on a chord tone)
-FORMS = {
-    "period":   [('M', 0), ('M', 1), ('V', 2), ('K', 'half'), ('M', 0), ('M', 1), ('C', 'peak'), ('K', 'full')],
-    "sentence": [('M', 0), ('M', -1), ('F', 1), ('K', 'half'), ('M', 0), ('M', -1), ('F', 2), ('K', 'full')],
-    "aaba":     [('M', 0), ('V', 0), ('M', 0), ('V', 1), ('C', 'peak'), ('C', 'down'), ('M', 0), ('K', 'full')],
-    "hook":     [('M', 0), ('V', 0), ('M', 0), ('V', 0), ('M', 0), ('V', 0), ('M', 1), ('K', 'open')],
-    "call":     [('M', 0), ('I', 0), ('M', 1), ('I', 1), ('M', 2), ('I', 2), ('C', 'peak'), ('K', 'full')],
-    "climb":    [('M', 0), ('M', 1), ('M', 2), ('M', 3), ('V', 3), ('C', 'peak'), ('C', 'down'), ('K', 'full')],
+# ── phrases ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+# batch-001's lesson (taste.md): a melody built bar by bar from a tiny motif, each bar moved on its own, sounds RANDOM.
+# People sing in PHRASES: a two-bar IDEA — an active bar, then a bar that LANDS on a long note — repeated where the
+# harmony repeats, every note heading for the next strong note, a breath only after a long note or before a pickup.
+
+LANDINGS = {          # the second bar of an idea: it lands (onset, length) — the long note is where a singer breathes
+    "land2":     [(0, 1), (1, 1), (2, 2)],                      # quarter, quarter, half
+    "land_dot":  [(0, 1.5), (1.5, 0.5), (2, 2)],                # dotted quarter, eighth, half
+    "land_long": [(0, 0.5), (0.5, 0.5), (1, 3)],                # two eighths, then held
+    "land_pick": [(0, 1), (1, 0.5), (1.5, 2), (3.5, 0.5)],      # held, then a PICKUP into the next phrase
+    "land_hold": [(0, 4)],                                      # a whole note
+    "land_hook": [(0, 0.5), (0.5, 0.5), (1, 1), (2, 1.5), (3.5, 0.5)],
 }
-FORM_NAMES = {"period": "period — a question (half cadence) and its answer", "sentence": "sentence — idea, idea moved, "
-              "fragments, cadence", "aaba": "AABA — a line, again, a contrast, home", "hook": "hook loop — two bars "
-              "four times, lifted at the end", "call": "call and response — the motif and its mirror", "climb":
-              "climbing sequence — the motif a step higher each bar, then the fall"}
+for _k, _v in {"future-bass": ["land_dot", "land_long", "land_pick"], "prog-house": ["land2", "land_dot", "land_pick"],
+               "ncs-hook": ["land_hook", "land_pick"], "pop-ballad": ["land2", "land_hold", "land_dot"],
+               "melodic-trap": ["land_long", "land_pick"], "cinematic": ["land_hold", "land2"],
+               "kawaii": ["land_hook", "land_long"], "lofi": ["land_long", "land_pick", "land2"]}.items():
+    STYLES[_k]["landings"] = _v
+
+# ── what professional melodies teach (scripts/corpus.py over POP909 → data/corpus_stats.json) ───────────────────────
+_CORPUS = None
 
 
-ARCHETYPES = {          # the shapes a motif can take, in scale steps (a motif is ONE recognisable gesture)
-    "rise":  [[0, 1, 2, 4], [0, 1, 2, 3], [0, 2, 4, 3], [0, 1, 3, 4], [-2, 0, 1, 2]],
-    "fall":  [[4, 3, 2, 0], [2, 1, 0, -1], [4, 2, 1, 0], [3, 2, 0, 1]],
-    "arch":  [[0, 2, 3, 1], [0, 1, 3, 2], [0, 2, 4, 2], [0, 3, 2, 1]],
-    "turn":  [[0, 1, 0, -1], [0, -1, 0, 2], [0, 1, -1, 0], [2, 1, 2, 0]],
-    "leap":  [[0, 4, 3, 2], [0, -3, -2, -1], [0, 5, 4, 2], [0, 3, 2, 0]],
-}
+def corpus():
+    """The aggregate statistics of 880 professional pop melodies — or None before corpus.py has run."""
+    global _CORPUS
+    if _CORPUS is None:
+        path = os.path.join(DATA, "corpus_stats.json")
+        _CORPUS = json.load(open(path)) if os.path.exists(path) else {}
+        if _CORPUS:
+            _CORPUS["_bigram"] = {int(k): {int(kk): vv for kk, vv in v.items()} for k, v in _CORPUS["bigram"].items()}
+    return _CORPUS or None
 
 
-def motif_shape(n, rng, rising_bias=0.0, allow_repeat=False):
-    """A motif for n notes: an ARCHETYPE (rise, fall, arch, turn, leap-and-fill) stretched or ornamented to n notes.
-    No note repeats the one before it unless the style uses repeated notes as rhythm (a hook); a leap is filled by
-    steps the other way; the span stays within a sixth; at least three different pitches."""
-    for _ in range(200):
-        kind = rng.choices(list(ARCHETYPES), weights=[3 + 4 * rising_bias, 2, 3, 2, 2])[0]
-        base = list(rng.choice(ARCHETYPES[kind]))
-        shape = base[:]
-        while len(shape) < n:                                   # ornament: a neighbour, a passing tone, a step on
-            k = rng.randrange(len(shape))
-            here = shape[k]
-            nxt = shape[k + 1] if k + 1 < len(shape) else here + rng.choice([-1, 1])
-            if abs(nxt - here) >= 2:
-                ins = here + (1 if nxt > here else -1)          # a passing tone fills the gap
-            else:
-                ins = here + rng.choice([-1, 1])                # a neighbour
-            shape.insert(k + 1, ins)
-        shape = shape[:n]
-        reps = sum(1 for a, b in zip(shape, shape[1:]) if a == b)
-        if reps and not (allow_repeat and reps <= 2):
+# notes in a two-bar idea, by style: a hook is busier, a film theme sparser (real pop vocals: 4–7 a bar)
+DENSITY = {"future-bass": (5, 10), "prog-house": (5, 10), "ncs-hook": (7, 12), "pop-ballad": (4, 9),
+           "melodic-trap": (4, 9), "cinematic": (3, 7), "kawaii": (8, 14), "lofi": (4, 9)}
+
+
+def corpus_rhythm(style, rng, exclude=None):
+    """A two-bar phrase rhythm as real songs have it — chosen by how common it is among those that can carry an idea:
+    it starts in its first beat or so, it lands (a note of a beat or more in its second bar), and nothing in it is a
+    hole (a rest over 1.5 beats) except before a pickup at its very end."""
+    c = corpus()
+    if not c:
+        return None
+    lo_n, hi_n = DENSITY.get(style, (4, 10))
+    pool = []
+    for t in c["rhythm"]["top_two_bars"]:
+        cells = [tuple(x) for x in t["cells"]]
+        if not lo_n <= len(cells) <= hi_n or cells[0][0] > 1.0 or cells == exclude:
             continue
-        span = max(shape) - min(shape)
-        if 2 <= span <= 5 and len(set(shape)) >= min(3, n):
-            return [x - shape[0] for x in shape], kind
-    return [0, 1, 2, 1][:n] + [0] * max(0, n - 4), "rise"
+        if not any(a >= 4 and l >= 1.0 for a, l in cells) or not any(a < 4 for a, _ in cells[1:]):
+            continue
+        holes = [b[0] - (a[0] + a[1]) for a, b in zip(cells, cells[1:]) if b[0] < 7.0]
+        if any(h > 1.5 for h in holes) or cells[-1][0] + cells[-1][1] > 8.01:
+            continue
+        pool.append((cells, t["count"] ** 0.7))
+    if not pool:
+        return None
+    return rng.choices([p for p, _ in pool], weights=[w for _, w in pool])[0]
+
+
+def surprise(ps):
+    """The melody's mean surprise, bits an interval, by the corpus's interval bigram — real pop: 2.94 (2.70–3.17)."""
+    c = corpus()
+    if not c or len(ps) < 3:
+        return None
+    bg = c["_bigram"]
+    ivs = [max(-12, min(12, b - a)) for a, b in zip(ps, ps[1:])]
+    bits = [-math.log2((bg.get(x, {}).get(y, 0) + 1) / (sum(bg.get(x, {}).values()) + 25)) for x, y in zip(ivs, ivs[1:])]
+    return sum(bits) / len(bits)
+
+
+CONTOURS = {          # the idea's strong notes, in scale steps from its first: the gesture the ear follows
+    "arch": [0, 2, 1, 0], "rise": [0, 1, 2, 3], "fall": [3, 2, 1, 0], "leap-fall": [0, 4, 3, 2], "wave": [0, 2, 0, 1],
+}
+FORM_NAMES = {
+    "period": "period — the idea, its question; the idea again, its answer",
+    "sentence": "sentence — the idea, the idea a third up, fragments climbing, the cadence",
+    "aaba": "AABA — the idea, again, a contrast at the top, the idea home",
+    "hook": "hook loop — one two-bar hook, again, again, lifted at the end",
+    "call": "call and response — the idea, its mirror; again; the answer home",
+    "climb": "climbing — the idea a step higher each time, the top, the fall home",
+}
+
+
+AFTER = {"step": {"same": 0.43, "reverse": 0.39, "repeat": 0.17},     # what follows what in real pop melodies
+         "third": {"same": 0.35, "reverse": 0.45, "repeat": 0.19},    # (data/corpus_stats.json "after"; these are
+         "skip": {"same": 0.16, "reverse": 0.59, "repeat": 0.26}}     # its values, used when the file is missing)
+
+
+def path(d0, d1, m, rng, prev=0):
+    """m scale degrees from d0 toward d1 (both outside the path), moving as real melodies move: after a step it goes
+    on or turns about equally, or stays; after a leap it mostly turns back (post-skip reversal) — the corpus's own
+    rates — weighted toward d1 (every note heading somewhere), steps preferred to thirds, never three of a note in a
+    row, the last within a third of d1."""
+    if m == 0:
+        return []
+    after = (corpus() or {}).get("after", AFTER)
+    for _ in range(300):
+        out, cur, last = [], d0, prev
+        ok = True
+        for k in range(m):
+            left = m - k - 1
+            opts = []
+            for st_ in (-2, -1, 0, 1, 2):
+                nxt = cur + st_
+                if st_ == 0 and (last == 0 or (len(out) >= 1 and out[-1] == cur and k >= 1)):
+                    continue                                     # never a third of the same note
+                gap = abs(d1 - nxt)
+                if left == 0 and gap > 2:
+                    continue
+                if gap > 2 * left + 2:
+                    continue
+                cls = "skip" if abs(last) >= 3 else ("third" if abs(last) == 2 else "step")
+                kind = "repeat" if st_ == 0 else ("same" if st_ * last > 0 or last == 0 else "reverse")
+                w = after[cls][kind] * (1.0 if abs(st_) <= 1 else 0.45)
+                if (d1 - cur) * st_ > 0 and abs(d1 - cur) > left:
+                    w *= 2.5                                     # far from the goal: head for it
+                opts.append((nxt, w, st_))
+            if not opts:
+                ok = False
+                break
+            nxt, _, st_ = rng.choices(opts, weights=[o[1] for o in opts])[0]
+            out.append(nxt)
+            cur, last = nxt, st_ if st_ else last * 0
+        if ok:
+            return out
+    return [d0 + (1 if d1 > d0 else -1) * ((k % 2) + 1) for k in range(m)]
 
 
 def build(style, rng, taste=None):
-    """One candidate: a key, a progression, a motif DEVELOPED through a form and ADAPTED to each bar's chord."""
+    """One candidate, PHRASE by phrase: a two-bar idea (an active bar and a landing), developed by a form over a
+    four-chord loop played twice, adapted to the chords, with the emotion placed: long notes at phrase ends, leaning
+    notes into them, one climax reached by a leap and left by steps."""
     st = STYLES[style]
     tonic, mode = rng.choice(st["keys"])
     key = Key(tonic, mode)
-    prog4 = rng.choice(st["progs"][mode])                    # a progression belongs to its mode
-    prog = [chord(r, key) for r in prog4 * 2]                  # eight bars, a chord a bar
-    rname = rng.choice(st["rhythms"])
-    cells = RHYTHMS[rname]
     form = rng.choice(st["forms"])
-    hooky = form == "hook"
-    shape, kind = motif_shape(len(cells), rng, rising_bias=0.3 if form in ("climb", "call") else 0.0, allow_repeat=hooky)
+    progs = st["progs"][mode]
+    homeward = [p for p in progs if key.tonic in chord(p[-1], key)["pcs"]]
+    if form != "hook" and homeward and rng.random() < 0.8:
+        progs = homeward                                         # an answer needs a chord it can come home on
+    prog4 = rng.choice(progs)
+    prog = [chord(r, key) for r in prog4 * 2]
+    rname = rng.choice(st["rhythms"])
+    lname = rng.choice(st["landings"])
+    cname = rng.choice(list(CONTOURS))
     lo, hi = st["lo"], st["hi"]
-    mid = (lo + hi) // 2 - 3
+    hook = form == "hook"
+    active = RHYTHMS[rname]
+    landing = active if (hook and rng.random() < 0.5) else LANDINGS[lname]
+    if hook and landing is active:
+        landing = [(a, l) for a, l in active if a < 2] + [(2, 1.5), (3.5, 0.5)]     # a hook's second bar still lands
+    cells = [(a, l) for a, l in active] + [(4 + a, l) for a, l in landing]
+    real = corpus_rhythm(style, rng) if rng.random() < 0.85 else None
+    if real:                                                     # a phrase rhythm professional songs actually use
+        cells, rname, lname = list(real), "corpus", "corpus"
 
-    def strong(a, l):
-        return a in (0, 2) or l >= 1
+    def is_strong(a, l):
+        return (a % 4) in (0, 2) or l >= 1
 
-    def cts(ch, a=lo, b=hi):
-        return [m for m in range(a, b + 1) if m % 12 in ch["pcs"]]
+    def ct_near(midi, ch, avoid_root=False, stable=False):
+        c = [m for m in range(lo, hi + 1) if m % 12 in ch["pcs"]]
+        if stable:
+            c = [m for m in c if ch["roles"][m % 12] in ("root", "third", "fifth")] or c
+        if avoid_root:
+            c = [m for m in c if m % 12 != ch["root"]] or c
+        return min(c, key=lambda m: (abs(m - midi), m))
 
-    def nearest_ct(midi, ch, direction=0):
-        cands = cts(ch)
-        if direction:
-            cands = [m for m in cands if (m - midi) * direction > 0] or cands
-        return min(cands, key=lambda m: (abs(m - midi), m)) if cands else midi
+    def idea(chA, chB, d0, contour):
+        """The two-bar idea: its strong notes on the contour (chord tones, the last stable and long), the rest a path."""
+        strong_ix = [k for k, (a, l) in enumerate(cells) if is_strong(a, l)]
+        heights = [contour[min(3, round(j * 3 / max(1, len(strong_ix) - 1)))] for j in range(len(strong_ix))]
+        pitch = {}
+        for j, k in enumerate(strong_ix):
+            a, l = cells[k]
+            ch = chA if a < 4 else chB
+            last = j == len(strong_ix) - 1
+            pitch[k] = ct_near(key.midi(d0 + heights[j]), ch, avoid_root=(a % 4 == 0 and not last), stable=last)
+        return fill(cells, pitch)
 
-    def realise(cells_b, degs, t0):
-        return [[t0 + a, l, key.midi(d)] for (a, l), d in zip(cells_b, degs)]
+    def fill(cs, pitch):
+        """Every note not fixed walks from the fixed note before toward the fixed note after."""
+        fixed = sorted(pitch)
+        out = [None] * len(cs)
+        for k in fixed:
+            out[k] = pitch[k]
+        first = fixed[0]
+        for k in range(first - 1, -1, -1):                       # before the first strong note: approach it by step
+            out[k] = key.midi(key.degree_of(out[k + 1])[0] - 1)
+        for a, b in zip(fixed, fixed[1:] + [None]):
+            gap = list(range(a + 1, b if b is not None else len(cs)))
+            if not gap:
+                continue
+            da = key.degree_of(out[a])[0]
+            db = key.degree_of(out[b])[0] if b is not None else da - 1
+            for k, d in zip(gap, path(da, db, len(gap), rng)):
+                out[k] = key.midi(d)
+        return [[cs[k][0], cs[k][1], out[k]] for k in range(len(cs))]
 
-    # the anchor: the motif's first note on the 3rd or 5th of bar 1 (a root start is bland), mid-range
-    first = [m for m in cts(prog[0], mid - 5, mid + 5) if m % 12 != prog[0]["root"]] or cts(prog[0], mid - 5, mid + 5)
-    start = rng.choice(first)
-    anchor_d, _ = key.degree_of(start)
-    others = [r for r in st["rhythms"] if r != rname] or [r for r in RHYTHMS if r != rname]
-    contrast_cells = RHYTHMS[rng.choice(others)]
-    notes, devices, plan = [], [], FORMS[form]
-    prev_last = None
-    for b, (op, arg) in enumerate(plan):
-        ch = prog[b]
-        t0 = 4 * b
-        if op in ('M', 'V', 'I', 'F'):
-            sh, cells_b = shape, cells
-            if op == 'I':
-                sh = [-x for x in shape]
-            if op == 'F':
-                half = max(1, len(cells) // 2)
-                cells_b = cells[:half] + [(a + 2, l) for a, l in cells[:half] if a + 2 < 4]
-                sh = (shape[:half] + [x + 1 for x in shape[:half]])[:len(cells_b)]
-            if op == 'V':
-                sh = shape[:-1] + [shape[-1] + rng.choice([-2, -1, 1, 2])]
-            # ADAPTATION: the transposition (within two steps of the plan) that puts the strong notes on this chord,
-            # joins the last bar smoothly and keeps the phrase's register — a tonal sequence, as a composer bends one
-            best, best_cost = None, 1e9
-            for k in range(arg - 2, arg + 3):
-                bar = realise(cells_b, [anchor_d + k + x for x in sh], t0)
-                if any(not (lo <= n[2] <= hi) for n in bar):
-                    continue
-                miss = sum(1 for n in bar if strong(n[0] - t0, n[1]) and n[2] % 12 not in ch["pcs"])
-                root_down = 1 if bar[0][2] % 12 == ch["root"] and b not in (0, 7) else 0
-                join = abs(bar[0][2] - prev_last) if prev_last else 0
-                cost = 3 * miss + 1.0 * abs(k - arg) + 0.35 * join + 0.5 * root_down
-                if prev_last is not None and bar[0][2] == prev_last:
-                    cost += 1.5                                     # do not restart on the note just held
-                if cost < best_cost:
-                    best, best_cost = bar, cost
-            bar = best or realise(cells_b, [anchor_d + arg + x for x in sh], t0)
-        elif op == 'C':
-            # CONTRAST: another rhythm, a stepwise line toward a target, chord tones on the strong beats
-            goal = hi - rng.choice([1, 2, 3]) if arg == 'peak' else mid - 3
-            cur = prev_last if prev_last else start
-            bar = []
-            n = len(contrast_cells)
-            for k, (a, l) in enumerate(contrast_cells):
-                aim = cur + (goal - cur) / max(1, n - k)
-                if strong(a, l):
-                    m = nearest_ct(int(round(aim)), ch, 1 if goal > cur else -1)
-                else:
-                    d0, _ = key.degree_of(int(round(aim)))
-                    m = key.midi(d0 + (1 if goal > cur else 0))
-                if m == cur:
-                    d0, _ = key.degree_of(m)
-                    m = key.midi(d0 + (1 if goal >= cur else -1))
-                bar.append([t0 + a, l, max(lo, min(hi, m))])
-                cur = bar[-1][2]
+    def norepeat(seq):
+        """A note the same as the one before, unmeant: the weaker of the two steps toward what follows it."""
+        for i in range(2, len(seq)):
+            if seq[i][2] == seq[i - 1][2] == seq[i - 2][2]:      # a pair dwells (real melodies do, a quarter of the
+                # time); a third in a row is a stall
+                k = i if not is_strong(seq[i][0] % 4, seq[i][1]) else i - 1
+                if k == 0:
+                    k = i
+                nxt = seq[k + 1][2] if k + 1 < len(seq) else seq[k][2] - 1
+                d = key.degree_of(seq[k][2])[0]
+                cand = key.midi(d + (1 if nxt > seq[k][2] else -1))
+                if (k > 0 and cand == seq[k - 1][2]) or cand == nxt:
+                    cand = key.midi(d + (-1 if nxt > seq[k][2] else 1))
+                seq[k][2] = cand
+        return seq
+
+    def adapt(unit, chA, chB, shift, t_from, t_to):
+        """The same idea — its rhythm and its shape — moved `shift` steps (a tonal sequence) to sit on chA, chB: the
+        transposition (within a step of the plan) with the most strong notes on the chords, the rest moved to one."""
+        best, cost0 = None, 1e9
+        for k in (shift - 1, shift, shift + 1):
+            u = [[a - t_from + t_to, l, key.midi(key.degree_of(p)[0] + k)] for a, l, p in unit]
+            if any(not lo <= n[2] <= hi for n in u):
+                continue
+            miss = sum(1 for n in u if is_strong(n[0] - t_to, n[1]) and n[2] % 12 not in (chA if n[0] - t_to < 4 else chB)["pcs"])
+            cost = 3 * miss + abs(k - shift)
+            if cost < cost0:
+                best, cost0 = u, cost
+        if best is None:
+            best = [[a - t_from + t_to, l, p] for a, l, p in unit]
+        for n in best:
+            ch = chA if n[0] - t_to < 4 else chB
+            if is_strong(n[0] - t_to, n[1]) and n[2] % 12 not in ch["pcs"]:
+                n[2] = ct_near(n[2], ch)
+        return best
+
+    def ending(unit, ch, kind, t0):
+        """The unit's last long note becomes a cadence: 'half' on 2, 5 or 7; 'home' on the tonic (or the chord's most
+        stable tone when the chord lacks it); 'open' on its 3rd or 5th. The notes before it step into it."""
+        held = [i for i, n in enumerate(unit) if n[1] >= 1.5]
+        k = held[-1] if held else len(unit) - 1                 # the held note, not a pickup after it
+        prev = unit[k - 1][2] if k else unit[k][2]
+        if kind == "half":
+            pcs = [p for p in ((key.tonic + key.scale[x]) % 12 for x in (1, 4, 6)) if p in ch["pcs"]] or \
+                  [p for p in ch["pcs"] if ch["roles"][p] != "root"]
+        elif kind == "home":
+            pcs = [key.tonic] if key.tonic in ch["pcs"] else [p for p in ch["pcs"] if ch["roles"][p] in ("third", "root")]
         else:
-            # CADENCE: the motif's opening, a step into the last note, held. 'full' ends home — on the tonic when
-            # this chord holds it, else on its most stable tone; 'half' on 2, 5 or 7 (a question); 'open' loops
-            head = [c for c in cells if c[0] < 2][:2] or [(0, 1)]
-            prev = prev_last if prev_last else start
-            if arg == 'full':
-                pcs = [key.tonic] if key.tonic in ch["pcs"] else [p for p in ch["pcs"] if ch["roles"][p] in ("third", "root")]
-                devices.append("ends home on the tonic" if key.tonic in ch["pcs"] else f"ends on {ch['name']}'s "
-                               f"{ch['roles'][pcs[0]]} (the loop goes home)")
-            elif arg == 'half':
-                pcs = [(key.tonic + key.scale[k]) % 12 for k in (1, 4, 6)]
-                pcs = [p for p in pcs if p in ch["pcs"]] or [p for p in ch["pcs"] if ch["roles"][p] != "root"]
-                devices.append("half cadence — a question")
-            else:
-                pcs = [p for p in ch["pcs"] if ch["roles"][p] in ("third", "fifth")] or ch["pcs"]
-                devices.append("open ending — it loops")
-            ends = [m for m in range(lo, hi + 1) if m % 12 in pcs]
-            end = min(ends, key=lambda m: (abs(m - prev), m)) if ends else nearest_ct(prev, ch)
-            d_end, _ = key.degree_of(end)
-            from_above = rng.random() < 0.6
-            appr = key.midi(d_end + (1 if from_above else -1))
-            bar = []
-            if len(head) > 1:
-                d0 = d_end + (2 if from_above else -2)
-                bar.append([t0 + head[0][0], head[0][1], key.midi(d0)])
-            h = head[-1]
-            bar.append([t0 + h[0], h[1], appr])
-            at_ = max(h[0] + h[1], 1.0)
-            bar.append([t0 + at_, 4 - at_, end])
-        notes += bar
-        prev_last = notes[-1][2]
+            pcs = [p for p in ch["pcs"] if ch["roles"][p] in ("third", "fifth")] or ch["pcs"]
+        cand = [m for m in range(lo, hi + 1) if m % 12 in pcs]
+        unit[k][2] = min(cand, key=lambda m: (abs(m - prev), m))
+        rel = (unit[k][2] - key.tonic) % 12
+        deg = key.scale.index(rel) + 1 if rel in key.scale else {11: 7, 9: 6, 4: 3}.get(rel, 0)
+        ends.append((kind, deg, ch["name"]))
+        if k >= 2:                                               # the notes before step into it
+            seg = path(key.degree_of(unit[k - 2][2])[0], key.degree_of(unit[k][2])[0], 1, rng)
+            unit[k - 1][2] = key.midi(seg[0])
+        return unit
 
-    # fit what the adaptation left: a strong non-chord tone moves to a chord tone — unless it is an APPOGGIATURA
-    # (the next note a step away and a chord tone), kept at the style's rate; a LEADING TONE resolves up
-    for i, n in enumerate(notes):
-        b = min(int(n[0] // 4), 7)
-        ch = prog[b]
-        if strong(n[0] - 4 * b, n[1]) and n[2] % 12 not in ch["pcs"]:
-            nxt = notes[i + 1] if i + 1 < len(notes) else None
-            is_app = nxt and int(nxt[0] // 4) == b and abs(nxt[2] - n[2]) <= 2 and nxt[2] % 12 in ch["pcs"]
-            if is_app and rng.random() < st["appogg"]:
-                if "appoggiatura" not in devices:
-                    devices.append("appoggiatura")
-            else:
-                n[2] = nearest_ct(n[2], ch)
-    # one climax: equal tops after the longest come down a step
-    top = max(n[2] for n in notes)
-    tops = [i for i, n in enumerate(notes) if n[2] == top]
-    keep = max(tops, key=lambda i: (notes[i][1], i))
-    for i in tops:
-        if i != keep:
-            d, _ = key.degree_of(notes[i][2])
-            notes[i][2] = key.midi(d - 1)
-    devices.insert(0, f"motif: a {kind}, {rname} rhythm")
-    devices += {"period": ["the antecedent repeated as the consequent's start"],
-                "sentence": ["idea, idea moved, fragmentation"],
-                "call": ["inversion — the response mirrors the call"],
-                "climb": ["rising sequence to the climax"],
-                "hook": ["two-bar hook, repeated — the last time lifted"],
-                "aaba": ["contrast (B) before the return"]}[form]
+    ends = []
+    # the idea: its first strong note the 3rd or 5th of the first chord, low-middle, so the phrase can rise
+    start = ct_near((lo + hi) // 2 - 4, prog[0], avoid_root=True)
+    d0 = key.degree_of(start)[0]
+    contour = CONTOURS[cname]
+    u1 = norepeat(idea(prog[0], prog[1], d0, contour))
+    devices = [f"the idea: a {cname} over two bars, on a phrase rhythm real pop songs use" if rname == "corpus"
+               else f"the idea: a {cname} over two bars — a {rname} bar, then it lands ({lname})"]
+    if form == "period":
+        u2 = ending(adapt(u1, prog[2], prog[3], rng.choice([1, -1]), 0, 8), prog[3], "half", 8)
+        u3 = [[a + 16, l, p] for a, l, p in u1]
+        u4 = adapt(u1, prog[6], prog[7], 2, 0, 24)
+        u4 = ending(u4, prog[7], "home", 24)
+        climax_unit = 3
+        devices += ["the idea returns exactly where the chords do (bars 5–6)"]
+    elif form == "sentence":
+        u2 = adapt(u1, prog[2], prog[3], 2, 0, 8)
+        frag = [n for n in u1 if n[0] < 4]
+        u3 = adapt(frag, prog[4], prog[4], 1, 0, 16) + adapt(frag, prog[5], prog[5], 3, 0, 20)
+        u4 = ending(adapt(u1, prog[6], prog[7], 2, 0, 24), prog[7], "home", 24)
+        climax_unit = 2
+        devices += ["the idea a third higher", "its first bar, climbing (fragmentation)"]
+    elif form == "aaba":
+        u2 = adapt(u1, prog[2], prog[3], 0, 0, 8)
+        b_cells = [(a, l) for a, l in RHYTHMS[rng.choice([r for r in st["rhythms"] if r != rname] or [rname])]] + \
+                  [(4 + a, l) for a, l in LANDINGS["land_long"]]
+        hi_d = key.degree_of(max(n[2] for n in u1 + u2))[0] + 2
+        strong_ix = [k for k, (a, l) in enumerate(b_cells) if is_strong(a, l)]
+        pitch = {k: ct_near(key.midi(hi_d - (1 if j else 0) - j), prog[4] if b_cells[k][0] < 4 else prog[5],
+                            stable=j == len(strong_ix) - 1) for j, k in enumerate(strong_ix)}
+        u3 = [[a + 16, l, p] for a, l, p in fill(b_cells, pitch)]
+        u4 = ending(adapt(u1, prog[6], prog[7], 0, 0, 24), prog[7], "home", 24)
+        climax_unit = 2
+        devices += ["a contrast (B) at the top", "the idea home"]
+    elif form == "hook":
+        u2 = adapt(u1, prog[2], prog[3], 0, 0, 8)
+        u3 = [[a + 16, l, p] for a, l, p in u1]
+        u4 = ending(adapt(u1, prog[6], prog[7], 1, 0, 24), prog[7], "open", 24)
+        climax_unit = 3
+        devices += ["one hook, four times — exactly where the chords repeat", "lifted the last time, open to loop"]
+    elif form == "call":
+        mirror = [[a, l, key.midi(2 * key.degree_of(u1[0][2])[0] - key.degree_of(p)[0])] for a, l, p in u1]
+        u2 = ending(adapt(mirror, prog[2], prog[3], 0, 0, 8), prog[3], "half", 8)
+        u3 = [[a + 16, l, p] for a, l, p in u1]
+        u4 = ending(adapt(mirror, prog[6], prog[7], 1, 0, 24), prog[7], "home", 24)
+        climax_unit = 2
+        devices += ["the response mirrors the call (inversion)", "the call again exactly, then the answer home"]
+    else:  # climb
+        u2 = adapt(u1, prog[2], prog[3], 1, 0, 8)
+        u3 = adapt(u1, prog[4], prog[5], 3, 0, 16)
+        u4 = ending(adapt([n for n in u1], prog[6], prog[7], 0, 0, 24), prog[7], "home", 24)
+        climax_unit = 2
+        devices += ["the idea a step higher, then higher", "down home"]
+    for kind, deg, chn in ends:
+        devices.append({"half": f"a question: it stops on {deg or '?'} over {chn}",
+                        "home": (f"the answer: home on 1 over {chn}" if deg == 1 else f"the answer: on {deg or '?'} over {chn} — the loop resolves it"),
+                        "open": f"open: on {deg or '?'} over {chn}, to loop"}[kind])
+    units = [u1, u2, u3, u4]
+    notes = [n for u in units for n in u]
+
+    # a PICKUP leads into what follows it: a step below (or above) the next note
+    for i in range(len(notes) - 1):
+        a, l, p = notes[i]
+        if (a % 4) == 3.5 and l <= 0.5 and notes[i + 1][0] == a + 0.5:
+            nxt = notes[i + 1][2]
+            notes[i][2] = key.midi(key.degree_of(nxt)[0] - 1)
+    # THE CLIMAX: the highest note once, in its unit, reached by a leap up and left by steps
+    cu = units[climax_unit]
+    peak_i = max(range(len(cu)), key=lambda k: (is_strong(cu[k][0] % 4, cu[k][1]), cu[k][2]))
+    others_top = max(n[2] for u_i, u in enumerate(units) for n in u if not (u_i == climax_unit and n is cu[peak_i]))
+    ch_peak = prog[min(int(cu[peak_i][0] // 4), 7)]
+    want = [m for m in range(others_top + 1, hi + 1) if m % 12 in ch_peak["pcs"]]
+    if want:
+        cu[peak_i][2] = want[0]
+        devices.append(f"the climax, once, in bar {int(cu[peak_i][0] // 4) + 1}")
+        if peak_i + 1 < len(cu):                                 # left by a step down
+            cu[peak_i + 1][2] = key.midi(key.degree_of(cu[peak_i][2])[0] - 1)
+    for n in notes:                                              # nothing else reaches it
+        if n is not cu[peak_i] and n[2] >= cu[peak_i][2]:
+            n[2] = key.midi(key.degree_of(cu[peak_i][2])[0] - 1)
+    # THE LEAN: a long phrase end (or the climax) entered by an APPOGGIATURA — a step above, on the beat, falling
+    leaned = 0
+    spots = [n for n in notes if n[1] >= 2 and (n[0] % 4) in (0, 2) and (8 <= n[0] < 16 or n[0] >= 24)]
+    for n in spots:
+        if leaned >= 2 or rng.random() >= st["appogg"] + 0.25:
+            continue
+        if True:
+            ch = prog[min(int(n[0] // 4), 7)]
+            up = key.midi(key.degree_of(n[2])[0] + 1)
+            if up % 12 not in ch["pcs"] and up <= hi and up != cu[peak_i][2]:
+                j = notes.index(n)
+                notes.insert(j, [n[0], 1.0, up])
+                n[0], n[1] = n[0] + 1.0, n[1] - 1.0
+                leaned += 1
+    if leaned:
+        devices.append(f"{leaned} leaning note{'s' if leaned > 1 else ''} (appoggiatura) into the long notes")
+    notes.sort(key=lambda n: n[0])
+    peak = cu[peak_i]
+    for i in range(2, len(notes)):                               # last: no stalls, the climax untouched
+        if notes[i][2] == notes[i - 1][2] == notes[i - 2][2] and notes[i] is not peak and notes[i - 1] is not peak:
+            norepeat(notes[i - 1:i + 2] if i + 1 < len(notes) else notes[i - 1:i + 1])
     mel = {
         "style": style, "style_label": st["label"], "bpm": st["bpm"], "key": key.name, "tonic": key.tonic, "mode": mode,
         "key_names": key.names, "progression": prog4, "chords": [c["name"] for c in prog],
         "chord_pcs": [c["pcs"] for c in prog], "chord_roots": [c["root"] for c in prog],
         "chord_roles": [{str(k): v for k, v in c["roles"].items()} for c in prog],
-        "rhythm": rname, "form": form, "form_label": FORM_NAMES[form], "motif_steps": shape, "motif_kind": kind,
-        "notes": [{"t": round(t, 4), "d": round(d, 4), "p": int(p), "name": key.spell(int(p))} for t, d, p in sorted(notes)],
+        "rhythm": rname, "landing": lname, "form": form, "form_label": FORM_NAMES[form], "contour": cname,
+        "motif_kind": cname, "engine": 2,
+        "notes": [{"t": round(t, 4), "d": round(d, 4), "p": int(p), "name": key.spell(int(p))} for t, d, p in notes],
         "devices": devices, "voice": st["voice"], "drums": st["drums"], "half_time": st["half_time"],
     }
     mel["metrics"] = analyze(mel)
@@ -410,6 +579,25 @@ def analyze(mel):
                 for b in range(8)]
     turns = sum(1 for a, b in zip(ivs, ivs[1:]) if a * b < 0)
     last = notes[-1]
+    # PHRASES (batch-001: "random", "the rest is not in natural place"): the idea's return, its rhythm kept, rests
+    # where a singer breathes, phrase ends held
+    unit = lambda u: [(round(n["t"] - 8 * u, 3), n["d"], n["p"]) for n in notes if 8 * u <= n["t"] < 8 * u + 8]
+    units = [unit(u) for u in range(4)]
+    exact_return = units[0] == units[2]
+    rhythm_kept = sum(1 for u in units[1:] if [x[:2] for x in u] == [x[:2] for x in units[0]]) / 3
+    misplaced = 0
+    for a, b in zip(notes, notes[1:]):
+        gap = b["t"] - (a["t"] + a["d"])
+        if gap >= 0.49:
+            breath = a["d"] >= 1.5 or (b["t"] % 8 >= 7.5 or b["t"] % 8 == 0)
+            misplaced += not breath
+    ends = 0
+    for u in range(4):
+        body = [n for n in notes if 8 * u <= n["t"] < 8 * u + 8 and not (n["t"] % 8 >= 7.5 and n["d"] <= 0.5)]
+        ends += bool(body) and body[-1]["d"] >= 1.5
+    ci = next(i for i, n in enumerate(notes) if n["p"] == top)
+    leap_in = ci > 0 and notes[ci]["p"] - notes[ci - 1]["p"] >= 3
+    step_out = ci + 1 < len(notes) and 1 <= notes[ci]["p"] - notes[ci + 1]["p"] <= 2
     return {
         "notes": len(notes), "range": top - min(ps), "pitches": len(set(ps)),
         "steps": round(sum(1 for iv in ivs if 1 <= abs(iv) <= 2) / max(1, len(ivs)), 3),
@@ -426,6 +614,9 @@ def analyze(mel):
         "ends_on_tonic": last["p"] % 12 == mel["tonic"], "end_length": last["d"],
         "bar_rhythms": len(rhythms), "syncopation": round(sync, 3), "turns": round(turns / max(1, len(ivs) - 1), 3),
         "density": round(len(notes) / 8, 2),
+        "surprise_bits": round(surprise(ps), 3) if surprise(ps) is not None else None,
+        "exact_return": exact_return, "rhythm_kept": round(rhythm_kept, 3), "misplaced_rests": misplaced,
+        "phrase_ends_held": ends, "climax_leap_in": leap_in, "climax_step_out": step_out,
     }
 
 
@@ -439,21 +630,30 @@ def score(mel, st, taste=None):
     m = mel["metrics"]
     hook = mel["form"] == "hook"
     parts = {
-        "chord_fit": bell(m["strong_chord_tones"] + 0.5 * m["appoggiaturas"] / 8, 1.0, 0.12),
+        # targets from 880 professional pop melodies (data/corpus_stats.json) where it has them
+        "chord_fit": bell(m["strong_chord_tones"] + 0.5 * m["appoggiaturas"] / 8, 0.9, 0.15),
         "unresolved": 0.6 ** m["strong_unresolved"],
-        "steps": bell(m["steps"], 0.62, 0.15),
-        "repeats": bell(m["repeats"], 0.12 if hook else 0.03, 0.12 if hook else 0.07),
+        "steps": bell(m["steps"], 0.5, 0.14),
+        "repeats": bell(m["repeats"], 0.18, 0.1),
         "leaps": m["leaps_recovered"] * 0.7 ** m["same_direction_leaps"] * 0.6 ** m["big_leaps"] * 0.75 ** m["tritones"],
-        "range": bell(m["range"], 12, 3.5),
+        "range": bell(m["range"], 14, 4),
         "variety": bell(m["pitches"], 9, 3),
-        "colour": bell(m["downbeat_colour"], 0.8, 0.25),
-        "climax": (1.0 if m["climax_single"] else 0.6) * bell(m["climax_at"], 0.72, 0.14),
+        "colour": bell(m["downbeat_colour"], 0.65, 0.25),
+        "climax": (1.0 if m["climax_single"] else 0.6) * bell(m["climax_at"], 0.62, 0.22),
         "arc": bell(m["rise_to_climax"], 5, 3) if mel["form"] != "hook" else 1.0,
         "tendency": m["leading_tones_resolved"],
         "cadence": bell(m["end_length"], 2.5, 1.2),
-        "rhythm": bell(m["bar_rhythms"], 3, 1.2),
+        "rhythm": bell(m["bar_rhythms"], 4, 2.0),
         "syncopation": bell(m["syncopation"], sum(st["sync"]) / 2, (st["sync"][1] - st["sync"][0]) / 2 + 0.05),
         "motion": bell(m["turns"], 0.45, 0.2),
+        # EXPECTEDNESS (batch-001 averaged 3.38 bits and was heard as random; real pop: 2.94, 2.70–3.17)
+        "expected": bell(m["surprise_bits"], 2.94, 0.25) if m.get("surprise_bits") is not None else 1.0,
+        # the phrase (batch-001's lesson): what makes a line sound meant rather than random
+        "return": 1.0 if m.get("exact_return") else (0.5 if mel["form"] in ("climb", "sentence") else 0.2),
+        "rhythm_kept": bell(m.get("rhythm_kept", 0), 0.67, 0.35),
+        "rests": 0.4 ** m.get("misplaced_rests", 0),
+        "phrase_ends": bell(m.get("phrase_ends_held", 0), 4, 1.2),
+        "climax_gesture": 0.5 + 0.25 * bool(m.get("climax_leap_in")) + 0.25 * bool(m.get("climax_step_out")),
     }
     total = sum(parts.values()) / len(parts)
     if taste:
@@ -488,7 +688,7 @@ def generate_style(style, n, rng, tries=600, taste=None):
     cands = sorted((build(style, rng, taste) for _ in range(tries)), key=lambda m: -m["score"])
     out, seen = [], set()
     for c in cands:
-        sig = (c["form"], tuple(c["motif_steps"]), c["rhythm"])
+        sig = (c["form"], c["contour"], c["rhythm"], c["landing"])
         if sig in seen or any(c["form"] == o["form"] and c["rhythm"] == o["rhythm"] for o in out):
             continue
         seen.add(sig)

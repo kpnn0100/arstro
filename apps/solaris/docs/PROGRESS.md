@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► H2** — the user judges batch-001 in the Melody Lab (http://127.0.0.1:8787/); fold their verdicts into the melody skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► H3** — the user judges batch-002 (engine 3) in the Melody Lab (http://127.0.0.1:8787/); fold their verdicts into the melody skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -863,8 +863,16 @@ good melody"*. Tooling, not product: the skill lives in `.claude/skills/arstro.s
       renderer through solaris-cc (render.py), the Melody Lab on 127.0.0.1:8787 (serve.py + assets/audition.html:
       piano roll, playhead, five verdicts and a note → data/judgments.jsonl), taste.py (verdicts → data/weights.json),
       the taste ledger (taste.md). batch-001: 16 melodies, 8 styles, in ~/Music/Solaris/melody-lab/batch-001.
-- [ ] **H2** The user's verdicts on batch-001 → taste.md's first lessons, weights, any rule change; batch-002 steered
-      by them.
+- [x] **H2** The user's verdicts on batch-001 → taste.md's first lessons, weights, rule changes; batch-002.
+      — Nothing above okay (7 okay, 8 weak, 1 no): "too random", "no emotional", "the rest is not in natural place".
+      Engine 2: two-bar phrases returning exactly, held phrase ends, leaning notes capped, rests measured. Then, on the
+      user's request to learn from professionals (references/research.md): Ableton, Gary Ewer, NI, Lost Stories, PML;
+      Narmour / Schellenberg / Pearce & Wiggins (expectation is learned); the earworm study; other composing skills
+      (toolkits, no craft); and scripts/corpus.py measuring 880 POP909 melodies (MIT) → data/corpus_stats.json.
+      batch-001 measured 3.38 bits of surprise an interval against real pop's 2.94 — "random" in numbers. Engine 3:
+      real phrase rhythms, corpus-shaped motion (repeats allowed, reversal after leaps), expectedness scored, targets
+      recalibrated. batch-002: 2.98 bits, 10 of 16 exact returns, no rest mid-phrase.
+- [ ] **H3** The user's verdicts on batch-002 (engine 3) → taste.md; is "random" gone, which styles are good.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
