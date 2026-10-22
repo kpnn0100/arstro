@@ -17,7 +17,7 @@ import argparse, json, os, statistics
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.normpath(os.path.join(HERE, "..", "data"))
-METRICS = ("steps", "range", "pitches", "repeats", "leaps", "climax_at", "rise_to_climax", "syncopation", "density",
+METRICS = ("surprise_bits", "steps", "range", "pitches", "repeats", "leaps", "climax_at", "rise_to_climax", "syncopation", "density",
            "downbeat_colour", "strong_chord_tones", "appoggiaturas", "bar_rhythms", "turns")
 CATEGORIES = ("style", "form", "rhythm", "motif_kind", "voice")
 
@@ -76,7 +76,7 @@ def main():
     liked = [r for r in rows if r["rating"] >= 4]
     disliked = [r for r in rows if r["rating"] <= 2]
     ranges = {}
-    if len(liked) >= 3 and len(disliked) >= 2:
+    if len(liked) >= 4 and len(disliked) >= 3:
         print("  metrics where the liked and the disliked differ:")
         for m in METRICS:
             lv = [float(r["melody"]["metrics"][m]) for r in liked if m in r["melody"].get("metrics", {})]
@@ -86,12 +86,15 @@ def main():
             spread = statistics.pstdev(lv + dv) or 1e-9
             gap = statistics.mean(lv) - statistics.mean(dv)
             if abs(gap) > 0.5 * spread:
-                ranges[m] = [round(pct(lv, 0.1), 3), round(pct(lv, 0.9), 3)]
+                # widened by half the liked melodies' own spread: a handful of verdicts is evidence, not a fence
+                pad = 0.5 * (statistics.pstdev(lv) or 0.25 * spread)
+                ranges[m] = [round(pct(lv, 0.1) - pad, 3), round(pct(lv, 0.9) + pad, 3)]
                 print(f"    {m:18} liked {statistics.mean(lv):.2f} against {statistics.mean(dv):.2f} → prefer "
                       f"{ranges[m][0]} … {ranges[m][1]}")
     else:
-        print("  (metric ranges need at least 3 liked and 2 disliked)")
+        print("  (metric ranges need at least 4 liked and 3 disliked)")
     weights["metric_ranges"] = ranges
+    weights["liked_count"] = len(liked)                          # melody.py scales the ranges' pull by it
     notes = [f"{r['id']} ({r['verdict']}): {r['note']}" for r in rows if r.get("note")]
     if notes:
         print("  the approver's words:")

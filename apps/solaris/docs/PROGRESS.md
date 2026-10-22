@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► H3** — the user judges batch-002 (engine 3) in the Melody Lab (http://127.0.0.1:8787/); fold their verdicts into the melody skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► H4** — the user judges batch-003 in the Melody Lab (http://127.0.0.1:8787/); fold their verdicts into the melody skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -872,7 +872,11 @@ good melody"*. Tooling, not product: the skill lives in `.claude/skills/arstro.s
       batch-001 measured 3.38 bits of surprise an interval against real pop's 2.94 — "random" in numbers. Engine 3:
       real phrase rhythms, corpus-shaped motion (repeats allowed, reversal after leaps), expectedness scored, targets
       recalibrated. batch-002: 2.98 bits, 10 of 16 exact returns, no rest mid-phrase.
-- [ ] **H3** The user's verdicts on batch-002 (engine 3) → taste.md; is "random" gone, which styles are good.
+- [x] **H3** The user's verdicts on batch-002 (engine 3) → taste.md; is "random" gone, which styles are good.
+      — 4 good, 6 okay, 6 weak, 0 no (mean 2.88 from 2.38). Lessons: call and response over the hook loop; dwell more,
+      surprise less; (hint) simpler lines. The taste learner tempered (it would have let four verdicts outvote the
+      theory). batch-003: call/period, 3.0 bits, 14 of 16 inside real pop's middle half.
+- [ ] **H4** The user's verdicts on batch-003 → taste.md.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

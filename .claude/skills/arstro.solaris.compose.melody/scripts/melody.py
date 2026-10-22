@@ -130,23 +130,23 @@ def syncopation(cells):
 STYLES = {
     "future-bass": dict(label="Future bass, emotional (Illenium / San Holo)", bpm=150, half_time=True,
                         keys=[('Db', 'major'), ('F', 'major')], progs={"major": [["vi", "IV", "I", "V"], ["IV", "V", "iii", "vi"]]},
-                        rhythms=["dotted", "tresillo", "lyrical"], forms=["period", "sentence", "climb"], color=True,
+                        rhythms=["dotted", "tresillo", "lyrical"], forms=["period", "call", "climb"], color=True,
                         appogg=0.35, lo=63, hi=82, voice="lead", drums="half", sync=(0.15, 0.45)),
     "prog-house": dict(label="Progressive house anthem", bpm=126, half_time=False, keys=[('D', 'major'), ('A', 'major')],
                        progs={"major": [["IV", "I", "V", "vi"], ["vi", "IV", "I", "V"]]}, rhythms=["lyrical", "anticip", "dotted"],
-                       forms=["period", "aaba", "climb"], color=True, appogg=0.3, lo=62, hi=81, voice="lead", drums="four",
+                       forms=["period", "aaba", "call"], color=True, appogg=0.3, lo=62, hi=81, voice="lead", drums="four",
                        sync=(0.1, 0.4)),
     "ncs-hook": dict(label="NCS / future house hook", bpm=128, half_time=False, keys=[('G', 'major'), ('E', 'major')],
                      progs={"major": [["vi", "IV", "I", "V"], ["I", "V", "vi", "IV"]]}, rhythms=["hook8", "tresillo", "anticip"],
-                     forms=["hook", "call"], color=False, appogg=0.15, lo=64, hi=83, voice="lead", drums="four",
+                     forms=["call", "period"], color=False, appogg=0.15, lo=64, hi=83, voice="lead", drums="four",
                      sync=(0.2, 0.5)),
     "pop-ballad": dict(label="Pop ballad", bpm=80, half_time=False, keys=[('C', 'major'), ('Eb', 'major')],
                        progs={"major": [["I", "V", "vi", "IV"], ["I", "vi", "IV", "V"]]}, rhythms=["ballad", "lyrical", "breath"],
-                       forms=["period", "sentence", "aaba"], color=False, appogg=0.4, lo=60, hi=77, voice="piano",
+                       forms=["period", "call", "aaba"], color=False, appogg=0.4, lo=60, hi=77, voice="piano",
                        drums=None, sync=(0.0, 0.3)),
     "melodic-trap": dict(label="Melodic trap (Trap Nation)", bpm=140, half_time=True, keys=[('C#', 'minor'), ('F', 'minor')],
                          progs={"minor": [["i", "VI", "III", "VII"], ["VI", "III", "VII", "i"]]}, rhythms=["offbeat", "breath", "dotted"],
-                         forms=["call", "sentence", "period"], color=False, appogg=0.25, lo=61, hi=80, voice="lead",
+                         forms=["call", "period"], color=False, appogg=0.25, lo=61, hi=80, voice="lead",
                          drums="half", sync=(0.2, 0.55)),
     "cinematic": dict(label="Cinematic, borrowed and suspended", bpm=88, half_time=False, keys=[('D', 'minor'), ('Bb', 'major')],
                       progs={"minor": [["i", "VI", "III", "VII"], ["i", "iv", "VI", "V"]], "major": [["I", "iii", "IV", "iv"]]}, rhythms=["long", "lyrical", "sparse"],
@@ -154,7 +154,7 @@ STYLES = {
                       sync=(0.0, 0.25)),
     "kawaii": dict(label="Kawaii / bright future bass plucks", bpm=150, half_time=True, keys=[('E', 'major'), ('Ab', 'major')],
                    progs={"major": [["IVmaj7", "V", "iii7", "vi"], ["I", "V", "vi", "IVadd9"]]}, rhythms=["pluck16", "hook8"],
-                   forms=["hook", "call"], color=True, appogg=0.1, lo=66, hi=86, voice="pluck", drums="half",
+                   forms=["call", "period"], color=True, appogg=0.1, lo=66, hi=86, voice="pluck", drums="half",
                    sync=(0.1, 0.45)),
     "lofi": dict(label="Lo-fi / jazzy sevenths", bpm=84, half_time=False, keys=[('F', 'major'), ('A', 'major')],
                  progs={"major": [["ii7", "V7", "Imaj7", "vi7"], ["IVmaj7", "iii7", "ii7", "V7"]]}, rhythms=["breath", "offbeat", "sparse"],
@@ -634,7 +634,7 @@ def score(mel, st, taste=None):
         "chord_fit": bell(m["strong_chord_tones"] + 0.5 * m["appoggiaturas"] / 8, 0.9, 0.15),
         "unresolved": 0.6 ** m["strong_unresolved"],
         "steps": bell(m["steps"], 0.5, 0.14),
-        "repeats": bell(m["repeats"], 0.18, 0.1),
+        "repeats": bell(m["repeats"], 0.20, 0.08),               # taste.md lesson 5 (liked 0.20, disliked 0.08)
         "leaps": m["leaps_recovered"] * 0.7 ** m["same_direction_leaps"] * 0.6 ** m["big_leaps"] * 0.75 ** m["tritones"],
         "range": bell(m["range"], 14, 4),
         "variety": bell(m["pitches"], 9, 3),
@@ -643,11 +643,11 @@ def score(mel, st, taste=None):
         "arc": bell(m["rise_to_climax"], 5, 3) if mel["form"] != "hook" else 1.0,
         "tendency": m["leading_tones_resolved"],
         "cadence": bell(m["end_length"], 2.5, 1.2),
-        "rhythm": bell(m["bar_rhythms"], 4, 2.0),
+        "rhythm": bell(m["bar_rhythms"], 3, 1.5),                # lesson 6: fewer bar rhythms — simple
         "syncopation": bell(m["syncopation"], sum(st["sync"]) / 2, (st["sync"][1] - st["sync"][0]) / 2 + 0.05),
-        "motion": bell(m["turns"], 0.45, 0.2),
+        "motion": bell(m["turns"], 0.36, 0.15),                  # lesson 6: liked lines turn less (0.32 vs 0.45)
         # EXPECTEDNESS (batch-001 averaged 3.38 bits and was heard as random; real pop: 2.94, 2.70–3.17)
-        "expected": bell(m["surprise_bits"], 2.94, 0.25) if m.get("surprise_bits") is not None else 1.0,
+        "expected": bell(m["surprise_bits"], 2.85, 0.22) if m.get("surprise_bits") is not None else 1.0,   # lesson 5
         # the phrase (batch-001's lesson): what makes a line sound meant rather than random
         "return": 1.0 if m.get("exact_return") else (0.5 if mel["form"] in ("climb", "sentence") else 0.2),
         "rhythm_kept": bell(m.get("rhythm_kept", 0), 0.67, 0.35),
@@ -655,7 +655,10 @@ def score(mel, st, taste=None):
         "phrase_ends": bell(m.get("phrase_ends_held", 0), 4, 1.2),
         "climax_gesture": 0.5 + 0.25 * bool(m.get("climax_leap_in")) + 0.25 * bool(m.get("climax_step_out")),
     }
-    total = sum(parts.values()) / len(parts)
+    # what the research and the verdicts validated weighs more: expectedness (why "random" was heard), the idea's
+    # return and rests in place (the approver's words, batch-001)
+    weight = {"expected": 2.0, "return": 1.5, "rests": 1.5}
+    total = sum(v * weight.get(k, 1.0) for k, v in parts.items()) / sum(weight.get(k, 1.0) for k in parts)
     if taste:
         total += taste_bonus(mel, taste)
     mel["rubric"] = {k: round(v, 3) for k, v in parts.items()}
@@ -668,10 +671,11 @@ def taste_bonus(mel, taste):
     b = 0.0
     for field in ("style", "form", "rhythm", "motif_kind", "voice"):
         b += taste.get(field, {}).get(mel.get(field), 0.0)
+    conf = min(1.0, taste.get("liked_count", 0) / 8)               # four liked melodies pull half as hard as eight
     for metric, rng_ in taste.get("metric_ranges", {}).items():
         v = mel["metrics"].get(metric)
         if v is not None:
-            b += 0.05 if rng_[0] <= v <= rng_[1] else -0.05
+            b += (0.02 if rng_[0] <= v <= rng_[1] else -0.02) * conf
     return b
 
 
