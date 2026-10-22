@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► H4** — the user judges batch-003 in the Melody Lab (http://127.0.0.1:8787/); fold their verdicts into the melody skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► H5** — the user judges batch-004 in the Melody Lab (http://127.0.0.1:8787/); fold their verdicts into the melody skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -876,7 +876,12 @@ good melody"*. Tooling, not product: the skill lives in `.claude/skills/arstro.s
       — 4 good, 6 okay, 6 weak, 0 no (mean 2.88 from 2.38). Lessons: call and response over the hook loop; dwell more,
       surprise less; (hint) simpler lines. The taste learner tempered (it would have let four verdicts outvote the
       theory). batch-003: call/period, 3.0 bits, 14 of 16 inside real pop's middle half.
-- [ ] **H4** The user's verdicts on batch-003 → taste.md.
+- [x] **H4** The user's verdicts on batch-003 → taste.md.
+      — 1 love (the first), 5 good, 8 okay, 2 weak, 0 no (mean 3.31). The user's words: "the melody is not luxury"
+      (choppy articulation copied from the corpus's MIDI → legato; the lush styles on 7th / maj7 / add9 chords) and
+      "the ending is not good" (→ a V7 → I cadence, the tonic on bar 8's downbeat held, no lean into it, the home chord
+      after it). Surprise made a gate (3.25 bits). batch-004: 2.99 bits, all 16 ending home on the downbeat.
+- [ ] **H5** The user's verdicts on batch-004 → taste.md.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

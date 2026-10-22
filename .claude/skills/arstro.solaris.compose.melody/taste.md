@@ -28,10 +28,26 @@ When a lesson becomes a rule, the code changes too (`melody.py`), and the entry 
 5. **Dwell a little more, surprise a little less** — the good ones repeat a note about a fifth of the time (0.20
    against 0.08 for the weak and no) and sit under real pop's surprise (2.82 bits against 3.04). *(repeats target 0.20,
    surprise target 2.85 and weighted double)*
+7. **"Luxury": legato, and colour under the held notes** — "the melody is not luxury" (batch-003-02, future bass): its
+   notes were sixteenths on eighth-note places, a gap after each — choppy, cheap. Real songs' MIDI writes sung
+   syllables short; the engine had copied those lengths. A gap under ¾ beat is articulation, not a rest: the note now
+   carries to the next. And the lush styles (future bass, progressive house) play 7th, maj7 and add9 chords, so a held
+   note can rest on colour. *(engine 4)*
+8. **A good ending: a cadence, the home note ON the downbeat, held** — "the ending is not good" (batch-003-15, the one
+   loved): its last note leaned G → F onto beat 2 and lasted 1.5 beats over vi, and the audition then played ii. Now
+   every answer ends V7 → I, the tonic on bar 8's downbeat held the bar (stepped into from 7 or 2), no leaning note on
+   the final note, and the audition's last chord is that I. *(engine 4)*
 6. *Hint, not yet a lesson:* the good ones change direction less (0.32 against 0.45) and use fewer bar rhythms (2.5
    against 2.8) — simpler lines, as the research says. *(the motion and rhythm targets nudged)*
 
 ## Batches
+
+### batch-004 (2026-10-22) — engine 4: legato, lush chords, real endings
+
+16 melodies, 2 each of the 8 styles (11 period, 4 call, 1 climb), lessons 7–8 applied; and surprise made a GATE (a line
+over 3.25 bits is chosen only when nothing in range is left — the first draft of batch-004 chose four at 3.45–3.77,
+winning on other parts). Measured: 2.99 bits (14 of 16 inside real pop's middle half), all 16 ending V7 → I on the
+downbeat, held; 10 exact returns; no rest mid-phrase; the lush styles on maj7 / m7 / add9 chords. *Awaiting verdicts.*
 
 ### batch-003 (2026-10-22) — lessons 4–6 applied
 
@@ -39,8 +55,14 @@ When a lesson becomes a rule, the code changes too (`melody.py`), and the entry 
 (its ranges widened by the liked melodies' own spread, their pull ±0.02 scaled by how many melodies are liked — at
 first it would have let four verdicts outvote the theory, and batch-003's first draft rose to 3.26 bits); surprise
 learned as a taste metric too and weighted double in the rubric. Measured: 3.0 bits (14 of 16 inside real pop's middle
-half), repeats 0.17, 9 exact returns, no rest mid-phrase. *Awaiting verdicts.* It asks: do call and response and a
-line that dwells carry into the EDM styles (future bass, prog house, NCS, trap) the way they did in lo-fi?
+half), repeats 0.17, 9 exact returns, no rest mid-phrase. It asked: do call and response and a line that dwells carry
+into the EDM styles?
+counts: love 1 · good 5 · okay 8 · weak 2 · no 0 (mean 3.31 — from 2.88, from 2.38)
+loved: 15 lo-fi (period) — "the ending is not good" (→ lesson 8)
+good: 03 prog house (call), 04 prog house (period), 05 NCS (period), 11 cinematic (period), 14 kawaii (period)
+okay: 01, 02 future bass — 02 "the melody is not luxury" (→ lesson 7); 07, 08 ballad; 09, 10 trap; 12 cinematic (climb);
+16 lo-fi (call). weak: 06 NCS (call), 13 kawaii (period)
+lesson: yes for prog house and NCS; future bass and trap still only okay. Period caught up with call (3.6 here).
 
 ### batch-002 (2026-10-22) — engine 3: phrases, real rhythms, real motion
 

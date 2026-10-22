@@ -55,11 +55,15 @@ time you use this skill in a session, and whenever a step below is not enough.
 6. **SHAPE the contour.** ONE climax — the highest note, once — reached by a leap up (one or two upward leaps, after
    the midpoint) and left by steps down; a range of about 14 semitones in 8 bars (12–16); the second phrase higher than
    the first.
-7. **CADENCE.** Phrases end on a long note. The first phrase asks (ends on 2, 5 or 7: a half cadence); the second
-   answers (ends home — 1, or 3 — when the chord holds it; over a V chord end on its 3rd or 5th, never force the
-   tonic). A loop hook may end open so it can repeat.
-8. **RESTS where a singer breathes** — after a held note, or the last beat of a bar before a pickup (where real songs
-   rest most). A rest in the middle of a phrase is "not in natural place" (the approver's words, batch-001).
+7. **CADENCE — the ending decides how the whole melody is remembered.** Phrases end on a long note. The first phrase
+   asks (2, 5 or 7: a half cadence). The last ANSWERS with a real cadence: V7 → I under bars 7–8 whatever the loop does,
+   the tonic ON bar 8's downbeat, held the bar, stepped into from 7 or 2 — no leaning note on the final note, and the
+   home chord ringing after it ("the ending is not good", batch-003). A loop hook may end open so it can repeat.
+8. **LEGATO, and RESTS where a singer breathes.** Inside a phrase the notes join — a gap under ¾ beat is articulation,
+   not a rest (sixteenths with gaps sound choppy and cheap: "not luxury", batch-003). Rest after a held note, or on the
+   last beat of a bar before a pickup (where real songs rest most). A rest in the middle of a phrase is "not in natural
+   place" (the approver's words, batch-001). For lush styles, put colour (7ths, maj7, add9) in the chords under the
+   held notes.
 9. **EMOTION is placed, not sprinkled**: long notes at phrase ends and at the climax; a leaning note (appoggiatura) into
    one or two of them — not every one; the ♭6 → 5 sigh where the harmony is borrowed.
 10. **Honour the tendency tones**: 7 → 1, 4 → 3, ♭6 → 5, 2 → 1 or 3. Where you break one, mean it.
@@ -136,6 +140,10 @@ leap and left by a step. **It ranks candidates; it does not judge music — the 
   "random", "no emotion". Build two-bar phrases and repeat them exactly where the harmony repeats.
 - **A line that never dwells**: no repeated notes at all is restless — real melodies repeat a note a quarter of the time.
 - **Rests in the middle of a phrase** ("not in natural place") — rest after a held note, or before a pickup.
+- **Choppy articulation** ("not luxury"): rhythms copied from MIDI keep sung syllables short — join the notes.
+- **A weak ending** ("the ending is not good"): the last note late, short, leaned into, over a chord that isn't home.
+- **Surprise as a mere preference**: a rubric that only prefers expectedness will still pick a 3.7-bit line that wins
+  elsewhere — it is a gate (3.25 bits).
 - A melody with no motif — a well-behaved random walk — sounds aimless however well it scores.
 - The motif pasted at one pitch over changing chords: bend it (tonal sequence).
 - The tonic forced as the last note over a V chord.

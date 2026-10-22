@@ -129,11 +129,11 @@ def syncopation(cells):
 # ── style presets ────────────────────────────────────────────────────────────────────────────────────────────────────
 STYLES = {
     "future-bass": dict(label="Future bass, emotional (Illenium / San Holo)", bpm=150, half_time=True,
-                        keys=[('Db', 'major'), ('F', 'major')], progs={"major": [["vi", "IV", "I", "V"], ["IV", "V", "iii", "vi"]]},
+                        keys=[('Db', 'major'), ('F', 'major')], progs={"major": [["vi7", "IVmaj7", "Iadd9", "V"], ["IVmaj7", "V", "iii7", "vi7"]]},
                         rhythms=["dotted", "tresillo", "lyrical"], forms=["period", "call", "climb"], color=True,
                         appogg=0.35, lo=63, hi=82, voice="lead", drums="half", sync=(0.15, 0.45)),
     "prog-house": dict(label="Progressive house anthem", bpm=126, half_time=False, keys=[('D', 'major'), ('A', 'major')],
-                       progs={"major": [["IV", "I", "V", "vi"], ["vi", "IV", "I", "V"]]}, rhythms=["lyrical", "anticip", "dotted"],
+                       progs={"major": [["IVmaj7", "Iadd9", "V", "vi7"], ["vi7", "IVmaj7", "Iadd9", "V"]]}, rhythms=["lyrical", "anticip", "dotted"],
                        forms=["period", "aaba", "call"], color=True, appogg=0.3, lo=62, hi=81, voice="lead", drums="four",
                        sync=(0.1, 0.4)),
     "ncs-hook": dict(label="NCS / future house hook", bpm=128, half_time=False, keys=[('G', 'major'), ('E', 'major')],
@@ -222,7 +222,14 @@ def corpus_rhythm(style, rng, exclude=None):
         pool.append((cells, t["count"] ** 0.7))
     if not pool:
         return None
-    return rng.choices([p for p, _ in pool], weights=[w for _, w in pool])[0]
+    cells = rng.choices([p for p, _ in pool], weights=[w for _, w in pool])[0]
+    out = []
+    for k, (a, l) in enumerate(cells):
+        nxt = cells[k + 1][0] if k + 1 < len(cells) else None
+        if nxt is not None and 0 < nxt - (a + l) < 0.75:
+            l = nxt - a                                          # legato: the gap was articulation, not a breath
+        out.append((a, l))
+    return out
 
 
 def surprise(ps):
@@ -308,6 +315,13 @@ def build(style, rng, taste=None):
         progs = homeward                                         # an answer needs a chord it can come home on
     prog4 = rng.choice(progs)
     prog = [chord(r, key) for r in prog4 * 2]
+    cadence = None
+    if form != "hook":
+        # A GOOD ENDING (taste.md lesson 8 — "the ending is not good"): the last two bars are an authentic cadence,
+        # V7 → I, whatever the loop does — the ear needs the home chord under the home note
+        home = ("Imaj7" if st["color"] else "I") if mode == "major" else "i"
+        prog[6], prog[7] = chord("V7", key), chord(home, key)
+        cadence = f"{prog[6]['name']} → {prog[7]['name']}"
     rname = rng.choice(st["rhythms"])
     lname = rng.choice(st["landings"])
     cname = rng.choice(list(CONTOURS))
@@ -411,6 +425,24 @@ def build(style, rng, taste=None):
                   [p for p in ch["pcs"] if ch["roles"][p] != "root"]
         elif kind == "home":
             pcs = [key.tonic] if key.tonic in ch["pcs"] else [p for p in ch["pcs"] if ch["roles"][p] in ("third", "root")]
+            if t0 == 24 and cadence:
+                # the last note lands on bar 8's DOWNBEAT and is held the bar; the note before steps into it from the
+                # leading tone or the 2nd — both tones of the V7 under bar 7
+                body = [n for n in unit if n[0] < 28]
+                for n in body:
+                    n[1] = min(n[1], 28 - n[0])
+                prev = body[-1][2] if body else unit[0][2]
+                cand = [m for m in range(lo, hi + 1) if m % 12 == key.tonic]
+                final = min(cand, key=lambda m: (abs(m - prev), m))
+                if body:
+                    below = key.midi(key.degree_of(final)[0] - 1)    # 7, the leading tone
+                    above = key.midi(key.degree_of(final)[0] + 1)    # 2
+                    body[-1][2] = below if abs(below - prev) <= abs(above - prev) else above
+                    if mode == "minor" and body[-1][2] == below:
+                        body[-1][2] = final - 1                       # the raised 7th of the V chord
+                unit[:] = body + [[28, 4.0, final]]
+                ends.append(("home", 1, ch["name"]))
+                return unit
         else:
             pcs = [p for p in ch["pcs"] if ch["roles"][p] in ("third", "fifth")] or ch["pcs"]
         cand = [m for m in range(lo, hi + 1) if m % 12 in pcs]
@@ -476,6 +508,8 @@ def build(style, rng, taste=None):
         u4 = ending(adapt([n for n in u1], prog[6], prog[7], 0, 0, 24), prog[7], "home", 24)
         climax_unit = 2
         devices += ["the idea a step higher, then higher", "down home"]
+    if cadence:
+        devices.append(f"an authentic cadence to end: {cadence}, the last note home on the downbeat, held")
     for kind, deg, chn in ends:
         devices.append({"half": f"a question: it stops on {deg or '?'} over {chn}",
                         "home": (f"the answer: home on 1 over {chn}" if deg == 1 else f"the answer: on {deg or '?'} over {chn} — the loop resolves it"),
@@ -505,7 +539,9 @@ def build(style, rng, taste=None):
             n[2] = key.midi(key.degree_of(cu[peak_i][2])[0] - 1)
     # THE LEAN: a long phrase end (or the climax) entered by an APPOGGIATURA — a step above, on the beat, falling
     leaned = 0
-    spots = [n for n in notes if n[1] >= 2 and (n[0] % 4) in (0, 2) and (8 <= n[0] < 16 or n[0] >= 24)]
+    # never into the FINAL note: the last note lands ON the downbeat (batch-003-15's ending leaned G → F onto beat 2 —
+    # "the ending is not good"); the lean belongs to the question and the climax
+    spots = [n for n in notes if n[1] >= 2 and (n[0] % 4) in (0, 2) and (8 <= n[0] < 16 or 24 <= n[0] < 28)]
     for n in spots:
         if leaned >= 2 or rng.random() >= st["appogg"] + 0.25:
             continue
@@ -529,7 +565,7 @@ def build(style, rng, taste=None):
         "key_names": key.names, "progression": prog4, "chords": [c["name"] for c in prog],
         "chord_pcs": [c["pcs"] for c in prog], "chord_roots": [c["root"] for c in prog],
         "chord_roles": [{str(k): v for k, v in c["roles"].items()} for c in prog],
-        "rhythm": rname, "landing": lname, "form": form, "form_label": FORM_NAMES[form], "contour": cname,
+        "cadence": cadence, "rhythm": rname, "landing": lname, "form": form, "form_label": FORM_NAMES[form], "contour": cname,
         "motif_kind": cname, "engine": 2,
         "notes": [{"t": round(t, 4), "d": round(d, 4), "p": int(p), "name": key.spell(int(p))} for t, d, p in notes],
         "devices": devices, "voice": st["voice"], "drums": st["drums"], "half_time": st["half_time"],
@@ -690,6 +726,11 @@ def load_taste():
 def generate_style(style, n, rng, tries=600, taste=None):
     """`tries` candidates for a style; the best n, each with its own motif and form where it can."""
     cands = sorted((build(style, rng, taste) for _ in range(tries)), key=lambda m: -m["score"])
+    # a GATE, not a preference: a line over real pop's surprise (its upper quartile 3.17, and a margin) is heard as
+    # random (batch-001; taste.md lessons 1, 5) — it may be chosen only when nothing in range is left
+    SURPRISE_GATE = 3.25
+    cands = [c for c in cands if (c["metrics"].get("surprise_bits") or 0) <= SURPRISE_GATE] + \
+            [c for c in cands if (c["metrics"].get("surprise_bits") or 0) > SURPRISE_GATE]
     out, seen = [], set()
     for c in cands:
         sig = (c["form"], c["contour"], c["rhythm"], c["landing"])

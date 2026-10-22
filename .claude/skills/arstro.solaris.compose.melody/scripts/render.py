@@ -53,8 +53,8 @@ def script(mel, out_mp3):
     pad = []
     bars = [(0.0, mel["chord_pcs"][0], mel["chord_roots"][0])]                 # the lead-in bar: the first chord
     bars += [(INTRO + 4 * k, mel["chord_pcs"][k], mel["chord_roots"][k]) for k in range(8)]
-    bars += [(INTRO + 32, mel["chord_pcs"][0], mel["chord_roots"][0])] if mel.get("form") != "hook" else \
-            [(INTRO + 32, mel["chord_pcs"][7], mel["chord_roots"][7])]
+    bars += [(INTRO + 32, mel["chord_pcs"][7], mel["chord_roots"][7])]       # the last chord rings on: home, after a
+    # cadence (batch-003: the loop's FIRST chord after the end made "the ending is not good")
     for at, pcs, root in bars:
         pad += [(m, at, 4, 70) for m in voicing(pcs, root)]
     line(f'notes add pt_1 "{tokens(pad)}"')

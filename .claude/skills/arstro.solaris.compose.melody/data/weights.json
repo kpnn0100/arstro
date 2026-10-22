@@ -1,83 +1,71 @@
 {
  "style": {
-  "lofi": 0.0583,
-  "cinematic": 0.025,
-  "kawaii": 0.025,
-  "prog-house": -0.0083,
-  "pop-ballad": -0.0083,
-  "future-bass": -0.025,
-  "melodic-trap": -0.025,
-  "ncs-hook": -0.0417
+  "lofi": 0.0609,
+  "cinematic": 0.0234,
+  "prog-house": 0.0109,
+  "kawaii": 0.0109,
+  "pop-ballad": -0.0141,
+  "future-bass": -0.0266,
+  "melodic-trap": -0.0266,
+  "ncs-hook": -0.0391
  },
  "form": {
-  "call": 0.0406,
-  "aaba": 0.0125,
-  "period": 0.0078,
-  "climb": -0.0063,
-  "hook": -0.0304,
-  "sentence": -0.0417
+  "call": 0.0196,
+  "period": 0.0174,
+  "aaba": 0.0049,
+  "climb": -0.0113,
+  "hook": -0.0467,
+  "sentence": -0.0569
  },
  "rhythm": {
-  "hook8": 0.0188,
-  "offbeat": 0.0125,
-  "sparse": 0.0125,
-  "corpus": 0.0266,
-  "lyrical": 0.0083,
-  "dotted": -0.0469,
-  "anticip": -0.0312,
-  "tresillo": -0.0312
+  "hook8": 0.0288,
+  "corpus": 0.0203,
+  "offbeat": 0.0049,
+  "sparse": 0.0049,
+  "lyrical": -0.0069,
+  "anticip": -0.0113,
+  "dotted": -0.0641,
+  "tresillo": -0.0427
  },
  "motif_kind": {
-  "leap": 0.0225,
-  "leap-fall": 0.0188,
-  "arch": 0.0163,
-  "wave": 0.0025,
-  "fall": -0.0083,
-  "rise": -0.025,
-  "turn": -0.0304
+  "wave": 0.0234,
+  "arch": 0.0129,
+  "leap": 0.0088,
+  "leap-fall": 0.0117,
+  "fall": -0.0141,
+  "rise": -0.0182,
+  "turn": -0.0467
  },
  "voice": {
-  "piano": 0.0321,
-  "pluck": 0.025,
-  "lead": -0.0333
+  "piano": 0.0281,
+  "pluck": 0.0109,
+  "lead": -0.025
  },
  "metric_ranges": {
-  "surprise_bits": [
-   2.68,
-   2.954
-  ],
-  "steps": [
-   0.483,
-   0.588
-  ],
   "range": [
-   9.893,
-   14.107
+   9.35,
+   14.65
   ],
   "pitches": [
-   6.946,
-   9.054
+   6.65,
+   9.35
   ],
   "repeats": [
-   0.192,
-   0.216
+   0.112,
+   0.23
   ],
   "climax_at": [
-   0.472,
-   0.829
+   0.502,
+   0.867
   ],
-  "appoggiaturas": [
-   -0.115,
-   2.415
-  ],
-  "bar_rhythms": [
-   1.75,
-   3.25
+  "syncopation": [
+   -0.077,
+   0.352
   ],
   "turns": [
-   0.213,
-   0.414
+   0.292,
+   0.437
   ]
  },
- "liked_count": 4
+ "liked_count": 10
 }
