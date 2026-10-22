@@ -168,6 +168,12 @@ It holds the method, the generator and analyzer, the Melody Lab where the user a
 taste ledger (`taste.md`): read it before writing a note. A song's melody goes on its own strip and is measured as
 written and as heard.
 
+### A sound (any track's patches, drums, bass, risers)
+**Invoke `arstro.solaris.sound.design` first** — the sounds are the user's to approve too (2026-10-22: "now come to the
+sound design"). It holds the elements' recipes in Solaris's own parameters, how the kick, the bass and the chords make
+room (the side-chain release that lets the bass back), the Sound Lab, and the taste ledger (`taste.md`): read it before
+choosing a patch. A sound the devices cannot make is a DSP task, never a sample in a script.
+
 ### A new instrument or effect (the commonest task)
 In `core/DigitalSignalProcessing` (`arstro.dsp.implement`): search `src/*/README.md` and compose
 before writing math; derive and document; implement; unit + integration tests; a `REQ-` id; the

@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► J1** — future bass sound design: the skill arstro.solaris.sound.design, and a verse, a build-up and a drop for the user to judge. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► J2** — the user judges fb-001 (future bass: verse, build-up, drop, every element alone) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -919,7 +919,20 @@ will judge the sound design / all will be write in skill arstro.solaris.sound.de
 bass, airy bell and main synth / for drop need super saw, bass, kick and bassline sync, a lot of percusion to fill
 between / learn from professional from trap nation first"*. Tooling, not product: the skill lives in
 `.claude/skills/arstro.solaris.sound.design/`.
-- [ ] **J1** The skill (research first) and the three sections — verse, build-up, drop — for the Sound Lab.
+- [x] **J1** The skill (research first) and the three sections — verse, build-up, drop — for the Sound Lab.
+      — references/research.md: NI, EDMProd, Loopmasters, PML, Feelyoursound, Unison; reese (Attack, NI, Soundbridge),
+      the FM bell (Splice), build-ups (Soundbridge, MusicRadar) — and, said plainly, no production material from Trap
+      Nation itself (a channel, not a producer). references/future-bass.md: every element's recipe in Solaris's own
+      parameters and why. scripts/futurebass.py: fb-001 from Paper Lanterns at 150 bpm half time — the verse (reese,
+      airy FM bell, the main synth as pluck + saw lead), the build (quickening filtered stabs, kick and snare rolls, the
+      snare up an octave, noise and pitch risers, the breath, a clap, the landing), the drop (the supersaw carrying the
+      melody with a pitch rise and a 1/16 tremolo, a sub and a mid bass struck with every kick and ducked by it, snare +
+      clap on 3, hats, rolls, snaps, toms, a shaker, a ride, crashes). Each element its own strip with its space in its
+      rack, rendered alone; every element's loudness measured. Found: the duck's default half-beat release held the sub
+      down ~600 ms behind the kick's tail (2.6 dB) — a 70 ms release: 9.4 dB, back within 200 ms. scripts/lab.py: the
+      Sound Lab (127.0.0.1:8788) — the melody lab's server with a data folder and a title of its own; the page shows a
+      sound section (a timeline, the element solos, the recipes, the levels). The implement skill points here.
+- [ ] **J2** The user's verdicts on fb-001 → taste.md; fb-002 changes what they name.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

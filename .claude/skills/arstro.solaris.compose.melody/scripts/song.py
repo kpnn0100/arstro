@@ -107,7 +107,7 @@ class Script:
 
     def bus(self, name):
         ch = self.new('ch')
-        self.line(f'strip add --kind bus --name {name}')
+        self.line(f'strip add --kind bus --name "{name}"')
         return ch
 
 

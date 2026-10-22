@@ -39,7 +39,8 @@
   .roll-wrap { position: relative; margin: 12px 0 10px; overflow-x: auto; border-radius: 6px; }
   .roll-wrap.long svg.roll { cursor: pointer; }
   .roll-wrap { scrollbar-color: #444 transparent; scrollbar-width: thin; }
-  .card.song .chip.plain { border-radius: 8px; }            /* a craft note runs to two lines: a box, not a pill */
+  .card.song .chip.plain, .card .chip.plain { border-radius: 8px; }
+  svg.roll.timeline { height: 44px; cursor: pointer; }            /* a craft note runs to two lines: a box, not a pill */
   svg.roll { width: 100%; height: 170px; display: block; background: #171717; border-radius: 6px; }
   .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .play { width: 42px; height: 42px; border-radius: 50%; border: none; background: var(--accent); color: #fff; cursor: pointer;
@@ -86,13 +87,13 @@
 <header>
   <div class="bar">
     <div>
-      <h1>Melody Lab<span class="dot">.</span></h1>
-      <div class="sub">arstro.solaris.compose.melody — you are the approver</div>
+      <h1><span id="labtitle">Melody Lab</span><span class="dot">.</span></h1>
+      <div class="sub" id="labsub">arstro.solaris.compose.melody — you are the approver</div>
     </div>
     <select id="batch" aria-label="Batch"></select>
     <div class="progress" id="progress"></div>
     <div class="grow"></div>
-    <div class="legend">
+    <div class="legend" id="legend">
       <span><i style="background:var(--accent)"></i>chord tone on a strong beat</span>
       <span><i style="background:var(--lean)"></i>leaning note (resolves)</span>
       <span><i style="background:var(--pass)"></i>passing / weak</span>
@@ -101,7 +102,7 @@
   </div>
 </header>
 <main id="main">
-  <div class="intro">A melody is eight bars over its chords (one bar of the chords first, the melody, the last chord held);
+  <div class="intro" id="intro">A melody is eight bars over its chords (one bar of the chords first, the melody, the last chord held);
   a SONG is a verse, a pre-chorus and a chorus with its words — sung by a voice through a vowel filter, or on a piano.
   Listen, then judge it — <b>Love it</b>, <b>Good</b>, <b>Okay</b>, <b>Weak</b> or <b>No</b> — and,
   if you can, say why in a few words ("too busy", "the ending is great", "boring rhythm"). Your verdicts teach the skill.</div>
@@ -131,7 +132,24 @@ function noteRole(m, n) {
   return ct ? "ctweak" : "pass";
 }
 
+function timeline(m) {                                  // a sound section: its bars and a playhead, no notes
+  const beats = span(m), bars = Math.ceil(beats / 4), W = 1000, H = 44;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  for (const [k, v] of Object.entries({viewBox: `0 0 ${W} ${H}`, class: "roll timeline", preserveAspectRatio: "none",
+                                       role: "img", "aria-label": "timeline"})) svg.setAttribute(k, v);
+  let s = "";
+  for (let b = 0; b < bars; b++) {
+    const x = 4 * b / beats * W;
+    s += `<line x1="${x}" x2="${x}" y1="0" y2="${H}" stroke="${b % 4 === 0 ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.06)'}"/>`;
+    if (b % 2 === 0) s += `<text x="${x + 4}" y="14" fill="#8a8a8a" font-size="10" font-family="system-ui">${b + 1}</text>`;
+  }
+  s += `<line class="head" x1="-10" x2="-10" y1="0" y2="${H}" stroke="#fff" stroke-width="2" opacity="0.85"/>`;
+  svg.innerHTML = s;
+  return svg;
+}
+
 function roll(m) {
+  if (m.sound) return timeline(m);
   const beats = span(m), bars = beats / 4;
   const W = rollWidth(m), H = m.song ? 230 : 170, top = m.song ? 40 : 22, bot = 8;
   const ps = m.notes.map(n => n.p), lo = Math.min(...ps) - 2, hi = Math.max(...ps) + 2;
@@ -176,11 +194,17 @@ function roll(m) {
   return svg;
 }
 
-function span(m) { return m.song ? m.chords.length * 4 : 32; }
+function span(m) { return m.sound ? m.seconds * m.bpm / 60 : m.song ? m.chords.length * 4 : 32; }
 function rollWidth(m) { return m.song && m.chords.length > 24 ? m.chords.length * 44 : 1000; }   // 44 px a bar when long
 
 function why(m) {
   const k = m.metrics, bits = [];
+  if (m.sound) {                                         // what was measured: every element's loudness, the duck
+    const l = k.lufs || {};
+    for (const [name, v] of Object.entries(l)) bits.push(`${name} ${v === null ? "—" : v.toFixed(1)} LUFS`);
+    if (k.sub_duck_db !== undefined) bits.push(`the kick ducks the sub ${k.sub_duck_db} dB and lets it back within 200 ms`);
+    return bits.join(" · ");
+  }
   if (m.song) {
     bits.push(`range ${k.low}–${k.high} (${k.range})`);
     bits.push(`${Math.round(k.stress_on_beat * 100)} % of stressed syllables on the beat`);
@@ -201,7 +225,10 @@ function why(m) {
 
 function card(m, i) {
   const c = el("section", {class: m.song ? "card song" : "card", id: m.id});
-  c.append(el("div", {class: "head"}, m.song
+  c.append(el("div", {class: "head"}, m.sound
+    ? `<span class="num">#${String(i + 1).padStart(2, "0")}</span><span class="title">${m.title}</span>
+       <span class="meta">${m.style_label} · ${m.key} · ${m.bpm} bpm · 0:${String(m.seconds).padStart(2, "0")}</span>`
+    : m.song
     ? `<span class="num">#${String(i + 1).padStart(2, "0")}</span><span class="title">${m.title}</span>
        <span class="meta">${m.style_label} · ${m.key} · ${m.bpm} bpm · ${m.metrics.seconds ? `${Math.floor(m.metrics.seconds / 60)}:${String(m.metrics.seconds % 60).padStart(2, "0")} · ${m.sections.length} sections` : m.sections.filter(sc => sc.name !== "intro").map(sc => `${sc.name} ${sc.bars}`).join(" · ") + " bars"}</span>`
     : `<span class="num">#${String(i + 1).padStart(2, "0")}</span><span class="title">${m.style_label}</span>
@@ -294,7 +321,7 @@ function card(m, i) {
   }
   function nextT(t) { const n = m.notes.find(n => n.t > t && n.syl !== "~"); return n ? n.t : Infinity; }
   function tick() {
-    const beat = audio.currentTime * m.bpm / 60 - (m.song ? 0 : INTRO);
+    const beat = audio.currentTime * m.bpm / 60 - (m.song || m.sound ? 0 : INTRO);
     const RW = rollWidth(m), xx = Math.max(-10, Math.min(RW, beat / span(m) * RW));
     if (m.song) sing(beat);
     if (RW > 1000 && !audio.paused) {                    // keep the playhead in view: the roll eases along, never jumps
@@ -306,7 +333,7 @@ function card(m, i) {
     time.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
     if (!audio.paused) requestAnimationFrame(tick);
   }
-  if (m.song) svg.addEventListener("click", e => {       // click the roll: play from there
+  if (m.song || m.sound) svg.addEventListener("click", e => {   // click the roll: play from there
     const r = svg.getBoundingClientRect(), beat = (e.clientX - r.left) / r.width * span(m);
     audio.currentTime = Math.max(0, beat * 60 / m.bpm);
     if (audio.paused) { players.forEach(p => p !== audio && p.pause()); audio.play(); }
@@ -334,11 +361,25 @@ async function load(name) {
   verdicts = await j(`/api/verdicts?name=${encodeURIComponent(name)}`);
   const main = document.getElementById("main");
   main.querySelectorAll(".card, .empty").forEach(e => e.remove());
+  const sound = batch.kind === "sound";
+  document.getElementById("legend").style.display = sound ? "none" : "";
+  document.getElementById("intro").innerHTML = sound
+    ? `Each card is one SECTION of a track — judge its <b>sound design</b>, not its melody. Play <b>full</b>, then each
+       element alone (the switch beside the play button) — every element carries its own space, so its solo is the sound
+       as designed. Then <b>Love it</b>, <b>Good</b>, <b>Okay</b>, <b>Weak</b> or <b>No</b>, and say what to change in a
+       few words ("the reese too dark", "more punch in the kick", "the bell too loud").`
+    : INTRO_TEXT;
   batch.melodies.forEach((m, i) => main.append(card(m, i)));
   progress();
 }
 
+const INTRO_TEXT = document.getElementById("intro").innerHTML;
+
 (async () => {
+  const meta = await j("/api/meta");
+  document.getElementById("labtitle").textContent = meta.title;
+  document.getElementById("labsub").textContent = meta.subtitle;
+  document.title = meta.title;
   const names = await j("/api/batches");
   const sel = document.getElementById("batch");
   if (!names.length) { document.getElementById("main").append(el("div", {class: "empty"}, "No batches yet.")); return; }

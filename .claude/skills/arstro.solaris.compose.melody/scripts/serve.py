@@ -4,8 +4,11 @@ theory it uses) and JUDGE. The user is the approver; each verdict is appended to
 melody, so taste.py can learn from it and the record stands on its own.
 
     python3 serve.py [--lab ~/Music/Solaris/melody-lab] [--port 8787]
+    python3 serve.py --lab ~/Music/Solaris/sound-lab --data <arstro.solaris.sound.design>/data --title "Sound Lab" \
+                     --port 8788                     # the sound design skill's lab: the same page, its own ledger
 
-Binds 127.0.0.1 only. Batches are the folders of the lab holding a batch.json (melody.py generate + render.py).
+Binds 127.0.0.1 only. Batches are the folders of the lab holding a batch.json (melody.py generate + render.py, or
+songbook.py + song.py, or the sound design skill's scripts). The verdicts go to <data>/judgments.jsonl.
 """
 import argparse, datetime, json, os, re
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -20,7 +23,9 @@ SAFE = re.compile(r"^[A-Za-z0-9._-]+$")
 VERDICTS = {1: "no", 2: "weak", 3: "okay", 4: "good", 5: "love"}
 KEEP = ("id", "style", "style_label", "bpm", "key", "tonic", "mode", "progression", "chords", "chord_pcs", "chord_roots",
         "rhythm", "form", "motif_steps", "motif_kind", "notes", "devices", "voice", "metrics", "rubric", "score",
-        "song", "title", "sections", "lyrics")                 # a song (songbook.py) carries its sections and words
+        "song", "title", "sections", "lyrics",                 # a song (songbook.py) carries its sections and words
+        "sound", "section", "elements")                         # a sound design section carries its elements' recipes
+META = {"title": "Melody Lab", "subtitle": "arstro.solaris.compose.melody — you are the approver"}
 
 
 def batches(lab):
@@ -63,6 +68,8 @@ def make_handler(lab):
             if u.path == "/":
                 with open(PAGE, "rb") as f:
                     return self.send(200, f.read(), "text/html; charset=utf-8")
+            if u.path == "/api/meta":
+                return self.send(200, META)
             if u.path == "/api/batches":
                 return self.send(200, batches(lab))
             if u.path in ("/api/batch", "/api/verdicts"):
@@ -119,13 +126,22 @@ def make_handler(lab):
 
 
 def main():
+    global DATA, JUDGMENTS
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--lab", default=os.path.expanduser("~/Music/Solaris/melody-lab"))
     ap.add_argument("--port", type=int, default=8787)
+    ap.add_argument("--data", default=DATA, help="where the verdicts go (a skill's data folder)")
+    ap.add_argument("--title", default=META["title"])
+    ap.add_argument("--subtitle", default="")
     a = ap.parse_args()
+    DATA = os.path.abspath(a.data)
+    JUDGMENTS = os.path.join(DATA, "judgments.jsonl")
+    META["title"] = a.title
+    if a.subtitle:
+        META["subtitle"] = a.subtitle
     lab = os.path.abspath(a.lab)
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), make_handler(lab))
-    print(f"melody lab: http://127.0.0.1:{a.port}/  (batches in {lab}; verdicts to {JUDGMENTS})", flush=True)
+    print(f"{META['title'].lower()}: http://127.0.0.1:{a.port}/  (batches in {lab}; verdicts to {JUDGMENTS})", flush=True)
     srv.serve_forever()
 
 
