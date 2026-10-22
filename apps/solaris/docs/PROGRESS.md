@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► J3** — the user judges fb-002 (four future bass tracks: four verses, four build-ups → drops, every element alone) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► J4** — the user judges fb-003 (the four future bass tracks with lessons 1–6 applied) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -940,7 +940,17 @@ between / learn from professional from trap nation first"*. Tooling, not product
       percussion), Neon Tide (quirky, Flume: a metallic bell, a square pluck, gated stabs dropping into each note, swung
       percussion). The build runs into its drop in one clip. Each kick tuned into its key. Levels measured and set;
       the kick ducks the sub 9.0–11.1 dB.
-- [ ] **J3** The user's verdicts on fb-002 → taste.md; the next batch leans into what they loved.
+- [x] **J3** The user's verdicts on fb-002 → taste.md; fb-003 changes what they named.
+      — good 1 (verse 2 Glass Garden: the softest), okay 6, weak 1 (verse 1). Their words: the reese "not deep
+      enough, need more ambient"; the bell "high cut a little bit and more depth"; "synth is too rough, need more soft
+      synth"; the drop "need some rest note and counter melody"; "kick is not punchy enough, need some hard bass";
+      "super saw need to be more sharp" (twice). Standing lessons 1–6 → every named recipe changed (the reese an octave
+      lower, louder sine, chorus, a room; the bell high-cut 6.5 kHz, a 6.5 s room; the main synth softer; the supersaw
+      open to 14 kHz with presence and air EQ; a click layer, +70 % transient and tube density on the kick; the mid bass
+      driven 18 dB; the drops' melodies with rests and a vocal-chop counter-melody). Measured, with measures that track
+      the words: the supersaw's centre 1.9–2.1 → 2.7–2.9 kHz; the kick's hit 3–6 → 7–10 dB over the mix (a peak-vs-tail
+      measure had not tracked the verdict — replaced). fb-003: the same four tracks, the lessons applied.
+- [ ] **J4** The user's verdicts on fb-003 → taste.md.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

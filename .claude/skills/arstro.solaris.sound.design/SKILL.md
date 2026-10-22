@@ -114,6 +114,10 @@ A new genre becomes a new script beside `futurebass.py`, with its recipes in `re
 - **Solos without their space**: a send-only reverb is missing from a solo. Put the space in the element's rack.
 - **A detuned pair into a resonant filter rings** (the melody skill's voice: +5.5 LU). Keep oscillators in tune
   unless the detune IS the sound (the reese, the supersaw), and measure.
+- **A measure that does not track the ear**: "punch" as a kick's peak against its own tail scored highest on the kick
+  the user called "not punchy". What tracks it is the hit against the MIX (`punch()`: the kick's first 50 ms over the
+  mix's RMS). "Sharp" is the supersaw's spectral centre and its energy above 4 kHz (`sharpness()`). Measure what the
+  user's word means, and check the measure against their verdict.
 - **A bus name with a space** must be quoted in the script (`strip add --kind bus --name "Main synth"`).
 
 ## References

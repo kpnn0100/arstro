@@ -203,6 +203,8 @@ function why(m) {
     const l = k.lufs || {};
     for (const [name, v] of Object.entries(l)) bits.push(`${name} ${v === null ? "—" : v.toFixed(1)} LUFS`);
     if (k.sub_duck_db !== undefined) bits.push(`the kick ducks the sub ${k.sub_duck_db} dB and lets it back within 200 ms`);
+    if (k.supersaw_centroid_hz !== undefined) bits.push(`the supersaw's spectral centre ${k.supersaw_centroid_hz} Hz (sharpness)`);
+    if (k.kick_hit_db !== undefined) bits.push(`the kick hits ${k.kick_hit_db} dB over the mix (punch)`);
     return bits.join(" · ");
   }
   if (m.song) {

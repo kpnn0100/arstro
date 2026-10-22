@@ -24,6 +24,18 @@ to the same order (the last table).
 the build's quickening filtered stabs and then the drop's melody. Its tremolo is 0 until the drop, and its filter opens
 350 Hz → 7 kHz through the build.
 
+## What the verdicts changed (fb-002 → fb-003; taste.md lessons 1–6)
+
+| element | was | now | the user's words |
+|---|---|---|---|
+| reese | ±12 ct, low-pass 750 Hz, sine 0.55, D2 register, dry | ±8 ct, 620 Hz, sine 0.85, **an octave lower (A♯1–A2)**, chorus 0.25, a 3.8 s room (mix 0.25, above 300 Hz), 150 % wide on top | "not deep enough, it need more ambient" |
+| bell | high-pass 600 Hz, room 4.5 s at 0.42, echo 0.28 | + a **high cut at 6.5 kHz**, room 6.5 s at 0.55, echo 0.32 (feedback 0.5) | "high cut a little bit and more depth" |
+| main synth | lead low-pass 2.6 kHz, square under, attack 18 ms; pluck 3.8 kHz | lead 1.7 kHz, **triangle** under, attack 35 ms; pluck 2.6 kHz; square pluck 2 kHz | "too rough, need more soft synth" |
+| supersaw | low-pass 6.5 kHz, +1.2 oct envelope, octave stack 0.3, room 0.18 | **14 kHz**, +0.6 oct; octave stack 0.55, noise 0.04; EQ −4 dB @ 300 Hz, +5 dB @ 3.5 kHz, +4 dB shelf @ 8 kHz; room 0.12 — centre 2.7–2.9 kHz (was 1.9–2.1) | "need to be more sharp" |
+| kick | 300 ms, tone 0.7, transient +35 % | 260 ms, tone 0.85, transient **+70 %**, tube saturation 6 dB; **a click layer** (an octave up, 70 ms, tone 1.0) on every hit — hits 7–10 dB over the mix (were 3–6) | "kick is not punchy enough" |
+| mid bass | low-pass 1.4 kHz, drive 10 dB (Glass: 900 Hz) | **2.6 kHz, drive 18 dB** (mix 0.7) for every track | "need some hard bass" |
+| drop melody | continuous | **rests** in the last two beats of every second bar, where a **vocal chop counter-melody** answers (the CHOP patch through the vowel filter, 'ah'/'oh', an echo, a room) | "need some rest note and counter melody" |
+
 ## The kick and its bass
 
 | what | value | why |

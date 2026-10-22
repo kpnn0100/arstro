@@ -68,9 +68,12 @@ TRACKS = {
                "G5:1 A5:.5 C6:1 A5:.5 G5:1 F5:1 G5:3 | E5:1 F5:.5 G5:1.5 A5:1 G5:3.5 r:.5",
                "A5:1.5 G5:.5 F5:1 G5:1 A5:3 r:.5 C6:.5 | D6:1.5 C6:.5 A5:1 C6:1 D6:3.5 r:.5",
                "C6:1 A5:.5 G5:1 F5:.5 G5:1 A5:3.5 r:.5 | A5:1 G5:1 E5:1 F5:1 G5:4"],
-        call="D6:.75 C6:.75 A5:1 C6:.5 D6:1 | A5:.5 F6:1.5 D6:.5 C6:1.5 | C6:.75 Bb5:.75 G5:1 Bb5:.5 C6:1 | G5:.5 E6:1.5 C6:.5 Bb5:1.5",
-        response="C6:.75 Bb5:.75 A5:1 G5:.5 A5:1 | E5:.5 C6:1.5 A5:2 | F5:1 G5:.5 A5:1.5 C6:1 | D6:4",
-        last="A5:.75 C6:.75 F6:1 G6:1.5 | F6:.5 E6:.5 D6:1 C6:2 | D6:.75 C6:.75 A5:1 G5:.5 G5:1 | F5:4",
+        call="D6:.75 C6:.75 A5:1.5 r:.5 A5:.5 | F6:1.5 D6:.5 r:2 | C6:.75 Bb5:.75 G5:1.5 r:.5 G5:.5 | E6:1.5 C6:.5 r:2",
+        response="C6:.75 Bb5:.75 A5:1.5 r:.5 A5:.5 | C6:1.5 A5:.5 r:2 | F5:.75 G5:.75 A5:1.5 r:.5 C6:.5 | D6:2 r:2",
+        last="A5:.75 C6:.75 F6:1.5 r:.5 F6:.5 | G6:1.5 F6:.5 r:2 | D6:.75 C6:.75 A5:1.5 r:.5 G5:.5 | F5:4",
+        counter_call="r:6 A5:.5 C6:.5 D6:1 r:6 G5:.5 Bb5:.5 C6:1",
+        counter_response="r:6 E6:.5 C6:.5 A5:1 r:6 F6:.5 E6:.5 D6:1",
+        counter_last="r:6 E6:.5 D6:.5 C6:1 r:8",
         build_rise="D6:2 C6:1 D6:1 F6:4 | E6:2 C6:1 E6:1 E6:2 r:2",
         design=dict(main="layers", bend=(-1, 0.07), trem=("1/16", "square", 0.45), kicks=([0, 1.5, 2.75], [0, 0.75, 2.5, 3.5]),
                     perc="full", patch={}),
@@ -85,16 +88,17 @@ TRACKS = {
                "E5:1 G#5:1 C#6:1.5 B5:.5 G#5:2 E5:1 r:1 | F#5:1 A5:1 C#6:1.5 B5:.5 B5:3 r:1",
                "G#5:1 B5:1 D#6:1.5 B5:.5 G#5:3 r:1 | F#5:1 G#5:1 B5:1.5 D#6:.5 F#6:3 r:1",
                "E6:1.5 D#6:.5 C#6:1 B5:1 G#5:3 r:1 | A5:1 B5:1 C#6:1 B5:1 G#5:4"],
-        call="C#6:1.5 B5:1.5 G#5:1 | E6:1.5 C#6:1 B5:1.5 | D#6:1.5 C#6:1.5 B5:1 | C#6:2 D#6:2",
-        response="B5:1.5 G#5:1.5 F#5:1 | G#5:1.5 B5:1 G#5:1.5 | G#5:1.5 F#5:1.5 E5:1 | E5:4",
-        last="B5:1.5 E6:1.5 G#6:1 | F#6:1.5 E6:1 D#6:1.5 | E6:1.5 C#6:1.5 D#6:1 | E6:4",
+        call="C#6:1.5 B5:1.5 G#5:1 | E6:2 r:2 | D#6:1.5 C#6:1.5 B5:1 | C#6:1 D#6:1 r:2",
+        response="B5:1.5 G#5:1.5 F#5:1 | G#5:2 r:2 | G#5:1.5 F#5:1.5 E5:1 | E5:2 r:2",
+        last="B5:1.5 E6:1.5 G#6:1 | F#6:2 r:2 | E6:1.5 C#6:1.5 D#6:1 | E6:4",
+        counter_call="r:6 G#5:.5 B5:.5 E6:1 r:6 F#5:.5 B5:.5 D#6:1",
+        counter_response="r:6 D#6:.5 B5:.5 G#5:1 r:6 C#6:.5 B5:.5 G#5:1",
+        counter_last="r:6 G#5:.5 B5:.5 C#6:1 r:8",
         build_rise="E5:2 G#5:2 B5:2 C#6:2 | D#6:2 F#6:2 D#6:2 r:2",
         design=dict(main="chop", bend=(-2, 0.15), trem=("1/8", "sine", 0.6), kicks=([0, 2.5], [0, 1.5, 2.75]),
                     perc="light",
-                    patch=dict(reese=dict(osc1__detune=14, filter__cutoff=600, volume=-13),
-                               bell=dict(op2__ratio=2, op2__level=0.3, op4__ratio=4, op1__decay=3200),
-                               saw=dict(filter__cutoff=4200, osc1__detune=26, filter__env=0.8, volume=-9.5),
-                               mid=dict(filter__cutoff=900, osc2__level=0.25))),
+                    patch=dict(bell=dict(op2__ratio=2, op2__level=0.3, op4__ratio=4, op1__decay=3200),
+                               saw=dict(osc1__detune=26, volume=-13.3))),
         sound=["the main synth: a vocal chop — one saw through the vowel filter, its vowel moving 'ah → oo' with the line",
                "a glassy bell (FM ratio 2: harmonic, a toy piano's glass) with a longer echo",
                "the supersaw softer (low-pass 4.2 kHz), each stab scooped up 2 semitones over 150 ms, a 1/8 sine sway",
@@ -107,16 +111,19 @@ TRACKS = {
                "G5:1 E5:1 G5:1.5 C6:.5 B5:2 G5:1 r:1 | D5:1 G5:1 B5:1.5 A5:.5 G5:3 r:1",
                "E5:1 A5:1 C6:1.5 B5:.5 A5:3 r:1 | G5:1 A5:1 C6:1.5 D6:.5 E6:3 r:1",
                "G5:1.5 E5:.5 G5:1 C6:1 B5:3 r:1 | A5:1 G5:1 E5:1 G5:1 D5:4"],
-        call="E6:1.5 D6:1.5 C6:1 | A5:1.5 C6:1 E6:1.5 | D6:1.5 B5:1.5 G5:1 | D6:2 B5:2",
-        response="E6:1.5 D6:1.5 C6:1 | G5:1.5 C6:1 D6:1.5 | C6:1.5 B5:1.5 A5:1 | E5:4",
-        last="C6:1.5 G6:1.5 A6:1 | G6:1.5 E6:1 D6:1.5 | C6:1.5 B5:1.5 G5:1 | A5:4",
+        call="E6:1.5 D6:1.5 C6:1 | A5:1 C6:1 r:2 | D6:1.5 C6:1.5 B5:1 | D6:2 r:2",
+        response="E6:1.5 D6:1.5 C6:1 | B5:1 C6:1 r:2 | C6:1.5 B5:1.5 A5:1 | A5:2 r:2",
+        last="C6:1.5 G6:1.5 A6:1 | G6:2 r:2 | E6:1.5 D6:1.5 B5:1 | A5:4",
+        counter_call="r:6 A5:.5 C6:.5 E6:1 r:6 G5:.5 B5:.5 D6:1",
+        counter_response="r:6 E5:.5 G5:.5 C6:1 r:6 A5:.5 C6:.5 E6:1",
+        counter_last="r:6 E6:.5 D6:.5 C6:1 r:8",
         build_rise="A5:2 C6:2 D6:2 E6:2 | D6:2 B5:2 D6:2 r:2",
         design=dict(main="layers", bend=(-1, 0.05), trem=("1/16", "square", 0.35),
                     kicks=([0, 0.75, 1.5, 2.75], [0, 1, 2.5, 3.25, 3.5]), perc="trap",
-                    patch=dict(reese=dict(osc1__detune=30, filter__env=1.0, volume=-16.5),
-                               reese_drive=14,
+                    patch=dict(reese=dict(osc1__detune=20, filter__env=1.0, volume=-10.5),
+                               reese_drive=8,
                                bell=dict(op2__ratio=4, op2__level=0.25, op4__level=0.1, op1__decay=2000),
-                               saw=dict(filter__cutoff=5000, osc1__detune=36, volume=-10.5), saw_drive=10,
+                               saw=dict(osc1__detune=36, volume=-14.3), saw_drive=10,
                                mid=dict(osc1__detune=24, filter__res=0.35, volume=-15.5), mid_curve="fold")),
         sound=["the reese heavier: ±15 ct, more filter movement, driven 14 dB",
                "a soft celesta bell (FM ratio 4, a gentle clang)",
@@ -130,16 +137,19 @@ TRACKS = {
                "E5:.75 C5:.75 E5:.5 A5:1 G5:1 | E5:.5 C5:1.5 r:2 | D5:.75 G5:.75 A5:.5 D6:1 C6:1 | A5:4",
                "G5:.75 E5:.75 G5:.5 B5:1 A5:1 | G5:.5 E5:1.5 r:2 | F#5:.75 D5:.75 F#5:.5 A5:1 B5:1 | D6:4",
                "C6:.75 B5:.75 A5:.5 G5:1 E5:1 | G5:.5 A5:1.5 r:2 | D5:.75 G5:.75 A5:.5 B5:1 A5:1 | G5:.5 A5:3.5"],
-        call="E6:.5 D6:.5 B5:.75 G5:.75 B5:.5 D6:1 | G6:.75 E6:.75 D6:2.5 | D6:.5 B5:.5 A5:.75 F#5:.75 A5:.5 B5:1 | F#6:.75 D6:.75 A5:2.5",
-        response="B5:.5 A5:.5 G5:.75 E5:.75 G5:.5 B5:1 | E6:.75 D6:.75 B5:2.5 | A5:.5 F#5:.5 D5:.75 F#5:.75 A5:.5 D6:1 | F#6:4",
-        last="D6:.5 E6:.5 G6:.75 A6:.75 G6:.5 E6:1 | D6:.75 B5:.75 G5:2.5 | A5:.5 B5:.5 D6:.75 E6:.75 D6:.5 B5:1 | G5:4",
+        call="E6:.5 D6:.5 B5:.75 G5:.75 B5:.5 D6:1 | G6:.75 E6:.75 D6:.5 r:2 | D6:.5 B5:.5 A5:.75 F#5:.75 A5:.5 B5:1 | F#6:.75 D6:.75 A5:.5 r:2",
+        response="B5:.5 A5:.5 G5:.75 E5:.75 G5:.5 B5:1 | E6:.75 D6:.75 B5:.5 r:2 | A5:.5 F#5:.5 D5:.75 F#5:.75 A5:.5 D6:1 | F#6:2 r:2",
+        last="D6:.5 E6:.5 G6:.75 A6:.75 G6:.5 E6:1 | D6:.75 B5:.75 G5:.5 r:2 | A5:.5 B5:.5 D6:.75 E6:.75 D6:.5 B5:1 | G5:4",
+        counter_call="r:6 B5:.5 D6:.5 E6:1 r:6 A5:.5 B5:.5 D6:1",
+        counter_response="r:6 G5:.5 B5:.5 E6:1 r:6 F#5:.5 A5:.5 D6:1",
+        counter_last="r:6 G5:.5 B5:.5 D6:1 r:8",
         build_first="E5:.75 G5:.75 A5:.5 C6:1 B5:1 | A5:.5 E5:1.5 r:2 | F#5:.75 A5:.75 B5:.5 D6:1 A5:1 | B5:.5 F#5:1.5 r:2",
         build_rise="G5:1 B5:1 C6:1 E6:1 | D6:2 E6:2 | F#5:1 A5:1 D6:1 F#6:1 | E6:2 r:2",
         design=dict(main="square", bend=(1.5, 0.09), trem=("1/16", "square", 0.75), kicks=([0, 1.75, 2.5], [0, 0.75, 2.25, 3.5]),
                     perc="swing",
                     patch=dict(reese=dict(osc1__detune=20, filter__cutoff=900, filter__res=0.35), reese_phaser=0.4,
                                bell=dict(op2__ratio=1.41, op2__level=0.5, feedback=0.2, op1__decay=1800),
-                               saw=dict(amp__decay=300, amp__sustain=0.4, filter__env=1.6, volume=-6.5),
+                               saw=dict(amp__decay=300, amp__sustain=0.4, filter__env=1.6, volume=-10.3),
                                mid=dict(fenv__decay=120, fenv__sustain=0.1, filter__env=2.0))),
         sound=["the main synth: a square pluck (pulse wavetable) and a detuned saw lead",
                "a metallic bell (FM ratio 1.41, feedback): inharmonic, glassy-metal",
@@ -148,41 +158,41 @@ TRACKS = {
 }
 
 # ── the base patches (each track overrides some) ───────────────────────────────────────────────────────────────────
-REESE = dict(osc1__wave="saw", osc1__voices=2, osc1__detune=24, osc1__width=0, osc1__level=0.75, osc2__wave="sine",
-             osc2__octave=-1, osc2__voices=1, osc2__fine=0, osc2__level=0.55, filter__cutoff=750, filter__res=0.2,
+REESE = dict(osc1__wave="saw", osc1__voices=2, osc1__detune=16, osc1__width=0, osc1__level=0.7, osc2__wave="sine",
+             osc2__octave=-1, osc2__voices=1, osc2__fine=0, osc2__level=0.85, filter__cutoff=620, filter__res=0.2,
              filter__env=0.6, filter__keytrack=0.3, fenv__attack=60, fenv__decay=900, fenv__sustain=0.4,
              amp__attack=25, amp__decay=500, amp__sustain=0.9, amp__release=250, voice__mode="legato",
-             voice__glide=70, velocity=0.3, volume=-12.5)
+             voice__glide=70, velocity=0.3, volume=-8)   # measured: deeper and darker reads ~4.5 LU quieter
 BELL = dict(algorithm=5, feedback=0, op1__ratio=1, op1__level=1, op1__attack=1, op1__decay=2600, op1__sustain=0,
             op1__release=1600, op2__ratio=3.5, op2__level=0.42, op2__attack=1, op2__decay=650, op2__sustain=0,
             op2__release=400, op3__ratio=2, op3__fine=7, op3__level=0.5, op3__attack=1, op3__decay=1900, op3__sustain=0,
             op3__release=1200, op4__ratio=5, op4__level=0.18, op4__attack=1, op4__decay=380, op4__sustain=0,
-            op4__release=300, volume=-9)
+            op4__release=300, volume=-7.5)
 PLUCK = dict(osc1__table="harmonics", osc1__position=0.55, osc1__posenv=-0.3, osc1__voices=2, osc1__detune=10,
-             osc2__level=0, filter__cutoff=3800, filter__env=1.2, fenv__decay=260, fenv__sustain=0, amp__attack=1,
+             osc2__level=0, filter__cutoff=2600, filter__env=0.9, fenv__decay=260, fenv__sustain=0, amp__attack=1,
              amp__decay=520, amp__sustain=0.15, amp__release=220, volume=-7)
-SQUARE = dict(PLUCK, osc1__table="pulse", osc1__position=0.35, osc1__posenv=0, filter__cutoff=2600, filter__env=1.8,
+SQUARE = dict(PLUCK, osc1__table="pulse", osc1__position=0.35, osc1__posenv=0, filter__cutoff=2000, filter__env=1.4,
               fenv__decay=180, amp__decay=340, amp__sustain=0.05)
-LEAD = dict(osc1__wave="saw", osc1__voices=3, osc1__detune=14, osc1__width=20, osc1__level=0.75, osc2__wave="square",
-            osc2__octave=0, osc2__fine=0, osc2__level=0.2, filter__cutoff=2600, filter__res=0.1, filter__env=0.4,
-            fenv__decay=400, fenv__sustain=0.6, amp__attack=18, amp__decay=300, amp__sustain=0.8, amp__release=260,
+LEAD = dict(osc1__wave="saw", osc1__voices=3, osc1__detune=14, osc1__width=20, osc1__level=0.7, osc2__wave="triangle",
+            osc2__octave=0, osc2__fine=0, osc2__level=0.3, filter__cutoff=1700, filter__res=0, filter__env=0.4,
+            fenv__decay=400, fenv__sustain=0.6, amp__attack=35, amp__decay=300, amp__sustain=0.8, amp__release=260,
             voice__mode="legato", voice__glide=40, vibrato__depth=0.35, vibrato__rate=5.4, velocity=0.4, volume=-15)
 CHOP = dict(osc1__wave="saw", osc1__voices=1, osc1__level=0.8, osc2__wave="square", osc2__octave=0, osc2__fine=0,
             osc2__level=0.3, noise=0.03, filter__cutoff=8000, filter__res=0.05, filter__env=0.3, filter__keytrack=0,
             fenv__decay=200, amp__attack=3, amp__decay=160, amp__sustain=0.85, amp__release=80, voice__mode="legato",
             voice__glide=35, vibrato__depth=0.25, vibrato__rate=5.6, velocity=0.3, volume=-1)   # measured: the vowel filter takes ~11 dB
 SAW = dict(osc1__wave="saw", osc1__voices=5, osc1__detune=32, osc1__width=45, osc1__level=0.7, osc2__wave="saw",
-           osc2__octave=1, osc2__voices=5, osc2__detune=24, osc2__width=40, osc2__fine=0, osc2__level=0.3, noise=0.02,
-           filter__cutoff=6500, filter__res=0.12, filter__env=1.2, filter__keytrack=0.2, fenv__attack=2,
+           osc2__octave=1, osc2__voices=5, osc2__detune=24, osc2__width=40, osc2__fine=0, osc2__level=0.55, noise=0.04,
+           filter__cutoff=14000, filter__res=0.12, filter__env=0.6, filter__keytrack=0.2, fenv__attack=2,
            fenv__decay=260, fenv__sustain=0.55, amp__attack=2, amp__decay=700, amp__sustain=0.8, amp__release=220,
-           voice__bend=2, velocity=0.4, volume=-8.5)
+           voice__bend=2, velocity=0.4, volume=-12.3)   # measured: sharper reads ~4 LU louder
 SUB = dict(osc1__wave="sine", osc1__level=0.9, osc2__level=0, filter__cutoff=300, filter__res=0, filter__env=0,
            amp__attack=2, amp__decay=300, amp__sustain=0.9, amp__release=60, voice__mode="mono", voice__glide=0,
            velocity=0.3, volume=-11)
 MID = dict(osc1__wave="saw", osc1__voices=3, osc1__detune=18, osc1__level=0.8, osc2__wave="square", osc2__octave=0,
-           osc2__fine=0, osc2__level=0.4, filter__cutoff=1400, filter__res=0.25, filter__env=1.0, fenv__decay=180,
+           osc2__fine=0, osc2__level=0.4, filter__cutoff=2600, filter__res=0.3, filter__env=1.0, fenv__decay=180,
            fenv__sustain=0.35, amp__attack=3, amp__decay=300, amp__sustain=0.8, amp__release=80, voice__mode="mono",
-           velocity=0.4, volume=-13)
+           velocity=0.4, volume=-14)
 NOISE = dict(osc1__level=0, osc2__level=0, noise=1, filter__cutoff=300, filter__res=0.2, filter__env=0,
              filter__keytrack=0, amp__attack=20, amp__decay=100, amp__sustain=1, amp__release=40, velocity=0, volume=-12)
 
@@ -334,7 +344,9 @@ def reese_strip(C, recipe):
     S.device(ch, "phaser", rate=tr.D["patch"].get("reese_phaser", 0.12), center=600, depth=1.5, stages=4, feedback=0.4,
              stereo=60, mix=0.4)
     S.device(ch, "saturator", drive=tr.D["patch"].get("reese_drive", 8), curve='"soft"', mix=0.5, output=-3)
-    S.device(ch, "imager", width=110, mono="on", frequency=140)
+    S.device(ch, "chorus", rate=0.3, depth=4, delay=14, mix=0.25)      # fb-002: "it need more ambient" — width on top,
+    S.device(ch, "imager", width=150, mono="on", frequency=140)        # the floor kept in the middle
+    C.space(ch, reverb=(0.25, 3800, 160))                              # a wash above 300 Hz; the sub stays dry
     return ch, dv, pt
 
 
@@ -342,7 +354,8 @@ def bell_strip(C, recipe):
     tr, S = C.tr, C.S
     ch, dv, pt = C.element("fm", "Airy bell", recipe, tr.patch("bell", BELL))
     S.device(ch, "filter", mode='"highpass"', cutoff=600, res=0.1, mix=1)
-    C.space(ch, reverb=(0.42, 4500, 180), delay=(0.34 if tr.D["main"] == "chop" else 0.28, 0.42))
+    S.device(ch, "eq", highcut__on="on", highcut__freq=6500)          # fb-002: "bell need to high cut a little bit
+    C.space(ch, reverb=(0.55, 6500, 200), delay=(0.36 if tr.D["main"] == "chop" else 0.32, 0.5))   # and more depth"
     return ch, dv, pt
 
 
@@ -380,10 +393,10 @@ def verse(tr):
                                      f"under, low-pass {p['filter__cutoff']} Hz opening through the verse, a phaser "
                                      f"({tr.D['patch'].get('reese_phaser', 0.12)} Hz), saturation "
                                      f"{tr.D['patch'].get('reese_drive', 8)} dB, mono under 140 Hz")
-    rn = [(root_in(chords[0], 38), 0, lead_in - 0.25, 80)]
+    rn = [(root_in(chords[0], 34), 0, lead_in - 0.25, 80)]           # A♯1 … A2: deeper (fb-002 "not deep enough")
     for i, ch in enumerate(chords):
-        t, r = lead_in + 8 * i, root_in(ch, 38)
-        nxt = root_in(chords[(i + 1) % len(chords)], 38)
+        t, r = lead_in + 8 * i, root_in(ch, 34)
+        nxt = root_in(chords[(i + 1) % len(chords)], 34)
         rn += [(r, t, 6, 92), (r + 7 if abs(nxt - r) > 2 else r + 12, t + 6, 1.5, 84)]
     S.notes(rpt, rn)
     S.automate(f"{rdv}.filter.cutoff", [(0, p["filter__cutoff"] - 100, "smooth"), (lead_in + n, 1300, "hold")])
@@ -413,10 +426,14 @@ def drop(tr):
     kicks += [(KICK, lead_in + 24 + 0.5 * k, .25, 100) for k in range(8)]
     kicks += [(KICK, lead_in + 28 + 0.25 * k, .2, 104 + 2 * k) for k in range(8)]
     kicks += [(KICK, t, .25, 124 if (t - land) % 4 == 0 else 112) for t in dkicks]
-    C.drums("Kick", f"tuned to the key ({tr.kick_hz} Hz), 300 ms: in the build on 1, quarters, eighths, a roll; in the "
-            f"drop {kA} / {kB} in the bar — the rhythm the bass plays too",
-            dict(kick__tune=tr.kick_tune, kick__decay=300, kick__tone=0.7, volume=-4), kicks)
-    S.device("ch_2", "transient", attack=35, sustain=-10, output=0)
+    C.drums("Kick", f"tuned to the key ({tr.kick_hz} Hz), 260 ms, tone 0.85, a hard transient (+70 %) and tube "
+            f"density: in the build on 1, quarters, eighths, a roll; in the drop {kA} / {kB} in the bar — the rhythm "
+            f"the bass plays too", dict(kick__tune=tr.kick_tune, kick__decay=260, kick__tone=0.85, volume=-3), kicks)
+    S.device("ch_2", "transient", attack=70, sustain=-20, output=0)   # fb-002: "kick is not punchy enough"
+    S.device("ch_2", "saturator", drive=6, curve='"tube"', mix=0.4, output=-2)
+    C.drums("Kick top", "the click: the kick an octave up, 70 ms, all tone — layered on every hit, the punch the ear "
+            "hears in a full drop", dict(kick__tune=min(12, tr.kick_tune + 12), kick__decay=70, kick__tone=1.0, volume=-6),
+            [(k, t, .1, v) for k, t, d, v in kicks])
     # ── the snare: the roll climbing an octave, the breath, one clap — then snare + clap on 3
     roll = [(SNARE, lead_in + 4 * b + 2, .25, 90) for b in range(2)]
     roll += [(SNARE, lead_in + 8 + k, .25, 70 + 3 * k) for k in range(8)]
@@ -489,8 +506,8 @@ def drop(tr):
              if k % 2 == 1 or k % 4 == 2])
     # ── the reese under the build's first six bars, then out: the floor drops away
     reese, rdv, rpt = reese_strip(C, "the verse's reese under the build's first six bars, then gone")
-    S.notes(rpt, [(root_in(bchords[0], 38), 0, lead_in - 0.25, 80)] +
-            [(root_in(ch, 38), lead_in + 8 * i, 7.75, 92) for i, ch in enumerate(bchords[:3])])
+    S.notes(rpt, [(root_in(bchords[0], 34), 0, lead_in - 0.25, 80)] +
+            [(root_in(ch, 34), lead_in + 8 * i, 7.75, 92) for i, ch in enumerate(bchords[:3])])
     S.automate(f"{rdv}.filter.cutoff", [(0, 900, "smooth"), (lead_in + 20, 2400, "hold")])
     C.duck(reese, "ch_2", 4, release=120)
     # ── the bass: a sub and a mid bass struck WITH every drop kick, on the chord's root, ducked by the kick
@@ -508,9 +525,9 @@ def drop(tr):
     mp = tr.patch("mid", MID)
     mid, _, mpt = C.element("synth", "Mid bass", f"the bass's voice an octave up: saws and a square, low-passed "
                             f"{mp['filter__cutoff'] / 1000:g} kHz, {tr.D['patch'].get('mid_curve', 'tube')}-driven, "
-                            f"high-passed at 160 Hz so the sub owns the low end; ducked 14 dB by the kick", mp)
+                            f"high-passed at 160 Hz so the sub owns the low end; driven HARD (18 dB) — fb-002: 'need some hard bass'; ducked 14 dB by the kick", mp)
     S.notes(mpt, [(p + 12, t, d, 104) for p, t, d in bass])
-    S.device(mid, "saturator", drive=10, curve=f'"{tr.D["patch"].get("mid_curve", "tube")}"', mix=0.6, output=-4)
+    S.device(mid, "saturator", drive=18, curve=f'"{tr.D["patch"].get("mid_curve", "tube")}"', mix=0.7, output=-7)
     S.device(mid, "filter", mode='"highpass"', cutoff=160, res=0.1, mix=1)
     S.device(mid, "chorus", rate=0.5, depth=2, delay=10, mix=0.2)
     C.duck(mid, "ch_2", 14, release=70)
@@ -541,13 +558,32 @@ def drop(tr):
         bend += [(t - 0.02, 0), (t, semis / 2), (t + tr.beats(move), 0)]            # the bend range is ±2 st
     S.notes(wpt, stabs)
     S.expr(wpt, "bend", bend)
+    # the counter-melody (fb-002 drop 1: "need some rest note and counter melody"): a vocal chop answering the
+    # supersaw in the rests it now leaves at the end of every second bar
+    cmel = tr.melody([tr.T["counter_call"], tr.T["counter_response"], tr.T["counter_call"], tr.T["counter_last"]], land)
+    chop, _, cpt = C.element("synth", "Counter chop", "a vocal chop answering the supersaw in its rests — the counter-"
+                             "melody: one saw and a square through the vowel filter, 'ah' and 'oh' in turn, an echo, a "
+                             "room", dict(CHOP, volume=2))
+    S.notes(cpt, [(p, t, max(0.1, d - 0.05), vel(t, 100)) for t, d, p in cmel])
+    cvw = S.device(chop, "vowel", resonance=0.7, glide=25, mix=1, output=9)
+    cau = S.new('au')
+    S.line(f'auto add --name "Counter · Vowel" --min 0 --max 4 --length {num(C.length)} --rest 0')
+    for i, (t, d, p) in enumerate(cmel):
+        S.line(f"auto point add {cau} --at {num(t)} --value {0 if i % 2 == 0 else 3} --shape hold")
+    S.line(f'set {cvw}.vowel="={cau}"')
+    S.new('ac')
+    S.line(f"clip add --auto {cau} --at 0 --length {num(C.length)}")
+    S.device(chop, "imager", width=130)
+    C.space(chop, reverb=(0.25, 2400, 130), delay=(0.22, 0.35))
     S.automate(f"{wdv}.filter.cutoff", [(0, 350, "smooth"), (lead_in + 30, 7000, "hold"),
                                         (land, sp["filter__cutoff"], "hold")])
     sh = S.device(saw, "shaper", rate=f'"{rate}"', shape=f'"{shape}"', depth=0, smooth=6)
     S.automate(f"{sh}.depth", [(0, 0, "hold"), (land, depth, "hold")])
     S.device(saw, "saturator", drive=tr.D["patch"].get("saw_drive", 5), curve='"soft"', mix=0.5, output=-2)
-    S.device(saw, "imager", width=160, mono="on", frequency=180)
-    C.space(saw, reverb=(0.18, 2200, 120))
+    S.device(saw, "eq", lowshelf__freq=300, lowshelf__gain=-4, peak3__freq=3500, peak3__gain=5, peak3__q=0.7,
+             highshelf__freq=8000, highshelf__gain=4)             # less body, more bite and air: measured sharper
+    S.device(saw, "imager", width=160, mono="on", frequency=180)       # fb-002: "super saw need to be more sharp" —
+    C.space(saw, reverb=(0.12, 2000, 110))                             # open to 14 kHz, presence, air, a drier room
     C.duck(saw, "ch_2", 12, release=120)
     C.duck(saw, sn, 5, release=80)
     # ── the risers
@@ -607,6 +643,50 @@ def duck_depth(tr, path, kick_beats):
     return round(sum(ds) / len(ds), 1) if ds else None
 
 
+def stem(path):
+    """A WAV (or anything ffmpeg reads) as mono floats at its rate — numpy, for the spectral measures."""
+    import numpy as np
+    if not path.endswith(".wav"):
+        r = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-f", "f32le", "-ac", "1", "-"], capture_output=True)
+        rate = int(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=sample_rate",
+                                   "-of", "csv=p=0", path], capture_output=True, text=True).stdout.strip())
+        return rate, np.frombuffer(r.stdout, dtype=np.float32).astype(float)
+    sr, x = read_wav(path)
+    return sr, np.array(x) / 2 ** 23
+
+
+def sharpness(path, t0, t1):
+    """How SHARP a sound is over [t0, t1) seconds: its spectral centroid (Hz) and its energy above 4 kHz (dB against
+    the whole) — "the supersaw needs to be more sharp" (fb-002), measured."""
+    import numpy as np
+    sr, x = stem(path)
+    x = x[int(t0 * sr):int(t1 * sr)]
+    n, cs, hs = 4096, [], []
+    f = np.fft.rfftfreq(n, 1 / sr)
+    for i in range(0, len(x) - n, n):
+        X = np.abs(np.fft.rfft(x[i:i + n] * np.hanning(n))) ** 2
+        if X.sum() > 1e-9:
+            cs.append((f * X).sum() / X.sum())
+            hs.append(X[f > 4000].sum() / X.sum())
+    return round(float(np.mean(cs))), round(10 * math.log10(max(1e-9, float(np.mean(hs)))), 1)
+
+
+def punch(paths, times, mix, t0, t1):
+    """How PUNCHY a kick is in its mix: the RMS of its layers over the first 50 ms of each hit, against the RMS of the
+    whole mix over [t0, t1) seconds, in dB — how far the hit stands out (fb-002: "kick is not punchy enough"). (A
+    kick's peak against its own tail did not track the verdict: the kick called weak scored highest.)"""
+    import numpy as np
+    sr, x = stem(paths[0])
+    for p in paths[1:]:
+        _, y = stem(p)
+        n = min(len(x), len(y))
+        x = x[:n] + y[:n]
+    _, m = stem(mix)
+    mix_rms = np.sqrt(np.mean(m[int(t0 * sr):int(t1 * sr)] ** 2))
+    hits = [np.sqrt(np.mean(x[int(t * sr):int((t + 0.05) * sr)] ** 2)) for t in times if int((t + 0.05) * sr) < len(x)]
+    return round(20 * math.log10(float(np.mean(hits)) / mix_rms), 1) if hits else None
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", required=True)
@@ -662,10 +742,18 @@ def main():
                         lufs[e["name"]] = loudness(os.path.join(out, f"{sid}.{e['strip']}.wav"))
                     item["metrics"]["lufs"] = lufs
                     if section == "drop":
+                        w = lambda name: os.path.join(out, f"{sid}.{next(e['strip'] for e in C.elements if e['name'] == name)}.wav")
+                        land = keys["kicks"][0]
                         item["metrics"]["sub_duck_db"] = duck_depth(tr, os.path.join(out, f"{sid}.{keys['bass']}.wav"),
                                                                     keys["kicks"])
+                        c, h = sharpness(w("Supersaw"), tr.sec(land), tr.sec(land + 64))
+                        item["metrics"]["supersaw_centroid_hz"], item["metrics"]["supersaw_above_4k_db"] = c, h
+                        item["metrics"]["kick_hit_db"] = punch([w("Kick"), w("Kick top")], [tr.sec(k) for k in keys["kicks"]],
+                                                               os.path.join(out, sid + ".wav"), tr.sec(land), tr.sec(land + 64))
                     print("   LUFS " + " · ".join(f"{k} {v}" for k, v in lufs.items()) +
-                          (f" · the kick ducks the sub {item['metrics'].get('sub_duck_db')} dB" if section == "drop" else ""),
+                          (f" · the kick ducks the sub {item['metrics'].get('sub_duck_db')} dB · the supersaw's centre "
+                           f"{item['metrics'].get('supersaw_centroid_hz')} Hz · the kick hits {item['metrics'].get('kick_hit_db')} "
+                           f"dB over the mix" if section == "drop" else ""),
                           flush=True)
                     for f in os.listdir(out):                      # the WAVs were for measuring only
                         if f.startswith(sid + ".") and f.endswith(".wav"):
