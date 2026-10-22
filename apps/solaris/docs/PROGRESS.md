@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► H9** — the user judges songs-002 (the three songs in their whole form, the voice singing) in the Melody Lab (http://127.0.0.1:8787/); fold their verdicts into the melody skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► J1** — future bass sound design: the skill arstro.solaris.sound.design, and a verse, a build-up and a drop for the user to judge. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -909,7 +909,17 @@ good melody"*. Tooling, not product: the skill lives in `.claude/skills/arstro.s
       phrase (the bend lane), consonants (noise through a key-tracked high-pass), doubles and a harmony; found: the
       voice's detuned second oscillator made the vowel filter ring 5.5 LU louder — in tune now. The lab: the roll
       scrolls with the playhead for a whole song, a click plays from there, the hook drawn in outline.
-- [ ] **H9** The user's verdicts on songs-002 → taste.md.
+- [x] **H9** The user's verdicts on songs-002 → taste.md.
+      — 01 Paper Lanterns good, 03 Run With Me good, 02 unrated; then the user turned to the sound itself:
+      "now come to the sound design" (→ section J).
+
+### J — future bass sound design, approved by ear (user request, 2026-10-22)
+*"now come to the sound design / I need you to focus on future bass only / give me verse, build up, drop separately i
+will judge the sound design / all will be write in skill arstro.solaris.sound.design / … for verse need to have reese
+bass, airy bell and main synth / for drop need super saw, bass, kick and bassline sync, a lot of percusion to fill
+between / learn from professional from trap nation first"*. Tooling, not product: the skill lives in
+`.claude/skills/arstro.solaris.sound.design/`.
+- [ ] **J1** The skill (research first) and the three sections — verse, build-up, drop — for the Sound Lab.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

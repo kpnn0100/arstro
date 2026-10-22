@@ -64,7 +64,10 @@ The same three songs, so the change is heard against songs-001, now:
 
 Measured: every check holds across the whole song — stresses on the beat 93–98 %, the climax once a chorus, no rest
 out of place, home on the downbeat held two bars; the voice 3–7 LU over the loudest other part in every sung section; the vibrato
-pitch-tracked (a held note: ±41 cents at 5.3 Hz after a steady start). *Judging begun: 01 Paper Lanterns good.*
+pitch-tracked (a held note: ±41 cents at 5.3 Hz after a steady start).
+counts: good 2 (01 Paper Lanterns, 03 Run With Me) · 02 Slow Sunday unrated (mean 4.0, as songs-001)
+lesson: the songs hold at good; the approver then turned to the SOUND — "now come to the sound design", future
+bass first (the skill arstro.solaris.sound.design). The melody's next step waits on what the sound teaches.
 
 ### songs-001 (2026-10-22) — the breakthrough: three songs, written as songs
 
