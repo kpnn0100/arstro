@@ -17,7 +17,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
 
 ## NEXT
 
-**► the user's call** — section G is done (the guitar, Porch Light). Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► H2** — the user judges batch-001 in the Melody Lab (http://127.0.0.1:8787/); fold their verdicts into the melody skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -852,6 +852,19 @@ R-SVC-17.
       piano); an all-bin chroma hears a detuned unison's skirts (peaks only) and a saw's overtones are not wrong notes; a
       growl must alternate open and shut to talk; the first balance buried the guitar 17 LU under the chords. Delivered
       ~/Music/Solaris/porchlight.*.
+
+### H — a melody skill, approved by ear (user request, 2026-10-22)
+*"now you have to learn and create skill for making melody / the melody skill is base for everything / i will be the
+approver / apply music theory to make a list of melody for me show it in local host / i will judge and tell you which
+melody sound good / the goal is you build a skill arstro.solaris.compose.melody skill that understand how to make a
+good melody"*. Tooling, not product: the skill lives in `.claude/skills/arstro.solaris.compose.melody/`.
+- [x] **H1** The skill: the method (SKILL.md), the theory (references/theory.md), the engine (scripts/melody.py: a
+      motif developed through a form, adapted to each chord — a tonal sequence — fitted, a graded rubric), the
+      renderer through solaris-cc (render.py), the Melody Lab on 127.0.0.1:8787 (serve.py + assets/audition.html:
+      piano roll, playhead, five verdicts and a note → data/judgments.jsonl), taste.py (verdicts → data/weights.json),
+      the taste ledger (taste.md). batch-001: 16 melodies, 8 styles, in ~/Music/Solaris/melody-lab/batch-001.
+- [ ] **H2** The user's verdicts on batch-001 → taste.md's first lessons, weights, any rule change; batch-002 steered
+      by them.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

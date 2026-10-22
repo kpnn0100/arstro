@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Melody Lab</title>
+<style>
+  :root {
+    --bg: #141414; --card: #1c1c1c; --raised: #222; --fg: #dbdbdb; --muted: #8a8a8a; --faint: #5a5a5a;
+    --line: rgba(255,255,255,0.072); --grid: rgba(255,255,255,0.05); --accent: #159387; --accent-soft: rgba(21,147,135,0.18);
+    --lean: #e0a050; --pass: #6f6f6f; --top: #ffffff; --love: #159387; --no: #e5534b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: rgba(20,20,20,0.94); backdrop-filter: blur(6px);
+           border-bottom: 1px solid var(--line); }
+  .bar { max-width: 1120px; margin: 0 auto; padding: 14px 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  h1 .dot { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 12px; }
+  .grow { flex: 1; }
+  select, textarea, button { font: inherit; color: var(--fg); }
+  select { background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+  .progress { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+  .progress b { color: var(--fg); font-weight: 600; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+  main { max-width: 1120px; margin: 0 auto; padding: 18px 16px 80px; display: grid; gap: 16px; }
+  .intro { color: var(--muted); font-size: 13px; max-width: 820px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; transition: border-color .2s; }
+  .card.playing { border-color: var(--accent); }
+  .head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  .num { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .title { font-weight: 600; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .score { margin-left: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .roll-wrap { position: relative; margin: 12px 0 10px; }
+  svg.roll { width: 100%; height: 170px; display: block; background: #171717; border-radius: 6px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .play { width: 42px; height: 42px; border-radius: 50%; border: none; background: var(--accent); color: #fff; cursor: pointer;
+          display: grid; place-items: center; flex: none; transition: transform .12s, background .2s; }
+  .play:hover { transform: scale(1.06); }
+  .play svg { width: 16px; height: 16px; }
+  .time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; min-width: 70px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { background: var(--accent-soft); color: #bfe9e4; border-radius: 999px; padding: 2px 9px; font-size: 12px; }
+  .chip.plain { background: var(--raised); color: var(--muted); }
+  .why { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .verdict { margin-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .v { background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 6px 11px; cursor: pointer;
+       transition: background .15s, border-color .15s, color .15s; }
+  .v:hover { border-color: rgba(255,255,255,0.2); }
+  .v.on[data-r="5"], .v.on[data-r="4"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .v.on[data-r="3"] { background: #3a3a3a; border-color: #555; color: #fff; }
+  .v.on[data-r="2"], .v.on[data-r="1"] { background: var(--no); border-color: var(--no); color: #fff; }
+  textarea { flex: 1 1 260px; min-height: 34px; height: 34px; resize: vertical; background: var(--raised); border: 1px solid var(--line);
+             border-radius: 6px; padding: 6px 10px; }
+  .saved { font-size: 12px; color: var(--accent); opacity: 0; transition: opacity .3s; }
+  .saved.show { opacity: 1; }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  @media (max-width: 640px) { svg.roll { height: 140px; } .score { margin-left: 0; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div>
+      <h1>Melody Lab<span class="dot">.</span></h1>
+      <div class="sub">arstro.solaris.compose.melody — you are the approver</div>
+    </div>
+    <select id="batch" aria-label="Batch"></select>
+    <div class="progress" id="progress"></div>
+    <div class="grow"></div>
+    <div class="legend">
+      <span><i style="background:var(--accent)"></i>chord tone on a strong beat</span>
+      <span><i style="background:var(--lean)"></i>leaning note (resolves)</span>
+      <span><i style="background:var(--pass)"></i>passing / weak</span>
+      <span><i style="background:none;outline:1.5px solid var(--top)"></i>climax</span>
+    </div>
+  </div>
+</header>
+<main id="main">
+  <div class="intro">Each melody is eight bars over its chords: one bar of the chords first, then the melody, then the
+  first chord again. Listen, then judge it — <b>Love it</b>, <b>Good</b>, <b>Okay</b>, <b>Weak</b> or <b>No</b> — and,
+  if you can, say why in a few words ("too busy", "the ending is great", "boring rhythm"). Your verdicts teach the skill.</div>
+</main>
+<script>
+const LABELS = {1: "No", 2: "Weak", 3: "Okay", 4: "Good", 5: "Love it"};
+const PLAY = '<svg viewBox="0 0 16 16"><path fill="currentColor" d="M4 2.5v11l9.5-5.5z"/></svg>';
+const PAUSE = '<svg viewBox="0 0 16 16"><path fill="currentColor" d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z"/></svg>';
+const INTRO = 4;                          // beats of chords before the melody
+let batch = null, verdicts = {}, players = [];
+
+async function j(url, opts) { const r = await fetch(url, opts); return r.json(); }
+
+function el(tag, attrs = {}, html = "") {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (html) e.innerHTML = html;
+  return e;
+}
+
+function noteRole(m, n) {
+  const b = Math.min(Math.floor(n.t / 4), 7), pos = n.t - 4 * b;
+  const strong = pos === 0 || pos === 2 || n.d >= 1;
+  const ct = m.chord_pcs[b].includes(n.p % 12);
+  if (strong && ct) return "ct";
+  if (strong) return "lean";
+  return ct ? "ctweak" : "pass";
+}
+
+function roll(m) {
+  const W = 1000, H = 170, top = 22, bot = 8;
+  const ps = m.notes.map(n => n.p), lo = Math.min(...ps) - 2, hi = Math.max(...ps) + 2;
+  const y = p => top + (hi - p) / (hi - lo) * (H - top - bot);
+  const x = t => t / 32 * W;
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, class: "roll", preserveAspectRatio: "none", role: "img",
+                         "aria-label": "piano roll"});
+  let s = "";
+  for (let p = lo; p <= hi; p++) {
+    const black = [1, 3, 6, 8, 10].includes(p % 12);
+    if (black) s += `<rect x="0" y="${y(p + 0.5)}" width="${W}" height="${(H - top - bot) / (hi - lo)}" fill="rgba(255,255,255,0.018)"/>`;
+  }
+  for (let b = 0; b <= 8; b++) {
+    s += `<line x1="${x(4 * b)}" x2="${x(4 * b)}" y1="${top - 4}" y2="${H}" stroke="${b % 4 === 0 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.07)'}"/>`;
+    for (let k = 1; k < 4 && b < 8; k++) s += `<line x1="${x(4 * b + k)}" x2="${x(4 * b + k)}" y1="${top}" y2="${H}" stroke="rgba(255,255,255,0.03)"/>`;
+    if (b < 8) s += `<text x="${x(4 * b) + 6}" y="14" fill="#8a8a8a" font-size="12" font-family="system-ui">${m.chords[b]}</text>`;
+  }
+  const topP = Math.max(...ps);
+  const colour = {ct: "#159387", lean: "#e0a050", ctweak: "rgba(21,147,135,0.55)", pass: "#6f6f6f"};
+  for (const n of m.notes) {
+    const r = noteRole(m, n), h = Math.max(6, (H - top - bot) / (hi - lo) - 2);
+    const isTop = n.p === topP;
+    s += `<rect x="${x(n.t) + 1}" y="${y(n.p) - h / 2}" width="${Math.max(3, x(n.d) - 2)}" height="${h}" rx="2.5"
+           fill="${colour[r]}" ${isTop ? 'stroke="#fff" stroke-width="2"' : ''}><title>${n.name} · beat ${n.t + 1}</title></rect>`;
+  }
+  s += `<line class="head" x1="-10" x2="-10" y1="${top - 4}" y2="${H}" stroke="#fff" stroke-width="2" opacity="0.85"/>`;
+  svg.innerHTML = s;
+  return svg;
+}
+
+function why(m) {
+  const k = m.metrics, bits = [];
+  bits.push(`range ${k.range} semitones`);
+  bits.push(`${Math.round(k.steps * 100)} % steps`);
+  bits.push(`climax in bar ${Math.floor(k.climax_at * 8) + 1}`);
+  bits.push(`${Math.round(k.strong_chord_tones * 100)} % of strong notes on the chord`);
+  if (k.appoggiaturas) bits.push(`${k.appoggiaturas} leaning note${k.appoggiaturas > 1 ? "s" : ""}`);
+  bits.push(`syncopation ${Math.round(k.syncopation * 100)} %`);
+  return bits.join(" · ");
+}
+
+function card(m, i) {
+  const c = el("section", {class: "card", id: m.id});
+  c.append(el("div", {class: "head"},
+    `<span class="num">#${String(i + 1).padStart(2, "0")}</span><span class="title">${m.style_label}</span>
+     <span class="meta">${m.key} · ${m.bpm} bpm · ${m.progression.join("–")}</span>
+     <span class="score" title="the rubric's score (theory only — your verdict outranks it)">rubric ${m.score.toFixed(3)}</span>`));
+  const wrap = el("div", {class: "roll-wrap"});
+  const svg = roll(m);
+  wrap.append(svg);
+  c.append(wrap);
+  const audio = new Audio(`/audio/${batch.batch}/${m.id}.mp3`);
+  audio.preload = "none";
+  const row = el("div", {class: "row"});
+  const btn = el("button", {class: "play", "aria-label": "Play"}, PLAY);
+  const time = el("span", {class: "time"}, "0:00");
+  const chips = el("div", {class: "chips"});
+  chips.append(el("span", {class: "chip"}, m.form_label.split(" — ")[0]));
+  for (const d of m.devices) chips.append(el("span", {class: "chip plain"}, d));
+  row.append(btn, time, chips);
+  c.append(row);
+  c.append(el("div", {class: "why"}, why(m)));
+  const v = el("div", {class: "verdict"});
+  const btns = [];
+  for (const r of [5, 4, 3, 2, 1]) {
+    const b = el("button", {class: "v", "data-r": r}, LABELS[r]);
+    btns.push(b);
+    v.append(b);
+  }
+  const note = el("textarea", {placeholder: "why? (optional) — e.g. the ending lands, too busy, love the rhythm", "aria-label": "Note"});
+  const saved = el("span", {class: "saved"}, "saved");
+  v.append(note, saved);
+  c.append(v);
+  const mark = r => btns.forEach(b => b.classList.toggle("on", +b.dataset.r === r));
+  const prior = verdicts[m.id];
+  if (prior) { mark(prior.rating); note.value = prior.note || ""; }
+  let current = prior ? prior.rating : 0;
+  async function save(r) {
+    current = r;
+    mark(r);
+    await j("/api/verdict", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({batch: batch.batch, id: m.id, rating: r, note: note.value})});
+    verdicts[m.id] = {rating: r, note: note.value};
+    saved.classList.add("show");
+    setTimeout(() => saved.classList.remove("show"), 1400);
+    progress();
+  }
+  btns.forEach(b => b.addEventListener("click", () => save(+b.dataset.r)));
+  note.addEventListener("change", () => { if (current) save(current); });
+  const head = svg.querySelector(".head");
+  function tick() {
+    const beat = audio.currentTime * m.bpm / 60 - INTRO;
+    const xx = Math.max(-10, Math.min(1000, beat / 32 * 1000));
+    head.setAttribute("x1", xx); head.setAttribute("x2", xx);
+    const s = Math.floor(audio.currentTime);
+    time.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    if (!audio.paused) requestAnimationFrame(tick);
+  }
+  btn.addEventListener("click", () => {
+    if (audio.paused) { players.forEach(p => p !== audio && p.pause()); audio.play(); } else audio.pause();
+  });
+  audio.addEventListener("play", () => { btn.innerHTML = PAUSE; c.classList.add("playing"); requestAnimationFrame(tick); });
+  audio.addEventListener("pause", () => { btn.innerHTML = PLAY; c.classList.remove("playing"); });
+  audio.addEventListener("ended", () => { audio.currentTime = 0; tick(); });
+  players.push(audio);
+  return c;
+}
+
+function progress() {
+  const n = batch.melodies.length, r = batch.melodies.filter(m => verdicts[m.id]).length;
+  document.getElementById("progress").innerHTML = `judged <b>${r}</b> of ${n}`;
+}
+
+async function load(name) {
+  players.forEach(p => p.pause());
+  players = [];
+  batch = await j(`/api/batch?name=${encodeURIComponent(name)}`);
+  verdicts = await j(`/api/verdicts?name=${encodeURIComponent(name)}`);
+  const main = document.getElementById("main");
+  main.querySelectorAll(".card, .empty").forEach(e => e.remove());
+  batch.melodies.forEach((m, i) => main.append(card(m, i)));
+  progress();
+}
+
+(async () => {
+  const names = await j("/api/batches");
+  const sel = document.getElementById("batch");
+  if (!names.length) { document.getElementById("main").append(el("div", {class: "empty"}, "No batches yet.")); return; }
+  for (const n of names) sel.append(el("option", {value: n}, n));
+  sel.value = names[names.length - 1];
+  sel.addEventListener("change", () => load(sel.value));
+  load(sel.value);
+})();
+</script>
+</body>
+</html>

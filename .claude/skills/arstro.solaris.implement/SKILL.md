@@ -162,6 +162,12 @@ the ledger; build it (it is probably NEXT) or say it is missing.
 
 ## 3. Recipes
 
+### A melody (any song, any demo track)
+**Invoke `arstro.solaris.compose.melody` first** — the melody is the base of every song (the user's words, 2026-10-22).
+It holds the method, the generator and analyzer, the Melody Lab where the user approves melodies by ear, and their
+taste ledger (`taste.md`): read it before writing a note. A song's melody goes on its own strip and is measured as
+written and as heard.
+
 ### A new instrument or effect (the commonest task)
 In `core/DigitalSignalProcessing` (`arstro.dsp.implement`): search `src/*/README.md` and compose
 before writing math; derive and document; implement; unit + integration tests; a `REQ-` id; the
