@@ -42,6 +42,11 @@ colour, cosmo's own panels), **Cut** (arrangement and the version switcher), **D
 `#CF5AED`, which is cosmo's blue rotated to hue 288° at the same lightness so every alpha built on
 it still works.
 
+**In a browser** — Interstellar is an app of Arstro Remote (R-SVC-4): `interstellar-cc ntwb install`
+lists it under Apps, and any browser (or the phone app) on the network gets Home and Edit — the
+monitor, the timeline, Cut / Grade / Deliver and a console — while the project, the media and the
+renders stay on the machine. Each page is its own view of the session; edits on one show on all.
+
 ## Driven by an agent
 
 Everything is a `Command`; everything observable is an `AppModel` field or an `Event`. The API

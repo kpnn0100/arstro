@@ -444,7 +444,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1..3, DR-API-1) — rung 4
+## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1..4, DR-API-1) — rung 4
 
 - **R-SVC-1** `InterstellarService`: `dispatch(Command)` / `pump(nowMs)` / `model()` / an `Event`
   sink. The GUI has no privileged path.
@@ -452,6 +452,18 @@ reserves the rest so adopting it is not a migration.
   `AppModel` of plain data plus an `Event` stream. `formatEvent()` output **is** the log line.
 - **R-SVC-3 An unknown input is REJECTED, naming it**, with the nearest candidates. A command that
   accepts a key it does not understand and reports success is worse than one that crashes.
+- **R-SVC-4 A web face: Interstellar is an Arstro Remote app over NTWB.** *(Added 2026-10-26: "Update
+  Interstellar and Solaris to supported app of ntwb".)* `interstellar-cc ntwb serve | install |
+  uninstall | api` (Solaris's R-SVC-7 and cosmo's R-NTWB are the pattern): `install` writes the
+  manifest, the API description and the web UI where Arstro Remote lists apps; `serve` is THE service
+  with the CLI's host, on the bridge. The service is the model, every page its own view (MVVM,
+  NTWB-11): a page draws `state print --json` (state `model`), follows the playhead and the meters
+  (state `transport`) and the events, and sends the same command lines the window and the CLI send —
+  nothing a browser can do that `interstellar-cc` cannot. What the monitor shows is the PAGE's tab
+  (Cut: the timeline at the playhead; Grade: the target's reference frame), so a page asks for its
+  own picture (`frame`) and gets it alone, as a JPEG. `wait` and `quit` are refused with the reason;
+  sessions are separate projects (`single: false`). The page's tokens are generated from `app/Theme.h`,
+  its reactive core and faces are cosmo's, copied beside it (borrowed, not forked); it works at 360 px.
 - **R-API-1 The API document is GENERATED, COMMITTED and DRIFT-TESTED.** `interstellar-cc api
   [--json]` prints every command with its grammar and argument hints, every event with its fields,
   every `AppModel` field, and the whole parameter address space with units, ranges and owners —

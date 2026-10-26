@@ -14,26 +14,16 @@
  *  line never races the one before it — and prints what the command produced on stdout. Refusals
  *  go to stderr with exit code 3; `--watch` streams every event to stderr.
  */
+#include "HostSetup.h"
 #include "InterstellarService.h"
+#include "Ntwb.h"
 #include "core/ThreadBudget.h"
-#ifdef INTERSTELLAR_HAVE_FFMPEG
-#include "AudioSourceFFmpeg.h"
-#include "FrameWriterFFmpeg.h"
-#include "PackageWriter.h"
-#include "HostFrameSource.h"
-#include "PngWriter.h"
-#include "VideoFrameDecoder.h"
-#endif
-#include "core/decode/NativeImageDecoder.h"
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
-#ifdef INTERSTELLAR_HAVE_TEXT
-#include "../app/BurnText.h"
-#endif
 
 using namespace arstro;
 using namespace arstro::interstellar;
@@ -48,7 +38,9 @@ namespace
             "interstellar-cc — Interstellar from a shell\n\n"
             "  interstellar-cc [--watch] <command> [: <command> …]\n"
             "  interstellar-cc [--watch] --script <file>      one command per line, `#` comments\n"
-            "  interstellar-cc api [--json | --md]            every command, event, model field, address\n\n"
+            "  interstellar-cc api [--json | --md]            every command, event, model field, address\n"
+            "  interstellar-cc ntwb install [--data-dir D]     Interstellar as an Arstro Remote app (its web UI in a browser)\n"
+            "  interstellar-cc ntwb uninstall [--data-dir D] | serve | api\n\n"
             "Commands are the service's grammar — `interstellar-cc api --md` prints all of them.\n"
             "Examples:\n"
             "  project new mv.isp --fps 24 --res 1920x1080\n"
@@ -61,49 +53,6 @@ namespace
     std::string quote(const std::string &s)
     {
         return s.find_first_of(" \t\"") == std::string::npos || s.empty() ? s : "\"" + s + "\"";
-    }
-
-    std::string recentsPath()
-    {
-        if (const char *x = std::getenv("INTERSTELLAR_RECENTS")) return x;
-        if (const char *x = std::getenv("XDG_DATA_HOME")) return std::string(x) + "/interstellar/recents";
-        if (const char *h = std::getenv("HOME")) return std::string(h) + "/.local/share/interstellar/recents";
-        return std::string();
-    }
-
-    InterstellarService::Host makeHost()
-    {
-        InterstellarService::Host h;
-#ifdef INTERSTELLAR_HAVE_FFMPEG
-        h.rackDecoder = [](std::shared_ptr<const FrameSelector> sel) {
-            return std::unique_ptr<cosmo::IImageDecoder>(new interstellar_host::VideoFrameDecoder(std::move(sel)));
-        };
-        h.frameSource = [] { return std::unique_ptr<IFrameSource>(new interstellar_host::HostFrameSource()); };
-        h.hasVendorDecoder = [](const std::string &ext) { return interstellar_host::vendorDecoderInstalled(ext); };   // R-MEDIA-1
-#ifdef INTERSTELLAR_HAVE_TEXT
-        h.drawText = [](interstellar::Raster &f, const std::vector<interstellar::OverlayText> &items) { return interstellar_v1::drawOverlayText(f, items); };   // R-DLV-1/2
-#endif
-        h.audioSource = [] { return std::unique_ptr<IAudioSource>(new interstellar_host::AudioSourceFFmpeg()); };
-        h.frameWriter = [] { return std::unique_ptr<IFrameWriter>(new interstellar_host::FrameWriterFFmpeg()); };
-        h.packageWriter = [] { return std::unique_ptr<IFrameWriter>(new interstellar_host::PackageWriter()); };   // R-DLV-4
-        h.writeImage = [](const std::string &p, const Raster &r, std::string &err) {
-            return interstellar_host::writePng(p, r, err);
-        };
-#else
-        h.rackDecoder = [](std::shared_ptr<const FrameSelector>) {
-            return std::unique_ptr<cosmo::IImageDecoder>(new cosmo::NativeImageDecoder());
-        };
-#endif
-        h.recentsPath = recentsPath();
-        // The same settings file and preset library the window uses, so `settings set` from a
-        // shell and the Engine Settings chips are one setting.
-        const char *xc = std::getenv("XDG_CONFIG_HOME"), *xd = std::getenv("XDG_DATA_HOME"), *home = std::getenv("HOME");
-        if (xc) h.settingsPath = std::string(xc) + "/interstellar/settings.txt";
-        else if (home) h.settingsPath = std::string(home) + "/.config/interstellar/settings.txt";
-        if (const char *x = std::getenv("INTERSTELLAR_PRESETS")) h.presetDir = x;
-        else if (xd) h.presetDir = std::string(xd) + "/interstellar/presets";
-        else if (home) h.presetDir = std::string(home) + "/.local/share/interstellar/presets";
-        return h;
     }
 
     int run(InterstellarService &svc, const std::string &line)
@@ -135,6 +84,8 @@ int main(int argc, char **argv)
         usage();
         return args.empty() ? kUsage : kOk;
     }
+    // the web face (R-SVC-4) builds its own service, started by Arstro Remote - before this one exists
+    if (args[0] == "ntwb") return interstellar_cli::ntwbMain(std::vector<std::string>(args.begin() + 1, args.end()));
     bool watch = false;
     std::string script;
     while (!args.empty() && args[0].rfind("--", 0) == 0)
@@ -145,7 +96,7 @@ int main(int argc, char **argv)
     }
 
     cosmo::ThreadBudget budget(50);
-    InterstellarService svc(budget, makeHost());
+    InterstellarService svc(budget, interstellar_cli::makeHost());
     // The event stream IS the log: a shell run with --watch shows exactly what a window would.
     svc.subscribe([watch](const Event &e) {
         if (watch || e.kind == Event::Kind::Error) std::fprintf(stderr, "%s\n", formatEvent(e).c_str());

@@ -19,7 +19,7 @@ Rung **4** of `arstro.rule` §5. The ladder:
 | 2 | registered with the root `ctest`; L2 headless service tests | done — `interstellar_service_l2` |
 | 3 | a real CLI that is the whole app without a window | done — `interstellar-cc`, DR-SVC-3 |
 | 4 | **generated API document, committed, drift-tested** | ← **here** — DR-API-1; the first app in the suite to reach it |
-| 5 | control socket + the GUI/headless equivalence test | post-P7 |
+| 5 | control socket + the GUI/headless equivalence test | post-P7 (the web face, DR-SVC-4, is a client of the service like the CLI; it is not the control socket) |
 
 ## Entries
 
@@ -238,6 +238,34 @@ through `dispatchText`, then `pumpUntilIdle`, then `output()` to stdout; refusal
 real media (FFmpeg-generated 640×360 clips): new project → rack add (two videos, a still) → grade →
 track → clips → versions → pin → rebase → transition → render H.264 (96 frames) and a PNG sequence
 → export-still; the mid-dissolve frame shows both clips at 50 %, the outgoing one held.
+
+### DR-SVC-4 The web face: `interstellar-cc ntwb` (R-SVC-4)
+`cli/NtwbAdapter.{h,cpp}` (`arstro::interstellar_cli::NtwbAdapter`) holds no behaviour: NTWB call
+`command {line}` → `dispatchText` (`wait` refused: it would sleep the loop; `quit` refused: the
+session is Arstro Remote's; a blank line runs nothing) returning `{output, revision}`; `model`;
+`commands` (`commandSpecs` with `usageOf`); `frame {t?, source?, edge?}` → `renderFrame` /
+`renderSourceFrame` at the asked long edge (64–3840, default 960) → the injected JPEG encoder → blob
+`frame` to the CALLING client only, `meta {seq, t, source, w, h, edge, frameSeq, ms}`, or
+`{empty: true, lastError}`. `tick()` pushes state `model` (`modelToJson`, reparsed) on a new revision
+— ≤ 25/s, ≤ 2/s while playing, because the revision moves every playback frame — and state
+`transport` `{playing, playhead, playheadFrame, duration, shuttle, frameSeq, sourceView,
+sourcePlayhead, soundPlaying, meterPeak, meterRms, meterClip}` when it changed (≤ 25/s). Every
+`Event` is relayed as `{line: formatEvent, fields}` under `eventName`. `cli/NtwbMain.cpp`:
+`ntwb api` prints `apiDescription()`; `install [--data-dir D] [--web-dir W]` writes
+`<D>/interstellar/{ntwb.json, api.json, web/}` (manifest: `capabilities: [blobs]`, `single: false`,
+exec = this binary), copying cosmo's `web/js/core/{signal,dom}.js` and fonts beside the page;
+`serve` builds the service with `cli/HostSetup.cpp`'s `makeHost()` — the same host `interstellar-cc`
+uses (moved there unchanged from `main.cpp`) — and loops `poll(8)` → `pump(monotonic ms)` → `tick`.
+The JPEG encoder is GdkPixbuf's (linked through `interstellar_host`); a build without it refuses
+`frame` naming why. The page, `web/`: `js/model/session.js` (the model's proxy: `model`,
+`transport`, `frame`, events, `api()` = `api --json` for the address table), `js/vm/edit.js` (shared
+values from the model; own `view.{tab, deck, pxPerSec, monitorEdge}`; one command line per intent;
+the monitor's picture requested per page, one in flight), `js/views/{topbar, home, monitor, timeline,
+inspector, console}.js`; `css/tokens.css` is `interstellar_web_tokens`' output. Guarded by
+`interstellar_ntwb` (the real service and adapter over `ntwb::MemoryTransport`: a call is a command
+line, refusals and the `command.rejected` event, `model` == `state print --json`, a `frame` goes to
+its page alone, a build with no encoder refuses `frame`, `ntwb install` into a scratch dir), by
+`interstellar_ntwb_api_current` (`docs/ntwb-api.json`) and by `interstellar_web_tokens_current`.
 
 ### DR-API-1 The API document is generated, committed and drift-tested — rung 4 (R-API-1)
 `apiJson` / `apiMarkdown` (`core/service/ApiDoc.cpp`) print four tables and no hand prose: commands

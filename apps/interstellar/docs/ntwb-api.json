@@ -1,0 +1,179 @@
+{
+  "ntwb": "1.1.0",
+  "app": "interstellar",
+  "methods": {
+    "command": {
+      "doc": "dispatch one command line to the service, as the window and interstellar-cc do; `wait` and `quit` are refused (watch the events; stop the session from Apps)",
+      "params": {
+        "line": {
+          "type": "str",
+          "required": true,
+          "doc": "one line of the Interstellar command grammar (R-SVC-1) - every command is in apps/interstellar/docs/API.md, and the `commands` method lists them"
+        }
+      },
+      "result": "{output, revision} - output is what the command printed; a refusal fails with its reason"
+    },
+    "model": {
+      "doc": "the whole AppModel as JSON (what `state print --json` prints)",
+      "params": {},
+      "result": "the model"
+    },
+    "commands": {
+      "doc": "the command grammar: every command with its usage and summary",
+      "params": {},
+      "result": "[{name, usage, summary}]"
+    },
+    "frame": {
+      "doc": "render the picture this page shows and send it to this page alone (stream `frame`)",
+      "params": {
+        "t": {
+          "type": "float",
+          "required": false,
+          "doc": "seconds: the timeline's time (default: the playhead), or the source's (default: its reference frame)"
+        },
+        "source": {
+          "type": "str",
+          "required": false,
+          "doc": "a rack source's bind name: its own picture, as the Grade tab and the source viewer show it"
+        },
+        "edge": {
+          "type": "int",
+          "required": false,
+          "doc": "the long edge in pixels, 64-3840 (default 960)"
+        }
+      },
+      "result": "{seq, w, h, bytes, ms}, or {empty: true, lastError} when there is nothing to show"
+    }
+  },
+  "events": {
+    "info": {
+      "doc": "A note worth logging; carries no state.",
+      "data": "{line, fields: {text}}"
+    },
+    "error": {
+      "doc": "Something failed. Also set as AppModel.lastError.",
+      "data": "{line, fields: {why}}"
+    },
+    "command.rejected": {
+      "doc": "A line was refused (R-SVC-3): unknown verb, unknown flag, refused edit.",
+      "data": "{line, fields: {line, why}}"
+    },
+    "screen.changed": {
+      "doc": "Home / Loading / Edit.",
+      "data": "{line, fields: {screen}}"
+    },
+    "project.opened": {
+      "doc": "A project is open.",
+      "data": "{line, fields: {path, timelines, rack}}"
+    },
+    "project.saved": {
+      "doc": "The .isp and the rack's .cmp were written.",
+      "data": "{line, fields: {path, cmp}}"
+    },
+    "project.closed": {
+      "doc": "Back to Home.",
+      "data": "{line, fields: {}}"
+    },
+    "rack.loaded": {
+      "doc": "The hosted Cosmo project finished decoding.",
+      "data": "{line, fields: {images, failed}}"
+    },
+    "rack.changed": {
+      "doc": "A node was added, grouped, renamed, reframed.",
+      "data": "{line, fields: {what, node}}"
+    },
+    "params.changed": {
+      "doc": "An address was written. target = rack | version | clip | track | project.",
+      "data": "{line, fields: {address, value, target}}"
+    },
+    "selection.changed": {
+      "doc": "The Grade target or the selected clip changed.",
+      "data": "{line, fields: {rack, clip}}"
+    },
+    "timeline.opened": {
+      "doc": "The editor's current timeline changed.",
+      "data": "{line, fields: {timeline, name}}"
+    },
+    "timeline.changed": {
+      "doc": "A version was created, pinned, unpinned, frozen, thawed or deleted.",
+      "data": "{line, fields: {timeline, what}}"
+    },
+    "timeline.rebased": {
+      "doc": "rebase ran: deltas pruned, the dangling ones named, the pin advanced (old→new).",
+      "data": "{line, fields: {timeline, pruned, dangling, pin}}"
+    },
+    "arrange.changed": {
+      "doc": "A cut operation landed.",
+      "data": "{line, fields: {timeline, what, node}}"
+    },
+    "playhead.moved": {
+      "doc": "The playhead moved by command.",
+      "data": "{line, fields: {t, frame}}"
+    },
+    "playback.changed": {
+      "doc": "Playback started or stopped.",
+      "data": "{line, fields: {playing}}"
+    },
+    "frame.ready": {
+      "doc": "A monitor frame was composited.",
+      "data": "{line, fields: {seq, width, height, ms}}"
+    },
+    "render.queued": {
+      "doc": "A render was queued.",
+      "data": "{line, fields: {job, timeline, out}}"
+    },
+    "render.progress": {
+      "doc": "Frames written so far.",
+      "data": "{line, fields: {job, timeline, done, total}}"
+    },
+    "render.finished": {
+      "doc": "A render completed.",
+      "data": "{line, fields: {job, timeline, frames, out}}"
+    },
+    "render.failed": {
+      "doc": "A render stopped with an error or was cancelled.",
+      "data": "{line, fields: {job, timeline, why}}"
+    },
+    "lint.report": {
+      "doc": "Counts from `lint`; details follow as info.",
+      "data": "{line, fields: {offline, dangling, refused}}"
+    },
+    "history.changed": {
+      "doc": "An edit was recorded, undone or redone (did = edit | undo | redo | cleared).",
+      "data": "{line, fields: {did, label, canUndo, canRedo}}"
+    },
+    "settings.changed": {
+      "doc": "Engine settings after a change, all keys.",
+      "data": "{line, fields: {cpuPercent, threads, previewEdge, useGpu, uiScale, hardwareVideo, previewCache, keyLaneHeight}}"
+    },
+    "presets.changed": {
+      "doc": "The preset library was rescanned.",
+      "data": "{line, fields: {count}}"
+    },
+    "cache.changed": {
+      "doc": "The preview cache of the current timeline: frames cached and current, of total (R-PLAY-1).",
+      "data": "{line, fields: {timeline, frames, total, building}}"
+    },
+    "keys.changed": {
+      "doc": "A parameter's curve changed; how many keyframes it has now (0 = no curve) (R-ANIM).",
+      "data": "{line, fields: {address, keys}}"
+    }
+  },
+  "state": {
+    "model": {
+      "doc": "the AppModel (state print --json), pushed on every revision (at most 25/s; 2/s while playing)",
+      "data": "object"
+    },
+    "transport": {
+      "doc": "what moves without an edit, pushed when it changed (at most 25/s)",
+      "data": "{playing, playhead, playheadFrame, duration, shuttle, frameSeq, sourceView, sourcePlayhead, soundPlaying, meterPeak: [l, r], meterRms: [l, r], meterClip}"
+    }
+  },
+  "streams": {
+    "frame": {
+      "doc": "the picture a page asked for (answer to `frame`), to that page alone",
+      "mime": "image/jpeg",
+      "meta": "{seq, t, source, w, h, edge, frameSeq, ms}"
+    }
+  }
+}

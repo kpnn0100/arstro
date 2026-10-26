@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Defects: [`DEFECTS.md`](DEFECTS.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-05 — the image-processing stack, scopes, read-ahead playback, hardware video, the preview cache, keyframes and the graph editor.*
+*Last updated: 2026-10-26 — the web face: Interstellar is an Arstro Remote app over NTWB (R-SVC-4, DR-SVC-4).*
 
 ---
 
@@ -32,6 +32,14 @@ one integrator who moves, wires, tests and commits each stream:
 - [x] `InterstellarService`: Rack + model + render + volume behind `dispatch` / `pump` / `model()` /
       `renderFrame`; `set` routed by owner; pins as content-addressed `.cmp` snapshots.
 - [x] `interstellar-cc` on the grammar; `docs/api.json` + `docs/API.md` committed and drift-tested.
+- [x] **The web face (R-SVC-4, DR-SVC-4):** `interstellar-cc ntwb serve/install/uninstall/api`, the page
+      (Home; Edit: monitor + transport, Cut/Grade/Deliver, timeline, console), `interstellar_ntwb`,
+      `interstellar_ntwb_api_current`, `interstellar_web_tokens_current`. Verified in a real Arstro
+      Remote on the board (2026-10-26): installed, launched, a project built by `apps call` with two
+      FFmpeg clips; the page drew the timeline frame at 2 s (its burned-in counter reads 00:00:02.000),
+      a clip selected from the page, Grade on `b` at +1.5 EV changed the picture and a double-click
+      reset it, at 1280×800 and 390×844. Found on the way and fixed in the page: `clip add` needs
+      `--in` and a `--track`; `rack select` takes the bind name, not the node number.
 - [x] R-RENDER-5: an Interstellar still == the same frame from Cosmo (`interstellar_still_equals_cosmo`).
 - [x] **Integrate the UI stream** and write the GTK host (`linux_main.cpp`); `interstellar_live`
       renders the real app over the real service.
@@ -147,6 +155,23 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-26 — Interstellar gets a web face over NTWB, as Solaris and cosmo have one (R-SVC-4).** The
+user asked for Interstellar and Solaris to be supported NTWB apps; Solaris already was (its R-SVC-7),
+so Interstellar follows its pattern: `interstellar-cc ntwb serve | install | uninstall | api`, an
+adapter with no behaviour, a page that is one view of the session.
+- The monitor's picture is a CALL (`frame`) answered to the asking page alone, not a pushed stream:
+  what a monitor shows is the window's tab (view state, not in the AppModel), so two pages on two
+  tabs must be able to show two pictures (cosmo's `before` / `uncropped` are the same pattern).
+- While playing, the model goes at most twice a second and the playhead as its own `transport` key:
+  `pump` bumps the revision on every playback frame, and the whole model per frame is not a view's
+  need.
+- `wait` and `quit` are refused, not run: one would sleep the bridge's loop, the other would end a
+  session that Arstro Remote owns.
+- `makeHost()` moved unchanged from `main.cpp` to `cli/HostSetup.cpp` so `ntwb serve` drives exactly
+  the service the shell drives (not a second host to keep in step).
+- Sessions are separate projects (`single: false`), cosmo's choice; Solaris is `single: true`
+  because a second engine would fight for the audio device, which Interstellar's picture path does not.
 
 **2026-10-07 — the ANIMATION section lists the timeline's marked properties under every clip of their
 object; groups use Grade's own words.** The user chose a section below all the tracks.
