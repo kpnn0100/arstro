@@ -187,8 +187,9 @@ umbrella's pointer — `arstro.rule` §7).
       script headless and through a live window — same events, output, dump, `.slp`, WAV (skipped
       without a display); `solaris-cc ntwb serve|install|uninstall|api` and `apps/solaris/web/` (song bar,
       Home, lanes, mixer, console; tokens generated from Theme.h). Rung 5. 3 mutants caught. Open: the web
-      re-derives the fader/meter maths (`MixerDock.cpp:89-90`) — the service should publish it; the web
-      not yet run inside a real Arstro Remote.
+      re-derives the fader/meter maths (`MixerDock.cpp:89-90`) — the service should publish it. (The web
+      ran inside a real Arstro Remote on 2026-10-26: installed, launched, called, drawn at desktop and
+      phone width — DR-SVC-7.)
 - [x] **C5** A whole song made by an agent with `solaris-cc`, measured (R-SVC-9).
       — DR-SVC-9: `demo/canon/` — Pachelbel's Canon as 128 bpm EDM, 86 commands, 7 instruments, 2 buses,
       formula delay, kick-keyed sidechains, bezier filter automation, limiter; `solaris_demo_canon`

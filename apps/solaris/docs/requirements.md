@@ -1654,7 +1654,7 @@ state `transport` (playing, position, loop, latency, the master's and every stri
 audition) when it changed (≤ 20/s), because `pump()` moves those with no revision (`:83`–`:102`).
 `model` and `commands` (the grammar table: name, usage, summary) are the other calls (`:127`).
 `apiDescription()` (`:152`) is generated from the event table and committed as
-`docs/ntwb-api.json` (ctest `solaris_ntwb_api_current`, `cli/CMakeLists.txt:20`); it points to
+`docs/ntwb-api.json` (ctest `solaris_ntwb_api_current`, `cli/CMakeLists.txt:62`); it points to
 `docs/API.md` for the grammar instead of copying it.
 
 **`solaris-cc ntwb`** (`cli/NtwbMain.cpp:210`): `api`; `install [--data-dir D] [--web-dir W]` (`:88`)
@@ -1676,7 +1676,7 @@ undo/redo/save/close, the session), Home (recents, new/open by a path on the mac
 mixer (pages, strips with meter, fader, gain, pan, mute, solo; the master) and a console (the line in,
 its output, refusals and the event stream, the verb's usage from `commands`). The tokens are generated
 from Theme.h with the teal installed (`cli/webTokens.cpp:41`, `web/css/tokens.css`, ctest
-`solaris_web_tokens_current`, `cli/CMakeLists.txt:31`).
+`solaris_web_tokens_current`, `cli/CMakeLists.txt:73`).
 
 **Proof.** `solaris_ntwb` (`tests/faces/ntwbAdapterTests.cpp`): the real service, adapter and
 `ntwb::Client` over `ntwb::MemoryTransport` with a fake host — calls become commands, a refusal is a
@@ -1687,7 +1687,7 @@ revision, `commands` lists the whole table, the transport has its key, every fra
 files unchanged and the fonts, and `uninstall` removes them (`:207`). Mutant: an adapter that relays
 no events fails it. The page was looked at in headless Chrome over a fake bridge fed a real `state
 print --json` (desktop, Home, the console mid cross-fade) and its intents checked to send the window's
-lines; it has NOT yet been run through a real Arstro Remote.
+lines. **Run through a real Arstro Remote on 2026-10-26** (an Orange Pi 5 Plus, Arstro Remote 2.1, NTWB 1.1.0): `solaris-cc ntwb install` listed it under Apps, `arstro-remote apps launch solaris` started `ntwb serve`, `apps call solaris command '{"line": "project new …"}'` answered `{output, revision}`, and the page at `/apps/solaris/` drew that song (song bar, lanes, mixer) at 1280×800 and at 390×844.
 
 ### DR-MIX-17 Latency compensated (R-MIX-17)
 **A device says how late it is** — DSP `Device::latency()` (`src/device/Device.h:125`, REQ-device-8, DSP
