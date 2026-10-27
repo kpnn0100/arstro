@@ -59,9 +59,14 @@ one integrator who moves, wires, tests and commits each stream:
       **Until every widget lands, the panels not yet ported are placeholders** — the board keeps the
       previous page installed.
   - [x] Home + Loading · [x] top bar + menus + versions + name prompt · [x] monitor + transport ·
-        [x] Cut: timeline, source bin, clip inspector, clip/lane menus (all 2026-10-27) · [ ] Engine
-        Settings dialog · [ ] scopes · [ ] key lane + key graph · [ ] Grade: rack, deck (+ node graph, stills),
-        inspector (+ plugins, effects) · [ ] Deliver: checks, output spec, render queue
+        [x] Cut: timeline, source bin, clip inspector, clip/lane menus (lean, one area a commit) ·
+        then seven parallel ports at the user's request ("do the remaining interstellar parts with multi
+        agent too"), all 2026-10-27: [x] key lane + key graph (rows, diamonds, key drag, the curve band,
+        Animate…, the key menus) · [x] Grade rack · [~] Grade inspector (tabs, Basic/Detail sliders,
+        image-processing list, Mix, the scopes slot — not yet Mixer/Curve, Grade, Xform pages, the
+        bypass scrim, mark diamonds) · [~] Grade deck (sources / stills / nodes, groups, ref-frame strip)
+        · [x] scopes · [x] Deliver: checks, output spec, render queue · [x] Engine Settings
+        Not yet: KeyGraph editing (dragging keys and handles in the graph), the inspector's other pages.
 - [x] R-RENDER-5: an Interstellar still == the same frame from Cosmo (`interstellar_still_equals_cosmo`).
 - [x] **Integrate the UI stream** and write the GTK host (`linux_main.cpp`); `interstellar_live`
       renders the real app over the real service.

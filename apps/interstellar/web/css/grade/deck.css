@@ -1,0 +1,2 @@
+/* Interstellar — css/grade/deck.css: GradeDeck (js/grade/deck.js), drawn in SVG. */
+.gd { overflow: hidden; touch-action: none; background: var(--deck-bg); }

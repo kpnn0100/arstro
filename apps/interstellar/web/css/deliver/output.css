@@ -1,0 +1,11 @@
+/* Interstellar — css/deliver/output.css: OutputSpec (js/deliver/output.js), drawn in SVG; the path is a real input. */
+.os { overflow: hidden; }
+.os-path {
+  position: absolute; box-sizing: border-box; margin: 0; padding: 0 7px;
+  background: var(--input); color: var(--foreground); border: 1px solid var(--border);
+  border-radius: var(--radius-control); font: 10px var(--font-mono), "JetBrains Mono", monospace;
+  outline: none; caret-color: var(--primary);
+}
+.os-path:focus { border-color: var(--ring); }
+.os-path::placeholder { color: var(--muted-foreground); }
+.os-path::selection { background: rgba(var(--primary-rgb), 0.38); }

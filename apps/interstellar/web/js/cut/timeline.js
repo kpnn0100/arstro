@@ -35,7 +35,7 @@
  * keyLaneHeight=<px>` on release, R-ANIM-8), and provides vm "timeline":
  *   { toX(t), toT(x), colW: Signal<number>, playhead: Signal<number> (the SHOWN playhead),
  *     keyOpen: Signal<number> (live eased 0..1), axis: Signal<number> (bumps on zoom/scroll/size),
- *     keysShown: Signal<boolean>, toggleKeys(), resetView() }
+ *     keysShown: Signal<boolean>, toggleKeys(), resetView(), relayout() }
  * and reads vm "keyLane" ({contentHeight()}) for the section's open height (until it exists: the
  * empty key lane's height, KeyLane::contentH with nothing marked). The section's HEADER is the key lane's
  * (KeyLane draws it natively).
@@ -107,6 +107,7 @@ export function mount(host, vm, ctx) {
     toX: (t) => toX(t), toT: (x) => toT(x), colW, playhead: shownPh, keyOpen, axis, keysShown: keysShownSig,
     toggleKeys: () => { keysWanted = !keysWanted; keysShownSig.value = keysWanted; loop.kick(); },
     resetView: () => { resetView(); loop.kick(); },
+    relayout: () => loop.kick(),                    // the key lane's height moved: re-lay the section
   };
   vm.provide("timeline", api);
 

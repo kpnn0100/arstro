@@ -1,0 +1,15 @@
+/* Interstellar — css/grade/inspector.css: GradeInspector (js/grade/inspector.js). */
+.gi { overflow: hidden; background: var(--card); }
+.gi > svg { position: absolute; left: 0; top: 0; pointer-events: none; }
+.gi-scopes, .gi-mix, .gi-page, .gi-wash { position: absolute; left: 0; }
+.gi-page { overflow: hidden; }
+.gi-page-content { position: absolute; left: 9.75px; top: 0; width: 304.5px; will-change: transform; }
+.gi-sec { position: relative; height: 27.95px; font: 600 9px "Roboto SemiBold", Roboto, sans-serif; letter-spacing: 1.17px;
+  color: var(--muted-foreground); display: flex; align-items: flex-end; padding-bottom: 6px; box-sizing: border-box; }
+.gi-sec::after { content: ""; flex: 1; height: 1px; background: var(--border); margin: 0 0 3px 6.5px; }
+.gi-row { position: relative; height: 22.75px; }
+.gi-row > .cp-slider-row { top: 1.375px !important; }
+.gi-key { position: absolute; left: -9px; top: 6px; width: 10px; height: 10px; cursor: pointer; }
+.gi-wash { pointer-events: none; display: flex; flex-direction: column; align-items: center; background: var(--card); }
+.gi-wash b { font: 500 12px "Roboto Medium", Roboto, sans-serif; color: var(--foreground); }
+.gi-wash span { font: 11px Roboto, sans-serif; color: var(--muted-foreground); margin-top: 6px; }

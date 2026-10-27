@@ -323,7 +323,18 @@ it), `cut/bin.js` (SourceBin: travelling rows, the lit target while nothing is c
 `cut_populated`, `cut_hover`, `cut_nested`, `cut_sound`; the lanes line up clip for clip (the key
 lane's own header still a placeholder). Live: a source dragged from the bin lands as `clp_1` at 1 s on
 V1, a drag moves it to 2 s, a click selects it, a ruler click puts the playhead at 3.5 s, Split at
-playhead cuts it in two; D-17 found and kept. Guarded by
+playhead cuts it in two; D-17 found and kept. The rest, ported in parallel the same day: `cut/keylane.js`,
+`cut/keygraph.js`, `cut/keymenus.js` (KeyLane + KeyGraph and App's key menus; the section's height is its
+`keyLane.contentHeight()`, the timeline re-lays it through `timeline.relayout()`), `grade/rack.js` (RackTree),
+`grade/inspector.js` (GradeInspector over cosmo's `ui/slider.js`, Basic/Detail with the native unit
+conversions, the image-processing list), `grade/deck.js` + `grade/menus.js` (GradeDeck, NodeGraph, App's
+node / still / plugin menus), `edit/scopes.js` (ScopePanel + scopesOf on the monitor's lossless PNG),
+`deliver/{checks,output,queue}.js`, `dialogs/settings.js` (cosmo's SettingsDialog as Interstellar opens it;
+the render queue's Cancel / Reveal right-click menu is web-only). Against the native shots' own models:
+`cut_key_lane` 2.9 %, `deliver_populated` 3.1 %, `grade_scope_*` 3.2–5.5 % (the fixture host sends JPEG for
+a PNG request, so the scope numbers differ there, not the drawing), the rack row for row; live over the
+real service a project's Grade tab draws its rack, monitor, histogram, sliders, deck thumbnail and
+reference strip, Deliver its checks, spec and queue. Guarded by
 `interstellar_ntwb` (the real service and adapter over `ntwb::MemoryTransport`: a call is a command
 line, refusals and the `command.rejected` event, `model` == `state print --json`, a `frame` goes to
 its page alone, a build with no encoder refuses `frame`, `thumb` / its epoch, `peaks`, `still`, `capture`, `browse`,

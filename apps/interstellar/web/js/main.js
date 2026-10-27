@@ -54,6 +54,7 @@ function applyFixture(fx) {
     if (typeof v.grade.scopeClipWarning === "boolean") vm.view.clipWarning.value = v.grade.scopeClipWarning;
   }
   if (v.monitor && v.monitor.edge > 0) vm.view.monitorEdge.value = v.monitor.edge;
+  if (v.settingsOpen) vm.openSettings();
 }
 if (window.__ntwbFixture) applyFixture(window.__ntwbFixture);
 window.addEventListener("ntwb-fixture", (e) => applyFixture(e.detail));
