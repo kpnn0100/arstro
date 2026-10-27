@@ -56,13 +56,12 @@ one integrator who moves, wires, tests and commits each stream:
       Parity tooling: `interstellar_app_shots --model-json` writes each named state's model, transport,
       view state, monitor frame and peaks; `core/Ntwb/tools/fixture_host.mjs` serves the page with that
       exact model over a fake NTWB.
-      **Until the widgets land the Edit screen and Home are placeholders** — the board keeps the
+      **Until every widget lands, the panels not yet ported are placeholders** — the board keeps the
       previous page installed.
-  - [x] Home + Loading (2026-10-27) · [x] top bar + menus + versions + name prompt (2026-10-27) ·
-        [ ] Engine Settings dialog · [ ] monitor +
-        transport + scopes · [ ] Cut: timeline, source bin, clip inspector · [ ] key lane + key graph ·
-        [ ] Grade: rack, deck (+ node graph, stills), inspector (+ plugins, effects) · [ ] Deliver:
-        checks, output spec, render queue
+  - [x] Home + Loading · [x] top bar + menus + versions + name prompt · [x] monitor + transport
+        (all 2026-10-27) · [ ] Engine Settings dialog · [ ] scopes · [ ] Cut: timeline, source bin,
+        clip inspector · [ ] key lane + key graph · [ ] Grade: rack, deck (+ node graph, stills),
+        inspector (+ plugins, effects) · [ ] Deliver: checks, output spec, render queue
 - [x] R-RENDER-5: an Interstellar still == the same frame from Cosmo (`interstellar_still_equals_cosmo`).
 - [x] **Integrate the UI stream** and write the GTK host (`linux_main.cpp`); `interstellar_live`
       renders the real app over the real service.

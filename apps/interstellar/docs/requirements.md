@@ -302,7 +302,16 @@ provider behind `ctx.prompt`). Against the native shots' own models: `home_popul
 pixels differ (text anti-aliasing), `home_empty` 0.44 %, `loading` 0.15 %; the top bar, the File
 menu, the versions dropdown and the New-version prompt line up in `edit_menu_file`,
 `grade_versions_open`, `grade_new_version_prompt`. Live, over the real service: a recent card opens
-its project; a tab click, `timeline new` through the prompt and `project save` are accepted. Guarded by
+its project; a tab click, `timeline new` through the prompt and `project save` are accepted. Then
+`edit/monitor.js` (Monitor: the decoded-before-shown picture, the linear 160 ms dissolve on a content
+change and a cut on a playback step, the three states, Ctrl+wheel zoom about the pointer with pan and
+fit, the wipe, the angle bar, the burned caption, the capture button, the clip-warning mask from the
+frame's own pixels) and `edit/transport.js` (Transport: the scrub as `playhead` notifies with the last
+as a command, the eased catch-up, the play/pause cross-fade, marks, the shuttle badge, the meter's
+ballistics; D-16 kept and cited): within 0.3–1.7 % of the native pixels in `cut_populated`,
+`cut_marks_shuttle`, `cut_multicam`, `cut_caption`, `grade_stills_wipe`, `grade_monitor_empty`,
+`grade_monitor_loading`; live, a placed test clip scrubbed to 3.417 s shows that frame (its
+burned-in counter reads it) under 00:00:03:10. Guarded by
 `interstellar_ntwb` (the real service and adapter over `ntwb::MemoryTransport`: a call is a command
 line, refusals and the `command.rejected` event, `model` == `state print --json`, a `frame` goes to
 its page alone, a build with no encoder refuses `frame`, `thumb` / its epoch, `peaks`, `still`, `capture`, `browse`,

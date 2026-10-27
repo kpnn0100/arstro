@@ -25,6 +25,21 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Open
 
+### D-16 — The scrubber thickens when the CAPTURE button is hovered, not when the scrubber is
+- **Area:** ui · **Status:** Open · **Severity:** S4 · **Found:** 2026-10-27, porting Transport to the
+  web face (R-SVC-4 amended).
+- **Reproduce:** Cut tab; hover the scrubber's track → it stays 3 px; hover the camera button → the
+  track grows to 4 px and the thumb to 5.5 px.
+- **Expected:** the track and thumb grow under the pointer ON THE SCRUBBER (the comment at
+  `Transport.cpp:290`, "hover is already 1 under a press").
+- **Evidence:** `handleGesture` hovers the scrubber as id `kButtons` = 4 (`Transport.cpp:139`) since
+  the capture button became button 3 (R-UI-11, `kButtons = 4`, `:15`); `onPaint` still reads
+  `mHover.amount(3)` for the scrubber (`:289`) — the capture button's.
+- **Cause:** `app/widgets/Transport.cpp:289` (an id not renumbered when a button was added).
+- **Recommended fix:** a named id for the scrubber (`kScrubId = kButtons`) used by both; a ui test that
+  hovers the track and reads the thumb radius. The web face (`web/js/edit/transport.js`) keeps the
+  native behaviour and cites this entry, so the two faces agree until the fix.
+
 ### D-15 — A command refused on Home or Loading is said where nobody can see it
 - **Area:** ui · **Status:** Open · **Severity:** S3 · **Found:** 2026-10-26, porting App.cpp to the
   web face (R-SVC-4 amended).
