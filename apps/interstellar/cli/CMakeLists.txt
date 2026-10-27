@@ -11,7 +11,7 @@ if(TARGET interstellar_host)
 else()
   target_link_libraries(interstellar-cc PRIVATE interstellar_core arstro_ntwb)
 endif()
-# `ntwb install` copies the page from the source tree, and cosmo's borrowed core and fonts beside it
+# `ntwb install` copies the page from the source tree, and what web/BORROW lists of cosmo's (and its fonts) beside it
 target_compile_definitions(interstellar-cc PRIVATE
   INTERSTELLAR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
   COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo")
@@ -47,6 +47,7 @@ target_include_directories(interstellar_ntwb_tests PRIVATE ${CMAKE_CURRENT_SOURC
 target_link_libraries(interstellar_ntwb_tests PRIVATE interstellar_core arstro_ntwb)
 target_compile_definitions(interstellar_ntwb_tests PRIVATE
   INTERSTELLAR_CC="$<TARGET_FILE:interstellar-cc>"
+  INTERSTELLAR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
   COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo")
 add_dependencies(interstellar_ntwb_tests interstellar-cc)
 add_test(NAME interstellar_ntwb COMMAND interstellar_ntwb_tests)

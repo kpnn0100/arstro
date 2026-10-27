@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Defects: [`DEFECTS.md`](DEFECTS.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-26 — the web face: Interstellar is an Arstro Remote app over NTWB (R-SVC-4, DR-SVC-4).*
+*Last updated: 2026-10-27 — the web face becomes the same app: its frame is built (R-SVC-4, DR-SVC-4).*
 
 ---
 
@@ -40,6 +40,28 @@ one integrator who moves, wires, tests and commits each stream:
       a clip selected from the page, Grade on `b` at +1.5 EV changed the picture and a double-click
       reset it, at 1280×800 and 390×844. Found on the way and fixed in the page: `clip add` needs
       `--in` and a `--track`; `rack select` takes the bind name, not the node number.
+- [~] **The web face is the same app (R-SVC-4 amended 2026-10-26: "have to make it like cosmo, port full
+      UI of solaris and interstellar to web").** Every widget of `app/` ported to `web/` as one module,
+      cosmo's way (logical px, generated tokens, eased, the same command lines).
+      **Built 2026-10-27 — the frame (DR-SVC-4):** the adapter gives the page what `AppHooks` gives the
+      window (`thumb`/`thumbs`, `peaks`, `still`, `capture`, `browse`, `frame {format: png}`); install
+      copies `web/BORROW` (cosmo's core, ui kit and the new `ui/{menu,menustrip,confirm}.js`) and writes
+      `files.json`; tokens cover all of Theme.h; `shell.js` = App.cpp (scale root, scaled down to fit a
+      phone, screens cross-fade, keys, layers); `edit/screen.js` = EditScreen::layout with a slot per
+      widget, each a placeholder in the native panel colours until its module lands; `edit/menus.js`,
+      the board file picker. Checked: `interstellar_ntwb` (6 cases), `_ntwb_api_current`,
+      `_web_tokens_current`; in a local Arstro Remote the frame lays out exactly as `cut_empty`,
+      `grade_empty`, `deliver_empty` (seams at x 233/1116, transport top 597, deck top 636 at
+      1440×900), tab and screen cross-fades, the UI-scale tween, the refusal chip, 390×844 scaled to fit.
+      Parity tooling: `interstellar_app_shots --model-json` writes each named state's model, transport,
+      view state, monitor frame and peaks; `core/Ntwb/tools/fixture_host.mjs` serves the page with that
+      exact model over a fake NTWB.
+      **Until the widgets land the Edit screen and Home are placeholders** — the board keeps the
+      previous page installed.
+  - [ ] Home + Loading + Settings · [ ] top bar + menus + versions + name prompt · [ ] monitor +
+        transport + scopes · [ ] Cut: timeline, source bin, clip inspector · [ ] key lane + key graph ·
+        [ ] Grade: rack, deck (+ node graph, stills), inspector (+ plugins, effects) · [ ] Deliver:
+        checks, output spec, render queue
 - [x] R-RENDER-5: an Interstellar still == the same frame from Cosmo (`interstellar_still_equals_cosmo`).
 - [x] **Integrate the UI stream** and write the GTK host (`linux_main.cpp`); `interstellar_live`
       renders the real app over the real service.

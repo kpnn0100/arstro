@@ -1,0 +1,52 @@
+/*
+ * Interstellar — dialogs/picker.css: the file picker (dialogs/picker.js) and the stand-ins the shell uses
+ * while a borrowed module is missing (dialogs/prompt.js, kit/menu-fallback.js, kit/confirm-fallback.js).
+ * The modal skeleton itself (.md, .md-card, the scrim, the fade) is cosmo's css/dialogs.css (borrowed).
+ * Cosmo's picker vocabulary (apps/cosmo/web/css/dialogs.css "picker"), Interstellar's tokens.
+ */
+.ip-t { position: absolute; white-space: pre; pointer-events: none; }
+.ip-fg { color: var(--foreground); }
+.ip-muted { color: var(--muted-foreground); }
+.ip-path { color: rgba(var(--white-rgb), 0.42); }
+.ip-box { position: absolute; left: 0; top: 0; background: var(--background); box-shadow: 0 0 0 0.5px var(--border), inset 0 0 0 0.5px var(--border);
+          border-radius: var(--radius-control); pointer-events: none; }
+.ip-list { position: absolute; left: 0; top: 0; overflow-y: auto; overflow-x: hidden; }
+.ip-rows { position: relative; width: 100%; transition: opacity var(--motion-scroll) var(--ease-out); }
+.ip-rows.fading { opacity: 0; }
+.ip-row { position: absolute; left: 0; top: 0; width: 100%; height: 26px; color: var(--foreground); transition: background-color var(--motion-hover) var(--ease-out); }
+.ip-row:hover { background: var(--hover-wash); }
+.ip-row.sel { background: rgba(var(--primary-rgb), 0.14); }
+.ip-row-ic { position: absolute; left: 0; top: 0; line-height: 0; color: rgba(var(--white-rgb), 0.42); pointer-events: none; }
+.ip-row-size { color: rgba(var(--white-rgb), 0.25); }
+.ip-check { position: absolute; left: 0; top: 0; width: 13px; height: 13px; border-radius: 3px; background: var(--secondary);
+            box-shadow: inset 0 0 0 1px var(--border); transition: background-color var(--motion-hover) var(--ease-out); }
+.ip-check.on { background: var(--primary); box-shadow: none; }
+.ip-check.on::after { content: ""; position: absolute; left: 4.5px; top: 2px; width: 3px; height: 6.5px; border: solid var(--primary-foreground);
+                      border-width: 0 1.8px 1.8px 0; transform: rotate(45deg); }
+.ip-note { color: rgba(var(--white-rgb), 0.22); opacity: 0; transition: opacity var(--motion-scroll) var(--ease-out); }
+.ip-note.on { opacity: 1; }
+.ip-field { position: absolute; left: 0; top: 0; box-sizing: border-box; margin: 0; border: 0; outline: 0; background: var(--background);
+            box-shadow: inset 0 0 0 1px var(--border); border-radius: var(--radius-control); color: var(--foreground);
+            font-family: var(--font-mono); font-size: 11px; line-height: 11px; padding: 0 8px; caret-color: var(--primary);
+            transition: box-shadow var(--motion-hover) var(--ease-out); user-select: text; -webkit-user-select: text; }
+.ip-field:focus { box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.6); }
+.ip-field.light { background: var(--input-light); color: var(--input-light-text); font-family: var(--font-sans); box-shadow: none; }
+.ip-btn { position: absolute; left: 0; top: 0; border-radius: var(--radius-control); color: var(--foreground);
+          transition: background-color var(--motion-hover) var(--ease-out), opacity var(--motion-hover) var(--ease-out); }
+.ip-btn::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: transparent; transition: background-color var(--motion-hover) var(--ease-out); }
+.ip-btn:hover::after { background: var(--hover-wash); }
+.ip-primary { background: var(--primary); color: var(--primary-foreground); }
+.ip-destructive { background: var(--destructive); color: var(--primary-foreground); }
+.ip-plain { background: var(--secondary); box-shadow: inset 0 0 0 1px var(--border); }
+.ip-btn.disabled { background: var(--secondary); color: rgba(var(--white-rgb), 0.22); box-shadow: inset 0 0 0 1px var(--border); }
+.ip-btn.disabled::after { display: none; }
+
+/* the stand-in context menu (kit/menu-fallback.js) */
+.ip-menu { position: absolute; left: 0; top: 0; background: var(--popover); box-shadow: 0 0 0 0.5px var(--border), inset 0 0 0 0.5px var(--border);
+           border-radius: var(--radius-control); opacity: 0; margin-top: 6px;
+           transition: opacity var(--motion-dropdown) var(--ease-out), margin-top var(--motion-dropdown) var(--ease-out); }
+.ip-menu.on { opacity: 1; margin-top: 0; }
+.ip-menu-row { position: absolute; left: 0; top: 0; height: 24px; color: var(--foreground); }
+.ip-menu-row:not(.inert):hover { background: rgba(var(--white-rgb), 0.08); }
+.ip-menu-row.inert { color: var(--muted-foreground); }
+.ip-field::selection { background: rgba(var(--primary-rgb), 0.26); color: inherit; }   /* ContextMenu.cpp:250 SEL_A, the kit's field selection */

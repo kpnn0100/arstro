@@ -1,0 +1,26 @@
+# Interstellar's web face borrows these of cosmo's, NOT forked: `interstellar-cc ntwb install` copies
+# each from apps/cosmo/web/<path> to the same <path> in the installed page (cli/NtwbMain.cpp). One path
+# per line, relative to apps/cosmo/web; `#` starts a comment. A listed file that is missing fails the
+# install, naming it. APPEND what a widget module needs - never rewrite or reorder this list.
+# Import them as ../core/signal.js, ../ui/controls.js … from a module in js/<area>/.
+
+# the reactive core, the keyed DOM helpers, the tweens (js/core)
+js/core/signal.js
+js/core/dom.js
+js/core/motion.js
+
+# the shared UI kit (js/ui) - PORTING.md §4
+js/ui/controls.js
+js/ui/slider.js
+js/ui/segmented.js
+js/ui/modal.js
+js/ui/icons.js
+js/ui/histogram.js
+js/ui/menu.js
+js/ui/menustrip.js
+js/ui/confirm.js
+
+# the stylesheets the kit reads (the kit loads ui-kit.css and dialogs.css itself)
+css/panels.css
+css/dialogs.css
+css/ui-kit.css

@@ -25,6 +25,24 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Open
 
+### D-15 — A command refused on Home or Loading is said where nobody can see it
+- **Area:** ui · **Status:** Open · **Severity:** S3 · **Found:** 2026-10-26, porting App.cpp to the
+  web face (R-SVC-4 amended).
+- **Reproduce:** on Home, click a recent project whose file was moved away (the card dispatches
+  `project open <path>`); or type nothing else — any refusal while `screen` is Home or Loading.
+- **Expected:** the refusal is SAID (R-G-4: "a refusal is said, never dropped"), on the screen showing.
+- **Actual:** nothing visible happens.
+- **Evidence:** `App::dispatch` (`app/App.cpp:521-529`) always calls `mEdit->showRefusal(...)`; the
+  chip is EditScreen's overlay, drawn at the Edit screen's opacity, which is 0 on Home and Loading
+  (`App::screenOpacity`, `App.cpp:501-509`). HomeScreen and LoadingView have no refusal display.
+- **Judgement:** defect (the requirement holds; the chip was placed on one screen).
+- **Cause:** `app/App.cpp:527`.
+- **Requirement:** R-G-4.
+- **Recommended fix:** a refusal chip the App owns, drawn over whichever screen is active (the same
+  look: popover, destructive border, the warn glyph), or one per screen. The web face shows the
+  refusal on every screen meanwhile (its shell's toast), and says so in `web/js/shell.js`.
+- **Guarded by:** — (a `ui` test: dispatch a refused line on Home, the chip's amount reaches 1 over Home).
+
 ### D-2 — Cosmo's save deletes an offline source and its grade (Cosmo D-66), and D-1 makes every video offline in Cosmo
 - **Area:** rack / cross-app · **Status:** Open — **mitigated** here, root cause in Cosmo ·
   **Severity:** S1 · **Found:** 2026-10-01, binding the rack's `.cmp` entries to `#rackobj`.

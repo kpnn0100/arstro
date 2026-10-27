@@ -171,10 +171,10 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/host/VideoFrameDecoder` · `HostFrameSource` · `PngWriter` | host | **built** — Cosmo's decoder seam, the timeline's source (stills through Cosmo's own decoder, for R-RENDER-5), PNG out |
 | `apps/interstellar/cli/main.cpp` | front end | **built** — `interstellar-cc`, argv/stdout only (DR-SVC-3) |
 | `apps/interstellar/cli/HostSetup.{h,cpp}` | front end | **built** — `makeHost()`: the codecs and the machine's paths every CLI face builds the service with (DR-SVC-3, DR-SVC-4) |
-| `apps/interstellar/cli/NtwbAdapter.{h,cpp}` · `NtwbMain.cpp` · `Ntwb.h` | front end | **built** — the web face: the service on the NTWB bridge (`interstellar-cc ntwb serve/install/uninstall/api`), per-page `frame` JPEGs (R-SVC-4, DR-SVC-4) |
+| `apps/interstellar/cli/NtwbAdapter.{h,cpp}` · `NtwbMain.cpp` · `Ntwb.h` | front end | **built** — the web face: the service on the NTWB bridge (`interstellar-cc ntwb serve/install/uninstall/api`), per-page pictures (`frame`, `thumb`, `still`, `capture`), `peaks`, `browse`; install copies `web/BORROW` (R-SVC-4, DR-SVC-4) |
 | `apps/interstellar/cli/webTokens.cpp` | tool | **built** — `interstellar_web_tokens`: `web/css/tokens.css` printed from `app/Theme.h` (R-SVC-4) |
-| `apps/interstellar/web/*` | web front end | **built** — the page Arstro Remote serves: model proxy, view-model, views (Home; Edit: monitor + transport, Cut/Grade/Deliver inspector, timeline, console) (R-SVC-4, DR-SVC-4) |
-| `apps/interstellar/cli/tests/ntwbAdapterTests.cpp` | test | **built** — `interstellar_ntwb`: the adapter over an in-memory bridge, and `ntwb install` into a scratch dir (DR-SVC-4) |
+| `apps/interstellar/web/*` | web front end | **in progress** — the native front end ported widget by widget: the FRAME is built (model proxy, view-model, `shell.js` = App.cpp, `edit/screen.js` = EditScreen with one slot per widget, kit, menus, file picker); the widget modules are being ported (R-SVC-4, DR-SVC-4) |
+| `apps/interstellar/cli/tests/ntwbAdapterTests.cpp` | test | **built** — `interstellar_ntwb`: the adapter over an in-memory bridge (pictures, peaks, browse), and `ntwb install` into a scratch dir with its BORROW list (DR-SVC-4) |
 | `apps/interstellar/app/*` | app | **built** — Home · Edit · the three tabs over `AppHooks`; cosmo's panels, `MenuStrip` and `SettingsDialog` compiled in; screen scale (R-UI, DR-UI-1..9; `app/NOTES.md`) |
 | `apps/interstellar/linux_main.cpp` | host | **built** — the GTK3 window: hooks bound to the service, pickers, frame tick (DR-UI-4) |
 | `apps/interstellar/host/Thumbnailer.{h,cpp}` | host | **built** — the app's optional `thumbnail` hook, cached |

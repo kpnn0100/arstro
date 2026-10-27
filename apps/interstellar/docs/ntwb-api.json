@@ -40,9 +40,94 @@
           "type": "int",
           "required": false,
           "doc": "the long edge in pixels, 64-3840 (default 960)"
+        },
+        "format": {
+          "type": "str",
+          "required": false,
+          "doc": "jpeg (default) | png - the frame's exact 8-bit pixels, for scopes that must read what the window's do"
         }
       },
       "result": "{seq, w, h, bytes, ms}, or {empty: true, lastError} when there is nothing to show"
+    },
+    "thumb": {
+      "doc": "a small still of a media file - a Home cover, a filmstrip cell, the reference strip (the window's thumbnail hook) - to this page alone (stream `thumb`); decoded off the loop, so a still not decoded yet answers ready: false: ask again when state `thumbs` rises",
+      "params": {
+        "path": {
+          "type": "str",
+          "required": true,
+          "doc": "a media file as the model names it (rack[].media, recents[].coverPath)"
+        },
+        "t": {
+          "type": "float",
+          "required": false,
+          "doc": "seconds into it (default 0)"
+        },
+        "edge": {
+          "type": "int",
+          "required": false,
+          "doc": "the long edge in pixels, 16-1024 (default 160)"
+        }
+      },
+      "result": "{ready: true, epoch, w, h, bytes} | {ready: false, epoch}"
+    },
+    "peaks": {
+      "doc": "a file's waveform envelope: the peak of |L|,|R| per 1/perSecond s (R-AUD-7); not computed yet = ready: false, and model.peaksEpoch rises when it lands",
+      "params": {
+        "media": {
+          "type": "str",
+          "required": true,
+          "doc": "an audio clip's media as the model names it (clips[].media)"
+        },
+        "perSecond": {
+          "type": "float",
+          "required": false,
+          "doc": "a coarser envelope: at most this many peaks a second (default: the service's own)"
+        }
+      },
+      "result": "{ready: true, perSecond, peaks: [0..1]} | {ready: false, peaksEpoch}"
+    },
+    "still": {
+      "doc": "a gallery still's picture (R-CLR-4) to this page alone (stream `still`)",
+      "params": {
+        "id": {
+          "type": "str",
+          "required": true,
+          "doc": "a still's id (model.stills[].id)"
+        },
+        "edge": {
+          "type": "int",
+          "required": false,
+          "doc": "the long edge in pixels, 0 = its own size (default 320)"
+        }
+      },
+      "result": "{w, h, bytes} | {empty: true}"
+    },
+    "capture": {
+      "doc": "what the monitor shows, at full resolution, as a PNG to this page alone (stream `capture`) - Copy Frame (R-UI-11): the page puts it on its own clipboard",
+      "params": {
+        "bind": {
+          "type": "str",
+          "required": false,
+          "doc": "a rack source's bind name (Grade: its reference frame); default: the timeline at the playhead"
+        }
+      },
+      "result": "{seq, w, h, bytes}; a refusal says why"
+    },
+    "browse": {
+      "doc": "list a folder of this machine for the page's file picker: sub-folders first, then the files of the kinds asked, by name; dot-files hidden",
+      "params": {
+        "path": {
+          "type": "str",
+          "required": false,
+          "doc": "the folder to list (default: the home folder)"
+        },
+        "kinds": {
+          "type": "list[str]",
+          "required": false,
+          "doc": "the file kinds to list: project | video | image | audio | lut | timeline | captions | preset | file (anything else); default every kind but file; folders always"
+        }
+      },
+      "result": "{path, parent, entries: [{name, path, kind, size?}]}"
     }
   },
   "events": {
@@ -167,13 +252,32 @@
     "transport": {
       "doc": "what moves without an edit, pushed when it changed (at most 25/s)",
       "data": "{playing, playhead, playheadFrame, duration, shuttle, frameSeq, sourceView, sourcePlayhead, soundPlaying, meterPeak: [l, r], meterRms: [l, r], meterClip}"
+    },
+    "thumbs": {
+      "doc": "the thumbnailer's epoch: it rises whenever a still asked for with `thumb` was decoded - ask again for what came back ready: false",
+      "data": "{epoch}"
     }
   },
   "streams": {
     "frame": {
       "doc": "the picture a page asked for (answer to `frame`), to that page alone",
+      "mime": "image/jpeg | image/png (format png)",
+      "meta": "{seq, t, source, w, h, edge, frameSeq, ms, format}"
+    },
+    "thumb": {
+      "doc": "a still of a media file a page asked for (answer to `thumb`), to that page alone",
       "mime": "image/jpeg",
-      "meta": "{seq, t, source, w, h, edge, frameSeq, ms}"
+      "meta": "{path, t, edge, epoch, w, h}"
+    },
+    "still": {
+      "doc": "a gallery still's picture a page asked for (answer to `still`), to that page alone",
+      "mime": "image/jpeg",
+      "meta": "{id, edge, w, h}"
+    },
+    "capture": {
+      "doc": "the monitor's picture at full resolution (answer to `capture`), to that page alone",
+      "mime": "image/png",
+      "meta": "{seq, bind, w, h}"
     }
   }
 }

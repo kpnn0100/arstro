@@ -119,7 +119,8 @@ target_compile_definitions(interstellar_app PUBLIC ARTBOARD_CAIRO_FT)
 # ── the headless shot harness: one PNG per named state ──
 add_executable(interstellar_app_shots ${IS_APP_DIR}/tests/shots/renderShots.cpp)
 target_include_directories(interstellar_app_shots PRIVATE ${IS_APP_DIR}/tests)
-target_link_libraries(interstellar_app_shots PRIVATE interstellar_app)
+# interstellar_core only for --model-json (the fixtures a web face is compared against: the codec)
+target_link_libraries(interstellar_app_shots PRIVATE interstellar_app interstellar_core)
 add_test(NAME interstellar_app_shots
          COMMAND interstellar_app_shots --outdir ${CMAKE_CURRENT_BINARY_DIR}/shots-ctest --check)
 

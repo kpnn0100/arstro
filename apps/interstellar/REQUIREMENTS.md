@@ -464,6 +464,16 @@ reserves the rest so adopting it is not a migration.
   own picture (`frame`) and gets it alone, as a JPEG. `wait` and `quit` are refused with the reason;
   sessions are separate projects (`single: false`). The page's tokens are generated from `app/Theme.h`,
   its reactive core and faces are cosmo's, copied beside it (borrowed, not forked); it works at 360 px.
+  **The web face is THE SAME APP as the window** *(amended 2026-10-26: "have to make it like cosmo, port
+  full UI of solaris and interstellar to web")*: every screen, panel, menu, dialog and control of
+  `app/` — Home, Loading, the Edit screen's top bar, monitor, transport and the Grade / Cut / Deliver
+  pages with every widget in them — is ported widget by widget, as cosmo's web face ports its App
+  (cosmo R-NTWB-5): the same logical-px geometry under a per-page UI scale, the generated tokens, the
+  window's faces, every visible change eased (R-G-1), and every control sending the command line the
+  native widget sends. What the window gets through `AppHooks` beyond the model (thumbnails, audio
+  peaks, stills, a source's picture) the page asks the adapter for, for itself alone; the board's
+  files are browsed through the adapter where the window opens a native picker. A page smaller than
+  the window's minimum is scaled down to fit (a phone sees the whole app).
 - **R-API-1 The API document is GENERATED, COMMITTED and DRIFT-TESTED.** `interstellar-cc api
   [--json]` prints every command with its grammar and argument hints, every event with its fields,
   every `AppModel` field, and the whole parameter address space with units, ranges and owners —

@@ -14,14 +14,32 @@
  *     the app's own type — a shot in the host's default sans reports overflow that does not exist.
  *
  *  Usage:
- *     interstellar_app_shots [--outdir DIR] [--only SUBSTR] [--size WxH] [--tree] [--check] [--list]
+ *     interstellar_app_shots [--outdir DIR] [--only SUBSTR] [--size WxH] [--tree] [--check] [--list] [--model-json]
  *  Without --size, every shot is rendered at 1440x900 AND 1024x640.
+ *
+ *  --model-json: the web face's verification fixtures (MVVM, NTWB-11). Beside each PNG, per shot (named
+ *  WITHOUT the size — give --size so one size writes them; without it the last size wins):
+ *     <shot>.model.json      the AppModel the App drew, by the codec `state print --json` and the NTWB
+ *                            `model` state use (modelToJson, default options)
+ *     <shot>.transport.json  the NTWB `transport` state for that model (NtwbAdapter::transportJson's keys)
+ *     <shot>.frame.png       the picture the monitor showed (the hook's answer, re-asked once after the PNG:
+ *                            the Grade source / the source viewer / the timeline at the playhead) — absent
+ *                            when the monitor showed none
+ *     <shot>.peaks.json      the audio clips' waveform envelopes the audioPeaks hook gave (when any)
+ *     <shot>.view.json       best effort: the VIEW state the shot put the App in, which the web view-model
+ *                            must be told (keys documented at writeView below)
+ *  The PNG is written first and nothing here feeds back into the App, so the PNGs are byte-identical
+ *  with and without the flag.
  */
 #include "App.h"
 #include "EmbeddedFonts.h"
 #include "adapter/native/CairoTarget.h"
 #include "FakeService.h"
 #include "Rig.h"
+// --model-json: the codec `state print --json` and the NTWB adapter use (interstellar_core, linked
+// into this tool only — the app itself is built without the service, AppHooks.h).
+#include "AppModelCodec.h"
+#include "Json.h"
 #include <cairo/cairo.h>
 #include <cstdio>
 #include <cstdlib>
@@ -50,7 +68,7 @@ namespace
         std::string outdir = "shots";
         std::string only;
         int w = 0, h = 0;
-        bool tree = false, check = false, list = false;
+        bool tree = false, check = false, list = false, modelJson = false;
     } gOpt;
 
     using istest::Rig;
@@ -84,6 +102,205 @@ namespace
         std::function<void(FakeService &)> setup;
         std::function<void(Rig &)> drive;
     };
+
+    // ── --model-json: the fixtures a web face is compared against ───────────────────────
+
+    using arstro::interstellar::Json;
+
+    bool writeText(const std::string &path, const std::string &text)
+    {
+        std::ofstream o(path, std::ios::binary);
+        o << text;
+        return (bool)o;
+    }
+
+    /** The NTWB `transport` state — apps/interstellar/cli/NtwbAdapter.cpp transportJson, the same keys
+     *  in the same order (the cli target is not linked here; keep the two in step). */
+    Json transportJson(const arstro::interstellar::AppModel &m)
+    {
+        Json t = Json::object();
+        t.set("playing", m.playing);
+        t.set("playhead", m.playhead);
+        t.set("playheadFrame", m.playheadFrame);
+        t.set("duration", m.duration);
+        t.set("shuttle", m.shuttle);
+        t.set("frameSeq", (long long)m.frameSeq);
+        t.set("sourceView", m.sourceView);
+        t.set("sourcePlayhead", m.sourcePlayhead);
+        t.set("soundPlaying", m.soundPlaying);
+        t.set("meterPeak", Json::array().push(Json::number(m.meterPeakL)).push(Json::number(m.meterPeakR)));
+        t.set("meterRms", Json::array().push(Json::number(m.meterRmsL)).push(Json::number(m.meterRmsR)));
+        t.set("meterClip", m.meterClip);
+        return t;
+    }
+
+    /** A Raster (straight RGBA8, top-down; or the deep RGBA16) as a PNG, through cairo. */
+    bool writeRasterPng(const arstro::interstellar::Raster &r, const std::string &path)
+    {
+        if (r.width <= 0 || r.height <= 0) return false;
+        cairo_surface_t *s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, r.width, r.height);
+        unsigned char *d = cairo_image_surface_get_data(s);
+        const int stride = cairo_image_surface_get_stride(s);
+        const bool deep = r.rgba.empty() && !r.rgba16.empty();
+        for (int y = 0; y < r.height; ++y)
+            for (int x = 0; x < r.width; ++x)
+            {
+                const size_t i = ((size_t)y * r.width + x) * 4;
+                auto c = [&](int k) { return deep ? (uint32_t)(r.rgba16[i + k] >> 8) : (uint32_t)r.rgba[i + k]; };
+                const uint32_t a = c(3), red = c(0) * a / 255, g = c(1) * a / 255, b = c(2) * a / 255;   // cairo is premultiplied
+                *(uint32_t *)(d + (size_t)y * stride + (size_t)x * 4) = (a << 24) | (red << 16) | (g << 8) | b;
+            }
+        cairo_surface_mark_dirty(s);
+        const bool ok = cairo_surface_write_to_png(s, path.c_str()) == CAIRO_STATUS_SUCCESS;
+        cairo_surface_destroy(s);
+        return ok;
+    }
+
+    /** The monitor's picture, asked again the way App::fetchFrame asked it (App.cpp): Grade shows the
+     *  selected source alone (at the time the App last asked — its reference frame, or a slider's
+     *  preview), Cut with a viewed source the source viewer, else the timeline at the playhead. Returns
+     *  the `frame` object of the view file (null when there is no Edit screen). */
+    Json writeFrame(Rig &r, const std::string &base, const std::string &fileName)
+    {
+        using arstro::interstellar::Screen;
+        const auto &m = r.svc.m;
+        if (r.app->screen() != Screen::Edit) return Json::null();
+        auto &ed = r.app->edit();
+        auto mon = ed.monitor();
+        const int edge = mon->wantedProxyEdge();
+        std::string kind = "timeline", source;
+        double t = m.playhead;
+        if (ed.tab() == EditScreen::Grade && m.selectedRack >= 0 && m.selectedRack < (int)m.rack.size())
+        {
+            const auto &n = m.rack[(size_t)m.selectedRack];
+            if (!n.group && !n.failed && !n.bindName.empty()) { kind = "source"; source = n.bindName; t = -1.0; }
+        }
+        if (kind == "timeline" && ed.tab() == EditScreen::Cut && !m.sourceView.empty()) { kind = "viewer"; source = m.sourceView; t = m.sourcePlayhead; }
+        if (kind != "timeline" && !r.svc.sourceCalls.empty() && r.svc.sourceCalls.back().first == source) t = r.svc.sourceCalls.back().second;
+        arstro::interstellar::Raster ras;
+        const bool ok = kind == "timeline" ? r.svc.renderFrame(t, edge, ras) : r.svc.renderSource(source, t, edge, ras);
+        Json f = Json::object();
+        f.set("kind", kind).set("source", source).set("t", t).set("edge", edge);
+        if (ok && writeRasterPng(ras, base + ".frame.png"))
+            f.set("file", fileName).set("w", ras.width).set("h", ras.height);
+        else
+            f.set("file", Json::null()).set("empty", true);
+        return f;
+    }
+
+    /** <shot>.view.json — the presentation the shot left the App in (none of it is in the model).
+     *  Keys (absent = not applicable on that screen):
+     *    app, shot, size {w, h}
+     *    screen        home | loading | edit — the screen the App shows (its cross-fade's target)
+     *    tab, tabIndex grade | cut | deliver, 0..2 — the Edit tab
+     *    uiScale       the drawn screen scale, percent (cosmo R-SCALE; eased toward settings.uiScale)
+     *    homeClock     unix seconds Home's relative dates ("2 h ago") are measured from (FakeService::kNow)
+     *    settingsOpen  Engine Settings (cosmo's SettingsDialog) is open
+     *    menuOpen      the menu strip's open menu index, -1 none (Edit only)
+     *    contextMenu   {open, items: [labels]} — the right-click menu (Edit only)
+     *    confirmOpen   the ConfirmDialog (Save changes?) is open
+     *    namePromptOpen, versionsOpen   the name prompt / the version switcher's list
+     *    toast         {amount, error} — the chip's presence (its words: model.lastError for a refusal)
+     *    grade         {inspectorTab, plugin ("" = Cosmo), scopeMode (0 off,1 waveform,2 parade,3 vector),
+     *                   scopeWaveRgb, scopeClipWarning, deckView (0 frames,1 stills,2 nodes),
+     *                   deckLevel (group #rackobj, "" top), rackSelected (row index)}
+     *    cut           {keysShown, keySelected (address), pps (px a second, target), scroll (seconds, live)}
+     *    monitor       {state: frame|loading|empty, zoom (target), edge (the proxy edge it asks)}
+     *    deliver       {format, flags (OutputSpec::specFlags — the render line's spec)}
+     *    frame         {kind: source|viewer|timeline, source, t, edge, file|null, w, h, empty} — what
+     *                  the page's `frame` call should get back (see <shot>.frame.png)
+     */
+    void writeView(Rig &r, const std::string &name, const std::string &base)
+    {
+        using arstro::interstellar::Screen;
+        Json v = Json::object();
+        v.set("app", "interstellar").set("shot", name);
+        v.set("size", Json::object().set("w", r.w).set("h", r.h));
+        v.set("screen", arstro::interstellar::screenName(r.app->screen()));
+        v.set("uiScale", r.app->drawnUiScale() * 100.0);
+        v.set("homeClock", FakeService::kNow());
+        v.set("settingsOpen", r.app->settings().isOpen());
+        if (r.app->screen() == Screen::Edit)
+        {
+            auto &ed = r.app->edit();
+            static const char *kTabs[3] = {"grade", "cut", "deliver"};
+            const int tab = ed.tab();
+            v.set("tab", tab >= 0 && tab < 3 ? kTabs[tab] : "").set("tabIndex", tab);
+            v.set("menuOpen", ed.topBar()->menus()->openIndex());
+            auto cm = ed.contextMenu();
+            Json items = Json::array();
+            if (cm->isOpen())
+                for (int i = 0; i < cm->itemCount(); ++i) items.push(Json::string(cm->item(i).label));
+            v.set("contextMenu", Json::object().set("open", cm->isOpen()).set("items", items));
+            v.set("confirmOpen", ed.confirm()->isOpen());
+            v.set("namePromptOpen", ed.namePrompt()->isOpen());
+            v.set("versionsOpen", ed.topBar()->versions()->isOpen());
+            v.set("toast", Json::object().set("amount", ed.toastAmount()).set("error", ed.toastIsError()));
+            auto gi = ed.gradeInspector();
+            auto deck = ed.gradeDeck();
+            v.set("grade", Json::object()
+                               .set("inspectorTab", gi->tabs()->selectedIndex())
+                               .set("plugin", gi->plugins()->selected())
+                               .set("scopeMode", gi->scopes()->mode())
+                               .set("scopeWaveRgb", gi->scopes()->waveRgb())
+                               .set("scopeClipWarning", gi->scopes()->clipWarning())
+                               .set("deckView", deck->view())
+                               .set("deckLevel", deck->shownLevel())
+                               .set("rackSelected", ed.rackTree()->selected()));
+            auto tl = ed.timeline();
+            v.set("cut", Json::object()
+                             .set("keysShown", tl->keysShown())
+                             .set("keySelected", tl->keyLane()->selected())
+                             .set("pps", tl->ppsTarget())
+                             .set("scroll", tl->scrollLive()));
+            auto mon = ed.monitor();
+            static const char *kStates[3] = {"frame", "loading", "empty"};
+            v.set("monitor", Json::object()
+                                 .set("state", kStates[(int)mon->state()])
+                                 .set("zoom", mon->zoomTarget())
+                                 .set("edge", mon->wantedProxyEdge()));
+            auto os = ed.outputSpec();
+            v.set("deliver", Json::object().set("format", os->format()).set("flags", os->specFlags()));
+        }
+        const std::string frameFile = name + ".frame.png";
+        std::error_code ec;
+        fs::remove(base + ".frame.png", ec);   // a stale picture from an earlier run must not outlive its shot
+        v.set("frame", writeFrame(r, base, frameFile));
+        writeText(base + ".view.json", v.dump());
+    }
+
+    /** <shot>.peaks.json — {<clips[].media>: {perSecond, peaks: [...]}}: what the App's audioPeaks hook
+     *  answered for each audio clip's file (R-AUD-7; the NTWB `peaks` method's answer), rounded to 1e-4.
+     *  Not written when no audio clip has an envelope. */
+    void writePeaks(Rig &r, const std::string &base)
+    {
+        std::error_code ec;
+        fs::remove(base + ".peaks.json", ec);
+        const auto hooks = r.svc.hooks();
+        Json all = Json::object();
+        std::vector<std::string> done;
+        for (const auto &c : r.svc.m.clips)
+        {
+            if (!c.audio || c.media.empty() || std::find(done.begin(), done.end(), c.media) != done.end()) continue;
+            done.push_back(c.media);
+            std::vector<float> pk;
+            double per = 0.0;
+            if (!hooks.audioPeaks || !hooks.audioPeaks(c.media, pk, per)) continue;
+            Json a = Json::array();
+            for (float v : pk) a.push(Json::number(std::round((double)v * 1e4) / 1e4));
+            all.set(c.media, Json::object().set("perSecond", per).set("peaks", a));
+        }
+        if (!all.members().empty()) writeText(base + ".peaks.json", all.dump());
+    }
+
+    void writeFixture(Rig &r, const std::string &name)
+    {
+        const std::string base = gOpt.outdir + "/" + name;
+        writeText(base + ".model.json", arstro::interstellar::modelToJson(r.svc.m).dump());
+        writeText(base + ".transport.json", transportJson(r.svc.m).dump());
+        writePeaks(r, base);
+        writeView(r, name, base);
+    }
 
     // ── the shot list ────────────────────────────────────────────────────────────────────
 
@@ -845,9 +1062,10 @@ int main(int argc, char **argv)
         else if (a == "--tree") gOpt.tree = true;
         else if (a == "--check") gOpt.check = true;
         else if (a == "--list") gOpt.list = true;
+        else if (a == "--model-json") gOpt.modelJson = true;
         else
         {
-            std::printf("usage: interstellar_app_shots [--outdir DIR] [--only SUBSTR] [--size WxH] [--tree] [--check] [--list]\n");
+            std::printf("usage: interstellar_app_shots [--outdir DIR] [--only SUBSTR] [--size WxH] [--tree] [--check] [--list] [--model-json]\n");
             return a == "--help" ? 0 : 2;
         }
     }
@@ -885,6 +1103,11 @@ int main(int argc, char **argv)
                 dumpTree(o, *rig.app->activeRoot(), 0);
                 if (rig.app->settings().isOpen()) dumpTree(o, rig.app->settings(), 0);
                 std::printf("     tree %s.tree.txt\n", base.c_str());
+            }
+            if (gOpt.modelJson)   // after the PNG: the fixtures never change what was drawn
+            {
+                writeFixture(rig, s.name);
+                std::printf("     model %s/%s.{model,view,transport}.json\n", gOpt.outdir.c_str(), s.name.c_str());
             }
         }
     }

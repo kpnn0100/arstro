@@ -253,18 +253,47 @@ sourcePlayhead, soundPlaying, meterPeak, meterRms, meterClip}` when it changed (
 `Event` is relayed as `{line: formatEvent, fields}` under `eventName`. `cli/NtwbMain.cpp`:
 `ntwb api` prints `apiDescription()`; `install [--data-dir D] [--web-dir W]` writes
 `<D>/interstellar/{ntwb.json, api.json, web/}` (manifest: `capabilities: [blobs]`, `single: false`,
-exec = this binary), copying cosmo's `web/js/core/{signal,dom}.js` and fonts beside the page;
+exec = this binary), copying the cosmo files `web/BORROW` lists and the fonts beside the page;
 `serve` builds the service with `cli/HostSetup.cpp`'s `makeHost()` — the same host `interstellar-cc`
 uses (moved there unchanged from `main.cpp`) — and loops `poll(8)` → `pump(monotonic ms)` → `tick`.
 The JPEG encoder is GdkPixbuf's (linked through `interstellar_host`); a build without it refuses
-`frame` naming why. The page, `web/`: `js/model/session.js` (the model's proxy: `model`,
-`transport`, `frame`, events, `api()` = `api --json` for the address table), `js/vm/edit.js` (shared
-values from the model; own `view.{tab, deck, pxPerSec, monitorEdge}`; one command line per intent;
-the monitor's picture requested per page, one in flight), `js/views/{topbar, home, monitor, timeline,
-inspector, console}.js`; `css/tokens.css` is `interstellar_web_tokens`' output. Guarded by
+`frame` naming why. **What the window gets through `AppHooks`** besides the model, the page asks for, for itself alone
+(added 2026-10-27 for the same-app port): `thumb {path, t, edge}` → blob `thumb` `meta {path, t,
+edge, epoch, w, h}` or `{ready: false}` until decoded (the host's Thumbnailer; state `thumbs {epoch}`
+moves when a decode lands, the window's `thumbnailEpoch`); `peaks {media, perSecond?}` → `{ready,
+perSecond, peaks}` (`audioPeaks`; a coarser rate takes each group's peak, quantised to 1e-4); `still
+{id, edge?}` → blob `still` (`stillPicture`, box-downscaled); `capture {bind?}` → a full-size PNG blob
+(Copy Frame: the page writes its own clipboard); `browse {path?, kinds?}` → `{path, parent, entries:
+[{name, path, kind, size?}]}` (kinds project, video, image, audio, lut, timeline, captions, preset,
+file — the web's stand-in for the host's file choosers); `frame {format: "png"}` → the exact 8-bit
+pixels the scopes need (`Scopes.cpp` reads the 8-bit raster; JPEG loss was the only gap). `install`
+copies the cosmo files `web/BORROW` lists (one path per line; a missing one fails the install by
+name, before anything is replaced) and writes `web/files.json` (the page's own file list, so a
+widget module not written yet is never fetched). `cli/webTokens.cpp` prints every token of
+`app/Theme.h` plus the cosmo ones the borrowed `ui/*` read; `css/tokens.css` is its output.
+**The page, as built 2026-10-27 — the FRAME of the same-app port (R-SVC-4, amended 2026-10-26):**
+`js/main.js` boots bridge → `js/model/session.js` (state signals, event and blob routers; picture
+caches by key — thumbs by path+t+edge+epoch, stills, peaks — LRU, object URLs revoked) →
+`js/vm/app.js` (the view-model: model-derived signals, the page's own view state — tab, per-page UI
+scale, monitor edge, deck level, rack open…; `cmd(line)` with the refusal said; providers between
+widgets) → `js/shell.js` (App.cpp: the logical-px root under the eased UI scale, minimum
+`App::minWidth/minHeight`, SCALED DOWN to fit a smaller window — web-only, so a phone sees the whole
+app; Home / Loading / Edit cross-faded 260 ms; `App::editKey`; the menu and modal layers; ctx
+`{toast, menu, confirm, prompt, pick, box, size, scale, point, layers, slot}`) → `js/edit/screen.js`
+(EditScreen::layout's exact arithmetic, the three FadePages, the transport's eased presence, the
+refusal/notice chip, and one SLOT per native widget: `edit/{topbar, monitor, transport, scopes}`,
+`grade/{rack, inspector, deck}`, `cut/{bin, inspector, timeline}`, `deliver/{checks, output, queue}`,
+`home/{home, loading}`). `js/kit/slot.js` loads a widget module (`export function mount(host, vm,
+ctx)`) by dynamic import: one that is absent keeps a quiet placeholder in the native panel colours,
+one that fails says so in its box, and the rest of the page keeps working. `js/edit/menus.js` holds
+the App's menus that cross widgets (rack context, input colour, capture, relink, place-timeline,
+`requestHome`, every host picker); `js/dialogs/picker.js` is the board file browser over `browse`.
+The widgets themselves are ported module by module (PROGRESS: the web face is the same app). Guarded by
 `interstellar_ntwb` (the real service and adapter over `ntwb::MemoryTransport`: a call is a command
 line, refusals and the `command.rejected` event, `model` == `state print --json`, a `frame` goes to
-its page alone, a build with no encoder refuses `frame`, `ntwb install` into a scratch dir), by
+its page alone, a build with no encoder refuses `frame`, `thumb` / its epoch, `peaks`, `still`, `capture`, `browse`,
+`frame {format: png}`, a missing thumbnailer, `ntwb install` into a scratch dir with its BORROW list
+and the failure on a missing entry), by
 `interstellar_ntwb_api_current` (`docs/ntwb-api.json`) and by `interstellar_web_tokens_current`.
 
 ### DR-API-1 The API document is generated, committed and drift-tested — rung 4 (R-API-1)
