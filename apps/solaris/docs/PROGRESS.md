@@ -210,7 +210,8 @@ umbrella's pointer — `arstro.rule` §7).
   - **Widgets landed 2026-10-27** (ten parallel ports at the user's request, "use multi agent for fast
     implement"): [x] Home · [x] song bar + menus · [x] history (song versions) · [x] session view ·
     [~] timeline (ruler, lanes, clips, zoom, select / move / duplicate / length, seek, markers band,
-    loop brace, the browser drop target — not yet automation, chords, tempo, takes, video lane, folding,
+    loop brace, the browser drop target, a double-click on a note clip opens its piano roll (2026-10-27, the user:
+    "double click midi roll should show piano roll for that midi") — not yet automation, chords, tempo, takes, video lane, folding,
     box select, clip edit handles, context menus) · [~] mixer dock (strips, faders, pan, meters, M/S/R,
     sends, master, tabs — not yet the matrix page, VCA, freeze, sidechain labels, group headers, menus)
     · [x] loudness · [~] device panel + param menu (parameter rows, choice menu, presets — analog

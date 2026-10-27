@@ -2,7 +2,8 @@
  * Solaris — timeline/timeline.js: Timeline.cpp in the page — the ruler (markers' band, bars / beats, the loop), the lane
  * headers, the lanes' grid, the clips, the playhead; Ctrl+wheel zoom (×1.25 a step, anchored at the pointer) and the
  * scroll, both EASED (motion.scroll EaseOutCubic); click selects, drag moves, the right edge trims, a click on the ruler
- * seeks — each gesture sends EXACTLY the native's line (Timeline::handleGesture):
+ * seeks, a double-click on a note clip opens its piano roll (vm.openRoll) — each gesture sends EXACTLY the native's
+ * line (Timeline::handleGesture):
  *   clip move <id> [--at <beats>] [--lane <ln>]   ·   clip duplicate <id> --at <beats> [--lane <ln>]  (Shift held)
  *   set <id>.length=<beats>   ·   transport seek <beats>   ·   transport loop <a> <b> (ruler dragged with Shift)
  * Provides vm.dnd.lanes (vm/dnd.js) and draws vm.dnd.hint.
@@ -352,8 +353,14 @@ export function mount(host, vm, ctx) {
   el.addEventListener("pointerup", (e) => up(e, false));
   el.addEventListener("pointercancel", (e) => up(e, true));
   el.addEventListener("dblclick", (e) => {
-    const L = local(e), ri = rowAt(L.y);
-    if (L.x < kHeaderW || clipAt(L.x, L.y) || ri < 0 || ri >= rows.length || !rows[ri].lane) return;
+    const L = local(e), ri = rowAt(L.y), id = clipAt(L.x, L.y);
+    if (id) {
+      // a note clip: its piano roll, for that clip (Timeline::onOpenPattern, R-ROLL-1, R-ROLL-6)
+      const c = clipById(id);
+      if (c && c.kind === "note" && c.pattern && vm.openRoll) vm.openRoll(c.pattern, c.id);
+      return;
+    }
+    if (L.x < kHeaderW || ri < 0 || ri >= rows.length || !rows[ri].lane) return;
     vm.cmd("clip add --lane " + vm.q(rows[ri].lane) + " --at " + beats(snap(xToBeat(L.x))) + " --length " + beats(bpb));
   });
   el.addEventListener("wheel", (e) => {
