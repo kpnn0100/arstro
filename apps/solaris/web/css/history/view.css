@@ -1,0 +1,4 @@
+/* Solaris — the history tree (history/view.js): one canvas over the whole root, modal while open. */
+.sl-historyview { position: absolute; inset: 0; }
+.sl-historyview > canvas { position: absolute; left: 0; top: 0; display: block; touch-action: none; }
+.sl-historyview:not(.open) { pointer-events: none; }

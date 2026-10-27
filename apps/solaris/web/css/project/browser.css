@@ -1,0 +1,15 @@
+/*
+ * Solaris — css/project/browser.css: the Browser's box (project/browser.js). Everything it shows is drawn on its canvas,
+ * as the native's onPaint; the box only takes the pointer.
+ */
+.sl-browser {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  background: var(--header-bg);
+}
+.sl-browser.sl-browser-dragging { cursor: grabbing; }

@@ -1704,6 +1704,21 @@ panel colours, one that fails says so in its box, and the rest of the page keeps
 `js/dialogs/picker.js` is the board file browser over `browse`. The widgets themselves are ported
 module by module (PROGRESS: the web face is the same app). The first page (song bar, Home, lanes,
 mixer, console — `js/views/*`, `js/vm/song.js`) is replaced by this frame.
+**The widgets, ported 2026-10-27** (each a module in its slot, from its native file's layout / paint /
+gestures with the native's numbers and command lines): `home/home.js` (HomeScreen), `project/songbar.js`
+(SongBar with cosmo's MenuStrip and the song menus), `project/browser.js` (Browser: the four tabs, folders
+through `browse`, audition, the drag and double-click to the lanes), `timeline/timeline.js` (Timeline's
+core: ruler, lanes, clips, zoom, select / `clip move` / `clip duplicate` / `set <clip>.length`, seek,
+markers band, loop brace, the drop target `vm.dnd.lanes`), `mixer/dock.js` + `mixer/law.js` (MixerDock:
+strips, the fader law and meter scale of FaderLaw.h, pan, sends, M/S/R, master, tabs), `mixer/loudness.js`,
+`mixer/parammenu.js`, `device/panel.js` (DevicePanel), `windows/layer.js` (FloatWindow + WindowLayer:
+contents by kind with `ctx.window`), `piano/roll.js` (PianoRoll), `session/view.js` (SessionView),
+`history/view.js` (cosmo's HistoryView as Solaris opens it), `sheets/{settings,export,relink}.js`.
+Not yet: the automation and video windows' contents, the conflicts sheet, and the parts PROGRESS C4c lists.
+Checked against the native shots' own models (`mixer-sources` 4.2 % of pixels, `piano-roll` 4.4 %,
+`browser-instruments` 4.6 %, the lanes, session view and history line up) and live over the real
+`solaris-cc` in a local Arstro Remote: a song built by commands draws its lanes, clips and strips, a
+piano-roll window and the settings sheet open, a refusal is said; no console errors.
 
 **Proof.** `solaris_ntwb` (`tests/faces/ntwbAdapterTests.cpp`): the real service, adapter and
 `ntwb::Client` over `ntwb::MemoryTransport` with a fake host — calls become commands, a refusal is a

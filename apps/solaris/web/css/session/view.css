@@ -1,0 +1,3 @@
+/* Solaris — SessionView (session/view.js): one canvas filling the timeline's box. */
+.sl-session { overflow: hidden; }
+.sl-session > canvas { position: absolute; left: 0; top: 0; display: block; touch-action: none; }

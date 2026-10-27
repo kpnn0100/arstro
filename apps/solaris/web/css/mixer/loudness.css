@@ -1,0 +1,3 @@
+/* Solaris — mixer/loudness.css: LoudnessPanel. */
+.sl-loud { position: absolute; inset: 0; overflow: hidden; }
+.sl-loud canvas { display: block; }

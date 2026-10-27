@@ -1,0 +1,95 @@
+/* Solaris — the Settings sheet (app/widgets/SettingsSheet.cpp): cosmo's modal look around a rail of sections and one page. */
+.ss-root { position: absolute; inset: 0; opacity: 0; transition: opacity var(--motion-modal-close) var(--ease-out); color: var(--foreground); user-select: none; }
+.ss-root.shown { opacity: 1; transition-duration: var(--motion-modal-open); }
+.ss-scrim { position: absolute; inset: 0; background: var(--scrim); }
+.ss-card { position: absolute; background: var(--popover); box-shadow: 0 0 0 0.5px var(--border), inset 0 0 0 0.5px var(--border); border-radius: var(--radius-control); }
+.ss-title, .ss-sub { position: absolute; }
+.ss-sub, .ss-muted, .ss-micro { color: var(--muted-foreground); }
+.ss-quiet { color: var(--muted-foreground); opacity: 0.8; }
+.ss-micro { text-transform: none; }
+/* the rail: the highlight slides to the chosen section; each name eases to the foreground with it */
+.ss-rail { position: absolute; height: 0; }
+.ss-rail-hi { position: absolute; left: 0; top: 0; width: 164px; height: 30px; border-radius: var(--radius-control);
+  background: rgba(var(--primary-rgb), 0.16); transition: transform var(--motion-slide) var(--ease-out); }
+.ss-rail-bar { position: absolute; left: 0; top: 7px; width: 2px; height: 16px; border-radius: var(--radius-pill); background: var(--primary);
+  transition: transform var(--motion-slide) var(--ease-out); }
+.ss-rail-item { position: absolute; left: 0; width: 164px; height: 30px; border-radius: var(--radius-control); cursor: pointer;
+  color: var(--muted-foreground); transition: color var(--motion-slide) var(--ease-out), background-color var(--motion-hover) var(--ease-out); }
+.ss-rail-item:hover { background-color: var(--hover-wash); }
+.ss-rail-item.on { color: var(--foreground); }
+.ss-vline { position: absolute; width: 1px; background: var(--border); transform: translateX(-0.5px); }
+.ss-hline { position: absolute; left: 0; right: 0; height: 1px; background: var(--border); transform: translateY(-0.5px); }
+.ss-done { position: absolute; width: 88px; height: 30px; border-radius: var(--radius-control); background: var(--primary); color: var(--primary-foreground);
+  cursor: pointer; overflow: hidden; }
+.ss-done::after, .ss-x::after, .ss-keyadd::after, .ss-reset::after, .ss-keychip::after, .ss-toggle::after { content: ""; position: absolute; inset: 0;
+  border-radius: inherit; background: var(--hover-wash); opacity: 0; transition: opacity var(--motion-hover) var(--ease-out); pointer-events: none; }
+.ss-done:hover::after, .ss-x:hover::after, .ss-keyadd:hover::after, .ss-reset.live:hover::after, .ss-keychip:hover::after, .ss-toggle:hover::after { opacity: 1; }
+/* the pages: clipped, cross-faded, each its own scroll */
+.ss-page { position: absolute; overflow: hidden; opacity: 0; pointer-events: none; transition: opacity var(--motion-cross-fade) var(--ease-out); }
+.ss-page.on { opacity: 1; pointer-events: auto; }
+.ss-page-in { position: absolute; left: 0; top: 0; right: 0; transition: transform var(--motion-scroll) var(--ease-out); }
+.ss-texts, .ss-dyn { position: absolute; left: 0; top: 0; right: 0; }
+.ss-rule { position: absolute; left: 0; height: 1px; background: var(--border); transform: translateY(-0.5px); }
+.ss-control { position: absolute; }
+/* a combo's field (SettingCombo::onPaint) */
+.ss-combo { position: absolute; background: var(--input); border-radius: var(--radius-control); cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--border); transition: box-shadow var(--motion-hover) var(--ease-out); }
+.ss-combo:hover, .ss-combo.open { box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.6); }
+.ss-combo-labels { position: absolute; inset: 0; overflow: hidden; }
+.ss-combo-text { position: absolute; color: var(--foreground); transition: opacity var(--motion-cross-fade) var(--ease-out); }
+.ss-caret { position: absolute; overflow: visible; }
+.ss-caret path { fill: none; stroke: var(--muted-foreground); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round;
+  transition: stroke var(--motion-hover) var(--ease-out); }
+.ss-combo:hover .ss-caret path { stroke: var(--foreground); }
+/* the open list (ComboBox::paintOverlay): 160 ms EaseOutCubic, opacity and a 6 px slide */
+.ss-pop-layer { position: absolute; inset: 0; pointer-events: none; }
+.ss-pop { position: absolute; pointer-events: auto; opacity: 0; transform: translateY(-6px); transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out); }
+.ss-pop.up { transform: translateY(6px); }
+.ss-pop.shown { opacity: 1; transform: none; }
+:root.rm .ss-pop { transition-duration: 0ms; }
+.ss-pop-back { position: absolute; inset: 0; background: var(--input); border-radius: var(--radius-control); }
+.ss-pop-card { position: absolute; left: 1px; top: 1px; right: 1px; bottom: 1px; background: var(--popover); border-radius: var(--radius-control); overflow: hidden; }
+.ss-pop-stroke { position: absolute; left: 1px; top: 1px; right: 1px; bottom: 1px; border-radius: var(--radius-control); box-shadow: 0 0 0 0.5px var(--border), inset 0 0 0 0.5px var(--border); pointer-events: none; }
+.ss-pop-list { position: absolute; left: 0; top: 0; right: 0; transition: transform var(--motion-scroll) var(--ease-out); }
+.ss-pop-row { position: absolute; left: 0; right: 0; height: 26px; cursor: pointer; color: var(--foreground); border-radius: var(--radius-hairline); }
+.ss-pop-row.sel { background: rgba(var(--primary-rgb), 0.22); }
+.ss-pop-hi { position: absolute; left: 0; right: 0; top: 0; height: 26px; border-radius: var(--radius-hairline); background: var(--muted-foreground);
+  opacity: 0; transition: opacity var(--motion-hover) var(--ease-out), transform var(--motion-hover) var(--ease-out); }
+.ss-pop-hi.on { opacity: 0.28; }
+.ss-pop-bar { position: absolute; right: 3px; top: 1px; bottom: 1px; width: 3px; border-radius: 1.5px; background: color-mix(in srgb, var(--foreground) 10%, transparent); }
+.ss-pop-thumb { position: absolute; left: 0; top: 0; width: 3px; border-radius: 1.5px; background: color-mix(in srgb, var(--foreground) 45%, transparent);
+  transition: transform var(--motion-scroll) var(--ease-out); }
+/* a toggle (SettingToggle::onPaint): the knob eases */
+.ss-toggle { position: absolute; width: 40px; height: 22px; border-radius: var(--radius-pill); cursor: pointer; background: var(--switch-background);
+  box-shadow: inset 0 0 0 1px var(--border); transition: background-color var(--motion-select) var(--ease-out), box-shadow var(--motion-select) var(--ease-out); }
+.ss-toggle.on { background: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.ss-knob { position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: var(--radius-pill); background: var(--white);
+  transition: transform var(--motion-select) var(--ease-out); }
+.ss-toggle.on .ss-knob { transform: translateX(18px); }
+.ss-toggle.still, .ss-toggle.still .ss-knob { transition: none; }
+/* lists: × remove, Add folder…, key chips */
+.ss-x { position: absolute; width: 18px; height: 18px; border-radius: var(--radius-control); cursor: pointer; }
+.ss-x::before { content: "\00d7"; position: absolute; inset: 0; text-align: center; line-height: 18px; font-size: 15px; color: var(--muted-foreground);
+  transition: color var(--motion-hover) var(--ease-out); }
+.ss-x:hover::before { color: var(--destructive); }
+.ss-addchip { position: absolute; border-radius: var(--radius-control); cursor: pointer; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 50%, var(--primary));
+  transition: background-color var(--motion-hover) var(--ease-out), box-shadow var(--motion-hover) var(--ease-out); }
+.ss-addchip:hover { background: rgba(var(--primary-rgb), 0.10); box-shadow: inset 0 0 0 1px var(--primary); }
+.ss-plus { position: absolute; width: 11px; height: 11px; left: 10px; top: 7.5px; }
+.ss-plus::before, .ss-plus::after { content: ""; position: absolute; background: var(--foreground); }
+.ss-plus::before { left: 0; right: 0; top: 50%; height: 1.4px; transform: translateY(-50%); }
+.ss-plus::after { top: 0; bottom: 0; left: 50%; width: 1.4px; transform: translateX(-50%); }
+.ss-keyadd { position: absolute; width: 26px; height: 26px; border-radius: var(--radius-control); background: var(--secondary); box-shadow: inset 0 0 0 1px var(--border); cursor: pointer; }
+.ss-keyadd .ss-plus { left: 8px; top: 8px; width: 10px; height: 10px; }
+.ss-keyadd .ss-plus::before, .ss-keyadd .ss-plus::after { background: var(--muted-foreground); }
+.ss-keychip { position: absolute; border-radius: var(--radius-control); background: var(--secondary); box-shadow: inset 0 0 0 1px var(--border); cursor: pointer; overflow: hidden;
+  transition: box-shadow var(--motion-select) var(--ease-out), background-color var(--motion-select) var(--ease-out), width var(--motion-cross-fade) var(--ease-out); }
+.ss-keychip.listen { background: color-mix(in srgb, var(--secondary), var(--primary) 14%); box-shadow: inset 0 0 0 1px var(--primary); }
+.ss-reset { position: absolute; border-radius: var(--radius-control); background: var(--secondary); box-shadow: inset 0 0 0 1px var(--border); opacity: 0.4;
+  transition: opacity var(--motion-select) var(--ease-out); }
+.ss-reset.live { opacity: 1; cursor: pointer; }
+.ss-dot { position: absolute; left: 1px; width: 5px; height: 5px; border-radius: var(--radius-pill); background: var(--primary); }
+.ss-portfield { cursor: pointer; }
+.ss-bar { position: absolute; right: 1px; top: 0; width: 3px; border-radius: 1.5px; background: rgba(255, 255, 255, 0.14);
+  transition: transform var(--motion-scroll) var(--ease-out); pointer-events: none; }
+.ss-still .ss-rail-hi, .ss-still .ss-rail-bar, .ss-still .ss-rail-item, .ss-still .ss-page, .ss-still .ss-toggle, .ss-still .ss-knob { transition: none; }

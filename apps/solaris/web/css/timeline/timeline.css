@@ -1,0 +1,3 @@
+/* Solaris — timeline/timeline.css: the Timeline's host; everything else is painted on its canvas. */
+.sl-timeline { overflow: hidden; background: var(--stage-bg); user-select: none; }
+.sl-timeline > canvas { position: absolute; left: 0; top: 0; display: block; }

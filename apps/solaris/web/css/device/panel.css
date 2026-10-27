@@ -1,0 +1,60 @@
+/* Solaris — DevicePanel (device/panel.js): the device window's content. Numbers are DevicePanel.cpp's / cosmo SliderRow's. */
+.dp { position: absolute; inset: 0; overflow: hidden; user-select: none; -webkit-user-select: none; }
+.dp-head { position: absolute; left: 0; top: 0; right: 0; height: 35.75px; border-bottom: 1px solid var(--border); box-sizing: border-box; }
+.dp-what { position: absolute; white-space: pre; color: var(--muted-foreground); font-family: var(--font-mono); }
+.dp-btn {
+  position: absolute; box-sizing: border-box; margin: 0; padding: 0; border: 0; outline: none; cursor: default;
+  border-radius: var(--radius-control); font: 10px/19.5px var(--font-sans); text-align: center; white-space: pre; overflow: hidden;
+  background: var(--secondary); color: var(--secondary-foreground);
+}
+.dp-anim .dp-btn { transition: background-color var(--motion-hover) cubic-bezier(0.33, 1, 0.68, 1), color var(--motion-hover) cubic-bezier(0.33, 1, 0.68, 1); }
+.dp-presets:hover, .dp-roll:hover { background: var(--popover); }
+.dp-presets.dp-lit-on { background: var(--primary); color: var(--primary-foreground); }
+.dp-bypass { background: var(--primary); color: var(--primary-foreground); }
+.dp-bypass.dp-off { background: var(--secondary); color: var(--secondary-foreground); }
+.dp-anim .dp-bypass { transition: background-color var(--motion-select) cubic-bezier(0.33, 1, 0.68, 1), color var(--motion-select) cubic-bezier(0.33, 1, 0.68, 1); }
+.dp-remove { background: rgba(var(--white-rgb), calc(0.07 * 0.6)); }
+.dp-remove:hover { background: rgba(var(--white-rgb), calc(0.07 * 1.6)); color: var(--destructive); }
+
+.dp-body { position: absolute; left: 0; right: 0; bottom: 0; overflow: hidden; }
+.dp-content { position: absolute; left: 0; top: 0; right: 0; will-change: transform; }
+.dp-anim .dp-content { transition: transform var(--motion-scroll) cubic-bezier(0.33, 1, 0.68, 1); }
+.dp-bar { position: absolute; right: 2px; top: 0; width: 3px; border-radius: var(--radius-pill); background: rgba(var(--white-rgb), 0.18); }
+.dp-anim .dp-bar { transition: transform var(--motion-scroll) cubic-bezier(0.33, 1, 0.68, 1); }
+
+.dp-sec { position: absolute; left: 9.75px; white-space: pre; color: var(--muted-foreground); font-family: var(--font-sans-semibold); letter-spacing: 1.17px; }
+
+/* a row: kRowStep 22.75 from top − 1 (the light's box); the SliderRow's 20 px inside it from 1 */
+.dp-row { position: absolute; left: 0; right: 0; height: 22.75px; }
+.dp-lit { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: rgba(var(--primary-rgb), 0.12); }
+.dp-lit::before { content: ""; position: absolute; left: 0; top: 3px; bottom: 3px; width: 2px; border-radius: var(--radius-pill); background: var(--primary); }
+.dp-anim .dp-lit { transition: opacity var(--motion-cross-fade) cubic-bezier(0.33, 1, 0.68, 1); }
+.dp-on .dp-lit { opacity: 1; }
+.dp-label { position: absolute; left: 9.75px; white-space: pre; color: var(--muted-foreground); font-family: var(--font-sans); }
+
+/* the slider: x = padX + 86 + 8.125; its width = W − 2·padX − 86 − 8.125 − kValueW − 8.125 */
+.dp-track { position: absolute; left: 103.875px; width: calc(100% - 211.75px); border-radius: var(--radius-pill); background: var(--secondary); }
+.dp-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: var(--radius-pill); background: var(--primary); }
+.dp-thumb {
+  position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 0.5px #fff;
+  transform: translate(-50%, -50%); pointer-events: none;
+}
+.dp-anim .dp-thumb { transition: width var(--motion-hover) cubic-bezier(0.33, 1, 0.68, 1), height var(--motion-hover) cubic-bezier(0.33, 1, 0.68, 1); }
+.dp-row:hover .dp-thumb, .dp-active .dp-thumb { width: 13px; height: 13px; }
+.dp-hit { position: absolute; left: 103.875px; width: calc(100% - 211.75px); top: -3px; height: 28px; cursor: default; touch-action: none; }
+.dp-val { position: absolute; right: 9.75px; white-space: pre; text-align: right; color: var(--muted-foreground); font-family: var(--font-mono); }
+
+/* a choice: a box after the label column, its name centred, a chevron each side */
+.dp-choice { position: absolute; left: 103.875px; height: 20px; border-radius: var(--radius-control); background: var(--secondary); }
+.dp-choicename { position: absolute; left: 50%; transform: translateX(-50%); white-space: pre; overflow: hidden; text-overflow: ellipsis; color: var(--foreground); font-family: var(--font-sans); }
+.dp-chev { position: absolute; top: 0; fill: none; stroke: var(--muted-foreground); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+.dp-chev-l { left: 0; }
+.dp-chev-r { right: 0; }
+
+/* View › Show IDs: each row's address over its label */
+.dp-ids { position: absolute; left: 0; top: 0; right: 0; pointer-events: none; }
+.dp-id {
+  position: absolute; left: 6.75px; height: 16px; box-sizing: border-box; border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--popover) 97%, transparent); border: 1px solid rgba(var(--primary-rgb), 0.45);
+}
+.dp-id span { position: absolute; left: 3px; top: 3.2px; font: 8.5px/8.5px var(--font-mono); white-space: pre; color: var(--primary); }

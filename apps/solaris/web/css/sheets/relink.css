@@ -1,0 +1,14 @@
+/* Solaris — css/sheets/relink.css: RelinkSheet (the card look is export.css's). Rows 48; Locate… 84×28; Search a Folder… 150 left · Done 88 right. */
+.sx-placed.sx-relink .sx-card { transition: height var(--motion-select, 200ms) cubic-bezier(0.33, 1, 0.68, 1), top var(--motion-select, 200ms) cubic-bezier(0.33, 1, 0.68, 1); }
+.sx-relink .sx-sub { right: 24px; }
+.sr-list { bottom: 56px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
+.sr-inner { position: relative; }
+.sr-row { position: absolute; left: 0; right: 0; height: 48px;
+  transition: top var(--motion-select, 200ms) cubic-bezier(0.33, 1, 0.68, 1), opacity var(--motion-cross-fade, 200ms) cubic-bezier(0.33, 1, 0.68, 1); }
+.sr-row.sr-leaving { opacity: 0; pointer-events: none; }
+.sr-name { position: absolute; left: 24px; right: 120px; top: 8px; font: 12px/14px var(--font-sans), sans-serif; color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr-where { position: absolute; left: 24px; right: 120px; top: 26px; font: 10px/12px var(--font-mono), monospace; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sx-btn.sr-locate { right: 24px; top: 10px; width: 84px; height: 28px; font: 11px/28px var(--font-sans), sans-serif; }
+.sr-empty { position: absolute; left: 0; right: 0; top: 0; height: 48px; text-align: center; font: 12px/48px var(--font-sans), sans-serif; color: var(--muted-foreground); }
+.sx-btn.sr-search { left: 24px; width: 150px; }
+.sx-btn.sr-done { right: 24px; width: 88px; }

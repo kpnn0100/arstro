@@ -1,0 +1,5 @@
+/* Solaris — project/songbar.js: SongBar — one canvas, 29.25 high, and cosmo's MenuStrip over it (its dropdowns hang
+   below the bar: the slot is overflow visible). */
+.sl-songbar { overflow: visible; }
+.sl-songbar > .sl-canvas { position: absolute; left: 0; top: 0; display: block; touch-action: none; }
+.sl-songbar > .sl-songbar-menus { position: absolute; left: 0; top: 0; z-index: 1; }

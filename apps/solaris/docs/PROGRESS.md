@@ -206,12 +206,17 @@ umbrella's pointer — `arstro.rule` §7).
       `core/Ntwb/tools/fixture_host.mjs`) every slot box lines up with `lanes-pseudo`, `dock-folded`,
       `session-view`, `home-cards` at 1440×900 and 1024×640; keys, words (vi, pseudo), high contrast,
       the UI-scale tween, the refusal toast; 390×844 scaled to fit.
-      **Until the widgets land Home and the project screen are placeholders** — the board keeps the
-      previous page installed.
-  - [ ] Home · [ ] song bar + menus · [ ] history (song versions) · [ ] session view · [ ] timeline
-        (lanes, clips, automation, chords, markers, takes, tempo, video) · [ ] mixer dock · [ ] loudness
-        · [ ] device panel + analog faces + param menu · [ ] browser · [ ] float windows · [ ] piano roll
-        · [ ] automation panel · [ ] video panel · [ ] settings / export / relink / conflicts sheets
+      Panels not yet ported show a quiet placeholder; the page is installed on the board (both slots).
+  - **Widgets landed 2026-10-27** (ten parallel ports at the user's request, "use multi agent for fast
+    implement"): [x] Home · [x] song bar + menus · [x] history (song versions) · [x] session view ·
+    [~] timeline (ruler, lanes, clips, zoom, select / move / duplicate / length, seek, markers band,
+    loop brace, the browser drop target — not yet automation, chords, tempo, takes, video lane, folding,
+    box select, clip edit handles, context menus) · [~] mixer dock (strips, faders, pan, meters, M/S/R,
+    sends, master, tabs — not yet the matrix page, VCA, freeze, sidechain labels, group headers, menus)
+    · [x] loudness · [~] device panel + param menu (parameter rows, choice menu, presets — analog
+    faces partial) · [x] browser · [x] float windows · [~] piano roll (notes, keys, scale, vel/chance,
+    zoom — not yet steps, toolbar menus, box select, copy) · [ ] automation panel · [ ] video panel ·
+    [x] settings · [x] export · [x] relink · [ ] conflicts sheet
 - [x] **C5** A whole song made by an agent with `solaris-cc`, measured (R-SVC-9).
       — DR-SVC-9: `demo/canon/` — Pachelbel's Canon as 128 bpm EDM, 86 commands, 7 instruments, 2 buses,
       formula delay, kick-keyed sidechains, bezier filter automation, limiter; `solaris_demo_canon`

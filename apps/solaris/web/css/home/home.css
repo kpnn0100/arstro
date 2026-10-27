@@ -1,0 +1,3 @@
+/* Solaris — home/home.js: HomeScreen is one canvas filling its slot (the whole root). */
+.sl-home { overflow: hidden; }
+.sl-home > .sl-canvas { position: absolute; left: 0; top: 0; display: block; touch-action: none; }

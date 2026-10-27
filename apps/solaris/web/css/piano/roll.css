@@ -1,0 +1,4 @@
+/* Solaris — piano/roll.css: PianoRoll (widgets/PianoRoll.cpp) — the content of a `roll:<pt>` window: one canvas,
+   painted as the native's onPaint (piano/roll.js). The host is the window layer's content box. */
+.sl-roll { overflow: hidden; background: var(--stage-bg); touch-action: none; user-select: none; }
+.sl-roll > canvas.sl-canvas { position: absolute; left: 0; top: 0; display: block; outline: none; }
