@@ -19,6 +19,24 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
+### D-67 The borrowable web kit cannot follow an app's own high contrast or reduced-motion setting
+- **Area:** web (`web/js/ui`, `web/js/core`) · **Status:** Open · **Severity:** S3 · **Found:**
+  2026-10-26, Solaris's web face borrowing the kit (Solaris R-SVC-7).
+- **Evidence:** `tok()` (`web/js/ui/controls.js:36-37`) reads the tokens once and caches them for
+  the page's life, so a control drawn by `ui/*` keeps the colours of the first frame when an app
+  eases its tokens (Solaris's high contrast); `reducedMotion()` (`web/js/core/motion.js:23-24`) asks
+  only the OS media query, so an app's own "reduce motion" setting cannot reach `Tween`, `Spring` or
+  `HoverFade`. Cosmo itself has neither setting, so Cosmo's page is unaffected.
+- **Judgement:** defect of the kit's borrowability (the kit is shared on purpose, `ntwb install`
+  copies it into Interstellar and Solaris).
+- **Recommended fix:** `tok()` re-reads on a `tokens-changed` event (or exposes `invalidateTokens()`);
+  `motion.js` exports `setReducedMotion(fn)` that ORs an app's setting with the OS's. Solaris's page
+  works around both meanwhile (`apps/solaris/web/js/kit/{draw,anim}.js`).
+- **Suspected, not yet measured on Cosmo's page:** an HTML label placed at a fractional baseline lands
+  1 px off for about 3 of 4 positions (Chrome snaps the box's top); SVG `<text>` rounds like Cairo.
+  The new `ui/{menu,menustrip,confirm}.js` draw labels as SVG text for that reason (measured within
+  0.1 px of the native); `desktop/editor.js` `text()`, `contextmenu.js` and `topbar.js` use spans.
+
 ### D-66 — Saving a project deletes every image whose decode failed, with its grade
 - **Area:** core / persistence · **Status:** **Confirmed** (measured) · **Severity:** S1 — silent,
   permanent loss of a user's edit · **Found:** 2026-10-01, by Interstellar's integrator while binding

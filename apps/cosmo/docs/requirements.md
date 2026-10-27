@@ -3462,6 +3462,16 @@ modules and a failing one is reported, not fatal.
 Every change leaves as one command line (`vm.setFields` -> `set`, drags as notifies between
 `gesture on|off`); every value arriving from the model eases (CSS transitions on `--t-*` / `--ease-*`,
 or `Tween` for drawn values); `prefers-reduced-motion` zeroes them.
+- **Borrowed by other apps** (added 2026-10-27): `js/core/*` and `js/ui/*` import nothing of Cosmo's
+  editor, so Interstellar's and Solaris's web faces copy them in at `ntwb install` (each app's
+  `web/BORROW`) instead of forking them. For them, three cosmo_v2 widgets they compile in natively
+  gained generic ports here: `ui/menu.js` (ContextMenu: `openMenu`, `openRename` with the rename
+  morph, `relabel`), `ui/menustrip.js` (MenuStrip: titles, dropdowns, the highlight slide, click to
+  switch as the native does) and `ui/confirm.js` (ConfirmDialog: Esc = the cancel button, Enter = the
+  primary), with `css/ui-kit.css`. They draw labels as SVG text and bodies as SVG rects (Chrome snaps
+  an HTML box to whole pixels; SVG rounds like Cairo) and measure within rasterizer noise of the
+  native PNGs (mean |d| 1.3–2.9 per channel, text centroids within 0.1 px). Cosmo's own
+  `desktop/contextmenu.js`, `desktop/topbar.js` and `dialogs/confirm.js` are unchanged (D-67).
 
 ### DR-NTWB-6 Install and the API description (R-NTWB-6)
 `cmdNtwbFiles` (`cli/main.cpp`): `ntwb api` prints `NtwbAdapter::apiDescription()` (methods with

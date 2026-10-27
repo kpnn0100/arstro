@@ -1,0 +1,97 @@
+/*
+ * Cosmo by arstro — ui-kit.css: the generic widget kit the sibling apps borrow (js/ui/menu.js,
+ * js/ui/menustrip.js, js/ui/confirm.js - each loads this file itself; confirm.js also loads
+ * dialogs.css for the modal skeleton of ui/modal.js). Logical px at 100 %; the numbers are the
+ * natives' (each module's header cites them) and every colour is a token present in cosmo's,
+ * Solaris's AND Interstellar's generated tokens.css - no literal colour but the context menu's
+ * hover white @ 0.08, which ContextMenu.cpp:274 types itself.
+ */
+
+/* Motion: cosmo's literals, defined here because the apps' tokens name them differently
+   (--motion-hover). Same values as cosmo's base.css, so a page holding both is unchanged. */
+:root {
+  --t-hover: 120ms;                                       /* interaction::kHoverMs (Artboard Interaction.h:17); base.css:19 */
+  --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);        /* EaseOutCubic; base.css:29 */
+  /* HoverFade: linear raw amount over 120 ms drawn through smoothstep (HoverFade.h:36-66) - over a
+     whole 0 -> 1 run that is cubic-bezier(1/3, 0, 2/3, 1) (cosmo desktop.css:9-13). */
+  --ease-fade: cubic-bezier(0.3333, 0, 0.6667, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --t-hover: 0ms; }
+}
+
+/* A drawRoundedRect (each module's body()): an SVG rect, so its edges stay fractional and its 1 px
+   border straddles them as Cairo strokes it - Chrome pixel-snaps CSS backgrounds and outlines. */
+.uk-body { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.uk-cm-body rect, .uk-ms-body rect { fill: var(--popover); stroke: var(--border); stroke-width: 1; }   /* ContextMenu.cpp:202-204, MenuStrip.cpp:215-216 */
+
+/* A label (each module's label()): an SVG <text> on the native's baseline, filled with the colour
+   its class gives, unwrapped and unshaped like cairo_show_text (no kerning, no ligatures). */
+.uk-t { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.uk-t text { fill: currentColor; white-space: pre; font-kerning: none; font-variant-ligatures: none; }
+
+/* ------------------------------------------------------------------ ContextMenu (ui/menu.js) */
+/* The layer is modal while the menu is open (ContextMenu.h:55): it takes every press. */
+.uk-cm-layer { position: absolute; inset: 0; pointer-events: none; touch-action: none; }
+.uk-cm-layer.modal { pointer-events: auto; }
+.uk-cm { position: absolute; left: 0; top: 0; pointer-events: none; }
+.uk-cm-items { position: absolute; left: 0; top: 0; right: 0; }
+.uk-cm-item { position: absolute; left: 0; right: 0; height: 24px; }
+/* Per-item hover wash: white @ 0.08, inset 3 px (ContextMenu.cpp:273-274), cross-fading (HoverFade). */
+.uk-cm-item::before { content: ""; position: absolute; left: 3px; right: 3px; top: 0; bottom: 0;
+                      border-radius: var(--radius-control); background: rgba(var(--white-rgb), 0.08);
+                      opacity: 0; transition: opacity var(--t-hover) var(--ease-fade); }
+.uk-cm-item.hover::before { opacity: 1; }
+.uk-cm-label { color: var(--foreground); }
+.uk-cm-header { color: var(--muted-foreground); opacity: 0; }
+/* The light rename field: palette::inputLight / inputLightText (Theme.h:113-114). */
+.uk-cm-field { position: absolute; left: 0; top: 0; display: none; }
+.uk-cm-fieldbody rect { fill: var(--input-light); }
+.uk-cm-ftext { color: var(--input-light-text); }
+.uk-cm-sel { position: absolute; left: 0; top: 0; background: var(--primary); border-radius: var(--radius-hairline); opacity: 0; }
+.uk-cm-caret { position: absolute; left: 0; top: 0; width: 1.6px; background: var(--primary); opacity: 0; }
+/* The key sink: a real (invisible) text input, so a phone shows its keyboard for the field. */
+.uk-cm-sink { position: absolute; left: 0; top: 0; width: 1px; height: 1px; margin: 0; padding: 0; border: 0;
+              opacity: 0; pointer-events: none; font-size: 16px; color: transparent; background: transparent;
+              caret-color: transparent; outline: none; }
+
+/* ------------------------------------------------------------------ MenuStrip (ui/menustrip.js) */
+.uk-ms { position: absolute; left: 0; top: 0; }
+.uk-ms-hi { visibility: hidden; }
+.uk-ms-hi rect { fill: var(--primary); }   /* MenuStrip.cpp:185-186 */
+.uk-ms-tabs { position: absolute; left: 0; top: 0; }
+.uk-ms-tab { position: absolute; left: 0; top: 0; }
+/* A title is mutedForeground, lifting toward white as it is hovered; the open one is white
+   (MenuStrip.cpp:190-197). */
+.uk-ms-title { color: var(--muted-foreground); transition: color var(--t-hover) var(--ease-fade); }
+.uk-ms-tab.hover .uk-ms-title, .uk-ms-tab.open .uk-ms-title { color: var(--white); }
+.uk-ms-drop { position: absolute; left: 0; top: 0; visibility: hidden; z-index: 1; }
+.uk-ms-clip { position: absolute; left: 0; top: 0; right: 0; height: 0; overflow: hidden; }   /* MenuStrip.cpp:217-218 */
+.uk-ms-list { position: absolute; left: 0; top: 0; right: 0; }
+.uk-ms-item { position: absolute; left: 0; right: 0; height: 24px; }
+/* hoverWash(amount x reveal), inset 3 px (MenuStrip.cpp:223-226) */
+.uk-ms-item::before { content: ""; position: absolute; left: 3px; right: 3px; top: 0; bottom: 0;
+                      border-radius: var(--radius-control); background: var(--hover-wash);
+                      opacity: 0; transition: opacity var(--t-hover) var(--ease-fade); }
+.uk-ms-item.hover::before { opacity: var(--reveal, 1); }
+.uk-ms-label { color: var(--foreground); }
+
+/* ------------------------------------------------------------------ ConfirmDialog (ui/confirm.js) */
+/* The card (modal.js's .md-card): popover + 1 px border, radius::control (ConfirmDialog.cpp:164-165). */
+.uk-cf .md-card { border-radius: var(--radius-control); }
+.uk-cf-frame { z-index: 0; }
+.uk-cf-frame rect { fill: none; stroke: var(--border); stroke-width: 1; }
+.uk-cf-title { color: var(--foreground); }
+.uk-cf-msg { color: var(--muted-foreground); }
+.uk-cf-btn { position: absolute; left: 0; top: 0; }
+/* fill: destructive / the accent / secondary + 1 px border (ConfirmDialog.cpp:177-181) */
+.uk-cf-btn.plain .uk-cf-fill rect { fill: var(--secondary); stroke: var(--border); stroke-width: 1; }
+.uk-cf-btn.primary .uk-cf-fill rect { fill: var(--uk-accent, var(--primary)); }
+.uk-cf-btn.destructive .uk-cf-fill rect { fill: var(--destructive); }
+/* the hover wash over the fill, under the label (ConfirmDialog.cpp:183-185) */
+.uk-cf-wash rect { fill: var(--hover-wash); opacity: 0; transition: opacity var(--t-hover) var(--ease-fade); }
+.uk-cf-btn:hover .uk-cf-wash rect { opacity: 1; }
+.uk-cf.closing .uk-cf-wash rect { opacity: 0; }   /* a closing dialog's hover clears (ConfirmDialog.cpp:98) */
+/* the label: primaryForeground on a filled button, foreground on a plain one (ConfirmDialog.cpp:186) */
+.uk-cf-label { color: var(--foreground); }
+.uk-cf-btn.primary .uk-cf-label, .uk-cf-btn.destructive .uk-cf-label { color: var(--primary-foreground); }
