@@ -58,7 +58,8 @@ one integrator who moves, wires, tests and commits each stream:
       exact model over a fake NTWB.
       **Until the widgets land the Edit screen and Home are placeholders** — the board keeps the
       previous page installed.
-  - [ ] Home + Loading + Settings · [ ] top bar + menus + versions + name prompt · [ ] monitor +
+  - [x] Home + Loading (2026-10-27) · [x] top bar + menus + versions + name prompt (2026-10-27) ·
+        [ ] Engine Settings dialog · [ ] monitor +
         transport + scopes · [ ] Cut: timeline, source bin, clip inspector · [ ] key lane + key graph ·
         [ ] Grade: rack, deck (+ node graph, stills), inspector (+ plugins, effects) · [ ] Deliver:
         checks, output spec, render queue

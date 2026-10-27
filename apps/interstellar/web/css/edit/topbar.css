@@ -1,0 +1,7 @@
+/* Interstellar — css/edit/topbar.css: EditTopBar (js/edit/topbar.js). Drawn in SVG; the menu strip
+   is the borrowed ui/menustrip.js; the version dropdown lives in the shell's menu layer. */
+.tb { overflow: visible !important; }
+.tb > .pt-svg { overflow: visible; }
+.tb-strip { position: absolute; left: 0; top: 0; }
+.tb-vmenu { position: absolute; inset: 0; pointer-events: none; }
+.tb-vmenu.on { pointer-events: auto; }

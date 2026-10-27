@@ -1,0 +1,11 @@
+/* Interstellar — css/edit/nameprompt.css: NamePrompt (js/edit/nameprompt.js). The card is drawn in
+   SVG; the fields are real inputs dressed as Artboard's TextBox (NamePrompt.cpp:22-31). */
+.np { position: absolute; inset: 0; pointer-events: none; visibility: hidden; }
+.np.on { pointer-events: auto; visibility: visible; }
+.np-field { position: absolute; left: 0; top: 0; box-sizing: border-box; margin: 0; padding: 0 8px;
+            background: var(--input); color: var(--foreground); border: 1px solid var(--border);
+            border-radius: var(--radius-control); font: 12px "Roboto", sans-serif; caret-color: var(--primary);
+            outline: none; user-select: text; -webkit-user-select: text;
+            transition: border-color var(--motion-hover) cubic-bezier(0.215, 0.61, 0.355, 1); }
+.np-field:focus { border-color: var(--ring); }
+.np-field::selection { background: rgba(var(--primary-rgb), 0.38); }

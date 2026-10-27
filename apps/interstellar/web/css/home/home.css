@@ -1,0 +1,4 @@
+/* Interstellar — css/home/home.css: Home (js/home/home.js). Everything is drawn in one SVG at the
+   native's coordinates; this only lets the box take the pointer and the wheel. */
+.hm { overflow: hidden; touch-action: pan-y; }
+.pt-svg text { white-space: pre; }

@@ -288,7 +288,21 @@ ctx)`) by dynamic import: one that is absent keeps a quiet placeholder in the na
 one that fails says so in its box, and the rest of the page keeps working. `js/edit/menus.js` holds
 the App's menus that cross widgets (rack context, input colour, capture, relink, place-timeline,
 `requestHome`, every host picker); `js/dialogs/picker.js` is the board file browser over `browse`.
-The widgets themselves are ported module by module (PROGRESS: the web face is the same app). Guarded by
+The widgets themselves are ported module by module (PROGRESS: the web face is the same app), each
+as its native file's `layout` / `advance` / `onPaint`, line by line, through `js/kit/paint.js`: a
+`Painter` that emits the IRenderTarget calls as SVG (text at its baseline, rects with the radius
+clamp, strokes centred, `drawCover`, cosmo's icons), Artboard's `AnimatedProperty` (`Anim`, on the
+caller's clock) and cosmo's `HoverFade`, and a `frameLoop` that paints only while something moves.
+**Ported 2026-10-27:** `home/home.js` (HomeScreen: the fitted wordmark, the eased card reflow,
+skeleton, late covers fading in, the empty state), `home/loading.js` (LoadingView's ping-pong sweep),
+`edit/topbar.js` (EditTopBar, TabSwitcher's travelling highlight, VersionSwitcher with its clamped,
+scrolling dropdown and cross-faded label, the App's File · Edit · Settings · Workspace · Preset ·
+Colour menus with their marks; "N viewing" is web-only) and `edit/nameprompt.js` (NamePrompt, the
+provider behind `ctx.prompt`). Against the native shots' own models: `home_populated` 1.2 % of
+pixels differ (text anti-aliasing), `home_empty` 0.44 %, `loading` 0.15 %; the top bar, the File
+menu, the versions dropdown and the New-version prompt line up in `edit_menu_file`,
+`grade_versions_open`, `grade_new_version_prompt`. Live, over the real service: a recent card opens
+its project; a tab click, `timeline new` through the prompt and `project save` are accepted. Guarded by
 `interstellar_ntwb` (the real service and adapter over `ntwb::MemoryTransport`: a call is a command
 line, refusals and the `command.rejected` event, `model` == `state print --json`, a `frame` goes to
 its page alone, a build with no encoder refuses `frame`, `thumb` / its epoch, `peaks`, `still`, `capture`, `browse`,
