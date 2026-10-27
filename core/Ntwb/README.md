@@ -40,3 +40,13 @@ web UI and relays messages and binary streams. The protocol is defined once, in 
 3. Change `Protocol.cpp` (and `Client` if a message gained a field) until it passes.
 
 See the `arstro.ntwb.implement` skill.
+
+## Checking a web face against its native window (`tools/`)
+
+`tools/fixture_host.mjs` (dependency-free Node ≥ 22) serves an app's INSTALLED web face with
+`tools/ntwb_fake.js` in place of `/ntwb/ntwb.js`: the page receives EXACTLY the model a native named
+state was drawn from — the app's shot tool writes it with `--model-json` (`<state>.model.json`,
+`.transport.json`, `.view.json`, Interstellar also `.frame.png`, `.peaks.json`) — and every call it
+makes is recorded in `window.__ntwbCalls`, so a screenshot of `/apps/<id>/?fixture=<state>` can be
+compared 1:1 with the native PNG and a control's command line asserted. The headers say what the fake
+answers and what it does not (no app runs; the model moves only by `window.__ntwbPush`).
