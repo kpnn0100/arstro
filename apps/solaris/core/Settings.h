@@ -35,7 +35,7 @@ namespace solaris
         std::string language = "auto";          // R-ACCESS-2: the window's words — auto (the OS's, when Solaris has it) or a code
         bool showIds = false;                   // R-UI-11: every object's id drawn beside its name (View › Show IDs)
         int autosave = 60;                      // R-SAFE-1: seconds between autosaves of an unsaved song; 0 = off
-        std::string driver = "pulse";            // R-DEV-9: pulse | pipewire — how the clock device is reached
+        std::string driver = "pulse";            // R-DEV-9: pulse | pipewire | web — how the clock device is reached (web: R-SVC-7, the page that listens)
         std::string midiInputs = "all";         // R-MIDI-2: all | none | port names, comma-separated
         std::string surface = "none";           // R-CTRL-2: none | mcu (Mackie Control) | hui
         std::string surfacePort;                // … the port it is on, in and out — never the keyboard's

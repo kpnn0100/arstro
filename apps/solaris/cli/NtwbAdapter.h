@@ -33,8 +33,11 @@
 #pragma once
 #include "ntwb/Client.h"
 #include "ntwb/Json.h"
+#include "WebAudio.h"
 #include <cstdint>
 #include <functional>
+#include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -74,6 +77,8 @@ namespace solaris_cli
             Lister listDir;
             VideoSource videoFrame, videoThumb;
             JpegEncoder jpeg;
+            /** R-SVC-7: the "web" driver's hub (WebAudio.h) - what the engine plays, for the pages that `audio.listen`. */
+            std::shared_ptr<WebAudioHub> audio;
         };
 
         NtwbAdapter(solaris::SolarisService &svc, ntwb::Client &client, Hooks hooks);
@@ -114,6 +119,7 @@ namespace solaris_cli
         static constexpr double kLiveMinIntervalMs = 40.0;      // ≤ 25 live pushes a second
         static constexpr int kVideoQuality = 85;                // a picture's JPEG quality (Interstellar's frame's)
         static constexpr int kVideoMaxEdge = 3840;              // a box larger than 4K is refused
+        static constexpr double kAudioChunkS = 0.02;            // the page's sound in blobs of >= 20 ms (or what is there after 40 ms)
 
     private:
         ntwb::Json runCommand(const std::string &line);
@@ -129,6 +135,11 @@ namespace solaris_cli
         std::string mSentLive;      // … and the last `live`
         double mLastLiveMs = -1e9;
         long long mVideoSeq = 0;
+        // R-SVC-7: the pages that listen (`audio.listen`), and the PCM sent to them on the stream `audio`
+        std::set<std::string> mListeners;
+        long long mAudioSeq = 0;
+        double mLastAudioMs = -1e9;
+        void sendAudio(double wallMs);
     };
 }
 }

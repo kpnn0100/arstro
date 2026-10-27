@@ -286,8 +286,16 @@ namespace solaris_cli
             host.audioOut = [] { return std::unique_ptr<solaris::IAudioOut>(new solaris_host::AudioOutPulse()); };
             host.audioIn = [] { return std::unique_ptr<solaris::IAudioIn>(new solaris_host::AudioInPulse()); }; // R-REC-1
 #endif
+            // R-SVC-7: the "web" driver - the engine plays into the pages that listen (WebAudio.h); PipeWire's as the CLI has it
+            auto webAudio = std::make_shared<WebAudioHub>();
+            host.audioOutFor = [webAudio](const std::string &d) -> std::unique_ptr<solaris::IAudioOut> {
+                if (d == "web") return std::unique_ptr<solaris::IAudioOut>(new WebAudioOut(webAudio));
 #ifdef SOLARIS_HAVE_PIPEWIRE
-            host.audioOutFor = [](const std::string &d) { return d == "pipewire" ? std::unique_ptr<solaris::IAudioOut>(new solaris_host::AudioOutPipewire()) : nullptr; }; // R-DEV-9
+                if (d == "pipewire") return std::unique_ptr<solaris::IAudioOut>(new solaris_host::AudioOutPipewire()); // R-DEV-9
+#endif
+                return nullptr;
+            };
+#ifdef SOLARIS_HAVE_PIPEWIRE
             host.audioInFor = [](const std::string &d) { return d == "pipewire" ? std::unique_ptr<solaris::IAudioIn>(new solaris_host::AudioInPipewire()) : nullptr; }; // R-REC-1
 #endif
 #ifdef SOLARIS_HAVE_ALSA
@@ -313,6 +321,7 @@ namespace solaris_cli
             // what the window's host gives the App beyond model + dispatch, and a browser cannot do for itself
             NtwbAdapter::Hooks hooks;
             hooks.listDir = solaris_host::listDir; // `browse`: the same lister the service's browser has
+            hooks.audio = webAudio;                // R-SVC-7: `audio.listen` and the stream `audio`
             // R-VIDEO-1: two decoders, as the window has (linux_main.cpp: one for the Video window, one for the lane's thumbnails)
             struct Decoder
             {

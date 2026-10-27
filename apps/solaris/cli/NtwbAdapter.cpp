@@ -161,6 +161,29 @@ namespace solaris_cli
         mClient.onNotify = [this](const ntwb::Call &c) {
             try { onCall(c); } catch (const std::exception &) {}
         };
+        // R-SVC-7: a page that leaves stops listening
+        mClient.onClientClose = [this](const std::string &client) {
+            mListeners.erase(client);
+            if (mHooks.audio) mHooks.audio->setListening(!mListeners.empty());
+        };
+    }
+
+    void NtwbAdapter::sendAudio(double wallMs)
+    {
+        if (!mHooks.audio) return;
+        WebAudioHub::Chunk c;
+        const int minFrames = (int)(mHooks.audio->rate() * kAudioChunkS);
+        if (!mHooks.audio->take(c, minFrames, wallMs - mLastAudioMs > 2000 * kAudioChunkS)) return;
+        mLastAudioMs = wallMs;
+        if (mListeners.empty()) return;   // nobody listens: the clock ran, the sound is dropped
+        Json meta = Json::object();
+        meta.set("seq", ++mAudioSeq);
+        meta.set("rate", c.rate);
+        meta.set("channels", c.channels);
+        meta.set("frames", c.frames());
+        meta.set("gen", c.gen);
+        const auto *bytes = reinterpret_cast<const uint8_t *>(c.pcm.data());   // little-endian int16, interleaved
+        for (const auto &client : mListeners) mClient.blob("audio", "audio/L16", bytes, c.pcm.size() * sizeof(int16_t), meta, client, false);
     }
 
     void NtwbAdapter::tick(double wallMs)
@@ -185,6 +208,7 @@ namespace solaris_cli
                 mClient.state("transport", t);
             }
         }
+        sendAudio(wallMs);   // R-SVC-7: what the engine played, to the pages that listen
         // everything else the window reads every frame: the same rule — sent when it changed, at most 25 a second
         if (wallMs - mLastLiveMs >= kLiveMinIntervalMs)
         {
@@ -308,6 +332,21 @@ namespace solaris_cli
         if (m == "browse") return browse(call.params);
         if (m == "video.frame") return video(call, false);
         if (m == "video.thumb") return video(call, true);
+        if (m == "audio.listen")
+        {
+            // R-SVC-7: this page hears the engine when the driver is "web" (`settings set driver=web`)
+            if (!mHooks.audio) throw ntwb::MethodError("this build cannot play into a page (no web audio output)");
+            const bool on = call.params["on"].isBool() ? call.params["on"].asBool() : true;
+            if (on) mListeners.insert(call.client); else mListeners.erase(call.client);
+            mHooks.audio->setListening(!mListeners.empty());
+            Json r = Json::object();
+            r.set("listening", on);
+            r.set("listeners", (long long)mListeners.size());
+            r.set("driver", mSvc.model().settings.driver);
+            r.set("rate", mHooks.audio->rate());
+            r.set("channels", mHooks.audio->channels());
+            return r;
+        }
         if (m == "commands")
         {
             Json out = Json::array();
@@ -376,6 +415,15 @@ namespace solaris_cli
                                p, "{seq, w, h, time, bytes}, or {empty: true} when the host cannot read the picture there"));
         }
 
+        {
+            Json p = Json::object();
+            p.set("on", P("bool", false, "true (default) to listen, false to stop"));
+            methods.set("audio.listen", method("this page hears what the engine plays while the driver is `web` (`settings set driver=web`, "
+                                               "Settings > Audio > Driver: This browser): 16-bit PCM on the stream `audio`, to the pages that "
+                                               "listen alone; a page that leaves stops listening (R-SVC-7)",
+                                               p, "{listening, listeners, driver, rate, channels}"));
+        }
+
         Json events = Json::object();
         for (const auto &s : solaris::eventSpecs())
         {
@@ -422,6 +470,14 @@ namespace solaris_cli
             st.set("mime", "image/jpeg");
             st.set("meta", "{seq, file, t, time, w, h}");
             streams.set(name, st);
+        }
+        {
+            Json st = Json::object();
+            st.set("doc", "what the engine plays while the driver is `web`, to the pages that `audio.listen` (R-SVC-7): little-endian 16-bit "
+                          "interleaved PCM, >= 20 ms a blob; a stop or a seek moves `gen` - a page drops what it scheduled from an older one");
+            st.set("mime", "audio/L16");
+            st.set("meta", "{seq, rate, channels, frames, gen}");
+            streams.set("audio", st);
         }
         api.set("streams", streams);
         return api;

@@ -15,6 +15,7 @@
  *   vm.settings         Computed<SettingsModel> m.settings (jsonEqual)
  *   vm.position         Computed<number>        beats HEARD now (vm.model's transport.position — live while playing)
  *   vm.playing          Computed<bool>
+ *   vm.audio       PageAudio (model/audio.js): start() from a click / stop(); listening, error — R-SVC-7, driver "web"
  *   vm.status, vm.presence, vm.events, vm.lastRejection   the session's (model/session.js)
  *
  * INTENT — a command line, the same text the native widget sends (app/NOTES.md, docs/API.md):
@@ -87,6 +88,7 @@ import { createA11y } from "../kit/a11y.js";
 import { keyActionFor, keyHint } from "../kit/keys.js";
 import * as W from "./words.js";
 import { createDnd } from "./dnd.js";
+import { PageAudio } from "../model/audio.js";
 
 export const UI_SCALES = [75, 90, 100, 125, 150, 175, 200];  // SettingsModel::uiScale's offered values (AppModel.h:295)
 export const MIN_W = 960, MIN_H = 600;                       // App::minWidth / minHeight (App.h): the window's floor
@@ -131,6 +133,7 @@ export function mergeLive(base, live, transport) {
 export function createViewModel(session, { toast } = {}) {
   const S = session;
   const m = computed(() => mergeLive(S.model.value, S.live.value, S.transport.value));
+  const audio = new PageAudio(S);   // R-SVC-7: this page hears the engine when the driver is "web"
 
   // ------------------------------------------------------------------ the model
   const ready = computed(() => !!m.value);
@@ -233,7 +236,7 @@ export function createViewModel(session, { toast } = {}) {
 
   Object.assign(vm, {
     session: S, model: m, base: S.model, transport: S.transport, live: S.live, status: S.status, presence: S.presence, events: S.events, lastRejection: S.lastRejection,
-    ready, screen, settings, position, playing, view, batch,
+    ready, screen, settings, position, playing, view, batch, audio,
     // intents
     cmd, modelAt, note: (line) => S.notify(line), q, beatText,
     browse: (path, kinds) => S.browse(path, kinds),

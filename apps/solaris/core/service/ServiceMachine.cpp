@@ -161,9 +161,10 @@ namespace solaris
                 else if (k == "driver")
                 {
                     // R-DEV-9: how the clock device is reached — the next play opens it
-                    if (v != "pulse" && v != "pipewire") { err = "driver is pulse or pipewire"; return false; }
+                    if (v != "pulse" && v != "pipewire" && v != "web") { err = "driver is pulse, pipewire or web"; return false; }
                     next.driver = v;
                     mPipewireDown = false; // set again: PipeWire is tried again
+                    mWebDown = false;      // … and so is the browser (R-SVC-7)
                 }
                 else if (k == "recordQuantize")
                 {

@@ -217,6 +217,9 @@ umbrella's pointer — `arstro.rule` §7).
     faces partial) · [x] browser · [x] float windows · [~] piano roll (notes, keys, scale, vel/chance,
     zoom — not yet steps, toolbar menus, box select, copy) · [ ] automation panel · [ ] video panel ·
     [x] settings · [x] export · [x] relink · [ ] conflicts sheet
+  - [x] **The sound in the browser** (2026-10-27, R-SVC-7): Settings › Audio › Driver: This browser
+    (`settings set driver=web`) — `cli/WebAudio.h`, `audio.listen` + the stream `audio`, `web/js/model/audio.js`,
+    the "Listen in this browser" pill (DR-SVC-7).
 - [x] **C5** A whole song made by an agent with `solaris-cc`, measured (R-SVC-9).
       — DR-SVC-9: `demo/canon/` — Pachelbel's Canon as 128 bpm EDM, 86 commands, 7 instruments, 2 buses,
       formula delay, kick-keyed sidechains, bezier filter automation, limiter; `solaris_demo_canon`

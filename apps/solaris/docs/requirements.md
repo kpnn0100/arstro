@@ -1732,6 +1732,30 @@ no events fails it. The page was looked at in headless Chrome over a fake bridge
 print --json` (desktop, Home, the console mid cross-fade) and its intents checked to send the window's
 lines. **The first page ran through a real Arstro Remote on 2026-10-26** (an Orange Pi 5 Plus, Arstro Remote 2.1, NTWB 1.1.0): `solaris-cc ntwb install` listed it under Apps, `arstro-remote apps launch solaris` started `ntwb serve`, `apps call solaris command '{"line": "project new …"}'` answered `{output, revision}`, and the page at `/apps/solaris/` drew that song (song bar, lanes, mixer) at 1280×800 and at 390×844.
 
+**The sound in the browser (R-SVC-7, added 2026-10-27).** A third driver, `web`: `settings set driver=web`
+(Settings.cpp, `ServiceMachine.cpp` — "driver is pulse, pipewire or web"); `SolarisService::openOutput`
+tries `Host::audioOutFor("web")` first and, where the host has none (the window, the CLI), says once
+"this host has no browser to play into — playing through PulseAudio" (`mWebDown`, cleared when the driver
+is set again). `solaris-cc ntwb serve`'s host has it: `cli/WebAudio.h` — `WebAudioOut`, a device paced by the
+steady clock (it lets the engine render at most a buffer, >= 20 ms, ahead of real time — the back-pressure a
+device's `write` gives; a stall restarts the clock rather than racing), `latency()` = what is ahead + the
+page's 120 ms, `flush()` bumps the hub's generation; `WebAudioHub` — the PCM as int16 (dropped while nobody
+listens, bounded at 4 s). The adapter's `audio.listen {on}` adds or removes the calling page (a page that
+leaves, `client.close`, is removed) and `tick` sends what the hub holds, >= 20 ms (or what is there after
+40 ms), as blobs on the stream `audio` (`audio/L16`, meta `{seq, rate, channels, frames, gen}`) to the
+listening pages alone. The page (`web/js/model/audio.js`, `PageAudio`) makes or resumes its AudioContext in
+the click, schedules each blob gaplessly (AudioBufferSourceNode — an AudioWorklet needs a secure context,
+an Arstro Remote page on the LAN is plain http), rebuffers 120 ms after an underrun, drops what an older
+generation scheduled, and drops a blob rather than queue past 0.6 s (the two clocks drift). The settings
+sheet's Driver offers "This browser" and starts the page that chose it inside the click; the shell's
+"Listen in this browser" pill (web-only) shows on every page while the driver is `web`. Proof:
+`solaris_ntwb` (`audio.listen`: what the engine plays reaches the listening page alone, as L16, 0.5 →
+16384; a stop moves the generation; a page that leaves stops; refused without the hub; the driver taken
+and a wrong one refused); `solaris_service` (the refusal's words); live in a local Arstro Remote with no
+sound server: a kick pattern played with the driver `web` sent 105 blobs (2.5 s of 48 kHz stereo) in
+2.5 s, peaking at −8.8 dBFS, the playhead advancing in real time, six buffers scheduled ~130 ms ahead;
+stop dropped them all.
+
 ### DR-MIX-17 Latency compensated (R-MIX-17)
 **A device says how late it is** — DSP `Device::latency()` (`src/device/Device.h:125`, REQ-device-8, DSP
 `b611e4a`): the samples its output lags its input at its current parameters; the limiter's `EffectDevice`

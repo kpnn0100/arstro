@@ -111,6 +111,20 @@ namespace solaris
         // R-DEV-9: the setting's driver — PipeWire not there, or linking nowhere, plays through PulseAudio (the fallback),
         // said ONCE so the user knows why the buffer is not what they asked; `settings set driver=pipewire` tries again
         driver.clear();
+        // R-SVC-7: "web" plays into the pages of an Arstro Remote session that listen — only `solaris-cc ntwb serve`'s
+        // host has that output; the window and the CLI have no browser, so they say so once and play through PulseAudio
+        if (mSettings.driver == "web" && !mWebDown)
+        {
+            std::string why = "this host has no browser to play into";
+            if (mHost.audioOutFor)
+                if (auto out = mHost.audioOutFor("web"))
+                {
+                    why.clear();
+                    if (out->open(mSettings.output, rate, 2, block, why)) { driver = "web"; return out; }
+                }
+            emit(Event(Event::Kind::Info).with("text", (why.empty() ? std::string("the web output did not open") : why) + " — playing through PulseAudio"));
+            mWebDown = true;
+        }
         if (mSettings.driver == "pipewire" && !mPipewireDown)
         {
             std::string why = "this build has no PipeWire driver";

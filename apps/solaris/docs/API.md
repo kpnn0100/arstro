@@ -661,7 +661,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.languages[].name` | string | R-ACCESS-2: the language's name in itself |
 | `settings.showIds` | bool | every object's id drawn beside its name (R-UI-11) |
 | `settings.autosave` | int | seconds between autosaves of an unsaved song; 0 = off (R-SAFE-1) |
-| `settings.driver` | string | pulse \| pipewire: how the clock device is reached (R-DEV-9) |
+| `settings.driver` | string | pulse \| pipewire \| web: how the clock device is reached (R-DEV-9; web = the pages that listen, R-SVC-7) |
 | `settings.recordQuantize` | string | off \| 1/4 \| 1/8 \| 1/16 \| 1/32: where a recorded note's start lands (R-MIDI-2) |
 | `settings.countIn` | int | bars of click before a recording, 0 … 4 (R-MIDI-2) |
 | `settings.midiInputs` | string | all \| none \| MIDI port names, comma-separated: the keyboards Solaris listens to (R-MIDI-2) |
@@ -713,7 +713,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `transport.masterRms` | number[] | the master's RMS over 300 ms, L/R (R-METER-2) *(not in `--stable`)* |
 | `transport.masterHold` | number[] | the master's held peak, L/R *(not in `--stable`)* |
 | `transport.masterClip` | bool | the master reached full scale since `meters clear` *(not in `--stable`)* |
-| `transport.driver` | string | what the clock device plays through now: pulse \| pipewire ('' stopped) — R-DEV-9 *(not in `--stable`)* |
+| `transport.driver` | string | what the clock device plays through now: pulse \| pipewire \| web ('' stopped) — R-DEV-9, R-SVC-7 *(not in `--stable`)* |
 | `transport.recording` | bool | `transport record` is keeping the armed strip's keyboard (R-MIDI-2) |
 | `transport.countingIn` | bool | … and its count-in still clicks *(not in `--stable`)* |
 | `transport.recorded` | int | notes struck that will land (a count-in's are not) *(not in `--stable`)* |

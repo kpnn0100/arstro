@@ -71,7 +71,7 @@ namespace solaris
             else if (k == "language" && (v == "auto" || solaris_strings::known(v))) s.language = v; // R-ACCESS-2
             else if (k == "showIds") s.showIds = v == "on";
             else if (k == "autosave") { const int a = v == "off" ? 0 : std::atoi(v.c_str()); if (a == 0 || (a >= 1 && a <= 3600)) s.autosave = a; }
-            else if (k == "driver") { if (v == "pulse" || v == "pipewire") s.driver = v; }
+            else if (k == "driver") { if (v == "pulse" || v == "pipewire" || v == "web") s.driver = v; }
             else if (k == "midiInputs") { if (!v.empty()) s.midiInputs = v; }
             else if (k == "surface") { if (v == "none" || v == "mcu" || v == "hui") s.surface = v; } // R-CTRL-2
             else if (k == "surfacePort") s.surfacePort = v;

@@ -227,6 +227,23 @@ export function mount(app, vm) {
   });
   paintScreens();
 
+  // ------------------------------------------------------------------ WEB-ONLY (R-SVC-7): "Listen in this browser"
+  // With the driver "web" the engine plays into the pages that listen; a browser starts sound only inside a click, so
+  // every page offers one, under the song bar, until it listens (Settings > Audio > Driver starts the page that chose it).
+  const listen = h("button.sl-listen", { type: "button" });
+  root.append(listen);
+  effect(() => {
+    const show = vm.ready.value && vm.screen.value === "project" && vm.settings.value.driver === "web";
+    const on = vm.audio.listening.value, err = vm.audio.error.value;
+    listen.classList.toggle("on", show);
+    listen.classList.toggle("live", on);
+    listen.textContent = on ? "\u25CF " + vm.tr("Listening here") : err ? vm.tr("Sound did not start — click to try again") : "\u25B6 " + vm.tr("Listen in this browser");
+  });
+  listen.addEventListener("click", () => {
+    if (vm.audio.listening.peek()) vm.audio.stop().catch(() => {});
+    else vm.audio.start().catch((e) => showToast(String(e.message || e), true));
+  });
+
   // ------------------------------------------------------------------ sheets and the history tree (modal, over both screens)
   function modalSlot(layer, path, widget) {
     const host = h("div.sl-slot.sl-fill.sl-sheet");

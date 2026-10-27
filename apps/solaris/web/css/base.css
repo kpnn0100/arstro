@@ -142,3 +142,12 @@ html.sl-hold, html.sl-hold * { cursor: var(--sl-hold-cursor) !important; }
 .scroll::-webkit-scrollbar { width: 6px; height: 6px; }
 .scroll::-webkit-scrollbar-thumb { background: rgba(var(--white-rgb), 0.14); border-radius: var(--radius-pill); }
 .scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* WEB-ONLY (R-SVC-7): "Listen in this browser" - shown while the driver is "web" (js/shell.js). Fades, never pops. */
+.sl-listen { position: absolute; right: 12px; top: 36px; z-index: 20; padding: 4px 10px; border-radius: var(--radius-pill);
+             background: var(--popover); color: var(--foreground); border: 1px solid var(--border); font: 11px var(--font-sans), sans-serif;
+             opacity: 0; pointer-events: none; cursor: pointer;
+             transition: opacity var(--motion-cross-fade, 200ms) ease-out, border-color var(--motion-hover, 120ms) ease-out, color var(--motion-hover, 120ms) ease-out; }
+.sl-listen.on { opacity: 1; pointer-events: auto; }
+.sl-listen:hover { border-color: var(--primary); }
+.sl-listen.live { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 60%, transparent); }

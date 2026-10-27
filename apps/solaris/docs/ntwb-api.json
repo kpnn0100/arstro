@@ -90,6 +90,17 @@
         }
       },
       "result": "{seq, w, h, time, bytes}, or {empty: true} when the host cannot read the picture there"
+    },
+    "audio.listen": {
+      "doc": "this page hears what the engine plays while the driver is `web` (`settings set driver=web`, Settings > Audio > Driver: This browser): 16-bit PCM on the stream `audio`, to the pages that listen alone; a page that leaves stops listening (R-SVC-7)",
+      "params": {
+        "on": {
+          "type": "bool",
+          "required": false,
+          "doc": "true (default) to listen, false to stop"
+        }
+      },
+      "result": "{listening, listeners, driver, rate, channels}"
     }
   },
   "events": {
@@ -246,6 +257,11 @@
       "doc": "a frame of the song's picture a page asked for (answer to `video.thumb`), to that page alone",
       "mime": "image/jpeg",
       "meta": "{seq, file, t, time, w, h}"
+    },
+    "audio": {
+      "doc": "what the engine plays while the driver is `web`, to the pages that `audio.listen` (R-SVC-7): little-endian 16-bit interleaved PCM, >= 20 ms a blob; a stop or a seek moves `gen` - a page drops what it scheduled from an older one",
+      "mime": "audio/L16",
+      "meta": "{seq, rate, channels, frames, gen}"
     }
   }
 }

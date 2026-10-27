@@ -379,6 +379,7 @@ namespace solaris
         std::vector<std::string> mAudit, mLastRenderPeaks;
         std::set<std::string> mClipLatch;  // R-METER-2: strips that reached full scale since `meters clear`
         bool mMasterClip = false;          // … and the master
+        bool mWebDown = false;             // R-SVC-7: no page-audio output in this host (the window, the CLI) — PulseAudio until set again
         bool mPipewireDown = false;        // R-DEV-9: PipeWire would not open this session — PulseAudio until the driver is set again
         std::map<std::string, double> mDriftOf;           // R-DEV-2: each follower's drift as last measured (a play starts locked)
         std::map<std::string, std::string> mFollowerDown; // R-DEV-1: followers this play could not open, and why

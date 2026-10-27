@@ -1406,6 +1406,14 @@ a process is the host's (law 12).
   every visible change eased (R-G-1), every control sending the command line the native widget sends;
   the board's files are browsed through the adapter where the window opens a native picker. A page
   smaller than the window's minimum is scaled down to fit (a phone sees the whole app).
+  **The sound can be heard in the browser** *(added 2026-10-27: "setting of solaris need to add output audio
+  to web, so that user can hear directly from web")*: Settings › Audio › Driver offers **This browser**
+  (`settings set driver=web`) — the engine then plays into the pages of the session that listen instead of
+  the machine's speakers, kept in time by the machine's clock with the page's buffer counted in the
+  latency, so the playhead shows what is heard; a stop or a seek is heard at once (nothing scheduled plays
+  out). Choosing it starts the page that chose it; every other page offers "Listen in this browser" (a
+  browser starts sound only in a click). Nobody listening, the transport still runs and nothing is heard.
+  The window and the CLI have no browser: with that driver they play through PulseAudio and say so once.
 - **R-SVC-8 Composition is agent-sized**: whatever an agent needs to write a whole song in few,
   readable lines — bulk note entry with note names, the ids a command made printed back, a song
   overview — specified from an audit of an agent composing with the CLI (2026-10-09), with a guide,

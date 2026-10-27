@@ -2352,7 +2352,7 @@ static void test_the_driver_and_its_fallback()
     assert(r.svc.model().settings.driver == "pulse");
     r.ok("settings set driver=pipewire");
     assert(r.svc.model().settings.driver == "pipewire");
-    assert(contains(r.no("settings set driver=alsa"), "pulse or pipewire"));
+    assert(contains(r.no("settings set driver=alsa"), "pulse, pipewire or web"));
     {
         Run again(settings, "");
         assert(again.svc.model().settings.driver == "pipewire"); // a second process reads it back

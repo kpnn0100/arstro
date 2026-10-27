@@ -16,6 +16,8 @@
  *   settings set <q(key.<id>=<combos>)>  a key chip re-bound (R-SET-4); Reset: settings set key.<id>=default …
  *   map remove <cc>                      a mapped control forgotten (R-CTRL-1)
  *   folder remove <q(path)> · folder add <path>   (the folder picker, as App's onAddFolder)
+ * WEB-ONLY: Driver offers "This browser" (`settings set driver=web`, R-SVC-7) — the engine plays into the pages that
+ *   listen (vm.audio, model/audio.js); choosing it starts this page listening inside the click.
  * WEB-ONLY: the UI scale is the PAGE's (vm.setUiScale — per page, like Cosmo's), never `settings set uiScale`.
  */
 import { signal, computed, effect, untracked, jsonEqual } from "../core/signal.js";
@@ -155,7 +157,12 @@ export function mount(host, vm, ctx) {
       const ch = (chips[key] || [])[j];
       if (!ch) return;
       if (key === "uiScale") vm.setUiScale(+ch.value);                    // WEB-ONLY: the page's own scale
-      else send("settings set " + q(key + "=" + ch.value));
+      else {
+        // WEB-ONLY (R-SVC-7): "This browser" — this page starts listening INSIDE the click (a browser plays nothing before one)
+        if (key === "driver" && ch.value === "web" && vm.audio) vm.audio.start().catch(() => {});
+        else if (key === "driver" && vm.audio && vm.audio.listening.peek()) vm.audio.stop().catch(() => {});
+        send("settings set " + q(key + "=" + ch.value));
+      }
     } });
     c.el.classList.add("ss-control");
     c.el.style.top = PAGE_TOP + i * ROW_H + (ROW_H - (TOGGLES.has(key) ? 22 : CONTROL_H)) * 0.5 + "px";
@@ -195,7 +202,8 @@ export function mount(host, vm, ctx) {
       case "metronomeLevel": case "auditionLevel": return [-18, -12, -6, 0].map((v) => ({ label: `${v} dB`, value: String(v) }));
       case "newBpm": return [100, 120, 124, 126, 128, 140, 150, 174].map((b) => ({ label: `${b} bpm`, value: String(b) }));
       case "newSig": return ["4/4", "3/4", "6/8", "7/8"].map((m) => ({ label: m, value: m }));
-      case "driver": return [{ label: "PulseAudio", value: "pulse" }, { label: "PipeWire — " + say("low latency"), value: "pipewire" }];
+      case "driver": return [{ label: "PulseAudio", value: "pulse" }, { label: "PipeWire — " + say("low latency"), value: "pipewire" },
+        { label: say("This browser"), value: "web" }];   // WEB-ONLY (R-SVC-7): the engine plays into the pages that listen
       case "midiInputs": return [{ label: say("Every MIDI input"), value: "all" }, { label: say("None"), value: "none" },
         ...d.midiDevices.map((x) => ({ label: x.name, value: x.id }))];
       case "surface": return [{ label: say("None"), value: "none" }, { label: "Mackie Control", value: "mcu" }, { label: "HUI", value: "hui" }];

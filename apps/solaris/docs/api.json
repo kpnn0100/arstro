@@ -3871,7 +3871,7 @@
     {
       "path": "settings.driver",
       "type": "string",
-      "summary": "pulse | pipewire: how the clock device is reached (R-DEV-9)",
+      "summary": "pulse | pipewire | web: how the clock device is reached (R-DEV-9; web = the pages that listen, R-SVC-7)",
       "stable": true
     },
     {
@@ -4183,7 +4183,7 @@
     {
       "path": "transport.driver",
       "type": "string",
-      "summary": "what the clock device plays through now: pulse | pipewire ('' stopped) — R-DEV-9",
+      "summary": "what the clock device plays through now: pulse | pipewire | web ('' stopped) — R-DEV-9, R-SVC-7",
       "stable": false
     },
     {

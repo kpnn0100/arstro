@@ -406,6 +406,81 @@ namespace
         pass("video.frame / video.thumb: the host's two decoders, a JPEG to the calling page alone; unreadable said, no box refused");
     }
 
+    void test_web_audio_reaches_only_the_pages_that_listen()
+    {
+        auto ends = ntwb::MemoryTransport::pair();
+        ntwb::Client client({"solaris", "1"});
+        client.setTransport(ends.first);
+        FakeHost host{ends.second};
+        solaris::SolarisService svc;
+        auto hub = std::make_shared<solaris_cli::WebAudioHub>();
+        solaris_cli::NtwbAdapter::Hooks hooks;
+        hooks.audio = hub;
+        solaris_cli::NtwbAdapter adapter(svc, client, hooks);
+        adapter.start();
+        std::string err;
+        assert(client.connect(err));
+        host.send(parse(R"({"t":"welcome","ntwb":"1.1.0","session":"main","host":{"name":"h","version":"1"},"clients":["c1","c2"]})"));
+        assert(client.poll(0) && client.welcomed());
+        // the "web" device as `ntwb serve`'s host makes it: paced by the clock, playing into the hub
+        solaris_cli::WebAudioOut out(hub);
+        assert(out.open("", 48000, 2, 256, err));
+        const std::vector<float> block(2 * 960, 0.5f);
+        assert(out.write(block.data(), 960));                  // nobody listens: the clock runs, the sound is dropped
+        adapter.tick(0.0);
+        host.drain();
+        for (const auto &f : host.frames) assert(!f.blob);
+        Json on = Json::object();
+        on.set("on", true);
+        host.call("a1", "audio.listen", on);                    // page c1 listens
+        assert(client.poll(0));
+        host.drain();
+        const Json *r = host.result("a1");
+        assert(r && (*r)["ok"].asBool() && (*r)["data"]["listening"].asBool() && (*r)["data"]["rate"].asInt() == 48000);
+        assert(out.write(block.data(), 960));
+        adapter.tick(100.0);
+        host.drain();
+        std::vector<const ntwb::Frame *> blobs;
+        for (const auto &f : host.frames) if (f.blob) blobs.push_back(&f);
+        assert(blobs.size() == 1);                              // to c1 alone, never to c2
+        const ntwb::Frame &b = *blobs[0];
+        assert(b.json["stream"].asString() == "audio" && b.json["client"].asString() == "c1" && b.json["mime"].asString() == "audio/L16");
+        assert(b.json["meta"]["frames"].asInt() == 960 && b.json["meta"]["channels"].asInt() == 2 && b.json["meta"]["rate"].asInt() == 48000);
+        assert(b.data.size() == 960 * 2 * sizeof(int16_t));
+        assert((int16_t)((uint8_t)b.data[0] | ((uint8_t)b.data[1] << 8)) == 16384);   // 0.5 as little-endian int16
+        assert(ntwb::validateBlobHeader(b.json, ntwb::A2H).empty());
+        // a stop flushes: what follows carries a newer generation, so the page drops what it scheduled
+        const long long gen0 = b.json["meta"]["gen"].asInt();
+        out.flush();
+        assert(out.write(block.data(), 960));
+        adapter.tick(200.0);
+        host.drain();
+        long long gen1 = -1;
+        for (const auto &f : host.frames) if (f.blob) gen1 = f.json["meta"]["gen"].asInt();
+        assert(gen1 > gen0);
+        // the page leaves: nobody listens any more
+        host.send(parse(R"({"t":"client.close","client":"c1"})"));
+        assert(client.poll(0));
+        assert(!hub->listening());
+        // without the hub (a build with no web output) it is refused, never guessed
+        solaris_cli::NtwbAdapter bare(svc, client);
+        bool refused = false;
+        try
+        {
+            ntwb::Call c;
+            c.method = "audio.listen";
+            bare.onCall(c);
+        }
+        catch (const ntwb::MethodError &e) { refused = std::string(e.what()).find("no web audio output") != std::string::npos; }
+        assert(refused);
+        const Json api = solaris_cli::NtwbAdapter::apiDescription();
+        assert(api["methods"].has("audio.listen") && api["streams"].has("audio"));
+        // the service takes the driver, and the CLI-like host (no web output) falls back to PulseAudio with a word
+        assert(svc.dispatchText("settings set driver=web", err));
+        assert(!svc.dispatchText("settings set driver=bluetooth", err) && err.find("pulse, pipewire or web") != std::string::npos);
+        pass("audio.listen: what the engine plays reaches the pages that listen alone, as L16; a stop moves the generation; a page that leaves stops");
+    }
+
     void test_install_writes_the_app_into_a_scratch_data_dir()
     {
         const fs::path data = scratch("install");
@@ -464,6 +539,7 @@ int main()
     test_a_call_is_a_command_line_and_the_state_is_the_model();
     test_browse_lists_a_folder_of_the_machine_with_the_hosts_lister();
     test_a_video_frame_is_a_jpeg_to_the_calling_page_alone();
+    test_web_audio_reaches_only_the_pages_that_listen();
     test_install_writes_the_app_into_a_scratch_data_dir();
     std::printf("solaris_ntwb: %d passed\n", passed);
     return 0;
