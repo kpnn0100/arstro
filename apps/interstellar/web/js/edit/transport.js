@@ -232,7 +232,7 @@ export function mount(host, vm, ctx) {
       vm.view.scrubbing.value = true;
       lastSentFrame = -1;
       scrubTo(pt.x);
-      host.setPointerCapture(e.pointerId);
+      try { host.setPointerCapture(e.pointerId); } catch {}
       loop.kick();
     }
   });

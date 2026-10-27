@@ -25,6 +25,22 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Open
 
+### D-17 — A project that was empty when the Cut tab first laid out stays at the maximum zoom
+- **Area:** ui · **Status:** Open · **Severity:** S3 · **Found:** 2026-10-27, driving the web face's
+  Cut tab over the real service (R-SVC-4 amended).
+- **Reproduce:** `project new`, open Cut (the timeline lays out with nothing on it), then `rack add` a
+  6 s clip and drop it: the timeline shows 480 px/s — two seconds across the deck — not the clip fitted.
+- **Expected:** a timeline that gets its first clip fits it, as one opened with clips does
+  (`fitPps`, "zoom to fit"); a user should not need Workspace › Reset Workspace to see the cut.
+- **Evidence:** `Timeline::advance` sets the zoom ONCE, on the first frame after the first bind
+  (`mPpsInit`, `Timeline.cpp:741-747`), from `fitPps()` = lanes width / max(1, duration) clamped to
+  2…480 (`:330-334`); with duration 0 that is 1 000+ px/s → 480, and nothing re-fits when the duration
+  later grows from 0.
+- **Cause:** `app/widgets/Timeline.cpp:741-747`.
+- **Recommended fix:** re-run the first fit when the duration goes from 0 to > 0 (and on a project or
+  version switch), unless the user has zoomed since. The web face (`web/js/cut/timeline.js`) keeps the
+  native behaviour until then; a ui test: an empty project, a clip added, `ppsTarget() == fitPps()`.
+
 ### D-16 — The scrubber thickens when the CAPTURE button is hovered, not when the scrubber is
 - **Area:** ui · **Status:** Open · **Severity:** S4 · **Found:** 2026-10-27, porting Transport to the
   web face (R-SVC-4 amended).

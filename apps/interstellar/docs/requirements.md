@@ -311,7 +311,19 @@ as a command, the eased catch-up, the play/pause cross-fade, marks, the shuttle 
 ballistics; D-16 kept and cited): within 0.3–1.7 % of the native pixels in `cut_populated`,
 `cut_marks_shuttle`, `cut_multicam`, `cut_caption`, `grade_stills_wipe`, `grade_monitor_empty`,
 `grade_monitor_loading`; live, a placed test clip scrubbed to 3.417 s shows that frame (its
-burned-in counter reads it) under 00:00:03:10. Guarded by
+burned-in counter reads it) under 00:00:03:10. The Cut tab: `cut/timeline.js` (Timeline: the one time
+origin, clips by provenance with hatching and waveforms from `peaks`, the anchored eased zoom, the
+direct-manipulation drags that keep their grab offset and snap within 8 px — `clip move`, `clip trim
+--in|--out`, Alt `clip roll` / `clip slip` with their hint chip — the ruler scrub, the drop ghost of a
+source dragged from the bin, the In/Out band, the target bar, the preview-cache bar, transitions,
+markers; it hosts the key lane's slot in the ANIMATION section's rect and provides the time axis to
+it), `cut/bin.js` (SourceBin: travelling rows, the lit target while nothing is cut, the drag-out),
+`cut/inspector.js` (ClipInspector, with the source timecode's drop-frame maths) and `cut/menus.js`
+(App::openClipContext / openLaneContext). Bin and inspector within 2.4–3 % of the native pixels in
+`cut_populated`, `cut_hover`, `cut_nested`, `cut_sound`; the lanes line up clip for clip (the key
+lane's own header still a placeholder). Live: a source dragged from the bin lands as `clp_1` at 1 s on
+V1, a drag moves it to 2 s, a click selects it, a ruler click puts the playhead at 3.5 s, Split at
+playhead cuts it in two; D-17 found and kept. Guarded by
 `interstellar_ntwb` (the real service and adapter over `ntwb::MemoryTransport`: a call is a command
 line, refusals and the `command.rejected` event, `model` == `state print --json`, a `frame` goes to
 its page alone, a build with no encoder refuses `frame`, `thumb` / its epoch, `peaks`, `still`, `capture`, `browse`,

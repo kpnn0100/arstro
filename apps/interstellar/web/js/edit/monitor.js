@@ -440,13 +440,13 @@ export function mount(host, vm, ctx) {
       wipeDrag = true;
       wipeTarget = wipeAtPoint(pt); wipeLive.set(wipeTarget); wipeLast = wipeTarget;
       vm.notify("view wipe --at " + num(wipeTarget));
-      host.setPointerCapture(e.pointerId);
+      try { host.setPointerCapture(e.pointerId); } catch {}
     } else if (zoomTarget > 1 + 1e-9 && inRect(pt, frameRect()) && !(captureRect && inRect(pt, captureRect)) && !angleAt(pt)) {
       centre = centreFor(Math.max(1, zoom.value));
       anchored = false;
       panning = true;
       panLast = pt;
-      host.setPointerCapture(e.pointerId);
+      try { host.setPointerCapture(e.pointerId); } catch {}
     }
     loop.kick();
   });
