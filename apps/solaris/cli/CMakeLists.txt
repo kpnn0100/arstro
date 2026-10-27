@@ -5,6 +5,17 @@ add_executable(solaris-cc main.cpp
   NtwbAdapter.cpp   # ntwb: Solaris as an Arstro Remote app (R-SVC-7)
   NtwbMain.cpp)
 target_link_libraries(solaris-cc PRIVATE solaris_host arstro_ntwb)
+# the web face's pictures (videoFrame / videoThumb): JPEG through GdkPixbuf, as interstellar-cc and cosmo-cc encode
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+  pkg_check_modules(SOLARIS_CC_PIXBUF IMPORTED_TARGET gdk-pixbuf-2.0)
+endif()
+if(SOLARIS_CC_PIXBUF_FOUND)
+  target_link_libraries(solaris-cc PRIVATE PkgConfig::SOLARIS_CC_PIXBUF)
+  target_compile_definitions(solaris-cc PRIVATE SOLARIS_HAVE_PIXBUF=1)
+else()
+  message(STATUS "solaris-cc: no gdk-pixbuf — the web face's video pictures are refused (videoFrame / videoThumb)")
+endif()
 # `ntwb install` copies the web UI, and what it borrows from cosmo's (its reactive core, its fonts)
 target_compile_definitions(solaris-cc PRIVATE SOLARIS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
                                               COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo")
@@ -66,7 +77,8 @@ add_test(NAME solaris_ntwb_api_current
 # cosmo_web_tokens, for Solaris): web/css/tokens.css is its committed output.
 #   build/apps/solaris/cli/solaris_web_tokens > apps/solaris/web/css/tokens.css
 if(TARGET artboard_core)
-  add_executable(solaris_web_tokens webTokens.cpp)
+  # cosmo's Theme.cpp compiled straight in (the app's pattern, app/CMakeLists.txt): sharedTheme() is a token function too
+  add_executable(solaris_web_tokens webTokens.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo/Theme.cpp)
   target_include_directories(solaris_web_tokens PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../app ${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo
                              ${CMAKE_CURRENT_SOURCE_DIR}/../../../core/Artboard/src ${CMAKE_CURRENT_SOURCE_DIR}/../../../core/Artboard/include)
   target_link_libraries(solaris_web_tokens PRIVATE artboard_core solaris_strings) # the app's Theme.h names its words (R-ACCESS-2)

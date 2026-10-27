@@ -15,11 +15,55 @@
   --success: #3FB950;
   --border: rgba(255, 255, 255, 0.072);
   --input: #252525;
+  --input-light: #F4F4F5;
+  --input-light-text: #18181B;
+  --switch-background: #444444;
   --ring: rgba(21, 147, 135, 0.5);
+  --canvas-bg: #0A0A0A;
+  --histogram-bg: #0F0F0F;
+  --left-rail-bg: #161616;
+  --filmstrip-bg: #121212;
+  --folder-chip-bg: #1A1A1A;
+  --segmented-bg: #111111;
+  --curve-plot-bg: #0D0D0D;
   --white: #FFFFFF;
   --white-rgb: 255, 255, 255;
   --primary-rgb: 21, 147, 135;
+  --success-rgb: 63, 185, 80;
   --hover-wash: rgba(255, 255, 255, 0.07);
+  --hover-wash-alpha: 0.07;
+  --radius-hairline: 1px;
+  --radius-control: 2px;
+  --radius-pill: 9999px;
+  --anchor-hit-radius: 13px;
+  --font-sans: "Roboto";
+  --font-sans-medium: "Roboto Medium";
+  --font-sans-semibold: "Roboto SemiBold";
+  --font-mono: "JetBrains Mono";
+  --font-mono-medium: "JetBrains Mono Medium";
+  --space-u: 3.25px;
+  --space-pad-x: 9.75px;
+  --space-gap: 6.5px;
+  --space-row-h: 22.75px;
+  --space-bar-h: 29.25px;
+  --motion-hover: 120ms;
+  --motion-modal-open: 150ms;
+  --motion-modal-close: 120ms;
+  --motion-scroll: 180ms;
+  --motion-cross-fade: 200ms;
+  --motion-dissolve: 160ms;
+  --motion-select: 200ms;
+  --motion-slide: 220ms;
+  --motion-catch-up: 220ms;
+  --motion-reflow: 260ms;
+  --motion-screen-fade: 260ms;
+  --motion-toast-in: 150ms;
+  --motion-toast-out: 300ms;
+  --motion-toast-hold: 3200ms;
+  --motion-meter-fall: 300ms;
+  --interaction-hover-fill-lift: 0.14;
+  --interaction-hover-stroke-lift: 0.5;
+  --interaction-disabled-fade: 0.55;
   --stage-bg: #0A0A0A;
   --ruler-bg: #0F0F0F;
   --header-bg: #161616;
@@ -27,12 +71,19 @@
   --lane-alt-bg: rgba(255, 255, 255, 0.012);
   --deck-bg: #121212;
   --strip-bg: #1C1C1C;
+  --scrim: rgba(0, 0, 0, 0.55);
+  --scrim-alpha: 0.55;
   --playhead: #E5534B;
   --meter-low: #3FB950;
   --meter-mid: #E3B341;
   --meter-high: #E5534B;
   --solo: #E3B341;
   --skeleton: rgba(255, 255, 255, 0.045);
+  --module-bg: #1C1C1C;
+  --screen-bg: #0D0D0D;
+  --knob-cap: #252525;
+  --knob-track: rgba(255, 255, 255, 0.09);
+  --screen-grid: rgba(255, 255, 255, 0.04);
   --track-0: #5B7FA6;
   --track-1: #6E9A68;
   --track-2: #A67B5B;
@@ -43,25 +94,411 @@
   --track-7: #6E86A6;
   --track-8: #7FA65B;
   --track-9: #A6705B;
-  --radius-hairline: 1px;
-  --radius-control: 2px;
-  --radius-pill: 9999px;
-  --space-pad-x: 9.75px;
-  --space-gap: 6.5px;
-  --space-row-h: 22.75px;
-  --space-bar-h: 29.25px;
-  --font-sans: "Roboto";
-  --font-sans-medium: "Roboto Medium";
-  --font-sans-semibold: "Roboto SemiBold";
-  --font-mono: "JetBrains Mono";
-  --font-mono-medium: "JetBrains Mono Medium";
-  --motion-hover: 120ms;
-  --motion-cross-fade: 200ms;
-  --motion-select: 200ms;
-  --motion-slide: 220ms;
-  --motion-catch-up: 220ms;
-  --motion-reflow: 260ms;
-  --motion-toast-in: 150ms;
-  --motion-toast-out: 300ms;
-  --motion-meter-fall: 300ms;
+  --theme-slider-track-fill: #252525;
+  --theme-slider-track-stroke: rgba(0, 0, 0, 0);
+  --theme-slider-track-stroke-width: 0px;
+  --theme-slider-track-radius: 9999px;
+  --theme-slider-range-fill-fill: #159387;
+  --theme-slider-range-fill-stroke: rgba(0, 0, 0, 0);
+  --theme-slider-range-fill-stroke-width: 0px;
+  --theme-slider-range-fill-radius: 9999px;
+  --theme-slider-thumb-fill: #FFFFFF;
+  --theme-slider-thumb-stroke: #FFFFFF;
+  --theme-slider-thumb-stroke-width: 1px;
+  --theme-slider-thumb-radius: 9999px;
+  --theme-slider-thumb-radius: 4.5px;
+  --theme-button-idle-fill: rgba(0, 0, 0, 0);
+  --theme-button-idle-stroke: rgba(255, 255, 255, 0.072);
+  --theme-button-idle-stroke-width: 1px;
+  --theme-button-idle-radius: 2px;
+  --theme-button-pressed-fill: rgba(21, 147, 135, 0.1);
+  --theme-button-pressed-stroke: #159387;
+  --theme-button-pressed-stroke-width: 1px;
+  --theme-button-pressed-radius: 2px;
+  --theme-button-label-color: #636363;
+  --theme-button-label-size: 10px;
+  --theme-button-label-family: "Roboto";
+  --theme-button-label-letter-spacing: 0px;
+  --theme-checkbox-box-fill: #444A56;
+  --theme-checkbox-box-stroke: #C4C8D0;
+  --theme-checkbox-box-stroke-width: 1px;
+  --theme-checkbox-box-radius: 6px;
+  --theme-checkbox-indicator-fill: #F8B040;
+  --theme-checkbox-indicator-stroke: rgba(0, 0, 0, 0);
+  --theme-checkbox-indicator-stroke-width: 0px;
+  --theme-checkbox-indicator-radius: 4px;
+  --theme-checkbox-label-color: #F5F2EB;
+  --theme-checkbox-label-size: 14px;
+  --theme-checkbox-label-family: "";
+  --theme-checkbox-label-letter-spacing: 0px;
+  --theme-text-box-idle-fill: #24272F;
+  --theme-text-box-idle-stroke: #C4C8D0;
+  --theme-text-box-idle-stroke-width: 1px;
+  --theme-text-box-idle-radius: 8px;
+  --theme-text-box-focused-fill: #24272F;
+  --theme-text-box-focused-stroke: #F8B040;
+  --theme-text-box-focused-stroke-width: 2px;
+  --theme-text-box-focused-radius: 8px;
+  --theme-text-box-text-color: #F5F2EB;
+  --theme-text-box-text-size: 14px;
+  --theme-text-box-text-family: "";
+  --theme-text-box-text-letter-spacing: 0px;
+  --theme-text-box-placeholder-color: #AAAEB6;
+  --theme-text-box-placeholder-size: 14px;
+  --theme-text-box-placeholder-family: "";
+  --theme-text-box-placeholder-letter-spacing: 0px;
+  --theme-text-box-caret: #F8B040;
+  --theme-text-box-selection: rgba(79, 125, 247, 0.38);
+  --theme-knob-dial-fill: #24272F;
+  --theme-knob-dial-stroke: #C4C8D0;
+  --theme-knob-dial-stroke-width: 2px;
+  --theme-knob-dial-radius: 999px;
+  --theme-knob-track: #444A56;
+  --theme-knob-value: #F8B040;
+  --theme-knob-indicator: #F8B040;
+  --theme-knob-arc-width: 3px;
+  --theme-knob-label-color: #AAAEB6;
+  --theme-knob-label-size: 11px;
+  --theme-knob-label-family: "";
+  --theme-knob-label-letter-spacing: 0px;
+  --theme-toggle-track-off-fill: #252525;
+  --theme-toggle-track-off-stroke: rgba(0, 0, 0, 0);
+  --theme-toggle-track-off-stroke-width: 0px;
+  --theme-toggle-track-off-radius: 9999px;
+  --theme-toggle-track-on-fill: #159387;
+  --theme-toggle-track-on-stroke: rgba(0, 0, 0, 0);
+  --theme-toggle-track-on-stroke-width: 0px;
+  --theme-toggle-track-on-radius: 9999px;
+  --theme-toggle-thumb-fill: #FFFFFF;
+  --theme-toggle-thumb-stroke: rgba(0, 0, 0, 0);
+  --theme-toggle-thumb-stroke-width: 0px;
+  --theme-toggle-thumb-radius: 9999px;
+  --theme-progress-track-fill: #444A56;
+  --theme-progress-track-stroke: #C4C8D0;
+  --theme-progress-track-stroke-width: 1px;
+  --theme-progress-track-radius: 6px;
+  --theme-progress-fill-fill: #F8B040;
+  --theme-progress-fill-stroke: rgba(0, 0, 0, 0);
+  --theme-progress-fill-stroke-width: 0px;
+  --theme-progress-fill-radius: 6px;
+  --theme-combo-field-fill: #24272F;
+  --theme-combo-field-stroke: #C4C8D0;
+  --theme-combo-field-stroke-width: 1px;
+  --theme-combo-field-radius: 8px;
+  --theme-combo-popup-fill: #24272F;
+  --theme-combo-popup-stroke: #F8B040;
+  --theme-combo-popup-stroke-width: 1px;
+  --theme-combo-popup-radius: 8px;
+  --theme-combo-row-selected-fill: #E69016;
+  --theme-combo-row-selected-stroke: rgba(0, 0, 0, 0);
+  --theme-combo-row-selected-stroke-width: 0px;
+  --theme-combo-row-selected-radius: 0px;
+  --theme-combo-text-color: #F5F2EB;
+  --theme-combo-text-size: 14px;
+  --theme-combo-text-family: "";
+  --theme-combo-text-letter-spacing: 0px;
+  --theme-combo-caret: #F8B040;
+  --theme-tab-idle-fill: #141414;
+  --theme-tab-idle-stroke: rgba(0, 0, 0, 0);
+  --theme-tab-idle-stroke-width: 0px;
+  --theme-tab-idle-radius: 0px;
+  --theme-tab-active-fill: #1C1C1C;
+  --theme-tab-active-stroke: rgba(0, 0, 0, 0);
+  --theme-tab-active-stroke-width: 0px;
+  --theme-tab-active-radius: 0px;
+  --theme-tab-label-color: #636363;
+  --theme-tab-label-size: 10px;
+  --theme-tab-label-family: "Roboto Medium";
+  --theme-tab-label-letter-spacing: 0px;
+  --theme-tab-label-active-color: #159387;
+  --theme-tab-label-active-size: 10px;
+  --theme-tab-label-active-family: "Roboto Medium";
+  --theme-tab-label-active-letter-spacing: 0px;
+  --theme-tab-indicator: #159387;
+  --theme-tab-indicator-height: 1.5px;
+  --theme-scroll-viewport-fill: rgba(0, 0, 0, 0);
+  --theme-scroll-viewport-stroke: rgba(0, 0, 0, 0);
+  --theme-scroll-viewport-stroke-width: 0px;
+  --theme-scroll-viewport-radius: 0px;
+  --theme-scroll-track-fill: rgba(0, 0, 0, 0);
+  --theme-scroll-track-stroke: rgba(0, 0, 0, 0);
+  --theme-scroll-track-stroke-width: 0px;
+  --theme-scroll-track-radius: 0px;
+  --theme-scroll-thumb-fill: rgba(255, 255, 255, 0.12);
+  --theme-scroll-thumb-stroke: rgba(0, 0, 0, 0);
+  --theme-scroll-thumb-stroke-width: 0px;
+  --theme-scroll-thumb-radius: 2px;
+  --theme-graph-background-fill: #24272F;
+  --theme-graph-background-stroke: #C4C8D0;
+  --theme-graph-background-stroke-width: 1px;
+  --theme-graph-background-radius: 8px;
+  --theme-graph-grid: #444A56;
+  --theme-graph-line: #F8B040;
+  --theme-graph-fill: rgba(248, 176, 64, 0.16);
+  --theme-graph-line-width: 2px;
+  --theme-label-color: #DBDBDB;
+  --theme-label-size: 11px;
+  --theme-label-family: "Roboto";
+  --theme-label-letter-spacing: 0px;
+  --theme-text-default-color: #F4F4F4;
+  --theme-text-default-size: 14px;
+  --theme-text-default-family: "";
+  --theme-text-default-letter-spacing: 0px;
+}
+
+/* R-ACCESS-1: high contrast - the same colours at palette::setContrast(1); the shell sets the class, the page eases */
+:root.hc {
+  --background: #000000;
+  --foreground: #FFFFFF;
+  --card: #0A0A0A;
+  --popover: #121212;
+  --primary: #159387;
+  --primary-foreground: #FFFFFF;
+  --secondary: #2E2E2E;
+  --secondary-foreground: #FFFFFF;
+  --muted: #0A0A0A;
+  --muted-foreground: #C0C0C0;
+  --destructive: #E5534B;
+  --success: #3FB950;
+  --border: rgba(255, 255, 255, 0.45);
+  --input: #1E1E1E;
+  --input-light: #F4F4F5;
+  --input-light-text: #18181B;
+  --switch-background: #6A6A6A;
+  --ring: rgba(21, 147, 135, 0.5);
+  --canvas-bg: #000000;
+  --histogram-bg: #000000;
+  --left-rail-bg: #050505;
+  --filmstrip-bg: #000000;
+  --folder-chip-bg: #0F0F0F;
+  --segmented-bg: #000000;
+  --curve-plot-bg: #000000;
+  --white: #FFFFFF;
+  --hover-wash: rgba(255, 255, 255, 0.07);
+  --stage-bg: #000000;
+  --ruler-bg: #000000;
+  --header-bg: #050505;
+  --lane-bg: #000000;
+  --lane-alt-bg: rgba(255, 255, 255, 0.012);
+  --deck-bg: #000000;
+  --strip-bg: #0A0A0A;
+  --scrim: rgba(0, 0, 0, 0.55);
+  --playhead: #E5534B;
+  --meter-low: #3FB950;
+  --meter-mid: #E3B341;
+  --meter-high: #E5534B;
+  --solo: #E3B341;
+  --skeleton: rgba(255, 255, 255, 0.045);
+  --module-bg: #0A0A0A;
+  --screen-bg: #000000;
+  --knob-cap: #2E2E2E;
+  --knob-track: rgba(255, 255, 255, 0.09);
+  --screen-grid: rgba(255, 255, 255, 0.04);
+  --track-0: #5B7FA6;
+  --track-1: #6E9A68;
+  --track-2: #A67B5B;
+  --track-3: #8E6EA6;
+  --track-4: #5B9A95;
+  --track-5: #A65B6E;
+  --track-6: #9A915B;
+  --track-7: #6E86A6;
+  --track-8: #7FA65B;
+  --track-9: #A6705B;
+  --theme-slider-track-fill: #2E2E2E;
+  --theme-slider-track-stroke: rgba(0, 0, 0, 0);
+  --theme-slider-range-fill-fill: #159387;
+  --theme-slider-range-fill-stroke: rgba(0, 0, 0, 0);
+  --theme-slider-thumb-fill: #FFFFFF;
+  --theme-slider-thumb-stroke: #FFFFFF;
+  --theme-button-idle-fill: rgba(0, 0, 0, 0);
+  --theme-button-idle-stroke: rgba(255, 255, 255, 0.45);
+  --theme-button-pressed-fill: rgba(21, 147, 135, 0.1);
+  --theme-button-pressed-stroke: #159387;
+  --theme-button-label-color: #C0C0C0;
+  --theme-checkbox-box-fill: #444A56;
+  --theme-checkbox-box-stroke: #C4C8D0;
+  --theme-checkbox-indicator-fill: #F8B040;
+  --theme-checkbox-indicator-stroke: rgba(0, 0, 0, 0);
+  --theme-checkbox-label-color: #F5F2EB;
+  --theme-text-box-idle-fill: #24272F;
+  --theme-text-box-idle-stroke: #C4C8D0;
+  --theme-text-box-focused-fill: #24272F;
+  --theme-text-box-focused-stroke: #F8B040;
+  --theme-text-box-text-color: #F5F2EB;
+  --theme-text-box-placeholder-color: #AAAEB6;
+  --theme-text-box-caret: #F8B040;
+  --theme-text-box-selection: rgba(79, 125, 247, 0.38);
+  --theme-knob-dial-fill: #24272F;
+  --theme-knob-dial-stroke: #C4C8D0;
+  --theme-knob-track: #444A56;
+  --theme-knob-value: #F8B040;
+  --theme-knob-indicator: #F8B040;
+  --theme-knob-label-color: #AAAEB6;
+  --theme-toggle-track-off-fill: #2E2E2E;
+  --theme-toggle-track-off-stroke: rgba(0, 0, 0, 0);
+  --theme-toggle-track-on-fill: #159387;
+  --theme-toggle-track-on-stroke: rgba(0, 0, 0, 0);
+  --theme-toggle-thumb-fill: #FFFFFF;
+  --theme-toggle-thumb-stroke: rgba(0, 0, 0, 0);
+  --theme-progress-track-fill: #444A56;
+  --theme-progress-track-stroke: #C4C8D0;
+  --theme-progress-fill-fill: #F8B040;
+  --theme-progress-fill-stroke: rgba(0, 0, 0, 0);
+  --theme-combo-field-fill: #24272F;
+  --theme-combo-field-stroke: #C4C8D0;
+  --theme-combo-popup-fill: #24272F;
+  --theme-combo-popup-stroke: #F8B040;
+  --theme-combo-row-selected-fill: #E69016;
+  --theme-combo-row-selected-stroke: rgba(0, 0, 0, 0);
+  --theme-combo-text-color: #F5F2EB;
+  --theme-combo-caret: #F8B040;
+  --theme-tab-idle-fill: #000000;
+  --theme-tab-idle-stroke: rgba(0, 0, 0, 0);
+  --theme-tab-active-fill: #0A0A0A;
+  --theme-tab-active-stroke: rgba(0, 0, 0, 0);
+  --theme-tab-label-color: #C0C0C0;
+  --theme-tab-label-active-color: #159387;
+  --theme-tab-indicator: #159387;
+  --theme-scroll-viewport-fill: rgba(0, 0, 0, 0);
+  --theme-scroll-viewport-stroke: rgba(0, 0, 0, 0);
+  --theme-scroll-track-fill: rgba(0, 0, 0, 0);
+  --theme-scroll-track-stroke: rgba(0, 0, 0, 0);
+  --theme-scroll-thumb-fill: rgba(255, 255, 255, 0.12);
+  --theme-scroll-thumb-stroke: rgba(0, 0, 0, 0);
+  --theme-graph-background-fill: #24272F;
+  --theme-graph-background-stroke: #C4C8D0;
+  --theme-graph-grid: #444A56;
+  --theme-graph-line: #F8B040;
+  --theme-graph-fill: rgba(248, 176, 64, 0.16);
+  --theme-label-color: #FFFFFF;
+  --theme-text-default-color: #F4F4F4;
+}
+
+/* every colour, registered, so a contrast switch EASES (a transition on :root over --contrast-props) */
+@property --background { syntax: "<color>"; inherits: true; initial-value: #141414; }
+@property --foreground { syntax: "<color>"; inherits: true; initial-value: #DBDBDB; }
+@property --card { syntax: "<color>"; inherits: true; initial-value: #1C1C1C; }
+@property --popover { syntax: "<color>"; inherits: true; initial-value: #222222; }
+@property --primary { syntax: "<color>"; inherits: true; initial-value: #159387; }
+@property --primary-foreground { syntax: "<color>"; inherits: true; initial-value: #FFFFFF; }
+@property --secondary { syntax: "<color>"; inherits: true; initial-value: #252525; }
+@property --secondary-foreground { syntax: "<color>"; inherits: true; initial-value: #AAAAAA; }
+@property --muted { syntax: "<color>"; inherits: true; initial-value: #191919; }
+@property --muted-foreground { syntax: "<color>"; inherits: true; initial-value: #636363; }
+@property --destructive { syntax: "<color>"; inherits: true; initial-value: #E5534B; }
+@property --success { syntax: "<color>"; inherits: true; initial-value: #3FB950; }
+@property --border { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.072); }
+@property --input { syntax: "<color>"; inherits: true; initial-value: #252525; }
+@property --input-light { syntax: "<color>"; inherits: true; initial-value: #F4F4F5; }
+@property --input-light-text { syntax: "<color>"; inherits: true; initial-value: #18181B; }
+@property --switch-background { syntax: "<color>"; inherits: true; initial-value: #444444; }
+@property --ring { syntax: "<color>"; inherits: true; initial-value: rgba(21, 147, 135, 0.5); }
+@property --canvas-bg { syntax: "<color>"; inherits: true; initial-value: #0A0A0A; }
+@property --histogram-bg { syntax: "<color>"; inherits: true; initial-value: #0F0F0F; }
+@property --left-rail-bg { syntax: "<color>"; inherits: true; initial-value: #161616; }
+@property --filmstrip-bg { syntax: "<color>"; inherits: true; initial-value: #121212; }
+@property --folder-chip-bg { syntax: "<color>"; inherits: true; initial-value: #1A1A1A; }
+@property --segmented-bg { syntax: "<color>"; inherits: true; initial-value: #111111; }
+@property --curve-plot-bg { syntax: "<color>"; inherits: true; initial-value: #0D0D0D; }
+@property --white { syntax: "<color>"; inherits: true; initial-value: #FFFFFF; }
+@property --hover-wash { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.07); }
+@property --stage-bg { syntax: "<color>"; inherits: true; initial-value: #0A0A0A; }
+@property --ruler-bg { syntax: "<color>"; inherits: true; initial-value: #0F0F0F; }
+@property --header-bg { syntax: "<color>"; inherits: true; initial-value: #161616; }
+@property --lane-bg { syntax: "<color>"; inherits: true; initial-value: #111111; }
+@property --lane-alt-bg { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.012); }
+@property --deck-bg { syntax: "<color>"; inherits: true; initial-value: #121212; }
+@property --strip-bg { syntax: "<color>"; inherits: true; initial-value: #1C1C1C; }
+@property --scrim { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0.55); }
+@property --playhead { syntax: "<color>"; inherits: true; initial-value: #E5534B; }
+@property --meter-low { syntax: "<color>"; inherits: true; initial-value: #3FB950; }
+@property --meter-mid { syntax: "<color>"; inherits: true; initial-value: #E3B341; }
+@property --meter-high { syntax: "<color>"; inherits: true; initial-value: #E5534B; }
+@property --solo { syntax: "<color>"; inherits: true; initial-value: #E3B341; }
+@property --skeleton { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.045); }
+@property --module-bg { syntax: "<color>"; inherits: true; initial-value: #1C1C1C; }
+@property --screen-bg { syntax: "<color>"; inherits: true; initial-value: #0D0D0D; }
+@property --knob-cap { syntax: "<color>"; inherits: true; initial-value: #252525; }
+@property --knob-track { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.09); }
+@property --screen-grid { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.04); }
+@property --track-0 { syntax: "<color>"; inherits: true; initial-value: #5B7FA6; }
+@property --track-1 { syntax: "<color>"; inherits: true; initial-value: #6E9A68; }
+@property --track-2 { syntax: "<color>"; inherits: true; initial-value: #A67B5B; }
+@property --track-3 { syntax: "<color>"; inherits: true; initial-value: #8E6EA6; }
+@property --track-4 { syntax: "<color>"; inherits: true; initial-value: #5B9A95; }
+@property --track-5 { syntax: "<color>"; inherits: true; initial-value: #A65B6E; }
+@property --track-6 { syntax: "<color>"; inherits: true; initial-value: #9A915B; }
+@property --track-7 { syntax: "<color>"; inherits: true; initial-value: #6E86A6; }
+@property --track-8 { syntax: "<color>"; inherits: true; initial-value: #7FA65B; }
+@property --track-9 { syntax: "<color>"; inherits: true; initial-value: #A6705B; }
+@property --theme-slider-track-fill { syntax: "<color>"; inherits: true; initial-value: #252525; }
+@property --theme-slider-track-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-slider-range-fill-fill { syntax: "<color>"; inherits: true; initial-value: #159387; }
+@property --theme-slider-range-fill-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-slider-thumb-fill { syntax: "<color>"; inherits: true; initial-value: #FFFFFF; }
+@property --theme-slider-thumb-stroke { syntax: "<color>"; inherits: true; initial-value: #FFFFFF; }
+@property --theme-button-idle-fill { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-button-idle-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.072); }
+@property --theme-button-pressed-fill { syntax: "<color>"; inherits: true; initial-value: rgba(21, 147, 135, 0.1); }
+@property --theme-button-pressed-stroke { syntax: "<color>"; inherits: true; initial-value: #159387; }
+@property --theme-button-label-color { syntax: "<color>"; inherits: true; initial-value: #636363; }
+@property --theme-checkbox-box-fill { syntax: "<color>"; inherits: true; initial-value: #444A56; }
+@property --theme-checkbox-box-stroke { syntax: "<color>"; inherits: true; initial-value: #C4C8D0; }
+@property --theme-checkbox-indicator-fill { syntax: "<color>"; inherits: true; initial-value: #F8B040; }
+@property --theme-checkbox-indicator-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-checkbox-label-color { syntax: "<color>"; inherits: true; initial-value: #F5F2EB; }
+@property --theme-text-box-idle-fill { syntax: "<color>"; inherits: true; initial-value: #24272F; }
+@property --theme-text-box-idle-stroke { syntax: "<color>"; inherits: true; initial-value: #C4C8D0; }
+@property --theme-text-box-focused-fill { syntax: "<color>"; inherits: true; initial-value: #24272F; }
+@property --theme-text-box-focused-stroke { syntax: "<color>"; inherits: true; initial-value: #F8B040; }
+@property --theme-text-box-text-color { syntax: "<color>"; inherits: true; initial-value: #F5F2EB; }
+@property --theme-text-box-placeholder-color { syntax: "<color>"; inherits: true; initial-value: #AAAEB6; }
+@property --theme-text-box-caret { syntax: "<color>"; inherits: true; initial-value: #F8B040; }
+@property --theme-text-box-selection { syntax: "<color>"; inherits: true; initial-value: rgba(79, 125, 247, 0.38); }
+@property --theme-knob-dial-fill { syntax: "<color>"; inherits: true; initial-value: #24272F; }
+@property --theme-knob-dial-stroke { syntax: "<color>"; inherits: true; initial-value: #C4C8D0; }
+@property --theme-knob-track { syntax: "<color>"; inherits: true; initial-value: #444A56; }
+@property --theme-knob-value { syntax: "<color>"; inherits: true; initial-value: #F8B040; }
+@property --theme-knob-indicator { syntax: "<color>"; inherits: true; initial-value: #F8B040; }
+@property --theme-knob-label-color { syntax: "<color>"; inherits: true; initial-value: #AAAEB6; }
+@property --theme-toggle-track-off-fill { syntax: "<color>"; inherits: true; initial-value: #252525; }
+@property --theme-toggle-track-off-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-toggle-track-on-fill { syntax: "<color>"; inherits: true; initial-value: #159387; }
+@property --theme-toggle-track-on-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-toggle-thumb-fill { syntax: "<color>"; inherits: true; initial-value: #FFFFFF; }
+@property --theme-toggle-thumb-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-progress-track-fill { syntax: "<color>"; inherits: true; initial-value: #444A56; }
+@property --theme-progress-track-stroke { syntax: "<color>"; inherits: true; initial-value: #C4C8D0; }
+@property --theme-progress-fill-fill { syntax: "<color>"; inherits: true; initial-value: #F8B040; }
+@property --theme-progress-fill-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-combo-field-fill { syntax: "<color>"; inherits: true; initial-value: #24272F; }
+@property --theme-combo-field-stroke { syntax: "<color>"; inherits: true; initial-value: #C4C8D0; }
+@property --theme-combo-popup-fill { syntax: "<color>"; inherits: true; initial-value: #24272F; }
+@property --theme-combo-popup-stroke { syntax: "<color>"; inherits: true; initial-value: #F8B040; }
+@property --theme-combo-row-selected-fill { syntax: "<color>"; inherits: true; initial-value: #E69016; }
+@property --theme-combo-row-selected-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-combo-text-color { syntax: "<color>"; inherits: true; initial-value: #F5F2EB; }
+@property --theme-combo-caret { syntax: "<color>"; inherits: true; initial-value: #F8B040; }
+@property --theme-tab-idle-fill { syntax: "<color>"; inherits: true; initial-value: #141414; }
+@property --theme-tab-idle-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-tab-active-fill { syntax: "<color>"; inherits: true; initial-value: #1C1C1C; }
+@property --theme-tab-active-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-tab-label-color { syntax: "<color>"; inherits: true; initial-value: #636363; }
+@property --theme-tab-label-active-color { syntax: "<color>"; inherits: true; initial-value: #159387; }
+@property --theme-tab-indicator { syntax: "<color>"; inherits: true; initial-value: #159387; }
+@property --theme-scroll-viewport-fill { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-scroll-viewport-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-scroll-track-fill { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-scroll-track-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-scroll-thumb-fill { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.12); }
+@property --theme-scroll-thumb-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
+@property --theme-graph-background-fill { syntax: "<color>"; inherits: true; initial-value: #24272F; }
+@property --theme-graph-background-stroke { syntax: "<color>"; inherits: true; initial-value: #C4C8D0; }
+@property --theme-graph-grid { syntax: "<color>"; inherits: true; initial-value: #444A56; }
+@property --theme-graph-line { syntax: "<color>"; inherits: true; initial-value: #F8B040; }
+@property --theme-graph-fill { syntax: "<color>"; inherits: true; initial-value: rgba(248, 176, 64, 0.16); }
+@property --theme-label-color { syntax: "<color>"; inherits: true; initial-value: #DBDBDB; }
+@property --theme-text-default-color { syntax: "<color>"; inherits: true; initial-value: #F4F4F4; }
+:root {
+  --contrast-props: --background, --foreground, --card, --popover, --primary, --primary-foreground, --secondary, --secondary-foreground, --muted, --muted-foreground, --destructive, --success, --border, --input, --input-light, --input-light-text, --switch-background, --ring, --canvas-bg, --histogram-bg, --left-rail-bg, --filmstrip-bg, --folder-chip-bg, --segmented-bg, --curve-plot-bg, --white, --hover-wash, --stage-bg, --ruler-bg, --header-bg, --lane-bg, --lane-alt-bg, --deck-bg, --strip-bg, --scrim, --playhead, --meter-low, --meter-mid, --meter-high, --solo, --skeleton, --module-bg, --screen-bg, --knob-cap, --knob-track, --screen-grid, --track-0, --track-1, --track-2, --track-3, --track-4, --track-5, --track-6, --track-7, --track-8, --track-9, --theme-slider-track-fill, --theme-slider-track-stroke, --theme-slider-range-fill-fill, --theme-slider-range-fill-stroke, --theme-slider-thumb-fill, --theme-slider-thumb-stroke, --theme-button-idle-fill, --theme-button-idle-stroke, --theme-button-pressed-fill, --theme-button-pressed-stroke, --theme-button-label-color, --theme-checkbox-box-fill, --theme-checkbox-box-stroke, --theme-checkbox-indicator-fill, --theme-checkbox-indicator-stroke, --theme-checkbox-label-color, --theme-text-box-idle-fill, --theme-text-box-idle-stroke, --theme-text-box-focused-fill, --theme-text-box-focused-stroke, --theme-text-box-text-color, --theme-text-box-placeholder-color, --theme-text-box-caret, --theme-text-box-selection, --theme-knob-dial-fill, --theme-knob-dial-stroke, --theme-knob-track, --theme-knob-value, --theme-knob-indicator, --theme-knob-label-color, --theme-toggle-track-off-fill, --theme-toggle-track-off-stroke, --theme-toggle-track-on-fill, --theme-toggle-track-on-stroke, --theme-toggle-thumb-fill, --theme-toggle-thumb-stroke, --theme-progress-track-fill, --theme-progress-track-stroke, --theme-progress-fill-fill, --theme-progress-fill-stroke, --theme-combo-field-fill, --theme-combo-field-stroke, --theme-combo-popup-fill, --theme-combo-popup-stroke, --theme-combo-row-selected-fill, --theme-combo-row-selected-stroke, --theme-combo-text-color, --theme-combo-caret, --theme-tab-idle-fill, --theme-tab-idle-stroke, --theme-tab-active-fill, --theme-tab-active-stroke, --theme-tab-label-color, --theme-tab-label-active-color, --theme-tab-indicator, --theme-scroll-viewport-fill, --theme-scroll-viewport-stroke, --theme-scroll-track-fill, --theme-scroll-track-stroke, --theme-scroll-thumb-fill, --theme-scroll-thumb-stroke, --theme-graph-background-fill, --theme-graph-background-stroke, --theme-graph-grid, --theme-graph-line, --theme-graph-fill, --theme-label-color, --theme-text-default-color;
 }

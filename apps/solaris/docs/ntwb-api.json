@@ -22,6 +22,74 @@
       "doc": "the command grammar: every command with its usage and summary",
       "params": {},
       "result": "[{name, usage, summary}]"
+    },
+    "browse": {
+      "doc": "list a folder of the machine for the page's pickers (open a song, save, render, a folder, a file to relink) - the host's lister, as the service's browser lists",
+      "params": {
+        "path": {
+          "type": "str",
+          "required": false,
+          "doc": "the folder to list (default: the home folder)"
+        },
+        "kinds": {
+          "type": "list[str]",
+          "required": false,
+          "doc": "keep only files of these kinds (folders always): song, audio, midi, video, preset, sfz, other"
+        }
+      },
+      "result": "{path, parent, entries: [{name, path, kind: dir|song|audio|midi|video|preset|sfz|other, size?}]}"
+    },
+    "video.frame": {
+      "doc": "the frame of the song's picture showing at `t` (App's onVideoFrame: the Video window), as a JPEG to this page alone (stream `video.frame`)",
+      "params": {
+        "file": {
+          "type": "str",
+          "required": true,
+          "doc": "the picture's file as the host opens it (the model's video.path)"
+        },
+        "t": {
+          "type": "num",
+          "required": false,
+          "doc": "seconds into the picture (default 0)"
+        },
+        "w": {
+          "type": "int",
+          "required": true,
+          "doc": "the box's width in device pixels: the frame is fitted to it, its aspect kept"
+        },
+        "h": {
+          "type": "int",
+          "required": true,
+          "doc": "the box's height in device pixels"
+        }
+      },
+      "result": "{seq, w, h, time, bytes}, or {empty: true} when the host cannot read the picture there"
+    },
+    "video.thumb": {
+      "doc": "a frame of the song's picture for the video lane's thumbnails (App's onVideoThumb - a decoder of its own, so its seeks never cost the window's frames), as a JPEG to this page alone (stream `video.thumb`)",
+      "params": {
+        "file": {
+          "type": "str",
+          "required": true,
+          "doc": "the picture's file as the host opens it (the model's video.path)"
+        },
+        "t": {
+          "type": "num",
+          "required": false,
+          "doc": "seconds into the picture (default 0)"
+        },
+        "w": {
+          "type": "int",
+          "required": true,
+          "doc": "the box's width in device pixels: the frame is fitted to it, its aspect kept"
+        },
+        "h": {
+          "type": "int",
+          "required": true,
+          "doc": "the box's height in device pixels"
+        }
+      },
+      "result": "{seq, w, h, time, bytes}, or {empty: true} when the host cannot read the picture there"
     }
   },
   "events": {
@@ -162,7 +230,22 @@
     "transport": {
       "doc": "what moves without an edit, pushed when it changed (at most 20/s)",
       "data": "{playing, position, loopFrom, loopTo, latencyMs, masterPeak, peaks: {<strip>: [l, r]}, audition, auditionPlaying, auditionProgress}"
+    },
+    "live": {
+      "doc": "EVERY value that moves with no edit (the model's unstable fields - meters, loudness, a tuner's reading, a formula's live value, the tempo map's tempo, the clock devices, the video's time ...), at the model's own paths; a page merges it over `model`. Pushed when it changed (at most 25/s)",
+      "data": "{transport: {playing, recording, position, tempo, tempoId, latencyMs, masterPeak, masterRms, masterHold, masterClip, driver, xruns, countingIn, recorded, cpu, cpuPeak, swaps, devices: [...], launched: [...]}, strips: {<strip>: {peak, rms, hold, clip, cpu}}, readings: {<device>: [value, ...]}, bindings: {<address>: live}, loudness: {momentary, shortTerm, integrated, truePeak, correlation, spectrum}, video: {time}, audition: {file, playing, progress}, midiMessages}"
     }
   },
-  "streams": {}
+  "streams": {
+    "video.frame": {
+      "doc": "a frame of the song's picture a page asked for (answer to `video.frame`), to that page alone",
+      "mime": "image/jpeg",
+      "meta": "{seq, file, t, time, w, h}"
+    },
+    "video.thumb": {
+      "doc": "a frame of the song's picture a page asked for (answer to `video.thumb`), to that page alone",
+      "mime": "image/jpeg",
+      "meta": "{seq, file, t, time, w, h}"
+    }
+  }
 }

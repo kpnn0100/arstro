@@ -5,14 +5,24 @@
  *  16 ms clock. Every shot at 1440×900 AND 1024×640 unless --size; mid-transition shots stop
  *  between two frames of a tween on purpose.
  *
- *     solaris_app_shots [--outdir DIR] [--only SUBSTR] [--size WxH] [--check] [--list]
+ *     solaris_app_shots [--outdir DIR] [--only SUBSTR] [--size WxH] [--check] [--list] [--model-json]
  *
  *  --check fails if any shot is a single colour (a blank frame is the cheapest broken state to miss).
+ *
+ *  --model-json: the web face's verification fixtures (MVVM, NTWB-11). Beside each PNG, per shot (named
+ *  WITHOUT the size — give --size so one size writes them; without it the last size wins):
+ *     <shot>.model.json      the AppModel the App drew, by the codec `state print --json` and the NTWB
+ *                            `model` state use (modelToJson(m, false))
+ *     <shot>.transport.json  the NTWB `transport` state for that model (NtwbAdapter::transportJson's keys)
+ *     <shot>.view.json       best effort: the VIEW state the shot put the App in, which the web view-model
+ *                            must be told (keys documented at writeView below)
+ *  Written after the PNG and read-only on the App, so the PNGs are byte-identical with and without it.
  */
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include "../Rig.h"
+#include "AppModelCodec.h"
 #include "../../widgets/DevicePanel.h"
 #include "../../widgets/PianoRoll.h"
 #include <thread>
@@ -31,6 +41,124 @@ namespace
         std::string name;
         std::function<void(sltest::Rig &)> run;
     };
+
+    // ── --model-json: the fixtures a web face is compared against ───────────────────────
+
+    using arstro::solaris::Json;
+
+    void writeText(const std::string &path, const std::string &text)
+    {
+        std::ofstream o(path, std::ios::binary);
+        o << text;
+    }
+
+    Json pairOf(const float (&v)[2]) { return Json::array().push(Json::number(v[0])).push(Json::number(v[1])); }
+
+    /** The NTWB `transport` state — apps/solaris/cli/NtwbAdapter.cpp transportJson, the same keys in the
+     *  same order (the cli target is not linked here; keep the two in step). */
+    Json transportJson(const arstro::solaris::AppModel &m)
+    {
+        Json t = Json::object();
+        t.set("playing", m.transport.playing);
+        t.set("position", m.transport.position);
+        t.set("loopFrom", m.transport.loopFrom);
+        t.set("loopTo", m.transport.loopTo);
+        t.set("latencyMs", m.transport.latencyMs);
+        t.set("masterPeak", pairOf(m.transport.masterPeak));
+        Json peaks = Json::object();
+        for (const auto &s : m.strips) peaks.set(s.id, pairOf(s.peak));
+        t.set("peaks", peaks);
+        t.set("audition", m.audition.file);
+        t.set("auditionPlaying", m.audition.playing);
+        t.set("auditionProgress", m.audition.progress);
+        return t;
+    }
+
+    Json stringsOf(const std::vector<std::string> &v)
+    {
+        Json a = Json::array();
+        for (const auto &s : v) a.push(Json::string(s));
+        return a;
+    }
+
+    /** <shot>.view.json — the presentation the shot left the App in (none of it is in the model).
+     *  Keys (absent = not applicable on that screen):
+     *    app, shot, size {w, h}
+     *    screen        home | project — the screen the App shows (its cross-fade's target)
+     *    uiScale       the drawn scale, percent (R-ACCESS-1; eased toward settings.uiScale)
+     *    contrast      the high-contrast amount drawn, 0..1
+     *    language      the language drawn (R-ACCESS-2: settings.language resolved; mid-dissolve: the new one)
+     *    toast         {text, refusal, amount} — the chip's words (in the language drawn) and presence
+     *    settingsOpen, settingsSection   the Settings sheet and its rail's page
+     *    exportOpen, relinkOpen, conflictsOpen, confirmOpen, historyOpen   the sheets and dialogs
+     *    contextMenu   {open, items: [labels]} — the right-click menu
+     *    focus         {key, held} — the keyboard's focus (R-ACCESS-1)
+     *    menuOpen      the song bar's open menu index, -1 none (project only)
+     *    project       {browserOpen, browserTab, dockOpen, dockTab, dockOnMatrix, sessionOpen,
+     *                   windows: [open floating windows' keys: dev:<dv> | roll:<pt> | auto:<au> | loudness | video],
+     *                   timeline {pxPerBeat (live), leftBeat (the beat at the lanes' left edge),
+     *                             selectedClip, selectedClips}}
+     */
+    void writeView(sltest::Rig &r, const std::string &name, const std::string &base, int w, int h)
+    {
+        auto &app = *r.app;
+        const auto &m = r.svc->model();
+        Json v = Json::object();
+        v.set("app", "solaris").set("shot", name);
+        v.set("size", Json::object().set("w", w).set("h", h));
+        v.set("screen", app.screen());
+        v.set("uiScale", app.drawnUiScale() * 100.0);
+        v.set("contrast", app.contrastAmount());
+        v.set("language", app.drawnLanguage());
+        v.set("toast", Json::object().set("text", app.toastText()).set("refusal", app.toastIsRefusal()).set("amount", app.toastAmount()));
+        v.set("settingsOpen", app.settings().isOpen()).set("settingsSection", app.settings().section());
+        v.set("exportOpen", app.exportSheet().isOpen()).set("relinkOpen", app.relinkSheet().isOpen());
+        v.set("conflictsOpen", app.conflictsSheet().isOpen()).set("confirmOpen", app.confirm().isOpen());
+        v.set("historyOpen", app.historyView().isOpen());
+        Json items = Json::array();
+        if (app.menu().isOpen())
+            for (int i = 0; i < app.menu().itemCount(); ++i) items.push(Json::string(app.menu().item(i).label));
+        v.set("contextMenu", Json::object().set("open", app.menu().isOpen()).set("items", items));
+        v.set("focus", Json::object().set("key", app.focusKey()).set("held", app.focusHeld()));
+        if (app.screen() == "project")
+        {
+            auto &ps = app.project();
+            v.set("menuOpen", ps.bar().menus().openIndex());
+            Json wins = Json::array();
+            auto open = [&](const std::string &key) { if (ps.windows().isOpen(key)) wins.push(Json::string(key)); };
+            for (const auto &s : m.strips)
+                for (const auto &d : s.devices) open("dev:" + d.id);
+            for (const auto &d : m.masterDevices) open("dev:" + d.id);
+            for (const auto &p : m.patterns) open("roll:" + p.id);
+            for (const auto &a : m.automations) open("auto:" + a.id);
+            open("loudness");
+            open("video");
+            auto &tl = ps.timeline();
+            v.set("project", Json::object()
+                                 .set("browserOpen", ps.browserOpen())
+                                 .set("browserTab", ps.browser().tab())
+                                 .set("dockOpen", ps.dockOpen())
+                                 .set("dockTab", ps.dock().tab())
+                                 .set("dockOnMatrix", ps.dock().onMatrix())
+                                 .set("sessionOpen", ps.sessionOpen())
+                                 .set("windows", wins)
+                                 .set("timeline", Json::object()
+                                                      .set("pxPerBeat", tl.pxPerBeat())
+                                                      .set("leftBeat", tl.xToBeat(arstro::solaris_ui::Timeline::kHeaderW))
+                                                      .set("selectedClip", tl.selectedClip())
+                                                      .set("selectedClips", stringsOf(tl.selectedClips()))));
+        }
+        writeText(base + ".view.json", v.dump());
+    }
+
+    void writeFixture(sltest::Rig &r, const std::string &outdir, const std::string &name, int w, int h)
+    {
+        const std::string base = outdir + "/" + name;
+        const auto &m = r.svc->model();
+        writeText(base + ".model.json", arstro::solaris::modelToJson(m, false).dump());
+        writeText(base + ".transport.json", transportJson(m).dump());
+        writeView(r, name, base, w, h);
+    }
 
     void songWithStrips(sltest::Rig &r, const std::string &name)
     {
@@ -1660,7 +1788,7 @@ int main(int argc, char **argv)
 {
     std::string outdir = "shots", only;
     int fw = 0, fh = 0;
-    bool check = false, list = false;
+    bool check = false, list = false, modelJson = false;
     for (int i = 1; i < argc; ++i)
     {
         const std::string a = argv[i];
@@ -1669,6 +1797,7 @@ int main(int argc, char **argv)
         else if (a == "--size" && i + 1 < argc) std::sscanf(argv[++i], "%dx%d", &fw, &fh);
         else if (a == "--check") check = true;
         else if (a == "--list") list = true;
+        else if (a == "--model-json") modelJson = true;
     }
     arstro::cosmo_v2::registerEmbeddedFonts();
     std::filesystem::create_directories(outdir);
@@ -1694,6 +1823,11 @@ int main(int argc, char **argv)
             if (uniform) { ++blank; std::fprintf(stderr, "BLANK %s\n", path.c_str()); }
             ++written;
             std::printf("wrote %s\n", path.c_str());
+            if (modelJson) // after the PNG: the fixtures never change what was drawn
+            {
+                writeFixture(r, outdir, s.name, sz.first, sz.second);
+                std::printf("     model %s/%s.{model,view,transport}.json\n", outdir.c_str(), s.name.c_str());
+            }
         }
     }
     if (check && blank) return 1;

@@ -1396,6 +1396,16 @@ a process is the host's (law 12).
   uninstall | api`, the `core/Ntwb` library, cosmo's worked example, `arstro.ntwb.implement`); its web UI
   (`apps/solaris/web`) shows the song — transport, lanes and clips, strips and their levels — and sends
   the same command lines. The service is the model; the web draws it.
+  **The web face is THE SAME APP as the window** *(amended 2026-10-26: "have to make it like cosmo, port
+  full UI of solaris and interstellar to web")*: every screen, panel, menu, sheet, window and control
+  of `app/` — Home, the project screen's song bar, browser, timeline (lanes, clips, automation,
+  chords, markers, takes, tempo, video), mixer dock, session view, the floating device / piano-roll /
+  automation / loudness / video windows, the settings, export, relink and conflicts sheets, the song
+  history — is ported widget by widget, as cosmo's web face ports its App (cosmo R-NTWB-5): the same
+  logical-px geometry under a per-page UI scale, the generated tokens, the window's faces and words,
+  every visible change eased (R-G-1), every control sending the command line the native widget sends;
+  the board's files are browsed through the adapter where the window opens a native picker. A page
+  smaller than the window's minimum is scaled down to fit (a phone sees the whole app).
 - **R-SVC-8 Composition is agent-sized**: whatever an agent needs to write a whole song in few,
   readable lines — bulk note entry with note names, the ids a command made printed back, a song
   overview — specified from an audit of an agent composing with the CLI (2026-10-09), with a guide,

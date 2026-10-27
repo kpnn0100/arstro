@@ -1,15 +1,28 @@
 /*
- * Solaris — session.js: the MODEL side of the page (R-SVC-7; cosmo's js/model/session.js).
+ * Solaris — model/session.js: the MODEL side of the page (R-SVC-7; cosmo's js/model/session.js).
  *
- * The model itself is `solaris-cc ntwb serve` on the machine - THE SolarisService of this Arstro
- * Remote session, shared by every page of it. This class is its proxy in the page and nothing more:
- * it turns what the adapter publishes into signals and the view-model's intents into command lines.
- * It holds no view state and computes nothing the service could tell it:
+ * The model itself is `solaris-cc ntwb serve` on the machine — THE SolarisService of this Arstro Remote session (the
+ * manifest is `single: true`: one session, shared by every page). This class is its proxy in the page and nothing
+ * more: what the adapter publishes becomes signals, the view-model's intents become calls. It holds no view state and
+ * computes nothing the service could tell it (cli/NtwbAdapter.h is the other half):
  *
- *   state `model`      -> `model`      the AppModel, exactly what `state print --json` prints
- *   state `transport`  -> `transport`  what moves with no edit: position, playing, the meters
- *   events             -> on(name)     the service's Event stream, each with its --watch line
- *   status / presence  -> `status`, `presence`
+ *   state `model`      -> model       the AppModel, exactly what `state print --json` prints (AppModelCodec.cpp
+ *                                     modelToJson: read the codec for field names — never guess them)
+ *   state `transport`  -> transport   what moves with no edit, ≤ 20/s: {playing, position, loopFrom, loopTo, latencyMs,
+ *                                     masterPeak: [l, r], peaks: {<strip>: [l, r]}, audition, auditionPlaying,
+ *                                     auditionProgress}
+ *   state `live`       -> live        EVERY value that moves with no edit, at the model's own paths, ≤ 25/s
+ *                                     (NtwbAdapter::liveJson: transport, strips' meters, readings, bindings' live,
+ *                                     loudness, video time, audition, midiMessages) — the vm merges it over `model`
+ *   events             -> on(name, fn) / events   the service's Event stream: {line (its --watch line), fields}
+ *   status, presence   -> status ("starting" | "running" | "stopped" | "failed" …), presence {session, clients}
+ *   lastRejection      -> {text, at} of the newest command.rejected / error event (any page's)
+ *
+ *   command(line)  -> Promise<{output, revision}>   one line of the grammar; rejects with the service's sentence
+ *   notify(line)                                     the same line, no reply awaited (a drag's per-frame `set`)
+ *   browse(path, kinds) -> Promise<{path, parent, entries: [{name, path, kind, size?}]}>   a folder of the machine
+ *   commands()     -> Promise<[{name, usage, summary}]>
+ *   call(method, params)                             any other adapter method (docs/ntwb-api.json)
  */
 import { signal, batch } from "../core/signal.js";
 
@@ -20,24 +33,29 @@ export class SolarisSession {
     this.presence = signal({ session: bridge.session, clients: bridge.clients });
     this.model = signal(null);
     this.transport = signal(null);
-    this.events = signal([]);             // the newest event lines, newest last (the console's log)
-    this.lastRejection = signal(null);    // {text, at} of the newest command.rejected / error
+    this.live = signal(null);
+    this.events = signal([]);             // the newest event lines, newest last (at most 200)
+    this.lastRejection = signal(null);
     this._subs = new Map();
 
     bridge.onStatus((s) => { this.status.value = s; });
     bridge.onPresence((p) => { this.presence.value = { ...p }; });
     bridge.onState("model", (m) => { if (m) batch(() => { this.model.value = m; }); });
     bridge.onState("transport", (t) => { if (t) this.transport.value = t; });
+    bridge.onState("live", (l) => { if (l) this.live.value = l; });
     bridge.onEvent("*", (name, data) => this._event(name, data));
   }
 
-  /** One line of the command grammar (docs/API.md), answered: resolves with {output, revision},
-   *  rejects with the service's reason (also the command.rejected event and model.lastError). */
   command(line) { return this.bridge.call("command", { line }); }
-  /** A line with no reply awaited - the per-frame `set` of a fader drag. */
   notify(line) { this.bridge.notify("command", { line }); }
-  /** Every command with its usage, for the console's hints. */
   commands() { return this.bridge.call("commands", {}); }
+  browse(path, kinds) {
+    const p = {};
+    if (path) p.path = path;
+    if (kinds && kinds.length) p.kinds = kinds;
+    return this.bridge.call("browse", p);
+  }
+  call(method, params) { return this.bridge.call(method, params || {}); }
 
   on(name, fn) {
     if (!this._subs.has(name)) this._subs.set(name, new Set());
@@ -58,11 +76,4 @@ export class SolarisSession {
       if (fns) for (const fn of [...fns]) { try { key === "*" ? fn(name, data) : fn(data); } catch (e) { console.error(e); } }
     }
   }
-}
-
-/** A value as one token of the command grammar: quoted when it has a space or a quote. */
-export function token(s) {
-  s = String(s);
-  if (/[\n]/.test(s)) throw new Error("a line break cannot be part of a command");
-  return s === "" || /[\s"]/.test(s) ? `"${s.replace(/"/g, "'")}"` : s;
 }

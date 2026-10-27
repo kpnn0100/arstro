@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-21 — A1: Afterglow, a progressive house track, its melody measured (R-SVC-14).*
+*Last updated: 2026-10-27 — the web face becomes the same app: its frame is built (R-SVC-7, DR-SVC-7).*
 
 ---
 
@@ -190,6 +190,28 @@ umbrella's pointer — `arstro.rule` §7).
       re-derives the fader/meter maths (`MixerDock.cpp:89-90`) — the service should publish it. (The web
       ran inside a real Arstro Remote on 2026-10-26: installed, launched, called, drawn at desktop and
       phone width — DR-SVC-7.)
+- [~] **C4c** The web face is the same app (R-SVC-7 amended 2026-10-26: "have to make it like cosmo, port
+      full UI of solaris and interstellar to web"). Every widget of `app/` ported to `web/` as one module,
+      cosmo's way (logical px, generated tokens and words, eased, the same command lines).
+      **Built 2026-10-27 — the frame (DR-SVC-7):** the adapter gives the page what the window's host
+      gives the window — `browse`, `video.frame`/`video.thumb`, and the state `live` (every value
+      `pump()` moves with no revision: meters, cpu, tempo, launched progress, loudness, tuner, MIDI…,
+      ≤ 25/s on change); install copies `web/BORROW`, `lang/*.strings`, writes `files.json`; tokens cover
+      all of Theme.h; `shell.js` = App.cpp (scale root, scaled down to fit a phone, screens, keys, toast,
+      cursors, layers), `vm/words.js` = the window's words, `project/screen.js` = ProjectScreen::layout
+      (browser, lanes floor, dock height/fold, session cross-fade, browser→lanes drag, the window layer)
+      with a slot per widget, each a placeholder in the native panel colours until its module lands.
+      Checked: `solaris_ntwb` (4 cases: commands, live, browse, video, install), `_ntwb_api_current`,
+      `_web_tokens_current`; with the native shots' own models (`solaris_app_shots --model-json`,
+      `core/Ntwb/tools/fixture_host.mjs`) every slot box lines up with `lanes-pseudo`, `dock-folded`,
+      `session-view`, `home-cards` at 1440×900 and 1024×640; keys, words (vi, pseudo), high contrast,
+      the UI-scale tween, the refusal toast; 390×844 scaled to fit.
+      **Until the widgets land Home and the project screen are placeholders** — the board keeps the
+      previous page installed.
+  - [ ] Home · [ ] song bar + menus · [ ] history (song versions) · [ ] session view · [ ] timeline
+        (lanes, clips, automation, chords, markers, takes, tempo, video) · [ ] mixer dock · [ ] loudness
+        · [ ] device panel + analog faces + param menu · [ ] browser · [ ] float windows · [ ] piano roll
+        · [ ] automation panel · [ ] video panel · [ ] settings / export / relink / conflicts sheets
 - [x] **C5** A whole song made by an agent with `solaris-cc`, measured (R-SVC-9).
       — DR-SVC-9: `demo/canon/` — Pachelbel's Canon as 128 bpm EDM, 86 commands, 7 instruments, 2 buses,
       formula delay, kick-keyed sidechains, bezier filter automation, limiter; `solaris_demo_canon`

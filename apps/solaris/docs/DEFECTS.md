@@ -6,6 +6,20 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Open
 
+### D-27 The window quotes an argument by a narrower rule than the grammar, and no rule can carry a `"`
+- **Found:** 2026-10-26, porting App.cpp to the web face (R-SVC-7 amended), from `App::quote`
+  (`app/App.cpp:29-32`): it quotes a token only for a space, a tab or a `"`. The grammar's own
+  `quoteToken` (`core/service/Command.cpp:650-654`) also quotes `;` and `#` — and a bare token that
+  starts with `#` after a space is a COMMENT to the parser (`Command.cpp:698`), so a strip, marker or
+  song NAMED `#2` sent by the window (`strip rename ch_2 #2`) loses its argument. Neither rule can
+  carry a `"` inside an argument: `tokenize` (`Command.cpp:630-647`) has no escape, a `"` always
+  toggles quoting, so a name or a path with a double quote cannot be sent at all.
+- **Recommended fix:** the window quotes with the grammar's `quoteToken` (one rule, one authority —
+  R-G-3); the grammar gains an escape inside quotes (`\"`, `\\`) with `quoteToken` emitting it. Guard: a
+  service test round-tripping names `#2`, `a;b`, `say "hi"` through `quoteToken` → `tokenize`.
+- **The web face** ports `App::quote` as it is (`web/js/kit/format.js`), so the two faces agree;
+  it changes with the fix.
+
 ### D-24 In the pseudo-language the song bar's transport runs into the CPU readout at 1024 px
 - **Found:** 2026-10-17, N43 part 2, by the shot `settings-pseudo-1024x640` (en-XA, a third longer than English): the menu
   titles and the version chip push `SongBar::transportX` (`app/widgets/SongBar.cpp:51`) right until Record, Play, the

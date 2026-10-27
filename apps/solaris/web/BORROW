@@ -1,0 +1,16 @@
+# Solaris's web face — the cosmo files `solaris-cc ntwb install` copies in (cli/NtwbMain.cpp), BORROWED, never forked:
+# each lands at the same path in the installed page (js/core/signal.js → web/js/core/signal.js), so the page imports
+# them as `../core/signal.js`, `../ui/menu.js`. One path per line, relative to apps/cosmo/web; `*` in the last part is a
+# glob over that folder. A listed file that is missing — or a glob that matches nothing — fails the install, naming it;
+# so does a file the app also has. Append; never rewrite (PORTING.md §3).
+
+# the reactive core (signal, computed, effect), the DOM helpers (h, own, destroy, keyed), motion (Tween, Ease)
+js/core/*.js
+# the UI kit: controls (place, S, T, rect, estW, gestures, Spring, HoverFade, tick, pillButton, comboBox …), slider,
+# segmented, modal, icons, histogram — and the wave-1 ports of cosmo's ContextMenu, MenuStrip and ConfirmDialog
+# (menu.js, menustrip.js, confirm.js), picked up by the glob as they land
+js/ui/*.js
+# the CSS the kit draws with (menu.js, menustrip.js and confirm.js load ui-kit.css themselves; confirm.js dialogs.css)
+css/panels.css
+css/dialogs.css
+css/ui-kit.css

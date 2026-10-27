@@ -33,9 +33,11 @@ endif()
 # the web face's adapter over ntwb::MemoryTransport, and `ntwb install` into a scratch data dir
 add_executable(solaris_ntwb_tests faces/ntwbAdapterTests.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../cli/NtwbAdapter.cpp)
 target_include_directories(solaris_ntwb_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../cli)
-target_link_libraries(solaris_ntwb_tests PRIVATE solaris_core arstro_ntwb)
+# solaris_host: `browse` is tested with the host's own folder lister (Machine.cpp listDir), as `ntwb serve` binds it
+target_link_libraries(solaris_ntwb_tests PRIVATE solaris_core solaris_host arstro_ntwb)
 target_compile_definitions(solaris_ntwb_tests PRIVATE SOLARIS_CC="$<TARGET_FILE:solaris-cc>"
-                                                      COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo")
+                                                      COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo"
+                                                      SOLARIS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
 add_dependencies(solaris_ntwb_tests solaris-cc)
 add_test(NAME solaris_ntwb COMMAND solaris_ntwb_tests)
 

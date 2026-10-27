@@ -1665,29 +1665,57 @@ sharing the song; `uninstall [--data-dir D]`; `serve` (`:153`) — the service w
 (files, devices, the clock device, the machine's settings and recents), the adapter, and the loop that
 owns the clock: `client.poll(8)`, `pump()`, `tick()` (`:198`).
 
-**The page** (`web/`, no build step, MVVM): `js/model/session.js` (NTWB → signals; intents → lines),
-`js/vm/song.js` (the shared shapes — the lanes' rows by Timeline's rule (`:53`), clips with their
-pattern's notes, mixers with their strips in order, the transport — `view.*` the page's own; every
-intent ONE command line, the window's own: `set <ch>.mute=true|false` (`:150`), `transport seek <beat>`
-on Timeline's snap step (`js/views/lanes.js:36`), a fader's `set <ch>.gain=<dB, 1 dp>` by
-MixerDock's law (`js/views/util.js:19`)), and the views: the song bar (transport, position, bpm,
-undo/redo/save/close, the session), Home (recents, new/open by a path on the machine), the lanes
-(ruler, rows, clips, playhead — every model value through an eased copy, `Tween`, `lanes.js:19`), the
-mixer (pages, strips with meter, fader, gain, pan, mute, solo; the master) and a console (the line in,
-its output, refusals and the event stream, the verb's usage from `commands`). The tokens are generated
-from Theme.h with the teal installed (`cli/webTokens.cpp:41`, `web/css/tokens.css`, ctest
-`solaris_web_tokens_current`, `cli/CMakeLists.txt:73`).
+**What the window's host gives it, the adapter gives the page** (added 2026-10-27 for the same-app
+port): `browse {path?, kinds?}` → `{path, parent, entries: [{name, path, kind, size?}]}` from the
+host's own `listDir` (kinds dir, song, audio, midi, video, preset, sfz, other — the web's stand-in for
+the native pickers); `video.frame` / `video.thumb {file, t, w, h}` → a JPEG blob on a stream of the
+same name to the calling page only (two decoders, as the native host has; GdkPixbuf's encoder); and
+the state **`live`** (`liveJson`, ≤ 25/s, sent when its text changed): every value the window reads
+each frame that `pump()` moves with no revision — the transport's meters, tempo, cpu, xruns, swaps,
+devices, launched clips' progress, count-in, recording; every strip's peak, rms, hold, clip and cpu;
+device readings (the tuner), bindings' live values, all of loudness, the video time, the audition and
+the MIDI messages — each at its model path, so the page merges it over `model`. `install` copies the
+cosmo files `web/BORROW` lists (globs allowed; a missing one fails the install by name), the
+window's words (`lang/*.strings` → `web/lang/`) and writes `web/files.json` (the page's own file
+list). `cli/webTokens.cpp` prints every token of `app/Theme.h` plus the cosmo ones the borrowed `ui/*`
+read.
+
+**The page, as built 2026-10-27 — the FRAME of the same-app port (R-SVC-7, amended 2026-10-26):**
+`js/model/session.js` (state `model`, `transport`, `live`; events; blobs; `browse`, `video.*`) →
+`js/vm/app.js` (`vm.model` = the model with `live` merged at its paths; `cmd(line)` with the refusal
+said as App::showToast says it; the page's own view state — per-page UI scale, dock height and fold,
+browser width, session view, the open float windows, the selection the lanes show, sheets, focus;
+registries for accessibility nodes, rolls and the keymap) → `js/vm/words.js` (Strings.cpp + Words.h:
+`tr`, stored words that re-say themselves when the language changes, en-XA generated in the page; a
+language switch dissolves 180 ms) → `js/shell.js` (App.cpp: the logical-px root under the eased UI
+scale, the window's floor 960×600, SCALED DOWN to fit a smaller window — web-only, so a phone sees
+the whole app; home | project cross-faded 260 ms; KeyInput's keys; the toast; cursors; the menu,
+popup and modal layers; ctx `{toast, menu, confirm, prompt, pick, copy, box, scale, screenPoint,
+overlay, slot, open}`) → `js/project/screen.js` (ProjectScreen::layout's arithmetic: the browser's
+eased width, the lanes floor 130, the dock's eased height and fold, the Session view's cross-fade, the
+browser→lanes drag of `js/vm/dnd.js` sending ONE line per drop as ProjectScreen::place does, the
+float-window layer) with one SLOT per native widget: `project/{songbar, browser}`, `timeline/timeline`,
+`session/view`, `mixer/dock`, `windows/layer` (contents `device/panel`, `piano/roll`,
+`automation/panel`, `mixer/loudness`, `video/panel` by kind), `home/home`, `sheets/{settings, export,
+relink, conflicts}`, `history/view`. `js/kit/slot.js` loads a widget module (`export function
+mount(host, vm, ctx)`) by dynamic import: one that is absent keeps a quiet placeholder in the native
+panel colours, one that fails says so in its box, and the rest of the page keeps working.
+`js/project/menus.js` holds the App's actions and the song menus as stored words;
+`js/dialogs/picker.js` is the board file browser over `browse`. The widgets themselves are ported
+module by module (PROGRESS: the web face is the same app). The first page (song bar, Home, lanes,
+mixer, console — `js/views/*`, `js/vm/song.js`) is replaced by this frame.
 
 **Proof.** `solaris_ntwb` (`tests/faces/ntwbAdapterTests.cpp`): the real service, adapter and
 `ntwb::Client` over `ntwb::MemoryTransport` with a fake host — calls become commands, a refusal is a
 failed result with the service's words and one `command.rejected` event, `wait` and an unknown method
 are refused, a notify lands, `model` and the pushed state equal `state print --json` but for the
-revision, `commands` lists the whole table, the transport has its key, every frame validates
-(`:124`); `ntwb install` into a scratch data dir writes the manifest, the API, the page, cosmo's two
-files unchanged and the fonts, and `uninstall` removes them (`:207`). Mutant: an adapter that relays
+revision, `commands` lists the whole table, the transport has its key, `live` carries what `pump()`
+moves and is sent again only when it changed, every frame validates; `browse` lists a folder with the
+host's lister; a `video.frame` is a JPEG to the calling page alone; `ntwb install` into a scratch data dir writes the manifest, the API, the page, the files
+`web/BORROW` lists and the fonts, and `uninstall` removes them (`:207`). Mutant: an adapter that relays
 no events fails it. The page was looked at in headless Chrome over a fake bridge fed a real `state
 print --json` (desktop, Home, the console mid cross-fade) and its intents checked to send the window's
-lines. **Run through a real Arstro Remote on 2026-10-26** (an Orange Pi 5 Plus, Arstro Remote 2.1, NTWB 1.1.0): `solaris-cc ntwb install` listed it under Apps, `arstro-remote apps launch solaris` started `ntwb serve`, `apps call solaris command '{"line": "project new …"}'` answered `{output, revision}`, and the page at `/apps/solaris/` drew that song (song bar, lanes, mixer) at 1280×800 and at 390×844.
+lines. **The first page ran through a real Arstro Remote on 2026-10-26** (an Orange Pi 5 Plus, Arstro Remote 2.1, NTWB 1.1.0): `solaris-cc ntwb install` listed it under Apps, `arstro-remote apps launch solaris` started `ntwb serve`, `apps call solaris command '{"line": "project new …"}'` answered `{output, revision}`, and the page at `/apps/solaris/` drew that song (song bar, lanes, mixer) at 1280×800 and at 390×844.
 
 ### DR-MIX-17 Latency compensated (R-MIX-17)
 **A device says how late it is** — DSP `Device::latency()` (`src/device/Device.h:125`, REQ-device-8, DSP
