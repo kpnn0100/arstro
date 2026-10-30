@@ -15,6 +15,32 @@ Format, newest first:
 
 ---
 
+## THE TASTE, as code — `scripts/taste.py` (read this first; it is what `edit.py run` does by default)
+
+27 Grade Lab verdicts on 18 photos (2026-10-30: 9 palette + 1 refine, then 18 taste rounds on photos the
+first round had not shown — one invalid, the sea wall's page could not load its images). The taste rounds
+CONFIRMED the hypotheses built from the first nine: the two looks made from the verdicts won 12 of 17.
+
+| scene / content | the approver's look (taste.py `choose`) | evidence |
+|---|---|---|
+| daylight / overcast — sky, foliage, architecture | **Natural Teal** 100 % | won 6 of 7: Kamakura ("really love the sky and the contrast"), Asakusa ("only #1 can achieve the depth, contrast needed"), Nikko ("really have depth"), Osaka castle, Fuji, the pond. The moat took the first cinematic grade (Natural Cinema + contrast "good") |
+| … a person, animal or tower is the SUBJECT | **Natural Cinema** + ½ contrast step | the woman (NC + contrast), deer by the temple (NC + contrast, "good depth in color"), pagoda (NC + contrast), deer grazing (NC plain — NC + contrast was BAD there, so half a step) |
+| night city | **Natural Cinema 70 %** + warmer | Shinjuku (NC 70 %), the alley (cinematic + warmer: "highlight the important and have good color") |
+| aquarium | **Cinematic + warmer** | the jellyfish |
+| dark interior, art light | **Corrected only** | teamLab orbs (corrected won); the fire: every look that warmed or opened it was BAD |
+
+**Two mistakes the approver told the skill never to repeat:**
+- **Burnt highlights on light sources.** The teamLab fire went LIME under Natural Cinema's first night variant
+  (mids opened, +200 K, a warm highlight wheel, a yellow hue move): *"#3 make it so bad on highlight, #9, #10,
+  #11 too, make sure this mistake doesn't happen in skill"*. → At night no mid lift, no warming, no hue move in
+  the 40–70° band; the clipping guard runs on EVERY render (the lab skipped it); art light gets no look at all.
+- **A veil over a face.** *"all bad, why the man's face cover in blur"* — a face mask that lifted `shadows`
+  plus luminance NR 22 at ISO 1600. → Face masks lift `exposure` (≤ 0.2) and `texture`/`clarity`, NEVER
+  `shadows`; luminance NR is low (10 at ISO 1600, 16 at 3200) — grain reads as film, smear as plastic.
+
+Also: strength preferred ≈ full (mean 0.95); a slight warm bias (warmer won both times it was offered at night
+and in water). The Tokyo set re-edited by this profile: `~/photo/tokyo/taste/` (tokyo.cmp now holds it).
+
 ## THE TASTE (what the approver's eye has said so far — read this before any grade)
 
 Learned 2026-10-30 from the Grade Lab (9 verdicts on 8 Tokyo photos, data/judgments.jsonl; `lab.py summary`):

@@ -259,11 +259,15 @@ MOODS = {
                 "mixer2=0,0;30,0.04;110,-0.08;220,-0.18;300,0 "
                 "saturation=-6 vibrance=8 clarity=10 dehaze=5 grainAmount=5 grainSize=14 lensVignette=-14 sharpenAmount=25"
                 % _crv((0, 0), (0.15, 0.11), (0.5, 0.5), (0.82, 0.87), (1, 0.975))),
-        # Night interiors were "all too dark": the mids open (0.5 -> 0.54) instead of sinking.
-        "night": ("curve=%s curveR=%s curveB=%s grade2=30,10,0 temp=6700 "
-                  "mixer0=0,0;55,-0.03;120,0.06;300,0 mixer1=0,0;30,0.05;120,-0.1;300,0.05 "
-                  "saturation=-2 vibrance=8 clarity=8 grainAmount=8 grainSize=18 lensVignette=-12"
-                  % (_crv((0, 0), (0.12, 0.08), (0.5, 0.54), (0.85, 0.9), (1, 0.975)),
+        # Night: the first version opened the mids (0.5 -> 0.54), warmed the light (+200 K, warm highlight
+        # wheel) and bent yellow (55 deg -0.03) — on the teamLab fire that clipped red first and turned the
+        # flames LIME ("#3 make it so bad on highlight … make sure this mistake doesn't happen in skill").
+        # So at night: no mid lift, no warming, no hue move in the 40-70 deg band; brightness comes from the
+        # correction (dark-interior median 0.15), which the clipping guard can hold.
+        "night": ("curve=%s curveR=%s curveB=%s "
+                  "mixer0=0,0;120,0.06;300,0 mixer1=0,0;30,0.05;120,-0.1;300,0.05 "
+                  "saturation=-2 vibrance=6 clarity=8 grainAmount=8 grainSize=18 lensVignette=-12"
+                  % (_crv((0, 0), (0.12, 0.08), (0.5, 0.5), (0.85, 0.9), (1, 0.975)),
                      _crv((0, 0), (0.3, 0.29), (1, 1)),
                      _crv((0, 0.02), (0.3, 0.31), (1, 0.98)))),
     },

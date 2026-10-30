@@ -17,7 +17,7 @@ A round is one photo shown N ways, names hidden until asked (choose with the eye
 The approver marks the BEST (and may mark others good or bad, and say why); the verdict goes to
 data/judgments.jsonl with every variant's recipe, and the next round is rendered around the pick.
 """
-import argparse, hashlib, html, json, os, random, shutil, sys, threading, time, urllib.parse
+import argparse, hashlib, html, json, os, random, re, shutil, sys, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -54,53 +54,14 @@ TASTE_CANDIDATES = [
 
 
 # ── a variant = (look, strength, tweaks) on top of the photo's correction ───────────────────
-
-def offset_mid(v, d):
-    return E.curve_str([(x, y + d * max(0.0, 1.0 - abs(x - 0.5) / 0.5)) for x, y in E.curve_grid(v)])
-
-
-def _add(d, k, v, base=0.0):
-    d[k] = "%g" % (float(d.get(k, base) or base) + v)
-
-
-TWEAKS = {
-    # name: (label, function(d, step))
-    "warmer":   ("warmer", lambda d, a: _add(d, "temp", 400 * a, 6500)),
-    "cooler":   ("cooler", lambda d, a: _add(d, "temp", -400 * a, 6500)),
-    "magenta":  ("more magenta", lambda d, a: _add(d, "tint", 8 * a)),
-    "green":    ("more green", lambda d, a: _add(d, "tint", -8 * a)),
-    "contrast": ("more contrast", lambda d, a: d.__setitem__("curve", E.offset_curve(d.get("curve", "0,0;1,1"), -0.03 * a, 0.02 * a))),
-    "soft":     ("softer", lambda d, a: d.__setitem__("curve", E.offset_curve(d.get("curve", "0,0;1,1"), 0.03 * a, -0.03 * a))),
-    "brighter": ("brighter", lambda d, a: d.__setitem__("curve", offset_mid(d.get("curve", "0,0;1,1"), 0.05 * a))),
-    "darker":   ("darker", lambda d, a: d.__setitem__("curve", offset_mid(d.get("curve", "0,0;1,1"), -0.05 * a))),
-    "vivid":    ("more saturated", lambda d, a: _add(d, "saturation", 10 * a)),
-    "muted":    ("less saturated", lambda d, a: _add(d, "saturation", -10 * a)),
-    "faded":    ("faded blacks", lambda d, a: d.__setitem__("curve", E.offset_curve(d.get("curve", "0,0;1,1"), 0.05 * a, 0.0))),
-    "deep":     ("deeper blacks", lambda d, a: d.__setitem__("curve", E.offset_curve(d.get("curve", "0,0;1,1"), -0.03 * a, 0.0))),
-}
-OPPOSITE = {"warmer": "cooler", "cooler": "warmer", "magenta": "green", "green": "magenta", "contrast": "soft",
-            "soft": "contrast", "brighter": "darker", "darker": "brighter", "vivid": "muted", "muted": "vivid",
-            "faded": "deep", "deep": "faded"}
-
-
-def look_line(look, fam):
-    if look == "corrected":
-        return ""
-    if look == "cinematic":
-        return L.LOOKS["cinematic"]["groups"][fam]["params"]
-    return M.MOODS[look][fam]
-
-
-def look_title(look):
-    return {"corrected": "Corrected only", "cinematic": "Cinematic (first grade)"}.get(look) or M.MOODS[look]["title"]
+# The steps, the looks and the composition are taste.py's, shared with the editor — what the approver
+# picks here is exactly what `edit.py run --mood taste` can reproduce.
+from taste import TWEAKS, OPPOSITE, simplify, look_line, look_title  # noqa: E402
+import taste as T  # noqa: E402
 
 
 def variant_params(corr, fam, v):
-    line = look_line(v["look"], fam)
-    d = E.compose(corr, M.scale(line, v["strength"]) if line else "", {})
-    for name, step in v["tweaks"]:
-        TWEAKS[name][1](d, step)
-    return d
+    return T.params(corr, fam, v)
 
 
 def variant_label(v):
@@ -114,20 +75,6 @@ def variant_label(v):
 
 def vid(v):
     return hashlib.sha1(json.dumps(v, sort_keys=True).encode()).hexdigest()[:10]
-
-
-def simplify(tweaks):
-    """Merge repeated tweaks and cancel opposites, so a recipe after six refine rounds stays readable."""
-    acc = {}
-    for n, a in tweaks:
-        o = OPPOSITE[n]
-        if acc.get(o):
-            take = min(acc[o], a)
-            acc[o] -= take
-            a -= take
-        if a > 1e-6:
-            acc[n] = acc.get(n, 0) + a
-    return [(n, round(a, 3)) for n, a in acc.items() if a > 1e-6]
 
 
 # ── the lab ─────────────────────────────────────────────────────────────────────────────────
@@ -177,7 +124,11 @@ class Lab:
     def render(self, photo, v, path):
         corr, fam, _ = self.correction(photo)
         node = self.names[photo]
-        E.set_photo(self.cs, node, variant_params(corr, fam, v), self.plan.get(photo, {}).get("masks", []))
+        d = variant_params(corr, fam, v)
+        E.set_photo(self.cs, node, d, self.plan.get(photo, {}).get("masks", []))
+        # The same clipping guard the editor runs: the first taste round showed a look burning the teamLab
+        # fire to lime because the lab rendered without it ("make sure this mistake doesn't happen").
+        E.guard(self.cs, node, d, fam, [])
         self.cs.preview(path, node, edge=1400)
 
     def new_round(self, photo, kind, base, step):
@@ -199,7 +150,8 @@ class Lab:
             if vid(v) not in seen:
                 seen.add(vid(v))
                 uniq.append(v)
-        rid = time.strftime("%Y%m%d-%H%M%S") + "-" + photo.split(".")[0].strip("_")
+        # Only URL-safe characters: "_DSF6696 (1).RAF" made a folder the page could not load ("this page is broken").
+        rid = time.strftime("%Y%m%d-%H%M%S") + "-" + re.sub(r"[^A-Za-z0-9]+", "-", photo.rsplit(".", 1)[0]).strip("-")
         rd = self.dir / "rounds" / rid
         rd.mkdir(parents=True, exist_ok=True)
         random.shuffle(uniq)                       # blind: position says nothing
@@ -383,7 +335,7 @@ def serve(args):
                 return self.send(200, "<pre style='font:14px/1.5 monospace;padding:16px;white-space:pre-wrap'>%s</pre>"
                                  % html.escape(summary_text()), "text/html; charset=utf-8")
             if u.startswith("/img/"):
-                parts = u.split("/")
+                parts = urllib.parse.unquote(u).split("/")
                 p = (lab.dir / "rounds" / parts[2] / parts[3]).resolve()
                 if p.is_file() and lab.dir.resolve() in p.parents:
                     return self.send(200, p.read_bytes(), "image/jpeg")

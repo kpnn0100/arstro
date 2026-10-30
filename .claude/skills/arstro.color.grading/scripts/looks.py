@@ -41,14 +41,15 @@ FAMILY = {"daylight": "day", "overcast-day": "day", "golden-hour": "day",
 
 
 def noise_for_iso(iso):
-    """Noise reduction by ISO for an APS-C sensor at preview scale: enough to stop colour speckle,
-    never enough to make skin plastic."""
+    """Noise reduction by ISO. Luminance NR kept LOW: at ISO 1600 the first setting (22) smeared the teamLab
+    face ("why the man's face cover in blur") — grain reads as film, smear reads as plastic. Colour NR
+    stays, colour speckle is never wanted."""
     if iso >= 3200:
-        return {"nrLuminance": 30.0, "nrColor": 40.0}
+        return {"nrLuminance": 16.0, "nrColor": 40.0}
     if iso >= 1600:
-        return {"nrLuminance": 22.0, "nrColor": 35.0}
+        return {"nrLuminance": 10.0, "nrColor": 35.0}
     if iso >= 800:
-        return {"nrLuminance": 12.0, "nrColor": 25.0}
+        return {"nrLuminance": 5.0, "nrColor": 25.0}
     return {"nrLuminance": 0.0, "nrColor": 15.0}
 
 

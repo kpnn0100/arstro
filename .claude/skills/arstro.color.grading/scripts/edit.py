@@ -310,8 +310,12 @@ def cmd_run(args):
     for sub in ("before", "after"):
         (out / sub).mkdir(parents=True, exist_ok=True)
     plan = json.loads(Path(args.plan).read_text()) if args.plan and Path(args.plan).exists() else {"photos": {}}
-    mood = args.mood or plan.get("mood") or "spring-haze"
-    mood = mood if mood in M.MOODS else M.find(mood)
+    # The default is the approver's TASTE (taste.py): each photo gets the look the Grade Lab verdicts chose
+    # for photos like it. A named mood ("spring-haze", or words) puts that one mood on every photo.
+    mood = args.mood or plan.get("mood") or "taste"
+    if mood != "taste":
+        mood = mood if mood in M.MOODS else M.find(mood)
+    import taste as T
     if not mood:
         sys.exit("run: no mood matches %r" % args.mood)
     only = set(n for n in args.names.split(",") if n) if args.names else None
@@ -339,7 +343,15 @@ def cmd_run(args):
             clear_masks(cs, node)
             cs.run("select %d\nset %s" % (node, PHOTO_RESET))
             corr, _ = A.normalise(cs, node, scene, int(A.number(md.get("ISO"), 100)), log)
-            d = compose(corr, M.scale(M.MOODS[mood][fam], args.strength * pp.get("strength", 1.0)), pp)
+            if mood == "taste":
+                ch = T.choose(scene, r["analysis"], pp)
+                v = {"look": ch["look"], "strength": ch["strength"] * args.strength * pp.get("strength", 1.0),
+                     "tweaks": ch["tweaks"]}
+                d = T.params(corr, fam, v, pp)
+                log.append("look %s %.0f%%%s — %s" % (ch["look"], v["strength"] * 100,
+                                                      "".join(" +%s" % t[0] for t in ch["tweaks"]), ch["why"]))
+            else:
+                d = compose(corr, M.scale(M.MOODS[mood][fam], args.strength * pp.get("strength", 1.0)), pp)
             set_photo(cs, node, d, pp.get("masks", []))
             a = cs.analyze(node)["analysis"]
             rows.append({"name": name, "node": node, "scene": scene, "family": fam, "why": why,
@@ -375,6 +387,7 @@ def cmd_run(args):
             if not (out / "before" / (stem + ".jpg")).exists():
                 cs.preview(out / "before" / (stem + ".jpg"), node, before=True)
             r["after"] = a
+            r["look"] = next((l for l in r["log"] if l.startswith("look ")), "")
             print("%-18s %-5s p50 %.3f sat %.2f clip %.3f | %s" % (r["name"], fam, a["lumPct"][3], a["meanSaturation"],
                                                                   a["clipHighlights"], " | ".join(r["log"][-3:])))
         if args.save_as:
@@ -393,7 +406,7 @@ def cmd_run(args):
         cs.close()
     A.sheets(out)
     import mood as MOODTOOL
-    MOODTOOL.overview(out, "%s - edited per photo" % M.MOODS[mood]["title"])
+    MOODTOOL.overview(out, "%s - edited per photo" % ("The approver's taste" if mood == "taste" else M.MOODS[mood]["title"]))
     print("-> %s (overview.jpg, sheet_*.jpg, edit.json)" % out)
 
 
@@ -402,7 +415,7 @@ def main():
     ap.add_argument("cmd", choices=("review", "run"))
     ap.add_argument("project")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--mood", default="")
+    ap.add_argument("--mood", default="", help="'taste' (default: the approver's look per photo) or a mood name / words")
     ap.add_argument("--plan", default="")
     ap.add_argument("--names", default="", help="only these photos (names, comma-separated)")
     ap.add_argument("--strength", type=float, default=1.0, help="the mood's strength")

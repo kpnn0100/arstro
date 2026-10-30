@@ -1,5 +1,5 @@
 {
- "mood": "spring-haze",
+ "mood": "taste",
  "photos": {
   "DSCF5186.RAF": {
    "scene": "night-city",
@@ -63,7 +63,7 @@
   "_DSF6994.RAF": {
    "scene": "dark-interior",
    "subject": "man looking up into crystal lights (teamLab)",
-   "intent": "a touch of light on the face",
+   "intent": "a touch of light on the face \u2014 exposure and texture only: a shadows lift there laid a veil over the face ('why the man's face cover in blur')",
    "masks": [
     {
      "type": "radial",
@@ -72,8 +72,9 @@
      "rx": 0.17,
      "ry": 0.13,
      "feather": 0.7,
-     "exposure": 0.25,
-     "shadows": 10
+     "exposure": 0.2,
+     "texture": 6,
+     "clarity": 4
     }
    ]
   },
@@ -132,8 +133,7 @@
      "exposure": 0.15,
      "saturation": 12
     }
-   ],
-   "strength": 0.8
+   ]
   },
   "DSCF5411.RAF": {
    "scene": "overcast-day",
