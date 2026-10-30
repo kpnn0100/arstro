@@ -18,12 +18,16 @@
 #include "InterstellarService.h"
 #include "Ntwb.h"
 #include "core/ThreadBudget.h"
+#include "mcp/ServiceTools.h"
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
+#include <unistd.h>
 
 using namespace arstro;
 using namespace arstro::interstellar;
@@ -40,7 +44,8 @@ namespace
             "  interstellar-cc [--watch] --script <file>      one command per line, `#` comments\n"
             "  interstellar-cc api [--json | --md]            every command, event, model field, address\n"
             "  interstellar-cc ntwb install [--data-dir D]     Interstellar as an Arstro Remote app (its web UI in a browser)\n"
-            "  interstellar-cc ntwb uninstall [--data-dir D] | serve | api\n\n"
+            "  interstellar-cc ntwb uninstall [--data-dir D] | serve | api\n"
+            "  interstellar-cc mcp                            Interstellar as an MCP server on stdio (R-MCP-1)\n\n"
             "Commands are the service's grammar — `interstellar-cc api --md` prints all of them.\n"
             "Examples:\n"
             "  project new mv.isp --fps 24 --res 1920x1080\n"
@@ -71,6 +76,62 @@ namespace
         if (!svc.output().empty()) std::fputs(svc.output().c_str(), stdout);
         return kOk;
     }
+
+    /** R-MCP-1: Interstellar as a Model Context Protocol server. The same service, and the same
+     *  `run` an argv command goes through — so an agent's line and a shell's line cannot differ.
+     *  One extra tool, `interstellar_frame`, because an agent grading video must SEE a frame:
+     *  it is `export-still` (the grammar's own, R-RENDER-5) into a temp file, read back. */
+    int serveMcp(InterstellarService &svc, std::string &events)
+    {
+        arstro::mcp::Server server({"interstellar", "1",
+            "Interstellar, the Arstro video colour tool that can cut, driven through its own command grammar. "
+            "Read interstellar_api first (commands, addresses, events, model). Typical loop: interstellar_run "
+            "\"project open <f.isp>\" -> interstellar_state -> interstellar_frame at=<t> (look) -> interstellar_run "
+            "\"set <address>=<value>\" -> interstellar_frame again -> interstellar_run \"project save\"."});
+        arstro::mcp::TextService t;
+        t.app = "interstellar";
+        t.runHint = "Grammar: docs/API.md (e.g. `set s_a.basic.exposure=0.35`, `timeline new social30 --base main`).";
+        t.runLine = [&svc](const std::string &line, std::string &out, std::string &err) {
+            if (!svc.dispatchText(line, err)) return false;
+            if (!svc.pumpUntilIdle()) { err = "timed out waiting for: " + line; return false; }
+            out = svc.output();
+            return true;
+        };
+        t.takeEvents = [&events]() { std::string e; e.swap(events); return e; };
+        arstro::mcp::addTextServiceTools(server, t);
+
+        arstro::mcp::Tool f;
+        f.name = "interstellar_frame";
+        f.description = "Look at one composited, graded frame of a timeline (the current one unless named) at a "
+                        "time in seconds, as a PNG — what export-still writes.";
+        std::string perr;
+        f.inputSchema = arstro::mcp::Json::parse(
+            R"({"type":"object","properties":{"at":{"type":"number"},"timeline":{"type":"string"}}})", perr);
+        f.call = [&svc, &events](const arstro::mcp::Json &a) {
+            const std::string png = (std::filesystem::temp_directory_path() /
+                                     ("interstellar-mcp-" + std::to_string((long)getpid()) + ".png")).string();
+            // The current timeline unless one is named — what the monitor shows. export-still
+            // requires the name (R-RENDER-1), so the default is resolved from the model, by name.
+            std::string tl = a.has("timeline") ? a["timeline"].asString() : std::string();
+            if (tl.empty())
+                for (const auto &x : svc.model().timelines)
+                    if (x.id == svc.model().currentTimeline) tl = x.name;
+            if (tl.empty()) return arstro::mcp::ToolResult::error("no timeline is open (project open / project new first)");
+            std::string line = "export-still --out " + quote(png) + " --timeline " + quote(tl);
+            if (a.has("at")) line += " --at " + std::to_string(a["at"].asNumber());
+            std::string err;
+            if (!svc.dispatchText(line, err) || !svc.pumpUntilIdle())
+                return arstro::mcp::ToolResult::error(line + ": " + (err.empty() ? "timed out" : err));
+            std::ifstream in(png, std::ios::binary);
+            std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            std::filesystem::remove(png);
+            events.clear();
+            if (bytes.empty()) return arstro::mcp::ToolResult::error(line + ": nothing was written");
+            return arstro::mcp::ToolResult::text(line).addImage(bytes, "image/png");
+        };
+        server.add(f);
+        return arstro::mcp::serveStdio(server);
+    }
 }
 
 int main(int argc, char **argv)
@@ -98,6 +159,15 @@ int main(int argc, char **argv)
     cosmo::ThreadBudget budget(50);
     InterstellarService svc(budget, interstellar_cli::makeHost());
     // The event stream IS the log: a shell run with --watch shows exactly what a window would.
+    if (!args.empty() && args[0] == "mcp")
+    {
+        std::string events;
+        svc.subscribe([&events](const Event &e) { events += formatEvent(e) + "\n"; });
+        svc.subscribe([](const Event &e) {
+            if (e.kind == Event::Kind::Error) std::fprintf(stderr, "%s\n", formatEvent(e).c_str());
+        });
+        return serveMcp(svc, events);
+    }
     svc.subscribe([watch](const Event &e) {
         if (watch || e.kind == Event::Kind::Error) std::fprintf(stderr, "%s\n", formatEvent(e).c_str());
     });

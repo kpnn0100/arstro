@@ -484,6 +484,12 @@ reserves the rest so adopting it is not a migration.
   document an agent cannot read without building the app is a document an agent will not read.
 - **R-API-2 An agent drives the app through the document.** Discover via `api --json`, reach via one
   `Command`, observe via an `AppModel` field or an `Event`, assert via a stable dump or `eval`.
+- **R-MCP-1 An agent's client drives it over the Model Context Protocol** (**Added 2026-10-30**; the
+  user: *"apply mcp for solaris, interstellar and cosmo"*). `interstellar-cc mcp` serves the service on
+  stdio as `interstellar_api` / `interstellar_run` / `interstellar_state` (core/Mcp's text-service
+  tools: the same `dispatchText` + `pumpUntilIdle` an argv line takes) and `interstellar_frame` (a
+  graded frame as a PNG — the grammar's own `export-still`, the current timeline unless named). A
+  front end, holding no behaviour; an undeclared argument is refused by name.
 
 ---
 

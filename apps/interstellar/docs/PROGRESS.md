@@ -183,6 +183,12 @@ one integrator who moves, wires, tests and commits each stream:
 
 ## Decisions log (newest first)
 
+**2026-10-30 — `interstellar-cc mcp` (R-MCP-1, DR-MCP-1) is a front end on `core/Mcp`, beside cosmo's
+and solaris's.** The user asked for MCP on all three apps. The protocol is shared (`core/Mcp`, its own
+`mcp_tests`); an app only says how to run one line. `interstellar_frame` exists because an agent
+grading video must SEE a frame — it is `export-still`, the grammar's own. Driving it from the API
+document found D-18 (`clip add` hints vs parser). `.mcp.json` registers it via `core/Mcp/serve.sh`.
+
 **2026-10-26 — Interstellar gets a web face over NTWB, as Solaris and cosmo have one (R-SVC-4).** The
 user asked for Interstellar and Solaris to be supported NTWB apps; Solaris already was (its R-SVC-7),
 so Interstellar follows its pattern: `interstellar-cc ntwb serve | install | uninstall | api`, an

@@ -25,6 +25,23 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Open
 
+### D-18 — `clip add`'s grammar says `--track`, `--in` and `--at` are optional; the parser requires all three
+- **Area:** service grammar / API document · **Status:** Confirmed (reproduced) · **Severity:** S3 ·
+  **Found:** 2026-10-30, driving Interstellar through `interstellar-cc mcp` from the API document.
+- **Reproduce:** `interstellar-cc project new /tmp/a.isp : rack add photo.jpg : clip add --src ro_1`
+  → `--in is required: clip add [--track <trk>] [--src <rackobj|timeline>] [--in <t>] …`; with
+  `--in 0` → `--at is required`; with `--at 0` on a new project → `clip add: no track named ` (empty).
+- **Expected:** what docs/API.md and the refusal's own usage line say — brackets mean optional; the
+  description even says "Without --out, the rest of the source from --in" (a drag drops at the
+  playhead on the selected track).
+- **Actual:** all three are required, and a new project has no track to default to.
+- **Judgement:** **defect** — the generated document and the parser disagree, which is exactly what an
+  agent reading `interstellar_api` trips on (arstro.rule §5: discover from the document).
+- **Recommended fix:** either default them (`--in 0`, `--at` the playhead, `--track` the first video
+  track — made if none) or drop the brackets in the command table so the document says the truth.
+- **Guarded by:** a service test that `clip add --src ro_1` on a fresh project either succeeds or is
+  refused with a usage line that shows no brackets around what it requires.
+
 ### D-17 — A project that was empty when the Cut tab first laid out stays at the maximum zoom
 - **Area:** ui · **Status:** Open · **Severity:** S3 · **Found:** 2026-10-27, driving the web face's
   Cut tab over the real service (R-SVC-4 amended).

@@ -7,9 +7,9 @@ add_executable(interstellar-cc ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/NtwbAdapter.cpp    # ntwb: Interstellar as an Arstro Remote app (R-SVC-4)
   ${CMAKE_CURRENT_SOURCE_DIR}/NtwbMain.cpp)
 if(TARGET interstellar_host)
-  target_link_libraries(interstellar-cc PRIVATE interstellar_host arstro_ntwb)
+  target_link_libraries(interstellar-cc PRIVATE interstellar_host arstro_ntwb arstro_mcp)
 else()
-  target_link_libraries(interstellar-cc PRIVATE interstellar_core arstro_ntwb)
+  target_link_libraries(interstellar-cc PRIVATE interstellar_core arstro_ntwb arstro_mcp)
 endif()
 # `ntwb install` copies the page from the source tree, and what web/BORROW lists of cosmo's (and its fonts) beside it
 target_compile_definitions(interstellar-cc PRIVATE

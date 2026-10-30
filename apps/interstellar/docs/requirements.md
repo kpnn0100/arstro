@@ -1965,3 +1965,15 @@ dispatches `settings set hardwareVideo=1` — red with the dialog's callback dro
 `interstellar_render_codecs`: on this machine (AMD, radeonsi) the hardware file has no libx264
 signature, is tagged BT.709 and decodes to 215,58,28 against the still's 216,59,30; with the device
 pointed nowhere it is libx264's, and said.
+
+### DR-MCP-1 `interstellar-cc mcp` (R-MCP-1)
+
+`main` (`cli/main.cpp:214`) builds the ordinary service and, for `mcp`, subscribes an event
+collector and calls `serveMcp` (`cli/main.cpp:135`): `addTextServiceTools` (`core/Mcp/src/
+ServiceTools.cpp`) with a `runLine` of `dispatchText` then `pumpUntilIdle`, printing `output()`;
+and `interstellar_frame {at?, timeline?}`, which resolves the current timeline's NAME from
+`model().timelines` (export-still requires it, R-RENDER-1), runs `export-still --out <tmp>.png
+--timeline <name> [--at t]`, reads the PNG back as image content and deletes it. Verified by a
+JSON-RPC client: `project new` → `rack add <jpg>` → `track add` → `clip add --track trk_1 --src ro_1
+--in 0 --at 0` → `interstellar_frame at=1` returned a 1280x720 frame of the photo (mean luma 21).
+
