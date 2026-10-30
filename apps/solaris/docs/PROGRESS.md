@@ -1000,6 +1000,11 @@ between / learn from professional from trap nation first"*. Tooling, not product
 
 ## Decisions log (newest first)
 
+- **2026-10-30 — `solaris-cc mcp` (R-MCP-1, DR-MCP-1):** the user asked for MCP on solaris, interstellar
+  and cosmo. One shared protocol library (`core/Mcp`, `mcp_tests`), three thin front ends; Solaris's is
+  one song session with undo, exactly `shell`. `.mcp.json` at the repo root registers it via
+  `core/Mcp/serve.sh`.
+
 - **2026-10-20 — the roll's copy, wheel and model note (R-ROLL-12…14), decided without a round:** Ctrl+C / Ctrl+V on
   notes already existed (R-ROLL-8), so "copy" is built as Shift-drag (as clips have it); the model note is the note
   last PRESSED (a click, a drag, a resize, its stem), its velocity, chance and length; Alt+wheel works on the selection

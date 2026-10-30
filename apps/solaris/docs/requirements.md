@@ -4134,3 +4134,12 @@ Freeze sending the wrong line. Found while testing it: Escape closes a context m
 Under test's last check ("no such item") passed whether or not its menu opened — it now asserts the menu opened and
 closes it by a click away.
 
+### DR-MCP-1 `solaris-cc mcp` (R-MCP-1)
+
+`main` (`cli/main.cpp:161`), after the ordinary host and service are built, serves for `mcp`:
+an event collector subscribed, `addTextServiceTools` (`core/Mcp/src/ServiceTools.cpp`) with a
+`runLine` of `dispatchText` printing `output()`, and `serveStdio`. Verified by a JSON-RPC client:
+`project new song.slp --bpm 128` → `clip add --instrument drums --at 0 --length 16` → `ls` (the
+tree), `solaris_state stable=true`, `set dv_1.kick.tnue=-2` refused with "did you mean: kick.tune?",
+then `project save` + `render --out mix.wav` (2.18 MB written).
+

@@ -34,6 +34,7 @@
 #endif
 #endif
 #include "SolarisService.h"
+#include "mcp/ServiceTools.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -59,7 +60,8 @@ namespace
             "  solaris-cc [options] shell [--song <file.slp>]\n"
             "                                            lines from stdin into ONE song session (undo kept);\n"
             "                                            --song opens the file, or makes it when it is not there\n"
-            "  solaris-cc api [--json | --md]            every command, event, model field and device parameter\n\n"
+            "  solaris-cc api [--json | --md]            every command, event, model field and device parameter\n"
+            "  solaris-cc mcp                            Solaris as an MCP server on stdio (R-MCP-1)\n\n"
             "Options: --watch (events to stderr) · --keep-going (run past a refusal, exit 3 at the end) ·\n"
             "         --discard (end with unsaved edits without exit 4)\n"
             "Exit: 0 ok · 2 usage · 3 a line was refused (`refused: line N: …`) · 4 unsaved edits left\n\n"
@@ -155,6 +157,31 @@ int main(int argc, char **argv)
     svc.subscribe([watch](const Event &e) {
         if (watch || e.kind == Event::Kind::Error) std::fprintf(stderr, "%s\n", formatEvent(e).c_str());
     });
+
+    if (!args.empty() && args[0] == "mcp")
+    {
+        // R-MCP-1: Solaris as a Model Context Protocol server — the same service and the same
+        // dispatchText a `shell` line goes through, so an agent's line cannot differ from a
+        // shell's. One session, undo kept, like `shell` (R-SVC-8).
+        std::string events;
+        svc.subscribe([&events](const Event &e) { events += formatEvent(e) + "\n"; });
+        arstro::mcp::Server server({"solaris", "1",
+            "Solaris, the Arstro DAW, driven through its own command grammar. Read solaris_api first (commands, "
+            "events, model, every device parameter) and docs/AGENTS.md for a whole song. Typical loop: solaris_run "
+            "\"project new song.slp --bpm 128\" -> clip add / pattern steps / notes add / set dv_1.x=... -> solaris_run "
+            "\"ls\" or \"show <id>\" to check -> \"project save\" -> \"render --out mix.wav\". Every edit is one undo step."});
+        arstro::mcp::TextService t;
+        t.app = "solaris";
+        t.runHint = "Grammar: docs/API.md and docs/AGENTS.md (e.g. `clip add --instrument drums --at 0 --length 16`).";
+        t.runLine = [&svc](const std::string &line, std::string &out, std::string &e) {
+            if (!svc.dispatchText(line, e)) return false;
+            out = svc.output();
+            return true;
+        };
+        t.takeEvents = [&events]() { std::string e; e.swap(events); return e; };
+        arstro::mcp::addTextServiceTools(server, t);
+        return arstro::mcp::serveStdio(server);
+    }
 
     std::string err;
     // One line, numbered as the user wrote it: a refusal says WHERE (R-SVC-8).

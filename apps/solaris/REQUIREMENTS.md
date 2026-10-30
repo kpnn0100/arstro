@@ -1383,6 +1383,12 @@ a process is the host's (law 12).
   directory listing and the settings path are injected by the host.
 - **R-API-1 The API document is generated, committed and drift-tested** — rung 4 — and includes the
   device registry (every instrument and effect parameter with unit and range).
+- **R-MCP-1 An agent's client drives it over the Model Context Protocol** (**Added 2026-10-30**; the
+  user: *"apply mcp for solaris, interstellar and cosmo"*). `solaris-cc mcp` serves ONE song session on
+  stdio, undo kept like `shell` (R-SVC-8), as `solaris_api` / `solaris_run` / `solaris_state` —
+  core/Mcp's text-service tools over the same `dispatchText` a shell line takes. A front end holding no
+  behaviour; an undeclared tool argument is refused by name, and a refused line returns the service's
+  own reason (`did you mean: kick.tune?`).
 
 - **R-SVC-5 An agent can drive the running window** (user request, 2026-10-09: *"Agent friendly, make it
   like cosmo, core backend and front end can be cli (for Agent), GUI for user and web"*): `solaris

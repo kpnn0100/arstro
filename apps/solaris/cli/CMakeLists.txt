@@ -4,7 +4,7 @@ add_executable(solaris-cc main.cpp
   Attach.cpp        # attach: a terminal on a running window (R-SVC-5) — builds no service
   NtwbAdapter.cpp   # ntwb: Solaris as an Arstro Remote app (R-SVC-7)
   NtwbMain.cpp)
-target_link_libraries(solaris-cc PRIVATE solaris_host arstro_ntwb)
+target_link_libraries(solaris-cc PRIVATE solaris_host arstro_ntwb arstro_mcp)
 # the web face's pictures (videoFrame / videoThumb): JPEG through GdkPixbuf, as interstellar-cc and cosmo-cc encode
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
