@@ -101,6 +101,11 @@ namespace cosmo
          *  false when no photo is current. The Before render is cached by the session. */
         bool renderBefore(RenderService::Frame &out);
         bool renderUncropped(RenderService::Frame &out);
+        /** R-GRADE-2: the current photo with EVERY edit, rendered now at preview size — what
+         *  the shared preview will show once it lands, but synchronous, so a front end with no
+         *  frame loop (an agent's MCP call) can look at an edit the moment it made it. A query
+         *  like the two above: no state changes, no event, no history. */
+        bool renderCurrent(RenderService::Frame &out);
 
         // ── transitional ──
         /** The GUI still renders from the session directly for everything the model does not
@@ -168,6 +173,8 @@ namespace cosmo
         bool pickWhiteBalance(const Command &c);
         /** R-INFO: read a photo's metadata into the model, on demand. */
         bool readMetadata(const Command &c);
+        /** R-GRADE-1: render the photo (as edited, or as shot) and measure it into the model. */
+        bool analyze(const Command &c);
         /** The picker's averaging radius, in proxy pixels — big enough to swamp sensor noise,
          *  small enough that clicking a small neutral patch does not drag its neighbours in. */
         static constexpr int kWbPickRadius = 4;

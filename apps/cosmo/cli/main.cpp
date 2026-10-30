@@ -29,6 +29,8 @@
  */
 #include "ExportWriter.h"
 #include "NtwbAdapter.h"
+#include "EditControls.h"
+#include "mcp/Server.h"
 #include "OmpPin.h"
 #include "core/AppSettings.h"
 #include "core/ProjectStore.h"
@@ -469,6 +471,7 @@ namespace
             {"ui dump", "[--json] [--visible] [--depth N]"},
             {"wb pick", "--x X --y Y   (0..1 of the photo)"},
             {"metadata", "[<node>]"},
+            {"analyze", "[<node>] [before]   (measure tone, cast, hues, content; before = as shot)"},
             {"gesture", "on|off"},
             {"history jump", "<step>   (a node of the history tree, as the model's `history` numbers it)"},
             {"add", "<img> [img ...]   (into the open project; import replaces it)"},
@@ -504,6 +507,8 @@ namespace
              "                                  cosmo under Apps (default D: $XDG_DATA_HOME/ntwb/apps)\n"
              "  ntwb uninstall [--data-dir D]   remove it again\n"
              "  ntwb api                        print the Cosmo API description (docs/ntwb-api.json)\n"
+             "  mcp                             cosmo as an MCP server on stdio: an agent opens, looks,\n"
+             "                                  measures and edits through the same grammar (R-MCP)\n"
              "  attach <socket> [--script <f>]   drive a RUNNING cosmo --control window; its\n"
              "                                  events stream back (R-SVC-8). No session here:\n"
              "                                  the window that owns the service does the work\n"
@@ -1743,6 +1748,284 @@ static int cmdNtwbServe(Host &h)
                : kFail;
 }
 
+
+// ── mcp: cosmo as a Model Context Protocol server (R-MCP-1..4) ───────────────────────
+//
+// An agent's client starts `cosmo-cc mcp` and calls tools. Seam rule, the same as the NTWB
+// adapter's: NOTHING here is behaviour. A line goes through `runLine` — the very function
+// `cosmo-cc run` uses — so an MCP call and a script line cannot differ; what comes back is
+// the model (`formatModel`, the one codec), the event lines (`formatEvent`), and pictures
+// from the service's own render queries. The only host work is the host's anyway: a JPEG
+// encode and fitting the picture to the size the caller asked for.
+namespace
+{
+    using arstro::mcp::Json;
+    using arstro::mcp::ToolResult;
+
+    Json schema(const char *text)
+    {
+        std::string err;
+        Json j = Json::parse(text, err);
+        return j;
+    }
+
+    /** Box-average `f` down so its long edge is at most `edge` — presentation for transport,
+     *  the window does the same when it draws a 1600 px preview into a smaller canvas. */
+    void fitTo(const arstro::RenderService::Frame &f, int edge, std::vector<uint8_t> &out, int &w, int &h)
+    {
+        const int big = std::max(f.width, f.height);
+        if (edge <= 0 || big <= edge)
+        {
+            out = f.rgba;
+            w = f.width;
+            h = f.height;
+            return;
+        }
+        w = std::max(1, (int)std::lround((double)f.width * edge / big));
+        h = std::max(1, (int)std::lround((double)f.height * edge / big));
+        out.assign((size_t)w * h * 4, 255);
+        for (int y = 0; y < h; ++y)
+        {
+            const int y0 = y * f.height / h, y1 = std::max(y0 + 1, (y + 1) * f.height / h);
+            for (int x = 0; x < w; ++x)
+            {
+                const int x0 = x * f.width / w, x1 = std::max(x0 + 1, (x + 1) * f.width / w);
+                unsigned sum[3] = {0, 0, 0}, n = 0;
+                for (int yy = y0; yy < y1; ++yy)
+                    for (int xx = x0; xx < x1; ++xx)
+                    {
+                        const uint8_t *p = &f.rgba[((size_t)yy * f.width + xx) * 4];
+                        sum[0] += p[0]; sum[1] += p[1]; sum[2] += p[2]; ++n;
+                    }
+                uint8_t *o = &out[((size_t)y * w + x) * 4];
+                for (int c = 0; c < 3; ++c) o[c] = (uint8_t)(sum[c] / n);
+            }
+        }
+    }
+
+    /** Run `fn` with std::cout and std::cerr captured — `runLine` reports through them, and
+     *  under `serveStdio` they no longer reach the client. */
+    std::string captured(const std::function<void()> &fn)
+    {
+        std::ostringstream buf;
+        std::streambuf *out = std::cout.rdbuf(buf.rdbuf());
+        std::streambuf *err = std::cerr.rdbuf(buf.rdbuf());
+        fn();
+        std::cout.rdbuf(out);
+        std::cerr.rdbuf(err);
+        return buf.str();
+    }
+
+    /** `set` keys: every key the params codec writes, generated from a default EditParams so
+     *  the list cannot name a key `set` would refuse or miss one it accepts; the slider ones
+     *  carry their ENGINE-unit range, sampled from the same conversions the panels use. */
+    Json paramCatalogue()
+    {
+        Json list = Json::array();
+        std::istringstream in(arstro::serializeParams(arstro::EditParams{}));
+        std::string line;
+        while (std::getline(in, line))
+        {
+            const auto eq = line.find('=');
+            if (eq == std::string::npos || eq == 0) continue;
+            Json o = Json::object();
+            const std::string key = line.substr(0, eq);
+            o.set("key", key);
+            o.set("default", line.substr(eq + 1));
+            for (const auto &sec : arstro::cosmo_v2::editControls())
+                for (const auto &c : sec.controls)
+                    if (key == c.field)
+                    {
+                        const double lo = c.toEngine ? c.toEngine(c.min) : c.min;
+                        const double hi = c.toEngine ? c.toEngine(c.max) : c.max;
+                        o.set("label", c.label);
+                        o.set("section", sec.title);
+                        o.set("min", std::min(lo, hi));
+                        o.set("max", std::max(lo, hi));
+                    }
+            list.push(std::move(o));
+        }
+        return list;
+    }
+}
+
+static int cmdMcp(Host &h)
+{
+    // The events of one call, in order — the same lines `--watch` prints and the log keeps.
+    std::vector<std::string> events;
+    bool capturing = false;
+    h.svc.subscribe([&](const Event &e) {
+        if (capturing) events.push_back(arstro::cosmo::formatEvent(e));
+    });
+    auto withEvents = [&](const std::function<std::string()> &fn, std::string &evts) {
+        events.clear();
+        capturing = true;
+        std::string out = fn();
+        capturing = false;
+        for (const auto &l : events) evts += l + "\n";
+        return out;
+    };
+    auto modelJson = [&h]() { return arstro::cosmo_v2::NtwbAdapter::modelJson(h.svc.model()); };
+
+    arstro::mcp::Server server({"cosmo", "2",
+        "Cosmo, the Arstro photo editor, driven through its own command grammar. Read cosmo_api first "
+        "(commands, and every `set` key with its engine units). Typical loop: cosmo_run \"project open "
+        "<f.cmp>\" -> cosmo_state (nodes: address photos by `node`) -> cosmo_analyze node=N before=true "
+        "(how the photo was shot: key, range, cast, hues, skin/sky/neon) and cosmo_preview node=N (look at "
+        "it) -> cosmo_run \"select N\\nset exposure=0.3 temp=6000 ...\" -> cosmo_preview / cosmo_analyze "
+        "again to check -> cosmo_run \"project save\". Every edit is one undoable history step."});
+
+    {
+        arstro::mcp::Tool t;
+        t.name = "cosmo_api";
+        t.description = "The Cosmo API: every command of the grammar with its arguments, and every `set` "
+                        "key with its default and (for sliders) its range in ENGINE units — read this first.";
+        t.inputSchema = schema(R"({"type":"object","properties":{}})");
+        t.call = [](const Json &) {
+            Json grammar = Json::array();
+            for (const auto &n : arstro::cosmo::commandNames())
+            {
+                Json c = Json::object();
+                c.set("name", n);
+                auto it = grammarHints().find(n);
+                c.set("args", it != grammarHints().end() ? it->second : std::string());
+                grammar.push(std::move(c));
+            }
+            Json o = Json::object();
+            o.set("app", "cosmo");
+            o.set("commands", std::move(grammar));
+            o.set("params", paramCatalogue());
+            o.set("notes",
+                  "Lines run through cosmo_run, one per line, exactly as in `cosmo-cc run` scripts. `select` takes a "
+                  "node id from cosmo_state. Curves: curve=x,y;x,y (0..1, display domain), mixer0/1/2 = hue/sat/lum "
+                  "curves over hue degrees with y in -1..1, grade0/1/2 = shadows/midtones/highlights as hue,sat,lum "
+                  "(0..360, 0..100, -100..100), balance -100..100, remapSrc/remapDst hue degrees with remapStrength "
+                  "0..1. temp is Kelvin (higher = warmer result), exposure is EV.");
+            return ToolResult::text(o.dumpPretty());
+        };
+        server.add(t);
+    }
+    {
+        arstro::mcp::Tool t;
+        t.name = "cosmo_run";
+        t.description = "Run command lines (newline-separated) through the service, in order, stopping at the "
+                        "first refusal. Each line waits for any load it started. Returns what the lines "
+                        "printed and the event lines they caused; a refusal is an error naming the line and why.";
+        t.inputSchema = schema(R"({"type":"object","properties":{"script":{"type":"string","description":"one command per line, e.g. \"select 3\\nset exposure=0.4 contrast=12\""}},"required":["script"]})");
+        t.call = [&](const Json &a) {
+            std::istringstream in(a["script"].asString());
+            std::string line, printed, evts;
+            int n = 0;
+            bool ok = true;
+            printed = withEvents([&] {
+                return captured([&] {
+                    while (ok && std::getline(in, line))
+                    {
+                        ++n;
+                        ok = runLine(h, line);
+                        if (ok && h.svc.model().load.active) ok = pumpUntilIdle(h);
+                        if (h.svc.quitRequested()) break;
+                    }
+                });
+            }, evts);
+            std::string text = printed;
+            if (!evts.empty()) text += (text.empty() ? "" : "\n") + evts;
+            if (!ok)
+                return ToolResult::error("refused at line " + std::to_string(n) + ": " + line + "\n" +
+                                         h.svc.model().lastError + "\n" + text);
+            return ToolResult::text(text.empty() ? "ok" : text);
+        };
+        server.add(t);
+    }
+    {
+        arstro::mcp::Tool t;
+        t.name = "cosmo_state";
+        t.description = "The application model as JSON: project, nodes (photos and groups, by `node`), "
+                        "selection, history, the last metadata and analysis answers; params=true adds every "
+                        "edit parameter of the selection.";
+        t.inputSchema = schema(R"({"type":"object","properties":{"params":{"type":"boolean"}}})");
+        t.call = [&h](const Json &a) {
+            pumpOnce(h);
+            arstro::cosmo::ModelDumpOptions o;
+            o.json = true;
+            o.params = a["params"].asBool();
+            return ToolResult::text(arstro::cosmo::formatModel(h.svc.model(), o));
+        };
+        server.add(t);
+    }
+    {
+        arstro::mcp::Tool t;
+        t.name = "cosmo_preview";
+        t.description = "Look at a photo: render it now with every edit (or as shot with before=true) and "
+                        "return it as a JPEG. node selects that photo first; edge caps the long side "
+                        "(default 1024, at most the preview edge).";
+        t.inputSchema = schema(R"({"type":"object","properties":{"node":{"type":"integer"},"before":{"type":"boolean"},"edge":{"type":"integer"},"quality":{"type":"integer"}}})");
+        t.call = [&](const Json &a) {
+            std::string evts;
+            if (a.has("node"))
+            {
+                Command sel;
+                sel.kind = Command::Kind::Select;
+                sel.index = (int)a["node"].asInt();
+                if (!h.svc.dispatch(sel)) return ToolResult::error("select " + std::to_string(sel.index) + ": " + h.svc.model().lastError);
+                pumpOnce(h);
+            }
+            arstro::RenderService::Frame f;
+            const bool before = a["before"].asBool();
+            if (!(before ? h.svc.renderBefore(f) : h.svc.renderCurrent(f)))
+                return ToolResult::error("no photo with pixels is selected (select a photo node, and wait for its load)");
+            std::vector<uint8_t> px;
+            int w = 0, ht = 0;
+            fitTo(f, (int)(a.has("edge") ? a["edge"].asInt() : 1024), px, w, ht);
+            std::string jpeg;
+            const int q = (int)std::min<long long>(95, std::max<long long>(40, a.has("quality") ? a["quality"].asInt() : 85));
+            if (!encodeJpeg(px.data(), w, ht, q, jpeg)) return ToolResult::error("JPEG encode failed");
+            const AppModel &m = h.svc.model();
+            std::string label;
+            for (const auto &n : m.nodes)
+                if (n.node == m.selectedNode) label = n.name;
+            return ToolResult::text("node " + std::to_string(m.selectedNode) + " " + label + " " +
+                                    (before ? "as shot" : "as edited") + " " + std::to_string(w) + "x" + std::to_string(ht))
+                .addImage(jpeg, "image/jpeg");
+        };
+        server.add(t);
+    }
+    {
+        arstro::mcp::Tool t;
+        t.name = "cosmo_analyze";
+        t.description = "Measure a photo (the `analyze` command): key in EV from 18% grey, dynamic range, "
+                        "luminance percentiles, clipping, colour cast (warmth = log2 R/B, tint = log2 G/sqrt(RB)) "
+                        "overall and per tonal zone, hue distribution (12 x 30 deg from red), colourfulness, "
+                        "and skin/sky/foliage/neon fractions — plus the file's metadata (camera, ISO, shutter, "
+                        "aperture, focal length, time). before=true measures it as shot.";
+        t.inputSchema = schema(R"({"type":"object","properties":{"node":{"type":"integer"},"before":{"type":"boolean"}}})");
+        t.call = [&](const Json &a) {
+            std::string line = "analyze";
+            if (a.has("node")) line += " " + std::to_string(a["node"].asInt());
+            if (a["before"].asBool()) line += " before";
+            bool ok = true;
+            std::string evts;
+            const std::string printed = withEvents([&] {
+                return captured([&] { ok = runLine(h, line) && runLine(h, "metadata"); });
+            }, evts);
+            if (!ok) return ToolResult::error(line + ": " + h.svc.model().lastError + "\n" + printed);
+            const Json m = modelJson();
+            Json o = Json::object();
+            o.set("node", m["analysisNode"]);
+            o.set("name", m["analysisName"]);
+            o.set("before", m["analysisBefore"]);
+            o.set("analysis", m["analysis"]);
+            o.set("metadata", m["metadata"]);
+            return ToolResult::text(o.dumpPretty());
+        };
+        server.add(t);
+    }
+
+    // The settings `applyStartupSettings` put in force are the user's; an agent's session must
+    // not write them back, like `run` (only `ntwb serve`, an interactive front end, saves).
+    return arstro::mcp::serveStdio(server);
+}
+
 int main(int argc, char **argv)
 {
     const Args a = parseArgs(argc, argv);
@@ -1780,6 +2063,7 @@ int main(int argc, char **argv)
     if (a.verb == "bench") return cmdBench(h, a);
     if (a.verb == "run") return cmdRun(h, a);
     if (a.verb == "ntwb") return cmdNtwbServe(h);
+    if (a.verb == "mcp") return cmdMcp(h);
 
     std::cerr << "cosmo-cc: unknown subcommand: " << a.verb << "\n";
     return usage(kUsage);

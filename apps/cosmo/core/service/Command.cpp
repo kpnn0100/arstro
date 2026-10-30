@@ -1,5 +1,6 @@
 #include "Command.h"
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <sstream>
 
@@ -87,7 +88,7 @@ namespace cosmo
             "group ungroup", "group rename", "delete", "mask set", "mask delete",
             "undo", "redo", "preset apply",
             "preset save", "export",
-            "settings set", "screen", "state print", "ui dump", "wait", "wb pick", "metadata",
+            "settings set", "screen", "state print", "ui dump", "wait", "wb pick", "metadata", "analyze",
             "gesture", "history jump", "add", "quit"};
         return names;
     }
@@ -184,6 +185,18 @@ namespace cosmo
             c.kind = Command::Kind::Metadata;
             // Bare = the current selection, which is what a right-click on the open photo means.
             c.index = t.size() > 1 ? std::atoi(t[1].c_str()) : -1;
+        }
+        else if (v == "analyze")
+        {
+            // `analyze` / `analyze before` / `analyze <node>` / `analyze <node> before`.
+            c.kind = Command::Kind::Analyze;
+            for (size_t i = 1; i < t.size(); ++i)
+            {
+                if (t[i] == "before") c.flag = true;
+                else if (!t[i].empty() && std::isdigit((unsigned char)t[i][0]) && c.index < 0)
+                    c.index = std::atoi(t[i].c_str());
+                else { err = "analyze: expected [<node>] [before], got " + t[i]; return Command{}; }
+            }
         }
         else if (v == "wb")
         {
@@ -390,6 +403,11 @@ namespace cosmo
             case Command::Kind::Metadata:
                 o << "metadata";
                 if (c.index >= 0) o << ' ' << c.index;
+                break;
+            case Command::Kind::Analyze:
+                o << "analyze";
+                if (c.index >= 0) o << ' ' << c.index;
+                if (c.flag) o << " before";
                 break;
             case Command::Kind::WhiteBalancePick:
                 o << "wb pick";

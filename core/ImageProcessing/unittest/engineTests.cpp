@@ -2031,3 +2031,79 @@ TEST(EditParams_mixerSpread_persists_and_composes_by_maximum)
     eng.setMixerSpread(40.f);
     CHECK_NEAR(eng.currentParams().mixerSpread, 40.0, 1e-4);
 }
+
+// ImageStats measures, it does not judge — so every number is checked against a picture whose
+// answer is known by construction, not against a photo whose answer is an opinion.
+TEST(ImageStats_measures_tone_cast_and_content_of_known_pictures)
+{
+    // Mid grey (encoded 118 ≈ 18 % linear): key 0 EV, no cast, no colour, no clipping.
+    {
+        auto b = solidRGBA8(64, 48, 118);
+        const ImageStats s = measureImage(b.data(), 64, 48);
+        CHECK(s.width == 64 && s.height == 48);
+        CHECK_NEAR(s.keyEv, 0.0, 0.05);
+        CHECK_NEAR(s.lumPct[3], 118.0 / 255.0, 0.002);
+        CHECK_NEAR(s.castWarmth, 0.0, 1e-4);
+        CHECK_NEAR(s.castTint, 0.0, 1e-4);
+        CHECK(s.castFromNeutrals);
+        CHECK(s.clipShadows == 0.f && s.clipHighlights == 0.f);
+        CHECK(s.colouredFraction == 0.f && s.colourfulness < 0.01f);
+    }
+    // Two stops under: the key says -2 EV whatever the encoding does to the number.
+    {
+        auto b = solidRGBA8(16, 16, 63);   // 63/255 decodes to ~0.0497 ≈ 0.18 / 3.6
+        const ImageStats s = measureImage(b.data(), 16, 16);
+        CHECK_NEAR(s.keyEv, std::log2(color::srgbDecodeExact(63.0f / 255.0f) / 0.18f), 0.02);
+        CHECK(s.keyEv < -1.5f);
+    }
+    // A tungsten-lit grey (warm, a little green-free): warmth positive, cast read from neutrals.
+    {
+        std::vector<uint8_t> b(32 * 32 * 4);
+        for (size_t i = 0; i < b.size(); i += 4) { b[i] = 150; b[i + 1] = 128; b[i + 2] = 100; b[i + 3] = 255; }
+        const ImageStats s = measureImage(b.data(), 32, 32);
+        const double lr = color::srgbDecodeExact(150.f / 255.f), lb = color::srgbDecodeExact(100.f / 255.f);
+        CHECK_NEAR(s.castWarmth, std::log2(lr / lb), 1e-3);
+        CHECK(s.castWarmth > 0.8f);
+    }
+    // Half black, half white: both clips measured, range is the full floor-to-ceiling span.
+    {
+        std::vector<uint8_t> b(20 * 10 * 4, 0);
+        for (int y = 0; y < 10; ++y)
+            for (int x = 10; x < 20; ++x)
+                for (int c = 0; c < 4; ++c) b[((size_t)y * 20 + x) * 4 + c] = 255;
+        for (size_t i = 3; i < b.size(); i += 4) b[i] = 255;
+        const ImageStats s = measureImage(b.data(), 20, 10);
+        CHECK_NEAR(s.clipShadows, 0.5, 1e-6);
+        CHECK_NEAR(s.clipHighlights, 0.5, 1e-6);
+        CHECK_NEAR(s.rangeStops, 10.0, 0.01);   // 1.0 over the 1/1024 floor
+        CHECK(s.zones[0].fraction == 0.5f && s.zones[2].fraction == 0.5f);
+    }
+    // A saturated magenta-and-cyan frame with a blue band on top: neon, sky and hue bins land.
+    {
+        const int w = 30, h = 30;
+        std::vector<uint8_t> b((size_t)w * h * 4, 255);
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x)
+            {
+                uint8_t *p = &b[((size_t)y * w + x) * 4];
+                if (y < 6) { p[0] = 90; p[1] = 150; p[2] = 230; }          // sky blue, top fifth
+                else if (x < w / 2) { p[0] = 255; p[1] = 20; p[2] = 200; } // magenta neon
+                else { p[0] = 10; p[1] = 230; p[2] = 240; }                // cyan neon
+            }
+        const ImageStats s = measureImage(b.data(), w, h);
+        CHECK_NEAR(s.skyFraction, 0.2, 1e-6);
+        CHECK(s.neonFraction > 0.75f);
+        CHECK(s.hues[10] > 0.3f);        // 300-330: the magenta
+        CHECK(s.hues[6] > 0.3f);         // 180-210: the cyan
+        CHECK(s.colourfulness > 80.f);
+        CHECK(s.skinFraction == 0.f);
+        float sum = 0;
+        for (float v : s.hues) sum += v;
+        CHECK_NEAR(sum, 1.0, 1e-4);
+    }
+    // Nothing to measure is all zeros, not a crash.
+    {
+        const ImageStats s = measureImage(nullptr, 0, 0);
+        CHECK(s.width == 0 && s.lumMean == 0.f);
+    }
+}

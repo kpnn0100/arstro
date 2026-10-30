@@ -128,6 +128,17 @@ scroll), `pointer`/`key` (menu dismissal, gesture feed, Home/Loading key swallow
 
 `arstro::cosmo`, `apps/cosmo/core/*` — UI-free; owns no Artboard types.
 
+### 2.0b ImageStats (`core/ImageProcessing/src/analysis/ImageStats.{h,cpp}`) — R-GRADE-1
+
+`ImageStats measureImage(const uint8_t *rgba, int w, int h)` over straight display-encoded RGBA8.
+One pass: an exact 256-entry sRGB decode table; display luminance `srgbEncode(0.2126R+0.7152G+0.0722B)`
+binned in 1024 for the percentiles (p1 p5 p25 p50 p75 p95 p99); `keyEv = log2(exp(mean ln max(Y,1e-4))
+/ 0.18)`; `rangeStops = log2(p99_lin / max(p1_lin, 1/1024))`; clip = every channel <= 2 / any >= 254;
+colourfulness = Hasler–Süsstrunk on 0..255. Zones: display L < 0.25 / > 0.70. Hue bins: 12 x 30 deg,
+weighted by HSV chroma, pixels with chroma > 0.08. Hints: skin (hue <= 50, s 0.18–0.65, v 0.25–0.97,
+R > G > B), sky (hue 185–250, s > 0.12, v > 0.45, top 40 % of rows), foliage (hue 60–170, s > 0.2,
+v > 0.12), neon (s > 0.65, v > 0.6). `CosmoService::analyze` stores it in `AppModel::analysis`.
+
 ### 2.1 EditSession (`EditSession.{h,cpp}`)
 The model: group tree + per-slot state + the owned `RenderService`.
 
@@ -873,6 +884,20 @@ unchanged for a JPEG's eleven rows and a RAW's sixteen. ConfirmDialog's chrome a
 The pinned Save/Import/Export row (`kHeight=39`). `onSave`, `onImport`, `onExport`. Save is the
 accent button; the others outline. Per-button `HoverFade` + `hoverBox`. Icons `save`/`upload`/
 `download`. (Wired in the app to Save/Import/Export **Preset**.)
+
+### 7.8d `cosmo-cc mcp` and `core/Mcp` (R-MCP)
+
+`arstro::mcp::Server(Info{name, version, instructions})` holds `Tool{name, description, inputSchema
+(ntwb::Json), call(Json) -> ToolResult}`; `handle(line) -> reply` is pure (one JSON-RPC message in,
+one out, "" for a notification), `serve(istream, ostream)` loops it, `serveStdio(server)` protects
+stdout. Protocol revisions: 2025-06-18, 2025-03-26, 2024-11-05 (the client's is echoed when known).
+Errors: -32700 parse, -32600 invalid request (incl. batches), -32601 unknown method, -32602 unknown
+tool; a tool's own failure — a refused line, a bad argument, a throw — is a RESULT with
+`isError: true`. `ToolResult::addImage(bytes, mime)` base64-encodes on the wire.
+`addTextServiceTools(server, TextService{app, runLine, takeEvents, runHint})` adds `<app>_api`
+(`api --json`), `<app>_run`, `<app>_state` (`state print --json [--stable]`) for a service whose one
+way in is a text line — Interstellar and Solaris use it; cosmo's grammar has no `api` verb, so
+`cmdMcp` builds its own five tools (DR-MCP-1).
 
 ### 7.8b ExportDialog
 The batch-export modal (R-EXPORT). `ExportDialog(accent)`; `struct Node{parent,group,slot,name,

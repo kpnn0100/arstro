@@ -1322,6 +1322,7 @@ namespace
             "state print", "state print --json",
             "gesture on", "gesture off",     // R-PREVIEW-1
             "wb pick --x 0.5 --y 0.5",       // R-WB-1
+            "analyze", "analyze before", "analyze 2", "analyze 2 before",   // R-GRADE-1
             "history jump 4", "add /c.raf \"/d e.jpg\"",   // R-NTWB-3
             "quit"};
         for (const char *line : lines)
@@ -1985,6 +1986,95 @@ namespace
                3, after - base);
     }
 
+    // R-GRADE-1: `analyze` measures a photo — as shot, and as edited — into the model, so a
+    // grader works from numbers a second front end would also get. The decoder hands back a
+    // BLUE-cast grey (shade light): the as-shot cast must read blue, and warming it through the
+    // ordinary `set` must move the measured cast toward amber. Asking twice is how before and
+    // after are compared, so the answer must say which one it is.
+    void test_analyze_measures_the_photo_before_and_after_the_edit()
+    {
+        using namespace arstro::cosmo;
+        struct BlueDecoder : IImageDecoder
+        {
+            DecodedImage decodeFile(const std::string &path) override
+            {
+                DecodedImage d;
+                d.width = 40; d.height = 30;
+                d.rgba.assign((size_t)40 * 30 * 4, 255);
+                for (size_t i = 0; i < (size_t)40 * 30; ++i)
+                {
+                    d.rgba[i * 4 + 0] = 110;
+                    d.rgba[i * 4 + 1] = 120;
+                    d.rgba[i * 4 + 2] = 165;
+                }
+                d.name = path;
+                return d;
+            }
+        };
+        const std::string path = "/tmp/cosmo_svc_analyze.cmp";
+        writeFakeProject(path, 2, true, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new BlueDecoder()); });
+        std::vector<std::string> lines;
+        svc.subscribe([&lines](const Event &e) { lines.push_back(formatEvent(e)); });
+        std::string err;
+        double clock = 0.0;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc, 20000, &clock);
+
+        int photo = -1, group = -1;
+        for (const auto &n : svc.model().nodes)
+        {
+            if (n.group && group < 0) group = n.node;
+            if (!n.group && photo < 0) photo = n.node;
+        }
+        assert(photo >= 0 && group >= 0);
+
+        // Before anything was asked, nothing is claimed.
+        assert(svc.model().analysisNode == -1);
+        assert(formatModel(svc.model(), {}).find("analysis") == std::string::npos);
+
+        // A group has no pixels of its own: rejected, with why, in the model.
+        assert(!svc.dispatchText("analyze " + std::to_string(group), err));
+        assert(svc.model().lastError.find("group") != std::string::npos);
+
+        // As shot, by node: it selects the photo and reads blue.
+        assert(svc.dispatchText("analyze " + std::to_string(photo) + " before", err) && err.empty());
+        assert(svc.model().selectedNode == photo && "measuring a photo makes it the current one");
+        assert(svc.model().analysisNode == photo && svc.model().analysisBefore);
+        const float shot = svc.model().analysis.castWarmth;
+        assert(shot < -0.3f && "a blue-cast grey measures cool");
+        assert(svc.model().analysis.width > 0 && std::fabs(svc.model().analysis.keyEv) < 0.5f && "a mid grey is a normal key");
+
+        // Warm it through the ordinary params path, then measure the edit.
+        assert(svc.dispatchText("set temp=11000", err));
+        assert(svc.dispatchText("analyze", err) && err.empty());
+        assert(!svc.model().analysisBefore);
+        const float edited = svc.model().analysis.castWarmth;
+        assert(edited > shot + 0.2f && "warming the white balance moves the measured cast toward amber");
+
+        // ...and the as-shot answer is unchanged by the edit, because `before` means as shot.
+        assert(svc.dispatchText("analyze before", err));
+        assert(std::fabs(svc.model().analysis.castWarmth - shot) < 1e-4f);
+
+        // The answer is in the dump (text and JSON) and on the event stream.
+        const std::string text = formatModel(svc.model(), {});
+        assert(text.find("analysisNode=" + std::to_string(photo)) != std::string::npos);
+        assert(text.find("  analysis zone midtones") != std::string::npos);
+        ModelDumpOptions jo;
+        jo.json = true;
+        const std::string json = formatModel(svc.model(), jo);
+        assert(json.find("\"analysis\": {\"width\": ") != std::string::npos);
+        assert(json.find("\"castWarmth\": ") != std::string::npos);
+        bool seen = false;
+        for (const auto &l : lines)
+            if (l.find("analyze ") != std::string::npos && l.find(" before key=") != std::string::npos) seen = true;
+        assert(seen && "every analyze emits its summary line");
+
+        printf("[PASS] analyze_measures_the_photo_before_and_after_the_edit (cast %.3f -> %.3f)\n", shot, edited);
+    }
+
     void test_picking_a_white_point_sets_temp_and_tint()
     {
         using namespace arstro::cosmo;
@@ -2434,12 +2524,13 @@ namespace
             {K::Wait, "wait load.finished"},
             {K::Metadata, "metadata 2"},   // bare form (the selection) covered by the R-INFO test
             {K::WhiteBalancePick, "wb pick --x 0.5 --y 0.5"},
+            {K::Analyze, "analyze 2 before"},
             {K::Gesture, "gesture on"},
             {K::HistoryJump, "history jump 3"},
             {K::Add, "add /b.raf"},
             {K::Quit, "quit"},
         };
-        const int kKindCount = 32;   // Kind::None is not a command
+        const int kKindCount = 33;   // Kind::None is not a command
         assert((int)(sizeof(cases) / sizeof(cases[0])) == kKindCount &&
                "a new Command::Kind needs a documented line here and a parser rule");
 
@@ -2937,6 +3028,7 @@ int main()
     test_service_opens_a_project_with_no_ui();
     test_history_advances_without_a_view();
     test_picking_a_white_point_sets_temp_and_tint();
+    test_analyze_measures_the_photo_before_and_after_the_edit();
     test_metadata_reads_the_file_without_decoding_it();
     test_a_path_mask_is_drawn_by_command_and_renders();
     test_mixer_spread_is_reachable_and_persists();

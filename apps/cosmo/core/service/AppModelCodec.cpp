@@ -1,5 +1,6 @@
 #include "AppModelCodec.h"
 #include "engine/EditParamsIO.h"
+#include <cstdio>
 #include <sstream>
 
 namespace arstro
@@ -248,6 +249,67 @@ namespace cosmo
                   << "metadata=" << m.metadata.size() << '\n';
                 for (const auto &kv : m.metadata)
                     s << "  meta " << kv.first << " = " << kv.second << '\n';
+            }
+        }
+
+        // R-GRADE-1: the last `analyze` answer. Stable for the same reason metadata is — every
+        // number is a function of the photo and its params, rendered at the preview edge — and
+        // emitted only once something was measured.
+        if (m.analysisNode >= 0)
+        {
+            const ImageStats &a = m.analysis;
+            char b[96];
+            auto f = [&b](double v) { std::snprintf(b, sizeof(b), "%.4f", v); return std::string(b); };
+            auto arr = [&f](const float *v, int n, const char *sep) {
+                std::string r;
+                for (int i = 0; i < n; ++i) r += (i ? sep : "") + f(v[i]);
+                return r;
+            };
+            static const char *kZone[3] = {"shadows", "midtones", "highlights"};
+            if (j)
+            {
+                s << ",\n  \"analysisNode\": " << m.analysisNode << ",\n  \"analysisName\": \""
+                  << jsonEscape(m.analysisName) << "\",\n  \"analysisBefore\": "
+                  << (m.analysisBefore ? "true" : "false") << ",\n  \"analysis\": {"
+                  << "\"width\": " << a.width << ", \"height\": " << a.height
+                  << ", \"keyEv\": " << f(a.keyEv) << ", \"rangeStops\": " << f(a.rangeStops)
+                  << ", \"lumMean\": " << f(a.lumMean) << ", \"lumStdDev\": " << f(a.lumStdDev)
+                  << ", \"lumPct\": [" << arr(a.lumPct.data(), 7, ", ") << "]"
+                  << ", \"clipShadows\": " << f(a.clipShadows) << ", \"clipHighlights\": " << f(a.clipHighlights)
+                  << ", \"meanSaturation\": " << f(a.meanSaturation) << ", \"colourfulness\": " << f(a.colourfulness)
+                  << ", \"castWarmth\": " << f(a.castWarmth) << ", \"castTint\": " << f(a.castTint)
+                  << ", \"castFromNeutrals\": " << (a.castFromNeutrals ? "true" : "false")
+                  << ", \"neutralFraction\": " << f(a.neutralFraction) << ", \"zones\": {";
+                for (int z = 0; z < 3; ++z)
+                    s << (z ? ", " : "") << "\"" << kZone[z] << "\": {\"fraction\": " << f(a.zones[z].fraction)
+                      << ", \"warmth\": " << f(a.zones[z].warmth) << ", \"tint\": " << f(a.zones[z].tint)
+                      << ", \"saturation\": " << f(a.zones[z].saturation) << "}";
+                s << "}, \"hues\": [" << arr(a.hues.data(), 12, ", ") << "]"
+                  << ", \"colouredFraction\": " << f(a.colouredFraction)
+                  << ", \"skinFraction\": " << f(a.skinFraction) << ", \"skyFraction\": " << f(a.skyFraction)
+                  << ", \"foliageFraction\": " << f(a.foliageFraction) << ", \"neonFraction\": " << f(a.neonFraction)
+                  << "}";
+            }
+            else
+            {
+                s << "analysisNode=" << m.analysisNode << '\n'
+                  << "analysisName=" << m.analysisName << '\n'
+                  << "analysisBefore=" << (m.analysisBefore ? 1 : 0) << '\n'
+                  << "  analysis size=" << a.width << 'x' << a.height << " keyEv=" << f(a.keyEv)
+                  << " rangeStops=" << f(a.rangeStops) << " lumMean=" << f(a.lumMean)
+                  << " lumStdDev=" << f(a.lumStdDev) << '\n'
+                  << "  analysis lumPct=" << arr(a.lumPct.data(), 7, ",") << " clipShadows=" << f(a.clipShadows)
+                  << " clipHighlights=" << f(a.clipHighlights) << '\n'
+                  << "  analysis meanSaturation=" << f(a.meanSaturation) << " colourfulness=" << f(a.colourfulness)
+                  << " castWarmth=" << f(a.castWarmth) << " castTint=" << f(a.castTint)
+                  << " castFromNeutrals=" << (a.castFromNeutrals ? 1 : 0) << " neutralFraction=" << f(a.neutralFraction) << '\n';
+                for (int z = 0; z < 3; ++z)
+                    s << "  analysis zone " << kZone[z] << " fraction=" << f(a.zones[z].fraction) << " warmth="
+                      << f(a.zones[z].warmth) << " tint=" << f(a.zones[z].tint) << " saturation="
+                      << f(a.zones[z].saturation) << '\n';
+                s << "  analysis hues=" << arr(a.hues.data(), 12, ",") << " colouredFraction=" << f(a.colouredFraction) << '\n'
+                  << "  analysis skin=" << f(a.skinFraction) << " sky=" << f(a.skyFraction)
+                  << " foliage=" << f(a.foliageFraction) << " neon=" << f(a.neonFraction) << '\n';
             }
         }
 

@@ -19,6 +19,26 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
+### D-68 — A colour wheel's HUE adds across group levels: two amber tints stack to yellow
+- **Area:** engine (`composeParams`) · **Status:** **Confirmed** (by reading, and by the grading run that
+  had to work around it) · **Severity:** S2
+- **Found:** 2026-10-30, grading the Tokyo project through `cosmo-cc mcp` with the look on a group and
+  per-photo corrections on its children.
+- **Front end:** every one — it is the render law.
+- **Reproduce:** a group with `grade2=28,22,0` (amber highlights) and a photo inside it with
+  `grade2=35,30,0`; `state print --params` shows the effective `grade2=63,52,0`.
+- **Expected:** stacking two warm highlight tints gives a stronger warm tint — the wheels' colour
+  OFFSETS add (as vectors on the wheel), so 28° and 35° stay amber.
+- **Actual:** `EditParamsCompose.cpp:131` adds `hue` like any scalar, so 28° + 35° = 63° (yellow); a
+  group at 200° (teal) over a photo at 200° renders at 40° (orange) — the opposite of both.
+- **Judgement:** **defect** against R-GROUPS' "a group's settings stack on its members" — scalars
+  were never meant to include an angle. (`remapSrc`/`remapDst` already follow `base`, rightly.)
+- **Recommended fix:** compose each wheel as a vector: (sat·cos h, sat·sin h) summed, hue = atan2,
+  sat = the length; `lum` adds. Identity (sat 0) stays identity. A project whose group and child
+  both carry a wheel renders differently afterwards — note it in the commit.
+- **Guard:** an `image_tests` case: 28°/22 over 35°/30 composes to ~32° and ~52; 200°/10 over 200°/10
+  to 200°/20; a sat-0 wheel over anything is that thing.
+- **Workaround in use:** `arstro.color.grading` puts wheels on the look group only, never on a photo.
 ### D-67 The borrowable web kit cannot follow an app's own high contrast or reduced-motion setting
 - **Area:** web (`web/js/ui`, `web/js/core`) · **Status:** Open · **Severity:** S3 · **Found:**
   2026-10-26, Solaris's web face borrowing the kit (Solaris R-SVC-7).

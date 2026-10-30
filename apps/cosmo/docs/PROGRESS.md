@@ -15,6 +15,33 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-10-30 — "apply mcp for solaris, interstellar and cosmo … make agent understand context,
+understand the image property, lighting and apply grading … grading the project tokyo for me
+cinematic color". DONE.**
+
+- **[x] R-GRADE-1/2: `analyze [<node>] [before]` + `CosmoService::renderCurrent`** (DR-GRADE-1/2).
+  `ImageStats` in arstro_image measures tone, cast (overall + per zone), hues, skin/sky/foliage/neon;
+  the model carries it, `state print` prints it. `image_tests` 102/102, `cosmo_core_tests` green
+  incl. `test_analyze_measures_the_photo_before_and_after_the_edit` and the round-trip (33 kinds).
+- **[x] R-MCP-1..4: `cosmo-cc mcp`** (DR-MCP-1) on the new `core/Mcp` (`mcp_tests` 4/4), with
+  `interstellar-cc mcp` and `solaris-cc mcp` beside it; `.mcp.json` registers all three via
+  `core/Mcp/serve.sh`. Verified by a JSON-RPC client driving each server end to end.
+- **[x] Tokyo graded "cinematic" through MCP** by the new `arstro.color.grading` skill: 18 RAWs read
+  (metadata + measurement + a look at each), normalised in a closed loop, two look groups
+  ("Cinematic - Day", "Cinematic - Night"), saved into `tokyo.cmp`; reopened and re-measured
+  identical; 2048 px JPEGs and before/after sheets in `~/photo/tokyo/cinematic-grade/`.
+- **Found on the way: D-68** (a wheel's hue adds across group levels) — filed, worked around.
+- **Decision (2026-10-30): the grader is a USER of cosmo, not part of it.** The measurement is the
+  core's (a second front end must get the same numbers); deciding what the numbers MEAN — "night",
+  "a white sky", "too green" — is the skill's (`.claude/skills/arstro.color.grading`), which drives
+  cosmo only through MCP. An "Auto" button would be a new R- entry that reuses the same numbers.
+- **Decision (2026-10-30): node ids are tree positions** and are renumbered when a project with
+  groups is reopened, so anything that remembers a photo across a reload keys it by NAME. Not a
+  defect (the model never promised stability) — but worth a stable id one day.
+
+**► NEXT:** D-68 (vector-compose the wheels), then D-62 (orientation, core), then PARITY W15 and W18,
+then NTWB-T3.
+
 **► 2026-09-30 (later) — "why it look like i'm remoting a screen … make it like model view viewmodel
 architect with pi is the core; each client view is independent … one edit will affect each other if
 using the same app session". IN PROGRESS.**
@@ -1050,7 +1077,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-09-29 · R-GPU-7: the compute backend is picked at run time (desktop GL, then GLES), the GLES backend loads its entry points and finds a headless display over GBM, and an RK3588's Mali-G610 edits on its GPU — available and conformant, not yet faster (D-60) · 2026-09-03 · R-MIXER-10..14: the Lum curve is a GAIN (Adobe's value scale), not an offset on HSL lightness in linear light — which turned a blue sky black at -100 · R-AISEG WITHDRAWN — the Detect mask is out of the tree; type value 4 is retired so a project that stores it still loads and renders nothing · R-AISEG-25..28: the Detect block says what state it is in, a Detect button starts the run and a progress bar reports it · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-10-30 · R-GRADE-1/2 + R-MCP-1..4: `analyze` measures a photo into the model, `renderCurrent` renders the edit on demand, `cosmo-cc mcp` serves cosmo to agents over the Model Context Protocol (with Interstellar and Solaris beside it), and the Tokyo project was graded through it · 2026-09-29 · R-GPU-7: the compute backend is picked at run time (desktop GL, then GLES), the GLES backend loads its entry points and finds a headless display over GBM, and an RK3588's Mali-G610 edits on its GPU — available and conformant, not yet faster (D-60) · 2026-09-03 · R-MIXER-10..14: the Lum curve is a GAIN (Adobe's value scale), not an offset on HSL lightness in linear light — which turned a blue sky black at -100 · R-AISEG WITHDRAWN — the Detect mask is out of the tree; type value 4 is retired so a project that stores it still loads and renders nothing · R-AISEG-25..28: the Detect block says what state it is in, a Detect button starts the run and a progress bar reports it · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Also merged in from the other machine: **D-40** (filed there as D-36 and renumbered on

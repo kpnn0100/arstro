@@ -3514,3 +3514,56 @@ is its committed output and ctest `cosmo_web_tokens_current` diffs the two. `web
 registers the vendored faces under the C++'s family names ("Roboto Medium" is a family) and carries
 the motion durations with the widget each comes from.
 
+### DR-GRADE-1 `analyze`: a photo measured into the model (R-GRADE-1)
+
+`analyze [<node>] [before]` parses at `core/service/Command.cpp:189` (`Command::Kind::Analyze`,
+`index` = node, `flag` = before) and dispatches at `core/service/CosmoService.cpp:972` to
+`CosmoService::analyze` (`CosmoService.cpp:645`). A named node other than the selection is SELECTED
+first through the ordinary `select` path, because what is measured is a render of the current slot.
+A group, or a photo with no resident pixels, fails with the reason (`analyze: a group has no pixels
+of its own …`). The frame is `renderBefore` (as shot: geometry only) or `renderCurrent` (every edit,
+DR-GRADE-2), measured by `measureImage` (`core/ImageProcessing/src/analysis/ImageStats.cpp:58`) into
+`AppModel::analysis` with `analysisNode` / `analysisName` / `analysisBefore`. It emits one line:
+
+    [evt] info analyze DSCF5186.RAF before key=-5.89 p50=0.031 p99=0.973 warmth=-0.010 tint=0.150 sat=0.610
+
+`formatModel` prints the answer once something was measured (`AppModelCodec.cpp:255`): text rows
+`analysisNode=` … `  analysis zone midtones …`, JSON `"analysis": {"width", "keyEv", "rangeStops",
+"lumMean", "lumStdDev", "lumPct"[7], "clipShadows", "clipHighlights", "meanSaturation",
+"colourfulness", "castWarmth", "castTint", "castFromNeutrals", "neutralFraction", "zones":
+{shadows|midtones|highlights: {fraction, warmth, tint, saturation}}, "hues"[12], "colouredFraction",
+"skinFraction", "skyFraction", "foliageFraction", "neonFraction"}`. The cast is `warmth = log2(R/B)`,
+`tint = log2(G/sqrt(RB))` in linear light, from the near-neutral pixels (HSV saturation < 0.25,
+display L 0.1–0.95) when they are at least 2 % of the frame, else the grey-world mean of every
+unclipped pixel below saturation 0.7. Guarded by `test_analyze_measures_the_photo_before_and_after_the_edit`
+(`core/tests/sessionTests.cpp:1994`: a blue-cast grey measures cool as shot, warming it with `set temp=11000`
+moves the measured cast toward amber, `before` is unchanged by the edit, a group is refused) and by
+`ImageStats_measures_tone_cast_and_content_of_known_pictures` (`core/ImageProcessing/unittest/engineTests.cpp:2037`).
+
+### DR-GRADE-2 `renderCurrent`: the edit, rendered now (R-GRADE-2)
+
+`CosmoService::renderCurrent` (`core/service/CosmoService.cpp:286`) renders the current slot with
+`effectiveParams` through `RenderService::renderPreviewSync` at the preview edge, and returns false
+when no photo is current. It changes nothing and emits nothing — a query, beside `renderBefore` and
+`renderUncropped`. `cosmo-cc mcp`'s `cosmo_preview` and `analyze` are its callers.
+
+### DR-MCP-1 `cosmo-cc mcp` (R-MCP-1..4)
+
+`cmdMcp` (`cli/main.cpp:1852`) builds the five tools over the ordinary `Host` and serves them with
+`arstro::mcp::serveStdio` (`core/Mcp/src/Stdio.cpp:51`, which dups the real stdout for the protocol and
+points descriptor 1 at stderr). `cosmo_run` runs each line through `runLine` — `cosmo-cc run`'s own —
+with `std::cout`/`std::cerr` captured (`captured`, `main.cpp:1808`) and the events of the call
+collected by a subscription; after a line that started a load it pumps until idle. `cosmo_api`'s
+`params` come from `serializeParams(EditParams{})` annotated by `editControls()` (`paramCatalogue`,
+`main.cpp:1822`): exposure −5..5 EV, contrast −100..100, temp 2000..19500 K … `cosmo_preview`
+box-fits the frame to `edge` (default 1024; `fitTo`, `main.cpp:1774`) and encodes JPEG with the host's
+encoder. Argument checking is the library's (`Server::validate`, `core/Mcp/src/Server.cpp:87`):
+`cosmo_run {"scrpt": …}` returns `cosmo_run: unknown argument: scrpt (accepted: script)`. Worked:
+
+    printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+                   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"cosmo_run","arguments":{"script":"project open tokyo.cmp"}}}' \
+      | build/apps/cosmo/cli/cosmo-cc mcp
+
+Verified live on the 18-RAW Tokyo project: open in 4.5 s, `analyze` + `metadata` + a 900 px preview
+per photo, and a whole grade driven through these tools (`.claude/skills/arstro.color.grading`).
+

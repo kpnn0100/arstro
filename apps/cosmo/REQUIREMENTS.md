@@ -2211,6 +2211,55 @@ the file cosmo already has open.
   reads the first 256 KB, tolerates a truncated or tagless file by reporting fewer rows, and never
   throws — a file that cannot be parsed produces the rows the caller already knew and nothing else.
 
+## R-GRADE — A photo measured, so grading starts from evidence — ✅ IMPLEMENTED
+
+(**Added 2026-10-30.** The user: *"the goal is to make agent understand context, understand the image
+property, lighting and apply grading for that photo so that photographer don't have to edit anymore,
+just need to check"*.) A grader — a person reading numbers, or an agent deciding an edit — cannot
+judge light from a histogram alone, and cannot check its own edit if it can only see the picture
+after a frame loop it does not have. Both are answers the SERVICE can give, so every front end gets
+the same ones (R-SVC-4).
+
+- **R-GRADE-1 `analyze [<node>] [before]` measures a photo into the model.** Tone (luminance
+  percentiles, mean, spread, the log-average key in EV from 18 % grey, the dynamic range in stops,
+  shadow and highlight clipping), colour (mean saturation, colourfulness, the colour cast as log2
+  ratios — overall from the near-neutral pixels, and per shadow / midtone / highlight zone), a
+  chroma-weighted hue distribution, and content hints (skin, sky, foliage, neon fractions).
+  - **Measurement, never judgement.** It does not say "night" or "too dark"; those are the grader's
+    calls, and the numbers are what makes them checkable.
+  - **As edited, or as shot** (`before`): asking twice is how a grader compares before and after,
+    so the answer says which one it is (`analysisBefore`) and for which node.
+  - **On demand** like `metadata` (it renders), kept until the next one, emitted as an `info`
+    event line and in `state print`. A group, or a photo whose pixels are not resident, is refused
+    with why in `lastError`.
+  - The measurement itself lives in `arstro_image` (`ImageStats`), platform- and codec-free, so it
+    is the same function for cosmo, Interstellar and any later front end.
+- **R-GRADE-2 The current edit can be rendered on demand.** `CosmoService::renderCurrent` — a query
+  like `renderBefore` (R-NTWB-2): no state change, no event, no history — renders the current photo
+  with every edit at preview size, synchronously, so a front end with no frame loop (an agent's MCP
+  call) can look at an edit the moment it made it.
+
+## R-MCP — An agent drives cosmo over the Model Context Protocol — ✅ IMPLEMENTED
+
+(**Added 2026-10-30.** The user: *"I need you to apply mcp for solaris, interstellar and cosmo"*.)
+MCP is how an agent's client (Claude Code and others) discovers and calls tools. `cosmo-cc mcp` is
+cosmo as an MCP server on stdio — **one more front end over the service, a peer of the window, the
+CLI, the control socket and NTWB**, holding no behaviour (arstro.rule §1).
+
+- **R-MCP-1 `cosmo-cc mcp` serves the service as tools**: `cosmo_api` (the grammar, every `set` key
+  with its default and, for sliders, its range in ENGINE units — generated from the codec and
+  `EditControls.h`, never hand-listed), `cosmo_run` (command lines through the SAME `runLine`
+  `cosmo-cc run` uses, each waiting for the load it started, stopping at the first refusal),
+  `cosmo_state` (the model), `cosmo_preview` (a JPEG of the current edit or the as-shot render, via
+  R-GRADE-2), `cosmo_analyze` (R-GRADE-1 plus the file's metadata).
+- **R-MCP-2 An argument a tool did not declare is refused, naming it** — never accepted and
+  ignored (arstro.rule §5). A refused line is an error result naming the line and `lastError`.
+- **R-MCP-3 stdout belongs to the protocol.** Anything else the process prints (a decoder, a
+  library) is moved to stderr before the first message, so it cannot corrupt the JSON-RPC stream.
+- **R-MCP-4 A session never writes the user's settings** — like `run`, unlike `ntwb serve`.
+- The protocol is `core/Mcp` (shared with Interstellar and Solaris); `.mcp.json` at the repo root
+  registers the three servers through `core/Mcp/serve.sh`.
+
 ## R-NTWB — Cosmo in a browser: an app of Arstro Remote over NTWB — 🚧 IN PROGRESS
 
 *Added 2026-09-30.* "Arstro Remote is the front end, the core still sits on the Pi": a board

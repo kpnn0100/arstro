@@ -36,6 +36,7 @@
  *      screen home
  *      state print
  *      wait load.finished --timeout 120s
+ *      analyze               (measure the selected photo as edited; `analyze 3 before` = node 3 as shot)
  *      quit
  */
 #pragma once
@@ -97,6 +98,12 @@ namespace cosmo
              *  and on demand rather than on selection because reading a file to print its ISO
              *  should not happen every time somebody arrows through the filmstrip. */
             Metadata,           // index = node (-1 = current)
+            /** R-GRADE-1: measure a photo — tone, colour cast, hues, content hints
+             *  (`ImageStats`) — into the model, so whoever grades starts from evidence. `index` =
+             *  node (-1 = current); `flag` = measure the as-shot BEFORE render instead of the
+             *  edit. A Command and not a front-end calculation because a second front end must
+             *  get the same numbers (R-SVC-4), and on demand because it renders. */
+            Analyze,            // index = node (-1 = current), flag = before
             WhiteBalancePick,   // fields: x, y (0..1)
             Gesture,         // flag = on
             /** R-NTWB-3: step to any node of the edit target's history DAG - what the

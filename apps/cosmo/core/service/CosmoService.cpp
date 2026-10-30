@@ -1,6 +1,7 @@
 #include "CosmoService.h"
 #include "../PresetLibrary.h"
 #include "engine/EditParamsIO.h"
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <sstream>
@@ -280,6 +281,14 @@ namespace cosmo
         if (!b || b->width <= 0) return false;
         out = *b;
         return true;
+    }
+
+    bool CosmoService::renderCurrent(RenderService::Frame &out)
+    {
+        const int slot = mSession.currentSlot();
+        if (slot < 0) return false;
+        return mSession.renderService().renderPreviewSync(slot, mSession.effectiveParams(slot), out) &&
+               out.width > 0;
     }
 
     bool CosmoService::renderUncropped(RenderService::Frame &out)
@@ -633,6 +642,45 @@ namespace cosmo
         return true;
     }
 
+    bool CosmoService::analyze(const Command &c)
+    {
+        // The node, like `metadata`; measuring a different photo SELECTS it first, through the
+        // ordinary selection path, because what is measured is a render and a render is of the
+        // current slot — a hidden second "current" would be a state no model field shows.
+        if (c.index >= 0 && c.index != mModel.selectedNode)
+        {
+            Command sel;
+            sel.kind = Command::Kind::Select;
+            sel.index = c.index;
+            if (!dispatch(sel)) return false;
+        }
+        const int node = mModel.selectedNode;
+        if (node < 0 || node >= (int)mSession.nodes().size()) return fail("analyze: nothing selected");
+        const EditSession::GNode &n = mSession.nodes()[(std::size_t)node];
+        if (n.slot < 0)
+            return fail(n.group ? "analyze: a group has no pixels of its own - select a photo in it"
+                                : "analyze: that photo's pixels are not loaded yet");
+
+        RenderService::Frame f;
+        if (!(c.flag ? renderBefore(f) : renderCurrent(f)))
+            return fail("analyze: no pixels resident for this photo yet");
+
+        mModel.analysis = measureImage(f.rgba.data(), f.width, f.height);
+        mModel.analysisNode = node;
+        mModel.analysisBefore = c.flag;
+        const std::string name = mSession.nameForSlot(n.slot);
+        mModel.analysisName = name.empty() ? baseOf(mSession.sourcePathForSlot(n.slot)) : name;
+        ++mModel.revision;
+
+        const ImageStats &s = mModel.analysis;
+        char buf[256];
+        std::snprintf(buf, sizeof(buf), "analyze %s %s key=%.2f p50=%.3f p99=%.3f warmth=%.3f tint=%.3f sat=%.3f",
+                      mModel.analysisName.c_str(), c.flag ? "before" : "after", s.keyEv, s.lumPct[3],
+                      s.lumPct[6], s.castWarmth, s.castTint, s.meanSaturation);
+        emit(Event::Kind::Info, buf, node, n.slot);
+        return true;
+    }
+
     bool CosmoService::pickWhiteBalance(const Command &c)
     {
         // R-WB-1: "this pixel should be white". Three steps, and each one is somewhere it can be
@@ -921,6 +969,7 @@ namespace cosmo
             case Command::Kind::Set: return applySetFields(c);
             case Command::Kind::WhiteBalancePick: return pickWhiteBalance(c);
             case Command::Kind::Metadata: return readMetadata(c);
+            case Command::Kind::Analyze: return analyze(c);
 
             // R-PREVIEW-1. Turning a gesture OFF backdates the silence timer so the
             // settle-and-refine walk starts on the very next pump rather than kSettleMs

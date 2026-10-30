@@ -325,6 +325,9 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/web/css/tokens.css` + `cli/webTokens.cpp` | web front end / tool | Theme.h's tokens as CSS custom properties, generated and drift-tested (R-NTWB-9) |
 | `apps/cosmo/tests/web/mvvm_test.mjs` | test | two pages of one session in a real browser: shells per screen, edits both ways, view state per page, presence (R-NTWB-7/8) |
 | `core/Ntwb/*` | library | the app side of NTWB for any Arstro app: `Json`, the protocol table (tested against the vendored `spec/api.json`), framing, the `ITransport` seam, `Client` (R-NTWB, NTWB-09) |
+| `core/ImageProcessing/src/analysis/ImageStats.{h,cpp}` | engine (arstro_image) | `measureImage`: tone, cast, hues and content hints of a rendered frame — measurement, never judgement (R-GRADE-1) |
+| `core/Mcp/*` | library | MCP for any Arstro app: JSON-RPC 2.0 on stdio, `initialize` / `tools/list` / `tools/call`, argument validation, `serveStdio` (the one OS seam), `addTextServiceTools` (R-MCP) |
+| `apps/cosmo/cli/main.cpp` `cmdMcp` | front end (CLI) | `cosmo-cc mcp`: five tools over the service, lines through `runLine` (R-MCP-1..4) |
 
 **Front ends over the service (R-SVC-1):** the GTK window (`linux_main.cpp` + `App`), `cosmo-cc`
 (CLI, `run`, `attach` to a `--control` window), the touch shell, and - since R-NTWB - a browser:

@@ -30,7 +30,7 @@ target_include_directories(cosmo-cc PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../../core/ImageProcessing/src)
 
 # arstro_image carries GL/EGL PUBLICly (R-GPU), so the GPU backend links itself.
-target_link_libraries(cosmo-cc PRIVATE cosmo_core arstro_image arstro_ntwb ${CMAKE_DL_LIBS})
+target_link_libraries(cosmo-cc PRIVATE cosmo_core arstro_image arstro_ntwb arstro_mcp ${CMAKE_DL_LIBS})
 
 # ── GdkPixbuf (via GTK3) for the decoder + the export encoder ──
 # find_package(PkgConfig) has to run in THIS directory scope: its result

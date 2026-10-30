@@ -159,6 +159,7 @@ package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
     + setDecoderFactory / setWorkerInit / setImageWriter
     + session() : EditSession &      ' transitional; S4 deletes every use
     + renderBefore(Frame&) / renderUncropped(Frame&)   ' one view's pixels, queries (R-NTWB-2)
+    + renderCurrent(Frame&)   ' the edit, rendered now (R-GRADE-2)
     - refreshModel() / startProjectLoad() / startAppendLoad() / refreshPresets()
   }
   class AppModel <<plain data, R-SVC-3>> {
@@ -171,6 +172,7 @@ package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
     + history.entries : HistoryEntryModel[]   ' the DAG (R-NTWB-3)
     + presets : PresetModel[]                 ' the library (R-NTWB-3)
     + frameSlot / frameWidth / frameSeq   ' metadata only — never pixels
+    + analysisNode / analysisBefore / analysis : ImageStats   ' R-GRADE-1
   }
   class Command <<one way in, R-SVC-2>> {
     + kind : Kind
@@ -453,5 +455,18 @@ NtwbAdapter ..> EditControls : the catalogue, sampled (R-NTWB-4)
 NtwbAdapter ..> AppModelCodec : state `model`
 NtwbAdapter ..> Frame : preview JPEG blobs (R-NTWB-2)
 
+class ImageStats <<arstro_image, R-GRADE-1>> {
+  + lumPct[7] / keyEv / rangeStops / clipShadows / clipHighlights
+  + castWarmth / castTint / zones[3] / hues[12]
+  + skinFraction / skyFraction / foliageFraction / neonFraction
+  + {static} measureImage(rgba, w, h) : ImageStats
+}
+class McpServer <<core/Mcp, R-MCP>> {
+  + add(Tool)
+  + handle(line) : string
+  + serve(in, out)
+}
+AppModel *-- ImageStats : analysis
+McpServer ..> CosmoService : cosmo-cc mcp — lines via runLine (R-MCP-1)
 @enduml
 

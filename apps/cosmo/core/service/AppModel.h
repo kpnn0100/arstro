@@ -24,6 +24,7 @@
 #pragma once
 #include "../AppSettings.h"
 #include "../ProjectStore.h"
+#include "analysis/ImageStats.h"
 #include "engine/EditParams.h"
 #include <string>
 #include <utility>
@@ -230,6 +231,15 @@ namespace cosmo
         int metadataNode = -1;
         std::string metadataName;
         std::vector<std::pair<std::string, std::string>> metadata;
+
+        /** R-GRADE-1: the last `analyze` answer — which photo, whether it measured the as-shot
+         *  BEFORE render or the edit, and the numbers. On demand like `metadata` (it renders),
+         *  and kept until the next one, so a grader can compare before against after by asking
+         *  twice. `analysisNode` is -1 until something was measured. */
+        int analysisNode = -1;
+        std::string analysisName;
+        bool analysisBefore = false;
+        ImageStats analysis;
 
         int frameSlot = -1;
         int frameWidth = 0, frameHeight = 0;
