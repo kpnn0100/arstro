@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "cosmo": {
+      "command": "sh",
+      "args": ["core/Mcp/serve.sh", "cosmo"]
+    },
+    "interstellar": {
+      "command": "sh",
+      "args": ["core/Mcp/serve.sh", "interstellar"]
+    },
+    "solaris": {
+      "command": "sh",
+      "args": ["core/Mcp/serve.sh", "solaris"]
+    }
+  }
+}

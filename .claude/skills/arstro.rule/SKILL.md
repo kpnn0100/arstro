@@ -336,6 +336,16 @@ Then:
    script from that, not from memory and not from the source. If a feature you need is not in the
    API document, that is the finding — file it (§6) rather than reaching around it.
 
+### MCP — the agent's front end, for every app with a service
+
+**Every app with a service also serves it over the Model Context Protocol: `<app>-cc mcp`**, built on
+`core/Mcp` (added 2026-10-30 for cosmo, interstellar and solaris; `.mcp.json` registers them). It is a
+front end like any other — it holds no behaviour, every line goes through the same grammar the CLI
+uses (`addTextServiceTools` needs only "run one line"), an undeclared argument is refused by name,
+and a picture the agent must judge (a photo, a frame) is a tool that returns an IMAGE from the
+service's own render, never a file path the agent has to go and open. A new app gets its `mcp`
+subcommand when it reaches rung 3.
+
 ### The conformance ladder
 
 No app but cosmo is near the top. **State which rung the unit is on, and build the next one** —

@@ -45,6 +45,9 @@ add_subdirectory(core/Gene)
 # NTWB, the native-to-web bridge: how an Arstro app shows its UI in Arstro Remote's browser
 # front end (core/Ntwb/README.md). Dependency-free, so it is always built.
 add_subdirectory(core/Ntwb)
+# MCP, the Model Context Protocol: how an agent drives an Arstro app the way a person drives its
+# window - each app's CLI serves its grammar, model and pictures as tools (core/Mcp/README.md).
+add_subdirectory(core/Mcp)
 
 # arstro_dsp: the channel-aware DSP/synth library (ESP32DigitalSynth) — physical-
 # modeling piano (physical/PianoVoice), oscillators, effects. Also defines the
