@@ -1,6 +1,6 @@
 ---
 name: arstro.color.grading
-description: Colour grading photos (and video frames) the way a professional colourist does — read the photo's context and light first (metadata, measurement, and LOOKING at it), correct it, then apply a look — so the photographer only checks. Drives Cosmo through its MCP server (`cosmo-cc mcp`: cosmo_analyze, cosmo_preview, cosmo_run, cosmo_state) or the autograde script. Use it whenever photos are to be graded, colour-corrected, white-balanced, "made cinematic", given a film / teal-orange / moody / night / Tokyo neon look, matched as a set, or auto-edited; when the user asks to "grade", "edit", "color" or "make it look like a movie" a Cosmo project (.cmp) or an Interstellar timeline; and on `/arstro.color.grading` — even when grading is one step of a bigger task. Holds the colour science, the professional workflow, a catalogue of looks with Cosmo recipes, how to read light and scenes, Cosmo's controls MEASURED (they are not Lightroom's), the autograde pipeline (scripts/autograde.py) and the approver's taste ledger (taste.md).
+description: Colour grading photos (and video frames) the way a professional colourist does — read the photo's context and light first (metadata, measurement, and LOOKING at it), correct it, then apply a look — so the photographer only checks. Drives Cosmo through its MCP server (`cosmo-cc mcp`: cosmo_analyze, cosmo_preview, cosmo_run, cosmo_state) or the autograde script. Use it whenever photos are to be graded, colour-corrected, white-balanced, "made cinematic", given a film / teal-orange / moody / night / Tokyo neon look, matched as a set, or auto-edited; when the user asks to "grade", "edit", "color" or "make it look like a movie" a Cosmo project (.cmp) or an Interstellar timeline; and on `/arstro.color.grading` — even when grading is one step of a bigger task. Also for MOODS and editing many photos by prompt — "make these moody", "neon cyberpunk", "soft pastel spring", "Wong Kar-wai", "golden", "sad and blue", "black and white", "teal and orange", "faded film", "a bit warmer / less green / stronger" — nine moods built with R/G/B curves and the colour mixer, one file each in moods/, applied to a whole project in seconds (scripts/mood.py). Holds the colour science, the professional workflow, how to read light and scenes, colour blending with curves and mixer (references/moods.md), Cosmo's controls MEASURED (they are not Lightroom's), the autograde pipeline (scripts/autograde.py) and the approver's taste ledger (taste.md).
 ---
 
 # arstro.color.grading
@@ -82,6 +82,64 @@ the language of §1 — then fix the RULE (looks.py / autograde.py) if it is a r
 photo (`--scene`, or a `cosmo_run "select N\nset …"` touch-up) if it is the photo. Record what you
 learned in references/ or taste.md so the next grade starts smarter.
 
+## 2b. Moods, and editing a lot of photos by prompt
+
+The approver's verdict on the first grade: correction alone is *"just basic correction"* — a grade
+carries a MOOD, made by **colour blending with the R/G/B curves and the mixer** (references/moods.md).
+Correction stays the floor; the mood sits on the look groups above it.
+
+| mood | for | file |
+|---|---|---|
+| `neon-noir` | night city, neon, rain, cyberpunk | moods/neon-noir.md |
+| `teal-orange` | people, street, travel, blockbuster | moods/teal-orange.md |
+| `wong-kar-wai` | romantic night, Hong Kong heat, red and green | moods/wong-kar-wai.md |
+| `faded-film` | travel diary, nostalgia, matte print | moods/faded-film.md |
+| `moody-forest` | dark, earthy, forest, temples, rain | moods/moody-forest.md |
+| `spring-haze` | airy pastel, sakura, gardens, tender | moods/spring-haze.md |
+| `golden-dream` | warm, summer, golden, happy | moods/golden-dream.md |
+| `blue-melancholy` | cold, sad, blue hour, winter | moods/blue-melancholy.md |
+| `mono-noir` | black and white, street, Moriyama | moods/mono-noir.md |
+
+**A prompt becomes a command.** Read the prompt for: the MOOD (a name, or its words — `mood.py list`
+shows them; `moods.find()` matches them), the STRENGTH ("subtle/a touch" 0.5–0.6, "strong/more"
+1.2–1.3), WHICH photos (all · the night ones · the day ones · "the deer" → look at `cosmo_state` names /
+the survey), and whether it is a NEW look or an ADJUSTMENT of the current one.
+
+```bash
+S=.claude/skills/arstro.color.grading/scripts
+python3 $S/mood.py list                                             # the moods and their words
+python3 $S/mood.py board  tokyo.cmp --photos a.RAF,b.RAF,c.RAF,d.RAF   # every mood on 4 photos, 1 sheet
+python3 $S/mood.py apply  tokyo.cmp --mood "moody dark forest" --strength 0.8 --save-as tokyo-moody.cmp
+python3 $S/mood.py apply  tokyo.cmp --mood spring-haze --night-mood neon-noir --save   # day / night mix
+```
+
+`apply` on an ungraded project corrects every photo first (autograde), then puts the mood on the
+groups; on a graded one it only swaps the groups' look (≈30 s for 18 RAWs). It guards clipping per
+photo but lets the mood move the key. It writes before|after sheets, `overview.jpg` (the whole set —
+judge a mood as a SET) and `mood.json` (the measured fingerprint — compare with the mood's file).
+
+**Adjustments by prompt** go to the GROUP (one decision for the set) unless the prompt names a photo:
+
+| the user says | do (on the group, `cosmo_run "select <group>\nset …"`) |
+|---|---|
+| warmer / cooler | `temp` +300…+600 / −300…−600 (group temp adds its offset from 6500) |
+| more / less green (cast) | `tint` −8 / +8 (positive = magenta) |
+| brighter / darker (mood kept) | master curve mid point ±0.04 (`0.5,0.54`), not exposure |
+| more contrast / softer | master curve: toe −0.02 & shoulder +0.02 / toe +0.03 & shoulder −0.03 |
+| lifted / faded blacks | master toe +0.03…+0.06 |
+| bluer / teal shadows | `curveB` toe +0.02…+0.04, `curveR` 0.25 point −0.02 |
+| warmer highlights | `curveB` top −0.03…−0.06 |
+| less saturated / more vivid | `saturation` −8 / `vibrance` +8 |
+| greens less loud | `mixer1` at 100–150 −0.15 more; `mixer2` there −0.1 |
+| skin warmer / healthier | `mixer1` at 25–35 +0.08, `mixer2` +0.05 (never a wheel on the photo: D-68) |
+| deeper sky | `mixer2` at 210–230 −0.15 |
+| more / less grain | `grainAmount` ±5 |
+| stronger / weaker mood | re-apply with `--strength` |
+| one photo too dark / bright | that photo's own `exposure` ±0.2 (with `highlights`), not the group |
+
+After any edit: `cosmo_preview` the photos it touched and look, then save (or `--save-as` a copy so the
+approver can compare versions). Record what the approver keeps in `taste.md` and in the mood's file.
+
 ## 3. Driving Cosmo by hand (MCP)
 
 ```
@@ -107,6 +165,9 @@ the tone curve works in a log domain, and a colour wheel's hue ADDS across group
 | `references/color-science.md` | light, colour, the eye, scene vs display, what "cinematic" is made of |
 | `references/workflow.md` | the professional order of operations, and the checks |
 | `references/light.md` | reading light and scene from metadata + measurement + looking; mixed light; what to neutralise and what not |
+| `moods/<mood>.md` | one file per mood: palette, how it is built (curves + mixer), use / avoid, tuning words, measured fingerprint, the approver's verdict |
+| `references/moods.md` | colour blending with R/G/B curves and the mixer; how to design a new mood |
+| `scripts/moods.py` · `scripts/mood.py` | the moods as data (+ strength, prompt matching) · list / board / apply |
 | `references/looks.md` | a catalogue of looks (cinematic film print, teal-orange, Eterna, Classic Chrome, Tokyo night, golden hour, noir, pastel …) with Cosmo recipes |
 | `references/cosmo-controls.md` | every Cosmo control MEASURED on a real photo; pitfalls |
 | `scripts/autograde.py` | survey / grade / sheet |

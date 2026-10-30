@@ -1,5 +1,9 @@
 # Looks — a catalogue, with Cosmo recipes
 
+> The MOODS in `moods/` (built with the R/G/B curves and the mixer, proven on the Tokyo set, applied by
+> `scripts/mood.py`) supersede most of the starting points below — use a mood first; this file keeps
+> the older recipes and the film references they came from.
+
 Each recipe is a GROUP's `set` line (the look), applied on top of per-photo correction. Values are
 calibrated to Cosmo (cosmo-controls.md) — do not copy Lightroom numbers in. Only `cinematic` is
 proven on a full set (Tokyo, 2026-10-30, `scripts/looks.py`); the others are starting points: render,

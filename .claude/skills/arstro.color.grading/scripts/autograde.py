@@ -26,6 +26,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from mcp_client import Client  # noqa: E402
 import looks as L  # noqa: E402
+import moods as M  # noqa: E402
 
 REPO = HERE.parents[3]
 COSMO_CC = os.environ.get("COSMO_CC", str(REPO / "build/apps/cosmo/cli/cosmo-cc"))
@@ -36,6 +37,9 @@ NEUTRAL = ("exposure=0 contrast=0 highlights=0 shadows=0 whites=0 blacks=0 temp=
            "saturation=0 texture=0 clarity=0 dehaze=0 grainAmount=0 grainSize=0 sharpenAmount=0 "
            "nrLuminance=0 nrColor=0 lensVignette=0 grade0=0,0,0 grade1=0,0,0 grade2=0,0,0 balance=0 "
            "curve=0,0;1,1")
+# ...and for a look GROUP, everything a look or mood may set, so one look never stacks on another.
+GROUP_RESET = NEUTRAL + (" curveR=0,0;1,1 curveG=0,0;1,1 curveB=0,0;1,1 mixer0= mixer1= mixer2= "
+                         "remapEnable=0 remapStrength=0 texture=0")
 
 
 class Cosmo:
@@ -333,7 +337,8 @@ def grade(args):
             name = look["groups"][fam]["name"]
             g = ensure_group(cs, name, members)
             groups[fam] = g
-            cs.run("select %d\nset %s\nset %s" % (g, NEUTRAL, look["groups"][fam]["params"]))
+            cs.run("select %d\nset %s\nset %s" % (g, GROUP_RESET,
+                                                   M.scale(look["groups"][fam]["params"], getattr(args, "strength", 1.0))))
             cs.run("bypass %d on" % g)          # normalise each photo with the look OFF
         for r in rows:
             log = []
@@ -390,6 +395,7 @@ def main():
     ap.add_argument("--nodes", default="", help="comma-separated node ids (default: every photo)")
     ap.add_argument("--save", action="store_true", help="save the project when graded")
     ap.add_argument("--resurvey", action="store_true")
+    ap.add_argument("--strength", type=float, default=1.0, help="scale the look: 0.5 half, 1 as written")
     ap.add_argument("--scene", default="", help="reviewer overrides, e.g. 16=dark-interior,5=aquarium "
                     "(scenes: %s)" % ", ".join(sorted(L.TARGETS)))
     args = ap.parse_args()

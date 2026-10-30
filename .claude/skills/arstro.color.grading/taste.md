@@ -15,7 +15,23 @@ Format, newest first:
 
 ---
 
-## 2026-10-30 — Tokyo / Japan trip (18 RAWs, Fuji X-S10) — `cinematic`  (status: awaiting verdict)
+## 2026-10-30 — Tokyo / Japan trip — nine MOODS + a day/night mix  (status: awaiting verdict)
+
+- Answer to the verdict below: the correction kept as the floor, a mood on the look groups above it,
+  built with the R/G/B curves and the mixer (references/moods.md). Delivered in `~/photo/tokyo/moods/`:
+  `board_*.jpg` (every mood on four photos — night street, temple + person, deer, garden pond), and
+  per mood `<mood>/overview.jpg` (the whole set), `sheet_*.jpg` (before|after), `tokyo-<mood>.cmp` (a
+  copy to open in Cosmo; `tokyo.cmp` itself is unchanged), `mood.json` (the fingerprint). Plus
+  `tokyo-spring-neon/` — Spring Haze by day, Neon Noir by night.
+- The grader's own read: strongest as a SET — moody-forest, neon-noir, the spring/neon mix,
+  mono-noir; boldest — wong-kar-wai and golden-dream (deliberately strong; try strength 0.7).
+  Three day variants were fixed after the first board because the overcast temple sky went pink
+  (neon-noir), peach (teal-orange) and lilac (spring-haze) — the three channels' shoulders decide a
+  white sky's colour.
+- VERDICT: _(pending — which moods do you keep, at what strength, for which photos? what would you
+  name a mood you want that is not here?)_
+
+## 2026-10-30 — Tokyo / Japan trip (18 RAWs, Fuji X-S10) — `cinematic`  (status: judged)
 
 - Delivered: `~/photo/tokyo/cinematic-grade/` — `jpg/` (2048 px), `sheet_01…05.jpg` (before|after),
   `overview.jpg`, `grade.json` (per photo: scene, witness, every value set, before/after numbers);
@@ -28,5 +44,13 @@ Format, newest first:
   8 (Fuji: green train-window cast removed, blue sky back), 11, 16–18; weakest 3 (the pale-blue sky
   goes nearly white — the shoulder could hold more of it) and 1–2 (night streets are clean but could
   take more teal).
-- VERDICT: _(pending — ask: which photos would you still touch, and how? warmer/cooler, darker,
-  more/less "film"?)_
+- VERDICT (2026-10-30, the user): *"I see your edit really well, but this is just basic correction, it look
+  good but i need you to do more color blending, use curve and mixer more for apply a mood to the photo,
+  try some mood and write that to a skill for each mood — the goal is user can use cosmo and prompt to edit
+  a lot of photo"*.
+- LESSON: **correction is the floor, not the grade.** The approver accepts the corrections as they are
+  (white balance, exposure, highlight protection — keep that pipeline) but a grade must carry a MOOD:
+  colour BLENDED through the tones with the R/G/B curves (tinted blacks, crossed channels, warm or
+  pink highlights) and the palette REDUCED with the mixer (hues pulled toward two or three, the rest
+  muted). The `cinematic` look was too timid to read as a mood. → moods/ (one file per mood),
+  `mood.py` (board / apply / strength), and §2b of SKILL.md for editing by prompt.

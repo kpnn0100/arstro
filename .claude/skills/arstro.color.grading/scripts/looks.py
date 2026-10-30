@@ -94,3 +94,13 @@ LOOKS = {
         },
     },
 }
+
+
+# The moods (moods.py, one write-up each in moods/) are looks too: `autograde.py grade --look neon-noir`.
+from moods import MOODS as _MOODS  # noqa: E402
+
+for _k, _m in _MOODS.items():
+    LOOKS[_k] = {"groups": {"day": {"name": _m["title"] + " - Day", "params": _m["day"]},
+                            "night": {"name": _m["title"] + " - Night", "params": _m["night"]}},
+                 "scene": {}}
+
