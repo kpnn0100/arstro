@@ -22,7 +22,8 @@ number Cosmo cannot measure, that is a Cosmo task (`arstro.cosmo.core.implement`
 
 ## 0. Before grading anything
 
-1. **Read `taste.md`.**
+1. **Read `taste.md`**, and `python3 scripts/lab.py summary` — the Grade Lab's verdicts, the approver's
+   eye in numbers (which looks won, which way the refine picks lean, the strength they like).
 2. **Know the brief.** "Cinematic" is not one look (references/looks.md §1). If the user named a
    reference (a film, a photographer, a film stock), use it; if not, the default is the
    `cinematic` look in `scripts/looks.py`, and say so.
@@ -111,6 +112,30 @@ plan entries (most photos need only `scene` and one or two masks; a photo with n
 corrected, given the mood and matched). Then `run` once (≈5 s a photo), read the overview in pages of 18,
 fix the misses with `--names`. The record (`edit.json`: scene, subject, intent, every value, the match
 log) is what the photographer checks against.
+
+## 2-lab. The Grade Lab — learning what GOOD grading is from the approver (`scripts/lab.py`)
+
+The approver (2026-10-30): *"i see your taste is not complete — give me a list of edit of a same photo,
+make it in local host page — i will choose the best looking photo, so you know what good grading is"*.
+
+```bash
+python3 scripts/lab.py serve --plan ~/photo/tokyo/edit/plan.json      # http://127.0.0.1:8789 (lab ~/photo/grade-lab)
+python3 scripts/lab.py summary                                        # what the verdicts say
+```
+
+One photo per round, names hidden, positions shuffled (choose with the eye). A **palette** round shows
+the photo corrected only, as the first cinematic grade, and in every mood; the pick opens a **refine**
+round — the pick and the pick moved one step each way (warmer / cooler, magenta / green, contrast /
+softer, brighter / darker, vivid / muted, faded / deep blacks, mood stronger / lighter); every refine
+round halves the step. "Next photo" moves on (woman at the temple, deer, Shinjuku, Fuji, pagoda,
+teamLab, jellyfish, pond). Every verdict — best, good, bad, the note, every version's recipe — is a line
+in `data/judgments.jsonl`. Renders from a COPY of the ungraded project (`~/photo/grade-lab/lab.cmp`)
+with the plan's masks, never saving anything the approver uses.
+
+**After a session:** read `lab.py summary` and the notes, then write what they mean into `taste.md`
+(e.g. "picks Spring Haze 4 of 6, always one step cooler and softer, mood at 80 %") and turn agreements of
+two or more photos into DEFAULTS — `moods.py` (a mood's curves), `edit.py` (default strength), or a new
+mood when the picks keep landing between two.
 
 ## 2a. The automatic pipeline — `scripts/autograde.py` (correction + a group look; superseded by §2)
 
@@ -222,6 +247,7 @@ the tone curve works in a log domain, and a colour wheel's hue ADDS across group
 | `references/light.md` | reading light and scene from metadata + measurement + looking; mixed light; what to neutralise and what not |
 | `moods/<mood>.md` | one file per mood: palette, how it is built (curves + mixer), use / avoid, tuning words, measured fingerprint, the approver's verdict |
 | `references/moods.md` | colour blending with R/G/B curves and the mixer; how to design a new mood |
+| `scripts/lab.py` | the Grade Lab (127.0.0.1:8789): palette and refine rounds of one photo, the approver picks — verdicts in data/judgments.jsonl; `summary` |
 | `scripts/edit.py` | THE editor: `review` (gridded sheets to look at), `run` (per-photo correct → mood → plan → match → guard) |
 | `scripts/moods.py` · `scripts/mood.py` | the moods as data (+ strength, prompt matching) · list / board / apply |
 | `references/looks.md` | a catalogue of looks (cinematic film print, teal-orange, Eterna, Classic Chrome, Tokyo night, golden hour, noir, pastel …) with Cosmo recipes |
