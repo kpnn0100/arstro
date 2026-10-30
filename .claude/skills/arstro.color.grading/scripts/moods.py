@@ -153,26 +153,32 @@ MOODS = {
     "spring-haze": {
         "title": "Spring Haze",
         "about": "Japanese airy pastel — sakura season, Hamaguchi daylight: bright and low-contrast, mint-cyan "
-                 "shadows, pink-cream highlights, greens to mint, pinks lifted. Light, tender, calm.",
+                 "shadows, pink-cream highlights, greens to fresh mint, pinks lifted. Light, tender, calm. At night "
+                 "a pastel night: mint haze in the blacks, pink in the lights.",
         "keywords": ["airy", "pastel", "soft", "spring", "sakura", "cherry blossom", "japanese", "light", "dreamy",
-                     "kawaii", "bright"],
+                     "kawaii", "bright", "spring haze"],
+        # Olive foliage (decoded RAW greens sit at 60-80 deg) is moved too, not only true green, or the
+        # deer and the mountain stay olive; 40 deg is pinned at 0 so skin and wood do not turn green.
         "day": ("curve=%s curveR=%s curveG=%s curveB=%s "
-                "mixer0=0,-0.03;60,0;90,0.1;130,0.08;220,-0.04;330,0 "
-                "mixer1=0,0.05;60,-0.25;120,-0.25;200,-0.1;330,0.25 "
-                "mixer2=0,0;60,0.1;120,0.1;330,0.1 "
+                "mixer0=0,-0.03;40,0;60,0.05;80,0.1;130,0.08;220,-0.04;330,0 "
+                "mixer1=0,0.05;40,0;60,-0.35;100,-0.25;140,-0.2;200,-0.1;330,0.35;350,0.2 "
+                "mixer2=0,0;60,0.12;120,0.1;330,0.12 "
                 "saturation=-10 vibrance=6 clarity=-8 grainAmount=4 grainSize=12"
                 % (_crv((0, 0.08), (0.25, 0.32), (0.5, 0.58), (0.75, 0.82), (1, 0.97)),
                    _crv((0, 0), (0.5, 0.5), (0.85, 0.88), (1, 1)),
                    _crv((0, 0.02), (0.5, 0.51), (0.85, 0.86), (1, 0.985)),
                    _crv((0, 0.05), (0.5, 0.52), (0.85, 0.84), (1, 0.95)))),
+        # A pastel NIGHT, so the set stays one mood: the blacks get a mint haze (G and B toes), the lights
+        # go pink (R's shoulder above G and B), sodium orange is quieted, magenta-pink lifted.
         "night": ("curve=%s curveR=%s curveG=%s curveB=%s "
-                  "mixer0=0,-0.03;90,0.1;130,0.08;220,-0.04;330,0 "
-                  "mixer1=0,0.05;60,-0.2;120,-0.2;330,0.25 "
-                  "saturation=-8 vibrance=6 clarity=-5 grainAmount=6 grainSize=15"
-                  % (_crv((0, 0.05), (0.2, 0.2), (0.5, 0.56), (0.8, 0.85), (1, 0.97)),
-                     _crv((0, 0), (0.5, 0.5), (0.85, 0.88), (1, 1)),
-                     _crv((0, 0.02), (0.5, 0.51), (1, 0.97)),
-                     _crv((0, 0.05), (0.5, 0.52), (1, 0.97)))),
+                  "mixer0=0,-0.03;40,0;60,0.04;90,0.1;130,0.08;330,0 "
+                  "mixer1=0,0.05;30,-0.1;60,-0.25;120,-0.2;330,0.3 "
+                  "mixer2=0,0;330,0.1 "
+                  "saturation=-10 vibrance=4 clarity=-6 grainAmount=6 grainSize=15"
+                  % (_crv((0, 0.06), (0.2, 0.21), (0.5, 0.55), (0.8, 0.84), (1, 0.97)),
+                     _crv((0, 0), (0.5, 0.5), (0.85, 0.9), (1, 1)),
+                     _crv((0, 0.03), (0.5, 0.51), (0.85, 0.86), (1, 0.98)),
+                     _crv((0, 0.07), (0.5, 0.53), (0.85, 0.85), (1, 0.96)))),
     },
     # ── 7 ─────────────────────────────────────────────────────────────────────────────────────
     "golden-dream": {

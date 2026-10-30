@@ -15,7 +15,19 @@ Format, newest first:
 
 ---
 
-## 2026-10-30 — Tokyo / Japan trip — nine MOODS + a day/night mix  (status: awaiting verdict)
+## 2026-10-30 — Tokyo / Japan trip — Spring Haze, chosen  (status: awaiting verdict)
+
+- The approver: *"so try spring haze for me"* — the first mood they picked out of the nine.
+- Refined before applying, after looking at it on the whole set: olive foliage (60–80°) now moves to
+  fresh mint with the greens (the deer and the mountain stayed olive), sakura pinks lifted harder, and the
+  night variant became a real PASTEL NIGHT (mint-navy blacks, pink light) — the first one left the night
+  photos looking merely corrected, splitting the set.
+- Applied to `tokyo.cmp` (groups "Spring Haze - Day/Night"); the cinematic version is
+  `~/photo/tokyo/cinematic-grade/tokyo.cinematic.cmp`. Output `~/photo/tokyo/spring-haze/`: overview.jpg,
+  sheet_*.jpg, jpg/ (2048 px), mood.json. Day p50 0.511 · night 0.167.
+- VERDICT: _(pending)_
+
+## 2026-10-30 — Tokyo / Japan trip — nine MOODS + a day/night mix  (status: one picked — see above)
 
 - Answer to the verdict below: the correction kept as the floor, a mood on the look groups above it,
   built with the R/G/B curves and the mixer (references/moods.md). Delivered in `~/photo/tokyo/moods/`:
