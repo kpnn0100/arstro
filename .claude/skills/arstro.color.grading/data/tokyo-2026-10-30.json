@@ -1,0 +1,463 @@
+{
+ "look": "cinematic",
+ "date": "2026-10-30",
+ "camera": "Fujifilm X-S10",
+ "photos": [
+  {
+   "name": "DSCF5186.RAF",
+   "scene": "night-city",
+   "why": [
+    "taken 19:00, median L 0.03, neon 0.9%"
+   ],
+   "taken": "2026-04-05 19:06:52",
+   "iso": "ISO 1600",
+   "params": {
+    "temp": 6695.463,
+    "tint": 30,
+    "exposure": 2.5,
+    "highlights": -80.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 22.0,
+    "nrColor": 35.0
+   },
+   "sceneLook": "",
+   "log": [
+    "wb temp=6695 tint=30 (trust 1.00) -> warmth +0.05 tint +0.07",
+    "exposure +1.75 highlights -80 shadows 0 (held by the highlights) -> p50 0.088 clip 0.035",
+    "final p1 0.012 p50 0.080 p99 0.959 clip 0.001 warmth +0.10 tint +0.10 sat 0.46"
+   ]
+  },
+  {
+   "name": "DSCF5194.RAF",
+   "scene": "night-city",
+   "why": [
+    "taken 19:00, median L 0.03, neon 1.5%"
+   ],
+   "taken": "2026-04-05 19:38:04",
+   "iso": "ISO 1600",
+   "params": {
+    "temp": 5500,
+    "tint": 30,
+    "exposure": 2.5,
+    "highlights": -80.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 22.0,
+    "nrColor": 35.0
+   },
+   "sceneLook": "",
+   "log": [
+    "wb temp=5500 tint=30 (trust 1.00) -> warmth +0.16 tint +0.21",
+    "exposure +1.75 highlights -80 shadows 0 (held by the highlights) -> p50 0.086 clip 0.063",
+    "final p1 0.017 p50 0.080 p99 0.959 clip 0.001 warmth +0.33 tint +0.25 sat 0.49"
+   ]
+  },
+  {
+   "name": "DSCF5288.RAF",
+   "scene": "overcast-day",
+   "why": [
+    "35% bright and colourless (a white sky)"
+   ],
+   "taken": "2026-04-06 11:40:56",
+   "iso": "ISO 160",
+   "params": {
+    "temp": 6794.324,
+    "tint": 5.689,
+    "exposure": 1.0,
+    "highlights": -80.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 0.0,
+    "nrColor": 15.0
+   },
+   "sceneLook": "dehaze=6",
+   "log": [
+    "wb temp=6794 tint=6 (trust 0.30) -> warmth -0.06 tint +0.09",
+    "exposure +0.25 highlights -80 shadows 0 (held by the highlights) -> p50 0.249 clip 0.000",
+    "final p1 0.023 p50 0.281 p99 0.974 clip 0.002 warmth -0.09 tint +0.10 sat 0.25"
+   ]
+  },
+  {
+   "name": "DSCF5411.RAF",
+   "scene": "overcast-day",
+   "why": [
+    "54% bright and colourless (a white sky)"
+   ],
+   "taken": "2026-04-07 08:20:26",
+   "iso": "ISO 160",
+   "params": {
+    "temp": 5210.681,
+    "tint": 44.211,
+    "exposure": 0.0,
+    "highlights": 0.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 0.0,
+    "nrColor": 15.0
+   },
+   "sceneLook": "dehaze=6",
+   "log": [
+    "wb temp=5210 tint=44 (trust 1.00) -> warmth +0.10 tint +0.04",
+    "exposure +0.00 highlights 0 shadows 0 -> p50 0.748 clip 0.000",
+    "final p1 0.028 p50 0.785 p99 0.969 clip 0.000 warmth +0.14 tint +0.07 sat 0.17"
+   ]
+  },
+  {
+   "name": "DSCF5807.RAF",
+   "scene": "aquarium",
+   "why": [
+    "dark, 91% of the colour is blue-cyan, no point lights, high ISO"
+   ],
+   "taken": "2026-04-07 12:15:01",
+   "iso": "ISO 3200",
+   "params": {
+    "temp": 6500.0,
+    "tint": 0.0,
+    "exposure": 0.316,
+    "highlights": -80.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 30.0,
+    "nrColor": 40.0
+   },
+   "sceneLook": "vibrance=6",
+   "log": [
+    "exposure +0.16 highlights -80 shadows 0 (held by the highlights) -> p50 0.171 clip 0.004",
+    "final p1 0.038 p50 0.152 p99 0.785 clip 0.000 warmth -0.20 tint -0.20 sat 0.71"
+   ]
+  },
+  {
+   "name": "_DSF5417.RAF",
+   "scene": "overcast-day",
+   "why": [
+    "28% bright and colourless (a white sky)"
+   ],
+   "taken": "2026-04-07 08:30:13",
+   "iso": "ISO 320",
+   "params": {
+    "temp": 5493.421,
+    "tint": 34.0,
+    "exposure": 1.0,
+    "highlights": -80.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 0.0,
+    "nrColor": 15.0
+   },
+   "sceneLook": "dehaze=6",
+   "log": [
+    "wb temp=5493 tint=34 (trust 1.00) -> warmth +0.12 tint +0.06",
+    "exposure +0.25 highlights -80 shadows 0 (held by the highlights) -> p50 0.246 clip 0.000",
+    "final p1 0.039 p50 0.284 p99 0.979 clip 0.000 warmth +0.26 tint +0.11 sat 0.28"
+   ]
+  },
+  {
+   "name": "_DSF6151.RAF",
+   "scene": "daylight",
+   "why": [
+    "daylight, median L 0.19"
+   ],
+   "taken": "2026-04-08 15:27:29",
+   "iso": "ISO 160",
+   "params": {
+    "temp": 7867.028,
+    "tint": 13.24,
+    "exposure": 1.0,
+    "highlights": -80.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 0.0,
+    "nrColor": 15.0
+   },
+   "sceneLook": "",
+   "log": [
+    "wb temp=7867 tint=13 (trust 0.25) -> warmth -0.11 tint +0.15",
+    "exposure +0.25 highlights -80 shadows 0 (held by the highlights) -> p50 0.208 clip 0.000",
+    "final p1 0.050 p50 0.217 p99 0.974 clip 0.002 warmth -0.14 tint +0.21 sat 0.36"
+   ]
+  },
+  {
+   "name": "_DSF6332.RAF",
+   "scene": "daylight",
+   "why": [
+    "daylight, median L 0.54"
+   ],
+   "taken": "2026-04-09 08:29:15",
+   "iso": "ISO 1250",
+   "params": {
+    "temp": 5230.417,
+    "tint": 80,
+    "exposure": 0.0,
+    "highlights": -20.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 12.0,
+    "nrColor": 25.0,
+    "blacks": -3.0
+   },
+   "sceneLook": "",
+   "log": [
+    "wb temp=5230 tint=80 (trust 1.00) -> warmth +0.12 tint +0.22",
+    "exposure +0.00 highlights -20 shadows 0 -> p50 0.540 clip 0.000",
+    "final p1 0.010 p50 0.536 p99 0.927 clip 0.000 warmth -0.21 tint +0.26 sat 0.34"
+   ]
+  },
+  {
+   "name": "_DSF6592.RAF",
+   "scene": "daylight",
+   "why": [
+    "daylight, median L 0.26"
+   ],
+   "taken": "2026-04-10 09:45:27",
+   "iso": "ISO 320",
+   "params": {
+    "temp": 5351.205,
+    "tint": 31.6,
+    "exposure": 1.0,
+    "highlights": -80.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 0.0,
+    "nrColor": 15.0,
+    "blacks": -3.0
+   },
+   "sceneLook": "",
+   "log": [
+    "wb temp=5351 tint=32 (trust 0.50) -> warmth +0.28 tint +0.14",
+    "exposure +0.25 highlights -80 shadows 0 (held by the highlights) -> p50 0.278 clip 0.000",
+    "final p1 0.010 p50 0.309 p99 0.974 clip 0.000 warmth +0.42 tint +0.21 sat 0.39"
+   ]
+  },
+  {
+   "name": "_DSF6609.RAF",
+   "scene": "overcast-day",
+   "why": [
+    "22% bright and colourless (a white sky)"
+   ],
+   "taken": "2026-04-10 15:58:30",
+   "iso": "ISO 320",
+   "params": {
+    "temp": 6017.65,
+    "tint": 39.757,
+    "exposure": 0.337,
+    "highlights": -80.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 0.0,
+    "nrColor": 15.0,
+    "blacks": -3.0
+   },
+   "sceneLook": "dehaze=6",
+   "log": [
+    "wb temp=6017 tint=40 (trust 1.00) -> warmth +0.10 tint +0.04",
+    "exposure +0.34 highlights -80 shadows 0 -> p50 0.420 clip 0.000",
+    "final p1 0.010 p50 0.386 p99 0.917 clip 0.000 warmth +0.28 tint +0.18 sat 0.33"
+   ]
+  },
+  {
+   "name": "_DSF6613.RAF",
+   "scene": "overcast-day",
+   "why": [
+    "38% bright and colourless (a white sky)"
+   ],
+   "taken": "2026-04-10 16:01:05",
+   "iso": "ISO 320",
+   "params": {
+    "temp": 5500.499,
+    "tint": 45.49,
+    "exposure": 0.0,
+    "highlights": -20.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 0.0,
+    "nrColor": 15.0
+   },
+   "sceneLook": "dehaze=6",
+   "log": [
+    "wb temp=5500 tint=45 (trust 1.00) -> warmth +0.10 tint +0.04",
+    "exposure +0.00 highlights -20 shadows 0 -> p50 0.467 clip 0.000",
+    "final p1 0.041 p50 0.466 p99 0.942 clip 0.000 warmth +0.18 tint +0.07 sat 0.21"
+   ]
+  },
+  {
+   "name": "_DSF6686.RAF",
+   "scene": "daylight",
+   "why": [
+    "daylight, median L 0.37"
+   ],
+   "taken": "2026-04-12 17:33:55",
+   "iso": "ISO 160",
+   "params": {
+    "temp": 5927.816,
+    "tint": 31.216,
+    "exposure": 0.221,
+    "highlights": -40.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 0.0,
+    "nrColor": 15.0,
+    "blacks": -3.0
+   },
+   "sceneLook": "",
+   "log": [
+    "wb temp=5927 tint=31 (trust 1.00) -> warmth +0.13 tint +0.06",
+    "exposure +0.22 highlights -40 shadows 0 -> p50 0.394 clip 0.001",
+    "final p1 0.010 p50 0.362 p99 0.948 clip 0.000 warmth +0.26 tint +0.11 sat 0.50"
+   ]
+  },
+  {
+   "name": "_DSF6696 (1).RAF",
+   "scene": "overcast-day",
+   "why": [
+    "20% bright and colourless (a white sky)"
+   ],
+   "taken": "2026-04-12 17:48:37",
+   "iso": "ISO 800",
+   "params": {
+    "temp": 6346.105,
+    "tint": 29.574,
+    "exposure": 0.0,
+    "highlights": -20.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 12.0,
+    "nrColor": 25.0,
+    "blacks": -9.0
+   },
+   "sceneLook": "dehaze=6",
+   "log": [
+    "wb temp=6346 tint=30 (trust 1.00) -> warmth +0.10 tint +0.05",
+    "exposure +0.00 highlights -20 shadows 0 -> p50 0.487 clip 0.000",
+    "final p1 0.044 p50 0.469 p99 0.938 clip 0.000 warmth +0.17 tint +0.15 sat 0.23"
+   ]
+  },
+  {
+   "name": "_DSF6778.RAF",
+   "scene": "overcast-day",
+   "why": [
+    "16% bright and colourless (a white sky)"
+   ],
+   "taken": "2026-04-13 11:27:34",
+   "iso": "ISO 640",
+   "params": {
+    "temp": 5423.93,
+    "tint": 51.669,
+    "exposure": 1.0,
+    "highlights": -80.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 0.0,
+    "nrColor": 15.0,
+    "blacks": -3.0
+   },
+   "sceneLook": "dehaze=6",
+   "log": [
+    "wb temp=5423 tint=52 (trust 1.00) -> warmth +0.10 tint +0.05",
+    "exposure +0.25 highlights -80 shadows 0 (held by the highlights) -> p50 0.304 clip 0.000",
+    "final p1 0.037 p50 0.352 p99 0.981 clip 0.003 warmth +0.34 tint +0.13 sat 0.47"
+   ]
+  },
+  {
+   "name": "_DSF6904.RAF",
+   "scene": "daylight",
+   "why": [
+    "daylight, median L 0.23"
+   ],
+   "taken": "2026-04-14 16:12:39",
+   "iso": "ISO 640",
+   "params": {
+    "temp": 5797.569,
+    "tint": 22.123,
+    "exposure": 1.0,
+    "highlights": -80.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 0.0,
+    "nrColor": 15.0,
+    "blacks": -3.0
+   },
+   "sceneLook": "",
+   "log": [
+    "wb temp=5797 tint=22 (trust 0.25) -> warmth +0.43 tint +0.21",
+    "exposure +0.25 highlights -80 shadows 0 (held by the highlights) -> p50 0.250 clip 0.000",
+    "final p1 0.010 p50 0.250 p99 0.969 clip 0.000 warmth +0.47 tint +0.30 sat 0.56"
+   ]
+  },
+  {
+   "name": "_DSF6994.RAF",
+   "scene": "dark-interior",
+   "why": [
+    "set by the reviewer (heuristic said aquarium: dark, 81% of the colour is blue-cyan, no point lights, high ISO)"
+   ],
+   "taken": "2026-04-14 20:49:06",
+   "iso": "ISO 1600",
+   "params": {
+    "temp": 6500.0,
+    "tint": 0.0,
+    "exposure": 0.0,
+    "highlights": -20.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 22.0,
+    "nrColor": 35.0
+   },
+   "sceneLook": "",
+   "log": [
+    "wb temp=6500 tint=0 (trust 1.00) -> warmth -0.46 tint -0.13",
+    "exposure +0.00 highlights -20 shadows 0 -> p50 0.117 clip 0.000",
+    "final p1 0.014 p50 0.080 p99 0.832 clip 0.000 warmth -0.17 tint -0.05 sat 0.65"
+   ]
+  },
+  {
+   "name": "_DSF6999.RAF",
+   "scene": "dark-interior",
+   "why": [
+    "set by the reviewer (heuristic said night-city: taken 20:00, median L 0.05, neon 1.1%)"
+   ],
+   "taken": "2026-04-14 20:51:30",
+   "iso": "ISO 1600",
+   "params": {
+    "temp": 6500.0,
+    "tint": 0.0,
+    "exposure": 1.587,
+    "highlights": -80.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 22.0,
+    "nrColor": 35.0
+   },
+   "sceneLook": "",
+   "log": [
+    "wb temp=6500 tint=0 (trust 1.00) -> warmth +0.10 tint -0.26",
+    "exposure +1.20 highlights -80 shadows 0 (held by the highlights) -> p50 0.087 clip 0.030",
+    "final p1 0.011 p50 0.072 p99 0.906 clip 0.001 warmth +0.07 tint -0.20 sat 0.64"
+   ]
+  },
+  {
+   "name": "_DSF7014.RAF",
+   "scene": "dark-interior",
+   "why": [
+    "set by the reviewer (heuristic said night-city: taken 20:00, median L 0.01, neon 3.0%)"
+   ],
+   "taken": "2026-04-14 20:58:10",
+   "iso": "ISO 1600",
+   "params": {
+    "temp": 6500.0,
+    "tint": 0.0,
+    "exposure": 2.5,
+    "highlights": -80.0,
+    "shadows": 0.0,
+    "whites": 0.0,
+    "nrLuminance": 22.0,
+    "nrColor": 35.0
+   },
+   "sceneLook": "",
+   "log": [
+    "wb temp=6500 tint=0 (trust 1.00) -> warmth +0.88 tint -0.15",
+    "exposure +1.75 highlights -80 shadows 0 (held by the highlights) -> p50 0.040 clip 0.032",
+    "final p1 0.014 p50 0.043 p99 0.890 clip 0.000 warmth +0.47 tint -0.17 sat 0.65"
+   ]
+  }
+ ]
+}
