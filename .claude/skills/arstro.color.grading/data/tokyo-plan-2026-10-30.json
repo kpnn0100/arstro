@@ -1,0 +1,384 @@
+{
+ "mood": "spring-haze",
+ "photos": {
+  "DSCF5186.RAF": {
+   "scene": "night-city",
+   "subject": "white roadster under the Shinjuku billboard",
+   "intent": "the car is the hero: lift it; the empty tarmac in the bottom third sinks; billboard kept",
+   "masks": [
+    {
+     "type": "radial",
+     "cx": 0.5,
+     "cy": 0.6,
+     "rx": 0.42,
+     "ry": 0.16,
+     "feather": 0.7,
+     "exposure": 0.25,
+     "clarity": 8
+    },
+    {
+     "type": "linear",
+     "x0": 0.5,
+     "y0": 0.72,
+     "x1": 0.5,
+     "y1": 1.0,
+     "exposure": -0.4
+    }
+   ]
+  },
+  "DSCF5194.RAF": {
+   "scene": "night-city",
+   "subject": "neon alley, crowd at the end of the street",
+   "intent": "signs glow; open the crowd only a little (a shadows lift there went foggy)",
+   "masks": [
+    {
+     "type": "radial",
+     "cx": 0.45,
+     "cy": 0.85,
+     "rx": 0.38,
+     "ry": 0.14,
+     "feather": 0.7,
+     "exposure": 0.15
+    }
+   ]
+  },
+  "DSCF5807.RAF": {
+   "scene": "aquarium",
+   "subject": "sea nettle jellyfish, bell upper middle",
+   "intent": "the jellyfish glows against deep water",
+   "set": "lensVignette-=8",
+   "masks": [
+    {
+     "type": "radial",
+     "cx": 0.55,
+     "cy": 0.4,
+     "rx": 0.32,
+     "ry": 0.5,
+     "feather": 0.7,
+     "exposure": 0.2,
+     "clarity": 6
+    }
+   ]
+  },
+  "_DSF6994.RAF": {
+   "scene": "dark-interior",
+   "subject": "man looking up into crystal lights (teamLab)",
+   "intent": "a touch of light on the face",
+   "masks": [
+    {
+     "type": "radial",
+     "cx": 0.56,
+     "cy": 0.52,
+     "rx": 0.17,
+     "ry": 0.13,
+     "feather": 0.7,
+     "exposure": 0.25,
+     "shadows": 10
+    }
+   ]
+  },
+  "_DSF6999.RAF": {
+   "scene": "dark-interior",
+   "subject": "man in silhouette among glowing orbs (teamLab)",
+   "intent": "keep the silhouette; the faintest lift on the face",
+   "masks": [
+    {
+     "type": "radial",
+     "cx": 0.48,
+     "cy": 0.46,
+     "rx": 0.12,
+     "ry": 0.1,
+     "feather": 0.8,
+     "exposure": 0.15
+    }
+   ]
+  },
+  "_DSF7014.RAF": {
+   "scene": "dark-interior",
+   "subject": "two silhouettes in amber mist (teamLab)",
+   "intent": "keep the fire glow; sink the dead ceiling",
+   "masks": [
+    {
+     "type": "linear",
+     "x0": 0.5,
+     "y0": 0.32,
+     "x1": 0.5,
+     "y1": 0.0,
+     "exposure": -0.4
+    }
+   ]
+  },
+  "DSCF5288.RAF": {
+   "scene": "daylight",
+   "subject": "temple roofs and sakura under a pale sky (Kamakura)",
+   "intent": "deepen the pale sky, lift the sakura, keep the roofs with detail \u2014 shadows+=6 on the mood's lifted toe went milky, contrast+=6 blacks-=4 crushed the roofs black; the mood at 0.8 with nothing else is the middle",
+   "masks": [
+    {
+     "type": "linear",
+     "x0": 0.5,
+     "y0": 0.36,
+     "x1": 0.5,
+     "y1": 0.0,
+     "exposure": -0.3,
+     "saturation": 10
+    },
+    {
+     "type": "radial",
+     "cx": 0.6,
+     "cy": 0.38,
+     "rx": 0.22,
+     "ry": 0.12,
+     "feather": 0.7,
+     "exposure": 0.15,
+     "saturation": 12
+    }
+   ],
+   "strength": 0.8
+  },
+  "DSCF5411.RAF": {
+   "scene": "overcast-day",
+   "subject": "five-storey pagoda against white sky (Asakusa)",
+   "intent": "the sky is 70% of the frame: grade it down from the top; lift the tower",
+   "masks": [
+    {
+     "type": "linear",
+     "x0": 0.5,
+     "y0": 0.45,
+     "x1": 0.5,
+     "y1": 0.0,
+     "exposure": -0.25
+    },
+    {
+     "type": "radial",
+     "cx": 0.5,
+     "cy": 0.68,
+     "rx": 0.36,
+     "ry": 0.32,
+     "feather": 0.7,
+     "exposure": 0.2,
+     "clarity": 6
+    }
+   ]
+  },
+  "_DSF5417.RAF": {
+   "scene": "overcast-day",
+   "subject": "Asakusa Nakamise shop with the drugstore sign",
+   "intent": "sky top-left down, shopfront up",
+   "masks": [
+    {
+     "type": "linear",
+     "x0": 0.45,
+     "y0": 0.45,
+     "x1": 0.15,
+     "y1": 0.0,
+     "exposure": -0.25
+    },
+    {
+     "type": "radial",
+     "cx": 0.55,
+     "cy": 0.76,
+     "rx": 0.48,
+     "ry": 0.25,
+     "feather": 0.7,
+     "exposure": 0.15
+    }
+   ]
+  },
+  "_DSF6151.RAF": {
+   "scene": "daylight",
+   "subject": "Nikko shrine under cedars",
+   "intent": "lift the shrine, tame the bright sky patches",
+   "masks": [
+    {
+     "type": "radial",
+     "cx": 0.45,
+     "cy": 0.86,
+     "rx": 0.42,
+     "ry": 0.17,
+     "feather": 0.7,
+     "exposure": 0.2,
+     "clarity": 8
+    },
+    {
+     "type": "linear",
+     "x0": 0.5,
+     "y0": 0.3,
+     "x1": 0.5,
+     "y1": 0.0,
+     "exposure": -0.2
+    }
+   ]
+  },
+  "_DSF6332.RAF": {
+   "scene": "daylight",
+   "subject": "Mt Fuji over the river bridge, through a train window",
+   "intent": "cut the window haze in the sky, pull Fuji out",
+   "set": "dehaze+=6",
+   "masks": [
+    {
+     "type": "linear",
+     "x0": 0.5,
+     "y0": 0.47,
+     "x1": 0.5,
+     "y1": 0.0,
+     "exposure": -0.2,
+     "dehaze": 15
+    }
+   ]
+  },
+  "_DSF6592.RAF": {
+   "scene": "daylight",
+   "subject": "two deer by a temple building (Nara)",
+   "intent": "lift the deer, settle the foreground gravel",
+   "masks": [
+    {
+     "type": "radial",
+     "cx": 0.75,
+     "cy": 0.74,
+     "rx": 0.2,
+     "ry": 0.15,
+     "feather": 0.7,
+     "exposure": 0.2,
+     "clarity": 8
+    },
+    {
+     "type": "linear",
+     "x0": 0.5,
+     "y0": 0.86,
+     "x1": 0.5,
+     "y1": 1.0,
+     "exposure": -0.25
+    }
+   ]
+  },
+  "_DSF6609.RAF": {
+   "scene": "overcast-day",
+   "subject": "castle moat, stone wall and bridge (Nijo)",
+   "intent": "deepen the sky band, keep the green reflections",
+   "masks": [
+    {
+     "type": "linear",
+     "x0": 0.5,
+     "y0": 0.26,
+     "x1": 0.5,
+     "y1": 0.0,
+     "exposure": -0.3
+    }
+   ]
+  },
+  "_DSF6613.RAF": {
+   "scene": "overcast-day",
+   "subject": "woman in a pink skirt before the palace (Nijo)",
+   "intent": "she is small: lift her; deepen the white sky",
+   "masks": [
+    {
+     "type": "radial",
+     "cx": 0.16,
+     "cy": 0.87,
+     "rx": 0.1,
+     "ry": 0.1,
+     "feather": 0.7,
+     "exposure": 0.25
+    },
+    {
+     "type": "linear",
+     "x0": 0.5,
+     "y0": 0.5,
+     "x1": 0.5,
+     "y1": 0.0,
+     "exposure": -0.3
+    }
+   ]
+  },
+  "_DSF6686.RAF": {
+   "scene": "daylight",
+   "subject": "deer grazing under a tree (Nara)",
+   "intent": "lift the deer, tame the bright sky patches",
+   "masks": [
+    {
+     "type": "radial",
+     "cx": 0.62,
+     "cy": 0.6,
+     "rx": 0.26,
+     "ry": 0.22,
+     "feather": 0.7,
+     "exposure": 0.15,
+     "clarity": 6
+    },
+    {
+     "type": "linear",
+     "x0": 0.5,
+     "y0": 0.25,
+     "x1": 0.5,
+     "y1": 0.0,
+     "exposure": -0.2
+    }
+   ]
+  },
+  "_DSF6696 (1).RAF": {
+   "scene": "overcast-day",
+   "subject": "sea wall under a forested mountain (Miyajima)",
+   "intent": "grade the sky, settle the water, a touch more contrast for the flat light",
+   "set": "contrast+=4",
+   "masks": [
+    {
+     "type": "linear",
+     "x0": 0.5,
+     "y0": 0.32,
+     "x1": 0.5,
+     "y1": 0.0,
+     "exposure": -0.25
+    },
+    {
+     "type": "linear",
+     "x0": 0.5,
+     "y0": 0.75,
+     "x1": 0.5,
+     "y1": 1.0,
+     "exposure": -0.15
+    }
+   ]
+  },
+  "_DSF6778.RAF": {
+   "scene": "overcast-day",
+   "subject": "Osaka castle framed by cherry branches",
+   "intent": "lift the castle and its green roof inside the frame of branches",
+   "masks": [
+    {
+     "type": "radial",
+     "cx": 0.5,
+     "cy": 0.52,
+     "rx": 0.18,
+     "ry": 0.12,
+     "feather": 0.7,
+     "exposure": 0.2,
+     "saturation": 10
+    }
+   ]
+  },
+  "_DSF6904.RAF": {
+   "scene": "daylight",
+   "subject": "stone lantern on a garden pond, reflections",
+   "intent": "lift the lantern, sink the bright building top-left",
+   "masks": [
+    {
+     "type": "radial",
+     "cx": 0.3,
+     "cy": 0.48,
+     "rx": 0.12,
+     "ry": 0.1,
+     "feather": 0.7,
+     "exposure": 0.2
+    },
+    {
+     "type": "linear",
+     "x0": 0.45,
+     "y0": 0.32,
+     "x1": 0.0,
+     "y1": 0.0,
+     "exposure": -0.3
+    }
+   ]
+  }
+ }
+}

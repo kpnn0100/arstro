@@ -15,7 +15,26 @@ Format, newest first:
 
 ---
 
-## 2026-10-30 — Tokyo / Japan trip — Spring Haze, chosen  (status: awaiting verdict)
+## 2026-10-30 — Tokyo — Spring Haze EDITED PER PHOTO  (status: awaiting verdict)
+
+- VERDICT on the group version (the approver): *"i see you apply color for whole group — that not what i
+  want — i need you to see the actual image and apply edit for each image so that it become cinematic, look
+  good and have consistent mood — it will later use to replace photo editor: photographer take 1000 photo,
+  prompt agent to edit, wala, 1000 photo got edit nicely"*.
+- LESSON: **a shared look is not editing.** Every photo is looked at and gets its own edit (subject lifted,
+  sky graded, dead areas sunk, the mood's strength per photo); consistency comes from MATCHING each photo's
+  shadow and highlight colour and saturation to the set's medians, not from one setting on a group. →
+  `edit.py` (review / run), SKILL.md §2 is now this workflow.
+- Delivered: `tokyo.cmp` has no groups now — each photo carries correction + Spring Haze + its plan's
+  masks (1-2 each) + its match. `~/photo/tokyo/edit/`: plan.json (what the grader saw and decided per photo),
+  edit.json (every value + the match log), overview.jpg, sheet_*.jpg, jpg/ (2048 px). The group version is
+  `~/photo/tokyo/spring-haze/tokyo.spring-haze-groups.cmp`.
+- Two photos missed on the first run and were fixed by their plan entries alone: the Kamakura temple
+  (milky, then crushed — the mood at 0.8 with nothing else was right) and the neon alley (a shadows lift on
+  the crowd went foggy — exposure alone).
+- VERDICT: _(pending)_
+
+## 2026-10-30 — Tokyo / Japan trip — Spring Haze, chosen  (status: judged — "edit each image", see above)
 
 - The approver: *"so try spring haze for me"* — the first mood they picked out of the nine.
 - Refined before applying, after looking at it on the whole set: olive foliage (60–80°) now moves to
