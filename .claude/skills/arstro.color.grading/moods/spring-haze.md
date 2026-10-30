@@ -50,3 +50,5 @@ that failed) — check `cosmo_state` before judging the look.
 2026-10-30 — the approver picked this mood from the nine (*"so try spring haze for me"*). Applied to
 `tokyo.cmp` itself (the cinematic version kept as `~/photo/tokyo/cinematic-grade/tokyo.cinematic.cmp`);
 2048 px JPEGs in `~/photo/tokyo/spring-haze/jpg/`. Verdict on the result: (pending).
+
+Grade Lab 2026-10-30: BAD on the woman at the temple — one colour over everything, "not natural". Picked earlier by name, lost by eye.

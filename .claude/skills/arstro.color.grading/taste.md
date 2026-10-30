@@ -15,6 +15,34 @@ Format, newest first:
 
 ---
 
+## THE TASTE (what the approver's eye has said so far — read this before any grade)
+
+Learned 2026-10-30 from the Grade Lab (9 verdicts on 8 Tokyo photos, data/judgments.jsonl; `lab.py summary`):
+
+1. **Natural object colour first.** The winner (the first cinematic grade, 4 of 8 palette rounds: the woman,
+   the deer, Shinjuku, the pagoda) *"keep original color of object well"*. On the woman, 7 of the 9 moods were
+   BAD because *"the bad photo fall for one color, it make the photo feel not natural"*. → No global channel
+   crossover where there is skin, wood, painted temple red, white walls. Colour work is SELECTIVE (mixer) and
+   SUBTLE (wheels), never one colour over everything.
+2. **Depth and contrast, never flat.** *"only #8 is good, other make the photo look flat, lost the depth"*
+   (pagoda); *"good contrast on human and background"*, *"good overall contrast"* (woman). → Deep toe, rolled
+   shoulder, dense sky, subject separated from background (masks, vignette). Lifted/faded/airy looks LOSE
+   (Spring Haze and Faded Film were bad on the woman; Spring Haze — picked earlier by name — lost by eye).
+3. **Balance, with a story.** *"#4 is balance with a story to tell"* over *"#3 … look like original"*; *"#8 really
+   have a mood but #3 got the balance in color and contrast"*. → A mood must not cost balance; "looks like the
+   original" is not enough either.
+4. **Bold colour where nothing has a true colour.** Landscape and water took the strong moods: Neon Noir on Fuji
+   (*"more balance"* than Teal & Orange) and the pond (*"really create a story"*), Golden Dream on the jellyfish
+   (*"really impressive, eye catching"*). → Teal foliage, deep cyan sky, complementary colour on a subject
+   against water are welcome in nature.
+5. **Slightly warm.** The one refine round picked *warmer* (+400 K) over the winner itself.
+6. **Night interiors were too dark.** *"all are too dark, only #2 got the balance"* (teamLab). → dark-interior
+   median target raised 0.10 → 0.15 (looks.py); night looks open the mids.
+
+Built from it (moods.py, hypotheses until the next verdicts confirm them): **Natural Cinema** (1-3, 5, 6) and
+**Natural Teal** (4). A taste round (`lab.py`, kind "taste") puts them beside the winner, the refine pick and
+milder versions of the landscape winners, on photos NOT yet judged — starting with the Kamakura temple.
+
 ## 2026-10-30 — Tokyo — Spring Haze EDITED PER PHOTO  (status: awaiting verdict)
 
 - VERDICT on the group version (the approver): *"i see you apply color for whole group — that not what i

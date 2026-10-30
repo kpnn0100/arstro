@@ -32,6 +32,25 @@ DATA = HERE.parent / "data"
 JUDGMENTS = DATA / "judgments.jsonl"
 DEFAULT_PHOTOS = ["_DSF6613.RAF", "_DSF6686.RAF", "DSCF5186.RAF", "_DSF6332.RAF", "DSCF5411.RAF",
                   "_DSF6999.RAF", "DSCF5807.RAF", "_DSF6904.RAF"]
+# Taste rounds go to photos the approver has NOT judged yet — a taste that only fits the photos it was
+# learned on is not a taste.
+TASTE_PHOTOS = ["DSCF5288.RAF", "_DSF5417.RAF", "_DSF6151.RAF", "_DSF6609.RAF", "_DSF6994.RAF", "DSCF5194.RAF",
+                "_DSF6696 (1).RAF", "_DSF6778.RAF", "_DSF6592.RAF", "_DSF7014.RAF"]
+# A taste round tests what the verdicts said (taste.md, 2026-10-30): the winner, the refine pick, the two
+# looks built from the verdicts, and milder versions of the moods that won on landscapes.
+TASTE_CANDIDATES = [
+    {"look": "cinematic", "strength": 1.0, "tweaks": []},
+    {"look": "cinematic", "strength": 1.0, "tweaks": [["warmer", 1.0]]},
+    {"look": "natural-cinema", "strength": 1.0, "tweaks": []},
+    {"look": "natural-cinema", "strength": 1.0, "tweaks": [["contrast", 1.0]]},
+    {"look": "natural-cinema", "strength": 0.7, "tweaks": []},
+    {"look": "natural-teal", "strength": 1.0, "tweaks": []},
+    {"look": "neon-noir", "strength": 0.6, "tweaks": []},
+    {"look": "teal-orange", "strength": 0.6, "tweaks": []},
+    {"look": "golden-dream", "strength": 0.5, "tweaks": []},
+    {"look": "moody-forest", "strength": 0.7, "tweaks": []},
+    {"look": "corrected", "strength": 1.0, "tweaks": []},
+]
 
 
 # ── a variant = (look, strength, tweaks) on top of the photo's correction ───────────────────
@@ -125,8 +144,9 @@ class Lab:
         self.cs = A.Cosmo(str(self.dir / "cosmo-mcp.log"))
         self.cs.run("project open %s" % self.project)
         self.names = A.nodes_by_name(self.cs.state())
-        self.photos = [p for p in (args.photos.split(",") if args.photos else DEFAULT_PHOTOS) if p in self.names] \
-            or list(self.names)[:8]
+        order = args.photos.split(",") if args.photos else TASTE_PHOTOS + DEFAULT_PHOTOS
+        self.photos = [p for p in order if p in self.names] or list(self.names)[:8]
+        self.photos += [p for p in self.names if p not in self.photos]
         self.corr = {}            # photo -> (correction dict, family, scene)
         self.state_path = self.dir / "state.json"
         self.state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {"rounds": [], "current": None}
@@ -161,7 +181,9 @@ class Lab:
         self.cs.preview(path, node, edge=1400)
 
     def new_round(self, photo, kind, base, step):
-        if kind == "palette":
+        if kind == "taste":
+            vs = [dict(v) for v in TASTE_CANDIDATES]
+        elif kind == "palette":
             vs = [{"look": "corrected", "strength": 1.0, "tweaks": []},
                   {"look": "cinematic", "strength": 1.0, "tweaks": []}] + \
                  [{"look": k, "strength": 1.0, "tweaks": []} for k in M.MOODS]
@@ -221,7 +243,9 @@ class Lab:
             if action == "photo" and body.get("photo") in self.photos:
                 return self.new_round(body["photo"], "palette", None, 1.0)
             i = self.photos.index(rnd["photo"]) if rnd["photo"] in self.photos else -1
-            return self.new_round(self.photos[(i + 1) % len(self.photos)], "palette", None, 1.0)
+            # A taste session stays a taste session: the next photo gets the same candidates.
+            nxt = "taste" if rnd["kind"] in ("taste",) or self.state.get("mode") == "taste" else "palette"
+            return self.new_round(self.photos[(i + 1) % len(self.photos)], nxt, None, 1.0)
 
 
 def summary_text():
@@ -234,9 +258,10 @@ def summary_text():
     out = ["%d verdicts on %d photos" % (len(recs), len({r["photo"] for r in recs}))]
     looks = {}
     for r in recs:
-        if r["kind"] == "palette":
-            looks[r["best"]["look"]] = looks.get(r["best"]["look"], 0) + 1
-    out.append("palette picks: " + (", ".join("%s %d" % (look_title(k), n) for k, n in
+        if r["kind"] in ("palette", "taste"):
+            key = r["best"]["look"] + ("" if abs(r["best"]["strength"] - 1) < 1e-6 else " %.0f%%" % (r["best"]["strength"] * 100))
+            looks[key] = looks.get(key, 0) + 1
+    out.append("look picks (palette + taste rounds): " + (", ".join("%s %d" % (look_title(k.split(" ")[0]) + k[len(k.split(" ")[0]):], n) for k, n in
                                                 sorted(looks.items(), key=lambda x: -x[1])) or "none"))
     pref = {}
     for r in recs:
@@ -299,7 +324,7 @@ async function load(){R=await (await fetch('/api/round')).json();verdict={best:n
 function draw(){
   $('#photos').innerHTML=R.photos.map(p=>`<button class="${p==R.photo?'on':''}" data-p="${p}">${p.replace('.RAF','')}</button>`).join('');
   document.querySelectorAll('.photos button').forEach(b=>b.onclick=()=>go('photo',b.dataset.p));
-  $('#meta').textContent=`${R.photo} · ${R.scene} · round ${R.n} — ${R.kind=='palette'?'which look? (the moods, names hidden)':'refine: the pick and one step each way (step '+R.step+')'} · ${R.items.length} versions`;
+  $('#meta').textContent=`${R.photo} · ${R.scene} · round ${R.n} — ${R.kind=='palette'?'which look? (the moods, names hidden)':R.kind=='taste'?'taste check: what I learned from your picks, on a photo you have not judged':'refine: the pick and one step each way (step '+R.step+')'} · ${R.items.length} versions`;
   $('#grid').innerHTML=R.items.map((it,i)=>`<div class="card" id="c${i}"><img src="/img/${R.id}/${it.file}" data-i="${i}" loading="lazy">
    <div class="row"><button class="b" data-a="best" data-i="${i}">Best</button><button class="g" data-a="good" data-i="${i}">Good</button><button class="x" data-a="bad" data-i="${i}">Bad</button></div>
    <div class="label">${$('#names').checked?it.label:'#'+(i+1)}</div></div>`).join('');
@@ -365,13 +390,22 @@ def serve(args):
             self.send(404, "not found", "text/plain")
 
         def do_POST(self):
+            if self.path == "/api/new":
+                # Start a round without a verdict: {"kind": "taste"|"palette", "photo": name}. The agent
+                # calls this after learning from the verdicts; "taste" also becomes the session's mode.
+                n = int(self.headers.get("content-length", 0))
+                body = json.loads(self.rfile.read(n) or b"{}")
+                with lab.lock:
+                    lab.state["mode"] = body.get("kind", "palette")
+                    r = lab.new_round(body.get("photo") or lab.photos[0], body.get("kind", "palette"), None, 1.0)
+                return self.send(200, json.dumps({"round": r["id"], "items": len(r["items"])}), "application/json")
             if self.path != "/api/judge":
                 return self.send(404, "not found", "text/plain")
             n = int(self.headers.get("content-length", 0))
             body = json.loads(self.rfile.read(n) or b"{}")
             if body.get("action") == "photo":
                 with lab.lock:
-                    lab.new_round(body["photo"], "palette", None, 1.0)
+                    lab.new_round(body["photo"], "taste" if lab.state.get("mode") == "taste" else "palette", None, 1.0)
                 return self.send(200, "{}", "application/json")
             lab.judge(body)
             self.send(200, "{}", "application/json")

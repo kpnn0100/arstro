@@ -26,8 +26,8 @@ TARGETS = {
     "night-city":    dict(wb="full", warmth=0.05, tint=0.04, p50=0.12, final=(0.09, 0.16), clip=0.01,
                           maxEv=2.5, blackMax=0.03, openShadows=False, floor=False, tempRange=(5500, 7500), tintRange=(-15, 30)),
     # Art installations (teamLab), concerts, bars: the coloured light is the author's — remove a
-    # decoder's green only.
-    "dark-interior": dict(wb="tint-only", warmth=0.0, tint=0.03, p50=0.10, final=(0.07, 0.14), clip=0.008,
+    # decoder's green only. Median 0.15, not 0.10: in the Grade Lab every teamLab version was "too dark".
+    "dark-interior": dict(wb="tint-only", warmth=0.0, tint=0.03, p50=0.15, final=(0.11, 0.19), clip=0.008,
                           maxEv=2.5, blackMax=0.025, openShadows=False, floor=False, tempRange=(6500, 6500), tintRange=(-25, 25)),
     # Aquarium: the blue IS the water. No white balance at all.
     "aquarium":      dict(wb=None, warmth=0.0, tint=0.0, p50=0.19, final=(0.15, 0.23), clip=0.004,

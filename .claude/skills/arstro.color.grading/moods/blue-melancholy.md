@@ -39,3 +39,5 @@ that failed) — check `cosmo_state` before judging the look.
 
 ## Approver's verdict
 (pending)
+
+Grade Lab 2026-10-30: BAD on the woman at the temple (one colour, not natural).

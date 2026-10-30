@@ -241,6 +241,52 @@ MOODS = {
                   "saturation=-100 clarity=16 grainAmount=20 grainSize=28 lensVignette=-22"
                   % _crv((0, 0), (0.15, 0.07), (0.5, 0.52), (0.85, 0.92), (1, 0.99))),
     },
+    # ── 10 ── learned in the Grade Lab, 2026-10-30 (taste.md): the approver's winner was the first cinematic
+    # grade — "keep original color of object well", "good contrast on human and background", "balance with a
+    # story" — and every one-colour mood lost on a photo with people ("fall for one color … not natural").
+    # So: natural object colours (no strong channel crossover), DEPTH (deeper toe, rolled shoulder, sky
+    # density, vignette), subtle split (wheels, not curves), a slight WARM bias (the one refine pick: warmer).
+    "natural-cinema": {
+        "title": "Natural Cinema",
+        "about": "The approver's own taste, from the Grade Lab: true object colours, real depth (deep blacks, "
+                 "a soft film shoulder, a dense sky, subject against background), a whisper of cool shadow and "
+                 "warm light, slightly warm overall. Balanced, with a story — never one colour over everything.",
+        "keywords": ["natural", "natural cinema", "my taste", "balanced", "true color", "depth", "cinematic natural",
+                     "default"],
+        "day": ("curve=%s grade0=210,4,0 grade1=35,4,0 grade2=45,8,0 balance=-10 temp=6800 "
+                "mixer0=0,0;60,0;105,-0.02;160,0.03;215,-0.05;300,0 "
+                "mixer1=0,0;30,0.04;100,-0.18;150,-0.15;210,0;300,0 "
+                "mixer2=0,0;30,0.04;110,-0.08;220,-0.18;300,0 "
+                "saturation=-6 vibrance=8 clarity=10 dehaze=5 grainAmount=5 grainSize=14 lensVignette=-14 sharpenAmount=25"
+                % _crv((0, 0), (0.15, 0.11), (0.5, 0.5), (0.82, 0.87), (1, 0.975))),
+        # Night interiors were "all too dark": the mids open (0.5 -> 0.54) instead of sinking.
+        "night": ("curve=%s curveR=%s curveB=%s grade2=30,10,0 temp=6700 "
+                  "mixer0=0,0;55,-0.03;120,0.06;300,0 mixer1=0,0;30,0.05;120,-0.1;300,0.05 "
+                  "saturation=-2 vibrance=8 clarity=8 grainAmount=8 grainSize=18 lensVignette=-12"
+                  % (_crv((0, 0), (0.12, 0.08), (0.5, 0.54), (0.85, 0.9), (1, 0.975)),
+                     _crv((0, 0), (0.3, 0.29), (1, 1)),
+                     _crv((0, 0.02), (0.3, 0.31), (1, 0.98)))),
+    },
+    # ── 11 ── the landscape variant: where nothing has a "true" colour to keep (Fuji, the pond), the approver
+    # chose Neon Noir's story — teal foliage, a deep cyan sky, hard depth. Natural Cinema's balance with that.
+    "natural-teal": {
+        "title": "Natural Teal",
+        "about": "Natural Cinema for landscapes and nature: foliage turned toward teal, a deep sky, more depth — "
+                 "the story the approver liked in Neon Noir on Fuji and the pond, kept balanced, skin and wood untouched.",
+        "keywords": ["landscape", "nature", "teal foliage", "natural teal", "deep sky", "travel landscape"],
+        "day": ("curve=%s grade0=200,5,0 grade1=35,4,0 grade2=40,8,0 balance=-10 temp=6700 "
+                "mixer0=0,0;40,0;60,-0.04;100,0.1;140,0.14;200,0.02;230,-0.04;300,0 "
+                "mixer1=0,0;30,0.05;60,-0.15;110,-0.2;160,0.05;200,0.1;300,0 "
+                "mixer2=0,0;30,0.04;110,-0.18;160,-0.1;220,-0.25;300,0 "
+                "saturation=-4 vibrance=10 clarity=12 dehaze=8 grainAmount=5 grainSize=14 lensVignette=-16 sharpenAmount=25"
+                % _crv((0, 0), (0.15, 0.1), (0.5, 0.49), (0.82, 0.87), (1, 0.975))),
+        "night": ("curve=%s curveR=%s curveB=%s grade2=30,10,0 "
+                  "mixer0=0,0;55,-0.04;120,0.14;300,0 mixer1=0,0;120,-0.15;190,0.15;300,0.05 mixer2=0,0;120,-0.2;220,-0.15;300,0 "
+                  "saturation=-2 vibrance=8 clarity=10 grainAmount=8 grainSize=18 lensVignette=-14"
+                  % (_crv((0, 0), (0.12, 0.08), (0.5, 0.53), (0.85, 0.9), (1, 0.975)),
+                     _crv((0, 0), (0.3, 0.28), (1, 1)),
+                     _crv((0, 0.03), (0.3, 0.32), (1, 0.98)))),
+    },
 }
 
 
