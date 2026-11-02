@@ -120,6 +120,12 @@ def classify(a, md):
     if dark and iso >= 800:
         reasons.append("median L %.2f at ISO %d — a dark interior lit by its own art light" % (p50, iso))
         return "dark-interior", "night", reasons
+    shutter = number(md.get("Shutter"), 0.0)
+    if shutter >= 0.25 and iso <= 800 and s["castWarmth"] <= -0.3 and s["skyFraction"] >= 0.05:
+        # a tripod exposure of a cool sky: dusk. The camera's clock is not trusted for this (it is often a home
+        # time zone) — the light and the exposure are.
+        reasons.append("%.1f s at ISO %d, a cool sky (warmth %+.2f) — blue hour" % (shutter, iso, s["castWarmth"]))
+        return "blue-hour", "night", reasons
     if hi["fraction"] > 0.12 and hi["saturation"] < 0.12:
         reasons.append("%.0f%% bright and colourless (a white sky)" % (hi["fraction"] * 100))
         return "overcast-day", "day", reasons

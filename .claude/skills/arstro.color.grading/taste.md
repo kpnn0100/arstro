@@ -15,6 +15,24 @@ Format, newest first:
 
 ---
 
+## FIRST REAL SHOOT — ~/photo/myphoto (2026-11-02): 4 RAWs, 3 cameras  (status: awaiting the approver's marks)
+
+The approver: *"i see you are ready, now try with all photo in this folder"*. Canon EOS 750D ×2 (CR2), Sony A7C (ARW),
+Panasonic GX7 II (RW2). Project, edits, exports and sheets in `~/photo/myphoto-graded`; reviewed on the exam page at
+`/exam?set=myphoto` (`~/photo/grade-lab/myphoto` links there).
+What the folder taught before the approver saw it (the agent's own looking, each fixed as a RULE, not a touch-up):
+- **Both CR2s decoded BLACK** — a Cosmo defect, not the files (D-69: Cosmo linked the non-reentrant LibRaw and decodes
+  a project's photos on parallel threads). Fixed in Cosmo (aee585a) before grading.
+- **Blue hour had no scene** — a 3.2 s Fuji over Lake Kawaguchi was called "daylight" and would have been balanced
+  grey. New scene `blue-hour` (classifier: >= 0.25 s, cool sky): keep it cool but not violet (magenta out, blue eased
+  to warmth -0.45, never bluer than shot), its median a FLOOR (pulled to 0.22 it lost 1.85 EV — navy, grey snow), the
+  look Natural Teal's night variant (cool shadows, warm lamps; no vibrance, the blue barely darkened).
+- **A dark warm subject again** — Kyoto's front stone rakan went cold under teal shadows: the pagoda's plan rule.
+- **A cloud torn by the set-match** (the Sony): the highlight SHOULDER of the match turned a bright cloud cyan-cored
+  and peach-rimmed, the moat's fault again. A photo with a smooth sky is now matched in its shadows only, its
+  highlight recovery held to -60.
+FIRST SHOOT VERDICT: _(pending)_
+
 ## EXAM 3 RESULT: 12 / 16 good = 75 % — the skies again, and the grader's fixes reached the land  → v6, exam 4 awaiting marks
 
 NOT GOOD: the pagoda — *"the blue in the sky is over saturated lead to it distinc from the sky, the tower look flat"*;

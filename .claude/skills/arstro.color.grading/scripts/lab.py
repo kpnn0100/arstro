@@ -386,11 +386,12 @@ ul{margin:6px 0 10px;padding-left:18px}li{margin:3px 0}
 <script>
 let E=null;const $=s=>document.querySelector(s);
 const md=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
-async function load(){E=await (await fetch('/api/exam')).json();draw();}
+const SET=new URLSearchParams(location.search).get('set')||'';const Q=SET?'?set='+encodeURIComponent(SET):'';
+async function load(){E=await (await fetch('/api/exam'+Q)).json();if(SET)document.title='Grade - '+SET;draw();}
 function draw(){
  $('#m').innerHTML=E.photos.map((p,i)=>`<div class="card ${p.verdict?(p.verdict.good?'good':'bad'):''}" id="c${i}">
-  <div class="pair"><figure><img src="/exam-img/${p.before}" data-s="/exam-img/${p.before}"><figcaption>original (as shot)</figcaption></figure>
-  <figure><img src="/exam-img/${p.after}" data-s="/exam-img/${p.after}"><figcaption>the skill's edit</figcaption></figure></div>
+  <div class="pair"><figure><img src="/exam-img/${p.before}${Q}" data-s="/exam-img/${p.before}${Q}"><figcaption>original (as shot)</figcaption></figure>
+  <figure><img src="/exam-img/${p.after}${Q}" data-s="/exam-img/${p.after}${Q}"><figcaption>the skill's edit</figcaption></figure></div>
   <div class="body"><div class="name">${i+1} / ${E.photos.length} · ${p.name}</div>
   <p class="reading"><b>What I see:</b> ${md(p.reading||'')}</p><p class="light">${md(p.light||'')}</p>
   <ul>${p.steps.map(x=>'<li>'+md(x)+'</li>').join('')}</ul>
@@ -407,7 +408,7 @@ function score(){const j=E.photos.filter(p=>p.verdict),g=j.filter(p=>p.verdict.g
  $('#score').textContent=`${g} good of ${j.length} judged (${E.photos.length} photos) — ${pc}% · target 90%`;
  $('#score').className=j.length?(pc>=90?'pass':'fail'):'';}
 async function judge(i,good){const p=E.photos[i],note=document.querySelector(`.row input[data-i="${i}"]`).value;
- p.verdict={good,note};const r=await fetch('/api/exam-judge',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:p.name,good,note})});
+ p.verdict={good,note};const r=await fetch('/api/exam-judge'+Q,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:p.name,good,note})});
  const c=$('#c'+i);c.className='card '+(good?'good':'bad');c.querySelectorAll('.row button').forEach(b=>b.classList.toggle('on',(b.dataset.v=='1')==good));
  $('#s'+i).textContent=r.ok?'saved ✓':'NOT saved';score();}
 load();
@@ -430,6 +431,12 @@ def serve(args):
             self.end_headers()
             self.wfile.write(b)
 
+        def exam_dir(self):
+            # `?set=<name>`: another graded set under the lab dir (a folder or a symlink to one, holding exam.json) —
+            # a real shoot reviewed on the same page as the exam (2026-11-02, ~/photo/myphoto). Default: the exam.
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("set", [""])[0]
+            return lab.dir / (q if re.fullmatch(r"[A-Za-z0-9_-]{1,40}", q or "") else "exam")
+
         def do_GET(self):
             u = urllib.parse.urlparse(self.path).path
             if u == "/":
@@ -441,12 +448,12 @@ def serve(args):
             if u == "/exam":
                 return self.send(200, EXAM_PAGE, "text/html; charset=utf-8")
             if u == "/api/exam":
-                f = lab.dir / "exam" / "exam.json"
+                f = self.exam_dir() / "exam.json"
                 return self.send(200, f.read_text() if f.exists() else '{"photos": []}', "application/json")
             if u.startswith("/exam-img/"):
                 rel = urllib.parse.unquote(u[len("/exam-img/"):])
-                p = (lab.dir / "exam" / rel).resolve()
-                if p.is_file() and (lab.dir / "exam").resolve() in p.parents:
+                p = (self.exam_dir() / rel).resolve()
+                if p.is_file() and self.exam_dir().resolve() in p.parents:
                     return self.send(200, p.read_bytes(), "image/jpeg")
             if u == "/taste":
                 return self.send(200, "<pre style='font:14px/1.5 monospace;padding:16px;white-space:pre-wrap'>%s</pre>"
@@ -468,17 +475,18 @@ def serve(args):
                     lab.state["mode"] = body.get("kind", "palette")
                     r = lab.new_round(body.get("photo") or lab.photos[0], body.get("kind", "palette"), None, 1.0)
                 return self.send(200, json.dumps({"round": r["id"], "items": len(r["items"])}), "application/json")
-            if self.path == "/api/exam-judge":
+            if urllib.parse.urlparse(self.path).path == "/api/exam-judge":
                 n = int(self.headers.get("content-length", 0))
                 b = json.loads(self.rfile.read(n) or b"{}")
                 with lab.lock:
-                    f = lab.dir / "exam" / "exam.json"
+                    f = self.exam_dir() / "exam.json"
                     ex = json.loads(f.read_text())
                     for p in ex["photos"]:
                         if p["name"] == b["name"]:
                             p["verdict"] = {"good": bool(b["good"]), "note": b.get("note", ""),
                                             "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
-                            rec = {"at": p["verdict"]["at"], "photo": p["name"], "kind": "exam", "good": p["verdict"]["good"],
+                            rec = {"at": p["verdict"]["at"], "photo": p["name"], "kind": "exam", "set": self.exam_dir().name,
+                                   "good": p["verdict"]["good"],
                                    "note": p["verdict"]["note"], "exam_built": ex.get("built"), "steps": p["steps"]}
                             with open(JUDGMENTS, "a") as fh:
                                 fh.write(json.dumps(rec) + "\n")

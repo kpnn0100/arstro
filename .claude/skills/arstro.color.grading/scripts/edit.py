@@ -191,11 +191,13 @@ def zone(a, z):
     return s if s["fraction"] >= 0.06 and s["saturation"] < NEUTRAL_ZONE_SAT else None
 
 
-def match(cs, node, d, target, fam, strength, log, skin=False):
+def match(cs, node, d, target, fam, strength, log, skin=False, zones=("shadows", "highlights")):
     """Nudge this photo's own R/G/B curves (toe for the shadows, shoulder for the highlights) and its
     saturation toward the set's medians. Two secant steps per axis; partial (`strength`) on purpose —
     a photo keeps its own character, only the outliers are pulled in."""
     for z, where in (("shadows", "toe"), ("highlights", "shoulder")):
+        if z not in zones:
+            continue
         t = target.get(z)
         a = cs.analyze(node)["analysis"]
         cur = zone(a, z)
@@ -805,18 +807,30 @@ def cmd_run(args):
         # ── pass 2: match each photo to its family, guard, look ──
         for r in rows:
             node, fam, d = r["node"], r["family"], r["d"]
-            if r["match"] and targets.get(fam):
-                a = match(cs, node, d, targets[fam], fam, args.match, r["log"],
-                          skin=r.get("skin", False) or r.get("white", False))
-            depth(cs, node, d, fam, r["log"])
             stem = Path(r["name"]).stem
             if not (out / "before" / (stem + ".jpg")).exists():
                 cs.preview(out / "before" / (stem + ".jpg"), node, before=True)
+            # A photo with a smooth sky: its brightest tones ARE the sky. The match's highlight SHOULDER there tore it
+            # twice — the moat (cream / lilac / teal, exam 2) and a cloud gone cyan-cored, peach-rimmed (the Sony,
+            # 2026-11-02) — so such a photo is matched in its shadows only, and its highlight recovery is held to -60
+            # (at -80 it outlined that cloud; the guard still stops clipping after).
+            bimg = _img(out / "before" / (stem + ".jpg"))
+            sky = sky_region(bimg)
+            has_sky = sky is not None and sky_stats(bimg, sky)["tex"] <= 0.008
+            if has_sky and float(d.get("highlights", 0) or 0) < -60:
+                d["highlights"] = "-60"
+                cs.run("select %d\nset highlights=-60" % node)
+                r["log"].append("highlight recovery held to -60 on a sky with clouds")
+            if r["match"] and targets.get(fam):
+                a = match(cs, node, d, targets[fam], fam, args.match, r["log"],
+                          skin=r.get("skin", False) or r.get("white", False),
+                          zones=("shadows",) if has_sky else ("shadows", "highlights"))
+            depth(cs, node, d, fam, r["log"])
             # LOOK at the result before it is delivered (exam 2: "take a look at the photo again after grading")
             scratch = out / "after" / (".check-" + stem + ".jpg")
             masks = subject_check(cs, node, d, r["masks"], out / "before" / (stem + ".jpg"), scratch, r["log"],
                                   skin=r.get("skin", False), white=r.get("white", False), fam=fam, corr=r.get("corr"))
-            if fam == "day":
+            if fam == "day" or r["scene"] == "blue-hour":     # a blue-hour sky is the hero of its frame
                 masks = sky_check(cs, node, d, masks, out / "before" / (stem + ".jpg"), scratch, r["log"], corr=r.get("corr"))
             r["masks"] = [{k: v for k, v in x.items() if not k.startswith("_")} | ({"sky": True} if x.get("_sky") else {})
                           for x in masks]

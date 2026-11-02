@@ -30,6 +30,17 @@ TARGETS = {
     # decoder's green only. Median 0.15, not 0.10: in the Grade Lab every teamLab version was "too dark".
     "dark-interior": dict(wb="tint-only", warmth=0.0, tint=0.03, p50=0.15, final=(0.11, 0.19), clip=0.008,
                           maxEv=2.5, blackMax=0.025, openShadows=False, floor=False, tempRange=(6500, 6500), tintRange=(-25, 25)),
+    # Blue hour (references/light.md: "keep the blue, neutralise only green", median 0.15-0.25): dusk, a deep blue
+    # ambient, lamps on. Balancing it to daylight turns the hour grey — the blue IS the mood, the town's lights are
+    # its warm counterpoint. Night family: its lights may clip a little, its blacks go deep. (First met: a 3.2 s
+    # Fuji over Lake Kawaguchi that the classifier called "daylight", 2026-11-02.)
+    # The median is a FLOOR, not a target: a blue hour is shot long (3.2 s) precisely to be bright; pulled down to the
+    # reference's 0.22 the Kawaguchi frame lost 1.85 EV — navy water, grey snow. Only clipping takes it down.
+    # White balance keeps it COOL but not violet: the Kawaguchi frame came in at warmth -0.76 / tint -0.11 and, with
+    # only green removed, the look built lavender sky and royal-blue water on its magenta. So: the magenta goes
+    # (tint +0.02), the blue eases to -0.45 (temp may only go warmer — never bluer than shot).
+    "blue-hour":     dict(wb="full", warmth=-0.45, tint=0.02, p50=0.30, final=(0.22, 0.50), clip=0.01,
+                          maxEv=1.5, blackMax=0.03, openShadows=False, floor=True, tempRange=(6500, 9000), tintRange=(-15, 30)),
     # Aquarium: the blue IS the water. No white balance at all.
     "aquarium":      dict(wb=None, warmth=0.0, tint=0.0, p50=0.19, final=(0.15, 0.23), clip=0.004,
                           maxEv=1.5, blackMax=0.04, openShadows=False, floor=False, tempRange=(6500, 6500), tintRange=(0, 0)),
@@ -38,7 +49,7 @@ TARGETS = {
 
 # Which look group a scene belongs to.
 FAMILY = {"daylight": "day", "overcast-day": "day", "golden-hour": "day",
-          "night-city": "night", "dark-interior": "night", "aquarium": "night"}
+          "night-city": "night", "dark-interior": "night", "aquarium": "night", "blue-hour": "night"}
 
 
 def noise_for_iso(iso):

@@ -307,9 +307,12 @@ MOODS = {
                    _crv((0, 0), (0.2, 0.185), (0.45, 0.45), (1, 1)),
                    _crv((0, 0.01), (0.4, 0.4), (1, 1)),
                    _crv((0, 0.03), (0.2, 0.22), (0.45, 0.45), (1, 1)))),
+        # night (v6, first used for BLUE HOUR): no vibrance and the blue barely darkened — a blue-hour sky is the hero,
+        # and vibrance / a darkened blue were what over-saturated and "separated" the approver's skies; the green
+        # depth starts at 95 deg like the day variant (a sky's hue noise sits below it).
         "night": ("curve=%s curveR=%s curveB=%s grade2=30,10,0 "
-                  "mixer0=0,0;55,-0.04;120,0.14;300,0 mixer1=0,0;120,-0.15;190,0.15;300,0.05 mixer2=0,0;120,-0.2;220,-0.15;300,0 "
-                  "saturation=-2 vibrance=8 clarity=10 grainAmount=8 grainSize=18 lensVignette=-14"
+                  "mixer0=0,0;55,-0.04;120,0.14;300,0 mixer1=0,0;120,-0.15;190,0.05;300,0.05 mixer2=0,0;95,0;125,-0.2;175,0;220,-0.05;300,0 "
+                  "saturation=2 clarity=10 grainAmount=8 grainSize=18 lensVignette=-14"
                   % (_crv((0, 0), (0.12, 0.08), (0.5, 0.53), (0.85, 0.9), (1, 0.975)),
                      _crv((0, 0), (0.3, 0.28), (1, 1)),
                      _crv((0, 0.03), (0.3, 0.32), (1, 0.98)))),

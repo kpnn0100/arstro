@@ -99,6 +99,15 @@ to a hero) → **depth** (no flat frame survives) → **LOOK at the result** →
 (`--names`) keeps the whole set's targets and merges into `edit.json`, so fixing the few that missed never re-centres
 the set on them.
 
+**A new folder, end to end** (the first real shoot, 2026-11-02): `printf 'project new P.cmp\nimport <files>\nwait
+load.finished\nproject save\n' | cosmo-cc run -` → `edit.py review` (if a RAW previews BLACK, suspect Cosmo before the
+file — D-69 — and check it with the camera's embedded preview) → LOOK at every photo, write `plan.json` (scene,
+subject, intent, reading, masks) → `edit.py run --save` → look again, large → fix rules, re-run → `exam.py build
+--project P.cmp --plan plan.json --out DIR`, link DIR into the lab dir (`ln -s DIR ~/photo/grade-lab/<set>`) and the
+approver marks it at `http://127.0.0.1:8789/exam?set=<set>` → `cosmo-cc export P.cmp --outdir DIR/export`.
+Scenes now include **`blue-hour`** (long exposure, cool sky — keep the blue, not violet, never darker than shot).
+A photo with a smooth sky is set-matched in its SHADOWS only, its highlight recovery held to -60.
+
 **LOOK at the result — the approver's words: "take a look at the photo again after grading".** Exam 2 had good
 colour and destroyed skies; every number the edit had checked was fine. So `run` now renders each photo and compares
 it with the camera's frame where the approver's eye goes first:

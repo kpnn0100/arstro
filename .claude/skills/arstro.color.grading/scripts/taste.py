@@ -192,6 +192,10 @@ def _choose(scene, analysis, plan_entry=None):
     if scene == "aquarium":
         return {"look": "golden-dream", "strength": 0.8, "tweaks": [], "skin": False,
                 "why": "amber bell on teal water, bolder: golden dream 80 % ('teal really hit it'; 50 % was too safe)"}
+    if scene == "blue-hour":
+        return {"look": "natural-teal", "strength": 1.0, "tweaks": [], "skin": person,
+                "why": "blue hour: the blue ambient IS the mood, the lamps its warm counterpoint — natural teal's night "
+                       "variant (cool shadows, warm lights); golden dream would warm the hour away"}
     if scene == "night-city":
         return {"look": "golden-dream", "strength": 0.8, "tweaks": [], "skin": person,
                 "why": "night city, bolder: golden dream 80 % ('really have warm mood'; 50 % was too safe)"}

@@ -128,6 +128,15 @@ def explain(row, pe):
                            g[1], g[6], g[3], g[7], g[5], g[8], g[10], g[13], g[12], g[14],
                            (" —" + g[15].replace(" — still:", " still failing:")) if g[15] else " — passes"))
             continue
+        if l.startswith("highlight recovery held to -60"):
+            out.append("**Highlight recovery held to −60** — a sky with clouds: at −80 it outlines and posterises them; "
+                       "and the set's matching touches only this photo's shadows (in its highlights it tears a sky).")
+            continue
+        m = re.match(r"sky: the mixer's Lum off for this photo", l)
+        if m:
+            out.append("**The mixer's green-depth off for this photo** — its clouds kept a green cast, and the move would "
+                       "break them into dark blotches.")
+            continue
         m = re.match(r"highlights -> (-?[\d.]+)", l)
         if m:
             out.append("**Clipping guard**: highlights brought to %s so no light source burns." % m.group(1))
