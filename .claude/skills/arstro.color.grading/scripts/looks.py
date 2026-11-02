@@ -11,12 +11,13 @@ render (references/cosmo-controls.md has the calibration). Cosmo's shadow wheel,
 # and after the look the window the median must stay in (final) and the highest 1st-percentile
 # luminance a black may have (blackMax). Night is meant to be dark; a white sky is meant to be white.
 TARGETS = {
-    # Daylight is judged against a slightly WARM, slightly GREEN neutral (warmth +0.10, tint +0.04):
+    # Daylight is judged against a slightly WARM, barely GREEN neutral (warmth +0.10, tint +0.02 — was +0.04,
+    # eased when the exam showed a white facade going green under the looks):
     # a mathematically grey overcast sky reads lilac next to warm wood and skin (measured on the
     # Asakusa pagoda, 2026-10-30).
-    "daylight":      dict(wb="full", warmth=0.12, tint=0.04, p50=0.40, final=(0.33, 0.85), clip=0.003,
+    "daylight":      dict(wb="full", warmth=0.12, tint=0.02, p50=0.40, final=(0.33, 0.85), clip=0.003,
                           maxEv=1.0, blackMax=0.06, openShadows=True, floor=True, tempRange=(5000, 8000), tintRange=(-10, 45)),
-    "overcast-day":  dict(wb="full", warmth=0.10, tint=0.04, p50=0.43, final=(0.36, 0.85), clip=0.004,
+    "overcast-day":  dict(wb="full", warmth=0.10, tint=0.02, p50=0.43, final=(0.36, 0.85), clip=0.004,
                           maxEv=1.0, blackMax=0.06, openShadows=True, floor=True, tempRange=(5000, 8000), tintRange=(-10, 45)),
     "golden-hour":   dict(wb="tint-only", warmth=0.0, tint=0.04, p50=0.40, final=(0.34, 0.85), clip=0.004,
                           maxEv=1.0, blackMax=0.05, openShadows=True, floor=True, tempRange=(6500, 6500), tintRange=(-10, 30)),

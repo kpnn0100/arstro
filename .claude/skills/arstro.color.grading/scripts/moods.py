@@ -253,7 +253,7 @@ MOODS = {
                  "warm light, slightly warm overall. Balanced, with a story — never one colour over everything.",
         "keywords": ["natural", "natural cinema", "my taste", "balanced", "true color", "depth", "cinematic natural",
                      "default"],
-        "day": ("curve=%s grade0=210,4,0 grade1=35,4,0 grade2=45,8,0 balance=-10 temp=6800 "
+        "day": ("curve=%s grade0=210,4,0 grade1=30,4,0 grade2=30,6,0 balance=-10 temp=6800 "
                 "mixer0=0,0;60,0;105,-0.02;160,0.03;215,-0.05;300,0 "
                 "mixer1=0,0;30,0.04;100,-0.18;150,-0.15;210,0;300,0 "
                 "mixer2=0,0;30,0.04;110,-0.08;220,-0.18;300,0 "
@@ -271,6 +271,8 @@ MOODS = {
                      _crv((0, 0), (0.3, 0.29), (1, 1)),
                      _crv((0, 0.02), (0.3, 0.31), (1, 0.98)))),
     },
+    # Warm highlights lean ORANGE (30 deg), not yellow (40-45 deg): yellow-warm reads GREEN on a white wall —
+    # the exam's Asakusa facade went yellow-green (highlight tint +0.23) under the 40-45 deg wheels (2026-11-02).
     # ── 11 ── the landscape variant: where nothing has a "true" colour to keep (Fuji, the pond), the approver
     # chose Neon Noir's story — teal foliage, a deep cyan sky, hard depth. Natural Cinema's balance with that.
     "natural-teal": {
@@ -278,7 +280,7 @@ MOODS = {
         "about": "Natural Cinema for landscapes and nature: foliage turned toward teal, a deep sky, more depth — "
                  "the story the approver liked in Neon Noir on Fuji and the pond, kept balanced, skin and wood untouched.",
         "keywords": ["landscape", "nature", "teal foliage", "natural teal", "deep sky", "travel landscape"],
-        "day": ("curve=%s grade0=200,5,0 grade1=35,4,0 grade2=40,8,0 balance=-10 temp=6700 "
+        "day": ("curve=%s grade0=200,5,0 grade1=30,4,0 grade2=30,6,0 balance=-10 temp=6700 "
                 "mixer0=0,0;40,0;60,-0.04;100,0.1;140,0.14;200,0.02;230,-0.04;300,0 "
                 "mixer1=0,0;30,0.05;60,-0.15;110,-0.2;160,0.05;200,0.1;300,0 "
                 "mixer2=0,0;30,0.04;110,-0.18;160,-0.1;220,-0.25;300,0 "

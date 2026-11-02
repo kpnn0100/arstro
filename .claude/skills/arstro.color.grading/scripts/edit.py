@@ -179,12 +179,19 @@ def set_photo(cs, node, d, masks):
         cs.run("select %d\nset mask=%s" % (node, mask_blob(m)))
 
 
+# Matching matches NEUTRALS only. On Tokyo the day set's median highlight tint was +0.18 (green) because most
+# frames' brightest pixels are sunlit LEAVES, and matching every photo to it turned the Asakusa facade's white
+# green after white balance had made it right (exam, 2026-11-02). A zone takes part — as a target and as a
+# photo being matched — only when it is near-neutral: a sky, a wall, stone, a white facade.
+NEUTRAL_ZONE_SAT = 0.22
+
+
 def zone(a, z):
     s = a["zones"][z]
-    return s if s["fraction"] >= 0.06 else None
+    return s if s["fraction"] >= 0.06 and s["saturation"] < NEUTRAL_ZONE_SAT else None
 
 
-def match(cs, node, d, target, fam, strength, log):
+def match(cs, node, d, target, fam, strength, log, skin=False):
     """Nudge this photo's own R/G/B curves (toe for the shadows, shoulder for the highlights) and its
     saturation toward the set's medians. Two secant steps per axis; partial (`strength`) on purpose —
     a photo keeps its own character, only the outliers are pulled in."""
@@ -231,7 +238,9 @@ def match(cs, node, d, target, fam, strength, log):
     a = cs.analyze(node)["analysis"]
     if target.get("sat") and a["meanSaturation"] > 0.02:
         ratio = target["sat"] / a["meanSaturation"]
-        dp = max(-15.0, min(15.0, 100.0 * (ratio - 1.0) * 0.5 * strength))
+        # With a person in the photo, matching may not push global saturation up — it reaches skin too
+        # ("keep the skin color for human"); the mixer pins only the hue band.
+        dp = max(-15.0, min(5.0 if skin else 15.0, 100.0 * (ratio - 1.0) * 0.5 * strength))
         if abs(dp) >= 3:
             d["saturation"] = "%g" % (float(d.get("saturation", 0)) + dp)
             cs.run("select %d\nset saturation=%s" % (node, d["saturation"]))
@@ -367,17 +376,19 @@ def cmd_run(args):
             md = A.meta_dict(r["metadata"])
             scene, fam, why = A.classify(r["analysis"], md)
             if pp.get("scene"):
-                scene, why = pp["scene"], ["set by the reviewer"]
+                scene, why = pp["scene"], ["set from the agent's reading of the photo (plan.json)"]
                 fam = L.FAMILY[scene]
             log = []
             clear_masks(cs, node)
             cs.run("select %d\nset %s" % (node, PHOTO_RESET))
             corr, _ = A.normalise(cs, node, scene, int(A.number(md.get("ISO"), 100)), log)
+            skin = False
             if mood == "taste":
                 ch = T.choose(scene, r["analysis"], pp)
                 v = {"look": ch["look"], "strength": ch["strength"] * args.strength * pp.get("strength", 1.0),
                      "tweaks": ch["tweaks"], "skin": ch["skin"]}
                 d = T.params(corr, fam, v, pp)
+                skin = ch["skin"]
                 log.append("look %s %.0f%%%s%s — %s" % (ch["look"], v["strength"] * 100,
                                                         "".join(" +%s" % t[0] for t in ch["tweaks"]),
                                                         " +skin" if ch["skin"] else "", ch["why"]))
@@ -386,6 +397,13 @@ def cmd_run(args):
             set_photo(cs, node, d, pp.get("masks", []))
             a = cs.analyze(node)["analysis"]
             rows.append({"name": name, "node": node, "scene": scene, "family": fam, "why": why,
+                         "skin": skin,
+                         "meta": {k: md.get(k) for k in ("Taken", "ISO", "Shutter", "Aperture", "Focal length",
+                                                          "Lens", "Camera model")},
+                         "before": {k: r["analysis"][k] for k in ("keyEv", "lumPct", "castWarmth", "castTint",
+                                                                  "meanSaturation", "clipHighlights", "skinFraction",
+                                                                  "skyFraction", "foliageFraction", "neonFraction")},
+                         "reading": pp.get("reading", ""),
                          "subject": pp.get("subject", ""), "intent": pp.get("intent", ""),
                          "d": d, "masks": pp.get("masks", []), "match": pp.get("match", True),
                          "pass1": a, "log": log})
@@ -411,7 +429,7 @@ def cmd_run(args):
         for r in rows:
             node, fam, d = r["node"], r["family"], r["d"]
             if r["match"] and targets.get(fam):
-                a = match(cs, node, d, targets[fam], fam, args.match, r["log"])
+                a = match(cs, node, d, targets[fam], fam, args.match, r["log"], skin=r.get("skin", False))
             depth(cs, node, d, fam, r["log"])
             a = guard(cs, node, d, fam, r["log"])
             stem = Path(r["name"]).stem

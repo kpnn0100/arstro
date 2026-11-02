@@ -147,6 +147,25 @@ with the plan's masks, never saving anything the approver uses.
 two or more photos into DEFAULTS — `moods.py` (a mood's curves), `edit.py` (default strength), or a new
 mood when the picks keep landing between two.
 
+## 2-exam. The exam — is the skill ready for real shoots? (`scripts/exam.py`)
+
+```bash
+python3 scripts/exam.py build          # edits ~/photo/grade-lab/exam/exam.cmp (a copy of the originals) exactly as a shoot
+#   open http://127.0.0.1:8789/exam   — original | edit, the reading, every step; the approver marks Good / Not good
+python3 scripts/exam.py score          # >= 90 % good = ready to edit real shoots
+```
+
+The approver's bar (2026-11-02): one edit per photo — cinematic, clean, good depth, a suitable mood — with the
+grader's thinking under it so they can check the JUDGEMENT, not only the result. The reasoning is built from what
+the edit recorded (camera data, the measurement as shot, the scene, each correction, the look and the verdicts
+behind it, the masks, matching, depth, clipping) plus the reading written while LOOKING (plan.json `reading`).
+**Review your own exam before the approver does** — the first build showed a white facade going green, which
+found two real faults (below) the approver never had to see. A "Not good" + why is a lesson: fix the RULE.
+
+Rules learned from that review: **match neutrals only** (a zone joins set-matching only when it is
+near-neutral — a sky, a wall, stone; sunlit leaves are not a white); **warm highlights lean orange (30°), never
+yellow (40-45°)**, which reads green on white; with a person, matching may raise saturation by +5 at most.
+
 ## 2a. The automatic pipeline — `scripts/autograde.py` (correction + a group look; superseded by §2)
 
 ```bash
@@ -258,6 +277,7 @@ the tone curve works in a log domain, and a colour wheel's hue ADDS across group
 | `moods/<mood>.md` | one file per mood: palette, how it is built (curves + mixer), use / avoid, tuning words, measured fingerprint, the approver's verdict |
 | `references/moods.md` | colour blending with R/G/B curves and the mixer; how to design a new mood |
 | `scripts/taste.py` | THE TASTE as code: `choose(scene, analysis, plan)` → the approver's look per photo; the shared refine steps |
+| `scripts/exam.py` | the exam: one edit per photo with the reasoning, judged on /exam; `score` |
 | `scripts/lab.py` | the Grade Lab (127.0.0.1:8789): palette and refine rounds of one photo, the approver picks — verdicts in data/judgments.jsonl; `summary` |
 | `scripts/edit.py` | THE editor: `review` (gridded sheets to look at), `run` (per-photo correct → mood → plan → match → guard) |
 | `scripts/moods.py` · `scripts/mood.py` | the moods as data (+ strength, prompt matching) · list / board / apply |

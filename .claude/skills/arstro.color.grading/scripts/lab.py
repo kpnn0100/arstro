@@ -245,7 +245,7 @@ def summary_text():
     if not JUDGMENTS.exists():
         return "no verdicts yet"
     recs = [json.loads(l) for l in JUDGMENTS.read_text().splitlines() if l.strip()] + drafts()
-    recs = [r for r in recs if r.get("best") and "look" in r["best"]]
+    recs = [r for r in recs if r.get("best") and "look" in r["best"]]   # exam lines have no best: exam.py score
     if not recs:
         return "no Grade Lab verdicts yet"
     out = ["%d verdicts on %d photos" % (len(recs), len({r["photo"] for r in recs}))]
@@ -355,6 +355,65 @@ load();
 </script></body></html>"""
 
 
+EXAM_PAGE = r"""<!doctype html><html><head><meta charset="utf-8"><title>Grade Exam</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#121214;--card:#1b1b1f;--ink:#ececf0;--dim:#9a9aa6;--acc:#e8a0b8;--good:#7fc8a0;--bad:#e07a7a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,sans-serif}
+header{position:sticky;top:0;z-index:5;background:#121214f0;padding:10px 16px;border-bottom:1px solid #2a2a30;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+h1{font-size:17px;margin:0}h1 small{color:var(--dim);font-weight:400}#score{font-weight:600}#score.pass{color:var(--good)}#score.fail{color:var(--acc)}
+main{padding:14px 16px 60px;max-width:1500px;margin:auto}
+.card{background:var(--card);border-radius:12px;margin:0 0 22px;overflow:hidden;border:2px solid transparent}
+.card.good{border-color:var(--good)}.card.bad{border-color:var(--bad)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#000}
+.pair figure{margin:0;position:relative}.pair img{width:100%;display:block;cursor:zoom-in}
+.pair figcaption{position:absolute;left:8px;top:8px;background:#000a;padding:2px 8px;border-radius:4px;font-size:12px}
+.body{padding:12px 16px}.name{color:var(--dim);font-size:12px}
+.reading{font-size:15px;margin:6px 0 4px}.light{color:var(--dim);margin:0 0 8px}
+ul{margin:6px 0 10px;padding-left:18px}li{margin:3px 0}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row button{background:#27272e;color:var(--ink);border:1px solid #383840;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:600}
+.row button.on.g{background:var(--good);color:#122}.row button.on.b{background:var(--bad);color:#200}
+.row input{flex:1;min-width:240px;background:#202026;color:var(--ink);border:1px solid #383840;border-radius:6px;padding:8px}
+.saved{color:var(--good);font-size:12px}
+#view{position:fixed;inset:0;background:#000e;display:none;z-index:9;align-items:center;justify-content:center}
+#view img{max-width:98vw;max-height:96vh}
+@media(max-width:800px){.pair{grid-template-columns:1fr}}
+</style></head><body>
+<header><h1>Grade Exam <small>one edit per photo, decided by the skill — is it good?</small></h1><span id="score"></span>
+<a href="/" style="color:var(--acc)">back to the lab</a></header>
+<main id="m"></main><div id="view"><img id="vimg"></div>
+<script>
+let E=null;const $=s=>document.querySelector(s);
+const md=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+async function load(){E=await (await fetch('/api/exam')).json();draw();}
+function draw(){
+ $('#m').innerHTML=E.photos.map((p,i)=>`<div class="card ${p.verdict?(p.verdict.good?'good':'bad'):''}" id="c${i}">
+  <div class="pair"><figure><img src="/exam-img/${p.before}" data-s="/exam-img/${p.before}"><figcaption>original (as shot)</figcaption></figure>
+  <figure><img src="/exam-img/${p.after}" data-s="/exam-img/${p.after}"><figcaption>the skill's edit</figcaption></figure></div>
+  <div class="body"><div class="name">${i+1} / ${E.photos.length} · ${p.name}</div>
+  <p class="reading"><b>What I see:</b> ${md(p.reading||'')}</p><p class="light">${md(p.light||'')}</p>
+  <ul>${p.steps.map(x=>'<li>'+md(x)+'</li>').join('')}</ul>
+  <div class="row"><button class="g ${p.verdict&&p.verdict.good?'on':''}" data-i="${i}" data-v="1">Good</button>
+  <button class="b ${p.verdict&&!p.verdict.good?'on':''}" data-i="${i}" data-v="0">Not good</button>
+  <input placeholder="why? (what is wrong, or what is right)" value="${(p.verdict&&p.verdict.note||'').replace(/"/g,'&quot;')}" data-i="${i}">
+  <span class="saved" id="s${i}">${p.verdict?'saved ✓':''}</span></div></div></div>`).join('');
+ document.querySelectorAll('.row button').forEach(b=>b.onclick=()=>judge(+b.dataset.i,b.dataset.v=='1'));
+ document.querySelectorAll('.row input').forEach(t=>t.onchange=()=>{const p=E.photos[+t.dataset.i];if(p.verdict)judge(+t.dataset.i,p.verdict.good);});
+ document.querySelectorAll('.pair img').forEach(im=>im.onclick=()=>{$('#vimg').src=im.dataset.s;$('#view').style.display='flex';});
+ score();}
+$('#view').onclick=()=>$('#view').style.display='none';
+function score(){const j=E.photos.filter(p=>p.verdict),g=j.filter(p=>p.verdict.good).length,pc=j.length?Math.round(100*g/j.length):0;
+ $('#score').textContent=`${g} good of ${j.length} judged (${E.photos.length} photos) — ${pc}% · target 90%`;
+ $('#score').className=j.length?(pc>=90?'pass':'fail'):'';}
+async function judge(i,good){const p=E.photos[i],note=document.querySelector(`.row input[data-i="${i}"]`).value;
+ p.verdict={good,note};const r=await fetch('/api/exam-judge',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:p.name,good,note})});
+ const c=$('#c'+i);c.className='card '+(good?'good':'bad');c.querySelectorAll('.row button').forEach(b=>b.classList.toggle('on',(b.dataset.v=='1')==good));
+ $('#s'+i).textContent=r.ok?'saved ✓':'NOT saved';score();}
+load();
+</script></body></html>"""
+
+
 def serve(args):
     lab = Lab(args)
 
@@ -379,6 +438,16 @@ def serve(args):
                 r = lab.round(lab.state["current"])
                 r["photos"] = lab.photos
                 return self.send(200, json.dumps(r), "application/json")
+            if u == "/exam":
+                return self.send(200, EXAM_PAGE, "text/html; charset=utf-8")
+            if u == "/api/exam":
+                f = lab.dir / "exam" / "exam.json"
+                return self.send(200, f.read_text() if f.exists() else '{"photos": []}', "application/json")
+            if u.startswith("/exam-img/"):
+                rel = urllib.parse.unquote(u[len("/exam-img/"):])
+                p = (lab.dir / "exam" / rel).resolve()
+                if p.is_file() and (lab.dir / "exam").resolve() in p.parents:
+                    return self.send(200, p.read_bytes(), "image/jpeg")
             if u == "/taste":
                 return self.send(200, "<pre style='font:14px/1.5 monospace;padding:16px;white-space:pre-wrap'>%s</pre>"
                                  % html.escape(summary_text()), "text/html; charset=utf-8")
@@ -399,6 +468,22 @@ def serve(args):
                     lab.state["mode"] = body.get("kind", "palette")
                     r = lab.new_round(body.get("photo") or lab.photos[0], body.get("kind", "palette"), None, 1.0)
                 return self.send(200, json.dumps({"round": r["id"], "items": len(r["items"])}), "application/json")
+            if self.path == "/api/exam-judge":
+                n = int(self.headers.get("content-length", 0))
+                b = json.loads(self.rfile.read(n) or b"{}")
+                with lab.lock:
+                    f = lab.dir / "exam" / "exam.json"
+                    ex = json.loads(f.read_text())
+                    for p in ex["photos"]:
+                        if p["name"] == b["name"]:
+                            p["verdict"] = {"good": bool(b["good"]), "note": b.get("note", ""),
+                                            "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+                            rec = {"at": p["verdict"]["at"], "photo": p["name"], "kind": "exam", "good": p["verdict"]["good"],
+                                   "note": p["verdict"]["note"], "exam_built": ex.get("built"), "steps": p["steps"]}
+                            with open(JUDGMENTS, "a") as fh:
+                                fh.write(json.dumps(rec) + "\n")
+                    f.write_text(json.dumps(ex, indent=1))
+                return self.send(200, '{"saved": true}', "application/json")
             if self.path not in ("/api/judge", "/api/mark"):
                 return self.send(404, "not found", "text/plain")
             if self.path == "/api/judge":

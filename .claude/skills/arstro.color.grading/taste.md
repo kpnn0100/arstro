@@ -15,6 +15,28 @@ Format, newest first:
 
 ---
 
+## v3 + THE EXAM (2026-11-02, afternoon) — status: exam awaiting the approver's marks
+
+Eight more verdicts (53): with full depth the approver's GOOD lists got long (the moat: 8 good versions) and the
+BAD shrank to Teal & Orange 60 % and Golden Dream / "corrected only" in DAYLIGHT. Changes:
+- Art light -> corrected only, even with a lit face (the face took "corrected only"; 3 of the last 4).
+- Asakusa settled: Natural Teal (2 of 3). The alley: Golden Dream 50 % again ("impressive"). Never Golden Dream
+  or Teal & Orange in daylight.
+- Found by the grader's own review of the exam, before the approver saw it: (1) set-matching pulled whites toward
+  the set's median highlight tint +0.18 — green, because most frames' brightest pixels are sunlit leaves — and the
+  Asakusa facade went green; matching now uses NEAR-NEUTRAL zones only (zone saturation < 0.22). (2) The warm
+  highlight wheels sat at 40-45 deg (yellow), which reads GREEN on a white wall; now 30 deg (orange), and the
+  daylight white-balance target is tint +0.02 (was +0.04). Asakusa highlight tint +0.23 -> +0.17, whites cream.
+  (3) Person photos: matching may raise global saturation by +5 at most (it reaches skin).
+
+THE EXAM — the approver: *"generate me 1 style only that is cinematic, clean, have good depth and have suitable
+mood … if i can see over 90% of the photos are good, that mean the skill is ready to edit in real life, write the
+summary of your thinking under photo"*. `exam.py build` edits the 16 photos (the two removed excluded) exactly as
+a real shoot is edited — `edit.py run`, taste default, nothing tuned for the exam — on a copy of the untouched
+originals (`~/photo/grade-lab/exam/exam.cmp`); http://127.0.0.1:8789/exam shows original | edit, the grader's
+reading of the photo and every step it took, Good / Not good + why. `exam.py score` reports; >= 90 % = ready.
+VERDICT: _(pending)_
+
 ## THE TASTE v2 (2026-11-02) — read this first; it is what `edit.py run` does by default
 
 45 verdicts (27 + 18 on 2026-11-02). The approver: *"those bad need to judge carefully, those bad are really

@@ -10,7 +10,7 @@ Learned in the Grade Lab (data/judgments.jsonl; taste.md "THE TASTE"): 45 verdic
 | water and reflections                         | neon-noir 60 % colour at FULL depth | the pond: "#11 [natural cinema] got the depth but #9 [neon noir 60 %] got the color" |
 | night city                                    | golden-dream 50 % colour, full depth | Shinjuku "really have warm mood", the alley "feel warm" |
 | aquarium                                      | golden-dream 50 %            | the jellyfish twice: "i like the water color, teal really hit it" |
-| art light (teamLab)                           | corrected only; a lit face: natural-cinema 70 % | orbs: "bring the mood without destroying face color"; the face: NC 70 % |
+| art light (teamLab)                           | corrected only               | orbs: "bring the mood without destroying face color"; the face too (3 of the last 4) |
 
 The basic mechanism, in the approver's words: **"keep the skin color for human"** — `protect_skin`.
 """
@@ -134,11 +134,9 @@ def choose(scene, analysis, plan_entry=None):
         return {"look": pe["look"], "strength": pe.get("strength", 1.0), "tweaks": pe.get("tweaks", []),
                 "skin": person, "why": "named in the plan"}
     if scene == "dark-interior":
-        if person and "silhouette" not in subject.lower():
-            return {"look": "natural-cinema", "strength": 0.7, "tweaks": [], "skin": True,
-                    "why": "a lit face in art light: NC 70 %, 'mood with the skin color still correct'"}
+        # 2026-11-02, second half: the lit face took 'corrected only' too — 3 of the last 4 art-light verdicts.
         return {"look": "corrected", "strength": 1.0, "tweaks": [], "skin": person,
-                "why": "art light is the artist's: corrected only, 'mood without destroying face color'"}
+                "why": "art light is the artist's: corrected only won 3 of the last 4 ('mood without destroying face color')"}
     if scene == "aquarium":
         return {"look": "golden-dream", "strength": 0.5, "tweaks": [], "skin": False,
                 "why": "the jellyfish, twice: golden dream 50 %, 'teal really hit it'"}
