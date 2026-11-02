@@ -182,8 +182,10 @@ def normalise(cs, node, scene, iso, log):
             dTi = max(-40, min(40, (goalT - ti) / kT)) * 0.85
             p["temp"] = max(t["tempRange"][0], min(t["tempRange"][1], p["temp"] + dT))
             # A witness trusted fully (clouds, snow, a white wall) may correct a real tinted-glass
-            # cast past the usual range — the Fuji frame was shot through a green train window.
-            tintHi = t["tintRange"][1] if trust < 1.0 or not t["floor"] else max(t["tintRange"][1], 80)
+            # cast past the usual range — the Fuji frame was shot through a green train window. To the
+            # engine's limit (150): stopped at 80, Fuji's clouds kept +0.22 green, the look turned them
+            # olive on a blue sky and "the sky look too fake because of the clouds" (exam 3, #10).
+            tintHi = t["tintRange"][1] if trust < 1.0 or not t["floor"] else max(t["tintRange"][1], 150)
             p["tint"] = max(t["tintRange"][0], min(tintHi, p["tint"] + dTi))
             a2 = apply()
             w2, ti2, _ = witness(a2, scene)

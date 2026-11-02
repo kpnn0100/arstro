@@ -110,17 +110,23 @@ def explain(row, pe):
             continue
         m = re.match(r"sky: (.*) \((.*)\)$", l)
         if m:
-            what = {"tex": "sharp/sandy", "sat": "over-saturated", "spread": "torn into several colours"}
+            what = {"tex": "sharp/sandy", "sat": "over-saturated", "spread": "torn into several colours",
+                    "gap": "its clouds a different colour from the sky", "contrast": "too contrasty around the clouds",
+                    "warm": "its clouds cream instead of white", "dull": "its clouds dimmed to grey-beige",
+                    "structure": "its clouds more contrasty than the camera saw them"}
             out.append("**Sky looked at** — it was %s → %s." % (" and ".join(what.get(x.strip(), x) for x in m.group(2).split(",")),
                                                                m.group(1)))
             continue
         m = re.match(r"sky check: texture ([\d.]+) -> ([\d.]+), saturation ([\d.]+) -> ([\d.]+), colour spread ([\d.]+) -> ([\d.]+) "
-                     r"\(original ([\d.]+) / ([\d.]+) / ([\d.]+)\)(.*)", l)
+                     r"\(original ([\d.]+) / ([\d.]+) / ([\d.]+)\); clouds vs sky colour ([\d.]+) -> ([\d.]+), contrast ([\d.]+) -> ([\d.]+) "
+                     r"\(white-balanced ([\d.]+) / camera ([\d.]+)\)(.*)", l)
         if m:
             g = m.groups()
-            out.append("**Sky check** (the sky must stay as smooth, about as saturated and ONE colour as the original): "
-                       "texture %s (original %s), saturation %s (original %s), colour spread %s (original %s)%s." % (
-                           g[1], g[6], g[3], g[7], g[5], g[8], (" —" + g[9].replace(" — still:", " still failing:")) if g[9] else " — passes"))
+            out.append("**Sky check** (the sky must stay as smooth, about as saturated and ONE colour as the original, its "
+                       "clouds the sky's colour and no more contrasty): texture %s (original %s), saturation %s (original %s), "
+                       "colour spread %s (original %s), clouds-vs-sky colour %s (white-balanced original %s), contrast %s (original %s)%s." % (
+                           g[1], g[6], g[3], g[7], g[5], g[8], g[10], g[13], g[12], g[14],
+                           (" —" + g[15].replace(" — still:", " still failing:")) if g[15] else " — passes"))
             continue
         m = re.match(r"highlights -> (-?[\d.]+)", l)
         if m:

@@ -44,6 +44,19 @@ LESSONS -> v5 (the colour stays bold — "you did it well for the color"):
 (4) **A person never ends darker than the camera had them**; at night their face keeps its warmth and colour.
 The grader's own look at exam 3 caught one more: blue-grey patches in white skies (pagoda, the woman) — measured, the
 camera has the same darker-is-bluer split (+0.02); white balance only took its cream cast away. Kept.
+EXAM 3 FIRST NOTE (before marks): *"don't make the sky and cloud too seperated, make sure the edit don't give too much
+contract on them, especially #10, the sky look too fake because of the clouds"*. Looked at #10 (Fuji) at 2000 px:
+olive-yellow clouds on a blue sky — stickers. Measured, one control at a time:
+- white balance stopped at tint 80 (the skill's cap; the engine goes to 150) and left the clouds +0.22 green from the
+  train window — now to 150 (tint 134; clouds neutral);
+- VIBRANCE pushed the pale sky bluer and the pale clouds creamier (cloud-vs-sky colour 0.169 white-balanced -> 0.288;
+  vibrance 0 -> 0.201) — wheels, curves and masks moved it < 0.01;
+- the clouds then read beige because they were DIMMED (brightest 0.90 white-balanced -> 0.77: highlights -40, depth,
+  vignette) — a dimmed white is beige-grey; and the look's +260 K yellowed them;
+- Kamakura: highlight RECOVERY (-80) pulled a cloud the camera barely showed out of a grey-blue sky; at -40 it is the
+  camera's airy sky (a contrast-down sky filter only greyed it).
+LESSON: **the clouds belong to their sky** — as white and as bright as white balance left them, no further from the
+sky's colour, no more contrasty than the camera saw them. Six cloud rules added to the sky check (edit.py).
 EXAM 3 VERDICT: _(pending)_
 
 ## EXAM 1 RESULT: 15 / 16 good = 94 % — "too safe"  → v4 BOLDER, exam 2: 88 % (above)

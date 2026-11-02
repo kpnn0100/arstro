@@ -106,6 +106,12 @@ it with the camera's frame where the approver's eye goes first:
   1.25x), roughly its saturation (<= 1.2x) and ONE colour (spread <= 1.3x). Fixes, cheapest first: colour NR 60 → 90
   → the mixer's Lum halved → off (sand); a graduated filter with saturation −12 a round (over-saturated); the
   match's R/G/B curves taken back → highlight wheels halved (torn). A textured "sky" (a wall, blossom) is skipped.
+  **The clouds belong to their sky** (exam 3, #10 "the sky look too fake because of the clouds"): against the
+  white-balanced frame they keep their colour distance from the sky (vibrance halved → off), their white (the look's
+  extra warmth halved → off) and their light (highlights back toward 0); against the camera, no more cloud contrast
+  (the plan's sky darkening eased, a lift reaching into the sky halved) or local structure (highlight recovery eased
+  to −40, then the sky filter's contrast down). White balance may use the engine's full tint (150) on a trusted
+  white witness — a tinted window's cast left in the clouds turns olive under any warm look.
 - `subject_check` (the plan's first radial lift): a person never ends darker than the camera had them (night: 10 %
   brighter), and at night keeps the camera's warmth and colour; a white subject gains no colour (local cooling).
 **The sky belongs to the photo**: the mood goes into the land, the shadows and the light — never `dehaze`, `clarity`
