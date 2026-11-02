@@ -81,7 +81,7 @@ target_link_libraries(cosmo
   ${DEPS_PREFIX}/lib/libcairo.a
   ${DEPS_PREFIX}/lib/libpixman-1.a
   ${DEPS_PREFIX}/lib/libfreetype.a
-  ${DEPS_PREFIX}/lib/libraw.a
+  ${DEPS_PREFIX}/lib/libraw_r.a
   z EGL GLESv3 android log m)
 
 # Keep the NativeActivity entry the glue defines (nothing references it directly).

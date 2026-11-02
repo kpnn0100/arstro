@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-66**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-70**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -422,6 +422,30 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-69 — Two Canon CR2s loaded together both decoded BLACK ("data corrupted at <n>")
+- **Area:** build / decode (LibRaw linkage) · **Status:** **Fixed** · **Severity:** S1 (a project's photos
+  silently black)
+- **Found:** 2026-11-02, grading the user's folder through `cosmo-cc mcp`: both Canon EOS 750D `.CR2` of four
+  photos rendered black; LibRaw printed `data corrupted at 2425228` / `3012483`.
+- **Front end:** every one that loads a project (the window, `cosmo-cc mcp`, `run`, NTWB) — `cosmo-cc render`
+  of one file was fine.
+- **Reproduce:** `project new x.cmp` · `import a.CR2 b.CR2` (two CR2s of one camera) · preview either -> black,
+  and the `<n>` changes every run. One CR2 alone, or a CR2 beside an ARW, decodes. LibRaw 0.22.1 (rawpy)
+  decodes the same files fully: the files are sound.
+- **Cause:** the build linked the vendored `lib/libraw.a`, which `Makefile.dist` compiles with
+  `LIBRAW_NOTHREADS`: decoder state becomes process globals (`nm` shows `getbithuff()::bitbuf/vbits/reset` as
+  BSS statics — the lossless-JPEG bit reader Canon's sliced CR2 uses). A project decodes its images on parallel
+  threads, so two CR2 decodes shared one bit buffer. It was also an ABI mismatch: `cosmo_core` is compiled
+  WITHOUT that define, so its `LibRaw` class layout differed from the library's.
+- **Fix:** link only the reentrant `libraw_r` — `apps/cosmo/core/CMakeLists.txt` (pkg-config `libraw_r`, else
+  vendored `lib/libraw_r.a` + Threads; `libraw.a` alone is refused with a WARNING), the same in
+  `apps/interstellar/host/CMakeLists.txt` (CinemaDNG frames), Android `build_deps.sh` / `CMakeLists.txt`
+  (not built here), `DEVELOPING.md`'s build line. Fixed in the commit that files this entry.
+- **Guard:** `cosmo_core_tests` `raws_decoded_concurrently_match_one_at_a_time` — decodes `COSMO_TEST_RAWS`
+  alone, then all together on threads, 3 rounds, pixel-identical. With `libraw.a` swapped in it FAILS
+  ("and to exactly the pixels it decodes to alone"); with `libraw_r.a` it passes (4 files: 2 CR2, ARW, RW2).
+  The repo carries no RAW, so without the variable it prints `[SKIP]` — run it with real files.
 
 ### D-65 — A page closed on Home reopened in the editor (web)
 - **Area:** design / web view-model · **Status:** **Fixed** · **Severity:** S2

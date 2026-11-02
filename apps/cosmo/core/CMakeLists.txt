@@ -45,19 +45,30 @@ pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
 target_link_libraries(cosmo_core PRIVATE PkgConfig::GTK3)
 
 # ── LibRaw (optional): native RAW decode. Same detection as the app build. ──
-pkg_check_modules(LIBRAW IMPORTED_TARGET libraw)
+# ONLY the reentrant build (`libraw_r`, D-69). Cosmo decodes a project's images on parallel threads; the plain
+# `libraw` is compiled with LIBRAW_NOTHREADS, which turns per-decoder state (the lossless-JPEG bit reader's
+# buffer, among others) into process globals — two Canon CR2s decoded at once corrupted each other and came out
+# black ("data corrupted at <n>", a different <n> each run). It is also a header/ABI mismatch: this code is
+# compiled WITHOUT that define. So `libraw` alone is refused, loudly, rather than linked.
+find_package(Threads REQUIRED)
+pkg_check_modules(LIBRAW IMPORTED_TARGET libraw_r)
 set(VENDORED_LIBRAW ${CMAKE_CURRENT_SOURCE_DIR}/../../../core/ImageProcessing/lib/LibRaw)
 if(LIBRAW_FOUND)
-  target_link_libraries(cosmo_core PRIVATE PkgConfig::LIBRAW)
+  target_link_libraries(cosmo_core PRIVATE PkgConfig::LIBRAW Threads::Threads)
   target_compile_definitions(cosmo_core PRIVATE COSMO_HAVE_LIBRAW)
-  message(STATUS "cosmo_core: RAW enabled (system LibRaw ${LIBRAW_VERSION})")
-elseif(EXISTS ${VENDORED_LIBRAW}/libraw/libraw.h AND EXISTS ${VENDORED_LIBRAW}/lib/libraw.a)
+  message(STATUS "cosmo_core: RAW enabled (system LibRaw ${LIBRAW_VERSION}, reentrant libraw_r)")
+elseif(EXISTS ${VENDORED_LIBRAW}/libraw/libraw.h AND EXISTS ${VENDORED_LIBRAW}/lib/libraw_r.a)
   target_include_directories(cosmo_core PRIVATE ${VENDORED_LIBRAW})
-  target_link_libraries(cosmo_core PRIVATE ${VENDORED_LIBRAW}/lib/libraw.a z)
+  target_link_libraries(cosmo_core PRIVATE ${VENDORED_LIBRAW}/lib/libraw_r.a z Threads::Threads)
   target_compile_definitions(cosmo_core PRIVATE COSMO_HAVE_LIBRAW)
-  message(STATUS "cosmo_core: RAW enabled (vendored LibRaw)")
+  message(STATUS "cosmo_core: RAW enabled (vendored LibRaw, reentrant libraw_r.a)")
 else()
-  message(STATUS "cosmo_core: RAW disabled (LibRaw not found) — JPEG/PNG/TIFF via GdkPixbuf only")
+  if(EXISTS ${VENDORED_LIBRAW}/lib/libraw.a)
+    message(WARNING "cosmo_core: only the NON-reentrant lib/libraw.a is built — it corrupts concurrent decodes "
+                    "(D-69). Build the reentrant one: make -C core/ImageProcessing/lib/LibRaw -f Makefile.dist "
+                    "lib/libraw_r.a -j8")
+  endif()
+  message(STATUS "cosmo_core: RAW disabled (reentrant LibRaw not found) — JPEG/PNG/TIFF via GdkPixbuf only")
 endif()
 
 # ── Smoke tests (plain assert(), no external framework) ──

@@ -7,7 +7,7 @@
  *  render a 1600 px preview.
  *
  *      g++ -O2 -std=c++17 -I core/ImageProcessing/lib/LibRaw -o /tmp/rawphase \
- *          raw_phase_timing.cpp core/ImageProcessing/lib/LibRaw/lib/libraw.a -lz -lpthread
+ *          raw_phase_timing.cpp core/ImageProcessing/lib/LibRaw/lib/libraw_r.a -lz -lpthread
  *      /tmp/rawphase <file>.RAF            # full quality, as shipped
  *      /tmp/rawphase <file>.RAF --half     # params.half_size=1   -> half dimensions
  *      /tmp/rawphase <file>.RAF --fast     # params.user_qual=0   -> FULL dimensions, bilinear

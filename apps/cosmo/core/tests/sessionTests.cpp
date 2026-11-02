@@ -2869,6 +2869,60 @@ namespace
         printf("[PASS] a_thumbnail_is_turned_the_way_the_photo_is\n");
     }
 
+    // D-69: RAW decodes running at the same time give exactly what each gives alone. A project's photos
+    // decode on parallel threads; the plain libraw.a (LIBRAW_NOTHREADS) kept the lossless-JPEG bit reader's
+    // state in process globals, so two Canon CR2s loaded together BOTH came out black ("data corrupted at
+    // <n>", a different <n> every run) while either alone decoded. The repo carries no RAW files, so the
+    // files come from COSMO_TEST_RAWS="a.CR2:b.CR2[:...]" — at least two, ideally from the SAME camera (the
+    // shared state is a decoder's). Without it the test says so and skips; it is not a pass.
+    void test_raws_decoded_concurrently_match_one_at_a_time()
+    {
+        using namespace arstro::cosmo;
+        const char *env = std::getenv("COSMO_TEST_RAWS");
+        std::vector<std::string> paths;
+        for (std::string rest = env ? env : ""; !rest.empty();)
+        {
+            const size_t c = rest.find(':');
+            if (c) paths.push_back(rest.substr(0, c));
+            rest = c == std::string::npos ? "" : rest.substr(c + 1);
+        }
+        if (paths.size() < 2 || !NativeImageDecoder::rawSupported())
+        {
+            printf("[SKIP] raws_decoded_concurrently_match_one_at_a_time (set COSMO_TEST_RAWS=a.CR2:b.CR2)\n");
+            return;
+        }
+        auto lit = [](const DecodedImage &im) {
+            uint64_t sum = 0;
+            for (size_t i = 0; i < im.rgba.size(); i += 4) sum += im.rgba[i] + im.rgba[i + 1] + im.rgba[i + 2];
+            return sum / (3.0 * std::max<size_t>(1, im.rgba.size() / 4));
+        };
+        std::vector<DecodedImage> alone;
+        for (const auto &p : paths)
+        {
+            NativeImageDecoder dec;
+            alone.push_back(dec.decodeFile(p, Fidelity::Preview));
+            assert(alone.back().ok() && lit(alone.back()) > 2.0 && "each RAW decodes, and not to black, on its own");
+        }
+        for (int round = 0; round < 3; ++round)
+        {
+            std::vector<DecodedImage> together(paths.size());
+            std::vector<std::thread> ts;
+            for (size_t i = 0; i < paths.size(); ++i)
+                ts.emplace_back([&, i] {
+                    NativeImageDecoder dec;
+                    together[i] = dec.decodeFile(paths[i], Fidelity::Preview);
+                });
+            for (auto &t : ts) t.join();
+            for (size_t i = 0; i < paths.size(); ++i)
+            {
+                assert(together[i].ok() && "a RAW decoded alongside others still decodes");
+                assert(together[i].width == alone[i].width && together[i].height == alone[i].height);
+                assert(together[i].rgba == alone[i].rgba && "and to exactly the pixels it decodes to alone");
+            }
+        }
+        printf("[PASS] raws_decoded_concurrently_match_one_at_a_time (%zu files, 3 rounds)\n", paths.size());
+    }
+
     // ── R-INFO: metadata is read from the FILE, on demand, without decoding it ────────────
     void test_metadata_reads_the_file_without_decoding_it()
     {
@@ -3042,6 +3096,7 @@ int main()
     test_a_load_reports_work_before_any_result();
     test_an_image_entry_gets_its_filename();
     test_a_thumbnail_is_turned_the_way_the_photo_is();
+    test_raws_decoded_concurrently_match_one_at_a_time();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

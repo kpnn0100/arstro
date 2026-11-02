@@ -97,7 +97,7 @@ build_cairo() {
 }
 
 build_libraw() {
-  [ -f "$PREFIX/lib/libraw.a" ] && { echo "libraw: already built"; return; }
+  [ -f "$PREFIX/lib/libraw_r.a" ] && { echo "libraw: already built"; return; }
   echo "== libraw (arm64) =="
   local LR="$HERE/../../../../core/ImageProcessing/lib/LibRaw"
   [ -f "$LR/libraw/libraw.h" ] || { echo "libraw source missing at $LR"; return 1; }
@@ -109,10 +109,10 @@ build_libraw() {
   rm -rf "$B"; mkdir -p "$B/object" "$B/lib"
   cp -r "$LR/src" "$LR/libraw" "$LR/internal" "$LR/Makefile.dist" "$B/"
   [ -d "$LR/GoPro" ] && cp -r "$LR/GoPro" "$B/"   # some decoders #include "GoPro/..."
-  ( cd "$B" && make -f Makefile.dist lib/libraw.a -j"$NPROC" \
+  ( cd "$B" && make -f Makefile.dist lib/libraw_r.a -j"$NPROC" \
        CXX="$CXX" \
        CFLAGS="-O2 -I. -w -DUSE_ZLIB -fPIC -std=c++17" )
-  cp "$B/lib/libraw.a" "$PREFIX/lib/"
+  cp "$B/lib/libraw_r.a" "$PREFIX/lib/"   # reentrant: decodes run on parallel threads (D-69)
   mkdir -p "$PREFIX/include/libraw"
   cp "$LR"/libraw/*.h "$PREFIX/include/libraw/"
   echo "libraw: OK"

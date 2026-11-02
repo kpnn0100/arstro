@@ -74,12 +74,17 @@ after the fact. A change inside a submodule is two commits: one in the submodule
 umbrella bumping the pointer.
 
 **RAW decode is optional and easy to lose.** CMake takes a system `libraw` if pkg-config finds one,
-else the vendored tree — but only if `core/ImageProcessing/lib/LibRaw/lib/libraw.a` has been
-*built*, which nothing in the CMake path does for you:
+else the vendored tree — but only if `core/ImageProcessing/lib/LibRaw/lib/libraw_r.a` has been
+*built* (the reentrant `libraw_r.a`), which nothing in the CMake path does for you:
 
 ```bash
-make -C core/ImageProcessing/lib/LibRaw -f Makefile.dist lib/libraw.a -j8
+make -C core/ImageProcessing/lib/LibRaw -f Makefile.dist lib/libraw_r.a -j8
 ```
+
+**`libraw_r.a`, the reentrant build — never `lib/libraw.a`** (D-69). The plain library is compiled with
+`LIBRAW_NOTHREADS`: decoder state becomes process globals, and Cosmo decodes a project's photos on parallel
+threads, so two Canon CR2s loaded together came out black ("data corrupted at <n>", a different `<n>` every run).
+CMake refuses `libraw.a` with a warning; a system LibRaw is taken through pkg-config's `libraw_r`.
 
 Without it the configure line reads `cosmo_core: RAW disabled (LibRaw not found)` and every `.RAF`
 in a project fails to decode with no other symptom. `cosmo-cc backends` prints `libraw=1` when it
