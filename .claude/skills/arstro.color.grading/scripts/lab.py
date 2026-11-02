@@ -38,19 +38,22 @@ TASTE_PHOTOS = ["DSCF5288.RAF", "_DSF5417.RAF", "_DSF6151.RAF", "_DSF6609.RAF", 
                 "_DSF6696 (1).RAF", "_DSF6778.RAF", "_DSF6592.RAF", "_DSF7014.RAF"]
 # A taste round tests what the verdicts said (taste.md, 2026-10-30): the winner, the refine pick, the two
 # looks built from the verdicts, and milder versions of the moods that won on landscapes.
+# Taste round v2 (2026-11-02): the profile's own picks and their nearest rivals, every one at FULL depth now
+# (strength scales colour only) — Moody Forest is gone: matte is flat, and flat lost every time it was shown.
 TASTE_CANDIDATES = [
-    {"look": "cinematic", "strength": 1.0, "tweaks": []},
-    {"look": "cinematic", "strength": 1.0, "tweaks": [["warmer", 1.0]]},
-    {"look": "natural-cinema", "strength": 1.0, "tweaks": []},
-    {"look": "natural-cinema", "strength": 1.0, "tweaks": [["contrast", 1.0]]},
-    {"look": "natural-cinema", "strength": 0.7, "tweaks": []},
     {"look": "natural-teal", "strength": 1.0, "tweaks": []},
+    {"look": "natural-teal", "strength": 0.7, "tweaks": []},
+    {"look": "natural-cinema", "strength": 1.0, "tweaks": []},
+    {"look": "natural-cinema", "strength": 0.7, "tweaks": []},
+    {"look": "golden-dream", "strength": 0.5, "tweaks": []},
     {"look": "neon-noir", "strength": 0.6, "tweaks": []},
     {"look": "teal-orange", "strength": 0.6, "tweaks": []},
-    {"look": "golden-dream", "strength": 0.5, "tweaks": []},
-    {"look": "moody-forest", "strength": 0.7, "tweaks": []},
+    {"look": "cinematic", "strength": 1.0, "tweaks": [["warmer", 1.0]]},
+    {"look": "natural-teal", "strength": 1.0, "tweaks": [["warmer", 1.0]]},
     {"look": "corrected", "strength": 1.0, "tweaks": []},
 ]
+# Photos the approver asked to take out of the judging ("next time remove this photo, it's too bad to judge").
+REMOVED = ["_DSF6778.RAF", "_DSF7014.RAF"]
 
 
 # ── a variant = (look, strength, tweaks) on top of the photo's correction ───────────────────
@@ -94,6 +97,7 @@ class Lab:
         order = args.photos.split(",") if args.photos else TASTE_PHOTOS + DEFAULT_PHOTOS
         self.photos = [p for p in order if p in self.names] or list(self.names)[:8]
         self.photos += [p for p in self.names if p not in self.photos]
+        self.photos = [p for p in self.photos if p not in REMOVED]
         self.corr = {}            # photo -> (correction dict, family, scene)
         self.state_path = self.dir / "state.json"
         self.state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {"rounds": [], "current": None}
@@ -121,11 +125,16 @@ class Lab:
             self.corr[photo] = (corr, fam, scene)
         return self.corr[photo]
 
-    def render(self, photo, v, path):
+    def render(self, photo, v, path, kind="taste"):
         corr, fam, _ = self.correction(photo)
         node = self.names[photo]
+        pe = self.plan.get(photo, {})
+        # The basic mechanism ("keep the skin color for human") holds in EVERY version of a photo with a person.
+        v = dict(v, skin=T.has_person({}, pe) if pe.get("subject") else False)
         d = variant_params(corr, fam, v)
-        E.set_photo(self.cs, node, d, self.plan.get(photo, {}).get("masks", []))
+        E.set_photo(self.cs, node, d, pe.get("masks", []))
+        if kind != "refine":     # what the editor would deliver: no flat version is shown as a candidate
+            E.depth(self.cs, node, d, fam, [])
         # The same clipping guard the editor runs: the first taste round showed a look burning the teamLab
         # fire to lime because the lab rendered without it ("make sure this mistake doesn't happen").
         E.guard(self.cs, node, d, fam, [])
@@ -158,7 +167,7 @@ class Lab:
         items = []
         for i, v in enumerate(uniq):
             f = "%02d.jpg" % (i + 1)
-            self.render(photo, v, rd / f)
+            self.render(photo, v, rd / f, kind)
             items.append({"id": vid(v), "file": f, "label": variant_label(v), "variant": v})
         n = sum(1 for r in self.state["rounds"] if r["photo"] == photo)
         rnd = {"id": rid, "photo": photo, "kind": kind, "step": step, "n": n + 1, "scene": self.corr[photo][2],

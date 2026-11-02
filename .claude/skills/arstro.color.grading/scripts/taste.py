@@ -1,16 +1,18 @@
-"""taste.py — the approver's taste as code: which look a photo gets, and the steps a refine can take.
+"""taste.py — the approver's taste as code: which look a photo gets, skin kept true, and the refine steps.
 
-Learned in the Grade Lab (data/judgments.jsonl; taste.md "THE TASTE"): 27 verdicts on 18 Tokyo photos,
-2026-10-30. `choose()` is what `edit.py run --mood taste` (the default) asks for every photo, so a
-thousand photos are graded the way the approver picked, not the way a recipe guessed.
+Learned in the Grade Lab (data/judgments.jsonl; taste.md "THE TASTE"): 45 verdicts, 2026-10-30 and 11-02.
+`choose()` is what `edit.py run --mood taste` (the default) asks for every photo.
 
-| scene / content                               | look                          | the verdicts behind it |
-|-----------------------------------------------|-------------------------------|------------------------|
-| daylight / overcast: sky, foliage, buildings  | natural-teal 100 %            | 6 wins of 7: "really love the sky and the contrast", "only #1 can achieve the depth" |
-| … with a person, animal or tower as SUBJECT   | natural-cinema 100 % + ½ contrast | woman, both deer, pagoda: "good depth in color" (one deer took it without contrast) |
-| night city                                    | natural-cinema 70 % + warmer  | Shinjuku (NC 70 %), the alley (cinematic + warmer: "highlight the important and have good color") |
-| aquarium                                      | cinematic + warmer            | the jellyfish |
-| dark interior lit by art (teamLab)            | corrected only                | 17: corrected won; 18: every look that warmed or opened the fire went lime ("make sure this mistake doesn't happen") |
+| photo                                         | look                         | the verdicts behind it |
+|-----------------------------------------------|------------------------------|------------------------|
+| daylight / overcast: sky, foliage, buildings, animals, landscape | natural-teal 100 % | 14 bests, never marked bad: "really love the sky", "the mood is very clear, it feel lonely" (Fuji), "keeping the main object color clean" (deer) |
+| a PERSON is the subject                        | natural-cinema 70 % colour, full depth, skin protected | the woman twice, the teamLab face: "apply a mood with the skin color still correct" |
+| water and reflections                         | neon-noir 60 % colour at FULL depth | the pond: "#11 [natural cinema] got the depth but #9 [neon noir 60 %] got the color" |
+| night city                                    | golden-dream 50 % colour, full depth | Shinjuku "really have warm mood", the alley "feel warm" |
+| aquarium                                      | golden-dream 50 %            | the jellyfish twice: "i like the water color, teal really hit it" |
+| art light (teamLab)                           | corrected only; a lit face: natural-cinema 70 % | orbs: "bring the mood without destroying face color"; the face: NC 70 % |
+
+The basic mechanism, in the approver's words: **"keep the skin color for human"** — `protect_skin`.
 """
 import re
 
@@ -74,38 +76,80 @@ def look_title(look):
 
 
 def params(corr, fam, v, plan=None):
-    """The photo's whole edit for a variant {look, strength, tweaks}: correction + look + steps + the plan's `set`."""
+    """The photo's whole edit for a variant {look, strength, tweaks, skin}: correction + look (colour scaled,
+    depth kept) + steps + the plan's `set`, with the skin line protected when a person is in the photo."""
     line = look_line(v["look"], fam)
     d = E.compose(corr, M.scale(line, v["strength"]) if line else "", plan or {})
     for name, step in v["tweaks"]:
         TWEAKS[name][1](d, step)
+    if v.get("skin"):
+        protect_skin(d)
     return d
 
 
 # ── the profile ─────────────────────────────────────────────────────────────────────────────
 
-# A subject the approver wanted held in natural colour with depth: a person, an animal, a tower.
-SUBJECT = re.compile(r"\b(wom[ae]n|m[ae]n|person|people|girl|boy|child|kid|face|portrait|couple|bride|deer|dog|cat|"
-                     r"horse|bird|animal|pagoda|tower)\b", re.I)
+# Who is in the photo, read from the plan's `subject` (what the agent SAW), never guessed from hue alone when a
+# subject was written: a deer's fur sits on the skin line too.
+PEOPLE = re.compile(r"\b(wom[ae]n|m[ae]n|person|people|girl|boy|child|kid|face|portrait|couple|bride|groom|lady|guy)\b", re.I)
+# Still water whose REFLECTIONS are the picture (the pond). Not any water: Fuji's river, the moat and the sea
+# wall all chose Natural Teal.
+WATER = re.compile(r"\b(pond|lake|reflection|reflections)\b", re.I)
+SKIN_BAND = (8.0, 48.0)          # hue degrees: every human skin tone sits on this line
+
+
+def protect_skin(d):
+    """The approver's basic mechanism: "keep the skin color for human". Whatever a look does to the palette,
+    the mixer does NOTHING to hue on the skin line, never desaturates it, and lifts it at most a touch. The
+    other hues keep the look's moves; the curve between interpolates from 0 at the band's edges."""
+    lo, hi = SKIN_BAND
+    pins = {"mixer0": [(lo, 0.0), (25.0, 0.0), (hi, 0.0)],
+            "mixer1": [(lo, 0.0), (25.0, 0.02), (hi, 0.0)],
+            "mixer2": [(lo, 0.0), (25.0, 0.03), (hi, 0.0)]}
+    for k, pin in pins.items():
+        pts = []
+        for p in (d.get(k) or "").split(";"):
+            if "," in p:
+                h, y = (float(x) for x in p.split(","))
+                if not (lo - 4 <= h <= hi + 4):
+                    pts.append((h, y))
+        pts = sorted(pts + pin)
+        d[k] = ";".join("%g,%g" % p for p in pts)
+    return d
+
+
+def has_person(analysis, plan_entry):
+    subject = (plan_entry or {}).get("subject", "")
+    if subject:
+        return bool(PEOPLE.search(subject))
+    return analysis.get("skinFraction", 0) >= 0.03 and analysis.get("foliageFraction", 0) < 0.3
 
 
 def choose(scene, analysis, plan_entry=None):
-    """{look, strength, tweaks, why} for one photo — the approver's choice for photos like it."""
+    """{look, strength, tweaks, skin, why} for one photo — the approver's choice for photos like it."""
     pe = plan_entry or {}
+    person = has_person(analysis, pe)
+    subject = pe.get("subject", "")
     if pe.get("look"):                                     # the agent (or the approver) named one: it wins
         return {"look": pe["look"], "strength": pe.get("strength", 1.0), "tweaks": pe.get("tweaks", []),
-                "why": "named in the plan"}
+                "skin": person, "why": "named in the plan"}
     if scene == "dark-interior":
-        return {"look": "corrected", "strength": 1.0, "tweaks": [],
-                "why": "art light is the artist's: 'corrected only' won teamLab, every warming look burned the fire"}
+        if person and "silhouette" not in subject.lower():
+            return {"look": "natural-cinema", "strength": 0.7, "tweaks": [], "skin": True,
+                    "why": "a lit face in art light: NC 70 %, 'mood with the skin color still correct'"}
+        return {"look": "corrected", "strength": 1.0, "tweaks": [], "skin": person,
+                "why": "art light is the artist's: corrected only, 'mood without destroying face color'"}
     if scene == "aquarium":
-        return {"look": "cinematic", "strength": 1.0, "tweaks": [["warmer", 1.0]], "why": "the jellyfish: cinematic + warmer"}
+        return {"look": "golden-dream", "strength": 0.5, "tweaks": [], "skin": False,
+                "why": "the jellyfish, twice: golden dream 50 %, 'teal really hit it'"}
     if scene == "night-city":
-        return {"look": "natural-cinema", "strength": 0.7, "tweaks": [["warmer", 1.0]],
-                "why": "night city: natural cinema 70 % (Shinjuku) + warmer (the alley)"}
-    subject = pe.get("subject", "")
-    if SUBJECT.search(subject) or (not subject and analysis.get("skinFraction", 0) >= 0.08):
-        return {"look": "natural-cinema", "strength": 1.0, "tweaks": [["contrast", 0.5]],
-                "why": "a person / animal / tower as subject: natural cinema with depth (woman, deer, pagoda)"}
-    return {"look": "natural-teal", "strength": 1.0, "tweaks": [],
-            "why": "sky, foliage, architecture: natural teal won 6 of 7 such photos"}
+        return {"look": "golden-dream", "strength": 0.5, "tweaks": [], "skin": person,
+                "why": "night city: golden dream 50 % at full depth, 'really have warm mood'"}
+    if person:
+        return {"look": "natural-cinema", "strength": 0.7, "tweaks": [], "skin": True,
+                "why": "a person: natural cinema 70 % colour, full depth, skin kept true"}
+    if WATER.search(subject):
+        return {"look": "neon-noir", "strength": 0.6, "tweaks": [], "skin": False,
+                "why": "green water and reflections: neon noir's colour at full depth ('#9 got the color')"}
+    return {"look": "natural-teal", "strength": 1.0, "tweaks": [], "skin": False,
+            "why": "sky, foliage, buildings, animals, landscape: natural teal, 14 bests and never bad"}

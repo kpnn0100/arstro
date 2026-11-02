@@ -15,7 +15,51 @@ Format, newest first:
 
 ---
 
-## THE TASTE, as code — `scripts/taste.py` (read this first; it is what `edit.py run` does by default)
+## THE TASTE v2 (2026-11-02) — read this first; it is what `edit.py run` does by default
+
+45 verdicts (27 + 18 on 2026-11-02). The approver: *"those bad need to judge carefully, those bad are really
+flat, it lose the depth needed for cinematic, learn the definition for cinematic … analyze the characteristic
+of each photo and analyze all my comment to know which photo apply which color is the best — basic mechanism
+is keep the skin color for human"*.
+
+### What CINEMATIC means to this approver — measured on every judged version (499 renders)
+Relative to the other versions of the same photo, the approver's **BEST** had deeper blacks (p1 −0.012),
+brighter highlights (p99 +0.018), a wider tonal range (+0.031), more global (sd +0.009) and local contrast
+(+0.003) and a little more colour (sat +0.022). The **BAD** were the opposite: lifted blacks (+0.009), DULL
+highlights (p99 −0.034), a narrow range (−0.043), less contrast (−0.011 / −0.004), less colour (−0.017).
+**Cinematic = the full tonal range (true blacks AND highlights reaching near white) + contrast, global and
+local + colour that carries a mood (warm, lonely) while the main subject's colour stays clean + balance.**
+Matte, faded, lowered whites = flat = rejected: Moody Forest 70 % was BAD 7 times (sd −0.038, lc −0.014).
+
+Two mechanisms enforce it now: **depth is never scaled** (moods.scale keeps the master curve, clarity,
+dehaze, vignette, grain at full — a mood at 50 % is half its colour, full depth; the flat Neon Noir 60 % /
+Teal & Orange 60 % were flat only because their curve had been scaled), and **edit.py `depth()`** steepens a
+photo's own curve until p1 <= 0.035 and p99 >= 0.90 (night 0.02 / 0.80), within the clipping guard.
+
+### Which photo gets which colour (taste.py v2, from each photo's characteristics and the notes)
+| photo characteristics | look | evidence (2026-11-02 notes) |
+|---|---|---|
+| sky, foliage, buildings, animals, landscape | **Natural Teal** | 14 bests, never bad: Fuji "the mood is very clear, it feel lonely"; Kamakura "really love the sky"; Nara deer "keeping the main object color clean"; sea wall "the balance needed" |
+| a person is the subject | **Natural Cinema 70 %** colour, full depth, **skin protected** | the woman (NC 70 %; "just balance, doesn't create a mood" — full depth now adds the mood the 70 % lacked), the teamLab face: "apply a mood with the skin color still correct" |
+| still water, reflections | **Neon Noir 60 %** colour at full depth | the pond: "#11 [natural cinema] got the depth but #9 [neon noir 60 %] got the color" |
+| night city | **Golden Dream 50 %** | Shinjuku "really have warm mood"; the alley "feel warm" |
+| aquarium | **Golden Dream 50 %** | the jellyfish: "i like the water color, teal really hit it" |
+| art light (teamLab) | **corrected only**; a lit face: NC 70 % | the orbs: "bring the mood without destroying face color" |
+Open question: the Asakusa shopfront took Natural Cinema + contrast ("#9 feel really cinematic, you are so
+close") after Natural Teal the round before — street colour may want NC; one more verdict decides.
+
+### The basic mechanism: keep the skin colour for human
+`taste.protect_skin`: on any photo with a person (the plan's `subject`, else the skin-hue fraction), the mixer
+does nothing to hue on the skin line (8–48°), never desaturates it, lifts it a touch at most — whatever the
+look does to the rest of the palette. Plus the earlier rules: no `shadows` lift on a face mask, low luminance NR.
+
+### Removed from the judging (the approver's words)
+`_DSF6778.RAF` (Osaka castle through branches: "next time remove this photo, it's too bad to judge") and
+`_DSF7014.RAF` (the teamLab fire: "remove this photo too") — lab.py REMOVED; still in the project.
+
+Tokyo re-edited with v2: `~/photo/tokyo/taste-v2/` (tokyo.cmp holds it; v1 kept as `~/photo/tokyo/taste/tokyo.taste-v1.cmp`).
+
+## THE TASTE, as code — `scripts/taste.py` (v1, 2026-10-30 — superseded by v2 above)
 
 27 Grade Lab verdicts on 18 photos (2026-10-30: 9 palette + 1 refine, then 18 taste rounds on photos the
 first round had not shown — one invalid, the sea wall's page could not load its images). The taste rounds

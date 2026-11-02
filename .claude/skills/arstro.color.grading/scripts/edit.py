@@ -240,6 +240,36 @@ def match(cs, node, d, target, fam, strength, log):
     return a
 
 
+# What "cinematic" means to the approver, MEASURED on their Grade Lab picks (taste.md): the best versions had
+# the deepest blacks and the brightest highlights of their round; the bad ones were flat. Day frames are
+# held to p1 <= 0.035 and p99 >= 0.90, night frames to p1 <= 0.02 and p99 >= 0.80 (their lights).
+DEPTH = {"day": (0.035, 0.90), "night": (0.02, 0.80)}
+
+
+def depth(cs, node, d, fam, log):
+    """Steepen THIS photo's master curve until it has the range a cinematic frame needs: the toe down while
+    the blacks are lifted, the shoulder up while the highlights are dull (and not near clipping). At most
+    three steps of 0.02 each way — the look keeps its character, a flat result does not survive."""
+    lo, hi = DEPTH[fam]
+    a = cs.analyze(node)["analysis"]
+    base = d.get("curve", "0,0;1,1")
+    toe = sh = 0.0
+    for _ in range(3):
+        p1, p99 = a["lumPct"][0], a["lumPct"][6]
+        dt = -0.02 if p1 > lo and toe > -0.06 else 0.0
+        ds = 0.02 if p99 < hi and sh < 0.06 and a["clipHighlights"] < CLIP[fam] * 0.5 else 0.0
+        if not dt and not ds:
+            break
+        toe += dt
+        sh += ds
+        d["curve"] = offset_curve(base, toe=toe, shoulder=sh)
+        cs.run("select %d\nset curve=%s" % (node, d["curve"]))
+        a = cs.analyze(node)["analysis"]
+    if toe or sh:
+        log.append("depth toe %+.2f shoulder %+.2f -> p1 %.3f p99 %.3f" % (toe, sh, a["lumPct"][0], a["lumPct"][6]))
+    return a
+
+
 def guard(cs, node, d, fam, log):
     a = cs.analyze(node)["analysis"]
     hl = float(d.get("highlights", 0))
@@ -346,10 +376,11 @@ def cmd_run(args):
             if mood == "taste":
                 ch = T.choose(scene, r["analysis"], pp)
                 v = {"look": ch["look"], "strength": ch["strength"] * args.strength * pp.get("strength", 1.0),
-                     "tweaks": ch["tweaks"]}
+                     "tweaks": ch["tweaks"], "skin": ch["skin"]}
                 d = T.params(corr, fam, v, pp)
-                log.append("look %s %.0f%%%s — %s" % (ch["look"], v["strength"] * 100,
-                                                      "".join(" +%s" % t[0] for t in ch["tweaks"]), ch["why"]))
+                log.append("look %s %.0f%%%s%s — %s" % (ch["look"], v["strength"] * 100,
+                                                        "".join(" +%s" % t[0] for t in ch["tweaks"]),
+                                                        " +skin" if ch["skin"] else "", ch["why"]))
             else:
                 d = compose(corr, M.scale(M.MOODS[mood][fam], args.strength * pp.get("strength", 1.0)), pp)
             set_photo(cs, node, d, pp.get("masks", []))
@@ -381,6 +412,7 @@ def cmd_run(args):
             node, fam, d = r["node"], r["family"], r["d"]
             if r["match"] and targets.get(fam):
                 a = match(cs, node, d, targets[fam], fam, args.match, r["log"])
+            depth(cs, node, d, fam, r["log"])
             a = guard(cs, node, d, fam, r["log"])
             stem = Path(r["name"]).stem
             cs.preview(out / "after" / (stem + ".jpg"), node)

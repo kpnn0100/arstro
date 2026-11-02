@@ -1,6 +1,6 @@
 ---
 name: arstro.color.grading
-description: Colour grading photos (and video frames) the way a professional colourist does — read the photo's context and light first (metadata, measurement, and LOOKING at it), correct it, then apply a look — so the photographer only checks. EDITS IN THE APPROVER'S TASTE by default (scripts/taste.py, learned from their Grade Lab picks: natural object colour, depth and contrast, balance with a story; Natural Teal for sky/foliage/architecture, Natural Cinema for people/animals, subtle and warm at night, hands off art light, never burnt highlights or veiled faces). EVERY PHOTO IS EDITED ON ITS OWN — look at each one, write its plan (subject, sky, light, local masks), then correct, give it the mood, apply the plan and match it to the set (scripts/edit.py review / run) — so 1000 photos come out edited and consistent from one prompt. Drives Cosmo through its MCP server (`cosmo-cc mcp`: cosmo_analyze, cosmo_preview, cosmo_run, cosmo_state) or the autograde script. Use it whenever photos are to be graded, colour-corrected, white-balanced, "made cinematic", given a film / teal-orange / moody / night / Tokyo neon look, matched as a set, or auto-edited; when the user asks to "grade", "edit", "color" or "make it look like a movie" a Cosmo project (.cmp) or an Interstellar timeline; and on `/arstro.color.grading` — even when grading is one step of a bigger task. Also for MOODS and editing many photos by prompt — "make these moody", "neon cyberpunk", "soft pastel spring", "Wong Kar-wai", "golden", "sad and blue", "black and white", "teal and orange", "faded film", "a bit warmer / less green / stronger" — nine moods built with R/G/B curves and the colour mixer, one file each in moods/, applied to a whole project in seconds (scripts/mood.py). Holds the colour science, the professional workflow, how to read light and scenes, colour blending with curves and mixer (references/moods.md), Cosmo's controls MEASURED (they are not Lightroom's), the autograde pipeline (scripts/autograde.py) and the approver's taste ledger (taste.md).
+description: Colour grading photos (and video frames) the way a professional colourist does — read the photo's context and light first (metadata, measurement, and LOOKING at it), correct it, then apply a look — so the photographer only checks. EDITS IN THE APPROVER'S TASTE by default (scripts/taste.py, learned from their Grade Lab picks: CINEMATIC = full tonal range and contrast, never flat; natural object colour and the skin colour of people kept true; Natural Teal for sky/foliage/buildings/animals, Natural Cinema for people, warm Golden Dream at night and in aquariums, Neon Noir colour on reflections, hands off art light, never burnt highlights or veiled faces). EVERY PHOTO IS EDITED ON ITS OWN — look at each one, write its plan (subject, sky, light, local masks), then correct, give it the mood, apply the plan and match it to the set (scripts/edit.py review / run) — so 1000 photos come out edited and consistent from one prompt. Drives Cosmo through its MCP server (`cosmo-cc mcp`: cosmo_analyze, cosmo_preview, cosmo_run, cosmo_state) or the autograde script. Use it whenever photos are to be graded, colour-corrected, white-balanced, "made cinematic", given a film / teal-orange / moody / night / Tokyo neon look, matched as a set, or auto-edited; when the user asks to "grade", "edit", "color" or "make it look like a movie" a Cosmo project (.cmp) or an Interstellar timeline; and on `/arstro.color.grading` — even when grading is one step of a bigger task. Also for MOODS and editing many photos by prompt — "make these moody", "neon cyberpunk", "soft pastel spring", "Wong Kar-wai", "golden", "sad and blue", "black and white", "teal and orange", "faded film", "a bit warmer / less green / stronger" — nine moods built with R/G/B curves and the colour mixer, one file each in moods/, applied to a whole project in seconds (scripts/mood.py). Holds the colour science, the professional workflow, how to read light and scenes, colour blending with curves and mixer (references/moods.md), Cosmo's controls MEASURED (they are not Lightroom's), the autograde pipeline (scripts/autograde.py) and the approver's taste ledger (taste.md).
 ---
 
 # arstro.color.grading
@@ -78,11 +78,14 @@ python3 $S/edit.py run shoot.cmp --plan ~/edit/shoot/plan.json --out ~/edit/shoo
 #   4. export: cosmo_run "export --outdir ~/edit/shoot/jpg --format jpg --quality 90 --long-edge 2048"
 ```
 
-**The default look is the APPROVER'S TASTE** (`scripts/taste.py`, learned in the Grade Lab — taste.md): each
-photo gets the look the verdicts chose for photos like it — Natural Teal for sky / foliage / architecture,
-Natural Cinema + half a contrast step when a person, animal or tower is the subject (from the plan's
-`subject`, else skin-hue fraction), Natural Cinema 70 % + warmer for night city, cinematic + warmer for an
-aquarium, corrected only for art light. A plan entry may name `"look"` (+ `"strength"`, `"tweaks"`) to
+**The default look is the APPROVER'S TASTE v2** (`scripts/taste.py`, learned in the Grade Lab — taste.md): each
+photo gets the look the verdicts chose for photos like it — Natural Teal for sky / foliage / buildings /
+animals / landscape, Natural Cinema 70 % with the skin line protected when a PERSON is the subject (the
+plan's `subject`, else skin-hue fraction), Neon Noir 60 % for still water and reflections, Golden Dream 50 %
+for night city and aquariums, corrected only for art light (NC 70 % for a lit face). Strengths scale COLOUR
+only; depth stays full. **Cinematic = full tonal range + contrast** (measured on the approver's picks): after
+matching, `depth()` steepens the photo's own curve until p1 <= 0.035 and p99 >= 0.90 (night 0.02 / 0.80).
+**Basic mechanism: keep the skin colour for human** (`taste.protect_skin`). A plan entry may name `"look"` (+ `"strength"`, `"tweaks"`) to
 override; `--mood <name|words>` puts one mood on every photo instead (only when the user asks for one).
 
 Per photo, `run` does what a retoucher does in order: **correct** (autograde's closed loop — white
@@ -92,7 +95,7 @@ balance against this photo's witness, exposure highlights-first, noise by ISO, t
 a sky graded down with a linear, a dead ceiling sunk) → **match** (after every photo has the above, the
 set's median shadow cast, highlight cast and saturation per day/night family are the targets; each
 photo's OWN R/G/B toe / shoulder and saturation are nudged 70 % of the way — a colourist matching shots
-to a hero) → **guard** clipping. A partial re-run (`--names`) keeps the whole set's targets and merges
+to a hero) → **depth** (no flat frame survives) → **guard** clipping. A partial re-run (`--names`) keeps the whole set's targets and merges
 into `edit.json`, so fixing the few that missed never re-centres the set on them.
 
 **Writing the plan is the agent's real job — LOOK at every photo.** For each: what is the subject and

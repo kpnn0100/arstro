@@ -299,9 +299,20 @@ MOODS = {
 _WHEEL = re.compile(r"^grade[012]$")
 
 
-def scale(params, s):
-    """`params` at strength `s` (0 = neutral, 1 = as written, >1 exaggerated): curve points move toward
-    the identity line, mixer y and wheel sat/lum scale, scalars scale (temp around 6500). Hue angles do
+# The TONE of a mood — its depth — is never scaled with its colour. The Grade Lab measured it (2026-11-02):
+# the approver's BAD picks had lifted blacks (p1 +0.009 vs the round), dull highlights (p99 -0.034) and a
+# narrower range (-0.043); the reduced-strength moods (Neon Noir 60 %, Teal & Orange 60 %) were among them
+# because scaling also pulled their master curve toward the flat line, and Cosmo's base render has no curve
+# of its own. "Those bad are really flat, it lose the depth needed for cinematic." So a mood at 50 % is half
+# its COLOUR at its full depth.
+TONE_KEYS = {"curve", "contrast", "clarity", "texture", "dehaze", "lensVignette", "sharpenAmount",
+             "grainAmount", "grainSize"}
+
+
+def scale(params, s, keep_tone=True):
+    """`params` at strength `s` (0 = neutral, 1 = as written, >1 exaggerated): the colour scales — R/G/B
+    curve points move toward the identity line, mixer y and wheel sat/lum scale, colour scalars scale
+    (temp around 6500) — and, unless keep_tone=False, the TONE (TONE_KEYS) stays as written. Hue angles do
     NOT scale — a wheel at half strength is the same hue, weaker."""
     if abs(s - 1.0) < 1e-6:
         return params
@@ -311,6 +322,9 @@ def scale(params, s):
             out.append(tok)
             continue
         k, v = tok.split("=", 1)
+        if keep_tone and k in TONE_KEYS:
+            out.append(tok)
+            continue
         if k in ("curve", "curveR", "curveG", "curveB"):
             pts = []
             for p in v.split(";"):
