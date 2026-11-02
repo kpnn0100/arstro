@@ -15,6 +15,27 @@ Format, newest first:
 
 ---
 
+## EXAM 1 RESULT: 15 / 16 good = 94 % — "too safe"  → v4 BOLDER, exam 2 awaiting marks
+
+Exam 1 (kept: `~/photo/grade-lab/exam/exam-1-safe-94pct.json`) passed the 90 % bar, and the approver: *"if i don't
+comment that mean you are playing it too safe, you just correct the lighting, i need to apply mood by playing with
+color, try something riskier"*.
+- COMMENTED goods = the mood landed: Shinjuku "really balance", Kamakura "this photo have mood", pagoda "love the
+  sky, the analyze is correct, tower really stand out", Fuji "love the sky color", moat "color real hit", pond
+  "really good", sea wall "good on balance color, but the mountain need to be darker".
+- SILENT goods = too safe: the alley, the jellyfish, both teamLab, Asakusa, the Nara deer, the woman, the grazing deer.
+- NOT GOOD: Nikko — "the color of green need to be more depth, deep to have cinematic look".
+LESSONS → v4: (1) a silent "good" is a fail of ambition — colour must carry the mood, not only correct it;
+(2) greens DEEP: darker and richer (Natural Teal mixer lum −0.3 at 110–150°, no green desaturation), big green
+masses weighted (sea-wall mountain mask); (3) colour up everywhere: Natural Teal 130 % colour on scenery, the teal
+mood on people with skin protected (not NC 70 %), Golden Dream 80 % at night and in the aquarium, Neon Noir 80 % on
+reflections, Neon Noir 50 % on art light with faces protected (not "corrected only").
+The grader's own review of the bold build caught two faults before the approver saw them: a cream R/B shoulder at
+130 % turned every white overcast sky PEACH (pagoda, woman, moat, sea wall) — Natural Teal's curves now tint the
+SHADOWS only; and set-matching dragged clean skies toward the set's yellow-olive median — neutral highlight
+targets are clamped to a clean-white window (warmth <= 0.15, tint <= 0.06).
+EXAM 2 VERDICT: _(pending)_
+
 ## v3 + THE EXAM (2026-11-02, afternoon) — status: exam awaiting the approver's marks
 
 Eight more verdicts (53): with full depth the approver's GOOD lists got long (the moat: 8 good versions) and the

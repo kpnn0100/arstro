@@ -421,6 +421,12 @@ def cmd_run(args):
                 if len(zs) >= 2:
                     t[z] = {"warmth": statistics.median(x["warmth"] for x in zs),
                             "tint": statistics.median(x["tint"] for x in zs)}
+            # Whites stay CLEAN: whatever the set's median says, a neutral highlight is never matched toward more
+            # than slightly warm (warmth 0.15) or a hair green (tint 0.06) — the set's median after the look was
+            # +0.26 / +0.18 (yellow-olive) and dragged the moat's and Asakusa's skies there (bold exam review).
+            if "highlights" in t:
+                t["highlights"]["warmth"] = max(-0.05, min(0.15, t["highlights"]["warmth"]))
+                t["highlights"]["tint"] = max(-0.03, min(0.06, t["highlights"]["tint"]))
             t["sat"] = statistics.median(r["pass1"]["meanSaturation"] for r in rs)
             targets[fam] = t
         if only and prev and prev.get("targets"):

@@ -126,7 +126,13 @@ def has_person(analysis, plan_entry):
 
 
 def choose(scene, analysis, plan_entry=None):
-    """{look, strength, tweaks, skin, why} for one photo — the approver's choice for photos like it."""
+    """{look, strength, tweaks, skin, why} for one photo — the approver's choice for photos like it.
+
+    v4, BOLDER (2026-11-02): the exam passed at 94 %, and the approver: "if i don't comment that mean you are
+    playing it too safe, you just correct the lighting, i need to apply mood by playing with color, try something
+    riskier". The commented goods were the teal-colour ones ("color real hit", "love the sky color", "this photo
+    have mood"); the silent ones were the safe ones (correction, NC 70 %, Golden Dream 50 %). So colour goes UP
+    everywhere — depth stays full, skin stays true."""
     pe = plan_entry or {}
     person = has_person(analysis, pe)
     subject = pe.get("subject", "")
@@ -134,20 +140,22 @@ def choose(scene, analysis, plan_entry=None):
         return {"look": pe["look"], "strength": pe.get("strength", 1.0), "tweaks": pe.get("tweaks", []),
                 "skin": person, "why": "named in the plan"}
     if scene == "dark-interior":
-        # 2026-11-02, second half: the lit face took 'corrected only' too — 3 of the last 4 art-light verdicts.
-        return {"look": "corrected", "strength": 1.0, "tweaks": [], "skin": person,
-                "why": "art light is the artist's: corrected only won 3 of the last 4 ('mood without destroying face color')"}
+        return {"look": "neon-noir", "strength": 0.5, "tweaks": [], "skin": True,
+                "why": "art light, bolder: neon noir's cyan and magenta at 50 % — the light's own palette pushed, faces "
+                       "kept true ('corrected only' was too safe in the exam)"}
     if scene == "aquarium":
-        return {"look": "golden-dream", "strength": 0.5, "tweaks": [], "skin": False,
-                "why": "the jellyfish, twice: golden dream 50 %, 'teal really hit it'"}
+        return {"look": "golden-dream", "strength": 0.8, "tweaks": [], "skin": False,
+                "why": "amber bell on teal water, bolder: golden dream 80 % ('teal really hit it'; 50 % was too safe)"}
     if scene == "night-city":
-        return {"look": "golden-dream", "strength": 0.5, "tweaks": [], "skin": person,
-                "why": "night city: golden dream 50 % at full depth, 'really have warm mood'"}
-    if person:
-        return {"look": "natural-cinema", "strength": 0.7, "tweaks": [], "skin": True,
-                "why": "a person: natural cinema 70 % colour, full depth, skin kept true"}
+        return {"look": "golden-dream", "strength": 0.8, "tweaks": [], "skin": person,
+                "why": "night city, bolder: golden dream 80 % ('really have warm mood'; 50 % was too safe)"}
     if WATER.search(subject):
-        return {"look": "neon-noir", "strength": 0.6, "tweaks": [], "skin": False,
-                "why": "green water and reflections: neon noir's colour at full depth ('#9 got the color')"}
-    return {"look": "natural-teal", "strength": 1.0, "tweaks": [], "skin": False,
-            "why": "sky, foliage, buildings, animals, landscape: natural teal, 14 bests and never bad"}
+        return {"look": "neon-noir", "strength": 0.8, "tweaks": [], "skin": False,
+                "why": "still water and reflections: neon noir's colour at 80 %, full depth ('really good')"}
+    if person:
+        return {"look": "natural-teal", "strength": 1.0, "tweaks": [], "skin": True,
+                "why": "a person: the teal mood the approver loves on everything around her, her skin kept true "
+                       "(natural cinema 70 % was 'just balance, doesn't create a mood')"}
+    return {"look": "natural-teal", "strength": 1.3, "tweaks": [], "skin": False,
+            "why": "sky, foliage, buildings, animals: natural teal at 130 % colour — teal blended through the tones, deep "
+                   "greens ('color real hit', 'love the sky color'; the green 'need to be more depth')"}

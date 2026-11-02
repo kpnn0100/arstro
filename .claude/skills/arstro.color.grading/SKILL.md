@@ -162,6 +162,12 @@ behind it, the masks, matching, depth, clipping) plus the reading written while 
 **Review your own exam before the approver does** — the first build showed a white facade going green, which
 found two real faults (below) the approver never had to see. A "Not good" + why is a lesson: fix the RULE.
 
+**A silent "good" means too safe** (the approver, exam 1 at 94 %): a mood must be MADE with colour, not only
+corrected into; v4 runs the teal mood at 130 % colour on scenery, on people with skin protected, Golden Dream 80 %
+at night, Neon Noir on art light and reflections — and greens DEEP ("the color of green need to be more depth").
+White overcast skies keep the colour out of the highlights (teal in the shadows only — a cream shoulder at 130 %
+turned them peach), and neutral highlights are matched to a clean-white window at most.
+
 Rules learned from that review: **match neutrals only** (a zone joins set-matching only when it is
 near-neutral — a sky, a wall, stone; sunlit leaves are not a white); **warm highlights lean orange (30°), never
 yellow (40-45°)**, which reads green on white; with a person, matching may raise saturation by +5 at most.

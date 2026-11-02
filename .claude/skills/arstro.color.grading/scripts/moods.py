@@ -278,14 +278,24 @@ MOODS = {
     "natural-teal": {
         "title": "Natural Teal",
         "about": "Natural Cinema for landscapes and nature: foliage turned toward teal, a deep sky, more depth — "
-                 "the story the approver liked in Neon Noir on Fuji and the pond, kept balanced, skin and wood untouched.",
+                 "the story the approver liked in Neon Noir on Fuji and the pond, kept balanced, skin and wood untouched. "
+                 "v4 (2026-11-02 exam): colour BLENDED through the tones with the R/G/B curves (teal shadows, cream "
+                 "highlights) and DEEP greens — 'the color of green need to be more depth, deep to have cinematic look'.",
         "keywords": ["landscape", "nature", "teal foliage", "natural teal", "deep sky", "travel landscape"],
-        "day": ("curve=%s grade0=200,5,0 grade1=30,4,0 grade2=30,6,0 balance=-10 temp=6700 "
+        # Greens: darker (lum -0.3 around 110-150 deg) and RICHER (no longer desaturated), still bent toward teal —
+        # the exam's one NOT GOOD (Nikko) and the sea wall's "the mountain need to be darker". The R/G/B curves
+        # put teal in the SHADOWS only and leave the highlights on the diagonal: a cream shoulder at 130 % turned
+        # every white overcast sky peach (pagoda, woman, moat, sea wall — the grader's review of the bold exam);
+        # the approver loved those skies neutral-cool. The warm wheel at 30 deg is all the warmth the light needs.
+        "day": ("curve=%s curveR=%s curveG=%s curveB=%s grade0=200,5,0 grade1=30,4,0 grade2=30,6,0 balance=-10 temp=6700 "
                 "mixer0=0,0;40,0;60,-0.04;100,0.1;140,0.14;200,0.02;230,-0.04;300,0 "
-                "mixer1=0,0;30,0.05;60,-0.15;110,-0.2;160,0.05;200,0.1;300,0 "
-                "mixer2=0,0;30,0.04;110,-0.18;160,-0.1;220,-0.25;300,0 "
+                "mixer1=0,0;30,0.05;60,-0.1;110,-0.04;150,0.08;200,0.1;300,0 "
+                "mixer2=0,0;30,0.04;70,-0.1;110,-0.32;150,-0.28;190,-0.1;220,-0.25;300,0 "
                 "saturation=-4 vibrance=10 clarity=12 dehaze=8 grainAmount=5 grainSize=14 lensVignette=-16 sharpenAmount=25"
-                % _crv((0, 0), (0.15, 0.1), (0.5, 0.49), (0.82, 0.87), (1, 0.975))),
+                % (_crv((0, 0), (0.15, 0.1), (0.5, 0.49), (0.82, 0.87), (1, 0.975)),
+                   _crv((0, 0), (0.25, 0.235), (0.6, 0.6), (1, 1)),
+                   _crv((0, 0.01), (0.5, 0.5), (1, 1)),
+                   _crv((0, 0.03), (0.25, 0.27), (0.6, 0.6), (1, 1)))),
         "night": ("curve=%s curveR=%s curveB=%s grade2=30,10,0 "
                   "mixer0=0,0;55,-0.04;120,0.14;300,0 mixer1=0,0;120,-0.15;190,0.15;300,0.05 mixer2=0,0;120,-0.2;220,-0.15;300,0 "
                   "saturation=-2 vibrance=8 clarity=10 grainAmount=8 grainSize=18 lensVignette=-14"

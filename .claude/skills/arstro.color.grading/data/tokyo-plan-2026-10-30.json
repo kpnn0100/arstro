@@ -195,7 +195,7 @@
   "_DSF6151.RAF": {
    "scene": "daylight",
    "subject": "Nikko shrine under cedars",
-   "intent": "lift the shrine, tame the bright sky patches",
+   "intent": "lift the shrine, tame the bright sky patches; the cedars deep and dense ('the color of green need to be more depth')",
    "masks": [
     {
      "type": "radial",
@@ -332,7 +332,7 @@
   "_DSF6696 (1).RAF": {
    "scene": "overcast-day",
    "subject": "sea wall under a forested mountain (Miyajima)",
-   "intent": "grade the sky, settle the water, a touch more contrast for the flat light",
+   "intent": "grade the sky, settle the water, and give the forested mountain weight ('the mountain need to be darker')",
    "set": "contrast+=4",
    "masks": [
     {
@@ -350,6 +350,16 @@
      "x1": 0.5,
      "y1": 1.0,
      "exposure": -0.15
+    },
+    {
+     "type": "radial",
+     "cx": 0.3,
+     "cy": 0.3,
+     "rx": 0.5,
+     "ry": 0.28,
+     "feather": 0.7,
+     "exposure": -0.3,
+     "saturation": 6
     }
    ],
    "reading": "A sea wall under a forested mountain at Miyajima: flat overcast light, grey-green water, a pale sky. A low-contrast scene \u2014 it needs depth without turning dark."
