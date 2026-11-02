@@ -169,6 +169,17 @@ class Lab:
         self.save_state()
         return rnd
 
+    def mark(self, body):
+        """Every click is saved the moment it is made (a DRAFT on the round), so a mark is never lost to a
+        missed button: on 2026-11-02 a whole rating session vanished because marks lived only in the page
+        until a "Pick best" button was pressed, and clicking a photo name discarded them."""
+        with self.lock:
+            rp = self.dir / "rounds" / body["round"] / "round.json"
+            rnd = json.loads(rp.read_text())
+            rnd["draft"] = {"best": body.get("best"), "good": body.get("good", []), "bad": body.get("bad", []),
+                            "note": body.get("note", ""), "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+            rp.write_text(json.dumps(rnd, indent=1))
+
     def judge(self, body):
         with self.lock:
             rnd = self.round(body["round"])
@@ -193,17 +204,38 @@ class Lab:
                 return self.new_round(rnd["photo"], "refine", best["variant"],
                                       1.0 if rnd["kind"] == "palette" else max(0.25, rnd["step"] / 2))
             if action == "photo" and body.get("photo") in self.photos:
-                return self.new_round(body["photo"], "palette", None, 1.0)
+                return self.new_round(body["photo"], "taste" if self.state.get("mode") == "taste" else "palette", None, 1.0)
             i = self.photos.index(rnd["photo"]) if rnd["photo"] in self.photos else -1
             # A taste session stays a taste session: the next photo gets the same candidates.
             nxt = "taste" if rnd["kind"] in ("taste",) or self.state.get("mode") == "taste" else "palette"
             return self.new_round(self.photos[(i + 1) % len(self.photos)], nxt, None, 1.0)
 
 
+def drafts(lab_dir=os.path.expanduser("~/photo/grade-lab")):
+    """Marks saved on rounds that never got a verdict (the approver moved on without pressing a button) —
+    they are the approver's picks all the same, so the analysis reads them, flagged as drafts."""
+    out = []
+    for rp in sorted(Path(lab_dir).glob("rounds/*/round.json")):
+        r = json.loads(rp.read_text())
+        d = r.get("draft") or {}
+        if r.get("judged") or not d.get("best"):
+            continue
+        by = {it["id"]: it for it in r["items"]}
+        b = by.get(d["best"])
+        if not b:
+            continue
+        out.append({"at": d.get("at"), "photo": r["photo"], "scene": r.get("scene"), "round": r["id"], "kind": r["kind"],
+                    "step": r["step"], "best": {"label": b["label"], **b["variant"]},
+                    "good": [{"label": by[i]["label"], **by[i]["variant"]} for i in d.get("good", []) if i in by],
+                    "bad": [{"label": by[i]["label"], **by[i]["variant"]} for i in d.get("bad", []) if i in by],
+                    "note": d.get("note", ""), "action": "draft", "shown": [it["label"] for it in r["items"]]})
+    return out
+
+
 def summary_text():
     if not JUDGMENTS.exists():
         return "no verdicts yet"
-    recs = [json.loads(l) for l in JUDGMENTS.read_text().splitlines() if l.strip()]
+    recs = [json.loads(l) for l in JUDGMENTS.read_text().splitlines() if l.strip()] + drafts()
     recs = [r for r in recs if r.get("best") and "look" in r["best"]]
     if not recs:
         return "no Grade Lab verdicts yet"
@@ -263,7 +295,7 @@ footer button.alt{background:#2c2c33;color:var(--ink)}footer label{color:var(--d
 </style></head><body>
 <header><h1>Grade Lab <small>arstro.color.grading — you are the approver</small></h1>
 <div class="photos" id="photos"></div><label><input type="checkbox" id="names"> show names</label>
-<a href="/taste" style="color:var(--acc)">taste so far</a></header>
+<a href="/taste" style="color:var(--acc)">taste so far</a><span id="saved" style="color:var(--good)"></span></header>
 <main><p class="meta" id="meta"></p><div class="grid" id="grid"></div></main>
 <footer><textarea id="note" placeholder="why? (optional) — e.g. 'skin too pink', 'love the mint shadows', 'sky too flat'"></textarea>
 <button id="refine">Pick best → refine around it</button><button class="alt" id="next">Pick best → next photo</button></footer>
@@ -272,7 +304,12 @@ footer button.alt{background:#2c2c33;color:var(--ink)}footer label{color:var(--d
 <script>
 let R=null, verdict={best:null,good:new Set(),bad:new Set()}, vi=0;
 const $=s=>document.querySelector(s);
-async function load(){R=await (await fetch('/api/round')).json();verdict={best:null,good:new Set(),bad:new Set()};draw();}
+async function load(){R=await (await fetch('/api/round')).json();const d=R.draft||{};
+  verdict={best:d.best||null,good:new Set(d.good||[]),bad:new Set(d.bad||[])};$('#note').value=d.note||'';draw();
+  $('#saved').textContent=d.best?'saved ✓ (your marks on this photo)':'';}
+async function save(){try{await fetch('/api/mark',{method:'POST',headers:{'content-type':'application/json'},
+  body:JSON.stringify({round:R.id,best:verdict.best,good:[...verdict.good],bad:[...verdict.bad],note:$('#note').value})});
+  $('#saved').textContent='saved ✓';}catch(e){$('#saved').textContent='NOT saved — is the lab running?';$('#saved').style.color='var(--bad)';}}
 function draw(){
   $('#photos').innerHTML=R.photos.map(p=>`<button class="${p==R.photo?'on':''}" data-p="${p}">${p.replace('.RAF','')}</button>`).join('');
   document.querySelectorAll('.photos button').forEach(b=>b.onclick=()=>go('photo',b.dataset.p));
@@ -287,7 +324,7 @@ function draw(){
 function mark(a,i){const id=R.items[i].id;
   if(a=='best'){verdict.best=verdict.best==id?null:id;verdict.bad.delete(id);}
   else{const s=verdict[a],o=verdict[a=='good'?'bad':'good'];s.has(id)?s.delete(id):(s.add(id),o.delete(id));if(a=='bad'&&verdict.best==id)verdict.best=null;}
-  paint();}
+  paint();save();}
 function paint(){R.items.forEach((it,i)=>{const c=$('#c'+i);c.className='card'+(verdict.best==it.id?' best':verdict.good.has(it.id)?' good':verdict.bad.has(it.id)?' bad':'');
   c.querySelectorAll('.row button').forEach(b=>b.classList.toggle('on',(b.dataset.a=='best'&&verdict.best==it.id)||(b.dataset.a=='good'&&verdict.good.has(it.id))||(b.dataset.a=='bad'&&verdict.bad.has(it.id))));});}
 function open_(i){vi=i;$('#vimg').src=`/img/${R.id}/${R.items[i].file}`;$('#vlab').textContent=`#${i+1}${$('#names').checked?' — '+R.items[i].label:''} · ← → move · B best · G good · X bad · Esc close`;$('#view').style.display='flex';}
@@ -299,9 +336,11 @@ document.onkeydown=e=>{if($('#view').style.display!='flex')return;
 $('#names').onchange=draw;
 async function go(action,photo){
   if(action!='photo'&&!verdict.best){alert('Mark the best one first (click Best under a photo, or B in the viewer).');return;}
+  await save();   // a photo switch keeps the marks: with a Best they become the verdict, without one they stay a draft
   $('#busy').style.display='flex';
   await fetch('/api/judge',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({round:R.id,best:verdict.best,good:[...verdict.good],bad:[...verdict.bad],note:$('#note').value,action,photo})});
   $('#note').value='';$('#busy').style.display='none';window.scrollTo(0,0);load();}
+$('#note').onchange=save;
 $('#refine').onclick=()=>go('refine');$('#next').onclick=()=>go('next');
 load();
 </script></body></html>"""
@@ -351,11 +390,18 @@ def serve(args):
                     lab.state["mode"] = body.get("kind", "palette")
                     r = lab.new_round(body.get("photo") or lab.photos[0], body.get("kind", "palette"), None, 1.0)
                 return self.send(200, json.dumps({"round": r["id"], "items": len(r["items"])}), "application/json")
-            if self.path != "/api/judge":
+            if self.path not in ("/api/judge", "/api/mark"):
                 return self.send(404, "not found", "text/plain")
-            n = int(self.headers.get("content-length", 0))
-            body = json.loads(self.rfile.read(n) or b"{}")
-            if body.get("action") == "photo":
+            if self.path == "/api/judge":
+                n = int(self.headers.get("content-length", 0))
+                body = json.loads(self.rfile.read(n) or b"{}")
+            else:
+                body = {}
+            if self.path == "/api/mark":
+                n = int(self.headers.get("content-length", 0))
+                lab.mark(json.loads(self.rfile.read(n) or b"{}"))
+                return self.send(200, '{"saved": true}', "application/json")
+            if body.get("action") == "photo" and not body.get("best"):
                 with lab.lock:
                     lab.new_round(body["photo"], "taste" if lab.state.get("mode") == "taste" else "palette", None, 1.0)
                 return self.send(200, "{}", "application/json")
