@@ -114,6 +114,10 @@ it with the camera's frame where the approver's eye goes first:
   white witness — a tinted window's cast left in the clouds turns olive under any warm look.
 - `subject_check` (the plan's first radial lift): a person never ends darker than the camera had them (night: 10 %
   brighter), and at night keeps the camera's warmth and colour; a white subject gains no colour (local cooling).
+**A sky's fix stays in the sky** (exam 3): the sky check works through the sky's own graduated filter, colour NR, the
+highlights slider and the plan's sky masks — never the mixer, vibrance, the look's temp or wheels (they recoloured the
+land the approver had passed). **When the eye and a number disagree about a sky, the eye wins**: look at it large,
+switch controls off one by one (that is how vibrance was found).
 **The sky belongs to the photo**: the mood goes into the land, the shadows and the light — never `dehaze`, `clarity`
 or `saturation +` in a sky mask. And after `run`, the agent still LOOKS at the skies at 1:1 crops beside the camera's.
 
@@ -125,8 +129,9 @@ neon, the artist's light), and what the photo needs that the mood cannot know. T
 |---|---|
 | a subject (person, animal, car, building) | radial on it: `exposure` +0.15…+0.25, `clarity` +6…8; small subject → small rx/ry |
 | a big pale or white sky | linear from the horizon (0) up to the top (full): `exposure` −0.2…−0.3 ONLY (`saturation +10` / `dehaze` there destroyed the sky — exam 2) |
-| haze (through glass, distance) | global `dehaze+=6`; never dehaze the sky itself |
 | a white subject (car, facade, snow) | say so in `subject` ("white roadster …"): `protect_white` keeps it white under any mood |
+| a DARK WARM subject (red lacquer, wood, brick) under a teal look | `set`: `grade0=200,3,0 curveR=0,0;1,1 curveG=0,0;1,1 curveB=0,0;1,1` — teal shadows turned the pagoda blue-black ("the tower look flat") |
+| haze over distant land (through glass, a valley) | a dehaze gradient on the LAND below the horizon (`dehaze` +10…12) — global dehaze drew dark halos round Fuji's clouds |
 | an empty dark foreground / ceiling | linear from its edge to the frame edge: `exposure` −0.25…−0.4 |
 | a glow worth keeping (neon, lantern, fire) | nothing that lifts the mids or warms it; no hue move at 40–70°; the guard holds the clip ("make sure this mistake doesn't happen") |
 | a face | a small radial `exposure` ≤ +0.2, `texture` +6, `clarity` +4 — NEVER `shadows` (it lays a veil: "why the man's face cover in blur") |

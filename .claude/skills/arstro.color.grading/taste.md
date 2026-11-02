@@ -15,6 +15,31 @@ Format, newest first:
 
 ---
 
+## EXAM 3 RESULT: 12 / 16 good = 75 % — the skies again, and the grader's fixes reached the land  → v6, exam 4 awaiting marks
+
+NOT GOOD: the pagoda — *"the blue in the sky is over saturated lead to it distinc from the sky, the tower look flat"*;
+Fuji — *"the color is not balance, field is too yellow, the sky look too red"*; the woman — *"the sky is tearing
+apart"*; the sea wall — *"mountain yellow color is too distinct, and the overall don't have depth"*. Passed now:
+Kamakura, the moat, Asakusa (their skies fixed), all night photos, the white car, the lit face.
+WHAT WAS WRONG — and two of it were the grader's own calls:
+- The blue-grey sand in white skies (pagoda, woman) — I had measured it as "the camera's own cloud split" and KEPT it.
+  Wrong: the eye sees grey clouds go blue next to cream. Cause, by switching each control off and LOOKING: VIBRANCE
+  (with the mixer) — it boosts the palest colours, a white sky's faint blue first. Vibrance 0: the sky is clean.
+- Fuji: white balance pushed to tint 134 made the sky red and the field yellow — the clouds were the sky check's
+  job, not the whole photo's white balance. Back to 80.
+- The sea wall: the sky check switched the mixer's Lum OFF for the whole photo (to calm the sky's grain) — the
+  mountain lost its depth and its yellow-greens stood out. Fixes for the sky must stay in the sky.
+- The pagoda's red lacquer went blue-black: Natural Teal's teal shadows (the shadow wheel and the R/G/B toe, each
+  about -0.04 of red-minus-blue) on a dark warm subject. Exam 1's tower, "really stand out", had a light wheel only.
+- Fuji's clouds drew dark halos: the plan's global `dehaze` — haze over the land is cut on the land.
+LESSONS -> v6: (1) **NO VIBRANCE in Natural Teal** (saturation +2 instead): vibrance is a sky's enemy. (2) **A sky's
+fix stays in the sky** — its own graduated filter, colour NR, the highlights slider, the plan's sky masks; never the
+mixer, vibrance, the look's temp or wheels, never white balance past 80. (3) **A dark warm subject** (red lacquer, wood,
+brick) under a teal look: the plan takes the teal out of its shadows (`set`: light shadow wheel, flat R/G/B curves).
+(4) Dehaze for haze goes on the land (a gradient below the horizon), never on the clouds. (5) When the eye and a
+number disagree about a sky, the eye wins — look at it LARGE, switch controls off one by one.
+EXAM 4 VERDICT: _(pending)_
+
 ## EXAM 2 RESULT: 14 / 16 good = 88 % — "you completely destroy the sky"  → v5, exam 3 awaiting marks
 
 Exam 2 (bold v4; kept: `~/photo/grade-lab/exam/exam-2-bold-88pct.json`): *"overall you did it well for the color but

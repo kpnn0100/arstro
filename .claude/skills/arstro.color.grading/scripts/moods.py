@@ -293,11 +293,16 @@ MOODS = {
         # greens' depth now starts at 95 deg. The blue sky is no longer darkened (-0.25) or saturated (+0.1).
         # And the teal of the R/G/B curves ends at 0.45 (was 0.6): the darker clouds of a white sky sit at 0.55-0.7
         # on the curve and turned blue-grey patches on a cream sky (pagoda, the woman — the grader's own look).
+        # v6 (exam 3: pagoda "the blue in the sky is over saturated", the woman "the sky is tearing apart", Fuji's
+        # clouds apart from their sky): NO VIBRANCE. Vibrance boosts the palest colours — a white sky's faint blue
+        # in its grey clouds became blue-grey sand (with it at 0 the pagoda's sky is clean; switching wheels, curves
+        # or temp off did not help) and it drove Fuji's pale sky and pale clouds apart. Saturation -4 -> +2 keeps the
+        # land's colour (saturation scales every colour alike; a pale sky stays pale).
         "day": ("curve=%s curveR=%s curveG=%s curveB=%s grade0=200,5,0 grade1=30,4,0 grade2=30,6,0 balance=-10 temp=6700 "
                 "mixer0=0,0;40,0;60,-0.04;100,0.1;140,0.14;200,0.02;230,-0.04;300,0 "
                 "mixer1=0,0;30,0.05;60,-0.1;110,-0.04;150,0.08;185,0.02;230,-0.04;300,0 "
                 "mixer2=0,0;95,0;125,-0.28;150,-0.26;175,-0.06;195,0;300,0 "
-                "saturation=-4 vibrance=10 clarity=12 dehaze=8 grainAmount=5 grainSize=14 lensVignette=-16 sharpenAmount=25"
+                "saturation=2 clarity=12 dehaze=8 grainAmount=5 grainSize=14 lensVignette=-16 sharpenAmount=25"
                 % (_crv((0, 0), (0.15, 0.1), (0.5, 0.49), (0.82, 0.87), (1, 0.975)),
                    _crv((0, 0), (0.2, 0.185), (0.45, 0.45), (1, 1)),
                    _crv((0, 0.01), (0.4, 0.4), (1, 1)),

@@ -316,7 +316,8 @@ def guard(cs, node, d, fam, log):
 # after <= before * a + b. Set by EYE on the exam-3 renders: at 1.5x texture Fuji's cloud still read sandy, at 1.8x
 # colour spread the moat's clouds still read cream-and-lilac; at these limits both are fixed and the sea wall's soft
 # cloud shapes (1.55x spread, one colour family) stay.
-SKY_LIMITS = {"tex": (1.25, 0.0003), "sat": (1.2, 0.01), "spread": (1.3, 0.006),
+SKY_LIMITS = {"tex": (1.1, 0.0002),     # 1.25x let the pagoda's blue sand through (exam 3: "the blue in the sky")
+              "sat": (1.2, 0.01), "spread": (1.3, 0.006),
               # Exam 3: "don't make the sky and cloud too seperated, make sure the edit don't give too much contract
               # on them, especially #10, the sky look too fake because of the clouds". Measured on the WHOLE sky,
               # clouds and their edges included: gap = the colour distance between the clouds (the camera's
@@ -408,7 +409,7 @@ def _ellipse(shape, x, k=1.0):
 
 
 def sky_faults(now, was):
-    bad = [k for k, (a, b) in SKY_LIMITS.items() if now[k] > was[k] * a + b]
+    bad = [k for k, ab in SKY_LIMITS.items() if ab and now[k] > was[k] * ab[0] + ab[1]]
     # Clouds (and snow) stay as WHITE as white balance left them — measured on the yellow axis ((R+G)/2 - B): once
     # Fuji's sky had calmed, its clouds and snow read cream (+0.044 white-balanced -> +0.062): the look's +260 K
     # (+0.012), the depth curve (+0.009), dehaze (+0.006); the grader's own look at exam 3, #10.
@@ -431,18 +432,16 @@ def _scale_mixer(v, f):
 
 
 def sky_check(cs, node, d, masks, before_jpg, scratch, log, corr=None):
-    """Render, LOOK at the sky against the original, and take back what broke it — one fix per round, the
-    cheapest first, the land's colour untouched wherever possible:
-      sharp     -> colour NR 60, then 90 (smooths the hue the mixer reads); then the mixer's Lum halved, then off
-      saturated -> a graduated filter over the sky: saturation -12 per round (never dehaze, never clarity)
-      separated -> the match's R/G/B shoulder taken back; then the highlight wheels halved
-      cloud gap -> vibrance halved, then off; then the sky's filter desaturates (to -24); then the wheels halved
-      contrast  -> the plan's sky darkening eased +0.1 EV a round, a subject lift reaching into the sky halved,
-                   then the clouds softened (clarity/dehaze down)
-      warm      -> clouds cream: the look's extra warmth halved, then off; then the warm highlight wheels
-      dull      -> clouds dimmed: highlights back toward 0, the vignette halved, the sky's darkening eased
-      structure -> the clouds' local contrast above the camera's: the highlight recovery eased to -40, then the
-                   sky filter's contrast -10 a round (to -30)
+    """Render, LOOK at the sky against the original, and take back what broke it — one fix per round, in the SKY
+    (its own graduated filter) or with a control that only reaches the sky (colour NR, the highlights slider, the
+    match's shoulder, the plan's sky masks). NEVER the mixer, vibrance, the look's temp or wheels: those recolour the
+    land the approver passed (exam 3: the sea wall's mountain lost its depth, Fuji's field went yellow):
+      sharp     -> colour NR 60, then 90; then the filter's texture down
+      saturated / several colours -> the filter's saturation -12 a round (to -48); then the match's shoulder back
+      cloud gap -> the filter's saturation (to -36)          warm (cream clouds) -> the filter cools, -6 a round
+      dull      -> highlights back toward 0, the plan's sky darkening eased, then the filter's highlights
+      structure -> the highlight recovery eased to -40 (it pulls clouds out of a bright sky), then the filter's contrast
+      contrast  -> the plan's sky darkening eased, a lift reaching into the sky halved, the filter's contrast down
     The guard runs after: whatever the clouds get back may not clip."""
     was_img = _img(before_jpg)
     m = sky_region(was_img)
@@ -476,124 +475,81 @@ def sky_check(cs, node, d, masks, before_jpg, scratch, log, corr=None):
         if not bad:
             break
         fix = None
+        g = next((x for x in masks if x.get("_sky")), None)
+        if g is None:
+            g = {"type": "linear", "x0": 0.5, "y0": min(1.0, bottom + 0.1), "x1": 0.5, "y1": bottom * 0.5, "_sky": True}
+            masks.append(g)
+
+        # Small steps, low caps: at highlights +45 / contrast -30 / texture -40 the filter drew its own streaks across
+        # the sea wall's sky (the exam-3 rework). A sky that still fails after them is left for the eye — logged.
+        def move(key, step, limit, what):
+            # one step of the sky's own graduated filter toward `limit`; None once it is there
+            v = g.get(key, 0)
+            if (step < 0 and v <= limit) or (step > 0 and v >= limit):
+                return None
+            g[key] = round(max(limit, v + step) if step < 0 else min(limit, v + step), 3)
+            return "sky filter %s %+g — %s" % (key, g[key], what)
+
+        def soften():
+            # clarity AND dehaze down together in the sky: global dehaze draws dark halos round clouds (Fuji)
+            if g.get("clarity", 0) <= -20 and g.get("dehaze", 0) <= -20:
+                return None
+            g["clarity"], g["dehaze"] = max(-20, g.get("clarity", 0) - 10), max(-20, g.get("dehaze", 0) - 10)
+            return "sky filter clarity %d dehaze %d — the clouds' edges and halos softened" % (g["clarity"], g["dehaze"])
+
+        # EVERY fix lands in the SKY (its graduated filter) — exam 3: the global fixes of exam 3's sky check (mixer Lum
+        # off, vibrance off, highlights to 0, the look's temp, white balance to tint 134) changed the land the
+        # approver had passed: the sea wall's "mountain yellow color is too distinct, and the overall don't have
+        # depth", Fuji's "field is too yellow, the sky look too red". Colour NR is the one global step: it only
+        # removes colour noise, the look stays.
         if "tex" in bad:
             nr = float(d.get("nrColor", 0) or 0)
             if nr < 60:
-                d["nrColor"], fix = "60", "colour NR 60"
+                d["nrColor"], fix = "60", "colour NR 60 (the sky's sand is the mixer reading noisy hue)"
             elif nr < 90:
                 d["nrColor"], fix = "90", "colour NR 90"
-            elif d.get("mixer2") and not d.get("_lum_halved"):
-                d["mixer2"], d["_lum_halved"], fix = _scale_mixer(d["mixer2"], 0.5), "1", "mixer Lum halved"
-            elif d.get("mixer2"):
-                d.pop("mixer2")
-                fix = "mixer Lum off (the plan's masks keep the land's depth)"
+            else:
+                fix = move("texture", -15, -30, "smooths the sky's grain")
         if not fix and "sat" in bad:
-            g = next((x for x in masks if x.get("_sky")), None)
-            if g is None:
-                g = {"type": "linear", "x0": 0.5, "y0": min(1.0, bottom + 0.1), "x1": 0.5, "y1": bottom * 0.5,
-                     "saturation": 0, "_sky": True}
-                masks.append(g)
-            if g["saturation"] > -48:
-                g["saturation"] -= 12
-                fix = "sky graduated filter saturation %d" % g["saturation"]
+            fix = move("saturation", -12, -48, "over-saturated")
         if not fix and "spread" in bad:
             if any(("_base_" + c) in d for c in ("curveR", "curveG", "curveB")) and not d.get("_unmatched"):
                 for c in ("curveR", "curveG", "curveB"):
                     if ("_base_" + c) in d:
                         d[c] = d["_base_" + c]
                 d["_unmatched"], fix = "1", "the match's R/G/B shoulder taken back"
-            elif not d.get("_wheels_halved"):
-                for w in ("grade1", "grade2"):
-                    if d.get(w):
-                        h, s, l = (float(x) for x in d[w].split(","))
-                        d[w] = "%g,%g,%g" % (h, s / 2, l)
-                d["_wheels_halved"], fix = "1", "highlight wheels halved"
+            else:
+                fix = move("saturation", -12, -48, "the sky in several colours")
         if not fix and "gap" in bad:
-            # The clouds and their sky drifted apart in colour. Measured on Fuji (#10, exam 3: "the sky look too fake
-            # because of the clouds"): VIBRANCE — it pushes the palest colours hardest, so a pale blue sky went bluer
-            # and its pale cream clouds creamier (gap 0.169 white-balanced -> 0.288; vibrance 0 -> 0.201); the wheels,
-            # curves and masks moved it < 0.01. So: vibrance halved, then off (the cause; the land's colour lives in
-            # the mixer and saturation), then the sky's filter desaturates a little (-36 there greyed Fuji's sky and
-            # left its clouds peach), then the warm/cool wheels.
-            g = next((x for x in masks if x.get("_sky")), None)
-            if float(d.get("vibrance", 0) or 0) > 3 and not d.get("_vib_halved"):
-                d["vibrance"], d["_vib_halved"] = "%g" % (float(d["vibrance"]) / 2), "1"
-                fix = "vibrance halved to %s" % d["vibrance"]
-            elif float(d.get("vibrance", 0) or 0) > 0 and not d.get("_vib_off"):
-                d["vibrance"], d["_vib_off"], fix = "0", "1", "vibrance off"
-            elif g is None or g["saturation"] > -24:
-                if g is None:
-                    g = {"type": "linear", "x0": 0.5, "y0": min(1.0, bottom + 0.1), "x1": 0.5, "y1": bottom * 0.5,
-                         "saturation": 0, "_sky": True}
-                    masks.append(g)
-                g["saturation"] -= 12
-                fix = "sky graduated filter saturation %d" % g["saturation"]
-            elif not d.get("_wheels_halved"):
-                for w in ("grade1", "grade2"):
-                    if d.get(w):
-                        h, s_, l_ = (float(x) for x in d[w].split(","))
-                        d[w] = "%g,%g,%g" % (h, s_ / 2, l_)
-                d["_wheels_halved"], fix = "1", "highlight wheels halved"
-            elif d.get("grade0") and not d.get("_shadow_halved"):
-                h, s_, l_ = (float(x) for x in d["grade0"].split(","))
-                d["grade0"], d["_shadow_halved"], fix = "%g,%g,%g" % (h, s_ / 2, l_), "1", "shadow wheel halved"
+            fix = move("saturation", -12, -36, "the clouds drifted from the sky's colour (vibrance pushes both apart)")
         if not fix and "warm" in bad:
-            look_k = float(d.get("temp", 0)) - float((corr or {}).get("temp", d.get("temp", 0)))
-            if corr and look_k > 50 and not d.get("_temp_halved"):
-                d["temp"] = "%g" % (float(corr["temp"]) + look_k / 2)
-                d["_temp_halved"], fix = "1", "the look's warmth on the clouds halved (temp %s)" % d["temp"]
-            elif corr and look_k > 20 and not d.get("_temp_off"):
-                d["temp"] = "%g" % float(corr["temp"])
-                d["_temp_off"], fix = "1", "the look's extra warmth off (temp %s, the white balance)" % d["temp"]
-            elif not d.get("_wheels_halved"):
-                for w in ("grade1", "grade2"):
-                    if d.get(w):
-                        h, s_, l_ = (float(x) for x in d[w].split(","))
-                        d[w] = "%g,%g,%g" % (h, s_ / 2, l_)
-                d["_wheels_halved"], fix = "1", "warm highlight wheels halved"
-            elif not d.get("_wheels_off") and (d.get("grade1") or d.get("grade2")):
-                for w in ("grade1", "grade2"):
-                    d.pop(w, None)
-                d["_wheels_off"], fix = "1", "warm highlight wheels off"
+            fix = move("temp", -6, -24, "the clouds cream, not white")
         if not fix and "dull" in bad:
             hl = float(d.get("highlights", 0) or 0)
-            if hl < 0:
+            dark = [x for x in masks if x.get("type") == "linear" and x.get("y1", 1) < x.get("y0", 0)
+                    and x.get("exposure", 0) < 0 and not x.get("_sky")]
+            if hl < 0:                    # the highlights slider moves the bright tones — in a daylight frame the sky
                 d["highlights"] = "%g" % min(0.0, hl + 20)
                 fix = "the clouds' light back: highlights %s" % d["highlights"]
-            elif float(d.get("lensVignette", 0) or 0) < -4 and not d.get("_vig_halved"):
-                d["lensVignette"], d["_vig_halved"] = "%g" % (float(d["lensVignette"]) / 2), "1"
-                fix = "vignette halved (%s) — it dimmed the clouds in the corners" % d["lensVignette"]
-            else:
-                dark = [x for x in masks if x.get("type") == "linear" and x.get("y1", 1) < x.get("y0", 0)
-                        and x.get("exposure", 0) < 0 and not x.get("_sky")]
+            elif dark:
                 for x in dark:
                     x["exposure"] = round(min(0.0, x["exposure"] + 0.1), 2)
-                if dark:
-                    fix = "the sky's darkening eased to %+g EV" % dark[0]["exposure"]
+                fix = "the sky's darkening eased to %+g EV" % dark[0]["exposure"]
+            else:
+                fix = move("highlights", 10, 20, "the clouds' light back")
         if not fix and "structure" in bad:
-            # Highlight RECOVERY is what pulls a cloud out of a bright sky: Kamakura's correction held its sky with
-            # highlights -80 and the cloud the camera barely showed stood out of a grey-blue sky; at -40 it is the
-            # camera's airy sky with a soft white cloud (clip 0.06 %; the guard still runs after). A contrast-down
-            # filter on the sky only greyed it.
+            # highlight RECOVERY pulls a cloud out of a bright sky (Kamakura at -80); giving the sky its highlights back
+            # in the filter undoes it there only
             hl = float(d.get("highlights", 0) or 0)
-            g = next((x for x in masks if x.get("_sky")), None)
             if hl < -40:
                 d["highlights"] = "%g" % min(-40.0, hl + 20)
                 fix = "the highlight recovery eased (highlights %s) — it pulled the clouds out of the sky" % d["highlights"]
-            elif g is None:
-                g = {"type": "linear", "x0": 0.5, "y0": min(1.0, bottom + 0.1), "x1": 0.5, "y1": bottom * 0.5,
-                     "saturation": 0, "_sky": True}
-                masks.append(g)
-            if not fix and g.get("contrast", 0) > -30:
-                g["contrast"] = g.get("contrast", 0) - 10
-                fix = "the clouds' contrast eased (sky filter contrast %d)" % g["contrast"]
+            else:
+                fix = move("contrast", -10, -20, "the clouds' contrast") or soften()
         if not fix and "contrast" in bad:
-            # Too much contrast between the clouds and the sky: first the plan's darkening of the sky eases (it
-            # sinks the blue behind a bright cloud — Kamakura), then the sky's cloud edges are softened.
             dark = [x for x in masks if x.get("type") == "linear" and x.get("y1", 1) < x.get("y0", 0)
                     and x.get("exposure", 0) < 0 and not x.get("_sky")]
-            # A subject's radial lift that reaches into the sky brightens the clouds there (Kamakura: the blossom's
-            # +0.15 EV lit the cloud above it, which popped out of its sky).
+            # A subject's radial lift that reaches into the sky brightens the clouds there (Kamakura's blossom lift).
             onsky = [x for x in masks if x.get("type", "radial") == "radial" and x.get("exposure", 0) > 0.05
                      and _ellipse(m_all.shape, x).any() and m_all[_ellipse(m_all.shape, x)].mean() > 0.2]
             if dark:
@@ -605,18 +561,12 @@ def sky_check(cs, node, d, masks, before_jpg, scratch, log, corr=None):
                     x["exposure"] = round(x["exposure"] / 2, 3)
                 fix = "a lift reaching into the sky halved (%+g EV)" % onsky[0]["exposure"]
             else:
-                g = next((x for x in masks if x.get("_sky")), None)
-                if g is None:
-                    g = {"type": "linear", "x0": 0.5, "y0": min(1.0, bottom + 0.1), "x1": 0.5, "y1": bottom * 0.5,
-                         "saturation": 0, "_sky": True}
-                    masks.append(g)
-                if g.get("clarity", 0) > -30:
-                    g["clarity"], g["dehaze"] = g.get("clarity", 0) - 10, g.get("dehaze", 0) - 8
-                    fix = "the clouds softened (sky clarity %d, dehaze %d)" % (g["clarity"], g["dehaze"])
+                fix = move("contrast", -10, -20, "the clouds too contrasty") or soften()
         if not fix:
             break
         log.append("sky: %s (%s)" % (fix, ", ".join(bad)))
         reapply(cs, node, d, [{k: v for k, v in x.items() if not k.startswith("_")} for x in masks])
+    masks = [x for x in masks if not x.get("_sky") or any(k in x for k in MASK_KEYS)]
     log.append("sky check: texture %.4f -> %.4f, saturation %.3f -> %.3f, colour spread %.3f -> %.3f "
                "(original %.4f / %.3f / %.3f); clouds vs sky colour %.3f -> %.3f, contrast %.3f -> %.3f "
                "(white-balanced %.3f / camera %.3f)%s" % (first["tex"], now["tex"], first["sat"], now["sat"], first["spread"],
@@ -626,7 +576,7 @@ def sky_check(cs, node, d, masks, before_jpg, scratch, log, corr=None):
     return masks
 
 
-def subject_check(cs, node, d, masks, before_jpg, scratch, log, skin=False, white=False, fam="day"):
+def subject_check(cs, node, d, masks, before_jpg, scratch, log, skin=False, white=False, fam="day", corr=None):
     """A person and a white subject keep what the camera gave them — the mood lives around them. The subject is
     the plan's first radial LIFT (exposure > 0); on its inner part, measured on screen against the camera's frame,
     each round (other subjects are left alone: a deer or a shrine sunk with the look's depth was judged GOOD):
@@ -646,6 +596,8 @@ def subject_check(cs, node, d, masks, before_jpg, scratch, log, skin=False, whit
                0.46). Desaturating the mask instead turned the red tail lights pink."""
     import numpy as np
     i = next((k for k, x in enumerate(masks) if x.get("type", "radial") == "radial" and x.get("exposure", 0) > 0), None)
+    # Other subjects are left alone: a generic "any subject keeps its warmth and light" rule lifted and warmed five
+    # photos the approver had PASSED (exam 3 rebuild). A red pagoda's wood is the plan's call — the agent's reading.
     if i is None or not (skin or white):
         return masks
     s = masks[i]
@@ -849,7 +801,7 @@ def cmd_run(args):
             # LOOK at the result before it is delivered (exam 2: "take a look at the photo again after grading")
             scratch = out / "after" / (".check-" + stem + ".jpg")
             masks = subject_check(cs, node, d, r["masks"], out / "before" / (stem + ".jpg"), scratch, r["log"],
-                                  skin=r.get("skin", False), white=r.get("white", False), fam=fam)
+                                  skin=r.get("skin", False), white=r.get("white", False), fam=fam, corr=r.get("corr"))
             if fam == "day":
                 masks = sky_check(cs, node, d, masks, out / "before" / (stem + ".jpg"), scratch, r["log"], corr=r.get("corr"))
             r["masks"] = [{k: v for k, v in x.items() if not k.startswith("_")} | ({"sky": True} if x.get("_sky") else {})
