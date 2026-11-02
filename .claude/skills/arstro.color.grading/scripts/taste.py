@@ -84,6 +84,8 @@ def params(corr, fam, v, plan=None):
         TWEAKS[name][1](d, step)
     if v.get("skin"):
         protect_skin(d)
+    if v.get("white"):
+        protect_white(d)
     return d
 
 
@@ -118,6 +120,42 @@ def protect_skin(d):
     return d
 
 
+# A WHITE subject (a white car, a white facade, snow) — read from the plan's subject, what the agent saw. Only the
+# subject's own words count, before its setting: "white roadster under the billboard" is white, "pagoda against
+# white sky" is not (the first build cooled the pagoda -50 for its sky).
+WHITE = re.compile(r"\b(white|silver|snow|snowy|snow-capped)\b", re.I)
+SETTING = re.compile(r"\b(against|under|over|before|by|in|on|through|framed|at|among|with|into|behind|beside)\b", re.I)
+
+
+def is_white(subject):
+    return bool(WHITE.search(SETTING.split(subject or "", 1)[0]))
+
+
+def protect_white(d):
+    """A white subject stays white under a warm (or cool) mood — exam 2, the white roadster under Golden Dream 80 %:
+    "would be better if the car don't fall for gold too much". Measured on the car's paint (saturation, camera
+    0.36): the correction alone kept it (0.34); the LOOK added +0.30 — the paint sits in the night's MIDS (0.48 on
+    screen), where Golden Dream's R/G/B curves lay the gold, plus the mixer's yellow-orange boost.
+    So: the R/G/B curves return to the diagonal from x 0.40 (full at 0.65) — the gold keeps the shadows and the
+    lights' own colour —, the mixer gives no saturation to 30-65 deg, and the highlight wheel is halved."""
+    for k in ("curveR", "curveG", "curveB"):
+        if d.get(k):
+            pts = []
+            for x, y in E.curve_grid(d[k]) + [(0.4, None), (0.65, None)]:
+                y = E.sample(E.curve_points(d[k]), x) if y is None else y
+                w = max(0.0, min(1.0, (x - 0.4) / 0.25))
+                pts.append((x, y + (x - y) * w))
+            d[k] = E.curve_str(sorted(set(pts)))
+    if d.get("mixer1"):
+        pts = [(float(h), float(y)) for h, y in (p.split(",") for p in d["mixer1"].split(";") if "," in p)]
+        pts = [(h, y) for h, y in pts if not 26 <= h <= 69] + [(30.0, 0.0), (45.0, 0.0), (65.0, 0.0)]
+        d["mixer1"] = ";".join("%g,%g" % p for p in sorted(pts))
+    if d.get("grade2"):
+        h, s, l = (float(x) for x in d["grade2"].split(","))
+        d["grade2"] = "%g,%g,%g" % (h, s / 2, l)
+    return d
+
+
 def has_person(analysis, plan_entry):
     subject = (plan_entry or {}).get("subject", "")
     if subject:
@@ -126,6 +164,14 @@ def has_person(analysis, plan_entry):
 
 
 def choose(scene, analysis, plan_entry=None):
+    """{look, strength, tweaks, skin, white, why} for one photo: the look (below), and the two things no look may
+    change — a person's skin (`skin`) and a white subject's white (`white`)."""
+    c = _choose(scene, analysis, plan_entry)
+    c["white"] = is_white((plan_entry or {}).get("subject", ""))
+    return c
+
+
+def _choose(scene, analysis, plan_entry=None):
     """{look, strength, tweaks, skin, why} for one photo — the approver's choice for photos like it.
 
     v4, BOLDER (2026-11-02): the exam passed at 94 %, and the approver: "if i don't comment that mean you are

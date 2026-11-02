@@ -95,8 +95,21 @@ balance against this photo's witness, exposure highlights-first, noise by ISO, t
 a sky graded down with a linear, a dead ceiling sunk) → **match** (after every photo has the above, the
 set's median shadow cast, highlight cast and saturation per day/night family are the targets; each
 photo's OWN R/G/B toe / shoulder and saturation are nudged 70 % of the way — a colourist matching shots
-to a hero) → **depth** (no flat frame survives) → **guard** clipping. A partial re-run (`--names`) keeps the whole set's targets and merges
-into `edit.json`, so fixing the few that missed never re-centres the set on them.
+to a hero) → **depth** (no flat frame survives) → **LOOK at the result** → **guard** clipping. A partial re-run
+(`--names`) keeps the whole set's targets and merges into `edit.json`, so fixing the few that missed never re-centres
+the set on them.
+
+**LOOK at the result — the approver's words: "take a look at the photo again after grading".** Exam 2 had good
+colour and destroyed skies; every number the edit had checked was fine. So `run` now renders each photo and compares
+it with the camera's frame where the approver's eye goes first:
+- `sky_check` (day): the sky (upper, bright, smooth, not leaves) must keep the original's smoothness (texture <=
+  1.25x), roughly its saturation (<= 1.2x) and ONE colour (spread <= 1.3x). Fixes, cheapest first: colour NR 60 → 90
+  → the mixer's Lum halved → off (sand); a graduated filter with saturation −12 a round (over-saturated); the
+  match's R/G/B curves taken back → highlight wheels halved (torn). A textured "sky" (a wall, blossom) is skipped.
+- `subject_check` (the plan's first radial lift): a person never ends darker than the camera had them (night: 10 %
+  brighter), and at night keeps the camera's warmth and colour; a white subject gains no colour (local cooling).
+**The sky belongs to the photo**: the mood goes into the land, the shadows and the light — never `dehaze`, `clarity`
+or `saturation +` in a sky mask. And after `run`, the agent still LOOKS at the skies at 1:1 crops beside the camera's.
 
 **Writing the plan is the agent's real job — LOOK at every photo.** For each: what is the subject and
 where (grid coordinates), where is the sky / the dead area / the light, what must not change (skin,
@@ -105,8 +118,9 @@ neon, the artist's light), and what the photo needs that the mood cannot know. T
 | the photo has | plan |
 |---|---|
 | a subject (person, animal, car, building) | radial on it: `exposure` +0.15…+0.25, `clarity` +6…8; small subject → small rx/ry |
-| a big pale or white sky | linear from the horizon (0) up to the top (full): `exposure` −0.2…−0.3, `saturation` +10 |
-| haze (through glass, distance) | that linear + `dehaze` +10…15; global `dehaze+=6` |
+| a big pale or white sky | linear from the horizon (0) up to the top (full): `exposure` −0.2…−0.3 ONLY (`saturation +10` / `dehaze` there destroyed the sky — exam 2) |
+| haze (through glass, distance) | global `dehaze+=6`; never dehaze the sky itself |
+| a white subject (car, facade, snow) | say so in `subject` ("white roadster …"): `protect_white` keeps it white under any mood |
 | an empty dark foreground / ceiling | linear from its edge to the frame edge: `exposure` −0.25…−0.4 |
 | a glow worth keeping (neon, lantern, fire) | nothing that lifts the mids or warms it; no hue move at 40–70°; the guard holds the clip ("make sure this mistake doesn't happen") |
 | a face | a small radial `exposure` ≤ +0.2, `texture` +6, `clarity` +4 — NEVER `shadows` (it lays a veil: "why the man's face cover in blur") |

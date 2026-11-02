@@ -82,7 +82,8 @@ def explain(row, pe):
             continue
         m = re.match(r"look (\S+) (\d+)%(.*?) — (.*)", l)
         if m:
-            extras = m.group(3).replace("+skin", "skin line protected").replace("+", "").strip()
+            extras = m.group(3).replace("+skin", "skin line protected,").replace("+white", "the white subject kept white,") \
+                .replace("+", "").strip().rstrip(",")
             out.append("**Look: %s at %s%% colour (full depth)%s** — %s." % (
                 m.group(1).replace("-", " ").title(), m.group(2), (", " + extras) if extras else "", m.group(4)))
             continue
@@ -100,16 +101,39 @@ def explain(row, pe):
             out.append("**Depth check** (cinematic = full range): blacks pulled %s, highlights lifted %s on the curve → "
                        "darkest 1 %% at %s, brightest 1 %% at %s." % (m.group(1), m.group(2), m.group(3), m.group(4)))
             continue
+        m = re.match(r"subject: (.*); on screen light ([\d.]+) \(camera ([\d.]+)\), warmth R-B ([-+][\d.]+) \(camera ([-+][\d.]+)\), "
+                     r"saturation ([\d.]+) \(camera ([\d.]+)\)(.*)", l)
+        if m:
+            g = m.groups()
+            out.append("**Subject looked at** — the mood may not take the subject's light, a face's warmth or a white's "
+                       "white: its mask %s → on screen light %s (camera %s), warmth %s (camera %s), saturation %s (camera %s)%s." % g)
+            continue
+        m = re.match(r"sky: (.*) \((.*)\)$", l)
+        if m:
+            what = {"tex": "sharp/sandy", "sat": "over-saturated", "spread": "torn into several colours"}
+            out.append("**Sky looked at** — it was %s → %s." % (" and ".join(what.get(x.strip(), x) for x in m.group(2).split(",")),
+                                                               m.group(1)))
+            continue
+        m = re.match(r"sky check: texture ([\d.]+) -> ([\d.]+), saturation ([\d.]+) -> ([\d.]+), colour spread ([\d.]+) -> ([\d.]+) "
+                     r"\(original ([\d.]+) / ([\d.]+) / ([\d.]+)\)(.*)", l)
+        if m:
+            g = m.groups()
+            out.append("**Sky check** (the sky must stay as smooth, about as saturated and ONE colour as the original): "
+                       "texture %s (original %s), saturation %s (original %s), colour spread %s (original %s)%s." % (
+                           g[1], g[6], g[3], g[7], g[5], g[8], (" —" + g[9].replace(" — still:", " still failing:")) if g[9] else " — passes"))
+            continue
         m = re.match(r"highlights -> (-?[\d.]+)", l)
         if m:
             out.append("**Clipping guard**: highlights brought to %s so no light source burns." % m.group(1))
-    masks = pe.get("masks", [])
+    masks = row.get("masks") or pe.get("masks", [])
     if masks or pe.get("intent"):
         desc = []
         for mk in masks:
             adj = ", ".join("%s %s" % (k, ("%+g" % v) if isinstance(v, (int, float)) else v) for k, v in mk.items()
                             if k in ("exposure", "contrast", "highlights", "shadows", "saturation", "texture", "clarity", "dehaze", "temp", "tint"))
-            if mk.get("type") == "linear":
+            if mk.get("sky"):
+                desc.append("sky graduated filter (added by the sky check): %s" % adj)
+            elif mk.get("type") == "linear":
                 desc.append("gradient from (%.2f, %.2f) to (%.2f, %.2f): %s" % (mk["x0"], mk["y0"], mk["x1"], mk["y1"], adj))
             else:
                 desc.append("radial at (%.2f, %.2f), %.2f × %.2f: %s" % (mk["cx"], mk["cy"], mk["rx"], mk["ry"], adj))

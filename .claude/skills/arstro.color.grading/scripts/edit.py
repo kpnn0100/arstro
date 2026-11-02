@@ -212,7 +212,10 @@ def match(cs, node, d, target, fam, strength, log, skin=False):
             dw = max(-0.05, min(0.05, -strength * ew / kw)) if abs(ew) >= 0.04 else 0.0
             dt = max(-0.04, min(0.04, -strength * et / kt)) if abs(et) >= 0.03 else 0.0
             # dw > 0 means "cooler": B up, R down. dt > 0 means "less green": G down.
-            gw2, gt2 = max(-0.07, min(0.07, gw + dw)), max(-0.05, min(0.05, gt + dt))
+            # A NUDGE, not a fight: at ±0.07 / ±0.05 the shoulder fought the look's warm wheels on the moat (the
+            # look made its clouds +0.40 warm, the match pulled only the brightest back, blue-magenta) and the
+            # sky tore into cream and lilac patches (exam 2: "the sky … seperated from the photo").
+            gw2, gt2 = max(-0.035, min(0.035, gw + dw)), max(-0.03, min(0.03, gt + dt))
             for ch, val in (("curveR", -gw2 / 2), ("curveB", gw2 / 2), ("curveG", -gt2)):
                 key = d.get(ch, "0,0;1,1")
                 base = d.setdefault("_base_" + ch, key)
@@ -238,9 +241,13 @@ def match(cs, node, d, target, fam, strength, log, skin=False):
     a = cs.analyze(node)["analysis"]
     if target.get("sat") and a["meanSaturation"] > 0.02:
         ratio = target["sat"] / a["meanSaturation"]
-        # With a person in the photo, matching may not push global saturation up — it reaches skin too
-        # ("keep the skin color for human"); the mixer pins only the hue band.
-        dp = max(-15.0, min(5.0 if skin else 15.0, 100.0 * (ratio - 1.0) * 0.5 * strength))
+        # With a person (or a white subject) in the photo, matching may not push global saturation up — it reaches
+        # skin too ("keep the skin color for human"), and it turned the white roadster gold (exam 2).
+        # Upward by at most +6 in daylight: +11 / +15 on the overcast moat and sea wall went straight into their
+        # skies' faint tints — "the sky is over saturated" (exam 2). An overcast photo is SUPPOSED to be quieter
+        # than the set's sunny median; its colour comes from the look, not from being matched to the sun.
+        up = 5.0 if skin else 6.0 if fam == "day" else 15.0
+        dp = max(-15.0, min(up, 100.0 * (ratio - 1.0) * 0.5 * strength))
         if abs(dp) >= 3:
             d["saturation"] = "%g" % (float(d.get("saturation", 0)) + dp)
             cs.run("select %d\nset saturation=%s" % (node, d["saturation"]))
@@ -290,6 +297,221 @@ def guard(cs, node, d, fam, log):
         d["highlights"] = "%g" % hl
         log.append("highlights -> %g" % hl)
     return a
+
+
+# ── LOOK at the result: the sky and the subject, measured on the render the approver sees ──────────────────
+# Exam 2 (2026-11-02), 14 of 16 good, and: *"overall you did it well for the color but the sky is over saturated,
+# you completely destroy the sky, the sky is now look sharp and seperated from the photo, please take a look at
+# the photo again after grading"*. Measured on the exam's renders against the originals, per control switched off:
+#   SHARP     — the sky's fine texture rose 2-4x (sea wall 0.0026 -> 0.0100). Not grain, sharpening, clarity or
+#               dehaze (each < 10 %): the colour MIXER's Lum channel. A white sky after white balance sits on
+#               the yellow-green hues the deep-greens move darkens, its pixels' hue is noise, so each pixel took
+#               a different darkening -> sand. Colour noise reduction (the hue made smooth) and a gentler Lum
+#               are the cures (nrColor 90: pagoda 0.0068 -> 0.0033, the original's 0.0034).
+#   SATURATED — Fuji's sky 0.17 -> 0.26, the moat's 0.07 -> 0.11 (the look x 1.3 + saturation matched UP +15).
+#   SEPARATED — the moat's cloud colour spread 0.013 -> 0.049: cream mids, lilac tops, a teal band — one sky in
+#               three lights (the match's shoulder fighting the look's warm wheels).
+# So after the edit, the agent LOOKS: the sky (found on the original: upper, bright, smooth, not leaves) must
+# keep the original's smoothness, roughly its saturation and ONE colour; the subject must not lose its light.
+# after <= before * a + b. Set by EYE on the exam-3 renders: at 1.5x texture Fuji's cloud still read sandy, at 1.8x
+# colour spread the moat's clouds still read cream-and-lilac; at these limits both are fixed and the sea wall's soft
+# cloud shapes (1.55x spread, one colour family) stay.
+SKY_LIMITS = {"tex": (1.25, 0.0003), "sat": (1.2, 0.01), "spread": (1.3, 0.006)}
+
+
+def _img(path, edge=600):
+    import numpy as np
+    from PIL import Image
+    im = Image.open(path).convert("RGB")
+    im = im.resize((edge, max(1, round(im.height * edge / im.width))))
+    return np.asarray(im).astype("float32") / 255
+
+
+def _luma(a):
+    return a[..., 0] * 0.2126 + a[..., 1] * 0.7152 + a[..., 2] * 0.0722
+
+
+def _blur(x, r):
+    import numpy as np
+    from PIL import Image, ImageFilter
+    im = Image.fromarray((np.clip(x, 0, 1) * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(r))
+    return np.asarray(im).astype("float32") / 255
+
+
+def sky_region(before):
+    """The sky as the camera saw it: the upper half, bright, smooth, not leaves. None if there is no sky."""
+    import numpy as np
+    l = _luma(before)
+    top = np.zeros(l.shape, bool)
+    top[: int(l.shape[0] * 0.55)] = True
+    mx, mn = before.max(2), before.min(2)
+    s = (mx - mn) / np.maximum(mx, 1e-6)
+    leaf = (before[..., 1] >= before[..., 0]) & (before[..., 1] >= before[..., 2]) & (s > 0.25)
+    m = top & (l > np.percentile(l, 70)) & (np.hypot(*np.gradient(l)) < 0.02) & ~leaf
+    return m if m.mean() >= 0.04 else None
+
+
+def sky_stats(a, m):
+    """tex: fine texture (|luma - its 2 px blur|); sat: HSV saturation; spread: how many colours the sky is
+    (the spread of its low-frequency chroma) — all on the sky's pixels."""
+    import numpy as np
+    l = _luma(a)
+    mx, mn = a.max(2), a.min(2)
+    sm = _blur(a, 6)
+    cb, cg = sm[..., 2] - sm[..., 0], sm[..., 1] - (sm[..., 0] + sm[..., 2]) / 2
+    return {"tex": float(np.abs(l - _blur(l, 2))[m].mean()),
+            "sat": float(((mx - mn) / np.maximum(mx, 1e-6))[m].mean()),
+            "spread": float(np.hypot(cb[m].std(), cg[m].std()))}
+
+
+def sky_faults(now, was):
+    return [k for k, (a, b) in SKY_LIMITS.items() if now[k] > was[k] * a + b]
+
+
+def reapply(cs, node, d, masks):
+    set_photo(cs, node, {k: v for k, v in d.items() if not k.startswith("_")}, masks)
+
+
+def _scale_mixer(v, f):
+    return ";".join("%g,%g" % (float(h), float(y) * f) for h, y in (p.split(",") for p in v.split(";") if "," in p))
+
+
+def sky_check(cs, node, d, masks, before_jpg, scratch, log):
+    """Render, LOOK at the sky against the original, and take back what broke it — one fix per round, the
+    cheapest first, the land's colour untouched wherever possible:
+      sharp     -> colour NR 60, then 90 (smooths the hue the mixer reads); then the mixer's Lum halved, then off
+      saturated -> a graduated filter over the sky: saturation -12 per round (never dehaze, never clarity)
+      separated -> the match's R/G/B shoulder taken back; then the highlight wheels halved."""
+    was_img = _img(before_jpg)
+    m = sky_region(was_img)
+    if m is None:
+        return masks
+    was = sky_stats(was_img, m)
+    if was["tex"] > 0.008:             # not a smooth sky — a bright wall, a blossom canopy: the look may work there
+        return masks
+    rows = [i for i in range(m.shape[0]) if m[i].any()]
+    bottom = (sorted(rows)[int(0.85 * (len(rows) - 1))] + 1) / m.shape[0]
+    masks = [dict(x) for x in masks]
+    first = None
+    for _ in range(9):
+        cs.preview(scratch, node, edge=900)
+        now = sky_stats(_img(scratch), m)
+        first = first or now
+        bad = sky_faults(now, was)
+        if not bad:
+            break
+        fix = None
+        if "tex" in bad:
+            nr = float(d.get("nrColor", 0) or 0)
+            if nr < 60:
+                d["nrColor"], fix = "60", "colour NR 60"
+            elif nr < 90:
+                d["nrColor"], fix = "90", "colour NR 90"
+            elif d.get("mixer2") and not d.get("_lum_halved"):
+                d["mixer2"], d["_lum_halved"], fix = _scale_mixer(d["mixer2"], 0.5), "1", "mixer Lum halved"
+            elif d.get("mixer2"):
+                d.pop("mixer2")
+                fix = "mixer Lum off (the plan's masks keep the land's depth)"
+        if not fix and "sat" in bad:
+            g = next((x for x in masks if x.get("_sky")), None)
+            if g is None:
+                g = {"type": "linear", "x0": 0.5, "y0": min(1.0, bottom + 0.1), "x1": 0.5, "y1": bottom * 0.5,
+                     "saturation": 0, "_sky": True}
+                masks.append(g)
+            if g["saturation"] > -48:
+                g["saturation"] -= 12
+                fix = "sky graduated filter saturation %d" % g["saturation"]
+        if not fix and "spread" in bad:
+            if any(("_base_" + c) in d for c in ("curveR", "curveG", "curveB")) and not d.get("_unmatched"):
+                for c in ("curveR", "curveG", "curveB"):
+                    if ("_base_" + c) in d:
+                        d[c] = d["_base_" + c]
+                d["_unmatched"], fix = "1", "the match's R/G/B shoulder taken back"
+            elif not d.get("_wheels_halved"):
+                for w in ("grade1", "grade2"):
+                    if d.get(w):
+                        h, s, l = (float(x) for x in d[w].split(","))
+                        d[w] = "%g,%g,%g" % (h, s / 2, l)
+                d["_wheels_halved"], fix = "1", "highlight wheels halved"
+        if not fix:
+            break
+        log.append("sky: %s (%s)" % (fix, ", ".join(bad)))
+        reapply(cs, node, d, [{k: v for k, v in x.items() if not k.startswith("_")} for x in masks])
+    log.append("sky check: texture %.4f -> %.4f, saturation %.3f -> %.3f, colour spread %.3f -> %.3f "
+               "(original %.4f / %.3f / %.3f)%s" % (first["tex"], now["tex"], first["sat"], now["sat"], first["spread"],
+                                                     now["spread"], was["tex"], was["sat"], was["spread"],
+                                                     " — still: " + ", ".join(bad) if bad else ""))
+    return masks
+
+
+def subject_check(cs, node, d, masks, before_jpg, scratch, log, skin=False, white=False, fam="day"):
+    """A person and a white subject keep what the camera gave them — the mood lives around them. The subject is
+    the plan's first radial LIFT (exposure > 0); on its inner part, measured on screen against the camera's frame,
+    each round (other subjects are left alone: a deer or a shrine sunk with the look's depth was judged GOOD):
+      light  — a person must end no darker than the camera had them (at night 10 % brighter: the camera's frame was
+               under), else the lift rises +0.2 EV (to +1.6):
+               a dodge, the face back in its light while the room stays deep. Exam 2, the teamLab man: "the face
+               is too dark" — Neon Noir's deep toe at full depth took it from 0.128 to 0.088 on screen although
+               its mask lifted +0.2; on screen +0.8 EV gives back only ~30 %, so the cap is high.
+      skin   — at night, a person's face keeps the camera's warmth (R-B within 0.03), else the mask warms +10 a round (to
+               +50), and its colour (saturation <= camera x 1.15 + 0.02), else -8 a round (to -32): the look's teal
+               shadows (Neon Noir's R/G/B toe) turned that face from pink 338 deg to violet 279 deg, and under art
+               light a face sits off the 8-48 deg band protect_skin pins, so the mixer's magenta reached it.
+      white  — a white subject gains no colour: on the pixels that were WHITE in the camera's frame (bright, sat <
+               0.45 — not the tail lights) saturation <= camera + 0.02, else the mask cools -10 a round (to -50), a
+               local white balance. Exam 2, the white roadster: "would be better if the car don't fall for gold too
+               much" — white balance, brightening, the look and set matching EACH added a little (paint 0.31 ->
+               0.46). Desaturating the mask instead turned the red tail lights pink."""
+    import numpy as np
+    i = next((k for k, x in enumerate(masks) if x.get("type", "radial") == "radial" and x.get("exposure", 0) > 0), None)
+    if i is None or not (skin or white):
+        return masks
+    s = masks[i]
+    was_img = _img(before_jpg)
+    H, W = was_img.shape[:2]
+    yy, xx = np.mgrid[0:H, 0:W]
+    inner = ((xx / W - s["cx"]) / (0.6 * s["rx"])) ** 2 + ((yy / H - s["cy"]) / (0.6 * s["ry"])) ** 2 <= 1
+    if inner.sum() < 50:
+        return masks
+
+    def sat(img):
+        mx, mn = img.max(2), img.min(2)
+        return (mx - mn) / np.maximum(mx, 1e-6)
+
+    lw = _luma(was_img)
+    lit = inner & (lw > np.percentile(lw[inner], 50))             # the subject's lit half: paint, skin — not tyres
+    whites = lit & (sat(was_img) < 0.45)                            # what the camera saw as white(ish)
+
+    def read(img):
+        l, s_ = _luma(img), sat(img)
+        return {"lum": float(np.median(l[inner])), "rb": float((img[..., 0] - img[..., 2])[lit].mean()),
+                "sat": float(s_[lit].mean()), "white": float(s_[whites].mean()) if whites.sum() >= 30 else 0.0}
+
+    was = read(was_img)
+    masks = [dict(x) for x in masks]
+    start = dict(masks[i])
+    for _ in range(8):
+        cs.preview(scratch, node, edge=900)
+        now = read(_img(scratch))
+        m, moved = masks[i], False
+        if skin and now["lum"] < was["lum"] * (1.1 if fam == "night" else 1.0) and m["exposure"] < 1.6:
+            m["exposure"], moved = round(min(1.6, m["exposure"] + 0.2), 2), True
+        if skin and fam == "night" and now["rb"] < was["rb"] - 0.03 and m.get("temp", 0) < 50:
+            m["temp"], moved = m.get("temp", 0) + 10, True
+        if skin and fam == "night" and now["sat"] > was["sat"] * 1.15 + 0.02 and m.get("saturation", 0) > -32:
+            m["saturation"], moved = m.get("saturation", 0) - 8, True
+        if white and was["white"] and now["white"] > was["white"] + 0.02 and m.get("temp", 0) > -50:
+            m["temp"], moved = m.get("temp", 0) - 10, True
+        if not moved:
+            break
+        reapply(cs, node, d, [{k: v for k, v in x.items() if not k.startswith("_")} for x in masks])
+    ch = ["%s %+g -> %+g" % (k, start.get(k, 0), masks[i].get(k, 0)) for k in ("exposure", "temp", "saturation")
+          if masks[i].get(k, 0) != start.get(k, 0)]
+    if ch:
+        log.append("subject: %s; on screen light %.3f (camera %.3f), warmth R-B %+.3f (camera %+.3f), saturation %.3f "
+                   "(camera %.3f)%s" % (", ".join(ch), now["lum"], was["lum"], now["rb"], was["rb"], now["sat"], was["sat"],
+                                        ", white paint saturation %.3f (camera %.3f)" % (now["white"], was["white"]) if white else ""))
+    return masks
 
 
 # ── commands ────────────────────────────────────────────────────────────────────────────────
@@ -382,22 +604,23 @@ def cmd_run(args):
             clear_masks(cs, node)
             cs.run("select %d\nset %s" % (node, PHOTO_RESET))
             corr, _ = A.normalise(cs, node, scene, int(A.number(md.get("ISO"), 100)), log)
-            skin = False
+            skin = white = False
             if mood == "taste":
                 ch = T.choose(scene, r["analysis"], pp)
                 v = {"look": ch["look"], "strength": ch["strength"] * args.strength * pp.get("strength", 1.0),
-                     "tweaks": ch["tweaks"], "skin": ch["skin"]}
+                     "tweaks": ch["tweaks"], "skin": ch["skin"], "white": ch.get("white", False)}
                 d = T.params(corr, fam, v, pp)
-                skin = ch["skin"]
+                skin, white = ch["skin"], ch.get("white", False)
                 log.append("look %s %.0f%%%s%s — %s" % (ch["look"], v["strength"] * 100,
                                                         "".join(" +%s" % t[0] for t in ch["tweaks"]),
-                                                        " +skin" if ch["skin"] else "", ch["why"]))
+                                                        (" +skin" if ch["skin"] else "") + (" +white" if ch.get("white") else ""),
+                                                        ch["why"]))
             else:
                 d = compose(corr, M.scale(M.MOODS[mood][fam], args.strength * pp.get("strength", 1.0)), pp)
             set_photo(cs, node, d, pp.get("masks", []))
             a = cs.analyze(node)["analysis"]
             rows.append({"name": name, "node": node, "scene": scene, "family": fam, "why": why,
-                         "skin": skin,
+                         "skin": skin, "white": white,
                          "meta": {k: md.get(k) for k in ("Taken", "ISO", "Shutter", "Aperture", "Focal length",
                                                           "Lens", "Camera model")},
                          "before": {k: r["analysis"][k] for k in ("keyEv", "lumPct", "castWarmth", "castTint",
@@ -435,13 +658,23 @@ def cmd_run(args):
         for r in rows:
             node, fam, d = r["node"], r["family"], r["d"]
             if r["match"] and targets.get(fam):
-                a = match(cs, node, d, targets[fam], fam, args.match, r["log"], skin=r.get("skin", False))
+                a = match(cs, node, d, targets[fam], fam, args.match, r["log"],
+                          skin=r.get("skin", False) or r.get("white", False))
             depth(cs, node, d, fam, r["log"])
-            a = guard(cs, node, d, fam, r["log"])
             stem = Path(r["name"]).stem
-            cs.preview(out / "after" / (stem + ".jpg"), node)
             if not (out / "before" / (stem + ".jpg")).exists():
                 cs.preview(out / "before" / (stem + ".jpg"), node, before=True)
+            # LOOK at the result before it is delivered (exam 2: "take a look at the photo again after grading")
+            scratch = out / "after" / (".check-" + stem + ".jpg")
+            masks = subject_check(cs, node, d, r["masks"], out / "before" / (stem + ".jpg"), scratch, r["log"],
+                                  skin=r.get("skin", False), white=r.get("white", False), fam=fam)
+            if fam == "day":
+                masks = sky_check(cs, node, d, masks, out / "before" / (stem + ".jpg"), scratch, r["log"])
+            r["masks"] = [{k: v for k, v in x.items() if not k.startswith("_")} | ({"sky": True} if x.get("_sky") else {})
+                          for x in masks]
+            scratch.unlink(missing_ok=True)
+            a = guard(cs, node, d, fam, r["log"])
+            cs.preview(out / "after" / (stem + ".jpg"), node)
             r["after"] = a
             r["look"] = next((l for l in r["log"] if l.startswith("look ")), "")
             print("%-18s %-5s p50 %.3f sat %.2f clip %.3f | %s" % (r["name"], fam, a["lumPct"][3], a["meanSaturation"],

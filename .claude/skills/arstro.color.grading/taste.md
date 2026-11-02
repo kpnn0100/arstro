@@ -15,7 +15,38 @@ Format, newest first:
 
 ---
 
-## EXAM 1 RESULT: 15 / 16 good = 94 % — "too safe"  → v4 BOLDER, exam 2 awaiting marks
+## EXAM 2 RESULT: 14 / 16 good = 88 % — "you completely destroy the sky"  → v5, exam 3 awaiting marks
+
+Exam 2 (bold v4; kept: `~/photo/grade-lab/exam/exam-2-bold-88pct.json`): *"overall you did it well for the color but
+the sky is over saturated, you completely destroy the sky, the sky is now look sharp and seperated from the photo,
+please take a look at the photo again after grading"*. NOT GOOD: the white roadster — *"would be better if the car
+don't fall for gold too much"*; the teamLab man — *"the face is too dark"*.
+WHAT BROKE THE SKY — measured on the exam's own renders, one control switched off at a time:
+- SHARP (fine texture 2-4x the original's, sea wall 0.0026 -> 0.0100): NOT grain, sharpening, clarity or dehaze —
+  the colour MIXER's Lum channel. Cosmo mixes after white balance and curves, where a white sky is yellow-green
+  (30-95 deg), next to the foliage the deep-greens move darkens; its pixels' hue is noise, so each took a different
+  darkening = sand. Cure: colour NR (90 put the pagoda back at the original's texture) and a Lum that is flat over
+  a sky's hues.
+- OVER-SATURATED (Fuji 0.17 -> 0.26, moat 0.07 -> 0.11): the look at 130 % plus set matching pushing saturation UP
+  +11 / +15 on overcast frames, plus a `saturation +10` / `dehaze 15` in the plan's sky masks.
+- SEPARATED (moat colour spread 0.013 -> 0.049: cream mids, lilac tops, a teal band): the match's R/G/B shoulder
+  fighting the look's warm wheels; one sky in three lights.
+- The car: the correction alone kept its paint (0.34 vs the camera's 0.36); the look added +0.30 — Golden Dream's
+  R/G/B curves lay gold in the night's mids, where the paint sits (0.48 on screen).
+- The face: Neon Noir's deep toe at full depth took it from 0.128 to 0.088 on screen, and its R/G/B toe turned it
+  from pink 338 deg to violet 279 deg.
+LESSONS -> v5 (the colour stays bold — "you did it well for the color"):
+(1) **THE SKY BELONGS TO THE PHOTO.** It stays as smooth as the camera had it, about as saturated (<= 1.2x), and ONE
+    colour; the mood goes into the land, the shadows and the light, not into the sky. Never `dehaze`, `clarity` or
+    `saturation +` on a sky mask — exposure only.
+(2) **LOOK AFTER GRADING** (`edit.py` sky_check / subject_check, on the render itself vs the camera's frame).
+(3) **A white subject stays white** under any mood (`taste.protect_white`; the car's mask cools locally if needed).
+(4) **A person never ends darker than the camera had them**; at night their face keeps its warmth and colour.
+The grader's own look at exam 3 caught one more: blue-grey patches in white skies (pagoda, the woman) — measured, the
+camera has the same darker-is-bluer split (+0.02); white balance only took its cream cast away. Kept.
+EXAM 3 VERDICT: _(pending)_
+
+## EXAM 1 RESULT: 15 / 16 good = 94 % — "too safe"  → v4 BOLDER, exam 2: 88 % (above)
 
 Exam 1 (kept: `~/photo/grade-lab/exam/exam-1-safe-94pct.json`) passed the 90 % bar, and the approver: *"if i don't
 comment that mean you are playing it too safe, you just correct the lighting, i need to apply mood by playing with
@@ -34,7 +65,7 @@ The grader's own review of the bold build caught two faults before the approver 
 130 % turned every white overcast sky PEACH (pagoda, woman, moat, sea wall) — Natural Teal's curves now tint the
 SHADOWS only; and set-matching dragged clean skies toward the set's yellow-olive median — neutral highlight
 targets are clamped to a clean-white window (warmth <= 0.15, tint <= 0.06).
-EXAM 2 VERDICT: _(pending)_
+EXAM 2 VERDICT: 14 / 16 = 88 % — the sky, the gold car, the dark face (above).
 
 ## v3 + THE EXAM (2026-11-02, afternoon) — status: exam awaiting the approver's marks
 
