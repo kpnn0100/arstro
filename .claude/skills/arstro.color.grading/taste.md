@@ -38,6 +38,14 @@ mixer, vibrance, the look's temp or wheels, never white balance past 80. (3) **A
 brick) under a teal look: the plan takes the teal out of its shadows (`set`: light shadow wheel, flat R/G/B curves).
 (4) Dehaze for haze goes on the land (a gradient below the horizon), never on the clouds. (5) When the eye and a
 number disagree about a sky, the eye wins — look at it LARGE, switch controls off one by one.
+EXAM 4 FIRST NOTE: *"the mountain fuji look even worse, the cloud completely broken"*. At 1600 px: the clouds round
+the peak were dark grey blotches. Switched off one by one: not the sky filter, clarity, dehaze or sharpening — the
+colour MIXER's Lum (its hue / sat channels innocent). Fuji's clouds kept the train window's green after white balance
+(+0.057 G over R+B; every other sky <= +0.040), so they sit on the hues the look's green-depth darkens, pixel by pixel.
+-> edit.py: clouds greener than +0.05 after white balance -> the mixer's Lum off for that photo (only Fuji; the sea
+wall's neutral clouds keep it — its mountain needs the depth). The plan: tint -20, temp -125 (the snow is the true
+white here: at tint 80 + the look's warmth it read pink and the field yellow). The grader's own miss: the sky check
+had stacked softening steps on Fuji (texture, contrast, clarity, dehaze all down) chasing a cause in the mixer.
 EXAM 4 VERDICT: _(pending)_
 
 ## EXAM 2 RESULT: 14 / 16 good = 88 % — "you completely destroy the sky"  → v5, exam 3 awaiting marks

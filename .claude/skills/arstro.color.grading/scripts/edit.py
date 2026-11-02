@@ -330,6 +330,10 @@ SKY_LIMITS = {"tex": (1.1, 0.0002),     # 1.25x let the pagoda's blue sand throu
               "structure": (1.0, 0.0005)}
 
 
+GREEN_CLOUDS = 0.05     # the clouds' G - (R+B)/2 after white balance above which the mixer's green Lum hits them: Fuji
+                        # (window) +0.057 broke; Kamakura +0.040 and Asakusa +0.036 passed with it (exam 3)
+
+
 def _img(path, edge=600):
     import numpy as np
     from PIL import Image
@@ -398,7 +402,8 @@ def cloud_stats(a, m, ref_l):
     return {"gap": float(np.linalg.norm(v(cl) - v(sk))), "contrast": float(np.percentile(l[m], 95) - np.percentile(l[m], 5)),
             "cloud_y": float((((sm[..., 0] + sm[..., 1]) / 2 - sm[..., 2])[cl]).mean()),
             "cloud_hi": float(np.percentile(l[cl], 95)),
-            "structure": float(np.abs(_blur(_luma(a), 2) - _blur(_luma(a), 12))[m].mean())}
+            "structure": float(np.abs(_blur(_luma(a), 2) - _blur(_luma(a), 12))[m].mean()),
+            "cloud_g": float((sm[..., 1] - (sm[..., 0] + sm[..., 2]) / 2)[cl].mean())}
 
 
 def _ellipse(shape, x, k=1.0):
@@ -460,6 +465,15 @@ def sky_check(cs, node, d, masks, before_jpg, scratch, log, corr=None):
         cs.preview(scratch, node, edge=900)
         wb = cloud_stats(_img(scratch), m_all, ref_l)
         was["gap"], was["cloud_y"], was["cloud_hi"] = wb["gap"], wb["cloud_y"], wb["cloud_hi"]
+        # Clouds still GREEN after white balance (a cast it could not take out — Fuji through a train window) sit on
+        # the hues the look's green-depth darkens: the mixer's Lum broke them into dark blotches ("the cloud
+        # completely broken", exam 4; Lum off -> whole again, the hue / sat channels innocent). Only then, and for
+        # that photo, the Lum goes — a neutral-cloud photo keeps it (the sea wall's mountain needs its depth).
+        log.append("clouds' green after white balance %+.3f" % wb["cloud_g"])
+        if wb["cloud_g"] > GREEN_CLOUDS and d.get("mixer2"):
+            d.pop("mixer2")
+            log.append("sky: the mixer's Lum off for this photo — the clouds kept a green cast and its green-depth "
+                       "move broke them into dark blotches (green clouds)")
         reapply(cs, node, d, [{k: v for k, v in x.items() if not k.startswith("_")} for x in masks])
     rows = [i for i in range(m.shape[0]) if m[i].any()]
     bottom = (sorted(rows)[int(0.85 * (len(rows) - 1))] + 1) / m.shape[0]

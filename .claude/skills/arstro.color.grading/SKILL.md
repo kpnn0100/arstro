@@ -115,7 +115,9 @@ it with the camera's frame where the approver's eye goes first:
 - `subject_check` (the plan's first radial lift): a person never ends darker than the camera had them (night: 10 %
   brighter), and at night keeps the camera's warmth and colour; a white subject gains no colour (local cooling).
 **A sky's fix stays in the sky** (exam 3): the sky check works through the sky's own graduated filter, colour NR, the
-highlights slider and the plan's sky masks — never the mixer, vibrance, the look's temp or wheels (they recoloured the
+highlights slider and the plan's sky masks — never the mixer (one exception: clouds still GREEN after white balance,
+> +0.05, a window's cast — the mixer's green-depth Lum broke Fuji's into blotches, so that photo loses it), vibrance,
+the look's temp or wheels (they recoloured the
 land the approver had passed). **When the eye and a number disagree about a sky, the eye wins**: look at it large,
 switch controls off one by one (that is how vibrance was found).
 **The sky belongs to the photo**: the mood goes into the land, the shadows and the light — never `dehaze`, `clarity`
