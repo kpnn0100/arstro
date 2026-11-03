@@ -164,6 +164,33 @@ namespace exporter
             }
         }
 
+        /** Set IFD0's Orientation (tag 0x0112) to 1 in place. The decoder hands the engine pixels
+         *  already turned the way the source's tag says (D-62), so the file written from them is
+         *  upright; carrying the source's 6 or 8 along would make every viewer turn it a second
+         *  time. A SHORT value sits in the entry itself, so nothing moves. */
+        void setUpright(std::vector<uint8_t> &app1)
+        {
+            constexpr size_t kTiff = 4 + 6;
+            if (app1.size() < kTiff + 8) return;
+            uint8_t *tiff = app1.data() + kTiff;
+            const size_t tiffLen = app1.size() - kTiff;
+            const bool be = tiff[0] == 'M' && tiff[1] == 'M';
+            if (!be && !(tiff[0] == 'I' && tiff[1] == 'I')) return;
+            if (rd16(tiff + 2, be) != 42) return;
+            const uint32_t ifd0 = rd32(tiff + 4, be);
+            if (ifd0 + 2 > tiffLen) return;
+            uint8_t *ifd = tiff + ifd0;
+            const uint16_t count = rd16(ifd, be);
+            if (ifd0 + 2 + (size_t)count * 12 > tiffLen) return;
+            for (uint16_t i = 0; i < count; ++i)
+            {
+                uint8_t *entry = ifd + 2 + (size_t)i * 12;
+                if (rd16(entry, be) != 0x0112 || rd16(entry + 2, be) != 3) continue;   // Orientation, SHORT
+                wr16(entry + 8, 1, be);
+                return;
+            }
+        }
+
         /** Rewrite `path` with `app1` spliced in directly after SOI (replacing any APP1
          *  already present). Returns false and leaves the file untouched on any error. */
         bool injectApp1(const std::string &path, const std::vector<uint8_t> &app1)
@@ -358,6 +385,7 @@ namespace exporter
             if (!app1.empty())
             {
                 if (req.stripGps) stripGps(app1);
+                setUpright(app1);
                 injectApp1(path, app1);
             }
         }

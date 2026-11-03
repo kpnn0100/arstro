@@ -14,6 +14,7 @@
 #include "../PresetLibrary.h"
 #include "PinnedDecoder.h"   // host layer, compiled into this suite on purpose — see CMakeLists
 #include "TestMain.h"
+#include <gdk-pixbuf/gdk-pixbuf.h>
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -2869,6 +2870,69 @@ namespace
         printf("[PASS] a_thumbnail_is_turned_the_way_the_photo_is\n");
     }
 
+    // D-62: a 48x32 JPEG of six grey blocks, 16 px each, carrying EXIF Orientation `o` in an APP1
+    // spliced in after SOI -- the way a Panasonic writes a portrait (stored landscape, tag 6 or 8).
+    //   A B C      A=40 B=80 C=120
+    //   D E F      D=160 E=200 F=240
+    std::string writeTaggedJpeg(const std::string &path, int o)
+    {
+        const int w = 48, h = 32;
+        std::vector<guchar> px((size_t)w * h * 3);
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x)
+                for (int c = 0; c < 3; ++c) px[((size_t)y * w + x) * 3 + c] = (guchar)(40 * (1 + (y / 16) * 3 + x / 16));
+        GdkPixbuf *pb = gdk_pixbuf_new_from_data(px.data(), GDK_COLORSPACE_RGB, FALSE, 8, w, h, w * 3, nullptr, nullptr);
+        assert(gdk_pixbuf_save(pb, path.c_str(), "jpeg", nullptr, "quality", "100", nullptr));
+        g_object_unref(pb);
+        std::ifstream in(path, std::ios::binary);
+        std::vector<uint8_t> j((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        in.close();
+        // FF E1 | len 34 | "Exif\0\0" | II*\0, IFD0 at 8 | one entry: 0x0112 SHORT x1 = o | next IFD 0
+        const uint8_t app1[] = {0xFF, 0xE1, 0, 34, 'E', 'x', 'i', 'f', 0, 0, 'I', 'I', 42, 0, 8, 0, 0, 0,
+                                1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, (uint8_t)o, 0, 0, 0, 0, 0, 0, 0};
+        j.insert(j.begin() + 2, std::begin(app1), std::end(app1));
+        std::ofstream(path, std::ios::binary | std::ios::trunc).write((const char *)j.data(), (std::streamsize)j.size());
+        return path;
+    }
+
+    // D-62: a JPEG is decoded turned the way its EXIF says, full size and as a thumbnail. Three of the
+    // user's four Panasonic JPEGs (tags 6 and 8) were graded lying on their side: the masks, the sky
+    // check and the preview all saw a sideways photo. Block centres, not just the aspect, so a turn
+    // 180 degrees out fails.
+    void test_a_jpeg_is_decoded_the_way_its_exif_turns_it()
+    {
+        using arstro::cosmo::DecodedImage;
+        using arstro::cosmo::NativeImageDecoder;
+        const auto dir = std::filesystem::temp_directory_path();
+        auto near = [](int a, int b) { return std::abs(a - b) <= 8; };
+        // the grey at block (r, c) of an image whose blocks are `b` px
+        auto at = [](const DecodedImage &img, int r, int c, int b) {
+            return (int)img.rgba[((size_t)(r * b + b / 2) * img.width + (c * b + b / 2)) * 4];
+        };
+        struct Case { int o; int tl, tr, bl, br; };   // the four corner blocks once upright
+        // 1 as stored · 6 turned 90 degrees clockwise (D A / E B / F C) · 8 counter-clockwise (C F / B E / A D)
+        const Case cases[] = {{1, 40, 120, 160, 240}, {6, 160, 40, 240, 120}, {8, 120, 240, 40, 160}};
+        for (const Case &k : cases)
+        {
+            const std::string path = writeTaggedJpeg((dir / ("cosmo_d62_" + std::to_string(k.o) + ".jpg")).string(), k.o);
+            NativeImageDecoder dec;
+            const DecodedImage full = dec.decodeFile(path);
+            const DecodedImage thumb = dec.decodeThumb(path, 24);
+            const bool quarter = k.o != 1;
+            assert(full.ok() && full.width == (quarter ? 32 : 48) && full.height == (quarter ? 48 : 32));
+            assert(thumb.ok() && thumb.width == (quarter ? 16 : 24) && thumb.height == (quarter ? 24 : 16));
+            const int rows = quarter ? 2 : 1, cols = quarter ? 1 : 2;   // index of the last block row/col
+            auto corners = [&](const DecodedImage &img, int b) {
+                return near(at(img, 0, 0, b), k.tl) && near(at(img, 0, cols, b), k.tr) &&
+                       near(at(img, rows, 0, b), k.bl) && near(at(img, rows, cols, b), k.br);
+            };
+            assert(corners(full, 16) && "the full decode is upright");
+            assert(corners(thumb, 8) && "and so is the thumbnail");
+            std::filesystem::remove(path);
+        }
+        printf("[PASS] a_jpeg_is_decoded_the_way_its_exif_turns_it\n");
+    }
+
     // D-69: RAW decodes running at the same time give exactly what each gives alone. A project's photos
     // decode on parallel threads; the plain libraw.a (LIBRAW_NOTHREADS) kept the lossless-JPEG bit reader's
     // state in process globals, so two Canon CR2s loaded together BOTH came out black ("data corrupted at
@@ -3096,6 +3160,7 @@ int main()
     test_a_load_reports_work_before_any_result();
     test_an_image_entry_gets_its_filename();
     test_a_thumbnail_is_turned_the_way_the_photo_is();
+    test_a_jpeg_is_decoded_the_way_its_exif_turns_it();
     test_raws_decoded_concurrently_match_one_at_a_time();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;

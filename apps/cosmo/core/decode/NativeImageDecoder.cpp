@@ -96,12 +96,24 @@ namespace cosmo
             return out;
         }
 
+        /** `pb` turned the way its file's EXIF Orientation says (D-62). The JPEG and TIFF loaders
+         *  record the tag as the "orientation" option and leave the pixels as stored, so without
+         *  this a portrait was edited, previewed and masked lying on its side. RAWs are turned by
+         *  their own `flip` (dcraw_process, applyFlip), never here. Takes `pb`'s reference. */
+        GdkPixbuf *upright(GdkPixbuf *pb)
+        {
+            if (!pb) return nullptr;
+            GdkPixbuf *turned = gdk_pixbuf_apply_embedded_orientation(pb);   // a new ref, or pb's own
+            g_object_unref(pb);
+            return turned;
+        }
+
         DecodedImage decodePixbufScaled(const std::string &path, int maxEdge)
         {
             GError *err = nullptr;
-            GdkPixbuf *pb = maxEdge > 0
+            GdkPixbuf *pb = upright(maxEdge > 0
                                 ? gdk_pixbuf_new_from_file_at_scale(path.c_str(), maxEdge, maxEdge, TRUE, &err)
-                                : gdk_pixbuf_new_from_file(path.c_str(), &err);
+                                : gdk_pixbuf_new_from_file(path.c_str(), &err));
             if (!pb) { if (err) g_error_free(err); return DecodedImage{}; }
             DecodedImage out = fromPixbuf(pb);
             g_object_unref(pb);
@@ -112,7 +124,7 @@ namespace cosmo
         {
             DecodedImage out;
             GError *err = nullptr;
-            GdkPixbuf *pb = gdk_pixbuf_new_from_file(path.c_str(), &err);
+            GdkPixbuf *pb = upright(gdk_pixbuf_new_from_file(path.c_str(), &err));
             if (!pb)
             {
                 if (err) g_error_free(err);

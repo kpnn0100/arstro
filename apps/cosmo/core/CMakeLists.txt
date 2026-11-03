@@ -80,7 +80,8 @@ endif()
 add_executable(cosmo_core_tests tests/sessionTests.cpp
                ${CMAKE_CURRENT_SOURCE_DIR}/../OmpPin.cpp)
 target_include_directories(cosmo_core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(cosmo_core_tests PRIVATE cosmo_core ${CMAKE_DL_LIBS})
+# GTK3 for GdkPixbuf: the D-62 test writes its own EXIF-tagged JPEGs.
+target_link_libraries(cosmo_core_tests PRIVATE cosmo_core PkgConfig::GTK3 ${CMAKE_DL_LIBS})
 add_test(NAME cosmo_core COMMAND cosmo_core_tests)
 
 endif()  # PkgConfig_FOUND

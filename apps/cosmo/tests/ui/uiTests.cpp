@@ -27,6 +27,10 @@
 #include "../../widgets/RightColumn.h"
 #include "../../core/service/Command.h"
 #include "../../core/decode/ImageDecoder.h"
+#include "../../core/decode/Exif.h"
+#include "../../ExportWriter.h"
+#include <filesystem>
+#include <gdk-pixbuf/gdk-pixbuf.h>
 #include <chrono>
 #include <cstdio>
 #include <fstream>
@@ -1361,6 +1365,51 @@ namespace
     }
 }
 
+namespace
+{
+    // ── D-62: an export from a turned JPEG tells viewers it is upright ───────────────
+    //
+    // The decoder now turns a JPEG by its EXIF Orientation, so the pixels the engine renders and
+    // the exporter encodes are already upright. The exporter copies the source's APP1 verbatim;
+    // left alone, the source's "rotate 90 CCW" would ride along and every viewer would turn the
+    // upright file onto its side again.
+    void anExportFromATurnedJpegSaysItIsUpright()
+    {
+        std::printf("Export: a JPEG shot as a portrait (Orientation 8) exports with Orientation 1 (D-62)\n");
+        const auto dir = std::filesystem::temp_directory_path();
+        const std::string src = (dir / "cosmo_ui_d62_src.jpg").string();
+        const std::string out = (dir / "cosmo_ui_d62_out.jpg").string();
+        std::vector<guchar> px((size_t)48 * 32 * 3, 128);
+        GdkPixbuf *pb = gdk_pixbuf_new_from_data(px.data(), GDK_COLORSPACE_RGB, FALSE, 8, 48, 32, 48 * 3, nullptr, nullptr);
+        gdk_pixbuf_save(pb, src.c_str(), "jpeg", nullptr, "quality", "90", nullptr);
+        g_object_unref(pb);
+        {
+            std::ifstream in(src, std::ios::binary);
+            std::vector<uint8_t> j((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            in.close();
+            // FF E1 | len 34 | "Exif\0\0" | II*\0, IFD0 at 8 | one entry: 0x0112 SHORT x1 = 8 | next IFD 0
+            const uint8_t app1[] = {0xFF, 0xE1, 0, 34, 'E', 'x', 'i', 'f', 0, 0, 'I', 'I', 42, 0, 8, 0, 0, 0,
+                                    1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0};
+            j.insert(j.begin() + 2, std::begin(app1), std::end(app1));
+            std::ofstream(src, std::ios::binary | std::ios::trunc).write((const char *)j.data(), (std::streamsize)j.size());
+        }
+        auto orientation = [](const std::string &path) {
+            for (const auto &kv : arstro::cosmo_v2::exif::read(path))
+                if (kv.first == "Orientation") return kv.second;
+            return std::string();
+        };
+        check(orientation(src) == "Rotated 90\xC2\xB0 CCW", "the source says it must be turned");
+        arstro::cosmo_v2::ExportDialog::Request req;   // JPEG, EXIF embedded: the defaults
+        std::vector<uint8_t> rgba((size_t)32 * 48 * 4, 128);   // what the engine renders: upright
+        std::string err;
+        const bool ok = arstro::cosmo_v2::exporter::write(req, rgba.data(), 32, 48, out, src, err);
+        check(ok, "the export is written");
+        check(orientation(out) == "Normal", "and its EXIF says Orientation 1, so no viewer turns it again");
+        std::filesystem::remove(src);
+        std::filesystem::remove(out);
+    }
+}
+
 int main()
 {
     std::printf("cosmo assembled-app UI tests\n\n");
@@ -1381,6 +1430,7 @@ int main()
     theStageDissolvesWhenAnAdjustmentLands();
     theStageNeverBlinksDuringADrag();
     theBeforeAfterToggleDissolves();
+    anExportFromATurnedJpegSaysItIsUpright();
     std::printf("\n%s (%d failure%s)\n", gFailures ? "FAILED" : "all passed", gFailures,
                 gFailures == 1 ? "" : "s");
     return gFailures ? 1 : 0;

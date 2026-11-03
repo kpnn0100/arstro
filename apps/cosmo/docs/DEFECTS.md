@@ -126,30 +126,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   a step, `setBypassed`, the group mutators) and not in `submitWith`.
 - **Guard:** in the same L2 test, `select` then `dirty == false`; an edit then `dirty == true`.
 
-### D-62 — A JPEG's EXIF orientation is ignored: a portrait photo edits (and previews) sideways
-- **Area:** core / decode · **Status:** **Confirmed** (measured) · **Severity:** S2
-- **Found:** 2026-09-30, while bringing up the NTWB web front end (R-NTWB) on an RK3588.
-- **Front end:** every one — the pixels are wrong below the service; the web preview showed it first
-  because it draws the frame exactly as rendered.
-- **Reproduce:** a Panasonic JPEG with EXIF `Orientation = 8` (`P1120349.JPG`, 4592×3448 stored):
-  `project new /tmp/t.cmp`, `import P1120349.JPG`, `export --outdir D --long-edge 600` → the
-  written file is **600×451** pixels (landscape) carrying the source's EXIF with `Orientation = 8`.
-  Viewers that honour the tag show it upright, so the export *looks* right — but every preview
-  frame (`frame.ready`, the GUI canvas, the NTWB `preview` stream, the filmstrip thumbnail) is the
-  stored landscape pixels, i.e. the photo lies on its side while being edited.
-- **Expected:** decode turns the pixels the way the file says (as R-THUMB's RAW path already does),
-  so preview, crop geometry, masks and export all agree with what the camera meant.
-- **Actual:** `NativeImageDecoder::applyFlip` exists and is right (guarded by
-  `a_thumbnail_is_turned_the_way_the_photo_is`), but its only caller is the RAW embedded-preview
-  path (`NativeImageDecoder.cpp:333`); the GdkPixbuf JPEG/PNG/TIFF path never reads the tag.
-- **Judgement:** **defect** — and it hides behind the exporter, which copies EXIF including the
-  tag, so a turned file rotates back in a viewer and nobody sees it until they look at the canvas.
-- **Recommended fix:** in the GdkPixbuf path read `gdk_pixbuf_get_option(pb, "orientation")` (or
-  `Exif.cpp`'s reader) and call `applyFlip` with the matching flip; then write `Orientation = 1`
-  (or drop the tag) on export so a turned file is not turned twice by viewers.
-- **Guard:** an L1 test with a 3×2 JPEG carrying `Orientation = 6` and `8`: decoded size 2×3, the
-  corner pixels where `applyFlip` puts them; plus the export reading back as upright with tag 1.
-
 ### D-61 — `cosmo-cc render` / `bench` print `backend=gpu` for renders that ran on the CPU
 - **Area:** core / cli · **Status:** **Confirmed** (by reading, and by D-60's measurement) · **Severity:** S3
 - **Found:** 2026-09-29, while verifying R-GPU-7 on an RK3588.
@@ -422,6 +398,41 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-62 — A JPEG's EXIF orientation is ignored: a portrait photo edits (and previews) sideways
+- **Area:** core / decode · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-09-30, while bringing up the NTWB web front end (R-NTWB) on an RK3588.
+- **Front end:** every one — the pixels are wrong below the service; the web preview showed it first
+  because it draws the frame exactly as rendered.
+- **Reproduce:** a Panasonic JPEG with EXIF `Orientation = 8` (`P1120349.JPG`, 4592×3448 stored):
+  `project new /tmp/t.cmp`, `import P1120349.JPG`, `export --outdir D --long-edge 600` → the
+  written file is **600×451** pixels (landscape) carrying the source's EXIF with `Orientation = 8`.
+  Viewers that honour the tag show it upright, so the export *looks* right — but every preview
+  frame (`frame.ready`, the GUI canvas, the NTWB `preview` stream, the filmstrip thumbnail) is the
+  stored landscape pixels, i.e. the photo lies on its side while being edited.
+- **Expected:** decode turns the pixels the way the file says (as R-THUMB's RAW path already does),
+  so preview, crop geometry, masks and export all agree with what the camera meant.
+- **Actual:** `NativeImageDecoder::applyFlip` exists and is right (guarded by
+  `a_thumbnail_is_turned_the_way_the_photo_is`), but its only caller is the RAW embedded-preview
+  path (`NativeImageDecoder.cpp:333`); the GdkPixbuf JPEG/PNG/TIFF path never reads the tag.
+- **Judgement:** **defect** — and it hides behind the exporter, which copies EXIF including the
+  tag, so a turned file rotates back in a viewer and nobody sees it until they look at the canvas.
+- **Recommended fix:** in the GdkPixbuf path read `gdk_pixbuf_get_option(pb, "orientation")` (or
+  `Exif.cpp`'s reader) and call `applyFlip` with the matching flip; then write `Orientation = 1`
+  (or drop the tag) on export so a turned file is not turned twice by viewers.
+- **Seen again:** 2026-11-03, grading the user's Panasonic folder (`dichoi`, DMC-GX7MK2, tags 6 and 8)
+  through `cosmo-cc mcp`: three of four photos lay on their side, so the grading skill's masks, sky check and
+  subject check all measured a sideways photo.
+- **Fix:** `NativeImageDecoder.cpp` `upright()` — the GdkPixbuf path (full decode and scaled thumbnail) calls
+  `gdk_pixbuf_apply_embedded_orientation`, which reads the loader's `orientation` option (all 8 values,
+  mirrors included). RAWs keep their own `flip`. `ExportWriter.cpp` `setUpright()` writes Orientation = 1
+  into the copied APP1, so an upright file is not turned again by a viewer. A project edited BEFORE this
+  fix with masks or a crop on a turned JPEG now sees the photo upright, so those masks land elsewhere —
+  re-place them.
+- **Guard:** `cosmo_core_tests` `a_jpeg_is_decoded_the_way_its_exif_turns_it` — 48×32 JPEGs of six grey
+  blocks tagged 1, 6, 8: decoded 32×48 for 6 and 8, the corner blocks where the turn puts them, full size and
+  as a thumbnail. `cosmo_ui_tests` `anExportFromATurnedJpegSaysItIsUpright` — the export of a tag-8 source
+  reads back "Normal". Both FAIL with the fix removed.
 
 ### D-69 — Two Canon CR2s loaded together both decoded BLACK ("data corrupted at <n>")
 - **Area:** build / decode (LibRaw linkage) · **Status:** **Fixed** · **Severity:** S1 (a project's photos
