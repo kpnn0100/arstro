@@ -107,6 +107,9 @@ subject, intent, reading, masks) → `edit.py run --save` → look again, large 
 approver marks it at `http://127.0.0.1:8789/exam?set=<set>` → `cosmo-cc export P.cmp --outdir DIR/export`.
 Scenes now include **`blue-hour`** (long exposure, cool sky — keep the blue, not violet, never darker than shot).
 A photo with a smooth sky is set-matched in its SHADOWS only, its highlight recovery held to -60.
+**The set-match stays inside a SHOOT** (photos more than 3 days apart are different shoots; `edit.json` records each
+photo's `shoot`): a folder of several trips is not one look. **A JPEG is graded upright** (Cosmo D-62, fixed
+2026-11-03) — if a review sheet ever shows a photo on its side, suspect Cosmo before writing the plan.
 
 **LOOK at the result — the approver's words: "take a look at the photo again after grading".** Exam 2 had good
 colour and destroyed skies; every number the edit had checked was fine. So `run` now renders each photo and compares

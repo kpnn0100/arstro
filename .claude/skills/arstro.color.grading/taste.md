@@ -15,6 +15,25 @@ Format, newest first:
 
 ---
 
+## SECOND SHOOT — ~/photo/myphoto/dichoi (2026-11-03): 4 Panasonic JPEGs, "cinematic mood"  (status: awaiting marks)
+
+The approver: *"try bring cinematic mood for these image"*. Cinematic = THE TASTE (taste.py): Natural Teal +skin on
+the two portraits, Neon Noir 80 % on the still lake, Natural Teal 130 % on the valley. Project, edits, exports in
+`~/photo/dichoi-graded`; reviewed at `/exam?set=dichoi`. What the folder taught before the approver saw it:
+- **Three of four photos lay on their side** — Cosmo ignored a JPEG's EXIF Orientation (D-62, open since 2026-09-30):
+  the masks, sky check and subject check all measured a sideways photo. Fixed in Cosmo (decode turns the pixels; the
+  export writes Orientation 1) before grading.
+- **The set-match crossed shoots**: a valley shot in June 2026 was matched to a Dalat trip of Jan 2025 — saturation
+  -7, its blue sky slate. Photos are now matched only within their SHOOT (a gap > 3 days starts a new one; a photo
+  alone in its shoot is matched to no one). The first shoot's folder (four shoots) was re-run under this rule.
+- **White balance ran to its cap on a blue sky**: the walk re-chose its witness every step (bluish clouds took over
+  from the frame's cast), and warming made the frame measure COOLER (blue-sky pixels greyed into the "neutral" set),
+  so it chased its goal to 8000 K. Now: the witness is chosen once; a step that moves it the wrong way is undone and
+  the walk stops; a blue sky filling >= 15 % of a frame with no pale witness is trusted a tenth. The exam's 18 photos
+  keep their white balance exactly; the first shoot's Panasonic RW2 (the same fault, 8000 K) now sits at the camera's.
+- The portrait's bright orange cushions at the frame edge: calmed in the plan (saturation -45, exposure -0.15).
+SECOND SHOOT VERDICT: _(pending)_
+
 ## FIRST REAL SHOOT — ~/photo/myphoto (2026-11-02): 4 RAWs, 3 cameras  (status: awaiting the approver's marks)
 
 The approver: *"i see you are ready, now try with all photo in this folder"*. Canon EOS 750D ×2 (CR2), Sony A7C (ARW),

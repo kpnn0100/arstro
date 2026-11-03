@@ -138,8 +138,13 @@ def classify(a, md):
 
 # ── 2. normalise (closed loop on the real render) ──────────────────────────────────────────
 
-def witness(a, scene):
+def witness(a, scene, which=None):
     """Which measured cast stands for the LIGHT, and how far to trust it (0..1).
+
+    Returns (warmth, tint, trust, which). `which` ("highlights" | "cast") holds the choice made on the
+    camera's frame for the whole walk: re-chosen every step, a June valley's bluish clouds became the
+    witness once warming had paled them, still far from the goal the frame's cast had set — and the walk
+    warmed to its 8000 K cap (dichoi, 2026-11-03).
 
     A bright, colourless highlight zone — an overcast sky, a white wall, cloud — is the best grey
     card a scene has. Foliage is not: grey-green leaves pass a "low saturation" test and drag a
@@ -147,14 +152,22 @@ def witness(a, scene):
     light.md). So daylight trusts the highlights when there are enough of them, and otherwise
     trusts the neutral estimate only half-way."""
     z = a["zones"]["highlights"]
+    if which == "highlights":
+        return z["warmth"], z["tint"], None, which
+    if which == "cast":
+        return a["castWarmth"], a["castTint"], None, which
     if scene in ("overcast-day", "daylight", "golden-hour"):
         if z["fraction"] >= 0.08 and z["saturation"] < 0.2:
             # ...unless it measures BLUE: then it is a pale blue sky, not a grey card, and making
             # it neutral warms the whole frame (the Kamakura temple's sky went white and the roofs
             # amber). Real overcast here measured warm; a blue witness is trusted a third.
-            return z["warmth"], z["tint"], (1.0 if z["warmth"] > -0.05 else 0.3)
-        return a["castWarmth"], a["castTint"], 0.5 if a["foliageFraction"] < 0.25 else 0.25
-    return a["castWarmth"], a["castTint"], 1.0
+            return z["warmth"], z["tint"], (1.0 if z["warmth"] > -0.05 else 0.3), "highlights"
+        # A blue sky filling the frame (no pale witness): the frame's cast IS that sky — "making it neutral" warmed
+        # a June valley to 8260 K and its blue sky went slate (dichoi, 2026-11-03). Trusted a tenth.
+        if a.get("skyFraction", 0) >= 0.15:
+            return a["castWarmth"], a["castTint"], 0.1, "cast"
+        return a["castWarmth"], a["castTint"], 0.5 if a["foliageFraction"] < 0.25 else 0.25, "cast"
+    return a["castWarmth"], a["castTint"], 1.0, "cast"
 
 
 def normalise(cs, node, scene, iso, log):
@@ -172,7 +185,7 @@ def normalise(cs, node, scene, iso, log):
     # ones (references/cosmo-controls.md) and are re-measured on every step.
     if t["wb"]:
         kW, kT = 0.19 / 1000.0, -0.0029
-        w0, ti0, trust = witness(a, scene)
+        w0, ti0, trust, which = witness(a, scene)
         goalW = t["warmth"] if t["wb"] == "full" else w0
         goalW = w0 + (goalW - w0) * trust
         goalT = ti0 + (t["tint"] - ti0) * trust
@@ -181,11 +194,12 @@ def normalise(cs, node, scene, iso, log):
             # it IS magenta; correcting it toward green would undo the artist's light.
             goalT = min(ti0, t["tint"]) if ti0 > t["tint"] else ti0
         for _ in range(5):
-            w, ti, _ = witness(a, scene)
+            w, ti, _, _ = witness(a, scene, which)
             if abs(w - goalW) < 0.03 and abs(ti - goalT) < 0.02:
                 break
             dT = 0.0 if t["wb"] != "full" else max(-2500, min(2500, (goalW - w) / kW)) * 0.85
             dTi = max(-40, min(40, (goalT - ti) / kT)) * 0.85
+            before_step = (p["temp"], p["tint"])
             p["temp"] = max(t["tempRange"][0], min(t["tempRange"][1], p["temp"] + dT))
             # A witness trusted fully (clouds, snow, a white wall) may correct a real tinted-glass
             # cast past the usual range — the Fuji frame was shot through a green train window. NOT to the
@@ -194,13 +208,21 @@ def normalise(cs, node, scene, iso, log):
             tintHi = t["tintRange"][1] if trust < 1.0 or not t["floor"] else max(t["tintRange"][1], 80)
             p["tint"] = max(t["tintRange"][0], min(tintHi, p["tint"] + dTi))
             a2 = apply()
-            w2, ti2, _ = witness(a2, scene)
+            w2, ti2, _, _ = witness(a2, scene, which)
+            # A witness that moves AGAINST the step is not measuring the light: warming a June valley made its
+            # blue sky's pixels grey enough to join the "neutral" ones, so the frame measured COOLER at every step
+            # and the walk ran to its 8000 K cap (dichoi, 2026-11-03). Undo that step and stop.
+            if (dT and (w2 - w) * math.copysign(1, dT) < -0.005) or (dTi and (ti2 - ti) * math.copysign(1, dTi) > 0.005):
+                p["temp"], p["tint"] = before_step
+                a = apply()
+                log.append("wb stopped: the witness moved against the step (the frame's colour, not a cast)")
+                break
             if dT and abs(w2 - w) > 1e-3:
                 kW = max(0.00005, min(0.0006, (w2 - w) / dT))
             if dTi and abs(ti2 - ti) > 1e-3:
                 kT = max(-0.008, min(-0.001, (ti2 - ti) / dTi))
             a = a2
-        w, ti, _ = witness(a, scene)
+        w, ti, _, _ = witness(a, scene, which)
         log.append("wb temp=%d tint=%.0f (trust %.2f) -> warmth %+.2f tint %+.2f" % (p["temp"], p["tint"], trust, w, ti))
     # Exposure toward the scene's median — but HIGHLIGHTS FIRST: when the sky still clips with the
     # highlights slider pulled in, exposure comes back down and the median is left for the curve.

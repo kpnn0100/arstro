@@ -19,7 +19,8 @@ Per photo, in order (SKILL.md §2c):
  3. plan      — what the agent decided LOOKING at this photo (plan.json): `set` tweaks (k=v, k+=v,
                 k-=v), local masks (a subject lifted, a sky graded down, a light given glow).
  4. match     — after every photo has 1-3, the set's median shadow cast, highlight cast and saturation
-                (per day / night family) become the targets, and each photo's OWN R/G/B curve toe and
+                (per SHOOT — a day, or a trip of consecutive days — and per day / night family) become the
+                targets, and each photo's OWN R/G/B curve toe and
                 shoulder and saturation are nudged toward them — a colourist matching shots to a hero.
                 Same mood, different photos: identical settings never give identical results.
  5. guard     — nothing that matters clips.
@@ -38,7 +39,7 @@ Mask geometry is 0..1 of the framed photo, y down. A linear mask is 0 at (x0,y0)
 Mask adjustments: exposure (EV), contrast, highlights, shadows, whites, blacks, temp, tint, saturation,
 texture, clarity, dehaze (-100..100, temp/tint relative).
 """
-import argparse, json, math, statistics, sys
+import argparse, datetime, json, math, statistics, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -716,6 +717,37 @@ def cmd_review(args):
         cs.close()
 
 
+# A set is matched within ONE SHOOT — a day, or a trip of consecutive days. The approver's folder "dichoi" held a
+# Dalat lake and two portraits (31 Jan - 1 Feb 2025) and a valley shot sixteen months later: matched to the others'
+# medians, the valley lost its saturation (-7) and its blue sky went slate. Photos more than SHOOT_GAP days apart
+# from the previous one start a new shoot; a photo alone in its shoot is matched to no one.
+SHOOT_GAP = 3.0
+
+
+def taken(meta):
+    s = str(meta.get("Taken") or "").strip()[:19]
+    for f in ("%Y:%m:%d %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.datetime.strptime(s, f)
+        except ValueError:
+            pass
+    return None
+
+
+def assign_shoots(rows, known=None):
+    """r["shoot"] = the date of its shoot's first photo ("undated" without one). `known` (a partial re-run) keeps
+    the shoots the whole set was given."""
+    known = known or {}
+    dated = sorted((t, r) for r in rows if r["name"] not in known for t in [taken(r["meta"])] if t)
+    shoot, last = None, None
+    for t, r in dated:
+        if last is None or (t - last).total_seconds() > SHOOT_GAP * 86400:
+            shoot = t.strftime("%Y-%m-%d")
+        r["shoot"], last = shoot, t
+    for r in rows:
+        r["shoot"] = known.get(r["name"]) or r.get("shoot") or "undated"
+
+
 def cmd_run(args):
     out = Path(args.out)
     for sub in ("before", "after"):
@@ -782,11 +814,18 @@ def cmd_run(args):
                          "pass1": a, "log": log})
             print("%-18s %-14s pass1 p50 %.3f sat %.2f  %s" % (name, scene, a["lumPct"][3], a["meanSaturation"],
                                                                pp.get("subject", "")))
-        # ── the set's medians, per family: what "consistent" means for THIS set in THIS mood ──
+        # ── the shoots: photos are matched only to photos of their own shoot ──
+        known = {p["name"]: p.get("shoot") for p in (prev or {}).get("photos", []) if only and p.get("shoot")}
+        assign_shoots(rows, known)
+        multi = len({r["shoot"] for r in rows} | set(known.values())) > 1
+        key = lambda r: (r["shoot"] + "/" if multi else "") + r["family"]   # noqa: E731
+        # ── the set's medians, per shoot and family: what "consistent" means for THIS set in THIS mood ──
         targets = {}
-        for fam in (() if (only and prev and prev.get("targets")) else ("day", "night")):
-            rs = [r for r in rows if r["family"] == fam]
-            if not rs:
+        for k in (() if (only and prev and prev.get("targets")) else sorted({key(r) for r in rows})):
+            rs = [r for r in rows if key(r) == k]
+            if len(rs) < 2:
+                for r in rs:
+                    r["log"].append("matched to no one: the only %s photo of its shoot (%s)" % (r["family"], r["shoot"]))
                 continue
             t = {}
             for z in ("shadows", "highlights"):
@@ -801,7 +840,7 @@ def cmd_run(args):
                 t["highlights"]["warmth"] = max(-0.05, min(0.15, t["highlights"]["warmth"]))
                 t["highlights"]["tint"] = max(-0.03, min(0.06, t["highlights"]["tint"]))
             t["sat"] = statistics.median(r["pass1"]["meanSaturation"] for r in rs)
-            targets[fam] = t
+            targets[k] = t
         if only and prev and prev.get("targets"):
             targets = prev["targets"]
         # ── pass 2: match each photo to its family, guard, look ──
@@ -821,8 +860,8 @@ def cmd_run(args):
                 d["highlights"] = "-60"
                 cs.run("select %d\nset highlights=-60" % node)
                 r["log"].append("highlight recovery held to -60 on a sky with clouds")
-            if r["match"] and targets.get(fam):
-                a = match(cs, node, d, targets[fam], fam, args.match, r["log"],
+            if r["match"] and targets.get(key(r)):
+                a = match(cs, node, d, targets[key(r)], fam, args.match, r["log"],
                           skin=r.get("skin", False) or r.get("white", False),
                           zones=("shadows",) if has_sky else ("shadows", "highlights"))
             depth(cs, node, d, fam, r["log"])
