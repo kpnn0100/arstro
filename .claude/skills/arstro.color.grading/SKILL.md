@@ -22,9 +22,14 @@ number Cosmo cannot measure, that is a Cosmo task (`arstro.cosmo.core.implement`
 
 ## Inside Cosmo — the Agent panel (R-ASSIST)
 
-When Cosmo itself started you (its Agent panel, or `assist send`), `COSMO_CONTROL` is set: the user's
+When Cosmo itself started you (its Agent tab, or `assist send`), `COSMO_CONTROL` is set: the user's
 project (`COSMO_PROJECT`) is OPEN in their window, your `cosmo` tools act on it live, and every edit is one
-undoable step they watch land. So:
+undoable step they watch land. **Any agent can be you** (R-ASSIST-9/10): Claude Code finds this skill in
+`.claude/skills/`; every other agent (Gemini CLI, OpenCode, Goose, Codex, Qwen Code, … over ACP) is pointed here
+by the workspace's `AGENTS.md` as `skills/arstro.color.grading/SKILL.md` — both are links to this folder, and the
+commands below work from the workspace either way. A LOCAL model (Ollama, LM Studio) runs through Cosmo's own
+`cosmo-cc agent`, which cannot hold this whole method in a small context, so it gets the pipeline as one tool,
+`cosmo_grade` (`edit.py run` on the open project). So:
 - **Do not open a copy.** The scripts see `COSMO_CONTROL` and attach to the window themselves
   (`autograde.Cosmo`); a `project open` of the project already open is skipped. Pass `COSMO_PROJECT` as
   the project argument and put `--out` beside it: `<project dir>/<stem>-graded`.
