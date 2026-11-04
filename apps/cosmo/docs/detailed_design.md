@@ -738,7 +738,9 @@ which follows the bottom while `mStick` (cleared when the user scrolls up, set a
 Send); the state dot's colour cross-fades 180 ms (`lerpColor`); the dot and the "is working…" line
 pulse on a 1400 ms period while starting/busy (and `App::needsRedraw` stays true then); Send fades to
 0.45 and stops taking clicks while the field is empty, and becomes Stop while the agent works. The
-messages are laid out in `onPaint` because wrapping needs `measureText`; the measured height is what
+messages are laid out in `onPaint` because wrapping needs `measureText` — each message wrapped ONCE per
+width (`Shown::lines` / `wrappedAt`, the empty state's sentence likewise; R-ASSIST-8: re-measuring every
+word every frame cost the window 2.2 ms a frame with 67 messages, 1.0 ms now); the measured height is what
 the next `advance` clamps the scroll against.
 
 ## 6. Widgets — reusable controls

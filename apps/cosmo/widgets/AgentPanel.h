@@ -90,6 +90,10 @@ namespace cosmo_v2
         {
             std::string role, text;
             double appearMs = -1.0;   // when it started fading in; -1 = not yet (set in advance)
+            // Wrapped (or ellipsized) ONCE per width: measuring every word of every message on
+            // every frame was the panel's share of the lag while an agent worked (R-ASSIST-8).
+            mutable std::vector<std::string> lines;
+            mutable double wrappedAt = -1.0;
         };
         void send();
         void refreshButtons();
@@ -113,6 +117,9 @@ namespace cosmo_v2
         std::string mDotState = "off";
 
         double mNowMs = 0.0;
+        mutable std::vector<std::string> mIntroLines;   // the empty state's sentence, wrapped once per width
+        mutable double mIntroAt = -1.0;
+        mutable std::string mIntroAgent;
         int mSendLive = -1;   // the last applied Send dimming (-1 = never), so it eases only on a change
     };
 }

@@ -313,10 +313,16 @@ namespace cosmo_v2
         if (mShown.empty())
         {
             // EMPTY is a state with words, not a blank (§7): what to do, and what is ready.
-            const std::vector<std::string> intro = wrap(t,
-                "Ask " + agent + " to grade this project \xE2\x80\x94 for example \xE2\x80\x9Cmake these cinematic\xE2\x80\x9D.\n"
-                "The colour-grading skill is loaded. Every edit lands here, one undoable step at a time.",
-                kTextPx, font::sans(), textW);
+            if (mIntroAt != textW || mIntroAgent != agent)
+            {
+                mIntroLines = wrap(t,
+                    "Ask " + agent + " to grade this project \xE2\x80\x94 for example \xE2\x80\x9Cmake these cinematic\xE2\x80\x9D.\n"
+                    "The colour-grading skill is loaded. Every edit lands here, one undoable step at a time.",
+                    kTextPx, font::sans(), textW);
+                mIntroAt = textW;
+                mIntroAgent = agent;
+            }
+            const std::vector<std::string> &intro = mIntroLines;
             y = box.y + std::max(kGap, (box.h - intro.size() * kLineH) * 0.4);
             t.setFill(palette::mutedForeground());
             for (const auto &l : intro) { t.drawText(l, kPadX, y + kLineH * 0.5 + kTextPx * 0.35, kTextPx, font::sans()); y += kLineH; }
@@ -331,7 +337,12 @@ namespace cosmo_v2
                 // One muted line: what the agent used, or what it is / what a turn took.
                 const bool tool = m.role == "tool";
                 const std::string f = tool ? font::mono() : font::sans();
-                const std::string line = ellipsize(t, (tool ? "\xC2\xB7 " : "") + m.text, kSmallPx, f, textW);
+                if (m.wrappedAt != textW)
+                {
+                    m.lines = {ellipsize(t, (tool ? "\xC2\xB7 " : "") + m.text, kSmallPx, f, textW)};
+                    m.wrappedAt = textW;
+                }
+                const std::string &line = m.lines[0];
                 t.setFill(fade(palette::mutedForeground()));
                 t.drawText(line, kPadX, y + kSmallLineH * 0.5 + kSmallPx * 0.35, kSmallPx, f);
                 y += kSmallLineH + kGap * 0.5;
@@ -343,7 +354,12 @@ namespace cosmo_v2
             t.drawText(label, kPadX, y + kLabelH * 0.5 + kLabelPx * 0.35, kLabelPx, font::sansSemiBold(), 0.13 * kLabelPx);
             y += kLabelH;
             const double inner = user ? textW - 2 * kBubblePad : textW;
-            const std::vector<std::string> lines = wrap(t, m.text, kTextPx, font::sans(), inner);
+            if (m.wrappedAt != textW)
+            {
+                m.lines = wrap(t, m.text, kTextPx, font::sans(), inner);
+                m.wrappedAt = textW;
+            }
+            const std::vector<std::string> &lines = m.lines;
             const double bodyH = lines.size() * kLineH;
             double tx = kPadX;
             if (user)
