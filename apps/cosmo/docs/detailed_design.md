@@ -720,6 +720,27 @@ mask is selected. `setMasks(masks, selected)`.
 
 ---
 
+### 5.7 AgentPanel (R-ASSIST-7)
+The right column's sixth tab (`RightColumn::kTabAgent = 5`). Constants: `kHeaderH = 29.25`,
+`kComposerH = 39` (= ActionBar), `kPadX = 9.75`, `kFieldH = 26`, `kSendW = 52`, `kGap = 6.5`,
+`kFadeMs = 180`; private: label 9 px SemiBold tracked `0.13 × px`, body 11 px on `kLineH = 15.6`, tool and
+info lines 10 px on 13, the user's message on a `secondary()` card padded 6.5, the scroll indicator a
+3.25 px pill at `whiteAlpha(0.18)`. Children: Start/Stop `PillButton` (46 × 19.5, header right), a
+`PromptBox` (a `TextBox` whose Enter calls `onEnter`) and Send `PillButton` (primary fill). Public:
+`setConversation(AssistModel)` (a pure push; appends the model's new tail, a shorter model starts over),
+`onSend(text)`, `onStart()`, `onStop()` (RightColumn turns them into `assist send / start / stop`
+through `emitCommand`, which answers "wired" rather than "accepted", so a refusal is never sent twice), `scrollBy(delta)` (px, positive toward the
+top, from `scrollActivePanel`), `isTyping()` (App::isTextEditing), and for tests `messagesRect()`,
+`scrollOffset()` (live), `scrollTarget()`, `contentHeight()`, `maxScroll()`, `newestAlpha()`,
+`sendRect()`, `startStopRect()`, `typeForTest(text)`. Motion: each message's fade starts in `advance`
+(the setter has no clock) and is EaseOutCubic over 180 ms; the scroll eases 180 ms toward the target,
+which follows the bottom while `mStick` (cleared when the user scrolls up, set again at the end or on
+Send); the state dot's colour cross-fades 180 ms (`lerpColor`); the dot and the "is working…" line
+pulse on a 1400 ms period while starting/busy (and `App::needsRedraw` stays true then); Send fades to
+0.45 and stops taking clicks while the field is empty, and becomes Stop while the agent works. The
+messages are laid out in `onPaint` because wrapping needs `measureText`; the measured height is what
+the next `advance` clamps the scroll against.
+
 ## 6. Widgets — reusable controls
 
 ### 6.1 SliderRow

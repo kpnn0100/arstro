@@ -25,6 +25,7 @@
 #include "../../widgets/CropOverlay.h"
 #include "../../widgets/XformPanel.h"
 #include "../../widgets/RightColumn.h"
+#include "../../widgets/AgentPanel.h"
 #include "../../core/service/Command.h"
 #include "../../core/decode/ImageDecoder.h"
 #include "../../core/decode/Exif.h"
@@ -48,6 +49,12 @@ using arstro::cosmo::AppSettings;
 
 namespace
 {
+
+    /** Tab `i`'s centre, in world x, from the tabs themselves (EditStackTabs::tabCenterX). */
+    double tabCenter(const artboard::Segment *tabs, int i)
+    {
+        return tabs->worldTransform().e + static_cast<const arstro::cosmo_v2::EditStackTabs *>(tabs)->tabCenterX(i);
+    }
     int gFailures = 0;
 
     void check(bool ok, const char *what)
@@ -303,11 +310,10 @@ namespace
         check(tabs != nullptr, "the edit-stack tabs exist");
         if (!tabs) return;
 
-        // Click the Mixer/Curve tab (index 2 of 5) the way a user does, so the CurvePanel is
+        // Click the Mixer/Curve tab (index 2) the way a user does, so the CurvePanel is
         // actually laid out and reachable rather than merely present.
         const artboard::Transform tw = tabs->worldTransform();
-        const double tabW = tabs->width.value() / 5.0;
-        rig.click(tw.e + tabW * 2.5, tw.f + 13.0);
+        rig.click(tabCenter(tabs, 2), tw.f + 13.0);
         rig.settle(400.0);
 
         auto *curve = const_cast<arstro::cosmo_v2::CurvePanel *>(
@@ -367,8 +373,7 @@ namespace
         check(tabs != nullptr, "the edit-stack tabs exist");
         if (!tabs) return;
         const artboard::Transform tw = tabs->worldTransform();
-        const double tabW = tabs->width.value() / 5.0;
-        rig.click(tw.e + tabW * 2.5, tw.f + 13.0);          // the Mixer/Curve tab
+        rig.click(tabCenter(tabs, 2), tw.f + 13.0);          // the Mixer/Curve tab
         rig.settle(400.0);
 
         auto *curve = const_cast<arstro::cosmo_v2::CurvePanel *>(
@@ -551,8 +556,7 @@ namespace
         check(tabs != nullptr, "the tabs exist");
         if (!tabs) return;
         const artboard::Transform tw = tabs->worldTransform();
-        const double tabW = tabs->width.value() / 5.0;
-        rig.click(tw.e + tabW * 4.5, tw.f + 13.0);
+        rig.click(tabCenter(tabs, 4), tw.f + 13.0);
         rig.settle(400.0);
         check(overlay->active(), "opening Xform activates the crop box");
 
@@ -658,7 +662,7 @@ namespace
         const artboard::Segment *tabs = arstro::cosmo_v2::findSegmentByType(*root, "EditStackTabs");
         if (!canvas || !tabs) { check(false, "canvas and tabs exist"); return; }
         const artboard::Transform tw = tabs->worldTransform();
-        rig.click(tw.e + tabs->width.value() / 5.0 * 4.5, tw.f + 13.0);   // Xform
+        rig.click(tabCenter(tabs, 4), tw.f + 13.0);   // Xform
         rig.settle(400.0);
 
         auto *xf = const_cast<arstro::cosmo_v2::XformPanel *>(
@@ -737,8 +741,7 @@ namespace
                 arstro::cosmo_v2::findSegmentByType(*root, "PhotoCanvas")));
         if (!tabs || !canvas) { check(false, "the tabs and canvas exist"); return; }
         const artboard::Transform tw = tabs->worldTransform();
-        const double tabW = tabs->width.value() / 5.0;
-        auto clickTab = [&](int i) { rig.click(tw.e + tabW * (i + 0.5), tw.f + 13.0); };
+        auto clickTab = [&](int i) { rig.click(tabCenter(tabs, i), tw.f + 13.0); };
 
         // Xform on, and a real crop set, so there is something to zoom BETWEEN. Without a crop
         // the framing never changes and the test would pass on a snap.
@@ -1313,8 +1316,7 @@ namespace
         if (!tabs) return;
         // Mask is the second of five tabs.
         const artboard::Transform tw = tabs->worldTransform();
-        const double tabW = tabs->width.value() / 5.0;
-        rig.click(tw.e + tabW * 1.5, tw.f + 13.0);
+        rig.click(tabCenter(tabs, 1), tw.f + 13.0);
         rig.settle(400.0);
 
         auto *panel = static_cast<const arstro::cosmo_v2::MaskPanel *>(
@@ -1410,6 +1412,106 @@ namespace
     }
 }
 
+namespace
+{
+    // ── R-ASSIST-7: the Agent tab ──────────────────────────────────────────────────────
+    //
+    // The assembled app with a fake agent behind the service: the tab is reachable, the empty
+    // state says what to do, Send is `assist send`, an answer FADES in (live alpha mid-tween), a
+    // long conversation follows the newest message by EASING there (live scroll != target), a user
+    // who scrolled up to read is not yanked back, and Stop is `assist stop`.
+    void theAgentTabTalksThroughTheService()
+    {
+        std::printf("App: the Agent tab shows the conversation and talks through the service (R-ASSIST-7)\n");
+        using namespace arstro::cosmo;
+        struct Shared
+        {
+            std::vector<std::string> sent;
+            std::vector<AssistOutput> queue;
+            bool stopped = false;
+        };
+        auto sh = std::make_shared<Shared>();
+        struct Fake : IAssistant
+        {
+            std::shared_ptr<Shared> s;
+            explicit Fake(std::shared_ptr<Shared> x) : s(std::move(x)) {}
+            bool start(const AssistLaunch &, std::string &) override { return true; }
+            bool send(const std::string &t, std::string &) override { s->sent.push_back(t); return true; }
+            void stop() override { s->stopped = true; }
+            void poll(std::vector<AssistOutput> &out) override { out.swap(s->queue); s->queue.clear(); }
+            std::string name() const override { return "Claude Code"; }
+        };
+        Rig rig(1440.0, 900.0);
+        rig.svc.setAssistantFactory([sh] { return std::unique_ptr<IAssistant>(new Fake(sh)); });
+        check(rig.loadFakePhoto(), "a photo is open");
+        rig.app.showEditor();
+        rig.settle(400.0);
+
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        const artboard::Segment *tabs = root ? arstro::cosmo_v2::findSegmentByType(*root, "EditStackTabs") : nullptr;
+        auto *agent = const_cast<arstro::cosmo_v2::AgentPanel *>(static_cast<const arstro::cosmo_v2::AgentPanel *>(
+            root ? arstro::cosmo_v2::findSegmentByType(*root, "AgentPanel") : nullptr));
+        check(tabs && agent, "the Agent tab and its panel are in the editor");
+        if (!tabs || !agent) return;
+        // The Agent tab, clicked the way a user does, where the tabs say it is.
+        const artboard::Transform tw = tabs->worldTransform();
+        rig.click(tabCenter(tabs, arstro::cosmo_v2::RightColumn::kTabAgent), tw.f + 13.0);
+        rig.settle(400.0);
+        check(agent->visible && agent->width.value() > 300.0 && agent->messagesRect().h > 200.0,
+              "selecting it lays the panel out across the column");
+        check(agent->contentHeight() == 0.0 && rig.svc.model().assist.messages.empty(), "empty: nothing said yet");
+
+        // Send through the panel's own button.
+        agent->typeForTest("make these cinematic");
+        rig.frames(2);
+        const artboard::Transform at = agent->worldTransform();
+        const artboard::Rect sr = agent->sendRect();
+        rig.click(at.e + sr.x + sr.w * 0.5, at.f + sr.y + sr.h * 0.5);
+        check(sh->sent.size() == 1 && sh->sent[0] == "make these cinematic", "Send is `assist send`: the agent got the message");
+        check(rig.svc.model().assist.state == "busy", "and the agent is working");
+
+        // An answer arrives: it fades in rather than popping.
+        sh->queue = {{AssistOutput::Kind::Ready, "Claude Code 2 - fake"},
+                     {AssistOutput::Kind::Text, "Warm light, deep greens. Photo 1 is done."},
+                     {AssistOutput::Kind::Done, "done in 3 s"}};
+        rig.frame();
+        rig.frame();
+        const double mid = agent->newestAlpha();
+        check(mid > 0.0 && mid < 1.0, "a new message is mid fade-in a frame after it arrives (live != target)");
+        rig.settle(300.0);
+        check(agent->newestAlpha() == 1.0 && rig.svc.model().assist.state == "ready", "and at rest it is fully shown");
+
+        // A long conversation overflows: the list EASES to the newest message.
+        for (int i = 0; i < 24; ++i)
+            sh->queue.push_back({AssistOutput::Kind::Text, "Line " + std::to_string(i) + " of a long answer about photo 1."});
+        rig.frames(3);
+        check(agent->maxScroll() > 0.0, "the conversation overflows its box");
+        bool easing = false;
+        for (int i = 0; i < 12 && !easing; ++i)
+        {
+            rig.frame();
+            easing = agent->scrollOffset() > 0.0 && agent->scrollOffset() < agent->scrollTarget() - 0.5;
+        }
+        check(easing, "it travels toward the newest message (a frame where the live offset is short of the target)");
+        rig.settle(400.0);
+        check(std::fabs(agent->scrollOffset() - agent->maxScroll()) < 1.0, "and comes to rest on it");
+
+        // The user scrolls up to read: a new message must not yank them back.
+        agent->scrollBy(200.0);
+        rig.settle(400.0);
+        const double reading = agent->scrollOffset();
+        sh->queue = {{AssistOutput::Kind::Text, "One more thing."}};
+        rig.settle(400.0);
+        check(reading < agent->maxScroll() - 50.0 && std::fabs(agent->scrollOffset() - reading) < 1.0,
+              "a reader scrolled up stays where they are when a message arrives");
+
+        // Stop, from the header.
+        const artboard::Rect ss = agent->startStopRect();
+        rig.click(at.e + ss.x + ss.w * 0.5, at.f + ss.y + ss.h * 0.5);
+        check(sh->stopped && rig.svc.model().assist.state == "off", "the header's Stop is `assist stop`");
+    }
+}
+
 int main()
 {
     std::printf("cosmo assembled-app UI tests\n\n");
@@ -1431,6 +1533,7 @@ int main()
     theStageNeverBlinksDuringADrag();
     theBeforeAfterToggleDissolves();
     anExportFromATurnedJpegSaysItIsUpright();
+    theAgentTabTalksThroughTheService();
     std::printf("\n%s (%d failure%s)\n", gFailures ? "FAILED" : "all passed", gFailures,
                 gFailures == 1 ? "" : "s");
     return gFailures ? 1 : 0;

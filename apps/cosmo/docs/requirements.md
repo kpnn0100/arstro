@@ -3640,6 +3640,29 @@ with `COSMO_PROJECT` set, and a missing agent refused:
 The real Claude Code was checked by hand (2.1.316): the workspace's `.claude/skills/arstro.color.grading`
 appears in its `init` skill list beside the user's own.
 
+### DR-ASSIST-7 The Agent tab (R-ASSIST-7)
+
+`AgentPanel` (`widgets/AgentPanel.{h,cpp}`) is the right column's sixth page (`RightColumn.cpp:262`,
+`kTabAgent = 5`). `App::bindViewToModel` pushes `AppModel::assist` into it on every model revision
+(`App.cpp:676`) — `setConversation` (`AgentPanel.cpp:179`) appends the model's new tail; each new message's
+180 ms fade starts in `advance` (`:236`), which also cross-fades the state dot, eases the scroll toward the
+newest message while the user has not scrolled up, and dims Send (0.45, not clickable) while the field is
+empty. The conversation is laid out in `onPaint` (`:280`), wrapped with `measureText` (a word wider than
+the line is cut at a codepoint), clipped to `messagesRect()`; the measured height is what the scroll clamps
+against, and the indicator is drawn only when there is more. The empty state is a sentence naming the
+agent, the loaded skill and that edits land as undoable steps; while starting/busy an "is working…" line
+pulses (1400 ms) and `App::needsRedraw` stays true (`App.cpp:951`). Send/Enter (`PromptBox`, `:100`;
+`send`, `:160`), Start and Stop call `onSend` / `onStart` / `onStop`, which `RightColumn` turns into
+`assist send | start | stop` through `emitCommand`. The wheel reaches it through `scrollActivePanel`
+(`RightColumn.cpp:429`, `scrollBy`, `:395`). While its field has the keyboard, `App::isTextEditing` is true
+(`App.cpp:1224`), so typing "o" or "s" to the agent does not open or save. `EditStackTabs::tabCenterX(i)`
+publishes where each tab is; the tests and shots that assumed five equal tabs now aim at it.
+Guards: `cosmo_ui_tests` `theAgentTabTalksThroughTheService` (12 checks — reached by clicking its tab;
+empty; Send → the agent got the message; a mid-fade frame with the live alpha < 1; an eased scroll frame
+with the live offset short of its target; a reader scrolled up stays put; Stop); `cosmo_shots`
+`agent-empty`, `agent-working`, `agent-message-arriving`, `agent-conversation`, `agent-overflow` at 1600×1000
+and 1280×800.
+
 ### DR-ASSIST-3 The agent's tools, in the running application (R-ASSIST-3)
 
 **`snapshot`** (`CosmoService::snapshot`, `CosmoService.cpp:716`) selects the node like `analyze`, renders

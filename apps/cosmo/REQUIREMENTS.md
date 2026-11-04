@@ -2260,7 +2260,7 @@ CLI, the control socket and NTWB**, holding no behaviour (arstro.rule §1).
 - The protocol is `core/Mcp` (shared with Interstellar and Solaris); `.mcp.json` at the repo root
   registers the three servers through `core/Mcp/serve.sh`.
 
-## R-ASSIST — Your own agent, inside cosmo — 🚧 IN PROGRESS
+## R-ASSIST — Your own agent, inside cosmo — ✅ IMPLEMENTED (desktop; touch and web pending)
 
 (**Added 2026-11-04.** The user, once the colour-grading skill could grade a whole folder: *"how can user
 apply that to cosmo with their own agent … there should be agent section inside of that with skill loaded
@@ -2300,6 +2300,27 @@ the P0 test harness — hence `ASSIST`.)
   user widens it with `agentArgs=` (extra arguments for the agent's command).
 - **R-ASSIST-6 An agent never blocks the application.** It runs as its own process; its output is read
   without blocking in `pump` (R-SVC-6); `assist stop` ends it and its children; quitting cosmo stops it.
+- **R-ASSIST-7 The Agent tab — the section where the user talks to their agent.** The right column's
+  sixth tab, after Xform, so it sits beside the photo it works on and every edit it makes shows up in the
+  panels next to it. It shows, top to bottom:
+  - a **header row**: the agent's name ("Claude Code" until it names itself) with its state as a coloured
+    dot and a word — *off*, *starting*, *ready*, *working*, *failed* — and one button, **Start** or
+    **Stop**;
+  - the **conversation**, oldest at the top: each message under a small uppercase label — YOU, the
+    agent's name, TOOL, ERROR — wrapped to the column; a tool use is ONE muted mono line; info lines
+    (what the agent is, how long a turn took) are muted and small; an error is in the destructive colour;
+  - a **composer** at the bottom: a text field ("Ask your agent…") and **Send**; Enter sends.
+
+  States: **empty** — no messages — says in words what to do and what is ready ("Ask Claude Code to grade
+  this project — e.g. *make these cinematic*. The colour-grading skill is loaded; every edit lands here,
+  undoable."); **starting / working** — an animated *working…* line under the last message, and Send
+  becomes **Stop**; **failed** — the reason as an ERROR message (for a missing agent, how to install it
+  or pick another), the header offering Start. Motion (R-G-1): a new message fades in, the list eases to
+  the newest one (180 ms) unless the user has scrolled up to read, the state dot cross-fades its colour,
+  the working line pulses. Overflow clips and scrolls (R6): wheel, clamped both ends, an indicator only
+  when there is more. Send is disabled while the field is empty. The panel holds no behaviour (R-SVC-4):
+  Send is `assist send`, Start `assist start`, Stop `assist stop`; everything it shows is
+  `AppModel::assist`.
 
 ## R-NTWB — Cosmo in a browser: an app of Arstro Remote over NTWB — 🚧 IN PROGRESS
 

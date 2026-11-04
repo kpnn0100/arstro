@@ -45,6 +45,8 @@
 #include "widgets/PhotoCanvas.h"  // ...and the canvas where its seam is
 #include "widgets/XformPanel.h"    // R-CROP: the shot asks the panel where its chips are
 #include "widgets/MaskPanel.h"     // R-MASK-6: and where the Draw chip is
+#include "widgets/AgentPanel.h"    // R-ASSIST-7: the Agent tab
+#include "widgets/EditStackTabs.h"
 #include "EmbeddedFonts.h"
 #include "OmpPin.h"
 #include "adapter/native/CairoTarget.h"
@@ -71,6 +73,12 @@
 
 namespace
 {
+
+    /** Tab `i`'s centre, in world x, from the tabs themselves (EditStackTabs::tabCenterX). */
+    double tabCenter(const artboard::Segment *tabs, int i)
+    {
+        return tabs->worldTransform().e + static_cast<const arstro::cosmo_v2::EditStackTabs *>(tabs)->tabCenterX(i);
+    }
     namespace fs = std::filesystem;
     using arstro::cosmo::AppSettings;
     using arstro::cosmo::Command;
@@ -573,6 +581,67 @@ namespace
         save(f, "editor-empty");
     }
 
+    /** R-ASSIST-7: the Agent tab in each of its states, fixture-free (a fake agent behind the
+     *  service, no project, no network): empty, a message arriving (mid fade-in), working, and a
+     *  finished turn with every kind of line — the user's, the agent's (wrapped), tool and info
+     *  lines, an error — long enough to overflow, so the scroll indicator shows. */
+    void shotAgent(int w, int h)
+    {
+        if (!wanted("agent-")) return;
+        using namespace arstro::cosmo;
+        setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-agent").string());
+        struct Shared { std::vector<AssistOutput> queue; };
+        auto sh = std::make_shared<Shared>();
+        struct Fake : IAssistant
+        {
+            std::shared_ptr<Shared> s;
+            explicit Fake(std::shared_ptr<Shared> x) : s(std::move(x)) {}
+            bool start(const AssistLaunch &, std::string &) override { return true; }
+            bool send(const std::string &, std::string &) override { return true; }
+            void stop() override {}
+            void poll(std::vector<AssistOutput> &out) override { out.swap(s->queue); s->queue.clear(); }
+            std::string name() const override { return "Claude Code"; }
+        };
+        Rig rig(w, h);
+        rig.svc.setAssistantFactory([sh] { return std::unique_ptr<IAssistant>(new Fake(sh)); });
+        Frame f(w, h);
+        rig.app.showEditor();
+        rig.settle(f, 600.0);
+        auto *tabs = const_cast<arstro::cosmo_v2::EditStackTabs *>(static_cast<const arstro::cosmo_v2::EditStackTabs *>(
+            arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "EditStackTabs")));
+        if (!tabs) return;
+        tabs->setSelectedIndex(tabs->pageCount() - 1);
+        rig.settle(f, 600.0);
+        save(f, "agent-empty");
+
+        std::string err;
+        rig.svc.dispatchText("assist send make these cinematic, keep her skin true", err);
+        sh->queue = {{AssistOutput::Kind::Ready, "Claude Code 2.1.316 - claude-opus-5-5"}};
+        rig.settle(f, 600.0);
+        save(f, "agent-working");
+
+        sh->queue = {
+            {AssistOutput::Kind::Tool, "Skill: arstro.color.grading"},
+            {AssistOutput::Kind::Tool, "Bash: python3 .claude/skills/arstro.color.grading/scripts/edit.py review dichoi.cmp --out dichoi-graded"},
+            {AssistOutput::Kind::Tool, "cosmo_preview: 2"},
+            {AssistOutput::Kind::Text, "I looked at all four photos. Two are portraits of the same woman in a cream hat, one is a lake under pine hills, one a green valley.\nPlan: Natural Teal on the landscapes, the teal kept off her skin, and the orange cushions behind her calmed."},
+            {AssistOutput::Kind::Tool, "Bash: python3 .claude/skills/arstro.color.grading/scripts/edit.py run dichoi.cmp --plan plan.json"},
+            {AssistOutput::Kind::Failed, "edit.py: the valley's white balance walked the wrong way - kept the camera's"},
+            {AssistOutput::Kind::Text, "Done. Every edit is in your history, one step per photo - undo any you do not like."},
+            {AssistOutput::Kind::Done, "done in 94 s - $1.120"}};
+        rig.step(f, 2);
+        save(f, "agent-message-arriving");   // mid fade-in, the list mid-travel
+        rig.settle(f, 800.0);
+        save(f, "agent-conversation");
+
+        // R6: more than the box holds - the list rests on the newest line and shows the indicator.
+        for (int i = 0; i < 16; ++i)
+            sh->queue.push_back({AssistOutput::Kind::Tool, "cosmo_run: select " + std::to_string(i % 4 + 1) + ";set exposure=0.1"});
+        sh->queue.push_back({AssistOutput::Kind::Text, "All four photos are graded; the last line is always in view."});
+        rig.settle(f, 800.0);
+        save(f, "agent-overflow");
+    }
+
     /** R-SCALE: the shell at every offered scale, in the SMALLEST window each scale allows.
      *
      *  That window size is the point of the shot, not decoration. A scaled shell looks fine in
@@ -865,8 +934,7 @@ namespace
         if (!tabs) { std::printf("  (no edit-stack tabs: skipping editor-crop)\n"); return; }
         // Xform is the last of five tabs.
         const artboard::Transform tw = tabs->worldTransform();
-        const double tabW = tabs->width.value() / 5.0;
-        const double tx = tw.e + tabW * 4.5, ty = tw.f + 13.0;
+        const double tx = tabCenter(tabs, 4), ty = tw.f + 13.0;
         rig.app.pointer(0, tx, ty, 1, rig.now);
         rig.app.pointer(2, tx, ty, 1, rig.now);
         rig.settleQuiet(f, 400.0, 300);
@@ -910,10 +978,9 @@ namespace
             arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "EditStackTabs");
         if (!tabs) { std::printf("  (no tabs: skipping editor-crop-zoom)\n"); return; }
         const artboard::Transform tw = tabs->worldTransform();
-        const double tabW = tabs->width.value() / 5.0;
         auto clickTab = [&](int i) {
-            rig.app.pointer(0, tw.e + tabW * (i + 0.5), tw.f + 13.0, 1, rig.now);
-            rig.app.pointer(2, tw.e + tabW * (i + 0.5), tw.f + 13.0, 1, rig.now);
+            rig.app.pointer(0, tabCenter(tabs, i), tw.f + 13.0, 1, rig.now);
+            rig.app.pointer(2, tabCenter(tabs, i), tw.f + 13.0, 1, rig.now);
         };
 
         // Xform, and a crop worth zooming between.
@@ -1005,9 +1072,8 @@ namespace
             arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "EditStackTabs");
         if (!tabs) { std::printf("  (no edit-stack tabs: skipping editor-mask-draw)\n"); return; }
         const artboard::Transform tw = tabs->worldTransform();
-        const double tabW = tabs->width.value() / 5.0;
-        rig.app.pointer(0, tw.e + tabW * 1.5, tw.f + 13.0, 1, rig.now);   // Mask is tab 2 of 5
-        rig.app.pointer(2, tw.e + tabW * 1.5, tw.f + 13.0, 1, rig.now);
+        rig.app.pointer(0, tabCenter(tabs, 1), tw.f + 13.0, 1, rig.now);   // Mask is the second tab
+        rig.app.pointer(2, tabCenter(tabs, 1), tw.f + 13.0, 1, rig.now);
         rig.settleQuiet(f, 400.0, 300);
 
         auto *panel = static_cast<const arstro::cosmo_v2::MaskPanel *>(
@@ -1192,6 +1258,8 @@ int main(int argc, char **argv)
     shotHomeEmpty(sizes[0], sizes[1]);
     shotHomeRecents(sizes, images);
     shotEditorEmpty(sizes[0], sizes[1]);
+    shotAgent(sizes[0], sizes[1]);   // R-ASSIST-7
+    shotAgent(sizes[2], sizes[3]);
     shotScales();   // R-SCALE: every offered scale, at the smallest window it permits
     shotScaleZoom();  // R-G-1: the scale change caught mid-tween
     shotTransition(sizes[0], sizes[1], images);

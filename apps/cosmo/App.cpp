@@ -672,6 +672,8 @@ namespace cosmo_v2
 
         refreshLibrary();
         mRightColumn->syncToSlot();
+        // R-ASSIST-7: the conversation is the model's; the panel eases in whatever arrived.
+        mRightColumn->agentPanel()->setConversation(mSvc.model().assist);
     }
 
     std::vector<int> App::buildPendingTree(const std::vector<WorkspaceEntry> &entries)
@@ -945,6 +947,8 @@ namespace cosmo_v2
         // window above: a load's progress bar and an export's counter both animate from
         // state the view does not own, and a refinement walk is about to deliver frames.
         if (m.load.active || m.exports.active || m.refining) return true;
+        // R-ASSIST-7: the working line pulses for as long as the agent works.
+        if (m.assist.state == "starting" || m.assist.state == "busy") return true;
         if (mScreen == Screen::Loading || mPhase != Phase::None) return true;
         if (mScaleAnim.isAnimating() || mScreenFade.isAnimating()) return true;
         return nowMs - mLastActivityMs < kActiveWindowMs;
@@ -1216,6 +1220,8 @@ namespace cosmo_v2
         // fields is focused -- either way the host must not fire its plain-key
         // shortcuts (o / s / Delete) behind it.
         if (mContextMenu && mContextMenu->isRenaming()) return true;
+        // R-ASSIST-7: typing to the agent - an `o` in "make it moody" is not File > Open.
+        if (mRightColumn && mRightColumn->agentPanel()->isTyping()) return true;
         return mExportDialog && mExportDialog->isOpen();
     }
 

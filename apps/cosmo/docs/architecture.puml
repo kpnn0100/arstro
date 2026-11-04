@@ -105,6 +105,12 @@ package "app  (namespace arstro::cosmo_v2)" as app {
     class CurvePanel
     class GradePanel
     class XformPanel
+    class AgentPanel {
+      + setConversation(AssistModel)
+      + onSend / onStart / onStop
+      + scrollOffset() / scrollTarget() / newestAlpha()
+      ' R-ASSIST-7: live eased values, so a test can tell a tween from a snap
+    }
     class MaskPanel {
       + detectOpenAmount() / detectBarFill() / detectBarShow() / detectStatusText()
       ' every one of those is the LIVE eased value, so a test can tell a snap from a tween
@@ -359,6 +365,7 @@ EditStackTabs *--> ParamPanel
 EditStackTabs *--> StackPanel
 EditStackTabs *--> GradePanel
 EditStackTabs *--> XformPanel
+EditStackTabs *--> AgentPanel : Agent tab (R-ASSIST-7)
 EditStackTabs *--> MaskPanel
 StackPanel *--> MixerPanel
 StackPanel *--> CurvePanel

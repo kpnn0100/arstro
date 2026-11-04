@@ -36,6 +36,10 @@ namespace cosmo_v2
         void setSelectedIndex(int index);
 
         void layoutPages();  // position/size/visibility of pages (call after width/height)
+        /** The centre of tab `i`, in this segment's x - published so a test or a shot aims at a
+         *  tab where it IS. Tabs are sized to their labels, so "the fifth fifth" stopped being
+         *  Xform the day a sixth tab (Agent, R-ASSIST-7) arrived. */
+        double tabCenterX(int i) const { return tabX(i) + tabW(i) * 0.5; }
         void advance(double nowMs) override;
 
     protected:

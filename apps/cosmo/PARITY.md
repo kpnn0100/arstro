@@ -64,3 +64,4 @@ the same commands the window sends.
 | W17 | Copy / paste settings | App clipboard + applyParamsToSlot | disabled | Missing (core: `paste`) | R-NTWB-5 |
 | W18 | An export that does not hold up the bridge | host thread | the service exports synchronously | Missing (core: incremental export, R-SVC-6) | R-SVC-6 |
 | W19 | A sharper render while zoomed in, per page | setPreviewZoom | the page scales the preview | Missing (core: a per-view region render) | R-NTWB-2 |
+| W20 | The Agent tab: the user's own agent, the colour-grading skill loaded (R-ASSIST-7) | AgentPanel | none - the conversation is in the model, so a page needs only the view | Missing | R-ASSIST-7 |

@@ -22,6 +22,7 @@
 #include "CurvePanel.h"
 #include "GradePanel.h"
 #include "XformPanel.h"
+#include "AgentPanel.h"
 #include "StackPanel.h"
 #include "ActionBar.h"
 #include <functional>
@@ -38,7 +39,7 @@ namespace cosmo_v2
         // comfortably centred (task point 5: "make the edit stack wider").
         static constexpr double kWidth = 324.0;
         // Merged edit-stack tabs (Basic+Detail, Mask, Mixer+Curve, Grade, Xform).
-        static constexpr int kTabBasicDetail = 0, kTabMask = 1, kTabColor = 2, kTabGrade = 3, kTabXform = 4;
+        static constexpr int kTabBasicDetail = 0, kTabMask = 1, kTabColor = 2, kTabGrade = 3, kTabXform = 4, kTabAgent = 5;
 
         /** S4c: the column reads the MODEL and emits Commands. It holds no `EditSession` at
          *  all — with no App above it (a shot rig, a test) it dispatches straight to the
@@ -95,6 +96,8 @@ namespace cosmo_v2
 
         // ── on-photo mask overlay bridge (R-MASK) ──
         int activeTab() const;                          // edit-stack tab index
+        /** R-ASSIST-7: the Agent tab - App binds the conversation into it from the model. */
+        AgentPanel *agentPanel() const { return mAgent.get(); }
         bool maskTabActive() const;                     // true while the Mask tab is selected
         const MaskParams *selectedMaskParams() const;   // the mask being edited, or nullptr
         /** Its INDEX — a
@@ -155,6 +158,7 @@ namespace cosmo_v2
         std::shared_ptr<CurvePanel> mCurve;
         std::shared_ptr<GradePanel> mGrade;
         std::shared_ptr<XformPanel> mXform;
+        std::shared_ptr<AgentPanel> mAgent;   // R-ASSIST-7
         std::shared_ptr<ActionBar> mActionBar;
         int mSelectedMask = -1;
         bool mBypassed = false;                     // R-BYPASS-4 target state

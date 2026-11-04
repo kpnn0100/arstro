@@ -178,7 +178,8 @@ mRoot
 │   │   ├─ MaskPanel         (Mask)
 │   │   ├─ StackPanel        (Mixer/Curve) ── MixerPanel(×3 HueCurveEditor) + CurvePanel
 │   │   ├─ GradePanel        (Grade)
-│   │   └─ XformPanel        (Xform)
+│   │   ├─ XformPanel        (Xform)
+│   │   └─ AgentPanel        (Agent) ── the user's own agent: conversation + composer (R-ASSIST-7)
 │   └─ ActionBar             (Save / Import / Export)
 ├─ HistoryView   (modal, overlay pass)
 ├─ ContextMenu   (modal, overlay pass)
@@ -334,6 +335,7 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/core/assist/Assistant.h` | core (seam) | `IAssistant` + `AssistLaunch` / `AssistOutput`: the service holds the user's agent through it and polls it without blocking (R-ASSIST-1/6) |
 | `apps/cosmo/AssistProcess.{h,cpp}` | host | `ProcessAssistant`: the agent as a process — Claude Code over stream-JSON, any other command once per message; workspace, skill links, MCP config, process group (R-ASSIST-2/4/5/6) |
 | `apps/cosmo/tests/assist/agent_test.sh` | test (ctest `cosmo_assist`) | a fake `claude` edits the served project through the relay; one-shot agents; a missing agent refused (R-ASSIST) |
+| `apps/cosmo/widgets/AgentPanel.{h,cpp}` | front end (widget) | the Agent tab: header (agent, state dot, Start/Stop), the conversation (self-drawn, wrapped with real metrics, scrolled), the composer (Enter sends); a view of `AppModel::assist` (R-ASSIST-7) |
 
 **Front ends over the service (R-SVC-1):** the GTK window (`linux_main.cpp` + `App`), `cosmo-cc`
 (CLI, `run`, `attach` to a `--control` window), the touch shell, and - since R-NTWB - a browser:

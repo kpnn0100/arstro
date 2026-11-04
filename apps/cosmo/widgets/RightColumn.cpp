@@ -245,6 +245,22 @@ namespace cosmo_v2
         };
         mTabs->addPage("Xform", mXform);
 
+        // R-ASSIST-7: the user's own agent. A view of AppModel::assist; its three actions are the
+        // three `assist` commands, through the same outbound channel as every edit (R-SVC-2).
+        mAgent = std::make_shared<AgentPanel>();
+        auto assist = [this](cosmo::Command::Kind k, const std::string &text) {
+            cosmo::Command c;
+            c.kind = k;
+            c.name = text;
+            // App's channel answers "wired", not "accepted", so a refused `assist start` is not
+            // sent twice; only an unwired column dispatches here itself (see sendSet).
+            if (!emitCommand(c)) mSvc.dispatch(c);
+        };
+        mAgent->onSend = [assist](const std::string &text) { assist(cosmo::Command::Kind::AssistSend, text); };
+        mAgent->onStart = [assist] { assist(cosmo::Command::Kind::AssistStart, std::string()); };
+        mAgent->onStop = [assist] { assist(cosmo::Command::Kind::AssistStop, std::string()); };
+        mTabs->addPage("Agent", mAgent);
+
         addChild(mTabs);
 
         mActionBar = std::make_shared<ActionBar>();
@@ -410,6 +426,7 @@ namespace cosmo_v2
             case kTabMask:        mMask->scrollBy(delta); break;
             case kTabColor:       mColorTab->scrollBy(delta); break;
             case kTabGrade:       mGrade->scrollBy(delta); break;
+            case kTabAgent:       mAgent->scrollBy(delta); break;
             default: break;  // Xform is fixed-height (no scroll)
         }
     }
