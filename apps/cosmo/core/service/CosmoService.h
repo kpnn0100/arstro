@@ -76,6 +76,10 @@ namespace cosmo
          *  (`cosmo-cc run`, a test that does not inject it) refuses `assist start` with why. */
         using AssistantFactory = std::function<std::unique_ptr<IAssistant>()>;
         void setAssistantFactory(AssistantFactory f) { mAssistantFactory = std::move(f); }
+        /** R-ASSIST-8: an `analyze` or `snapshot` is still rendering on the worker. Its answer
+         *  arrives in a later `pump` - a front end that must answer in order (a CLI line, an MCP
+         *  call) pumps until this is false. */
+        bool queriesPending() const { return !mQueries.empty(); }
         void subscribe(EventSink s) { mSinks.push_back(std::move(s)); }
         /** Put the persisted preferences in force and into the model (R-SETTINGS-4). The host
          *  calls this once at startup with what `AppSettings::load()` returned, instead of
@@ -196,6 +200,7 @@ namespace cosmo
         bool assistSend(const Command &c);
         bool assistStop();
         void pumpAssistant();
+        void pumpQueries();
         void assistSay(const std::string &role, const std::string &text);
         void assistState(const std::string &state);
         /** The picker's averaging radius, in proxy pixels — big enough to swamp sensor noise,
@@ -221,6 +226,21 @@ namespace cosmo
         JpegWriter mJpegWriter;
         AssistantFactory mAssistantFactory;
         std::unique_ptr<IAssistant> mAssistant;   // R-ASSIST-6: destroyed (and so stopped) with the service
+        /** R-ASSIST-8: an `analyze` / `snapshot` whose render is on the worker. What the worker
+         *  computes for it (the measurement, the snapshot's size and encoder answer) comes back
+         *  through the shared state; the UI thread only publishes it. */
+        struct PendingQuery
+        {
+            int ticket = 0;
+            Command::Kind kind = Command::Kind::None;
+            int node = -1, slot = -1;
+            bool before = false;
+            std::string path, name;
+            std::shared_ptr<ImageStats> stats;
+            std::shared_ptr<std::string> err;
+            std::shared_ptr<std::pair<int, int>> size;
+        };
+        std::vector<PendingQuery> mQueries;
         std::vector<EventSink> mSinks;
 
         AppModel mModel;

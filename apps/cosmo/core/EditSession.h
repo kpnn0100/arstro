@@ -317,6 +317,9 @@ namespace cosmo
          *  internally and only re-renders when the geometry actually changed.
          *  Returns nullptr if there is no current image. */
         const RenderService::Frame *renderBefore();
+        /** What "as shot" means for `slot`: no edit but its geometry (crop, rotation, lens) -
+         *  the ONE definition `renderBefore` and an asynchronous `analyze before` share. */
+        EditParams beforeParams(int slot) const;
 
     private:
         /** Ease `p`'s crop toward the full frame by `mCropPreview` (R-CROP-7). */

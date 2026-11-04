@@ -929,6 +929,12 @@ connect(path, err); send(line); readLine(line, timeoutMs); roundTrip(lines, got,
 `CosmoService::setJpegWriter(JpegWriter)` with `JpegWriter = bool(path, rgba, w, h, quality, err)`;
 `static fitFrame(frame, edge, out, w, h)` (box filter, long side ≤ edge, 0 = as is); `snapshot(Command)`;
 `Event::Kind::SnapshotWritten` (text = path, a = w, b = h, c = node) and `Pong` (text = token).
+**Queries (R-ASSIST-8).** `RenderService::queryPreview(int slot, const EditParams &, std::function<void(Frame &)>
+work = nullptr) -> int ticket` and `takeQuery(int ticket, Frame *out = nullptr) -> bool`; private `struct Query
+{ticket, slot, params, work}`, `mQueries` (FIFO), `mQueryDone`, `renderQuery(Query &)`. `CosmoService`:
+`struct PendingQuery {ticket, kind, node, slot, before, path, name, shared_ptr<ImageStats> stats,
+shared_ptr<string> err, shared_ptr<pair<int,int>> size}`, `mQueries`, `pumpQueries()`, `queriesPending()`;
+`EditSession::beforeParams(slot)` is the one definition of "as shot".
 
 ### 7.8e The user's agent (R-ASSIST)
 

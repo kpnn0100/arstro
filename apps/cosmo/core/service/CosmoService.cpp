@@ -395,6 +395,7 @@ namespace cosmo
         // render request, so a live run and a scripted one take the same path.
         mNowMs = nowMs;
         pumpAssistant();   // R-ASSIST-6: what the agent said since the last pump, read without blocking
+        pumpQueries();     // R-ASSIST-8: analyze / snapshot answers the worker finished
         // The session's clock, which ONLY the two views used to advance (`App::render` and
         // `PhoneApp`). `History::record` coalesces edits that arrive close together — a whole
         // slider drag is one undoable step — and it reads that clock, so a front end that never
@@ -662,24 +663,63 @@ namespace cosmo
             return fail(n.group ? "analyze: a group has no pixels of its own - select a photo in it"
                                 : "analyze: that photo's pixels are not loaded yet");
 
-        RenderService::Frame f;
-        if (!(c.flag ? renderBefore(f) : renderCurrent(f)))
-            return fail("analyze: no pixels resident for this photo yet");
-
-        mModel.analysis = measureImage(f.rgba.data(), f.width, f.height);
-        mModel.analysisNode = node;
-        mModel.analysisBefore = c.flag;
+        // R-ASSIST-8: rendered AND measured on the worker. Synchronous, this froze the window for
+        // ~2 s per call while an agent graded (a 1 s preview render with the dichoi edits, plus
+        // ~145 ms of measuring) - and a grade makes dozens of calls. The answer is published by
+        // pumpQueries, with the same `info analyze ...` line as before.
+        PendingQuery q;
+        q.kind = Command::Kind::Analyze;
+        q.node = node;
+        q.slot = n.slot;
+        q.before = c.flag;
         const std::string name = mSession.nameForSlot(n.slot);
-        mModel.analysisName = name.empty() ? baseOf(mSession.sourcePathForSlot(n.slot)) : name;
-        ++mModel.revision;
-
-        const ImageStats &s = mModel.analysis;
-        char buf[256];
-        std::snprintf(buf, sizeof(buf), "analyze %s %s key=%.2f p50=%.3f p99=%.3f warmth=%.3f tint=%.3f sat=%.3f",
-                      mModel.analysisName.c_str(), c.flag ? "before" : "after", s.keyEv, s.lumPct[3],
-                      s.lumPct[6], s.castWarmth, s.castTint, s.meanSaturation);
-        emit(Event::Kind::Info, buf, node, n.slot);
+        q.name = name.empty() ? baseOf(mSession.sourcePathForSlot(n.slot)) : name;
+        auto stats = std::make_shared<ImageStats>();
+        q.stats = stats;
+        const EditParams p = c.flag ? mSession.beforeParams(n.slot) : mSession.effectiveParams(n.slot);
+        q.ticket = mSession.renderService().queryPreview(n.slot, p, [stats](RenderService::Frame &f) {
+            if (f.width > 0) *stats = measureImage(f.rgba.data(), f.width, f.height);
+            std::vector<uint8_t>().swap(f.rgba);   // measured; nobody needs the pixels again
+        });
+        mQueries.push_back(std::move(q));
         return true;
+    }
+
+    void CosmoService::pumpQueries()
+    {
+        for (size_t i = 0; i < mQueries.size();)
+        {
+            RenderService::Frame f;
+            if (!mSession.renderService().takeQuery(mQueries[i].ticket, &f)) { ++i; continue; }
+            const PendingQuery q = mQueries[i];
+            mQueries.erase(mQueries.begin() + (std::ptrdiff_t)i);
+            if (q.kind == Command::Kind::Analyze)
+            {
+                if (f.width <= 0) { fail("analyze: no pixels resident for this photo yet"); continue; }
+                mModel.analysis = *q.stats;
+                mModel.analysisNode = q.node;
+                mModel.analysisBefore = q.before;
+                mModel.analysisName = q.name;
+                ++mModel.revision;
+                const ImageStats &s = mModel.analysis;
+                char buf[256];
+                std::snprintf(buf, sizeof(buf), "analyze %s %s key=%.2f p50=%.3f p99=%.3f warmth=%.3f tint=%.3f sat=%.3f",
+                              q.name.c_str(), q.before ? "before" : "after", s.keyEv, s.lumPct[3], s.lumPct[6],
+                              s.castWarmth, s.castTint, s.meanSaturation);
+                emit(Event::Kind::Info, buf, q.node, q.slot);
+            }
+            else
+            {
+                if (!q.err->empty()) { fail("snapshot: " + q.path + ": " + *q.err); continue; }
+                Event ev;
+                ev.kind = Event::Kind::SnapshotWritten;
+                ev.text = q.path;
+                ev.a = q.size->first;
+                ev.b = q.size->second;
+                ev.c = q.node;
+                emit(ev);
+            }
+        }
     }
 
     void CosmoService::fitFrame(const RenderService::Frame &f, int edge, std::vector<uint8_t> &out, int &w, int &h)
@@ -732,22 +772,35 @@ namespace cosmo
         if (n.slot < 0)
             return fail(n.group ? "snapshot: a group has no pixels of its own - select a photo in it"
                                 : "snapshot: that photo's pixels are not loaded yet");
-        RenderService::Frame f;
-        if (!(c.flag ? renderBefore(f) : renderCurrent(f))) return fail("snapshot: no pixels resident for this photo yet");
-        const std::string e = c.field("edge"), q = c.field("quality");
-        std::vector<uint8_t> px;
-        int w = 0, h = 0;
-        fitFrame(f, e.empty() ? 1024 : std::atoi(e.c_str()), px, w, h);
-        const int quality = std::min(95, std::max(40, q.empty() ? 85 : std::atoi(q.c_str())));
-        std::string err;
-        if (!mJpegWriter(c.path, px.data(), w, h, quality, err)) return fail("snapshot: " + c.path + ": " + err);
-        Event ev;
-        ev.kind = Event::Kind::SnapshotWritten;
-        ev.text = c.path;
-        ev.a = w;
-        ev.b = h;
-        ev.c = node;
-        emit(ev);
+        // R-ASSIST-8: rendered, fitted and ENCODED on the worker (the writer is a pure function
+        // of its pixels); `snapshot.written` follows from pumpQueries.
+        const std::string e = c.field("edge"), qs = c.field("quality");
+        const int edge = e.empty() ? 1024 : std::atoi(e.c_str());
+        const int quality = std::min(95, std::max(40, qs.empty() ? 85 : std::atoi(qs.c_str())));
+        PendingQuery q;
+        q.kind = Command::Kind::Snapshot;
+        q.node = node;
+        q.slot = n.slot;
+        q.before = c.flag;
+        q.path = c.path;
+        auto err = std::make_shared<std::string>();
+        auto size = std::make_shared<std::pair<int, int>>(0, 0);
+        q.err = err;
+        q.size = size;
+        const JpegWriter writer = mJpegWriter;
+        const std::string path = c.path;
+        const EditParams p = c.flag ? mSession.beforeParams(n.slot) : mSession.effectiveParams(n.slot);
+        q.ticket = mSession.renderService().queryPreview(n.slot, p, [=](RenderService::Frame &f) {
+            if (f.width <= 0) { *err = "no pixels resident for this photo yet"; return; }
+            std::vector<uint8_t> px;
+            int w = 0, h = 0;
+            fitFrame(f, edge, px, w, h);
+            *size = {w, h};
+            std::string why;
+            if (!writer(path, px.data(), w, h, quality, why)) *err = why.empty() ? std::string("the encoder failed") : why;
+            std::vector<uint8_t>().swap(f.rgba);
+        });
+        mQueries.push_back(std::move(q));
         return true;
     }
 

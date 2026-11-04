@@ -1065,14 +1065,20 @@ namespace cosmo
         return (slot >= 0 && slot < (int)mSlotNames.size()) ? mSlotNames[slot] : std::string();
     }
 
-    const RenderService::Frame *EditSession::renderBefore()
+    EditParams EditSession::beforeParams(int slot) const
     {
-        if (mCurrentSlot < 0) return nullptr;
-        const EditParams cur = effectiveParams(mCurrentSlot);
+        const EditParams cur = effectiveParams(slot);
         EditParams b;
         b.cropX = cur.cropX; b.cropY = cur.cropY; b.cropW = cur.cropW; b.cropH = cur.cropH;
         b.rotation = cur.rotation; b.quarterTurns = cur.quarterTurns;
         b.lensDistortion = cur.lensDistortion; b.lensCA = cur.lensCA; b.lensVignette = cur.lensVignette;
+        return b;
+    }
+
+    const RenderService::Frame *EditSession::renderBefore()
+    {
+        if (mCurrentSlot < 0) return nullptr;
+        const EditParams b = beforeParams(mCurrentSlot);
 
         if (mBeforeSlot == mCurrentSlot &&
             b.cropX == mBeforeGeom.cropX && b.cropY == mBeforeGeom.cropY &&

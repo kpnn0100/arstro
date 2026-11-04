@@ -1997,6 +1997,17 @@ namespace
     // BLUE-cast grey (shade light): the as-shot cast must read blue, and warming it through the
     // ordinary `set` must move the measured cast toward amber. Asking twice is how before and
     // after are compared, so the answer must say which one it is.
+    // R-ASSIST-8: `analyze` and `snapshot` render on the worker and answer in a later pump.
+    void waitQueries(arstro::cosmo::CosmoService &svc, double &clock)
+    {
+        for (int i = 0; i < 20000 && svc.queriesPending(); ++i)
+        {
+            clock += 16.0;
+            svc.pump(clock);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+
     // R-ASSIST-3: the two verbs that let an agent on the far side of a socket work on the open project.
     // `snapshot` writes exactly the caller's path, as shot or as edited, at most `--edge` px, and says so;
     // a group or an encoder-less front end is refused with why. `ping` is answered in ORDER: its pong
@@ -2038,6 +2049,7 @@ namespace
 
         lines.clear();
         assert(svc.dispatchText("snapshot /tmp/cosmo_snap.jpg " + std::to_string(photo) + " before --edge 20 --quality 99", err));
+        waitQueries(svc, clock);
         assert(written.size() == 1 && written[0].path == "/tmp/cosmo_snap.jpg" && "exactly the caller's path");
         assert(std::max(written[0].w, written[0].h) <= 20 && written[0].w > 0 && "at most --edge on the long side");
         assert(written[0].q == 95 && "quality is clamped to 40..95");
@@ -2051,6 +2063,7 @@ namespace
         // As edited differs from as shot once there is an edit - the agent sees its own work.
         assert(svc.dispatchText("set exposure=1.5", err));
         assert(svc.dispatchText("snapshot /tmp/cosmo_snap2.jpg --edge 20", err));
+        waitQueries(svc, clock);
         assert(written.size() == 2 && written[1].px != written[0].px && "the edit is in the picture");
 
         // ping: the pong comes after everything dispatched before it, carrying the token.
@@ -2212,6 +2225,7 @@ namespace
 
         // As shot, by node: it selects the photo and reads blue.
         assert(svc.dispatchText("analyze " + std::to_string(photo) + " before", err) && err.empty());
+        waitQueries(svc, clock);
         assert(svc.model().selectedNode == photo && "measuring a photo makes it the current one");
         assert(svc.model().analysisNode == photo && svc.model().analysisBefore);
         const float shot = svc.model().analysis.castWarmth;
@@ -2221,12 +2235,14 @@ namespace
         // Warm it through the ordinary params path, then measure the edit.
         assert(svc.dispatchText("set temp=11000", err));
         assert(svc.dispatchText("analyze", err) && err.empty());
+        waitQueries(svc, clock);
         assert(!svc.model().analysisBefore);
         const float edited = svc.model().analysis.castWarmth;
         assert(edited > shot + 0.2f && "warming the white balance moves the measured cast toward amber");
 
         // ...and the as-shot answer is unchanged by the edit, because `before` means as shot.
         assert(svc.dispatchText("analyze before", err));
+        waitQueries(svc, clock);
         assert(std::fabs(svc.model().analysis.castWarmth - shot) < 1e-4f);
 
         // The answer is in the dump (text and JSON) and on the event stream.

@@ -218,6 +218,7 @@ namespace
         double tickMs = 0.0;          // the tick handed to pump()
         double encodeMs = 0.0;        // time the writer spent encoding (bench splits on it)
         int written = 0, failures = 0;
+        int rejected = 0;   // command.rejected events seen (R-ASSIST-8: an async query fails late)
         std::vector<std::string> outputs;
     };
 
@@ -335,6 +336,7 @@ namespace
         }
         h.svc.subscribe([&h](const Event &e) {
             if (e.kind == Event::Kind::ExportFinished) { h.written += e.a; h.failures += e.b; }
+            if (e.kind == Event::Kind::CommandRejected) ++h.rejected;   // incl. an async query's failure
         });
     }
 
@@ -1394,7 +1396,20 @@ namespace
                 break;
             default: break;
         }
+        const int rejectedBefore = h.rejected;
         if (!run(h, c)) return false;
+        // R-ASSIST-8: `analyze` / `snapshot` render on the worker; a script line answers in order,
+        // so the next line waits for this one's answer (it lands in a pump, like a frame).
+        if (c.kind == Command::Kind::Analyze || c.kind == Command::Kind::Snapshot)
+        {
+            const double until = wallMs() + 120000;
+            while (h.svc.queriesPending() && wallMs() < until)
+            {
+                pumpOnce(h);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            if (h.rejected > rejectedBefore) return false;   // its render or its encoder failed
+        }
         pumpOnce(h);   // let anything the command started make progress before the next line
         return true;
     }
@@ -2153,6 +2168,24 @@ public:
         }
         return false;
     }
+    /** Read on until a line starting with any of `prefixes` (collected lines searched first). */
+    bool waitForAny(const std::vector<std::string> &prefixes, std::vector<std::string> &got, int timeoutMs)
+    {
+        auto hit = [&prefixes](const std::string &l) {
+            for (const auto &p : prefixes)
+                if (l.rfind(p, 0) == 0) return true;
+            return false;
+        };
+        for (const auto &l : got)
+            if (hit(l)) return true;
+        std::string line;
+        while (readLine(line, timeoutMs))
+        {
+            got.push_back(line);
+            if (hit(line)) return true;
+        }
+        return false;
+    }
     /** Read on until a line starting with `prefix` (already-collected lines are searched first). */
     bool waitFor(const std::string &prefix, std::vector<std::string> &got, int timeoutMs)
     {
@@ -2292,6 +2325,9 @@ static int cmdMcpAttach(const Args &a)
         line += " --edge " + std::to_string(edge) + " --quality " + std::to_string(quality);
         std::vector<std::string> got;
         if (!cc.roundTrip({line}, got)) return ToolResult::error("no answer from cosmo to: " + line);
+        // R-ASSIST-8: the pong says the line was taken; the picture comes when the worker is done.
+        if (rejection(got).empty() && !cc.waitForAny({"[evt] snapshot.written", "[evt] command.rejected"}, got, 120000))
+            return ToolResult::error("cosmo took no snapshot within 120 s: " + line);
         std::string written;
         for (const auto &l : got)
             if (l.rfind("[evt] snapshot.written", 0) == 0) written = l;
@@ -2321,6 +2357,9 @@ static int cmdMcpAttach(const Args &a)
         if (before) line += " before";
         std::vector<std::string> got;
         if (!cc.roundTrip({line, "metadata"}, got)) return ToolResult::error("no answer from cosmo to: " + line);
+        // R-ASSIST-8: the measurement lands when the worker has rendered it.
+        if (rejection(got).empty() && !cc.waitForAny({"[evt] info analyze ", "[evt] command.rejected"}, got, 120000))
+            return ToolResult::error("cosmo measured nothing within 120 s: " + line);
         const std::string why = rejection(got);
         if (!why.empty()) return ToolResult::error(line + ": " + why);
         std::string json, perr;

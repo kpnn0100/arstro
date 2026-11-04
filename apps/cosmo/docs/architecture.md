@@ -258,7 +258,9 @@ Two kinds of worker exist, and **one object decides how many of each** — `cosm
   exclusively; `render()` requests are coalesced to the latest; the UI polls `tryAcquire()`. Its
   internal `par::parallelFor` width is `ThreadBudget::engineThreads()` — the whole budget when idle,
   and only what the load left while one is running. With threads disabled the service degrades to
-  synchronous.
+  synchronous. It also serves **queries** (R-ASSIST-8): `queryPreview` queues a level-0 render plus a
+  `work` function run on the worker (an agent's `analyze` measures, a `snapshot` fits and encodes), one per
+  pass after the pass's preview; the UI collects them in `pump` with `takeQuery` and never waits.
 
 **Why one owner.** These two overlap for most of a load, because R-LOADPERF-3 reveals the editor
 while images are still arriving. When each of them converted the user's percentage independently,

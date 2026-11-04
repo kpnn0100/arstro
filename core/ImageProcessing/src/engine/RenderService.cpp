@@ -298,7 +298,8 @@ namespace arstro
         {
             std::vector<AddCmd> adds;
             std::vector<int> releases;
-            bool doPrev = false, doFull = false, fullPreviewOnly = false, doReset = false;
+            bool doPrev = false, doFull = false, fullPreviewOnly = false, doReset = false, doQuery = false;
+            Query query;
             int slot = -1, fullSlot = -1, maxEdge = 1600;
             RenderIntent intent = RenderIntent::Final;
             int explicitLevel = -1;
@@ -306,7 +307,8 @@ namespace arstro
             {
                 std::unique_lock<std::mutex> lk(mMu);
                 mCv.wait(lk, [this] {
-                    return mStop || mResetEngine || !mAddQueue.empty() || !mReleaseQueue.empty() || mPendingPreview || mPendingFull;
+                    return mStop || mResetEngine || !mAddQueue.empty() || !mReleaseQueue.empty() || mPendingPreview || mPendingFull ||
+                           !mQueries.empty();
                 });
                 if (mStop)
                     return;
@@ -316,6 +318,8 @@ namespace arstro
                 maxEdge = mPreviewMaxEdge;
                 if (mPendingFull) { doFull = true; fullSlot = mFullSlot; fullParams = mFullParams; fullPreviewOnly = mFullPreviewOnly; mPendingFull = false; }
                 if (mPendingPreview) { doPrev = true; slot = mPendingSlot; params = mPendingParams; intent = mPendingIntent; explicitLevel = mPendingLevel; mPendingPreview = false; }
+                // ONE query per pass, so an interactive preview queued meanwhile goes next.
+                if (!mQueries.empty()) { query = std::move(mQueries.front()); mQueries.erase(mQueries.begin()); doQuery = true; }
             }
 
             if (doReset)  // full workspace reset: drop all slots so the next add is slot 0
@@ -371,7 +375,36 @@ namespace arstro
             }
             if (doPrev)
                 doPreview(slot, params, maxEdge, intent, explicitLevel);
+            if (doQuery)
+            {
+                mEngine.setPreviewSize(maxEdge);
+                Frame f = renderQuery(query);
+                std::lock_guard<std::mutex> lk(mMu);
+                mQueryDone.emplace_back(query.ticket, std::move(f));
+            }
         }
+    }
+
+    int RenderService::queryPreview(int slot, const EditParams &params, std::function<void(Frame &)> work)
+    {
+        std::lock_guard<std::mutex> lk(mMu);
+        const int t = mNextTicket++;
+        mQueries.push_back({t, slot, params, std::move(work)});
+        mCv.notify_all();
+        return t;
+    }
+
+    bool RenderService::takeQuery(int ticket, Frame *out)
+    {
+        std::lock_guard<std::mutex> lk(mMu);
+        for (auto it = mQueryDone.begin(); it != mQueryDone.end(); ++it)
+            if (it->first == ticket)
+            {
+                if (out) *out = std::move(it->second);
+                mQueryDone.erase(it);
+                return true;
+            }
+        return false;
     }
 
     void RenderService::doPreview(int slot, const EditParams &params, int maxEdge, RenderIntent intent,
@@ -560,7 +593,52 @@ namespace arstro
         mReady.rehydrated = mEngine.rehydrations() > rehyBefore;
         mFrameReady = true;
     }
+    int RenderService::queryPreview(int slot, const EditParams &params, std::function<void(Frame &)> work)
+    {
+        // Unthreaded: no worker to hand it to, so it renders now - and is still collected with
+        // takeQuery, so a caller has one code path for both builds.
+        Query q{mNextTicket++, slot, params, std::move(work)};
+        mEngine.setPreviewSize(mPreviewMaxEdge);
+        Frame f = renderQuery(q);
+        mQueryDone.emplace_back(q.ticket, std::move(f));
+        return q.ticket;
+    }
+
+    bool RenderService::takeQuery(int ticket, Frame *out)
+    {
+        for (auto it = mQueryDone.begin(); it != mQueryDone.end(); ++it)
+            if (it->first == ticket)
+            {
+                if (out) *out = std::move(it->second);
+                mQueryDone.erase(it);
+                return true;
+            }
+        return false;
+    }
 #endif
+
+    RenderService::Frame RenderService::renderQuery(Query &q)
+    {
+        // As renderPreviewSync renders, level 0 at the preview size - an agent measuring a photo
+        // must see what the user will see at rest, not a coarse level.
+        const auto t0 = std::chrono::steady_clock::now();
+        ensureSource(q.slot, /*needFullRes=*/false);
+        mEngine.selectImage(q.slot);
+        mEngine.setCurrentParams(q.params);
+        mEngine.setPreviewLevel(0);
+        PreviewBuffer pb = mEngine.renderPreview();
+        Frame f;
+        if (pb.rgba)
+        {
+            f.rgba.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4);
+            f.width = pb.width;
+            f.height = pb.height;
+        }
+        f.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        if (q.work) q.work(f);
+        return f;
+    }
+
 
     // ── build-independent: GPU-preference relay (mirrors setPreviewSize — a plain
     //    engine scalar the worker re-reads on the next render; no queueing needed) ──

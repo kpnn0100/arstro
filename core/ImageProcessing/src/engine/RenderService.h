@@ -168,6 +168,18 @@ namespace arstro
          *  so it is cheap to draw and matches the live preview's resolution. */
         bool renderPreviewSync(int slot, const EditParams &params, Frame &out);
 
+        /** A preview-size render for a caller that must NOT wait (R-ASSIST-8): an agent's
+         *  `analyze` / `snapshot` arriving over the control socket used to call
+         *  renderPreviewSync on the UI thread and froze the window 1-2 s per call. Queued in
+         *  order and rendered on the worker AFTER any pending interactive preview, so the
+         *  user's own edits are never stuck behind an agent's. `work`, if given, runs on the
+         *  worker with the finished frame — the measurement, a downscale, an encode: whatever
+         *  would otherwise cost the UI thread a frame. Returns a ticket for takeQuery. */
+        int queryPreview(int slot, const EditParams &params, std::function<void(Frame &)> work = nullptr);
+        /** Collect a finished query (and its frame, if `out`). False while it is still queued
+         *  or rendering — never blocks. A ticket is answered once. */
+        bool takeQuery(int ticket, Frame *out = nullptr);
+
         bool threaded() const;
 
     private:
@@ -210,6 +222,19 @@ namespace arstro
         // could choose, and would go stale the moment the CPU budget changed.
         std::atomic<double> mMsPerMpx{0.0};
         double mInteractiveBudgetMs = 33.0;   // ~30 fps; the product decision, 2026-08-24
+
+        // R-ASSIST-8: asynchronous preview queries (guarded by mMu on the threaded build).
+        struct Query
+        {
+            int ticket = 0;
+            int slot = -1;
+            EditParams params;
+            std::function<void(Frame &)> work;
+        };
+        std::vector<Query> mQueries;                      // FIFO, not yet rendered
+        std::vector<std::pair<int, Frame>> mQueryDone;    // rendered, waiting to be taken
+        int mNextTicket = 1;
+        Frame renderQuery(Query &q);                      // on the worker (or inline, unthreaded)
 
 #ifdef ARSTRO_ENABLE_THREADS
         void workerLoop();

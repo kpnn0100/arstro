@@ -3524,8 +3524,9 @@ the motion durations with the widget each comes from.
 `CosmoService::analyze` (`CosmoService.cpp:645`). A named node other than the selection is SELECTED
 first through the ordinary `select` path, because what is measured is a render of the current slot.
 A group, or a photo with no resident pixels, fails with the reason (`analyze: a group has no pixels
-of its own …`). The frame is `renderBefore` (as shot: geometry only) or `renderCurrent` (every edit,
-DR-GRADE-2), measured by `measureImage` (`core/ImageProcessing/src/analysis/ImageStats.cpp:58`) into
+of its own …`). **AMENDED (R-ASSIST-8):** the frame is queued with `RenderService::queryPreview` — as shot
+(`EditSession::beforeParams`, geometry only) or with every edit — and rendered AND measured on the render
+worker; `pumpQueries` publishes it (DR-ASSIST-8). Measured by `measureImage` (`core/ImageProcessing/src/analysis/ImageStats.cpp:58`) into
 `AppModel::analysis` with `analysisNode` / `analysisName` / `analysisBefore`. It emits one line:
 
     [evt] info analyze DSCF5186.RAF before key=-5.89 p50=0.031 p99=0.973 warmth=-0.010 tint=0.150 sat=0.610
@@ -3640,6 +3641,29 @@ with `COSMO_PROJECT` set, and a missing agent refused:
 The real Claude Code was checked by hand (2.1.316): the workspace's `.claude/skills/arstro.color.grading`
 appears in its `init` skill list beside the user's own.
 
+### DR-ASSIST-8 Agent queries off the UI thread (R-ASSIST-8)
+
+`RenderService::queryPreview(slot, params, work)` (`core/ImageProcessing/src/engine/RenderService.h`) queues a
+preview-size, level-0 render and returns a ticket; the worker takes ONE query per pass, after the pass's
+pending preview, renders it (`renderQuery`), runs `work(frame)` on the worker, and parks the frame for
+`takeQuery(ticket, &frame)` — non-blocking, answered once. Unthreaded builds render inline and are still
+collected with `takeQuery`. `CosmoService::analyze` queues the edit (or `beforeParams`) with a `work` that
+fills a shared `ImageStats`; `snapshot` queues one that fits (`fitFrame`) and calls the injected
+`JpegWriter` (both hosts' writers are pure functions of their pixels, so they run on the worker).
+`pumpQueries`, called from `pump` after `pumpAssistant`, publishes finished ones in order: the analysis
+into the model with the same `info analyze …` line, or `snapshot.written`; a failure is
+`command.rejected` + `lastError`, late. `queriesPending()` lets an in-order front end wait: `cosmo-cc`'s
+`runLine` pumps until it is false (and fails the line on a late rejection); `cosmo-cc mcp --attach` waits,
+after the pong, for `[evt] info analyze` / `[evt] snapshot.written` / `[evt] command.rejected`. Measured
+with `cosmo-cc serve` on the dichoi project over the socket:
+
+    analyze 2                            accepted in   8.1 ms | answer after   1950 ms | 239 pings meanwhile, slowest   9.8 ms
+    snapshot /tmp/x.jpg 2 --edge 900     accepted in   8.1 ms | answer after    962 ms | 117 pings meanwhile, slowest   8.2 ms
+
+(before: 2067 ms and 1085 ms with the app answering nothing). Guards: `cosmo_core_tests`
+`analyze_measures_the_photo_before_and_after_the_edit` and `snapshot_and_ping_answer_a_client_on_the_far_side`
+(now waiting through `queriesPending`), ctest `cosmo_mcp_attach` and `cosmo_assist`.
+
 ### DR-ASSIST-7 The Agent tab (R-ASSIST-7)
 
 `AgentPanel` (`widgets/AgentPanel.{h,cpp}`) is the right column's sixth page (`RightColumn.cpp:262`,
@@ -3665,8 +3689,8 @@ and 1280×800.
 
 ### DR-ASSIST-3 The agent's tools, in the running application (R-ASSIST-3)
 
-**`snapshot`** (`CosmoService::snapshot`, `CosmoService.cpp:716`) selects the node like `analyze`, renders
-`renderCurrent` / `renderBefore`, fits it with `fitFrame` (`--edge`, default 1024) and writes EXACTLY
+**`snapshot`** (`CosmoService::snapshot`) selects the node like `analyze`, queues the edit or the as-shot
+render to the worker (DR-ASSIST-8), fits it with `fitFrame` (`--edge`, default 1024) and writes EXACTLY
 `path` through the injected `JpegWriter` (`setJpegWriter`, `CosmoService.h:72`; quality clamped 40..95,
 default 85) — the window's is `exporter::write` with no source EXIF (`linux_main.cpp:1558`), `cosmo-cc`'s
 the MCP preview's GdkPixbuf encoder (`cli/main.cpp:321`). No encoder, a group, or pixels not resident are

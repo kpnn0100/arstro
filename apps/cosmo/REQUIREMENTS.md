@@ -2229,6 +2229,9 @@ the same ones (R-SVC-4).
     calls, and the numbers are what makes them checkable.
   - **As edited, or as shot** (`before`): asking twice is how a grader compares before and after,
     so the answer says which one it is (`analysisBefore`) and for which node.
+  - (**AMENDED (R-ASSIST-8), 2026-11-04:** the answer arrives in a LATER pump — rendered and measured on
+    the render worker — because rendering it inline froze the window ~2 s per call while an agent
+    graded. A front end that answers in order waits for it.)
   - **On demand** like `metadata` (it renders), kept until the next one, emitted as an `info`
     event line and in `state print`. A group, or a photo whose pixels are not resident, is refused
     with why in `lastError`.
@@ -2300,6 +2303,16 @@ the P0 test harness — hence `ASSIST`.)
   user widens it with `agentArgs=` (extra arguments for the agent's command).
 - **R-ASSIST-6 An agent never blocks the application.** It runs as its own process; its output is read
   without blocking in `pump` (R-SVC-6); `assist stop` ends it and its children; quitting cosmo stops it.
+- **R-ASSIST-8 The window stays smooth while an agent works.** (**Added 2026-11-04** — the user, recording a
+  demo: *"while agent is editing, the UI is too lag … this need to be smooth"*. Measured on the dichoi project
+  over the control socket: each `analyze` held the window's thread **2067 ms**, each `snapshot` **1085 ms** —
+  the render ran synchronously on it — and a grade makes dozens.) Nothing an agent asks for may hold the
+  UI thread longer than a frame: `analyze` and `snapshot` are queued to the render worker, which renders
+  them AFTER any pending preview of the user's own (so their edits are never stuck behind the agent's),
+  and also does the measuring, fitting and encoding; the answer — the same `info analyze …` line, the
+  same `snapshot.written` — is published from `pump`. A front end that answers in order (a CLI line, an
+  MCP tool call) waits for it (`queriesPending`). The Agent tab measures each message's text once per
+  width, not every frame.
 - **R-ASSIST-7 The Agent tab — the section where the user talks to their agent.** The right column's
   sixth tab, after Xform, so it sits beside the photo it works on and every edit it makes shows up in the
   panels next to it. It shows, top to bottom:
