@@ -41,13 +41,15 @@ CLI inside cosmo, editing the open project live, the colour-grading skill loaded
   (a fake `claude` edits the served project through the relay, two turns; a one-shot agent; a missing
   one refused). **Live:** the real Claude Code 2.1.316 against `serve` on the dichoi project looked at
   photo 2 through `cosmo_preview` and described it (7 s, $0.41 on the default model).
-- **[ ] R-ASSIST (skill): `arstro.color.grading` drives the open project** when `COSMO_CONTROL` is set
-  (`mcp --attach`, no second `project open`).
+- **[x] R-ASSIST (skill): `arstro.color.grading` drives the open project** when `COSMO_CONTROL` is set
+  (`autograde.Cosmo` runs `cosmo-cc mcp --attach`; a `project open` of the project already open is
+  skipped). Verified against `serve` on a copy of the dichoi project: `edit.py run` graded P1090446 in
+  the SERVED session (temp 6016, the look's curves and mixer read back with `attach`).
 - **[ ] R-ASSIST-7 (design): the Agent tab** — `arstro.cosmo.design.implement`.
 - **Reconciled: D-62 is DONE** (d498b19, 2026-11-03 — a JPEG turned by its EXIF; guarded in
   `cosmo_core_tests` and `cosmo_ui_tests`), and D-69 (aee585a); the NEXT lines below still name D-62.
 
-**► NEXT:** the skill drives the open project (`COSMO_CONTROL`), then the Agent tab (design).
+**► NEXT:** the Agent tab (design).
 
 **► 2026-10-30 — "apply mcp for solaris, interstellar and cosmo … make agent understand context,
 understand the image property, lighting and apply grading … grading the project tokyo for me

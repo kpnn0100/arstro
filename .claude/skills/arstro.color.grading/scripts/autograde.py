@@ -30,6 +30,9 @@ import moods as M  # noqa: E402
 
 REPO = HERE.parents[3]
 COSMO_CC = os.environ.get("COSMO_CC", str(REPO / "build/apps/cosmo/cli/cosmo-cc"))
+# Started by cosmo's own Agent panel (R-ASSIST-4): cosmo says where its control socket is, and the grade
+# goes into the project open in the user's window - live, undoable - instead of a second copy of it.
+COSMO_CONTROL = os.environ.get("COSMO_CONTROL", "")
 
 # Every image parameter the grader may set; a fresh grade puts these back to neutral first so a
 # re-run never stacks on its own previous answer.
@@ -46,13 +49,32 @@ class Cosmo:
     """The MCP client with the three calls the grader needs, failing loudly on any refusal."""
 
     def __init__(self, log):
-        self.c = Client([COSMO_CC, "mcp"], log=log)
+        self.attached = bool(COSMO_CONTROL) and os.path.exists(COSMO_CONTROL)
+        self.c = Client([COSMO_CC, "mcp", "--attach", COSMO_CONTROL] if self.attached else [COSMO_CC, "mcp"], log=log)
 
     def run(self, script):
+        if self.attached:
+            script = self._keep_open(script)
+            if not script.strip():
+                return "ok"
         err, text = self.c.call("cosmo_run", script=script)
         if err:
             raise RuntimeError(text)
         return text
+
+    def _keep_open(self, script):
+        """Attached to the user's window: `project open` of the project already open there would reload
+        it (and drop what the user did since saving) - it is skipped. Another project still opens."""
+        keep = []
+        for line in script.splitlines():
+            t = line.strip()
+            if t.startswith("project open "):
+                want = t[len("project open "):].strip().strip('"')
+                have = self.state().get("projectPath", "")
+                if have and os.path.realpath(have) == os.path.realpath(want):
+                    continue
+            keep.append(line)
+        return "\n".join(keep)
 
     def state(self):
         return json.loads(self.c.call("cosmo_state")[1])

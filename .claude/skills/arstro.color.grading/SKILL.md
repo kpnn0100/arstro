@@ -20,6 +20,19 @@ number Cosmo cannot measure, that is a Cosmo task (`arstro.cosmo.core.implement`
 
 ---
 
+## Inside Cosmo — the Agent panel (R-ASSIST)
+
+When Cosmo itself started you (its Agent panel, or `assist send`), `COSMO_CONTROL` is set: the user's
+project (`COSMO_PROJECT`) is OPEN in their window, your `cosmo` tools act on it live, and every edit is one
+undoable step they watch land. So:
+- **Do not open a copy.** The scripts see `COSMO_CONTROL` and attach to the window themselves
+  (`autograde.Cosmo`); a `project open` of the project already open is skipped. Pass `COSMO_PROJECT` as
+  the project argument and put `--out` beside it: `<project dir>/<stem>-graded`.
+- **The same method**: read `taste.md`, `edit.py review`, LOOK, write `plan.json`, `edit.py run` (add
+  `--save` only when the user asked to save — the window shows the result either way), look again.
+- **Answer in the panel briefly**: what you did per photo in a line each, and what you would like them to
+  check. The before|after sheets are in `--out`.
+
 ## 0. Before grading anything
 
 1. **Read `taste.md`**, and `python3 scripts/lab.py summary` — the Grade Lab's verdicts, the approver's
