@@ -3703,6 +3703,35 @@ the agent is BUSY — during "starting" it sends (the runner queues it). Guards:
 `theAgentTabTalksThroughTheService` (choices first; a click selects and shows the setting; Connect stores it and
 starts the agent; a frame mid cross-fade; then the chat), shots `agent-choices`, `agent-connecting`.
 
+### DR-ASSIST-12 An agent's reply as formatting (R-ASSIST-12)
+
+`widgets/MarkdownText.{h,cpp}` (namespace `md`), three steps. `md::parse(text)` (`MarkdownText.cpp:541`)
+normalises (`\r` dropped, ANSI CSI/OSC escapes removed, tab → four spaces), removes a closed `<think>…</think>`
+(and anything before a lone `</think>`), turns an open one into a trailing `Thinking` block, then reads lines into
+blocks: fenced code (``` or ~~~, unclosed = to the end), ATX headings, rules, pipe tables (a `|` line followed by a
+delimiter row; `:-:` alignment), quotes (nesting flattened), bullets / ordered (`1.` or `1)`) / tasks (`- [x]`)
+with depth = indent / 2 (≤ 3) and indented continuation lines, else paragraphs; each line of a block is a hard
+break. `md::parseInline` tokenises code spans (an unclosed run = code to the end), links / images (label kept),
+autolinks and bare `http(s)://` URLs, a whitelist of inline HTML tags (`<br>` = break, `<b>`, `<code>`… dropped;
+`<model>` stays text), backslash escapes, and `*` `_` `~~` delimiter runs, then matches emphasis with
+CommonMark's flanking rules and rule of three (`snake_case` and `2**3` stay text); an unmatched opener of two
+that cannot close styles to the end (a reply mid-stream). Codepoints: ✓ ✔ ✅ ☑ → a `Tick`, ✗ ✘ ❌ → a `Cross`
+(vector marks), arrows / box drawing / maths Roboto lacks → `Symbol` (JetBrains Mono), emoji and other
+pictographs dropped. `md::layout(target, blocks, width)` fills styled words greedily with the target's real
+metrics, merging a line's same-style words into one run; bold = Roboto SemiBold, italic = Roboto Italic, code
+and symbols = mono a size down, code on a `secondary()` chip padded 3.25; a word wider than the line is cut at
+a codepoint; a code-block line is cut by width; a table keeps narrow columns natural and shares the rest,
+wrapping in the cell. Spacing: 6.5 between blocks, 3.25 between list items, 9.75 above a heading; headings 13 /
+12 / 11 SemiBold. `md::paint` draws decorations (code box `background()` + border, quote bar, rules, bullets —
+filled at depth 0 — task boxes) and runs with the message's fade, culled to the clip. `AgentPanel` lays out an
+agent's reply once per width and per streamed change (`Shown::layout`, `AgentPanel.cpp:484`); tool titles pass
+through `md::plain`; the user's and error messages are wrapped as plain text. The italic face is the sixth
+embedded face (`CMakeLists.txt` `COSMO_FONT_LIST`, `font::sansItalic()`). Guards: `cosmo_ui_tests`
+`anAgentsMarkdownBecomesFormatting` (styles; markers gone; streaming `**`; unclosed fence; every block kind;
+breaks; `<think>`; ANSI / emoji / tick / arrow; `plain`; every run within the width; SemiBold and Italic faces)
+and `theAgentTabTalksThroughTheService` (no `**` or backtick in any drawn text; fails with the formatting off),
+shots `agent-markdown-streaming`, `agent-markdown`.
+
 ### DR-ASSIST-8 Agent queries off the UI thread (R-ASSIST-8)
 
 `RenderService::queryPreview(slot, params, work)` (`core/ImageProcessing/src/engine/RenderService.h`) queues a

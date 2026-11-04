@@ -113,6 +113,11 @@ package "app  (namespace arstro::cosmo_v2)" as app {
       + onConnect / onDetect / pickerShown() / pickAmount()
       ' R-ASSIST-11: the choices, cross-faded with the chat
     }
+    class MarkdownText <<md::>> {
+      + parse(text) / parseInline(text) / plain(text)
+      + layout(target, blocks, width) / paint(target, layout, x, y, inks)
+      ' R-ASSIST-12: an agent's Markdown drawn as formatting
+    }
     class MaskPanel {
       + detectOpenAmount() / detectBarFill() / detectBarShow() / detectStatusText()
       ' every one of those is the LIVE eased value, so a test can tell a snap from a tween
@@ -368,6 +373,7 @@ EditStackTabs *--> StackPanel
 EditStackTabs *--> GradePanel
 EditStackTabs *--> XformPanel
 EditStackTabs *--> AgentPanel : Agent tab (R-ASSIST-7)
+AgentPanel ..> MarkdownText : a reply's layout (R-ASSIST-12)
 EditStackTabs *--> MaskPanel
 StackPanel *--> MixerPanel
 StackPanel *--> CurvePanel

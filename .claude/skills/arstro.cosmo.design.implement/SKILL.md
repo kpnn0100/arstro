@@ -131,6 +131,7 @@ design. A widget that invents a fourth radius is a bug.
 ### 1.3 Fonts (`font::`) — weight is a family name, not a flag
 
 `sans() = "Roboto"` · `sansMedium() = "Roboto Medium"` · `sansSemiBold() = "Roboto SemiBold"` ·
+`sansItalic() = "Roboto Italic"` (an agent's *emphasis* only, R-ASSIST-12) ·
 `mono() = "JetBrains Mono"` · `monoMedium() = "JetBrains Mono Medium"`.
 
 **Compiled INTO the binary** (`EmbeddedFonts.{h,cpp}`, `registerEmbeddedFonts()`, R-FONT-1) — no

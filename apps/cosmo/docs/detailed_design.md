@@ -732,7 +732,7 @@ info lines 10 px on 13, the user's message on a `secondary()` card padded 6.5, t
 through `emitCommand`, which answers "wired" rather than "accepted", so a refusal is never sent twice), `scrollBy(delta)` (px, positive toward the
 top, from `scrollActivePanel`), `isTyping()` (App::isTextEditing), and for tests `messagesRect()`,
 `scrollOffset()` (live), `scrollTarget()`, `contentHeight()`, `maxScroll()`, `newestAlpha()`,
-`sendRect()`, `startStopRect()`, `typeForTest(text)`. Motion: each message's fade starts in `advance`
+`sendRect()`, `startStopRect()`, `typeForTest(text)`, `messageLayout(i)` (R-ASSIST-12). Motion: each message's fade starts in `advance`
 (the setter has no clock) and is EaseOutCubic over 180 ms; the scroll eases 180 ms toward the target,
 which follows the bottom while `mStick` (cleared when the user scrolls up, set again at the end or on
 Send); the state dot's colour cross-fades 180 ms (`lerpColor`); the dot and the "is working…" line
@@ -748,6 +748,25 @@ the next `advance` clamps the scroll against.
 `mPick` (180 ms), `mRowHover` (HoverFade), `mPickScroll`, `mPickContentH`, the hint and notes wrapped once per width.
 The header's Start/Stop is Stop while running, else Agents / Chat / Refresh; Send is Connect on the choices and Stop
 only while busy.
+
+### 5.7a MarkdownText (R-ASSIST-12)
+`widgets/MarkdownText.{h,cpp}`, namespace `arstro::cosmo_v2::md` — an agent's reply drawn as formatting. Free
+functions, no Segment: `parse(text) -> std::vector<Block>`, `parseInline(text) -> std::vector<Span>`,
+`plain(text) -> std::string`, `layout(const IRenderTarget&, blocks, width, Metrics = {}) -> Layout`,
+`themeInks(alpha) -> Inks`, `paint(IRenderTarget&, layout, x, y, inks, clipTop, clipBottom)`.
+`Span{text, style}` with `Style` bits `Bold 1, Italic 2, Code 4, Link 8, Strike 16, Symbol 32, Tick 64,
+Cross 128, Break 256`. `Block{kind, level, marker, done, spans, code, rows, align}` with `BlockKind`
+`Paragraph, Heading, Bullet, Ordered, Task, Quote, CodeBlock, Rule, Table, Thinking`. `Layout{runs, decos,
+height}`: `Run{text, x, baseline, w, px, font, ink, style}`, `Deco{kind (CodeBox, QuoteBar, Rule, TableLine,
+Bullet, TaskBox), r, filled}`. `Metrics{px 11, lineH 15.6, codePx 10, codeLineH 13}`. Private constants:
+`kChipPad 3.25`, `kBlockGap 6.5`, `kItemGap 3.25`, `kHeadGap 9.75`, `kIndent 13`, `kQuoteIndent 9.75`,
+`kCodePad 6.5`, `kCellGap 9.75`, `kRowPad 3.25`; an ordered item's gutter is `max(16.25, marker + 4.875)`, a task's
+16.25; headings 13 / 12 / 11 px SemiBold on `px × 1.42`. Inks: body `foreground`, muted `mutedForeground`, quote
+`secondaryForeground`, link `primary` (underlined at half alpha), success / danger for the tick and cross, chip
+`secondary`, code box `background` stroked `border`. Emphasis is CommonMark's delimiter algorithm (flanking, the
+rule of three) plus one streaming rule: an unmatched `**` / `__` / `~~` opener that cannot close styles to the end.
+`AgentPanel` holds one `Layout` per shown message (`Shown::layout`), rebuilt when `wrappedAt` is invalidated — a new
+width or a streamed change — so a frame only paints.
 
 ## 6. Widgets — reusable controls
 

@@ -164,6 +164,7 @@ need one — a bare number in a widget is the bug.**
 font::sans()         "Roboto"
 font::sansMedium()   "Roboto Medium"
 font::sansSemiBold() "Roboto SemiBold"
+font::sansItalic()   "Roboto Italic"     ← cosmo only, for an agent's *emphasis* (R-ASSIST-12)
 font::mono()         "JetBrains Mono"
 font::monoMedium()   "JetBrains Mono Medium"
 ```

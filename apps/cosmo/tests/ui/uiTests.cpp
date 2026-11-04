@@ -1420,6 +1420,83 @@ namespace
     // state says what to do, Send is `assist send`, an answer FADES in (live alpha mid-tween), a
     // long conversation follows the newest message by EASING there (live scroll != target), a user
     // who scrolled up to read is not yanked back, and Stop is `assist stop`.
+    /** R-ASSIST-12: every agent answers in Markdown; the parser and layout under the Agent tab. */
+    void anAgentsMarkdownBecomesFormatting()
+    {
+        std::printf("MarkdownText: an agent's Markdown parses to styled text and fits its width (R-ASSIST-12)\n");
+        using namespace arstro::cosmo_v2;
+        auto find = [](const std::vector<md::Span> &sp, const std::string &t) -> const md::Span * {
+            for (const auto &s : sp)
+                if (s.text == t) return &s;
+            return nullptr;
+        };
+        auto joined = [](const std::vector<md::Span> &sp) {
+            std::string all;
+            for (const auto &s : sp) all += s.text;
+            return all;
+        };
+        const auto in = md::parseInline("**Exposure** lifted by `+0.3`, *gently*, ~~not~~ snake_case_name 2**3 local:<url>|<model>");
+        const md::Span *b = find(in, "Exposure"), *c = find(in, "+0.3"), *i = find(in, "gently"), *x = find(in, "not");
+        check(b && (b->style & md::Bold) && c && (c->style & md::Code) && i && (i->style & md::Italic) && x && (x->style & md::Strike),
+              "bold, code, italic and strike become styles");
+        const std::string all = joined(in);
+        check(all.find("**E") == std::string::npos && all.find('`') == std::string::npos && all.find("snake_case_name") != std::string::npos &&
+                  all.find("2**3") != std::string::npos && all.find("local:<url>|<model>") != std::string::npos,
+              "their markers are gone; snake_case, 2**3 and <placeholders> stay text");
+
+        const auto streaming = md::parse("- **Port");
+        check(streaming.size() == 1 && streaming[0].kind == md::BlockKind::Bullet && streaming[0].spans.size() == 1 &&
+                  streaming[0].spans[0].text == "Port" && (streaming[0].spans[0].style & md::Bold),
+              "mid-stream, an unclosed ** is already bold - no stars flash while the reply arrives");
+        const auto fence = md::parse("```sh\nedit.py run");
+        check(fence.size() == 1 && fence[0].kind == md::BlockKind::CodeBlock && fence[0].code.size() == 1 && fence[0].code[0] == "edit.py run",
+              "an unclosed fence is code to the end");
+
+        const auto blocks = md::parse("## Title\n1. one\n2) two\n- [x] done\n> quote\n---\n| a | b |\n|:-|--:|\n| 1 | 2 |\nplain\nnext line");
+        std::vector<md::BlockKind> kinds;
+        for (const auto &bl : blocks) kinds.push_back(bl.kind);
+        using K = md::BlockKind;
+        check(kinds == std::vector<K>{K::Heading, K::Ordered, K::Ordered, K::Task, K::Quote, K::Rule, K::Table, K::Paragraph} &&
+                  blocks[0].level == 2 && blocks[2].marker == "2." && blocks[3].done && blocks[6].rows.size() == 2 &&
+                  blocks[6].align == std::vector<char>{'l', 'r'},
+              "headings, ordered and task items, quotes, rules and tables are blocks");
+        check(blocks[7].spans.size() == 3 && (blocks[7].spans[1].style & md::Break), "a single newline is a line break, as in a chat");
+
+        check(joined(md::parse("<think>hmm</think>Answer")[0].spans) == "Answer" && md::parse("<think>still going").back().kind == K::Thinking &&
+                  joined(md::parse("reasoning</think>Answer")[0].spans) == "Answer",
+              "a reasoning model's <think> is not the answer: dropped when closed, one Thinking line while open");
+
+        const auto odd = md::parseInline("\x1b[1mBold\x1b[0m \xF0\x9F\x8E\xAC done \xE2\x9C\x85 \xE2\x86\x92 next");
+        bool tick = false, arrow = false;
+        for (const auto &s : odd)
+        {
+            tick |= (s.style & md::Tick) != 0;
+            arrow |= (s.style & md::Symbol) && s.text == "\xE2\x86\x92";
+        }
+        const std::string oddAll = joined(odd);
+        check(tick && arrow && oddAll.find('\x1b') == std::string::npos && oddAll.find("\xF0\x9F") == std::string::npos,
+              "ANSI colours go, a pictograph the faces lack goes, a check mark is drawn, an arrow is drawn in mono");
+        check(md::plain("Read `edit.py` **now**") == "Read edit.py now", "a one-line tool title loses its markup");
+
+        // Layout: nothing spills past the width, a long URL and a wide table included (R5).
+        artboard::RecordingTarget rt;
+        const double W = 180.0;
+        const md::Layout l = md::layout(rt, md::parse("**Bold** and *italic* text that wraps across lines\n"
+                                                      "https://example.com/a/very/long/path/that/cannot/fit/on/one/line\n\n"
+                                                      "| Photo | Exposure | A long look name |\n|---|--:|---|\n| Lake | +0.30 | Natural Teal for the sky |\n\n"
+                                                      "```\na code line that is much too long for a narrow column\n```"),
+                                        W);
+        bool fits = true, boldFace = false, italicFace = false;
+        for (const auto &r : l.runs)
+        {
+            fits &= r.x >= -0.01 && r.x + r.w <= W + 0.5;
+            boldFace |= r.text == "Bold" && std::string(r.font) == font::sansSemiBold();
+            italicFace |= r.text == "italic" && std::string(r.font) == font::sansItalic();
+        }
+        check(fits && l.height > 0.0, "every run fits the width: words wrap, a URL and a code line are cut, a table shares it");
+        check(boldFace && italicFace, "bold draws in Roboto SemiBold, italic in Roboto Italic");
+    }
+
     void theAgentTabTalksThroughTheService()
     {
         std::printf("App: the Agent tab shows the conversation and talks through the service (R-ASSIST-7)\n");
@@ -1532,6 +1609,20 @@ namespace
         check(reading < agent->maxScroll() - 50.0 && std::fabs(agent->scrollOffset() - reading) < 1.0,
               "a reader scrolled up stays where they are when a message arrives");
 
+        // R-ASSIST-12: a reply in Markdown is drawn as formatting - no `**` reaches the screen.
+        sh->queue = {{AssistOutput::Kind::Text, "**Exposure** lifted by `+0.3` on *every* photo"}};
+        agent->scrollBy(-100000.0);   // back to the newest
+        rig.settle(400.0);
+        bool stars = false, boldRun = false;
+        for (const auto &op : rig.target.ops())
+            if (op.kind == artboard::DrawOp::Kind::DrawText)
+            {
+                stars |= op.text.find("**") != std::string::npos || op.text.find('`') != std::string::npos;
+                boldRun |= op.text == "Exposure" && op.fontFamily == arstro::cosmo_v2::font::sansSemiBold();
+            }
+        const arstro::cosmo_v2::md::Layout *ml = agent->messageLayout(rig.svc.model().assist.messages.size() - 1);
+        check(!stars && boldRun && ml && !ml->runs.empty(), "an agent's **bold** and `code` are drawn as bold and code, not as markup");
+
         // Stop, from the header.
         const artboard::Rect ss = agent->startStopRect();
         rig.click(at.e + ss.x + ss.w * 0.5, at.f + ss.y + ss.h * 0.5);
@@ -1560,6 +1651,7 @@ int main()
     theStageNeverBlinksDuringADrag();
     theBeforeAfterToggleDissolves();
     anExportFromATurnedJpegSaysItIsUpright();
+    anAgentsMarkdownBecomesFormatting();
     theAgentTabTalksThroughTheService();
     std::printf("\n%s (%d failure%s)\n", gFailures ? "FAILED" : "all passed", gFailures,
                 gFailures == 1 ? "" : "s");

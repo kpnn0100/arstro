@@ -390,6 +390,9 @@ look like itself.
   UI is identical across platforms. The generator is a `cmake -P` script (no `xxd`, no `objcopy`, no
   host codegen target to build first), so Linux and MSYS2 run the same line, and it re-runs only
   when a TTF changes.
+  (**Added 2026-11-04, R-ASSIST-12:** a sixth face, **Roboto Italic** — `font::sansItalic()` — for an
+  agent's *emphasis*: Roboto 2.137 Italic, Apache-2.0, its licence beside the TTF; metric-compatible with
+  the 3.x roman faces.)
 - **R-FONT-2 Roboto is the UI face; JetBrains Mono stays the numeric one.** `font::sans` /
   `sansMedium` / `sansSemiBold` are Roboto Regular / Medium / SemiBold — one family, three real
   static weights, because a weight is selected by its own family name at the text-stack level
@@ -2337,6 +2340,20 @@ the P0 test harness — hence `ASSIST`.)
   (R-ASSIST-7) with **Change** in the header. An agent is *ready* as soon as it is running and can take a
   message — Claude Code says nothing until its first message, and waiting for it left the tab at "starting"
   forever (the user: *"why the claude code is starting take too long"*).
+- **R-ASSIST-12 An agent's reply is shown as formatting, not as its Markdown.** (**Added 2026-11-04** — the user:
+  *"update the agent panel, it need to have format for text that suitable for all kind of agent so that output
+  don't have \"**\" … i think it is markdown format"*.) Every agent cosmo runs answers in GitHub-flavoured
+  Markdown, so the Agent tab draws a reply as what it means: **bold**, *italic*, `code`, ~~strike~~, links,
+  headings, bullet / numbered / task lists, quotes, fenced code, rules and pipe tables; no marker reaches the
+  screen. One newline is one line break (as in a chat). It must hold for every agent and while a reply
+  STREAMS (R-ASSIST-9): an opened `**` or backtick styles to the end of its paragraph rather than flashing as
+  literal marks, an unclosed fence is code to the end; a reasoning model's `<think>` is not the answer
+  (dropped when closed, one muted "Thinking…" line while open); ANSI colour escapes and `\r` are removed; a
+  pictograph the app's compiled-in faces (R-FONT-1) cannot draw is dropped instead of drawn as an empty box,
+  except a check mark or a cross, which are drawn as marks, and arrows / box drawing, which come from the mono
+  face. Text still fits (R5: a long word, URL or code line is cut, a table shares the width) and is measured
+  once per width and per change, never per frame (R-ASSIST-8). The model keeps the agent's text exactly as it
+  arrived — how it looks is the view's (R-SVC-4); the user's own messages stay as typed.
 - **R-ASSIST-8 The window stays smooth while an agent works.** (**Added 2026-11-04** — the user, recording a
   demo: *"while agent is editing, the UI is too lag … this need to be smooth"*. Measured on the dichoi project
   over the control socket: each `analyze` held the window's thread **2067 ms**, each `snapshot` **1085 ms** —

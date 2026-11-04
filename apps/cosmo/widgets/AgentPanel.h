@@ -10,7 +10,8 @@
  *
  *  Layout, top to bottom, at the column's 324 px:
  *    header    29.25   the agent's name, a state dot + word, and Start/Stop
- *    messages  flex    self-drawn, wrapped with the real font metrics, clipped AND scrolled (R6)
+ *    messages  flex    self-drawn, wrapped with the real font metrics, clipped AND scrolled (R6);
+ *                      an agent's reply is drawn from its Markdown (MarkdownText, R-ASSIST-12)
  *    composer  39      a text field (Enter sends) and Send - the ActionBar's height, so the column's
  *                      bottom edge reads as one band whichever tab is open
  *
@@ -28,6 +29,7 @@
 #include "../core/service/AppModel.h"
 #include "PillButton.h"
 #include "HoverFade.h"
+#include "MarkdownText.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -78,6 +80,9 @@ namespace cosmo_v2
         /** The newest message's opacity right now (1 at rest, < 1 mid fade-in). */
         double newestAlpha() const;
         void typeForTest(const std::string &text);
+        /** R-ASSIST-12: message `i`'s formatted layout as the last paint measured it (an agent's
+         *  reply only; nullptr for any other role, or before the first paint). */
+        const md::Layout *messageLayout(size_t i) const;
         // ── the choices (R-ASSIST-11) ──
         bool pickerShown() const;                      // the target: choices, not the chat
         double pickAmount() const { return mPick.value(); }   // the LIVE cross-fade, 0 chat .. 1 choices
@@ -109,6 +114,8 @@ namespace cosmo_v2
             // every frame was the panel's share of the lag while an agent worked (R-ASSIST-8).
             mutable std::vector<std::string> lines;
             mutable double wrappedAt = -1.0;
+            // R-ASSIST-12: an agent's reply, parsed and laid out at the same moments.
+            mutable md::Layout layout;
         };
         void send();
         void refreshButtons();

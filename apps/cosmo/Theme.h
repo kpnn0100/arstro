@@ -37,6 +37,9 @@ namespace cosmo_v2
         inline const char *sans() { return "Roboto"; }
         inline const char *sansMedium() { return "Roboto Medium"; }
         inline const char *sansSemiBold() { return "Roboto SemiBold"; }
+        // R-ASSIST-12: *emphasis* in an agent's reply. Roboto 2.137 Italic (Apache-2.0, beside the
+        // TTF), metric-compatible with the 3.x roman faces above; the only italic the app draws.
+        inline const char *sansItalic() { return "Roboto Italic"; }
         inline const char *mono() { return "JetBrains Mono"; }
         inline const char *monoMedium() { return "JetBrains Mono Medium"; }
     }

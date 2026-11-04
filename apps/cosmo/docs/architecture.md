@@ -179,7 +179,8 @@ mRoot
 │   │   ├─ StackPanel        (Mixer/Curve) ── MixerPanel(×3 HueCurveEditor) + CurvePanel
 │   │   ├─ GradePanel        (Grade)
 │   │   ├─ XformPanel        (Xform)
-│   │   └─ AgentPanel        (Agent) ── the user's own agent: conversation + composer (R-ASSIST-7)
+│   │   └─ AgentPanel        (Agent) ── the user's own agent: conversation + composer (R-ASSIST-7);
+│   │                                    replies drawn from their Markdown by MarkdownText (R-ASSIST-12)
 │   └─ ActionBar             (Save / Import / Export)
 ├─ HistoryView   (modal, overlay pass)
 ├─ ContextMenu   (modal, overlay pass)
@@ -340,6 +341,7 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/HttpLite.{h,cpp}` | host | one HTTP/1.1 request to a LOCAL server (plain http; Content-Length, chunked or close) - local-model detection and `cosmo-cc agent` (R-ASSIST-9) |
 | `apps/cosmo/cli/main.cpp` `cmdAgent` · `remoteBackend` | front end (CLI) | `cosmo-cc agent`: an ACP agent for a model on an OpenAI-compatible endpoint, cosmo's tools as functions, `cosmo_grade` (R-ASSIST-9/10) |
 | `apps/cosmo/tests/assist/acp_test.sh` | test (ctest `cosmo_assist_acp`) | a fake ACP agent and a fake local model, each editing the served project (R-ASSIST-9/10) |
+| `apps/cosmo/widgets/MarkdownText.{h,cpp}` | front end (widget helper) | an agent's Markdown reply parsed into styled blocks, laid out with real metrics once per width and change, painted with the message's fade; streaming-safe, `<think>`/ANSI/emoji aware (R-ASSIST-12) |
 | `apps/cosmo/widgets/AgentPanel.{h,cpp}` | front end (widget) | the Agent tab: header (agent, state dot, Start/Stop), the conversation (self-drawn, wrapped with real metrics, scrolled), the composer (Enter sends); a view of `AppModel::assist` (R-ASSIST-7) |
 
 **Front ends over the service (R-SVC-1):** the GTK window (`linux_main.cpp` + `App`), `cosmo-cc`

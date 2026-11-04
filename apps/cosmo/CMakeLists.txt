@@ -50,19 +50,21 @@ if(TARGET cosmo_core)
   # when a TTF or the script itself changes.
   #
   # Roboto is the UI face (three static weights, since a weight is a family name at the text
-  # stack level — Artboard FR-22); JetBrains Mono stays the numeric/filename face, embedded for
+  # stack level — Artboard FR-22 — plus an italic for an agent's emphasis, R-ASSIST-12); JetBrains Mono stays the numeric/filename face, embedded for
   # the same reason. Every family string here must match a `font::` accessor in Theme.h.
   set(COSMO_FONT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts)
   set(COSMO_FONT_FILES
       ${COSMO_FONT_DIR}/Roboto/Roboto-Regular.ttf
       ${COSMO_FONT_DIR}/Roboto/Roboto-Medium.ttf
       ${COSMO_FONT_DIR}/Roboto/Roboto-SemiBold.ttf
+      ${COSMO_FONT_DIR}/Roboto/Roboto-Italic.ttf
       ${COSMO_FONT_DIR}/JetBrainsMono/JetBrainsMono-Regular.ttf
       ${COSMO_FONT_DIR}/JetBrainsMono/JetBrainsMono-Medium.ttf)
   set(COSMO_FONT_LIST
       "Roboto|${COSMO_FONT_DIR}/Roboto/Roboto-Regular.ttf"
       "Roboto Medium|${COSMO_FONT_DIR}/Roboto/Roboto-Medium.ttf"
       "Roboto SemiBold|${COSMO_FONT_DIR}/Roboto/Roboto-SemiBold.ttf"
+      "Roboto Italic|${COSMO_FONT_DIR}/Roboto/Roboto-Italic.ttf"
       "JetBrains Mono|${COSMO_FONT_DIR}/JetBrainsMono/JetBrainsMono-Regular.ttf"
       "JetBrains Mono Medium|${COSMO_FONT_DIR}/JetBrainsMono/JetBrainsMono-Medium.ttf")
   set(COSMO_EMBEDDED_FONTS ${CMAKE_CURRENT_BINARY_DIR}/EmbeddedFonts.generated.cpp)

@@ -182,6 +182,13 @@ namespace cosmo_v2
 
     bool AgentPanel::isTyping() const { return mField && mField->hasFocus(); }
 
+    const md::Layout *AgentPanel::messageLayout(size_t i) const
+    {
+        if (i >= mShown.size() || mShown[i].wrappedAt < 0) return nullptr;
+        const std::string &r = mShown[i].role;
+        return r == "user" || r == "error" || r == "tool" || r == "info" ? nullptr : &mShown[i].layout;
+    }
+
     void AgentPanel::typeForTest(const std::string &text)
     {
         mField->text = text;
@@ -459,7 +466,8 @@ namespace cosmo_v2
                 const std::string f = tool ? font::mono() : font::sans();
                 if (m.wrappedAt != textW)
                 {
-                    m.lines = {ellipsize(t, (tool ? "\xC2\xB7 " : "") + m.text, kSmallPx, f, textW)};
+                    // A tool's title is the agent's words too ("Read `edit.py`"): its markup goes.
+                    m.lines = {ellipsize(t, (tool ? "\xC2\xB7 " + md::plain(m.text) : m.text), kSmallPx, f, textW)};
                     m.wrappedAt = textW;
                 }
                 const std::string &line = m.lines[0];
@@ -473,6 +481,19 @@ namespace cosmo_v2
             t.setFill(fade(error ? palette::destructive() : palette::mutedForeground()));
             t.drawText(label, kPadX, y + kLabelH * 0.5 + kLabelPx * 0.35, kLabelPx, font::sansSemiBold(), 0.13 * kLabelPx);
             y += kLabelH;
+            if (!user && !error)
+            {
+                // R-ASSIST-12: the agent's reply as it meant it - bold, lists, code, tables - not its
+                // Markdown. Parsed and laid out once per width and per streamed change, like the wrap.
+                if (m.wrappedAt != textW)
+                {
+                    m.layout = md::layout(t, md::parse(m.text), textW);
+                    m.wrappedAt = textW;
+                }
+                md::paint(t, m.layout, kPadX, y, md::themeInks(a), box.y, box.y + box.h);
+                y += m.layout.height + kGap;
+                continue;
+            }
             const double inner = user ? textW - 2 * kBubblePad : textW;
             if (m.wrappedAt != textW)
             {

@@ -653,6 +653,28 @@ namespace
         sh->queue.push_back({AssistOutput::Kind::Text, "All four photos are graded; the last line is always in view."});
         rig.settle(f, 800.0);
         save(f, "agent-overflow");
+
+        // R-ASSIST-12: a reply in the Markdown every agent writes, drawn as what it means - first
+        // mid-stream (an unclosed ** already bold, an unclosed fence already code), then whole.
+        const std::string reply =
+            "## Graded 4 photos \xE2\x80\x94 *Natural Teal*\n"
+            "**What I did**\n"
+            "- **Lake** (photo 1): white balance from the clouds, `temp=5600`, teal in the shadows\n"
+            "- **Portraits** (2, 3): skin kept on the skin line \xE2\x86\x92 warm *Natural Cinema*\n"
+            "  - the orange cushions calmed (`hue_orange=-8`)\n"
+            "- [x] project saved\n\n"
+            "| Photo | Exposure | Look |\n|---|--:|---|\n| Lake | +0.30 | Natural Teal |\n| Valley | \xE2\x88\x92" "0.15 | Natural Teal |\n\n"
+            "> Undo any photo you do not like \xE2\x80\x94 each is one step.\n\n"
+            "```sh\nedit.py run dichoi.cmp --plan plan.json\n```\n"
+            "\xE2\x9C\x85 Exported to `~/photo/dichoi-graded/export` \xF0\x9F\x8E\xAC";
+        rig.svc.dispatchText("assist send make the valley warmer and tell me what you changed", err);
+        sh->queue = {{AssistOutput::Kind::TextDelta, reply.substr(0, reply.find("Portraits") + 4)}};
+        rig.settle(f, 400.0);
+        save(f, "agent-markdown-streaming");
+        sh->queue = {{AssistOutput::Kind::TextDelta, reply.substr(reply.find("Portraits") + 4)},
+                     {AssistOutput::Kind::Done, "done in 41 s - $0.380"}};
+        rig.settle(f, 800.0);
+        save(f, "agent-markdown");
     }
 
     /** R-SCALE: the shell at every offered scale, in the SMALLEST window each scale allows.
