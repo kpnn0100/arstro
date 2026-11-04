@@ -59,6 +59,9 @@ namespace cosmo
                 else if (k == "cpuPercent") s.cpuPercent = std::stoi(v);
                 else if (k == "uiScale") s.uiScale = std::stoi(v);
                 else if (k == "touchUi") s.touchUi = (v != "0");
+                else if (k == "agent") s.agent = v.empty() ? std::string("claude") : v;
+                else if (k == "agentArgs") s.agentArgs = v;
+                else if (k == "agentSkills") s.agentSkills = v;
             }
             catch (...) {}
         }
@@ -83,7 +86,10 @@ namespace cosmo
           << "useGpu=" << (useGpu ? 1 : 0) << "\n"
           << "cpuPercent=" << cpuPercent << "\n"
           << "uiScale=" << uiScale << "\n"
-          << "touchUi=" << (touchUi ? 1 : 0) << "\n";
+          << "touchUi=" << (touchUi ? 1 : 0) << "\n"
+          << "agent=" << agent << "\n"
+          << "agentArgs=" << agentArgs << "\n"
+          << "agentSkills=" << agentSkills << "\n";
         return (bool)f;
     }
 }

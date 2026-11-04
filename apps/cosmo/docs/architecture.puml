@@ -488,5 +488,26 @@ class ControlChannel <<host, R-SVC-8>> {
 }
 ControlClient ..> ControlChannel : the running app's control socket (R-SVC-8)
 note right of CosmoService : setJpegWriter(JpegWriter) — snapshot's encoder,\ninjected like the export's (R-ASSIST-3)
+interface IAssistant <<core seam, R-ASSIST-1>> {
+  + start(AssistLaunch, err) : bool
+  + send(text, err) : bool
+  + stop()
+  + poll(out) : never blocks
+  + name() : string
+}
+class AssistModel <<R-ASSIST-1>> {
+  + state : off|starting|ready|busy|failed
+  + agent : string
+  + messages : {role, text}[]
+}
+class ProcessAssistant <<host, R-ASSIST-2>> {
+  + {static} configFor(socket) : Config
+  + {static} parseClaudeLine(line, out)
+  + {static} kAllowedTools
+}
+IAssistant <|.. ProcessAssistant
+CosmoService o-- IAssistant : AssistantFactory (host-injected)
+AppModel *-- AssistModel : assist
+ProcessAssistant ..> McpBackend : the agent runs cosmo-cc mcp --attach
 @enduml
 

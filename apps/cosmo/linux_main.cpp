@@ -13,6 +13,7 @@
 #include "ExportWriter.h"
 #include "Log.h"
 #include "ControlChannel.h"
+#include "AssistProcess.h"
 #include "UiDump.h"
 #include "widgets/WidgetLog.h"
 #include "OmpPin.h"
@@ -1562,6 +1563,20 @@ int main(int argc, char **argv)
         req.embedExif = false;
         return arstro::cosmo_v2::exporter::write(req, rgba, w, h, path, std::string(), err);
     });
+    // R-ASSIST-1/2: the user's own agent, run beside the window. Its tools reach THIS session over
+    // the control socket (R-ASSIST-3), so the socket is opened here if `--control` did not.
+    host.svc.setAssistantFactory([&host]() -> std::unique_ptr<arstro::cosmo::IAssistant> {
+        if (!host.control.isOpen())
+        {
+            const char *rt = std::getenv("XDG_RUNTIME_DIR");
+            const std::string path = std::string(rt && *rt ? rt : "/tmp") + "/cosmo-" + std::to_string((long)getpid()) + ".sock";
+            std::string err;
+            if (!host.control.open(path, err)) LOGE("assist: the control socket: %s", err.c_str());
+            else LOGI("assist: opened the control socket %s for the agent (R-ASSIST-3)", path.c_str());
+        }
+        return std::make_unique<arstro::cosmo_v2::ProcessAssistant>(
+            arstro::cosmo_v2::ProcessAssistant::configFor(host.control.isOpen() ? host.control.path() : std::string()));
+    });
     host.svc.subscribe([&host](const arstro::cosmo::Event &e) { onServiceEvent(&host, e); });
     // One call, so the budget, the session and the model can never disagree about what is in
     // force (D-15). App::applySettings above still seeds the widgets, which is a view concern.
@@ -1660,13 +1675,14 @@ int main(int argc, char **argv)
         {
             LOGI("control: driving cosmo from %s — same commands a click produces (R-SVC-8)",
                  host.control.path().c_str());
-            // R-SVC-3/5: one event stream, one format. The socket, the log and a --watch
-            // client all see the identical line.
-            host.svc.subscribe([&host](const arstro::cosmo::Event &e) {
-                host.control.broadcast(arstro::cosmo::formatEvent(e));
-            });
         }
     }
+    // R-SVC-3/5: one event stream, one format. The socket, the log and a --watch client all see
+    // the identical line. Subscribed whether or not the socket is open yet: an agent opens it
+    // later (R-ASSIST-3), and a broadcast with no socket reaches nobody.
+    host.svc.subscribe([&host](const arstro::cosmo::Event &e) {
+        if (host.control.isOpen()) host.control.broadcast(arstro::cosmo::formatEvent(e));
+    });
 
     host.window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(host.window), "cosmo. by arstro");

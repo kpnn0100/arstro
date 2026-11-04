@@ -33,6 +33,8 @@ namespace cosmo
             case Event::Kind::CommandRejected: return "command.rejected";
             case Event::Kind::SnapshotWritten: return "snapshot.written";
             case Event::Kind::Pong: return "pong";
+            case Event::Kind::AssistState: return "assist.state";
+            case Event::Kind::AssistMessage: return "assist.message";
         }
         return "unknown";
     }
@@ -79,6 +81,16 @@ namespace cosmo
                 break;
             case Event::Kind::ExportProgress: o << " done=" << e.a << " total=" << e.b << " name=" << e.text; break;
             case Event::Kind::ExportFinished: o << " written=" << e.a << " failures=" << e.b; break;
+            // An event is ONE line on every channel (the log, --watch, the socket): a message's
+            // line breaks print as \n, the same escape `assist send` reads back.
+            case Event::Kind::AssistMessage:
+                o << ' ';
+                for (char ch : e.text)
+                {
+                    if (ch == '\n') o << "\\n";
+                    else if (ch != '\r') o << ch;
+                }
+                break;
             // The path last: it is the one field that may hold a space.
             case Event::Kind::SnapshotWritten:
                 o << " node=" << e.c << " size=" << e.a << 'x' << e.b << " path=" << e.text;

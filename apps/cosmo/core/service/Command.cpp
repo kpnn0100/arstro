@@ -89,7 +89,8 @@ namespace cosmo
             "undo", "redo", "preset apply",
             "preset save", "export",
             "settings set", "screen", "state print", "ui dump", "wait", "wb pick", "metadata", "analyze",
-            "gesture", "history jump", "add", "snapshot", "ping", "quit"};
+            "gesture", "history jump", "add", "snapshot", "ping", "assist start", "assist send",
+            "assist stop", "quit"};
         return names;
     }
 
@@ -97,6 +98,33 @@ namespace cosmo
     {
         err.clear();
         Command c;
+        // R-ASSIST-1: a message to the agent is free text - a '#' in it is not a comment and its
+        // quotes are its own - so it is taken raw, before the comment strip and the tokenizer.
+        {
+            const size_t i = line.find_first_not_of(" \t");
+            if (i != std::string::npos && line.compare(i, 6, "assist") == 0)
+            {
+                const size_t j = line.find_first_not_of(" \t", i + 6);
+                if (j != std::string::npos && j > i + 6 && line.compare(j, 4, "send") == 0 &&
+                    (j + 4 == line.size() || line[j + 4] == ' ' || line[j + 4] == '\t'))
+                {
+                    std::string text = j + 4 < line.size() ? line.substr(j + 5) : std::string();
+                    while (!text.empty() && (text.back() == ' ' || text.back() == '\t' || text.back() == '\r')) text.pop_back();
+                    while (!text.empty() && (text.front() == ' ' || text.front() == '\t')) text.erase(0, 1);
+                    if (text.size() >= 2 && text.front() == '"' && text.back() == '"') text = text.substr(1, text.size() - 2);
+                    std::string msg;
+                    for (size_t k = 0; k < text.size(); ++k)
+                    {
+                        if (text[k] == '\\' && k + 1 < text.size() && text[k + 1] == 'n') { msg += '\n'; ++k; }
+                        else msg += text[k];
+                    }
+                    if (msg.empty()) { err = "assist send: expected the message"; return Command{}; }
+                    c.kind = Command::Kind::AssistSend;
+                    c.name = msg;
+                    return c;
+                }
+            }
+        }
         const auto hash = line.find('#');
         const std::string body = hash == std::string::npos ? line : line.substr(0, hash);
         const std::vector<std::string> t = tokenize(body);
@@ -379,6 +407,12 @@ namespace cosmo
                 }
             }
         }
+        else if (v == "assist")
+        {
+            if (sub == "start" && t.size() == 2) c.kind = Command::Kind::AssistStart;
+            else if (sub == "stop" && t.size() == 2) c.kind = Command::Kind::AssistStop;
+            else { err = "assist: expected start | send <message> | stop"; return Command{}; }
+        }
         else if (v == "ping")
         {
             if (!need(2, "ping <token>")) return c;
@@ -468,7 +502,11 @@ namespace cosmo
                 break;
             case Command::Kind::SettingsSet:
                 o << "settings set";
-                for (const auto &kv : c.fields) o << ' ' << kv.first << '=' << kv.second;
+                // R-ASSIST-2/5: an agent's command and arguments carry spaces; quoted, they re-parse
+                // to one value (the tokenizer joins a quoted run inside a token).
+                for (const auto &kv : c.fields)
+                    o << ' ' << kv.first << '='
+                      << (kv.second.find_first_of(" \t") != std::string::npos ? "\"" + kv.second + "\"" : kv.second);
                 break;
             case Command::Kind::Screen: o << "screen " << c.name; break;
             case Command::Kind::StatePrint:
@@ -492,6 +530,16 @@ namespace cosmo
                 for (const auto &kv : c.fields) o << " --" << kv.first << ' ' << kv.second;
                 break;
             case Command::Kind::Ping: o << "ping " << c.name; break;
+            case Command::Kind::AssistStart: o << "assist start"; break;
+            case Command::Kind::AssistStop: o << "assist stop"; break;
+            case Command::Kind::AssistSend:
+                o << "assist send ";
+                for (char ch : c.name)
+                {
+                    if (ch == '\n') o << "\\n";
+                    else o << ch;
+                }
+                break;
             case Command::Kind::Quit: o << "quit"; break;
         }
         return o.str();

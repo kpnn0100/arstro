@@ -296,6 +296,18 @@ printf 'snapshot /tmp/look.jpg 1 --edge 800\nping done\n' | build/apps/cosmo/cli
 
 `ctest -R cosmo_mcp_attach` runs the relay against `serve` and reads the edit back from the served model.
 
+**The user's own agent runs inside cosmo** (R-ASSIST). `assist send <words>` starts the agent named by the
+`agent=` setting (Claude Code, `claude`, by default) in `<config>/agent`, with the colour-grading skill and
+cosmo's tools attached to this session, and the conversation streams back as `assist.*` events:
+
+```bash
+printf 'assist send make photo 2 cinematic\nwait assist.state ready\n' | build/apps/cosmo/cli/cosmo-cc attach $S
+```
+
+`settings set agent=<command>` uses another agent (run once per message, `{prompt}` replaced or the
+message on stdin); `agentArgs=` widens what Claude Code may do. `ctest -R cosmo_assist` proves it with a
+fake `claude` and no network.
+
 ## 6. The invariants — break one and something lies silently
 
 The full list is `.claude/skills/arstro.cosmo.core.implement` §0. These are the ones a newcomer

@@ -49,6 +49,14 @@ namespace cosmo
          *  host without a device (R-TOUCH-5). */
         bool touchUi = false;
 
+        /** R-ASSIST-2/4/5: the user's own agent. `agent` is its command ("claude" = Claude Code,
+         *  spoken to in its streaming-JSON protocol; anything else is run once per message with
+         *  `{prompt}` replaced). `agentArgs` is appended to it — how a user widens what the agent
+         *  may do. `agentSkills` adds skill directories (`:`-separated) to the bundled one. */
+        std::string agent = "claude";
+        std::string agentArgs;
+        std::string agentSkills;
+
         /** Legal UI scales, in the order the settings row offers them. */
         static const std::vector<int> &uiScales()
         {

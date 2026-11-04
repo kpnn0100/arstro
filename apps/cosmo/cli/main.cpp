@@ -29,6 +29,7 @@
  */
 #include "ExportWriter.h"
 #include "ControlChannel.h"
+#include "AssistProcess.h"
 #include "NtwbAdapter.h"
 #include "EditControls.h"
 #include "mcp/Server.h"
@@ -492,6 +493,9 @@ namespace
             {"add", "<img> [img ...]   (into the open project; import replaces it)"},
             {"snapshot", "<path.jpg> [<node>] [before] [--edge N] [--quality Q]   (write the edit, or as shot, as a JPEG)"},
             {"ping", "<token>   (answered [evt] pong <token> after every line sent before it)"},
+            {"assist start", "   (start the user's agent: settings agent=, claude by default)"},
+            {"assist send", "<free text>   (to the agent; starts it if needed; \\n = a line break)"},
+            {"assist stop", ""},
             {"wait", "load.finished|export.finished|quit|<ms> [--timeout 120s]  (hyphens accepted)"},
             {"quit", ""}};
         return hints;
@@ -2345,6 +2349,12 @@ static int cmdServe(Host &h, const Args &a)
     std::string err;
     if (!control.open(sock, err)) { fprintf(stderr, "serve: %s\n", err.c_str()); return kFail; }
     h.svc.subscribe([&control](const Event &e) { control.broadcast(arstro::cosmo::formatEvent(e)); });
+    // R-ASSIST-1/2: `assist start` here runs the user's agent as the window does, attached to this
+    // socket. (`run` has no socket for an agent to come back through, so it refuses.)
+    h.svc.setAssistantFactory([&control]() -> std::unique_ptr<arstro::cosmo::IAssistant> {
+        return std::make_unique<arstro::cosmo_v2::ProcessAssistant>(
+            arstro::cosmo_v2::ProcessAssistant::configFor(control.path()));
+    });
     if (a.has("project"))
     {
         Command open;

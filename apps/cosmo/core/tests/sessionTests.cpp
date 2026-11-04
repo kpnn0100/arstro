@@ -1327,6 +1327,9 @@ namespace
             "history jump 4", "add /c.raf \"/d e.jpg\"",   // R-NTWB-3
             "snapshot /tmp/a.jpg", "snapshot \"/tmp/a b.jpg\" 3 before --edge 600 --quality 80",   // R-ASSIST-3
             "ping 42",
+            "assist start", "assist stop", "assist send make these cinematic # keep her skin true",   // R-ASSIST-1
+            "assist send two lines\\nof text",
+            "settings set agent=\"codex exec {prompt}\" agentArgs=\"--model haiku\"",
             "quit"};
         for (const char *line : lines)
         {
@@ -2064,6 +2067,101 @@ namespace
         printf("[PASS] snapshot_and_ping_answer_a_client_on_the_far_side\n");
     }
 
+    // R-ASSIST-1/6: the conversation with the user's agent is application state. A fake agent stands
+    // in for the host's process: what it says while the service is pumped lands in the model and on
+    // the event stream, in order; the states move off -> starting -> ready -> busy -> ready; a crash is
+    // `failed` with why; stop ends it; and a front end that cannot run an agent refuses with why.
+    void test_the_agent_conversation_is_application_state()
+    {
+        using namespace arstro::cosmo;
+        struct Shared
+        {
+            std::vector<AssistOutput> queue;
+            std::vector<std::string> sent;
+            AssistLaunch launch;
+            bool stopped = false, startFails = false;
+        };
+        struct FakeAssistant : IAssistant
+        {
+            Shared &s;
+            explicit FakeAssistant(Shared &sh) : s(sh) {}
+            bool start(const AssistLaunch &l, std::string &err) override
+            {
+                s.launch = l;
+                if (s.startFails) { err = "fake is not installed"; return false; }
+                return true;
+            }
+            bool send(const std::string &t, std::string &) override { s.sent.push_back(t); return true; }
+            void stop() override { s.stopped = true; }
+            void poll(std::vector<AssistOutput> &out) override { out.swap(s.queue); s.queue.clear(); }
+            std::string name() const override { return "Fake Agent"; }
+        };
+
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        std::vector<std::string> lines;
+        svc.subscribe([&lines](const Event &e) { lines.push_back(formatEvent(e)); });
+        std::string err;
+        double clock = 0.0;
+
+        // No runner injected (`cosmo-cc run`, this test so far): refused, and why.
+        assert(!svc.dispatchText("assist start", err));
+        assert(svc.model().lastError.find("cannot run an agent") != std::string::npos);
+        assert(svc.model().assist.state == "off");
+
+        Shared sh;
+        svc.setAssistantFactory([&sh] { return std::unique_ptr<IAssistant>(new FakeAssistant(sh)); });
+        assert(svc.dispatchText("settings set agent=fake agentSkills=/a:/b", err));
+        assert(svc.model().settings.agent == "fake");
+
+        // A message with no agent running starts one first, with the settings the user chose.
+        assert(svc.dispatchText("assist send make these cinematic # keep her skin true", err) && err.empty());
+        assert(sh.launch.agent == "fake" && sh.launch.skillDirs.size() == 2 && sh.launch.skillDirs[1] == "/b");
+        assert(sh.sent.size() == 1 && sh.sent[0] == "make these cinematic # keep her skin true" &&
+               "a # in a message is the user's, not a comment");
+        assert(svc.model().assist.state == "busy" && svc.model().assist.agent == "Fake Agent");
+        assert(!svc.dispatchText("assist start", err) && "one agent at a time");
+
+        sh.queue = {{AssistOutput::Kind::Ready, "Fake 1.0"},
+                    {AssistOutput::Kind::Tool, "cosmo_run: select 2;set temp=5600"},
+                    {AssistOutput::Kind::Text, "Warm light, deep greens.\nDone with photo 2."},
+                    {AssistOutput::Kind::Done, "done in 3 s"}};
+        clock += 16;
+        svc.pump(clock);
+        const auto &msgs = svc.model().assist.messages;
+        assert(msgs.size() == 5);
+        assert(msgs[0].role == "user" && msgs[1].role == "info" && msgs[2].role == "tool" && msgs[3].role == "agent");
+        assert(msgs[3].text == "Warm light, deep greens.\nDone with photo 2." && "the model keeps the line break");
+        assert(svc.model().assist.state == "ready" && "a finished turn leaves it ready for the next");
+        bool oneLine = false, stateSeen = false;
+        for (const auto &l : lines)
+        {
+            if (l == "[evt] assist.message agent Warm light, deep greens.\\nDone with photo 2.") oneLine = true;
+            if (l == "[evt] assist.state ready agent=Fake Agent") stateSeen = true;
+        }
+        assert(oneLine && "an event is one line: the break prints as \\n");
+        assert(stateSeen);
+        const std::string dump = formatModel(svc.model(), {});
+        assert(dump.find("assistState=ready") != std::string::npos && dump.find("  assist tool: cosmo_run") != std::string::npos);
+        ModelDumpOptions jo;
+        jo.json = true;
+        assert(formatModel(svc.model(), jo).find("{\"role\": \"agent\", \"text\": \"Warm light, deep greens.\\nDone") !=
+               std::string::npos);
+
+        // The agent dies on its own: failed, with why; the next message starts a new one.
+        sh.queue = {{AssistOutput::Kind::Exited, "the agent exited with code 2: boom"}};
+        svc.pump(clock += 16);
+        assert(svc.model().assist.state == "failed" && svc.model().assist.messages.back().role == "error");
+
+        // stop ends it and says so; a start that fails is `failed` with the reason, not a hang.
+        assert(svc.dispatchText("assist start", err));
+        assert(svc.dispatchText("assist stop", err) && sh.stopped && svc.model().assist.state == "off");
+        sh.startFails = true;
+        assert(!svc.dispatchText("assist start", err));
+        assert(svc.model().assist.state == "failed" && svc.model().lastError.find("not installed") != std::string::npos);
+        printf("[PASS] the_agent_conversation_is_application_state\n");
+    }
+
     void test_analyze_measures_the_photo_before_and_after_the_edit()
     {
         using namespace arstro::cosmo;
@@ -2603,9 +2701,12 @@ namespace
             {K::Add, "add /b.raf"},
             {K::Snapshot, "snapshot /tmp/a.jpg 2 before"},
             {K::Ping, "ping 1"},
+            {K::AssistStart, "assist start"},
+            {K::AssistSend, "assist send hello"},
+            {K::AssistStop, "assist stop"},
             {K::Quit, "quit"},
         };
-        const int kKindCount = 35;   // Kind::None is not a command
+        const int kKindCount = 38;   // Kind::None is not a command
         assert((int)(sizeof(cases) / sizeof(cases[0])) == kKindCount &&
                "a new Command::Kind needs a documented line here and a parser rule");
 
@@ -3222,6 +3323,7 @@ int main()
     test_picking_a_white_point_sets_temp_and_tint();
     test_analyze_measures_the_photo_before_and_after_the_edit();
     test_snapshot_and_ping_answer_a_client_on_the_far_side();
+    test_the_agent_conversation_is_application_state();
     test_metadata_reads_the_file_without_decoding_it();
     test_a_path_mask_is_drawn_by_command_and_renders();
     test_mixer_spread_is_reachable_and_persists();

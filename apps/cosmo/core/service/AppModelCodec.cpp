@@ -109,6 +109,9 @@ namespace cosmo
         kvi(s, j, "settingsCpuPercent", m.settings.cpuPercent);
         kvi(s, j, "settingsUiScale", m.settings.uiScale);
         kvb(s, j, "settingsTouchUi", m.settings.touchUi);
+        kv(s, j, "settingsAgent", m.settings.agent);             // R-ASSIST-2
+        kv(s, j, "settingsAgentArgs", m.settings.agentArgs);     // R-ASSIST-5
+        kv(s, j, "settingsAgentSkills", m.settings.agentSkills); // R-ASSIST-4
 
         kvi(s, j, "budgetPercent", m.budget.percent);
         kvi(s, j, "budgetTotal", m.budget.total);
@@ -310,6 +313,28 @@ namespace cosmo
                 s << "  analysis hues=" << arr(a.hues.data(), 12, ",") << " colouredFraction=" << f(a.colouredFraction) << '\n'
                   << "  analysis skin=" << f(a.skinFraction) << " sky=" << f(a.skyFraction)
                   << " foliage=" << f(a.foliageFraction) << " neon=" << f(a.neonFraction) << '\n';
+            }
+        }
+
+        // R-ASSIST-1: the conversation. Stable: it is what was said, not when it was drawn.
+        if (j)
+        {
+            s << ",\n  \"assistState\": \"" << jsonEscape(m.assist.state) << "\",\n  \"assistAgent\": \""
+              << jsonEscape(m.assist.agent) << "\",\n  \"assist\": [";
+            for (size_t i = 0; i < m.assist.messages.size(); ++i)
+                s << (i ? "," : "") << "\n    {\"role\": \"" << jsonEscape(m.assist.messages[i].role)
+                  << "\", \"text\": \"" << jsonEscape(m.assist.messages[i].text) << "\"}";
+            s << (m.assist.messages.empty() ? "]" : "\n  ]");
+        }
+        else
+        {
+            s << "assistState=" << m.assist.state << '\n' << "assistAgent=" << m.assist.agent << '\n'
+              << "assistMessages=" << m.assist.messages.size() << '\n';
+            for (const auto &msg : m.assist.messages)
+            {
+                s << "  assist " << msg.role << ": ";
+                for (char ch : msg.text) s << (ch == '\n' ? std::string("\\n") : std::string(1, ch));
+                s << '\n';
             }
         }
 

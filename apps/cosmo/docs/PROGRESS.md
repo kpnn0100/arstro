@@ -29,17 +29,25 @@ CLI inside cosmo, editing the open project live, the colour-grading skill loaded
   ends a script on a pong instead of 600 ms of silence (DR-SVC-8 amended).
   **Not run: the acceptance test** (`tests/acceptance/run.sh`) needs a display, and the only one here is
   the user's live desktop; the window's change is one injected encoder.
-- **[ ] R-ASSIST-1/2/4/5/6 (core): the agent session in the service** — `assist start|send|stop`, the
-  conversation in the model and on the event stream, an `IAssistant` seam with the host's process runner
-  (Claude Code stream-JSON; any other command once per message), `agent=` / `agentSkills=` / `agentArgs=`
-  settings, the workspace with `arstro.color.grading`, the window opening its control socket on start.
+- **[x] R-ASSIST-1/2/4/5/6 (core): the agent session in the service** (DR-ASSIST-1/2). `assist start|send|
+  stop` (38 kinds; `assist send` is raw free text, `\n` its one escape), `AppModel::assist` + `assist.state`
+  / `assist.message` events, the `IAssistant` seam (`core/assist/Assistant.h`) polled in `pump`, settings
+  `agent` / `agentArgs` / `agentSkills` (spaced values now quoted by `formatCommand`). Host
+  `ProcessAssistant` (`AssistProcess.{h,cpp}`): Claude Code over stream-JSON in one process, any other
+  command once per message; workspace `<config>/agent` with `arstro.color.grading` linked in, the MCP config
+  attached to this app, `COSMO_CONTROL/CC/PROJECT`, process group stopped with SIGTERM then SIGKILL. The
+  window opens its control socket on the first `assist start`; `cosmo-cc serve` runs agents too. Guards:
+  `the_agent_conversation_is_application_state` (fails without `pumpAssistant`) and ctest `cosmo_assist`
+  (a fake `claude` edits the served project through the relay, two turns; a one-shot agent; a missing
+  one refused). **Live:** the real Claude Code 2.1.316 against `serve` on the dichoi project looked at
+  photo 2 through `cosmo_preview` and described it (7 s, $0.41 on the default model).
 - **[ ] R-ASSIST (skill): `arstro.color.grading` drives the open project** when `COSMO_CONTROL` is set
   (`mcp --attach`, no second `project open`).
-- **[ ] R-ASSIST (design): the Agent panel** — `arstro.cosmo.design.implement`.
+- **[ ] R-ASSIST-7 (design): the Agent tab** — `arstro.cosmo.design.implement`.
 - **Reconciled: D-62 is DONE** (d498b19, 2026-11-03 — a JPEG turned by its EXIF; guarded in
   `cosmo_core_tests` and `cosmo_ui_tests`), and D-69 (aee585a); the NEXT lines below still name D-62.
 
-**► NEXT:** R-ASSIST-1/2/4/5/6 core (the agent session), then the skill, then the Agent panel.
+**► NEXT:** the skill drives the open project (`COSMO_CONTROL`), then the Agent tab (design).
 
 **► 2026-10-30 — "apply mcp for solaris, interstellar and cosmo … make agent understand context,
 understand the image property, lighting and apply grading … grading the project tokyo for me
@@ -1103,7 +1111,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-11-04 · R-ASSIST-3: an agent's MCP tools reach a RUNNING cosmo (`mcp --attach`, `snapshot`, `ping`, `serve --control`) · 2026-11-03 · D-62: a JPEG is turned the way its EXIF says · 2026-10-30 · R-GRADE-1/2 + R-MCP-1..4: `analyze` measures a photo into the model, `renderCurrent` renders the edit on demand, `cosmo-cc mcp` serves cosmo to agents over the Model Context Protocol (with Interstellar and Solaris beside it), and the Tokyo project was graded through it · 2026-09-29 · R-GPU-7: the compute backend is picked at run time (desktop GL, then GLES), the GLES backend loads its entry points and finds a headless display over GBM, and an RK3588's Mali-G610 edits on its GPU — available and conformant, not yet faster (D-60) · 2026-09-03 · R-MIXER-10..14: the Lum curve is a GAIN (Adobe's value scale), not an offset on HSL lightness in linear light — which turned a blue sky black at -100 · R-AISEG WITHDRAWN — the Detect mask is out of the tree; type value 4 is retired so a project that stores it still loads and renders nothing · R-AISEG-25..28: the Detect block says what state it is in, a Detect button starts the run and a progress bar reports it · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-11-04 · R-ASSIST-1/2/4/5/6: the user's own agent runs inside cosmo (`assist start|send|stop`, Claude Code or any command, the colour-grading skill by default) · R-ASSIST-3: an agent's MCP tools reach a RUNNING cosmo (`mcp --attach`, `snapshot`, `ping`, `serve --control`) · 2026-11-03 · D-62: a JPEG is turned the way its EXIF says · 2026-10-30 · R-GRADE-1/2 + R-MCP-1..4: `analyze` measures a photo into the model, `renderCurrent` renders the edit on demand, `cosmo-cc mcp` serves cosmo to agents over the Model Context Protocol (with Interstellar and Solaris beside it), and the Tokyo project was graded through it · 2026-09-29 · R-GPU-7: the compute backend is picked at run time (desktop GL, then GLES), the GLES backend loads its entry points and finds a headless display over GBM, and an RK3588's Mali-G610 edits on its GPU — available and conformant, not yet faster (D-60) · 2026-09-03 · R-MIXER-10..14: the Lum curve is a GAIN (Adobe's value scale), not an offset on HSL lightness in linear light — which turned a blue sky black at -100 · R-AISEG WITHDRAWN — the Detect mask is out of the tree; type value 4 is retired so a project that stores it still loads and renders nothing · R-AISEG-25..28: the Detect block says what state it is in, a Detect button starts the run and a progress bar reports it · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Also merged in from the other machine: **D-40** (filed there as D-36 and renumbered on

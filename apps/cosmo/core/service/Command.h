@@ -39,6 +39,9 @@
  *      analyze               (measure the selected photo as edited; `analyze 3 before` = node 3 as shot)
  *      snapshot /tmp/a.jpg 3 before --edge 1024   (R-ASSIST-3: node 3 as shot, written as a JPEG)
  *      ping 42                                    (R-ASSIST-3: answered `[evt] pong 42`)
+ *      assist start          (R-ASSIST-1: start the user's agent, per the `agent=` setting)
+ *      assist send make these cinematic, keep her skin true   (free text to the agent)
+ *      assist stop
  *      quit
  */
 #pragma once
@@ -125,6 +128,14 @@ namespace cosmo
             /** R-ASSIST-3: a marker in the event stream, answered `[evt] pong <name>` after
              *  every line dispatched before it, so a client knows its commands were handled. */
             Ping,            // name = token
+            /** R-ASSIST-1: the user's own agent (R-ASSIST-2), run by the host beside the app.
+             *  `assist send` takes FREE TEXT: everything after `send` (one pair of surrounding
+             *  quotes dropped), a `#` included - and `\n` in the text form is a line break, the
+             *  one escape in the grammar, because a message can span lines and a command cannot.
+             *  Sending with no agent running starts one first. */
+            AssistStart,
+            AssistSend,      // name = the message
+            AssistStop,
             Quit
         };
 

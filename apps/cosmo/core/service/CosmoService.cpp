@@ -394,6 +394,7 @@ namespace cosmo
         // needs it. Nothing blocks and nothing sleeps — a step is just another coalesced
         // render request, so a live run and a scripted one take the same path.
         mNowMs = nowMs;
+        pumpAssistant();   // R-ASSIST-6: what the agent said since the last pump, read without blocking
         // The session's clock, which ONLY the two views used to advance (`App::render` and
         // `PhoneApp`). `History::record` coalesces edits that arrive close together — a whole
         // slider drag is one undoable step — and it reads that clock, so a front end that never
@@ -750,6 +751,104 @@ namespace cosmo
         return true;
     }
 
+    // ── R-ASSIST: the user's own agent ──────────────────────────────────────────────────────
+
+    void CosmoService::assistSay(const std::string &role, const std::string &text)
+    {
+        mModel.assist.messages.push_back({role, text});
+        ++mModel.revision;
+        emit(Event::Kind::AssistMessage, role + " " + text);
+    }
+
+    void CosmoService::assistState(const std::string &state)
+    {
+        if (mModel.assist.state == state) return;
+        mModel.assist.state = state;
+        ++mModel.revision;
+        emit(Event::Kind::AssistState, state + (mModel.assist.agent.empty() ? std::string() : " agent=" + mModel.assist.agent));
+    }
+
+    bool CosmoService::assistStart()
+    {
+        if (mAssistant) return fail("assist: the agent is already running (assist stop first)");
+        if (!mAssistantFactory)
+            return fail("assist: this front end cannot run an agent - the window and `cosmo-cc serve` can");
+        AssistLaunch l;
+        l.agent = mModel.settings.agent.empty() ? std::string("claude") : mModel.settings.agent;
+        l.args = mModel.settings.agentArgs;
+        for (size_t at = 0; at <= mModel.settings.agentSkills.size();)
+        {
+            const size_t colon = mModel.settings.agentSkills.find(':', at);
+            const std::string dir = mModel.settings.agentSkills.substr(at, colon == std::string::npos ? std::string::npos : colon - at);
+            if (!dir.empty()) l.skillDirs.push_back(dir);
+            if (colon == std::string::npos) break;
+            at = colon + 1;
+        }
+        l.project = mModel.projectPath;
+        l.photos = mModel.imageCount;
+        mAssistant = mAssistantFactory();
+        mModel.assist.agent = mAssistant ? mAssistant->name() : std::string();
+        std::string err;
+        if (!mAssistant || !mAssistant->start(l, err))
+        {
+            mAssistant.reset();
+            assistSay("error", err.empty() ? std::string("the agent could not be started") : err);
+            assistState("failed");
+            return fail("assist: " + (err.empty() ? std::string("the agent could not be started") : err));
+        }
+        assistState("starting");
+        return true;
+    }
+
+    bool CosmoService::assistSend(const Command &c)
+    {
+        if (!mAssistant && !assistStart()) return false;   // sending with none running starts one
+        std::string err;
+        if (!mAssistant->send(c.name, err)) return fail("assist: " + err);
+        assistSay("user", c.name);
+        assistState("busy");
+        return true;
+    }
+
+    bool CosmoService::assistStop()
+    {
+        if (!mAssistant) return true;   // nothing to stop is not a failure: the state is already off
+        mAssistant->stop();
+        mAssistant.reset();
+        assistSay("info", "stopped");
+        assistState("off");
+        return true;
+    }
+
+    void CosmoService::pumpAssistant()
+    {
+        if (!mAssistant) return;
+        std::vector<AssistOutput> out;
+        mAssistant->poll(out);
+        for (const AssistOutput &o : out)
+        {
+            switch (o.kind)
+            {
+                case AssistOutput::Kind::Ready:
+                    if (!o.text.empty()) assistSay("info", o.text);
+                    if (mModel.assist.state == "starting") assistState("ready");
+                    break;
+                case AssistOutput::Kind::Text: assistSay("agent", o.text); break;
+                case AssistOutput::Kind::Tool: assistSay("tool", o.text); break;
+                case AssistOutput::Kind::Done:
+                    if (!o.text.empty()) assistSay("info", o.text);
+                    assistState("ready");
+                    break;
+                case AssistOutput::Kind::Failed: assistSay("error", o.text); break;
+                case AssistOutput::Kind::Exited:
+                    mAssistant.reset();
+                    if (!o.text.empty()) assistSay("error", o.text);
+                    assistState(o.text.empty() ? "off" : "failed");
+                    return;   // `out` may hold nothing after an exit, and the assistant is gone
+            }
+        }
+    }
+
     bool CosmoService::pickWhiteBalance(const Command &c)
     {
         // R-WB-1: "this pixel should be white". Three steps, and each one is somewhere it can be
@@ -861,6 +960,11 @@ namespace cosmo
             // so the service stores the choice, puts it in the model and emits the change. That
             // is also what makes the touch shell scriptable from a desktop host.
             else if (k == "touchUi") s.touchUi = (kv.second != "0" && kv.second != "false");
+            // R-ASSIST-2/4/5: strings, stored for the next `assist start` (a running agent keeps
+            // the command it was started with).
+            else if (k == "agent") s.agent = kv.second.empty() ? std::string("claude") : kv.second;
+            else if (k == "agentArgs") s.agentArgs = kv.second;
+            else if (k == "agentSkills") s.agentSkills = kv.second;
             else return fail("settings: unknown key " + k);
         }
         std::string tail;
@@ -1214,6 +1318,9 @@ namespace cosmo
             case Command::Kind::Add: return startAppendLoad(c.paths);
             case Command::Kind::Snapshot: return snapshot(c);
             case Command::Kind::Ping: emit(Event::Kind::Pong, c.name); return true;
+            case Command::Kind::AssistStart: return assistStart();
+            case Command::Kind::AssistSend: return assistSend(c);
+            case Command::Kind::AssistStop: return assistStop();
             case Command::Kind::Undo:
                 if (!mSession.canUndo()) return fail("nothing to undo");
                 mSession.undo();

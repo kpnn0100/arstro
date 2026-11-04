@@ -13,6 +13,8 @@
  *      [evt] load.finished entries=18 decoded=18 failed=0 peak=5 budget=6
  *      [evt] snapshot.written node=3 size=1024x683 path=/tmp/a.jpg
  *      [evt] pong 42
+ *      [evt] assist.state ready agent=Claude Code
+ *      [evt] assist.message agent Warm light, deep greens - here is the plan:\n1. ...
  *
  *  Kept small on purpose: `a`/`b` carry the two integers nearly every event needs
  *  (done/total, slot/index), `ms` the one duration, and `text` the name or the key=value
@@ -55,7 +57,9 @@ namespace cosmo
             ExportFinished,   // a = written, b = failures
             CommandRejected,  // text = the line, plus why
             SnapshotWritten,  // R-ASSIST-3: text = path, a = width, b = height, c = node
-            Pong              // R-ASSIST-3: text = the ping's token
+            Pong,             // R-ASSIST-3: text = the ping's token
+            AssistState,      // R-ASSIST-1: text = the state (off|starting|ready|busy|failed), then agent=<name>
+            AssistMessage     // R-ASSIST-1: text = "<role> <message>"; a line break prints as \n
         };
 
         Kind kind = Kind::Info;

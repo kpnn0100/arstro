@@ -82,6 +82,10 @@ if(TARGET cosmo_core)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
 
   target_link_libraries(cosmo PRIVATE artboard_core arstro_image cosmo_core)
+  # R-ASSIST-2: AssistProcess reads Claude Code's stream-JSON with the suite's dependency-free Json.
+  target_link_libraries(cosmo PRIVATE arstro_ntwb)
+  # R-ASSIST-4: the skills an agent gets by default - the repository's in a developer build.
+  target_compile_definitions(cosmo PRIVATE COSMO_SKILLS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../.claude/skills")
 
   # OmpPin.cpp resolves omp_set_num_threads dynamically (dlsym / GetProcAddress) rather
   # than linking OpenMP, so the app carries no OpenMP dependency and the pin is a no-op
@@ -138,7 +142,7 @@ if(TARGET cosmo_core)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
-  target_link_libraries(cosmo_shots PRIVATE artboard_core arstro_image cosmo_core
+  target_link_libraries(cosmo_shots PRIVATE artboard_core arstro_image cosmo_core arstro_ntwb
                         ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FREETYPE)
   target_compile_definitions(cosmo_shots PRIVATE
     COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" ARTBOARD_CAIRO_FT)
@@ -160,7 +164,7 @@ if(TARGET cosmo_core)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
-  target_link_libraries(cosmo_ui_tests PRIVATE artboard_core arstro_image cosmo_core
+  target_link_libraries(cosmo_ui_tests PRIVATE artboard_core arstro_image cosmo_core arstro_ntwb
                         ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FREETYPE)
   target_compile_definitions(cosmo_ui_tests PRIVATE
     COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" ARTBOARD_CAIRO_FT)

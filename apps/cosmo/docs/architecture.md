@@ -331,6 +331,9 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/cli/main.cpp` `cmdMcpAttach` · `ControlClient` | front end (CLI) | `cosmo-cc mcp --attach`: the same five tools relayed to a RUNNING cosmo over its control socket, `ping`-delimited round trips (R-ASSIST-3) |
 | `apps/cosmo/cli/main.cpp` `cmdServe` | front end (CLI) | `cosmo-cc serve --control`: the application with its control socket and no window; links `ControlChannel.cpp` + `Log.cpp` (R-ASSIST-3) |
 | `apps/cosmo/tests/assist/relay_test.sh` | test (ctest `cosmo_mcp_attach`) | the relay against `serve`, edit read back from the served session (R-ASSIST-3) |
+| `apps/cosmo/core/assist/Assistant.h` | core (seam) | `IAssistant` + `AssistLaunch` / `AssistOutput`: the service holds the user's agent through it and polls it without blocking (R-ASSIST-1/6) |
+| `apps/cosmo/AssistProcess.{h,cpp}` | host | `ProcessAssistant`: the agent as a process — Claude Code over stream-JSON, any other command once per message; workspace, skill links, MCP config, process group (R-ASSIST-2/4/5/6) |
+| `apps/cosmo/tests/assist/agent_test.sh` | test (ctest `cosmo_assist`) | a fake `claude` edits the served project through the relay; one-shot agents; a missing agent refused (R-ASSIST) |
 
 **Front ends over the service (R-SVC-1):** the GTK window (`linux_main.cpp` + `App`), `cosmo-cc`
 (CLI, `run`, `attach` to a `--control` window), the touch shell, and - since R-NTWB - a browser:

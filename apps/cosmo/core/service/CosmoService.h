@@ -32,10 +32,12 @@
 #include "../EditSession.h"
 #include "../ProjectLoader.h"
 #include "../ThreadBudget.h"
+#include "../assist/Assistant.h"
 #include "AppModel.h"
 #include "Command.h"
 #include "Event.h"
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -70,6 +72,10 @@ namespace cosmo
         using JpegWriter = std::function<bool(const std::string &path, const uint8_t *rgba, int w, int h,
                                               int quality, std::string &err)>;
         void setJpegWriter(JpegWriter w) { mJpegWriter = std::move(w); }
+        /** R-ASSIST-1/2: the host's way of running the user's agent. A front end without one
+         *  (`cosmo-cc run`, a test that does not inject it) refuses `assist start` with why. */
+        using AssistantFactory = std::function<std::unique_ptr<IAssistant>()>;
+        void setAssistantFactory(AssistantFactory f) { mAssistantFactory = std::move(f); }
         void subscribe(EventSink s) { mSinks.push_back(std::move(s)); }
         /** Put the persisted preferences in force and into the model (R-SETTINGS-4). The host
          *  calls this once at startup with what `AppSettings::load()` returned, instead of
@@ -186,6 +192,12 @@ namespace cosmo
         /** R-GRADE-1: render the photo (as edited, or as shot) and measure it into the model. */
         bool analyze(const Command &c);
         bool snapshot(const Command &c);
+        bool assistStart();
+        bool assistSend(const Command &c);
+        bool assistStop();
+        void pumpAssistant();
+        void assistSay(const std::string &role, const std::string &text);
+        void assistState(const std::string &state);
         /** The picker's averaging radius, in proxy pixels — big enough to swamp sensor noise,
          *  small enough that clicking a small neutral patch does not drag its neighbours in. */
         static constexpr int kWbPickRadius = 4;
@@ -207,6 +219,8 @@ namespace cosmo
         std::function<void()> mWorkerInit;
         ImageWriter mWriter;
         JpegWriter mJpegWriter;
+        AssistantFactory mAssistantFactory;
+        std::unique_ptr<IAssistant> mAssistant;   // R-ASSIST-6: destroyed (and so stopped) with the service
         std::vector<EventSink> mSinks;
 
         AppModel mModel;

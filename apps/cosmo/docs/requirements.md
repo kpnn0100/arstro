@@ -3572,6 +3572,74 @@ per photo, and a whole grade driven through these tools (`.claude/skills/arstro.
 
 
 
+### DR-ASSIST-1 The agent conversation in the service (R-ASSIST-1, -6)
+
+`assist start` · `assist send <free text>` · `assist stop` (`Command.cpp:410`). `assist send` is read RAW
+before the comment strip and the tokenizer (`Command.cpp:101`): a `#` is the user's, one pair of surrounding
+quotes is dropped, and `\n` is a line break — the grammar's one escape, because a message may span lines
+and a command may not; `formatCommand` writes it back the same way. `CosmoService::assistStart`
+(`CosmoService.cpp:771`) builds an `AssistLaunch` from the settings (`agent`, `agentArgs`, `agentSkills`
+split on `:`) and the open project, asks the injected `AssistantFactory` for an `IAssistant`
+(`core/assist/Assistant.h`) and starts it: `starting`, or `failed` with the reason as an `error` message and
+in `lastError`. No factory (`cosmo-cc run`) → `assist: this front end cannot run an agent - the window and
+`cosmo-cc serve` can`; one already running → refused. `assistSend` (`:803`) starts one first if none runs,
+appends the `user` message and goes `busy`. `pump` polls the assistant first thing (`:397`, never blocking,
+R-SVC-6) and `pumpAssistant` (`:823`) maps what it said: `Ready` → `ready` (plus an `info` line naming the
+agent), `Text` → `agent`, `Tool` → `tool`, `Done` → an `info` line ("done in 12 s - $0.040") and `ready`,
+`Failed` → `error`, `Exited` → the assistant is dropped, `off` (asked to stop) or `failed` (with why).
+`assistStop` (`:813`) stops it and says `stopped`. The model's `assist {state, agent, messages[{role,
+text}]}` is in both dumps (`AppModelCodec.cpp:319`; text form `assistState=` / `assistAgent=` /
+`assistMessages=` then `  assist <role>: <text>` with `\n`), stable; the events are
+`[evt] assist.state ready agent=Claude Code` and `[evt] assist.message <role> <text>`, a line break printed
+as `\n` (`Event.cpp:86`) so an event stays one line on every channel. The service owns the assistant
+(`unique_ptr`), so destroying it stops the agent (R-ASSIST-6). Guard: `cosmo_core_tests`
+`the_agent_conversation_is_application_state` (a fake `IAssistant`; fails with `pumpAssistant` removed).
+
+### DR-ASSIST-2 The user's agent as a process (R-ASSIST-2, -4, -5, -6)
+
+`cosmo_v2::ProcessAssistant` (`apps/cosmo/AssistProcess.{h,cpp}`, host, POSIX), made by the window's
+factory (`linux_main.cpp:1568` — which first opens the control socket at `$XDG_RUNTIME_DIR/cosmo-<pid>.sock`
+if `--control` did not; the event broadcast is now subscribed unconditionally) and by `cosmo-cc serve`'s
+(`cli/main.cpp:2354`). `configFor(socket)` (`AssistProcess.cpp:178`): `cosmo-cc` beside the executable
+(`<dir>/cosmo-cc`, `<dir>/cli/cosmo-cc`, else PATH), the workspace `<config>/agent`, and the default skills —
+`arstro.color.grading` under `$COSMO_SKILLS_DIR`, else the `COSMO_SKILLS_DIR` the build was configured with
+(the repository's `.claude/skills` in a developer build). `start` refuses an agent not on PATH by name
+("Claude Code is not installed (`claude` was not found on PATH) - install it, or choose another agent in
+Settings"), then `prepareWorkspace` (`:285`) links each skill directory into `<workspace>/.claude/skills/`
+and writes `<workspace>/cosmo-mcp.json` = `{"mcpServers": {"cosmo": {"command": <cosmo-cc>, "args": ["mcp",
+"--attach", <socket>]}}}`.
+
+- **Claude Code** (`agent`'s program is `claude`): one process per conversation —
+  `claude -p --input-format stream-json --output-format stream-json --verbose --mcp-config
+  <workspace>/cosmo-mcp.json --append-system-prompt <systemPrompt> --allowedTools <kAllowedTools>
+  <agentArgs…>`. `kAllowedTools` (`:28`) = `mcp__cosmo,Skill,Read,Glob,Grep,Write,Edit,TodoWrite,
+  Bash(python3:*),Bash(ls:*),Bash(mkdir:*)` (R-ASSIST-5). `systemPrompt` (`:188`) says it is inside
+  Cosmo, names the open project and its photo count, that edits are live and undoable, to use the
+  colour-grading skill for grading, to look before and after, and to answer briefly. A message is
+  `{"type":"user","message":{"role":"user","content":…}}` on its stdin. `parseClaudeLine` (`:240`):
+  `system/init` → `Ready` ("Claude Code 2.1.316 - claude-…"), `assistant` text → `Text`, `tool_use` →
+  `Tool` ("cosmo_run: select 2;set temp=5600", the first meaningful argument, 140 chars), `result` →
+  `Done` (plus `Failed` when `is_error`).
+- **Any other command**: run once per message as `sh -c <agent> <agentArgs>`, `{prompt}` replaced by the
+  single-quoted message, or the message on stdin when there is no `{prompt}`; the whole stdout is one
+  `Text`, a non-zero exit a `Failed` with the stderr tail, then `Done`. A second message while one runs
+  is refused ("still answering").
+
+`spawn` (`:344`) builds argv and the environment BEFORE `fork` (a threaded parent's child may only make
+async-signal-safe calls), puts the child in its own process group, closes descriptors ≥ 3 (the window's
+sockets, the GPU), `chdir`s to the workspace and `execve`s with `COSMO_CONTROL`, `COSMO_CC`, `COSMO_PROJECT`
+added. The pipes are non-blocking; a message is written as the pipe takes it. `stop` (`:519`) closes stdin,
+SIGTERMs the group, waits at most 500 ms, then SIGKILLs it. Proven with no network by ctest `cosmo_assist`
+(`tests/assist/agent_test.sh`): a fake `claude` on PATH checks the MCP config, the socket, the workspace
+skill and the system prompt, starts the configured `cosmo-cc mcp --attach` and edits through it — two turns
+in one process, both edits read back from the served project — then a one-shot agent answering from stdin
+with `COSMO_PROJECT` set, and a missing agent refused:
+
+    printf 'assist send warm it up\nwait assist.state ready\nstate print\n' | cosmo-cc attach $S
+
+The real Claude Code was checked by hand (2.1.316): the workspace's `.claude/skills/arstro.color.grading`
+appears in its `init` skill list beside the user's own.
+
 ### DR-ASSIST-3 The agent's tools, in the running application (R-ASSIST-3)
 
 **`snapshot`** (`CosmoService::snapshot`, `CosmoService.cpp:716`) selects the node like `analyze`, renders

@@ -25,6 +25,8 @@ add_executable(cosmo-cc
   # R-ASSIST-3: `serve --control` - the window's control socket, with no window. The channel logs
   # its attach/detach lines through the host log, hence Log.cpp.
   ${CMAKE_CURRENT_SOURCE_DIR}/../ControlChannel.cpp
+  # R-ASSIST-2: the user's agent as a process - `serve` runs one as the window does.
+  ${CMAKE_CURRENT_SOURCE_DIR}/../AssistProcess.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../Log.cpp)
 
 target_include_directories(cosmo-cc PRIVATE
@@ -46,6 +48,8 @@ target_link_libraries(cosmo-cc PRIVATE PkgConfig::COSMO_CC_GTK3)
 
 # `cosmo-cc ntwb install` copies the web UI and the fonts from the source tree (R-NTWB-5).
 target_compile_definitions(cosmo-cc PRIVATE COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
+# R-ASSIST-4: the skills an agent gets by default - the repository's in a developer build.
+target_compile_definitions(cosmo-cc PRIVATE COSMO_SKILLS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../../.claude/skills")
 
 # R-NTWB-6: the committed Cosmo API description is what `cosmo-cc ntwb api` generates - a method,
 # an event or a grammar hint added in code without regenerating it fails here.
@@ -58,4 +62,9 @@ add_test(NAME cosmo_ntwb_api_current
 if(NOT WIN32)
   add_test(NAME cosmo_mcp_attach
     COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/../tests/assist/relay_test.sh" "$<TARGET_FILE:cosmo-cc>")
+  # R-ASSIST-1..6: the user's agent run by cosmo (a fake `claude` speaking stream-JSON, no network)
+  # edits the served project through that relay; one-shot agents; a missing agent refused.
+  add_test(NAME cosmo_assist
+    COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/../tests/assist/agent_test.sh" "$<TARGET_FILE:cosmo-cc>"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../../.claude/skills")
 endif()

@@ -169,6 +169,22 @@ namespace cosmo
         int rehydrations = 0;
     };
 
+    /** R-ASSIST-1: one line of the conversation with the user's agent. */
+    struct AssistMessageModel
+    {
+        std::string role;   // user | agent | tool | error | info
+        std::string text;
+    };
+
+    /** R-ASSIST-1: the agent conversation, as every front end shows it. The agent itself is a
+     *  process the host started; what it SAID is application state. */
+    struct AssistModel
+    {
+        std::string state = "off";   // off | starting | ready | busy | failed
+        std::string agent;           // which agent, as it named itself ("Claude Code")
+        std::vector<AssistMessageModel> messages;
+    };
+
     struct AppModel
     {
         unsigned revision = 0;
@@ -240,6 +256,8 @@ namespace cosmo
         std::string analysisName;
         bool analysisBefore = false;
         ImageStats analysis;
+
+        AssistModel assist;   // R-ASSIST-1
 
         int frameSlot = -1;
         int frameWidth = 0, frameHeight = 0;

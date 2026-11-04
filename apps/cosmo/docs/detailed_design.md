@@ -909,6 +909,19 @@ connect(path, err); send(line); readLine(line, timeoutMs); roundTrip(lines, got,
 `static fitFrame(frame, edge, out, w, h)` (box filter, long side ≤ edge, 0 = as is); `snapshot(Command)`;
 `Event::Kind::SnapshotWritten` (text = path, a = w, b = h, c = node) and `Pong` (text = token).
 
+### 7.8e The user's agent (R-ASSIST)
+
+`IAssistant { start(AssistLaunch, err); send(text, err); stop(); poll(vector<AssistOutput>&) — never
+blocks; name() }`, `AssistLaunch { agent, args, skillDirs[], project, photos }`, `AssistOutput { Kind
+{Ready, Text, Tool, Done, Failed, Exited}, text }` (`core/assist/Assistant.h`). `CosmoService::
+setAssistantFactory(function<unique_ptr<IAssistant>()>)`; `assistStart / assistSend / assistStop /
+pumpAssistant / assistSay(role, text) / assistState(state)`; `AppModel::assist` = `AssistModel { state
+"off"|"starting"|"ready"|"busy"|"failed", agent, messages[AssistMessageModel{role, text}] }`; settings
+`agent` ("claude"), `agentArgs`, `agentSkills`. Host: `ProcessAssistant(Config{cosmoCc, controlSocket,
+workspace, bundledSkills})`, statics `isClaude`, `systemPrompt`, `claudeArgv`, `parseClaudeLine`,
+`fillPrompt`, `findProgram`, `findCosmoCc`, `defaultSkills`, `configFor(socket)`; constants
+`kAllowedTools`; `stop()` waits 50 × 10 ms after SIGTERM before SIGKILL.
+
 ### 7.8b ExportDialog
 The batch-export modal (R-EXPORT). `ExportDialog(accent)`; `struct Node{parent,group,slot,name,
 sourcePath}` (pre-order, `parent` indexes the vector) and `struct Request{slots, sameAsSource,
