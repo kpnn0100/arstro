@@ -62,6 +62,7 @@ namespace cosmo
                 else if (k == "agent") s.agent = v.empty() ? std::string("claude") : v;
                 else if (k == "agentArgs") s.agentArgs = v;
                 else if (k == "agentSkills") s.agentSkills = v;
+                else if (k == "agentAllowAll") s.agentAllowAll = (v != "0");
             }
             catch (...) {}
         }
@@ -89,7 +90,8 @@ namespace cosmo
           << "touchUi=" << (touchUi ? 1 : 0) << "\n"
           << "agent=" << agent << "\n"
           << "agentArgs=" << agentArgs << "\n"
-          << "agentSkills=" << agentSkills << "\n";
+          << "agentSkills=" << agentSkills << "\n"
+          << "agentAllowAll=" << (agentAllowAll ? 1 : 0) << "\n";
         return (bool)f;
     }
 }

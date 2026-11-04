@@ -950,6 +950,15 @@ pumpAssistant / assistSay(role, text) / assistState(state)`; `AppModel::assist` 
 workspace, bundledSkills})`, statics `isClaude`, `systemPrompt`, `claudeArgv`, `parseClaudeLine`,
 `fillPrompt`, `findProgram`, `findCosmoCc`, `defaultSkills`, `configFor(socket)`; constants
 `kAllowedTools`; `stop()` waits 50 × 10 ms after SIGTERM before SIGKILL.
+**Any agent (R-ASSIST-9/10).** `AssistOutput::Kind::TextDelta`; `AgentChoice {id, name, agent, installed, note}`,
+`AssistModel::choices`; `Command::Kind::AssistAgents`; `CosmoService::setAgentDetector(function<vector<AgentChoice>()>)`,
+`mAgentOpen`; settings `agentAllowAll`, `AssistLaunch::allowAll`. `ProcessAssistant`: `Proto {Claude, Acp, OneShot}`
+as `mClaude`/`mAcp`/`mPersistent`; ACP state `mRpcId, mInitId, mNewId, mPromptId, mSession, mAcpQueue,
+mContextSent, mPromptStartMs, mToolTitles, mSkillNames, mDisplayName`; `acpSend(json)`, `acpCall(method, params)
+-> id`, `acpPrompt(text)`, `handleAcpLine(line, out)`; statics `detect(current)`, `agentsMd(launch, skills)`,
+`permitted(kind, title, command, paths, launch, config)`. `HttpLite`: `httpRequest(method, url, body, timeoutMs) ->
+HttpResult{status, body, error}`. `cosmo-cc agent`: `toolText(ToolResult, cap = 6000)`, `remoteBackend(cc, shot,
+backend)`; at most 16 model calls per prompt.
 
 ### 7.8b ExportDialog
 The batch-export modal (R-EXPORT). `ExportDialog(accent)`; `struct Node{parent,group,slot,name,

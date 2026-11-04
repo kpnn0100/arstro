@@ -516,5 +516,15 @@ IAssistant <|.. ProcessAssistant
 CosmoService o-- IAssistant : AssistantFactory (host-injected)
 AppModel *-- AssistModel : assist
 ProcessAssistant ..> McpBackend : the agent runs cosmo-cc mcp --attach
+class AgentChoice <<R-ASSIST-9>> {
+  + id / name / agent / installed / note
+}
+class HttpLite <<host, R-ASSIST-9>> {
+  + httpRequest(method, url, body, timeoutMs) : HttpResult
+}
+AssistModel *-- AgentChoice : choices
+ProcessAssistant ..> HttpLite : detect local model servers
+ProcessAssistant ..> "cosmo-cc agent" : local:<url>|<model> (ACP)
+note right of ProcessAssistant : Claude Code (stream-JSON) · any ACP agent\n(initialize / session/new with cosmo's MCP /\nsession/prompt / request_permission) · one-shot
 @enduml
 

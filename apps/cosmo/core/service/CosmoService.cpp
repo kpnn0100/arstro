@@ -839,10 +839,13 @@ namespace cosmo
         }
         l.project = mModel.projectPath;
         l.photos = mModel.imageCount;
+        l.allowAll = mModel.settings.agentAllowAll;
         mAssistant = mAssistantFactory();
-        mModel.assist.agent = mAssistant ? mAssistant->name() : std::string();
         std::string err;
-        if (!mAssistant || !mAssistant->start(l, err))
+        const bool started = mAssistant && mAssistant->start(l, err);
+        // Asked AFTER start: which agent it is depends on the setting start() just read.
+        mModel.assist.agent = mAssistant ? mAssistant->name() : std::string();
+        if (!started)
         {
             mAssistant.reset();
             assistSay("error", err.empty() ? std::string("the agent could not be started") : err);
@@ -868,6 +871,7 @@ namespace cosmo
         if (!mAssistant) return true;   // nothing to stop is not a failure: the state is already off
         mAssistant->stop();
         mAssistant.reset();
+        if (mAgentOpen) { mAgentOpen = false; emit(Event::Kind::AssistMessage, "agent " + mModel.assist.messages.back().text); }
         assistSay("info", "stopped");
         assistState("off");
         return true;
@@ -880,9 +884,26 @@ namespace cosmo
         mAssistant->poll(out);
         for (const AssistOutput &o : out)
         {
+            // A streamed message is closed by anything that is not more of it - and only then is
+            // it an event, so the log and the socket get the whole message once, not every chunk.
+            if (o.kind != AssistOutput::Kind::TextDelta && mAgentOpen)
+            {
+                mAgentOpen = false;
+                emit(Event::Kind::AssistMessage, "agent " + mModel.assist.messages.back().text);
+            }
             switch (o.kind)
             {
+                case AssistOutput::Kind::TextDelta:
+                    if (!mAgentOpen)
+                    {
+                        mModel.assist.messages.push_back({"agent", std::string()});
+                        mAgentOpen = true;
+                    }
+                    mModel.assist.messages.back().text += o.text;
+                    ++mModel.revision;   // the view re-reads; no event per chunk
+                    break;
                 case AssistOutput::Kind::Ready:
+                    mModel.assist.agent = mAssistant->name();   // an ACP agent names itself in initialize
                     if (!o.text.empty()) assistSay("info", o.text);
                     if (mModel.assist.state == "starting") assistState("ready");
                     break;
@@ -894,6 +915,7 @@ namespace cosmo
                     break;
                 case AssistOutput::Kind::Failed: assistSay("error", o.text); break;
                 case AssistOutput::Kind::Exited:
+                    mAgentOpen = false;
                     mAssistant.reset();
                     if (!o.text.empty()) assistSay("error", o.text);
                     assistState(o.text.empty() ? "off" : "failed");
@@ -1018,6 +1040,7 @@ namespace cosmo
             else if (k == "agent") s.agent = kv.second.empty() ? std::string("claude") : kv.second;
             else if (k == "agentArgs") s.agentArgs = kv.second;
             else if (k == "agentSkills") s.agentSkills = kv.second;
+            else if (k == "agentAllowAll") s.agentAllowAll = (kv.second != "0" && kv.second != "false");
             else return fail("settings: unknown key " + k);
         }
         std::string tail;
@@ -1374,6 +1397,17 @@ namespace cosmo
             case Command::Kind::AssistStart: return assistStart();
             case Command::Kind::AssistSend: return assistSend(c);
             case Command::Kind::AssistStop: return assistStop();
+            case Command::Kind::AssistAgents:
+            {
+                if (!mAgentDetector) return fail("assist agents: this front end cannot look for agents");
+                mModel.assist.choices = mAgentDetector();
+                ++mModel.revision;
+                int found = 0;
+                for (const auto &a : mModel.assist.choices) found += a.installed ? 1 : 0;
+                emit(Event::Kind::Info, "assist agents " + std::to_string(found) + " of " +
+                                            std::to_string(mModel.assist.choices.size()) + " found");
+                return true;
+            }
             case Command::Kind::Undo:
                 if (!mSession.canUndo()) return fail("nothing to undo");
                 mSession.undo();

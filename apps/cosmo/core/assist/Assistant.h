@@ -26,6 +26,10 @@ namespace cosmo
         std::vector<std::string> skillDirs;     // extra skill directories (settings `agentSkills=`)
         std::string project;                    // the open project's path, "" for none
         int photos = 0;
+        /** R-ASSIST-5: approve every permission an ACP agent asks for (settings `agentAllowAll`),
+         *  instead of the default policy (cosmo's tools, reading, the skill's python, edits in
+         *  the workspace or beside the project). */
+        bool allowAll = false;
     };
 
     /** One thing the agent did, as the conversation shows it. */
@@ -35,6 +39,9 @@ namespace cosmo
         {
             Ready,    // the agent is up; text = what it said about itself (model, version)
             Text,     // the agent answered; text = the answer
+            /** R-ASSIST-9: more of the answer the agent is still writing (an ACP agent streams
+             *  its text in chunks). Appended to the open message; closed by anything else. */
+            TextDelta,
             Tool,     // the agent used a tool; text = "name: what" (one line)
             Done,     // the agent finished the turn; text = a summary ("12 s, $0.04") or ""
             Failed,   // something went wrong; text = why. The agent may still be running.
@@ -42,6 +49,16 @@ namespace cosmo
         };
         Kind kind = Kind::Text;
         std::string text;
+    };
+
+    /** R-ASSIST-9: one agent the user could choose, as the host found it on this machine. */
+    struct AgentChoice
+    {
+        std::string id;          // "claude", "gemini", "ollama:qwen2.5", "custom"
+        std::string name;        // "Claude Code", "Gemini CLI", "Ollama - qwen2.5:7b"
+        std::string agent;       // the `agent=` setting that uses it ("acp:gemini --experimental-acp")
+        bool installed = false;  // found (on PATH, or a server answering)
+        std::string note;        // "installed", "not found - npm i -g @google/gemini-cli", "3 models"
     };
 
     class IAssistant

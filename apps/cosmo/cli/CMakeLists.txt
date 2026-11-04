@@ -27,6 +27,8 @@ add_executable(cosmo-cc
   ${CMAKE_CURRENT_SOURCE_DIR}/../ControlChannel.cpp
   # R-ASSIST-2: the user's agent as a process - `serve` runs one as the window does.
   ${CMAKE_CURRENT_SOURCE_DIR}/../AssistProcess.cpp
+  # R-ASSIST-9: local model servers - detection, and `cosmo-cc agent`'s chat-completion calls.
+  ${CMAKE_CURRENT_SOURCE_DIR}/../HttpLite.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../Log.cpp)
 
 target_include_directories(cosmo-cc PRIVATE
@@ -66,5 +68,10 @@ if(NOT WIN32)
   # edits the served project through that relay; one-shot agents; a missing agent refused.
   add_test(NAME cosmo_assist
     COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/../tests/assist/agent_test.sh" "$<TARGET_FILE:cosmo-cc>"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../../.claude/skills")
+  # R-ASSIST-9/10: an ACP agent (a fake one) and a local model (a fake OpenAI-compatible server driving
+  # `cosmo-cc agent`) edit the served project; AGENTS.md, permissions, streamed text.
+  add_test(NAME cosmo_assist_acp
+    COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/../tests/assist/acp_test.sh" "$<TARGET_FILE:cosmo-cc>"
             "${CMAKE_CURRENT_SOURCE_DIR}/../../../.claude/skills")
 endif()

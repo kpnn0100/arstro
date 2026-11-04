@@ -23,6 +23,7 @@
  */
 #pragma once
 #include "../AppSettings.h"
+#include "../assist/Assistant.h"
 #include "../ProjectStore.h"
 #include "analysis/ImageStats.h"
 #include "engine/EditParams.h"
@@ -183,6 +184,8 @@ namespace cosmo
         std::string state = "off";   // off | starting | ready | busy | failed
         std::string agent;           // which agent, as it named itself ("Claude Code")
         std::vector<AssistMessageModel> messages;
+        /** R-ASSIST-9: the agents found on this machine, after `assist agents`. */
+        std::vector<AgentChoice> choices;
     };
 
     struct AppModel

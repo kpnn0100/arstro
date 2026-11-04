@@ -30,6 +30,7 @@
 #include "ExportWriter.h"
 #include "ControlChannel.h"
 #include "AssistProcess.h"
+#include "HttpLite.h"
 #include "NtwbAdapter.h"
 #include "EditControls.h"
 #include "mcp/Server.h"
@@ -498,6 +499,7 @@ namespace
             {"assist start", "   (start the user's agent: settings agent=, claude by default)"},
             {"assist send", "<free text>   (to the agent; starts it if needed; \\n = a line break)"},
             {"assist stop", ""},
+            {"assist agents", "   (which agents this machine has: CLI agents on PATH, local model servers)"},
             {"wait", "load.finished|export.finished|quit|<ms> [--timeout 120s]  (hyphens accepted)"},
             {"quit", ""}};
         return hints;
@@ -534,6 +536,8 @@ namespace
              "                                  measures and edits through the same grammar (R-MCP)\n"
              "  mcp --attach <socket>           the same tools, relayed to a RUNNING cosmo: the agent's\n"
              "                                  edits land in the open project, live (R-ASSIST-3)\n"
+             "  agent --endpoint <url> --model <m>   an ACP agent for a model on an OpenAI-compatible\n"
+             "                                  endpoint (Ollama, LM Studio, llama.cpp): cosmo's tools as functions\n"
              "  serve --control <socket>        the application with its control socket and no window,\n"
              "        [--project <f.cmp>]       for `attach` and `mcp --attach` (R-ASSIST-3)\n"
              "  attach <socket> [--script <f>]   drive a RUNNING cosmo --control window; its\n"
@@ -2231,18 +2235,14 @@ static std::string rejection(const std::vector<std::string> &got)
 /** `cosmo-cc mcp --attach <socket>` (R-ASSIST-3): the same tools, relayed to a running cosmo, so
  *  an agent's edit lands in the user's window. Builds no Host - like `attach`, it is a client of
  *  somebody else's service, and keeping the pixels in the process that owns them is the point. */
-static int cmdMcpAttach(const Args &a)
+/** cosmo's five tools as a client of a RUNNING cosmo over `cc` (R-ASSIST-3) - what `mcp --attach`
+ *  serves and what `agent` (R-ASSIST-9) calls. `cc` and `shot` must outlive `b`. */
+static void remoteBackend(ControlClient &cc, unsigned &shot, McpBackend &b)
 {
-    const std::string sock = a.value("attach");
-    ControlClient cc;
-    std::string err;
-    if (sock.empty() || sock == "1") { fprintf(stderr, "mcp --attach: need the control socket's path\n"); return kUsage; }
-    if (!cc.connect(sock, err)) { fprintf(stderr, "mcp --attach: %s\n", err.c_str()); return kFail; }
-    unsigned shot = 0;
 
     // `wait` asks the MODEL, as `run`'s does - a load that finished before this client connected
     // has no event left to wait for, and waiting for one hung for the whole timeout.
-    auto remoteWait = [&](const std::string &raw, int timeoutMs) {
+    auto remoteWait = [&cc](const std::string &raw, int timeoutMs) {
         std::string cond = raw;
         for (char &ch : cond) if (ch == '-') ch = '.';
         const double deadline = wallMs() + (timeoutMs > 0 ? timeoutMs : 120000);
@@ -2264,8 +2264,7 @@ static int cmdMcpAttach(const Args &a)
         }
     };
 
-    McpBackend b;
-    b.run = [&](const std::string &script) {
+    b.run = [&cc, remoteWait](const std::string &script) {
         std::istringstream in(script);
         std::string line, text;
         int n = 0;
@@ -2310,12 +2309,12 @@ static int cmdMcpAttach(const Args &a)
         }
         return ToolResult::text(text.empty() ? "ok" : text);
     };
-    b.state = [&](bool params) {
+    b.state = [&cc](bool params) {
         std::string json;
         if (!remoteModel(cc, params, json)) return ToolResult::error("no model from cosmo");
         return ToolResult::text(json);
     };
-    b.preview = [&](int node, bool before, int edge, int quality) {
+    b.preview = [&cc, &shot](int node, bool before, int edge, int quality) {
         const char *tmp = std::getenv("XDG_RUNTIME_DIR");
         const std::string path = std::string(tmp && *tmp ? tmp : "/tmp") + "/cosmo-mcp-" +
                                  std::to_string(::getpid()) + "-" + std::to_string(++shot) + ".jpg";
@@ -2351,7 +2350,7 @@ static int cmdMcpAttach(const Args &a)
         return ToolResult::text("node " + field("node") + " " + (before ? "as shot" : "as edited") + " " + field("size"))
             .addImage(jpeg, "image/jpeg");
     };
-    b.analyze = [&](int node, bool before) {
+    b.analyze = [&cc](int node, bool before) {
         std::string line = "analyze";
         if (node >= 0) line += " " + std::to_string(node);
         if (before) line += " before";
@@ -2368,7 +2367,307 @@ static int cmdMcpAttach(const Args &a)
         if (!perr.empty()) return ToolResult::error("cosmo's model did not parse: " + perr);
         return analyzeAnswer(m);
     };
+}
+
+static int cmdMcpAttach(const Args &a)
+{
+    const std::string sock = a.value("attach");
+    ControlClient cc;
+    std::string err;
+    if (sock.empty() || sock == "1") { fprintf(stderr, "mcp --attach: need the control socket's path\n"); return kUsage; }
+    if (!cc.connect(sock, err)) { fprintf(stderr, "mcp --attach: %s\n", err.c_str()); return kFail; }
+    unsigned shot = 0;
+    McpBackend b;
+    remoteBackend(cc, shot, b);
     return serveCosmoMcp(b, true);
+}
+#endif
+
+#ifndef _WIN32
+/** One tool result as the text a chat model reads: the text parts joined, an image noted (a local
+ *  model here gets no pixels), cut to `cap` so one big answer cannot fill a small context. */
+static std::string toolText(const ToolResult &r, size_t cap = 6000)
+{
+    std::string t;
+    for (const auto &c : r.content)
+        t += c.type == arstro::mcp::Content::Type::Text ? c.text : std::string("[an image - not sent to this model]");
+    if (t.size() > cap) t = t.substr(0, cap) + "\n...[cut]";
+    return (r.isError ? "ERROR: " : "") + t;
+}
+
+/** `cosmo-cc agent --endpoint <url> --model <name>` (R-ASSIST-9): an ACP AGENT on stdio for a model
+ *  on an OpenAI-compatible endpoint (Ollama, LM Studio, llama.cpp, vLLM). A model is not an agent;
+ *  this is the loop that makes it one: each turn is chat-completion calls with cosmo's tools as
+ *  functions, a tool call run against the RUNNING cosmo it was handed in session/new (the same
+ *  backend as `mcp --attach`), until the model answers in words. Plus `cosmo_grade`: the
+ *  colour-grading skill's whole pipeline as one function, because a small local model cannot follow
+ *  the skill's pages of method (R-ASSIST-10). Its own process, so a slow model blocks nothing. */
+static int cmdAgent(const Args &a)
+{
+    const std::string endpoint = a.value("endpoint"), model = a.value("model");
+    if (endpoint.empty() || endpoint == "1" || model.empty() || model == "1")
+    {
+        fprintf(stderr, "agent: need --endpoint <http://host:port/v1> --model <name>\n");
+        return kUsage;
+    }
+    std::string base = endpoint;
+    while (!base.empty() && base.back() == '/') base.pop_back();
+    ControlClient cc;
+    unsigned shot = 0;
+    McpBackend tools;
+    bool connected = false;
+    std::string sockPath;
+    std::vector<Json> history;
+
+    auto send = [](const Json &m) { std::cout << m.dump() << "\n" << std::flush; };
+    auto respond = [&](const Json &id, Json result) {
+        Json m = Json::object();
+        m.set("jsonrpc", "2.0");
+        m.set("id", id);
+        m.set("result", std::move(result));
+        send(m);
+    };
+    auto update = [&](Json u) {
+        Json p = Json::object();
+        p.set("sessionId", "cosmo-local");
+        p.set("update", std::move(u));
+        Json m = Json::object();
+        m.set("jsonrpc", "2.0");
+        m.set("method", "session/update");
+        m.set("params", std::move(p));
+        send(m);
+    };
+    auto say = [&](const std::string &text) {
+        Json c = Json::object();
+        c.set("type", "text");
+        c.set("text", text);
+        Json u = Json::object();
+        u.set("sessionUpdate", "agent_message_chunk");
+        u.set("content", std::move(c));
+        update(std::move(u));
+    };
+    auto fn = [](const char *name, const char *desc, const char *params) {
+        std::string e;
+        Json f = Json::object();
+        f.set("name", name);
+        f.set("description", desc);
+        f.set("parameters", Json::parse(params, e));
+        Json t = Json::object();
+        t.set("type", "function");
+        t.set("function", std::move(f));
+        return t;
+    };
+    Json toolDefs = Json::array();
+    toolDefs.push(fn("cosmo_grade",
+                     "Grade the open project's photos in the photographer's own taste with the colour-grading skill: "
+                     "corrects each photo, gives it the look that suits it, matches the set, protects skies and skin. "
+                     "Use it for 'make these cinematic', a mood, 'edit them all'. About a minute per photo; the edits "
+                     "appear live in the user's window.",
+                     R"({"type":"object","properties":{"mood":{"type":"string","description":"optional: a mood in words, e.g. moody forest, golden hour, teal and orange; omit for the photographer's own cinematic taste"},"photos":{"type":"string","description":"optional: photo names, comma-separated; omit for all"}}})"));
+    toolDefs.push(fn("cosmo_state", "The open project: its photos (each with a `node` number), the selection, the history.",
+                     R"({"type":"object","properties":{}})"));
+    toolDefs.push(fn("cosmo_analyze", "Measure a photo: exposure (key EV, percentiles), colour cast, saturation, hues, "
+                                      "sky/skin/foliage fractions, plus camera data. before=true measures it as shot.",
+                     R"({"type":"object","properties":{"node":{"type":"integer"},"before":{"type":"boolean"}},"required":["node"]})"));
+    toolDefs.push(fn("cosmo_run", "Run Cosmo command lines, one per line: `select <node>` then `set key=value ...` "
+                                  "(exposure EV -5..5, contrast -100..100, temp Kelvin 2000..19500 higher=warmer, tint, "
+                                  "highlights, shadows, whites, blacks, saturation, vibrance -100..100), `undo`. "
+                                  "Every edit is one undoable step.",
+                     R"({"type":"object","properties":{"script":{"type":"string"}},"required":["script"]})"));
+    toolDefs.push(fn("cosmo_api", "Every Cosmo command and every adjustment key with its range - read it before an "
+                                  "unusual edit.", R"({"type":"object","properties":{}})"));
+
+    auto grade = [&](const Json &args) -> std::string {
+        const char *proj = std::getenv("COSMO_PROJECT");
+        if (!proj || !*proj) return "ERROR: no project is open in Cosmo";
+        const std::vector<std::string> skills = arstro::cosmo_v2::ProcessAssistant::defaultSkills();
+        if (skills.empty()) return "ERROR: the colour-grading skill was not found (set COSMO_SKILLS_DIR)";
+        const std::filesystem::path p(proj);
+        const std::string out = (p.parent_path() / (p.stem().string() + "-graded")).string();
+        auto q = [](const std::string &v) {
+            std::string r = "'";
+            for (char ch : v) r += ch == '\'' ? std::string("'\\''") : std::string(1, ch);
+            return r + "'";
+        };
+        std::string cmd = "COSMO_CONTROL=" + q(sockPath) + " COSMO_CC=" + q(arstro::cosmo_v2::ProcessAssistant::findCosmoCc()) +
+                          " python3 " + q(skills[0] + "/scripts/edit.py") + " run " + q(proj) + " --out " + q(out);
+        if (!args["mood"].asString().empty()) cmd += " --mood " + q(args["mood"].asString());
+        if (!args["photos"].asString().empty()) cmd += " --names " + q(args["photos"].asString());
+        cmd += " 2>&1";
+        std::string text;
+        if (FILE *f = popen(cmd.c_str(), "r"))
+        {
+            char buf[4096];
+            size_t n;
+            while ((n = fread(buf, 1, sizeof(buf), f)) > 0) text.append(buf, n);
+            const int rc = pclose(f);
+            if (rc != 0) text = "ERROR (exit " + std::to_string(rc) + "):\n" + text;
+        }
+        if (text.size() > 4000) text = "...\n" + text.substr(text.size() - 4000);
+        return text + "\nThe before|after sheets are in " + out;
+    };
+    auto runTool = [&](const std::string &name, const Json &args) -> std::string {
+        if (!connected) return "ERROR: not connected to Cosmo";
+        if (name == "cosmo_grade") return grade(args);
+        if (name == "cosmo_state") return toolText(tools.state(false));
+        if (name == "cosmo_analyze") return toolText(tools.analyze((int)args["node"].asInt(-1), args["before"].asBool()));
+        if (name == "cosmo_run") return toolText(tools.run(args["script"].asString()));
+        if (name == "cosmo_api")
+        {
+            std::string t;
+            for (const auto &n : arstro::cosmo::commandNames())
+            {
+                auto it = grammarHints().find(n);
+                t += n + " " + (it != grammarHints().end() ? it->second : std::string()) + "\n";
+            }
+            return t + "\nset keys:\n" + paramCatalogue().dump().substr(0, 5000);
+        }
+        return "ERROR: no tool named " + name;
+    };
+
+    std::string line;
+    while (std::getline(std::cin, line))
+    {
+        std::string perr;
+        const Json m = Json::parse(line, perr);
+        if (!perr.empty() || !m.has("method")) continue;
+        const std::string method = m["method"].asString();
+        const Json &params = m["params"];
+        if (method == "initialize")
+        {
+            Json caps = Json::object();
+            caps.set("loadSession", false);
+            Json pc = Json::object();
+            pc.set("image", false);
+            pc.set("audio", false);
+            pc.set("embeddedContext", false);
+            caps.set("promptCapabilities", std::move(pc));
+            Json info = Json::object();
+            info.set("name", "cosmo-local");
+            info.set("title", "Local model (" + model + ")");
+            info.set("version", "1");
+            Json r = Json::object();
+            r.set("protocolVersion", 1);
+            r.set("agentCapabilities", std::move(caps));
+            r.set("agentInfo", std::move(info));
+            r.set("authMethods", Json::array());
+            respond(m["id"], std::move(r));
+        }
+        else if (method == "session/new")
+        {
+            // The cosmo server we were handed is `cosmo-cc mcp --attach <socket>`: its socket is ours.
+            const Json &servers = params["mcpServers"];
+            for (size_t i = 0; i < servers.size(); ++i)
+            {
+                const Json &args = servers.at(i)["args"];
+                for (size_t k = 0; k + 1 < args.size(); ++k)
+                    if (args.at(k).asString() == "--attach") sockPath = args.at(k + 1).asString();
+            }
+            if (sockPath.empty() && std::getenv("COSMO_CONTROL")) sockPath = std::getenv("COSMO_CONTROL");
+            std::string err;
+            connected = !sockPath.empty() && cc.connect(sockPath, err);
+            if (connected) remoteBackend(cc, shot, tools);
+            history.clear();
+            Json sys = Json::object();
+            sys.set("role", "system");
+            sys.set("content",
+                    "You are the photographer's assistant inside Cosmo, a photo editor. The tools act on the project open "
+                    "in their window, live and undoable. To grade photos (cinematic, a mood, 'edit them all'), call "
+                    "cosmo_grade once and then say in two or three sentences what changed. For one adjustment, call "
+                    "cosmo_state to find the photo's node, then cosmo_run with `select <node>` and `set ...`. Answer "
+                    "briefly and plainly.");
+            history.push_back(std::move(sys));
+            Json r = Json::object();
+            r.set("sessionId", "cosmo-local");
+            respond(m["id"], std::move(r));
+        }
+        else if (method == "session/prompt")
+        {
+            std::string text;
+            const Json &prompt = params["prompt"];
+            for (size_t i = 0; i < prompt.size(); ++i)
+                if (prompt.at(i)["type"].asString() == "text") text += prompt.at(i)["text"].asString();
+            Json user = Json::object();
+            user.set("role", "user");
+            user.set("content", text);
+            history.push_back(std::move(user));
+            for (int step = 0; step < 16; ++step)
+            {
+                Json body = Json::object();
+                body.set("model", model);
+                Json msgs = Json::array();
+                for (const auto &h : history) msgs.push(h);
+                body.set("messages", std::move(msgs));
+                body.set("tools", toolDefs);
+                body.set("stream", false);
+                const arstro::cosmo_v2::HttpResult r = arstro::cosmo_v2::httpRequest("POST", base + "/chat/completions", body.dump(), 600000);
+                std::string e2;
+                const Json reply = r.status == 200 ? Json::parse(r.body, e2) : Json();
+                const Json &msg = reply["choices"].size() ? reply["choices"].at(0)["message"] : Json();
+                if (r.status != 200 || !msg.isObject())
+                {
+                    say("The model at " + base + " did not answer: " +
+                        (r.error.empty() ? "HTTP " + std::to_string(r.status) + " " + r.body.substr(0, 300) : r.error));
+                    break;
+                }
+                Json kept = Json::object();
+                kept.set("role", "assistant");
+                kept.set("content", msg["content"].isString() ? msg["content"].asString() : std::string());
+                const Json &calls = msg["tool_calls"];
+                if (calls.size()) kept.set("tool_calls", calls);
+                history.push_back(std::move(kept));
+                if (!calls.size())
+                {
+                    say(msg["content"].asString());
+                    break;
+                }
+                for (size_t i = 0; i < calls.size(); ++i)
+                {
+                    const Json &c = calls.at(i);
+                    const std::string id = c["id"].asString().empty() ? "call_" + std::to_string(step) + "_" + std::to_string(i) : c["id"].asString();
+                    const std::string name = c["function"]["name"].asString();
+                    std::string e3;
+                    const Json &rawArgs = c["function"]["arguments"];
+                    const Json args = rawArgs.isString() ? Json::parse(rawArgs.asString(), e3) : rawArgs;
+                    std::string brief = args.dump();
+                    if (brief.size() > 100) brief = brief.substr(0, 97) + "...";
+                    Json u = Json::object();
+                    u.set("sessionUpdate", "tool_call");
+                    u.set("toolCallId", id);
+                    u.set("title", name + (brief == "{}" ? std::string() : " " + brief));
+                    u.set("kind", name == "cosmo_run" || name == "cosmo_grade" ? "edit" : "read");
+                    u.set("status", "in_progress");
+                    update(std::move(u));
+                    const std::string result = runTool(name, args);
+                    Json done = Json::object();
+                    done.set("sessionUpdate", "tool_call_update");
+                    done.set("toolCallId", id);
+                    done.set("status", result.rfind("ERROR", 0) == 0 ? "failed" : "completed");
+                    update(std::move(done));
+                    Json t = Json::object();
+                    t.set("role", "tool");
+                    t.set("tool_call_id", id);
+                    t.set("content", result);
+                    history.push_back(std::move(t));
+                }
+            }
+            Json r = Json::object();
+            r.set("stopReason", "end_turn");
+            respond(m["id"], std::move(r));
+        }
+        else if (m.has("id"))
+        {
+            Json e = Json::object();
+            e.set("code", -32601);
+            e.set("message", "cosmo-local does not provide " + method);
+            Json out = Json::object();
+            out.set("jsonrpc", "2.0");
+            out.set("id", m["id"]);
+            out.set("error", std::move(e));
+            send(out);
+        }
+    }
+    return kOk;
 }
 #endif
 
@@ -2394,6 +2693,7 @@ static int cmdServe(Host &h, const Args &a)
         return std::make_unique<arstro::cosmo_v2::ProcessAssistant>(
             arstro::cosmo_v2::ProcessAssistant::configFor(control.path()));
     });
+    h.svc.setAgentDetector([&h] { return arstro::cosmo_v2::ProcessAssistant::detect(h.svc.model().settings.agent); });
     if (a.has("project"))
     {
         Command open;
@@ -2463,6 +2763,9 @@ int main(int argc, char **argv)
     if (a.verb == "attach") return cmdAttach(a, opt);
 #ifndef _WIN32
     if (a.verb == "mcp" && a.has("attach")) return cmdMcpAttach(a);   // R-ASSIST-3: no Host of its own
+#ifndef _WIN32
+    if (a.verb == "agent") return cmdAgent(a);   // R-ASSIST-9: an ACP agent for a local model; no Host either
+#endif
 #endif
     // `ntwb api|install|uninstall` touch files only; `ntwb serve` needs the service below.
     if (a.verb == "ntwb" && (a.positional.empty() || a.positional[0] != "serve")) return cmdNtwbFiles(a);

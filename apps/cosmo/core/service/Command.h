@@ -42,6 +42,7 @@
  *      assist start          (R-ASSIST-1: start the user's agent, per the `agent=` setting)
  *      assist send make these cinematic, keep her skin true   (free text to the agent)
  *      assist stop
+ *      assist agents         (R-ASSIST-9: which agents this machine has, into the model)
  *      quit
  */
 #pragma once
@@ -136,6 +137,10 @@ namespace cosmo
             AssistStart,
             AssistSend,      // name = the message
             AssistStop,
+            /** R-ASSIST-9: look for agents on this machine (the host's detector) into
+             *  `assist.choices`. A query of the machine, so it is a command (a second front end
+             *  must get the same list) and on demand (it reads PATH and probes local servers). */
+            AssistAgents,
             Quit
         };
 

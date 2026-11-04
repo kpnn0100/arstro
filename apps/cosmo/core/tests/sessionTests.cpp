@@ -1328,7 +1328,7 @@ namespace
             "snapshot /tmp/a.jpg", "snapshot \"/tmp/a b.jpg\" 3 before --edge 600 --quality 80",   // R-ASSIST-3
             "ping 42",
             "assist start", "assist stop", "assist send make these cinematic # keep her skin true",   // R-ASSIST-1
-            "assist send two lines\\nof text",
+            "assist send two lines\\nof text", "assist agents",
             "settings set agent=\"codex exec {prompt}\" agentArgs=\"--model haiku\"",
             "quit"};
         for (const char *line : lines)
@@ -2161,6 +2161,27 @@ namespace
         assert(formatModel(svc.model(), jo).find("{\"role\": \"agent\", \"text\": \"Warm light, deep greens.\\nDone") !=
                std::string::npos);
 
+        // R-ASSIST-9: an ACP agent's text streams in chunks - ONE message in the model, growing, and ONE
+        // event when something else closes it (not an event per chunk).
+        lines.clear();
+        const size_t before = svc.model().assist.messages.size();
+        sh.queue = {{AssistOutput::Kind::TextDelta, "Warm "}, {AssistOutput::Kind::TextDelta, "light."}};
+        svc.pump(clock += 16);
+        assert(svc.model().assist.messages.size() == before + 1 && svc.model().assist.messages.back().text == "Warm light.");
+        for (const auto &l : lines) assert(l.rfind("[evt] assist.message", 0) != 0 && "no event per chunk");
+        sh.queue = {{AssistOutput::Kind::Done, ""}};
+        svc.pump(clock += 16);
+        assert(!lines.empty() && std::count(lines.begin(), lines.end(), std::string("[evt] assist.message agent Warm light.")) == 1);
+
+        // R-ASSIST-9: the machine's agents, from the host's detector.
+        assert(!svc.dispatchText("assist agents", err) && "no detector: refused, with why");
+        svc.setAgentDetector([] {
+            return std::vector<AgentChoice>{{"claude", "Claude Code", "claude", true, "installed"},
+                                            {"gemini", "Gemini CLI", "acp:gemini --experimental-acp", false, "not found"}};
+        });
+        assert(svc.dispatchText("assist agents", err) && svc.model().assist.choices.size() == 2);
+        assert(formatModel(svc.model(), {}).find("  agent gemini missing acp:gemini --experimental-acp") != std::string::npos);
+
         // The agent dies on its own: failed, with why; the next message starts a new one.
         sh.queue = {{AssistOutput::Kind::Exited, "the agent exited with code 2: boom"}};
         svc.pump(clock += 16);
@@ -2720,9 +2741,10 @@ namespace
             {K::AssistStart, "assist start"},
             {K::AssistSend, "assist send hello"},
             {K::AssistStop, "assist stop"},
+            {K::AssistAgents, "assist agents"},
             {K::Quit, "quit"},
         };
-        const int kKindCount = 38;   // Kind::None is not a command
+        const int kKindCount = 39;   // Kind::None is not a command
         assert((int)(sizeof(cases) / sizeof(cases[0])) == kKindCount &&
                "a new Command::Kind needs a documented line here and a parser rule");
 

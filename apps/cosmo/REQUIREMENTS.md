@@ -2279,6 +2279,8 @@ the P0 test harness — hence `ASSIST`.)
   conversation — what the user said, what the agent answered, which tool it used, what failed — are in
   the model, and every message is an event. Front ends show them; none runs the agent itself (R-SVC-4).
 - **R-ASSIST-2 The agent is the user's own, an installed CLI — no API key and no model inside cosmo.**
+  (**AMENDED (R-ASSIST-9), 2026-11-04:** "any other agent" is now an ACP agent, a local model through
+  cosmo's own loop, or a plain command — each with cosmo's tools.)
   Claude Code by default (`claude`, its streaming-JSON protocol, one process for the whole conversation
   so it keeps its context); any other agent as a command line in the settings (`agent=`), run once per
   message with `{prompt}` replaced and its output taken as the answer. Starting an agent that is not
@@ -2303,6 +2305,38 @@ the P0 test harness — hence `ASSIST`.)
   user widens it with `agentArgs=` (extra arguments for the agent's command).
 - **R-ASSIST-6 An agent never blocks the application.** It runs as its own process; its output is read
   without blocking in `pump` (R-SVC-6); `assist stop` ends it and its children; quitting cosmo stops it.
+- **R-ASSIST-9 Any agent the user likes — a CLI agent or a local model.** (**Added 2026-11-04** — *"this can only use
+  with claude code, can you make it more generic so user can use any agent that they like, even local agent"*.)
+  **AMENDS R-ASSIST-2**, whose "any other agent" was a command run once per message with no tools of
+  cosmo's. Four kinds, chosen by the `agent=` setting:
+  - `claude` — Claude Code, natively (stream-JSON; R-ASSIST-2).
+  - `acp:<command>` — **any agent that speaks the Agent Client Protocol** (agentclientprotocol.com: Gemini CLI,
+    OpenCode, Goose, Qwen Code, Codex and Claude through their adapters, and the rest of that list). Cosmo is
+    the ACP client: it starts the command, `initialize`s, opens a session in its workspace and hands the agent
+    cosmo's MCP server in `session/new` (no per-agent configuration file), sends each message as a
+    `session/prompt`, shows `session/update`s (the agent's text as it streams, each tool call), answers
+    `session/request_permission` by the R-ASSIST-5 policy, and `session/cancel`s on Stop.
+  - `local:<base url>|<model>` — **a model on an OpenAI-compatible endpoint** (Ollama, LM Studio, llama.cpp,
+    vLLM). A model is not an agent, so cosmo brings the loop: `cosmo-cc agent --endpoint U --model M` is an ACP
+    agent whose turns are chat-completion calls with cosmo's tools as functions — plus `cosmo_grade`, the
+    colour-grading skill's whole pipeline as ONE tool, because a small local model cannot follow the skill's
+    pages of method. Only `http://` endpoints (a local server needs no TLS).
+  - `cmd:<command>` — any other program, once per message (`{prompt}` replaced, or the message on stdin).
+  Cosmo lists the agents it can find (`assist agents`: Claude Code, Gemini CLI, OpenCode, Goose, Qwen Code, Codex,
+  a running Ollama / LM Studio with its models, and a custom command), each with whether it is installed and
+  the setting that uses it. Starting one that is missing says how to get it.
+- **R-ASSIST-10 The skill is not Claude-only.** The workspace's `AGENTS.md` (the instructions file Codex,
+  OpenCode, Goose, Gemini and others read; also as `GEMINI.md` / `QWEN.md`) says the agent is inside cosmo,
+  which project is open, what its tools do, and where the colour-grading skill is (`skills/arstro.color.grading/
+  SKILL.md`, read it before grading). An ACP agent also gets that context with its first message; the local
+  agent gets a short version and `cosmo_grade`. The skill's scripts were already agent-neutral (Python over
+  cosmo's MCP).
+- **R-ASSIST-11 Choose an agent, connect, chat.** The Agent tab opens on its choices when no agent is running:
+  each with its name, whether cosmo found it, and its setting, which the user may edit (a custom command, a
+  local model's name); one press of **Connect** stores the choice and starts it. Connected, the tab is the chat
+  (R-ASSIST-7) with **Change** in the header. An agent is *ready* as soon as it is running and can take a
+  message — Claude Code says nothing until its first message, and waiting for it left the tab at "starting"
+  forever (the user: *"why the claude code is starting take too long"*).
 - **R-ASSIST-8 The window stays smooth while an agent works.** (**Added 2026-11-04** — the user, recording a
   demo: *"while agent is editing, the UI is too lag … this need to be smooth"*. Measured on the dichoi project
   over the control socket: each `analyze` held the window's thread **2067 ms**, each `snapshot` **1085 ms** —

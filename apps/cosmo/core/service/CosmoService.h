@@ -76,6 +76,9 @@ namespace cosmo
          *  (`cosmo-cc run`, a test that does not inject it) refuses `assist start` with why. */
         using AssistantFactory = std::function<std::unique_ptr<IAssistant>()>;
         void setAssistantFactory(AssistantFactory f) { mAssistantFactory = std::move(f); }
+        /** R-ASSIST-9: the host's look at this machine (PATH, local model servers). */
+        using AgentDetector = std::function<std::vector<AgentChoice>()>;
+        void setAgentDetector(AgentDetector d) { mAgentDetector = std::move(d); }
         /** R-ASSIST-8: an `analyze` or `snapshot` is still rendering on the worker. Its answer
          *  arrives in a later `pump` - a front end that must answer in order (a CLI line, an MCP
          *  call) pumps until this is false. */
@@ -225,6 +228,8 @@ namespace cosmo
         ImageWriter mWriter;
         JpegWriter mJpegWriter;
         AssistantFactory mAssistantFactory;
+        AgentDetector mAgentDetector;
+        bool mAgentOpen = false;   // the last agent message is still being streamed (TextDelta)
         std::unique_ptr<IAssistant> mAssistant;   // R-ASSIST-6: destroyed (and so stopped) with the service
         /** R-ASSIST-8: an `analyze` / `snapshot` whose render is on the worker. What the worker
          *  computes for it (the measurement, the snapshot's size and encoder answer) comes back

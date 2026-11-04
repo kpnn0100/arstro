@@ -56,6 +56,7 @@ namespace cosmo
         std::string agent = "claude";
         std::string agentArgs;
         std::string agentSkills;
+        bool agentAllowAll = false;   // R-ASSIST-5: let an ACP agent do whatever it asks to
 
         /** Legal UI scales, in the order the settings row offers them. */
         static const std::vector<int> &uiScales()

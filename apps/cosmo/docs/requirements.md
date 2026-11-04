@@ -3641,6 +3641,54 @@ with `COSMO_PROJECT` set, and a missing agent refused:
 The real Claude Code was checked by hand (2.1.316): the workspace's `.claude/skills/arstro.color.grading`
 appears in its `init` skill list beside the user's own.
 
+### DR-ASSIST-9 Any agent: ACP, a local model, a plain command (R-ASSIST-9, -5)
+
+`ProcessAssistant::start` (`AssistProcess.cpp:454`) reads the kind from the setting: `acp:<command>` (an ACP
+agent; `agentArgs` appended), `local:<url>|<model>` (an ACP agent too: `<cosmo-cc> agent --endpoint <url>
+--model <model>`), `cmd:<command>` (one-shot), anything else Claude Code if its program is `claude`, else
+one-shot. A missing program is refused with the detector's install hint. **The ACP client**
+(`handleAcpLine`, `:577`): newline-delimited JSON-RPC 2.0 on the agent's stdio; `initialize` with
+`protocolVersion 1`, `clientCapabilities {fs: {readTextFile: false, writeTextFile: false}, terminal: false}`,
+`clientInfo {name "cosmo"}`; on its answer the agent's `agentInfo.title` names it, and `session/new` goes out
+with `cwd` = the workspace and `mcpServers: [{name "cosmo", command <absolute cosmo-cc>, args ["mcp",
+"--attach", <socket>], env []}]` — so no agent needs a configuration file. Its `sessionId` is `Ready`
+("Fake ACP - connected over ACP"); messages sent before it, or while a prompt runs, queue and go one per
+turn (`acpPrompt`, `:528`, the first carrying the AGENTS.md text). `session/update`: `agent_message_chunk`
+text → `TextDelta`, `tool_call` → `Tool` (its title), `tool_call_update` status `failed` → `Failed`.
+`session/request_permission` is answered by `permitted` (`:551`): allowed — `agentAllowAll`, a title naming
+cosmo, kind read/search/think/fetch, `execute` starting `python3 `/`python `/`ls`/`mkdir `/`cat `/`head `/`tail `,
+`edit` whose every location is in the workspace or the project's folder; the answer is the first
+`allow_once`/`allow_always` (else `reject_once`/`reject_always`, else `cancelled`), and a refusal is an error line
+naming it and `settings set agentAllowAll=1`. Any other request from the agent is answered -32601. An error on
+`initialize`/`session/new` (-32000 = sign in first) ends it as `failed` with why; on a prompt it is `Failed` +
+`Done`. **Streamed text** (`CosmoService.cpp:896`): `TextDelta`s grow ONE agent message (model revision per
+chunk, no event); anything else closes it with one `assist.message` event. Claude Code is `Ready` as soon as it
+is spawned (`:873`) — it prints nothing before its first message, so the tab sat at "starting" forever (the
+user's report). **`cosmo-cc agent`** (`cli/main.cpp:2405`) is the ACP agent for a local model: `session/new`
+connects to the socket named in the `--attach` of the cosmo server it was handed (else `COSMO_CONTROL`) and
+uses `remoteBackend` (`:2240`, the same tools as `mcp --attach`); a prompt is up to 16 `POST
+<endpoint>/chat/completions` (`HttpLite`, plain http, 10 min) with `cosmo_grade`, `cosmo_state`,
+`cosmo_analyze`, `cosmo_run`, `cosmo_api` as functions; each call is a `tool_call` + `tool_call_update`, results
+cut to 6000 chars; `cosmo_grade` runs `python3 <skill>/scripts/edit.py run $COSMO_PROJECT --out
+<project>-graded [--mood] [--names]` with `COSMO_CONTROL` set. **Detection** (`detect`, `:228`; `assist agents`,
+`CosmoService.cpp:1400`): Claude Code, Gemini CLI (`acp:gemini --experimental-acp`), OpenCode (`acp:opencode
+acp`), Goose (`acp:goose acp`), Qwen Code (`acp:qwen --experimental-acp`), Codex (`acp:codex-acp`) by PATH;
+Ollama (`/api/tags`) and LM Studio (`/v1/models`) probed at 127.0.0.1 with a 250 ms timeout, up to six models each
+(`local:http://127.0.0.1:11434/v1|<model>`); a "Custom agent" keeps a setting that is none of these. On this
+machine: `assist agents 2 of 8 found` (Claude Code, Custom). Guard: ctest `cosmo_assist_acp`
+(`tests/assist/acp_test.sh`) — a fake ACP agent checks initialize, the MCP server in `session/new`, AGENTS.md and the
+first prompt's context, gets a `python3` permission granted and an `rm -rf` refused, streams three chunks into one
+message and edits the served project; a fake OpenAI-compatible server drives the real `cosmo-cc agent` to an edit
+and an answer. `cosmo_core_tests` `the_agent_conversation_is_application_state` covers TextDelta and `assist agents`.
+
+### DR-ASSIST-10 The skill for every agent (R-ASSIST-10)
+
+`prepareWorkspace` (`AssistProcess.cpp:400`) links each skill directory as `.claude/skills/<name>` AND
+`skills/<name>` and writes `AGENTS.md`, `GEMINI.md` and `QWEN.md` from `agentsMd` (`:200`): inside Cosmo, the
+open project and its photo count, the five tools and what each does, each skill's `skills/<name>/SKILL.md` (the
+grading one described), and to answer briefly. The skill's SKILL.md "Inside Cosmo" section says how each kind of
+agent reaches it.
+
 ### DR-ASSIST-8 Agent queries off the UI thread (R-ASSIST-8)
 
 `RenderService::queryPreview(slot, params, work)` (`core/ImageProcessing/src/engine/RenderService.h`) queues a

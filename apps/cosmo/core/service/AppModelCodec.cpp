@@ -112,6 +112,7 @@ namespace cosmo
         kv(s, j, "settingsAgent", m.settings.agent);             // R-ASSIST-2
         kv(s, j, "settingsAgentArgs", m.settings.agentArgs);     // R-ASSIST-5
         kv(s, j, "settingsAgentSkills", m.settings.agentSkills); // R-ASSIST-4
+        kvb(s, j, "settingsAgentAllowAll", m.settings.agentAllowAll); // R-ASSIST-5
 
         kvi(s, j, "budgetPercent", m.budget.percent);
         kvi(s, j, "budgetTotal", m.budget.total);
@@ -325,11 +326,22 @@ namespace cosmo
                 s << (i ? "," : "") << "\n    {\"role\": \"" << jsonEscape(m.assist.messages[i].role)
                   << "\", \"text\": \"" << jsonEscape(m.assist.messages[i].text) << "\"}";
             s << (m.assist.messages.empty() ? "]" : "\n  ]");
+            s << ",\n  \"assistChoices\": [";
+            for (size_t i = 0; i < m.assist.choices.size(); ++i)
+            {
+                const AgentChoice &a = m.assist.choices[i];
+                s << (i ? "," : "") << "\n    {\"id\": \"" << jsonEscape(a.id) << "\", \"name\": \"" << jsonEscape(a.name)
+                  << "\", \"agent\": \"" << jsonEscape(a.agent) << "\", \"installed\": " << (a.installed ? "true" : "false")
+                  << ", \"note\": \"" << jsonEscape(a.note) << "\"}";
+            }
+            s << (m.assist.choices.empty() ? "]" : "\n  ]");
         }
         else
         {
             s << "assistState=" << m.assist.state << '\n' << "assistAgent=" << m.assist.agent << '\n'
               << "assistMessages=" << m.assist.messages.size() << '\n';
+            for (const auto &a : m.assist.choices)
+                s << "  agent " << a.id << (a.installed ? " found " : " missing ") << a.agent << " (" << a.note << ")\n";
             for (const auto &msg : m.assist.messages)
             {
                 s << "  assist " << msg.role << ": ";

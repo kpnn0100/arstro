@@ -90,7 +90,7 @@ namespace cosmo
             "preset save", "export",
             "settings set", "screen", "state print", "ui dump", "wait", "wb pick", "metadata", "analyze",
             "gesture", "history jump", "add", "snapshot", "ping", "assist start", "assist send",
-            "assist stop", "quit"};
+            "assist stop", "assist agents", "quit"};
         return names;
     }
 
@@ -411,7 +411,8 @@ namespace cosmo
         {
             if (sub == "start" && t.size() == 2) c.kind = Command::Kind::AssistStart;
             else if (sub == "stop" && t.size() == 2) c.kind = Command::Kind::AssistStop;
-            else { err = "assist: expected start | send <message> | stop"; return Command{}; }
+            else if (sub == "agents" && t.size() == 2) c.kind = Command::Kind::AssistAgents;
+            else { err = "assist: expected start | send <message> | stop | agents"; return Command{}; }
         }
         else if (v == "ping")
         {
@@ -532,6 +533,7 @@ namespace cosmo
             case Command::Kind::Ping: o << "ping " << c.name; break;
             case Command::Kind::AssistStart: o << "assist start"; break;
             case Command::Kind::AssistStop: o << "assist stop"; break;
+            case Command::Kind::AssistAgents: o << "assist agents"; break;
             case Command::Kind::AssistSend:
                 o << "assist send ";
                 for (char ch : c.name)

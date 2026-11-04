@@ -555,6 +555,17 @@ namespace
                     applyWindowMinimum(a);
                     if (a->area) gtk_widget_queue_draw(a->area);
                 }
+                // R-ASSIST-11: the agent the user connected to is theirs - kept for the next session,
+                // as the Settings screen keeps what it changes.
+                if (e.text.find("agent") != std::string::npos)
+                {
+                    const arstro::cosmo::AppSettings &m = a->svc.model().settings;
+                    a->settings.agent = m.agent;
+                    a->settings.agentArgs = m.agentArgs;
+                    a->settings.agentSkills = m.agentSkills;
+                    a->settings.agentAllowAll = m.agentAllowAll;
+                    if (!a->settings.save()) LOGW("assist: could not save the agent setting");
+                }
                 break;
 
             case K::ProjectOpening:
@@ -1577,6 +1588,8 @@ int main(int argc, char **argv)
         return std::make_unique<arstro::cosmo_v2::ProcessAssistant>(
             arstro::cosmo_v2::ProcessAssistant::configFor(host.control.isOpen() ? host.control.path() : std::string()));
     });
+    // R-ASSIST-9: what this machine has, for the Agent tab's choices.
+    host.svc.setAgentDetector([&host] { return arstro::cosmo_v2::ProcessAssistant::detect(host.svc.model().settings.agent); });
     host.svc.subscribe([&host](const arstro::cosmo::Event &e) { onServiceEvent(&host, e); });
     // One call, so the budget, the session and the model can never disagree about what is in
     // force (D-15). App::applySettings above still seeds the widgets, which is a view concern.

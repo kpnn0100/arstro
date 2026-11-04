@@ -337,6 +337,9 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/core/assist/Assistant.h` | core (seam) | `IAssistant` + `AssistLaunch` / `AssistOutput`: the service holds the user's agent through it and polls it without blocking (R-ASSIST-1/6) |
 | `apps/cosmo/AssistProcess.{h,cpp}` | host | `ProcessAssistant`: the agent as a process — Claude Code over stream-JSON, any other command once per message; workspace, skill links, MCP config, process group (R-ASSIST-2/4/5/6) |
 | `apps/cosmo/tests/assist/agent_test.sh` | test (ctest `cosmo_assist`) | a fake `claude` edits the served project through the relay; one-shot agents; a missing agent refused (R-ASSIST) |
+| `apps/cosmo/HttpLite.{h,cpp}` | host | one HTTP/1.1 request to a LOCAL server (plain http; Content-Length, chunked or close) - local-model detection and `cosmo-cc agent` (R-ASSIST-9) |
+| `apps/cosmo/cli/main.cpp` `cmdAgent` · `remoteBackend` | front end (CLI) | `cosmo-cc agent`: an ACP agent for a model on an OpenAI-compatible endpoint, cosmo's tools as functions, `cosmo_grade` (R-ASSIST-9/10) |
+| `apps/cosmo/tests/assist/acp_test.sh` | test (ctest `cosmo_assist_acp`) | a fake ACP agent and a fake local model, each editing the served project (R-ASSIST-9/10) |
 | `apps/cosmo/widgets/AgentPanel.{h,cpp}` | front end (widget) | the Agent tab: header (agent, state dot, Start/Stop), the conversation (self-drawn, wrapped with real metrics, scrolled), the composer (Enter sends); a view of `AppModel::assist` (R-ASSIST-7) |
 
 **Front ends over the service (R-SVC-1):** the GTK window (`linux_main.cpp` + `App`), `cosmo-cc`

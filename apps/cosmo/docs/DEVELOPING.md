@@ -308,6 +308,12 @@ printf 'assist send make photo 2 cinematic\nwait assist.state ready\n' | build/a
 message on stdin); `agentArgs=` widens what Claude Code may do. `ctest -R cosmo_assist` proves it with a
 fake `claude` and no network.
 
+**Any agent, even a local one** (R-ASSIST-9). `assist agents` lists what this machine has. `settings set
+agent="acp:gemini --experimental-acp"` (or `acp:opencode acp`, `acp:goose acp`, any ACP agent) speaks the Agent
+Client Protocol and is handed cosmo's tools in its session; `settings set agent="local:http://127.0.0.1:11434/v1|qwen2.5:7b"`
+runs Cosmo's own `cosmo-cc agent` against a model on Ollama / LM Studio / llama.cpp. `ctest -R cosmo_assist_acp`
+proves both with fakes.
+
 ## 6. The invariants — break one and something lies silently
 
 The full list is `.claude/skills/arstro.cosmo.core.implement` §0. These are the ones a newcomer
