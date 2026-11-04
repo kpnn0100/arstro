@@ -21,7 +21,7 @@ Uses `core/Ntwb`'s dependency-free `Json` rather than a second JSON type.
 
 | app | `… mcp` | tools |
 |---|---|---|
-| cosmo | `cosmo-cc mcp` | `cosmo_api` (grammar + every `set` key in engine units), `cosmo_run`, `cosmo_state`, `cosmo_preview` (a JPEG of the edit or as shot), `cosmo_analyze` (`analyze` + metadata) |
+| cosmo | `cosmo-cc mcp` · `cosmo-cc mcp --attach <socket>` (the same tools relayed to a RUNNING cosmo, R-ASSIST-3) | `cosmo_api` (grammar + every `set` key in engine units), `cosmo_run`, `cosmo_state`, `cosmo_preview` (a JPEG of the edit or as shot), `cosmo_analyze` (`analyze` + metadata) |
 | interstellar | `interstellar-cc mcp` | `interstellar_api`, `interstellar_run`, `interstellar_state`, `interstellar_frame` (a graded frame, PNG) |
 | solaris | `solaris-cc mcp` | `solaris_api`, `solaris_run`, `solaris_state` — one song session, undo kept |
 

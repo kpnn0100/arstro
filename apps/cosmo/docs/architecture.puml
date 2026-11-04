@@ -468,5 +468,25 @@ class McpServer <<core/Mcp, R-MCP>> {
 }
 AppModel *-- ImageStats : analysis
 McpServer ..> CosmoService : cosmo-cc mcp — lines via runLine (R-MCP-1)
+class McpBackend <<cli, R-ASSIST-3>> {
+  + run(script) : ToolResult
+  + state(params) : ToolResult
+  + preview(node, before, edge, quality) : ToolResult
+  + analyze(node, before) : ToolResult
+}
+class ControlClient <<cli, R-ASSIST-3>> {
+  + connect(path, err) : bool
+  + roundTrip(lines, got, timeoutMs) : bool
+  + waitFor(prefix, got, timeoutMs) : bool
+}
+McpServer ..> McpBackend : the five tools, declared once
+McpBackend ..> ControlClient : --attach: ping-delimited round trips
+class ControlChannel <<host, R-SVC-8>> {
+  + open(path, err) : bool
+  + poll(onLine)
+  + broadcast(line)
+}
+ControlClient ..> ControlChannel : the running app's control socket (R-SVC-8)
+note right of CosmoService : setJpegWriter(JpegWriter) — snapshot's encoder,\ninjected like the export's (R-ASSIST-3)
 @enduml
 

@@ -89,7 +89,7 @@ namespace cosmo
             "undo", "redo", "preset apply",
             "preset save", "export",
             "settings set", "screen", "state print", "ui dump", "wait", "wb pick", "metadata", "analyze",
-            "gesture", "history jump", "add", "quit"};
+            "gesture", "history jump", "add", "snapshot", "ping", "quit"};
         return names;
     }
 
@@ -356,6 +356,35 @@ namespace cosmo
             const std::string to = tmp.field("timeout");
             c.index = to.empty() ? 120000 : parseDurationMs(to);
         }
+        else if (v == "snapshot")
+        {
+            // `snapshot <path> [<node>] [before] [--edge N] [--quality Q]` (R-ASSIST-3).
+            if (!need(2, "snapshot <path> [<node>] [before] [--edge N] [--quality Q]")) return c;
+            c.kind = Command::Kind::Snapshot;
+            c.path = t[1];
+            for (size_t i = 2; i < t.size(); ++i)
+            {
+                if (t[i] == "before") c.flag = true;
+                else if ((t[i] == "--edge" || t[i] == "--quality") && i + 1 < t.size())
+                {
+                    c.fields.push_back({t[i].substr(2), t[i + 1]});
+                    ++i;
+                }
+                else if (!t[i].empty() && std::isdigit((unsigned char)t[i][0]) && c.index < 0)
+                    c.index = std::atoi(t[i].c_str());
+                else
+                {
+                    err = "snapshot: expected <path> [<node>] [before] [--edge N] [--quality Q], got " + t[i];
+                    return Command{};
+                }
+            }
+        }
+        else if (v == "ping")
+        {
+            if (!need(2, "ping <token>")) return c;
+            c.kind = Command::Kind::Ping;
+            c.name = sub;
+        }
         else if (v == "quit" || v == "exit") c.kind = Command::Kind::Quit;
         else err = "unknown command: " + v;
 
@@ -456,6 +485,13 @@ namespace cosmo
                 if (!c.field("depth").empty()) o << " --depth " << c.field("depth");
                 break;
             case Command::Kind::Wait: o << "wait " << c.name << " --timeout " << c.index << "ms"; break;
+            case Command::Kind::Snapshot:
+                o << "snapshot " << q(c.path);
+                if (c.index >= 0) o << ' ' << c.index;
+                if (c.flag) o << " before";
+                for (const auto &kv : c.fields) o << " --" << kv.first << ' ' << kv.second;
+                break;
+            case Command::Kind::Ping: o << "ping " << c.name; break;
             case Command::Kind::Quit: o << "quit"; break;
         }
         return o.str();

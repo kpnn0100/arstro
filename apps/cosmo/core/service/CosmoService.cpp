@@ -681,6 +681,75 @@ namespace cosmo
         return true;
     }
 
+    void CosmoService::fitFrame(const RenderService::Frame &f, int edge, std::vector<uint8_t> &out, int &w, int &h)
+    {
+        const int big = std::max(f.width, f.height);
+        if (edge <= 0 || big <= edge)
+        {
+            out = f.rgba;
+            w = f.width;
+            h = f.height;
+            return;
+        }
+        w = std::max(1, (int)std::lround((double)f.width * edge / big));
+        h = std::max(1, (int)std::lround((double)f.height * edge / big));
+        out.assign((size_t)w * h * 4, 255);
+        for (int y = 0; y < h; ++y)
+        {
+            const int y0 = y * f.height / h, y1 = std::max(y0 + 1, (y + 1) * f.height / h);
+            for (int x = 0; x < w; ++x)
+            {
+                const int x0 = x * f.width / w, x1 = std::max(x0 + 1, (x + 1) * f.width / w);
+                unsigned sum[3] = {0, 0, 0}, n = 0;
+                for (int yy = y0; yy < y1; ++yy)
+                    for (int xx = x0; xx < x1; ++xx)
+                    {
+                        const uint8_t *p = &f.rgba[((size_t)yy * f.width + xx) * 4];
+                        sum[0] += p[0]; sum[1] += p[1]; sum[2] += p[2]; ++n;
+                    }
+                uint8_t *o = &out[((size_t)y * w + x) * 4];
+                for (int c = 0; c < 3; ++c) o[c] = (uint8_t)(sum[c] / n);
+            }
+        }
+    }
+
+    bool CosmoService::snapshot(const Command &c)
+    {
+        // The node is selected first, as `analyze` does and for its reason: a render is of the
+        // current slot, and a hidden second "current" would be a state no model field shows.
+        if (c.index >= 0 && c.index != mModel.selectedNode)
+        {
+            Command sel;
+            sel.kind = Command::Kind::Select;
+            sel.index = c.index;
+            if (!dispatch(sel)) return false;
+        }
+        if (!mJpegWriter) return fail("snapshot: this front end has no image encoder");
+        const int node = mModel.selectedNode;
+        if (node < 0 || node >= (int)mSession.nodes().size()) return fail("snapshot: nothing selected");
+        const EditSession::GNode &n = mSession.nodes()[(std::size_t)node];
+        if (n.slot < 0)
+            return fail(n.group ? "snapshot: a group has no pixels of its own - select a photo in it"
+                                : "snapshot: that photo's pixels are not loaded yet");
+        RenderService::Frame f;
+        if (!(c.flag ? renderBefore(f) : renderCurrent(f))) return fail("snapshot: no pixels resident for this photo yet");
+        const std::string e = c.field("edge"), q = c.field("quality");
+        std::vector<uint8_t> px;
+        int w = 0, h = 0;
+        fitFrame(f, e.empty() ? 1024 : std::atoi(e.c_str()), px, w, h);
+        const int quality = std::min(95, std::max(40, q.empty() ? 85 : std::atoi(q.c_str())));
+        std::string err;
+        if (!mJpegWriter(c.path, px.data(), w, h, quality, err)) return fail("snapshot: " + c.path + ": " + err);
+        Event ev;
+        ev.kind = Event::Kind::SnapshotWritten;
+        ev.text = c.path;
+        ev.a = w;
+        ev.b = h;
+        ev.c = node;
+        emit(ev);
+        return true;
+    }
+
     bool CosmoService::pickWhiteBalance(const Command &c)
     {
         // R-WB-1: "this pixel should be white". Three steps, and each one is somewhere it can be
@@ -1143,6 +1212,8 @@ namespace cosmo
                 return true;
             }
             case Command::Kind::Add: return startAppendLoad(c.paths);
+            case Command::Kind::Snapshot: return snapshot(c);
+            case Command::Kind::Ping: emit(Event::Kind::Pong, c.name); return true;
             case Command::Kind::Undo:
                 if (!mSession.canUndo()) return fail("nothing to undo");
                 mSession.undo();

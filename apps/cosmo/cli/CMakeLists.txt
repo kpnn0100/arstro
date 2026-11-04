@@ -21,7 +21,11 @@ add_executable(cosmo-cc
   # resolved with dlsym rather than linked, hence ${CMAKE_DL_LIBS} below.
   ${CMAKE_CURRENT_SOURCE_DIR}/../OmpPin.cpp
   # R-NTWB: `cosmo-cc ntwb` - cosmo as an app of Arstro Remote, its UI in a browser.
-  ${CMAKE_CURRENT_SOURCE_DIR}/NtwbAdapter.cpp)
+  ${CMAKE_CURRENT_SOURCE_DIR}/NtwbAdapter.cpp
+  # R-ASSIST-3: `serve --control` - the window's control socket, with no window. The channel logs
+  # its attach/detach lines through the host log, hence Log.cpp.
+  ${CMAKE_CURRENT_SOURCE_DIR}/../ControlChannel.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../Log.cpp)
 
 target_include_directories(cosmo-cc PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -48,3 +52,10 @@ target_compile_definitions(cosmo-cc PRIVATE COSMO_SOURCE_DIR="${CMAKE_CURRENT_SO
 #   cmake-build/apps/cosmo/cli/cosmo-cc ntwb api > apps/cosmo/docs/ntwb-api.json
 add_test(NAME cosmo_ntwb_api_current
   COMMAND sh -c "\"$<TARGET_FILE:cosmo-cc>\" ntwb api | diff -u \"${CMAKE_CURRENT_SOURCE_DIR}/../docs/ntwb-api.json\" -")
+
+# R-ASSIST-3: an agent's MCP tools relayed to a RUNNING cosmo (`mcp --attach`), against `serve --control`
+# standing in for the window - the edit must land in the served session, not in a copy.
+if(NOT WIN32)
+  add_test(NAME cosmo_mcp_attach
+    COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/../tests/assist/relay_test.sh" "$<TARGET_FILE:cosmo-cc>")
+endif()

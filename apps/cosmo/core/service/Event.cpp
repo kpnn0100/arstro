@@ -31,6 +31,8 @@ namespace cosmo
             case Event::Kind::ExportProgress: return "export.progress";
             case Event::Kind::ExportFinished: return "export.finished";
             case Event::Kind::CommandRejected: return "command.rejected";
+            case Event::Kind::SnapshotWritten: return "snapshot.written";
+            case Event::Kind::Pong: return "pong";
         }
         return "unknown";
     }
@@ -77,6 +79,10 @@ namespace cosmo
                 break;
             case Event::Kind::ExportProgress: o << " done=" << e.a << " total=" << e.b << " name=" << e.text; break;
             case Event::Kind::ExportFinished: o << " written=" << e.a << " failures=" << e.b; break;
+            // The path last: it is the one field that may hold a space.
+            case Event::Kind::SnapshotWritten:
+                o << " node=" << e.c << " size=" << e.a << 'x' << e.b << " path=" << e.text;
+                break;
                 break;
             default:
                 if (!e.text.empty()) o << ' ' << e.text;

@@ -899,6 +899,16 @@ tool; a tool's own failure — a refused line, a bad argument, a throw — is a 
 way in is a text line — Interstellar and Solaris use it; cosmo's grammar has no `api` verb, so
 `cmdMcp` builds its own five tools (DR-MCP-1).
 
+**Attached (R-ASSIST-3).** `struct McpBackend { run(script), state(params), preview(node, before, edge,
+quality), analyze(node, before) }` — each a `std::function` returning `ToolResult`; `serveCosmoMcp(backend,
+attached)` declares the tools once (the attached instructions add: the project is already open, edits are
+live). `cmdMcp` supplies the in-process backend, `cmdMcpAttach` the remote one over `ControlClient {
+connect(path, err); send(line); readLine(line, timeoutMs); roundTrip(lines, got, timeoutMs = 120000) — lines
++ "ping mcp<pid>-<n>", collect to "[evt] pong …"; waitFor(prefix, got, timeoutMs) }`. Service side:
+`CosmoService::setJpegWriter(JpegWriter)` with `JpegWriter = bool(path, rgba, w, h, quality, err)`;
+`static fitFrame(frame, edge, out, w, h)` (box filter, long side ≤ edge, 0 = as is); `snapshot(Command)`;
+`Event::Kind::SnapshotWritten` (text = path, a = w, b = h, c = node) and `Pong` (text = token).
+
 ### 7.8b ExportDialog
 The batch-export modal (R-EXPORT). `ExportDialog(accent)`; `struct Node{parent,group,slot,name,
 sourcePath}` (pre-order, `parent` indexes the vector) and `struct Request{slots, sameAsSource,

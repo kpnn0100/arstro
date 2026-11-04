@@ -28,6 +28,7 @@
  *  control socket and cosmo_v2.log.
  */
 #include "ExportWriter.h"
+#include "ControlChannel.h"
 #include "NtwbAdapter.h"
 #include "EditControls.h"
 #include "mcp/Server.h"
@@ -58,6 +59,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <cerrno>
+#include <csignal>
 #include <cstring>
 #endif
 #include <gdk-pixbuf/gdk-pixbuf.h>
@@ -87,6 +89,9 @@ using arstro::cosmo::Event;
 using arstro::cosmo::ModelDumpOptions;
 using arstro::cosmo_v2::PinnedDecoder;   // R-CPU-2c / D-41: the host has ONE decoder, and it pins its thread
 using arstro::cosmo::ThreadBudget;
+
+// RGBA -> JPEG bytes through GdkPixbuf; defined with the MCP front end below.
+static bool encodeJpeg(const uint8_t *rgba, int w, int h, int quality, std::string &out);
 
 namespace
 {
@@ -312,6 +317,16 @@ namespace
             return ok;
         });
 
+        // R-ASSIST-3: `snapshot`'s encoder - the same GdkPixbuf JPEG the MCP preview returns.
+        h.svc.setJpegWriter([](const std::string &path, const uint8_t *rgba, int w, int h2, int quality,
+                               std::string &err) {
+            std::string jpeg;
+            if (!encodeJpeg(rgba, w, h2, quality, jpeg)) { err = "JPEG encode failed"; return false; }
+            std::ofstream f(path, std::ios::binary | std::ios::trunc);
+            if (!f.write(jpeg.data(), (std::streamsize)jpeg.size())) { err = "cannot write the file"; return false; }
+            return true;
+        });
+
         if (h.opt.watch)
         {
             // R-SVC-5: the event stream IS the log. One line, one shape, whoever is reading.
@@ -475,6 +490,8 @@ namespace
             {"gesture", "on|off"},
             {"history jump", "<step>   (a node of the history tree, as the model's `history` numbers it)"},
             {"add", "<img> [img ...]   (into the open project; import replaces it)"},
+            {"snapshot", "<path.jpg> [<node>] [before] [--edge N] [--quality Q]   (write the edit, or as shot, as a JPEG)"},
+            {"ping", "<token>   (answered [evt] pong <token> after every line sent before it)"},
             {"wait", "load.finished|export.finished|quit|<ms> [--timeout 120s]  (hyphens accepted)"},
             {"quit", ""}};
         return hints;
@@ -509,6 +526,10 @@ namespace
              "  ntwb api                        print the Cosmo API description (docs/ntwb-api.json)\n"
              "  mcp                             cosmo as an MCP server on stdio: an agent opens, looks,\n"
              "                                  measures and edits through the same grammar (R-MCP)\n"
+             "  mcp --attach <socket>           the same tools, relayed to a RUNNING cosmo: the agent's\n"
+             "                                  edits land in the open project, live (R-ASSIST-3)\n"
+             "  serve --control <socket>        the application with its control socket and no window,\n"
+             "        [--project <f.cmp>]       for `attach` and `mcp --attach` (R-ASSIST-3)\n"
              "  attach <socket> [--script <f>]   drive a RUNNING cosmo --control window; its\n"
              "                                  events stream back (R-SVC-8). No session here:\n"
              "                                  the window that owns the service does the work\n"
@@ -1446,6 +1467,12 @@ static int cmdAttach(const Args &a, const Options &opt)
         for (std::string line; std::getline(in, line);) if (!line.empty()) pending.push_back(line);
     }
 
+    // R-ASSIST-3: the script ends with a ping, and its pong - not a guess from silence - says every
+    // line was handled. Silence alone dropped the answer to a `snapshot` whose first render took
+    // longer than the quiet window. (An older cosmo refuses `ping`; that refusal counts as the pong.)
+    const std::string pongToken = "attach-" + std::to_string(::getpid());
+    pending.push_back("ping " + pongToken);
+    bool ponged = false;
     std::string waitFor, buf;
     // A numeric `wait <ms>` is a SLEEP, exactly as it is in `cosmo-cc run` (waitFor(), which
     // spins pumpOnce for the duration). It needs its own state rather than riding in
@@ -1496,7 +1523,7 @@ static int cmdAttach(const Args &a, const Options &opt)
             }
             else
             {
-                if (opt.watch) printf("--> %s\n", line.c_str());
+                if (opt.watch && line != "ping " + pongToken) printf("--> %s\n", line.c_str());
                 const std::string out = line + "\n";
                 if (::send(fd, out.data(), out.size(), MSG_NOSIGNAL) < 0)
                 { perror("attach: send"); ::close(fd); return kFail; }
@@ -1530,6 +1557,12 @@ static int cmdAttach(const Args &a, const Options &opt)
             {
                 const std::string line = buf.substr(0, nl);
                 buf.erase(0, nl + 1);
+                if (line.find(pongToken) != std::string::npos &&
+                    (line == "[evt] pong " + pongToken || line.find("command.rejected") != std::string::npos))
+                {
+                    ponged = true;
+                    continue;
+                }
                 printf("%s\n", line.c_str());
                 if (line.find("command.rejected") != std::string::npos) ++rejections;
                 if (!waitFor.empty() && line.find(waitFor) != std::string::npos)
@@ -1541,7 +1574,7 @@ static int cmdAttach(const Args &a, const Options &opt)
             fflush(stdout);
             lastData = std::chrono::steady_clock::now();
         }
-        if (pending.empty() && waitFor.empty() && !sleeping &&
+        if (pending.empty() && waitFor.empty() && !sleeping && ponged &&
             std::chrono::duration<double>(std::chrono::steady_clock::now() - lastData).count() > kQuietS)
             break;
     }
@@ -1771,37 +1804,6 @@ namespace
 
     /** Box-average `f` down so its long edge is at most `edge` — presentation for transport,
      *  the window does the same when it draws a 1600 px preview into a smaller canvas. */
-    void fitTo(const arstro::RenderService::Frame &f, int edge, std::vector<uint8_t> &out, int &w, int &h)
-    {
-        const int big = std::max(f.width, f.height);
-        if (edge <= 0 || big <= edge)
-        {
-            out = f.rgba;
-            w = f.width;
-            h = f.height;
-            return;
-        }
-        w = std::max(1, (int)std::lround((double)f.width * edge / big));
-        h = std::max(1, (int)std::lround((double)f.height * edge / big));
-        out.assign((size_t)w * h * 4, 255);
-        for (int y = 0; y < h; ++y)
-        {
-            const int y0 = y * f.height / h, y1 = std::max(y0 + 1, (y + 1) * f.height / h);
-            for (int x = 0; x < w; ++x)
-            {
-                const int x0 = x * f.width / w, x1 = std::max(x0 + 1, (x + 1) * f.width / w);
-                unsigned sum[3] = {0, 0, 0}, n = 0;
-                for (int yy = y0; yy < y1; ++yy)
-                    for (int xx = x0; xx < x1; ++xx)
-                    {
-                        const uint8_t *p = &f.rgba[((size_t)yy * f.width + xx) * 4];
-                        sum[0] += p[0]; sum[1] += p[1]; sum[2] += p[2]; ++n;
-                    }
-                uint8_t *o = &out[((size_t)y * w + x) * 4];
-                for (int c = 0; c < 3; ++c) o[c] = (uint8_t)(sum[c] / n);
-            }
-        }
-    }
 
     /** Run `fn` with std::cout and std::cerr captured — `runLine` reports through them, and
      *  under `serveStdio` they no longer reach the client. */
@@ -1849,31 +1851,31 @@ namespace
     }
 }
 
-static int cmdMcp(Host &h)
+/** What each of cosmo's MCP tools DOES, behind one set of names, schemas and descriptions: in this
+ *  process (`cosmo-cc mcp`, R-MCP-1) or in a running application over its control socket
+ *  (`cosmo-cc mcp --attach`, R-ASSIST-3). An agent must not be able to tell the two apart by what a
+ *  tool accepts or returns - only by where the edit lands. */
+struct McpBackend
 {
-    // The events of one call, in order — the same lines `--watch` prints and the log keeps.
-    std::vector<std::string> events;
-    bool capturing = false;
-    h.svc.subscribe([&](const Event &e) {
-        if (capturing) events.push_back(arstro::cosmo::formatEvent(e));
-    });
-    auto withEvents = [&](const std::function<std::string()> &fn, std::string &evts) {
-        events.clear();
-        capturing = true;
-        std::string out = fn();
-        capturing = false;
-        for (const auto &l : events) evts += l + "\n";
-        return out;
-    };
-    auto modelJson = [&h]() { return arstro::cosmo_v2::NtwbAdapter::modelJson(h.svc.model()); };
+    std::function<ToolResult(const std::string &script)> run;
+    std::function<ToolResult(bool params)> state;
+    std::function<ToolResult(int node, bool before, int edge, int quality)> preview;   // node -1 = current
+    std::function<ToolResult(int node, bool before)> analyze;
+};
 
-    arstro::mcp::Server server({"cosmo", "2",
+static int serveCosmoMcp(const McpBackend &b, bool attached)
+{
+    std::string instructions =
         "Cosmo, the Arstro photo editor, driven through its own command grammar. Read cosmo_api first "
         "(commands, and every `set` key with its engine units). Typical loop: cosmo_run \"project open "
         "<f.cmp>\" -> cosmo_state (nodes: address photos by `node`) -> cosmo_analyze node=N before=true "
         "(how the photo was shot: key, range, cast, hues, skin/sky/neon) and cosmo_preview node=N (look at "
         "it) -> cosmo_run \"select N\\nset exposure=0.3 temp=6000 ...\" -> cosmo_preview / cosmo_analyze "
-        "again to check -> cosmo_run \"project save\". Every edit is one undoable history step."});
+        "again to check -> cosmo_run \"project save\". Every edit is one undoable history step.";
+    if (attached)
+        instructions += " ATTACHED to a running Cosmo: the user's project is already open in their window and every "
+                        "edit appears there live - do not `project open` another project unless the user asks.";
+    arstro::mcp::Server server({"cosmo", "2", instructions});
 
     {
         arstro::mcp::Tool t;
@@ -1912,29 +1914,7 @@ static int cmdMcp(Host &h)
                         "first refusal. Each line waits for any load it started. Returns what the lines "
                         "printed and the event lines they caused; a refusal is an error naming the line and why.";
         t.inputSchema = schema(R"({"type":"object","properties":{"script":{"type":"string","description":"one command per line, e.g. \"select 3\\nset exposure=0.4 contrast=12\""}},"required":["script"]})");
-        t.call = [&](const Json &a) {
-            std::istringstream in(a["script"].asString());
-            std::string line, printed, evts;
-            int n = 0;
-            bool ok = true;
-            printed = withEvents([&] {
-                return captured([&] {
-                    while (ok && std::getline(in, line))
-                    {
-                        ++n;
-                        ok = runLine(h, line);
-                        if (ok && h.svc.model().load.active) ok = pumpUntilIdle(h);
-                        if (h.svc.quitRequested()) break;
-                    }
-                });
-            }, evts);
-            std::string text = printed;
-            if (!evts.empty()) text += (text.empty() ? "" : "\n") + evts;
-            if (!ok)
-                return ToolResult::error("refused at line " + std::to_string(n) + ": " + line + "\n" +
-                                         h.svc.model().lastError + "\n" + text);
-            return ToolResult::text(text.empty() ? "ok" : text);
-        };
+        t.call = [&b](const Json &a) { return b.run(a["script"].asString()); };
         server.add(t);
     }
     {
@@ -1944,13 +1924,7 @@ static int cmdMcp(Host &h)
                         "selection, history, the last metadata and analysis answers; params=true adds every "
                         "edit parameter of the selection.";
         t.inputSchema = schema(R"({"type":"object","properties":{"params":{"type":"boolean"}}})");
-        t.call = [&h](const Json &a) {
-            pumpOnce(h);
-            arstro::cosmo::ModelDumpOptions o;
-            o.json = true;
-            o.params = a["params"].asBool();
-            return ToolResult::text(arstro::cosmo::formatModel(h.svc.model(), o));
-        };
+        t.call = [&b](const Json &a) { return b.state(a["params"].asBool()); };
         server.add(t);
     }
     {
@@ -1960,33 +1934,10 @@ static int cmdMcp(Host &h)
                         "return it as a JPEG. node selects that photo first; edge caps the long side "
                         "(default 1024, at most the preview edge).";
         t.inputSchema = schema(R"({"type":"object","properties":{"node":{"type":"integer"},"before":{"type":"boolean"},"edge":{"type":"integer"},"quality":{"type":"integer"}}})");
-        t.call = [&](const Json &a) {
-            std::string evts;
-            if (a.has("node"))
-            {
-                Command sel;
-                sel.kind = Command::Kind::Select;
-                sel.index = (int)a["node"].asInt();
-                if (!h.svc.dispatch(sel)) return ToolResult::error("select " + std::to_string(sel.index) + ": " + h.svc.model().lastError);
-                pumpOnce(h);
-            }
-            arstro::RenderService::Frame f;
-            const bool before = a["before"].asBool();
-            if (!(before ? h.svc.renderBefore(f) : h.svc.renderCurrent(f)))
-                return ToolResult::error("no photo with pixels is selected (select a photo node, and wait for its load)");
-            std::vector<uint8_t> px;
-            int w = 0, ht = 0;
-            fitTo(f, (int)(a.has("edge") ? a["edge"].asInt() : 1024), px, w, ht);
-            std::string jpeg;
+        t.call = [&b](const Json &a) {
             const int q = (int)std::min<long long>(95, std::max<long long>(40, a.has("quality") ? a["quality"].asInt() : 85));
-            if (!encodeJpeg(px.data(), w, ht, q, jpeg)) return ToolResult::error("JPEG encode failed");
-            const AppModel &m = h.svc.model();
-            std::string label;
-            for (const auto &n : m.nodes)
-                if (n.node == m.selectedNode) label = n.name;
-            return ToolResult::text("node " + std::to_string(m.selectedNode) + " " + label + " " +
-                                    (before ? "as shot" : "as edited") + " " + std::to_string(w) + "x" + std::to_string(ht))
-                .addImage(jpeg, "image/jpeg");
+            return b.preview(a.has("node") ? (int)a["node"].asInt() : -1, a["before"].asBool(),
+                             (int)(a.has("edge") ? a["edge"].asInt() : 1024), q);
         };
         server.add(t);
     }
@@ -1999,32 +1950,449 @@ static int cmdMcp(Host &h)
                         "and skin/sky/foliage/neon fractions — plus the file's metadata (camera, ISO, shutter, "
                         "aperture, focal length, time). before=true measures it as shot.";
         t.inputSchema = schema(R"({"type":"object","properties":{"node":{"type":"integer"},"before":{"type":"boolean"}}})");
-        t.call = [&](const Json &a) {
-            std::string line = "analyze";
-            if (a.has("node")) line += " " + std::to_string(a["node"].asInt());
-            if (a["before"].asBool()) line += " before";
-            bool ok = true;
-            std::string evts;
-            const std::string printed = withEvents([&] {
-                return captured([&] { ok = runLine(h, line) && runLine(h, "metadata"); });
-            }, evts);
-            if (!ok) return ToolResult::error(line + ": " + h.svc.model().lastError + "\n" + printed);
-            const Json m = modelJson();
-            Json o = Json::object();
-            o.set("node", m["analysisNode"]);
-            o.set("name", m["analysisName"]);
-            o.set("before", m["analysisBefore"]);
-            o.set("analysis", m["analysis"]);
-            o.set("metadata", m["metadata"]);
-            return ToolResult::text(o.dumpPretty());
-        };
+        t.call = [&b](const Json &a) { return b.analyze(a.has("node") ? (int)a["node"].asInt() : -1, a["before"].asBool()); };
         server.add(t);
     }
-
-    // The settings `applyStartupSettings` put in force are the user's; an agent's session must
-    // not write them back, like `run` (only `ntwb serve`, an interactive front end, saves).
     return arstro::mcp::serveStdio(server);
 }
+
+/** The answer `cosmo_analyze` gives, from a model as JSON - the same object whichever side of a
+ *  socket the model came from. */
+static ToolResult analyzeAnswer(const Json &m)
+{
+    Json o = Json::object();
+    o.set("node", m["analysisNode"]);
+    o.set("name", m["analysisName"]);
+    o.set("before", m["analysisBefore"]);
+    o.set("analysis", m["analysis"]);
+    o.set("metadata", m["metadata"]);
+    return ToolResult::text(o.dumpPretty());
+}
+
+static int cmdMcp(Host &h)
+{
+    // The events of one call, in order — the same lines `--watch` prints and the log keeps.
+    std::vector<std::string> events;
+    bool capturing = false;
+    h.svc.subscribe([&](const Event &e) {
+        if (capturing) events.push_back(arstro::cosmo::formatEvent(e));
+    });
+    auto withEvents = [&](const std::function<std::string()> &fn, std::string &evts) {
+        events.clear();
+        capturing = true;
+        std::string out = fn();
+        capturing = false;
+        for (const auto &l : events) evts += l + "\n";
+        return out;
+    };
+
+    McpBackend b;
+    b.run = [&](const std::string &script) {
+        std::istringstream in(script);
+        std::string line, printed, evts;
+        int n = 0;
+        bool ok = true;
+        printed = withEvents([&] {
+            return captured([&] {
+                while (ok && std::getline(in, line))
+                {
+                    ++n;
+                    ok = runLine(h, line);
+                    if (ok && h.svc.model().load.active) ok = pumpUntilIdle(h);
+                    if (h.svc.quitRequested()) break;
+                }
+            });
+        }, evts);
+        std::string text = printed;
+        if (!evts.empty()) text += (text.empty() ? "" : "\n") + evts;
+        if (!ok)
+            return ToolResult::error("refused at line " + std::to_string(n) + ": " + line + "\n" +
+                                     h.svc.model().lastError + "\n" + text);
+        return ToolResult::text(text.empty() ? "ok" : text);
+    };
+    b.state = [&h](bool params) {
+        pumpOnce(h);
+        arstro::cosmo::ModelDumpOptions o;
+        o.json = true;
+        o.params = params;
+        return ToolResult::text(arstro::cosmo::formatModel(h.svc.model(), o));
+    };
+    b.preview = [&h](int node, bool before, int edge, int quality) {
+        if (node >= 0)
+        {
+            Command sel;
+            sel.kind = Command::Kind::Select;
+            sel.index = node;
+            if (!h.svc.dispatch(sel)) return ToolResult::error("select " + std::to_string(node) + ": " + h.svc.model().lastError);
+            pumpOnce(h);
+        }
+        arstro::RenderService::Frame f;
+        if (!(before ? h.svc.renderBefore(f) : h.svc.renderCurrent(f)))
+            return ToolResult::error("no photo with pixels is selected (select a photo node, and wait for its load)");
+        std::vector<uint8_t> px;
+        int w = 0, ht = 0;
+        CosmoService::fitFrame(f, edge, px, w, ht);
+        std::string jpeg;
+        if (!encodeJpeg(px.data(), w, ht, quality, jpeg)) return ToolResult::error("JPEG encode failed");
+        const AppModel &m = h.svc.model();
+        std::string label;
+        for (const auto &n : m.nodes)
+            if (n.node == m.selectedNode) label = n.name;
+        return ToolResult::text("node " + std::to_string(m.selectedNode) + " " + label + " " +
+                                (before ? "as shot" : "as edited") + " " + std::to_string(w) + "x" + std::to_string(ht))
+            .addImage(jpeg, "image/jpeg");
+    };
+    b.analyze = [&](int node, bool before) {
+        std::string line = "analyze";
+        if (node >= 0) line += " " + std::to_string(node);
+        if (before) line += " before";
+        bool ok = true;
+        std::string evts;
+        const std::string printed = withEvents([&] {
+            return captured([&] { ok = runLine(h, line) && runLine(h, "metadata"); });
+        }, evts);
+        if (!ok) return ToolResult::error(line + ": " + h.svc.model().lastError + "\n" + printed);
+        // The model's own JSON, exactly what `--attach` parses on the far side of the socket.
+        arstro::cosmo::ModelDumpOptions o;
+        o.json = true;
+        std::string perr;
+        const Json m = Json::parse(arstro::cosmo::formatModel(h.svc.model(), o), perr);
+        if (!perr.empty()) return ToolResult::error("the model did not parse: " + perr);
+        return analyzeAnswer(m);
+    };
+    // The settings `applyStartupSettings` put in force are the user's; an agent's session must
+    // not write them back, like `run` (only `ntwb serve`, an interactive front end, saves).
+    return serveCosmoMcp(b, false);
+}
+
+#ifndef _WIN32
+/** A client of somebody else's service over its control socket (R-SVC-8) - what `attach` is for a
+ *  terminal, for a program. `roundTrip` is the reason it exists: each batch of lines is followed by
+ *  `ping <token>`, and everything up to `[evt] pong <token>` is that batch's answer (R-ASSIST-3), so
+ *  a command is known to be handled without waiting for the stream to fall silent. */
+class ControlClient
+{
+public:
+    ~ControlClient()
+    {
+        if (mFd >= 0) ::close(mFd);
+    }
+    bool connect(const std::string &path, std::string &err)
+    {
+        mFd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        if (mFd < 0) { err = strerror(errno); return false; }
+        sockaddr_un addr{};
+        addr.sun_family = AF_UNIX;
+        if (path.size() >= sizeof(addr.sun_path)) { err = "socket path too long"; return false; }
+        memcpy(addr.sun_path, path.c_str(), path.size());
+        if (::connect(mFd, (sockaddr *)&addr, sizeof(addr)) != 0)
+        {
+            err = "cannot connect to " + path + ": " + strerror(errno) + " - is cosmo running with its control socket?";
+            return false;
+        }
+        return true;
+    }
+    bool send(const std::string &line)
+    {
+        const std::string l = line + "\n";
+        size_t off = 0;
+        while (off < l.size())
+        {
+            const ssize_t n = ::write(mFd, l.data() + off, l.size() - off);
+            if (n < 0 && errno == EINTR) continue;
+            if (n <= 0) return false;
+            off += (size_t)n;
+        }
+        return true;
+    }
+    /** One line, waiting at most `timeoutMs`; false on timeout or a closed socket. */
+    bool readLine(std::string &line, int timeoutMs)
+    {
+        const double end = wallMs() + timeoutMs;
+        for (;;)
+        {
+            const size_t nl = mBuf.find('\n');
+            if (nl != std::string::npos)
+            {
+                line = mBuf.substr(0, nl);
+                mBuf.erase(0, nl + 1);
+                return true;
+            }
+            const double left = end - wallMs();
+            if (left <= 0) return false;
+            fd_set rd;
+            FD_ZERO(&rd);
+            FD_SET(mFd, &rd);
+            timeval tv{(long)(left / 1000), (long)((long)left % 1000) * 1000};
+            const int r = ::select(mFd + 1, &rd, nullptr, nullptr, &tv);
+            if (r < 0 && errno == EINTR) continue;
+            if (r <= 0) return false;
+            char tmp[65536];
+            const ssize_t n = ::read(mFd, tmp, sizeof(tmp));
+            if (n <= 0) return false;
+            mBuf.append(tmp, (size_t)n);
+        }
+    }
+    /** Send `lines`, then a ping; collect every line until its pong. False on a timeout. */
+    bool roundTrip(const std::vector<std::string> &lines, std::vector<std::string> &got, int timeoutMs = 120000)
+    {
+        const std::string token = "mcp" + std::to_string(::getpid()) + "-" + std::to_string(++mSeq);
+        for (const auto &l : lines)
+            if (!send(l)) return false;
+        if (!send("ping " + token)) return false;
+        const std::string pong = "[evt] pong " + token;
+        std::string line;
+        while (readLine(line, timeoutMs))
+        {
+            if (line == pong) return true;
+            got.push_back(line);
+        }
+        return false;
+    }
+    /** Read on until a line starting with `prefix` (already-collected lines are searched first). */
+    bool waitFor(const std::string &prefix, std::vector<std::string> &got, int timeoutMs)
+    {
+        for (const auto &l : got)
+            if (l.rfind(prefix, 0) == 0) return true;
+        std::string line;
+        while (readLine(line, timeoutMs))
+        {
+            got.push_back(line);
+            if (line.rfind(prefix, 0) == 0) return true;
+        }
+        return false;
+    }
+
+private:
+    int mFd = -1;
+    std::string mBuf;
+    unsigned mSeq = 0;
+};
+
+/** The model as JSON from the far side - the framed `state print --json` (R-SVC-8). */
+static bool remoteModel(ControlClient &cc, bool params, std::string &json)
+{
+    std::vector<std::string> got;
+    if (!cc.roundTrip({std::string("state print --json") + (params ? " --params" : "")}, got)) return false;
+    bool in = false;
+    for (const auto &l : got)
+    {
+        if (l == "[evt] state.begin") { in = true; json.clear(); continue; }
+        if (l == "[evt] state.end") { in = false; continue; }
+        if (in) json += l + "\n";
+    }
+    return !json.empty();
+}
+
+static std::string rejection(const std::vector<std::string> &got)
+{
+    for (const auto &l : got)
+        if (l.rfind("[evt] command.rejected", 0) == 0) return l;
+    return std::string();
+}
+
+/** `cosmo-cc mcp --attach <socket>` (R-ASSIST-3): the same tools, relayed to a running cosmo, so
+ *  an agent's edit lands in the user's window. Builds no Host - like `attach`, it is a client of
+ *  somebody else's service, and keeping the pixels in the process that owns them is the point. */
+static int cmdMcpAttach(const Args &a)
+{
+    const std::string sock = a.value("attach");
+    ControlClient cc;
+    std::string err;
+    if (sock.empty() || sock == "1") { fprintf(stderr, "mcp --attach: need the control socket's path\n"); return kUsage; }
+    if (!cc.connect(sock, err)) { fprintf(stderr, "mcp --attach: %s\n", err.c_str()); return kFail; }
+    unsigned shot = 0;
+
+    // `wait` asks the MODEL, as `run`'s does - a load that finished before this client connected
+    // has no event left to wait for, and waiting for one hung for the whole timeout.
+    auto remoteWait = [&](const std::string &raw, int timeoutMs) {
+        std::string cond = raw;
+        for (char &ch : cond) if (ch == '-') ch = '.';
+        const double deadline = wallMs() + (timeoutMs > 0 ? timeoutMs : 120000);
+        if (!cond.empty() && std::isdigit((unsigned char)cond[0]))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(std::atoi(cond.c_str())));
+            return true;
+        }
+        if (cond != "load.finished" && cond != "export.finished") return false;
+        for (;;)
+        {
+            std::string json, perr;
+            if (!remoteModel(cc, false, json)) return false;
+            const Json m = Json::parse(json, perr);
+            if (!perr.empty()) return false;
+            if (!m[cond == "load.finished" ? "loadActive" : "exportActive"].asBool()) return true;
+            if (wallMs() > deadline) return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    };
+
+    McpBackend b;
+    b.run = [&](const std::string &script) {
+        std::istringstream in(script);
+        std::string line, text;
+        int n = 0;
+        while (std::getline(in, line))
+        {
+            ++n;
+            // The same parser the far side runs, so a typo is refused here with the same words
+            // and never reaches the user's session.
+            std::string perr;
+            const Command c = arstro::cosmo::parseCommand(line, perr);
+            if (!c.valid())
+            {
+                if (perr.empty()) continue;   // blank or a comment
+                return ToolResult::error("refused at line " + std::to_string(n) + ": " + line + "\n" + perr + "\n" + text);
+            }
+            std::vector<std::string> got;
+            bool ok = true;
+            if (c.kind == Command::Kind::Wait)
+            {
+                std::string cond = c.name;
+                for (char &ch : cond) if (ch == '-') ch = '.';
+                if (!std::isdigit((unsigned char)(cond.empty() ? 'x' : cond[0])) && cond != "load.finished" &&
+                    cond != "export.finished")
+                    return ToolResult::error("refused at line " + std::to_string(n) + ": " + line +
+                                             "\nwait: unknown condition " + cond + " (load.finished, export.finished or <ms>)");
+                ok = remoteWait(c.name, c.index);
+            }
+            else
+            {
+                ok = cc.roundTrip({line}, got);
+                const bool loads = c.kind == Command::Kind::ProjectOpen || c.kind == Command::Kind::Import ||
+                                   c.kind == Command::Kind::Add;
+                if (ok && loads && rejection(got).empty()) ok = cc.waitFor("[evt] load.finished", got, 600000);
+            }
+            for (const auto &l : got) text += l + "\n";
+            const std::string why = rejection(got);
+            if (!why.empty())
+                return ToolResult::error("refused at line " + std::to_string(n) + ": " + line + "\n" + why + "\n" + text);
+            if (!ok)
+                return ToolResult::error("no answer from cosmo at line " + std::to_string(n) + ": " + line + "\n" + text);
+            if (c.kind == Command::Kind::Quit) break;
+        }
+        return ToolResult::text(text.empty() ? "ok" : text);
+    };
+    b.state = [&](bool params) {
+        std::string json;
+        if (!remoteModel(cc, params, json)) return ToolResult::error("no model from cosmo");
+        return ToolResult::text(json);
+    };
+    b.preview = [&](int node, bool before, int edge, int quality) {
+        const char *tmp = std::getenv("XDG_RUNTIME_DIR");
+        const std::string path = std::string(tmp && *tmp ? tmp : "/tmp") + "/cosmo-mcp-" +
+                                 std::to_string(::getpid()) + "-" + std::to_string(++shot) + ".jpg";
+        std::string line = "snapshot " + path;
+        if (node >= 0) line += " " + std::to_string(node);
+        if (before) line += " before";
+        line += " --edge " + std::to_string(edge) + " --quality " + std::to_string(quality);
+        std::vector<std::string> got;
+        if (!cc.roundTrip({line}, got)) return ToolResult::error("no answer from cosmo to: " + line);
+        std::string written;
+        for (const auto &l : got)
+            if (l.rfind("[evt] snapshot.written", 0) == 0) written = l;
+        if (written.empty())
+        {
+            const std::string why = rejection(got);
+            return ToolResult::error(why.empty() ? "cosmo wrote no snapshot" : why);
+        }
+        std::ifstream f(path, std::ios::binary);
+        const std::string jpeg((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        f.close();
+        std::remove(path.c_str());
+        if (jpeg.empty()) return ToolResult::error("the snapshot could not be read back: " + path);
+        // "[evt] snapshot.written node=3 size=1024x683 path=..." -> "node 3 as edited 1024x683"
+        const auto field = [&written](const std::string &k) {
+            const size_t i = written.find(" " + k + "=");
+            if (i == std::string::npos) return std::string();
+            const size_t s0 = i + k.size() + 2, e = written.find(' ', s0);
+            return written.substr(s0, e == std::string::npos ? std::string::npos : e - s0);
+        };
+        return ToolResult::text("node " + field("node") + " " + (before ? "as shot" : "as edited") + " " + field("size"))
+            .addImage(jpeg, "image/jpeg");
+    };
+    b.analyze = [&](int node, bool before) {
+        std::string line = "analyze";
+        if (node >= 0) line += " " + std::to_string(node);
+        if (before) line += " before";
+        std::vector<std::string> got;
+        if (!cc.roundTrip({line, "metadata"}, got)) return ToolResult::error("no answer from cosmo to: " + line);
+        const std::string why = rejection(got);
+        if (!why.empty()) return ToolResult::error(line + ": " + why);
+        std::string json, perr;
+        if (!remoteModel(cc, false, json)) return ToolResult::error("no model from cosmo");
+        const Json m = Json::parse(json, perr);
+        if (!perr.empty()) return ToolResult::error("cosmo's model did not parse: " + perr);
+        return analyzeAnswer(m);
+    };
+    return serveCosmoMcp(b, true);
+}
+#endif
+
+#ifndef _WIN32
+static volatile sig_atomic_t gServeStop = 0;
+
+/** `cosmo-cc serve --control <socket> [--project f.cmp]` (R-ASSIST-3): the application with its
+ *  control socket (R-SVC-8) and no window - what `cosmo --control` is, minus the pixels on a
+ *  screen. Lines are handled exactly as the window's `pollControl` handles them; this loop is the
+ *  clock (R-SVC-6). It exists so an agent can work on a project with no display, and so the relay
+ *  that puts an agent into the window can be tested without one. */
+static int cmdServe(Host &h, const Args &a)
+{
+    const std::string sock = a.value("control");
+    if (sock.empty() || sock == "1") { fprintf(stderr, "serve: need --control <socket>\n"); return kUsage; }
+    arstro::cosmo_v2::ControlChannel control;
+    std::string err;
+    if (!control.open(sock, err)) { fprintf(stderr, "serve: %s\n", err.c_str()); return kFail; }
+    h.svc.subscribe([&control](const Event &e) { control.broadcast(arstro::cosmo::formatEvent(e)); });
+    if (a.has("project"))
+    {
+        Command open;
+        open.kind = Command::Kind::ProjectOpen;
+        open.path = a.value("project");
+        if (!h.svc.dispatch(open)) { fprintf(stderr, "serve: %s\n", h.svc.model().lastError.c_str()); return kFail; }
+    }
+    std::signal(SIGINT, [](int) { gServeStop = 1; });
+    std::signal(SIGTERM, [](int) { gServeStop = 1; });
+    fprintf(stderr, "serve: listening on %s\n", sock.c_str());
+    while (!gServeStop && !h.svc.quitRequested())
+    {
+        h.svc.pump(wallMs());
+        control.poll([&](const std::string &line) {
+            std::string perr;
+            const Command c = arstro::cosmo::parseCommand(line, perr);
+            if (!c.valid())
+            {
+                if (!perr.empty()) control.broadcast("[evt] command.rejected line=" + line + " why=" + perr);
+                return;
+            }
+            if (c.kind == Command::Kind::StatePrint)
+            {
+                arstro::cosmo::ModelDumpOptions o;
+                o.json = c.flag;
+                o.stable = c.field("stable") == "1";
+                o.params = c.field("params") == "1";
+                control.broadcast("[evt] state.begin");
+                control.broadcast(arstro::cosmo::formatModel(h.svc.model(), o));
+                control.broadcast("[evt] state.end");
+                return;
+            }
+            if (c.kind == Command::Kind::UiDump)
+            {
+                // There is no Segment tree without a window; say so in the window's own framing.
+                control.broadcast("[evt] ui.begin");
+                control.broadcast("ui-root " + (c.name.empty() ? std::string("all") : c.name) + " (absent)");
+                control.broadcast("[evt] ui.end");
+                return;
+            }
+            h.svc.dispatch(c);   // a rejection reaches the client through the event sink
+        });
+        std::this_thread::sleep_for(std::chrono::milliseconds(8));
+    }
+    control.close();
+    return kOk;
+}
+#endif
 
 int main(int argc, char **argv)
 {
@@ -2044,6 +2412,9 @@ int main(int argc, char **argv)
     // attach drives somebody else's service, so it must come before the Host below: building
     // one here would start a render thread and a GPU context for a terminal.
     if (a.verb == "attach") return cmdAttach(a, opt);
+#ifndef _WIN32
+    if (a.verb == "mcp" && a.has("attach")) return cmdMcpAttach(a);   // R-ASSIST-3: no Host of its own
+#endif
     // `ntwb api|install|uninstall` touch files only; `ntwb serve` needs the service below.
     if (a.verb == "ntwb" && (a.positional.empty() || a.positional[0] != "serve")) return cmdNtwbFiles(a);
 
@@ -2064,6 +2435,9 @@ int main(int argc, char **argv)
     if (a.verb == "run") return cmdRun(h, a);
     if (a.verb == "ntwb") return cmdNtwbServe(h);
     if (a.verb == "mcp") return cmdMcp(h);
+#ifndef _WIN32
+    if (a.verb == "serve") return cmdServe(h, a);
+#endif
 
     std::cerr << "cosmo-cc: unknown subcommand: " << a.verb << "\n";
     return usage(kUsage);

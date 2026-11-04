@@ -1229,10 +1229,13 @@ the only subcommand that builds **no** service — everything else in `cosmo-cc`
 this one is a terminal on somebody else's, which is the asymmetry that keeps pixels in the process
 that owns them. `wait <event>` is handled client-side because a wait is a property of the caller's
 loop. It exits non-zero if any command was rejected or a `wait` timed out, so a script that
-half-worked fails a build instead of looking fine. It drains for 600 ms of stream silence after the
-last command: a command's events arrive *after* the send, so ending the loop when the script ends
-drops every response to the final commands — including the `state print` that was the point of the
-run.
+half-worked fails a build instead of looking fine. A command's events arrive *after* the send, so
+ending the loop when the script ends drops every response to the final commands — including the
+`state print` that was the point of the run. **AMENDED (R-ASSIST-3, 2026-11-04):** it used to stop after
+600 ms of stream silence, which dropped the answer to a `snapshot` whose first render took longer; the
+script now ends with `ping attach-<pid>`, the pong (not printed) says every line was handled, and only
+then does the 600 ms drain for trailing frames start. An older cosmo's refusal of `ping` counts as the
+pong.
 
 **Verified live** on the reported 18-RAF project: the GUI was driven entirely over the socket
 through `settings set` → `project open` → `wait load.finished` → `select next` → `set exposure=0.8`
@@ -3549,14 +3552,14 @@ when no photo is current. It changes nothing and emits nothing — a query, besi
 
 ### DR-MCP-1 `cosmo-cc mcp` (R-MCP-1..4)
 
-`cmdMcp` (`cli/main.cpp:1852`) builds the five tools over the ordinary `Host` and serves them with
+`cmdMcp` (`cli/main.cpp:1960`) gives the five tools (named, described and schema'd once, in `serveCosmoMcp`, `main.cpp:1854`) a backend over the ordinary `Host` and serves them with
 `arstro::mcp::serveStdio` (`core/Mcp/src/Stdio.cpp:51`, which dups the real stdout for the protocol and
 points descriptor 1 at stderr). `cosmo_run` runs each line through `runLine` — `cosmo-cc run`'s own —
 with `std::cout`/`std::cerr` captured (`captured`, `main.cpp:1808`) and the events of the call
 collected by a subscription; after a line that started a load it pumps until idle. `cosmo_api`'s
 `params` come from `serializeParams(EditParams{})` annotated by `editControls()` (`paramCatalogue`,
 `main.cpp:1822`): exposure −5..5 EV, contrast −100..100, temp 2000..19500 K … `cosmo_preview`
-box-fits the frame to `edge` (default 1024; `fitTo`, `main.cpp:1774`) and encodes JPEG with the host's
+box-fits the frame to `edge` (default 1024; `CosmoService::fitFrame`, `CosmoService.cpp:684` — the one downscale `snapshot` uses too) and encodes JPEG with the host's
 encoder. Argument checking is the library's (`Server::validate`, `core/Mcp/src/Server.cpp:87`):
 `cosmo_run {"scrpt": …}` returns `cosmo_run: unknown argument: scrpt (accepted: script)`. Worked:
 
@@ -3567,3 +3570,39 @@ encoder. Argument checking is the library's (`Server::validate`, `core/Mcp/src/S
 Verified live on the 18-RAW Tokyo project: open in 4.5 s, `analyze` + `metadata` + a 900 px preview
 per photo, and a whole grade driven through these tools (`.claude/skills/arstro.color.grading`).
 
+
+
+### DR-ASSIST-3 The agent's tools, in the running application (R-ASSIST-3)
+
+**`snapshot`** (`CosmoService::snapshot`, `CosmoService.cpp:716`) selects the node like `analyze`, renders
+`renderCurrent` / `renderBefore`, fits it with `fitFrame` (`--edge`, default 1024) and writes EXACTLY
+`path` through the injected `JpegWriter` (`setJpegWriter`, `CosmoService.h:72`; quality clamped 40..95,
+default 85) — the window's is `exporter::write` with no source EXIF (`linux_main.cpp:1558`), `cosmo-cc`'s
+the MCP preview's GdkPixbuf encoder (`cli/main.cpp:321`). No encoder, a group, or pixels not resident are
+refused with why. It answers `[evt] snapshot.written node=3 size=1024x683 path=/tmp/a.jpg` (path last: the
+one field that may hold a space). **`ping <token>`** emits `[evt] pong <token>` from `dispatch`
+(`CosmoService.cpp:1216`) — synchronously, so on a socket the pong follows every event the client's earlier
+lines caused.
+
+**`cosmo-cc mcp --attach <socket>`** (`cmdMcpAttach`, `cli/main.cpp:2185`) builds no `Host`: its backend is a
+`ControlClient` (`main.cpp:2061`) on the application's control socket. `roundTrip` sends a batch plus
+`ping mcp<pid>-<n>` and takes everything up to the pong as the batch's answer; a line is parsed HERE first
+(the one parser), so a typo never reaches the user's session. `cosmo_run` waits after `project open` /
+`import` / `add` for `load.finished`; `wait` asks the model (`loadActive` / `exportActive` in `state print
+--json`), because a load that ended before the client connected has no event left to wait for.
+`cosmo_state` is the framed `state print --json`; `cosmo_preview` is a `snapshot` into
+`$XDG_RUNTIME_DIR/cosmo-mcp-<pid>-<n>.jpg`, read back and deleted; `cosmo_analyze` is `analyze` +
+`metadata`, then the model's JSON. The in-process `cosmo_analyze` now reads the same JSON (`formatModel`),
+so both modes answer the same object. Events are broadcast to every client, so a reply may carry the
+window's own `frame.ready` lines too.
+
+**`cosmo-cc serve --control <socket> [--project f.cmp]`** (`cmdServe`, `main.cpp:2328`) is the window's
+`pollControl` without the window: same parsing, `state print` framed, `ui dump` answered `(absent)`, an
+8 ms loop as the clock. It is what `cosmo_mcp_attach` (ctest; `tests/assist/relay_test.sh`) runs the relay
+against — six checks, ending with the edit read back from the SERVED session with `cosmo-cc attach`:
+
+    build/apps/cosmo/cli/cosmo-cc serve --control $XDG_RUNTIME_DIR/c.sock --project p.cmp &
+    build/apps/cosmo/cli/cosmo-cc mcp --attach $XDG_RUNTIME_DIR/c.sock      # what the agent runs
+
+A socket path is limited to 107 bytes (`sun_path`); the session scratch dirs are longer, hence
+`$XDG_RUNTIME_DIR`.

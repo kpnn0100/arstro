@@ -11,6 +11,8 @@
  *      [evt] load.progress done=6 total=18 name=DSCF5411.RAF
  *      [evt] frame.ready slot=3 1600x1067 ms=41.2
  *      [evt] load.finished entries=18 decoded=18 failed=0 peak=5 budget=6
+ *      [evt] snapshot.written node=3 size=1024x683 path=/tmp/a.jpg
+ *      [evt] pong 42
  *
  *  Kept small on purpose: `a`/`b` carry the two integers nearly every event needs
  *  (done/total, slot/index), `ms` the one duration, and `text` the name or the key=value
@@ -51,7 +53,9 @@ namespace cosmo
             FrameReady,       // a = slot, b = width, ms = render time, c = pyramid level
             ExportProgress,   // a = done, b = total, text = name
             ExportFinished,   // a = written, b = failures
-            CommandRejected   // text = the line, plus why
+            CommandRejected,  // text = the line, plus why
+            SnapshotWritten,  // R-ASSIST-3: text = path, a = width, b = height, c = node
+            Pong              // R-ASSIST-3: text = the ping's token
         };
 
         Kind kind = Kind::Info;

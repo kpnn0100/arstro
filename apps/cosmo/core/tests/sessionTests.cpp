@@ -1325,6 +1325,8 @@ namespace
             "wb pick --x 0.5 --y 0.5",       // R-WB-1
             "analyze", "analyze before", "analyze 2", "analyze 2 before",   // R-GRADE-1
             "history jump 4", "add /c.raf \"/d e.jpg\"",   // R-NTWB-3
+            "snapshot /tmp/a.jpg", "snapshot \"/tmp/a b.jpg\" 3 before --edge 600 --quality 80",   // R-ASSIST-3
+            "ping 42",
             "quit"};
         for (const char *line : lines)
         {
@@ -1992,6 +1994,76 @@ namespace
     // BLUE-cast grey (shade light): the as-shot cast must read blue, and warming it through the
     // ordinary `set` must move the measured cast toward amber. Asking twice is how before and
     // after are compared, so the answer must say which one it is.
+    // R-ASSIST-3: the two verbs that let an agent on the far side of a socket work on the open project.
+    // `snapshot` writes exactly the caller's path, as shot or as edited, at most `--edge` px, and says so;
+    // a group or an encoder-less front end is refused with why. `ping` is answered in ORDER: its pong
+    // follows every event the lines before it caused - the property the relay's round trip rests on.
+    void test_snapshot_and_ping_answer_a_client_on_the_far_side()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_snapshot.cmp";
+        writeFakeProject(path, 2, true, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        std::vector<std::string> lines;
+        svc.subscribe([&lines](const Event &e) { lines.push_back(formatEvent(e)); });
+        std::string err;
+        double clock = 0.0;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc, 20000, &clock);
+        int photo = -1, group = -1;
+        for (const auto &n : svc.model().nodes)
+        {
+            if (n.group && group < 0) group = n.node;
+            if (!n.group && photo < 0) photo = n.node;
+        }
+        assert(photo >= 0 && group >= 0);
+
+        // No encoder injected: refused, never a silent success.
+        assert(!svc.dispatchText("snapshot /tmp/cosmo_snap.jpg " + std::to_string(photo), err));
+        assert(svc.model().lastError.find("encoder") != std::string::npos);
+
+        struct Written { std::string path; int w = 0, h = 0, q = 0; std::vector<uint8_t> px; };
+        std::vector<Written> written;
+        svc.setJpegWriter([&written](const std::string &p, const uint8_t *rgba, int w, int h, int q, std::string &) {
+            written.push_back({p, w, h, q, std::vector<uint8_t>(rgba, rgba + (size_t)w * h * 4)});
+            return true;
+        });
+        assert(!svc.dispatchText("snapshot /tmp/cosmo_snap.jpg " + std::to_string(group), err));
+        assert(svc.model().lastError.find("group") != std::string::npos && "a group has no pixels to look at");
+
+        lines.clear();
+        assert(svc.dispatchText("snapshot /tmp/cosmo_snap.jpg " + std::to_string(photo) + " before --edge 20 --quality 99", err));
+        assert(written.size() == 1 && written[0].path == "/tmp/cosmo_snap.jpg" && "exactly the caller's path");
+        assert(std::max(written[0].w, written[0].h) <= 20 && written[0].w > 0 && "at most --edge on the long side");
+        assert(written[0].q == 95 && "quality is clamped to 40..95");
+        assert(svc.model().selectedNode == photo && "looking at a photo makes it the current one, as analyze does");
+        bool said = false;
+        for (const auto &l : lines)
+            if (l.rfind("[evt] snapshot.written node=" + std::to_string(photo) + " size=", 0) == 0 &&
+                l.find(" path=/tmp/cosmo_snap.jpg") != std::string::npos) said = true;
+        assert(said && "a snapshot says what it wrote");
+
+        // As edited differs from as shot once there is an edit - the agent sees its own work.
+        assert(svc.dispatchText("set exposure=1.5", err));
+        assert(svc.dispatchText("snapshot /tmp/cosmo_snap2.jpg --edge 20", err));
+        assert(written.size() == 2 && written[1].px != written[0].px && "the edit is in the picture");
+
+        // ping: the pong comes after everything dispatched before it, carrying the token.
+        lines.clear();
+        assert(svc.dispatchText("set exposure=0.5", err));
+        assert(svc.dispatchText("ping t-7", err));
+        assert(!lines.empty() && lines.back() == "[evt] pong t-7");
+        bool before = false;
+        for (size_t i = 0; i + 1 < lines.size(); ++i)
+            if (lines[i].rfind("[evt] params.changed", 0) == 0) before = true;
+        assert(before && "the line before the ping was handled before the pong");
+        assert(!svc.dispatchText("ping", err) && "a ping needs a token to be told apart");
+        std::remove(path.c_str());
+        printf("[PASS] snapshot_and_ping_answer_a_client_on_the_far_side\n");
+    }
+
     void test_analyze_measures_the_photo_before_and_after_the_edit()
     {
         using namespace arstro::cosmo;
@@ -2529,9 +2601,11 @@ namespace
             {K::Gesture, "gesture on"},
             {K::HistoryJump, "history jump 3"},
             {K::Add, "add /b.raf"},
+            {K::Snapshot, "snapshot /tmp/a.jpg 2 before"},
+            {K::Ping, "ping 1"},
             {K::Quit, "quit"},
         };
-        const int kKindCount = 33;   // Kind::None is not a command
+        const int kKindCount = 35;   // Kind::None is not a command
         assert((int)(sizeof(cases) / sizeof(cases[0])) == kKindCount &&
                "a new Command::Kind needs a documented line here and a parser rule");
 
@@ -3147,6 +3221,7 @@ int main()
     test_history_advances_without_a_view();
     test_picking_a_white_point_sets_temp_and_tint();
     test_analyze_measures_the_photo_before_and_after_the_edit();
+    test_snapshot_and_ping_answer_a_client_on_the_far_side();
     test_metadata_reads_the_file_without_decoding_it();
     test_a_path_mask_is_drawn_by_command_and_renders();
     test_mixer_spread_is_reachable_and_persists();

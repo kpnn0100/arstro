@@ -37,6 +37,8 @@
  *      state print
  *      wait load.finished --timeout 120s
  *      analyze               (measure the selected photo as edited; `analyze 3 before` = node 3 as shot)
+ *      snapshot /tmp/a.jpg 3 before --edge 1024   (R-ASSIST-3: node 3 as shot, written as a JPEG)
+ *      ping 42                                    (R-ASSIST-3: answered `[evt] pong 42`)
  *      quit
  */
 #pragma once
@@ -115,6 +117,14 @@ namespace cosmo
              *  resetting the workspace - `import` replaces it. What File > Open... did in the
              *  window through `openImage`, synchronously and with no Command (R-SVC-2). */
             Add,             // paths[]
+            /** R-ASSIST-3: write the current edit of `index` (-1 = the selection; `flag` = as
+             *  shot) to `path` as a JPEG, answered by `snapshot.written`. How a client on the far
+             *  side of a socket LOOKS at a photo - `renderCurrent` (R-GRADE-2) is in-process only.
+             *  fields: edge (long side, default 1024), quality (40..95, default 85). */
+            Snapshot,        // path, index = node, flag = before, fields: edge / quality
+            /** R-ASSIST-3: a marker in the event stream, answered `[evt] pong <name>` after
+             *  every line dispatched before it, so a client knows its commands were handled. */
+            Ping,            // name = token
             Quit
         };
 

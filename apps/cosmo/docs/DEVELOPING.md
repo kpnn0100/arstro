@@ -279,6 +279,23 @@ its first run.
 when a bare path would be ambiguous with an image. It runs the normal animated load rather than
 jumping to the editor; only a bare image list lands straight in the editor.
 
+**An agent can work in a RUNNING cosmo** (R-ASSIST-3). `cosmo-cc mcp --attach <socket>` offers the same
+five MCP tools as `cosmo-cc mcp`, relayed over the control socket, so every edit lands in that session.
+`cosmo-cc serve` is the application with that socket and no window — the way to try it with no display:
+
+```bash
+S=$XDG_RUNTIME_DIR/cosmo.sock          # a socket path must fit in 107 bytes
+build/apps/cosmo/cli/cosmo-cc serve --control $S --project p.cmp &
+build/apps/cosmo/cli/cosmo-cc mcp --attach $S                  # the agent's MCP server
+printf 'snapshot /tmp/look.jpg 1 --edge 800\nping done\n' | build/apps/cosmo/cli/cosmo-cc attach $S
+```
+```
+[evt] snapshot.written node=1 size=800x534 path=/tmp/look.jpg
+[evt] pong done
+```
+
+`ctest -R cosmo_mcp_attach` runs the relay against `serve` and reads the edit back from the served model.
+
 ## 6. The invariants — break one and something lies silently
 
 The full list is `.claude/skills/arstro.cosmo.core.implement` §0. These are the ones a newcomer

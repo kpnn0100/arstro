@@ -328,6 +328,9 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `core/ImageProcessing/src/analysis/ImageStats.{h,cpp}` | engine (arstro_image) | `measureImage`: tone, cast, hues and content hints of a rendered frame — measurement, never judgement (R-GRADE-1) |
 | `core/Mcp/*` | library | MCP for any Arstro app: JSON-RPC 2.0 on stdio, `initialize` / `tools/list` / `tools/call`, argument validation, `serveStdio` (the one OS seam), `addTextServiceTools` (R-MCP) |
 | `apps/cosmo/cli/main.cpp` `cmdMcp` | front end (CLI) | `cosmo-cc mcp`: five tools over the service, lines through `runLine` (R-MCP-1..4) |
+| `apps/cosmo/cli/main.cpp` `cmdMcpAttach` · `ControlClient` | front end (CLI) | `cosmo-cc mcp --attach`: the same five tools relayed to a RUNNING cosmo over its control socket, `ping`-delimited round trips (R-ASSIST-3) |
+| `apps/cosmo/cli/main.cpp` `cmdServe` | front end (CLI) | `cosmo-cc serve --control`: the application with its control socket and no window; links `ControlChannel.cpp` + `Log.cpp` (R-ASSIST-3) |
+| `apps/cosmo/tests/assist/relay_test.sh` | test (ctest `cosmo_mcp_attach`) | the relay against `serve`, edit read back from the served session (R-ASSIST-3) |
 
 **Front ends over the service (R-SVC-1):** the GTK window (`linux_main.cpp` + `App`), `cosmo-cc`
 (CLI, `run`, `attach` to a `--control` window), the touch shell, and - since R-NTWB - a browser:

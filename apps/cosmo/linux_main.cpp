@@ -1554,6 +1554,14 @@ int main(int argc, char **argv)
         App::ExportRequest req;   // defaults: JPEG q92, EXIF kept, profile embedded
         return arstro::cosmo_v2::exporter::write(req, rgba, w, h, out, src, err);
     });
+    // R-ASSIST-3: `snapshot` writes exactly the caller's path, a plain JPEG with no source EXIF.
+    host.svc.setJpegWriter([](const std::string &path, const uint8_t *rgba, int w, int h, int quality,
+                              std::string &err) {
+        App::ExportRequest req;
+        req.quality = quality;
+        req.embedExif = false;
+        return arstro::cosmo_v2::exporter::write(req, rgba, w, h, path, std::string(), err);
+    });
     host.svc.subscribe([&host](const arstro::cosmo::Event &e) { onServiceEvent(&host, e); });
     // One call, so the budget, the session and the model can never disagree about what is in
     // force (D-15). App::applySettings above still seeds the widgets, which is a view concern.

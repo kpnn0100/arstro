@@ -64,6 +64,12 @@ namespace cosmo
         /** Runs on every decode worker before it works — the OpenMP pin (R-CPU-2c, D-12). */
         void setWorkerInit(std::function<void()> f) { mWorkerInit = std::move(f); }
         void setImageWriter(ImageWriter w) { mWriter = std::move(w); }
+        /** R-ASSIST-3: `snapshot`'s encoder, injected for the same reason as the export's (no
+         *  codec in cosmo_core). Writes exactly `path` - unlike an export, a snapshot's name is
+         *  the caller's, not derived from the source. */
+        using JpegWriter = std::function<bool(const std::string &path, const uint8_t *rgba, int w, int h,
+                                              int quality, std::string &err)>;
+        void setJpegWriter(JpegWriter w) { mJpegWriter = std::move(w); }
         void subscribe(EventSink s) { mSinks.push_back(std::move(s)); }
         /** Put the persisted preferences in force and into the model (R-SETTINGS-4). The host
          *  calls this once at startup with what `AppSettings::load()` returned, instead of
@@ -106,6 +112,10 @@ namespace cosmo
          *  frame loop (an agent's MCP call) can look at an edit the moment it made it. A query
          *  like the two above: no state changes, no event, no history. */
         bool renderCurrent(RenderService::Frame &out);
+        /** `f` box-filtered so its long side is at most `edge` (0 = as is). The ONE downscale
+         *  a front end uses to hand a picture to an agent - `snapshot` and `cosmo-cc mcp`'s
+         *  preview must not differ in what the agent sees (R-ASSIST-3). */
+        static void fitFrame(const RenderService::Frame &f, int edge, std::vector<uint8_t> &out, int &w, int &h);
 
         // ── transitional ──
         /** The GUI still renders from the session directly for everything the model does not
@@ -175,6 +185,7 @@ namespace cosmo
         bool readMetadata(const Command &c);
         /** R-GRADE-1: render the photo (as edited, or as shot) and measure it into the model. */
         bool analyze(const Command &c);
+        bool snapshot(const Command &c);
         /** The picker's averaging radius, in proxy pixels — big enough to swamp sensor noise,
          *  small enough that clicking a small neutral patch does not drag its neighbours in. */
         static constexpr int kWbPickRadius = 4;
@@ -195,6 +206,7 @@ namespace cosmo
         ProjectLoader::DecoderFactory mMakeDecoder;
         std::function<void()> mWorkerInit;
         ImageWriter mWriter;
+        JpegWriter mJpegWriter;
         std::vector<EventSink> mSinks;
 
         AppModel mModel;

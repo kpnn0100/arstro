@@ -2260,6 +2260,47 @@ CLI, the control socket and NTWB**, holding no behaviour (arstro.rule §1).
 - The protocol is `core/Mcp` (shared with Interstellar and Solaris); `.mcp.json` at the repo root
   registers the three servers through `core/Mcp/serve.sh`.
 
+## R-ASSIST — Your own agent, inside cosmo — 🚧 IN PROGRESS
+
+(**Added 2026-11-04.** The user, once the colour-grading skill could grade a whole folder: *"how can user
+apply that to cosmo with their own agent … there should be agent section inside of that with skill loaded
+for that agent by default"*. Asked how the agent should run, they chose *"Launch their agent CLI"* over a
+built-in agent with an API key and over a connect-only page.) Until now only a developer could do it:
+Claude Code started in this repository, with the skill in `.claude/skills` and `cosmo-cc mcp` in
+`.mcp.json`, editing a project FILE in a second process while the window showed something else. A
+photographer has cosmo open on their project; the agent must work there. (`R-AGENT` is taken — it names
+the P0 test harness — hence `ASSIST`.)
+
+- **R-ASSIST-1 An agent conversation is part of the application.** `assist start`, `assist send "<text>"`,
+  `assist stop`. Its state (`off` · `starting` · `ready` · `busy` · `failed`), which agent it is, and the
+  conversation — what the user said, what the agent answered, which tool it used, what failed — are in
+  the model, and every message is an event. Front ends show them; none runs the agent itself (R-SVC-4).
+- **R-ASSIST-2 The agent is the user's own, an installed CLI — no API key and no model inside cosmo.**
+  Claude Code by default (`claude`, its streaming-JSON protocol, one process for the whole conversation
+  so it keeps its context); any other agent as a command line in the settings (`agent=`), run once per
+  message with `{prompt}` replaced and its output taken as the answer. Starting an agent that is not
+  installed is refused, naming the command.
+- **R-ASSIST-3 The agent edits the OPEN project, live.** Its tools are cosmo's MCP tools (R-MCP-1),
+  relayed to the running application over its control socket (`cosmo-cc mcp --attach <socket>`), so every
+  edit lands in the window as one undoable step, exactly as if it had been clicked (R-SVC-8). The
+  application opens its control socket when an agent starts, if `--control` did not. Two verbs make the
+  relay complete:
+  - `snapshot <path> [<node>] [before] [--edge N] [--quality Q]` writes the current edit (or the photo as
+    shot) as a JPEG and answers `[evt] snapshot.written` — how an agent on the far side of a socket LOOKS
+    at the photo it is editing (R-GRADE-2 is in-process only);
+  - `ping <token>` answers `[evt] pong <token>` after every line sent before it was dispatched — how a
+    client knows a command was handled, rather than guessing from 600 ms of silence.
+- **R-ASSIST-4 The colour-grading skill is loaded by default.** The agent runs in cosmo's own workspace
+  (`<config>/agent/`), whose skills include `arstro.color.grading`; `agentSkills=` (directories,
+  `:`-separated) adds more. The agent is told it is inside cosmo and which project is open, and finds
+  the application through `COSMO_CONTROL`, `COSMO_CC` and `COSMO_PROJECT` — so the skill's own scripts
+  drive the open project too, rather than a second copy of it.
+- **R-ASSIST-5 What the agent may do is stated, not assumed.** By default: cosmo's tools, reading files,
+  running the skill's Python scripts, writing its plan and notes. Nothing else is pre-approved; the
+  user widens it with `agentArgs=` (extra arguments for the agent's command).
+- **R-ASSIST-6 An agent never blocks the application.** It runs as its own process; its output is read
+  without blocking in `pump` (R-SVC-6); `assist stop` ends it and its children; quitting cosmo stops it.
+
 ## R-NTWB — Cosmo in a browser: an app of Arstro Remote over NTWB — 🚧 IN PROGRESS
 
 *Added 2026-09-30.* "Arstro Remote is the front end, the core still sits on the Pi": a board
