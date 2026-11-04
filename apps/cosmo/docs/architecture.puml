@@ -110,6 +110,8 @@ package "app  (namespace arstro::cosmo_v2)" as app {
       + onSend / onStart / onStop
       + scrollOffset() / scrollTarget() / newestAlpha()
       ' R-ASSIST-7: live eased values, so a test can tell a tween from a snap
+      + onConnect / onDetect / pickerShown() / pickAmount()
+      ' R-ASSIST-11: the choices, cross-faded with the chat
     }
     class MaskPanel {
       + detectOpenAmount() / detectBarFill() / detectBarShow() / detectStatusText()

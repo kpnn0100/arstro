@@ -8,6 +8,7 @@ namespace arstro
 namespace cosmo_v2
 {
     using namespace artboard;
+    using cosmo::AgentChoice;
 
     namespace
     {
@@ -19,6 +20,9 @@ namespace cosmo_v2
         constexpr double kLabelH = 13.0;      // ladder 4
         constexpr double kBubblePad = 6.5;    // ladder 2: the user's message sits on a card
         constexpr double kStickSlack = 2.0;   // within this of the bottom counts as "at the bottom"
+        constexpr double kRowH = 39.0;        // ladder 12: a choice is two lines, name and note
+        constexpr double kRowGap = 3.25;      // ladder 1
+        constexpr double kListHeadH = 22.75;  // ladder 7: the section header above the choices
 
         Color stateColor(const std::string &s)
         {
@@ -126,7 +130,13 @@ namespace cosmo_v2
         mStartStop->activeText = {palette::white(), 10.0, font::sans()};
         mStartStop->onClick = [this] {
             if (running(mModel.state)) { if (onStop) onStop(); }
-            else if (onStart) onStart();
+            else if (pickerShown())
+            {
+                // On the choices: back to the chat if there is one, else look again.
+                if (!mShown.empty()) mPickWanted = false;
+                else if (onDetect) onDetect();
+            }
+            else mPickWanted = true;
         };
         addChild(mStartStop);
 
@@ -138,7 +148,7 @@ namespace cosmo_v2
         st.caretColor = palette::primary();
         auto field = std::make_shared<PromptBox>(st);
         field->placeholder = "Ask your agent\xE2\x80\xA6";
-        field->onEnter = [this] { send(); };
+        field->onEnter = [this] { if (pickerShown()) connect(); else send(); };
         mField = field;
         addChild(mField);
 
@@ -147,9 +157,11 @@ namespace cosmo_v2
         mSend->idleText = {palette::primaryForeground(), 10.0, font::sansMedium()};
         mSend->activeText = mSend->idleText;
         mSend->onClick = [this] {
-            // While the agent works the button is Stop: the one thing worth doing then.
-            if (working(mModel.state)) { if (onStop) onStop(); }
-            else send();
+            // On the choices it is Connect; while the agent works it is Stop - the one thing worth
+            // doing then; otherwise Send.
+            if (pickerShown()) connect();
+            else if (mModel.state == "busy") { if (onStop) onStop(); }
+            else send();   // while STARTING too: the runner queues it until the agent can take it
         };
         addChild(mSend);
 
@@ -182,15 +194,84 @@ namespace cosmo_v2
         // Messages only ever append (the service never edits one), so the shown list grows by the
         // tail; a SHORTER model is a new conversation and starts over.
         if (m.messages.size() < mShown.size()) mShown.clear();
+        // R-ASSIST-9: a streamed message GROWS in place - re-wrapped, not faded in again.
+        for (size_t i = 0; i < mShown.size(); ++i)
+            if (mShown[i].text != m.messages[i].text)
+            {
+                mShown[i].text = m.messages[i].text;
+                mShown[i].wrappedAt = -1.0;
+            }
         for (size_t i = mShown.size(); i < m.messages.size(); ++i)
             mShown.push_back({m.messages[i].role, m.messages[i].text, -1.0});
+        // The choices: kept selected by setting across a re-detection.
+        bool same = m.choices.size() == mChoices.size();
+        for (size_t i = 0; same && i < m.choices.size(); ++i) same = m.choices[i].agent == mChoices[i].agent;
+        if (!same)
+        {
+            const std::string was = mSelectedChoice >= 0 && mSelectedChoice < (int)mChoices.size() ? mChoices[mSelectedChoice].agent
+                                                                                                    : mCurrentAgent;
+            mChoices = m.choices;
+            mSelectedChoice = -1;
+            for (size_t i = 0; i < mChoices.size() && mSelectedChoice < 0; ++i)
+                if (mChoices[i].agent == was) mSelectedChoice = (int)i;
+            for (size_t i = 0; i < mChoices.size() && mSelectedChoice < 0; ++i)
+                if (mChoices[i].installed) mSelectedChoice = (int)i;
+            if (pickerShown() && mSelectedChoice >= 0) { mField->text = mChoices[mSelectedChoice].agent; mField->caretToEnd(); }
+        }
+        if (running(m.state)) mPickWanted = false;   // connected: the chat
         refreshButtons();
     }
 
     void AgentPanel::refreshButtons()
     {
-        mStartStop->setLabel(running(mModel.state) ? "Stop" : "Start");
-        mSend->setLabel(working(mModel.state) ? "Stop" : "Send");
+        const bool pick = pickerShown();
+        mStartStop->setLabel(running(mModel.state) ? "Stop" : pick ? (mShown.empty() ? "Refresh" : "Chat") : "Agents");
+        mSend->setLabel(pick ? "Connect" : mModel.state == "busy" ? "Stop" : "Send");
+    }
+
+    bool AgentPanel::pickerShown() const { return !running(mModel.state) && (mShown.empty() || mPickWanted); }
+
+    void AgentPanel::selectChoice(int i)
+    {
+        if (i < 0 || i >= (int)mChoices.size()) return;
+        mSelectedChoice = i;
+        mField->text = mChoices[i].agent;   // shown, and editable: a custom command, another model
+        mField->caretToEnd();
+    }
+
+    void AgentPanel::connect()
+    {
+        std::string agent = mField->text;
+        while (!agent.empty() && (agent.back() == ' ' || agent.back() == '\t')) agent.pop_back();
+        if (agent.empty() || !onConnect) return;
+        mPickWanted = false;
+        onConnect(agent);
+    }
+
+    double AgentPanel::choicesTop() const { return messagesRect().y + kGap + kListHeadH - mPickScroll.value(); }
+
+    Rect AgentPanel::choiceRect(int i) const
+    {
+        return Rect{kPadX, choicesTop() + i * (kRowH + kRowGap), std::max(40.0, width.value() - 2 * kPadX), kRowH};
+    }
+
+    int AgentPanel::choiceAt(const Point &local) const
+    {
+        if (!messagesRect().contains(local)) return -1;
+        for (int i = 0; i < (int)mChoices.size(); ++i)
+            if (choiceRect(i).contains(local)) return i;
+        return -1;
+    }
+
+    bool AgentPanel::handleGesture(const Gesture &g, const Point &local)
+    {
+        if (mPick.value() > 0.5)
+        {
+            const int i = choiceAt(local);
+            if (g.type == Gesture::Type::Move) mRowHover.setHovered(i);
+            if (g.type == Gesture::Type::Click && i >= 0) { selectChoice(i); return true; }
+        }
+        return Segment::handleGesture(g, local);
     }
 
     Rect AgentPanel::messagesRect() const
@@ -239,6 +320,35 @@ namespace cosmo_v2
         for (auto &m : mShown)
             if (m.appearMs < 0) m.appearMs = nowMs;   // a setter has no clock: the fade starts here
 
+        // R-ASSIST-11: the choices and the chat cross-fade (180 ms); the field swaps what it holds -
+        // the chat draft is kept while it shows the agent's command.
+        const bool pick = pickerShown();
+        if (pick != mPickShownApplied)
+        {
+            if (pick)
+            {
+                mDraft = mField->text;
+                mField->text = mSelectedChoice >= 0 ? mChoices[mSelectedChoice].agent : mCurrentAgent;
+                if (!mDetectAsked && mChoices.empty() && onDetect) { mDetectAsked = true; onDetect(); }
+            }
+            else
+                mField->text = mDraft;
+            mField->caretToEnd();
+            mPick.animateTo(pick ? 1.0 : 0.0, 180.0, Easing::EaseOutCubic, nowMs);
+            mPickShownApplied = pick;
+            refreshButtons();
+        }
+        mPick.update(nowMs);
+        if (!isHovered()) mRowHover.clear();
+        mRowHover.advance(nowMs);
+        mPickScrollTarget = std::clamp(mPickScrollTarget, 0.0, std::max(0.0, mPickContentH - messagesRect().h));
+        if (mPickScrollTarget != mPickScrollLast)
+        {
+            mPickScroll.animateTo(mPickScrollTarget, 180.0, Easing::EaseOutCubic, nowMs);
+            mPickScrollLast = mPickScrollTarget;
+        }
+        mPickScroll.update(nowMs);
+
         // The dot cross-fades from wherever it is to the new state's colour.
         if (mModel.state != mDotState)
         {
@@ -264,7 +374,7 @@ namespace cosmo_v2
         mLastContentH = mContentH;
 
         // Send dims (and stops taking clicks) while there is nothing to send; as Stop it is live.
-        const bool live = working(mModel.state) || !mField->text.empty();
+        const bool live = mModel.state == "busy" || !mField->text.empty();   // Connect needs a command too
         if ((int)live != mSendLive)
         {
             if (mSendLive < 0) mSend->opacity.set(live ? 1.0 : 0.45);   // first placement: nothing to travel from
@@ -294,10 +404,17 @@ namespace cosmo_v2
         const std::string word = stateWord(mModel.state);
         const double wordW = t.measureText(word, kSmallPx, font::sans());
         const std::string name = ellipsize(t, agent, 11.0, font::sansMedium(), std::max(0.0, room - wordW - kGap));
-        t.setFill(palette::foreground());
+        // R-ASSIST-11: on the choices the header asks the question; the two titles cross-fade with the
+        // body rather than swap in one frame.
+        const double hp = mPick.value();
+        auto hf = [](Color c, double a) { c.a *= a; return c; };
+        t.setFill(hf(palette::foreground(), 1.0 - hp));
         t.drawText(name, nameX, cy + 11.0 * 0.35, 11.0, font::sansMedium());
-        t.setFill(palette::mutedForeground());
+        t.setFill(hf(palette::mutedForeground(), 1.0 - hp));
         t.drawText(word, nameX + t.measureText(name, 11.0, font::sansMedium()) + kGap, cy + kSmallPx * 0.35, kSmallPx, font::sans());
+        t.setFill(hf(palette::foreground(), hp));
+        t.drawText(ellipsize(t, "Choose your agent", 11.0, font::sansMedium(), std::max(0.0, room)), nameX, cy + 11.0 * 0.35, 11.0,
+                   font::sansMedium());
         t.setStroke(palette::border(), 1.0);
         t.beginPath();
         t.moveTo(0, kHeaderH - 0.5);
@@ -324,13 +441,16 @@ namespace cosmo_v2
             }
             const std::vector<std::string> &intro = mIntroLines;
             y = box.y + std::max(kGap, (box.h - intro.size() * kLineH) * 0.4);
-            t.setFill(palette::mutedForeground());
+            Color introC = palette::mutedForeground();
+            introC.a *= 1.0 - mPick.value();
+            t.setFill(introC);
             for (const auto &l : intro) { t.drawText(l, kPadX, y + kLineH * 0.5 + kTextPx * 0.35, kTextPx, font::sans()); y += kLineH; }
             mContentH = 0.0;
         }
+        const double chatA = 1.0 - mPick.value();   // R-ASSIST-11: the chat fades out as the choices fade in
         for (const Shown &m : mShown)
         {
-            const double a = alphaOf(m);
+            const double a = alphaOf(m) * chatA;
             auto fade = [a](Color c) { c.a *= a; return c; };
             if (m.role == "tool" || m.role == "info")
             {
@@ -382,22 +502,84 @@ namespace cosmo_v2
         {
             // LOADING is a state too: the agent is at work, said in words, pulsing (R-G-1).
             const double p = reducedMotion() ? 1.0 : 0.45 + 0.35 * (0.5 + 0.5 * std::sin(mNowMs / 1400.0 * 6.2831853));
-            t.setFill(Color{palette::mutedForeground().r, palette::mutedForeground().g, palette::mutedForeground().b, p});
+            t.setFill(Color{palette::mutedForeground().r, palette::mutedForeground().g, palette::mutedForeground().b, p * chatA});
             t.drawText(agent + (mModel.state == "starting" ? " is starting\xE2\x80\xA6" : " is working\xE2\x80\xA6"), kPadX,
                        y + kSmallLineH * 0.5 + kSmallPx * 0.35, kSmallPx, font::sans());
             y += kSmallLineH + kGap;
         }
         if (!mShown.empty() || working(mModel.state)) mContentH = y + mScroll.value() - box.y;
 
-        // R6: an indicator only when there is more to see.
-        const double maxS = std::max(0.0, mContentH - box.h);
-        if (maxS > 0.5)
+        // ── R-ASSIST-11: the choices, fading in over the chat ──
+        const double pa = mPick.value();
+        if (pa > 0.01)
         {
-            const double trackH = box.h - 2 * kGap;
-            const double thumbH = std::max(19.5, trackH * box.h / mContentH);
-            const double ty = box.y + kGap + (trackH - thumbH) * std::clamp(mScroll.value() / maxS, 0.0, 1.0);
-            drawRoundedRect(t, Rect{w - 4.875, ty, 3.25, thumbH}, radius::pill(), Paint::filled(palette::whiteAlpha(0.18)));
+            auto pf = [pa](Color c) { c.a *= pa; return c; };
+            const double top = box.y + kGap - mPickScroll.value();
+            t.setFill(pf(palette::mutedForeground()));
+            t.drawText("AGENTS ON THIS MACHINE", kPadX, top + kListHeadH * 0.5 + kLabelPx * 0.35, kLabelPx,
+                       font::sansSemiBold(), 0.13 * kLabelPx);
+            double endY = top + kListHeadH;
+            if (mChoices.empty())
+            {
+                // LOADING, in words: the list is being looked for, not empty.
+                t.drawText("Looking for agents\xE2\x80\xA6", kPadX, endY + kLineH * 0.5 + kTextPx * 0.35, kTextPx, font::sans());
+                endY += kLineH;
+            }
+            const double rowW = std::max(40.0, w - 2 * kPadX);
+            const double noteW = rowW - 22.75 - 6.5;
+            if (mNotesAt != noteW || mNotesFor != mChoices.size())
+            {
+                mNoteLines.clear();
+                for (const auto &c : mChoices) mNoteLines.push_back(ellipsize(t, c.note, kSmallPx, font::sans(), noteW));
+                mNotesAt = noteW;
+                mNotesFor = mChoices.size();
+            }
+            for (int i = 0; i < (int)mChoices.size(); ++i)
+            {
+                const Rect r = choiceRect(i);
+                endY = r.y + r.h + kRowGap;
+                if (r.y + r.h < box.y || r.y > box.y + box.h) continue;   // culled (R6)
+                const bool sel = i == mSelectedChoice;
+                const double hv = mRowHover.amount(i);
+                if (sel) drawRoundedRect(t, r, radius::control(), Paint::filled(pf(palette::secondary())));
+                else if (hv > 0.0) drawRoundedRect(t, r, radius::control(), Paint::filled(pf(palette::hoverWash(hv))));
+                const double cx = r.x + 9.75, cy = r.y + r.h * 0.5;
+                drawCircle(t, cx, cy, 4.875, Paint::filledStroked(Color{0, 0, 0, 0}, pf(sel ? palette::primary() : palette::mutedForeground()), 1.0));
+                if (sel) drawCircle(t, cx, cy, 2.6, Paint::filled(pf(palette::primary())));
+                const AgentChoice &c = mChoices[(size_t)i];
+                t.setFill(pf(c.installed ? palette::foreground() : palette::mutedForeground()));
+                t.drawText(c.name, r.x + 22.75, r.y + 13.0 + 11.0 * 0.35, 11.0, font::sansMedium());
+                t.setFill(pf(palette::mutedForeground()));
+                t.drawText(mNoteLines[(size_t)i], r.x + 22.75, r.y + 27.0 + kSmallPx * 0.35, kSmallPx, font::sans());
+            }
+            if (mHintAt != rowW)
+            {
+                mHintLines = wrap(t, "Pick one and Connect. The command below is editable: acp:<command> runs any ACP agent, "
+                                     "local:<url>|<model> a model on Ollama or LM Studio, cmd:<command> any program.",
+                                  kSmallPx, font::sans(), rowW);
+                mHintAt = rowW;
+            }
+            endY += kGap;
+            t.setFill(pf(palette::mutedForeground()));
+            for (const auto &l : mHintLines)
+            {
+                t.drawText(l, kPadX, endY + kSmallLineH * 0.5 + kSmallPx * 0.35, kSmallPx, font::sans());
+                endY += kSmallLineH;
+            }
+            mPickContentH = endY + mPickScroll.value() - box.y + kGap;
         }
+
+        // R6: an indicator only when there is more to see.
+        auto indicator = [&](double content, double offset, double alpha) {
+            const double maxS = std::max(0.0, content - box.h);
+            if (maxS <= 0.5 || alpha <= 0.01) return;
+            const double trackH = box.h - 2 * kGap;
+            const double thumbH = std::max(19.5, trackH * box.h / content);
+            const double ty = box.y + kGap + (trackH - thumbH) * std::clamp(offset / maxS, 0.0, 1.0);
+            drawRoundedRect(t, Rect{w - 4.875, ty, 3.25, thumbH}, radius::pill(), Paint::filled(palette::whiteAlpha(0.18 * alpha)));
+        };
+        indicator(mContentH, mScroll.value(), 1.0 - pa);
+        indicator(mPickContentH, mPickScroll.value(), pa);
         t.restore();
 
         // ── composer band ──
@@ -410,6 +592,11 @@ namespace cosmo_v2
 
     void AgentPanel::scrollBy(double delta)
     {
+        if (pickerShown())
+        {
+            mPickScrollTarget = std::clamp(mPickScrollTarget - delta, 0.0, std::max(0.0, mPickContentH - messagesRect().h));
+            return;
+        }
         const double maxS = maxScroll();
         mScrollTarget = std::clamp(mScrollTarget - delta, 0.0, maxS);
         mStick = mScrollTarget >= maxS - kStickSlack;   // back at the end: follow the newest again

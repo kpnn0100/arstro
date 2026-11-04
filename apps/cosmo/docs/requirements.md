@@ -3689,6 +3689,20 @@ open project and its photo count, the five tools and what each does, each skill'
 grading one described), and to answer briefly. The skill's SKILL.md "Inside Cosmo" section says how each kind of
 agent reaches it.
 
+### DR-ASSIST-11 Choose an agent, connect, chat (R-ASSIST-11)
+
+`AgentPanel::pickerShown` (`AgentPanel.cpp:232`) — no agent running and nothing said, or the user asked for
+the choices (header **Agents**). Its `advance` cross-fades the chat and the choices (`mPick`, 180 ms), swaps
+what the field holds (the chat draft is kept; the field shows the selected choice's setting, editable), and asks
+for detection (`onDetect` → `assist agents`) the first time the list is empty ("Looking for agents…" until it
+comes). Rows (39 px) show a radio, the name (dimmed when missing) and the note ellipsized once per width; a click
+selects; the list scrolls (R6). Send is **Connect** there (`connect`, `:242`): `RightColumn` sends `settings set
+agent=<field>` and `assist start` (`RightColumn.cpp:265`); the window saves an agent setting change to
+settings.txt (`linux_main.cpp:558`). The header title cross-fades to "Choose your agent". Send is Stop only while
+the agent is BUSY — during "starting" it sends (the runner queues it). Guards: `cosmo_ui_tests`
+`theAgentTabTalksThroughTheService` (choices first; a click selects and shows the setting; Connect stores it and
+starts the agent; a frame mid cross-fade; then the chat), shots `agent-choices`, `agent-connecting`.
+
 ### DR-ASSIST-8 Agent queries off the UI thread (R-ASSIST-8)
 
 `RenderService::queryPreview(slot, params, work)` (`core/ImageProcessing/src/engine/RenderService.h`) queues a

@@ -589,6 +589,7 @@ namespace
     {
         if (!wanted("agent-")) return;
         using namespace arstro::cosmo;
+        using arstro::cosmo::AgentChoice;
         setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-agent").string());
         struct Shared { std::vector<AssistOutput> queue; };
         auto sh = std::make_shared<Shared>();
@@ -604,6 +605,16 @@ namespace
         };
         Rig rig(w, h);
         rig.svc.setAssistantFactory([sh] { return std::unique_ptr<IAssistant>(new Fake(sh)); });
+        rig.svc.setAgentDetector([] {
+            return std::vector<AgentChoice>{
+                {"claude", "Claude Code", "claude", true, "installed"},
+                {"gemini", "Gemini CLI", "acp:gemini --experimental-acp", false, "not found - install: npm i -g @google/gemini-cli"},
+                {"opencode", "OpenCode", "acp:opencode acp", true, "installed"},
+                {"goose", "Goose", "acp:goose acp", false, "not found - install: block.github.io/goose"},
+                {"ollama:qwen2.5:7b", "Ollama - qwen2.5:7b", "local:http://127.0.0.1:11434/v1|qwen2.5:7b", true,
+                 "local model, cosmo's own agent loop"},
+                {"custom", "Custom agent", "acp:", true, "acp:<command> any ACP agent - local:<url>|<model> - cmd:<command>"}};
+        });
         Frame f(w, h);
         rig.app.showEditor();
         rig.settle(f, 600.0);
@@ -612,11 +623,13 @@ namespace
         if (!tabs) return;
         tabs->setSelectedIndex(tabs->pageCount() - 1);
         rig.settle(f, 600.0);
-        save(f, "agent-empty");
+        save(f, "agent-choices");   // R-ASSIST-11: no agent yet - the machine's agents to choose from
 
         std::string err;
         rig.svc.dispatchText("assist send make these cinematic, keep her skin true", err);
         sh->queue = {{AssistOutput::Kind::Ready, "Claude Code 2.1.316 - claude-opus-5-5"}};
+        rig.step(f, 6);
+        save(f, "agent-connecting");   // mid cross-fade, choices into the chat
         rig.settle(f, 600.0);
         save(f, "agent-working");
 

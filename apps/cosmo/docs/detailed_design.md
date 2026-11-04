@@ -742,6 +742,12 @@ messages are laid out in `onPaint` because wrapping needs `measureText` — each
 width (`Shown::lines` / `wrappedAt`, the empty state's sentence likewise; R-ASSIST-8: re-measuring every
 word every frame cost the window 2.2 ms a frame with 67 messages, 1.0 ms now); the measured height is what
 the next `advance` clamps the scroll against.
+**The choices (R-ASSIST-11):** `onConnect(setting)`, `onDetect()`, `setCurrentAgent(setting)`, `pickerShown()`,
+`pickAmount()` (live), `choiceCount()`, `selectedChoice()`, `choiceRect(i)`, `fieldText()`; private `kRowH = 39`,
+`kRowGap = 3.25`, `kListHeadH = 22.75`, `mChoices`, `mSelectedChoice`, `mPickWanted` / `mPickShownApplied`, `mDraft`,
+`mPick` (180 ms), `mRowHover` (HoverFade), `mPickScroll`, `mPickContentH`, the hint and notes wrapped once per width.
+The header's Start/Stop is Stop while running, else Agents / Chat / Refresh; Send is Connect on the choices and Stop
+only while busy.
 
 ## 6. Widgets — reusable controls
 

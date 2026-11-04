@@ -259,6 +259,18 @@ namespace cosmo_v2
         mAgent->onSend = [assist](const std::string &text) { assist(cosmo::Command::Kind::AssistSend, text); };
         mAgent->onStart = [assist] { assist(cosmo::Command::Kind::AssistStart, std::string()); };
         mAgent->onStop = [assist] { assist(cosmo::Command::Kind::AssistStop, std::string()); };
+        mAgent->onDetect = [assist] { assist(cosmo::Command::Kind::AssistAgents, std::string()); };
+        // R-ASSIST-11: Connect is two commands - the setting, then the start - so the choice is the
+        // user's stored setting, exactly as `settings set agent=` from a script would make it.
+        mAgent->onConnect = [this](const std::string &agent) {
+            cosmo::Command set;
+            set.kind = cosmo::Command::Kind::SettingsSet;
+            set.fields = {{"agent", agent}};
+            if (!emitCommand(set)) mSvc.dispatch(set);
+            cosmo::Command start;
+            start.kind = cosmo::Command::Kind::AssistStart;
+            if (!emitCommand(start)) mSvc.dispatch(start);
+        };
         mTabs->addPage("Agent", mAgent);
 
         addChild(mTabs);

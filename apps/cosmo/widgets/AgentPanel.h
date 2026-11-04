@@ -27,6 +27,7 @@
 #include "../../../core/Artboard/include/artboard/artboard.h"
 #include "../core/service/AppModel.h"
 #include "PillButton.h"
+#include "HoverFade.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -56,6 +57,12 @@ namespace cosmo_v2
         std::function<void(const std::string &)> onSend;   // -> assist send <text>
         std::function<void()> onStart;                     // -> assist start
         std::function<void()> onStop;                      // -> assist stop
+        /** R-ASSIST-11: Connect - store this `agent=` setting and start it. */
+        std::function<void(const std::string &)> onConnect;
+        /** R-ASSIST-11: look for agents (`assist agents`) - asked when the choices are first shown. */
+        std::function<void()> onDetect;
+        /** The user's current `agent=` setting, so the choices open on it. */
+        void setCurrentAgent(const std::string &setting) { mCurrentAgent = setting; }
 
         /** Whether the message field has the keyboard - App::isTextEditing() asks, so its plain-key
          *  shortcuts (o, s, Delete) do not fire while the user types to the agent. */
@@ -71,6 +78,13 @@ namespace cosmo_v2
         /** The newest message's opacity right now (1 at rest, < 1 mid fade-in). */
         double newestAlpha() const;
         void typeForTest(const std::string &text);
+        // ── the choices (R-ASSIST-11) ──
+        bool pickerShown() const;                      // the target: choices, not the chat
+        double pickAmount() const { return mPick.value(); }   // the LIVE cross-fade, 0 chat .. 1 choices
+        int choiceCount() const { return (int)mChoices.size(); }
+        int selectedChoice() const { return mSelectedChoice; }
+        artboard::Rect choiceRect(int i) const;        // in this segment's coordinates
+        std::string fieldText() const { return mField ? mField->text : std::string(); }
         artboard::Rect sendRect() const;
         artboard::Rect startStopRect() const;
 
@@ -83,6 +97,7 @@ namespace cosmo_v2
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
+        bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
     private:
@@ -121,6 +136,29 @@ namespace cosmo_v2
         mutable double mIntroAt = -1.0;
         mutable std::string mIntroAgent;
         int mSendLive = -1;   // the last applied Send dimming (-1 = never), so it eases only on a change
+
+        // ── the choices (R-ASSIST-11) ──
+        void selectChoice(int i);
+        void connect();
+        int choiceAt(const artboard::Point &local) const;
+        double choicesTop() const;
+        std::vector<cosmo::AgentChoice> mChoices;
+        int mSelectedChoice = -1;
+        std::string mCurrentAgent;
+        bool mPickWanted = false;        // the user opened the choices while a chat exists
+        bool mPickShownApplied = false;  // what advance() last acted on (the setter has no clock)
+        bool mDetectAsked = false;
+        std::string mDraft;              // the chat message being typed, kept while the field holds a command
+        artboard::AnimatedProperty mPick{0.0};
+        HoverFade mRowHover;
+        artboard::AnimatedProperty mPickScroll{0.0};
+        double mPickScrollTarget = 0.0, mPickScrollLast = 0.0;
+        mutable double mPickContentH = 0.0;
+        mutable std::vector<std::string> mHintLines;
+        mutable double mHintAt = -1.0;
+        mutable std::vector<std::string> mNoteLines;   // each choice's note, ellipsized once per width
+        mutable double mNotesAt = -1.0;
+        mutable size_t mNotesFor = 0;
     };
 }
 }

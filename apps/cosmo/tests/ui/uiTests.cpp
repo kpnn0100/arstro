@@ -1424,6 +1424,7 @@ namespace
     {
         std::printf("App: the Agent tab shows the conversation and talks through the service (R-ASSIST-7)\n");
         using namespace arstro::cosmo;
+        using arstro::cosmo::AgentChoice;
         struct Shared
         {
             std::vector<std::string> sent;
@@ -1443,6 +1444,10 @@ namespace
         };
         Rig rig(1440.0, 900.0);
         rig.svc.setAssistantFactory([sh] { return std::unique_ptr<IAssistant>(new Fake(sh)); });
+        rig.svc.setAgentDetector([] {
+            return std::vector<AgentChoice>{{"claude", "Claude Code", "claude", true, "installed"},
+                                            {"ollama:m", "Ollama - m", "local:http://127.0.0.1:11434/v1|m", true, "local model"}};
+        });
         check(rig.loadFakePhoto(), "a photo is open");
         rig.app.showEditor();
         rig.settle(400.0);
@@ -1461,11 +1466,33 @@ namespace
               "selecting it lays the panel out across the column");
         check(agent->contentHeight() == 0.0 && rig.svc.model().assist.messages.empty(), "empty: nothing said yet");
 
+        // R-ASSIST-11: with nothing said and no agent running, the tab is the CHOICES - looked for on
+        // first sight - and Connect stores the chosen setting and starts it.
+        check(agent->pickerShown() && agent->pickAmount() > 0.99, "it opens on the agents to choose from");
+        check(agent->choiceCount() == 2 && agent->selectedChoice() == 0 && agent->fieldText() == "claude",
+              "the machine's agents are listed, the field shows the selected one's setting");
+        const artboard::Transform at = agent->worldTransform();
+        const artboard::Rect c1 = agent->choiceRect(1);
+        rig.click(at.e + c1.x + c1.w * 0.5, at.f + c1.y + c1.h * 0.5);
+        check(agent->selectedChoice() == 1 && agent->fieldText() == "local:http://127.0.0.1:11434/v1|m",
+              "clicking a choice selects it and shows its setting, editable");
+        const artboard::Rect sr = agent->sendRect();
+        rig.click(at.e + sr.x + sr.w * 0.5, at.f + sr.y + sr.h * 0.5);   // Connect
+        check(rig.svc.model().settings.agent == "local:http://127.0.0.1:11434/v1|m" && rig.svc.model().assist.state != "off",
+              "Connect stores the setting and starts that agent");
+        bool fading = false;
+        for (int i = 0; i < 8 && !fading; ++i)
+        {
+            rig.frame();
+            fading = agent->pickAmount() > 0.01 && agent->pickAmount() < 0.99;
+        }
+        check(fading, "the choices cross-fade into the chat (a frame mid-fade)");
+        rig.settle(300.0);
+        check(!agent->pickerShown() && agent->pickAmount() < 0.01, "connected, the tab is the chat");
+
         // Send through the panel's own button.
         agent->typeForTest("make these cinematic");
         rig.frames(2);
-        const artboard::Transform at = agent->worldTransform();
-        const artboard::Rect sr = agent->sendRect();
         rig.click(at.e + sr.x + sr.w * 0.5, at.f + sr.y + sr.h * 0.5);
         check(sh->sent.size() == 1 && sh->sent[0] == "make these cinematic", "Send is `assist send`: the agent got the message");
         check(rig.svc.model().assist.state == "busy", "and the agent is working");

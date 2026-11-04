@@ -673,6 +673,7 @@ namespace cosmo_v2
         refreshLibrary();
         mRightColumn->syncToSlot();
         // R-ASSIST-7: the conversation is the model's; the panel eases in whatever arrived.
+        mRightColumn->agentPanel()->setCurrentAgent(mSvc.model().settings.agent);
         mRightColumn->agentPanel()->setConversation(mSvc.model().assist);
     }
 
