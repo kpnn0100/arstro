@@ -3601,12 +3601,15 @@ as `\n` (`Event.cpp:86`) so an event stays one line on every channel. The servic
 `cosmo_v2::ProcessAssistant` (`apps/cosmo/AssistProcess.{h,cpp}`, host, POSIX), made by the window's
 factory (`linux_main.cpp:1568` — which first opens the control socket at `$XDG_RUNTIME_DIR/cosmo-<pid>.sock`
 if `--control` did not; the event broadcast is now subscribed unconditionally) and by `cosmo-cc serve`'s
-(`cli/main.cpp:2354`). `configFor(socket)` (`AssistProcess.cpp:178`): `cosmo-cc` beside the executable
+(`cli/main.cpp:2354`). `configFor(socket)` (`AssistProcess.cpp:206`): `cosmo-cc` beside the executable
 (`<dir>/cosmo-cc`, `<dir>/cli/cosmo-cc`, else PATH), the workspace `<config>/agent`, and the default skills —
-`arstro.color.grading` under `$COSMO_SKILLS_DIR`, else the `COSMO_SKILLS_DIR` the build was configured with
-(the repository's `.claude/skills` in a developer build). `start` refuses an agent not on PATH by name
+`arstro.color.grading` and every `arstro.color.grading.<part>` beside it (the skills the entry point loads —
+`.style`; the entry first, the rest sorted; `defaultSkills`, `AssistProcess.cpp:178`) under `$COSMO_SKILLS_DIR`, else
+the `COSMO_SKILLS_DIR` the build was configured with (the repository's `.claude/skills` in a developer build).
+AGENTS.md lists each with what it is for (`agentsMd`). Guard: `cosmo_assist` and `cosmo_assist_acp` assert the
+`.style` sub-skill is linked and listed (both fail with only the entry skill linked). `start` refuses an agent not on PATH by name
 ("Claude Code is not installed (`claude` was not found on PATH) - install it, or choose another agent in
-Settings"), then `prepareWorkspace` (`:285`) links each skill directory into `<workspace>/.claude/skills/`
+Settings"), then `prepareWorkspace` (`:420`) links each skill directory into `<workspace>/.claude/skills/`
 and writes `<workspace>/cosmo-mcp.json` = `{"mcpServers": {"cosmo": {"command": <cosmo-cc>, "args": ["mcp",
 "--attach", <socket>]}}}`.
 
@@ -3614,10 +3617,10 @@ and writes `<workspace>/cosmo-mcp.json` = `{"mcpServers": {"cosmo": {"command": 
   `claude -p --input-format stream-json --output-format stream-json --verbose --mcp-config
   <workspace>/cosmo-mcp.json --append-system-prompt <systemPrompt> --allowedTools <kAllowedTools>
   <agentArgs…>`. `kAllowedTools` (`:28`) = `mcp__cosmo,Skill,Read,Glob,Grep,Write,Edit,TodoWrite,
-  Bash(python3:*),Bash(ls:*),Bash(mkdir:*)` (R-ASSIST-5). `systemPrompt` (`:188`) says it is inside
+  Bash(python3:*),Bash(ls:*),Bash(mkdir:*)` (R-ASSIST-5). `systemPrompt` (`:323`) says it is inside
   Cosmo, names the open project and its photo count, that edits are live and undoable, to use the
   colour-grading skill for grading, to look before and after, and to answer briefly. A message is
-  `{"type":"user","message":{"role":"user","content":…}}` on its stdin. `parseClaudeLine` (`:240`):
+  `{"type":"user","message":{"role":"user","content":…}}` on its stdin. `parseClaudeLine` (`:375`):
   `system/init` → `Ready` ("Claude Code 2.1.316 - claude-…"), `assistant` text → `Text`, `tool_use` →
   `Tool` ("cosmo_run: select 2;set temp=5600", the first meaningful argument, 140 chars), `result` →
   `Done` (plus `Failed` when `is_error`).

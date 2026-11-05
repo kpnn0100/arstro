@@ -2300,7 +2300,11 @@ the P0 test harness — hence `ASSIST`.)
     client knows a command was handled, rather than guessing from 600 ms of silence.
 - **R-ASSIST-4 The colour-grading skill is loaded by default.** The agent runs in cosmo's own workspace
   (`<config>/agent/`), whose skills include `arstro.color.grading`; `agentSkills=` (directories,
-  `:`-separated) adds more. The agent is told it is inside cosmo and which project is open, and finds
+  `:`-separated) adds more. (**AMENDED (the entry point loads other skills), 2026-11-05:** the user: *"arstro.color.grading
+  will be entry point to load other skill"* — the bundled skills are the entry skill `arstro.color.grading` AND every
+  skill it loads, `arstro.color.grading.<part>` beside it (first `arstro.color.grading.style`: what a user means by a
+  look in their own words); all are linked into the workspace and listed in its AGENTS.md, the entry first. A
+  sub-skill the workspace did not link could be named by the entry skill and never be found.) The agent is told it is inside cosmo and which project is open, and finds
   the application through `COSMO_CONTROL`, `COSMO_CC` and `COSMO_PROJECT` — so the skill's own scripts
   drive the open project too, rather than a second copy of it.
 - **R-ASSIST-5 What the agent may do is stated, not assumed.** By default: cosmo's tools, reading files,

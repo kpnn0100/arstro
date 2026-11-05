@@ -29,6 +29,8 @@ cfg = json.load(open(argv[argv.index("--mcp-config") + 1]))["mcpServers"]["cosmo
 assert cfg["args"][:2] == ["mcp", "--attach"] and cfg["args"][2] == os.environ["COSMO_CONTROL"], cfg
 assert "--allowedTools" in argv and "mcp__cosmo" in argv[argv.index("--allowedTools") + 1]
 assert os.path.isfile(".claude/skills/arstro.color.grading/SKILL.md"), os.getcwd()
+# R-ASSIST-4 (amended 2026-11-05): the entry skill AND the skills it loads (arstro.color.grading.*)
+assert os.path.isfile(".claude/skills/arstro.color.grading.style/SKILL.md"), os.listdir(".claude/skills")
 assert "INSIDE Cosmo" in argv[argv.index("--append-system-prompt") + 1]
 def out(o): print(json.dumps(o), flush=True)
 out({"type": "system", "subtype": "init", "claude_code_version": "0-fake", "model": "fake-model"})

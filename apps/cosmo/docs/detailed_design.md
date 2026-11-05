@@ -973,7 +973,8 @@ pumpAssistant / assistSay(role, text) / assistState(state)`; `AppModel::assist` 
 "off"|"starting"|"ready"|"busy"|"failed", agent, messages[AssistMessageModel{role, text}] }`; settings
 `agent` ("claude"), `agentArgs`, `agentSkills`. Host: `ProcessAssistant(Config{cosmoCc, controlSocket,
 workspace, bundledSkills})`, statics `isClaude`, `systemPrompt`, `claudeArgv`, `parseClaudeLine`,
-`fillPrompt`, `findProgram`, `findCosmoCc`, `defaultSkills`, `configFor(socket)`; constants
+`fillPrompt`, `findProgram`, `findCosmoCc`, `defaultSkills` (the entry skill `arstro.color.grading` first, then every
+`arstro.color.grading.<part>` it loads, sorted), `configFor(socket)`; constants
 `kAllowedTools`; `stop()` waits 50 × 10 ms after SIGTERM before SIGKILL.
 **Any agent (R-ASSIST-9/10).** `AssistOutput::Kind::TextDelta`; `AgentChoice {id, name, agent, installed, note}`,
 `AssistModel::choices`; `Command::Kind::AssistAgents`; `CosmoService::setAgentDetector(function<vector<AgentChoice>()>)`,

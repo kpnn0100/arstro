@@ -46,6 +46,8 @@ while True:
         md = open(os.path.join(p["cwd"], "AGENTS.md")).read()
         assert "skills/arstro.color.grading/SKILL.md" in md and os.path.isfile(os.path.join(p["cwd"], "skills/arstro.color.grading/SKILL.md")), md
         assert os.path.isfile(os.path.join(p["cwd"], "GEMINI.md"))
+        # R-ASSIST-4 (amended 2026-11-05): the skills the entry point loads are linked and listed too
+        assert "skills/arstro.color.grading.style/SKILL.md" in md and os.path.isfile(os.path.join(p["cwd"], "skills/arstro.color.grading.style/SKILL.md")), md
         mcp = subprocess.Popen([srv["command"]] + srv["args"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         def call(method, params, n=[0]):
             n[0] += 1

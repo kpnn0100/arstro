@@ -3,6 +3,7 @@
 #include "HttpLite.h"
 #include "ntwb/Json.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <csignal>
@@ -181,9 +182,24 @@ namespace cosmo_v2
 #ifdef COSMO_SKILLS_DIR
         if (root.empty()) root = COSMO_SKILLS_DIR;
 #endif
+        // R-ASSIST-4 (amended 2026-11-05): the colour-grading ENTRY skill and every skill it loads
+        // (`arstro.color.grading.<part>`, e.g. `.style` - what a user means by a look in their own words).
+        // The entry comes first: `cosmo_grade` runs its editor.
         std::vector<std::string> out;
         const std::string grading = root + "/arstro.color.grading";
-        if (!root.empty() && access((grading + "/SKILL.md").c_str(), R_OK) == 0) out.push_back(grading);
+        if (root.empty() || access((grading + "/SKILL.md").c_str(), R_OK) != 0) return out;
+        out.push_back(grading);
+        namespace fs = std::filesystem;
+        std::error_code ec;
+        std::vector<std::string> parts;
+        for (const auto &e : fs::directory_iterator(root, ec))
+        {
+            const std::string name = e.path().filename().string();
+            if (name.rfind("arstro.color.grading.", 0) == 0 && fs::exists(e.path() / "SKILL.md", ec))
+                parts.push_back(e.path().string());
+        }
+        std::sort(parts.begin(), parts.end());
+        out.insert(out.end(), parts.begin(), parts.end());
         return out;
     }
 
@@ -216,9 +232,13 @@ namespace cosmo_v2
                  "from this directory and reach this window through the COSMO_CONTROL environment variable.\n";
             for (const auto &k : skills)
                 s += "- " + k + ": skills/" + k + "/SKILL.md" +
-                     (k == "arstro.color.grading" ? " - colour grading in the photographer's own taste: cinematic, a "
-                                                    "mood or look, correcting, matching a set, many photos at once"
-                                                  : std::string()) + "\n";
+                     (k == "arstro.color.grading"
+                          ? " - THE ENTRY POINT for colour: grading in the photographer's own taste, cinematic, a mood or "
+                            "look, correcting, matching a set, many photos at once; it says which skill below to load"
+                      : k == "arstro.color.grading.style"
+                          ? " - what the user MEANS by a look in their own words, any language (warm, moody, tong Han, "
+                            "vintage film but brighter, the night ones neon) and the edit that answers it"
+                          : std::string()) + "\n";
         }
         s += "\n## How to answer\n\nThe user reads your replies in a small panel beside the photo: answer briefly and "
              "plainly. Look at a photo before and after you change it.\n";

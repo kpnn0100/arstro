@@ -2463,7 +2463,7 @@ static int cmdAgent(const Args &a)
                      "corrects each photo, gives it the look that suits it, matches the set, protects skies and skin. "
                      "Use it for 'make these cinematic', a mood, 'edit them all'. About a minute per photo; the edits "
                      "appear live in the user's window.",
-                     R"({"type":"object","properties":{"mood":{"type":"string","description":"optional: a mood in words, e.g. moody forest, golden hour, teal and orange; omit for the photographer's own cinematic taste"},"photos":{"type":"string","description":"optional: photo names, comma-separated; omit for all"}}})"));
+                     R"({"type":"object","properties":{"mood":{"type":"string","description":"optional: the look the user asked for, in their own words and language, e.g. warm and moody, tông Hàn nhẹ nhàng, vintage film but brighter, golden hour, black and white; omit for the photographer's own cinematic taste"},"photos":{"type":"string","description":"optional: photo names, comma-separated; omit for all"}}})"));
     toolDefs.push(fn("cosmo_state", "The open project: its photos (each with a `node` number), the selection, the history.",
                      R"({"type":"object","properties":{}})"));
     toolDefs.push(fn("cosmo_analyze", "Measure a photo: exposure (key EV, percentiles), colour cast, saturation, hues, "
