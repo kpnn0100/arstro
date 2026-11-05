@@ -15,7 +15,7 @@ Format, newest first:
 
 ---
 
-## THE STYLE LAB (2026-11-05): 17 styles a user may ask for, 3 readings each  (status: awaiting the approver's picks)
+## THE STYLE LAB (2026-11-05): 17 styles a user may ask for, 3 readings each  (status: 14 judged; moody, dreamy, melancholy in round 2)
 
 The approver: *"now i need to teach you with multiple style and wording since user will input a lot, you need to
 understand what they mean — generate a list of edit that represent for a style, a desire with photo, i will judge
@@ -32,7 +32,30 @@ What the first board taught before the approver saw it: **the sky check took a r
 for may now colour its sky (saturation up to 1.6x, clouds may take its warmth); sand, two colours, torn clouds and
 extra contrast are still refused; `natural` and `cinematic` keep the strict taste sky. And a split tone (cool toe,
 warm shoulder) on a white sky splits it into cream and grey — warm's third reading now keeps neutral blacks.
-STYLE LAB VERDICT: _(pending — per style: which reading IS the word, which are wrong, and why)_
+STYLE LAB VERDICT, round 1 (2026-11-05, 17 styles): 14 picks, 2 "none of them", 1 wrong.
+- **A feeling is a DIRECTION applied to the photo, not a filter over it.** Every feeling word was won by the reading
+  that kept the photo's own colour and moved it one way: cinematic = THE TASTE itself (not anamorphic teal & orange,
+  not a muted film print); natural = Natural Cinema 70 % + a little richer (NOT "corrected only" — natural to them
+  still has a look); warm = Natural Cinema in +800 K light; bright & airy = natural colour, brighter, softer contrast
+  (not pastel haze, not high key); vibrant = their own teal at 130 % (not a mixer pop, not HDR).
+- **Warm is never colour painted on the light**: the one WRONG of the board is warm's orange highlight wheels — and the
+  gold wash (Golden Dream 70 %) lost to plain warmer light.
+- **A named look commits fully**: vintage film = Kodak Gold (warm, rich reds, grain); neon = Neon Noir; golden hour =
+  Golden Dream (amber through the whole frame — there the wash IS the word); B&W = the warm-toned print; muted = the
+  Classic-Chrome documentary; Korean = clean bright cool-pink; Japanese = Spring Haze; teal & orange at 60 % (the
+  quieter split); cool = Blue Melancholy 60 % (a blue MOOD, more than a cooler temperature).
+- **Dreamy keeps its depth** ("it just low contrast, lost the depth of the photo, dreamy soft got depth too"): all three
+  readings lifted the blacks. Dreamy is soft LIGHT on a photo with deep blacks — local contrast down, highlights rolled
+  and tinted, the depth floor on. (Japanese film, judged on another photo, was accepted with its soft lift — the
+  Japanese look asks for "a little overexposed"; dreamy does not.)
+- **A style needs a photo that can carry it** ("can not dark and moody on this photo" — sunlit cedars at Nikko): moody
+  is judged again on the overcast castle moat.
+- **Melancholy without losing the natural colour** ("too much blue it lost the natural color", Blue Melancholy picked):
+  the blue reading at half strength and a quiet natural one, round 2.
+- Found while rebuilding dreamy: a pink-only colour-mixer line (saturation or luminance, however anchored) turned the
+  gold ornaments lime (hue 45 -> 55-58) and the sakura cream on DSCF5288; a flat mixer changes nothing. Suspected
+  Cosmo defect (to file with arstro.cosmo.core.debug); until then a candidate gets its pinks from the wheels.
+STYLE LAB VERDICT, round 2: _(pending — moody, dreamy, melancholy)_
 
 ## SECOND SHOOT — ~/photo/myphoto/dichoi (2026-11-03): 4 Panasonic JPEGs, "cinematic mood"  (status: awaiting marks)
 

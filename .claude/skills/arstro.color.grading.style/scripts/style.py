@@ -183,6 +183,20 @@ def cmd_board(args):
     board = {"built": time.strftime("%Y-%m-%dT%H:%M:%S"), "project": str(Path(args.project).expanduser()),
              "styles": sorted(keep + rows, key=lambda b: order.index(b["id"]) if b["id"] in order else 99)}
     board_path.write_text(json.dumps(board, ensure_ascii=False, indent=1))
+    # A verdict belongs to the renders it was given on: a style rendered again (new candidates, a new photo) is
+    # judged again. The old verdict moves into its history — the page shows its note as "last time", and the next
+    # judgement keeps the history (lab.py).
+    ver, moved = ST.verdicts(), []
+    for r in rows:
+        prev = ver.get(r["id"]) or {}
+        if prev.get("best") or prev.get("none"):
+            hist = prev.pop("history", [])
+            ver[r["id"]] = {"history": hist + [prev]}
+            moved.append(r["id"])
+    if moved:
+        ST.VERDICTS.write_text(json.dumps(ver, ensure_ascii=False, indent=1))
+        print("judged before, to judge again (round %s): %s" % (
+            ", ".join(str(len(ver[m]["history"]) + 1) for m in moved), ", ".join(moved)))
     print("-> %s (%d styles) — judge at http://127.0.0.1:8789/styles" % (board_path, len(board["styles"])))
 
 

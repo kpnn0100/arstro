@@ -113,7 +113,11 @@ own steps on the style's demo photo, so the pick is what `edit.py run --style` d
 
 **After the approver judges:**
 - write what the picks MEAN into `taste.md` (entry skill) — e.g. "warm = the light warmer, never a gold wash";
-- a style judged **none fits** gets three NEW candidates built from the note, and a new board for that style only;
+- a style judged **none fits** gets three NEW candidates built from the note (or a photo that can carry the word —
+  "can not dark and moody on this photo"), and a new board for that style only (`--styles <id>`). **A style rendered
+  again is judged again**: `board` moves its verdict into the style's `history`, the page shows it as "Round N — last
+  time: …" and opens on the styles still to judge, and `recipe()` falls back to candidate A until the new pick — so
+  put the reading the note asks for in A;
 - a **Wrong** on a candidate is a lesson about the word ("vintage is not faded to them") — record it beside the style;
 - when two styles' picks agree on a rule (e.g. both refuse a coloured sky), make it a rule in `styles.py` / `style.py`;
 - a new wording a user used that the matcher missed → add it to that style's `words` (and `style.py match` it).
@@ -122,7 +126,11 @@ own steps on the style's demo photo, so the pick is what `edit.py run --style` d
 
 1. A user asked for something the catalogue reads wrongly or not at all → name the desire, write `means`, `words`
    (English + Vietnamese, the way people actually type it), `modifier`, a `demo` photo that suits it.
-2. Three candidates that are genuinely different READINGS (not one recipe at three strengths).
+2. Three candidates that are genuinely different READINGS (not one recipe at three strengths). The demo photo must
+   be in the project the board renders from (`tokyoaitest.cmp` has 13 of the shoot's photos — a missing one falls
+   back to the first photo). **Do not give a candidate a colour-mixer line aimed at one hue** (pinks only, say): in
+   Cosmo it moved other hues too (gold ornaments to lime, sakura to cream, 2026-11-05 — suspected engine defect); get
+   that colour from the grade wheels, vibrance or a mood instead, and measure the hue you protect after rendering.
 3. `style.py board --styles <id>` → LOOK at all three yourself (skies at 1:1, skin, whites) → the approver judges.
 4. `style.py match` a few real prompts with the new words, including one with "a bit" and one with "less".
 

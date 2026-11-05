@@ -435,7 +435,7 @@ main{padding:14px 16px 60px;max-width:1700px;margin:auto}
 .card{background:var(--card);border-radius:12px;margin:0 0 26px;overflow:hidden;border:2px solid transparent}
 .card.done{border-color:var(--good)}.card.none{border-color:var(--bad)}
 .head{padding:12px 16px 8px}.head h2{margin:0;font-size:19px}.head h2 span{color:var(--dim);font-size:13px;font-weight:400}
-.means{margin:2px 0}.words{color:var(--dim);font-size:13px}.words b{color:var(--ink);font-weight:500}
+.was{margin:2px 0;color:var(--acc);font-size:13px}.means{margin:2px 0}.words{color:var(--dim);font-size:13px}.words b{color:var(--ink);font-weight:500}
 .row4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:#000;padding:6px}
 @media(max-width:1000px){.row4{grid-template-columns:repeat(2,1fr)}}
 .c{position:relative;background:#0b0b0d;border:2px solid transparent;border-radius:6px;overflow:hidden}
@@ -455,7 +455,8 @@ main{padding:14px 16px 60px;max-width:1700px;margin:auto}
 #view img{max-width:98vw;max-height:90vh}#view p{color:var(--dim);margin:8px}
 </style></head><body>
 <header><h1>Style Lab <small>arstro.color.grading.style — what does each word mean to you?</small></h1>
-<span id="prog"></span><label><input type="checkbox" id="rev"> show what each version is</label>
+<span id="prog"></span><label><input type="checkbox" id="todo"> only the ones still to judge</label>
+<label><input type="checkbox" id="rev"> show what each version is</label>
 <a href="/">Grade Lab</a><a href="/exam">exam</a></header>
 <main><p class="intro">Each card is one STYLE a user may ask for, with the words people use for it. The three versions are three
 readings of that word on the same photo (order shuffled). Mark the one that <b>is</b> the word — <b>Best</b> — and any that are
@@ -465,11 +466,17 @@ become the recipe an agent uses when a user writes that word.</p><div id="m"></d
 <script>
 let B=null;const $=s=>document.querySelector(s);
 const esc=t=>(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-async function load(){B=await (await fetch('/api/styles')).json();draw();}
-function V(s){return s.verdict||(s.verdict={best:null,wrong:[],none:false,note:''});}
+let TODO=new Set();
+async function load(){B=await (await fetch('/api/styles')).json();
+ TODO=new Set(B.styles.filter(s=>!(s.verdict&&(s.verdict.best||s.verdict.none))).map(s=>s.id));
+ $('#todo').checked=TODO.size>0&&TODO.size<B.styles.length;draw();}
+function was(v){const h=v.history||[];if(!h.length)return'';const l=h[h.length-1];
+ return `<p class="was">Round ${h.length+1} — new versions. Last time: ${l.none?'none of them':'you picked one'}${l.note?' — “'+esc(l.note)+'”':''}</p>`;}
+function V(s){const v=s.verdict||(s.verdict={});v.best??=null;v.wrong??=[];v.none??=false;v.note??='';return v;}
 function draw(){
- $('#m').innerHTML=B.styles.map((s,i)=>{const v=V(s);return `<div class="card ${v.none?'none':v.best?'done':''}" id="s${i}">
-  <div class="head"><h2>${esc(s.title)} <span>· ${esc(s.photo)}${s.subject?' — '+esc(s.subject):''}</span></h2>
+ $('#m').innerHTML=B.styles.map((s,i)=>{const v=V(s);if($('#todo').checked&&!TODO.has(s.id))return'';
+  return `<div class="card ${v.none?'none':v.best?'done':''}" id="s${i}">
+  <div class="head"><h2>${esc(s.title)} <span>· ${esc(s.photo)}${s.subject?' — '+esc(s.subject):''}</span></h2>${was(v)}
   <p class="means">${esc(s.means)}</p><p class="words"><b>people say:</b> ${s.words.map(esc).join(' · ')}</p></div>
   <div class="row4"><div class="c orig"><img src="/styles-img/${s.id}/${s.original}" data-s="${i}" data-k="-1"><span class="tag">original (as shot)</span>
    <div class="btns">the camera's frame</div></div>
@@ -511,6 +518,7 @@ document.onkeydown=e=>{if($('#view').style.display!='flex')return;const n=B.styl
  if(e.key=='o'||e.key=='O'){$('#vimg').src=`/styles-img/${B.styles[vs].id}/${B.styles[vs].original}`;}};
 document.onkeyup=e=>{if((e.key=='o'||e.key=='O')&&$('#view').style.display=='flex')open_(vs,vk);};
 $('#rev').onchange=()=>{document.body.classList.toggle('reveal',$('#rev').checked);};
+$('#todo').onchange=draw;
 load();
 </script></body></html>"""
 
@@ -635,7 +643,7 @@ def serve(args):
                          "wrong": [x for x in b.get("wrong", []) if x in ("A", "B", "C")],
                          "none": bool(b.get("none")), "note": b.get("note", ""),
                          "photo": s and s["photo"], "board": board.get("built"),
-                         "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+                         "at": time.strftime("%Y-%m-%dT%H:%M:%S"), "history": prev.get("history", [])}
                     ver[b["style"]] = v
                     ST.VERDICTS.parent.mkdir(parents=True, exist_ok=True)
                     ST.VERDICTS.write_text(json.dumps(ver, ensure_ascii=False, indent=1))
@@ -643,7 +651,7 @@ def serve(args):
                     rec = {"at": v["at"], "kind": "style", "style": b["style"], "photo": v["photo"],
                            "best": v["best"] and {"letter": v["best"], **by.get(v["best"], {}).get("recipe", {})},
                            "wrong": [{"letter": x, **by.get(x, {}).get("recipe", {})} for x in v["wrong"]],
-                           "none": v["none"], "note": v["note"]}
+                           "none": v["none"], "note": v["note"], "round": len(v["history"]) + 1}
                     # the log keeps each DECISION (a pick or "none", or a changed note) — not every click on the way
                     if (v["best"] or v["none"]) and any(prev.get(k) != v[k] for k in ("best", "wrong", "none", "note")):
                         with open(JUDGMENTS, "a") as fh:

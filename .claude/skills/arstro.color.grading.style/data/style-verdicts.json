@@ -1,0 +1,169 @@
+{
+ "cinematic": {
+  "best": "A",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "DSCF5186.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:33:20"
+ },
+ "natural": {
+  "best": "C",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "_DSF6592.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:33:50"
+ },
+ "warm": {
+  "best": "B",
+  "wrong": [
+   "C"
+  ],
+  "none": false,
+  "note": "",
+  "photo": "_DSF5417.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:34:14"
+ },
+ "cool": {
+  "best": "B",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "DSCF5411.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:34:27"
+ },
+ "moody": {
+  "history": [
+   {
+    "best": null,
+    "wrong": [],
+    "none": true,
+    "note": "can not dark and moody on this photo",
+    "photo": "_DSF6151.RAF",
+    "board": "2026-11-05T09:08:04",
+    "at": "2026-11-05T15:34:55"
+   }
+  ]
+ },
+ "bright-airy": {
+  "best": "B",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "_DSF6686.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:34:58"
+ },
+ "dreamy": {
+  "history": [
+   {
+    "best": null,
+    "wrong": [],
+    "none": true,
+    "note": "it just low contrast, lost the depth of the photo, dreamy soft got depth too",
+    "photo": "DSCF5288.RAF",
+    "board": "2026-11-05T09:08:04",
+    "at": "2026-11-05T15:38:07"
+   }
+  ]
+ },
+ "melancholy": {
+  "history": [
+   {
+    "best": "A",
+    "wrong": [],
+    "none": false,
+    "note": "but too much blue it lost the natural color",
+    "photo": "_DSF6609.RAF",
+    "board": "2026-11-05T09:08:04",
+    "at": "2026-11-05T15:35:40"
+   }
+  ]
+ },
+ "vintage-film": {
+  "best": "B",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "_DSF5417.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:35:47"
+ },
+ "teal-orange": {
+  "best": "B",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "_DSF6332.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:35:57"
+ },
+ "neon": {
+  "best": "A",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "DSCF5194.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:36:05"
+ },
+ "golden-hour": {
+  "best": "A",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "_DSF6904.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:36:12"
+ },
+ "vibrant": {
+  "best": "A",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "_DSF6592.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:36:22"
+ },
+ "muted": {
+  "best": "B",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "DSCF5411.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:36:29"
+ },
+ "bw": {
+  "best": "C",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "DSCF5186.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:36:38"
+ },
+ "korean": {
+  "best": "A",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "_DSF6686.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:36:53"
+ },
+ "japanese": {
+  "best": "A",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "_DSF6904.RAF",
+  "board": "2026-11-05T09:08:04",
+  "at": "2026-11-05T15:37:01"
+ }
+}

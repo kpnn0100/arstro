@@ -124,9 +124,20 @@ STYLES = {
         "words": ["moody", "dark", "darker mood", "dramatic", "brooding", "mysterious", "atmospheric", "intense",
                   "low key", "low-key", "gothic", "tối", "trầm", "u tối", "huyền bí", "kịch tính", "bí ẩn", "tông tối"],
         "modifier": [["darker", 1.5], ["contrast", 1]],
-        "demo": "_DSF6151.RAF",
+        # Style Lab 1 (2026-11-05): none fits — "can not dark and moody on this photo" (Nikko, sunlit cedars: a
+        # bright day has nothing dark to be moody with). Round 2 on the overcast castle moat (dark water, stone) —
+        # the melancholy photo too, so the two words can be told apart on one frame; the Moody Forest reading
+        # (flat: toe lifted, p99 0.74) replaced by a dense, deep one.
+        "demo": "_DSF6609.RAF",
         "candidates": [
-            C("moody forest — earthy, greens to deep olive-teal, nothing bright", look="moody-forest"),
+            C("dark & moody — dense mids, deep shadows, greens to deep olive, blues to slate, the light warm-neutral",
+              set=("exposure-=0.3 highlights-=20 curve=%s saturation=-10 grade0=195,6,0 grade2=30,4,0 "
+                   "mixer1=0,0;30,0.05;60,-0.1;95,-0.25;120,-0.25;200,-0.2;300,0 "
+                   "mixer2=0,0;60,0;95,-0.15;120,-0.15;200,-0.1;300,0 clarity=12 lensVignette=-25 "
+                   "grainAmount=6 grainSize=18" % _crv((0, 0), (0.25, 0.17), (0.5, 0.42), (0.8, 0.78), (1, 0.97))),
+              night=("curve=%s saturation=-10 grade0=195,6,0 mixer1=0,0;30,0.05;95,-0.2;120,-0.2;200,-0.15;300,0 "
+                     "clarity=10 lensVignette=-25 grainAmount=8 grainSize=18"
+                     % _crv((0, 0), (0.25, 0.2), (0.5, 0.46), (0.85, 0.88), (1, 0.97)))),
             C("dark teal — the approver's teal, darker, more contrast, a heavy vignette", look="natural-teal",
               tweaks=[("darker", 2), ("contrast", 1)], set="lensVignette=-28"),
             C("low key — exposure down, colour quiet except the warm light, the corners black", set=(
@@ -162,16 +173,24 @@ STYLES = {
                   "glowy", "pastel", "whimsical", "mộng mơ", "mơ màng", "lãng mạn", "dịu", "dịu dàng", "pastel",
                   "huyền ảo"],
         "modifier": [["soft", 1], ["faded", 0.5]],
+        # Style Lab 1 (2026-11-05): none fits — "it just low contrast, lost the depth of the photo, dreamy soft got
+        # depth too". All three lifted the blacks (depth off). Dreamy is SOFT LIGHT on a photo that keeps its
+        # blacks: local contrast down (clarity, texture), highlights rolled and tinted, the black point untouched,
+        # and the cinematic depth floor ON.
         "demo": "DSCF5288.RAF",
         "candidates": [
-            C("spring haze — mint shadows, pink light, sakura lifted", look="spring-haze", depth=False),
-            C("soft glow — less clarity, lifted toe, pinks up, a warm haze", set=(
-                "curve=%s curveR=%s curveB=%s clarity=-22 texture=-12 dehaze=-8 highlights-=20 "
-                "mixer1=0,0.1;30,0.02;60,-0.15;120,-0.1;300,0.15;330,0.25 saturation=-6"
-                % (_crv((0, 0.06), (0.25, 0.3), (0.5, 0.57), (0.8, 0.86), (1, 0.98)),
-                   _crv((0, 0.01), (0.5, 0.52), (1, 1)), _crv((0, 0.04), (0.5, 0.51), (1, 0.97)))), depth=False),
-            C("faded pastel — Faded Film 70 %, brighter", look="faded-film", strength=0.7, tweaks=[("brighter", 1)],
-              depth=False),
+            C("dreamy with depth — Spring Haze 80 %, blacks kept deep, local contrast down (a soft glow)",
+              look="spring-haze", strength=0.8, set="clarity=-18 texture=-8"),
+            # no mixer: on the first render a pink-only mixer (sat or lum, any anchoring) turned the gold
+            # ornaments lime (hue 45 -> 55-58) and the sakura cream; a flat mixer changes nothing. The pink comes
+            # from the highlight wheel and vibrance instead.
+            C("romantic glow — pink-cream light, deep shadows, edges soft", set=(
+                "exposure+=0.1 highlights-=20 curve=%s grade0=190,4,0 grade2=345,10,0 "
+                "saturation=-4 vibrance=8 clarity=-24 texture=-10"
+                % _crv((0, 0), (0.2, 0.17), (0.5, 0.54), (0.85, 0.88), (1, 0.97)))),
+            C("soft light, natural colour — Natural Cinema 60 %, a step brighter, local contrast down, highlights "
+              "rolled", look="natural-cinema", strength=0.6, tweaks=[("brighter", 1)],
+              set="clarity=-22 texture=-10 highlights-=15 vibrance=4"),
         ],
     },
     "melancholy": {
@@ -180,15 +199,15 @@ STYLES = {
         "words": ["sad", "melancholy", "melancholic", "lonely", "loneliness", "gloomy", "somber", "sombre", "quiet",
                   "rainy day", "blue mood", "buồn", "u buồn", "cô đơn", "trầm buồn", "lạnh lẽo", "tâm trạng", "chill buồn"],
         "modifier": [["cooler", 1], ["muted", 1.5]],
+        # Style Lab 1 (2026-11-05): Blue Melancholy picked — "but too much blue it lost the natural color". Round 2:
+        # the same reading with the natural colour kept, at two strengths, and a quiet one with no blue look at all.
         "demo": "_DSF6609.RAF",
         "candidates": [
-            C("blue melancholy — cold, nearly monochrome except the blues", look="blue-melancholy"),
-            C("lonely muted teal — the approver's teal, quieter, cooler, darker", look="natural-teal", strength=0.8,
-              tweaks=[("muted", 2), ("cooler", 1), ("darker", 1)]),
-            C("grey and still — colour drained, a soft cool grey air", set=(
-                "saturation=-40 temp-=200 curve=%s curveB=%s grainAmount=10 grainSize=20 lensVignette=-18 clarity=-4"
-                % (_crv((0, 0.03), (0.25, 0.22), (0.5, 0.47), (0.8, 0.8), (1, 0.94)),
-                   _crv((0, 0.03), (0.5, 0.51), (1, 1)))), depth=False),
+            C("blue melancholy, natural colour kept — Blue Melancholy 50 %", look="blue-melancholy", strength=0.5),
+            C("blue melancholy, quieter — Blue Melancholy 35 %, muted", look="blue-melancholy", strength=0.35,
+              tweaks=[("muted", 1)]),
+            C("quiet natural — natural colour, a step cooler, muted, a little darker; no blue look",
+              look="natural-cinema", strength=0.7, tweaks=[("cooler", 1), ("muted", 1.5), ("darker", 0.5)]),
         ],
     },
     # ── film and era ─────────────────────────────────────────────────────────────────────────────────────
