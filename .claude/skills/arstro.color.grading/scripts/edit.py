@@ -39,7 +39,7 @@ Mask geometry is 0..1 of the framed photo, y down. A linear mask is 0 at (x0,y0)
 Mask adjustments: exposure (EV), contrast, highlights, shadows, whites, blacks, temp, tint, saturation,
 texture, clarity, dehaze (-100..100, temp/tint relative).
 """
-import argparse, datetime, json, math, statistics, sys
+import argparse, contextlib, datetime, json, math, statistics, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -756,9 +756,29 @@ def cmd_run(args):
     # The default is the approver's TASTE (taste.py): each photo gets the look the Grade Lab verdicts chose
     # for photos like it. A named mood ("spring-haze", or words) puts that one mood on every photo.
     mood = args.mood or plan.get("mood") or "taste"
-    if mood != "taste":
-        mood = mood if mood in M.MOODS else M.find(mood)
     import taste as T
+    # A STYLE in the user's own words (arstro.color.grading.style): "--style 'tông Hàn nhẹ nhàng'", or mood words
+    # that name no mood. Its recipe is the candidate the approver picked in the Style Lab; adjustment words
+    # ("a bit warmer") alone refine the taste; a night/day scope edits only those photos.
+    style_v, scope, STY = None, None, None
+    words = args.style or ("" if mood == "taste" or mood in M.MOODS else mood)
+    if words:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "arstro.color.grading.style" / "scripts"))
+        import styles as STL
+        import style as STY
+        m = ({"style": words, "strength": 1.0, "tweaks": [], "scope": None, "why": "named"} if words in STL.STYLES
+             else STL.match(words))
+        if m["style"] or m["tweaks"]:
+            style_v = STL.variant(m) or {"look": "taste", "strength": 1.0, "tweaks": m["tweaks"], "set": "",
+                                         "night": None, "depth": True, "style": None, "label": "the taste"}
+            scope = m.get("scope")
+            mood = "style:%s" % (style_v["style"] or "taste")
+            print("style: %s — %s%s" % (m["why"], style_v["label"],
+                                        "".join(" +%s %g" % (n, a) for n, a in m["tweaks"])), flush=True)
+        elif args.style:
+            sys.exit("run: no style matches %r (style.py list shows them)" % args.style)
+    if mood not in ("taste",) and not mood.startswith("style:"):
+        mood = mood if mood in M.MOODS else M.find(mood)
     if not mood:
         sys.exit("run: no mood matches %r" % args.mood)
     only = set(n for n in args.names.split(",") if n) if args.names else None
@@ -782,12 +802,24 @@ def cmd_run(args):
             if pp.get("scene"):
                 scene, why = pp["scene"], ["set from the agent's reading of the photo (plan.json)"]
                 fam = L.FAMILY[scene]
+            if scope and fam != scope:          # "make the night ones neon": the day photos keep their edit
+                continue
             log = []
             clear_masks(cs, node)
             cs.run("select %d\nset %s" % (node, PHOTO_RESET))
             corr, _ = A.normalise(cs, node, scene, int(A.number(md.get("ISO"), 100)), log)
             skin = white = False
-            if mood == "taste":
+            keep_depth = True
+            if style_v:
+                v = STY.resolve(style_v, scene, r["analysis"], pp, style_v.get("style"))
+                v["strength"] = v["strength"] * args.strength * pp.get("strength", 1.0)
+                d = T.params(corr, fam, v, pp)
+                skin, white, keep_depth = v["skin"], v["white"], v.get("depth", True)
+                log.append("look %s %.0f%%%s%s — style %s: %s" % (v["look"], v["strength"] * 100,
+                                                                  "".join(" +%s" % t[0] for t in v["tweaks"]),
+                                                                  (" +skin" if skin else "") + (" +white" if white else ""),
+                                                                  style_v.get("style") or "taste", style_v["label"]))
+            elif mood == "taste":
                 ch = T.choose(scene, r["analysis"], pp)
                 v = {"look": ch["look"], "strength": ch["strength"] * args.strength * pp.get("strength", 1.0),
                      "tweaks": ch["tweaks"], "skin": ch["skin"], "white": ch.get("white", False)}
@@ -802,7 +834,7 @@ def cmd_run(args):
             set_photo(cs, node, d, pp.get("masks", []))
             a = cs.analyze(node)["analysis"]
             rows.append({"name": name, "node": node, "scene": scene, "family": fam, "why": why,
-                         "skin": skin, "white": white,
+                         "skin": skin, "white": white, "depth": keep_depth,
                          "meta": {k: md.get(k) for k in ("Taken", "ISO", "Shutter", "Aperture", "Focal length",
                                                           "Lens", "Camera model")},
                          "before": {k: r["analysis"][k] for k in ("keyEv", "lumPct", "castWarmth", "castTint",
@@ -864,13 +896,17 @@ def cmd_run(args):
                 a = match(cs, node, d, targets[key(r)], fam, args.match, r["log"],
                           skin=r.get("skin", False) or r.get("white", False),
                           zones=("shadows",) if has_sky else ("shadows", "highlights"))
-            depth(cs, node, d, fam, r["log"])
+            if r.get("depth", True):
+                depth(cs, node, d, fam, r["log"])
             # LOOK at the result before it is delivered (exam 2: "take a look at the photo again after grading")
             scratch = out / "after" / (".check-" + stem + ".jpg")
             masks = subject_check(cs, node, d, r["masks"], out / "before" / (stem + ".jpg"), scratch, r["log"],
                                   skin=r.get("skin", False), white=r.get("white", False), fam=fam, corr=r.get("corr"))
             if fam == "day" or r["scene"] == "blue-hour":     # a blue-hour sky is the hero of its frame
-                masks = sky_check(cs, node, d, masks, out / "before" / (stem + ".jpg"), scratch, r["log"], corr=r.get("corr"))
+                # a style the user asked for may colour its sky (style.py sky_tolerance); fakery is still refused
+                with (STY.sky_tolerance(style_v.get("style")) if style_v else contextlib.nullcontext()):
+                    masks = sky_check(cs, node, d, masks, out / "before" / (stem + ".jpg"), scratch, r["log"],
+                                      corr=r.get("corr"))
             r["masks"] = [{k: v for k, v in x.items() if not k.startswith("_")} | ({"sky": True} if x.get("_sky") else {})
                           for x in masks]
             scratch.unlink(missing_ok=True)
@@ -891,13 +927,17 @@ def cmd_run(args):
         if only and prev:
             keep = [p for p in prev.get("photos", []) if p["name"] not in only]
             rows = keep + rows
-        (out / "edit.json").write_text(json.dumps({"mood": mood, "strength": args.strength, "match": args.match,
+        (out / "edit.json").write_text(json.dumps({"mood": mood, "style_words": args.style or None,
+                                                   "strength": args.strength, "match": args.match,
                                                    "targets": targets, "photos": rows}, indent=1))
     finally:
         cs.close()
     A.sheets(out)
     import mood as MOODTOOL
-    MOODTOOL.overview(out, "%s - edited per photo" % ("The approver's taste" if mood == "taste" else M.MOODS[mood]["title"]))
+    title = ("The approver's taste" if mood == "taste" else
+             ("Style: " + (style_v["style"] or "taste")) if style_v else
+             M.MOODS[mood]["title"])
+    MOODTOOL.overview(out, "%s - edited per photo" % title)
     print("-> %s (overview.jpg, sheet_*.jpg, edit.json)" % out)
 
 
@@ -907,6 +947,8 @@ def main():
     ap.add_argument("project")
     ap.add_argument("--out", required=True)
     ap.add_argument("--mood", default="", help="'taste' (default: the approver's look per photo) or a mood name / words")
+    ap.add_argument("--style", default="", help="a style in the user's own words, any language — 'tông Hàn', "
+                                                "'warm and moody', 'vintage film, a bit brighter' (arstro.color.grading.style)")
     ap.add_argument("--plan", default="")
     ap.add_argument("--names", default="", help="only these photos (names, comma-separated)")
     ap.add_argument("--strength", type=float, default=1.0, help="the mood's strength")

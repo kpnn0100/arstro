@@ -15,6 +15,25 @@ Format, newest first:
 
 ---
 
+## THE STYLE LAB (2026-11-05): 17 styles a user may ask for, 3 readings each  (status: awaiting the approver's picks)
+
+The approver: *"now i need to teach you with multiple style and wording since user will input a lot, you need to
+understand what they mean — generate a list of edit that represent for a style, a desire with photo, i will judge
+that — each style just give me 3 photo, i will pick the best suitable for the style, use tokyoaitest.cmp to
+demonstrate — then build the skill to make sure agent can do edit just from prompt"* and *"/arstro.color.grading will
+be entry point to load other skill"*. Built: the sub-skill **arstro.color.grading.style** (this skill is its entry
+point): 17 styles (cinematic, natural, warm, cool, moody, bright & airy, dreamy, melancholy, vintage film, teal &
+orange, neon, golden hour, vibrant, muted, B&W, Korean tone, Japanese film), ~270 wordings in English and Vietnamese,
+three candidate READINGS per style rendered on a tokyoaitest photo that suits it, judged at
+http://127.0.0.1:8789/styles (verdicts -> arstro.color.grading.style/data/style-verdicts.json; `recipe()` follows the
+pick at once). `edit.py run --style "<the user's words>"` applies one to a whole shoot.
+What the first board taught before the approver saw it: **the sky check took a requested style back out of the sky**
+(warm: sky filter saturation -48 on a white overcast sky, the warm candidates read neutral). A style the user ASKED
+for may now colour its sky (saturation up to 1.6x, clouds may take its warmth); sand, two colours, torn clouds and
+extra contrast are still refused; `natural` and `cinematic` keep the strict taste sky. And a split tone (cool toe,
+warm shoulder) on a white sky splits it into cream and grey — warm's third reading now keeps neutral blacks.
+STYLE LAB VERDICT: _(pending — per style: which reading IS the word, which are wrong, and why)_
+
 ## SECOND SHOOT — ~/photo/myphoto/dichoi (2026-11-03): 4 Panasonic JPEGs, "cinematic mood"  (status: awaiting marks)
 
 The approver: *"try bring cinematic mood for these image"*. Cinematic = THE TASTE (taste.py): Natural Teal +skin on

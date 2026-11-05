@@ -1,6 +1,6 @@
 ---
 name: arstro.color.grading
-description: Colour grading photos (and video frames) the way a professional colourist does — read the photo's context and light first (metadata, measurement, and LOOKING at it), correct it, then apply a look — so the photographer only checks. EDITS IN THE APPROVER'S TASTE by default (scripts/taste.py, learned from their Grade Lab picks: CINEMATIC = full tonal range and contrast, never flat; natural object colour and the skin colour of people kept true; Natural Teal for sky/foliage/buildings/animals, Natural Cinema for people, warm Golden Dream at night and in aquariums, Neon Noir colour on reflections, hands off art light, never burnt highlights or veiled faces). EVERY PHOTO IS EDITED ON ITS OWN — look at each one, write its plan (subject, sky, light, local masks), then correct, give it the mood, apply the plan and match it to the set (scripts/edit.py review / run) — so 1000 photos come out edited and consistent from one prompt. Drives Cosmo through its MCP server (`cosmo-cc mcp`: cosmo_analyze, cosmo_preview, cosmo_run, cosmo_state) or the autograde script. Use it whenever photos are to be graded, colour-corrected, white-balanced, "made cinematic", given a film / teal-orange / moody / night / Tokyo neon look, matched as a set, or auto-edited; when the user asks to "grade", "edit", "color" or "make it look like a movie" a Cosmo project (.cmp) or an Interstellar timeline; and on `/arstro.color.grading` — even when grading is one step of a bigger task. Also for MOODS and editing many photos by prompt — "make these moody", "neon cyberpunk", "soft pastel spring", "Wong Kar-wai", "golden", "sad and blue", "black and white", "teal and orange", "faded film", "a bit warmer / less green / stronger" — nine moods built with R/G/B curves and the colour mixer, one file each in moods/, applied to a whole project in seconds (scripts/mood.py). Holds the colour science, the professional workflow, how to read light and scenes, colour blending with curves and mixer (references/moods.md), Cosmo's controls MEASURED (they are not Lightroom's), the autograde pipeline (scripts/autograde.py) and the approver's taste ledger (taste.md).
+description: THE ENTRY POINT for colour grading — it loads the skill a request needs (arstro.color.grading.style for a look asked for in the user's own words, any wording or language: "warm", "tông Hàn", "vintage film but brighter", "make the night ones neon"). Colour grading photos (and video frames) the way a professional colourist does — read the photo's context and light first (metadata, measurement, and LOOKING at it), correct it, then apply a look — so the photographer only checks. EDITS IN THE APPROVER'S TASTE by default (scripts/taste.py, learned from their Grade Lab picks: CINEMATIC = full tonal range and contrast, never flat; natural object colour and the skin colour of people kept true; Natural Teal for sky/foliage/buildings/animals, Natural Cinema for people, warm Golden Dream at night and in aquariums, Neon Noir colour on reflections, hands off art light, never burnt highlights or veiled faces). EVERY PHOTO IS EDITED ON ITS OWN — look at each one, write its plan (subject, sky, light, local masks), then correct, give it the mood, apply the plan and match it to the set (scripts/edit.py review / run) — so 1000 photos come out edited and consistent from one prompt. Drives Cosmo through its MCP server (`cosmo-cc mcp`: cosmo_analyze, cosmo_preview, cosmo_run, cosmo_state) or the autograde script. Use it whenever photos are to be graded, colour-corrected, white-balanced, "made cinematic", given a film / teal-orange / moody / night / Tokyo neon look, matched as a set, or auto-edited; when the user asks to "grade", "edit", "color" or "make it look like a movie" a Cosmo project (.cmp) or an Interstellar timeline; and on `/arstro.color.grading` — even when grading is one step of a bigger task. Also for MOODS and editing many photos by prompt — "make these moody", "neon cyberpunk", "soft pastel spring", "Wong Kar-wai", "golden", "sad and blue", "black and white", "teal and orange", "faded film", "a bit warmer / less green / stronger" — nine moods built with R/G/B curves and the colour mixer, one file each in moods/, applied to a whole project in seconds (scripts/mood.py). Holds the colour science, the professional workflow, how to read light and scenes, colour blending with curves and mixer (references/moods.md), Cosmo's controls MEASURED (they are not Lightroom's), the autograde pipeline (scripts/autograde.py) and the approver's taste ledger (taste.md).
 ---
 
 # arstro.color.grading
@@ -19,6 +19,20 @@ grading, and it lives here. Never put a grading decision into Cosmo's code — i
 number Cosmo cannot measure, that is a Cosmo task (`arstro.cosmo.core.implement`, R-GRADE).
 
 ---
+
+## THE ENTRY POINT — load the skill the request needs
+
+This skill is the entry point for every colour request. It owns the METHOD (read the photo, correct it, give it a
+look, match the set, LOOK again — §1-§2) and the approver's TASTE (`taste.md`, `taste.py`). What a request is
+ABOUT decides which other skill to load as well:
+
+| the user… | load | then |
+|---|---|---|
+| asks for a look, feeling, film, era, region or adjustment **in their own words** — "warm", "moody", "tông Hàn nhẹ nhàng", "vintage film but brighter", "like a Japanese film", "black and white", "make the night ones neon", "a bit less orange" | **`arstro.color.grading.style`** (Claude Code: the Skill tool; any other agent: read `skills/arstro.color.grading.style/SKILL.md`) | read the prompt with its five questions, then `edit.py run --style "<their words>"` (§2) |
+| says only "grade / edit / make it cinematic / make it look good" | nothing more — the taste is the default | §2 as written |
+| judges grades or styles (Grade Lab, exam, Style Lab `/styles`) | `arstro.color.grading.style` for `/styles` | §2-lab, §2-exam |
+
+When in doubt, load the style skill: reading a prompt wrongly costs a whole shoot; loading it costs one file.
 
 ## Inside Cosmo — the Agent panel (R-ASSIST)
 
@@ -272,7 +286,9 @@ deliver: the delivered edit is per photo (§2, `edit.py run --mood <the chosen o
 | `blue-melancholy` | cold, sad, blue hour, winter | moods/blue-melancholy.md |
 | `mono-noir` | black and white, street, Moriyama | moods/mono-noir.md |
 
-**A prompt becomes a command.** Read the prompt for: the MOOD (a name, or its words — `mood.py list`
+**A prompt becomes a command — read it with `arstro.color.grading.style`** (the five questions, 17 judged styles,
+~270 wordings in English and Vietnamese; `edit.py run --style "<words>"`). The moods below are the palette those
+styles draw on; naming a mood directly still works. The older reading, kept for the moods: the MOOD (a name, or its words — `mood.py list`
 shows them; `moods.find()` matches them), the STRENGTH ("subtle/a touch" 0.5–0.6, "strong/more"
 1.2–1.3), WHICH photos (all · the night ones · the day ones · "the deer" → look at `cosmo_state` names /
 the survey), and whether it is a NEW look or an ADJUSTMENT of the current one.
@@ -342,7 +358,8 @@ the tone curve works in a log domain, and a colour wheel's hue ADDS across group
 | `scripts/taste.py` | THE TASTE as code: `choose(scene, analysis, plan)` → the approver's look per photo; the shared refine steps |
 | `scripts/exam.py` | the exam: one edit per photo with the reasoning, judged on /exam; `score` |
 | `scripts/lab.py` | the Grade Lab (127.0.0.1:8789): palette and refine rounds of one photo, the approver picks — verdicts in data/judgments.jsonl; `summary` |
-| `scripts/edit.py` | THE editor: `review` (gridded sheets to look at), `run` (per-photo correct → mood → plan → match → guard) |
+| `scripts/edit.py` | THE editor: `review` (gridded sheets to look at), `run` (per-photo correct → mood → plan → match → guard); `run --style "<words>"` applies a style in the user's words (arstro.color.grading.style) |
+| `../arstro.color.grading.style/` | the STYLE skill this entry point loads: what users mean by a look, in their words (`styles.py`, `style.py`, the Style Lab) |
 | `scripts/moods.py` · `scripts/mood.py` | the moods as data (+ strength, prompt matching) · list / board / apply |
 | `references/looks.md` | a catalogue of looks (cinematic film print, teal-orange, Eterna, Classic Chrome, Tokyo night, golden hour, noir, pastel …) with Cosmo recipes |
 | `references/cosmo-controls.md` | every Cosmo control MEASURED on a real photo; pitfalls |

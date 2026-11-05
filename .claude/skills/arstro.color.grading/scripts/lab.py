@@ -245,7 +245,8 @@ def summary_text():
     if not JUDGMENTS.exists():
         return "no verdicts yet"
     recs = [json.loads(l) for l in JUDGMENTS.read_text().splitlines() if l.strip()] + drafts()
-    recs = [r for r in recs if r.get("best") and "look" in r["best"]]   # exam lines have no best: exam.py score
+    styles = [r for r in recs if r.get("kind") == "style"]
+    recs = [r for r in recs if r.get("best") and "look" in r["best"] and r.get("kind") != "style"]   # exam lines have no best: exam.py score
     if not recs:
         return "no Grade Lab verdicts yet"
     out = ["%d verdicts on %d photos" % (len(recs), len({r["photo"] for r in recs}))]
@@ -268,6 +269,12 @@ def summary_text():
     strengths = [r["best"]["strength"] for r in recs if r["best"]["look"] not in ("corrected",)]
     if strengths:
         out.append("mood strength of the picks: mean %.2f (%d)" % (sum(strengths) / len(strengths), len(strengths)))
+    if styles:
+        last = {}
+        for r in styles:
+            last[r["style"]] = r
+        out.append("style picks (Style Lab): " + ", ".join(
+            "%s %s" % (k, "none fits" if r["none"] else r["best"]["letter"]) for k, r in last.items()))
     notes = [("%s: %s" % (r["photo"], r["note"])) for r in recs if r.get("note")]
     if notes:
         out.append("notes:\n  " + "\n  ".join(notes))
@@ -415,8 +422,109 @@ load();
 </script></body></html>"""
 
 
+STYLES_PAGE = r"""<!doctype html><html><head><meta charset="utf-8"><title>Style Lab</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#121214;--card:#1b1b1f;--ink:#ececf0;--dim:#9a9aa6;--acc:#e8a0b8;--good:#7fc8a0;--bad:#e07a7a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,sans-serif}
+header{position:sticky;top:0;z-index:5;background:#121214f0;padding:10px 16px;border-bottom:1px solid #2a2a30;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+h1{font-size:17px;margin:0}h1 small{color:var(--dim);font-weight:400}#prog{font-weight:600;color:var(--acc)}
+header label{color:var(--dim)}header a{color:var(--acc)}
+main{padding:14px 16px 60px;max-width:1700px;margin:auto}
+.intro{color:var(--dim);margin:0 0 16px;max-width:900px}
+.card{background:var(--card);border-radius:12px;margin:0 0 26px;overflow:hidden;border:2px solid transparent}
+.card.done{border-color:var(--good)}.card.none{border-color:var(--bad)}
+.head{padding:12px 16px 8px}.head h2{margin:0;font-size:19px}.head h2 span{color:var(--dim);font-size:13px;font-weight:400}
+.means{margin:2px 0}.words{color:var(--dim);font-size:13px}.words b{color:var(--ink);font-weight:500}
+.row4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:#000;padding:6px}
+@media(max-width:1000px){.row4{grid-template-columns:repeat(2,1fr)}}
+.c{position:relative;background:#0b0b0d;border:2px solid transparent;border-radius:6px;overflow:hidden}
+.c.best{border-color:var(--acc)}.c.wrong{opacity:.42}
+.c img{width:100%;display:block;cursor:zoom-in;user-select:none;-webkit-user-drag:none}
+.c .tag{position:absolute;left:6px;top:6px;background:#000b;padding:1px 8px;border-radius:4px;font-size:12px}
+.c .btns{display:flex;gap:6px;padding:6px}
+.c .btns button{flex:1;background:#27272e;color:var(--ink);border:1px solid #383840;border-radius:6px;padding:7px;cursor:pointer;font-weight:600}
+.c .btns button.on.b{background:var(--acc);color:#222}.c .btns button.on.x{background:var(--bad);color:#200}
+.c .lab{padding:0 8px 8px;color:var(--dim);font-size:12px;display:none}.reveal .c .lab{display:block}
+.orig .btns{color:var(--dim);font-size:12px;padding:10px 8px;justify-content:center}
+.foot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 16px 14px}
+.foot input{flex:1;min-width:260px;background:#202026;color:var(--ink);border:1px solid #383840;border-radius:6px;padding:8px}
+.foot button{background:#2c2c33;color:var(--ink);border:1px solid #383840;border-radius:6px;padding:8px 12px;cursor:pointer}
+.foot button.on{background:var(--bad);color:#200}.saved{color:var(--good);font-size:12px}
+#view{position:fixed;inset:0;background:#000e;display:none;z-index:9;align-items:center;justify-content:center;flex-direction:column}
+#view img{max-width:98vw;max-height:90vh}#view p{color:var(--dim);margin:8px}
+</style></head><body>
+<header><h1>Style Lab <small>arstro.color.grading.style — what does each word mean to you?</small></h1>
+<span id="prog"></span><label><input type="checkbox" id="rev"> show what each version is</label>
+<a href="/">Grade Lab</a><a href="/exam">exam</a></header>
+<main><p class="intro">Each card is one STYLE a user may ask for, with the words people use for it. The three versions are three
+readings of that word on the same photo (order shuffled). Mark the one that <b>is</b> the word — <b>Best</b> — and any that are
+<b>Wrong</b> for it; or "none of them" if no version says the word. Press and hold a photo to see the original. Your picks
+become the recipe an agent uses when a user writes that word.</p><div id="m"></div></main>
+<div id="view"><img id="vimg"><p id="vlab"></p></div>
+<script>
+let B=null;const $=s=>document.querySelector(s);
+const esc=t=>(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+async function load(){B=await (await fetch('/api/styles')).json();draw();}
+function V(s){return s.verdict||(s.verdict={best:null,wrong:[],none:false,note:''});}
+function draw(){
+ $('#m').innerHTML=B.styles.map((s,i)=>{const v=V(s);return `<div class="card ${v.none?'none':v.best?'done':''}" id="s${i}">
+  <div class="head"><h2>${esc(s.title)} <span>· ${esc(s.photo)}${s.subject?' — '+esc(s.subject):''}</span></h2>
+  <p class="means">${esc(s.means)}</p><p class="words"><b>people say:</b> ${s.words.map(esc).join(' · ')}</p></div>
+  <div class="row4"><div class="c orig"><img src="/styles-img/${s.id}/${s.original}" data-s="${i}" data-k="-1"><span class="tag">original (as shot)</span>
+   <div class="btns">the camera's frame</div></div>
+  ${s.candidates.map((c,k)=>`<div class="c ${v.best==c.letter?'best':''} ${v.wrong.includes(c.letter)?'wrong':''}" id="c${i}_${k}">
+   <img src="/styles-img/${s.id}/${c.file}" data-s="${i}" data-k="${k}"><span class="tag">#${k+1}</span>
+   <div class="btns"><button class="b ${v.best==c.letter?'on':''}" data-s="${i}" data-k="${k}" data-a="best">Best</button>
+   <button class="x ${v.wrong.includes(c.letter)?'on':''}" data-s="${i}" data-k="${k}" data-a="wrong">Wrong</button></div>
+   <div class="lab">${esc(c.label)}</div></div>`).join('')}</div>
+  <div class="foot"><button class="${v.none?'on':''}" data-none="${i}">None of them is "${esc(s.title)}"</button>
+  <input placeholder="why? (optional) — e.g. 'too orange', '#2 is warm but the sky went yellow'" value="${esc(v.note)}" data-n="${i}">
+  <span class="saved" id="ok${i}">${s.verdict.at?'saved ✓':''}</span></div></div>`;}).join('');
+ document.querySelectorAll('.c .btns button').forEach(b=>b.onclick=()=>mark(+b.dataset.s,+b.dataset.k,b.dataset.a));
+ document.querySelectorAll('[data-none]').forEach(b=>b.onclick=()=>{const v=V(B.styles[+b.dataset.none]);v.none=!v.none;if(v.none)v.best=null;save(+b.dataset.none);});
+ document.querySelectorAll('[data-n]').forEach(t=>t.onchange=()=>{V(B.styles[+t.dataset.n]).note=t.value;save(+t.dataset.n);});
+ document.querySelectorAll('.c img').forEach(im=>{const s=B.styles[+im.dataset.s],k=+im.dataset.k;
+  const orig=`/styles-img/${s.id}/${s.original}`,own=im.src;let held=false,t=null;
+  if(k>=0){im.onpointerdown=e=>{t=setTimeout(()=>{held=true;im.src=orig;},180);};
+   im.onpointerup=im.onpointerleave=()=>{clearTimeout(t);if(held){im.src=own;setTimeout(()=>held=false,0);}};}
+  im.onclick=()=>{if(!held)open_(+im.dataset.s,k);};});
+ prog();}
+function prog(){const n=B.styles.filter(s=>s.verdict&&(s.verdict.best||s.verdict.none)).length;$('#prog').textContent=`${n} of ${B.styles.length} styles judged`;}
+function mark(i,k,a){const s=B.styles[i],v=V(s),L=s.candidates[k].letter;
+ if(a=='best'){v.best=v.best==L?null:L;v.wrong=v.wrong.filter(x=>x!=L);if(v.best)v.none=false;}
+ else{v.wrong.includes(L)?v.wrong=v.wrong.filter(x=>x!=L):(v.wrong.push(L),v.best==L&&(v.best=null));}
+ save(i);}
+async function save(i){const s=B.styles[i],v=V(s);v.note=document.querySelector(`[data-n="${i}"]`).value;
+ const r=await fetch('/api/style-judge',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({style:s.id,best:v.best,wrong:v.wrong,none:v.none,note:v.note})});
+ v.at=r.ok?'now':'';const y=window.scrollY;draw();window.scrollTo(0,y);$('#ok'+i).textContent=r.ok?'saved ✓':'NOT saved — is the lab running?';}
+let vs=0,vk=0;
+function open_(i,k){vs=i;vk=k;const s=B.styles[i],c=k<0?null:s.candidates[k];
+ $('#vimg').src=`/styles-img/${s.id}/${c?c.file:s.original}`;
+ $('#vlab').textContent=`${s.title} — ${c?'#'+(k+1)+($('#rev').checked?' · '+c.label:''):'original'} · ← → move · B best · X wrong · O original (hold) · Esc close`;
+ $('#view').style.display='flex';}
+$('#view').onclick=e=>{if(e.target.id=='view')$('#view').style.display='none';};
+document.onkeydown=e=>{if($('#view').style.display!='flex')return;const n=B.styles[vs].candidates.length;
+ if(e.key=='Escape')$('#view').style.display='none';
+ if(e.key=='ArrowRight')open_(vs,vk+1>=n?-1:vk+1);if(e.key=='ArrowLeft')open_(vs,vk-1<-1?n-1:vk-1);
+ if((e.key=='b'||e.key=='B')&&vk>=0){mark(vs,vk,'best');open_(vs,vk);}if((e.key=='x'||e.key=='X')&&vk>=0){mark(vs,vk,'wrong');open_(vs,vk);}
+ if(e.key=='o'||e.key=='O'){$('#vimg').src=`/styles-img/${B.styles[vs].id}/${B.styles[vs].original}`;}};
+document.onkeyup=e=>{if((e.key=='o'||e.key=='O')&&$('#view').style.display=='flex')open_(vs,vk);};
+$('#rev').onchange=()=>{document.body.classList.toggle('reveal',$('#rev').checked);};
+load();
+</script></body></html>"""
+
+
+def _styles_mod():
+    """arstro.color.grading.style's catalogue, for its verdict file — the sub-skill sits beside this one."""
+    sys.path.insert(0, str(HERE.parent.parent / "arstro.color.grading.style" / "scripts"))
+    import styles
+    return styles
+
+
 def serve(args):
     lab = Lab(args)
+    ST = _styles_mod()
 
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
@@ -455,6 +563,25 @@ def serve(args):
                 p = (self.exam_dir() / rel).resolve()
                 if p.is_file() and self.exam_dir().resolve() in p.parents:
                     return self.send(200, p.read_bytes(), "image/jpeg")
+            if u == "/styles":
+                return self.send(200, STYLES_PAGE, "text/html; charset=utf-8")
+            if u == "/api/styles":
+                f = lab.dir / "styles" / "board.json"
+                b = json.loads(f.read_text()) if f.exists() else {"styles": []}
+                ver = ST.verdicts()
+                for s in b["styles"]:
+                    if s["id"] in ver:
+                        s["verdict"] = ver[s["id"]]
+                    for c in s["candidates"]:
+                        c.pop("params", None)
+                        c.pop("recipe", None)
+                return self.send(200, json.dumps(b, ensure_ascii=False), "application/json")
+            if u.startswith("/styles-img/"):
+                rel = urllib.parse.unquote(u[len("/styles-img/"):])
+                root = (lab.dir / "styles").resolve()
+                p = (root / rel).resolve()
+                if p.is_file() and root in p.parents:
+                    return self.send(200, p.read_bytes(), "image/jpeg")
             if u == "/taste":
                 return self.send(200, "<pre style='font:14px/1.5 monospace;padding:16px;white-space:pre-wrap'>%s</pre>"
                                  % html.escape(summary_text()), "text/html; charset=utf-8")
@@ -491,6 +618,36 @@ def serve(args):
                             with open(JUDGMENTS, "a") as fh:
                                 fh.write(json.dumps(rec) + "\n")
                     f.write_text(json.dumps(ex, indent=1))
+                return self.send(200, '{"saved": true}', "application/json")
+            if self.path == "/api/style-judge":
+                # A style verdict: which of the three readings IS the word. Saved the moment it is clicked, into the
+                # style skill's verdict file (what `styles.recipe()` reads) and the judgments log.
+                n = int(self.headers.get("content-length", 0))
+                b = json.loads(self.rfile.read(n) or b"{}")
+                if b.get("style") not in ST.STYLES:
+                    return self.send(400, '{"error": "unknown style"}', "application/json")
+                with lab.lock:
+                    ver = ST.verdicts()
+                    prev = ver.get(b["style"]) or {}
+                    board = json.loads((lab.dir / "styles" / "board.json").read_text())
+                    s = next((x for x in board["styles"] if x["id"] == b["style"]), None)
+                    v = {"best": b.get("best") if b.get("best") in ("A", "B", "C") else None,
+                         "wrong": [x for x in b.get("wrong", []) if x in ("A", "B", "C")],
+                         "none": bool(b.get("none")), "note": b.get("note", ""),
+                         "photo": s and s["photo"], "board": board.get("built"),
+                         "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+                    ver[b["style"]] = v
+                    ST.VERDICTS.parent.mkdir(parents=True, exist_ok=True)
+                    ST.VERDICTS.write_text(json.dumps(ver, ensure_ascii=False, indent=1))
+                    by = {c["letter"]: c for c in (s or {}).get("candidates", [])}
+                    rec = {"at": v["at"], "kind": "style", "style": b["style"], "photo": v["photo"],
+                           "best": v["best"] and {"letter": v["best"], **by.get(v["best"], {}).get("recipe", {})},
+                           "wrong": [{"letter": x, **by.get(x, {}).get("recipe", {})} for x in v["wrong"]],
+                           "none": v["none"], "note": v["note"]}
+                    # the log keeps each DECISION (a pick or "none", or a changed note) — not every click on the way
+                    if (v["best"] or v["none"]) and any(prev.get(k) != v[k] for k in ("best", "wrong", "none", "note")):
+                        with open(JUDGMENTS, "a") as fh:
+                            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 return self.send(200, '{"saved": true}', "application/json")
             if self.path not in ("/api/judge", "/api/mark"):
                 return self.send(404, "not found", "text/plain")

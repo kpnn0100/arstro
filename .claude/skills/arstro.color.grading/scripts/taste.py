@@ -75,11 +75,28 @@ def look_title(look):
     return {"corrected": "Corrected only", "cinematic": "Cinematic (first grade)"}.get(look) or M.MOODS[look]["title"]
 
 
+_LIFT = re.compile(r"^(exposure|shadows)\+=")
+
+
+def style_set(v, fam):
+    """A STYLE's own `set` line (arstro.color.grading.style): `night` on a night photo when the style wrote one, else
+    `set` without its exposure / shadows lifts (night is meant to be dark — a high-key lift at night is grey). It
+    scales with the strength like the look; a style that drops the cinematic depth (faded, airy) scales its tone too,
+    since its tone IS the style."""
+    line = v.get("night") if fam == "night" and v.get("night") is not None else v.get("set", "")
+    if fam == "night" and v.get("night") is None:
+        line = " ".join(t for t in (line or "").split() if not _LIFT.match(t))
+    return M.scale(line or "", v.get("strength", 1.0), keep_tone=v.get("depth", True))
+
+
 def params(corr, fam, v, plan=None):
-    """The photo's whole edit for a variant {look, strength, tweaks, skin}: correction + look (colour scaled,
-    depth kept) + steps + the plan's `set`, with the skin line protected when a person is in the photo."""
+    """The photo's whole edit for a variant {look, strength, tweaks, skin, set}: correction + look (colour scaled,
+    depth kept) + the style's own `set` + the plan's `set` + steps, with the skin line protected when a person is
+    in the photo."""
     line = look_line(v["look"], fam)
-    d = E.compose(corr, M.scale(line, v["strength"]) if line else "", plan or {})
+    d = E.compose(corr, M.scale(line, v["strength"]) if line else "", {})
+    E.apply_ops(d, style_set(v, fam))
+    E.apply_ops(d, (plan or {}).get("set", ""))
     for name, step in v["tweaks"]:
         TWEAKS[name][1](d, step)
     if v.get("skin"):
