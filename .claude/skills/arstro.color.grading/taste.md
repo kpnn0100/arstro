@@ -15,7 +15,7 @@ Format, newest first:
 
 ---
 
-## THE STYLE LAB (2026-11-05): 17 styles a user may ask for, 3 readings each  (status: 14 judged; moody, dreamy, melancholy in round 2)
+## THE STYLE LAB (2026-11-05): 17 styles a user may ask for, 3 readings each  (status: 17 of 17 judged — moody, dreamy, melancholy in round 2)
 
 The approver: *"now i need to teach you with multiple style and wording since user will input a lot, you need to
 understand what they mean — generate a list of edit that represent for a style, a desire with photo, i will judge
@@ -55,7 +55,16 @@ STYLE LAB VERDICT, round 1 (2026-11-05, 17 styles): 14 picks, 2 "none of them", 
 - Found while rebuilding dreamy: a pink-only colour-mixer line (saturation or luminance, however anchored) turned the
   gold ornaments lime (hue 45 -> 55-58) and the sakura cream on DSCF5288; a flat mixer changes nothing. Suspected
   Cosmo defect (to file with arstro.cosmo.core.debug); until then a candidate gets its pinks from the wheels.
-STYLE LAB VERDICT, round 2: _(pending — moody, dreamy, melancholy)_
+STYLE LAB VERDICT, round 2 (2026-11-05, the 3 styles round 1 left open): 3 picks, no notes. Every style now has a pick.
+- **Moody is darkness, not a colour scheme**: low key won (exposure −0.45, colour quiet except the warm light, corners
+  black) over dense olive-and-slate and over dark teal. On the castle moat, the same frame melancholy was judged on.
+- **Dreamy is a soft light WITH a tint, and depth**: the romantic glow won (pink-cream highlights, grade2 345°/10,
+  clarity −24, blacks deep) over Spring Haze 80 % with depth and over plain soft natural light. Beside warm's wrong
+  (orange painted on the light) this draws the line: a TEMPERATURE word moves the white balance; a word that IS a
+  colour mood (dreamy, romantic) may tint the light, gently.
+- **Sad is less colour, a little blue**: Blue Melancholy 35 % muted won over 50 % and over a natural one with no blue.
+  So cool (the same look at 60 %, full colour) and melancholy stay two different edits: cool = more blue, sad = less
+  colour.
 
 ## SECOND SHOOT — ~/photo/myphoto/dichoi (2026-11-03): 4 Panasonic JPEGs, "cinematic mood"  (status: awaiting marks)
 

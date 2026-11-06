@@ -38,6 +38,13 @@
   "at": "2026-11-05T15:34:27"
  },
  "moody": {
+  "best": "C",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "_DSF6609.RAF",
+  "board": "2026-11-05T15:53:18",
+  "at": "2026-11-05T16:04:15",
   "history": [
    {
     "best": null,
@@ -60,6 +67,13 @@
   "at": "2026-11-05T15:34:58"
  },
  "dreamy": {
+  "best": "B",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "DSCF5288.RAF",
+  "board": "2026-11-05T15:53:18",
+  "at": "2026-11-05T16:04:30",
   "history": [
    {
     "best": null,
@@ -73,6 +87,13 @@
   ]
  },
  "melancholy": {
+  "best": "B",
+  "wrong": [],
+  "none": false,
+  "note": "",
+  "photo": "_DSF6609.RAF",
+  "board": "2026-11-05T15:53:18",
+  "at": "2026-11-05T16:04:55",
   "history": [
    {
     "best": "A",

@@ -128,6 +128,8 @@ STYLES = {
         # bright day has nothing dark to be moody with). Round 2 on the overcast castle moat (dark water, stone) —
         # the melancholy photo too, so the two words can be told apart on one frame; the Moody Forest reading
         # (flat: toe lifted, p99 0.74) replaced by a dense, deep one.
+        # Round 2 (2026-11-05): C picked, low key — moody is DARKNESS with the warm light kept, not a colour scheme
+        # (the olive/slate and dark-teal readings lost).
         "demo": "_DSF6609.RAF",
         "candidates": [
             C("dark & moody — dense mids, deep shadows, greens to deep olive, blues to slate, the light warm-neutral",
@@ -177,6 +179,8 @@ STYLES = {
         # depth too". All three lifted the blacks (depth off). Dreamy is SOFT LIGHT on a photo that keeps its
         # blacks: local contrast down (clarity, texture), highlights rolled and tinted, the black point untouched,
         # and the cinematic depth floor ON.
+        # Round 2 (2026-11-05): B picked, romantic glow — the softness AND a pink-cream tint in the light; Spring Haze
+        # with depth and plain soft light both lost.
         "demo": "DSCF5288.RAF",
         "candidates": [
             C("dreamy with depth — Spring Haze 80 %, blacks kept deep, local contrast down (a soft glow)",
@@ -201,6 +205,8 @@ STYLES = {
         "modifier": [["cooler", 1], ["muted", 1.5]],
         # Style Lab 1 (2026-11-05): Blue Melancholy picked — "but too much blue it lost the natural color". Round 2:
         # the same reading with the natural colour kept, at two strengths, and a quiet one with no blue look at all.
+        # Round 2 (2026-11-05): B picked, Blue Melancholy 35 % muted — sad is LESS colour, a little blue; cool (the same
+        # look at 60 %, not muted) is MORE blue. The two words stay apart.
         "demo": "_DSF6609.RAF",
         "candidates": [
             C("blue melancholy, natural colour kept — Blue Melancholy 50 %", look="blue-melancholy", strength=0.5),
