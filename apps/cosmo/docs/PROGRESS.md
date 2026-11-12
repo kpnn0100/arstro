@@ -15,6 +15,22 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-11-12 — user-reported bug, fixed (the NEXT below is unchanged): "same name different format
+should prioritize raw — abc.jpg and abc.RW2 open, only open abc.RW2, ignore abc.jpg".**
+
+- **[x] R-HOME-5a / D-70: a RAW and its camera JPEG open as one photo** (DR-HOME-3a). `preferRaw`
+  (`core/RawPairs.{h,cpp}`, pure, same folder + case-insensitive stem) applied by
+  `CosmoService::preferRawOf` on `import` and `add`, and `preferRawIn` on `project open` (an edited JPG entry
+  is kept: `import.kept … reason=edited`), one `[evt] info import.skipped path=… raw=…` per file
+  left out; only when `IImageDecoder::decodesRaw()` (new, default false; Native/Android = LibRaw built in,
+  forwarded by `PinnedDecoder`). The RAW extension list is one function in `ImageDecoder.h`. The GTK host's
+  argv-only copy in `openPaths` now calls the same rule. Guard: `cosmo_core_tests`
+  `a_raw_and_its_jpeg_open_as_one_photo` (fails without the service change). **L3:** `cosmo-cc run --watch`
+  with the real decoder on a real RAF beside a JPEG — `import.skipped` observed, the saved `.cmp` lists
+  `abc.RAF` and `def.jpg` only; a copy of the user's `vungtau.cmp` (75 RW2 + 75 JPG) opens 75 entries, 75
+  `import.skipped`, 0 kept, the file unchanged. **Not run live in the window**: the only display here is the user's desktop;
+  the window's Import Catalog dispatches the same `import` command.
+
 **► 2026-11-04 — "how can user apply that to cosmo with their own agent … there should be agent section
 inside of that with skill loaded for that agent by default". R-ASSIST, chosen: launch the user's agent
 CLI inside cosmo, editing the open project live, the colour-grading skill loaded by default.**
@@ -1153,7 +1169,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-11-05 · R-ASSIST-4 amended: the colour skills the entry point loads are linked for the agent · 2026-11-04 · R-ASSIST-12: an agent's Markdown drawn as formatting · R-ASSIST-9/10/11: any agent (ACP, a local model), the skill for every agent, choose-connect-chat · R-ASSIST-8: agent queries off the UI thread · R-ASSIST-7: the Agent tab · R-ASSIST-1/2/4/5/6: the user's own agent runs inside cosmo (`assist start|send|stop`, Claude Code or any command, the colour-grading skill by default) · R-ASSIST-3: an agent's MCP tools reach a RUNNING cosmo (`mcp --attach`, `snapshot`, `ping`, `serve --control`) · 2026-11-03 · D-62: a JPEG is turned the way its EXIF says · 2026-10-30 · R-GRADE-1/2 + R-MCP-1..4: `analyze` measures a photo into the model, `renderCurrent` renders the edit on demand, `cosmo-cc mcp` serves cosmo to agents over the Model Context Protocol (with Interstellar and Solaris beside it), and the Tokyo project was graded through it · 2026-09-29 · R-GPU-7: the compute backend is picked at run time (desktop GL, then GLES), the GLES backend loads its entry points and finds a headless display over GBM, and an RK3588's Mali-G610 edits on its GPU — available and conformant, not yet faster (D-60) · 2026-09-03 · R-MIXER-10..14: the Lum curve is a GAIN (Adobe's value scale), not an offset on HSL lightness in linear light — which turned a blue sky black at -100 · R-AISEG WITHDRAWN — the Detect mask is out of the tree; type value 4 is retired so a project that stores it still loads and renders nothing · R-AISEG-25..28: the Detect block says what state it is in, a Detect button starts the run and a progress bar reports it · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-11-12 · R-HOME-5a / D-70: a RAW and the JPEG beside it open as one photo, the RAW · 2026-11-05 · R-ASSIST-4 amended: the colour skills the entry point loads are linked for the agent · 2026-11-04 · R-ASSIST-12: an agent's Markdown drawn as formatting · R-ASSIST-9/10/11: any agent (ACP, a local model), the skill for every agent, choose-connect-chat · R-ASSIST-8: agent queries off the UI thread · R-ASSIST-7: the Agent tab · R-ASSIST-1/2/4/5/6: the user's own agent runs inside cosmo (`assist start|send|stop`, Claude Code or any command, the colour-grading skill by default) · R-ASSIST-3: an agent's MCP tools reach a RUNNING cosmo (`mcp --attach`, `snapshot`, `ping`, `serve --control`) · 2026-11-03 · D-62: a JPEG is turned the way its EXIF says · 2026-10-30 · R-GRADE-1/2 + R-MCP-1..4: `analyze` measures a photo into the model, `renderCurrent` renders the edit on demand, `cosmo-cc mcp` serves cosmo to agents over the Model Context Protocol (with Interstellar and Solaris beside it), and the Tokyo project was graded through it · 2026-09-29 · R-GPU-7: the compute backend is picked at run time (desktop GL, then GLES), the GLES backend loads its entry points and finds a headless display over GBM, and an RK3588's Mali-G610 edits on its GPU — available and conformant, not yet faster (D-60) · 2026-09-03 · R-MIXER-10..14: the Lum curve is a GAIN (Adobe's value scale), not an offset on HSL lightness in linear light — which turned a blue sky black at -100 · R-AISEG WITHDRAWN — the Detect mask is out of the tree; type value 4 is retired so a project that stores it still loads and renders nothing · R-AISEG-25..28: the Detect block says what state it is in, a Detect button starts the run and a progress bar reports it · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Also merged in from the other machine: **D-40** (filed there as D-36 and renumbered on
@@ -1571,6 +1587,15 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+**2026-11-12 — RAW over JPEG (R-HOME-5a): same folder only, and only when RAW decodes.** Files in two
+folders with one name are kept (two cameras both write `IMG_0001`; dropping one loses a photo). Two RAWs or
+two renderings of one stem are both kept — the rule prefers RAW over a rendering, it does not choose
+between equals. When the decoder cannot read RAW nothing is dropped. The rule applies to a saved project
+on `project open` too (amended the same day, after the user's `vungtau.cmp` still opened its JPGs), except
+that a JPG entry carrying edits is kept — dropping it would delete the edit. The open does not rewrite the
+`.cmp`; the next save does. The host's earlier argv-only copy
+compared names across folders and ignored RAW support — replaced by the shared rule, not kept beside it.
 
 **2026-10-01 — three widgets gained opt-in surface for a sibling app; cosmo's pixels unchanged.**
 Interstellar reuses `MenuStrip` and `SettingsDialog`. Added: `MenuStrip::setItems(menu, items)` (a

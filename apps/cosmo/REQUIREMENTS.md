@@ -1617,6 +1617,32 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
   yet, so it is written once the last image has landed (`LoadJob::saveOnFinish`); the loading-screen
   cover falls back to the first decoded image, since no thumbnail is cached for a never-opened
   catalog.
+- **R-HOME-5a A RAW and the JPEG the camera wrote beside it are one photo, and the RAW is the one
+  opened.** (**Added 2026-11-12**, from the user: *"same name different format should prioritize
+  raw — abc.jpg and abc.RW2 open, only open abc.RW2, ignore abc.jpg"*.) A camera set to RAW+JPEG
+  writes two files per shot; selecting a folder's worth of them must not put every photo in the
+  project twice. When one `import` or `add` names a RAW (`rw2 arw cr2 cr3 nef dng orf raf pef srw
+  rwl raw`) and a non-RAW file **in the same folder with the same name before the extension**
+  (compared case-insensitively — `P1090446.JPG` and `p1090446.rw2` are one shot), the non-RAW file is
+  not opened, and the service says so: one `[evt] info import.skipped path=<jpg> raw=<raw>` per file
+  left out, so an agent or a script can see which photos it did not get. It is a rule of the
+  **service**, not of a dialog: the window's Import Catalog, `cosmo <files…>`, `cosmo-cc`, the
+  control socket, an agent and the touch shell all open the same set from the same list. Three
+  limits, each deliberate: (a) files in **different folders** are different photos — two cameras both
+  write `IMG_0001`, and silently dropping one would lose a photo; (b) two RAWs, or two non-RAWs, with
+  one name are both kept — the rule prefers RAW over a rendering, it does not pick between files of
+  equal standing; (c) **when the decoder cannot read RAW** (a build without LibRaw) nothing is left
+  out, because preferring a file that will fail to decode would turn two copies of a photo into
+  none. This narrows R-HOME-5's "opens the selected images" for exactly that one case and no other.
+  (**AMENDED 2026-11-12, the same day:** this first said the rule *"applies to the list being opened,
+  not to a project already saved with both files in it"*. The user opened `vungtau.cmp` — 75 RW2 + 75
+  JPG, imported before the rule existed — and asked *"why … it still open jpg"*. A project file is a
+  list being opened too.) **`project open` applies it as well**, to the project's image entries, with
+  one more limit: (d) **a rendering that carries work is kept** — params that differ from the defaults,
+  a bypass, or a history of more than its opening node. Leaving out an untouched JPG loses nothing,
+  because the RAW beside it is the same shot; leaving out an edited one would delete the edit with no
+  way back. The file on disk is not rewritten by the open; the next save writes the project without
+  the left-out entries.
 - **R-HOME-6 Recent Projects (real, persisted).** The grid lists recent projects from a
   **persisted recent-projects index** (a JSON file in the app config dir), each entry storing
   the project name, `.cmp` path, photo count, last-opened time, and a cached thumbnail of the

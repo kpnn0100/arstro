@@ -91,6 +91,11 @@ namespace cosmo_v2
 
         void setProgress(Progress p) override { mInner.setProgress(std::move(p)); }
 
+        /** Forwarded for the same reason `readMetadata` is: the base answers `false`, and a
+         *  wrapper that forgot this would quietly turn R-HOME-5a off in the one build that
+         *  ships (the window's and `cosmo-cc`'s decoder is this type). */
+        bool decodesRaw() const override { return mInner.decodesRaw(); }
+
         // Static passthroughs so a caller asking about RAW support does not need to reach
         // past this type to the one it wraps — reaching past it is how the pin got skipped.
         static bool isRawExtension(const std::string &path)

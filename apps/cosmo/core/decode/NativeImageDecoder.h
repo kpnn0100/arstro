@@ -35,6 +35,8 @@ namespace cosmo
         static bool isRawExtension(const std::string &path);
         /** True if RAW decoding is compiled in (LibRaw present). */
         static bool rawSupported();
+        /** R-HOME-5a: what the service asks before it lets a RAW replace the JPEG beside it. */
+        bool decodesRaw() const override { return rawSupported(); }
 
         /** Rotate/mirror decoded pixels by a LibRaw/dcraw `flip` code (0..7) — the SAME
          *  transform `dcraw_process` applies to a full decode (`flip & 4` transposes,

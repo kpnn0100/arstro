@@ -224,6 +224,25 @@ kids; }`. `scan(dir)` recursively builds folder/leaf nodes (folders-first, alpha
 `flatNames(dir)` lists top-level `.apf` stems; `categoryLabel(key)` maps apf category keys to UI
 labels.
 
+### 2.4i RawPairs (`RawPairs.{h,cpp}`) — R-HOME-5a
+
+`struct RawPairing { std::vector<std::string> keep; std::vector<std::pair<std::string, std::string>>
+dropped; }` and `RawPairing preferRaw(const std::vector<std::string> &paths)` — pure, over path
+strings, no filesystem. The key of a shot is the folder (exact) plus the stem (ASCII lower-cased,
+extension cut); a non-RAW path whose key has a RAW in the list goes to `dropped` as
+(rendered, raw), everything else to `keep` in the given order. RAW is
+`isRawExtension(path)` — an inline free function in `decode/ImageDecoder.h` holding the one list
+(`rw2 arw cr2 cr3 nef dng orf raf pef srw rwl raw`); `NativeImageDecoder::isRawExtension` and
+`AndroidImageDecoder::isRawExtension` forward to it. `IImageDecoder::decodesRaw() const` (default
+`false`) is overridden by both to `rawSupported()` and forwarded by `PinnedDecoder`.
+`CosmoService::preferRawOf(paths)` applies it for `import` and `add`: no pair → the list unchanged
+with no decoder built; a pair → `decoderReadsRaw()` (one probe from the factory), and only if it is
+true are the renderings dropped, each emitting `info import.skipped path=<rendered> raw=<raw>`.
+`CosmoService::preferRawIn(entries)` does the same for `project open` over the image entries, keeping
+an entry whose params serialize differently from `EditParams{}`, whose `bypass` is set, or whose
+`history.nodes.size() > 1` (`info import.kept … reason=edited`), then rewrites each kept entry's
+`parent` through an old→new index table.
+
 ### 2.4b AppSettings (`AppSettings.{h,cpp}`)
 `struct AppSettings { int previewEdge=1600; int threads=0; bool useGpu=false; int cpuPercent=50; }`
 — the preferences that must survive a restart (R-SETTINGS-4, R-CPU-3). `path()` =

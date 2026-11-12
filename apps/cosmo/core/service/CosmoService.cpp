@@ -1,10 +1,12 @@
 #include "CosmoService.h"
 #include "../PresetLibrary.h"
+#include "../RawPairs.h"
 #include "engine/EditParamsIO.h"
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <sstream>
+#include <unordered_map>
 
 namespace arstro
 {
@@ -302,6 +304,70 @@ namespace cosmo
         return mSession.renderService().renderPreviewSync(slot, p, out) && out.width > 0;
     }
 
+    bool CosmoService::decoderReadsRaw() const
+    {
+        // R-HOME-5a (c): only a decoder that can READ the RAW may have it instead of the JPEG.
+        // Asked of a fresh instance because the service holds a factory, not a decoder — and
+        // callers ask only when there is a pair, so a list with no RAW+JPEG shot never builds one.
+        const std::unique_ptr<IImageDecoder> probe = mMakeDecoder ? mMakeDecoder() : nullptr;
+        return probe && probe->decodesRaw();
+    }
+
+    std::vector<std::string> CosmoService::preferRawOf(const std::vector<std::string> &paths)
+    {
+        RawPairing p = preferRaw(paths);
+        if (p.dropped.empty() || !decoderReadsRaw()) return paths;
+        for (const auto &d : p.dropped)
+            emit(Event::Kind::Info, "import.skipped path=" + d.first + " raw=" + d.second);
+        return std::move(p.keep);
+    }
+
+    void CosmoService::preferRawIn(std::vector<EditSession::WorkspaceEntry> &entries)
+    {
+        std::vector<std::string> paths;
+        for (const auto &e : entries)
+            if (!e.group) paths.push_back(e.imagePath);
+        const RawPairing p = preferRaw(paths);
+        if (p.dropped.empty() || !decoderReadsRaw()) return;
+
+        // R-HOME-5a (d): a rendering that carries work stays. "Work" is anything the open would
+        // otherwise throw away: params off the defaults (compared as the text the file stores, so
+        // a field added later is covered without a list here), a bypass, or history beyond the
+        // single node a fresh import writes.
+        const std::string untouched = serializeParams(EditParams{});
+        std::unordered_map<std::string, std::string> rawFor(p.dropped.begin(), p.dropped.end());
+        std::vector<int> newIndex(entries.size(), -1);
+        std::vector<EditSession::WorkspaceEntry> out;
+        out.reserve(entries.size());
+        for (size_t i = 0; i < entries.size(); ++i)
+        {
+            EditSession::WorkspaceEntry &e = entries[i];
+            if (!e.group)
+            {
+                const auto it = rawFor.find(e.imagePath);
+                if (it != rawFor.end())
+                {
+                    const bool edited = e.bypass || e.history.nodes.size() > 1 ||
+                                        serializeParams(e.params) != untouched;
+                    if (!edited)
+                    {
+                        emit(Event::Kind::Info, "import.skipped path=" + e.imagePath + " raw=" + it->second);
+                        continue;
+                    }
+                    emit(Event::Kind::Info, "import.kept path=" + e.imagePath + " raw=" + it->second +
+                                                " reason=edited");
+                }
+            }
+            newIndex[i] = (int)out.size();
+            out.push_back(std::move(e));
+        }
+        // `parent=` is an entry index, and only a GROUP is ever a parent — groups are never left
+        // out, so every parent still has a new index; the images after a gap just moved up.
+        for (auto &e : out)
+            if (e.parent >= 0) e.parent = newIndex[(size_t)e.parent];
+        entries = std::move(out);
+    }
+
     bool CosmoService::startAppendLoad(const std::vector<std::string> &paths)
     {
         if (paths.empty()) return fail("add: no image paths");
@@ -310,7 +376,7 @@ namespace cosmo
         if (!mMakeDecoder) return fail("no decoder factory installed (host must call setDecoderFactory)");
 
         std::vector<EditSession::WorkspaceEntry> entries;
-        for (const std::string &p : paths)
+        for (const std::string &p : preferRawOf(paths))
         {
             EditSession::WorkspaceEntry e;
             e.imagePath = p;
@@ -1121,6 +1187,7 @@ namespace cosmo
                 if (repaired > 0)
                     emit(Event::Kind::Info, "project had " + std::to_string(repaired) +
                                             " non-finite parameter value(s), neutralised");
+                preferRawIn(entries);   // R-HOME-5a: a saved project is a list being opened too
                 return startProjectLoad(c.path, std::move(entries), false);
             }
             case Command::Kind::ProjectNew:
@@ -1151,17 +1218,17 @@ namespace cosmo
 
             case Command::Kind::Import:
             {
+                // An import has no .cmp yet, so the file is written once every image lands.
+                const std::string path = c.path.empty() ? mSession.workspacePath() : c.path;
+                if (path.empty()) return fail("import: open or create a project first");
                 std::vector<EditSession::WorkspaceEntry> entries;
-                for (const std::string &p : c.paths)
+                for (const std::string &p : preferRawOf(c.paths))
                 {
                     EditSession::WorkspaceEntry e;
                     e.imagePath = p;
                     e.name = baseOf(p);
                     entries.push_back(std::move(e));
                 }
-                // An import has no .cmp yet, so the file is written once every image lands.
-                const std::string path = c.path.empty() ? mSession.workspacePath() : c.path;
-                if (path.empty()) return fail("import: open or create a project first");
                 return startProjectLoad(path, std::move(entries), true);
             }
 

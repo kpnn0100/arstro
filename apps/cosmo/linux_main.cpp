@@ -20,6 +20,7 @@
 #include "core/service/AppModelCodec.h"
 #include "core/service/CosmoService.h"
 #include "core/service/Event.h"
+#include "core/RawPairs.h"
 #include "core/ThreadBudget.h"
 #include "widgets/SplashScreen.h"
 #include "PinnedDecoder.h"
@@ -222,31 +223,28 @@ namespace
                            ? " (RAW needs a LibRaw build)" : "");
     }
 
-    std::string stemLower(const std::string &p)
-    {
-        std::string b = baseName(p);
-        auto dot = b.find_last_of('.');
-        if (dot != std::string::npos) b = b.substr(0, dot);
-        for (char &c : b) c = (char)std::tolower((unsigned char)c);
-        return b;
-    }
-
     void openPath(Host *a, const std::string &path);       // fwd
     void startProjectLoad(Host *a, const std::string &path);  // fwd: defined with the load adapter
     void openPaths(Host *a, const std::vector<std::string> &paths)
     {
-        for (const std::string &p : paths)
+        // R-HOME-5a: the SAME rule `import` and `add` apply in the service — this host had its
+        // own copy, which compared names across folders and dropped the JPEG even in a build
+        // that could not read the RAW. Bare argv images still open inline, outside the service,
+        // so the rule is called here rather than inherited; the decision is not re-made.
+        std::vector<std::string> open = paths;
+        if (PinnedDecoder::rawSupported())
         {
-            if (!PinnedDecoder::isRawExtension(p))
+            arstro::cosmo::RawPairing p = arstro::cosmo::preferRaw(paths);
+            for (const auto &d : p.dropped)
             {
-                bool rawDup = false;
-                for (const std::string &q : paths)
-                    if (&q != &p && PinnedDecoder::isRawExtension(q) && stemLower(q) == stemLower(p))
-                    { rawDup = true; break; }
-                if (rawDup) { g_print("cosmo_v2: skipping %s (RAW with same name preferred)\n", p.c_str()); continue; }
+                arstro::cosmo::Event e;   // the service's line, through the service's codec
+                e.kind = arstro::cosmo::Event::Kind::Info;
+                e.text = "import.skipped path=" + d.first + " raw=" + d.second;
+                LOGI("%s", arstro::cosmo::formatEvent(e).c_str());
             }
-            openPath(a, p);
+            open = std::move(p.keep);
         }
+        for (const std::string &p : open) openPath(a, p);
     }
 
     void openPath(Host *a, const std::string &path)

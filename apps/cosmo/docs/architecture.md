@@ -311,6 +311,7 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/core/ThreadBudget.{h,cpp}` | core | the ONE owner of the CPU budget: one total, divided between the decode pool and the engine, with the measured peak (R-SVC-10, fixes D-11) |
 | `apps/cosmo/core/History.{h,cpp}` | core | branching undo tree |
 | `apps/cosmo/core/ProjectStore.{h,cpp}` | core | recents index (config dir) |
+| `apps/cosmo/core/RawPairs.{h,cpp}` | core | `preferRaw`: a RAW and the same-stem JPEG beside it are one photo, the RAW opened — applied by the service on `import` / `add` / `project open` (R-HOME-5a, D-70) |
 | `apps/cosmo/core/AppSettings.{h,cpp}` | core | engine preferences persisted across launches (R-SETTINGS-4). It still holds `cpuPercent`, but no longer converts it — `workersFor()` survives only for the legacy test; `ThreadBudget` owns the conversion (R-SVC-10) |
 | `apps/cosmo/core/PresetLibrary.{h,cpp}` | core | `.apf` preset tree scan |
 | `apps/cosmo/core/decode/*` | core | `IImageDecoder` + GdkPixbuf/LibRaw `NativeImageDecoder`, plus `Exif.{h,cpp}` — the JPEG tag reader behind `readMetadata`, which parses a header and never decodes (R-INFO-2) |

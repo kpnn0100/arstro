@@ -63,10 +63,34 @@ namespace cosmo
         }
     };
 
+    /** True if this path names a camera RAW file, by its extension (any case). THE list: the
+     *  native and Android decoders each carried their own copy, and R-HOME-5a's "a RAW beside its
+     *  JPEG" asks the same question from the service, which must not include a codec to ask it. */
+    inline bool isRawExtension(const std::string &path)
+    {
+        const auto dot = path.find_last_of('.');
+        const auto slash = path.find_last_of("/\\");
+        if (dot == std::string::npos || (slash != std::string::npos && dot < slash)) return false;
+        std::string e = path.substr(dot + 1);
+        for (char &c : e)
+            if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+        static const char *kRaw[] = {"rw2", "arw", "cr2", "cr3", "nef", "dng",
+                                     "orf", "raf", "pef", "srw", "rwl", "raw"};
+        for (const char *r : kRaw)
+            if (e == r) return true;
+        return false;
+    }
+
     struct IImageDecoder
     {
         virtual ~IImageDecoder() = default;
         virtual DecodedImage decodeFile(const std::string &path) = 0;
+
+        /** Whether this decoder can read a camera RAW at all (R-HOME-5a). `false` by default: a
+         *  decoder that does not say is not trusted with one, because the service uses this to
+         *  decide whether a RAW may REPLACE the JPEG beside it — and a RAW that then fails to
+         *  decode would leave the photo out of the project entirely. */
+        virtual bool decodesRaw() const { return false; }
 
         /** As `decodeFile`, at the requested fidelity. The default forwards to the
          *  full-quality path, so a decoder that has no cheaper mode costs nothing to keep

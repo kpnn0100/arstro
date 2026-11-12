@@ -187,6 +187,16 @@ namespace cosmo
         /** `add`: the load path without the reset - pending nodes appended at the top level,
          *  decoded by the same loader, the project saved when they have landed. */
         bool startAppendLoad(const std::vector<std::string> &paths);
+        /** R-HOME-5a: the list to open, with every rendering that has its RAW beside it left out
+         *  (one `info import.skipped` each) — unless the decoder cannot read RAW, when the list
+         *  comes back whole. `import` and `add` both go through it, so no front end has to. */
+        std::vector<std::string> preferRawOf(const std::vector<std::string> &paths);
+        /** R-HOME-5a, AMENDED: the same rule on a saved project's entries at `project open`,
+         *  except that a rendering carrying edits is kept (`info import.kept … reason=edited`).
+         *  Group parents are re-indexed past the entries left out. */
+        void preferRawIn(std::vector<EditSession::WorkspaceEntry> &entries);
+        /** Whether the installed decoder can read RAW — one probe instance from the factory. */
+        bool decoderReadsRaw() const;
         /** The preset library in the model, rescanned only when the folder changed or a
          *  preset was saved - it is a directory walk, and refreshModel runs per edit. */
         void refreshPresets(bool force);

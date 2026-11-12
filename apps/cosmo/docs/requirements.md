@@ -122,6 +122,43 @@ Project "size" on a card is the sum of the referenced files' byte sizes
   `.cmp` after the last image lands, since the file does not exist yet; the loading cover falls back
   to the first decoded image (no cached thumbnail for a never-opened catalog).
 
+### DR-HOME-3a A RAW beside its JPEG opens alone (R-HOME-5a, D-70)
+`import` and `add` pass their path list through `CosmoService::preferRawOf`
+(`core/service/CosmoService.cpp:316`, called at `:1225` and `:379`) before any entry is built, and
+`project open` passes the saved entries through `preferRawIn` (`:325`, called at `:1190`), so every
+front end — the Import Catalog dialog, a recent card, `cosmo-cc`, the control socket, an agent over
+MCP, the touch shell — opens the same set. The rule is `preferRaw` (`core/RawPairs.cpp:31`), a pure function over
+path strings: a non-RAW path is left out when a RAW in the **same folder** has the same stem, the stem
+compared case-insensitively (`shotKey`, `:18`); order is kept; other folders, two RAWs, and two
+non-RAWs of one stem are all kept. RAW is `isRawExtension` (`core/decode/ImageDecoder.h:69`), the one
+extension list — `NativeImageDecoder` and `AndroidImageDecoder` forward to it. The service drops a
+file only when the decoder says it can read RAW: `IImageDecoder::decodesRaw()` (`ImageDecoder.h:93`,
+`false` unless overridden; `true` from Native/Android when LibRaw is compiled in, forwarded by
+`PinnedDecoder.h:97`), asked of one probe instance (`decoderReadsRaw`, `:307`) and only when a pair
+exists. Each file left out is one event:
+
+    [evt] info import.skipped path=/photos/abc.jpg raw=/photos/abc.RW2
+
+On `project open` a rendering that carries work is kept (`:350`): params whose `serializeParams` text
+differs from a default `EditParams`'s, a bypass, or more than one history node. It is reported, not
+dropped:
+
+    [evt] info import.kept path=/photos/abc.jpg raw=/photos/abc.RW2 reason=edited
+
+Group parents (`parent=` is an entry index) are re-indexed past the entries left out; only images are
+ever left out, so every parent survives. The `.cmp` is not rewritten by the open — the next save
+writes it without them. Measured on the user's `vungtau.cmp` (75 RW2 + 75 JPG, imported before the
+rule): `project.opening entries=75`, 75 `import.skipped`, 0 `import.kept`.
+
+`cosmo <files…>` (bare argv images, which still decode inline in the host) calls the same
+`preferRaw` in `openPaths` (`linux_main.cpp:228`) and logs the same line through `formatEvent`.
+Worked check (the real decoder, a real RAF beside a JPEG):
+
+    printf 'project new /tmp/p.cmp\nimport /x/abc.jpg /x/abc.RAF /x/def.jpg\nwait load.finished\nstate print\n' > s.txt
+    cosmo-cc run --watch --script s.txt   # → import.skipped path=/x/abc.jpg raw=/x/abc.RAF; nodes abc.RAF, def.jpg
+
+Guard: `cosmo_core_tests` `a_raw_and_its_jpeg_open_as_one_photo`.
+
 ### DR-HOME-4 Recent projects (persisted) (R-HOME-6)
 Recents persist in a tab-separated `recent.tsv` in the config dir, newest first, capped at 24
 (`ProjectStore`, `kMaxRecents=24`). Each `RecentEntry` stores name, `.cmp` path (identity key),
@@ -775,7 +812,9 @@ Clarity → Vibrance → ColorMixer → ColorGrading → Dehaze → Sharpen → 
 ### DR-ENGINE-3 Decode
 `NativeImageDecoder` decodes to top-down RGBA8 via GdkPixbuf (JPEG/PNG/TIFF, channels expanded to
 RGBA) and, when built with `COSMO_HAVE_LIBRAW`, RAW formats (rw2/arw/cr2/cr3/nef/dng/orf/raf/pef/
-srw/rwl/raw) via LibRaw. `openPaths` prefers a RAW over a same-stem JPEG when both are selected.
+srw/rwl/raw) via LibRaw — the list is `isRawExtension` in the seam header, shared with the Android
+decoder. A RAW is preferred over the same-stem JPEG beside it by the service, for every front end
+(DR-HOME-3a).
 
 ### DR-GPU-7 The GPU backend is chosen at run time, and a GLES-only ARM board uses its GPU (R-GPU-7, R-GPU-1, R-GPU-6)
 `createComputeAccelerator()` (`core/ImageProcessing/src/compute/ComputeBackend.cpp:49`) pushes every

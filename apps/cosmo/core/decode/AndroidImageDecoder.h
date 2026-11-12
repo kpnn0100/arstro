@@ -21,6 +21,8 @@ namespace cosmo
         static bool isRawExtension(const std::string &path);
         /** True if RAW decoding is compiled in (LibRaw present). */
         static bool rawSupported();
+        /** R-HOME-5a: what the service asks before it lets a RAW replace the JPEG beside it. */
+        bool decodesRaw() const override { return rawSupported(); }
     };
 }
 }

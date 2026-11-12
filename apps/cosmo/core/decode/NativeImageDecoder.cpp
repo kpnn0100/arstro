@@ -16,16 +16,6 @@ namespace cosmo
 {
     namespace
     {
-        std::string lowerExt(const std::string &path)
-        {
-            auto dot = path.find_last_of('.');
-            if (dot == std::string::npos) return "";
-            std::string e = path.substr(dot + 1);
-            std::transform(e.begin(), e.end(), e.begin(),
-                           [](unsigned char c) { return (char)std::tolower(c); });
-            return e;
-        }
-
         std::string baseName(const std::string &path)
         {
             auto slash = path.find_last_of("/\\");
@@ -253,12 +243,7 @@ namespace cosmo
 
     bool NativeImageDecoder::isRawExtension(const std::string &path)
     {
-        static const char *kRaw[] = {"rw2", "arw", "cr2", "cr3", "nef", "dng",
-                                     "orf", "raf", "pef", "srw", "rwl", "raw"};
-        const std::string e = lowerExt(path);
-        for (const char *r : kRaw)
-            if (e == r) return true;
-        return false;
+        return ::arstro::cosmo::isRawExtension(path);   // the one list, in the seam (R-HOME-5a)
     }
 
     bool NativeImageDecoder::rawSupported()

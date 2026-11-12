@@ -65,7 +65,7 @@ namespace cosmo
     struct NodeModel
     {
         int node = -1;          // EditSession node id — the handle commands use
-        int parent = -1;        // index into AppModel::nodes, -1 for a root child
+        int parent = -1;        // the parent's NODE ID (not an index into nodes), -1 for a root child
         int depth = 0;
         bool group = false;
         std::string name;

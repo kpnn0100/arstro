@@ -12,6 +12,7 @@
 #include "engine/EditParamsIO.h"
 #include "../service/CosmoService.h"
 #include "../PresetLibrary.h"
+#include "../RawPairs.h"
 #include "PinnedDecoder.h"   // host layer, compiled into this suite on purpose — see CMakeLists
 #include "TestMain.h"
 #include <gdk-pixbuf/gdk-pixbuf.h>
@@ -1274,6 +1275,107 @@ namespace
         for (const auto &e : back) if (!e.group) ++images;
         assert(images == before + 2 && "and the project file lists them");
         printf("[PASS] add_appends_to_the_open_project\n");
+    }
+
+    // R-HOME-5a: a camera set to RAW+JPEG writes two files per shot, and opening both put every
+    // photo in the project twice. The user: "abc.jpg and abc.RW2 open, only open abc.RW2".
+    struct RawCapableDecoder : FakeDecoder
+    {
+        bool decodesRaw() const override { return true; }
+    };
+
+    void test_a_raw_and_its_jpeg_open_as_one_photo()
+    {
+        using namespace arstro::cosmo;
+
+        // The rule, on names alone.
+        const RawPairing p = preferRaw({"/s/abc.jpg", "/s/abc.RW2", "/s/def.JPG", "/t/def.nef",
+                                        "/s/KLM.jpg", "/s/klm.rw2", "/s/ghi.RW2", "/s/ghi.DNG",
+                                        "/s/x.png", "/s/x.jpeg", "/s/abc.png"});
+        const std::vector<std::string> keep{"/s/abc.RW2", "/s/def.JPG", "/t/def.nef", "/s/klm.rw2",
+                                            "/s/ghi.RW2", "/s/ghi.DNG", "/s/x.png", "/s/x.jpeg"};
+        assert(p.keep == keep && "the RAW stays, in order; other folders, RAW pairs and JPEG pairs stay too");
+        assert(p.dropped.size() == 3);
+        assert(p.dropped[0] == std::make_pair(std::string("/s/abc.jpg"), std::string("/s/abc.RW2")));
+        assert(p.dropped[1] == std::make_pair(std::string("/s/KLM.jpg"), std::string("/s/klm.rw2")) &&
+               "the name is compared without case");
+        assert(p.dropped[2].first == "/s/abc.png" && "any rendering of the shot, not only a JPEG");
+        assert(isRawExtension("/a/b.Rw2") && !isRawExtension("/a.rw2/b") && !isRawExtension("/a/b.jpg"));
+
+        // Through the service, for `import` and for `add`.
+        const std::string path = "/tmp/cosmo_svc_rawpair.cmp";
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new RawCapableDecoder()); });
+        std::vector<std::string> events;
+        svc.subscribe([&](const Event &e) { events.push_back(formatEvent(e)); });
+        std::string err;
+        assert(svc.dispatchText("project new " + path, err));
+        assert(svc.dispatchText("import /fake/s/abc.jpg /fake/s/abc.RW2 /fake/s/def.jpg", err) && err.empty());
+        pumpUntilIdle(svc);
+        std::vector<std::string> names;
+        for (const NodeModel &n : svc.model().nodes) if (!n.group) names.push_back(n.name);
+        assert(names == (std::vector<std::string>{"abc.RW2", "def.jpg"}) && "abc.jpg is not opened");
+        auto saw = [&](const std::string &line) {
+            for (const std::string &e : events) if (e == line) return true;
+            return false;
+        };
+        assert(saw("[evt] info import.skipped path=/fake/s/abc.jpg raw=/fake/s/abc.RW2") &&
+               "and the service says which file it left out");
+
+        assert(svc.dispatchText("add /fake/s/zz.JPG /fake/s/zz.RAF", err) && err.empty());
+        pumpUntilIdle(svc);
+        names.clear();
+        for (const NodeModel &n : svc.model().nodes) if (!n.group) names.push_back(n.name);
+        assert(names == (std::vector<std::string>{"abc.RW2", "def.jpg", "zz.RAF"}) && "add follows the same rule");
+        assert(saw("[evt] info import.skipped path=/fake/s/zz.JPG raw=/fake/s/zz.RAF"));
+
+        // A decoder that cannot read RAW must not be handed the RAW in place of the JPEG:
+        // that would turn two copies of the photo into none.
+        CosmoService noRaw(budget);
+        noRaw.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        assert(noRaw.dispatchText("project new " + path, err));
+        assert(noRaw.dispatchText("import /fake/s/abc.jpg /fake/s/abc.RW2", err));
+        pumpUntilIdle(noRaw);
+        assert(noRaw.model().imageCount == 2 && "without RAW support both are kept");
+
+        // AMENDED: a SAVED project is a list being opened too — the user's vungtau.cmp was 75 RW2 +
+        // 75 JPG imported before the rule existed. An untouched JPG goes; an edited one stays; a
+        // group after the gap keeps its children (parent= is an entry index, so it must re-index).
+        {
+            std::ofstream f(path, std::ios::trunc);
+            f << "cosmoworkspace=1\n"
+                 "#group\nparent=-1\nname=Trip\n"                       // 0
+                 "#image\nparent=0\npath=/fake/s/aa.jpg\n"              // 1  untouched: left out
+                 "#image\nparent=0\npath=/fake/s/aa.RW2\n"              // 2
+                 "#image\nparent=-1\npath=/fake/s/bb.jpg\nexposure=0.5\n"  // 3  edited: kept
+                 "#image\nparent=-1\npath=/fake/s/bb.RW2\n"             // 4
+                 "#group\nparent=0\nname=Inner\n"                       // 5
+                 "#image\nparent=5\npath=/fake/s/cc.jpg\n";             // 6  no RAW: kept
+        }
+        events.clear();
+        assert(svc.dispatchText("project open " + path, err) && err.empty());
+        pumpUntilIdle(svc);
+        const std::vector<NodeModel> &nodes = svc.model().nodes;
+        auto parentName = [&](const std::string &name) {
+            for (const NodeModel &n : nodes)
+                if (n.name == name)
+                {
+                    if (n.parent < 0) return std::string("(root)");
+                    for (const NodeModel &q : nodes) if (q.node == n.parent) return q.name;   // a node id
+                }
+            return std::string("(absent)");
+        };
+        assert(parentName("aa.jpg") == "(absent)" && "the untouched JPG is not opened");
+        assert(parentName("aa.RW2") == "Trip");
+        assert(parentName("bb.jpg") == "(root)" && "the edited JPG is kept");
+        assert(parentName("bb.RW2") == "(root)");
+        assert(parentName("Inner") == "Trip" && parentName("cc.jpg") == "Inner" && "the tree survives the gap");
+        assert(svc.model().imageCount == 4);
+        assert(saw("[evt] info import.skipped path=/fake/s/aa.jpg raw=/fake/s/aa.RW2"));
+        assert(saw("[evt] info import.kept path=/fake/s/bb.jpg raw=/fake/s/bb.RW2 reason=edited"));
+        std::filesystem::remove(path);
+        printf("[PASS] a_raw_and_its_jpeg_open_as_one_photo\n");
     }
 
     // R-NTWB-2: the pixels ONE view asks for - Before, and the photo uncropped while it crops -
@@ -3351,6 +3453,7 @@ int main()
     test_every_command_kind_has_a_grammar();
     test_the_model_carries_what_a_second_view_draws();
     test_add_appends_to_the_open_project();
+    test_a_raw_and_its_jpeg_open_as_one_photo();
     test_render_queries_for_one_view();
     test_engine_memory_is_capped_and_a_cold_slot_is_re_decoded();
     test_a_cold_slot_is_re_decoded_through_the_service();

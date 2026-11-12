@@ -274,6 +274,11 @@ package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
     + decodeFile(path, fidelity)
     + decodeThumb(path, maxEdge)
     + readMetadata(path) : ImageMetadata   ' R-INFO: parses a header, never decodes
+    + decodesRaw() : bool   ' R-HOME-5a: false unless the decoder can read a RAW
+  }
+  class RawPairs <<free functions>> {
+    + preferRaw(paths) : RawPairing   ' R-HOME-5a: keep[] + dropped (rendered, raw)[]
+    + isRawExtension(path) : bool     ' the one RAW list, in ImageDecoder.h
   }
   class NativeImageDecoder
   class Exif <<free functions>> {
@@ -417,6 +422,7 @@ GtkMain ..> ThreadBudget : setPercent / setExplicitEngineThreads (R-CPU-3)
 ProjectLoader ..> ThreadBudget : beginLoad / producerEnter (R-SVC-10)
 ProjectLoader ..> OrderedParallelLoad : pool + in-order hand-off
 ProjectLoader ..> IImageDecoder : one per produce() call
+CosmoService ..> RawPairs : import / add / project open (R-HOME-5a)
 ProjectLoader ..> OmpPin : onWorkerStart hook (R-CPU-2c)
 PinnedDecoder ..|> IImageDecoder
 PinnedDecoder ..> OmpPin : pins the thread before EVERY decode (D-41)

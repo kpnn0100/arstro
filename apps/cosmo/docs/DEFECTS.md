@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-70**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-71**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -398,6 +398,33 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-70 — A RAW and its camera JPEG opened as two photos
+- **Area:** core / service (`import`, `add`) · **Status:** **Fixed** · **Severity:** S3
+- **Found:** 2026-11-12, reported by the user: *"same name different format should prioritize raw —
+  abc.jpg and abc.RW2 open, only open abc.RW2, ignore abc.jpg"*.
+- **Front end:** every one that opens a list — Import Catalog, `cosmo-cc`, the control socket, an agent,
+  the touch shell. Only `cosmo <files…>` already did it.
+- **Reproduce:** `project new /tmp/p.cmp`, `import /x/abc.jpg /x/abc.RAF /x/def.jpg` → three photos.
+- **Expected:** two — `abc.RAF` and `def.jpg`.
+- **Actual:** `CosmoService` built one entry per path. The preference existed only in the GTK host's
+  argv path (`openPaths`), where it compared names across folders and dropped the JPEG even in a build
+  that could not read the RAW.
+- **Judgement:** **requirement gap** → R-HOME-5a written. The host-only copy was also a Law-1 breach: a
+  behaviour one front end had and the others did not.
+- **Seen again (same day):** opening `vungtau.cmp` (`/media/namdln/kpnn`, 75 RW2 + 75 JPG, imported before
+  the fix) still showed the JPGs — the first fix covered `import`/`add` only and R-HOME-5a said so. Amended.
+- **Fix:** `preferRaw` (`core/RawPairs.cpp`) applied by `CosmoService::preferRawOf` on `import` and `add`
+  and by `preferRawIn` on `project open` (an edited JPG entry is kept, `info import.kept … reason=edited`),
+  only when `IImageDecoder::decodesRaw()`; one `info import.skipped` per file left out. The host's copy
+  now calls the same function. The RAW extension list is one function in the decoder seam. While testing
+  it: `AppModel::NodeModel::parent` was documented as an index into `nodes` but holds the parent's node
+  id — the comment is corrected.
+- **Guard:** `cosmo_core_tests` `a_raw_and_its_jpeg_open_as_one_photo` — the rule on names (folders,
+  case, RAW pairs, non-JPEG renderings), then `import` and `add` through the service, then a decoder that
+  cannot read RAW keeping both, then `project open` of a saved project with a group after the gap and an
+  edited JPG. Each half FAILS with its service change removed (`abc.jpg is not opened`;
+  `the untouched JPG is not opened`).
 
 ### D-62 — A JPEG's EXIF orientation is ignored: a portrait photo edits (and previews) sideways
 - **Area:** core / decode · **Status:** **Fixed** · **Severity:** S2
