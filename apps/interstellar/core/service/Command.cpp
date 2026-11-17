@@ -32,8 +32,9 @@ namespace interstellar
         static const std::vector<CommandSpec> specs = {
             {K::ProjectNew, "project new", "<path.isp>", 1, 1, {"fps=<n>", "res=<WxH>"},
              "Create a project and its rack (an empty .cmp beside it), and open it.", "R-SCOPE-2"},
-            {K::ProjectOpen, "project open", "<path.isp>", 1, 1, {},
-             "Open a project: its timelines, and the hosted Cosmo project its #rack names.", "R-SCOPE-2"},
+            {K::ProjectOpen, "project open", "<path.isp|path.cmp>", 1, 1, {},
+             "Open a project: its timelines, and the hosted Cosmo project its #rack names. A Cosmo .cmp opens as a "
+             "new unsaved project around it (nothing is written until `project save`).", "R-SCOPE-2"},
             {K::ProjectSave, "project save", "[path.isp]", 0, 1, {},
              "Save the .isp and the rack's .cmp. A path saves the .isp there.", "R-RACK-2"},
             {K::ProjectClose, "project close", "", 0, 0, {}, "Close the project and return Home (its autosave goes: closing is a decision).", "R-UI-1"},

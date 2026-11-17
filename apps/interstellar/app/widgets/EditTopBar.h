@@ -8,6 +8,8 @@
  *  Interstellar's contents: the project name, ELLIPSIZED against the room actually left before
  *  the tab switcher (R5); the tab switcher centred on the window; the version switcher as chrome
  *  right after it (R-UI-4); and a save button whose accent lights while the project is dirty.
+ *  Unsaved work is also the family's DirtyDot after the project name — FOREGROUND, radius 3, eased
+ *  (R-UI-21c): it is a fact about the document, and the accent means selection.
  *
  *  Not cosmo's TopBar class: that one owns cosmo's menu strip and rail toggle, which Interstellar
  *  does not have. Clicking the wordmark asks to go Home (the App turns it into `project close`,
@@ -19,6 +21,7 @@
 #include "VersionSwitcher.h"
 #include "../../../cosmo/widgets/IconButton.h"
 #include "../../../cosmo/widgets/MenuStrip.h"
+#include "../../../cosmo/widgets/DirtyDot.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -38,12 +41,17 @@ namespace interstellar_v1
 
         std::shared_ptr<TabSwitcher> tabs() { return mTabs; }
         std::shared_ptr<VersionSwitcher> versions() { return mVersions; }
-        /** Cosmo's menu bar (File · Edit · Settings · Workspace · Preset), after the wordmark as in
-         *  cosmo's TopBar. The App fills it. */
+        /** Cosmo's menu bar (File · Edit · Preset · Colour · View), after the wordmark as in cosmo's
+         *  TopBar. The App fills it. */
         std::shared_ptr<cosmo_v2::MenuStrip> menus() { return mMenus; }
         artboard::Rect wordmarkRect() const { return artboard::Rect{0, 0, mWordmarkW + 2 * 9.75, height.value()}; }
         /** The box the project name was drawn into (its right edge stops before the tabs). */
         artboard::Rect nameRect() const;
+
+        /** R-UI-21c: the unsaved dot — its LIVE eased amount (0 saved … 1 unsaved) and where its
+         *  centre was last drawn (local; measured in the paint, so it follows the name's real end). */
+        double dirtyDotAmount() const { return mDot.amount(); }
+        artboard::Point dirtyDotCentre() const { return mDotAt; }
 
         std::function<void()> onHome;
         std::function<void()> onSave;
@@ -67,7 +75,9 @@ namespace interstellar_v1
         artboard::AnimatedProperty mHomeHover{0.0};
         bool mHomeHovered = false;
         double mNowMs = 0.0;
-        artboard::AnimatedProperty mDirtyAmt{0.0};
+        cosmo_v2::DirtyDot mDot;                 // R-UI-21c: after the project name, foreground
+        mutable artboard::Point mDotAt{0.0, 0.0};
+        artboard::AnimatedProperty mDirtyAmt{0.0};   // the save icon's light
         bool mDirtyApplied = false, mDirtyInit = false, mBound = false;   // first placement sets
     };
 }

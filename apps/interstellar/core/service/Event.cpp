@@ -33,7 +33,7 @@ namespace interstellar
             {EK::CommandRejected, "command.rejected", {"line", "why"},
              "A line was refused (R-SVC-3): unknown verb, unknown flag, refused edit."},
             {EK::ScreenChanged, "screen.changed", {"screen"}, "Home / Loading / Edit."},
-            {EK::ProjectOpened, "project.opened", {"path", "timelines", "rack"}, "A project is open."},
+            {EK::ProjectOpened, "project.opened", {"path", "timelines", "rack", "from"}, "A project is open. `from` is what was opened: isp, or cmp (a Cosmo project, wrapped - R-RACK-1a)."},
             {EK::ProjectSaved, "project.saved", {"path", "cmp"}, "The .isp and the rack's .cmp were written."},
             {EK::ProjectClosed, "project.closed", {}, "Back to Home."},
             {EK::RackLoaded, "rack.loaded", {"images", "failed"}, "The hosted Cosmo project finished decoding."},

@@ -465,6 +465,46 @@ int main()
         assert(std::fabs(evalValue(g, "get a.basic.exposure") - 0.35) < 1e-6);
     });
 
+    test("a Cosmo project opens directly: a project is made around it, and nothing is written until save (R-RACK-1a)", [] {
+        // A .cmp that no Interstellar project owns: the rack of a finished project, copied aside.
+        Fixture f("opencmp_src");
+        f.standard();
+        f.must("set a.basic.exposure=0.2");
+        f.must("project save");
+        Fixture g("opencmp");
+        fs::copy_file(f.path("mv.cmp"), g.path("look.cmp"));
+        g.must("project open \"" + g.path("look.cmp") + "\"");
+        bool opened = false;
+        for (const auto &e : g.events) opened = opened || (has(e, "project.opened") && has(e, "from=cmp"));
+        assert(opened);
+        assert(g.svc->model().dirty);                       // the .isp is only in memory
+        assert(!fs::exists(g.path("look.isp")));            // ... and opening wrote no file
+        assert(std::fabs(evalValue(g, "get a.basic.exposure") - 0.2) < 1e-6);   // Cosmo's grade, read through the rack
+        g.must("set a.basic.exposure=0.45");
+        g.must("project save");
+        assert(fs::exists(g.path("look.isp")));
+        double e = 0;
+        assert(cmpValue(g.path("look.cmp"), 0, "exposure", e) && std::fabs(e - 0.45) < 1e-6);   // R-RACK-2 holds
+        // Opening the .cmp again finds the project that now owns it, not a second one.
+        Fixture h("opencmp_again");
+        h.must("project open \"" + g.path("look.cmp") + "\"");
+        assert(h.svc->model().projectPath == g.path("look.isp"));
+        assert(!h.svc->model().dirty);
+    });
+
+    test("a Solaris song is refused, and the file is not touched (R-AUD-2 amended)", [] {
+        Fixture f("openslp");
+        const std::string text = "arstro-project = 1\napp        = solaris\nid         = prj_song\nname       = song\n";
+        { std::ofstream(f.path("song.slp")) << text; }
+        std::string err;
+        assert(!f.run("project open \"" + f.path("song.slp") + "\"", &err));
+        assert(has(err, "Solaris song"));
+        assert(f.svc->model().projectPath.empty());
+        std::ifstream in(f.path("song.slp"));
+        const std::string after((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        assert(after == text);
+    });
+
     test("a version's colour is an OVERRIDE: a delta that keeps receiving the base (R-VER-2)", [] {
         Fixture f("override");
         f.standard();

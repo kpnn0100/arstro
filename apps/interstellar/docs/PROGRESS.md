@@ -3,7 +3,7 @@
 **The only authority on what is done and what is next.** Committed, so work resumes on any machine.
 A session reads **NEXT**, does one task, updates this file, and commits — in the same commit.
 
-- Rules: `.claude/skills/arstro.rule` · `.claude/skills/arstro.design.rule`
+- Rules: `.claude/skills/arstro.rule` · `.claude/skills/arstro.rule.design`
 - Skills: `.claude/skills/arstro.interstellar.implement` · `.claude/skills/arstro.interstellar.debug`
 - Intent: [`../REQUIREMENTS.md`](../REQUIREMENTS.md) · As-built: [`requirements.md`](requirements.md)
   · Format: [`project-format.md`](project-format.md) · Audio: [`../../../docs/audio-format.md`](../../../docs/audio-format.md)
@@ -11,11 +11,44 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Defects: [`DEFECTS.md`](DEFECTS.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-27 — the web face becomes the same app: its frame is built (R-SVC-4, DR-SVC-4).*
+*Last updated: 2026-11-17 — the family standard adopted: menus, toast, unsaved dialog and dot, empty states, Home, words (R-UI-21, R-UI-7 amended; DR-UI-7, DR-UI-18).*
 
 ---
 
 ## NEXT
+
+**2026-11-17, the family standard (cosmo R-FAMILY-0, `arstro.rule.design` §2.7) — adopted in the
+native app; NOT committed (the tree holds other sessions' work).**
+- `[x]` **Menus** File · Edit · Preset · Colour · View; Settings… in File (Ctrl+,); shortcuts in their
+  column, separators, disabled rows, U+2026, Title Case; keys routed to an open menu; Ctrl+N
+  (R-UI-7 amended, DR-UI-7).
+- `[x]` **Toast**: the shared `Toast`, the App's, top-centre under the top bar, over every screen;
+  D-15 closed (R-UI-21a, DR-UI-18a).
+- `[x]` **Unsaved dialog** `Save changes to "<name>"?`, Cancel · Don't save · Save, Auto destructive
+  style (R-UI-21b). `[x]` **Unsaved dot** = `DirtyDot`, foreground (R-UI-21c).
+- `[x]` **Empty states** said once in the monitor with one filled button; the deck's page switch in
+  sentence case (R-UI-21d/e). `[x]` **Home**: version from `INTERSTELLAR_VERSION`, one sentence + one
+  button (R-UI-21f). `[x]` **Words** (R-UI-21g).
+- `[x]` The 2026-11-17 UI audit (R-UI-16..20), built by an earlier interrupted pass, now has its
+  as-built entry (DR-UI-17) — written from the code and its tests.
+- `[!]` UNVERIFIED: the live window (L5) — nothing was run on a display. Real GTK key delivery of
+  Ctrl+, / Ctrl+N / Home / End, the toast over the real Home, and the dialog on the window's close
+  button were exercised only through `App::key` / `requestQuit` in the headless tests.
+- `[ ]` **D-20** the web face (`web/`) still has the old menus, chip and empty sentences.
+- `[ ]` Wanted from the shared widgets (apps/cosmo, not ours to edit): `MenuStrip` — change one row's
+  `enabled` in place (today a change of live rows under an OPEN Edit menu closes it);
+  `ConfirmDialog::title()` for a test.
+
+**2026-11-17, cross-app projects (the founder: Interstellar opens Cosmo and Solaris projects).**
+- `[x]` **R-RACK-1a** a `.cmp` opens directly as an unsaved project around it; the picker lists
+  `.cmp`; `project.opened from=`; API document regenerated. L2 tests green.
+- `[x]` **D-19** a `.slp` is refused instead of half-opened and rewritten on save.
+- `[ ]` **R-SONG** (not written yet as requirements): host a `SolarisService` through one adapter
+  library. Step 1 = render-only (`audio clip add --src song.slp[#v=<version>]`, proof: samples
+  equal `solaris-cc render`); then `#song` node + `project open x.slp`; then `song <line>`
+  pass-through with direct save; then `song branch <name>` (a Solaris `#aversion`). Build order and
+  the header-name clash between the two models are the known obstacles.
+- `[ ]` Home has no card or button for "open a Cosmo project" beyond the picker's filter.
 
 **► Integration of four parallel streams, then the service.** The second build is being made by four
 agents in disjoint directories (each builds standalone, none touches shared CMake, none commits) and
@@ -182,6 +215,23 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+- **2026-11-17 — the family standard, and the calls made adopting it** (R-UI-21, R-UI-7 amended).
+  (1) The autosave interval had lived in the Settings menu; with that menu gone it sits in File under
+  Settings…. (2) A disabled menu row must not have a live key, so I, O, comma and period do nothing
+  on the Grade tab (which has no playhead) — a behaviour change to R-EDT-1's keys, written into
+  R-UI-7. (3) The toast belongs to the App, not the Edit screen, which also closes D-15. (4) Home's
+  empty state has its own filled New project button although the sidebar's is filled too — the
+  family pattern asks for one button in the stage; two filled buttons with one label are on screen
+  only while there are no projects. (5) Small lowercase status captions stay lowercase: they are
+  labels, not sentences. (6) View has no Show Agent: there is no agent panel here yet.
+
+- **2026-11-17 — the accent is teal `#159387`, the logo is Warp, and there is an opening splash**
+  (R-UI-2 amended; R-BRAND-1..4, DR-BRAND-1). The accent is the value Solaris had measured for white
+  text; purple-pink went to Arstro. Home shows the logo; `linux_main.cpp` plays cosmo's splash in
+  Interstellar's brand (skipped with a project path or `INTERSTELLAR_NO_SPLASH`). The UI test's
+  on-screen slider sample now expects teal. `[!]` UNVERIFIED: the splash window was not run live
+  (L5) — its frames were rendered headlessly.
 
 **2026-10-30 — `interstellar-cc mcp` (R-MCP-1, DR-MCP-1) is a front end on `core/Mcp`, beside cosmo's
 and solaris's.** The user asked for MCP on all three apps. The protocol is shared (`core/Mcp`, its own

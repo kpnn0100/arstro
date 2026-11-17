@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <string>
 #include <vector>
@@ -49,6 +50,10 @@ using istest::worldRect;
 namespace
 {
     int gChecks = 0;
+    // INTERSTELLAR_UI_KEEP_GOING=1 lists EVERY failing check instead of stopping at the first — for a
+    // mutant run that must show which assertions guard a change (R-TEST-3). The exit code is still non-zero.
+    int gFails = 0;
+    bool gKeepGoing = false;
     std::string gErr;   // a sink for FakeService::dispatch's error out-param when a test drives the model directly
 
     bool validUtf8(const std::string &s)
@@ -69,7 +74,8 @@ namespace
         const bool ok_ = (cond);                                                           \
         ++gChecks;                                                                         \
         std::printf("  [%s] %s\n", ok_ ? "ok" : "FAIL", what);                             \
-        assert(ok_ && what);                                                               \
+        if (!ok_) ++gFails;                                                                \
+        assert((ok_ || gKeepGoing) && what);                                               \
     } while (0)
 
     const int kSizes[2][2] = {{1440, 900}, {1024, 640}};
@@ -128,12 +134,12 @@ namespace
         Rig r(1440, 900, [](FakeService &s) { s.edit(); });
         r.settle();
         const artboard::Color p = palette::primary();
-        CHECK(near(p.r, 0xCF / 255.0, 1e-4) && near(p.g, 0x5A / 255.0, 1e-4) && near(p.b, 0xED / 255.0, 1e-4), "palette::primary() is #CF5AED after App()");
+        CHECK(near(p.r, 0x15 / 255.0, 1e-4) && near(p.g, 0x93 / 255.0, 1e-4) && near(p.b, 0x87 / 255.0, 1e-4), "palette::primary() is #159387 after App()");
         const artboard::Color fill = sharedTheme().slider.rangeFill.paint.fill;
         CHECK(near(fill.r, p.r) && near(fill.g, p.g) && near(fill.b, p.b), "cosmo's shared slider fill follows the accent");
         CHECK(near(sharedTheme().tab.activeIndicatorColor.b, p.b), "cosmo's tab indicator follows the accent");
         CHECK(near(palette::ring().a, 0.5) && near(palette::ring().r, p.r), "ring() is the accent at 0.5");
-        // a reused cosmo widget DRAWS purple-pink: cosmo's SliderRow as Cosmo's Mix (100 %, R-FX-5) has
+        // a reused cosmo widget DRAWS teal (R-UI-2, amended 2026-11-17): cosmo's SliderRow as Cosmo's Mix (100 %, R-FX-5) has
         // its fill running the whole track — sample inside it, clear of the thumb
         artboard::Slider *sl = firstChild<artboard::Slider>(*r.app->edit().gradeInspector()->cosmoMix());
         CHECK(sl != nullptr, "found the slider inside cosmo's SliderRow (Cosmo's Mix)");
@@ -141,7 +147,7 @@ namespace
         const uint32_t px = r.pixel((int)a.x, (int)std::floor(a.y));
         const int R = (px >> 16) & 0xFF, G = (px >> 8) & 0xFF, B = px & 0xFF;
         std::printf("      slider fill pixel at (%.0f,%.0f) = #%02X%02X%02X\n", a.x, a.y, R, G, B);
-        CHECK(R > 150 && B > 170 && G < 140, "the reused cosmo slider fill is purple-pink on screen");
+        CHECK(R < 70 && G > 120 && B > 105 && G > B, "the reused cosmo slider fill is teal on screen");
     }
 
     // ── 1. intent as text ─────────────────────────────────────────────────────────────
@@ -590,8 +596,42 @@ namespace
             auto rt = r.app->edit().rackTree();
             const Point p = centre(*rt, rt->bypassRect(1));
             r.click(p.x, p.y);
-            const double first = firstMoved(r, [&] { return r.app->edit().toastAmount(); }, 0.0);
+            auto &toast = r.app->toast();
+            const double first = firstMoved(r, [&] { return toast.amount(); }, 0.0);
             CHECK(strictlyBetween(first, 0.0, 1.0), "a refused line is SAID: the toast eases in (first frame between 0 and 1)");
+            // R-UI-21a: the family's toast — an ERROR with the service's own sentence, top-centre under the top bar
+            using Kind = arstro::cosmo_v2::Toast::Kind;
+            CHECK(toast.kind() == Kind::Error && toast.text() == r.svc.refuseMessage && toast.text().find("Refused") == std::string::npos,
+                  "…an error toast carrying the service's own sentence, with no \"Refused:\" before it");
+            const double y0 = toast.y.value() + toast.rect().y;
+            r.pump(400);
+            const Rect tr{toast.x.value() + toast.rect().x, toast.y.value() + toast.rect().y, toast.rect().w, toast.rect().h};
+            CHECK(tr.w > 0 && near(tr.x + tr.w * 0.5, r.app->width() * 0.5, 1.0) && tr.y >= shell::topBarH() && tr.y < shell::topBarH() + 24.0,
+                  "…centred on the window, just under the top bar");
+            CHECK(y0 < tr.y, "…and it slid DOWN into place while it faded in");
+            r.pump(2600);
+            CHECK(near(toast.amount(), 1.0, 1e-6), "3000 ms after it appeared it is still held (the old chip left at 2600)");
+            r.pump(360);   // past 3200: leaving
+            CHECK(strictlyBetween(toast.amount(), 0.0, 1.0), "…and after 3200 ms it fades out, eased (mid-fade)");
+            r.pump(600);
+            CHECK(toast.amount() < 1e-6 && !toast.isShowing(), "…to nothing");
+            // a second toast while one is up cross-fades; a note is INFO
+            r.app->say(Kind::Error, "First.");
+            r.pump(400);
+            r.app->say(Kind::Info, "Second.");
+            double sw = 1.0;   // the swap starts at 0 and eases to 1: the first frame strictly inside
+            for (int i = 0; i < 8 && !strictlyBetween(sw, 0.0, 1.0); ++i) { r.frame(); sw = toast.swapAmount(); }
+            CHECK(strictlyBetween(sw, 0.0, 1.0) && toast.kind() == Kind::Info && toast.text() == "Second.", "a toast shown over another CROSS-FADES into it");
+        }
+        {
+            // D-15: a refusal on Home is seen — the toast is the App's, over whichever screen shows
+            Rig r(1440, 900, [](FakeService &s) { s.home(); });
+            r.settle();
+            r.svc.refuseNext = true;
+            r.app->dispatch("project open /moved/away.isp");
+            r.pump(400);
+            CHECK(r.app->screen() == arstro::interstellar::Screen::Home && near(r.app->toast().amount(), 1.0, 1e-6) && r.app->toast().rect().w > 0,
+                  "a command refused on Home is SAID there (D-15)");
         }
     }
 
@@ -1037,15 +1077,17 @@ namespace
             auto ms = r.app->edit().topBar()->menus();
             std::string titles;
             for (int i = 0; i < ms->menuCount(); ++i) titles += (i ? " " : "") + ms->menu(i).title;
-            CHECK(titles == "File Edit Settings Workspace Preset Colour", "the top bar carries cosmo's menu strip: File Edit Settings Workspace Preset, and Colour (R-COLOR-3)");
-            CHECK(clickMenuItem(r, "File", "Save ") && hasLine(r.svc, "project save"), "File > Save dispatched project save");
+            CHECK(titles == "File Edit Preset Colour View", "the top bar carries the family's menus: File · Edit · Preset · Colour · View (R-UI-7 amended)");
+            CHECK(clickMenuItem(r, "File", "Save") && hasLine(r.svc, "project save"), "File > Save dispatched project save");
+            r.svc.m.canUndo = true; r.svc.m.undoLabel = "clip move c7"; r.svc.m.hasGradeClipboard = true; ++r.svc.m.revision;   // R-UI-7 (amended): Undo acts only when there is something to undo
+            r.frame();
             CHECK(clickMenuItem(r, "Edit", "Undo") && hasLine(r.svc, "undo"), "Edit > Undo dispatched undo");
             CHECK(clickMenuItem(r, "Edit", "Paste Grade to All") && hasLine(r.svc, "grade paste --all"), "Edit > Paste Grade to All dispatched grade paste --all");
             const std::string sel = r.svc.m.rack[(size_t)r.svc.m.selectedRack].bindName;
             const std::string apply = "preset apply Film/Warm --node " + sel;
-            CHECK(clickMenuItem(r, "Preset", "Apply  Film/Warm") && hasLine(r.svc, apply), "the Preset menu lists the library: Apply Film/Warm dispatched preset apply");
-            CHECK(clickMenuItem(r, "Workspace", "Cut") && r.app->tab() == EditScreen::Cut, "Workspace > Cut switched the tab");
-            CHECK(clickMenuItem(r, "Settings", "Engine Settings") && r.app->settings().isOpen(), "Settings > Engine Settings opened cosmo's settings dialog");
+            CHECK(clickMenuItem(r, "Preset", "Apply Film/Warm") && hasLine(r.svc, apply), "the Preset menu lists the library: Apply Film/Warm dispatched preset apply");
+            CHECK(clickMenuItem(r, "View", "Cut") && r.app->tab() == EditScreen::Cut, "View > Cut switched the tab");
+            CHECK(clickMenuItem(r, "File", "Settings") && r.app->settings().isOpen(), "File > Settings… opened cosmo's settings dialog");
             r.settle();
             CHECK(r.app->settings().extraRowCount() == 2, "Interstellar adds two rows of its own to cosmo's dialog: Hardware video (R-PLAY-3), Preview cache (R-PLAY-1)");
             const Rect on = r.app->settings().extraChipRect(0, 1);
@@ -1737,13 +1779,13 @@ namespace
         r.click(p.x, p.y);
         r.pump(250);
         auto cm = e.contextMenu();
-        CHECK(cm->isOpen() && cm->itemCount() == 2 && cm->item(0).label == "Copy Frame" && cm->item(1).label == "Save Frame...",
+        CHECK(cm->isOpen() && cm->itemCount() == 2 && cm->item(0).label == "Copy Frame" && cm->item(1).label == "Save Frame\xE2\x80\xA6",
               "clicking it opens Copy Frame / Save Frame…");
         Point ip = centre(*cm, cm->itemRect(0));
         r.click(ip.x, ip.y);
         r.pump(64);
         CHECK(r.svc.copies.size() == 1 && r.svc.copies[0].empty(), "Copy Frame in Cut copies the timeline at the playhead");
-        CHECK(e.toastAmount() > 0.0 && !e.toastIsError(), "…and says so, without the refusal's red");
+        CHECK(r.app->toast().amount() > 0.0 && r.app->toast().kind() == arstro::cosmo_v2::Toast::Kind::Info, "…and says so, an info toast");
 
         // back in Grade: the caption's capture button fades in; Save Frame… names the source
         r.app->setTab(0);
@@ -1772,7 +1814,7 @@ namespace
         ip = centre(*cm, cm->itemRect(0));
         r.click(ip.x, ip.y);
         r.pump(64);
-        CHECK(e.toastIsError(), "a failed copy is SAID, as a refusal");
+        CHECK(r.app->toast().kind() == arstro::cosmo_v2::Toast::Kind::Error, "a failed copy is SAID, as an error toast");
     }
 
     /** R-RACK-3 (amended): the reference frame is a fast-seek slider over the whole source that
@@ -2038,7 +2080,7 @@ namespace
                 }
             return false;
         };
-        CHECK(clickItem("Place Timeline Here..."), "a video lane offers Place Timeline Here... when one can be placed");
+        CHECK(clickItem("Place Timeline Here\xE2\x80\xA6"), "a video lane offers Place Timeline Here... when one can be placed");
         labels.clear();
         for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
         CHECK(cm->isOpen() && labels == "main|", "…the list opens in its place, naming only what may go inside");
@@ -2311,12 +2353,12 @@ namespace
         };
         rightClickRow();
         r.svc.lines.clear();
-        CHECK(clickItem("Input LUT..."), "a source's menu offers Input LUT...");
+        CHECK(clickItem("Input LUT\xE2\x80\xA6"), "a source's menu offers Input LUT...");
         CHECK(!r.svc.lines.empty() && r.svc.lines.back() == "set s_day01.lut=/luts/teal.cube", "…the host picks a .cube and the line sets it");
         rightClickRow();
         CHECK(clickItem("Remove Input LUT") && r.svc.lines.back() == "set s_day01.lut=none", "a source with a LUT offers Remove Input LUT");
         rightClickRow();
-        CHECK(clickItem("Export LUT...") && suggested == "s_day01.cube" && r.svc.lines.back() == "lut export s_day01 --out /out/s_day01.cube",
+        CHECK(clickItem("Export LUT\xE2\x80\xA6") && suggested == "s_day01.cube" && r.svc.lines.back() == "lut export s_day01 --out /out/s_day01.cube",
               "Export LUT... suggests <bind>.cube and dispatches lut export");
         // the LUT effect: its section ends with a file row
         auto gi = r.app->edit().gradeInspector();
@@ -2336,19 +2378,29 @@ namespace
         CHECK(!r.svc.lines.empty() && r.svc.lines.back() == "set ef_3.path=/luts/teal.cube", "clicking it picks the file: set ef_3.path=<file>");
         CHECK(fb->label() == "LUT  \xC2\xB7  teal.cube", "…and the row names the file");
 
-        // D-12: at 1024x640 the panel scrolls to the LUT's section — and paints nothing outside itself
-        Rig s(1024, 640, [](FakeService &f) {
+        // D-12: in a short column the panel scrolls to the LUT's section — and paints nothing outside itself.
+        // (918x560 since R-UI-16a: at 1024x640 the folded list leaves the panel room for all three sections.)
+        Rig s(918, 560, [](FakeService &f) {
             f.edit();
-            f.m.effects.push_back(FakeService::effect("ef_3", "ro2", "s_day01", "lut.cube", 2, true, 1.0));
+            // four more blurs before the LUT: with the list folded, seven section headers are what outgrow the panel
+            for (int k = 0; k < 4; ++k)
+                f.m.effects.push_back(FakeService::effect(("ef_b" + std::to_string(k)).c_str(), "ro2", "s_day01", "blur.box", 2 + k, true, 1.0));
+            f.m.effects.push_back(FakeService::effect("ef_3", "ro2", "s_day01", "lut.cube", 6, true, 1.0));
             ++f.m.revision;
         });
         s.settle();
         auto pl2 = s.app->edit().gradeInspector()->plugins();
         auto ep2 = s.app->edit().gradeInspector()->effectPanel();
-        p = centre(*pl2, pl2->rowRect(3));
+        // R-UI-16a: at this size the list is folded to its selected row — its count chip opens it
+        CHECK(pl2->folded() && pl2->rowCount() == 1, "918x560: eight plugins fold to the selected row");
+        p = centre(*pl2, pl2->moreRect());
+        s.click(p.x, p.y);
+        s.settle();
+        p = centre(*pl2, pl2->rowRect(7));
         s.click(p.x - 30.0, p.y);
         s.settle();
-        CHECK(ep2->headerRect(0).y < 0.0, "1024x640: the panel scrolled to reveal the LUT's section");
+        CHECK(pl2->selected() == "ef_3" && pl2->rowCount() == 1, "…and choosing the LUT folds it again");
+        CHECK(ep2->headerRect(0).y < 0.0, "918x560: the panel scrolled to reveal the LUT's section");
         const Point tl = world(*pl2, 0, 0);
         const int x0 = (int)tl.x, y0 = (int)tl.y, x1 = x0 + (int)pl2->width.value(), y1 = y0 + (int)pl2->height.value();
         std::vector<uint32_t> scrolled;
@@ -2590,7 +2642,7 @@ namespace
             if (cm->item(i).label == "Remove Proxy") { const Point q = centre(*cm, cm->itemRect(i)); r.click(q.x, q.y); r.pump(64); break; }
         CHECK(hasLine(r.svc, "proxy remove s_day01"), "…Remove Proxy dispatches proxy remove s_day01");
         r.svc.lines.clear();
-        CHECK(clickMenuItem(r, "Workspace", "     Use Proxies") && hasLine(r.svc, "proxy use on"), "Workspace › Use Proxies turns the switch on");
+        CHECK(clickMenuItem(r, "View", "     Use Proxies") && hasLine(r.svc, "proxy use on"), "View › Use Proxies turns the switch on");
         r.svc.m.useProxies = true;
         ++r.svc.m.revision;
         r.settle();
@@ -2601,8 +2653,8 @@ namespace
         r.settle();
         CHECK(r.app->edit().monitor()->caption().find("proxy") != std::string::npos, "…and in Grade, that this source is its proxy");
         r.svc.lines.clear();
-        CHECK(clickMenuItem(r, "Workspace", "\xE2\x80\xA2  Use Proxies") && hasLine(r.svc, "proxy use off"), "…marked while on, and the same item turns it off");
-        CHECK(clickMenuItem(r, "Workspace", "     Make Proxies for All Video") && hasLine(r.svc, "proxy make"), "Make Proxies for All Video dispatches proxy make");
+        CHECK(clickMenuItem(r, "View", "\xE2\x80\xA2  Use Proxies") && hasLine(r.svc, "proxy use off"), "…marked while on, and the same item turns it off");
+        CHECK(clickMenuItem(r, "View", "     Make Proxies for All Video") && hasLine(r.svc, "proxy make"), "Make Proxies for All Video dispatches proxy make");
     }
 
     /** R-MEDIA-3: offline media in one list — located by hand or searched for in a folder. */
@@ -2631,7 +2683,7 @@ namespace
         std::string labels;
         for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
         std::printf("      %s\n", labels.c_str());
-        CHECK(cm->isOpen() && labels == "Locate B002_C014 corridor (B002_C014.mov)...|Search a Folder for It...|",
+        CHECK(cm->isOpen() && labels == "Locate B002_C014 corridor (B002_C014.mov)\xE2\x80\xA6|Search a Folder for It\xE2\x80\xA6|",
               "…listing every offline source, and a folder search");
         r.svc.lines.clear();
         CHECK(clickItem("Locate ") && asked == "B002_C014.mov" && hasLine(r.svc, "media relink s_off01 /cards/B002_C014.mov"),
@@ -2655,7 +2707,7 @@ namespace
         r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
         r.pump(250);
         r.svc.lines.clear();
-        CHECK(clickItem("Relink...") && hasLine(r.svc, "media relink s_off01 /cards/B002_C014.mov"), "an offline source's menu offers Relink...");
+        CHECK(clickItem("Relink\xE2\x80\xA6") && hasLine(r.svc, "media relink s_off01 /cards/B002_C014.mov"), "an offline source's menu offers Relink...");
     }
 
     /** R-CLR-1/2: the matte types in the plugin menu; the matte view from the Colour menu and Shift+H, said on the caption. */
@@ -2865,10 +2917,10 @@ namespace
         Rig r(1440, 900, [](FakeService &s) { s.edit(); s.m.settings.autosaveSeconds = 60; ++s.m.revision; });
         r.settle();
         r.svc.lines.clear();
-        CHECK(clickMenuItem(r, "Settings", "     Autosave Every 5 Minutes") && hasLine(r.svc, "settings set autosave=300"),
-              "Settings › Autosave Every 5 Minutes sets it (the current one is marked)");
+        CHECK(clickMenuItem(r, "File", "     Autosave Every 5 Minutes") && hasLine(r.svc, "settings set autosave=300"),
+              "File › Autosave Every 5 Minutes sets it (the current one is marked)");
         r.svc.lines.clear();
-        CHECK(clickMenuItem(r, "Settings", "     Autosave Off") && hasLine(r.svc, "settings set autosave=0"), "…and Off");
+        CHECK(clickMenuItem(r, "File", "     Autosave Off") && hasLine(r.svc, "settings set autosave=0"), "…and Off");
         auto dlg = r.app->edit().confirm();
         CHECK(!dlg->isOpen(), "no offer without an autosave");
         r.svc.m.recoveryAvailable = true;
@@ -3006,7 +3058,7 @@ namespace
         r.settle();
         CHECK(mon->subtitleText().empty() && mon->subtitleLeavingAmount() < 1e-9, "captions off: the monitor shows none");
         r.svc.lines.clear();
-        CHECK(clickMenuItem(r, "Workspace", "     Show Captions") && hasLine(r.svc, "view captions on"), "Workspace > Show Captions turns them back on");
+        CHECK(clickMenuItem(r, "View", "     Show Captions") && hasLine(r.svc, "view captions on"), "View > Show Captions turns them back on");
         r.app->onPickCaptionsToImport = [](std::function<void(const std::string &)> done) { done("/subs/day 3.srt"); };
         CHECK(clickMenuItem(r, "File", "Import Captions") && hasLine(r.svc, "caption import \"/subs/day 3.srt\""), "File > Import Captions reads an SRT");
         std::string suggested;
@@ -3218,11 +3270,561 @@ namespace
         dblClick(r, g1.x - 40.0, g1.y);
         CHECK(deck->wantedLevel() == "ro1" && rt->isOpen(0), "double-clicking a group row opens it in the strip and the tree");
     }
+
+    // ── R-UI-16: at the smallest window every control is still reachable ────────────────
+
+    void testSmallWindowGrade()
+    {
+        std::printf("R-UI-16a: Grade's right column at the smallest window\n");
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            auto gi = r.app->edit().gradeInspector();
+            CHECK(near(gi->scopeHeight(), ScopePanel::kHeight) && near(gi->scopes()->height.value(), ScopePanel::kHeight),
+                  "in a tall column the scopes keep their 168 px");
+            CHECK(!gi->plugins()->folded() && gi->plugins()->rowCount() == 3, "…and the IMAGE PROCESSING list shows every row");
+            // the fold is a travel: shrink the window and catch the list's height on its way
+            const double full = gi->plugins()->wantedHeight();
+            r.resize(918, 560);
+            const double mid = firstMoved(r, [&] { return gi->plugins()->wantedHeight(); }, full);
+            r.settle();
+            const double folded = gi->plugins()->wantedHeight();
+            CHECK(gi->plugins()->folded() && folded < full - 40.0, "at 918x560 the list folds to its selected row");
+            CHECK(strictlyBetween(mid, folded, full), "…its height EASING there, not jumping");
+        }
+        Rig r(918, 560, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto gi = r.app->edit().gradeInspector();
+        auto pl = gi->plugins();
+        const Rect col = worldRect(*gi);
+        CHECK(gi->scopeHeight() >= ScopePanel::kMinHeight && gi->scopeHeight() < 0.3 * col.h && near(gi->scopes()->height.value(), gi->scopeHeight()),
+              "the scopes take a share of the column (under 30 %, never under 84 px)");
+        CHECK(pl->folded() && pl->rowCount() == 1 && pl->totalCount() == 3 && pl->foldAmount() > 0.999, "the list shows its selected row and a count of the rest");
+        auto bd = gi->basicDetail();
+        auto rowIn = [&](int i) {
+            auto row = bd->row(i);
+            if (!row || !row->visible) return false;
+            const Rect w = worldRect(*row);
+            return w.y >= worldRect(*bd).y - 0.5 && w.bottom() <= col.bottom() + 0.5;
+        };
+        int shown = 0;
+        for (int i = 0; i < 23; ++i) shown += rowIn(i) ? 1 : 0;
+        CHECK(rowIn(0) && shown >= 3, "Exposure and at least two more sliders are on screen at 918x560");
+        // …and the last one can be reached
+        const Point pp = centre(*bd, Rect{0, 0, bd->width.value(), bd->height.value()});
+        CHECK(!rowIn(22), "the last slider (Vignette) starts below the fold");
+        r.app->wheel(pp.x, pp.y, -80.0);
+        r.settle();
+        CHECK(rowIn(22), "wheeling down brings the LAST slider fully into the column");
+        r.app->wheel(pp.x, pp.y, 200.0);
+        r.settle();
+        CHECK(rowIn(0), "…and wheeling back up returns to Exposure");
+        // the count chip opens the whole list; choosing a row folds it again — presentation only
+        r.svc.lines.clear();
+        Point p = centre(*pl, pl->moreRect());
+        r.click(p.x, p.y);
+        const double h1 = firstMoved(r, [&] { return pl->wantedHeight(); }, pl->wantedHeight());
+        r.settle();
+        CHECK(pl->opened() && pl->rowCount() == 3, "the count chip opens the whole list");
+        CHECK(strictlyBetween(h1, 0.0, pl->wantedHeight()) && h1 < pl->wantedHeight() - 1.0, "…eased open");
+        CHECK(worldRect(*gi->tabs()).bottom() <= col.bottom() + 0.5 && gi->tabs()->height.value() > gi->tabs()->tabHeight,
+              "…with Cosmo's tabs still inside the column under it");
+        p = centre(*pl, pl->rowRect(1));
+        r.click(p.x - 30.0, p.y);
+        r.settle();
+        CHECK(pl->selected() == "ef_1" && !pl->opened() && pl->rowCount() == 1, "choosing a row selects it and folds the list again");
+        CHECK(r.svc.lines.empty(), "folding and opening dispatched nothing");
+        p = centre(*pl, pl->moreRect());
+        r.click(p.x, p.y);
+        r.settle();
+        p = centre(*pl, pl->rowRect(0));
+        r.click(p.x - 30.0, p.y);
+        r.settle();
+        CHECK(pl->selected().empty() && pl->rowCount() == 1, "…and back to Cosmo the same way");
+        // Xform scrolls (it was the one fixed-height page)
+        gi->tabs()->setSelectedIndex(GradeInspector::kTabXform);
+        r.settle();
+        auto xf = gi->xform();
+        const double y0 = xf->y.value();
+        const Point xp = world(*gi->xformPage(), gi->xformPage()->width.value() * 0.5, gi->xformPage()->height.value() * 0.5);
+        r.app->wheel(xp.x, xp.y, -80.0);
+        const double ym = firstMoved(r, [&] { return xf->y.value(); }, y0);
+        r.settle();
+        const double y1 = xf->y.value();
+        CHECK(y1 < y0 - 10.0, "the Xform page scrolls at 918x560");
+        CHECK(strictlyBetween(ym, y1, y0), "…eased");
+        CHECK(near(xf->y.value() + xf->height.value(), gi->xformPage()->height.value(), 0.5), "…and stops with its last row at the bottom of the page (clamped)");
+    }
+
+    void testSmallWindowDeliver()
+    {
+        std::printf("R-UI-16b: Deliver's OUTPUT block is pinned\n");
+        for (const auto &sz : {std::pair<int, int>{918, 560}, std::pair<int, int>{1024, 640}, std::pair<int, int>{1440, 900}})
+        {
+            Rig r(sz.first, sz.second, [](FakeService &s) { s.edit(); });
+            r.app->setTab(EditScreen::Deliver);
+            r.settle();
+            auto os = r.app->edit().outputSpec();
+            const Rect col = worldRect(*os);
+            auto in = [&](Segment &s) {
+                const Rect w = worldRect(s);
+                return s.visible && w.y >= col.y - 0.5 && w.bottom() <= col.bottom() + 0.5 && w.h > 1.0;
+            };
+            char what[160];
+            std::snprintf(what, sizeof what, "%dx%d: the path, Render and the burn-ins are inside the column with nothing scrolled", sz.first, sz.second);
+            CHECK(near(os->columnScroll().value(), 0.0) && in(*os->renderButton()) && in(*os->pathField()) && in(*os->burnButton()), what);
+            CHECK(near(os->footRect().bottom(), os->height.value(), 0.5), "…the OUTPUT block sits on the column's bottom edge");
+            if (sz.second > 640) continue;
+            CHECK(os->columnScroll().scrollable(), "…and the spec above it is what scrolls");
+            const Rect before = worldRect(*os->renderButton());
+            const Point mid = world(*os, os->width.value() * 0.5, os->viewportH() * 0.5);
+            r.app->wheel(mid.x, mid.y, -80.0);
+            const double s1 = firstMoved(r, [&] { return os->columnScroll().value(); }, 0.0);
+            r.settle();
+            CHECK(strictlyBetween(s1, 0.0, os->columnScroll().maxScroll()), "…eased");
+            CHECK(near(os->columnScroll().value(), os->columnScroll().maxScroll(), 0.5), "wheeling lands at the spec's end");
+            const Rect after = worldRect(*os->renderButton());
+            CHECK(near(before.y, after.y, 0.01) && in(*os->renderButton()), "Render did not move while the spec scrolled under it");
+            // nothing of the spec is live through the foot: every control is above it or culled
+            auto rp = os->rangePicker();
+            CHECK(!rp->visible || worldRect(*rp).y < col.y + os->viewportH(), "a control scrolled under the foot is culled");
+            r.svc.lines.clear();
+            const Point c = centre(*os->renderButton(), os->renderButton()->localBounds());
+            r.click(c.x, c.y);
+            CHECK(!withPrefix(r.svc, "render --timeline ").empty(), "…and it renders from there");
+        }
+    }
+
+    void testQuitAndTitle()
+    {
+        std::printf("R-UI-17: closing the window asks; the title names the project\n");
+        {
+            Rig r(1024, 640, [](FakeService &s) { s.home(); });
+            r.settle();
+            CHECK(r.app->windowTitle() == "Interstellar", "on Home the window is titled Interstellar");
+            CHECK(r.app->requestQuit(), "…and closes at once: there is nothing to lose");
+        }
+        Rig r(1024, 640, [](FakeService &s) { s.edit(); });
+        r.settle();
+        int quits = 0;
+        r.app->onQuit = [&] { ++quits; };
+        auto dlg = r.app->edit().confirm();
+        const std::string name = r.svc.m.projectName;
+        CHECK(r.svc.m.dirty && r.app->windowTitle() == "*" + name + " \xE2\x80\x94 Interstellar", "unsaved edits: the title is *<project> — Interstellar");
+        // close with unsaved edits: the Home path's dialog, eased in, and the window stays
+        r.svc.lines.clear();
+        CHECK(!r.app->requestQuit() && dlg->isOpen() && quits == 0 && r.svc.lines.empty(), "closing the window with unsaved edits asks first and keeps the window");
+        CHECK(dlg->buttonCount() == 3 && dlg->buttonLabel(0) == "Cancel" && dlg->buttonLabel(1) == "Don't save" && dlg->buttonLabel(2) == "Save",
+              "…with Cancel · Don't save · Save");
+        // R-UI-21b: the family's dialog — the title quotes the project; the destructive button is outlined beside Save
+        CHECK(r.app->unsavedTitle() == "Save changes to \"" + name + "\"?", "the title is Save changes to \"<name>\"?");
+        using DS = arstro::cosmo_v2::ConfirmDialog::DestructiveStyle;
+        CHECK(dlg->destructiveStyle() == DS::Auto && dlg->drawsOutlined(1) && !dlg->drawsOutlined(2) && !dlg->drawsOutlined(0),
+              "Don't save is OUTLINED because a primary Save sits beside it (DestructiveStyle::Auto)");
+        {
+            const Rect b0 = dlg->buttonRect(0), b1 = dlg->buttonRect(1), b2 = dlg->buttonRect(2);
+            CHECK(b0.right() <= b1.x && b1.right() <= b2.x && b1.w > b0.w, "the three buttons sit in that order, none overlapping, Don't save wide enough for its words");
+        }
+        r.pump(300);
+        // Cancel: nothing happens
+        Point c = centre(*dlg, dlg->buttonRect(0));
+        r.click(c.x, c.y);
+        r.pump(300);
+        CHECK(!dlg->isOpen() && quits == 0 && r.svc.lines.empty(), "Cancel keeps the window and dispatches nothing");
+        // Save: saves, then quits
+        r.app->requestQuit();
+        r.pump(300);
+        r.svc.lines.clear();
+        dlg->confirmDefault();
+        r.pump(300);
+        CHECK(hasLine(r.svc, "project save") && quits == 1, "Save dispatches project save, then the window closes");
+        CHECK(r.app->windowTitle() == name + " \xE2\x80\x94 Interstellar", "saved: the title loses its mark");
+        {
+            // R-UI-21c: the unsaved dot after the project name — the family's DirtyDot, FOREGROUND, eased
+            Rig d(1440, 900, [](FakeService &s) { s.edit(); });
+            d.settle();
+            auto tb = d.app->edit().topBar();
+            CHECK(near(tb->dirtyDotAmount(), 1.0), "an unsaved project opens with its dot already there (placed, not animated)");
+            const Point c = world(*tb, tb->dirtyDotCentre().x, tb->dirtyDotCentre().y);
+            const uint32_t px = d.pixel((int)c.x, (int)c.y);
+            const int pr = (px >> 16) & 0xFF, pg = (px >> 8) & 0xFF, pb = px & 0xFF;
+            std::printf("      unsaved dot pixel: %d %d %d\n", pr, pg, pb);
+            CHECK(std::abs(pr - pg) < 12 && std::abs(pg - pb) < 12 && pr > 150, "the dot is the FOREGROUND grey, not the teal accent");
+            const Rect nr = tb->nameRect();
+            CHECK(tb->dirtyDotCentre().x > nr.x && tb->dirtyDotCentre().x + 3.0 <= nr.right() + 0.5, "…after the name, inside the name's box");
+            d.svc.m.dirty = false; ++d.svc.m.revision;
+            const double first = firstMoved(d, [&] { return tb->dirtyDotAmount(); }, 1.0);
+            CHECK(strictlyBetween(first, 0.0, 1.0), "saving FADES the dot out (first frame between 1 and 0)");
+            d.settle();
+            CHECK(tb->dirtyDotAmount() < 1e-6, "…to nothing");
+        }
+        CHECK(r.app->requestQuit(), "…and a clean project closes at once");
+        // Don't save: closes the project and the window
+        r.svc.m.dirty = true; ++r.svc.m.revision;
+        r.frame();
+        quits = 0;
+        r.svc.lines.clear();
+        r.app->requestQuit();
+        r.pump(300);
+        c = centre(*dlg, dlg->buttonRect(1));
+        r.click(c.x, c.y);
+        r.pump(300);
+        CHECK(hasLine(r.svc, "project close") && !hasLine(r.svc, "project save") && quits == 1, "Don't save closes the project and the window, saving nothing");
+        // a refused save keeps the window
+        Rig q(1024, 640, [](FakeService &s) { s.edit(); });
+        q.settle();
+        int quits2 = 0;
+        q.app->onQuit = [&] { ++quits2; };
+        q.svc.refuseNext = true;
+        q.app->requestQuit();
+        q.pump(300);
+        q.app->edit().confirm()->confirmDefault();
+        q.pump(300);
+        CHECK(quits2 == 0, "a refused save keeps the window open");
+    }
+
+    void testPinnedAndFrozen()
+    {
+        std::printf("R-UI-18: a pinned colour and a frozen cut are visible states\n");
+        Rig r(1024, 640, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto gi = r.app->edit().gradeInspector();
+        auto tl = r.app->edit().timeline();
+        CHECK(gi->pinAmount() < 0.001 && !gi->pinPill()->visible && gi->basicDetail()->enabled, "a free version: no pin scrim, the sliders live");
+        CHECK(tl->frozenAmount() < 0.001 && near(tl->lanesRect().y, shell::rulerH()), "…and no frozen strip: the tracks start under the ruler");
+        // switch to the pinned + frozen version: both ease in
+        std::string err;
+        r.svc.dispatch("timeline open delivery", err);
+        const double p1 = firstMoved(r, [&] { return gi->pinAmount(); }, 0.0);
+        CHECK(strictlyBetween(p1, 0.0, 1.0), "opening a pinned version EASES the scrim in");
+        r.settle();
+        CHECK(gi->pinAmount() > 0.999 && gi->pinPill()->visible && gi->pinPill()->state() == "COLOUR PINNED @a41c9e2", "Grade says COLOUR PINNED and at which commit");
+        CHECK(!gi->basicDetail()->enabled && !gi->gradePanel()->enabled && gi->tabs()->enabled, "Cosmo's pages take no input; the tab bar still switches");
+        auto *row = firstChild<arstro::cosmo_v2::SliderRow>(*gi->basicDetail());
+        auto *sl = firstChild<artboard::Slider>(*row);
+        const Point c = centre(*sl, sl->localBounds());
+        r.svc.lines.clear();
+        r.drag(c.x, c.y, c.x + 60.0, c.y);
+        CHECK(withPrefix(r.svc, "set ").empty(), "dragging Exposure on a pinned version dispatches nothing (no refusal to provoke)");
+        const Rect plate = gi->pinPill()->plateRect();
+        CHECK(plate.w > 60.0 && worldRect(*gi->pinPill()).y > worldRect(*gi->tabs()).y, "the pill sits over the top of Cosmo's page");
+        const Point pp = centre(*gi->pinPill(), plate);
+        r.svc.lines.clear();
+        r.click(pp.x, pp.y);
+        CHECK(hasLine(r.svc, "timeline unpin delivery"), "the pill is the way out: timeline unpin delivery");
+        const double p2 = firstMoved(r, [&] { return gi->pinAmount(); }, 1.0);
+        CHECK(strictlyBetween(p2, 0.0, 1.0), "…and the scrim eases away");
+        r.settle();
+        CHECK(gi->basicDetail()->enabled && !gi->pinPill()->visible, "unpinned: the sliders are live again");
+        // the frozen cut: a strip between the ruler and the tracks, which stay editable
+        r.app->setTab(EditScreen::Cut);
+        r.settle();
+        CHECK(tl->frozenAmount() > 0.999 && near(tl->lanesRect().y, shell::rulerH() + Timeline::kFrozenH), "Cut shows the CUT FROZEN strip; the tracks start under it");
+        CHECK(near(tl->laneRect("v1").y - tl->lanesRect().y, std::round(tl->laneRect("v1").y - tl->lanesRect().y), 40.0) && tl->clipRect("c5").y >= tl->lanesRect().y,
+              "…with every clip below the strip");
+        r.svc.lines.clear();
+        Point cp = centre(*tl, tl->clipRect("c5"));
+        r.click(cp.x, cp.y);
+        CHECK(hasLine(r.svc, "clip select c5"), "a frozen cut is still editable: the strip locks nothing (R-VER-3)");
+        const Point tp = centre(*tl, tl->thawRect());
+        r.svc.lines.clear();
+        r.click(tp.x, tp.y);
+        CHECK(hasLine(r.svc, "timeline thaw delivery"), "Thaw dispatched timeline thaw delivery");
+        const double f1 = firstMoved(r, [&] { return tl->frozenAmount(); }, 1.0);
+        CHECK(strictlyBetween(f1, 0.0, 1.0), "…and the strip eases shut, the tracks rising through its live height");
+        r.settle();
+        CHECK(near(tl->lanesRect().y, shell::rulerH()), "thawed: the tracks are back under the ruler");
+    }
+
+    void testCutDeckPass()
+    {
+        std::printf("R-UI-19 / R-UI-16c: the Cut deck pass\n");
+        // (b) one meaning per ruler label
+        CHECK(Timeline::tickLabel(6.0, 24.0) == "0:06" && Timeline::tickLabel(66.0, 24.0) == "1:06" && Timeline::tickLabel(3600.0, 24.0) == "1:00:00",
+              "a whole second is m:ss (h:mm:ss past the hour)");
+        CHECK(Timeline::tickLabel(0.25, 24.0) == "+06f" && Timeline::tickLabel(6.5, 24.0) == "+12f", "a tick between seconds is its frame offset — never the m:ss shape");
+        Rig r(1024, 640, [](FakeService &s) { s.edit(); });
+        r.app->setTab(EditScreen::Cut);
+        r.settle();
+        auto tl = r.app->edit().timeline();
+        // (a) nothing animated: the ANIMATION section is its header
+        CHECK(r.svc.m.anims.empty() && !tl->keysShown() && tl->keyLaneAmount() < 0.001 && near(tl->animSectionRect().h, KeyLane::kHeadH, 0.5),
+              "nothing animated: the ANIMATION section starts folded to its header");
+        std::string err;
+        r.svc.dispatch("key mark s_day01.basic.exposure", err);
+        const double k1 = firstMoved(r, [&] { return tl->keyLaneAmount(); }, 0.0);
+        CHECK(tl->keysShown() && strictlyBetween(k1, 0.0, 1.0), "the first mark opens it, eased");
+        r.settle();
+        tl->toggleKeys();
+        r.settle();
+        ++r.svc.m.revision;   // an unrelated change of the model
+        r.settle();
+        CHECK(!tl->keysShown() && tl->keyLaneAmount() < 0.001, "the fold button's choice holds while the curves stay");
+        r.svc.dispatch("key clear s_day01.basic.exposure", err);
+        r.svc.dispatch("key mark s_day01.basic.contrast", err);
+        r.settle();
+        CHECK(!tl->keysShown(), "…a curve swapped for another is not a first mark");
+        r.svc.dispatch("key clear s_day01.basic.contrast", err);
+        r.settle();
+        CHECK(r.svc.m.anims.empty() && !tl->keysShown(), "the last curve gone: folded");
+        // (c) a transition does not cover the incoming clip's name
+        const auto &tr = r.svc.m.transitions[0];
+        double at = 0;
+        for (const auto &c : r.svc.m.clips) if (c.id == tr.clipB) at = c.at;
+        CHECK(tl->clipLabelX(tr.clipB) >= tl->timeToX(at + tr.dur * 0.5) + 4.0, "the incoming clip's label starts after the transition's right edge");
+        CHECK(near(tl->clipLabelX("c1"), tl->clipRect("c1").x + 6.0, 2.01), "a clip with no transition keeps its label at its left edge");
+        // (d) fit, and what the readout says
+        const double fit = tl->ppsTarget();
+        Point p = centre(*tl, tl->zoomInRect());
+        r.click(p.x, p.y);
+        r.settle();
+        CHECK(tl->ppsTarget() > fit * 1.2, "+ zooms in");
+        const std::string zoomed = tl->visibleDurationLabel();
+        p = centre(*tl, tl->zoomFitRect());
+        r.click(p.x, p.y);
+        const double z1 = firstMoved(r, [&] { return tl->ppsLive(); }, tl->ppsLive());
+        r.settle();
+        CHECK(near(tl->ppsTarget(), fit, 1e-6) && strictlyBetween(z1, fit, fit * 1.5), "the fit button returns to the whole timeline, eased");
+        CHECK(zoomed != tl->visibleDurationLabel() && tl->visibleDurationLabel().find("px") == std::string::npos && tl->visibleDurationLabel().find(" s") != std::string::npos,
+              "the readout is the duration the lanes show, not px/s");
+        CHECK(tl->zoomFitRect().right() <= shell::headerWidth() && !overlap(tl->zoomFitRect(), tl->zoomInRect()), "the fit button sits beside − and + inside the header corner");
+        CHECK(clickMenuItem(r, "View", "Reset Workspace") && r.app->tab() == EditScreen::Cut, "View > Reset Workspace stays on the Cut tab");
+        // (e) the transport: the meter, then the duration, give way; the scrubber never reaches zero
+        auto tp = r.app->edit().transport();
+        CHECK(tp->durationAmount() > 0.999 && tp->scrubRect().w >= Transport::kMinScrubW, "1024x640: the duration fits beside a usable scrubber");
+        r.resize(918, 560);
+        const double d1 = firstMoved(r, [&] { return tp->durationAmount(); }, 1.0);
+        r.settle();
+        CHECK(strictlyBetween(d1, 0.0, 1.0), "narrowing the window EASES the duration away");
+        CHECK(tp->durationAmount() < 0.001 && tp->meterAmount() < 0.001 && tp->scrubRect().w >= Transport::kMinScrubW,
+              "918x560: the meter and the duration gave way; the scrubber is still usable");
+        const Rect sr = tp->scrubRect();
+        r.svc.lines.clear();
+        const Point s0 = world(*tp, sr.x + sr.w * 0.5, sr.y + sr.h * 0.5);
+        r.click(s0.x, s0.y);
+        CHECK(!withPrefix(r.svc, "playhead ").empty(), "…and scrubs");
+    }
+
+    /** R-UI-7 (amended, the family standard): File · Edit · Preset · Colour · View; shortcuts in their own
+     *  column, separators, disabled rows, U+2026, the keyboard through an open menu, Ctrl+N and Ctrl+, */
+    void testFamilyMenus()
+    {
+        std::printf("R-UI-7 (family): the menus, their shortcuts, disabled rows and keys\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); s.m.dirty = false; });
+        r.settle();
+        auto ms = r.app->edit().topBar()->menus();
+        auto find = [&](int menu, const std::string &prefix) {
+            for (int k = 0; k < (int)ms->menu(menu).items.size(); ++k)
+                if (ms->menu(menu).items[(size_t)k].label.rfind(prefix, 0) == 0) return k;
+            return -1;
+        };
+        CHECK(ms->menuCount() == 5 && ms->menu(0).title == "File" && ms->menu(4).title == "View", "five menus, File first and View last");
+        bool clean = true, seps = true;
+        for (int i = 0; i < ms->menuCount(); ++i)
+        {
+            bool sep = false;
+            for (const auto &it : ms->menu(i).items)
+            {
+                sep = sep || it.separator;
+                clean = clean && it.label.find("...") == std::string::npos && it.label.find("(Ctrl") == std::string::npos &&
+                        it.label.find("   (") == std::string::npos && (it.label.empty() || it.label.back() != ')' || it.label.find("Input Colour") == 0);
+            }
+            seps = seps && (sep || i == 2);   // Preset divides only when it lists a library
+        }
+        CHECK(clean, "no label carries three dots or a padded shortcut: an ellipsis is U+2026 and a key is in the shortcut column");
+        CHECK(seps, "every menu divides its groups with a separator");
+        const int st = find(0, "Settings\xE2\x80\xA6");
+        CHECK(st >= 0 && ms->menu(0).items[(size_t)st].shortcut == "Ctrl+,", "Engine Settings is File > Settings… (Ctrl+,)");
+        CHECK(find(0, "Render") < 0 && find(0, "Export\xE2\x80\xA6") >= 0, "File's Render… is Export…");
+        CHECK(clickMenuItem(r, "File", "Export\xE2\x80\xA6") && r.app->tab() == EditScreen::Deliver, "…and it still opens the Deliver tab");
+        r.app->setTab(EditScreen::Grade);
+        r.settle();
+        CHECK(find(4, "Reset Workspace") >= 0 && find(4, "Grade") == 0, "View keeps the tabs and Reset Workspace");
+        // the shortcut column: measured in the paint, right-aligned
+        const Point ft = centre(*ms, ms->titleRect(0));
+        r.click(ft.x, ft.y);
+        r.pump(300);
+        const Rect s1 = ms->shortcutRect(0, find(0, "Save")), s2 = ms->shortcutRect(0, find(0, "Save As"));
+        CHECK(s1.w > 0 && s2.w > s1.w && near(s1.right(), s2.right(), 0.5), "shortcuts are drawn in one right-aligned column (Ctrl+S, Ctrl+Shift+S end on the same x)");
+        const int sv = find(0, "Save");
+        CHECK(ms->menu(0).items[(size_t)(sv - 1)].separator && ms->itemRect(0, sv).y < ms->itemRect(0, 0).y + sv * 24.0 - 1.0 && ms->itemRect(0, sv - 1).h < 24.0, "a separator is a row with its own index and its own (shorter) rect");
+        // the keyboard owns an open menu: Down stands on the first row, EASED; Space does not play
+        r.svc.lines.clear();
+        key(r, 32);
+        CHECK(r.svc.lines.empty() && ms->openIndex() == 0, "with a menu open, Space is the menu's: nothing plays");
+        key(r, 40);
+        CHECK(ms->cursorItem() == 0, "Down stands on the first row");
+        const double wash = firstMoved(r, [&] { return ms->itemHoverAmount(0); }, 0.0);
+        CHECK(strictlyBetween(wash, 0.0, 1.0), "…its wash EASING in (first frame between 0 and 1)");
+        key(r, 39);
+        CHECK(ms->openIndex() == 1, "Right opens the next menu");
+        // Edit on the Grade tab: nothing to undo, nothing copied, no playhead → those rows are disabled
+        const int un = find(1, "Undo"), pg = find(1, "Paste Grade to Selected"), pa = find(1, "Paste Grade to All"), mi = find(1, "Mark In"), ins = find(1, "Insert");
+        CHECK(!ms->menu(1).items[(size_t)un].enabled, "Undo with nothing to undo is disabled");
+        CHECK(pg >= 0 && !ms->menu(1).items[(size_t)pg].enabled && !ms->menu(1).items[(size_t)pa].enabled, "Paste Grade with nothing copied is disabled");
+        CHECK(mi >= 0 && !ms->menu(1).items[(size_t)mi].enabled && !ms->menu(1).items[(size_t)ins].enabled, "Mark In and Insert are disabled on the Grade tab");
+        CHECK(ms->menu(1).items[(size_t)mi].shortcut == "I" && ms->menu(1).items[(size_t)ins].shortcut == ",", "…each still showing its key");
+        CHECK(ms->cursorItem() == find(1, "Copy Grade"), "…standing on its first LIVE row: the disabled Undo and Redo and the separator are skipped");
+        key(r, 38);
+        CHECK(ms->cursorItem() == find(1, "Duplicate as Variant"), "Up wraps to the last live row (Mark In … Overwrite are disabled on Grade)");
+        key(r, 27);
+        CHECK(ms->openIndex() < 0, "Escape closes the menu");
+        r.pump(200);
+        r.svc.lines.clear();
+        key(r, 'I'); key(r, 188);
+        CHECK(r.svc.lines.empty(), "…and the keys of the disabled rows do nothing on Grade: I and comma dispatch nothing");
+        r.svc.m.hasGradeClipboard = true; ++r.svc.m.revision;
+        r.app->setTab(EditScreen::Cut);
+        r.settle();
+        CHECK(ms->menu(1).items[(size_t)pg].enabled && ms->menu(1).items[(size_t)mi].enabled && ms->menu(1).items[(size_t)ins].enabled,
+              "on Cut with a grade copied, Paste Grade, Mark In and Insert are live");
+        CHECK(clickMenuItem(r, "Edit", "Mark In") && hasLine(r.svc, "mark in"), "Edit > Mark In dispatched mark in");
+        // Enter runs the row under the cursor
+        int picks = 0;
+        r.app->onPickProjectToCreate = [&] { ++picks; };
+        r.click(ft.x, ft.y);
+        r.pump(300);
+        key(r, 36);
+        key(r, 13);
+        CHECK(picks == 1 && ms->openIndex() < 0, "Home then Enter ran File's first row (New Project…) and closed the menu");
+        // the new accelerators
+        ctrlKey(r, 'N');
+        CHECK(picks == 2, "Ctrl+N asks for a new project");
+        ctrlKey(r, 188);
+        CHECK(r.app->settings().isOpen(), "Ctrl+, opens Settings");
+    }
+
+    void testEditMenuAndEmptyStates()
+    {
+        std::printf("R-UI-7 (amended) / R-UI-20: Undo says what; an empty state says which\n");
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            auto ms = r.app->edit().topBar()->menus();
+            CHECK(ms->menu(1).items[0].label == "Undo" && !ms->menu(1).items[0].enabled && ms->menu(1).items[1].label == "Redo" && !ms->menu(1).items[1].enabled,
+                  "nothing to undo: Undo and Redo are DISABLED rows (R-UI-7 amended)");
+            r.svc.lines.clear();
+            CHECK(clickMenuItem(r, "Edit", "Undo") && !hasLine(r.svc, "undo") && ms->openIndex() == 1, "…a click on one dispatches nothing and leaves the menu open");
+            ms->close();
+            r.pump(100);
+            r.svc.m.canUndo = true; r.svc.m.undoLabel = "clip move shotA";
+            r.svc.m.canRedo = true; r.svc.m.redoLabel = "set s_day01.basic.exposure";
+            ++r.svc.m.revision;
+            r.pump(100);
+            CHECK(ms->menu(1).items[0].label == "Undo clip move shotA" && ms->menu(1).items[0].enabled && ms->menu(1).items[0].shortcut == "Ctrl+Z",
+                  "Undo names what it will undo: Undo clip move shotA, its key in the shortcut column");
+            CHECK(ms->menu(1).items[1].label == "Redo set s_day01.basic.exposure" && ms->menu(1).items[1].shortcut == "Ctrl+Shift+Z", "…and Redo what it will redo, Ctrl+Shift+Z");
+            CHECK(clickMenuItem(r, "Edit", "Redo ") && hasLine(r.svc, "redo"), "Edit > Redo … dispatched redo");
+            // File > New Project…: the picker, behind the unsaved-edits question
+            int picks = 0;
+            r.app->onPickProjectToCreate = [&] { ++picks; };
+            CHECK(r.svc.m.dirty && clickMenuItem(r, "File", "New Project") && picks == 0 && r.app->edit().confirm()->isOpen(), "File > New Project… with unsaved edits asks first");
+            r.pump(300);
+            r.app->edit().confirm()->confirmDefault();
+            r.pump(300);
+            CHECK(hasLine(r.svc, "project save") && picks == 1, "Save saves, then the host's picker opens");
+            r.pump(300);
+            CHECK(clickMenuItem(r, "File", "New Project") && picks == 2, "…and with nothing unsaved it opens at once");
+        }
+        {
+            Rig r(1024, 640, [](FakeService &s) { s.editNewProject(); });
+            r.settle();
+            auto mon = r.app->edit().monitor();
+            // R-UI-21d: the empty project is said ONCE, in the monitor: a sentence, a hint, one filled button
+            auto sentence = [](const std::string &t) { return !t.empty() && t[0] >= 'A' && t[0] <= 'Z' && t.back() == '.'; };
+            CHECK(mon->state() == Monitor::State::Empty && mon->emptyText() == "No footage yet." && sentence(mon->emptyText()),
+                  "an empty rack: the monitor says No footage yet. — a capital, a full stop");
+            CHECK(!mon->emptyHint().empty() && sentence(mon->emptyHint()) && mon->emptyAction() == "Add footage\xE2\x80\xA6", "…with one hint line and the button Add footage…");
+            const Rect br = mon->emptyActionRect();
+            const Rect mw = worldRect(*mon);
+            CHECK(br.w > 0 && br.x >= 0 && br.right() <= mw.w && br.bottom() <= mw.h && near(br.x + br.w * 0.5, mw.w * 0.5, 1.0), "the button is inside the monitor, centred");
+            {
+                const Point bc = world(*mon, br.x + 6.0, br.y + 5.0);
+                const uint32_t px = r.pixel((int)bc.x, (int)bc.y);
+                const int pr = (px >> 16) & 0xFF, pg = (px >> 8) & 0xFF, pb = px & 0xFF;
+                std::printf("      empty-state button pixel: %d %d %d\n", pr, pg, pb);
+                CHECK(pg > pr + 60 && pg > 110, "…FILLED with the accent: the one primary button");
+                int picks = 0;
+                r.app->onPickFootage = [&] { ++picks; };
+                const Point c = world(*mon, br.x + br.w * 0.5, br.y + br.h * 0.5);
+                r.click(c.x, c.y);
+                CHECK(picks == 1, "…and it asks the host for footage");
+            }
+            // …and nowhere else: the rack, the inspector and the SOURCES strip stay quiet
+            auto inkIn = [&](const Rect &w) {
+                const uint32_t plate = r.pixel((int)(w.x + 4), (int)(w.y + w.h * 0.5));
+                int n = 0;
+                for (int y = (int)w.y; y < (int)w.bottom(); ++y)
+                    for (int x = (int)w.x; x < (int)w.right(); ++x) n += r.pixel(x, y) != plate ? 1 : 0;
+                return n;
+            };
+            auto gd = r.app->edit().gradeDeck();
+            const Rect dw = worldRect(*gd);
+            const double cy = dw.y + GradeDeck::kHeaderH + arstro::cosmo_v2::Filmstrip::kHeight * 0.5;
+            const Rect stripMid{dw.x + dw.w * 0.25, cy - 8.0, dw.w * 0.5, 17.0};
+            const Rect rk = worldRect(*r.app->edit().rackTree());
+            const Rect gi = worldRect(*r.app->edit().gradeInspector());
+            const int rackInk = inkIn(Rect{rk.x + 8.0, rk.y + rk.h * 0.3, rk.w - 16.0, rk.h * 0.4});
+            const int inspInk = inkIn(Rect{gi.x + 8.0, gi.y + gi.h * 0.3, gi.w - 16.0, gi.h * 0.3});
+            const int stripInk = inkIn(stripMid);
+            std::printf("      empty project: rack %d, inspector %d, SOURCES strip %d inked pixels\n", rackInk, inspInk, stripInk);
+            CHECK(rackInk == 0 && inspInk == 0 && stripInk == 0, "the rack, the inspector and the SOURCES strip do not repeat it");
+            // the STILLS strip's own sentence is a different empty and still shows ON SCREEN, over the strip
+            gd->showStills(true);
+            r.settle();
+            const int stillInk = inkIn(stripMid);
+            std::printf("      empty STILLS strip: %d inked pixels\n", stillInk);
+            CHECK(stillInk > 150, "the empty STILLS strip still says how to fill it, over the strip");
+            // R-UI-21e: the deck's page switch — sentence case, an accent underline that travels
+            CHECK(std::string(GradeDeck::viewTabLabel(0)) == "Sources" && std::string(GradeDeck::viewTabLabel(1)) == "Stills" && std::string(GradeDeck::viewTabLabel(2)) == "Nodes",
+                  "the deck's tabs read Sources · Stills · Nodes");
+        }
+        {
+            Rig r(1024, 640, [](FakeService &s) { s.edit(); s.m.hasGradeTarget = false; s.m.selectedRack = -1; s.m.playhead = 15.4; s.m.clips.erase(s.m.clips.begin() + 4); });
+            r.settle();
+            auto mon = r.app->edit().monitor();
+            CHECK(mon->state() == Monitor::State::Empty && mon->emptyText() == "Nothing selected." && !mon->emptyHint().empty() && mon->emptyAction().empty() && mon->emptyActionRect().w == 0,
+                  "footage but no Grade target: Nothing selected. and its hint — and no button");
+            r.app->setTab(EditScreen::Cut);
+            // the new sentence's weight starts at 0 and eases up: four frames in it is part-way, not there
+            r.pump(4 * Rig::kFrameMs);
+            const double x1 = mon->emptyTextAmount();
+            CHECK(strictlyBetween(x1, 0.0, 1.0), "the sentence CROSS-FADES when the reason changes");
+            r.settle();
+            CHECK(mon->emptyText() == "No clip at the playhead." && mon->emptyHint().empty(), "in Cut, a gap is a gap: No clip at the playhead.");
+        }
+        CHECK(std::string(HomeScreen::emptySentence()) == "No projects yet." && std::string(HomeScreen::emptyHint()).find("open some footage") == std::string::npos &&
+                  std::string(HomeScreen::emptyHint()).find("Create one") == 0 && std::string(HomeScreen::emptyHint()).back() == '.',
+              "Home's empty state is one sentence and one hint, and the hint names what New project does");
+        {
+            // R-UI-21f: Home with no projects — the sentence, the hint and ONE filled button; the version from the build
+            Rig r(1024, 640, [](FakeService &s) { s.homeEmpty(); });
+            r.settle();
+            auto &home = r.app->home();
+            const Rect chip = home.emptyChipRect();
+            const uint32_t px = r.pixel((int)(chip.x + 6.0), (int)(chip.y + 6.0));
+            const int pr = (px >> 16) & 0xFF, pg = (px >> 8) & 0xFF;
+            std::printf("      Home empty-state button pixel: %d %d %d\n", pr, pg, (int)(px & 0xFF));
+            CHECK(chip.w > 0 && pg > pr + 60 && pg > 110, "Home's empty state has one FILLED New project button");
+            int asked = 0;
+            r.app->onPickProjectToCreate = [&] { ++asked; };
+            r.click(chip.x + chip.w * 0.5, chip.y + chip.h * 0.5);
+            CHECK(asked == 1, "…which asks for a new project");
+            CHECK(HomeScreen::versionText() == std::string("interstellar v") + INTERSTELLAR_VERSION && HomeScreen::versionText() != "interstellar v",
+                  "Home's version line comes from the build's INTERSTELLAR_VERSION");
+            // Ctrl+N and Ctrl+, work on Home too
+            ctrlKey(r, 'N');
+            CHECK(asked == 2, "Ctrl+N on Home asks for a new project");
+            ctrlKey(r, 188);
+            CHECK(r.app->settings().isOpen(), "Ctrl+, on Home opens Settings");
+        }
+    }
 }
 
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);   // a failing assert must not swallow the log above it
+    gKeepGoing = std::getenv("INTERSTELLAR_UI_KEEP_GOING") != nullptr;
     installInterstellarAccent();
     arstro::cosmo_v2::registerEmbeddedFonts();
     testAccent();
@@ -3265,6 +3867,14 @@ int main()
     testBurnInsUi();
     testCaptionsUi();
     testPackagesUi();
+    testSmallWindowGrade();
+    testSmallWindowDeliver();
+    testQuitAndTitle();
+    testPinnedAndFrozen();
+    testCutDeckPass();
+    testEditMenuAndEmptyStates();
+    testFamilyMenus();
+    if (gFails) { std::printf("\ninterstellar_app_ui_tests: %d of %d checks FAILED\n", gFails, gChecks); return 1; }
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

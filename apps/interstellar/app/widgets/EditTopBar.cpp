@@ -48,6 +48,7 @@ namespace interstellar_v1
     {
         mProjectName = m.projectName;
         mDirty = m.dirty;
+        mDot.set(m.dirty);   // a setter has no clock: the first advance places it, later ones ease
         mBound = true;
         mVersions->bind(m);
     }
@@ -105,6 +106,7 @@ namespace interstellar_v1
             mDirtyApplied = mDirty;
         }
         mDirtyAmt.update(nowMs);
+        if (mBound) mDot.advance(nowMs);
         // cosmo's IconButton switches `active` colours in one frame; driving its idle colour from
         // the eased dirty amount keeps "there are unsaved edits" a fade (R1) without forking it
         mSave->active = false;
@@ -154,21 +156,17 @@ namespace interstellar_v1
         t.setFill(palette::primary());
         t.drawText(".", kPad + wordW, base, kWordPx, font::sansSemiBold(), sp);
 
-        // Project name, ellipsized against what is actually left before the tabs (R5), with an
-        // eased "edited" dot after it while the project has unsaved changes.
+        // Project name, ellipsized against what is actually left before the tabs (R5), with the
+        // family's unsaved dot after it (R-UI-21c): foreground, never the accent.
         const Rect nr = nameRect();
-        const double dirty = mDirtyAmt.value();
-        const double dotRoom = 12.0;
+        const double dotRoom = cosmo_v2::DirtyDot::kGap + cosmo_v2::DirtyDot::kRadius + 1.0;
         const std::string name = textfit::ellipsize(t, mProjectName, nr.w - dotRoom, kNamePx, font::sansMedium());
         if (!name.empty())
         {
             t.setFill(palette::foreground());
             t.drawText(name, nr.x, textfit::baseline(h * 0.5, kNamePx), kNamePx, font::sansMedium());
-            if (dirty > 0.001)
-            {
-                const double nx = nr.x + t.measureText(name, kNamePx, font::sansMedium()) + 7.0;
-                drawCircle(t, nx, h * 0.5, 2.5, Paint::filled(palette::primaryAlpha(0.9 * dirty)));
-            }
+            mDotAt = Point{nr.x + t.measureText(name, kNamePx, font::sansMedium()) + cosmo_v2::DirtyDot::kGap, h * 0.5};
+            mDot.draw(t, mDotAt);
         }
     }
 }

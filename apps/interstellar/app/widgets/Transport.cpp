@@ -70,10 +70,21 @@ namespace interstellar_v1
         for (const auto &tl : m.timelines) if (tl.id == m.currentTimeline) mSoundIn = tl.hasSound;
     }
 
+    // R-UI-16c: a column gives way before its content does (design rule R4). The scrubber is the
+    // control; the meter and the duration are readouts. In a short bar the meter leaves first, then
+    // the duration, each through its own eased amount — the scrubber never reaches zero width.
+    namespace
+    {
+        constexpr double kLeftW = kPad + kButtons * (kBtn + 2.0) + 6.0 + kTcW + 6.0;   // buttons + timecode
+        constexpr double kDurBlock = kDurW + 6.0, kMeterBlock = kMeterW + 10.0;
+    }
+    bool Transport::durationFits() const { return width.value() - kLeftW - kPad - kDurBlock >= kMinScrubW; }
+    bool Transport::meterFits() const { return width.value() - kLeftW - kPad - kDurBlock - kMeterBlock >= kMinScrubW; }
+
     Rect Transport::meterRect() const
     {
         const double a = mMeterAmt.value();
-        const double x1 = width.value() - kPad - kDurW - 6.0;
+        const double x1 = width.value() - kPad - kDurBlock * mDurAmt.value();
         return Rect{x1 - kMeterW * a, height.value() * 0.5 - 6.0, kMeterW * a, 12.0};
     }
 
@@ -87,7 +98,7 @@ namespace interstellar_v1
     {
         const double x0 = kPad + kButtons * (kBtn + 2.0) + 6.0 + kTcW + 6.0 + (kBadgeW + 4.0) * mBadgeAmt.value();
         // the meter, when shown, takes its width from the scrubber — through its eased amount
-        const double x1 = width.value() - kPad - kDurW - 6.0 - (kMeterW + 10.0) * mMeterAmt.value();
+        const double x1 = width.value() - kPad - kDurBlock * mDurAmt.value() - kMeterBlock * mMeterAmt.value();
         return Rect{x0, 0, std::max(0.0, x1 - x0), height.value()};
     }
 
@@ -193,8 +204,10 @@ namespace interstellar_v1
         mLastMs = nowMs;
         if (!mMeterInit)
         {
-            mMeterAmt.set(mSoundIn ? 1.0 : 0.0);
-            mSoundApplied = mSoundIn;
+            mMeterAmt.set(mSoundIn && meterFits() ? 1.0 : 0.0);
+            mSoundApplied = mSoundIn && meterFits();
+            mDurAmt.set(durationFits() ? 1.0 : 0.0);
+            mDurApplied = durationFits();
             mMeterInit = true;
         }
         for (int c = 0; c < 2; ++c)
@@ -215,10 +228,17 @@ namespace interstellar_v1
             mClipApplied = mClipIn;
         }
         mClipAmt.update(nowMs);
-        if (mSoundIn != mSoundApplied)
+        const bool meterOn = mSoundIn && meterFits();   // wanted AND there is room (R-UI-16c)
+        if (durationFits() != mDurApplied)
         {
-            mMeterAmt.animateTo(mSoundIn ? 1.0 : 0.0, motion::kScrollMs, Easing::EaseOutCubic, nowMs);
-            mSoundApplied = mSoundIn;
+            mDurApplied = durationFits();
+            mDurAmt.animateTo(mDurApplied ? 1.0 : 0.0, motion::kScrollMs, Easing::EaseOutCubic, nowMs);
+        }
+        mDurAmt.update(nowMs);
+        if (meterOn != mSoundApplied)
+        {
+            mMeterAmt.animateTo(meterOn ? 1.0 : 0.0, motion::kScrollMs, Easing::EaseOutCubic, nowMs);
+            mSoundApplied = meterOn;
         }
         mMeterAmt.update(nowMs);
         if (mBadgeOn != mBadgeApplied)
@@ -329,7 +349,8 @@ namespace interstellar_v1
             if (const double ca = mClipAmt.value(); ca > 0.001) drawCircle(t, mr.right() + 5.0, mr.y + 6.0, 2.5, Paint::filled(fade(palette::destructive(), ca * ma)));
         }
         const std::string dur = cmd::timecode(mDuration, mFps);
-        t.setFill(palette::mutedForeground());
+        if (mDurAmt.value() <= 0.001) return;   // R-UI-16c: given way to the scrubber
+        t.setFill(fade(palette::mutedForeground(), mDurAmt.value()));
         t.drawText(dur, w - kPad - t.measureText(dur, 10.0, font::mono()), textfit::baseline(cy, 10.0), 10.0, font::mono());
     }
 }

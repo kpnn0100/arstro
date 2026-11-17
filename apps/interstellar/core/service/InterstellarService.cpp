@@ -1070,14 +1070,105 @@ namespace interstellar
         mModel.playhead = 0;
         if (!projectSave(std::string())) return false;
         touchRecent(mIspPath);
-        emit(Event(EK::ProjectOpened).with("path", mIspPath).with("timelines", 1).with("rack", cmp));
+        emit(Event(EK::ProjectOpened).with("path", mIspPath).with("timelines", 1).with("rack", cmp).with("from", "isp"));
         emit(Event(EK::ScreenChanged).with("screen", "edit"));
         bumpFrame();
         return true;
     }
 
+    namespace
+    {
+        /** Whose file is this? Read from what the file SAYS, never from its extension: a renamed
+         *  file is still what it is. `cmp` = a Cosmo workspace, `slp` = a Solaris song, `isp` =
+         *  anything else (the .isp parser then gives its own, better error). */
+        std::string sniffProject(const std::string &path)
+        {
+            std::ifstream in(path);
+            std::string line;
+            bool suite = false;
+            for (int n = 0; n < 12 && std::getline(in, line); ++n)
+            {
+                std::string t;
+                for (char ch : line) if (ch != ' ' && ch != '\t' && ch != '\r') t += ch;
+                if (t.empty() || t[0] == ';') continue;
+                if (t.rfind("cosmoworkspace=", 0) == 0) return "cmp";
+                if (t.rfind("arstro-project=", 0) == 0) { suite = true; continue; }
+                if (suite && t.rfind("app=", 0) == 0) return t == "app=solaris" ? "slp" : "isp";
+            }
+            return "isp";
+        }
+    }
+
+    /** R-RACK-1a: a Cosmo project opened directly. A project is made AROUND it in memory - the
+     *  rack is that .cmp, one empty `main` timeline - and nothing is written until the user saves:
+     *  opening somebody's photo project must not leave a file beside it. */
+    bool InterstellarService::projectOpenCmp(const std::string &path)
+    {
+        const std::string cmp = fs::absolute(path).lexically_normal().string();
+        const std::string isp = (fs::path(cmp).parent_path() / (fileStem(cmp) + ".isp")).string();
+        // The project that already hosts this rack is the one to open: two .isp files writing one
+        // .cmp is the thing this must not create by accident.
+        if (fs::exists(isp))
+        {
+            Project probe;
+            std::string perr;
+            if (probe.load(isp, perr) && probe.hasRack &&
+                (fs::path(isp).parent_path() / probe.rack.path).lexically_normal().string() == cmp)
+                return projectOpen(isp);
+            return fail("project open: " + isp + " already exists and is not the project of " + cmp +
+                        " — open that .isp, or `project new` elsewhere and `rack import` this .cmp");
+        }
+        std::string err;
+        ColourTree entries;
+        if (!colourTreeFromCmp(cmp, entries, err)) return fail("project open: " + err);
+        if (mOpen) projectClose();
+
+        auto P = std::make_unique<Project>();
+        P->name = fileStem(cmp);
+        P->id = "prj_" + P->name;
+        P->hasRack = true;
+        P->rack.id = "rk_1";
+        P->rack.path = fs::path(cmp).filename().string();
+        NodeId main;
+        if (!newTimeline(*P, "main", NodeId(), main, err)) return fail("project open: " + err);
+        P->current = main;
+
+        mIspPath = isp;
+        mProject = std::move(P);
+        mOpen = true;
+        mNodeOf.clear();
+        mPins.clear();
+        mSync->sources.clear();
+        resetPreview();
+        mCache->clear();
+        mModel.playhead = 0;
+        mModel.autosavedAt = 0;
+        mAutosaveDueMs = 0;
+        mOpenedFrom = "cmp";
+        mPending.reset(new PendingRack());
+        mPending->kind = PendingRack::Kind::Open;
+        mPending->projectOpening = true;
+        bindFromCmp(entries);
+        if (!mRack.beginOpen(cmp, err))
+        {
+            mPending.reset();
+            projectClose(false);
+            return fail("project open: the rack refused: " + err);
+        }
+        markDirty();   // the .isp exists only in memory until `project save`
+        emit(Event(EK::ScreenChanged).with("screen", "loading"));
+        return true;
+    }
+
     bool InterstellarService::projectOpen(const std::string &path)
     {
+        const std::string whose = fs::exists(path) ? sniffProject(path) : std::string("isp");
+        if (whose == "cmp") return projectOpenCmp(path);
+        // R-AUD-2 (amended): a Solaris song is not an .isp. It used to open as an empty project and
+        // a save then rewrote the .slp in Interstellar's node order.
+        if (whose == "slp")
+            return fail("project open: " + path + " is a Solaris song — Interstellar cannot open one yet (R-SONG is "
+                        "planned); the file was not touched. Its audio can be used after `solaris-cc render`");
         auto P = std::make_unique<Project>();
         std::string err;
         int repaired = 0;
@@ -1086,6 +1177,7 @@ namespace interstellar
         mIspPath = fs::absolute(path).lexically_normal().string();
         mProject = std::move(P);
         mOpen = true;
+        mOpenedFrom = "isp";
         mNodeOf.clear();
         mPins.clear();
         mSync->sources.clear();
@@ -1102,7 +1194,7 @@ namespace interstellar
 
         if (!mProject->hasRack)
         {
-            emit(Event(EK::ProjectOpened).with("path", mIspPath).with("timelines", (int)mProject->timelines.size()).with("rack", ""));
+            emit(Event(EK::ProjectOpened).with("path", mIspPath).with("timelines", (int)mProject->timelines.size()).with("rack", "").with("from", "isp"));
             return true;
         }
         const std::string cmp = resolvePath(mProject->rack.path);
@@ -1110,7 +1202,7 @@ namespace interstellar
         if (!fs::exists(cmp) || !colourTreeFromCmp(cmp, entries, err))
         {
             // R-RACK-7: the project stays openable; every rack node reads as missing.
-            emit(Event(EK::ProjectOpened).with("path", mIspPath).with("timelines", (int)mProject->timelines.size()).with("rack", cmp));
+            emit(Event(EK::ProjectOpened).with("path", mIspPath).with("timelines", (int)mProject->timelines.size()).with("rack", cmp).with("from", "isp"));
             return fail("the rack " + cmp + " is missing — every rack node is offline until `rack import` finds it");
         }
         mPending.reset(new PendingRack());
@@ -1171,7 +1263,8 @@ namespace interstellar
             emit(Event(EK::ProjectOpened)
                      .with("path", mIspPath)
                      .with("timelines", (int)mProject->timelines.size())
-                     .with("rack", mRack.path()));
+                     .with("rack", mRack.path())
+                     .with("from", mOpenedFrom));
             emit(Event(EK::ScreenChanged).with("screen", "edit"));
         }
         mCache->clear();

@@ -104,6 +104,9 @@ namespace interstellar_v1
         int view() const { return mViewWanted; }
         double viewAmount(int v) const { return v >= 0 && v < 3 ? mViewAmt[v].value() : 0.0; }
         artboard::Rect viewTabRect(int v) const { return v >= 0 && v < 3 ? mViewTab[v] : artboard::Rect{0, 0, 0, 0}; }
+        /** R-UI-21e: the page switch's words — sentence case, under the travelling accent underline. */
+        static const char *viewTabLabel(int v) { return v == 0 ? "Sources" : (v == 1 ? "Stills" : "Nodes"); }
+        static constexpr double kTabPx = 11.0;
         void showStills(bool on) { setView(on ? 1 : 0); }
         bool stillsShown() const { return mViewWanted == 1; }
         double stillsAmount() const { return mViewAmt[1].value(); }

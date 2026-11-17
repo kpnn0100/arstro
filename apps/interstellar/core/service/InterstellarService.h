@@ -185,6 +185,8 @@ namespace interstellar
         // project lifecycle
         bool projectNew(const Command &c);
         bool projectOpen(const std::string &path);
+        bool projectOpenCmp(const std::string &path);   // R-RACK-1a
+        std::string mOpenedFrom = "isp";               // what `project open` was handed: isp | cmp
         bool projectSave(const std::string &path);
         void projectClose(bool deliberate = false);   // deliberate: `project close` — the autosave goes too (R-DLV-5)
         void finishRackLoad();

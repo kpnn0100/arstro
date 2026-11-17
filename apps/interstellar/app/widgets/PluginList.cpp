@@ -24,6 +24,7 @@ namespace interstellar_v1
 
     void PluginList::bind(const interstellar::AppModel &m)
     {
+        std::vector<Item> &mItems = mAll;   // the whole stack; present() decides which rows show
         mItems.clear();
         mHasTarget = m.hasGradeTarget && m.selectedRack >= 0 && m.selectedRack < (int)m.rack.size();
         std::string node;
@@ -60,6 +61,17 @@ namespace interstellar_v1
         bool still = mSelected.empty();
         for (const auto &it : mItems) still = still || it.id == mSelected;
         if (!still) select("");   // the selected effect went away
+        present();
+    }
+
+    void PluginList::present()
+    {
+        // R-UI-16a: folded and not opened, only the selected row is shown — the others leave through
+        // AnimatedRows (a fade) and the selected one travels to the first slot
+        mItems.clear();
+        const bool one = mFolded && !mOpened;
+        for (const auto &it : mAll)
+            if (!one || it.id == mSelected) mItems.push_back(it);
         std::vector<std::pair<std::string, Item>> items;
         for (const auto &it : mItems) items.emplace_back(keyOf(it.id), it);
         mRows.sync(items, kRowH);
@@ -69,14 +81,30 @@ namespace interstellar_v1
         mHeightTarget = kHeaderH + (double)mItems.size() * kRowH + kBottomPad;
     }
 
+    double PluginList::fullHeight() const { return kHeaderH + (double)mAll.size() * kRowH + kBottomPad; }
+
+    void PluginList::setFolded(bool folded)
+    {
+        if (folded == mFolded) return;
+        mFolded = folded;
+        mOpened = false;
+        present();
+    }
+
     void PluginList::select(const std::string &id)
     {
-        if (id == mSelected) return;
+        const bool reFold = mOpened;   // a row chosen in the opened list folds it again, whichever row
+        mOpened = false;
+        if (id == mSelected) { if (reFold) present(); return; }
         mSelected = id;
-        int sel = -1;
-        for (int i = 0; i < (int)mItems.size(); ++i) if (mItems[(size_t)i].id == mSelected) sel = i;
-        mSel.setHovered(sel);
+        present();
         if (onSelect) onSelect(id);
+    }
+
+    Rect PluginList::moreRect() const
+    {
+        const Rect a = addRect();
+        return Rect{a.x - 6.5 - 58.0, a.y, 58.0, a.h};
     }
 
     Rect PluginList::rowRect(int i) const
@@ -117,6 +145,7 @@ namespace interstellar_v1
         case Gesture::Type::Move:
         {
             if (addRect().contains(local)) { mHover.setHovered(1); return true; }
+            if (mFolded && mAll.size() > 1 && moreRect().contains(local)) { mHover.setHovered(2); return true; }
             const int i = rowAt(local);
             mHover.setHovered(i >= 0 ? 10 + i : -1);
             return true;
@@ -131,9 +160,15 @@ namespace interstellar_v1
                 if (onAdd) onAdd(Rect{o.x, o.y, addRect().w, addRect().h});
                 return true;
             }
+            if (mFolded && mAll.size() > 1 && moreRect().contains(local))
+            {
+                mOpened = !mOpened;   // presentation: the whole list, until a row is chosen
+                present();
+                return true;
+            }
             const int i = rowAt(local);
             if (i < 0) return true;
-            const Item &it = mItems[(size_t)i];
+            const Item it = mItems[(size_t)i];   // a copy: select() re-presents the rows
             if (switchRect(i).contains(local))
             {
                 // the switch: Cosmo's is the node's bypass, an effect's is its own `enabled`
@@ -164,7 +199,7 @@ namespace interstellar_v1
     void PluginList::advance(double nowMs)
     {
         mRows.advance(nowMs);
-        for (const auto &it : mItems)
+        for (const auto &it : mAll)   // every plugin's switch, shown or folded away
         {
             const std::string k = keyOf(it.id);
             auto &knob = mKnob[k];
@@ -184,6 +219,20 @@ namespace interstellar_v1
             mHeightApplied = mHeightTarget;
         }
         mHeight.update(nowMs);
+        // the count chip comes and goes with the fold; its caret turns when the list is opened
+        const bool chip = mFolded && mAll.size() > 1;
+        if (chip != mFoldApplied)
+        {
+            mFoldAmt.animateTo(chip ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mFoldApplied = chip;
+        }
+        if (mOpened != mOpenApplied)
+        {
+            mOpenAmt.animateTo(mOpened ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseInOutCubic, nowMs);
+            mOpenApplied = mOpened;
+        }
+        mFoldAmt.update(nowMs);
+        mOpenAmt.update(nowMs);
         if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
         mSel.advance(nowMs, motion::kSelectMs);
@@ -207,6 +256,24 @@ namespace interstellar_v1
             glyph::plus(t, Rect{ar.x + 5.0, ar.y + 4.0, 10.0, 10.0}, lerpColor(palette::mutedForeground(), palette::foreground(), hv));
             t.setFill(lerpColor(palette::mutedForeground(), palette::foreground(), hv));
             t.drawText("Add", ar.x + 18.0, textfit::baseline(ar.y + ar.h * 0.5, 10.0), 10.0, font::sans());
+            // R-UI-16a: folded — "1 of 3" and a caret that turns over when the list is opened
+            const double fa = mFoldAmt.value();
+            if (fa > 0.001)
+            {
+                const Rect mr = moreRect();
+                const double mh = mHover.amount(2);
+                drawRoundedRect(t, mr, radius::control(), Paint::filledStroked(fade(palette::hoverWash(mh), fa), fade(palette::border(), fa), 1.0));
+                int at = 0;
+                for (int i = 0; i < (int)mAll.size(); ++i) if (mAll[(size_t)i].id == mSelected) at = i;
+                const std::string n = std::to_string(at + 1) + " of " + std::to_string(mAll.size());
+                t.setFill(fade(lerpColor(palette::mutedForeground(), palette::foreground(), mh), fa));
+                t.drawText(n, mr.x + 6.5, textfit::baseline(mr.y + mr.h * 0.5, 9.0), 9.0, font::mono());
+                // the caret: two strokes whose apex travels from below to above (a turn, never a stretch)
+                const double cx = mr.right() - 9.0, cy = mr.y + mr.h * 0.5, d = 2.2 * (1.0 - 2.0 * mOpenAmt.value());
+                const Color cc = fade(lerpColor(palette::mutedForeground(), palette::foreground(), mh), fa);
+                glyph::line(t, cx - 3.2, cy - d, cx, cy + d, cc, 1.2);
+                glyph::line(t, cx, cy + d, cx + 3.2, cy - d, cc, 1.2);
+            }
         }
         else
         {

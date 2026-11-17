@@ -12,6 +12,11 @@
  *  `effect remove <ef>`. Rows travel on insert/remove (AnimatedRows); switches slide and the
  *  selection wash moves, both eased; the list's height eases with its row count so the panel
  *  under it never jumps.
+ *
+ *  R-UI-16a: in a column too short for the whole list and the sliders under it, the owner asks the
+ *  list to FOLD (`setFolded`): only the selected row stays, and a count chip beside "+ Add"
+ *  ("1 of 3") opens the whole list again. Choosing a row folds it back. The rows leave and return
+ *  through AnimatedRows and the height eases, so the fold is a travel, not a swap.
  */
 #pragma once
 #include "../Theme.h"
@@ -40,7 +45,21 @@ namespace interstellar_v1
         void select(const std::string &id);
         /** The height the list wants now (eased with its row count) — the inspector lays out by it. */
         double wantedHeight() const { return mHeight.value(); }
+        /** The rows SHOWN now (all of them, or the selected one while folded). */
         int rowCount() const { return (int)mItems.size(); }
+        /** Every plugin of the node, shown or not. */
+        int totalCount() const { return (int)mAll.size(); }
+        /** The height the whole list needs, unfolded — the owner decides from it whether there is room. */
+        double fullHeight() const;
+        /** R-UI-16a: the column is too short — show the selected row only (the count chip opens the rest). */
+        void setFolded(bool folded);
+        bool folded() const { return mFolded; }
+        /** Folded AND opened by its count chip: the whole list, until a row is chosen. */
+        bool opened() const { return mOpened; }
+        /** The count chip ("1 of 3"), left of "+ Add"; only while folded. */
+        artboard::Rect moreRect() const;
+        /** The LIVE eased presence of the count chip (0 none … 1 shown). */
+        double foldAmount() const { return mFoldAmt.value(); }
 
         // geometry a test aims at (local)
         artboard::Rect rowRect(int i) const;
@@ -76,7 +95,12 @@ namespace interstellar_v1
         int rowAt(const artboard::Point &p) const;
         void emit(const std::string &l) { if (onCommand) onCommand(l); }
 
-        std::vector<Item> mItems;
+        void present();   // mAll + fold state → the rows shown, the selection wash, the height wanted
+
+        std::vector<Item> mAll;     // the node's whole stack
+        std::vector<Item> mItems;   // the rows shown
+        bool mFolded = false, mOpened = false, mFoldApplied = false, mOpenApplied = false;
+        artboard::AnimatedProperty mFoldAmt{0.0}, mOpenAmt{0.0};
         AnimatedRows<Item> mRows;
         std::string mBind, mSelected;
         bool mHasTarget = false;

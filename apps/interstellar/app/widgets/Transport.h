@@ -53,6 +53,10 @@ namespace interstellar_v1
         double meterDb(int ch) const { return mPeakDb[ch]; }   // the LIVE displayed peak, dB
         double meterHoldDb(int ch) const { return mHoldDb[ch]; }
         double meterAmount() const { return mMeterAmt.value(); }
+        /** R-UI-16c: the LIVE eased presence of the duration readout — it gives way (after the meter)
+         *  when the bar is too short to keep a usable scrubber. */
+        double durationAmount() const { return mDurAmt.value(); }
+        static constexpr double kMinScrubW = 72.0;   // the scrubber's floor: below it a drag is guesswork
         double clipAmount() const { return mClipAmt.value(); }
         double timeToX(double t) const;
 
@@ -91,6 +95,11 @@ namespace interstellar_v1
         double mPeakDb[2] = {-120, -120}, mRmsDb[2] = {-120, -120}, mHoldDb[2] = {-120, -120}, mHoldAt[2] = {0, 0};
         bool mClipIn = false, mClipApplied = false, mSoundIn = false, mSoundApplied = false, mMeterInit = false;
         artboard::AnimatedProperty mClipAmt{0.0}, mMeterAmt{0.0};
+        // R-UI-16c: what the bar has room for — derived from its width every advance, eased
+        bool meterFits() const;
+        bool durationFits() const;
+        bool mDurApplied = true;
+        artboard::AnimatedProperty mDurAmt{1.0};
         double mLastMs = 0.0;
         cosmo_v2::HoverFade mHover;
     };

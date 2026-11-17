@@ -39,7 +39,7 @@ radius 0 and none of them can see a neighbouring frame.
 **Home** — projects. **Edit** — three tabs over one monitor: **Grade** (the rack: grouping and
 colour, cosmo's own panels), **Cut** (arrangement and the version switcher), **Deliver** (render a
 *named* timeline). Cosmo's design exactly, with one token changed: the accent is purple-pink
-`#CF5AED`, which is cosmo's blue rotated to hue 288° at the same lightness so every alpha built on
+`#159387` (teal — R-UI-2, amended 2026-11-17; before that `#CF5AED`, which is cosmo's blue rotated to hue 288° at the same lightness so every alpha built on
 it still works.
 
 **In a browser** — Interstellar is an app of Arstro Remote (R-SVC-4): `interstellar-cc ntwb install`

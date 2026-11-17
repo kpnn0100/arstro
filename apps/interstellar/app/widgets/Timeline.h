@@ -39,8 +39,14 @@
  *  States: empty → "drag a source here", tracks greyed and the source bin lit (SourceBin); the
  *  tracks scroll vertically when they outgrow the deck, time scrolls horizontally, both clamped.
  *
+ *  A FROZEN cut (R-UI-18b) says so in a strip between the ruler and the tracks — "CUT FROZEN · no
+ *  longer follows <base>" and a Thaw button (`timeline thaw <version>`). The strip's height eases
+ *  and the tracks give way through it (`lanesTop`). It locks nothing: a frozen cut is the version's
+ *  own copy and stays editable (R-VER-3); only a pin is read-only.
+ *
  *  Below all the tracks, the ANIMATION section (KeyLane, R-ANIM-9): its header always shows and
- *  folds it; open, it takes its lanes' height, no more than the setting (R-ANIM-8, dragged at its
+ *  folds it. It starts folded while nothing is animated, opens when the first curve is marked and
+ *  folds when the last goes (R-UI-19a). Open, it takes its lanes' height, no more than the setting (R-ANIM-8, dragged at its
  *  TOP edge) or than leaves one track showing above it. The tracks keep the rest of the deck.
  */
 #pragma once
@@ -91,6 +97,20 @@ namespace interstellar_v1
         artboard::Rect clipRect(const std::string &clipId) const;
         artboard::Rect zoomOutRect() const;
         artboard::Rect zoomInRect() const;
+        artboard::Rect zoomFitRect() const;       // R-UI-19d: fit the whole timeline
+        /** R-UI-19d: what the lanes show now, in words — "12.4 s", "1:05". */
+        std::string visibleDurationLabel() const;
+        /** R-UI-19b: a ruler tick's label — a whole second is m:ss, a tick between seconds "+NNf". */
+        static std::string tickLabel(double t, double fps);
+        /** R-UI-19c: where clip `id`'s label starts (local x) — after a transition that ends on it. */
+        double clipLabelX(const std::string &clipId) const;
+        // ── R-UI-18b: the CUT FROZEN strip ──
+        static constexpr double kFrozenH = 19.5;      // u(6): a sentence row
+        double frozenAmount() const { return mFrozenAmt.value(); }
+        artboard::Rect frozenStripRect() const;       // as tall as it is now
+        artboard::Rect thawRect() const;
+        /** The top of the tracks: under the ruler and whatever of the strip is showing. */
+        double lanesTop() const { return shell::rulerH() + kFrozenH * mFrozenAmt.value(); }
         bool dragging() const { return mDrag.kind != DragKind::None; }
         /** The snapped start (move) or edge (trim) the current drag would dispatch. */
         double dragValue() const { return mDrag.value; }
@@ -132,6 +152,7 @@ namespace interstellar_v1
         bool resizingKeyLane() const { return mLaneDragging; }
         /** Open or fold the section. Intent only; it eases. */
         void setKeysShown(bool on) { mKeysWanted = on; }
+        void toggleKeys() { mKeysWanted = !mKeysWanted; }
         bool keysShown() const { return mKeysWanted; }
         double keyLaneAmount() const { return mKeyLane.value(); }
         std::shared_ptr<KeyLane> keyLane() { return mKeyLaneW; }
@@ -226,13 +247,18 @@ namespace interstellar_v1
         bool mEmptyWanted = true, mEmptyApplied = true, mEmptyInit = false;
         artboard::AnimatedProperty mEmptyAmt{1.0};
         std::vector<CacheSegAnim> mCacheSegs;
-        // the ANIMATION section (R-ANIM-9): open by default — its header says what it is
+        // the ANIMATION section (R-ANIM-9): folded while nothing is animated, open once something is
+        // (R-UI-19a) — the header's fold button overrides until the next such change
         std::shared_ptr<KeyLane> mKeyLaneW;
-        bool mKeysWanted = true, mKeyLaneApplied = true;
+        bool mKeysWanted = false, mKeyLaneApplied = false, mKeysInit = false, mHadCurves = false;
+        // R-UI-18b: the version being edited has a frozen cut
+        bool mFrozen = false, mFrozenApplied = false, mFrozenInit = false;
+        std::string mFrozenTimeline, mFrozenBase;
+        artboard::AnimatedProperty mFrozenAmt{0.0};
         artboard::AnimatedProperty mLaneH{140.0};
         double mLaneHTarget = 140.0, mLaneHLast = -1.0;
         bool mLaneDragging = false;
-        artboard::AnimatedProperty mKeyLane{1.0};
+        artboard::AnimatedProperty mKeyLane{0.0};
         double mCacheSegSeconds = 1.0;
         std::string mSelectedClip;
         double mDuration = 0.0, mFps = 24.0, mPlayhead = 0.0;

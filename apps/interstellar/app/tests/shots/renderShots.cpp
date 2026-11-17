@@ -235,7 +235,7 @@ namespace
             v.set("confirmOpen", ed.confirm()->isOpen());
             v.set("namePromptOpen", ed.namePrompt()->isOpen());
             v.set("versionsOpen", ed.topBar()->versions()->isOpen());
-            v.set("toast", Json::object().set("amount", ed.toastAmount()).set("error", ed.toastIsError()));
+            v.set("toast", Json::object().set("amount", r.app->toast().amount()).set("error", r.app->toast().kind() == arstro::cosmo_v2::Toast::Kind::Error));
             auto gi = ed.gradeInspector();
             auto deck = ed.gradeDeck();
             v.set("grade", Json::object()
@@ -341,6 +341,77 @@ namespace
         }});
         // Edit — Grade
         v.push_back({"grade_populated", edit, [](Rig &r) { r.settle(); }});
+        // R-UI-16a: Grade's right column in a short window — the list folded (at 1024x640 and under), its
+        // count chip opened, the sliders wheeled to their end, the Xform page, and the fold caught mid-way
+        v.push_back({"grade_list_opened", edit, [](Rig &r) {
+            r.settle();
+            auto pl = r.app->edit().gradeInspector()->plugins();
+            if (!pl->folded()) return;   // a tall window shows the whole list already
+            const Point p = centre(*pl, pl->moreRect());
+            r.click(p.x, p.y);
+            r.settle();
+        }});
+        v.push_back({"grade_sliders_end", edit, [](Rig &r) {
+            r.settle();
+            auto bd = r.app->edit().gradeInspector()->basicDetail();
+            const Point p = world(*bd, bd->width.value() * 0.5, bd->height.value() * 0.5);
+            r.app->wheel(p.x, p.y, -80.0);
+            r.settle();
+        }});
+        v.push_back({"grade_xform_end", edit, [](Rig &r) {
+            r.settle();
+            auto gi = r.app->edit().gradeInspector();
+            gi->tabs()->setSelectedIndex(arstro::interstellar_v1::GradeInspector::kTabXform);
+            r.settle();
+            const Point p = world(*gi->xformPage(), gi->xformPage()->width.value() * 0.5, gi->xformPage()->height.value() * 0.5);
+            r.app->wheel(p.x, p.y, -80.0);
+            r.settle();
+        }});
+        v.push_back({"grade_list_fold_mid", edit, [](Rig &r) {
+            const int w = r.w, h = r.h;
+            r.resize(1440, 900);
+            r.settle();
+            r.resize(w, h);
+            r.pump(80);   // ~ 40 % of the 200 ms fold
+        }});
+        // R-UI-17a: the window's close button with unsaved edits — the Home path's dialog
+        v.push_back({"edit_quit_confirm", edit, [](Rig &r) { r.settle(); r.app->requestQuit(); r.settle(); }});
+        // R-UI-18: a pinned colour (scrim + the Unpin pill; with a bypassed node, both pills) and a frozen cut
+        auto delivery = [](FakeService &s) { s.edit(); s.m.currentTimeline = "delivery"; };
+        v.push_back({"grade_colour_pinned", delivery, [](Rig &r) { r.settle(); }});
+        v.push_back({"grade_colour_pinned_mid", edit, [](Rig &r) {
+            r.settle();
+            std::string err;
+            r.svc.dispatch("timeline open delivery", err);
+            r.pump(96);   // about half of the 180 ms scrim
+        }});
+        v.push_back({"grade_colour_pinned_bypassed", [](FakeService &s) { s.edit(); s.m.currentTimeline = "delivery"; s.m.rack[(size_t)s.m.selectedRack].bypass = true; },
+                     [](Rig &r) { r.settle(); }});
+        v.push_back({"cut_frozen", delivery, [](Rig &r) { r.settle(); r.app->setTab(EditScreen::Cut); r.settle(); }});
+        v.push_back({"cut_frozen_mid", edit, [](Rig &r) {
+            r.settle(); r.app->setTab(EditScreen::Cut); r.settle();
+            std::string err;
+            r.svc.dispatch("timeline open delivery", err);
+            r.pump(112);   // about half of the 220 ms strip
+        }});
+        // R-UI-19b: zoomed in until the ruler shows frame ticks ("+06f") between whole seconds
+        v.push_back({"cut_frame_ticks", edit, [](Rig &r) {
+            r.settle(); r.app->setTab(EditScreen::Cut); r.settle();
+            auto tl = r.app->edit().timeline();
+            for (int k = 0; k < 6; ++k) tl->zoomBy(1.5, tl->timeToX(2.0));
+            r.settle();
+        }});
+        // R-UI-7 (amended): Undo / Redo say what; R-UI-20: footage but nothing selected
+        v.push_back({"edit_menu_edit_undo", [](FakeService &s) { s.edit(); s.m.canUndo = true; s.m.undoLabel = "clip move shotA"; },
+                     [](Rig &r) {
+                         r.settle();
+                         auto strip = r.app->edit().topBar()->menus();
+                         const Point t = centre(*strip, strip->titleRect(1));
+                         r.click(t.x, t.y);
+                         r.pump(400);
+                     }});
+        v.push_back({"grade_nothing_selected", [](FakeService &s) { s.edit(); s.m.hasGradeTarget = false; s.m.selectedRack = -1; s.m.playhead = 15.4; s.m.clips.erase(s.m.clips.begin() + 4); },
+                     [](Rig &r) { r.settle(); }});
         // cosmo's menu strip, settings dialog and screen scale
         auto openMenu = [](Rig &r, int i, double ms) {
             auto strip = r.app->edit().topBar()->menus();
@@ -352,7 +423,20 @@ namespace
         v.push_back({"edit_menu_file_mid", edit, [openMenu](Rig &r) { r.settle(); openMenu(r, 0, 64); }});
         v.push_back({"edit_menu_edit", edit, [openMenu](Rig &r) { r.settle(); openMenu(r, 1, 400); }});
         v.push_back({"edit_menu_preset", [](FakeService &s) { s.edit(); s.m.presets = {{"Film/Warm fade", "Film"}, {"Film/Bleach", "Film"}, {"Soft skin", ""}}; ++s.m.revision; },
-                     [openMenu](Rig &r) { r.settle(); openMenu(r, 4, 400); }});
+                     [openMenu](Rig &r) { r.settle(); openMenu(r, 2, 400); }});
+        // R-UI-7 (the family standard): Colour and View, and the keyboard standing on a row of Edit on
+        // the Cut tab (Down, Down: its wash; the disabled rows above are skipped)
+        v.push_back({"edit_menu_colour", edit, [openMenu](Rig &r) { r.settle(); openMenu(r, 3, 400); }});
+        v.push_back({"edit_menu_view", edit, [openMenu](Rig &r) { r.settle(); openMenu(r, 4, 400); }});
+        v.push_back({"edit_menu_edit_keyboard", [](FakeService &s) { s.edit(); s.m.hasGradeClipboard = true; }, [openMenu](Rig &r) {
+            r.settle(); r.app->setTab(EditScreen::Cut); r.settle();
+            openMenu(r, 1, 400);
+            artboard::KeyEvent e;
+            e.type = artboard::KeyEvent::Type::Down;
+            e.keyCode = 40;
+            r.app->key(e); r.app->key(e);
+            r.pump(300);
+        }});
         v.push_back({"edit_settings", edit, [](Rig &r) { r.settle(); r.app->openSettings(); r.settle(); }});
         // cosmo's selection + right-click menu on rack items
         v.push_back({"grade_multiselect", [](FakeService &s) { s.edit(); for (int k : {1, 2, 3}) s.m.rack[(size_t)k].selected = true; ++s.m.revision; },
@@ -1039,6 +1123,18 @@ namespace
         // Edit — Deliver
         v.push_back({"deliver_populated", edit, [](Rig &r) { r.settle(); r.app->setTab(EditScreen::Deliver); r.settle(); }});
         v.push_back({"deliver_empty", [](FakeService &s) { s.editNewProject(); }, [](Rig &r) { r.settle(); r.app->setTab(EditScreen::Deliver); r.settle(); }});
+        // R-UI-21d: a new project on the Cut tab — the monitor says it once; the bin does not repeat it
+        v.push_back({"cut_new_project", [](FakeService &s) { s.editNewProject(); }, [](Rig &r) { r.settle(); r.app->setTab(EditScreen::Cut); r.settle(); }});
+        // R-UI-21a: the family's toast — an info note, mid-way in, and over Home (D-15)
+        v.push_back({"grade_toast_info", [](FakeService &s) { s.edit(); }, [](Rig &r) {
+            r.settle(); r.app->say(arstro::cosmo_v2::Toast::Kind::Info, "Frame copied to the clipboard."); r.pump(400);
+        }});
+        v.push_back({"grade_toast_in_mid", [](FakeService &s) { s.edit(); }, [](Rig &r) {
+            r.settle(); r.svc.refuseNext = true; r.app->dispatch("set s_day01.basic.exposure=0.5"); r.pump(64);
+        }});
+        v.push_back({"home_refused", [](FakeService &s) { s.home(); }, [](Rig &r) {
+            r.settle(); r.svc.refuseNext = true; r.app->dispatch("project open /moved/away.isp"); r.pump(400);
+        }});
         // transitions
         v.push_back({"tab_grade_to_cut_mid", edit, [](Rig &r) {
             r.settle();

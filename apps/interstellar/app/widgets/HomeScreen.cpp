@@ -113,6 +113,15 @@ namespace interstellar_v1
     {
         return Rect{kPad, height.value() - kBottomBlockH + 16.0, kSidebarW - 2 * kPad, 18.0};
     }
+    std::string HomeScreen::versionText()
+    {
+#ifdef INTERSTELLAR_VERSION
+        return std::string("interstellar v") + INTERSTELLAR_VERSION;
+#else
+        return "interstellar";   // a build that was not told its version does not invent one
+#endif
+    }
+
     Rect HomeScreen::emptyChipRect() const
     {
         const Rect vp = gridViewport();
@@ -157,6 +166,8 @@ namespace interstellar_v1
     void HomeScreen::advance(double nowMs)
     {
         mNowMs = nowMs;
+        if (mMark.gone()) mMark.showUp(nowMs, false);   // R-BRAND-2: once, the first time Home is drawn
+        mMark.advance(nowMs);
         if (!mInit) { mSkeleton.set(mLoading ? 1.0 : 0.0); mLoadingApplied = mLoading; mInit = true; }
         if (mLoading != mLoadingApplied)
         {
@@ -248,6 +259,10 @@ namespace interstellar_v1
         t.beginPath(); t.moveTo(kSidebarW, 0); t.lineTo(kSidebarW, H); t.strokePath();
         t.beginPath(); t.moveTo(kSidebarW, kHeaderH); t.lineTo(W, kHeaderH); t.strokePath();
 
+        // ── the logo, above the wordmark (R-BRAND-2). Structure in the foreground colour, so
+        //    it follows the theme and high contrast; the colour part is the brand's own. ──
+        ::arstro::cosmo_v2::brand::draw(t, Rect{kPad - 2.0, 18.0, 36.0, 36.0}, mMark.mark(), mMark.pose(), palette::foreground());
+
         // ── wordmark: sized to fit, the dot at the MEASURED end of the word ──
         const double room = kSidebarW - 2 * kPad;
         const double px = textfit::fitSize(t, std::string(kWord) + ".", room, kWordMaxPx, kWordMinPx, font::sansSemiBold(), -0.03);
@@ -299,7 +314,7 @@ namespace interstellar_v1
             t.drawText("Settings", r.x + 18.0, textfit::baseline(r.y + r.h * 0.5, 11.0), 11.0, font::sans());
         }
         t.setFill(fade(palette::mutedForeground(), 0.4));
-        t.drawText("interstellar v0.1.0", kPad, blockTop + 60.0, 10.0, font::mono());
+        t.drawText(versionText(), kPad, blockTop + 60.0, 10.0, font::mono());
 
         // ── header ──
         const double hx = gridLeft();
@@ -307,7 +322,7 @@ namespace interstellar_v1
         drawCircle(t, clock.x + 6.5, clock.y + 6.5, 5.5, Paint::stroked(palette::mutedForeground(), 1.2));
         glyph::line(t, clock.x + 6.5, clock.y + 6.5, clock.x + 6.5, clock.y + 3.2, palette::mutedForeground(), 1.2);
         glyph::line(t, clock.x + 6.5, clock.y + 6.5, clock.x + 9.2, clock.y + 6.5, palette::mutedForeground(), 1.2);
-        const std::string title = "Recent Projects";
+        const std::string title = "Recent projects";
         t.setFill(palette::foreground());
         t.drawText(title, hx + 20.0, textfit::baseline(kHeaderH * 0.5, 13.0), 13.0, font::sansSemiBold());
         if (!mLoading)
@@ -346,17 +361,20 @@ namespace interstellar_v1
         {
             if (mCards.empty() && mHasModel)
             {
-                const std::string s = "No projects yet \xE2\x80\x94 open some footage to start one.";
-                const std::string se = textfit::ellipsize(t, s, vp.w - 16.0, 13.0, font::sans());
+                // The family's empty state (R-UI-21f): one sentence, one hint, one FILLED button. The hint says
+                // what the button does — it CREATES a project (R-UI-20), it does not open footage.
+                const std::string se = textfit::ellipsize(t, emptySentence(), vp.w - 16.0, 14.0, font::sansMedium());
+                t.setFill(fade(palette::foreground(), real));
+                t.drawText(se, vp.x + (vp.w - t.measureText(se, 14.0, font::sansMedium())) * 0.5, vp.y + 56.0, 14.0, font::sansMedium());
+                const std::string he = textfit::ellipsize(t, emptyHint(), vp.w - 16.0, 12.0, font::sans());
                 t.setFill(fade(palette::mutedForeground(), real));
-                t.drawText(se, vp.x + (vp.w - t.measureText(se, 13.0, font::sans())) * 0.5, vp.y + 72.0, 13.0, font::sans());
+                t.drawText(he, vp.x + (vp.w - t.measureText(he, 12.0, font::sans())) * 0.5, vp.y + 76.0, 12.0, font::sans());
                 const Rect chip = emptyChipRect();
                 const double hv = mHover.amount(9);
-                drawRoundedRect(t, chip, radius::control(), Paint::filledStroked(fade(palette::primaryAlpha(0.10 + 0.08 * hv), real),
-                                                                                  fade(lerpColor(palette::border(), palette::primary(), 0.6 + 0.4 * hv), real), 1.0));
+                drawRoundedRect(t, chip, radius::control(), Paint::filled(fade(lerpColor(palette::primary(), palette::white(), 0.12 * hv), real)));
                 const std::string cl = "New project";
-                t.setFill(fade(palette::foreground(), real));
-                t.drawText(cl, chip.x + (chip.w - t.measureText(cl, 12.0, font::sans())) * 0.5, textfit::baseline(chip.y + chip.h * 0.5, 12.0), 12.0, font::sans());
+                t.setFill(fade(palette::primaryForeground(), real));
+                t.drawText(cl, chip.x + (chip.w - t.measureText(cl, 12.0, font::sansMedium())) * 0.5, textfit::baseline(chip.y + chip.h * 0.5, 12.0), 12.0, font::sansMedium());
             }
             for (int i = 0; i < (int)mCards.size(); ++i)
             {

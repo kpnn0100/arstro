@@ -29,6 +29,7 @@
 #include "widgets/EditScreen.h"
 #include "../../cosmo/widgets/SettingsDialog.h"
 #include "../../cosmo/widgets/ContextMenu.h"
+#include "../../cosmo/widgets/Toast.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -53,8 +54,14 @@ namespace interstellar_v1
         void wheel(double x, double y, double notches, bool ctrl = false);
         bool key(const artboard::KeyEvent &e);
 
-        /** Send one command line through the hooks. A refusal is SAID (the toast), never dropped. */
+        /** Send one command line through the hooks. A refusal is SAID (an error toast carrying the
+         *  service's own sentence), never dropped — on whichever screen is showing (R-UI-21a, D-15). */
         bool dispatch(const std::string &line);
+        /** The family's ONE toast (cosmo R-FAMILY-2): top-centre under the top bar, over every screen.
+         *  `say` has no clock — the toast begins on the next frame. Its live amount, kind, text and
+         *  rect are the Toast's own accessors (rect() is in the toast's coordinates: add its x, y). */
+        void say(cosmo_v2::Toast::Kind kind, const std::string &text);
+        cosmo_v2::Toast &toast() { return *mToast; }
 
         // ── native pickers: the host shows its dialog, then answers ──
         std::function<void()> onPickProjectToOpen, onPickProjectToCreate, onPickFootage;
@@ -89,6 +96,17 @@ namespace interstellar_v1
         void frameSavePicked(const std::string &path);
         /** Ask to go Home: `project close`, behind cosmo's ConfirmDialog when there are unsaved edits. */
         void requestHome();
+        /** R-UI-17a: the host's window is asked to close. True = close it now (nothing unsaved). False =
+         *  keep it: the Home path's ConfirmDialog is up, and `onQuit` is called if the user chooses to
+         *  leave (Don't save, or a Save that succeeded). */
+        /** File › New Project… (R-UI-7 amended): the host's picker, behind the unsaved-edits dialog. */
+        void requestNewProject();
+        bool requestQuit();
+        /** R-UI-21b: the unsaved-changes dialog's title — `Save changes to "<name>"?`. */
+        std::string unsavedTitle() const;
+        std::function<void()> onQuit;
+        /** R-UI-17b: the host window's title — "<project> — Interstellar", "*" first while unsaved. */
+        std::string windowTitle() const;
 
         // ── presentation state ──
         void setTab(int tab) { mEdit->setTab(tab); }
@@ -129,11 +147,16 @@ namespace interstellar_v1
     private:
         void bindIfStale(double nowMs);
         void buildMenus();
+        // the menu bar (R-UI-7 amended): the family's order — File · Edit · the app's own · View
+        enum MenuIndex { kMenuFile = 0, kMenuEdit, kMenuPreset, kMenuColour, kMenuView };
+        void refreshFileMenu(const interstellar::AppModel &m);     // + Settings… and the autosave interval (R-DLV-5)
+        void refreshEditMenu(const interstellar::AppModel &m);     // Undo / Redo say what; rows that cannot act are disabled
         void refreshPresetMenu(const interstellar::AppModel &m);
         /** The Colour menu: the working space, the current one marked (R-COLOR-3). */
         void refreshColourMenu(const interstellar::AppModel &m);
-        void refreshWorkspaceMenu(const interstellar::AppModel &m);
-        void refreshSettingsMenu(const interstellar::AppModel &m);   // R-DLV-5
+        void refreshViewMenu(const interstellar::AppModel &m);     // the tabs; proxies (R-MEDIA-2); captions (R-DLV-1)
+        std::string mEditMenuFor = "?", mFileMenuFor = "?";
+        int mPresetMenuFor = -1;
         /** The rack row's input-colour list, opened in place of its menu (R-COLOR-2). */
         void openInputColourMenu(const std::string &bind, artboard::Point at);
         void setUiScale(int percent, bool animate);
@@ -167,6 +190,7 @@ namespace interstellar_v1
         void showScopes(const interstellar::Raster &frame);
         void fetchSource(const interstellar::AppModel &m, const interstellar::RackNodeModel &n, int edge, bool force);
         void fetchViewer(const interstellar::AppModel &m, int edge, bool force);   // R-EDT-1: the source viewer
+        void askUnsaved(const std::string &lost, std::function<void()> discard, std::function<void()> save);
         void layoutAll();
         void noteActivity() { mLastActivityMs = mNowMs; }
         bool textEditing() const;
@@ -179,14 +203,14 @@ namespace interstellar_v1
         std::shared_ptr<LoadingView> mLoading;
         std::shared_ptr<EditScreen> mEdit;
         std::shared_ptr<cosmo_v2::SettingsDialog> mSettings;
+        std::shared_ptr<cosmo_v2::Toast> mToast;
         double mPhysW = 0.0, mPhysH = 0.0;             // the host's size; mW/mH are logical
         int mUiScale = 100, mMaxUiScale = 10000;
         bool mScaleBound = false;
         artboard::AnimatedProperty mScaleAnim{1.0};
         std::vector<std::string> mPresetNames;          // what the Preset menu lists now
-        std::string mColourMenuFor;                     // the working space the Colour menu marks
-        int mWorkspaceMenuFor = -1;                     // R-MEDIA-2: 0 no project · 1 originals · 2 proxies
-        int mSettingsMenuFor = -2;                      // R-DLV-5: the autosave interval the Settings menu marks
+        std::string mColourMenuFor = "?";                   // the working space the Colour menu marks
+        int mViewMenuFor = -1;                          // R-MEDIA-2: 0 no project · 1 originals · 2 proxies (+2: captions hidden)
         std::string mRecoveryAsked;                     // R-DLV-6: the autosave already offered (project|time)
         unsigned mThumbEpoch = 0;                       // the host's thumbnail epoch last seen
         artboard::GestureRecognizer mRecognizer;

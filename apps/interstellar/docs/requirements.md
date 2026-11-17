@@ -30,6 +30,20 @@ the `Select` + `Set` pair `cosmo-cc` sends (`Rack::setParam`, `core/Rack.cpp`), 
 any future GUI path are one path. `interstellar_core` links `cosmo_core` deliberately — a real
 authority is worth a link dependency, and avoiding one is what let colour be a fake in two builds.
 
+### DR-RACK-1a `project open` reads whose file it is, and wraps a `.cmp` (R-RACK-1a, R-AUD-2 amended)
+`InterstellarService::projectOpen` first asks `sniffProject` (`core/service/InterstellarService.cpp`)
+what the file SAYS: `cosmoworkspace=` → `cmp`, `arstro-project` + `app = solaris` → `slp`, anything
+else → the `.isp` parser and its own errors. A `.cmp` goes to `projectOpenCmp`: an in-memory
+`Project` (`#rack path=<file name>`, one `main` timeline, `mIspPath = <stem>.isp` beside the `.cmp`),
+the rack opened through the same pending load `rack import` uses, `markDirty()` and **no write**:
+unlike `project new` it creates no `.cmp` and saves nothing. An existing `<stem>.isp` whose rack
+resolves to this `.cmp` is opened instead; any other existing `<stem>.isp` refuses the open. A
+`.slp` is refused with the file untouched (D-19). `project.opened` carries `from=isp|cmp`
+(`core/service/Event.cpp`, appended last). The GTK picker lists `*.isp` and `*.cmp`
+(`linux_main.cpp`). Proof: `interstellar_service_l2`, "a Cosmo project opens directly…" (grade read
+through the rack, no `.isp` before save, the edit lands in the `.cmp`, a second open finds the
+saved project) and "a Solaris song is refused…" (bytes compared).
+
 ### DR-RACK-2 A colour edit reaches a real `.cmp` (R-RACK-2) — THE GATE
 Guarded by `test_a_colour_edit_reaches_a_real_cmp`, which reads the saved file back with code that
 shares **nothing** with the writer, and by `test_a_second_service_sees_the_edit_the_first_one_made`,
@@ -495,7 +509,7 @@ Model: `captions[]` (the current timeline's), `captionsShown`, `timelines[].capt
 UI:
 - The monitor draws the caption under the playhead the way the burn does, cross-faded on change and
   lifted above the multicam bar (`app/widgets/Monitor.cpp:536`, fed by `app/App.cpp:1174`).
-- File › Import Captions… / Export Captions… and Workspace › Show Captions (`App.cpp:332`, `:412`).
+- File › Import Captions… / Export Captions… and View › Show Captions (`App.cpp:332`, `:412`).
 - Deliver's RANGE header line has a captions pill (`app/widgets/OutputSpec.cpp:447`), dimmed (eased)
   while the chosen timeline has none. Its menu toggles the three ways (`App.cpp:85`); the render line
   gains `--captions` (`OutputSpec.cpp:216`), never in a preset's flags, and a PNG sequence leaves out the
@@ -755,7 +769,7 @@ decode the originals whatever the switch. `proxy remove` forgets a proxy (or can
 the file stays. Undo restores the `.isp` but keeps the proxy fields as they are
 (`core/service/ServiceEdit.cpp:141`): a proxy finished after an edit survives undoing it. Model:
 `useProxies`, `proxyJobs[]`, `rack[].proxy`. UI: a video source's menu has Make Proxy / Make Proxy
-Again / Remove Proxy / Cancel Proxy (`app/App.cpp:196`); Workspace › Use Proxies (marked while on) and
+Again / Remove Proxy / Cancel Proxy (`app/App.cpp:196`); View › Use Proxies (marked while on) and
 Make Proxies for All Video (`:291`); the source bin's row says "proxy ·" or "proxy 40% ·"
 (`app/widgets/SourceBin.cpp:36`); the monitor's caption says "proxies" (timeline) or "proxy" (Grade,
 viewer) (`app/App.cpp:1021`). Guarded by L2 `proxies…` (refusals; two jobs done, 96 frames each, 48×27 →
@@ -1013,9 +1027,10 @@ a render today is picture only.
 ### DR-UI-1 The accent is the one forked token, installed at runtime (R-UI-2, R-G-2)
 `app/Theme.h` aliases cosmo's palette, radius, font and metrics namespaces and `sharedTheme()`, and
 adds only named Interstellar surface tokens; `installInterstellarAccent()` sets cosmo's runtime
-accent slot (cosmo R-G-5) to `#CF5AED` first thing in `App::App` (`app/App.cpp:46`). Guarded by
-`interstellar_app_ui_tests`, which reads `palette::primary()` and a reused cosmo slider fill and gets
-exactly `#CF5AED`.
+accent slot (cosmo R-G-5) to teal `#159387` first thing in `App::App` (`app/App.cpp:46`). Guarded by
+`interstellar_app_ui_tests`, which reads `palette::primary()` and gets exactly `#159387`, and samples
+a reused cosmo slider fill on screen and gets teal. (`#CF5AED` until 2026-11-17 — R-UI-2, amended.)
+`web/css/tokens.css` is regenerated from it and `interstellar_web_tokens_current` fails on drift.
 
 ### DR-UI-2 Home, Loading and Edit follow the model's screen, cross-faded (R-UI-1, R-UI-3)
 `App` (`app/App.h`) shows `AppModel::screen` and cross-fades between screens (260 ms); Edit is three
@@ -1045,7 +1060,7 @@ A rack row carries an eased OVR badge when the current version has a `#tlgrade` 
 edge, dangling in destructive with its reason). Guarded by `clicking the OVR badge dispatched
 revert s_day02`.
 
-### DR-UI-6 Every state is drawn, shot and looked at, at two sizes (R-UI-6, arstro.design.rule)
+### DR-UI-6 Every state is drawn, shot and looked at, at two sizes (R-UI-6, arstro.rule.design)
 `interstellar_app_shots --check` renders 31 named states × {1440×900, 1024×640} (idle, hover, empty,
 loading, populated, mid-transition) and fails a uniform PNG; `interstellar_app_ui_tests` (137
 checks) asserts exact dispatched lines, layout containment at both sizes, clamped scrolling, image
@@ -1097,18 +1112,55 @@ quality caps the monitor`.
 `renderTimelineFrame` — renders, export-still — is untouched; a cap never upscales. Measured in the
 same test: a 640×360 project at `previewEdge=256` → monitor 256×144, render 640×360; `0` → full.
 
-### DR-UI-7 Cosmo's menu bar and accelerators (R-UI-7)
-`EditTopBar` carries cosmo's `MenuStrip` after the wordmark; `App::buildMenus` (`app/App.cpp:144`)
-fills File · Edit · Settings · Workspace · Preset, every item a command line or a host picker
-(Save As, Import Preset, Export Still added to the GTK host); the Preset menu is rebuilt from
-`AppModel::presets` (`refreshPresetMenu`, `:190`, via cosmo's new `MenuStrip::setItems`).
-Accelerators in `App::editKey` (`:404`). Engine Settings opens COSMO's `SettingsDialog`
-(`openSettings`, `:126`) with its Input row hidden (cosmo's new `setInputRowShown`) — one instance
-for Home and Edit; Interstellar's own Reduce-motion dialog is retired (the OS setting governs, as in
-cosmo). Guarded by `interstellar_app_ui_tests` (menu clicks dispatch `project save`, `undo`,
-`grade paste --all`, `preset apply Film/Warm --node …`; Workspace switches the tab; the
-accelerators) and shots `edit_menu_file`, `edit_menu_file_mid`, `edit_menu_edit`,
-`edit_menu_preset`, `edit_settings`.
+### DR-UI-7 The menu bar and accelerators (R-UI-7, amended to the family standard)
+`EditTopBar` carries cosmo's `MenuStrip` after the wordmark. `App::buildMenus` (`app/App.cpp:341`)
+adds five empty menus — **File · Edit · Preset · Colour · View** (`App::MenuIndex`, `app/App.h`) —
+and each is filled by its own builder from the model, through `MenuStrip::setItems`, when a key of
+what it shows changes: `refreshFileMenu` (`:355`), `refreshEditMenu` (`:422`), `refreshPresetMenu`
+(`:567`), `refreshColourMenu` (`:522`), `refreshViewMenu` (`:498`). Every row is built by one helper
+(`item(label, action, shortcut, enabled)`), so a shortcut is in `Item::shortcut` (cosmo draws it in
+its right-aligned column), groups are `Item::sep()` rows, and a row that cannot act is
+`enabled = false`. There is no Settings and no Workspace menu.
+- **File:** New Project… (Ctrl+N) · Open… (Ctrl+O) | Save (Ctrl+S) · Save As… (Ctrl+Shift+S) | Add
+  Footage… · Relink Media… (disabled with nothing offline) | Import / Export Timeline… · Import /
+  Export Captions… (Export disabled with none) | Export Still… · Export… (opens the Deliver tab) |
+  Settings… (Ctrl+,) · Autosave Every Minute / Every 5 Minutes / Off, the current one bulleted
+  (R-DLV-5) | Home.
+- **Edit:** Undo / Redo — "Undo clip move shotA", Ctrl+Z / Ctrl+Shift+Z, disabled and plainly "Undo"
+  / "Redo" with nothing to undo | Copy Grade (Ctrl+C) · Paste Grade to Selected (Ctrl+V) · Paste Grade
+  to All Sources | Group Selection (Ctrl+G) · Ungroup · Duplicate as Variant (Ctrl+D) | Mark In (I) ·
+  Mark Out (O) · Clear In / Out · Insert (,) · Overwrite (.). Disabled: the paste rows with
+  `hasGradeClipboard` false; Copy / Duplicate without a source as Grade target; Ungroup unless the
+  target is a group; the last five on the Grade tab. `refreshEditMenu` runs EVERY frame (the tab is
+  view state, not a revision) behind a string key; when only words changed it uses
+  `MenuStrip::relabel`, so an open menu is not closed by an edit landing, and `setItems` only when
+  the set of live rows changed. Its actions read the model when they run.
+- **Preset:** Save Preset… · Import Preset… | Apply <name> per library preset. **Colour:** the two
+  working spaces (bulleted) | Input Colour of Selected… | Grab Still (Ctrl+Alt+G) · Show Matte
+  (Shift+H). **View:** Grade (1) · Cut (2) · Deliver (3) | Reset Workspace | Use Proxies · Make Proxies
+  for All Video · Show Captions (with a project open).
+- **Keys** (`App::key`, `:1215`; `App::editKey`, `:1343`): an open dropdown owns the keyboard —
+  `MenuStrip::menuKey` gets every key and the key is consumed; an open context menu gets
+  `ContextMenu::menuKey` first, then its rename field. Ctrl+N is `requestNewProject`, Ctrl+, is
+  `openSettings`; on Home, Ctrl+N / Ctrl+O / Ctrl+, call the pickers and the dialog directly. I, O,
+  comma and period return unhandled on the Grade tab. The GTK host maps Home and End (36, 35) as well
+  as the arrows (`linux_main.cpp:471`).
+- The context menus (`App::open*Context`) use the same fields: shortcuts in `Item::shortcut`
+  (Ctrl+G, Ctrl+D, S, Ctrl+C / X / V, Del, Shift+Del), U+2026 for every ellipsis, and the rows that
+  only inform ("No media is offline", "Everything here is animated") disabled.
+- Engine Settings is still COSMO's `SettingsDialog` (`openSettings`), its Input row hidden.
+- **Limits.** (1) `MenuStrip` has no way to change one row's `enabled` in place, so a change in
+  which Edit rows are live while the Edit dropdown is OPEN closes it (`setItems`); it cannot happen
+  from the pointer, only from an edit arriving over a socket. (2) View has no Show Agent row:
+  Interstellar has no agent panel.
+- Guarded by `interstellar_app_ui_tests`: `testFamilyMenus` (`app/tests/ui/uiTests.cpp:3610` — the
+  order, no three dots or padded shortcut in any label, separators, Settings… at Ctrl+,, Export…,
+  one right-aligned shortcut column by `shortcutRect`, a separator's own shorter rect, the disabled
+  rows and their dead keys on Grade, live again on Cut, Down / Up / Right / Home / Enter / Escape
+  with the wash read mid-tween, Space not playing under an open menu, Ctrl+N, Ctrl+,),
+  `testMenusSettingsScale` and `testEditMenuAndEmptyStates`. Shots: `edit_menu_file`,
+  `edit_menu_file_mid`, `edit_menu_edit`, `edit_menu_edit_undo`, `edit_menu_edit_keyboard`,
+  `edit_menu_preset`, `edit_menu_colour`, `edit_menu_view`, `edit_settings`.
 
 ### DR-UI-8 Screen scale zooms, and input maps through it (R-UI-8)
 `App::setUiScale` (`:103`) follows `settings.uiScale` from the model (whoever changed it), eases the
@@ -1126,7 +1178,7 @@ graded. Before this the monitor said "no clip at the playhead" and a chosen refe
 never seen. Guarded by `with no clip at the playhead the monitor still asks for a frame`.
 
 
-### DR-RENDER-6 The monitor renders off the UI thread (D-5, arstro.design.rule R2)
+### DR-RENDER-6 The monitor renders off the UI thread (D-5, arstro.rule.design R2)
 With `Host::asyncPreview` (the GTK host sets it), `renderFrame` (`core/service/ServiceRender.cpp:401`)
 plans on the calling thread — resolve, grades, source frames, geometry, copied into a `FramePlan`
 (`planFrame`, `:191`) — and hands the plan to one worker that decodes, grades and composites it
@@ -1216,8 +1268,8 @@ binds the optional `AppHooks::copyFrame`; the GTK host renders `captureFrame` at
 `GdkPixbuf` on the CLIPBOARD selection, `linux_main.cpp:224`) and **Save Frame…** (the host's .png
 dialog → `App::frameSavePicked` → `capture --out <p> [--source <Grade target>]`, `:333`). What is
 captured is what the monitor shows: the Grade target alone in Grade, the timeline at the playhead
-elsewhere. A successful copy says so in the toast chip without the refusal's red
-(`EditScreen::showNotice`); a failed one is a refusal. Guarded by `testCaptureAndGradeMonitor`
+elsewhere. A successful copy says so in an info toast (R-UI-21a, DR-UI-18a)
+(`App::say`); a failed one is an error toast. Guarded by `testCaptureAndGradeMonitor`
 (`the capture button sits next to ▶▶`, `clicking it opens Copy Frame / Save Frame…`, `Copy Frame in
 Cut copies the timeline`, `the monitor's capture button FADES in on Grade`, `…the answer dispatches
 capture --out <path> --source <the Grade target>`, `a failed copy is SAID`) and shots
@@ -1290,7 +1342,7 @@ tween) keeps a target zoom (1×–8×) and an eased live zoom (220 ms). Ctrl + w
 pointer; the view centre is RE-DERIVED every frame from the live zoom about that anchor
 (`centreFor`) and clamped so the picture covers the frame, so the point stays under the pointer
 through the tween. A plain wheel bubbles (cosmo does nothing there). While zoomed a drag pans
-(direct manipulation; the anchor lets go); a double-click — or Workspace › Reset Workspace — eases
+(direct manipulation; the anchor lets go); a double-click — or View › Reset Workspace — eases
 back to fit about the view's centre. The picture is drawn at `imageRect()` clipped to the 1× frame;
 a mono chip names the magnification, its alpha derived from the live zoom. `wantedProxyEdge()`
 scales with the TARGET zoom (one request per level, a 7680 bucket added); the service's preview
@@ -1977,3 +2029,96 @@ and `interstellar_frame {at?, timeline?}`, which resolves the current timeline's
 JSON-RPC client: `project new` → `rack add <jpg>` → `track add` → `clip add --track trk_1 --src ro_1
 --in 0 --at 0` → `interstellar_frame at=1` returned a 1280x720 frame of the photo (mean luma 21).
 
+
+
+### DR-UI-17 The 2026-11-17 UI audit, as built (R-UI-16, R-UI-17, R-UI-18, R-UI-19, R-UI-20)
+*(Written 2026-11-17 by the family-standard pass, from the code and its tests: the audit pass that
+built these was interrupted before it wrote an as-built entry. Each line names the code and the test
+that holds it; none of it was changed here except where DR-UI-18 says so.)*
+- **R-UI-16 small windows.** (a) `GradeInspector` gives the scopes a share of the column
+  (`ScopePanel`, 28 %, floor 84, cap 168), folds `PluginList` to its selected row with a count chip,
+  and scrolls every Cosmo page, Xform included (`app/widgets/GradeInspector.cpp`, `PluginList.cpp`).
+  (b) `OutputSpec`'s OUTPUT block is its own pinned foot Segment; only the spec above scrolls
+  (`OutputSpec.cpp`). (c) `Transport` lets the meter, then the duration, give way before the
+  scrubber (`Transport.cpp`). Tests: `testSmallWindowGrade`, `testSmallWindowDeliver`.
+- **R-UI-17 closing and the title.** `App::requestQuit` (`app/App.cpp:1149`) and `App::windowTitle`
+  (`:1161`); the GTK host asks on `delete-event` and sets the title each frame it changed
+  (`linux_main.cpp:370`, `:381`). The dialog itself is DR-UI-18(b). Test: `testQuitAndTitle`.
+- **R-UI-18 pinned and frozen.** `GradeInspector::pinAmount` and its `StatePill`
+  (`app/widgets/StatePill.h`, "COLOUR PINNED @commit · Unpin" → `timeline unpin`); `Timeline`'s CUT
+  FROZEN strip with Thaw (`frozenAmount`, `thawRect`). Test: `testPinnedAndFrozen`.
+- **R-UI-19 the Cut deck.** The ANIMATION section starts folded, ruler labels (`m:ss` / `+NNf`), the
+  label after a transition, the fit button and the duration readout (`Timeline.cpp`). Test:
+  `testCutDeckPass`.
+- **R-UI-20 which empty.** The monitor's sentence (`Monitor::setEmptyState`, cross-faded by
+  `emptyTextAmount`), the STILLS strip's line drawn in `GradeDeck::onOverlay`; amended by DR-UI-18(d).
+
+### DR-UI-18 The family standard, as adopted (R-UI-21; cosmo R-FAMILY-0, DR-FAMILY-1..5)
+The shared pieces are compiled in place from `apps/cosmo/widgets` (`app/CMakeLists.txt:97` adds
+`Toast.cpp`; `DirtyDot.h` is header-only). The menus are DR-UI-7.
+- **(a) Toast (R-UI-21a).** `App` owns ONE `cosmo_v2::Toast` (`App::toast()`, `App::say(kind, text)`,
+  `app/App.cpp:640`). `App::dispatch` (`:629`) shows a refusal as `Kind::Error` with the service's
+  `err` verbatim (no prefix; with no words at all, `Could not run “<line>”.`); "Frame copied to the
+  clipboard." is `Kind::Info`. `App::render` places it every frame at `x = 0`, `y = topBarH + 9.75`,
+  `width` = the logical window (`:1711`), advances it and draws it in the overlay pass AFTER the
+  three screens and before Settings — so it is centred on the window and visible on Home and Loading
+  (closes D-15). `needsRedraw` is true while `isShowing()`. `EditScreen`'s own chip
+  (`showRefusal`, `showNotice`, `toastAmount`, `toastIsError`, 2600 ms, the monitor's bottom) is
+  deleted. Tests: `testHomeAndShell` (`uiTests.cpp:552` — first frame of the fade strictly inside,
+  kind, the sentence, centred under the top bar, slid down, still held at 3000 ms, mid-fade after
+  3200, gone, a second toast's `swapAmount` mid-way, a refusal seen on Home),
+  `testCaptureAndGradeMonitor` (info / error). Shots: `grade_refused`, `grade_toast_info`,
+  `grade_toast_in_mid`, `home_refused`.
+- **(b) The unsaved dialog (R-UI-21b, R-UI-17a).** `App::askUnsaved(lost, discard, save)` (`:487`)
+  is the one dialog for `requestHome`, `requestNewProject` and `requestQuit`: title
+  `App::unsavedTitle()` (`:478`) = `Save changes to "<name>"?` (`…to this project?` unnamed), a
+  one-line body that says what is lost, Cancel · Don't save · Save. The Edit screen's
+  `ConfirmDialog` is set to `DestructiveStyle::Auto` once, in `App::App`, so Don't save is outlined
+  beside Save, and the recovery dialog's Discard likewise. Test: `testQuitAndTitle` (labels, the
+  title, `drawsOutlined`, the buttons' order and width). Shots: `edit_quit_confirm`,
+  `grade_save_confirm`. **Not assertable:** the title as DRAWN — `ConfirmDialog` publishes no
+  title; the test reads `unsavedTitle()`, the shot shows it.
+- **(c) The unsaved dot (R-UI-21c).** `EditTopBar` holds a `cosmo_v2::DirtyDot`: `set` in `bind`
+  (`app/widgets/EditTopBar.cpp:51`), advanced once bound, drawn at the MEASURED end of the name +
+  `kGap` (`:169`), in `foreground()`. `dirtyDotAmount()` and `dirtyDotCentre()` are published. The
+  save icon's eased light and the window title are unchanged. Test: `testQuitAndTitle` (placed on
+  open, the drawn pixel is grey 219 not teal, inside the name's box, first frame of the fade-out
+  strictly inside).
+- **(d) Empty states (R-UI-21d, R-UI-20 amended).** `Monitor::setEmptyState(sentence, hint, action)`
+  draws a 13 px sentence, an 11 px hint and — with an action — one filled accent button
+  (`app/widgets/Monitor.cpp:473`, `:479`), whose presence eases (`emptyActionAmount`) and whose
+  click calls `onEmptyAction` (the App: the footage picker). `App::fetchFrame` (`app/App.cpp:1513`)
+  says "No footage yet." / "Add video or stills to grade and cut them." / "Add footage…", "Nothing
+  selected." / "Pick a source in the rack to grade it.", or "No clip at the playhead.".
+  `RackTree` and `SourceBin` draw nothing when empty (their sentence and chip are deleted; the rack
+  header's + remains), `GradeInspector` covers its column without words, `GradeDeck`'s SOURCES strip
+  says nothing. Test: `testEditMenuAndEmptyStates` (the words, the button filled and centred and
+  clicking through, 0 inked pixels in the rack, the inspector and the strip, the STILLS line still
+  on screen). Shots: `grade_empty`, `cut_new_project`, `deliver_empty`, `grade_nothing_selected`.
+- **(e) The deck's page switch (R-UI-21e).** `GradeDeck::viewTabLabel` — Sources · Stills · Nodes at
+  11 px Medium, untracked (`app/widgets/GradeDeck.h:108`); the underline that travels was already
+  there. The deck's left title (SOURCES n) stays a section header.
+- **(f) Home (R-UI-21f).** `HomeScreen::versionText()` (`app/widgets/HomeScreen.cpp:116`) =
+  `"interstellar v" INTERSTELLAR_VERSION`, a PUBLIC compile definition of `interstellar_app`
+  (`app/CMakeLists.txt:123`). With no projects: `emptySentence()` "No projects yet.", `emptyHint()`,
+  and a FILLED New project button at `emptyChipRect()`. "Recent projects" is sentence case. Test:
+  `testEditMenuAndEmptyStates`. Shot: `home_empty`.
+- **(g) Words (R-UI-21g).** No `...` is left in a string literal of `app/` or `linux_main.cpp`.
+  Sentences: "No frame to measure.", "Nothing queued.", "Drag a source here.", "No version". Buttons:
+  "Save preset…", "Set in", "Set out". Left lowercase on purpose: the small status captions under a
+  row ("offline — media missing", "decoding…", "1 clip") — they are labels, not sentences.
+- **Not done here:** the web face (`web/`) still draws the old menus, chip and empty sentences —
+  D-20.
+
+
+## DR-BRAND — The logo and its animations (R-BRAND)
+
+### DR-BRAND-1 Warp, on Home and in the splash (R-BRAND-1..4)
+`app/CMakeLists.txt` compiles cosmo's `widgets/BrandMark.cpp` and `widgets/SplashScreen.cpp`.
+`HomeScreen` owns a `brand::Player{Mark::Interstellar}`, shows it up on its first `advance`, and
+draws it at `Rect{kPad − 2, 18, 36, 36}` above the wordmark (`app/widgets/HomeScreen.cpp`).
+`linux_main.cpp` ends by calling `arstro::cosmo_v2::runSplash(SplashScreen::interstellarBrand(), 1.0,
+showMain)` unless `argc > 1` or `INTERSTELLAR_NO_SPLASH` is set; `showMain` shows the window.
+`web/icon.svg` is Warp on a Night tile. The animations themselves are measured in cosmo's
+`cosmo_widget_tests` (cosmo DR-BRAND-3). Seen: `interstellar_app_shots --only home_populated`, and the
+splash at six moments rendered headlessly.

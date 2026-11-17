@@ -233,7 +233,7 @@ namespace interstellar_v1
         if (!mData.valid)
         {
             t.setFill(palette::mutedForeground());
-            const std::string s = "no frame to measure";
+            const std::string s = "No frame to measure.";
             t.drawText(s, b.x + (b.w - t.measureText(s, 10.0, font::sans())) * 0.5, b.y + b.h * 0.5 + 3.5, 10.0, font::sans());
         }
     }

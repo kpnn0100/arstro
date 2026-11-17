@@ -10,11 +10,6 @@ namespace interstellar_v1
 {
     using namespace artboard;
 
-    namespace
-    {
-        constexpr double kToastHoldMs = 2600.0;   // a hold, not a tween (design rule §2.5)
-    }
-
     EditScreen::EditScreen()
     {
         clipToBounds = true;
@@ -199,36 +194,8 @@ namespace interstellar_v1
         place(*mConfirm, 0, 0, W, H);
     }
 
-    void EditScreen::showRefusal(const std::string &message)
-    {
-        mToast = message;
-        mToastError = true;
-        mToastPending = true;
-    }
-
-    void EditScreen::showNotice(const std::string &message)
-    {
-        mToast = message;
-        mToastError = false;
-        mToastPending = true;
-    }
-
     void EditScreen::advance(double nowMs)
     {
-        mNowMs = nowMs;
-        if (mToastPending)
-        {
-            mToastAmt.animateTo(1.0, motion::kModalOpenMs, Easing::EaseOutCubic, nowMs);
-            mToastShownAt = nowMs;
-            mToastClosing = false;
-            mToastPending = false;
-        }
-        if (mToastShownAt >= 0.0 && !mToastClosing && nowMs - mToastShownAt > kToastHoldMs)
-        {
-            mToastAmt.animateTo(0.0, motion::kProgressOutMs, Easing::EaseOutCubic, nowMs);
-            mToastClosing = true;
-        }
-        mToastAmt.update(nowMs);
         const double tt = mTab == Grade ? 0.0 : 1.0;
         if (!mTransportInit) { mTransportAmt.set(tt); mTransportTarget = mTransportApplied = tt; mTransportInit = true; mMonitor->setCaptureShown(mTab == Grade); }
         else if (mTransportApplied != mTransportTarget)
@@ -245,25 +212,5 @@ namespace interstellar_v1
         drawRoundedRect(t, Rect{0, 0, width.value(), height.value()}, 0.0, Paint::filled(palette::background()));
     }
 
-    void EditScreen::onOverlay(IRenderTarget &t) const
-    {
-        const double a = mToastAmt.value();
-        if (a <= 0.001 || mToast.empty()) return;
-        // the refused/error state, said in words over the monitor, never silently dropped — or,
-        // without the red, a notice that an action finished
-        const Rect mon{mMonitor->x.value(), mMonitor->y.value(), mMonitor->width.value(), mMonitor->height.value()};
-        const std::string msg = textfit::ellipsize(t, mToast, std::max(0.0, mon.w - 80.0), 11.0, font::sans());
-        const double tw = t.measureText(msg, 11.0, font::sans());
-        const Rect chip{mon.x + (mon.w - tw - 40.0) * 0.5, mon.bottom() - 44.0 + 6.0 * (1.0 - a), tw + 40.0, 28.0};
-        Color bg = palette::popover(); bg.a *= a;
-        Color bd = mToastError ? palette::destructive() : palette::border(); bd.a *= (mToastError ? 0.8 : 1.0) * a;
-        drawRoundedRect(t, chip, radius::control(), Paint::filledStroked(bg, bd, 1.0));
-        Color ic = mToastError ? palette::destructive() : palette::success(); ic.a *= a;
-        if (mToastError) glyph::warn(t, Rect{chip.x + 12.0, chip.y + 8.5, 11.0, 11.0}, ic);
-        else glyph::check(t, Rect{chip.x + 12.0, chip.y + 8.5, 11.0, 11.0}, ic);
-        Color fc = palette::foreground(); fc.a *= a;
-        t.setFill(fc);
-        t.drawText(msg, chip.x + 30.0, textfit::baseline(chip.y + chip.h * 0.5, 11.0), 11.0, font::sans());
-    }
 }
 }

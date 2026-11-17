@@ -24,21 +24,21 @@ namespace interstellar_v1
             if (c.duration > 0.0) return c.duration;
             return c.speed > 0.0 ? (c.out - c.in) / c.speed : (c.out - c.in);
         }
-        std::string tickLabel(double t, double step, double fps)
-        {
-            char buf[32];
-            const long long fr = (long long)std::llround(t * fps);
-            const long long ifps = std::max(1LL, (long long)std::llround(fps));
-            const long long s = fr / ifps, f = fr % ifps;
-            if (step >= 1.0)
-            {
-                if (s >= 3600) std::snprintf(buf, sizeof buf, "%lld:%02lld:%02lld", s / 3600, (s / 60) % 60, s % 60);
-                else std::snprintf(buf, sizeof buf, "%lld:%02lld", s / 60, s % 60);
-            }
-            else
-                std::snprintf(buf, sizeof buf, "%lld:%02lld", s, f);
-            return buf;
-        }
+    }
+
+    std::string Timeline::tickLabel(double t, double fps)
+    {
+        // R-UI-19b: ONE meaning per text. A whole second is always m:ss (h:mm:ss past the hour); a
+        // tick between seconds — only drawn when zoomed in — is its frame offset, "+06f". Before this
+        // a sub-second step printed s:ff, so "0:06" was six seconds at one zoom and frame six at another.
+        char buf[32];
+        const long long ifps = std::max(1LL, (long long)std::llround(fps));
+        const long long fr = (long long)std::llround(t * fps);
+        const long long s = fr / ifps, f = fr % ifps;
+        if (f != 0) std::snprintf(buf, sizeof buf, "+%02lldf", f);
+        else if (s >= 3600) std::snprintf(buf, sizeof buf, "%lld:%02lld:%02lld", s / 3600, (s / 60) % 60, s % 60);
+        else std::snprintf(buf, sizeof buf, "%lld:%02lld", s / 60, s % 60);
+        return buf;
     }
 
     Timeline::Timeline()
@@ -50,7 +50,7 @@ namespace interstellar_v1
         mKeyLaneW->onPlotContext = [this](double t, Point w) { if (onKeyPlotContext) onKeyPlotContext(t, w); };
         mKeyLaneW->onAddMenu = [this](Rect w) { if (onAnimateMenu) onAnimateMenu(w); };
         mKeyLaneW->onRowContext = [this](const std::string &a, Point w) { if (onKeyRowContext) onKeyRowContext(a, w); };
-        mKeyLaneW->onToggle = [this] { mKeysWanted = !mKeysWanted; };
+        mKeyLaneW->onToggle = [this] { toggleKeys(); };
         mKeyLaneW->setTimeAxis([this](double t) { return timeToX(t); }, [this](double x) { return xToTime(x); });
         addChild(mKeyLaneW);
     }
@@ -58,7 +58,7 @@ namespace interstellar_v1
     double Timeline::keyLaneH() const
     {
         // its lanes' height, no taller than asked (R-ANIM-8) nor than leaves one track showing above it
-        const double room = height.value() - shell::rulerH() - shell::trackH() - KeyLane::kHeadH;
+        const double room = height.value() - lanesTop() - shell::trackH() - KeyLane::kHeadH;
         const double asked = std::clamp(mLaneH.value(), kKeyLaneMinH, 600.0);
         return std::max(0.0, std::min({mKeyLaneW->contentHeight(), asked, room}));
     }
@@ -129,6 +129,23 @@ namespace interstellar_v1
             for (const auto &tk : m.tracks) if (!tk.audio && tk.order < best) { best = tk.order; mTargetTrack = tk.id; }
         }
         mKeyLaneW->bind(m);   // where animation is authored (R-ANIM-3, R-ANIM-9)
+        // R-UI-19a: nothing animated → the section is its header; the first mark opens it, the last
+        // one going folds it. Only the CHANGE decides, so the fold button's choice holds in between.
+        {
+            const bool has = !m.anims.empty();
+            if (!mEverBound || has != mHadCurves) mKeysWanted = has;
+            mHadCurves = has;
+        }
+        // R-UI-18b: is the version being edited frozen, and what did it follow?
+        mFrozen = false;
+        for (const auto &tl : m.timelines)
+            if (tl.id == m.currentTimeline && tl.cutFrozen)
+            {
+                mFrozen = true;
+                mFrozenTimeline = tl.id;
+                mFrozenBase = tl.base;
+                for (const auto &b : m.timelines) if (b.id == tl.base && !b.name.empty()) mFrozenBase = b.name;
+            }
         mCacheSegSeconds = m.previewCacheSegmentSeconds > 0 ? m.previewCacheSegmentSeconds : 1.0;
         if (mCacheSegs.size() < m.previewCacheSegments.size()) mCacheSegs.resize(m.previewCacheSegments.size());
         for (size_t n = 0; n < mCacheSegs.size(); ++n)
@@ -238,12 +255,12 @@ namespace interstellar_v1
     Rect Timeline::lanesRect() const
     {
         // the tracks keep what the ANIMATION section below them leaves
-        return Rect{shell::headerWidth(), shell::rulerH(), std::max(0.0, width.value() - shell::headerWidth()),
-                    std::max(0.0, animSectionRect().y - shell::rulerH())};
+        return Rect{shell::headerWidth(), lanesTop(), std::max(0.0, width.value() - shell::headerWidth()),
+                    std::max(0.0, animSectionRect().y - lanesTop())};
     }
     double Timeline::laneTop(double laneLive) const
     {
-        return shell::rulerH() + laneLive * shell::trackH() - mVScroll.value();
+        return lanesTop() + laneLive * shell::trackH() - mVScroll.value();
     }
     Rect Timeline::laneRect(const std::string &trackId) const
     {
@@ -280,6 +297,39 @@ namespace interstellar_v1
 
     Rect Timeline::zoomOutRect() const { return Rect{9.75, (shell::rulerH() - 18.0) * 0.5, 18.0, 18.0}; }
     Rect Timeline::zoomInRect() const { return Rect{9.75 + 20.0, (shell::rulerH() - 18.0) * 0.5, 18.0, 18.0}; }
+
+    Rect Timeline::zoomFitRect() const { return Rect{9.75 + 40.0, (shell::rulerH() - 18.0) * 0.5, 18.0, 18.0}; }
+
+    std::string Timeline::visibleDurationLabel() const
+    {
+        const double sec = lanesRect().w / std::max(1e-6, mPps.value());
+        char buf[24];
+        if (sec < 60.0) std::snprintf(buf, sizeof buf, "%.1f s", sec);
+        else std::snprintf(buf, sizeof buf, "%d:%02d", (int)(sec / 60.0), (int)sec % 60);
+        return buf;
+    }
+
+    Rect Timeline::frozenStripRect() const { return Rect{0.0, shell::rulerH(), width.value(), kFrozenH * mFrozenAmt.value()}; }
+    Rect Timeline::thawRect() const
+    {
+        // rides the strip's BOTTOM edge, so it slides out from under the ruler as the strip opens
+        const double bottom = shell::rulerH() + kFrozenH * mFrozenAmt.value();
+        return Rect{width.value() - 9.75 - 46.0, bottom - kFrozenH + (kFrozenH - 15.0) * 0.5, 46.0, 15.0};
+    }
+
+    double Timeline::clipLabelX(const std::string &clipId) const
+    {
+        const ClipAnim *a = animFor(clipId);
+        if (!a) return 0.0;
+        const Rect lr = lanesRect();
+        const double left = timeToX(a->at.value());
+        const bool edge = a->data.provenance == interstellar::Provenance::Overridden && left >= lr.x;
+        double x = std::max(left, lr.x) + (edge ? 8.0 : 6.0);
+        // R-UI-19c: a transition INTO this clip is drawn over its head — the label starts after it
+        for (const auto &tr : mTransitions)
+            if (tr.clipB == clipId) x = std::max(x, timeToX(a->at.value() + tr.dur * 0.5) + 5.0);
+        return x;
+    }
 
     double Timeline::fitPps() const
     {
@@ -385,12 +435,14 @@ namespace interstellar_v1
             int edge = 0;
             const std::string id = clipAt(local, edge);
             mHover.setHovered(id.empty() ? -1 : clipSlot(id));
-            mUi.setHovered(zoomOutRect().contains(local) ? 0 : (zoomInRect().contains(local) ? 1 : -1));
+            mUi.setHovered(zoomOutRect().contains(local) ? 0 : zoomInRect().contains(local) ? 1 : zoomFitRect().contains(local) ? 2
+                           : (mFrozenAmt.value() > 0.5 && thawRect().contains(local)) ? 3 : -1);
             return true;
         }
         case Gesture::Type::Down:
         {
-            if (zoomOutRect().contains(local) || zoomInRect().contains(local)) return true;
+            if (zoomOutRect().contains(local) || zoomInRect().contains(local) || zoomFitRect().contains(local)) return true;
+            if (frozenStripRect().contains(local)) return true;   // the strip is chrome: nothing under it starts a drag
             if (mKeyLane.value() > 0.5 && keyLaneGrabRect().contains(local)) { mLaneDragging = true; return true; }   // R-ANIM-8
             if (rulerRect().contains(local) && mDuration > 0.0)
             {
@@ -571,6 +623,13 @@ namespace interstellar_v1
         {
             if (zoomOutRect().contains(local)) { zoomBy(1.0 / kZoomStep, timeToX(mPlayhead)); return true; }
             if (zoomInRect().contains(local)) { zoomBy(kZoomStep, timeToX(mPlayhead)); return true; }
+            if (zoomFitRect().contains(local)) { resetView(); return true; }   // R-UI-19d
+            if (frozenStripRect().contains(local))
+            {
+                // R-UI-18b: the way out of the state, beside the words that name it
+                if (mFrozenAmt.value() > 0.5 && thawRect().contains(local) && !mFrozenTimeline.empty()) emit("timeline thaw " + cmd::quote(mFrozenTimeline));
+                return true;
+            }
             if (rulerRect().contains(local)) return true;   // the press already moved the playhead
             int edge = 0;
             const std::string id = clipAt(local, edge);
@@ -592,7 +651,7 @@ namespace interstellar_v1
             const std::string id = clipAt(local, edge);
             const Point w = worldTransform().apply(local);
             if (!id.empty()) { if (onClipContext) onClipContext(id, w); return true; }
-            if (lanesRect().contains(local) || (local.x < shell::headerWidth() && local.y > shell::rulerH()))
+            if (lanesRect().contains(local) || (local.x < shell::headerWidth() && local.y > lanesTop()))
             {
                 const int lane = laneAtY(local.y);
                 const std::string trk = lane >= 0 && lane < (int)mTracks.size() ? mTracks[(size_t)lane].id : std::string();
@@ -696,6 +755,14 @@ namespace interstellar_v1
 
     void Timeline::advance(double nowMs)
     {
+        // R-UI-18b: the CUT FROZEN strip opens and closes eased; the tracks follow its live height
+        if (!mFrozenInit && mEverBound) { mFrozenAmt.set(mFrozen ? 1.0 : 0.0); mFrozenApplied = mFrozen; mFrozenInit = true; }
+        if (mFrozen != mFrozenApplied)
+        {
+            mFrozenAmt.animateTo(mFrozen ? 1.0 : 0.0, motion::kSlideMs, Easing::EaseInOutCubic, nowMs);
+            mFrozenApplied = mFrozen;
+        }
+        mFrozenAmt.update(nowMs);
         if (mBandOn != mBandApplied)
         {
             mBandAmt.animateTo(mBandOn ? 1.0 : 0.0, motion::kHoverMs, Easing::EaseOutCubic, nowMs);
@@ -759,6 +826,7 @@ namespace interstellar_v1
         {
             // the ANIMATION section: folded to its header or open to its lanes, eased; the tracks above
             // it give way through the same eased height (lanesRect reads it)
+            if (!mKeysInit && mEverBound) { mKeyLane.set(mKeysWanted ? 1.0 : 0.0); mKeyLaneApplied = mKeysWanted; mKeysInit = true; }   // first placement sets
             if (mKeysWanted != mKeyLaneApplied)
             {
                 mKeyLane.animateTo(mKeysWanted ? 1.0 : 0.0, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
@@ -774,7 +842,7 @@ namespace interstellar_v1
             mKeyLaneW->setColumnWidth(shell::headerWidth());
             mKeyLaneW->setPlayhead(mShownPlayhead.value());
         }
-        mVScroll.setExtent(shell::rulerH(), lanesRect().h, (double)mTracks.size() * shell::trackH());
+        mVScroll.setExtent(lanesTop(), lanesRect().h, (double)mTracks.size() * shell::trackH());
         mVScroll.advance(nowMs);
         for (auto &cs : mCacheSegs)
         {
@@ -1004,7 +1072,8 @@ namespace interstellar_v1
             }
             // label: the source, then (room permitting) what makes this clip itself
             // the label rides the VISIBLE part of the clip, so a clip that starts off-screen keeps its name
-            const double tx = std::max(r.x, lr.x) + (c.provenance == interstellar::Provenance::Overridden && r.x >= lr.x ? 8.0 : 6.0);
+            // …and starts after a transition that ends on this clip (R-UI-19c)
+            const double tx = clipLabelX(c.id);
             const double room = r.right() - 5.0 - tx;
             if (room > 8.0)
             {
@@ -1083,7 +1152,7 @@ namespace interstellar_v1
         }
         if (emptyAmt > 0.001)
         {
-            const std::string s = "drag a source here";
+            const std::string s = "Drag a source here.";
             const double tw = t.measureText(s, 12.0, font::sans());
             t.setFill(fade(palette::mutedForeground(), emptyAmt));
             t.drawText(s, lr.x + (lr.w - tw) * 0.5, lr.y + lr.h * 0.5 + 4.0, 12.0, font::sans());
@@ -1091,15 +1160,15 @@ namespace interstellar_v1
         t.restore();
 
         // ── track headers (the column that IS the time origin) ──
-        drawRoundedRect(t, Rect{0, rh, hw, lr.h}, 0.0, Paint::filled(surface::trackHeaderBg()));
+        drawRoundedRect(t, Rect{0, lr.y, hw, lr.h}, 0.0, Paint::filled(surface::trackHeaderBg()));
         t.save();
-        t.clipRect(0, rh, hw, lr.h);
+        t.clipRect(0, lr.y, hw, lr.h);
         for (const auto &kv : mTrackAnims)
         {
             const auto &tk = kv.second.data;
             const double y = laneTop(kv.second.lane.value());
             const double hA = kv.second.alpha.value();
-            if (y + th < rh || y > H || hA <= 0.001) continue;
+            if (y + th < lr.y || y > H || hA <= 0.001) continue;
             t.pushLayer(hA);
             const double cy = y + th * 0.5;
             const bool inherited = tk.provenance == interstellar::Provenance::Inherited;
@@ -1158,7 +1227,7 @@ namespace interstellar_v1
                 const double x = timeToX(tm);
                 glyph::line(t, x, rh - 10.0, x, rh - 1.0, palette::whiteAlpha(0.28), 1.0);
                 t.setFill(palette::mutedForeground());
-                t.drawText(tickLabel(tm, step, mFps), x + 3.0, 10.5, 8.5, font::mono());
+                t.drawText(tickLabel(tm, mFps), x + 3.0, 10.5, 8.5, font::mono());
             }
         }
         // the preview cache (R-PLAY-1): a 2-px bar along the ruler's top, per second of the timeline
@@ -1197,20 +1266,58 @@ namespace interstellar_v1
         t.restore();
 
         // zoom controls in the corner
-        for (int k = 0; k < 2; ++k)
+        for (int k = 0; k < 3; ++k)
         {
-            const Rect b = k == 0 ? zoomOutRect() : zoomInRect();
+            const Rect b = k == 0 ? zoomOutRect() : k == 1 ? zoomInRect() : zoomFitRect();
             const double hv = mUi.amount(k);
             if (hv > 0.001) drawRoundedRect(t, b, radius::control(), Paint::filled(palette::hoverWash(hv)));
             const Color c = lerpColor(palette::mutedForeground(), palette::foreground(), 0.7 * hv);
-            if (k == 0) glyph::minus(t, Rect{b.x + 4, b.y + 4, 10, 10}, c); else glyph::plus(t, Rect{b.x + 4, b.y + 4, 10, 10}, c);
+            if (k == 0) glyph::minus(t, Rect{b.x + 4, b.y + 4, 10, 10}, c);
+            else if (k == 1) glyph::plus(t, Rect{b.x + 4, b.y + 4, 10, 10}, c);
+            else
+            {
+                // fit: the whole span between two stops (R-UI-19d)
+                const double cy = b.y + b.h * 0.5;
+                glyph::line(t, b.x + 4.0, cy - 4.0, b.x + 4.0, cy + 4.0, c, 1.3);
+                glyph::line(t, b.right() - 4.0, cy - 4.0, b.right() - 4.0, cy + 4.0, c, 1.3);
+                glyph::line(t, b.x + 6.5, cy, b.right() - 6.5, cy, c, 1.3);
+            }
         }
         {
-            char buf[24];
-            std::snprintf(buf, sizeof buf, "%.0f px/s", pps);
+            // what the lanes SHOW, not the scale they are drawn at (R-UI-19d): "12.4 s", "1:05"
+            const double zx = zoomFitRect().right() + 4.0;
             t.setFill(fade(palette::mutedForeground(), 0.8));
-            const std::string z = textfit::ellipsize(t, buf, hw - 9.75 - 58.0, 8.5, font::mono());
-            t.drawText(z, 58.0, textfit::baseline(rh * 0.5, 8.5), 8.5, font::mono());
+            const std::string z = textfit::ellipsize(t, visibleDurationLabel(), hw - 4.0 - zx, 8.5, font::mono());
+            t.drawText(z, zx, textfit::baseline(rh * 0.5, 8.5), 8.5, font::mono());
+        }
+        // ── R-UI-18b: the CUT FROZEN strip, between the ruler and the tracks ──
+        if (const double fa = mFrozenAmt.value(); fa > 0.001)
+        {
+            const Rect sr = frozenStripRect();
+            t.save();
+            t.clipRect(sr.x, sr.y, sr.w, sr.h);   // a FIXED edge the row slides out from under — never a squashed row
+            const double top = sr.bottom() - kFrozenH, cy = top + kFrozenH * 0.5;
+            drawRoundedRect(t, Rect{0, top, W, kFrozenH}, 0.0, Paint::filled(palette::secondary()));
+            glyph::line(t, 0, sr.bottom() - 0.5, W, sr.bottom() - 0.5, palette::border(), 1.0);
+            glyph::lock(t, Rect{9.75, cy - 5.0, 8.0, 10.0}, fade(palette::whiteAlpha(0.6), fa));
+            const Rect th = thawRect();
+            const std::string head = "CUT FROZEN";
+            t.setFill(fade(palette::whiteAlpha(0.66), fa));
+            t.drawText(head, 9.75 + 13.0, textfit::baseline(cy, 9.0), 9.0, font::sansMedium());
+            const double hx = 9.75 + 13.0 + t.measureText(head, 9.0, font::sansMedium()) + 9.0;
+            const std::string why = mFrozenBase.empty() ? std::string("its arrangement no longer follows the base")
+                                                        : "its arrangement no longer follows " + mFrozenBase + " \xC2\xB7 still editable here";
+            if (th.x - 9.0 - hx > 24.0)
+            {
+                t.setFill(fade(palette::mutedForeground(), fa));
+                t.drawText(textfit::ellipsize(t, why, th.x - 9.0 - hx, 9.5, font::sans()), hx, textfit::baseline(cy, 9.5), 9.5, font::sans());
+            }
+            const double hv = mUi.amount(3);
+            drawRoundedRect(t, th, radius::control(), Paint::filledStroked(palette::hoverWash(hv), fade(lerpColor(palette::border(), palette::primary(), 0.4 + 0.6 * hv), fa), 1.0));
+            const double tw = t.measureText("Thaw", 9.5, font::sansMedium());
+            t.setFill(fade(lerpColor(palette::foreground(), palette::white(), hv), fa));
+            t.drawText("Thaw", th.x + (th.w - tw) * 0.5, textfit::baseline(th.y + th.h * 0.5, 9.5), 9.5, font::sansMedium());
+            t.restore();
         }
 
         // ── the playhead: destructive, a position (ui-brief §1) ──

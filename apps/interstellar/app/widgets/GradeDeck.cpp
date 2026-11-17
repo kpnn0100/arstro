@@ -600,12 +600,13 @@ namespace interstellar_v1
         // the breadcrumb (a child) takes the header's remaining width, where a rule would run
         mHeaderRight = kPadX + (srcW > 0 ? srcW : t.measureText("SOURCES", 9.0, font::sansSemiBold(), 0.13 * 9.0) + 20.0) + 6.5;
         {
-            // the views: SOURCES · STILLS · NODES, right-aligned, the shown one underlined (the line travels)
-            const std::string labels[3] = {"SOURCES", "STILLS", "NODES"};
+            // the views: Sources · Stills · Nodes, right-aligned — the family's PAGE switch (R-UI-21e): sentence
+            // case, the shown one under an accent underline that travels
+            const std::string labels[3] = {viewTabLabel(0), viewTabLabel(1), viewTabLabel(2)};
             double right = w - kPadX;
             for (int v = 2; v >= 0; --v)
             {
-                const double tw = t.measureText(labels[v], 9.0, font::sansSemiBold(), 0.06 * 9.0) + 12.0;
+                const double tw = t.measureText(labels[v], kTabPx, font::sansMedium()) + 12.0;
                 mViewTab[v] = Rect{right - tw, (kHeaderH - 17.0) * 0.5, tw, 17.0};
                 right -= tw + 2.0;
             }
@@ -616,24 +617,11 @@ namespace interstellar_v1
                 if (hv > 0.001) drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv)));
                 const double on = mViewAmt[v].value();
                 t.setFill(lerpColor(lerpColor(palette::mutedForeground(), palette::foreground(), hv * 0.6), palette::foreground(), on));
-                t.drawText(labels[v], r.x + 6.0, textfit::baseline(hy, 9.0), 9.0, font::sansSemiBold(), 0.06 * 9.0);
+                t.drawText(labels[v], r.x + 6.0, textfit::baseline(hy, kTabPx), kTabPx, font::sansMedium());
             }
             if (mTabW.value() > 0)
                 drawRoundedRect(t, Rect{mTabX.value() + 4.0, mViewTab[0].bottom() - 1.0, std::max(0.0, mTabW.value() - 8.0), 1.5}, radius::pill(), Paint::filled(palette::primary()));
         }
-        if (mRack.empty() && stA < 0.999)
-        {
-            const std::string s = "Sources appear here as footage joins the rack.";
-            t.setFill(fade(palette::mutedForeground(), 1.0 - stA));
-            t.drawText(s, (w - t.measureText(s, 11.0, font::sans())) * 0.5, kHeaderH + cosmo_v2::Filmstrip::kHeight * 0.5 + 4.0, 11.0, font::sans());
-        }
-        if (mStillList.empty() && stA > 0.001)
-        {
-            const std::string s = textfit::ellipsize(t, "Grab a still (Ctrl+Alt+G) to keep a frame and the grade it was made with.", w - 2 * kPadX, 11.0, font::sans());
-            t.setFill(fade(palette::mutedForeground(), stA));
-            t.drawText(s, (w - t.measureText(s, 11.0, font::sans())) * 0.5, kHeaderH + cosmo_v2::Filmstrip::kHeight * 0.5 + 4.0, 11.0, font::sans());
-        }
-
         // the reference-frame band
         const double top = bandTop();
         if (h - top < 12.0) return;
@@ -730,6 +718,21 @@ namespace interstellar_v1
 
     void GradeDeck::onOverlay(IRenderTarget &t) const
     {
+        // R-UI-20: why a strip is empty, and how to fill it. Drawn HERE, over the children: in onPaint the
+        // sentences sat under cosmo's Filmstrip, whose own plate covered them — an empty deck said nothing.
+        {
+            const double w = width.value();
+            const double stA = mViewAmt[1].value(), srcA = mViewAmt[0].value();
+        // (an empty rack says nothing here: the monitor says it once, with the button — R-UI-21d)
+        (void)srcA;
+        if (mStillList.empty() && stA > 0.001)
+        {
+            const std::string s = textfit::ellipsize(t, "Grab a still (Ctrl+Alt+G) to keep a frame and the grade it was made with.", w - 2 * kPadX, 11.0, font::sans());
+            t.setFill(fade(palette::mutedForeground(), stA));
+            t.drawText(s, (w - t.measureText(s, 11.0, font::sans())) * 0.5, kHeaderH + cosmo_v2::Filmstrip::kHeight * 0.5 + 4.0, 11.0, font::sans());
+        }
+
+        }
         // OFFLINE chips over the cells of missing sources (cosmo's strip has no word for it)
         t.save();
         t.clipRect(0, kHeaderH, width.value(), cosmo_v2::Filmstrip::kHeight);

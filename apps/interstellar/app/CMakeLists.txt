@@ -94,6 +94,9 @@ set(IS_COSMO_SOURCES
     ${IS_COSMO_DIR}/widgets/Breadcrumb.cpp
     ${IS_COSMO_DIR}/widgets/SettingsDialog.cpp
     ${IS_COSMO_DIR}/widgets/Icons.cpp
+    ${IS_COSMO_DIR}/widgets/Toast.cpp          # R-UI-21a: the family's one toast (cosmo R-FAMILY-2)
+    ${IS_COSMO_DIR}/widgets/BrandMark.cpp      # R-BRAND: the logo and its animations, shared by the suite
+    ${IS_COSMO_DIR}/widgets/SplashScreen.cpp   # R-SPLASH: cosmo's opening splash, branded per app
     ${IS_COSMO_DIR}/widgets/WidgetLog.cpp)
 
 file(GLOB IS_APP_SOURCES CONFIGURE_DEPENDS ${IS_APP_DIR}/*.cpp ${IS_APP_DIR}/widgets/*.cpp)
@@ -115,6 +118,10 @@ target_link_libraries(interstellar_app PUBLIC artboard_core arstro_image
 # ARTBOARD_CAIRO_FT: CairoTarget's text path is "a registered (embedded) face wins" (Artboard
 # FR-22a). PUBLIC, because CairoTarget.h's registerFontMemory only exists under it.
 target_compile_definitions(interstellar_app PUBLIC ARTBOARD_CAIRO_FT)
+# R-UI-21f: the app's version, said ONCE (cosmo's COSMO_VERSION pattern). Home shows it; PUBLIC so the
+# ui tests compare against the same value instead of a second literal.
+set(INTERSTELLAR_VERSION "0.1.0")
+target_compile_definitions(interstellar_app PUBLIC INTERSTELLAR_VERSION="${INTERSTELLAR_VERSION}")
 
 # ── the headless shot harness: one PNG per named state ──
 add_executable(interstellar_app_shots ${IS_APP_DIR}/tests/shots/renderShots.cpp)

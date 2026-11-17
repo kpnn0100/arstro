@@ -30,6 +30,9 @@
  *
  *  States: no grade target → an eased card wash with a sentence naming what to do; the selected
  *  node BYPASSED → cosmo's own scrim-and-pill treatment; a change of selected node → the page
+ *  version being edited has its colour PINNED → the same scrim over Cosmo's pages and a pill that is
+ *  the way out, "COLOUR PINNED @commit · Unpin" (R-UI-18a; the pages take no input, the tab bar still
+ *  switches); a change of selected node → the page
  *  cross-fades (cosmo's EditStackTabs page-swap idiom), since cosmo's sliders take a programmatic
  *  value without easing and a node switch would otherwise re-seat twenty rows in one frame.
  *  While the pointer is down in here, `bind` does not re-seed the panels: a gesture in flight
@@ -50,6 +53,7 @@
 #include "PluginList.h"
 #include "ScopePanel.h"
 #include "EffectPanel.h"
+#include "StatePill.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -84,6 +88,10 @@ namespace interstellar_v1
         std::shared_ptr<cosmo_v2::SliderRow> cosmoMix() { return mCosmoMix; }
         /** The LIVE eased swap between Cosmo's panels (0) and the selected effect's (1). */
         double pluginFade() const { return mPluginFade.value(); }
+        /** R-UI-16a: the scopes' height in this column (a share of it, clamped). */
+        double scopeHeight() const { return ScopePanel::heightFor(height.value()); }
+        /** The Xform page's scroller (R-UI-16a: every page scrolls). */
+        std::shared_ptr<cosmo_v2::StackPanel> xformPage() { return mXformTab; }
         /** "+ Add" in the plugin list, at a WORLD rect: the screen opens the catalog menu. */
         std::function<void(artboard::Rect world)> onAddEffect;
         /** Right-click on a plugin row ("" = Cosmo) at a WORLD point. */
@@ -91,6 +99,9 @@ namespace interstellar_v1
         const std::string &target() const { return mBind; }
         double emptyAmount() const { return mEmptyAmt.value(); }
         double bypassAmount() const { return mBypassAmt.value(); }
+        /** R-UI-18a: the LIVE eased amount of the "COLOUR PINNED" scrim, and its pill (the Unpin button). */
+        double pinAmount() const { return mPinAmt.value(); }
+        std::shared_ptr<StatePill> pinPill() { return mPinPill; }
 
         std::function<void(const std::string &line)> onCommand;
         /** R-ANIM-9: a marked parameter's mark pressed — its menu at a WORLD point (the mode, Remove Animation). */
@@ -117,6 +128,7 @@ namespace interstellar_v1
         std::shared_ptr<cosmo_v2::EditStackTabs> mTabs;
         std::shared_ptr<cosmo_v2::ParamPanel> mBasicDetail;
         std::shared_ptr<cosmo_v2::StackPanel> mColorTab;
+        std::shared_ptr<cosmo_v2::StackPanel> mXformTab;   // cosmo's XformPanel at its own height, scrolled
         std::shared_ptr<cosmo_v2::MixerPanel> mMixer;
         std::shared_ptr<cosmo_v2::CurvePanel> mCurve;
         std::shared_ptr<cosmo_v2::GradePanel> mGrade;
@@ -137,6 +149,11 @@ namespace interstellar_v1
         bool mHasTarget = false, mBypassed = false, mRackEmpty = true;
         bool mEmptyApplied = true, mBypassApplied = false, mInit = false;
         bool mSwapPending = false;
+        // R-UI-18a: the version being edited is pinned — its colour is read-only
+        std::shared_ptr<StatePill> mPinPill;
+        bool mPinned = false, mPinApplied = false;
+        std::string mPinTimeline;
+        artboard::AnimatedProperty mPinAmt{0.0};
         artboard::AnimatedProperty mEmptyAmt{1.0}, mBypassAmt{0.0}, mSwap{1.0};
     };
 }

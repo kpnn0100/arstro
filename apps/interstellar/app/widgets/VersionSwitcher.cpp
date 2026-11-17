@@ -298,7 +298,7 @@ namespace interstellar_v1
         if (!tlp)
         {
             t.setFill(fade(palette::mutedForeground(), alpha));
-            t.drawText("no version", x, textfit::baseline(cy, 10.0), 10.0, font::sans());
+            t.drawText("No version", x, textfit::baseline(cy, 10.0), 10.0, font::sans());
             return;
         }
         const auto &tl = *tlp;

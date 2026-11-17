@@ -6,7 +6,7 @@
   --foreground: #DBDBDB;
   --card: #1C1C1C;
   --popover: #222222;
-  --primary: #CF5AED;
+  --primary: #159387;
   --primary-foreground: #FFFFFF;
   --secondary: #252525;
   --secondary-foreground: #AAAAAA;
@@ -19,7 +19,7 @@
   --input-light: #F4F4F5;
   --input-light-text: #18181B;
   --switch-background: #444444;
-  --ring: rgba(207, 90, 237, 0.5);
+  --ring: rgba(21, 147, 135, 0.5);
   --canvas-bg: #0A0A0A;
   --histogram-bg: #0F0F0F;
   --left-rail-bg: #161616;
@@ -29,7 +29,7 @@
   --curve-plot-bg: #0D0D0D;
   --white: #FFFFFF;
   --white-rgb: 255, 255, 255;
-  --primary-rgb: 207, 90, 237;
+  --primary-rgb: 21, 147, 135;
   --success-rgb: 63, 185, 80;
   --destructive-rgb: 229, 83, 75;
   --foreground-rgb: 219, 219, 219;

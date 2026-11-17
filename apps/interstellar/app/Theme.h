@@ -9,10 +9,12 @@
  *
  *  The one divergence is the accent, and it is not a forked token either: cosmo's accent is a
  *  RUNTIME slot (`palette::setAccent`, cosmo R-G-5), so `installInterstellarAccent()` moves it to
- *  #CF5AED once at startup and every reused cosmo widget — slider fills, tab indicators, the
- *  segmented highlight, the curve editor, the focus ring, `sharedTheme()` — draws purple-pink with
- *  no widget forked. #CF5AED is cosmo's #4F7EF7 rotated to H 288° at S 80% and the same lightness
- *  (ui-brief §1), so every alpha token built on it keeps its weight.
+ *  teal #159387 once at startup and every reused cosmo widget — slider fills, tab indicators, the
+ *  segmented highlight, the curve editor, the focus ring, `sharedTheme()` — draws teal with no
+ *  widget forked. #159387 is the teal of the Warp logo (arstro.rule.brand §7) taken down to cosmo
+ *  blue's LUMINANCE (0.228), so white text on it reads at 3.8:1 — the measurement Solaris made when
+ *  this exact value was its accent (Solaris R-UI-2, 2026-10-08). The accent was purple-pink
+ *  #CF5AED until 2026-11-17 (R-UI-2, amended: the founder gave purple-pink to Arstro itself).
  *
  *  What IS declared here is only what cosmo has no word for, because cosmo has no timeline:
  *  the deck / ruler / track / lane / clip surfaces, and the playhead. Each is a NAMED token so no
@@ -36,11 +38,11 @@ namespace interstellar_v1
     namespace metrics = ::arstro::cosmo_v2::metrics;
     using ::arstro::cosmo_v2::sharedTheme;
 
-    /** The accent: purple-pink #CF5AED (R-UI-2). Call ONCE at startup, BEFORE the first frame —
+    /** The accent: teal #159387 (R-UI-2, amended 2026-11-17). Call ONCE at startup, BEFORE the first frame —
      *  the App constructor and every harness main do. A widget that copied the accent into a
      *  member at construction would keep the old blue, which is why "before the first frame" is
      *  cosmo's contract for the slot and therefore this one's. */
-    inline void installInterstellarAccent() { ::arstro::cosmo_v2::palette::setAccent(artboard::Color::hex(0xCF5AED)); }
+    inline void installInterstellarAccent() { ::arstro::cosmo_v2::palette::setAccent(artboard::Color::hex(0x159387)); }
 
     // ── the spacing ladder: cosmo's 3.25 px unit (a 13 px root, 0.25 rem) ───────────────────
     namespace space

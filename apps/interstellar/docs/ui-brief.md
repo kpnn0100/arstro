@@ -1,6 +1,6 @@
 # Interstellar — UI brief
 
-> The law is `.claude/skills/arstro.design.rule`, invoked and **not restated**. This file specifies
+> The law is `.claude/skills/arstro.rule.design`, invoked and **not restated**. This file specifies
 > only what is *about Interstellar*: its accent, its two screens and its three tabs.
 
 **Interstellar is cosmo wearing one different colour.** That is the requirement, and it is also the
@@ -10,10 +10,10 @@ most of the widgets are *aliased or linked*, not rewritten.
 ## 1. The accent — the only forked token
 
 ```
-primary           #CF5AED      ← purple-pink. THE single accent
+primary           #159387      ← teal. THE single accent (was purple-pink #CF5AED until 2026-11-17, R-UI-2 amended)
 primaryForeground #FFFFFF
-ring              rgba(207, 90, 237, 0.5)
-primaryAlpha(a)   rgba(207, 90, 237, a)
+ring              rgba(21, 147, 135, 0.5)
+primaryAlpha(a)   rgba(21, 147, 135, a)
 ```
 
 **Derived, not picked.** Cosmo's `#4F7EF7` in HSL is H 222°, S 91%, L 64%. Rotating the hue to
@@ -68,7 +68,7 @@ same button sits left of the monitor caption.
 **Ctrl + wheel zooms the monitor** about the pointer, as cosmo's photo stage does (R-UI-13): eased,
 drag to pan, double-click to fit, a chip naming the magnification.
 
-**Cosmo's menu bar sits after the wordmark** — File · Edit · Settings · Workspace · Preset (R-UI-7);
+**Cosmo's menu bar sits after the wordmark** — File · Edit · Preset · Colour · View, the family's order (R-UI-7 amended, R-UI-21);
 Engine Settings is cosmo's own dialog; the whole shell draws through cosmo's screen scale (R-UI-8).
 
 **The version switcher (`‹ main ▾ ›`) is chrome**, beside the project name — because which version

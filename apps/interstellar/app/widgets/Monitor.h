@@ -50,6 +50,27 @@ namespace interstellar_v1
         void setFrame(const interstellar::Raster &r, bool dissolve);
         void setState(State s) { mState = s; }
         State state() const { return mState; }
+        /** R-UI-20: WHICH empty this is, in words — "no footage yet…", "nothing selected…", "no clip at
+         *  the playhead". A change while the sentence shows cross-fades (`emptyTextAmount`, live). */
+        void setEmptyText(const std::string &s) { setEmptyState(s); }
+        /** R-UI-21d: the empty state in the family's shape — ONE sentence (a capital, a full stop), one
+         *  hint line under it, and (with `action`) one filled primary button, which calls
+         *  `onEmptyAction`. The words cross-fade with the sentence; the button eases in and out. */
+        void setEmptyState(const std::string &sentence, const std::string &hint = std::string(), const std::string &action = std::string())
+        {
+            mEmptyWanted = sentence;
+            mHintWanted = hint;
+            mActionWanted = action;
+        }
+        const std::string &emptyText() const { return mEmptyWanted; }
+        const std::string &emptyHint() const { return mHintWanted; }
+        const std::string &emptyAction() const { return mActionWanted; }
+        /** Where the empty state's button was last painted (local; empty when there is none), and its
+         *  LIVE eased presence. */
+        artboard::Rect emptyActionRect() const { return mEmptyBtnRect; }
+        double emptyActionAmount() const { return mEmptyBtnAmt.value(); }
+        std::function<void()> onEmptyAction;
+        double emptyTextAmount() const { return mEmptyTextAmt.value(); }
         void setTimecode(const std::string &tc) { mTimecode = tc; }
         void setCaption(const std::string &c) { mCaption = c; }
         const std::string &caption() const { return mCaption; }
@@ -131,6 +152,14 @@ namespace interstellar_v1
         bool mStateInit = false;
         State mStateApplied = State::Empty;
         artboard::AnimatedProperty mStateAmt[3];
+        std::string mEmptyWanted = "No clip at the playhead.", mEmptyShown = "No clip at the playhead.", mEmptyPrev;
+        std::string mHintWanted, mHintShown, mHintPrev;      // the hint line travels with its sentence
+        std::string mActionWanted, mActionApplied, mActionShown;   // the button's label ("" = none); Shown stays while it fades out
+        artboard::AnimatedProperty mEmptyBtnAmt{0.0};
+        bool mEmptyBtnInit = false;
+        mutable artboard::Rect mEmptyBtnRect{0.0, 0.0, 0.0, 0.0};
+        cosmo_v2::HoverFade mEmptyBtnHover;
+        artboard::AnimatedProperty mEmptyTextAmt{1.0};   // the shown sentence's weight over the one it replaced
         std::string mTimecode, mCaption;
         int mProxyEdge = 720;
 

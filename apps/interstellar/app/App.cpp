@@ -49,6 +49,7 @@ namespace interstellar_v1
         mEdit = std::make_shared<EditScreen>();
         mEdit->onCommand = [this](const std::string &l) { return dispatch(l); };
         mEdit->onAddFootage = [this] { if (onPickFootage) onPickFootage(); };
+        mEdit->monitor()->onEmptyAction = [this] { if (onPickFootage) onPickFootage(); };   // R-UI-21d: the empty project's one button
         mEdit->onHome = [this] { requestHome(); };
         mEdit->gradeDeck()->thumbnail = mHooks.thumbnail;
         // R-CLR-4: the stills gallery
@@ -87,7 +88,7 @@ namespace interstellar_v1
             auto os = mEdit->outputSpec();
             std::vector<cosmo_v2::ContextMenu::Item> items;
             if (os->timelineCaptions() == 0)
-                items.push_back({"No captions on this timeline \xE2\x80\x94 File \xE2\x80\xBA Import Captions\xE2\x80\xA6", [] {}});
+                items.push_back({"No captions on this timeline \xE2\x80\x94 File \xE2\x80\xBA Import Captions\xE2\x80\xA6", [] {}, "", false});
             else
             {
                 static const char *names[OutputSpec::kCapWays] = {"Burn into the picture", "Subtitle track (MP4, MOV, MKV)", "Sidecar .srt beside the file"};
@@ -171,6 +172,9 @@ namespace interstellar_v1
                                   [this](int i) { dispatch(std::string("settings set hardwareVideo=") + (i ? "1" : "0")); }},
                                  {"Preview cache", "graded frames, built when idle", {"Off", "On"}, 1,   // R-PLAY-1
                                   [this](int i) { dispatch(std::string("settings set previewCache=") + (i ? "1" : "0")); }}});
+        mToast = std::make_shared<cosmo_v2::Toast>();
+        // the family's rule for a destructive button (R-UI-21b): outlined beside a primary, filled alone
+        mEdit->confirm()->setDestructiveStyle(cosmo_v2::ConfirmDialog::DestructiveStyle::Auto);
         buildMenus();
 
         mRecognizer.setSink([this](const Gesture &g) {
@@ -254,20 +258,20 @@ namespace interstellar_v1
         for (const auto &r : m2.rack)
             if (r.selected && !r.bindName.empty()) { selection += " " + cmd::quote(r.bindName); ++selected; }
         std::vector<cosmo_v2::ContextMenu::Item> items;
-        items.push_back({"Add Footage...", [this] { if (onPickFootage) onPickFootage(); }});
-        items.push_back({selected > 1 ? "Group Selection  (Ctrl+G)" : "Group  (Ctrl+G)", [this] { dispatch("rack group new"); }});
+        items.push_back({"Add Footage\xE2\x80\xA6", [this] { if (onPickFootage) onPickFootage(); }});
+        items.push_back({selected > 1 ? "Group Selection" : "Group", [this] { dispatch("rack group new"); }, "Ctrl+G"});
         if (n.group) items.push_back({"Ungroup", [this, b] { dispatch("rack ungroup " + b); }});
         if (!n.failed)
             items.push_back({n.bypass ? "Enable Filter" : "Disable Filter",
                              [this, name = n.bindName, on = !n.bypass] { dispatch("set " + name + ".bypass=" + (on ? "1" : "0")); }});
-        items.push_back({"Rename...", [this, name = n.bindName] {
+        items.push_back({"Rename\xE2\x80\xA6", [this, name = n.bindName] {
             mRenameTarget = name;
             mEdit->contextMenu()->enterRenameMode(name);
         }});
-        if (!n.group && !n.failed) items.push_back({"Duplicate as Variant  (Ctrl+D)", [this, b] { dispatch("rack duplicate " + b); }});
+        if (!n.group && !n.failed) items.push_back({"Duplicate as Variant", [this, b] { dispatch("rack duplicate " + b); }, "Ctrl+D"});
         // R-MEDIA-3: a missing file, found where it is now
         if (!n.group && n.failed && n.offlineWhy.empty())
-            items.push_back({"Relink...", [this, b, file = std::filesystem::path(n.media).filename().string()] {
+            items.push_back({"Relink\xE2\x80\xA6", [this, b, file = std::filesystem::path(n.media).filename().string()] {
                 if (onPickMediaToRelink)
                     onPickMediaToRelink(file, [this, b](const std::string &p) { dispatch("media relink " + b + " " + cmd::quote(p)); });
             }});
@@ -284,15 +288,15 @@ namespace interstellar_v1
             // R-COLOR-2: what the source IS — the list opens in place of this menu
             std::string now = "Rec.709";
             for (const auto &c : m2.colourInputs) if (c.id == n.input) now = c.label;
-            items.push_back({"Input Colour (" + now + ")...", [this, name = n.bindName, at] { openInputColourMenu(name, at); }});
+            items.push_back({"Input Colour (" + now + ")\xE2\x80\xA6", [this, name = n.bindName, at] { openInputColourMenu(name, at); }});
             // R-COLOR-5/6: an input LUT in, the source's colour out
-            items.push_back({n.lut.empty() ? "Input LUT..." : "Change Input LUT...", [this, name = n.bindName] {
+            items.push_back({n.lut.empty() ? "Input LUT\xE2\x80\xA6" : "Change Input LUT\xE2\x80\xA6", [this, name = n.bindName] {
                 if (onPickLutToOpen)
                     onPickLutToOpen([this, name](const std::string &path) { dispatch("set " + cmd::quote(name + ".lut=" + path)); });
             }});
             if (!n.lut.empty()) items.push_back({"Remove Input LUT", [this, name = n.bindName] { dispatch("set " + cmd::quote(name + ".lut=none")); }});
             if (!n.failed)
-                items.push_back({"Export LUT...", [this, name = n.bindName, b] {
+                items.push_back({"Export LUT\xE2\x80\xA6", [this, name = n.bindName, b] {
                     if (onPickLutToSave)
                         onPickLutToSave(name + ".cube", [this, b](const std::string &path) { dispatch("lut export " + b + " --out " + cmd::quote(path)); });
                 }});
@@ -305,143 +309,243 @@ namespace interstellar_v1
         noteActivity();
     }
 
-    // ── the menu bar: cosmo's File / Develop / History / Settings / Preset, Interstellar's words ──
-    // Every item is a command line or a host picker — the menus add no behaviour of their own.
+    // ── the menu bar: the family's File · Edit · <the app's own> · View (R-UI-7 amended, R-FAMILY-0) ──
+    // Every item is a command line or a host picker — the menus add no behaviour of their own. A
+    // shortcut lives in the item's shortcut field (drawn in its own right-aligned column), groups are
+    // divided by separators, and an item that cannot act now is disabled. Each menu is rebuilt from
+    // the model when what it shows changes; the builders below are the ONE description of a menu.
+
+    namespace
+    {
+        using MItem = cosmo_v2::MenuStrip::Item;
+        MItem item(std::string label, std::function<void()> action, std::string shortcut = std::string(), bool enabled = true)
+        {
+            MItem it;
+            it.label = std::move(label);
+            it.action = std::move(action);
+            it.shortcut = std::move(shortcut);
+            it.enabled = enabled;
+            return it;
+        }
+        const char *kBullet = "\xE2\x80\xA2  ", *kNoBullet = "     ";   // a marked row, and the indent that lines the others up
+        /** A label cut to `max` bytes on a UTF-8 boundary, with U+2026. */
+        std::string clipLabel(const std::string &l, size_t max = 34)
+        {
+            if (l.size() <= max) return l;
+            size_t n = max - 3;
+            while (n > 0 && ((unsigned char)l[n] & 0xC0) == 0x80) --n;
+            return l.substr(0, n) + "\xE2\x80\xA6";
+        }
+    }
 
     void App::buildMenus()
     {
         auto ms = mEdit->topBar()->menus();
-        ms->addMenu({"File", {
-            {"Home",                         [this] { requestHome(); }},
-            {"Open...      (Ctrl+O)",        [this] { if (onPickProjectToOpen) onPickProjectToOpen(); }},
-            {"Save         (Ctrl+S)",        [this] { dispatch("project save"); }},
-            {"Save As...   (Ctrl+Shift+S)",  [this] { if (onPickSaveAs) onPickSaveAs(); }},
-            {"Add Footage...",               [this] { if (onPickFootage) onPickFootage(); }},
-            {"Export Still...",              [this] { if (onPickStillToExport) onPickStillToExport(); }},
-            // R-XCH: a cut for another editor, and back
-            {"Import Timeline...",           [this] {
-                 if (onPickTimelineToImport)
-                     onPickTimelineToImport([this](const std::string &p) { dispatch("interchange import " + cmd::quote(p)); });
-             }},
-            {"Export Timeline...",           [this] {
-                 const auto &m = mHooks.model ? mHooks.model() : emptyModel();
-                 std::string name;
-                 for (const auto &tl : m.timelines) if (tl.id == m.currentTimeline) name = tl.name;
-                 if (name.empty() || !onPickTimelineToExport) return;
-                 onPickTimelineToExport(name + ".fcpxml", [this, name](const std::string &p) {
-                     dispatch("interchange export " + cmd::quote(name) + " --out " + cmd::quote(p));
-                 });
-             }},
-            // R-DLV-1: captions — an SRT onto the open timeline, and back out
-            {"Import Captions...",           [this] {
-                 if (onPickCaptionsToImport)
-                     onPickCaptionsToImport([this](const std::string &p) { dispatch("caption import " + cmd::quote(p)); });
-             }},
-            {"Export Captions...",           [this] {
-                 const auto &m = mHooks.model ? mHooks.model() : emptyModel();
-                 std::string name;
-                 for (const auto &tl : m.timelines) if (tl.id == m.currentTimeline) name = tl.name;
-                 if (name.empty() || m.captions.empty() || !onPickCaptionsToExport) return;
-                 onPickCaptionsToExport(name + ".srt", [this, name](const std::string &p) {
-                     dispatch("caption export " + cmd::quote(p) + " --timeline " + cmd::quote(name));
-                 });
-             }},
-            {"Relink Media...",              [this] { openRelinkMenu(Point(width() * 0.25, 40.0)); }},   // R-MEDIA-3
-            {"Render...",                    [this] { mEdit->setTab(EditScreen::Deliver); }},
-        }});
-        ms->addMenu({"Edit", {
-            {"Undo         (Ctrl+Z)",        [this] { dispatch("undo"); }},
-            {"Redo         (Ctrl+Y)",        [this] { dispatch("redo"); }},
-            {"Copy Grade   (Ctrl+C)",        [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("grade copy " + cmd::quote(b)); }},
-            {"Paste Grade to Selected (Ctrl+V)", [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("grade paste " + cmd::quote(b)); }},
-            {"Paste Grade to All Sources",   [this] { dispatch("grade paste --all"); }},
-            {"Group Selection  (Ctrl+G)",    [this] { dispatch("rack group new"); }},
-            // R-EDT-1: three-point editing, the keys beside them
-            {"Mark In      (I)",             [this] { const auto &mm = mHooks.model ? mHooks.model() : emptyModel(); dispatch(std::string("mark in") + (mEdit->tab() == EditScreen::Cut && !mm.sourceView.empty() ? " --source" : "")); }},
-            {"Mark Out     (O)",             [this] { const auto &mm = mHooks.model ? mHooks.model() : emptyModel(); dispatch(std::string("mark out") + (mEdit->tab() == EditScreen::Cut && !mm.sourceView.empty() ? " --source" : "")); }},
-            {"Clear In / Out",               [this] { const auto &mm = mHooks.model ? mHooks.model() : emptyModel(); dispatch(std::string("mark clear") + (mEdit->tab() == EditScreen::Cut && !mm.sourceView.empty() ? " --source" : "")); }},
-            {"Insert       (,)",             [this] { dispatch("edit insert"); }},
-            {"Overwrite    (.)",             [this] { dispatch("edit overwrite"); }},
-            {"Ungroup",                      [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack ungroup " + cmd::quote(b)); }},
-            {"Duplicate as Variant (Ctrl+D)", [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack duplicate " + cmd::quote(b)); }},
-        }});
-        ms->addMenu({"Settings", {
-            {"Engine Settings...",           [this] { openSettings(); }},
-        }});
-        ms->addMenu({"Workspace", {
-            {"Grade        (1)",             [this] { mEdit->setTab(EditScreen::Grade); }},
-            {"Cut          (2)",             [this] { mEdit->setTab(EditScreen::Cut); }},
-            {"Deliver      (3)",             [this] { mEdit->setTab(EditScreen::Deliver); }},
-            {"Reset Workspace",              [this] { mEdit->setTab(EditScreen::Grade); mEdit->timeline()->resetView(); mEdit->monitor()->resetZoom(); }},
-        }});
-        ms->addMenu({"Preset", {}});
-        ms->addMenu({"Colour", {}});
-        refreshPresetMenu(mHooks.model ? mHooks.model() : emptyModel());
-        refreshColourMenu(mHooks.model ? mHooks.model() : emptyModel());
+        for (const char *title : {"File", "Edit", "Preset", "Colour", "View"}) ms->addMenu({title, {}});
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        refreshFileMenu(m);
+        refreshEditMenu(m);
+        refreshPresetMenu(m);
+        refreshColourMenu(m);
+        refreshViewMenu(m);
     }
 
-    /** The Settings menu: Engine Settings, and how often unsaved work is autosaved (R-DLV-5), marked. */
-    void App::refreshSettingsMenu(const interstellar::AppModel &m)
+    /** File: the project, its media, what leaves it, and Settings… with the autosave interval
+     *  (R-DLV-5) under it — the family has no Settings menu. */
+    void App::refreshFileMenu(const interstellar::AppModel &m)
     {
+        std::string tlName;
+        for (const auto &tl : m.timelines) if (tl.id == m.currentTimeline) tlName = tl.name;
+        bool offline = false;
+        for (const auto &n : m.rack) offline = offline || (!n.group && n.failed);
         const int s = m.settings.autosaveSeconds;
-        if (s == mSettingsMenuFor) return;
-        mSettingsMenuFor = s;
-        auto mark = [&](int v) { return std::string(s == v ? "\xE2\x80\xA2  " : "     "); };
-        std::vector<cosmo_v2::MenuStrip::Item> items = {
-            {"Engine Settings...",           [this] { openSettings(); }},
-            {mark(60) + "Autosave Every Minute",    [this] { dispatch("settings set autosave=60"); }},
-            {mark(300) + "Autosave Every 5 Minutes", [this] { dispatch("settings set autosave=300"); }},
-            {mark(0) + "Autosave Off",              [this] { dispatch("settings set autosave=0"); }},
+        const std::string key = std::to_string(s) + "|" + (tlName.empty() ? "0" : "1") + (m.captions.empty() ? "0" : "1") + (offline ? "1" : "0");
+        if (key == mFileMenuFor) return;
+        mFileMenuFor = key;
+        auto mark = [&](int v) { return std::string(s == v ? kBullet : kNoBullet); };
+        std::vector<MItem> items = {
+            item("New Project\xE2\x80\xA6", [this] { requestNewProject(); }, "Ctrl+N"),
+            item("Open\xE2\x80\xA6", [this] { if (onPickProjectToOpen) onPickProjectToOpen(); }, "Ctrl+O"),
+            MItem::sep(),
+            item("Save", [this] { dispatch("project save"); }, "Ctrl+S"),
+            item("Save As\xE2\x80\xA6", [this] { if (onPickSaveAs) onPickSaveAs(); }, "Ctrl+Shift+S"),
+            MItem::sep(),
+            item("Add Footage\xE2\x80\xA6", [this] { if (onPickFootage) onPickFootage(); }),
+            item("Relink Media\xE2\x80\xA6", [this] { openRelinkMenu(Point(width() * 0.25, 40.0)); }, "", offline),   // R-MEDIA-3
+            MItem::sep(),
+            // R-XCH: a cut for another editor, and back
+            item("Import Timeline\xE2\x80\xA6", [this] {
+                if (onPickTimelineToImport)
+                    onPickTimelineToImport([this](const std::string &p) { dispatch("interchange import " + cmd::quote(p)); });
+            }),
+            item("Export Timeline\xE2\x80\xA6", [this] {
+                const auto &mm = mHooks.model ? mHooks.model() : emptyModel();
+                std::string name;
+                for (const auto &tl : mm.timelines) if (tl.id == mm.currentTimeline) name = tl.name;
+                if (name.empty() || !onPickTimelineToExport) return;
+                onPickTimelineToExport(name + ".fcpxml", [this, name](const std::string &p) {
+                    dispatch("interchange export " + cmd::quote(name) + " --out " + cmd::quote(p));
+                });
+            }, "", !tlName.empty()),
+            // R-DLV-1: captions — an SRT onto the open timeline, and back out
+            item("Import Captions\xE2\x80\xA6", [this] {
+                if (onPickCaptionsToImport)
+                    onPickCaptionsToImport([this](const std::string &p) { dispatch("caption import " + cmd::quote(p)); });
+            }),
+            item("Export Captions\xE2\x80\xA6", [this] {
+                const auto &mm = mHooks.model ? mHooks.model() : emptyModel();
+                std::string name;
+                for (const auto &tl : mm.timelines) if (tl.id == mm.currentTimeline) name = tl.name;
+                if (name.empty() || mm.captions.empty() || !onPickCaptionsToExport) return;
+                onPickCaptionsToExport(name + ".srt", [this, name](const std::string &p) {
+                    dispatch("caption export " + cmd::quote(p) + " --timeline " + cmd::quote(name));
+                });
+            }, "", !tlName.empty() && !m.captions.empty()),
+            MItem::sep(),
+            item("Export Still\xE2\x80\xA6", [this] { if (onPickStillToExport) onPickStillToExport(); }),
+            item("Export\xE2\x80\xA6", [this] { mEdit->setTab(EditScreen::Deliver); }),   // the Deliver tab, whose own button is Render
+            MItem::sep(),
+            item("Settings\xE2\x80\xA6", [this] { openSettings(); }, "Ctrl+,"),
+            item(mark(60) + "Autosave Every Minute", [this] { dispatch("settings set autosave=60"); }),
+            item(mark(300) + "Autosave Every 5 Minutes", [this] { dispatch("settings set autosave=300"); }),
+            item(mark(0) + "Autosave Off", [this] { dispatch("settings set autosave=0"); }),
+            MItem::sep(),
+            item("Home", [this] { requestHome(); }),
         };
-        mEdit->topBar()->menus()->setItems(2, std::move(items));
+        mEdit->topBar()->menus()->setItems(kMenuFile, std::move(items));
     }
 
-    /** The Workspace menu: the tabs, and the project's proxy switch (R-MEDIA-2), marked when on. */
-    void App::refreshWorkspaceMenu(const interstellar::AppModel &m)
+    /** Edit: Undo / Redo say WHAT ("Undo clip move shotA"), and every row that cannot act now is
+     *  disabled. The actions read the model when they run, so a change of WORDS alone is relabelled
+     *  in place (an open menu is neither closed nor moved by an edit landing); a change of which rows
+     *  are live rebuilds the menu. Called every frame: the tab is view state, not a model revision. */
+    void App::refreshEditMenu(const interstellar::AppModel &m)
+    {
+        const bool grade = mEdit->tab() == EditScreen::Grade;
+        const interstellar::RackNodeModel *n = m.selectedRack >= 0 && m.selectedRack < (int)m.rack.size() ? &m.rack[(size_t)m.selectedRack] : nullptr;
+        const bool target = n && !n->bindName.empty();
+        const bool source = target && !n->group && !n->failed;
+        std::string key = m.undoLabel + "|" + m.redoLabel + "|";
+        for (bool b : {m.canUndo, m.canRedo, grade, target, source, target && n->group, m.hasGradeClipboard}) key += b ? '1' : '0';
+        if (key == mEditMenuFor) return;
+        mEditMenuFor = key;
+        auto live = [this]() -> const interstellar::AppModel & { return mHooks.model ? mHooks.model() : emptyModel(); };
+        auto mark = [this, live](const char *what) {
+            return [this, live, what] { dispatch(std::string("mark ") + what + (mEdit->tab() == EditScreen::Cut && !live().sourceView.empty() ? " --source" : "")); };
+        };
+        std::vector<MItem> items = {
+            item(m.canUndo ? "Undo" + (m.undoLabel.empty() ? std::string() : " " + clipLabel(m.undoLabel)) : std::string("Undo"),
+                 [this, live] { if (live().canUndo) dispatch("undo"); }, "Ctrl+Z", m.canUndo),
+            item(m.canRedo ? "Redo" + (m.redoLabel.empty() ? std::string() : " " + clipLabel(m.redoLabel)) : std::string("Redo"),
+                 [this, live] { if (live().canRedo) dispatch("redo"); }, "Ctrl+Shift+Z", m.canRedo),
+            MItem::sep(),
+            item("Copy Grade", [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("grade copy " + cmd::quote(b)); }, "Ctrl+C", source),
+            item("Paste Grade to Selected", [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("grade paste " + cmd::quote(b)); }, "Ctrl+V",
+                 target && m.hasGradeClipboard),
+            item("Paste Grade to All Sources", [this] { dispatch("grade paste --all"); }, "", m.hasGradeClipboard),
+            MItem::sep(),
+            item("Group Selection", [this] { dispatch("rack group new"); }, "Ctrl+G", target),
+            item("Ungroup", [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack ungroup " + cmd::quote(b)); }, "", target && n->group),
+            item("Duplicate as Variant", [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack duplicate " + cmd::quote(b)); }, "Ctrl+D", source),
+            MItem::sep(),
+            // R-EDT-1: three-point editing — on the timeline's playhead, which Grade does not have (R-UI-3)
+            item("Mark In", mark("in"), "I", !grade),
+            item("Mark Out", mark("out"), "O", !grade),
+            item("Clear In / Out", mark("clear"), "", !grade),
+            item("Insert", [this] { dispatch("edit insert"); }, ",", !grade),
+            item("Overwrite", [this] { dispatch("edit overwrite"); }, ".", !grade),
+        };
+        auto ms = mEdit->topBar()->menus();
+        const auto &old = ms->menu(kMenuEdit).items;
+        bool sameRows = old.size() == items.size();
+        for (size_t i = 0; sameRows && i < items.size(); ++i) sameRows = old[i].enabled == items[i].enabled && old[i].separator == items[i].separator;
+        if (!sameRows) { ms->setItems(kMenuEdit, std::move(items)); return; }
+        std::vector<std::string> labels;
+        for (const auto &it : items) labels.push_back(it.label);
+        ms->relabel(kMenuEdit, ms->menu(kMenuEdit).title, labels);
+    }
+
+    void App::requestNewProject()
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        auto pick = [this] { if (onPickProjectToCreate) onPickProjectToCreate(); };
+        if (!m.dirty || mScreen != interstellar::Screen::Edit) { pick(); return; }
+        // the open project has unsaved edits: the Home path's question first (R-UI-7 amended)
+        askUnsaved("Edits since the last save are lost if you go on without saving.", pick,
+                   [this, pick] { if (dispatch("project save")) pick(); });
+    }
+
+    std::string App::unsavedTitle() const
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        return m.projectName.empty() ? std::string("Save changes to this project?") : "Save changes to \"" + m.projectName + "\"?";
+    }
+
+    /** The family's unsaved-changes dialog (R-UI-21b): ONE wording for Home, New Project and closing
+     *  the window — the title names the project, the body says what is lost, Cancel · Don't save ·
+     *  Save. ("Don't save" keeps its ASCII apostrophe: cosmo's dialog sizes a button by bytes.) */
+    void App::askUnsaved(const std::string &lost, std::function<void()> discard, std::function<void()> save)
+    {
+        mEdit->confirm()->show(unsavedTitle(), lost,
+                               {{"Cancel", false, false, [] {}},
+                                {"Don't save", true, false, std::move(discard)},
+                                {"Save", false, true, std::move(save)}});
+        noteActivity();
+    }
+
+    /** View: the tabs, the view's reset, and (with a project open) the project's proxy switch
+     *  (R-MEDIA-2) and the captions on the monitor (R-DLV-1), marked when on. */
+    void App::refreshViewMenu(const interstellar::AppModel &m)
     {
         const int key = m.screen == interstellar::Screen::Edit ? (m.useProxies ? 2 : 1) + (m.captionsShown ? 0 : 2) : 0;
-        if (key == mWorkspaceMenuFor) return;
-        mWorkspaceMenuFor = key;
-        std::vector<cosmo_v2::MenuStrip::Item> items = {
-            {"Grade        (1)",             [this] { mEdit->setTab(EditScreen::Grade); }},
-            {"Cut          (2)",             [this] { mEdit->setTab(EditScreen::Cut); }},
-            {"Deliver      (3)",             [this] { mEdit->setTab(EditScreen::Deliver); }},
-            {"Reset Workspace",              [this] { mEdit->setTab(EditScreen::Grade); mEdit->timeline()->resetView(); mEdit->monitor()->resetZoom(); }},
+        if (key == mViewMenuFor) return;
+        mViewMenuFor = key;
+        std::vector<MItem> items = {
+            item("Grade", [this] { mEdit->setTab(EditScreen::Grade); }, "1"),
+            item("Cut", [this] { mEdit->setTab(EditScreen::Cut); }, "2"),
+            item("Deliver", [this] { mEdit->setTab(EditScreen::Deliver); }, "3"),
+            MItem::sep(),
+            item("Reset Workspace", [this] { mEdit->timeline()->resetView(); mEdit->monitor()->resetZoom(); }),   // the view, on the tab you are in (R-UI-19d)
         };
         if (key)
         {
-            items.push_back({std::string(m.useProxies ? "\xE2\x80\xA2  " : "     ") + "Use Proxies", [this, on = !m.useProxies] { dispatch(std::string("proxy use ") + (on ? "on" : "off")); }});
-            items.push_back({"     Make Proxies for All Video", [this] { dispatch("proxy make"); }});
+            items.push_back(MItem::sep());
+            items.push_back(item(std::string(m.useProxies ? kBullet : kNoBullet) + "Use Proxies", [this, on = !m.useProxies] { dispatch(std::string("proxy use ") + (on ? "on" : "off")); }));
+            items.push_back(item(std::string(kNoBullet) + "Make Proxies for All Video", [this] { dispatch("proxy make"); }));
             // R-DLV-1: the caption under the playhead on the monitor
-            items.push_back({std::string(m.captionsShown ? "\xE2\x80\xA2  " : "     ") + "Show Captions",
-                             [this, on = !m.captionsShown] { dispatch(std::string("view captions ") + (on ? "on" : "off")); }});
+            items.push_back(item(std::string(m.captionsShown ? kBullet : kNoBullet) + "Show Captions",
+                                 [this, on = !m.captionsShown] { dispatch(std::string("view captions ") + (on ? "on" : "off")); }));
         }
-        mEdit->topBar()->menus()->setItems(3, std::move(items));
+        mEdit->topBar()->menus()->setItems(kMenuView, std::move(items));
     }
 
     void App::refreshColourMenu(const interstellar::AppModel &m)
     {
-        const std::string menuKey = m.workingSpace + (m.matteView ? "|matte" : "");
+        const bool source = m.selectedRack >= 0 && m.selectedRack < (int)m.rack.size() && !m.rack[(size_t)m.selectedRack].group &&
+                            !m.rack[(size_t)m.selectedRack].bindName.empty();
+        const std::string menuKey = m.workingSpace + (m.matteView ? "|matte" : "") + (source ? "|s" : "");
         if (menuKey == mColourMenuFor) return;
         mColourMenuFor = menuKey;
         // the current working space is marked with a dot; the others are indented to line up
-        auto mark = [&](const char *id) { return m.workingSpace == id ? std::string("\xE2\x80\xA2  ") : std::string("     "); };
-        std::vector<cosmo_v2::MenuStrip::Item> items = {
-            {mark("rec709") + "Rec.709 Working Space", [this] { dispatch("colour working rec709"); }},
-            {mark("acescct") + "ACEScct Working Space", [this] { dispatch("colour working acescct"); }},
-            {"Input Colour of Selected...", [this] {
-                 const auto b = selectedBind();
-                 if (!b.empty()) openInputColourMenu(b, Point(width() * 0.5, 40.0));
-             }},
+        auto mark = [&](const char *id) { return m.workingSpace == id ? std::string(kBullet) : std::string(kNoBullet); };
+        std::vector<MItem> items = {
+            item(mark("rec709") + "Rec.709 Working Space", [this] { dispatch("colour working rec709"); }),
+            item(mark("acescct") + "ACEScct Working Space", [this] { dispatch("colour working acescct"); }),
+            MItem::sep(),
+            item(std::string(kNoBullet) + "Input Colour of Selected\xE2\x80\xA6", [this] {
+                const auto b = selectedBind();
+                if (!b.empty()) openInputColourMenu(b, Point(width() * 0.5, 40.0));
+            }, "", source),
+            MItem::sep(),
             // R-CLR-4: what the monitor shows, kept with its grade
-            {"     Grab Still  (Ctrl+Alt+G)", [this] { grabStill(); }},
+            item(std::string(kNoBullet) + "Grab Still", [this] { grabStill(); }, "Ctrl+Alt+G"),
             // R-CLR-1: the key a qualifier or a window makes, looked at
-            {std::string(m.matteView ? "\xE2\x80\xA2  " : "     ") + "Show Matte  (Shift+H)", [this, on = !m.matteView] {
-                 dispatch(std::string("view matte ") + (on ? "on" : "off"));
-                 if (on) mEdit->setTab(EditScreen::Grade);
-             }},
+            item(std::string(m.matteView ? kBullet : kNoBullet) + "Show Matte", [this, on = !m.matteView] {
+                dispatch(std::string("view matte ") + (on ? "on" : "off"));
+                if (on) mEdit->setTab(EditScreen::Grade);
+            }, "Shift+H"),
         };
-        mEdit->topBar()->menus()->setItems(5, std::move(items));
+        mEdit->topBar()->menus()->setItems(kMenuColour, std::move(items));
     }
 
     void App::openInputColourMenu(const std::string &bind, Point at)
@@ -464,28 +568,32 @@ namespace interstellar_v1
     {
         std::vector<std::string> names;
         for (const auto &p : m.presets) names.push_back(p.name);
-        if (names == mPresetNames && !mPresetNames.empty()) return;
+        const bool target = m.selectedRack >= 0 && m.selectedRack < (int)m.rack.size() && !m.rack[(size_t)m.selectedRack].bindName.empty();
+        const int state = target ? 1 : 0;
+        if (names == mPresetNames && state == mPresetMenuFor) return;
         mPresetNames = names;
+        mPresetMenuFor = state;
         auto ask = [this](std::function<void(const std::string &)> then) {
             mEdit->namePrompt()->show("Save preset", "The selected source's grade, saved to the library as an .apf.", "", "Save",
                                       std::move(then));
         };
-        std::vector<cosmo_v2::MenuStrip::Item> items = {
-            {"Save Preset...",   [this, ask] {
-                 const auto b = selectedBind();
-                 if (b.empty()) return;
-                 ask([this, b](const std::string &name) {
-                     if (!name.empty()) dispatch("preset save " + cmd::quote(name) + " --node " + cmd::quote(b));
-                 });
-             }},
-            {"Import Preset...", [this] { if (onPickPresetToImport) onPickPresetToImport(); }},
+        std::vector<MItem> items = {
+            item("Save Preset\xE2\x80\xA6", [this, ask] {
+                const auto b = selectedBind();
+                if (b.empty()) return;
+                ask([this, b](const std::string &name) {
+                    if (!name.empty()) dispatch("preset save " + cmd::quote(name) + " --node " + cmd::quote(b));
+                });
+            }, "", target),
+            item("Import Preset\xE2\x80\xA6", [this] { if (onPickPresetToImport) onPickPresetToImport(); }),
         };
+        if (!names.empty()) items.push_back(MItem::sep());
         for (const auto &n : names)
-            items.push_back({"Apply  " + n, [this, n] {
+            items.push_back(item("Apply " + n, [this, n] {
                 const auto b = selectedBind();
                 if (!b.empty()) dispatch("preset apply " + cmd::quote(n) + " --node " + cmd::quote(b));
-            }});
-        mEdit->topBar()->menus()->setItems(4, std::move(items));
+            }, "", target));
+        mEdit->topBar()->menus()->setItems(kMenuPreset, std::move(items));
     }
 
     void App::layoutAll()
@@ -524,8 +632,15 @@ namespace interstellar_v1
         if (!mHooks.dispatch) return false;
         std::string err;
         const bool ok = mHooks.dispatch(line, err);
-        if (!ok) mEdit->showRefusal(err.empty() ? "Refused: " + line : err);
+        // the service's own sentence, as it gave it; a refusal with no words still says what was refused
+        if (!ok) say(cosmo_v2::Toast::Kind::Error, err.empty() ? "Could not run \xE2\x80\x9C" + line + "\xE2\x80\x9D." : err);
         return ok;
+    }
+
+    void App::say(cosmo_v2::Toast::Kind kind, const std::string &text)
+    {
+        mToast->show(kind, text);
+        noteActivity();
     }
 
     void App::openProjectPicked(const std::string &path)
@@ -595,10 +710,10 @@ namespace interstellar_v1
         if (mHooks.copyFrame)
             items.push_back({"Copy Frame", [this] {
                 std::string err;
-                if (!mHooks.copyFrame(mCaptureBind, err)) mEdit->showRefusal(err.empty() ? "Could not copy the frame" : err);
-                else mEdit->showNotice("Frame copied to the clipboard");
+                if (!mHooks.copyFrame(mCaptureBind, err)) say(cosmo_v2::Toast::Kind::Error, err.empty() ? "Could not copy the frame." : err);
+                else say(cosmo_v2::Toast::Kind::Info, "Frame copied to the clipboard.");
             }});
-        items.push_back({"Save Frame...", [this] { if (onPickFrameToSave) onPickFrameToSave(); }});
+        items.push_back({"Save Frame\xE2\x80\xA6", [this] { if (onPickFrameToSave) onPickFrameToSave(); }});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y + at.h);
         noteActivity();
     }
@@ -715,8 +830,8 @@ namespace interstellar_v1
         {
             const std::string list = g->selectionList().empty() ? address + "@" + cmd::num(k->t) : g->selectionList();
             const int n = std::max(1, g->selectionCount());
-            items.push_back({n > 1 ? "Copy " + std::to_string(n) + " Keys  (Ctrl+C)" : std::string("Copy Key  (Ctrl+C)"),
-                             [this, list] { dispatch("key copy --keys " + cmd::quote(list)); }});
+            items.push_back({n > 1 ? "Copy " + std::to_string(n) + " Keys" : std::string("Copy Key"),
+                             [this, list] { dispatch("key copy --keys " + cmd::quote(list)); }, "Ctrl+C"});
         }
         items.push_back({"Delete Key", [this, address, tt = k->t] { dispatch("key remove " + cmd::quote(address) + " --at " + cmd::num(tt)); }});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
@@ -765,7 +880,7 @@ namespace interstellar_v1
                 else               // a panel or an effect: its properties as a second step, in the same place
                     items.push_back({g + "  \xE2\x80\xBA", [this, at, g] { openAnimateMenu(at, g); }});
             }
-        if (items.empty()) items.push_back({all.empty() ? "Choose a clip or a source first" : "Everything here is animated", [] {}});
+        if (items.empty()) items.push_back({all.empty() ? "Choose a clip or a source first" : "Everything here is animated", [] {}, "", false});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y + at.h);
         noteActivity();
     }
@@ -817,7 +932,7 @@ namespace interstellar_v1
         auto tl = mEdit->timeline();
         const double now = tl->keyLane()->now();   // -1: the playhead is not over a clip of the front lane's object
         std::vector<cosmo_v2::ContextMenu::Item> items;
-        if (now >= 0) items.push_back({"Paste Keys at Playhead  (Ctrl+V)", [this, now] { dispatch("key paste --at " + cmd::num(now)); }});
+        if (now >= 0) items.push_back({"Paste Keys at Playhead", [this, now] { dispatch("key paste --at " + cmd::num(now)); }, "Ctrl+V"});
         items.push_back({"Paste Keys Here", [this, t] { dispatch("key paste --at " + cmd::num(t)); }});
         const std::string front = tl->keyLane()->selected();
         if (m.keyClipboardCurves == 1 && !front.empty() && now >= 0)
@@ -879,12 +994,12 @@ namespace interstellar_v1
         const auto clip = *c;   // the menu outlives this model snapshot
         std::vector<cosmo_v2::ContextMenu::Item> items;
         if (m.playhead > clip.at + 1e-9 && m.playhead < clip.at + clipLen(clip) - 1e-9)
-            items.push_back({"Split at Playhead  (S)", [this, q, t = m.playhead, fps] { dispatch("clip split " + q + " --at " + cmd::seconds(t, fps)); }});
-        items.push_back({"Copy  (Ctrl+C)", [this, q] { dispatch("clip copy " + q); }});
-        items.push_back({"Cut  (Ctrl+X)", [this, q] { if (dispatch("clip copy " + q)) dispatch("clip delete " + q); }});
-        if (m.hasClipClipboard) items.push_back({"Paste at Playhead  (Ctrl+V)", [this] { dispatch("clip paste"); }});
-        items.push_back({"Delete  (Del)", [this, q] { dispatch("clip delete " + q); }});
-        items.push_back({"Ripple Delete  (Shift+Del)", [this, q] { dispatch("clip delete " + q + " --ripple"); }});
+            items.push_back({"Split at Playhead", [this, q, t = m.playhead, fps] { dispatch("clip split " + q + " --at " + cmd::seconds(t, fps)); }, "S"});
+        items.push_back({"Copy", [this, q] { dispatch("clip copy " + q); }, "Ctrl+C"});
+        items.push_back({"Cut", [this, q] { if (dispatch("clip copy " + q)) dispatch("clip delete " + q); }, "Ctrl+X"});
+        if (m.hasClipClipboard) items.push_back({"Paste at Playhead", [this] { dispatch("clip paste"); }, "Ctrl+V"});
+        items.push_back({"Delete", [this, q] { dispatch("clip delete " + q); }, "Del"});
+        items.push_back({"Ripple Delete", [this, q] { dispatch("clip delete " + q + " --ripple"); }, "Shift+Del"});
         if (!clip.audio)
         {
             // a dissolve into the next clip that TOUCHES this one on its track (R-TL-4 holds the outgoing one)
@@ -916,7 +1031,7 @@ namespace interstellar_v1
             items.push_back({"Paste Here", [this, track, t, fps] {
                 dispatch("clip paste --at " + cmd::seconds(t, fps) + (track.empty() ? std::string() : " --track " + cmd::quote(track)));
             }});
-        items.push_back({"Add Marker Here  (M at the playhead)", [this, t, fps] { dispatch("marker add " + freshMarkerName() + " --at " + cmd::seconds(t, fps)); }});
+        items.push_back({"Add Marker Here", [this, t, fps] { dispatch("marker add " + freshMarkerName() + " --at " + cmd::seconds(t, fps)); }});
         bool video = false;
         for (const auto &tk : m.tracks) video = video || (tk.id == track && !tk.audio);
         if (video && track != m.targetTrack)
@@ -924,7 +1039,7 @@ namespace interstellar_v1
         bool placeable = false;
         for (const auto &tl : m.timelines) placeable = placeable || tl.placeable;
         if (video && placeable)
-            items.push_back({"Place Timeline Here...", [this, track, t, at] { openPlaceTimelineMenu(track, t, at); }});   // R-EDT-4
+            items.push_back({"Place Timeline Here\xE2\x80\xA6", [this, track, t, at] { openPlaceTimelineMenu(track, t, at); }});   // R-EDT-4
         items.push_back({"Add Video Track", [this] { dispatch("track add --kind video"); }});
         items.push_back({"Add Audio Track", [this] { dispatch("track add --kind audio"); }});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
@@ -988,20 +1103,20 @@ namespace interstellar_v1
             const std::string name = n.cosmoName.empty() ? n.bindName : n.cosmoName;
             if (!n.offlineWhy.empty())
             {
-                items.push_back({name + " \xE2\x80\x94 " + n.offlineWhy, [] {}});   // nothing to locate: a decoder is missing
+                items.push_back({name + " \xE2\x80\x94 " + n.offlineWhy, [] {}, "", false});   // nothing to locate: a decoder is missing
                 continue;
             }
             ++missing;
-            items.push_back({"Locate " + name + " (" + file + ")...", [this, b = cmd::quote(n.bindName), file] {
+            items.push_back({"Locate " + name + " (" + file + ")\xE2\x80\xA6", [this, b = cmd::quote(n.bindName), file] {
                 if (onPickMediaToRelink)
                     onPickMediaToRelink(file, [this, b](const std::string &p) { dispatch("media relink " + b + " " + cmd::quote(p)); });
             }});
         }
         if (missing > 0)
-            items.push_back({"Search a Folder for " + std::string(missing > 1 ? "All..." : "It..."), [this] {
+            items.push_back({"Search a Folder for " + std::string(missing > 1 ? "All\xE2\x80\xA6" : "It\xE2\x80\xA6"), [this] {
                 if (onPickFolder) onPickFolder([this](const std::string &dir) { dispatch("media relink --search " + cmd::quote(dir)); });
             }});
-        if (items.empty()) items.push_back({"No media is offline", [] {}});
+        if (items.empty()) items.push_back({"No media is offline", [] {}, "", false});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
         noteActivity();
     }
@@ -1026,11 +1141,33 @@ namespace interstellar_v1
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         if (!m.dirty) { dispatch("project close"); return; }
-        mEdit->confirm()->show("Save changes to " + (m.projectName.empty() ? std::string("this project") : m.projectName) + "?",
-                               "Edits since the last save are lost if you close without saving.",
-                               {{"Cancel", false, false, [] {}},
-                                {"Don't save", true, false, [this] { dispatch("project close"); }},
-                                {"Save", false, true, [this] { if (dispatch("project save")) dispatch("project close"); }}});
+        askUnsaved("Edits since the last save are lost if you close without saving.",
+                   [this] { dispatch("project close"); },
+                   [this] { if (dispatch("project save")) dispatch("project close"); });
+    }
+
+    bool App::requestQuit()
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        // unsaved edits exist only with a project open — and the dialog is the Edit screen's
+        if (!m.dirty || mScreen != interstellar::Screen::Edit) return true;
+        askUnsaved("Edits since the last save are lost if you quit without saving.",
+                   [this] { dispatch("project close"); if (onQuit) onQuit(); },
+                   // a refused save keeps the window: the refusal is on screen (R-UI-17a)
+                   [this] { if (dispatch("project save") && onQuit) onQuit(); });
+        return false;
+    }
+
+    std::string App::windowTitle() const
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        if (m.screen == interstellar::Screen::Home || (m.projectName.empty() && m.projectPath.empty())) return "Interstellar";
+        std::string name = m.projectName;
+        if (name.empty())
+        {
+            name = m.projectPath.substr(m.projectPath.find_last_of('/') + 1);
+        }
+        return (m.dirty ? "*" : "") + name + " \xE2\x80\x94 Interstellar";
     }
 
     bool App::textEditing() const
@@ -1082,14 +1219,22 @@ namespace interstellar_v1
         if (mSettings->isOpen()) return true;   // the modal owns the keyboard (its chips are pointer-only, as in cosmo)
         if (mScreen == Screen::Home)
         {
+            // the family's accelerators work before a project is open too (R-UI-7 amended)
+            if (e.type == KeyEvent::Type::Down && e.ctrl && (e.keyCode == 'N' || e.keyCode == 'O' || e.keyCode == kKeyComma))
+            {
+                if (e.keyCode == 'N') { if (onPickProjectToCreate) onPickProjectToCreate(); }
+                else if (e.keyCode == 'O') { if (onPickProjectToOpen) onPickProjectToOpen(); }
+                else openSettings();
+                return true;
+            }
             mHome->dispatchKey(e);
             return true;   // the launcher owns the keyboard
         }
         // Edit: a modal owns the keyboard while it is up
         if (mEdit->confirm()->isOpen()) return mEdit->confirm()->handleKey(e) || true;
-        if (mEdit->contextMenu()->isOpen())   // the menu owns the keyboard (its rename field types)
+        if (mEdit->contextMenu()->isOpen())   // the menu owns the keyboard: its rows (R-FAMILY-1), or its rename field
         {
-            mEdit->contextMenu()->dispatchKey(e);
+            if (!mEdit->contextMenu()->menuKey(e)) mEdit->contextMenu()->dispatchKey(e);
             return true;
         }
         if (mEdit->namePrompt()->isOpen()) return mEdit->namePrompt()->handleKey(e);
@@ -1097,6 +1242,12 @@ namespace interstellar_v1
         if (versions->isOpen())
         {
             if (e.type == KeyEvent::Type::Down && e.keyCode == kKeyEsc) versions->close();
+            return true;
+        }
+        // an open dropdown of the menu bar owns the keyboard: arrows, Home / End, Enter, Escape (R-FAMILY-1)
+        if (auto ms = mEdit->topBar()->menus(); ms->openIndex() >= 0)
+        {
+            ms->menuKey(e);
             return true;
         }
         if (textEditing()) return mEdit->dispatchKey(e);
@@ -1139,12 +1290,16 @@ namespace interstellar_v1
         // R-EDT-1: marks (the source's while the viewer shows one), Insert and Overwrite
         case 'I': case 'O':
         {
+            if (mEdit->tab() == EditScreen::Grade) return false;   // Grade has no playhead: the menu rows are disabled, so are their keys
             const bool src = mEdit->tab() == EditScreen::Cut && !m.sourceView.empty();
             dispatch(std::string("mark ") + (e.keyCode == 'I' ? "in" : "out") + (src ? " --source" : ""));
             return true;
         }
-        case kKeyComma: dispatch("edit insert"); return true;
-        case kKeyPeriod: dispatch("edit overwrite"); return true;
+        case kKeyComma:
+        case kKeyPeriod:
+            if (mEdit->tab() == EditScreen::Grade) return false;
+            dispatch(e.keyCode == kKeyComma ? "edit insert" : "edit overwrite");
+            return true;
         case kKeyEsc:
             if (mEdit->tab() == EditScreen::Cut && !m.sourceView.empty()) { dispatch("source view none"); return true; }
             return false;
@@ -1183,7 +1338,7 @@ namespace interstellar_v1
         }
     }
 
-    /** Cosmo's accelerators: Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) / Ctrl+S / Ctrl+Shift+S / Ctrl+O, and
+    /** Cosmo's accelerators: Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y) / Ctrl+S / Ctrl+Shift+S / Ctrl+O / Ctrl+N / Ctrl+, and
      *  Ctrl+C / Ctrl+V for a grade on the Grade tab (cosmo's Copy Settings / Paste to Selected). */
     bool App::editKey(const KeyEvent &e)
     {
@@ -1196,6 +1351,8 @@ namespace interstellar_v1
             else dispatch("project save");
             return true;
         case 'O': if (onPickProjectToOpen) onPickProjectToOpen(); return true;
+        case 'N': requestNewProject(); return true;     // R-UI-7 (amended): behind the unsaved-edits dialog
+        case kKeyComma: openSettings(); return true;    // Ctrl+, — File > Settings…
         case 'G':
             if (e.alt) { grabStill(); return true; }            // R-CLR-4: Ctrl+Alt+G, Resolve's grab
             dispatch("rack group new");
@@ -1261,6 +1418,7 @@ namespace interstellar_v1
                     if (m.playhead >= k.at - 1e-6 && m.playhead < k.at + k.dur - 1e-6) sub += (sub.empty() ? "" : "\n") + k.text;
             mEdit->monitor()->setSubtitle(sub);
         }
+        refreshEditMenu(m);   // every frame: which rows are live follows the TAB too, which is not a revision
         if (mBound && m.revision == mSeenRevision)
         {
             if (m.screen == Screen::Edit) fetchFrame(m, false);   // the monitor may have resized
@@ -1276,10 +1434,10 @@ namespace interstellar_v1
             setUiScale(m.settings.uiScale, mScaleBound);   // first placement sets; later ones ease
             mScaleBound = true;
         }
+        refreshFileMenu(m);
         refreshPresetMenu(m);
         refreshColourMenu(m);
-        refreshWorkspaceMenu(m);
-        refreshSettingsMenu(m);
+        refreshViewMenu(m);
         // R-DLV-6: an autosave newer than the file — the session before ended without saving; asked once
         if (m.screen == interstellar::Screen::Edit && m.recoveryAvailable)
         {
@@ -1347,7 +1505,17 @@ namespace interstellar_v1
         }
         // Nothing cut here: the service shows the Grade target's reference frame, graded — so
         // choosing a frame or grading before the first cut is visible. Empty only without one.
-        if (!clipHere && !m.hasGradeTarget) { mon->setState(Monitor::State::Empty); return; }
+        if (!clipHere && !m.hasGradeTarget)
+        {
+            // R-UI-20: which empty it is — no footage at all, nothing chosen to grade, or a gap in the cut
+            // …said ONCE, here in the main stage, in the family's shape (R-UI-21d): a sentence, a hint, and for
+            // the empty project the one filled button
+            if (m.rack.empty()) mon->setEmptyState("No footage yet.", "Add video or stills to grade and cut them.", "Add footage\xE2\x80\xA6");
+            else if (mEdit->tab() == EditScreen::Grade) mon->setEmptyState("Nothing selected.", "Pick a source in the rack to grade it.");
+            else mon->setEmptyState("No clip at the playhead.");
+            mon->setState(Monitor::State::Empty);
+            return;
+        }
 
         const bool changed = force || m.frameSeq != mFetchedSeq || edge != mFetchedEdge || m.currentTimeline != mFetchedTimeline ||
                              std::fabs(m.playhead - mFetchedAt) > 1e-9 || m.revision != mFetchedRevision || mFetchedSource;
@@ -1464,6 +1632,7 @@ namespace interstellar_v1
         if (m.playing || m.screen == Screen::Loading) return true;
         if (mHome->opacity.isAnimating() || mLoading->opacity.isAnimating() || mEdit->opacity.isAnimating()) return true;
         for (const auto &r : m.renders) if (r.state == "running") return true;
+        if (mToast->isShowing()) return true;                      // its hold ends on the clock, not on input
         for (const auto &n : m.rack) if (n.pending) return true;   // spinner cells turn
         if (mHooks.thumbnailEpoch && mHooks.thumbnailEpoch() != mThumbEpoch) return true;   // a still landed
         return nowMs - mLastActivityMs < kActiveWindowMs;
@@ -1536,6 +1705,13 @@ namespace interstellar_v1
             r->render(target, rt);
             r->renderOverlay(target, rt);
         }
+        // The toast: top-centre under the top bar, over whichever screen is showing (R-UI-21a) — the
+        // band is the whole window, so it is centred on the window, not on a column.
+        mToast->x.set(0.0);
+        mToast->y.set(shell::topBarH() + 9.75);
+        mToast->width.set(mW);
+        mToast->advance(nowMs);
+        mToast->renderOverlay(target, rt);
         // Settings floats over whichever screen opened it; advanced unconditionally so its close
         // can finish (design rule §1) — it draws nothing when shut.
         mSettings->advance(nowMs);

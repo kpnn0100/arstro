@@ -18,6 +18,13 @@ namespace interstellar_v1
         // cosmo's RightColumn constants for the merged Mixer/Curve stack, verbatim
         constexpr double kMixerStackH = 250.0;
         constexpr double kCurveStackH = 235.0;
+        // cosmo's XformPanel laid out top to bottom: four section headers (27.95), the rotate row, the
+        // ratio chips, the Custom ratio row when it shows (20), the flip and auto rows, their gaps and
+        // one ladder-3 pad under the last row — the height it needs, so the page can scroll to its end
+        constexpr double kXformStackH = 260.0;
+        // R-UI-16a: the room the sliders must keep (a section header and about six rows). Under it the
+        // IMAGE PROCESSING list folds to its selected row.
+        constexpr double kMinPageH = 150.0;
         constexpr double kPillH = 19.0, kPillPx = 9.0, kPillPadX = 9.0;
         constexpr double kDimAlpha = 0.62;   // cosmo's bypass scrim strength
         constexpr double kNotchPx = 1.0;     // gesture deltas already arrive in pixels
@@ -132,7 +139,11 @@ namespace interstellar_v1
         mXform->onCropChange = [this](double x, double y, double w, double h) {
             send("xform", {{"crop", cmd::num(x) + "," + cmd::num(y) + "," + cmd::num(w) + "," + cmd::num(h)}});
         };
-        mTabs->addPage("Xform", mXform);
+        // R-UI-16a: cosmo's Xform page has no scroll of its own (in cosmo the column is always tall
+        // enough); here it sits in cosmo's StackPanel, as Mixer/Curve does, so a short column scrolls it
+        mXformTab = std::make_shared<StackPanel>();
+        mXformTab->addItem(mXform, kXformStackH, [this] { mXform->layout(); });
+        mTabs->addPage("Xform", mXformTab);
         addChild(mTabs);
 
         // R-FX-5: the node's plugin stack, Cosmo first; the selected row decides the panel below
@@ -156,11 +167,16 @@ namespace interstellar_v1
             if (!mBind.empty() && onCommand) onCommand("set " + cmd::quote(mBind + ".weight=" + cmd::num(v / 100.0)));
         };
         addChild(mCosmoMix);
+        // R-UI-18a: LAST, so it takes the click above the pages it covers
+        mPinPill = std::make_shared<StatePill>();
+        mPinPill->onAction = [this] { if (!mPinTimeline.empty() && onCommand) onCommand("timeline unpin " + cmd::quote(mPinTimeline)); };
+        mPinPill->opacity.set(0.0);
+        addChild(mPinPill);
     }
 
     double GradeInspector::tabsTop() const
     {
-        return ScopePanel::kHeight + mPlugins->wantedHeight() + SliderRow::kRowHeight + 13.0;   // the Mix row and its gaps
+        return scopeHeight() + mPlugins->wantedHeight() + SliderRow::kRowHeight + 13.0;   // the Mix row and its gaps
     }
 
     void GradeInspector::send(const char *filter, const Fields &fields)
@@ -177,6 +193,18 @@ namespace interstellar_v1
         mBind = valid ? m.rack[m.selectedRack].bindName : std::string();
         mBypassed = valid && m.rack[m.selectedRack].bypass;
         mTabs->enabled = valid;   // nothing to edit: the panels take no input (the wash says why)
+        // R-UI-18a: a pinned version's colour is read-only (R-VER-3) — the PAGES take no input and say
+        // why; the tab bar stays live, so a pinned grade can still be read
+        mPinned = false;
+        for (const auto &tl : m.timelines)
+            if (tl.id == m.currentTimeline && tl.colourPinned)
+            {
+                mPinned = valid;
+                mPinTimeline = tl.id;
+                mPinPill->setText("COLOUR PINNED" + (tl.pinCommit.empty() ? std::string() : " @" + tl.pinCommit.substr(0, 7)), "Unpin");
+            }
+        for (Segment *page : {(Segment *)mBasicDetail.get(), (Segment *)mColorTab.get(), (Segment *)mGrade.get(), (Segment *)mXformTab.get()})
+            page->enabled = !mPinned;
         mLastModel = &m;   // the service's model outlives every frame; a selection re-binds from it
         mScopes->setSourceBits(valid ? m.rack[(size_t)m.selectedRack].mediaBitDepth : 0);
         mPlugins->bind(m);
@@ -248,9 +276,14 @@ namespace interstellar_v1
         // scopes · the plugin list (its height eases with its rows) · then Cosmo's Mix and tabs
         // OR the selected effect's panel, cross-faded through one live amount
         const double w = width.value(), h = height.value();
-        mScopes->x.set(0.0); mScopes->y.set(0.0); mScopes->width.set(w); mScopes->height.set(ScopePanel::kHeight);
+        // R-UI-16a: the scopes take a share of the column, and the list folds to its selected row when
+        // the whole of it would leave the sliders less than kMinPageH — derived every layout from the
+        // room there is (design rule R4), and eased by the list itself
+        const double scopeH = scopeHeight();
+        mPlugins->setFolded(h - scopeH - mPlugins->fullHeight() - (SliderRow::kRowHeight + 13.0) - mTabs->tabHeight < kMinPageH);
+        mScopes->x.set(0.0); mScopes->y.set(0.0); mScopes->width.set(w); mScopes->height.set(scopeH);
         mScopes->layout();
-        const double listY = ScopePanel::kHeight, listH = mPlugins->wantedHeight();
+        const double listY = scopeH, listH = mPlugins->wantedHeight();
         mPlugins->x.set(0.0); mPlugins->y.set(listY); mPlugins->width.set(w); mPlugins->height.set(listH);
         const double f = mPluginFade.value();
         const double below = listY + listH;
@@ -265,12 +298,21 @@ namespace interstellar_v1
         mTabs->opacity.set(1.0 - f);
         mTabs->visible = f < 0.999;
         mTabs->layoutPages();
-        mBasicDetail->layout(); mColorTab->layout(); mGrade->layout(); mXform->layout();
+        mBasicDetail->layout(); mColorTab->layout(); mGrade->layout(); mXformTab->layout();
+        mColorTab->scrollBy(0.0); mXformTab->scrollBy(0.0);   // re-clamp: a taller column must not leave a gap under the last row
         mEffectPanel->x.set(0.0); mEffectPanel->y.set(below);
         mEffectPanel->width.set(w); mEffectPanel->height.set(std::max(0.0, h - below));
         mEffectPanel->opacity.set(f);
         mEffectPanel->visible = f > 0.001;
         mEffectPanel->layout();
+        // R-UI-18a: the pin pill over the top of Cosmo's page — under the bypass pill when both show,
+        // through the bypass amount so it slides rather than jumps
+        const double pa = mPinAmt.value() * (1.0 - mEmptyAmt.value()) * (1.0 - f);
+        mPinPill->x.set(0.0); mPinPill->width.set(w);
+        mPinPill->y.set(tabsY + mTabs->tabHeight + 8.0 + (kPillH + 6.5) * mBypassAmt.value());
+        mPinPill->height.set(StatePill::kHeight);
+        mPinPill->opacity.set(pa);
+        mPinPill->visible = pa > 0.001 && mPinPill->y.value() + StatePill::kHeight <= h;   // an overlay is unclipped: never past the column
     }
 
     bool GradeInspector::handleGesture(const Gesture &g, const Point &local)
@@ -285,7 +327,8 @@ namespace interstellar_v1
             case kTabBasicDetail: mBasicDetail->scrollBy(d); break;
             case kTabColor: mColorTab->scrollBy(d); break;
             case kTabGrade: mGrade->scrollBy(d); break;
-            default: break;   // Xform is fixed-height, as in cosmo
+            case kTabXform: mXformTab->scrollBy(d); break;   // R-UI-16a: every page scrolls
+            default: break;
             }
             return true;
         }
@@ -301,6 +344,8 @@ namespace interstellar_v1
             mEmptyApplied = empty;
             mBypassAmt.set(mBypassed ? 1.0 : 0.0);
             mBypassApplied = mBypassed;
+            mPinAmt.set(mPinned ? 1.0 : 0.0);
+            mPinApplied = mPinned;
             mInit = true;
         }
         if (empty != mEmptyApplied)
@@ -313,6 +358,12 @@ namespace interstellar_v1
             mBypassAmt.animateTo(mBypassed ? 1.0 : 0.0, motion::kScrollMs, Easing::EaseInOutCubic, nowMs);   // cosmo's scrim easing
             mBypassApplied = mBypassed;
         }
+        if (mPinned != mPinApplied)
+        {
+            mPinAmt.animateTo(mPinned ? 1.0 : 0.0, motion::kScrollMs, Easing::EaseInOutCubic, nowMs);   // the bypass scrim's own easing
+            mPinApplied = mPinned;
+        }
+        mPinAmt.update(nowMs);
         if (mSwapPending)
         {
             mSwap.set(0.0);
@@ -343,7 +394,7 @@ namespace interstellar_v1
         const Rect stack = stackRect();
         const Rect page{stack.x, stack.y + mTabs->tabHeight, stack.w, std::max(0.0, stack.h - mTabs->tabHeight)};
         const double cosmoShown = 1.0 - mPluginFade.value();   // the Cosmo page's washes go with it
-        const Rect band{0, ScopePanel::kHeight, width.value(), std::max(0.0, height.value() - ScopePanel::kHeight)};
+        const Rect band{0, scopeHeight(), width.value(), std::max(0.0, height.value() - scopeHeight())};
         t.save();
         t.clipRect(0, 0, width.value(), height.value());
         // a different node selected: the page re-seats under a card wash that eases away
@@ -355,9 +406,12 @@ namespace interstellar_v1
         }
         // the selected node is bypassed: cosmo's own scrim + pill (R-BYPASS-4's look)
         const double ba = mBypassAmt.value() * (1.0 - mEmptyAmt.value()) * cosmoShown;
+        // …or the version's colour is pinned (R-UI-18a): ONE scrim for both, never two stacked
+        const double pin = mPinAmt.value() * (1.0 - mEmptyAmt.value()) * cosmoShown;
+        if (std::max(ba, pin) > 0.001 && page.h > 0.0)
+            drawRoundedRect(t, page, 0.0, Paint::filled(surface::scrim(kDimAlpha * std::max(ba, pin))));
         if (ba > 0.001 && page.h > 0.0)
         {
-            drawRoundedRect(t, page, 0.0, Paint::filled(surface::scrim(kDimAlpha * ba)));
             const std::string label = "NODE BYPASSED";
             const double tw = t.measureText(label, kPillPx, font::sansMedium());
             const double pw = tw + 2 * kPillPadX + 11.0;
@@ -375,8 +429,9 @@ namespace interstellar_v1
         {
             Color c = palette::card(); c.a *= ea;
             drawRoundedRect(t, band, 0.0, Paint::filled(c));
-            const std::string a = mRackEmpty ? "Nothing to grade yet." : "Nothing selected to grade.";
-            const std::string b = mRackEmpty ? "Add footage to the rack to start grading." : "Pick a source or a group in the rack.";
+            // an empty project is said ONCE, in the monitor (R-UI-21d): here the column is simply quiet
+            const std::string a = mRackEmpty ? "" : "Nothing selected to grade.";
+            const std::string b = mRackEmpty ? "" : "Pick a source or a group in the rack.";
             Color f = palette::foreground(); f.a *= ea;
             Color mf = palette::mutedForeground(); mf.a *= ea;
             const double cy = band.y + band.h * 0.38;

@@ -565,7 +565,7 @@ namespace interstellar_v1
         {
             const double y = kHeadH + kPad - mScroll.value() + kHintH * 0.5;
             t.setFill(fade(palette::mutedForeground(), none));
-            t.drawText(textfit::ellipsize(t, "Nothing is animated \xE2\x80\x94 mark a property in Grade (its diamond) or Animate\xE2\x80\xA6", w - mColW - 2 * kPadX, 10.0, font::sans()),
+            t.drawText(textfit::ellipsize(t, "Nothing is animated \xE2\x80\x94 mark a property in Grade (its diamond) or Animate\xE2\x80\xA6.", w - mColW - 2 * kPadX, 10.0, font::sans()),
                        mColW + kPadX, textfit::baseline(y, 10.0), 10.0, font::sans());
         }
         for (int i = 0; i < (int)mRows.size(); ++i)

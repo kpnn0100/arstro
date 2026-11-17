@@ -126,7 +126,7 @@ namespace interstellar_v1
         t.clipRect(0, kHeaderH, w, std::max(0.0, h - kHeaderH));
         if (mJobs.empty() && mRows.rows().empty())
         {
-            const std::string s1 = "nothing queued";
+            const std::string s1 = "Nothing queued.";
             const std::string s2 = "Choose a version and press Render \xE2\x80\x94 the job names the version it renders.";
             const double cy = kHeaderH + (h - kHeaderH) * 0.42;
             t.setFill(palette::mutedForeground());

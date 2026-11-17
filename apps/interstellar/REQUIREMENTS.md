@@ -18,7 +18,7 @@ in the section heading. Read before any code; conflict-check before accepting a 
 
 ## Global rules — 📋 SPECIFIED
 
-- **R-G-1 The design law binds this app by reference.** `.claude/skills/arstro.design.rule` — every
+- **R-G-1 The design law binds this app by reference.** `.claude/skills/arstro.rule.design` — every
   visible change animates, tokens only, R1–R6. **No value from it is restated here**; cosmo's own
   `R-G-1` predates the shared law and now duplicates it, and a third copy is how a rule becomes
   three rules.
@@ -62,6 +62,15 @@ done while its authority is a fake.**
   `cosmo::CosmoService` in-process. Sources and groups are its nodes; a group's parameters compose
   onto its descendants through Cosmo's own `composeParams`. Interstellar stores **no `EditParams`,
   no curve, no mixer, no mask and no LUT reference**, ever.
+- **R-RACK-1a A Cosmo project opens directly.** (**Added 2026-11-17**, the founder: *"interstellar
+  can open both solaris and cosmo project"*.) `project open <path.cmp>` makes a project **around**
+  that `.cmp`: it is the rack, there is one empty `main` timeline, and the `.isp` is
+  `<stem>.isp` beside it, **in memory only**: opening a photographer's project writes no file, and
+  the project reads as unsaved until `project save`. What a file is comes from what it says
+  (`cosmoworkspace=`), not from its extension. If `<stem>.isp` already exists and its rack is this
+  `.cmp`, that project opens instead (two `.isp` files writing one `.cmp` must not happen by
+  accident); if it exists and is something else, the open is refused and names it.
+  `project.opened` says which with `from=isp|cmp`. The file picker offers `.isp` and `.cmp`.
 - **R-RACK-2 A colour edit from Interstellar IS an edit to the Cosmo project.** It enters Cosmo's
   history and is saved into the `.cmp`. Opening that `.cmp` in Cosmo afterwards shows it. There is
   no import, no export and no synchronisation step, because there is nothing to synchronise.
@@ -381,6 +390,14 @@ reserves the rest so adopting it is not a migration.
   chain), `aeffect`, `aauto` (a parameter curve), `asend`. Interstellar implements `atrack
   kind=audio`, `aclip` sample form, `gain`, `fade` and the master sum; the rest **parse, round-trip
   and are preserved** so a Solaris project opens here without loss.
+  (**AMENDED (D-19), 2026-11-17:** "preserved" is about Solaris nodes *inside an `.isp`*. A `.slp`
+  itself is **not** an `.isp` and is no longer opened as one: `project open song.slp` used to
+  succeed, show nothing of the song, and a `project save` then rewrote the song in Interstellar's
+  node order with five video header keys added, a write into another app's file that no
+  requirement governed. It is now refused, by what the file says (`app = solaris`), and the file is
+  left byte-identical. Opening, editing and saving a song is **R-SONG** (planned: a hosted
+  `SolarisService`, as the rack hosts Cosmo; edits are Solaris commands; saved on `main` or on a
+  named Solaris version) and is not built yet.)
 - **R-AUD-3 Time is shared with video and stated per project.** Seconds on a frame boundary in
   Interstellar; Solaris adds `bpm`/`sig` and beats, and the schema carries both without either app
   guessing.
@@ -493,12 +510,18 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-UI — the two screens — ✅ IMPLEMENTED (DR-UI-1..16, DR-UI-3c, DR-UI-11a/b; gap: drag-to-regroup, needs a Cosmo move — D-8)
+## R-UI — the two screens — ✅ IMPLEMENTED (DR-UI-1..18, DR-UI-3c, DR-UI-11a/b; the family standard R-UI-21 = DR-UI-7, DR-UI-18; gap: drag-to-regroup, needs a Cosmo move — D-8)
 
 - **R-UI-1 Home.** Recent projects as cards, newest first, with name, footage count and size; new,
   open, and a settings dialog. Cosmo's `HomeScreen` rhythm — this is the surface where "exactly the
   same design as cosmo" is most visible and least excusable to get wrong.
-- **R-UI-2 The accent is purple-pink, and it is the ONLY forked token.** `primary = #CF5AED`,
+- **R-UI-2 The accent is teal, and it is the ONLY forked token.** `primary = #159387`.
+  (**AMENDED (founder, 2026-11-17):** *"interstellar is teal"*. Purple-pink went to Arstro itself —
+  it is the colour of the Arstro mark (`arstro.rule.brand`) — and Interstellar's logo, Warp, is teal
+  to blue. `#159387` is that teal at cosmo blue's LUMINANCE (0.228): white text on it reads at
+  3.8:1. It is the exact value Solaris measured for its own accent on 2026-10-08, reused because the
+  measurement is the argument. The derivation below is the accent's HISTORY, kept because it says why
+  hue alone is not enough; the value in force is `#159387`.) It was purple-pink, `primary = #CF5AED`,
   derived by taking cosmo's `#4F7EF7` into HSL (H 222°, S 91%, L 64%), rotating the hue to **288°**
   and easing saturation to 80% — so it carries the *same perceptual weight* and every alpha token
   built on it (`ring`, `primaryAlpha`, the 22% highlight wash) keeps working untouched. Everything
@@ -532,6 +555,28 @@ reserves the rest so adopting it is not a migration.
   view, never data), **Preset** (Save, Import, and Apply for every preset in the library). Cosmo's
   accelerators: Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+C / Ctrl+V. Every
   item is a command line or a host picker — the menus add no behaviour of their own (R-G-4).
+  (**AMENDED 2026-11-17, UI audit:** (1) Undo and Redo say WHAT they will undo — "Undo clip move
+  shotA", from the model's `undoLabel` / `redoLabel` — and are drawn disabled, and do nothing, while
+  `canUndo` / `canRedo` is false; they were always enabled and unlabelled. (2) File gains **New
+  Project…** (the host's picker, then `project new <path>`, behind the unsaved-edits dialog like
+  Home), which only Home had. (3) Reset Workspace no longer changes the tab — R-UI-19d.)
+  (**AMENDED (the family standard, cosmo R-FAMILY-0a/b/f, 2026-11-17):** the three apps answered
+  "where is Settings" three ways; the family's one answer replaces this menu bar's order and words.
+  The menus are **File · Edit · Preset · Colour · View**. The Settings menu is gone: Engine Settings
+  is **File ▸ Settings…** (Ctrl+,), and the autosave interval (R-DLV-5) sits under it in File.
+  Workspace is renamed **View** and is last; its items are unchanged. File's "Render…" is
+  **Export…** (it still opens the Deliver tab, whose button stays "Render"). A shortcut is shown in
+  the row's right-aligned column, never padded into the label; groups are divided by separators;
+  an item that cannot act now is DISABLED — Undo / Redo with nothing to undo (labelled plainly
+  "Undo" / "Redo"; "Nothing to Undo" is retired), Paste Grade with nothing copied, Copy / Paste /
+  Ungroup / Duplicate with no fitting Grade target, Mark In / Mark Out / Clear In / Out / Insert /
+  Overwrite on the Grade tab (which has no playhead, R-UI-3 amended), Export Captions with none,
+  Relink Media with nothing offline. Because a disabled row must not have a live key, the keys I,
+  O, comma and period do nothing on the Grade tab. Redo shows Ctrl+Shift+Z (Ctrl+Y still works).
+  New accelerators: Ctrl+N (New Project…) and Ctrl+, (Settings…), on Home as well as in Edit. Menu
+  items are Title Case and every ellipsis is U+2026. While a menu is open the keyboard is the
+  menu's: arrows, Home / End, Enter, Escape (cosmo R-FAMILY-1). Interstellar has no agent panel, so
+  View has no Show Agent item yet.)
 - **R-UI-9 Cosmo's right-click menu on rack items** (added 2026-10-02, user request) — rack rows and
   filmstrip cells: Add Footage, Group / Group Selection, Ungroup, Enable/Disable Filter, Rename
   (inline, cosmo's morph), Duplicate as Variant, Copy Grade, Paste Grade (to Selection), Remove from
@@ -549,7 +594,7 @@ reserves the rest so adopting it is not a migration.
 - **R-UI-13 Zoom the monitor like Cosmo** (added 2026-10-02, user request "zoom in using Ctrl +
   scroll like cosmo"). Cosmo's R-ZOOM, on the monitor: Ctrl + wheel zooms about the pointer
   (wheel up = in), 1×–8×; drag pans while zoomed, clamped so the picture covers the monitor;
-  double-click (or Workspace › Reset Workspace) returns to fit. The zoom EASES (cosmo's R-ZOOM-5,
+  double-click (or View › Reset Workspace) returns to fit. The zoom EASES (cosmo's R-ZOOM-5,
   which cosmo itself has not built), a chip names the magnification while zoomed, and the monitor
   asks for a frame sharp enough for the magnification — within Engine Settings' preview cap, which
   still bounds the monitor (R-SET-3; raise Preview quality for full detail). Plain wheel over the
@@ -573,6 +618,102 @@ reserves the rest so adopting it is not a migration.
   (**AMENDED 2026-10-05, user request "the waveform should have a colour-split option":** the
   waveform has a **Luma | RGB** switch; RGB overlays the three channels' waveforms in one plot, each
   in its channel colour, additive — white where they agree, a colour where one channel runs away.)
+- **R-UI-16 At the smallest window every control is still reachable** (added 2026-11-17, UI audit at
+  1440×900, 1024×640 and 918×560: at 1024×640 Grade showed three sliders and at 918×560 none; Deliver's
+  Render button was below the fold at both). A column gives way before its controls do
+  (`arstro.rule.design` R4, R6):
+  - **(a) Grade's right column.** The scopes take a share of the column — about 28 % of its height,
+    never under 84 px, never over the 168 px they have in a tall window. When the column cannot show
+    the IMAGE PROCESSING list and still leave room for the sliders, the list folds to its selected
+    row; a count beside "+ Add" opens it again, and choosing a row folds it. Every page of Cosmo's
+    tabs scrolls, Xform included. At 918×560 a slider is on screen and the last one can be reached.
+  - **(b) Deliver's right column.** The OUTPUT block — burn-ins, the path, Render and the summary —
+    is pinned to the bottom of the column and never scrolls away; only the spec above it scrolls.
+  - **(c) The transport.** When the bar is short the level meter gives way first, then the
+    duration; the scrubber never shrinks to nothing.
+  Each of these changes is eased (R-G: nothing snaps).
+- **R-UI-17 Closing the window never loses work silently, and the window says what it holds** (added
+  2026-11-17, UI audit: the window's close button quit at once with unsaved edits, and the window
+  title was the constant "Interstellar" while the top bar drops the project name under ~1100 px).
+  - **(a)** Closing the window with unsaved edits raises the SAME dialog the Home path raises
+    (R-UI-7's File › Home: Cancel / Don't save / Save). Cancel keeps the window. Don't save closes
+    the project and the window. Save saves, and closes the window only if the save succeeded — a
+    refused save keeps the window and says why. With nothing unsaved the window closes at once.
+  - **(b)** The window's title is `<project> — Interstellar`, with a `*` before the name while there
+    are unsaved edits, and plain `Interstellar` with no project open. (A window title is the window
+    manager's text: it is replaced, not eased — the one visible change the app does not draw.)
+  The decision and the title text are the app's (`App::requestQuit`, `App::windowTitle`), so a test
+  reaches them without a window; the host only asks and obeys.
+- **R-UI-18 A pinned colour and a frozen cut are states you can see, with the way out beside them**
+  (added 2026-11-17, UI audit: neither Grade nor the timeline read `colourPinned` / `cutFrozen`; a
+  pinned version looked fully editable and the user learned otherwise from a 2.6 s refusal). R-VER-3
+  says both stop inheriting "deliberately and visibly"; this is the visibly.
+  - **(a) Colour pinned.** While the version being edited is pinned, Cosmo's pages in Grade's right
+    column are under the same scrim-and-pill a bypassed node gets (R-BYPASS-4's look): the pill reads
+    `COLOUR PINNED @<commit> · Unpin`, the pages take no input (the tab bar still switches, so a
+    pinned grade can be read), and the pill is the button — `timeline unpin <version>`. Bypassed AND
+    pinned shows both pills, one under the other.
+  - **(b) Cut frozen.** While the version being edited is frozen, a strip between the ruler and the
+    tracks reads `CUT FROZEN · no longer follows <base>` with a `Thaw` button — `timeline thaw
+    <version>`. **The tracks stay editable**: a frozen cut is the version's own copy of the
+    arrangement, which is exactly what R-VER-3 means by freezing — only a PIN is read-only. (The
+    audit asked for the timeline's input to be disabled; that would have refused edits the service
+    accepts, so the strip says what the state is and does not lock anything.)
+  Scrim, pill and strip ease in and out; the tracks give way to the strip through its live height.
+- **R-UI-19 The Cut deck reads at a glance** (added 2026-11-17, UI audit of the timeline):
+  - **(a)** The ANIMATION section starts FOLDED while nothing is animated (its header alone, not
+    ~55 px of empty lane), opens by itself when the first curve is marked, and folds again when the
+    last one goes; the header's fold button overrides either until the next such change.
+    (R-ANIM-9 does not say which way the section starts; it was built open — DR-ANIM-7 — and
+    that as-built entry is rewritten. Remembering the user's fold across sessions needs a
+    settings key beside `keyLaneHeight`, which is the service's to add — not built; the fold is
+    presentation state for now.)
+  - **(b)** A ruler label means one thing. A whole second is always `m:ss` (or `h:mm:ss`); a tick
+    between seconds, shown when zoomed in, is its frame offset `+NNf`. The same text never means
+    six seconds at one zoom and frame six at another.
+  - **(c)** A transition's bowtie does not cover the incoming clip's name: the label starts after
+    the transition's right edge.
+  - **(d)** Zoom: a **fit** button beside − and +, and the readout is the DURATION the lanes show
+    ("12.4 s", "1:05"), not pixels per second. View › Reset Workspace fits the timeline and the
+    monitor and **stays on the tab you are in** (it changed the tab to Grade; R-UI-7 amended).
+- **R-UI-20 An empty state says which empty it is** (added 2026-11-17, UI audit; `arstro.rule.design`
+  §7). With no footage in the rack the monitor says so and what to do ("no footage yet — add some
+  to the rack"), not "no clip at the playhead", which is true only when there IS footage and the
+  playhead is in a gap. The Grade deck's SOURCES strip and STILLS strip each say why they are empty
+  and how to fill them. Home's empty line names what its button does (a project is created, then
+  footage is added), not "open some footage".
+  (**AMENDED (the family standard, R-UI-21d/f, 2026-11-17):** with NO footage the project says so
+  once, in the monitor — a sentence, a hint and the Add footage… button — and the rack, the source
+  bin and the SOURCES strip stay quiet instead of each repeating it. The other empties are
+  unchanged and are now sentences: "Nothing selected." with its hint, "No clip at the playhead.",
+  the STILLS strip's own line.)
+- **R-UI-21 One family, one behaviour** (added 2026-11-17, the family standard: cosmo R-FAMILY-0,
+  `arstro.rule.design` §2.7 — Cosmo, Interstellar and Solaris answer these the same way, built from
+  the same shared pieces in `apps/cosmo/widgets`). The menus are R-UI-7 (amended). The rest:
+  - **(a) One toast.** What the app says in passing is the family's `Toast`: top-centre under the
+    top bar, held 3200 ms, fading in while it slides down and out while it slides up; a second one
+    cross-fades. A refused command is an **error** toast carrying the service's own sentence, with
+    no "Refused:" before it; a note that something finished is an **info** toast. It is the App's,
+    drawn over whichever screen is showing — so a refusal on Home or Loading is seen (D-15).
+    (**AMENDS** the refused-command chip of R-G-4 / ui-brief §3: a pill at the monitor's bottom,
+    red-bordered, 2600 ms, visible in Edit only.)
+  - **(b) The unsaved-changes dialog** is `Save changes to "<name>"?`, a body that says what is
+    lost, and **Cancel · Don't save · Save**; the destructive button is outlined beside a primary
+    one and filled when it is the only action (`DestructiveStyle::Auto`). It is the same dialog for
+    Home, New Project and closing the window (R-UI-17a).
+  - **(c) Unsaved is a foreground dot** after the project name (`DirtyDot`, radius 3, eased) — not
+    the accent, which means selection. The save icon that lights and the window title
+    `*Name — Interstellar` (R-UI-17b) stay.
+  - **(d) An empty project says so once**, in the main stage: one sentence with a capital and a
+    full stop, one hint line, one filled primary button, "Add footage…". The rack, the source bin
+    and the deck do not repeat it (**AMENDS R-UI-20**, which had the monitor, the rack and the
+    SOURCES strip each say it).
+  - **(e) An accent underline switches a page.** The deck's Sources · Stills · Nodes switch is an
+    underline that travels, in sentence case — not tracked capitals with a tinted word.
+  - **(f) Home.** The version shown comes from the build (`INTERSTELLAR_VERSION`, said once in the
+    app's CMake), and Home with no projects is one sentence and one filled button.
+  - **(g) Words.** Menu items Title Case; buttons and sentences sentence case; an ellipsis is
+    U+2026 in everything the user reads.
 - **R-UI-8 Screen scale, eased** — cosmo's R-SCALE: the shell draws at 75–200 %, the scale ZOOMS
   (260 ms) with the layout re-derived from the drawn scale every frame, input maps through it, and
   the window minimum follows the target scale.
@@ -754,7 +895,7 @@ reserves the rest so adopting it is not a migration.
 - **R-DLV-1 Captions**: SRT import, shown on the monitor, burned in or carried as a subtitle track
   (MP4 mov_text, MKV SRT) or written as a sidecar `.srt`. — ✅ (DR-DLV-4). A caption is a timeline node
   (a version inherits and overrides it by delta). The monitor shows the one under the playhead
-  (Workspace › Show Captions). A render carries them only when asked: burned in, as a track (MOV takes
+  (View › Show Captions). A render carries them only when asked: burned in, as a track (MOV takes
   mov_text too) and/or as an .srt, in the render's own seconds and cut to its range. A stream shows one
   cue at a time, so overlapping cues are joined or shortened. SRT styling (italics, positions) is not
   kept. The Cut timeline has no caption lane yet: captions are edited by address (`cue3.text=…`) or by
@@ -800,3 +941,17 @@ reserves the rest so adopting it is not a migration.
 - **R-TEST-3 The new behaviour needs a test that fails without the fix.** Checked, not assumed.
 - **R-TEST-4 Four load-bearing suites:** the `.isp` round-trip fixed point; the **colour round trip
   through a real `.cmp`** (R-RACK-2's gate); the version/rebase table; and the golden frame.
+
+
+## R-BRAND — The logo and its animations — ✅ IMPLEMENTED (DR-BRAND-1)
+
+Founder, 2026-11-17: *"fix the color, logo and animation in those actual application every section."*
+
+- **R-BRAND-1 The logo is Warp** — a white ship (a play button) with three teal-to-blue light streaks
+  (three clips) behind it — drawn by cosmo's `BrandMark` module, compiled here, never copied. Cosmo's
+  R-BRAND is the requirement for the drawing and the three animations; this section only places them.
+- **R-BRAND-2 On Home**, above the wordmark; it shows up once, then rests.
+- **R-BRAND-3 The opening splash** (cosmo R-SPLASH-6, R-SPLASH-7): cosmo's splash in Interstellar's
+  brand — the logo shows up, flies, disappears, and then the window appears. Skipped when launched
+  with a project path or with `INTERSTELLAR_NO_SPLASH` set. It costs about 2.0 s of launch.
+- **R-BRAND-4 The web face's icon** (`web/icon.svg`) is the same logo.

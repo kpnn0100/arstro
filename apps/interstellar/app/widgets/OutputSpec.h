@@ -27,7 +27,10 @@
  *  A row the chosen codec does not have COLLAPSES (its height and opacity ease together), so a
  *  codec change re-lays the column smoothly instead of popping rows in and out. Defaults are left
  *  out of the line (the service's defaults are the same), so a plain render stays a plain line.
- *  The column scrolls when it outgrows the window (R6); the version list scrolls inside it first.
+ *  The spec scrolls when it outgrows the window (R6); the version list scrolls inside it first.
+ *  OUTPUT does NOT scroll (R-UI-16b): the burn-ins, the path, Render and the summary are a foot
+ *  pinned to the bottom of the column, so the button a Deliver tab exists for is on screen at every
+ *  window size. The foot is its own Segment, last among the children, so the spec scrolls UNDER it.
  *
  *  A chosen version with dangling deltas gets a destructive note under the picker — rendering it
  *  is allowed, but not silently.
@@ -85,6 +88,9 @@ namespace interstellar_v1
         /** The LIVE eased presence of a codec-dependent row (0 collapsed … 1 shown). */
         double rowAmount(RowId r) const { return mRows[r].amt.value(); }
         const EasedScroll &columnScroll() const { return mColScroll; }
+        /** R-UI-16b: the pinned OUTPUT foot (local), and the height left above it for the scrolling spec. */
+        artboard::Rect footRect() const;
+        double viewportH() const { return std::max(0.0, height.value() - footRect().h); }
         /** What the line will write, in words: "960×540 · 25 fps · whole timeline · 372 frames". */
         std::string summary() const;
         /** The AUDIO line: what sound this render will carry (R-AUD-9). */
@@ -173,7 +179,9 @@ namespace interstellar_v1
         int mRateIndex = 0;                               // into the rate list; 0 = the project's
         std::string mLastDefault;
         EasedScroll mScroll;                              // the version list
-        EasedScroll mColScroll;                           // the whole column
+        EasedScroll mColScroll;                           // the spec above the pinned OUTPUT foot
+        std::shared_ptr<artboard::Segment> mFoot;         // R-UI-16b: OUTPUT — burn-ins, path, Render, summary
+        void paintFoot(artboard::IRenderTarget &t) const;
         cosmo_v2::HoverFade mHover, mSel, mStepHover;
         int mNoteCount = 0;                               // the chosen version's dangling deltas, last seen
         bool mNoteWanted = false, mNoteApplied = false, mNoteInit = false;
@@ -187,7 +195,7 @@ namespace interstellar_v1
         Row mRows[kRows];
 
         // where layout put things (paint draws the headers, labels and self-drawn rows there)
-        double mHdrFormatY = 0, mHdrSizeY = 0, mHdrRangeY = 0, mHdrOutputY = 0, mNoteY = 0;
+        double mHdrFormatY = 0, mHdrSizeY = 0, mHdrRangeY = 0, mNoteY = 0;
         double mColourY = 0;
         double mRowY[kRows] = {}, mSizeY = 0, mRateY = 0, mRangeY = 0, mAudioY = 0, mSummaryY = 0, mListY = 0;
         double mContentH = 0;

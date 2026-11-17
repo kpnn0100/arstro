@@ -32,7 +32,7 @@ namespace interstellar
             Error,              // why — also lands in AppModel::lastError
             CommandRejected,    // line, why
             ScreenChanged,      // screen
-            ProjectOpened,      // path, timelines, rack
+            ProjectOpened,      // path, timelines, rack, from
             ProjectSaved,       // path, cmp
             ProjectClosed,
             RackLoaded,         // images, failed

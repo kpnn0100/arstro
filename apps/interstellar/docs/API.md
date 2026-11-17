@@ -14,7 +14,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | usage | does | req |
 |---|---|---|
 | `project new <path.isp> [--fps <n>] [--res <WxH>]` | Create a project and its rack (an empty .cmp beside it), and open it. | R-SCOPE-2 |
-| `project open <path.isp>` | Open a project: its timelines, and the hosted Cosmo project its #rack names. | R-SCOPE-2 |
+| `project open <path.isp\|path.cmp>` | Open a project: its timelines, and the hosted Cosmo project its #rack names. A Cosmo .cmp opens as a new unsaved project around it (nothing is written until `project save`). | R-SCOPE-2 |
 | `project save [path.isp]` | Save the .isp and the rack's .cmp. A path saves the .isp there. | R-RACK-2 |
 | `project close` | Close the project and return Home (its autosave goes: closing is a decision). | R-UI-1 |
 | `project autosave` | Write the autosave now — the .isp and every rack node's grade beside the project (<stem>.autosave.*); it happens by itself every `autosave` seconds while there are unsaved changes. | R-DLV-5 |
@@ -271,7 +271,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `error` | `why` | Something failed. Also set as AppModel.lastError. |
 | `command.rejected` | `line`, `why` | A line was refused (R-SVC-3): unknown verb, unknown flag, refused edit. |
 | `screen.changed` | `screen` | Home / Loading / Edit. |
-| `project.opened` | `path`, `timelines`, `rack` | A project is open. |
+| `project.opened` | `path`, `timelines`, `rack`, `from` | A project is open. `from` is what was opened: isp, or cmp (a Cosmo project, wrapped - R-RACK-1a). |
 | `project.saved` | `path`, `cmp` | The .isp and the rack's .cmp were written. |
 | `project.closed` |  | Back to Home. |
 | `rack.loaded` | `images`, `failed` | The hosted Cosmo project finished decoding. |

@@ -23,6 +23,7 @@
  *  to start one." rather than showing a blank grid.
  */
 #pragma once
+#include "../../../cosmo/widgets/BrandMark.h"
 #include "../Theme.h"
 #include "../AppHooks.h"
 #include "EasedScroll.h"
@@ -39,6 +40,12 @@ namespace interstellar_v1
     class HomeScreen : public artboard::Segment
     {
     public:
+        /** R-UI-20: Home with no projects — the line above the New project button says what that button does. */
+        static const char *emptySentence() { return "No projects yet."; }
+        /** R-UI-21f: the family's empty state — the sentence, ONE hint line, one filled button (emptyChipRect). */
+        static const char *emptyHint() { return "Create one, then add your footage to it."; }
+        /** R-UI-21f: "interstellar v<version>" — the version from the build (INTERSTELLAR_VERSION), not a literal. */
+        static std::string versionText();
         static constexpr double kSidebarW = 300.0;
         static constexpr double kPad = 32.0;
         static constexpr double kHeaderH = 60.0;
@@ -113,6 +120,9 @@ namespace interstellar_v1
         artboard::AnimatedProperty mSkeleton{0.0};
         long long mNowUnix = 0;
         double mNowMs = 0.0;
+        // R-BRAND-2: the app's logo above the wordmark. It shows up once when Home first appears
+        // (the first advance), then rests — Home is a place to choose, not a loading screen.
+        mutable ::arstro::cosmo_v2::brand::Player mMark{::arstro::cosmo_v2::brand::Mark::Interstellar};
         EasedScroll mScroll;
         cosmo_v2::HoverFade mHover;
         mutable double mWordPx = 46.0;   // the fitted wordmark size from the last paint

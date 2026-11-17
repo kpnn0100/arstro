@@ -20,9 +20,9 @@
  *  flexible one) last with max(0, remainder). The window minimum is derived, not guessed:
  *  `minWidth()` = both columns + the monitor's floor.
  *
- *  Also here: the refused-command toast (the error/refused state — a line the service rejected is
- *  said, in destructive, over the monitor, and fades), cosmo's ConfirmDialog ("save changes?")
- *  and the NamePrompt ("New version…"), last in child order so they draw and hit-test on top.
+ *  Also here: cosmo's ConfirmDialog ("save changes?") and the NamePrompt ("New version…"), last in
+ *  child order so they draw and hit-test on top. (The toast is the App's — the family's one Toast,
+ *  drawn over whichever screen is showing: R-UI-21a.)
  */
 #pragma once
 #include "../../../cosmo/widgets/ContextMenu.h"
@@ -67,12 +67,6 @@ namespace interstellar_v1
         /** The LIVE eased opacity of a tab page, and the live switcher highlight position. */
         double tabFade(int tab) const { return mPages[tab]->fadeValue(); }
         double tabHighlight() const { return mTopBar->tabs()->highlightPos(); }
-
-        void showRefusal(const std::string &message);
-        /** The same chip, saying an action FINISHED (a ✓, no red) — "frame copied" (R-UI-11). */
-        void showNotice(const std::string &message);
-        bool toastIsError() const { return mToastError; }
-        double toastAmount() const { return mToastAmt.value(); }
 
         static double minWidth() { return shell::leftW() + shell::rightW() + shell::minMonitorW(); }
         static double minHeight() { return shell::topBarH() + shell::minMonitorH() + shell::transportH() + 176.0; }
@@ -122,7 +116,6 @@ namespace interstellar_v1
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
-        void onOverlay(artboard::IRenderTarget &t) const override;
 
     private:
         bool emit(const std::string &line) { return onCommand ? onCommand(line) : false; }
@@ -146,12 +139,6 @@ namespace interstellar_v1
         int mTab = Grade;
         std::string mCurrentTimeline;
 
-        std::string mToast;
-        bool mToastError = true;
-        bool mToastPending = false;
-        double mToastShownAt = -1.0, mNowMs = 0.0;
-        bool mToastClosing = false;
-        artboard::AnimatedProperty mToastAmt{0.0};
         /** 1 in Cut and Deliver, 0 in Grade: the transport fades out and the monitor takes its room
          *  as one eased value (R-UI-3, amended). Intent from setTab, the tween from advance. */
         artboard::AnimatedProperty mTransportAmt{0.0};

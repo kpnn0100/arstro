@@ -15,7 +15,6 @@ namespace interstellar_v1
     {
         constexpr double kPadX = 9.75;
         Color fade(Color c, double a) { c.a *= a; return c; }
-        Rect emptyChip(const Rect &vp) { return Rect{vp.x + (vp.w - 116.0) * 0.5, vp.y + vp.h * 0.42 + 14.0, 116.0, 24.0}; }
     }
 
     SourceBin::SourceBin() { clipToBounds = true; }
@@ -73,7 +72,6 @@ namespace interstellar_v1
         switch (g.type)
         {
         case Gesture::Type::Move:
-            if (mSources.empty() && emptyChip(viewport()).contains(local)) { mHover.setHovered(0); return true; }
             mHover.setHovered(rowAt(local) >= 0 ? 10 + rowAt(local) : -1);
             return true;
         case Gesture::Type::Down:
@@ -118,7 +116,6 @@ namespace interstellar_v1
             return mScroll.scrollBy(g.delta.y);
         case Gesture::Type::Click:
         {
-            if (mSources.empty() && emptyChip(viewport()).contains(local)) { if (onAddFootage) onAddFootage(); return true; }
             const int i = rowAt(local);
             if (i >= 0 && mSources[i].bindName != mSelectedBind && onCommand)
                 onCommand("rack select " + cmd::quote(mSources[i].bindName));
@@ -175,19 +172,7 @@ namespace interstellar_v1
         const Rect vp = viewport();
         t.save();
         t.clipRect(vp.x, vp.y, vp.w, vp.h);
-        if (mSources.empty() && mRows.rows().empty())
-        {
-            const std::string s = "no footage yet \xE2\x80\x94 add some";
-            t.setFill(palette::mutedForeground());
-            t.drawText(s, vp.x + (vp.w - t.measureText(s, 11.0, font::sans())) * 0.5, vp.y + vp.h * 0.42, 11.0, font::sans());
-            const Rect chip = emptyChip(vp);
-            const double hv = mHover.amount(0);
-            drawRoundedRect(t, chip, radius::control(),
-                            Paint::filledStroked(palette::primaryAlpha(0.10 * hv), lerpColor(palette::border(), palette::primary(), 0.5 + 0.5 * hv), 1.0));
-            const std::string cl = "Add footage\xE2\x80\xA6";
-            t.setFill(palette::foreground());
-            t.drawText(cl, chip.x + (chip.w - t.measureText(cl, 11.0, font::sans())) * 0.5, textfit::baseline(chip.y + chip.h * 0.5, 11.0), 11.0, font::sans());
-        }
+        // an empty bin draws nothing: the monitor says it once, with the button (R-UI-21d)
         for (const auto &row : mRows.rows())
         {
             const auto &n = row.data;

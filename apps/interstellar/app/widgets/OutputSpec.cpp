@@ -44,6 +44,24 @@ namespace interstellar_v1
                                {"60", "60", 60.0}};
         constexpr int kRateCount = (int)(sizeof kRates / sizeof kRates[0]);
         Color fade(Color c, double a) { c.a *= a; return c; }
+        // R-UI-16b: the OUTPUT foot — header line, path, Render, the two summary lines, their gaps
+        constexpr double kFootH = cosmo_v2::kSectionHeaderHeight + kFieldH + kGap * 2 + kButtonH + kGap + 2 * kLineH * 0.75 + kGap;
+        /** The pinned foot: an opaque plate over whatever the spec scrolled under it. It takes the
+         *  pointer inside its box (a half-covered control beneath must not be clickable through it)
+         *  and lets the wheel bubble to the column. */
+        class Foot : public Segment
+        {
+        public:
+            std::function<void(IRenderTarget &)> paint;
+        protected:
+            void onPaint(IRenderTarget &t) const override { if (paint) paint(t); }
+            bool hitTestSelf(const Point &p) const override { return localBounds().contains(p); }
+            bool handleGesture(const Gesture &g, const Point &local) override
+            {
+                if (g.type == Gesture::Type::Scroll) return Segment::handleGesture(g, local);
+                return true;
+            }
+        };
         std::string rateText(double fps)
         {
             char b[32];
@@ -94,14 +112,17 @@ namespace interstellar_v1
         mContainer->onChange = [this](int) { if (!mContainerSync) mContainerChosen = true; };
         mRange = segmented({"Whole", "In \xE2\x80\x93 Out"}, 0);
 
-        auto pill = [this](const char *label) {
+        auto foot = std::make_shared<Foot>();
+        foot->paint = [this](IRenderTarget &t) { paintFoot(t); };
+        mFoot = foot;
+        auto pill = [this](const char *label, Segment *parent = nullptr) {
             auto b = std::make_shared<cosmo_v2::PillButton>(label);
             b->idleBox = {Paint::filledStroked(palette::secondary(), palette::border(), 1.0), radius::control()};
             b->activeBox = b->idleBox;
             b->idleText = {palette::foreground(), 10.0, font::sans()};
             b->activeText = b->idleText;
             b->hoverEmphasis = palette::white();
-            addChild(b);
+            if (parent) parent->addChild(b); else addChild(b);
             return b;
         };
         // R-DLV-3: a preset in one step, or the controls kept as one
@@ -112,7 +133,7 @@ namespace interstellar_v1
             onPresetMenu(Rect{o.x, o.y, mPresetBtn->width.value(), mPresetBtn->height.value()});
         };
         // R-DLV-2: this render's burn-ins, from a menu — the column keeps its height
-        mBurnBtn = pill("No burn-ins");
+        mBurnBtn = pill("No burn-ins", mFoot.get());
         mBurnBtn->onClick = [this] {
             if (!onBurnMenu) return;
             const Point o = mBurnBtn->worldTransform().apply(Point{0, 0});
@@ -125,14 +146,14 @@ namespace interstellar_v1
             const Point o = mCapBtn->worldTransform().apply(Point{0, 0});
             onCaptionsMenu(Rect{o.x, o.y, mCapBtn->width.value(), mCapBtn->height.value()});
         };
-        mSavePreset = pill("Save Preset\xE2\x80\xA6");
+        mSavePreset = pill("Save preset\xE2\x80\xA6");
         mSavePreset->onClick = [this] { if (onSavePreset) onSavePreset(specFlags()); };
-        mSetIn = pill("Set In");
+        mSetIn = pill("Set in");
         mSetIn->onClick = [this] {
             mIn = mPlayhead;
             if (mOut >= 0 && mOut <= mIn) mOut = -1.0;   // an out before the in: back to the end
         };
-        mSetOut = pill("Set Out");
+        mSetOut = pill("Set out");
         mSetOut->onClick = [this] {
             mOut = mPlayhead;
             if (mOut <= mIn) mIn = 0.0;
@@ -148,7 +169,7 @@ namespace interstellar_v1
         mPath = std::make_shared<TextBox>(st);
         mPath->focusable = true;
         mPath->placeholder = "output path";
-        addChild(mPath);
+        mFoot->addChild(mPath);
 
         mRender = std::make_shared<cosmo_v2::PillButton>("Render");
         mRender->idleBox = {Paint::filled(palette::primary()), radius::control()};
@@ -160,7 +181,8 @@ namespace interstellar_v1
             if (!onCommand || mTimeline.empty() || mPath->text.empty()) return;
             onCommand(renderLine());
         };
-        addChild(mRender);
+        mFoot->addChild(mRender);
+        addChild(mFoot);   // LAST: the spec scrolls under it (R-UI-16b)
     }
 
     std::string OutputSpec::format() const { return kCodecs[std::clamp(mCodec->selected(), 0, 6)]; }
@@ -411,10 +433,11 @@ namespace interstellar_v1
         const double w = width.value();
         const double cw = std::max(0.0, w - kPadX - kPadX - kLabelW);
         double y = -mColScroll.value();
+        const double viewH = viewportH();   // the spec's viewport: the column less the pinned foot
         auto place = [&](Segment &s, double x, double yy, double ww, double hh, double alpha) {
             s.x.set(x); s.y.set(yy); s.width.set(std::max(0.0, ww)); s.height.set(hh);
             s.opacity.set(alpha);
-            s.visible = alpha > 0.001 && yy + hh > 0.0 && yy < height.value();   // culled: no input when hidden or scrolled out
+            s.visible = alpha > 0.001 && yy + hh > 0.0 && yy < viewH;   // culled: no input when hidden or scrolled out
         };
         auto seg = [&](cosmo_v2::SegmentedControl &s, double x, double yy, double ww, double alpha) {
             place(s, x, yy, ww, kSegH, alpha);
@@ -505,23 +528,36 @@ namespace interstellar_v1
         mAudioY = y;
         y += kLineH + kGap;
 
-        mHdrOutputY = y;
+        mContentH = y + mColScroll.value();   // the spec ends with its AUDIO line; OUTPUT is the foot
+
+        // R-UI-16b: the OUTPUT foot, pinned to the column's bottom — laid out in its own coordinates
+        const Rect fr = footRect();
+        mFoot->x.set(fr.x); mFoot->y.set(fr.y); mFoot->width.set(fr.w); mFoot->height.set(fr.h);
+        auto pin = [&](Segment &s, double x, double yy, double ww, double hh) {
+            s.x.set(x); s.y.set(yy); s.width.set(std::max(0.0, ww)); s.height.set(hh);
+        };
+        double fy = 0.0;
         {
             // R-DLV-2: the burn-ins ride the OUTPUT header's line, right-aligned, as the preset rides FORMAT's
             int n = 0;
             for (int b = 0; b < kBurns; ++b) n += burn(b) && (b != BurnText || !mBurnText.empty()) ? 1 : 0;
             mBurnBtn->setLabel(n == 0 ? std::string("No burn-ins") : std::to_string(n) + (n == 1 ? " burn-in" : " burn-ins"));
             const double ph = std::min(kSegH, cosmo_v2::kSectionHeaderHeight - 4.0);
-            place(*mBurnBtn, w - kPadX - 92.0, y + (cosmo_v2::kSectionHeaderHeight - ph) * 0.5, 92.0, ph, 1.0);
+            pin(*mBurnBtn, w - kPadX - 92.0, fy + (cosmo_v2::kSectionHeaderHeight - ph) * 0.5, 92.0, ph);
         }
-        y += cosmo_v2::kSectionHeaderHeight;
-        place(*mPath, kPadX, y, w - 2 * kPadX, kFieldH, 1.0);
-        y += kFieldH + kGap * 2;
-        place(*mRender, kPadX, y, w - 2 * kPadX, kButtonH, 1.0);
-        y += kButtonH + kGap;
-        mSummaryY = y;
-        y += 2 * kLineH * 0.75 + kGap;   // two lines: what, then which span
-        mContentH = y + mColScroll.value();
+        fy += cosmo_v2::kSectionHeaderHeight;
+        pin(*mPath, kPadX, fy, w - 2 * kPadX, kFieldH);
+        fy += kFieldH + kGap * 2;
+        pin(*mRender, kPadX, fy, w - 2 * kPadX, kButtonH);
+        fy += kButtonH + kGap;
+        mSummaryY = fy;   // in the foot's coordinates
+    }
+
+    Rect OutputSpec::footRect() const
+    {
+        // never taller than the column: in a window too short for it the foot keeps the bottom edge
+        const double fh = std::min(kFootH, height.value());
+        return Rect{0.0, height.value() - fh, width.value(), fh};
     }
 
     bool OutputSpec::handleGesture(const Gesture &g, const Point &local)
@@ -591,7 +627,7 @@ namespace interstellar_v1
         mCapAvail.update(nowMs);
         mScroll.setExtent(listTop(), listH(), (double)mTimelines.size() * kRowH);
         mScroll.advance(nowMs);
-        mColScroll.setExtent(0.0, height.value(), mContentH);
+        mColScroll.setExtent(0.0, viewportH(), mContentH);
         mColScroll.advance(nowMs);
         for (int r = 0; r < kRows; ++r)
         {
@@ -632,10 +668,14 @@ namespace interstellar_v1
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0.5, 0); t.lineTo(0.5, h); t.strokePath();
 
+        // the spec is drawn inside its viewport only: the foot below it is another Segment's (R-UI-16b)
+        const double viewH = viewportH();
+        t.save();
+        t.clipRect(0, 0, w, viewH);
         cosmo_v2::drawSectionHeader(t, kPadX, listTop() - cosmo_v2::kSectionHeaderHeight, w - 2 * kPadX, "TIMELINE");
         const Rect list{0, listTop(), w, listH()};
         t.save();
-        t.clipRect(list.x, std::max(0.0, list.y), list.w, std::max(0.0, list.bottom() - std::max(0.0, list.y)));
+        t.clipRect(list.x, std::max(0.0, list.y), list.w, std::max(0.0, std::min(viewH, list.bottom()) - std::max(0.0, list.y)));
         for (int i = 0; i < (int)mTimelines.size(); ++i)
         {
             const auto &tl = mTimelines[i];
@@ -750,7 +790,22 @@ namespace interstellar_v1
                        kPadX + 16.0, textfit::baseline(cy, 9.5), 9.5, font::sans());
         }
 
-        cosmo_v2::drawSectionHeader(t, kPadX, mHdrOutputY, w - 2 * kPadX, "OUTPUT");
+        mColScroll.drawBar(t, w - 2.0);
+        t.restore();
+    }
+
+    void OutputSpec::paintFoot(IRenderTarget &t) const
+    {
+        // an opaque plate (the spec scrolls under it), the column's own left edge carried through, and
+        // a hairline on top that is there only while something is hidden beneath — its strength follows
+        // the eased scroll, so it never pops
+        const double w = mFoot->width.value(), fh = mFoot->height.value();
+        drawRoundedRect(t, Rect{0, 0, w, fh}, 0.0, Paint::filled(palette::card()));
+        t.setStroke(palette::border(), 1.0);
+        t.beginPath(); t.moveTo(0.5, 0); t.lineTo(0.5, fh); t.strokePath();
+        const double under = std::clamp((mColScroll.maxScroll() - mColScroll.value()) / 12.0, 0.0, 1.0);
+        if (under > 0.001) glyph::line(t, 0, 0.5, w, 0.5, fade(palette::border(), under), 1.0);
+        cosmo_v2::drawSectionHeader(t, kPadX, 0.0, w - 2 * kPadX, "OUTPUT");
         {
             // what will be written, in two lines: the frame and count, then the span
             const std::string all = summary();
@@ -767,7 +822,6 @@ namespace interstellar_v1
             if (!l2.empty())
                 t.drawText(textfit::ellipsize(t, l2, w - 2 * kPadX, 9.5, font::mono()), kPadX, textfit::baseline(mSummaryY + kLineH * 1.125, 9.5), 9.5, font::mono());
         }
-        mColScroll.drawBar(t, w - 2.0);
     }
 }
 }

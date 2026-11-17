@@ -5,7 +5,7 @@ plus its widgets), drawn ONLY from `AppModel` and reporting intent ONLY as **tex
 (project-format §8) through `AppHooks`. It links neither `cosmo_core` nor `interstellar_core` —
 the service does not exist in this build; the integrator wires the hooks to it. Cosmo's tokens are
 **aliased** and cosmo's panels are **compiled from `apps/cosmo/widgets/*.cpp`**, not copied; the
-one divergence is the accent, moved to `#CF5AED` at runtime through cosmo's `palette::setAccent`.
+one divergence is the accent, moved to teal `#159387` (R-UI-2, amended 2026-11-17; `#CF5AED` before) at runtime through cosmo's `palette::setAccent`.
 
 - Static library **`interstellar_app`** (App + widgets + the reused cosmo widget TUs + cosmo's
   `Theme.cpp`, `EmbeddedFonts.cpp`, the generated font array and `CairoTarget.cpp`).
@@ -52,9 +52,15 @@ PUBLIC defines match the rest of the final binary.
   | File | Home → `project close` (behind the save prompt) · Open… → `onPickProjectToOpen` · Save → `project save` · Save As… → `onPickSaveAs` → `project save <path>` · Add Footage… → `onPickFootage` · Export Still… → `onPickStillToExport` → `export-still --timeline <cur> --out <p> --at <playhead>` · Render… → Deliver tab |
   | Edit | Undo → `undo` · Redo → `redo` · Copy Grade → `grade copy <sel>` · Paste Grade to Selected → `grade paste <sel>` · to All → `grade paste --all` · Group Selected… (name prompt) → `rack group new <name> --nodes <sel>` · Ungroup → `rack ungroup <sel>` · Duplicate as Variant → `rack duplicate <sel>` |
   | Keyframes (Grade's marks; Cut's ANIMATION section below the tracks) | Grade mark → `key mark <address>` / its menu → `key mode <a> offset|fixed`, `key clear <a>`; Animate… → `key mark <a>`; a lane's diamond → `key add|remove <address> --at <playhead on its clip's clock>`; its badge → `key mode`; graph drags → `key set …`; key menu → `key set … --ease <preset>` / typed sides / `key remove` |
-| Settings | Engine Settings… → cosmo's `SettingsDialog` (each chip → `settings set <key>=<v>`); Interstellar's own rows after cosmo's, through `setExtraRows`: Hardware video Off/On → `settings set hardwareVideo=0|1`; Preview cache Off/On → `settings set previewCache=0|1` |
-  | Workspace | Grade / Cut / Deliver → the tab · Reset Workspace → Grade tab + timeline zoom-to-fit (view only) |
+| File ▸ Settings… (Ctrl+,) | Settings… → cosmo's `SettingsDialog` (each chip → `settings set <key>=<v>`); Interstellar's own rows after cosmo's, through `setExtraRows`: Hardware video Off/On → `settings set hardwareVideo=0|1`; Preview cache Off/On → `settings set previewCache=0|1` |
+  | View | Grade / Cut / Deliver → the tab · Reset Workspace → timeline zoom-to-fit + monitor fit, on the tab you are in (view only) · Use Proxies · Make Proxies for All Video · Show Captions |
   | Preset | Save Preset… (name prompt) → `preset save <name> --node <sel>` · Import Preset… → `onPickPresetToImport` → `preset import <path>` · Apply <name> (one per library preset) → `preset apply <name> --node <sel>` |
+
+  **The menu bar is the family's since 2026-11-17 (R-UI-7 amended): File · Edit · Preset · Colour ·
+  View — the as-built list of every row, its shortcut and when it is disabled is DR-UI-7 in
+  `docs/requirements.md`; the File and Edit rows above name the commands, which did not change
+  (Render… is now Export…; Engine Settings… is File ▸ Settings…; New Project… is Ctrl+N).** The toast,
+  the unsaved dialog and dot, the empty states and Home's version are DR-UI-18.
 
   Accelerators (`App::editKey`): Ctrl+Z `undo`, Ctrl+Shift+Z / Ctrl+Y `redo`, Ctrl+S save,
   Ctrl+Shift+S Save As, Ctrl+O Open, Ctrl+C / Ctrl+V copy/paste the Grade target's grade (Grade tab).
@@ -99,8 +105,8 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   caption (fades with Grade) open cosmo's `ContextMenu`: **Copy Frame** (only if the host binds the
   optional `AppHooks::copyFrame(bind, err)`; GTK puts a `GdkPixbuf` on the CLIPBOARD selection) and
   **Save Frame…** (`App::onPickFrameToSave` → host dialog → `App::frameSavePicked(path)` →
-  `capture --out <path> [--source <Grade target>]`). A good copy says so in the toast chip with a ✓
-  (`EditScreen::showNotice`); a failed one is a refusal.
+  `capture --out <path> [--source <Grade target>]`). A good copy says so in an info toast (R-UI-21a)
+  (`App::say`); a failed one is an error toast.
 - Shots added: `grade_capture_menu`, `cut_capture_menu`, `grade_frame_copied`. UI checks: 183.
 
 ## The reference-frame slider (2026-10-02, R-RACK-3 amended)
@@ -387,7 +393,7 @@ app.onPickFootage         = [&]{ /* dialog */ app.footagePicked(paths); };
 | `App.{h,cpp}` | screen state machine (Home/Loading/Edit follow `model().screen`, 260 ms cross-fade), revision-guarded bind once per frame, frame fetch through `renderFrame` (monitor state, dissolve rule, histogram), input routing, keys, host pickers, refusal toast. |
 | `widgets/HomeScreen` | cosmo's HomeScreen rhythm (300 sidebar, 32/16 grid, 220 min card); wordmark **sized to fit** with the dot at the measured end; eased reflow; skeletons; empty sentence; covers via `thumbnail`. |
 | `widgets/LoadingView` | Screen::Loading: name, sentence, indeterminate ping-pong sweep (1400 ms period). |
-| `widgets/EditScreen` | composition: top bar, **monitor + transport as siblings of the tab pages**, three `FadePage`s, toast, cosmo `ConfirmDialog`, `NamePrompt`. Hand-written `layout()` every frame; one deck height and fixed column widths for all tabs so the monitor never moves. |
+| `widgets/EditScreen` | composition: top bar, **monitor + transport as siblings of the tab pages**, three `FadePage`s, cosmo `ConfirmDialog` (the toast is the App's: the family's `Toast`, R-UI-21a), `NamePrompt`. Hand-written `layout()` every frame; one deck height and fixed column widths for all tabs so the monitor never moves. |
 | `widgets/EditTopBar` | wordmark (→ Home), ellipsized project name + eased dirty dot, `TabSwitcher`, `VersionSwitcher`, save (cosmo `IconButton`, colour eased from the dirty amount). |
 | `widgets/TabSwitcher` | [Grade·Cut·Deliver], cosmo's segmented look; travelling highlight (220 ms), `highlightPos()` public. |
 | `widgets/VersionSwitcher` | `‹ name ▾ ›` chrome with lock + `@commit`/`frozen` (tag degrades before the name); eased dropdown placed against the root, capped, list scrolled, actions pinned; chrome label cross-fades on a version switch. |
@@ -487,7 +493,7 @@ arguments containing whitespace or quotes are double-quoted with `\"` escapes.
   (provenance/offline), so a restyle cross-fades in place. Wheel: plain = pan time (bubbles when
   there is nothing to pan), over headers = tracks, Ctrl = zoom about the pointer.
 - **Refused / error state**: a `dispatch` that returns false shows its error over the monitor in a
-  destructive toast (150 ms in, 2.6 s hold, 300 ms out); nothing is dropped silently.
+  error toast — the family's `Toast`, top-centre under the top bar, 150 ms in, 3200 ms hold, 300 ms out (R-UI-21a); nothing is dropped silently.
 - **Reduced motion**: every tween goes through `animateTo`/`HoverFade`, so `setReducedMotion`
   collapses them; the Settings dialog makes it reachable; the host should seed it from the OS.
 - **Fonts** are cosmo's five embedded faces; every `drawText` names a family; every string placed
@@ -528,20 +534,20 @@ arguments containing whitespace or quotes are double-quoted with `\"` escapes.
 |---|---|
 | `home_populated` | wordmark sized to fit with the **accent dot at the measured word end**; primary New project in purple-pink; 4/2 columns; long Lisbon name ellipsized inside its card; size/date meta; dashed New project card |
 | `home_hover` | hovered card border lifts toward the accent, surface brightens |
-| `home_empty` | "No projects yet — open some footage to start one." + New project chip, no blank grid |
+| `home_empty` | "No projects yet." + its hint + one filled New project button, no blank grid (R-UI-21f) |
 | `home_loading` | skeleton cards at the real card geometry, no count |
 | `home_reflow_mid` | cards caught travelling between column layouts (mid-260 ms); scroll bar appears when the grid overflows |
 | `home_settings` | modal over a scrim; Reduce motion toggle track visible on the popover (`switchBackground`, fixed after first look) |
 | `loading`, `loading_to_edit_mid` | name + sentence + sweep; the shell cross-fade half-way |
 | `grade_populated` | rack rows (depth guides, OVR, bypassed dim, offline in destructive, decoding spinner, "unused" still); **cosmo's sliders fill purple-pink**, Basic/Detail tab label + indicator purple-pink, histogram, filmstrip selection ring purple-pink, cosmo spinner cell for the decoding source (fixed after first look: a placeholder thumb had hidden it), reference-frame strip with the accent marker (redesigned after first look: the timecode overlapped the track and the deck was half empty) |
 | `grade_hover` | row hover wash |
-| `grade_empty` | "no footage yet — add some" + chip; inspector "Nothing to grade yet. / Add footage…" (message fixed after first look); "no clip at the playhead" |
+| `grade_empty` | the monitor alone says it: "No footage yet." + hint + the filled Add footage… button; rack, inspector and SOURCES strip quiet (R-UI-21d) |
 | `grade_no_target`, `grade_bypassed` | full card wash + sentence; cosmo's scrim-and-pill "NODE BYPASSED" |
 | `grade_tab_color`, `grade_tab_grade` | **MixerPanel/CurvePanel/GradePanel in purple-pink** (segmented pickers, curve, slider fills) |
 | `grade_versions_open`, `_open_mid` | dropdown against the root, indented by depth with elbows, current row tinted, `Δ` overrides, dangling in destructive, pinned `@commit`, actions; mid-shot visibly half-faded |
 | `grade_version_pinned` | lock + `@a41c9e2 · frozen` + full name at both sizes (fixed after first look: at 1024 the tag had squeezed the name to "Deliv…") |
 | `grade_new_version_prompt` | NamePrompt with focused ring and typed text, purple Create |
-| `grade_refused`, `grade_save_confirm` | destructive toast over the monitor; cosmo ConfirmDialog with Cancel / Don't save / Save |
+| `grade_refused`, `grade_save_confirm` | error toast top-centre under the top bar; cosmo ConfirmDialog `Save changes to "<name>"?` with Cancel / Don't save (outlined) / Save |
 | `grade_monitor_loading`, `grade_monitor_empty` | "decoding · 540p proxy" with spinner; "no clip at the playhead" |
 | `cut_populated` | provenance: Inherited dimmed, Overridden accent edge + stripe, Dangling hatched destructive with reason, offline hatched; transitions as bowties; markers on ruler + through lanes; destructive playhead; track headers incl. M chip |
 | `cut_hover`, `cut_drag_mid` | hover wash; dragged clip snapped with the accent guide on the caught edge |

@@ -24,12 +24,12 @@
     },
     {
       "verb": "project open",
-      "usage": "project open <path.isp>",
-      "args": "<path.isp>",
+      "usage": "project open <path.isp|path.cmp>",
+      "args": "<path.isp|path.cmp>",
       "minArgs": 1,
       "maxArgs": 1,
       "flags": [],
-      "summary": "Open a project: its timelines, and the hosted Cosmo project its #rack names.",
+      "summary": "Open a project: its timelines, and the hosted Cosmo project its #rack names. A Cosmo .cmp opens as a new unsaved project around it (nothing is written until `project save`).",
       "requirement": "R-SCOPE-2"
     },
     {
@@ -1919,9 +1919,10 @@
       "fields": [
         "path",
         "timelines",
-        "rack"
+        "rack",
+        "from"
       ],
-      "summary": "A project is open."
+      "summary": "A project is open. `from` is what was opened: isp, or cmp (a Cosmo project, wrapped - R-RACK-1a)."
     },
     {
       "name": "project.saved",

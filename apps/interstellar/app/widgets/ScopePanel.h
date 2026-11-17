@@ -32,7 +32,15 @@ namespace interstellar_v1
         enum Mode { Histogram = 0, Waveform = 1, Parade = 2, Vector = 3, kModes = 4 };
         static constexpr double kHeaderH = 24.0;
         static constexpr double kReadoutH = 20.0;
-        static constexpr double kHeight = 168.0;
+        static constexpr double kHeight = 168.0;      // in a tall column
+        static constexpr double kMinHeight = 84.0;    // header + readout + a body still worth reading
+        /** R-UI-16a: the scopes take a SHARE of the column (28 %), between the floor and the tall-window
+         *  height — a fixed 168 px left a 355 px column no room for a single slider. */
+        static constexpr double heightFor(double columnH)
+        {
+            const double h = columnH * 0.28;
+            return h < kMinHeight ? kMinHeight : (h > kHeight ? kHeight : h);
+        }
 
         ScopePanel();
         void setData(const ScopeData &d);

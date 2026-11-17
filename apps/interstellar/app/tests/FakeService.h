@@ -59,7 +59,7 @@ namespace istest
         std::vector<std::string> lines;
         bool peaksReady = true;     // R-AUD-7: the fake's envelopes are ready (a test turns it off to watch one land)
         bool refuseNext = false;
-        std::string refuseMessage = "Refused: the version is pinned \xE2\x80\x94 colour is read-only at @a41c9e2";
+        std::string refuseMessage = "The version is pinned \xE2\x80\x94 colour is read-only at @a41c9e2.";
         bool frameFails = false;
         int frames = 0;
         // the Grade monitor's source path and Copy Frame (R-UI-3, R-RACK-3, R-UI-11)
@@ -485,6 +485,12 @@ namespace istest
             else if (a[0] == "play") m.playing = true;
             else if (a[0] == "pause") m.playing = false;
             else if (a[0] == "timeline" && a.size() >= 3 && a[1] == "open") { m.currentTimeline = a[2]; ++m.frameSeq; }
+            else if (a[0] == "timeline" && a.size() >= 3 && (a[1] == "unpin" || a[1] == "thaw"))
+            {
+                // R-UI-18: the way out of a pin / a freeze, as the service answers it
+                for (auto &tl : m.timelines)
+                    if (tl.id == a[2]) { if (a[1] == "unpin") { tl.colourPinned = false; tl.pinCommit.clear(); } else tl.cutFrozen = false; }
+            }
             else if (a[0] == "clip" && a.size() >= 3 && a[1] == "select") m.selectedClip = a[2];
             else if (a[0] == "clip" && a.size() >= 5 && a[1] == "move")
             {

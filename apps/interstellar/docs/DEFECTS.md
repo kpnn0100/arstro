@@ -15,7 +15,7 @@ worse than no id.
 | D-2, a suite printed `[PASS]` while `NDEBUG` disabled its assertions | **R-TEST-1** — both suites undefine `NDEBUG` before `<cassert>` |
 | D-5, `eval --explain` printed an input that contradicted its own result | **R-G-3** — one authority per fact, including the one a trace reads |
 | D-7, `rack add` refused when nothing could be decoded | **R-RACK-7** — a source registers and reads offline; registering and decoding are different things |
-| D-3, every automation link in the first 190 px was culled behind a label gutter | **`arstro.design.rule` gotcha 15** — derive the second copy of a fact from the first |
+| D-3, every automation link in the first 190 px was culled behind a label gutter | **`arstro.rule.design` gotcha 15** — derive the second copy of a fact from the first |
 
 ## Entry format
 
@@ -24,6 +24,24 @@ Severity · Found · Reproduce (pasteable) · Expected · Actual · Evidence (a 
 argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix · Guarded by.**
 
 ## Open
+
+### D-20 — The web face still draws the menus, the refusal chip and the empty states of before the family standard
+- **Area:** web face (`web/`) · **Status:** Open · **Severity:** S3 · **Found:** 2026-11-17, adopting the
+  family standard in the native app (R-UI-21, R-UI-7 amended).
+- **Reproduce:** `interstellar-cc ntwb serve`, open the page beside the window: the page's menu bar is
+  File · Edit · Settings · Workspace · Preset · Colour with the shortcuts padded into the labels and
+  three-dot ellipses (`web/js/edit/menus.js`); a refusal is the red-bordered chip at the monitor's
+  bottom; an empty project says "no footage yet — add some" in the rack (`web/js/grade/rack.js:177`)
+  and the bin (`web/js/cut/bin.js:103`) as well as the monitor; the deck's tabs are capitals; the
+  unsaved dot is the accent.
+- **Expected:** R-SVC-4 (amended): the web face is the same app — the family's menus, toast,
+  unsaved dot, dialog wording and one-sentence empty state.
+- **Judgement:** defect (the native app moved; the port did not — the pass that moved it was not
+  allowed to touch `web/`).
+- **Recommended fix:** port DR-UI-7 and DR-UI-18 to `web/js` (the shared `ui/menustrip.js` needs the
+  shortcut column, separators and disabled rows cosmo's web kit gets from R-FAMILY-1), then re-take
+  the parity fixtures with `interstellar_app_shots --model-json`.
+- **Guarded by:** — (the parity comparison against the native shots).
 
 ### D-18 — `clip add`'s grammar says `--track`, `--in` and `--at` are optional; the parser requires all three
 - **Area:** service grammar / API document · **Status:** Confirmed (reproduced) · **Severity:** S3 ·
@@ -73,24 +91,6 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
   hovers the track and reads the thumb radius. The web face (`web/js/edit/transport.js`) keeps the
   native behaviour and cites this entry, so the two faces agree until the fix.
 
-### D-15 — A command refused on Home or Loading is said where nobody can see it
-- **Area:** ui · **Status:** Open · **Severity:** S3 · **Found:** 2026-10-26, porting App.cpp to the
-  web face (R-SVC-4 amended).
-- **Reproduce:** on Home, click a recent project whose file was moved away (the card dispatches
-  `project open <path>`); or type nothing else — any refusal while `screen` is Home or Loading.
-- **Expected:** the refusal is SAID (R-G-4: "a refusal is said, never dropped"), on the screen showing.
-- **Actual:** nothing visible happens.
-- **Evidence:** `App::dispatch` (`app/App.cpp:521-529`) always calls `mEdit->showRefusal(...)`; the
-  chip is EditScreen's overlay, drawn at the Edit screen's opacity, which is 0 on Home and Loading
-  (`App::screenOpacity`, `App.cpp:501-509`). HomeScreen and LoadingView have no refusal display.
-- **Judgement:** defect (the requirement holds; the chip was placed on one screen).
-- **Cause:** `app/App.cpp:527`.
-- **Requirement:** R-G-4.
-- **Recommended fix:** a refusal chip the App owns, drawn over whichever screen is active (the same
-  look: popover, destructive border, the warn glyph), or one per screen. The web face shows the
-  refusal on every screen meanwhile (its shell's toast), and says so in `web/js/shell.js`.
-- **Guarded by:** — (a `ui` test: dispatch a refused line on Home, the chip's amount reaches 1 over Home).
-
 ### D-2 — Cosmo's save deletes an offline source and its grade (Cosmo D-66), and D-1 makes every video offline in Cosmo
 - **Area:** rack / cross-app · **Status:** Open — **mitigated** here, root cause in Cosmo ·
   **Severity:** S1 · **Found:** 2026-10-01, binding the rack's `.cmp` entries to `#rackobj`.
@@ -106,6 +106,10 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
   make Cosmo save while any rack node is offline, naming the offline sources and this defect. The
   `.isp` still saves. Guarded by `a save is refused while a source is offline` (`interstellar_service_l2`).
 - **Recommended fix:** Cosmo D-66 (keep and re-write failed entries). Then D-1's shared host decoder.
+- **Update 2026-11-17:** Cosmo D-66 is fixed (an offline leaf is written back on save, guarded by
+  `saving_keeps_a_photo_that_is_offline`). `rackSaveBlocked` is still in force here; lifting it
+  needs an L2 test that saves a rack with an offline source and finds its grade in the `.cmp`.
+  D-1 (Cosmo alone cannot decode a video source) is unchanged.
 
 ### D-1 — Cosmo, opened by itself, shows a video source as failed
 - **Area:** rack / cross-app · **Status:** Open · **Severity:** S3 · **Found:** 2026-10-01, running
@@ -131,6 +135,44 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 - **Requirement:** R-RACK-2 needs a sentence scoping it; amended when the fix lands.
 
 ## Closed
+
+### D-15 — A command refused on Home or Loading is said where nobody can see it
+- **Area:** ui · **Status:** Closed 2026-11-17 (the family-standard pass; in the working tree, not yet committed) · **Severity:** S3 · **Found:** 2026-10-26, porting App.cpp to the
+  web face (R-SVC-4 amended).
+- **Reproduce:** on Home, click a recent project whose file was moved away (the card dispatches
+  `project open <path>`); or type nothing else — any refusal while `screen` is Home or Loading.
+- **Expected:** the refusal is SAID (R-G-4: "a refusal is said, never dropped"), on the screen showing.
+- **Actual:** nothing visible happens.
+- **Evidence:** `App::dispatch` (`app/App.cpp:521-529`) always calls `mEdit->showRefusal(...)`; the
+  chip is EditScreen's overlay, drawn at the Edit screen's opacity, which is 0 on Home and Loading
+  (`App::screenOpacity`, `App.cpp:501-509`). HomeScreen and LoadingView have no refusal display.
+- **Judgement:** defect (the requirement holds; the chip was placed on one screen).
+- **Cause:** `app/App.cpp:527`.
+- **Requirement:** R-G-4.
+- **Recommended fix:** a refusal chip the App owns, drawn over whichever screen is active (the same
+  look: popover, destructive border, the warn glyph), or one per screen. The web face shows the
+  refusal on every screen meanwhile (its shell's toast), and says so in `web/js/shell.js`.
+- **Fix:** the toast is the App's — the family's one `Toast` (R-UI-21a, DR-UI-18a), drawn after the
+  three screens in `App::render`, so it shows over Home, Loading and Edit alike.
+- **Guarded by:** `interstellar_app_ui_tests` → `testHomeAndShell`, "a command refused on Home is SAID
+  there (D-15)"; shot `home_refused`.
+
+### D-19 — Opening a Solaris song "worked", showed nothing, and a save rewrote the song
+- **Area:** service (`project open`, `project save`) · **Status:** **Fixed** · **Severity:** S2 ·
+  **Found:** 2026-11-17, while planning how Interstellar should host a song.
+- **Reproduce:** `interstellar-cc project open song.slp : project save`, then `diff` the file.
+- **Expected:** either the song opens as a song, or the open is refused.
+- **Actual:** `project.opened … timelines=0 rack=""`, every later command refused ("the project has
+  no timeline"), and `project save` rewrote the `.slp`: header re-aligned, `fps/width/height/par/
+  colorspace` added, nodes reordered. Solaris still opened it and one small song rendered the same
+  audio; automation, formulas and frozen versions were not tried.
+- **Judgement:** defect, and a requirement gap: R-AUD-2's "a Solaris project opens here without
+  loss" was read as "an `.slp` is an `.isp`". Amended.
+- **Cause:** the `.isp` parser does not enforce `app`, so the song parsed as a project with no
+  timelines (`model/NOTES.md`).
+- **Fix:** `projectOpen` sniffs the header and refuses `app = solaris` with the file untouched
+  (DR-RACK-1a). Hosting a song properly is R-SONG, not built.
+- **Guarded by:** `interstellar_service_l2`, "a Solaris song is refused, and the file is not touched".
 
 ### D-14 — An autosave written in the same clock tick as its file was not offered
 - **Area:** service · **Status:** Closed (same commit) · **Severity:** S3 (a script that saves, edits and autosaves
@@ -292,7 +334,7 @@ Closed by R-RACK-8 and R-UI-9 (DR-RACK-8, DR-UI-10).
   a keyframe — the file's cues or keyframe flags are off (common in captures). Decoding stays
   correct (checked: the frame at 30 s of an intra-refresh MKV matches `ffmpeg -ss 30`); the message
   is noise on stderr, not the slowness.
-- **Requirement:** R2 of `arstro.design.rule` (a visible response this frame; heavy work off the UI
+- **Requirement:** R2 of `arstro.rule.design` (a visible response this frame; heavy work off the UI
   thread), R-VOL.
 - **Recommended fix:** preview frames rendered on a worker (plan on the UI thread, decode + grade +
   compose on the worker, latest request wins, the monitor keeps the last frame until the next is

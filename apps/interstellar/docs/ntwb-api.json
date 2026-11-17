@@ -148,8 +148,8 @@
       "data": "{line, fields: {screen}}"
     },
     "project.opened": {
-      "doc": "A project is open.",
-      "data": "{line, fields: {path, timelines, rack}}"
+      "doc": "A project is open. `from` is what was opened: isp, or cmp (a Cosmo project, wrapped - R-RACK-1a).",
+      "data": "{line, fields: {path, timelines, rack, from}}"
     },
     "project.saved": {
       "doc": "The .isp and the rack's .cmp were written.",

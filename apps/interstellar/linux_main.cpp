@@ -16,6 +16,7 @@
 #include "App.h"
 #include "BurnText.h"
 #include "EmbeddedFonts.h"
+#include "SplashWindow.h"   // R-SPLASH: the opening splash, cosmo's widget in this app's brand
 #include "AudioSourceFFmpeg.h"
 #ifdef INTERSTELLAR_HAVE_PULSE
 #include "AudioOutPulse.h"
@@ -108,6 +109,7 @@ namespace
         std::unique_ptr<App> app;
         artboard::CairoTarget target;
         GtkWidget *window = nullptr;
+        std::string title = "Interstellar";   // what the window says now (R-UI-17b)
         GtkWidget *area = nullptr;
         gint64 startUs = 0;
         int minW = 0, minH = 0;   // the size request last given to the drawing area
@@ -138,7 +140,7 @@ namespace
     {
         GtkWidget *d = gtk_file_chooser_dialog_new("Open project", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_OPEN,
                                                    "_Cancel", GTK_RESPONSE_CANCEL, "_Open", GTK_RESPONSE_ACCEPT, nullptr);
-        addFilter(d, "Interstellar projects", {"*.isp"});
+        addFilter(d, "Interstellar and Cosmo projects", {"*.isp", "*.cmp"});   // R-RACK-1a
         if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
         {
             char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
@@ -363,8 +365,25 @@ namespace
             a->minH = minH;
             gtk_widget_set_size_request(a->area, minW, minH);
         }
+        // R-UI-17b: the window names its project, with a mark while there are unsaved edits — the top
+        // bar drops the name in a narrow window, the title never does
+        if (const std::string title = a->app->windowTitle(); title != a->title)
+        {
+            a->title = title;
+            gtk_window_set_title(GTK_WINDOW(a->window), title.c_str());
+        }
         if (a->app->needsRedraw(now)) gtk_widget_queue_draw(a->area);
         return G_SOURCE_CONTINUE;
+    }
+
+    /** R-UI-17a: the window's close button. With unsaved edits the app raises the Home path's dialog
+     *  and the window stays; `App::onQuit` destroys it if the user chooses to leave. */
+    gboolean onDeleteEvent(GtkWidget *, GdkEvent *, gpointer user)
+    {
+        auto *a = static_cast<Host *>(user);
+        if (a->app->requestQuit()) return FALSE;   // nothing unsaved: GTK destroys the window
+        gtk_widget_queue_draw(a->area);
+        return TRUE;
     }
 
     gboolean onButton(GtkWidget *w, GdkEventButton *e, gpointer user)
@@ -449,6 +468,8 @@ namespace
                 case GDK_KEY_Return: case GDK_KEY_KP_Enter: code = 13; break;
                 case GDK_KEY_Escape: code = 27; break;
                 case GDK_KEY_space: code = 32; break;
+                case GDK_KEY_End: code = 35; break;       // the last row of an open menu (R-FAMILY-1)
+                case GDK_KEY_Home: code = 36; break;
                 case GDK_KEY_Left: code = 37; break;
                 case GDK_KEY_Up: code = 38; break;
                 case GDK_KEY_Right: code = 39; break;
@@ -485,7 +506,7 @@ int main(int argc, char **argv)
 #endif
 
     gtk_init(&argc, &argv);
-    // The typeface is in the binary, never resolved from the machine (arstro.design.rule §2.3).
+    // The typeface is in the binary, never resolved from the machine (arstro.rule.design §2.3).
     arstro::cosmo_v2::registerEmbeddedFonts();
     // Reduced motion: the OS's animation setting, read once, honoured by every tween (§2.6).
     gboolean animations = TRUE;
@@ -561,6 +582,8 @@ int main(int argc, char **argv)
     gtk_window_set_title(GTK_WINDOW(a->window), "Interstellar");
     gtk_window_set_default_size(GTK_WINDOW(a->window), kW, kH);
     g_signal_connect(a->window, "destroy", G_CALLBACK(gtk_main_quit), nullptr);
+    g_signal_connect(a->window, "delete-event", G_CALLBACK(onDeleteEvent), a);
+    a->app->onQuit = [a] { gtk_widget_destroy(a->window); };
 
     a->area = gtk_drawing_area_new();
     a->minW = (int)std::ceil(a->app->minPhysicalWidth());
@@ -589,8 +612,12 @@ int main(int argc, char **argv)
 
     a->startUs = g_get_monotonic_time();
     gtk_widget_add_tick_callback(a->area, onTick, a, nullptr);
-    gtk_widget_show_all(a->window);
-    gtk_widget_grab_focus(a->area);
+    // R-SPLASH-1: the logo's opening splash first, then the window. Skipped when the app was
+    // launched to open a project (the user asked for the project, not for the brand) and when
+    // INTERSTELLAR_NO_SPLASH is set (a harness that drives the window must not wait two seconds).
+    auto showMain = [a] { gtk_widget_show_all(a->window); gtk_widget_grab_focus(a->area); };
+    if (argc > 1 || g_getenv("INTERSTELLAR_NO_SPLASH")) showMain();
+    else arstro::cosmo_v2::runSplash(arstro::cosmo_v2::SplashScreen::interstellarBrand(), 1.0, showMain);
     gtk_main();
     return 0;
 }

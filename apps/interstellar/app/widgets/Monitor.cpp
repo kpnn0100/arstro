@@ -178,8 +178,14 @@ namespace interstellar_v1
         case Gesture::Type::Move:
             mCaptureHover.setHovered(mCaptureRect.contains(local) ? 0 : -1);
             mAngleHover.setHovered(angleAt(local) - 1);
+            mEmptyBtnHover.setHovered(mEmptyBtnRect.w > 0 && mEmptyBtnRect.contains(local) ? 0 : -1);
             return true;
         case Gesture::Type::Click:
+            if (mEmptyBtnRect.w > 0 && mEmptyBtnRect.contains(local) && !mActionWanted.empty())
+            {
+                if (onEmptyAction) onEmptyAction();
+                return true;
+            }
             if (const int k = angleAt(local))
             {
                 if (onAngle) onAngle(k);
@@ -318,7 +324,30 @@ namespace interstellar_v1
             mStateApplied = mState;
             mStateInit = true;
         }
-        else if (mState != mStateApplied)
+        // R-UI-20: a different empty sentence. Unseen, it is simply the sentence; on screen, it cross-fades.
+        if (mEmptyWanted != mEmptyShown || mHintWanted != mHintShown)
+        {
+            const bool seen = mStateAmt[(int)State::Empty].value() > 0.001 && mState == State::Empty && mStateApplied == State::Empty;
+            mEmptyPrev = seen ? mEmptyShown : std::string();
+            mHintPrev = seen ? mHintShown : std::string();
+            mEmptyShown = mEmptyWanted;
+            mHintShown = mHintWanted;
+            if (seen) { mEmptyTextAmt.set(0.0); mEmptyTextAmt.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseInOutCubic, nowMs); }
+            else mEmptyTextAmt.set(1.0);
+        }
+        mEmptyTextAmt.update(nowMs);
+        // R-UI-21d: the empty state's button — placed on the first frame, eased after; its label stays
+        // while it fades out, so it never reads "" on the way
+        if (!mEmptyBtnInit) { mActionShown = mActionApplied = mActionWanted; mEmptyBtnAmt.set(mActionWanted.empty() ? 0.0 : 1.0); mEmptyBtnInit = true; }
+        else if (mActionWanted != mActionApplied)
+        {
+            if (!mActionWanted.empty()) mActionShown = mActionWanted;
+            mEmptyBtnAmt.animateTo(mActionWanted.empty() ? 0.0 : 1.0, motion::kCrossFadeMs, Easing::EaseInOutCubic, nowMs);
+            mActionApplied = mActionWanted;
+        }
+        mEmptyBtnAmt.update(nowMs);
+        mEmptyBtnHover.advance(nowMs);
+        if (mState != mStateApplied)
         {
             for (int i = 0; i < 3; ++i)
                 mStateAmt[i].animateTo(i == (int)mState ? 1.0 : 0.0, motion::kScrollMs, Easing::EaseOutCubic, nowMs);
@@ -430,12 +459,34 @@ namespace interstellar_v1
         const double ea = mStateAmt[(int)State::Empty].value();
         if (ea > 0.001)
         {
-            glyph::film(t, Rect{w * 0.5 - 11.0, cy - 26.0, 22.0, 18.0}, fade(palette::mutedForeground(), 0.7 * ea), 1.2);
-            const std::string s = "no clip at the playhead";
-            const double tw = t.measureText(s, 12.0, font::sans());
-            t.setFill(fade(palette::mutedForeground(), ea));
-            t.drawText(s, (w - tw) * 0.5, cy + 10.0, 12.0, font::sans());
+            glyph::film(t, Rect{w * 0.5 - 11.0, cy - 40.0, 22.0, 18.0}, fade(palette::mutedForeground(), 0.7 * ea), 1.2);
+            // WHICH empty (R-UI-20), in the family's shape (R-UI-21d): one sentence, one hint line, one
+            // button — the words cross-fading from the ones they replaced
+            const double xa = mEmptyTextAmt.value();
+            auto say = [&](const std::string &raw, double a, double y, double px, const char *f, const Color &c) {
+                if (a <= 0.001 || raw.empty()) return;
+                const std::string s = textfit::ellipsize(t, raw, std::max(0.0, w - 32.0), px, f);
+                t.setFill(fade(c, ea * a));
+                t.drawText(s, (w - t.measureText(s, px, f)) * 0.5, y, px, f);
+            };
+            say(mEmptyPrev, 1.0 - xa, cy - 4.0, 13.0, font::sansMedium(), palette::foreground());
+            say(mEmptyShown, xa, cy - 4.0, 13.0, font::sansMedium(), palette::foreground());
+            say(mHintPrev, 1.0 - xa, cy + 14.0, 11.0, font::sans(), palette::mutedForeground());
+            say(mHintShown, xa, cy + 14.0, 11.0, font::sans(), palette::mutedForeground());
+            const double ba = mEmptyBtnAmt.value() * ea;
+            if (ba > 0.001 && !mActionShown.empty())
+            {
+                // the ONE filled primary button of the empty project
+                const double bw = t.measureText(mActionShown, 12.0, font::sansMedium()) + 28.0;
+                mEmptyBtnRect = Rect{(w - bw) * 0.5, cy + 30.0, bw, 26.0};
+                const double hv = mEmptyBtnHover.amount(0);
+                drawRoundedRect(t, mEmptyBtnRect, radius::control(), Paint::filled(fade(lerpColor(palette::primary(), palette::white(), 0.12 * hv), ba)));
+                t.setFill(fade(palette::primaryForeground(), ba));
+                t.drawText(mActionShown, mEmptyBtnRect.x + 14.0, textfit::baseline(mEmptyBtnRect.y + 13.0, 12.0), 12.0, font::sansMedium());
+            }
+            else mEmptyBtnRect = Rect{0.0, 0.0, 0.0, 0.0};
         }
+        else mEmptyBtnRect = Rect{0.0, 0.0, 0.0, 0.0};
 
         // timecode chip (mono — a number in a proportional face jitters as it changes)
         if (!mTimecode.empty())

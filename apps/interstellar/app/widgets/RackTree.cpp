@@ -22,8 +22,6 @@ namespace interstellar_v1
         constexpr double kMetaPx = 9.0;
         Color fade(Color c, double a) { c.a *= a; return c; }
         std::string usesLabel(int n) { return n == 0 ? "unused" : (n == 1 ? "1 clip" : std::to_string(n) + " clips"); }
-        // the empty state's add chip, centred in the viewport
-        Rect emptyChip(const Rect &vp) { return Rect{vp.x + (vp.w - 116.0) * 0.5, vp.y + vp.h * 0.42 + 14.0, 116.0, 24.0}; }
     }
 
     RackTree::RackTree() { clipToBounds = true; }
@@ -151,7 +149,6 @@ namespace interstellar_v1
         case Gesture::Type::Move:
         {
             if (addRect().contains(local)) { mHover.setHovered(0); return true; }
-            if (mRack.empty() && emptyChip(viewport()).contains(local)) { mHover.setHovered(1); return true; }
             const int i = rowAt(local);
             mHover.setHovered(i >= 0 ? (mRack[(size_t)i].group && chevronRect(i).contains(local) ? 1000 + i : 10 + i) : -1);
             return true;
@@ -179,7 +176,7 @@ namespace interstellar_v1
             return mScroll.scrollBy(g.delta.y);   // false = nothing to scroll: let it bubble
         case Gesture::Type::Click:
         {
-            if (addRect().contains(local) || (mRack.empty() && emptyChip(viewport()).contains(local)))
+            if (addRect().contains(local))
             {
                 if (onAddFootage) onAddFootage();
                 return true;
@@ -278,21 +275,8 @@ namespace interstellar_v1
         const Rect vp = viewport();
         t.save();
         t.clipRect(vp.x, vp.y, vp.w, vp.h);
-        if (mRack.empty() && mRows.rows().empty())
-        {
-            const std::string s = "no footage yet \xE2\x80\x94 add some";
-            const double tw = t.measureText(s, 11.0, font::sans());
-            t.setFill(palette::mutedForeground());
-            t.drawText(s, vp.x + (vp.w - tw) * 0.5, vp.y + vp.h * 0.42, 11.0, font::sans());
-            const Rect chip = emptyChip(vp);
-            const double hv = mHover.amount(1);
-            drawRoundedRect(t, chip, radius::control(),
-                            Paint::filledStroked(palette::primaryAlpha(0.10 * hv), lerpColor(palette::border(), palette::primary(), 0.5 + 0.5 * hv), 1.0));
-            const std::string cl = "Add footage\xE2\x80\xA6";
-            const double cw = t.measureText(cl, 11.0, font::sans());
-            t.setFill(lerpColor(palette::foreground(), palette::white(), hv));
-            t.drawText(cl, chip.x + (chip.w - cw) * 0.5, textfit::baseline(chip.y + chip.h * 0.5, 11.0), 11.0, font::sans());
-        }
+        // an empty rack draws nothing here: the monitor says it once, with the button (R-UI-21d); the
+        // header's + still adds footage
 
         for (const auto &row : mRows.rows())
         {
