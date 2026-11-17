@@ -70,7 +70,8 @@ namespace solaris
             SettingsSet, SettingsPrint, FolderAdd, FolderRemove, FolderMove, DevicesList, Browse, RecentsRemove,
             TransportPlay, TransportStop, TransportSeek, TransportLoop, TransportRecord, TransportMono, Wait, Audition, NotePreview,
             MetersClear, // R-METER-2
-            MidiDevices  // R-MIDI-2
+            MidiDevices, // R-MIDI-2
+            AssistStart, AssistSend, AssistStop, AssistAgents // R-AGENT-1
         };
         Kind kind = Kind::None;
         std::vector<std::string> args;                           // positionals after the verb

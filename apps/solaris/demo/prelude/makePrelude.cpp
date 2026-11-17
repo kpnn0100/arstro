@@ -351,7 +351,7 @@ int main(int argc, char **argv)
         h.key('S', true);
         auto &ms = bar.menus();
         h.click(world(ms, ms.titleRect(0)));
-        h.click(world(ms, ms.itemRect(0, 4)));
+        h.click(world(ms, ms.itemRect(0, 9))); // File › Export Mix as WAV… (R-FAM-1/6: after two rules)
     }
     h.look("rendered");
 

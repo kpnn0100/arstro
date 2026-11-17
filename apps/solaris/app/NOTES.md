@@ -1,7 +1,7 @@
 # solaris_app — notes for whoever changes a widget
 
-Read `arstro.design.rule` first; values are cosmo's (aliased in `Theme.h`), the accent is teal
-`#159387` (R-UI-2). This file is the app's own record: what each control SENDS, the shots, and the
+Read `arstro.rule.design` first; values are cosmo's (aliased in `Theme.h`), the accent is teal
+`#DD5A0C` (orange — R-UI-2, amended 2026-11-17; teal `#159387` before). This file is the app's own record: what each control SENDS, the shots, and the
 helpers it borrows.
 
 ## Every control is a command line
@@ -17,11 +17,14 @@ helpers it borrows.
 | Settings › Interface › Autosave (combo) | `settings set autosave=<seconds|off>` (R-SAFE-1) |
 | Browser › a `.mid` dragged onto an instrument's track · onto empty space | `pattern import <file> --lane <ln> --at <b>` · `… --instrument synth --at <b>` (R-MIDI-1) |
 | Song bar › the `solaris.` wordmark | Home: `project close` (an unsaved song asks Save / Discard / Cancel first) — R-UI-3 amended |
-| Home / song bar › Settings (beside the wordmark), Ctrl+, | `devices list`, then the sheet opens |
+| Home › Settings · song bar › File › Settings… · Ctrl+, (R-FAM-1: no Settings button in the bar) | `devices list`, then the sheet opens |
+| The window's close button (R-FAM-2) | nothing when saved or on Home; unsaved: the dialog — Save is `project save` then quit, Don't save `project close` then quit |
+| Ctrl+N · Ctrl+O · Ctrl+Shift+S (R-FAM-8, keymap `song.new` / `song.open` / `song.saveAs`) | the host's pickers, then `project new` / `project open` / `project save <path>` |
+| Home › the dashed "New song" card (R-FAM-7) | as New song: the host's picker, then `project new` |
 | Song bar › File › New Song… · Open… · Save · Save As… · Render… · Export… · Render Stems… · Home | picker → `project new` · picker → `project open` · `project save` · picker → `project save "<path>"` · picker → `render --out "<path>"` · the Export sheet, then picker → `render --out "<path>" --format <f> [--rate <Hz>] (--bits <b> \| --kbps <k>) [--normalize <LUFS> --ceiling <dBTP>] [--stems all]` (R-EXPORT-1) — with the video on (R-VIDEO-1): `render --out "<path>.mp4\|.mkv" --video [--rate <Hz>] [--normalize <LUFS> --ceiling <dBTP>]` · picker → `render --out "<path>" --stems <every strip>` · `project close` |
 | Song bar › Edit › Undo · Redo · Duplicate Clip · Delete Clip | `undo` · `redo` · `clip duplicate <ac>` · `clip delete <ac>` |
 | Song bar › Song › Add Mixer · Add Bus · Add Audio Line · Add Lane · Quantize Clip | `mixer add` · `strip add --kind bus` (placed before Main, feeding it) · `strip add --kind audio` · `lane add` · `pattern quantize <pt> --grid <the lanes' snap step, 1/32 when none>` (the selected note clip's pattern) |
-| Song bar › View › Hide/Show Mixer · Hide/Show Browser · Metronome · Show/Hide IDs · Settings… | the view's · the view's · `settings set metronome=on\|off` · `settings set showIds=on\|off` (R-UI-11) · the sheet |
+| Song bar › View › Hide/Show Mixer · Hide/Show Browser · Metronome · Show/Hide IDs (Settings… is File's since R-FAM-1; rows are found by label — a rule is a row) | the view's · the view's · `settings set metronome=on\|off` · `settings set showIds=on\|off` (R-UI-11) |
 | Song bar › File › Collect and Save | `project collect --save` — every file the song names, every version's too, gathered into its folder's `Samples/` and saved; a toast says it (and what is still missing) (R-COLLECT-1) |
 | Song bar › File › Relink… | `project files --missing` (a read: a file may have gone since), then the Relink window over the song (R-COLLECT-1) |
 | Relink › a row's Locate… · Search a Folder… · Done, Escape, Enter, the scrim | the host's file picker → `project relink "<file>" --to "<picked>"` · the host's folder picker → `project relink --folder "<dir>"` · the view's — a found row fades out where it is, the rest slide up, the card shrinks with them |

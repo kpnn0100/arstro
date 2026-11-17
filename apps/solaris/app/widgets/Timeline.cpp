@@ -105,6 +105,11 @@ namespace solaris_ui
         mArmed = m.armed; // R-MIDI-2
         mStrips.clear();
         for (const auto &s : m.strips) mStrips.push_back(StripRef{s.id, s.name, s.kind});
+        mInstruments.clear(); // R-UI-16
+        for (const auto &t : m.deviceTypes)
+            if (t.kind == "instrument") mInstruments.push_back({t.name, t.label});
+        mMuteSolo.clear(); // R-LANE-4
+        for (const auto &s : m.strips) mMuteSolo[s.id] = {s.mute, s.solo};
         mLength = m.lengthBeats;
         mPosition = m.transport.position;
         mCue = m.transport.cue;
@@ -346,6 +351,18 @@ namespace solaris_ui
                 arm.checked = mArmed == row.strip;
                 out.push_back(arm);
             }
+            if (const std::string ms = rowStrip(i); !ms.empty()) // R-LANE-4: its M and S, as toggles
+            {
+                const auto st = mMuteSolo.find(ms);
+                const bool m = st != mMuteSolo.end() && st->second.first, so = st != mMuteSolo.end() && st->second.second;
+                const std::string name = row.label.empty() ? tr("Lane") : row.label;
+                A11yNode mute = a11yNode("lanes." + row.key + ".mute", "toggle", fillIn(tr("{1} mute"), name), worldRect(*this, muteRect(i)), m ? tr("on") : tr("off"));
+                mute.checked = m;
+                out.push_back(mute);
+                A11yNode solo = a11yNode("lanes." + row.key + ".solo", "toggle", fillIn(tr("{1} solo"), name), worldRect(*this, soloRect(i)), so ? tr("on") : tr("off"));
+                solo.checked = so;
+                out.push_back(solo);
+            }
         }
         for (const auto &l : mChords) // R-ASSIST-1: each chord on screen, named — its span its value
         {
@@ -363,6 +380,88 @@ namespace solaris_ui
         if (i < 0 || i >= (int)mRows.size() || mRows[(size_t)i].strip.empty()) return Rect{};
         const Rect r = rowRect(i);
         return Rect{kHeaderW - 24.0, r.y + 9.75, 13.0, 13.0}; // space::u(4): at the header's right, level with the name
+    }
+
+    // ── R-UI-17: where the lanes are in the song, and the whole of it on request ────────────────────────────────────────
+
+    Rect Timeline::hScrollThumb() const
+    {
+        const double viewW = mScrollX.viewH(), content = mScrollX.contentH(); // the helper's one axis: here the sideways one
+        if (!mScrollX.scrollable() || viewW <= 0.0) return Rect{};
+        const double w = std::max(18.0, viewW * viewW / content); // the view's share of the song (EasedScroll's vertical thumb, turned)
+        return Rect{kHeaderW + (viewW - w) * (mScrollX.value() / mScrollX.maxScroll()), height.value() - 4.0, w, 3.0};
+    }
+
+    void Timeline::zoomToFit()
+    {
+        // the song and the four bars of air the scroll's extent gives it (so that, fitted, there is nothing to scroll); the
+        // fit may go FURTHER out than Ctrl+wheel does (kFitOutSteps) — a three-minute song is wider than the wheel's floor
+        const double viewW = std::max(1.0, width.value() - kHeaderW), beats = std::max(1.0, mLength + 4.0 * mBeatsPerBar);
+        int step = -kFitOutSteps;
+        for (int k = -kFitOutSteps; k <= kZoomInSteps; ++k)
+            if (beats * kZoomPpb * std::pow(kZoomRatio, k) <= viewW) step = k; // the largest that fits
+        mZoomStep = step;
+        mPpbTarget = kZoomPpb * std::pow(kZoomRatio, step);
+        mPpb.animateTo(mPpbTarget, motion::kCatchUpMs, Easing::EaseOutCubic, mNowMs); // as a Ctrl+wheel's
+        layout();
+        mScrollX.scrollBy(-mScrollX.target()); // back at the start, eased
+    }
+
+    // ── R-UI-16: an empty song offers its first sound ──────────────────────────────────────────────────────────────────
+
+    Rect Timeline::emptyButtonRect() const
+    {
+        const double cx = kHeaderW + (width.value() - kHeaderW) * 0.5;
+        return Rect{cx - mEmptyBtnW * 0.5, top() + 126.0, mEmptyBtnW, 26.0}; // under the two sentences
+    }
+
+    std::vector<cosmo_v2::ContextMenu::Item> Timeline::instrumentMenu()
+    {
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        for (const auto &in : mInstruments)
+        {
+            const std::string type = in.first;
+            // the line the browser's drop sends: a strip, its track, a first clip to write in — ONE line
+            items.push_back({in.second, [this, type] { if (onCommand) onCommand("clip add --instrument " + type + " --at 0 --length 4"); }});
+        }
+        return items;
+    }
+
+    // ── R-LANE-4: a track's header mutes and solos its strip ───────────────────────────────────────────────────────────
+
+    std::string Timeline::rowStrip(int i) const
+    {
+        if (i < 0 || i >= (int)mRows.size()) return std::string();
+        const Row &r = mRows[(size_t)i];
+        if (!r.takeClip.empty() || !r.automation.empty() || r.folded) return std::string();
+        if (!r.strip.empty()) return r.strip;                                              // an instrument's track
+        return r.lane.empty() && r.key.rfind("strip:", 0) == 0 ? r.key.substr(6) : std::string(); // a strip's own row
+    }
+
+    Rect Timeline::muteRect(int i) const
+    {
+        if (rowStrip(i).empty()) return Rect{};
+        const Rect r = rowRect(i);
+        return Rect{kHeaderW - 8.0 - 2.0 * kMsW - kMsGap, r.y + 26.0, kMsW, kMsH}; // under the arm ring, on the sub-line
+    }
+
+    Rect Timeline::soloRect(int i) const
+    {
+        if (rowStrip(i).empty()) return Rect{};
+        const Rect r = rowRect(i);
+        return Rect{kHeaderW - 8.0 - kMsW, r.y + 26.0, kMsW, kMsH};
+    }
+
+    double Timeline::muteAmount(const std::string &strip) const
+    {
+        const auto it = mMs.find(strip);
+        return it == mMs.end() ? 0.0 : it->second.mute.value();
+    }
+
+    double Timeline::soloAmount(const std::string &strip) const
+    {
+        const auto it = mMs.find(strip);
+        return it == mMs.end() ? 0.0 : it->second.solo.value();
     }
 
     double Timeline::armAmount(const std::string &strip) const
@@ -693,6 +792,22 @@ namespace solaris_ui
             if (mArmLast[row.strip] != want) { it->second.animateTo(want, motion::kSelectMs, Easing::EaseOutCubic, nowMs); mArmLast[row.strip] = want; }
             it->second.update(nowMs);
         }
+        // R-LANE-4: a strip's mute and solo lights in its header, eased on and off whoever changed them
+        for (int i = 0; i < (int)mRows.size(); ++i)
+        {
+            const std::string id = rowStrip(i);
+            if (id.empty()) continue;
+            const auto ms = mMuteSolo.find(id);
+            const bool m = ms != mMuteSolo.end() && ms->second.first, so = ms != mMuteSolo.end() && ms->second.second;
+            MsLive &l = mMs[id];
+            if (!l.placed) { l.mute.set(m ? 1.0 : 0.0); l.solo.set(so ? 1.0 : 0.0); l.m = m; l.s = so; l.placed = true; } // first seen: placed
+            if (l.m != m) { l.mute.animateTo(m ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.m = m; }
+            if (l.s != so) { l.solo.animateTo(so ? 1.0 : 0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.s = so; }
+            l.mute.update(nowMs);
+            l.solo.update(nowMs);
+        }
+        if (!isHovered()) mMsHover.clear();
+        mMsHover.advance(nowMs);
         mBoxAmt.update(nowMs);
         mDropAmt.update(nowMs);
         // the loop region: appears and goes with a fade; moved by anyone it eases there (§1)
@@ -869,6 +984,16 @@ namespace solaris_ui
         if (!mEmptyInit) { mEmptyAmt.set(emptyWant); mEmptyLast = emptyWant; mEmptyInit = true; }
         else if (emptyWant != mEmptyLast) { mEmptyAmt.animateTo(emptyWant, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); mEmptyLast = emptyWant; }
         mEmptyAmt.update(nowMs);
+        {
+            // R-UI-17: the sideways thumb is there only while the song is wider than the view — fading in and out
+            const bool want = mScrollX.scrollable();
+            if (!mHBarInit) { mHBarAmt.set(want ? 1.0 : 0.0); mHBarWant = want; mHBarInit = true; }
+            else if (want != mHBarWant) { mHBarAmt.animateTo(want ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); mHBarWant = want; }
+            mHBarAmt.update(nowMs);
+        }
+        if (!isHovered()) mEmptyOver = false; // R-UI-16: the button's hover, eased
+        if (mEmptyOver != mEmptyOverLast) { mEmptyHover.animateTo(mEmptyOver ? 1.0 : 0.0, motion::kHoverMs, Easing::EaseOutCubic, nowMs); mEmptyOverLast = mEmptyOver; }
+        mEmptyHover.update(nowMs);
         if (mBound) mEver = true;
         mScrollX.advance(nowMs);
         mScrollY.advance(nowMs);
@@ -1060,6 +1185,17 @@ namespace solaris_ui
         {
         case Gesture::Type::Move:
         {
+            mEmptyOver = mEmptyAmt.value() > 0.5 && emptyButtonRect().contains(local); // R-UI-16
+            {
+                int over = -1; // R-LANE-4: the header's M / S under the pointer
+                if (local.x < kHeaderW && local.y >= top())
+                    for (int i = 0; i < (int)mRows.size() && over < 0; ++i)
+                    {
+                        if (muteRect(i).contains(local)) over = i * 2;
+                        else if (soloRect(i).contains(local)) over = i * 2 + 1;
+                    }
+                mMsHover.setHovered(over);
+            }
             const std::string id = clipAt(local);
             int h = -1;
             for (size_t i = 0; i < mClips.size(); ++i)
@@ -1223,6 +1359,24 @@ namespace solaris_ui
                     if (onCommand) onCommand("set " + r.group + ".folded=" + (r.folded ? "off" : "on"));
                     return true;
                 }
+            if (mEmptyAmt.value() > 0.5 && emptyButtonRect().contains(local))
+            {
+                // R-UI-16: the empty song's button — its menu drops from under it
+                const Rect b = emptyButtonRect();
+                const Point at{g.pos.x - local.x + b.x, g.pos.y - local.y + b.bottom() + 2.0};
+                if (onMenu) onMenu(instrumentMenu(), at);
+                return true;
+            }
+            for (int i = 0; i < (int)mRows.size() && local.x < kHeaderW && local.y >= top(); ++i)
+            {
+                // R-LANE-4: a track's M and S — the ONE line the dock's own button sends
+                const std::string id = rowStrip(i);
+                if (id.empty()) continue;
+                const auto ms = mMuteSolo.find(id);
+                const bool m = ms != mMuteSolo.end() && ms->second.first, so = ms != mMuteSolo.end() && ms->second.second;
+                if (muteRect(i).contains(local)) { if (onCommand) onCommand("set " + id + ".mute=" + (m ? "false" : "true")); return true; }
+                if (soloRect(i).contains(local)) { if (onCommand) onCommand("set " + id + ".solo=" + (so ? "false" : "true")); return true; }
+            }
             for (int i = 0; i < (int)mRows.size(); ++i)
             {
                 // R-MIDI-2: an instrument track's arm button — ONE line, arming it (or disarming it, armed)
@@ -1265,7 +1419,7 @@ namespace solaris_ui
                     // R-ARR-3: a folded group's row — open it, rename it, ungroup it
                     const std::string lg = mRows[(size_t)ri].group, name = mRows[(size_t)ri].groupName;
                     const Point world = g.pos;
-                    onMenu({{say("Open group"), [this, lg] { if (onCommand) onCommand("set " + lg + ".folded=off"); }},
+                    onMenu({{say("Open Group"), [this, lg] { if (onCommand) onCommand("set " + lg + ".folded=off"); }},
                             {say("Rename group\xE2\x80\xA6"), [this, lg, name, world] {
                                  if (onRename) onRename(name, world, [this, lg](const std::string &n) { if (onCommand && !n.empty()) onCommand("set " + lg + ".name=" + q(n)); });
                              }},
@@ -1279,7 +1433,7 @@ namespace solaris_ui
                 std::vector<cosmo_v2::ContextMenu::Item> owners, items;
                 if (!au.empty()) // R-AUTO-14: an automation's track — the automation, not an instrument
                 {
-                    items.push_back({say("Open automation"), [this, au] { if (onOpenAutomation) onOpenAutomation(au); }});
+                    items.push_back({say("Open Automation"), [this, au] { if (onOpenAutomation) onOpenAutomation(au); }});
                     items.push_back({say("Copy as Formula"), [this, au] { if (onCopy) onCopy("=" + au); }});
                     items.push_back({say("Delete Automation"), [this, au] { if (onCommand) onCommand("auto delete " + au + " --unbind"); }});
                 }
@@ -1304,13 +1458,13 @@ namespace solaris_ui
                     if (lg.empty())
                     {
                         const std::string name = fillIn(tr("Group {1}"), std::to_string(seen.size() + 1)); // a new group's name — the user's, in their words
-                        items.push_back({say("New group"), [this, ln, name] { if (onCommand) onCommand("lane group " + ln + " --name " + q(name)); }});
+                        items.push_back({say("New Group"), [this, ln, name] { if (onCommand) onCommand("lane group " + ln + " --name " + q(name)); }});
                     }
-                    if (!into.empty()) items.push_back({say("Into group\xE2\x80\xA6"), [this, into, world] { if (onMenu) onMenu(into, world); }});
+                    if (!into.empty()) items.push_back({say("Into Group\xE2\x80\xA6"), [this, into, world] { if (onMenu) onMenu(into, world); }});
                     if (!lg.empty())
                     {
-                        items.push_back({say("Leave group"), [this, ln] { if (onCommand) onCommand("set " + ln + ".group=none"); }});
-                        items.push_back({say("Fold group"), [this, lg] { if (onCommand) onCommand("set " + lg + ".folded=on"); }});
+                        items.push_back({say("Leave Group"), [this, ln] { if (onCommand) onCommand("set " + ln + ".group=none"); }});
+                        items.push_back({say("Fold Group"), [this, lg] { if (onCommand) onCommand("set " + lg + ".folded=on"); }});
                         items.push_back({say("Ungroup"), [this, lg] { if (onCommand) onCommand("lane ungroup " + lg); }});
                     }
                 }
@@ -1355,9 +1509,9 @@ namespace solaris_ui
                     lengths.push_back({o.first + (std::fabs(b - now) < 1e-9 ? "  \xC2\xB7 " + say("now") : std::string()),
                                        [this, au, b] { if (onCommand) onCommand("set " + au + ".length=" + beats(b)); }});
                 }
-                if (c.linked > 1) items.push_back({say("Make unique"), [this, id] { if (onCommand) onCommand("clip unique " + id); }});
+                if (c.linked > 1) items.push_back({say("Make Unique"), [this, id] { if (onCommand) onCommand("clip unique " + id); }});
                 items.push_back({say("Length \xE2\x96\xB8"), [this, lengths, world] { if (onMenu) onMenu(lengths, world); }});
-                items.push_back({say("Open automation"), [this, au] { if (onOpenAutomation) onOpenAutomation(au); }});
+                items.push_back({say("Open Automation"), [this, au] { if (onOpenAutomation) onOpenAutomation(au); }});
                 items.push_back({say("Duplicate"), [this, id] { if (onCommand) onCommand("clip duplicate " + id); }});
                 items.push_back({say("Copy ID"), [this, id] { if (onCopy) onCopy(id); }}); // R-UI-11
                 items.push_back({say("Delete"), [this, id] { if (onCommand) onCommand("clip delete " + id); }});
@@ -1374,7 +1528,7 @@ namespace solaris_ui
                                        [this, id, sid] { if (onCommand) onCommand("clip move " + id + " --strip " + sid); }});
                 }
             const Point world = g.pos;
-            items.push_back({say("Play through \xE2\x96\xB8"), [this, through, world] { if (onMenu) onMenu(through, world); }});
+            items.push_back({say("Play Through \xE2\x96\xB8"), [this, through, world] { if (onMenu) onMenu(through, world); }});
             if (c.kind == "note")
             {
                 const std::string pt = c.pattern;
@@ -1383,7 +1537,7 @@ namespace solaris_ui
             if (!c.takes.empty()) // R-REC-2: its takes under it — the view's
             {
                 const bool shown = mTakesOpen.count(id) > 0;
-                items.push_back({shown ? say("Hide takes") : say("Show takes"), [this, id, shown] { showTakes(id, !shown); }});
+                items.push_back({shown ? say("Hide Takes") : say("Show Takes"), [this, id, shown] { showTakes(id, !shown); }});
             }
             clipEditItems(c, items, world); // R-EDIT-1: split, reverse, consolidate, slice
             items.push_back({say("Duplicate"), [this, id] { if (onCommand) onCommand("clip duplicate " + id); }});
@@ -1397,7 +1551,8 @@ namespace solaris_ui
             {
                 // zoom about the pointer: the beat under it stays under it
                 const double anchor = xToBeat(local.x);
-                const int step = std::clamp(mZoomStep + (g.delta.y < 0 ? 1 : -1), -kZoomOutSteps, kZoomInSteps);
+                // (a Zoom to Fit may have gone further out than the wheel does, R-UI-17: from there the wheel only comes in)
+                const int step = std::clamp(mZoomStep + (g.delta.y < 0 ? 1 : -1), std::min(-kZoomOutSteps, mZoomStep), kZoomInSteps);
                 if (step == mZoomStep) return true;
                 mZoomStep = step; // a lattice: in and out are exact inverses, and the deepest zoom is one place
                 const double next = kZoomPpb * std::pow(kZoomRatio, step);
@@ -1743,10 +1898,28 @@ namespace solaris_ui
                 drawRoundedRect(t, ar, radius::pill(), Paint::filledStroked(fade(lerpColor(palette::input(), palette::destructive(), lit), a),
                                                                            fade(lerpColor(palette::mutedForeground(), palette::destructive(), lit), a), 1.0));
             }
+            // R-LANE-4: a row that IS a strip's — M and S under the arm ring, lit as the dock's are (mute white, solo amber)
+            int rowIndex = -1;
+            for (int k = 0; k < (int)mRows.size(); ++k)
+                if (mRows[(size_t)k].key == row.key) rowIndex = k;
+            const std::string msId = rowStrip(rowIndex);
+            const double subW = msId.empty() ? kHeaderW - 20.0 : kHeaderW - 24.0 - 2.0 * kMsW - kMsGap - 8.0; // the sub-line gives the buttons room
+            if (!msId.empty())
+            {
+                auto mini = [&](double x, const char *label, double on, const Color &onCol, int hoverId) {
+                    const Rect b{x, r.y + 26.0, kMsW, kMsH};
+                    const double hv = mMsHover.amount(hoverId);
+                    drawRoundedRect(t, b, radius::control(), Paint::filled(fade(lerpColor(lerpColor(palette::secondary(), palette::popover(), hv), onCol, on), a)));
+                    t.setFill(fade(lerpColor(lerpColor(palette::mutedForeground(), palette::foreground(), hv), palette::background(), on), a));
+                    t.drawText(label, b.x + (b.w - t.measureText(label, 9.0, font::sansMedium())) * 0.5, textfit::baseline(b.y + b.h * 0.5, 9.0), 9.0, font::sansMedium());
+                };
+                mini(kHeaderW - 8.0 - 2.0 * kMsW - kMsGap, "M", muteAmount(msId), palette::whiteAlpha(0.82), rowIndex * 2);
+                mini(kHeaderW - 8.0 - kMsW, "S", soloAmount(msId), surface::solo(), rowIndex * 2 + 1);
+            }
             if (own)
             {
                 t.setFill(fade(palette::mutedForeground(), a));
-                t.drawText(textfit::ellipsize(t, tr("its strip's row"), kHeaderW - 20.0, 9.0, font::sans()), 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::sans());
+                t.drawText(textfit::ellipsize(t, tr("its strip's row"), subW, 9.0, font::sans()), 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::sans());
             }
             else if (d.folded)
             {
@@ -1757,7 +1930,7 @@ namespace solaris_ui
             {
                 // R-LANE-3: an instrument's track names its instrument
                 t.setFill(fade(palette::mutedForeground(), a * tk->second.amt.value()));
-                t.drawText(textfit::ellipsize(t, tk->second.sub, kHeaderW - 20.0, 9.0, font::sans()), 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::sans());
+                t.drawText(textfit::ellipsize(t, tk->second.sub, subW, 9.0, font::sans()), 12.0, textfit::baseline(r.y + 31.0, 9.0), 9.0, font::sans());
             }
             t.setStroke(fade(palette::border(), a), 1.0);
             t.beginPath(); t.moveTo(0, r.bottom() - 0.5); t.lineTo(W, r.bottom() - 0.5); t.strokePath();
@@ -1829,7 +2002,7 @@ namespace solaris_ui
                 t.beginPath(); t.moveTo(cx, 7.5); t.lineTo(cx, rulerRect().bottom()); t.strokePath();
             }
         }
-        // playhead: a position, so `destructive` (Interstellar's reading)
+        // playhead: a position, not a state — `foreground` (R-UI-2 amended: red read as "recording")
         const double px = beatToX(mPlayhead.value());
         if (px >= kHeaderW - 1.0 && px <= W)
         {
@@ -1851,8 +2024,18 @@ namespace solaris_ui
             t.setFill(fade(palette::mutedForeground(), 0.75 * ea));
             const std::string be = textfit::ellipsize(t, b, W - kHeaderW - 32.0, 11.0, font::sans());
             t.drawText(be, cx - t.measureText(be, 11.0, font::sans()) * 0.5, top() + 110.0, 11.0, font::sans());
+            // R-UI-16: … and the way to the first sound, offered — the primary action of an empty song
+            const std::string label = textfit::ellipsize(t, tr("Add an instrument"), W - kHeaderW - 60.0, 12.0, font::sansMedium());
+            mEmptyBtnW = t.measureText(label, 12.0, font::sansMedium()) + 28.0;
+            const Rect br = emptyButtonRect();
+            drawRoundedRect(t, br, radius::control(), Paint::filled(fade(brighten(palette::primary(), interaction::kHoverFillLift * mEmptyHover.value()), ea)));
+            t.setFill(fade(palette::primaryForeground(), ea));
+            t.drawText(label, br.x + 14.0, textfit::baseline(br.y + br.h * 0.5, 12.0), 12.0, font::sansMedium());
         }
         mScrollY.drawBar(t, W - 5.0);
+        // R-UI-17: … and the sideways one along the lanes' foot — the same pill, only when the song is wider than the view
+        if (const Rect hb = hScrollThumb(); hb.w > 0.0 && mHBarAmt.value() > 0.001)
+            drawRoundedRect(t, hb, radius::pill(), Paint::filled(palette::whiteAlpha(0.14 * mHBarAmt.value())));
     }
 }
 }

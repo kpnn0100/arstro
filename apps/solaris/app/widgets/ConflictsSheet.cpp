@@ -188,10 +188,10 @@ namespace solaris_ui
                     out.push_back(a11yNode("conflicts." + r.node + ".mine", "button", fillIn(tr("Keep mine \xE2\x80\x94 {1}"), r.what), m.second, joined(r.mine)));
                     out.push_back(a11yNode("conflicts." + r.node + ".theirs", "button", fillIn(tr("Take theirs \xE2\x80\x94 {1}"), r.what), theirsRect(r.node), joined(r.theirs)));
                 }
-        A11yNode all = a11yNode("conflicts.allMine", "button", tr("Keep All Mine"), mAllMine);
+        A11yNode all = a11yNode("conflicts.allMine", "button", tr("Keep all mine"), mAllMine);
         all.enabled = !mWanted.empty();
         out.push_back(all);
-        all = a11yNode("conflicts.allTheirs", "button", tr("Take All Theirs"), mAllTheirs);
+        all = a11yNode("conflicts.allTheirs", "button", tr("Take all theirs"), mAllTheirs);
         all.enabled = !mWanted.empty();
         out.push_back(all);
         out.push_back(a11yNode("conflicts.done", "button", tr("Done"), mDone));
@@ -398,8 +398,8 @@ namespace solaris_ui
                 mMine.emplace_back(r.node, mine);
                 mTheirs.emplace_back(r.node, theirs);
             }
-            button(t, mine, tr("Keep Mine"), mHover.amount(mineId(r.node)), a, false);
-            button(t, theirs, tr("Take Theirs"), mHover.amount(theirsId(r.node)), a, false);
+            button(t, mine, tr("Keep mine"), mHover.amount(mineId(r.node)), a, false);
+            button(t, theirs, tr("Take theirs"), mHover.amount(theirsId(r.node)), a, false);
             if (&r != &mRows.back())
             {
                 t.setStroke(fade(palette::border(), a), 1.0);
@@ -420,8 +420,8 @@ namespace solaris_ui
         mDone = Rect{c.right() - kPad - 88.0, c.bottom() - kFooterH + (kFooterH - 30.0) * 0.5, 88.0, 30.0};
         mAllMine = Rect{c.x + kPad, mDone.y, 128.0, 30.0};
         mAllTheirs = Rect{mAllMine.right() + 8.0, mDone.y, 136.0, 30.0};
-        button(t, mAllMine, tr("Keep All Mine"), mHover.amount(kAllMineId), mAllOn.value(), false);
-        button(t, mAllTheirs, tr("Take All Theirs"), mHover.amount(kAllTheirsId), mAllOn.value(), false);
+        button(t, mAllMine, tr("Keep all mine"), mHover.amount(kAllMineId), mAllOn.value(), false);
+        button(t, mAllTheirs, tr("Take all theirs"), mHover.amount(kAllTheirsId), mAllOn.value(), false);
         button(t, mDone, tr("Done"), mHover.amount(kDoneId), 1.0, true);
     }
 }

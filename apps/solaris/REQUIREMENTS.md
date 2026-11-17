@@ -29,7 +29,7 @@ the section heading. Read before any code; conflict-check before accepting a new
 
 ## Global rules — 📋 SPECIFIED
 
-- **R-G-1 The design law binds this app by reference** (`.claude/skills/arstro.design.rule`). No
+- **R-G-1 The design law binds this app by reference** (`.claude/skills/arstro.rule.design`). No
   value from it is restated here.
 - **R-G-2 Cosmo is the reference implementation and the divergence is ONE token**, exactly as
   Interstellar R-UI-2: radii, fonts, spacing and every neutral colour are cosmo's, *aliased*; only
@@ -267,6 +267,17 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   whose clips all play through one instrument strip made that strip's track — the lanes R-SVC-8's lane
   reuse built; one still carrying the name it was made with (its strip's, or its instrument's) shows the
   strip's name — and is saved with the line from then on (detailed building E3).
+- **R-LANE-4 A track's header mutes and solos its strip** (UI audit from rendered frames, 2026-11-17).
+  A lane header carried one control, an unlabelled 13 px ring (the record arm, R-MIDI-2); to mute or
+  solo a track the user had to find its strip in the dock — which at 1024 × 640 may be folded or
+  scrolled away. A row that IS a strip's — an instrument's track (R-LANE-3), or a strip's own row —
+  has two mini-buttons at its header's right, under the arm ring: **M** and **S**. Each click is the
+  ONE line the dock's own button sends, `set <ch>.mute=true|false`, `set <ch>.solo=true|false`; the
+  two places show one state — the light EASES on and off whoever changed it (the dock, a script, a
+  surface), mute in the dock's white, solo in the amber (never the accent). A plain lane — one that
+  only arranges clips, of however many strips — has none: lanes are organisation only (R-LANE-1), and
+  a lane's button that muted "its" strip would be deriving the one from the other. The keyboard
+  reaches both (R-ACCESS-1: toggles named for the track).
 - **R-CLIP-1 An audio clip** plays a span of a file: `at` (beats), source `in`/`out` (seconds — a
   file has no tempo), gain, fade in/out, loop to fill a length (was SR-CLIP-1/2).
 - **R-CLIP-2 A note clip** plays a **pattern** — a named list of notes (pitch, start, length,
@@ -342,6 +353,23 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
   2026-10-09, R-EDM-2/7:** the metronome is the machine's setting (`settings set metronome=on`), clicks
   on every beat while playing with the bar's first accented, its sound a pad of the DSP library's
   Drum Machine, and is NEVER in a render; the loop region is drawn on the ruler and dragged there.)
+  (**AMENDED (UI audit from rendered frames, 2026-11-17):** the song bar's transport showed Record and
+  Play only — the loop could be made only by a Shift-drag on the ruler nobody is told about, and the
+  metronome only from View. The transport now reads, left to right: Record · Play · **Loop** ·
+  **Metronome** · the position · the tempo · **the time signature** (a label: `project.sig`, in mono,
+  where the bars it counts are shown). Loop and Metronome are toggles, lit in the accent while on,
+  the light EASED whoever changed the state (§1) — a script's `transport loop`, the ruler's drag, View
+  › Metronome. Each click is ONE line: Metronome `settings set metronome=on|off` (the line View's
+  item sends); Loop off `transport loop off`; Loop on `transport loop <from> <to>` over the region
+  the window last saw looped in this song, else the whole song (0 to the last clip's end, up to a
+  whole bar; an empty song: four bars). *That choice of region is the window's and should not be:*
+  the service forgets a loop it turns off, so a second front end would have to re-derive it —
+  `transport loop on` (the last region back) is the grammar's to add, OPEN in `docs/PROGRESS.md`;
+  so are the key actions `transport.record`, `transport.loop` and `transport.metronome`, which need
+  rows in the service's keymap table. **The bar gives way before its content does (design rule R4):**
+  when the transport's right end would reach the CPU readout, the time signature folds first
+  (eased); while a MIDI learn waits and its pill would have under 140 px, the CPU readout folds too
+  (eased) and the pill takes its room. The song's name keeps what it had.)
 - **R-TIME-7 Stop returns the time bar to where it was put** (user request, 2026-10-16: *"remember where user
   put the time bar, when stop using space return to that time bar"*). The transport keeps a CUE — where the
   user last PUT the time bar: a seek (a ruler click or drag, the start key), or a play that says where it
@@ -449,7 +477,8 @@ audio devices so the user can take advantage of their devices."*
   Song** — a tab is named for what is in it: "Folders" named the mechanism; "Presets" promised a
   preset store that does not exist yet, so the tab lists the registry's instruments and effects and
   a type's factory and user presets will join it under its row; "Project" is "the song" everywhere
-  else in this app.)
+  else in this app.) (**AMENDED (R-FAM-5, 2026-11-17):** the tabs are underlined words, not boxed
+  chips — they switch a page.)
 - **R-BROWSE-4 The song's MIDI list** (user request, 2026-10-09, third brief: *"there should be a midi
   list of project to drag and drop into project"*): the Song tab lists the song's MIDI (its patterns)
   above its samples — each with its name, length, note count and the instruments that play it; keyed
@@ -531,7 +560,7 @@ R-VER, applied to an arrangement:
 - **R-VER-5 Reserved:** import another song (concatenate or overlay), embed a song in a song or in
   Interstellar (was SR-MERGE-2, SR-EMBED-1..4).
 
-## R-RENDER — offline render — ✅ IMPLEMENTED (DR-RENDER-1)
+## R-RENDER — offline render — ✅ IMPLEMENTED (DR-RENDER-1) — 4 ✅ the minimum (a render from the window seen and its result said, DR-RENDER-4); the worker, progress and cancel OPEN
 
 - **R-RENDER-1 Render is offline and deterministic:** the same project, version and range give the
   same bytes (was SR-NFR-1, SR-RENDER-1).
@@ -539,6 +568,25 @@ R-VER, applied to an arrangement:
   output port. WAV, 24-bit or 32-bit float, at the project rate (was SR-RENDER-1/2).
 - **R-RENDER-3 A range or the whole song**, with the tail rendered until the output falls below
   −90 dBFS or a 10 s cap (was SR-RENDER-3/4).
+- **R-RENDER-4 A render started from the window is SEEN, and its result SAID** (**AMENDED (R-FAM-6,
+  2026-11-17): File › Render… is now File › Export Mix as WAV…, and the card has the family's 3 px
+  sweeping progress bar.**) (UI audit from rendered
+  frames, 2026-11-17; design rule R2 — a visible response this frame). File › Render…, Render Stems…
+  and the Export sheet each send ONE `render …` line, which the service runs to its end before it
+  answers: the window froze on whatever frame it was showing, with nothing to say a render had begun
+  and nothing to say it had ended — `render.finished` was never shown. So: (a) BEFORE the line is
+  sent, a modal eases in over the window — "Rendering…", the file's name, and the plain statement that
+  the window waits until the file is written — and at least one frame of it at full opacity has been
+  PAINTED before the line goes out, so that frame is what stands on screen while the service works;
+  it takes all input while it is there; (b) when the service answers, the modal eases out and the
+  result is said in an INFO toast (R-UI-15) from the service's own `render.finished` — the file and
+  the master's peak in dBFS; a refusal is the error toast with the service's sentence, as any refused
+  line. The host hears the event (it subscribes to the service; the app links none, R-G-4) and tells
+  the App. **This is the minimum, and it is said to be:** the render still runs on the UI thread, so
+  the window does not repaint, shows no progress and cannot be cancelled while it runs. The proper
+  version — the render on a worker (the service's, behind a `render --async` or a job the model
+  publishes), a progress fraction in the model, `render cancel` — is OPEN in `docs/PROGRESS.md`; it
+  needs the service and is not a window change.
 
 ## R-PLAY — real-time playback — ✅ IMPLEMENTED on one device (1–2: DR-PLAY-1/2) — 3 ✅ (peaks DR-PLAY-3; RMS, held peak, clip latch DR-METER-2) — several devices: P2, R-DEV-2/4
 
@@ -809,7 +857,7 @@ controller, normalised parameters and saved state.
   machine also"*; the user chose "plugins with an Arstro editor", not standalone apps): each plugin opens
   its own editor (`IPlugView` — on Linux an X11 window embedded in the host's, driven by the host's
   `IRunLoop`) instead of the host's generic sliders. It is drawn by Artboard with cosmo's tokens and
-  embedded fonts and Solaris's teal (they are Solaris's instruments) and obeys `arstro.design.rule` like
+  embedded fonts and Solaris's teal (they are Solaris's instruments) and obeys `arstro.rule.design` like
   any Arstro window — nothing snaps; a value the HOST changes (automation, a preset, undo) eases in.
   Its controls are GENERATED from the registry (law 2): a section per parameter group, a slider per
   number with its unit and taper, a segmented choice per choice, double-click → the default; every
@@ -1389,6 +1437,41 @@ a process is the host's (law 12).
   core/Mcp's text-service tools over the same `dispatchText` a shell line takes. A front end holding no
   behaviour; an undeclared tool argument is refused by name, and a refused line returns the service's
   own reason (`did you mean: kick.tune?`).
+- **R-MCP-2 The same tools on the song open in the window** (**Added 2026-11-17**; the founder: *"final
+  goal is both cosmo/interstellar/solaris have agent, have mcp and can agent can help user making
+  music"*). `solaris-cc mcp --attach <socket>` serves `solaris_api` / `solaris_run` / `solaris_state`
+  with **no service of its own**: each line goes down the control socket of a `solaris --control`
+  window (R-SVC-5) and ends where the window says it ends (`[ok]` / `[refused]`). So an agent edits the
+  song the user is looking at, each line is one step of the user's undo, and a refusal is the window's
+  own sentence. It is the hands an in-app agent is given (as cosmo's `cosmo-cc mcp --attach`).
+
+- **R-AGENT The user's own agent, inside Solaris** (**Added 2026-11-17**; the founder: *"final goal is
+  both cosmo/interstellar/solaris have agent, have mcp and can agent can help user making
+  music/video/edit photo"*). The prefix is R-AGENT because R-ASSIST here already names the analysis
+  tools. It is cosmo's agent (cosmo R-ASSIST-1…13), built from Solaris's `AssistProfile`, not a
+  second runner (`arstro.rule` §5).
+  - **R-AGENT-1 The conversation is the service's.** `assist start | send <text…> | stop | agents`;
+    the model's `assist` block (`state` off|starting|ready|busy|failed, `agent`, `messages[]`
+    role+text, `choices[]`); events `assist.state` and `assist.message`. A front end only shows it.
+    With no runner installed by the host, `assist start` is refused and says which front ends can.
+  - **R-AGENT-2 Which agent is a machine setting:** `agent` (default `claude`; `acp:<command>`,
+    `cmd:<command>`), `agentArgs`, `agentSkills` (extra skill folders, `:`-separated),
+    `agentAllowAll` (on|off). Saved like every setting; a running agent keeps what it started with.
+  - **R-AGENT-3 Its hands are the open song:** the agent is given `solaris-cc mcp --attach <the
+    window's control socket>` (R-MCP-2), so it edits what the user sees and each line is one undo
+    step. A window started without `--control` opens a socket the first time an agent starts. The
+    agent's process is told where it is through `SOLARIS_CONTROL`, `SOLARIS_CC`, `SOLARIS_PROJECT`;
+    `$SOLARIS_CC` in the window's own environment names the CLI when it is not beside the app.
+  - **R-AGENT-4 The Agent panel in the window** (cosmo's `AgentPanel`), docked on the right of the
+    song: closed until **View › Show Agent**; it folds by its width (eased) and the lanes and the
+    mixer dock give it the room. What it asks for is the grammar's lines (`assist send "<text>"`,
+    `assist start`, `assist stop`, `assist agents`, `settings set "agent=…"`); a closed panel asks
+    the machine nothing. While its field has the focus the keyboard is the field's (Space is not
+    Play). Its words are in the language table.
+  - **R-AGENT-5 It is given the music skills** (`arstro.solaris.compose.melody`,
+    `arstro.solaris.sound.design`), never a developer skill. Each has an "Inside Solaris" section
+    that takes over when `SOLARIS_CONTROL` is set: work on the open song through the tools, one
+    proposal the user plays in their own window, no lab server.
 
 - **R-SVC-5 An agent can drive the running window** (user request, 2026-10-09: *"Agent friendly, make it
   like cosmo, core backend and front end can be cli (for Agent), GUI for user and web"*): `solaris
@@ -1529,7 +1612,33 @@ a process is the host's (law 12).
 ## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8/9 — 3 without the version chip, X1; 4 partly: the Artboard move is T1) — 10 ✅ (the grid, DR-UI-10), 11 ✅ (ids shown and copied, DR-UI-11) — 12 ✅ (the analog face, DR-UI-12) — 13 ✅ (the tempo set in the song bar, DR-UI-13) — 14 ✅ (the resize cursor, DR-UI-14)
 
 - **R-UI-1 Two screens, as Interstellar:** Home (R-HOME) and the Project view.
-- **R-UI-2 The accent is teal, `#159387`, the only forked token** — teal because orange, the
+- **R-UI-2 The accent is orange, `#DD5A0C`, the only forked token.**
+  (**AMENDED (founder, 2026-11-17):** *"solaris need to have color orange and yellow … it will be
+  more suitable"*, and, shown that this entry forbade it: *"change the requirement too"*. Solaris is
+  the sun; its logo, Synth sun, is orange to yellow. `#DD5A0C` is that orange at cosmo blue's
+  LUMINANCE (0.227), so white text on it reads at 3.8:1 — the same measurement the 2026-10-08
+  amendment below made for teal. **What this gives up, knowingly:** the reason the entry chose teal
+  still stands — orange sits between record-red and solo-amber on a mixer. Nothing else moved: solo
+  is still amber, record still red, the meter still green → amber → red. (**AMENDED (UI audit from
+  rendered frames, 2026-11-17):** this sentence named amber solo as the risk — *"if the three warm
+  colours confuse on the mixer, the fix is to move `solo()`"*. Measured on the frames, solo is not
+  the pair that collides: amber `#E3B341` is far lighter than the accent and reads apart. The pair
+  is the ACCENT against RECORD / DESTRUCTIVE red `#E5534B` — the same luminance (0.227 against
+  0.23) and 19° of hue apart, so wherever a filled orange sat beside a filled red, or orange and
+  red each meant a state, the two read as one. The accent stays; what stood beside it moved, so
+  that orange means "the primary action / the selection", red means "recording, destructive, an
+  error", and nothing else wears either: (a) in a confirm dialog only the PRIMARY button is filled
+  — the destructive one is OUTLINED, red words and a red border on no fill (an opt-in style of
+  cosmo's `ConfirmDialog`; cosmo's own dialogs are unchanged); (b) the song bar's unsaved dot is
+  `foreground`, not the accent — it sat a few pixels from the record dot; (c) the playhead is
+  `foreground` in the lanes and in the piano roll — it is a POSITION, not a state, and a red line
+  across the lanes read as "recording" (this REVERSES the first reading, "the playhead is
+  `destructive`, Interstellar's reading too" — Interstellar has no record state to confuse it
+  with); the cue mark follows it; the punch region, the armed ring and Record stay red; (d) the
+  piano roll's pattern-end line and its handle are a neutral GRIP, not the accent — a line of the
+  accent across the grid beside a red playhead was the same collision; (e) a toast no longer says
+  "refused" in red and "done" in orange — R-UI-15.) The text below is the accent's HISTORY and is
+  no longer in force.) It was teal, `#159387` — teal because orange, the
   "solar" reading, sits beside record-red and solo-amber, which a DAW cannot afford to confuse.
   (**AMENDED 2026-10-08, measuring it:** this said `#5AEDDE`, Interstellar's recipe — cosmo's blue
   rotated to H 174° at the same S 80 %, L 64 %. The recipe holds HSL LIGHTNESS, which is not
@@ -1553,6 +1662,19 @@ a process is the host's (law 12).
   the `solaris.` wordmark IS Home, as cosmo's and Interstellar's are: washed on hover, a click goes Home (with the
   unsaved-changes question, as the button asked). The left reads: wordmark · Settings · the menus. File › Home
   stays.)
+  (**AMENDED (R-FAM-1, the family standard, 2026-11-17):** the Settings button beside the wordmark is
+  gone — Settings… is in the File menu (and on Home), as in cosmo and Interstellar; the left reads
+  wordmark · File · Edit · Song · View. The 2026-10-09 request ("settings at top left next to home")
+  is still met: File is the first thing after the wordmark. The menus' rows, separators, shortcuts
+  and disabled states are R-FAM-1's; the tabs of the browser and the dock are R-FAM-5's.)
+  (**AMENDED (UI audit from rendered frames, 2026-11-17): the dock takes its share of the window, not a
+  fixed 429 px.** At 1024 × 640 a 429 px dock left three lanes — the mixer had two thirds of the song
+  view and the arrangement the rest. Until the user drags its top edge the dock is
+  `min(429, 45 % of the window's height)` — 288 px at 640 (six lanes), 405 at 900 — and follows the
+  window when it is resized, EASED (§1); the lanes' floor still wins (R4). Once dragged it is the
+  user's height, as before, for as long as the window lives. *Keeping that height for the next
+  session needs a machine setting (`settings set dockHeight=`), which is the service's — OPEN in
+  `docs/PROGRESS.md`.*)
 - **R-UI-4 Cosmo's widgets are reused as libraries** (`SliderRow`, `SegmentedControl`, `PillButton`,
   `IconButton`, `ConfirmDialog`, `MenuStrip`, `HoverFade`); Interstellar's timeline idioms are
   followed, and its header-only helpers (`TextFit`, `EasedScroll`, `Glyphs`) are INCLUDED from
@@ -1626,6 +1748,64 @@ a process is the host's (law 12).
   settings, a menu, the history tree, a dialog), the arrow. A window covers what is beneath it. The App decides the
   shape; the host only shows it (law 12) — the OS's own cursors, which do not ease (an OS cursor is not drawn by us).
 
+- **R-UI-15 What the window says, it says in one of three voices** (UI audit from rendered frames,
+  2026-11-17; R-UI-2 amended). A toast is INFO (something was done: "Copied …", "Collected …", the
+  song followed its file), a WARNING (the song is open and something is owed: "3 files are missing —
+  File › Relink…") or an ERROR (a line was refused — the service's own sentence). The three are told
+  apart by SHAPE as well as colour, so the accent/red closeness cannot blur them and neither can a
+  colour-blind eye: every toast has the popover's ground and a NEUTRAL border; a warning adds a 3 px
+  bar at its left in the meter's amber and a triangle; an error a 3 px bar in `destructive` and a
+  crossed circle; an info adds nothing. The accent is not a toast colour. A toast sits UNDER THE SONG
+  BAR, centred — never over the mixer's M / S / R row, where it covered the controls a refusal is
+  usually about — fades in while sliding down into place, holds, and fades out; one that replaces
+  another cross-fades with it (§1). The kind is published for a test (`toastKind`), as the text is.
+  (**AMENDED (R-FAM-4, 2026-11-17):** this toast is now the family's `Toast` widget — lifted from
+  here, so nothing above changes; the App places it and forwards what it publishes.)
+
+- **R-UI-16 An empty song says how to make a sound, and offers it** (UI audit from rendered frames,
+  2026-11-17; design rule §7 — the empty state is the one that makes an app feel broken). A new song
+  showed two sentences about dragging from the browser, a browser open on "No sample folders yet",
+  and a mixer whose one offer read "+ Line" — on a machine with no sample folders there was no
+  visible way to the first sound. So: (a) the lanes' empty state has a BUTTON under its sentence,
+  "Add an instrument", whose menu lists the registry's instruments (R-DSP-2 — a new one appears with
+  no UI code); one picked is ONE line, `clip add --instrument <type> --at 0 --length 4`, the line the
+  browser's drop sends: a strip, its track and a first clip to write in; the button fades with the
+  empty state (§1); (b) Song › **Add Instrument…** opens the same menu from the song bar, whatever
+  the song holds; (c) the browser opens on **Instruments**, not Samples, when the machine has no
+  sample folder — decided once, when the window is made: a tab the user chose is never taken back;
+  (d) the mixer's slot after the last card reads **"+ Strip"** — "line" was the code's word (R-MIX-13)
+  for what every other label, and the lanes' own sentence, call a strip. Its menu is unchanged.
+
+- **R-UI-17 The lanes show where they are in the song, fit it on request, and the wheel means one
+  thing** (UI audit from rendered frames, 2026-11-17; design rule R6 — a clip with no indicator
+  silently deletes content). (a) When the song is wider than the lanes' view a thin pill thumb is
+  drawn along the lanes' FOOT — the same thumb the vertical bar uses, its place and width the view's
+  share of the song — and only then (a permanent track claims there is more when there is not); it
+  fades in and out (§1) and follows the eased scroll. (b) View › **Zoom to Fit** puts the whole song
+  in view: the largest step of the zoom's lattice (R-UI-10) at which the song's length and four bars
+  of air fit the lanes' width, the scroll back at the start — both EASED, as a Ctrl+wheel's are; the
+  view's own, as zoom is (nothing is sent). The fit may go further OUT than the wheel does (to 0.5
+  px a beat, ten steps past the wheel's 4.7): a three-minute song is wider than the wheel's floor at
+  1024 px; from there the wheel only zooms in, a step a notch. (c) **One wheel rule in the lanes and in the dock:** the
+  wheel scrolls VERTICALLY where there is something to scroll vertically, else sideways; Shift+wheel
+  scrolls sideways (a tilted wheel or a touchpad's sideways scroll arrives as Shift, D-5); Ctrl+wheel
+  zooms the lanes. The dock had it the other way round — a plain wheel went sideways whenever the
+  page was wider than the window — so the same gesture meant two things a few pixels apart.
+
+- **R-UI-18 Small things the frames showed** (UI audit from rendered frames, 2026-11-17). (a) The
+  Settings sheet is `min(900, the window − 64)` wide and `min(700, the window − 64)` high (it was a
+  fixed 720 × 520, which cut its rows' hints off with the window's room unused); a hint that still
+  does not fit is ellipsized, as before. (b) A device window's header names its owner and its type;
+  the device's internal id (`dv_3`) is an ID — drawn after them, in the accent, only as far as View ›
+  Show IDs is on (R-UI-11), eased with it. (c) Home's "Recent Songs" heading has no glyph before it
+  (a speaker said nothing there), and a card's plate is a token (`segmentedBg`), not a raw hex
+  (design rule §2). (**(c) AMENDED (R-FAM-7): the heading reads "Recent songs" and has a clock before it and
+  the count after it.**) (d) File › Save and View › Settings… name the key the keymap has NOW (R-SET-4),
+  as Edit's items do — a re-keyed action is followed, an action with no key has no hint; the padded
+  "(Ctrl+S)" and "(Ctrl+,)" written into the labels are gone. (**(d) AMENDED (R-FAM-1): the key is in
+  the row's shortcut column, not in its label, and Settings… is in File.**) (e) The `toast-refusal` shot's rig has
+  no output device, so the refusal it is named for is what it shows (R-UI-6).
+
 ## R-NFR — non-functional — 📋 SPECIFIED
 
 - **R-NFR-1 Performance:** a 64-strip project renders faster than real time on a laptop (was
@@ -1643,3 +1823,82 @@ a process is the host's (law 12).
 - **R-TEST-3** A new behaviour's test fails without it — checked.
 - **R-TEST-4 Audio is asserted by numbers:** a render's peak/RMS/spectral peak at a known place,
   byte-identical output across two runs, a golden hash.
+
+
+## R-BRAND — The logo and its animations — ✅ IMPLEMENTED (DR-BRAND-1)
+
+Founder, 2026-11-17: *"fix the color, logo and animation in those actual application every section."*
+
+- **R-BRAND-1 The logo is Synth sun** — an orange-to-yellow half sun over three white stripes that
+  shorten like a reflection (level bars) — drawn by cosmo's `BrandMark` module, compiled here, never
+  copied. Cosmo's R-BRAND is the requirement for the drawing and the three animations; this section
+  only places them. (A wave-cut "sunrise on the beach" redraw was tried on 2026-11-17 and rejected
+  by the founder — do not propose it again.)
+- **R-BRAND-2 On Home**, above the wordmark; it shows up once, then rests.
+- **R-BRAND-3 The opening splash** (cosmo R-SPLASH-6, R-SPLASH-7): cosmo's splash in Solaris's brand —
+  the logo shows up, flies, disappears, and then the window appears. Skipped when launched with any
+  argument (a song, `--control`) or with `SOLARIS_NO_SPLASH` set. It costs about 2.0 s of launch.
+  **Known gap:** the splash's tagline is not drawn through the words table (R-ACCESS-2) — it is
+  cosmo's widget and takes a C string; file it when a second language needs it.
+- **R-BRAND-4 The web face's icon** (`web/icon.svg`) is the same logo.
+
+
+## R-FAM — the family standard, adopted — 🚧 IN PROGRESS (1–6, 8 ✅ DR-FAM-1…6, 8; 7 partly — the relative time on a card waits for a time in the model's recents, DR-FAM-7; the live GTK window not yet looked at)
+
+*(Added 2026-11-17, founder: Cosmo, Interstellar and Solaris answer the same questions the same
+way — cosmo R-FAMILY-0, `.claude/skills/arstro.rule.design` §2.7.)* The shared pieces are cosmo's
+(`apps/cosmo/widgets`, compiled in place — R-UI-4); these entries say how Solaris uses them and
+which of its own earlier entries they AMEND. Where an entry below disagrees with an older one, the
+older one carries an `AMENDED (R-FAM-n)` note and this one is in force.
+
+- **R-FAM-1 Settings is File ▸ Settings…; a menu row has a shortcut, a separator, a disabled
+  state.** (AMENDS R-UI-3: the song bar no longer has a Settings button — the left reads wordmark ·
+  File · Edit · Song · View; and R-UI-18 (d): the key is not written into the label.) Settings… is
+  in the File menu, with the key the keymap has now (`song.settings`), and on Home (R-HOME-1). Every
+  row whose action has a key in the keymap shows it in the menu's right-aligned shortcut column —
+  fed by the live keymap, so a re-keyed action shows its new key and an action with no key shows
+  none (R-SET-4); a key is drawn as its character where it has one (`Ctrl+,` for the keymap's
+  `Ctrl+Comma`). Redo shows the keymap's key too. Groups are divided by separators. A row that
+  cannot act now is DISABLED (dim, no hover, a click does nothing): Undo / Redo with nothing to undo
+  / redo, Show History Tree… with no history, Copy / Duplicate / Delete / Split Clip with no clip
+  selected, Paste Clip with nothing copied, Quantize Clip unless a note clip is selected. The four
+  menus keep their order (File, Edit, Song, View); Show Agent stays the last row of View (R-AGENT-4).
+  The keyboard walks an open menu: Up / Down (skipping separators and disabled rows), Home / End,
+  Left / Right to the neighbouring menu, Enter runs the row, Escape closes it.
+  (**Amended 2026-11-17:** Edit's history row reads "History…" as Cosmo's does; it was "Show
+  History Tree…".)
+- **R-FAM-2 Closing the window with unsaved edits asks.** The window's close button, with a song
+  open and unsaved, raises the SAME dialog Home's path does (R-FAM-3) and the window closes only on
+  Save (after the save landed — a refused save keeps the window and says why) or Don't save; Cancel
+  and Escape keep it. A saved song, or Home, closes at once.
+- **R-FAM-3 The unsaved-changes dialog is the family's.** Title `Save changes to "<name>"?`; the body
+  says what is lost ("Your changes will be lost if you don't save them."); buttons **Cancel · Don't
+  save · Save** (AMENDS R-UI-2's "Discard": the word and the rule — the destructive button's weight
+  is `DestructiveStyle::Auto`: outlined beside a primary button, filled when it is the only action;
+  in this dialog it is therefore outlined, as before).
+- **R-FAM-4 The toast is the family's `Toast`** (AMENDS R-UI-15's "drawn by the App": the behaviour
+  and every number are unchanged — the widget was lifted from here; the warning's colour is now the
+  family's `palette::warning()`, the same amber). Placed by the App under the song bar, centred;
+  kind, text, rect, amount and swap amount stay published by the App.
+- **R-FAM-5 A page is switched by an accent underline, a value by a segmented fill.** The browser's
+  tabs (Samples · Instruments · Song · Presets) and the mixer dock's tabs (a mixer each, Matrix)
+  switch PAGES: they are words in sentence case with a 2 px accent underline under the current one,
+  no box; the underline TRAVELS between tabs, eased (§1). Their accessible ids and their gestures
+  are unchanged. (AMENDS R-BROWSE-1's and R-UI-3's "chips".)
+- **R-FAM-6 Words and the wait.** Menu items are Title Case; buttons, headings and sentences are
+  sentence case; an ellipsis is U+2026. File's quick WAV render is **Export Mix as WAV…** (it was
+  "Render…", next to "Export…" — two words for one idea); **Export…** stays the deliverable's sheet
+  ("Render Stems…" keeps its name: it was not confused with anything). The "Rendering…" card (R-RENDER-4) gains the family's
+  3 px accent progress bar — there is no fraction to show (the service runs a render to its end), so
+  a segment sweeps along the track, eased in and out, looping without a visible seam.
+  (AMENDS R-RENDER-4.)
+- **R-FAM-7 Home is the family's.** The "Recent songs" header has a clock icon and the count
+  (AMENDS R-UI-18 (c): the heading now has a glyph — a clock says "recent"; a speaker said nothing);
+  every card says when the song was last opened, relative ("2 hours ago") (**NOT BUILT: the model's
+  recents carry no time — the service must publish one first; docs/PROGRESS.md**); when there are songs a
+  dashed "New song" card ends the grid; when there are none Home shows ONE sentence and ONE outline
+  button. The version shown is the build's (`SOLARIS_VERSION`), not a literal in the widget.
+- **R-FAM-8 Keys and the window's title.** New Song is Ctrl+N, Open is Ctrl+O, Save As is
+  Ctrl+Shift+S by default — actions in the keymap (R-SET-4), so re-keyable and shown in the File
+  menu. The window's title is `*<song> — Solaris` with unsaved changes, `<song> — Solaris` saved,
+  `Solaris` on Home.

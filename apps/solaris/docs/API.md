@@ -135,7 +135,11 @@ A line is `<verb…> <positional…> [--flag value]…`; chain lines with ` : ` 
 | `ls` | The song as a tree of ids and names: mixers → strips (kind, devices, output, sends), the master, lanes → clips (at, length, pattern or file), patterns (length, notes, clips), automations. | R-SVC-8 |
 | `show <id>` | One node's fields that differ from their defaults; a device's non-default parameters with their units (and the default); `show project` for the song. | R-SVC-8 |
 | `api [--json] [--md]` | This document: every command, event, model field and device parameter. | R-API-1 |
-| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on\|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on\|off), showIds (on\|off: every object's id beside its name, R-UI-11), autosave (seconds between autosaves of an unsaved song, or off — R-SAFE-1), key.<action>=<combos> (R-SET-4: a keyboard action's keys — a comma list such as "Ctrl+Shift+Z, Ctrl+Y", `none`, or `default`; a combo another action of the same keyboard has is refused naming it — the actions are in this document's Keyboard section). Saved at once. | R-SET-1 |
+| `assist start` | Start the user's agent (settings `agent`): it is given this song through `solaris-cc mcp --attach`. Refused where the front end cannot run one. | R-AGENT-1 |
+| `assist send <text…>` | Say something to the agent (starting it first when none runs). Its reply arrives as assist.message events and in the model's assist.messages. | R-AGENT-1 |
+| `assist stop` | Stop the agent and everything it started. Nothing to stop is not a refusal. | R-AGENT-1 |
+| `assist agents` | Look for the agents installed on this machine; fills the model's assist.choices. | R-AGENT-1 |
+| `settings set <key>=<value> …` | The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on\|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on\|off), showIds (on\|off: every object's id beside its name, R-UI-11), agent / agentArgs / agentSkills / agentAllowAll (R-AGENT-2: the user's agent — claude, acp:<command> or cmd:<command>; what is appended; extra skill folders; on\|off), autosave (seconds between autosaves of an unsaved song, or off — R-SAFE-1), key.<action>=<combos> (R-SET-4: a keyboard action's keys — a comma list such as "Ctrl+Shift+Z, Ctrl+Y", `none`, or `default`; a combo another action of the same keyboard has is refused naming it — the actions are in this document's Keyboard section). Saved at once. | R-SET-1 |
 | `settings print [--json]` | The machine's settings. | R-SET-1 |
 | `folder add <path>` | Add a sample folder to the browser's quick-access list. | R-SET-1 |
 | `folder remove <path>` | Remove a sample folder from the list (the folder itself is untouched). | R-SET-1 |
@@ -266,7 +270,10 @@ Every shortcut is an action; `settings set key.<id>=<combos>` gives it this mach
 | `transport.play` | Transport | Play / stop — back to where the time bar was put | Space |
 | `transport.stopHere` | Transport | Stop here | Ctrl+Space |
 | `transport.toStart` | Transport | To the start | Enter |
+| `song.new` | Song | New song | Ctrl+N |
+| `song.open` | Song | Open a song | Ctrl+O |
 | `song.save` | Song | Save | Ctrl+S |
+| `song.saveAs` | Song | Save as | Ctrl+Shift+S |
 | `song.undo` | Song | Undo | Ctrl+Z |
 | `song.redo` | Song | Redo | Ctrl+Shift+Z, Ctrl+Y |
 | `song.settings` | Song | Settings | Ctrl+Comma |
@@ -296,6 +303,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 |---|---|---|
 | `info` | text | A note worth logging; carries no state. |
 | `error` | why | Something failed. Also set as AppModel.lastError. |
+| `assist.state` | state, agent | R-AGENT-1: the user's agent is off \| starting \| ready \| busy \| failed. |
+| `assist.message` | role, text | R-AGENT-1: one message of the conversation: user \| agent \| tool \| error \| info. A streamed reply repeats with the text so far. |
 | `command.rejected` | line, why | A line was refused (R-SVC-3): unknown verb, flag, address or parameter; a refused edit. |
 | `screen.changed` | screen | home \| project. |
 | `project.opened` | path, strips, clips | A song is open. |
@@ -660,6 +669,19 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `settings.languages[].code` | string | R-ACCESS-2: en, vi, en-XA (the pseudo-language) … |
 | `settings.languages[].name` | string | R-ACCESS-2: the language's name in itself |
 | `settings.showIds` | bool | every object's id drawn beside its name (R-UI-11) |
+| `settings.agent` | string | R-AGENT-2: the user's agent: claude \| acp:<command> \| cmd:<command> |
+| `assist` | object | R-AGENT-1: the conversation with the user's agent; left out of a stable dump (a process, not the song) |
+| `assist.state` | string | R-AGENT-1: off \| starting \| ready \| busy \| failed (left out of a stable dump: it is a process, not the song) |
+| `assist.agent` | string | R-AGENT-1: the agent as it named itself |
+| `assist.messages` | object[] | R-AGENT-1: the conversation, oldest first |
+| `assist.messages[].role` | string | user \| agent \| tool \| error \| info |
+| `assist.messages[].text` | string |  |
+| `assist.choices` | object[] | R-AGENT-1: the agents found on this machine, after `assist agents` |
+| `assist.choices[].id` | string | claude, gemini, custom … |
+| `assist.choices[].name` | string |  |
+| `assist.choices[].agent` | string | what `settings set agent=` takes to use it |
+| `assist.choices[].installed` | bool |  |
+| `assist.choices[].note` | string | installed, or how to get it |
 | `settings.autosave` | int | seconds between autosaves of an unsaved song; 0 = off (R-SAFE-1) |
 | `settings.driver` | string | pulse \| pipewire \| web: how the clock device is reached (R-DEV-9; web = the pages that listen, R-SVC-7) |
 | `settings.recordQuantize` | string | off \| 1/4 \| 1/8 \| 1/16 \| 1/32: where a recorded note's start lands (R-MIDI-2) |

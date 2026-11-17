@@ -20,12 +20,14 @@ set(SL_FONT_FILES
     ${SL_FONT_DIR}/Roboto/Roboto-Regular.ttf
     ${SL_FONT_DIR}/Roboto/Roboto-Medium.ttf
     ${SL_FONT_DIR}/Roboto/Roboto-SemiBold.ttf
+    ${SL_FONT_DIR}/Roboto/Roboto-Italic.ttf
     ${SL_FONT_DIR}/JetBrainsMono/JetBrainsMono-Regular.ttf
     ${SL_FONT_DIR}/JetBrainsMono/JetBrainsMono-Medium.ttf)
 set(SL_FONT_LIST
     "Roboto|${SL_FONT_DIR}/Roboto/Roboto-Regular.ttf"
     "Roboto Medium|${SL_FONT_DIR}/Roboto/Roboto-Medium.ttf"
     "Roboto SemiBold|${SL_FONT_DIR}/Roboto/Roboto-SemiBold.ttf"
+    "Roboto Italic|${SL_FONT_DIR}/Roboto/Roboto-Italic.ttf"   # an agent's emphasis (cosmo R-ASSIST-12)
     "JetBrains Mono|${SL_FONT_DIR}/JetBrainsMono/JetBrainsMono-Regular.ttf"
     "JetBrains Mono Medium|${SL_FONT_DIR}/JetBrainsMono/JetBrainsMono-Medium.ttf")
 set(SL_EMBEDDED_FONTS ${CMAKE_CURRENT_BINARY_DIR}/SolarisEmbeddedFonts.generated.cpp)
@@ -44,7 +46,13 @@ set(SL_COSMO_SOURCES
     ${SL_COSMO_DIR}/widgets/HistoryView.cpp
     ${SL_COSMO_DIR}/widgets/Icons.cpp
     ${SL_COSMO_DIR}/widgets/MenuStrip.cpp
-    ${SL_COSMO_DIR}/widgets/SliderRow.cpp)
+    ${SL_COSMO_DIR}/widgets/Toast.cpp          # R-FAM-4: the family's one toast
+    ${SL_COSMO_DIR}/widgets/BrandMark.cpp      # R-BRAND: the logo and its animations, shared by the suite
+    ${SL_COSMO_DIR}/widgets/SplashScreen.cpp   # R-SPLASH: cosmo's opening splash, branded per app
+    ${SL_COSMO_DIR}/widgets/SliderRow.cpp
+    ${SL_COSMO_DIR}/widgets/AgentPanel.cpp     # R-AGENT-4: the user's agent, cosmo's panel compiled in place
+    ${SL_COSMO_DIR}/widgets/MarkdownText.cpp   # … and how it draws an agent's reply
+    ${SL_COSMO_DIR}/widgets/PillButton.cpp)    # … and its buttons
 
 file(GLOB SL_APP_SOURCES CONFIGURE_DEPENDS ${SL_APP_DIR}/*.cpp ${SL_APP_DIR}/widgets/*.cpp)
 add_library(solaris_app STATIC
@@ -60,7 +68,11 @@ target_include_directories(solaris_app PUBLIC
   ${SL_REPO_DIR}/core/Artboard/src
   ${SL_REPO_DIR}/core/Artboard/include)
 target_link_libraries(solaris_app PUBLIC artboard_core solaris_strings PkgConfig::SL_CAIRO PkgConfig::SL_FREETYPE) # R-ACCESS-2: the window's words
-target_compile_definitions(solaris_app PUBLIC ARTBOARD_CAIRO_FT)
+# R-FAM-7: the version Home shows is the build's, as cosmo's COSMO_VERSION is — never a literal in a widget
+if(NOT DEFINED SOLARIS_VERSION)
+  set(SOLARIS_VERSION "0.1.0")
+endif()
+target_compile_definitions(solaris_app PUBLIC ARTBOARD_CAIRO_FT SOLARIS_VERSION="${SOLARIS_VERSION}")
 
 # the shots and the UI tests run the REAL service behind the hooks (tests/Rig.h)
 add_executable(solaris_app_shots tests/shots/renderShots.cpp)

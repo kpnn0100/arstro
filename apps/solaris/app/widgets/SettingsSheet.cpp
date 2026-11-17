@@ -528,7 +528,7 @@ namespace solaris_ui
     Rect SettingsSheet::cardRect() const
     {
         const double W = width.value(), H = height.value();
-        const double w = std::min(kCardW, W - 32.0), h = std::min(kCardH, H - 48.0);
+        const double w = std::max(0.0, std::min(kCardW, W - kMargin)), h = std::max(0.0, std::min(kCardH, H - kMargin));
         return Rect{std::floor((W - w) * 0.5), std::floor((H - h) * 0.5), w, h};
     }
 

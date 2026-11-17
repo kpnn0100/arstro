@@ -68,4 +68,17 @@ if(UNIX)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo/ControlChannel.cpp)
   target_include_directories(solaris_control PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
   target_link_libraries(solaris_control PUBLIC solaris_core)
+  # R-AGENT-3: the user's agent as a process. cosmo's ProcessAssistant, COMPILED IN PLACE with Solaris's
+  # profile (AgentRunner.cpp); cosmo's include root is PRIVATE, so no header of cosmo's can shadow one
+  # of the window's. Needs arstro_ntwb's Json, as cosmo's does.
+  if(TARGET arstro_ntwb)
+    target_sources(solaris_control PRIVATE
+      AgentRunner.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo/AssistProcess.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo/HttpLite.cpp)
+    target_include_directories(solaris_control PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo)
+    target_link_libraries(solaris_control PRIVATE arstro_ntwb)
+    target_compile_definitions(solaris_control PUBLIC SOLARIS_HAVE_AGENT=1
+      PRIVATE SOLARIS_SKILLS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../../.claude/skills")
+  endif()
 endif()

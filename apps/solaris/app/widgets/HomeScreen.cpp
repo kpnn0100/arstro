@@ -32,6 +32,25 @@ namespace solaris_ui
             std::snprintf(buf, sizeof buf, "%d:%02d", (int)(s / 60.0), (int)std::fmod(s, 60.0));
             return buf;
         }
+        // R-FAM-7: a dashed outline (Artboard has no dash primitive: short strokes along each edge, as cosmo's Home draws its own)
+        void dashedRect(IRenderTarget &t, const Rect &r, const Color &c, double sw, double dash = 5.0)
+        {
+            t.setStroke(c, sw);
+            auto edge = [&](double x0, double y0, double x1, double y1) {
+                const double len = std::hypot(x1 - x0, y1 - y0);
+                if (len <= 0.0) return;
+                const double ux = (x1 - x0) / len, uy = (y1 - y0) / len;
+                for (double d = 0; d < len; d += dash * 2)
+                {
+                    const double e = std::min(d + dash, len);
+                    t.beginPath(); t.moveTo(x0 + ux * d, y0 + uy * d); t.lineTo(x0 + ux * e, y0 + uy * e); t.strokePath();
+                }
+            };
+            edge(r.x, r.y, r.right(), r.y);
+            edge(r.right(), r.y, r.right(), r.bottom());
+            edge(r.right(), r.bottom(), r.x, r.bottom());
+            edge(r.x, r.bottom(), r.x, r.y);
+        }
         // A deterministic hash of the song's name → the heights of its plate's bars.
         unsigned hashOf(const std::string &s)
         {
@@ -41,7 +60,14 @@ namespace solaris_ui
         }
     }
 
-    HomeScreen::HomeScreen() { clipToBounds = true; }
+    HomeScreen::HomeScreen()
+    {
+        clipToBounds = true;
+        mNew.alpha.set(0.0);
+    }
+
+    std::string HomeScreen::versionLabel() { return std::string("solaris v") + SOLARIS_VERSION; }
+    Rect HomeScreen::newCardLive() const { return toScreen(mNew.live()); }
 
     void HomeScreen::bind(const solaris::AppModel &m)
     {
@@ -58,6 +84,7 @@ namespace solaris_ui
         }
         mCards = std::move(next);
         mHasModel = true;
+        mNewWanted = !mCards.empty(); // R-FAM-7: the "New song" card ends a grid that has songs
     }
 
     HomeScreen::Grid HomeScreen::grid() const
@@ -75,6 +102,8 @@ namespace solaris_ui
         for (int i = 0; i < 3; ++i) out.push_back(a11yNode("home.action." + std::to_string(i), "button", tr(kActions[i]), worldRect(*this, actionRect(i))));
         out.push_back(a11yNode("home.settings", "button", tr("Settings"), worldRect(*this, settingsRect())));
         const Rect vp = gridViewport();
+        if (mNewWanted && newCardLive().bottom() >= vp.y && newCardLive().y <= vp.bottom())
+            out.push_back(a11yNode("home.newCard", "button", tr("New song"), worldRect(*this, newCardLive())));
         for (int i = 0; i < (int)mCards.size(); ++i)
         {
             const Rect r = cardLive(i);
@@ -104,37 +133,50 @@ namespace solaris_ui
         const Grid g = grid();
         mCols = g.cols;
         int slot = 0;
-        for (auto &c : mCards)
-        {
-            const int r = slot / g.cols, k = slot % g.cols;
-            ++slot;
-            c.target = Rect{k * (g.cardW + kGap), r * (g.cardH + kGap), g.cardW, g.cardH};
-            const bool moved = c.target.x != c.lastTarget.x || c.target.y != c.lastTarget.y || c.target.w != c.lastTarget.w ||
-                               c.target.h != c.lastTarget.h;
-            if (!moved) continue;
-            if (!c.placed || reducedMotion())
-            {
-                // the first placement SETS: there is nowhere to travel from
-                c.ax.set(c.target.x); c.ay.set(c.target.y); c.aw.set(c.target.w); c.ah.set(c.target.h);
-                c.placed = true;
-            }
-            else
-            {
-                c.ax.animateTo(c.target.x, motion::kReflowMs, Easing::EaseOutCubic, mNowMs);
-                c.ay.animateTo(c.target.y, motion::kReflowMs, Easing::EaseOutCubic, mNowMs);
-                c.aw.animateTo(c.target.w, motion::kReflowMs, Easing::EaseOutCubic, mNowMs);
-                c.ah.animateTo(c.target.h, motion::kReflowMs, Easing::EaseOutCubic, mNowMs);
-            }
-            c.lastTarget = c.target;
-        }
+        for (auto &c : mCards) place(c, slot++, g);
+        // R-FAM-7: the "New song" card takes the slot after the last song — and keeps it while it fades out, so the last
+        // song forgotten does not send it travelling
+        if (mNewWanted || !mNew.placed) place(mNew, slot, g);
+        if (mNewWanted) ++slot;
         const int rows = (slot + g.cols - 1) / g.cols;
         const double contentH = rows * g.cardH + std::max(0, rows - 1) * kGap + kPad;
         mScroll.setExtent(gridTop(), std::max(0.0, height.value() - gridTop()), contentH);
     }
 
+    void HomeScreen::place(Card &c, int slot, const Grid &g)
+    {
+        const int r = slot / g.cols, k = slot % g.cols;
+        c.target = Rect{k * (g.cardW + kGap), r * (g.cardH + kGap), g.cardW, g.cardH};
+        const bool moved = c.target.x != c.lastTarget.x || c.target.y != c.lastTarget.y || c.target.w != c.lastTarget.w || c.target.h != c.lastTarget.h;
+        if (!moved) return;
+        if (!c.placed || reducedMotion() || c.alpha.value() <= 0.001)
+        {
+            // the first placement SETS: there is nowhere to travel from (nor for a card nobody can see)
+            c.ax.set(c.target.x); c.ay.set(c.target.y); c.aw.set(c.target.w); c.ah.set(c.target.h);
+            c.placed = true;
+        }
+        else
+        {
+            c.ax.animateTo(c.target.x, motion::kReflowMs, Easing::EaseOutCubic, mNowMs);
+            c.ay.animateTo(c.target.y, motion::kReflowMs, Easing::EaseOutCubic, mNowMs);
+            c.aw.animateTo(c.target.w, motion::kReflowMs, Easing::EaseOutCubic, mNowMs);
+            c.ah.animateTo(c.target.h, motion::kReflowMs, Easing::EaseOutCubic, mNowMs);
+        }
+        c.lastTarget = c.target;
+    }
+
     void HomeScreen::advance(double nowMs)
     {
         mNowMs = nowMs;
+        {
+            // R-FAM-7: the "New song" card fades with there being songs — the first frame places it
+            const double want = mNewWanted ? 1.0 : 0.0;
+            if (!mNew.fadeIn) { mNew.alpha.set(want); mNew.fadeIn = true; } // (fadeIn here: "its fade has been placed")
+            else if (std::fabs(mNew.alpha.value() - want) > 1e-4 && !mNew.alpha.isAnimating()) mNew.alpha.animateTo(want, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mNew.ax.update(nowMs); mNew.ay.update(nowMs); mNew.aw.update(nowMs); mNew.ah.update(nowMs); mNew.alpha.update(nowMs);
+        }
+        if (mMark.gone()) mMark.showUp(nowMs, false);   // R-BRAND-2: once, the first time Home is drawn
+        mMark.advance(nowMs);
         for (auto &c : mCards)
         {
             if (c.fadeIn) { c.alpha.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); c.fadeIn = false; }
@@ -154,6 +196,7 @@ namespace solaris_ui
         if (settingsRect().contains(p)) return 2;
         if (!gridViewport().contains(p)) return -1;
         if (mCards.empty()) return emptyButtonRect().contains(p) ? 9 : -1;
+        if (mNewWanted && newCardLive().contains(p)) return 8; // R-FAM-7: the dashed "New song" card
         for (int i = 0; i < (int)mCards.size(); ++i)
             if (cardLive(i).contains(p)) return 10 + i;
         return -1;
@@ -173,7 +216,7 @@ namespace solaris_ui
         case Gesture::Type::Click:
         {
             const int h = hoverAt(local);
-            if (h == 0 || h == 9) { if (onNewSong) onNewSong(); }
+            if (h == 0 || h == 9 || h == 8) { if (onNewSong) onNewSong(); }
             else if (h == 1) { if (onOpenSong) onOpenSong(); }
             else if (h == 2) { if (onSettings) onSettings(); }
             else if (h == 3) { if (onNewFromTemplate) onNewFromTemplate(g.pos); } // R-PRESET-2
@@ -201,7 +244,7 @@ namespace solaris_ui
         drawRoundedRect(t, s, radius::control(), Paint::filledStroked(fade(bg, a), fade(bd, a), 1.0 + 0.5 * hv));
         // the plate: a song's bars, from its name — deterministic, muted, never the accent
         const Rect plate{s.x + 1.0, s.y + 1.0, s.w - 2.0, th - 1.0};
-        drawRoundedRect(t, plate, 0.0, Paint::filled(fade(Color::hex(0x111111), a)));
+        drawRoundedRect(t, plate, 0.0, Paint::filled(fade(palette::segmentedBg(), a))); // a token (it was a raw 0x111111 — the same value)
         unsigned h = hashOf(c.info.name.empty() ? c.info.path : c.info.name);
         const int bars = 28;
         const double bw = (plate.w - 32.0) / bars;
@@ -247,6 +290,10 @@ namespace solaris_ui
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(kSidebarW, 0); t.lineTo(kSidebarW, H); t.strokePath();
         t.beginPath(); t.moveTo(kSidebarW, kHeaderH); t.lineTo(W, kHeaderH); t.strokePath();
+
+        // ── the logo, above the wordmark (R-BRAND-2). Structure in the foreground colour, so
+        //    it follows the theme and high contrast; the colour part is the brand's own. ──
+        ::arstro::cosmo_v2::brand::draw(t, Rect{kPad - 2.0, 18.0, 36.0, 36.0}, mMark.mark(), mMark.pose(), palette::foreground());
 
         // ── wordmark, sized to fit; the dot at the MEASURED end of the word ──
         const double px = textfit::fitSize(t, std::string(kWord) + ".", kSidebarW - 2 * kPad, kWordMaxPx, kWordMinPx, font::sansSemiBold(), -0.03);
@@ -302,16 +349,24 @@ namespace solaris_ui
             t.drawText(textfit::ellipsize(t, tr("Settings"), r.w - 18.0, 11.0, font::sans()), r.x + 18.0, textfit::baseline(r.y + r.h * 0.5, 11.0), 11.0, font::sans());
         }
         t.setFill(fade(palette::mutedForeground(), 0.4));
-        t.drawText("solaris v0.1.0", kPad, blockTop + 60.0, 10.0, font::mono());
+        t.drawText(versionLabel(), kPad, blockTop + 60.0, 10.0, font::mono()); // the build's (R-FAM-7)
 
         // ── header ──
-        const double hx = gridLeft();
-        const std::string title = tr("Recent Songs");
-        glyph::speaker(t, Rect{hx, kHeaderH * 0.5 - 6.5, 13.0, 13.0}, palette::mutedForeground(), 1.1);
+        // R-FAM-7: a clock, the words, the count — as cosmo's and Interstellar's Home (a clock says "recent")
+        {
+            const Rect ic = headingIconRect();
+            const double cx = ic.x + ic.w * 0.5, cy = ic.y + ic.h * 0.5;
+            const Color c = palette::mutedForeground();
+            drawCircle(t, cx, cy, ic.w * 0.5 - 0.6, Paint::stroked(c, 1.2));
+            t.setStroke(c, 1.2);
+            t.beginPath(); t.moveTo(cx, cy - 3.4); t.lineTo(cx, cy); t.lineTo(cx + 2.6, cy + 1.5); t.strokePath();
+        }
+        const double hx = headingTextLeft();
+        const std::string title = tr("Recent songs");
         t.setFill(palette::foreground());
-        t.drawText(title, hx + 20.0, textfit::baseline(kHeaderH * 0.5, 13.0), 13.0, font::sansSemiBold());
+        t.drawText(title, hx, textfit::baseline(kHeaderH * 0.5, 13.0), 13.0, font::sansSemiBold());
         t.setFill(fade(palette::mutedForeground(), 0.6));
-        t.drawText(std::to_string(mCards.size()), hx + 20.0 + t.measureText(title, 13.0, font::sansSemiBold()) + 8.0,
+        t.drawText(std::to_string(mCards.size()), hx + t.measureText(title, 13.0, font::sansSemiBold()) + 8.0,
                    textfit::baseline(kHeaderH * 0.5, 10.0), 10.0, font::sans());
 
         // ── the grid, clipped to its viewport ──
@@ -336,6 +391,23 @@ namespace solaris_ui
             const Rect s = toScreen(mCards[i].live());
             if (s.bottom() < vp.y || s.y > vp.bottom() || mCards[i].alpha.value() <= 0.001) continue; // culled, the hover test's band
             paintCard(t, mCards[i], s, mHover.amount(10 + i));
+        }
+        // R-FAM-7: the dashed "New song" card after the last song — an outline, a plus, the words; never a filled card
+        if (const double na = mNew.alpha.value(); na > 0.001)
+        {
+            const Rect s = newCardLive();
+            if (s.bottom() >= vp.y && s.y <= vp.bottom())
+            {
+                const double hv = mHover.amount(8);
+                if (hv > 0.001) drawRoundedRect(t, s, radius::control(), Paint::filled(palette::primaryAlpha(0.06 * hv * na)));
+                dashedRect(t, Rect{s.x + 0.5, s.y + 0.5, s.w - 1.0, s.h - 1.0}, fade(lerpColor(palette::border(), palette::primary(), 0.7 * hv), na), 1.0);
+                const Color fg = fade(lerpColor(palette::mutedForeground(), palette::foreground(), hv), na);
+                const std::string ns = textfit::ellipsize(t, tr("New song"), s.w - 24.0, 12.0, font::sans());
+                const double tw = t.measureText(ns, 12.0, font::sans()), gx = s.x + (s.w - (13.0 + 8.0 + tw)) * 0.5, gy = s.y + s.h * 0.5;
+                glyph::plus(t, Rect{gx, gy - 6.5, 13.0, 13.0}, fg, 1.4);
+                t.setFill(fg);
+                t.drawText(ns, gx + 21.0, textfit::baseline(gy, 12.0), 12.0, font::sans());
+            }
         }
         t.restore();
         mScroll.drawBar(t, W - 6.0);

@@ -69,7 +69,7 @@ namespace solaris_ui
             for (const auto &r : mRows)
                 if (r.path == l.first)
                     out.push_back(a11yNode("relink." + r.path, "button", fillIn(tr("Locate {1}"), r.name), l.second, r.folder.empty() ? r.users : r.folder + " \xC2\xB7 " + r.users));
-        out.push_back(a11yNode("relink.search", "button", tr("Search a Folder\xE2\x80\xA6"), mSearch));
+        out.push_back(a11yNode("relink.search", "button", tr("Search a folder\xE2\x80\xA6"), mSearch));
         out.push_back(a11yNode("relink.done", "button", tr("Done"), mDone));
     }
 
@@ -256,7 +256,7 @@ namespace solaris_ui
         mSearch = Rect{c.x + kPad, mDone.y, 150.0, 30.0};
         drawRoundedRect(t, mSearch, radius::control(), Paint::filled(lerpColor(palette::secondary(), palette::card(), mHover.amount(kSearchId))));
         t.setFill(palette::secondaryForeground());
-        const std::string s = textfit::ellipsize(t, tr("Search a Folder\xE2\x80\xA6"), mSearch.w - 12.0, 12.0, font::sans());
+        const std::string s = textfit::ellipsize(t, tr("Search a folder\xE2\x80\xA6"), mSearch.w - 12.0, 12.0, font::sans());
         t.drawText(s, mSearch.x + (mSearch.w - t.measureText(s, 12.0, font::sans())) * 0.5, textfit::baseline(mSearch.y + mSearch.h * 0.5, 12.0), 12.0, font::sans());
         drawRoundedRect(t, mDone, radius::control(), Paint::filled(palette::primary()));
         const double hv = mHover.amount(kDoneId);

@@ -339,6 +339,19 @@ namespace solaris
             {"settings.languages[].code", "string", "R-ACCESS-2: en, vi, en-XA (the pseudo-language) …"},
             {"settings.languages[].name", "string", "R-ACCESS-2: the language's name in itself"},
             {"settings.showIds", "bool", "every object's id drawn beside its name (R-UI-11)"},
+            {"settings.agent", "string", "R-AGENT-2: the user's agent: claude | acp:<command> | cmd:<command>"},
+            {"assist", "object", "R-AGENT-1: the conversation with the user's agent; left out of a stable dump (a process, not the song)"},
+            {"assist.state", "string", "R-AGENT-1: off | starting | ready | busy | failed (left out of a stable dump: it is a process, not the song)"},
+            {"assist.agent", "string", "R-AGENT-1: the agent as it named itself"},
+            {"assist.messages", "object[]", "R-AGENT-1: the conversation, oldest first"},
+            {"assist.messages[].role", "string", "user | agent | tool | error | info"},
+            {"assist.messages[].text", "string", ""},
+            {"assist.choices", "object[]", "R-AGENT-1: the agents found on this machine, after `assist agents`"},
+            {"assist.choices[].id", "string", "claude, gemini, custom …"},
+            {"assist.choices[].name", "string", ""},
+            {"assist.choices[].agent", "string", "what `settings set agent=` takes to use it"},
+            {"assist.choices[].installed", "bool", ""},
+            {"assist.choices[].note", "string", "installed, or how to get it"},
             {"settings.autosave", "int", "seconds between autosaves of an unsaved song; 0 = off (R-SAFE-1)"},
             {"settings.driver", "string", "pulse | pipewire | web: how the clock device is reached (R-DEV-9; web = the pages that listen, R-SVC-7)"},
             {"settings.recordQuantize", "string", "off | 1/4 | 1/8 | 1/16 | 1/32: where a recorded note's start lands (R-MIDI-2)"},
@@ -865,9 +878,16 @@ namespace solaris
                                   for (const auto &l : m.settings.languages) ls.push(Json::object().set("code", l.code).set("name", l.name));
                                   return ls;
                               }())
-                              .set("showIds", m.settings.showIds).set("autosave", m.settings.autosave).set("driver", m.settings.driver).set("midiInputs", m.settings.midiInputs).set("recordQuantize", m.settings.recordQuantize)
+                              .set("showIds", m.settings.showIds).set("agent", m.settings.agent).set("autosave", m.settings.autosave).set("driver", m.settings.driver).set("midiInputs", m.settings.midiInputs).set("recordQuantize", m.settings.recordQuantize)
                               .set("countIn", m.settings.countIn).set("keys", keys).set("mappings", mappings)
                               .set("surface", m.settings.surface).set("surfacePort", m.settings.surfacePort).set("threads", m.settings.threads));
+        if (!stable) // R-AGENT-1: a conversation with a process is not a property of the song
+        {
+            Json msgs = Json::array(), choices = Json::array();
+            for (const auto &x : m.assist.messages) msgs.push(Json::object().set("role", x.role).set("text", x.text));
+            for (const auto &c : m.assist.choices) choices.push(Json::object().set("id", c.id).set("name", c.name).set("agent", c.agent).set("installed", c.installed).set("note", c.note));
+            j.set("assist", Json::object().set("state", m.assist.state).set("agent", m.assist.agent).set("messages", msgs).set("choices", choices));
+        }
         Json midi = Json::array();
         for (const auto &d : m.midiDevices) midi.push(Json::object().set("id", d.id).set("name", d.name).set("listening", d.listening));
         j.set("armed", m.armed).set("midiDevices", midi).set("mapLearning", m.mapLearning);

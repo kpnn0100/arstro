@@ -65,6 +65,7 @@ namespace solaris_ui
     {
     public:
         static constexpr double kTabsH = 29.25;      // space::u(9): the browser's tab bar
+        static constexpr double kTabUnderline = 2.0; // R-FAM-5: the current tab's accent underline, over the bar's foot rule
         static constexpr double kStripW = 84.5;      // space::u(26)
         static constexpr double kMasterW = 97.5;     // space::u(30)
         static constexpr double kFoldW = 29.25;      // space::u(9): an open group's header

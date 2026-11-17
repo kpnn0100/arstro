@@ -17,6 +17,9 @@ namespace solaris_ui
     namespace
     {
         constexpr double kPlayW = 30.0, kBtnH = 21.0;
+        constexpr double kToggleW = 24.0, kBtnGap = 6.5; // Loop, Metronome (R-TIME-4 amended); space::gap() between buttons
+        constexpr double kReadGap = 9.75;                // space::padX(): before the position, and before the tempo
+        constexpr double kSigW = 4 * 0.6 * 11.0;         // "12/8" in JetBrains Mono at 11 px (its advance is 0.6 em)
         constexpr double kMeterW = 60.0;
         Color fade(Color c, double a) { c.a *= a; return c; }
         // a name as one token of a command line: quoted when it holds a space (the format has no escape: " becomes ')
@@ -39,8 +42,7 @@ namespace solaris_ui
 
     void SongBar::layout()
     {
-        const Rect s = hitRect(kSettings);
-        mMenus->x.set(s.right() + 6.0);
+        mMenus->x.set(hitRect(kHome).right() + 6.0); // R-FAM-1: the menus follow the wordmark — Settings… is File's
         mMenus->y.set(0.0);
         mMenus->width.set(mMenus->contentWidth());
         mMenus->height.set(kHeight);
@@ -53,7 +55,22 @@ namespace solaris_ui
         // centred when there is room; otherwise right of the menus, the version chip and a readable name (R4: measured,
         // not fixed — the chip's width is eased, so the transport slides with it)
         const double after = chipX() + mChipW.value() + 10.0 + kNameMin + 24.0;
-        return std::max(width.value() * 0.5 - 110.0, after);
+        return std::max(width.value() * 0.5 - 122.0, after); // Record … the signature is 316 wide; Play begins 36.5 into it
+    }
+
+    double SongBar::contentRight(bool withSig) const { return hitRect(kBpm).right() + (withSig ? 6.0 + kSigW : 0.0); }
+
+    double SongBar::rightLimit(double fold) const
+    {
+        const Rect save = hitRect(kSave);
+        const double meterX = save.x - 14.0 - kMeterW;
+        return (meterX - 12.0 - 58.5) * (1.0 - fold) + meterX * fold - 12.0; // before the CPU readout — or, it folded, the meter
+    }
+
+    Rect SongBar::sigRect() const
+    {
+        const Rect b = hitRect(kBpm);
+        return Rect{b.right() + 6.0, b.y, kSigW, b.h};
     }
 
     void SongBar::bind(const solaris::AppModel &m)
@@ -67,6 +84,9 @@ namespace solaris_ui
         mBpm = m.tempos.empty() ? m.bpm : m.transport.tempo;
         mTempoId = m.tempos.empty() ? std::string() : m.transport.tempoId;
         mBeatsPerBar = std::max(1, std::atoi(m.sig.c_str()));
+        mSig = m.sig;
+        mLoopWanted = m.transport.loopTo > m.transport.loopFrom; // R-TIME-4 amended: a region is looped (the song's, or a roll's clip)
+        mMetroWanted = m.settings.metronome;
         mPeak[0] = m.transport.masterPeak[0];
         mPeak[1] = m.transport.masterPeak[1];
         mLearning = m.mapLearning; // R-CTRL-1
@@ -84,12 +104,17 @@ namespace solaris_ui
     {
         auto at = [this](int which) { return worldRect(*this, hitRect(which)); };
         out.push_back(a11yNode("bar.home", "button", tr("Home"), at(kHome)));
-        out.push_back(a11yNode("bar.settings", "button", tr("Settings"), at(kSettings)));
         if (mChipW.value() > 1.0) out.push_back(a11yNode("bar.version", "button", tr("Version"), at(kVersion), ::arstro::solaris_ui::shown(mChipTo)));
         A11yNode rec = a11yNode("bar.record", "toggle", tr("Record"), at(kRecord), mRecordingWanted ? tr("on") : tr("off"));
         rec.checked = mRecordingWanted;
         out.push_back(rec);
         out.push_back(a11yNode("bar.play", "button", mPlayingWanted ? tr("Stop") : tr("Play"), at(kPlay)));
+        A11yNode loop = a11yNode("bar.loop", "toggle", tr("Loop"), at(kLoop), mLoopWanted ? tr("on") : tr("off"));
+        loop.checked = mLoopWanted;
+        out.push_back(loop);
+        A11yNode metro = a11yNode("bar.metronome", "toggle", tr("Metronome"), at(kMetronome), mMetroWanted ? tr("on") : tr("off"));
+        metro.checked = mMetroWanted;
+        out.push_back(metro);
         char b[32];
         std::snprintf(b, sizeof b, "%g bpm", std::round(mBpm * 10.0) / 10.0);
         A11yNode bpm = a11yNode("bar.tempo", "slider", tr("Tempo"), at(kBpm), b);
@@ -109,22 +134,24 @@ namespace solaris_ui
         switch (which)
         {
         case kHome: return Rect{6.0, cy - 10.0, mWordW + 12.0, 20.0}; // the wordmark (R-UI-3 amended)
-        case kSettings: return Rect{12.0 + mWordW + 12.0, cy - kBtnH * 0.5, 66.0, kBtnH};
         case kPlay: return Rect{transportX(), cy - kBtnH * 0.5, kPlayW, kBtnH};
         case kRecord: return Rect{transportX() - 6.5 - kPlayW, cy - kBtnH * 0.5, kPlayW, kBtnH}; // R-MIDI-2: before Play
         case kSave: return Rect{W - 12.0 - 48.0, cy - kBtnH * 0.5, 48.0, kBtnH};
+        case kLoop: return Rect{transportX() + kPlayW + kBtnGap, cy - kBtnH * 0.5, kToggleW, kBtnH};                 // R-TIME-4 amended: after Play
+        case kMetronome: return Rect{transportX() + kPlayW + kBtnGap + kToggleW + kBtnGap, cy - kBtnH * 0.5, kToggleW, kBtnH};
         case kBpm:
         {
             // after the position: JetBrains Mono's advance is 0.6 em, so "000.0.000" at 11 px is 59.4 px wide —
             // a fixed width, so the hit rect needs no render target; "999.9 bpm" fits in u(21)
-            const Rect p = hitRect(kPlay);
-            return Rect{p.right() + 12.0 + 9 * 0.6 * 11.0 + 12.0, cy - kBtnH * 0.5, 68.25, kBtnH};
+            const Rect p = hitRect(kMetronome);
+            return Rect{p.right() + kReadGap + 9 * 0.6 * 11.0 + kReadGap, cy - kBtnH * 0.5, 68.25, kBtnH};
         }
         case kVersion: return Rect{chipX(), cy - 9.0, mChipW.value(), 18.0}; // R-VER: after the menus
         case kLearn:
         {
-            // R-CTRL-1: after the tempo, up to the CPU readout (u(80) at most)
-            const double x = hitRect(kBpm).right() + 12.0, right = cpuRect().x - 12.0;
+            // R-CTRL-1: after the tempo and the signature (as much of it as shows), up to the CPU readout — or the meter,
+            // the readout folded (R-TIME-4 amended) — u(80) at most; every term the eased one, so nothing here jumps
+            const double x = hitRect(kBpm).right() + 12.0 + mSigAmt.value() * (6.0 + kSigW), right = rightLimit(mCpuFold.value());
             return Rect{x, cy - kBtnH * 0.5, std::clamp(right - x, 0.0, 260.0), kBtnH};
         }
         default: return Rect{};
@@ -142,6 +169,8 @@ namespace solaris_ui
     {
         for (int i = kHome; i <= kRecord; ++i)
             if (hitRect(i).contains(p)) return i;
+        for (int i : {(int)kLoop, (int)kMetronome})
+            if (hitRect(i).contains(p)) return i;
         if (mLearn.value() > 0.5 && hitRect(kLearn).contains(p)) return kLearn; // only while it is there
         if (hitRect(kVersion).contains(p)) return kVersion;
         return kNone;
@@ -153,6 +182,8 @@ namespace solaris_ui
         {
             mPlaying.set(mPlayingWanted ? 1.0 : 0.0);
             mRecLit.set(mRecordingWanted ? 1.0 : 0.0);
+            mLoopLit.set(mLoopWanted ? 1.0 : 0.0);
+            mMetroLit.set(mMetroWanted ? 1.0 : 0.0);
             mLearn.set(mLearning.empty() ? 0.0 : 1.0);
             mDirtyDot.set(mDirty ? 1.0 : 0.0);
             mInit = true;
@@ -173,6 +204,19 @@ namespace solaris_ui
         toward(mPlaying, mPlayingWanted ? 1.0 : 0.0, motion::kCrossFadeMs);
         toward(mRecLit, mRecordingWanted ? 1.0 : 0.0, motion::kCrossFadeMs);
         toward(mLearn, mLearning.empty() ? 0.0 : 1.0, motion::kCrossFadeMs);
+        toward(mLoopLit, mLoopWanted ? 1.0 : 0.0, motion::kCrossFadeMs);
+        toward(mMetroLit, mMetroWanted ? 1.0 : 0.0, motion::kCrossFadeMs);
+        // R4 (R-TIME-4 amended): the bar gives way before its content — the signature folds when the transport would
+        // reach the CPU readout; while a learn waits and its pill would have under kLearnMin, the readout folds too
+        {
+            const bool learning = !mLearning.empty();
+            const bool cpuFold = learning && rightLimit(0.0) - (contentRight(false) + 12.0) < kLearnMin;
+            const double limit = rightLimit(cpuFold ? 1.0 : 0.0);
+            const bool sig = contentRight(true) <= limit && (!learning || limit - (contentRight(true) + 12.0) >= kLearnMin);
+            if (!mFoldInit) { mSigAmt.set(sig ? 1.0 : 0.0); mCpuFold.set(cpuFold ? 1.0 : 0.0); mFoldInit = width.value() > 1.0; }
+            toward(mSigAmt, sig ? 1.0 : 0.0, motion::kCrossFadeMs);
+            toward(mCpuFold, cpuFold ? 1.0 : 0.0, motion::kCrossFadeMs);
+        }
         // R-PERF-1: the load, a value catching up to a source it does not control
         if (mCpu != mCpuTarget)
         {
@@ -280,8 +324,9 @@ namespace solaris_ui
             case kHome: if (onHome) onHome(); break;
             case kPlay: if (onPlayToggle) onPlayToggle(); break;
             case kRecord: if (onRecordToggle) onRecordToggle(); break;
+            case kLoop: if (onLoopToggle) onLoopToggle(); break;                 // R-TIME-4 amended: ONE line, the App's
+            case kMetronome: if (onMetronomeToggle) onMetronomeToggle(); break;
             case kSave: if (onSave) onSave(); break;
-            case kSettings: if (onSettings) onSettings(); break;
             case kLearn: if (onCommand) onCommand("map learn --cancel"); break; // R-CTRL-1
             case kVersion: // R-VER: its menu drops from under the chip, not over it
             {
@@ -373,7 +418,6 @@ namespace solaris_ui
             }
             return r;
         };
-        button(kSettings, tr("Settings"), false);
 
         // R-VER: the version chip — the label cross-faded, the width eased (measured here, for the next frame's ease)
         {
@@ -403,8 +447,10 @@ namespace solaris_ui
         const std::string nm = textfit::ellipsize(t, ::arstro::solaris_ui::shown(mName), nameMax, 12.0, font::sansMedium());
         t.setFill(palette::foreground());
         t.drawText(nm, nameX, textfit::baseline(cy, 12.0), 12.0, font::sansMedium());
-        if (mDirtyDot.value() > 0.001)
-            drawCircle(t, nameX + t.measureText(nm, 12.0, font::sansMedium()) + 8.0, cy, 3.0, Paint::filled(fade(palette::primary(), mDirtyDot.value())));
+        // the unsaved dot: `foreground`, not the accent — an orange dot a few pixels from Record's red one read as a
+        // second record light (R-UI-2 amended)
+        mDirtyDotAt = Point{nameX + t.measureText(nm, 12.0, font::sansMedium()) + 8.0, cy};
+        if (mDirtyDot.value() > 0.001) drawCircle(t, mDirtyDotAt.x, mDirtyDotAt.y, 3.0, Paint::filled(fade(palette::foreground(), mDirtyDot.value())));
 
         // R-MIDI-2: record — a red dot; lit while recording, eased
         {
@@ -423,6 +469,31 @@ namespace solaris_ui
             const Rect g{r.x + (r.w - 10.0) * 0.5, r.y + (r.h - 10.0) * 0.5, 10.0, 10.0};
             if (p < 0.999) glyph::play(t, g, fade(palette::foreground(), 1.0 - p));
             if (p > 0.001) drawRoundedRect(t, Rect{g.x + 1.0, g.y + 1.0, 8.0, 8.0}, radius::control(), Paint::filled(fade(palette::foreground(), p)));
+            // R-TIME-4 amended: Loop and Metronome — toggles, lit in the accent while on (eased), their glyphs drawn
+            auto toggle = [&](int id, double lit) {
+                const Rect b = hitRect(id);
+                const double h2 = mHover.amount(id);
+                drawRoundedRect(t, b, radius::control(), Paint::filledStroked(lerpColor(palette::secondary(), palette::primaryAlpha(0.25), lit),
+                                                                               lerpColor(palette::border(), palette::primary(), 0.4 * h2 + 0.6 * lit), 1.0));
+                return lerpColor(palette::mutedForeground(), palette::foreground(), std::max(lit, h2));
+            };
+            {
+                const Color ink = toggle(kLoop, mLoopLit.value());
+                const Rect b = hitRect(kLoop);
+                const double gx = b.x + b.w * 0.5, gy = b.y + b.h * 0.5 + 1.0;
+                drawRoundedRect(t, Rect{gx - 6.0, gy - 3.5, 12.0, 7.0}, 3.5, Paint::stroked(ink, 1.25)); // the loop …
+                t.setFill(ink);                                                                           // … and which way round
+                t.beginPath(); t.moveTo(gx - 1.0, gy - 6.5); t.lineTo(gx + 2.5, gy - 3.5); t.lineTo(gx - 1.0, gy - 0.5); t.closePath(); t.fillPath();
+            }
+            {
+                const Color ink = toggle(kMetronome, mMetroLit.value());
+                const Rect b = hitRect(kMetronome);
+                const double gx = b.x + b.w * 0.5, gy = b.y + b.h * 0.5;
+                t.setStroke(ink, 1.25); // a metronome: its case, its pendulum
+                t.beginPath(); t.moveTo(gx - 4.5, gy + 5.0); t.lineTo(gx + 4.5, gy + 5.0); t.lineTo(gx + 2.0, gy - 5.0); t.lineTo(gx - 2.0, gy - 5.0); t.closePath(); t.strokePath();
+                t.beginPath(); t.moveTo(gx, gy + 2.5); t.lineTo(gx + 4.0, gy - 4.0); t.strokePath();
+            }
+            const Rect last = hitRect(kMetronome);
             // position: bar.beat.tick, 1-based like every DAW
             const double beats = std::max(0.0, mPosition);
             const int bar = (int)(beats / mBeatsPerBar) + 1, beat = (int)std::fmod(beats, (double)mBeatsPerBar) + 1;
@@ -430,7 +501,7 @@ namespace solaris_ui
             char buf[48];
             std::snprintf(buf, sizeof buf, "%3d.%d.%03d", bar, beat, tick);
             t.setFill(palette::foreground());
-            t.drawText(buf, r.right() + 12.0, textfit::baseline(cy, 11.0), 11.0, font::mono());
+            t.drawText(buf, last.right() + kReadGap, textfit::baseline(cy, 11.0), 11.0, font::mono());
             // the tempo: a control (R-UI-13) — a wash on hover, the accent while held, eased from elsewhere
             const Rect br = hitRect(kBpm);
             const double bh = std::max(mHover.amount(kBpm), mBpmDrag ? 1.0 : 0.0);
@@ -438,6 +509,12 @@ namespace solaris_ui
             std::snprintf(buf, sizeof buf, "%g bpm", std::round(bpmShown() * 10.0) / 10.0);
             t.setFill(mBpmDrag ? palette::primary() : lerpColor(palette::mutedForeground(), palette::foreground(), bh));
             t.drawText(buf, br.x + 4.0, textfit::baseline(cy, 11.0), 11.0, font::mono());
+            // the time signature: a label, where the bars it counts are shown — folded when the bar has no room (R4)
+            if (mSigAmt.value() > 0.001)
+            {
+                t.setFill(fade(palette::mutedForeground(), mSigAmt.value()));
+                t.drawText(textfit::ellipsize(t, mSig, kSigW, 11.0, font::mono()), sigRect().x, textfit::baseline(cy, 11.0), 11.0, font::mono());
+            }
         }
 
         // R-CTRL-1: a learn waiting — what for; a click cancels it
@@ -454,20 +531,21 @@ namespace solaris_ui
                        r.x + 8.0, textfit::baseline(cy, 10.0), 10.0, font::sans());
         }
         // R-PERF-1: the audio thread's load — muted, the destructive colour from 80 %
+        if (const double ca = 1.0 - mCpuFold.value(); ca > 0.001) // folded (eased) while a learn's pill needs its room (R4)
         {
             const Rect r = cpuRect();
             const double v = std::max(0.0, mCpuShown.value());
-            const Color c = lerpColor(palette::mutedForeground(), palette::destructive(), std::clamp((v - 0.7) / 0.1, 0.0, 1.0));
+            const Color c = fade(lerpColor(palette::mutedForeground(), palette::destructive(), std::clamp((v - 0.7) / 0.1, 0.0, 1.0)), ca);
             char pct[16];
             std::snprintf(pct, sizeof pct, "%d%%", (int)std::lround(v * 100.0));
-            t.setFill(palette::mutedForeground());
+            t.setFill(fade(palette::mutedForeground(), ca));
             // the label has the room the readout leaves (a longer language's word ellipsized, never over the number)
             t.drawText(textfit::ellipsize(t, tr("CPU"), std::max(0.0, r.w - t.measureText(pct, 10.0, font::mono()) - 6.0), 9.0, font::sansSemiBold()), r.x, r.y + 10.0, 9.0,
                        font::sansSemiBold(), 0.13 * 9.0);
             t.setFill(c);
             t.drawText(pct, r.right() - t.measureText(pct, 10.0, font::mono()), r.y + 10.0, 10.0, font::mono());
             const Rect track{r.x, r.bottom() - 3.0, r.w, 2.0};
-            drawRoundedRect(t, track, radius::pill(), Paint::filled(palette::whiteAlpha(0.06)));
+            drawRoundedRect(t, track, radius::pill(), Paint::filled(palette::whiteAlpha(0.06 * ca)));
             if (v > 0.0) drawRoundedRect(t, Rect{track.x, track.y, track.w * std::min(1.0, v), track.h}, radius::pill(), Paint::filled(c));
         }
         // master meter, L over R

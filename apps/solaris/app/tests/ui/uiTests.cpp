@@ -40,6 +40,13 @@ namespace
         ++passed;
     }
     bool contains(const std::string &s, const std::string &p) { return s.find(p) != std::string::npos; }
+    /** A song-bar menu's row by its label (R-FAM-1: a separator is a row too, so a position is not a name), or -1. */
+    int rowOf(arstro::cosmo_v2::MenuStrip &ms, int menu, const std::string &label)
+    {
+        for (int i = 0; i < (int)ms.menu(menu).items.size(); ++i)
+            if (ms.menu(menu).items[(size_t)i].label == label) return i;
+        return -1;
+    }
     bool sentLine(const sltest::Rig &r, const std::string &line)
     {
         for (const auto &l : r.sent)
@@ -271,7 +278,7 @@ static void test_home_unsaved_confirm_and_recents()
     r.click(r.app->project().bar().hitRect(0));                           // Home, unsaved → asked
     r.settle();
     assert(r.app->confirm().isOpen() && r.app->screen() == "project");
-    r.app->confirm().activate(1);                                         // Discard
+    r.app->confirm().activate(1);                                         // Don't save
     r.settle();
     assert(r.app->screen() == "home" && sentLine(r, "project close"));
     assert(r.app->home().cardCount() == 2);
@@ -281,7 +288,7 @@ static void test_home_unsaved_confirm_and_recents()
     r.click(r.app->home().cardLive(0));                                   // open the other
     r.settle();
     assert(r.app->screen() == "project" && r.svc->model().projectName == "Draft");
-    pass("Home: unsaved changes ask first (Discard closes); a card opens its song, right-click forgets it");
+    pass("Home: unsaved changes ask first (Don't save closes); a card opens its song, right-click forgets it");
 }
 
 using sltest::cx;
@@ -687,7 +694,9 @@ static void test_lists_travel_when_the_song_changes_shape()
     r.settle();
     const double y1 = tl.rowRect(0).y;
     assert(ym < y0 && ym > y1 && tl.clipAlpha("ac_1") == 0.0);
-    // the browser: a tab switched CROSS-FADES its list
+    // the browser: a tab switched CROSS-FADES its list (from Samples — with no sample folder it opened on Instruments, R-UI-16)
+    b.setTab(0);
+    r.settle();
     r.click(world(b, b.tabRect(1)));
     double fa = 0;
     for (int k = 0; k < 20 && fa == 0; ++k) { r.frame(); fa = b.rowAlpha(1); }
@@ -765,8 +774,8 @@ static void test_the_export_sheet_is_one_render_line()
     auto &ms = r.app->project().bar().menus();
     r.click(world(ms, ms.titleRect(0)));
     r.settle();
-    assert(ms.menu(0).items[5].label == "Export\xE2\x80\xA6");
-    r.click(world(ms, ms.itemRect(0, 5)));
+    assert(ms.menu(0).items[10].label == "Export\xE2\x80\xA6"); // after "Export Mix as WAV…" (R-FAM-6)
+    r.click(world(ms, ms.itemRect(0, 10)));
     r.frame();
     r.frame();
     auto &ex = r.app->exportSheet();
@@ -808,10 +817,11 @@ static void test_the_export_sheet_is_one_render_line()
     assert(!ex.isOpen() && asked == "Export the mix" && suggested == "Mixdown.mp3");
     assert(r.sent.back() == "render --out \"" + r.dir + "/Mixdown out.mp3\" " + want);
     assert(contains(r.app->toastText(), "no mp3 writer")); // this rig's host has no encoders: the service's own sentence
+    assert(r.app->toastIsRefusal() && r.app->renderAmount() == 0.0 && !r.app->renderPending()); // R-RENDER-4: refused — an error, the modal gone
     // a choice the format cannot take moves: 32-bit float, then FLAC — 24-bit, its label cross-fading there
     r.click(world(ms, ms.titleRect(0)));
     r.settle();
-    r.click(world(ms, ms.itemRect(0, 5)));
+    r.click(world(ms, ms.itemRect(0, rowOf(ms, 0, "Export\xE2\x80\xA6"))));
     r.settle();
     pick(ES::kFormat, 0);
     r.settle();
@@ -906,7 +916,9 @@ static void test_meters_and_the_loudness_window()
 
 static void test_mixer_dock_strips()
 {
-    sltest::Rig r("ui-mixer", 1280, 800);
+    // 1280 × 900: the dock's share of the window (R-UI-3 amended, 45 %) is then 405 px — a whole strip in view, its
+    // route chip too (at 800 the share is 360 and the strip's foot is reached by the dock's own scroll)
+    sltest::Rig r("ui-mixer", 1280, 900);
     r.cmd("project new " + r.song("Mix") + ".slp --bpm 120");
     r.cmd("clip add --instrument drums --at 0 --length 4");  // ch_2
     r.cmd("clip add --instrument synth --at 0 --length 4");  // ch_3
@@ -1949,20 +1961,23 @@ static void test_song_bar_menus_and_settings_sections()
     auto &bar = r.app->project().bar();
     auto &ms = bar.menus();
     using arstro::solaris_ui::SongBar;
-    // Settings sits beside Home; the transport keeps clear of the menus and a readable name, even at 1024
-    assert(bar.hitRect(SongBar::kSettings).x > bar.hitRect(SongBar::kHome).right());
+    // R-FAM-1: no Settings button — the menus follow the wordmark; the transport keeps clear of them and a readable name, even at 1024
+    assert(ms.x.value() == bar.hitRect(SongBar::kHome).right() + 6.0);
     assert(bar.hitRect(SongBar::kPlay).x >= ms.x.value() + ms.contentWidth() + SongBar::kNameMin);
-    r.click(world(bar, bar.hitRect(SongBar::kSettings)));
+    // File › Settings… opens the sheet
+    assert(ms.menuCount() == 4 && ms.menu(0).title == "File" && ms.menu(1).title == "Edit" && ms.menu(2).title == "Song" && ms.menu(3).title == "View");
+    r.click(world(ms, ms.titleRect(0)));
     r.settle();
-    assert(r.app->settings().isOpen());
+    r.click(world(ms, ms.itemRect(0, rowOf(ms, 0, "Settings\xE2\x80\xA6"))));
+    r.settle();
+    assert(r.app->settings().isOpen() && ms.openIndex() == -1);
     r.key(27);
     r.settle();
     // File › Save is `project save`
-    assert(ms.menuCount() == 4 && ms.menu(0).title == "File" && ms.menu(3).title == "View");
     r.click(world(ms, ms.titleRect(0)));
     r.settle();
     assert(ms.openIndex() == 0);
-    r.click(world(ms, ms.itemRect(0, 2)));
+    r.click(world(ms, ms.itemRect(0, rowOf(ms, 0, "Save"))));
     r.settle();
     assert(sentLine(r, "project save") && ms.openIndex() == -1);
     // Edit names what undo would take back, and is the `undo` line
@@ -1985,8 +2000,8 @@ static void test_song_bar_menus_and_settings_sections()
     r.settle();
     r.click(world(ms, ms.titleRect(2)));
     r.settle();
-    assert(ms.menu(2).items[4].label == "Quantize Clip");
-    r.click(world(ms, ms.itemRect(2, 4)));
+    assert(ms.menu(2).items[4].label == "Add Instrument\xE2\x80\xA6" && ms.menu(2).items[5].separator && ms.menu(2).items[6].label == "Quantize Clip"); // R-UI-16: before Quantize, a rule between
+    r.click(world(ms, ms.itemRect(2, 6)));
     r.settle();
     {
         char grid[32];
@@ -2021,7 +2036,7 @@ static void test_song_bar_menus_and_settings_sections()
     assert(ps.browserWidth() == 0.0);
     r.click(world(ms, ms.titleRect(3)));
     r.settle();
-    r.click(world(ms, ms.itemRect(3, 2)));
+    r.click(world(ms, ms.itemRect(3, rowOf(ms, 3, "Metronome: Off"))));
     r.settle();
     assert(sentLine(r, "settings set metronome=on") && r.svc->model().settings.metronome);
     // the settings sheet's pages: a combo's row, a toggle — each a `settings set` line
@@ -2049,7 +2064,7 @@ static void test_song_bar_menus_and_settings_sections()
     r.settle();
     {
         const artboard::Rect wm = world(bar, bar.hitRect(SongBar::kHome));
-        assert(wm.x < 20.0 && wm.right() < bar.hitRect(SongBar::kSettings).x + 1.0);
+        assert(wm.x < 20.0 && wm.right() < ms.x.value());
         r.cmd("set project.bpm=121"); // an unsaved edit
         r.settle();
         r.click(cx(wm), cy(wm));
@@ -2063,7 +2078,7 @@ static void test_song_bar_menus_and_settings_sections()
         r.settle();
         assert(sentLine(r, "project close") && r.app->screen() == "home");
     }
-    pass("Song bar: the wordmark is Home (no Home button); Settings beside it; File/Edit/Song/View are command lines (Edit names its undo); outside press closes; View folds the dock and browser, eased; new settings rows are lines");
+    pass("Song bar: the wordmark is Home (no Home button, no Settings button: File \xE2\x80\xBA Settings\xE2\x80\xA6); File/Edit/Song/View are command lines (Edit names its undo); outside press closes; View folds the dock and browser, eased; new settings rows are lines");
 }
 
 static void test_device_window_lists_parameters_and_binds_them()
@@ -2263,7 +2278,7 @@ static void test_automation_clips_draw_and_edit_curves()
     for (const auto &c : r.svc->model().clips)
         if (c.automation == "au_1" && c.id != ac) copy = c.id;
     assert(!copy.empty() && clipOf(copy).linked == 2);
-    clipMenu(copy, "Make unique");
+    clipMenu(copy, "Make Unique");
     assert(sentLine(r, "clip unique " + copy) && clipOf(copy).automation == "au_2" && r.svc->model().automations.size() == 2);
     // its track's menu: Delete Automation — the formulas that read it, its copy, its clips and its track go with it
     const artboard::Rect head = world(tl, tl.rowRect(autoTrackRow(r, "au_1")));
@@ -2598,7 +2613,7 @@ static void test_the_rolls_note_tools()
     assert(roll.rowOut(64) == 1.0 && roll.rowOut(61) == 1.0 && roll.rowOut(60) == 0.0);
     r.click(world(roll, roll.scaleRect()));
     r.settle();
-    assert(pick("Change key\xE2\x80\xA6"));
+    assert(pick("Change Key\xE2\x80\xA6"));
     r.settle();
     assert(menu.isOpen() && menu.itemCount() == 12);
     assert(pick("D minor") && sentLine(r, "pattern scale " + pt + " D minor"));
@@ -2618,7 +2633,7 @@ static void test_the_rolls_note_tools()
     assert(at3 == 3);
     r.click(world(roll, roll.chordRect()));
     r.settle();
-    assert(pick("Single notes") && !roll.chordOn());
+    assert(pick("Single Notes") && !roll.chordOn());
     // a velocity set by a shell eases there
     r.cmd("notes set " + pt + " \"60@0\" --vel 40");
     r.frame();
@@ -3565,13 +3580,13 @@ static void test_a_line_added_and_sources_relinked()
     assert(ax > add0.x + 0.5 && ax < add0.x + arstro::solaris_ui::MixerDock::kStripW - 0.5);
     r.settle();
     assert(std::fabs(d.addLineRect().x - 6.5 - d.cardRect(added).right()) < 0.5); // right after the last card (two now feed Main: a group)
-    // a strip's menu: "Move its clips to ▸" — the lines of its kind — is ONE `strip relink`
+    // a strip's menu: "Move Its Clips to ▸" — the lines of its kind — is ONE `strip relink`
     const artboard::Rect card = world(d, d.cardRect("ch_2"));
     r.click(card.x + 20.0, card.y + 16.0, 2);
     r.settle();
     int move = -1;
     for (int i = 0; i < menu.itemCount(); ++i)
-        if (menu.item(i).label.rfind("Move its clips to", 0) == 0) move = i;
+        if (menu.item(i).label.rfind("Move Its Clips to", 0) == 0) move = i;
     assert(menu.isOpen() && move >= 0);
     r.click(menu.itemRect(move));
     r.settle();
@@ -3579,12 +3594,12 @@ static void test_a_line_added_and_sources_relinked()
     r.click(menu.itemRect(0));
     r.settle();
     assert(sentLine(r, "strip relink ch_2 --to " + added) && r.svc->model().clips[0].track == added);
-    // a clip's menu on the lanes: "Play through ▸" — the strips of its kind — is ONE `clip move --strip`
+    // a clip's menu on the lanes: "Play Through ▸" — the strips of its kind — is ONE `clip move --strip`
     auto &tl = r.app->project().timeline();
     const artboard::Rect clip = world(tl, tl.clipRect(ac));
     r.click(clip.x + 12.0, cy(clip), 2);
     r.settle();
-    assert(menu.isOpen() && menu.item(0).label.rfind("Play through", 0) == 0);
+    assert(menu.isOpen() && menu.item(0).label.rfind("Play Through", 0) == 0);
     r.click(menu.itemRect(0));
     r.settle();
     int back = -1;
@@ -4269,7 +4284,7 @@ static void test_markers_on_the_ruler()
     const artboard::Rect f3 = world(tl, tl.markerRect("mk_3"));
     r.click(cx(f3), cy(f3), 2);
     r.settle();
-    assert(menu.isOpen() && menuItem(r, "Rename\xE2\x80\xA6") >= 0 && menuItem(r, "Delete marker") >= 0);
+    assert(menu.isOpen() && menuItem(r, "Rename\xE2\x80\xA6") >= 0 && menuItem(r, "Delete Marker") >= 0);
     r.click(menu.itemRect(menuItem(r, "Rename\xE2\x80\xA6")));
     r.settle();
     assert(menu.isRenaming());
@@ -4282,7 +4297,7 @@ static void test_markers_on_the_ruler()
     assert(sentLine(r, "marker rename mk_3 \"Big Outro\"") && r.svc->model().markers[2].name == "Big Outro");
     r.click(cx(f3), cy(f3), 2);
     r.settle();
-    r.click(menu.itemRect(menuItem(r, "Delete marker")));
+    r.click(menu.itemRect(menuItem(r, "Delete Marker")));
     r.frame();
     r.frame();
     assert(sentLine(r, "marker delete mk_3"));
@@ -4294,8 +4309,8 @@ static void test_markers_on_the_ruler()
     const artboard::Rect band = world(tl, artboard::Rect{tl.beatToX(28.0), 0.0, 1.0, arstro::solaris_ui::Timeline::kMarkH});
     r.click(cx(band), cy(band), 2);
     r.settle();
-    assert(menuItem(r, "Add marker here") >= 0);
-    r.click(menu.itemRect(menuItem(r, "Add marker here")));
+    assert(menuItem(r, "Add Marker Here") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Add Marker Here")));
     r.settle();
     assert(sentLine(r, "marker add \"Marker 3\" --at 28") && r.svc->model().markers.size() == 3);
     pass("markers on the ruler (R-ARR-1): a flag clicked seeks, double-clicked loops its section, dragged moves it (one line, its section with it), right-clicked renames or deletes it; elsewhere adds one; a shell's move eases, a new one fades in, a deleted one fades out");
@@ -4315,9 +4330,9 @@ static void test_time_edits_from_the_ruler()
     const artboard::Rect band = world(tl, artboard::Rect{tl.beatToX(5.0), 0.0, 1.0, arstro::solaris_ui::Timeline::kMarkH});
     r.click(cx(band), cy(band), 2);
     r.settle();
-    assert(menuItem(r, "Insert a bar here") >= 0 && menuItem(r, "Delete this bar") >= 0 && menuItem(r, "Delete the loop's time") < 0);
+    assert(menuItem(r, "Insert a Bar Here") >= 0 && menuItem(r, "Delete This Bar") >= 0 && menuItem(r, "Delete the Loop's Time") < 0);
     const double x8 = tl.clipRect("ac_2").x;
-    r.click(menu.itemRect(menuItem(r, "Insert a bar here")));
+    r.click(menu.itemRect(menuItem(r, "Insert a Bar Here")));
     r.frame();
     r.frame();
     assert(sentLine(r, "time insert --at 4 --length 4") && r.svc->model().clips[1].at == 12.0);
@@ -4326,15 +4341,15 @@ static void test_time_edits_from_the_ruler()
     r.settle();
     r.click(cx(band), cy(band), 2);
     r.settle();
-    r.click(menu.itemRect(menuItem(r, "Delete this bar")));
+    r.click(menu.itemRect(menuItem(r, "Delete This Bar")));
     r.settle();
     assert(sentLine(r, "time delete --from 4 --to 8") && r.svc->model().clips[1].at == 8.0 && std::fabs(tl.clipRect("ac_2").x - x8) < 0.01);
     r.cmd("transport loop 8 12");
     r.settle();
     r.click(cx(band), cy(band), 2);
     r.settle();
-    assert(menuItem(r, "Delete the loop's time") >= 0);
-    r.click(menu.itemRect(menuItem(r, "Delete the loop's time")));
+    assert(menuItem(r, "Delete the Loop's Time") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Delete the Loop's Time")));
     r.settle();
     assert(sentLine(r, "time delete --from 8 --to 12") && r.svc->model().clips.size() == 1);
     pass("time edits from the ruler (R-ARR-2): Insert a bar here, Delete this bar, Delete the loop's time — each one line; the clips eased there");
@@ -4390,8 +4405,8 @@ static void test_lane_groups_on_the_timeline()
     const artboard::Rect head = world(tl, artboard::Rect{20.0, tl.rowRect(tl.groupRow("lg_1")).y + 10.0, 1.0, 1.0});
     r.click(head.x, head.y, 2);
     r.settle();
-    assert(menu.isOpen() && menuItem(r, "Open group") >= 0 && menuItem(r, "Ungroup") >= 0);
-    r.click(menu.itemRect(menuItem(r, "Open group")));
+    assert(menu.isOpen() && menuItem(r, "Open Group") >= 0 && menuItem(r, "Ungroup") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Open Group")));
     r.settle();
     assert(sentLine(r, "set lg_1.folded=off") && tl.groupRow("lg_1") < 0 && tl.groupTurn("lg_1") == 0.0);
     // a lane's menu: into the group, and out again
@@ -4401,8 +4416,8 @@ static void test_lane_groups_on_the_timeline()
     const artboard::Rect lc = world(tl, artboard::Rect{20.0, tl.rowRect(rc).y + 10.0, 1.0, 1.0});
     r.click(lc.x, lc.y, 2);
     r.settle();
-    assert(menuItem(r, "New group") >= 0 && menuItem(r, "Into group\xE2\x80\xA6") >= 0);
-    r.click(menu.itemRect(menuItem(r, "Into group\xE2\x80\xA6")));
+    assert(menuItem(r, "New Group") >= 0 && menuItem(r, "Into Group\xE2\x80\xA6") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Into Group\xE2\x80\xA6")));
     r.settle();
     assert(menuItem(r, "Drums") >= 0);
     r.click(menu.itemRect(menuItem(r, "Drums")));
@@ -4413,7 +4428,7 @@ static void test_lane_groups_on_the_timeline()
     const artboard::Rect lc2 = world(tl, artboard::Rect{20.0, tl.rowRect(rc).y + 10.0, 1.0, 1.0});
     r.click(lc2.x, lc2.y, 2);
     r.settle();
-    r.click(menu.itemRect(menuItem(r, "Leave group")));
+    r.click(menu.itemRect(menuItem(r, "Leave Group")));
     r.settle();
     assert(sentLine(r, "set " + c + ".group=none") && r.svc->model().groups[0].lanes.size() == 2);
     pass("lane groups on the timeline (R-ARR-3): the chevron folds and opens a group, one line, eased — the chevron turns, the clips travel into one row; a clip dragged on the folded row carries the group's clips, one `clips move`; the folded row's menu opens it; a lane's menu puts it into a group and out");
@@ -4466,8 +4481,8 @@ static void test_recording_audio_from_the_window()
     const artboard::Rect band = world(tl, artboard::Rect{tl.beatToX(5.0), 0.0, 1.0, arstro::solaris_ui::Timeline::kMarkH});
     r.click(cx(band), cy(band), 2);
     r.settle();
-    assert(menuItem(r, "Punch the loop's span") >= 0 && menuItem(r, "Punch off") < 0);
-    r.click(menu.itemRect(menuItem(r, "Punch the loop's span")));
+    assert(menuItem(r, "Punch the Loop's Span") >= 0 && menuItem(r, "Punch Off") < 0);
+    r.click(menu.itemRect(menuItem(r, "Punch the Loop's Span")));
     r.frame();
     r.frame();
     assert(sentLine(r, "transport punch 4 8"));
@@ -4514,8 +4529,8 @@ static void test_takes_under_their_clip()
     const artboard::Rect cr = world(tl, tl.clipRect(ac));
     r.click(cr.x + 20.0, cy(cr), 2);
     r.settle();
-    assert(menuItem(r, "Show takes") >= 0);
-    r.click(menu.itemRect(menuItem(r, "Show takes")));
+    assert(menuItem(r, "Show Takes") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Show Takes")));
     r.settle();
     assert(tl.takesShown(ac) && tl.rowCount() == rows + 3 && tl.takeRowRect(ac, 3).h > 0.0);
     assert(tl.takeLit(ac, 3, 1.5) == 1.0 && tl.takeLit(ac, 1, 1.5) == 0.0); // the last plays where the comp says nothing
@@ -4539,7 +4554,7 @@ static void test_takes_under_their_clip()
     // hidden again
     r.click(cr.x + 20.0, cy(cr), 2);
     r.settle();
-    r.click(menu.itemRect(menuItem(r, "Hide takes")));
+    r.click(menu.itemRect(menuItem(r, "Hide Takes")));
     r.settle();
     assert(!tl.takesShown(ac) && tl.rowCount() == rows);
     pass("takes under their clip (R-REC-2): Show takes inserts a row per take, the last lit; a drag across take 1 is one `clip comp`, its light crossing over eased; a double-click on take 2 the whole clip; Hide takes");
@@ -4611,7 +4626,7 @@ static void test_a_clips_fades_gain_and_edits()
     auto &menu = r.app->menu();
     r.click(cr.x + 30.0, cy(cr), 2);
     r.settle();
-    assert(menuItem(r, "Reverse") >= 0 && menuItem(r, "Consolidate 2 clips") >= 0 && menuItem(r, "Slice \xE2\x96\xB8") < 0);
+    assert(menuItem(r, "Reverse") >= 0 && menuItem(r, "Consolidate 2 Clips") >= 0 && menuItem(r, "Slice \xE2\x96\xB8") < 0);
     r.click(menu.itemRect(menuItem(r, "Reverse")));
     r.frame();
     r.frame();
@@ -4619,8 +4634,8 @@ static void test_a_clips_fades_gain_and_edits()
     r.settle();
     r.click(cr.x + 30.0, cy(cr), 2);
     r.settle();
-    assert(menuItem(r, "Play forwards") >= 0);
-    r.click(menu.itemRect(menuItem(r, "Consolidate 2 clips")));
+    assert(menuItem(r, "Play Forwards") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Consolidate 2 Clips")));
     r.settle();
     assert(sentLine(r, "clip consolidate " + ac + " " + over));
     // a plain clip: Slice ▸ Every half beat; Split at the time bar; Ctrl+E
@@ -4633,18 +4648,18 @@ static void test_a_clips_fades_gain_and_edits()
     const artboard::Rect pr = world(tl, tl.clipRect(plain));
     r.click(cx(pr), cy(pr), 2);
     r.settle();
-    assert(menuItem(r, "Split at the time bar") >= 0);
+    assert(menuItem(r, "Split at the Time Bar") >= 0);
     r.click(menu.itemRect(menuItem(r, "Slice \xE2\x96\xB8")));
     r.settle();
-    assert(menuItem(r, "At its hits") >= 0 && menuItem(r, "To a kit, a slice a beat") >= 0);
-    r.click(menu.itemRect(menuItem(r, "Every half beat")));
+    assert(menuItem(r, "At Its Hits") >= 0 && menuItem(r, "To a Kit, a Slice a Beat") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Every Half Beat")));
     r.settle();
     assert(sentLine(r, "clip slice " + plain + " --every 0.5") && r.svc->model().clips.size() == 3);
     r.cmd("undo");
     r.settle();
     r.click(cx(pr), cy(pr), 2);
     r.settle();
-    r.click(menu.itemRect(menuItem(r, "Split at the time bar")));
+    r.click(menu.itemRect(menuItem(r, "Split at the Time Bar")));
     r.settle();
     assert(sentLine(r, "clip split " + plain + " --at 8.5"));
     r.cmd("undo");
@@ -4675,7 +4690,7 @@ static void test_a_clip_warped_from_its_menu()
         r.settle();
     };
     open();
-    assert(menuItem(r, "Warp to the song's tempo") >= 0 && menuItem(r, "Tempo\xE2\x80\xA6") >= 0 && menuItem(r, "Pitch \xE2\x96\xB8") >= 0);
+    assert(menuItem(r, "Warp to the Song's Tempo") >= 0 && menuItem(r, "Tempo\xE2\x80\xA6") >= 0 && menuItem(r, "Pitch \xE2\x96\xB8") >= 0);
     r.click(menu.itemRect(menuItem(r, "Tempo\xE2\x80\xA6")));
     r.settle();
     assert(menu.isRenaming());
@@ -4687,7 +4702,7 @@ static void test_a_clip_warped_from_its_menu()
     r.settle();
     assert(sentLine(r, "set " + ac + ".bpm=60") && r.svc->model().clips[0].bpm == 60.0);
     open();
-    r.click(menu.itemRect(menuItem(r, "Warp to the song's tempo")));
+    r.click(menu.itemRect(menuItem(r, "Warp to the Song's Tempo")));
     r.frame();
     r.frame();
     assert(sentLine(r, "set " + ac + ".warp=true") && r.svc->model().clips[0].warp);
@@ -4755,8 +4770,8 @@ static void test_tempo_changes_on_the_ruler()
     const artboard::Rect f2 = world(tl, tl.tempoRect(tp));
     r.click(f2.x + 4.0, cy(f2), 2);
     r.settle();
-    assert(menuItem(r, "Glide into it") >= 0 && menuItem(r, "Delete tempo change") >= 0);
-    r.click(menu.itemRect(menuItem(r, "Glide into it")));
+    assert(menuItem(r, "Glide into It") >= 0 && menuItem(r, "Delete Tempo Change") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Glide into It")));
     r.settle();
     assert(sentLine(r, "tempo move " + tp + " --ramp true") && r.svc->model().tempos[0].ramp);
     r.click(f2.x + 4.0, cy(f2), 2);
@@ -4774,8 +4789,8 @@ static void test_tempo_changes_on_the_ruler()
     const double x4 = world(tl, artboard::Rect{tl.beatToX(4.0), 0, 0, 0}).x;
     r.click(x4 + 1.0, f2.y + f2.h * 0.5, 2);
     r.settle();
-    assert(menuItem(r, "Tempo change here\xE2\x80\xA6") >= 0);
-    r.click(menu.itemRect(menuItem(r, "Tempo change here\xE2\x80\xA6")));
+    assert(menuItem(r, "Tempo Change Here\xE2\x80\xA6") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Tempo Change Here\xE2\x80\xA6")));
     r.settle();
     typed.text = "75";
     r.app->key(typed);
@@ -4794,7 +4809,7 @@ static void test_tempo_changes_on_the_ruler()
     const artboard::Rect f3 = world(tl, tl.tempoRect(tp));
     r.click(f3.x + 4.0, cy(f3), 2);
     r.settle();
-    r.click(menu.itemRect(menuItem(r, "Delete tempo change")));
+    r.click(menu.itemRect(menuItem(r, "Delete Tempo Change")));
     r.frame();
     r.frame();
     assert(sentLine(r, "tempo delete " + tp));
@@ -4851,13 +4866,13 @@ static void test_presets_in_the_window()
     auto &menu = r.app->menu();
     r.click(world(p, p.presetsRect()));
     r.settle();
-    assert(menuItem(r, "Warm  \xC2\xB7 factory") >= 0 && menuItem(r, "Save as preset\xE2\x80\xA6") >= 0);
+    assert(menuItem(r, "Warm  \xC2\xB7 factory") >= 0 && menuItem(r, "Save as Preset\xE2\x80\xA6") >= 0);
     r.click(menu.itemRect(menuItem(r, "Warm  \xC2\xB7 factory")));
     r.settle();
     assert(sentLine(r, "preset load " + dv + " \"Warm\""));
     r.click(world(p, p.presetsRect()));
     r.settle();
-    r.click(menu.itemRect(menuItem(r, "Save as preset\xE2\x80\xA6")));
+    r.click(menu.itemRect(menuItem(r, "Save as Preset\xE2\x80\xA6")));
     r.settle();
     artboard::KeyEvent typed;
     typed.type = artboard::KeyEvent::Type::Text;
@@ -4913,7 +4928,7 @@ static void test_templates_in_the_window()
         if (ms.menu(0).items[(size_t)i].label == "Save as Template\xE2\x80\xA6") saveAs = i;
         if (ms.menu(0).items[(size_t)i].label == "New from Template\xE2\x80\xA6") fromT = i;
     }
-    assert(saveAs >= 0 && fromT >= 0 && ms.menu(0).items[5].label == "Export\xE2\x80\xA6"); // the others where they were
+    assert(saveAs >= 0 && fromT >= 0 && rowOf(ms, 0, "Export\xE2\x80\xA6") >= 0); // the others still there
     r.click(world(ms, ms.titleRect(0)));
     r.settle();
     r.click(world(ms, ms.itemRect(0, saveAs)));
@@ -5018,7 +5033,7 @@ static void test_the_sample_library_in_the_browser()
     // Remove tag, from its menu there
     r.click(cx(world(b, b.rowRect(1))) - 40.0, cy(world(b, b.rowRect(1))), 2);
     r.settle();
-    r.click(menu.itemRect(menuItem(r, "Remove tag \xC2\xB7 punchy")));
+    r.click(menu.itemRect(menuItem(r, "Remove Tag \xC2\xB7 punchy")));
     r.settle();
     assert(sentLine(r, "sample untag " + quote(kick) + " punchy"));
     pass("the sample library in the browser (R-PRESET-3): a star one `sample favourite`, lit eased; Tag… typed one `sample tag`; Search samples… typed one `browse --search`, the list crossing to what it found, back by its first row; Favourites one `browse --favourites`; Remove tag one `sample untag`");
@@ -5566,8 +5581,8 @@ static void test_the_chords_band()
     const artboard::Rect cr = world(tl, tl.clipRect(prog));
     r.click(cr.x + 30.0, cy(cr), 2);
     r.settle();
-    assert(menuItem(r, "Separate harmonic / percussive") >= 0 && menuItem(r, "To MIDI") >= 0 && menuItem(r, "Detect chords") >= 0);
-    r.click(menu.itemRect(menuItem(r, "Detect chords")));
+    assert(menuItem(r, "Separate Harmonic / Percussive") >= 0 && menuItem(r, "To MIDI") >= 0 && menuItem(r, "Detect Chords") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Detect Chords")));
     double grow = -1, fadeIn = -1;
     for (int k = 0; k < 40 && (grow < 0 || fadeIn < 0); ++k)
     {
@@ -5604,8 +5619,8 @@ static void test_the_chords_band()
     const artboard::Rect band = world(tl, artboard::Rect{tl.beatToX(1.0), Timeline::kRulerH + 4.0, 1.0, 1.0});
     r.click(cx(band), cy(band), 2);
     r.settle();
-    assert(menuItem(r, "Insert a bar here") >= 0 && menuItem(r, "Detect chords") >= 0 && menuItem(r, "Clear chords") >= 0);
-    r.click(menu.itemRect(menuItem(r, "Insert a bar here")));
+    assert(menuItem(r, "Insert a Bar Here") >= 0 && menuItem(r, "Detect Chords") >= 0 && menuItem(r, "Clear Chords") >= 0);
+    r.click(menu.itemRect(menuItem(r, "Insert a Bar Here")));
     double slid = -1;
     for (int k = 0; k < 30 && slid < 0; ++k)
     {
@@ -5618,7 +5633,7 @@ static void test_the_chords_band()
     // Clear chords: each fades out, the band closes, the lanes slide back up
     r.click(cx(band), cy(band), 2);
     r.settle();
-    r.click(menu.itemRect(menuItem(r, "Clear chords")));
+    r.click(menu.itemRect(menuItem(r, "Clear Chords")));
     double fadeOut = -1, shut = -1;
     for (int k = 0; k < 40 && (fadeOut < 0 || shut < 0); ++k)
     {
@@ -5634,8 +5649,8 @@ static void test_the_chords_band()
     const artboard::Rect ruler = world(tl, artboard::Rect{tl.beatToX(1.0), Timeline::kMarkH + 4.0, 1.0, 1.0});
     r.click(cx(ruler), cy(ruler), 2);
     r.settle();
-    assert(menuItem(r, "Detect chords") >= 0 && menuItem(r, "Clear chords") < 0);
-    r.click(menu.itemRect(menuItem(r, "Detect chords")));
+    assert(menuItem(r, "Detect Chords") >= 0 && menuItem(r, "Clear Chords") < 0);
+    r.click(menu.itemRect(menuItem(r, "Detect Chords")));
     r.settle();
     assert(sentLine(r, "chords detect") && r.svc->model().songChords.size() == 4 && r.svc->model().songChords[0].at == 8.0 && tl.chordRowAmount() == 1.0);
     // the melody's menu: To MIDI — a track of its notes; the progression's: Separate — two clips in its place
@@ -5650,7 +5665,7 @@ static void test_the_chords_band()
     const artboard::Rect pr = world(tl, tl.clipRect(prog));
     r.click(pr.x + 30.0, cy(pr), 2);
     r.settle();
-    r.click(menu.itemRect(menuItem(r, "Separate harmonic / percussive")));
+    r.click(menu.itemRect(menuItem(r, "Separate Harmonic / Percussive")));
     r.settle();
     int halves = 0;
     for (const auto &c : r.svc->model().clips) halves += c.name == "progression harmonic" || c.name == "progression percussive";
@@ -5680,7 +5695,7 @@ static void test_export_with_the_video()
     auto open = [&] {
         r.click(world(ms, ms.titleRect(0)));
         r.settle();
-        r.click(world(ms, ms.itemRect(0, 5)));
+        r.click(world(ms, ms.itemRect(0, rowOf(ms, 0, "Export\xE2\x80\xA6"))));
         r.settle();
         assert(ex.isOpen());
     };
@@ -5810,8 +5825,8 @@ static void test_conflicts_are_asked_in_a_sheet()
     auto &ms = r.app->project().bar().menus();
     r.click(world(ms, ms.titleRect(0)));
     r.settle();
-    const int item = (int)ms.menu(0).items.size() - 1;
-    assert(ms.menu(0).items[(size_t)item].label == "Conflicts\xE2\x80\xA6");
+    const int item = rowOf(ms, 0, "Conflicts\xE2\x80\xA6");
+    assert(item >= 0);
     r.click(world(ms, ms.itemRect(0, item)));
     r.settle();
     assert(cs.isOpen() && cs.rowCount() == 1);
@@ -5855,7 +5870,7 @@ static void test_the_ui_scale_and_high_contrast()
     r.settle();
     assert(r.app->drawnUiScale() == 1.5 && std::fabs(r.app->logicalWidth() - 1280.0 / 1.5) < 1e-6 && std::fabs(r.app->logicalHeight() - 800.0 / 1.5) < 1e-6);
     {
-        // DRAWN at the scale: the playhead (red) at 1.5 × its logical place, not at the logical place itself
+        // DRAWN at the scale: the playhead (a light line — R-UI-2 amended) at 1.5 × its logical place, not at the logical place itself
         r.app->settings().close();
         r.settle();
         auto &tl = r.app->project().timeline();
@@ -5864,8 +5879,8 @@ static void test_the_ui_scale_and_high_contrast()
             for (int dx = -1; dx <= 1; ++dx)
             {
                 const uint32_t p = r.pixel((int)std::floor(x) + dx, (int)y);
-                const int R = (int)((p >> 16) & 0xFF), G = (int)((p >> 8) & 0xFF);
-                if (R > G + 60) return true;
+                const int R = (int)((p >> 16) & 0xFF), G = (int)((p >> 8) & 0xFF), B = (int)(p & 0xFF);
+                if (R > 90 && std::abs(R - G) <= 14 && std::abs(G - B) <= 14) return true;
             }
             return false;
         };
@@ -5925,25 +5940,26 @@ static void test_the_keyboard_reaches_every_control()
     };
     {
         const auto nodes = r.app->accessibles();
-        assert(nodes.size() > 12 && nodes[0].key == "bar.home" && nodes[1].key == "bar.settings" && nodes[2].key == "menu.File" && nodes[2].role == "menu");
+        assert(nodes.size() > 12 && nodes[0].key == "bar.home" && nodes[1].key == "menu.File" && nodes[1].role == "menu" && nodes[4].key == "menu.View");
+        for (const auto &n : nodes) assert(n.key != "bar.settings"); // R-FAM-1: Settings… is File's
     }
     const A11yNode *fader = find("dock.ch_2.fader");
     assert(fader && fader->role == "slider" && fader->name == "Basic Synth fader" && fader->value == "0.0 dB");
-    assert(find("bar.tempo")->value == "120 bpm" && find("browser.tab.0")->checked && find("dock.ch_2.mute")->role == "toggle");
+    assert(find("bar.tempo")->value == "120 bpm" && find("browser.tab.1")->checked /* no sample folder: Instruments (R-UI-16) */ && find("dock.ch_2.mute")->role == "toggle");
     // Tab: the first control, its ring fading in
     r.key(9);
     r.frame();
     r.frame();
     assert(r.app->focusHeld() && r.app->focusKey() == "bar.home" && r.app->focusAmount() > 0.0 && r.app->focusAmount() < 1.0);
     r.settle();
-    const artboard::Rect home = find("bar.home")->bounds, settings = find("bar.settings")->bounds;
+    const artboard::Rect home = find("bar.home")->bounds, settings = find("menu.File")->bounds;
     assert(std::fabs(r.app->focusRing().x - home.x) < 1e-6 && std::fabs(r.app->focusRing().w - home.w) < 1e-6);
     // Tab: the next, the ring travelling there; Shift+Tab back
     r.key(9);
     r.frame();
     r.frame();
     const double rx = r.app->focusRing().x;
-    assert(r.app->focusKey() == "bar.settings" && rx > home.x && rx < settings.x);
+    assert(r.app->focusKey() == "menu.File" && rx > home.x && rx < settings.x);
     r.settle();
     r.key(9, false, true);
     r.settle();
@@ -6345,13 +6361,13 @@ static void test_a_strip_freezes_from_its_menu()
     };
     // the bus is fed: neither offered
     open("ch_3");
-    assert(menuItem(r, "Freeze") < 0 && menuItem(r, "Bounce to a new strip") < 0 && menuItem(r, "Unfreeze") < 0);
+    assert(menuItem(r, "Freeze") < 0 && menuItem(r, "Bounce to a New Strip") < 0 && menuItem(r, "Unfreeze") < 0);
     r.click(5.0, 790.0); // away: the menu closes (Escape closes only a rename)
     r.settle();
     assert(!menu.isOpen());
     assert(d.frozenAmount("ch_2") == 0.0);
     open("ch_2");
-    assert(menuItem(r, "Freeze") >= 0 && menuItem(r, "Bounce to a new strip") >= 0 && menuItem(r, "Unfreeze") < 0);
+    assert(menuItem(r, "Freeze") >= 0 && menuItem(r, "Bounce to a New Strip") >= 0 && menuItem(r, "Unfreeze") < 0);
     r.click(menu.itemRect(menuItem(r, "Freeze")));
     assert(r.sent.back() == "strip freeze ch_2" && !r.svc->model().strips.empty());
     bool frozen = false;
@@ -6365,7 +6381,7 @@ static void test_a_strip_freezes_from_its_menu()
     assert(d.frozenAmount("ch_2") == 1.0);
     // frozen: Unfreeze instead of Freeze; Bounce still offered
     open("ch_2");
-    assert(menuItem(r, "Unfreeze") >= 0 && menuItem(r, "Freeze") < 0 && menuItem(r, "Bounce to a new strip") >= 0);
+    assert(menuItem(r, "Unfreeze") >= 0 && menuItem(r, "Freeze") < 0 && menuItem(r, "Bounce to a New Strip") >= 0);
     r.click(menu.itemRect(menuItem(r, "Unfreeze")));
     assert(r.sent.back() == "strip unfreeze ch_2");
     r.frame();
@@ -6377,7 +6393,7 @@ static void test_a_strip_freezes_from_its_menu()
     // bounce: a new strip
     const size_t strips = r.svc->model().strips.size();
     open("ch_2");
-    r.click(menu.itemRect(menuItem(r, "Bounce to a new strip")));
+    r.click(menu.itemRect(menuItem(r, "Bounce to a New Strip")));
     r.settle();
     assert(r.sent.back() == "strip bounce ch_2" && r.svc->model().strips.size() == strips + 1);
     pass("freeze from the mixer (R-PERF-3): Freeze and Bounce on a strip nothing feeds, Unfreeze on a frozen one — one line each; the rack recedes under FROZEN, eased in and out");
@@ -6624,7 +6640,7 @@ namespace
         bool table = drawn.size() == 1; // a single name may be data alone
         for (const auto &d : drawn) table |= d.text.find('[') != std::string::npos;
         if (!table) { std::printf("    %s: drew nothing from the table\n", where); return 1; }
-        static const char *kNames[] = {"solaris", "v0.1.0", "bpm", "kHz", "dBTP", "dB", "ms", "LUFS", "kbps", "ppm", "PulseAudio", "PipeWire",
+        static const char *kNames[] = {"solaris", "v" SOLARIS_VERSION, "bpm", "kHz", "dBTP", "dB", "ms", "LUFS", "kbps", "ppm", "PulseAudio", "PipeWire",
                                        "Mackie Control", "HUI", "WAV", "FLAC", "MP3", "Ogg Vorbis", "Opus", "MP4", "MKV", "Ctrl", "Shift", "Alt",
                                        ".wav", ".flac", ".mp3", ".ogg", ".opus", ".mp4", ".mkv", "ITU-R BS.1770-4"};
         for (size_t i = 0, n = data.size(); i < n; ++i) data.push_back(arstro::solaris_strings::upper(data[i])); // a micro-label's data, uppercased
@@ -6700,7 +6716,7 @@ static void test_every_word_the_shell_draws_is_from_the_table()
             bad += untranslated({sltest::Drawn{n.name, 0, 0, 1}}, modelWords(r.svc->model()), "a menu's names");
         if (i == 0) // a toast the window composes: File › Collect and Save
         {
-            assert(r.app->activateNode("menu.File.6"));
+            assert(r.app->activateNode("menu.File.7")); // Collect and Save: row 7, a rule counted (R-FAM-1)
             r.settle();
             const std::string toast = r.app->toastText();
             assert(sentLine(r, "project collect --save") && toast.front() == '[' && toast.back() == ']');
@@ -6950,104 +6966,1272 @@ static void test_the_table_has_every_word_the_window_says()
     pass("the table has every word the window says, and no word it does not (R-ACCESS-2: vi.strings == the code's keys)");
 }
 
-int main()
+// ── the UI audit of 2026-11-17 (R-UI-2 amended, R-UI-15 …) ───────────────────────────────────────────────────────────
+
+namespace
 {
+    struct Rgb { int r, g, b; };
+    Rgb rgbAt(const sltest::Rig &r, double x, double y)
+    {
+        const uint32_t p = r.pixel((int)std::floor(x), (int)std::floor(y));
+        return Rgb{(int)((p >> 16) & 0xFF), (int)((p >> 8) & 0xFF), (int)(p & 0xFF)};
+    }
+    bool nearHex(const Rgb &c, uint32_t hex, int tol)
+    {
+        return std::abs(c.r - (int)((hex >> 16) & 0xFF)) <= tol && std::abs(c.g - (int)((hex >> 8) & 0xFF)) <= tol && std::abs(c.b - (int)(hex & 0xFF)) <= tol;
+    }
+    bool neutral(const Rgb &c) { return std::abs(c.r - c.g) <= 14 && std::abs(c.g - c.b) <= 14; } // a grey: no hue
+    bool warm(const Rgb &c) { return c.r > c.g + 50 && c.r > c.b + 50; }                           // the accent's orange, or the red
+    const uint32_t kAccentHex = 0xDD5A0C, kRedHex = 0xE5534B, kAmberHex = 0xE3B341;
+}
+
+static void test_the_accent_never_stands_beside_red()
+{
+    // R-UI-2 (amended 2026-11-17): the orange accent and the destructive red have one luminance, 19° of hue apart — so
+    // the unsaved dot and the playhead are `foreground`, the roll's pattern end a neutral grip, and in a confirm dialog
+    // only the primary button is filled (the destructive one outlined)
+    namespace ui = arstro::solaris_ui;
+    sltest::Rig r("ui-accent-red", 1280, 800);
+    r.cmd("project new " + r.song("Draft") + ".slp --name Draft");
+    r.cmd("clip add --instrument synth --at 4 --length 4");
+    r.settle();
+    assert(r.svc->model().dirty);
+    auto &bar = r.app->project().bar();
+    auto &tl = r.app->project().timeline();
+    // the unsaved dot: a grey, not the accent
+    {
+        assert(bar.dirtyAmount() == 1.0);
+        const artboard::Rect at = world(bar, artboard::Rect{bar.dirtyDotAt().x, bar.dirtyDotAt().y, 0, 0});
+        const Rgb c = rgbAt(r, at.x, at.y);
+        assert(neutral(c) && c.r > 150 && !nearHex(c, kAccentHex, 60));
+    }
+    // the playhead: a light line, not a red one — in the lanes (below the clip's row) and on the ruler
+    {
+        const artboard::Color ph = ui::surface::playhead(), fg = ui::palette::foreground(), red = ui::palette::destructive();
+        assert(ph.r == fg.r && ph.g == fg.g && ph.b == fg.b && !(ph.r == red.r && ph.g == red.g));
+        const artboard::Rect at = world(tl, artboard::Rect{tl.beatToX(0.0), tl.rowRect(0).bottom() + 60.0, 0, 0});
+        bool light = false, red2 = false;
+        for (int dx = -1; dx <= 1; ++dx)
+        {
+            const Rgb c = rgbAt(r, at.x + dx, at.y);
+            if (neutral(c) && c.r > 90) light = true;
+            if (warm(c)) red2 = true;
+        }
+        assert(light && !red2);
+    }
+    // the roll's pattern end: a neutral grip, not the accent
+    {
+        auto &wl = r.app->project().windows();
+        auto &win = wl.openRoll(r.svc->model().patterns[0].id);
+        r.settle();
+        auto &roll = *wl.roll(r.svc->model().patterns[0].id);
+        const artboard::Rect e = world(roll, roll.endRect());
+        assert(e.w > 0 && e.x > 0 && e.right() < 1280 && e.bottom() < 800);
+        const Rgb c = rgbAt(r, cx(e), cy(e));
+        assert(neutral(c) && c.r > 110 && !warm(c));
+        win.close();
+        r.settle();
+    }
+    // the unsaved-changes dialog: Save filled with the accent, Discard OUTLINED in red — two weights
+    r.click(world(bar, bar.hitRect(0)));
+    r.settle();
+    auto &cf = r.app->confirm();
+    assert(cf.isOpen() && cf.destructiveStyle() == arstro::cosmo_v2::ConfirmDialog::DestructiveStyle::Auto && cf.drawsOutlined(1) && !cf.drawsOutlined(2) &&
+           cf.buttonCount() == 3 && cf.buttonLabel(1) == "Don't save" && cf.buttonLabel(2) == "Save"); // R-FAM-3
+    {
+        const artboard::Rect d = world(cf, cf.buttonRect(1)), s = world(cf, cf.buttonRect(2));
+        const Rgb inD = rgbAt(r, d.x + 5.0, cy(d)), edgeD = rgbAt(r, d.x + d.w * 0.5, d.y), inS = rgbAt(r, s.x + 5.0, cy(s));
+        assert(nearHex(inS, kAccentHex, 24));                 // the primary: filled
+        assert(!warm(inD) && inD.r < 90);                     // the destructive: no fill …
+        assert(warm(edgeD) && edgeD.b > 30);                  // … a red border
+        bool redWords = false;                                // … and red words
+        for (double x = d.x + 12.0; x < d.right() - 12.0; x += 1.0)
+            for (double y = d.y + 8.0; y < d.bottom() - 8.0; y += 1.0)
+                if (nearHex(rgbAt(r, x, y), kRedHex, 40)) redWords = true;
+        assert(redWords);
+    }
+    pass("the accent never stands beside red: the unsaved dot and the playhead are foreground, the roll's pattern end a neutral grip, Don't save outlined beside a filled Save (R-UI-2 amended, R-FAM-3)");
+}
+
+static void test_a_toast_speaks_in_one_of_three_voices()
+{
+    // R-UI-15: info · warning · error, told apart by a bar and a glyph on a neutral border; under the song bar, never
+    // over the mixer; fading in while sliding into place; one that replaces another cross-fades with it
+    namespace ui = arstro::solaris_ui;
+    using ui::ToastKind;
+    sltest::Rig r("ui-toasts", 1280, 800);
+    std::ofstream(r.dir + "/gone.wav", std::ios::binary) << "RIFF";
+    const std::string song = r.song("Voices") + ".slp";
+    r.cmd("project new " + song + " --bpm 120");
+    r.cmd("clip add --src " + r.dir + "/gone.wav --at 0");
+    r.cmd("project save");
+    r.settle();
+    assert(r.app->toastAmount() == 0.0);
+    // an ERROR: a refused line, in the service's words — caught fading in ABOVE its place (it slides down into it)
+    assert(!r.app->dispatch("clip delete nothing_by_this_name"));
+    assert(r.app->toastKind() == ToastKind::Error && r.app->toastIsRefusal() && !r.app->toastText().empty());
+    const double rest = ui::App::kToastTop;
+    assert(rest > ui::SongBar::kHeight && rest < ui::SongBar::kHeight + 12.0);
+    double mid = 0.0, midY = 0.0;
+    for (int k = 0; k < 30 && mid == 0.0; ++k)
+    {
+        r.frame();
+        if (r.app->toastAmount() > 0.0 && r.app->toastAmount() < 1.0) { mid = r.app->toastAmount(); midY = r.app->toastRect().y; }
+    }
+    assert(mid > 0.0 && mid < 1.0 && midY < rest);
+    r.pump(500.0);
+    artboard::Rect t = r.app->toastRect();
+    const artboard::Rect dock = world(r.app->project().dock(), artboard::Rect{0, 0, 0, 0});
+    assert(r.app->toastAmount() == 1.0 && std::fabs(t.y - rest) < 1e-9 && t.bottom() < dock.y && std::fabs(cx(t) - 640.0) < 1.0); // under the bar, clear of the mixer
+    {
+        auto &tl = r.app->project().timeline();
+        assert(t.bottom() <= world(tl, tl.rowRect(0)).y); // … and of the lanes: inside the ruler's band
+    }
+    auto bar = [&] { return rgbAt(r, t.x + 2.0, cy(t)); };
+    auto border = [&] { return rgbAt(r, cx(t), t.y); };
+    assert(nearHex(bar(), kRedHex, 30) && neutral(border()));                                 // a red bar, a neutral border
+    // an INFO replaces it while it shows: the two cross-fade (caught mid-way), then no bar at all, and no accent
+    r.app->pickTemplate(artboard::Point{60.0, 30.0}); // no templates on this machine: it says how to make one
+    assert(r.app->toastKind() == ToastKind::Info && !r.app->toastIsRefusal() && contains(r.app->toastText(), "No templates yet"));
+    double swap = -1.0;
+    for (int k = 0; k < 30 && swap < 0.0; ++k)
+    {
+        r.frame();
+        if (r.app->toastSwapAmount() > 0.0 && r.app->toastSwapAmount() < 1.0) swap = r.app->toastSwapAmount();
+    }
+    assert(swap > 0.0 && swap < 1.0 && r.app->toastAmount() == 1.0);
+    r.pump(500.0);
+    t = r.app->toastRect();
+    assert(r.app->toastSwapAmount() == 1.0 && neutral(bar()) && bar().r < 90 && neutral(border()));
+    for (double x = t.x; x < t.right(); x += 1.0) assert(!nearHex(rgbAt(r, x, t.y), kAccentHex, 50) && !nearHex(rgbAt(r, x, t.bottom() - 1.0), kAccentHex, 50));
+    // a WARNING: the song opened with a file missing — it IS open; something is owed. An amber bar
+    r.pump(4200.0); // the info's hold and its fade out
+    assert(r.app->toastAmount() == 0.0);
+    std::filesystem::remove(r.dir + "/gone.wav");
+    r.cmd("project close");
+    r.settle();
+    r.cmd("project open " + song);
+    r.pump(500.0);
+    t = r.app->toastRect();
+    assert(r.app->screen() == "project" && contains(r.app->toastText(), "1 file is missing") && r.app->toastKind() == ToastKind::Warning && !r.app->toastIsRefusal());
+    assert(nearHex(bar(), kAmberHex, 30) && neutral(border()) && std::fabs(t.y - rest) < 1e-9);
+    pass("a toast speaks in one of three voices: an error's red bar, an info's none, a warning's amber (files missing is a warning) — neutral borders, under the song bar clear of the mixer, sliding in, cross-fading when replaced (R-UI-15)");
+}
+
+static void test_a_render_from_the_window_is_seen_and_said()
+{
+    // R-RENDER-4: File › Render… — the line is NOT sent at once: "Rendering…" eases in, a frame paints it whole, THEN the
+    // ONE render line goes out; the modal eases out and the service's render.finished is said in an info toast
+    namespace ui = arstro::solaris_ui;
+    sltest::Rig r("ui-render-seen", 1280, 800);
+    r.cmd("project new " + r.song("Mix") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 2");
+    r.cmd("note add " + r.svc->model().clips[0].pattern + " --pitch 57 --at 0 --length 1");
+    r.settle();
+    const std::string out = r.dir + "/mix.wav", line = "render --out " + out;
+    r.app->onPickSave = [&](const std::string &, const std::string &, std::function<void(const std::string &)> done) { done(out); };
+    auto &ms = r.app->project().bar().menus();
+    r.click(world(ms, ms.titleRect(0)));
+    r.settle();
+    assert(ms.menu(0).items[9].label == "Export Mix as WAV\xE2\x80\xA6" && rowOf(ms, 0, "Render\xE2\x80\xA6") < 0); // R-FAM-6
+    r.click(world(ms, ms.itemRect(0, 9)));
+    assert(r.app->renderPending() && !sentLine(r, line) && r.app->renderAmount() == 0.0); // asked for: nothing sent yet
+    // it eases in — caught mid-way, the line still unsent; it takes the input meanwhile
+    double mid = 0.0, sweepPrev = -1.0;
+    int guard = 0, sweepMoved = 0;
+    while (r.app->renderAmount() < 1.0 && ++guard < 60)
+    {
+        r.frame();
+        if (r.app->renderAmount() > 0.0 && r.app->renderAmount() < 1.0) mid = r.app->renderAmount();
+        if (r.app->renderAmount() < 1.0) assert(!sentLine(r, line));
+        // R-FAM-6: the progress bar's segment sweeps — each frame further along, never a jump
+        const double sw = r.app->renderSweep();
+        if (sweepPrev >= 0.0 && sw > sweepPrev && sw - sweepPrev < 0.1) ++sweepMoved;
+        sweepPrev = sw;
+    }
+    assert(mid > 0.0 && mid < 1.0 && r.app->renderAmount() == 1.0);
+    {
+        // … a 3 px track in the card, the accent's segment inside it and part of the way along
+        const artboard::Rect bar = r.app->renderBarRect(), seg = r.app->renderSegmentRect(), card = r.app->renderCardRect();
+        assert(sweepMoved >= 3 && r.app->renderSweep() > 0.0 && r.app->renderSweep() < 1.0);
+        assert(bar.h == 3.0 && bar.x > card.x && bar.right() < card.right() && bar.bottom() < card.bottom() && seg.w > 8.0 && seg.x >= bar.x && seg.right() <= bar.right() + 1e-9);
+        assert(nearHex(rgbAt(r, seg.x + seg.w * 0.5, seg.y + 1.5), kAccentHex, 24) && !warm(rgbAt(r, bar.right() - 2.0, bar.y + 1.5)));
+    }
+    assert(!sentLine(r, line) && r.app->renderPending()); // THIS frame painted it whole — the line goes with the next
+    const size_t before = r.sent.size();
+    r.click(world(r.app->project().bar(), r.app->project().bar().hitRect(ui::SongBar::kPlay)));
+    r.key(32);
+    assert(r.sent.size() == before && !r.svc->model().transport.playing); // modal: a click and Space go nowhere
+    {
+        const artboard::Rect c = r.app->renderCardRect();
+        assert(c.w > 0 && c.x >= 16.0 && c.right() <= 1280.0 - 16.0 && std::fabs(cx(c) - 640.0) < 1.0);
+    }
+    r.spying = true;
+    r.frame(); // the line goes out here; what was showing is painted again as it was
+    r.spying = false;
+    assert(r.sent.size() == before + 1 && r.sent.back() == line && !r.app->renderPending() && r.app->renderAmount() == 1.0);
+    {
+        bool title = false, file = false, waits = false;
+        for (const auto &d : r.spy.drawn)
+        {
+            if (d.text == "Rendering\xE2\x80\xA6") title = true;
+            if (d.text == "mix.wav") file = true;
+            if (contains(d.text, "waits until the file is written")) waits = true;
+        }
+        assert(title && file && waits);
+    }
+    // the result: the service's render.finished, said — an INFO, fading in (not popped) as the modal eases out
+    assert(r.app->toastKind() == ui::ToastKind::Info && contains(r.app->toastText(), "Rendered mix.wav") && contains(r.app->toastText(), "dBFS"));
+    assert(r.app->toastAmount() == 0.0);
+    double closing = 0.0, toastMid = 0.0;
+    for (int k = 0; k < 40; ++k)
+    {
+        r.frame();
+        if (r.app->renderAmount() > 0.0 && r.app->renderAmount() < 1.0) closing = r.app->renderAmount();
+        if (r.app->toastAmount() > 0.0 && r.app->toastAmount() < 1.0) toastMid = r.app->toastAmount();
+    }
+    assert(closing > 0.0 && closing < 1.0 && toastMid > 0.0 && toastMid < 1.0);
+    assert(r.app->renderAmount() == 0.0 && r.app->toastAmount() == 1.0);
+    r.click(world(r.app->project().bar(), r.app->project().bar().hitRect(ui::SongBar::kPlay)));
+    assert(r.svc->model().transport.playing); // the window is the user's again
+    r.cmd("transport stop");
+    pass("a render from the window is seen and said: \"Rendering…\" eases in and is painted whole before the ONE render line goes out, takes the input meanwhile, eases out; render.finished is an info toast with the file and the peak (R-RENDER-4)");
+}
+
+static void test_the_transport_has_loop_and_metronome()
+{
+    // R-TIME-4 (amended 2026-11-17): after Play — Loop and Metronome, toggles whose light eases whoever changed the
+    // state, ONE line a click; the time signature after the tempo; the bar gives way before its content (R4)
+    using arstro::solaris_ui::SongBar;
+    sltest::Rig r("ui-transport", 1280, 800);
+    r.cmd("project new " + r.song("Loops") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 6");
+    r.settle();
+    auto &bar = r.app->project().bar();
+    auto at = [&](int id) { return world(bar, bar.hitRect(id)); };
+    assert(at(SongBar::kRecord).right() < at(SongBar::kPlay).x && at(SongBar::kPlay).right() < at(SongBar::kLoop).x &&
+           at(SongBar::kLoop).right() < at(SongBar::kMetronome).x && at(SongBar::kMetronome).right() < at(SongBar::kBpm).x &&
+           at(SongBar::kBpm).right() < bar.sigRect().x && bar.sigRect().right() < bar.cpuRect().x);
+    r.spying = true;
+    r.frame();
+    r.spying = false;
+    bool sig = false;
+    for (const auto &d : r.spy.drawn)
+        if (d.text == "4/4" && d.x >= bar.sigRect().x - 1.0 && d.x < bar.sigRect().right()) sig = true;
+    assert(sig && bar.sigShown() == "4/4" && bar.sigAmount() == 1.0 && bar.loopAmount() == 0.0 && bar.metronomeAmount() == 0.0);
+    auto midway = [&](const std::function<double()> &v) {
+        double mid = -1.0;
+        for (int k = 0; k < 30 && mid < 0.0; ++k)
+        {
+            r.frame();
+            if (v() > 0.0 && v() < 1.0) mid = v();
+        }
+        return mid > 0.0;
+    };
+    // the metronome: the machine's setting, ONE line; lit eased — and unlit eased when a shell turns it off
+    r.click(at(SongBar::kMetronome));
+    assert(r.sent.back() == "settings set metronome=on" && r.svc->model().settings.metronome);
+    assert(midway([&] { return bar.metronomeAmount(); }));
+    r.settle();
+    assert(bar.metronomeAmount() == 1.0);
+    r.cmd("settings set metronome=off");
+    assert(midway([&] { return bar.metronomeAmount(); }));
+    r.settle();
+    assert(bar.metronomeAmount() == 0.0);
+    // the loop: on over the whole song to a whole bar (a 6-beat clip: 0 … 8), off, and on again over what was last looped
+    r.click(at(SongBar::kLoop));
+    assert(r.sent.back() == "transport loop 0 8" && r.svc->model().transport.loopFrom == 0.0 && r.svc->model().transport.loopTo == 8.0);
+    assert(midway([&] { return bar.loopAmount(); }));
+    r.settle();
+    assert(bar.loopAmount() == 1.0);
+    r.click(at(SongBar::kLoop));
+    assert(r.sent.back() == "transport loop off" && r.svc->model().transport.loopTo == r.svc->model().transport.loopFrom);
+    assert(midway([&] { return bar.loopAmount(); }));
+    r.settle();
+    assert(bar.loopAmount() == 0.0);
+    r.cmd("transport loop 2 4"); // the ruler's drag, a script: lit from there too
+    assert(midway([&] { return bar.loopAmount(); }));
+    r.settle();
+    r.click(at(SongBar::kLoop));
+    r.settle();
+    assert(r.sent.back() == "transport loop off");
+    r.click(at(SongBar::kLoop));
+    assert(r.sent.back() == "transport loop 2 4");
+    r.settle(); // (two clicks with no frame between them are a double-click)
+    r.click(at(SongBar::kLoop));
+    r.settle();
+    assert(r.sent.back() == "transport loop off");
+    // the keyboard reaches both, as toggles
+    {
+        bool loop = false, metro = false;
+        for (const auto &n : r.app->accessibles())
+        {
+            if (n.key == "bar.loop" && n.role == "toggle" && !n.checked) loop = true;
+            if (n.key == "bar.metronome" && n.role == "toggle" && !n.checked) metro = true;
+        }
+        assert(loop && metro);
+    }
+    // a short bar gives way before its content: at 1024 the signature shows only with room before the CPU readout; a
+    // learn waiting folds the readout (eased) so its pill keeps kLearnMin
+    r.resize(1024, 640);
+    r.settle();
+    assert(at(SongBar::kBpm).right() < bar.cpuRect().x);
+    assert(bar.sigAmount() == 1.0 ? bar.sigRect().right() <= bar.cpuRect().x - 12.0 + 1e-6 : bar.sigAmount() == 0.0);
+    const double sigBefore = bar.sigAmount();
+    r.cmd("map learn ch_2.gain");
+    bool foldMid = false;
+    for (int k = 0; k < 40; ++k)
+    {
+        r.frame();
+        if (bar.cpuAmount() > 0.0 && bar.cpuAmount() < 1.0) foldMid = true;
+    }
+    r.settle();
+    // at 1024 the pill had 42 px before the readout — under kLearnMin: the readout and the signature folded (eased), and it
+    // has their room, up to the meter
+    assert(foldMid && bar.cpuAmount() == 0.0 && bar.sigAmount() == 0.0 && bar.learnAmount() == 1.0);
+    assert(bar.hitRect(SongBar::kLearn).w >= 90.0 && bar.hitRect(SongBar::kLearn).right() > bar.cpuRect().x); // (84 before the toggles came)
+    r.cmd("map learn --cancel");
+    r.settle();
+    assert(bar.cpuAmount() == 1.0 && bar.sigAmount() == sigBefore);
+    pass("the transport has Loop and Metronome after Play — ONE line a click, lit eased whoever changed it; Loop back on is the region last looped; the time signature after the tempo; at 1024 the signature and (a learn waiting) the CPU readout give way, eased (R-TIME-4 amended)");
+}
+
+static void test_a_tracks_header_mutes_and_solos_its_strip()
+{
+    // R-LANE-4: a row that IS a strip's has M and S in its header — the ONE line the dock's own button sends, one state
+    // in both places, the light eased whoever changed it; a plain lane has none
+    sltest::Rig r("ui-lane-ms", 1280, 800);
+    r.cmd("project new " + r.song("Heads") + ".slp --bpm 120");
+    r.cmd("clip add --instrument drums --at 0 --length 4"); // its lane is its track
+    r.cmd("lane add");                                       // a plain lane: organisation only
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &dock = r.app->project().dock();
+    int track = -1, plain = -1;
+    for (int i = 0; i < tl.rowCount(); ++i)
+    {
+        if (!tl.rowTrack(i).empty()) track = i;
+        else if (tl.rowStrip(i).empty()) plain = i;
+    }
+    assert(track >= 0 && plain >= 0);
+    const std::string ch = tl.rowStrip(track);
+    assert(ch == tl.rowTrack(track) && tl.muteRect(plain).w == 0.0 && tl.soloRect(plain).w == 0.0);
+    const artboard::Rect m = world(tl, tl.muteRect(track)), so = world(tl, tl.soloRect(track)), arm = world(tl, tl.armRect(track)), row = world(tl, tl.rowRect(track));
+    assert(m.w > 0 && so.w > 0 && m.right() <= so.x && so.right() <= Timeline::kHeaderW + row.x && m.y >= arm.bottom() && m.bottom() <= row.bottom()); // in the header, under the arm ring
+    assert(tl.muteAmount(ch) == 0.0 && tl.soloAmount(ch) == 0.0);
+    auto midway = [&](const std::function<double()> &v) {
+        double mid = -1.0;
+        for (int k = 0; k < 30 && mid < 0.0; ++k)
+        {
+            r.frame();
+            if (v() > 0.0 && v() < 1.0) mid = v();
+        }
+        return mid > 0.0;
+    };
+    auto strip = [&]() -> const arstro::solaris::StripModel & {
+        for (const auto &s : r.svc->model().strips)
+            if (s.id == ch) return s;
+        return r.svc->model().strips[0];
+    };
+    // M: the dock's line, the light caught on its way — and the dock's own M lit with it
+    r.click(m);
+    assert(r.sent.back() == "set " + ch + ".mute=true" && strip().mute);
+    assert(midway([&] { return tl.muteAmount(ch); }));
+    r.settle();
+    assert(tl.muteAmount(ch) == 1.0);
+    {
+        const Rgb c = rgbAt(r, m.x + 2.0, m.y + 2.0); // lit: the dock's white
+        assert(neutral(c) && c.r > 150);
+    }
+    r.click(world(dock, dock.muteRect(ch))); // the dock turns it off: the header follows, eased
+    assert(r.sent.back() == "set " + ch + ".mute=false" && !strip().mute);
+    assert(midway([&] { return tl.muteAmount(ch); }));
+    r.settle();
+    assert(tl.muteAmount(ch) == 0.0);
+    // S: likewise — amber, never the accent; a script's line lights it too
+    r.click(so);
+    assert(r.sent.back() == "set " + ch + ".solo=true" && strip().solo);
+    assert(midway([&] { return tl.soloAmount(ch); }));
+    r.settle();
+    {
+        const Rgb c = rgbAt(r, so.x + 2.0, so.y + 2.0);
+        assert(tl.soloAmount(ch) == 1.0 && nearHex(c, kAmberHex, 24) && !nearHex(c, kAccentHex, 40));
+    }
+    r.cmd("set " + ch + ".solo=false");
+    assert(midway([&] { return tl.soloAmount(ch); }));
+    r.settle();
+    assert(tl.soloAmount(ch) == 0.0);
+    // the arm ring beside them still arms; the keyboard reaches all three
+    r.click(arm);
+    assert(r.sent.back() == "strip arm " + ch);
+    int toggles = 0;
+    for (const auto &n : r.app->accessibles())
+        if (n.role == "toggle" && n.key.rfind("lanes.", 0) == 0 && (contains(n.key, ".mute") || contains(n.key, ".solo"))) ++toggles;
+    assert(toggles == 2);
+    pass("a track's header mutes and solos its strip: M and S under the arm ring send the dock's own lines, light eased from either place (mute white, solo amber); a plain lane has none (R-LANE-4)");
+}
+
+static void test_the_dock_takes_its_share_of_the_window()
+{
+    // R-UI-3 (amended 2026-11-17): undragged, the dock is min(429, 45 % of the window's height) — at 1024 × 640 five
+    // lanes and more show, not three — and follows a resize, eased; dragged, it is the user's height
+    using arstro::solaris_ui::ProjectScreen;
+    using arstro::solaris_ui::MixerDock;
+    sltest::Rig r("ui-dock-share", 1024, 640);
+    r.cmd("project new " + r.song("Share") + ".slp --bpm 120");
+    for (int i = 0; i < 6; ++i) r.cmd("clip add --instrument synth --at 0 --length 4");
+    r.settle();
+    auto &ps = r.app->project();
+    auto &tl = ps.timeline();
+    assert(ps.dockHeight() == 288.0 && !ps.dockDragged()); // 0.45 × 640
+    {
+        int whole = 0; // lanes wholly in view above the dock
+        const double foot = world(ps.dock(), artboard::Rect{0, 0, 0, 0}).y;
+        for (int i = 0; i < tl.rowCount(); ++i)
+            if (world(tl, tl.rowRect(i)).bottom() <= foot + 0.5) ++whole;
+        assert(whole >= 5);
+    }
+    // a taller window: its share again, capped at 429 — eased there, caught on the way
+    r.resize(1440, 900);
+    r.frame();
+    r.frame();
+    const double mid = ps.dockHeight();
+    assert(mid > 288.0 && mid < 405.0);
+    r.settle();
+    assert(ps.dockHeight() == 405.0);
+    r.resize(1600, 1200);
+    r.settle();
+    assert(ps.dockHeight() == ProjectScreen::kDockMost);
+    // dragged: the user's — and it stays theirs when the window changes
+    const artboard::Rect dock = world(ps.dock(), artboard::Rect{0, 0, ps.dock().width.value(), 0});
+    r.drag(dock.x + 300.0, dock.y + 1.0, dock.x + 300.0, dock.y + 101.0);
+    r.settle();
+    assert(ps.dockDragged() && std::fabs(ps.dockHeight() - (ProjectScreen::kDockMost - 100.0)) < 1.5);
+    const double mine = ps.dockHeight();
+    r.resize(1440, 900);
+    r.settle();
+    assert(ps.dockHeight() == mine);
+    pass("the dock takes its share of the window: 45 % of its height up to 429 until dragged (288 at 1024 × 640: five lanes and more), eased on a resize; dragged, the user's (R-UI-3 amended)");
+}
+
+static void test_an_empty_song_offers_its_first_sound()
+{
+    // R-UI-16: an empty song — the browser on Instruments when the machine has no sample folder, "Add an instrument"
+    // under the lanes' sentence (its menu the registry's instruments, ONE line each), Song › Add Instrument… the same
+    // menu, and the mixer's slot reading "+ Strip"
+    using arstro::solaris_ui::Browser;
+    sltest::Rig r("ui-empty-song", 1024, 640);
+    r.cmd("project new " + r.song("Blank") + ".slp --bpm 120");
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &b = r.app->project().browser();
+    auto &dock = r.app->project().dock();
+    assert(r.svc->model().settings.folders.empty() && b.tab() == Browser::kInstruments);
+    assert(tl.rowCount() == 0 && tl.emptyAmount() == 1.0);
+    const artboard::Rect btn = world(tl, tl.emptyButtonRect()), lanes = world(tl, artboard::Rect{0, 0, tl.width.value(), tl.height.value()});
+    assert(btn.w > 60.0 && btn.x > lanes.x + Timeline::kHeaderW && btn.right() < lanes.right() && btn.bottom() < lanes.bottom()); // whole, above the dock
+    r.spying = true;
+    r.frame();
+    r.spying = false;
+    bool words = false, strip = false, line = false;
+    for (const auto &d : r.spy.drawn)
+    {
+        if (d.text == "Add an instrument" && d.x > btn.x && d.x < btn.right()) words = true;
+        if (d.text == "+ Strip") strip = true;
+        if (contains(d.text, "+ Line")) line = true;
+    }
+    assert(words && strip && !line);
+    assert(nearHex(rgbAt(r, btn.x + 4.0, btn.y + 4.0), kAccentHex, 24)); // the empty song's primary action
+    // its menu: every instrument of the registry; one picked is ONE line — a strip, its track, a first clip
+    r.click(btn);
+    r.settle();
+    auto &menu = r.app->menu();
+    int instruments = 0, drums = -1;
+    for (const auto &t : r.svc->model().deviceTypes)
+        if (t.kind == "instrument") ++instruments;
+    assert(menu.isOpen() && instruments > 2 && menu.itemCount() == instruments);
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label == "Drum Machine") drums = i;
+    assert(drums >= 0);
+    r.click(menu.itemRect(drums));
+    assert(r.sent.back() == "clip add --instrument drums --at 0 --length 4");
+    assert(r.svc->model().clips.size() == 1 && r.svc->model().strips.size() == 2);
+    // the empty state — its button with it — fades out as the track comes in: caught mid-way; then it takes no click
+    double mid = -1.0;
+    for (int k = 0; k < 30 && mid < 0.0; ++k)
+    {
+        r.frame();
+        if (tl.emptyAmount() > 0.0 && tl.emptyAmount() < 1.0) mid = tl.emptyAmount();
+    }
+    assert(mid > 0.0);
+    r.settle();
+    assert(tl.emptyAmount() == 0.0 && tl.rowCount() == 1 && !tl.rowTrack(0).empty());
+    const size_t before = r.sent.size();
+    r.click(btn);
+    r.settle();
+    assert(!menu.isOpen() && r.sent.size() == before);
+    // Song › Add Instrument…: the same menu, whatever the song holds
+    auto &ms = r.app->project().bar().menus();
+    r.click(world(ms, ms.titleRect(2)));
+    r.settle();
+    assert(ms.menu(2).items[4].label == "Add Instrument\xE2\x80\xA6");
+    r.click(world(ms, ms.itemRect(2, 4)));
+    r.settle();
+    assert(menu.isOpen() && menu.itemCount() == instruments);
+    int synth = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label == "Basic Synth") synth = i;
+    assert(synth >= 0);
+    r.click(menu.itemRect(synth));
+    r.settle();
+    assert(r.sent.back() == "clip add --instrument synth --at 0 --length 4" && r.svc->model().strips.size() == 3);
+    // a machine WITH a sample folder opens on Samples, as before; and a tab the user chose stays chosen
+    {
+        sltest::Rig r2("ui-empty-song-folders", 1024, 640);
+        r2.cmd("folder add /music/Samples");
+        r2.cmd("project new " + r2.song("Blank2") + ".slp --bpm 120");
+        r2.settle();
+        assert(r2.app->project().browser().tab() == Browser::kSamples);
+    }
+    b.setTab(Browser::kSamples);
+    r.cmd("folder add /music/Samples");
+    r.cmd("folder remove /music/Samples");
+    r.settle();
+    assert(b.tab() == Browser::kSamples && world(dock, dock.addLineRect()).w > 0.0);
+    pass("an empty song offers its first sound: the browser on Instruments with no sample folder (decided once), \"Add an instrument\" under the lanes' sentence and Song › Add Instrument… — the registry's instruments, ONE line each — fading out with the empty state; the mixer's slot reads \"+ Strip\" (R-UI-16)");
+}
+
+static void test_the_lanes_show_where_they_are_and_fit_the_song()
+{
+    // R-UI-17: a thumb along the lanes' foot only while the song is wider than the view, following the eased scroll;
+    // View › Zoom to Fit — the whole song in view, eased; ONE wheel rule in the lanes and the dock
+    using arstro::solaris_ui::MixerDock;
+    sltest::Rig r("ui-lanes-fit", 1024, 640);
+    r.cmd("project new " + r.song("Long") + ".slp --bpm 120");
+    for (int i = 0; i < 12; ++i) r.cmd("clip add --instrument synth --at " + std::to_string(i * 24) + " --length 8"); // 12 strips, to beat 272
+    r.settle();
+    auto &tl = r.app->project().timeline();
+    auto &dock = r.app->project().dock();
+    const artboard::Rect lanes = world(tl, artboard::Rect{0, 0, tl.width.value(), tl.height.value()});
+    // wider than the view: the thumb, at the foot, right of the headers, as wide as the view's share
+    assert(tl.scrollsSideways() && tl.hScrollAmount() == 1.0);
+    artboard::Rect th = tl.hScrollThumb();
+    assert(th.w >= 18.0 && th.w < tl.width.value() - Timeline::kHeaderW && th.x == Timeline::kHeaderW && th.bottom() <= tl.height.value() && th.y >= tl.height.value() - 6.0);
+    {
+        int lit = 0; // drawn: along its length it is lighter than the lane just above it (the same column: the same grid line or none)
+        for (double x = th.x + 3.0; x < th.right() - 3.0; x += 1.0)
+            if (rgbAt(r, lanes.x + x, lanes.y + th.y + 1.5).r > rgbAt(r, lanes.x + x, lanes.y + th.y - 6.0).r + 12) ++lit;
+        assert(lit > (int)(0.8 * (th.w - 6.0)));
+    }
+    // Shift+wheel in the lanes: sideways, eased — the thumb caught on its way
+    r.app->wheel(lanes.x + 400.0, lanes.y + 200.0, -6.0, false, true);
+    r.frame();
+    r.frame();
+    const double midX = tl.hScrollThumb().x, midScroll = tl.scrollXLive();
+    r.settle();
+    th = tl.hScrollThumb();
+    assert(tl.scrollXLive() > 0.0 && midScroll > 0.0 && midScroll < tl.scrollXLive() && midX > Timeline::kHeaderW && midX < th.x);
+    // a plain wheel in the lanes: down the rows (twelve of them do not fit), not sideways
+    const double sx = tl.scrollXLive(), y0 = tl.rowRect(0).y;
+    r.app->wheel(lanes.x + 400.0, lanes.y + 200.0, -2.0);
+    r.settle();
+    assert(tl.rowRect(0).y < y0 && tl.scrollXLive() == sx);
+    // the dock, the SAME rule: a plain wheel scrolls its strips down (they are taller than the dock), Shift sideways
+    const artboard::Rect dk = world(dock, artboard::Rect{0, 0, dock.width.value(), dock.height.value()});
+    const std::string ch = r.svc->model().strips[1].id;
+    const double top0 = dock.cardRect(ch).y, cx0 = dock.cardRect(ch).x;
+    r.app->wheel(dk.x + 300.0, dk.y + 150.0, -2.0);
+    r.settle();
+    assert(dock.cardRect(ch).y < top0 && dock.cardRect(ch).x == cx0);
+    const double top1 = dock.cardRect(ch).y;
+    r.app->wheel(dk.x + 300.0, dk.y + 150.0, -2.0, false, true);
+    r.settle();
+    assert(dock.cardRect(ch).x < cx0 && dock.cardRect(ch).y == top1);
+    // View › Zoom to Fit: the zoom and the scroll ease to where the whole song shows; the thumb fades out
+    auto &ms = r.app->project().bar().menus();
+    r.click(world(ms, ms.titleRect(3)));
+    r.settle();
+    int fit = -1;
+    for (int i = 0; i < (int)ms.menu(3).items.size(); ++i)
+        if (ms.menu(3).items[(size_t)i].label == "Zoom to Fit") fit = i;
+    assert(fit >= 0);
+    const double ppb0 = tl.pxPerBeat();
+    const size_t sent = r.sent.size();
+    r.click(world(ms, ms.itemRect(3, fit)));
+    bool zoomMid = false, barMid = false;
+    for (int k = 0; k < 40; ++k)
+    {
+        r.frame();
+        if (tl.pxPerBeat() < ppb0 && tl.zoomStep() < 0 && tl.pxPerBeat() > Timeline::kZoomPpb * std::pow(1.25, tl.zoomStep()) + 1e-6) zoomMid = true;
+        if (tl.hScrollAmount() > 0.0 && tl.hScrollAmount() < 1.0) barMid = true;
+    }
+    r.settle();
+    const double length = r.svc->model().lengthBeats;
+    assert(zoomMid && barMid && r.sent.size() == sent); // eased; the view's own — nothing sent
+    assert(tl.zoomStep() < -Timeline::kZoomOutSteps); // 272 beats at 1024 px: further out than the wheel goes
+    assert(tl.scrollXLive() == 0.0 && tl.beatToX(0.0) == Timeline::kHeaderW && tl.beatToX(length) <= tl.width.value());
+    assert(tl.beatToX(length) > Timeline::kHeaderW + 0.6 * (tl.width.value() - Timeline::kHeaderW)); // … and fills most of it: the LARGEST step that fits
+    assert(!tl.scrollsSideways() && tl.hScrollAmount() == 0.0 && tl.hScrollThumb().w == 0.0); // nothing more: no thumb
+    // from out there the wheel only comes in — a step a notch, never a jump back to its own floor
+    const int fitted = tl.zoomStep();
+    r.app->wheel(lanes.x + 400.0, lanes.y + 100.0, -1.0, true);
+    r.settle();
+    assert(tl.zoomStep() == fitted);
+    r.app->wheel(lanes.x + 400.0, lanes.y + 100.0, 1.0, true);
+    r.settle();
+    assert(tl.zoomStep() == fitted + 1);
+    pass("the lanes show where they are and fit the song: a thumb along their foot only while the song is wider than the view, following the eased scroll; View › Zoom to Fit eases the whole song into view (nothing sent); the wheel scrolls down and Shift+wheel sideways in the lanes AND the dock (R-UI-17)");
+}
+
+// R-AGENT-4: the user's agent, docked on the right of the song.
+namespace
+{
+    struct UiFakeAgent : arstro::cosmo::IAssistant
+    {
+        std::vector<arstro::cosmo::AssistOutput> queued;
+        bool start(const arstro::cosmo::AssistLaunch &, std::string &) override { queued.push_back({arstro::cosmo::AssistOutput::Kind::Ready, "Fake Agent"}); return true; }
+        bool send(const std::string &, std::string &) override
+        {
+            queued.push_back({arstro::cosmo::AssistOutput::Kind::Tool, "solaris_run clip add --instrument drums"});
+            queued.push_back({arstro::cosmo::AssistOutput::Kind::Text, "I added a **drum clip** in bars 1 to 2."});
+            queued.push_back({arstro::cosmo::AssistOutput::Kind::Done, ""});
+            return true;
+        }
+        void stop() override {}
+        void poll(std::vector<arstro::cosmo::AssistOutput> &out) override { out.insert(out.end(), queued.begin(), queued.end()); queued.clear(); }
+        std::string name() const override { return "Fake Agent"; }
+    };
+}
+
+static void test_the_agent_panel_docks_beside_the_song()
+{
+    using arstro::solaris_ui::ProjectScreen;
+    sltest::Rig r("ui-agent", 1280, 760);
+    r.cmd("project new " + r.song("Agent") + ".slp --name Agent");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    r.settle();
+    auto &ps = r.app->project();
+    // closed: it takes no room, no input, and asks the machine nothing
+    assert(!ps.agentOpen() && ps.agentWidth() == 0.0 && !ps.agent().visible);
+    const double lanes0 = ps.timeline().width.value(), dock0 = ps.dock().width.value();
+    for (const auto &l : r.sent) assert(l.rfind("assist", 0) != 0);
+    // opening eases its width: mid-way the live width is between, and the lanes read the LIVE width
+    ps.setAgentOpen(true);
+    r.pump(60.0);
+    const double mid = ps.agentWidth();
+    assert(mid > 0.0 && mid < ProjectScreen::kAgentW);
+    // the panel and the lanes share ONE width inside a frame: the panel's left edge is the lanes' right edge
+    assert(std::fabs((ps.timeline().x.value() + ps.timeline().width.value()) - ps.agent().x.value()) < 0.5);
+    // the lanes are part-way too (they are laid out from the live width; the rig's frame order may put them one frame behind it)
+    const double lanesMid = ps.timeline().width.value();
+    assert(lanesMid < lanes0 && lanesMid > lanes0 - ProjectScreen::kAgentW && std::fabs(lanesMid - (lanes0 - mid)) < 64.0);
+    r.settle();
+    assert(ps.agentWidth() == ProjectScreen::kAgentW && ps.agent().visible);
+    assert(std::fabs(ps.timeline().width.value() - (lanes0 - ProjectScreen::kAgentW)) < 0.5);
+    assert(std::fabs(ps.dock().width.value() - (dock0 - ProjectScreen::kAgentW)) < 0.5);
+    assert(std::fabs(ps.agent().x.value() + ProjectScreen::kAgentW - 1280.0) < 0.5); // flush to the right edge
+    // what the panel asks for is the grammar: one `assist send` line, quotes and newlines made safe
+    r.svc->setAssistantFactory([] { return std::unique_ptr<arstro::cosmo::IAssistant>(new UiFakeAgent()); });
+    ps.agent().onSend("make a \"beat\"\nplease");
+    assert(sentLine(r, "assist send \"make a 'beat' please\""));
+    r.settle();
+    const auto &a = r.svc->model().assist;
+    assert(a.state == "ready" && a.messages.size() >= 3 && a.messages[0].text == "make a 'beat' please");
+    bool reply = false;
+    for (const auto &m : a.messages) reply = reply || (m.role == "agent" && m.text.find("drum clip") != std::string::npos);
+    assert(reply);
+    ps.agent().onStop();
+    r.settle();
+    assert(sentLine(r, "assist stop") && r.svc->model().assist.state == "off");
+    // closing gives the room back, eased
+    ps.setAgentOpen(false);
+    r.pump(60.0);
+    assert(ps.agentWidth() > 0.0 && ps.agentWidth() < ProjectScreen::kAgentW);
+    r.settle();
+    assert(ps.agentWidth() == 0.0 && std::fabs(ps.timeline().width.value() - lanes0) < 0.5);
+    pass("the agent panel docks on the right: closed it takes nothing; its width eases and the lanes and dock read the live width; Send is ONE `assist send` line; the reply is the model's (R-AGENT-4)");
+}
+
+static void test_small_things_the_frames_showed()
+{
+    // R-UI-18: the settings sheet takes the window's room; a device window's id is an ID; Home's heading has no glyph
+    // and no widget a raw hex; File › Save and View › Settings… name the keymap's key
+    using arstro::solaris_ui::SettingsSheet;
+    sltest::Rig r("ui-small", 1024, 640);
+    // Home: "Recent songs" begins at the grid's left edge — nothing before it
+    r.cmd("project new " + r.song("Seen") + ".slp --name Seen");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    r.cmd("project save");
+    r.cmd("project close");
+    r.settle();
+    r.spying = true;
+    r.frame();
+    r.spying = false;
+    bool heading = false;
+    for (const auto &d : r.spy.drawn)
+        if (d.text == "Recent songs") heading = std::fabs(d.x - world(r.app->home(), artboard::Rect{r.app->home().headingTextLeft(), 0, 0, 0}).x) < 0.5; // after its clock (R-FAM-7)
+    assert(heading);
+    // no widget draws a raw hex: every colour is a token (Theme.h names the app's own)
+    for (const char *sub : {"", "widgets"})
+        for (const auto &e : std::filesystem::directory_iterator(std::filesystem::path(SOLARIS_APP_SOURCE_DIR) / sub))
+        {
+            const std::string name = e.path().filename().string(), ext = e.path().extension().string();
+            if ((ext != ".h" && ext != ".cpp") || name == "Theme.h") continue;
+            std::ifstream in(e.path());
+            std::stringstream ss;
+            ss << in.rdbuf();
+            if (contains(ss.str(), "Color::hex(")) std::printf("    a raw hex in %s\n", name.c_str());
+            assert(!contains(ss.str(), "Color::hex("));
+        }
+    // the settings sheet: min(900, the window − 64) × min(700, the window − 64), centred
+    r.cmd("project open " + r.song("Seen") + ".slp");
+    r.settle();
+    r.app->openSettings();
+    r.settle();
+    auto &sheet = r.app->settings();
+    artboard::Rect c = sheet.card();
+    assert(c.w == 900.0 && c.h == 576.0 && std::fabs(cx(c) - 512.0) < 0.5 && std::fabs(cy(c) - 320.0) < 0.5);
+    r.resize(1440, 900);
+    r.settle();
+    c = sheet.card();
+    assert(c.w == SettingsSheet::kCardW && c.h == SettingsSheet::kCardH);
+    r.resize(960, 600);
+    r.settle();
+    c = sheet.card();
+    assert(c.w == 896.0 && c.h == 536.0 && c.x == 32.0 && c.y == 32.0);
+    r.key(27);
+    r.resize(1024, 640);
+    r.settle();
+    // File › Save and View › Settings… name the keymap's key — and follow it when it is re-keyed
+    auto &ms = r.app->project().bar().menus();
+    // (R-FAM-1: in the row's shortcut column, never in its label; Settings… is File's; a key is its character)
+    auto keyOf = [&](int menu, const std::string &label) {
+        const int i = rowOf(ms, menu, label);
+        assert(i >= 0);
+        return ms.menu(menu).items[(size_t)i].shortcut;
+    };
+    assert(keyOf(0, "Save") == "Ctrl+S" && keyOf(0, "Settings\xE2\x80\xA6") == "Ctrl+," && rowOf(ms, 3, "Settings\xE2\x80\xA6") < 0);
+    r.cmd("settings set \"key.song.save=Ctrl+Alt+S\"");
+    r.settle();
+    assert(keyOf(0, "Save") == "Ctrl+Alt+S");
+    r.cmd("settings set \"key.song.save=none\"");
+    r.settle();
+    assert(keyOf(0, "Save").empty()); // no key: no hint
+    r.cmd("settings set \"key.song.save=Ctrl+S\"");
+    r.settle();
+    // a device window's header: its owner and type — the id only as far as Show IDs is on, eased
+    auto &wl = r.app->project().windows();
+    const std::string dv = r.svc->model().strips[1].devices.empty() ? std::string("dv_1") : r.svc->model().strips[1].devices[0].id;
+    wl.openDevice(dv);
+    r.settle();
+    auto idDrawn = [&]() {
+        double alpha = -1.0;
+        for (const auto &d : r.wordsOf(*wl.devicePanel(dv)))
+            if (contains(d.text, dv)) alpha = 1.0;
+        return alpha > 0.0;
+    };
+    assert(wl.devicePanel(dv)->idsShown() == 0.0 && !idDrawn());
+    r.cmd("settings set showIds=on");
+    double mid = -1.0;
+    for (int k = 0; k < 30 && mid < 0.0; ++k)
+    {
+        r.frame();
+        if (wl.devicePanel(dv)->idsShown() > 0.0 && wl.devicePanel(dv)->idsShown() < 1.0) mid = wl.devicePanel(dv)->idsShown();
+    }
+    assert(mid > 0.0 && idDrawn());
+    r.settle();
+    assert(wl.devicePanel(dv)->idsShown() == 1.0 && idDrawn());
+    pass("small things the frames showed: Home's heading at the grid's edge and no raw hex in a widget; the settings sheet min(900, window − 64) × min(700, window − 64); File › Save and View › Settings… name the keymap's key and follow it; a device window's id drawn only with Show IDs, eased (R-UI-18)");
+}
+
+static void test_the_menus_are_the_familys()
+{
+    // R-FAM-1: Settings… is File's (no button in the bar); a row's key is in its shortcut column, from the live keymap;
+    // groups are divided by rules; a row that cannot act is disabled and its click does nothing; the keyboard walks an
+    // open menu, its cursor washed eased
+    sltest::Rig r("ui-fam-menus", 1280, 800);
+    r.cmd("project new " + r.song("Family") + ".slp --bpm 120");
+    r.settle();
+    auto &ms = r.app->project().bar().menus();
+    auto item = [&](int menu, const std::string &label) -> const arstro::cosmo_v2::MenuStrip::Item & {
+        const int i = rowOf(ms, menu, label);
+        if (i < 0) std::printf("    no row \"%s\"\n", label.c_str());
+        assert(i >= 0);
+        return ms.menu(menu).items[(size_t)i];
+    };
+    // no label carries a key; the keys are the keymap's, shown as their characters
+    for (int m = 0; m < 4; ++m)
+        for (const auto &it : ms.menu(m).items) assert(!contains(it.label, "(Ctrl") && !contains(it.label, "   ("));
+    assert(item(0, "Settings\xE2\x80\xA6").shortcut == "Ctrl+," && item(0, "Save").shortcut == "Ctrl+S" && item(1, "Redo").shortcut == "Ctrl+Shift+Z");
+    assert(item(1, "Copy Clip").shortcut == "Ctrl+C" && item(1, "Delete Clip").shortcut == "Delete" && item(3, "Zoom to Fit").shortcut.empty());
+    // R-FAM-8: New, Open and Save As have the family's keys — shown, and pressed they are the host's pickers
+    assert(item(0, "New Song\xE2\x80\xA6").shortcut == "Ctrl+N" && item(0, "Open\xE2\x80\xA6").shortcut == "Ctrl+O" && item(0, "Save As\xE2\x80\xA6").shortcut == "Ctrl+Shift+S");
+    {
+        int made = 0, opened = 0;
+        std::string saveAs;
+        r.app->onPickSongToCreate = [&] { ++made; };
+        r.app->onPickSongToOpen = [&] { ++opened; };
+        r.app->onPickSave = [&](const std::string &, const std::string &suggested, std::function<void(const std::string &)>) { saveAs = suggested; };
+        r.key('N', true);
+        r.key('O', true);
+        r.key('S', true, true);
+        assert(made == 1 && opened == 1 && saveAs == "Family.slp");
+        r.app->onPickSongToCreate = nullptr;
+        r.app->onPickSongToOpen = nullptr;
+        r.app->onPickSave = nullptr;
+    }
+    // rules between groups; Show Agent last; the four menus in the family's order
+    int rules = 0;
+    for (const auto &it : ms.menu(0).items) rules += it.separator ? 1 : 0;
+    assert(rules == 5 && ms.menu(0).items[3].separator && ms.menu(1).items[3].separator && ms.menu(3).items.back().label == "Show Agent");
+    assert(ms.menu(0).items.back().label == "Home" && rowOf(ms, 0, "Settings\xE2\x80\xA6") == (int)ms.menu(0).items.size() - 3);
+    // a new song: nothing to undo, no clip selected, nothing copied — those rows are disabled; the others are not
+    assert(!item(1, "Undo").enabled && !item(1, "Redo").enabled && !item(1, "Copy Clip").enabled && !item(1, "Paste Clip").enabled &&
+           !item(1, "Duplicate Clip").enabled && !item(1, "Delete Clip").enabled && !item(1, "Split Clip at the Time Bar").enabled && !item(2, "Quantize Clip").enabled);
+    assert(item(0, "Save").enabled && item(2, "Add Bus").enabled && item(3, "Zoom to Fit").enabled);
+    // a click on a disabled row does nothing, and the menu stays open
+    r.click(world(ms, ms.titleRect(1)));
+    r.settle();
+    const size_t sent0 = r.sent.size();
+    r.click(world(ms, ms.itemRect(1, rowOf(ms, 1, "Undo"))));
+    r.settle();
+    assert(ms.openIndex() == 1 && r.sent.size() == sent0);
+    // the shortcut column: right-aligned — every key drawn ends on the same x
+    {
+        const artboard::Rect a = ms.shortcutRect(1, rowOf(ms, 1, "Undo")), b = ms.shortcutRect(1, rowOf(ms, 1, "Redo")), c = ms.shortcutRect(1, rowOf(ms, 1, "Delete Clip"));
+        assert(a.w > 0.0 && b.w > a.w && std::fabs(a.right() - b.right()) < 0.01 && std::fabs(a.right() - c.right()) < 0.01);
+        assert(a.x > ms.itemRect(1, 0).x + ms.itemRect(1, 0).w * 0.5); // in the row's right half
+    }
+    r.key(27); // Escape closes the open menu
+    r.settle();
+    assert(ms.openIndex() == -1);
+    // an edit: Undo names it and is enabled; a clip selected enables the clip rows (no revision moved); copied: Paste too
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    r.settle();
+    assert(ms.menu(1).items[0].enabled && contains(ms.menu(1).items[0].label, "Undo ") && !item(1, "Copy Clip").enabled);
+    r.app->project().timeline().selectClip("ac_1");
+    r.frame();
+    assert(item(1, "Copy Clip").enabled && item(1, "Delete Clip").enabled && item(2, "Quantize Clip").enabled && !item(1, "Paste Clip").enabled);
+    r.click(world(ms, ms.titleRect(1)));
+    r.settle();
+    r.click(world(ms, ms.itemRect(1, rowOf(ms, 1, "Copy Clip"))));
+    r.settle();
+    assert(item(1, "Paste Clip").enabled);
+    // the keyboard in an open menu: Down stands on the first row that can act — its wash eased, caught mid-way — Down
+    // again skips nothing here, Enter runs the row (ONE line) and the menu closes
+    r.click(world(ms, ms.titleRect(1)));
+    r.settle();
+    r.click(640.0, 500.0); // (the pointer leaves: the keyboard's cursor is its own) — a press outside closes; open again by the title
+    r.settle();
+    r.click(world(ms, ms.titleRect(1)));
+    r.settle();
+    r.move(640.0, 500.0);
+    r.settle();
+    r.key(40);
+    double mid = -1.0;
+    for (int k = 0; k < 20 && mid < 0.0; ++k)
+    {
+        r.frame();
+        const double a = ms.itemHoverAmount(0);
+        if (a > 0.0 && a < 1.0) mid = a;
+    }
+    assert(ms.cursorItem() == 0 && mid > 0.0);
+    r.settle();
+    assert(ms.itemHoverAmount(0) == 1.0);
+    r.key(38); // Up from the first wraps to the last row that can act
+    r.settle();
+    assert(ms.cursorItem() == rowOf(ms, 1, "Split Clip at the Time Bar"));
+    r.key(36); // Home
+    r.settle();
+    assert(ms.cursorItem() == 0);
+    const size_t before = r.sent.size();
+    r.key(13);
+    r.settle();
+    assert(r.sent.size() == before + 1 && r.sent.back() == "undo" && ms.openIndex() == -1);
+    // Left / Right walk the menus; Space is not the menu's — it is still the keymap's
+    r.click(world(ms, ms.titleRect(1)));
+    r.settle();
+    r.key(39);
+    r.settle();
+    assert(ms.openIndex() == 2);
+    r.key(37);
+    r.key(37);
+    r.settle();
+    assert(ms.openIndex() == 0);
+    r.key(27);
+    r.settle();
+    // the accessible list of an open menu: its rows with their index, a rule left out, a disabled row said to be
+    r.click(world(ms, ms.titleRect(1)));
+    r.settle();
+    {
+        const auto nodes = r.app->accessibles();
+        bool redo = false;
+        for (const auto &n : nodes)
+        {
+            assert(n.key.rfind("menu.Edit.", 0) == 0 && n.key != "menu.Edit.3"); // row 3 is the rule
+            if (n.key == "menu.Edit.1") redo = n.enabled && n.value == "Ctrl+Shift+Z"; // after the undo above there is a redo
+        }
+        assert(redo && nodes.size() == ms.menu(1).items.size() - 1);
+    }
+    r.key(27);
+    r.settle();
+    pass("the menus are the family's (R-FAM-1): Settings\xE2\x80\xA6 in File with the keymap's key, keys in the shortcut column (right-aligned) not the labels, rules between groups, rows that cannot act disabled (a click does nothing), enabled by an edit and by a selection; the keyboard walks an open menu, its cursor's wash caught mid-way");
+}
+
+static void test_closing_the_window_asks_and_the_title_says_unsaved()
+{
+    // R-FAM-2/3/8: the window's title follows the song and its unsaved state; closing the window with unsaved edits
+    // raises the family's dialog — Save changes to "<name>"? · Cancel · Don't save · Save — and quits only on Save
+    // (after the save) or Don't save; a saved song, or Home, quits at once
+    sltest::Rig r("ui-fam-close", 1280, 800);
+    int quits = 0;
+    r.app->onQuit = [&] { ++quits; };
+    r.settle();
+    assert(r.app->windowTitle() == "Solaris"); // Home
+    r.app->requestQuit();
+    assert(quits == 1 && !r.app->confirm().isOpen()); // Home: nothing to lose
+    r.cmd("project new " + r.song("Dusk") + ".slp --name Dusk");
+    r.cmd("project save");
+    r.settle();
+    assert(r.app->windowTitle() == "Dusk \xE2\x80\x94 Solaris");
+    r.app->requestQuit();
+    assert(quits == 2 && !r.app->confirm().isOpen()); // saved: at once
+    r.cmd("strip add --kind bus");
+    r.settle();
+    assert(r.app->windowTitle() == "*Dusk \xE2\x80\x94 Solaris");
+    // unsaved: asked — the dialog eases in (caught mid-way), nothing quits
+    auto &cf = r.app->confirm();
+    const int lit0 = rgbAt(r, 40.0, 780.0).r + rgbAt(r, 40.0, 780.0).g + rgbAt(r, 40.0, 780.0).b; // a corner of the dock: the scrim will dim it
+    r.app->requestQuit();
+    r.frame();
+    r.frame();
+    const int litMid = rgbAt(r, 40.0, 780.0).r + rgbAt(r, 40.0, 780.0).g + rgbAt(r, 40.0, 780.0).b;
+    assert(cf.isOpen() && quits == 2);
+    r.settle();
+    const int lit1 = rgbAt(r, 40.0, 780.0).r + rgbAt(r, 40.0, 780.0).g + rgbAt(r, 40.0, 780.0).b;
+    if (!(lit1 < litMid && litMid < lit0)) std::printf("    scrim %d -> %d -> %d\n", lit0, litMid, lit1);
+    assert(lit1 < litMid && litMid < lit0); // two frames in: part dimmed — the dialog eases in, it does not cut
+    r.spying = true;
+    r.frame();
+    r.spying = false;
+    bool title = false, body = false;
+    for (const auto &d : r.spy.drawn)
+    {
+        title |= d.text == "Save changes to \"Dusk\"?";
+        body |= contains(d.text, "Your changes will be lost");
+    }
+    assert(title && body && cf.buttonCount() == 3 && cf.buttonLabel(0) == "Cancel" && cf.buttonLabel(1) == "Don't save" && cf.buttonLabel(2) == "Save");
+    // Cancel: the window stays, the song still unsaved
+    cf.activate(0);
+    r.settle();
+    assert(quits == 2 && !cf.isOpen() && r.svc->model().dirty && r.app->screen() == "project");
+    // Escape too
+    r.app->requestQuit();
+    r.settle();
+    r.key(27);
+    r.settle();
+    assert(quits == 2 && !cf.isOpen());
+    // Save: saved, THEN quit
+    r.app->requestQuit();
+    r.settle();
+    cf.activate(2);
+    r.settle();
+    assert(quits == 3 && sentLine(r, "project save") && !r.svc->model().dirty && r.app->windowTitle() == "Dusk \xE2\x80\x94 Solaris");
+    // Don't save: quit, nothing saved
+    r.cmd("strip add --kind bus");
+    r.settle();
+    const size_t saves = (size_t)std::count(r.sent.begin(), r.sent.end(), std::string("project save"));
+    r.app->requestQuit();
+    r.settle();
+    cf.activate(1);
+    r.settle();
+    assert(quits == 4 && (size_t)std::count(r.sent.begin(), r.sent.end(), std::string("project save")) == saves);
+    // Home's path asks the same question
+    r.cmd("project open " + r.song("Dusk") + ".slp");
+    r.cmd("strip add --kind bus");
+    r.settle();
+    r.app->requestHome();
+    r.settle();
+    assert(cf.isOpen() && cf.buttonLabel(1) == "Don't save" && quits == 4);
+    cf.activate(1);
+    r.settle();
+    assert(r.app->screen() == "home" && quits == 4 && r.app->windowTitle() == "Solaris");
+    pass("closing the window asks (R-FAM-2): at once on Home or saved; unsaved, the family's dialog (R-FAM-3: Save changes to \"<name>\"? \xC2\xB7 Cancel \xC2\xB7 Don't save \xC2\xB7 Save, eased in) and it quits only on Save, after saving, or Don't save; the title is *<song> \xE2\x80\x94 Solaris, <song> \xE2\x80\x94 Solaris, Solaris (R-FAM-8)");
+}
+
+static void test_page_tabs_are_underlined()
+{
+    // R-FAM-5: the browser's and the dock's tabs switch a PAGE — words with a 2 px accent underline under the current
+    // one, no box behind it; the underline travels between tabs, eased (caught between them)
+    sltest::Rig r("ui-fam-tabs", 1280, 800);
+    r.cmd("project new " + r.song("Tabs") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");
+    r.settle();
+    using arstro::solaris_ui::Browser;
+    using arstro::solaris_ui::MixerDock;
+    auto &br = r.app->project().browser();
+    auto &dock = r.app->project().dock();
+    auto same = [](const Rgb &a, const Rgb &b) { return std::abs(a.r - b.r) <= 3 && std::abs(a.g - b.g) <= 3 && std::abs(a.b - b.b) <= 3; };
+    // the browser: under the current tab the accent, 2 px at the bar's foot; inside the tab the bar's own ground
+    {
+        const artboard::Rect cur = world(br, br.tabRect(br.tab())), other = world(br, br.tabRect(Browser::kSong));
+        const double foot = world(br, artboard::Rect{0, Browser::kTabsH, 0, 0}).y;
+        assert(nearHex(rgbAt(r, cx(cur), foot - 1.0), kAccentHex, 24) && Browser::kTabUnderline == 2.0 && MixerDock::kTabUnderline == 2.0);
+        assert(!warm(rgbAt(r, cx(cur), foot - 4.0)) && !warm(rgbAt(r, cx(other), foot - 1.0)));        // 2 px, and only under the current one
+        assert(same(rgbAt(r, cur.x + 3.0, cur.y + 3.0), rgbAt(r, other.x + 3.0, other.y + 3.0)));      // no chip behind the current tab
+        assert(same(rgbAt(r, cur.x + 3.0, cur.y + 3.0), rgbAt(r, world(br, artboard::Rect{2.0, 2.0, 0, 0}).x, world(br, artboard::Rect{2.0, 2.0, 0, 0}).y))); // … and no track behind the row
+        // a click on Song: the underline on its way — the accent between the two tabs, under neither's centre yet
+        r.click(other);
+        r.frame();
+        r.frame();
+        r.frame();
+        const double hx = world(br, artboard::Rect{br.tabHighlightX() + br.tabHighlightW() * 0.5, 0, 0, 0}).x;
+        assert(br.tab() == Browser::kSong && hx > cx(cur) + 1.0 && hx < cx(other) - 1.0 && nearHex(rgbAt(r, hx, foot - 1.0), kAccentHex, 24));
+        r.settle();
+        assert(nearHex(rgbAt(r, cx(other), foot - 1.0), kAccentHex, 24) && !warm(rgbAt(r, cx(cur), foot - 1.0)));
+    }
+    // the dock: the same — Sources underlined; a click on Matrix, the underline caught between
+    {
+        const int matrix = dock.tabCount() - 1;
+        const artboard::Rect cur = world(dock, dock.tabRect(dock.tab())), other = world(dock, dock.tabRect(matrix));
+        const double foot = world(dock, artboard::Rect{0, MixerDock::kTabsH, 0, 0}).y;
+        assert(nearHex(rgbAt(r, cx(cur), foot - 1.5), kAccentHex, 24) && !warm(rgbAt(r, cx(cur), foot - 4.5)) && !warm(rgbAt(r, cx(other), foot - 1.5)));
+        assert(same(rgbAt(r, cur.x + 2.0, cur.y + 2.0), rgbAt(r, other.x + 2.0, other.y + 2.0))); // no chip
+        const double x0 = dock.tabHighlightX();
+        r.click(other);
+        r.frame();
+        r.frame();
+        r.frame();
+        const double x1 = dock.tabHighlightX();
+        assert(dock.tab() == matrix && x1 > x0 && x1 < dock.tabRect(matrix).x);
+        r.settle();
+        assert(nearHex(rgbAt(r, cx(other), foot - 1.5), kAccentHex, 24) && !warm(rgbAt(r, cx(cur), foot - 1.5)));
+    }
+    // their accessible ids are the same
+    r.app->project().dock().setTab(0);
+    r.settle();
+    bool bt = false, dt = false;
+    for (const auto &n : r.app->accessibles())
+    {
+        bt |= n.key == "browser.tab.2" && n.role == "tab" && n.checked;
+        dt |= n.key.rfind("dock.tab.", 0) == 0 && n.role == "tab";
+    }
+    assert(bt && dt);
+    pass("page tabs are underlined (R-FAM-5): the browser's and the dock's tabs are words with a 2 px accent underline, no chip and no track; the underline travels between tabs, caught between them; their accessible ids unchanged");
+}
+
+static void test_home_is_the_familys()
+{
+    // R-FAM-7: the "Recent songs" header has a clock and the count; while there are songs a dashed "New song" card
+    // ends the grid (it eases to its slot when a song goes, and fades when the last one does); with none: ONE sentence
+    // and ONE outline button; the version is the build's
+    sltest::Rig r("ui-fam-home", 1280, 800);
+    int picks = 0;
+    r.app->onPickSongToCreate = [&] { ++picks; };
+    auto &home = r.app->home();
+    auto drawn = [&] {
+        r.spying = true;
+        r.frame();
+        r.spying = false;
+        return r.spy.drawn;
+    };
+    auto count = [](const std::vector<sltest::Drawn> &d, const std::string &text) {
+        int n = 0;
+        for (const auto &x : d) n += x.text == text ? 1 : 0;
+        return n;
+    };
+    // no songs: one sentence, one button (its words) — and no dashed card
+    r.settle();
+    {
+        const auto d = drawn();
+        assert(home.cardCount() == 0 && home.newCardAmount() == 0.0 && count(d, "No songs yet \xE2\x80\x94 start one.") == 1 && count(d, "Recent songs") == 1 && count(d, "0") == 1);
+        assert(count(d, "New song") == 2); // the sidebar's action and the empty state's button — no third
+        assert(count(d, std::string("solaris v") + SOLARIS_VERSION) == 1 && arstro::solaris_ui::HomeScreen::versionLabel() == std::string("solaris v") + SOLARIS_VERSION);
+        r.click(world(home, home.emptyButtonRect()));
+        assert(picks == 1);
+        // the header: the clock before the words — a ring's stroke where the icon is, nothing where its centre's corner is
+        const artboard::Rect ic = world(home, home.headingIconRect());
+        int ring = 0;
+        for (double x = ic.x - 1.0; x < ic.x + 4.0; x += 1.0) ring = std::max(ring, rgbAt(r, x, cy(ic)).r);
+        if (!(ring > 60)) std::printf("    the clock's ring: %d\n", ring);
+        assert(home.headingTextLeft() == home.headingLeft() + 21.0 && ring > 60 && rgbAt(r, ic.x + 0.5, ic.y + 0.5).r < 40);
+    }
+    // three songs: the dashed card is the fourth slot, the count says 3
+    for (const char *n : {"One", "Two", "Three"})
+    {
+        r.cmd("project new " + r.song(n) + ".slp --name " + n);
+        r.cmd("project save");
+        r.cmd("project close");
+    }
+    r.settle();
+    {
+        const auto d = drawn();
+        assert(home.cardCount() == 3 && home.newCardAmount() == 1.0 && count(d, "3") == 1 && count(d, "New song") == 2 && count(d, "No songs yet \xE2\x80\x94 start one.") == 0);
+        const artboard::Rect last = home.cardLive(2), nc = home.newCardLive();
+        assert(nc.w == last.w && nc.h == last.h && ((nc.y == last.y && nc.x > last.right()) || (nc.y > last.bottom() && nc.x == home.cardLive(0).x)));
+        // dashed: along its top edge the border comes and goes; inside it is the page's ground (no filled card)
+        const artboard::Rect w = world(home, nc);
+        int on = 0, off = 0;
+        for (double x = w.x + 2.0; x < w.right() - 2.0; x += 1.0) (rgbAt(r, x, w.y + 0.5).r > 30 ? on : off)++;
+        const Rgb in = rgbAt(r, w.x + 20.0, w.y + 20.0), page = rgbAt(r, w.right() + 8.0, w.y + 20.0);
+        assert(on > 20 && off > 20 && std::abs(in.r - page.r) <= 2);
+        bool node = false;
+        for (const auto &n : r.app->accessibles()) node |= n.key == "home.newCard" && n.role == "button";
+        assert(node);
+        r.click(w);
+        assert(picks == 2);
+    }
+    // a song forgotten: the dashed card eases to the slot before — caught on its way
+    {
+        const artboard::Rect from = home.newCardLive(), to = home.cardLive(2);
+        r.click(home.cardLive(2), 2);
+        double mid = -1.0;
+        for (int k = 0; k < 30 && mid < 0.0; ++k)
+        {
+            r.frame();
+            const artboard::Rect now = home.newCardLive();
+            if (home.cardCount() == 2 && (now.x != from.x || now.y != from.y) && (now.x != to.x || now.y != to.y)) mid = now.x;
+        }
+        assert(mid >= 0.0);
+        r.settle();
+        assert(home.newCardLive().x == to.x && home.newCardLive().y == to.y && home.newCardAmount() == 1.0);
+    }
+    // the last ones forgotten: it fades out (caught), the sentence and the button come back
+    r.click(home.cardLive(1), 2);
+    r.settle();
+    r.click(home.cardLive(0), 2);
+    double fading = -1.0;
+    for (int k = 0; k < 30 && fading < 0.0; ++k)
+    {
+        r.frame();
+        if (home.newCardAmount() > 0.0 && home.newCardAmount() < 1.0) fading = home.newCardAmount();
+    }
+    assert(fading > 0.0);
+    r.settle();
+    {
+        const auto d = drawn();
+        assert(home.cardCount() == 0 && home.newCardAmount() == 0.0 && count(d, "No songs yet \xE2\x80\x94 start one.") == 1 && count(d, "New song") == 2);
+    }
+    pass("Home is the family's (R-FAM-7): a clock and the count in the Recent songs header; a dashed New song card ends a grid with songs (it eases to its slot, fades with the last song); with none one sentence and one outline button; the version is the build's");
+}
+
+int main(int argc, char **argv)
+{
+    // solaris_app_ui_tests [--only SUBSTR]: every test, or the ones whose name holds SUBSTR (as the shots' --only)
+    const std::string only = argc > 2 && std::string(argv[1]) == "--only" ? argv[2] : "";
+#define RUN(test) do { if (only.empty() || std::string(#test).find(only) != std::string::npos) test(); } while (0)
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     arstro::cosmo_v2::registerEmbeddedFonts();
-    test_new_song_cross_fades_from_home();
-    test_settings_combos_send_lines_and_ease();
-    test_settings_in_pages();
-    test_settings_folders();
-    test_song_bar_and_keys();
-    test_the_tempo_is_set_in_the_song_bar();
-    test_space_returns_and_ctrl_space_stays();
-    test_the_keys_are_the_machines();
-    test_the_keyboard_section();
-    test_the_history_tree();
-    test_clips_are_copied_by_shift_drag_and_ctrl_c_v();
-    test_clips_are_selected_by_a_box_and_handled_together();
-    test_the_pointer_says_a_drag_resizes();
-    test_an_automation_is_made_with_its_clip_and_sized_in_its_window();
-    test_a_recovered_song_is_offered();
-    test_a_midi_file_dropped_on_a_track();
-    test_home_unsaved_confirm_and_recents();
-    test_browser_tabs_and_sample_drag();
-    test_instrument_drop_and_clip_drag();
-    test_an_instruments_face_is_an_analog_panel();
-    test_a_lane_is_an_instruments_track();
-    test_midi_clips_are_made_looped_moved_and_listed();
-    test_ruler_seek_keys_and_selection();
-    test_the_mixers_numbers_bind_from_the_dock();
-    test_ids_shown_and_copied();
-    test_lists_travel_when_the_song_changes_shape();
-    test_mixer_dock_strips();
-    test_meters_and_the_loudness_window();
-    test_the_export_sheet_is_one_render_line();
-    test_an_instrument_track_is_armed_from_its_header();
-    test_the_rack_shows_its_generator_apart_and_slides();
-    test_an_effect_is_dragged_to_its_place();
-    test_mixer_matrix_effects_and_device_panel();
-    test_song_bar_menus_and_settings_sections();
-    test_device_window_lists_parameters_and_binds_them();
-    test_automation_clips_draw_and_edit_curves();
-    test_automation_clips_copy_like_midi_clips();
-    test_bezier_handles_and_the_automation_window();
-    test_piano_roll_edits_the_pattern();
-    test_the_rolls_lane_draws_the_wheels();
-    test_the_rolls_note_tools();
-    test_markers_on_the_ruler();
-    test_time_edits_from_the_ruler();
-    test_lane_groups_on_the_timeline();
-    test_recording_audio_from_the_window();
-    test_takes_under_their_clip();
-    test_a_clips_fades_gain_and_edits();
-    test_a_clip_warped_from_its_menu();
-    test_tempo_changes_on_the_ruler();
-    test_presets_in_the_window();
-    test_templates_in_the_window();
-    test_the_sample_library_in_the_browser();
-    test_the_roll_plays_its_clip();
-    test_the_roll_sounds_what_is_made();
-    test_the_rolls_selection_and_what_is_done_to_it();
-    test_notes_copied_from_one_clips_roll_to_anothers();
-    test_alt_wheel_changes_the_lane_shown();
-    test_the_roll_copies_by_shift_drag_and_makes_notes_like_the_last();
-    test_the_length_a_click_makes_and_a_window_resized();
-    test_the_wheel_scrolls_sideways_with_shift();
-    test_a_short_drag_lands_where_it_was_let_go();
-    test_a_kits_roll_names_its_pads();
-    test_a_line_added_and_sources_relinked();
-    test_a_strip_keys_a_later_compressor();
-    test_a_strip_ducks_under_another_from_its_menu();
-    test_the_loop_region_on_the_ruler();
-    test_the_ruler_is_dragged();
-    test_a_sample_dropped_on_a_sampler_loads_it();
-    test_a_plugins_device_window();
-    test_a_tuners_window();
-    test_a_vca_in_the_dock();
-    test_per_strip_tools_in_the_dock();
-    test_versions_from_the_song_bar();
-    test_relink_and_collect_from_the_file_menu();
-    test_the_session_view();
-    test_the_video_window();
-    test_the_video_lane();
-    test_the_chords_band();
-    test_export_with_the_video();
-    test_conflicts_are_asked_in_a_sheet();
-    test_the_ui_scale_and_high_contrast();
-    test_the_keyboard_reaches_every_control();
-    test_midi_learn_in_the_window();
-    test_a_surface_chosen_in_settings();
-    test_the_cpu_in_the_song_bar();
-    test_settings_puts_a_port_on_a_device();
-    test_a_strip_freezes_from_its_menu();
-    test_a_sample_is_heard_from_the_browser();
-    test_the_grid_follows_the_zoom();
-    test_the_window_speaks_the_language();             // R-ACCESS-2
-    test_every_word_the_shell_draws_is_from_the_table();
-    test_every_word_the_lanes_draw_is_from_the_table();
-    test_every_word_the_dock_and_windows_draw_is_from_the_table();
-    test_the_table_has_every_word_the_window_says();
+    RUN(test_new_song_cross_fades_from_home);
+    RUN(test_settings_combos_send_lines_and_ease);
+    RUN(test_settings_in_pages);
+    RUN(test_settings_folders);
+    RUN(test_song_bar_and_keys);
+    RUN(test_the_tempo_is_set_in_the_song_bar);
+    RUN(test_space_returns_and_ctrl_space_stays);
+    RUN(test_the_keys_are_the_machines);
+    RUN(test_the_keyboard_section);
+    RUN(test_the_history_tree);
+    RUN(test_clips_are_copied_by_shift_drag_and_ctrl_c_v);
+    RUN(test_clips_are_selected_by_a_box_and_handled_together);
+    RUN(test_the_pointer_says_a_drag_resizes);
+    RUN(test_an_automation_is_made_with_its_clip_and_sized_in_its_window);
+    RUN(test_a_recovered_song_is_offered);
+    RUN(test_a_midi_file_dropped_on_a_track);
+    RUN(test_home_unsaved_confirm_and_recents);
+    RUN(test_browser_tabs_and_sample_drag);
+    RUN(test_instrument_drop_and_clip_drag);
+    RUN(test_an_instruments_face_is_an_analog_panel);
+    RUN(test_a_lane_is_an_instruments_track);
+    RUN(test_midi_clips_are_made_looped_moved_and_listed);
+    RUN(test_ruler_seek_keys_and_selection);
+    RUN(test_the_mixers_numbers_bind_from_the_dock);
+    RUN(test_ids_shown_and_copied);
+    RUN(test_lists_travel_when_the_song_changes_shape);
+    RUN(test_mixer_dock_strips);
+    RUN(test_meters_and_the_loudness_window);
+    RUN(test_the_export_sheet_is_one_render_line);
+    RUN(test_an_instrument_track_is_armed_from_its_header);
+    RUN(test_the_rack_shows_its_generator_apart_and_slides);
+    RUN(test_an_effect_is_dragged_to_its_place);
+    RUN(test_mixer_matrix_effects_and_device_panel);
+    RUN(test_song_bar_menus_and_settings_sections);
+    RUN(test_device_window_lists_parameters_and_binds_them);
+    RUN(test_automation_clips_draw_and_edit_curves);
+    RUN(test_automation_clips_copy_like_midi_clips);
+    RUN(test_bezier_handles_and_the_automation_window);
+    RUN(test_piano_roll_edits_the_pattern);
+    RUN(test_the_rolls_lane_draws_the_wheels);
+    RUN(test_the_rolls_note_tools);
+    RUN(test_markers_on_the_ruler);
+    RUN(test_time_edits_from_the_ruler);
+    RUN(test_lane_groups_on_the_timeline);
+    RUN(test_recording_audio_from_the_window);
+    RUN(test_takes_under_their_clip);
+    RUN(test_a_clips_fades_gain_and_edits);
+    RUN(test_a_clip_warped_from_its_menu);
+    RUN(test_tempo_changes_on_the_ruler);
+    RUN(test_presets_in_the_window);
+    RUN(test_templates_in_the_window);
+    RUN(test_the_sample_library_in_the_browser);
+    RUN(test_the_roll_plays_its_clip);
+    RUN(test_the_roll_sounds_what_is_made);
+    RUN(test_the_rolls_selection_and_what_is_done_to_it);
+    RUN(test_notes_copied_from_one_clips_roll_to_anothers);
+    RUN(test_alt_wheel_changes_the_lane_shown);
+    RUN(test_the_roll_copies_by_shift_drag_and_makes_notes_like_the_last);
+    RUN(test_the_length_a_click_makes_and_a_window_resized);
+    RUN(test_the_wheel_scrolls_sideways_with_shift);
+    RUN(test_a_short_drag_lands_where_it_was_let_go);
+    RUN(test_a_kits_roll_names_its_pads);
+    RUN(test_a_line_added_and_sources_relinked);
+    RUN(test_a_strip_keys_a_later_compressor);
+    RUN(test_a_strip_ducks_under_another_from_its_menu);
+    RUN(test_the_loop_region_on_the_ruler);
+    RUN(test_the_ruler_is_dragged);
+    RUN(test_a_sample_dropped_on_a_sampler_loads_it);
+    RUN(test_a_plugins_device_window);
+    RUN(test_a_tuners_window);
+    RUN(test_a_vca_in_the_dock);
+    RUN(test_per_strip_tools_in_the_dock);
+    RUN(test_versions_from_the_song_bar);
+    RUN(test_relink_and_collect_from_the_file_menu);
+    RUN(test_the_session_view);
+    RUN(test_the_video_window);
+    RUN(test_the_video_lane);
+    RUN(test_the_chords_band);
+    RUN(test_export_with_the_video);
+    RUN(test_conflicts_are_asked_in_a_sheet);
+    RUN(test_the_ui_scale_and_high_contrast);
+    RUN(test_the_keyboard_reaches_every_control);
+    RUN(test_midi_learn_in_the_window);
+    RUN(test_a_surface_chosen_in_settings);
+    RUN(test_the_cpu_in_the_song_bar);
+    RUN(test_settings_puts_a_port_on_a_device);
+    RUN(test_a_strip_freezes_from_its_menu);
+    RUN(test_a_sample_is_heard_from_the_browser);
+    RUN(test_the_grid_follows_the_zoom);
+    RUN(test_the_window_speaks_the_language);             // R-ACCESS-2
+    RUN(test_every_word_the_shell_draws_is_from_the_table);
+    RUN(test_every_word_the_lanes_draw_is_from_the_table);
+    RUN(test_every_word_the_dock_and_windows_draw_is_from_the_table);
+    RUN(test_the_table_has_every_word_the_window_says);
+    // the UI audit of 2026-11-17
+    RUN(test_the_accent_never_stands_beside_red);
+    RUN(test_a_toast_speaks_in_one_of_three_voices);
+    RUN(test_a_render_from_the_window_is_seen_and_said);
+    RUN(test_the_transport_has_loop_and_metronome);
+    RUN(test_a_tracks_header_mutes_and_solos_its_strip);
+    RUN(test_the_dock_takes_its_share_of_the_window);
+    RUN(test_an_empty_song_offers_its_first_sound);
+    RUN(test_the_lanes_show_where_they_are_and_fit_the_song);
+    RUN(test_small_things_the_frames_showed);
+    RUN(test_the_agent_panel_docks_beside_the_song);
+    // the family standard (R-FAM), 2026-11-17
+    RUN(test_the_menus_are_the_familys);
+    RUN(test_closing_the_window_asks_and_the_title_says_unsaved);
+    RUN(test_page_tabs_are_underlined);
+    RUN(test_home_is_the_familys);
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

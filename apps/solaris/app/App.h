@@ -33,6 +33,7 @@
 #include "../../cosmo/widgets/ConfirmDialog.h"
 #include "../../cosmo/widgets/ContextMenu.h"
 #include "../../cosmo/widgets/HistoryView.h"
+#include "../../cosmo/widgets/Toast.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -41,6 +42,10 @@ namespace arstro
 {
 namespace solaris_ui
 {
+    /** R-UI-15: the three voices of a toast — something was done · the song is open and something is owed · a line was
+     *  refused. Told apart by shape as well as colour (a 3 px bar and a glyph), never by the accent. */
+    using ToastKind = cosmo_v2::Toast::Kind; // R-FAM-4: the family's toast, and its three kinds
+
     class App
     {
     public:
@@ -59,7 +64,7 @@ namespace solaris_ui
         double logicalHeight() const { return mH; }
 
         /** R-ACCESS-1: every control the window shows as an accessible node, in reading order — the song bar (its menus'
-         *  titles after Settings), the browser, the lanes' headers, the dock, the open windows; a modal's — a menu open,
+         *  titles after the wordmark), the browser, the lanes' headers, the dock, the open windows; a modal's — a menu open,
          *  a dialog, a sheet — ALONE while it is open. What the keyboard walks and the host gives AT-SPI. */
         std::vector<A11yNode> accessibles();
         /** A node by its key, as the keyboard does it: its activation (the click it stands for), its step. False when
@@ -114,6 +119,24 @@ namespace solaris_ui
         double languageAmount() const { return mLangFade.value(); }    // LIVE: 0 the old language … 1 the new alone
         /** The OS's own "reduce motion" (the host reads it once); the app ORs it with its setting (R-SET-3). */
         void setOsReducedMotion(bool on) { mOsReducedMotion = on; artboard::setReducedMotion(on || mAppReducedMotion); }
+        /** R-RENDER-4: a `render …` line from the window. It is NOT sent now: a "Rendering…" modal eases in first, and
+         *  the line goes out at the start of the frame AFTER one that painted the modal whole — the service runs a
+         *  render to its end before it answers, so that frame is what stands on screen meanwhile. `file` is named on it. */
+        void beginRender(const std::string &line, const std::string &file);
+        /** The service's `render.finished`, as the host heard it (the host subscribes; the app links no service):
+         *  said in an info toast — the file and the master's peak. */
+        void renderFinished(const std::string &out, const std::string &peakDb);
+        bool renderPending() const { return !mRenderLine.empty(); }  // asked for, not yet sent
+        double renderAmount() const { return mRenderAmt.value(); }   // LIVE: the modal's fade
+        artboard::Rect renderCardRect() const;                       // its card (logical units)
+        /** R-FAM-6: the card's progress bar — the family's 3 px accent bar. A render has no fraction to show, so a
+         *  segment (kRenderSegment of the track) SWEEPS along it, eased in and out, entering and leaving through the
+         *  track's ends so the loop has no seam; still, at the middle, under reduced motion. `renderSweep` is its LIVE
+         *  place, 0 (about to enter) … 1 (gone out the far end). */
+        static constexpr double kRenderBarH = 3.0, kRenderSegment = 0.3, kRenderSweepMs = 1400.0;
+        double renderSweep() const;
+        artboard::Rect renderBarRect() const;     // the track
+        artboard::Rect renderSegmentRect() const; // the accent's segment, as drawn now (clipped to the track)
         void openSongPicked(const std::string &path);
         void newSongPicked(const std::string &path);
         /** R-PRESET-2: a menu of the song templates at `world`; one picked, `onPickSongToCreate` asks where. */
@@ -122,15 +145,28 @@ namespace solaris_ui
         /** R-HIST-3: Edit ▸ Show History Tree… — cosmo's history view over the model's tree. */
         void openHistory();
         cosmo_v2::HistoryView &historyView() { return *mHistory; }
-        /** Home, behind cosmo's ConfirmDialog when the song has unsaved changes. */
+        /** Home, behind cosmo's ConfirmDialog when the song has unsaved changes (R-FAM-3: the family's question). */
         void requestHome();
+        /** R-FAM-2: the window's close button. With no unsaved edits `onQuit` runs at once; with some, the same dialog
+         *  as Home's is raised and `onQuit` runs only on Save (after the save landed) or Don't save. */
+        void requestQuit();
+        std::function<void()> onQuit; // the host closes its window
+        /** R-FAM-8: what the window's title bar says — `*<song> — Solaris` unsaved, `<song> — Solaris` saved, `Solaris`
+         *  on Home. The host shows it when it changes. */
+        std::string windowTitle() const;
 
         // presentation, for the host and the tests
         const std::string &screen() const { return mScreen; }
         double screenOpacity(const std::string &screen) const;
-        std::string toastText() const { return shown(mToastText); } // in the language drawn now
-        bool toastIsRefusal() const { return mToastRefusal; }
-        double toastAmount() const { return mToast.value(); }
+        // R-FAM-4: the toast is cosmo's `Toast`; these forward what it publishes
+        std::string toastText() const { return mToast->text(); }           // in the language drawn now
+        bool toastIsRefusal() const { return mToast->kind() == ToastKind::Error; }
+        ToastKind toastKind() const { return mToast->kind(); }             // R-UI-15
+        double toastAmount() const { return mToast->amount(); }            // LIVE: its fade (and its slide into place)
+        double toastSwapAmount() const { return mToast->swapAmount(); }    // LIVE: 0 the toast it replaced … 1 this one alone
+        artboard::Rect toastRect() const;                                  // as last DRAWN (logical units, the window's): under the song bar
+        static constexpr double kToastBarW = cosmo_v2::Toast::kBarW;       // a warning's and an error's bar, at its left
+        static constexpr double kToastTop = SongBar::kHeight + 4.0;        // where it rests: under the song bar, in the ruler's band
         static double minWidth() { return 960.0; }
         static double minHeight() { return 600.0; }
 
@@ -151,7 +187,7 @@ namespace solaris_ui
         std::string selectedClip() const;
         void layoutAll();
         /** Words to say (`say` — Words.h — or the service's line, as data). */
-        void showToast(const std::string &text, bool refusal = true);
+        void showToast(const std::string &text, ToastKind kind = ToastKind::Error);
         /** A menu at `world` — its labels kept as words, shown in each pass's language (R-ACCESS-2). */
         void openMenu(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world);
         /** cosmo's dialog, its words kept: the title and the message composed for the language drawn, each pass. */
@@ -168,7 +204,8 @@ namespace solaris_ui
         static const solaris::AppModel &emptyModel();
         /** R-SET-4: the action a combo means on a keyboard ("song" or "roll") in the model's keymap, or "". */
         static std::string keyActionFor(const solaris::AppModel &m, const std::string &combo, const std::string &group);
-        static std::string keyHint(const solaris::AppModel &m, const std::string &action); // "   (Ctrl+Z)", or "" — the keymap's first key
+        static std::string keyHint(const solaris::AppModel &m, const std::string &action); // "Ctrl+Z", or "" — the keymap's first key, as a menu's shortcut column shows it
+        void askUnsaved(std::function<void()> then); // R-FAM-3: `then` at once when saved; else on Save (saved) or Don't save
         void syncHistory(const solaris::AppModel &m); // the open tree view follows the model's tree
         void askRecovery(const solaris::AppModel &m); // R-SAFE-2: Recover / Open the saved one
         bool songAction(const solaris::AppModel &m, const std::string &id); // true when it did something
@@ -182,6 +219,8 @@ namespace solaris_ui
         std::shared_ptr<SettingsSheet> mSettings;
         std::shared_ptr<ExportSheet> mExport;
         std::shared_ptr<RelinkSheet> mRelink;
+        double mLoopFrom = 0.0, mLoopTo = 0.0; // R-TIME-4 amended: the song's loop as the window last saw it (what Loop turns back on)
+        std::string mLoopSong;                 // … and the song it was in
         std::string mMissingSaidFor; // R-COLLECT-1: the song whose missing files a toast has said
         std::shared_ptr<ConflictsSheet> mConflicts; // R-COLLAB-1
         double mPhysW = 1.0, mPhysH = 1.0;          // R-ACCESS-1: the window, in device pixels
@@ -217,11 +256,7 @@ namespace solaris_ui
         bool mRollKeys = false; // R-ROLL-8: the pointer last pressed in the front piano roll — the keys go to it
         long long mBoundRevision = -1;
         bool mBoundAudition = false;
-        std::string mToastText;
-        bool mToastRefusal = true;           // a refusal is outlined in the destructive red; a notice in the accent
-        artboard::AnimatedProperty mToast{0.0};
-        bool mToastWanted = false;
-        double mToastShownAt = -1e9;
+        std::shared_ptr<cosmo_v2::Toast> mToast; // R-FAM-4: the family's toast, placed under the song bar
         bool mOsReducedMotion = false, mAppReducedMotion = false;
         std::string mMenuKey;                // what the dynamic menu labels were built from
         // R-ACCESS-2: the language drawn, and the words stored in cosmo's widgets kept as words
@@ -235,6 +270,13 @@ namespace solaris_ui
         long mWordsGen = 0, mRelabelGen = -1;
         std::string mRelabelLang;
         std::string mRecoveryAsked;          // R-SAFE-2: the song whose autosave the window has asked about
+        // R-RENDER-4: the line waiting to be sent, the file it names, the modal's fade; a frame painted it whole; the
+        // service has answered and the modal closes on the next frame's clock (the one a render blocked is stale)
+        std::string mRenderLine, mRenderFile;
+        artboard::AnimatedProperty mRenderAmt{0.0};
+        bool mRenderOpening = false, mRenderPainted = false, mRenderCloseWanted = false;
+        double mRenderT0 = 0.0; // when the modal began to open: the sweep's clock (R-FAM-6)
+        void paintRender(artboard::IRenderTarget &target) const;
     };
 }
 }

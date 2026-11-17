@@ -86,7 +86,10 @@ namespace solaris_ui
         enum Row { kOutput = 0, kInput, kRate, kBuffer, kMetronome, kClickLevel, kPreviewLevel, kNewBpm, kNewSig, kMotion, kAutosave, kDriver, kMidiIn, kRecQuant, kCountIn,
                    kSurface, kSurfacePort, kUiScale, kContrast, kLanguage, kRows }; // kSurface…: R-CTRL-2, the MIDI page; kUiScale, kContrast: R-ACCESS-1; kLanguage: R-ACCESS-2
         enum Section { kAudio = 0, kPlayback, kNewSongs, kFolders, kInterface, kKeyboard, kMidi, kSections }; // kMidi: R-CTRL-1
-        static constexpr double kCardW = 720.0, kCardH = 520.0;
+        static constexpr double kCardW = 900.0, kCardH = 700.0; // at most (R-UI-18: it was a fixed 720 × 520, its hints cut off)
+        /** The sheet's card (local): min(kCardW, the window − kMargin) × min(kCardH, the window − kMargin), centred (R-UI-18). */
+        artboard::Rect card() const { return cardRect(); }
+        static constexpr double kMargin = 64.0;                 // … and the window less this, each way
         static constexpr double kRailW = 164.0;   // the sections' column
         static constexpr double kPad = 24.0;
         static constexpr double kChipH = 26.0;    // the keymap's chips, "Add folder…"

@@ -657,6 +657,86 @@ static void test_event_and_model_tables()
     pass("event names unique; an event formats as its log line");
 }
 
+// R-AGENT-1/2: the conversation is the service's; the process is a host's — here a fake one.
+namespace
+{
+    struct FakeAgent : arstro::cosmo::IAssistant
+    {
+        std::vector<arstro::cosmo::AssistOutput> queued;
+        arstro::cosmo::AssistLaunch launched;
+        std::vector<std::string> *heard = nullptr;
+        bool start(const arstro::cosmo::AssistLaunch &l, std::string &) override
+        {
+            launched = l;
+            queued.push_back({arstro::cosmo::AssistOutput::Kind::Ready, "Fake Agent"});
+            return true;
+        }
+        bool send(const std::string &text, std::string &) override
+        {
+            if (heard) heard->push_back(text);
+            queued.push_back({arstro::cosmo::AssistOutput::Kind::Tool, "solaris_run clip add --instrument drums"});
+            queued.push_back({arstro::cosmo::AssistOutput::Kind::Text, "Added a drum clip."});
+            queued.push_back({arstro::cosmo::AssistOutput::Kind::Done, ""});
+            return true;
+        }
+        void stop() override {}
+        void poll(std::vector<arstro::cosmo::AssistOutput> &out) override { out.insert(out.end(), queued.begin(), queued.end()); queued.clear(); }
+        std::string name() const override { return "Fake Agent"; }
+    };
+}
+
+static void test_the_users_agent_is_a_conversation_the_service_keeps()
+{
+    Run r;
+    // no runner: refused, and it says where one is
+    assert(r.no("assist start").find("the window can") != std::string::npos);
+    assert(r.svc.model().assist.state == "off");
+
+    std::vector<std::string> heard;
+    arstro::cosmo::AssistLaunch seen;
+    r.svc.setAssistantFactory([&] {
+        auto a = std::make_unique<FakeAgent>();
+        a->heard = &heard;
+        return std::unique_ptr<arstro::cosmo::IAssistant>(std::move(a));
+    });
+    r.ok("settings set agent=acp:demo agentAllowAll=on");
+    assert(r.svc.model().settings.agent == "acp:demo");
+    r.no("settings set agentAllowAll=maybe");
+    r.ok("project new " + freshSong("agent"));
+    r.events.clear();
+    r.ok("assist send make a beat please"); // starts the agent first
+    r.svc.pump();
+    r.svc.pump();
+    const auto &a = r.svc.model().assist;
+    assert(a.state == "ready" && a.agent == "Fake Agent");
+    assert(heard.size() == 1 && heard[0] == "make a beat please");
+    assert(a.messages.size() >= 3);
+    assert(a.messages[0].role == "user" && a.messages[0].text == "make a beat please");
+    bool tool = false, reply = false;
+    for (const auto &m : a.messages)
+    {
+        tool = tool || (m.role == "tool" && m.text.find("clip add") != std::string::npos);
+        reply = reply || (m.role == "agent" && m.text == "Added a drum clip.");
+    }
+    assert(tool && reply);
+    bool sawState = false, sawMsg = false;
+    for (const auto &e : r.events)
+    {
+        sawState = sawState || e.rfind("[evt] assist.state state=ready agent=", 0) == 0;
+        sawMsg = sawMsg || e == "[evt] assist.message role=agent text=\"Added a drum clip.\"";
+    }
+    assert(sawState && sawMsg);
+    // the conversation is not the song: it survives a model rebuild, is absent from a stable dump, and is no edit
+    r.ok("set ch_1.gain=-3");
+    assert(r.svc.model().assist.messages.size() == a.messages.size());
+    assert(r.ok("state print --json --stable").find("\"assist\"") == std::string::npos);
+    assert(r.ok("state print --json").find("\"assist\"") != std::string::npos);
+    r.ok("assist stop");
+    assert(r.svc.model().assist.state == "off");
+    r.ok("assist stop"); // nothing to stop is not a refusal
+    pass("the user's agent: refused with no runner; send starts it; tool calls and the reply are messages and events; settings carry the agent; not in a stable dump (R-AGENT-1/2)");
+}
+
 // ── L2: the real service ─────────────────────────────────────────────────────────────────────
 
 static void test_a_new_song_has_its_mixers_and_round_trips()
@@ -1749,6 +1829,14 @@ static void test_keys_are_settings()
         assert(r.svc.model().settings.keys.size() == keyActions().size() && r.svc.model().settings.keys[0].id == "transport.play");
         assert(keyOf("transport.play").keys == std::vector<std::string>{"Space"} && keyOf("transport.stopHere").keys == std::vector<std::string>{"Ctrl+Space"});
         assert((keyOf("song.redo").keys == std::vector<std::string>{"Ctrl+Shift+Z", "Ctrl+Y"}) && keyOf("roll.octaveUp").area == "Piano roll");
+        // R-FAM-8: the family's keys are actions like any other — New, Open, Save As
+        assert(keyOf("song.new").keys == std::vector<std::string>{"Ctrl+N"} && keyOf("song.open").keys == std::vector<std::string>{"Ctrl+O"} &&
+               keyOf("song.saveAs").keys == std::vector<std::string>{"Ctrl+Shift+S"} && keyOf("song.saveAs").area == "Song");
+        for (const auto &a : r.svc.model().settings.keys) // no two actions of one keyboard share a default combo
+            for (const auto &b : r.svc.model().settings.keys)
+                if (a.id < b.id && keyGroup(a.area) == keyGroup(b.area))
+                    for (const auto &k : a.defaults) assert(std::find(b.defaults.begin(), b.defaults.end(), k) == b.defaults.end());
+        assert(contains(r.no("settings set key.song.save=Ctrl+N"), "(key.song.new)"));
         // set: any spelling in, the canonical one kept; the event names the action
         r.events.clear();
         r.ok("settings set key.transport.play=\"shift+ctrl+p, F5\"");
@@ -7908,6 +7996,7 @@ int main()
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     test_grammar_table_parses_and_rejects();
     test_event_and_model_tables();
+    test_the_users_agent_is_a_conversation_the_service_keeps();
     test_a_new_song_has_its_mixers_and_round_trips();
     test_every_sample_file_gets_its_own_strip();
     test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_changed();

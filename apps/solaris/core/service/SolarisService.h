@@ -15,6 +15,7 @@
  *  with the validation's sentence — a refused command changes nothing.
  */
 #pragma once
+#include "../../../cosmo/core/assist/AssistConversation.h" // cosmo's, compiled in place (R-AGENT, cosmo R-ASSIST-13)
 #include "AppModel.h"
 #include "AudioIn.h"
 #include "AudioOut.h"
@@ -121,6 +122,10 @@ namespace solaris
         /** Bring the transport and meters into the model, free engines the player handed back. A
          *  host calls it on a timer while playing; `wait` calls it; it emits nothing. */
         void pump();
+        /** R-AGENT-1: the host's way of running the user's agent (a process: never the core's), and its
+         *  look at this machine for installed agents. With neither, `assist start` says why. */
+        void setAssistantFactory(arstro::cosmo::AssistConversation::AssistantFactory f) { mAssist.setFactory(std::move(f)); }
+        void setAgentDetector(arstro::cosmo::AssistConversation::AgentDetector d) { mAssist.setDetector(std::move(d)); }
         bool auditionCommand(const Command &c, std::string &err);
         bool previewCommand(const Command &c, std::string &err);  // R-ROLL-7: `note preview`
         const std::string &output() const { return mOutput; }
@@ -137,6 +142,8 @@ namespace solaris
         bool clipCommand(const Command &c, std::string &err);
         bool render(const Command &c, std::string &err);
         bool machineCommand(const Command &c, std::string &err);
+        bool assistCommand(const Command &c, std::string &err); // R-AGENT-1
+        arstro::cosmo::AssistConversation::Hooks assistHooks();
         bool transportCommand(const Command &c, std::string &err);
         /** R-DEV-9: the clock device through the setting's driver, PulseAudio the fallback; `driver` says which. */
         std::unique_ptr<IAudioOut> openOutput(int rate, int block, std::string &driver, std::string &err);
@@ -429,6 +436,8 @@ namespace solaris
         bool commitRecording(long long stoppedAt, std::string &err); // at the stop: the take into a clip (an edit)
         long long mCountInFrames = 0;          // a recording's count-in, for the play it starts
         Settings mSettings;
+        arstro::cosmo::AssistModel mAssistModel;       // R-AGENT-1: kept here; refreshModel copies it into the model
+        arstro::cosmo::AssistConversation mAssist;     // … declared after it: it holds a reference to it
         std::vector<std::string> mRecents;
         std::vector<RecentModel> mRecentCards; // parsed from the files: rebuilt only when stale
         bool mRecentsStale = true;

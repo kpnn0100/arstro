@@ -335,9 +335,9 @@ namespace solaris_ui
         const std::string id = c.id;
         const double pos = mPosition;
         if (pos > c.at + 1e-9 && pos < c.at + c.length - 1e-9) // R-EDIT-1: where the time bar is
-            items.push_back({say("Split at the time bar"), [this, id, pos] { if (onCommand) onCommand("clip split " + id + " --at " + beatText(toTick(pos))); }});
+            items.push_back({say("Split at the Time Bar"), [this, id, pos] { if (onCommand) onCommand("clip split " + id + " --at " + beatText(toTick(pos))); }});
         const bool rev = c.reverse;
-        items.push_back({rev ? say("Play forwards") : say("Reverse"), [this, id, rev] { if (onCommand) onCommand("set " + id + ".reverse=" + (rev ? "false" : "true")); }});
+        items.push_back({rev ? say("Play Forwards") : say("Reverse"), [this, id, rev] { if (onCommand) onCommand("set " + id + ".reverse=" + (rev ? "false" : "true")); }});
         // consolidate: the clips it runs into on its lane through its strip — touching or overlapping, one after another
         std::vector<const ClipView *> run;
         for (const auto &v : mClips)
@@ -356,15 +356,15 @@ namespace solaris_ui
         std::sort(run.begin(), run.end(), [](const ClipView *x, const ClipView *y) { return x->c.at < y->c.at || (x->c.at == y->c.at && x->c.id < y->c.id); });
         std::string ids;
         for (const ClipView *x : run) ids += " " + x->c.id;
-        items.push_back({run.size() > 1 ? say("Consolidate {1} clips", (long)run.size()) : say("Consolidate"),
+        items.push_back({run.size() > 1 ? say("Consolidate {1} Clips", (long)run.size()) : say("Consolidate"),
                          [this, ids] { if (onCommand) onCommand("clip consolidate" + ids); }});
         // R-ASSIST-1: what the DSP library hears in it — its two halves, its melody, its chords
-        items.push_back({say("Separate harmonic / percussive"), [this, id] { if (onCommand) onCommand("clip separate " + id); }});
+        items.push_back({say("Separate Harmonic / Percussive"), [this, id] { if (onCommand) onCommand("clip separate " + id); }});
         items.push_back({say("To MIDI"), [this, id] { if (onCommand) onCommand("clip to-midi " + id); }});
-        items.push_back({say("Detect chords"), [this, id] { if (onCommand) onCommand("chords detect " + id); }});
+        items.push_back({say("Detect Chords"), [this, id] { if (onCommand) onCommand("chords detect " + id); }});
         // R-WARP-1: the song's tempo, its own typed, its pitch
         const bool warped = c.warp;
-        items.push_back({warped ? say("Unwarp") : say("Warp to the song's tempo"), [this, id, warped] { if (onCommand) onCommand("set " + id + ".warp=" + (warped ? "false" : "true")); }});
+        items.push_back({warped ? say("Unwarp") : say("Warp to the Song's Tempo"), [this, id, warped] { if (onCommand) onCommand("set " + id + ".warp=" + (warped ? "false" : "true")); }});
         if (onRename)
         {
             char b[32];
@@ -385,11 +385,11 @@ namespace solaris_ui
         if (c.loop) return; // a looping clip is not sliced (unloop it first)
         std::vector<cosmo_v2::ContextMenu::Item> slice;
         auto every = [this, id](double b) { return [this, id, b] { if (onCommand) onCommand("clip slice " + id + " --every " + beatText(b)); }; };
-        slice.push_back({say("Every bar"), every(mBeatsPerBar)});
-        slice.push_back({say("Every beat"), every(1.0)});
-        slice.push_back({say("Every half beat"), every(0.5)});
-        if (c.takes.empty()) slice.push_back({say("At its hits"), [this, id] { if (onCommand) onCommand("clip slice " + id + " --transients"); }});
-        slice.push_back({say("To a kit, a slice a beat"), [this, id] { if (onCommand) onCommand("clip slice " + id + " --every 1 --kit"); }});
+        slice.push_back({say("Every Bar"), every(mBeatsPerBar)});
+        slice.push_back({say("Every Beat"), every(1.0)});
+        slice.push_back({say("Every Half Beat"), every(0.5)});
+        if (c.takes.empty()) slice.push_back({say("At Its Hits"), [this, id] { if (onCommand) onCommand("clip slice " + id + " --transients"); }});
+        slice.push_back({say("To a Kit, a Slice a Beat"), [this, id] { if (onCommand) onCommand("clip slice " + id + " --every 1 --kit"); }});
         items.push_back({say("Slice \xE2\x96\xB8"), [this, slice, world] { if (onMenu) onMenu(slice, world); }});
     }
 }

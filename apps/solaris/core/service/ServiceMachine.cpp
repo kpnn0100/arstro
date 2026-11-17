@@ -111,6 +111,18 @@ namespace solaris
                     if (v != "on" && v != "off") { err = k + " is on or off"; return false; }
                     (k == "metronome" ? next.metronome : k == "reducedMotion" ? next.reducedMotion : k == "highContrast" ? next.highContrast : next.showIds) = v == "on";
                 }
+                else if (k == "agent") // R-AGENT-2: stored for the next `assist start`
+                {
+                    if (v.empty()) { err = "agent is a command: claude, acp:<command> or cmd:<command>"; return false; }
+                    next.agent = v;
+                }
+                else if (k == "agentArgs") next.agentArgs = v;
+                else if (k == "agentSkills") next.agentSkills = v;
+                else if (k == "agentAllowAll")
+                {
+                    if (v != "on" && v != "off") { err = k + " is on or off"; return false; }
+                    next.agentAllowAll = v == "on";
+                }
                 else if (k == "language") // R-ACCESS-2: auto, or a language Solaris has — another is refused naming the nearest
                 {
                     if (v != "auto" && !solaris_strings::known(v))
@@ -276,7 +288,7 @@ namespace solaris
                               .set("folders", folders).set("ports", ports).set("metronome", mSettings.metronome)
                               .set("metronomeLevel", mSettings.metronomeLevel).set("auditionLevel", mSettings.auditionLevel).set("newBpm", mSettings.newBpm)
                               .set("newSig", mSettings.newSig).set("reducedMotion", mSettings.reducedMotion).set("uiScale", mSettings.uiScale).set("highContrast", mSettings.highContrast).set("language", mSettings.language)
-                              .set("showIds", mSettings.showIds).set("autosave", mSettings.autosave).set("driver", mSettings.driver).set("midiInputs", mSettings.midiInputs).set("recordQuantize", mSettings.recordQuantize).set("countIn", mSettings.countIn).set("keys", [&] {
+                              .set("showIds", mSettings.showIds).set("agent", mSettings.agent).set("agentArgs", mSettings.agentArgs).set("agentSkills", mSettings.agentSkills).set("agentAllowAll", mSettings.agentAllowAll).set("autosave", mSettings.autosave).set("driver", mSettings.driver).set("midiInputs", mSettings.midiInputs).set("recordQuantize", mSettings.recordQuantize).set("countIn", mSettings.countIn).set("keys", [&] {
                                   Json keys = Json::array(); // only the re-keyed actions, as the file has them
                                   for (const auto &k : mSettings.keys) keys.push(Json::string(k.first + "=" + k.second));
                                   return keys;

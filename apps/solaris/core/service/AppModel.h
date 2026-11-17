@@ -10,6 +10,7 @@
  *  under the current solos, a clip's resolved length, how many clips share a pattern.
  */
 #pragma once
+#include "../../../cosmo/core/assist/Assistant.h" // cosmo's agent seam, compiled in place (R-AGENT)
 #include <string>
 #include <vector>
 
@@ -300,6 +301,7 @@ namespace solaris
         double auditionLevel = -6;              // dB: a sample previewed from the browser (R-EDM-9)
         std::string newSig = "4/4";
         bool showIds = false;                    // R-UI-11: every object's id beside its name
+        std::string agent = "claude";            // R-AGENT-2: the user's agent (the command)
         int autosave = 60;                       // R-SAFE-1: seconds; 0 = off
         std::string driver = "pulse";             // R-DEV-9: pulse | pipewire
         std::string midiInputs = "all";          // R-MIDI-2: all | none | port names
@@ -565,6 +567,7 @@ namespace solaris
         std::string lastError;
         std::vector<RecentModel> recents;        // Home's cards, newest first
         SettingsModel settings;
+        arstro::cosmo::AssistModel assist; // R-AGENT-1: the conversation with the user's agent (cosmo's seam type, R-ASSIST-13)
         std::vector<DeviceInfo> devices;         // from the last `devices list`
         BrowserModel browser;
         TransportModel transport;

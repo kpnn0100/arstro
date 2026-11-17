@@ -21,7 +21,7 @@ namespace solaris
 {
     using K = Command::Kind;
 
-    SolarisService::SolarisService(Host host) : mHost(std::move(host))
+    SolarisService::SolarisService(Host host) : mHost(std::move(host)), mAssist(mAssistModel, assistHooks())
     {
         loadMachine();
         refreshModel();
@@ -131,6 +131,7 @@ namespace solaris
             case K::Get: case K::Eval: case K::Undo: case K::Redo: case K::HistoryPrint: case K::HistoryJump: case K::Render: case K::MatrixPrint: case K::Audit: case K::StatePrint: case K::Api:
             case K::SettingsSet: case K::SettingsPrint: case K::FolderAdd: case K::FolderRemove: case K::FolderMove:
             case K::DevicesList: case K::Browse: case K::RecentsRemove:
+            case K::AssistStart: case K::AssistSend: case K::AssistStop: case K::AssistAgents: // R-AGENT-1: a conversation, not the song
             case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::TransportRecord: case K::TransportMono: case K::Wait:
             case K::Audition: case K::NotePreview: case K::MetersClear: case K::MidiDevices: case K::StripArm: case K::TransportPunch: case K::None:
             case K::Ls: case K::Show: case K::PatternPrint: // R-SVC-8: reading back
@@ -335,6 +336,9 @@ namespace solaris
             break;
         case K::MidiDevices: case K::StripArm: case K::PortAdd:
             ok = inputCommand(c, err);
+            break;
+        case K::AssistStart: case K::AssistSend: case K::AssistStop: case K::AssistAgents:
+            ok = assistCommand(c, err); // R-AGENT-1
             break;
         case K::TransportPlay: case K::TransportStop: case K::TransportSeek: case K::TransportLoop: case K::TransportPunch: case K::TransportRecord: case K::TransportMono: case K::Wait: case K::Audition: case K::MetersClear:
         case K::NotePreview:

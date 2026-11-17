@@ -122,6 +122,8 @@ namespace solaris
         mModel.audit = mAudit;
         // the machine's side: there with or without a song
         mModel.settings.sampleRate = mSettings.sampleRate;
+        mModel.settings.agent = mSettings.agent;
+        mModel.assist = mAssistModel; // R-AGENT-1: the conversation outlives a rebuild of the model
         mModel.settings.bufferSize = mSettings.bufferSize;
         mModel.settings.latencyMs = std::round(1000.0 * mSettings.bufferSize / mSettings.sampleRate * 10.0) / 10.0;
         mModel.settings.output = mSettings.output;

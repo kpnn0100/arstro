@@ -3,7 +3,7 @@
  *  cosmo_web_tokens, apps/cosmo/cli/webTokens.cpp, for Solaris).
  *
  *  The web face must look like the window, and two hand-kept palettes are the first thing that makes
- *  two faces look different (arstro.design.rule §2: a forked token file is a divergence with a delay
+ *  two faces look different (arstro.rule.design §2: a forked token file is a divergence with a delay
  *  fuse). So the stylesheet's tokens are GENERATED: Solaris's accent is installed exactly as the
  *  window installs it (`installSolarisAccent`, teal), then EVERY token function `apps/solaris/app/
  *  Theme.h` reaches — every namespace: cosmo's `palette` (through Solaris's alias), `radius`, `font`,

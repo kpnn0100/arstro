@@ -42,6 +42,8 @@ namespace solaris_ui
         addChild(mSession);
         addChild(mDock);
         addChild(mBrowser);
+        mAgent = std::make_shared<arstro::cosmo_v2::AgentPanel>(); // R-AGENT-4
+        addChild(mAgent);
         mWindows = std::make_shared<WindowLayer>();
         addChild(mWindows); // over the lanes, the dock and the browser; under the song bar and its menus
         addChild(mBar);
@@ -93,6 +95,7 @@ namespace solaris_ui
             // direct manipulation: the edge follows the pointer, and that is where it stays
             const double h = height.value() - toLocal(Point{0.0, worldY}).y;
             mDockOpen = true;
+            mDockDragged = true; // from here it is the user's height, whatever the window does
             mDockWant = std::max(MixerDock::kTabsH + 97.5, h);
             mDockLast = dockTarget();
             mDockH.set(mDockLast);
@@ -180,7 +183,8 @@ namespace solaris_ui
         const double avail = std::max(0.0, height.value() - SongBar::kHeight);
         if (!mDockOpen) return MixerDock::kTabsH;
         // the dock gives way before the lanes do (R4)
-        return std::max(MixerDock::kTabsH, std::min(mDockWant, avail - kLanesFloor));
+        const double want = mDockDragged ? mDockWant : std::min(kDockMost, std::round(kDockShare * height.value())); // its share, until dragged
+        return std::max(MixerDock::kTabsH, std::min(want, avail - kLanesFloor));
     }
 
     void ProjectScreen::layout()
@@ -192,7 +196,13 @@ namespace solaris_ui
         const double bw = mBrowserW.value();
         mBrowser->x.set(bw - Browser::kWidth); mBrowser->y.set(top); mBrowser->width.set(Browser::kWidth); mBrowser->height.set(std::max(0.0, H - top));
         mBrowser->opacity.set(std::clamp(bw / Browser::kWidth, 0.0, 1.0));
-        const double rw = std::max(0.0, W - bw), dockH = std::min(mDockH.value(), std::max(0.0, H - top));
+        // R-AGENT-4: the agent folds by its width on the right; the lanes and the dock give it the room
+        const double aw = mAgentW.value();
+        mAgent->x.set(W - aw); mAgent->y.set(top); mAgent->width.set(kAgentW); mAgent->height.set(std::max(0.0, H - top));
+        mAgent->opacity.set(std::clamp(aw / kAgentW, 0.0, 1.0));
+        mAgent->visible = aw > 0.5;
+        mAgent->inputTransparent = !mAgentOpen;
+        const double rw = std::max(0.0, W - bw - aw), dockH = std::min(mDockH.value(), std::max(0.0, H - top));
         mTimeline->x.set(bw); mTimeline->y.set(top);
         mTimeline->width.set(rw);                                    // the flexible column last (§4)
         mTimeline->height.set(std::max(0.0, H - top - dockH));       // from the LIVE dock height: the seam never tears
@@ -213,6 +223,7 @@ namespace solaris_ui
         mWindows->x.set(0.0); mWindows->y.set(top);
         mWindows->width.set(W); mWindows->height.set(std::max(0.0, H - top));
         mBrowser->layout();
+        mAgent->layout();
         mTimeline->layout();
         mDock->layout();
         mWindows->layout();
@@ -233,6 +244,10 @@ namespace solaris_ui
         if (!mBrowserInit) { mBrowserW.set(bwWant); mBrowserLast = mBrowserOpen; mBrowserInit = true; }
         else if (mBrowserOpen != mBrowserLast) { mBrowserW.animateTo(bwWant, motion::kSlideMs, Easing::EaseOutCubic, nowMs); mBrowserLast = mBrowserOpen; }
         mBrowserW.update(nowMs);
+        const double awWant = mAgentOpen ? kAgentW : 0.0;
+        if (!mAgentInit) { mAgentW.set(awWant); mAgentLast = mAgentOpen; mAgentInit = true; }
+        else if (mAgentOpen != mAgentLast) { mAgentW.animateTo(awWant, motion::kSlideMs, Easing::EaseOutCubic, nowMs); mAgentLast = mAgentOpen; }
+        mAgentW.update(nowMs);
         if (mSessionOpen != mSessionLast) // R-LAUNCH-1: View › Session — a cross-fade, never a cut
         {
             mSessionAmt.animateTo(mSessionOpen ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);

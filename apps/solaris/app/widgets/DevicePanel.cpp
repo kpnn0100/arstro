@@ -707,7 +707,7 @@ namespace solaris_ui
                         items.push_back({name + (x.factory ? "  \xC2\xB7 factory" : ""), [this, dv, name] { if (onCommand) onCommand("preset load " + dv + " \"" + name + "\""); }});
                     }
                 const Point world = g.pos;
-                items.push_back({say("Save as preset\xE2\x80\xA6"), [this, dv, world] {
+                items.push_back({say("Save as Preset\xE2\x80\xA6"), [this, dv, world] {
                                      if (onRename) onRename("", world, [this, dv](const std::string &n) { if (onCommand && !n.empty()) onCommand("preset save " + dv + " \"" + n + "\""); });
                                  }});
                 onMenu(std::move(items), g.pos);
@@ -766,9 +766,18 @@ namespace solaris_ui
         const bool plugin = !d->plugin.empty();
         t.setFill(palette::mutedForeground());
         // a sampler names its sound where the others name their type (R-EDM-8); a plugin, itself (R-VST-6)
-        const std::string what = d->takesSample ? sampleText() : d->id + " \xC2\xB7 " + (plugin ? d->label : d->type);
-        t.drawText(textfit::ellipsize(t, ::arstro::solaris_ui::shown(mOwner) + " \xC2\xB7 " + what, std::max(0.0, pr.x - 2.0 * space::padX()), 10.0, font::mono()),
-                   space::padX(), textfit::baseline(by.y + by.h * 0.5, 10.0), 10.0, font::mono());
+        // … and its id is an ID: after them, in the accent, as far as View › Show IDs is on (R-UI-18 — it was always there)
+        const std::string what = d->takesSample ? sampleText() : (plugin ? d->label : d->type);
+        const double headRoom = std::max(0.0, pr.x - 2.0 * space::padX());
+        const std::string head = textfit::ellipsize(t, ::arstro::solaris_ui::shown(mOwner) + " \xC2\xB7 " + what, headRoom, 10.0, font::mono());
+        t.drawText(head, space::padX(), textfit::baseline(by.y + by.h * 0.5, 10.0), 10.0, font::mono());
+        if (const double ids = idsShown(); ids > 0.001)
+        {
+            const double hw = t.measureText(head, 10.0, font::mono());
+            t.setFill(fade(palette::primary(), ids));
+            t.drawText(textfit::ellipsize(t, " \xC2\xB7 " + d->id, std::max(0.0, headRoom - hw), 10.0, font::mono()), space::padX() + hw, textfit::baseline(by.y + by.h * 0.5, 10.0), 10.0,
+                       font::mono());
+        }
         if (plugin)
         {
             // N26: Editor — its own window; lit while it is open

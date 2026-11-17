@@ -2,6 +2,7 @@
 # (attach: a terminal on a running window; ntwb: the service on the Arstro Remote bridge).
 add_executable(solaris-cc main.cpp
   Attach.cpp        # attach: a terminal on a running window (R-SVC-5) — builds no service
+  McpAttach.cpp     # mcp --attach: the MCP tools relayed to a running window (R-MCP-2) — builds no service
   NtwbAdapter.cpp   # ntwb: Solaris as an Arstro Remote app (R-SVC-7)
   NtwbMain.cpp)
 target_link_libraries(solaris-cc PRIVATE solaris_host arstro_ntwb arstro_mcp)

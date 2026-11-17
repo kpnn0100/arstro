@@ -1074,7 +1074,7 @@ namespace solaris_ui
                 // R-ROLL-10: the length a click makes — the last one (the default), or a note value
                 if (!onMenu) return true;
                 std::vector<cosmo_v2::ContextMenu::Item> items;
-                items.push_back({say("Last used ({1})", lengthName(mLastLength)), [this] { mLengthChoice = 0.0; }});
+                items.push_back({say("Last Used ({1})", lengthName(mLastLength)), [this] { mLengthChoice = 0.0; }});
                 for (double b : {0.125, 0.25, 0.5, 1.0, 2.0, 4.0})
                     items.push_back({lengthName(b), [this, b] { mLengthChoice = b; }});
                 onMenu(std::move(items), g.pos);
@@ -1101,11 +1101,11 @@ namespace solaris_ui
                 const std::string key = cur.empty() ? std::string("C") : cur.substr(0, cur.find(' '));
                 const std::string kind = cur.empty() ? std::string("major") : cur.substr(cur.find(' ') + 1);
                 std::vector<cosmo_v2::ContextMenu::Item> items;
-                items.push_back({say("No scale"), [this, id] { send("pattern scale " + id + " off"); }});
+                items.push_back({say("No Scale"), [this, id] { send("pattern scale " + id + " off"); }});
                 for (const auto &s : mScales)
                     items.push_back({key + " " + s.name, [this, id, key, n = s.name] { send("pattern scale " + id + " " + key + " " + n); }});
                 const Point at = g.pos;
-                items.push_back({say("Change key\xE2\x80\xA6"), [this, id, kind, at] {
+                items.push_back({say("Change Key\xE2\x80\xA6"), [this, id, kind, at] {
                                      std::vector<cosmo_v2::ContextMenu::Item> keys;
                                      for (const char *k : kKeyNames)
                                          keys.push_back({std::string(k) + " " + kind, [this, id, kind, k] { send("pattern scale " + id + " " + k + " " + kind); }});
@@ -1119,7 +1119,7 @@ namespace solaris_ui
                 // R-ROLL-11: what a click on the grid makes — a note, or this chord on the row clicked (the view's)
                 if (!onMenu) return true;
                 std::vector<cosmo_v2::ContextMenu::Item> items;
-                items.push_back({say("Single notes"), [this] { mChordOn = false; }});
+                items.push_back({say("Single Notes"), [this] { mChordOn = false; }});
                 for (const auto &q : mChords)
                     items.push_back({(q.name.empty() ? std::string("maj") : q.name) + " \xC2\xB7 " + q.label, [this, n = q.name] { mChordOn = true; mChord = n; }});
                 onMenu(std::move(items), g.pos);
@@ -1374,9 +1374,12 @@ namespace solaris_ui
                 drawRoundedRect(t, Rect{std::max(grid.x, ex), grid.y, W - std::max(grid.x, ex), H - grid.y}, 0.0, Paint::filled(surface::scrim(1.0)));
                 t.restore();
             }
-            t.setStroke(palette::primary(), 1.5);
+            // a GRIP, neutral: it is neither the selection nor a state, and a line of the accent beside the playhead
+            // was the accent/red collision (R-UI-2 amended)
+            // the line dimmer than its handle, so it is never taken for the playhead (a brighter, thinner line)
+            t.setStroke(fade(surface::grip(), 0.45), 1.5);
             t.beginPath(); t.moveTo(ex, grid.y); t.lineTo(ex, H); t.strokePath();
-            drawRoundedRect(t, endRect(), radius::control(), Paint::filled(palette::primary()));
+            drawRoundedRect(t, endRect(), radius::control(), Paint::filled(surface::grip()));
         }
 
         // the lane below (R-MIDI-3): Vel | Bend | Mod — the velocities, or a wheel's curve; cross-faded

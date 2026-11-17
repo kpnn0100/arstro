@@ -112,6 +112,14 @@
       "doc": "Something failed. Also set as AppModel.lastError.",
       "data": "{line, fields: {why}}"
     },
+    "assist.state": {
+      "doc": "R-AGENT-1: the user's agent is off | starting | ready | busy | failed.",
+      "data": "{line, fields: {state, agent}}"
+    },
+    "assist.message": {
+      "doc": "R-AGENT-1: one message of the conversation: user | agent | tool | error | info. A streamed reply repeats with the text so far.",
+      "data": "{line, fields: {role, text}}"
+    },
     "command.rejected": {
       "doc": "A line was refused (R-SVC-3): unknown verb, flag, address or parameter; a refused edit.",
       "data": "{line, fields: {line, why}}"

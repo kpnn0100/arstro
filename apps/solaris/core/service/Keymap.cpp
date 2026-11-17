@@ -12,7 +12,10 @@ namespace solaris
             {"transport.play", "Transport", "Play / stop — back to where the time bar was put", "Space"},
             {"transport.stopHere", "Transport", "Stop here", "Ctrl+Space"},
             {"transport.toStart", "Transport", "To the start", "Enter"},
+            {"song.new", "Song", "New song", "Ctrl+N"},            // R-FAM-8: the family's keys
+            {"song.open", "Song", "Open a song", "Ctrl+O"},
             {"song.save", "Song", "Save", "Ctrl+S"},
+            {"song.saveAs", "Song", "Save as", "Ctrl+Shift+S"},
             {"song.undo", "Song", "Undo", "Ctrl+Z"},
             {"song.redo", "Song", "Redo", "Ctrl+Shift+Z, Ctrl+Y"},
             {"song.settings", "Song", "Settings", "Ctrl+Comma"},

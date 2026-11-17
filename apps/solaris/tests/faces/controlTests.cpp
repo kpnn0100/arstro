@@ -13,6 +13,7 @@
 #undef NDEBUG
 #endif
 #include "AppModelCodec.h"
+#include "AgentRunner.h"
 #include "ControlServer.h"
 #include "Machine.h"
 #include "Plugins.h"
@@ -228,10 +229,11 @@ namespace
     }
 
     /** Run solaris-cc with `args`, stdout and stderr to files, in `cwd`; true once it has exited. */
-    pid_t spawnCc(const std::vector<std::string> &args, const fs::path &out, const fs::path &err)
+    pid_t spawnCc(const std::vector<std::string> &args, const fs::path &out, const fs::path &err, const fs::path &in = fs::path())
     {
         posix_spawn_file_actions_t fa;
         posix_spawn_file_actions_init(&fa);
+        if (!in.empty()) posix_spawn_file_actions_addopen(&fa, 0, in.c_str(), O_RDONLY, 0);
         posix_spawn_file_actions_addopen(&fa, 1, out.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         posix_spawn_file_actions_addopen(&fa, 2, err.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         std::vector<std::string> all = {SOLARIS_CC};
@@ -322,6 +324,114 @@ namespace
         assert(slurp(dir / "cli" / "song.slp") == slurp(dir / "live" / "song.slp"));
         pass("solaris-cc attach prints what solaris-cc --watch --script prints: outputs, events and the saved song, byte for byte");
     }
+
+    /** R-MCP-2: an agent's MCP client, attached, edits the song the window holds. */
+    void test_mcp_attach_edits_the_song_in_the_window()
+    {
+        const fs::path dir = scratch("mcp_attach");
+        fs::current_path(dir);
+        solaris::SolarisService::Host host;
+        host.settingsPath = (dir / "settings.txt").string();
+        host.recentsPath = (dir / "recents").string();
+        solaris_host::presetPaths(host.presetsPath, host.factoryPresetsPath);
+        solaris_host::templatePaths(host.templatesPath, host.factoryTemplatesPath);
+        host.libraryPath = solaris_host::libraryPath();
+        host.pluginsPath = solaris_host::pluginsListPath();
+        solaris::SolarisService svc(host);
+        std::string err;
+        assert(svc.dispatchText("project new song.slp --bpm 120", err)); // the user's song, already open
+        solaris_host::ControlServer server(svc);
+        assert(server.open("control.sock", err));
+        {
+            std::ofstream in(dir / "in.jsonl");
+            in << R"({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}})" << "\n"
+               << R"({"jsonrpc":"2.0","id":2,"method":"tools/list"})" << "\n"
+               << R"({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"solaris_run","arguments":{"script":"clip add --instrument drums --at 0 --length 8\n# a comment\n\nset ch_2.gain=-6\nget ch_2.gain"}}})" << "\n"
+               << R"({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"solaris_run","arguments":{"script":"set ch_2.gian=1"}}})" << "\n"
+               << R"({"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"solaris_state","arguments":{"stable":true}}})" << "\n";
+        }
+        const pid_t pid = spawnCc({"mcp", "--attach", "control.sock"}, dir / "out.txt", dir / "err.txt", dir / "in.jsonl");
+        int status = 0;
+        bool done = false;
+        const auto t0 = std::chrono::steady_clock::now();
+        while (!done && std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 30.0)
+        {
+            server.poll(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+            if (waitpid(pid, &status, WNOHANG) == pid) done = true;
+            else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        assert(done && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+        const std::string out = slurp(dir / "out.txt");
+        assert(out.find("solaris_run") != std::string::npos && out.find("solaris_state") != std::string::npos);
+        // the edit landed in the service that lives HERE - the window's - and is one undo step of it
+        std::string e;
+        assert(svc.dispatchText("get ch_2.gain", e) && svc.output().find("-6") != std::string::npos);
+        assert(out.find("-6") != std::string::npos);                 // ... and the agent read it back
+        assert(out.find("params.changed address=ch_2.gain value=-6.0") != std::string::npos); // with the events it caused
+        assert(out.find("did you mean: gain?") != std::string::npos);
+        assert(out.find("refused at line 1") != std::string::npos);  // a mistyped key is the service's own refusal
+        assert(out.find("\\\"screen\\\": \\\"project\\\"") != std::string::npos); // the state dump is the window's
+        assert(svc.dispatchText("undo", e));
+        assert(svc.dispatchText("get ch_2.gain", e) && svc.output().find("-6") == std::string::npos);
+        pass("solaris-cc mcp --attach: an MCP client's lines edit the song the window holds, refusals and state come from it");
+    }
+
+#ifdef SOLARIS_HAVE_AGENT
+    /** R-AGENT-3: the runner the window installs starts a real process that finds THIS song through
+     *  its environment and edits it over the control socket. The "agent" is a one-line command, so no
+     *  model is needed: it proves the wiring, not an agent's judgement. */
+    void test_the_agent_runner_drives_the_open_song()
+    {
+        const fs::path dir = scratch("agent");
+        fs::current_path(dir);
+        setenv("SOLARIS_SETTINGS", (dir / "settings.txt").c_str(), 1); // the agent's workspace goes beside it
+        setenv("SOLARIS_CC", SOLARIS_CC, 1);                            // the CLI this build made
+        solaris::SolarisService::Host host;
+        host.settingsPath = (dir / "settings.txt").string();
+        host.recentsPath = (dir / "recents").string();
+        solaris_host::presetPaths(host.presetsPath, host.factoryPresetsPath);
+        solaris_host::templatePaths(host.templatesPath, host.factoryTemplatesPath);
+        host.libraryPath = solaris_host::libraryPath();
+        host.pluginsPath = solaris_host::pluginsListPath();
+        solaris::SolarisService svc(host);
+        std::string err;
+        assert(svc.dispatchText("project new song.slp --bpm 120", err));
+        solaris_host::ControlServer server(svc);
+        bool asked = false;
+        solaris_host::installAgent(svc, [&] {
+            asked = true;
+            std::string e;
+            if (!server.isOpen()) assert(server.open((dir / "agent.sock").string(), e)); // opened on demand, absolute, as the window does
+            return server.path();
+        });
+        // a one-shot "agent": it drives the song with the CLI and the socket it was handed, then answers
+        assert(svc.dispatchText("settings set \"agent=cmd:sh " + (dir / "agent.sh").string() + "\"", err)); // absolute: the agent runs in its workspace
+        { std::ofstream(dir / "agent.sh") << "\"$SOLARIS_CC\" attach \"$SOLARIS_CONTROL\" clip add --instrument drums --at 0 --length 8 >/dev/null 2>&1 && echo \"added drums to $SOLARIS_PROJECT\"\n"; }
+        if (!svc.dispatchText("assist send add a drum clip", err)) { std::fprintf(stderr, "  assist send refused: %s\n", err.c_str()); assert(false); }
+        assert(asked && server.isOpen());
+        const auto t0 = std::chrono::steady_clock::now();
+        bool replied = false;
+        while (!replied && std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 30.0)
+        {
+            server.poll(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+            svc.pump();
+            for (const auto &m : svc.model().assist.messages) replied = replied || (m.role == "agent" && m.text.find("added drums to") != std::string::npos);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        if (!replied)
+            for (const auto &m : svc.model().assist.messages) std::fprintf(stderr, "  %s: %s\n", m.role.c_str(), m.text.c_str());
+        assert(replied);
+        assert(svc.model().clips.size() == 1); // the agent's line landed in THIS song
+        bool namesSong = false;
+        for (const auto &m : svc.model().assist.messages) namesSong = namesSong || m.text.find("song.slp") != std::string::npos;
+        assert(namesSong); // SOLARIS_PROJECT was the open song
+        assert(fs::exists(dir / "agent" / "AGENTS.md")); // the workspace, beside the settings
+        const std::string md = slurp(dir / "agent" / "AGENTS.md");
+        assert(md.find("inside Solaris") != std::string::npos && md.find("solaris_run") != std::string::npos && md.find("cosmo") == std::string::npos);
+        assert(svc.dispatchText("assist stop", err));
+        pass("the agent runner: a process started from `assist send` finds the open song through SOLARIS_CONTROL / SOLARIS_CC / SOLARIS_PROJECT and edits it; its workspace says Solaris");
+    }
+#endif
 }
 
 int main()
@@ -330,6 +440,10 @@ int main()
     test_each_line_is_answered_in_order();
     test_wait_holds_the_queue_not_the_thread();
     test_attach_prints_what_solaris_cc_prints();
+    test_mcp_attach_edits_the_song_in_the_window();
+#ifdef SOLARIS_HAVE_AGENT
+    test_the_agent_runner_drives_the_open_song();
+#endif
     std::printf("solaris_control: %d passed\n", passed);
     return 0;
 }

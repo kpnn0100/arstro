@@ -6,6 +6,27 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
 
 ## Open
 
+### D-28 The "Rendering…" card's progress bar stands still while the render runs
+- **Found:** 2026-11-17, adopting the family standard (R-FAM-6). The card now has the family's 3 px accent bar with a
+  sweeping segment (`App::renderSweep`, `app/App.cpp`), but `render …` runs to its end on the UI thread inside
+  `dispatch` (R-RENDER-4's stated minimum), so no frame is painted meanwhile: the segment moves while the card eases in
+  and out and is a STILL picture — about a quarter along the track — for the whole render. A bar that does not move
+  says less than it seems to.
+- **Judgement:** requirement gap, already written: R-RENDER-4's "the worker, progress and cancel OPEN". Not a UI fix.
+- **Recommended fix:** the service's render on a worker with a `render.progress` event (core — not the window's to
+  add); the App then draws the fraction in the same track and keeps the sweep for the time before the first event.
+- **Guard to add then:** a UI test that pumps frames DURING a render and sees the bar's fill advance.
+
+### D-29 A recent song's card cannot say when it was opened — the model has no time
+- **Found:** 2026-11-17, R-FAM-7 (Home is the family's): "a relative time on every card". `RecentModel`
+  (`core/service/AppModel.h:250`) is `path, name, bpm, lengthBeats, strips, missing, recovery` — no time; the recents
+  file keeps none either. The widget may not read the file's mtime itself (law 13: it draws only from the model).
+- **Judgement:** requirement gap in the service (R-HOME-1 / R-FAM-7), blocking one line of the card.
+- **Recommended fix:** `RecentModel::openedAt` (seconds since the epoch, 0 unknown) — written when a song is opened or
+  saved (`ServiceMachine`'s recents), published in `refreshModel` and `modelToJson`, documented in `appModelFields()`,
+  API documents regenerated; plus a "now" the App can read without a wall clock in the widget (the host passes it, as
+  cosmo's Home does). Then `HomeScreen::paintCard` adds "· 2 hours ago" to the meta line through `trn`.
+
 ### D-27 The window quotes an argument by a narrower rule than the grammar, and no rule can carry a `"`
 - **Found:** 2026-10-26, porting App.cpp to the web face (R-SVC-7 amended), from `App::quote`
   (`app/App.cpp:29-32`): it quotes a token only for a space, a tab or a `"`. The grammar's own
@@ -140,6 +161,13 @@ skill, which never fixes; fixed by `arstro.solaris.implement`). Reproductions li
   42 "Closed Hat" ↔ `chat` — and the plugins' editor uses it for its pads. The fix above is now a lookup.)
 
 ## Closed
+
+### D-30 The `home-vi` shot showed an empty Home — its own `project new` was refused — closed 2026-11-17 (uncommitted, with R-FAM)
+- **Found:** 2026-11-17, looking at `home-vi` for R-FAM-7: the rig printed `project new …/Night Drive.slp refused: too
+  many arguments` — the path has a space and was not quoted (`app/tests/shots/renderShots.cpp`, the `home-vi` entry), so
+  the shot named "a recent song's name its own" had no recent song, and `--check` (blank frames only) could not see it.
+- **Fix:** the path is quoted. **Guard:** none automatic — the shot now shows one card ("Night Drive") and the dashed
+  New song card; looked at. A rig that fails a shot whose setup line was refused would guard the class.
 
 ### D-26 The audit called a wavetable with its built-in tables "silent — has no sample" — closed in Z1
 - **Found:** 2026-10-21, making *Magnetar* (R-SVC-13): `audit` said `silent: dv_9 (Wavetable) has no sample` for the

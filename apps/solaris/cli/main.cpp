@@ -61,7 +61,8 @@ namespace
             "                                            lines from stdin into ONE song session (undo kept);\n"
             "                                            --song opens the file, or makes it when it is not there\n"
             "  solaris-cc api [--json | --md]            every command, event, model field and device parameter\n"
-            "  solaris-cc mcp                            Solaris as an MCP server on stdio (R-MCP-1)\n\n"
+            "  solaris-cc mcp                            Solaris as an MCP server on stdio (R-MCP-1)\n"
+            "  solaris-cc mcp --attach <socket>          the same tools on the song open in a `solaris --control` window (R-MCP-2)\n\n"
             "Options: --watch (events to stderr) · --keep-going (run past a refusal, exit 3 at the end) ·\n"
             "         --discard (end with unsaved edits without exit 4)\n"
             "Exit: 0 ok · 2 usage · 3 a line was refused (`refused: line N: …`) · 4 unsaved edits left\n\n"
@@ -96,6 +97,12 @@ int main(int argc, char **argv)
     }
     // the faces that are not this loop (Faces.h): attach builds NO service, ntwb serves one to a browser
     if (args[0] == "attach") return solaris_cli::attachMain(std::vector<std::string>(args.begin() + 1, args.end()));
+    if (args[0] == "mcp" && args.size() > 1)
+    {
+        if (args.size() == 3 && args[1] == "--attach") return solaris_cli::mcpAttachMain(args[2]); // R-MCP-2
+        std::fprintf(stderr, "mcp takes nothing, or --attach <socket> — not `%s`\n", args[1].c_str());
+        return kUsage;
+    }
     if (args[0] == "ntwb") return solaris_cli::ntwbMain(std::vector<std::string>(args.begin() + 1, args.end()));
     bool watch = false, keepGoing = false, discard = false, shell = false;
     std::string script, song;

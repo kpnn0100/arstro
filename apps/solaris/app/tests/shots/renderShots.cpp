@@ -40,6 +40,7 @@ namespace
     {
         std::string name;
         std::function<void(sltest::Rig &)> run;
+        bool audio = true; // false: a machine with no output device — Play is refused (the refusal toast's shot)
     };
 
     // ── --model-json: the fixtures a web face is compared against ───────────────────────
@@ -418,12 +419,155 @@ namespace
                  r.cmd("project new \"" + r.song("Fresh") + "\" --name Fresh");
                  r.pump(8 * sltest::Rig::kFrameMs); // half-way through the 260 ms cross-fade
              }},
-            {"toast-refusal",
+            {"toast-refusal",   // R-UI-15: an ERROR — Play on a machine with no output device, the service's sentence; a red bar
+                                // and a crossed circle on a neutral border, under the song bar
              [](sltest::Rig &r) {
                  songWithStrips(r, "Night Drive");
                  r.settle();
-                 r.click(r.app->project().bar().hitRect(1)); // Play — this rig has no output device
+                 r.click(r.app->project().bar().hitRect(1)); // Play — this rig has no output device (audio = false, below)
                  r.pump(300.0);
+             },
+             false},
+            {"toast-in-mid",    // R-UI-15: the same toast three frames in — part faded, still above its place, sliding down into it
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 r.click(r.app->project().bar().hitRect(1));
+                 r.pump(3 * sltest::Rig::kFrameMs);
+             },
+             false},
+            {"toast-warning",   // R-UI-15: a WARNING — a song opened with two files missing: it is open, something is owed; an
+                                // amber bar and a triangle
+             [](sltest::Rig &r) {
+                 const std::string lib = r.dir + "/Old Samples";
+                 std::filesystem::create_directories(lib);
+                 for (const char *f : {"/kick 909.wav", "/snare.wav"}) std::ofstream(lib + f) << "RIFF";
+                 songWithStrips(r, "Night Drive");
+                 r.cmd("clip add --src \"" + lib + "/kick 909.wav\" --at 0");
+                 r.cmd("clip add --src \"" + lib + "/snare.wav\" --at 4");
+                 r.cmd("project save");
+                 const std::string path = r.svc->model().projectPath;
+                 std::filesystem::remove_all(lib);
+                 r.cmd("project close");
+                 r.settle();
+                 r.cmd("project open \"" + path + "\"");
+                 r.pump(900.0);
+             }},
+            {"toast-replacing-mid", // R-UI-15: an info replacing that warning while it shows — the two cross-fading
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 r.app->dispatch("clip delete nothing_by_this_name");
+                 r.pump(600.0);
+                 r.app->pickTemplate(artboard::Point{60.0, 30.0}); // no templates here: it says how to make one
+                 r.pump(6 * sltest::Rig::kFrameMs);
+             }},
+            {"rendering",       // R-RENDER-4: File › Render… — "Rendering…" whole over the song, the frame that stands while the
+                                // service works (the line goes out with the next frame)
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 r.app->beginRender("render --out \"" + r.dir + "/Night Drive.wav\"", r.dir + "/Night Drive.wav");
+                 for (int k = 0; k < 40 && r.app->renderAmount() < 1.0; ++k) r.frame();
+             }},
+            {"rendering-mid",   // … and three frames in: the scrim and the card part faded
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 r.app->beginRender("render --out \"" + r.dir + "/Night Drive.wav\"", r.dir + "/Night Drive.wav");
+                 r.pump(3 * sltest::Rig::kFrameMs);
+             }},
+            {"rendered-toast",  // … and after: the modal gone, render.finished said — the file and the master's peak (an info)
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 r.app->beginRender("render --out \"" + r.dir + "/Night Drive.wav\"", r.dir + "/Night Drive.wav");
+                 r.pump(900.0);
+             }},
+            {"transport-toggles", // R-TIME-4 amended: Loop and Metronome lit after Play (the loop's brace on the ruler), the
+                                  // position, the tempo, the time signature
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.cmd("transport loop 4 12");
+                 r.cmd("settings set metronome=on");
+                 r.settle();
+             }},
+            {"transport-toggles-mid", // … Loop clicked off three frames ago: its light part-way out, the metronome's still on
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.cmd("transport loop 4 12");
+                 r.cmd("settings set metronome=on");
+                 r.settle();
+                 r.click(world(r.app->project().bar(), r.app->project().bar().hitRect(arstro::solaris_ui::SongBar::kLoop)));
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
+            {"transport-learn-short", // R4: a MIDI learn waiting — at 1024 the signature and the CPU readout folded for its pill
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.cmd("map learn ch_2.gain");
+                 r.settle();
+             }},
+            {"lane-mute-solo",  // R-LANE-4: the drums' track muted, the bass's soloed — M and S lit in their headers as in the dock
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.cmd("set ch_2.mute=true");
+                 r.cmd("set ch_3.solo=true");
+                 r.settle();
+             }},
+            {"lane-mute-solo-mid", // … the bass's M clicked three frames ago: its light part-way on
+             [](sltest::Rig &r) {
+                 songWithStrips(r, "Night Drive");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 r.click(world(tl, tl.muteRect(1)));
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
+            {"song-empty",      // R-UI-16: a new song on a machine with no sample folder — the browser on Instruments, "Add an
+                                // instrument" under the lanes' sentence, the mixer's "+ Strip"
+             [](sltest::Rig &r) {
+                 r.cmd("project new \"" + r.song("Untitled") + "\" --bpm 120 --name Untitled");
+                 r.settle();
+             }},
+            {"song-empty-menu", // … its button clicked: the registry's instruments, dropping from under it
+             [](sltest::Rig &r) {
+                 r.cmd("project new \"" + r.song("Untitled") + "\" --bpm 120 --name Untitled");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 r.click(world(tl, tl.emptyButtonRect()));
+                 r.settle();
+             }},
+            {"song-empty-leaving-mid", // … an instrument picked four frames ago: the empty state fading out as its track comes in
+             [](sltest::Rig &r) {
+                 r.cmd("project new \"" + r.song("Untitled") + "\" --bpm 120 --name Untitled");
+                 r.settle();
+                 r.cmd("clip add --instrument drums --at 0 --length 4");
+                 r.pump(4 * sltest::Rig::kFrameMs);
+             }},
+            {"lanes-long-song", // R-UI-17: a song wider than the view, scrolled part-way — the thumb along the lanes' foot
+             [](sltest::Rig &r) {
+                 r.cmd("project new \"" + r.song("Long Night") + "\" --bpm 120 --name \"Long Night\"");
+                 for (int i = 0; i < 5; ++i) r.cmd("clip add --instrument synth --at " + std::to_string(i * 40) + " --length 24");
+                 r.settle();
+                 auto &tl = r.app->project().timeline();
+                 const artboard::Rect l = world(tl, artboard::Rect{0, 0, tl.width.value(), tl.height.value()});
+                 r.app->wheel(l.x + 400.0, l.y + 150.0, -18.0, false, true);
+                 r.settle();
+             }},
+            {"lanes-zoom-to-fit", // … View › Zoom to Fit: the whole song in view, no thumb
+             [](sltest::Rig &r) {
+                 r.cmd("project new \"" + r.song("Long Night") + "\" --bpm 120 --name \"Long Night\"");
+                 for (int i = 0; i < 5; ++i) r.cmd("clip add --instrument synth --at " + std::to_string(i * 40) + " --length 24");
+                 r.settle();
+                 r.app->project().timeline().zoomToFit();
+                 r.settle();
+             }},
+            {"lanes-zoom-to-fit-mid", // … five frames into it: the zoom part-way, the thumb fading
+             [](sltest::Rig &r) {
+                 r.cmd("project new \"" + r.song("Long Night") + "\" --bpm 120 --name \"Long Night\"");
+                 for (int i = 0; i < 5; ++i) r.cmd("clip add --instrument synth --at " + std::to_string(i * 40) + " --length 24");
+                 r.settle();
+                 r.app->project().timeline().zoomToFit();
+                 r.pump(5 * sltest::Rig::kFrameMs);
              }},
             {"browser-instruments",
              [](sltest::Rig &r) {
@@ -544,6 +688,13 @@ namespace
                  r.settle();
                  r.app->project().dock().setTab(1);
                  r.pump(4 * sltest::Rig::kFrameMs); // the pages mid cross-fade, the highlight mid-slide
+             }},
+            {"browser-tab-mid", // R-FAM-5: the browser's tabs are underlined words — Song chosen four frames ago: the underline between
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 r.app->project().browser().setTab(arstro::solaris_ui::Browser::kSong);
+                 r.pump(4 * sltest::Rig::kFrameMs);
              }},
             {"mixer-matrix",
              [](sltest::Rig &r) {
@@ -843,7 +994,7 @@ namespace
             {"home-vi", // R-ACCESS-2: Home in Vietnamese — its words from lang/vi.strings, a recent song's name its own
              [](sltest::Rig &r) {
                  r.cmd("settings set language=vi");
-                 r.cmd("project new " + r.song("Night Drive") + ".slp");
+                 r.cmd("project new \"" + r.song("Night Drive") + ".slp\""); // quoted: the name has a space (it was refused, and the shot showed no card)
                  r.cmd("strip add --kind bus");
                  r.cmd("project save");
                  r.cmd("project close");
@@ -1086,7 +1237,7 @@ namespace
                  r.frame();
                  r.frame();
              }},
-            {"copied-toast",  // a copy says so, in the accent (a refusal's toast is red)
+            {"copied-toast",  // R-UI-15: an INFO — a copy says so; no bar, a neutral border (the accent is not a toast colour)
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");
                  r.settle();
@@ -1683,6 +1834,31 @@ namespace
                  r.click(r.app->menu().itemRect(0)); // Play through ▸
                  r.settle();
              }},
+            {"agent-panel", // R-AGENT-4: the user's agent docked beside the song, a short conversation in it
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 struct Shown : arstro::cosmo::IAssistant
+                 {
+                     std::vector<arstro::cosmo::AssistOutput> q;
+                     bool start(const arstro::cosmo::AssistLaunch &, std::string &) override { q.push_back({arstro::cosmo::AssistOutput::Kind::Ready, "Claude Code"}); return true; }
+                     bool send(const std::string &, std::string &) override
+                     {
+                         q.push_back({arstro::cosmo::AssistOutput::Kind::Tool, "solaris_run: clip add --instrument drums --at 0 --length 8"});
+                         q.push_back({arstro::cosmo::AssistOutput::Kind::Text, "I added a **four-on-the-floor** drum clip in bars 1 to 2 and turned the bass down 3 dB so the kick reads.\n\n- Loudness is now -14.2 LUFS\n- Peak is -1.1 dB"});
+                         q.push_back({arstro::cosmo::AssistOutput::Kind::Done, ""});
+                         return true;
+                     }
+                     void stop() override {}
+                     void poll(std::vector<arstro::cosmo::AssistOutput> &out) override { out.insert(out.end(), q.begin(), q.end()); q.clear(); }
+                     std::string name() const override { return "Claude Code"; }
+                 };
+                 r.svc->setAssistantFactory([] { return std::unique_ptr<arstro::cosmo::IAssistant>(new Shown()); });
+                 r.app->project().setAgentOpen(true);
+                 r.settle();
+                 r.app->project().agent().onSend("add a simple drum beat and make room for the kick");
+                 r.settle();
+             }},
             {"dock-folded",
              [](sltest::Rig &r) {
                  mixedSong(r, "Night Drive");
@@ -1729,7 +1905,7 @@ namespace
                  auto &ms = r.app->project().bar().menus();
                  r.click(world(ms, ms.titleRect(0)));
                  r.settle();
-                 r.click(world(ms, ms.itemRect(0, 5)));
+                 r.click(world(ms, ms.itemRect(0, 10))); // File › Export… (R-FAM-1: rows are counted with their rules)
                  r.settle();
                  auto &ex = r.app->exportSheet();
                  using ES = arstro::solaris_ui::ExportSheet;
@@ -1751,7 +1927,7 @@ namespace
                  auto &ms = r.app->project().bar().menus();
                  r.click(world(ms, ms.titleRect(0)));
                  r.settle();
-                 r.click(world(ms, ms.itemRect(0, 5)));
+                 r.click(world(ms, ms.itemRect(0, 10))); // File › Export… (R-FAM-1: rows are counted with their rules)
                  r.settle();
                  auto &ex = r.app->exportSheet();
                  using ES = arstro::solaris_ui::ExportSheet;
@@ -1809,7 +1985,7 @@ int main(int argc, char **argv)
         if (list) { std::printf("%s\n", s.name.c_str()); continue; }
         for (const auto &sz : sizes)
         {
-            sltest::Rig r("shot-" + s.name + "-" + std::to_string(sz.first), sz.first, sz.second);
+            sltest::Rig r("shot-" + s.name + "-" + std::to_string(sz.first), sz.first, sz.second, s.audio);
             s.run(r);
             r.frame();
             const std::string path = outdir + "/" + s.name + "-" + std::to_string(sz.first) + "x" + std::to_string(sz.second) + ".png";

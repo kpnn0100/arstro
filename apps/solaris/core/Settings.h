@@ -34,6 +34,9 @@ namespace solaris
         bool highContrast = false;              // R-ACCESS-1: the neutrals toward black, white and solid borders, eased
         std::string language = "auto";          // R-ACCESS-2: the window's words — auto (the OS's, when Solaris has it) or a code
         bool showIds = false;                   // R-UI-11: every object's id drawn beside its name (View › Show IDs)
+        std::string agent = "claude";           // R-AGENT-2: the user's agent — claude | acp:<command> | cmd:<command>
+        std::string agentArgs, agentSkills;     // … appended to it; extra skill folders, `:`-separated
+        bool agentAllowAll = false;             // … approve every permission an ACP agent asks for
         int autosave = 60;                      // R-SAFE-1: seconds between autosaves of an unsaved song; 0 = off
         std::string driver = "pulse";            // R-DEV-9: pulse | pipewire | web — how the clock device is reached (web: R-SVC-7, the page that listens)
         std::string midiInputs = "all";         // R-MIDI-2: all | none | port names, comma-separated

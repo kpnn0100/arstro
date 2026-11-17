@@ -3,7 +3,7 @@
 **The only authority on what is done and what is next.** Committed, so work resumes on any machine.
 A session reads **NEXT**, does one task, updates this file, and commits — in the same commit.
 
-- Rules: `.claude/skills/arstro.rule` · `.claude/skills/arstro.design.rule`
+- Rules: `.claude/skills/arstro.rule` · `.claude/skills/arstro.rule.design`
 - Skill: `.claude/skills/arstro.solaris.implement` (the DSP half: `arstro.dsp.implement`)
 - Intent: [`../REQUIREMENTS.md`](../REQUIREMENTS.md) · As-built: [`requirements.md`](requirements.md)
   · Format: [`project-format.md`](project-format.md) · Audio: [`../../../docs/audio-format.md`](../../../docs/audio-format.md)
@@ -11,11 +11,52 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-27 — the web face becomes the same app: its frame is built (R-SVC-7, DR-SVC-7).*
+*Last updated: 2026-11-17 — the family standard adopted (R-FAM-1…8; one line of R-FAM-7 waits for the service).*
 
 ---
 
 ## NEXT
+
+**2026-11-17, the family standard (cosmo R-FAMILY-0, design rule §2.7) — Solaris's half (R-FAM, DR-FAM).** Runs
+beside J4. NOT committed (the tree is shared with the cosmo and interstellar passes).
+- `[x]` **R-FAM-1** Settings… in File (no button in the song bar); rows with the keymap's key in the shortcut column,
+  rules, disabled rows; the keyboard walks an open menu. `test_the_menus_are_the_familys`; shots `menu-file-open`,
+  `menus-vi` looked at. **Tests that addressed rows by position now use `rowOf(ms, menu, label)`** — do the same.
+- `[!]` **R-FAM-2** closing the window asks. `App::requestQuit` is tested (a mutant that always quits fails);
+  UNVERIFIED: the GTK `delete-event` → `gtk_widget_destroy` path in `linux_main.cpp` was compiled, never run live.
+- `[x]` **R-FAM-3** `Save changes to "<name>"?` · Cancel · Don't save · Save, `DestructiveStyle::Auto`. Shot
+  `confirm-unsaved` looked at.
+- `[x]` **R-FAM-4** the toast is cosmo's `Toast`; its band is pixel-identical to the frames before in four toast shots.
+- `[x]` **R-FAM-5** the browser's and the dock's tabs are accent-underlined words. `test_page_tabs_are_underlined` (seen
+  red first); shots `browser-tab-mid`, `mixer-tab-mid` looked at.
+- `[x]` **R-FAM-6** File › Export Mix as WAV…; context menus Title Case, buttons sentence case; the Rendering… card's
+  3 px sweeping bar — **which stands still while the service renders: D-28** (needs the render worker).
+- `[~]` **R-FAM-7** Home: the clock and count, the dashed New song card, the build's version — done
+  (`test_home_is_the_familys`, shots looked at). **NOT DONE: the relative time on a card — D-29**: the service must
+  publish a time in `recents[]` (core; this pass could not touch it).
+- `[!]` **R-FAM-8** Ctrl+N / Ctrl+O / Ctrl+Shift+S in the keymap (API documents regenerated), the window title
+  `*<song> — Solaris`. `App::windowTitle` and the keys through `App::key` are tested; UNVERIFIED: the GTK title bar and
+  real key presses in the live window.
+- `[ ]` The older DR entries still cite context-menu labels in their earlier capitals (DR-FAM-6 says so); sweep them
+  when one is next edited.
+
+**2026-11-17, the agent in Solaris (the founder: all three apps have an agent and MCP).** Not J4's
+line; runs beside it.
+- `[x]` **R-MCP-2** `solaris-cc mcp --attach <socket>`: the MCP tools on the song open in the
+  window. `solaris_control` 4 of 4.
+- `[x]` **R-AGENT-1/2** the conversation in the service: `assist start|send|stop|agents`, the
+  model's `assist` block, the two events, the four settings (DR-AGENT-1). `solaris_service` 129.
+- `[x]` **R-AGENT-3** the host: `host/AgentRunner` (Solaris's profile + cosmo's `ProcessAssistant`),
+  installed by `linux_main.cpp`, the socket opened on demand (DR-AGENT-3). `solaris_control` 5 of 5.
+  Unproven: a real Claude Code / ACP agent, and the live window.
+- `[x]` **R-AGENT-4** the Agent panel docked on the right of the song, View › Show Agent
+  (DR-AGENT-4). `solaris_app_ui` 105; shot `agent-panel` looked at. Unproven: typing in the field,
+  the live window, a real agent.
+- `[x]` **R-AGENT-5** both music skills have an "Inside Solaris" section.
+- `[ ]` The agent cannot hear: a `solaris_analyze` tool (spectrum, onsets, pitch) beside
+  `render --measure`.
+- `[ ]` The melody and sound-design skills are written for a developer running the lab servers;
+  each needs an "inside Solaris" section before an in-app agent is given them.
 
 **► J4** — the user judges fb-003 (the four future bass tracks with lessons 1–6 applied) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
@@ -986,7 +1027,7 @@ between / learn from professional from trap nation first"*. Tooling, not product
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
-      `implement_artboard`); both apps include them from there.
+      `arstro.artboard.implement`); both apps include them from there.
 - [ ] **T2** The service publishes a fader's position law and a meter's scale in `AppModel`, so the web
       face stops re-deriving `MixerDock.cpp:89-90` (law 13; found merging C4b).
 - [ ] **T3** D-2 (a renamed strip's lane and pattern keep the old name) and D-3 (a kit's pad names are
@@ -999,6 +1040,23 @@ between / learn from professional from trap nation first"*. Tooling, not product
 ---
 
 ## Decisions log (newest first)
+
+- **2026-11-17 — the family standard in Solaris (R-FAM), decided without a round (the standard was the founder's):**
+  (a) a menu's key is drawn as its character (`Ctrl+,`), though the keymap and Settings › Keyboard spell it
+  `Ctrl+Comma` — the family's menus say `Ctrl+,`; (b) Show History Tree… stays in the undo group (row 2), Show Agent
+  stays the last row of View behind a rule; (c) Don't save at the window's close sends `project close` before quitting,
+  as Home's does, so a declined autosave is not offered back; (d) "Render Stems…" keeps its name — only "Render…" sat
+  beside "Export…"; (e) EVERY context-menu label became Title Case and five buttons sentence case, the Vietnamese
+  table's keys with them; (f) the dashed New song card keeps its slot while it fades out, so the last song forgotten
+  does not send it travelling; (g) `demo/prelude/makePrelude.cpp` clicks File's row 9 now (Export Mix as WAV…).
+
+- **2026-11-17 — the accent is orange `#DD5A0C`, the logo is Synth sun, and there is an opening
+  splash** (R-UI-2 amended on the founder's word, against its own earlier reason; R-BRAND-1..4,
+  DR-BRAND-1). Solo stays amber and record red: orange now sits between them, knowingly. Home shows
+  the logo; `linux_main.cpp` plays cosmo's splash in Solaris's brand (skipped with any argument or
+  `SOLARIS_NO_SPLASH`). `[!]` UNVERIFIED: the splash window was not run live (L5), and nobody has
+  yet looked at a full mixer in orange next to amber solo buttons — do that before calling the
+  colour settled.
 
 - **2026-10-30 — `solaris-cc mcp` (R-MCP-1, DR-MCP-1):** the user asked for MCP on solaris, interstellar
   and cosmo. One shared protocol library (`core/Mcp`, `mcp_tests`), three thin front ends; Solaris's is

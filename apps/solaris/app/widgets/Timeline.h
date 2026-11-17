@@ -9,7 +9,7 @@
  *  says "linked ×N" (R-CLIP-3).
  *
  *  Interstellar's time idioms: the header column is the time origin (117 px); the ruler counts bars
- *  from 1; the playhead is `destructive` (a position). Zoom (Ctrl+wheel, anchored at the pointer)
+ *  from 1; the playhead is `foreground` (a position, not a state). Zoom (Ctrl+wheel, anchored at the pointer)
  *  and scroll EASE; while playing the playhead follows the transport continuously, and a seek eases
  *  it (§1).
  *
@@ -100,6 +100,7 @@ namespace solaris_ui
         static constexpr double kMarkH = 13.0;      // space::u(4): the markers' band, the ruler's top (R-ARR-1)
         static constexpr double kRulerH = 35.75;    // space::u(11): the markers' band, then the bars and the loop's brace
         static constexpr double kRowH = 48.75;      // space::u(15)
+        static constexpr double kMsW = 16.25, kMsH = 13.0, kMsGap = 3.25; // R-LANE-4: a header's M / S — u(5) × u(4), u(1) apart
         // the grid (R-UI-10): level 0 a bar, 1 a beat, 2…6 a half … a thirty-second of a beat
         static constexpr int kGridLevels = 7;
         static constexpr double kGridHidePx = 6.0;  // a level's lines closer than this: not drawn
@@ -110,6 +111,7 @@ namespace solaris_ui
         static constexpr int kAutoHue = -2;         // R-AUTO-14: an automation clip wears the accent, not a strip's colour
         static constexpr double kZoomPpb = 28.0;    // the zoom a song opens at, px a beat
         static constexpr int kZoomOutSteps = 8, kZoomInSteps = 14; // Ctrl+wheel: ×1.25 a step — 4.7 … 637 px a beat
+        static constexpr int kFitOutSteps = 18;                    // R-UI-17: Zoom to Fit may go on out to 0.5 px a beat
 
         Timeline();
         void bind(const solaris::AppModel &m);
@@ -127,6 +129,20 @@ namespace solaris_ui
         /** R-MIDI-2: an instrument track's arm button (local; a click is `strip arm`), and how lit it is (LIVE). */
         artboard::Rect armRect(int row) const;
         double armAmount(const std::string &strip) const;
+        /** R-UI-16: the empty song's "Add an instrument" button (local; as last drawn — its width is measured in the
+         *  paint), how much of the empty state shows (LIVE), and the menu it opens — the registry's instruments, each ONE
+         *  `clip add --instrument <type> --at 0 --length 4` (also Song › Add Instrument…'s). */
+        artboard::Rect emptyButtonRect() const;
+        double emptyAmount() const { return mEmptyAmt.value(); }
+        std::vector<cosmo_v2::ContextMenu::Item> instrumentMenu();
+        /** R-LANE-4: the strip a row IS — an instrument's track, or a strip's own row ('' a plain lane, an automation's,
+         *  a take's, a folded group) — its header's M and S mini-buttons (local; empty when it has none; a click is the
+         *  dock's `set <ch>.mute|solo=`), and how lit each is (LIVE, eased whoever changed it). */
+        std::string rowStrip(int row) const;
+        artboard::Rect muteRect(int row) const;
+        artboard::Rect soloRect(int row) const;
+        double muteAmount(const std::string &strip) const;
+        double soloAmount(const std::string &strip) const;
         std::string trackLabel(const std::string &lane) const;
         std::string rowLane(int i) const { return i >= 0 && i < (int)mRows.size() ? mRows[(size_t)i].lane : std::string(); }
         artboard::Rect rowRect(int i) const;
@@ -136,6 +152,17 @@ namespace solaris_ui
         artboard::Rect clipRect(const std::string &id) const;
         artboard::Rect rulerRect() const;
         double pxPerBeat() const { return mPpb.value(); }          // LIVE (eased)
+        /** R-UI-17: the whole song in view — the largest step of the zoom's lattice (on out past the wheel's floor, to
+         *  kFitOutSteps) at which its length and four bars of air fit the lanes' width, the scroll back at the start;
+         *  eased, the view's own (View › Zoom to Fit). */
+        void zoomToFit();
+        int zoomStep() const { return mZoomStep; }
+        /** R-UI-17: the sideways scroll's thumb along the lanes' foot (local; as drawn now — empty when the song fits),
+         *  and how much of it shows (LIVE: it fades in and out). */
+        artboard::Rect hScrollThumb() const;
+        double hScrollAmount() const { return mHBarAmt.value(); }
+        double scrollXLive() const { return mScrollX.value(); }
+        bool scrollsSideways() const { return mScrollX.scrollable(); }
         /** A clip's LIVE opacity (0 = not there): a test tells a fade from a cut. */
         double clipAlpha(const std::string &id) const;
         /** How far a clip's colour has come since its strip's last changed (1 = there). */
@@ -460,6 +487,19 @@ namespace solaris_ui
         std::string mArmed;                           // R-MIDI-2: the model's armed strip
         std::map<std::string, artboard::AnimatedProperty> mArm; // its button's light, by strip
         std::map<std::string, double> mArmLast;
+        // R-LANE-4: each strip's mute and solo as the model has them, and their lights in the headers
+        struct MsLive
+        {
+            artboard::AnimatedProperty mute{0.0}, solo{0.0};
+            bool m = false, s = false, placed = false;
+        };
+        std::map<std::string, std::pair<bool, bool>> mMuteSolo;
+        std::map<std::string, MsLive> mMs;
+        cosmo_v2::HoverFade mMsHover; // by row * 2 + (0 mute, 1 solo)
+        std::vector<std::pair<std::string, std::string>> mInstruments; // R-UI-16: the registry's instruments — type, label
+        mutable double mEmptyBtnW = 132.0;                             // the button's width, measured in the paint
+        artboard::AnimatedProperty mEmptyHover{0.0};
+        bool mEmptyOver = false, mEmptyOverLast = false;
         std::string mSong;                            // another song: everything placed afresh
         bool mBound = false, mEver = false, mEmptyInit = false;
         artboard::AnimatedProperty mEmptyAmt{0.0};
@@ -474,6 +514,8 @@ namespace solaris_ui
         artboard::AnimatedProperty mPpb{kZoomPpb}, mPlayhead{0.0};
         double mPpbTarget = kZoomPpb;
         int mZoomStep = 0;                  // the lattice: mPpbTarget = kZoomPpb · 1.25^step
+        artboard::AnimatedProperty mHBarAmt{0.0}; // R-UI-17: the sideways thumb's fade
+        bool mHBarWant = false, mHBarInit = false;
         // the step's name on the ruler: when the step changes (the zoom eased past a level) the new name
         // fades in and the ones before fade out from where they are — however fast the wheel turns
         struct StepName

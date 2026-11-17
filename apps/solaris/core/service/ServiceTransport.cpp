@@ -39,7 +39,8 @@ namespace solaris
           mSinks(), mPcm(o.mPcm), mOffline(o.mOffline), mPcmRate(o.mPcmRate), mAudit(o.mAudit),
           mLastRenderPeaks(o.mLastRenderPeaks), mSettings(o.mSettings), mRecents(o.mRecents), mRecentCards(o.mRecentCards),
           mRecentsStale(o.mRecentsStale), mDevices(o.mDevices), mBrowser(o.mBrowser), mPosition(o.mPosition),
-          mLoopFrom(o.mLoopFrom), mLoopTo(o.mLoopTo)
+          mLoopFrom(o.mLoopFrom), mLoopTo(o.mLoopTo),
+          mAssist(mAssistModel, arstro::cosmo::AssistConversation::Hooks()) // a copy (a render's) runs no agent: R-AGENT-1
     {
         mPluginLive = o.mPluginLive; // R-VST-6: the same plugins answer what their parameters are
     }
@@ -151,6 +152,7 @@ namespace solaris
     {
         // R-SAFE-1: an unsaved song is written beside itself on the clock, whatever else is happening
         if (mOpen && mModel.dirty && mSettings.autosave > 0 && steadySeconds() - mLastAutosave >= mSettings.autosave) autosave();
+        mAssist.pump(); // R-AGENT-1: what the agent said since the last pump, never blocking
         watchFile(); // R-COLLAB-1: the song's file, looked at once a second — changed by someone else, synced
         if (mPreview) mPreview->collect(); // R-ROLL-7: what its thread is done with, freed here
         mModel.midiMessages = mMidiCount->load(std::memory_order_relaxed); // R-MIDI-2: the keyboard's activity

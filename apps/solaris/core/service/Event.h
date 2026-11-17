@@ -25,6 +25,7 @@ namespace solaris
         enum class Kind
         {
             Info,
+            AssistState, AssistMessage, // R-AGENT-1
             Error,            // why — also lands in AppModel::lastError
             CommandRejected,  // line, why
             ScreenChanged,    // screen

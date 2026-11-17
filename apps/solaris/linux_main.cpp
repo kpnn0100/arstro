@@ -19,10 +19,13 @@
  *  children are the App's accessible nodes — listed once a screen reader asks for the window, then re-read every
  *  200 ms and when the keyboard's focus moves; a screen reader's click and steps come back as the keyboard's.
  */
+#include "../cosmo/SplashWindow.h"   // R-SPLASH: the opening splash, cosmo's widget in this app's brand
 #include "App.h"
 #include "AudioFiles.h"
 #include "VideoFiles.h"
 #include "ControlServer.h"
+#include <unistd.h>
+#include "AgentRunner.h" // R-AGENT-3
 #include "EmbeddedFonts.h"
 #include "KeyInput.h"
 #include "PluginInstance.h"
@@ -105,6 +108,7 @@ namespace
         gint64 startUs = 0;
         std::unique_ptr<solaris_host::ControlServer> control; // R-SVC-5: only with --control; last, so it goes first
         int cursor = -1;                                       // the cursor shown (R-UI-14)
+        std::string title = "Solaris";                         // the title bar's words as last set (R-FAM-8)
         solaris_host::VideoReader video, thumbs;               // R-VIDEO-1: the Video window's decoder, and the lane's
         std::string videoFile, thumbFile;
 #ifdef SOLARIS_HAVE_ATK
@@ -203,6 +207,12 @@ namespace
         auto *a = static_cast<Host *>(user);
         a->svc.pump();
         if (a->app->needsRedraw(nowMs(*a))) gtk_widget_queue_draw(a->area);
+        // R-FAM-8: the title bar follows the song and its unsaved state — set only when it changes
+        if (const std::string title = a->app->windowTitle(); title != a->title)
+        {
+            a->title = title;
+            gtk_window_set_title(GTK_WINDOW(a->window), title.c_str());
+        }
         return G_SOURCE_CONTINUE;
     }
 
@@ -375,6 +385,10 @@ int main(int argc, char **argv)
     hooks.model = [a]() -> const solaris::AppModel & { return a->svc.model(); };
     hooks.dispatch = [a](const std::string &line, std::string &err) { return a->svc.dispatchText(line, err); };
     a->app = std::make_unique<App>(hooks, (double)kW, (double)kH);
+    // R-RENDER-4: the host hears the service's events; a render written is said in the window (the app links no service)
+    a->svc.subscribe([a](const solaris::Event &e) {
+        if (a->app && e.kind == solaris::Event::Kind::RenderFinished) a->app->renderFinished(e.field("out"), e.field("peak"));
+    });
     a->app->onPickSongToOpen = [a] {
         const std::string p = pick(a, GTK_FILE_CHOOSER_ACTION_OPEN, "Open song", "_Open", true, std::string());
         if (!p.empty()) a->app->openSongPicked(p);
@@ -454,6 +468,15 @@ int main(int argc, char **argv)
     gtk_window_set_title(GTK_WINDOW(a->window), "Solaris");
     gtk_window_set_default_size(GTK_WINDOW(a->window), kW, kH);
     g_signal_connect(a->window, "destroy", G_CALLBACK(gtk_main_quit), nullptr);
+    // R-FAM-2: the close button asks the App — it quits at once with nothing unsaved, else raises the unsaved dialog and
+    // quits only on Save (after saving) or Don't save. TRUE: GTK does not destroy the window itself.
+    a->app->onQuit = [a] { gtk_widget_destroy(a->window); };
+    g_signal_connect(a->window, "delete-event", G_CALLBACK(+[](GtkWidget *, GdkEvent *, gpointer user) -> gboolean {
+                         auto *h = static_cast<Host *>(user);
+                         h->app->requestQuit();
+                         if (h->area) gtk_widget_queue_draw(h->area);
+                         return TRUE;
+                     }), a);
 #ifdef SOLARIS_HAVE_ATK
     a->area = GTK_WIDGET(g_object_new(solaris_area_get_type(), nullptr));
     g_object_set_data(G_OBJECT(a->area), "solaris-host", a); // before anything asks for its accessible
@@ -486,6 +509,23 @@ int main(int argc, char **argv)
         std::string err;
         if (!a->svc.dispatchText("project open \"" + song + "\"", err)) g_printerr("solaris: %s\n", err.c_str());
     }
+#ifdef SOLARIS_HAVE_AGENT
+    // R-AGENT-3: the user's own agent. Its tools reach THIS song over the control socket, so a window
+    // started without --control opens one the first time an agent is started (cosmo does the same).
+    solaris_host::installAgent(a->svc, [a]() -> std::string {
+        if (!a->control)
+        {
+            const char *rt = g_getenv("XDG_RUNTIME_DIR");
+            const std::string path = std::string(rt && *rt ? rt : "/tmp") + "/solaris-" + std::to_string((long)getpid()) + ".sock";
+            auto server = std::make_unique<solaris_host::ControlServer>(a->svc);
+            std::string err;
+            if (!server->open(path, err)) { g_printerr("solaris: the agent's control socket: %s\n", err.c_str()); return std::string(); }
+            a->control = std::move(server);
+            g_timeout_add(16, onControl, a);
+        }
+        return a->control->isOpen() ? a->control->path() : std::string();
+    });
+#endif
     if (!controlPath.empty())
     {
         // after the song opened, so a client that attaches at once sees every later event
@@ -496,8 +536,12 @@ int main(int argc, char **argv)
     }
     a->startUs = g_get_monotonic_time();
     gtk_widget_add_tick_callback(a->area, onTick, a, nullptr);
-    gtk_widget_show_all(a->window);
-    gtk_widget_grab_focus(a->area);
+    // R-SPLASH-1: the logo's opening splash first, then the window. Skipped when the app was
+    // launched to DO something — a song on the command line, a control socket (a script driving
+    // the window must not wait two seconds) — and when SOLARIS_NO_SPLASH is set.
+    auto showMain = [a] { gtk_widget_show_all(a->window); gtk_widget_grab_focus(a->area); };
+    if (argc > 1 || g_getenv("SOLARIS_NO_SPLASH")) showMain();
+    else arstro::cosmo_v2::runSplash(arstro::cosmo_v2::SplashScreen::solarisBrand(), 1.0, showMain);
     gtk_main();
     return 0;
 }

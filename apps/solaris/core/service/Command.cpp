@@ -462,10 +462,15 @@ namespace solaris
              "(and the default); `show project` for the song.", "R-SVC-8"},
             {K::Api, "api", "", 0, 0, {"json", "md"}, "This document: every command, event, model field and device parameter.", "R-API-1"},
 
+            {K::AssistStart, "assist start", "", 0, 0, {}, "Start the user's agent (settings `agent`): it is given this song through `solaris-cc mcp --attach`. Refused where the front end cannot run one.", "R-AGENT-1"},
+            {K::AssistSend, "assist send", "<text…>", 1, -1, {}, "Say something to the agent (starting it first when none runs). Its reply arrives as assist.message events and in the model's assist.messages.", "R-AGENT-1"},
+            {K::AssistStop, "assist stop", "", 0, 0, {}, "Stop the agent and everything it started. Nothing to stop is not a refusal.", "R-AGENT-1"},
+            {K::AssistAgents, "assist agents", "", 0, 0, {}, "Look for the agents installed on this machine; fills the model's assist.choices.", "R-AGENT-1"},
+
             {K::SettingsSet, "settings set", "<key>=<value> …", 1, -1, {},
              "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), "
              "bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), "
-             "port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on|off), showIds (on|off: every object's id beside its name, R-UI-11), "
+             "port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on|off), showIds (on|off: every object's id beside its name, R-UI-11), agent / agentArgs / agentSkills / agentAllowAll (R-AGENT-2: the user's agent — claude, acp:<command> or cmd:<command>; what is appended; extra skill folders; on|off), "
              "autosave (seconds between autosaves of an unsaved song, or off — R-SAFE-1), key.<action>=<combos> (R-SET-4: a keyboard action's keys — a comma list such as \"Ctrl+Shift+Z, Ctrl+Y\", `none`, or `default`; "
              "a combo another action of the same keyboard has is refused naming it — the actions are in this document's Keyboard section). Saved at once.",
              "R-SET-1", true},

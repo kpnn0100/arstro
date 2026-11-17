@@ -5,7 +5,7 @@
   --foreground: #DBDBDB;
   --card: #1C1C1C;
   --popover: #222222;
-  --primary: #159387;
+  --primary: #DD5A0C;
   --primary-foreground: #FFFFFF;
   --secondary: #252525;
   --secondary-foreground: #AAAAAA;
@@ -18,7 +18,7 @@
   --input-light: #F4F4F5;
   --input-light-text: #18181B;
   --switch-background: #444444;
-  --ring: rgba(21, 147, 135, 0.5);
+  --ring: rgba(221, 90, 12, 0.5);
   --canvas-bg: #0A0A0A;
   --histogram-bg: #0F0F0F;
   --left-rail-bg: #161616;
@@ -28,7 +28,7 @@
   --curve-plot-bg: #0D0D0D;
   --white: #FFFFFF;
   --white-rgb: 255, 255, 255;
-  --primary-rgb: 21, 147, 135;
+  --primary-rgb: 221, 90, 12;
   --success-rgb: 63, 185, 80;
   --hover-wash: rgba(255, 255, 255, 0.07);
   --hover-wash-alpha: 0.07;
@@ -73,7 +73,7 @@
   --strip-bg: #1C1C1C;
   --scrim: rgba(0, 0, 0, 0.55);
   --scrim-alpha: 0.55;
-  --playhead: #E5534B;
+  --playhead: #DBDBDB;
   --meter-low: #3FB950;
   --meter-mid: #E3B341;
   --meter-high: #E5534B;
@@ -98,7 +98,7 @@
   --theme-slider-track-stroke: rgba(0, 0, 0, 0);
   --theme-slider-track-stroke-width: 0px;
   --theme-slider-track-radius: 9999px;
-  --theme-slider-range-fill-fill: #159387;
+  --theme-slider-range-fill-fill: #DD5A0C;
   --theme-slider-range-fill-stroke: rgba(0, 0, 0, 0);
   --theme-slider-range-fill-stroke-width: 0px;
   --theme-slider-range-fill-radius: 9999px;
@@ -111,8 +111,8 @@
   --theme-button-idle-stroke: rgba(255, 255, 255, 0.072);
   --theme-button-idle-stroke-width: 1px;
   --theme-button-idle-radius: 2px;
-  --theme-button-pressed-fill: rgba(21, 147, 135, 0.1);
-  --theme-button-pressed-stroke: #159387;
+  --theme-button-pressed-fill: rgba(221, 90, 12, 0.1);
+  --theme-button-pressed-stroke: #DD5A0C;
   --theme-button-pressed-stroke-width: 1px;
   --theme-button-pressed-radius: 2px;
   --theme-button-label-color: #636363;
@@ -165,7 +165,7 @@
   --theme-toggle-track-off-stroke: rgba(0, 0, 0, 0);
   --theme-toggle-track-off-stroke-width: 0px;
   --theme-toggle-track-off-radius: 9999px;
-  --theme-toggle-track-on-fill: #159387;
+  --theme-toggle-track-on-fill: #DD5A0C;
   --theme-toggle-track-on-stroke: rgba(0, 0, 0, 0);
   --theme-toggle-track-on-stroke-width: 0px;
   --theme-toggle-track-on-radius: 9999px;
@@ -210,11 +210,11 @@
   --theme-tab-label-size: 10px;
   --theme-tab-label-family: "Roboto Medium";
   --theme-tab-label-letter-spacing: 0px;
-  --theme-tab-label-active-color: #159387;
+  --theme-tab-label-active-color: #DD5A0C;
   --theme-tab-label-active-size: 10px;
   --theme-tab-label-active-family: "Roboto Medium";
   --theme-tab-label-active-letter-spacing: 0px;
-  --theme-tab-indicator: #159387;
+  --theme-tab-indicator: #DD5A0C;
   --theme-tab-indicator-height: 1.5px;
   --theme-scroll-viewport-fill: rgba(0, 0, 0, 0);
   --theme-scroll-viewport-stroke: rgba(0, 0, 0, 0);
@@ -252,7 +252,7 @@
   --foreground: #FFFFFF;
   --card: #0A0A0A;
   --popover: #121212;
-  --primary: #159387;
+  --primary: #DD5A0C;
   --primary-foreground: #FFFFFF;
   --secondary: #2E2E2E;
   --secondary-foreground: #FFFFFF;
@@ -265,7 +265,7 @@
   --input-light: #F4F4F5;
   --input-light-text: #18181B;
   --switch-background: #6A6A6A;
-  --ring: rgba(21, 147, 135, 0.5);
+  --ring: rgba(221, 90, 12, 0.5);
   --canvas-bg: #000000;
   --histogram-bg: #000000;
   --left-rail-bg: #050505;
@@ -283,7 +283,7 @@
   --deck-bg: #000000;
   --strip-bg: #0A0A0A;
   --scrim: rgba(0, 0, 0, 0.55);
-  --playhead: #E5534B;
+  --playhead: #FFFFFF;
   --meter-low: #3FB950;
   --meter-mid: #E3B341;
   --meter-high: #E5534B;
@@ -306,14 +306,14 @@
   --track-9: #A6705B;
   --theme-slider-track-fill: #2E2E2E;
   --theme-slider-track-stroke: rgba(0, 0, 0, 0);
-  --theme-slider-range-fill-fill: #159387;
+  --theme-slider-range-fill-fill: #DD5A0C;
   --theme-slider-range-fill-stroke: rgba(0, 0, 0, 0);
   --theme-slider-thumb-fill: #FFFFFF;
   --theme-slider-thumb-stroke: #FFFFFF;
   --theme-button-idle-fill: rgba(0, 0, 0, 0);
   --theme-button-idle-stroke: rgba(255, 255, 255, 0.45);
-  --theme-button-pressed-fill: rgba(21, 147, 135, 0.1);
-  --theme-button-pressed-stroke: #159387;
+  --theme-button-pressed-fill: rgba(221, 90, 12, 0.1);
+  --theme-button-pressed-stroke: #DD5A0C;
   --theme-button-label-color: #C0C0C0;
   --theme-checkbox-box-fill: #444A56;
   --theme-checkbox-box-stroke: #C4C8D0;
@@ -336,7 +336,7 @@
   --theme-knob-label-color: #AAAEB6;
   --theme-toggle-track-off-fill: #2E2E2E;
   --theme-toggle-track-off-stroke: rgba(0, 0, 0, 0);
-  --theme-toggle-track-on-fill: #159387;
+  --theme-toggle-track-on-fill: #DD5A0C;
   --theme-toggle-track-on-stroke: rgba(0, 0, 0, 0);
   --theme-toggle-thumb-fill: #FFFFFF;
   --theme-toggle-thumb-stroke: rgba(0, 0, 0, 0);
@@ -357,8 +357,8 @@
   --theme-tab-active-fill: #0A0A0A;
   --theme-tab-active-stroke: rgba(0, 0, 0, 0);
   --theme-tab-label-color: #C0C0C0;
-  --theme-tab-label-active-color: #159387;
-  --theme-tab-indicator: #159387;
+  --theme-tab-label-active-color: #DD5A0C;
+  --theme-tab-indicator: #DD5A0C;
   --theme-scroll-viewport-fill: rgba(0, 0, 0, 0);
   --theme-scroll-viewport-stroke: rgba(0, 0, 0, 0);
   --theme-scroll-track-fill: rgba(0, 0, 0, 0);
@@ -379,7 +379,7 @@
 @property --foreground { syntax: "<color>"; inherits: true; initial-value: #DBDBDB; }
 @property --card { syntax: "<color>"; inherits: true; initial-value: #1C1C1C; }
 @property --popover { syntax: "<color>"; inherits: true; initial-value: #222222; }
-@property --primary { syntax: "<color>"; inherits: true; initial-value: #159387; }
+@property --primary { syntax: "<color>"; inherits: true; initial-value: #DD5A0C; }
 @property --primary-foreground { syntax: "<color>"; inherits: true; initial-value: #FFFFFF; }
 @property --secondary { syntax: "<color>"; inherits: true; initial-value: #252525; }
 @property --secondary-foreground { syntax: "<color>"; inherits: true; initial-value: #AAAAAA; }
@@ -392,7 +392,7 @@
 @property --input-light { syntax: "<color>"; inherits: true; initial-value: #F4F4F5; }
 @property --input-light-text { syntax: "<color>"; inherits: true; initial-value: #18181B; }
 @property --switch-background { syntax: "<color>"; inherits: true; initial-value: #444444; }
-@property --ring { syntax: "<color>"; inherits: true; initial-value: rgba(21, 147, 135, 0.5); }
+@property --ring { syntax: "<color>"; inherits: true; initial-value: rgba(221, 90, 12, 0.5); }
 @property --canvas-bg { syntax: "<color>"; inherits: true; initial-value: #0A0A0A; }
 @property --histogram-bg { syntax: "<color>"; inherits: true; initial-value: #0F0F0F; }
 @property --left-rail-bg { syntax: "<color>"; inherits: true; initial-value: #161616; }
@@ -410,7 +410,7 @@
 @property --deck-bg { syntax: "<color>"; inherits: true; initial-value: #121212; }
 @property --strip-bg { syntax: "<color>"; inherits: true; initial-value: #1C1C1C; }
 @property --scrim { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0.55); }
-@property --playhead { syntax: "<color>"; inherits: true; initial-value: #E5534B; }
+@property --playhead { syntax: "<color>"; inherits: true; initial-value: #DBDBDB; }
 @property --meter-low { syntax: "<color>"; inherits: true; initial-value: #3FB950; }
 @property --meter-mid { syntax: "<color>"; inherits: true; initial-value: #E3B341; }
 @property --meter-high { syntax: "<color>"; inherits: true; initial-value: #E5534B; }
@@ -433,14 +433,14 @@
 @property --track-9 { syntax: "<color>"; inherits: true; initial-value: #A6705B; }
 @property --theme-slider-track-fill { syntax: "<color>"; inherits: true; initial-value: #252525; }
 @property --theme-slider-track-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
-@property --theme-slider-range-fill-fill { syntax: "<color>"; inherits: true; initial-value: #159387; }
+@property --theme-slider-range-fill-fill { syntax: "<color>"; inherits: true; initial-value: #DD5A0C; }
 @property --theme-slider-range-fill-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
 @property --theme-slider-thumb-fill { syntax: "<color>"; inherits: true; initial-value: #FFFFFF; }
 @property --theme-slider-thumb-stroke { syntax: "<color>"; inherits: true; initial-value: #FFFFFF; }
 @property --theme-button-idle-fill { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
 @property --theme-button-idle-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.072); }
-@property --theme-button-pressed-fill { syntax: "<color>"; inherits: true; initial-value: rgba(21, 147, 135, 0.1); }
-@property --theme-button-pressed-stroke { syntax: "<color>"; inherits: true; initial-value: #159387; }
+@property --theme-button-pressed-fill { syntax: "<color>"; inherits: true; initial-value: rgba(221, 90, 12, 0.1); }
+@property --theme-button-pressed-stroke { syntax: "<color>"; inherits: true; initial-value: #DD5A0C; }
 @property --theme-button-label-color { syntax: "<color>"; inherits: true; initial-value: #636363; }
 @property --theme-checkbox-box-fill { syntax: "<color>"; inherits: true; initial-value: #444A56; }
 @property --theme-checkbox-box-stroke { syntax: "<color>"; inherits: true; initial-value: #C4C8D0; }
@@ -463,7 +463,7 @@
 @property --theme-knob-label-color { syntax: "<color>"; inherits: true; initial-value: #AAAEB6; }
 @property --theme-toggle-track-off-fill { syntax: "<color>"; inherits: true; initial-value: #252525; }
 @property --theme-toggle-track-off-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
-@property --theme-toggle-track-on-fill { syntax: "<color>"; inherits: true; initial-value: #159387; }
+@property --theme-toggle-track-on-fill { syntax: "<color>"; inherits: true; initial-value: #DD5A0C; }
 @property --theme-toggle-track-on-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
 @property --theme-toggle-thumb-fill { syntax: "<color>"; inherits: true; initial-value: #FFFFFF; }
 @property --theme-toggle-thumb-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
@@ -484,8 +484,8 @@
 @property --theme-tab-active-fill { syntax: "<color>"; inherits: true; initial-value: #1C1C1C; }
 @property --theme-tab-active-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
 @property --theme-tab-label-color { syntax: "<color>"; inherits: true; initial-value: #636363; }
-@property --theme-tab-label-active-color { syntax: "<color>"; inherits: true; initial-value: #159387; }
-@property --theme-tab-indicator { syntax: "<color>"; inherits: true; initial-value: #159387; }
+@property --theme-tab-label-active-color { syntax: "<color>"; inherits: true; initial-value: #DD5A0C; }
+@property --theme-tab-indicator { syntax: "<color>"; inherits: true; initial-value: #DD5A0C; }
 @property --theme-scroll-viewport-fill { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
 @property --theme-scroll-viewport-stroke { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }
 @property --theme-scroll-track-fill { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0); }

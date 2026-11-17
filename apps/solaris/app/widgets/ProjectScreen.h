@@ -22,6 +22,7 @@
 #include "../Theme.h"
 #include "AppModel.h"
 #include "Browser.h"
+#include "widgets/AgentPanel.h" // cosmo's, compiled in place (R-AGENT-4)
 #include "FloatWindow.h"
 #include "MixerDock.h"
 #include "SongBar.h"
@@ -51,6 +52,11 @@ namespace solaris_ui
         /** A right-click, offered before anyone else: a window's parameter row takes it (R-WIN-3). */
         bool contextClick(artboard::Point world) { return mWindows->contextClick(world); }
         static constexpr double kLanesFloor = 130.0;  // space::u(40): the lanes never shrink below this
+        /** R-UI-3 (amended 2026-11-17): until its top edge is dragged the dock is min(kDockMost, kDockShare × the window's
+         *  height) — 429 px left three lanes at 1024 × 640; dragged, it is the user's height. */
+        static constexpr double kDockMost = 429.0;    // space::u(132)
+        static constexpr double kDockShare = 0.45;
+        bool dockDragged() const { return mDockDragged; }
         double dockHeight() const { return mDockH.value(); } // LIVE
         void setDockOpen(bool open) { mDockOpen = open; }
         bool dockOpen() const { return mDockOpen; }
@@ -63,6 +69,13 @@ namespace solaris_ui
         void setBrowserOpen(bool open) { mBrowserOpen = open; }
         bool browserOpen() const { return mBrowserOpen; }
         double browserWidth() const { return mBrowserW.value(); } // LIVE
+        /** R-AGENT-4: the user's agent, docked on the right. Closed until View › Agent; folds by its
+         *  WIDTH like the browser, and everything left of it reads the live width. */
+        static constexpr double kAgentW = 324.0;
+        arstro::cosmo_v2::AgentPanel &agent() { return *mAgent; }
+        void setAgentOpen(bool open) { mAgentOpen = open; }
+        bool agentOpen() const { return mAgentOpen; }
+        double agentWidth() const { return mAgentW.value(); } // LIVE
         /** The pointer is down somewhere: a gesture in flight outranks the model (the device panel). */
         void setInteracting(bool on) { mInteracting = on; }
 
@@ -99,12 +112,16 @@ namespace solaris_ui
         artboard::AnimatedProperty mSessionAmt{0.0};
         std::shared_ptr<MixerDock> mDock;
         std::shared_ptr<WindowLayer> mWindows;
-        double mDockWant = 429.0;          // space::u(132): what the user last dragged it to
+        double mDockWant = kDockMost;      // what the user last dragged it to (in force once mDockDragged)
+        bool mDockDragged = false;         // R-UI-3 amended: until then the dock is its share of the window
         bool mDockOpen = true, mDockInit = false, mInteracting = false;
         double mDockLast = 0.0;
         artboard::AnimatedProperty mDockH{0.0};
         bool mBrowserOpen = true, mBrowserInit = false, mBrowserLast = true;
         artboard::AnimatedProperty mBrowserW{0.0};
+        std::shared_ptr<arstro::cosmo_v2::AgentPanel> mAgent;
+        bool mAgentOpen = false, mAgentInit = false, mAgentLast = false;
+        artboard::AnimatedProperty mAgentW{0.0};
         double mNowMs = 0.0, mPosition = 0.0;
         artboard::AnimatedProperty mIds{0.0};
         bool mIdsWant = false, mIdsLast = false, mIdsInit = false;

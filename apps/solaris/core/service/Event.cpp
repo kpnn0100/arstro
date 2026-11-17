@@ -28,6 +28,8 @@ namespace solaris
         static const std::vector<EventSpec> specs = {
             {EK::Info, "info", {"text"}, "A note worth logging; carries no state."},
             {EK::Error, "error", {"why"}, "Something failed. Also set as AppModel.lastError."},
+            {EK::AssistState, "assist.state", {"state", "agent"}, "R-AGENT-1: the user's agent is off | starting | ready | busy | failed."},
+            {EK::AssistMessage, "assist.message", {"role", "text"}, "R-AGENT-1: one message of the conversation: user | agent | tool | error | info. A streamed reply repeats with the text so far."},
             {EK::CommandRejected, "command.rejected", {"line", "why"},
              "A line was refused (R-SVC-3): unknown verb, flag, address or parameter; a refused edit."},
             {EK::ScreenChanged, "screen.changed", {"screen"}, "home | project."},

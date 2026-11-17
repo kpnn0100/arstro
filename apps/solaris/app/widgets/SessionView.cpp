@@ -358,7 +358,7 @@ namespace solaris_ui
         const double bh = mHover.amount(kBack);
         drawRoundedRect(t, br, radius::control(), Paint::filledStroked(lerpColor(palette::secondary(), palette::card(), bh), palette::border(), 1.0));
         t.setFill(lerpColor(palette::secondaryForeground(), palette::foreground(), bh));
-        const std::string back = tr("Back to Arrangement");
+        const std::string back = tr("Back to arrangement");
         t.drawText(textfit::ellipsize(t, back, br.w - 12.0, 10.0, font::sans()), br.x + 6.0, textfit::baseline(br.y + br.h * 0.5, 10.0), 10.0, font::sans());
         if (mScenes.empty())
         {

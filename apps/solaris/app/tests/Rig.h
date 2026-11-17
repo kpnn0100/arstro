@@ -307,6 +307,10 @@ namespace sltest
             };
             app = std::make_unique<arstro::solaris_ui::App>(hooks, w, h);
             app->onCopy = [this](const std::string &text) { copied.push_back(text); };
+            // R-RENDER-4: the host hears the service's events and tells the App a render was written (as linux_main does)
+            svc->subscribe([this](const arstro::solaris::Event &e) {
+                if (app && e.kind == arstro::solaris::Event::Kind::RenderFinished) app->renderFinished(e.field("out"), e.field("peak"));
+            });
             // R-VIDEO-1: the host's decoder, faked — a 16:9 picture fitted to the box: a dusk sky, an amber band whose
             // left edge is the frame's time (a second a tenth of the width), so each frame reads as its own
             auto paint = [](double t, int bw, int bh, arstro::solaris_ui::VideoImage &out) {

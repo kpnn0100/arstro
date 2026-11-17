@@ -370,17 +370,17 @@ twenty, so it could not compute them — and a second front end must read the sa
 ### DR-UI-1 The window, Home and the song bar (R-UI-1, R-UI-2, R-UI-3, R-HOME-1, R-G-4)
 `solaris_app` (`app/`) is a platform-free Artboard tree that links no service: `App` (`app/App.h`)
 draws from `AppHooks::model()` and sends text lines through `AppHooks::dispatch` (`App::dispatch`,
-`app/App.cpp:434` — a refusal becomes a toast with the service's sentence). `linux_main.cpp` is the
+`app/App.cpp` — a refusal becomes an error toast with the service's sentence, DR-UI-15). `linux_main.cpp` is the
 only OS code: GTK3, the frame clock, the pickers, the host functions, the service pumped every tick.
 The screen follows `AppModel::screen` and CROSS-FADES (260 ms, `App::render`, `app/App.cpp:951`).
-`installSolarisAccent()` moves cosmo's accent slot to teal `#159387` before any widget exists
+`installSolarisAccent()` moves cosmo's accent slot to orange `#DD5A0C` (R-UI-2, amended 2026-11-17; teal `#159387` before) before any widget exists
 (`app/Theme.h`); every neutral, radius, font and spacing token is cosmo's, aliased. `HomeScreen`
 (`app/widgets/HomeScreen.cpp`): the `solaris.` wordmark sized to fit, New/Open, Settings, recent-song
 cards (name, `bpm · length · strips` over a plate of bars from the song's name; a moved song says
 "missing" in red and is named by its file) whose grid geometry eases on reflow (`layout`, `:86`);
 right-click forgets a card. `SongBar` (`app/widgets/SongBar.cpp`): wordmark, Home (asking first with
 cosmo's `ConfirmDialog` when unsaved, `App::requestHome`, `app/App.cpp:545`), the song's name with an eased
-unsaved dot, Play/Stop whose glyphs cross-fade, the position as bar.beat.tick in mono, the tempo,
+unsaved dot (`foreground`, DR-UI-2), Record, Play/Stop whose glyphs cross-fade, Loop and Metronome (DR-UI-16), the position as bar.beat.tick in mono, the tempo,
 the master meter (40 ms rise, 300 ms fall, `advance`, `app/widgets/SongBar.cpp:150`), Save, Settings. Keys: Space play/stop,
 Ctrl+S save, Enter to the start, Ctrl+, settings. Every control's command line is in `app/NOTES.md`.
 
@@ -411,7 +411,7 @@ first clip's. A clip is drawn on its row, coloured by its STRIP (`surface::track
 to the visible edge when it begins off-screen (`paintClip`, `:979`); a note clip draws its
 pattern's notes repeated where it loops, the seams marked, and "linked ×N" when it shares its
 pattern. Ruler: bars from 1, the grid's ticks, every label faded in by its room (DR-UI-10). The
-playhead is `destructive`; it follows the transport while playing and eases 140 ms on a seek.
+playhead is `foreground` (R-UI-2 amended, DR-UI-2 — it was `destructive`); it follows the transport while playing and eases 140 ms on a seek.
 Ctrl+wheel zooms ×1.25 a notch on a lattice about 28 px/beat — 4.7 to 637 px/beat — eased 220 ms
 and anchored at the pointer (`:713`); the wheel scrolls, Shift+wheel sideways. The grid follows the
 zoom and its finest level with room is THE snap step on the lanes (DR-UI-10). A clip dragged follows
@@ -451,7 +451,10 @@ deleted. Every front end draws it as is.
 
 ### DR-UI-8 The mixer dock (R-UI-3, R-MIX-1/5/6/7/9/12, R-MIX-12 amended)
 `MixerDock` (`app/widgets/MixerDock.cpp`) sits under the lanes (`ProjectScreen::dockTarget`,
-`app/widgets/ProjectScreen.cpp:178`: 429 px wanted; its top edge dragged follows the pointer; the
+`app/widgets/ProjectScreen.cpp:179`: until its top edge is dragged, `min(kDockMost 429, round(kDockShare 0.45 × the window's height))` —
+288 at 640, 405 at 900 — following a resize eased 220 ms (R-UI-3 amended 2026-11-17; `dockDragged()`; UI test
+`test_the_dock_takes_its_share_of_the_window`, mutants: the fixed 429, a drag forgotten on a resize — red; **D-28: under
+about 890 px of window a whole strip, 400 px, no longer fits its share**); dragged it follows the pointer and is the user's; the
 chevron folds it to its tab bar, eased 220 ms; it gives way before the lanes, which keep 130 px).
 Tabs: a mixer page each, "+" (`mixer add`), Matrix; keyed (`syncTabs`) so a tab added slides the
 others along, measured in one weight so choosing a tab moves nothing; the highlight slides, the
@@ -639,6 +642,8 @@ closes it, eased); shots `history-tree`, `history-tree-jumping`. Mutant: a highl
 
 
 ### DR-UI-9 The song bar's menus and Settings beside Home (R-UI-3 amended)
+(**2026-11-17, R-FAM-1:** there is no Settings button in the bar any more and the menus' rows are rebuilt — where this
+entry says "Settings beside Home", a row's position, or a key written in a label, **DR-FAM-1 is the truth**.)
 (**2026-10-16, R-UI-3 amended again:** the Home button is gone — the `solaris.` wordmark is Home, its hit rect the
 measured word (`SongBar::hitRect(kHome)`), washed on hover; a click is `requestHome`, which asks about unsaved changes.
 UI `test_song_bar_menus_and_settings_sections`, `test_home_unsaved_confirm_and_recents`; mutant (a wordmark that does nothing) seen red.)
@@ -1233,7 +1238,7 @@ choice); Copy ID on a clip (`app/widgets/Timeline.cpp:1207`), a strip's and a mi
 and Copy as Formula (`=au_1`) on an automation row (`app/widgets/TimelineAuto.cpp:483`). The clipboard is the
 HOST's (the core has none, R-SVC-4): `App::onCopy`, which `linux_main.cpp:391` gives GTK's CLIPBOARD and
 PRIMARY selections and the test rig records (`Rig::copied`). A copy says so: `App::copy` (`app/App.cpp:270`)
-toasts "Copied dv_1.filter.cutoff", outlined in the accent (a refusal's toast stays red). When hosting lands,
+toasts "Copied dv_1.filter.cutoff" — an INFO toast (DR-UI-15: no bar, a neutral border; a refusal's has a red bar). When hosting lands,
 a third-party VST3's parameter list (R-VST-6) builds a `ParamTarget` per row and offers this same menu.
 
 Measured. L2 (`test_the_machine_settings_folders_devices_and_recents`): `settings set showIds=on` reaches the
@@ -2791,7 +2796,7 @@ never sets it (its 41 shots byte-identical, cosmo DR-G-5). A zoom or a fade keep
 Tests: L2 `test_the_ui_scale_and_contrast_are_settings` (`core/tests/serviceTests.cpp:4935`): set, in the model,
 printed, read back by another process; 110 refused, a typo named. UI `test_the_ui_scale_and_high_contrast`
 (`app/tests/ui/uiTests.cpp:5827`): Settings › Interface → `settings set uiScale=150`, the drawn scale caught mid-way with
-the logical width the window over it; at rest 853 × 533; the red playhead DRAWN at 1.5 × its logical place and not at
+the logical width the window over it; at rest 853 × 533; the light playhead DRAWN at 1.5 × its logical place and not at
 it; High contrast → `settings set highContrast=on`, the foreground caught mid-blend; at rest white on black, borders
 solid, the shared theme's tab label light; the File menu's title clicked at its place in the window opens it; back from a
 shell's line, eased the other way. Mutants seen red (9): the scale snapping; laid out at the target, not the drawn scale;
@@ -4143,3 +4148,294 @@ an event collector subscribed, `addTextServiceTools` (`core/Mcp/src/ServiceTools
 tree), `solaris_state stable=true`, `set dv_1.kick.tnue=-2` refused with "did you mean: kick.tune?",
 then `project save` + `render --out mix.wav` (2.18 MB written).
 
+### DR-MCP-2 `solaris-cc mcp --attach <socket>` (R-MCP-2)
+`cli/McpAttach.cpp`: `mcpAttachMain` builds NO `SolarisService`. A `Relay` connects to the window's
+Unix socket, and `run(line)` sends one line and reads until the `ControlServer`'s own framing ends
+it: `[out] ` lines are the printed output, `[evt] ` lines are kept for `takeEvents`, `[ok] <line>`
+is success, `[refused] <why>` is the error text. An empty line or a `#` comment is not sent (the
+channel answers neither). The three tools are core/Mcp's `addTextServiceTools`, unchanged, so
+`solaris_api` and `solaris_state` are the window's `api --json` / `state print --json`. The wait
+for an answer is 30 minutes (a render) and ends early when the window closes the connection.
+`main.cpp` routes `mcp --attach` before it builds its own service. Proof: `solaris_control`,
+"solaris-cc mcp --attach…": a real MCP exchange over stdio adds a clip and sets a gain in a service
+that lives in the test (the window's place), the answer carries `params.changed address=ch_2.gain`,
+a mistyped key comes back as the service's `did you mean: gain?`, and one `undo` there takes the
+gain back.
+
+
+### DR-UI-2 The accent never stands beside red (R-UI-2, amended 2026-11-17)
+The accent `#DD5A0C` and `destructive` `#E5534B` have one luminance and sit 19° of hue apart, so no widget lets the two
+mean neighbouring things. `surface::playhead()` is `palette::foreground()` (`app/Theme.h:85`) — the
+lanes' time bar and its cue mark (`app/widgets/Timeline.cpp:1937`), the piano roll's (`app/widgets/PianoRoll.cpp:1466`); the punch
+region, an armed ring and Record stay red. The roll's pattern end is `surface::grip()` (`secondaryForeground`): its
+handle whole, its line at 45 % so it is never taken for the brighter, thinner playhead (`app/widgets/PianoRoll.cpp:1380`).
+The song bar's unsaved dot is `foreground` (`app/widgets/SongBar.cpp:457`; `SongBar::dirtyDotAt`, `dirtyAmount` for a test). The
+unsaved-changes dialog draws Discard OUTLINED — red words, a 1 px red border, no fill — beside a filled Save: an opt-in
+style of cosmo's dialog, `ConfirmDialog::setOutlinedDestructive` (`../cosmo/widgets/ConfirmDialog.h`, off by default;
+cosmo never calls it, its `cosmo_widget` and `cosmo_ui` suites unchanged), set once in `App::App` (`app/App.cpp:50`).
+The web face's `--playhead` follows the token (`web/css/tokens.css`, generated; `solaris_web_tokens_current`); `grip` and
+`warning` are not in its generator yet (`cli/webTokens.cpp` — open, R9). UI test
+`test_the_accent_never_stands_beside_red` (`app/tests/ui/uiTests.cpp:6975`) reads the PIXELS: the dot a grey, the time bar a light line with
+nothing warm beside it, the roll's end handle a grey, Save's fill the accent, Discard's inside dark with a red edge and
+red words. Mutants seen red (4): the dot in the accent; the playhead `destructive`; the grip in the accent; Discard
+filled. `test_the_ui_scale_and_high_contrast` now finds the LIGHT playhead at 1.5 × its place. Shots `confirm-unsaved`,
+`piano-roll-playing`, `project-open`.
+
+### DR-UI-15 A toast in one of three voices (R-UI-15)
+(**2026-11-17, R-FAM-4:** the toast is now cosmo's `Toast` widget, placed by the App — the behaviour and numbers below
+are unchanged, the code that draws it is `apps/cosmo/widgets/Toast.cpp`; see **DR-FAM-4** for the anchors.)
+`ToastKind { Info, Warning, Error }` (`app/App.h`); `App::showToast(words, kind)` (`app/App.cpp:333`) — a setter with no clock:
+the next frame starts the fade. Error (the default): a refused line, `App::dispatch` (`app/App.cpp:475`), a drop the lanes cannot
+take. Warning: a song opened with files missing (`app/App.cpp:668`), Collect and Save with some still missing. Info: a copy, the
+clips copied, a sync said, Collect and Save done, "No templates yet", a render written (DR-RENDER-4).
+`App::paintToast` (`app/App.cpp:1201`): the popover's ground and `palette::border()` for every kind; a warning adds a
+3 px bar (`kToastBarW`) in `surface::warning()` (the meter's amber) and a triangle, an error a bar in `destructive` and a
+crossed circle — drawn paths, 12 px; the words ellipsized against what is left. It rests at `App::kToastTop`
+(`SongBar::kHeight` + 4) and is 28 px tall — inside the ruler's band, over no lane and far from the dock — centred;
+it fades in over 150 ms while sliding 12 px down into place (its position is a function of its eased alpha, so it is
+also still moving as it fades out, 300 ms after a 3.2 s hold). One that replaces a toast still showing cross-fades
+with it over 200 ms (`mToastSwap`, `app/App.cpp:1083`). Published: `toastKind()`, `toastRect()` (as drawn),
+`toastAmount()`, `toastSwapAmount()` (LIVE). UI test `test_a_toast_speaks_in_one_of_three_voices` (`app/tests/ui/uiTests.cpp:7042`): a
+refused line — Error, caught part-faded above its place, at rest under the bar, above the first lane and the dock, its
+bar's pixel red and its border's a grey; "No templates yet" replacing it — Info, the swap caught mid-way, no bar and
+no accent pixel on its border; a song reopened with a file gone — Warning, an amber bar. Mutants seen red (6): files
+missing as an Error; the toast at the window's foot; an info bordered in the accent; the replacement snapping; no
+slide; no bar. Shots `toast-refusal` (its rig built with no output device, so Play IS refused), `toast-in-mid`,
+`toast-warning`, `toast-replacing-mid`, `copied-toast`.
+
+### DR-RENDER-4 A render from the window is seen, and its result said (R-RENDER-4) — the minimum
+File › Render…, Render Stems… and the Export sheet no longer `dispatch` their line: they call `App::beginRender(line,
+file)` (`app/App.cpp:481`), which keeps the line and asks for the modal. `App::render` (`app/App.cpp:1044`) eases
+`mRenderAmt` to 1 over 150 ms; `paintPass` draws it over everything but the toast — the scrim, a card (`renderCardRect`,
+360 × 104 at most, centred): "Rendering…", the file's name in mono, "The window waits until the file is written." — and
+marks `mRenderPainted` only on a frame that painted it at full opacity (`app/App.cpp:1173`). The NEXT frame sends the ONE
+`render …` line first thing; the service runs it to its end there, so that frame's clock is stale when it returns —
+the frame paints what was showing, as it was, and returns: the modal's close (120 ms) and the toast start on the frame
+after, on a true clock (a tween started on the stale one would be over before it was seen). While the line waits or
+the modal shows, the gesture sink and `App::key` swallow everything (`app/App.cpp:150`). The result: the host subscribes to
+the service's events and calls `App::renderFinished(out, peak)` for `render.finished` (`linux_main.cpp`, `linux_main.cpp:380`; the rig the
+same, `app/tests/Rig.h`) — an INFO toast, "Rendered <file> — peak <dB> dBFS" (`app/App.cpp:492`); a refusal is `dispatch`'s
+error toast. Published: `renderPending()`, `renderAmount()` (LIVE), `renderCardRect()`. **Not built** (R-RENDER-4's
+open half, ledger R9): the render still runs on the UI thread — no repaint, no progress, no cancel while it runs.
+UI test `test_a_render_from_the_window_is_seen_and_said` (`app/tests/ui/uiTests.cpp:7107`): nothing sent at the click; the modal caught mid-fade
+with the line unsent; a click on Play and Space go nowhere; the frame after the whole one sends the ONE line and still
+shows the modal whole, its three lines drawn; then an Info toast naming the file and "dBFS", at alpha 0 (not popped),
+the modal and the toast each caught mid-way; Play works again. `test_the_export_sheet_is_one_render_line` adds: a
+refused render (no MP3 writer) is an error and the modal is gone. Mutants seen red (7): the line sent at once; the
+modal snapping open; sent before it was painted whole; the modal letting input through; the result unsaid; the modal
+snapping shut; a toast started on the stale clock. Shots `rendering`, `rendering-mid`, `rendered-toast`. **Unverified:**
+that GTK has presented the whole-modal frame before the next draw blocks — headless here; a live look is owed.
+
+### DR-UI-16 The song bar's transport: Loop, Metronome, the time signature (R-TIME-4, amended 2026-11-17)
+`SongBar` (`app/widgets/SongBar.cpp`): after Play, `kLoop` and `kMetronome` — 24 × 21, `hitRect` (`app/widgets/SongBar.cpp:143`) — then the position, the
+tempo and the time signature (`sigRect`, the model's `sig` in mono, muted). Each toggle's light is an eased copy of
+the model (`mLoopLit` from `transport.loopTo > loopFrom`, `mMetroLit` from `settings.metronome`; 200 ms, `app/widgets/SongBar.cpp:210`),
+so a script's line or the ruler's drag lights it too; lit is the accent's wash and border, as Play's; the glyphs are
+drawn paths (`app/widgets/SongBar.cpp:477`). The lines are the App's (`app/App.cpp:86`): Metronome `settings set metronome=on|off`; Loop
+off `transport loop off`; Loop on `transport loop <from> <to>` over the song's own loop as `bindIfStale` last saw it
+in this song (`app/App.cpp:646`), else 0 to the last clip's end rounded up to a bar (four bars for an empty song).
+R4 (`app/widgets/SongBar.cpp:212`): `mSigAmt` folds the signature when `contentRight(true)` would pass `rightLimit`; while a learn waits and
+its pill would have under `kLearnMin` (140) `mCpuFold` folds the CPU readout and the pill's right edge moves, through
+the same eased value, to the meter (`hitRect(kLearn)`); both 200 ms. At 1024 px in English the signature shows; a
+learn there folds both and the pill has 96 px (84 before the toggles). Accessible: `bar.loop`, `bar.metronome`,
+toggles. **Needs the service** (ledger R9): `transport loop on`, so the region is not the window's to remember; the
+key actions `transport.record|loop|metronome` (the keymap table, `core/service/Keymap.cpp`). UI test
+`test_the_transport_has_loop_and_metronome` (`app/tests/ui/uiTests.cpp:7176`): the order along the bar; "4/4" drawn in `sigRect`; each
+toggle ONE line and its light caught mid-way, on and off, from a click and from a shell's line; a 6-beat song loops
+`0 8`; after `transport loop 2 4` and off, on is `2 4` again; at 1024 the folds, the CPU's caught mid-way. Mutants
+seen red (7): each light snapping; the region forgotten; the end not on a bar; the readout not folding; its fold
+snapping; no signature. Shots `transport-toggles`, `transport-toggles-mid`, `transport-learn-short`.
+
+### DR-LANE-4 A track's header mutes and solos its strip (R-LANE-4)
+`Timeline::rowStrip(row)` (`app/widgets/Timeline.cpp:384`) is the strip a row IS: an instrument track's (`Row::strip`, R-LANE-3) or a
+strip's own row (`strip:<id>`); '' for a plain lane, an automation's, a take's, a folded group. Such a row has
+`muteRect` / `soloRect` — 16.25 × 13 (`kMsW`, `kMsH`), 3.25 apart, at the header's right on its sub-line, under the arm
+ring; the sub-line's words are ellipsized against what they leave. A click (`app/widgets/Timeline.cpp:1305`) is `set <ch>.mute=true|false` /
+`set <ch>.solo=…`, the dock's lines (`MixerDock.cpp`). The lights are eased copies of the model's strips by strip id
+(`mMs`, 200 ms, placed when first seen — `app/widgets/Timeline.cpp:747`), drawn as the dock's: mute `whiteAlpha(0.82)`, solo
+`surface::solo()`; hover through a `HoverFade` of their own (`mMsHover`). Accessible: `lanes.<row>.mute`, `.solo`,
+toggles. UI test `test_a_tracks_header_mutes_and_solos_its_strip` (`app/tests/ui/uiTests.cpp:7274`): a plain lane has no rects; the
+track's sit in the header under the ring; M sends the line, its light caught mid-way, its pixel white; the DOCK's M
+turns it off and the header follows, eased; S likewise, its pixel the amber and not the accent, unlit by a shell's
+line; the ring still arms. Mutants seen red (5): each light snapping; solo in the accent; M sending nothing; a
+plain lane given buttons. Shots `lane-mute-solo`, `lane-mute-solo-mid`.
+
+## DR-AGENT — The user's agent (R-AGENT)
+
+### DR-AGENT-1 The conversation in the service (R-AGENT-1, R-AGENT-2)
+`core/service/ServiceAssist.cpp` is all that is Solaris's: `assistCommand` (the four verbs) and
+`assistHooks` (the launch from `mSettings` and the open song; cosmo's event payloads split into
+this service's fields: `assist.state state= agent=`, `assist.message role= text=`; the refusal's
+words). The state machine is cosmo's `AssistConversation`, compiled in place by
+`core/CMakeLists.txt` (`apps/cosmo/core/assist/AssistConversation.cpp`); `AppModel.h` and
+`SolarisService.h` include cosmo's seam headers by relative path, so the window library needs no
+include directory for them. The conversation's `AssistModel` is a MEMBER of the service
+(`mAssistModel`), copied into `mModel.assist` by `refreshModel` and by the `changed` hook, because
+`refreshModel` rebuilds the model from nothing. `pump()` calls `mAssist.pump()`. The copy
+constructor (a render's copy of the service) gives its copy hooks that do nothing. The four verbs
+are in `mutates()`'s read-only list: a conversation is no edit of the song. Settings `agent`,
+`agentArgs`, `agentSkills`, `agentAllowAll` are in `Settings` (file, `settings set`, `settings
+print --json`); `settings.agent` is in the model. `state print --json --stable` leaves `assist`
+out. The host installs the runner with `setAssistantFactory` / `setAgentDetector`; **no host does
+yet**, so today `assist start` is refused with "the window can". Proof: `solaris_service`, "the
+user's agent…" with a fake `IAssistant` (refused with no runner; `assist send` starts it; the tool
+call and the reply are messages and events; the settings; not in a stable dump); API documents
+regenerated (`solaris_api_current`, `solaris_ntwb_api_current`).
+
+
+### DR-AGENT-3 The runner and Solaris's profile (R-AGENT-3, R-AGENT-5)
+`host/AgentRunner.{h,cpp}` (in `solaris_control`, POSIX, built when `arstro_ntwb` is): `installAgent(svc,
+controlSocket)` sets the service's factory to cosmo's `ProcessAssistant` (`apps/cosmo/AssistProcess.cpp`
+and `HttpLite.cpp`, compiled in place; cosmo's include root is PRIVATE to the library and the header
+names no cosmo type) with `solarisAssistProfile()`: MCP server `solaris` = `solaris-cc mcp --attach
+<socket>`, environment prefix `SOLARIS`, allowed tools `mcp__solaris,…`, the workspace `<settings
+dir>/agent`, AGENTS.md and system prompt in a musician's words (the three tools, ids, `render
+--measure`, "you cannot hear"), the two music skills from `$SOLARIS_SKILLS_DIR` or the repo's
+`.claude/skills`, no `local:` kind. `linux_main.cpp` calls it with a lambda that opens
+`$XDG_RUNTIME_DIR/solaris-<pid>.sock` on demand and starts the control timer. `SOLARIS_HAVE_AGENT` is
+defined when the runner is built. Proof: `solaris_control`, "the agent runner…": `assist send` with
+`agent=cmd:sh <script>` starts a real process that runs `"$SOLARIS_CC" attach "$SOLARIS_CONTROL" clip add
+…`; the clip is in the test's own service, the reply names `$SOLARIS_PROJECT`, the socket was opened on
+demand, and the workspace's AGENTS.md says Solaris and never cosmo. **Not proven:** a real Claude Code or
+ACP agent (only the one-shot kind ran), and the window path itself (no window was opened).
+
+
+### DR-AGENT-4 The Agent panel, docked (R-AGENT-4)
+`app/CMakeLists.txt` compiles cosmo's `widgets/AgentPanel.cpp`, `MarkdownText.cpp` and
+`PillButton.cpp` in place and embeds Roboto Italic. `ProjectScreen` owns the panel (`agent()`,
+`setAgentOpen`, `agentWidth()` live, `kAgentW` = 324): `advance` eases `mAgentW` as it does the
+browser's width; `layout` places the panel at `W − aw` and gives the lanes, the session grid and the
+dock `W − browser − aw`, all from the one live value, so the seam does not tear. `App` binds the
+callbacks to lines (quotes in the text become `'`, a newline a space: it is ONE grammar line),
+feeds `setCurrentAgent` / `setConversation` in `bindIfStale` (the conversation bumps the model's
+revision), routes keys to the focused field before the keymap, keeps frames coming while the
+agent is `starting` or `busy`, and adds **View › Show/Hide Agent** as the menu's last item (tests
+address the others by position). `lang/vi.strings` has the three new strings. Proof:
+`solaris_app_ui`, "the agent panel docks on the right…" (closed: no room, no `assist` line sent;
+mid-way the width is between and the panel's left edge is the lanes' right edge; open: lanes and
+dock narrower by 324; Send is one `assist send` line; the reply comes from a fake agent through
+the real service; closing gives the room back), and the shot `agent-panel` at 1440×900 looked at:
+header with the agent's name and state, the user's line, the tool line, the reply with bold and a
+list, the composer and Send. **Not proven:** typing into the field (no key test), the 1024×640
+frame was rendered but not looked at, and the live window.
+
+
+## DR-BRAND — The logo and its animations (R-BRAND)
+
+### DR-BRAND-1 Synth sun, on Home and in the splash (R-BRAND-1..4)
+`app/CMakeLists.txt` compiles cosmo's `widgets/BrandMark.cpp` and `widgets/SplashScreen.cpp`.
+`HomeScreen` owns a `brand::Player{Mark::Solaris}`, shows it up on its first `advance`, and draws it
+at `Rect{kPad − 2, 18, 36, 36}` above the wordmark (`app/widgets/HomeScreen.cpp`). `linux_main.cpp`
+ends by calling `arstro::cosmo_v2::runSplash(SplashScreen::solarisBrand(), 1.0, showMain)` unless
+`argc > 1` or `SOLARIS_NO_SPLASH` is set. `web/icon.svg` is Synth sun on a Night tile, and
+`web/css/tokens.css` is regenerated from the orange accent (`solaris_web_tokens_current` fails on
+drift). The animations themselves are measured in cosmo's `cosmo_widget_tests` (cosmo DR-BRAND-3).
+Seen: `solaris_app_shots` `home-cards`, and the splash at six moments rendered headlessly.
+
+## DR-FAM — the family standard, adopted (R-FAM; cosmo R-FAMILY-0, design rule §2.7)
+
+As built on 2026-11-17. The shared pieces are cosmo's (`apps/cosmo/widgets/{MenuStrip,ContextMenu,Toast,ConfirmDialog}`,
+compiled in place: `app/CMakeLists.txt` lists `widgets/Toast.cpp`); cosmo's DR-FAMILY-1…7 describe them. Tests are
+`solaris_app_ui` (`app/tests/ui/uiTests.cpp`) unless said.
+
+### DR-FAM-1 Settings in File; rows with a shortcut, a rule, a disabled state (R-FAM-1)
+`SongBar` has no Settings button (`Hit` has no `kSettings`, no `bar.settings` node): `SongBar::layout`
+(`app/widgets/SongBar.cpp:45`) puts the `MenuStrip` 6 px after the wordmark. `App::buildMenus` adds the four menus
+(File, Edit, Song, View — indexes 0…3) and `App::refreshMenus` (`app/App.cpp:209`) rebuilds all their rows whenever its
+key changes — the undo / redo labels, the panels shown, the metronome and Show IDs settings, whether a clip is selected,
+whether a note clip is, whether anything is copied, whether there is a history, and the keymap's key of twelve actions —
+and is called EVERY frame from `App::render` (a selection moves no revision).
+- **File** (19 rows): New Song… · New from Template… · Open… · — · Save · Save As… · Save as Template… · Collect and
+  Save · — · Export Mix as WAV… · Export… · Render Stems… · — · Relink… · Conflicts… · — · Settings… · — · Home.
+  **Edit** (9): Undo · Redo · Show History Tree… · — · Copy Clip · Paste Clip · Duplicate Clip · Delete Clip · Split Clip
+  at the Time Bar. **Song** (7): Add Mixer · Add Bus · Add Audio Line · Add Lane · Add Instrument… · — · Quantize Clip.
+  **View** (11): Show/Hide Mixer · Browser · Show Session/Arrangement · Show/Hide Video · — · Zoom to Fit · — ·
+  Metronome: On/Off · Show/Hide IDs · — · Show/Hide Agent (last). A rule is `Item::sep()` and HAS an index.
+- **Shortcut.** `Item::shortcut` = `App::keyHint(model, action)` (`app/App.cpp:1089`): the keymap's FIRST key for the
+  action, its last token drawn as its character where it has one (`Comma` → `,`, `Period`, `Slash`, …), `""` with no
+  key. No label carries a key. Rows with one: New Song (`song.new`), Open (`song.open`), Save, Save As (`song.saveAs`),
+  Settings (`song.settings`, shown `Ctrl+,`), Undo, Redo, and the five clip rows (`lanes.*`).
+- **Disabled.** `Item::enabled` false for Undo / Redo with an empty `undoLabel` / `redoLabel`, Show History Tree… with an
+  empty history, Copy / Duplicate / Delete / Split with no clip selected, Paste with an empty window clipboard,
+  Quantize Clip unless the selected clip has a pattern.
+- **Keyboard.** `App::key` (`app/App.cpp:1029`) gives a key-down to `MenuStrip::menuKey` while a menu of the strip is
+  open (after the focus keys and the modals, before the keymap); what it does not take (Space) is still the keymap's.
+  The context menu's keys go to `ContextMenu::dispatchKey`, as before.
+- **Accessible list.** An open menu's rows are `menu.<Menu>.<index>` with the index counting rules; a rule is left out; a
+  disabled row has `enabled = false`; the shortcut is the node's value (`app/App.cpp:877`). The menus' titles follow
+  `bar.home`.
+- **Words.** `App::relabel` passes one label a row (a rule's is empty) to `MenuStrip::relabel`.
+- Test: `test_the_menus_are_the_familys` (`:7747`), `test_song_bar_menus_and_settings_sections`,
+  `test_small_things_the_frames_showed` (the key follows a re-key; no key, no shortcut), `test_the_keyboard_reaches_every_control`.
+  Shots: `menu-file-open`, `menus-vi`.
+
+### DR-FAM-2 Closing the window asks (R-FAM-2)
+`App::requestQuit` (`app/App.cpp:705`): Home, or a song with `dirty` false → `onQuit()` at once; else `askUnsaved` with a
+continuation that sends `project close` if the song is still unsaved (Don't save) and then calls `onQuit`. The host
+(`linux_main.cpp:474`) connects `delete-event` to it and returns TRUE; `onQuit` is `gtk_widget_destroy(window)`, whose
+`destroy` is `gtk_main_quit` as before. Test: `test_closing_the_window_asks_and_the_title_says_unsaved` (`:7881`; a
+mutant that always quits was seen red). **Not run live:** the GTK `delete-event` path itself.
+
+### DR-FAM-3 The unsaved-changes dialog (R-FAM-3)
+`App::askUnsaved(then)` (`app/App.cpp:719`), used by `requestHome` and `requestQuit`: title `Save changes to "<name>"?`,
+message `Your changes will be lost if you don't save them.`, buttons Cancel · Don't save (destructive) · Save (primary;
+`then` only when `project save` was accepted). The dialog is built with `ConfirmDialog::DestructiveStyle::Auto`
+(`App::App`), so Don't save is outlined here; `setOutlinedDestructive` is no longer called. "Don't save" has an ASCII
+apostrophe (the dialog sizes a button by bytes). Test: the one above and `test_the_accent_never_stands_beside_red`.
+Shot: `confirm-unsaved`.
+
+### DR-FAM-4 The toast is cosmo's `Toast` (R-FAM-4)
+`App::mToast` is a `cosmo_v2::Toast`; `ToastKind` is an alias of `Toast::Kind`. `App::showToast` (`app/App.cpp:386`) is
+`mToast->show(kind, words)` (no clock: it starts on the next frame); `App::render` places it (`x` 0, `y` `kToastTop` =
+the song bar's height + 4, `width` the logical width) and advances it; `App::paintPass` draws it last with
+`renderOverlay`; `translate` is `shown`, so each pass draws its language. `toastText / toastKind / toastIsRefusal /
+toastAmount / toastSwapAmount` forward to it; `toastRect` (`app/App.cpp:393`) is its `rect()` plus its `x`, `y` (the
+window's logical units, as before). `needsRedraw` asks `isShowing()`. The App's own `paintToast` and its seven members
+are gone. Test: `test_a_toast_speaks_in_one_of_three_voices` and every test that reads a toast, unchanged; the toast's
+band in `toast-refusal`, `toast-in-mid`, `toast-warning`, `toast-replacing-mid` is pixel-identical to the frames before
+the swap (compared at 1024 × 640).
+
+### DR-FAM-5 Page tabs are underlined (R-FAM-5)
+`Browser::onPaint` (`app/widgets/Browser.cpp:524`): no track and no chip; a `kTabUnderline` (2 px) `primary` bar at the
+bar's foot, at `mTabX + 4`, `mTabW − 8` wide — the same eased `mTabX` / `mTabW` the chip rode (`tabHighlightX/W`, 220 ms),
+so it travels. Its tabs are Samples · Instruments · Song · Presets. `MixerDock::onPaint` (`app/widgets/MixerDock.cpp:2285`):
+the same bar, 1 px above the bar's foot rule, at `mHiX + 4`, `mHiW − 8`. Words and hit rects are unchanged; the ids are
+`browser.tab.<n>` and `dock.tab.<mixer id | matrix>`. Test: `test_page_tabs_are_underlined` (`:7962`; seen red against
+the chips). Shots: `browser-tab-mid` (new), `mixer-tab-mid`.
+
+### DR-FAM-6 Words and the wait (R-FAM-6)
+File › **Export Mix as WAV…** (was Render…; its picker's title "Export the mix as WAV") sends the same `render --out`
+line through `beginRender`. Every context-menu label is Title Case (51 renamed, e.g. `Delete Marker`, `Insert a Bar
+Here`, `Move Its Clips to ▸`, `Save as Preset…`); the buttons that were Title Case are sentence case (`Keep mine`, `Take
+all theirs`, `Search a folder…`, `Back to arrangement`, `Open the saved one`), and Home's header is `Recent songs`;
+`lang/vi.strings` keys follow. **Older entries in this file still cite some labels in their earlier capitals** — the
+words are the same. The History card's title is `History`, not upper-cased (`App::relabel`).
+The Rendering… card (`App::paintRender`, `app/App.cpp:581`) is 119 high and ends with a 3 px track (`renderBarRect`:
+20 px in from the card's sides, 20 px above its foot, `whiteAlpha(0.08)`) and a `primary` segment 0.3 of the track
+(`renderSegmentRect`) at `renderSweep()` (`app/App.cpp:557`): `EaseInOutCubic(fmod((now − t0) / 1400 ms + 0.25, 1))`, the
+segment travelling from just before the track to just past it and clipped to it; 0.5 under reduced motion. **The render
+still blocks the UI thread (R-RENDER-4), so the segment moves while the card eases in and out and STANDS while the
+service works** — a moving bar needs the render worker, which is the service's and OPEN. Test:
+`test_a_render_from_the_window_is_seen_and_said` (`:7121`: the sweep advancing frame by frame, the segment's pixels).
+Shots: `rendering`, `rendering-mid`.
+
+### DR-FAM-7 Home (R-FAM-7)
+`HomeScreen::onPaint`: a clock (a ring and two hands, `mutedForeground`, `headingIconRect`) at the grid's left edge, the
+words `Recent songs` at `headingTextLeft()`, the count after them (`app/widgets/HomeScreen.cpp:355`). `mNew` is the
+dashed "New song" card: `layout` gives it the slot after the last song through the same `place` the cards use
+(`:146`, eased 260 ms when its slot changes), `advance` eases its alpha to 1 while there are songs and 0 when there are
+none (200 ms); drawn as dashes (`dashedRect`), a plus and the words, a wash on hover (`:395`); a click is `onNewSong`;
+node `home.newCard`. With no songs: one sentence and one outline button (as before). The version is
+`HomeScreen::versionLabel()` = `"solaris v" SOLARIS_VERSION` (`:69`), the macro a PUBLIC compile definition of
+`solaris_app` (`app/CMakeLists.txt:72`, default 0.1.0). **NOT BUILT: the relative time on a card** — `RecentModel` has
+no time; see docs/PROGRESS.md. Test: `test_home_is_the_familys` (`:8023`). Shots: `home-cards`, `home-empty`, `home-vi`.
+
+### DR-FAM-8 Keys and the window's title (R-FAM-8)
+`core/service/Keymap.cpp:15`: `song.new` Ctrl+N, `song.open` Ctrl+O, `song.saveAs` Ctrl+Shift+S (area Song; no other
+action of the song's keyboard had those combos). `App::songAction` runs them — New and Open on Home too, Save As with a
+song open; File's rows call the same. `docs/api.json` and `docs/API.md` are regenerated (the keymap rows only;
+`docs/ntwb-api.json` did not change). `App::windowTitle()` (`app/App.cpp:736`) is `Solaris` on Home, else
+`[*]<name> — Solaris`; the host sets the GTK title from `onTick` when it changes (`linux_main.cpp:214`). Tests:
+`solaris_service` `test_keys_are_settings` (the three defaults; no two actions of one keyboard share a default combo),
+`test_the_menus_are_the_familys` (the keys shown and pressed), `test_closing_the_window_asks_and_the_title_says_unsaved`.
+**Not run live:** the GTK title bar and real key presses.

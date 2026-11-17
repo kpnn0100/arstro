@@ -2,7 +2,8 @@
  *  solaris_ui — Browser: the left panel — samples, instruments and effects, the song's sounds
  *  (R-BROWSE-1, R-BROWSE-3).
  *
- *  Three tabs, a highlight that SLIDES between them (220 ms): **Samples** lists the sample folders
+ *  Four tabs — page tabs (R-FAM-5: words, the current one underlined in the accent, no box) — whose underline SLIDES
+ *  between them (220 ms): **Samples** lists the sample folders
  *  from Settings, and a folder clicked is browsed (`browse <path>` — the host lists it) with a row
  *  back up; **Instruments** lists the DSP registry, instruments then effects; **Song** lists the
  *  sounds the song already plays. A row an item can be dropped from — an audio file, an instrument,
@@ -42,6 +43,7 @@ namespace solaris_ui
     public:
         static constexpr double kWidth = 234.0;   // space::u(72): Interstellar's left column
         static constexpr double kTabsH = 29.25;
+        static constexpr double kTabUnderline = 2.0; // R-FAM-5: the current tab's accent underline, at the bar's foot
         enum Tab { kSamples = 0, kInstruments, kSong, kPresets, kTabs }; // R-PRESET-1: Presets last, the others where they were
 
         struct Item
@@ -135,6 +137,7 @@ namespace solaris_ui
         double mGhostScroll = 0.0;                    // where the list a navigation left was scrolled to
         double mNowMs = 0.0;
         bool mTabInit = false;
+        bool mFirstTabChosen = false; // R-UI-16: the tab the window opens on, decided once
         artboard::AnimatedProperty mTabX{0.0}, mTabW{0.0}; // the highlight's x and width (tabs are as wide as their names)
         interstellar_v1::EasedScroll mScroll;
         cosmo_v2::HoverFade mHover;

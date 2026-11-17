@@ -94,6 +94,13 @@ namespace solaris_ui
     {
         mFolders = m.settings.folders;
         mTypes = m.deviceTypes;
+        if (!mFirstTabChosen)
+        {
+            // R-UI-16: a machine with no sample folder opens on Instruments — the way to a first sound — decided ONCE,
+            // before anything is drawn (so there is nothing to ease from); a tab the user chose is never taken back
+            mFirstTabChosen = true;
+            if (mFolders.empty() && !mTypes.empty()) mTab = kInstruments;
+        }
         mPresets = m.presets; // R-PRESET-1
         mAudFile = m.audition.file;
         mAudPlaying = m.audition.playing;
@@ -482,8 +489,8 @@ namespace solaris_ui
                                  }});
                 if (lib != mLib.end())
                     for (const auto &tag : lib->second.tags)
-                        items.push_back({say("Remove tag \xC2\xB7 {1}", tag), [this, file, tag] { if (onCommand) onCommand("sample untag " + q(file) + " " + tag); }});
-                items.push_back({fav ? say("Not a favourite") : say("Favourite"), [this, file, fav] { if (onCommand) onCommand("sample favourite " + q(file) + (fav ? " off" : " on")); }});
+                        items.push_back({say("Remove Tag \xC2\xB7 {1}", tag), [this, file, tag] { if (onCommand) onCommand("sample untag " + q(file) + " " + tag); }});
+                items.push_back({fav ? say("Not a Favourite") : say("Favourite"), [this, file, fav] { if (onCommand) onCommand("sample favourite " + q(file) + (fav ? " off" : " on")); }});
                 onMenu(std::move(items), world);
                 return true;
             }
@@ -514,10 +521,9 @@ namespace solaris_ui
         t.beginPath(); t.moveTo(W - 0.5, 0); t.lineTo(W - 0.5, H); t.strokePath();
         t.beginPath(); t.moveTo(0, kTabsH); t.lineTo(W, kTabsH); t.strokePath();
 
-        // tabs: the highlight SLIDES
-        drawRoundedRect(t, Rect{space::padX(), 4.0, W - 2 * space::padX(), kTabsH - 8.0}, radius::hairline(), Paint::filled(palette::segmentedBg()));
-        const Rect tr0 = tabRect(0);
-        drawRoundedRect(t, Rect{mTabX.value() + 1.0, tr0.y + 1.0, mTabW.value() - 2.0, tr0.h - 2.0}, radius::hairline(), Paint::filled(palette::secondary()));
+        // tabs switch a PAGE (R-FAM-5): words, and a 2 px accent underline at the bar's foot that SLIDES to the current
+        // one — no track and no chip: a segmented fill is for picking a value
+        drawRoundedRect(t, Rect{mTabX.value() + 4.0, kTabsH - kTabUnderline, std::max(0.0, mTabW.value() - 8.0), kTabUnderline}, 0.0, Paint::filled(palette::primary()));
         for (int k = 0; k < kTabs; ++k)
         {
             const Rect r = tabRect(k);

@@ -3,7 +3,7 @@
  *
  *  Interstellar's Home, which is cosmo's rhythm on the 8/16/32 grid: a 300 px sidebar on
  *  `leftRailBg` with the wordmark, a two-line tagline, a rule, the actions (New song primary, Open
- *  song… outline), Settings and the version at the foot; a 60 px header band with "Recent Songs"
+ *  song… outline), Settings and the version at the foot; a 60 px header band with "Recent songs"
  *  and the count; a grid of cards at a 220 px minimum width. Interstellar's class is not reused —
  *  it is Interstellar's launcher (its covers are film frames) — its structure is.
  *
@@ -18,6 +18,7 @@
  *  offers the button right there.
  */
 #pragma once
+#include "../../../cosmo/widgets/BrandMark.h"
 #include "../Theme.h"
 #include "../A11y.h"
 #include "AppModel.h"
@@ -34,6 +35,19 @@ namespace solaris_ui
     class HomeScreen : public artboard::Segment
     {
     public:
+        /** Where the "Recent songs" header begins (local) — the grid's left edge: its clock icon (R-FAM-7), then its words
+         *  at `headingTextLeft`, then the count. */
+        double headingLeft() const { return kSidebarW + kPad; }
+        static constexpr double kHeadIcon = 13.0, kHeadIconGap = 8.0;
+        double headingTextLeft() const { return headingLeft() + kHeadIcon + kHeadIconGap; }
+        artboard::Rect headingIconRect() const { return artboard::Rect{headingLeft(), (kHeaderH - kHeadIcon) * 0.5, kHeadIcon, kHeadIcon}; }
+        /** R-FAM-7: the dashed "New song" card that ends the grid while there are songs — where it is drawn now (LIVE:
+         *  it eases to its slot when a card comes or goes) and its LIVE fade (0 with no songs: the empty state's
+         *  sentence and button stand there instead). */
+        artboard::Rect newCardLive() const;
+        double newCardAmount() const { return mNew.alpha.value(); }
+        /** The version Home shows — the build's (`SOLARIS_VERSION`, app/CMakeLists.txt), never a literal here. */
+        static std::string versionLabel();
         static constexpr double kSidebarW = 300.0;
         static constexpr double kPad = 32.0;
         static constexpr double kHeaderH = 60.0;
@@ -89,8 +103,14 @@ namespace solaris_ui
         void paintCard(artboard::IRenderTarget &t, const Card &c, const artboard::Rect &s, double hover) const;
 
         std::vector<Card> mCards;
+        Card mNew;                 // R-FAM-7: the dashed "New song" card — a slot after the last song's (no `info`)
+        bool mNewWanted = false;   // … there while there are songs
+        void place(Card &c, int slot, const Grid &g);
         int mCols = 1;
         double mNowMs = 0.0;
+        // R-BRAND-2: the app's logo above the wordmark. It shows up once when Home first appears
+        // (the first advance), then rests — Home is a place to choose, not a loading screen.
+        mutable ::arstro::cosmo_v2::brand::Player mMark{::arstro::cosmo_v2::brand::Mark::Solaris};
         bool mHasModel = false;
         interstellar_v1::EasedScroll mScroll;
         cosmo_v2::HoverFade mHover;

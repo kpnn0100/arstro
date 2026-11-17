@@ -6,16 +6,24 @@
  *  a value changed in `apps/cosmo/Theme.h` reaches this app the next time it builds.
  *
  *  The accent is cosmo's RUNTIME slot (`palette::setAccent`, cosmo R-G-5): `installSolarisAccent()`
- *  moves it to teal #159387 once, before the first widget exists, so every reused cosmo widget and
- *  every Interstellar helper draws teal with nothing forked. Teal, at cosmo blue's LUMINANCE, so
- *  white text on it reads as well as on cosmo's (R-UI-2, amended with the measurement).
+ *  moves it to orange #DD5A0C once, before the first widget exists, so every reused cosmo widget and
+ *  every Interstellar helper draws orange with nothing forked. It is the orange of the Synth sun
+ *  logo (arstro.rule.brand §7) taken down to cosmo blue's LUMINANCE (0.227), so white text on it
+ *  reads at 3.8:1, as well as on cosmo's. The accent was teal #159387 until 2026-11-17 (R-UI-2,
+ *  amended on the founder's word: Solaris is the sun, so it is orange; teal went to Interstellar).
  *
  *  What IS declared here is only what cosmo has no word for, because cosmo has no timeline and no
  *  mixer: lanes, the ruler, clips, strips, meters, the playhead. Each is a NAMED token, defined AS a
  *  cosmo surface wherever one already has the right value. Domain adaptations, written down as the
- *  design law requires: the playhead is `destructive` (a POSITION, not a state — Interstellar's
- *  reading too); the meter ramps success → amber → destructive, the universal meter colours,
- *  meaning-only; solo is amber and record red, never the accent (why the accent is teal).
+ *  design law requires: the meter ramps success → amber → destructive, the universal meter colours,
+ *  meaning-only; solo is amber and record red, never the accent.
+ *
+ *  The accent is orange (R-UI-2, amended 2026-11-17) and sits at the destructive red's LUMINANCE,
+ *  19° of hue away — amber solo, far lighter, reads apart; the accent and the red do not. So the
+ *  two never stand for neighbouring things (R-UI-2, amended again the same day): the playhead is
+ *  `foreground` (a POSITION, not a state — it was `destructive`, and a red line across the lanes
+ *  read as "recording"), a grip that is neither a selection nor a state is `grip()`, a warning is
+ *  the meter's amber, and red is kept for recording, destructive actions and errors.
  */
 #pragma once
 #include "Words.h" // R-ACCESS-2: every widget draws its words through the table
@@ -32,7 +40,7 @@ namespace solaris_ui
     using ::arstro::cosmo_v2::sharedTheme;
 
     /** Call ONCE at startup, before the first widget (cosmo's contract for the slot). */
-    inline void installSolarisAccent() { ::arstro::cosmo_v2::palette::setAccent(artboard::Color::hex(0x159387)); }
+    inline void installSolarisAccent() { ::arstro::cosmo_v2::palette::setAccent(artboard::Color::hex(0xDD5A0C)); }
 
     // ── the spacing ladder: cosmo's 3.25 px unit; Home and modals on the 8/16/32 rhythm ─────
     namespace space
@@ -74,11 +82,13 @@ namespace solaris_ui
         inline artboard::Color deckBg() { return palette::filmstripBg(); }       // the mixer dock
         inline artboard::Color stripBg() { return palette::card(); }
         inline artboard::Color scrim(double a) { return artboard::Color{0.0, 0.0, 0.0, 0.55 * a}; } // cosmo's modal scrim
-        inline artboard::Color playhead() { return palette::destructive(); }
+        inline artboard::Color playhead() { return palette::foreground(); }      // a position, not a state (R-UI-2 amended)
+        inline artboard::Color grip() { return palette::secondaryForeground(); } // a handle that is neither selected nor a state: the roll's pattern end
         inline artboard::Color meterLow() { return palette::success(); }
         inline artboard::Color meterMid() { return artboard::Color::hex(0xE3B341); } // amber: hot, not yet clipping
         inline artboard::Color meterHigh() { return palette::destructive(); }
         inline artboard::Color solo() { return artboard::Color::hex(0xE3B341); }      // = meterMid: one amber
+        inline artboard::Color warning() { return meterMid(); }                       // a toast that warns (R-UI-15): the same amber
         inline artboard::Color skeleton() { return palette::whiteAlpha(0.045); }
         // the analog face (R-UI-12): a module a recessed card, a screen cosmo's curve-plot black, a knob's cap a key's grey
         inline artboard::Color moduleBg() { return palette::card(); }

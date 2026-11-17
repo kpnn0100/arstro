@@ -1298,11 +1298,43 @@
       "requirement": "R-API-1"
     },
     {
+      "verb": "assist start",
+      "usage": "assist start",
+      "args": "",
+      "flags": [],
+      "summary": "Start the user's agent (settings `agent`): it is given this song through `solaris-cc mcp --attach`. Refused where the front end cannot run one.",
+      "requirement": "R-AGENT-1"
+    },
+    {
+      "verb": "assist send",
+      "usage": "assist send <text…>",
+      "args": "<text…>",
+      "flags": [],
+      "summary": "Say something to the agent (starting it first when none runs). Its reply arrives as assist.message events and in the model's assist.messages.",
+      "requirement": "R-AGENT-1"
+    },
+    {
+      "verb": "assist stop",
+      "usage": "assist stop",
+      "args": "",
+      "flags": [],
+      "summary": "Stop the agent and everything it started. Nothing to stop is not a refusal.",
+      "requirement": "R-AGENT-1"
+    },
+    {
+      "verb": "assist agents",
+      "usage": "assist agents",
+      "args": "",
+      "flags": [],
+      "summary": "Look for the agents installed on this machine; fills the model's assist.choices.",
+      "requirement": "R-AGENT-1"
+    },
+    {
       "verb": "settings set",
       "usage": "settings set <key>=<value> …",
       "args": "<key>=<value> …",
       "flags": [],
-      "summary": "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on|off), showIds (on|off: every object's id beside its name, R-UI-11), autosave (seconds between autosaves of an unsaved song, or off — R-SAFE-1), key.<action>=<combos> (R-SET-4: a keyboard action's keys — a comma list such as \"Ctrl+Shift+Z, Ctrl+Y\", `none`, or `default`; a combo another action of the same keyboard has is refused naming it — the actions are in this document's Keyboard section). Saved at once.",
+      "summary": "The MACHINE's settings (never a song's): sampleRate (new songs, and the clock device's rate), bufferSize (frames), output / input (device ids from `devices list`; empty = the system default), port.<name>=<device>:<channel> (where a song's port plays on this machine), metronome (on|off), metronomeLevel (dB), auditionLevel (dB, the browser's preview), newBpm / newSig (what a new song starts at), reducedMotion (on|off), showIds (on|off: every object's id beside its name, R-UI-11), agent / agentArgs / agentSkills / agentAllowAll (R-AGENT-2: the user's agent — claude, acp:<command> or cmd:<command>; what is appended; extra skill folders; on|off), autosave (seconds between autosaves of an unsaved song, or off — R-SAFE-1), key.<action>=<combos> (R-SET-4: a keyboard action's keys — a comma list such as \"Ctrl+Shift+Z, Ctrl+Y\", `none`, or `default`; a combo another action of the same keyboard has is refused naming it — the actions are in this document's Keyboard section). Saved at once.",
       "requirement": "R-SET-1"
     },
     {
@@ -1649,6 +1681,22 @@
         "why"
       ],
       "summary": "Something failed. Also set as AppModel.lastError."
+    },
+    {
+      "name": "assist.state",
+      "fields": [
+        "state",
+        "agent"
+      ],
+      "summary": "R-AGENT-1: the user's agent is off | starting | ready | busy | failed."
+    },
+    {
+      "name": "assist.message",
+      "fields": [
+        "role",
+        "text"
+      ],
+      "summary": "R-AGENT-1: one message of the conversation: user | agent | tool | error | info. A streamed reply repeats with the text so far."
     },
     {
       "name": "command.rejected",
@@ -3860,6 +3908,84 @@
       "path": "settings.showIds",
       "type": "bool",
       "summary": "every object's id drawn beside its name (R-UI-11)",
+      "stable": true
+    },
+    {
+      "path": "settings.agent",
+      "type": "string",
+      "summary": "R-AGENT-2: the user's agent: claude | acp:<command> | cmd:<command>",
+      "stable": true
+    },
+    {
+      "path": "assist",
+      "type": "object",
+      "summary": "R-AGENT-1: the conversation with the user's agent; left out of a stable dump (a process, not the song)",
+      "stable": true
+    },
+    {
+      "path": "assist.state",
+      "type": "string",
+      "summary": "R-AGENT-1: off | starting | ready | busy | failed (left out of a stable dump: it is a process, not the song)",
+      "stable": true
+    },
+    {
+      "path": "assist.agent",
+      "type": "string",
+      "summary": "R-AGENT-1: the agent as it named itself",
+      "stable": true
+    },
+    {
+      "path": "assist.messages",
+      "type": "object[]",
+      "summary": "R-AGENT-1: the conversation, oldest first",
+      "stable": true
+    },
+    {
+      "path": "assist.messages[].role",
+      "type": "string",
+      "summary": "user | agent | tool | error | info",
+      "stable": true
+    },
+    {
+      "path": "assist.messages[].text",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "assist.choices",
+      "type": "object[]",
+      "summary": "R-AGENT-1: the agents found on this machine, after `assist agents`",
+      "stable": true
+    },
+    {
+      "path": "assist.choices[].id",
+      "type": "string",
+      "summary": "claude, gemini, custom …",
+      "stable": true
+    },
+    {
+      "path": "assist.choices[].name",
+      "type": "string",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "assist.choices[].agent",
+      "type": "string",
+      "summary": "what `settings set agent=` takes to use it",
+      "stable": true
+    },
+    {
+      "path": "assist.choices[].installed",
+      "type": "bool",
+      "summary": "",
+      "stable": true
+    },
+    {
+      "path": "assist.choices[].note",
+      "type": "string",
+      "summary": "installed, or how to get it",
       "stable": true
     },
     {
@@ -9341,10 +9467,28 @@
         "defaults": "Enter"
       },
       {
+        "id": "song.new",
+        "area": "Song",
+        "label": "New song",
+        "defaults": "Ctrl+N"
+      },
+      {
+        "id": "song.open",
+        "area": "Song",
+        "label": "Open a song",
+        "defaults": "Ctrl+O"
+      },
+      {
         "id": "song.save",
         "area": "Song",
         "label": "Save",
         "defaults": "Ctrl+S"
+      },
+      {
+        "id": "song.saveAs",
+        "area": "Song",
+        "label": "Save as",
+        "defaults": "Ctrl+Shift+S"
       },
       {
         "id": "song.undo",

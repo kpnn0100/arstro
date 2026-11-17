@@ -26,6 +26,10 @@ namespace solaris
         o << "highContrast = " << (highContrast ? "on" : "off") << "\n";
         o << "language = " << language << "\n";                       // R-ACCESS-2
         o << "showIds = " << (showIds ? "on" : "off") << "\n";
+        o << "agent = " << agent << "\n";                              // R-AGENT-2
+        if (!agentArgs.empty()) o << "agentArgs = " << agentArgs << "\n";
+        if (!agentSkills.empty()) o << "agentSkills = " << agentSkills << "\n";
+        if (agentAllowAll) o << "agentAllowAll = on\n";
         o << "autosave = " << (autosave > 0 ? std::to_string(autosave) : std::string("off")) << "\n";
         o << "driver = " << driver << "\n";
         o << "midiInputs = " << midiInputs << "\n";
@@ -70,6 +74,10 @@ namespace solaris
             else if (k == "highContrast") s.highContrast = v == "on";
             else if (k == "language" && (v == "auto" || solaris_strings::known(v))) s.language = v; // R-ACCESS-2
             else if (k == "showIds") s.showIds = v == "on";
+            else if (k == "agent") { if (!v.empty()) s.agent = v; } // R-AGENT-2
+            else if (k == "agentArgs") s.agentArgs = v;
+            else if (k == "agentSkills") s.agentSkills = v;
+            else if (k == "agentAllowAll") s.agentAllowAll = v == "on";
             else if (k == "autosave") { const int a = v == "off" ? 0 : std::atoi(v.c_str()); if (a == 0 || (a >= 1 && a <= 3600)) s.autosave = a; }
             else if (k == "driver") { if (v == "pulse" || v == "pipewire" || v == "web") s.driver = v; }
             else if (k == "midiInputs") { if (!v.empty()) s.midiInputs = v; }

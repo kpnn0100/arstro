@@ -1362,10 +1362,10 @@ namespace solaris_ui
         const std::string id = sd.id, to = sd.to;
         const bool pre = sd.pre;
         items.push_back({pre ? say("Post-fader") : say("Pre-fader"), [this, id, pre] { send("set " + id + ".pre=" + (pre ? "false" : "true")); }});
-        items.push_back({say("Make it the main output"), [this, from, to, id] {
+        items.push_back({say("Make It the Main Output"), [this, from, to, id] {
                              if (send("route " + from + " --to " + to)) send("send delete " + id);
                          }});
-        items.push_back({say("Remove send"), [this, id] { send("send delete " + id); }});
+        items.push_back({say("Remove Send"), [this, id] { send("send delete " + id); }});
         onMenu(items, world);
     }
 
@@ -1581,7 +1581,7 @@ namespace solaris_ui
                         const std::string id = h.id;
                         for (const auto &po : mModel.ports)
                             if (po.dir == "in") ins.push_back({"Arm with " + po.name, [this, id, pid = po.id] { send("strip arm " + id + " --input " + pid); }});
-                        if (ins.empty()) ins.push_back({say("Add an input port (In)"), [this] { send("port add In --dir in"); }});
+                        if (ins.empty()) ins.push_back({say("Add an Input Port (In)"), [this] { send("port add In --dir in"); }});
                         onMenu(std::move(ins), world);
                     }
                     else send("strip arm " + h.id);
@@ -1692,7 +1692,7 @@ namespace solaris_ui
                             to.push_back({o.name, [this, id, oid] { send("strip relink " + id + " --to " + oid); }});
                         }
                 if (!to.empty())
-                    items.push_back({say("Move its clips to \xE2\x96\xB8"), [this, to, world] { if (onMenu) onMenu(to, world); }});
+                    items.push_back({say("Move Its Clips to \xE2\x96\xB8"), [this, to, world] { if (onMenu) onMenu(to, world); }});
                 // a key for a later strip's compressor — exactly the service's keyTargets (R-MIX-15)
                 std::vector<cosmo_v2::ContextMenu::Item> keys;
                 for (const auto &k : s.keyTargets)
@@ -1716,13 +1716,13 @@ namespace solaris_ui
                     for (const auto &po : mModel.ports)
                         if (po.dir == "in")
                             ins.push_back({po.name + (po.id == s.input ? "  \xC2\xB7 " + say("now") : std::string()), [this, id, pid = po.id] { send("set " + id + ".input=" + pid); }});
-                    if (!s.input.empty()) ins.push_back({say("No input"), [this, id] { send("set " + id + ".input=none"); }});
-                    ins.push_back({say("Add an input port\xE2\x80\xA6"), [this, world] {
+                    if (!s.input.empty()) ins.push_back({say("No Input"), [this, id] { send("set " + id + ".input=none"); }});
+                    ins.push_back({say("Add an Input Port\xE2\x80\xA6"), [this, world] {
                                        if (onRename) onRename("In", world, [this](const std::string &n) { if (!n.empty()) send("port add " + q(n) + " --dir in"); });
                                    }});
                     items.push_back({say("Input\xE2\x80\xA6"), [this, ins, world] { if (onMenu) onMenu(ins, world); }});
                     for (const char *m : {"auto", "on", "off"})
-                        mon.push_back({(m == std::string("auto") ? say("Auto (stopped or recording)") : m == std::string("on") ? say("On") : say("Off")) +
+                        mon.push_back({(m == std::string("auto") ? say("Auto (Stopped or Recording)") : m == std::string("on") ? say("On") : say("Off")) +
                                            (s.monitor == m ? "  \xC2\xB7 " + say("now") : std::string()),
                                        [this, id, m] { send("set " + id + ".monitor=" + m); }});
                     items.push_back({say("Monitor\xE2\x80\xA6"), [this, mon, world] { if (onMenu) onMenu(mon, world); }});
@@ -1757,16 +1757,18 @@ namespace solaris_ui
                 {
                     if (!s.frozen.empty()) items.push_back({say("Unfreeze"), [this, id] { send("strip unfreeze " + id); }});
                     else if (s.fromStrips.empty()) items.push_back({say("Freeze"), [this, id] { send("strip freeze " + id); }});
-                    if (s.fromStrips.empty()) items.push_back({say("Bounce to a new strip"), [this, id] { send("strip bounce " + id); }});
+                    if (s.fromStrips.empty()) items.push_back({say("Bounce to a New Strip"), [this, id] { send("strip bounce " + id); }});
                 }
-                items.push_back({say("Delete strip"), [this, id] { send("strip delete " + id); }});
+                items.push_back({say("Delete Strip"), [this, id] { send("strip delete " + id); }});
                 onMenu(std::move(items), world);
             }
             return true;
         }
         case Gesture::Type::Scroll:
             if (onMatrix()) return g.shift ? mMxX.scrollBy(g.delta.y) : mMxY.scrollBy(g.delta.y);
-            if (mScrollX.scrollable() && !g.shift) return mScrollX.scrollBy(g.delta.y);
+            // R-UI-17: the lanes' rule — the wheel scrolls vertically where there is something to scroll vertically, else
+            // sideways; Shift+wheel sideways (it was the other way round here)
+            if (g.shift || !mScrollY.scrollable()) return mScrollX.scrollBy(g.delta.y);
             return mScrollY.scrollBy(g.delta.y);
         default:
             return Segment::handleGesture(g, local);
@@ -2123,14 +2125,14 @@ namespace solaris_ui
             }
             cx += cw;
         }
-        // "+ Line": after the last card, sliding with the cards as they grow and shrink (R-MIX-13)
+        // "+ Strip" (R-UI-16: it read "+ Line", the code's word): after the last card, sliding with the cards as they grow and shrink (R-MIX-13)
         const Rect add = addLineAt(cx, bodyTop());
         if (add.x < stripsRight() && alpha > 0.001)
         {
             const double hv = shown ? mHover.amount(hoverId((int)Part::AddLine, ">", -1)) : 0.0;
             drawRoundedRect(t, add, radius::control(), Paint::stroked(fade(palette::whiteAlpha(0.14 + 0.2 * hv), alpha), 1.0));
             t.setFill(fade(lerpColor(palette::secondaryForeground(), palette::foreground(), hv), alpha));
-            const std::string line = textfit::ellipsize(t, tr("+ Line"), add.w - 6.0, 10.0, font::sans());
+            const std::string line = textfit::ellipsize(t, tr("+ Strip"), add.w - 6.0, 10.0, font::sans());
             t.drawText(line, add.x + (add.w - t.measureText(line, 10.0, font::sans())) * 0.5, textfit::baseline(add.y + add.h * 0.5, 10.0), 10.0, font::sans());
         }
         if (pg.cards.empty() && alpha > 0.001)
@@ -2139,7 +2141,7 @@ namespace solaris_ui
             t.setFill(fade(palette::mutedForeground(), alpha));
             t.drawText(textfit::ellipsize(t, tr("No strips on this mixer."), std::max(0.0, stripsRight() - tx - 13.0), 11.0, font::sans()), tx, kTabsH + 34.0, 11.0, font::sans());
             t.setFill(fade(palette::mutedForeground(), 0.75 * alpha));
-            t.drawText(textfit::ellipsize(t, tr("\"+ Line\" adds one here; a strip moved to this mixer shows up too."), std::max(0.0, stripsRight() - tx - 13.0), 10.0,
+            t.drawText(textfit::ellipsize(t, tr("\"+ Strip\" adds one here; a strip moved to this mixer shows up too."), std::max(0.0, stripsRight() - tx - 13.0), 10.0,
                                           font::sans()),
                        tx, kTabsH + 52.0, 10.0, font::sans());
         }
@@ -2280,8 +2282,9 @@ namespace solaris_ui
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, 0.5); t.lineTo(W, 0.5); t.strokePath();
         t.beginPath(); t.moveTo(0, kTabsH - 0.5); t.lineTo(W, kTabsH - 0.5); t.strokePath();
+        // R-FAM-5: the tabs switch a page — the current one has a 2 px accent underline (it slides, with mHiX / mHiW), no chip
         if (mHiW.value() > 0.5)
-            drawRoundedRect(t, Rect{mHiX.value(), 4.0, mHiW.value(), kTabsH - 8.0}, radius::hairline(), Paint::filled(palette::secondary()));
+            drawRoundedRect(t, Rect{mHiX.value() + 4.0, kTabsH - 1.0 - kTabUnderline, std::max(0.0, mHiW.value() - 8.0), kTabUnderline}, 0.0, Paint::filled(palette::primary()));
         for (const auto &tb : mTabs)
         {
             const double ia = tb.in.value();

@@ -2,11 +2,12 @@
  *  solaris_ui — SongBar: the song screen's top bar (R-UI-3, R-TIME-4, R-PLAY-3).
  *
  *  Left → right: the `solaris.` wordmark (13 px, the dot in the accent) — it IS Home, as cosmo's and Interstellar's
- *  are (R-UI-3 amended 2026-10-16) — then Settings, cosmo's
- *  `MenuStrip` (File · Edit · Song · View — R-UI-3 amended: *"settings at top left next to home"*),
- *  the song's name with an unsaved dot; then the transport — Play/Stop, the position as
- *  bar.beat.tick in mono (it changes every frame while playing, so it must not jitter: mono), the
- *  tempo — centred when there is room, pushed right of the name when there is not; on the right
+ *  are (R-UI-3 amended 2026-10-16) — then cosmo's `MenuStrip` (File · Edit · Song · View; Settings… is
+ *  File's — R-FAM-1, the family standard: there is no Settings button here),
+ *  the song's name with an unsaved dot; then the transport — Record, Play/Stop, Loop, Metronome (toggles, lit
+ *  eased — R-TIME-4 amended), the position as bar.beat.tick in mono (it changes every frame while playing, so
+ *  it must not jitter: mono), the tempo, the time signature — centred when there is room, pushed right of the
+ *  name when there is not, the signature and then the CPU readout folding when the bar is short (R4); on the right
  *  the master meter and Save. Cosmo's TopBar height (29.25 = 9 units). The menus' items are the
  *  App's (every one a command line or a host picker); this bar only places the strip.
  *
@@ -44,20 +45,30 @@ namespace solaris_ui
     {
     public:
         static constexpr double kHeight = 29.25;
-        enum Hit { kNone = -1, kHome = 0, kPlay, kSave, kSettings, kBpm, kRecord, kLearn, kVersion }; // kHome: the wordmark; kRecord: R-MIDI-2; kLearn: R-CTRL-1; kVersion: R-VER
+        enum Hit { kNone = -1, kHome = 0, kPlay, kSave, kBpm, kRecord, kLearn, kVersion, kLoop, kMetronome }; // kHome: the wordmark; kRecord: R-MIDI-2; kLearn: R-CTRL-1; kVersion: R-VER; kLoop, kMetronome: R-TIME-4 amended
         static constexpr double kBpmStepPx = 3.25; // space::u(1) of vertical drag: one step
         static constexpr double kNameMin = 120.0; // the song's name keeps this much before the transport moves right
+        static constexpr double kLearnMin = 140.0; // R-TIME-4 amended: under this the learn pill takes the CPU readout's room
 
         SongBar();
         void bind(const solaris::AppModel &m);
         void layout();
         cosmo_v2::MenuStrip &menus() { return *mMenus; }
         artboard::Rect hitRect(int which) const;
-        /** R-ACCESS-1: its controls as accessible nodes — Home, Settings, the version, Record, Play, the tempo (a slider:
+        /** R-ACCESS-1: its controls as accessible nodes — Home, the version, Record, Play, the tempo (a slider:
          *  ±1 bpm, fine 0.1), Save (the menus' titles are the App's: a menu open is a modal of its own). */
         void accessibles(std::vector<A11yNode> &out);
         double playAmount() const { return mPlaying.value(); }   // 0 = the play glyph, 1 = the stop glyph (LIVE)
         double recordAmount() const { return mRecLit.value(); }  // R-MIDI-2: 1 = recording, lit red (LIVE)
+        /** R-TIME-4 (amended 2026-11-17): Loop and Metronome after Play — toggles, lit while on (LIVE, eased whoever
+         *  changed it); the time signature after the tempo, folded (eased) when the bar has no room for it; the CPU
+         *  readout folded (eased) while a learn's pill needs its room. */
+        double loopAmount() const { return mLoopLit.value(); }
+        double metronomeAmount() const { return mMetroLit.value(); }
+        double sigAmount() const { return mSigAmt.value(); }
+        double cpuAmount() const { return 1.0 - mCpuFold.value(); }
+        artboard::Rect sigRect() const;
+        const std::string &sigShown() const { return mSig; }
         /** R-CTRL-1: while a `map learn` waits, a pill after the tempo says for what (a click cancels it) — LIVE, eased. */
         double learnAmount() const { return mLearn.value(); }
         const std::string &learnShown() const { return mLearnShown; }
@@ -73,11 +84,14 @@ namespace solaris_ui
         /** R-VER: the menu the chip opens — what a click on it sends, item by item (also what a test reads). */
         std::vector<cosmo_v2::ContextMenu::Item> versionMenu(artboard::Point world);
         double meterLevel(int ch) const { return mMeter[ch].value(); }
+        /** The unsaved dot: where its centre was last drawn (local), and its LIVE fade. */
+        artboard::Point dirtyDotAt() const { return mDirtyDotAt; }
+        double dirtyAmount() const { return mDirtyDot.value(); }
         double bpmShown() const { return mBpmDrag ? mBpmLive : mBpmShown.value(); } // the tempo as DRAWN (LIVE)
         /** R-TEMPO-1: the line that sets the tempo shown — the song's, or the change in effect at the time bar. */
         std::string tempoLine(const std::string &v) const { return mTempoId.empty() ? "set project.bpm=" + v : "tempo move " + mTempoId + " --bpm " + v; }
 
-        std::function<void()> onHome, onPlayToggle, onSave, onSettings, onRecordToggle;
+        std::function<void()> onHome, onPlayToggle, onSave, onRecordToggle, onLoopToggle, onMetronomeToggle;
         /** A menu the App hosts (R-VER: the version chip's). */
         std::function<void(std::vector<cosmo_v2::ContextMenu::Item> items, artboard::Point world)> onMenu;
         std::function<bool(const std::string &line)> onCommand;
@@ -92,6 +106,7 @@ namespace solaris_ui
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
     private:
+        mutable artboard::Point mDirtyDotAt{0.0, 0.0}; // measured in the paint (it follows the name)
         mutable double mWordW = 52.0; // the `solaris.` wordmark, measured in the paint (Home's hit rect)
         int hitAt(const artboard::Point &p) const;
         std::string mName;
@@ -105,12 +120,17 @@ namespace solaris_ui
         int mBeatsPerBar = 4;
         float mPeak[2] = {0, 0};
         artboard::AnimatedProperty mRecLit{0.0};
+        bool mLoopWanted = false, mMetroWanted = false; // R-TIME-4 amended: the model's loop (a region), the machine's metronome
+        std::string mSig = "4/4";
+        artboard::AnimatedProperty mLoopLit{0.0}, mMetroLit{0.0}, mSigAmt{1.0}, mCpuFold{0.0};
+        double contentRight(bool withSig) const; // where the tempo (and the signature) end
+        double rightLimit(double fold) const;    // where the transport's side must end: before the CPU readout, or the meter
         std::string mLearning, mLearnShown; // R-CTRL-1: what a learn waits for; what the pill says (kept while it fades out)
         artboard::AnimatedProperty mLearn{0.0};
         double mCpu = 0.0, mCpuTarget = 0.0;  // R-PERF-1: the model's load; what the drawn value heads for
         artboard::AnimatedProperty mCpuShown{0.0};
         artboard::AnimatedProperty mPlaying{0.0}, mDirtyDot{0.0}, mMeter[2]{artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
-        bool mInit = false;
+        bool mInit = false, mFoldInit = false;
         // R-VER: the version chip
         std::vector<solaris::VersionModel> mVersions;
         std::string mVersion, mChipWanted, mChipFrom, mChipTo; // the open one's id; the label wanted, fading out, fading in
