@@ -36,8 +36,12 @@ namespace cosmo_v2
         constexpr double kSpinR = 5.5;
         constexpr double kSpinGap = 8.0;
         constexpr double kSpinMs = 900.0;   // one turn — the same rate as the rack's cells
-        const char *kTagline = "PROFESSIONAL PHOTO EDITOR";
-        const char *kVersion = "v1.0.0";
+        // ── the logo (R-SPLASH-7): centred above the wordmark ──
+        constexpr double kMarkSize = 52.0;
+        constexpr double kMarkTop = 26.0;
+        // The wordmark sat at 42% of the height when it had the top of the window to itself; it
+        // moves down to make room for the logo above it, and stays clear of the status slot.
+        constexpr double kWordBaselineFrac = 0.52;
 
         double clamp01(double v) { return v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v); }
     }
@@ -48,7 +52,11 @@ namespace cosmo_v2
         mNowMs = nowMs;
         mStarted = true;
         mExiting = false;
+        mChromeLeaving = false;
         mExit.set(1.0);
+        // R-SPLASH-7: the logo shows up (1000 ms) and then flies — its working loop IS the
+        // "something is happening" of a launch. Under reducedMotion() the Player makes it a fade.
+        mMark.showUp(nowMs, true);
         // Staggered exactly like the reference: the wordmark leads, the tagline follows,
         // the dots come in last (R-SPLASH-2). AnimatedProperty collapses each of these
         // under reducedMotion(), so the splash still reads, just without the motion.
@@ -106,7 +114,17 @@ namespace cosmo_v2
         if (mExitRequested && !mExiting && mProgress.value() >= 0.995)
         {
             mExiting = true;
-            mExit.animateTo(0.0, 260.0, Easing::EaseOutCubic, nowMs);
+            // R-SPLASH-7: the logo leaves first — it eases out of its loop (a launch must not
+            // wait a whole loop period for the boundary) and then plays its disappear.
+            mMark.requestOut(nowMs, brand::Leave::EaseOut);
+        }
+        mMark.advance(nowMs);
+        // The rest of the splash fades WHILE the logo is leaving, never after it has gone
+        // (arstro.rule.animation, rule 3): it starts with the logo's exit and is done by 60% of it.
+        if (mExiting && !mChromeLeaving && (mMark.leaving() || mMark.gone()))
+        {
+            mChromeLeaving = true;
+            mExit.animateTo(0.0, reducedMotion() ? brand::kReducedMs : brand::kOutMs * 0.6, Easing::EaseInOutCubic, nowMs);
         }
         mExit.update(nowMs);
         Segment::advance(nowMs);
@@ -120,7 +138,7 @@ namespace cosmo_v2
     // untrimmed track and the count separately and lets the caller see both.
     std::string SplashScreen::uiDetail() const
     {
-        char buf[320];
+        char buf[360];
         const double a = mExit.value();
         const double barA = a * mBarFade.value();
         std::string count = (mDone >= 0 && mTotal > 0)
@@ -128,14 +146,19 @@ namespace cosmo_v2
                                 : std::string("-");
         std::snprintf(buf, sizeof(buf),
                       "progress=%.3f barAlpha=%.3f bar=%.0f,%.0f %.0fx%.0f fill=%.0f count=%s "
-                      "alpha=%.3f intro=%s status=\"%s\" statusMix=%.2f exiting=%d exitReq=%d",
+                      "alpha=%.3f intro=%s status=\"%s\" statusMix=%.2f exiting=%d exitReq=%d mark=%s",
                       clamp01(mProgress.value()), barA,
                       kBarInset, height.value() - kBarBottom,
                       width.value() - kBarInset * 2.0, kBarH,
                       std::max((width.value() - kBarInset * 2.0) * clamp01(mProgress.value()), kBarH),
                       count.c_str(), a, introDone() ? "done" : "playing",
                       mStatus.c_str(), mStatusMix.value(), mExiting ? 1 : 0,
-                      mExitRequested ? 1 : 0);
+                      mExitRequested ? 1 : 0,
+                      // R-SPLASH-7: which part of its life the logo is in, so "did the splash play
+                      // its disappear" is answered over the socket, not by filming the screen.
+                      mMark.phase() == brand::Phase::In ? "in" : mMark.phase() == brand::Phase::Idle ? "idle"
+                      : mMark.phase() == brand::Phase::Settle ? "settle" : mMark.phase() == brand::Phase::Out ? "out"
+                      : mMark.phase() == brand::Phase::Gone ? "gone" : "rest");
         return buf;
     }
 
@@ -143,7 +166,10 @@ namespace cosmo_v2
     {
         const double w = width.value(), h = height.value();
         const double a = mExit.value();
-        if (a <= 0.001) return;
+        // Not `a <= 0.001`: the wordmark and the bar finish fading at 60% of the logo's exit, and
+        // returning there would cut the logo's disappear off mid-flight (R-SPLASH-7). The window
+        // stays painted until the logo itself has gone.
+        if (isGone()) return;
 
         drawRoundedRect(t, Rect{0, 0, w, h}, 0.0, Paint::filled(palette::background()));
 
@@ -153,14 +179,18 @@ namespace cosmo_v2
         const double sp = -0.03 * sz;   // R-G-2a: the one wordmark spacing formula
         // Measure ONCE and reuse for both the centring and the dot's offset: mixing a
         // measured width with an estimated one is what pushed the wordmark off-centre.
-        const double stemW = t.measureText("cosmo", sz, font::sansSemiBold(), sp);
+        // ── the logo, above the wordmark. It is drawn at full strength while it leaves: its own
+        //    exit is the fade (multiplying by `a` as well would fade it twice). ──
+        brand::draw(t, Rect{(w - kMarkSize) * 0.5, kMarkTop, kMarkSize, kMarkSize}, mMark.mark(), mMark.pose(), palette::foreground());
+
+        const double stemW = t.measureText(mBrand.word, sz, font::sansSemiBold(), sp);
         const double wordW = stemW + t.measureText(".", sz, font::sansSemiBold(), sp);
         const double wx = (w - wordW) * 0.5;
-        const double wy = h * 0.42 + (1.0 - rise) * 8.0;
+        const double wy = h * kWordBaselineFrac + (1.0 - rise) * 8.0;
         Color fg = palette::foreground(); fg.a *= rise * a;
         Color dot = palette::primary(); dot.a *= rise * a;
         t.setFill(fg);
-        t.drawText("cosmo", wx, wy, sz, font::sansSemiBold(), sp);
+        t.drawText(mBrand.word, wx, wy, sz, font::sansSemiBold(), sp);
         t.setFill(dot);
         t.drawText(".", wx + stemW, wy, sz, font::sansSemiBold(), sp);
 
@@ -170,10 +200,10 @@ namespace cosmo_v2
         {
             // measureText is the read side of drawText and accounts for the tracking, so
             // the tagline centres exactly rather than by an estimate (R5).
-            const double tw = t.measureText(kTagline, kTagPx, font::sans(), kTagTrack);
+            const double tw = t.measureText(mBrand.tagline, kTagPx, font::sans(), kTagTrack);
             Color tc = palette::mutedForeground(); tc.a *= tagA;
             t.setFill(tc);
-            t.drawText(kTagline, (w - tw) * 0.5, wy + 22.0, kTagPx, font::sans(), kTagTrack);
+            t.drawText(mBrand.tagline, (w - tw) * 0.5, wy + 22.0, kTagPx, font::sans(), kTagTrack);
         }
 
         // ── the activity slot: dots until there is something to name, then the
@@ -245,7 +275,7 @@ namespace cosmo_v2
         // ── version, bottom-right ──
         Color vc = palette::whiteAlpha(0.22 * a);
         t.setFill(vc);
-        t.drawText(kVersion, w - 12.0 - t.measureText(kVersion, 9.0, font::mono()), h - 10.0, 9.0, font::mono());
+        t.drawText(mBrand.version, w - 12.0 - t.measureText(mBrand.version, 9.0, font::mono()), h - 10.0, 9.0, font::mono());
 
         // ── progress bar ──
         const double barA = a * mBarFade.value();

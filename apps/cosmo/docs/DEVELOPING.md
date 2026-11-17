@@ -103,7 +103,7 @@ is on — check there before concluding a RAW file is corrupt.
 | How does this class work, and what are its traps? | [`detailed_design.md`](detailed_design.md) |
 | Why is the core a service at all? | [`service-architecture-proposal.md`](service-architecture-proposal.md) — the design behind R-SVC, approved 2026-08-17. **Not a ledger**: it is not updated per commit |
 | What is still missing versus the original app? | [`../PARITY.md`](../PARITY.md) |
-| What should the UI look and feel like? | `.claude/skills/arstro.design.rule` — the design law for every front end (tokens, motion, R1–R6, the gotchas) |
+| What should the UI look and feel like? | `.claude/skills/arstro.rule.design` — the design law for every front end (tokens, motion, R1–R6, the gotchas) |
 | What are the rules here, whatever I am doing? | `.claude/skills/arstro.rule` — invoked first by every skill |
 | How do I work on this? | `.claude/skills/arstro.cosmo.core.implement` (non-UI) · `arstro.cosmo.design.implement` (widgets/layout/theme) · the two matching `.debug` skills |
 
@@ -190,6 +190,18 @@ XDG_CONFIG_HOME=/tmp/cosmo-run ./build/apps/cosmo/cli/cosmo-cc backends   # prin
 
 `cosmo_core_tests` backs up and restores the real `settings.txt` if you forget, but only that one
 file, and only if it survives the run.
+
+**A demo video with no display: `cosmo_demo`** (`tests/demo/recordDemo.cpp`). The shots harness's
+real App and service plus `cosmo-cc serve`'s agent wiring: it opens a project, opens the Agent tab,
+connects the agent, zooms into the composer and types the prompt, records the user's REAL agent
+working at `--speed` (a badge says so), then sweeps the Split seam across `--compare` photos — a silent
+1920x1080 H.264 MP4 drawn at 2x so the zooms stay sharp. It edits the project it is given and sets its
+own `XDG_CONFIG_HOME` under `--workdir`, so pass a copy; `--dry` sends no prompt (a layout check).
+
+```bash
+cp tokyoaitest.cmp /tmp/demo/ && ./build/apps/cosmo/cosmo_demo --project /tmp/demo/tokyoaitest.cmp \
+    --out /tmp/demo/demo.mp4 --prompt "Make these Tokyo photos cinematic" --speed 4 --compare 6
+```
 
 **A suite listed by `ctest` but reported `Not Run` has simply not been built** — `ctest` does not
 build. Run `cmake --build build` first, and use `ctest --test-dir build -N` rather than this file

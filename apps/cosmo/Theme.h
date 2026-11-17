@@ -109,6 +109,10 @@ namespace cosmo_v2
         inline artboard::Color success() { return artboard::Color::hex(0x3FB950); }
         inline artboard::Color successAlpha(double a)
         { return artboard::Color{0x3F / 255.0, 0xB9 / 255.0, 0x50 / 255.0, a}; }
+        // The third semantic state colour (R-FAMILY-4): "this worked, and something is owed" — a
+        // warning toast's bar and glyph. An amber that is no app's accent (blue, teal, orange): it
+        // is Solaris's solo / hot-meter amber, hoisted so the family has ONE warning colour.
+        inline artboard::Color warning() { return artboard::Color::hex(0xE3B341); }
         inline artboard::Color border() { return neutral(0xFFFFFF, 0xFFFFFF, 0.072, 0.45); }  // rgba(255,255,255,.072); solid-ish when high
         inline artboard::Color input() { return neutral(0x252525, 0x1E1E1E); }
         // Elegant light entry field (the inline group-rename box, DR-TREE-5): a deliberate
@@ -156,6 +160,43 @@ namespace cosmo_v2
         inline double hairline() { return 1.0; }  // rounded-[1px]: mixer/curve/grade segmented pickers
         inline double control() { return 2.0; }   // rounded-[2px]: buttons, chips, panels, filmstrip cells
         inline double pill() { return 9999.0; }   // rounded-full: slider track/thumb, before/after pill
+    }
+
+    // The spacing ladder (R-FAMILY-4, design law §2.4): one unit is 3.25 px (a 13 px root, 0.25 rem).
+    // Interstellar and Solaris each declared these same rungs in their own Theme.h; this is the
+    // family's copy of record. Modals and Home use the coarser 8 / 16 / 32 rhythm instead.
+    namespace space
+    {
+        inline constexpr double u(double n) { return n * 3.25; }
+        inline constexpr double padX() { return u(3); }     // 9.75 — the dominant panel padding
+        inline constexpr double gap() { return u(2); }      // 6.5
+        inline constexpr double rowH() { return u(7); }     // 22.75 — a list row
+        inline constexpr double barH() { return u(9); }     // 29.25 — the top bar, deck headers
+        inline constexpr double modal8() { return 8.0; }    // the modal / Home rhythm
+        inline constexpr double modal16() { return 16.0; }
+        inline constexpr double modal32() { return 32.0; }
+    }
+
+    // Durations, named once (R-FAMILY-4, design law §2.5) — the values Interstellar and Solaris both
+    // declared, plus the toast's. A HOLD is a timing, not a tween: it does not ease.
+    // (Cosmo's own widgets still carry their literals; a new widget uses these names.)
+    namespace motion
+    {
+        inline constexpr double kHoverMs = artboard::interaction::kHoverMs;  // 120
+        inline constexpr double kModalOpenMs = 150.0;
+        inline constexpr double kModalCloseMs = 120.0;
+        inline constexpr double kDropdownMs = 160.0;    // menu grow
+        inline constexpr double kDissolveMs = 160.0;    // a picture's cross-dissolve — LINEAR
+        inline constexpr double kScrollMs = 180.0;      // eased scroll everywhere; scrim
+        inline constexpr double kCrossFadeMs = 200.0;   // page / text cross-fade
+        inline constexpr double kSelectMs = 200.0;      // selection ring / wash slide
+        inline constexpr double kSlideMs = 220.0;       // segmented / tab highlight travel
+        inline constexpr double kCatchUpMs = 220.0;     // a value catching up to a source it does not control
+        inline constexpr double kReflowMs = 260.0;      // grid reflow
+        inline constexpr double kScreenFadeMs = 260.0;  // shell cross-fade
+        inline constexpr double kToastInMs = 150.0;     // a toast fades in fast...
+        inline constexpr double kToastOutMs = 300.0;    // ...and out slowly
+        inline constexpr double kToastHoldMs = 3200.0;  // how long it stays — a HOLD, not a tween
     }
 
     // Interaction hit targets -- the forgiving pick radius (px) around a small

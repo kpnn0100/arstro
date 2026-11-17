@@ -20,7 +20,7 @@ namespace cosmo_v2
         constexpr double kHeaderH = 50.0;
         constexpr double kMargin = 14.0;
         constexpr double kBtn = 22.0;
-        constexpr double kCardRadius = 6.0;
+        constexpr double kTitlePx = 14.0;   // the ramp's modal title
         // Pan glide durations (R-G-1): drag follows the cursor tightly, wheel/jump glide.
         constexpr double kDragGlideMs = 70.0;
         constexpr double kScrollGlideMs = 170.0;
@@ -236,11 +236,14 @@ namespace cosmo_v2
         drawRoundedRect(t, Rect{0, 0, width.value(), height.value()}, 0.0, Paint::filled(Color{0, 0, 0, 0.5 * appear}));
 
         const Rect c = cardRect();  // already carries the appear y-rise
-        drawRoundedRect(t, c, kCardRadius, Paint::filledStroked(fa(palette::popover()), fa(palette::border()), 1.0));
+        // The card every other modal has: the named control radius, not a literal (R-FAMILY-7).
+        drawRoundedRect(t, c, radius::control(), Paint::filledStroked(fa(palette::popover()), fa(palette::border()), 1.0));
 
         // header: title + hint + close button
         t.setFill(fa(palette::foreground()));
-        t.drawText(title, c.x + kMargin, c.y + 24.0, 12.0, font::sansSemiBold(), 0.12 * 12.0);
+        // The modal title of the ramp — 14 px SemiBold, untracked — as Settings, Presets and the
+        // confirm dialog draw theirs (R-FAMILY-7; it was 12 px tracked uppercase).
+        t.drawText(title, c.x + kMargin, c.y + 24.0, kTitlePx, font::sansSemiBold());
         t.setFill(fa(palette::mutedForeground()));
         t.drawText(hint, c.x + kMargin, c.y + 40.0, 10.0, font::sans());
 

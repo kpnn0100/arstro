@@ -96,8 +96,18 @@ namespace cosmo_v2
 
         // ── on-photo mask overlay bridge (R-MASK) ──
         int activeTab() const;                          // edit-stack tab index
+        /** R-FAMILY-8: View > Show Agent selects a tab from outside the strip. The strip's own
+         *  eased indicator and page cross-fade run exactly as for a click. */
+        void setActiveTab(int index);
         /** R-ASSIST-7: the Agent tab - App binds the conversation into it from the model. */
         AgentPanel *agentPanel() const { return mAgent.get(); }
+        /** R-UX-9c: where the active page's scroll indicator is (this column's space; empty when
+         *  the page does not overflow) and its LIVE eased presence - for a test and a shot. */
+        artboard::Rect scrollThumbRect() const;
+        double scrollIndicatorAmount() const { return mScrollInd.value(); }
+        ParamPanel *basicPanel() const { return mBasicDetail.get(); }
+        MaskPanel *maskPanel() const { return mMask.get(); }
+        XformPanel *xformPanel() const { return mXform.get(); }
         bool maskTabActive() const;                     // true while the Mask tab is selected
         const MaskParams *selectedMaskParams() const;   // the mask being edited, or nullptr
         /** Its INDEX — a
@@ -124,6 +134,10 @@ namespace cosmo_v2
         /** The dimmed band: the tab strip + panel body, i.e. everything between the
          *  histogram and the action bar. */
         artboard::Rect editStackRect() const;
+        /** R-UX-9c: the page under the tab strip, and the active page's scroll state
+         *  (content height, live offset). Returns true when it overflows. */
+        artboard::Rect pageRect() const;
+        bool activeScroll(double &content, double &offset) const;
 
         // Push the effective (group-stacked) curves to the mixer/curve editors as their
         // faint green "final" reference — call after every curve/mixer edit so it tracks live.
@@ -164,6 +178,10 @@ namespace cosmo_v2
         bool mBypassed = false;                     // R-BYPASS-4 target state
         artboard::AnimatedProperty mDim{0.0};       // eased scrim opacity 0..1 (R-G-1)
         double mLastMs = 0.0;                       // frame clock, so setBypassed() can start a tween
+        // R-UX-9c: the scroll indicator's eased presence, and the last thumb drawn (for the fade-out).
+        artboard::AnimatedProperty mScrollInd{0.0};
+        bool mScrollIndInit = false, mScrollIndShown = false;
+        mutable artboard::Rect mLastThumb{0, 0, 0, 0};
     };
 }
 }

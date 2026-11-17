@@ -25,7 +25,9 @@ namespace cosmo
         }
     }
 
-    CosmoService::CosmoService(ThreadBudget &budget) : mBudget(budget)
+    // mAssist is bound to mModel.assist before mModel is constructed (declaration order): it only
+    // keeps the reference, and reads it on the first command.
+    CosmoService::CosmoService(ThreadBudget &budget) : mBudget(budget), mAssist(mModel.assist, assistHooks())
     {
         refreshRecents();
         refreshModel();
@@ -244,6 +246,7 @@ namespace cosmo
             const int parent = (e.parent < 0 || e.parent >= (int)i) ? 0 : mNodeOf[e.parent];
             mNodeOf[i] = e.group ? mSession.addWorkspaceGroup(parent, e.name, e.params, e.history, e.bypass)
                                  : mSession.addPendingImage(parent, e.name);
+            if (!e.group) mSession.setLeafSource(mNodeOf[i], e.imagePath, e.params, e.history, e.bypass);   // D-66
         }
 
         const size_t n = entries.size();
@@ -460,7 +463,7 @@ namespace cosmo
         // needs it. Nothing blocks and nothing sleeps — a step is just another coalesced
         // render request, so a live run and a scripted one take the same path.
         mNowMs = nowMs;
-        pumpAssistant();   // R-ASSIST-6: what the agent said since the last pump, read without blocking
+        mAssist.pump();   // R-ASSIST-6: what the agent said since the last pump, read without blocking
         pumpQueries();     // R-ASSIST-8: analyze / snapshot answers the worker finished
         // The session's clock, which ONLY the two views used to advance (`App::render` and
         // `PhoneApp`). `History::record` coalesces edits that arrive close together — a whole
@@ -872,122 +875,47 @@ namespace cosmo
 
     // ── R-ASSIST: the user's own agent ──────────────────────────────────────────────────────
 
-    void CosmoService::assistSay(const std::string &role, const std::string &text)
-    {
-        mModel.assist.messages.push_back({role, text});
-        ++mModel.revision;
-        emit(Event::Kind::AssistMessage, role + " " + text);
-    }
+    // The conversation itself - the state machine, the messages, a streamed reply as one message -
+    // is AssistConversation's (core/assist, R-ASSIST-13: shared with the sibling apps). The service
+    // gives it cosmo's part: the events, the launch built from the settings and the open project,
+    // and the `assist:` rejection.
 
-    void CosmoService::assistState(const std::string &state)
+    AssistConversation::Hooks CosmoService::assistHooks()
     {
-        if (mModel.assist.state == state) return;
-        mModel.assist.state = state;
-        ++mModel.revision;
-        emit(Event::Kind::AssistState, state + (mModel.assist.agent.empty() ? std::string() : " agent=" + mModel.assist.agent));
+        AssistConversation::Hooks h;
+        h.changed = [this] { ++mModel.revision; };
+        h.emitState = [this](const std::string &payload) { emit(Event::Kind::AssistState, payload); };
+        h.emitMessage = [this](const std::string &payload) { emit(Event::Kind::AssistMessage, payload); };
+        h.launch = [this] {
+            AssistLaunch l;
+            l.agent = mModel.settings.agent.empty() ? std::string("claude") : mModel.settings.agent;
+            l.args = mModel.settings.agentArgs;
+            l.skillDirs = AssistConversation::splitDirs(mModel.settings.agentSkills);
+            l.project = mModel.projectPath;
+            l.photos = mModel.imageCount;
+            l.allowAll = mModel.settings.agentAllowAll;
+            return l;
+        };
+        h.noRunner = "this front end cannot run an agent - the window and `cosmo-cc serve` can";
+        return h;
     }
 
     bool CosmoService::assistStart()
     {
-        if (mAssistant) return fail("assist: the agent is already running (assist stop first)");
-        if (!mAssistantFactory)
-            return fail("assist: this front end cannot run an agent - the window and `cosmo-cc serve` can");
-        AssistLaunch l;
-        l.agent = mModel.settings.agent.empty() ? std::string("claude") : mModel.settings.agent;
-        l.args = mModel.settings.agentArgs;
-        for (size_t at = 0; at <= mModel.settings.agentSkills.size();)
-        {
-            const size_t colon = mModel.settings.agentSkills.find(':', at);
-            const std::string dir = mModel.settings.agentSkills.substr(at, colon == std::string::npos ? std::string::npos : colon - at);
-            if (!dir.empty()) l.skillDirs.push_back(dir);
-            if (colon == std::string::npos) break;
-            at = colon + 1;
-        }
-        l.project = mModel.projectPath;
-        l.photos = mModel.imageCount;
-        l.allowAll = mModel.settings.agentAllowAll;
-        mAssistant = mAssistantFactory();
         std::string err;
-        const bool started = mAssistant && mAssistant->start(l, err);
-        // Asked AFTER start: which agent it is depends on the setting start() just read.
-        mModel.assist.agent = mAssistant ? mAssistant->name() : std::string();
-        if (!started)
-        {
-            mAssistant.reset();
-            assistSay("error", err.empty() ? std::string("the agent could not be started") : err);
-            assistState("failed");
-            return fail("assist: " + (err.empty() ? std::string("the agent could not be started") : err));
-        }
-        assistState("starting");
-        return true;
+        return mAssist.start(err) ? true : fail("assist: " + err);
     }
 
     bool CosmoService::assistSend(const Command &c)
     {
-        if (!mAssistant && !assistStart()) return false;   // sending with none running starts one
         std::string err;
-        if (!mAssistant->send(c.name, err)) return fail("assist: " + err);
-        assistSay("user", c.name);
-        assistState("busy");
-        return true;
+        return mAssist.send(c.name, err) ? true : fail("assist: " + err);
     }
 
     bool CosmoService::assistStop()
     {
-        if (!mAssistant) return true;   // nothing to stop is not a failure: the state is already off
-        mAssistant->stop();
-        mAssistant.reset();
-        if (mAgentOpen) { mAgentOpen = false; emit(Event::Kind::AssistMessage, "agent " + mModel.assist.messages.back().text); }
-        assistSay("info", "stopped");
-        assistState("off");
+        mAssist.stop();
         return true;
-    }
-
-    void CosmoService::pumpAssistant()
-    {
-        if (!mAssistant) return;
-        std::vector<AssistOutput> out;
-        mAssistant->poll(out);
-        for (const AssistOutput &o : out)
-        {
-            // A streamed message is closed by anything that is not more of it - and only then is
-            // it an event, so the log and the socket get the whole message once, not every chunk.
-            if (o.kind != AssistOutput::Kind::TextDelta && mAgentOpen)
-            {
-                mAgentOpen = false;
-                emit(Event::Kind::AssistMessage, "agent " + mModel.assist.messages.back().text);
-            }
-            switch (o.kind)
-            {
-                case AssistOutput::Kind::TextDelta:
-                    if (!mAgentOpen)
-                    {
-                        mModel.assist.messages.push_back({"agent", std::string()});
-                        mAgentOpen = true;
-                    }
-                    mModel.assist.messages.back().text += o.text;
-                    ++mModel.revision;   // the view re-reads; no event per chunk
-                    break;
-                case AssistOutput::Kind::Ready:
-                    mModel.assist.agent = mAssistant->name();   // an ACP agent names itself in initialize
-                    if (!o.text.empty()) assistSay("info", o.text);
-                    if (mModel.assist.state == "starting") assistState("ready");
-                    break;
-                case AssistOutput::Kind::Text: assistSay("agent", o.text); break;
-                case AssistOutput::Kind::Tool: assistSay("tool", o.text); break;
-                case AssistOutput::Kind::Done:
-                    if (!o.text.empty()) assistSay("info", o.text);
-                    assistState("ready");
-                    break;
-                case AssistOutput::Kind::Failed: assistSay("error", o.text); break;
-                case AssistOutput::Kind::Exited:
-                    mAgentOpen = false;
-                    mAssistant.reset();
-                    if (!o.text.empty()) assistSay("error", o.text);
-                    assistState(o.text.empty() ? "off" : "failed");
-                    return;   // `out` may hold nothing after an exit, and the assistant is gone
-            }
-        }
     }
 
     bool CosmoService::pickWhiteBalance(const Command &c)
@@ -1466,11 +1394,9 @@ namespace cosmo
             case Command::Kind::AssistStop: return assistStop();
             case Command::Kind::AssistAgents:
             {
-                if (!mAgentDetector) return fail("assist agents: this front end cannot look for agents");
-                mModel.assist.choices = mAgentDetector();
-                ++mModel.revision;
                 int found = 0;
-                for (const auto &a : mModel.assist.choices) found += a.installed ? 1 : 0;
+                std::string why;
+                if (!mAssist.agents(found, why)) return fail("assist agents: " + why);
                 emit(Event::Kind::Info, "assist agents " + std::to_string(found) + " of " +
                                             std::to_string(mModel.assist.choices.size()) + " found");
                 return true;

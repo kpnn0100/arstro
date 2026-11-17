@@ -70,13 +70,15 @@ namespace cosmo_v2
         mTopBar->width.set(width);
         mTopBar->onRailToggle = [this] { toggleRail(); };
         mTopBar->onHome = [this] { requestHome(); };
+        mTopBar->onExport = [this] { openExportDialog(); };   // R-UX-4: the photo's export, one click away
+        mTopBar->onSave = [this] { saveWorkspace(); };        // R-FAMILY-9: the save icon is File ▸ Save
         mTopBar->onNameClick = [this] {  // click the top-right group name -> rename it (DR-TREE-5)
             const int g = mSession.editGroup();
             if (g < 0 || g >= (int)mSession.nodes().size()) return;
             mRenameTargetNode = g;
             mContextMenu->openRename(mSession.nodes()[g].name, mW - 236.0, TopBar::kHeight + 2.0);
         };
-        buildMenus();  // File/Settings/Develop/History/Preset dropdowns, wired to real actions
+        buildMenus();  // File/Edit/Develop/Preset/View dropdowns, wired to real actions (R-FAMILY-8)
         mRoot->addChild(mTopBar);
 
         mLeftRail = std::make_shared<LeftRail>();
@@ -96,6 +98,7 @@ namespace cosmo_v2
         });
 
         mCenterStage = std::make_shared<CenterStage>();
+        mCenterStage->photo()->onAddPhotos = [this] { if (onOpenRequested) onOpenRequested(); };   // R-UX-7: = the context menu's Add Photo...
         mCenterStage->photo()->onModeChange = [this](int) { refreshPhotoForMode(); };
         mCenterStage->filmstrip()->onSelect = [this](int cell, bool shift, bool ctrl) {
             // R-SVC-2: a click on a photo leaves as a Command like every other behaviour.
@@ -289,7 +292,19 @@ namespace cosmo_v2
         mRoot->addChild(mExportDialog);
 
         mConfirmDialog = std::make_shared<ConfirmDialog>(mAccent);
+        // R-FAMILY-12: one filled button per dialog. "Don't save" is outlined beside the filled
+        // Save; the remove-photo confirm's single "Remove" stays filled.
+        mConfirmDialog->setDestructiveStyle(ConfirmDialog::DestructiveStyle::Auto);
         mRoot->addChild(mConfirmDialog);
+
+        // R-FAMILY-11: the family's one toast. Not a child of either screen's tree - Home and the
+        // editor are two roots - so render() places it and draws it over whichever is up.
+        mToast = std::make_shared<Toast>();
+        // What the service says, said to the user: a refusal used to reach only the log.
+        {
+            std::weak_ptr<bool> alive = mAlive;
+            mSvc.subscribe([this, alive](const cosmo::Event &e) { if (!alive.expired()) onServiceEvent(e); });
+        }
 
         // R-INFO. Added after the confirm prompt, so it draws above it — the only way the two
         // can be up together is a metadata panel opened before a quit prompt, and in that order
@@ -468,38 +483,165 @@ namespace cosmo_v2
         // TopBar; this raises the TopBar within the root.
         ms->onOpenChanged = [this](int open) { if (open >= 0) mTopBar->raise(); };
 
-        ms->addMenu({"File", {
-            {"Home",                     [this] { showHome(); }},
-            {"Open...",                  [this] { if (onOpenRequested) onOpenRequested(); }},
-            {"Save        (Ctrl+S)",     [this] { saveWorkspace(); }},
-            {"Save As...  (Ctrl+Shift+S)", [this] { if (onSaveWorkspaceRequested) onSaveWorkspaceRequested(); }},
-            {"Export...",                [this] { openExportDialog(); }},
-        }});
-        ms->addMenu({"Settings", {
-            {"Engine Settings...", [this] { openSettingsDialog(); }},
-            {"Reset Workspace",    [this] { resetWorkspace(); syncControlsToSlot(); }},
-        }});
-        ms->addMenu({"Develop", {
-            {"Copy Settings",        [this] { copySettings(); }},
-            {"Paste to Selected",    [this] { pasteSettings(false); }},
-            {"Paste to All Images",  [this] { pasteSettings(true); }},
-            {"Group Selection",      [this] { mSession.createGroupFromSelection(); syncControlsToSlot(); }},
-            {"Ungroup Selection",    [this] { mSession.ungroupSelected(); syncControlsToSlot(); }},
-        }});
-        ms->addMenu({"History", {
-            {"Undo   (Ctrl+Z)",      [this] { undo(); }},
-            {"Redo   (Ctrl+Y)",      [this] { redo(); }},
-            {"Show History Tree...", [this] { openHistoryView(); }},
-        }});
-        ms->addMenu({"Preset", {
-            {"Save Preset...",   [this] { presetSaveClicked(); }},
-            {"Import Preset...", [this] { if (onImportPresetRequested) onImportPresetRequested(); }},
-        }});
+        // R-FAMILY-8: File · Edit · Develop · Preset · View. The rows depend on the model (what
+        // is disabled, what Undo would undo), so they come from menuItems() and refreshMenus()
+        // swaps them in whenever that state changes and no menu is open.
+        const char *titles[] = {"File", "Edit", "Develop", "Preset", "View"};
+        for (int m = 0; m < 5; ++m) ms->addMenu({titles[m], menuItems(m)});
+        mMenuKey = menuStateKey();
+    }
+
+    namespace
+    {
+        constexpr int kMenuFile = 0, kMenuEdit = 1, kMenuDevelop = 2, kMenuPreset = 3, kMenuView = 4;
+        const char *const kEllipsis = "\xE2\x80\xA6";   // U+2026, never three dots (R-FAMILY-0f)
+    }
+
+    std::string App::menuStateKey() const
+    {
+        // Everything menuItems() reads, as one comparable value: the menus are rebuilt only when
+        // this changes, not on every model revision (a slider drag bumps that every frame).
+        const cosmo::AppModel &m = mSvc.model();
+        bool anyPhoto = false, selGroup = false;
+        for (const auto &r : mSession.treeRows())
+            if (!r.group && r.slot >= 0) { anyPhoto = true; break; }
+        for (int n : mSession.selection())
+            if (n > 0 && n < (int)mSession.nodes().size() && mSession.nodes()[n].group) selGroup = true;
+        std::string k;
+        k += mSession.canUndo() ? '1' : '0';
+        k += mSession.canRedo() ? '1' : '0';
+        { const cosmo::History *h = mSession.currentHistory(); k += (h && !h->nodes.empty()) ? '1' : '0'; }
+        k += anyPhoto ? '1' : '0';
+        k += mHasClipboard ? '1' : '0';
+        k += mSession.curParams() ? '1' : '0';
+        k += mSession.selection().empty() ? '0' : '1';
+        k += selGroup ? '1' : '0';
+        k += mRailWanted ? '1' : '0';
+        k += agentShown() ? '1' : '0';
+        k += (m.history.canUndo && m.history.current >= 0 && m.history.current < (int)m.history.entries.size())
+                 ? m.history.entries[(size_t)m.history.current].label : std::string();
+        return k;
+    }
+
+    std::vector<MenuStrip::Item> App::menuItems(int menu) const
+    {
+        using Item = MenuStrip::Item;
+        App *self = const_cast<App *>(this);   // the rows' actions act; building them does not
+        const std::string key = menuStateKey();
+        const bool canUndo = key[0] == '1', canRedo = key[1] == '1', hasHistory = key[2] == '1';
+        const bool anyPhoto = key[3] == '1', hasClip = key[4] == '1', hasTarget = key[5] == '1';
+        const bool hasSel = key[6] == '1', selGroup = key[7] == '1';
+        const bool rail = key[8] == '1', agent = key[9] == '1';
+        const std::string undoLabel = key.substr(10);
+        const std::string dots = kEllipsis;
+        switch (menu)
+        {
+        case kMenuFile:
+            return {
+                {"New Project" + dots, [self] { self->requestNewProject(); }, "Ctrl+N"},
+                {"Open" + dots, [self] { if (self->onOpenRequested) self->onOpenRequested(); }, "Ctrl+O"},
+                Item::sep(),
+                {"Save", [self] { self->saveWorkspace(); }, "Ctrl+S", anyPhoto},
+                {"Save As" + dots, [self] { if (self->onSaveWorkspaceRequested) self->onSaveWorkspaceRequested(); }, "Ctrl+Shift+S", anyPhoto},
+                Item::sep(),
+                {"Export" + dots, [self] { self->openExportDialog(); }, "", anyPhoto},
+                Item::sep(),
+                {"Settings" + dots, [self] { self->openSettingsDialog(); }, "Ctrl+,"},
+                Item::sep(),
+                // R-UX-2: was Settings > Reset Workspace, which wiped the project with no question.
+                // R-FAMILY-8a: Home sits in the menu's LAST group in all three apps (it was first here)
+                {"Home", [self] { self->requestHome(); }},
+                {"Close Project", [self] { self->requestCloseProject(); }},
+            };
+        case kMenuEdit:
+            return {
+                {undoLabel.empty() ? std::string("Undo") : "Undo " + undoLabel, [self] { self->undo(); }, "Ctrl+Z", canUndo},
+                {"Redo", [self] { self->redo(); }, "Ctrl+Shift+Z", canRedo},
+                Item::sep(),
+                {"History" + dots, [self] { self->openHistoryView(); }, "", hasHistory},
+            };
+        case kMenuDevelop:
+            return {
+                {"Copy Settings", [self] { self->copySettings(); }, "", hasTarget},
+                {"Paste to Selected", [self] { self->pasteSettings(false); }, "", hasClip && hasTarget},
+                {"Paste to All Images", [self] { self->pasteSettings(true); }, "", hasClip && anyPhoto},
+                Item::sep(),
+                {"Group Selection", [self] { self->mSession.createGroupFromSelection(); self->syncControlsToSlot(); }, "", hasSel},
+                {"Ungroup Selection", [self] { self->mSession.ungroupSelected(); self->syncControlsToSlot(); }, "", selGroup},
+            };
+        case kMenuPreset:
+            return {
+                {"Save Preset" + dots, [self] { self->presetSaveClicked(); }, "", anyPhoto},
+                {"Import Preset" + dots, [self] { if (self->onImportPresetRequested) self->onImportPresetRequested(); }},
+            };
+        case kMenuView:
+            return {
+                {rail ? "Hide Presets" : "Show Presets", [self] { self->toggleRail(); }},
+                {agent ? "Hide Agent" : "Show Agent", [self, agent] { self->setAgentShown(!agent); }},
+            };
+        }
+        return {};
+    }
+
+    void App::refreshMenus()
+    {
+        auto ms = mTopBar->menuStrip();
+        if (ms->openIndex() >= 0) return;          // never under the pointer; the next closed frame does it
+        const std::string key = menuStateKey();
+        if (key == mMenuKey) return;
+        mMenuKey = key;
+        for (int m = 0; m < ms->menuCount(); ++m) ms->setItems(m, menuItems(m));
+    }
+
+    bool App::agentShown() const { return mRightColumn && mRightColumn->activeTab() == RightColumn::kTabAgent; }
+
+    void App::setAgentShown(bool shown)
+    {
+        if (shown == agentShown()) return;
+        if (shown) mTabBeforeAgent = mRightColumn->activeTab();
+        mRightColumn->setActiveTab(shown ? RightColumn::kTabAgent : mTabBeforeAgent);
+        noteActivity(mNowMs);
     }
 
     void App::copySettings()
     {
         if (const EditParams *p = mSession.curParams()) { mClipboard = *p; mHasClipboard = true; }
+    }
+
+    // ── R-FAMILY-11: the toast ──────────────────────────────────────────────────────────
+    void App::showToast(Toast::Kind kind, const std::string &text)
+    {
+        if (!mToast || text.empty()) return;
+        mToast->show(kind, text);   // no clock here: it begins on the next advance
+        noteActivity(mNowMs);
+    }
+
+    void App::exportFinished(int written, int failed, const std::string &why)
+    {
+        auto photos = [](int n) { return std::to_string(n) + (n == 1 ? " photo" : " photos"); };
+        if (failed <= 0)
+        {
+            if (written > 0) showToast(Toast::Kind::Info, "Exported " + photos(written));
+            return;
+        }
+        std::string msg = written > 0 ? std::to_string(failed) + " of " + photos(written + failed) + " could not be exported"
+                                      : std::string("Export failed");
+        if (!why.empty()) msg += ": " + why;
+        showToast(Toast::Kind::Error, msg);
+    }
+
+    void App::onServiceEvent(const cosmo::Event &e)
+    {
+        using K = cosmo::Event::Kind;
+        // The service's own sentence (it is also `lastError`). A refused command used to show
+        // nothing at all in the window.
+        // Not the agent's: its tab already says what state the agent is in (R-ASSIST-7), and the
+        // panel's own background question ("assist agents") is not something the user asked.
+        if (e.kind == K::CommandRejected || e.kind == K::Error)
+        {
+            if (e.text.rfind("assist", 0) != 0) showToast(Toast::Kind::Error, e.text);
+        }
+        else if (e.kind == K::ExportFinished) exportFinished(e.a, e.b, e.b > 0 ? mSvc.model().lastError : std::string());
     }
 
     void App::pasteSettings(bool toAll)
@@ -580,9 +722,13 @@ namespace cosmo_v2
         // current group (all photos live in the current group -- see cosmo's
         // showPhotoContext / showCellContext).
         std::vector<ContextMenu::Item> items;
-        items.push_back({"Add Photo...",      [this] { if (onOpenRequested) onOpenRequested(); }});
-        items.push_back({"Group Selection",   [this] { mSession.createGroupFromSelection(); syncControlsToSlot(); }});
-        items.push_back({"Ungroup Selection", [this] { mSession.ungroupSelected(); syncControlsToSlot(); }});
+        // R-FAMILY-8/14: U+2026, and a row that cannot act now is disabled rather than silent.
+        bool selGroup = false;
+        for (int n : mSession.selection())
+            if (n > 0 && n < (int)mSession.nodes().size() && mSession.nodes()[n].group) selGroup = true;
+        items.push_back({std::string("Add Photo") + kEllipsis, [this] { if (onOpenRequested) onOpenRequested(); }});
+        items.push_back({"Group Selection",   [this] { mSession.createGroupFromSelection(); syncControlsToSlot(); }, "", !mSession.selection().empty()});
+        items.push_back({"Ungroup Selection", [this] { mSession.ungroupSelected(); syncControlsToSlot(); }, "", selGroup});
         const auto cells = mSession.currentGroupCells();
         // R-BYPASS-3: right-clicking any cell (group OR image) offers a filter
         // disable/enable toggle. The label names the CURRENT state's inverse, so the
@@ -615,7 +761,7 @@ namespace cosmo_v2
                 items.push_back({"Image Information", [this, node] { openImageInfo(node); }});
         }
         if (cell >= 0)
-            items.push_back({"Delete",        [this] { deleteSelected(); }});
+            items.push_back({"Delete",        [this] { requestDeleteSelected(); }});   // R-UX-3: asks first
         mContextMenu->open(std::move(items), x, y);
     }
 
@@ -721,9 +867,27 @@ namespace cosmo_v2
         if (mSession.editGroup() < 0 && slot >= 0)
             mTopBar->setFilename(filenameOf(mSession.currentSourcePath()), slot + 1, mSession.imageCount());
 
+        // R-UX-4: Export is live only when there is a photo to export. Asked of the TREE, not of
+        // imageCount() - slot ids never shrink, so a project whose photos were all removed still
+        // counts its old slots.
+        bool anyPhoto = false;
+        for (const auto &r : mSession.treeRows())
+            if (!r.group && r.slot >= 0) { anyPhoto = true; break; }
+        mTopBar->setExportEnabled(anyPhoto);
+
         std::vector<Filmstrip::Cell> cells;
         for (const auto &c : mSession.currentGroupCells())
-            cells.push_back({c.group, c.node, c.slot, c.name, c.count, c.bypassed, c.loading});
+        {
+            // R-UX-7: a leaf with no slot that is not still coming is a file that could not be
+            // read. It gets a name even when the project stored none (a reloaded .cmp keeps the
+            // path, not a display name), so the cell says WHICH photo is missing.
+            const bool missing = !c.group && c.slot < 0 && !c.loading;
+            std::string name = c.name;
+            if (missing && name.empty() && c.node >= 0 && c.node < (int)mSession.nodes().size())
+                name = filenameOf(mSession.nodes()[c.node].sourcePath);
+            if (missing && name.empty()) name = "Missing photo";
+            cells.push_back({c.group, c.node, c.slot, name, c.count, c.bypassed, c.loading, missing});
+        }
         mCenterStage->filmstrip()->setCells(cells);
 
         const auto &kids = mSession.nodes()[mSession.currentGroup()].kids;
@@ -732,10 +896,23 @@ namespace cosmo_v2
         int primary = -1;
         for (int c = 0; c < (int)kids.size(); ++c)
             if (std::find(sel.begin(), sel.end(), kids[c]) != sel.end()) selCells.push_back(c);
-        for (int c = 0; c < (int)kids.size(); ++c)
-            if ((mSession.editGroup() >= 0 && kids[c] == mSession.editGroup()) ||
-                (mSession.editGroup() < 0 && !mSession.nodes()[kids[c]].group && mSession.nodes()[kids[c]].slot == slot))
-                primary = c;
+        // R-UX-7: a selected leaf with NO slot (missing, or still coming - R-LOADUX-2's "the ring
+        // travels") is the primary cell. It used to be matched by `slot == currentSlot`, which
+        // with no current slot (-1) matched EVERY slotless leaf and left the ring on the last
+        // one, whichever was selected.
+        if (mSession.editGroup() < 0 && !sel.empty())
+        {
+            const int n = sel.back();
+            if (n > 0 && n < (int)mSession.nodes().size() && !mSession.nodes()[n].group && mSession.nodes()[n].slot < 0)
+                for (int c = 0; c < (int)kids.size(); ++c)
+                    if (kids[c] == n) primary = c;
+        }
+        if (primary < 0)
+            for (int c = 0; c < (int)kids.size(); ++c)
+                if ((mSession.editGroup() >= 0 && kids[c] == mSession.editGroup()) ||
+                    (mSession.editGroup() < 0 && slot >= 0 && !mSession.nodes()[kids[c]].group &&
+                     mSession.nodes()[kids[c]].slot == slot))
+                    primary = c;
         mCenterStage->filmstrip()->setSelection(selCells, primary);
     }
 
@@ -952,10 +1129,24 @@ namespace cosmo_v2
         if (m.assist.state == "starting" || m.assist.state == "busy") return true;
         if (mScreen == Screen::Loading || mPhase != Phase::None) return true;
         if (mScaleAnim.isAnimating() || mScreenFade.isAnimating()) return true;
+        if (mToast && mToast->isShowing()) return true;   // R-FAMILY-11: its hold has its own clock
         return nowMs - mLastActivityMs < kActiveWindowMs;
     }
 
     void App::render(IRenderTarget &target, double nowMs)
+    {
+        renderScreen(target, nowMs);
+        // R-FAMILY-11: the toast, over whichever screen was just drawn. Top-centre under the top
+        // bar: the band is the whole width, its resting top 4 px below the bar. Placed every
+        // frame from the live logical size, so it stays centred through a resize or a zoom.
+        mToast->x.set(0.0);
+        mToast->y.set(TopBar::kHeight + 4.0);
+        mToast->width.set(mW);
+        mToast->advance(nowMs);
+        mToast->renderOverlay(target, rootTransform());
+    }
+
+    void App::renderScreen(IRenderTarget &target, double nowMs)
     {
         mNowMs = nowMs;
         // T3.1: painting is what catches up with the model. If something had changed since
@@ -1015,9 +1206,38 @@ namespace cosmo_v2
         renderEditor(target, nowMs);
     }
 
+    void App::updateStageNotice()
+    {
+        // R-UX-7: what the stage says when it has no photo to show. Asked every frame, of the
+        // nodes themselves (no allocation), because the facts change without a re-sync: a decode
+        // that fails marks its leaf between two frames and nothing re-pushes the library for it.
+        // Nothing while a load is running - the spinner cells already say so.
+        const auto &nodes = mSession.nodes();
+        PhotoCanvas::Notice notice = PhotoCanvas::Notice::None;
+        const std::string *detail = nullptr;
+        if (nodes.empty() || nodes[0].kids.empty()) notice = PhotoCanvas::Notice::Empty;
+        else if (mSession.editGroup() < 0 && !mSession.selection().empty())
+        {
+            bool anyPending = false;
+            for (const auto &g : nodes) anyPending |= g.pending;
+            const int n = mSession.selection().back();
+            if (!anyPending && n > 0 && n < (int)nodes.size() && !nodes[n].group && nodes[n].slot < 0)
+            {
+                notice = PhotoCanvas::Notice::Missing;
+                detail = nodes[n].sourcePath.empty() ? &nodes[n].name : &nodes[n].sourcePath;
+            }
+        }
+        mCenterStage->photo()->setNotice(notice, detail ? *detail : std::string());
+    }
+
     void App::renderEditor(IRenderTarget &target, double nowMs)
     {
         mSession.tick(nowMs);
+        updateStageNotice();
+        // R-FAMILY-9: the unsaved dot and the save icon follow the MODEL's flag, every frame (a
+        // setter with no clock; the bar eases it). R-FAMILY-8: and the menus' disabled rows.
+        mTopBar->setDirty(mSvc.model().dirty);
+        refreshMenus();
         mRoot->advance(nowMs);
         // Re-run manual composite layout every frame (cheap arithmetic) so
         // children stay in sync while the rail's width Property is mid-animation
@@ -1199,6 +1419,24 @@ namespace cosmo_v2
         if (emitCommand(c)) return;
         mSession.deleteSelected();
         syncControlsToSlot();
+    }
+
+    void App::requestDeleteSelected()
+    {
+        // R-UX-3. EditSession::deleteSelected erases the nodes and no History records it, so
+        // this is the one edit Ctrl+Z cannot take back - which is the whole reason it asks.
+        const int n = (int)mSession.selection().size();
+        if (n <= 0 || !mConfirmDialog) return;
+        // The dialog draws its message on ONE line (it does not wrap), so the count goes in the
+        // title and the message stays short enough for the 400 px card.
+        const std::string what = n == 1 ? std::string("1 item") : std::to_string(n) + " items";
+        ConfirmDialog::Button cancel{"Cancel", false, false, {}};
+        ConfirmDialog::Button remove{"Remove", true, false, [this] { deleteSelected(); }};
+        mConfirmDialog->show("Remove " + what + " from this project?",
+                             n == 1 ? "This cannot be undone. The file on disk is kept."
+                                    : "This cannot be undone. The files on disk are kept.",
+                             {cancel, remove});
+        noteActivity(mNowMs);
     }
 
     void App::renameGroup(const std::string &name)
@@ -1713,6 +1951,19 @@ namespace cosmo_v2
         {
             mPhase = Phase::ReturnLoad;
             mPhaseT0 = nowMs;
+            if (mCloseOnReturn)
+            {
+                // R-UX-2: File > Close Project. The editor is fully covered now, so dropping the
+                // project, its title and its histogram changes nothing a user can see.
+                mCloseOnReturn = false;
+                cosmo::Command c;
+                c.kind = cosmo::Command::Kind::ProjectClose;
+                emitCommand(c);
+                resetWorkspace();
+                mTopBar->setProjectName(std::string());
+                mRightColumn->histogram()->clear();
+                syncControlsToSlot();
+            }
             refreshHome();  // "loading later": prepare the launcher (recents + cached thumbnails)
                             // NOW, behind the fully-shown loading screen — not as a click-time freeze
         }
@@ -1773,17 +2024,88 @@ namespace cosmo_v2
         target.restore();
     }
 
+    std::string App::projectDisplayName() const
+    {
+        std::string stem = mTopBar->projectName();
+        if (!stem.empty()) return stem;
+        stem = mSession.workspacePath();
+        if (auto sl = stem.find_last_of("/\\"); sl != std::string::npos) stem = stem.substr(sl + 1);
+        if (auto d = stem.find_last_of('.'); d != std::string::npos) stem = stem.substr(0, d);
+        return stem.empty() ? std::string("Untitled") : stem;
+    }
+
+    void App::askUnsaved(std::function<void()> proceed, bool forget)
+    {
+        // R-FAMILY-12: the family's one unsaved-changes question, for every way out of a project
+        // (the wordmark, File > Home, Close Project, New Project, the window's close).
+        // The dialog draws its title on one line of a 400 px card (20 px padding each side), so a
+        // long name is shortened here: cut at a UTF-8 boundary, ended with U+2026.
+        std::string name = projectDisplayName();
+        auto title = [](const std::string &n) { return "Save changes to \"" + n + "\"?"; };
+        constexpr double kTitleRoom = 400.0 - 2 * 20.0, kTitlePx = 14.0;
+        if (estimateTextWidth(title(name), kTitlePx) > kTitleRoom)
+        {
+            while (!name.empty() && estimateTextWidth(title(name + kEllipsis), kTitlePx) > kTitleRoom)
+            {
+                name.pop_back();
+                while (!name.empty() && (static_cast<unsigned char>(name.back()) & 0xC0) == 0x80) name.pop_back();
+                if (!name.empty() && (static_cast<unsigned char>(name.back()) & 0xC0) == 0xC0) name.pop_back();
+            }
+            name += kEllipsis;
+        }
+        ConfirmDialog::Button cancel{"Cancel", false, false, {}};
+        // The ASCII apostrophe: the dialog sizes a button by a per-byte estimate.
+        ConfirmDialog::Button dont{"Don't save", true, false, [this, proceed, forget] {
+            if (forget) { mSession.markClean(); mSvc.refreshFromSession(); }
+            if (proceed) proceed();
+        }};
+        ConfirmDialog::Button save{"Save", false, true, [this, proceed] { saveWorkspace(); if (proceed) proceed(); }};
+        mConfirmDialog->show(title(name), "Your changes will be lost if you don't save them.", {cancel, dont, save});
+        noteActivity(mNowMs);   // T3.1: the modal has to be drawn to be answered
+    }
+
     void App::requestHome()
     {
-        // Unsaved edits -> ask to save or discard (discard is destructive/red); a
-        // clean project just returns to the launcher (R-HOME item 1).
+        // Unsaved edits -> ask first; a clean project just returns to the launcher (R-HOME-1).
         if (!mSession.isDirty()) { showHome(); return; }
-        ConfirmDialog::Button save{"Save", false, true, [this] { saveWorkspace(); showHome(); }};
-        ConfirmDialog::Button discard{"Discard", true, false, [this] { mSession.markClean(); showHome(); }};
-        ConfirmDialog::Button cancel{"Cancel", false, false, {}};
-        mConfirmDialog->show("Unsaved changes",
-                             "Save your changes to this project before leaving?",
-                             {cancel, discard, save});
+        askUnsaved([this] { showHome(); });
+    }
+
+    void App::requestCloseProject()
+    {
+        // R-UX-2: the same question as the wordmark and the window's close, because it is the
+        // same loss. A clean project just closes.
+        if (!mSession.isDirty()) { closeProject(); return; }
+        askUnsaved([this] { closeProject(); });
+    }
+
+    void App::requestNewProject()
+    {
+        // R-FAMILY-13: Ctrl+N from an open project. The host's dialog replaces the workspace when
+        // it is accepted, so the question comes first - but "Don't save" does not mark anything
+        // clean: if the dialog is then cancelled the edits are still there and still unsaved.
+        auto go = [this] { if (onNewProjectRequested) onNewProjectRequested(); };
+        if (mScreen != Screen::Editor || !mSession.isDirty()) { go(); return; }
+        askUnsaved(go, false);
+    }
+
+    void App::closeProject()
+    {
+        // The project is dropped by renderReturn once the star-sky covers the editor: clearing
+        // the photo, the strip, the title and the histogram here would empty the editor in one
+        // frame while it is still fading out (R-G-1).
+        mCloseOnReturn = (mScreen == Screen::Editor);
+        showHome();
+    }
+
+    std::string App::topBarTitle() const { return mTopBar->projectName(); }
+    bool App::histogramShown() const { return mRightColumn->histogram()->hasData(); }
+
+    bool App::modalOpen() const
+    {
+        return (mConfirmDialog && mConfirmDialog->isOpen()) || (mInfoDialog && mInfoDialog->isOpen()) ||
+               (mExportDialog && mExportDialog->isOpen()) || (mPresetDialog && mPresetDialog->isOpen()) ||
+               (mSettingsDialog && mSettingsDialog->isOpen()) || (mHistoryView && mHistoryView->isOpen());
     }
 
     void App::requestQuit()
@@ -1793,13 +2115,67 @@ namespace cosmo_v2
         // answered it once should not have to read it again.
         auto go = [this] { if (onQuitApproved) onQuitApproved(); };
         if (!mSession.isDirty()) { go(); return; }
-        ConfirmDialog::Button save{"Save", false, true, [this, go] { saveWorkspace(); go(); }};
-        ConfirmDialog::Button discard{"Discard", true, false, [this, go] { mSession.markClean(); go(); }};
-        ConfirmDialog::Button cancel{"Cancel", false, false, {}};
-        mConfirmDialog->show("Unsaved changes",
-                             "Save your changes to this project before closing cosmo?",
-                             {cancel, discard, save});
-        noteActivity(mNowMs);   // T3.1: the modal has to be drawn to be answered
+        askUnsaved(go);
+    }
+
+    // ── R-FAMILY-9: the window's title ───────────────────────────────────────────────────
+    std::string App::windowTitle() const
+    {
+        // "Cosmo" wherever no project is on screen: Home, and the way back to it.
+        if (mScreen == Screen::Home || mReturning) return "Cosmo";
+        std::string name = mTopBar->projectName();
+        if (name.empty() && mScreen == Screen::Loading) name = mLoadName;
+        if (name.empty()) return "Cosmo";
+        return (mSvc.model().dirty ? "*" : "") + name + " \xE2\x80\x94 Cosmo";   // U+2014
+    }
+
+    // ── R-FAMILY-13: the keys ────────────────────────────────────────────────────────────
+    App::Shortcut App::shortcutFor(int key, bool ctrl, bool shift)
+    {
+        if (key == kKeyDelete || key == kKeyBackspace) return ctrl ? Shortcut::None : Shortcut::Delete;
+        if (!ctrl) return Shortcut::None;   // a plain letter is never a shortcut (`o`, `s` are withdrawn)
+        switch (key)
+        {
+        case 'o': return shift ? Shortcut::None : Shortcut::Open;
+        case 'n': return shift ? Shortcut::None : Shortcut::NewProject;
+        case 's': return shift ? Shortcut::SaveAs : Shortcut::Save;
+        case ',': return Shortcut::Settings;
+        case 'z': return shift ? Shortcut::Redo : Shortcut::Undo;
+        case 'y': return shift ? Shortcut::None : Shortcut::Redo;
+        }
+        return Shortcut::None;
+    }
+
+    bool App::shortcut(int key, bool ctrl, bool shift)
+    {
+        const Shortcut sc = shortcutFor(key, ctrl, shift);
+        if (sc == Shortcut::None) return false;
+        noteActivity(mNowMs);
+        // R-UX-1: nothing fires behind a modal, an open menu, a focused field or the transition.
+        if (mScreen == Screen::Loading || modalOpen() || isTextEditing() ||
+            mTopBar->menuStrip()->openIndex() >= 0)
+            return true;
+        if (mScreen == Screen::Home)
+        {
+            // The launcher has no project: only the keys that make sense with none.
+            if (sc == Shortcut::Open) { if (onOpenProjectRequested) onOpenProjectRequested(); }
+            else if (sc == Shortcut::NewProject) { if (onNewProjectRequested) onNewProjectRequested(); }
+            else if (sc == Shortcut::Settings) openSettingsDialog();
+            return true;
+        }
+        switch (sc)
+        {
+        case Shortcut::Open: if (onOpenRequested) onOpenRequested(); break;
+        case Shortcut::NewProject: requestNewProject(); break;
+        case Shortcut::Save: saveWorkspace(); break;
+        case Shortcut::SaveAs: if (onSaveWorkspaceRequested) onSaveWorkspaceRequested(); break;
+        case Shortcut::Settings: openSettingsDialog(); break;
+        case Shortcut::Undo: undo(); break;
+        case Shortcut::Redo: redo(); break;
+        case Shortcut::Delete: requestDeleteSelected(); break;   // R-UX-3: it asks
+        case Shortcut::None: break;
+        }
+        return true;
     }
 
     bool App::key(const artboard::KeyEvent &e)
@@ -1809,8 +2185,27 @@ namespace cosmo_v2
         // A modal owns the keyboard while it is up (R-HOME-1c): Escape cancels, Enter takes the
         // primary action, and everything else is swallowed rather than reaching the editor behind
         // it. Checked before the tree, because the tree does not know a modal is over it.
-        if (mInfoDialog && mInfoDialog->isOpen() && mInfoDialog->handleKey(e)) return true;
-        if (mConfirmDialog && mConfirmDialog->isOpen() && mConfirmDialog->handleKey(e)) return true;
+        // R-UX-1: ONE gate for every modal. It used to name two of the six, so behind Settings, the
+        // preset picker or History, Escape did nothing and Delete removed the selected photo. The
+        // topmost open modal gets the key; whatever it does with it, the editor does not see it.
+        if (modalOpen())
+        {
+            if (mConfirmDialog->isOpen()) mConfirmDialog->handleKey(e);          // raised over the others
+            else if (mInfoDialog->isOpen()) mInfoDialog->handleKey(e);
+            else if (mExportDialog->isOpen()) mExportDialog->modalKey(e);        // its text fields type
+            else if (mPresetDialog->isOpen()) mPresetDialog->modalKey(e);
+            else if (mSettingsDialog->isOpen()) mSettingsDialog->modalKey(e);
+            else if (mHistoryView->isOpen()) mHistoryView->modalKey(e);
+            return true;
+        }
+        // R-FAMILY-8: an open menu owns the keyboard next. Arrows / Home / End / Enter / Escape
+        // walk it (MenuStrip::menuKey); everything else is swallowed, so no shortcut and no rack
+        // step happens behind a dropdown.
+        if (mScreen == Screen::Editor && mTopBar->menuStrip()->openIndex() >= 0)
+        {
+            mTopBar->menuStrip()->menuKey(e);
+            return true;
+        }
         const bool handled = (mScreen == Screen::Home) ? mHome->dispatchKey(e) : mRoot->dispatchKey(e);
         // R-BROWSE-2: Left/Right walk the rack — but only once nothing in the tree wanted
         // the key (a focused field, an open modal) has claimed it.
@@ -1868,10 +2263,34 @@ namespace cosmo_v2
         if (mSession.imageCount() == 0) return;
         if (mSession.workspacePath().empty())
         {
-            if (onSaveWorkspaceRequested) onSaveWorkspaceRequested();
+            if (onSaveWorkspaceRequested) onSaveWorkspaceRequested();   // the host's dialog -> saveProjectAs
         }
         else
-            mSession.saveWorkspaceAs(mSession.workspacePath());
+            saveProjectAs(mSession.workspacePath());
+    }
+
+    bool App::saveProjectAs(const std::string &path)
+    {
+        // R-FAMILY-11: a save the user asked for says what happened. (saveWorkspaceAs stays the
+        // silent passthrough - creating a new project also writes one, and that is not "Saved".)
+        const bool ok = !path.empty() && mSession.saveWorkspaceAs(path);
+        mSvc.refreshFromSession();   // the model's `dirty` is what the dot, the icon and the title read
+        mBindPending = true;
+        std::string name = path;
+        if (auto sl = name.find_last_of("/\\"); sl != std::string::npos) name = name.substr(sl + 1);
+        if (ok)
+        {
+            // Save As may have renamed the project: the bar and the window title follow.
+            std::string stem = name;
+            if (auto d = stem.find_last_of('.'); d != std::string::npos) stem = stem.substr(0, d);
+            if (mScreen == Screen::Editor) mTopBar->setProjectName(stem);
+            showToast(Toast::Kind::Info, "Saved");
+        }
+        else
+        {
+            showToast(Toast::Kind::Error, "Could not save " + (name.empty() ? std::string("the project") : name));
+        }
+        return ok;
     }
 
     void App::finishWorkspaceLoad(const std::string &path)

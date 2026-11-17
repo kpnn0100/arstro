@@ -30,6 +30,7 @@
 #include "ExportWriter.h"
 #include "ControlChannel.h"
 #include "AssistProcess.h"
+#include "CosmoAssistProfile.h"
 #include "HttpLite.h"
 #include "NtwbAdapter.h"
 #include "EditControls.h"
@@ -305,9 +306,12 @@ namespace
             req.embedExif = h.write.metadata;
             req.embedProfile = h.write.metadata;
 
+            // R-EXPORT-3a: an `export --outdir` that is the photo's own folder must not replace
+            // the photo (`_edit`); a path the user typed themselves (`-o`) is written as given.
             const std::string path = h.write.forcePath.empty()
-                                         ? withExtension(nameableOutPath(outPath, sourcePath, h.written),
-                                                         extensionFor(h.write.format))
+                                         ? arstro::cosmo_v2::exporter::awayFromSource(
+                                               withExtension(nameableOutPath(outPath, sourcePath, h.written),
+                                                             extensionFor(h.write.format)), sourcePath)
                                          : h.write.forcePath;
             std::error_code ec;
             const std::filesystem::path dir = std::filesystem::path(path).parent_path();
@@ -2480,7 +2484,7 @@ static int cmdAgent(const Args &a)
     auto grade = [&](const Json &args) -> std::string {
         const char *proj = std::getenv("COSMO_PROJECT");
         if (!proj || !*proj) return "ERROR: no project is open in Cosmo";
-        const std::vector<std::string> skills = arstro::cosmo_v2::ProcessAssistant::defaultSkills();
+        const std::vector<std::string> skills = arstro::cosmo_v2::ProcessAssistant::defaultSkills(arstro::cosmo_v2::cosmoAssistProfile());
         if (skills.empty()) return "ERROR: the colour-grading skill was not found (set COSMO_SKILLS_DIR)";
         const std::filesystem::path p(proj);
         const std::string out = (p.parent_path() / (p.stem().string() + "-graded")).string();
@@ -2489,7 +2493,7 @@ static int cmdAgent(const Args &a)
             for (char ch : v) r += ch == '\'' ? std::string("'\\''") : std::string(1, ch);
             return r + "'";
         };
-        std::string cmd = "COSMO_CONTROL=" + q(sockPath) + " COSMO_CC=" + q(arstro::cosmo_v2::ProcessAssistant::findCosmoCc()) +
+        std::string cmd = "COSMO_CONTROL=" + q(sockPath) + " COSMO_CC=" + q(arstro::cosmo_v2::ProcessAssistant::findCc(arstro::cosmo_v2::cosmoAssistProfile())) +
                           " python3 " + q(skills[0] + "/scripts/edit.py") + " run " + q(proj) + " --out " + q(out);
         if (!args["mood"].asString().empty()) cmd += " --mood " + q(args["mood"].asString());
         if (!args["photos"].asString().empty()) cmd += " --names " + q(args["photos"].asString());
@@ -2691,9 +2695,10 @@ static int cmdServe(Host &h, const Args &a)
     // socket. (`run` has no socket for an agent to come back through, so it refuses.)
     h.svc.setAssistantFactory([&control]() -> std::unique_ptr<arstro::cosmo::IAssistant> {
         return std::make_unique<arstro::cosmo_v2::ProcessAssistant>(
-            arstro::cosmo_v2::ProcessAssistant::configFor(control.path()));
+            arstro::cosmo_v2::cosmoAssistProfile(),
+            arstro::cosmo_v2::ProcessAssistant::configFor(arstro::cosmo_v2::cosmoAssistProfile(), control.path()));
     });
-    h.svc.setAgentDetector([&h] { return arstro::cosmo_v2::ProcessAssistant::detect(h.svc.model().settings.agent); });
+    h.svc.setAgentDetector([&h] { return arstro::cosmo_v2::ProcessAssistant::detect(arstro::cosmo_v2::cosmoAssistProfile(), h.svc.model().settings.agent); });
     if (a.has("project"))
     {
         Command open;

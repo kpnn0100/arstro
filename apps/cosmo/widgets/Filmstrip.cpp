@@ -1,4 +1,5 @@
 #include "Filmstrip.h"
+#include "TextFit.h"
 #include "../Theme.h"
 #include "Icons.h"
 #include <algorithm>
@@ -284,6 +285,30 @@ namespace cosmo_v2
                     if (sgi == 0) t.moveTo(px, py); else t.lineTo(px, py);
                 }
                 t.strokePath();
+            }
+            else if (c.missing)
+            {
+                // R-UX-7 (opt-in): the file is gone. A plate, a "no file" mark (a frame with a
+                // stroke through it) and the photo's NAME - loading is a spinner, this is not,
+                // so the two never look alike - where there used to be an empty box.
+                const Rect r{x, y, cw, kCellH};
+                drawRoundedRect(t, r, radius::control(), Paint::filled(palette::folderChipBg()));
+                const double cx = x + cw * 0.5, cy = y + kCellH * 0.5 - 6.0, s = 8.0;
+                const Color mark = palette::mutedForeground();
+                t.setStroke(mark, 1.2);
+                t.beginPath();
+                t.moveTo(cx - s, cy - s * 0.75); t.lineTo(cx + s, cy - s * 0.75);
+                t.lineTo(cx + s, cy + s * 0.75); t.lineTo(cx - s, cy + s * 0.75); t.closePath();
+                t.strokePath();
+                t.beginPath(); t.moveTo(cx - s - 2.0, cy + s * 0.75 + 2.0); t.lineTo(cx + s + 2.0, cy - s * 0.75 - 2.0);
+                t.strokePath();
+                // The primary cell's name bar (onOverlay) already carries the name: once is enough.
+                if (i != mPrimary)
+                {
+                    const std::string label = fitTextEnd(t, c.name, cw - 2 * 4.875, 8.0, font::sans());
+                    t.setFill(mark);
+                    t.drawText(label, x + (cw - t.measureText(label, 8.0, font::sans())) * 0.5, y + kCellH - 14.0, 8.0, font::sans());
+                }
             }
             // Photo cells: the thumbnail is a child ImageView; its selection outline,
             // sliding primary ring and name bar are drawn in onOverlay (below) so

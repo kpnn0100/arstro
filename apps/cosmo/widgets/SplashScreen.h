@@ -19,6 +19,7 @@
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
 #include "../UiInspectable.h"
+#include "BrandMark.h"
 #include <string>
 
 namespace arstro
@@ -35,7 +36,24 @@ namespace cosmo_v2
         /** Total intro length; the host defers its startup work until this has played. */
         static constexpr double kIntroMs = 900.0;
 
+        /** Which app this splash opens (R-SPLASH-6). Interstellar and Solaris compile this same
+         *  widget and differ only here; the default is cosmo, so cosmo's host changes nothing. */
+        struct Brand
+        {
+            brand::Mark mark = brand::Mark::Cosmo;
+            const char *word = "cosmo";
+            const char *tagline = "PROFESSIONAL PHOTO EDITOR";
+            const char *version = "v1.0.0";
+        };
+        static Brand cosmoBrand() { return Brand{}; }
+        static Brand interstellarBrand() { return Brand{brand::Mark::Interstellar, "interstellar", "VIDEO COLOUR AND CUT", "v1.0.0"}; }
+        static Brand solarisBrand() { return Brand{brand::Mark::Solaris, "solaris", "DIGITAL AUDIO WORKSTATION", "v1.0.0"}; }
+
         SplashScreen() { inputTransparent = true; }   // R-SPLASH-4: takes no input
+        explicit SplashScreen(const Brand &b) : mBrand(b), mMark(b.mark) { inputTransparent = true; }
+        const Brand &brandInfo() const { return mBrand; }
+        /** The logo's live state, for a test or `ui dump` — a private eased value is unverifiable. */
+        const brand::Player &markPlayer() const { return mMark; }
 
         /** Start the intro at `nowMs`. */
         void begin(double nowMs);
@@ -58,7 +76,7 @@ namespace cosmo_v2
          *  the work was over before the 260 ms fade-in had gone anywhere. A progress bar
          *  nobody can see is not a progress bar. */
         void beginExit();
-        bool isGone() const { return mExiting && mExit.value() <= 0.001; }
+        bool isGone() const { return mExiting && mMark.gone() && mExit.value() <= 0.001; }
 
         void advance(double nowMs) override;
 
@@ -72,9 +90,12 @@ namespace cosmo_v2
         void onPaint(artboard::IRenderTarget &t) const override;
 
     private:
+        Brand mBrand;
+        brand::Player mMark{brand::Mark::Cosmo};   // R-SPLASH-7: show up, fly while loading, leave
         double mT0 = 0.0, mNowMs = 0.0;
         bool mStarted = false, mExiting = false;
         bool mExitRequested = false;   // asked to go; waiting for the bar to read 100%
+        bool mChromeLeaving = false;   // the wordmark, status and bar have started their fade
         artboard::AnimatedProperty mRise{0.0};      // wordmark: opacity + rise + scale
         artboard::AnimatedProperty mTag{0.0};       // tagline, staggered behind it
         artboard::AnimatedProperty mDots{0.0};      // the pulsing dot row (pre-status)

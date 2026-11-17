@@ -142,9 +142,11 @@ namespace cosmo_v2
         const double viewH = height.value();
         auto visible = [&](double y) { return y + kSectionHeaderHeight >= 0 && y <= viewH; };
         const char *regionNames[3] = {"Shadows", "Midtones", "Highlights"};
-        if (visible(mRegionHeaderY)) drawSectionHeader(t, kPadX, mRegionHeaderY, innerW, regionNames[mRegion]);
-        if (visible(mBalanceHeaderY)) drawSectionHeader(t, kPadX, mBalanceHeaderY, innerW, "Balance");
-        if (visible(mRemapHeaderY)) drawSectionHeader(t, kPadX, mRemapHeaderY, innerW, "Hue Remap");
+        // R-UX-9 (opt-in): `upperHeaders` draws the three headers in capitals.
+        auto hdr = [this](const std::string &label) { return upperHeaders ? sectionHeaderUpper(label) : label; };
+        if (visible(mRegionHeaderY)) drawSectionHeader(t, kPadX, mRegionHeaderY, innerW, hdr(regionNames[mRegion]));
+        if (visible(mBalanceHeaderY)) drawSectionHeader(t, kPadX, mBalanceHeaderY, innerW, hdr("Balance"));
+        if (visible(mRemapHeaderY)) drawSectionHeader(t, kPadX, mRemapHeaderY, innerW, hdr("Hue Remap"));
 
         if (mEnableRowY + kEnableRowH >= 0 && mEnableRowY <= viewH)
         {

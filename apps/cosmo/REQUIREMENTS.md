@@ -2,7 +2,7 @@
 
 The single shared source of truth for cosmo behavior. **Every agent must read this
 before implementing, and check any new/changed requirement here for conflict before writing
-code** (mirrors the `implement_artboard` V-model, step 1). cosmo is an *application* built
+code** (mirrors the `arstro.artboard.implement` V-model, step 1). cosmo is an *application* built
 on the Artboard library + `cosmo::EditSession`; the Artboard library keeps its own
 `core/Artboard/docs/`. Requirements below are numbered `R-<area>-<n>`.
 
@@ -58,7 +58,7 @@ architecture, per-class detailed design, design rationale, and a PlantUML model 
   cosmo's `ParamPanel` / `MixerPanel` / `CurvePanel` / `GradePanel` / `XformPanel` — and its accent is
   purple-pink. Before this, `palette::primary()`, `ring()` and `primaryAlpha()` returned a literal, so
   every reused panel drew cosmo's blue inside the other app, and the only fixes were to fork 23 widget
-  files (a divergence with a delay fuse, `arstro.design.rule` §2) or to leave them the wrong colour.
+  files (a divergence with a delay fuse, `arstro.rule.design` §2) or to leave them the wrong colour.
   So the accent is ONE slot read by all three tokens and by `sharedTheme()`, set once at startup with
   `palette::setAccent`. **Cosmo never calls it**, so cosmo's own pixels do not change — established by
   rendering all 41 named `cosmo_shots` states before and after and comparing the bytes (41 identical),
@@ -763,6 +763,8 @@ and the engine renders byte-identically before/after the round-trip.
   has none); `Ctrl+Shift+S` is Save As (always prompts). File ▸ Save / Save As… map to the same
   workspace actions (labels show the shortcuts), so "save" means "save the project" everywhere —
   group tree, per-image params, and history. (Bare `s` remains the quick PNG export.)
+  (**AMENDED (R-FAMILY-13), 2026-11-17:** the bare `s` key is withdrawn - a plain letter must not open a
+  dialog. Export… is the route; the labels' shortcuts are in the menu's shortcut column.)
 
 ## R-MASK — Mask adjustable inside the photo (item 1) — ✅ IMPLEMENTED
 
@@ -1582,18 +1584,21 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
   returns to home; if the project has **unsaved changes** (`EditSession::isDirty()`), a modal
   first asks to **Save** (accent) or **Discard** (red/destructive), with Cancel/click-outside to
   stay (`ConfirmDialog`). Screen transitions cross-fade (R-G-1).
+  (**AMENDED (R-FAMILY-12), 2026-11-17:** the question is `Save changes to "<name>"?` with Cancel ·
+  Don't save · Save, "Don't save" outlined.)
 - **R-HOME-1c The same question is asked when the APP closes.** `isDirty()` guarded exactly one
   exit — the wordmark back to the launcher — so closing the window discarded the whole session
   silently: the host wired only GTK's `destroy` and there was no `delete-event` handler at all
   (D-53). Every route out of an unsaved project now asks the same question, through the same modal
   and the same three buttons: **Cancel** stays, **Discard** (red) leaves, **Save** writes and then
-  leaves. The close request is *refused* while the modal is up, so the window cannot vanish out from
+  leaves. (**AMENDED (R-FAMILY-12), 2026-11-17:** "Discard" reads **Don't save**, outlined.) The close request is *refused* while the modal is up, so the window cannot vanish out from
   under the question — and a clean project closes immediately, because a prompt with nothing to lose
   is a prompt nobody reads.
   This is about the exit the user takes, not about the process: `quit` from a script or the control
   socket means quit, and is not second-guessed.
 - **R-HOME-1b Project name in the top bar.** The open project's name (the `.cmp` stem) is shown
   centred in the editor top bar; set on New/Open/Import/Recent-open.
+  (**AMENDED (R-FAMILY-9), 2026-11-17:** it sits LEFT, after the menus, with the unsaved dot after it.)
 - **R-HOME-2 Project file format `.cmp` = catalog/manifest.** A `.cmp` is a JSON catalog that
   **references the original image files on disk** (absolute/relative paths) plus each image's
   edit settings and the group tree — i.e. it reuses cosmo's existing workspace serialization
@@ -1660,12 +1665,21 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
   number that happened to work at the size someone tested. On the current layout that is
   **584 × 466**. A magic number here is not a shortcut; it is a second copy of the layout that
   nobody updates.
+  (**AMENDED (R-UX-5, D-82), 2026-11-17:** with What's New and Help gone the sidebar's own sum is
+  **426**, and a shot at 584 × 426 showed that the Settings modal opened over this screen
+  (R-SETTINGS-5) is taller than the window - it already was at 466, where its Done button is off
+  the bottom edge. The minimum is therefore **held at 584 × 466** by a NAMED third term of the sum
+  (`kSettingsModalFloorH`), so removing two links does not cut 40 px more off that dialog; the
+  term is to be derived from the dialog once D-82 gives it a scrolling body.)
 - **R-HOME-8 Reserved.** Settings / What's New / Help & Documentation are present but inert
   (reserved), matching the Figma affordances without behavior. **AMENDED (R-SETTINGS-5): Settings is
   now live** — it opens the same modal the editor's Settings menu opens. A link that draws a hover
   wash and then does nothing reads as broken, and the settings a photographer most wants to set
   (preview quality, CPU limit) are the ones they want set *before* opening a project, when the only
   screen available is this one. What's New and Help stay reserved.
+  **AMENDED (R-UX-5, 2026-11-17): What's New and Help & Documentation are removed** until they
+  exist; Settings is the only link. A reserved link that hovers and swallows a click is a dead
+  control, which R-G-3 never meant to license.
 
 ## R-BYPASS — Per-node filter bypass (disable/enable a group's or photo's edits)
 
@@ -1720,6 +1734,7 @@ one or many images in one action. It replaces the old "immediately show a native
 current image" behaviour of that menu item. The **bare `s` shortcut keeps its quick single-image
 PNG/JPEG export** through the native save dialog (R-PERSIST-1's note stands) — the modal is the
 deliberate, batch path, `s` is the fast path.
+(**AMENDED (R-FAMILY-13), 2026-11-17:** the bare `s` quick export is withdrawn; the modal is the one route.)
 
 Reference design: `ref/cosmo/File Reader Design(1).zip` → `src/app/App.tsx` `ExportModal`, adapted
 to this app's tree model per the deltas called out below.
@@ -1755,6 +1770,27 @@ to this app's tree model per the deltas called out below.
   muted while its checkbox is off): **Filename prefix** (prepended to each output name) and
   **Export to subfolder** (a folder created under the resolved destination). The resolved path +
   example filename is previewed live in mono under the destination row, ellipsized to fit (R5).
+  (**AMENDED (D-72), 2026-11-17:** this entry mandated "same as source" as the default and was
+  silent on name collisions, so the default export of a JPEG - JPEG out, no prefix, no subfolder -
+  resolved to the source's own path and overwrote the original. An editor that never changes a
+  pixel of the original may not do that on its default path. See R-EXPORT-3a, which every
+  destination now obeys.)
+- **R-EXPORT-3a An export never overwrites a file (D-72).** Added 2026-11-17. The output path
+  of an export **shall never be the source file, and shall never be a file that already exists**:
+  - when the wanted name is the source itself, the name gets the suffix **`_edit`**
+    (`IMG_1.jpg` beside `IMG_1.jpg` becomes `IMG_1_edit.jpg`);
+  - when the name (with or without `_edit`) already exists, a counter is added: **`-1`, `-2`, …**
+    until the name is free (`IMG_1_edit-1.jpg`); so a second export never replaces the first;
+  - the rule holds for every destination (same as source, a chosen folder, a subfolder, a prefix)
+    and inside one batch (two photos with one stem get two files);
+  - **the dialog's preview line shows the name that will really be written**, suffix included -
+    a preview that shows `IMG_1.jpg` while `IMG_1_edit.jpg` is written is a lie about where the
+    user's file went;
+  - the scripted `export <outdir>` (the service's export, the window's and `cosmo-cc`'s writer)
+    keeps replacing its OWN earlier outputs - a script that renders twice into one folder expects
+    the same names - but it too **never writes onto the source**: that one name gets `_edit`.
+    An explicit single output path (`cosmo-cc render -o`, the `s` quick export's save dialog,
+    where the toolkit asks before replacing) is the user's own named choice and is written as given.
 - **R-EXPORT-4 Format / size / quality.** Format chips: **JPEG · PNG · TIFF** — the three the host
   writer can actually produce (GdkPixbuf); WebP from the reference is dropped rather than shipped
   broken. Size chips: **Original · 2048 px · 1080 px · 720 px** (long edge; downscale only, never
@@ -1863,6 +1899,52 @@ It now opens the way a project does: **animation first, work after**.
   line skips straight through.
 - **R-SPLASH-4 Non-interactive.** The splash takes no input and cannot be dismissed; it is chrome
   for a fixed, short moment.
+
+- **R-SPLASH-6 One splash, three apps.** Interstellar and Solaris open with THIS splash, not a copy
+  of it: the widget takes a **brand** — the logo, the wordmark, the tagline, the version — and
+  defaults to cosmo's, so cosmo's host changes nothing. An app with no startup work to report runs
+  it through `SplashWindow.h`: show up, then leave. (**Added 2026-11-17**, founder: *"Add a splash to
+  both"*.) The splash is skipped when the app is launched to DO something (a file on the command
+  line, a control socket, `<APP>_NO_SPLASH`) — R-SPLASH-3's own "skips straight through", applied
+  to the two new hosts.
+- **R-SPLASH-7 The logo lives through the launch.** The app's logo (R-BRAND) sits centred above the
+  wordmark and plays its three animations: it **shows up** with the intro, **flies** (its working
+  loop) while the host is loading, and **disappears** when the launch is done — and only then is
+  the splash gone. The wordmark, status and bar fade **while** the logo is leaving, never after
+  (`arstro.rule.animation`, rule 3). (**Added 2026-11-17.** **AMENDS R-SPLASH-2:** the wordmark's
+  baseline moves from 42% to 52% of the height to make room for the logo above it; nothing else in
+  R-SPLASH-2 changes. **AMENDS the cost R-SPLASH accepts:** the exit was a 260 ms fade and is now
+  the logo easing out of its loop (240 ms) plus its disappear (720 ms) — about 0.7 s more launch,
+  accepted by the founder for the animation. The logo leaves its loop by EASING OUT, not by waiting
+  for the loop boundary, precisely so a launch never waits a whole 1.6 s period.)
+
+## R-BRAND — The logos, and how they move
+
+Founder, 2026-11-17: *"fix the color, logo and animation in those actual application every section."*
+Each app has a logo that is two things at once — something from space and the app's own tool
+(`arstro.rule.brand` §7) — and each logo has three animations that obey `arstro.rule.animation`.
+The pictures, storyboards and timing tables are `docs/brand/app-logos.html`; this is what the code
+must do.
+
+- **R-BRAND-1 One implementation for the suite.** The three app logos — cosmo's ring and moon,
+  Interstellar's Warp, Solaris's Synth sun — are drawn by ONE module that lives in cosmo and is
+  compiled by Interstellar and Solaris (their "linked, never copied" rule), on the brand's 96-unit
+  grid, so a logo is the same drawing at 16 px and at 160 px and cannot drift between apps.
+- **R-BRAND-2 The logo is on Home.** Each app's Home shows its logo above the wordmark. It shows up
+  once, the first time Home is drawn, and then rests.
+- **R-BRAND-3 Show up, 1000 ms.** Starts with nothing drawn, ends exactly at the still logo. Parts
+  arriving slow into rest.
+- **R-BRAND-4 Disappear, 720 ms.** Starts at the still logo, ends with nothing drawn. The body starts
+  slowly from rest and **fades while it is still moving**; no opacity step anywhere is a pop.
+- **R-BRAND-5 Working loop.** 1600 ms (cosmo, Solaris) / 1200 ms (Interstellar). It starts and ends
+  at the still logo. A flight loop moves on one axis only. The loop is left **only at a loop
+  boundary, or by easing out of it** — never cut mid-pose.
+- **R-BRAND-6 The law is enforced by construction and by measurement.** A pose has translations, one
+  rotation and ONE uniform scale — there is no way to express a stretch. The pose is a pure function
+  of time, so every rule above is a test that stands at a millisecond and measures; none is checked
+  by looking.
+- **R-BRAND-7 Reduced motion.** Nothing travels and nothing loops; the logo fades in and out over
+  150 ms. A fade is still required.
 
 ## R-LOADUX — A project load says what it is doing
 
@@ -2384,6 +2466,17 @@ the P0 test harness — hence `ASSIST`.)
   face. Text still fits (R5: a long word, URL or code line is cut, a table shares the width) and is measured
   once per width and per change, never per frame (R-ASSIST-8). The model keeps the agent's text exactly as it
   arrived — how it looks is the view's (R-SVC-4); the user's own messages stay as typed.
+- **R-ASSIST-13 The agent is built from an app profile, so Interstellar and Solaris run the same
+  one.** (**Added 2026-11-17**; the founder: *"final goal is both cosmo/interstellar/solaris have
+  agent, have mcp and can agent can help user making music/video/edit photo"*.) Everything in the
+  agent that says "cosmo" is a value: the MCP server's name and the CLI that serves it attached
+  (`<app>-cc mcp --attach <socket>`), the environment names, the skills and their blurbs, the
+  AGENTS.md and system-prompt words, the allowed tools, the workspace. They live in an
+  `AssistProfile`; Cosmo's is `cosmoAssistProfile()` and reproduces what it did before, exactly.
+  The conversation (`assist start|send|stop|agents`, the model's `assist` block, the two events)
+  is one class each service owns, and the Agent panel reads only the seam header. **No command,
+  event, model field or setting of Cosmo's changed.** A sibling app supplies a profile, compiles
+  these files in place, and gives the agent its own `mcp --attach`.
 - **R-ASSIST-8 The window stays smooth while an agent works.** (**Added 2026-11-04** — the user, recording a
   demo: *"while agent is editing, the UI is too lag … this need to be smooth"*. Measured on the dichoi project
   over the control socket: each `analyze` held the window's thread **2067 ms**, each `snapshot` **1085 ms** —
@@ -2415,6 +2508,99 @@ the P0 test harness — hence `ASSIST`.)
   when there is more. Send is disabled while the field is empty. The panel holds no behaviour (R-SVC-4):
   Send is `assist send`, Start `assist start`, Stop `assist stop`; everything it shows is
   `AppModel::assist`.
+
+## R-UX — The 2026-11-17 UI/UX audit: nothing destroys work unasked, nothing looks live that is not — 🚧 IN PROGRESS
+
+An audit of rendered frames (2026-11-17) found the editor could lose a user's work with one key or
+one click, let the keyboard reach the editor behind an open dialog, offered controls that did
+nothing, and said nothing at all when there was nothing to show. Each rule below names the defect
+that produced it. (The export half of the audit is R-EXPORT-3a.)
+
+- **R-UX-1 One modal gate: a modal owns the keyboard, every modal, in one place (D-73).** While
+  ANY in-app modal is open - the confirm dialog, Image Information, Export, Settings, the preset
+  category picker, the History tree - **every key belongs to it**: **Escape closes it** (cancels),
+  **Enter takes its primary action** (Done for Settings, the confirm button for the preset picker,
+  close for History; the Export dialog keeps its own rule - Enter commits a focused field), and
+  **every other key is swallowed**. No editor shortcut may fire behind a modal: not Delete, not
+  `o` / `s` (**AMENDED (R-FAMILY-13):** those two plain keys no longer exist; Ctrl+O / Ctrl+N / Ctrl+, are
+  covered the same way), not Ctrl+Z / Ctrl+Y / Ctrl+S, not the arrow keys. The check is ONE function,
+  `App::modalOpen()`, asked at the top of `App::key` and by the host before its own accelerators,
+  so a modal added later is covered by adding it to that one list. (**AMENDS R-HOME-1c's host
+  guard**, which named only the confirm dialog: Settings, the preset picker and History had no
+  key handling at all, so Escape did nothing and Delete removed the selected photo behind them.)
+  The destructive action of a confirm stays unbound, as R-HOME-1c says.
+- **R-UX-2 Closing a project asks first, and is called what it is (D-74).** `Settings ▸ Reset
+  Workspace` wiped the open project at once - every photo, edit and history step - with no
+  question, from a menu about engine settings, and left the old title and histogram on screen.
+  It is **withdrawn** and replaced by **`File ▸ Close Project`**: with unsaved changes it asks the
+  same Save / Discard / Cancel question (**AMENDED (R-FAMILY-12):** Cancel · Don't save · Save) as the wordmark and the window's close (R-HOME-1c), then
+  returns to Home through the normal return transition (R-LOADING-6); the project is dropped only
+  once the editor is no longer on screen, so nothing visible changes in one frame (R-G-1), and
+  the top bar's title and the histogram are cleared with it. Cancel leaves everything as it was.
+- **R-UX-3 Removing photos from a project asks first (D-75).** Delete (the key, and the
+  filmstrip's context menu) removes the selected photos or groups from the project together with
+  their edits and their history, and **it cannot be undone** - history is per photo, so there is
+  no step to undo. It therefore asks: a confirm dialog that says how many items go, that the
+  files on disk are kept, and that it cannot be undone; **Remove** is the destructive button
+  (red, never bound to Enter), **Cancel** the default. With nothing selected the key does
+  nothing. The scripted `delete` command is unchanged - a script has already decided.
+
+- **R-UX-4 A button says what it acts on, and the photo's export has a button (D-76).** The
+  pinned row under the edit stack acts on PRESETS, and read "Save / Import / Export" with Save in
+  the accent fill - so the most prominent button in the editor looked like "save my project" and
+  the one beside it like "export my photo", and did neither. The row now reads **Save preset /
+  Import preset / Export preset**, all three outline chips (no accent fill: saving a preset is not
+  the editor's primary action), labels measured and centred (R5). **Exporting photos gets the
+  primary button instead**: an accent-filled **Export** button (download glyph + label) at the
+  right end of the top bar, opening the Export modal (R-EXPORT) - until now File ▸ Export… was the
+  only route. It hovers (R-G-3), and with no photo in the project it is drawn dimmed and does
+  nothing; the dim eases (R-G-1). (**AMENDS the Figma action bar**, R-G-2: the mock's
+  Save/Import/Export wording and filled Save are withdrawn for the reason above.)
+- **R-UX-5 No control looks live that does nothing (D-77).** (a) The Xform tab's four buttons
+  with no engine behind them - Flip Horizontal / Vertical, Auto Horizon / Geometry - are **not
+  shown** in Cosmo until the engine has a flip and an auto-geometry; the panel is shorter by those
+  two sections. (The panel is shared with Interstellar: hiding is opt-in and Interstellar's panel
+  is unchanged.) (b) Home's **What's New** and **Help & Documentation** links are **removed**
+  until they exist - a link that washes on hover and swallows the click reads as broken
+  (**AMENDS R-HOME-8**, which kept them "reserved"; the sidebar's bottom block in R-HOME-11 is
+  now one link tall - see the amendment there for what that did to the window minimum). (c) The version under the
+  links comes **from the build** (`COSMO_VERSION` in `apps/cosmo/CMakeLists.txt`), not from a
+  literal in the widget.
+- **R-UX-6 Chrome text fits the room it has (D-78; R5 applied).** (**AMENDED (R-FAMILY-9), 2026-11-17:**
+  (a)'s name is left-aligned after the menus, not centred; fitting and ellipsis are unchanged.) (a) The project name in the top
+  bar is centred in the bar when that fits, otherwise centred in the **free span** between the
+  menu strip and the right-hand group, and **ellipsized** to that span with real text metrics; it
+  never draws over a menu title or the filename readout, and with no room it is not drawn.
+  (b) A preset or folder name in the left rail is ellipsized to the rail's width less its indent
+  and padding - while the rail is closing the name shortens with it rather than being cut by the
+  edge.
+- **R-UX-7 Empty and missing are states, and each says what it is (D-79).** (a) **A project with
+  no photos** shows, centred on the stage, "No photos yet", one muted line saying what to do, and
+  an **Add photos** button (the same action as the context menu's Add Photo…); it fades in and
+  out (R-G-1) and never shows while a load is running or a photo is on the stage. (b) **An empty
+  presets rail** says "No presets yet" and how to make one, instead of a blank column. (c) **A
+  photo whose file is gone** is a filmstrip cell with a plate, a missing-file mark and its
+  **name** - not an anonymous empty box - and, when it is the selected photo, the stage says
+  **"File not found"** with the path (front-ellipsized to fit), so the user knows which file to
+  put back. Loading (spinner, R-LOADUX-2) and missing stay different pictures. (The cell flag is
+  opt-in on the shared Filmstrip; Interstellar's strip is unchanged.)
+- **R-UX-8 A readout is in the unit the photographer thinks in (D-80).** The Basic/Detail rows
+  showed the slider's own track position: +0.4 EV read "+32", 6200 K read "-2", a 1.0 px
+  sharpening radius read "+10". Each row's readout is now formatted from the value the ENGINE
+  gets, by one function over the `EditControls.h` catalogue (`formatEditControl`): **exposure in
+  EV with two decimals and a sign** ("+0.40 EV"), **temperature in kelvin** ("6200 K"),
+  **sharpening radius in pixels** ("1.0 px"), a **unipolar** control (range starting at 0 or
+  above) as a plain number with **no "+"**, a bipolar one as a signed integer as before. The
+  readout column is wide enough for the longest of them and every row's track is the same length.
+  Cosmo only: Interstellar's inspector does not use the catalogue and is unchanged.
+- **R-UX-9 Small consistencies (D-81).** (a) Every section header in the edit stack is
+  UPPERCASE, as R-G-4's header and the Basic/Detail sections already are - Mask, Curve, Grade and
+  Xform said "Tone Curve", "Balance", "Rotate" in title case (opt-in on the shared panels;
+  SectionHeader's default and the other apps are unchanged). (b) The Mask tab with no mask says
+  in one muted line what a mask is for, under its four "add" chips. (c) A right-column page that
+  overflows shows a **scroll indicator** at its right edge - the same thin pill the Agent tab
+  draws - only while there is more than fits, positioned from the live eased offset, and fading in
+  and out (R6, R-G-1).
 
 ## R-NTWB — Cosmo in a browser: an app of Arstro Remote over NTWB — 🚧 IN PROGRESS
 
@@ -2512,5 +2698,136 @@ screen share. The bridge is **NTWB 1.0.0** (native-to-web bridge), defined once 
 - **R-NTWB-9 The page's tokens are Theme.h's.** *(Added 2026-09-30.)* The colours, radii, families and
   metrics the page uses are GENERATED from Theme.h (`cosmo_web_tokens` -> `web/css/tokens.css`,
   committed, ctest `cosmo_web_tokens_current` fails on drift) - a stylesheet typed by hand is a second
-  palette, the forked-token failure of arstro.design.rule §2. The faces are the window's own files,
+  palette, the forked-token failure of arstro.rule.design §2. The faces are the window's own files,
   each registered under the family name the C++ draws with.
+
+## R-FAMILY — One family, one behaviour — 🚧 IN PROGRESS (the shared building blocks are built; Cosmo has adopted them, R-FAMILY-8…14; Interstellar and Solaris adopt them in their own documents)
+
+*(Added 2026-11-17, from the UI-consistency plan across Cosmo, Interstellar and Solaris.)* The three
+apps compile the same widgets (`apps/cosmo/widgets`, `apps/cosmo/Theme.h`) and still answered the
+same question three ways: where Settings lives, how an unsaved project looks, where a toast sits,
+which button of a dialog is filled. This section is the one answer. **Step 1 (these entries) adds
+only the shared building blocks: every one is opt-in, and its default leaves all three apps
+pixel-identical — except R-FAMILY-7, which says so.** An app's own requirements are amended when
+that app adopts a block, not here.
+
+- **R-FAMILY-0 The standard.** Decided; an app may choose its accent and its own menus, not these:
+  (a) menus are **File · Edit · the app's own menus · View**; Settings is **File ▸ Settings…**
+  (Ctrl+,); (b) a menu row shows its shortcut in a right-aligned column, menus have separators and a
+  dim disabled state; (c) unsaved work is a **foreground-coloured dot after the project name**, a save
+  icon that lights, and the window title `*Name — App`; the project name sits left, after the menus;
+  (d) **one toast**, top-centre under the top bar, kinds info / warning / error, held 3200 ms; (e) the
+  unsaved dialog is `Save changes to "<name>"?` with **Cancel · Don't save · Save**; the destructive
+  button is OUTLINED when a primary button sits beside it and FILLED when it is the only action;
+  (f) menu items are Title Case, buttons and sentences are sentence case, and an ellipsis is U+2026;
+  (g) a segmented fill picks a **mode**, an accent underline switches a **page**; (h) the agent is
+  opened by **View ▸ Show Agent / Hide Agent**.
+- **R-FAMILY-1 A menu row has a shortcut, can be a separator, can be disabled.** `MenuStrip::Item`
+  and `ContextMenu::Item` carry a `shortcut`, an `enabled` flag and a `separator` flag; an existing
+  `{label, action}` item compiles and draws as before. The shortcut is drawn right-aligned, in the
+  mono face, muted; a menu that has one is as wide as its widest label plus its widest shortcut, by
+  **measured** text (R-G / design law R5). A separator is a hairline row: no click, no hover. A
+  disabled row is dimmed, has no hover wash, and its click does nothing (the menu stays open). An
+  item's index counts every row, separators included, and the published geometry follows it. The
+  keyboard moves through a menu skipping separators and disabled rows; the row it stands on is
+  washed through the same eased hover as the pointer's (R-G-1, R-G-3).
+- **R-FAMILY-2 One toast.** `Toast` is a self-drawn Segment the caller places (it does not know any
+  top bar). Kinds Info / Warning / Error: every kind has the popover's ground and a neutral border —
+  the accent is not a toast colour; a warning adds a 3 px bar and a triangle in `palette::warning()`,
+  an error a 3 px bar and a crossed circle in `palette::destructive()`, an info adds nothing (shape
+  AND colour, for a colour-blind eye). It fades in while sliding down into place, holds 3200 ms, and
+  fades out while sliding up (arstro.rule.animation rule 3); a toast shown while one is up
+  **cross-fades** with it, never a cut. Its text is ellipsized to its maximum width with measured
+  text. Its rect, live amount, kind and text are published for a test. The behaviour is Solaris's
+  toast (Solaris R-UI-15), so Solaris can adopt it with no visible change.
+- **R-FAMILY-3 The destructive button's weight is a style.** `ConfirmDialog` draws its destructive
+  button Filled, Outlined, or Auto — outlined when a primary button is also present, filled when the
+  destructive button is the only filled action. The default is Filled, so every existing caller
+  draws as before; Solaris's earlier `setOutlinedDestructive(true)` is the Outlined style and keeps
+  compiling and drawing the same.
+- **R-FAMILY-4 The family's tokens are in one header.** `palette::warning()` — an amber (#E3B341,
+  Solaris's solo and meter amber) that is no app's accent; named `motion::` durations and `space::`
+  rungs with the values Interstellar and Solaris each declared (design law §2.4, §2.5). The web
+  tokens are regenerated (R-NTWB-9).
+- **R-FAMILY-5 One wordmark helper, one unsaved dot.** `Wordmark` draws `<name>.` with the accent
+  dot at the **measured** end of the name (R-G-2a's estimate detaches it) and returns its width;
+  `DirtyDot` is the unsaved dot — foreground colour, radius 3, eased 0 … 1. Neither is wired into an
+  app in this step.
+- **R-FAMILY-6 A segmented control publishes its live highlight.** `SegmentedControl::highlightPos()`
+  is the eased position of the highlight, so an app reads it rather than re-implementing the control
+  to test it (design law §1: a private eased value is an unverifiable one).
+- **R-FAMILY-7 The History card looks like the other modals.** Its title is `History` at 14 px
+  SemiBold, not tracked uppercase, and its card radius is the named `radius::control()`, not a
+  literal 6. **This one changes pixels wherever the card is shown (Cosmo, Solaris) — intended.** A
+  host that sets `title` itself keeps its own words.
+
+**Cosmo adopts the standard** *(added 2026-11-17; these entries AMEND the Cosmo requirements named
+in each — the older text is marked where it stands)*:
+
+- **R-FAMILY-8 Cosmo's menus are File · Edit · Develop · Preset · View.** (**AMENDS** the earlier
+  File · Settings · Develop · History · Preset; R-GPU-3's and R-SETTINGS' "Engine Settings…" is
+  now **File ▸ Settings…**.) **File:** Home · New Project… (Ctrl+N) · Open… (Ctrl+O) ‖ Save
+  (Ctrl+S) · Save As… (Ctrl+Shift+S) ‖ Export… ‖ Settings… (Ctrl+,) ‖ Close Project. **Edit:**
+  Undo (Ctrl+Z) · Redo (Ctrl+Shift+Z) ‖ History…. **Develop:** Copy Settings · Paste to Selected ·
+  Paste to All Images ‖ Group Selection · Ungroup Selection. **Preset:** Save Preset… · Import
+  Preset…. **View:** Show / Hide Presets · Show / Hide Agent. (‖ = a separator.) Shortcuts are in
+  the shortcut column, never padded into the label; labels are Title Case; an ellipsis is U+2026.
+  **Undo names what it would undo** ("Undo Exposure") when the model has the step's label. **A
+  row that cannot act now is disabled:** Undo / Redo with nothing to undo / redo, History… with no
+  history, Save / Save As… / Export… / Save Preset… with no photo, both Pastes with nothing
+  copied, Copy with nothing being edited, Group with nothing selected, Ungroup with no group
+  selected. The state follows the model; it is refreshed while no menu is open, so a dropdown
+  never changes under the pointer. **Show Agent** selects the Agent tab of the right column;
+  while that tab is shown the row reads **Hide Agent** and returns to the tab that was open
+  before. **While a menu is open the keyboard belongs to it** (after a modal, R-UX-1): Up / Down /
+  Home / End / Left / Right / Enter / Escape go to `MenuStrip::menuKey`, every other key is
+  swallowed, and no editor shortcut fires behind it.
+- **R-FAMILY-8a Home sits in the File menu's last group** in all three apps (**Added 2026-11-17**,
+  after the three menus were looked at side by side: it was the first row here and the last in
+  Solaris and Interstellar). In Cosmo the last group is Home, then Close Project.
+- **R-FAMILY-9 Cosmo's top bar: the name sits left, with the unsaved dot and a save button.**
+  (**AMENDS R-HOME-1b and R-UX-6a**: the project name is no longer centred.) After the wordmark
+  and the menus comes the project name, left-aligned, ellipsized with measured text to the room
+  before the right-hand group; with no room it is not drawn. Directly after it is the `DirtyDot`
+  (foreground colour, radius 3, eased), shown while the model says the project has unsaved
+  changes. At the right of the bar, left of Export, is a **save icon button**: dim when there is
+  nothing to save, lit (foreground, eased) while the project is unsaved; a click saves (it is
+  File ▸ Save). The wordmark is drawn by `Wordmark::draw` (the dot at the measured end of the
+  name - R-G-2a's estimate is withdrawn for the top bar). **The window title** is `Cosmo` on
+  Home, `<name> — Cosmo` for a saved project and `*<name> — Cosmo` for an unsaved one
+  (**AMENDS** the fixed title "cosmo. by arstro").
+- **R-FAMILY-10 Only a change that would be written marks the project unsaved (D-63).**
+  Selecting a photo, walking the rack, zooming or re-rendering does not. An edit that records a
+  history step, undo / redo / a history jump, a bypass, a group made, ungrouped or renamed, a
+  photo removed, a paste or a preset applied do. (**AMENDS** the session's "true once an edit is
+  submitted": every render submitted used to set it.)
+- **R-FAMILY-11 Cosmo's toast.** One shared `Toast`, top-centre under the top bar (its top at
+  bar height + 4), drawn over whichever screen is up. It says: **"Saved"** (Info) after a save
+  the user asked for; the result of an export - **"Exported N photos"** (Info), or (Error) how
+  many could not be written and the first reason; and **every command the service refuses**
+  (Error, the service's own sentence) - a refusal used to reach only the log.
+- **R-FAMILY-12 Cosmo's unsaved-changes dialog.** (**AMENDS R-HOME-1, R-HOME-1c, R-UX-2**: the
+  title "Unsaved changes" and the button "Discard" are replaced; the three routes still ask the
+  same question.) Title `Save changes to "<name>"?`; body `Your changes will be lost if you
+  don't save them.`; buttons **Cancel · Don't save · Save**; the dialog is in
+  `DestructiveStyle::Auto`, so "Don't save" is outlined beside the filled Save, and the
+  remove-photo confirm (R-UX-3) keeps its single filled **Remove**. Escape cancels, Enter saves,
+  "Don't save" is bound to no key. A long name is shortened so the title fits the card.
+- **R-FAMILY-13 Cosmo's keys.** (**AMENDS R-PERSIST-2, R-EXPORT's introduction and R-UX-1's
+  list**: the plain `o` and plain `s` keys are **withdrawn** - a letter typed with no modifier
+  must never open a dialog.) **Ctrl+O** opens (the editor's File ▸ Open…; on Home, Open
+  project…), **Ctrl+N** new project (it asks about unsaved changes first), **Ctrl+S** save,
+  **Ctrl+Shift+S** save as, **Ctrl+,** settings (Home too), **Ctrl+Z** undo, **Ctrl+Shift+Z**
+  and Ctrl+Y redo, **Delete and Backspace** remove the selection after the same confirm
+  (R-UX-3). The quick single-photo export has **no key**: Export… is the route. Which key means
+  what is ONE function of the app (`App::shortcut`), so it is testable with no window; the host
+  only translates the toolkit's key. None fires behind a modal, an open menu, a focused text
+  field, or the loading transition.
+- **R-FAMILY-14 Cosmo's words, and Home's empty state.** Menu items Title Case; buttons, links,
+  headers and sentences in sentence case ("New project", "Open project…", "Import catalog…",
+  "Recent projects", "Add photo…"); U+2026 wherever an ellipsis is drawn. **With no recent
+  project** Home's grid shows, centred: one sentence ("No recent projects"), one hint
+  ("Create a project, or open one you already have."), one outline button ("New project") - and
+  not the dashed card, which returns as the last cell once there is a project. (**AMENDS R-HOME's
+  introduction and R-HOME-3**: the capitalised labels, and "the empty-state card".)
+

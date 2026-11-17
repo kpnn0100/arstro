@@ -36,9 +36,19 @@ namespace exporter
     /** Where `slot`'s output lands for this request: the resolved directory (created
      *  if needed) joined with the prefixed filename + the format's extension.
      *  `sourcePath` is the image's original file (drives "same as source" + the stem);
-     *  `fallbackName` is used when the source path is empty (a never-saved image). */
+     *  `fallbackName` is used when the source path is empty (a never-saved image).
+     *
+     *  R-EXPORT-3a (D-72): the result is NEVER `sourcePath` and never a file that already
+     *  exists - the stem gets `_edit` when it would be the source, then `-1`, `-2`, … while
+     *  the name is taken. Call it just before writing, one photo at a time. */
     std::string resolvePath(const ExportDialog::Request &req, const std::string &sourcePath,
                             const std::string &fallbackName);
+
+    /** For a writer handed a ready-made path (the scripted `export <outdir>`): `path` unless
+     *  it IS the source file, in which case `<stem>_edit<ext>` beside it (R-EXPORT-3a). An
+     *  existing file that is not the source is left to be replaced - a script that renders
+     *  twice into one folder expects the same names. */
+    std::string awayFromSource(const std::string &path, const std::string &sourcePath);
 
     /** Encode `rgba` (w*h, 4 bytes/px, straight RGBA) to `path` per `req`.
      *  Returns true on success; `error` carries a human-readable reason otherwise. */

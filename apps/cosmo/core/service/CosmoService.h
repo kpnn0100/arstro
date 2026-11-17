@@ -33,6 +33,7 @@
 #include "../ProjectLoader.h"
 #include "../ThreadBudget.h"
 #include "../assist/Assistant.h"
+#include "../assist/AssistConversation.h"
 #include "AppModel.h"
 #include "Command.h"
 #include "Event.h"
@@ -74,11 +75,11 @@ namespace cosmo
         void setJpegWriter(JpegWriter w) { mJpegWriter = std::move(w); }
         /** R-ASSIST-1/2: the host's way of running the user's agent. A front end without one
          *  (`cosmo-cc run`, a test that does not inject it) refuses `assist start` with why. */
-        using AssistantFactory = std::function<std::unique_ptr<IAssistant>()>;
-        void setAssistantFactory(AssistantFactory f) { mAssistantFactory = std::move(f); }
+        using AssistantFactory = AssistConversation::AssistantFactory;
+        void setAssistantFactory(AssistantFactory f) { mAssist.setFactory(std::move(f)); }
         /** R-ASSIST-9: the host's look at this machine (PATH, local model servers). */
-        using AgentDetector = std::function<std::vector<AgentChoice>()>;
-        void setAgentDetector(AgentDetector d) { mAgentDetector = std::move(d); }
+        using AgentDetector = AssistConversation::AgentDetector;
+        void setAgentDetector(AgentDetector d) { mAssist.setDetector(std::move(d)); }
         /** R-ASSIST-8: an `analyze` or `snapshot` is still rendering on the worker. Its answer
          *  arrives in a later `pump` - a front end that must answer in order (a CLI line, an MCP
          *  call) pumps until this is false. */
@@ -212,10 +213,9 @@ namespace cosmo
         bool assistStart();
         bool assistSend(const Command &c);
         bool assistStop();
-        void pumpAssistant();
+        /** R-ASSIST-13: cosmo's side of the shared conversation - its events, its launch, its words. */
+        AssistConversation::Hooks assistHooks();
         void pumpQueries();
-        void assistSay(const std::string &role, const std::string &text);
-        void assistState(const std::string &state);
         /** The picker's averaging radius, in proxy pixels — big enough to swamp sensor noise,
          *  small enough that clicking a small neutral patch does not drag its neighbours in. */
         static constexpr int kWbPickRadius = 4;
@@ -237,10 +237,9 @@ namespace cosmo
         std::function<void()> mWorkerInit;
         ImageWriter mWriter;
         JpegWriter mJpegWriter;
-        AssistantFactory mAssistantFactory;
-        AgentDetector mAgentDetector;
-        bool mAgentOpen = false;   // the last agent message is still being streamed (TextDelta)
-        std::unique_ptr<IAssistant> mAssistant;   // R-ASSIST-6: destroyed (and so stopped) with the service
+        /** R-ASSIST-1/13: the conversation with the user's agent, on `mModel.assist`. It owns the
+         *  agent (R-ASSIST-6: destroyed, and so stopped, with the service). */
+        AssistConversation mAssist;
         /** R-ASSIST-8: an `analyze` / `snapshot` whose render is on the worker. What the worker
          *  computes for it (the measurement, the snapshot's size and encoder answer) comes back
          *  through the shared state; the UI thread only publishes it. */

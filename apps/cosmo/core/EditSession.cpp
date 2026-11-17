@@ -217,6 +217,7 @@ namespace cosmo
                        siblings.end());
         for (int k : moved) { mNodes[k].parent = gnode; mNodes[gnode].kids.push_back(k); }
         siblings.push_back(gnode);
+        mDirty = true;   // the tree changed (R-FAMILY-10)
         mSel = {gnode};
         mSelAnchor = -1;
         const auto &kids = mNodes[mCurGroup].kids;
@@ -233,6 +234,7 @@ namespace cosmo
             for (int child : mNodes[n].kids) { mNodes[child].parent = mCurGroup; kids.push_back(child); }
             mNodes[n].kids.clear();
             kids.erase(std::remove(kids.begin(), kids.end(), n), kids.end());
+            mDirty = true;   // the tree changed (R-FAMILY-10)
         }
         mSel.clear(); mSelAnchor = -1;
         submit();
@@ -240,8 +242,11 @@ namespace cosmo
 
     void EditSession::renameGroup(int node, const std::string &name)
     {
-        if (node > 0 && node < (int)mNodes.size() && mNodes[node].group && !name.empty())
+        if (node > 0 && node < (int)mNodes.size() && mNodes[node].group && !name.empty() && mNodes[node].name != name)
+        {
             mNodes[node].name = name;
+            mDirty = true;   // a name is written to the project (R-FAMILY-10)
+        }
     }
 
     void EditSession::collectSubtree(int node, std::vector<int> &out) const
@@ -308,6 +313,7 @@ namespace cosmo
 
         const std::vector<int> victims = mSel;  // deleteNodeImpl mutates mNodes; copy first
         for (int n : victims) deleteNodeImpl(mNodes, mService, n);
+        if (!victims.empty()) mDirty = true;   // photos left the project (R-FAMILY-10)
         mSel.clear(); mSelAnchor = -1;
 
         if (editTargetGone)
@@ -470,14 +476,14 @@ namespace cosmo
         return -1;
     }
 
-    void EditSession::recordHistory()
+    bool EditSession::recordHistory()
     {
-        if (mSuppressHistory) return;
+        if (mSuppressHistory) return false;
         History *h = editHistory();
         EditParams *p = curParams();  // group params while editing a group, else the slot's
-        if (!h || !p) return;
-        if (h->empty()) h->init(*p);
-        h->record(*p, mNowMs);
+        if (!h || !p) return false;
+        if (h->empty()) { h->init(*p); return false; }   // seeding a timeline is not an edit
+        return h->record(*p, mNowMs);
     }
 
     void EditSession::applyCropPreview(EditParams &p) const
@@ -513,8 +519,11 @@ namespace cosmo
     void EditSession::submitWith(RenderService::RenderIntent intent)
     {
         if (mCurrentSlot < 0) return;
-        mDirty = true;   // an edit is being committed -> unsaved changes
-        recordHistory();
+        // D-63 / R-FAMILY-10: unsaved means "something that would be written changed". This used
+        // to set the flag for EVERY render submitted, and selecting, walking the rack and zooming
+        // all submit one - so the unsaved prompt (and now the top bar's dot) appeared after merely
+        // looking. History already knows whether the params moved: it records a step only then.
+        if (recordHistory()) mDirty = true;
         EditParams p = effectiveParams(mCurrentSlot);
         applyCropPreview(p);
         mService.render(mCurrentSlot, p, intent);
@@ -551,7 +560,7 @@ namespace cosmo
         History &h = mSlotHistory[slot];
         if (h.empty()) h.init(mSlotParams[slot]);
         h.breakCoalesce();
-        h.record(mSlotParams[slot], mNowMs);
+        if (h.record(mSlotParams[slot], mNowMs)) mDirty = true;   // a paste / an import is a change to save
     }
 
     const EditParams *EditSession::applyHistoryParams(const EditParams *p)
@@ -567,6 +576,7 @@ namespace cosmo
         mSuppressHistory = true;
         submit();
         mSuppressHistory = false;
+        mDirty = true;   // a step back or forward changes what a save would write (R-FAMILY-10)
         return p;
     }
 
@@ -747,6 +757,15 @@ namespace cosmo
                     f << "#image\nparent=" << parentId << "\npath=" << mSlotPaths[g.slot] << '\n';
                     if (g.bypass) f << "bypass=1\n";   // R-BYPASS-6
                     writeParamsAndHistory(mSlotParams[g.slot], mSlotHistory[g.slot]);
+                }
+                else if (!g.sourcePath.empty())
+                {
+                    // D-66: a leaf with no slot - offline, or not decoded yet - is written back as
+                    // the file gave it. Skipping it deleted the photo AND its edit from the
+                    // project on the next save, which `add` and `import` trigger by themselves.
+                    f << "#image\nparent=" << parentId << "\npath=" << g.sourcePath << '\n';
+                    if (g.bypass) f << "bypass=1\n";
+                    writeParamsAndHistory(g.params, g.history);
                 }
             }
         };
@@ -961,6 +980,17 @@ namespace cosmo
             submit();
         }
         return slot;
+    }
+
+    void EditSession::setLeafSource(int node, const std::string &path, const EditParams &params,
+                                    const History &history, bool bypass)
+    {
+        if (node < 0 || node >= (int)mNodes.size() || mNodes[node].group || mNodes[node].slot >= 0) return;
+        GNode &leaf = mNodes[node];
+        leaf.sourcePath = path;
+        leaf.params = params;
+        leaf.history = history;
+        leaf.bypass = bypass;
     }
 
     void EditSession::markImageFailed(int node)

@@ -3,7 +3,7 @@
  *
  *  The browser front end must look like the window (R-NTWB-5), and the first thing that makes
  *  two UIs look different is two palettes. Typing Theme.h's values into a stylesheet would be
- *  a second, hand-kept copy - the forked-token-file failure arstro.design.rule §2 names ("a
+ *  a second, hand-kept copy - the forked-token-file failure arstro.rule.design §2 names ("a
  *  divergence with a delay fuse"). So the stylesheet's tokens are GENERATED: this program calls
  *  the same inline token functions every widget calls and prints them as CSS custom
  *  properties. apps/cosmo/web/css/tokens.css is its committed output; ctest
@@ -12,7 +12,7 @@
  *      cmake-build/apps/cosmo/cosmo_web_tokens > apps/cosmo/web/css/tokens.css
  *
  *  Only what Theme.h defines is here; motion durations are literals in the widgets (cosmo does
- *  not use Artboard's motion tokens yet, arstro.design.rule §2.5), so base.css carries those
+ *  not use Artboard's motion tokens yet, arstro.rule.design §2.5), so base.css carries those
  *  with a citation per value.
  */
 #include "Theme.h"
@@ -59,6 +59,7 @@ int main()
     colour("muted-foreground", palette::mutedForeground());
     colour("destructive", palette::destructive());
     colour("success", palette::success());
+    colour("warning", palette::warning());   // R-FAMILY-4
     colour("border", palette::border());
     colour("input", palette::input());
     colour("input-light", palette::inputLight());

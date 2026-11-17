@@ -11,6 +11,7 @@ format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 - A resolved entry moves to `## Closed` with its commit hash and the test that now guards it. **Nothing
   is ever deleted.**
 
+
 The entries below were found by reading the source on 2026-08-16, while writing the cosmo skills. They
 are **confirmed in the code but not yet reproduced at runtime** — each says so. Most are observability
 and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
@@ -57,37 +58,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   The new `ui/{menu,menustrip,confirm}.js` draw labels as SVG text for that reason (measured within
   0.1 px of the native); `desktop/editor.js` `text()`, `contextmenu.js` and `topbar.js` use spans.
 
-### D-66 — Saving a project deletes every image whose decode failed, with its grade
-- **Area:** core / persistence · **Status:** **Confirmed** (measured) · **Severity:** S1 — silent,
-  permanent loss of a user's edit · **Found:** 2026-10-01, by Interstellar's integrator while binding
-  its rack (`apps/interstellar/docs/DEFECTS.md` D-2).
-- **Reproduce:**
-  ```bash
-  cd "$(mktemp -d)" && export HOME=$PWD && cp <any>.png a.png && cp <any>.png b.png
-  printf 'project new %s/p.cmp\nadd %s/a.png %s/b.png\nwait load.finished --timeout 30s\nselect 2\nset exposure=0.7\nproject save\n' $PWD $PWD $PWD > s1.txt
-  cosmo-cc run --script s1.txt; grep -c '^#image' p.cmp        # 2
-  mv b.png b_moved.png                                         # the file goes offline
-  printf 'project open %s/p.cmp\nwait load.finished --timeout 30s\nproject save\n' $PWD > s2.txt
-  cosmo-cc run --script s2.txt; grep -c '^#image' p.cmp        # 1 — b.png and exposure=0.7 are gone
-  ```
-- **Expected:** an offline photo "reads as missing, not as a stall" (R-LOADUX-2) — and is KEPT, with
-  its params and history, so relinking the file restores the edit.
-- **Actual:** `before: 2 images; exposure lines: 2` → `after reopen+save with b.png offline: 1 images;
-  exposure=0.7 lines: 0`. The node, its path, its params and its history are deleted from the file.
-- **Cause:** `EditSession::saveWorkspaceAs`'s walk (`core/EditSession.cpp:733`) writes an `#image`
-  only `if (g.slot >= 0 …)`; a failed (or still-pending) node has no slot, so it is skipped. Its path
-  and params live only in the slot arrays, which a failed decode never fills.
-- **Requirement:** R-LOADUX-2 (offline reads as missing) and, through Interstellar, R-RACK-2/R-RACK-7.
-- **Why it is S1 and not S3:** `add` and `import` save on finish (`mSaveOnFinish`), so it is not only
-  an explicit save that triggers it — adding a photo to a project with one offline file deletes that
-  file's edit. And every Interstellar VIDEO source reads as failed in Cosmo alone (Interstellar D-1),
-  so opening an Interstellar rack in Cosmo and saving it deletes every video's grade.
-- **Recommended fix:** keep each loaded `WorkspaceEntry` for a node whose decode failed (path, params,
-  history, bypass) and write it back verbatim in the walk; a relink then restores it. Guard with a
-  core test: open a `.cmp` with one unreadable path, save, assert the `#image` and its params remain.
-- **Mitigation outside Cosmo:** Interstellar refuses every command that would make Cosmo save while
-  the rack has an offline source (`InterstellarService::rackSaveBlocked`).
-
 ### D-64 — `cosmo_core_tests` writes its throwaway projects into the user's recent projects
 - **Area:** core / tests · **Status:** **Confirmed** (measured) · **Severity:** S3
 - **Found:** 2026-09-30, looking at the web Home screen on the RK3588 after a `ctest` run.
@@ -107,24 +77,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   the first test and let the settings test back up / restore inside it - or back up and restore
   `recent.tsv` around the run the way the settings test does.
 - **Guard:** the suite asserts `ProjectStore::recents()` of the real dir is unchanged after it ran.
-
-### D-63 — Selecting a photo marks the project unsaved
-- **Area:** core / session · **Status:** **Confirmed** (measured) · **Severity:** S3
-- **Found:** 2026-09-30, while putting the session's real `dirty` into the model (R-NTWB-3).
-- **Front end:** every one — the flag is the session's; a browser now shows it, the window's
-  unsaved-changes prompt already obeyed it.
-- **Reproduce:** `project open <p.cmp>` → `dirty = false`; `select <node>` → `dirty = true` with no
-  edit made (`the_model_carries_what_a_second_view_draws` asserts the clean state before the select
-  and notes this).
-- **Expected:** only a change that would be written to the project marks it unsaved (an edit, a
-  bypass, a group change, a reorder).
-- **Actual:** `EditSession::submitWith` (`core/EditSession.cpp:513-516`) sets `mDirty = true` for every
-  render it submits, and selecting, navigating and zooming all submit a render.
-- **Judgement:** **defect** — the unsaved prompt appears after merely looking at photos, which
-  teaches the user to click it away.
-- **Recommended fix:** set `mDirty` where a change is recorded (`recordHistory` when it actually adds
-  a step, `setBypassed`, the group mutators) and not in `submitWith`.
-- **Guard:** in the same L2 test, `select` then `dirty == false`; an edit then `dirty == true`.
 
 ### D-61 — `cosmo-cc render` / `bench` print `backend=gpu` for renders that ran on the CPU
 - **Area:** core / cli · **Status:** **Confirmed** (by reading, and by D-60's measurement) · **Severity:** S3
@@ -397,7 +349,198 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   it. `R-AGENT-*` will state the contract.
 - **Fix:** pending. P0.4 + P0.5.
 
+### D-82 — The Settings modal is taller than the minimum window: its Done button is off the bottom edge
+- **Area:** UI (`widgets/SettingsDialog.cpp`, shared with Interstellar) · **Status:** **Open** ·
+  **Severity:** S3 — the dialog still closes (click outside; Escape and Enter since R-UX-1) and every
+  chip applies as it is clicked, so nothing is lost; the Input row and Done are cut.
+- **Found:** 2026-11-17, during the R-UX pass, in shot `scale-100-settings-min` (584x466). The frame from
+  before the pass shows the same cut, so it predates it - most likely since the Input row was added.
+- **Reproduce:** `cosmo_shots --outdir /tmp/s --only scale-` and open `cosmo-scale-100-settings-min-584x466.png`.
+- **Expected:** R6 - anything that can overflow clips AND scrolls; a dialog fits its window or scrolls.
+- **Actual:** the card is laid out from y = 4 at its full height (six rows, the scale row wrapped to two
+  lines at this width) and runs past the window's bottom; there is no scroll.
+- **Judgement:** defect (R6). `docs/detailed_design.md`'s "430 px, which still clears the 466 px logical
+  minimum" is no longer true.
+- **Recommended fix:** give the card a scrolling body with a pinned Done row (ExportDialog's skeleton),
+  opt-in or proven pixel-identical at sizes where it fits, since Interstellar compiles this file; then
+  derive `kSettingsModalFloorH` (`widgets/HomeScreen.cpp`) from the dialog instead of the typed 466.
+
 ## Closed
+
+### D-63 — Selecting a photo marks the project unsaved
+- **Area:** core / session · **Status:** **Fixed** (2026-11-17, uncommitted at the time of writing: the session that fixed it was told not to commit) · **Severity:** S3
+- **Found:** 2026-09-30, while putting the session's real `dirty` into the model (R-NTWB-3).
+- **Front end:** every one — the flag is the session's; a browser now shows it, the window's
+  unsaved-changes prompt already obeyed it.
+- **Reproduce:** `project open <p.cmp>` → `dirty = false`; `select <node>` → `dirty = true` with no
+  edit made (`the_model_carries_what_a_second_view_draws` asserts the clean state before the select
+  and notes this).
+- **Expected:** only a change that would be written to the project marks it unsaved (an edit, a
+  bypass, a group change, a reorder).
+- **Actual:** `EditSession::submitWith` (`core/EditSession.cpp:513-516`) sets `mDirty = true` for every
+  render it submits, and selecting, navigating and zooming all submit a render.
+- **Judgement:** **defect** — the unsaved prompt appears after merely looking at photos, which
+  teaches the user to click it away.
+- **Recommended fix:** set `mDirty` where a change is recorded (`recordHistory` when it actually adds
+  a step, `setBypassed`, the group mutators) and not in `submitWith`.
+- **Guard:** in the same L2 test, `select` then `dirty == false`; an edit then `dirty == true`.
+- **Fix (R-FAMILY-10, DR-FAMILY-10):** as recommended. `EditSession::recordHistory()` now returns whether a
+  step was recorded and `submitWith` sets `mDirty` only then; undo / redo / jump, a recorded slot edit
+  (paste, import), a group made / ungrouped / renamed and a removed photo set it themselves. Found
+  again from the other side: the top bar's new unsaved dot, save icon and `*Name — Cosmo` title would
+  have lit on the first click of a photo.
+- **Guarded by:** `cosmo_core_tests` `the_model_carries_what_a_second_view_draws` (seen failing on the
+  `select` before the fix) and `cosmo_ui_tests` `theTopBarSaysWhatIsUnsaved` ("selecting a photo lights
+  nothing").
+
+### D-81 — Section headers in two cases, a Mask tab of four bare chips, and no scroll indicator on the edit pages
+- **Area:** UI (edit stack) · **Status:** **Fixed** (2026-11-17, uncommitted at the time of writing) · **Severity:** S4
+- **Found:** 2026-11-17, UI/UX audit from rendered frames.
+- **Actual:** Basic/Detail said "TONE", the other tabs "Tone Curve", "Balance", "Rotate"; the Mask tab
+  with no mask was four chips and nothing else; a page that overflowed showed no sign of it.
+- **Judgement:** requirement gap -> R-UX-9. **Fix:** DR-UX-9.
+- **Proof:** `cosmo_ui_tests` `theEditStackIsConsistent` (10 of its checks fail with the change reverted).
+
+### D-80 — Slider readouts showed the track position, not the value
+- **Area:** UI (`widgets/RightColumn.cpp`, `EditControls.h`) · **Status:** **Fixed** (2026-11-17, uncommitted) · **Severity:** S3
+- **Actual:** +0.4 EV read "+32", 6200 K read "-2", a 1.0 px radius read "+10" (a sign on an unsigned
+  value). `SliderRow::formatValue` existed and nothing set it.
+- **Judgement:** requirement gap -> R-UX-8. **Fix:** DR-UX-8 (`formatEditControl`).
+- **Proof:** `cosmo_ui_tests` `sliderReadoutsAreInRealUnits` (4 checks fail with the formatter unassigned).
+
+### D-79 — An empty project and a missing photo said nothing
+- **Area:** UI (stage, filmstrip, presets rail) · **Status:** **Fixed** (2026-11-17, uncommitted) · **Severity:** S3
+- **Actual:** an empty project was a blank stage with no visible way to add a photo and a blank rail; a
+  photo whose file was gone was an anonymous empty cell, and selecting it left the previous photo on
+  the stage. While fixing it: the primary ring sat on the LAST slotless cell whichever was selected
+  (`slot == currentSlot` with both -1).
+- **Judgement:** requirement gap -> R-UX-7. **Fix:** DR-UX-7.
+- **Proof:** `cosmo_ui_tests` `anEmptyProjectAndAMissingPhotoSayWhatTheyAre` (7 checks fail reverted);
+  shots `editor-empty`, `editor-missing`, `editor-missing-mid`.
+
+### D-78 — A long project name was drawn over the menu strip; a long preset name was cut at the rail's edge
+- **Area:** UI (`widgets/TopBar.cpp`, `widgets/PresetTree.cpp`) · **Status:** **Fixed** (2026-11-17, uncommitted) · **Severity:** S3
+- **Judgement:** defect (R5). Requirement stated as R-UX-6. **Fix:** DR-UX-6 (`widgets/TextFit.h`).
+- **Proof:** `cosmo_ui_tests` `aLongProjectNameAndPresetNameAreFitted` (5 checks fail with the fit disabled).
+
+### D-77 — Controls that looked live and did nothing
+- **Area:** UI (`widgets/XformPanel.cpp`, `widgets/HomeScreen.cpp`) · **Status:** **Fixed** (2026-11-17, uncommitted) · **Severity:** S3
+- **Actual:** Flip Horizontal / Vertical and Auto Horizon / Geometry hovered and did nothing (no engine
+  API); Home's What's New and Help & Documentation hovered and swallowed the click; the version was a
+  literal.
+- **Judgement:** requirement conflict (R-HOME-8 kept the links "reserved") -> amended by R-UX-5.
+- **Fix:** DR-UX-5, DR-HOME-6. The old test `homeReservedLinksStaySilentButSwallowTheClick` asserted
+  the withdrawn behaviour and is replaced by `homeHasNoDeadLinksAndShowsTheBuildsVersion`.
+- **Proof:** that test, and `theEditStackIsConsistent` (2 checks fail with the opt-in off).
+
+### D-76 — Save / Import / Export in the action bar were preset actions that read as project and photo actions
+- **Area:** UI (`widgets/ActionBar.cpp`, `widgets/TopBar.cpp`) · **Status:** **Fixed** (2026-11-17, uncommitted) · **Severity:** S2
+- **Actual:** the accent-filled "Save" saved a preset; "Export" exported a preset; exporting a photo had
+  no button anywhere (File > Export... only).
+- **Judgement:** requirement conflict with the Figma mock (R-G-2) -> R-UX-4 amends it.
+- **Fix:** DR-EDIT-9, DR-UX-4.
+- **Proof:** `cosmo_ui_tests` `thePresetRowIsLabelledAndExportHasAButton` (4 checks fail reverted).
+
+### D-75 — Delete removed the selected photo with one unconfirmed keypress, and it cannot be undone
+- **Area:** UI (`App.cpp`, `linux_main.cpp`) · **Status:** **Fixed** (2026-11-17, uncommitted) · **Severity:** S2
+- **Actual:** `EditSession::deleteSelected` erases the nodes; no History records it, so Ctrl+Z does not
+  bring the photo, its edits or its history back. (Measured: `undo` after a delete leaves the rack at 2 of 3.)
+- **Judgement:** requirement gap -> R-UX-3. **Fix:** DR-UX-3 (`App::requestDeleteSelected`).
+- **Proof:** `cosmo_ui_tests` `deleteAsksBeforeRemovingAPhoto` (7 checks fail reverted); shots
+  `editor-delete-confirm`, `editor-delete-confirm-mid`.
+
+### D-74 — Settings > Reset Workspace wiped the open project with no question
+- **Area:** UI (`App.cpp`) · **Status:** **Fixed** (2026-11-17, uncommitted) · **Severity:** S1 — every
+  photo, edit and history step of an unsaved project gone in one click
+- **Actual:** the item called `resetWorkspace()` directly, and left the old title and histogram on screen.
+- **Judgement:** requirement gap -> R-UX-2. **Fix:** DR-UX-2 (`File > Close Project`).
+- **Proof:** `cosmo_ui_tests` `closingAProjectAsksFirstAndClearsTheChrome` (8 checks fail reverted).
+- **Left open, on purpose:** `File > Home` still calls `showHome()` with no question (the wordmark asks);
+  it keeps the session, so nothing is lost there - but opening another project from Home then replaces
+  a dirty one unasked. Not part of this defect; worth its own entry if confirmed live.
+
+### D-73 — Behind an open Settings, preset picker or History, the keyboard still reached the editor
+- **Area:** UI (`App.cpp`, `linux_main.cpp`) · **Status:** **Fixed** (2026-11-17, uncommitted) · **Severity:** S2
+- **Actual:** those three modals had no key handling (Escape did nothing) and the host guarded only the
+  confirm dialog, so Delete removed the selected photo, `o` / `s` opened file dialogs and Ctrl+Z undid.
+- **Judgement:** requirement gap (R-HOME-1c named one dialog) -> R-UX-1. **Fix:** DR-UX-1 (`App::modalOpen`).
+- **Proof:** `cosmo_ui_tests` `aModalOwnsTheKeyboard` (13 checks fail reverted). `[!]` The host half
+  (`onKey` asking `modalOpen()` before its accelerators) is read, not run: it needs a window.
+
+### D-72 — The default export overwrote the original JPEG
+- **Area:** host / export (`ExportWriter.cpp`, `widgets/ExportDialog.cpp`, `cli/main.cpp`) · **Status:**
+  **Fixed** (2026-11-17, uncommitted) · **Severity:** S1 — silent, permanent loss of the user's original
+- **Reproduce (before):** open a JPEG, File > Export..., press Export with the defaults. "Same as source",
+  JPEG, no prefix, no subfolder: `resolvePath` returned the source's own path and `write` replaced it.
+- **Judgement:** requirement conflict - R-EXPORT-3 mandated same-as-source and was silent on collisions
+  -> amended; R-EXPORT-3a added.
+- **Fix:** DR-EXPORT-3a - `widgets/ExportNaming.h` names every output (never the source: `_edit`; never
+  an existing file: `-1`, `-2`); the dialog's preview calls the same function; the scripted writers
+  (`linux_main.cpp`, `cli/main.cpp`) pass through `exporter::awayFromSource`.
+- **Proof:** `cosmo_ui_tests` `anExportBesideTheSourceLeavesTheOriginalAlone` (the original is
+  byte-identical; 7 checks fail with the rule removed), `cosmo_widget_tests`
+  `test_export_preview_shows_the_real_output_name` (3 fail), and at L3:
+  `cosmo-cc export p.cmp --outdir <the photo's folder> --format jpg` wrote `a_edit.jpg` and left
+  `a.jpg`'s sha1 unchanged.
+- **Not changed:** an explicit single path (`cosmo-cc render -o`, the `s` quick export's save dialog) is
+  written as given.
+
+### D-66 — Saving a project deletes every image whose decode failed, with its grade
+- **Area:** core / persistence · **Status:** **Fixed** (2026-11-17) · **Severity:** S1 — silent,
+  permanent loss of a user's edit · **Found:** 2026-10-01, by Interstellar's integrator while binding
+  its rack (`apps/interstellar/docs/DEFECTS.md` D-2).
+- **Reproduce:**
+  ```bash
+  cd "$(mktemp -d)" && export HOME=$PWD && cp <any>.png a.png && cp <any>.png b.png
+  printf 'project new %s/p.cmp\nadd %s/a.png %s/b.png\nwait load.finished --timeout 30s\nselect 2\nset exposure=0.7\nproject save\n' $PWD $PWD $PWD > s1.txt
+  cosmo-cc run --script s1.txt; grep -c '^#image' p.cmp        # 2
+  mv b.png b_moved.png                                         # the file goes offline
+  printf 'project open %s/p.cmp\nwait load.finished --timeout 30s\nproject save\n' $PWD > s2.txt
+  cosmo-cc run --script s2.txt; grep -c '^#image' p.cmp        # 1 — b.png and exposure=0.7 are gone
+  ```
+- **Expected:** an offline photo "reads as missing, not as a stall" (R-LOADUX-2) — and is KEPT, with
+  its params and history, so relinking the file restores the edit.
+- **Actual:** `before: 2 images; exposure lines: 2` → `after reopen+save with b.png offline: 1 images;
+  exposure=0.7 lines: 0`. The node, its path, its params and its history are deleted from the file.
+- **Cause:** `EditSession::saveWorkspaceAs`'s walk (`core/EditSession.cpp:733`) writes an `#image`
+  only `if (g.slot >= 0 …)`; a failed (or still-pending) node has no slot, so it is skipped. Its path
+  and params live only in the slot arrays, which a failed decode never fills.
+- **Requirement:** R-LOADUX-2 (offline reads as missing) and, through Interstellar, R-RACK-2/R-RACK-7.
+- **Why it is S1 and not S3:** `add` and `import` save on finish (`mSaveOnFinish`), so it is not only
+  an explicit save that triggers it — adding a photo to a project with one offline file deletes that
+  file's edit. And every Interstellar VIDEO source reads as failed in Cosmo alone (Interstellar D-1),
+  so opening an Interstellar rack in Cosmo and saving it deletes every video's grade.
+- **Recommended fix:** keep each loaded `WorkspaceEntry` for a node whose decode failed (path, params,
+  history, bypass) and write it back verbatim in the walk; a relink then restores it. Guard with a
+  core test: open a `.cmp` with one unreadable path, save, assert the `#image` and its params remain.
+- **Mitigation outside Cosmo:** Interstellar refuses every command that would make Cosmo save while
+  the rack has an offline source (`InterstellarService::rackSaveBlocked`).
+- **Fix (2026-11-17):** a leaf with no slot now carries what the file said about it:
+  `GNode::sourcePath` plus the node's own `params` / `history` / `bypass`, set by
+  `EditSession::setLeafSource` from `CosmoService`'s open (`core/service/CosmoService.cpp`), and
+  `saveWorkspaceAs` writes that leaf back in its place. The same covers a photo that is still
+  decoding when a save-on-finish runs. Not done: there is still no "Locate…" to relink an offline
+  photo from the window, and Interstellar's `rackSaveBlocked` mitigation is still in place.
+- **Guarded by:** `cosmo_core_tests`, `saving_keeps_a_photo_that_is_offline` (three photos, the middle
+  one offline with `exposure=0.7` and bypass; after open + save the file still has all three, in
+  order, with the edit). Seen failing with the fix disabled: `back.size() == 3` asserts.
+
+### D-71 — Cosmo crashed when an ACP agent asked for a permission
+- **Area:** host (`AssistProcess.cpp`, the ACP client) · **Status:** **Fixed** · **Severity:** S1
+- **Found:** 2026-11-17, by `cosmo_assist_acp` going red (`attach: timed out waiting for assist.state
+  ready`, `cosmo-cc serve` exit 139).
+- **Front end:** every one that runs an `acp:` agent (Gemini, OpenCode, Goose, Codex): the window and
+  `cosmo-cc serve`.
+- **Reproduce:** `ctest -R cosmo_assist_acp` — the fake agent sends `session/request_permission`.
+- **Expected:** the request is answered by policy (R-ASSIST-9).
+- **Actual:** segfault in `ProcessAssistant::handleAcpLine`. The option list was
+  `ok ? std::initializer_list<const char *>{…} : std::initializer_list<const char *>{…}`; the backing
+  arrays die with the conditional expression and the loop read dead stack. Present since the ACP client
+  was written (3034354); whether it crashed depended on stack layout, which is why it showed up late.
+- **Judgement:** defect (undefined behaviour), no requirement change.
+- **Fix:** two named `static` arrays. The three `tests/assist/*.sh` cleanup traps no longer abort on a
+  process that is already dead, so a failed run stops leaking its socket.
+- **Proof:** `ctest -R cosmo_assist` — 2 of 2 pass; it was 1 of 2 before the fix.
 
 ### D-70 — A RAW and its camera JPEG opened as two photos
 - **Area:** core / service (`import`, `add`) · **Status:** **Fixed** · **Severity:** S3
@@ -2010,7 +2153,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   `list(REMOVE_ITEM … linux_main.cpp)` stands in the way. `cosmo_widget_tests` covers isolated widget
   hit-testing only, never the assembled app.
 - **Judgement:** defect against the family design rule that a UI change must be *seen* before it ships
-  (`arstro.design.desktop` §5, now `arstro.design.rule` §8) — currently unsatisfiable for cosmo.
+  (`arstro.design.desktop` §5, now `arstro.rule.design` §8) — currently unsatisfiable for cosmo.
 - **Fix:** commit `c755a76`. **One line was the whole of it** — `list(REMOVE_ITEM COSMO_APP_NOMAIN
   … linux_main.cpp)`, named and shaped after Genesis's `GENESIS_APP_NOMAIN`, which has had it all
   along. On top of that, `apps/cosmo/tests/shots/renderShots.cpp` renders **13 PNGs across 2 window

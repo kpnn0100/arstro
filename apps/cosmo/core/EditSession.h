@@ -49,6 +49,10 @@ namespace cosmo
         int addPendingImage(int parentNode, const std::string &name);
         /** The decode failed: the leaf stops being "still coming" and reads as missing. */
         void markImageFailed(int node);
+        /** D-66: tell a slot-less leaf what the project file says about it (path, settings,
+         *  history, bypass), so `saveWorkspaceAs` can write it back if it never decodes. */
+        void setLeafSource(int node, const std::string &path, const arstro::EditParams &params,
+                           const History &history, bool bypass);
         /** attachImage() — giving a pending leaf its pixels — is declared below with
          *  `Thumb`, which it needs and which lives with the group tree. */
         int imageCount() const { return (int)mSlotParams.size(); }
@@ -72,6 +76,11 @@ namespace cosmo
              *  not been decoded yet. `slot` is still -1, exactly like a missing image —
              *  `pending` is what tells "still coming" apart from "gone". */
             bool pending = false;
+            /** D-66: where an image leaf WITHOUT a slot (still coming, or offline) came from.
+             *  Its develop settings, history and bypass ride in `params` / `history` /
+             *  `bypass` above until it gets a slot - so a save writes it back whole, and a
+             *  file that is offline today keeps its edit for the day it is found again. */
+            std::string sourcePath;
         };
         /** One row of "the current group's children" -- what a filmstrip widget draws. */
         struct Cell
@@ -203,7 +212,9 @@ namespace cosmo
         void submitRefine(int level, arstro::RenderService::RenderIntent intent =
                                          arstro::RenderService::RenderIntent::Final);
 
-        /** Unsaved-changes flag: true once an edit is submitted, cleared on
+        /** Unsaved-changes flag: true once something a save would WRITE has changed (an edit
+         *  that records a history step, undo/redo, a bypass, a tree change - not a selection or
+         *  a re-render: D-63, R-FAMILY-10), cleared on
          *  save/load/reset. Drives the "save or discard?" prompt (R-HOME). */
         bool isDirty() const { return mDirty; }
         void markClean() { mDirty = false; }
@@ -326,7 +337,7 @@ namespace cosmo
         void applyCropPreview(arstro::EditParams &p) const;
         void submitWith(arstro::RenderService::RenderIntent intent);
         const EditParams *applyHistoryParams(const EditParams *p);
-        void recordHistory();  // snapshot the current edit target (slot or group) into its history
+        bool recordHistory();  // snapshot the current edit target (slot or group) into its history; true = a step was recorded
         int firstImageSlotUnder(int node) const;  // representative member for a group's live preview
         History *editHistory();  // the History of whatever is being edited (group or current slot)
 

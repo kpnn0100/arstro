@@ -3,7 +3,7 @@
  *  of the Figma `HomeScreenDesktop` frame (ref/2 Figma export). A 300px left
  *  sidebar (wordmark, tagline, New / Open / Import actions, a live Settings link
  *  plus two reserved ones,
- *  version) and a right pane with a "Recent Projects" header + count + search box
+ *  version) and a right pane with a "Recent projects" header + count + search box
  *  and an auto-fill grid of project cards (16:9 thumbnail, Edited badge, name,
  *  "N photos · size · date") plus a dashed New-Project card and an empty-search
  *  state.
@@ -14,6 +14,7 @@
  *  TextBox; its text is polled each frame to re-filter the grid.
  */
 #pragma once
+#include "BrandMark.h"
 #include "../../../core/Artboard/include/artboard/artboard.h"
 #include "HoverFade.h"
 #include "ProjectCard.h"
@@ -66,16 +67,27 @@ namespace cosmo_v2
         /** Hide the big sidebar wordmark while the App flies its own copy back on
          *  return (so the wordmark reads as one continuous element, R-LOADING). */
         void setWordmarkHidden(bool h) { mWordmarkHidden = h; }
+        /** R-FAMILY-14: with NO recent project the grid says so - one sentence, one hint, one
+         *  outline button ("New project") - instead of a lone dashed card. Published so a test
+         *  and a shot aim at the button where it is (this screen's space; empty otherwise). */
+        bool showsEmptyState() const { return mCards.empty(); }
+        artboard::Rect emptyButtonRect() const;
         void layout();
         /** ── The window minimum, summed from this layout rather than guessed ──
-         *  The action buttons are anchored to the sidebar's TOP and the Settings / What's New /
-         *  Help & Documentation links to its BOTTOM, so a window shorter than their sum makes
+         *  The action buttons are anchored to the sidebar's TOP and the Settings link (the only
+         *  one since R-UX-5) and the version to its BOTTOM, so a window shorter than their sum makes
          *  them overlap — which is exactly what a hardcoded 400 px minimum did. The host asks
          *  for these instead of keeping a second copy of the arithmetic, so the minimum follows
          *  the layout when the layout changes. */
         static double minSidebarHeight();
         static double minContentWidth();
         static double minContentHeight();
+        static int linkCount();                      // how many sidebar links exist
+        /** Where the Settings link is in a home screen `windowH` tall - public and static so a shot
+         *  or a host aims at the link where it IS. The shots used to type "137 px off the bottom"
+         *  themselves and clicked empty sidebar the day the block changed height (R-UX-5). */
+        static artboard::Rect settingsLinkRectFor(double windowH);
+        static std::string versionText();            // "cosmo v<COSMO_VERSION>", from the build (R-UX-5)
 
         void advance(double nowMs) override;  // App drives this (Home is not in the editor tree)
 
@@ -85,7 +97,7 @@ namespace cosmo_v2
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
         // Protected, not private: the widget tests drive the sidebar links through their
         // real geometry rather than re-deriving it (R-SETTINGS-5 / R-HOME-8).
-        artboard::Rect bottomLinkRect(int i) const;  // 0=Settings 1=What's New 2=Help
+        artboard::Rect bottomLinkRect(int i) const;  // 0=Settings (the only link, R-UX-5)
 
     private:
         struct Card
@@ -129,7 +141,7 @@ namespace cosmo_v2
         // shares its width instead of the two halves being positioned independently — the
         // overlap this trio exists to prevent is only visible by comparing them (R5).
         artboard::Rect searchRect() const;
-        /** "Recent Projects", or "Recent" when the row is too narrow to hold both it and the
+        /** "Recent projects", or "Recent" when the row is too narrow to hold both it and the
          *  search field at its floor (R5). One mapping, read by the paint and by searchRect. */
         std::string headerTitle() const;
         /** Width of the clock glyph + title + count block, measured the way it is drawn. */
@@ -167,6 +179,9 @@ namespace cosmo_v2
         artboard::Rect mLastOpenRect{0, 0, 0, 0};  // full screen rect of the last-opened recent card
         ProjectCardData mLastOpenCard;             // its info (name/photos/size/date/edited)
         bool mWordmarkHidden = false;              // suppress the sidebar wordmark during a return fly
+        // R-BRAND-2: the app's logo above the wordmark. It shows up once when Home first appears
+        // (the first advance), then rests — Home is a place to choose, not a loading screen.
+        mutable ::arstro::cosmo_v2::brand::Player mMark{::arstro::cosmo_v2::brand::Mark::Cosmo};
 
         // hover + eased scroll (R-G-1/R-G-3: everything animates, nothing snaps)
         HoverFade mHover;                           // per-region hover cross-fade (flat ids via hoverId)

@@ -17,6 +17,13 @@
  *
  *  The open dropdown paints in onOverlay so it sits above every sibling
  *  (unclipped), like cosmo's MenuBar.
+ *
+ *  R-FAMILY-1 (2026-11-17), all three opt-in per item, so a `{label, action}` item draws as it
+ *  always did: a SHORTCUT drawn right-aligned in the mono face, muted (a dropdown that has one is
+ *  as wide as its widest label + its widest shortcut, by measured text); a SEPARATOR, a hairline
+ *  row that takes no click and no hover; a DISABLED row, dimmed, no hover wash, its click does
+ *  nothing. An item's index counts every row, separators included. `menuKey` is the keyboard's
+ *  way through an open menu (the host routes keys to it; it skips separators and disabled rows).
  */
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
@@ -32,7 +39,19 @@ namespace cosmo_v2
     class MenuStrip : public artboard::Segment
     {
     public:
-        struct Item { std::string label; std::function<void()> action; };
+        struct Item
+        {
+            std::string label;
+            std::function<void()> action;
+            // R-FAMILY-1 — after `action`, with defaults, so `{label, action}` still initialises one.
+            std::string shortcut;      // "Ctrl+S": drawn right-aligned, mono, muted; never parsed
+            bool enabled = true;       // false: dimmed, no hover wash, a click does nothing
+            bool separator = false;    // true: a hairline row (label and action unused)
+            /** A separator row. It IS an item: it has an index, and `itemRect` answers for it. */
+            static Item sep() { Item i; i.separator = true; return i; }
+            /** A row a pointer or the keyboard can stand on and activate. */
+            bool selectable() const { return enabled && !separator; }
+        };
         struct Menu { std::string title; std::vector<Item> items; };
 
         MenuStrip();
@@ -61,6 +80,22 @@ namespace cosmo_v2
         const Menu &menu(int i) const { return mMenus[(size_t)i]; }
         artboard::Rect titleRect(int i) const;
         artboard::Rect itemRect(int menu, int item) const;
+        /** Where an item's shortcut was last DRAWN (local coordinates; empty if it has none or the
+         *  menu has not been painted) — what a test checks the right-aligned column against. */
+        artboard::Rect shortcutRect(int menu, int item) const;
+        /** The row at a point of the open dropdown: its index (separators and disabled rows
+         *  included), or -1. */
+        int itemIndexAt(const artboard::Point &local) const { return mOpen >= 0 ? itemAt(mOpen, local) : -1; }
+        /** The row the pointer or the keyboard stands on in the open menu (-1 = none) — never a
+         *  separator, never a disabled row — and its LIVE eased wash, 0 … 1. */
+        int cursorItem() const { return mCursor; }
+        double itemHoverAmount(int item) const { return mItemHover.amount(item); }
+
+        /** The keyboard, for an open menu (R-FAMILY-1): Down / Up move the cursor, skipping
+         *  separators and disabled rows and wrapping; Home / End jump; Left / Right open the
+         *  neighbouring menu; Enter runs the row under the cursor; Escape closes. Returns true when
+         *  the key was consumed. Opt-in: nothing calls it until a host routes keys here. */
+        bool menuKey(const artboard::KeyEvent &e);
 
         std::function<void(int)> onOpenChanged;  // index, or -1 = none open
 
@@ -79,6 +114,10 @@ namespace cosmo_v2
         artboard::Rect dropdownRect(int i) const;
         int titleAt(const artboard::Point &p) const;
         int itemAt(int menu, const artboard::Point &p) const;
+        double itemTop(int menu, int item) const;      // y of a row inside the dropdown's content
+        double itemHeight(int menu, int item) const;   // a row's height: a separator is shorter
+        bool hasShortcuts(int menu) const;
+        int stepCursor(int from, int dir) const;       // the next selectable row, wrapping; -1 = none
 
         std::vector<Menu> mMenus;
         int mOpen = -1;
@@ -93,6 +132,16 @@ namespace cosmo_v2
         // hovered item washes. Each title/item cross-fades independently.
         HoverFade mTitleHover;
         HoverFade mItemHover;
+
+        // R-FAMILY-1: the row the pointer or the keyboard stands on. One wash for both, so moving
+        // from one to the other cross-fades; the keyboard's survives the pointer being elsewhere.
+        int mCursor = -1;
+        bool mCursorByKey = false;
+        // Measured in the paint (measurement is only valid there): the open menu's widest label and
+        // widest shortcut, and where each shortcut was drawn. -1 = not measured yet -> estimate.
+        mutable int mMeasuredMenu = -1;
+        mutable double mMeasuredLabelW = 0.0, mMeasuredShortcutW = 0.0;
+        mutable std::vector<artboard::Rect> mShortcutRects;
     };
 }
 }

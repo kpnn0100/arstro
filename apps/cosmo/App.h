@@ -24,6 +24,7 @@
 #include "widgets/InfoDialog.h"
 #include "widgets/HomeScreen.h"
 #include "widgets/Starfield.h"
+#include "widgets/Toast.h"
 #include "core/AppSettings.h"
 #include "core/ProjectStore.h"
 #include <cstdint>
@@ -61,7 +62,7 @@ namespace cosmo_v2
          *
          *  Deliberately CONSERVATIVE rather than exact. Artboard's `Segment` has no
          *  tree-wide "is anything animating" query, and adding one is an Artboard change
-         *  (a submodule, and `implement_artboard`'s territory, not this skill's). So this
+         *  (a submodule, and `arstro.artboard.implement`'s territory, not this skill's). So this
          *  keeps painting for `kActiveWindowMs` after the last thing that could have started
          *  an animation, which is longer than cosmo's longest duration — it can waste a few
          *  frames and can never truncate a tween. Being wrong in the other direction would
@@ -157,6 +158,60 @@ namespace cosmo_v2
          *  The host must REFUSE its own close request and call this instead: the dialog is drawn
          *  inside the window, so a window that has already begun closing has nowhere to ask. */
         void requestQuit();
+        // ── R-FAMILY: the family standard, as Cosmo adopts it ─────────────────────────────
+        /** R-FAMILY-13: what a key means. ONE function, so the keys are testable with no window
+         *  and the host only translates the toolkit's key: `key` is a lowercase ASCII letter,
+         *  ',' , `kKeyDelete` or `kKeyBackspace`. A plain letter means nothing - `o` and `s`
+         *  used to open dialogs. */
+        enum class Shortcut { None, Open, NewProject, Save, SaveAs, Settings, Undo, Redo, Delete };
+        static constexpr int kKeyBackspace = 8, kKeyDelete = 127;
+        static Shortcut shortcutFor(int key, bool ctrl, bool shift);
+        /** Run the shortcut for a key. True when the key was the app's (run, or deliberately
+         *  swallowed: behind a modal, an open menu, a focused field or the loading transition
+         *  nothing fires - R-UX-1). False for a key that is no shortcut. */
+        bool shortcut(int key, bool ctrl, bool shift);
+        /** R-FAMILY-9: the host's window title - "Cosmo" on Home, "<name> — Cosmo" for a saved
+         *  project, "*<name> — Cosmo" for an unsaved one. The host sets it when it changes. */
+        std::string windowTitle() const;
+        /** R-FAMILY-11: the one toast, placed top-centre under the top bar and drawn over
+         *  whichever screen is up. Exposed for a test and a shot (rect, live amount, kind, text). */
+        Toast *toast() { return mToast.get(); }
+        void showToast(Toast::Kind kind, const std::string &text);
+        /** The result of an export, said in the toast: how many were written, or how many were
+         *  not and the first reason. Called by the host's batch and by the service's event. */
+        void exportFinished(int written, int failed, const std::string &why);
+        /** Save As from the host's dialog: writes, then says so ("Saved") or why not. */
+        bool saveProjectAs(const std::string &path);
+        /** Ctrl+N / File > New Project…: asks about unsaved changes first, then the host's dialog. */
+        void requestNewProject();
+        /** View > Show Agent / Hide Agent: the Agent tab of the right column, and back. */
+        void setAgentShown(bool shown);
+        bool agentShown() const;
+        /** The top bar, for a test or a shot to aim at (its menus, the dot, the save icon). */
+        TopBar *topBar() { return mTopBar.get(); }
+        HomeScreen *home() { return mHome.get(); }
+
+        /** R-UX-1: true while ANY in-app modal is open. `key` asks it first and the host asks it
+         *  before its own accelerators - one list, so a modal added later is covered by adding
+         *  it here and nowhere else. */
+        bool modalOpen() const;
+        /** The modals a menu opens. Public for the reason `infoDialog()` is: a headless test and
+         *  a shot must be able to open each one without finding a menu item by pixel (R-UX-1's
+         *  test opens every modal and presses keys behind it). */
+        void openHistoryView();     // Edit ▸ History… (in-app, like cosmo)
+        void presetSaveClicked();   // Save Preset -> category picker -> host name dialog
+        void openSettingsDialog();  // File ▸ Settings… (modal)
+        void openExportDialog();    // File ▸ Export… (R-EXPORT): snapshot the tree into the modal
+        /** What the top bar shows as the project's name, and whether the histogram has a curve -
+         *  read by R-UX-2's test: a closed project leaves neither behind. */
+        std::string topBarTitle() const;
+        bool histogramShown() const;
+        /** R-UX-2: File > Close Project. Asks about unsaved changes (the R-HOME-1c question),
+         *  then returns to Home and drops the project once the editor is off screen. */
+        void requestCloseProject();
+        /** R-UX-3: the Delete key and the context menu's Delete. Removing photos from a project
+         *  cannot be undone, so it asks first; `deleteSelected` is the unasked action. */
+        void requestDeleteSelected();
         /** The save/discard modal, so the host can route keys to it and a test can answer it
          *  (R-HOME-1c). Exposed rather than mirrored: one dialog, one owner. */
         std::shared_ptr<ConfirmDialog> confirmDialog() { return mConfirmDialog; }
@@ -381,13 +436,25 @@ namespace cosmo_v2
          *  before/split/after mode (before = original, after = edited, split = both). */
         void refreshPhotoForMode();
         void buildMenus();          // populate the TopBar's MenuStrip + wire actions
+        /** R-FAMILY-8: one menu's rows for the state the model is in NOW (labels, shortcuts,
+         *  separators, what is disabled), and the refresh that swaps them in while no menu is
+         *  open - a dropdown must not change under the pointer. */
+        std::vector<MenuStrip::Item> menuItems(int menu) const;
+        std::string menuStateKey() const;
+        void refreshMenus();
+        std::string mMenuKey;
+        /** R-FAMILY-12: the one unsaved-changes question. `proceed` runs after Save or Don't
+         *  save; `forget` = Don't save also marks the session clean (the project is being left). */
+        void askUnsaved(std::function<void()> proceed, bool forget = true);
+        std::string projectDisplayName() const;
+        void renderScreen(artboard::IRenderTarget &target, double nowMs);   // render() minus the toast
+        void onServiceEvent(const cosmo::Event &e);
+        std::shared_ptr<Toast> mToast;
+        std::shared_ptr<bool> mAlive = std::make_shared<bool>(true);   // the service may outlive this view
+        int mTabBeforeAgent = 0;   // where Hide Agent returns to
         void copySettings();        // Develop ▸ Copy Settings
         void pasteSettings(bool toAll);  // Develop ▸ Paste to Selected / to All Images
-        void openHistoryView();     // History ▸ Show History Tree… (in-app, like cosmo)
-        void presetSaveClicked();   // Save Preset -> category picker -> host name dialog
         void presetExportClicked(); // Export Preset -> category picker -> host path dialog
-        void openSettingsDialog();  // Settings ▸ Engine Settings… (modal)
-        void openExportDialog();    // File ▸ Export… (R-EXPORT): snapshot the tree into the modal
         void refreshHome();         // rebuild the home grid from ProjectStore + request thumbnails
         void requestHome();         // wordmark click: prompt to save/discard if dirty, else go home
 
@@ -516,6 +583,9 @@ namespace cosmo_v2
         // return-to-home (reverse) transition: editor fades to the star-sky, then the
         // home fades in; the wordmark flies from the top-bar slot back to its home spot.
         bool mReturning = false;
+        bool mCloseOnReturn = false;   // R-UX-2: drop the project when the return transition covers the editor
+        void closeProject();
+        void updateStageNotice();   // R-UX-7: empty / missing, decided per frame from the tree
         artboard::AnimatedProperty mReturn{0.0};     // 1=top-bar(small) .. 0=home(big)
         artboard::AnimatedProperty mEnterFade{0.0};  // ReturnEnter: editor -> star-sky (0..1)
         artboard::AnimatedProperty mExitFade{0.0};   // ReturnExit: star-sky -> home (0..1)

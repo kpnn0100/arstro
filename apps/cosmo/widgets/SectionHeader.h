@@ -33,6 +33,18 @@ namespace cosmo_v2
      *  symptom of the drift would be a hairline one pixel into a hover box. */
     inline constexpr double kSectionActionSize = kSectionHeaderHeight - 2.0;
 
+    /** `label` in capitals (ASCII letters; every other byte, UTF-8 included, is left alone).
+     *  For a caller that wants its header to match the uppercase micro-label style when its
+     *  own label string is written in title case (cosmo R-UX-9). `drawSectionHeader` itself
+     *  still draws exactly what it is given. */
+    inline std::string sectionHeaderUpper(const std::string &label)
+    {
+        std::string s = label;
+        for (char &c : s)
+            if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
+        return s;
+    }
+
     /** Draws at the given top `y` (local space) and returns kSectionHeaderHeight
      *  so callers can advance their own layout cursor by the return value.
      *

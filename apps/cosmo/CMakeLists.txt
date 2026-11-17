@@ -8,6 +8,15 @@
 # font file to ship, no Fontconfig in the text path, and no dependency on what the
 # host has installed. Native-only; there is no web build.
 
+# R-UX-5: the app's version, said ONCE. The sources that show it get it as COSMO_VERSION
+# (Version.h holds the "dev" fallback for a hand-rolled compile); a source property rather than
+# a directory-wide definition, so changing it recompiles two files and not every cosmo target.
+set(COSMO_VERSION "1.0.0")
+set_source_files_properties(
+  ${CMAKE_CURRENT_SOURCE_DIR}/widgets/HomeScreen.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/widgets/tests/widgetTests.cpp
+  PROPERTIES COMPILE_DEFINITIONS "COSMO_VERSION=\"${COSMO_VERSION}\"")
+
 # UI-free session/editing/history/decode logic lives in core/ (target cosmo_core).
 # Optional itself — needs pkg-config + GTK3, see core/CMakeLists.txt — so the
 # `cosmo` app below only builds when cosmo_core actually exists (e.g. skipped on
@@ -137,6 +146,21 @@ if(TARGET cosmo_core)
   # linked in (${COSMO_EMBEDDED_FONTS}) so the shots draw in the app's OWN type rather than
   # whatever the host's default sans happens to be — a shot in the wrong typeface measures the
   # wrong text widths and would report overflow bugs that do not exist.
+  # ── cosmo_demo — a silent MP4 of the Agent tab at work, recorded with no display ──
+  # cosmo_shots' rig plus `cosmo-cc serve`'s agent wiring: the real App and service, the user's
+  # real agent over a control socket, frames piped to ffmpeg. A tool for demo videos, not a test.
+  add_executable(cosmo_demo ${COSMO_APP_NOMAIN} ${CAIRO_ADAPTER} ${COSMO_EMBEDDED_FONTS}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/demo/recordDemo.cpp)
+  target_include_directories(cosmo_demo PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
+  target_link_libraries(cosmo_demo PRIVATE artboard_core arstro_image cosmo_core arstro_ntwb
+                        ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FREETYPE)
+  target_compile_definitions(cosmo_demo PRIVATE ARTBOARD_CAIRO_FT
+    COSMO_SKILLS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../.claude/skills")
+
   add_executable(cosmo_shots ${COSMO_APP_NOMAIN} ${CAIRO_ADAPTER} ${COSMO_EMBEDDED_FONTS}
                  ${CMAKE_CURRENT_SOURCE_DIR}/tests/shots/renderShots.cpp)
   target_include_directories(cosmo_shots PRIVATE
@@ -238,7 +262,13 @@ add_executable(cosmo_widget_tests
   widgets/HomeScreen.cpp
   widgets/ProjectCard.cpp
   widgets/SplashScreen.cpp
+  widgets/BrandMark.cpp     # R-BRAND: the logos and their animations, measured as poses
   widgets/WidgetLog.cpp     # the sink itself: no deps, and stays null in this target
+  widgets/MenuStrip.cpp     # R-FAMILY-1: shortcut column, separators, disabled rows
+  widgets/ContextMenu.cpp
+  widgets/Toast.cpp         # R-FAMILY-2
+  widgets/ConfirmDialog.cpp # R-FAMILY-3
+  widgets/HistoryView.cpp   # R-FAMILY-7
   Theme.cpp
   widgets/Icons.cpp)
 target_include_directories(cosmo_widget_tests PRIVATE
@@ -248,6 +278,23 @@ target_include_directories(cosmo_widget_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
 target_link_libraries(cosmo_widget_tests PRIVATE artboard_core)
 add_test(NAME cosmo_widget COMMAND cosmo_widget_tests)
+
+# ── cosmo_assist_profile_tests: the agent module without cosmo (R-ASSIST-13) ─────────────
+# ProcessAssistant and AssistConversation run for a fake app "demo" and nothing they generate says
+# "cosmo". The target links NO cosmo_core and compiles NO CosmoAssistProfile.cpp, on purpose: that it
+# links at all is the proof that Interstellar and Solaris can compile these same files in place.
+# Asserts are the test, so NDEBUG is undefined whatever the build type.
+if(TARGET arstro_ntwb AND NOT WIN32)
+  add_executable(cosmo_assist_profile_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/assist/profileTests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/AssistProcess.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/HttpLite.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/assist/AssistConversation.cpp)
+  target_include_directories(cosmo_assist_profile_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(cosmo_assist_profile_tests PRIVATE arstro_ntwb)
+  target_compile_options(cosmo_assist_profile_tests PRIVATE -UNDEBUG)
+  add_test(NAME cosmo_assist_profile COMMAND cosmo_assist_profile_tests)
+endif()
 
 # ── cosmo_web_tokens: the web UI's design tokens, generated from Theme.h (R-NTWB-9) ─────
 # The browser draws with the window's palette, radii and families only if it reads them from

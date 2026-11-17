@@ -22,6 +22,11 @@ namespace cosmo_v2
         constexpr double kFieldGap = 6.0;   // header -> field vertical gap
         constexpr double kFieldMx = 8.0;    // field horizontal inset within the menu
         constexpr double kRenameW = 208.0;  // menu width in rename mode (room for a name)
+        // R-FAMILY-1: the shortcut column and the separator row — MenuStrip's values.
+        constexpr double kShortcutPx = 10.0;
+        constexpr double kShortcutGap = 26.0;  // space::u(8)
+        constexpr double kSepH = 9.75;         // space::u(3)
+        constexpr int kKeyEnter = 13, kKeyEsc = 27, kKeyEnd = 35, kKeyHome = 36, kKeyUp = 38, kKeyDown = 40;
         double clamp01(double v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
     }
 
@@ -32,6 +37,8 @@ namespace cosmo_v2
         mY = y;
         mRenaming = false;
         mRename.set(0.0);
+        mCursorByKey = false;
+        mMeasured = false;      // measured for the rows that were here before
         mOpen = !mItems.empty();
         if (mOpen) raise();  // topmost -> wins hit-testing over body widgets it overlaps
     }
@@ -40,7 +47,7 @@ namespace cosmo_v2
     {
         // Called by the "Rename Group" item's action (which already cleared mOpen): the
         // menu's items collapse to a "Rename" header, then the field grows below.
-        mPreRenameItemsH = (double)mItems.size() * kItemH;  // shrink from the current list
+        mPreRenameItemsH = itemTop((int)mItems.size());  // shrink from the current list
         mOpen = true;
         mRenaming = true;
         mRenameText = currentName.empty() ? "Group" : currentName;
@@ -75,14 +82,83 @@ namespace cosmo_v2
         return itemsH + (kFieldGap + kFieldH) * grow;
     }
 
+    double ContextMenu::itemHeight(int i) const { return mItems[(size_t)i].separator ? kSepH : kItemH; }
+
+    double ContextMenu::itemTop(int i) const
+    {
+        double y = 0.0;   // with no separator: i * kItemH exactly, as before
+        for (int k = 0; k < i && k < (int)mItems.size(); ++k) y += itemHeight(k);
+        return y;
+    }
+
+    bool ContextMenu::hasShortcuts() const
+    {
+        for (const auto &it : mItems)
+            if (!it.separator && !it.shortcut.empty()) return true;
+        return false;
+    }
+
+    int ContextMenu::stepCursor(int from, int dir) const
+    {
+        const int n = (int)mItems.size();
+        int i = from < 0 ? (dir > 0 ? -1 : n) : from;
+        for (int tries = 0; tries < n; ++tries)
+        {
+            i = ((i + dir) % n + n) % n;
+            if (mItems[(size_t)i].selectable()) return i;
+        }
+        return -1;
+    }
+
+    bool ContextMenu::menuKey(const KeyEvent &e)
+    {
+        if (!mOpen || mRenaming || e.type != KeyEvent::Type::Down) return false;
+        auto stand = [this](int row) { mCursorByKey = true; mHover.setHovered(row); };
+        switch (e.keyCode)
+        {
+        case kKeyDown: stand(stepCursor(mHover.hovered(), +1)); return true;
+        case kKeyUp: stand(stepCursor(mHover.hovered(), -1)); return true;
+        case kKeyHome: stand(stepCursor(-1, +1)); return true;
+        case kKeyEnd: stand(stepCursor(-1, -1)); return true;
+        case kKeyEnter:
+        {
+            const int i = mHover.hovered();
+            if (i >= 0 && i < (int)mItems.size() && mItems[(size_t)i].selectable())
+            {
+                auto action = mItems[(size_t)i].action;  // copy before closing
+                mOpen = false;
+                mHover.clear();
+                if (action) action();
+            }
+            return true;
+        }
+        case kKeyEsc: mOpen = false; return true;
+        default: return false;
+        }
+    }
+
     Rect ContextMenu::menuRect() const
     {
         double w = kMinW;
         if (mRenaming)
             w = kRenameW;
-        else
+        else if (!hasShortcuts())
             for (const auto &it : mItems) w = std::max(w, estimateTextWidth(it.label, kFontPx) + 2 * kPadX);
-        const double contentH = mRenaming ? renameContentH() : (double)mItems.size() * kItemH;
+        else
+        {
+            // R-FAMILY-1: widest label + widest shortcut, measured in the paint; the estimate until then.
+            double lw = 0.0, sw = 0.0;
+            if (mMeasured) { lw = mMeasuredLabelW; sw = mMeasuredShortcutW; }
+            else
+                for (const auto &it : mItems)
+                {
+                    if (it.separator) continue;
+                    lw = std::max(lw, estimateTextWidth(it.label, kFontPx));
+                    sw = std::max(sw, estimateTextWidth(it.shortcut, kShortcutPx));
+                }
+            w = std::max(w, lw + kShortcutGap + sw + 2 * kPadX);
+        }
+        const double contentH = mRenaming ? renameContentH() : itemTop((int)mItems.size());
         const double h = contentH + 2 * kPadY;
         // keep it fully on-screen (nudge left/up if it would overflow the window)
         double x = std::min(mX, width.value() - w);
@@ -101,15 +177,23 @@ namespace cosmo_v2
     Rect ContextMenu::itemRect(int i) const
     {
         const Rect r = menuRect();
-        return Rect{r.x, r.y + kPadY + i * kItemH, r.w, kItemH};   // itemAt's arithmetic, inverted
+        if (i < 0 || i >= (int)mItems.size()) return Rect{r.x, r.y + kPadY + i * kItemH, r.w, kItemH};
+        return Rect{r.x, r.y + kPadY + itemTop(i), r.w, itemHeight(i)};   // itemAt's arithmetic, inverted
     }
 
     int ContextMenu::itemAt(const Point &local) const
     {
         const Rect r = menuRect();
         if (!r.contains(local)) return -1;
-        const int i = (int)((local.y - (r.y + kPadY)) / kItemH);
-        return (i >= 0 && i < (int)mItems.size()) ? i : -1;
+        double y = r.y + kPadY;   // row by row: a separator is shorter than an item
+        if (local.y < y) return -1;
+        for (int i = 0; i < (int)mItems.size(); ++i)
+        {
+            const double h = itemHeight(i);
+            if (local.y < y + h) return i;
+            y += h;
+        }
+        return -1;
     }
 
     void ContextMenu::advance(double nowMs)
@@ -171,11 +255,19 @@ namespace cosmo_v2
             }
             return true;  // modal: swallow everything else while editing
         }
-        if (g.type == T::Move) { mHover.setHovered(itemAt(local)); return true; }  // track hovered item
+        if (g.type == T::Move)  // track hovered item
+        {
+            int row = itemAt(local);
+            if (row >= 0 && !mItems[(size_t)row].selectable()) row = -1;   // a separator / disabled row takes no hover
+            // The pointer takes the cursor from the keyboard only by standing on a row (R-FAMILY-1).
+            if (row >= 0 || !mCursorByKey) { mHover.setHovered(row); mCursorByKey = false; }
+            return true;
+        }
         if (g.type == T::Down) return true;  // consume so the press doesn't fall through
         if (g.type == T::Click || g.type == T::RightClick)
         {
             const int i = itemAt(local);
+            if (i >= 0 && !mItems[(size_t)i].selectable()) return true;  // separator / disabled: nothing, and it stays open
             if (i >= 0)
             {
                 auto action = mItems[i].action;  // copy before closing
@@ -196,6 +288,22 @@ namespace cosmo_v2
     {
         const double appear = mAppear.value();
         if (!mOpen && appear <= 0.001) return;  // fully closed
+        const bool shortcuts = !mRenaming && hasShortcuts();
+        if (shortcuts)
+        {
+            // Measure BEFORE asking for the rect, so the first frame is already at the real width.
+            double lw = 0.0, sw = 0.0;
+            for (const auto &it : mItems)
+            {
+                if (it.separator) continue;
+                lw = std::max(lw, t.measureText(it.label, kFontPx, font::sans()));
+                if (!it.shortcut.empty()) sw = std::max(sw, t.measureText(it.shortcut, kShortcutPx, font::mono()));
+            }
+            mMeasuredLabelW = lw;
+            mMeasuredShortcutW = sw;
+            mMeasured = true;
+            mShortcutRects.assign(mItems.size(), Rect{});
+        }
         Rect r = menuRect();
         r.y -= (1.0 - appear) * 6.0;  // rise into place as it fades in (R-G-1)
 
@@ -214,8 +322,9 @@ namespace cosmo_v2
             if (itemsA > 0.01)
                 for (int i = 0; i < (int)mItems.size(); ++i)
                 {
-                    const double y = r.y + kPadY + i * kItemH;
-                    Color fg = palette::foreground(); fg.a *= itemsA;
+                    if (mItems[(size_t)i].separator) continue;   // the words fade out; a rule is not a word
+                    const double y = r.y + kPadY + itemTop(i);
+                    Color fg = mItems[(size_t)i].enabled ? palette::foreground() : palette::mutedForeground(); fg.a *= itemsA;
                     t.setFill(fg);
                     t.drawText(mItems[i].label, r.x + kPadX, y + kItemH * 0.5 + kFontPx * 0.35, kFontPx, font::sans());
                 }
@@ -266,16 +375,37 @@ namespace cosmo_v2
 
         for (int i = 0; i < (int)mItems.size(); ++i)
         {
-            const double y = r.y + kPadY + i * kItemH;
-            // Per-item hover wash: each item cross-fades independently (R-G-3).
+            const Item &it = mItems[(size_t)i];
+            const double y = r.y + kPadY + itemTop(i);
+            if (it.separator)
+            {
+                // A hairline across the row's middle, inset like the hover wash; a filled 1 px rect
+                // on a whole pixel so it is one crisp line (it rides the menu's rise, like the rows).
+                Color rule = palette::border(); rule.a *= appear;
+                drawRoundedRect(t, Rect{r.x + 3, std::floor(y + kSepH * 0.5), r.w - 6, 1.0}, 0.0, Paint::filled(rule));
+                continue;
+            }
+            // Per-item hover wash: each item cross-fades independently (R-G-3). Never on a disabled row.
             const double hv = mHover.amount(i) * appear;
-            if (hv > 0.001)
+            if (hv > 0.001 && it.enabled)
                 drawRoundedRect(t, Rect{r.x + 3, y, r.w - 6, kItemH}, radius::control(),
                                 Paint::filled(palette::whiteAlpha(0.08 * hv)));
-            Color fg = palette::foreground();
+            Color fg = it.enabled ? palette::foreground() : palette::mutedForeground();
             fg.a *= appear;
             t.setFill(fg);
-            t.drawText(mItems[i].label, r.x + kPadX, y + kItemH * 0.5 + kFontPx * 0.35, kFontPx, font::sans());
+            t.drawText(it.label, r.x + kPadX, y + kItemH * 0.5 + kFontPx * 0.35, kFontPx, font::sans());
+            if (!it.shortcut.empty())
+            {
+                // Right-aligned by its own measured width; mono, muted (fainter when disabled).
+                const double sw = t.measureText(it.shortcut, kShortcutPx, font::mono());
+                const double sx = r.x + r.w - kPadX - sw;
+                Color sc = palette::mutedForeground();
+                sc.a *= appear * (it.enabled ? 1.0 : 0.55);
+                t.setFill(sc);
+                t.drawText(it.shortcut, sx, y + kItemH * 0.5 + kShortcutPx * 0.35, kShortcutPx, font::mono());
+                // Published at rest (without the rise), in the menu's own coordinates.
+                mShortcutRects[(size_t)i] = Rect{sx, y + (1.0 - appear) * 6.0, sw, kItemH};
+            }
         }
     }
 }

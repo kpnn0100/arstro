@@ -22,8 +22,19 @@
 #include "../CurvePanel.h"
 #include "../XformPanel.h"
 #include "../ExportDialog.h"
+#include "../../Version.h"
 #include "../Filmstrip.h"
 #include "../../Theme.h"
+#include "../BrandMark.h"
+#include "../MenuStrip.h"
+#include "../ContextMenu.h"
+#include "../Toast.h"
+#include "../ConfirmDialog.h"
+#include "../Wordmark.h"
+#include "../DirtyDot.h"
+#include "../SegmentedControl.h"
+#include "../HistoryView.h"
+#include "../TextMetrics.h"
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -583,6 +594,22 @@ namespace
         check(d->selectedSlots().size() == 5, "all five image leaves are selected");
     }
 
+    // R-EXPORT-3a (D-72): the preview line is the name that will be WRITTEN. With the defaults
+    // (same as source, JPEG) the first photo's wanted name is its own source, so the line must
+    // read river_01_edit.jpg; and when that is taken, river_01_edit-1.jpg.
+    void test_export_preview_shows_the_real_output_name()
+    {
+        auto d = makeTree();
+        d->setExistsProbe([](const std::string &) { return false; });
+        check(d->previewPath() == "/pics/rivers/river_01_edit.jpg",
+              "the preview of a JPEG exported beside itself is <stem>_edit.jpg, not the source's name");
+        d->setExistsProbe([](const std::string &p) { return p == "/pics/rivers/river_01_edit.jpg"; });
+        check(d->previewPath() == "/pics/rivers/river_01_edit-1.jpg", "a taken name counts up in the preview too");
+        d->toggleRow(kRivers);   // only loose.jpg is left ticked
+        d->setExistsProbe([](const std::string &) { return false; });
+        check(d->previewPath() == "/pics/loose_edit.jpg", "the preview follows the first TICKED photo");
+    }
+
     void exportDeselectParentClearsChildren()
     {
         auto d = makeTree();
@@ -963,18 +990,35 @@ namespace
         check(opened == 1, "clicking Settings on the home screen opens the settings surface");
     }
 
-    void homeReservedLinksStaySilentButSwallowTheClick()
+    // R-UX-5 (amends R-HOME-8): What's New and Help & Documentation hovered, swallowed the
+    // click and did nothing. They are gone until they exist - Settings is the only link - and
+    // the version under it is the build's, not a literal.
+    void homeHasNoDeadLinksAndShowsTheBuildsVersion()
     {
         auto home = makeHome();
+        check(arstro::cosmo_v2::HomeScreen::linkCount() == 1, "the sidebar has one link: Settings");
+        artboard::RecordingTarget t;
+        home->render(t, artboard::Transform::identity());
+        bool whatsNew = false, help = false, settings = false, version = false;
+        const std::string want = std::string("cosmo v") + COSMO_VERSION;
+        for (const auto &op : t.ops())
+            if (op.kind == artboard::DrawOp::Kind::DrawText)
+            {
+                whatsNew |= op.text.find("What's New") != std::string::npos;
+                help |= op.text.find("Help") != std::string::npos;
+                settings |= op.text == "Settings";
+                version |= op.text == want;
+            }
+        check(settings, "Settings is drawn");
+        check(!whatsNew && !help, "What's New and Help & Documentation are not drawn (R-UX-5)");
+        check(version && arstro::cosmo_v2::HomeScreen::versionText() == want,
+              "the version line is the build's COSMO_VERSION");
+        // Where the dead links were is now plain sidebar: a click there is not consumed as a link.
+        const artboard::Rect r = home->bottomLinkRect(0);
         int opened = 0;
         home->onSettings = [&opened] { ++opened; };
-        for (int i = 1; i <= 2; ++i)   // What's New, Help & Documentation
-        {
-            const bool consumed = home->handleGesture(ev(Gesture::Type::Click),
-                                                      centreOf(home->bottomLinkRect(i)));
-            check(consumed, "a reserved link still swallows its click");
-        }
-        check(opened == 0, "only Settings is live; the reserved links do nothing (R-HOME-8)");
+        const bool consumed = home->handleGesture(ev(Gesture::Type::Click), artboard::Point{r.x + 20.0, r.y + r.h * 0.5 + 20.0});
+        check(opened == 0 && !consumed, "a click where What's New was is no longer swallowed by a dead link");
     }
 
     void homeSettingsLinkIsReachableAtASmallWindow()
@@ -1050,7 +1094,7 @@ namespace
         check(firstLink.y - actionsBottom > 8.0, "with visible air, not merely non-overlapping");
 
         // The version line is the lowest thing in the sidebar: it must still be on screen.
-        const artboard::Rect lastLink = home->bottomLinkRect(2);
+        const artboard::Rect lastLink = home->bottomLinkRect(HomeScreen::linkCount() - 1);
         check(lastLink.y + lastLink.h < minH, "and the last link fits inside the window");
 
         // The minimum must be doing real work, not sitting comfortably clear of the problem —
@@ -1058,15 +1102,21 @@ namespace
         // tallest window that still overlaps, by scanning rather than by hardcoding a delta
         // (the first attempt guessed 40 px and was simply wrong: the built-in air is 32 px plus
         // the link block's own 16 px offset, so 40 px short of the minimum still cleared it).
+        //
+        // Tightness is a property of the SIDEBAR's own sum, which is one term of the minimum
+        // (R-HOME-11 as amended by R-UX-5: the other terms are a card row and the floor held
+        // for the Settings modal, D-82). So it is measured from that term, not from the max.
+        const double sidebarMin = HomeScreen::minSidebarHeight();
+        check(sidebarMin <= minH, "the sidebar's sum is one term of the window minimum");
         double firstOverlap = -1.0;
-        for (double h = minH; h > 200.0; h -= 1.0)
+        for (double h = sidebarMin; h > 200.0; h -= 1.0)
         {
             auto probe = makeHome(HomeScreen::minContentWidth(), h);
             if (probe->bottomLinkRect(0).y < actionsBottom) { firstOverlap = h; break; }
         }
-        check(firstOverlap > 0.0, "some window height below the minimum does overlap");
-        check(minH - firstOverlap < 64.0,
-              "and it is close below the minimum, so the minimum is tight rather than generous");
+        check(firstOverlap > 0.0, "some window height below the sidebar's sum does overlap");
+        check(sidebarMin - firstOverlap < 64.0,
+              "and it is close below that sum, so the sum is tight rather than generous");
     }
 
     // R-SCALE-3 / R5: the header row shares ONE line between the "Recent Projects" title and
@@ -1094,7 +1144,7 @@ namespace
             if (titleEnd > sr.x && overlapAt < 0) overlapAt = w;
             if (sr.x + sr.w > w - 32.0 + 0.01 && spillAt < 0) spillAt = w;
             if (sr.w < 72.0 && squeezeAt < 0) squeezeAt = w;
-            if (home->headerTitle() == "Recent Projects") sawLong = true; else sawShort = true;
+            if (home->headerTitle() == "Recent projects") sawLong = true; else sawShort = true;
             if (sr.w < 168.0) sawShrunkField = true;
         }
         check(overlapAt < 0, "the title block ends before the search field at every width");
@@ -1573,10 +1623,702 @@ static void test_accent_is_a_runtime_token()
     check(same(sharedTheme().tab.activeIndicatorColor, blue), "R-G-5: and rebuilds back");
 }
 
+// ── R-BRAND: the logos and their animations ──────────────────────────────────────────────
+// The animation law (arstro.rule.animation) is checked by MEASURING poses, never by looking:
+// poseAt() is a pure function of time, so a test can stand at any millisecond.
+namespace brandtest
+{
+    using namespace arstro::cosmo_v2::brand;
+    const Mark kMarks[3] = {Mark::Cosmo, Mark::Interstellar, Mark::Solaris};
+    const char *name(Mark m) { return m == Mark::Cosmo ? "cosmo" : m == Mark::Interstellar ? "interstellar" : "solaris"; }
+
+    /** Every number in a pose, so two poses can be compared whole. */
+    std::array<double, 23> flat(const Pose &p)
+    {
+        return {p.alpha, p.ringScale, p.ringAlpha, p.orbitDeg, p.dotAlpha, p.trailAlpha, p.shipX, p.shipY, p.shipAlpha,
+                p.barX[0], p.barX[1], p.barX[2], p.barAlpha[0], p.barAlpha[1], p.barAlpha[2],
+                p.passAlpha[0], p.passAlpha[1], p.sunY, p.sunAlpha, p.stripeY[0], p.stripeY[1], p.stripeY[2],
+                p.stripeAlpha[0] + p.stripeAlpha[1] + p.stripeAlpha[2]};
+    }
+    bool samePose(const Pose &a, const Pose &b, double eps = 1e-6)
+    {
+        const auto x = flat(a), y = flat(b);
+        for (std::size_t i = 0; i < x.size(); ++i)
+        {
+            double d = std::fabs(x[i] - y[i]);
+            if (i == 3) d = std::fabs(std::fmod(d, 360.0));   // the moon's angle: 360 is home
+            if (d > eps && std::fabs(d - 360.0) > eps) return false;
+        }
+        return true;
+    }
+    /** The main body's opacity and position — the part the eye follows out. */
+    void body(Mark m, const Pose &p, double &alpha, double &pos)
+    {
+        if (m == Mark::Cosmo) { alpha = p.dotAlpha; pos = p.orbitDeg; }
+        else if (m == Mark::Interstellar) { alpha = p.shipAlpha; pos = p.shipX; }
+        else { alpha = p.sunAlpha; pos = p.sunY; }
+    }
+    /** Everything a mark draws, summed: zero means nothing is on screen. */
+    double visible(Mark m, const Pose &p)
+    {
+        if (m == Mark::Cosmo) return p.ringAlpha + p.dotAlpha + p.trailAlpha;
+        if (m == Mark::Interstellar) return p.shipAlpha + p.barAlpha[0] + p.barAlpha[1] + p.barAlpha[2] + p.passAlpha[0] + p.passAlpha[1];
+        return p.sunAlpha + p.stripeAlpha[0] + p.stripeAlpha[1] + p.stripeAlpha[2];
+    }
+}
+
+static void test_brand_marks_obey_the_animation_law()
+{
+    using namespace brandtest;
+    char msg[160];
+    for (Mark m : kMarks)
+    {
+        const Pose rest;
+        // Show up ends exactly at the still logo, and it does not start there.
+        std::snprintf(msg, sizeof msg, "R-BRAND-3 %s: show up ends at the rest pose", name(m));
+        check(samePose(poseAt(m, Phase::In, kInMs), rest), msg);
+        std::snprintf(msg, sizeof msg, "R-BRAND-3 %s: show up starts with nothing drawn", name(m));
+        check(visible(m, poseAt(m, Phase::In, 0.0)) < 1e-6, msg);
+        std::snprintf(msg, sizeof msg, "R-BRAND-3 %s: mid show-up the live pose differs from the target (it eases, it does not snap)", name(m));
+        check(!samePose(poseAt(m, Phase::In, 400.0), rest, 1e-3), msg);
+
+        // Rule 3 — never vanish suddenly. The exit ends at nothing ...
+        std::snprintf(msg, sizeof msg, "R-BRAND-4 %s: disappear starts at the rest pose", name(m));
+        check(samePose(poseAt(m, Phase::Out, 0.0), rest), msg);
+        std::snprintf(msg, sizeof msg, "R-BRAND-4 %s: disappear ends with nothing drawn", name(m));
+        check(visible(m, poseAt(m, Phase::Out, kOutMs)) < 1e-6, msg);
+        // ... and the body is STILL MOVING while it fades: at two late moments it is partly
+        // transparent and in two different places. "Move, stop, then fade" fails this.
+        double a1, p1, a2, p2;
+        body(m, poseAt(m, Phase::Out, kOutMs * 0.70), a1, p1);
+        body(m, poseAt(m, Phase::Out, kOutMs * 0.82), a2, p2);
+        std::snprintf(msg, sizeof msg, "rule 3 %s: the body fades WHILE it moves (alpha %.2f->%.2f, pos %.1f->%.1f)", name(m), a1, a2, p1, p2);
+        check(a1 < 0.999 && a1 > a2 && a2 >= 0.0 && std::fabs(p2 - p1) > 0.5, msg);
+        // ... and no frame-to-frame jump in opacity anywhere in the exit (a pop).
+        double worst = 0.0, pa, pp;
+        body(m, poseAt(m, Phase::Out, 0.0), pa, pp);
+        for (double t = 8.0; t <= kOutMs; t += 8.0)
+        {
+            double a, q; body(m, poseAt(m, Phase::Out, t), a, q);
+            worst = std::max(worst, std::fabs(a - pa)); pa = a;
+        }
+        std::snprintf(msg, sizeof msg, "rule 3 %s: no opacity pop in the exit (largest 8 ms step %.3f)", name(m), worst);
+        check(worst < 0.06, msg);
+
+        // Rule 2 — speed has a slope. Leaving starts slowly: a quarter of the way into the
+        // flight the body has covered well under a quarter of the distance.
+        double a0, x0, aq, xq, ae, xe;
+        body(m, poseAt(m, Phase::Out, kOutMs * 0.18), a0, x0);
+        body(m, poseAt(m, Phase::Out, kOutMs * 0.36), aq, xq);
+        body(m, poseAt(m, Phase::Out, kOutMs * 0.88), ae, xe);
+        std::snprintf(msg, sizeof msg, "rule 2 %s: the exit starts slowly (%.0f%% of the way after a quarter of the time)", name(m), 100.0 * std::fabs(xq - x0) / std::fabs(xe - x0));
+        check(std::fabs(xq - x0) < 0.2 * std::fabs(xe - x0), msg);
+        // Arriving ends slowly: the last fifth of the body's move covers almost nothing.
+        double ai, xi, aj, xj;
+        body(m, poseAt(m, Phase::In, kInMs * 0.50), ai, xi);
+        body(m, poseAt(m, Phase::In, kInMs * 0.60), aj, xj);
+        double as, xs; body(m, poseAt(m, Phase::In, 0.0), as, xs);
+        std::snprintf(msg, sizeof msg, "rule 2 %s: the arrival slows into rest", name(m));
+        check(std::fabs(xj - xi) < 0.12 * std::fabs(xs), msg);
+
+        // Loops: the working loop returns to its start pose, which is the rest pose, so it can
+        // be entered and left without a jump — and it actually moves in between.
+        std::snprintf(msg, sizeof msg, "loop %s: starts at the rest pose", name(m));
+        check(samePose(poseAt(m, Phase::Idle, 0.0), rest), msg);
+        std::snprintf(msg, sizeof msg, "loop %s: is back at its start pose after one period (%.0f ms)", name(m), loopMs(m));
+        check(samePose(poseAt(m, Phase::Idle, loopMs(m)), poseAt(m, Phase::Idle, 0.0), 1e-4), msg);
+        std::snprintf(msg, sizeof msg, "loop %s: moves in between", name(m));
+        check(!samePose(poseAt(m, Phase::Idle, loopMs(m) * 0.37), rest, 1e-3), msg);
+    }
+    // The flight loops are vertical only: the ship and the sun never move sideways in them.
+    bool vertical = true;
+    for (double t = 0.0; t < 1600.0; t += 20.0)
+        if (std::fabs(poseAt(Mark::Interstellar, Phase::Idle, t).shipX) > 1e-9) vertical = false;
+    check(vertical, "loop interstellar: the ship shakes up and down only, never sideways");
+}
+
+static void test_brand_player_leaves_the_loop_only_at_a_boundary()
+{
+    using namespace brandtest;
+    Player pl(Mark::Interstellar);            // loop = 1200 ms
+    check(pl.gone(), "R-BRAND-5: a player starts with nothing drawn");
+    pl.showUp(1000.0, true);
+    pl.advance(1500.0);
+    check(pl.phase() == Phase::In, "R-BRAND-5: showing up");
+    pl.advance(2001.0);
+    check(pl.phase() == Phase::Idle, "R-BRAND-5: show up hands over to the working loop");
+    // Ask to leave 500 ms into a 1200 ms loop: it must keep flying to the boundary at 3200.
+    pl.advance(2500.0); pl.requestOut(2500.0); pl.advance(2501.0);
+    check(pl.phase() == Phase::Idle && !pl.leaving(), "loop rule: asked to leave mid-loop, it finishes the loop first");
+    pl.advance(3199.0);
+    check(pl.phase() == Phase::Idle, "loop rule: still in the loop 1 ms before the boundary");
+    pl.advance(3210.0);
+    check(pl.phase() == Phase::Out, "loop rule: the exit starts at the boundary");
+    check(std::fabs(pl.outProgress() - 10.0 / kOutMs) < 1e-6, "loop rule: and is dated from the boundary, not from the frame that noticed");
+    pl.advance(3200.0 + kOutMs + 1.0);
+    check(pl.gone(), "R-BRAND-5: gone when the exit has played");
+
+    // Reduced motion: nothing travels, but it still fades (rule 3 does not switch off).
+    artboard::setReducedMotion(true);
+    Player r(Mark::Solaris);
+    r.showUp(0.0, true); r.advance(75.0);
+    const Pose mid = r.pose();
+    check(std::fabs(mid.alpha - 0.5) < 1e-6 && std::fabs(mid.sunY) < 1e-9, "reduced motion: show up is a fade with no travel");
+    r.advance(200.0);
+    check(r.phase() == Phase::Rest, "reduced motion: no working loop");
+    artboard::setReducedMotion(false);
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// R-FAMILY — one family, one behaviour: the shared building blocks (2026-11-17).
+// Every block is opt-in, so each test first pins what an app that opts into nothing still gets.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+namespace
+{
+    using arstro::cosmo_v2::ConfirmDialog;
+    using arstro::cosmo_v2::ContextMenu;
+    using arstro::cosmo_v2::MenuStrip;
+    using arstro::cosmo_v2::Toast;
+    using artboard::DrawOp;
+    using artboard::KeyEvent;
+    using artboard::Rect;
+
+    struct TestMenuStrip : MenuStrip { using MenuStrip::handleGesture; };
+    struct TestContextMenu : ContextMenu { using ContextMenu::handleGesture; };
+    struct TestConfirm : ConfirmDialog
+    {
+        TestConfirm() : ConfirmDialog(arstro::cosmo_v2::palette::primary()) {}
+        using ConfirmDialog::advance;
+    };
+
+    KeyEvent keyDown(int code) { KeyEvent e; e.type = KeyEvent::Type::Down; e.keyCode = code; return e; }
+    bool sameColour(const artboard::Color &a, const artboard::Color &b, double eps = 1e-6)
+    {
+        return std::fabs(a.r - b.r) < eps && std::fabs(a.g - b.g) < eps && std::fabs(a.b - b.b) < eps && std::fabs(a.a - b.a) < eps;
+    }
+    /** True if a frame put nothing on screen (a render still records its save / transform). */
+    bool drewNothing(const artboard::RecordingTarget &t)
+    {
+        return t.count(DrawOp::Kind::FillPath) == 0 && t.count(DrawOp::Kind::StrokePath) == 0 && t.count(DrawOp::Kind::DrawText) == 0;
+    }
+    /** The DrawText op for `text`, and the fill colour in force when it was drawn. */
+    struct DrawnText { bool found = false; double x = 0, y = 0, px = 0; std::string family; artboard::Color fill; };
+    DrawnText drawnText(const artboard::RecordingTarget &t, const std::string &text)
+    {
+        DrawnText d;
+        artboard::Color fill;
+        for (const auto &op : t.ops())
+        {
+            if (op.kind == DrawOp::Kind::SetFill) fill = op.color;
+            if (op.kind == DrawOp::Kind::DrawText && op.text == text)
+            {
+                d.found = true; d.x = op.args[0]; d.y = op.args[1]; d.px = op.args[2];
+                d.family = op.fontFamily; d.fill = fill;
+            }
+        }
+        return d;
+    }
+    constexpr int kUp = 38, kDown = 40, kLeft = 37, kRight = 39, kEnter = 13, kEsc = 27, kHome = 36, kEnd = 35;
+}
+
+// R-FAMILY-1 (MenuStrip): shortcut column, separator, disabled row, keyboard.
+static void test_family_menu_strip_rows()
+{
+    using namespace arstro::cosmo_v2;
+    std::printf("\nR-FAMILY-1: MenuStrip rows\n");
+    int ran = 0;
+    auto act = [&ran](int id) { return [&ran, id] { ran = id; }; };
+
+    TestMenuStrip ms;
+    ms.width.set(600.0);
+    // Menu 0 is the OLD shape — plain `{label, action}` initialisers, which must still compile.
+    ms.addMenu({"Plain", {{"Open", act(1)}, {"Save a Copy of the Project", act(2)}}});
+    // Menu 1 uses every new field. Indexes: 0 New, 1 Open, 2 SEPARATOR, 3 Save (disabled), 4 Export.
+    ms.addMenu({"File", {{"New Project", act(10), "Ctrl+N"},
+                         {"Open\xE2\x80\xA6", act(11), "Ctrl+O"},
+                         MenuStrip::Item::sep(),
+                         {"Save", act(13), "Ctrl+S", false},
+                         {"Export All Photos\xE2\x80\xA6", act(14), "Ctrl+Shift+E"}}});
+
+    const MenuStrip::Item plain{"x", nullptr};
+    check(plain.shortcut.empty() && plain.enabled && !plain.separator && plain.selectable(),
+          "a {label, action} item has no shortcut, is enabled, is not a separator");
+
+    // ── the old menu is laid out exactly as before: 24 px rows, width from the estimate ──
+    ms.handleGesture(ev(Gesture::Type::Click), centreOf(ms.titleRect(0)));
+    ms.advance(0.0); ms.advance(400.0);
+    { artboard::RecordingTarget t; ms.renderOverlay(t); }
+    const Rect p0 = ms.itemRect(0, 0), p1 = ms.itemRect(0, 1);
+    check(near(p0.h, 24.0) && near(p1.y - p0.y, 24.0), "a plain menu keeps its 24 px rows");
+    check(near(p0.w, std::max(152.0, estimateTextWidth("Save a Copy of the Project", 11.0) + 22.0)),
+          "a plain menu keeps the width it always had (no shortcut: nothing re-measured)");
+    check(near(ms.shortcutRect(0, 0).w, 0.0), "...and has no shortcut rect");
+
+    // ── the new menu ──
+    ms.handleGesture(ev(Gesture::Type::Click), centreOf(ms.titleRect(1)));
+    check(ms.openIndex() == 1, "the File menu opens");
+    ms.advance(500.0); ms.advance(900.0);
+    artboard::RecordingTarget t;
+    ms.renderOverlay(t);
+
+    // Indexes count every row, the separator included; its row is shorter.
+    const Rect r0 = ms.itemRect(1, 0), r1 = ms.itemRect(1, 1), rs = ms.itemRect(1, 2), r3 = ms.itemRect(1, 3), r4 = ms.itemRect(1, 4);
+    check(near(r1.y - r0.y, 24.0) && near(rs.y - r1.y, 24.0), "rows before the separator are where a plain menu puts them");
+    check(rs.h > 0.0 && rs.h < 24.0, "the separator IS item 2, with a rect of its own, shorter than a row");
+    check(near(r3.y, rs.y + rs.h) && near(r4.y - r3.y, 24.0), "rows after it start where it ends");
+    check(ms.itemIndexAt(centreOf(rs)) == 2 && ms.itemIndexAt(centreOf(r3)) == 3 && ms.itemIndexAt(centreOf(r4)) == 4,
+          "hit-testing and itemRect agree, by index, across the separator");
+
+    // The width: widest label + widest shortcut, MEASURED by the target (not chars x 0.6).
+    double lw = 0.0, sw = 0.0;
+    for (const auto &it : ms.menu(1).items)
+    {
+        if (it.separator) continue;
+        lw = std::max(lw, t.measureText(it.label, 11.0, font::sans()));
+        sw = std::max(sw, t.measureText(it.shortcut, 10.0, font::mono()));
+    }
+    check(near(r0.w, std::max(152.0, lw + sw + 26.0 + 22.0)), "the menu is as wide as its widest label + widest shortcut, measured");
+    const double estimated = estimateTextWidth("Export All Photos\xE2\x80\xA6", 11.0) + estimateTextWidth("Ctrl+Shift+E", 10.0) + 26.0 + 22.0;
+    check(!near(r0.w, estimated, 0.5), "...which is not what the estimate would have given");
+
+    // The shortcut: mono, muted, right-aligned by its own measured width.
+    const DrawnText sc = drawnText(t, "Ctrl+N"), scLong = drawnText(t, "Ctrl+Shift+E");
+    check(sc.found && sc.family == font::mono() && near(sc.px, 10.0), "a shortcut is drawn in the mono face");
+    check(sameColour(sc.fill, palette::mutedForeground()), "...in the muted colour");
+    const double rightEdge = r0.x + r0.w - 11.0;
+    check(near(sc.x + t.measureText("Ctrl+N", 10.0, font::mono()), rightEdge) &&
+          near(scLong.x + t.measureText("Ctrl+Shift+E", 10.0, font::mono()), rightEdge),
+          "every shortcut ends on the same right edge (a right-aligned column)");
+    check(near(ms.shortcutRect(1, 0).x, sc.x) && near(ms.shortcutRect(1, 0).w, t.measureText("Ctrl+N", 10.0, font::mono())),
+          "shortcutRect publishes where it was drawn");
+    const DrawnText lab = drawnText(t, "New Project");
+    check(lab.found && lab.x + t.measureText("New Project", 11.0, font::sans()) < sc.x, "a label and its shortcut do not touch");
+
+    // Disabled: dimmed.
+    check(sameColour(drawnText(t, "Save").fill, palette::mutedForeground()) && sameColour(lab.fill, palette::foreground()),
+          "a disabled row's label is dimmed; an enabled one is not");
+    check(drawnText(t, "Ctrl+S").fill.a < sc.fill.a, "...and its shortcut is fainter than an enabled row's");
+
+    // Hover: an enabled row eases in (LIVE differs from the target mid-tween); a separator and a
+    // disabled row never take one.
+    artboard::Segment::setHovered(&ms);
+    ms.advance(1000.0);
+    ms.handleGesture(ev(Gesture::Type::Move), centreOf(r1));
+    ms.advance(1060.0);
+    const double mid = ms.itemHoverAmount(1);
+    check(ms.cursorItem() == 1 && mid > 0.02 && mid < 0.98, "an enabled row's wash is EASING 60 ms in (live != target)");
+    ms.advance(1400.0);
+    check(near(ms.itemHoverAmount(1), 1.0), "...and settles fully on");
+    ms.handleGesture(ev(Gesture::Type::Move), centreOf(rs));
+    ms.advance(1800.0);
+    check(ms.cursorItem() == -1 && near(ms.itemHoverAmount(2), 0.0), "the separator takes no hover");
+    ms.handleGesture(ev(Gesture::Type::Move), centreOf(r3));
+    ms.advance(2200.0);
+    check(ms.cursorItem() == -1 && near(ms.itemHoverAmount(3), 0.0), "a disabled row takes no hover wash");
+
+    // Clicks: the separator and the disabled row do nothing and the menu stays open.
+    ran = 0;
+    ms.handleGesture(ev(Gesture::Type::Click), centreOf(rs));
+    check(ran == 0 && ms.openIndex() == 1, "a click on the separator does nothing; the menu stays open");
+    ms.handleGesture(ev(Gesture::Type::Click), centreOf(r3));
+    check(ran == 0 && ms.openIndex() == 1, "a click on a disabled row does nothing; the menu stays open");
+    ms.handleGesture(ev(Gesture::Type::Click), centreOf(r4));
+    check(ran == 14 && ms.openIndex() == -1, "a click on an enabled row runs it and closes");
+
+    // Keyboard: skips the separator and the disabled row, wraps, runs, switches, closes.
+    artboard::Segment::setHovered(nullptr);   // the pointer is elsewhere: the keyboard's cursor must survive that
+    check(!ms.menuKey(keyDown(kDown)), "menuKey consumes nothing while no menu is open");
+    ms.handleGesture(ev(Gesture::Type::Click), centreOf(ms.titleRect(1)));
+    ms.advance(3000.0);
+    check(ms.cursorItem() == -1, "a menu opens with no row under the cursor");
+    ms.menuKey(keyDown(kDown));
+    check(ms.cursorItem() == 0, "Down stands on the first row");
+    ms.advance(3016.0); ms.advance(3076.0);
+    const double kmid = ms.itemHoverAmount(0);
+    check(kmid > 0.02 && kmid < 0.98, "the keyboard's row is washed through the same EASED hover (mid-tween)");
+    ms.advance(3400.0);
+    check(near(ms.itemHoverAmount(0), 1.0), "...and stays lit with the pointer elsewhere");
+    ms.menuKey(keyDown(kDown));
+    check(ms.cursorItem() == 1, "Down moves to the next row");
+    ms.menuKey(keyDown(kDown));
+    check(ms.cursorItem() == 4, "Down steps OVER the separator and the disabled row");
+    ms.menuKey(keyDown(kDown));
+    check(ms.cursorItem() == 0, "...and wraps to the top");
+    ms.menuKey(keyDown(kUp));
+    check(ms.cursorItem() == 4, "Up wraps to the bottom");
+    ms.menuKey(keyDown(kUp));
+    check(ms.cursorItem() == 1, "Up steps over them too");
+    ms.menuKey(keyDown(kEnd));
+    check(ms.cursorItem() == 4, "End is the last selectable row");
+    ms.menuKey(keyDown(kHome));
+    check(ms.cursorItem() == 0, "Home is the first");
+    ms.menuKey(keyDown(kLeft));
+    check(ms.openIndex() == 0 && ms.cursorItem() == 0, "Left opens the neighbouring menu, on its first row");
+    ms.menuKey(keyDown(kRight));
+    check(ms.openIndex() == 1, "Right comes back");
+    ms.menuKey(keyDown(kDown));
+    ran = 0;
+    check(ms.menuKey(keyDown(kEnter)) && ran == 11 && ms.openIndex() == -1, "Enter runs the row under the cursor and closes");
+    ms.handleGesture(ev(Gesture::Type::Click), centreOf(ms.titleRect(1)));
+    check(ms.menuKey(keyDown(kEsc)) && ms.openIndex() == -1, "Escape closes");
+}
+
+// R-FAMILY-1 (ContextMenu): the same three fields.
+static void test_family_context_menu_rows()
+{
+    using namespace arstro::cosmo_v2;
+    std::printf("\nR-FAMILY-1: ContextMenu rows\n");
+    int ran = 0;
+    auto act = [&ran](int id) { return [&ran, id] { ran = id; }; };
+    TestContextMenu cm;
+    cm.width.set(800.0); cm.height.set(600.0);
+
+    // The old shape, laid out as before.
+    cm.open({{"Rename Group", act(1)}, {"Delete", act(2)}}, 100.0, 100.0);
+    cm.advance(0.0); cm.advance(400.0);
+    { artboard::RecordingTarget t; cm.renderOverlay(t); }
+    check(near(cm.itemRect(1).y - cm.itemRect(0).y, 24.0) && near(cm.itemRect(0).w, 150.0),
+          "a plain context menu keeps its rows and its width");
+    cm.close();
+    cm.advance(800.0);
+
+    // 0 Copy, 1 Paste (disabled), 2 SEPARATOR, 3 Delete.
+    cm.open({{"Copy", act(10), "Ctrl+C"}, {"Paste", act(11), "Ctrl+V", false}, ContextMenu::Item::sep(), {"Delete", act(13), "Del"}},
+            100.0, 100.0);
+    cm.advance(1000.0); cm.advance(1400.0);
+    artboard::RecordingTarget t;
+    cm.renderOverlay(t);
+    const Rect r0 = cm.itemRect(0), r1 = cm.itemRect(1), rs = cm.itemRect(2), r3 = cm.itemRect(3);
+    check(cm.itemCount() == 4 && rs.h > 0.0 && rs.h < 24.0 && near(r3.y, rs.y + rs.h), "the separator is item 2; the row after it starts where it ends");
+    check(cm.itemIndexAt(centreOf(r3)) == 3 && cm.itemIndexAt(centreOf(rs)) == 2, "hit-testing agrees with itemRect across it");
+    const DrawnText sc = drawnText(t, "Ctrl+C"), del = drawnText(t, "Del");
+    check(sc.found && sc.family == font::mono() && sameColour(sc.fill, palette::mutedForeground()), "a shortcut is mono and muted");
+    check(near(sc.x + t.measureText("Ctrl+C", 10.0, font::mono()), r0.x + r0.w - 11.0) &&
+          near(del.x + t.measureText("Del", 10.0, font::mono()), r0.x + r0.w - 11.0), "shortcuts are right-aligned by measured width");
+    check(sameColour(drawnText(t, "Paste").fill, palette::mutedForeground()), "a disabled row is dimmed");
+
+    cm.handleGesture(ev(Gesture::Type::Move), centreOf(r1));
+    cm.advance(1800.0);
+    check(cm.cursorItem() == -1 && near(cm.itemHoverAmount(1), 0.0), "a disabled row takes no hover");
+    cm.handleGesture(ev(Gesture::Type::Move), centreOf(r0));
+    cm.advance(1816.0); cm.advance(1876.0);
+    check(cm.itemHoverAmount(0) > 0.02 && cm.itemHoverAmount(0) < 0.98, "an enabled row's wash is easing mid-tween");
+    cm.handleGesture(ev(Gesture::Type::Click), centreOf(r1));
+    check(ran == 0 && cm.isOpen(), "a click on a disabled row does nothing; the menu stays open");
+    cm.handleGesture(ev(Gesture::Type::Click), centreOf(rs));
+    check(ran == 0 && cm.isOpen(), "a click on the separator does nothing; the menu stays open");
+
+    cm.handleGesture(ev(Gesture::Type::Move), Point{700.0, 500.0});   // off the menu
+    cm.menuKey(keyDown(kHome));
+    check(cm.cursorItem() == 0, "Home stands on the first row");
+    cm.menuKey(keyDown(kDown));
+    check(cm.cursorItem() == 3, "Down steps over the disabled row and the separator");
+    cm.menuKey(keyDown(kDown));
+    check(cm.cursorItem() == 0, "...and wraps");
+    cm.menuKey(keyDown(kUp));
+    check(cm.cursorItem() == 3, "Up wraps back");
+    check(cm.menuKey(keyDown(kEnter)) && ran == 13 && !cm.isOpen(), "Enter runs the row and closes");
+    check(!cm.menuKey(keyDown(kDown)), "menuKey consumes nothing once closed");
+}
+
+// R-FAMILY-2: the toast.
+static void test_family_toast()
+{
+    using namespace arstro::cosmo_v2;
+    std::printf("\nR-FAMILY-2: Toast\n");
+    Toast toast;
+    toast.width.set(1000.0);
+    toast.advance(0.0);
+    { artboard::RecordingTarget t; toast.renderOverlay(t);
+      check(drewNothing(t) && !toast.isShowing() && near(toast.amount(), 0.0), "a toast nobody showed draws nothing"); }
+
+    // In: eased (live != target mid-tween), sliding down while it fades.
+    toast.show(Toast::Kind::Info, "Copied dv_3.cutoff", 1000.0);
+    toast.advance(1000.0);
+    toast.advance(1060.0);
+    const double inMid = toast.amount();
+    check(inMid > 0.05 && inMid < 0.98, "60 ms in, the toast is mid-fade (live != target)");
+    { artboard::RecordingTarget t; toast.renderOverlay(t);
+      check(toast.rect().y < 0.0 && near(toast.rect().y, -(1.0 - inMid) * Toast::kSlide), "...and still above its resting place: it slides as it fades"); }
+    toast.advance(1200.0);
+    artboard::RecordingTarget atRest;
+    toast.renderOverlay(atRest);
+    check(near(toast.amount(), 1.0) && near(toast.rect().y, 0.0) && near(toast.rect().h, Toast::kHeight), "150 ms later it is at rest, at the top of its band");
+    check(near(toast.rect().x + toast.rect().w * 0.5, 500.0), "centred in the band the caller gave it");
+    check(toast.kind() == Toast::Kind::Info && toast.text() == "Copied dv_3.cutoff", "kind and text are published");
+
+    // Kinds: info draws no bar; warning an amber bar; error a red one.
+    auto barColour = [&](Toast::Kind k, artboard::Color &out) {
+        Toast tk; tk.width.set(1000.0);
+        tk.show(k, "Two files are missing", 0.0);
+        tk.advance(0.0); tk.advance(400.0);
+        artboard::RecordingTarget t; tk.renderOverlay(t);
+        // the bar is the only fill of the kind's colour that is not text: look for the colour at all
+        for (const auto &op : t.ops())
+            if (op.kind == DrawOp::Kind::SetFill && (sameColour(op.color, palette::warning()) || sameColour(op.color, palette::destructive())))
+            { out = op.color; return true; }
+        return false;
+    };
+    artboard::Color c;
+    check(!barColour(Toast::Kind::Info, c), "an info toast has no bar and no glyph");
+    check(barColour(Toast::Kind::Warning, c) && sameColour(c, palette::warning()), "a warning's bar is palette::warning()");
+    check(barColour(Toast::Kind::Error, c) && sameColour(c, palette::destructive()), "an error's bar is palette::destructive()");
+    check(sameColour(palette::warning(), artboard::Color::hex(0xE3B341)) && !sameColour(palette::warning(), palette::primary()),
+          "the warning amber is #E3B341 and is not the accent");
+
+    // Hold 3200 ms, then out — eased, sliding up while it fades, ending with nothing drawn.
+    toast.advance(1000.0 + 3100.0);
+    check(near(toast.amount(), 1.0), "it holds: still fully shown 3100 ms after it was said");
+    toast.advance(1000.0 + 3216.0);   // the hold is over: this frame starts the fade
+    toast.advance(1000.0 + 3216.0 + 150.0);
+    const double outMid = toast.amount();
+    check(outMid > 0.05 && outMid < 0.95, "half way out it is mid-fade (live != target)");
+    { artboard::RecordingTarget t; toast.renderOverlay(t);
+      check(toast.rect().y < 0.0, "...and already moving: it fades WHILE it leaves, not after it stops"); }
+    toast.advance(1000.0 + 3216.0 + 400.0);
+    { artboard::RecordingTarget t; toast.renderOverlay(t);
+      check(near(toast.amount(), 0.0) && drewNothing(t) && !toast.isShowing(), "then it is gone, and draws nothing"); }
+
+    // A second toast while one shows: a cross-fade of the words, never a cut.
+    Toast sw; sw.width.set(1000.0);
+    sw.show(Toast::Kind::Info, "First", 0.0);
+    sw.advance(0.0); sw.advance(400.0);
+    check(near(sw.swapAmount(), 1.0), "nothing replaced: swap is 1");
+    sw.show(Toast::Kind::Error, "Second", 400.0);
+    sw.advance(400.0); sw.advance(500.0);
+    const double s = sw.swapAmount();
+    check(s > 0.05 && s < 0.95, "100 ms after a second toast, the swap is mid-way (live != target)");
+    check(near(sw.amount(), 1.0), "...while the toast itself stays up: no fade-out-and-in");
+    { artboard::RecordingTarget t; sw.renderOverlay(t);
+      const DrawnText a = drawnText(t, "First"), b = drawnText(t, "Second");
+      check(a.found && b.found, "both the old and the new words are drawn during the swap");
+      check(a.fill.a > 0.02 && b.fill.a > 0.02 && near(a.fill.a + b.fill.a, palette::foreground().a, 1e-6),
+            "...the old fading out as the new fades in (their alphas sum to one)"); }
+    sw.advance(900.0);
+    { artboard::RecordingTarget t; sw.renderOverlay(t);
+      check(near(sw.swapAmount(), 1.0) && !drawnText(t, "First").found && drawnText(t, "Second").found && sw.kind() == Toast::Kind::Error,
+            "then only the new one is left"); }
+    sw.advance(400.0 + 3100.0);
+    check(near(sw.amount(), 1.0), "the hold is counted from the LAST thing said");
+
+    // The clockless overload begins on the next advance.
+    Toast lazy; lazy.width.set(1000.0);
+    lazy.advance(100.0);
+    lazy.show(Toast::Kind::Info, "Later");
+    check(lazy.isShowing() && near(lazy.amount(), 0.0), "show() with no clock starts nothing yet, and says it is pending");
+    lazy.advance(116.0); lazy.advance(180.0);
+    check(lazy.amount() > 0.05 && lazy.amount() < 0.99, "...the next advance starts it, eased");
+
+    // Text fits: ellipsized to the band with the target's real metrics.
+    Toast narrow; narrow.width.set(300.0);
+    const std::string longText = "Rendered the whole song to a file with a very long name indeed and then some more words after it";
+    narrow.show(Toast::Kind::Warning, longText, 0.0);
+    narrow.advance(0.0); narrow.advance(400.0);
+    artboard::RecordingTarget nt; narrow.renderOverlay(nt);
+    std::string drawn;
+    for (const auto &op : nt.ops()) if (op.kind == DrawOp::Kind::DrawText) drawn = op.text;
+    check(drawn != longText && drawn.size() >= 3 && drawn.compare(drawn.size() - 3, 3, "\xE2\x80\xA6") == 0, "a long sentence is cut with U+2026");
+    check(nt.measureText(drawn, 12.0, font::sans()) <= 300.0 - 2 * Toast::kSideMargin - (Toast::kGlyph + 8.0) + 1e-6, "...to what the band leaves, by measured width");
+    check(narrow.rect().x >= 0.0 && narrow.rect().x + narrow.rect().w <= 300.0, "the toast stays inside its band");
+
+    // translate: a host's words, at paint time.
+    Toast tr; tr.width.set(1000.0);
+    tr.translate = [](const std::string &s) { return s == "Saved" ? std::string("\xC4\x90\xC3\xA3 l\xC6\xB0u") : s; };
+    tr.show(Toast::Kind::Info, "Saved", 0.0);
+    tr.advance(0.0); tr.advance(400.0);
+    { artboard::RecordingTarget t; tr.renderOverlay(t);
+      check(drawnText(t, "\xC4\x90\xC3\xA3 l\xC6\xB0u").found && tr.text() == "\xC4\x90\xC3\xA3 l\xC6\xB0u", "translate turns the stored words into the shown ones"); }
+    check(!toast.hitTest(Point{500.0, 10.0}), "a toast never takes input");
+}
+
+// R-FAMILY-3: the destructive button's style.
+static void test_family_confirm_destructive_style()
+{
+    using namespace arstro::cosmo_v2;
+    std::printf("\nR-FAMILY-3: ConfirmDialog destructive style\n");
+    using Style = ConfirmDialog::DestructiveStyle;
+    auto threeButtons = [] { return std::vector<ConfirmDialog::Button>{{"Cancel"}, {"Don\xE2\x80\x99t save", true}, {"Save", false, true}}; };
+    auto twoButtons = [] { return std::vector<ConfirmDialog::Button>{{"Cancel"}, {"Delete", true}}; };
+    // How button `i` was painted: a FillPath (filled) or only a StrokePath (outlined) in destructive red.
+    auto paintedFilledRed = [](TestConfirm &d) {
+        d.advance(0.0); d.advance(400.0);
+        artboard::RecordingTarget t; d.renderOverlay(t);
+        bool red = false, filled = false;
+        for (const auto &op : t.ops())
+        {
+            if (op.kind == DrawOp::Kind::SetFill) red = sameColour(op.color, palette::destructive());
+            if (op.kind == DrawOp::Kind::BeginPath) { /* a new shape: keep `red` — it was set just before */ }
+            if (op.kind == DrawOp::Kind::FillPath && red) filled = true;
+            if (op.kind == DrawOp::Kind::DrawText) red = false;
+        }
+        return filled;
+    };
+    auto labelColour = [](TestConfirm &d, const std::string &label) {
+        artboard::RecordingTarget t; d.renderOverlay(t);
+        return drawnText(t, label).fill;
+    };
+
+    {   // the default: what every existing caller gets
+        TestConfirm d; d.width.set(800.0); d.height.set(600.0);
+        check(d.destructiveStyle() == Style::Filled && !d.outlinedDestructive(), "the default style is Filled");
+        d.show("Save changes to \xE2\x80\x9CTokyo\xE2\x80\x9D?", "Your edits will be lost.", threeButtons());
+        check(!d.drawsOutlined(1) && paintedFilledRed(d), "by default the destructive button is filled, even beside a primary");
+        check(sameColour(labelColour(d, "Don\xE2\x80\x99t save"), palette::primaryForeground()), "...with white words");
+    }
+    {   // Auto, with a primary beside it: outlined
+        TestConfirm d; d.width.set(800.0); d.height.set(600.0);
+        d.setDestructiveStyle(Style::Auto);
+        d.show("Save changes to \xE2\x80\x9CTokyo\xE2\x80\x9D?", "Your edits will be lost.", threeButtons());
+        check(d.drawsOutlined(1) && !d.drawsOutlined(0) && !d.drawsOutlined(2), "Auto: beside a primary, the destructive button (only it) is outlined");
+        check(!paintedFilledRed(d), "...nothing is filled red");
+        check(sameColour(labelColour(d, "Don\xE2\x80\x99t save"), palette::destructive()), "...its words are red");
+        check(sameColour(labelColour(d, "Save"), palette::primaryForeground()), "...and the primary is still the filled one");
+    }
+    {   // Auto, alone: filled
+        TestConfirm d; d.width.set(800.0); d.height.set(600.0);
+        d.setDestructiveStyle(Style::Auto);
+        d.show("Delete 3 photos?", "This cannot be undone.", twoButtons());
+        check(!d.drawsOutlined(1) && paintedFilledRed(d), "Auto: the only action — the destructive button is FILLED");
+        check(sameColour(labelColour(d, "Delete"), palette::primaryForeground()), "...with white words");
+    }
+    {   // Outlined, always — and the first form of the option still means exactly that
+        TestConfirm d; d.width.set(800.0); d.height.set(600.0);
+        d.setOutlinedDestructive(true);
+        check(d.outlinedDestructive() && d.destructiveStyle() == Style::Outlined, "setOutlinedDestructive(true) is the Outlined style");
+        d.show("Delete 3 photos?", "This cannot be undone.", twoButtons());
+        check(d.drawsOutlined(1) && !paintedFilledRed(d), "Outlined: outlined even when it is the only action (Solaris's behaviour, kept)");
+        d.setOutlinedDestructive(false);
+        check(!d.outlinedDestructive() && d.destructiveStyle() == Style::Filled && !d.drawsOutlined(1), "...and (false) is Filled again");
+    }
+}
+
+// R-FAMILY-4: the tokens.
+static void test_family_tokens()
+{
+    using namespace arstro::cosmo_v2;
+    std::printf("\nR-FAMILY-4: tokens\n");
+    check(near(space::u(1), 3.25) && near(space::padX(), 9.75) && near(space::gap(), 6.5) && near(space::rowH(), 22.75) && near(space::barH(), 29.25),
+          "space:: is the 3.25 px ladder (padX 9.75, gap 6.5, rowH 22.75, barH 29.25)");
+    check(near(motion::kHoverMs, 120.0) && near(motion::kModalOpenMs, 150.0) && near(motion::kModalCloseMs, 120.0) &&
+          near(motion::kScrollMs, 180.0) && near(motion::kCrossFadeMs, 200.0) && near(motion::kSlideMs, 220.0) &&
+          near(motion::kReflowMs, 260.0) && near(motion::kScreenFadeMs, 260.0),
+          "motion:: carries the design law's durations");
+    check(near(motion::kToastInMs, 150.0) && near(motion::kToastOutMs, 300.0) && near(motion::kToastHoldMs, 3200.0), "the toast: 150 in, 3200 hold, 300 out");
+    const artboard::Color w = palette::warning();
+    palette::setAccent(artboard::Color::hex(0xDD5A0C));   // Solaris's orange
+    check(sameColour(palette::warning(), w), "the warning does not follow the accent");
+    palette::setAccent(artboard::Color::hex(0x4F7EF7));
+}
+
+// R-FAMILY-5: the wordmark and the unsaved dot.
+static void test_family_wordmark_and_dirty_dot()
+{
+    using namespace arstro::cosmo_v2;
+    std::printf("\nR-FAMILY-5: Wordmark, DirtyDot\n");
+    artboard::RecordingTarget t;
+    const double w = Wordmark::draw(t, "cosmo", 10.0, 20.0, 13.0);
+    const DrawnText name = drawnText(t, "cosmo"), dot = drawnText(t, ".");
+    const double sp = -0.03 * 13.0;
+    const double nameW = t.measureText("cosmo", 13.0, font::sansSemiBold(), sp);
+    check(name.found && dot.found && near(name.x, 10.0) && near(name.y, 20.0) && near(dot.y, 20.0), "the name and the dot share a baseline");
+    check(near(dot.x, 10.0 + nameW), "the dot sits at the MEASURED end of the name");
+    check(!near(dot.x, 10.0 + estimateTextWidth("cosmo", 13.0), 0.5), "...which is not where the estimate puts it");
+    check(sameColour(name.fill, palette::foreground()) && sameColour(dot.fill, palette::primary()), "name in foreground, dot in the accent");
+    check(name.family == font::sansSemiBold() && dot.family == font::sansSemiBold(), "both SemiBold");
+    check(near(w, nameW + t.measureText(".", 13.0, font::sansSemiBold(), sp)) && near(w, Wordmark::width(t, "cosmo", 13.0)), "it returns its width, and width() agrees");
+    artboard::RecordingTarget t2;
+    Wordmark::draw(t2, "interstellar", 0.0, 20.0, 13.0, 0.5);
+    check(near(drawnText(t2, "interstellar").fill.a, palette::foreground().a * 0.5) && near(drawnText(t2, ".").fill.a, 0.5), "alpha fades both runs");
+    check(drawnText(t2, ".").x > dot.x, "a longer name pushes the dot further: it follows the name");
+
+    DirtyDot d;
+    d.set(true);
+    d.advance(0.0);
+    check(near(d.amount(), 1.0), "the first advance PLACES the dot (nowhere to travel from)");
+    DirtyDot e;
+    e.advance(0.0);
+    check(near(e.amount(), 0.0), "a clean project has no dot");
+    e.set(true);
+    check(near(e.amount(), 0.0) && e.isAnimating(), "a setter has no clock: nothing moved yet, and it says it is pending");
+    e.advance(16.0); e.advance(96.0);
+    const double mid = e.amount();
+    check(mid > 0.05 && mid < 0.99 && e.target(), "80 ms after it became dirty the dot is mid-fade (live != target)");
+    { artboard::RecordingTarget r; e.draw(r, Point{50.0, 12.0});
+      artboard::Color fill; bool drew = false;
+      for (const auto &op : r.ops()) { if (op.kind == DrawOp::Kind::SetFill) fill = op.color; if (op.kind == DrawOp::Kind::FillPath) drew = true; }
+      check(drew && near(fill.r, palette::foreground().r) && near(fill.g, palette::foreground().g) && near(fill.a, mid * palette::foreground().a),
+            "it is drawn in the FOREGROUND colour, at its live amount"); }
+    e.advance(400.0);
+    check(near(e.amount(), 1.0) && !e.isAnimating(), "...and settles on");
+    e.set(false);
+    e.advance(416.0); e.advance(496.0);
+    check(e.amount() > 0.01 && e.amount() < 0.95, "saving fades it out, eased");
+    e.advance(900.0);
+    { artboard::RecordingTarget r; e.draw(r, Point{50.0, 12.0});
+      check(near(e.amount(), 0.0) && drewNothing(r), "...to nothing drawn"); }
+    check(near(DirtyDot::kRadius, 3.0), "radius 3");
+}
+
+// R-FAMILY-6: the segmented control's live highlight.
+static void test_family_segmented_highlight_pos()
+{
+    using namespace arstro::cosmo_v2;
+    std::printf("\nR-FAMILY-6: SegmentedControl::highlightPos\n");
+    SegmentedControl seg({"Before", "Split", "After"});
+    seg.width.set(300.0); seg.height.set(24.0);
+    seg.layout();
+    seg.advance(0.0);
+    check(near(seg.highlightPos(), 0.0), "at rest the highlight is on the selected slot");
+    seg.setSelected(2);
+    check(seg.selected() == 2 && near(seg.highlightPos(), 0.0), "selecting moves the TARGET at once; the highlight has not moved yet");
+    seg.advance(16.0); seg.advance(96.0);
+    const double mid = seg.highlightPos();
+    check(mid > 0.05 && mid < 1.95, "80 ms into the slide the highlight is between slots (live != target)");
+    seg.advance(400.0);
+    check(near(seg.highlightPos(), 2.0), "...and arrives");
+    seg.setSelectedImmediate(1);
+    check(near(seg.highlightPos(), 1.0), "setSelectedImmediate snaps it");
+}
+
+// R-FAMILY-7: the History card's title and radius.
+static void test_family_history_title()
+{
+    using namespace arstro::cosmo_v2;
+    std::printf("\nR-FAMILY-7: HistoryView title\n");
+    HistoryView hv;
+    hv.width.set(1200.0); hv.height.set(800.0);
+    check(hv.title == "History", "the default title is \"History\", not uppercase");
+    hv.show({HistoryView::Node{-1, "Open"}, HistoryView::Node{0, "Exposure"}}, 1);
+    hv.advance(0.0); hv.advance(600.0);
+    artboard::RecordingTarget t;
+    hv.renderOverlay(t);
+    const DrawnText title = drawnText(t, "History");
+    check(title.found && near(title.px, 14.0) && title.family == font::sansSemiBold(), "drawn at 14 px SemiBold, as the other modal titles");
+    double tracking = -1.0;
+    for (const auto &op : t.ops()) if (op.kind == DrawOp::Kind::DrawText && op.text == "History") tracking = op.letterSpacingPx;
+    check(near(tracking, 0.0), "...and not tracked out");
+    // The card's corner. The scrim is the first path (radius 0), the card the second; a rounded
+    // rect's path starts at (x + r, y), so r is that MoveTo's x minus the path's leftmost x.
+    int paths = 0; double firstX = 0.0, minX = 1e9;
+    for (const auto &op : t.ops())
+    {
+        if (op.kind == DrawOp::Kind::BeginPath) { ++paths; continue; }
+        if (paths != 2) { if (paths > 2) break; continue; }
+        if (op.kind == DrawOp::Kind::MoveTo) firstX = op.args[0];
+        if (op.kind == DrawOp::Kind::MoveTo || op.kind == DrawOp::Kind::LineTo) minX = std::min(minX, op.args[0]);
+        if (op.kind == DrawOp::Kind::QuadTo) minX = std::min(minX, op.args[2]);
+        if (op.kind == DrawOp::Kind::CubicTo) minX = std::min(minX, op.args[4]);
+    }
+    check(near(firstX - minX, radius::control(), 0.01), "the card's corner radius is radius::control(), not a literal 6");
+}
+
 int main()
 {
     arstro::cosmo::testMainInit();   // D-10: a failing assert must exit, not hang
     test_accent_is_a_runtime_token();
+    test_brand_marks_obey_the_animation_law();
+    test_brand_player_leaves_the_loop_only_at_a_boundary();
     std::printf("cosmo widget hit-test suite (anchor pick radius = %.0f px)\n\n",
                 arstro::cosmo_v2::metrics::anchorHitRadius());
 
@@ -1602,6 +2344,7 @@ int main()
     cropPartHitTestPrefersCornersOverEdges();
 
     exportTreeStartsFullySelected();
+    test_export_preview_shows_the_real_output_name();
     exportDeselectParentClearsChildren();
     exportSelectParentSelectsChildren();
     exportDeselectChildUnticksParent();
@@ -1629,9 +2372,18 @@ int main()
     homeGridReflowIsAnimated();
     homeMinimumHeightClearsBothAnchoredBlocks();
     homeHeaderTitleNeverRunsUnderTheSearchField();
-    homeReservedLinksStaySilentButSwallowTheClick();
+    homeHasNoDeadLinksAndShowsTheBuildsVersion();
     homeSettingsLinkIsReachableAtASmallWindow();
     sectionHeaderRuleStopsBeforeItsTrailingControl();
+
+    test_family_menu_strip_rows();
+    test_family_context_menu_rows();
+    test_family_toast();
+    test_family_confirm_destructive_style();
+    test_family_tokens();
+    test_family_wordmark_and_dirty_dot();
+    test_family_segmented_highlight_pos();
+    test_family_history_title();
 
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all passed",

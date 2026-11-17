@@ -31,8 +31,14 @@
  *  Either way the process gets COSMO_CONTROL (the socket), COSMO_CC (the `cosmo-cc` to attach
  *  with) and COSMO_PROJECT (the open project), which is how the skill's own scripts drive the open
  *  project rather than a copy (R-ASSIST-4). POSIX only, like the control socket.
+ *
+ *  R-ASSIST-13: everything above that says "cosmo" is a VALUE, not code - it comes from the
+ *  AssistProfile this is constructed with (AssistProfile.h; cosmo's is `cosmoAssistProfile()`), so
+ *  Interstellar and Solaris run the user's agent with this same class, compiled in place. This file
+ *  and its .cpp include nothing of cosmo_core but the seam header.
  */
 #pragma once
+#include "AssistProfile.h"
 #include "core/assist/Assistant.h"
 #include <string>
 #include <sys/types.h>
@@ -47,17 +53,15 @@ namespace cosmo_v2
     public:
         struct Config
         {
-            std::string cosmoCc;                     // the `cosmo-cc` the agent's MCP server runs
+            std::string cc;                          // the `<app>-cc` the agent's MCP server runs
             std::string controlSocket;               // this application's control socket (R-SVC-8)
             std::string workspace;                   // where the agent runs: <config>/agent
             std::vector<std::string> bundledSkills;  // skill directories loaded by default (R-ASSIST-4)
         };
 
-        /** R-ASSIST-5: what Claude Code may do without asking — cosmo's tools, reading, the skill's
-         *  scripts and its plan files. Nothing else is pre-approved (`agentArgs=` widens it). */
-        static const char *const kAllowedTools;
-
-        explicit ProcessAssistant(Config c);
+        /** `profile` says which application this agent runs inside (R-ASSIST-13); its `allowedTools`
+         *  is what Claude Code may do without asking (R-ASSIST-5; `agentArgs=` widens it). */
+        ProcessAssistant(AssistProfile profile, Config c);
         ~ProcessAssistant() override;
 
         bool start(const arstro::cosmo::AssistLaunch &launch, std::string &err) override;
@@ -72,31 +76,39 @@ namespace cosmo_v2
         /** R-ASSIST-9: what this machine has — the agents cosmo knows how to talk to, whether each is
          *  installed, and a running Ollama / LM Studio with its models. `current` (the user's own
          *  setting) is kept as the "Custom" choice. Local servers are probed with a 250 ms timeout. */
-        static std::vector<arstro::cosmo::AgentChoice> detect(const std::string &current);
+        static std::vector<arstro::cosmo::AgentChoice> detect(const AssistProfile &p, const std::string &current);
         /** What the workspace's AGENTS.md says (R-ASSIST-10) - also an ACP agent's first-message context. */
-        static std::string agentsMd(const arstro::cosmo::AssistLaunch &l, const std::vector<std::string> &skills);
+        static std::string agentsMd(const AssistProfile &p, const arstro::cosmo::AssistLaunch &l,
+                                    const std::vector<std::string> &skills);
         /** R-ASSIST-5: may an ACP agent do what `toolCall` describes? `what` names it for the refusal. */
         static bool permitted(const std::string &kind, const std::string &title, const std::string &command,
-                              const std::vector<std::string> &paths, const arstro::cosmo::AssistLaunch &l,
-                              const Config &c);
+                              const std::vector<std::string> &paths, const AssistProfile &p,
+                              const arstro::cosmo::AssistLaunch &l, const Config &c);
         /** What the agent is told about where it is (appended to Claude Code's system prompt). */
-        static std::string systemPrompt(const arstro::cosmo::AssistLaunch &l);
+        static std::string systemPrompt(const AssistProfile &p, const arstro::cosmo::AssistLaunch &l);
         /** Claude Code's argv, the program first. */
-        static std::vector<std::string> claudeArgv(const arstro::cosmo::AssistLaunch &l, const Config &c);
+        static std::vector<std::string> claudeArgv(const AssistProfile &p, const arstro::cosmo::AssistLaunch &l,
+                                                   const Config &c);
         /** One line of Claude Code's stream-JSON output -> what the conversation shows. */
         static void parseClaudeLine(const std::string &line, std::vector<arstro::cosmo::AssistOutput> &out);
         /** `command` with `{prompt}` replaced by `prompt`, single-quoted for `sh -c`. */
         static std::string fillPrompt(const std::string &command, const std::string &prompt, bool &usedPlaceholder);
         /** The program on PATH (or as given, when it has a slash); "" when there is none. */
         static std::string findProgram(const std::string &program);
-        /** The `cosmo-cc` beside this executable (or in its cli/), else on PATH. */
-        static std::string findCosmoCc();
-        /** The skills an agent gets by default (R-ASSIST-4): `arstro.color.grading` from
-         *  $COSMO_SKILLS_DIR, else the directory this build was configured with. */
-        static std::vector<std::string> defaultSkills();
-        /** A Config for an application whose control socket is `socket`: cosmo-cc, the workspace
-         *  `<config>/agent`, the default skills. */
-        static Config configFor(const std::string &socket);
+        /** The CLI named `ccName` beside this executable (or in its cli/), else on PATH. */
+        static std::string findCc(const std::string &ccName);
+        /** The profile's CLI: its own `findCc` when it has one, else findCc(p.ccName). */
+        static std::string findCc(const AssistProfile &p);
+        /** The skills an agent gets by default (R-ASSIST-4): the profile's `skills` (and their
+         *  parts) from $<skillsDirEnv>, else the profile's `skillsDirDefault`. */
+        static std::vector<std::string> defaultSkills(const AssistProfile &p);
+        /** A Config for an application whose control socket is `socket`: the profile's CLI, its
+         *  workspace, its default skills. */
+        static Config configFor(const AssistProfile &p, const std::string &socket);
+        /** The MCP server entry that attaches the app's tools to THIS application:
+         *  `{command: <cc>, args: [<attachArgs...>, <socket>]}` as JSON text. With `named`, the ACP
+         *  form (`name` and an empty `env` too). */
+        static std::string mcpServerJson(const AssistProfile &p, const Config &c, bool named);
 
     private:
         enum class Proto { Claude, Acp, OneShot };
@@ -109,6 +121,7 @@ namespace cosmo_v2
         void readPipes();
         void reap(int status, std::vector<arstro::cosmo::AssistOutput> &out);
 
+        AssistProfile mProfile;
         Config mCfg;
         arstro::cosmo::AssistLaunch mLaunch;
         bool mClaude = false;      // Proto::Claude

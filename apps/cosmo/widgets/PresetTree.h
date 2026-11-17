@@ -39,6 +39,9 @@ namespace cosmo_v2
         void setRoots(std::vector<cosmo::PresetNode> roots);
         void setSelected(const std::string &relPath) { mSelected = relPath; }
         void scrollBy(double delta);
+        int rowCount() const { return (int)mRows.size(); }
+        /** LIVE amount of the "No presets yet" empty state (R-UX-7): 0 hidden … 1 shown. */
+        double emptyAmount() const { return mEmptyAmt.value(); }
 
         void advance(double nowMs) override;  // eases the scroll offset + hover/selection fades
 
@@ -82,6 +85,11 @@ namespace cosmo_v2
         // Selection-fill fade-in: mSelAmt eases 0->1 when mSelected changes.
         std::string mSelPrev;
         artboard::AnimatedProperty mSelAmt{0.0};
+
+        // R-UX-7: the "No presets yet" sentence, eased (see advance / onPaint).
+        artboard::AnimatedProperty mEmptyAmt{0.0};
+        bool mEmptyInit = false, mEmptyShown = false;
+        static constexpr double kPadRight = 6.5;   // px-2, the row's right padding (R-UX-6)
     };
 }
 }

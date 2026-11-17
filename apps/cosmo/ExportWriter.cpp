@@ -1,4 +1,5 @@
 #include "ExportWriter.h"
+#include "widgets/ExportNaming.h"
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <glib.h>
 #include <algorithm>
@@ -60,21 +61,6 @@ namespace exporter
         0x69, 0x63, 0x20, 0x44, 0x6F, 0x6D, 0x61, 0x69, 0x6E, 0x00, 0x00, 0x00,
         };
 
-        std::string folderOf(const std::string &p)
-        {
-            const auto s = p.find_last_of('/');
-            return s == std::string::npos ? std::string() : p.substr(0, s);
-        }
-        std::string fileOf(const std::string &p)
-        {
-            const auto s = p.find_last_of('/');
-            return s == std::string::npos ? p : p.substr(s + 1);
-        }
-        std::string stemOf(const std::string &name)
-        {
-            const auto d = name.find_last_of('.');
-            return d == std::string::npos ? name : name.substr(0, d);
-        }
         bool isJpegPath(const std::string &p)
         {
             std::string lower = p;
@@ -290,17 +276,20 @@ namespace exporter
     std::string resolvePath(const ExportDialog::Request &req, const std::string &sourcePath,
                             const std::string &fallbackName)
     {
-        std::string dir = req.sameAsSource ? folderOf(sourcePath) : req.destination;
-        if (dir.empty()) dir = folderOf(sourcePath);
-        if (dir.empty()) dir = ".";
-        if (req.useSubfolder && !req.subfolder.empty()) dir += "/" + req.subfolder;
-        g_mkdir_with_parents(dir.c_str(), 0755);
+        // The folder first: the name is chosen against what is IN it (R-EXPORT-3a).
+        g_mkdir_with_parents(exportNaming::outputDir(req, sourcePath).c_str(), 0755);
+        return exportNaming::outputPath(req, sourcePath, fallbackName);
+    }
 
-        std::string base = sourcePath.empty() ? fallbackName : fileOf(sourcePath);
-        if (base.empty()) base = "export";
-        base = stemOf(base);
-        const std::string ext = req.format == "PNG" ? ".png" : req.format == "TIFF" ? ".tif" : ".jpg";
-        return dir + "/" + (req.usePrefix ? req.prefix : std::string()) + base + ext;
+    std::string awayFromSource(const std::string &path, const std::string &sourcePath)
+    {
+        if (!exportNaming::samePath(path, sourcePath)) return path;
+        const std::string file = exportNaming::fileOf(path);
+        const auto dot = file.find_last_of('.');
+        const std::string ext = dot == std::string::npos || dot == 0 ? std::string() : file.substr(dot);
+        std::string dir = exportNaming::folderOf(path);
+        if (dir.empty()) dir = ".";
+        return exportNaming::freeName(dir, exportNaming::stemOf(file), ext, sourcePath, false);
     }
 
     // ── encode ─────────────────────────────────────────────────────────────────

@@ -170,23 +170,8 @@ namespace cosmo
         int rehydrations = 0;
     };
 
-    /** R-ASSIST-1: one line of the conversation with the user's agent. */
-    struct AssistMessageModel
-    {
-        std::string role;   // user | agent | tool | error | info
-        std::string text;
-    };
-
-    /** R-ASSIST-1: the agent conversation, as every front end shows it. The agent itself is a
-     *  process the host started; what it SAID is application state. */
-    struct AssistModel
-    {
-        std::string state = "off";   // off | starting | ready | busy | failed
-        std::string agent;           // which agent, as it named itself ("Claude Code")
-        std::vector<AssistMessageModel> messages;
-        /** R-ASSIST-9: the agents found on this machine, after `assist agents`. */
-        std::vector<AgentChoice> choices;
-    };
+    // AssistMessageModel / AssistModel (R-ASSIST-1) live in ../assist/Assistant.h since R-ASSIST-13: the
+    // Agent tab and the conversation are shared with the sibling apps and may not include this file.
 
     struct AppModel
     {

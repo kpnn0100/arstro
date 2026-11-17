@@ -33,6 +33,8 @@ namespace cosmo_v2
                   std::vector<Row> rows, std::function<void(std::vector<std::string>)> onConfirm);
         /** True while the modal is capturing input (not while fading out). */
         bool isOpen() const { return mOpen && !mClosing; }
+        /** R-UX-1: Escape cancels, Enter confirms the ticked categories; every key is taken. */
+        bool modalKey(const artboard::KeyEvent &e);
 
     protected:
         void advance(double nowMs) override;
@@ -42,6 +44,7 @@ namespace cosmo_v2
 
     private:
         void beginClose();
+        void confirm();   // the confirm button's action, shared by the click and Enter
         artboard::Rect cardRect() const;
         double rowTop(int i) const;      // top y of category row i
         artboard::Rect selectAllRect() const;

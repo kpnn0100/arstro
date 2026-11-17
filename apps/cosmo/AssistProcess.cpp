@@ -1,5 +1,4 @@
 #include "AssistProcess.h"
-#include "core/ProjectStore.h"
 #include "HttpLite.h"
 #include "ntwb/Json.h"
 
@@ -26,9 +25,6 @@ namespace cosmo_v2
     using arstro::cosmo::AssistLaunch;
     using arstro::cosmo::AssistOutput;
     using arstro::ntwb::Json;
-
-    const char *const ProcessAssistant::kAllowedTools =
-        "mcp__cosmo,Skill,Read,Glob,Grep,Write,Edit,TodoWrite,Bash(python3:*),Bash(ls:*),Bash(mkdir:*)";
 
     namespace
     {
@@ -107,9 +103,24 @@ namespace cosmo_v2
             const size_t s = p.rfind('/');
             return s == std::string::npos ? std::string(".") : p.substr(0, s);
         }
+
+        /** R-ASSIST-3: the MCP server that attaches the app's tools to THIS application. `named` is
+         *  the ACP form (`session/new` takes a list of named servers, each with an `env`). */
+        Json mcpServer(const AssistProfile &p, const std::string &cc, const std::string &socket, bool named)
+        {
+            Json server = Json::object();
+            if (named) server.set("name", p.mcpServer);
+            server.set("command", cc);
+            Json args = Json::array();
+            for (const auto &a : p.attachArgs) args.push(a);
+            args.push(socket);
+            server.set("args", std::move(args));
+            if (named) server.set("env", Json::array());
+            return server;
+        }
     }
 
-    ProcessAssistant::ProcessAssistant(Config c) : mCfg(std::move(c)) {}
+    ProcessAssistant::ProcessAssistant(AssistProfile profile, Config c) : mProfile(std::move(profile)), mCfg(std::move(c)) {}
 
     ProcessAssistant::~ProcessAssistant() { stop(); }
 
@@ -161,94 +172,90 @@ namespace cosmo_v2
         return std::string();
     }
 
-    std::string ProcessAssistant::findCosmoCc()
+    std::string ProcessAssistant::findCc(const std::string &ccName)
     {
+        if (ccName.empty()) return std::string();
         char self[4096];
         const ssize_t n = readlink("/proc/self/exe", self, sizeof(self) - 1);
         if (n > 0)
         {
             self[n] = 0;
             const std::string dir = dirOf(self);
-            for (const std::string &cand : {dir + "/cosmo-cc", dir + "/cli/cosmo-cc"})
+            for (const std::string &cand : {dir + "/" + ccName, dir + "/cli/" + ccName})
                 if (access(cand.c_str(), X_OK) == 0) return cand;
         }
-        return findProgram("cosmo-cc");
+        return findProgram(ccName);
     }
 
-    std::vector<std::string> ProcessAssistant::defaultSkills()
+    std::string ProcessAssistant::findCc(const AssistProfile &p) { return p.findCc ? p.findCc() : findCc(p.ccName); }
+
+    std::vector<std::string> ProcessAssistant::defaultSkills(const AssistProfile &p)
     {
         std::string root;
-        if (const char *e = std::getenv("COSMO_SKILLS_DIR")) root = e;
-#ifdef COSMO_SKILLS_DIR
-        if (root.empty()) root = COSMO_SKILLS_DIR;
-#endif
-        // R-ASSIST-4 (amended 2026-11-05): the colour-grading ENTRY skill and every skill it loads
-        // (`arstro.color.grading.<part>`, e.g. `.style` - what a user means by a look in their own words).
-        // The entry comes first: `cosmo_grade` runs its editor.
+        if (!p.skillsDirEnv.empty())
+            if (const char *e = std::getenv(p.skillsDirEnv.c_str())) root = e;
+        if (root.empty()) root = p.skillsDirDefault;
+        // R-ASSIST-4 (amended 2026-11-05): an ENTRY skill and every skill it loads (`<entry>.<part>`,
+        // e.g. cosmo's `arstro.color.grading.style` - what a user means by a look in their own words).
+        // The entry comes first: cosmo's `cosmo_grade` runs its editor.
         std::vector<std::string> out;
-        const std::string grading = root + "/arstro.color.grading";
-        if (root.empty() || access((grading + "/SKILL.md").c_str(), R_OK) != 0) return out;
-        out.push_back(grading);
+        if (root.empty()) return out;
         namespace fs = std::filesystem;
-        std::error_code ec;
-        std::vector<std::string> parts;
-        for (const auto &e : fs::directory_iterator(root, ec))
+        for (const AssistProfile::Skill &k : p.skills)
         {
-            const std::string name = e.path().filename().string();
-            if (name.rfind("arstro.color.grading.", 0) == 0 && fs::exists(e.path() / "SKILL.md", ec))
-                parts.push_back(e.path().string());
+            const std::string entry = root + "/" + k.name;
+            if (access((entry + "/SKILL.md").c_str(), R_OK) != 0) continue;
+            out.push_back(entry);
+            if (!k.withParts) continue;
+            std::error_code ec;
+            std::vector<std::string> parts;
+            for (const auto &e : fs::directory_iterator(root, ec))
+            {
+                const std::string name = e.path().filename().string();
+                if (name.rfind(k.name + ".", 0) == 0 && fs::exists(e.path() / "SKILL.md", ec))
+                    parts.push_back(e.path().string());
+            }
+            std::sort(parts.begin(), parts.end());
+            out.insert(out.end(), parts.begin(), parts.end());
         }
-        std::sort(parts.begin(), parts.end());
-        out.insert(out.end(), parts.begin(), parts.end());
         return out;
     }
 
-    ProcessAssistant::Config ProcessAssistant::configFor(const std::string &socket)
+    ProcessAssistant::Config ProcessAssistant::configFor(const AssistProfile &p, const std::string &socket)
     {
         Config c;
-        c.cosmoCc = findCosmoCc();
+        c.cc = findCc(p);
         c.controlSocket = socket;
-        c.workspace = arstro::cosmo::ProjectStore::configDir() + "/agent";
-        c.bundledSkills = defaultSkills();
+        c.workspace = p.workspace;
+        c.bundledSkills = defaultSkills(p);
         return c;
     }
 
-    std::string ProcessAssistant::agentsMd(const AssistLaunch &l, const std::vector<std::string> &skills)
+    std::string ProcessAssistant::mcpServerJson(const AssistProfile &p, const Config &c, bool named)
     {
-        std::string s = "# You are inside Cosmo\n\n"
-                        "You are running INSIDE Cosmo, the Arstro photo editor, as the photographer's assistant. ";
+        return mcpServer(p, c.cc, c.controlSocket, named).dump();
+    }
+
+    std::string ProcessAssistant::agentsMd(const AssistProfile &p, const AssistLaunch &l, const std::vector<std::string> &skills)
+    {
+        if (p.agentsMd) return p.agentsMd(l, skills);
+        // The plain default (R-ASSIST-13): an app that writes no text of its own still tells its
+        // agent where it is, what its tools are and where the skills are.
+        std::string s = "# You are inside " + p.brand + "\n\nYou are running INSIDE " + p.brand + " as the " + p.user + "'s assistant. ";
         s += l.project.empty() ? "No project is open yet in the user's window.\n"
-                               : "The project open in the user's window is " + l.project + " (" + std::to_string(l.photos) + " photos).\n";
-        s += "\n## Your tools\n\nCosmo's MCP server `cosmo` acts on that open project LIVE - every edit appears in the "
-             "user's window as one undoable step. Do not open another project unless the user asks.\n"
-             "- cosmo_api: the command grammar and every adjustment key - read it before your first edit\n"
-             "- cosmo_state: the project, its photos (address them by `node`), the selection, the history\n"
-             "- cosmo_preview: LOOK at a photo, as edited or as shot (before=true)\n"
-             "- cosmo_analyze: measure a photo - exposure, colour cast, hues, sky/skin/foliage - and its camera data\n"
-             "- cosmo_run: run command lines, e.g. \"select 2\\nset exposure=0.3 temp=6000\"\n";
-        if (!skills.empty())
-        {
-            s += "\n## Skills\n\nRead a skill's SKILL.md before doing what it covers, and follow it. Its scripts run "
-                 "from this directory and reach this window through the COSMO_CONTROL environment variable.\n";
-            for (const auto &k : skills)
-                s += "- " + k + ": skills/" + k + "/SKILL.md" +
-                     (k == "arstro.color.grading"
-                          ? " - THE ENTRY POINT for colour: grading in the photographer's own taste, cinematic, a mood or "
-                            "look, correcting, matching a set, many photos at once; it says which skill below to load"
-                      : k == "arstro.color.grading.style"
-                          ? " - what the user MEANS by a look in their own words, any language (warm, moody, tong Han, "
-                            "vintage film but brighter, the night ones neon) and the edit that answers it"
-                          : std::string()) + "\n";
-        }
-        s += "\n## How to answer\n\nThe user reads your replies in a small panel beside the photo: answer briefly and "
-             "plainly. Look at a photo before and after you change it.\n";
+                               : "The project open in the user's window is " + l.project + ".\n";
+        s += "\n## Your tools\n\n" + p.brand + "'s MCP server `" + p.mcpServer + "` acts on that open project LIVE - every "
+             "edit appears in the user's window as one undoable step. Do not open another project unless the user asks. "
+             "Read its API tool before your first edit.\n";
+        s += assistSkillsSection(p, skills);
+        s += "\n## How to answer\n\nThe user reads your replies in a small panel inside the window: answer briefly and plainly.\n";
         return s;
     }
 
-    std::vector<cosmo::AgentChoice> ProcessAssistant::detect(const std::string &current)
+    std::vector<cosmo::AgentChoice> ProcessAssistant::detect(const AssistProfile &p, const std::string &current)
     {
         struct Preset { const char *id, *name, *agent, *program, *hint; };
-        // The agents cosmo knows how to start (R-ASSIST-9). The ACP command lines are the agents' own
+        // The agents this module knows how to start (R-ASSIST-9). The ACP command lines are the agents' own
         // documented ACP modes; a user whose version differs edits the setting.
         static const Preset presets[] = {
             {"claude", "Claude Code", "claude", "claude", "install: claude.com/claude-code"},
@@ -279,6 +286,9 @@ namespace cosmo_v2
         };
         for (const Server &sv : servers)
         {
+            // R-ASSIST-13: a local model needs the app's own agent loop (`<cc> agent`); an app that
+            // ships none does not offer one, and its machine is not probed for servers.
+            if (p.localAgentArgs.empty()) break;
             const HttpResult r = httpRequest("GET", std::string(sv.base) + sv.list, std::string(), 250);
             std::string perr;
             const Json j = r.status == 200 ? Json::parse(r.body, perr) : Json();
@@ -293,7 +303,7 @@ namespace cosmo_v2
                 c.name = std::string(sv.name) + " - " + model;
                 c.agent = "local:" + std::string(sv.base) + "/v1|" + model;
                 c.installed = true;
-                c.note = "local model, cosmo's own agent loop";
+                c.note = "local model, " + p.appId + "'s own agent loop";
                 if (current == c.agent) currentListed = true;
                 out.push_back(c);
                 ++shown;
@@ -315,40 +325,35 @@ namespace cosmo_v2
         custom.name = "Custom agent";
         custom.agent = currentListed ? std::string("acp:") : current;
         custom.installed = true;
-        custom.note = "acp:<command> any ACP agent - local:<url>|<model> - cmd:<command>";
+        custom.note = p.localAgentArgs.empty() ? "acp:<command> any ACP agent - cmd:<command>"
+                                               : "acp:<command> any ACP agent - local:<url>|<model> - cmd:<command>";
         out.push_back(custom);
         return out;
     }
 
-    std::string ProcessAssistant::systemPrompt(const AssistLaunch &l)
+    std::string ProcessAssistant::systemPrompt(const AssistProfile &p, const AssistLaunch &l)
     {
-        std::string s =
-            "You are running INSIDE Cosmo, the Arstro photo editor, as the photographer's assistant. ";
-        if (l.project.empty())
-            s += "No project is open yet in the user's window. ";
-        else
-            s += "The project open in the user's window is " + l.project + " (" + std::to_string(l.photos) +
-                 " photos). ";
-        s += "Your `cosmo` MCP tools act on that open project LIVE: every edit appears in the user's window as "
-             "one undoable step, so do not `project open` another project unless the user asks. "
-             "For colour grading - cinematic, a mood or a look, correcting, matching a set, editing many photos - "
-             "use the arstro.color.grading skill; its scripts reach this same window through the COSMO_CONTROL "
-             "environment variable. LOOK at a photo (cosmo_preview) before and after you change it. "
-             "The user reads your replies in a small panel beside the photo: answer briefly and plainly.";
+        if (p.systemPrompt) return p.systemPrompt(l);
+        std::string s = "You are running INSIDE " + p.brand + " as the " + p.user + "'s assistant. ";
+        s += l.project.empty() ? "No project is open yet in the user's window. "
+                               : "The project open in the user's window is " + l.project + ". ";
+        s += "Your `" + p.mcpServer + "` MCP tools act on that open project LIVE: every edit appears in the user's window as "
+             "one undoable step, so do not open another project unless the user asks. "
+             "The user reads your replies in a small panel inside the window: answer briefly and plainly.";
         return s;
     }
 
-    std::vector<std::string> ProcessAssistant::claudeArgv(const AssistLaunch &l, const Config &c)
+    std::vector<std::string> ProcessAssistant::claudeArgv(const AssistProfile &p, const AssistLaunch &l, const Config &c)
     {
         std::vector<std::string> a = words(l.agent.empty() ? std::string("claude") : l.agent);
         for (const char *x : {"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"})
             a.push_back(x);
         a.push_back("--mcp-config");
-        a.push_back(c.workspace + "/cosmo-mcp.json");
+        a.push_back(c.workspace + "/" + p.mcpConfigName());
         a.push_back("--append-system-prompt");
-        a.push_back(systemPrompt(l));
+        a.push_back(systemPrompt(p, l));
         a.push_back("--allowedTools");
-        a.push_back(kAllowedTools);
+        a.push_back(p.allowedTools);
         for (const auto &w : words(l.args)) a.push_back(w);
         return a;
     }
@@ -447,27 +452,21 @@ namespace cosmo_v2
         }
         // The instructions file the agents read: AGENTS.md (Codex, OpenCode, Goose, ...), and the
         // same text under the names Gemini CLI and Qwen Code look for.
-        const std::string md = agentsMd(mLaunch, mSkillNames);
+        const std::string md = agentsMd(mProfile, mLaunch, mSkillNames);
         for (const char *f : {"AGENTS.md", "GEMINI.md", "QWEN.md"})
         {
             std::ofstream o(mCfg.workspace + "/" + f, std::ios::trunc);
             o << md;
         }
-        // R-ASSIST-3: cosmo's MCP tools, attached to THIS application.
-        Json server = Json::object();
-        server.set("command", mCfg.cosmoCc);
-        Json args = Json::array();
-        args.push("mcp");
-        args.push("--attach");
-        args.push(mCfg.controlSocket);
-        server.set("args", std::move(args));
+        // R-ASSIST-3: the app's MCP tools, attached to THIS application.
         Json servers = Json::object();
-        servers.set("cosmo", std::move(server));
+        servers.set(mProfile.mcpServer, mcpServer(mProfile, mCfg.cc, mCfg.controlSocket, false));
         Json cfg = Json::object();
         cfg.set("mcpServers", std::move(servers));
-        std::ofstream f(mCfg.workspace + "/cosmo-mcp.json", std::ios::trunc);
+        const std::string file = mCfg.workspace + "/" + mProfile.mcpConfigName();
+        std::ofstream f(file, std::ios::trunc);
         f << cfg.dumpPretty() << "\n";
-        if (!f) { err = "cannot write " + mCfg.workspace + "/cosmo-mcp.json"; return false; }
+        if (!f) { err = "cannot write " + file; return false; }
         return true;
     }
 
@@ -493,8 +492,16 @@ namespace cosmo_v2
                 err = "a local model is local:<url>|<model>, e.g. local:http://127.0.0.1:11434/v1|qwen2.5:7b";
                 return false;
             }
+            if (mProfile.localAgentArgs.empty())
+            {
+                err = mProfile.brand + " has no agent loop for a local model - choose an ACP agent (acp:<command>)";
+                return false;
+            }
             mAcp = true;
-            acpArgv = {mCfg.cosmoCc, "agent", "--endpoint", spec.substr(0, bar), "--model", spec.substr(bar + 1)};
+            acpArgv = {mCfg.cc};
+            for (const auto &a : mProfile.localAgentArgs) acpArgv.push_back(a);
+            for (const std::string &a : {std::string("--endpoint"), spec.substr(0, bar), std::string("--model"), spec.substr(bar + 1)})
+                acpArgv.push_back(a);
         }
         else if (mLaunch.agent.rfind("cmd:", 0) == 0)
             mLaunch.agent = mLaunch.agent.substr(4);
@@ -506,15 +513,15 @@ namespace cosmo_v2
         if (w.empty() || findProgram(w[0]).empty())
         {
             std::string hint;
-            for (const auto &c : detect(std::string()))
+            for (const auto &c : detect(mProfile, std::string()))
                 if (!c.installed && c.agent == launch.agent) hint = " - " + c.note.substr(c.note.find(" - ") == std::string::npos ? 0 : c.note.find(" - ") + 3);
             err = mClaude ? "Claude Code is not installed (`claude` was not found on PATH) - install it, or choose "
                             "another agent"
                           : "the agent `" + (w.empty() ? std::string() : w[0]) + "` was not found on PATH" + hint;
             return false;
         }
-        if (mCfg.cosmoCc.empty()) { err = "cosmo-cc was not found next to cosmo or on PATH"; return false; }
-        if (mCfg.controlSocket.empty()) { err = "the control socket is not open, so the agent could not reach cosmo"; return false; }
+        if (mCfg.cc.empty()) { err = mProfile.ccName + " was not found next to " + mProfile.appId + " or on PATH"; return false; }
+        if (mCfg.controlSocket.empty()) { err = "the control socket is not open, so the agent could not reach " + mProfile.appId; return false; }
         if (!prepareWorkspace(err)) return false;
         mStarted = true;
         mStopping = false;
@@ -524,13 +531,13 @@ namespace cosmo_v2
             if (!spawn(acpArgv, err)) return false;
             mInitId = acpCall("initialize",
                               "{\"protocolVersion\":1,\"clientCapabilities\":{\"fs\":{\"readTextFile\":false,"
-                              "\"writeTextFile\":false},\"terminal\":false},\"clientInfo\":{\"name\":\"cosmo\","
-                              "\"title\":\"Cosmo\",\"version\":\"2\"}}");
+                              "\"writeTextFile\":false},\"terminal\":false},\"clientInfo\":{\"name\":\"" + mProfile.acpClientName + "\","
+                              "\"title\":\"" + mProfile.brand + "\",\"version\":\"" + mProfile.acpClientVersion + "\"}}");
             readPipes();
             return true;
         }
         // Claude Code runs for the whole conversation; a one-shot agent is started per message.
-        return mClaude ? spawn(claudeArgv(mLaunch, mCfg), err) : true;
+        return mClaude ? spawn(claudeArgv(mProfile, mLaunch, mCfg), err) : true;
     }
 
     // ── ACP client (R-ASSIST-9) ────────────────────────────────────────────────────────
@@ -552,8 +559,8 @@ namespace cosmo_v2
         std::string t = text;
         if (!mContextSent)
         {
-            t = "[Context from Cosmo - the app you are running in]\n" + agentsMd(mLaunch, mSkillNames) +
-                "\n[The photographer says]\n" + text;
+            t = "[Context from " + mProfile.brand + " - the app you are running in]\n" + agentsMd(mProfile, mLaunch, mSkillNames) +
+                "\n[The " + mProfile.user + " says]\n" + text;
             mContextSent = true;
         }
         Json block = Json::object();
@@ -569,12 +576,14 @@ namespace cosmo_v2
     }
 
     bool ProcessAssistant::permitted(const std::string &kind, const std::string &title, const std::string &command,
-                                     const std::vector<std::string> &paths, const AssistLaunch &l, const Config &c)
+                                     const std::vector<std::string> &paths, const AssistProfile &p,
+                                     const AssistLaunch &l, const Config &c)
     {
         if (l.allowAll) return true;
-        std::string t = title;
+        std::string t = title, own = p.mcpServer;
         for (char &ch : t) ch = (char)std::tolower((unsigned char)ch);
-        if (t.find("cosmo") != std::string::npos) return true;                     // cosmo's own tools
+        for (char &ch : own) ch = (char)std::tolower((unsigned char)ch);
+        if (!own.empty() && t.find(own) != std::string::npos) return true;         // the app's own tools
         if (kind == "read" || kind == "search" || kind == "think" || kind == "fetch") return true;
         if (kind == "execute")
         {
@@ -641,11 +650,15 @@ namespace cosmo_v2
                 std::vector<std::string> paths;
                 const Json &loc = tc["locations"];
                 for (size_t i = 0; i < loc.size(); ++i) paths.push_back(loc.at(i)["path"].asString());
-                const bool ok = permitted(kind, title, command, paths, mLaunch, mCfg);
+                const bool ok = permitted(kind, title, command, paths, mProfile, mLaunch, mCfg);
                 std::string chosen;
                 const Json &opts = params["options"];
-                for (const char *want : ok ? std::initializer_list<const char *>{"allow_once", "allow_always"}
-                                           : std::initializer_list<const char *>{"reject_once", "reject_always"})
+                // Named arrays, not a conditional of two braced lists: a temporary initializer_list's
+                // backing array dies with the conditional expression, and the loop then read dead
+                // stack - a crash on the first permission request from a real ACP agent (D-71).
+                static const char *const kAllow[] = {"allow_once", "allow_always"};
+                static const char *const kReject[] = {"reject_once", "reject_always"};
+                for (const char *want : ok ? kAllow : kReject)
                     for (size_t i = 0; i < opts.size() && chosen.empty(); ++i)
                         if (opts.at(i)["kind"].asString() == want) chosen = opts.at(i)["optionId"].asString();
                 Json outcome = Json::object();
@@ -661,7 +674,7 @@ namespace cosmo_v2
                                        " - to allow everything: settings set agentAllowAll=1"});
                 return;
             }
-            acpSend("{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"error\":{\"code\":-32601,\"message\":\"cosmo does not provide " +
+            acpSend("{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"error\":{\"code\":-32601,\"message\":\"" + mProfile.appId + " does not provide " +
                     m + "\"}}");
             return;
         }
@@ -694,18 +707,9 @@ namespace cosmo_v2
             const Json &info = r["agentInfo"];
             const std::string t = info["title"].asString().empty() ? info["name"].asString() : info["title"].asString();
             if (!t.empty()) mDisplayName = t;
-            // cosmo's own MCP server, attached to THIS window, handed over in the session - no config file.
-            Json server = Json::object();
-            server.set("name", "cosmo");
-            server.set("command", mCfg.cosmoCc);
-            Json args = Json::array();
-            args.push("mcp");
-            args.push("--attach");
-            args.push(mCfg.controlSocket);
-            server.set("args", std::move(args));
-            server.set("env", Json::array());
+            // The app's own MCP server, attached to THIS window, handed over in the session - no config file.
             Json servers = Json::array();
-            servers.push(std::move(server));
+            servers.push(mcpServer(mProfile, mCfg.cc, mCfg.controlSocket, true));
             Json p = Json::object();
             p.set("cwd", mCfg.workspace);
             p.set("mcpServers", std::move(servers));
@@ -744,13 +748,14 @@ namespace cosmo_v2
         for (char **e = environ; *e; ++e)
         {
             const std::string kv = *e;
-            if (kv.rfind("COSMO_CONTROL=", 0) == 0 || kv.rfind("COSMO_CC=", 0) == 0 || kv.rfind("COSMO_PROJECT=", 0) == 0)
+            if (kv.rfind(mProfile.controlEnv() + "=", 0) == 0 || kv.rfind(mProfile.ccEnv() + "=", 0) == 0 ||
+                kv.rfind(mProfile.projectEnv() + "=", 0) == 0)
                 continue;
             env.push_back(kv);
         }
-        env.push_back("COSMO_CONTROL=" + mCfg.controlSocket);
-        env.push_back("COSMO_CC=" + mCfg.cosmoCc);
-        env.push_back("COSMO_PROJECT=" + mLaunch.project);
+        env.push_back(mProfile.controlEnv() + "=" + mCfg.controlSocket);
+        env.push_back(mProfile.ccEnv() + "=" + mCfg.cc);
+        env.push_back(mProfile.projectEnv() + "=" + mLaunch.project);
         std::vector<char *> cargv, cenv;
         for (const auto &a : argv) cargv.push_back(const_cast<char *>(a.c_str()));
         cargv.push_back(nullptr);

@@ -221,6 +221,11 @@ namespace cosmo_v2
         }
         y += 4.875;
 
+        // R-UX-5 (opt-in): the four buttons with no engine behind them are not shown at all -
+        // hidden here (`visible`, so they take no input either) and their headers skipped in
+        // onPaint. Static per host, so there is no transition to ease.
+        for (auto &b : {mFlipH, mFlipV, mAutoHorizon, mAutoGeometry}) b->visible = mShowUnbuilt;
+
         mFlipHeaderY = y; y += kSectionHeaderHeight;
         const double flipGap = 4.875, flipW = (innerW - flipGap) * 0.5;
         mFlipH->x.set(kPadX); mFlipH->y.set(y); mFlipH->width.set(flipW);
@@ -253,8 +258,10 @@ namespace cosmo_v2
 
     void XformPanel::onPaint(IRenderTarget &t) const
     {
+        // R-UX-9 (opt-in): a host that sets `upperHeaders` gets its section headers in capitals.
+        auto hdr = [this](const char *label) { return upperHeaders ? sectionHeaderUpper(label) : std::string(label); };
         const double innerW = std::max(0.0, width.value() - 2 * kPadX);
-        drawSectionHeader(t, kPadX, 0.0, innerW, "Rotate");
+        drawSectionHeader(t, kPadX, 0.0, innerW, hdr("Rotate"));
 
         drawRoundedRect(t, mReadoutRect, radius::control(), Paint::filledStroked(palette::curvePlotBg(), palette::border(), 1.0));
         // Built from integer parts rather than a "%.1f" printf spec: %f's decimal
@@ -271,7 +278,7 @@ namespace cosmo_v2
         t.drawText(readout, mReadoutRect.x + (mReadoutRect.w - estimateTextWidth(readout, 11.0)) * 0.5,
                    mReadoutRect.y + mReadoutRect.h * 0.5 + 11.0 * 0.35, 11.0, font::mono());
 
-        drawSectionHeader(t, kPadX, mAspectHeaderY, innerW, "Aspect Ratio");
+        drawSectionHeader(t, kPadX, mAspectHeaderY, innerW, hdr("Aspect Ratio"));
         // R-CROP-4: the ":" between the two custom-ratio fields. Drawn here rather than as a
         // third child because it is a label, not a control — and it only exists while the row
         // does, so it follows the same `mCustomRowVisible()` test the fields do.
@@ -284,8 +291,11 @@ namespace cosmo_v2
                        mCustomRowY + kCustomRowH * 0.5 + 10.0 * 0.35, 10.0, font::mono());
         }
 
-        drawSectionHeader(t, kPadX, mFlipHeaderY, innerW, "Flip");
-        drawSectionHeader(t, kPadX, mAutoHeaderY, innerW, "Auto");
+        if (mShowUnbuilt)
+        {
+            drawSectionHeader(t, kPadX, mFlipHeaderY, innerW, hdr("Flip"));
+            drawSectionHeader(t, kPadX, mAutoHeaderY, innerW, hdr("Auto"));
+        }
     }
 }
 }

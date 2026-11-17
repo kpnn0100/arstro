@@ -1,6 +1,8 @@
 #include "HomeScreen.h"
+#include "../Version.h"
 #include "Icons.h"
 #include "TextMetrics.h"
+#include "TextFit.h"
 #include "../Theme.h"
 #include <algorithm>
 #include <cctype>
@@ -33,12 +35,22 @@ namespace cosmo_v2
         constexpr double kLinkFirstY = 16.0;         // below the bottom divider
         constexpr double kLinkStride = 20.0;
         constexpr double kLinkH = 18.0;
-        constexpr int kLinkCount = 3;                // Settings / What's New / Help & Documentation
-        constexpr double kVersionY = 92.0;           // baseline, below the divider
+        // R-UX-5: ONE link. What's New and Help & Documentation hovered and swallowed the click
+        // and did nothing; they are gone until they exist. The version line moves up with them
+        // (it sat 18 px under the last link, and still does), and minSidebarHeight() re-sums.
+        constexpr int kLinkCount = 1;                // Settings
+        constexpr double kVersionY = kLinkFirstY + (kLinkCount - 1) * kLinkStride + kLinkH + 18.0;   // baseline
         constexpr double kBottomPad = 24.0;          // breathing room under the version line
         /** Divider to window bottom: the links, then the version baseline, then the pad. */
-        constexpr double kBottomBlockH = kVersionY + kBottomPad + 21.0;   // = 137, as drawn
+        constexpr double kBottomBlockH = kVersionY + kBottomPad + 21.0;   // = 97 with one link
         constexpr double kBlockGap = 32.0;           // minimum air between actions and the links
+        /** The window minimum this screen had before R-UX-5 shortened the sidebar, kept so the
+         *  Settings modal over it loses no more room. HONESTLY: at 584x466 the modal's card (six
+         *  rows, the scale row wrapped to two lines) is already taller than the window and its
+         *  Done button is off the bottom edge - shot `scale-100-settings-min`, D-82, OPEN. The
+         *  right fix is in SettingsDialog (scroll its body, R6), after which this term can be
+         *  derived from the dialog instead of typed here. */
+        constexpr double kSettingsModalFloorH = 466.0;
         constexpr double gridTopConst() { return kHeaderH + 24.0; }
         constexpr double kSearchW = 168.0, kSearchH = 26.0;
         /** The narrowest the search field may be squeezed to before the header gives up the
@@ -99,23 +111,6 @@ namespace cosmo_v2
             drawCircle(t, cx, cy, b.w * 0.22, Paint::stroked(c, sw));
             drawCircle(t, cx, cy, b.w * 0.42, Paint::stroked(c, sw));
         }
-        void iconSpark(IRenderTarget &t, const Rect &b, const Color &c, double sw)
-        {
-            const double cx = b.x + b.w / 2, cy = b.y + b.h / 2, r = b.w * 0.42;
-            t.setStroke(c, sw);
-            t.beginPath(); t.moveTo(cx, cy - r); t.lineTo(cx, cy + r); t.strokePath();
-            t.beginPath(); t.moveTo(cx - r, cy); t.lineTo(cx + r, cy); t.strokePath();
-            t.beginPath(); t.moveTo(cx - r * 0.6, cy - r * 0.6); t.lineTo(cx + r * 0.6, cy + r * 0.6); t.strokePath();
-            t.beginPath(); t.moveTo(cx - r * 0.6, cy + r * 0.6); t.lineTo(cx + r * 0.6, cy - r * 0.6); t.strokePath();
-        }
-        void iconHelp(IRenderTarget &t, const Rect &b, const Color &c, double sw)
-        {
-            const double cx = b.x + b.w / 2, cy = b.y + b.h / 2, r = b.w * 0.42;
-            drawCircle(t, cx, cy, r, Paint::stroked(c, sw));
-            t.setFill(c);
-            t.drawText("?", cx - 2.4, cy + 3.5, 9.0, font::sansMedium());
-        }
-
         void dashedRoundRect(IRenderTarget &t, const Rect &r, const Color &c, double sw, double dash = 5.0)
         {
             t.setStroke(c, sw);
@@ -197,27 +192,45 @@ namespace cosmo_v2
     {
         // The grid's own need: the header, one card row at the minimum card width, and a pad.
         const double oneRow = gridTopConst() + kMinCard * 9.0 / 16.0 + kMetaH + kPad;
-        return std::max(minSidebarHeight(), oneRow);
+        // R-UX-5 took two links out of the sidebar, so ITS sum fell from 466 to 426 - and a shot
+        // at 584x426 showed what the old number had been half-hiding: the Settings modal, which
+        // opens over this screen (R-SETTINGS-5), is taller than the window. So the minimum is
+        // HELD where it was, as a named term, rather than allowed to shrink and cut 40 px more
+        // off that dialog. It is not yet enough: see kSettingsModalFloorH and D-82.
+        return std::max({minSidebarHeight(), oneRow, kSettingsModalFloorH});
+    }
+
+    std::string HomeScreen::versionText()
+    {
+        // R-UX-5: from the build (COSMO_VERSION, set once in apps/cosmo/CMakeLists.txt), not a
+        // literal that someone has to remember to edit here.
+        return std::string("cosmo v") + COSMO_VERSION;
+    }
+
+    int HomeScreen::linkCount() { return kLinkCount; }
+
+    Rect HomeScreen::settingsLinkRectFor(double windowH)
+    {
+        return Rect{kPad, windowH - kBottomBlockH + kLinkFirstY, kSidebarW - 2 * kPad, kLinkH};
     }
 
     Rect HomeScreen::bottomLinkRect(int i) const
     {
-        const double h = height.value();
-        const double blockTop = h - kBottomBlockH;
-        return Rect{kPad, blockTop + kLinkFirstY + i * kLinkStride, kSidebarW - 2 * kPad, kLinkH};
+        const Rect first = settingsLinkRectFor(height.value());
+        return Rect{first.x, first.y + i * kLinkStride, first.w, first.h};
     }
 
     // ── the header row shares one line between a title and a field (R5/R6) ──────────────
     // At the minimum window width the title ran straight under the search box: the field was
     // pinned to the right at a fixed 168 px and the title was drawn from the left with no
-    // knowledge of it, so "Recent Projects" simply overlapped it. Two lines cannot both be
+    // knowledge of it, so "Recent projects" simply overlapped it. Two lines cannot both be
     // fixed on one row. The title is the more important of the two, so it is measured first
     // and the field takes what is left — and when even the floor does not fit, the title gives
     // up its long form rather than the field disappearing.
     std::string HomeScreen::headerTitle() const
     {
         const double room = width.value() - kPad - kSearchMinW - kHeaderGap - (contentX() + kPad);
-        return titleBlockW("Recent Projects") <= room ? "Recent Projects" : "Recent";
+        return titleBlockW("Recent projects") <= room ? "Recent projects" : "Recent";
     }
 
     double HomeScreen::titleBlockW(const std::string &title) const
@@ -333,7 +346,10 @@ namespace cosmo_v2
                 c.thumb->height.set(lv.w * 9.0 / 16.0);
             }
         }
-        place(mNewCardRect);  // trailing New-Project card
+        // The trailing New-project card - but not when there is no recent project at all: then
+        // the grid shows the empty state (R-FAMILY-14), whose button is the one way in.
+        if (mCards.empty()) mNewCardRect = Rect{0, 0, 0, 0};
+        else place(mNewCardRect);
         const int rows = (slot + cols - 1) / cols;
         mContentH = rows * cardH + std::max(0, rows - 1) * kGap;
 
@@ -341,6 +357,28 @@ namespace cosmo_v2
         const double maxScroll = std::max(0.0, mContentH - viewH + kPad);
         if (mScrollY > maxScroll) mScrollY = maxScroll;
         if (mScrollY < 0) mScrollY = 0;
+    }
+
+    // ── R-FAMILY-14: the empty state - one sentence, one hint, one button ────────────────
+    namespace
+    {
+        constexpr double kEmptyTitlePx = 13.0, kEmptyHintPx = 11.0, kEmptyBtnPx = 12.0;
+        constexpr double kEmptyGap = 8.0, kEmptyBtnGap = 16.0, kEmptyBtnH = 34.0, kEmptyBtnPadX = 16.0;
+        const char *const kEmptyTitle = "No recent projects";
+        const char *const kEmptyHint = "Create a project, or open one you already have.";
+        const char *const kEmptyHintShort = "Create or open a project.";
+        const char *const kEmptyButton = "New project";
+        constexpr double kEmptyBlockH = kEmptyTitlePx + kEmptyGap + kEmptyHintPx + kEmptyBtnGap + kEmptyBtnH;
+    }
+
+    Rect HomeScreen::emptyButtonRect() const
+    {
+        if (!mCards.empty()) return Rect{0, 0, 0, 0};
+        // Centred in the grid's viewport - the same box the cards would have been laid out in.
+        const double left = contentX() + kPad, right = width.value() - kPad, gy = gridTop();
+        const double top = gy + std::max(0.0, (height.value() - gy - kEmptyBlockH) * 0.5);
+        const double w = estimateTextWidth(kEmptyButton, kEmptyBtnPx) + 2 * kEmptyBtnPadX;
+        return Rect{(left + right - w) * 0.5, top + kEmptyBlockH - kEmptyBtnH, w, kEmptyBtnH};
     }
 
     void HomeScreen::scrollBy(double delta)
@@ -363,6 +401,8 @@ namespace cosmo_v2
 
     void HomeScreen::advance(double nowMs)
     {
+        if (mMark.gone()) mMark.showUp(nowMs, false);   // R-BRAND-2: once, the first time Home is drawn
+        mMark.advance(nowMs);
         if (mSearch && mSearch->text != mLastSearch)
         {
             mLastSearch = mSearch->text;
@@ -413,7 +453,7 @@ namespace cosmo_v2
         kind = Region::None; index = -1;
         for (int i = 0; i < 3; ++i)
             if (actionRect(i).contains(local)) { kind = Region::Action; index = i; return; }
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < kLinkCount; ++i)
             if (bottomLinkRect(i).contains(local)) { kind = Region::Link; index = i; return; }
         // grid cards (screen space = grid origin + content rect - eased scroll)
         const double gridLeft = contentX() + kPad, gy = gridTop();
@@ -425,7 +465,10 @@ namespace cosmo_v2
             const Rect s{gridLeft + lv.x, gy + lv.y - scrollY(), lv.w, lv.h};
             if (s.contains(local)) { kind = Region::Card; index = i; return; }
         }
-        const Rect ns{gridLeft + mNewCardRect.x, gy + mNewCardRect.y - scrollY(), mNewCardRect.w, mNewCardRect.h};
+        // The dashed card, or - with no recent project - the empty state's button: one region,
+        // because they are the same action and never on screen together.
+        const Rect ns = mCards.empty() ? emptyButtonRect()
+                                       : Rect{gridLeft + mNewCardRect.x, gy + mNewCardRect.y - scrollY(), mNewCardRect.w, mNewCardRect.h};
         if (ns.contains(local)) { kind = Region::NewCard; index = -1; return; }
     }
 
@@ -449,9 +492,8 @@ namespace cosmo_v2
             }
         // Sidebar links: Settings is live (R-SETTINGS-5, amending R-HOME-8) so the
         // preferences that decide how a project LOADS can be set before opening one --
-        // this is the only screen available at that point. What's New / Help remain
-        // reserved: they consume the click so it cannot fall through to the grid behind.
-        for (int i = 0; i < 3; ++i)
+        // this is the only screen available at that point. It is the only link (R-UX-5).
+        for (int i = 0; i < kLinkCount; ++i)
             if (bottomLinkRect(i).contains(local))
             {
                 if (i == 0 && onSettings) onSettings();
@@ -475,7 +517,8 @@ namespace cosmo_v2
                 return true;
             }
         }
-        const Rect ns{gridLeft + mNewCardRect.x, gy + mNewCardRect.y - scrollY(), mNewCardRect.w, mNewCardRect.h};
+        const Rect ns = mCards.empty() ? emptyButtonRect()
+                                       : Rect{gridLeft + mNewCardRect.x, gy + mNewCardRect.y - scrollY(), mNewCardRect.w, mNewCardRect.h};
         if (ns.contains(local)) { if (onNewProject) onNewProject(); return true; }
 
         return Segment::handleGesture(g, local);
@@ -492,6 +535,10 @@ namespace cosmo_v2
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(kSidebarW, 0); t.lineTo(kSidebarW, H); t.strokePath();
         t.beginPath(); t.moveTo(kSidebarW, kHeaderH); t.lineTo(W, kHeaderH); t.strokePath();
+
+        // ── the logo, above the wordmark (R-BRAND-2). Structure in the foreground colour, so
+        //    it follows the theme and high contrast; the colour part is the brand's own. ──
+        ::arstro::cosmo_v2::brand::draw(t, Rect{kPad - 2.0, 18.0, 36.0, 36.0}, mMark.mark(), mMark.pose(), palette::foreground());
 
         // ── sidebar: wordmark + tagline ── (wordmark suppressed while the App flies
         //    its own copy back into place on return, so it reads as one element)
@@ -518,7 +565,8 @@ namespace cosmo_v2
 
         // ── sidebar: actions ──
         struct Act { const char *label; int icon; };  // icon: 0 plus 1 folder 2 upload
-        const Act acts[3] = {{"New Project", 0}, {"Open Project\xE2\x80\xA6", 1}, {"Import Catalog\xE2\x80\xA6", 2}};
+        // Sentence case (R-FAMILY-14): these are buttons, not menu items.
+        const Act acts[3] = {{"New project", 0}, {"Open project\xE2\x80\xA6", 1}, {"Import catalog\xE2\x80\xA6", 2}};
         for (int i = 0; i < 3; ++i)
         {
             const Rect r = actionRect(i);
@@ -548,8 +596,8 @@ namespace cosmo_v2
         const double blockTop = H - kBottomBlockH;
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(kPad, blockTop); t.lineTo(kSidebarW - kPad, blockTop); t.strokePath();
-        const char *links[3] = {"Settings", "What's New", "Help & Documentation"};
-        for (int i = 0; i < 3; ++i)
+        const char *links[kLinkCount] = {"Settings"};
+        for (int i = 0; i < kLinkCount; ++i)
         {
             const Rect r = bottomLinkRect(i);
             const double hv = mHover.amount(hoverId(Region::Link, i));
@@ -557,14 +605,12 @@ namespace cosmo_v2
                 drawRoundedRect(t, Rect{r.x - 6.0, r.y - 1.0, r.w + 12.0, r.h + 2.0}, radius::control(), Paint::filled(palette::hoverWash(hv)));
             const Color lc = lerpColor(palette::mutedForeground(), palette::foreground(), 0.7 * hv);
             const Rect ib{r.x, r.y + (r.h - 11.0) / 2, 11.0, 11.0};
-            if (i == 0) iconGear(t, ib, lc, 1.1);
-            else if (i == 1) iconSpark(t, ib, lc, 1.1);
-            else iconHelp(t, ib, lc, 1.1);
+            iconGear(t, ib, lc, 1.1);
             t.setFill(lc);
             t.drawText(links[i], r.x + 18.0, r.y + r.h / 2 + 4.0, 11.0, font::sans());
         }
         t.setFill(Color{palette::mutedForeground().r, palette::mutedForeground().g, palette::mutedForeground().b, 0.4});
-        t.drawText("cosmo v1.0.0", kPad, blockTop + kVersionY, 10.0, font::mono());
+        t.drawText(versionText(), kPad, blockTop + kVersionY, 10.0, font::mono());
 
         // ── right header ──
         iconClock(t, Rect{contentX() + kPad, kHeaderH / 2 - 6.5, 13.0, 13.0}, palette::mutedForeground(), 1.2);
@@ -604,7 +650,37 @@ namespace cosmo_v2
             // Shared card chrome (thumbnail itself is the ImageView child, drawn over it).
             drawProjectCardChrome(t, s, {c.info.name, c.info.photos, c.info.size, c.info.date, c.info.edited}, hv);
         }
-        // trailing New-Project card (dashed)
+        // R-FAMILY-14: no recent project at all -> one sentence, one hint, one outline button,
+        // centred in the grid. (It used to be a lone dashed card in the corner of an empty pane,
+        // which says neither that the list is empty nor what to do about it.)
+        if (mCards.empty())
+        {
+            const Rect btn = emptyButtonRect();
+            const double cx = btn.x + btn.w * 0.5;
+            const double top = btn.y + kEmptyBtnH - kEmptyBlockH;
+            const double room = std::max(0.0, availW);
+            auto centred = [&](const std::string &s, double cy, double px, const char *fam, const Color &c) {
+                const std::string fit = fitTextEnd(t, s, room, px, fam);   // R5: measured; ellipsized as the backstop
+                if (fit.empty()) return;
+                t.setFill(c);
+                t.drawText(fit, cx - t.measureText(fit, px, fam) * 0.5, cy + px * 0.35, px, fam);
+            };
+            centred(kEmptyTitle, top + kEmptyTitlePx * 0.5, kEmptyTitlePx, font::sansSemiBold(), palette::foreground());
+            // The hint has a short form for a narrow pane (the window minimum leaves 220 px):
+            // a whole shorter sentence reads better than the long one cut off.
+            const char *hint = t.measureText(kEmptyHint, kEmptyHintPx, font::sans()) <= room ? kEmptyHint : kEmptyHintShort;
+            centred(hint, top + kEmptyTitlePx + kEmptyGap + kEmptyHintPx * 0.5, kEmptyHintPx, font::sans(), palette::mutedForeground());
+            // The outline chip the sidebar's "Open project…" uses: hover pulls its border to the
+            // accent and washes it (R-G-3). Outline, because the filled primary is the sidebar's.
+            const double hv = mHover.amount(hoverId(Region::NewCard, -1));
+            drawRoundedRect(t, btn, radius::control(),
+                            Paint::filledStroked(palette::primaryAlpha(0.10 * hv),
+                                                 lerpColor(palette::border(), palette::primary(), 0.5 * hv), 1.0));
+            centred(kEmptyButton, btn.y + btn.h * 0.5, kEmptyBtnPx, font::sansMedium(),
+                    lerpColor(palette::secondaryForeground(), palette::foreground(), hv));
+        }
+        // trailing New-project card (dashed) - only beside real projects
+        else
         {
             const Rect s = cardScreen(mNewCardRect);
             const double th = s.w * 9.0 / 16.0;
@@ -618,7 +694,7 @@ namespace cosmo_v2
             const double cxp = box.x + box.w / 2;
             iconPlus(t, Rect{cxp - 10, box.y + box.h / 2 - 16, 20, 20}, nc, 1.4);
             t.setFill(nc);
-            t.drawText("New Project", cxp - estimateTextWidth("New Project", 11.0) / 2, box.y + box.h / 2 + 18.0, 11.0, font::sans());
+            t.drawText("New project", cxp - estimateTextWidth("New project", 11.0) / 2, box.y + box.h / 2 + 18.0, 11.0, font::sans());
         }
         t.restore();
     }

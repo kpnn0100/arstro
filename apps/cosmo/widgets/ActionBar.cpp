@@ -1,6 +1,6 @@
 #include "ActionBar.h"
 #include "Icons.h"
-#include "TextMetrics.h"
+#include "TextFit.h"
 #include "../Theme.h"
 
 namespace arstro
@@ -12,7 +12,9 @@ namespace cosmo_v2
     namespace
     {
         constexpr double kPadX = 9.75, kPadY = 8.125, kGap = 4.875, kBtnH = 20.75;  // 10px*1.3+2*4.875(py-1.5)
-        const char *kLabels[3] = {"Save", "Import", "Export"};
+        // R-UX-4: these act on PRESETS. "Save / Import / Export" with a filled Save read as the
+        // project's save and the photo's export, and were neither.
+        const char *kLabels[3] = {"Save preset", "Import preset", "Export preset"};
     }
 
     ActionBar::ActionBar() { height.set(kHeight); }
@@ -23,6 +25,12 @@ namespace cosmo_v2
         const double totalGap = kGap * 2;
         const double btnW = (w - 2 * kPadX - totalGap) / 3.0;
         for (int i = 0; i < 3; ++i) { mBtns[i].x = kPadX + i * (btnW + kGap); mBtns[i].w = btnW; }
+    }
+
+    Rect ActionBar::buttonRect(int i) const
+    {
+        if (i < 0 || i > 2) return Rect{0, 0, 0, 0};
+        return Rect{mBtns[i].x, (kHeight - kBtnH) * 0.5, mBtns[i].w, kBtnH};
     }
 
     int ActionBar::btnAt(const Point &local) const
@@ -62,24 +70,21 @@ namespace cosmo_v2
         for (int i = 0; i < 3; ++i)
         {
             const Rect btn{mBtns[i].x, y, mBtns[i].w, kBtnH};
-            const bool primary = (i == 0);
             const double hv = mHover.amount(i);
 
-            // Hover: brighten the primary fill; pull the outline chips' border toward
-            // the accent + a faint fill wash. Each button cross-fades via HoverFade (R-G-3).
-            const BoxStyle base = primary
-                ? BoxStyle{Paint::filled(palette::primary()), 2.0}
-                : BoxStyle{Paint::filledStroked(Color{0, 0, 0, 0}, palette::border(), 1.0), 2.0};
+            // R-UX-4: three outline chips, none filled - the accent fill is the editor's ONE
+            // primary action, and that is exporting photos (the top bar), not saving a preset.
+            // Hover pulls the border toward the accent with a faint wash (R-G-3, via HoverFade).
+            const BoxStyle base{Paint::filledStroked(Color{0, 0, 0, 0}, palette::border(), 1.0), 2.0};
             BoxStyle drawn = hoverBox(base, palette::primary(), hv);
-            if (!primary && hv > 0.0)  // give outline chips a subtle accent tint on hover
-                drawn.paint.fill = palette::primaryAlpha(0.10 * hv);
-            drawRoundedRect(t, btn, 2.0, drawn.paint);
+            if (hv > 0.0) drawn.paint.fill = palette::primaryAlpha(0.10 * hv);
+            drawRoundedRect(t, btn, radius::control(), drawn.paint);
 
-            const Color fg = primary ? palette::white()
-                                     : lerpColor(palette::mutedForeground(), palette::foreground(), 0.6 * hv);
-            const std::string label = kLabels[i];
+            const Color fg = lerpColor(palette::mutedForeground(), palette::foreground(), 0.6 * hv);
             const double iconSize = 10.0, gap = 4.875;
-            const double labelW = estimateTextWidth(label, 10.0);
+            // Measured, and ellipsized to the button if a narrow column ever squeezes it (R5).
+            const std::string label = fitTextEnd(t, kLabels[i], btn.w - iconSize - gap - 2 * 4.875, 10.0, font::sansMedium());
+            const double labelW = t.measureText(label, 10.0, font::sansMedium());
             const double groupW = iconSize + gap + labelW;
             const double gx = btn.x + (btn.w - groupW) * 0.5;
             const Rect iconBox{gx, btn.y + (kBtnH - iconSize) * 0.5, iconSize, iconSize};

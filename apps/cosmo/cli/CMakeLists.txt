@@ -27,6 +27,8 @@ add_executable(cosmo-cc
   ${CMAKE_CURRENT_SOURCE_DIR}/../ControlChannel.cpp
   # R-ASSIST-2: the user's agent as a process - `serve` runs one as the window does.
   ${CMAKE_CURRENT_SOURCE_DIR}/../AssistProcess.cpp
+  # R-ASSIST-13: cosmo's values for it (the `cosmo` MCP server, COSMO_*, the colour-grading skills).
+  ${CMAKE_CURRENT_SOURCE_DIR}/../CosmoAssistProfile.cpp
   # R-ASSIST-9: local model servers - detection, and `cosmo-cc agent`'s chat-completion calls.
   ${CMAKE_CURRENT_SOURCE_DIR}/../HttpLite.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../Log.cpp)

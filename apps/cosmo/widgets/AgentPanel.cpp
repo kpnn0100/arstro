@@ -195,6 +195,20 @@ namespace cosmo_v2
         mField->caretToEnd();
     }
 
+    void AgentPanel::setIntro(const std::string &text)
+    {
+        if (text == mIntro) return;
+        mIntro = text;
+        mIntroAt = -1.0;   // wrapped again at the next paint (a pure push, like setConversation)
+    }
+
+    void AgentPanel::setDefaultAgentName(const std::string &name)
+    {
+        if (name == mDefaultAgent) return;
+        mDefaultAgent = name;
+        mIntroAt = -1.0;
+    }
+
     void AgentPanel::setConversation(const cosmo::AssistModel &m)
     {
         mModel = m;
@@ -405,7 +419,7 @@ namespace cosmo_v2
         double pulse = 1.0;
         if (working(mModel.state) && !reducedMotion()) pulse = 0.55 + 0.45 * (0.5 + 0.5 * std::sin(mNowMs / 1400.0 * 6.2831853));
         drawCircle(t, kPadX + 3.25, cy, 3.25, Paint::filled(Color{dot.r, dot.g, dot.b, dot.a * pulse}));
-        const std::string agent = mModel.agent.empty() ? std::string("Claude Code") : mModel.agent;
+        const std::string agent = mModel.agent.empty() ? mDefaultAgent : mModel.agent;
         const double nameX = kPadX + 13.0;
         const double room = mStartStop->x.value() - kGap - nameX;
         const std::string word = stateWord(mModel.state);
@@ -439,10 +453,10 @@ namespace cosmo_v2
             // EMPTY is a state with words, not a blank (§7): what to do, and what is ready.
             if (mIntroAt != textW || mIntroAgent != agent)
             {
-                mIntroLines = wrap(t,
-                    "Ask " + agent + " to grade this project \xE2\x80\x94 for example \xE2\x80\x9Cmake these cinematic\xE2\x80\x9D.\n"
-                    "The colour-grading skill is loaded. Every edit lands here, one undoable step at a time.",
-                    kTextPx, font::sans(), textW);
+                std::string text = mIntro;
+                for (size_t at = text.find("{agent}"); at != std::string::npos; at = text.find("{agent}", at + agent.size()))
+                    text.replace(at, 7, agent);
+                mIntroLines = wrap(t, text, kTextPx, font::sans(), textW);
                 mIntroAt = textW;
                 mIntroAgent = agent;
             }

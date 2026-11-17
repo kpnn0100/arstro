@@ -1,4 +1,5 @@
 #include "PhotoCanvas.h"
+#include "TextFit.h"
 #include "TextMetrics.h"
 #include "WidgetLog.h"
 #include "../Theme.h"
@@ -106,9 +107,117 @@ namespace cosmo_v2
         mSplitApplied = mSplitWanted;
     }
 
+    // ── R-UX-7: the stage notice ────────────────────────────────────────────────────────
+
+    namespace
+    {
+        constexpr double kNoticeTitlePx = 13.0, kNoticeBodyPx = 11.0, kNoticeLineH = 16.0;
+        constexpr double kNoticeBtnW = 104.0, kNoticeBtnH = 26.0;   // the dialogs' button height
+        constexpr double kNoticeGap = 13.0;                         // 4 units, title/body/button
+    }
+
+    void PhotoCanvas::setNotice(Notice kind, const std::string &detail)
+    {
+        // Called every frame by the App: assign only on a change, so a steady state costs a
+        // comparison and no string copy.
+        mNoticeWanted = kind;
+        if (kind != Notice::Missing) { if (!mNoticeDetailWanted.empty()) mNoticeDetailWanted.clear(); }
+        else if (mNoticeDetailWanted != detail) mNoticeDetailWanted = detail;
+    }
+
+    Rect PhotoCanvas::noticeButtonRect() const
+    {
+        // The block is title + gap + two body lines + gap + button, centred on the stage.
+        const double blockH = kNoticeTitlePx + kNoticeGap + 2 * kNoticeLineH + kNoticeGap + kNoticeBtnH;
+        const double top = (height.value() - blockH) * 0.5;
+        return Rect{(width.value() - kNoticeBtnW) * 0.5, top + blockH - kNoticeBtnH, kNoticeBtnW, kNoticeBtnH};
+    }
+
+    void PhotoCanvas::onOverlay(IRenderTarget &t) const
+    {
+        const double a = mNoticeAmt.value();
+        if (a <= 0.004 || mNoticeShown == Notice::None) return;
+        const double w = width.value(), h = height.value();
+        t.save();
+        t.clipRect(0, 0, w, h);
+        // Missing: the stage still holds the photo that was selected before, and a sentence
+        // about one file drawn over a picture of another would be a lie - so the stage is
+        // covered. Empty has nothing under it; the same cover costs nothing there.
+        const Color bg = palette::canvasBg();
+        drawRoundedRect(t, Rect{0, 0, w, h}, 0.0, Paint::filled(Color{bg.r, bg.g, bg.b, 0.92 * a}));
+
+        const bool empty = mNoticeShown == Notice::Empty;
+        const Rect btn = noticeButtonRect();
+        const double blockH = kNoticeTitlePx + kNoticeGap + 2 * kNoticeLineH + kNoticeGap + kNoticeBtnH;
+        const double top = (h - blockH) * 0.5;
+        const double maxW = std::max(0.0, w - 2 * 19.5);
+        auto centred = [&](const std::string &s, double cy, double px, const char *fam, const Color &c) {
+            if (s.empty()) return;
+            t.setFill(Color{c.r, c.g, c.b, c.a * a});
+            t.drawText(s, (w - t.measureText(s, px, fam)) * 0.5, cy + px * 0.35, px, fam);
+        };
+        centred(fitTextEnd(t, empty ? "No photos yet" : "File not found", maxW, kNoticeTitlePx, font::sansSemiBold()),
+                top + kNoticeTitlePx * 0.5, kNoticeTitlePx, font::sansSemiBold(), palette::foreground());
+        const double bodyY = top + kNoticeTitlePx + kNoticeGap;
+        if (empty)
+        {
+            centred(fitTextEnd(t, "Add photos to start editing.", maxW, kNoticeBodyPx, font::sans()),
+                    bodyY + kNoticeLineH * 0.5, kNoticeBodyPx, font::sans(), palette::secondaryForeground());
+            centred(fitTextEnd(t, "JPEG, PNG, TIFF and RAW files open here.", maxW, kNoticeBodyPx, font::sans()),
+                    bodyY + kNoticeLineH * 1.5, kNoticeBodyPx, font::sans(), palette::mutedForeground());
+            // The button: the accent outline chip the action bar uses, here with a label that
+            // says exactly what it does. Hover pulls the fill up (R-G-3).
+            const double hv = mNoticeBtnHover.value();
+            const Color acc = palette::primary();
+            drawRoundedRect(t, btn, radius::control(),
+                            Paint::filled(Color{acc.r, acc.g, acc.b, (0.86 + 0.14 * hv) * a}));
+            centred("Add photos", btn.y + btn.h * 0.5, 12.0, font::sansMedium(), palette::primaryForeground());
+        }
+        else
+        {
+            // The path, front-ellipsized: its END is the file's name, the part to look for.
+            centred(fitTextFront(t, mNoticeDetail, maxW, kNoticeBodyPx, font::mono()),
+                    bodyY + kNoticeLineH * 0.5, kNoticeBodyPx, font::mono(), palette::secondaryForeground());
+            centred(fitTextEnd(t, "Put the file back, or remove this photo from the project.", maxW, kNoticeBodyPx, font::sans()),
+                    bodyY + kNoticeLineH * 1.5, kNoticeBodyPx, font::sans(), palette::mutedForeground());
+        }
+        t.restore();
+    }
+
     void PhotoCanvas::advance(double nowMs)
     {
         mNowMs = nowMs;   // a gesture handler has no clock of its own (R-VIEW-3's re-centre)
+
+        // R-UX-7: the notice. First frame sets (nothing to travel from); a change fades the old
+        // one out, swaps the words while nothing is drawn, and fades the new one in.
+        if (!mNoticeInit)
+        {
+            mNoticeInit = true;
+            mNoticeShown = mNoticeWanted; mNoticeDetail = mNoticeDetailWanted;
+            mNoticeAmt.set(mNoticeShown == Notice::None ? 0.0 : 1.0);
+        }
+        else if (mNoticeWanted != mNoticeShown || mNoticeDetailWanted != mNoticeDetail)
+        {
+            if (mNoticeShown == Notice::None || mNoticeAmt.value() <= 0.004)
+            {
+                mNoticeShown = mNoticeWanted; mNoticeDetail = mNoticeDetailWanted;
+                mNoticeLeaving = false;
+                mNoticeAmt.set(0.0);
+                if (mNoticeShown != Notice::None) mNoticeAmt.animateTo(1.0, 180.0, Easing::EaseOutCubic, nowMs);
+            }
+            else if (!mNoticeLeaving)
+            {
+                mNoticeLeaving = true;
+                mNoticeAmt.animateTo(0.0, 120.0, Easing::EaseOutCubic, nowMs);
+            }
+        }
+        mNoticeAmt.update(nowMs);
+        if (mNoticeBtnHovered && !isHovered())
+        {
+            mNoticeBtnHovered = false;
+            mNoticeBtnHover.animateTo(0.0, 120.0, Easing::EaseOutCubic, nowMs);
+        }
+        mNoticeBtnHover.update(nowMs);
         // R-VIEW-3: the seam's own tween and its hover brighten. `layout()` reads
         // `mSplitPos` every frame, so advancing it here is all the plumbing the eased
         // re-centre needs — and while a drag writes the value directly, `update` on a
@@ -305,6 +414,18 @@ namespace cosmo_v2
     bool PhotoCanvas::handleGesture(const Gesture &g, const Point &local)
     {
         if (g.type == Gesture::Type::RightClick && onContext) { onContext(g.pos.x, g.pos.y); return true; }
+
+        // R-UX-7: the empty stage's "Add photos". Live only while that notice is mostly shown.
+        if (mNoticeShown == Notice::Empty && mNoticeWanted == Notice::Empty && mNoticeAmt.value() > 0.5)
+        {
+            const bool over = noticeButtonRect().contains(local);
+            if (g.type == Gesture::Type::Move && over != mNoticeBtnHovered)
+            {
+                mNoticeBtnHovered = over;
+                mNoticeBtnHover.animateTo(over ? 1.0 : 0.0, 120.0, Easing::EaseOutCubic, mNowMs);
+            }
+            if (g.type == Gesture::Type::Click && over) { if (onAddPhotos) onAddPhotos(); return true; }
+        }
 
         // R-WB-1: offered FIRST, so an armed eyedropper wins the click. Normalised against the
         // fitted rect, so zoom and pan are already in it and the coordinate is a point on the

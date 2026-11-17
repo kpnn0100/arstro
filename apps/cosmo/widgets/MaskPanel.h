@@ -35,6 +35,11 @@ namespace cosmo_v2
         void setMasks(const std::vector<MaskParams> &masks, int selected);
         void layout();
         void scrollBy(double delta);
+        /** Read-only: scroll state for the column's indicator (R-UX-9c), and the LIVE amount of
+         *  the no-mask sentence (R-UX-9b) - what a test reads to tell a fade from a cut. */
+        double scrollOffset() const { return mScroll.value(); }
+        double contentHeight() const { return mContentHeight; }
+        double emptyAmount() const { return mEmptyAmt.value(); }
 
         std::function<void(int type)> onAddMask;   // MaskParams::Type
         std::function<void(int index)> onSelectMask;  // choose which mask to edit
@@ -78,6 +83,11 @@ namespace cosmo_v2
         // [3]="Presence". The mask identity is now the ComboBox, not a header.
         double mHeaderY[4] = {0, 0, 0, 0};
         double mSelectRowY = 0.0;
+        // R-UX-9b: the no-mask sentence (two 10 px lines), its y from layout and its eased amount.
+        static constexpr double kEmptyLineH = 14.0;
+        double mEmptyY = 0.0;
+        artboard::AnimatedProperty mEmptyAmt{0.0};
+        bool mEmptyInit = false, mEmptyShown = false;
     };
 }
 }

@@ -1,4 +1,5 @@
 #include "RightColumn.h"
+#include "../EditControls.h"
 #include "../EditCommands.h"
 #include "../Theme.h"
 #include "Icons.h"
@@ -126,6 +127,23 @@ namespace cosmo_v2
         // Merge Basic + Detail into one scrollable tab: all sections stacked in order.
         for (auto &sec : detailSections) basicSections.push_back(std::move(sec));
         mBasicDetail = std::make_shared<ParamPanel>(std::move(basicSections));
+        // R-UX-8: each row's readout is the ENGINE's value in its own unit, from the shared
+        // catalogue (EditControls.h) - "+0.40 EV", "6200 K", "1.0 px", no "+" on a unipolar
+        // control - instead of the track position ("+32", "-2", "+10"). The catalogue and the
+        // sections above are the same list in the same order (NTWB-T3 will make them one); a row
+        // whose label does not match is left on the default readout rather than mislabelled.
+        {
+            int flat = 0;
+            for (const auto &sec : editControls())
+                for (const EditControl &c : sec.controls)
+                {
+                    const auto row = mBasicDetail->row(flat++);
+                    if (!row) continue;
+                    row->setValueWidth(kEditReadoutWidth);   // every row: one track length
+                    if (row->label() != c.label) continue;
+                    row->formatValue = [c](double v) { return formatEditControl(c, v); };
+                }
+        }
         mTabs->addPage("Basic/Detail", mBasicDetail);
 
         mMask = std::make_shared<MaskPanel>();
@@ -243,6 +261,12 @@ namespace cosmo_v2
         mXform->onCropChange = [this](double x, double y, double w, double h) {
             sendSet({{"crop", num(x) + "," + num(y) + "," + num(w) + "," + num(h)}});
         };
+        // R-UX-5: Flip and Auto have no engine behind them - not shown until they do.
+        mXform->setUnbuiltControlsShown(false);
+        // R-UX-9a: one header style across the edit stack (the shared panels' opt-in).
+        mXform->upperHeaders = true;
+        mCurve->upperHeaders = true;
+        mGrade->upperHeaders = true;
         mTabs->addPage("Xform", mXform);
 
         // R-ASSIST-7: the user's own agent. A view of AppModel::assist; its three actions are the
@@ -377,6 +401,7 @@ namespace cosmo_v2
     }
 
     int RightColumn::activeTab() const { return mTabs->selectedIndex(); }
+    void RightColumn::setActiveTab(int index) { mTabs->setSelectedIndex(index); }
     double RightColumn::aspectLock() const { return mXform ? mXform->lockedRatio() : 0.0; }
     void RightColumn::setWhiteBalancePickArmed(bool armed)
     {
@@ -488,7 +513,55 @@ namespace cosmo_v2
     {
         mLastMs = nowMs;
         mDim.update(nowMs);
+        // R-UX-9c: the scroll indicator shows only while the active page overflows, and its
+        // appearing is a visible change like any other (a window dragged shorter, a mask's
+        // controls arriving) - so it fades. First frame sets; later frames ease.
+        double content = 0.0, offset = 0.0;
+        const bool over = activeScroll(content, offset);
+        if (!mScrollIndInit) { mScrollIndInit = true; mScrollIndShown = over; mScrollInd.set(over ? 1.0 : 0.0); }
+        else if (over != mScrollIndShown)
+        {
+            mScrollIndShown = over;
+            mScrollInd.animateTo(over ? 1.0 : 0.0, 180.0, Easing::EaseOutCubic, nowMs);
+        }
+        mScrollInd.update(nowMs);
         Segment::advance(nowMs);
+    }
+
+    Rect RightColumn::pageRect() const
+    {
+        const Rect band = editStackRect();
+        const double th = mTabs->tabHeight;
+        return Rect{band.x, band.y + th, band.w, std::max(0.0, band.h - th)};
+    }
+
+    bool RightColumn::activeScroll(double &content, double &offset) const
+    {
+        content = 0.0; offset = 0.0;
+        switch (mTabs->selectedIndex())
+        {
+            case kTabBasicDetail: content = mBasicDetail->contentHeight(); offset = mBasicDetail->scrollOffset(); break;
+            case kTabMask:        content = mMask->contentHeight();        offset = mMask->scrollOffset(); break;
+            case kTabColor:       content = mColorTab->contentHeight();    offset = mColorTab->scrollOffset(); break;
+            case kTabGrade:       content = mGrade->contentHeight();       offset = mGrade->scrollOffset(); break;
+            default: break;   // Xform is fixed-height; the Agent tab draws its own indicator
+        }
+        return content - pageRect().h > 0.5;
+    }
+
+    Rect RightColumn::scrollThumbRect() const
+    {
+        double content = 0.0, offset = 0.0;
+        if (!activeScroll(content, offset)) return Rect{0, 0, 0, 0};
+        // The same pill the Agent tab draws (AgentPanel's `indicator`): 3.25 wide, 4.875 from
+        // the edge, never shorter than 19.5, placed from the LIVE eased offset.
+        const Rect box = pageRect();
+        const double gap = 6.5;
+        const double maxS = content - box.h;
+        const double trackH = box.h - 2 * gap;
+        const double thumbH = std::max(19.5, trackH * box.h / content);
+        const double ty = box.y + gap + (trackH - thumbH) * std::clamp(offset / maxS, 0.0, 1.0);
+        return Rect{box.x + box.w - 4.875, ty, 3.25, thumbH};
     }
 
     Rect RightColumn::editStackRect() const
@@ -503,6 +576,18 @@ namespace cosmo_v2
 
     void RightColumn::onOverlay(IRenderTarget &t) const
     {
+        // R-UX-9c (R6): more below than fits -> a thin pill at the page's right edge. Drawn
+        // here, over the page, and before the tab strip's own overlay (its cross-fade scrim
+        // covers it during a tab change, so it changes with the page). While fading OUT there
+        // is no overflow to measure, so the last thumb drawn is what fades.
+        {
+            const double ia = mScrollInd.value();
+            const Rect now = scrollThumbRect();
+            if (now.w > 0.0) mLastThumb = now;
+            if (ia > 0.01 && mLastThumb.w > 0.0)
+                drawRoundedRect(t, mLastThumb, radius::pill(), Paint::filled(palette::whiteAlpha(0.18 * ia)));
+        }
+
         const double a = mDim.value();
         if (a <= 0.001) return;
         const Rect band = editStackRect();

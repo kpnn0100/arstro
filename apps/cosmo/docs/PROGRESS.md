@@ -15,6 +15,86 @@ file, and commit.
 
 ## NEXT
 
+- **2026-11-17 — R-FAMILY step 2: Cosmo adopts the family standard (R-FAMILY-8…14, DR-FAMILY-8…14; D-63 closed).**
+  `[x]` menus are File · Edit · Develop · Preset · View - Settings… under File (Ctrl+,), Undo / Redo /
+  History… under Edit (Undo names its step), View ▸ Show / Hide Presets and Show / Hide Agent;
+  shortcuts in the shortcut column, separators, disabled rows that follow the model, U+2026; an open
+  menu owns the keyboard (`menuKey`) · `[x]` top bar: the project name left after the menus, the
+  `DirtyDot`, a save icon that lights and saves, `Wordmark::draw`; the filename gives way before the
+  name in a narrow bar · `[x]` D-63: only a change that would be written marks the project unsaved ·
+  `[x]` the toast, top-centre under the bar: Saved, an export's result, every refused command ·
+  `[x]` `Save changes to "<name>"?` - Cancel · Don't save · Save, `DestructiveStyle::Auto`; File ▸ Home
+  now asks too (it did not) · `[x]` keys: `App::shortcut` - Ctrl+O, Ctrl+N (asks first), Ctrl+S,
+  Ctrl+Shift+S, Ctrl+, , Backspace = Delete; plain `o` and `s` withdrawn · `[x]` Home in sentence case,
+  and its empty state (one sentence, one hint, one outline button) · `[x]` words: U+2026, sentence-case
+  buttons (touch shell too). `[!]` **UNVERIFIED, needs a window:** the GTK half - `onKey`'s translation
+  of GDK keys into `App::shortcut`, Up / Down / Home / End reaching an open menu, the window title
+  actually changing, the toast after a real export batch and a real Save As dialog. All of it is
+  thin glue over App functions that ARE tested headlessly, and it compiles; nobody has pressed a key.
+  Proof: `cosmo_ui_tests` 6 new tests (`theMenusAreTheFamilys`, `theTopBarSaysWhatIsUnsaved`,
+  `theToastSaysWhatHappened`, `theUnsavedDialogIsTheFamilys`, `theKeysAreTheFamilys`,
+  `homeSpeaksInSentenceCaseAndSaysWhenItIsEmpty`), every eased value asserted mid-tween;
+  `cosmo_core_tests` for D-63 (seen failing first); a mutation pass (seven behaviours broken on
+  purpose -> 26 checks failed, restored); `cosmo_shots --only fam-` (78 frames at 1600x1000,
+  1024x640 and the 584x466 minimum, looked at); `ctest -R cosmo` 12 of 12. **Not committed** (the
+  owner's instruction). Decisions: (1) the keys moved INTO App so they are testable - the host only
+  translates; (2) the save icon acts only while unsaved (dim = nothing to save; Ctrl+S always
+  saves); (3) the agent's own refusals (`assist…`) do not toast - its tab shows its state; (4) the
+  quick single-photo export keeps its host function and has no key; (5) Redo is not labelled - the
+  model does not say which branch it takes; (6) headers follow sentence case too ("Recent projects").
+  Not done / left: the web shell mirrors none of it (PARITY W23); the touch shell's own sheet still
+  says "Engine Settings" / "Show History Tree" (its menu rows; not restructured); shared
+  `ContextMenu`'s "Rename Group" header and `XformPanel`'s hidden buttons were not touched (shared
+  with the siblings); `architecture.puml` not touched (no new class). **► NEXT for R-FAMILY:** run
+  the window once and tick the `[!]`; the web port (W22, W23).
+
+- **2026-11-17 — R-FAMILY step 1: the family's shared building blocks (R-FAMILY-0…7, DR-FAMILY-1…7).**
+  `[x]` menu rows carry a shortcut, a separator and a disabled state, and `menuKey` walks them
+  (MenuStrip, ContextMenu) · `[x]` `Toast` (Solaris's toast, hoisted) · `[x]` `ConfirmDialog`
+  `setDestructiveStyle(Filled | Outlined | Auto)` · `[x]` `palette::warning()`, `space::`, `motion::`
+  in Theme.h, `--warning` in tokens.css · `[x]` `Wordmark`, `DirtyDot` (header-only, wired into
+  nothing) · `[x]` `SegmentedControl::highlightPos()` · `[x]` the History card's title and radius —
+  the one item that changes pixels (Cosmo, Solaris). Everything else is opt-in: Cosmo's App, top
+  bar, Home and menus are untouched. Proof: `cosmo_widget_tests` `test_family_*` (8 tests), the
+  `family-*` shots of `cosmo_shots`. **NOT committed by the session that built it** (it was told
+  to leave the tree as it is). **► NEXT for R-FAMILY:** each app adopts the blocks (Cosmo: the
+  menus to File · Edit · … · View with Settings under File, the wordmark through `Wordmark`, the
+  dirty dot, the toast, the dialog in Auto; PARITY W22 for the web).
+
+- **2026-11-17 — the UI/UX audit fix pass (R-EXPORT-3a, R-UX-1…9; D-72…D-81 closed, D-82 filed).**
+  `[x]` an export never overwrites a file - `_edit` beside the source, `-1`/`-2` when taken, and the
+  dialog's preview shows the real name (D-72, S1) · `[x]` one modal gate, `App::modalOpen()` (D-73;
+  `[!]` the host's `onKey` half is read, not run - it needs a window) · `[x]` File ▸ Close Project
+  asks first and clears the title and histogram; Reset Workspace is withdrawn (D-74) · `[x]` Delete
+  asks first - it cannot be undone (D-75) · `[x]` "Save preset / Import preset / Export preset", and
+  an Export button in the top bar (D-76) · `[x]` no dead Xform buttons, no dead Home links, the
+  version from the build (D-77) · `[x]` the project name and preset names are fitted (D-78) · `[x]`
+  "No photos yet" + Add photos, the empty rail's sentence, a missing photo's cell and "File not found"
+  (D-79) · `[x]` readouts in EV / K / px (D-80) · `[x]` capital headers, the Mask hint, a scroll
+  indicator (D-81). Decisions: (1) the scripted `export <outdir>` protects only the SOURCE and keeps
+  replacing its own outputs - a script expects stable names; (2) the unbuilt Xform buttons are hidden,
+  not disabled; (3) every change to a widget Interstellar or Solaris compiles is opt-in or an additive
+  accessor - their pixels are unchanged by construction, and their targets were NOT built here (two
+  other sessions own them); (4) the window minimum stays 584x466: the sidebar's sum fell to 426 and a
+  shot showed the Settings modal does not fit even 466 (D-82, open, predates this pass). Proof:
+  `ctest -R cosmo` 11 of 11; every new check was run against the reverted behaviour and failed; frames
+  looked at (1024x640 and 1600x1000). **Not committed** (the owner's instruction for this pass).
+  Parity: the web shell mirrors none of it yet (PARITY W21). Not done: the Mask and Grade tabs' own
+  sliders still show plain numbers; `File ▸ Home` does not ask about unsaved work; the splash, the
+  touch shell and the Android manifest still carry their own version literals; `detailed_design.md`
+  and `architecture.puml` were not touched (no new class; three header-only helpers are in the module map).
+
+- **2026-11-17 — R-BRAND and R-SPLASH-6/7: the logos and their animations are in the apps.**
+  `widgets/BrandMark` draws the three app logos and their show-up / working-loop / disappear as pure
+  poses; Home shows the logo; the splash is branded per app and the logo lives through the launch.
+  Decisions: (1) the module lives in cosmo and is compiled by Interstellar and Solaris; (2) the
+  splash's logo leaves its loop by easing out (240 ms), not at the loop boundary, so a launch never
+  waits a period; (3) the exit is ~0.7 s longer than the old 260 ms fade — accepted by the founder;
+  (4) exit fades are `Sine`, never `In` — the test measured a 0.10 alpha pop. `[!]` UNVERIFIED: not
+  run live in a window (L5) — rendered headlessly only. `cosmo_assist_acp` was already failing in
+  this tree before this work and is not caused by it (it fails identically against the skills
+  folder at HEAD, and `cosmo-cc` compiles none of these files).
+
 **► 2026-11-12 — user-reported bug, fixed (the NEXT below is unchanged): "same name different format
 should prioritize raw — abc.jpg and abc.RW2 open, only open abc.RW2, ignore abc.jpg".**
 
@@ -751,7 +831,7 @@ T0.1-T0.4, T1, T2 (core + design), T3.1 and T4.1. T4.2 is scoped in detail below
 on purpose — it is the only item that adds a persistence format, and a stale cache does not make
 cosmo slow, it makes it show the wrong photo. T3.2/T3.3 are now optional rather than necessary (with
 the window idle at rest, per-frame cost only matters while something is moving, and a frame measured
-1.50 ms). T3.4 belongs to `implement_artboard`. T5 stays deferred until the target hardware says the
+1.50 ms). T3.4 belongs to `arstro.artboard.implement`. T5 stays deferred until the target hardware says the
 above is not enough.
 
 **Where the numbers landed**, 1600x1066 preview, every parameter at its neutral value:
@@ -920,7 +1000,7 @@ engine needs. R-G-1 says nothing may change in one frame; it does **not** say re
       by `render` (the first version cleared it on the ask, which reported "nothing to do" while the
       screen still showed the old frame — caught by the test, not by reading). Conservative by
       design: Artboard has no tree-wide "is anything animating" query and adding one is
-      `implement_artboard`'s territory, so a 1000 ms activity window can waste a frame and can never
+      `arstro.artboard.implement`'s territory, so a 1000 ms activity window can waste a frame and can never
       truncate a tween. Also fixed: `cosmo_ui` now sandboxes `XDG_CONFIG_HOME`, so the assembled-app
       tests stop being driven by the developer's own recents file. ~~`App::needsRedraw()`~~ — true while any property is animating, a frame arrived, or input
       landed since the last paint; `onTick` honours it. A tween in flight keeps requesting frames, so
@@ -930,10 +1010,10 @@ engine needs. R-G-1 says nothing may change in one frame; it does **not** say re
       the canvas, not the whole window.
 - [ ] T3.3 A 30 fps shell option for slow devices. cosmo's durations are 120-520 ms, so 30 fps still
       gives 4-16 frames per tween.
-- [ ] T3.4 **NOT OURS — `implement_artboard`.** `CairoTarget::buildEntry` premultiplies every new preview frame at 1.75 ms
+- [ ] T3.4 **NOT OURS — `arstro.artboard.implement`.** `CairoTarget::buildEntry` premultiplies every new preview frame at 1.75 ms
       (`CairoTarget.cpp:287-315`) although the engine emits alpha=255 for every photo. Fast path for
       known-opaque, and better: have the engine pack BGRA directly on little-endian so `buildEntry`
-      becomes a per-row `memcpy`. (Artboard is a submodule and goes through `implement_artboard`.)
+      becomes a per-row `memcpy`. (Artboard is a submodule and goes through `arstro.artboard.implement`.)
 
 **T4 — the load path, which on an SBC is the difference between usable and not.**
 - [x] T4.1 **D-24 — FIXED.** `cosmo::Fidelity{Preview, Full}` on the decode seam; the load AND the
@@ -1281,7 +1361,7 @@ Decisions taken with the user before any code (so no other machine re-litigates 
       exposure / contrast / white balance / sRGB encode; extend it to tone curve, tone regions,
       clarity/texture, sharpen and masks, each conformance-tested against the CPU reference
 - [ ] **T7** **Artboard: a GLES render adapter.** Draw the UI on the GPU instead of software Cairo
-      (a new `IRenderTarget` adapter in the Artboard repo, via `implement_artboard`) — for UI
+      (a new `IRenderTarget` adapter in the Artboard repo, via `arstro.artboard.implement`) — for UI
       smoothness and battery on device, and reusable by every Arstro app on Android
 
 ## U3 — reported 2026-08-21

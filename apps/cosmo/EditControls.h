@@ -20,7 +20,10 @@
  */
 #pragma once
 #include "widgets/UnitConversions.h"
+#include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <string>
 #include <vector>
 
 namespace arstro
@@ -43,6 +46,41 @@ namespace cosmo_v2
         std::vector<EditControl> controls;
         bool whiteBalancePicker = false;        // the COLOUR header carries the eyedropper (R-WB-1)
     };
+
+    /** The readout column wide enough for the longest formatted value ("+0.40 EV", 8 mono
+     *  glyphs at 10 px ≈ 48 px): 15 units of the 3.25 px ladder. One width for every row, so
+     *  every track in the column is the same length (R-UX-8). */
+    inline constexpr double kEditReadoutWidth = 48.75;
+
+    /** What a row's readout says for the track position `track` (R-UX-8): the value the ENGINE
+     *  gets, in the unit a photographer thinks in — not where the thumb sits. Derived from the
+     *  catalogue row itself (its conversion and its range), so there is no second list of
+     *  "which control has which unit" to keep in step:
+     *    exposure     track/80          "+0.40 EV"   two decimals, signed
+     *    temperature  mired-linear      "6200 K"     kelvin, to the nearest 10
+     *    radius       track/10          "1.0 px"
+     *    unipolar     (min >= 0)        "40"         no sign: there is no negative to tell it from
+     *    bipolar                        "+25" / "-25" / "0"   (what every row showed before) */
+    inline std::string formatEditControl(const EditControl &c, double track)
+    {
+        char buf[32];
+        if (c.toEngine == toEv)
+        {
+            const double ev = std::round(toEv(track) * 100.0) / 100.0;   // no "-0.00"
+            std::snprintf(buf, sizeof(buf), ev > 0.0 ? "+%.2f EV" : "%.2f EV", ev == 0.0 ? 0.0 : ev);
+        }
+        else if (c.toEngine == toKelvin)
+            std::snprintf(buf, sizeof(buf), "%d K", (int)(std::lround(toKelvin(track) / 10.0) * 10));
+        else if (c.toEngine == toRadiusPx)
+            std::snprintf(buf, sizeof(buf), "%.1f px", toRadiusPx(track));
+        else
+        {
+            const double v = c.toEngine ? c.toEngine(track) : track;
+            const int n = (int)std::lround(v);
+            std::snprintf(buf, sizeof(buf), (c.min < 0.0 && n > 0) ? "+%d" : "%d", n);
+        }
+        return buf;
+    }
 
     inline const std::vector<EditControlSection> &editControls()
     {

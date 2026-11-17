@@ -35,6 +35,10 @@ namespace cosmo_v2
             mTarget = std::min(maxS, std::max(0.0, mTarget - delta));
         }
 
+        /** Read-only scroll state, for a host that draws its own indicator (cosmo R-UX-9c). */
+        double scrollOffset() const { return mScroll.value(); }
+        double contentHeight() const { return mContentH; }
+
         void layout()  // size + relayout children, position from the current scroll
         {
             double y = -mScroll.value();

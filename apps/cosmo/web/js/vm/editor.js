@@ -15,7 +15,7 @@
  *   filmstrip shows, the open tab and panels, Before / Split / After and the seam, zoom and pan,
  *   the rail, menus and dialogs, the white-balance pick mode, and a drag in flight (its value is
  *   drawn here at once and sent as `set` notifies; the model catches up - "a gesture in flight
- *   outranks the model", arstro.design.rule gotcha 9).
+ *   outranks the model", arstro.rule.design gotcha 9).
  *
  * Views read signals from here and call its intents; nothing else in the page talks to the
  * session. That one rule is what makes two clients of one session look different and agree.

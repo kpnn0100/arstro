@@ -58,6 +58,7 @@ namespace cosmo_v2
          *  layout are exactly cosmo's (a signed integer, kValueWidth). */
         std::function<std::string(double)> formatValue;
         void setValueWidth(double w) { mValueWidth = w; }
+        const std::string &label() const { return mLabel; }
 
         void layout();  // call after width changes
         void advance(double nowMs) override;

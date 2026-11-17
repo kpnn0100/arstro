@@ -1,4 +1,5 @@
 #include "ExportDialog.h"
+#include "ExportNaming.h"
 #include "Icons.h"
 #include "TextMetrics.h"
 #include "../Theme.h"
@@ -108,6 +109,7 @@ namespace cosmo_v2
 
     void ExportDialog::show(std::vector<Node> nodes, const std::vector<int> &preselect)
     {
+        mPreviewKey.clear();         // the disk may have changed since the last time (R-EXPORT-3a)
         mNodes = std::move(nodes);
         const int n = (int)mNodes.size();
         mKids.assign(n, {});
@@ -463,17 +465,34 @@ namespace cosmo_v2
         return std::string();
     }
 
-    std::string ExportDialog::previewFilename() const
+    std::string ExportDialog::previewPath() const
     {
-        std::string base = "image.jpg";
-        for (int i = 0; i < (int)mNodes.size(); ++i)
+        // R-EXPORT-3a: the line under the destination row is the name that will be WRITTEN, from
+        // the same function the writer calls - "_edit" beside a source of the same name, "-1" when
+        // the name is taken. The probe touches the disk, so the answer is kept until an input changes.
+        const Request r = buildRequest();
+        std::string source, name = "image";
+        bool any = false;
+        for (int i = 0; i < (int)mNodes.size() && !any; ++i)
             if (!mNodes[i].group && mNodes[i].slot >= 0 && mLeafChecked[i])
-            { base = mNodes[i].name.empty() ? fileOf(mNodes[i].sourcePath) : mNodes[i].name; break; }
-        // Strip the source extension and append the chosen format's.
-        const auto dot = base.find_last_of('.');
-        if (dot != std::string::npos) base = base.substr(0, dot);
-        const std::string ext = mFormat == 0 ? ".jpg" : mFormat == 1 ? ".png" : ".tif";
-        return (mUsePrefix ? mPrefix : std::string()) + base + ext;
+            { source = mNodes[i].sourcePath; name = mNodes[i].name; any = true; }
+        const std::string key = source + '\n' + name + '\n' + r.destination + '\n' + r.prefix + '\n' + r.subfolder +
+                                '\n' + r.format + (r.sameAsSource ? "S" : "s") + (r.usePrefix ? "P" : "p") +
+                                (r.useSubfolder ? "F" : "f");
+        if (key == mPreviewKey) return mPreviewPath;
+        mPreviewKey = key;
+        if (!any || (source.empty() && r.sameAsSource) || (!r.sameAsSource && r.destination.empty()))
+        {
+            // Nothing on disk to resolve against yet: say which folder is missing, in the old words.
+            std::string dir = r.sameAsSource ? "<image folder>" : (r.destination.empty() ? "<no folder chosen>" : r.destination);
+            if (r.useSubfolder && !r.subfolder.empty()) dir += "/" + r.subfolder;
+            mPreviewPath = dir + "/" + (r.usePrefix ? r.prefix : std::string()) +
+                           exportNaming::stemOf(exportNaming::fileOf(name.empty() ? source : name)) +
+                           exportNaming::extensionFor(r.format);
+        }
+        else
+            mPreviewPath = exportNaming::outputPath(r, source, name, mExistsProbe);
+        return mPreviewPath;
     }
 
     // ── geometry ───────────────────────────────────────────────────────────────
@@ -1240,16 +1259,10 @@ namespace cosmo_v2
                        L.sameCheck.y + L.sameCheck.h * 0.5 + 4.0, kFontPx, font::sans());
         }
 
-        // Live preview of exactly where the first image will land.
+        // Live preview of exactly where the first image will land (R-EXPORT-3a: the real name).
         {
-            const std::string dir = same ? (firstCheckedFolder().empty() ? std::string("<image folder>")
-                                                                        : firstCheckedFolder())
-                                         : (mDestination.empty() ? std::string("<no folder chosen>") : mDestination);
-            std::string full = dir + "/";
-            if (mUseSubfolder && !mSubfolder.empty()) full += mSubfolder + "/";
-            full += previewFilename();
             t.setFill(fade(palette::whiteAlpha(0.32), a));
-            t.drawText(fitFront(full, iw, kMonoPx), L.pathPreview.x, L.pathPreview.y + 11.0, kMonoPx, font::mono());
+            t.drawText(fitFront(previewPath(), iw, kMonoPx), L.pathPreview.x, L.pathPreview.y + 11.0, kMonoPx, font::mono());
         }
 
         // ── prefix / subfolder ──

@@ -14,6 +14,7 @@
 #include "Log.h"
 #include "ControlChannel.h"
 #include "AssistProcess.h"
+#include "CosmoAssistProfile.h"
 #include "UiDump.h"
 #include "widgets/WidgetLog.h"
 #include "OmpPin.h"
@@ -100,6 +101,7 @@ namespace
         std::atomic<bool> stop{false};
         size_t consumed = 0;                   // main-thread reported count
         int failures = 0;
+        std::string firstError;                // why the first failure failed (main thread only)
         std::thread worker;
         guint pollId = 0;
 
@@ -115,6 +117,7 @@ namespace
     {
         GtkWidget *window = nullptr;
         GtkWidget *area = nullptr;
+        std::string windowTitle;   // R-FAMILY-9: what the window was last titled (set only on change)
         // S4c: declaration order IS construction order, and it matters — the budget is the
         // service's, and the service is App's. The application is built bottom-up and the view
         // last, which is the shape R-SVC-1 always described and only now compiles.
@@ -311,7 +314,8 @@ namespace
             char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
             std::string p = path ? path : "";
             if (!p.empty() && !endsWith(p, ".cosmoproj")) p += ".cosmoproj";
-            if (a->app.saveWorkspaceAs(p)) g_print("cosmo_v2: saved workspace %s\n", p.c_str());
+            // R-FAMILY-11: through the app, so the save says "Saved" (or why not) in the toast.
+            if (a->app.saveProjectAs(p)) g_print("cosmo_v2: saved workspace %s\n", p.c_str());
             g_free(path);
         }
         gtk_widget_destroy(d);
@@ -920,6 +924,7 @@ namespace
             else
             {
                 ++job.failures;
+                if (job.firstError.empty()) job.firstError = r.error;   // R-FAMILY-11: the toast's reason
                 g_printerr("cosmo_v2: export failed for %s: %s\n", r.path.c_str(), r.error.c_str());
             }
             // Report the count DONE plus the name of the one now in flight, so the
@@ -934,6 +939,8 @@ namespace
         if (job.producedAll.load() && job.consumed >= total)
         {
             LOGI("cosmo_v2: export finished (%zu written, %d failed)", total - job.failures, job.failures);
+            // R-FAMILY-11: the result, said in the toast - the count, or the reason.
+            a->app.exportFinished((int)total - job.failures, job.failures, job.firstError);
             job.pollId = 0;                 // we are returning REMOVE; don't double-remove
             a->exportJob.reset();           // joins the worker
             gtk_widget_queue_draw(a->area);
@@ -1303,6 +1310,17 @@ namespace
         // depend on the view wanting to draw.
         if (a->touchMode || a->touchFade.isAnimating() || a->app.needsRedraw(now))
             gtk_widget_queue_draw(a->area);
+        // R-FAMILY-9: the title follows the project and its unsaved state ("*Name — Cosmo").
+        // A string compare a tick; GTK is told only when it changed.
+        if (a->window)
+        {
+            std::string title = a->app.windowTitle();
+            if (title != a->windowTitle)
+            {
+                a->windowTitle = std::move(title);
+                gtk_window_set_title(GTK_WINDOW(a->window), a->windowTitle.c_str());
+            }
+        }
         return G_SOURCE_CONTINUE;
     }
 
@@ -1397,10 +1415,15 @@ namespace
         }
         // Arrow keys walk the photo rack (R-BROWSE-2). Sent before the plain-key
         // shortcuts so the app can claim them; if it doesn't, GTK keeps its own default.
-        if (e->keyval == GDK_KEY_Left || e->keyval == GDK_KEY_Right)
+        // R-FAMILY-8: Up / Down / Home / End go too - an open menu is walked with them
+        // (App::key routes them to MenuStrip::menuKey); with no menu open the app declines them.
+        if (e->keyval == GDK_KEY_Left || e->keyval == GDK_KEY_Right || e->keyval == GDK_KEY_Up ||
+            e->keyval == GDK_KEY_Down || e->keyval == GDK_KEY_Home || e->keyval == GDK_KEY_End)
         {
             artboard::KeyEvent ke; ke.type = artboard::KeyEvent::Type::Down;
-            ke.keyCode = (e->keyval == GDK_KEY_Left) ? 37 : 39;
+            ke.keyCode = e->keyval == GDK_KEY_Left ? 37 : e->keyval == GDK_KEY_Right ? 39
+                         : e->keyval == GDK_KEY_Up ? 38 : e->keyval == GDK_KEY_Down ? 40
+                         : e->keyval == GDK_KEY_Home ? 36 : 35;
             ke.shift = shift; ke.ctrl = ctrl; ke.alt = alt;
             if (a->app.key(ke)) { gtk_widget_queue_draw(a->area); return TRUE; }
         }
@@ -1417,64 +1440,51 @@ namespace
         // shortcuts (Delete, o, s, ...) so those keys edit the text instead.
         if (a->app.isTextEditing()) { gtk_widget_queue_draw(a->area); return TRUE; }
 
-        // R-HOME-1c: a modal owns the keyboard. Routed BEFORE the host's own accelerators, or
-        // Ctrl+S behind an unsaved-changes prompt would start a second save while the first
-        // question is still on screen.
-        if (auto dlg = a->app.confirmDialog())
-            if (dlg->isOpen())
+        // R-UX-1 (was R-HOME-1c, which named only the confirm dialog): a modal owns the keyboard.
+        // Asked BEFORE the host's own accelerators, or Ctrl+S behind an unsaved-changes prompt
+        // would start a second save, and Delete behind Settings would remove a photo. App::key
+        // gives Escape / Enter to the open modal and swallows the rest.
+        if (a->app.modalOpen())
+        {
+            ::artboard::KeyEvent ke;
+            ke.type = ::artboard::KeyEvent::Type::Down;
+            ke.keyCode = (e->keyval == GDK_KEY_Escape) ? 0x1B
+                         : (e->keyval == GDK_KEY_Return || e->keyval == GDK_KEY_KP_Enter) ? 0x0D
+                                                                                         : 0;
+            ke.shift = shift; ke.ctrl = ctrl; ke.alt = alt;
+            // Escape / Enter were already delivered by the block above (which returned if the
+            // app took them); anything that reaches here is a key the modal must only swallow.
+            if (ke.keyCode == 0) a->app.key(ke);
+            gtk_widget_queue_draw(a->area);
+            return TRUE;
+        }
+
+        // R-FAMILY-13: which key means what is App's (App::shortcut) - this only translates
+        // GDK's key. Ctrl+O open, Ctrl+N new project, Ctrl+S save, Ctrl+Shift+S save as, Ctrl+,
+        // settings, Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y undo and redo, Delete and Backspace remove
+        // (after the confirm). The plain `o` and `s` keys are withdrawn: a letter typed with no
+        // modifier must never open a dialog. App refuses all of them behind a modal, an open menu,
+        // a focused field and the loading transition, and on Home runs only the three that make
+        // sense with no project.
+        {
+            int key = 0;
+            if (e->keyval == GDK_KEY_Delete || e->keyval == GDK_KEY_KP_Delete) key = App::kKeyDelete;
+            else if (e->keyval == GDK_KEY_BackSpace) key = App::kKeyBackspace;
+            else if (e->keyval == GDK_KEY_comma) key = ',';
+            else
             {
-                ::artboard::KeyEvent ke;
-                ke.type = ::artboard::KeyEvent::Type::Down;
-                ke.keyCode = (e->keyval == GDK_KEY_Escape) ? 0x1B
-                             : (e->keyval == GDK_KEY_Return || e->keyval == GDK_KEY_KP_Enter) ? 0x0D
-                                                                                             : 0;
-                dlg->handleKey(ke);
+                const guint lower = gdk_keyval_to_lower(e->keyval);
+                if (lower >= GDK_KEY_a && lower <= GDK_KEY_z) key = 'a' + (int)(lower - GDK_KEY_a);
+            }
+            if (key != 0 && a->app.shortcut(key, ctrl, shift))
+            {
                 gtk_widget_queue_draw(a->area);
                 return TRUE;
             }
-
+        }
         // On the home screen the launcher owns the keyboard, and during the open
         // transition input is swallowed — don't leak editor keys in either case.
         if (a->app.onHomeScreen() || a->app.inOpenTransition()) return TRUE;
-
-        if (ctrl && (e->keyval == GDK_KEY_z || e->keyval == GDK_KEY_Z))
-        {
-            if (shift) a->app.redo(); else a->app.undo();
-            gtk_widget_queue_draw(a->area);
-            return TRUE;
-        }
-        if (ctrl && (e->keyval == GDK_KEY_y || e->keyval == GDK_KEY_Y))
-        {
-            a->app.redo();
-            gtk_widget_queue_draw(a->area);
-            return TRUE;
-        }
-        // Ctrl+S = save the project (to its current path, else prompt);
-        // Ctrl+Shift+S = Save As (always prompt for a new path). Both persist the
-        // full workspace: group tree, per-image params, and edit history.
-        if (ctrl && (e->keyval == GDK_KEY_s || e->keyval == GDK_KEY_S))
-        {
-            if (shift) saveWorkspaceDialog(a);
-            else       a->app.saveWorkspace();
-            gtk_widget_queue_draw(a->area);
-            return TRUE;
-        }
-        if (!ctrl && (e->keyval == GDK_KEY_o || e->keyval == GDK_KEY_O))
-        {
-            openDialog(a);
-            return TRUE;
-        }
-        if (!ctrl && (e->keyval == GDK_KEY_s || e->keyval == GDK_KEY_S))
-        {
-            saveDialog(a);
-            return TRUE;
-        }
-        if (e->keyval == GDK_KEY_Delete || e->keyval == GDK_KEY_KP_Delete)
-        {
-            a->app.deleteSelected();
-            gtk_widget_queue_draw(a->area);
-            return TRUE;
-        }
         return FALSE;
     }
 }
@@ -1505,7 +1515,7 @@ int main(int argc, char **argv)
 
     host.app.onOpenRequested = [&host] { openDialog(&host); };
     host.app.onSaveAsRequested = [&host] { saveSessionDialog(&host); };
-    host.app.onExportRequested = [&host] { saveDialog(&host); };   // bare 's': quick single-image export
+    host.app.onExportRequested = [&host] { saveDialog(&host); };   // quick single-image export; no key since R-FAMILY-13 (bare 's' withdrawn)
     host.app.onChooseExportFolderRequested = [&host] { chooseExportFolderDialog(&host); };
     host.app.onExportBatchRequested = [&host](App::ExportRequest r) { startExportBatch(&host, std::move(r)); };
     host.app.onSavePresetRequested = [&host] { savePresetDialog(&host); };
@@ -1562,7 +1572,8 @@ int main(int argc, char **argv)
         // The encoder stays in the host — a codec inside cosmo_core would break the Android
         // and WASM builds (R-SVC-7). ExportWriter already owns the metadata rules.
         App::ExportRequest req;   // defaults: JPEG q92, EXIF kept, profile embedded
-        return arstro::cosmo_v2::exporter::write(req, rgba, w, h, out, src, err);
+        // R-EXPORT-3a: `export <outdir>` into the photo's own folder must not replace the photo.
+        return arstro::cosmo_v2::exporter::write(req, rgba, w, h, arstro::cosmo_v2::exporter::awayFromSource(out, src), src, err);
     });
     // R-ASSIST-3: `snapshot` writes exactly the caller's path, a plain JPEG with no source EXIF.
     host.svc.setJpegWriter([](const std::string &path, const uint8_t *rgba, int w, int h, int quality,
@@ -1584,10 +1595,11 @@ int main(int argc, char **argv)
             else LOGI("assist: opened the control socket %s for the agent (R-ASSIST-3)", path.c_str());
         }
         return std::make_unique<arstro::cosmo_v2::ProcessAssistant>(
-            arstro::cosmo_v2::ProcessAssistant::configFor(host.control.isOpen() ? host.control.path() : std::string()));
+            arstro::cosmo_v2::cosmoAssistProfile(),
+            arstro::cosmo_v2::ProcessAssistant::configFor(arstro::cosmo_v2::cosmoAssistProfile(), host.control.isOpen() ? host.control.path() : std::string()));
     });
     // R-ASSIST-9: what this machine has, for the Agent tab's choices.
-    host.svc.setAgentDetector([&host] { return arstro::cosmo_v2::ProcessAssistant::detect(host.svc.model().settings.agent); });
+    host.svc.setAgentDetector([&host] { return arstro::cosmo_v2::ProcessAssistant::detect(arstro::cosmo_v2::cosmoAssistProfile(), host.svc.model().settings.agent); });
     host.svc.subscribe([&host](const arstro::cosmo::Event &e) { onServiceEvent(&host, e); });
     // One call, so the budget, the session and the model can never disagree about what is in
     // force (D-15). App::applySettings above still seeds the widgets, which is a view concern.
@@ -1696,7 +1708,10 @@ int main(int argc, char **argv)
     });
 
     host.window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(host.window), "cosmo. by arstro");
+    // R-FAMILY-9: "Cosmo" on Home, "<name> — Cosmo", "*<name> — Cosmo" while unsaved. onTick
+    // re-sets it whenever App::windowTitle() changes.
+    host.windowTitle = host.app.windowTitle();
+    gtk_window_set_title(GTK_WINDOW(host.window), host.windowTitle.c_str());
     gtk_window_set_default_size(GTK_WINDOW(host.window), kW, kH);
 
     host.area = gtk_drawing_area_new();

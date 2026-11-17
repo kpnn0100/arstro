@@ -33,6 +33,10 @@ namespace cosmo_v2
         void setSelected(int index);          // animates the highlight to `index`
         void setSelectedImmediate(int index);  // snaps (no animation) -- for programmatic sync
         int selected() const { return mSelected; }
+        /** LIVE: where the highlight is drawn right now, as a continuous slot index (0 … n−1) — it
+         *  eases toward `selected()` over 220 ms, so mid-slide it lies between two slots. Published
+         *  so an app can test (or follow) the slide without re-implementing the control (R-FAMILY-6). */
+        double highlightPos() const { return mHiPos.value(); }
         std::function<void(int)> onChange;
 
         artboard::BoxStyle containerBox;                 // outer tray/pill background

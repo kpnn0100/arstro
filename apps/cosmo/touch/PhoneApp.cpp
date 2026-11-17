@@ -1075,7 +1075,7 @@ protected:
         txt(t, ".", 24 + t.measureText("cosmo", 36, fnt::sansSemiBold()), y + 26, 36, fnt::sansSemiBold(), ACCENT);
         txt(t, "Dark-room tools for serious work.", 24, y + 52, 14, fnt::sans(), MUTED);
         y += 76;
-        struct A { const char *l; bool ac; int ic; }; const A acts[3] = {{"New Project", true, 0}, {"Open Project", false, 1}, {"Import Catalog", false, 2}};
+        struct A { const char *l; bool ac; int ic; }; const A acts[3] = {{"New project", true, 0}, {"Open project", false, 1}, {"Import catalog", false, 2}};
         mActBtns.clear();
         for (auto &a : acts)
         { t.setFill(a.ac ? ACCENT : BG); rrectPath(t, 16, y, w - 32, 52, 2); t.fillPath(); if (!a.ac) { t.setStroke(BORDER, 1.0); rrectPath(t, 16, y, w - 32, 52, 2); t.strokePath(); }
@@ -1086,8 +1086,8 @@ protected:
         // filtered recents
         std::vector<int> filtered;
         for (size_t i = 0; i < mCards.size(); ++i) if (matches(mCards[i].name)) filtered.push_back((int)i);
-        txt(t, "Recent Projects", 16, y + 14, 15, fnt::sansSemiBold(), FG);
-        double cx = 16 + t.measureText("Recent Projects", 15, fnt::sansSemiBold()) + 10;
+        txt(t, "Recent projects", 16, y + 14, 15, fnt::sansSemiBold(), FG);
+        double cx = 16 + t.measureText("Recent projects", 15, fnt::sansSemiBold()) + 10;
         char cb[8]; std::snprintf(cb, sizeof cb, "%d", (int)filtered.size());
         t.setFill(CARD); rrectPath(t, cx, y, 22, 18, 2); t.fillPath(); t.setStroke(BORDER, 1.0); rrectPath(t, cx, y, 22, 18, 2); t.strokePath();
         txtC(t, cb, cx + 11, y + 13, 11, fnt::mono(), MUTED);
@@ -1120,7 +1120,7 @@ protected:
             y += 88;
         }
         t.setStroke(BORDER, 1.5); rrectPath(t, 16, y, w - 32, 72, 2); t.strokePath();
-        icon::plusCircle(t, Rect{w / 2 - 62, y + 27, 18, 18}, MUTED, 1.6); txt(t, "New Project", w / 2 - 36, y + 41, 14, fnt::sans(), MUTED);
+        icon::plusCircle(t, Rect{w / 2 - 62, y + 27, 18, 18}, MUTED, 1.6); txt(t, "New project", w / 2 - 36, y + 41, 14, fnt::sans(), MUTED);
         mNewCard = Rect{16, y, w - 32, 72}; y += 96;
         for (const char *l : {"Settings", "What's New", "Help & Documentation"}) { txt(t, l, 24, y + 27, 13, fnt::sans(), MUTED); hline(t, 24, w - 24, y + 44, BORDER); y += 44; }
         txt(t, "cosmo v1.0.0-beta", 24, y + 24, 11, fnt::mono(), Color(MUTED.r, MUTED.g, MUTED.b, 0.5));
@@ -1211,9 +1211,9 @@ protected:
         t.setFill(Color(0, 0, 0, mScrim.value())); rectPath(t, 0, 0, w, h); t.fillPath();
         double px = 24, py = 60, pw = w - 48, ph = h - 120;
         t.setFill(CARD); rrectPath(t, px, py, pw, ph, 4); t.fillPath(); t.setStroke(BORDER, 1.0); rrectPath(t, px, py, pw, ph, 4); t.strokePath();
-        txt(t, mMode == Mode::OpenImage ? "Open Image" : "Import Folder", px + 16, py + 30, 15, fnt::sansSemiBold(), FG);
+        txt(t, mMode == Mode::OpenImage ? "Open image" : "Import folder", px + 16, py + 30, 15, fnt::sansSemiBold(), FG);
         icon::back(t, Rect{px + pw - 38, py + 12, 20, 20}, MUTED, 1.6); zoneRect(px + pw - 44, py + 8, 40, 34, -2);
-        std::string path = mDir; if (t.measureText(path, 11, fnt::mono()) > pw - 32) path = "..." + path.substr(path.size() > 30 ? path.size() - 30 : 0);
+        std::string path = mDir; if (t.measureText(path, 11, fnt::mono()) > pw - 32) path = "\xE2\x80\xA6" + path.substr(path.size() > 30 ? path.size() - 30 : 0);
         txt(t, path, px + 16, py + 52, 11, fnt::mono(), MUTED);
         double top = py + 66, rowH = 44, listH = ph - 66 - (mMode == Mode::ImportFolder ? 52 : 0);
         // import-folder action

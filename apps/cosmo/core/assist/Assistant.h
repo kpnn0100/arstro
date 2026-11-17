@@ -7,6 +7,10 @@
  *  OS call. So the service owns the conversation (state, messages, events — what every front end
  *  shows) and holds an IAssistant the host made, which it asks, without blocking, what the agent
  *  said since the last pump (R-SVC-6). A test injects a fake one and needs no agent at all.
+ *
+ *  R-ASSIST-13: this header is the SHARED seam - it includes nothing of cosmo's (no session, no
+ *  ProjectStore, no EditParams, no AppModel), so Interstellar and Solaris compile the agent module
+ *  (AssistConversation, the host's ProcessAssistant, the AgentPanel widget) in place against it.
  */
 #pragma once
 #include <string>
@@ -25,6 +29,8 @@ namespace cosmo
         std::string args;                       // appended to it (settings `agentArgs=`, R-ASSIST-5)
         std::vector<std::string> skillDirs;     // extra skill directories (settings `agentSkills=`)
         std::string project;                    // the open project's path, "" for none
+        /** How many items the project holds - cosmo's photos. An app's AssistProfile decides what
+         *  its prompts say about it (R-ASSIST-13); an app with nothing to count leaves it 0. */
         int photos = 0;
         /** R-ASSIST-5: approve every permission an ACP agent asks for (settings `agentAllowAll`),
          *  instead of the default policy (cosmo's tools, reading, the skill's python, edits in
@@ -59,6 +65,26 @@ namespace cosmo
         std::string agent;       // the `agent=` setting that uses it ("acp:gemini --experimental-acp")
         bool installed = false;  // found (on PATH, or a server answering)
         std::string note;        // "installed", "not found - npm i -g @google/gemini-cli", "3 models"
+    };
+
+    /** R-ASSIST-1: one line of the conversation with the user's agent. */
+    struct AssistMessageModel
+    {
+        std::string role;   // user | agent | tool | error | info
+        std::string text;
+    };
+
+    /** R-ASSIST-1: the agent conversation, as every front end shows it. The agent itself is a
+     *  process the host started; what it SAID is application state. It is a member of the
+     *  application's model (`AppModel::assist`), declared HERE (R-ASSIST-13) so the Agent tab and
+     *  AssistConversation need this header alone - not cosmo's whole model. */
+    struct AssistModel
+    {
+        std::string state = "off";   // off | starting | ready | busy | failed
+        std::string agent;           // which agent, as it named itself ("Claude Code")
+        std::vector<AssistMessageModel> messages;
+        /** R-ASSIST-9: the agents found on this machine, after `assist agents`. */
+        std::vector<AgentChoice> choices;
     };
 
     class IAssistant

@@ -37,6 +37,10 @@ namespace cosmo_v2
             int count = 0;        // group leaf only
             bool bypassed = false;  // R-BYPASS-5: this node's filter is disabled
             bool loading = false;   // R-LOADUX-2: pixels still decoding -> spinner cell
+            /** OPT-IN (cosmo R-UX-7): the photo's file is gone. Drawn as a plate with a
+             *  missing-file mark and `name`, instead of an empty box. Default false: a host
+             *  that never sets it draws exactly as before. */
+            bool missing = false;
         };
 
         Filmstrip();

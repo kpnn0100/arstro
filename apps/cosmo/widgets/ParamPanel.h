@@ -56,6 +56,9 @@ namespace cosmo_v2
          *  setValues; 0 hides a row's green reach (DR-EDIT-4). */
         void setSubValues(const std::vector<double> &offsets);
         void scrollBy(double delta);
+        /** Read-only scroll state, for a host that draws its own indicator (cosmo R-UX-9c). */
+        double scrollOffset() const { return mScroll.value(); }
+        double contentHeight() const { return mContentHeight; }
         /** Set a section action's armed state from outside — the picker disarms itself once it
          *  has taken its sample, and the button has to follow. */
         void setSectionActionArmed(const std::string &sectionTitle, bool armed);

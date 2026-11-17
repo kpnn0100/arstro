@@ -38,6 +38,23 @@ namespace cosmo_v2
             mMessage = message;
             for (size_t i = 0; i < labels.size(); ++i) mButtons[i].label = labels[i];
         }
+        /** How the destructive button is drawn (R-FAMILY-3).
+         *    Filled   — a filled red button. THE DEFAULT: every caller that sets nothing draws as it always did.
+         *    Outlined — red words and a red border on no fill, always.
+         *    Auto     — the family standard: OUTLINED when a primary button sits beside it (one filled
+         *               button per dialog: two filled buttons side by side read as one weight), FILLED
+         *               when the destructive button is the only action that is filled ("Delete" beside
+         *               "Cancel"). Decided per `show`, from the buttons shown. */
+        enum class DestructiveStyle { Filled, Outlined, Auto };
+        void setDestructiveStyle(DestructiveStyle s) { mDestructiveStyle = s; }
+        DestructiveStyle destructiveStyle() const { return mDestructiveStyle; }
+        /** Whether button `i` is drawn outlined right now — the style, resolved against the buttons shown. */
+        bool drawsOutlined(int i) const;
+        /** The first form of this option (Solaris, R-UI-2 amended 2026-11-17, whose orange accent sits at the
+         *  destructive red's luminance, 19° of hue away). Kept, and unchanged in effect: `true` is
+         *  `DestructiveStyle::Outlined`, `false` is `Filled`. */
+        void setOutlinedDestructive(bool on) { mDestructiveStyle = on ? DestructiveStyle::Outlined : DestructiveStyle::Filled; }
+        bool outlinedDestructive() const { return mDestructiveStyle == DestructiveStyle::Outlined; }
         bool isOpen() const { return mOpen && !mClosing; }
         /** Snap shut immediately (used when leaving the editor mid-prompt). */
         void close() { mOpen = false; mClosing = false; mAppear.set(0.0); }
@@ -81,6 +98,7 @@ namespace cosmo_v2
         int buttonAt(const artboard::Point &local) const;
 
         artboard::Color mAccent;
+        DestructiveStyle mDestructiveStyle = DestructiveStyle::Filled;
         bool mOpen = false;
         bool mClosing = false;
         double mLastMs = 0.0;

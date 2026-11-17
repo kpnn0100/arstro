@@ -48,6 +48,16 @@ namespace cosmo_v2
         void layout();
         void advance(double nowMs) override;
 
+        /** OPT-IN (cosmo R-UX-5). Flip Horizontal / Vertical and Auto Horizon / Geometry have no
+         *  engine behind them; `false` hides the four buttons and their two headers rather than
+         *  showing controls that do nothing. Default: shown, so a host that says nothing draws
+         *  the panel exactly as before. */
+        void setUnbuiltControlsShown(bool shown) { mShowUnbuilt = shown; layout(); }
+        bool unbuiltControlsShown() const { return mShowUnbuilt; }
+        /** OPT-IN (cosmo R-UX-9): section headers in capitals, like the Basic/Detail sections.
+         *  Default off - the labels are drawn as written. */
+        bool upperHeaders = false;
+
         std::function<void(double)> onRotationChange;
         std::function<void(int)> onQuarterTurn;  // +1 or -1
         std::function<void()> onResetRotation;
@@ -94,6 +104,7 @@ namespace cosmo_v2
         float mDragStartRotation = 0.0f;
 
         double mAspectHeaderY = 0.0, mFlipHeaderY = 0.0, mAutoHeaderY = 0.0;
+        bool mShowUnbuilt = true;   // R-UX-5, see setUnbuiltControlsShown
     };
 }
 }

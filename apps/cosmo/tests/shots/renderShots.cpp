@@ -42,11 +42,20 @@
  */
 #include "App.h"
 #include "UiDump.h"              // findSegmentByType — R-VIEW-3's shot asks the tree for the canvas
+#include "widgets/HomeScreen.h"
 #include "widgets/PhotoCanvas.h"  // ...and the canvas where its seam is
 #include "widgets/XformPanel.h"    // R-CROP: the shot asks the panel where its chips are
 #include "widgets/MaskPanel.h"     // R-MASK-6: and where the Draw chip is
 #include "widgets/AgentPanel.h"    // R-ASSIST-7: the Agent tab
 #include "widgets/EditStackTabs.h"
+#include "widgets/MenuStrip.h"     // R-FAMILY: the shared building blocks, drawn on their own
+#include "widgets/ContextMenu.h"
+#include "widgets/Toast.h"
+#include "widgets/ConfirmDialog.h"
+#include "widgets/HistoryView.h"
+#include "widgets/Wordmark.h"
+#include "widgets/DirtyDot.h"
+#include "Theme.h"
 #include "EmbeddedFonts.h"
 #include "OmpPin.h"
 #include "adapter/native/CairoTarget.h"
@@ -561,7 +570,10 @@ namespace
                 Frame f(w, h);
                 rig.app.showHome();
                 rig.settle(f, 900.0);
-                rig.click(f, 150.0, (double)h - 137.0 + 16.0 + 9.0);
+                {
+                    const artboard::Rect lr = arstro::cosmo_v2::HomeScreen::settingsLinkRectFor((double)h);
+                    rig.click(f, lr.x + lr.w * 0.5, lr.y + lr.h * 0.5);
+                }
                 rig.settle(f, 500.0);   // the modal's open tween has finished
                 save(f, "home-settings");
             }
@@ -579,6 +591,187 @@ namespace
         rig.app.showEditor();
         rig.settle(f, 1200.0);
         save(f, "editor-empty");
+    }
+
+    /** R-UX: the states the 2026-11-17 audit found undrawn or lying - fixture-free, because
+     *  every one of them is about NOT having a photo: a project whose files are gone (cells
+     *  with a name and a mark, "File not found" on the stage, the presets rail's empty
+     *  sentence, Export dimmed), the confirm that now stands in front of Delete - caught
+     *  mid-fade and at rest - and the same at a small window. */
+    void shotUxStates(int w, int h)
+    {
+        if (!wanted("editor-missing") && !wanted("editor-delete-confirm")) return;
+        setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-ux").string());
+        const fs::path cmp = gOpt.outdir / "projects" / "A long project name, to prove the top bar fits it between the menus and Export.cmp";
+        fs::create_directories(cmp.parent_path());
+        if (!writeCmp(cmp, {"/offline/2026-09 Iceland/DSCF_0001.RAF", "/offline/2026-09 Iceland/DSCF_0002.RAF"})) return;
+        Rig rig(w, h);
+        Frame f(w, h);
+        rig.app.showHome();
+        rig.settle(f, 300.0);
+        if (!rig.openProject(f, cmp.string(), 30)) { std::printf("  editor-missing: the project did not open\n"); return; }
+        std::string err;
+        for (const auto &nd : rig.svc.model().nodes)
+            if (nd.failed) { rig.svc.dispatchText("select " + std::to_string(nd.node), err); break; }
+        rig.app.syncFromSession();
+        rig.step(f, 3);
+        save(f, "editor-missing-mid");          // the notice mid fade-in
+        rig.settle(f, 600.0);
+        save(f, "editor-missing");
+        rig.app.requestDeleteSelected();
+        rig.step(f, 3);
+        save(f, "editor-delete-confirm-mid");   // the confirm mid fade-in
+        rig.settle(f, 500.0);
+        save(f, "editor-delete-confirm");
+    }
+
+    /** R-FAMILY-8…14: Cosmo with the family standard adopted. Fixture-free: the photos are two
+     *  gradients this harness paints and writes as PNG into --outdir, so the project is real
+     *  (it decodes, it can be edited, it can be saved) and nothing outside --outdir is touched.
+     *  Every eased change is caught mid-tween as well as at rest. */
+    void shotFamilyAdoption(int w, int h)
+    {
+        if (!wanted("fam-")) return;
+        setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-fam").string());
+        const fs::path dir = gOpt.outdir / "fam-project";
+        fs::create_directories(dir);
+        std::vector<std::string> photos;
+        for (int i = 0; i < 3; ++i)
+        {
+            Frame g(480, 320);
+            cairo_t *cr = g.cr();
+            cairo_pattern_t *pat = cairo_pattern_create_linear(0, 0, 480, 320);
+            cairo_pattern_add_color_stop_rgb(pat, 0.0, 0.10 + 0.25 * i, 0.22, 0.42 - 0.1 * i);
+            cairo_pattern_add_color_stop_rgb(pat, 1.0, 0.92, 0.62 + 0.1 * i, 0.30);
+            cairo_set_source(cr, pat);
+            cairo_paint(cr);
+            cairo_pattern_destroy(pat);
+            cairo_set_source_rgb(cr, 0.96, 0.93, 0.85);
+            cairo_arc(cr, 150 + 90 * i, 120, 46, 0, 6.2832);
+            cairo_fill(cr);
+            const fs::path png = dir / ("dune_0" + std::to_string(i + 1) + ".png");
+            if (!g.write(png.string())) return;
+            photos.push_back(png.string());
+        }
+        const fs::path cmp = dir / "Sahara dunes.cmp";
+        if (!writeCmp(cmp, photos)) return;
+
+        // ── Home, empty: one sentence, one hint, one button (and its hover) ──
+        // Its own config dir: the project below is remembered as a recent the moment it opens.
+        {
+            setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-fam-empty").string());
+            Rig rig(w, h);
+            Frame f(w, h);
+            rig.app.showHome();
+            rig.settle(f, 900.0);
+            save(f, "fam-home-empty");
+            const artboard::Rect b = rig.app.home()->emptyButtonRect();
+            rig.app.pointer(1, b.x + b.w * 0.5, b.y + b.h * 0.5, 0, rig.now);
+            rig.step(f, 3);
+            save(f, "fam-home-empty-hover-mid");
+            rig.settle(f, 300.0);
+            save(f, "fam-home-empty-hover");
+        }
+        setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-fam").string());
+
+        Rig rig(w, h);
+        Frame f(w, h);
+        rig.app.showHome();
+        rig.settle(f, 300.0);
+        if (!rig.openProject(f, cmp.string(), 60)) { std::printf("  fam-: the project did not open\n"); return; }
+        std::string err;
+        rig.svc.dispatchText("select " + std::to_string(rig.svc.model().nodes.front().node), err);
+        rig.app.syncFromSession();
+        rig.settleQuiet(f, 400.0, 1500);
+        save(f, "fam-topbar-clean");                 // name left after the menus, no dot, save icon dim
+        std::printf("  window title: \"%s\"\n", rig.app.windowTitle().c_str());
+
+        rig.svc.dispatchText("set exposure=0.6", err);
+        rig.step(f, 4);
+        save(f, "fam-topbar-dirty-mid");             // the dot and the icon half lit
+        rig.settleQuiet(f, 400.0, 1500);
+        save(f, "fam-topbar-dirty");
+        std::printf("  window title: \"%s\"\n", rig.app.windowTitle().c_str());
+
+        auto *bar = rig.app.topBar();
+        auto &ms = *bar->menuStrip();
+        const artboard::Transform mt = ms.worldTransform();
+        auto openMenu = [&](int m) {
+            const artboard::Rect r = ms.titleRect(m);
+            rig.click(f, mt.e + r.x + r.w * 0.5, mt.f + r.y + r.h * 0.5);
+        };
+        const char *names[] = {"file", "edit", "develop", "preset", "view"};
+        for (int m = 0; m < ms.menuCount() && m < 5; ++m)
+        {
+            openMenu(m);
+            if (m == 0) { rig.step(f, 2); save(f, "fam-menu-file-mid"); }   // the dropdown growing
+            rig.settle(f, 400.0);
+            save(f, std::string("fam-menu-") + names[m]);
+            if (m == 0)
+            {
+                artboard::KeyEvent k; k.type = artboard::KeyEvent::Type::Down;
+                k.keyCode = 40; rig.app.key(k); rig.app.key(k); rig.app.key(k);   // Down x3: over the separator
+                rig.step(f, 3);
+                save(f, "fam-menu-file-keyboard-mid");
+                rig.settle(f, 300.0);
+                save(f, "fam-menu-file-keyboard");
+            }
+            artboard::KeyEvent esc; esc.type = artboard::KeyEvent::Type::Down; esc.keyCode = 27;
+            rig.app.key(esc);
+            rig.settle(f, 300.0);
+        }
+
+        // ── the unsaved dialog, mid fade and at rest ──
+        rig.app.requestCloseProject();
+        rig.step(f, 3);
+        save(f, "fam-unsaved-dialog-mid");
+        rig.settle(f, 500.0);
+        save(f, "fam-unsaved-dialog");
+        {
+            const artboard::Rect b = rig.app.confirmDialog()->buttonRect(1);
+            rig.app.pointer(1, b.x + b.w * 0.5, b.y + b.h * 0.5, 0, rig.now);
+            rig.settle(f, 300.0);
+            save(f, "fam-unsaved-dialog-hover-dont-save");
+        }
+        artboard::KeyEvent esc; esc.type = artboard::KeyEvent::Type::Down; esc.keyCode = 27;
+        rig.app.key(esc);
+        rig.settle(f, 400.0);
+        rig.app.requestDeleteSelected();
+        rig.settle(f, 500.0);
+        save(f, "fam-remove-confirm");               // the single FILLED Remove
+        rig.app.key(esc);
+        rig.settle(f, 400.0);
+
+        // ── the toast: a refusal, an export's result, Saved ──
+        rig.svc.dispatchText("history jump 99", err);
+        rig.step(f, 3);
+        save(f, "fam-toast-error-in-mid");
+        rig.settle(f, 500.0);
+        save(f, "fam-toast-error");
+        rig.app.exportFinished(3, 0, "");
+        rig.step(f, 6);
+        save(f, "fam-toast-swap-mid");
+        rig.settle(f, 500.0);
+        save(f, "fam-toast-exported");
+        {
+            const artboard::Rect sr = bar->saveRect();
+            const artboard::Transform bt = bar->worldTransform();
+            rig.click(f, bt.e + sr.x + sr.w * 0.5, bt.f + sr.y + sr.h * 0.5);   // the lit save icon
+        }
+        rig.step(f, 4);
+        save(f, "fam-toast-saved-mid");              // Saved arriving, the dot leaving
+        rig.settle(f, 600.0);
+        save(f, "fam-toast-saved");                  // clean again: no dot, the icon dim
+        std::printf("  window title: \"%s\"\n", rig.app.windowTitle().c_str());
+        rig.settle(f, 3200.0 - 600.0 + 150.0);
+        save(f, "fam-toast-out-mid");
+
+        // ── View > Show Agent ──
+        rig.app.setAgentShown(true);
+        rig.settle(f, 500.0);
+        openMenu(4);
+        rig.settle(f, 400.0);
+        save(f, "fam-view-hide-agent");
     }
 
     /** R-ASSIST-7: the Agent tab in each of its states, fixture-free (a fake agent behind the
@@ -742,7 +935,11 @@ namespace
                 r2.app.showHome();
                 r2.settle(f, 400.0);
                 const double sc = pct / 100.0;   // the link's logical rect, in physical px
-                r2.click(f, 150.0 * sc, ((double)h / sc - 137.0 + 16.0 + 9.0) * sc);
+                {
+                    // Asked of the widget (R-UX-5 moved the link; a typed offset clicked nothing).
+                    const artboard::Rect lr = arstro::cosmo_v2::HomeScreen::settingsLinkRectFor((double)h / sc);
+                    r2.click(f, (lr.x + lr.w * 0.5) * sc, (lr.y + lr.h * 0.5) * sc);
+                }
                 r2.settle(f, 500.0);
                 save(f, tag + "-settings-min");
             }
@@ -1216,6 +1413,236 @@ namespace
         return 0;
     }
 
+
+    // ── R-FAMILY: the shared building blocks, each drawn on its own ───────────────────────
+    //
+    // These are widgets no app has adopted yet (step 1 of the family plan adds them opt-in), so
+    // there is no App state that shows them. They are drawn here directly, through the same Cairo
+    // adapter and the same embedded faces, so the shortcut column, the three toast kinds and the
+    // dialog's Auto style can be LOOKED at before any app wires them in.
+    namespace family
+    {
+        using namespace arstro::cosmo_v2;
+        using artboard::Point;
+        using artboard::Rect;
+
+        struct OpenMenuStrip : MenuStrip { using MenuStrip::handleGesture; };
+        struct OpenContextMenu : ContextMenu { using ContextMenu::handleGesture; };
+        struct OpenConfirm : ConfirmDialog
+        {
+            OpenConfirm() : ConfirmDialog(palette::primary()) {}
+            using ConfirmDialog::advance;
+        };
+
+        artboard::Gesture gesture(artboard::Gesture::Type t) { artboard::Gesture g; g.type = t; return g; }
+        Point mid(const Rect &r) { return Point{r.x + r.w * 0.5, r.y + r.h * 0.5}; }
+
+        /** The window's ground and a top bar band, so a block is seen where it will live. */
+        void backdrop(artboard::CairoTarget &t, Frame &f, bool bar)
+        {
+            f.clear();
+            t.setContext(f.cr());
+            t.setTransform(artboard::Transform::identity());
+            artboard::drawRoundedRect(t, Rect{0, 0, (double)f.width(), (double)f.height()}, 0.0, artboard::Paint::filled(palette::background()));
+            if (!bar) return;
+            artboard::drawRoundedRect(t, Rect{0, 0, (double)f.width(), space::barH()}, 0.0, artboard::Paint::filled(palette::leftRailBg()));
+            artboard::drawRoundedRect(t, Rect{0, space::barH(), (double)f.width(), 1.0}, 0.0, artboard::Paint::filled(palette::border()));
+        }
+
+        void menus(artboard::CairoTarget &t)
+        {
+            if (!wanted("family-menu")) return;
+            OpenMenuStrip ms;
+            ms.x.set(space::padX()); ms.y.set((space::barH() - 21.0) * 0.5); ms.width.set(400.0);
+            auto nop = [] {};
+            ms.addMenu({"File", {{"New Project\xE2\x80\xA6", nop, "Ctrl+N"},
+                                 {"Open Project\xE2\x80\xA6", nop, "Ctrl+O"},
+                                 MenuStrip::Item::sep(),
+                                 {"Save", nop, "Ctrl+S", false},
+                                 {"Save As\xE2\x80\xA6", nop, "Ctrl+Shift+S"},
+                                 {"Export\xE2\x80\xA6", nop, "Ctrl+E"},
+                                 MenuStrip::Item::sep(),
+                                 {"Settings\xE2\x80\xA6", nop, "Ctrl+,"},
+                                 {"Close Project", nop, "Ctrl+W"}}});
+            ms.addMenu({"Edit", {{"Undo", nop, "Ctrl+Z"}, {"Redo", nop, "Ctrl+Y", false}}});
+            ms.addMenu({"View", {{"Show Agent", nop}, {"Show History Tree\xE2\x80\xA6", nop}}});   // a plain menu: as before
+
+            auto draw = [&](Frame &f) {
+                backdrop(t, f, true);
+                ms.render(t);
+                ms.renderOverlay(t);
+            };
+            double now = 0.0;
+            ms.advance(now);
+            ms.handleGesture(gesture(artboard::Gesture::Type::Click), mid(ms.titleRect(0)));
+            // Mid-transition: the dropdown growing out of its title, 64 ms into 160.
+            for (int i = 0; i < 4; ++i) ms.advance(now += kFrameMs);
+            { Frame f(460, 300); draw(f); save(f, "family-menu-shortcuts-mid"); }
+            for (int i = 0; i < 30; ++i) ms.advance(now += kFrameMs);
+            { Frame f(460, 300); draw(f); }                                    // a paint measures the column
+            artboard::Segment::setHovered(&ms);
+            ms.handleGesture(gesture(artboard::Gesture::Type::Move), mid(ms.itemRect(0, 4)));
+            for (int i = 0; i < 30; ++i) ms.advance(now += kFrameMs);
+            { Frame f(460, 300); draw(f); save(f, "family-menu-shortcuts"); }
+            // The pointer on the disabled row: no wash.
+            ms.handleGesture(gesture(artboard::Gesture::Type::Move), mid(ms.itemRect(0, 3)));
+            for (int i = 0; i < 30; ++i) ms.advance(now += kFrameMs);
+            { Frame f(460, 300); draw(f); save(f, "family-menu-disabled-hover"); }
+            // The keyboard: Down twice from the top lands past the separator and the disabled row.
+            artboard::Segment::setHovered(nullptr);
+            artboard::KeyEvent down; down.type = artboard::KeyEvent::Type::Down; down.keyCode = 40;
+            ms.menuKey(down); ms.menuKey(down); ms.menuKey(down);
+            for (int i = 0; i < 30; ++i) ms.advance(now += kFrameMs);
+            { Frame f(460, 300); draw(f); save(f, "family-menu-keyboard"); }
+            // A plain menu beside it: drawn exactly as it always was.
+            ms.handleGesture(gesture(artboard::Gesture::Type::Click), mid(ms.titleRect(2)));
+            for (int i = 0; i < 30; ++i) ms.advance(now += kFrameMs);
+            { Frame f(460, 300); draw(f); save(f, "family-menu-plain"); }
+
+            OpenContextMenu cm;
+            cm.width.set(360.0); cm.height.set(220.0);
+            cm.open({{"Copy Edits", nop, "Ctrl+C"}, {"Paste Edits", nop, "Ctrl+V", false}, ContextMenu::Item::sep(),
+                     {"Rename Group\xE2\x80\xA6", nop, "F2"}, {"Delete", nop, "Del"}}, 40.0, 30.0);
+            now = 0.0;
+            cm.advance(now);
+            for (int i = 0; i < 30; ++i) cm.advance(now += kFrameMs);
+            { Frame f(360, 220); backdrop(t, f, false); cm.renderOverlay(t); }
+            cm.handleGesture(gesture(artboard::Gesture::Type::Move), mid(cm.itemRect(3)));
+            for (int i = 0; i < 30; ++i) cm.advance(now += kFrameMs);
+            { Frame f(360, 220); backdrop(t, f, false); cm.renderOverlay(t); save(f, "family-context-menu"); }
+        }
+
+        void toasts(artboard::CairoTarget &t)
+        {
+            if (!wanted("family-toast")) return;
+            const double top = space::barH() + 4.0;   // the caller's choice: under the top bar
+            auto shot = [&](Toast &toast, int w, const char *name) {
+                Frame f(w, 96);
+                backdrop(t, f, true);
+                toast.x.set(0.0); toast.y.set(top); toast.width.set((double)w);
+                toast.renderOverlay(t);
+                save(f, name);
+            };
+            struct K { Toast::Kind kind; const char *text; const char *name; };
+            const K kinds[] = {{Toast::Kind::Info, "Exported 12 photos to ~/Pictures/Tokyo", "family-toast-info"},
+                               {Toast::Kind::Warning, "2 files are missing \xE2\x80\x94 File \xE2\x80\xBA Relink\xE2\x80\xA6", "family-toast-warning"},
+                               {Toast::Kind::Error, "Could not save: the disk is full", "family-toast-error"}};
+            for (const K &k : kinds)
+            {
+                Toast toast;
+                toast.show(k.kind, k.text, 0.0);
+                for (double now = 0.0; now <= 400.0; now += kFrameMs) toast.advance(now);
+                shot(toast, 640, k.name);
+            }
+            {   // mid-transition, in: half faded, half way down
+                Toast toast;
+                toast.show(Toast::Kind::Warning, kinds[1].text, 0.0);
+                toast.advance(0.0); toast.advance(32.0);
+                shot(toast, 640, "family-toast-in-mid");
+            }
+            {   // mid-transition, out
+                Toast toast;
+                toast.show(Toast::Kind::Error, kinds[2].text, 0.0);
+                double now = 0.0;
+                for (; now <= 3232.0; now += kFrameMs) toast.advance(now);
+                toast.advance(now += 144.0);
+                shot(toast, 640, "family-toast-out-mid");
+            }
+            {   // a second toast while one shows: the words cross-fade
+                Toast toast;
+                toast.show(Toast::Kind::Info, kinds[0].text, 0.0);
+                double now = 0.0;
+                for (; now <= 400.0; now += kFrameMs) toast.advance(now);
+                toast.show(Toast::Kind::Error, kinds[2].text, now);
+                toast.advance(now); toast.advance(now += 96.0);
+                shot(toast, 640, "family-toast-swap-mid");
+            }
+            {   // a sentence longer than a small window: ellipsized, inside the band
+                Toast toast;
+                toast.show(Toast::Kind::Warning, "Rendered the whole song to a file with a very long name indeed, and then some more words", 0.0);
+                for (double now = 0.0; now <= 400.0; now += kFrameMs) toast.advance(now);
+                shot(toast, 360, "family-toast-long");
+            }
+        }
+
+        void confirms(artboard::CairoTarget &t)
+        {
+            if (!wanted("family-confirm")) return;
+            using Style = ConfirmDialog::DestructiveStyle;
+            auto shot = [&](Style style, bool three, const char *name) {
+                OpenConfirm d;
+                d.width.set(640.0); d.height.set(300.0);
+                d.setDestructiveStyle(style);
+                d.advance(0.0);
+                if (three)
+                    d.show("Save changes to \xE2\x80\x9CTokyo Streets\xE2\x80\x9D?", "Your changes will be lost if you don\xE2\x80\x99t save them.",
+                           {{"Cancel"}, {"Don't save", true}, {"Save", false, true}});
+                else
+                    d.show("Delete 3 photos?", "They are removed from the project. The files stay on disk.", {{"Cancel"}, {"Delete", true}});
+                for (double now = 0.0; now <= 400.0; now += kFrameMs) d.advance(now);
+                Frame f(640, 300);
+                backdrop(t, f, true);
+                d.renderOverlay(t);
+                save(f, name);
+            };
+            shot(Style::Auto, true, "family-confirm-auto");               // outlined beside a primary
+            shot(Style::Auto, false, "family-confirm-auto-single");       // filled when it is the only action
+            shot(Style::Filled, true, "family-confirm-default");          // what every existing caller still gets
+        }
+
+        void history(artboard::CairoTarget &t)
+        {
+            if (!wanted("family-history")) return;
+            HistoryView hv;
+            hv.width.set(900.0); hv.height.set(560.0);
+            hv.advance(0.0);
+            hv.show({HistoryView::Node{-1, "Open"}, HistoryView::Node{0, "Exposure +0.30"}, HistoryView::Node{1, "Contrast +12"},
+                     HistoryView::Node{1, "Temp 5600 K"}, HistoryView::Node{3, "Crop 16:9"}}, 4);
+            for (double now = 0.0; now <= 600.0; now += kFrameMs) hv.advance(now);
+            Frame f(900, 560);
+            backdrop(t, f, true);
+            hv.renderOverlay(t);
+            save(f, "family-history");
+        }
+
+        void marks(artboard::CairoTarget &t)
+        {
+            if (!wanted("family-wordmark")) return;
+            Frame f(520, 150);
+            backdrop(t, f, false);
+            const char *names[] = {"cosmo", "interstellar", "solaris"};
+            const artboard::Color accents[] = {artboard::Color::hex(0x4F7EF7), artboard::Color::hex(0x159387), artboard::Color::hex(0xDD5A0C)};
+            const artboard::Color keep = palette::primary();
+            DirtyDot dirty;
+            dirty.setImmediate(true);
+            double y = 26.0;
+            for (int i = 0; i < 3; ++i, y += 26.0)
+            {
+                palette::setAccent(accents[i]);
+                const double w = Wordmark::draw(t, names[i], 16.0, y + 13.0 * 0.35, 13.0);
+                // ...then the project name, and the unsaved dot after it, both placed by measurement.
+                const double nameX = 16.0 + w + 16.0;
+                t.setFill(palette::foreground());
+                t.drawText("Tokyo Streets", nameX, y + 12.0 * 0.35, 12.0, font::sansMedium());
+                dirty.draw(t, Point{nameX + t.measureText("Tokyo Streets", 12.0, font::sansMedium()) + DirtyDot::kGap, y});
+            }
+            palette::setAccent(artboard::Color::hex(0x4F7EF7));
+            Wordmark::draw(t, "cosmo", 300.0, 96.0, 46.0);
+            palette::setAccent(keep);
+            save(f, "family-wordmark-dirtydot");
+        }
+
+        void all()
+        {
+            artboard::CairoTarget target;
+            menus(target);
+            toasts(target);
+            confirms(target);
+            history(target);
+            marks(target);
+        }
+    }
+
     void usage()
     {
         std::printf(
@@ -1265,7 +1692,11 @@ int main(int argc, char **argv)
                     "scale-zoom-{000-before,060-mid,140-mid,999-after}\n"
                     "editor-split-seam  editor-crop-{free,16x9,custom}  editor-crop-zoom-*\n"
                     "editor-context-menu  editor-image-info  editor-image-info-scrolled\n"
-                    "editor-mask-draw-placing  editor-mask-draw\n");
+                    "editor-mask-draw-placing  editor-mask-draw\n"
+                    "editor-missing{,-mid}  editor-delete-confirm{,-mid}   (each at 1600x1000 and 1024x640)\n"
+                    "family-menu-{shortcuts,shortcuts-mid,disabled-hover,keyboard,plain}  family-context-menu\n"
+                    "family-toast-{info,warning,error,in-mid,out-mid,swap-mid,long}\n"
+                    "family-confirm-{auto,auto-single,default}  family-history  family-wordmark-dirtydot\n");
         return 0;
     }
 
@@ -1290,9 +1721,16 @@ int main(int argc, char **argv)
     // the size where a panel that only fits on the big one shows itself.
     const std::vector<int> sizes = {1600, 1000, 1280, 800};
 
+    family::all();   // R-FAMILY: the shared building blocks, on their own
     shotHomeEmpty(sizes[0], sizes[1]);
     shotHomeRecents(sizes, images);
     shotEditorEmpty(sizes[0], sizes[1]);
+    shotEditorEmpty(1024, 640);      // R-UX-7: the empty stage's notice, at a small window too
+    shotUxStates(sizes[0], sizes[1]); // R-UX-3 / R-UX-7
+    shotUxStates(1024, 640);
+    shotFamilyAdoption(sizes[0], sizes[1]);   // R-FAMILY-8…14: Cosmo adopts the family standard
+    shotFamilyAdoption(1024, 640);
+    shotFamilyAdoption((int)App::minLogicalWidth(), (int)App::minLogicalHeight());   // the window minimum
     shotAgent(sizes[0], sizes[1]);   // R-ASSIST-7
     shotAgent(sizes[2], sizes[3]);
     shotScales();   // R-SCALE: every offered scale, at the smallest window it permits

@@ -574,8 +574,17 @@ While a group is the edit target the right slot instead shows **"Group: <name>"*
 ellipsized to fit, DR-TOPBAR) as a **clickable, eased-hover** affordance (`groupNameRect`,
 `mNameHover`); `onNameClick` → opens rename (DR-TREE-5).
 
+**R-FAMILY-9 (2026-11-17).** Left to right: `Wordmark::draw("cosmo")`, the menus, the project name
+(left-aligned, `fitTextEnd`), the `DirtyDot` (`setDirty(bool)`, eased 200 ms, `dirtyAmount()`,
+`dirtyDotCentre()`); right to left: Export (61.75), the save icon (`saveRect()`, 20.5 box, lit by the
+dot's amount, `onSave` only while unsaved), the rail toggle, the filename readout (capped so the
+name keeps up to `kTitleKeepW` = 120; under `kFileMinW` = 36 only `(i/n)`). `kDotRoom` = 14.25.
+
 ### 4.2 MenuStrip
-The File/Settings/Develop/History/Preset bar. `struct Item{label,action}`, `struct Menu{title,
+The File/Edit/Develop/Preset/View bar (R-FAMILY-8; it was File/Settings/Develop/History/Preset). `struct Item{label,action,shortcut,enabled=true,separator=false}`
+(+ `Item::sep()`, `selectable()`; R-FAMILY-1: the last three opt-in — a right-aligned mono shortcut column
+measured in the paint, a 9.75 px hairline row, a dimmed row; `menuKey(KeyEvent)` for the keyboard,
+`cursorItem()`, `itemHoverAmount(i)`, `itemIndexAt(p)`, `shortcutRect(menu,i)`), `struct Menu{title,
 items}`; `addMenu`, `openIndex`, `close`, `pointInActiveArea`, `contentWidth`; `onOpenChanged(int)`.
 At most one dropdown open, drawn in `onOverlay`. Animated highlight (`mHiCenter/mHiW`, 190 ms) and
 dropdown reveal (`mDropReveal`, 160 ms); `HoverFade` for titles + items. `dropdownRect` min-width
@@ -806,6 +815,7 @@ child `PillButton` each). `setSelected(index)` (animates + fires `onChange`),
 `activeSegBox`, `idleText`, `activeText`, `padding=2`, `gap=2`, `edgeRadius`. The highlight
 (`mHiPos`, 220 ms EaseOutCubic) blends per-corner radii across the split point so rounding eases
 rather than snaps.
+`highlightPos()` — the LIVE eased slot index of the highlight, for a test or a follower (R-FAMILY-6).
 
 ### 6.3 PillButton
 A labeled clickable with idle/active style pairs. `setLabel`, `active`, `idleBox/activeBox`,
@@ -862,14 +872,35 @@ variable-length list, so `mDrag` grows three families of ids: `kDragPoint + i` (
   grabs a point where it is *drawn*.
 
 ### 7.2 HistoryView
-The "Show History Tree…" modal — a git-log branching layout of `struct Node{parent,label}`.
+The "History…" modal (Edit ▸ History…, R-FAMILY-8) — a git-log branching layout of `struct Node{parent,label}`.
 `show(nodes,current)`, `setCurrent`, `scrollBy`, `hide`, `isOpen`, `onSelect(int)`. DFS lane
 layout (first child keeps the lane; others open new lanes); click a node to jump, drag to pan,
 close-X or click-outside to close; eased pan (`mPanXAnim/mPanYAnim`, per-interaction durations),
-`mAppear` open 150/close 110 ms + a 12 px rise.
+`mAppear` open 150/close 110 ms + a 12 px rise. Title `title` (default "History") at 14 px SemiBold, card
+`radius::control()` (R-FAMILY-7).
+
+### 7.2b App: the family standard (R-FAMILY-8…14)
+`enum class Shortcut` + `static shortcutFor(key, ctrl, shift)` + `shortcut(key, ctrl, shift)` (the
+keys, gated on `modalOpen()` / open menu / `isTextEditing()` / Loading); `windowTitle()`;
+`toast()` / `showToast(kind, text)` / `exportFinished(written, failed, why)` / `saveProjectAs(path)`;
+`requestNewProject()`; `setAgentShown(bool)` / `agentShown()`; `topBar()` / `home()` for tests.
+Private: `menuItems(menu)`, `menuStateKey()`, `refreshMenus()`, `askUnsaved(proceed, forget)`,
+`renderScreen` (the old `render` body; `render` adds the toast), `onServiceEvent`. The toast rests
+at `y = TopBar::kHeight + 4`, band = the logical width. `HomeScreen`: `showsEmptyState()`,
+`emptyButtonRect()`; `kEmptyBlockH` = 13 + 8 + 11 + 16 + 34.
+
+### 7.2a Toast, Wordmark, DirtyDot (R-FAMILY-2, -5)
+`Toast` — `enum Kind{Info,Warning,Error}`; `show(kind,text,nowMs)` / `show(kind,text)`; `kHeight=28`, `kBarW=3`,
+`kSlide=12`, `kMaxWidth=640`, `kSideMargin=32`, `kGlyph=12`; `mAmount` (150 in EaseOut / 3200 hold / 300 out
+EaseInOut), `mSwap` (200, EaseInOut) cross-fades a replaced toast; `rect()`, `amount()`, `swapAmount()`, `kind()`,
+`text()`, `isShowing()`, `translate`. Painted in `onOverlay`; the caller sets x / y / width.
+`Wordmark::draw(t,name,x,baselineY,sizePx,alpha)` → width; `Wordmark::width(t,name,sizePx)`; `kTrackPerPx=-0.03`.
+`DirtyDot` — `set(bool)`, `setImmediate(bool)`, `advance(nowMs)`, `amount()`, `draw(t,centre,alpha)`; `kRadius=3`,
+`kGap=8`; 200 ms EaseOut.
 
 ### 7.3 ContextMenu
-A right-click popup of `struct Item{label,action}` at the cursor. `open(items,x,y)` (nudged to stay
+A right-click popup of `struct Item{label,action,shortcut,enabled=true,separator=false}` (R-FAMILY-1, as
+MenuStrip's: `menuKey`, `cursorItem`, `itemHoverAmount`, `itemIndexAt`, `shortcutRect`) at the cursor. `open(items,x,y)` (nudged to stay
 on-screen), `close`, `isOpen`. `mAppear` open 130/close 100 ms; per-item `HoverFade`. Fed by the
 photo/filmstrip/preset-tree `onContext` callbacks via the App.
 **Rename mode (DR-TREE-5):** `enterRenameMode(name)` (from the "Rename Group" item — morphs an open
@@ -925,7 +956,9 @@ false during the closing fade, so gating on it would freeze the close mid-fade.
 ### 7.6 ConfirmDialog
 A confirm/choose prompt (save-or-discard on leaving an edited project). `ConfirmDialog(accent)`;
 `struct Button{label,bool destructive,bool primary,onClick}`; `show(title,message,buttons)`;
-`close()` (snap shut). Right-aligned button row; destructive=red, primary=accent, else outline. OPT-IN (Solaris
+`close()` (snap shut). Right-aligned button row; destructive=red, primary=accent, else outline.
+`setDestructiveStyle(Filled|Outlined|Auto)` (R-FAMILY-3; default Filled; Auto = outlined beside a primary, filled
+alone; `drawsOutlined(i)`; `setOutlinedDestructive(bool)` kept = Outlined/Filled). OPT-IN (Solaris
 R-ACCESS-2): `relabel(title, message, labels)` replaces the words, its fade untouched; cosmo never calls it.
 
 ### 7.6b InfoDialog (R-INFO)

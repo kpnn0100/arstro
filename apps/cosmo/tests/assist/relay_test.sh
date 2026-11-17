@@ -10,7 +10,7 @@ W=$(mktemp -d)
 SOCK="${XDG_RUNTIME_DIR:-/tmp}/cosmo-relay-$$.sock"
 export XDG_CONFIG_HOME="$W/cfg"
 SERVE=""
-cleanup() { [ -n "$SERVE" ] && kill "$SERVE" 2>/dev/null; rm -rf "$W" "$SOCK"; }
+cleanup() { [ -n "$SERVE" ] && kill "$SERVE" 2>/dev/null || true; rm -rf "$W" "$SOCK"; }
 trap cleanup EXIT
 
 # A 64x48 photo, and a project holding it.

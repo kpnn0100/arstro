@@ -1,9 +1,14 @@
 /*
- *  cosmo_v2 by arstro — ActionBar: the pinned Save/Import/Export row at the
- *  literal bottom of the right column (App.tsx: `px-3 py-2.5 border-t
- *  bg-[#141414]`, three equal-width buttons, Save filled-primary, the other
- *  two outline). Always visible regardless of which tab or how tall its
+ *  cosmo_v2 by arstro — ActionBar: the pinned PRESET row at the literal bottom
+ *  of the right column (App.tsx: `px-3 py-2.5 border-t bg-[#141414]`, three
+ *  equal-width buttons). Always visible regardless of which tab or how tall its
  *  content is, per the design brief.
+ *
+ *  R-UX-4 amends the mock: it read "Save / Import / Export" with Save filled in
+ *  the accent, which made a preset action look like the project's save and the
+ *  photo's export. The labels now name what they act on - "Save preset / Import
+ *  preset / Export preset" - and all three are outline chips; the accent fill
+ *  belongs to the top bar's Export, the photo's.
  */
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
@@ -23,6 +28,8 @@ namespace cosmo_v2
 
         std::function<void()> onSave, onImport, onExport;
         void layout();  // call after width changes
+        /** Button `i`'s box (0 Save preset, 1 Import preset, 2 Export preset) - for a test's click. */
+        artboard::Rect buttonRect(int i) const;
 
         void advance(double nowMs) override;  // drives the button-hover fade
 

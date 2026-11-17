@@ -108,11 +108,26 @@ namespace cosmo_v2
         void zoomAbout(double factor, const artboard::Point &localInCanvas);  // localInCanvas == PhotoCanvas-local == ImageView-local
         void resetZoom();
 
+        // ── R-UX-7: the stage says what state it is in ──
+        // An empty project was a blank black rectangle with no way to add a photo, and a photo
+        // whose file is gone showed the PREVIOUS photo and no word of explanation. A notice is a
+        // centred block over the stage: a title, one or two muted lines, and (Empty only) a
+        // button. It fades in and out; a change of notice fades out, swaps, fades in.
+        enum class Notice { None, Empty, Missing };
+        /** Record which notice is wanted (`detail`: the missing file's path). A setter has no
+         *  clock - `advance` starts the fade. */
+        void setNotice(Notice kind, const std::string &detail = std::string());
+        Notice notice() const { return mNoticeShown; }
+        double noticeAmount() const { return mNoticeAmt.value(); }   // LIVE, eased
+        artboard::Rect noticeButtonRect() const;                     // Empty's "Add photos" (canvas-local)
+        std::function<void()> onAddPhotos;
+
         void layout();  // call after width/height changes
         void advance(double nowMs) override;  // starts the mode fade the pill could not (no nowMs)
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
+        void onOverlay(artboard::IRenderTarget &t) const override;   // the notice (R-UX-7), above the photo
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
@@ -131,6 +146,12 @@ namespace cosmo_v2
 
         // The dissolving pair: fixed in z-order (base below, top above), so the only thing that
         // moves is mPhotoTop->opacity and `mTopIsCurrent` says which one holds the newest pixels.
+        // R-UX-7 notice state: wanted (the setter) vs shown (what is drawn), and the eased amount.
+        Notice mNoticeWanted = Notice::None, mNoticeShown = Notice::None;
+        std::string mNoticeDetailWanted, mNoticeDetail;
+        artboard::AnimatedProperty mNoticeAmt{0.0}, mNoticeBtnHover{0.0};
+        bool mNoticeInit = false, mNoticeLeaving = false, mNoticeBtnHovered = false;
+
         std::shared_ptr<artboard::ImageView> mPhotoBase;
         std::shared_ptr<artboard::ImageView> mPhotoTop;
         bool mTopIsCurrent = false;

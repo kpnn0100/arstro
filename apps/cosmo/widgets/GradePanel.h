@@ -34,6 +34,11 @@ namespace cosmo_v2
         void setState(const State &s);
         void layout();
         void scrollBy(double delta);
+        /** OPT-IN (cosmo R-UX-9): section headers in capitals. Default off - drawn as written. */
+        bool upperHeaders = false;
+        /** Read-only scroll state, for a host that draws its own indicator (cosmo R-UX-9c). */
+        double scrollOffset() const { return mScroll.value(); }
+        double contentHeight() const { return mContentHeight; }
 
         std::function<void(int region, double hue, double sat, double lum)> onRegionChange;
         std::function<void(double)> onBalanceChange;

@@ -25,6 +25,10 @@ namespace cosmo_v2
         HistogramWidget();
 
         void setHistogram(const HistogramData &data) { mData = data; mHasData = true; }
+        /** No photo, no curve: back to the empty plot (cosmo R-UX-2 - a closed project's
+         *  histogram is not the last photo's). Additive; nothing calls it by default. */
+        void clear() { mData = HistogramData{}; mHasData = false; }
+        bool hasData() const { return mHasData; }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;

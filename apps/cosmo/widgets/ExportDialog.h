@@ -74,7 +74,17 @@ namespace cosmo_v2
         /** Open on a freshly-snapshotted tree. `preselect` are the slots that start
          *  ticked (the current selection); empty = every image. */
         void show(std::vector<Node> nodes, const std::vector<int> &preselect);
+
+        /** The mono line under the destination row: the full path the FIRST ticked photo will
+         *  be written to - from `exportNaming::outputPath`, the function the writer itself
+         *  calls, so it carries the `_edit` / `-1` an export beside its source gets
+         *  (R-EXPORT-3a). Public so a test reads what the user reads. */
+        std::string previewPath() const;
+        /** Replace the "does this file exist" probe behind `previewPath` (tests only). */
+        void setExistsProbe(std::function<bool(const std::string &)> probe) { mExistsProbe = std::move(probe); mPreviewKey.clear(); }
         bool isOpen() const { return mOpen && !mClosing; }
+        /** The App's modal gate hands every key here while the dialog is open (R-UX-1). */
+        bool modalKey(const artboard::KeyEvent &e) { return handleKey(e); }
         /** True while the batch is being written — the host is mid-export and the
          *  dialog is showing its progress state (R-EXPORT-6). */
         bool isExporting() const { return mExporting; }
@@ -135,7 +145,6 @@ namespace cosmo_v2
         int checkedCount() const;
         std::vector<int> checkedSlots() const;       // in tree order
         std::string firstCheckedFolder() const;      // default destination (R-EXPORT-3)
-        std::string previewFilename() const;         // the example name under the destination row
 
         // ── geometry ──
         double formContentH() const;                 // the body's full (unscrolled) height
@@ -149,7 +158,7 @@ namespace cosmo_v2
         artboard::Rect treeRect() const;             // the bordered tree box (inside the body)
         double bodyTop() const;                      // content y of the first section, at scroll 0
         // Section geometry is derived from one running cursor so a row can never
-        // overlap its neighbour (implement_artboard §2 "snap, don't stack").
+        // overlap its neighbour (arstro.artboard.implement §2 "snap, don't stack").
         struct Layout
         {
             artboard::Rect masterBtn, tree, selInfo;
@@ -224,6 +233,8 @@ namespace cosmo_v2
         // form state
         bool mSameAsSource = true;
         std::string mDestination;                    // explicit folder (when !mSameAsSource)
+        mutable std::string mPreviewKey, mPreviewPath;   // previewPath()'s answer, kept per input set
+        std::function<bool(const std::string &)> mExistsProbe;   // empty = the real disk
         bool mUsePrefix = false, mUseSubfolder = false;
         std::string mPrefix = "export_", mSubfolder = "exported";
         int mFormat = 0;                             // index into kFormats

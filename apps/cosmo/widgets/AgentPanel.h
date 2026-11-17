@@ -2,6 +2,9 @@
  *  cosmo — AgentPanel: the right column's "Agent" tab, where the photographer talks to their own
  *  agent (R-ASSIST-7).
  *
+ *  Shared with the sibling apps (R-ASSIST-13): it includes the seam header, not cosmo's model, and
+ *  the two sentences that are cosmo's are setters (setIntro, setDefaultAgentName).
+ *
  *  The agent is the user's (Claude Code by default), run by the host beside the window, editing the
  *  open project through cosmo's own tools with the colour-grading skill loaded (R-ASSIST-1..6). This
  *  panel is only its VIEW: it shows `AppModel::assist` and sends `assist start | send | stop` — the
@@ -26,7 +29,7 @@
  */
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
-#include "../core/service/AppModel.h"
+#include "../core/assist/Assistant.h"   // the seam alone (R-ASSIST-13): AssistModel, AgentChoice
 #include "PillButton.h"
 #include "HoverFade.h"
 #include "MarkdownText.h"
@@ -65,6 +68,15 @@ namespace cosmo_v2
         std::function<void()> onDetect;
         /** The user's current `agent=` setting, so the choices open on it. */
         void setCurrentAgent(const std::string &setting) { mCurrentAgent = setting; }
+
+        // ── what an application says in its own words (R-ASSIST-13); the defaults are cosmo's ──
+        /** The empty state's sentence: what to ask for, and what is ready. `{agent}` is replaced by
+         *  the agent's name; a line break is a paragraph. */
+        void setIntro(const std::string &text);
+        const std::string &intro() const { return mIntro; }
+        /** The name shown for the agent before one has named itself (the app's default agent). */
+        void setDefaultAgentName(const std::string &name);
+        const std::string &defaultAgentName() const { return mDefaultAgent; }
 
         /** Whether the message field has the keyboard - App::isTextEditing() asks, so its plain-key
          *  shortcuts (o, s, Delete) do not fire while the user types to the agent. */
@@ -142,6 +154,10 @@ namespace cosmo_v2
         mutable std::vector<std::string> mIntroLines;   // the empty state's sentence, wrapped once per width
         mutable double mIntroAt = -1.0;
         mutable std::string mIntroAgent;
+        std::string mIntro =
+            "Ask {agent} to grade this project \xE2\x80\x94 for example \xE2\x80\x9Cmake these cinematic\xE2\x80\x9D.\n"
+            "The colour-grading skill is loaded. Every edit lands here, one undoable step at a time.";
+        std::string mDefaultAgent = "Claude Code";
         int mSendLive = -1;   // the last applied Send dimming (-1 = never), so it eases only on a change
 
         // ── the choices (R-ASSIST-11) ──

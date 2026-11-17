@@ -293,12 +293,22 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/PixelBudget.h` | host | how big the engine's pixel caches may be on THIS machine — physical RAM queried here because it is the only layer allowed a platform call (R-MEM-1/5, fixes D-44) |
 | `apps/cosmo/PinnedDecoder.h` | host | the ONE decoder the host constructs: wraps `NativeImageDecoder` and pins the decoding thread first, so the budget covers every decode and not only the load pool's (R-CPU-2c, fixes D-41) |
 | `apps/cosmo/App.{h,cpp}` | app | screen state machine, transitions, Segment tree, host-callback seam |
-| `apps/cosmo/Theme.{h,cpp}` | app | palette, radii, font family names, type ramp |
+| `apps/cosmo/Theme.{h,cpp}` | app, the family's token header | palette (incl. `warning()`), radii, font family names, type ramp, the `space::` ladder and the `motion::` durations (R-FAMILY-4) |
 | `apps/cosmo/touch/*` + `apps/cosmo/TouchViewport.h` | app | the TOUCH shell (`arstro::cosmo_touch`), built into the desktop binary too: `linux_main.cpp` holds one beside `App` and cross-fades to it when `touchUi` is set (R-TOUCH-6). Same service, so the switch keeps the project open |
 | `apps/cosmo/EditCommands.{h,cpp}` | app | the one place a moved control becomes a `Command`, shared by BOTH shells (R-TOUCH-1) |
 | `apps/cosmo/EmbeddedFonts.{h,cpp}` + `cmake/embed_fonts.cmake` | app (host) | the typeface, compiled into the binary: the script generates a C++ array from the vendored TTFs and `registerEmbeddedFonts()` hands them to `CairoTarget::registerFontMemory` — no font file, no Fontconfig, no system font (R-FONT-1, Artboard FR-22a) |
 | `apps/cosmo/Log.{h,cpp}` | app | file log + crash backtrace |
 | `apps/cosmo/ExportWriter.{h,cpp}` | app (host) | batch export encoder: path resolution, JPEG/PNG/TIFF via GdkPixbuf, EXIF/GPS/sRGB metadata (R-EXPORT-3/4/5) |
+| `apps/cosmo/widgets/ExportNaming.h` | app (header-only, no toolkit) | the ONE function that names an exported file: never the source (`_edit`), never an existing file (`-1`, `-2`); called by `ExportWriter` and by the Export dialog's preview line (R-EXPORT-3a) |
+| `apps/cosmo/widgets/TextFit.h` | app (header-only) | `fitTextEnd` / `fitTextFront`: ellipsize to a pixel width with the render target's real metrics (R-UX-6) |
+| `apps/cosmo/Version.h` | app | `COSMO_VERSION`, defined by the build (`apps/cosmo/CMakeLists.txt`), with a `"dev"` fallback (R-UX-5) |
+| `apps/cosmo/widgets/BrandMark.{h,cpp}` | app, shared with Interstellar and Solaris | the three app logos and their three animations: a pure `poseAt()`, a `draw()`, and the `Player` a widget owns (R-BRAND) |
+| `apps/cosmo/widgets/Toast.{h,cpp}` | app, shared with Interstellar and Solaris | the family's one transient message: Info / Warning / Error, eased in and out, a second one cross-fades; the caller places it (R-FAMILY-2) |
+| `apps/cosmo/widgets/Wordmark.h` | app (header-only), shared | `<name>.` with the accent dot at the MEASURED end of the name; returns its width (R-FAMILY-5) |
+| `apps/cosmo/widgets/DirtyDot.h` | app (header-only), shared | the unsaved dot: foreground, radius 3, an eased 0 … 1 the owner draws at a measured point (R-FAMILY-5) |
+| `apps/cosmo/widgets/MenuStrip.{h,cpp}`, `ContextMenu.{h,cpp}` | app, shared | the menus; an item may carry a shortcut, be a separator, be disabled, and is reachable by `menuKey` (R-FAMILY-1) |
+| `apps/cosmo/widgets/ConfirmDialog.{h,cpp}` | app, shared | the confirm prompt; its destructive button is Filled / Outlined / Auto (R-FAMILY-3) |
+| `apps/cosmo/SplashWindow.h` | host (GTK, header-only) | the borderless window a branded `SplashScreen` plays in for a host with no startup work — Interstellar's and Solaris's (R-SPLASH-6) |
 | `apps/cosmo/widgets/*` | app | ~40 `Segment` widgets (chrome, panels, controls, overlays, dialogs) — plus `SplashScreen`, which the host renders in its OWN borderless window before the main one exists (R-SPLASH) |
 | `apps/cosmo/core/service/CosmoService.{h,cpp}` | core | **the application** — `dispatch(Command)` / `pump(nowMs)` / `model()`, owning the load, the export queue, settings and recents (R-SVC-1) |
 | `apps/cosmo/core/service/Command.{h,cpp}` | core | the one way in, plus the single parser/formatter for its text form (R-SVC-2/5) |
@@ -338,6 +348,8 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/tests/assist/relay_test.sh` | test (ctest `cosmo_mcp_attach`) | the relay against `serve`, edit read back from the served session (R-ASSIST-3) |
 | `apps/cosmo/core/assist/Assistant.h` | core (seam) | `IAssistant` + `AssistLaunch` / `AssistOutput`: the service holds the user's agent through it and polls it without blocking (R-ASSIST-1/6) |
 | `apps/cosmo/AssistProcess.{h,cpp}` | host | `ProcessAssistant`: the agent as a process — Claude Code over stream-JSON, any other command once per message; workspace, skill links, MCP config, process group (R-ASSIST-2/4/5/6) |
+| `apps/cosmo/AssistProfile.h`, `CosmoAssistProfile.{h,cpp}` | host | what makes the agent Cosmo's: names, CLI, environment, skills, prompts, allowed tools (R-ASSIST-13); a sibling app writes its own |
+| `apps/cosmo/core/assist/AssistConversation.{h,cpp}` | core (seam) | the conversation's state machine and messages, owned by a service; knows no application (R-ASSIST-13) |
 | `apps/cosmo/tests/assist/agent_test.sh` | test (ctest `cosmo_assist`) | a fake `claude` edits the served project through the relay; one-shot agents; a missing agent refused (R-ASSIST) |
 | `apps/cosmo/HttpLite.{h,cpp}` | host | one HTTP/1.1 request to a LOCAL server (plain http; Content-Length, chunked or close) - local-model detection and `cosmo-cc agent` (R-ASSIST-9) |
 | `apps/cosmo/cli/main.cpp` `cmdAgent` · `remoteBackend` | front end (CLI) | `cosmo-cc agent`: an ACP agent for a model on an OpenAI-compatible endpoint, cosmo's tools as functions, `cosmo_grade` (R-ASSIST-9/10) |

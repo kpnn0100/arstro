@@ -68,6 +68,8 @@ namespace cosmo_v2
 
         // (channel, points): channel 0 = RGB master, 1..3 = R/G/B.
         std::function<void(int, Points)> onCurveChange;
+        /** OPT-IN (cosmo R-UX-9): the section header in capitals. Default off - drawn as written. */
+        bool upperHeaders = false;
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;

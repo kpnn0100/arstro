@@ -97,8 +97,8 @@ is drawn identically everywhere (letter-spacing `-0.03·size`, accent dot after 
 ### DR-HOME-1 Launcher
 On start with no file arguments the app shows the **Home** screen (`Screen::Home` default,
 `App.h:190`; `linux_main.cpp:881-886`). Home is `widgets/HomeScreen` — a 300 px sidebar
-(wordmark, tagline, New Project / Open Project… / Import Catalog… actions, reserved
-Settings/What's New/Help links, version) and a right pane with a "Recent Projects" header +
+(wordmark, tagline, New project / Open project… / Import catalog… actions - sentence case since
+DR-FAMILY-14 - reserved Settings/What's New/Help links, version) and a right pane with a "Recent projects" header +
 count + search box and an auto-fill `minmax(220px,1fr)` grid of project cards plus a dashed
 New-Project card. HomeScreen is **not** part of the editor Segment tree; the App advances and
 renders it separately (`App.cpp:463-476`).
@@ -172,9 +172,17 @@ The search box is a focusable `artboard::TextBox`; typing filters recents by
 case-insensitive substring of the name; no matches shows the empty-state placeholder
 (`HomeScreen.cpp:259-264`).
 
-### DR-HOME-6 Reserved affordances
-Settings / What's New / Help & Documentation links and the version string are drawn with hover
-feedback but are inert (R-HOME-8).
+### DR-HOME-6 The sidebar's bottom block (R-HOME-8, AMENDED by R-UX-5)
+One link, **Settings** (live, R-SETTINGS-5), and the version line under it. What's New and Help &
+Documentation are gone: `kLinkCount = 1` in `widgets/HomeScreen.cpp`, the hit test, the hover ids and
+the paint all loop over it, and `kVersionY` / `kBottomBlockH` (97) are derived from it. The version is
+`HomeScreen::versionText()` = `"cosmo v" COSMO_VERSION`; `COSMO_VERSION` is set once in
+`apps/cosmo/CMakeLists.txt` and handed to `HomeScreen.cpp` as a source-file definition (`Version.h`
+holds a `"dev"` fallback for a hand-rolled compile). `HomeScreen::settingsLinkRectFor(h)` publishes
+where the link is, and the shots aim at it. `minContentHeight()` is `max(sidebar sum 426, one card
+row, kSettingsModalFloorH 466)` - see R-HOME-11's amendment and D-82. Guard: `cosmo_widget_tests`
+`homeHasNoDeadLinksAndShowsTheBuildsVersion`. Not yet from the build: the splash's "v1.0.0"
+(`SplashScreen.h`, shared), the touch shell's "v1.0.0-beta" and the Android manifest's versionName.
 
 ---
 
@@ -240,7 +248,7 @@ frame so children reflow while the rail width animates (`App.cpp:489`).
 
 ### DR-SHELL-2 Top bar (`widgets/TopBar`)
 Left: the `cosmo.` wordmark (click → `requestHome`, i.e. save-or-discard confirm then home) and
-the `MenuStrip` menu bar. Center: the open project's name. Right: the current image filename +
+the `MenuStrip` menu bar. After the menus (left, DR-FAMILY-9 - it was centred): the open project's name and the unsaved dot. Right: the current image filename +
 `(i/n)` index, and the left-rail toggle button (`icon::panelLeft`). `setRailOpen` reflects rail
 state on the toggle.
 
@@ -248,6 +256,8 @@ state on the toggle.
 - **File**: Home; Open…; Save (Ctrl+S) → `saveWorkspace()`; Save As… (Ctrl+Shift+S) → workspace
   save dialog.
 - **Settings**: Engine Settings… (modal); Reset Workspace.
+  **(SUPERSEDED by DR-FAMILY-8, 2026-11-17: the menus are File · Edit · Develop · Preset · View; this
+  list is the pre-family one.)**
 - **Develop**: Copy Settings; Paste to Selected; Paste to All Images; Group Selection; Ungroup
   Selection.
 - **History**: Undo (Ctrl+Z); Redo (Ctrl+Y); Show History Tree….
@@ -260,6 +270,7 @@ Text input is handled first (BackSpace + printable unicode to a focused field). 
 a transition, all editor keys are swallowed. Editor shortcuts: **Ctrl+Z** undo (Ctrl+Shift+Z
 redo); **Ctrl+Y** redo; **Ctrl+S** save project (Ctrl+Shift+S = Save As); plain **o** open;
 plain **s** export PNG; **Delete** delete selected (R-PERSIST-2).
+**(SUPERSEDED by DR-FAMILY-13, 2026-11-17: plain `o` and `s` are gone; the keys are `App::shortcut`'s.)**
 
 ### DR-SHELL-5 Left rail & preset tree
 `LeftRail` shows a "PRESETS" header over a scrollable `PresetTree`. The tree flattens
@@ -624,10 +635,12 @@ Delete controls, a Feather slider (0..1), then Basic-style tone/colour/presence 
 the selected mask's `LocalAdjust`. Per-mask controls are hidden until a mask is selected. The
 overlay bridge (`selectedMaskParams`/`writeSelectedMask`) round-trips dragged geometry.
 
-### DR-EDIT-9 Action bar (`ActionBar`)
-A pinned Save / Import / Export row, always visible at the column's bottom (`kHeight=39`). In the
-app these are wired to Save Preset, Import Preset, and Export Preset respectively
-(`App.cpp:95-97`).
+### DR-EDIT-9 Action bar (`ActionBar`) (AMENDED by R-UX-4)
+A pinned row of three PRESET actions, always visible at the column's bottom (`kHeight=39`):
+**Save preset / Import preset / Export preset**, three outline chips (none accent-filled), each
+label measured, centred with its glyph and ellipsized to its button. Wired in `App.cpp` to
+`presetSaveClicked`, `onImportPresetRequested` and `presetExportClicked`. `ActionBar::buttonRect(i)`
+publishes each box.
 
 ---
 
@@ -722,8 +735,8 @@ any node. The History modal (`widgets/HistoryView`, Show History Tree…) draws 
 style, click-to-jump, drag-to-pan, painted in the overlay pass while modal. Two OPT-IN members for a host
 that reuses it (Solaris R-HIST-3, 2026-10-16): `easeCurrent` eases the current node's highlight from the node it
 leaves to the node it reaches (200 ms) instead of jumping, and `hint` replaces the line under the title (a host whose
-keys are settings names its own) — and `title` (default "HISTORY"), a host's word for the card's header (Solaris
-R-ACCESS-2, 2026-10-17). Cosmo leaves them at their defaults, so it draws exactly as before; the read-only
+keys are settings names its own) — and `title` (default "History" — it was "HISTORY" until R-FAMILY-7, DR-FAMILY-7),
+a host's word for the card's header (Solaris R-ACCESS-2, 2026-10-17). Cosmo leaves them at their defaults; the read-only
 `appearAmount`, `nodeCount`, `current`, `nodePoint` and `currentAmount` are for a host's tests.
 
 ### DR-HIST-3 History persists with the project
@@ -969,6 +982,23 @@ host folder chooser → `setDestination()`. Two optional modifiers below — **F
 **Export to subfolder** — each a checkbox + label + hand-rolled text field (focus + `handleKey`, as
 in `ContextMenu`'s rename box); the field is drawn muted and inert while its checkbox is off. A mono
 preview line under the row shows the resolved path + example filename, front-ellipsized.
+
+### DR-EXPORT-3a An export never overwrites a file (R-EXPORT-3a, D-72)
+One function names every output: `exportNaming::outputPath(req, sourcePath, fallbackName, exists)`
+(`widgets/ExportNaming.h`, header-only, no I/O but the `exists` probe, which defaults to
+`std::filesystem::exists`). It builds `<dir>/[<subfolder>/][<prefix>]<stem><ext>`; if that is the
+source file (compared as normalised paths) the stem gets `_edit`; then, while the name exists, `-1`,
+`-2`, … are tried (bounded at 9999). `exporter::resolvePath` (`ExportWriter.cpp`) is that function
+plus creating the folder, and the batch worker (`linux_main.cpp` `startExportBatch`) resolves each
+photo just before writing it, so two photos with one stem in one batch get two files.
+`ExportDialog::previewPath()` calls the same function for the first ticked photo, so the mono line
+under the destination row is the name that will be written (cached on the dialog's inputs, re-probed
+on `show()`). The scripted writers (`linux_main.cpp` `setImageWriter`, `cli/main.cpp`) pass their
+path through `exporter::awayFromSource(path, sourcePath)`: the same `_edit` rule for the source only -
+an explicit `--outdir` keeps replacing its own earlier outputs. Guards: `cosmo_ui_tests`
+`anExportBesideTheSourceLeavesTheOriginalAlone` (a JPEG exported beside itself with the defaults -
+the original is byte-identical, the output is `<stem>_edit.jpg`, a second export is `<stem>_edit-1.jpg`),
+`cosmo_widget_tests` `test_export_preview_shows_the_real_output_name`.
 
 ### DR-EXPORT-4 Format / size / quality
 Format chips **JPEG · PNG · TIFF** (exactly what the GdkPixbuf writer produces). Size chips
@@ -1804,6 +1834,26 @@ unit (spinner + gap + text) and ellipsizes at `kStatusMaxFrac` of the window. **
 the room available, not against the string's own measured width** — the latter truncates *every*
 string, since appending `…` always makes it wider.
 
+### DR-SPLASH-6 The splash takes a brand (R-SPLASH-6)
+`SplashScreen::Brand` (`widgets/SplashScreen.h`) carries the logo, the wordmark, the tagline and the
+version; `cosmoBrand()`, `interstellarBrand()` and `solarisBrand()` are the three. The default
+constructor is cosmo's brand, so `linux_main.cpp` is unchanged. `SplashWindow.h` (header-only, GTK,
+host-side) is `runSplash(brand, uiScale, done)`: it owns a 420×260 borderless window, ticks the
+splash at 16 ms, asks it to leave once the logo has shown up (`setProgress(1)` + `beginExit()`), and
+calls `done()` when `isGone()` — Interstellar's and Solaris's `linux_main.cpp` show their main
+window there. Both skip it with a path argument or `INTERSTELLAR_NO_SPLASH` / `SOLARIS_NO_SPLASH`.
+
+### DR-SPLASH-7 The logo's life in the splash (R-SPLASH-7, R-BRAND)
+`SplashScreen` owns a `brand::Player`. `begin()` calls `showUp(now, thenIdle = true)`; the mark is
+drawn in a 52 px box, 26 px from the top, and the wordmark's baseline is `0.52 × height`. When the
+exit is due (`mExitRequested` and the bar at 99.5%) `advance()` calls
+`requestOut(now, Leave::EaseOut)`; when the Player reports `leaving()` the chrome's `mExit` starts a
+fade of `0.6 × 720 ms` (`EaseInOutCubic`), so text and bar are gone at 60% of the logo's exit.
+`isGone()` is `mExiting && mark.gone() && mExit ≈ 0`, and `onPaint` returns only on `isGone()` —
+returning on `mExit ≈ 0` cut the logo's disappear off mid-flight (seen in the first render).
+`uiDetail()` ends with `mark=<in|idle|settle|out|gone|rest>`. Verified by rendering six moments of
+all three brands headlessly (show up, flying, loading, leaving ×3).
+
 ### DR-SPLASH-5 The progress bar, and why it waits (R-SPLASH / R-LOADUX-3)
 An inset rounded bar pinned above the version line: `kBarInset = 44` (the tagline's optical
 margin), `kBarBottom = 34`, `kBarH = 4`, a track at 10% white with the fill in the accent colour,
@@ -1899,6 +1949,12 @@ front, arrival order can no longer reparent anything.
 from the frame clock) instead of a thumbnail. `EditSession::selectNode` on a pending leaf moves the
 selection but leaves `mCurrentSlot` alone, so the stage keeps what it was showing; `attachImage`
 points the editor at the photo if it is the one selected.
+
+**An offline photo survives a save (D-66, 2026-11-17).** A leaf that never got a slot keeps the
+project file's own record of it (`GNode::sourcePath`, and its `params` / `history` / `bypass`, set
+by `EditSession::setLeafSource` during the open), and `EditSession::saveWorkspaceAs` writes it back
+where it was. Before this the save walk wrote only leaves with a slot, so the photo and its edit
+left the file.
 
 ### DR-LOADUX-3 Meaningful progress
 `Filmstrip::setLoadProgress(done,total)` draws a 2 px determinate accent bar along the strip's top
@@ -2371,7 +2427,7 @@ Two decisions worth naming:
   screen still showed the old frame. A predicate a host may call freely must not have a side effect —
   caught by the test below, not by reading the code.
 - **It is deliberately conservative, not exact.** Artboard's `Segment` has no tree-wide "is anything
-  animating" query, and adding one is an Artboard change — a submodule, and `implement_artboard`'s
+  animating" query, and adding one is an Artboard change — a submodule, and `arstro.artboard.implement`'s
   territory. So the 1000 ms window is longer than every duration in cosmo's motion vocabulary: it can
   waste a few frames and can never truncate a tween. Being wrong the other way is a visible stutter.
 
@@ -2397,7 +2453,7 @@ click opened one of my own projects.
 **Not done, and deliberately:** `CairoTarget::buildEntry` still premultiplies every new preview frame
 at 1.75 ms although the engine emits alpha=255 for every photo, and `drawImage` still rescales the
 full photo every frame rather than caching by destination size. Both are in **Artboard**, which is a
-submodule and belongs to `implement_artboard`, not to this skill. Left as T3.4 with the measurement
+submodule and belongs to `arstro.artboard.implement`, not to this skill. Left as T3.4 with the measurement
 attached so whoever picks it up does not have to re-derive it.
 
 ### DR-LOADPERF-5 A load decodes cheaply; an export decodes properly (R-LOADPERF, D-24)
@@ -2869,7 +2925,7 @@ release audit, then asked for directly.
 
 **As built.** `App::requestQuit()` is `requestHome`'s twin: a clean project calls `onQuitApproved`
 immediately, a dirty one raises the **same** modal with the same three buttons in the same order
-(Cancel · Discard · Save), because a user who has answered that question once should not have to read
+(Cancel · Don't save · Save - DR-FAMILY-12; it read Discard), because a user who has answered that question once should not have to read
 it again. The host's `delete-event` handler **returns TRUE** — refusing the close — and calls
 `requestQuit()`; `onQuitApproved` is wired to `gtk_main_quit`. Refusing matters: the dialog is drawn
 *inside* the window, so a window that has already begun closing has nowhere to ask.
@@ -3820,6 +3876,29 @@ with the live offset short of its target; a reader scrolled up stays put; Stop);
 `agent-empty`, `agent-working`, `agent-message-arriving`, `agent-conversation`, `agent-overflow` at 1600×1000
 and 1280×800.
 
+### DR-ASSIST-13 One agent module, parameterised by an AssistProfile (R-ASSIST-13)
+- `AssistProfile.h`: the struct (names, the CLI and its `attachArgs`, `localAgentArgs` or empty when
+  the app ships no local-model loop, `envPrefix`, skills and blurbs, `agentsMd` / `systemPrompt`
+  builders, `allowedTools`, `workspace`). `CosmoAssistProfile.{h,cpp}`: Cosmo's values.
+- `AssistProcess.{h,cpp}`: `ProcessAssistant(profile, config)`; every former literal reads the
+  profile (`mcpServerJson`, `claudeArgv`, `permitted`, `agentsMd`, `detect`, `findCc`,
+  `defaultSkills`, `configFor`). It includes nothing of `cosmo_core` but `core/assist/Assistant.h`.
+- `core/assist/Assistant.h` now also holds `AssistModel` / `AssistMessageModel`; `AppModel.h` uses
+  them from there. `core/assist/AssistConversation.{h,cpp}`: the state machine and messages that
+  were `CosmoService`'s own code, given the service's `AssistModel` and `Hooks` (emit the two
+  events, build the launch, the refusal sentence). `CosmoService` owns one and forwards.
+- `widgets/AgentPanel.{h,cpp}` includes the seam header only and takes its intro sentence and
+  default agent name through setters whose defaults are Cosmo's words.
+- **What a sibling app compiles and supplies:** `AssistProcess.cpp`, `core/assist/AssistConversation.cpp`,
+  `widgets/AgentPanel.cpp`, `widgets/MarkdownText.cpp` (+ Roboto Italic); an `AssistProfile`; in its
+  service an `AssistModel` in the model, the four commands, the two events and the four settings;
+  in its host a factory making a `ProcessAssistant`, and a control socket for `mcp --attach`.
+- Proof: `cosmo_assist_profile` builds the workspace, MCP config, allowed tools and AGENTS.md for a
+  fake app "demo" and finds the profile's names and none of Cosmo's; `cosmo_assist`,
+  `cosmo_assist_acp`, `cosmo_mcp_attach`, `cosmo_core`, `cosmo_ui` unchanged and green (74 of 74).
+- Known drift, not fixed here: R-ASSIST-9 says Stop sends `session/cancel`; the code stops the
+  process instead.
+
 ### DR-ASSIST-3 The agent's tools, in the running application (R-ASSIST-3)
 
 **`snapshot`** (`CosmoService::snapshot`) selects the node like `analyze`, queues the edit or the as-shot
@@ -3854,3 +3933,336 @@ against — six checks, ending with the edit read back from the SERVED session w
 
 A socket path is limited to 107 bytes (`sun_path`); the session scratch dirs are longer, hence
 `$XDG_RUNTIME_DIR`.
+
+
+## 22. The 2026-11-17 UI/UX audit (R-UX)
+
+### DR-UX-1 One modal gate (R-UX-1, D-73)
+`App::modalOpen()` (`App.cpp`) is true while any of `mConfirmDialog`, `mInfoDialog`, `mExportDialog`,
+`mPresetDialog`, `mSettingsDialog`, `mHistoryView` is open. `App::key` asks it first (after the
+loading-screen swallow): the key goes to the topmost open modal's key handler - `ConfirmDialog::handleKey`,
+`InfoDialog::handleKey`, `ExportDialog::modalKey` (its `handleKey`: text fields, Escape), and the new
+`PresetDialog::modalKey` (Escape cancels, Enter confirms the ticked categories), `SettingsDialog::modalKey`
+(Escape or Enter = Done) and `HistoryView::modalKey` (Escape or Enter closes) - and `key` returns true
+whatever the modal did with it. The two shared widgets' `modalKey` are additive inline methods; an app
+that does not call them is unchanged. The host (`linux_main.cpp` `onKey`) asks `app.modalOpen()` before
+its accelerators, sends Escape / Enter (or key code 0) to `app.key` and returns, replacing the block that
+named only the confirm dialog. Guard: `cosmo_ui_tests` `aModalOwnsTheKeyboard`.
+
+### DR-UX-2 File ▸ Close Project (R-UX-2, D-74)
+`App::buildMenus` (the Settings menu is gone since DR-FAMILY-8; Settings… is under File): File has "Close Project" →
+`App::requestCloseProject()`. Clean → `closeProject()`; dirty → the R-HOME-1c confirm (Cancel /
+Don't save / Save, DR-FAMILY-12) whose Save and Discard end in `closeProject()`. `closeProject()` sets
+`mCloseOnReturn` and calls `showHome()`; `renderReturn` consumes the flag when the return transition
+reaches `Phase::ReturnLoad` (the editor is fully covered): it dispatches `project close` (direct
+`resetWorkspace()` with no service), clears the editor's visible state (`App::resetWorkspace`), the
+top bar's project name and the histogram (`HistogramWidget::clear()`, additive), and re-syncs.
+Guard: `cosmo_ui_tests` `closingAProjectAsksFirstAndClearsTheChrome`.
+
+### DR-UX-3 Delete asks first (R-UX-3, D-75)
+`App::requestDeleteSelected()` shows the confirm dialog (title "Remove <n> item(s) from this project?",
+message "This cannot be undone. The file(s) on disk are kept." - one line, because the dialog does not
+wrap) with Cancel and a destructive Remove that calls `deleteSelected()`. The Delete key (`linux_main.cpp`) and the filmstrip context menu's Delete call it;
+`deleteSelected()` and the `delete` command are unchanged. `EditSession::deleteSelected`
+(`core/EditSession.cpp:286`) erases the nodes outright and no History records it, which is why it asks.
+Guard: `cosmo_ui_tests` `deleteAsksBeforeRemovingAPhoto`.
+
+### DR-UX-4 The photo's Export button (R-UX-4, D-76)
+`TopBar` (`widgets/TopBar.cpp`) draws an accent-filled **Export** button (download glyph + label,
+61.75 x 20.5) at the right end of the bar; the rail toggle sits to its left and the filename readout
+to the left of that. `onExport` -> `App::openExportDialog()`. `setExportEnabled(bool)` records intent
+and `advance` eases `mExportEnable` (180 ms): disabled it is drawn at 35 % and neither hovers nor
+fires. `App::refreshLibrary` enables it when the tree holds a leaf with a slot. `exportRect()` and
+`exportEnabledAmount()` are public for a test. Guard: `cosmo_ui_tests`
+`thePresetRowIsLabelledAndExportHasAButton` (labels drawn; dimmed click opens nothing; the dim is
+mid-tween a frame after it changes; the click opens `ExportDialog`).
+
+### DR-UX-5 No dead controls (R-UX-5, D-77)
+`XformPanel::setUnbuiltControlsShown(false)` (opt-in, default shown) hides the Flip Horizontal /
+Vertical and Auto Horizon / Geometry buttons (`visible = false` in `layout()`) and skips their two
+headers in `onPaint`; `RightColumn` calls it. Interstellar's inspector never calls it and draws the
+panel as before. Home: DR-HOME-6. Guards: `cosmo_ui_tests` `theEditStackIsConsistent`,
+`cosmo_widget_tests` `homeHasNoDeadLinksAndShowsTheBuildsVersion`.
+
+### DR-UX-6 Text fits (R-UX-6, D-78)
+`widgets/TextFit.h`: `fitTextEnd` / `fitTextFront(target, text, maxW, px, family)` ellipsize with
+`IRenderTarget::measureText`, cutting on UTF-8 code points. `TopBar::onPaint` draws the right-hand
+group first (filename capped at 220 px and measured), then the project name: the span is from the
+menu strip's right edge + 9.75 to the right group's left edge - 9.75; the name is ellipsized to the
+span and drawn at the span's LEFT (DR-FAMILY-9; it was centred); under
+26 px it is not drawn. `titleRect()` / `titleDrawn()` report what the last paint drew.
+`PresetTree::onPaint` ellipsizes each row to `width - labelX - 6.5`. Guard: `cosmo_ui_tests`
+`aLongProjectNameAndPresetNameAreFitted`.
+
+### DR-UX-7 Empty and missing states (R-UX-7, D-79)
+`PhotoCanvas::setNotice(None|Empty|Missing, detail)` records intent; `advance` eases `mNoticeAmt`
+(in 180 ms, out 120 ms; a change of notice fades out, swaps, fades in; the first frame sets) and
+`onOverlay` draws a 92 % stage-coloured cover, a 13 px title, two 11 px lines and - Empty only - an
+accent **Add photos** button (`noticeButtonRect()`, `onAddPhotos` -> the host's `onOpenRequested`).
+Missing shows the path front-ellipsized in mono. `App::updateStageNotice()` decides every frame from
+`EditSession::nodes()`: Empty when the root has no children; Missing when the last selected node is a
+leaf with no slot and nothing is still pending. `Filmstrip::Cell::missing` (opt-in, default false)
+draws a plate, a struck-through frame mark and the ellipsized name; `App::refreshLibrary` sets it for
+a slotless leaf that is not loading and names it from the node's `sourcePath` when the project stored
+no name. The same function now makes a selected slotless leaf the PRIMARY cell (it used to match
+every slotless leaf by `slot == -1`). `PresetTree` draws "No presets yet" and two muted lines while it
+has no rows (`emptyAmount()`, eased 180 ms, faded with the rail's width). Guards: `cosmo_ui_tests`
+`anEmptyProjectAndAMissingPhotoSayWhatTheyAre`; shots `editor-empty`, `editor-missing{,-mid}`.
+
+### DR-UX-8 Readouts in real units (R-UX-8, D-80)
+`EditControls.h`: `formatEditControl(control, track)` returns "+0.40 EV" (rows whose conversion is
+`toEv`), "6200 K" (`toKelvin`, nearest 10), "1.0 px" (`toRadiusPx`), an unsigned integer for a range
+starting at 0 or above, a signed integer otherwise; `kEditReadoutWidth = 48.75`. `RightColumn`'s
+constructor walks `editControls()` beside `ParamPanel::row(i)`, sets every row's value width to it and
+assigns `SliderRow::formatValue` where the labels match. Interstellar does not include
+`EditControls.h` (only a comment in `core/ParamRegistry.cpp` names it) and its rows keep the default
+readout. Not covered: the Mask and Grade tabs' own sliders. Guard: `cosmo_ui_tests`
+`sliderReadoutsAreInRealUnits`.
+
+### DR-UX-9 Header case, the Mask hint, the scroll indicator (R-UX-9, D-81)
+(a) `sectionHeaderUpper()` (`widgets/SectionHeader.h`, additive) uppercases ASCII; `CurvePanel`,
+`GradePanel` and `XformPanel` gain an opt-in `upperHeaders` (default false) that `RightColumn` sets;
+`MaskPanel` (cosmo only) writes its headers in capitals. (b) `MaskPanel` draws two muted 10 px lines
+under the add chips while `mMasks` is empty, eased by `mEmptyAmt` (`emptyAmount()`). (c)
+`RightColumn::onOverlay` draws a 3.25 px pill 4.875 px from the page's right edge - AgentPanel's
+indicator, copied - from `activeScroll()` (the active page's `contentHeight()` / `scrollOffset()`,
+read-only accessors added to `ParamPanel`, `MaskPanel`, `StackPanel`, `GradePanel`); its presence is
+eased by `mScrollInd` (180 ms) and the last thumb drawn is what fades out. `scrollThumbRect()` and
+`scrollIndicatorAmount()` are public. The Xform page has no scroll at all (unchanged) and the Agent
+tab keeps its own indicator. Guard: `cosmo_ui_tests` `theEditStackIsConsistent`.
+
+## DR-BRAND — The logos and their animations (R-BRAND)
+
+### DR-BRAND-1 The module (R-BRAND-1, R-BRAND-6)
+`widgets/BrandMark.{h,cpp}`, namespace `arstro::cosmo_v2::brand`. `poseAt(mark, phase, ms)` is a pure
+function returning a `Pose` — per part: translations, the moon's angle, one uniform ring scale, and
+alphas; the defaults are the rest pose. `draw(target, box, mark, pose, structureColour, alpha)` maps
+the 96 grid into the largest centred square of `box`. Tracks are keyframes whose easings are the
+brand pages' cubic-beziers, solved by bisection (`Out .2,.8,.2,1`, `In .6,0,.9,.4`,
+`InOut .7,0,.3,1`, `Sine .42,0,.58,1`). The two-tone is one `setLinearFill` across the whole mark,
+(8,92)→(88,4). What the HAL lacks is built by hand and said so in place: round stroke ends are discs,
+the ship's round corners are a traced outline, the moon's streak is eight short strokes of rising
+alpha, a passing streak is two two-stop fills. The Solaris sun is clipped by a fixed `clipRect` at
+y = 49.5 and only translates behind it. Compiled into cosmo by its source glob, and listed in
+`apps/interstellar/app/CMakeLists.txt` and `apps/solaris/app/CMakeLists.txt`.
+
+### DR-BRAND-2 On Home (R-BRAND-2)
+`HomeScreen` (all three apps) owns a `brand::Player`, calls `showUp(now, false)` on its first
+`advance`, and draws the mark at `Rect{kPad − 2, 18, 36, 36}` in `palette::foreground()`, above the
+wordmark.
+
+### DR-BRAND-3 The three animations, measured (R-BRAND-3, -4, -5, -7)
+`cosmo_widget_tests` → `test_brand_marks_obey_the_animation_law` asserts, for each mark: show up
+starts with nothing and ends at rest and differs from rest mid-way; disappear starts at rest and ends
+with nothing; the body is partly transparent AND in two different places at 70% and 82% of the exit;
+the largest opacity change in any 8 ms of the exit is under 0.06; a quarter of the way into the
+flight the body has covered under 20% of the distance; the loop is at rest at 0 and identical after
+one period; Interstellar's ship never moves sideways in the loop.
+`test_brand_player_leaves_the_loop_only_at_a_boundary` asserts the Player keeps flying until the
+latched boundary, dates the exit from the boundary, and under reduced motion fades with no travel.
+**Two defects those tests found before anything shipped:** exit fades eased `In` ended in a pop
+(0.10 of alpha in one 8 ms step — fades are `Sine` now, and `In` is for position only); and the loop
+boundary was recomputed every frame as "the next one" and never reached (it is latched when asked).
+
+## DR-FAMILY — One family, one behaviour (R-FAMILY)
+
+The shared building blocks of the three apps' common UI, as built on 2026-11-17 (step 1), and
+**Cosmo's adoption of them (DR-FAMILY-8…14, the same day)**. Interstellar's and Solaris's adoption
+is in their own documents. Each block is opt-in; DR-FAMILY-7 is the one
+that changes pixels. The standard itself (R-FAMILY-0) is recorded for the family in
+`.claude/skills/arstro.rule.design/SKILL.md` §2.7.
+
+### DR-FAMILY-1 Menu rows: shortcut, separator, disabled, keyboard (R-FAMILY-1)
+`MenuStrip::Item` (`widgets/MenuStrip.h:42`) and `ContextMenu::Item` (`widgets/ContextMenu.h:27`) are
+`{label, action, shortcut, enabled = true, separator = false}` — the three new fields come after
+`action` with defaults, so `{label, action}` initialises one unchanged — plus `Item::sep()` (a
+separator row) and `selectable()` (`enabled && !separator`).
+- **Rows.** A row is 24 px; a separator row is 9.75 px (`space::u(3)`) with a 1 px
+  `palette::border()` rule across its middle, inset 3 px like the hover wash. `itemTop` sums the row
+  heights, so a menu with no separator is `i × 24` exactly as before. `itemRect`, `itemAt` and the
+  new `itemIndexAt(point)` count every row: **a separator has an index and a rect.**
+- **Shortcut column.** Drawn at 10 px `font::mono()` in `palette::mutedForeground()`, its right edge
+  on `menu right − 11`, placed by `measureText` of that shortcut. A menu with at least one shortcut
+  is `max(152 | 150, widest label + 26 + widest shortcut + 22)` wide, both measured in the paint
+  (`MenuStrip::onOverlay`, `MenuStrip.cpp:331`; `ContextMenu::onOverlay`, `ContextMenu.cpp:287`) and
+  kept for the hit-test; before the first paint `dropdownRect` (`MenuStrip.cpp:95`) / `menuRect`
+  (`ContextMenu.cpp:140`) answer with the estimate. **A menu with no shortcut keeps the estimated
+  width it always had** — that is what leaves every existing menu pixel-identical.
+  `shortcutRect(...)` publishes where each was drawn.
+- **Disabled.** Label in `mutedForeground`, shortcut at 0.55 of its alpha; `Move` never stands on
+  it, so it has no wash; a click on it (or on a separator) is consumed and does nothing — the menu
+  stays open.
+- **Keyboard.** `menuKey(KeyEvent)` (`MenuStrip.cpp:139`, `ContextMenu.cpp:113`) — public, called by
+  a host that routes keys to an open menu; nothing calls it yet. Down / Up step to the next
+  `selectable()` row, wrapping; Home / End; Enter runs the row and closes; Escape closes; on the
+  strip, Left / Right open the neighbouring menu on its first selectable row. The cursor is
+  `cursorItem()` and is washed through the same `HoverFade` the pointer drives
+  (`itemHoverAmount(i)`, live), and survives the pointer being elsewhere; the pointer takes it back
+  only by standing on a row.
+- Test: `cosmo_widget_tests` → `test_family_menu_strip_rows`, `test_family_context_menu_rows`
+  (`widgets/tests/widgetTests.cpp:1826`, `:1968`). Shots: `family-menu-{shortcuts,shortcuts-mid,
+  disabled-hover,keyboard,plain}`, `family-context-menu`.
+
+### DR-FAMILY-2 Toast (R-FAMILY-2)
+`widgets/Toast.{h,cpp}`, a `Segment` painted in `onOverlay`, input-transparent. `enum class Kind
+{Info, Warning, Error}`; `show(kind, text, nowMs)` starts at once, `show(kind, text)` on the next
+`advance`. Height 28, text 12 px `font::sans()`, 16 px side padding, popover fill + `border()` for
+every kind; Warning / Error add a 3 px bar (`kBarW`) at the left and a 12 px glyph (triangle /
+crossed circle) in `palette::warning()` / `palette::destructive()`. `mAmount` 0→1 in
+`motion::kToastInMs` (150, EaseOut), held `kToastHoldMs` (3200) from the last `show`, 1→0 in
+`kToastOutMs` (300, EaseInOut); it is drawn `(1 − amount) × 12` px above its resting place, so it
+slides as it fades. A `show` while `amount > 0` with other words or another kind keeps the old
+words and runs `mSwap` 0→1 in `kCrossFadeMs` (200, EaseInOut): old at `amount × (1 − swap)`, new at
+`amount × swap`. The words are cut by `fitTextEnd` to `min(640, width − 64) − glyph`. The caller
+sets `x`, `y` (the resting top) and `width` (the band it is centred in). Published: `rect()` (as last
+drawn, local), `amount()`, `swapAmount()`, `kind()`, `text()`, `isShowing()`; `translate` is an
+opt-in hook for a host that draws in its language. These are Solaris's toast's numbers
+(`apps/solaris/app/App.cpp`, R-UI-15). Compiled into Cosmo by its source glob and used by nothing;
+**Interstellar and Solaris list Cosmo's sources explicitly and must add `widgets/Toast.cpp`.**
+Test: `test_family_toast` (`widgetTests.cpp:2026`). Shots: `family-toast-{info,warning,error,in-mid,
+out-mid,swap-mid,long}`.
+
+### DR-FAMILY-3 ConfirmDialog's destructive style (R-FAMILY-3)
+`ConfirmDialog::DestructiveStyle {Filled, Outlined, Auto}` (`widgets/ConfirmDialog.h:48`),
+`setDestructiveStyle` / `destructiveStyle`, default `Filled`. `drawsOutlined(i)`
+(`ConfirmDialog.cpp:87`) resolves it for a button: never for a non-destructive or a primary button;
+`Outlined` always; `Auto` when any button of the dialog is primary. An outlined button is a 1 px
+`destructive()` stroke with `destructive()` words; a filled one is as before. `setOutlinedDestructive
+(bool)` and `outlinedDestructive()` remain (Solaris calls the first, its tests the second) and map
+to `Outlined` / `Filled`. Test: `test_family_confirm_destructive_style` (`widgetTests.cpp:2136`).
+Shots: `family-confirm-{auto,auto-single,default}`.
+
+### DR-FAMILY-4 Tokens (R-FAMILY-4)
+`Theme.h`: `palette::warning()` = #E3B341 (`:115`), not derived from the accent slot; `namespace
+space` (`:168`) — `u(n) = 3.25 n`, `padX` 9.75, `gap` 6.5, `rowH` 22.75, `barH` 29.25, `modal8/16/32`;
+`namespace motion` (`:183`) — `kHoverMs` 120, `kModalOpenMs` 150, `kModalCloseMs` 120, `kDropdownMs`
+160, `kDissolveMs` 160, `kScrollMs` 180, `kCrossFadeMs` 200, `kSelectMs` 200, `kSlideMs` 220,
+`kCatchUpMs` 220, `kReflowMs` 260, `kScreenFadeMs` 260, `kToastInMs` 150, `kToastOutMs` 300,
+`kToastHoldMs` 3200. Interstellar's and Solaris's own `space::` / `motion::` are untouched and still
+win inside their namespaces. Cosmo's existing widgets keep their literals. `cli/webTokens.cpp`
+prints `--warning`; `web/css/tokens.css` is regenerated (`cosmo_web_tokens_current`).
+Test: `test_family_tokens` (`widgetTests.cpp:2197`).
+
+### DR-FAMILY-5 Wordmark and DirtyDot (R-FAMILY-5)
+`widgets/Wordmark.h` (header-only): `Wordmark::draw(target, name, x, baselineY, sizePx, alpha = 1)`
+draws `name` in `foreground()` and `.` in `primary()`, both `font::sansSemiBold()` tracked
+`−0.03 × size`, the dot at `x + measureText(name)`; returns the width; `Wordmark::width(...)` is the
+same number without drawing. `widgets/DirtyDot.h` (header-only, a value, not a Segment):
+`set(bool)` / `setImmediate(bool)`, `advance(nowMs)` (the first one places it; a change eases over
+`motion::kCrossFadeMs`, EaseOut), `amount()` (live), `draw(target, centre, alpha = 1)` — a circle of
+radius 3 in `foreground()`; `kGap = 8` is the family's distance from the name's end to the dot's
+centre. **Wired into nothing**: that was step 1; Cosmo's top bar draws both since DR-FAMILY-9.
+Test: `test_family_wordmark_and_dirty_dot` (`widgetTests.cpp:2215`). Shot: `family-wordmark-dirtydot`.
+
+### DR-FAMILY-6 SegmentedControl::highlightPos (R-FAMILY-6)
+`double highlightPos() const` (`widgets/SegmentedControl.h:39`) returns `mHiPos.value()` — the
+continuous slot index the highlight is drawn at. Test: `test_family_segmented_highlight_pos`
+(`widgetTests.cpp:2264`).
+
+### DR-FAMILY-7 The History card's title and radius (R-FAMILY-7)
+`HistoryView::title` defaults to `"History"`; it is drawn at 14 px (`kTitlePx`)
+`font::sansSemiBold()` with no tracking (`widgets/HistoryView.cpp:246`; it was 12 px, tracked
+`0.12 × 12`), and the card is `radius::control()` (`:240`; it was a literal 6). **Pixels change in
+Cosmo's History card and in Solaris's** (Solaris sets `title` to its own uppercase word, so there
+only the size, the tracking and the corner change until Solaris adopts the standard). The web
+port (`web/js/desktop/history.js`) still draws the old card — PARITY W22.
+Test: `test_family_history_title` (`widgetTests.cpp:2285`). Shot: `family-history`.
+
+### DR-FAMILY-8 Cosmo's menus (R-FAMILY-8)
+`App::buildMenus` adds five menus - File · Edit · Develop · Preset · View - whose rows come from
+`App::menuItems(menu)` (`App.cpp:526`):
+- **File**: Home (→ `requestHome`, so it asks) · New Project… `Ctrl+N` (→ `requestNewProject`) ·
+  Open… `Ctrl+O` ‖ Save `Ctrl+S` · Save As… `Ctrl+Shift+S` ‖ Export… ‖ Settings… `Ctrl+,` ‖ Close Project.
+- **Edit**: Undo `Ctrl+Z` (labelled `Undo <label>` from `model().history.entries[current].label`
+  when `canUndo`) · Redo `Ctrl+Shift+Z` ‖ History…. Redo is not labelled: the model does not say
+  which branch a redo takes.
+- **Develop**: Copy Settings · Paste to Selected · Paste to All Images ‖ Group Selection · Ungroup Selection.
+- **Preset**: Save Preset… · Import Preset….  **View**: Show/Hide Presets (`toggleRail`) · Show/Hide Agent.
+
+Disabled rows: Save / Save As… / Export… / Save Preset… with no photo in the tree; Undo / Redo by
+`canUndo` / `canRedo`; History… with no history; Copy with no edit target; the Pastes with nothing
+copied; Group with an empty selection; Ungroup with no group selected. `menuStateKey()`
+(`App.cpp:500`) packs everything `menuItems` reads into one string; `refreshMenus()` (`:585`),
+called every editor frame, calls `MenuStrip::setItems` for each menu only when that key changed
+AND no menu is open. `setAgentShown` (`:597`) calls the new `RightColumn::setActiveTab` and
+remembers the tab to return to. Keys: `App::key`, after the modal gate, gives every key to
+`MenuStrip::menuKey` while `openIndex() >= 0` and returns true; the host forwards Up / Down / Home /
+End as well as Left / Right (`linux_main.cpp:1421`). The right-click menu's "Add Photo…" has U+2026
+and its Group / Ungroup rows are disabled the same way.
+Test: `cosmo_ui_tests` → `theMenusAreTheFamilys` (`tests/ui/uiTests.cpp:1049`). Shots: `fam-menu-{file,
+file-mid,file-keyboard,file-keyboard-mid,edit,develop,preset,view}`, `fam-view-hide-agent`.
+
+### DR-FAMILY-9 Cosmo's top bar and window title (R-FAMILY-9)
+`TopBar::onPaint`: the wordmark is `Wordmark::draw(t, "cosmo", …, 13)` (`widgets/TopBar.cpp:221`).
+The project name is drawn at `menus right + 9.75`, 12 px `sansMedium`, `fitTextEnd` to the span that
+ends `9.75 + kDotRoom` (14.25) before the right-hand group; under 26 px it is not drawn. The
+`DirtyDot` (`mDirty`) is drawn at `name end + DirtyDot::kGap` on the bar's centre line (`:289`);
+`setDirty(bool)` records the target and `advance` eases it (200 ms); `dirtyAmount()` and
+`dirtyDotCentre()` are published. **The filename gives way first:** with a project name the
+readout is capped to what is left after `min(120, name width)` + the dot's room (`:247`); under
+36 px only `(i/n)` is drawn. The save icon (`icon::save`, 12 px in a 20.5 box, `saveRect()` `:144`,
+left of Export; the rail toggle moved left by 27) is `lerpColor(muted@45%, foreground,
+dirtyAmount())` with the hover wash scaled by the same amount; a click calls `onSave` only while
+the target is dirty. `App::renderEditor` calls `mTopBar->setDirty(model().dirty)` every frame;
+`onSave` is `saveWorkspace()`. `App::windowTitle()` (`App.cpp:2121`) returns `Cosmo` on Home and
+during the return, else `[*]<name> — Cosmo` from the top bar's name (the load's name during the
+open transition) and `model().dirty`; the host's `onTick` sets the GTK title when the string
+changes (`linux_main.cpp:1317`).
+Test: `theTopBarSaysWhatIsUnsaved` (`uiTests.cpp:1164`). Shots: `fam-topbar-{clean,dirty-mid,dirty}`
+at 1600x1000, 1024x640 and 584x466.
+
+### DR-FAMILY-10 What marks a project unsaved (R-FAMILY-10, D-63)
+`EditSession::recordHistory()` returns whether a step was recorded (`core/EditSession.cpp:479`;
+seeding an empty timeline is not one) and `submitWith` sets `mDirty` only then (`:526`).
+`applyHistoryParams` (undo / redo / jump), `recordSlotEdit` when it records, `createGroupFromSelection`,
+`ungroupSelected`, `renameGroup` (a different name) and `deleteSelected` (something removed) set it
+themselves; `setBypassed` already did. Test: `cosmo_core_tests`
+`the_model_carries_what_a_second_view_draws` (select, select next / prev and a re-render stay clean;
+undo, group, rename, ungroup, delete each make it dirty).
+
+### DR-FAMILY-11 Cosmo's toast (R-FAMILY-11)
+`App` owns one `Toast` (`mToast`), in neither screen's tree: `App::render` draws the screen
+(`renderScreen`), then sets the toast's `x = 0`, `y = TopBar::kHeight + 4`, `width = mW`, advances it
+and calls `renderOverlay(target, rootTransform())` (`App.cpp:1142`); `needsRedraw` is true while
+`isShowing()`. Sources: `saveProjectAs` → Info `Saved` / Error `Could not save <file>` (`:2271`;
+`saveWorkspace` and the host's Save As dialog go through it, `saveWorkspaceAs` stays silent for
+New Project); `exportFinished(written, failed, why)` (`:618`) → Info `Exported N photo(s)` or Error
+`F of T photos could not be exported: <why>` / `Export failed: <why>`, called by the host's batch
+(`linux_main.cpp:943`, with the first failure's reason) and for the service's `ExportFinished`;
+`onServiceEvent` (`:632`, subscribed in the constructor through a weak token) → Error with the
+text of every `CommandRejected` / `Error` event except the agent's (`assist…`), which its tab
+already shows. Test: `theToastSaysWhatHappened` (`uiTests.cpp:1250`). Shots: `fam-toast-{error-in-mid,
+error,swap-mid,exported,saved-mid,saved,out-mid}`.
+
+### DR-FAMILY-12 Cosmo's unsaved-changes dialog (R-FAMILY-12)
+`App::askUnsaved(proceed, forget = true)` (`App.cpp:2036`) is the one question; `requestHome`,
+`requestCloseProject`, `requestQuit` and `requestNewProject` call it. Title `Save changes to "<name>"?`
+(the name cut on UTF-8 boundaries and ended with U+2026 until the title's estimate fits 360 px),
+body `Your changes will be lost if you don't save them.`, buttons `Cancel`, `Don't save`
+(destructive; marks the session clean when `forget`), `Save` (primary; `saveWorkspace()` then
+`proceed`). The dialog is constructed with `setDestructiveStyle(Auto)`. `requestNewProject` passes
+`forget = false`. Test: `theUnsavedDialogIsTheFamilys` (`uiTests.cpp:1309`). Shots:
+`fam-unsaved-dialog{,-mid,-hover-dont-save}`, `fam-remove-confirm`.
+
+### DR-FAMILY-13 Cosmo's keys (R-FAMILY-13)
+`App::shortcutFor(key, ctrl, shift)` (`App.cpp:2132`) maps a lowercase ASCII letter, `,`,
+`kKeyDelete` (127) or `kKeyBackspace` (8) to `Shortcut::{Open, NewProject, Save, SaveAs, Settings,
+Undo, Redo, Delete}`; without Ctrl only Delete / Backspace mean anything. `App::shortcut` (`:2148`)
+runs it: swallowed (true, nothing run) during `Screen::Loading`, behind `modalOpen()`, while
+`isTextEditing()` or a menu is open; on Home only Open (→ `onOpenProjectRequested`), NewProject and
+Settings act. The host's `onKey` translates GDK's key and calls it (`linux_main.cpp:1471`); its own
+`o` / `s` / Ctrl branches are gone. `saveDialog` (the quick export) is still wired to
+`onExportRequested` and has no caller. Test: `theKeysAreTheFamilys` (`uiTests.cpp:1374`).
+**Not run:** the GDK translation itself needs a window.
+
+### DR-FAMILY-14 Cosmo's words and Home's empty state (R-FAMILY-14)
+`HomeScreen`: actions `New project` / `Open project…` / `Import catalog…`, header `Recent projects`,
+the dashed card `New project`. With `mCards.empty()` (`showsEmptyState()`): `relayoutGrid` gives the
+dashed card no rect, and `onPaint` (`widgets/HomeScreen.cpp:656`) draws, centred in the grid
+viewport, `No recent projects` (13 px SemiBold), the hint (11 px muted; `Create or open a project.`
+when the long form does not fit; `fitTextEnd` as the backstop) and an outline button `New project`
+(34 high, `emptyButtonRect()` `:374`), which shares the dashed card's hover id and click
+(`onNewProject`). The touch shell's buttons and titles follow (`New project`, `Open project`,
+`Import catalog`, `Recent projects`, `Open image`, `Import folder`, U+2026 for its path).
+Test: `homeSpeaksInSentenceCaseAndSaysWhenItIsEmpty` (`uiTests.cpp:1448`). Shots:
+`fam-home-empty{,-hover-mid,-hover}` at three sizes.

@@ -30,6 +30,16 @@ namespace cosmo_v2
         void scrollBy(double wheelDelta);
         void hide() { mOpen = false; }
         bool isOpen() const { return mOpen; }
+        /** OPT-IN (cosmo R-UX-1): a host's modal gate hands keys here. Escape and Enter close the
+         *  view the way its close button does; every other key is taken. A host that never calls
+         *  it is unchanged. */
+        bool modalKey(const artboard::KeyEvent &e)
+        {
+            if (!mOpen) return false;
+            if (e.type == artboard::KeyEvent::Type::Down && (e.keyCode == 0x1B || e.keyCode == 0x0D || e.keyCode == 0x0A))
+                hide();
+            return true;
+        }
 
         void advance(double nowMs) override;  // drives the open/close + hover fades + eased pan (R-G-1)
 
@@ -40,7 +50,7 @@ namespace cosmo_v2
         bool easeCurrent = false;
         /** The line under the title. A host whose keys are settings says its own (Solaris R-SET-4). */
         std::string hint = "click a node to jump  .  Ctrl+Z undo  .  Ctrl+Y redo";
-        std::string title = "HISTORY"; // the card's header (opt-in: Solaris draws it in its language, R-ACCESS-2)
+        std::string title = "History"; // the card's header, drawn as the other modals' titles (R-FAMILY-7); a host may say its own (Solaris R-ACCESS-2)
         // read-only, for a host's tests: the LIVE open amount, a node's centre (this segment's space) and how lit it is
         double appearAmount() const { return mAppear.value(); }
         int nodeCount() const { return (int)mNodes.size(); }

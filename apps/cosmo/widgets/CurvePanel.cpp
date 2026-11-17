@@ -361,7 +361,7 @@ namespace cosmo_v2
     void CurvePanel::onPaint(IRenderTarget &t) const
     {
         const double innerW = std::max(0.0, width.value() - 2 * kPadX);
-        drawSectionHeader(t, kPadX, 0.0, innerW, "Tone Curve");
+        drawSectionHeader(t, kPadX, 0.0, innerW, upperHeaders ? sectionHeaderUpper("Tone Curve") : std::string("Tone Curve"));
 
         const Rect plot = plotRect();
         drawRoundedRect(t, plot, radius::control(), Paint::filledStroked(palette::curvePlotBg(), palette::border(), 1.0));

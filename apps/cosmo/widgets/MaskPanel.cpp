@@ -1,4 +1,5 @@
 #include "MaskPanel.h"
+#include "TextFit.h"
 #include "SectionHeader.h"
 #include "Icons.h"
 #include "TextMetrics.h"
@@ -159,6 +160,16 @@ namespace cosmo_v2
         const bool moving = mScroll.isAnimating();
         mScroll.update(nowMs);
         if (moving) layout();
+
+        // R-UX-9b: the empty-state sentence. Set on the first frame, eased after it.
+        const bool empty = mMasks.empty();
+        if (!mEmptyInit) { mEmptyInit = true; mEmptyShown = empty; mEmptyAmt.set(empty ? 1.0 : 0.0); }
+        else if (empty != mEmptyShown)
+        {
+            mEmptyShown = empty;
+            mEmptyAmt.animateTo(empty ? 1.0 : 0.0, empty ? 180.0 : 120.0, Easing::EaseOutCubic, nowMs);
+        }
+        mEmptyAmt.update(nowMs);
         Segment::advance(nowMs);
     }
 
@@ -184,6 +195,7 @@ namespace cosmo_v2
             mAddChips[i]->width.set(chipW);
         }
         y += kChipH + kChipMarginBottom;
+        mEmptyY = y;   // R-UX-9b: where the "what a mask is" sentence sits while there is no mask
 
         if (mSelected >= 0)
         {
@@ -225,11 +237,26 @@ namespace cosmo_v2
         const double viewH = height.value();
         auto visible = [&](double y) { return y + kSectionHeaderHeight >= 0 && y <= viewH; };
 
-        if (visible(mHeaderY[0])) drawSectionHeader(t, kPadX, mHeaderY[0], innerW, "Add Mask");
+        // R-UX-9a: capitals, like every other section header in the edit stack.
+        if (visible(mHeaderY[0])) drawSectionHeader(t, kPadX, mHeaderY[0], innerW, "ADD MASK");
+
+        // R-UX-9b: with no mask the tab was four bare chips. One muted sentence says what a
+        // mask is for; it fades (mEmptyAmt) as the first mask's controls take its place.
+        const double ea = mEmptyAmt.value();
+        if (ea > 0.004)
+        {
+            static const char *const kLines[2] = {"A mask limits an adjustment to part of the photo.",
+                                                  "Pick a shape above, then place it on the photo."};
+            const Color c = palette::mutedForeground();
+            t.setFill(Color{c.r, c.g, c.b, ea});
+            for (int i = 0; i < 2; ++i)
+                t.drawText(fitTextEnd(t, kLines[i], innerW, 10.0, font::sans()), kPadX,
+                           mEmptyY + i * kEmptyLineH + kEmptyLineH * 0.5 + 10.0 * 0.35, 10.0, font::sans());
+        }
         if (mSelected < 0) return;
-        if (visible(mHeaderY[1])) drawSectionHeader(t, kPadX, mHeaderY[1], innerW, "Tone");
-        if (visible(mHeaderY[2])) drawSectionHeader(t, kPadX, mHeaderY[2], innerW, "Colour");
-        if (visible(mHeaderY[3])) drawSectionHeader(t, kPadX, mHeaderY[3], innerW, "Presence");
+        if (visible(mHeaderY[1])) drawSectionHeader(t, kPadX, mHeaderY[1], innerW, "TONE");
+        if (visible(mHeaderY[2])) drawSectionHeader(t, kPadX, mHeaderY[2], innerW, "COLOUR");
+        if (visible(mHeaderY[3])) drawSectionHeader(t, kPadX, mHeaderY[3], innerW, "PRESENCE");
     }
 }
 }

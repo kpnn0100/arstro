@@ -26,6 +26,12 @@
 #include "../../widgets/XformPanel.h"
 #include "../../widgets/RightColumn.h"
 #include "../../widgets/AgentPanel.h"
+#include "../../widgets/TopBar.h"
+#include "../../widgets/PresetTree.h"
+#include "../../widgets/ActionBar.h"
+#include "../../widgets/Filmstrip.h"
+#include "../../widgets/TextFit.h"
+#include "../../EditControls.h"
 #include "../../core/service/Command.h"
 #include "../../core/decode/ImageDecoder.h"
 #include "../../core/decode/Exif.h"
@@ -862,10 +868,941 @@ namespace
         // Discard: approved, and the dirty flag cleared so a second ask cannot appear.
         rig.app.requestQuit();
         rig.settle(200.0);
-        check(rig.app.confirmDialog()->confirmDestructive(), "the dialog offers a Discard");
+        check(rig.app.confirmDialog()->confirmDestructive(), "the dialog offers a Don't save");
         rig.settle(300.0);
         check(approvals == 1, "discarding closes the app");
         check(!rig.svc.session().isDirty(), "and clears the dirty flag");
+    }
+
+    // ── R-UX-1: one modal gate ────────────────────────────────────────────────────────────
+    // Settings, the preset picker and History had no key handling, and the host guarded only the
+    // confirm dialog - so Escape did nothing and Delete / Ctrl+Z reached the editor behind them.
+    // For each modal: open it, press Delete-as-the-host-would (the host asks modalOpen() before
+    // its accelerators - asserted directly), an arrow key (App::key's own shortcut), then Escape.
+    artboard::KeyEvent keyDown(int code)
+    {
+        artboard::KeyEvent e;
+        e.type = artboard::KeyEvent::Type::Down;
+        e.keyCode = code;
+        return e;
+    }
+
+    void aModalOwnsTheKeyboard()
+    {
+        std::printf("App: a modal owns the keyboard - Escape closes it, nothing reaches the editor (R-UX-1)\n");
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(3), "photos are loaded");
+        rig.app.showEditor();
+        rig.settle(400.0);
+        std::string err;
+        check(rig.svc.dispatchText("set exposure=0.4", err), "an edit, so History has a tree to show");
+        rig.settle(200.0);
+        check(!rig.app.modalOpen(), "no modal is open to begin with");
+
+        struct Case { const char *name; void (App::*open)(); };
+        const Case cases[] = {{"Settings", &App::openSettingsDialog},
+                              {"the preset picker", &App::presetSaveClicked},
+                              {"History", &App::openHistoryView},
+                              {"Export", &App::openExportDialog}};
+        for (const Case &c : cases)
+        {
+            (rig.app.*c.open)();
+            rig.settle(300.0);
+            const std::string n = c.name;
+            check(rig.app.modalOpen(), (n + " is open, and the gate knows it").c_str());
+            const int nodeBefore = rig.svc.model().selectedNode;
+            check(rig.app.key(keyDown(39)), ("behind " + n + ", the Right arrow is swallowed").c_str());
+            rig.settle(100.0);
+            check(rig.svc.model().selectedNode == nodeBefore, "and the selection did not walk");
+            artboard::KeyEvent t;
+            t.type = artboard::KeyEvent::Type::Text;
+            t.text = "o";
+            check(rig.app.key(t), "a typed `o` is swallowed (the host would otherwise open a file dialog)");
+            check(rig.app.modalOpen(), "the modal is still open after those keys");
+            check(rig.app.key(keyDown(0x1B)), "Escape is taken");
+            rig.settle(400.0);
+            check(!rig.app.modalOpen(), ("Escape closed " + n).c_str());
+        }
+        int rack = 0;
+        for (const auto &nd : rig.svc.model().nodes) rack += nd.group ? 0 : 1;
+        check(rack == 3, "no photo was removed along the way");
+
+        // Enter is the primary action: Done for Settings.
+        rig.app.openSettingsDialog();
+        rig.settle(300.0);
+        rig.app.key(keyDown(0x0D));
+        rig.settle(400.0);
+        check(!rig.app.modalOpen(), "Enter is Done on Settings");
+    }
+
+    // ── R-UX-3: Delete asks first ──────────────────────────────────────────────────────────
+    void deleteAsksBeforeRemovingAPhoto()
+    {
+        std::printf("App: Delete asks before removing a photo - it cannot be undone (R-UX-3)\n");
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(3), "three photos are loaded");
+        rig.app.showEditor();
+        rig.settle(400.0);
+        // Wired as the host wires it, so the confirmed Delete is the `delete` command (R-SVC-2).
+        rig.app.onCommand = [&rig](arstro::cosmo::Command c) { rig.svc.dispatch(c); };
+
+        // The slot count never shrinks (slot id == index), so count what the user counts: the rack.
+        auto photos = [&rig] {
+            int n = 0;
+            for (const auto &nd : rig.svc.model().nodes) n += nd.group ? 0 : 1;
+            return n;
+        };
+        check(photos() == 3, "the rack holds three photos");
+        rig.app.requestDeleteSelected();
+        rig.settle(300.0);
+        check(photos() == 3, "the Delete key alone removes nothing");
+        check(rig.app.confirmDialog()->isOpen(), "it asks");
+        rig.app.key(keyDown(0x0D));   // Enter: the destructive button is never the default
+        rig.settle(300.0);
+        check(photos() == 3 && !rig.app.modalOpen(), "Enter cancels - Remove is not bound to a key");
+
+        rig.app.requestDeleteSelected();
+        rig.settle(300.0);
+        rig.app.key(keyDown(0x1B));
+        rig.settle(300.0);
+        check(photos() == 3, "Escape keeps the photo");
+
+        rig.app.requestDeleteSelected();
+        rig.settle(300.0);
+        check(rig.app.confirmDialog()->confirmDestructive(), "the dialog offers a destructive Remove");
+        rig.settle(300.0);
+        check(photos() == 2, "Remove removes it");
+        // And it really cannot be undone, which is why it asks.
+        { std::string e2; rig.svc.dispatchText("undo", e2); }
+        rig.settle(200.0);
+        check(photos() == 2, "undo does not bring it back");
+    }
+
+    // ── R-UX-2: File > Close Project ───────────────────────────────────────────────────────
+    void closingAProjectAsksFirstAndClearsTheChrome()
+    {
+        std::printf("App: Close Project asks about unsaved work, then leaves nothing of the project behind (R-UX-2)\n");
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(2), "a project is loaded");
+        rig.app.showEditor();
+        rig.settle(600.0);
+        rig.app.onCommand = [&rig](arstro::cosmo::Command c) { rig.svc.dispatch(c); };
+        std::string err;
+        check(rig.svc.dispatchText("set exposure=0.8", err), "an edit lands");
+        rig.settle(300.0);
+        check(rig.svc.session().isDirty(), "the project is dirty");
+
+        rig.app.requestCloseProject();
+        rig.settle(300.0);
+        check(rig.app.confirmDialog()->isOpen(), "closing a dirty project asks first");
+        check(rig.svc.model().imageCount == 2, "and nothing is gone while it asks");
+        rig.app.key(keyDown(0x1B));
+        rig.settle(300.0);
+        check(rig.svc.model().imageCount == 2 && rig.svc.session().isDirty() && !rig.app.onHomeScreen(),
+              "Cancel keeps the project, the edits and the editor");
+
+        rig.app.requestCloseProject();
+        rig.settle(300.0);
+        check(rig.app.confirmDialog()->confirmDestructive(), "Don't save is offered");
+        rig.frames(3);
+        check(rig.svc.model().imageCount == 2, "the project is still there while the editor fades out (nothing empties in one frame)");
+        rig.settle(3000.0);
+        check(rig.app.onHomeScreen(), "it lands on Home");
+        check(rig.svc.model().imageCount == 0, "the project is closed");
+        check(rig.app.topBarTitle().empty(), "the top bar no longer carries the project's name");
+        check(!rig.app.histogramShown(), "and the histogram is empty");
+    }
+
+    template <class T> T *widget(Rig &rig, const char *type)
+    {
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        const artboard::Segment *s = root ? arstro::cosmo_v2::findSegmentByType(*root, type) : nullptr;
+        return const_cast<T *>(static_cast<const T *>(s));
+    }
+    bool drew(const Rig &rig, const std::string &text)
+    {
+        for (const auto &op : rig.target.ops())
+            if (op.kind == artboard::DrawOp::Kind::DrawText && op.text == text) return true;
+        return false;
+    }
+
+    // ══ R-FAMILY-8…14: Cosmo adopts the family standard ═══════════════════════════════════
+    int menuRow(const arstro::cosmo_v2::MenuStrip &ms, int menu, const std::string &prefix)
+    {
+        const auto &items = ms.menu(menu).items;
+        for (int i = 0; i < (int)items.size(); ++i)
+            if (!items[(size_t)i].separator && items[(size_t)i].label.rfind(prefix, 0) == 0) return i;
+        return -1;
+    }
+    bool rowEnabled(const arstro::cosmo_v2::MenuStrip &ms, int menu, const std::string &prefix)
+    {
+        const int i = menuRow(ms, menu, prefix);
+        return i >= 0 && ms.menu(menu).items[(size_t)i].enabled;
+    }
+    bool anyThreeDots(const Rig &rig)
+    {
+        for (const auto &op : rig.target.ops())
+            if (op.kind == artboard::DrawOp::Kind::DrawText && op.text.find("...") != std::string::npos) return true;
+        return false;
+    }
+
+    void theMenusAreTheFamilys()
+    {
+        std::printf("App: the menus are File · Edit · Develop · Preset · View, with shortcuts, separators and disabled rows (R-FAMILY-8)\n");
+        using arstro::cosmo_v2::MenuStrip;
+        using arstro::cosmo_v2::RightColumn;
+        Rig rig(1440.0, 900.0);
+        rig.app.showEditor();
+        rig.settle(400.0);
+        MenuStrip &ms = *rig.app.topBar()->menuStrip();
+        const char *want[] = {"File", "Edit", "Develop", "Preset", "View"};
+        bool titles = ms.menuCount() == 5;
+        for (int i = 0; titles && i < 5; ++i) titles = ms.menu(i).title == want[i];
+        check(titles, "the five menus, in the family's order");
+
+        bool dots = false, padded = false, sep = false;
+        for (int m = 0; m < ms.menuCount(); ++m)
+            for (const auto &it : ms.menu(m).items)
+            {
+                dots |= it.label.find("...") != std::string::npos;
+                padded |= it.label.find("(Ctrl") != std::string::npos || it.label.find("  ") != std::string::npos;
+                sep |= it.separator;
+            }
+        check(!dots, "no label has three dots (an ellipsis is U+2026)");
+        check(!padded, "no shortcut is padded into a label");
+        check(sep, "groups are divided by separators");
+        const int settings = menuRow(ms, 0, "Settings\xE2\x80\xA6");
+        check(settings >= 0 && ms.menu(0).items[(size_t)settings].shortcut == "Ctrl+,", "Settings… is under File, Ctrl+,");
+        check(menuRow(ms, 0, "Export\xE2\x80\xA6") >= 0, "File's deliverable is Export…");
+        check(menuRow(ms, 1, "History\xE2\x80\xA6") >= 0 && menuRow(ms, 1, "Undo") == 0 && menuRow(ms, 1, "Redo") == 1,
+              "Edit holds Undo, Redo and History…");
+        check(ms.menu(1).items[0].shortcut == "Ctrl+Z" && ms.menu(1).items[1].shortcut == "Ctrl+Shift+Z" &&
+                  ms.menu(0).items[(size_t)menuRow(ms, 0, "Save As")].shortcut == "Ctrl+Shift+S" &&
+                  ms.menu(0).items[(size_t)menuRow(ms, 0, "Open")].shortcut == "Ctrl+O" &&
+                  ms.menu(0).items[(size_t)menuRow(ms, 0, "New Project")].shortcut == "Ctrl+N",
+              "the shortcuts are in the shortcut field");
+
+        // Nothing loaded: what cannot act is disabled.
+        check(!rowEnabled(ms, 0, "Export") && !rowEnabled(ms, 0, "Save") && !rowEnabled(ms, 1, "Undo") &&
+                  !rowEnabled(ms, 1, "Redo") && !rowEnabled(ms, 1, "History") && !rowEnabled(ms, 2, "Paste to Selected") &&
+                  !rowEnabled(ms, 2, "Ungroup") && !rowEnabled(ms, 3, "Save Preset"),
+              "with no photo: Export, Save, Undo, Redo, History, Paste, Ungroup and Save Preset are disabled");
+        check(rowEnabled(ms, 0, "Settings") && rowEnabled(ms, 0, "Open"), "Settings… and Open… are live");
+
+        check(rig.loadFakePhoto(3), "photos arrive");
+        rig.app.showEditor();
+        rig.settle(500.0);
+        check(rowEnabled(ms, 0, "Export") && rowEnabled(ms, 0, "Save") && rowEnabled(ms, 3, "Save Preset"),
+              "with photos: Export…, Save and Save Preset… are live");
+        check(!rowEnabled(ms, 1, "Undo") && !rowEnabled(ms, 2, "Paste to Selected"), "nothing to undo or paste yet");
+        ms.menu(2).items[(size_t)menuRow(ms, 2, "Copy Settings")].action();
+        rig.frames(2);
+        check(rowEnabled(ms, 2, "Paste to Selected") && rowEnabled(ms, 2, "Paste to All"), "after Copy, both Pastes are live");
+        std::string err;
+        check(rig.svc.dispatchText("set exposure=0.6", err), "an edit lands");
+        rig.settle(200.0);
+        check(rowEnabled(ms, 1, "Undo") && rowEnabled(ms, 1, "History"), "after an edit, Undo and History… are live");
+        const std::string undo = ms.menu(1).items[0].label;
+        check(undo.size() > 5 && undo.rfind("Undo ", 0) == 0, "Undo names what it would undo");
+        std::printf("      (the row reads \"%s\")\n", undo.c_str());
+
+        // View > Show Agent selects the Agent tab; the row then reads Hide Agent and goes back.
+        const int before = rig.app.agentShown() ? -1 : 0;
+        check(before == 0 && menuRow(ms, 4, "Show Agent") >= 0, "View offers Show Agent");
+        ms.menu(4).items[(size_t)menuRow(ms, 4, "Show Agent")].action();
+        rig.settle(400.0);
+        check(rig.app.agentShown(), "it selects the Agent tab of the right column");
+        check(menuRow(ms, 4, "Hide Agent") >= 0, "and the row now reads Hide Agent");
+        ms.menu(4).items[(size_t)menuRow(ms, 4, "Hide Agent")].action();
+        rig.settle(400.0);
+        check(!rig.app.agentShown() && menuRow(ms, 4, "Show Agent") >= 0, "Hide Agent returns to the tab that was open");
+
+        // ── the keyboard, with a menu open ──
+        const artboard::Transform mt = ms.worldTransform();
+        auto mid = [&mt](const artboard::Rect &r) { return artboard::Point{mt.e + r.x + r.w * 0.5, mt.f + r.y + r.h * 0.5}; };
+        artboard::Point p = mid(ms.titleRect(0));
+        rig.click(p.x, p.y);
+        rig.settle(300.0);
+        check(ms.openIndex() == 0, "clicking File opens it");
+        check(!anyThreeDots(rig), "nothing drawn with a menu open has three dots");
+        bool sawShortcut = false;
+        for (const auto &op : rig.target.ops())
+            if (op.kind == artboard::DrawOp::Kind::DrawText && op.text == "Ctrl+Shift+S" && op.fontFamily == arstro::cosmo_v2::font::mono())
+                sawShortcut = true;
+        check(sawShortcut, "the shortcut column is drawn, in the mono face");
+        const int rev = (int)rig.svc.model().selectedNode;
+        check(rig.app.key(keyDown(40)), "Down is taken by the open menu");
+        rig.frames(2);
+        const int cur = ms.cursorItem();
+        check(cur == 0, "it stands on the first row");
+        const double wash = ms.itemHoverAmount(cur);
+        check(wash > 0.0 && wash < 1.0, "the row's wash is eased (live value mid-tween)");
+        check(rig.app.key(keyDown(39)), "Right is taken too");
+        rig.settle(300.0);
+        check(ms.openIndex() == 1 && rig.svc.model().selectedNode == rev, "it opens Edit - and the rack did not walk");
+        int saves = 0;
+        rig.app.onSaveWorkspaceRequested = [&saves] { ++saves; };
+        check(rig.app.shortcut('s', true, true) && saves == 0, "Ctrl+Shift+S behind an open menu is swallowed");
+        check(ms.openIndex() == 1, "and the menu is still open");
+        check(rig.app.key(keyDown(0x1B)), "Escape is taken");
+        rig.settle(300.0);
+        check(ms.openIndex() < 0, "Escape closes the menu");
+
+        // Enter runs the row: File > Settings…, reached with the keyboard.
+        rig.click(p.x, p.y);
+        rig.settle(300.0);
+        rig.app.key(keyDown(35));   // End -> Close Project
+        rig.app.key(keyDown(38));   // Up -> Home (R-FAMILY-8a: Home is in the last group, as in the siblings)
+        check(ms.cursorItem() == menuRow(ms, 0, "Home"), "End then Up stands on Home, in the menu's last group");
+        rig.app.key(keyDown(38));   // Up again, over the separator -> Settings…
+        check(ms.cursorItem() == menuRow(ms, 0, "Settings"), "Up again skips the separator and stands on Settings…");
+        rig.app.key(keyDown(0x0D));
+        rig.settle(400.0);
+        check(ms.openIndex() < 0 && rig.app.modalOpen(), "Enter runs it: the Settings modal opens and the menu closes");
+        rig.app.key(keyDown(0x1B));
+        rig.settle(400.0);
+    }
+
+    void theTopBarSaysWhatIsUnsaved()
+    {
+        std::printf("App: the project name sits left with the unsaved dot, the save icon lights, the title has a star (R-FAMILY-9, D-63)\n");
+        using arstro::cosmo_v2::TopBar;
+        {
+            Rig home(1440.0, 900.0);
+            home.settle(100.0);
+            check(home.app.windowTitle() == "Cosmo", "on Home the window is titled Cosmo");
+        }
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(3), "a project is loaded");
+        rig.app.showEditor();
+        rig.settle(500.0);
+        TopBar *bar = rig.app.topBar();
+        const double menusRight = bar->menuStrip()->x.value() + bar->menuStrip()->width.value();
+        artboard::Rect tr = bar->titleRect();
+        check(bar->titleDrawn() == "cosmo_ui_fake", "the project's name is drawn");
+        check(near(tr.x, menusRight + 9.75, 0.01), "LEFT, directly after the menus (not centred)");
+        check(tr.x + tr.w < 1440.0 * 0.5, "well left of the bar's centre");
+
+        // The wordmark: the accent dot at the MEASURED end of the name.
+        double nameX = -1, dotX = -1;
+        for (const auto &op : rig.target.ops())
+            if (op.kind == artboard::DrawOp::Kind::DrawText && op.args[2] == 13.0 && op.args[1] < 29.25)
+            {
+                if (op.text == "cosmo") nameX = op.args[0];
+                if (op.text == ".") dotX = op.args[0];
+            }
+        check(nameX >= 0 && near(dotX, nameX + rig.target.measureText("cosmo", 13.0, arstro::cosmo_v2::font::sansSemiBold(), -0.39), 0.01),
+              "the wordmark's dot touches the name (Wordmark::draw)");
+
+        check(!rig.svc.model().dirty && bar->dirtyAmount() < 0.001, "a project just opened is clean: no dot");
+        check(rig.app.windowTitle() == "cosmo_ui_fake \xE2\x80\x94 Cosmo", "the title is <name> — Cosmo");
+        // D-63: looking is not editing.
+        std::string err;
+        check(rig.svc.dispatchText("select next", err), "another photo is selected");
+        rig.settle(300.0);
+        check(!rig.svc.model().dirty && bar->dirtyAmount() < 0.001, "selecting a photo lights nothing");
+        const artboard::Transform bt = bar->worldTransform();
+        const artboard::Rect sr = bar->saveRect();
+        check(sr.x + sr.w < bar->exportRect().x && sr.x > tr.x + tr.w, "the save icon sits at the right, left of Export");
+        const auto mtimeOf = [] { std::error_code ec; return std::filesystem::last_write_time("/tmp/cosmo_ui_fake.cmp", ec); };
+        const auto t0 = mtimeOf();
+        rig.click(bt.e + sr.x + sr.w * 0.5, bt.f + sr.y + sr.h * 0.5);
+        rig.settle(100.0);
+        check(mtimeOf() == t0 && !rig.app.toast()->isShowing(), "clean, the save icon is dim and does nothing");
+
+        check(rig.svc.dispatchText("set exposure=0.7", err), "an edit lands");
+        rig.frames(3);
+        const double mid = bar->dirtyAmount();
+        check(mid > 0.0 && mid < 1.0, "the dot fades in (live value mid-tween), it does not pop");
+        rig.settle(400.0);
+        check(bar->dirtyAmount() > 0.999, "and settles lit");
+        tr = bar->titleRect();
+        const artboard::Point dc = bar->dirtyDotCentre();
+        check(near(dc.x, tr.x + tr.w + 8.0, 0.01) && near(dc.y, 29.25 * 0.5, 0.01), "the dot is 8 px after the name, on the bar's centre line");
+        check(rig.app.windowTitle() == "*cosmo_ui_fake \xE2\x80\x94 Cosmo", "the title gains its star");
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        rig.click(bt.e + sr.x + sr.w * 0.5, bt.f + sr.y + sr.h * 0.5);
+        rig.frames(2);
+        check(!rig.svc.model().dirty, "clicking the lit save icon saves");
+        check(mtimeOf() != t0, "the project file was written");
+        const double out = bar->dirtyAmount();
+        check(out > 0.0 && out < 1.0, "the dot fades out (live value mid-tween)");
+        rig.settle(400.0);
+        check(bar->dirtyAmount() < 0.001 && rig.app.windowTitle() == "cosmo_ui_fake \xE2\x80\x94 Cosmo", "clean again: no dot, no star");
+        check(rig.app.toast()->text() == "Saved" && rig.app.toast()->kind() == arstro::cosmo_v2::Toast::Kind::Info,
+              "and the toast says Saved");
+
+        // A long name is ellipsized and still leaves room for its dot before the filename.
+        const std::string longName = "Iceland Ring Road, September 2026 - selects for the print portfolio, second pass (final), with the aurora set";
+        bar->setProjectName(longName + " / " + longName + " / " + longName);
+        rig.svc.dispatchText("set exposure=0.2", err);
+        rig.settle(400.0);
+        tr = bar->titleRect();
+        double fileX = 1e9;
+        for (const auto &op : rig.target.ops())
+            if (op.kind == artboard::DrawOp::Kind::DrawText && op.text.find(".raf") != std::string::npos &&
+                op.fontFamily == arstro::cosmo_v2::font::mono() && op.args[1] < 29.25)
+                fileX = std::min(fileX, op.args[0]);
+        const std::string drawn = bar->titleDrawn();
+        check(drawn.size() >= 3 && drawn.compare(drawn.size() - 3, 3, "\xE2\x80\xA6") == 0, "a long name is ellipsized");
+        check(fileX < 1e9 && bar->dirtyDotCentre().x + 3.0 <= fileX - 9.0, "and its dot still ends before the filename readout");
+    }
+
+    void theToastSaysWhatHappened()
+    {
+        std::printf("App: one toast, top-centre under the top bar - Saved, an export's result, a refused command (R-FAMILY-11)\n");
+        using arstro::cosmo_v2::Toast;
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(2), "a project is loaded");
+        rig.app.showEditor();
+        rig.settle(500.0);
+        Toast *toast = rig.app.toast();
+        check(!toast->isShowing(), "nothing is said at rest");
+        if (toast->isShowing()) std::printf("      (it says \"%s\")\n", toast->text().c_str());
+        std::string err;
+        check(!rig.svc.dispatchText("history jump 99", err), "the service refuses a command");
+        rig.frames(3);
+        check(toast->kind() == Toast::Kind::Error && toast->text() == rig.svc.model().lastError && !toast->text().empty(),
+              "the toast is an error carrying the service's own sentence");
+        std::printf("      (it reads \"%s\")\n", toast->text().c_str());
+        const double in = toast->amount();
+        check(in > 0.0 && in < 1.0, "it fades in while sliding (live value mid-tween)");
+        const artboard::Rect midRect = toast->rect();
+        rig.settle(400.0);
+        check(toast->amount() > 0.999, "and comes to rest");
+        const artboard::Rect r = toast->rect();
+        check(near(toast->y.value(), 29.25 + 4.0, 0.01) && near(r.y, 0.0, 0.01), "its top rests 4 px under the top bar");
+        check(midRect.y < r.y, "mid-tween it was still above its resting place");
+        check(near(r.x + r.w * 0.5, 1440.0 * 0.5, 1.0), "it is centred in the window");
+        bool drawn = false;
+        for (const auto &op : rig.target.ops())
+            if (op.kind == artboard::DrawOp::Kind::DrawText && op.text == toast->text()) drawn = true;
+        check(drawn, "it is painted over the editor");
+
+        rig.app.exportFinished(3, 0, "");
+        rig.frames(4);
+        check(toast->kind() == Toast::Kind::Info && toast->text() == "Exported 3 photos", "an export says how many photos were written");
+        check(toast->swapAmount() > 0.0 && toast->swapAmount() < 1.0, "a second toast cross-fades with the first (mid-tween)");
+        rig.settle(400.0);
+        rig.app.exportFinished(1, 0, "");
+        rig.settle(400.0);
+        check(toast->text() == "Exported 1 photo", "one photo is singular");
+        rig.app.exportFinished(1, 2, "the disk is full");
+        rig.settle(400.0);
+        check(toast->kind() == Toast::Kind::Error && toast->text() == "2 of 3 photos could not be exported: the disk is full",
+              "a failed export is an error with the count and the reason");
+        check(rig.app.needsRedraw(rig.now), "the app keeps painting while the toast holds");
+        rig.settle(3200.0 - 400.0 + 120.0);
+        const double leaving = toast->amount();
+        check(leaving > 0.0 && leaving < 1.0, "after 3200 ms it fades out (mid-tween)");
+        rig.settle(600.0);
+        check(!toast->isShowing(), "and is gone");
+
+        // On Home too: the same toast, the same place.
+        Rig home(1024.0, 640.0);
+        home.settle(100.0);
+        check(!home.svc.dispatchText("project save", err), "saving with no project is refused");
+        home.settle(400.0);
+        check(home.app.toast()->amount() > 0.999 && home.app.toast()->kind() == Toast::Kind::Error, "Home shows the refusal");
+        check(near(home.app.toast()->rect().x + home.app.toast()->rect().w * 0.5, 512.0, 1.0), "centred in the smaller window");
+    }
+
+    void theUnsavedDialogIsTheFamilys()
+    {
+        std::printf("App: Save changes to \"<name>\"? - Cancel · Don't save · Save, the destructive button outlined (R-FAMILY-12)\n");
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(2), "a project is loaded");
+        rig.app.showEditor();
+        rig.settle(500.0);
+        std::string err;
+        rig.svc.dispatchText("set exposure=0.5", err);
+        rig.settle(200.0);
+        int quits = 0, news = 0;
+        rig.app.onQuitApproved = [&quits] { ++quits; };
+        rig.app.onNewProjectRequested = [&news] { ++news; };
+        rig.app.requestQuit();
+        rig.settle(300.0);
+        auto dlg = rig.app.confirmDialog();
+        check(dlg->isOpen() && dlg->buttonCount() == 3, "a dirty project asks, with three buttons");
+        check(dlg->buttonLabel(0) == "Cancel" && dlg->buttonLabel(1) == "Don't save" && dlg->buttonLabel(2) == "Save",
+              "Cancel · Don't save · Save");
+        check(dlg->drawsOutlined(1) && !dlg->drawsOutlined(2), "Don't save is outlined beside the filled Save");
+        check(drew(rig, "Save changes to \"cosmo_ui_fake\"?"), "the title names the project");
+        check(drew(rig, "Your changes will be lost if you don't save them."), "the body says what is lost");
+        const artboard::Rect b0 = dlg->buttonRect(0), b1 = dlg->buttonRect(1), b2 = dlg->buttonRect(2);
+        check(b0.x + b0.w <= b1.x && b1.x + b1.w <= b2.x, "left to right in that order");
+        rig.app.key(keyDown(0x1B));
+        rig.settle(300.0);
+        check(quits == 0 && rig.svc.session().isDirty(), "Escape cancels");
+
+        // Close Project and the wordmark ask the same question.
+        rig.app.requestCloseProject();
+        rig.settle(300.0);
+        check(dlg->isOpen() && dlg->buttonLabel(1) == "Don't save" && drew(rig, "Save changes to \"cosmo_ui_fake\"?"),
+              "Close Project asks the same question");
+        rig.app.key(keyDown(0x1B));
+        rig.settle(300.0);
+
+        // New Project asks first; Don't save goes on to the host's dialog and forgets nothing.
+        rig.app.requestNewProject();
+        rig.settle(300.0);
+        check(dlg->isOpen() && news == 0, "New Project asks before the host's dialog");
+        check(dlg->confirmDestructive(), "Don't save is offered");
+        rig.settle(300.0);
+        check(news == 1 && rig.svc.session().isDirty(), "it goes on - and the edits are still unsaved if that dialog is cancelled");
+
+        // A long name is shortened so the title fits the 400 px card.
+        rig.app.topBar()->setProjectName("Iceland Ring Road, September 2026 - selects for the print portfolio");
+        rig.app.requestQuit();
+        rig.settle(300.0);
+        std::string title;
+        for (const auto &op : rig.target.ops())
+            if (op.kind == artboard::DrawOp::Kind::DrawText && op.text.rfind("Save changes to \"Iceland", 0) == 0) title = op.text;
+        check(!title.empty() && title.find("\xE2\x80\xA6\"?") != std::string::npos, "a long name ends in an ellipsis inside the quotes");
+        check(rig.target.measureText(title, 14.0, arstro::cosmo_v2::font::sansSemiBold()) <= 360.0 + 0.5, "and the title fits the card");
+        rig.app.key(keyDown(0x1B));
+        rig.settle(300.0);
+
+        // The remove-photo confirm keeps its single FILLED Remove.
+        rig.app.requestDeleteSelected();
+        rig.settle(300.0);
+        check(dlg->isOpen() && dlg->buttonCount() == 2 && dlg->buttonLabel(1) == "Remove" && !dlg->drawsOutlined(1),
+              "Remove, the only action, stays filled");
+        rig.app.key(keyDown(0x1B));
+        rig.settle(300.0);
+    }
+
+    void theKeysAreTheFamilys()
+    {
+        std::printf("App: Ctrl+O / Ctrl+N / Ctrl+S / Ctrl+, - and no plain letter opens anything (R-FAMILY-13)\n");
+        using S = App::Shortcut;
+        check(App::shortcutFor('o', false, false) == S::None && App::shortcutFor('s', false, false) == S::None,
+              "plain o and plain s mean nothing");
+        check(App::shortcutFor('o', true, false) == S::Open && App::shortcutFor('n', true, false) == S::NewProject &&
+                  App::shortcutFor('s', true, false) == S::Save && App::shortcutFor('s', true, true) == S::SaveAs &&
+                  App::shortcutFor(',', true, false) == S::Settings,
+              "Ctrl+O, Ctrl+N, Ctrl+S, Ctrl+Shift+S, Ctrl+,");
+        check(App::shortcutFor('z', true, false) == S::Undo && App::shortcutFor('z', true, true) == S::Redo &&
+                  App::shortcutFor('y', true, false) == S::Redo,
+              "Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y");
+        check(App::shortcutFor(App::kKeyDelete, false, false) == S::Delete && App::shortcutFor(App::kKeyBackspace, false, false) == S::Delete,
+              "Delete and Backspace are the same key");
+
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(3), "photos are loaded");
+        rig.app.showEditor();
+        rig.settle(500.0);
+        int opens = 0, saveAs = 0, news = 0, quick = 0;
+        rig.app.onOpenRequested = [&opens] { ++opens; };
+        rig.app.onSaveWorkspaceRequested = [&saveAs] { ++saveAs; };
+        rig.app.onNewProjectRequested = [&news] { ++news; };
+        rig.app.onExportRequested = [&quick] { ++quick; };
+        check(!rig.app.shortcut('o', false, false) && !rig.app.shortcut('s', false, false) && opens == 0 && quick == 0,
+              "typing o or s opens nothing");
+        check(rig.app.shortcut('o', true, false) && opens == 1, "Ctrl+O opens");
+        check(rig.app.shortcut('n', true, false) && news == 1, "Ctrl+N starts a new project (the project is clean: no question)");
+        check(rig.app.shortcut('s', true, true) && saveAs == 1, "Ctrl+Shift+S is Save As");
+        std::string err;
+        rig.svc.dispatchText("set exposure=0.3", err);
+        rig.settle(200.0);
+        check(rig.svc.model().dirty && rig.app.shortcut('s', true, false), "Ctrl+S is taken");
+        rig.frames(2);
+        check(!rig.svc.model().dirty, "and saves");
+
+        auto photos = [&rig] { int n = 0; for (const auto &nd : rig.svc.model().nodes) n += nd.group ? 0 : 1; return n; };
+        check(rig.app.shortcut(App::kKeyBackspace, false, false), "Backspace is taken");
+        rig.settle(300.0);
+        check(rig.app.confirmDialog()->isOpen() && rig.app.confirmDialog()->buttonLabel(1) == "Remove" && photos() == 3,
+              "it asks the Delete key's question, and removes nothing yet");
+        // Behind the modal, every shortcut is swallowed.
+        check(rig.app.shortcut('o', true, false) && opens == 1, "Ctrl+O behind a modal is swallowed");
+        check(rig.app.shortcut(',', true, false), "Ctrl+, behind a modal is swallowed");
+        rig.app.key(keyDown(0x1B));
+        rig.settle(300.0);
+        check(!rig.app.modalOpen(), "(the confirm is closed, and Settings did not open behind it)");
+        check(rig.app.shortcut(App::kKeyDelete, false, false), "Delete is taken");
+        rig.settle(300.0);
+        check(rig.app.confirmDialog()->isOpen(), "and asks the same question");
+        rig.app.key(keyDown(0x1B));
+        rig.settle(300.0);
+
+        check(rig.app.shortcut(',', true, false), "Ctrl+, is taken");
+        rig.settle(300.0);
+        check(rig.app.modalOpen(), "and opens Settings");
+        rig.app.key(keyDown(0x1B));
+        rig.settle(400.0);
+
+        // Home: only the keys that make sense with no project.
+        Rig home(1440.0, 900.0);
+        home.settle(100.0);
+        int projOpens = 0, projNews = 0;
+        home.app.onOpenProjectRequested = [&projOpens] { ++projOpens; };
+        home.app.onNewProjectRequested = [&projNews] { ++projNews; };
+        check(home.app.shortcut('o', true, false) && projOpens == 1, "on Home, Ctrl+O is Open project…");
+        check(home.app.shortcut('n', true, false) && projNews == 1, "on Home, Ctrl+N is New project");
+        check(home.app.shortcut('s', true, false) && !home.app.toast()->isShowing(), "on Home, Ctrl+S is swallowed and does nothing");
+        check(home.app.shortcut(',', true, false), "on Home, Ctrl+, is taken");
+        home.settle(300.0);
+        check(home.app.modalOpen(), "and opens Settings over the launcher");
+    }
+
+    void homeSpeaksInSentenceCaseAndSaysWhenItIsEmpty()
+    {
+        std::printf("Home: sentence-case actions, and an empty state of one sentence, one hint, one button (R-FAMILY-14)\n");
+        using arstro::cosmo_v2::HomeScreen;
+        Rig rig(1440.0, 900.0);
+        HomeScreen *home = rig.app.home();
+        home->setRecents({});
+        rig.settle(200.0);
+        check(drew(rig, "New project") && drew(rig, "Open project\xE2\x80\xA6") && drew(rig, "Import catalog\xE2\x80\xA6"),
+              "the actions read New project / Open project… / Import catalog…");
+        check(!drew(rig, "New Project") && !drew(rig, "Open Project\xE2\x80\xA6") && !drew(rig, "Recent Projects"),
+              "no Title Case button or header is left");
+        check(drew(rig, "Recent projects"), "the header reads Recent projects");
+        check(!anyThreeDots(rig), "nothing on Home has three dots");
+        check(home->showsEmptyState() && drew(rig, "No recent projects"), "with no recent project it says so, starting with a capital");
+        check(drew(rig, "Create a project, or open one you already have."), "one hint");
+        const artboard::Rect btn = home->emptyButtonRect();
+        check(btn.w > 40.0 && btn.x > 300.0 && btn.x + btn.w < 1440.0 && btn.y > 60.0 && btn.y + btn.h < 900.0,
+              "one button, inside the grid pane");
+        int stroked = 0, labels = 0;
+        for (const auto &op : rig.target.ops())
+            if (op.kind == artboard::DrawOp::Kind::DrawText && op.text == "New project") ++labels;
+        check(labels == 2, "New project is drawn twice: the sidebar's and the empty state's - and no dashed card");
+        (void)stroked;
+        int news = 0;
+        rig.app.onNewProjectRequested = [&news] { ++news; };
+        // Hover is eased: one frame after the pointer arrives the wash is between.
+        rig.app.pointer(1, btn.x + btn.w * 0.5, btn.y + btn.h * 0.5, 0, rig.now);
+        rig.frames(2);
+        rig.click(btn.x + btn.w * 0.5, btn.y + btn.h * 0.5);
+        check(news == 1, "clicking it starts a new project");
+
+        // The same at the window minimum: the block stays inside the pane.
+        Rig small(App::minLogicalWidth(), App::minLogicalHeight());
+        small.app.home()->setRecents({});
+        small.settle(200.0);
+        const artboard::Rect sb = small.app.home()->emptyButtonRect();
+        check(sb.x >= 300.0 && sb.x + sb.w <= App::minLogicalWidth() && sb.y + sb.h <= App::minLogicalHeight() && sb.y - 48.0 >= 60.0,
+              "at the window minimum the sentence, hint and button fit under the header");
+
+        HomeScreen::CardInfo card;
+        card.name = "Tokyo"; card.photos = "12 photos"; card.date = "2h ago"; card.recentIndex = 0;
+        home->setRecents({card});
+        rig.settle(200.0);
+        check(!home->showsEmptyState() && !drew(rig, "No recent projects"), "with a recent project the empty state is gone");
+        check(home->emptyButtonRect().w == 0.0, "and so is its button");
+    }
+
+    // ── R-UX-4: the preset row says "preset"; the photo's export has a button ────────────
+    void thePresetRowIsLabelledAndExportHasAButton()
+    {
+        std::printf("App: the action bar names presets, and the top bar has the photo's Export (R-UX-4)\n");
+        using arstro::cosmo_v2::TopBar;
+        Rig rig(1440.0, 900.0);
+        rig.app.showEditor();
+        rig.settle(400.0);
+        check(drew(rig, "Save preset") && drew(rig, "Import preset") && drew(rig, "Export preset"),
+              "the pinned row reads Save preset / Import preset / Export preset");
+        check(!drew(rig, "Save") && !drew(rig, "Import"), "and no bare Save / Import is left to be read as the project's");
+        check(drew(rig, "Export"), "the top bar draws an Export button");
+
+        TopBar *bar = widget<TopBar>(rig, "TopBar");
+        check(bar != nullptr, "the top bar is in the tree");
+        if (!bar) return;
+        const artboard::Transform bt = bar->worldTransform();
+        const artboard::Rect er = bar->exportRect();
+        check(er.x + er.w <= 1440.0 && er.w > 30.0, "the button is inside the bar");
+        // No photo: dimmed, and a click opens nothing.
+        check(bar->exportEnabledAmount() < 0.01, "with no photo it is dimmed");
+        rig.click(bt.e + er.x + er.w * 0.5, bt.f + er.y + er.h * 0.5);
+        rig.settle(200.0);
+        check(!rig.app.modalOpen(), "and clicking it opens nothing");
+
+        check(rig.loadFakePhoto(2), "photos arrive");
+        rig.app.showEditor();
+        rig.settle(500.0);
+        check(bar->exportEnabledAmount() > 0.99, "with photos it is live");
+        // The dim is a tween, not a flip: one frame after the change the live value is between.
+        bar->setExportEnabled(false);
+        rig.frames(2);
+        const double mid = bar->exportEnabledAmount();
+        check(mid > 0.0 && mid < 1.0, "the enable/disable fade is eased (live value mid-tween)");
+        bar->setExportEnabled(true);
+        rig.settle(300.0);
+        rig.click(bt.e + er.x + er.w * 0.5, bt.f + er.y + er.h * 0.5);
+        rig.settle(300.0);
+        check(rig.app.modalOpen(), "clicking Export opens the Export modal");
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        const auto *dlg = static_cast<const arstro::cosmo_v2::ExportDialog *>(
+            root ? arstro::cosmo_v2::findSegmentByType(*root, "ExportDialog") : nullptr);
+        check(dlg && dlg->isOpen(), "and it is the Export dialog");
+    }
+
+    // ── R-UX-6: text fits ─────────────────────────────────────────────────────────────────
+    void aLongProjectNameAndPresetNameAreFitted()
+    {
+        std::printf("App: a long project name stays between the menus and the filename; a long preset name ends in an ellipsis (R-UX-6)\n");
+        using arstro::cosmo_v2::TopBar;
+        using arstro::cosmo_v2::PresetTree;
+        Rig rig(1024.0, 640.0);
+        check(rig.loadFakePhoto(2), "photos are loaded");
+        rig.app.showEditor();
+        rig.settle(500.0);
+        TopBar *bar = widget<TopBar>(rig, "TopBar");
+        if (!bar) { check(false, "the top bar is in the tree"); return; }
+        const double menusRight = bar->menuStrip()->x.value() + bar->menuStrip()->width.value();
+
+        bar->setProjectName("Tokyo");
+        rig.frames(2);
+        artboard::Rect tr = bar->titleRect();
+        check(bar->titleDrawn() == "Tokyo", "a short name is drawn whole");
+        check(tr.x > menusRight, "clear of the menu strip");
+
+        const std::string longName = "Iceland Ring Road, September 2026 - selects for the print portfolio, second pass (final)";
+        bar->setProjectName(longName);
+        rig.frames(2);
+        tr = bar->titleRect();
+        const std::string drawn = bar->titleDrawn();
+        check(!drawn.empty() && drawn != longName && drawn.size() >= 3 && drawn.compare(drawn.size() - 3, 3, "\xE2\x80\xA6") == 0,
+              "a long name is ellipsized");
+        check(tr.x >= menusRight + 9.0, "it starts after the menu strip, not over it");
+        // Its right edge stops before the filename readout: find that text op's x.
+        double fileX = 1e9;
+        for (const auto &op : rig.target.ops())
+            if (op.kind == artboard::DrawOp::Kind::DrawText && op.text.find("ui0.raf") != std::string::npos &&
+                op.fontFamily == arstro::cosmo_v2::font::mono() && op.args[2] == 11.0 && op.args[1] < 29.25)
+                fileX = std::min(fileX, op.args[0]);   // the top bar's readout: 11 px mono, in the bar's band
+        check(fileX < 1e9, "the filename readout is drawn");
+        check(tr.x + tr.w <= fileX - 9.0, "and it stops before the filename readout");
+        check(rig.target.measureText(drawn, 12.0, arstro::cosmo_v2::font::sansMedium()) <= tr.w + 0.5, "the drawn text is as wide as its box says");
+
+        // The preset rail: a long name ends in an ellipsis inside the rail.
+        PresetTree *tree = widget<PresetTree>(rig, "PresetTree");
+        if (!tree) { check(false, "the preset tree is in the tree"); return; }
+        arstro::cosmo::PresetNode leaf;
+        leaf.name = "Kodak Portra 400 pushed two stops, warm highlights, lifted blacks v3";
+        leaf.relPath = "long.apf";
+        tree->setRoots({leaf});
+        rig.frames(3);
+        bool cut = false, whole = false;
+        double right = 0.0;
+        for (const auto &op : rig.target.ops())
+            if (op.kind == artboard::DrawOp::Kind::DrawText && op.text.rfind("Kodak Portra", 0) == 0)
+            {
+                whole |= op.text == leaf.name;
+                cut |= op.text.size() >= 3 && op.text.compare(op.text.size() - 3, 3, "\xE2\x80\xA6") == 0;
+                right = op.args[0] + rig.target.measureText(op.text, 11.0, arstro::cosmo_v2::font::sans());
+            }
+        check(cut && !whole, "the long preset name is drawn with an ellipsis, not whole");
+        check(right > 0.0 && right <= tree->width.value() - 6.0, "and ends inside the rail");
+    }
+
+    // ── R-UX-7: empty and missing are states ──────────────────────────────────────────────
+    void anEmptyProjectAndAMissingPhotoSayWhatTheyAre()
+    {
+        std::printf("App: an empty project offers Add photos; a missing photo has a name and the stage says File not found (R-UX-7)\n");
+        using arstro::cosmo_v2::PhotoCanvas;
+        using arstro::cosmo_v2::PresetTree;
+        {
+            Rig rig(1024.0, 640.0);
+            int asked = 0;
+            rig.app.onOpenRequested = [&asked] { ++asked; };
+            rig.app.showEditor();
+            rig.frames(3);
+            PhotoCanvas *canvas = widget<PhotoCanvas>(rig, "PhotoCanvas");
+            if (!canvas) { check(false, "the canvas is in the tree"); return; }
+            rig.settle(400.0);
+            check(canvas->notice() == PhotoCanvas::Notice::Empty && canvas->noticeAmount() > 0.99, "an empty project shows its notice");
+            check(drew(rig, "No photos yet") && drew(rig, "Add photos"), "it says No photos yet and offers Add photos");
+            const artboard::Transform ct = canvas->worldTransform();
+            const artboard::Rect b = canvas->noticeButtonRect();
+            check(b.x >= 0.0 && b.x + b.w <= canvas->width.value() && b.y + b.h <= canvas->height.value(), "the button is inside the stage");
+            rig.click(ct.e + b.x + b.w * 0.5, ct.f + b.y + b.h * 0.5);
+            check(asked == 1, "Add photos asks the host for files (the context menu's Add Photo)");
+            // The empty rail says so too.
+            PresetTree *tree = widget<PresetTree>(rig, "PresetTree");
+            if (tree && tree->rowCount() == 0)
+                check(drew(rig, "No presets yet") && tree->emptyAmount() > 0.99, "an empty presets rail says No presets yet");
+            else if (tree)
+            {
+                tree->setRoots({});
+                rig.frames(2);
+                const double mid = tree->emptyAmount();
+                check(mid > 0.0 && mid < 1.0, "the rail's empty sentence fades in (live value mid-tween)");
+                rig.settle(300.0);
+                check(drew(rig, "No presets yet"), "an empty presets rail says No presets yet");
+            }
+
+            // Photos arrive: the notice leaves by FADING (a frame where it is partly there).
+            {
+                std::ofstream f("/tmp/cosmo_ui_fake1.cmp", std::ios::trunc);
+                f << "cosmoworkspace=1\n#image\nparent=-1\npath=/fake/ui0.raf\n";
+            }
+            struct Grey : arstro::cosmo::IImageDecoder
+            {
+                arstro::cosmo::DecodedImage decodeFile(const std::string &path) override
+                {
+                    arstro::cosmo::DecodedImage d;
+                    d.width = 96; d.height = 64;
+                    d.rgba.assign((size_t)96 * 64 * 4, 150);
+                    d.name = path;
+                    return d;
+                }
+            };
+            rig.svc.setDecoderFactory([] { return std::unique_ptr<arstro::cosmo::IImageDecoder>(new Grey()); });
+            std::string err;
+            check(rig.svc.dispatchText("project open /tmp/cosmo_ui_fake1.cmp", err), "a project opens");
+            bool partly = false;
+            for (int i = 0; i < 600 && canvas->noticeAmount() > 0.004; ++i)
+            {
+                rig.app.syncFromSession();
+                rig.frame();
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                partly |= canvas->noticeAmount() > 0.02 && canvas->noticeAmount() < 0.98;
+            }
+            check(partly, "the notice fades out rather than vanishing (a frame where it is partly there)");
+            rig.settle(400.0);
+            check(canvas->noticeAmount() < 0.01 && !drew(rig, "No photos yet"), "and with photos it is gone");
+        }
+        {
+            // One good photo and one whose decode fails: the failed leaf is a MISSING photo.
+            Rig rig(1024.0, 640.0);
+            struct HalfDecoder : arstro::cosmo::IImageDecoder
+            {
+                arstro::cosmo::DecodedImage decodeFile(const std::string &path) override
+                {
+                    arstro::cosmo::DecodedImage d;
+                    if (path.find("gone") != std::string::npos) return d;   // nothing decoded
+                    d.width = 96; d.height = 64;
+                    d.rgba.assign((size_t)96 * 64 * 4, 150);
+                    d.name = path;
+                    return d;
+                }
+            };
+            rig.svc.setDecoderFactory([] { return std::unique_ptr<arstro::cosmo::IImageDecoder>(new HalfDecoder()); });
+            const std::string path = "/tmp/cosmo_ui_missing.cmp";
+            {
+                std::ofstream f(path, std::ios::trunc);
+                f << "cosmoworkspace=1\n#image\nparent=-1\npath=/fake/here.raf\n#image\nparent=-1\npath=/offline/shoot/gone_0042.raf\n";
+            }
+            std::string err;
+            check(rig.svc.dispatchText("project open " + path, err), "a project with a missing file opens");
+            for (int i = 0; i < 400 && rig.svc.model().load.active; ++i) { rig.frames(1); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+            rig.app.showEditor();
+            rig.settle(500.0);
+            int missingNode = -1;
+            for (const auto &nd : rig.svc.model().nodes) if (nd.failed) missingNode = nd.node;
+            check(missingNode >= 0, "one photo failed to load");
+            rig.frames(2);
+            check(drew(rig, "gone_0042.raf"), "its filmstrip cell carries its name");
+            check(rig.svc.dispatchText("select " + std::to_string(missingNode), err), "the missing photo can be selected");
+            rig.app.syncFromSession();
+            rig.settle(500.0);
+            PhotoCanvas *canvas = widget<PhotoCanvas>(rig, "PhotoCanvas");
+            check(canvas && canvas->notice() == PhotoCanvas::Notice::Missing, "the stage shows the missing notice");
+            bool path42 = false;
+            for (const auto &op : rig.target.ops())
+                if (op.kind == artboard::DrawOp::Kind::DrawText) path42 |= op.text.find("gone_0042.raf") != std::string::npos && op.fontFamily == arstro::cosmo_v2::font::mono() && op.args[2] == 11.0;
+            check(drew(rig, "File not found") && path42, "it says File not found and names the path");
+        }
+    }
+
+    // ── R-UX-8: readouts in real units ────────────────────────────────────────────────────
+    void sliderReadoutsAreInRealUnits()
+    {
+        std::printf("App: slider readouts are EV, kelvin and pixels, and a unipolar value has no plus (R-UX-8)\n");
+        using namespace arstro::cosmo_v2;
+        const EditControl *exp = nullptr, *temp = nullptr, *radius = nullptr, *dehaze = nullptr, *contrast = nullptr;
+        for (const auto &sec : editControls())
+            for (const auto &c : sec.controls)
+            {
+                const std::string f = c.field;
+                if (f == "exposure") exp = &c;
+                if (f == "temp") temp = &c;
+                if (f == "sharpenRadius") radius = &c;
+                if (f == "dehaze") dehaze = &c;
+                if (f == "contrast") contrast = &c;
+            }
+        check(exp && temp && radius && dehaze && contrast, "the catalogue has the rows");
+        if (!(exp && temp && radius && dehaze && contrast)) return;
+        check(formatEditControl(*exp, 32) == "+0.40 EV", "exposure: track 32 reads +0.40 EV, not +32");
+        check(formatEditControl(*exp, -80) == "-1.00 EV" && formatEditControl(*exp, 0) == "0.00 EV", "exposure is signed, two decimals, and 0 has no sign");
+        check(formatEditControl(*temp, fromKelvin(6200)) == "6200 K", "temperature: 6200 K reads 6200 K, not -2");
+        check(formatEditControl(*temp, 0) == "6500 K", "the neutral temperature reads 6500 K");
+        check(formatEditControl(*radius, 10) == "1.0 px", "sharpening radius: track 10 reads 1.0 px, not +10");
+        check(formatEditControl(*dehaze, 40) == "40", "a unipolar control has no plus sign");
+        check(formatEditControl(*contrast, 25) == "+25" && formatEditControl(*contrast, -25) == "-25", "a bipolar control keeps its sign");
+
+        // And the assembled column draws them.
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(1), "a photo is loaded");
+        rig.app.showEditor();
+        std::string err;
+        check(rig.svc.dispatchText("set exposure=0.4 temp=6200 sharpenRadius=1 dehaze=40", err), "values are set in engine units");
+        rig.settle(500.0);
+        check(drew(rig, "+0.40 EV"), "the Exposure row reads +0.40 EV");
+        check(drew(rig, "6200 K"), "the Temperature row reads 6200 K");
+        check(drew(rig, "40") && !drew(rig, "+40"), "Dehaze reads 40, with no plus");
+        check(!drew(rig, "+32"), "and the track position +32 is not shown anywhere");
+        const auto *col = widget<RightColumn>(rig, "RightColumn");
+        if (col && col->basicPanel() && col->basicPanel()->row(0) && col->basicPanel()->row(1))
+            check(near(col->basicPanel()->row(0)->children().front()->width.value(),
+                       col->basicPanel()->row(1)->children().front()->width.value()), "every row's track is the same length");
+    }
+
+    // ── R-UX-5 / R-UX-9: dead buttons gone, one header style, a mask hint, a scroll indicator ──
+    void theEditStackIsConsistent()
+    {
+        std::printf("App: Xform has no dead buttons, headers are capitals, the Mask tab explains itself, an overflowing page shows it (R-UX-5, R-UX-9)\n");
+        using namespace arstro::cosmo_v2;
+        Rig rig(1024.0, 640.0);
+        check(rig.loadFakePhoto(1), "a photo is loaded");
+        rig.app.showEditor();
+        rig.settle(500.0);
+        RightColumn *col = widget<RightColumn>(rig, "RightColumn");
+        EditStackTabs *tabs = widget<EditStackTabs>(rig, "EditStackTabs");
+        if (!col || !tabs) { check(false, "the right column is in the tree"); return; }
+
+        // Basic/Detail overflows a 640-tall window: the indicator is there, inside the column,
+        // and it moves with the scroll.
+        const artboard::Rect t0 = col->scrollThumbRect();
+        check(t0.w > 0.0 && t0.h >= 19.5 && col->scrollIndicatorAmount() > 0.99, "an overflowing page shows a scroll indicator");
+        check(t0.x + t0.w <= col->width.value() && t0.x > col->width.value() - 10.0, "at the column's right edge");
+        col->scrollActivePanel(-400.0);
+        rig.settle(400.0);
+        check(col->scrollThumbRect().y > t0.y + 1.0, "it moves down as the page scrolls");
+        col->scrollActivePanel(-100000.0);
+        rig.settle(400.0);
+        const artboard::Rect tEnd = col->scrollThumbRect();
+        const artboard::Rect band = col->localBounds();
+        check(tEnd.y + tEnd.h <= band.h - ActionBar::kHeight, "and at the end of the page it stops above the action bar");
+
+        // Mask: capitals, and the sentence.
+        tabs->setSelectedIndex(RightColumn::kTabMask);
+        rig.settle(400.0);
+        check(drew(rig, "ADD MASK") && !drew(rig, "Add Mask"), "the Mask header is in capitals");
+        check(col->maskPanel()->emptyAmount() > 0.99 && drew(rig, "A mask limits an adjustment to part of the photo."),
+              "with no mask the tab says what a mask is for");
+        check(col->scrollThumbRect().w == 0.0, "a page that fits has no indicator rect");
+        check(col->scrollIndicatorAmount() < 0.01, "and the indicator has faded out");
+
+        // Curve / Grade / Xform: capitals; Xform: no Flip / Auto.
+        tabs->setSelectedIndex(RightColumn::kTabColor);
+        rig.settle(400.0);
+        col->scrollActivePanel(-100000.0);
+        rig.settle(400.0);
+        check(drew(rig, "TONE CURVE") && !drew(rig, "Tone Curve"), "the Curve header is in capitals");
+        tabs->setSelectedIndex(RightColumn::kTabGrade);
+        rig.settle(400.0);
+        check(drew(rig, "SHADOWS") || drew(rig, "MIDTONES") || drew(rig, "HIGHLIGHTS"), "the Grade headers are in capitals");
+        tabs->setSelectedIndex(RightColumn::kTabXform);
+        rig.settle(400.0);
+        check(drew(rig, "ROTATE") && drew(rig, "ASPECT RATIO"), "the Xform headers are in capitals");
+        check(!drew(rig, "Auto Horizon") && !drew(rig, "Auto Geometry") && !drew(rig, "Horizontal") && !drew(rig, "Vertical"),
+              "the four buttons with no engine behind them are not drawn");
+        check(!drew(rig, "FLIP") && !drew(rig, "AUTO") && !drew(rig, "Flip") && !drew(rig, "Auto"), "nor are their two headers");
     }
 
     // ── R-SCALE-3: every offered scale has a window it can be laid out in ────────────────
@@ -1410,6 +2347,59 @@ namespace
         std::filesystem::remove(src);
         std::filesystem::remove(out);
     }
+
+    // ── R-EXPORT-3a / D-72: the default export may not replace the photo it came from ────
+    // The dialog's defaults are "same as source", JPEG, no prefix, no subfolder - so a JPEG's
+    // output path was the JPEG. The bytes of the original are the assertion: a name check alone
+    // would pass on a writer that picked a new name and still truncated the old file.
+    void anExportBesideTheSourceLeavesTheOriginalAlone()
+    {
+        std::printf("Export: a JPEG exported beside itself keeps the original byte for byte (R-EXPORT-3a, D-72)\n");
+        namespace fs = std::filesystem;
+        const fs::path dir = fs::temp_directory_path() / "cosmo_ui_d72";
+        fs::remove_all(dir);
+        fs::create_directories(dir);
+        const std::string src = (dir / "IMG_1.jpg").string();
+        std::vector<guchar> px((size_t)48 * 32 * 3, 90);
+        GdkPixbuf *pb = gdk_pixbuf_new_from_data(px.data(), GDK_COLORSPACE_RGB, FALSE, 8, 48, 32, 48 * 3, nullptr, nullptr);
+        gdk_pixbuf_save(pb, src.c_str(), "jpeg", nullptr, "quality", "90", nullptr);
+        g_object_unref(pb);
+        auto bytes = [](const std::string &p) {
+            std::ifstream in(p, std::ios::binary);
+            return std::vector<char>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        };
+        const std::vector<char> original = bytes(src);
+        check(!original.empty(), "there is a source JPEG");
+
+        arstro::cosmo_v2::ExportDialog::Request req;   // the dialog's defaults, untouched
+        std::vector<uint8_t> rgba((size_t)48 * 32 * 4, 200);   // an EDITED frame: brighter than the source
+        std::string err;
+        const std::string out1 = arstro::cosmo_v2::exporter::resolvePath(req, src, "IMG_1.jpg");
+        check(out1 != src, "the output path is not the source path");
+        check(arstro::cosmo_v2::exporter::write(req, rgba.data(), 48, 32, out1, src, err), "the export is written");
+        check(bytes(src) == original, "the original is byte-identical after the export");
+        check(fs::path(out1).filename() == "IMG_1_edit.jpg" && fs::exists(out1), "the export is IMG_1_edit.jpg beside it");
+
+        // A second export replaces neither the source nor the first export.
+        const std::vector<char> first = bytes(out1);
+        const std::string out2 = arstro::cosmo_v2::exporter::resolvePath(req, src, "IMG_1.jpg");
+        std::vector<uint8_t> darker((size_t)48 * 32 * 4, 40);
+        check(arstro::cosmo_v2::exporter::write(req, darker.data(), 48, 32, out2, src, err), "a second export is written");
+        check(fs::path(out2).filename() == "IMG_1_edit-1.jpg", "it is IMG_1_edit-1.jpg");
+        check(bytes(out1) == first && bytes(src) == original, "and the first export and the original are both untouched");
+
+        // Another format beside the source has a free name and keeps it; once taken, it counts.
+        req.format = "PNG";
+        check(fs::path(arstro::cosmo_v2::exporter::resolvePath(req, src, "x")).filename() == "IMG_1.png", "a PNG beside a JPEG keeps the plain name");
+        std::ofstream((dir / "IMG_1.png").string()) << "someone else's file";
+        check(fs::path(arstro::cosmo_v2::exporter::resolvePath(req, src, "x")).filename() == "IMG_1-1.png", "an existing file of that name is not replaced either");
+
+        // The scripted writer's rule: only the source is protected, its own outputs are replaced.
+        using arstro::cosmo_v2::exporter::awayFromSource;
+        check(awayFromSource(src, src) == (dir / "IMG_1_edit.jpg").string(), "export --outdir into the photo's folder: _edit, even though that name exists");
+        check(awayFromSource((dir / "other.jpg").string(), src) == (dir / "other.jpg").string(), "any other path is written as given");
+        fs::remove_all(dir);
+    }
 }
 
 namespace
@@ -1642,6 +2632,14 @@ int main()
     cropLockedRatioHoldsWhenDraggedOffThePhoto();
     leavingAndEnteringTheCropZoomsRatherThanCutting();
     closingTheAppAsksAboutUnsavedWork();
+    aModalOwnsTheKeyboard();
+    deleteAsksBeforeRemovingAPhoto();
+    closingAProjectAsksFirstAndClearsTheChrome();
+    thePresetRowIsLabelledAndExportHasAButton();
+    aLongProjectNameAndPresetNameAreFitted();
+    anEmptyProjectAndAMissingPhotoSayWhatTheyAre();
+    sliderReadoutsAreInRealUnits();
+    theEditStackIsConsistent();
     rightClickShowsTheImageInformation();
     drawingAMaskOnThePhotoReachesTheModel();
     scaleChangeIsAnimatedNotSnapped();
@@ -1651,8 +2649,15 @@ int main()
     theStageNeverBlinksDuringADrag();
     theBeforeAfterToggleDissolves();
     anExportFromATurnedJpegSaysItIsUpright();
+    anExportBesideTheSourceLeavesTheOriginalAlone();
     anAgentsMarkdownBecomesFormatting();
     theAgentTabTalksThroughTheService();
+    theMenusAreTheFamilys();
+    theTopBarSaysWhatIsUnsaved();
+    theToastSaysWhatHappened();
+    theUnsavedDialogIsTheFamilys();
+    theKeysAreTheFamilys();
+    homeSpeaksInSentenceCaseAndSaysWhenItIsEmpty();
     std::printf("\n%s (%d failure%s)\n", gFailures ? "FAILED" : "all passed", gFailures,
                 gFailures == 1 ? "" : "s");
     return gFailures ? 1 : 0;

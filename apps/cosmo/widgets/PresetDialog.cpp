@@ -37,6 +37,24 @@ namespace cosmo_v2
         raise();  // topmost for input + draws last (overlay)
     }
 
+    void PresetDialog::confirm()
+    {
+        std::vector<std::string> sel;
+        for (const auto &r : mRows) if (r.checked) sel.push_back(r.key);
+        auto cb = mOnConfirm;  // copy: the callback may re-open the dialog
+        beginClose();
+        if (cb) cb(sel);
+    }
+
+    bool PresetDialog::modalKey(const artboard::KeyEvent &e)
+    {
+        if (!isOpen()) return false;
+        if (e.type != artboard::KeyEvent::Type::Down) return true;
+        if (e.keyCode == 0x1B) beginClose();                          // Escape cancels
+        else if (e.keyCode == 0x0D || e.keyCode == 0x0A) confirm();   // Enter is the confirm button
+        return true;   // a modal lets nothing through (R-UX-1)
+    }
+
     void PresetDialog::beginClose()
     {
         mClosing = true;
@@ -122,11 +140,7 @@ namespace cosmo_v2
 
         if (confirmRect().contains(p))
         {
-            std::vector<std::string> sel;
-            for (const auto &r : mRows) if (r.checked) sel.push_back(r.key);
-            auto cb = mOnConfirm;  // copy: the callback may re-open the dialog
-            beginClose();
-            if (cb) cb(sel);
+            confirm();
             return true;
         }
         if (cancelRect().contains(p)) { beginClose(); return true; }

@@ -29,6 +29,10 @@ file(GLOB COSMO_SERVICE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/se
 add_library(cosmo_core STATIC
   ${COSMO_CORE_SOURCES}
   ${COSMO_SERVICE_SOURCES}
+  # R-ASSIST-13: the conversation with the user's agent. Listed (assist/ is not globbed) because it
+  # is the SHARED part of the service's agent code: it includes only assist/Assistant.h, so a sibling
+  # app's core compiles this same file in place.
+  ${CMAKE_CURRENT_SOURCE_DIR}/assist/AssistConversation.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/decode/NativeImageDecoder.cpp
   # R-INFO: the JPEG Exif tag reader, beside its only consumer. Listed rather than globbed
   # because decode/ is deliberately explicit — the Android decoder must NOT be picked up here.

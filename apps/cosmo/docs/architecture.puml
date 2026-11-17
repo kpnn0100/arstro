@@ -158,6 +158,12 @@ package "app  (namespace arstro::cosmo_v2)" as app {
     class PillButton
     class IconButton
     class HoverFade <<helper>>
+    class Toast {
+      + show(kind, text, nowMs)    ' R-FAMILY-2: Info / Warning / Error
+      + rect() / amount() / swapAmount() / kind() / text()
+    }
+    class Wordmark <<helper>>     ' R-FAMILY-5: "<name>." by measured width
+    class DirtyDot <<helper>>     ' R-FAMILY-5: the unsaved dot, eased
     class Starfield <<helper>>
   }
 }

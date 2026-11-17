@@ -1,4 +1,5 @@
 #include "PresetTree.h"
+#include "TextFit.h"
 #include "Icons.h"
 #include "../Theme.h"
 #include <algorithm>
@@ -81,6 +82,17 @@ namespace cosmo_v2
         }
         mSelAmt.update(nowMs);
 
+        // R-UX-7: the empty-state sentence fades with the list's emptiness. The first frame
+        // SETS it (there is nothing to travel from), every later change eases.
+        const bool empty = mRows.empty();
+        if (!mEmptyInit) { mEmptyInit = true; mEmptyShown = empty; mEmptyAmt.set(empty ? 1.0 : 0.0); }
+        else if (empty != mEmptyShown)
+        {
+            mEmptyShown = empty;
+            mEmptyAmt.animateTo(empty ? 1.0 : 0.0, 180.0, Easing::EaseOutCubic, nowMs);
+        }
+        mEmptyAmt.update(nowMs);
+
         Segment::advance(nowMs);
     }
 
@@ -157,7 +169,24 @@ namespace cosmo_v2
                 : (selected ? palette::primary() : palette::mutedForeground());
             const char *fam = r.folder ? font::sansMedium() : font::sans();
             t.setFill(labelColor);
-            t.drawText(r.name, labelX, baseline, 11.0, fam);
+            // R-UX-6: ellipsized to the rail's width less the indent and px-2, with real
+            // metrics - a long preset name used to run to the rail's edge and be cut there.
+            t.drawText(fitTextEnd(t, r.name, w - labelX - kPadRight, 11.0, fam), labelX, baseline, 11.0, fam);
+        }
+
+        // R-UX-7: an empty rail says so, and how to fill it - a blank column reads as "broken".
+        // Eased in and out (mEmptyAmt), and faded with the rail's own width so a closing rail
+        // does not cut the sentence at its edge.
+        const double ea = mEmptyAmt.value() * std::clamp((w - 120.0) / 60.0, 0.0, 1.0);
+        if (ea > 0.004)
+        {
+            const double x = 9.75, y0 = 9.75;
+            t.setFill(Color{palette::foreground().r, palette::foreground().g, palette::foreground().b, 0.65 * ea});
+            t.drawText("No presets yet", x, y0 + 11.0 * 0.85, 11.0, font::sansMedium());
+            t.setFill(Color{palette::mutedForeground().r, palette::mutedForeground().g, palette::mutedForeground().b, ea});
+            static const char *const kLines[2] = {"Save preset keeps the current", "look here, to use on any photo."};
+            for (int i = 0; i < 2; ++i)
+                t.drawText(fitTextEnd(t, kLines[i], w - 2 * x, 10.0, font::sans()), x, y0 + 30.0 + i * 14.0, 10.0, font::sans());
         }
     }
 }

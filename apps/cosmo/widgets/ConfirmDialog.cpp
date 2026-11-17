@@ -84,6 +84,24 @@ namespace cosmo_v2
         return true;
     }
 
+    bool ConfirmDialog::drawsOutlined(int i) const
+    {
+        if (i < 0 || i >= (int)mButtons.size()) return false;
+        const Button &b = mButtons[(size_t)i];
+        if (!b.destructive || b.primary) return false;   // a button that is also primary is filled
+        switch (mDestructiveStyle)
+        {
+        case DestructiveStyle::Outlined: return true;
+        case DestructiveStyle::Auto:
+            // Outlined when a primary button sits beside it; filled when it is the only filled action.
+            for (const Button &o : mButtons)
+                if (o.primary) return true;
+            return false;
+        case DestructiveStyle::Filled:
+        default: return false;
+        }
+    }
+
     void ConfirmDialog::beginClose()
     {
         mClosing = true;
@@ -175,7 +193,10 @@ namespace cosmo_v2
             const Button &b = mButtons[i];
             const Rect &r = rects[i];
             Color fill = b.destructive ? palette::destructive() : (b.primary ? mAccent : Color{0, 0, 0, 0});
-            if (b.destructive || b.primary)
+            const bool outlined = drawsOutlined((int)i); // R-FAMILY-3: opt-in — only the primary is filled
+            if (outlined)
+                drawRoundedRect(t, r, radius::control(), Paint::stroked(fade(palette::destructive(), a), 1.0));
+            else if (b.destructive || b.primary)
                 drawRoundedRect(t, r, radius::control(), Paint::filled(fade(fill, a)));
             else
                 drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(palette::secondary(), a), fade(palette::border(), a), 1.0));
@@ -183,7 +204,7 @@ namespace cosmo_v2
             const double hv = mHover.amount((int)i) * a;
             if (hv > 0.001)
                 drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv)));
-            const Color fg = (b.destructive || b.primary) ? palette::primaryForeground() : palette::foreground();
+            const Color fg = outlined ? palette::destructive() : (b.destructive || b.primary) ? palette::primaryForeground() : palette::foreground();
             t.setFill(fade(fg, a));
             const double tw = estimateTextWidth(b.label, kFontPx);
             t.drawText(b.label, r.x + (r.w - tw) * 0.5, r.y + r.h * 0.5 + 4.0, kFontPx, font::sansMedium());

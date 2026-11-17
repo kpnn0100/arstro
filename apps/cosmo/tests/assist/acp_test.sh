@@ -14,7 +14,7 @@ SOCK="${XDG_RUNTIME_DIR:-/tmp}/cosmo-acp-$$.sock"
 export XDG_CONFIG_HOME="$W/cfg"
 export COSMO_SKILLS_DIR="$SKILLS"
 SERVE=""; LLM=""
-cleanup() { [ -n "$SERVE" ] && kill "$SERVE" 2>/dev/null; [ -n "$LLM" ] && kill "$LLM" 2>/dev/null; rm -rf "$W" "$SOCK"; }
+cleanup() { [ -n "$SERVE" ] && kill "$SERVE" 2>/dev/null || true; [ -n "$LLM" ] && kill "$LLM" 2>/dev/null || true; rm -rf "$W" "$SOCK"; }
 trap cleanup EXIT
 mkdir -p "$W/bin"
 

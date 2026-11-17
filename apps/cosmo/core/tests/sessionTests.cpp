@@ -1187,8 +1187,14 @@ namespace
         assert(!svc.model().dirty && "a project that was just opened is saved");
         assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
         assert(svc.model().hasEditTarget);
-        // (Selecting already reads as unsaved: EditSession::submit sets the flag for every
-        // render, edit or not - D-63. The model reports the session's flag as it is.)
+        // D-63 / R-FAMILY-10: looking is not editing. Selecting, walking the rack and a re-render
+        // used to mark the project unsaved, because every submitted render set the flag.
+        assert(!svc.model().dirty && "selecting a photo does not make the project unsaved");
+        assert(svc.dispatchText("select next", err));
+        assert(svc.dispatchText("select prev", err));
+        svc.session().submit();
+        svc.pump(now += 100);
+        assert(!svc.session().isDirty() && "nor does walking the rack or a re-render with nothing changed");
 
         // Two edits far enough apart not to coalesce -> three history nodes: root, 1, 2.
         assert(svc.dispatchText("set exposure=1", err));
@@ -1230,6 +1236,23 @@ namespace
         for (const char *want : {"\"hasEditTarget\": true", "\"history\": [", "\"presets\": [", "\"path\": \"Mine/Look\"",
                                  "\"loadEntryStage\""})
             assert(j.find(want) != std::string::npos);
+
+        // R-FAMILY-10: what else would be written. Each from a clean project.
+        assert(svc.dispatchText("undo", err) && svc.model().dirty && "an undo is a change to save");
+        svc.session().markClean();
+        svc.session().createGroupFromSelection();
+        assert(svc.session().isDirty() && "making a group is a change to save");
+        svc.session().markClean();
+        svc.session().renameGroup(svc.session().editGroup(), "Renamed");
+        assert(svc.session().isDirty() && "renaming a group is a change to save");
+        svc.session().markClean();
+        svc.session().ungroupSelected();
+        assert(svc.session().isDirty() && "ungrouping is a change to save");
+        svc.session().markClean();
+        assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
+        svc.session().deleteSelected();
+        assert(svc.session().isDirty() && "removing a photo is a change to save");
+        assert(svc.dispatchText("project save", err) && !svc.model().dirty);
         fs::remove_all(presets);
         printf("[PASS] the_model_carries_what_a_second_view_draws\n");
     }
@@ -1765,6 +1788,37 @@ namespace
 
         pumpUntilIdle(svc, 20000);
         printf("[PASS] selection_reaches_the_service_during_a_load\n");
+    }
+
+    // D-66: an offline photo keeps its place and its edit through a save.
+    void test_saving_keeps_a_photo_that_is_offline()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_offline_kept.cmp";
+        {
+            std::ofstream f(path, std::ios::trunc);
+            f << "cosmoworkspace=1\n"
+              << "#image\nparent=-1\npath=/fake/img0.raf\n"
+              << "#image\nparent=-1\npath=/fake/missing.raf\nbypass=1\nexposure=0.7\n"
+              << "#image\nparent=-1\npath=/fake/img1.raf\n";
+        }
+        ThreadBudget budget(25, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc);
+        assert(svc.model().imageCount == 2 && svc.model().nodes.size() == 3 && svc.model().nodes[1].failed);
+        assert(svc.dispatchText("project save", err));
+
+        std::vector<EditSession::WorkspaceEntry> back;
+        assert(EditSession::readWorkspaceFile(path, back));
+        assert(back.size() == 3 && "the offline photo is still in the project");
+        assert(back[1].imagePath == "/fake/missing.raf" && "... in its place, between the other two");
+        assert(std::fabs(back[1].params.exposure - 0.7) < 1e-6 && "... with its edit");
+        assert(back[1].bypass && "... and its bypass");
+        assert(back[0].imagePath == "/fake/img0.raf" && back[2].imagePath == "/fake/img1.raf");
+        printf("[PASS] saving_keeps_a_photo_that_is_offline (D-66)\n");
     }
 
     void test_service_opens_a_project_with_no_ui()
@@ -3460,6 +3514,7 @@ int main()
     test_walking_a_rack_that_fits_the_cap_never_re_decodes();
     test_selection_reaches_the_service_during_a_load();
     test_service_opens_a_project_with_no_ui();
+    test_saving_keeps_a_photo_that_is_offline();
     test_history_advances_without_a_view();
     test_picking_a_white_point_sets_temp_and_tint();
     test_analyze_measures_the_photo_before_and_after_the_edit();

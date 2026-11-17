@@ -52,6 +52,16 @@ namespace cosmo_v2
         void show(int uiScale, int maxScale, int previewEdge, int threads, int cpuPercent,
                   bool useGpu, bool gpuAvailable, bool touchUi);
         bool isOpen() const { return mOpen && !mClosing; }
+        /** OPT-IN (cosmo R-UX-1): a host's modal gate hands keys here. Escape and Enter are the
+         *  Done button - the dialog has no other action, every chip applies as it is clicked -
+         *  and every other key is taken. A host that never calls it is unchanged. */
+        bool modalKey(const artboard::KeyEvent &e)
+        {
+            if (!isOpen()) return false;
+            if (e.type == artboard::KeyEvent::Type::Down && (e.keyCode == 0x1B || e.keyCode == 0x0D || e.keyCode == 0x0A))
+                beginClose();
+            return true;
+        }
         /** A host with no touch shell (Interstellar) hides the Input row; the card sizes to the
          *  rows it shows. Default: shown — cosmo's dialog is unchanged (R-SETTINGS). */
         void setInputRowShown(bool shown) { mShowInput = shown; }
